@@ -101,6 +101,7 @@ gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edge
 | 节点通道：安装命令固定 CA 指纹，节点先核对指纹再发送 token；token 一次性、带过期时间、只存哈希；除 `Enroll` 外强制 mTLS；证书 30 天有效期并自动轮换；删除或禁用节点立即生效（删除时吊销证书序列号，节点再连接被拒绝） | 首次连接被中间人劫持；token 泄露或重放；已下线节点继续拉配置 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
 | 敏感数据信封加密入库，主密钥不进数据库 | 数据库备份或只读 SQL 注入泄露证书私钥和 DNS 密钥 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
 | 管理操作写审计日志，与变更同事务提交 | 越权或误操作无法追溯 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
+| `/api/auth/*` 只放行控制台界面用到的 better-auth 端点（登录、登出、会话、改密码、两步验证、passkey、API key 的创建/列表/删除），其余一律 404；组织、成员与用户管理只走 Edgeweir 自己的接口；`x-api-key` 在 `/api/auth/*` 上被剥掉，API key 只在 `/api/v1` 生效 | 借 better-auth 插件自带的 HTTP 端点绕过 Edgeweir 的权限检查、审计和配置版本（删除组织、冒充用户、改他人密码）；API key 变成会话后自行签发新 key | [ADR-0005](docs/adr/0005-api-orpc-openapi.md)、[ADR-0007](docs/adr/0007-auth-better-auth-multitenancy.md) |
 | 客户端 IP 取 TCP 对端地址；`X-Forwarded-For` / `X-Real-IP` 只在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用；登录、2FA 等认证接口的限速计数存 PostgreSQL，多实例共享、重启不清零 | 伪造 IP 绕过登录与 2FA 限速，审计日志里的 IP 失真 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
 | `install.sh` 与 agent 自升级都先校验 cosign 签名和 sha256 再执行；控制台镜像转发只是传输通道 | 下载链路或镜像转发被篡改 | [ADR-0016](docs/adr/0016-one-line-install.md)、[ADR-0017](docs/adr/0017-release-supply-chain.md) |
 | agent 只执行类型化操作，不提供执行任意命令的接口 | 控制面失陷后在节点上执行任意代码 | [ADR-0014](docs/adr/0014-node-agent-responsibilities.md) |

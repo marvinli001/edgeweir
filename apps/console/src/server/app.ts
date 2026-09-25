@@ -11,7 +11,7 @@ import { SimpleCsrfProtectionHandlerPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
-import { API_KEY_HEADER } from "./lib/auth";
+import { API_KEY_HEADER, AUTH_BASE_PATH, isAllowedAuthRoute } from "./lib/auth";
 import { resolveClientIp, withClientIp } from "./lib/client-ip";
 import type { AppContext } from "./lib/context";
 import { type RequestContext, router } from "./rpc/router";
@@ -97,9 +97,14 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
   /**
    * better-auth reads the client IP (rate limiting, session records) from a
    * header; it gets the one resolved here instead of anything the client sent.
+   * The API key header is removed: keys authenticate /api/v1 only (ADR-0005)
+   * and must never become a session on better-auth's own endpoints.
    */
-  const authRequest = (c: HonoContext): Request =>
-    new Request(c.req.raw, { headers: withClientIp(c.req.raw.headers, clientIp(c)) });
+  const authRequest = (c: HonoContext): Request => {
+    const headers = withClientIp(c.req.raw.headers, clientIp(c));
+    headers.delete(API_KEY_HEADER);
+    return new Request(c.req.raw, { headers });
+  };
 
   app.use(
     "*",
@@ -118,7 +123,12 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
 
   app.get("/healthz", (c) => c.json({ status: "ok", version: ctx.env.version }));
 
-  app.on(["GET", "POST"], "/api/auth/*", (c) => ctx.auth.handler(authRequest(c)));
+  app.on(["GET", "POST"], "/api/auth/*", async (c, next) => {
+    // Exact match on the normalized path: no prefixes, encodings or trailing slashes.
+    const path = new URL(c.req.url).pathname.slice(AUTH_BASE_PATH.length);
+    if (!isAllowedAuthRoute(c.req.method, path)) return next(); // -> the /api/* 404
+    return ctx.auth.handler(authRequest(c));
+  });
 
   app.use("/rpc/*", async (c, next) => {
     const { matched, response } = await rpc.handle(c.req.raw, {

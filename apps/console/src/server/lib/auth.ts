@@ -11,6 +11,40 @@ import { CLIENT_IP_HEADER } from "./client-ip";
 delete process.env.BETTER_AUTH_TELEMETRY;
 
 export const API_KEY_HEADER = "x-api-key";
+export const AUTH_BASE_PATH = "/api/auth";
+
+/**
+ * The better-auth HTTP endpoints the web console calls (apps/console/src/web,
+ * `authClient`), by path under /api/auth and method. Everything else answers
+ * 404: the organization and admin plugins are used server side only
+ * (`auth.api.*`), and their HTTP endpoints would bypass Edgeweir's own
+ * checks, audit log and revisions.
+ */
+export const AUTH_HTTP_ROUTES: Readonly<Record<string, readonly ("GET" | "POST")[]>> = {
+  "/get-session": ["GET"],
+  "/sign-in/email": ["POST"],
+  "/sign-out": ["POST"],
+  "/change-password": ["POST"],
+  "/two-factor/enable": ["POST"],
+  "/two-factor/disable": ["POST"],
+  "/two-factor/verify-totp": ["POST"],
+  "/two-factor/verify-backup-code": ["POST"],
+  "/passkey/generate-register-options": ["GET"],
+  "/passkey/verify-registration": ["POST"],
+  "/passkey/generate-authenticate-options": ["GET"],
+  "/passkey/verify-authentication": ["POST"],
+  "/passkey/list-user-passkeys": ["GET"],
+  "/passkey/delete-passkey": ["POST"],
+  "/api-key/create": ["POST"],
+  "/api-key/list": ["GET"],
+  "/api-key/delete": ["POST"],
+};
+
+/** Whether an /api/auth request (path below the base path) is on the allow list. */
+export function isAllowedAuthRoute(method: string, path: string): boolean {
+  const methods = Object.hasOwn(AUTH_HTTP_ROUTES, path) ? AUTH_HTTP_ROUTES[path] : undefined;
+  return methods?.includes(method as "GET" | "POST") ?? false;
+}
 
 export function createAuth(opts: {
   db: Database;
@@ -23,7 +57,7 @@ export function createAuth(opts: {
   return betterAuth({
     appName: "Edgeweir",
     baseURL: opts.publicUrl,
-    basePath: "/api/auth",
+    basePath: AUTH_BASE_PATH,
     secret: opts.secret,
     telemetry: { enabled: false },
     trustedOrigins: [url.origin],
