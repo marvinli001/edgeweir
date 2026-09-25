@@ -16,15 +16,15 @@
 - Node.js 24+（版本见 `.nvmrc`）
 - pnpm 12（`corepack enable` 后按 `package.json` 的 `packageManager` 自动使用，或 `npm i -g pnpm@12`）
 - Docker（本地 PostgreSQL 与端到端测试）
-- Go 1.27（仅修改 `helpers/certd` 时需要）
-- buf（仅修改 `proto/` 时需要）
+- Go 1.27.1（仅修改 `helpers/certd` 时需要）
+- buf 随开发依赖安装（`@bufbuild/buf`），`pnpm lint` 和 `pnpm proto:*` 直接使用
 
 启动：
 
 ```sh
 pnpm install
-docker compose -f compose.dev.yml up -d
-cp .env.example .env
+docker compose -f compose.dev.yml up -d   # 本地 PostgreSQL
+cp .env.example .env                      # 填写 EDGEWEIR_MASTER_KEY 和 BETTER_AUTH_SECRET
 pnpm dev
 ```
 
@@ -36,12 +36,12 @@ pnpm dev
 
 | 命令 | 何时运行 |
 | --- | --- |
-| `pnpm lint` | 每次提交前 |
+| `pnpm lint`（Biome + `buf lint`） | 每次提交前 |
 | `pnpm typecheck` | 每次提交前 |
-| `pnpm test` | 每次提交前 |
+| `pnpm test`（Vitest，数据库用 PGlite，不需要 Docker） | 每次提交前 |
 | `pnpm build` | 改动构建配置或依赖时 |
 | `pnpm proto:lint` | 改动 `proto/` 时 |
-| `pnpm e2e` | 改动节点通道、配置编译或页面流程时（需要 Docker） |
+| `pnpm e2e` | 改动节点通道、配置编译或页面流程时：先 `docker compose -f compose.e2e.yml up -d --build`（需要 Docker 和同级目录的 edgeweir-node） |
 
 格式问题可以用 `pnpm exec biome check --write .` 自动修复。
 
@@ -142,7 +142,8 @@ BREAKING CHANGE: nodes built from proto/v0.x must be regenerated.
 1. 复制 [docs/adr/template.md](docs/adr/template.md) 为 `docs/adr/NNNN-slug.md`。`NNNN` 取现有最大编号加一（两个仓库共用一套编号），`slug` 用英文小写加连字符。
 2. 状态写"提议"，与相关代码放在同一个 PR 中，并在 [docs/adr/README.md](docs/adr/README.md) 的索引表中加一行。
 3. 评审通过后把状态改为"已接受"再合入。
-4. 要推翻已接受的决策，写一篇新 ADR，并把旧 ADR 的状态改为"已被 ADR-NNNN 取代"。不要改写旧 ADR 的结论。
+4. 要推翻已接受的决策，写一篇新 ADR，并把旧 ADR 的状态改为"已被 ADR-NNNN 取代"。不要改写旧 ADR 的结论；落地情况、版本号等事实变化在该 ADR 末尾追加带日期的"更新记录"。
+5. ADR 只在本仓库修改；edgeweir-node 的 `docs/adr` 是镜像，在节点仓库运行 `scripts/sync-adr.sh` 更新（`--check` 检查是否一致）。
 
 ## 许可证
 
