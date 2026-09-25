@@ -1,0 +1,116 @@
+/*
+ * appica-ui bridge (ADR-0003).
+ *
+ * appica-ui ships its own tokens (`@appica/ui-react/styles.css`) whose names collide with shadcn's
+ * but mean different things (appica `--primary` is near-black, `--secondary` is the blue accent,
+ * `--foreground` is body grey). That stylesheet is never imported. Instead:
+ *
+ * 1. Tailwind scans only the appica components we use (one `@source` per component).
+ * 2. `@theme inline` registers the appica-only utility names those components need
+ *    (`text-primary-soft`, `bg-background-strong`, ...). Their values are defined only inside
+ *    `.appica-scope`, so the utilities resolve to nothing anywhere else.
+ * 3. `.appica-scope` maps every appica-only token onto a shadcn token. Shared names
+ *    (`--primary`, `--background`, `--foreground`, `--border`, `--radius`) keep their shadcn values.
+ *
+ * Effect wrappers that read no appica tokens (BorderBeam, GradientGlow, TextAnimate) only need the
+ * keyframes below and may wrap shadcn content. Token-reading components (Loader, Sparkline, Meter,
+ * BackgroundPattern, Countdown) render inside <AppicaScope> and must not contain shadcn components.
+ * All appica imports live in src/web/components/appica/ (enforced by test/web/ui-rules.test.ts).
+ */
+
+@source "../../node_modules/@appica/ui-react/dist/components/background-pattern";
+@source "../../node_modules/@appica/ui-react/dist/components/border-beam";
+@source "../../node_modules/@appica/ui-react/dist/components/countdown";
+@source "../../node_modules/@appica/ui-react/dist/components/gradient-glow";
+@source "../../node_modules/@appica/ui-react/dist/components/loader";
+@source "../../node_modules/@appica/ui-react/dist/components/meter";
+@source "../../node_modules/@appica/ui-react/dist/components/sparkline";
+@source "../../node_modules/@appica/ui-react/dist/components/text-animate";
+
+@custom-variant hover-none (@media (hover: none));
+
+@theme inline {
+  --color-primary-soft: var(--primary-soft);
+  --color-background-subtle: var(--background-subtle);
+  --color-background-strong: var(--background-strong);
+  --color-border-overlay: var(--border-overlay);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-intense: var(--foreground-intense);
+  --color-success-emphasis: var(--success-emphasis);
+  --color-warning-emphasis: var(--warning-emphasis);
+  --color-error-emphasis: var(--error-emphasis);
+}
+
+.appica-scope {
+  --primary-soft: color-mix(in oklab, var(--primary) 18%, transparent);
+  --background-subtle: color-mix(in oklab, var(--muted) 60%, transparent);
+  --background-strong: var(--muted);
+  --border-overlay: var(--border);
+  --foreground-muted: var(--muted-foreground);
+  --foreground-intense: var(--foreground);
+  --success-emphasis: var(--chart-2);
+  /* shadcn has no warning token; appica's own default amber. */
+  --warning-emphasis: oklch(0.705 0.213 47.604);
+  --error-emphasis: var(--destructive);
+  --color-success: var(--chart-2);
+  --color-border-intense: var(--muted-foreground);
+  --radius-3xs: calc(var(--radius) * 0.3);
+}
+
+/* Keyframes and registered properties used by appica effects (MIT, from @appica/ui-react 1.2.0). */
+
+@property --gradient-glow-rotation {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@utility animate-gradient-glow {
+  animation-name: gradient-glow;
+  animation-duration: var(--gradient-glow-duration, 4s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@utility animate-gradient-glow-aura {
+  animation-name: gradient-glow, gradient-glow-pulse;
+  animation-duration: var(--gradient-glow-duration, 4s);
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes gradient-glow {
+  to {
+    --gradient-glow-rotation: 360deg;
+  }
+}
+
+@keyframes gradient-glow-pulse {
+  0%,
+  100% {
+    transform: scale(0.94);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+@property --border-beam-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@utility animate-border-beam {
+  animation-name: border-beam;
+  animation-duration: var(--border-beam-duration, 5s);
+  animation-delay: var(--border-beam-delay, 0s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes border-beam {
+  to {
+    --border-beam-angle: 360deg;
+  }
+}
