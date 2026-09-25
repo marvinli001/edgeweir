@@ -1,4 +1,4 @@
-import type { Site, SiteUpdateInput } from "@edgeweir/contract";
+import { analyticsRange, type Site, type SiteUpdateInput } from "@edgeweir/contract";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -6,8 +6,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import * as z from "zod";
+import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Page } from "@/components/page";
+import { StarButton, useSiteStars } from "@/components/site-star";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,14 +26,17 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DEFAULT_RANGE } from "@/lib/analytics";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
-
-const TABS = ["overview", "domains", "origins", "cache"] as const;
-type Tab = (typeof TABS)[number];
+import { recordRecent } from "@/lib/recents";
+import { SITE_TABS, type SiteTab, siteTabLabel } from "@/lib/site-tabs";
 
 export const Route = createFileRoute("/_app/sites/$id")({
-  validateSearch: z.object({ tab: z.enum(TABS).optional() }),
+  validateSearch: z.object({
+    tab: z.enum(SITE_TABS).optional(),
+    range: analyticsRange.optional(),
+  }),
   component: SiteDetailPage,
 });
 
@@ -39,16 +44,39 @@ function SiteDetailPage() {
   const { id } = Route.useParams();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
+  const { session } = Route.useRouteContext();
   const site = useQuery(orpc.sites.get.queryOptions({ input: { id } }));
-  const tab: Tab = search.tab ?? "overview";
+  const stars = useSiteStars();
+  const tab: SiteTab = search.tab ?? "overview";
+  const name = site.data?.name;
+
+  React.useEffect(() => {
+    if (name) {
+      recordRecent(session.user.id, {
+        kind: "site",
+        id,
+        name,
+        ...(tab === "overview" ? {} : { tab }),
+      });
+    }
+  }, [session.user.id, id, name, tab]);
 
   return (
     <Page
       title={site.data?.name ?? m.site_detail_title()}
       actions={
-        <Link to="/sites" className="text-sm text-muted-foreground hover:text-foreground">
-          {m.site_back()}
-        </Link>
+        <>
+          {site.data ? (
+            <StarButton
+              starred={stars.ids.has(id)}
+              pending={stars.pendingId === id || stars.starred.isPending}
+              onToggle={() => void stars.toggle(id)}
+            />
+          ) : null}
+          <Link to="/sites" className="text-sm text-muted-foreground hover:text-foreground">
+            {m.site_back()}
+          </Link>
+        </>
       }
     >
       {site.isPending ? (
@@ -60,27 +88,38 @@ function SiteDetailPage() {
           value={tab}
           onValueChange={(value) =>
             navigate({
-              search: { tab: value === "overview" ? undefined : (value as Tab) },
+              search: (prev) => ({
+                ...prev,
+                tab: value === "overview" ? undefined : (value as SiteTab),
+              }),
               replace: true,
             })
           }
         >
           <TabsList className="max-w-full overflow-x-auto">
-            <TabsTrigger value="overview" data-testid="tab-overview">
-              {m.site_tab_overview()}
-            </TabsTrigger>
-            <TabsTrigger value="domains" data-testid="tab-domains">
-              {m.site_tab_domains()}
-            </TabsTrigger>
-            <TabsTrigger value="origins" data-testid="tab-origins">
-              {m.site_tab_origins()}
-            </TabsTrigger>
-            <TabsTrigger value="cache" data-testid="tab-cache">
-              {m.site_tab_cache()}
-            </TabsTrigger>
+            {SITE_TABS.map((value) => (
+              <TabsTrigger key={value} value={value} data-testid={`tab-${value}`}>
+                {siteTabLabel(value)}
+              </TabsTrigger>
+            ))}
           </TabsList>
           <TabsContent value="overview" className="animate-enter">
             <OverviewTab key={site.data.updatedAt} site={site.data} />
+          </TabsContent>
+          <TabsContent value="analytics" className="animate-enter">
+            <AnalyticsSection
+              siteId={site.data.id}
+              range={search.range ?? DEFAULT_RANGE}
+              onRangeChange={(range) =>
+                navigate({
+                  search: (prev) => ({
+                    ...prev,
+                    range: range === DEFAULT_RANGE ? undefined : range,
+                  }),
+                  replace: true,
+                })
+              }
+            />
           </TabsContent>
           <TabsContent value="domains" className="animate-enter">
             <DomainsTab key={site.data.updatedAt} site={site.data} />

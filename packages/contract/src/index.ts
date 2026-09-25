@@ -37,6 +37,22 @@ export const contract = {
   overview: {
     get: oc.route({ method: "GET", path: "/overview", tags: ["overview"] }).output(s.overview),
   },
+  /** Lite analytics (per-minute node statistics), scoped like sites. */
+  analytics: {
+    traffic: oc
+      .route({ method: "GET", path: "/analytics/traffic", tags: ["analytics"] })
+      .input(s.trafficInput)
+      .output(s.traffic),
+    topSites: oc
+      .route({ method: "GET", path: "/analytics/top-sites", tags: ["analytics"] })
+      .input(s.trafficTopInput)
+      .output(z.array(s.trafficTopItem)),
+    /** Platform administrators only. */
+    topNodes: oc
+      .route({ method: "GET", path: "/analytics/top-nodes", tags: ["analytics"] })
+      .input(s.trafficTopInput)
+      .output(z.array(s.trafficTopItem)),
+  },
   clusters: {
     list: oc
       .route({ method: "GET", path: "/clusters", tags: ["clusters"] })
@@ -157,6 +173,14 @@ export const contract = {
       .route({ method: "POST", path: "/sites/{id}/purge", tags: ["sites"] })
       .input(idParam)
       .output(s.siteMutationResult),
+    /** The caller's starred sites, most recently starred first. */
+    starred: oc
+      .route({ method: "GET", path: "/starred-sites", tags: ["sites"] })
+      .output(z.array(s.starredSite)),
+    setStarred: oc
+      .route({ method: "PUT", path: "/sites/{id}/starred", tags: ["sites"] })
+      .input(s.siteStarInput)
+      .output(ok),
   },
   /** Members of the caller's active organization (organization owners and admins). */
   members: {

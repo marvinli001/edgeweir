@@ -9,6 +9,7 @@ import * as z from "zod";
 import { type Columns, DataTable } from "@/components/data-table";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
+import { StarButton, useSiteStars } from "@/components/site-star";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,8 +70,22 @@ function SitesPage() {
     navigate({ search: (prev) => ({ ...prev, create: open || undefined }), replace: true });
   const filtered = !!search.q || !!search.cluster;
 
+  const stars = useSiteStars();
+  const { ids: starredIds, pendingId, toggle } = stars;
   const columns = React.useMemo<Columns<Site>>(
     () => [
+      {
+        id: "star",
+        header: () => <span className="sr-only">{m.site_star()}</span>,
+        cell: ({ row }) => (
+          <StarButton
+            starred={starredIds.has(row.original.id)}
+            pending={pendingId === row.original.id}
+            onToggle={() => void toggle(row.original.id)}
+            className="-my-1 -ml-1"
+          />
+        ),
+      },
       {
         id: "name",
         header: () => m.sites_col_name(),
@@ -133,7 +148,7 @@ function SitesPage() {
           ] satisfies Columns<Site>)
         : []),
     ],
-    [isAdmin],
+    [isAdmin, starredIds, pendingId, toggle],
   );
 
   return (

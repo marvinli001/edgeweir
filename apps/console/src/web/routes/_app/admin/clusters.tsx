@@ -26,9 +26,10 @@ import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { Dot, StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -53,9 +54,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { formatDateTime, m, timeAgo } from "@/lib/i18n";
+import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { revisionReason } from "@/lib/revisions";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/clusters")({
   validateSearch: z.object({
@@ -202,6 +204,16 @@ function ClusterDialog({
   );
 }
 
+/** One labeled figure of the cluster summary strip. */
+function SummaryStat({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 px-4 py-3">
+      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+      <dd className="flex items-center gap-2 text-xl font-semibold tracking-tight">{children}</dd>
+    </div>
+  );
+}
+
 function ClusterSummary({
   clusters,
   selected,
@@ -218,23 +230,9 @@ function ClusterSummary({
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center gap-3">
-        <div className="flex flex-1 flex-col gap-1">
-          <CardTitle data-testid="cluster-name">{selected.name}</CardTitle>
-          <CardDescription className="flex flex-wrap gap-2">
-            <Badge variant="outline" data-testid="cluster-nodes-online">
-              {m.clusters_nodes_count({
-                online: selected.onlineNodeCount,
-                total: selected.nodeCount,
-              })}
-            </Badge>
-            <Badge variant="outline">{m.clusters_sites_count({ count: selected.siteCount })}</Badge>
-            <Badge variant="secondary" data-testid="cluster-latest-revision">
-              {selected.latestRevision
-                ? m.clusters_latest_revision({ revision: selected.latestRevision.revision })
-                : m.clusters_no_revision()}
-            </Badge>
-          </CardDescription>
-        </div>
+        <CardTitle className="flex-1" data-testid="cluster-name">
+          {selected.name}
+        </CardTitle>
         <div className="flex items-center gap-2">
           {clusters.length > 1 ? (
             <Select
@@ -289,6 +287,35 @@ function ClusterSummary({
           </DropdownMenu>
         </div>
       </CardHeader>
+      <CardContent>
+        <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border">
+          <SummaryStat label={m.admin_nodes_online()}>
+            <Dot
+              tone={
+                selected.nodeCount === 0
+                  ? "idle"
+                  : selected.onlineNodeCount < selected.nodeCount
+                    ? "bad"
+                    : "good"
+              }
+            />
+            <span data-testid="cluster-nodes-online">
+              {selected.onlineNodeCount}/{selected.nodeCount}
+            </span>
+          </SummaryStat>
+          <SummaryStat label={m.admin_sites()}>{formatNumber(selected.siteCount)}</SummaryStat>
+          <SummaryStat label={m.admin_latest_revision()}>
+            <span
+              className={cn(selected.latestRevision && "font-mono")}
+              data-testid="cluster-latest-revision"
+            >
+              {selected.latestRevision
+                ? `#${selected.latestRevision.revision}`
+                : m.clusters_no_revision()}
+            </span>
+          </SummaryStat>
+        </dl>
+      </CardContent>
       <ClusterDialog
         key={selected.id}
         cluster={selected}
@@ -646,21 +673,17 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
         header: () => m.nodes_col_status(),
         cell: ({ row }) =>
           row.original.status === "disabled" ? (
-            <Badge variant="outline" data-testid="node-disabled">
+            <StatusDot tone="idle" data-testid="node-disabled">
               {m.nodes_disabled()}
-            </Badge>
+            </StatusDot>
           ) : row.original.online ? (
-            <Badge data-testid="node-online">
-              <span className="relative flex size-1.5">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-current opacity-60 motion-reduce:hidden" />
-                <span className="relative inline-flex size-1.5 rounded-full bg-current" />
-              </span>
+            <StatusDot tone="good" pulse data-testid="node-online">
               {m.nodes_online()}
-            </Badge>
+            </StatusDot>
           ) : (
-            <Badge variant="destructive" data-testid="node-offline">
+            <StatusDot tone="bad" data-testid="node-offline">
               {m.nodes_offline()}
-            </Badge>
+            </StatusDot>
           ),
       },
       {

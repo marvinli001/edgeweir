@@ -1,7 +1,26 @@
 import { formatDomain, parseDomain } from "@edgeweir/config-compiler";
-import type { Revision, Site, siteCreateInput, siteUpdateInput } from "@edgeweir/contract";
+import type {
+  Revision,
+  Site,
+  StarredSite,
+  siteCreateInput,
+  siteUpdateInput,
+} from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { and, asc, count, eq, exists, ilike, inArray, ne, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  ne,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import type * as z from "zod";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
@@ -100,16 +119,6 @@ async function toSiteDtos(
       updatedAt: r.updatedAt.toISOString(),
     };
   });
-}
-
-/** All sites of the scope, oldest first (overview statistics). */
-export async function allSites(db: Database, scope: SiteScope): Promise<Site[]> {
-  const rows = await db
-    .select()
-    .from(schema.site)
-    .where(scopeFilter(scope))
-    .orderBy(asc(schema.site.createdAt));
-  return toSiteDtos(db, rows);
 }
 
 /** One page of sites, filtered by name/domain search and (for admins) cluster. */
@@ -423,4 +432,57 @@ export async function purgeSite(
     if (!dto) throw new Error("site not readable after update");
     return { site: dto, revision: toRevisionDto(revision) };
   });
+}
+
+export async function countSites(db: Database, scope: SiteScope): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(schema.site).where(scopeFilter(scope));
+  return row?.n ?? 0;
+}
+
+/** The user's starred sites within the scope, most recently starred first. */
+export async function starredSites(
+  db: Database,
+  scope: SiteScope,
+  userId: string,
+): Promise<StarredSite[]> {
+  const rows = await db
+    .select({ id: schema.site.id, name: schema.site.name })
+    .from(schema.siteStar)
+    .innerJoin(schema.site, eq(schema.site.id, schema.siteStar.siteId))
+    .where(and(eq(schema.siteStar.userId, userId), scopeFilter(scope)))
+    .orderBy(desc(schema.siteStar.createdAt), asc(schema.site.name));
+  if (rows.length === 0) return [];
+  const domains = await db
+    .select()
+    .from(schema.siteDomain)
+    .where(
+      inArray(
+        schema.siteDomain.siteId,
+        rows.map((r) => r.id),
+      ),
+    )
+    .orderBy(asc(schema.siteDomain.createdAt), asc(schema.siteDomain.name));
+  return rows.map((r) => ({
+    ...r,
+    domains: domains.filter((d) => d.siteId === r.id).map(formatDomain),
+  }));
+}
+
+/** Stars or un-stars a visible site for the user (a personal preference, not audited). */
+export async function setSiteStarred(
+  db: Database,
+  scope: SiteScope,
+  input: { userId: string; siteId: string; starred: boolean },
+): Promise<void> {
+  const row = await findSite(db, input.siteId, scope);
+  if (input.starred) {
+    await db
+      .insert(schema.siteStar)
+      .values({ userId: input.userId, siteId: row.id })
+      .onConflictDoNothing();
+  } else {
+    await db
+      .delete(schema.siteStar)
+      .where(and(eq(schema.siteStar.userId, input.userId), eq(schema.siteStar.siteId, row.id)));
+  }
 }

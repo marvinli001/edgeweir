@@ -46,6 +46,16 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-metric: var(--metric);
+  --color-status-2xx: var(--status-2xx);
+  --color-status-3xx: var(--status-3xx);
+  --color-status-4xx: var(--status-4xx);
+  --color-status-5xx: var(--status-5xx);
+  --color-delta-good: var(--delta-good);
+  --color-delta-bad: var(--delta-bad);
+  --color-star: var(--star);
+  --color-state-good: var(--state-good);
+  --color-state-warn: var(--state-warn);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -102,6 +112,22 @@
   --chart-3: oklch(0.596 0.145 163.225);
   --chart-4: oklch(0.508 0.118 165.612);
   --chart-5: oklch(0.432 0.095 166.913);
+  /*
+   * Analytics. The line and the status classes (2xx–5xx, stacked in that order) pass the dataviz
+   * palette checks (lightness band, CVD and normal-vision separation) on the card surface in each
+   * mode; 3xx/4xx sit below 3:1 in light mode, so their values are always labeled as text too.
+   */
+  --metric: #2a78d6;
+  --status-2xx: #2a78d6;
+  --status-3xx: #1baf7a;
+  --status-4xx: #eda100;
+  --status-5xx: #d03b3b;
+  --delta-good: #006300;
+  --delta-bad: #c62f2f;
+  --star: #e2a400;
+  /* Node and cluster states; always shown with a text label. */
+  --state-good: #0ca30c;
+  --state-warn: #eda100;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -137,6 +163,16 @@
   --chart-3: oklch(0.596 0.145 163.225);
   --chart-4: oklch(0.508 0.118 165.612);
   --chart-5: oklch(0.432 0.095 166.913);
+  --metric: #3987e5;
+  --status-2xx: #3987e5;
+  --status-3xx: #199e70;
+  --status-4xx: #c98500;
+  --status-5xx: #d03b3b;
+  --delta-good: #0ca30c;
+  --delta-bad: #e66767;
+  --star: #f0b429;
+  --state-good: #0ca30c;
+  --state-warn: #fab219;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.623 0.214 259.815);

@@ -100,6 +100,7 @@ describe("admin area procedures", async () => {
       ["settings.get", () => member.settings.get()],
       ["auditLogs.list", () => member.auditLogs.list({})],
       ["auditLogs.facets", () => member.auditLogs.facets()],
+      ["analytics.topNodes", () => member.analytics.topNodes({})],
     ];
     for (const [name, call] of calls) {
       const error = await rpcError(call());

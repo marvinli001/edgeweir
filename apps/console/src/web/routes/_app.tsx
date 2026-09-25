@@ -1,10 +1,11 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import type * as React from "react";
+import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/react-router";
+import * as React from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandMenu } from "@/components/command-menu";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/lib/orpc";
+import { isRecentPath, recordRecent } from "@/lib/recents";
 
 export const Route = createFileRoute("/_app")({
   beforeLoad: async ({ context, location }) => {
@@ -27,6 +28,11 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   const { session, isAdmin } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // Site pages record themselves once their name is known.
+  React.useEffect(() => {
+    if (isRecentPath(pathname)) recordRecent(session.user.id, { kind: "page", path: pathname });
+  }, [pathname, session.user.id]);
   return (
     <SidebarProvider
       style={

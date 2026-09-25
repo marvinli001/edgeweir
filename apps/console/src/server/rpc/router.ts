@@ -1,5 +1,5 @@
 import { schema } from "@edgeweir/db";
-import { and, asc, count, desc, eq, gt, sql } from "drizzle-orm";
+import { count, desc, eq, gt, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import {
   acceptInvitation,
@@ -8,6 +8,7 @@ import {
   setActiveOrganization,
   toMe,
 } from "../services/account";
+import { topNodes, topSites, trafficSeries } from "../services/analytics";
 import { auditFacets, listAuditLogs } from "../services/audit";
 import {
   createCluster,
@@ -49,12 +50,14 @@ import { createRegion, deleteRegion, listRegions, updateRegion } from "../servic
 import { rollbackToRevision, toRevisionDto } from "../services/revisions";
 import { isInitialized, runSetup, setupCompletedAt } from "../services/setup";
 import {
-  allSites,
+  countSites,
   createSite,
   deleteSite,
   getSite,
   listSites,
   purgeSite,
+  setSiteStarred,
+  starredSites,
   updateSite,
 } from "../services/sites";
 import { createUser, listUsers, setUserAdmin, setUserDisabled } from "../services/users";
@@ -97,46 +100,38 @@ export const router = os.router({
     get: tenant.overview.get.handler(async ({ context }) => {
       const db = context.app.db;
       const since = sql`now() - make_interval(secs => ${ONLINE_WINDOW_SECONDS})`;
-      const stats = schema.nodeMinuteStats;
-      const [[clusters], [nodes], [online], sites, revisions, traffic] = await Promise.all([
+      const [[clusters], [nodes], [online], sites, revisions] = await Promise.all([
         db.select({ n: count() }).from(schema.cluster),
         db.select({ n: count() }).from(schema.node),
         db.select({ n: count() }).from(schema.node).where(gt(schema.node.lastSeenAt, since)),
-        allSites(db, context.scope),
+        countSites(db, context.scope),
         db
           .select()
           .from(schema.configRevision)
           .orderBy(desc(schema.configRevision.createdAt))
           .limit(10),
-        db
-          .select({
-            minute: stats.minute,
-            requests: sql<number>`sum(${stats.requests})::bigint`.mapWith(Number),
-            cacheHits: sql<number>`sum(${stats.cacheHits})::bigint`.mapWith(Number),
-            cacheMisses: sql<number>`sum(${stats.cacheMisses})::bigint`.mapWith(Number),
-          })
-          .from(stats)
-          .innerJoin(schema.site, eq(schema.site.id, stats.siteId))
-          .where(
-            and(
-              gt(stats.minute, sql`now() - interval '60 minutes'`),
-              context.scope.all
-                ? undefined
-                : eq(schema.site.organizationId, context.scope.organizationId),
-            ),
-          )
-          .groupBy(stats.minute)
-          .orderBy(asc(stats.minute)),
       ]);
       return {
         clusters: context.isAdmin ? (clusters?.n ?? 0) : 0,
         nodes: context.isAdmin ? (nodes?.n ?? 0) : 0,
         onlineNodes: context.isAdmin ? (online?.n ?? 0) : 0,
-        sites: sites.length,
+        sites,
         revisions: context.isAdmin ? revisions.map(toRevisionDto) : [],
-        traffic: traffic.map((t) => ({ ...t, minute: new Date(t.minute).toISOString() })),
       };
     }),
+  },
+  analytics: {
+    traffic: tenant.analytics.traffic.handler(async ({ input, context }) => {
+      // Fails with SITE_NOT_FOUND for sites outside the caller's scope.
+      if (input.siteId) await getSite(context.app.db, input.siteId, context.scope);
+      return trafficSeries(context.app.db, context.scope, input);
+    }),
+    topSites: tenant.analytics.topSites.handler(({ input, context }) =>
+      topSites(context.app.db, context.scope, input),
+    ),
+    topNodes: admin.analytics.topNodes.handler(({ input, context }) =>
+      topNodes(context.app.db, input),
+    ),
   },
   clusters: {
     list: admin.clusters.list.handler(({ context }) => listClusters(context.app.db)),
@@ -260,6 +255,17 @@ export const router = os.router({
     purgeAll: tenant.sites.purgeAll.handler(({ input, context }) =>
       purgeSite(context.app.db, input.id, { scope: context.scope, actor: context.actor }),
     ),
+    starred: tenant.sites.starred.handler(({ context }) =>
+      starredSites(context.app.db, context.scope, context.user.id),
+    ),
+    setStarred: tenant.sites.setStarred.handler(async ({ input, context }) => {
+      await setSiteStarred(context.app.db, context.scope, {
+        userId: context.user.id,
+        siteId: input.id,
+        starred: input.starred,
+      });
+      return ok;
+    }),
   },
   members: {
     list: orgManager.members.list.handler(({ context }) =>

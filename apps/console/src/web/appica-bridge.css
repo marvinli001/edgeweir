@@ -13,9 +13,9 @@
  *    (`--primary`, `--background`, `--foreground`, `--border`, `--radius`) keep their shadcn values.
  *
  * Effect wrappers that read no appica tokens (BorderBeam, GradientGlow, TextAnimate) only need the
- * keyframes below and may wrap shadcn content. Token-reading components (Loader, Sparkline, Meter,
- * BackgroundPattern, Countdown, OTPField) render inside <AppicaScope> and must not contain shadcn
- * components.
+ * keyframes below and may wrap shadcn content. Token-reading components (Loader, BackgroundPattern,
+ * Countdown, OTPField) render inside <AppicaScope> and must not contain shadcn components.
+ * Charts are not appica: they use recharts through the shadcn chart primitives.
  * All appica imports live in src/web/components/appica/ (enforced by test/web/ui-rules.test.ts).
  */
 
@@ -24,11 +24,9 @@
 @source "../../node_modules/@appica/ui-react/dist/components/countdown";
 @source "../../node_modules/@appica/ui-react/dist/components/gradient-glow";
 @source "../../node_modules/@appica/ui-react/dist/components/loader";
-@source "../../node_modules/@appica/ui-react/dist/components/meter";
 @source "../../node_modules/@appica/ui-react/dist/components/otp-field";
 /* otp-field styles its slots with the input variants. */
 @source "../../node_modules/@appica/ui-react/dist/components/input/input-variants.js";
-@source "../../node_modules/@appica/ui-react/dist/components/sparkline";
 @source "../../node_modules/@appica/ui-react/dist/components/text-animate";
 
 @custom-variant hover-none (@media (hover: none));

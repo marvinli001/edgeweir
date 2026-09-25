@@ -255,22 +255,84 @@ export const enrollmentTokenResult = z.object({
   installCommand: z.string(),
 });
 
-export const trafficPoint = z.object({
-  minute: isoDateTime,
-  requests: z.number().int(),
-  cacheHits: z.number().int(),
-  cacheMisses: z.number().int(),
-});
-
 export const overview = z.object({
   clusters: z.number().int(),
   nodes: z.number().int(),
   onlineNodes: z.number().int(),
   sites: z.number().int(),
   revisions: z.array(revision),
-  /** Per-minute totals over the last 60 minutes (lite analytics). */
-  traffic: z.array(trafficPoint),
 });
+
+/** Time windows the analytics views offer, each ending now. */
+export const analyticsRange = z.enum(["1h", "6h", "24h", "7d", "30d"]);
+
+/** Traffic counters of one time bucket or a whole period, summed over nodes and sites. */
+const trafficCounters = {
+  requests: z.number().int(),
+  bytesSent: z.number().int(),
+  bytesReceived: z.number().int(),
+  cacheHits: z.number().int(),
+  cacheMisses: z.number().int(),
+  /** Responses by status class. */
+  status2xx: z.number().int(),
+  status3xx: z.number().int(),
+  status4xx: z.number().int(),
+  status5xx: z.number().int(),
+};
+
+export const trafficPoint = z.object({ time: isoDateTime, ...trafficCounters });
+
+export const trafficTotals = z.object({
+  ...trafficCounters,
+  /** Egress of the busiest bucket, in bytes per second. */
+  peakBytesPerSecond: z.number(),
+});
+
+export const trafficInput = z.object({
+  range: analyticsRange.default("24h"),
+  /** Only this site; it must be visible to the caller. */
+  siteId: uuid.optional(),
+});
+
+export const traffic = z.object({
+  range: analyticsRange,
+  /** Width of one point, in seconds. */
+  bucketSeconds: z.number().int(),
+  from: isoDateTime,
+  to: isoDateTime,
+  /** One point per bucket, oldest first; buckets without traffic are zero. */
+  points: z.array(trafficPoint),
+  totals: trafficTotals,
+  /** The same-length period right before `from`, for change indicators. */
+  previous: trafficTotals,
+});
+
+export const trafficTopInput = z.object({
+  range: analyticsRange.default("24h"),
+  limit: z.coerce.number().int().min(1).max(50).default(5),
+});
+
+/** A site or node ranked by requests over a period. */
+export const trafficTopItem = z.object({
+  id: uuid,
+  name: z.string(),
+  /** The site's organization or the node's cluster. */
+  parentId: z.string(),
+  parentName: z.string(),
+  requests: z.number().int(),
+  bytesSent: z.number().int(),
+  cacheHits: z.number().int(),
+  cacheMisses: z.number().int(),
+});
+
+/** A starred site, as the console home lists it. */
+export const starredSite = z.object({
+  id: uuid,
+  name: z.string(),
+  domains: z.array(z.string()),
+});
+
+export const siteStarInput = z.object({ id: uuid, starred: z.boolean() });
 
 export const systemStatus = z.object({
   initialized: z.boolean(),
@@ -528,7 +590,12 @@ export type Cluster = z.infer<typeof cluster>;
 export type Node = z.infer<typeof node>;
 export type Revision = z.infer<typeof revision>;
 export type Overview = z.infer<typeof overview>;
+export type AnalyticsRange = z.infer<typeof analyticsRange>;
 export type TrafficPoint = z.infer<typeof trafficPoint>;
+export type TrafficTotals = z.infer<typeof trafficTotals>;
+export type Traffic = z.infer<typeof traffic>;
+export type TrafficTopItem = z.infer<typeof trafficTopItem>;
+export type StarredSite = z.infer<typeof starredSite>;
 export type EnrollmentTokenResult = z.infer<typeof enrollmentTokenResult>;
 export type Settings = z.infer<typeof settings>;
 export type AuditLogEntry = z.infer<typeof auditLogEntry>;
