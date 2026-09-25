@@ -104,6 +104,37 @@ MVP M2 新增（2026-09-25）：
     `COMPOSE_PROJECT_NAME=edgeweir-m2 E2E_CONSOLE_PORT=13100 E2E_NODE_PORT=18180 E2E_TAG=m2`（命令本身不变）。**默认**：默认值不变，单独运行时与以前完全一样。
 43. **mvp-m2 的合并方式**：M2 完成时主工作区有另一个会话未提交的落地页改动，当时没有快进。2026-09-25 收尾时，落地页与主题改动先按功能提交，`master` 已经前进（数据展示重做、落地页），不能再快进，也不 rebase（`proto/v0.2.0` 必须从 `master` 可达）。
     **已执行**：按审计 I2 用 `git merge --no-ff mvp-m2` 合入 `master`，M2 迁移重新生成为 `0003_m2`（见「收尾（2026-09-25 审计）」）。
+收尾新增（2026-09-25 审计，见文末「收尾（2026-09-25 审计）」）：
+
+44. **工作区里的两个未跟踪文件**：`edgeweir-bootstrap-prompt.md` 与 `BOOTSTRAP.md` 逐字节相同，已移到 `~/Developer/edgeweir-research/`；`.claude/launch.json`（桌面应用的开发服务器配置）提交，`.claude/` 下其他本地设置加入 `.gitignore`。
+45. **旧数据卷要重建**：迁移重新编号（`0003_m2`，另有收尾新增的 `0004_wrapup_auth`、`0005_wrapup_console`）。1.0 之前没有生产数据，开发库与 e2e 卷用 `docker compose … down -v` 重建；按旧编号迁移过的库不能原地升级。
+46. **proto v0.2.1 / v0.2.2**：收尾只加字段（`buf breaking` 对 v0.2.0 通过），tag 只打在本地。v0.2.2 只改注释（列出节点实际上报的错误码）。`NodeTask.created_at` 的注释（"清缓存用它作标记时间"）已过时（节点自己分配时间，N-M3），留到下一次 proto 改动（M3 的 v0.3.0）一起改。
+47. **`/api/auth` 白名单放在 Hono 层**：只放行界面用到的路径和方法，其余 404；organization、admin 插件仍注册，只供服务端 `auth.api.*` 调用（没有用 better-auth 的 `disabledPaths`）。
+48. **认证事件的审计**：新增 `auth.sign_in` / `auth.sign_in_failed`（失败时记录提交的邮箱，不记密码，数量受限速约束）。better-auth 自己提交的改动（改密码、TOTP、passkey、API key）在它提交后立即写审计，不在同一事务，写失败只记日志；Edgeweir 自己的写操作与审计同一事务。
+49. **账户创建的补偿**：better-auth 建好账户后，Edgeweir 的后续事务（成员关系 + 审计）失败时删除该账户，而不是单一事务（`runWithAdapter` 是内部 API，未采用）。
+50. **信封 v2**：附加数据含用途与记录 id；读路径拒绝 v1，启动时一次性把 v1 重新封装为 v2。多实例部署需要同时升级。
+51. **主密钥格式**：不把 hex 当作另一种编码解释。`openssl rand -hex 32` 的输出按 base64 解码为 48 字节，本来就可用；改成 hex 解释会让已用它部署的实例换掉密钥。
+52. **登录限速**：沿用 better-auth 默认（只在 `NODE_ENV=production` 时开启，镜像默认如此），计数存数据库，多实例、重启后共享。
+53. **install.sh 的不兼容变化**：命令行 `--token` 被拒绝（token 只经 `EDGEWEIR_TOKEN` 或 `--token-file`），以前复制的旧命令要重新从控制台复制；`--server` 必须是 https；另有 `--format`、`--mirror` / `--mirror-only`、`--no-start`；cosign 缺失时下载 v3.1.3 并校验固定的 SHA-256。
+54. **install.sh 的 e2e 用 `--no-start`**：本机 Docker 容器里没有 systemd，e2e 在容器里用 goreleaser snapshot 的 .deb 完成安装、建用户、注册，但不启动 systemd 服务。**默认**如此；有 systemd 容器环境时再补一次完整启动。
+55. **源站地址策略**：默认拒绝特殊用途地址段，**包括私网**（10/8、172.16/12、192.168/16、100.64/10 等，完整列表见 `packages/contract/src/addresses.ts` 与节点 ARCHITECTURE）。源站在内网的自建部署需要平台管理员在后台「系统设置」加入源站地址允许清单（下发到所有集群）。`localhost` 即使在允许清单内也拒绝；`127.1`、`2130706433` 这类数字主机名视为无效地址；已存在的源站只在编辑时重新校验，节点运行时照样拒绝（返回 502，站点不下线）；允许清单规范化后最多 256 条；配置回滚沿用当前的允许清单。
+56. **清缓存频率限制**：每个组织每分钟 10 个任务、每小时 2000 个目标（代码常量，不可配置）；平台管理员不受限；预热也计数，全站刷新按站点计 1；控制台自动补发的全站刷新不计数。
+57. **停用和离线节点的刷新任务**：停用节点的任务行显示为「已跳过」；重新启用或离线超过 7 天后重连时，控制台按组织给该节点补发一次全站刷新（宁可多刷），不补预热。
+58. **节点错误码**：旧节点只报文本时，只把明确的几种（`HTTP 503`、`dns <host>:` 等）映射为错误码，含糊的（`timeout or HTTP 504`）照原文显示。`task_unsupported` 的 `type` 是未知字段号 `field_<n>` 或 `unknown`；无效目标的刷新任务也报 `purge_failed`。
+59. **刷新标记的上限与降级**：每站点最多 1000 个标记，超出合并为一个站点级标记；数据面存储写满（507）后只保留站点级标记；其他失败先装站点级兜底，一分钟后重试完整集合；`purge.json` 不可读时每个站点刷新一次。缓存键：含百分号转义的 URL 升级后缓存键变化一次（升级后的第一次请求是 `MISS`）。
+60. **预热**：优先用第一个普通监听；全部监听都要求 PROXY protocol 时用本地 unix socket 监听；时间预算默认 4 分钟（`--prefetch-budget`），同一批任务共享，保证在控制台 5 分钟重新下发之前结束。
+61. **带 Authorization 的请求**：生效规则没有勾选「缓存带 Authorization 的请求」时按不缓存处理（即使源站返回 `public`）。**默认**关闭。
+62. **节点配置与 reload**：站点、源站、规则 id 不符合 `[A-Za-z0-9_-]`（或超过 128 字符）时拒绝整份配置，id 为空的源站或规则丢弃并告警；reload 后校验新配置标识，失败时恢复旧文件并按永久失败处理（5 分钟后或有新版本时重试）；watch 流正常时节点仍保留带 ±20% 抖动的兜底轮询（与 ADR-0014 第 4 条不同，已写更新记录）。
+63. **回源 HTTPS 的证书名称**：nginx 1.29.7 起 upstream 默认开启 keepalive，只按地址复用连接，按一个名称校验过的连接会被复用给另一个名称的请求而跳过校验。节点在 `edgeweir_balancer` upstream 上关闭 keepalive，连接池改由 `balancer.enable_keepalive`（按地址 + 端口 + SNI）负责，每次尝试设置 `proxy_ssl_name`。按 IP 配置的 HTTPS 源站需要设置证书覆盖的回源 Host 或 SNI。
+64. **界面**：Rubik 字体保留（fontsource 自托管，SIL OFL 1.1，ADR-0003 更新记录）；`/` 的第一帧总是浅色（落地页关闭时，深色用户直接打开 `/` 会看到一帧浅色再跳到 `/overview`）；`AlertDescription` 是提示正文，不算说明段落，单行安全提示统一用 `SafetyNote`；颜色规则里命名颜色（如 `white`）与 Tailwind 调色板类视为 token；`chart.tsx` 的 recharts 默认色选择器移到 `index.css`，与上游 shadcn 不同。
+65. **ADR 的偏差用更新记录说明**：ADR-0014 的"刷新不删文件"和"保留兜底轮询"、ADR-0003 决策 7–9 都以更新记录说明，不另写替代 ADR。**默认**如此；若希望偏差较大的决策写新 ADR 取代旧的，再补。
+66. **RPM 包**：goreleaser 生成的 .rpm 内容已与 .deb 逐项核对，但本机没有 RPM 系发行版镜像，未实际安装。
+67. **BOOTSTRAP.md 不改**：它是 Phase 0 的需求来源，按原样保留；其中的 `--token` 安装命令已过时，以 README 与控制台显示的命令为准。
+68. **install.sh e2e 如何证明 unit 可用**：没有 systemd，e2e 读取已安装 unit 的 `User=`、`Environment=`、`ExecStart=`，手动建 `/run/edgeweir-node` 后按同样方式启动，证明节点以 `edgeweir` 用户运行并在线；systemd 的沙箱选项没有被执行到。
+69. **snapshot 包没有签名**：e2e 用 `--allow-unsigned`（仍校验 SHA-256），cosign 校验只在正式发布的包上发生；本机节点仓库没有 remote，snapshot 版本号是 `0.0.1-snapshot+none`。
+70. **e2e 的主机要求**：除 Docker 外还需要 goreleaser v2、syft、Go 1.27.1，以及访问 deb.debian.org 和 openresty.org 的网络；compose 网段固定（`E2E_SUBNET` 默认 `172.28.213.0/24` 放进源站允许清单，`E2E_ISOLATED_SUBNET` 默认 `172.28.214.0/24` 保持拒绝），并行运行时各自换网段、端口和 `COMPOSE_PROJECT_NAME`。
+
+
 ## 版本核实记录（2026-09-25，来源：npm registry / proxy.golang.org / Docker Hub / nodejs.org / GitHub Releases）
 
 | 组件 | BOOTSTRAP 快照 | 核实后使用 | 备注 |
@@ -344,3 +375,82 @@ MVP M2 新增（2026-09-25）：
 | 5 | 界面规范 | Playwright 截图（浅色/深色、1280/375，断言无横向溢出与 `pageerror`）；`ui-rules.test.ts` | 源站 Tab、缓存 Tab、刷新预热页无副标题与说明段落、无骨架屏、appica 只经 `components/appica`；375px 下无横向滚动 |
 
 说明：Claude 桌面应用的内置浏览器会拦截 `GET /api/auth/*`，界面检查继续用 Playwright 截图完成。
+
+## 收尾（2026-09-25 审计）
+
+需求来源：[docs/audits/2026-09-25-wrapup.md](docs/audits/2026-09-25-wrapup.md)（原件在 `~/Developer/edgeweir-research/`）。按审计编号逐项勾选；每项后面是证明修复的测试（Vitest 为 `文件 › describe › it`，Go 为测试函数，Lua 为 `test/lua/run.lua` 的用例名，e2e 为 `scripts/e2e.sh` 的步骤）。收尾期间新增的决策见上方待决策 44–70。
+
+### 1. 集成
+
+- [x] **I1** 落地页与主题的未提交改动按功能提交（主题 `90040b3`、落地页接口 `b1ae334`、落地页界面 `594cea0`、e2e `6549274`、文档 `57c08a4`），提交前 lint、typecheck、test 通过；`.claude/launch.json` 提交，`.claude/` 其余内容忽略（`c3d5fca`，待决策 44）。
+- [x] **I2** `git merge --no-ff mvp-m2`（`aed149d`），未 rebase；`git merge-base --is-ancestor proto/v0.2.0 master` 退出 0。
+- [x] **I3** 保留 `0002_site_star`，删除 `0002_m2`，用 `pnpm db:generate` 从合并后的 schema 重新生成 `0003_m2`（语句与原 `0002_m2` 完全相同）。测试：`packages/db/test/migrations.test.ts › migration journal › has unique tags and contiguous indexes that match the tag prefix`、`› has strictly increasing timestamps (drizzle skips migrations older than the last applied)`、`› has exactly one SQL file and one snapshot per entry`。旧数据卷需要重建（待决策 45）。
+- [x] **I4** `admin.test.ts` 的控制台清单加入 `sites.starred`、`sites.setStarred`、`analytics.traffic`、`analytics.topSites`、`analytics.breakdown`、`landing.get`（`landing.update` 在 403 表），收尾新增的后台过程 `settings.originAllowList`、`settings.setOriginAllowList` 也在 403 表。测试：`test/server/admin.test.ts › admin area procedures › refuses every admin-area procedure to a tenant member with 403`（断言每个契约过程都已归类）。
+- [x] **I5** 待决策统一重编号（数据展示 26–28、落地页 29–30、M2 31–43），第 43 条改写为实际的合并方式，第 10 条移回 9 与 11 之间；"MVP 分为 5 个里程碑"改为 6 个；ROADMAP 两边的勾选合并（M2 各项、分钟级统计）。
+- [x] **I6** 节点仓库新增 `scripts/sync-adr.sh`（只把指向控制面文件的相对链接改写为 GitHub 链接，`--check` 检查一致），ADR README 说明镜像关系；收尾的 ADR 更新记录已同步，`scripts/sync-adr.sh --check` 通过。
+- [x] **I7** 已删除两个仓库的 `mvp-m2`、控制面的 `feat/analytics-redesign`（数据展示会话在合并后已删）；`git worktree remove` 移除 `~/Developer/m2/edgeweir`、`~/Developer/m2/edgeweir-node`、`~/Developer/edgeweir-analytics`（`~/Developer/m2` 里的日志等文件保留）。
+
+### 2. 必修：控制面
+
+- [x] **CP-C1** `/api/auth/*` 前加方法 + 路径白名单（`lib/auth.ts` 的 `AUTH_HTTP_ROUTES`），其余 404；`/api/auth/*` 上删除 `x-api-key`（待决策 47）。Vitest：`test/server/auth-routes.test.ts › /api/auth allow list › does not let an organization owner delete the organization through better-auth`、`› refuses the admin plugin endpoints, even to a platform administrator`、`› never turns an x-api-key into a session on /api/auth`、`› answers 404 for every path and method outside the list`、`› keeps the flows the web console uses working`、`› leaves server-side auth.api calls working`。e2e：步骤「CP-C1: better-auth's organization and admin endpoints are closed, even for an owner and platform admin」（5 个 `organization/*`、6 个 `admin/*` 端点对 owner 与平台管理员返回 404，组织、角色、密码不变）与「CP-C1: an x-api-key alone never becomes a better-auth session」（只带 `x-api-key` 时 `get-session` 为 null、`api-key/create` 401、`/rpc` 401）。
+- [x] **CP-H3** 回滚在同一事务写 `cluster.rollback` 审计。Vitest：`test/server/rollback.test.ts › configuration rollback › publishes the old content as a new revision and audits it`、`› writes nothing for unknown revisions or clusters`、`› keeps no revision when its audit entry cannot be written (same transaction)`。
+- [x] **CP-H4** better-auth 的改密码、TOTP 开关、passkey 增删、API key 增删和登录（成功 / 失败）都写审计（`lib/auth-audit.ts`，待决策 48）。Vitest：`test/server/auth-audit.test.ts › audit entries for better-auth account events › records a password change`、`› records enabling TOTP, the second-factor sign-in, and disabling it`、`› records adding a passkey, signing in with it and deleting it`、`› records API key creation and deletion without the key`、`› records successful and failed password sign-ins with the client address`。
+- [x] **CP-H5** `EDGEWEIR_TRUSTED_PROXIES`：只有来自可信对端的 `X-Forwarded-For` / `X-Real-IP` 才采用（审计 IP 与 better-auth 限速键同一个值）；登录限速存数据库（迁移 `0004_wrapup_auth`，待决策 52）。Vitest：`test/server/client-ip.test.ts › client IP resolution › ignores forwarding headers from an untrusted peer`、`› client IP on audit entries and sessions › ignores X-Forwarded-For from an untrusted peer`、`› honors X-Forwarded-For from a trusted proxy`、`› better-auth rate limiting › keeps the counters in the database, shared across instances and restarts`。
+- [x] **CP-H6** 文档里的主密钥命令改为 `openssl rand -base64 32` 原样使用，`.env.example`、compose 注释一起改（待决策 51）。Vitest：`test/server/master-key-docs.test.ts › documented secret generation commands › only produce master keys that envelope.ts accepts (200 runs each)`、`› produce database passwords that fit into DATABASE_URL unescaped`。
+- [x] **CP-H7** mvp.md 0.1「营销页例外」与 0.2（控制台首页 `/overview`），ADR-0003 更新记录；模板改为中性名称，去掉竞品名称与"仿照"注释；落地页挂载时固定浅色，`theme-init.js` 对 `/` 不加 `.dark`；Rubik 自托管并记入 ADR（待决策 64）。测试：`test/web/ui-rules.test.ts › keeps the landing templates neutral: no other vendor's name in their code or copy`；Playwright `e2e/landing.spec.ts › landing page template and login-aware header`（375px 无横向溢出、深色系统与已存深色选择下仍为浅色、离开后恢复深色、无第三方请求、无 `pageerror`）。
+- [x] **CP-H8** 统一为"绝不存 SSH 凭据"：SECURITY.md 改正，ADR-0016（决策 5）、ADR-0018 追加更新记录，原文不动。
+- [x] **CP-M1** 信封 v2 的附加数据绑定用途与记录 id（源站凭据、CA 私钥、setup token），启动时把 v1 一次性重新封装（待决策 50）。Vitest：`test/server/crypto.test.ts › MasterKey envelopes › binds the record id: a ciphertext swapped into another row does not open`、`› opens legacy (v1) envelopes only through the upgrade path`；`test/server/envelope-upgrade.test.ts › legacy envelope upgrade › re-seals every legacy envelope bound to its record id, once`、`› refuses a ciphertext swapped between rows after the upgrade`。
+- [x] **CP-M2** e2e：步骤「M2 / CP-M2: Range requests are served from the slice cache; the origin only sees 1 MiB slices」（断言源站日志里只有 `bytes=0-1048575`、`bytes=1048576-2097151`）；步骤「M2 / N-H4: HTTPS origins are verified against their name with the trusted CA, unless verification is off」（受信 CA + 名称匹配 200、受信 CA + 名称不符 502 且控制台显示 `tls_failed`、自签名 502、关闭校验 200，并断言节点错误日志）；源站证书校验的日志检查去掉了 `|| true`。
+- [x] **CP-M3** 节点：重试只在主源之间，主源全部不可用才用备用（Lua `lb.order uses backups only when every primary is down`）；控制面：任务只下发给启用的节点，停用时进行中的任务行标为已跳过（`test/server/cache-tasks.test.ts › cache task delivery › disabled nodes (CP-M3) › dispatches only to enabled nodes and lists disabled ones as skipped`、`› skips a node's pending and running deliveries when it is disabled`）；升级说明见下方「升级说明」与 [docs/guide/origins-and-cache.md](docs/guide/origins-and-cache.md)。
+- [x] **CP-M5** users、enrollment、members、landing、setup、邀请接受、证书续期的审计移进业务事务。Vitest：`test/server/audit-transactions.test.ts › audit entries share the business transaction`（6 个用例，例如 `› stores no enrollment token without its audit entry`、`› leaves the landing page settings unchanged`）。
+- [x] **CP-M6** Vitest：`test/server/tenancy.test.ts › overview, whole-site purge and tenant isolation › overview.get counts the platform for administrators and only the organization's sites for tenants`、`› sites.purgeAll bumps the cache generation, publishes a revision and audits it`、`› refuses to delete or purge another organization's site and changes nothing`、`› refuses cache tasks on another organization's site and never creates a partial task`；回滚见 CP-H3。
+- [x] **CP-M7** spinner、dialog / sheet 的关闭、sidebar、面包屑、命令面板的无障碍标签全部走 Paraglide（`7195c8d`），由 CP-M8 的英文字面量检查覆盖。
+- [x] **CP-M8** `test/web/i18n.test.ts › keeps English UI text out of components (JSX text, labels and accessibility attributes)`；`test/web/ui-rules.test.ts › never uses skeleton placeholders or pulsing blocks…`、`› uses no description slots…`、`› spells out no colors in TS/TSX…`、`› links nothing on other sites except a short allow list…`；检查发现的违规已全部修正（约 200 处颜色移入 CSS token、说明槽位改为 `SafetyNote`）。
+- [x] **CP-M9** 节点上报错误码 + 参数（proto v0.2.1），控制面存储并本地化，未知码回退原文（待决策 58）。测试：`test/server/node-channel.test.ts › stores the error codes nodes report and returns them with the text (CP-M9)`；`test/web/i18n.test.ts › localizes every node error code and task outcome code with the same parameters`；`test/web/node-errors.test.ts › node error texts`；节点 Lua `origin.classify…`、`health reports error codes…`，Go `TestAgentPrefetchFailureCodes`、`TestAgentReportsUnsupportedTasks`。
+- [x] **CP-M10a** `ReportStats` 一次请求一条 upsert 语句（批内先合并重复键）。Vitest：`test/server/stats.test.ts › node minute stats ingestion (ReportStats) › stores a full report of 5000 buckets with a single statement`、`› sums buckets of the same minute and site inside one report`、`› adds counters across reports and merges status codes key by key`。
+- [x] **CP-M11** README、ARCHITECTURE 不再把 certd、ClickHouse 写成可用；数据模型、迁移列表与开发说明与代码一致；ADR-0002、ADR-0003 的原地修改改回原文并写更新记录（ADR-0014 经逐提交比对只有追加，偏差见待决策 65）；各 ADR 追加收尾更新记录。
+- [x] **CP-L** 迁移锁在同一连接上加 / 解（`packages/db/test/migrate.test.ts › runMigrations › locks, migrates and unlocks on one dedicated connection`、`› unlocks and discards the connection when a migration fails`）；公开过程在 OpenAPI 里 `security: []`（`test/server/openapi.test.ts › OpenAPI security requirements › requires the API key by default and not for public procedures`）；接受邀请返回 `INVITATION_ACCOUNT_REQUIRED`（`test/server/console.test.ts › console procedures › asks a new invitee for a name and password with a stable error code`）；主题 provider 的 localStorage 全部 try/catch（`test/web/theme.test.ts › theme storage (ThemeProvider)`、`› theme-init.js (first paint)`）；`/` 加载时显示 `LoadingState`、失败显示错误态（Playwright landing 用例）；`.env.example` 补齐（`test/server/env-example.test.ts › documents every variable the console reads`、`› documents the variables compose files interpolate`）。
+
+### 2. 必修：节点与一键安装
+
+- [x] **N-H1** 控制台 `/downloads/*` 从 `EDGEWEIR_DOWNLOADS_DIR` 提供镜像文件，其余 404，`/downloads`、`/api`、`/rpc`、`/install.sh`、`/healthz` 不走 SPA 兜底；install.sh 重写（`main` 函数、semver 校验、优先 .deb/.rpm、tar.gz 路径修正并建用户、cosign 缺失时下载 v3.1.3 并校验 SHA-256、签名身份精确匹配版本 tag、token 只经 `EDGEWEIR_TOKEN` 或 `--token-file`、`--no-start`）；节点 `enroll` 读取 `EDGEWEIR_TOKEN` / `--token-file`（待决策 53、54）。测试：`test/server/downloads.test.ts › /downloads release mirror › answers 404 for files that are not mirrored and for traversal attempts`、`› never falls back to the SPA shell for server paths`；`test/server/install-script.test.ts › install.sh › is only function definitions until \`main\` on the last line`、`› verifies the signature against exactly the tag being installed, before installing`、`› pins cosign v3.1.3 by SHA-256 and passes the token to enroll through the environment`、`› refuses --token on the command line`、`› executes nothing when the download is cut short`；节点 `TestEnrollTokenSources`、`TestEnrollReadsTokenFromEnvAndFile`；e2e：步骤「N-H1」：控制台 `/downloads` 镜像 goreleaser snapshot（未镜像的版本和文件 404），`debian` 容器里 `curl …/install.sh | bash -s -- … --allow-unsigned --no-start --mirror …` 安装 .deb 与 OpenResty、创建 `edgeweir` 系统用户、文件与权限符合包定义、注册成功（证书指纹与控制台一致），再按 unit 的 `User=`/`ExecStart=` 启动后节点在线（待决策 54、68）。
+- [x] **N-H2** 节点拒绝特殊用途地址（配置字面量与每个 DNS 应答），平台允许清单经 `NodeConfig.origin_allowed_cidrs` 下发；控制面同样校验；边缘加 `CDN-Loop`（RFC 8586），带本节点标识的请求返回 508（待决策 55）。测试：节点 `TestAddressPolicyForbiddenRanges`、`TestAddressPolicyAllowList`、`TestBuildRefusesSpecialPurposeOrigins`、`TestCDNID`，Lua `dns drops special-purpose answers`、`router CDN-Loop detection and header value`；控制面 `test/server/origin-allow-list.test.ts › refuses loopback, metadata, private, IPv6 loopback, mapped and localhost origins`、`› allows listed ranges and compiles the list into every cluster with a new revision`、`packages/contract/test/addresses.test.ts`；e2e：控制台对 `127.0.0.1`、`169.254.169.254`、`10.0.0.10` 的创建和更新都返回 `ORIGIN_ADDRESS_FORBIDDEN` 且不发布；解析到未放行网段（`172.28.214.0/24`）的主机名源站由节点返回 502，控制台源站健康显示 `address_forbidden`；Playwright M1 检查本地化提示；源站指向节点自己时返回 508，`CDN-Loop` 按 RFC 8586 追加本节点标识，带本节点标识的请求 508。
+- [x] **N-H3** 每站点标记上限后合并为站点级标记；存储大小可配置（`--purge-dict-mb`）；增量计数与集合标识；装载失败退化为站点级标记；站点表推送不依赖清缓存同步；控制台按组织限制清缓存频率（待决策 56、59）。测试：`TestAgentServesSitesWhenPurgeSyncFails`、`TestAgentFallsBackToSiteLevelMarkers`、`TestAgentPurgeMarkersPerSiteCap`、`TestPurgeStateCollapsesSitesOverTheCap`、`TestPurgeStateIDIsIncremental`、`TestRenderPurgeDictSize`，Lua `purge status comes from counters…`、`purge replace collapses a site that does not fit…`；`test/server/cache-tasks.test.ts › per-organization rate limit (N-H3) › refuses more than the tasks per minute with CACHE_TASK_RATE_LIMITED and a retry time`、`› refuses more than the URLs per hour, counting every target`。
+- [x] **N-H4** 按源站的 SNI / Host 校验证书名称（`proxy_ssl_name $edgeweir_ssl_name`），并关闭 upstream 块的 keepalive（待决策 63）。测试：`TestRenderOriginTLSName`；e2e：步骤「M2 / N-H4: HTTPS origins are verified against their name with the trusted CA, unless verification is off」（受信 CA + 名称匹配 200、受信 CA + 名称不符 502 且控制台显示 `tls_failed`、自签名 502、关闭校验 200，并断言节点错误日志）。
+- [x] **N-M1** 缓存键读取全部请求头，与剥离头部用同一张表；每段转义。Lua `cachekey parts are escaped so no value can imitate another part`。
+- [x] **N-M2** 缓存键与清缓存用同一规范化路径。Lua `cachekey.normalize_path matches nginx's $uri`、`purge markers match encoded variants of their paths`。
+- [x] **N-M3** 节点首次应用时自己分配标记时间 `max(now, last+1)`，按任务 id 持久化。`TestPurgeTaskEpochAssignedByNode`、`TestAgentPurgeEpochPerTask`。
+- [x] **N-M4** 节点重连时控制台把过期未执行的清缓存标为 `task_expired`，按组织给该节点补发一次全站刷新（待决策 57）。`test/server/cache-tasks.test.ts › purges a node missed (N-M4) › makes up purges that expired while the node was offline, once, with a whole-site purge`；`test/server/node-channel.test.ts › hands a node back after more than 7 days a whole-site purge for expired purges (N-M4)`。
+- [x] **N-M6** Host 未命中用独立的小缓存（1024 条）。Lua `store: a Host flood cannot evict decoded sites or their balancing state`。
+- [x] **N-M7** 清缓存先于预热；预热有时间预算（`--prefetch-budget`，待决策 60）。`TestAgentRunsPurgesBeforePrefetches`、`TestAgentPrefetchTimeBudget`。
+- [x] **N-M9** 带 `Authorization` 的请求默认不查也不存缓存，规则勾选 `cacheAuthorized`（proto `cache_authorized`）才缓存（待决策 61）。Lua `requests with Authorization bypass the cache unless the rule allows them`；`TestBuildCacheAuthorized`；`packages/contract/test/schemas.test.ts › does not cache requests with Authorization unless a rule allows it`、`packages/config-compiler/test/compiler.test.ts › compiles cacheAuthorized per rule, off unless a rule asks for it`。
+- [x] **N-M11** 节点 ARCHITECTURE、SECURITY、README、ROADMAP、CLAUDE.md 与代码对齐（proto v0.2.2、负载均衡、stale、内部头、WebSocket、清缓存与健康检查的端点和存储、任务循环、`credentials.json`、`purge.json`、新参数）。
+- [x] **N-L** `go.mod` 固定 `go 1.27.1`（certd 同样）；SIGHUP 后校验 reload（`TestAgentReportsFailedReload`、`TestRenderConfID`）；轮询加 ±20% 抖动（`TestJitteredPollInterval`）；PROXY protocol 监听以 PROXY 头的客户端地址作为 `$remote_addr`（`TestRenderProxyProtocolRealIP`），预热不用 PROXY protocol 监听（`TestAgentPrefetchAvoidsProxyProtocolListeners`）；id 校验（`TestBuildRejectsUnsafeIDs`）；S3 回源删除客户端 `x-amz-*` 头（Lua `origin.amz_headers finds the client's x-amz-* headers…`，e2e：S3 步骤带伪造的 `x-amz-*` 头仍签名成功，源站只看到节点自己的 `X-Amz-Date` / `X-Amz-Content-Sha256`）；新增测试：未知任务类型 `TestAgentReportsUnsupportedTasks`、旧 revision `TestAgentIgnoresOlderRevisions`、`TestAgentDoesNotRetryRejectedRevision`，`controlplane` 包 `TestParseServerURL`、`TestIsAuthError`、`TestNewPinnedClientValidatesURL`、`TestChannelMTLSAndReload`，`hostinfo` 包 `TestCollect`、`TestIPAddresses`、`TestHostnameAndProbes`；共享字典名保留：`TestBuildSkipsCacheZonesNamedLikeSharedDicts`、`TestRenderedSharedDictsAreReservedZoneNames`（`configir.SharedDicts` 一处定义，缓存区不能与共享字典同名）。
+
+### 3. 延后（已写进对应里程碑）
+
+- [x] **D1** 最低 agent 版本门槛 → [mvp.md](docs/specs/mvp.md) 第 3 节 M3「兼容性」与 M3 验收、第 8 节 M3 行、0.5 节；ROADMAP MVP「协议与证书」。
+- [x] **D2** `ReportStats` 重试去重、小时 / 天汇总与保留 → mvp.md 第 5 节 M5「统计」与验收、0.5 节；ROADMAP MVP「运维」。
+- [x] **D3** 备份恢复后的 revision 序号 → mvp.md 第 6 节 M6「备份与恢复」与验收、0.5 节；ROADMAP「运维」。
+- [x] **D4** 预热的移动变体、前缀与全站预热 → ROADMAP v1「缓存与调度」（节点 ROADMAP 同）。
+- [x] **D5** 镜像与 GitHub Actions 按 digest / SHA 固定 → ROADMAP「首次正式发布前」，ADR-0017 收尾更新记录。
+- [x] **D6** 节点 CI 的 proto 一致性检查依赖公开仓库 → mvp.md 0.4 最后一行（保留）、ROADMAP「首次正式发布前」。
+
+### 升级说明（M2 与收尾）
+
+- 回源 HTTPS 从 M2 起默认校验证书（系统 CA 或节点的 `--trusted-ca`），校验名称是源站的回源 Host / SNI。自签名证书的源站要么换成受信证书，要么在源站 Tab 关闭校验；按 IP 配置的 HTTPS 源站要设置证书覆盖的回源 Host 或 SNI。
+- 特殊用途地址（环回、链路本地、私网、CGNAT 等）的源站默认被拒：编辑时控制台报 `ORIGIN_ADDRESS_FORBIDDEN`，节点运行时返回 502。源站在内网的部署先在后台「系统设置」加入源站地址允许清单。
+- 旧的一行安装命令（`--token`）不再可用，从控制台重新复制；反向代理后面部署控制台时设置 `EDGEWEIR_TRUSTED_PROXIES`，否则审计 IP 和登录限速按代理地址计算。
+- 迁移重新编号，1.0 之前的开发 / e2e 数据卷需要重建（待决策 45）；多实例控制台要同时升级（信封 v2，待决策 50）。
+- 含百分号转义的 URL 升级后缓存键变化一次；带 `Authorization` 的请求默认不再缓存。
+
+### 验证记录（2026-09-26，本机实跑，`master`）
+
+| # | 验收项 | 命令 | 结果 |
+| --- | --- | --- | --- |
+| 1 | 集成 | `git merge-base --is-ancestor proto/v0.2.0 master`；`git worktree list`、`git branch -a`（两个仓库）；节点 `scripts/sync-adr.sh --check` | 退出 0；两个仓库都只剩 `master` 与主工作区，`mvp-m2`、`feat/analytics-redesign` 已删；ADR 镜像一致 |
+| 2 | 控制面 | `pnpm install && pnpm lint && pnpm typecheck --force && pnpm test --force && pnpm build --force` | 全部 exit 0；测试 218 个（console 165、contract 29、compiler 16、db 8） |
+| 3 | proto / certd | `pnpm proto:gen && git diff --exit-code -- packages/proto`；`helpers/certd` 的 `go vet ./...`、`go test ./...` | 全部 exit 0；proto tag `proto/v0.2.1`（新字段）、`proto/v0.2.2`（只改注释），`buf breaking` 对 v0.2.0 通过 |
+| 4 | 节点 | `go vet ./...`、`go test -race ./...`、`make proto-check`、`make lua-test`、`goreleaser check` | 全部 exit 0；Lua 36 + 16 个用例；`make proto-check` 从 `proto/v0.2.2` 生成无差异 |
+| 5 | 端到端 | `COMPOSE_PROJECT_NAME=edgeweir-wrapup E2E_CONSOLE_PORT=13200 E2E_NODE_PORT=18280 E2E_TAG=wrapup`：`docker compose -f compose.e2e.yml down -v && docker compose -f compose.e2e.yml up -d --build && bash scripts/e2e.sh` | 输出 `E2E OK`，50 个 PASS、0 个 FAIL；Playwright setup、smoke（2）、M1、landing、analytics、M2 全部通过，无 `pageerror`；收尾新增的 7 类用例见上方各项的 e2e 步骤；结束后只清理了 `edgeweir-wrapup` 项目 |
+| 6 | 仓库与文档 | `git status`（两个仓库）；README、ARCHITECTURE、SECURITY、ROADMAP、CLAUDE.md 对照代码 | 两个仓库干净；文档由收尾各环节对照代码更新（见 CP-M11、N-M11） |
