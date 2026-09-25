@@ -184,6 +184,29 @@ describe("diffNodeConfig", () => {
     expect(applied.sites.map((s) => s.id)).toEqual(["a", "b", "d"]);
   });
 
+  it("carries the origin allow list in full and applies it", () => {
+    const allowed = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [site("a"), site("b"), site("c")],
+        originAllowedCidrs: ["192.168.0.0/16", "10.0.0.0/8", "10.0.0.0/8"],
+      },
+      2n,
+    );
+    expect(allowed.originAllowedCidrs).toEqual(["10.0.0.0/8", "192.168.0.0/16"]);
+    expect(allowed.contentHash).not.toBe(base.contentHash);
+    const diff = diffNodeConfig(base, allowed);
+    expect(diff.upsertedSites).toEqual([]);
+    expect(diff.originAllowedCidrs).toEqual(["10.0.0.0/8", "192.168.0.0/16"]);
+    const applied = applyNodeConfigDiff(base, diff);
+    expect(applied.originAllowedCidrs).toEqual(allowed.originAllowedCidrs);
+    expect(applied.contentHash).toBe(allowed.contentHash);
+    // And back: an empty list in the diff clears it.
+    expect(
+      applyNodeConfigDiff(allowed, diffNodeConfig(allowed, target)).originAllowedCidrs,
+    ).toEqual([]);
+  });
+
   it("rejects a diff whose hash does not match", () => {
     const diff = diffNodeConfig(base, target);
     diff.contentHash = "0".repeat(64);

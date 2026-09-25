@@ -125,6 +125,11 @@ export interface CompileInput {
   sites: SiteModel[];
   listeners?: ListenerModel[];
   cacheZones?: CacheZoneModel[];
+  /**
+   * CIDRs that origins may use although they are special-purpose addresses
+   * (the platform's origin allow list); any order, duplicates allowed.
+   */
+  originAllowedCidrs?: string[];
 }
 
 export const DEFAULT_CACHE_ZONE = "default";
@@ -275,6 +280,8 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   out.cacheZones.sort(byString((z: CacheZone) => z.name));
   out.certificates.sort(byString((c: CertificateRef) => c.id));
   out.sites.sort(byString((s: Site) => s.id));
+  // A set: ascending (byte order, ASCII) without duplicates, as the Go agent sorts it.
+  out.originAllowedCidrs = sortedSet(out.originAllowedCidrs);
   for (const site of out.sites) {
     site.domains.sort(byString((d) => `${d.name}\u0000${d.wildcard ? 1 : 0}`));
     site.originPool?.origins.sort(byString((o) => o.id));
@@ -326,6 +333,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       cacheZones,
       sites,
       certificates: [],
+      originAllowedCidrs: [...(input.originAllowedCidrs ?? [])],
     }),
   );
   config.contentHash = contentHash(config);
@@ -344,7 +352,8 @@ const siteBytes = (site: Site) => Buffer.from(toBinary(SiteSchema, site)).toStri
 
 /**
  * Computes the diff that turns `base` into `target`: sites are upserted or
- * removed by id, everything else is sent in full.
+ * removed by id, everything else (listeners, cache zones, certificates, the
+ * origin allow list) is sent in full.
  */
 export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfigDiff {
   const baseSites = new Map(base.sites.map((s) => [s.id, siteBytes(s)]));
@@ -357,6 +366,7 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     listeners: target.listeners,
     cacheZones: target.cacheZones,
     certificates: target.certificates,
+    originAllowedCidrs: target.originAllowedCidrs,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -382,6 +392,7 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       listeners: diff.listeners,
       cacheZones: diff.cacheZones,
       certificates: diff.certificates,
+      originAllowedCidrs: diff.originAllowedCidrs,
       sites,
     }),
   );
