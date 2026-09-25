@@ -176,7 +176,9 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
         header: () => m.nodes_col_name(),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="font-medium">{row.original.name}</span>
+            <span className="font-medium" data-testid="node-name">
+              {row.original.name}
+            </span>
             <span className="text-xs text-muted-foreground">{row.original.hostname}</span>
           </div>
         ),
@@ -400,7 +402,7 @@ function EnrollDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{m.enroll_title()}</DialogTitle>
           <DialogDescription>{m.enroll_description()}</DialogDescription>
@@ -436,7 +438,7 @@ function EnrollDialog({
                 setResult(
                   await create.mutateAsync({
                     clusterId: cluster.id,
-                    nodeName: String(data.get("nodeName") ?? ""),
+                    nodeName: String(data.get("enrollNodeName") ?? ""),
                     ttlMinutes: ttl,
                   }),
                 );
@@ -447,8 +449,14 @@ function EnrollDialog({
           >
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="nodeName">{m.enroll_node_name()}</FieldLabel>
-                <Input id="nodeName" name="nodeName" maxLength={64} placeholder="edge-sh-01" />
+                <FieldLabel htmlFor="enrollNodeName">{m.enroll_node_name()}</FieldLabel>
+                {/* Not "nodeName": that would clobber HTMLFormElement.nodeName and break React events. */}
+                <Input
+                  id="enrollNodeName"
+                  name="enrollNodeName"
+                  maxLength={64}
+                  placeholder="edge-sh-01"
+                />
               </Field>
               <Field>
                 <FieldLabel>{m.enroll_ttl()}</FieldLabel>

@@ -43,7 +43,7 @@ function SetupPage() {
                 event.preventDefault();
                 const data = new FormData(event.currentTarget);
                 const input = {
-                  name: String(data.get("name") ?? ""),
+                  name: String(data.get("adminName") ?? ""),
                   email: String(data.get("email") ?? ""),
                   password: String(data.get("password") ?? ""),
                   organizationName: String(data.get("organizationName") ?? ""),
@@ -56,8 +56,8 @@ function SetupPage() {
             >
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor="name">{m.setup_name()}</FieldLabel>
-                  <Input id="name" name="name" required autoComplete="name" />
+                  <FieldLabel htmlFor="adminName">{m.setup_name()}</FieldLabel>
+                  <Input id="adminName" name="adminName" required autoComplete="name" />
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="email">{m.setup_email()}</FieldLabel>

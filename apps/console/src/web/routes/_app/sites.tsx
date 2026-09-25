@@ -241,7 +241,7 @@ function CreateSiteDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{m.site_form_title()}</DialogTitle>
           <DialogDescription>{m.site_form_description()}</DialogDescription>
@@ -253,7 +253,7 @@ function CreateSiteDialog({
             const text = (key: string) => String(data.get(key) ?? "").trim();
             try {
               const result = await create.mutateAsync({
-                name: text("name"),
+                name: text("siteName"),
                 domains: text("domains")
                   .split(/[\s,]+/)
                   .filter(Boolean),
@@ -285,8 +285,8 @@ function CreateSiteDialog({
         >
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="name">{m.site_form_name()}</FieldLabel>
-              <Input id="name" name="name" required maxLength={100} placeholder="demo" />
+              <FieldLabel htmlFor="siteName">{m.site_form_name()}</FieldLabel>
+              <Input id="siteName" name="siteName" required maxLength={100} placeholder="demo" />
             </Field>
             <Field>
               <FieldLabel htmlFor="domains">{m.site_form_domains()}</FieldLabel>
