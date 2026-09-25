@@ -24,7 +24,7 @@ import { getLocale, m, setLocale } from "@/lib/i18n";
 export function CommandMenu({ isAdmin }: { isAdmin: boolean }) {
   const [open, setOpen] = React.useState(false);
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const manageMembers = useManageMembers();
 
   React.useEffect(() => {
@@ -84,7 +84,7 @@ export function CommandMenu({ isAdmin }: { isAdmin: boolean }) {
             <HugeiconsIcon icon={LanguageSkillIcon} strokeWidth={2} />
             {m.command_toggle_language()}
           </CommandItem>
-          <CommandItem onSelect={run(() => setTheme(theme === "dark" ? "light" : "dark"))}>
+          <CommandItem onSelect={run(() => setTheme(resolvedTheme === "dark" ? "light" : "dark"))}>
             <HugeiconsIcon icon={Moon02Icon} strokeWidth={2} />
             {m.command_toggle_theme()}
           </CommandItem>

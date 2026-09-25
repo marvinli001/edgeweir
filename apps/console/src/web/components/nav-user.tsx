@@ -47,7 +47,7 @@ function initials(name: string) {
 
 export function NavUser({ user }: { user: { name: string; email: string } }) {
   const { isMobile } = useSidebar();
-  const { theme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   return (
@@ -115,7 +115,10 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
             </DropdownMenuSub>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
-                <HugeiconsIcon icon={theme === "dark" ? Moon02Icon : Sun03Icon} strokeWidth={2} />
+                <HugeiconsIcon
+                  icon={resolvedTheme === "dark" ? Moon02Icon : Sun03Icon}
+                  strokeWidth={2}
+                />
                 {m.user_menu_theme()}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>

@@ -73,3 +73,24 @@ test("login -> admin clusters & nodes -> console sites, then switch to English",
 
   expect(pageErrors).toEqual([]);
 });
+
+test("follows the OS color scheme and keeps a manual choice", async ({ page }) => {
+  const html = page.locator("html");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/login");
+  await expect(html).toHaveClass(/\bdark\b/);
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(html).toHaveClass(/\blight\b/);
+
+  // A manual choice wins over the OS and survives a reload.
+  await page.getByTestId("theme-toggle").click();
+  await page.getByTestId("theme-dark").click();
+  await expect(html).toHaveClass(/\bdark\b/);
+  await page.reload();
+  await expect(html).toHaveClass(/\bdark\b/);
+
+  // Back to following the OS.
+  await page.getByTestId("theme-toggle").click();
+  await page.getByTestId("theme-system").click();
+  await expect(html).toHaveClass(/\blight\b/);
+});

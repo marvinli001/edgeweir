@@ -12,6 +12,8 @@ type ThemeProviderProps = {
 
 type ThemeProviderState = {
   theme: Theme;
+  /** What is on screen: the stored choice, or the OS preference while it is "system". */
+  resolvedTheme: ResolvedTheme;
   setTheme: (theme: Theme) => void;
 };
 
@@ -96,32 +98,13 @@ export function ThemeProvider({
     [storageKey],
   );
 
-  const applyTheme = React.useCallback(
-    (nextTheme: Theme) => {
-      const root = document.documentElement;
-      const resolvedTheme = nextTheme === "system" ? getSystemTheme() : nextTheme;
-      const restoreTransitions = disableTransitionOnChange ? disableTransitionsTemporarily() : null;
-
-      root.classList.remove("light", "dark");
-      root.classList.add(resolvedTheme);
-
-      if (restoreTransitions) {
-        restoreTransitions();
-      }
-    },
-    [disableTransitionOnChange],
-  );
+  const [systemTheme, setSystemTheme] = React.useState<ResolvedTheme>(getSystemTheme);
+  const resolvedTheme = theme === "system" ? systemTheme : theme;
 
   React.useEffect(() => {
-    applyTheme(theme);
-
-    if (theme !== "system") {
-      return undefined;
-    }
-
     const mediaQuery = window.matchMedia(COLOR_SCHEME_QUERY);
     const handleChange = () => {
-      applyTheme("system");
+      setSystemTheme(getSystemTheme());
     };
 
     mediaQuery.addEventListener("change", handleChange);
@@ -129,7 +112,25 @@ export function ThemeProvider({
     return () => {
       mediaQuery.removeEventListener("change", handleChange);
     };
-  }, [theme, applyTheme]);
+  }, []);
+
+  // public/theme-init.js applies the same class before first paint; this keeps it in sync.
+  React.useEffect(() => {
+    const root = document.documentElement;
+    if (root.classList.contains(resolvedTheme) && root.style.colorScheme === resolvedTheme) {
+      return;
+    }
+
+    const restoreTransitions = disableTransitionOnChange ? disableTransitionsTemporarily() : null;
+
+    root.classList.remove("light", "dark");
+    root.classList.add(resolvedTheme);
+    root.style.colorScheme = resolvedTheme;
+
+    if (restoreTransitions) {
+      restoreTransitions();
+    }
+  }, [resolvedTheme, disableTransitionOnChange]);
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -149,19 +150,7 @@ export function ThemeProvider({
         return;
       }
 
-      setThemeState((currentTheme) => {
-        const nextTheme =
-          currentTheme === "dark"
-            ? "light"
-            : currentTheme === "light"
-              ? "dark"
-              : getSystemTheme() === "dark"
-                ? "light"
-                : "dark";
-
-        localStorage.setItem(storageKey, nextTheme);
-        return nextTheme;
-      });
+      setTheme(resolvedTheme === "dark" ? "light" : "dark");
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -169,7 +158,7 @@ export function ThemeProvider({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [storageKey]);
+  }, [resolvedTheme, setTheme]);
 
   React.useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
@@ -199,9 +188,10 @@ export function ThemeProvider({
   const value = React.useMemo(
     () => ({
       theme,
+      resolvedTheme,
       setTheme,
     }),
-    [theme, setTheme],
+    [theme, resolvedTheme, setTheme],
   );
 
   return (

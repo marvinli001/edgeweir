@@ -1,6 +1,7 @@
 import { useRouteContext } from "@tanstack/react-router";
 import type * as React from "react";
 import { AreaSwitch } from "@/components/area-switch";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
@@ -23,6 +24,7 @@ export function SiteHeader({ title, actions }: { title: string; actions?: React.
             {actions}
           </div>
         ) : null}
+        <ThemeToggle className="shrink-0" />
         {isAdmin ? (
           <div className="shrink-0">
             <AreaSwitch />
