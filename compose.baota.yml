@@ -3,7 +3,8 @@
 # 用法见 docs/deploy/baota.md，要点：
 #   1. 宝塔「Docker → 容器编排 → 添加编排」，粘贴本文件，并在同目录的 .env 里填写
 #      EDGEWEIR_MASTER_KEY、BETTER_AUTH_SECRET、POSTGRES_PASSWORD、EDGEWEIR_PUBLIC_URL
-#      （可用 openssl rand -base64 32 生成）。
+#      （前两个用 openssl rand -base64 32 生成并原样使用，POSTGRES_PASSWORD 会拼进
+#      DATABASE_URL，用 openssl rand -hex 24 生成）。
 #   2. Web 控制台只监听 127.0.0.1:3000，由宝塔站点「反向代理」到 http://127.0.0.1:3000，
 #      HTTPS 证书在宝塔上配置即可。
 #   3. 节点通道 8443 端口必须直接暴露（或用 nginx stream 四层透传），

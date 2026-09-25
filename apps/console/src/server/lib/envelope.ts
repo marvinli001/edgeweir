@@ -26,7 +26,9 @@ export class MasterKey {
   constructor(encoded: string) {
     const raw = Buffer.from(encoded, "base64");
     if (raw.length < 32) {
-      throw new Error("EDGEWEIR_MASTER_KEY must be at least 32 bytes, base64 encoded");
+      throw new Error(
+        "EDGEWEIR_MASTER_KEY must be at least 32 bytes, base64 encoded (generate one with `openssl rand -base64 32` and use the output as is)",
+      );
     }
     this.kid = createHash("sha256").update(raw).digest("hex").slice(0, 16);
     this.kek = Buffer.from(hkdfSync("sha256", raw, "edgeweir/kek/v1", "envelope", 32));
