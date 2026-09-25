@@ -210,3 +210,14 @@ MVP M1 新增（2026-09-25）：
 - [x] e2e：`scripts/e2e.sh` 与 Playwright 覆盖第 1 节「验收」整条链路，断言没有 `pageerror`
 - [x] 未改 proto；edgeweir-node 无需改代码（被拒绝时继续按 last-known-good 服务的行为已存在）
 
+### 验证记录（2026-09-25，本机实跑，`master` 工作区）
+
+| # | 验收项 | 命令 | 结果 |
+| --- | --- | --- | --- |
+| 1 | 功能与遗留项 | 本节清单；`git status`、`git log` | 全部勾选；ROADMAP 勾选多集群、节点组、区域、多域名（含泛域名）、审计日志，新增「租户与账户」并勾选；两个仓库 `git status` 干净，提交为 Conventional Commits |
+| 2 | 控制面 | `pnpm install && pnpm lint && pnpm typecheck --force && pnpm test --force && pnpm build --force` | 全部 exit 0；测试 66 个（console 42、contract 11、compiler 10、db 3），含 37 个后台过程对租户成员返回 403 的表驱动用例；`test/web` 的 i18n（5）与 ui-rules（4）通过 |
+| 3 | proto / 节点 | `buf lint proto`；edgeweir-node `go vet ./...`、`go test ./...`、`make proto-check` | 未改 proto 与节点代码（仅同步 ADR 镜像），全部 exit 0 |
+| 4 | 端到端 | `docker compose -f compose.e2e.yml up -d --build`、`bash scripts/e2e.sh` | 输出 `E2E OK`：日志中的 setup token → 错误 token 被拒（API + Playwright 本地化提示）→ Playwright 初始化 → Phase 0 链路 → Playwright 冒烟 → Playwright M1 全链路（第二个组织与成员、成员只见控制台且 `/admin` 被重定向、成员新建并改域名和源站、管理员建区域/集群/节点组并移动 e2e 节点且在线、版本一致、审计日志显示名称并按操作筛选、英文下版本原因和错误提示为英文，无 `pageerror`）→ 节点按编辑后的域名和源站服务 → 停用被拒、启用恢复、删除后吊销且继续按 last-known-good 服务 |
+| 5 | 界面规范 | Playwright 截图（浅色/深色、1280/375）；`ui-rules.test.ts` | 无副标题与说明段落、无骨架屏、appica 只经 `components/appica`；375px 下页头操作换行 |
+
+说明：Claude 桌面应用的内置浏览器会拦截 `GET /api/auth/*`（Chromium/Playwright 正常），因此界面检查用 Playwright 截图完成，不影响产品。
