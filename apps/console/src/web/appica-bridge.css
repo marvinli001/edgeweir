@@ -14,7 +14,8 @@
  *
  * Effect wrappers that read no appica tokens (BorderBeam, GradientGlow, TextAnimate) only need the
  * keyframes below and may wrap shadcn content. Token-reading components (Loader, Sparkline, Meter,
- * BackgroundPattern, Countdown) render inside <AppicaScope> and must not contain shadcn components.
+ * BackgroundPattern, Countdown, OTPField) render inside <AppicaScope> and must not contain shadcn
+ * components.
  * All appica imports live in src/web/components/appica/ (enforced by test/web/ui-rules.test.ts).
  */
 
@@ -24,6 +25,9 @@
 @source "../../node_modules/@appica/ui-react/dist/components/gradient-glow";
 @source "../../node_modules/@appica/ui-react/dist/components/loader";
 @source "../../node_modules/@appica/ui-react/dist/components/meter";
+@source "../../node_modules/@appica/ui-react/dist/components/otp-field";
+/* otp-field styles its slots with the input variants. */
+@source "../../node_modules/@appica/ui-react/dist/components/input/input-variants.js";
 @source "../../node_modules/@appica/ui-react/dist/components/sparkline";
 @source "../../node_modules/@appica/ui-react/dist/components/text-animate";
 
@@ -39,6 +43,14 @@
   --color-success-emphasis: var(--success-emphasis);
   --color-warning-emphasis: var(--warning-emphasis);
   --color-error-emphasis: var(--error-emphasis);
+  --color-background-muted: var(--background-muted);
+  --color-border-strong: var(--border-strong);
+  --color-border-emphasis: var(--border-emphasis);
+  --color-error: var(--error);
+  --color-error-subtle: var(--error-subtle);
+  --color-ring-input: var(--focus-ring-input);
+  --color-ring-error: var(--focus-ring-error);
+  --opacity-disabled: var(--appica-opacity-disabled);
 }
 
 .appica-scope {
@@ -52,6 +64,14 @@
   /* shadcn has no warning token; appica's own default amber. */
   --warning-emphasis: oklch(0.705 0.213 47.604);
   --error-emphasis: var(--destructive);
+  --background-muted: var(--muted);
+  --border-strong: var(--input);
+  --border-emphasis: var(--ring);
+  --error: var(--destructive);
+  --error-subtle: color-mix(in oklab, var(--destructive) 10%, transparent);
+  --focus-ring-input: color-mix(in oklab, var(--ring) 30%, transparent);
+  --focus-ring-error: color-mix(in oklab, var(--destructive) 30%, transparent);
+  --appica-opacity-disabled: 0.5;
   --color-success: var(--chart-2);
   --color-border-intense: var(--muted-foreground);
   --radius-3xs: calc(var(--radius) * 0.3);

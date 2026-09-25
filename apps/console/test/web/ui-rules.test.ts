@@ -1,4 +1,4 @@
-import { globSync, readFileSync } from "node:fs";
+import { existsSync, globSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -29,19 +29,33 @@ describe("UI rules (ADR-0003)", () => {
     expect(main).not.toContain("@appica/ui-react/providers");
   });
 
-  it("scans every appica component it imports, and nothing else", () => {
+  it("scans every appica component it imports (and their internal deps), and nothing else", () => {
+    const dist = resolve(root, "node_modules/@appica/ui-react/dist/components");
     const imported = new Set(
       webSources
         .filter((file) => file.includes("components/appica/"))
         .flatMap((file) =>
-          [...read(file).matchAll(/@appica\/ui-react\/([a-z-]+)/g)].map((m) => m[1]),
+          [...read(file).matchAll(/@appica\/ui-react\/([a-z-]+)/g)].map((m) => m[1] as string),
         ),
     );
-    const scanned = new Set(
-      [...read("src/web/appica-bridge.css").matchAll(/dist\/components\/([a-z-]+)";/g)].map(
-        (m) => m[1],
-      ),
+    // Components that style themselves with another component's variants need that file scanned too.
+    const needed = new Set(imported);
+    for (const name of imported) {
+      for (const file of globSync("*.js", { cwd: resolve(dist, name) })) {
+        const source = readFileSync(resolve(dist, name, file), "utf8");
+        for (const m of source.matchAll(/from '\.\.\/([a-z-]+)\/[^']+'/g))
+          needed.add(m[1] as string);
+      }
+    }
+    const sources = [...read("src/web/appica-bridge.css").matchAll(/@source "([^"]+)";/g)].map(
+      (m) => m[1] as string,
     );
-    expect([...scanned].sort()).toEqual([...imported].sort());
+    for (const source of sources) {
+      expect(existsSync(resolve(root, "src/web", source)), source).toBe(true);
+    }
+    const scanned = new Set(
+      sources.map((source) => source.match(/dist\/components\/([a-z-]+)/)?.[1] ?? source),
+    );
+    expect([...scanned].sort()).toEqual([...needed].sort());
   });
 });
