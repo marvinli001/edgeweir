@@ -89,7 +89,7 @@ Details: [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) and [ADR-001
 
 ## Development
 
-Requirements: Node.js 24+, pnpm 12, Docker. Go 1.27.1 is needed only for `helpers/certd`. buf comes with the dev dependencies (`pnpm lint` runs it).
+Requirements: Node.js 24+, pnpm 12, Docker. Go 1.27.1 is needed only for `helpers/certd` and `pnpm e2e`. buf comes with the dev dependencies (`pnpm lint` runs it).
 
 ```sh
 pnpm install
@@ -109,7 +109,31 @@ pnpm dev
 | `pnpm proto:lint` | Lint `proto/` with buf |
 | `pnpm proto:gen` | Regenerate TypeScript from `proto/` into `packages/proto` |
 | `pnpm db:generate` | Generate a SQL migration from schema changes in `packages/db/src/schema` |
-| `pnpm e2e` | End-to-end tests against `compose.e2e.yml`: start it first with `docker compose -f compose.e2e.yml up -d --build` (needs Docker and a checkout of edgeweir-node next to this repository) |
+| `pnpm e2e` | End-to-end tests against `compose.e2e.yml` (see [End-to-end tests](#end-to-end-tests)) |
+
+### End-to-end tests
+
+`pnpm e2e` runs `scripts/e2e.sh` against a fresh `compose.e2e.yml` stack (PostgreSQL, the console, one edge node built from edgeweir-node, test origins):
+
+```sh
+docker compose -f compose.e2e.yml up -d --build
+pnpm e2e     # --up starts the stack, --down removes it and its volumes afterwards, --skip-ui skips Playwright
+```
+
+Besides curl, jq, Docker and Node.js it needs a checkout of edgeweir-node next to this repository (or `EDGEWEIR_NODE_CONTEXT`), and for the install step goreleaser v2, syft and Go 1.27.1 on the host, plus network access to deb.debian.org and openresty.org. On top of enrollment, config rollout, cache, purge and prefetch, origins, S3, failover and the Playwright suites it checks the auth route allow list (better-auth's organization and admin endpoints are closed, API keys never become sessions), the origin address policy and CDN-Loop, HTTPS origin name verification, Range requests from 1 MiB slices, and `install.sh` in a clean container installing goreleaser snapshot packages from the console's mirror.
+
+`compose.e2e.yml` and `scripts/e2e.sh` read these variables; give both the same values. With another project name, ports, tag and subnets a second environment runs next to the first one.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `COMPOSE_PROJECT_NAME` | `edgeweir-e2e` | Compose project; also names the install container |
+| `E2E_CONSOLE_PORT` | `13000` | Host port of the console |
+| `E2E_NODE_PORT` | `18080` | Host port of the node's HTTP listener |
+| `E2E_TAG` | `e2e` | Tag of the console and node images |
+| `E2E_SUBNET` | `172.28.213.0/24` | Default network, put on the origin allow list |
+| `E2E_ISOLATED_SUBNET` | `172.28.214.0/24` | Network outside the allow list (its origin must be refused) |
+| `E2E_INSTALL_IMAGE` | `debian:bookworm-slim` | Clean machine for `install.sh` |
+| `EDGEWEIR_NODE_CONTEXT` | `../edgeweir-node` | edgeweir-node checkout |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for commit conventions, the proto change flow and the i18n rules.
 

@@ -47,7 +47,7 @@ PostgreSQL 是唯一的外部依赖。`compose.yml` 的 `analytics`（ClickHouse
 | `proto/` | buf 模块：`edgeweir/node/v1/{node,config}.proto`，两个仓库唯一的契约来源（当前 tag `proto/v0.2.2`） |
 | `helpers/certd` | Go 编写的 `edgeweir-certd` 骨架，多阶段构建进同一镜像 |
 | `compose*.yml`、`Dockerfile`、`docker/` | 部署；`compose.dev.yml` 是本地开发数据库，`compose.e2e.yml` 用于端到端测试 |
-| `scripts/e2e.sh` | 端到端测试脚本（注册、配置下发、缓存、刷新预热、源站、S3、证书校验等，最后跑 Playwright） |
+| `scripts/e2e.sh` | 端到端测试脚本：注册、配置下发、缓存、刷新预热、源站、S3、故障切换，认证路由白名单、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、分片 Range，`install.sh` 在干净容器里安装 goreleaser snapshot 包；中间穿插 Playwright |
 | `docs/` | `adr/`（架构决策，edgeweir-node 的 `docs/adr` 由该仓库的 `scripts/sync-adr.sh` 镜像）、`specs/mvp.md`、`guide/`、`deploy/`、`audits/`、`research/` |
 
 ## 3. 数据模型
@@ -101,7 +101,7 @@ URL、目录、全站刷新和 URL 预热不走 revision，而是类型化的节
 - `pnpm build`：Vite 构建 SPA 到 `apps/console/dist/web`，esbuild 把服务端和所有依赖打成单个 `dist/server/main.js`（`install/` 一并复制），迁移复制到 `dist/migrations`。生产镜像不需要 `node_modules`。
 - `pnpm db:generate`：drizzle-kit 根据 schema 的改动生成 SQL 迁移，SQL 与快照一起提交。
 - `pnpm proto:gen`：从 `proto/` 生成 TS；`edgeweir-node` 从本仓库的 git tag（`proto/vX.Y.Z`）生成 Go。
-- 端到端：`docker compose -f compose.e2e.yml up -d --build` 后 `pnpm e2e`（`scripts/e2e.sh`），需要同级目录的 edgeweir-node。
+- 端到端：`docker compose -f compose.e2e.yml up -d --build` 后 `pnpm e2e`（`scripts/e2e.sh`），需要同级目录的 edgeweir-node（`EDGEWEIR_NODE_CONTEXT`），安装步骤还需要宿主机上的 goreleaser v2、syft、Go 1.27.1，以及对 deb.debian.org 和 openresty.org 的网络访问。`COMPOSE_PROJECT_NAME`、`E2E_CONSOLE_PORT`、`E2E_NODE_PORT`、`E2E_TAG`、`E2E_SUBNET`、`E2E_ISOLATED_SUBNET` 让第二套环境并行运行，`E2E_INSTALL_IMAGE` 换安装用的镜像（默认值见 README 的端到端测试一节）。
 
 ## 8. 可观测性
 

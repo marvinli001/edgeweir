@@ -16,7 +16,7 @@
 - Node.js 24+（版本见 `.nvmrc`）
 - pnpm 12（`corepack enable` 后按 `package.json` 的 `packageManager` 自动使用，或 `npm i -g pnpm@12`）
 - Docker（本地 PostgreSQL 与端到端测试）
-- Go 1.27.1（仅修改 `helpers/certd` 时需要）
+- Go 1.27.1（修改 `helpers/certd` 和运行 `pnpm e2e` 时需要）
 - buf 随开发依赖安装（`@bufbuild/buf`），`pnpm lint` 和 `pnpm proto:*` 直接使用
 
 启动：
@@ -41,7 +41,7 @@ pnpm dev
 | `pnpm test`（Vitest，数据库用 PGlite，不需要 Docker） | 每次提交前 |
 | `pnpm build` | 改动构建配置或依赖时 |
 | `pnpm proto:lint` | 改动 `proto/` 时 |
-| `pnpm e2e` | 改动节点通道、配置编译或页面流程时：先 `docker compose -f compose.e2e.yml up -d --build`（需要 Docker 和同级目录的 edgeweir-node） |
+| `pnpm e2e` | 改动节点通道、配置编译、安装脚本或页面流程时：先 `docker compose -f compose.e2e.yml up -d --build`（需要 Docker、同级目录的 edgeweir-node，以及 goreleaser v2、syft 和对 deb.debian.org、openresty.org 的网络访问；变量见 README 的[端到端测试](README.zh-CN.md#端到端测试)） |
 
 格式问题可以用 `pnpm exec biome check --write .` 自动修复。
 

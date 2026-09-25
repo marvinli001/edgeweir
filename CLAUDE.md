@@ -18,7 +18,8 @@ pnpm test           # vitest (PGlite, no Docker needed)
 pnpm build
 pnpm proto:gen      # regenerate packages/proto from proto/
 pnpm db:generate    # drizzle-kit migration from schema changes
-docker compose -f compose.e2e.yml up -d --build && pnpm e2e   # needs ../edgeweir-node
+docker compose -f compose.e2e.yml up -d --build && pnpm e2e   # needs ../edgeweir-node, goreleaser v2, syft, Go 1.27.1, deb.debian.org, openresty.org
+# second stack: COMPOSE_PROJECT_NAME, E2E_{CONSOLE_PORT,NODE_PORT,TAG,SUBNET,ISOLATED_SUBNET}; E2E_INSTALL_IMAGE (README "End-to-end tests")
 ```
 
 ## Conventions

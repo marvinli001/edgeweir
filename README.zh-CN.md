@@ -89,7 +89,7 @@ docker compose up -d
 
 ## 开发
 
-需要 Node.js 24+、pnpm 12、Docker。修改 `helpers/certd` 需要 Go 1.27.1。buf 随开发依赖安装（`pnpm lint` 会运行它）。
+需要 Node.js 24+、pnpm 12、Docker。修改 `helpers/certd` 和运行 `pnpm e2e` 需要 Go 1.27.1。buf 随开发依赖安装（`pnpm lint` 会运行它）。
 
 ```sh
 pnpm install
@@ -109,7 +109,31 @@ pnpm dev
 | `pnpm proto:lint` | 用 buf 检查 `proto/` |
 | `pnpm proto:gen` | 从 `proto/` 重新生成 TypeScript 到 `packages/proto` |
 | `pnpm db:generate` | 根据 `packages/db/src/schema` 的改动生成 SQL 迁移 |
-| `pnpm e2e` | 针对 `compose.e2e.yml` 的端到端测试：先执行 `docker compose -f compose.e2e.yml up -d --build`（需要 Docker，以及本仓库旁边的 edgeweir-node 检出） |
+| `pnpm e2e` | 针对 `compose.e2e.yml` 的端到端测试（见[端到端测试](#端到端测试)） |
+
+### 端到端测试
+
+`pnpm e2e` 运行 `scripts/e2e.sh`，对象是一套全新的 `compose.e2e.yml` 环境（PostgreSQL、控制台、由 edgeweir-node 构建的一个边缘节点、测试源站）：
+
+```sh
+docker compose -f compose.e2e.yml up -d --build
+pnpm e2e     # --up 先启动环境，--down 结束后删除环境及其卷，--skip-ui 跳过 Playwright
+```
+
+除 curl、jq、Docker 和 Node.js 外，需要本仓库旁边的 edgeweir-node 检出（或用 `EDGEWEIR_NODE_CONTEXT` 指定）；安装步骤还需要宿主机上的 goreleaser v2、syft 和 Go 1.27.1，并能访问 deb.debian.org 和 openresty.org。除注册、配置下发、缓存、刷新预热、源站、S3、故障切换和 Playwright 用例外，它还检查认证路由白名单（better-auth 的组织与管理端点关闭，API Key 不会变成会话）、源站地址策略与 CDN-Loop、HTTPS 源站的名称校验、1 MiB 分片的 Range 请求，以及 `install.sh` 在干净容器里从控制台镜像安装 goreleaser snapshot 包。
+
+`compose.e2e.yml` 和 `scripts/e2e.sh` 读取下列变量，两边要给相同的值。换一组项目名、端口、tag 和子网，就能在旁边再跑一套环境。
+
+| 变量 | 默认值 | 作用 |
+| --- | --- | --- |
+| `COMPOSE_PROJECT_NAME` | `edgeweir-e2e` | Compose 项目名，也用于命名安装容器 |
+| `E2E_CONSOLE_PORT` | `13000` | 控制台的宿主机端口 |
+| `E2E_NODE_PORT` | `18080` | 节点 HTTP 的宿主机端口 |
+| `E2E_TAG` | `e2e` | 控制台和节点镜像的 tag |
+| `E2E_SUBNET` | `172.28.213.0/24` | 默认网络，加入源站允许清单 |
+| `E2E_ISOLATED_SUBNET` | `172.28.214.0/24` | 允许清单之外的网络（其中的源站必须被拒绝） |
+| `E2E_INSTALL_IMAGE` | `debian:bookworm-slim` | 运行 `install.sh` 的干净机器 |
+| `EDGEWEIR_NODE_CONTEXT` | `../edgeweir-node` | edgeweir-node 检出目录 |
 
 提交规范、proto 变更流程和 i18n 规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
