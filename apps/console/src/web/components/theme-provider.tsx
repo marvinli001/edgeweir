@@ -1,7 +1,16 @@
 import * as React from "react";
-
-type Theme = "dark" | "light" | "system";
-type ResolvedTheme = "dark" | "light";
+import {
+  holdLightLock,
+  isLightLocked,
+  isLocalStorage,
+  isTheme,
+  type ResolvedTheme,
+  readStoredTheme,
+  setInitialLightLock,
+  storeTheme,
+  subscribeLightLock,
+  type Theme,
+} from "@/lib/theme";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -12,23 +21,19 @@ type ThemeProviderProps = {
 
 type ThemeProviderState = {
   theme: Theme;
-  /** What is on screen: the stored choice, or the OS preference while it is "system". */
+  /** What is on screen: light while a light-only page holds the lock, else the choice or the OS. */
   resolvedTheme: ResolvedTheme;
   setTheme: (theme: Theme) => void;
 };
 
 const COLOR_SCHEME_QUERY = "(prefers-color-scheme: dark)";
-const THEME_VALUES: Theme[] = ["dark", "light", "system"];
+
+// public/theme-init.js marks the first paint of the landing route as light-locked.
+if (typeof document !== "undefined") {
+  setInitialLightLock(document.documentElement.dataset.themeLock === "light");
+}
 
 const ThemeProviderContext = React.createContext<ThemeProviderState | undefined>(undefined);
-
-function isTheme(value: string | null): value is Theme {
-  if (value === null) {
-    return false;
-  }
-
-  return THEME_VALUES.includes(value as Theme);
-}
 
 function getSystemTheme(): ResolvedTheme {
   if (window.matchMedia(COLOR_SCHEME_QUERY).matches) {
@@ -81,25 +86,22 @@ export function ThemeProvider({
   disableTransitionOnChange = true,
   ...props
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = React.useState<Theme>(() => {
-    const storedTheme = localStorage.getItem(storageKey);
-    if (isTheme(storedTheme)) {
-      return storedTheme;
-    }
-
-    return defaultTheme;
-  });
+  const [theme, setThemeState] = React.useState<Theme>(
+    () => readStoredTheme(storageKey) ?? defaultTheme,
+  );
 
   const setTheme = React.useCallback(
     (nextTheme: Theme) => {
-      localStorage.setItem(storageKey, nextTheme);
+      storeTheme(storageKey, nextTheme);
       setThemeState(nextTheme);
     },
     [storageKey],
   );
 
   const [systemTheme, setSystemTheme] = React.useState<ResolvedTheme>(getSystemTheme);
-  const resolvedTheme = theme === "system" ? systemTheme : theme;
+  const locked = React.useSyncExternalStore(subscribeLightLock, isLightLocked, () => false);
+  const chosenTheme = theme === "system" ? systemTheme : theme;
+  const resolvedTheme = locked ? "light" : chosenTheme;
 
   React.useEffect(() => {
     const mediaQuery = window.matchMedia(COLOR_SCHEME_QUERY);
@@ -114,8 +116,9 @@ export function ThemeProvider({
     };
   }, []);
 
-  // public/theme-init.js applies the same class before first paint; this keeps it in sync.
-  React.useEffect(() => {
+  // public/theme-init.js applies the same class before first paint; this keeps it in sync. A layout
+  // effect, so entering or leaving a light-only page never paints a frame in the other scheme.
+  React.useLayoutEffect(() => {
     const root = document.documentElement;
     if (root.classList.contains(resolvedTheme) && root.style.colorScheme === resolvedTheme) {
       return;
@@ -150,7 +153,12 @@ export function ThemeProvider({
         return;
       }
 
-      setTheme(resolvedTheme === "dark" ? "light" : "dark");
+      // A light-only page would not show the change; do not flip the saved choice unseen.
+      if (locked) {
+        return;
+      }
+
+      setTheme(chosenTheme === "dark" ? "light" : "dark");
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -158,11 +166,11 @@ export function ThemeProvider({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [resolvedTheme, setTheme]);
+  }, [chosenTheme, locked, setTheme]);
 
   React.useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.storageArea !== localStorage) {
+      if (!isLocalStorage(event.storageArea)) {
         return;
       }
 
@@ -210,3 +218,11 @@ export const useTheme = () => {
 
   return context;
 };
+
+/**
+ * Keeps the page light while the calling component is mounted (the landing page has a fixed light
+ * palette); the user's theme returns when it unmounts.
+ */
+export function useLightTheme() {
+  React.useLayoutEffect(() => holdLightLock(), []);
+}
