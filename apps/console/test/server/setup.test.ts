@@ -2,6 +2,7 @@ import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
+import { MasterKey } from "../../src/server/lib/envelope";
 import { ensureSetupToken, SETUP_TOKEN_PREFIX } from "../../src/server/services/setup";
 import { createTestContext, PASSWORD, rpcClient, rpcError, signIn } from "./helpers";
 
@@ -74,5 +75,24 @@ describe("first-run setup token", async () => {
       actorName: "Platform Admin",
       targetName: "Platform Admin",
     });
+  });
+});
+
+describe("setup token storage", async () => {
+  const { ctx, client: pglite } = await createTestContext();
+  afterAll(() => pglite.close());
+
+  it("is shared by instances starting together and reissued after a master key change", async () => {
+    const [a, b] = await Promise.all([ensureSetupToken(ctx), ensureSetupToken(ctx)]);
+    expect(a).toMatch(/^ews_/);
+    expect(b).toBe(a);
+    const rotated = {
+      db: ctx.db,
+      masterKey: new MasterKey(Buffer.alloc(32, 9).toString("base64")),
+    };
+    const reissued = await ensureSetupToken(rotated);
+    expect(reissued).toMatch(/^ews_/);
+    expect(reissued).not.toBe(a);
+    expect(await ensureSetupToken(rotated)).toBe(reissued);
   });
 });

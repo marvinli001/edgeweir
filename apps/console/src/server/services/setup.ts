@@ -58,29 +58,38 @@ export async function ensureSetupToken(ctx: {
   masterKey: MasterKey;
 }): Promise<string | null> {
   if (await isInitialized(ctx.db)) return null;
-  const state = await readSetupToken(ctx.db);
-  if (state.usedAt) return null;
-  if (state.envelope) {
+  const open = (state: SetupTokenState) => {
+    if (!state.envelope) return null;
     try {
       return ctx.masterKey.open(state.envelope, SETUP_TOKEN_PURPOSE).toString("utf8");
     } catch {
-      // Sealed with a previous master key: issue a new token below.
+      return null; // sealed with a previous master key
     }
-  }
+  };
+  const state = await readSetupToken(ctx.db);
+  if (state.usedAt) return null;
+  const existing = open(state);
+  if (existing) return existing;
   const token = `${SETUP_TOKEN_PREFIX}${randomBytes(24).toString("base64url")}`;
-  const value: SetupTokenState = {
+  const value = {
     envelope: ctx.masterKey.seal(token, SETUP_TOKEN_PURPOSE),
     hash: sha256(token),
     createdAt: new Date().toISOString(),
-  };
-  await ctx.db
-    .insert(schema.systemSetting)
-    .values({ key: SETUP_TOKEN_KEY, value: value as Record<string, unknown> })
-    .onConflictDoUpdate({
-      target: schema.systemSetting.key,
-      set: { value: value as Record<string, unknown> },
-    });
-  return token;
+  } satisfies SetupTokenState as Record<string, unknown>;
+  if (state.envelope) {
+    // Unreadable (master key changed): replace it.
+    await ctx.db
+      .update(schema.systemSetting)
+      .set({ value })
+      .where(eq(schema.systemSetting.key, SETUP_TOKEN_KEY));
+  } else {
+    // Several instances may start at once: the first stored token wins, all print it.
+    await ctx.db
+      .insert(schema.systemSetting)
+      .values({ key: SETUP_TOKEN_KEY, value })
+      .onConflictDoNothing();
+  }
+  return open(await readSetupToken(ctx.db));
 }
 
 /** Prints the setup token to the log, where the operator reads it (`docker compose logs`). */
