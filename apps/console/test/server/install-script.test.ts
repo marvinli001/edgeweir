@@ -176,6 +176,70 @@ describe("install.sh", () => {
     }
   });
 
+  it("adds the openresty.org yum/dnf repository of the distribution and release", () => {
+    // The script's own function on the fields of a fake /etc/os-release (read
+    // as install_openresty reads them), called in place of `main`.
+    expect(script).toContain('repo="$(openresty_rpm_repo "$id" "$like" "$version" "$ARCH")"');
+    const osRelease = join(stubs, "os-release");
+    const rpmRepo = (fields: string, arch: string) => {
+      writeFileSync(osRelease, `${fields}\n`);
+      return spawnSync("bash", ["-s", "--", osRelease, arch], {
+        input: script.replace(
+          /main "\$@"\s*$/,
+          'ID= ID_LIKE= VERSION_ID=\n. "$1"\nopenresty_rpm_repo "$ID" "$ID_LIKE" "$VERSION_ID" "$2"\n',
+        ),
+        encoding: "utf8",
+      });
+    };
+    /** ID, ID_LIKE and VERSION_ID as the distributions' images ship them. */
+    const os = (id: string, like: string, version?: string) =>
+      [`ID="${id}"`, like && `ID_LIKE="${like}"`, version && `VERSION_ID="${version}"`]
+        .filter(Boolean)
+        .join("\n");
+    const el = "rhel centos fedora";
+    const cases: [string, string, string][] = [
+      [os("rocky", el, "9.8"), "amd64", "rocky/openresty2.repo"],
+      [os("rocky", el, "9.8"), "arm64", "rocky/openresty2.repo"],
+      [os("rocky", el, "8.10"), "arm64", "rocky/openresty.repo"],
+      [os("rhel", "fedora", "9.8"), "amd64", "rhel/openresty2.repo"],
+      [os("rhel", "fedora", "8.10"), "arm64", "rhel/openresty.repo"],
+      [os("centos", "rhel fedora", "9"), "arm64", "centos/openresty2.repo"],
+      [os("centos", "rhel fedora", "7"), "amd64", "centos/openresty.repo"],
+      // RHEL rebuilds without a repository of their own use RHEL's.
+      [os("almalinux", el, "9.8"), "arm64", "rhel/openresty2.repo"],
+      [os("almalinux", el, "8.10"), "amd64", "rhel/openresty.repo"],
+      [os("ol", "fedora", "8.10"), "arm64", "oracle/openresty.repo"],
+      ["ID=fedora\nVERSION_ID=42", "arm64", "fedora/openresty.repo"],
+      [os("amzn", "fedora", "2023"), "arm64", "amazon/openresty.repo"],
+      [os("amzn", "centos rhel fedora", "2"), "amd64", "amazon/openresty.repo"],
+      [os("amzn", "centos rhel fedora", "2018.03"), "amd64", "amazon/openresty.repo"],
+      [os("alinux", "rhel fedora centos anolis", "3"), "arm64", "alinux/openresty.repo"],
+      [os("tencentos", "rhel fedora centos", "3.1"), "amd64", "tlinux/openresty.repo"],
+      ['ID=mariner\nVERSION_ID="2.0"', "arm64", "mariner/openresty.repo"],
+    ];
+    for (const [fields, arch, path] of cases) {
+      const res = rpmRepo(fields, arch);
+      expect(res.status, `${fields} ${arch}`).toBe(0);
+      expect(res.stdout, `${fields} ${arch}`).toBe(`https://openresty.org/package/${path}\n`);
+    }
+    const refused: [string, string][] = [
+      // openresty.org packages Oracle Linux 7 and 8 only, Amazon Linux 1 for x86_64 only.
+      [os("ol", "fedora", "9.8"), "amd64"],
+      [os("amzn", "centos rhel fedora", "2018.03"), "arm64"],
+      [os("centos", "rhel fedora", "6.10"), "amd64"],
+      [os("rocky", el, "9.8"), "riscv64"],
+      [os("opensuse-leap", "suse opensuse", "15.6"), "amd64"],
+      [os("azurelinux", "", "3.0"), "amd64"],
+      [os("rhel", "fedora"), "amd64"],
+      [os("rhel", "fedora", "9; rm -rf /"), "amd64"],
+    ];
+    for (const [fields, arch] of refused) {
+      const res = rpmRepo(fields, arch);
+      expect(res.status, `${fields} ${arch}`).not.toBe(0);
+      expect(res.stdout).toBe("");
+    }
+  });
+
   it("executes nothing when the download is cut short", () => {
     const last = script.lastIndexOf('main "$@"');
     for (const cut of [last, last + 3, Math.floor(script.length / 2), 200]) {

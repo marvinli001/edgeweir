@@ -273,6 +273,44 @@ openresty_apt_source() {
     "$arch" "$path" "$codename" "$component"
 }
 
+# openresty_rpm_repo ID ID_LIKE VERSION_ID ARCH: the URL of the openresty.org
+# yum/dnf .repo file (https://openresty.org/en/linux-packages.html). One file
+# serves x86_64 and aarch64 (its baseurl ends in $releasever/$basearch).
+# CentOS, RHEL and Rocky 9 or later use openresty2.repo (packages signed with
+# the newer key); RHEL rebuilds without a repository of their own (AlmaLinux,
+# ...) use RHEL's, found through ID_LIKE. Fails for anything openresty.org
+# does not package.
+openresty_rpm_repo() {
+  local id="$1" like="$2" version="$3" arch="$4" major dir min max=999999 file="openresty.repo"
+  case "$arch" in amd64 | arm64) ;; *) return 1 ;; esac
+  [[ "$version" =~ ^[0-9]{1,6}(\.[0-9]+)*$ ]] || return 1
+  major="${version%%.*}"
+  case "$id" in
+    centos | rhel | rocky | ol | fedora | amzn | alinux | tencentos | mariner) ;;
+    *)
+      [[ " $like " == *" rhel "* ]] || return 1
+      id="rhel"
+      ;;
+  esac
+  case "$id" in
+    centos | rhel) dir="$id" min=7 ;;
+    rocky) dir="rocky" min=8 ;;
+    ol) dir="oracle" min=7 max=8 ;;
+    fedora) dir="fedora" min=32 ;;
+    amzn)
+      # Amazon Linux 2 and 2023; Amazon Linux 1 (2018.03) on x86_64 only.
+      dir="amazon" min=0
+      case "$version" in 2 | 2023) ;; 2018.03) [ "$arch" = amd64 ] || return 1 ;; *) return 1 ;; esac
+      ;;
+    alinux) dir="alinux" min=2 max=3 ;;
+    tencentos) dir="tlinux" min=2 max=3 ;;
+    mariner) dir="mariner" min=2 max=2 ;;
+  esac
+  [ "$major" -ge "$min" ] && [ "$major" -le "$max" ] || return 1
+  case "$id" in centos | rhel | rocky) [ "$major" -lt 9 ] || file="openresty2.repo" ;; esac
+  printf 'https://openresty.org/package/%s/%s\n' "$dir" "$file"
+}
+
 install_openresty() {
   if command -v openresty >/dev/null 2>&1; then
     return 0
@@ -293,10 +331,23 @@ install_openresty() {
     apt-get update -y
     apt-get install -y --no-install-recommends openresty
   elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
-    local pm
+    local pm id like version repo
     pm="$(command -v dnf || command -v yum)"
-    curl -fsSL -o /etc/yum.repos.d/openresty.repo https://openresty.org/package/centos/openresty.repo
-    "$pm" install -y openresty
+    # shellcheck source=/dev/null
+    id="$(. /etc/os-release && printf '%s' "${ID:-}")"
+    # shellcheck source=/dev/null
+    like="$(. /etc/os-release && printf '%s' "${ID_LIKE:-}")"
+    # shellcheck source=/dev/null
+    version="$(. /etc/os-release && printf '%s' "${VERSION_ID:-}")"
+    repo="$(openresty_rpm_repo "$id" "$like" "$version" "$ARCH")" \
+      || die "openresty.org has no packages for ${id:-this distribution} ${version} (${RPM_ARCH}); install OpenResty manually and re-run"
+    log "adding ${repo}"
+    download "$repo" /etc/yum.repos.d/openresty.repo || die "could not download ${repo}"
+    if ! "$pm" install -y openresty; then
+      # A repository without metadata for this release would break every later dnf/yum run.
+      rm -f /etc/yum.repos.d/openresty.repo
+      die "could not install OpenResty from ${repo}; install OpenResty manually and re-run"
+    fi
   else
     die "unsupported package manager; install OpenResty manually and re-run"
   fi
