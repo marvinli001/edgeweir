@@ -11,6 +11,7 @@ import {
 } from "../../src/server/services/cache-tasks";
 import { replaceOriginHealth } from "../../src/server/services/origin-health";
 import { latestRevision } from "../../src/server/services/revisions";
+import { s3SecretBinding } from "../../src/server/services/sites";
 import {
   type ApiClient,
   createTestContext,
@@ -212,7 +213,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect(rotated?.version).toBe(2);
     expect(
       ctx.masterKey
-        .open(JSON.parse(rotated?.secretEnvelope ?? "{}"), "origin-credential/s3-secret")
+        .open(JSON.parse(rotated?.secretEnvelope ?? "{}"), s3SecretBinding(rotated?.id ?? ""))
         .toString(),
     ).toBe("rotated");
 

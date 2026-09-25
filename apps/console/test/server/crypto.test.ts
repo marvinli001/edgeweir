@@ -2,8 +2,9 @@ import "reflect-metadata";
 import { webcrypto, X509Certificate } from "node:crypto";
 import * as x509 from "@peculiar/x509";
 import { describe, expect, it } from "vitest";
-import { MasterKey } from "../../src/server/lib/envelope";
+import { LegacyEnvelopeError, MasterKey } from "../../src/server/lib/envelope";
 import { CertificateAuthority, CsrError, generateCa } from "../../src/server/pki/ca";
+import { LEGACY_V1_FIXTURE } from "./fixtures";
 import { TEST_MASTER_KEY } from "./helpers";
 
 async function makeCsr(cn = "host-1") {
@@ -21,28 +22,55 @@ async function makeCsr(cn = "host-1") {
 }
 
 describe("MasterKey envelopes", () => {
+  const row1 = { purpose: "dns_credential.secret", recordId: "row-1" };
+
   it("round-trips and binds the purpose", () => {
     const mk = new MasterKey(TEST_MASTER_KEY);
-    const env = mk.seal("secret", "dns:1");
+    const env = mk.seal("secret", row1);
+    expect(env.v).toBe(2);
     expect(env.ciphertext).not.toContain("secret");
-    expect(mk.open(env, "dns:1").toString()).toBe("secret");
-    expect(() => mk.open(env, "dns:2")).toThrow(/purpose/);
-    expect(() => mk.open({ ...env, purpose: "dns:2" }, "dns:2")).toThrow();
+    expect(mk.open(env, row1).toString()).toBe("secret");
+    expect(() => mk.open(env, { ...row1, purpose: "other.secret" })).toThrow(/purpose/);
+    expect(() =>
+      mk.open({ ...env, purpose: "other.secret" }, { ...row1, purpose: "other.secret" }),
+    ).toThrow();
+  });
+
+  it("binds the record id: a ciphertext swapped into another row does not open", () => {
+    const mk = new MasterKey(TEST_MASTER_KEY);
+    const a = mk.seal("secret of row 1", row1);
+    const b = mk.seal("secret of row 2", { ...row1, recordId: "row-2" });
+    expect(mk.open(b, { ...row1, recordId: "row-2" }).toString()).toBe("secret of row 2");
+    // Row 2 now holds row 1's envelope.
+    expect(() => mk.open(a, { ...row1, recordId: "row-2" })).toThrow();
+    // Only the data part swapped, with row 2's wrapped key kept.
+    const mixed = { ...b, iv: a.iv, tag: a.tag, ciphertext: a.ciphertext };
+    expect(() => mk.open(mixed, { ...row1, recordId: "row-2" })).toThrow();
+    expect(() => mk.seal("x", { ...row1, recordId: "" })).toThrow(/binding/);
   });
 
   it("refuses a different master key and short keys", () => {
-    const env = new MasterKey(TEST_MASTER_KEY).seal("secret", "p");
+    const env = new MasterKey(TEST_MASTER_KEY).seal("secret", row1);
     const other = new MasterKey(Buffer.alloc(32, 9).toString("base64"));
-    expect(() => other.open(env, "p")).toThrow(/different master key/);
+    expect(() => other.open(env, row1)).toThrow(/different master key/);
     expect(() => new MasterKey(Buffer.alloc(16).toString("base64"))).toThrow(/32 bytes/);
   });
 
   it("detects tampering", () => {
     const mk = new MasterKey(TEST_MASTER_KEY);
-    const env = mk.seal("secret", "p");
+    const env = mk.seal("secret", row1);
     const flipped = Buffer.from(env.ciphertext, "base64");
     flipped[0] = (flipped[0] ?? 0) ^ 1;
-    expect(() => mk.open({ ...env, ciphertext: flipped.toString("base64") }, "p")).toThrow();
+    expect(() => mk.open({ ...env, ciphertext: flipped.toString("base64") }, row1)).toThrow();
+  });
+
+  it("opens legacy (v1) envelopes only through the upgrade path", () => {
+    const mk = new MasterKey(TEST_MASTER_KEY);
+    const { envelope, purpose, plaintext } = LEGACY_V1_FIXTURE;
+    expect(MasterKey.isLegacy(envelope)).toBe(true);
+    expect(mk.openLegacy(envelope, purpose).toString()).toBe(plaintext);
+    expect(() => mk.open(envelope, { purpose, recordId: "any" })).toThrow(LegacyEnvelopeError);
+    expect(() => mk.openLegacy(mk.seal("x", row1), row1.purpose)).toThrow(/not a legacy/);
   });
 });
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { formatDomain, parseDomain } from "@edgeweir/config-compiler";
 import type {
   Revision,
@@ -36,8 +37,14 @@ type CacheRuleInput = SiteCreate["cacheRules"][number];
 type OriginSettingsInput = SiteCreate["originSettings"];
 type CacheSettingsInput = SiteCreate["cacheSettings"];
 
-/** Envelope purpose of S3 secret access keys (bound as AAD). */
-export const S3_SECRET_PURPOSE = "origin-credential/s3-secret";
+/** Envelope binding of an S3 secret access key: the column and the credential row (AAD). */
+export const S3_SECRET_PURPOSE = "origin_credential.secret_envelope";
+export const s3SecretBinding = (credentialId: string) => ({
+  purpose: S3_SECRET_PURPOSE,
+  recordId: credentialId,
+});
+/** The purpose version 1 envelopes were sealed with (no record id). */
+export const LEGACY_S3_SECRET_PURPOSE = "origin-credential/s3-secret";
 
 /** Which sites a caller may see: all (platform admin) or one organization. */
 export type SiteScope = { all: true } | { all: false; organizationId: string };
@@ -281,7 +288,9 @@ async function syncCredentials(
     const { accessKeyId, secretAccessKey } = o.s3;
     const current = byKey.get(accessKeyId);
     if (secretAccessKey) {
-      const secretEnvelope = JSON.stringify(masterKey.seal(secretAccessKey, S3_SECRET_PURPOSE));
+      // The id is part of the envelope's AAD, so a new row gets its id first.
+      const id = current?.id ?? randomUUID();
+      const secretEnvelope = JSON.stringify(masterKey.seal(secretAccessKey, s3SecretBinding(id)));
       if (current) {
         const [row] = await tx
           .update(schema.originCredential)
@@ -292,7 +301,7 @@ async function syncCredentials(
       } else {
         const [row] = await tx
           .insert(schema.originCredential)
-          .values({ siteId, accessKeyId, secretEnvelope })
+          .values({ id, siteId, accessKeyId, secretEnvelope })
           .returning();
         if (row) byKey.set(accessKeyId, row);
       }

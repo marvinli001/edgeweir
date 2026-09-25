@@ -113,7 +113,7 @@ stream {
 
 ## 7. 升级、备份与验证
 
-- 升级：`docker compose pull && docker compose up -d`。迁移在启动时自动执行（带锁，多实例安全）。
+- 升级：`docker compose pull && docker compose up -d`。迁移在启动时自动执行（带锁，多实例安全）。启动时还会把旧版本写入的信封密文（附加数据未绑定记录 id）用主密钥重新加密一次；新版本不再读取旧格式，所以多个控制台实例要一起升级。
 - 备份：`docker compose exec postgres pg_dump -U edgeweir edgeweir > edgeweir.sql`，同时备份 `.env` 里的 `EDGEWEIR_MASTER_KEY`。
 - 校验镜像签名：
 

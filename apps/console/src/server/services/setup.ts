@@ -24,11 +24,17 @@ export function slugify(name: string): string {
   return slug || "org";
 }
 
-const SETUP_TOKEN_KEY = "setup_token";
-const SETUP_TOKEN_PURPOSE = "system/setup-token";
+export const SETUP_TOKEN_KEY = "setup_token";
+/** Envelope binding of the setup token: the setting and its key (AAD). */
+export const SETUP_TOKEN_BINDING = {
+  purpose: "system_setting.setup_token",
+  recordId: SETUP_TOKEN_KEY,
+} as const;
+/** The purpose version 1 envelopes were sealed with. */
+export const LEGACY_SETUP_TOKEN_PURPOSE = "system/setup-token";
 export const SETUP_TOKEN_PREFIX = "ews_";
 
-interface SetupTokenState {
+export interface SetupTokenState {
   /** The token, sealed with the master key so every instance prints the same one. */
   envelope?: Envelope;
   hash?: string;
@@ -61,9 +67,9 @@ export async function ensureSetupToken(ctx: {
   const open = (state: SetupTokenState) => {
     if (!state.envelope) return null;
     try {
-      return ctx.masterKey.open(state.envelope, SETUP_TOKEN_PURPOSE).toString("utf8");
+      return ctx.masterKey.open(state.envelope, SETUP_TOKEN_BINDING).toString("utf8");
     } catch {
-      return null; // sealed with a previous master key
+      return null; // sealed with a previous master key (or never upgraded)
     }
   };
   const state = await readSetupToken(ctx.db);
@@ -72,7 +78,7 @@ export async function ensureSetupToken(ctx: {
   if (existing) return existing;
   const token = `${SETUP_TOKEN_PREFIX}${randomBytes(24).toString("base64url")}`;
   const value = {
-    envelope: ctx.masterKey.seal(token, SETUP_TOKEN_PURPOSE),
+    envelope: ctx.masterKey.seal(token, SETUP_TOKEN_BINDING),
     hash: sha256(token),
     createdAt: new Date().toISOString(),
   } satisfies SetupTokenState as Record<string, unknown>;

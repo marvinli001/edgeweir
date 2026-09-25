@@ -11,6 +11,7 @@ import { ConfigEventBus } from "./lib/events";
 import { logger, setLogLevel } from "./lib/logger";
 import { startNodeChannel } from "./node-channel/server";
 import { loadOrCreateNodeCa } from "./pki/store";
+import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
 import { announceSetupToken, ensureSetupToken } from "./services/setup";
 
 async function waitForDatabase(pool: import("pg").Pool, timeoutMs = 60_000) {
@@ -47,6 +48,8 @@ export async function bootstrap(): Promise<Running> {
   log.info("database migrated");
 
   const masterKey = new MasterKey(env.EDGEWEIR_MASTER_KEY);
+  // Secrets sealed before envelopes were bound to their record id.
+  await upgradeLegacyEnvelopes(db, masterKey, log);
   const nodeCa = await loadOrCreateNodeCa(db, masterKey);
   const auth = createAuth({
     db,

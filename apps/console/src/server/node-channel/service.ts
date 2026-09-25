@@ -38,7 +38,7 @@ import { claimEnrollmentToken } from "../services/enrollment";
 import { isSerialRevoked, normalizeSerial } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
 import { getRevision, latestRevision } from "../services/revisions";
-import { S3_SECRET_PURPOSE } from "../services/sites";
+import { s3SecretBinding } from "../services/sites";
 
 export const HEARTBEAT_SECONDS = 15;
 export const KEEPALIVE_MS = 15_000;
@@ -556,7 +556,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         try {
           const secret = app.masterKey.open(
             JSON.parse(credential.secretEnvelope),
-            S3_SECRET_PURPOSE,
+            s3SecretBinding(credential.id),
           );
           return [
             {

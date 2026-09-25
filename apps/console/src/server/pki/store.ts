@@ -4,7 +4,11 @@ import type { Envelope, MasterKey } from "../lib/envelope";
 import { CertificateAuthority, generateCa, sha256Fingerprint } from "./ca";
 
 export const NODE_CA_ID = "node-channel";
-const PURPOSE = "pki_authority.private_key:node-channel";
+/** Envelope binding of a CA private key: the column and the authority row (AAD). */
+export const CA_KEY_PURPOSE = "pki_authority.private_key_envelope";
+export const caKeyBinding = (id: string) => ({ purpose: CA_KEY_PURPOSE, recordId: id });
+/** The purpose version 1 envelopes were sealed with. */
+export const legacyCaKeyPurpose = (id: string) => `pki_authority.private_key:${id}`;
 
 /**
  * Loads the node-channel CA, creating it on first boot. Concurrent console
@@ -24,7 +28,7 @@ export async function loadOrCreateNodeCa(
       const envelope = JSON.parse(existing.privateKeyEnvelope) as Envelope;
       return CertificateAuthority.load({
         certificatePem: existing.certificatePem,
-        privateKeyPkcs8Der: masterKey.open(envelope, PURPOSE),
+        privateKeyPkcs8Der: masterKey.open(envelope, caKeyBinding(NODE_CA_ID)),
       });
     }
     const material = await generateCa("Edgeweir Node Channel CA");
@@ -33,7 +37,9 @@ export async function loadOrCreateNodeCa(
       id: NODE_CA_ID,
       certificatePem: material.certificatePem,
       fingerprintSha256: sha256Fingerprint(ca.certificate),
-      privateKeyEnvelope: JSON.stringify(masterKey.seal(material.privateKeyPkcs8Der, PURPOSE)),
+      privateKeyEnvelope: JSON.stringify(
+        masterKey.seal(material.privateKeyPkcs8Der, caKeyBinding(NODE_CA_ID)),
+      ),
       notAfter: ca.certificate.notAfter,
     });
     return ca;
