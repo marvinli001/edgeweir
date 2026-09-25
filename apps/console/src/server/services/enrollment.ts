@@ -1,9 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { EnrollmentTokenResult } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { ORPCError } from "@orpc/server";
 import { and, eq, gt, isNull } from "drizzle-orm";
+import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
+import { findNodeGroup } from "./node-groups";
 import type { Tx } from "./revisions";
 
 export const TOKEN_PREFIX = "ewt_";
@@ -38,20 +39,30 @@ export function buildInstallCommand(opts: {
 
 export async function createEnrollmentToken(
   db: Database,
-  input: { clusterId: string; nodeName: string; ttlMinutes: number },
+  input: { clusterId: string; nodeGroupId?: string; nodeName: string; ttlMinutes: number },
   ctx: { actor: Actor; consoleUrl: string; serverUrl: string; caSha256: string },
 ): Promise<EnrollmentTokenResult> {
   const [clusterRow] = await db
     .select()
     .from(schema.cluster)
     .where(eq(schema.cluster.id, input.clusterId));
-  if (!clusterRow) throw new ORPCError("NOT_FOUND", { message: "cluster not found" });
-  const [group] = await db
-    .select()
-    .from(schema.nodeGroup)
-    .where(
-      and(eq(schema.nodeGroup.clusterId, input.clusterId), eq(schema.nodeGroup.isDefault, true)),
-    );
+  if (!clusterRow) fail("CLUSTER_NOT_FOUND", "cluster not found");
+  let nodeGroupId: string | null = null;
+  if (input.nodeGroupId) {
+    const group = await findNodeGroup(db, input.nodeGroupId);
+    if (group.clusterId !== input.clusterId) {
+      fail("NODE_GROUP_CLUSTER_MISMATCH", "the node group belongs to another cluster");
+    }
+    nodeGroupId = group.id;
+  } else {
+    const [group] = await db
+      .select({ id: schema.nodeGroup.id })
+      .from(schema.nodeGroup)
+      .where(
+        and(eq(schema.nodeGroup.clusterId, input.clusterId), eq(schema.nodeGroup.isDefault, true)),
+      );
+    nodeGroupId = group?.id ?? null;
+  }
 
   const token = generateToken();
   const expiresAt = new Date(Date.now() + input.ttlMinutes * 60_000);
@@ -59,7 +70,7 @@ export async function createEnrollmentToken(
     .insert(schema.enrollmentToken)
     .values({
       clusterId: input.clusterId,
-      nodeGroupId: group?.id ?? null,
+      nodeGroupId,
       tokenHash: hashToken(token),
       tokenPrefix: token.slice(0, TOKEN_PREFIX.length + 6),
       nodeName: input.nodeName,
@@ -72,7 +83,13 @@ export async function createEnrollmentToken(
     action: "enrollment_token.create",
     targetType: "cluster",
     targetId: input.clusterId,
-    metadata: { tokenId: row.id, expiresAt: expiresAt.toISOString(), nodeName: input.nodeName },
+    targetName: clusterRow.name,
+    metadata: {
+      tokenId: row.id,
+      expiresAt: expiresAt.toISOString(),
+      nodeName: input.nodeName,
+      nodeGroupId,
+    },
   });
   return {
     tokenId: row.id,

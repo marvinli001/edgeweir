@@ -1,7 +1,7 @@
 import type { Cluster } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { ORPCError } from "@orpc/server";
-import { asc, count, eq, gt, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, ne, sql } from "drizzle-orm";
+import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { ONLINE_WINDOW_SECONDS } from "./nodes";
 import {
@@ -17,15 +17,20 @@ async function toClusterDto(
   row: typeof schema.cluster.$inferSelect,
 ): Promise<Cluster> {
   const since = sql`now() - make_interval(secs => ${ONLINE_WINDOW_SECONDS})`;
-  const [[nodes], [online], [sites], latest] = await Promise.all([
-    db.select({ n: count() }).from(schema.node).where(eq(schema.node.clusterId, row.id)),
-    db
-      .select({ n: count() })
-      .from(schema.node)
-      .where(sql`${schema.node.clusterId} = ${row.id} and ${gt(schema.node.lastSeenAt, since)}`),
-    db.select({ n: count() }).from(schema.site).where(eq(schema.site.clusterId, row.id)),
-    latestRevision(db, row.id),
-  ]);
+  // Sequential on purpose: `db` may be a transaction, i.e. a single connection.
+  const [nodes] = await db
+    .select({ n: count() })
+    .from(schema.node)
+    .where(eq(schema.node.clusterId, row.id));
+  const [online] = await db
+    .select({ n: count() })
+    .from(schema.node)
+    .where(and(eq(schema.node.clusterId, row.id), gt(schema.node.lastSeenAt, since)));
+  const [sites] = await db
+    .select({ n: count() })
+    .from(schema.site)
+    .where(eq(schema.site.clusterId, row.id));
+  const latest = await latestRevision(db, row.id);
   return {
     id: row.id,
     name: row.name,
@@ -43,10 +48,24 @@ export async function listClusters(db: Database): Promise<Cluster[]> {
   return Promise.all(rows.map((r) => toClusterDto(db, r)));
 }
 
-export async function getCluster(db: Database, id: string): Promise<Cluster> {
+async function findCluster(db: Executor, id: string) {
   const [row] = await db.select().from(schema.cluster).where(eq(schema.cluster.id, id));
-  if (!row) throw new ORPCError("NOT_FOUND", { message: "cluster not found" });
-  return toClusterDto(db, row);
+  if (!row) fail("CLUSTER_NOT_FOUND", "cluster not found");
+  return row;
+}
+
+export async function getCluster(db: Database, id: string): Promise<Cluster> {
+  return toClusterDto(db, await findCluster(db, id));
+}
+
+async function assertNameFree(db: Executor, name: string, exceptId?: string) {
+  const [existing] = await db
+    .select({ id: schema.cluster.id })
+    .from(schema.cluster)
+    .where(
+      and(eq(schema.cluster.name, name), exceptId ? ne(schema.cluster.id, exceptId) : undefined),
+    );
+  if (existing) fail("CLUSTER_NAME_TAKEN", `cluster name already exists: ${name}`, { name });
 }
 
 /** Creates a cluster with its default node group and publishes revision 1. */
@@ -55,23 +74,20 @@ export async function createClusterTx(
   input: { name: string; description: string },
   actor: Actor,
 ) {
-  const existing = await tx
-    .select()
-    .from(schema.cluster)
-    .where(eq(schema.cluster.name, input.name));
-  if (existing.length) throw new ORPCError("CONFLICT", { message: "cluster name already exists" });
+  await assertNameFree(tx, input.name);
   const [row] = await tx.insert(schema.cluster).values(input).returning();
   if (!row) throw new Error("cluster insert failed");
   await tx.insert(schema.nodeGroup).values({ clusterId: row.id, name: "default", isDefault: true });
   await publishRevision(tx, {
     clusterId: row.id,
-    reason: "cluster created",
+    reason: { code: "cluster_created", params: { cluster: row.name } },
     userId: actor.type === "user" ? actor.id : null,
   });
   await recordAudit(tx, actor, {
     action: "cluster.create",
     targetType: "cluster",
     targetId: row.id,
+    targetName: row.name,
     metadata: { name: row.name },
   });
   return row;
@@ -86,13 +102,83 @@ export async function createCluster(
   return toClusterDto(db, row);
 }
 
-/** The cluster new sites land on when none is specified (the oldest one). */
-export async function defaultClusterId(db: Executor): Promise<string> {
+export async function updateCluster(
+  db: Database,
+  input: { id: string; name?: string; description?: string },
+  actor: Actor,
+): Promise<Cluster> {
+  const row = await db.transaction(async (tx) => {
+    const before = await findCluster(tx, input.id);
+    if (input.name !== undefined) await assertNameFree(tx, input.name, input.id);
+    const [updated] = await tx
+      .update(schema.cluster)
+      .set({
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+      })
+      .where(eq(schema.cluster.id, input.id))
+      .returning();
+    if (!updated) throw new Error("cluster update failed");
+    await recordAudit(tx, actor, {
+      action: "cluster.update",
+      targetType: "cluster",
+      targetId: updated.id,
+      targetName: updated.name,
+      metadata: { from: { name: before.name, description: before.description }, ...input },
+    });
+    return updated;
+  });
+  return toClusterDto(db, row);
+}
+
+/** Deletes an empty cluster; refused while nodes or sites still belong to it. */
+export async function deleteCluster(db: Database, id: string, actor: Actor): Promise<void> {
+  await db.transaction(async (tx) => {
+    const row = await findCluster(tx, id);
+    const [nodes] = await tx
+      .select({ n: count() })
+      .from(schema.node)
+      .where(eq(schema.node.clusterId, id));
+    const [sites] = await tx
+      .select({ n: count() })
+      .from(schema.site)
+      .where(eq(schema.site.clusterId, id));
+    const nodeCount = nodes?.n ?? 0;
+    const siteCount = sites?.n ?? 0;
+    if (nodeCount > 0 || siteCount > 0) {
+      fail("CLUSTER_NOT_EMPTY", `cluster still has ${nodeCount} node(s) and ${siteCount} site(s)`, {
+        nodes: nodeCount,
+        sites: siteCount,
+      });
+    }
+    await tx.delete(schema.cluster).where(eq(schema.cluster.id, id));
+    await recordAudit(tx, actor, {
+      action: "cluster.delete",
+      targetType: "cluster",
+      targetId: id,
+      targetName: row.name,
+      metadata: { name: row.name },
+    });
+  });
+}
+
+/**
+ * The cluster a new site lands on when none is specified: the organization's
+ * default cluster if set, otherwise the oldest cluster.
+ */
+export async function defaultClusterId(db: Executor, organizationId?: string): Promise<string> {
+  if (organizationId) {
+    const [settings] = await db
+      .select({ clusterId: schema.organizationSettings.defaultClusterId })
+      .from(schema.organizationSettings)
+      .where(eq(schema.organizationSettings.organizationId, organizationId));
+    if (settings?.clusterId) return settings.clusterId;
+  }
   const [row] = await db
     .select({ id: schema.cluster.id })
     .from(schema.cluster)
     .orderBy(asc(schema.cluster.createdAt))
     .limit(1);
-  if (!row) throw new ORPCError("PRECONDITION_FAILED", { message: "no cluster exists yet" });
+  if (!row) fail("NO_CLUSTER", "no cluster exists yet");
   return row.id;
 }

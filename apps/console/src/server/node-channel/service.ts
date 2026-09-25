@@ -26,6 +26,7 @@ import type { AppContext } from "../lib/context";
 import { NODE_CERT_LIFETIME_DAYS } from "../pki/ca";
 import { recordAudit } from "../services/audit";
 import { claimEnrollmentToken } from "../services/enrollment";
+import { isSerialRevoked, normalizeSerial } from "../services/nodes";
 import { getRevision, latestRevision } from "../services/revisions";
 
 export const HEARTBEAT_SECONDS = 15;
@@ -69,9 +70,6 @@ export function peerContextValues(req: NodeServerRequest): ContextValues {
   return createContextValues().set(peerKey, info);
 }
 
-const normalizeSerial = (s: string | null | undefined) =>
-  (s ?? "").toLowerCase().replace(/^0+/, "").replace(/:/g, "");
-
 export function createNodeService(app: AppContext): ServiceImpl<typeof NodeService> {
   const log = app.log.child({ component: "node-channel" });
 
@@ -84,6 +82,9 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         Code.Unauthenticated,
       );
     }
+    if (await isSerialRevoked(app.db, peer.serialNumber)) {
+      throw new ConnectError("certificate has been revoked", Code.Unauthenticated);
+    }
     const [row] = await app.db
       .select()
       .from(schema.node)
@@ -94,6 +95,19 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       throw new ConnectError("certificate has been superseded", Code.Unauthenticated);
     }
     return row;
+  }
+
+  /** Ends an open watch stream once its node is disabled, deleted or re-keyed. */
+  async function assertStillActive(node: { id: string; certSerial: string | null }) {
+    const [row] = await app.db
+      .select({ status: schema.node.status, certSerial: schema.node.certSerial })
+      .from(schema.node)
+      .where(eq(schema.node.id, node.id));
+    if (!row) throw new ConnectError("unknown node", Code.Unauthenticated);
+    if (row.status !== "active") throw new ConnectError("node is disabled", Code.PermissionDenied);
+    if (normalizeSerial(row.certSerial) !== normalizeSerial(node.certSerial)) {
+      throw new ConnectError("certificate has been superseded", Code.Unauthenticated);
+    }
   }
 
   return {
@@ -111,11 +125,24 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           );
         }
         const info = req.info;
+        let nodeGroupId = token.nodeGroupId;
+        if (!nodeGroupId) {
+          const [fallback] = await tx
+            .select({ id: schema.nodeGroup.id })
+            .from(schema.nodeGroup)
+            .where(
+              and(
+                eq(schema.nodeGroup.clusterId, token.clusterId),
+                eq(schema.nodeGroup.isDefault, true),
+              ),
+            );
+          nodeGroupId = fallback?.id ?? null;
+        }
         const [nodeRow] = await tx
           .insert(schema.node)
           .values({
             clusterId: token.clusterId,
-            nodeGroupId: token.nodeGroupId,
+            nodeGroupId,
             name: token.nodeName || info?.hostname || `node-${token.id.slice(0, 8)}`,
             hostname: info?.hostname ?? "",
             agentVersion: info?.agentVersion ?? "",
@@ -154,11 +181,12 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           .where(eq(schema.enrollmentToken.id, token.id));
         await recordAudit(
           tx,
-          { type: "node", id: nodeRow.id, ip: peer.remoteAddress ?? "" },
+          { type: "node", id: nodeRow.id, name: nodeRow.name, ip: peer.remoteAddress ?? "" },
           {
             action: "node.enroll",
             targetType: "node",
             targetId: nodeRow.id,
+            targetName: nodeRow.name,
             metadata: {
               clusterId: token.clusterId,
               tokenId: token.id,
@@ -198,11 +226,12 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         .where(eq(schema.node.id, node.id));
       await recordAudit(
         app.db,
-        { type: "node", id: node.id },
+        { type: "node", id: node.id, name: node.name },
         {
           action: "node.certificate_renew",
           targetType: "node",
           targetId: node.id,
+          targetName: node.name,
           metadata: { certSerial: issued.serialNumber },
         },
       );
@@ -253,6 +282,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
             wake = undefined;
           }
           if (ctx.signal.aborted) break;
+          await assertStillActive(node);
           const item = queue
             .splice(0)
             .reduce<{ revision: number; contentHash: string } | undefined>(

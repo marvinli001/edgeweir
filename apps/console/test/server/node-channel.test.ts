@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startNodeChannel } from "../../src/server/node-channel/server";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
-import { listNodes } from "../../src/server/services/nodes";
+import { deleteNode, listNodes, setNodeStatus } from "../../src/server/services/nodes";
 import { latestRevision } from "../../src/server/services/revisions";
 import { createSite } from "../../src/server/services/sites";
 import { createTestContext, seedOrganization } from "./helpers";
@@ -211,6 +211,68 @@ describe("node channel", async () => {
       expect.arrayContaining(["node.enroll", "node.certificate_renew"]),
     );
     expect((await latestRevision(ctx.db, clusterId))?.revision).toBe(2);
+  });
+
+  it("refuses disabled nodes, ends their watch stream and revokes deleted nodes", async () => {
+    const token = await createEnrollmentToken(
+      ctx.db,
+      { clusterId, nodeName: "edge-2", ttlMinutes: 10 },
+      {
+        actor,
+        consoleUrl: ctx.env.EDGEWEIR_PUBLIC_URL,
+        serverUrl: ctx.env.nodeApiUrl,
+        caSha256: ctx.nodeCa.fingerprintSha256,
+      },
+    );
+    const { csrPem, keyPem } = await nodeKeyAndCsr();
+    const enrolled = await anonymous().enroll({ token: token.token, csrPem });
+    const mtls = createClient(
+      NodeService,
+      createConnectTransport({
+        baseUrl,
+        httpVersion: "2",
+        nodeOptions: {
+          ca: enrolled.caCertificatePem,
+          cert: enrolled.certificatePem,
+          key: keyPem,
+          servername: "localhost",
+        },
+      }),
+    );
+    const [row] = await ctx.db
+      .select()
+      .from(schema.node)
+      .where(eq(schema.node.id, enrolled.nodeId));
+    const [group] = await ctx.db
+      .select()
+      .from(schema.nodeGroup)
+      .where(eq(schema.nodeGroup.clusterId, clusterId));
+    // Enrolled nodes join the cluster's default node group.
+    expect(row?.nodeGroupId).toBe(group?.id);
+
+    // An open watch stream ends as soon as the node is disabled.
+    const stream = mtls.watchConfig({ knownRevision: 0n });
+    const iterator = stream[Symbol.asyncIterator]();
+    expect((await iterator.next()).value?.event).toBe(WatchEvent.REVISION);
+    await setNodeStatus(ctx.db, enrolled.nodeId, "disabled", actor);
+    ctx.events.emitLocal({ clusterId, revision: 99, contentHash: "wake" });
+    await expect(iterator.next()).rejects.toMatchObject({ code: Code.PermissionDenied });
+    await expect(mtls.getConfig({})).rejects.toMatchObject({ code: Code.PermissionDenied });
+
+    await setNodeStatus(ctx.db, enrolled.nodeId, "active", actor);
+    expect((await mtls.getConfig({})).payload.case).toBe("snapshot");
+
+    // Deleting revokes the certificate: the agent can no longer reconnect.
+    await deleteNode(ctx.db, enrolled.nodeId, actor);
+    const [revoked] = await ctx.db
+      .select()
+      .from(schema.nodeCertificateRevocation)
+      .where(eq(schema.nodeCertificateRevocation.nodeId, enrolled.nodeId));
+    expect(revoked?.fingerprintSha256).toBe(row?.certFingerprint);
+    const refused = await mtls.getConfig({}).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(ConnectError);
+    expect((refused as ConnectError).code).toBe(Code.Unauthenticated);
+    expect((refused as ConnectError).rawMessage).toContain("revoked");
   });
 
   it("rejects unknown tokens", async () => {
