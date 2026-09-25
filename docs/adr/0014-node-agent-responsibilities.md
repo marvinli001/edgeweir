@@ -1,0 +1,113 @@
+# ADR-0014: 节点 agent 的职责与机制
+
+- 状态：已接受
+- 日期：2026-09-25
+- 适用仓库：edgeweir-node
+
+## 背景
+
+[ADR-0013](0013-node-go-agent-openresty.md) 确定了 Go agent 加 OpenResty 的节点形态。本 ADR 规定 agent 的职责边界，以及每项职责的实现机制。设计依据来自调研：
+
+- GoEdge 的配置同步采用"流式推送提示 + 轮询兜底"。
+- Apache Traffic Control 的节点端流程是"拉取、比较、备份，再区分 reload 与 restart"。
+- GoEdge 控制面保存节点 SSH root 凭据，2025 年的 RingH23 攻击借此横向投毒边缘节点。agent 的设计要保证控制面失陷时，攻击者也不能借 agent 在节点上执行任意代码。
+
+## 决策
+
+### 注册
+
+1. 一次性 token → 本地生成 ECDSA P-256 私钥和 CSR → 控制面内部 CA 签发节点证书 → 之后全程 mTLS，证书自动轮换。细节见 [ADR-0008](0008-node-channel-connect-rpc-mtls.md)。
+2. 私钥和证书存放在 agent 的数据目录，文件权限 0600。
+
+### 同步
+
+3. **主通道**：`WatchConfig` 服务端流。收到比本地新的 revision 通知后调用 `GetConfig`。
+4. **兜底**：流不可用时按固定间隔轮询 `GetConfig`，间隔带随机抖动，避免大量节点同时请求；流恢复后停止轮询。
+5. **last-known-good**：只在应用成功后写入，先写临时文件再原子重命名。agent 启动时先用 last-known-good 恢复数据面，再连接控制面。
+6. **控制面宕机时节点照常服务**，按 last-known-good 继续工作；控制面恢复后自动追上最新 revision。
+
+### 重载
+
+7. 只有结构性变更（`listeners`、`cache_zones`，以及将来的全局参数）才重新渲染 nginx.conf。
+8. 流程：渲染到临时文件 → `nginx -t` 校验 → 原子替换 → 向 nginx master 发送 HUP 平滑重载。校验失败时保留旧配置，通过 `ReportStatus` 回报 `FAILED` 和 `nginx -t` 的输出。
+9. 站点、证书、IP 名单等变更不触发 reload。
+
+### 热更新
+
+10. **通道**：站点、路由、上游、证书、IP 名单通过本地 unix socket 推给 OpenResty。nginx 在 unix socket 上开一个只供本机访问的控制 server，由 Lua 处理 agent 的写入请求。
+11. **MVP 存储：`lua_shared_dict`**（所有 worker 共享）。nginx 完全重启后 shared dict 会清空，agent 检测到后重新灌入全部数据。
+12. **worker 内缓存**：每个 worker 用 lua-resty-lrucache 缓存反序列化后的对象，并记录数据版本号。处理请求时比较 shared dict 中的版本号，变化了就失效重建。
+13. **之后**：有了自定义构建（[ADR-0015](0015-openresty-build-and-cache.md)）后评估 lua-resty-lmdb。数据持久化在磁盘，nginx 重启不丢失，容量也不受 shared dict 大小限制。
+
+### 清缓存与预热
+
+14. 清缓存支持 URL、前缀、tag、全量四种。
+15. **全量**：每个站点有代际号（IR 字段 `Site.cache_generation`），cache key 中包含代际号。代际号加一后旧对象全部不再命中，之后由 nginx cache manager 按 `inactive` 和 `max_size` 回收，不需要遍历磁盘。
+16. **URL**：agent 按与 nginx 相同的规则计算 cache key 的 MD5 和缓存文件路径，直接删除对应文件。
+17. **前缀与 tag**：需要额外维护 cache key 与前缀、tag 的对应关系，分别在 MVP（前缀）和 v1（Cache-Tag）实现时单独设计。
+18. **预热**：agent 以受控的并发向本机数据面请求指定 URL，让对象进入缓存。
+
+### 运维
+
+19. **健康检查**：agent 定期探测本机数据面，结果放进 `ReportStatus.data_plane_healthy`。
+20. **指标**：按（分钟，站点）预聚合后通过 `ReportStats` 上报（[ADR-0009](0009-analytics-clickhouse-and-lite.md)）。
+21. **访问日志**：按站点配置的采样率采样后上报（analytics 模式）。
+22. **自升级**：下载新版本 → 校验 cosign 签名和 sha256（[ADR-0017](0017-release-supply-chain.md)）→ 原子替换二进制 → 由 systemd 重启 agent。新版本启动失败时回退到旧二进制。升级 agent 不影响正在运行的 OpenResty。
+
+### agent 不做的事
+
+23. agent 只执行类型化的操作：应用配置、清缓存、预热、证书轮换、升级。它不提供执行任意命令或脚本的接口。
+24. 自升级只接受通过签名校验的官方发布物。控制面失陷时，攻击者可以下发恶意配置，但不能让节点运行未签名的程序。
+
+## 备选方案与取舍
+
+- **只靠轮询**：生效延迟取决于轮询间隔；节点多时轮询请求量大。
+- **只靠推送**：长连接断开期间的变更会丢失。
+- **每次变更都 reload nginx**：reload 会启动新 worker，旧 worker 要等长连接结束才退出；变更频繁时旧 worker 堆积，内存上涨，缓存锁等进程内状态也会丢失。
+- **把热数据写成 Lua 文件再 reload**：问题同上。
+- **用 ngx_cache_purge 模块清缓存**：需要自定义构建。按文件路径删除在官方包上就能实现。
+- **命令式 agent（控制面下发 shell 命令，或控制面持有 SSH 凭据）**：控制面一旦失陷，就等于所有节点失陷，这正是 GoEdge 事件的教训。
+
+## 后果
+
+### 正面
+
+- 控制面宕机不影响边缘流量。
+- reload 次数降到最低。
+- 全量清缓存是常数时间操作。
+- 控制面失陷的影响被限制在配置层面，不会变成节点上的远程代码执行。
+
+### 负面
+
+- shared dict 的大小在 nginx.conf 中静态指定，扩容属于结构性变更，需要 reload。
+- nginx 重启后到 agent 重新灌入数据之间有短暂窗口，此时站点表为空。缓解：由 agent 负责启动 nginx 并立即灌入；或者让 Lua 在 init 阶段从 agent 写出的本地快照文件加载。
+- URL 清除依赖 agent 与 nginx 的 cache key 计算规则保持一致，改 cache key 格式时两边要同步修改并测试。
+
+## Phase 0 落地情况
+
+Phase 0 范围：
+
+- 注册、mTLS、`WatchConfig` 加轮询兜底。
+- 快照落盘（last-known-good）。
+- 渲染最小 nginx.conf，经 unix socket 推送站点表。
+- 回报已应用的 revision。
+
+后续：
+
+- 证书、IP 名单热更新。
+- 清缓存与预热。
+- 指标和访问日志上报。
+- 自升级。
+- 证书自动轮换的节点侧完整实现与测试。
+- 评估 lua-resty-lmdb。
+
+## 版本核实
+
+核实日期：2026-09-25。来源：proxy.golang.org、Docker Hub。
+
+| 组件 | 版本 | 来源 |
+| --- | --- | --- |
+| Go | 1.27.1 | proxy.golang.org（golang.org/toolchain） |
+| OpenResty | 1.31.1.1，镜像 `openresty/openresty:1.31.1.1-bookworm` | Docker Hub |
+| connectrpc.com/connect | v1.21.0 | proxy.golang.org |
+| google.golang.org/protobuf | v1.36.12 | proxy.golang.org |
