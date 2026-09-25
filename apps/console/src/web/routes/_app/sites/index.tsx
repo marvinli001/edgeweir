@@ -1,14 +1,14 @@
 import type { Site } from "@edgeweir/contract";
-import { Add01Icon, Delete02Icon, GlobeIcon, RefreshIcon } from "@hugeicons/core-free-icons";
+import { Add01Icon, GlobeIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import * as z from "zod";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { Page } from "@/components/page";
+import { Pager } from "@/components/pager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import {
   Select,
   SelectContent,
@@ -34,30 +35,39 @@ import { Textarea } from "@/components/ui/textarea";
 import { m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
-export const Route = createFileRoute("/_app/sites")({
-  validateSearch: z.object({ create: z.boolean().optional() }),
+const PAGE_SIZE = 20;
+const ALL = "__all__";
+
+export const Route = createFileRoute("/_app/sites/")({
+  validateSearch: z.object({
+    create: z.boolean().optional(),
+    q: z.string().optional(),
+    cluster: z.string().optional(),
+    page: z.number().int().min(1).optional(),
+  }),
   component: SitesPage,
 });
-
-function cacheSummary(site: Site): string[] {
-  if (site.cacheRules.length === 0) return [m.sites_no_cache_rules()];
-  return site.cacheRules.map((r) => {
-    const prefix = [...r.pathPrefixes, ...r.extensions.map((e) => `*.${e}`)].join(", ") || "/*";
-    return r.action === "bypass"
-      ? m.sites_cache_bypass({ prefix })
-      : m.sites_cache_ttl({ prefix, ttl: r.edgeTtlSeconds });
-  });
-}
 
 function SitesPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const queryClient = useQueryClient();
-  const sites = useQuery(orpc.sites.list.queryOptions());
-  const purge = useMutation(orpc.sites.purgeAll.mutationOptions());
-  const remove = useMutation(orpc.sites.delete.mutationOptions());
+  const { isAdmin } = Route.useRouteContext();
+  const page = search.page ?? 1;
+  const sites = useQuery({
+    ...orpc.sites.list.queryOptions({
+      input: {
+        search: search.q || undefined,
+        clusterId: search.cluster,
+        page,
+        pageSize: PAGE_SIZE,
+      },
+    }),
+    placeholderData: keepPreviousData,
+  });
+  const clusters = useQuery({ ...orpc.clusters.list.queryOptions(), enabled: isAdmin });
   const setCreateOpen = (open: boolean) =>
-    navigate({ search: { create: open || undefined }, replace: true });
+    navigate({ search: (prev) => ({ ...prev, create: open || undefined }), replace: true });
+  const filtered = !!search.q || !!search.cluster;
 
   const columns = React.useMemo<Columns<Site>>(
     () => [
@@ -66,7 +76,14 @@ function SitesPage() {
         header: () => m.sites_col_name(),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="font-medium">{row.original.name}</span>
+            <Link
+              to="/sites/$id"
+              params={{ id: row.original.id }}
+              className="font-medium underline-offset-4 hover:underline"
+              data-testid="site-link"
+            >
+              {row.original.name}
+            </Link>
             <span className="text-xs text-muted-foreground">{timeAgo(row.original.createdAt)}</span>
           </div>
         ),
@@ -97,79 +114,26 @@ function SitesPage() {
           </div>
         ),
       },
-      {
-        id: "cache",
-        header: () => m.sites_col_cache(),
-        cell: ({ row }) => (
-          <div className="flex flex-col text-xs text-muted-foreground">
-            {cacheSummary(row.original).map((line) => (
-              <span key={line}>{line}</span>
-            ))}
-          </div>
-        ),
-      },
-      {
-        id: "cluster",
-        header: () => m.sites_col_cluster(),
-        cell: ({ row }) => <Badge variant="secondary">{row.original.clusterName}</Badge>,
-      },
-      {
-        id: "actions",
-        header: () => <span className="sr-only">{m.common_actions()}</span>,
-        cell: ({ row }) => (
-          <div className="flex justify-end gap-1">
-            <ConfirmDialog
-              trigger={
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={m.sites_purge()}
-                  title={m.sites_purge()}
-                >
-                  <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} />
-                </Button>
-              }
-              title={m.sites_purge()}
-              description={row.original.domains.join(", ")}
-              onConfirm={async () => {
-                try {
-                  const result = await purge.mutateAsync({ id: row.original.id });
-                  toast.success(m.sites_purged({ revision: result.revision.revision }));
-                  await queryClient.invalidateQueries();
-                } catch (error) {
-                  toast.error(errorMessage(error, m.common_unknown_error()));
-                }
-              }}
-            />
-            <ConfirmDialog
-              trigger={
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={m.common_delete()}
-                  title={m.common_delete()}
-                >
-                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                </Button>
-              }
-              destructive
-              title={m.sites_delete_confirm({ name: row.original.name })}
-              confirmLabel={m.common_delete()}
-              onConfirm={async () => {
-                try {
-                  const result = await remove.mutateAsync({ id: row.original.id });
-                  toast.success(m.sites_deleted({ revision: result.revision.revision }));
-                  await queryClient.invalidateQueries();
-                } catch (error) {
-                  toast.error(errorMessage(error, m.common_unknown_error()));
-                }
-              }}
-            />
-          </div>
-        ),
-      },
+      ...(isAdmin
+        ? ([
+            {
+              id: "organization",
+              header: () => m.sites_col_organization(),
+              cell: ({ row }) => (
+                <span className="text-sm text-muted-foreground">
+                  {row.original.organizationName}
+                </span>
+              ),
+            },
+            {
+              id: "cluster",
+              header: () => m.sites_col_cluster(),
+              cell: ({ row }) => <Badge variant="secondary">{row.original.clusterName}</Badge>,
+            },
+          ] satisfies Columns<Site>)
+        : []),
     ],
-    [purge, remove, queryClient],
+    [isAdmin],
   );
 
   return (
@@ -182,27 +146,113 @@ function SitesPage() {
         </Button>
       }
     >
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchBox
+          value={search.q ?? ""}
+          onChange={(q) =>
+            navigate({
+              search: (prev) => ({ ...prev, q: q || undefined, page: undefined }),
+              replace: true,
+            })
+          }
+        />
+        {isAdmin && clusters.data && clusters.data.length > 1 ? (
+          <Select
+            value={search.cluster ?? ALL}
+            onValueChange={(value) =>
+              navigate({
+                search: (prev) => ({
+                  ...prev,
+                  cluster: !value || value === ALL ? undefined : String(value),
+                  page: undefined,
+                }),
+                replace: true,
+              })
+            }
+            items={[
+              { label: m.sites_all_clusters(), value: ALL },
+              ...clusters.data.map((c) => ({ label: c.name, value: c.id })),
+            ]}
+          >
+            <SelectTrigger
+              className="w-44"
+              aria-label={m.sites_col_cluster()}
+              data-testid="cluster-filter"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>{m.sites_all_clusters()}</SelectItem>
+              {clusters.data.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+      </div>
       {sites.isPending ? (
         <LoadingState />
       ) : sites.isError ? (
         <ErrorState error={sites.error} onRetry={() => sites.refetch()} />
-      ) : sites.data.length === 0 ? (
-        <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
-          <Button onClick={() => setCreateOpen(true)}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            {m.nav_new_site()}
-          </Button>
-        </EmptyState>
+      ) : sites.data.total === 0 ? (
+        filtered ? (
+          <EmptyState icon={Search01Icon} title={m.sites_no_match()} />
+        ) : (
+          <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
+            <Button onClick={() => setCreateOpen(true)}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              {m.nav_new_site()}
+            </Button>
+          </EmptyState>
+        )
       ) : (
-        <DataTable
-          data={sites.data}
-          columns={columns}
-          getRowId={(s) => s.id}
-          testId="sites-table"
-        />
+        <>
+          <DataTable
+            data={sites.data.items}
+            columns={columns}
+            getRowId={(s) => s.id}
+            testId="sites-table"
+          />
+          <Pager
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={sites.data.total}
+            onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
+          />
+        </>
       )}
       <CreateSiteDialog open={search.create === true} onOpenChange={setCreateOpen} />
     </Page>
+  );
+}
+
+/** Search input that updates the URL a moment after typing stops. */
+function SearchBox({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [text, setText] = React.useState(value);
+  const latest = React.useRef(onChange);
+  latest.current = onChange;
+  React.useEffect(() => setText(value), [value]);
+  React.useEffect(() => {
+    if (text === value) return;
+    const timer = setTimeout(() => latest.current(text.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [text, value]);
+  return (
+    <InputGroup className="w-full sm:w-72">
+      <InputGroupAddon>
+        <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
+      </InputGroupAddon>
+      <InputGroupInput
+        type="search"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        placeholder={m.sites_search_placeholder()}
+        aria-label={m.sites_search_placeholder()}
+        data-testid="sites-search"
+      />
+    </InputGroup>
   );
 }
 
@@ -214,10 +264,13 @@ function CreateSiteDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const create = useMutation(orpc.sites.create.mutationOptions());
   const [scheme, setScheme] = React.useState<"http" | "https">("http");
   const [cacheEnabled, setCacheEnabled] = React.useState(true);
   const [respectOrigin, setRespectOrigin] = React.useState(false);
+  const [navigating, setNavigating] = React.useState(false);
+  const pending = create.isPending || navigating;
 
   return (
     <Dialog
@@ -236,6 +289,7 @@ function CreateSiteDialog({
             event.preventDefault();
             const data = new FormData(event.currentTarget);
             const text = (key: string) => String(data.get(key) ?? "").trim();
+            let siteId: string;
             try {
               const result = await create.mutateAsync({
                 name: text("siteName"),
@@ -260,11 +314,17 @@ function CreateSiteDialog({
                     ]
                   : [],
               });
+              siteId = result.site.id;
               toast.success(m.site_form_created({ revision: result.revision.revision }));
-              await queryClient.invalidateQueries();
-              onOpenChange(false);
             } catch {
-              // rendered below via create.error
+              return; // rendered below via create.error
+            }
+            setNavigating(true);
+            try {
+              await queryClient.invalidateQueries();
+              await navigate({ to: "/sites/$id", params: { id: siteId } });
+            } finally {
+              setNavigating(false);
             }
           }}
         >
@@ -362,13 +422,11 @@ function CreateSiteDialog({
               </>
             ) : null}
             {create.isError ? (
-              <FieldError data-testid="site-form-error">
-                {errorMessage(create.error, m.common_unknown_error())}
-              </FieldError>
+              <FieldError data-testid="site-form-error">{errorMessage(create.error)}</FieldError>
             ) : null}
             <DialogFooter>
-              <Button type="submit" disabled={create.isPending} data-testid="create-site-submit">
-                {create.isPending ? <Spinner /> : null}
+              <Button type="submit" disabled={pending} data-testid="create-site-submit">
+                {pending ? <Spinner /> : null}
                 {m.site_form_submit()}
               </Button>
             </DialogFooter>
