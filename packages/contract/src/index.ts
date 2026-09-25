@@ -157,6 +157,26 @@ export const contract = {
       .route({ method: "POST", path: "/sites/{id}/purge", tags: ["sites"] })
       .input(idParam)
       .output(s.siteMutationResult),
+    /** Passive health of the site's origins, as reported by the nodes. */
+    originHealth: oc
+      .route({ method: "GET", path: "/sites/{id}/origin-health", tags: ["sites"] })
+      .input(idParam)
+      .output(z.array(s.originHealth)),
+  },
+  /** Cache purge (URL, prefix, whole site) and prefetch tasks with per-node results. */
+  cacheTasks: {
+    list: oc
+      .route({ method: "GET", path: "/cache-tasks", tags: ["cache"] })
+      .input(s.cacheTaskListInput)
+      .output(s.cacheTaskList),
+    get: oc
+      .route({ method: "GET", path: "/cache-tasks/{id}", tags: ["cache"] })
+      .input(idParam)
+      .output(s.cacheTask),
+    create: oc
+      .route({ method: "POST", path: "/cache-tasks", tags: ["cache"], successStatus: 201 })
+      .input(s.cacheTaskCreateInput)
+      .output(s.cacheTask),
   },
   /** Members of the caller's active organization (organization owners and admins). */
   members: {

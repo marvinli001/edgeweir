@@ -37,6 +37,10 @@ export const errorDefs = {
   LAST_OWNER: { status: 409, params: [] },
   INVITATION_NOT_FOUND: { status: 404, params: [] },
   INVITATION_EMAIL_MISMATCH: { status: 403, params: ["email"] },
+  S3_SECRET_REQUIRED: { status: 400, params: ["accessKeyId"] },
+  CACHE_TASK_NOT_FOUND: { status: 404, params: [] },
+  CACHE_TASK_URL_INVALID: { status: 400, params: ["urls"] },
+  CACHE_TASK_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
 } as const satisfies Record<string, { status: number; params: readonly string[] }>;
 
 export type ErrorCode = keyof typeof errorDefs;
