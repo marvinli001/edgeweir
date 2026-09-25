@@ -7,9 +7,11 @@ import { OpenAPIGenerator } from "@orpc/openapi";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
+import { SimpleCsrfProtectionHandlerPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
+import { API_KEY_HEADER } from "./lib/auth";
 import type { AppContext } from "./lib/context";
 import { type RequestContext, router } from "./rpc/router";
 
@@ -38,17 +40,28 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
     const status = (error as { status?: number }).status ?? 500;
     if (status >= 500) log.error("rpc error", { error });
   };
-  const rpc = new RPCHandler(router, { interceptors: [onError(logServerError)] });
+  const rpc = new RPCHandler(router, {
+    interceptors: [onError(logServerError)],
+    plugins: [new SimpleCsrfProtectionHandlerPlugin()],
+  });
   const openapi = new OpenAPIHandler(router, { interceptors: [onError(logServerError)] });
   const generator = new OpenAPIGenerator({ schemaConverters: [new ZodToJsonSchemaConverter()] });
   let spec: unknown;
 
-  const requestContext = (c: Parameters<typeof getConnInfo>[0]): RequestContext => ({
-    app: ctx,
-    headers: c.req.raw.headers,
-    ip: clientIp(c),
-    userAgent: c.req.header("user-agent") ?? "",
-  });
+  /**
+   * The UI surface (/rpc) authenticates with the session cookie only; the
+   * public API (/api/v1) with the x-api-key header only (ADR-0005). The other
+   * credential is stripped so it can never be used on the wrong surface.
+   */
+  const requestContext = (
+    c: Parameters<typeof getConnInfo>[0],
+    surface: "rpc" | "api",
+  ): RequestContext => {
+    const headers = new Headers(c.req.raw.headers);
+    if (surface === "rpc") headers.delete(API_KEY_HEADER);
+    else headers.delete("cookie");
+    return { app: ctx, headers, ip: clientIp(c), userAgent: c.req.header("user-agent") ?? "" };
+  };
 
   app.use(
     "*",
@@ -72,7 +85,7 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
   app.use("/rpc/*", async (c, next) => {
     const { matched, response } = await rpc.handle(c.req.raw, {
       prefix: "/rpc",
-      context: requestContext(c),
+      context: requestContext(c, "rpc"),
     });
     if (matched) return c.newResponse(response.body, response);
     await next();
@@ -98,7 +111,7 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
   app.use("/api/v1/*", async (c, next) => {
     const { matched, response } = await openapi.handle(c.req.raw, {
       prefix: "/api/v1",
-      context: requestContext(c),
+      context: requestContext(c, "api"),
     });
     if (matched) return c.newResponse(response.body, response);
     await next();

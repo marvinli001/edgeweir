@@ -57,7 +57,15 @@ describe("HTTP API", async () => {
     });
     expect((await call("/api/v1/sites")).status).toBe(401);
     expect((await call("/api/v1/nodes")).status).toBe(401);
-    expect((await call("/rpc/sites/list", { method: "POST", body: "{}" })).status).toBe(401);
+    expect(
+      (
+        await call("/rpc/sites/list", {
+          method: "POST",
+          headers: { "x-csrf-token": "orpc" },
+          body: "{}",
+        })
+      ).status,
+    ).toBe(401);
     expect((await call("/api/v1/sites", { headers: { "x-api-key": "ewk_bogus" } })).status).toBe(
       401,
     );
@@ -122,9 +130,31 @@ describe("HTTP API", async () => {
     });
     expect(dup.status).toBe(409);
 
-    const list = await call("/api/v1/sites", { headers: { cookie } });
+    const list = await call("/api/v1/sites", { headers: { "x-api-key": key } });
     expect(list.status).toBe(200);
     expect(((await list.json()) as unknown[]).length).toBe(1);
+
+    // Each surface accepts only its own credential.
+    expect((await call("/api/v1/sites", { headers: { cookie } })).status).toBe(401);
+    const rpcWithKey = await call("/rpc/sites/list", {
+      method: "POST",
+      headers: { "x-api-key": key, "x-csrf-token": "orpc" },
+      body: "{}",
+    });
+    expect(rpcWithKey.status).toBe(401);
+    const rpcWithCookie = await call("/rpc/sites/list", {
+      method: "POST",
+      headers: { cookie, "x-csrf-token": "orpc" },
+      body: "{}",
+    });
+    expect(rpcWithCookie.status).toBe(200);
+    // Without the CSRF header the UI surface refuses the request.
+    const rpcNoCsrf = await call("/rpc/sites/list", {
+      method: "POST",
+      headers: { cookie },
+      body: "{}",
+    });
+    expect(rpcNoCsrf.status).toBe(403);
 
     const invalid = await call("/api/v1/sites", {
       method: "POST",
@@ -133,7 +163,7 @@ describe("HTTP API", async () => {
     });
     expect(invalid.status).toBe(400);
 
-    const audit = await call("/api/v1/audit-logs", { headers: { cookie } });
+    const audit = await call("/api/v1/audit-logs", { headers: { "x-api-key": key } });
     const entries = (await audit.json()) as { action: string; actorType: string }[];
     expect(entries.find((e) => e.action === "site.create")?.actorType).toBe("api_key");
   });
