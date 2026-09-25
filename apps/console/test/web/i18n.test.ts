@@ -1,6 +1,17 @@
 import { globSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { errorCodes, errorDefs, revisionReasonCodes, revisionReasonDefs } from "@edgeweir/contract";
+import {
+  errorCodes,
+  errorDefs,
+  nodeErrorCodes,
+  nodeErrorDefs,
+  prefetchFailureReasonDefs,
+  prefetchFailureReasons,
+  revisionReasonCodes,
+  revisionReasonDefs,
+  taskErrorCodes,
+  taskErrorDefs,
+} from "@edgeweir/contract";
 import { type ESTree, parseSync, Visitor } from "vite";
 import { describe, expect, it } from "vitest";
 
@@ -133,6 +144,31 @@ describe("i18n messages", () => {
       const key = `revision_reason_${code}`;
       expect(zh[key], key).toBeTruthy();
       expect(placeholders(zh[key] ?? ""), key).toEqual([...revisionReasonDefs[code].params].sort());
+    }
+  });
+
+  it("localizes every node error code and task outcome code with the same parameters", () => {
+    const tables: [string, string, Record<string, { params: readonly string[] }>][] = [
+      ["node_error_", "nodeErrorDefs", nodeErrorDefs],
+      ["task_error_", "taskErrorDefs", taskErrorDefs],
+      ["task_error_reason_", "prefetchFailureReasonDefs", prefetchFailureReasonDefs],
+    ];
+    expect(nodeErrorCodes.length).toBeGreaterThanOrEqual(6);
+    expect(taskErrorCodes.length).toBeGreaterThanOrEqual(6);
+    expect(prefetchFailureReasons).toContain("status");
+    for (const [prefix, table, defs] of tables) {
+      for (const [code, def] of Object.entries(defs)) {
+        const key = `${prefix}${code}`;
+        for (const [locale, messages] of [
+          ["zh-CN", zh],
+          ["en", en],
+        ] as const) {
+          expect(messages[key], `${table}.${code} → ${locale} ${key}`).toBeTruthy();
+          expect(placeholders(messages[key] ?? ""), `${locale} ${key}`).toEqual(
+            [...def.params].sort(),
+          );
+        }
+      }
     }
   });
 

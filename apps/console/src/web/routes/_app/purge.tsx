@@ -32,6 +32,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
+import { taskErrorText } from "@/lib/node-errors";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
@@ -535,43 +536,51 @@ function TaskRow({
                 <p className="text-sm text-muted-foreground">{m.purge_no_nodes()}</p>
               ) : (
                 <ul className="flex flex-col gap-2">
-                  {task.nodes.map((node) => (
-                    <li
-                      key={node.nodeId}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-background px-3 py-2 text-sm"
-                      data-testid="cache-task-node"
-                      data-state={node.state}
-                    >
-                      <span className="font-medium" data-testid="cache-task-node-name">
-                        {node.nodeName}
-                      </span>
-                      <StateBadge state={node.state} testId="cache-task-node-state" />
-                      {finished(node.state) ? (
-                        <span
-                          className="text-xs tabular-nums text-muted-foreground"
-                          data-testid="cache-task-node-counts"
-                        >
-                          {m.purge_node_counts({
-                            succeeded: formatNumber(node.succeeded),
-                            failed: formatNumber(node.failed),
-                          })}
+                  {task.nodes.map((node) => {
+                    const outcome = taskErrorText(node.errorCode, node.errorParams, node.message);
+                    return (
+                      <li
+                        key={node.nodeId}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-background px-3 py-2 text-sm"
+                        data-testid="cache-task-node"
+                        data-state={node.state}
+                      >
+                        <span className="font-medium" data-testid="cache-task-node-name">
+                          {node.nodeName}
                         </span>
-                      ) : null}
-                      {node.finishedAt ? (
-                        <span
-                          className="ml-auto text-xs text-muted-foreground"
-                          title={formatDateTime(node.finishedAt)}
-                        >
-                          {timeAgo(node.finishedAt)}
-                        </span>
-                      ) : null}
-                      {node.message ? (
-                        <p className="basis-full text-xs break-all text-muted-foreground">
-                          {node.message}
-                        </p>
-                      ) : null}
-                    </li>
-                  ))}
+                        <StateBadge state={node.state} testId="cache-task-node-state" />
+                        {finished(node.state) ? (
+                          <span
+                            className="text-xs tabular-nums text-muted-foreground"
+                            data-testid="cache-task-node-counts"
+                          >
+                            {m.purge_node_counts({
+                              succeeded: formatNumber(node.succeeded),
+                              failed: formatNumber(node.failed),
+                            })}
+                          </span>
+                        ) : null}
+                        {node.finishedAt ? (
+                          <span
+                            className="ml-auto text-xs text-muted-foreground"
+                            title={formatDateTime(node.finishedAt)}
+                          >
+                            {timeAgo(node.finishedAt)}
+                          </span>
+                        ) : null}
+                        {outcome ? (
+                          <p
+                            className="basis-full text-xs break-all text-muted-foreground"
+                            title={node.message || undefined}
+                            data-testid="cache-task-node-message"
+                            data-code={node.errorCode || undefined}
+                          >
+                            {outcome}
+                          </p>
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

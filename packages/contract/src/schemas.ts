@@ -666,6 +666,9 @@ export const siteUpdateInput = z.object({
   cacheSettings: cacheSettings.optional(),
 });
 
+/** Parameters of a node error code (see node-errors.ts). */
+const errorParams = z.record(z.string(), z.string());
+
 /** Passive health of one origin as reported by the nodes. */
 export const originHealth = z.object({
   originId: uuid,
@@ -673,7 +676,11 @@ export const originHealth = z.object({
   downNodes: z.number().int(),
   /** Online nodes of the site's cluster. */
   onlineNodes: z.number().int(),
+  /** The most recent failure across nodes: the node's text ... */
   lastError: z.string(),
+  /** ... and its stable code (nodeErrorDefs) with parameters; empty when unknown. */
+  lastErrorCode: z.string(),
+  lastErrorParams: errorParams,
   lastFailureAt: isoDateTime.nullable(),
   nodes: z.array(
     z.object({
@@ -682,6 +689,8 @@ export const originHealth = z.object({
       healthy: z.boolean(),
       consecutiveFailures: z.number().int(),
       lastError: z.string(),
+      lastErrorCode: z.string(),
+      lastErrorParams: errorParams,
       lastFailureAt: isoDateTime.nullable(),
       downUntil: isoDateTime.nullable(),
       reportedAt: isoDateTime,
@@ -711,7 +720,11 @@ export const cacheTaskNode = z.object({
   nodeId: uuid,
   nodeName: z.string(),
   state: cacheTaskState,
+  /** The node's text of the outcome (English fallback for unknown codes) ... */
   message: z.string(),
+  /** ... and its stable code (taskErrorDefs) with parameters; empty on success. */
+  errorCode: z.string(),
+  errorParams: errorParams,
   succeeded: z.number().int(),
   failed: z.number().int(),
   finishedAt: isoDateTime.nullable(),

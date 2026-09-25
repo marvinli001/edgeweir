@@ -2,6 +2,7 @@ import type { OriginHealth } from "@edgeweir/contract";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { m, timeAgo } from "@/lib/i18n";
+import { originErrorText } from "@/lib/node-errors";
 
 /** Passive health of one origin across the online nodes of the site's cluster. */
 export function OriginHealthBadge({ health }: { health: OriginHealth | undefined }) {
@@ -42,12 +43,15 @@ export function OriginHealthBadge({ health }: { health: OriginHealth | undefined
         {m.site_origin_health_down({ down: health.downNodes, total: health.onlineNodes })}
       </TooltipTrigger>
       <TooltipContent className="flex-col items-start gap-1">
-        {down.map((node) => (
-          <span key={node.nodeId} className="break-all">
-            <span className="font-medium">{node.nodeName}</span>
-            {node.lastError ? ` · ${node.lastError}` : null}
-          </span>
-        ))}
+        {down.map((node) => {
+          const error = originErrorText(node.lastErrorCode, node.lastErrorParams, node.lastError);
+          return (
+            <span key={node.nodeId} className="break-all" data-testid="origin-health-node">
+              <span className="font-medium">{node.nodeName}</span>
+              {error ? ` · ${error}` : null}
+            </span>
+          );
+        })}
       </TooltipContent>
     </Tooltip>
   );
@@ -55,15 +59,18 @@ export function OriginHealthBadge({ health }: { health: OriginHealth | undefined
 
 /** The latest failure of a down origin, visible without hovering (phones). */
 export function OriginHealthError({ health }: { health: OriginHealth | undefined }) {
-  if (!health || health.downNodes === 0 || !health.lastError) return null;
+  if (!health || health.downNodes === 0) return null;
+  const error = originErrorText(health.lastErrorCode, health.lastErrorParams, health.lastError);
+  if (!error) return null;
   return (
     <p
       className="line-clamp-2 text-xs break-all text-destructive animate-in fade-in"
-      title={health.lastError}
+      title={health.lastError || error}
       data-testid="origin-health-error"
+      data-code={health.lastErrorCode || undefined}
     >
       {health.lastFailureAt ? `${timeAgo(health.lastFailureAt)} · ` : null}
-      {health.lastError}
+      {error}
     </p>
   );
 }

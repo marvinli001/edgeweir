@@ -631,5 +631,22 @@
   "a11y_more": "更多",
   "a11y_sidebar": "侧边栏",
   "a11y_toggle_sidebar": "展开或收起侧边栏",
-  "a11y_command_palette": "命令面板"
+  "a11y_command_palette": "命令面板",
+  "node_error_connect_failed": "无法连接源站",
+  "node_error_timeout": "源站响应超时",
+  "node_error_upstream_status": "源站返回 HTTP {status}",
+  "node_error_dns_failed": "无法解析 {host}",
+  "node_error_address_forbidden": "{address} 是特殊用途地址，不在源站地址允许清单内",
+  "node_error_tls_failed": "TLS 握手或证书校验失败",
+  "task_error_prefetch_failed": "{failed}/{total} 个 URL 预热失败，第一个是 {url}（{reason}）",
+  "task_error_reason_status": "HTTP {status}",
+  "task_error_reason_connect_failed": "连接失败",
+  "task_error_reason_timeout": "超时",
+  "task_error_reason_https_unsupported": "节点还没有 HTTPS 监听",
+  "task_error_reason_other": "其他错误",
+  "task_error_prefetch_timeout": "预热超时，已完成 {done}/{total} 个 URL",
+  "task_error_task_unsupported": "节点不支持此任务类型（{type}），请升级 edgeweir-node",
+  "task_error_purge_failed": "刷新未能全部生效",
+  "task_error_task_expired": "节点 7 天内没有执行",
+  "task_error_node_disabled": "节点已停用，未下发"
 }

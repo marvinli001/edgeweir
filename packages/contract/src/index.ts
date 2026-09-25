@@ -4,6 +4,7 @@ import * as s from "./schemas";
 
 export * from "./addresses";
 export * from "./errors";
+export * from "./node-errors";
 export * from "./schemas";
 
 const idParam = z.object({ id: s.uuid });

@@ -1,6 +1,7 @@
 import type { OriginHealth } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, eq, gt, inArray } from "drizzle-orm";
+import { cleanErrorCode, cleanErrorParams, originError } from "../lib/node-errors";
 import { ONLINE_WINDOW_SECONDS } from "./nodes";
 import type { Executor } from "./revisions";
 import { findSite, type SiteScope } from "./sites";
@@ -11,6 +12,9 @@ export interface ReportedOriginHealth {
   healthy: boolean;
   consecutiveFailures: number;
   lastError: string;
+  /** Stable code of the last failure (nodes before v0.2.1 send none). */
+  lastErrorCode?: string;
+  lastErrorParams?: Record<string, string>;
   lastFailureAt: Date | null;
   downUntil: Date | null;
 }
@@ -51,6 +55,8 @@ export async function replaceOriginHealth(
         healthy: r.healthy,
         consecutiveFailures: r.consecutiveFailures,
         lastError: r.lastError.slice(0, 500),
+        lastErrorCode: cleanErrorCode(r.lastErrorCode),
+        lastErrorParams: cleanErrorParams(r.lastErrorParams),
         lastFailureAt: r.lastFailureAt,
         downUntil: r.downUntil,
         reportedAt: now,
@@ -86,6 +92,10 @@ export async function siteOriginHealth(
     .from(schema.originHealth)
     .where(eq(schema.originHealth.siteId, site.id));
   const online = new Map(onlineNodes.map((n) => [n.id, n.name]));
+  const error = (r: (typeof reports)[number] | undefined) => {
+    const e = originError(r?.lastErrorCode ?? "", r?.lastErrorParams ?? {}, r?.lastError ?? "");
+    return { lastError: r?.lastError ?? "", lastErrorCode: e.code, lastErrorParams: e.params };
+  };
   return origins.map((o) => {
     const rows = reports.filter((r) => r.originId === o.id && online.has(r.nodeId));
     const last = rows
@@ -95,14 +105,14 @@ export async function siteOriginHealth(
       originId: o.id,
       downNodes: rows.filter((r) => !r.healthy).length,
       onlineNodes: onlineNodes.length,
-      lastError: last?.lastError ?? "",
+      ...error(last),
       lastFailureAt: last?.lastFailureAt?.toISOString() ?? null,
       nodes: rows.map((r) => ({
         nodeId: r.nodeId,
         nodeName: online.get(r.nodeId) ?? "",
         healthy: r.healthy,
         consecutiveFailures: r.consecutiveFailures,
-        lastError: r.lastError,
+        ...error(r),
         lastFailureAt: r.lastFailureAt?.toISOString() ?? null,
         downUntil: r.downUntil?.toISOString() ?? null,
         reportedAt: r.reportedAt.toISOString(),

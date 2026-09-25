@@ -11,10 +11,11 @@ import * as x509 from "@peculiar/x509";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startNodeChannel } from "../../src/server/node-channel/server";
-import { createCacheTask } from "../../src/server/services/cache-tasks";
+import { createCacheTask, getCacheTask } from "../../src/server/services/cache-tasks";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
 import { deleteNode, listNodes, setNodeStatus } from "../../src/server/services/nodes";
+import { siteOriginHealth } from "../../src/server/services/origin-health";
 import { latestRevision } from "../../src/server/services/revisions";
 import { createSite } from "../../src/server/services/sites";
 import { createTestContext, seedOrganization } from "./helpers";
@@ -53,6 +54,42 @@ describe("node channel", async () => {
         nodeOptions: { ca: ctx.nodeCa.certificatePem, servername: "localhost" },
       }),
     );
+
+  /** Enrolls a node of the default cluster and returns its mTLS client. */
+  const enroll = async (nodeName: string) => {
+    const token = await createEnrollmentToken(
+      ctx.db,
+      { clusterId, nodeName, ttlMinutes: 10 },
+      {
+        actor,
+        consoleUrl: ctx.env.EDGEWEIR_PUBLIC_URL,
+        serverUrl: ctx.env.nodeApiUrl,
+        caSha256: ctx.nodeCa.fingerprintSha256,
+      },
+    );
+    const { csrPem, keyPem } = await nodeKeyAndCsr();
+    const enrolled = await anonymous().enroll({ token: token.token, csrPem });
+    const mtls = createClient(
+      NodeService,
+      createConnectTransport({
+        baseUrl,
+        httpVersion: "2",
+        nodeOptions: {
+          ca: enrolled.caCertificatePem,
+          cert: enrolled.certificatePem,
+          key: keyPem,
+          servername: "localhost",
+        },
+      }),
+    );
+    return { nodeId: enrolled.nodeId, mtls };
+  };
+  const demoSite = (name: string, origins: { address: string }[] = [{ address: "whoami" }]) =>
+    createSite(ctx.db, siteCreateInput.parse({ name, domains: [`${name}.test`], origins }), {
+      organizationId,
+      actor,
+      masterKey: ctx.masterKey,
+    });
 
   beforeAll(async () => {
     ({ organizationId } = await seedOrganization(ctx.db));
@@ -454,6 +491,149 @@ describe("node channel", async () => {
         statusCodes: { "200": 3, "404": 2 },
       }),
     ]);
+  });
+
+  it("stores the error codes nodes report and returns them with the text (CP-M9)", async () => {
+    const { nodeId, mtls } = await enroll("edge-codes");
+    const { site } = await demoSite("codes", [
+      { address: "primary.test" },
+      { address: "legacy.test" },
+      { address: "odd.test" },
+    ]);
+    const [primary, legacy, odd] = site.origins.map((o) => o.id);
+    const failedAt = timestampFromDate(new Date());
+    await mtls.reportStatus({
+      appliedRevision: 1n,
+      state: ApplyState.APPLIED,
+      originHealth: [
+        {
+          siteId: site.id,
+          originId: primary,
+          healthy: false,
+          consecutiveFailures: 3,
+          lastError: "HTTP 503",
+          lastErrorCode: "upstream_status",
+          lastErrorParams: { status: "503" },
+          lastFailureAt: failedAt,
+        },
+        // A node before v0.2.1: text only, mapped to a code where that is unambiguous.
+        {
+          siteId: site.id,
+          originId: legacy,
+          healthy: false,
+          consecutiveFailures: 3,
+          lastError: "dns legacy.test: server failure",
+          lastFailureAt: failedAt,
+        },
+        // Malformed codes and parameters are dropped, the text stays.
+        {
+          siteId: site.id,
+          originId: odd,
+          healthy: false,
+          consecutiveFailures: 1,
+          lastError: "timeout or HTTP 504",
+          lastErrorCode: "Not A Code!",
+          lastErrorParams: { "bad-key": "x", ok: "y".repeat(600) },
+          lastFailureAt: failedAt,
+        },
+      ],
+    });
+    const [stored] = await ctx.db
+      .select()
+      .from(schema.originHealth)
+      .where(eq(schema.originHealth.originId, primary ?? ""));
+    expect(stored).toMatchObject({
+      lastErrorCode: "upstream_status",
+      lastErrorParams: { status: "503" },
+    });
+    const health = await siteOriginHealth(ctx.db, site.id, { all: true });
+    const nodeOf = (originId: string | undefined) =>
+      health.find((h) => h.originId === originId)?.nodes.find((n) => n.nodeId === nodeId);
+    expect(health.find((h) => h.originId === primary)).toMatchObject({
+      lastError: "HTTP 503",
+      lastErrorCode: "upstream_status",
+      lastErrorParams: { status: "503" },
+    });
+    expect(nodeOf(legacy)).toMatchObject({
+      lastError: "dns legacy.test: server failure",
+      lastErrorCode: "dns_failed",
+      lastErrorParams: { host: "legacy.test" },
+    });
+    expect(nodeOf(odd)).toMatchObject({ lastError: "timeout or HTTP 504", lastErrorCode: "" });
+    const [oddRow] = await ctx.db
+      .select()
+      .from(schema.originHealth)
+      .where(eq(schema.originHealth.originId, odd ?? ""));
+    expect(oddRow?.lastErrorParams).toEqual({ ok: "y".repeat(500) });
+
+    // Task results carry a code and parameters next to the text.
+    const purge = await createCacheTask(
+      ctx.db,
+      { type: "url", urls: ["http://codes.test/a"], siteIds: [] },
+      { scope: { all: true }, actor },
+    );
+    const prefetch = await createCacheTask(
+      ctx.db,
+      { type: "prefetch", urls: ["http://codes.test/b", "http://codes.test/c"], siteIds: [] },
+      { scope: { all: true }, actor },
+    );
+    const old = await createCacheTask(
+      ctx.db,
+      { type: "prefix", urls: ["http://codes.test/c/"], siteIds: [] },
+      { scope: { all: true }, actor },
+    );
+    expect((await mtls.pullTasks({})).tasks.map((t) => t.id).sort()).toEqual(
+      [purge.id, prefetch.id, old.id].sort(),
+    );
+    const finishedAt = timestampFromDate(new Date());
+    await mtls.reportTaskResult({
+      taskId: purge.id,
+      state: TaskState.FAILED,
+      failed: 1,
+      message: "data plane unavailable, the purge applies when it recovers: x",
+      errorCode: "purge_failed",
+      finishedAt,
+    });
+    const params = {
+      failed: "1",
+      total: "2",
+      url: "http://codes.test/c",
+      reason: "status",
+      status: "404",
+    };
+    await mtls.reportTaskResult({
+      taskId: prefetch.id,
+      state: TaskState.FAILED,
+      succeeded: 1,
+      failed: 1,
+      message: "http://codes.test/c: HTTP 404",
+      errorCode: "prefetch_failed",
+      errorParams: params,
+      finishedAt,
+    });
+    await mtls.reportTaskResult({
+      taskId: old.id,
+      state: TaskState.FAILED,
+      message: "unsupported task type; upgrade edgeweir-node",
+      finishedAt,
+    });
+    const nodeResult = async (taskId: string) =>
+      (await getCacheTask(ctx.db, taskId, { all: true })).nodes.find((n) => n.nodeId === nodeId);
+    expect(await nodeResult(purge.id)).toMatchObject({
+      state: "failed",
+      errorCode: "purge_failed",
+      errorParams: {},
+      message: "data plane unavailable, the purge applies when it recovers: x",
+    });
+    expect(await nodeResult(prefetch.id)).toMatchObject({
+      errorCode: "prefetch_failed",
+      errorParams: params,
+      message: "http://codes.test/c: HTTP 404",
+    });
+    expect(await nodeResult(old.id)).toMatchObject({
+      errorCode: "task_unsupported",
+      errorParams: { type: "unknown" },
+    });
   });
 
   it("rejects unknown tokens", async () => {

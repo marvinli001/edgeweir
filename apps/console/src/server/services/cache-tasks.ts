@@ -9,6 +9,7 @@ import { and, arrayContains, count, desc, eq, inArray, lt, or, type SQL, sql } f
 import type * as z from "zod";
 import { fail } from "../lib/errors";
 import { TASKS_CHANNEL } from "../lib/events";
+import { cleanErrorCode, cleanErrorParams, taskError } from "../lib/node-errors";
 import { type Actor, recordAudit } from "./audit";
 import type { Executor } from "./revisions";
 import type { SiteScope } from "./sites";
@@ -152,15 +153,20 @@ async function toTaskDtos(db: Executor, rows: TaskRow[]): Promise<CacheTask[]> {
         return site ? [site] : [];
       }),
       state: taskState(taskNodes),
-      nodes: taskNodes.map((n) => ({
-        nodeId: n.nodeId,
-        nodeName: n.nodeName,
-        state: n.state as CacheTaskState,
-        message: n.message,
-        succeeded: n.succeeded,
-        failed: n.failed,
-        finishedAt: n.finishedAt?.toISOString() ?? null,
-      })),
+      nodes: taskNodes.map((n) => {
+        const error = taskError(n.errorCode, n.errorParams, n.message);
+        return {
+          nodeId: n.nodeId,
+          nodeName: n.nodeName,
+          state: n.state as CacheTaskState,
+          message: n.message,
+          errorCode: error.code,
+          errorParams: error.params,
+          succeeded: n.succeeded,
+          failed: n.failed,
+          finishedAt: n.finishedAt?.toISOString() ?? null,
+        };
+      }),
       createdByName: r.createdByName,
       createdAt: r.createdAt.toISOString(),
       finishedAt: r.finishedAt?.toISOString() ?? null,
@@ -400,6 +406,9 @@ export async function reportCacheTaskResult(
     taskId: string;
     state: "succeeded" | "failed";
     message: string;
+    /** Stable code of the outcome (nodes before v0.2.1 send none). */
+    errorCode?: string;
+    errorParams?: Record<string, string>;
     succeeded: number;
     failed: number;
     finishedAt: Date;
@@ -411,6 +420,8 @@ export async function reportCacheTaskResult(
       .set({
         state: result.state,
         message: result.message.slice(0, 2000),
+        errorCode: cleanErrorCode(result.errorCode),
+        errorParams: cleanErrorParams(result.errorParams),
         succeeded: result.succeeded,
         failed: result.failed,
         finishedAt: result.finishedAt,
@@ -452,6 +463,8 @@ export async function expireCacheTasks(db: Database, now = new Date()): Promise<
       .set({
         state: "failed",
         message: "expired: the node did not report a result",
+        errorCode: "task_expired",
+        errorParams: {},
         finishedAt: now,
       })
       .where(

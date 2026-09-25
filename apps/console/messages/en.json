@@ -631,5 +631,22 @@
   "a11y_more": "More",
   "a11y_sidebar": "Sidebar",
   "a11y_toggle_sidebar": "Toggle sidebar",
-  "a11y_command_palette": "Command palette"
+  "a11y_command_palette": "Command palette",
+  "node_error_connect_failed": "Cannot connect to the origin",
+  "node_error_timeout": "The origin timed out",
+  "node_error_upstream_status": "The origin answered HTTP {status}",
+  "node_error_dns_failed": "Cannot resolve {host}",
+  "node_error_address_forbidden": "{address} is a special-purpose address outside the origin allow list",
+  "node_error_tls_failed": "TLS handshake or certificate verification failed",
+  "task_error_prefetch_failed": "{failed} of {total} URLs failed, first {url} ({reason})",
+  "task_error_reason_status": "HTTP {status}",
+  "task_error_reason_connect_failed": "connection failed",
+  "task_error_reason_timeout": "timed out",
+  "task_error_reason_https_unsupported": "the node has no HTTPS listener yet",
+  "task_error_reason_other": "other error",
+  "task_error_prefetch_timeout": "Ran out of time after {done} of {total} URLs",
+  "task_error_task_unsupported": "The node does not support this task type ({type}); upgrade edgeweir-node",
+  "task_error_purge_failed": "The purge did not fully apply",
+  "task_error_task_expired": "Not executed by the node within 7 days",
+  "task_error_node_disabled": "Not sent: the node is disabled"
 }
