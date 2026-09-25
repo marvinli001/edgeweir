@@ -1,0 +1,193 @@
+syntax = "proto3";
+
+package edgeweir.node.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// NodeConfig is the engine-agnostic intermediate representation (IR) that the
+// console compiles from sites and rules. Nodes render it into their data plane
+// (OpenResty today, possibly Pingora later). It never contains secrets inline:
+// certificates and keys are referenced by id and fetched separately.
+//
+// Canonical form (required for content hashing):
+//   - listeners sorted by port, cache_zones by name, sites by id,
+//     certificates by id;
+//   - inside a site: domains by name, origins by id, cache_rules by
+//     (priority, id).
+// content_hash is the lowercase hex SHA-256 of the deterministic binary
+// encoding of this message with `revision` and `content_hash` cleared.
+message NodeConfig {
+  // Monotonically increasing revision within the cluster.
+  uint64 revision = 1;
+  // Hash of the canonical content, independent of the revision number.
+  string content_hash = 2;
+  // Cluster this configuration belongs to.
+  string cluster_id = 3;
+  // Ports the data plane listens on. Changing them is a structural change.
+  repeated Listener listeners = 4;
+  // Cache storage zones. Changing them is a structural change.
+  repeated CacheZone cache_zones = 5;
+  // Sites served by the cluster. Hot-updated without reloading the engine.
+  repeated Site sites = 6;
+  // TLS certificates referenced by sites.
+  repeated CertificateRef certificates = 7;
+}
+
+// NodeConfigDiff transforms the config at base_revision into revision.
+// Listeners, cache zones and certificates are small and always sent in full.
+message NodeConfigDiff {
+  // Revision the diff applies to.
+  uint64 base_revision = 1;
+  // Revision produced by applying the diff.
+  uint64 revision = 2;
+  // content_hash of the resulting NodeConfig, used to verify the result.
+  string content_hash = 3;
+  // Cluster this configuration belongs to.
+  string cluster_id = 4;
+  // Full listener set of the target revision.
+  repeated Listener listeners = 5;
+  // Full cache zone set of the target revision.
+  repeated CacheZone cache_zones = 6;
+  // Sites that were added or changed.
+  repeated Site upserted_sites = 7;
+  // Ids of sites that were removed.
+  repeated string removed_site_ids = 8;
+  // Full certificate reference set of the target revision.
+  repeated CertificateRef certificates = 9;
+}
+
+// ListenerProtocol is the application protocol of a listener.
+enum ListenerProtocol {
+  LISTENER_PROTOCOL_UNSPECIFIED = 0;
+  LISTENER_PROTOCOL_HTTP = 1;
+  LISTENER_PROTOCOL_HTTPS = 2;
+}
+
+// Listener is a port the data plane accepts traffic on.
+message Listener {
+  uint32 port = 1;
+  ListenerProtocol protocol = 2;
+  bool http2 = 3;
+  bool http3 = 4;
+  bool proxy_protocol = 5;
+}
+
+// CacheZone describes one on-disk cache with its in-memory key index.
+message CacheZone {
+  string name = 1;
+  uint64 max_size_mb = 2;
+  uint32 keys_zone_mb = 3;
+  uint32 inactive_seconds = 4;
+}
+
+// Site is one customer property: a set of domains, an origin pool and rules.
+message Site {
+  string id = 1;
+  string name = 2;
+  bool enabled = 3;
+  repeated Domain domains = 4;
+  OriginPool origin_pool = 5;
+  repeated CacheRule cache_rules = 6;
+  // Name of the cache zone the site stores objects in.
+  string cache_zone = 7;
+  // Bumped to invalidate every cached object of the site at once.
+  uint64 cache_generation = 8;
+  // Id of an entry in NodeConfig.certificates, empty for HTTP-only sites.
+  string certificate_id = 9;
+}
+
+// Domain is a host name routed to a site.
+message Domain {
+  // Lowercase host name without port, e.g. "a.example.com".
+  string name = 1;
+  // When true, name is a suffix and matches any single left-most label
+  // ("*.example.com" is stored as name "example.com", wildcard true).
+  bool wildcard = 2;
+}
+
+// LoadBalancePolicy selects how an origin is picked from a pool.
+enum LoadBalancePolicy {
+  LOAD_BALANCE_POLICY_UNSPECIFIED = 0;
+  LOAD_BALANCE_POLICY_WEIGHTED_RANDOM = 1;
+  LOAD_BALANCE_POLICY_ROUND_ROBIN = 2;
+  LOAD_BALANCE_POLICY_CONSISTENT_HASH = 3;
+}
+
+// OriginPool is the set of upstream servers of a site.
+message OriginPool {
+  string id = 1;
+  LoadBalancePolicy policy = 2;
+  repeated Origin origins = 3;
+}
+
+// OriginScheme is the protocol used to talk to an origin.
+enum OriginScheme {
+  ORIGIN_SCHEME_UNSPECIFIED = 0;
+  ORIGIN_SCHEME_HTTP = 1;
+  ORIGIN_SCHEME_HTTPS = 2;
+}
+
+// Origin is one upstream server.
+message Origin {
+  string id = 1;
+  // Host name or IP literal.
+  string address = 2;
+  uint32 port = 3;
+  OriginScheme scheme = 4;
+  // Relative weight inside the pool, at least 1.
+  uint32 weight = 5;
+  // Backup origins only receive traffic when all primaries are down.
+  bool backup = 6;
+  // Host header sent upstream; empty means forward the client Host.
+  string host_header = 7;
+  // TLS SNI for HTTPS origins; empty means derive from host_header/address.
+  string sni = 8;
+}
+
+// CacheAction is what a matching cache rule does.
+enum CacheAction {
+  CACHE_ACTION_UNSPECIFIED = 0;
+  CACHE_ACTION_CACHE = 1;
+  CACHE_ACTION_BYPASS = 2;
+}
+
+// OriginCacheControl decides whether origin caching headers win.
+enum OriginCacheControl {
+  ORIGIN_CACHE_CONTROL_UNSPECIFIED = 0;
+  // Use edge_ttl_seconds regardless of origin headers.
+  ORIGIN_CACHE_CONTROL_OVERRIDE = 1;
+  // Honour Cache-Control/Expires from the origin, falling back to
+  // edge_ttl_seconds when the origin sends none.
+  ORIGIN_CACHE_CONTROL_RESPECT = 2;
+}
+
+// CacheRule decides whether and for how long a response is cached.
+// Rules are evaluated in (priority, id) order and the first match wins.
+message CacheRule {
+  string id = 1;
+  uint32 priority = 2;
+  CacheRuleMatch match = 3;
+  CacheAction action = 4;
+  uint32 edge_ttl_seconds = 5;
+  OriginCacheControl origin_cache_control = 6;
+}
+
+// CacheRuleMatch is the condition of a cache rule. Empty lists match all
+// requests. When several lists are set, all of them must match.
+message CacheRuleMatch {
+  // URI path prefixes, e.g. "/static/".
+  repeated string path_prefixes = 1;
+  // File extensions without the dot, lowercase, e.g. "png".
+  repeated string extensions = 2;
+  // Reserved for the rule-engine expression language (wirefilter style).
+  // Phase 0 nodes reject configs where this is non-empty.
+  string expression = 3;
+}
+
+// CertificateRef points at a certificate stored in the console.
+message CertificateRef {
+  string id = 1;
+  repeated string names = 2;
+  string sha256_fingerprint = 3;
+  google.protobuf.Timestamp not_after = 4;
+}

@@ -1,0 +1,15 @@
+# Buf module for the Edgeweir node channel. This directory is the single
+# source of truth for the contract between the console and edgeweir-node.
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+    - COMMENTS
+  except:
+    - COMMENT_FIELD
+    - COMMENT_ENUM_VALUE
+breaking:
+  use:
+    - FILE

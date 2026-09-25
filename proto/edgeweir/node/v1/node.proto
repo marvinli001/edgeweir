@@ -1,0 +1,177 @@
+syntax = "proto3";
+
+package edgeweir.node.v1;
+
+import "edgeweir/node/v1/config.proto";
+import "google/protobuf/timestamp.proto";
+
+// NodeService is the channel between edgeweir-node agents and the console.
+//
+// Transport: Connect protocol over HTTPS on a dedicated port (default :8443).
+// TLS is terminated by the console itself, never by a reverse proxy.
+//
+// Authentication:
+//   - Enroll is the only RPC callable without a client certificate. It is
+//     authorised by a single-use enrollment token. The agent pins the
+//     console's internal CA by SHA-256 fingerprint (given in the install
+//     command) before sending the token.
+//   - Every other RPC requires mutual TLS with a client certificate issued by
+//     the console's internal CA; the certificate subject CN is the node id.
+service NodeService {
+  // Enroll exchanges a single-use token and a CSR for a node certificate.
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+  // RenewCertificate issues a fresh certificate for an enrolled node.
+  rpc RenewCertificate(RenewCertificateRequest) returns (RenewCertificateResponse);
+  // WatchConfig streams revision notifications. The first message always
+  // carries the latest revision; keepalives are sent periodically. Agents must
+  // also poll GetConfig as a fallback when the stream is unavailable.
+  rpc WatchConfig(WatchConfigRequest) returns (stream WatchConfigResponse);
+  // GetConfig returns a full snapshot or a diff against base_revision.
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  // ReportStatus is the heartbeat and apply receipt of a node.
+  rpc ReportStatus(ReportStatusRequest) returns (ReportStatusResponse);
+  // ReportStats uploads per-minute pre-aggregated traffic statistics.
+  rpc ReportStats(ReportStatsRequest) returns (ReportStatsResponse);
+}
+
+// NodeInfo describes the host and software of a node.
+message NodeInfo {
+  string hostname = 1;
+  string agent_version = 2;
+  string os = 3;
+  string arch = 4;
+  // Data plane engine, e.g. "openresty".
+  string engine = 5;
+  string engine_version = 6;
+  repeated string ip_addresses = 7;
+}
+
+// EnrollRequest carries the one-time token and the node's CSR.
+message EnrollRequest {
+  // Single-use enrollment token shown once in the console.
+  string token = 1;
+  // PEM-encoded PKCS#10 CSR. The private key never leaves the node.
+  string csr_pem = 2;
+  NodeInfo info = 3;
+}
+
+// EnrollResponse returns the node identity and its certificate.
+message EnrollResponse {
+  string node_id = 1;
+  string cluster_id = 2;
+  string node_name = 3;
+  // PEM-encoded node certificate (client auth).
+  string certificate_pem = 4;
+  // PEM-encoded internal CA certificate; must match the pinned fingerprint.
+  string ca_certificate_pem = 5;
+  google.protobuf.Timestamp not_after = 6;
+}
+
+// RenewCertificateRequest carries a CSR for a new key pair.
+message RenewCertificateRequest {
+  string csr_pem = 1;
+}
+
+// RenewCertificateResponse returns the renewed certificate.
+message RenewCertificateResponse {
+  string certificate_pem = 1;
+  string ca_certificate_pem = 2;
+  google.protobuf.Timestamp not_after = 3;
+}
+
+// WatchConfigRequest opens a notification stream.
+message WatchConfigRequest {
+  // Revision the node has currently applied, 0 if none.
+  uint64 known_revision = 1;
+}
+
+// WatchEvent is the kind of a WatchConfig message.
+enum WatchEvent {
+  WATCH_EVENT_UNSPECIFIED = 0;
+  // A revision is available; fetch it with GetConfig if it is newer.
+  WATCH_EVENT_REVISION = 1;
+  // Keepalive so that both sides can detect dead streams.
+  WATCH_EVENT_KEEPALIVE = 2;
+}
+
+// WatchConfigResponse notifies the node about the latest revision.
+message WatchConfigResponse {
+  WatchEvent event = 1;
+  uint64 latest_revision = 2;
+  string content_hash = 3;
+}
+
+// GetConfigRequest selects the revision to fetch.
+message GetConfigRequest {
+  // Revision to fetch; 0 means the latest.
+  uint64 revision = 1;
+  // Revision the node already has. When non-zero and still retained, the
+  // console may answer with a diff instead of a snapshot.
+  uint64 base_revision = 2;
+}
+
+// GetConfigResponse carries either a snapshot or a diff.
+message GetConfigResponse {
+  // Payload of the response.
+  oneof payload {
+    NodeConfig snapshot = 1;
+    NodeConfigDiff diff = 2;
+  }
+  google.protobuf.Timestamp generated_at = 3;
+}
+
+// ApplyState is the outcome of applying a revision on a node.
+enum ApplyState {
+  APPLY_STATE_UNSPECIFIED = 0;
+  APPLY_STATE_APPLYING = 1;
+  APPLY_STATE_APPLIED = 2;
+  APPLY_STATE_FAILED = 3;
+}
+
+// ReportStatusRequest is sent after every apply and periodically.
+message ReportStatusRequest {
+  // Revision currently serving traffic.
+  uint64 applied_revision = 1;
+  string applied_content_hash = 2;
+  ApplyState state = 3;
+  // Human-readable detail, e.g. the nginx -t error on failure.
+  string message = 4;
+  NodeInfo info = 5;
+  google.protobuf.Timestamp applied_at = 6;
+  // Whether the data plane answered its local health probe.
+  bool data_plane_healthy = 7;
+  google.protobuf.Timestamp certificate_not_after = 8;
+}
+
+// ReportStatusResponse tells the node what the console expects next.
+message ReportStatusResponse {
+  uint64 latest_revision = 1;
+  // The console asks the node to renew its certificate.
+  bool renew_certificate = 2;
+  // Suggested heartbeat interval.
+  uint32 report_interval_seconds = 3;
+}
+
+// MinuteStats is traffic of one site during one minute on one node.
+message MinuteStats {
+  // Start of the minute (UTC, seconds truncated).
+  google.protobuf.Timestamp minute = 1;
+  string site_id = 2;
+  uint64 requests = 3;
+  uint64 bytes_sent = 4;
+  uint64 bytes_received = 5;
+  uint64 cache_hits = 6;
+  uint64 cache_misses = 7;
+  // Response count per HTTP status code.
+  map<uint32, uint64> status_codes = 8;
+}
+
+// ReportStatsRequest uploads a batch of minute buckets.
+message ReportStatsRequest {
+  repeated MinuteStats stats = 1;
+}
+
+// ReportStatsResponse acknowledges a stats batch.
+message ReportStatsResponse {
+  uint32 accepted = 1;
+}

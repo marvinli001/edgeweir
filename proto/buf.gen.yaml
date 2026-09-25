@@ -1,0 +1,12 @@
+# TypeScript generation for the console. Run from the repository root:
+#   pnpm proto:gen
+# Go code is generated in edgeweir-node from a git tag of this directory.
+version: v2
+clean: true
+plugins:
+  - local: protoc-gen-es
+    out: packages/proto/src/gen
+    include_imports: false
+    opt:
+      - target=ts
+      - import_extension=js
