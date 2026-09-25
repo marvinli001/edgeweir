@@ -2,7 +2,7 @@
 // admin, two-factor, passkey and api-key plugins. Only change: timestamps use timestamptz.
 
 import { relations } from "drizzle-orm";
-import { boolean, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -207,6 +207,17 @@ export const apikey = pgTable(
     index("apikey_key_idx").on(table.key),
   ],
 );
+
+/**
+ * better-auth rate limit counters (`rateLimit.storage: "database"`), shared by
+ * every console instance and kept across restarts. `last_request` is epoch ms.
+ */
+export const rateLimit = pgTable("rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),

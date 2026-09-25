@@ -47,6 +47,8 @@ chmod 600 .env
 
 `EDGEWEIR_PUBLIC_URL` 必须与浏览器实际访问的地址一致（含 `https://`），否则登录会因来源校验失败。
 
+宝塔 nginx 经 Docker 端口映射访问 `127.0.0.1:3000`，控制台看到的对端是 Docker 网桥网关。要让审计日志和登录限速使用访客的真实 IP，在 `.env` 里加 `EDGEWEIR_TRUSTED_PROXIES=172.16.0.0/12`（以 `docker network inspect edgeweir_default` 显示的网关为准）并重启编排；不设置时控制台不采信任何 `X-Forwarded-For`。
+
 ## 5. （可选）用 stream 透传 8443
 
 如果想让 8443 也经过宝塔的 nginx（例如统一端口管理），只能做四层透传：

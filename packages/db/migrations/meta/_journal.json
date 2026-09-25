@@ -29,6 +29,13 @@
       "when": 1790330743267,
       "tag": "0003_m2",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790332098423,
+      "tag": "0004_wrapup_auth",
+      "breakpoints": true
     }
   ]
 }

@@ -34,7 +34,10 @@ export async function createTestDatabase() {
   return { client, db: pgliteDb as unknown as Database };
 }
 
-export async function createTestContext(overrides: Record<string, string> = {}) {
+export async function createTestContext(
+  overrides: Record<string, string> = {},
+  opts: { rateLimit?: boolean } = {},
+) {
   const { client, db } = await createTestDatabase();
   const env = loadEnv({
     NODE_ENV: "test",
@@ -61,7 +64,12 @@ export async function createTestContext(overrides: Record<string, string> = {}) 
     env,
     db,
     pool,
-    auth: createAuth({ db, secret: env.BETTER_AUTH_SECRET, publicUrl: env.EDGEWEIR_PUBLIC_URL }),
+    auth: createAuth({
+      db,
+      secret: env.BETTER_AUTH_SECRET,
+      publicUrl: env.EDGEWEIR_PUBLIC_URL,
+      rateLimit: opts.rateLimit,
+    }),
     masterKey: new MasterKey(TEST_MASTER_KEY),
     nodeCa: await CertificateAuthority.load(await generateCa("Test CA")),
     events: new ConfigEventBus("postgres://unused", log),

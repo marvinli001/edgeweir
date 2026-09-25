@@ -14,6 +14,8 @@ x-console-env: &console-env
   EDGEWEIR_NODE_API_URL: ${EDGEWEIR_NODE_API_URL:-}
   EDGEWEIR_NODE_API_HOSTNAMES: ${EDGEWEIR_NODE_API_HOSTNAMES:-}
   EDGEWEIR_ANALYTICS: ${EDGEWEIR_ANALYTICS:-lite}
+  # Reverse proxies whose X-Forwarded-For is believed (IPs/CIDRs, comma separated).
+  EDGEWEIR_TRUSTED_PROXIES: ${EDGEWEIR_TRUSTED_PROXIES:-}
 
 services:
   console:

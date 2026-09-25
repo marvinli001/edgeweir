@@ -4,6 +4,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, organization, twoFactor } from "better-auth/plugins";
+import { CLIENT_IP_HEADER } from "./client-ip";
 
 // Edgeweir never phones home. better-auth's own telemetry is opt-in via this
 // variable; strip it so no third-party telemetry can be switched on implicitly.
@@ -11,7 +12,13 @@ delete process.env.BETTER_AUTH_TELEMETRY;
 
 export const API_KEY_HEADER = "x-api-key";
 
-export function createAuth(opts: { db: Database; secret: string; publicUrl: string }) {
+export function createAuth(opts: {
+  db: Database;
+  secret: string;
+  publicUrl: string;
+  /** better-auth rate limiting; unset keeps its default (on in production only). */
+  rateLimit?: boolean;
+}) {
   const url = new URL(opts.publicUrl);
   return betterAuth({
     appName: "Edgeweir",
@@ -33,8 +40,12 @@ export function createAuth(opts: { db: Database; secret: string; publicUrl: stri
         twoFactor: schema.twoFactor,
         passkey: schema.passkey,
         apikey: schema.apikey,
+        rateLimit: schema.rateLimit,
       },
     }),
+    // Counters live in PostgreSQL so every instance shares them and a restart
+    // does not reset them.
+    rateLimit: { enabled: opts.rateLimit, storage: "database", modelName: "rateLimit" },
     emailAndPassword: {
       enabled: true,
       // Accounts are created by the setup wizard and by administrators only.
@@ -43,7 +54,10 @@ export function createAuth(opts: { db: Database; secret: string; publicUrl: stri
     },
     advanced: {
       useSecureCookies: url.protocol === "https:",
-      ipAddress: { ipAddressHeaders: ["x-forwarded-for", "x-real-ip"] },
+      // Only the address the console resolved itself (socket, or a trusted
+      // proxy's X-Forwarded-For); client-supplied forwarding headers are
+      // stripped before a request reaches better-auth.
+      ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
     },
     plugins: [
       organization({ allowUserToCreateOrganization: false }),

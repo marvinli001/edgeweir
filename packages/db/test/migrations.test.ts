@@ -90,6 +90,7 @@ describe("migrations", () => {
       "origin_health",
       "cache_task",
       "cache_task_node",
+      "rate_limit",
     ]) {
       expect(tables).toContain(name);
     }

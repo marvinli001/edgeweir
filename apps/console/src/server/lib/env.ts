@@ -1,5 +1,6 @@
 import { hostname } from "node:os";
 import * as z from "zod";
+import { TrustedProxies } from "./client-ip";
 
 const bool = z
   .enum(["true", "false", "1", "0", "yes", "no", "on", "off", ""])
@@ -18,6 +19,11 @@ const schema = z.object({
   EDGEWEIR_NODE_API_URL: z.url().optional(),
   /** Extra DNS names / IPs for the node-channel server certificate, comma separated. */
   EDGEWEIR_NODE_API_HOSTNAMES: z.string().default(""),
+  /**
+   * Reverse proxies (comma-separated IPs / CIDR ranges) whose X-Forwarded-For
+   * and X-Real-IP headers are believed. Empty: the socket address is the client.
+   */
+  EDGEWEIR_TRUSTED_PROXIES: z.string().default(""),
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   NODE_API_PORT: z.coerce.number().int().min(0).max(65535).default(8443),
@@ -31,6 +37,7 @@ const schema = z.object({
 export type Env = z.infer<typeof schema> & {
   nodeApiUrl: string;
   nodeApiHostnames: string[];
+  trustedProxies: TrustedProxies;
   version: string;
 };
 
@@ -43,6 +50,14 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error(`invalid configuration:\n${issues}`);
   }
   const env = parsed.data;
+  let trustedProxies: TrustedProxies;
+  try {
+    trustedProxies = new TrustedProxies(env.EDGEWEIR_TRUSTED_PROXIES);
+  } catch (error) {
+    throw new Error(
+      `invalid configuration:\n  EDGEWEIR_TRUSTED_PROXIES: ${(error as Error).message}`,
+    );
+  }
   const nodeApiUrl =
     env.EDGEWEIR_NODE_API_URL ??
     `https://${new URL(env.EDGEWEIR_PUBLIC_URL).hostname}:${env.NODE_API_PORT}`;
@@ -51,5 +66,5 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   for (const extra of env.EDGEWEIR_NODE_API_HOSTNAMES.split(",")) {
     if (extra.trim()) names.add(extra.trim());
   }
-  return { ...env, nodeApiUrl, nodeApiHostnames: [...names], version: VERSION };
+  return { ...env, nodeApiUrl, nodeApiHostnames: [...names], trustedProxies, version: VERSION };
 }

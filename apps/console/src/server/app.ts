@@ -12,6 +12,7 @@ import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import { API_KEY_HEADER } from "./lib/auth";
+import { resolveClientIp, withClientIp } from "./lib/client-ip";
 import type { AppContext } from "./lib/context";
 import { type RequestContext, router } from "./rpc/router";
 import { getLandingPage } from "./services/landing";
@@ -50,9 +51,10 @@ export function landingShell(
     .replace(/<title>[^<]*<\/title>/, () => head);
 }
 
-function clientIp(c: Parameters<typeof getConnInfo>[0]): string {
-  const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-  if (forwarded) return forwarded;
+type HonoContext = Parameters<typeof getConnInfo>[0];
+
+/** The TCP peer ("" when there is no socket, e.g. in-process test requests). */
+function peerAddress(c: HonoContext): string {
   try {
     return getConnInfo(c).remote.address ?? "";
   } catch {
@@ -80,15 +82,24 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
    * public API (/api/v1) with the x-api-key header only (ADR-0005). The other
    * credential is stripped so it can never be used on the wrong surface.
    */
-  const requestContext = (
-    c: Parameters<typeof getConnInfo>[0],
-    surface: "rpc" | "api",
-  ): RequestContext => {
-    const headers = new Headers(c.req.raw.headers);
+  const clientIp = (c: HonoContext) =>
+    resolveClientIp(peerAddress(c), c.req.raw.headers, ctx.env.trustedProxies);
+
+  const requestContext = (c: HonoContext, surface: "rpc" | "api"): RequestContext => {
+    const ip = clientIp(c);
+    // Server-side auth.api.* calls see the same resolved address as /api/auth.
+    const headers = withClientIp(c.req.raw.headers, ip);
     if (surface === "rpc") headers.delete(API_KEY_HEADER);
     else headers.delete("cookie");
-    return { app: ctx, headers, ip: clientIp(c), userAgent: c.req.header("user-agent") ?? "" };
+    return { app: ctx, headers, ip, userAgent: c.req.header("user-agent") ?? "" };
   };
+
+  /**
+   * better-auth reads the client IP (rate limiting, session records) from a
+   * header; it gets the one resolved here instead of anything the client sent.
+   */
+  const authRequest = (c: HonoContext): Request =>
+    new Request(c.req.raw, { headers: withClientIp(c.req.raw.headers, clientIp(c)) });
 
   app.use(
     "*",
@@ -107,7 +118,7 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
 
   app.get("/healthz", (c) => c.json({ status: "ok", version: ctx.env.version }));
 
-  app.on(["GET", "POST"], "/api/auth/*", (c) => ctx.auth.handler(c.req.raw));
+  app.on(["GET", "POST"], "/api/auth/*", (c) => ctx.auth.handler(authRequest(c)));
 
   app.use("/rpc/*", async (c, next) => {
     const { matched, response } = await rpc.handle(c.req.raw, {

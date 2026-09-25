@@ -92,6 +92,10 @@ server {
 }
 ```
 
+控制台默认**不信任** `X-Forwarded-For` / `X-Real-IP`：审计日志里的 IP 和登录限速都按 TCP 对端地址计算，否则任何人都能伪造 IP 绕过限速。放在反向代理后面时，把代理连到控制台时使用的地址写进 `.env` 的 `EDGEWEIR_TRUSTED_PROXIES`（逗号分隔的 IP 或 CIDR），只有来自这些地址的转发头才会被采用。代理跑在宿主机、经 Docker 端口映射访问 `127.0.0.1:3000` 时，对端是 Docker 网桥的网关地址，可以写 `EDGEWEIR_TRUSTED_PROXIES=172.16.0.0/12`（以 `docker network inspect edgeweir_default` 显示的网关为准）；不要写客户端也能直接连进来的网段。
+
+登录、改密码等认证接口的限速计数存在 PostgreSQL 里，多个 `app` 副本共享，重启后也不会清零。
+
 节点通道（只能四层透传，不能终结 TLS）：
 
 ```nginx
