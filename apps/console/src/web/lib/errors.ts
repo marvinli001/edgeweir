@@ -24,11 +24,17 @@ const authCodes: Record<string, MessageFn> = {
   BANNED_USER: () => m.error_user_disabled(),
 };
 
-function errorFields(error: unknown): { code?: string; message?: string; data?: unknown } {
+function errorFields(error: unknown): {
+  code?: string;
+  status?: number;
+  message?: string;
+  data?: unknown;
+} {
   if (!error || typeof error !== "object") return {};
-  const e = error as { code?: unknown; message?: unknown; data?: unknown };
+  const e = error as { code?: unknown; status?: unknown; message?: unknown; data?: unknown };
   return {
     code: typeof e.code === "string" ? e.code : undefined,
+    status: typeof e.status === "number" ? e.status : undefined,
     message: typeof e.message === "string" ? e.message : undefined,
     data: e.data,
   };
@@ -39,7 +45,7 @@ function errorFields(error: unknown): { code?: string; message?: string; data?: 
  * server's message, then to `fallback`.
  */
 export function localizeError(error: unknown, fallback: string = m.common_unknown_error()): string {
-  const { code, message, data } = errorFields(error);
+  const { code, status, message, data } = errorFields(error);
   if (code && isErrorCode(code)) {
     const params: Record<string, string | number> = {};
     const values = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
@@ -52,5 +58,7 @@ export function localizeError(error: unknown, fallback: string = m.common_unknow
   }
   if (code && genericCodes[code]) return (genericCodes[code] as MessageFn)();
   if (code && authCodes[code]) return (authCodes[code] as MessageFn)();
+  // better-auth's rate limiter answers 429 without a code.
+  if (status === 429) return m.error_too_many_requests();
   return message || fallback;
 }
