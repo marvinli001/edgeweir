@@ -252,24 +252,44 @@ verify_checksum() {
   log "SHA-256 verified: ${ARTIFACT}"
 }
 
+# openresty_apt_source ID CODENAME ARCH: the openresty.org APT source line
+# (https://openresty.org/en/linux-packages.html). arm64 packages live under
+# /package/arm64/; the component is "openresty" on Debian and "main" on
+# Ubuntu. Fails for anything openresty.org does not package.
+openresty_apt_source() {
+  local id="$1" codename="$2" arch="$3" path component
+  case "$id" in
+    debian) component="openresty" ;;
+    ubuntu) component="main" ;;
+    *) return 1 ;;
+  esac
+  [[ "$codename" =~ ^[a-z]+$ ]] || return 1
+  case "$arch" in
+    amd64) path="$id" ;;
+    arm64) path="arm64/$id" ;;
+    *) return 1 ;;
+  esac
+  printf 'deb [arch=%s signed-by=/usr/share/keyrings/openresty.gpg] https://openresty.org/package/%s %s %s\n' \
+    "$arch" "$path" "$codename" "$component"
+}
+
 install_openresty() {
   if command -v openresty >/dev/null 2>&1; then
     return 0
   fi
   log "installing OpenResty from openresty.org"
   if command -v apt-get >/dev/null 2>&1; then
-    apt-get update -y
-    apt-get install -y --no-install-recommends wget gnupg ca-certificates lsb-release
-    wget -qO - https://openresty.org/package/pubkey.gpg | gpg --dearmor --yes -o /usr/share/keyrings/openresty.gpg
-    local id codename component
+    local id codename apt_source
     # shellcheck source=/dev/null
     id="$(. /etc/os-release && printf '%s' "${ID:-}")"
     # shellcheck source=/dev/null
     codename="$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-}")"
-    component="openresty"
-    [ "$id" = "ubuntu" ] && component="main"
-    echo "deb [signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package/${id} ${codename} ${component}" \
-      >/etc/apt/sources.list.d/openresty.list
+    apt_source="$(openresty_apt_source "$id" "$codename" "$ARCH")" \
+      || die "openresty.org has no packages for ${id:-this distribution} ${codename} (${ARCH}); install OpenResty manually and re-run"
+    apt-get update -y
+    apt-get install -y --no-install-recommends wget gnupg ca-certificates
+    wget -qO - https://openresty.org/package/pubkey.gpg | gpg --dearmor --yes -o /usr/share/keyrings/openresty.gpg
+    printf '%s\n' "$apt_source" >/etc/apt/sources.list.d/openresty.list
     apt-get update -y
     apt-get install -y --no-install-recommends openresty
   elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then

@@ -145,6 +145,37 @@ describe("install.sh", () => {
     expect(run(["--help"]).status).toBe(2);
   });
 
+  it("adds the openresty.org APT repository of the distribution and architecture", () => {
+    // The script's own function, called in place of `main`.
+    const aptSource = (...args: string[]) =>
+      spawnSync("bash", ["-s", "--", ...args], {
+        input: script.replace(/main "\$@"\s*$/, 'openresty_apt_source "$@"\n'),
+        encoding: "utf8",
+      });
+    const repo = "[ARCH signed-by=/usr/share/keyrings/openresty.gpg] https://openresty.org/package";
+    const cases: [string[], string][] = [
+      [["debian", "bookworm", "amd64"], `deb ${repo}/debian bookworm openresty`],
+      [["debian", "bookworm", "arm64"], `deb ${repo}/arm64/debian bookworm openresty`],
+      [["ubuntu", "noble", "amd64"], `deb ${repo}/ubuntu noble main`],
+      [["ubuntu", "noble", "arm64"], `deb ${repo}/arm64/ubuntu noble main`],
+    ];
+    for (const [args, line] of cases) {
+      const res = aptSource(...args);
+      expect(res.status, args.join(" ")).toBe(0);
+      expect(res.stdout).toBe(`${line.replace("ARCH", `arch=${args[2]}`)}\n`);
+    }
+    for (const args of [
+      ["linuxmint", "wilma", "amd64"],
+      ["debian", "bookworm", "riscv64"],
+      ["debian", "", "amd64"],
+      ["debian", "bookworm main", "amd64"],
+    ]) {
+      const res = aptSource(...args);
+      expect(res.status, args.join(" ")).not.toBe(0);
+      expect(res.stdout).toBe("");
+    }
+  });
+
   it("executes nothing when the download is cut short", () => {
     const last = script.lastIndexOf('main "$@"');
     for (const cut of [last, last + 3, Math.floor(script.length / 2), 200]) {
