@@ -65,6 +65,28 @@ MVP M1 新增（2026-09-25）：
 24. **调研原始资料**：goedge.rip 文档抓取等第三方内容只保存在本机 `~/Developer/edgeweir-research/`，不进仓库。
 25. **品牌**：`edgeweir.com`、`edgeweir.dev` 域名和 GitHub org 需要维护者自己注册；README 已加读音说明（EDGE-weer）。
 
+MVP M2 新增（2026-09-25）：
+
+28. **缓存键按站点设置**：mvp.md 把「自定义缓存键」列在缓存规则下；实现为按站点的一套策略，对所有规则生效。原因是 URL 刷新要能覆盖同一 URL 的全部变体（查询形式、设备、请求头、Cookie、分片），按规则各自一套键时刷新无法确定目标。
+    **默认**：按站点；需要按规则区分时在 M4 的配置规则（按表达式覆盖站点设置）里做。
+29. **刷新不删缓存文件**：URL、目录、全站刷新都记录刷新标记（时间戳进入 cache key），下一次请求是真正的 `MISS`；旧对象不再被读取，磁盘空间按缓存区 `inactive`（默认 7 天）和 `max_size` 回收，与原来的代际号全量清除一致（ADR-0014 更新记录）。
+    **默认**如此；若需要"刷新后立即释放磁盘"，v1 再加节点侧的按前缀扫描删除。
+30. **离线节点的刷新任务**：任务对节点保留 7 天，节点恢复连接后执行；7 天内未执行的记为失败（`expired`），任务列表可见，需要时再提交一次。
+    **默认**如此。
+31. **S3 源站的边界**：只转发 GET / HEAD（其他方法 405），不转发访问者的查询字符串；节点把 S3 密钥以 0600 保存在状态目录，使控制台不可达时重启仍能回源（与节点私钥同等保护）。
+    **默认**如此。
+32. **回源证书校验的粒度**：校验开关按站点（源站池）而不是按单个源站，因为 nginx 的 `proxy_ssl_verify` 是静态指令，按站点分到两个源站层；一次请求内的重试不在 HTTP 与 HTTPS 源站之间切换；不校验证书的 HTTPS 连接不进入连接池。节点找不到系统 CA bundle 时，需要校验的 HTTPS 源站直接失败（`--trusted-ca` 可指定）。
+    **默认**如此。
+33. **stale 默认关闭**：Phase 0 的节点静态配置了 `proxy_cache_use_stale error timeout updating http_5xx`（出错时无限期返回旧内容）；M2 改为按规则设置 stale-while-revalidate / stale-if-error，默认 0（关闭）；「遵循源站缓存头」的规则同时遵循源站自己的 stale 扩展。
+    **默认**：关闭；如果希望新规则默认带 stale-if-error（例如 1 天），改 contract 的默认值即可。
+34. **一致性哈希的键**：固定为请求 URI（路径 + 查询），不提供按客户端 IP 等其他键。**默认**如此，会话保持在 ROADMAP v1。
+35. **预热**：不跟随跳转（3xx 按原样缓存并算成功）；HTTPS URL 的预热要等 M3 的 HTTPS 监听，目前在结果中记为失败。前缀和全站预热不在 MVP（node ROADMAP 已拆出）。
+36. **源站 id 的稳定性**：保存源站池时，协议、地址、端口相同的源站保留原 id（节点上报的健康状态随 id），其余新建或删除。**默认**如此。
+37. **界面单位**：超时以秒输入（存毫秒），响应大小以 KB 输入（1 KB = 1024 字节）；大小留空表示不限，stale 留空表示关闭。拖动排序用 @dnd-kit（shadcn dashboard 区块同款），支持指针、触摸和键盘。
+38. **e2e 的 S3 服务**：用 Versity S3 Gateway `v1.8.0`（Apache-2.0，镜像约 29 MB，posix 后端）验证真实的 SigV4 校验。**默认**如此。
+39. **e2e 环境隔离**：M2 验证期间另一个会话占用了默认的 `edgeweir-e2e` compose 项目（端口 13000/18080）。compose.e2e.yml 的镜像标签改为可覆盖（`E2E_TAG`），M2 的验证在独立项目中运行：
+    `COMPOSE_PROJECT_NAME=edgeweir-m2 E2E_CONSOLE_PORT=13100 E2E_NODE_PORT=18180 E2E_TAG=m2`（命令本身不变）。**默认**：默认值不变，单独运行时与以前完全一样。
+
 ## 版本核实记录（2026-09-25，来源：npm registry / proxy.golang.org / Docker Hub / nodejs.org / GitHub Releases）
 
 | 组件 | BOOTSTRAP 快照 | 核实后使用 | 备注 |
@@ -94,6 +116,9 @@ MVP M1 新增（2026-09-25）：
 | goreleaser / syft / cosign | — | 2.18.2 / 1.52.0 / 3.1.3 | |
 | ClickHouse / Valkey | 可选 | 26.9-alpine / 9.2-alpine | compose profiles |
 | GitHub Actions | — | checkout v7、setup-node v7、pnpm/action-setup v6、setup-go v7、build-push v7、cosign-installer v4、attest-build-provenance v4 | |
+| lua-nginx-module / lua-resty-core | （随 OpenResty） | 0.10.31 / 0.1.34（OpenResty 1.31.1.1 镜像内核实） | `ngx.balancer` 的 `set_current_peer(host, port, sni)`、`enable_keepalive`、`recreate_request`；自带 `resty.openssl.hmac`、`resty.dns.resolver`（MVP M2） |
+| @dnd-kit/core / sortable / utilities | — | 6.3.1 / 10.0.0 / 3.2.2 | 缓存规则拖动排序（MVP M2） |
+| Versity S3 Gateway | — | `versity/versitygw:v1.8.0` | 仅 e2e（MVP M2） |
 
 ## Phase 0 交付清单（BOOTSTRAP §3）
 
@@ -146,9 +171,9 @@ MVP M1 新增（2026-09-25）：
 
 ## 已知限制（Phase 0 范围之外，已写入 ROADMAP / ADR 更新记录）
 
-- proto v0.1.0 没有下发证书材料的接口，节点暂不启用 HTTPS 监听；回源 HTTPS 暂不校验证书。
-- 清缓存只支持全站（cache generation），URL/前缀/tag 清除和预热、节点自升级、访问日志采样上报属于 MVP。
-- 负载均衡的 round_robin / consistent_hash 在节点侧暂按加权随机处理，无被动健康检查。
+- proto v0.1.0 没有下发证书材料的接口，节点暂不启用 HTTPS 监听（归 M3）；~~回源 HTTPS 暂不校验证书。~~ MVP M2 已默认校验，可按站点关闭。
+- ~~清缓存只支持全站（cache generation），URL/前缀/tag 清除和预热~~（MVP M2 已实现 URL、前缀、全站刷新与 URL 预热；tag 清除在 v1）；节点自升级、访问日志采样上报属于 MVP M6。
+- ~~负载均衡的 round_robin / consistent_hash 在节点侧暂按加权随机处理，无被动健康检查。~~ MVP M2 已实现平滑加权轮询、一致性哈希和被动健康检查。
 - 节点仓库 CI 的 proto 一致性检查从 `github.com/edgeweir/edgeweir` 拉 tag，仓库公开前会失败（本地用 `make proto-check` 从同级仓库校验）。
 - ~~修订记录里的"原因"文本（如 `site demo created`）目前是服务端生成的英文，未本地化。~~ MVP M1 已改为 `reason_code` + 参数，界面按语言渲染。
 
@@ -232,3 +257,34 @@ MVP M1 新增（2026-09-25）：
 | 5 | 界面规范 | Playwright 截图（浅色/深色、1280/375）；`ui-rules.test.ts` | 无副标题与说明段落、无骨架屏、appica 只经 `components/appica`；375px 下页头操作换行 |
 
 说明：Claude 桌面应用的内置浏览器会拦截 `GET /api/auth/*`（Chromium/Playwright 正常），因此界面检查用 Playwright 截图完成，不影响产品。
+
+## MVP M2：源站与缓存
+
+规格：[docs/specs/mvp.md](docs/specs/mvp.md) 第 0 节与第 2 节。proto 升级到 `proto/v0.2.0`（edgeweir-node 已从该 tag 重新生成），数据模型见迁移 `packages/db/migrations/0002_m2.sql`，决策见 ADR-0008、0011、0014、0015 的 MVP M2 更新记录，行为说明见 [docs/guide/origins-and-cache.md](docs/guide/origins-and-cache.md)。开发在独立 worktree 的 `mvp-m2` 分支进行（开始时另有会话在 `edgeweir-analytics` worktree 和主工作区工作）。
+
+### 节点与 proto
+
+- [x] 源站池：权重、备用源站（主源全部不可用时启用）；`balancer_by_lua` 选源，一次请求最多尝试 3 个源站
+- [x] 被动健康检查：连接失败、超时、502/503/504、域名解析失败计为失败；连续失败次数达到阈值后在恢复时间内不再选中，成功一次才恢复健康；经 ReportStatus 上报，控制台源站 Tab 显示
+- [x] round_robin（平滑加权轮询）与 consistent_hash（按请求 URI 的 ketama 环）真正实现（0.4 遗留项）
+- [x] 回源 Host 与 SNI；回源 HTTPS 证书校验开关（默认校验，系统 CA 或 `--trusted-ca`）（0.4 遗留项）
+- [x] 对象存储源站：S3 兼容 SigV4 签名回源（AWS 官方向量 + 独立 Node 实现交叉验证 + e2e 对真实 S3 网关）；密钥信封加密入库，经 mTLS 的 `GetOriginCredentials` 下发，不进配置
+- [x] 缓存规则：后缀、精确路径、前缀、状态码、响应大小；遵循或覆盖源站缓存头；stale-while-revalidate、stale-if-error；Range 走 slice（按站点）
+- [x] 自定义缓存键（对标补充）：查询参数全部 / 忽略 / 白名单、参数排序、指定请求头、指定 Cookie、移动与桌面、是否包含 Host
+- [x] 回源连接（对标补充）：keep-alive 连接池（按地址 + 端口 + SNI）、连接 / 读取 / 发送超时；WebSocket 透传（按站点开关，默认开）
+- [x] 刷新和预热：URL、前缀、全站刷新（0.4 遗留项"清缓存只支持全站"）与 URL 预热，经类型化节点任务（`PullTasks` / `ReportTaskResult`、`WATCH_EVENT_TASKS`）下发，逐节点回报结果；proto 升级到 v0.2.0 并打 tag
+
+### 控制台
+
+- [x] 网站详情页源站 Tab：源站池编辑（地址、端口、协议、权重、备用、回源 Host、SNI、S3 签名）、源站池设置（负载均衡、证书校验、被动健康检查、超时、长连接、WebSocket）、每个源站的健康状态
+- [x] 网站详情页缓存 Tab：规则列表可拖动排序（指针、触摸、键盘），规则的全部条件；缓存键与分片设置
+- [x] 刷新预热页面 `/purge`：提交 URL 刷新 / 目录刷新 / 全站刷新 / URL 预热，显示每个任务在各节点的执行进度和结果（进行中自动轮询）
+
+### 工程约束（mvp.md 0.1–0.3）
+
+- [x] API 先改 `packages/contract`：`sites.originHealth`、`cacheTasks.list/get/create`，`sites.create/update` 增加源站与缓存设置；每个新过程都有 Vitest 用例（`test/server/m2.test.ts`、`node-channel.test.ts`），租户隔离与租户成员调用后台过程返回 403；`admin.test.ts` 新增断言：契约里的每个过程都要么在控制台清单里，要么在 403 表里
+- [x] 管理操作写审计日志（`cache.purge`、`cache.prefetch`、网站设置变更），审计中不含密钥
+- [x] 界面：无副标题与说明段落（原理写在 docs/guide）、无骨架屏、appica 只经 `components/appica`；深浅色与 375px 用 Playwright 截图检查
+- [x] 功能归属符合 0.2：刷新预热、网站源站 / 缓存 Tab 在控制台；未新增后台过程
+- [x] e2e：`scripts/e2e.sh` 覆盖第 2 节「验收」全部场景（另加全站刷新、预热、S3、证书校验、stale-if-error、控制台显示源站故障），Playwright `e2e/m2.spec.ts` 覆盖刷新任务提交和结果展示，断言无 `pageerror`；M1 链路仍通过
+- [x] proto 改动只加字段、枚举值和 RPC（`buf breaking` 对 v0.1.0 通过）；TS 与 Go 共用新的哈希向量 `content_hash_vector_m2.json`
