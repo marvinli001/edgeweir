@@ -198,7 +198,7 @@ CLUSTER="$(api GET "/clusters/$CLUSTER_ID")"
 pass "cluster latest revision #$REVISION, $(jq -r .onlineNodeCount <<<"$CLUSTER")/$(jq -r .nodeCount <<<"$CLUSTER") nodes online"
 
 if ! $SKIP_UI; then
-  step "Playwright smoke: login -> clusters & nodes -> sites"
+  step "Playwright smoke: login -> admin clusters & nodes -> console sites"
   E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     E2E_EXPECT_REVISION="$REVISION" pnpm --filter @edgeweir/console run test:e2e \
     || fail "Playwright smoke test failed"

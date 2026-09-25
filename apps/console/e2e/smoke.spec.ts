@@ -4,18 +4,25 @@ const email = process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test";
 const password = process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123";
 const expectedRevision = process.env.E2E_EXPECT_REVISION;
 
-test("login -> clusters & nodes -> sites, then switch to English", async ({ page }) => {
+test("login -> admin clusters & nodes -> console sites, then switch to English", async ({
+  page,
+}) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   // Login (zh-CN is the default locale).
   await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
-  await expect(page.getByText("登录 Edgeweir")).toBeVisible();
+  await expect(page.getByTestId("login-submit")).toHaveText("登录");
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill(password);
   await page.getByTestId("login-submit").click();
   await expect(page.getByTestId("page-title")).toHaveText("概览");
+
+  // Admins switch to the admin area for clusters & nodes.
+  await page.getByTestId("area-admin").click();
+  await expect(page.getByTestId("page-title")).toHaveText("平台概览");
+  await expect(page.getByTestId("nav-sites")).toHaveCount(0);
 
   // Clusters & nodes: the enrolled node is online with its applied revision.
   await page.getByTestId("nav-clusters").click();
@@ -32,7 +39,7 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
 
   // The "add node" dialog produces a one-time install command with the CA pin.
   await page.getByTestId("add-node").click();
-  await page.getByLabel("节点名称（可选）").fill("edge-ui");
+  await page.getByLabel("节点名称").fill("edge-ui");
   await page.getByTestId("generate-install-command").click();
   const command = page.getByTestId("install-command");
   await expect(command).toContainText("/install.sh | sudo bash -s --");
@@ -40,7 +47,9 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   await expect(command).toContainText(/--ca-sha256 [0-9a-f]{64}/);
   await page.keyboard.press("Escape");
 
-  // Sites: demo.test created through the API is listed; create one through the UI.
+  // Back to the console. Sites: demo.test created through the API is listed; create one through the UI.
+  await page.getByTestId("area-console").click();
+  await expect(page.getByTestId("nav-clusters")).toHaveCount(0);
   await page.getByTestId("nav-sites").click();
   await expect(page.getByTestId("page-title")).toHaveText("网站");
   const sites = page.getByTestId("sites-table");
@@ -57,6 +66,7 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   await page.getByTestId("language-menu").hover();
   await page.getByTestId("locale-en").click();
   await expect(page.getByTestId("page-title")).toHaveText("Sites");
+  await page.getByTestId("area-admin").click();
   await page.getByTestId("nav-clusters").click();
   await expect(page.getByTestId("page-title")).toHaveText("Clusters & nodes");
 
