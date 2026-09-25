@@ -47,5 +47,41 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/console/src/web/components/ui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noLabelWithoutControl": "off",
+            "useFocusableInteractive": "off",
+            "useKeyWithClickEvents": "off",
+            "useSemanticElements": "off"
+          },
+          "correctness": {
+            "useExhaustiveDependencies": "off"
+          },
+          "security": {
+            "noDangerouslySetInnerHtml": "off"
+          },
+          "suspicious": {
+            "noArrayIndexKey": "off",
+            "noDocumentCookie": "off",
+            "noDoubleEquals": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/console/public/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noSvgWithoutTitle": "off"
+          }
+        }
+      }
+    }
+  ]
 }

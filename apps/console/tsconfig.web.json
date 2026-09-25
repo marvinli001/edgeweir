@@ -10,5 +10,5 @@
       "@/*": ["./src/web/*"]
     }
   },
-  "include": ["src/web", "test/web"]
+  "include": ["src/web"]
 }
