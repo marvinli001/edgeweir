@@ -99,12 +99,12 @@ gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edge
 | 控制面绝不保存节点 SSH 凭据；节点只通过控制台生成的一次性安装命令接入，由节点主动注册 | 控制面失陷后借 SSH 凭据横向控制所有节点（GoEdge 2025 年 RingH23 事件） | [ADR-0016](docs/adr/0016-one-line-install.md) |
 | 节点私钥在节点本地生成，从不离开节点；控制面只签发证书 | 控制面数据库泄露后冒充节点 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
 | 节点通道：安装命令固定 CA 指纹，节点先核对指纹再发送 token；token 一次性、带过期时间、只存哈希；除 `Enroll` 外强制 mTLS；证书 30 天有效期并自动轮换；删除或禁用节点立即生效（删除时吊销证书序列号，节点再连接被拒绝） | 首次连接被中间人劫持；token 泄露或重放；已下线节点继续拉配置 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
-| 敏感数据信封加密入库，主密钥不进数据库 | 数据库备份或只读 SQL 注入泄露证书私钥和 DNS 密钥 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
-| 管理操作写审计日志，与变更同事务提交 | 越权或误操作无法追溯 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
+| 敏感数据信封加密入库，主密钥不进数据库；附加认证数据绑定表、字段和记录 id | 数据库备份或只读 SQL 注入泄露证书私钥和 DNS 密钥；有库写权限者把一条记录的密文换到另一条记录上 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
+| 管理操作写审计日志，与变更同事务提交（better-auth 完成的登录与账号变更在其提交后紧接着写入） | 越权或误操作无法追溯 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
 | `/api/auth/*` 只放行控制台界面用到的 better-auth 端点（登录、登出、会话、改密码、两步验证、passkey、API key 的创建/列表/删除），其余一律 404；组织、成员与用户管理只走 Edgeweir 自己的接口；`x-api-key` 在 `/api/auth/*` 上被剥掉，API key 只在 `/api/v1` 生效 | 借 better-auth 插件自带的 HTTP 端点绕过 Edgeweir 的权限检查、审计和配置版本（删除组织、冒充用户、改他人密码）；API key 变成会话后自行签发新 key | [ADR-0005](docs/adr/0005-api-orpc-openapi.md)、[ADR-0007](docs/adr/0007-auth-better-auth-multitenancy.md) |
-| 客户端 IP 取 TCP 对端地址；`X-Forwarded-For` / `X-Real-IP` 只在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用；登录、2FA 等认证接口的限速计数存 PostgreSQL，多实例共享、重启不清零 | 伪造 IP 绕过登录与 2FA 限速，审计日志里的 IP 失真 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
+| 客户端 IP 取 TCP 对端地址；`X-Forwarded-For` / `X-Real-IP` 只在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用；登录、2FA 等认证接口的限速计数存 PostgreSQL，多实例共享、重启不清零 | 伪造 IP 绕过登录与 2FA 限速，审计日志里的 IP 失真 | [ADR-0007](docs/adr/0007-auth-better-auth-multitenancy.md)、[ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
 | `install.sh` 与 agent 自升级都先校验 cosign 签名和 sha256 再执行；控制台镜像转发（`/downloads`，`EDGEWEIR_DOWNLOADS_DIR`）只是传输通道，未镜像的文件返回 404 | 下载链路或镜像转发被篡改 | [ADR-0016](docs/adr/0016-one-line-install.md)、[ADR-0017](docs/adr/0017-release-supply-chain.md) |
-| 源站不能是特殊用途地址（回环、链路本地、私网、CGNAT、组播等）或 `localhost`：控制台拒绝保存这类 IP 字面量，节点对配置和每个 DNS 解析结果执行同一清单；只有平台管理员能通过审计过的允许清单放行地址段 | 租户借 CDN 回源读取云元数据（`169.254.169.254`）、探测内网，或让节点回源到自己造成回环 | [docs/guide/origins-and-cache.md](docs/guide/origins-and-cache.md) |
+| 源站不能是特殊用途地址（回环、链路本地、私网、CGNAT、组播等）或 `localhost`：控制台拒绝保存这类 IP 字面量，节点对配置和每个 DNS 解析结果执行同一清单；只有平台管理员能通过审计过的允许清单放行地址段。节点发往源站的请求带 `CDN-Loop`（RFC 8586），收到带自身标识的请求返回 508 | 租户借 CDN 回源读取云元数据（`169.254.169.254`）、探测内网，或让节点回源到自己造成回环 | [docs/guide/origins-and-cache.md](docs/guide/origins-and-cache.md)、[ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
 | 每个组织的刷新预热有频率上限（每分钟 10 个任务、每小时 2000 条），平台管理员不受限；节点端清缓存标记超过上限时合并为站点级标记 | 租户用大量刷新请求填满节点的清缓存存储，拖累同节点的其他网站 | [docs/guide/origins-and-cache.md](docs/guide/origins-and-cache.md) |
 | agent 只执行类型化操作，不提供执行任意命令的接口 | 控制面失陷后在节点上执行任意代码 | [ADR-0014](docs/adr/0014-node-agent-responsibilities.md) |
 | 发布物 keyless 签名、SBOM、SLSA provenance、可复现构建 | 发布的二进制与源码不一致，或被投毒 | [ADR-0017](docs/adr/0017-release-supply-chain.md) |
@@ -113,6 +113,7 @@ gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edge
 
 - `install.sh` 由控制台提供，信任控制台（运营者自己的服务器）是前提。需要更强保证时，先下载脚本审阅，或与 GitHub 上同版本的脚本比对。
 - 控制面被攻破时，攻击者可以下发恶意配置（例如把站点指向恶意源站），但不能让节点运行未签名的程序，也拿不到节点私钥。
+- 节点在状态目录（默认 `/var/lib/edgeweir-node`，0700）以 0600 权限保存节点私钥和 S3 源站密钥（`credentials.json`，明文，使控制面不可达时节点重启后仍能回源）。拿到节点 root 权限的人能读到它们。
 - 主密钥与数据库同时泄露时，信封加密失去作用。请通过 secret 文件或编排平台的 secret 机制注入 `EDGEWEIR_MASTER_KEY`，并与数据库备份分开保存。
 - 首次初始化需要控制台启动时打印在日志里的一次性 setup token（主密钥加密后入库，只比对 SHA-256）。能读控制台日志的人就能完成初始化，请像对待主密钥一样控制日志的访问。
 - 节点通道 `:8443` 不能放在反向代理后面由代理终结 TLS，否则 mTLS 失效；只能直接暴露或四层透传。
@@ -125,7 +126,16 @@ gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edge
 
 This policy covers [edgeweir/edgeweir](https://github.com/edgeweir/edgeweir) (console), [edgeweir/edgeweir-node](https://github.com/edgeweir/edgeweir-node) (edge node), and their official images and release artifacts.
 
-**Trust baseline.** No phone-home of any kind and no licence-check code. Telemetry is off by default and requires explicit opt-in. SSH credentials are never stored. Secrets (CA key, certificate keys, DNS API credentials) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` (AES-256-GCM, a random data key per record) before they reach the database. Every management action is written to an audit log. Every release is signed with cosign keyless, ships with an SBOM and SLSA provenance, and is built reproducibly from the tagged source.
+**Trust baseline.** No phone-home of any kind and no licence-check code. Telemetry is off by default and requires explicit opt-in. The console never stores SSH credentials; nodes join only through the one-time install command. Secrets (the internal CA key, S3 origin keys, the setup token, and later certificate keys and DNS API credentials) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they reach the database: AES-256-GCM with a random data key per record, and additional authenticated data that binds table, column and record id (envelope format v2; v1 envelopes written by older versions are re-encrypted at startup and no longer read otherwise). Enrollment tokens, API keys and passwords are stored as hashes only. Every management action is written to the audit log: Edgeweir's own changes commit their audit entry in the same transaction, while sign-ins (successful and failed), password changes, two-factor on/off, passkey add/delete and API key create/delete are completed by better-auth and audited right after it commits. Every release is signed with cosign keyless, ships with an SBOM and SLSA provenance, and is built reproducibly from the tagged source.
+
+**Threat model highlights.**
+
+- `/api/auth/*` serves only the better-auth endpoints the web console uses (sign-in, sign-out, session, password change, two-factor, passkeys, API key create/list/delete); everything else, including the organization and admin plugin endpoints, answers 404. `x-api-key` is stripped there: API keys work on `/api/v1` only, and `/rpc` accepts only the session cookie plus the CSRF header.
+- The client IP (audit log, sign-in rate limiting) is the TCP peer. `X-Forwarded-For` / `X-Real-IP` are believed only from peers listed in `EDGEWEIR_TRUSTED_PROXIES`. Rate-limit counters live in PostgreSQL, shared by all instances and kept across restarts.
+- Origins may not be special-purpose addresses (loopback, link-local, private, CGNAT, multicast, ...) or `localhost`: the console refuses such IP literals and nodes apply the same list to configured literals and to every DNS answer. Only a platform administrator can allow ranges, through an audited allow list. Nodes send `CDN-Loop` (RFC 8586) upstream and answer 508 to requests that already carry their own id.
+- Purge and prefetch requests are limited per organization (10 tasks per minute, 2000 targets per hour; platform administrators are exempt), and a node collapses a site's purge markers into one site-level marker beyond its cap.
+- `install.sh` verifies the cosign signature (certificate identity exactly the edgeweir-node release workflow at the tag being installed) and the SHA-256 before it runs anything; without cosign on the machine it downloads cosign v3.1.3 and checks its pinned SHA-256 first. The enrollment token travels in `EDGEWEIR_TOKEN` or `--token-file`, never on a command line. The console's `/downloads` mirror (`EDGEWEIR_DOWNLOADS_DIR`) is only a transport and answers 404 for anything it does not hold.
+- The agent runs typed operations only and has no interface for arbitrary commands. Node private keys are generated on the node and never leave it. Known limitation: the node keeps its private key and the S3 origin keys (`credentials.json`, plain text) in its state directory with mode 0600.
 
 **Supported versions.** Before 1.0, only the latest `master` is supported. Security fixes land on `master` only.
 
