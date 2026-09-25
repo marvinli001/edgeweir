@@ -142,6 +142,12 @@ export const site = pgTable(
     enabled: boolean("enabled").notNull().default(true),
     /** Bumped to purge every cached object of the site. */
     cacheGeneration: bigint("cache_generation", { mode: "number" }).notNull().default(1),
+    /** Cache key policy (contract `cacheKeyPolicy`); `{}` means the defaults. */
+    cacheKey: jsonb("cache_key").$type<Record<string, unknown>>().notNull().default({}),
+    /** Fetch and cache cacheable responses in slices (Range requests). */
+    rangeSlice: boolean("range_slice").notNull().default(false),
+    /** Proxy WebSocket upgrades to the origin. */
+    websocket: boolean("websocket").notNull().default(true),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -191,9 +197,44 @@ export const originPool = pgTable(
     name: text("name").notNull().default("default"),
     /** weighted_random | round_robin | consistent_hash */
     policy: text("policy").notNull().default("weighted_random"),
+    /** Verify certificates of HTTPS origins. */
+    tlsVerify: boolean("tls_verify").notNull().default(true),
+    /** Passive health check: consecutive failures that mark an origin down. */
+    maxFails: integer("max_fails").notNull().default(3),
+    /** Passive health check: seconds before a down origin is tried again. */
+    recoverySeconds: integer("recovery_seconds").notNull().default(30),
+    connectTimeoutMs: integer("connect_timeout_ms").notNull().default(10_000),
+    sendTimeoutMs: integer("send_timeout_ms").notNull().default(60_000),
+    readTimeoutMs: integer("read_timeout_ms").notNull().default(60_000),
+    /** Reuse upstream connections (keep-alive pool). */
+    keepalive: boolean("keepalive").notNull().default(true),
+    keepaliveIdleSeconds: integer("keepalive_idle_seconds").notNull().default(60),
+    keepaliveMaxRequests: integer("keepalive_max_requests").notNull().default(1000),
     createdAt: createdAt(),
   },
   (t) => [index("origin_pool_site_idx").on(t.siteId)],
+);
+
+/**
+ * Access keys of S3-compatible origins. The secret is envelope-encrypted with
+ * the master key and only leaves the console over the mTLS node channel.
+ */
+export const originCredential = pgTable(
+  "origin_credential",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    accessKeyId: text("access_key_id").notNull(),
+    /** JSON envelope of the secret access key. Never plaintext. */
+    secretEnvelope: text("secret_envelope").notNull(),
+    /** Bumped when the secret changes; part of the compiled configuration. */
+    version: integer("version").notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("origin_credential_site_key_uq").on(t.siteId, t.accessKeyId)],
 );
 
 export const origin = pgTable(
@@ -211,6 +252,13 @@ export const origin = pgTable(
     backup: boolean("backup").notNull().default(false),
     hostHeader: text("host_header").notNull().default(""),
     sni: text("sni").notNull().default(""),
+    /** Set for S3-compatible origins: requests are signed with this credential. */
+    credentialId: uuid("credential_id").references(() => originCredential.id, {
+      onDelete: "set null",
+    }),
+    s3Region: text("s3_region").notNull().default(""),
+    /** Path-style bucket; empty for virtual-hosted endpoints. */
+    s3Bucket: text("s3_bucket").notNull().default(""),
     createdAt: createdAt(),
   },
   (t) => [index("origin_pool_idx").on(t.poolId)],
@@ -226,12 +274,20 @@ export const cacheRule = pgTable(
     priority: integer("priority").notNull().default(100),
     pathPrefixes: text("path_prefixes").array().notNull().default(sql`'{}'::text[]`),
     extensions: text("extensions").array().notNull().default(sql`'{}'::text[]`),
+    /** Exact URI paths. */
+    paths: text("paths").array().notNull().default(sql`'{}'::text[]`),
+    /** Response status codes; empty matches any cacheable status. */
+    statusCodes: integer("status_codes").array().notNull().default(sql`'{}'::integer[]`),
+    minSizeBytes: bigint("min_size_bytes", { mode: "number" }).notNull().default(0),
+    maxSizeBytes: bigint("max_size_bytes", { mode: "number" }).notNull().default(0),
     expression: text("expression").notNull().default(""),
     /** cache | bypass */
     action: text("action").notNull().default("cache"),
     edgeTtlSeconds: integer("edge_ttl_seconds").notNull().default(3600),
     /** override | respect */
     originCacheControl: text("origin_cache_control").notNull().default("override"),
+    staleWhileRevalidateSeconds: integer("stale_while_revalidate_seconds").notNull().default(0),
+    staleIfErrorSeconds: integer("stale_if_error_seconds").notNull().default(0),
     createdAt: createdAt(),
   },
   (t) => [index("cache_rule_site_idx").on(t.siteId)],
@@ -374,3 +430,86 @@ export const systemSetting = pgTable("system_setting", {
   value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
   updatedAt: updatedAt(),
 });
+
+/** Latest passive health state reported by each node for origins it saw failing. */
+export const originHealth = pgTable(
+  "origin_health",
+  {
+    nodeId: uuid("node_id")
+      .notNull()
+      .references(() => node.id, { onDelete: "cascade" }),
+    originId: uuid("origin_id")
+      .notNull()
+      .references(() => origin.id, { onDelete: "cascade" }),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    healthy: boolean("healthy").notNull(),
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+    lastError: text("last_error").notNull().default(""),
+    lastFailureAt: timestamp("last_failure_at", { withTimezone: true }),
+    downUntil: timestamp("down_until", { withTimezone: true }),
+    reportedAt: timestamp("reported_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.nodeId, t.originId] }),
+    index("origin_health_site_idx").on(t.siteId),
+  ],
+);
+
+/**
+ * A cache purge or prefetch requested in the console. It is delivered to
+ * every node of the affected clusters as a typed node task.
+ */
+export const cacheTask = pgTable(
+  "cache_task",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Null when the targets span several organizations (platform administrators). */
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "cascade",
+    }),
+    /** url | prefix | site | prefetch */
+    type: text("type").notNull(),
+    /** What the user asked for: URLs, prefixes or site names, for display. */
+    targets: text("targets").array().notNull().default(sql`'{}'::text[]`),
+    siteIds: uuid("site_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    /** Resolved node payload: [{ siteId, clusterId, type, host, path, query, url }]. */
+    payload: jsonb("payload").$type<Record<string, string>[]>().notNull().default([]),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdByName: text("created_by_name").notNull().default(""),
+    createdAt: createdAt(),
+    /** Set once every node reported a result (or the task expired). */
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("cache_task_org_idx").on(t.organizationId, t.createdAt)],
+);
+
+/** Delivery and result of a cache task on one node. */
+export const cacheTaskNode = pgTable(
+  "cache_task_node",
+  {
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => cacheTask.id, { onDelete: "cascade" }),
+    nodeId: uuid("node_id")
+      .notNull()
+      .references(() => node.id, { onDelete: "cascade" }),
+    clusterId: uuid("cluster_id").notNull(),
+    /** Node name when the task was created (survives renames in the list). */
+    nodeName: text("node_name").notNull().default(""),
+    /** pending | running | succeeded | failed */
+    state: text("state").notNull().default("pending"),
+    message: text("message").notNull().default(""),
+    succeeded: integer("succeeded").notNull().default(0),
+    failed: integer("failed").notNull().default(0),
+    dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.taskId, t.nodeId] }),
+    index("cache_task_node_node_idx").on(t.nodeId, t.state),
+  ],
+);

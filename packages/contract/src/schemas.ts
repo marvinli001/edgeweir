@@ -46,10 +46,62 @@ export const extension = z
   .transform((value) => value.replace(/^\./, ""))
   .pipe(z.string().regex(/^[a-z0-9]{1,16}$/, "invalid file extension"));
 
+/** An exact URI path, e.g. "/index.html". */
+export const exactPath = pathPrefix;
+
+/** Host name used as TLS SNI or Host override; empty means derived. */
+const optionalHostname = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(253)
+  .refine((value) => value === "" || HOSTNAME_RE.test(value), "invalid host name");
+
+/** RFC 7230 token, used for header and cookie names in cache keys. */
+const TOKEN_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;
+
+export const headerName = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(TOKEN_RE, "invalid header name")
+  .refine(
+    (value) => !["cookie", "host"].includes(value),
+    "use the cookie and host options instead",
+  );
+
+export const cookieName = z.string().trim().regex(TOKEN_RE, "invalid cookie name");
+
+export const queryParamName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(128)
+  .refine((value) => !/[\s&=#]/.test(value), "invalid query parameter name");
+
 export const originScheme = z.enum(["http", "https"]);
+export const loadBalancePolicy = z.enum(["weighted_random", "round_robin", "consistent_hash"]);
 export const cacheAction = z.enum(["cache", "bypass"]);
 export const originCacheControl = z.enum(["override", "respect"]);
 export const applyState = z.enum(["applying", "applied", "failed"]);
+
+/** S3-compatible object storage: requests are signed with AWS Signature V4. */
+export const s3Input = z.object({
+  region: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, "invalid region"),
+  /** Path-style bucket; leave empty when the origin address names the bucket. */
+  bucket: z
+    .string()
+    .trim()
+    .regex(/^([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$/, "invalid bucket name")
+    .default(""),
+  accessKeyId: z.string().trim().min(1).max(128),
+  /** Write-only. Omit to keep the stored secret of the same access key. */
+  secretAccessKey: z.string().min(1).max(256).optional(),
+});
 
 export const originInput = z.object({
   address: originAddress,
@@ -58,20 +110,79 @@ export const originInput = z.object({
   weight: z.number().int().min(1).max(100).default(1),
   backup: z.boolean().default(false),
   hostHeader: z.string().trim().max(253).default(""),
+  /** TLS server name for HTTPS origins; empty derives it from the Host or address. */
+  sni: optionalHostname.default(""),
+  s3: s3Input.nullable().default(null),
 });
 
-export const cacheRuleInput = z.object({
-  priority: z.number().int().min(0).max(10000).default(100),
-  pathPrefixes: z.array(pathPrefix).max(32).default([]),
-  extensions: z.array(extension).max(64).default([]),
-  action: cacheAction.default("cache"),
-  edgeTtlSeconds: z
-    .number()
-    .int()
-    .min(0)
-    .max(365 * 24 * 3600)
-    .default(3600),
-  originCacheControl: originCacheControl.default("override"),
+const MAX_TTL = 365 * 24 * 3600;
+const MAX_STALE = 30 * 24 * 3600;
+
+export const cacheRuleInput = z
+  .object({
+    priority: z.number().int().min(0).max(10000).default(100),
+    pathPrefixes: z.array(pathPrefix).max(32).default([]),
+    paths: z.array(exactPath).max(32).default([]),
+    extensions: z.array(extension).max(64).default([]),
+    /** Response status codes; empty matches any status the rule may cache. */
+    statusCodes: z.array(z.number().int().min(100).max(599)).max(16).default([]),
+    /** Response size bounds in bytes; 0 means unbounded. */
+    minSizeBytes: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
+    maxSizeBytes: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
+    action: cacheAction.default("cache"),
+    edgeTtlSeconds: z.number().int().min(0).max(MAX_TTL).default(3600),
+    originCacheControl: originCacheControl.default("override"),
+    staleWhileRevalidateSeconds: z.number().int().min(0).max(MAX_STALE).default(0),
+    staleIfErrorSeconds: z.number().int().min(0).max(MAX_STALE).default(0),
+  })
+  .refine((r) => r.maxSizeBytes === 0 || r.maxSizeBytes >= r.minSizeBytes, {
+    message: "maximum size must not be below the minimum size",
+    path: ["maxSizeBytes"],
+  });
+
+/** Origin pool behaviour: load balancing, health, TLS, connections, WebSocket. */
+export const originSettings = z.object({
+  policy: loadBalancePolicy.default("weighted_random"),
+  /** Verify certificates of HTTPS origins against the system trust store. */
+  tlsVerify: z.boolean().default(true),
+  /** Passive health check: consecutive failures that mark an origin down. */
+  maxFails: z.number().int().min(1).max(100).default(3),
+  /** Passive health check: seconds before a down origin is tried again. */
+  recoverySeconds: z.number().int().min(1).max(3600).default(30),
+  connectTimeoutMs: z.number().int().min(100).max(120_000).default(10_000),
+  sendTimeoutMs: z.number().int().min(100).max(3_600_000).default(60_000),
+  readTimeoutMs: z.number().int().min(100).max(3_600_000).default(60_000),
+  /** Reuse upstream connections. */
+  keepalive: z.boolean().default(true),
+  keepaliveIdleSeconds: z.number().int().min(1).max(3600).default(60),
+  keepaliveMaxRequests: z.number().int().min(1).max(100_000).default(1000),
+  /** Proxy WebSocket upgrades to the origin. */
+  websocket: z.boolean().default(true),
+});
+
+export const cacheKeyQuery = z.enum(["all", "ignore", "include"]);
+
+/** How the cache key of every request of a site is composed. */
+export const cacheKeyPolicy = z.object({
+  query: cacheKeyQuery.default("all"),
+  /** Parameters kept by `include`. */
+  queryParams: z.array(queryParamName).max(32).default([]),
+  /** Sort parameters so that their order does not matter. */
+  sortQuery: z.boolean().default(false),
+  /** Request headers whose values vary the key. */
+  headers: z.array(headerName).max(8).default([]),
+  /** Cookies whose values vary the key. */
+  cookies: z.array(cookieName).max(8).default([]),
+  /** Separate mobile and desktop user agents. */
+  deviceType: z.boolean().default(false),
+  /** Include the Host; when off, all domains of the site share cached objects. */
+  includeHost: z.boolean().default(true),
+});
+
+export const cacheSettings = z.object({
+  cacheKey: cacheKeyPolicy.prefault({}),
+  /** Fetch and cache large files in 1 MiB slices (Range requests). */
+  rangeSlice: z.boolean().default(false),
 });
 
 export const siteCreateInput = z.object({
@@ -80,10 +191,30 @@ export const siteCreateInput = z.object({
   domains: z.array(domainName).min(1).max(50),
   origins: z.array(originInput).min(1).max(32),
   cacheRules: z.array(cacheRuleInput).max(64).default([]),
+  originSettings: originSettings.prefault({}),
+  cacheSettings: cacheSettings.prefault({}),
 });
 
-export const origin = originInput.extend({ id: uuid });
-export const cacheRule = cacheRuleInput.extend({ id: uuid });
+export const origin = originInput.omit({ s3: true }).extend({
+  id: uuid,
+  /** Secrets are never returned. */
+  s3: z.object({ region: z.string(), bucket: z.string(), accessKeyId: z.string() }).nullable(),
+});
+export const cacheRule = z.object({
+  id: uuid,
+  priority: z.number().int(),
+  pathPrefixes: z.array(z.string()),
+  paths: z.array(z.string()),
+  extensions: z.array(z.string()),
+  statusCodes: z.array(z.number().int()),
+  minSizeBytes: z.number().int(),
+  maxSizeBytes: z.number().int(),
+  action: cacheAction,
+  edgeTtlSeconds: z.number().int(),
+  originCacheControl,
+  staleWhileRevalidateSeconds: z.number().int(),
+  staleIfErrorSeconds: z.number().int(),
+});
 
 export const site = z.object({
   id: uuid,
@@ -96,6 +227,11 @@ export const site = z.object({
   domains: z.array(z.string()),
   origins: z.array(origin),
   cacheRules: z.array(cacheRule),
+  originSettings: originSettings.required(),
+  cacheSettings: z.object({
+    cacheKey: cacheKeyPolicy.required(),
+    rangeSlice: z.boolean(),
+  }),
   cacheGeneration: z.number().int(),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
@@ -483,6 +619,83 @@ export const siteUpdateInput = z.object({
   domains: z.array(domainName).min(1).max(50).optional(),
   origins: z.array(originInput).min(1).max(32).optional(),
   cacheRules: z.array(cacheRuleInput).max(64).optional(),
+  originSettings: originSettings.optional(),
+  cacheSettings: cacheSettings.optional(),
+});
+
+/** Passive health of one origin as reported by the nodes. */
+export const originHealth = z.object({
+  originId: uuid,
+  /** Online nodes that currently mark the origin down. */
+  downNodes: z.number().int(),
+  /** Online nodes of the site's cluster. */
+  onlineNodes: z.number().int(),
+  lastError: z.string(),
+  lastFailureAt: isoDateTime.nullable(),
+  nodes: z.array(
+    z.object({
+      nodeId: uuid,
+      nodeName: z.string(),
+      healthy: z.boolean(),
+      consecutiveFailures: z.number().int(),
+      lastError: z.string(),
+      lastFailureAt: isoDateTime.nullable(),
+      downUntil: isoDateTime.nullable(),
+      reportedAt: isoDateTime,
+    }),
+  ),
+});
+
+export const cacheTaskType = z.enum(["url", "prefix", "site", "prefetch"]);
+export const cacheTaskState = z.enum(["pending", "running", "succeeded", "failed"]);
+
+export const MAX_CACHE_TASK_URLS = 500;
+
+export const cacheTaskCreateInput = z
+  .object({
+    type: cacheTaskType,
+    /** Absolute URLs (url, prefetch) or URL prefixes (prefix), one per entry. */
+    urls: z.array(z.string().trim().min(1).max(2048)).max(MAX_CACHE_TASK_URLS).default([]),
+    /** Sites to purge entirely (site). */
+    siteIds: z.array(uuid).max(100).default([]),
+  })
+  .refine((t) => (t.type === "site" ? t.siteIds.length > 0 : t.urls.length > 0), {
+    message: "nothing to do",
+    path: ["urls"],
+  });
+
+export const cacheTaskNode = z.object({
+  nodeId: uuid,
+  nodeName: z.string(),
+  state: cacheTaskState,
+  message: z.string(),
+  succeeded: z.number().int(),
+  failed: z.number().int(),
+  finishedAt: isoDateTime.nullable(),
+});
+
+export const cacheTask = z.object({
+  id: uuid,
+  type: cacheTaskType,
+  targets: z.array(z.string()),
+  sites: z.array(z.object({ id: z.string(), name: z.string() })),
+  /** pending: no node finished; running: some finished; then succeeded or failed. */
+  state: cacheTaskState,
+  nodes: z.array(cacheTaskNode),
+  createdByName: z.string(),
+  createdAt: isoDateTime,
+  finishedAt: isoDateTime.nullable(),
+});
+
+export const cacheTaskListInput = z.object({
+  siteId: uuid.optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export const cacheTaskList = z.object({
+  items: z.array(cacheTask),
+  total: z.number().int(),
 });
 
 export const siteListInput = z.object({
@@ -704,3 +917,13 @@ export type User = z.infer<typeof user>;
 export type SiteUpdateInput = z.input<typeof siteUpdateInput>;
 export type Origin = z.infer<typeof origin>;
 export type CacheRule = z.infer<typeof cacheRule>;
+export type OriginInput = z.input<typeof originInput>;
+export type CacheRuleInput = z.input<typeof cacheRuleInput>;
+export type OriginSettings = z.infer<typeof site>["originSettings"];
+export type CacheSettings = z.infer<typeof site>["cacheSettings"];
+export type CacheKeyPolicy = CacheSettings["cacheKey"];
+export type OriginHealth = z.infer<typeof originHealth>;
+export type CacheTask = z.infer<typeof cacheTask>;
+export type CacheTaskType = z.infer<typeof cacheTaskType>;
+export type CacheTaskState = z.infer<typeof cacheTaskState>;
+export type CacheTaskCreateInput = z.input<typeof cacheTaskCreateInput>;

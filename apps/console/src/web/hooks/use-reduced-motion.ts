@@ -8,7 +8,7 @@ function subscribe(onChange: () => void) {
   return () => mql.removeEventListener("change", onChange);
 }
 
-/** Whether the user asked for less motion (for animations CSS cannot switch off, e.g. charts). */
+/** Whether the user asked for reduced motion (for motion CSS cannot switch off, e.g. charts and drag transitions). */
 export function useReducedMotion(): boolean {
   return React.useSyncExternalStore(
     subscribe,

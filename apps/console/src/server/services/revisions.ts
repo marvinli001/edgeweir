@@ -13,6 +13,7 @@ import {
 import { type Database, schema } from "@edgeweir/db";
 import type { NodeConfig } from "@edgeweir/proto";
 import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { readCacheKey } from "../lib/cache-key";
 import { CONFIG_CHANNEL } from "../lib/events";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -68,9 +69,15 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
           ),
         )
     : [];
+  const credentials = await db
+    .select({ id: schema.originCredential.id, version: schema.originCredential.version })
+    .from(schema.originCredential)
+    .where(inArray(schema.originCredential.siteId, siteIds));
 
   return sites.map((s): SiteModel => {
-    const pool = pools.find((p) => p.siteId === s.id);
+    const pool = pools
+      .filter((p) => p.siteId === s.id)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
     return {
       id: s.id,
       name: s.name,
@@ -84,16 +91,40 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
         policy: (pool?.policy ?? "weighted_random") as SiteModel["originPool"]["policy"],
         origins: origins
           .filter((o) => o.poolId === pool?.id)
-          .map((o) => ({
-            id: o.id,
-            address: o.address,
-            port: o.port,
-            scheme: o.scheme === "https" ? "https" : "http",
-            weight: o.weight,
-            backup: o.backup,
-            hostHeader: o.hostHeader,
-            sni: o.sni,
-          })),
+          .map((o) => {
+            const credential = credentials.find((c) => c.id === o.credentialId);
+            return {
+              id: o.id,
+              address: o.address,
+              port: o.port,
+              scheme: o.scheme === "https" ? "https" : "http",
+              weight: o.weight,
+              backup: o.backup,
+              hostHeader: o.hostHeader,
+              sni: o.sni,
+              s3: credential
+                ? {
+                    region: o.s3Region,
+                    bucket: o.s3Bucket,
+                    credentialId: credential.id,
+                    credentialVersion: credential.version,
+                  }
+                : null,
+            };
+          }),
+        settings: pool
+          ? {
+              tlsVerify: pool.tlsVerify,
+              maxFails: pool.maxFails,
+              recoverySeconds: pool.recoverySeconds,
+              connectTimeoutMs: pool.connectTimeoutMs,
+              sendTimeoutMs: pool.sendTimeoutMs,
+              readTimeoutMs: pool.readTimeoutMs,
+              keepalive: pool.keepalive,
+              keepaliveIdleSeconds: pool.keepaliveIdleSeconds,
+              keepaliveMaxRequests: pool.keepaliveMaxRequests,
+            }
+          : undefined,
       },
       cacheRules: rules
         .filter((r) => r.siteId === s.id)
@@ -101,12 +132,21 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
           id: r.id,
           priority: r.priority,
           pathPrefixes: r.pathPrefixes,
+          paths: r.paths,
           extensions: r.extensions,
+          statusCodes: r.statusCodes,
+          minSizeBytes: r.minSizeBytes,
+          maxSizeBytes: r.maxSizeBytes,
           expression: r.expression,
           action: r.action === "bypass" ? "bypass" : "cache",
           edgeTtlSeconds: r.edgeTtlSeconds,
           originCacheControl: r.originCacheControl === "respect" ? "respect" : "override",
+          staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
+          staleIfErrorSeconds: r.staleIfErrorSeconds,
         })),
+      cacheKey: readCacheKey(s.cacheKey),
+      rangeSlice: s.rangeSlice,
+      websocket: s.websocket,
     };
   });
 }

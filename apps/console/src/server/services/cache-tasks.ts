@@ -1,0 +1,473 @@
+import type {
+  CacheTask,
+  CacheTaskState,
+  CacheTaskType,
+  cacheTaskCreateInput,
+} from "@edgeweir/contract";
+import { type Database, schema } from "@edgeweir/db";
+import { and, arrayContains, count, desc, eq, inArray, lt, or, type SQL, sql } from "drizzle-orm";
+import type * as z from "zod";
+import { fail } from "../lib/errors";
+import { TASKS_CHANNEL } from "../lib/events";
+import { type Actor, recordAudit } from "./audit";
+import type { Executor } from "./revisions";
+import type { SiteScope } from "./sites";
+
+type CacheTaskCreate = z.output<typeof cacheTaskCreateInput>;
+type TaskRow = typeof schema.cacheTask.$inferSelect;
+type TaskNodeRow = typeof schema.cacheTaskNode.$inferSelect;
+
+/** Undelivered tasks are handed out for as long as purged objects may live on a node. */
+export const CACHE_TASK_TTL_MS = 7 * 24 * 3600 * 1000;
+/** A task handed out without a result is handed out again after this long. */
+export const CACHE_TASK_REDISPATCH_MS = 5 * 60 * 1000;
+
+/**
+ * One unit of work for the nodes of `clusterId`. Purge items carry the
+ * normalized host, path and raw query; prefetch items the absolute URL.
+ */
+export interface CacheTaskItem {
+  siteId: string;
+  clusterId: string;
+  type: "url" | "prefix" | "site" | "prefetch";
+  host: string;
+  path: string;
+  query: string;
+  url: string;
+}
+
+interface ParsedTarget {
+  input: string;
+  host: string;
+  path: string;
+  query: string;
+  url: string;
+}
+
+/**
+ * Parses an absolute http(s) URL. Prefixes must not carry a query string;
+ * the fragment is dropped. The path keeps the percent-encoding of the WHATWG
+ * URL parser, which is what nodes see in the request line.
+ */
+function parseTarget(input: string, type: CacheTaskType): ParsedTarget | null {
+  let url: URL;
+  try {
+    url = new URL(input);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  if (url.username || url.password) return null;
+  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (!host) return null;
+  if (type === "prefix" && url.search) return null;
+  url.hash = "";
+  return {
+    input,
+    host,
+    path: url.pathname,
+    query: url.search.replace(/^\?/, ""),
+    url: url.toString(),
+  };
+}
+
+function scopeFilter(scope: SiteScope) {
+  return scope.all ? undefined : eq(schema.site.organizationId, scope.organizationId);
+}
+
+/** Maps host names to the sites (in scope) that serve them: exact domains win over wildcards. */
+async function resolveHosts(db: Executor, hosts: string[], scope: SiteScope) {
+  const parents = hosts.map((h) => h.slice(h.indexOf(".") + 1)).filter((p, i) => p !== hosts[i]);
+  const rows = await db
+    .select({
+      name: schema.siteDomain.name,
+      wildcard: schema.siteDomain.wildcard,
+      siteId: schema.site.id,
+      siteName: schema.site.name,
+      clusterId: schema.site.clusterId,
+      organizationId: schema.site.organizationId,
+    })
+    .from(schema.siteDomain)
+    .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
+    .where(
+      and(
+        or(
+          and(inArray(schema.siteDomain.name, hosts), eq(schema.siteDomain.wildcard, false)),
+          parents.length
+            ? and(inArray(schema.siteDomain.name, parents), eq(schema.siteDomain.wildcard, true))
+            : undefined,
+        ),
+        scopeFilter(scope),
+      ),
+    );
+  const resolved = new Map<string, (typeof rows)[number]>();
+  for (const host of hosts) {
+    const exact = rows.find((r) => !r.wildcard && r.name === host);
+    const dot = host.indexOf(".");
+    const wild =
+      dot > 0 ? rows.find((r) => r.wildcard && r.name === host.slice(dot + 1)) : undefined;
+    const match = exact ?? wild;
+    if (match) resolved.set(host, match);
+  }
+  return resolved;
+}
+
+function taskState(nodes: Pick<TaskNodeRow, "state">[]): CacheTaskState {
+  if (nodes.length === 0) return "succeeded";
+  const finished = nodes.filter((n) => n.state === "succeeded" || n.state === "failed");
+  if (finished.length === nodes.length) {
+    return finished.some((n) => n.state === "failed") ? "failed" : "succeeded";
+  }
+  if (finished.length === 0 && nodes.every((n) => n.state === "pending")) return "pending";
+  return "running";
+}
+
+async function toTaskDtos(db: Executor, rows: TaskRow[]): Promise<CacheTask[]> {
+  if (rows.length === 0) return [];
+  const nodes = await db
+    .select()
+    .from(schema.cacheTaskNode)
+    .where(
+      inArray(
+        schema.cacheTaskNode.taskId,
+        rows.map((r) => r.id),
+      ),
+    )
+    .orderBy(schema.cacheTaskNode.nodeName);
+  const siteIds = [...new Set(rows.flatMap((r) => r.siteIds))];
+  const sites = siteIds.length
+    ? await db
+        .select({ id: schema.site.id, name: schema.site.name })
+        .from(schema.site)
+        .where(inArray(schema.site.id, siteIds))
+    : [];
+  return rows.map((r) => {
+    const taskNodes = nodes.filter((n) => n.taskId === r.id);
+    return {
+      id: r.id,
+      type: r.type as CacheTaskType,
+      targets: r.targets,
+      sites: r.siteIds.flatMap((id) => {
+        const site = sites.find((s) => s.id === id);
+        return site ? [site] : [];
+      }),
+      state: taskState(taskNodes),
+      nodes: taskNodes.map((n) => ({
+        nodeId: n.nodeId,
+        nodeName: n.nodeName,
+        state: n.state as CacheTaskState,
+        message: n.message,
+        succeeded: n.succeeded,
+        failed: n.failed,
+        finishedAt: n.finishedAt?.toISOString() ?? null,
+      })),
+      createdByName: r.createdByName,
+      createdAt: r.createdAt.toISOString(),
+      finishedAt: r.finishedAt?.toISOString() ?? null,
+    };
+  });
+}
+
+/**
+ * Creates a purge or prefetch task: resolves URLs to sites (within the
+ * caller's scope), fans the task out to every node of the affected clusters
+ * and wakes their watch streams.
+ */
+export async function createCacheTask(
+  db: Database,
+  input: CacheTaskCreate,
+  ctx: { scope: SiteScope; actor: Actor },
+): Promise<CacheTask> {
+  return db.transaction(async (tx) => {
+    const items: CacheTaskItem[] = [];
+    const targets: string[] = [];
+    const siteMeta = new Map<string, { name: string; organizationId: string }>();
+
+    if (input.type === "site") {
+      const ids = [...new Set(input.siteIds)];
+      const sites = await tx
+        .select()
+        .from(schema.site)
+        .where(and(inArray(schema.site.id, ids), scopeFilter(ctx.scope)));
+      if (sites.length !== ids.length) fail("SITE_NOT_FOUND", "site not found");
+      for (const site of sites) {
+        siteMeta.set(site.id, { name: site.name, organizationId: site.organizationId });
+        targets.push(site.name);
+        items.push({
+          siteId: site.id,
+          clusterId: site.clusterId,
+          type: "site",
+          host: "",
+          path: "",
+          query: "",
+          url: "",
+        });
+      }
+    } else {
+      const parsed: ParsedTarget[] = [];
+      const invalid: string[] = [];
+      for (const raw of new Set(input.urls)) {
+        const target = parseTarget(raw, input.type);
+        if (target) parsed.push(target);
+        else invalid.push(raw);
+      }
+      if (invalid.length) {
+        const urls = invalid.slice(0, 5).join(", ");
+        fail("CACHE_TASK_URL_INVALID", `invalid URL: ${urls}`, { urls });
+      }
+      const resolved = await resolveHosts(tx, [...new Set(parsed.map((p) => p.host))], ctx.scope);
+      const unknown = [...new Set(parsed.map((p) => p.host).filter((h) => !resolved.has(h)))];
+      if (unknown.length) {
+        const hosts = unknown.slice(0, 5).join(", ");
+        fail("CACHE_TASK_HOST_UNKNOWN", `no site serves: ${hosts}`, { hosts });
+      }
+      const seen = new Set<string>();
+      for (const target of parsed) {
+        const site = resolved.get(target.host);
+        if (!site || seen.has(target.url)) continue;
+        seen.add(target.url);
+        siteMeta.set(site.siteId, { name: site.siteName, organizationId: site.organizationId });
+        targets.push(target.url);
+        items.push({
+          siteId: site.siteId,
+          clusterId: site.clusterId,
+          type: input.type,
+          host: target.host,
+          path: target.path,
+          query: input.type === "url" ? target.query : "",
+          url: input.type === "prefetch" ? target.url : "",
+        });
+      }
+    }
+
+    const organizations = [...new Set([...siteMeta.values()].map((s) => s.organizationId))];
+    const clusterIds = [...new Set(items.map((i) => i.clusterId))];
+    const nodes = await tx
+      .select({ id: schema.node.id, name: schema.node.name, clusterId: schema.node.clusterId })
+      .from(schema.node)
+      .where(inArray(schema.node.clusterId, clusterIds));
+    const [task] = await tx
+      .insert(schema.cacheTask)
+      .values({
+        organizationId: organizations.length === 1 ? (organizations[0] ?? null) : null,
+        type: input.type,
+        targets,
+        siteIds: [...siteMeta.keys()],
+        payload: items as unknown as Record<string, string>[],
+        createdByUserId:
+          ctx.actor.type === "user" || ctx.actor.type === "api_key" ? ctx.actor.id : null,
+        createdByName: ctx.actor.name ?? "",
+        finishedAt: nodes.length === 0 ? new Date() : null,
+      })
+      .returning();
+    if (!task) throw new Error("cache task insert failed");
+    if (nodes.length) {
+      await tx.insert(schema.cacheTaskNode).values(
+        nodes.map((n) => ({
+          taskId: task.id,
+          nodeId: n.id,
+          clusterId: n.clusterId,
+          nodeName: n.name,
+        })),
+      );
+      await tx.execute(sql`select pg_notify(${TASKS_CHANNEL}, ${JSON.stringify({ clusterIds })})`);
+    }
+    await recordAudit(tx, ctx.actor, {
+      action: `cache.${input.type === "prefetch" ? "prefetch" : "purge"}`,
+      organizationId: task.organizationId,
+      targetType: "cache_task",
+      targetId: task.id,
+      targetName: targets.length === 1 ? (targets[0] ?? "") : `${targets.length} × ${input.type}`,
+      metadata: {
+        type: input.type,
+        targets: targets.slice(0, 20),
+        count: targets.length,
+        sites: [...siteMeta.values()].map((s) => s.name),
+        nodes: nodes.length,
+      },
+    });
+    const [dto] = await toTaskDtos(tx, [task]);
+    if (!dto) throw new Error("cache task not readable after insert");
+    return dto;
+  });
+}
+
+function taskScope(scope: SiteScope): SQL | undefined {
+  return scope.all ? undefined : eq(schema.cacheTask.organizationId, scope.organizationId);
+}
+
+export async function listCacheTasks(
+  db: Database,
+  scope: SiteScope,
+  query: { siteId?: string; page: number; pageSize: number },
+): Promise<{ items: CacheTask[]; total: number }> {
+  const where = and(
+    taskScope(scope),
+    query.siteId ? arrayContains(schema.cacheTask.siteIds, [query.siteId]) : undefined,
+  );
+  const [total] = await db.select({ n: count() }).from(schema.cacheTask).where(where);
+  const rows = await db
+    .select()
+    .from(schema.cacheTask)
+    .where(where)
+    .orderBy(desc(schema.cacheTask.createdAt), desc(schema.cacheTask.id))
+    .limit(query.pageSize)
+    .offset((query.page - 1) * query.pageSize);
+  return { items: await toTaskDtos(db, rows), total: total?.n ?? 0 };
+}
+
+export async function getCacheTask(db: Database, id: string, scope: SiteScope): Promise<CacheTask> {
+  const [row] = await db
+    .select()
+    .from(schema.cacheTask)
+    .where(and(eq(schema.cacheTask.id, id), taskScope(scope)));
+  if (!row) fail("CACHE_TASK_NOT_FOUND", "cache task not found");
+  const [dto] = await toTaskDtos(db, [row]);
+  if (!dto) fail("CACHE_TASK_NOT_FOUND", "cache task not found");
+  return dto;
+}
+
+/** Tasks waiting for a node: pending, or handed out without a result for too long. */
+function deliverable(nodeId: string, now: Date) {
+  return and(
+    eq(schema.cacheTaskNode.nodeId, nodeId),
+    or(
+      eq(schema.cacheTaskNode.state, "pending"),
+      and(
+        eq(schema.cacheTaskNode.state, "running"),
+        lt(schema.cacheTaskNode.dispatchedAt, new Date(now.getTime() - CACHE_TASK_REDISPATCH_MS)),
+      ),
+    ),
+  );
+}
+
+export async function hasDeliverableTasks(db: Executor, nodeId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(schema.cacheTaskNode)
+    .where(deliverable(nodeId, new Date()));
+  return (row?.n ?? 0) > 0;
+}
+
+/**
+ * Hands out the oldest deliverable tasks of a node and marks them running.
+ * Only the items for the node's cluster are returned.
+ */
+export async function pullCacheTasks(
+  db: Database,
+  node: { id: string; clusterId: string },
+  max: number,
+): Promise<{ id: string; type: string; createdAt: Date; items: CacheTaskItem[] }[]> {
+  const now = new Date();
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ task: schema.cacheTask })
+      .from(schema.cacheTaskNode)
+      .innerJoin(schema.cacheTask, eq(schema.cacheTask.id, schema.cacheTaskNode.taskId))
+      .where(deliverable(node.id, now))
+      .orderBy(schema.cacheTask.createdAt)
+      .limit(max)
+      .for("update", { of: schema.cacheTaskNode, skipLocked: true });
+    if (rows.length === 0) return [];
+    await tx
+      .update(schema.cacheTaskNode)
+      .set({ state: "running", dispatchedAt: now })
+      .where(
+        and(
+          eq(schema.cacheTaskNode.nodeId, node.id),
+          inArray(
+            schema.cacheTaskNode.taskId,
+            rows.map((r) => r.task.id),
+          ),
+        ),
+      );
+    return rows.map(({ task }) => ({
+      id: task.id,
+      type: task.type,
+      createdAt: task.createdAt,
+      items: (task.payload as unknown as CacheTaskItem[]).filter(
+        (i) => i.clusterId === node.clusterId,
+      ),
+    }));
+  });
+}
+
+/** Records a node's result; the task finishes once every node reported. */
+export async function reportCacheTaskResult(
+  db: Database,
+  node: { id: string },
+  result: {
+    taskId: string;
+    state: "succeeded" | "failed";
+    message: string;
+    succeeded: number;
+    failed: number;
+    finishedAt: Date;
+  },
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const updated = await tx
+      .update(schema.cacheTaskNode)
+      .set({
+        state: result.state,
+        message: result.message.slice(0, 2000),
+        succeeded: result.succeeded,
+        failed: result.failed,
+        finishedAt: result.finishedAt,
+      })
+      .where(
+        and(
+          eq(schema.cacheTaskNode.taskId, result.taskId),
+          eq(schema.cacheTaskNode.nodeId, node.id),
+          inArray(schema.cacheTaskNode.state, ["pending", "running"]),
+        ),
+      )
+      .returning({ taskId: schema.cacheTaskNode.taskId });
+    if (updated.length === 0) return false;
+    await finishIfDone(tx, [result.taskId]);
+    return true;
+  });
+}
+
+async function finishIfDone(tx: Executor, taskIds: string[]) {
+  if (taskIds.length === 0) return;
+  await tx
+    .update(schema.cacheTask)
+    .set({ finishedAt: new Date() })
+    .where(
+      and(
+        inArray(schema.cacheTask.id, taskIds),
+        sql`${schema.cacheTask.finishedAt} is null`,
+        sql`not exists (select 1 from ${schema.cacheTaskNode} where ${schema.cacheTaskNode.taskId} = ${schema.cacheTask.id} and ${schema.cacheTaskNode.state} in ('pending', 'running'))`,
+      ),
+    );
+}
+
+/** Fails deliveries that no node picked up within CACHE_TASK_TTL_MS (node offline). */
+export async function expireCacheTasks(db: Database, now = new Date()): Promise<number> {
+  return db.transaction(async (tx) => {
+    const cutoff = new Date(now.getTime() - CACHE_TASK_TTL_MS);
+    const expired = await tx
+      .update(schema.cacheTaskNode)
+      .set({
+        state: "failed",
+        message: "expired: the node did not report a result",
+        finishedAt: now,
+      })
+      .where(
+        and(
+          inArray(schema.cacheTaskNode.state, ["pending", "running"]),
+          inArray(
+            schema.cacheTaskNode.taskId,
+            tx
+              .select({ id: schema.cacheTask.id })
+              .from(schema.cacheTask)
+              .where(lt(schema.cacheTask.createdAt, cutoff)),
+          ),
+        ),
+      )
+      .returning({ taskId: schema.cacheTaskNode.taskId });
+    await finishIfDone(tx, [...new Set(expired.map((e) => e.taskId))]);
+    return expired.length;
+  });
+}

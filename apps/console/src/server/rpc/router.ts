@@ -11,6 +11,7 @@ import {
 } from "../services/account";
 import { topNodes, topSites, trafficBreakdown, trafficSeries } from "../services/analytics";
 import { auditFacets, listAuditLogs } from "../services/audit";
+import { createCacheTask, getCacheTask, listCacheTasks } from "../services/cache-tasks";
 import {
   createCluster,
   deleteCluster,
@@ -48,6 +49,7 @@ import {
   listOrganizations,
   updateOrganization,
 } from "../services/organizations";
+import { siteOriginHealth } from "../services/origin-health";
 import { createRegion, deleteRegion, listRegions, updateRegion } from "../services/regions";
 import { rollbackToRevision, toRevisionDto } from "../services/revisions";
 import { isInitialized, runSetup, setupCompletedAt } from "../services/setup";
@@ -254,10 +256,15 @@ export const router = os.router({
       return createSite(context.app.db, input, {
         organizationId: context.organizationId,
         actor: context.actor,
+        masterKey: context.app.masterKey,
       });
     }),
     update: tenant.sites.update.handler(({ input, context }) =>
-      updateSite(context.app.db, input, { scope: context.scope, actor: context.actor }),
+      updateSite(context.app.db, input, {
+        scope: context.scope,
+        actor: context.actor,
+        masterKey: context.app.masterKey,
+      }),
     ),
     delete: tenant.sites.delete.handler(({ input, context }) =>
       deleteSite(context.app.db, input.id, { scope: context.scope, actor: context.actor }),
@@ -276,6 +283,20 @@ export const router = os.router({
       });
       return ok;
     }),
+    originHealth: tenant.sites.originHealth.handler(({ input, context }) =>
+      siteOriginHealth(context.app.db, input.id, context.scope),
+    ),
+  },
+  cacheTasks: {
+    list: tenant.cacheTasks.list.handler(({ input, context }) =>
+      listCacheTasks(context.app.db, context.scope, input),
+    ),
+    get: tenant.cacheTasks.get.handler(({ input, context }) =>
+      getCacheTask(context.app.db, input.id, context.scope),
+    ),
+    create: tenant.cacheTasks.create.handler(({ input, context }) =>
+      createCacheTask(context.app.db, input, { scope: context.scope, actor: context.actor }),
+    ),
   },
   members: {
     list: orgManager.members.list.handler(({ context }) =>

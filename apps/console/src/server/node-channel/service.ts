@@ -18,21 +18,70 @@ import {
   ApplyState,
   GetConfigResponseSchema,
   type NodeService,
+  NodeTaskSchema,
+  PurgeType,
+  TaskState,
   WatchConfigResponseSchema,
   WatchEvent,
 } from "@edgeweir/proto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { NODE_CERT_LIFETIME_DAYS } from "../pki/ca";
 import { recordAudit } from "../services/audit";
+import {
+  type CacheTaskItem,
+  hasDeliverableTasks,
+  pullCacheTasks,
+  reportCacheTaskResult,
+} from "../services/cache-tasks";
 import { claimEnrollmentToken } from "../services/enrollment";
 import { isSerialRevoked, normalizeSerial } from "../services/nodes";
+import { replaceOriginHealth } from "../services/origin-health";
 import { getRevision, latestRevision } from "../services/revisions";
+import { S3_SECRET_PURPOSE } from "../services/sites";
 
 export const HEARTBEAT_SECONDS = 15;
 export const KEEPALIVE_MS = 15_000;
 /** Ask nodes to renew once less than a third of the lifetime remains. */
 const RENEW_BEFORE_MS = (NODE_CERT_LIFETIME_DAYS * 24 * 3600 * 1000) / 3;
+/** Tasks handed out per PullTasks call unless the node asks for fewer. */
+export const MAX_TASKS_PER_PULL = 20;
+
+const purgeTypes = {
+  url: PurgeType.URL,
+  prefix: PurgeType.PREFIX,
+  site: PurgeType.SITE,
+} as const;
+
+function toNodeTask(task: { id: string; type: string; createdAt: Date; items: CacheTaskItem[] }) {
+  const createdAt = timestampFromDate(task.createdAt);
+  if (task.type === "prefetch") {
+    return create(NodeTaskSchema, {
+      id: task.id,
+      createdAt,
+      kind: {
+        case: "prefetch",
+        value: { targets: task.items.map((i) => ({ siteId: i.siteId, url: i.url })) },
+      },
+    });
+  }
+  return create(NodeTaskSchema, {
+    id: task.id,
+    createdAt,
+    kind: {
+      case: "purge",
+      value: {
+        targets: task.items.map((i) => ({
+          siteId: i.siteId,
+          type: purgeTypes[i.type as keyof typeof purgeTypes] ?? PurgeType.UNSPECIFIED,
+          host: i.host,
+          path: i.path,
+          query: i.query,
+        })),
+      },
+    },
+  });
+}
 
 export interface PeerInfo {
   authorized: boolean;
@@ -245,6 +294,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
     async *watchConfig(_req, ctx) {
       const node = await requireNode(ctx);
       const queue: { revision: number; contentHash: string }[] = [];
+      let tasksPending = false;
       let wake: (() => void) | undefined;
       const push = (item: { revision: number; contentHash: string }) => {
         queue.push(item);
@@ -253,9 +303,19 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       const refresh = async () => {
         const latest = await latestRevision(app.db, node.clusterId);
         if (latest) push({ revision: latest.revision, contentHash: latest.contentHash });
+        if (await hasDeliverableTasks(app.db, node.id)) {
+          tasksPending = true;
+          wake?.();
+        }
       };
       const offConfig = app.events.on("config", (e) => {
         if (e.clusterId === node.clusterId) push(e);
+      });
+      const offTasks = app.events.on("tasks", (e) => {
+        if (e.clusterIds.includes(node.clusterId)) {
+          tasksPending = true;
+          wake?.();
+        }
       });
       const offReconnect = app.events.on("reconnected", () => void refresh());
       const onAbort = () => wake?.();
@@ -271,6 +331,14 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         }
         let lastSent = -1;
         while (!ctx.signal.aborted) {
+          if (tasksPending) {
+            tasksPending = false;
+            yield create(WatchConfigResponseSchema, {
+              event: WatchEvent.TASKS,
+              latestRevision: BigInt(Math.max(lastSent, 0)),
+            });
+            continue;
+          }
           if (queue.length === 0) {
             await new Promise<void>((resolve) => {
               const timer = setTimeout(resolve, KEEPALIVE_MS);
@@ -283,6 +351,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           }
           if (ctx.signal.aborted) break;
           await assertStillActive(node);
+          if (tasksPending) continue;
           const item = queue
             .splice(0)
             .reduce<{ revision: number; contentHash: string } | undefined>(
@@ -305,6 +374,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         }
       } finally {
         offConfig();
+        offTasks();
         offReconnect();
         ctx.signal.removeEventListener("abort", onAbort);
         log.info("watch stream closed", { nodeId: node.id });
@@ -388,8 +458,23 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
             .values(ips.map((address) => ({ nodeId: node.id, address })))
             .onConflictDoNothing();
         }
+        await replaceOriginHealth(
+          tx,
+          node,
+          req.originHealth.slice(0, 2000).map((h) => ({
+            siteId: h.siteId,
+            originId: h.originId,
+            healthy: h.healthy,
+            consecutiveFailures: h.consecutiveFailures,
+            lastError: h.lastError,
+            lastFailureAt: h.lastFailureAt ? timestampDate(h.lastFailureAt) : null,
+            downUntil: h.downUntil ? timestampDate(h.downUntil) : null,
+          })),
+          now,
+        );
       });
       const latest = await latestRevision(app.db, node.clusterId);
+      const tasksPending = await hasDeliverableTasks(app.db, node.id);
       const expiresIn = (node.certNotAfter?.getTime() ?? 0) - now.getTime();
       log.debug("status", {
         nodeId: node.id,
@@ -401,6 +486,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         latestRevision: BigInt(latest?.revision ?? 0),
         renewCertificate: expiresIn < RENEW_BEFORE_MS,
         reportIntervalSeconds: HEARTBEAT_SECONDS,
+        tasksPending,
       };
     },
 
@@ -450,6 +536,77 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         accepted++;
       }
       return { accepted };
+    },
+
+    async getOriginCredentials(req, ctx) {
+      const node = await requireNode(ctx);
+      const ids = [...new Set(req.ids)].filter((id) => /^[0-9a-f-]{36}$/i.test(id)).slice(0, 1000);
+      if (ids.length === 0) return { credentials: [] };
+      // Only credentials of sites served by the node's own cluster.
+      const rows = await app.db
+        .select({ credential: schema.originCredential })
+        .from(schema.originCredential)
+        .innerJoin(schema.site, eq(schema.site.id, schema.originCredential.siteId))
+        .where(
+          and(inArray(schema.originCredential.id, ids), eq(schema.site.clusterId, node.clusterId)),
+        );
+      const credentials = rows.flatMap(({ credential }) => {
+        try {
+          const secret = app.masterKey.open(
+            JSON.parse(credential.secretEnvelope),
+            S3_SECRET_PURPOSE,
+          );
+          return [
+            {
+              id: credential.id,
+              version: BigInt(credential.version),
+              accessKeyId: credential.accessKeyId,
+              secretAccessKey: secret.toString("utf8"),
+            },
+          ];
+        } catch (error) {
+          log.error("cannot open origin credential", { credentialId: credential.id, error });
+          return [];
+        }
+      });
+      log.info("origin credentials delivered", {
+        nodeId: node.id,
+        credentials: credentials.map((c) => c.id),
+      });
+      return { credentials };
+    },
+
+    async pullTasks(req, ctx) {
+      const node = await requireNode(ctx);
+      const max = Math.min(req.maxTasks || MAX_TASKS_PER_PULL, MAX_TASKS_PER_PULL);
+      const tasks = await pullCacheTasks(app.db, node, max);
+      if (tasks.length) log.info("tasks handed out", { nodeId: node.id, tasks: tasks.length });
+      return { tasks: tasks.map(toNodeTask) };
+    },
+
+    async reportTaskResult(req, ctx) {
+      const node = await requireNode(ctx);
+      if (!/^[0-9a-f-]{36}$/i.test(req.taskId)) {
+        throw new ConnectError("invalid task_id", Code.InvalidArgument);
+      }
+      if (req.state !== TaskState.SUCCEEDED && req.state !== TaskState.FAILED) {
+        throw new ConnectError("state must be SUCCEEDED or FAILED", Code.InvalidArgument);
+      }
+      const recorded = await reportCacheTaskResult(app.db, node, {
+        taskId: req.taskId,
+        state: req.state === TaskState.SUCCEEDED ? "succeeded" : "failed",
+        message: req.message,
+        succeeded: req.succeeded,
+        failed: req.failed,
+        finishedAt: req.finishedAt ? timestampDate(req.finishedAt) : new Date(),
+      });
+      log.info("task result", {
+        nodeId: node.id,
+        taskId: req.taskId,
+        state: TaskState[req.state],
+        recorded,
+      });
+      return {};
     },
   };
 }

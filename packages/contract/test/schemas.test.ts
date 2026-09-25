@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   auditLogListInput,
+  cacheKeyPolicy,
+  cacheRuleInput,
+  cacheTaskCreateInput,
   contract,
   domainName,
   errorCodes,
   errorDefs,
   extension,
   isErrorCode,
+  originInput,
+  originSettings,
   reasonText,
   regionCode,
   revisionReasonCodes,
@@ -51,8 +56,35 @@ describe("siteCreateInput", () => {
       weight: 1,
       backup: false,
       hostHeader: "",
+      sni: "",
+      s3: null,
     });
     expect(parsed.cacheRules).toEqual([]);
+    expect(parsed.originSettings).toEqual({
+      policy: "weighted_random",
+      tlsVerify: true,
+      maxFails: 3,
+      recoverySeconds: 30,
+      connectTimeoutMs: 10_000,
+      sendTimeoutMs: 60_000,
+      readTimeoutMs: 60_000,
+      keepalive: true,
+      keepaliveIdleSeconds: 60,
+      keepaliveMaxRequests: 1000,
+      websocket: true,
+    });
+    expect(parsed.cacheSettings).toEqual({
+      cacheKey: {
+        query: "all",
+        queryParams: [],
+        sortQuery: false,
+        headers: [],
+        cookies: [],
+        deviceType: false,
+        includeHost: true,
+      },
+      rangeSlice: false,
+    });
   });
 
   it("rejects out-of-range ports and empty origins", () => {
@@ -158,5 +190,82 @@ describe("error and reason codes", () => {
       const placeholders = [...revisionReasonDefs[code].en.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
       expect(placeholders.sort(), code).toEqual([...revisionReasonDefs[code].params].sort());
     }
+  });
+});
+
+describe("M2 origin and cache inputs", () => {
+  it("validates S3 origins and keeps the secret optional (write-only)", () => {
+    const parsed = originInput.parse({
+      address: "minio",
+      port: 9000,
+      s3: { region: "US-East-1", bucket: "assets", accessKeyId: "AKID" },
+    });
+    expect(parsed.s3).toEqual({ region: "us-east-1", bucket: "assets", accessKeyId: "AKID" });
+    expect(
+      originInput.safeParse({ address: "minio", s3: { region: "x y", accessKeyId: "A" } }).success,
+    ).toBe(false);
+    expect(
+      originInput.safeParse({
+        address: "minio",
+        s3: { region: "r", bucket: "Bad_Bucket", accessKeyId: "A" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts SNI host names only", () => {
+    expect(originInput.parse({ address: "10.0.0.1", sni: "Origin.Example.com" }).sni).toBe(
+      "origin.example.com",
+    );
+    expect(originInput.safeParse({ address: "10.0.0.1", sni: "bad host" }).success).toBe(false);
+  });
+
+  it("bounds origin connection settings", () => {
+    expect(originSettings.safeParse({ connectTimeoutMs: 50 }).success).toBe(false);
+    expect(originSettings.safeParse({ maxFails: 0 }).success).toBe(false);
+    expect(originSettings.parse({ policy: "consistent_hash" }).policy).toBe("consistent_hash");
+    expect(originSettings.safeParse({ policy: "least_conn" }).success).toBe(false);
+  });
+
+  it("validates cache rule conditions", () => {
+    const rule = cacheRuleInput.parse({
+      paths: ["/index.html"],
+      statusCodes: [200, 404],
+      minSizeBytes: 10,
+      maxSizeBytes: 100,
+      staleIfErrorSeconds: 60,
+    });
+    expect(rule).toMatchObject({ paths: ["/index.html"], statusCodes: [200, 404] });
+    expect(cacheRuleInput.safeParse({ minSizeBytes: 100, maxSizeBytes: 10 }).success).toBe(false);
+    expect(cacheRuleInput.safeParse({ statusCodes: [99] }).success).toBe(false);
+    expect(cacheRuleInput.safeParse({ paths: ["no-slash"] }).success).toBe(false);
+  });
+
+  it("validates cache key policies", () => {
+    expect(cacheKeyPolicy.parse({ headers: ["Accept-Language"] }).headers).toEqual([
+      "accept-language",
+    ]);
+    expect(cacheKeyPolicy.safeParse({ headers: ["Cookie"] }).success).toBe(false);
+    expect(cacheKeyPolicy.safeParse({ headers: ["bad header"] }).success).toBe(false);
+    expect(cacheKeyPolicy.safeParse({ queryParams: ["a&b"] }).success).toBe(false);
+    expect(cacheKeyPolicy.parse({ query: "include", queryParams: ["v"] }).queryParams).toEqual([
+      "v",
+    ]);
+  });
+
+  it("requires targets that match the task type", () => {
+    expect(cacheTaskCreateInput.safeParse({ type: "url", urls: [] }).success).toBe(false);
+    expect(cacheTaskCreateInput.safeParse({ type: "site", urls: ["http://a.test/"] }).success).toBe(
+      false,
+    );
+    expect(
+      cacheTaskCreateInput.safeParse({
+        type: "site",
+        siteIds: ["00000000-0000-4000-8000-000000000000"],
+      }).success,
+    ).toBe(true);
+    expect(
+      cacheTaskCreateInput.safeParse({ type: "url", urls: Array(501).fill("http://a.test/") })
+        .success,
+    ).toBe(false);
   });
 });

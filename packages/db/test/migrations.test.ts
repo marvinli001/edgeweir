@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -15,6 +17,44 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await client.close();
+});
+
+type JournalEntry = { idx: number; when: number; tag: string };
+
+describe("migration journal", () => {
+  const journal = JSON.parse(
+    readFileSync(join(defaultMigrationsFolder, "meta", "_journal.json"), "utf8"),
+  ) as { entries: JournalEntry[] };
+  const entries = journal.entries;
+
+  it("has unique tags and contiguous indexes that match the tag prefix", () => {
+    const tags = entries.map((e) => e.tag);
+    expect(new Set(tags).size).toBe(tags.length);
+    // Two branches must never ship the same migration number.
+    const numbers = tags.map((t) => t.slice(0, 4));
+    expect(new Set(numbers).size).toBe(numbers.length);
+    entries.forEach((e, i) => {
+      expect(e.idx).toBe(i);
+      expect(e.tag.slice(0, 4)).toBe(String(i).padStart(4, "0"));
+    });
+  });
+
+  it("has strictly increasing timestamps (drizzle skips migrations older than the last applied)", () => {
+    for (let i = 1; i < entries.length; i++) {
+      expect(entries[i]?.when).toBeGreaterThan(entries[i - 1]?.when ?? 0);
+    }
+  });
+
+  it("has exactly one SQL file and one snapshot per entry", () => {
+    const sql = readdirSync(defaultMigrationsFolder)
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
+    expect(sql).toEqual(entries.map((e) => `${e.tag}.sql`));
+    const snapshots = readdirSync(join(defaultMigrationsFolder, "meta"))
+      .filter((f) => f.endsWith("_snapshot.json"))
+      .sort();
+    expect(snapshots).toEqual(entries.map((e) => `${e.tag.slice(0, 4)}_snapshot.json`));
+  });
 });
 
 describe("migrations", () => {
@@ -45,6 +85,11 @@ describe("migrations", () => {
       "organization_settings",
       "node_certificate_revocation",
       "system_setting",
+      "site_star",
+      "origin_credential",
+      "origin_health",
+      "cache_task",
+      "cache_task_node",
     ]) {
       expect(tables).toContain(name);
     }

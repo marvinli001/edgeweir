@@ -2,11 +2,13 @@ import { schema } from "@edgeweir/db";
 import { and, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { PgBoss } from "pg-boss";
 import type { AppContext } from "../lib/context";
+import { expireCacheTasks } from "../services/cache-tasks";
 import { pruneRevisions } from "../services/revisions";
 
 export const QUEUES = {
   pruneRevisions: "maintenance.prune-revisions",
   expireEnrollmentTokens: "maintenance.expire-enrollment-tokens",
+  expireCacheTasks: "maintenance.expire-cache-tasks",
 } as const;
 
 /**
@@ -39,7 +41,13 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     if (deleted.length) log.info("deleted stale enrollment tokens", { count: deleted.length });
   });
 
+  await boss.work(QUEUES.expireCacheTasks, async () => {
+    const expired = await expireCacheTasks(ctx.db);
+    if (expired) log.info("expired undelivered cache tasks", { deliveries: expired });
+  });
+
   await boss.schedule(QUEUES.pruneRevisions, "17 * * * *");
+  await boss.schedule(QUEUES.expireCacheTasks, "43 * * * *");
   await boss.schedule(QUEUES.expireEnrollmentTokens, "*/30 * * * *");
   log.info("worker started", { queues: Object.values(QUEUES) });
   return boss;

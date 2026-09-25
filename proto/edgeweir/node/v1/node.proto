@@ -32,6 +32,15 @@ service NodeService {
   rpc ReportStatus(ReportStatusRequest) returns (ReportStatusResponse);
   // ReportStats uploads per-minute pre-aggregated traffic statistics.
   rpc ReportStats(ReportStatsRequest) returns (ReportStatsResponse);
+  // GetOriginCredentials returns origin credentials (e.g. S3 access keys)
+  // referenced by the node's cluster configuration. Secrets only travel over
+  // this mutually authenticated channel and never inside NodeConfig.
+  rpc GetOriginCredentials(GetOriginCredentialsRequest) returns (GetOriginCredentialsResponse);
+  // PullTasks hands out pending typed tasks (cache purge, prefetch). Tasks
+  // are idempotent: a task is handed out again when no result arrives.
+  rpc PullTasks(PullTasksRequest) returns (PullTasksResponse);
+  // ReportTaskResult records the outcome of a task on the calling node.
+  rpc ReportTaskResult(ReportTaskResultRequest) returns (ReportTaskResultResponse);
 }
 
 // NodeInfo describes the host and software of a node.
@@ -92,6 +101,8 @@ enum WatchEvent {
   WATCH_EVENT_REVISION = 1;
   // Keepalive so that both sides can detect dead streams.
   WATCH_EVENT_KEEPALIVE = 2;
+  // Tasks are waiting for this node; fetch them with PullTasks.
+  WATCH_EVENT_TASKS = 3;
 }
 
 // WatchConfigResponse notifies the node about the latest revision.
@@ -141,6 +152,23 @@ message ReportStatusRequest {
   // Whether the data plane answered its local health probe.
   bool data_plane_healthy = 7;
   google.protobuf.Timestamp certificate_not_after = 8;
+  // Passive health state of the origins this node has seen failing; origins
+  // without failures may be omitted and count as healthy.
+  repeated OriginHealth origin_health = 9;
+}
+
+// OriginHealth is the passive health state of one origin on one node.
+message OriginHealth {
+  string site_id = 1;
+  string origin_id = 2;
+  // False while the origin is marked down.
+  bool healthy = 3;
+  uint32 consecutive_failures = 4;
+  google.protobuf.Timestamp last_failure_at = 5;
+  // End of the current down period, unset while healthy.
+  google.protobuf.Timestamp down_until = 6;
+  // Short description of the last failure, e.g. "connect timeout".
+  string last_error = 7;
 }
 
 // ReportStatusResponse tells the node what the console expects next.
@@ -150,6 +178,8 @@ message ReportStatusResponse {
   bool renew_certificate = 2;
   // Suggested heartbeat interval.
   uint32 report_interval_seconds = 3;
+  // Tasks are waiting for this node (fallback for a missed watch event).
+  bool tasks_pending = 4;
 }
 
 // MinuteStats is traffic of one site during one minute on one node.
@@ -175,3 +205,112 @@ message ReportStatsRequest {
 message ReportStatsResponse {
   uint32 accepted = 1;
 }
+
+// GetOriginCredentialsRequest names the credentials to fetch.
+message GetOriginCredentialsRequest {
+  // Ids from S3Auth.credential_id.
+  repeated string ids = 1;
+}
+
+// OriginCredential is an access key pair for an S3-compatible origin.
+message OriginCredential {
+  string id = 1;
+  // Matches S3Auth.credential_version of the configuration.
+  uint64 version = 2;
+  string access_key_id = 3;
+  string secret_access_key = 4;
+}
+
+// GetOriginCredentialsResponse carries the credentials the node may use.
+// Unknown ids and credentials of other clusters are left out.
+message GetOriginCredentialsResponse {
+  repeated OriginCredential credentials = 1;
+}
+
+// PullTasksRequest asks for pending tasks.
+message PullTasksRequest {
+  // Upper bound of tasks to return; 0 means the console's default.
+  uint32 max_tasks = 1;
+}
+
+// PullTasksResponse carries pending tasks, oldest first.
+message PullTasksResponse {
+  repeated NodeTask tasks = 1;
+}
+
+// NodeTask is a typed one-off operation. Nodes never execute anything that
+// is not one of these types.
+message NodeTask {
+  string id = 1;
+  // Creation time; purge tasks use it as the purge epoch.
+  google.protobuf.Timestamp created_at = 2;
+  // What to do.
+  oneof kind {
+    PurgeTask purge = 3;
+    PrefetchTask prefetch = 4;
+  }
+}
+
+// PurgeType is the scope of a purge target.
+enum PurgeType {
+  PURGE_TYPE_UNSPECIFIED = 0;
+  // One URL (host, path and query), with every cache key variant of it.
+  PURGE_TYPE_URL = 1;
+  // Every URL of the host whose path starts with the given prefix.
+  PURGE_TYPE_PREFIX = 2;
+  // Every object of the site.
+  PURGE_TYPE_SITE = 3;
+}
+
+// PurgeTarget is one thing to purge.
+message PurgeTarget {
+  string site_id = 1;
+  PurgeType type = 2;
+  // Lowercase host without port; empty for PURGE_TYPE_SITE.
+  string host = 3;
+  // URI path (URL) or path prefix (PREFIX) as requested, percent-encoded.
+  string path = 4;
+  // Raw query string of a URL target, without the "?".
+  string query = 5;
+}
+
+// PurgeTask invalidates cached objects. Purged objects are never served
+// again; their storage is reclaimed by the cache manager.
+message PurgeTask {
+  repeated PurgeTarget targets = 1;
+}
+
+// PrefetchTarget is one URL to load into the cache.
+message PrefetchTarget {
+  string site_id = 1;
+  // Absolute http(s) URL whose host belongs to the site.
+  string url = 2;
+}
+
+// PrefetchTask requests URLs through the node's own data plane so that the
+// responses are cached.
+message PrefetchTask {
+  repeated PrefetchTarget targets = 1;
+}
+
+// TaskState is the outcome of a task on a node.
+enum TaskState {
+  TASK_STATE_UNSPECIFIED = 0;
+  TASK_STATE_SUCCEEDED = 1;
+  TASK_STATE_FAILED = 2;
+}
+
+// ReportTaskResultRequest reports the outcome of a task.
+message ReportTaskResultRequest {
+  string task_id = 1;
+  TaskState state = 2;
+  // Human-readable detail, e.g. the URLs that failed to prefetch.
+  string message = 3;
+  // Targets that succeeded and failed.
+  uint32 succeeded = 4;
+  uint32 failed = 5;
+  google.protobuf.Timestamp finished_at = 6;
+}
+
+// ReportTaskResultResponse acknowledges a task result.
+message ReportTaskResultResponse {}
