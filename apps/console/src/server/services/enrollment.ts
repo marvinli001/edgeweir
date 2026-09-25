@@ -22,6 +22,12 @@ function sh(value: string): string {
   return /^[A-Za-z0-9_./:@=+-]+$/.test(value) ? value : `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 
+/**
+ * The command the console shows for a new node. The token travels in the
+ * EDGEWEIR_TOKEN environment variable (exported by the shell, passed through
+ * sudo, read by install.sh and `edgeweir-node enroll`), never as an argument
+ * that the process list would show.
+ */
 export function buildInstallCommand(opts: {
   consoleUrl: string;
   serverUrl: string;
@@ -30,11 +36,13 @@ export function buildInstallCommand(opts: {
 }): string {
   const script = `${opts.consoleUrl.replace(/\/$/, "")}/install.sh`;
   return [
-    `curl -fsSL ${sh(script)} | sudo bash -s --`,
-    `--server ${sh(opts.serverUrl)}`,
-    `--token ${sh(opts.token)}`,
-    `--ca-sha256 ${sh(opts.caSha256)}`,
-  ].join(" ");
+    `export EDGEWEIR_TOKEN='${opts.token.replace(/'/g, `'"'"'`)}'`,
+    [
+      `curl -fsSL ${sh(script)} | sudo --preserve-env=EDGEWEIR_TOKEN bash -s --`,
+      `--server ${sh(opts.serverUrl)}`,
+      `--ca-sha256 ${sh(opts.caSha256)}`,
+    ].join(" "),
+  ].join("\n");
 }
 
 export async function createEnrollmentToken(

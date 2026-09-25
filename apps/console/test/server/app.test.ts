@@ -29,13 +29,17 @@ describe("HTTP API", async () => {
     const script = await res.text();
     expect(script).toContain(`CONSOLE_URL="${origin}"`);
     expect(script).not.toContain("__EDGEWEIR_CONSOLE_URL__");
-    // Verification happens before anything is executed.
-    const verify = script.indexOf("cosign verify-blob");
-    const sha = script.indexOf("sha256sum -c");
-    const exec = script.indexOf("/usr/bin/edgeweir-node enroll");
+    // Verification happens before anything is executed (the step order of
+    // `main` is checked in install-script.test.ts).
+    const main = script.slice(script.indexOf("main() {"));
+    const verify = main.indexOf("\n  verify_signature\n");
+    const sha = main.indexOf("\n  verify_checksum\n");
+    const exec = main.indexOf("\n  enroll\n");
     expect(verify).toBeGreaterThan(0);
     expect(sha).toBeGreaterThan(verify);
     expect(exec).toBeGreaterThan(sha);
+    expect(script).toContain("verify-blob");
+    expect(script).toContain("sha256sum -c");
     execFileSync("bash", ["-n"], { input: script });
   });
 

@@ -70,7 +70,7 @@ stream {
 
 ## 6. 添加节点
 
-控制台「集群与节点 → 添加节点」生成一次性安装命令，在**节点服务器**（不是这台控制台服务器）上以 root 执行。命令里的 `--server` 就是 `EDGEWEIR_NODE_API_URL`，`--ca-sha256` 是内部 CA 指纹，节点注册前会校验。
+控制台「集群与节点 → 添加节点」生成一次性安装命令（先 `export EDGEWEIR_TOKEN=...`，再 `curl ... | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- ...`），在**节点服务器**（不是这台控制台服务器）上用有 sudo 权限的账号执行。token 只经环境变量传递，不出现在命令行参数里。命令里的 `--server` 就是 `EDGEWEIR_NODE_API_URL`，`--ca-sha256` 是内部 CA 指纹，节点注册前会校验。节点访问 GitHub 慢时可以配置控制台镜像，见 [docker.md](docker.md#控制台镜像可选)。
 
 ## 7. 升级与备份
 

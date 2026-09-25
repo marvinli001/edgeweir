@@ -65,14 +65,40 @@ docker compose --profile cache up -d       # Valkey：可选缓存
 
 ## 4. 添加节点
 
-控制台「集群与节点 → 添加节点」会生成一条一次性安装命令，在节点服务器上以 root 执行：
+控制台「集群与节点 → 添加节点」会生成一条一次性安装命令，在节点服务器上用有 sudo 权限的账号执行：
 
 ```bash
-curl -fsSL https://cdn-admin.example.com/install.sh | sudo bash -s -- \
-  --server https://cdn-admin.example.com:8443 --token <一次性 token> --ca-sha256 <CA 指纹>
+export EDGEWEIR_TOKEN='<一次性 token>'
+curl -fsSL https://cdn-admin.example.com/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- \
+  --server https://cdn-admin.example.com:8443 --ca-sha256 <CA 指纹>
 ```
 
-安装脚本先校验 cosign 签名和 SHA-256，再安装 OpenResty 和 `edgeweir-node`；节点在本机生成私钥，用 token 换取证书，之后全程 mTLS。控制台不保存任何 SSH 凭据。
+token 只经环境变量传递（`--preserve-env` 让 sudo 保留它），不出现在任何命令行参数里，`ps` 看不到；也可以写进文件用 `--token-file PATH` 传入。安装脚本先校验 cosign 签名（证书身份必须是 edgeweir-node 的 release 工作流、且正是要安装的版本 tag）和 SHA-256，再安装 OpenResty 和 `edgeweir-node`：Debian/Ubuntu 装 .deb，RHEL 系装 .rpm，其余用 tar.gz（脚本自己创建 `edgeweir` 用户和目录）。机器上没有 cosign 时，脚本下载固定版本（v3.1.3）并先核对它的 SHA-256。节点在本机生成私钥，用 token 换取证书，之后全程 mTLS。控制台不保存任何 SSH 凭据。
+
+常用参数：`--version 0.2.0` 指定版本（默认最新），`--format deb|rpm|tar`，`--no-start` 只安装和注册、不启用 systemd 服务（容器里测试用），`--mirror URL` / `--mirror-only` 指定下载源，`--allow-unsigned` 只用于开发（仍校验 SHA-256）。
+
+### 控制台镜像（可选）
+
+节点访问 GitHub 慢时，可以让控制台转发发布文件：把 edgeweir-node 发布页上的文件放进一个目录，挂载进容器并设置 `EDGEWEIR_DOWNLOADS_DIR`，安装脚本会先从 `<控制台>/downloads/edgeweir-node/` 下载，没有的文件再去 GitHub。镜像只是传输通道，签名和 SHA-256 照样在节点上校验。
+
+```text
+downloads/
+  edgeweir-node/
+    latest                      # 内容是版本号，例如 0.2.0
+    v0.2.0/
+      checksums.txt
+      checksums.txt.sigstore.json
+      edgeweir-node_0.2.0_amd64.deb
+      edgeweir-node-0.2.0-1.x86_64.rpm
+      edgeweir-node_0.2.0_linux_amd64.tar.gz
+      ...
+  cosign/
+    v3.1.3/
+      cosign-linux-amd64
+      cosign-linux-arm64
+```
+
+compose.yml 里取消 `volumes` 注释（`./downloads:/srv/edgeweir-downloads:ro`），`.env` 里设置 `EDGEWEIR_DOWNLOADS_DIR=/srv/edgeweir-downloads`。未设置时 `/downloads/*` 一律 404。
 
 ## 5. 反向代理示例
 

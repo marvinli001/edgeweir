@@ -83,7 +83,12 @@ describe("node channel", async () => {
       },
     );
     expect(token.installCommand).toContain(`--ca-sha256 ${ctx.nodeCa.fingerprintSha256}`);
-    expect(token.installCommand).toContain("/install.sh | sudo bash -s --");
+    // The token is exported, then passed through sudo in the environment only.
+    const [exportLine, curlLine] = token.installCommand.split("\n");
+    expect(exportLine).toBe(`export EDGEWEIR_TOKEN='${token.token}'`);
+    expect(curlLine).toContain("/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s --");
+    expect(curlLine).not.toContain(token.token);
+    expect(curlLine).not.toContain("--token");
 
     // Only the hash is stored.
     const rows = await ctx.db.select().from(schema.enrollmentToken);

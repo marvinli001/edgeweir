@@ -74,7 +74,7 @@ sha256sum -c checksums.txt --ignore-missing
 gh attestation verify edgeweir-node_<版本>_linux_amd64.tar.gz --repo edgeweir/edgeweir-node
 ```
 
-第 1、2 步都通过后再安装。一键安装脚本 `install.sh` 在执行任何下载的程序之前会自动完成同样的校验（[ADR-0016](docs/adr/0016-one-line-install.md)）。
+第 1、2 步都通过后再安装。一键安装脚本 `install.sh` 在执行任何下载的程序之前会自动完成同样的校验，而且更严格：证书身份必须精确等于要安装的版本 tag（`...release.yml@refs/tags/v<版本>`）；机器上没有 cosign 时，先下载固定版本的 cosign 并核对脚本里写死的 SHA-256。注册 token 只经 `EDGEWEIR_TOKEN` 环境变量或 `--token-file` 传递，不出现在命令行参数里（[ADR-0016](docs/adr/0016-one-line-install.md)）。
 
 ### 控制面镜像
 
@@ -103,7 +103,7 @@ gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edge
 | 管理操作写审计日志，与变更同事务提交 | 越权或误操作无法追溯 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
 | `/api/auth/*` 只放行控制台界面用到的 better-auth 端点（登录、登出、会话、改密码、两步验证、passkey、API key 的创建/列表/删除），其余一律 404；组织、成员与用户管理只走 Edgeweir 自己的接口；`x-api-key` 在 `/api/auth/*` 上被剥掉，API key 只在 `/api/v1` 生效 | 借 better-auth 插件自带的 HTTP 端点绕过 Edgeweir 的权限检查、审计和配置版本（删除组织、冒充用户、改他人密码）；API key 变成会话后自行签发新 key | [ADR-0005](docs/adr/0005-api-orpc-openapi.md)、[ADR-0007](docs/adr/0007-auth-better-auth-multitenancy.md) |
 | 客户端 IP 取 TCP 对端地址；`X-Forwarded-For` / `X-Real-IP` 只在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用；登录、2FA 等认证接口的限速计数存 PostgreSQL，多实例共享、重启不清零 | 伪造 IP 绕过登录与 2FA 限速，审计日志里的 IP 失真 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
-| `install.sh` 与 agent 自升级都先校验 cosign 签名和 sha256 再执行；控制台镜像转发只是传输通道 | 下载链路或镜像转发被篡改 | [ADR-0016](docs/adr/0016-one-line-install.md)、[ADR-0017](docs/adr/0017-release-supply-chain.md) |
+| `install.sh` 与 agent 自升级都先校验 cosign 签名和 sha256 再执行；控制台镜像转发（`/downloads`，`EDGEWEIR_DOWNLOADS_DIR`）只是传输通道，未镜像的文件返回 404 | 下载链路或镜像转发被篡改 | [ADR-0016](docs/adr/0016-one-line-install.md)、[ADR-0017](docs/adr/0017-release-supply-chain.md) |
 | agent 只执行类型化操作，不提供执行任意命令的接口 | 控制面失陷后在节点上执行任意代码 | [ADR-0014](docs/adr/0014-node-agent-responsibilities.md) |
 | 发布物 keyless 签名、SBOM、SLSA provenance、可复现构建 | 发布的二进制与源码不一致，或被投毒 | [ADR-0017](docs/adr/0017-release-supply-chain.md) |
 

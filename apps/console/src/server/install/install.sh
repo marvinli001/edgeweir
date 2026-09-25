@@ -1,153 +1,378 @@
 #!/usr/bin/env bash
 # Edgeweir node installer, served by the Edgeweir console at /install.sh.
 #
-#   curl -fsSL https://<console>/install.sh | sudo bash -s -- \
-#     --server https://<console>:8443 --token <one-time token> --ca-sha256 <fingerprint>
+#   export EDGEWEIR_TOKEN='<one-time token>'
+#   curl -fsSL https://<console>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- \
+#     --server https://<console>:8443 --ca-sha256 <fingerprint>
+#
+# The token never appears on a command line (it would be visible in the
+# process list): it comes from the EDGEWEIR_TOKEN environment variable or
+# from --token-file PATH, and reaches `edgeweir-node enroll` the same way.
 #
 # What it does, in order:
-#   1. downloads the edgeweir-node release archive, checksums.txt and its
-#      cosign signature bundle (from the console mirror, or GitHub);
-#   2. verifies the cosign keyless signature of checksums.txt against the
-#      edgeweir-node release workflow identity, then the archive's SHA-256;
-#      nothing is executed before both checks pass;
-#   3. installs OpenResty from the official openresty.org repository if needed;
-#   4. installs the agent, its Lua files and the systemd unit;
+#   1. downloads checksums.txt and its cosign signature bundle for the
+#      edgeweir-node version (from the console mirror, then GitHub);
+#   2. verifies the keyless signature of checksums.txt: the certificate must
+#      be the edgeweir-node release workflow at exactly the tag being
+#      installed. Without cosign on the machine, a pinned cosign release is
+#      downloaded and checked against its SHA-256 first;
+#   3. downloads the .deb, .rpm or tar.gz package and verifies its SHA-256
+#      against the signed checksums.txt; nothing is executed before steps 2
+#      and 3 pass;
+#   4. installs OpenResty from the official openresty.org repository if
+#      needed, then the package (deb/rpm create the `edgeweir` user and the
+#      state directories; for the tar.gz this script does it);
 #   5. enrolls the node with the one-time token (the private key is generated
 #      locally and never leaves this machine) and starts the service.
 # It never stores SSH credentials and never phones home.
+#
+# The whole script is a set of functions; `main` runs on the last line, so a
+# download cut short executes nothing.
 set -euo pipefail
 
-CONSOLE_URL="__EDGEWEIR_CONSOLE_URL__"
-VERSION="latest"
-SERVER=""
-TOKEN=""
-CA_SHA256=""
-MIRROR=""
-ALLOW_UNSIGNED="false"
-REPO="edgeweir/edgeweir-node"
-CERT_IDENTITY_REGEXP="^https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/v.*$"
-OIDC_ISSUER="https://token.actions.githubusercontent.com"
+constants() {
+  CONSOLE_URL="__EDGEWEIR_CONSOLE_URL__"
+  REPO="edgeweir/edgeweir-node"
+  OIDC_ISSUER="https://token.actions.githubusercontent.com"
+  STATE_DIR="/var/lib/edgeweir-node"
+  CACHE_DIR="/var/cache/edgeweir-node"
+  LUA_DIR="/usr/share/edgeweir-node/lua"
+  # Pinned cosign for machines without one; SHA-256 values from the official
+  # cosign_checksums.txt of the sigstore/cosign v3.1.3 release.
+  COSIGN_VERSION="3.1.3"
+  COSIGN_SHA256_AMD64="4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71"
+  COSIGN_SHA256_ARM64="c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a"
+  SEMVER_RE='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+}
 
 log() { printf '\033[1;34m[edgeweir]\033[0m %s\n' "$*" >&2; }
-die() { printf '\033[1;31m[edgeweir] error:\033[0m %s\n' "$*" >&2; exit 1; }
+die() {
+  printf '\033[1;31m[edgeweir] error:\033[0m %s\n' "$*" >&2
+  exit 1
+}
 
 usage() {
-  cat >&2 <<USAGE
-Usage: install.sh --server URL --token TOKEN --ca-sha256 HEX [options]
+  cat >&2 <<'USAGE'
+Usage:
+  export EDGEWEIR_TOKEN='<one-time token>'
+  install.sh --server URL --ca-sha256 HEX [options]
 
   --server URL         node channel URL of the console, e.g. https://console.example.com:8443
-  --token TOKEN        one-time enrollment token from the console
   --ca-sha256 HEX      SHA-256 fingerprint of the console's node CA (pinned during enrollment)
-  --version VER        edgeweir-node version to install (default: latest)
-  --mirror URL         base URL to download release files from (default: console mirror, then GitHub)
+  --token-file PATH    read the enrollment token from PATH instead of $EDGEWEIR_TOKEN
+  --version VER        edgeweir-node version to install, e.g. 0.2.0 (default: latest)
+  --format FMT         package to install: auto (default), deb, rpm or tar
+  --mirror URL         edgeweir-node mirror (URL/latest, URL/v<version>/<file>);
+                       default: the console's /downloads/edgeweir-node
+  --mirror-only        never fall back to GitHub
+  --no-start           install and enroll only: do not require, enable or start systemd
   --allow-unsigned     skip the cosign signature check (development only; SHA-256 is still verified)
 USAGE
   exit 2
 }
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --server) SERVER="${2:-}"; shift 2 ;;
-    --token) TOKEN="${2:-}"; shift 2 ;;
-    --ca-sha256) CA_SHA256="${2:-}"; shift 2 ;;
-    --version) VERSION="${2:-}"; shift 2 ;;
-    --mirror) MIRROR="${2:-}"; shift 2 ;;
-    --allow-unsigned) ALLOW_UNSIGNED="true"; shift ;;
-    -h|--help) usage ;;
-    *) die "unknown option: $1" ;;
-  esac
-done
-
-[ -n "$SERVER" ] && [ -n "$TOKEN" ] && [ -n "$CA_SHA256" ] || usage
-[[ "$CA_SHA256" =~ ^[0-9a-f]{64}$ ]] || die "--ca-sha256 must be 64 lowercase hex characters"
-[ "$(id -u)" -eq 0 ] || die "run as root (e.g. via sudo)"
-command -v systemctl >/dev/null || die "systemd is required"
-command -v curl >/dev/null || die "curl is required"
-command -v sha256sum >/dev/null || die "sha256sum is required"
-
-case "$(uname -m)" in
-  x86_64|amd64) ARCH="amd64" ;;
-  aarch64|arm64) ARCH="arm64" ;;
-  *) die "unsupported architecture: $(uname -m)" ;;
-esac
-
-if [ "$VERSION" = "latest" ]; then
-  VERSION="$(curl -fsSL "${CONSOLE_URL}/downloads/edgeweir-node/latest" 2>/dev/null || true)"
-  if [ -z "$VERSION" ]; then
-    VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-      | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n1)"
+parse_args() {
+  VERSION="latest"
+  SERVER=""
+  CA_SHA256=""
+  TOKEN_FILE=""
+  FORMAT="auto"
+  MIRROR=""
+  MIRROR_ONLY="false"
+  NO_START="false"
+  ALLOW_UNSIGNED="false"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --server) SERVER="${2:-}"; shift 2 || usage ;;
+      --ca-sha256) CA_SHA256="${2:-}"; shift 2 || usage ;;
+      --token-file) TOKEN_FILE="${2:-}"; shift 2 || usage ;;
+      --version) VERSION="${2:-}"; shift 2 || usage ;;
+      --format) FORMAT="${2:-}"; shift 2 || usage ;;
+      --mirror) MIRROR="${2:-}"; shift 2 || usage ;;
+      --mirror-only) MIRROR_ONLY="true"; shift ;;
+      --no-start) NO_START="true"; shift ;;
+      --allow-unsigned) ALLOW_UNSIGNED="true"; shift ;;
+      --token | --token=*)
+        die "--token is not accepted (the process list would show it): export EDGEWEIR_TOKEN or use --token-file" ;;
+      -h | --help) usage ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  [ -n "$SERVER" ] && [ -n "$CA_SHA256" ] || usage
+  [[ "$SERVER" =~ ^https://[^[:space:]/]+(/[^[:space:]]*)?$ ]] || die "--server must be an https:// URL"
+  [[ "$CA_SHA256" =~ ^[0-9a-f]{64}$ ]] || die "--ca-sha256 must be 64 lowercase hex characters"
+  case "$FORMAT" in auto | deb | rpm | tar) ;; *) die "--format must be auto, deb, rpm or tar" ;; esac
+  if [ "$VERSION" != "latest" ]; then
+    VERSION="${VERSION#v}"
+    [[ "$VERSION" =~ $SEMVER_RE ]] || die "--version must be a semantic version, e.g. 0.2.0"
   fi
-  [ -n "$VERSION" ] || die "could not determine the latest edgeweir-node version; pass --version"
-fi
-VERSION="${VERSION#v}"
-ARCHIVE="edgeweir-node_${VERSION}_linux_${ARCH}.tar.gz"
+  MIRROR="${MIRROR:-${CONSOLE_URL%/}/downloads/edgeweir-node}"
+  MIRROR="${MIRROR%/}"
+  [[ "$MIRROR" =~ ^https?://[^[:space:]]+$ ]] || die "--mirror must be an http(s) URL"
+}
 
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+# The token is read once and removed from the environment, so no other
+# child process (curl, apt, ...) inherits it.
+read_token() {
+  TOKEN="${EDGEWEIR_TOKEN:-}"
+  unset EDGEWEIR_TOKEN
+  if [ -n "$TOKEN_FILE" ]; then
+    [ -r "$TOKEN_FILE" ] || die "cannot read --token-file $TOKEN_FILE"
+    TOKEN="$(tr -d '[:space:]' <"$TOKEN_FILE")"
+  fi
+  [ -n "$TOKEN" ] || die "no enrollment token: export EDGEWEIR_TOKEN='<token>' and run with sudo --preserve-env=EDGEWEIR_TOKEN, or pass --token-file PATH"
+  [[ "$TOKEN" =~ ^ewt_[A-Za-z0-9_-]+$ ]] || die "the enrollment token is malformed (expected ewt_...)"
+}
 
+check_system() {
+  [ "$(uname -s)" = "Linux" ] || die "edgeweir-node runs on Linux only"
+  [ "$(id -u)" -eq 0 ] || die "run as root (e.g. via sudo)"
+  command -v curl >/dev/null 2>&1 || die "curl is required"
+  command -v sha256sum >/dev/null 2>&1 || die "sha256sum is required"
+  command -v tar >/dev/null 2>&1 || die "tar is required"
+  if [ "$NO_START" != "true" ]; then
+    command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] \
+      || die "systemd is required (use --no-start to only install and enroll)"
+  fi
+  case "$(uname -m)" in
+    x86_64 | amd64) ARCH="amd64"; RPM_ARCH="x86_64"; COSIGN_SHA256="$COSIGN_SHA256_AMD64" ;;
+    aarch64 | arm64) ARCH="arm64"; RPM_ARCH="aarch64"; COSIGN_SHA256="$COSIGN_SHA256_ARM64" ;;
+    *) die "unsupported architecture: $(uname -m)" ;;
+  esac
+  if [ "$FORMAT" = "auto" ]; then
+    if command -v dpkg >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then
+      FORMAT="deb"
+    elif command -v rpm >/dev/null 2>&1 && { command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; }; then
+      FORMAT="rpm"
+    else
+      FORMAT="tar"
+    fi
+  fi
+}
+
+# download URL DEST: fails (non-zero) on HTTP errors, never writes an error page.
+download() {
+  curl -fsSL --retry 3 --connect-timeout 15 -o "$2" "$1"
+}
+
+# fetch NAME: the release file NAME of $VERSION into $WORK, mirror first.
 fetch() {
-  local name="$1" base
-  for base in ${MIRROR:+"$MIRROR"} "${CONSOLE_URL}/downloads/edgeweir-node/v${VERSION}" \
-    "https://github.com/${REPO}/releases/download/v${VERSION}"; do
-    if curl -fsSL --retry 3 -o "${WORK}/${name}" "${base}/${name}"; then
+  local name="$1" url
+  for url in "${MIRROR}/v${VERSION}/${name}" \
+    "https://github.com/${REPO}/releases/download/v${VERSION}/${name}"; do
+    if [ "$MIRROR_ONLY" = "true" ] && [[ "$url" == https://github.com/* ]]; then
+      continue
+    fi
+    if download "$url" "${WORK}/${name}"; then
       return 0
     fi
+    log "not available from ${url%/*}"
   done
   die "failed to download ${name}"
 }
 
-log "downloading edgeweir-node ${VERSION} (${ARCH})"
-fetch "$ARCHIVE"
-fetch "checksums.txt"
+resolve_version() {
+  [ "$VERSION" = "latest" ] || return 0
+  local latest=""
+  latest="$(curl -fsSL --retry 3 --connect-timeout 15 "${MIRROR}/latest" 2>/dev/null || true)"
+  latest="$(printf '%s' "$latest" | tr -d '[:space:]')"
+  latest="${latest#v}"
+  if ! [[ "$latest" =~ $SEMVER_RE ]] && [ "$MIRROR_ONLY" != "true" ]; then
+    local release=""
+    release="$(curl -fsSL --retry 3 --connect-timeout 15 \
+      "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null || true)"
+    latest="$(printf '%s\n' "$release" | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n1)"
+  fi
+  [[ "$latest" =~ $SEMVER_RE ]] || die "could not determine the latest edgeweir-node version; pass --version"
+  VERSION="$latest"
+}
 
-if [ "$ALLOW_UNSIGNED" = "true" ]; then
-  log "WARNING: --allow-unsigned given, skipping the cosign signature check"
-else
-  command -v cosign >/dev/null || die "cosign is required to verify the release signature (https://docs.sigstore.dev/cosign/system_config/installation/)"
+# Uses the machine's cosign, or downloads the pinned release and checks its SHA-256.
+ensure_cosign() {
+  if command -v cosign >/dev/null 2>&1; then
+    COSIGN="$(command -v cosign)"
+    return 0
+  fi
+  local name="cosign-linux-${ARCH}" url ok="false"
+  local mirror_base="${MIRROR%/edgeweir-node}"
+  for url in "${mirror_base}/cosign/v${COSIGN_VERSION}/${name}" \
+    "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/${name}"; do
+    if [ "$MIRROR_ONLY" = "true" ] && [[ "$url" == https://github.com/* ]]; then
+      continue
+    fi
+    if download "$url" "${WORK}/cosign"; then
+      ok="true"
+      break
+    fi
+  done
+  [ "$ok" = "true" ] || die "cosign is not installed and cosign v${COSIGN_VERSION} could not be downloaded"
+  printf '%s  %s\n' "$COSIGN_SHA256" "${WORK}/cosign" | sha256sum -c --status - \
+    || die "SHA-256 verification FAILED for the downloaded cosign v${COSIGN_VERSION}"
+  chmod 0755 "${WORK}/cosign"
+  COSIGN="${WORK}/cosign"
+  log "using cosign v${COSIGN_VERSION} (SHA-256 verified)"
+}
+
+verify_signature() {
+  if [ "$ALLOW_UNSIGNED" = "true" ]; then
+    log "WARNING: --allow-unsigned given, skipping the cosign signature check"
+    return 0
+  fi
   fetch "checksums.txt.sigstore.json"
-  cosign verify-blob \
+  ensure_cosign
+  # Exactly the release workflow of this repository at the tag being installed.
+  "$COSIGN" verify-blob \
     --bundle "${WORK}/checksums.txt.sigstore.json" \
-    --certificate-identity-regexp "$CERT_IDENTITY_REGEXP" \
+    --certificate-identity "https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/v${VERSION}" \
     --certificate-oidc-issuer "$OIDC_ISSUER" \
     "${WORK}/checksums.txt" >/dev/null || die "cosign signature verification FAILED"
-  log "cosign signature verified"
-fi
+  log "cosign signature verified (release workflow, tag v${VERSION})"
+}
 
-( cd "$WORK" && grep " ${ARCHIVE}\$" checksums.txt | sha256sum -c --status - ) \
-  || die "SHA-256 verification FAILED for ${ARCHIVE}"
-log "SHA-256 verified"
+# The package file for this machine, as listed in the signed checksums.txt.
+pick_artifact() {
+  local names count
+  names="$(awk '{ sub(/^\*/, "", $2); print $2 }' "${WORK}/checksums.txt")"
+  case "$FORMAT" in
+    deb) ARTIFACT="$(printf '%s\n' "$names" | grep -E "^edgeweir-node_.*_${ARCH}\.deb$" || true)" ;;
+    rpm) ARTIFACT="$(printf '%s\n' "$names" | grep -E "^edgeweir-node-.*\.${RPM_ARCH}\.rpm$" || true)" ;;
+    tar)
+      ARTIFACT="$(printf '%s\n' "$names" \
+        | grep -Fx "edgeweir-node_${VERSION}_linux_${ARCH}.tar.gz" || true)"
+      ;;
+  esac
+  count="$(printf '%s' "$ARTIFACT" | grep -c . || true)"
+  [ "$count" = "1" ] || die "checksums.txt lists ${count:-0} ${FORMAT} packages for ${ARCH}"
+  [[ "$ARTIFACT" =~ ^[A-Za-z0-9._+~-]+$ ]] || die "unexpected package name: ${ARTIFACT}"
+}
 
-if ! command -v openresty >/dev/null; then
+verify_checksum() {
+  (cd "$WORK" && awk -v f="$ARTIFACT" '{ n = $2; sub(/^\*/, "", n) } n == f' checksums.txt \
+    | sha256sum -c --status -) || die "SHA-256 verification FAILED for ${ARTIFACT}"
+  log "SHA-256 verified: ${ARTIFACT}"
+}
+
+install_openresty() {
+  if command -v openresty >/dev/null 2>&1; then
+    return 0
+  fi
   log "installing OpenResty from openresty.org"
-  if command -v apt-get >/dev/null; then
-    apt-get update -y && apt-get install -y --no-install-recommends wget gnupg ca-certificates lsb-release
-    wget -qO - https://openresty.org/package/pubkey.gpg | gpg --dearmor -o /usr/share/keyrings/openresty.gpg
-    . /etc/os-release
-    echo "deb [signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package/${ID} ${VERSION_CODENAME} $( [ "$ID" = ubuntu ] && echo main || echo openresty )" \
-      > /etc/apt/sources.list.d/openresty.list
-    apt-get update -y && apt-get install -y --no-install-recommends openresty
-  elif command -v dnf >/dev/null || command -v yum >/dev/null; then
-    PM="$(command -v dnf || command -v yum)"
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update -y
+    apt-get install -y --no-install-recommends wget gnupg ca-certificates lsb-release
+    wget -qO - https://openresty.org/package/pubkey.gpg | gpg --dearmor --yes -o /usr/share/keyrings/openresty.gpg
+    local id codename component
+    # shellcheck source=/dev/null
+    id="$(. /etc/os-release && printf '%s' "${ID:-}")"
+    # shellcheck source=/dev/null
+    codename="$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-}")"
+    component="openresty"
+    [ "$id" = "ubuntu" ] && component="main"
+    echo "deb [signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package/${id} ${codename} ${component}" \
+      >/etc/apt/sources.list.d/openresty.list
+    apt-get update -y
+    apt-get install -y --no-install-recommends openresty
+  elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
+    local pm
+    pm="$(command -v dnf || command -v yum)"
     curl -fsSL -o /etc/yum.repos.d/openresty.repo https://openresty.org/package/centos/openresty.repo
-    "$PM" install -y openresty
+    "$pm" install -y openresty
   else
     die "unsupported package manager; install OpenResty manually and re-run"
   fi
-  systemctl disable --now openresty >/dev/null 2>&1 || true
-fi
+}
 
-log "installing edgeweir-node"
-tar -xzf "${WORK}/${ARCHIVE}" -C "$WORK"
-install -m 0755 "${WORK}/edgeweir-node" /usr/bin/edgeweir-node
-mkdir -p /usr/share/edgeweir-node
-rm -rf /usr/share/edgeweir-node/lua && cp -r "${WORK}/lua" /usr/share/edgeweir-node/lua
-install -m 0644 "${WORK}/packaging/systemd/edgeweir-node.service" /etc/systemd/system/edgeweir-node.service
-install -d -m 0700 /var/lib/edgeweir-node
+# The tar.gz has no install scripts: user, directories and unit are set up here,
+# the same way the .deb/.rpm scripts do it.
+install_tarball() {
+  local top="edgeweir-node_${VERSION}_linux_${ARCH}" dir
+  mkdir -p "${WORK}/extract"
+  tar -xzf "${WORK}/${ARTIFACT}" -C "${WORK}/extract"
+  dir="${WORK}/extract/${top}"
+  [ -f "${dir}/edgeweir-node" ] && [ -f "${dir}/systemd/edgeweir-node.service" ] \
+    && [ -d "${dir}/lua/edgeweir" ] || die "unexpected archive layout in ${ARTIFACT}"
+  if ! getent group edgeweir >/dev/null 2>&1; then
+    groupadd --system edgeweir
+  fi
+  if ! getent passwd edgeweir >/dev/null 2>&1; then
+    local nologin
+    nologin="$(command -v nologin 2>/dev/null || echo /bin/false)"
+    useradd --system --gid edgeweir --home-dir "$STATE_DIR" --no-create-home \
+      --shell "$nologin" --comment "Edgeweir edge node" edgeweir
+  fi
+  install -m 0755 "${dir}/edgeweir-node" /usr/bin/edgeweir-node
+  rm -rf "${LUA_DIR}/edgeweir"
+  install -d -m 0755 "${LUA_DIR}/edgeweir"
+  install -m 0644 "${dir}"/lua/edgeweir/*.lua "${LUA_DIR}/edgeweir/"
+  install -D -m 0644 "${dir}/systemd/edgeweir-node.service" /etc/systemd/system/edgeweir-node.service
+  install -d -o edgeweir -g edgeweir -m 0700 "$STATE_DIR"
+  install -d -o edgeweir -g edgeweir -m 0750 "$CACHE_DIR"
+}
 
-log "enrolling with ${SERVER}"
-/usr/bin/edgeweir-node enroll --server "$SERVER" --token "$TOKEN" --ca-sha256 "$CA_SHA256" \
-  --state-dir /var/lib/edgeweir-node
+install_package() {
+  install_openresty
+  log "installing ${ARTIFACT}"
+  case "$FORMAT" in
+    deb)
+      if command -v apt-get >/dev/null 2>&1; then
+        apt-get install -y --no-install-recommends "${WORK}/${ARTIFACT}"
+      else
+        dpkg -i "${WORK}/${ARTIFACT}"
+      fi
+      ;;
+    rpm)
+      if command -v dnf >/dev/null 2>&1; then
+        dnf install -y "${WORK}/${ARTIFACT}"
+      elif command -v yum >/dev/null 2>&1; then
+        yum install -y "${WORK}/${ARTIFACT}"
+      else
+        rpm -Uvh --replacepkgs "${WORK}/${ARTIFACT}"
+      fi
+      ;;
+    tar) install_tarball ;;
+  esac
+  getent passwd edgeweir >/dev/null 2>&1 || die "the package did not create the edgeweir user"
+  [ -d "$STATE_DIR" ] || die "the package did not create ${STATE_DIR}"
+}
 
-systemctl daemon-reload
-systemctl enable --now edgeweir-node
-log "done: edgeweir-node is running (journalctl -u edgeweir-node -f)"
+enroll() {
+  log "enrolling with ${SERVER}"
+  # The token goes through the environment only (edgeweir-node reads EDGEWEIR_TOKEN).
+  EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --server "$SERVER" --ca-sha256 "$CA_SHA256" \
+    --state-dir "$STATE_DIR" || die "enrollment failed"
+}
+
+start_service() {
+  if [ "$NO_START" = "true" ]; then
+    log "done: installed and enrolled; --no-start given, the service was not started"
+    log "start it with: systemctl enable --now edgeweir-node.service"
+    return 0
+  fi
+  systemctl daemon-reload
+  # The agent runs OpenResty itself; the distribution unit would bind the same ports.
+  systemctl disable --now openresty.service >/dev/null 2>&1 || true
+  systemctl enable --now edgeweir-node.service
+  log "done: edgeweir-node is running (journalctl -u edgeweir-node -f)"
+}
+
+main() {
+  constants
+  parse_args "$@"
+  read_token
+  check_system
+  umask 022
+  WORK="$(mktemp -d)"
+  trap 'rm -rf "$WORK"' EXIT
+  resolve_version
+  log "installing edgeweir-node ${VERSION} (${FORMAT}, ${ARCH})"
+  fetch "checksums.txt"
+  verify_signature
+  pick_artifact
+  fetch "$ARTIFACT"
+  verify_checksum
+  install_package
+  enroll
+  start_service
+}
+
+main "$@"
