@@ -56,16 +56,16 @@ docker compose logs console | grep setupToken
 
 浏览器打开 `EDGEWEIR_PUBLIC_URL`，在初始化向导里填入 setup token，创建平台管理员和第一个组织；默认集群会自动创建。没有 token 的初始化请求一律被拒绝（写入审计日志），所以初始化之前控制台暴露在网络上，别人也无法抢先创建管理员。token 用主密钥加密后存在数据库里；更换主密钥后会重新生成。
 
-可选组件：
+`compose.yml` 另有两个 profile，只为后续版本预留容器，控制台目前都不使用（流量统计存在 PostgreSQL 里）：
 
 ```bash
-docker compose --profile analytics up -d   # ClickHouse：原始日志与聚合（后续版本启用）
-docker compose --profile cache up -d       # Valkey：可选缓存
+docker compose --profile analytics up -d   # ClickHouse：后续版本的原始日志与分析
+docker compose --profile cache up -d       # Valkey：预留
 ```
 
 ## 4. 添加节点
 
-控制台「集群与节点 → 添加节点」会生成一条一次性安装命令，在节点服务器上用有 sudo 权限的账号执行：
+平台管理员在后台「集群与节点」为集群生成一条一次性安装命令，在节点服务器上用有 sudo 权限的账号执行：
 
 ```bash
 export EDGEWEIR_TOKEN='<一次性 token>'
