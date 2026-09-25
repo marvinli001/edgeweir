@@ -10,7 +10,7 @@ MVP 分成 6 个里程碑，每个里程碑对应一个 `/goal` 会话（第 8 �
 
 - **文案**：面向用户，简短明确。页面不加副标题；对话框、卡片、表单不加说明段落；字段提示优先用 placeholder；空状态只有标题和操作按钮。只保留与安全相关的一句话（例如"仅显示一次"）。原理和注意事项写进 `docs/`，不写进界面。
 - **加载**：不用骨架屏。路由、请求、提交由顶部进度条（`TopProgress`）表示；首次加载用 `LoadingState`（居中 appica Loader）；刷新保留旧数据；提交按钮内显示 `Spinner` 并禁用，直到整个动作完成（包括随后的跳转）。轮询查询加 `meta: { background: true }`。
-- **视觉与动效**：新页面沿用现有做法：卡片分层阴影；统计卡片用 `SectionCards`（Sparkline、Meter、数值动画）；状态用 BorderBeam 表达（颜色随状态变化）；列表和卡片用 `animate-enter` 依次入场；遵循 `prefers-reduced-motion`。
+- **视觉与动效**：新页面沿用现有做法：卡片分层阴影；列表和卡片用 `animate-enter` 依次入场；遵循 `prefers-reduced-motion`。数据展示参考 Cloudflare 仪表盘，统一用 `src/web/components/analytics/` 的扁平面板：`AnalyticsSection`（时间范围、带数值轴的大图、通到卡片边缘的小图、状态码分布、Top 列表）、`MetricCard`（数值动画 + 与上一时段相比的涨跌）；概览页的资源列表用 `ResourceList`；状态用 `StatusDot`（状态点 + 文字）。指标卡片点开是详情浮窗（`MetricDetailDialog`：按维度拆分的时间图 + 排行列表）。图表只用 `index.css` 里校验过的颜色 token（`--metric`、`--series-*`、`--status-2xx`…`--status-5xx`、`--delta-*`、`--state-*`）。
 - **组件**：shadcn 已有的用 shadcn；shadcn 没有的（颜色选择、评分、倒计时、仪表、迷你图、数字输入、OTP 输入、时间与日期输入、轮播等）用 appica-ui，只能经 `src/web/components/appica/` 封装后使用，新组件要在 `appica-bridge.css` 加对应的 `@source` 和 token 映射。
 - **状态**：每个页面都有加载态、空状态和错误态；深浅色都要检查；375px 宽度下可用。
 - **i18n**：所有字符串走 Paraglide（zh-CN、en）。服务端返回的错误和配置版本原因也要能本地化（见 0.4）。

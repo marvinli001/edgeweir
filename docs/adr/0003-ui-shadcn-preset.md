@@ -48,7 +48,7 @@
    - 顶部 2px 进度条（`TopProgress`）：路由加载、请求、提交期间显示，150ms 内完成的不显示；已有数据的后台轮询（`meta: { background: true }`）不触发。
    - 首次加载：内容区居中显示 appica Loader（`LoadingState`，延迟 200ms 淡入）。刷新时保留旧数据，只有进度条在动。
    - 提交按钮：按钮内显示 `Spinner` 并禁用，直到整个动作（包括随后的跳转）完成。
-9. **动效与层次**：页面内容、统计卡片、表格行用 `animate-enter` 依次入场（行延迟上限 12 × 30ms）；卡片有分层阴影，概览统计区有 GradientGlow 光晕，状态卡片用 BorderBeam（颜色随状态变化），登录与初始化页用 BackgroundPattern。所有动效遵循 `prefers-reduced-motion`。
+9. **动效与层次**：页面内容、统计卡片、表格行用 `animate-enter` 依次入场（行延迟上限 12 × 30ms）；卡片有分层阴影，登录与初始化页用 GradientGlow、BorderBeam 和 BackgroundPattern。数据展示（统计、图表、概览列表）用扁平的细边框面板，见下方 2026-09-25「数据展示重做」更新记录。所有动效遵循 `prefers-reduced-motion`。
 
 ## 备选方案与取舍
 
@@ -103,3 +103,11 @@ Phase 0 范围：
 >   - 不使用 appica 的 ThemeProvider，仍然只有一个 ThemeProvider。appica 的 CopyButton 内部渲染 appica Button，与 shadcn Button 重复，因此不用。
 >   - `apps/console/test/web/ui-rules.test.ts` 校验：业务代码不使用 Skeleton；appica 只能在 `components/appica/` 中导入；不导入 appica 全局样式；bridge 的 `@source` 列表与实际导入的组件一致。
 > - 2026-09-25（MVP M1）：新增 appica OTPField（TOTP 验证码，经 `components/appica/otp-field.tsx`）。它用 appica input 组件的 `input-variants.js` 给输入格加样式，因此 bridge 也扫描这个文件，并在 `.appica-scope` 内为它用到的 token（`border-strong`、`ring-input`、`error-subtle` 等）映射 shadcn token。`ui-rules.test.ts` 相应收紧：已导入 appica 组件的内部依赖目录也必须有 `@source`，且每个 `@source` 路径都必须存在。TOTP 二维码用 uqr 0.1.3（MIT，无依赖）生成模块矩阵，再画成一个 SVG path，不使用 `innerHTML`。新增 shadcn tabs（网站详情页、组织与用户）。页头在 `sm` 以下把页面操作换到第二行，保证 375px 下标题和 [控制台 | 后台] 切换可用。
+> - 2026-09-25（数据展示重做）：维护者要求控制台与后台的数据展示参考 Cloudflare 仪表盘，决策第 9 条随之修改：
+>   - 统计与图表放在 `src/web/components/analytics/` 的扁平面板里（`rounded-xl` 细边框、无阴影和光晕）：标题、数值（TextAnimate 数值动画）、与上一时段相比的涨跌箭头（绿色或红色取决于该指标上升是好是坏），下面是图。大图带右侧数值轴和水平细网格线；小图不画坐标轴，面积通到卡片边缘。折线 1.5px，面积为同色 10% 透明度，十字线提示框先列时间、再列数值。时间范围是统计区上方的一个下拉按钮，写进 URL（`?range=`）；换范围时保留旧图并变淡。
+>   - 图表仍用 shadcn chart（recharts 3.8.0）。颜色是 `index.css` 中的新 token：`--metric`（折线）、`--status-2xx`…`--status-5xx`（状态码）、`--delta-good` / `--delta-bad`（涨跌文字）、`--state-good` / `--state-warn`（节点状态点）、`--star`（星标）。折线与状态码色板用 dataviz 校验脚本在亮色（白底）和暗色（`#171717` 底）下分别校验：亮度区间、CVD 与正常视觉下相邻色差全部通过；亮色下 3xx、4xx 对白底不足 3:1，因此状态码卡片总是同时显示数值和百分比。
+>   - 概览页（控制台首页、平台概览）顶部是 Cloudflare 式的资源列：标题带数量和箭头链接，行之间细分隔线，整行可点。控制台首页：网站（星标在前）、最近访问；平台概览：集群、节点（异常在前）、最近发布。
+>   - 移除 `SectionCards`、`TrafficChart` 和 appica Sparkline、Meter 的封装（不再有调用方），`appica-bridge.css` 同步去掉两条 `@source`。BorderBeam、GradientGlow 只留在登录与初始化页。
+>   - 指标卡片和状态码卡片整张可点，打开 Cloudflare 式的详情浮窗（`detail-dialog.tsx`）：上面是按网站 / 节点（仅管理员）/ 状态码 / 缓存状态拆分的时间图，下面是排行列表（名称、占比条、数值，同时是图的表格视图）。流量类用折线（前 5 项），状态码和缓存状态用堆叠柱（前 5 项 + 灰色「其他」，柱宽按本地时钟取整：1 天 → 1 小时一根）。可拆的维度多于一个时以 Tab 切换；只看一个网站的租户没有可拆维度的指标显示放大的趋势图。浮窗内也有时间范围，与页面共用同一个 `?range=`。
+>   - 拆分序列的颜色是新 token `--series-1`…`--series-5`（dataviz 分类色前 5 位）和 `--series-other`（灰）。在白底和 `#171717` 底下各自校验：相邻 CVD 色差最低 9.1 / 8.4，正常视觉最低 19.6 / 19.3；亮色下 3–5 号对白底不足 3:1，因此图例和排行列表总是显示数值。同一个浮窗里，某一项第一次拿到的颜色在刷新后保持不变。
+

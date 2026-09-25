@@ -76,3 +76,7 @@ Phase 0 范围：
 | ClickHouse | 26.9，镜像 `clickhouse/clickhouse-server:26.9-alpine` | Docker Hub |
 | PostgreSQL | 18.6，镜像 `postgres:18.6-alpine` | Docker Hub |
 | pg-boss | 12.34.0 | npm registry |
+
+> 更新记录：
+> - 2026-09-25（数据展示重做）：lite 模式的查询与图表先落地。`analytics.traffic` 按范围（1h、6h、24h、7d、30d）选桶宽（1 分钟到 6 小时），用 `date_bin` 在 PostgreSQL 里按 Unix 纪元对齐分桶，状态码按首位数字汇总成 2xx–5xx；服务端补齐没有数据的桶，并一次查出紧挨着的上一等长时段，用于涨跌比较。Top 网站、Top 节点按请求数排序。小时 / 天汇总表与分钟明细的保留期清理（决策 3）尚未实现，目前所有范围都直接读分钟明细。
+

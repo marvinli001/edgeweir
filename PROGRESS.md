@@ -65,6 +65,15 @@ MVP M1 新增（2026-09-25）：
 24. **调研原始资料**：goedge.rip 文档抓取等第三方内容只保存在本机 `~/Developer/edgeweir-research/`，不进仓库。
 25. **品牌**：`edgeweir.com`、`edgeweir.dev` 域名和 GitHub org 需要维护者自己注册；README 已加读音说明（EDGE-weer）。
 
+数据展示重做新增（2026-09-25，见文末「数据展示重做」）：
+
+26. **星标与最近访问的存放**：星标存服务端（`site_star` 表，按用户，跨设备一致）；最近访问只存当前浏览器的 localStorage（按用户，最多 5 条，存储不可用时为空）。
+    **默认**如此；需要跨设备同步最近访问时再入库。
+27. **统计时间范围**：过去 1 小时 / 6 小时 / 24 小时 / 7 天 / 30 天，默认 24 小时；每点宽度 1 分钟 / 5 分钟 / 10 分钟 / 1 小时 / 6 小时（60–168 个点）。窗口以当前（未满）的时间桶结尾，涨跌与紧挨着的上一等长时段比较，显示相对变化。
+    **默认**如此。
+28. **`overview.get` 去掉 `traffic` 字段**：首页图表改用 `analytics.traffic`，概览接口不再每 10 秒查一遍流量（1.0 之前的不兼容变更，ADR-0005 更新记录）。
+    **默认**：不保留旧字段。
+
 ## 版本核实记录（2026-09-25，来源：npm registry / proxy.golang.org / Docker Hub / nodejs.org / GitHub Releases）
 
 | 组件 | BOOTSTRAP 快照 | 核实后使用 | 备注 |
@@ -232,3 +241,30 @@ MVP M1 新增（2026-09-25）：
 | 5 | 界面规范 | Playwright 截图（浅色/深色、1280/375）；`ui-rules.test.ts` | 无副标题与说明段落、无骨架屏、appica 只经 `components/appica`；375px 下页头操作换行 |
 
 说明：Claude 桌面应用的内置浏览器会拦截 `GET /api/auth/*`（Chromium/Playwright 正常），因此界面检查用 Playwright 截图完成，不影响产品。
+
+## 数据展示重做（参考 Cloudflare 仪表盘，2026-09-25）
+
+维护者要求重做控制台与后台的数据展示和图表，控制台首页参考 Cloudflare 账户首页。决策见 ADR-0003、0005、0009 的更新记录和上面的待决策 26–28。M5「统计」的分钟级部分（请求数、流量、带宽、命中率、状态码）随之提前完成；Top URL、Top IP 需要改 proto，仍在 M5。
+
+- [x] API：`analytics.traffic`（范围 + 可选网站；分桶序列补零、本期与上一期合计、带宽峰值、状态码按 2xx–5xx 汇总）、`analytics.topSites`、`analytics.topNodes`（仅管理员）；`sites.starred`、`sites.setStarred`；数据范围与网站一致（租户只看本组织，平台管理员看全部）
+- [x] 数据：迁移 `0002_site_star.sql`；lite 统计直接按 `date_bin` 聚合分钟明细
+- [x] 控制台首页：网站列（星标在前）、最近访问列；统计区（时间范围、刷新、请求总数与数据传输两张带数值轴的大图，缓存命中率、带宽峰值、4xx/5xx 占比四张小图，状态码分布，流量最高的网站）
+- [x] 网站详情新增「统计」Tab；网站列表和详情页可加星标
+- [x] 平台概览：集群、节点（异常在前）、最近发布三列 + 全平台统计（另有流量最高的节点）；集群页摘要改为数值条，节点状态改为状态点 + 文字
+- [x] 指标详情浮窗（参考 Cloudflare 点开卡片的浮窗）：六张指标卡片和状态码卡片可点；按网站 / 节点（仅管理员）/ 状态码 / 缓存状态拆分的时间图 + 排行列表，维度多于一个时用 Tab 切换，浮窗内可换时间范围；API `analytics.breakdown`。顺带修正时间范围菜单选中后不关闭（Base UI 单选项默认不关，菜单的遮罩会挡住页面点击）
+- [x] 视觉：扁平面板、1.5px 折线 + 10% 面积、十字线提示框、涨跌箭头（好坏按指标方向着色）；图表色板经 dataviz 校验（亮/暗两套）；换时间范围时保留旧图并变淡，不闪烁；移除 SectionCards、TrafficChart 以及 appica Sparkline、Meter 的封装
+- [x] 测试：`test/server/analytics.test.ts`（分桶、补零、状态码分类、上一期、范围窗口、排名、租户范围、星标按用户与范围）；租户调用 `analytics.topNodes` 返回 403；Playwright `e2e/analytics.spec.ts`；`scripts/e2e.sh` 等待节点上报的分钟统计出现在 API 中
+
+已知限制：
+
+- lite 模式的小时/天汇总与分钟明细清理（ADR-0009 决策 3）尚未实现；「过去 30 天」直接读 60 天的分钟行（含上一期），数据量大时需要补汇总任务。
+- 最近访问不跨设备（待决策 26）。
+
+验证记录（2026-09-25，本机实跑，`feat/analytics-redesign` 工作树）：
+
+| # | 验收项 | 命令 | 结果 |
+| --- | --- | --- | --- |
+| 1 | 控制面 | `pnpm lint && pnpm typecheck && pnpm test && pnpm build` | 全部 exit 0；测试 72 个（console 48，其中 analytics 6 个，含 `analytics.breakdown` 的网站 / 节点 / 状态码拆分、租户调用节点维度返回 403） |
+| 2 | 端到端 | `bash scripts/e2e.sh --up --down`（独立 compose 项目与端口，未动主工作区的 e2e 栈） | 输出 `E2E OK`；节点上报的分钟统计经 `/api/v1/analytics/traffic` 读到 demo.test 的 3 个请求、1 次命中、3 个 2xx；Playwright 冒烟、M1、analytics 三个用例通过，无 `pageerror`；analytics 用例覆盖指标详情浮窗（节点 / 状态码 Tab、缓存状态、平台概览按网站和节点拆分） |
+| 3 | 界面 | Playwright 截图（浅色/深色 1280、浅色 375），开发库灌入 8 个网站、4 个节点、约 9 万行分钟统计 | 控制台首页、网站统计 Tab、平台概览、集群与节点、网站列表均无 `pageerror`；375px 下列表与卡片单列/双列排布，无横向滚动 |
+| 4 | 指标详情浮窗 | Playwright 截图（深色/浅色 1440、浅色 375），管理员与租户成员各一套 | 六张指标卡片和状态码卡片都能打开，点卡片标题区或图都可以；管理员有网站 / 节点 / 状态码 Tab，租户没有节点 Tab，只看一个网站的租户在数据传输、带宽上看到放大的趋势图；柱状图按本地整点分组，时间轴刻度落在整点和日期上；无 `pageerror` |
