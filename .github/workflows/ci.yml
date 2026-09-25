@@ -72,6 +72,21 @@ jobs:
         with:
           repository: edgeweir/edgeweir-node
           path: edgeweir-node
+          fetch-depth: 0
+      # scripts/e2e.sh builds goreleaser snapshot packages of the node for the
+      # install.sh step (same tool versions as the node repository's CI).
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: edgeweir-node/go.mod
+          cache-dependency-path: edgeweir-node/go.sum
+      - uses: anchore/sbom-action/download-syft@v0
+        with:
+          syft-version: v1.52.0
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          install-only: true
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
