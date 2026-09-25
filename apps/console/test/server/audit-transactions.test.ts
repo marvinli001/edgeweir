@@ -1,0 +1,143 @@
+import { schema } from "@edgeweir/db";
+import { eq } from "drizzle-orm";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { createApp } from "../../src/server/app";
+import { ensureSetupToken, runSetup } from "../../src/server/services/setup";
+import {
+  type ApiClient,
+  createTestContext,
+  PASSWORD,
+  rpcClient,
+  rpcError,
+  signIn,
+} from "./helpers";
+
+/**
+ * Audit entries commit with the change they describe: when writing the entry
+ * fails (a trigger makes it fail on demand), the change is rolled back too.
+ */
+describe("audit entries share the business transaction", async () => {
+  const { ctx, client } = await createTestContext();
+  const app = createApp(ctx);
+  const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
+  let admin: ApiClient;
+  let organizationId: string;
+  let clusterId: string;
+
+  const failAuditFor = (action: string) =>
+    client.query("insert into test_fail_audit (action) values ($1)", [action]);
+  const count = async (table: string, where = "true") =>
+    (await client.query<{ n: number }>(`select count(*)::int as n from "${table}" where ${where}`))
+      .rows[0]?.n;
+
+  beforeAll(async () => {
+    await client.exec(`
+      create table test_fail_audit (action text primary key);
+      create function test_fail_audit() returns trigger language plpgsql as $$
+      begin
+        if exists (select 1 from test_fail_audit where action = new.action) then
+          raise exception 'audit write failed (test): %', new.action;
+        end if;
+        return new;
+      end $$;
+      create trigger test_fail_audit before insert on audit_log
+        for each row execute function test_fail_audit();
+    `);
+  });
+  afterEach(() => client.query("delete from test_fail_audit"));
+  afterAll(() => client.close());
+
+  it("rolls back the first-run setup and keeps the token usable", async () => {
+    const setupToken = await ensureSetupToken(ctx);
+    if (!setupToken) throw new Error("no setup token");
+    const input = {
+      setupToken,
+      name: "Platform Admin",
+      email: "admin@example.com",
+      password: PASSWORD,
+      organizationName: "Default",
+    };
+    const meta = { ip: "127.0.0.1", userAgent: "vitest" };
+    await failAuditFor("system.setup");
+    await expect(runSetup(ctx, input, meta)).rejects.toThrow(/insert into "audit_log"/);
+    expect(await count("user")).toBe(0);
+    expect(await count("organization")).toBe(0);
+    expect(await count("cluster")).toBe(0);
+    expect(await ensureSetupToken(ctx)).toBe(setupToken);
+
+    await client.query("delete from test_fail_audit");
+    ({ organizationId } = await runSetup(ctx, input, meta));
+    admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
+    clusterId = (await admin.clusters.list())[0]?.id ?? "";
+  });
+
+  it("creates no account when its audit entry or membership cannot be written", async () => {
+    const user = {
+      name: "Nobody",
+      email: "nobody@example.com",
+      password: PASSWORD,
+      organizationId,
+      role: "member" as const,
+    };
+    await failAuditFor("user.create");
+    await rpcError(admin.users.create(user));
+    expect(await count("user", "email = 'nobody@example.com'")).toBe(0);
+
+    await client.query("delete from test_fail_audit");
+    await failAuditFor("member.add");
+    await rpcError(admin.users.create(user));
+    expect(await count("user", "email = 'nobody@example.com'")).toBe(0);
+    // The user.create entry was rolled back with the membership.
+    expect(await count("audit_log", "action = 'user.create'")).toBe(0);
+    expect(await count("account")).toBe(1); // the administrator's only
+  });
+
+  it("stores no enrollment token without its audit entry", async () => {
+    await failAuditFor("enrollment_token.create");
+    await rpcError(admin.clusters.createEnrollmentToken({ clusterId }));
+    expect(await count("enrollment_token")).toBe(0);
+  });
+
+  it("keeps an invitation pending when its cancellation cannot be audited", async () => {
+    const { invitation } = await admin.members.invite({
+      email: "guest@example.com",
+      role: "member",
+    });
+    await failAuditFor("invitation.cancel");
+    await rpcError(admin.members.cancelInvitation({ id: invitation.id }));
+    const [row] = await ctx.db
+      .select()
+      .from(schema.invitation)
+      .where(eq(schema.invitation.id, invitation.id));
+    expect(row?.status).toBe("pending");
+  });
+
+  it("creates no account from an invitation when the acceptance cannot be audited", async () => {
+    const { invitation } = await admin.members.invite({ email: "new@example.com", role: "member" });
+    const anonymous = rpcClient(app, origin);
+    await failAuditFor("invitation.accept");
+    await rpcError(
+      anonymous.invitations.accept({ id: invitation.id, name: "New", password: PASSWORD }),
+    );
+    expect(await count("user", "email = 'new@example.com'")).toBe(0);
+    const info = await anonymous.invitations.get({ id: invitation.id });
+    expect(info.userExists).toBe(false);
+
+    await client.query("delete from test_fail_audit");
+    await anonymous.invitations.accept({ id: invitation.id, name: "New", password: PASSWORD });
+    await signIn(app, origin, "new@example.com");
+  });
+
+  it("leaves the landing page settings unchanged", async () => {
+    const before = await admin.landing.get();
+    await failAuditFor("system.landing_update");
+    await rpcError(
+      admin.landing.update({ ...before.settings, template: "horizon", brandName: "Changed" }),
+    );
+    const [row] = await ctx.db
+      .select()
+      .from(schema.systemSetting)
+      .where(eq(schema.systemSetting.key, "landing"));
+    expect(row).toBeUndefined();
+  });
+});

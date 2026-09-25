@@ -265,25 +265,27 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       } catch (error) {
         throw new ConnectError(`rejected CSR: ${(error as Error).message}`, Code.InvalidArgument);
       }
-      await app.db
-        .update(schema.node)
-        .set({
-          certSerial: issued.serialNumber,
-          certFingerprint: issued.fingerprintSha256,
-          certNotAfter: issued.notAfter,
-        })
-        .where(eq(schema.node.id, node.id));
-      await recordAudit(
-        app.db,
-        { type: "node", id: node.id, name: node.name },
-        {
-          action: "node.certificate_renew",
-          targetType: "node",
-          targetId: node.id,
-          targetName: node.name,
-          metadata: { certSerial: issued.serialNumber },
-        },
-      );
+      await app.db.transaction(async (tx) => {
+        await tx
+          .update(schema.node)
+          .set({
+            certSerial: issued.serialNumber,
+            certFingerprint: issued.fingerprintSha256,
+            certNotAfter: issued.notAfter,
+          })
+          .where(eq(schema.node.id, node.id));
+        await recordAudit(
+          tx,
+          { type: "node", id: node.id, name: node.name },
+          {
+            action: "node.certificate_renew",
+            targetType: "node",
+            targetId: node.id,
+            targetName: node.name,
+            metadata: { certSerial: issued.serialNumber },
+          },
+        );
+      });
       return {
         certificatePem: issued.certificatePem,
         caCertificatePem: app.nodeCa.certificatePem,

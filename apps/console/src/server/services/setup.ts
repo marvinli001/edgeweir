@@ -144,35 +144,49 @@ export async function runSetup(
       body: { email: input.email, password: input.password, name: input.name, role: "admin" },
     });
     const userId = created.user.id;
-    const org = await ctx.auth.api.createOrganization({
-      body: { name: input.organizationName, slug: slugify(input.organizationName), userId },
-    });
-    if (!org) throw new Error("organization creation failed");
-    const actor = { type: "user" as const, id: userId, name: input.name, ...meta };
-    await ctx.db.transaction(async (tx) => {
-      const [clusters] = await tx.select({ n: count() }).from(schema.cluster);
-      if ((clusters?.n ?? 0) === 0) {
-        await createClusterTx(tx, { name: "default", description: "Default cluster" }, actor);
-      }
-      await tx
-        .insert(schema.organizationSettings)
-        .values({ organizationId: org.id })
-        .onConflictDoNothing();
-      const used: SetupTokenState = { usedAt: new Date().toISOString(), usedBy: userId };
-      await tx
-        .update(schema.systemSetting)
-        .set({ value: used as Record<string, unknown> })
-        .where(eq(schema.systemSetting.key, SETUP_TOKEN_KEY));
-      await recordAudit(tx, actor, {
-        action: "system.setup",
-        organizationId: org.id,
-        targetType: "user",
-        targetId: userId,
-        targetName: input.name,
-        metadata: { email: input.email, organization: org.name },
+    let organizationId: string | undefined;
+    try {
+      // better-auth writes the administrator and the organization in its own
+      // statements; everything else (cluster, spent token, audit entry)
+      // commits in one transaction. If any step fails, both are deleted again
+      // so the console stays uninitialized and the token stays usable.
+      const org = await ctx.auth.api.createOrganization({
+        body: { name: input.organizationName, slug: slugify(input.organizationName), userId },
       });
-    });
-    return { userId, organizationId: org.id };
+      if (!org) throw new Error("organization creation failed");
+      organizationId = org.id;
+      const actor = { type: "user" as const, id: userId, name: input.name, ...meta };
+      await ctx.db.transaction(async (tx) => {
+        const [clusters] = await tx.select({ n: count() }).from(schema.cluster);
+        if ((clusters?.n ?? 0) === 0) {
+          await createClusterTx(tx, { name: "default", description: "Default cluster" }, actor);
+        }
+        await tx
+          .insert(schema.organizationSettings)
+          .values({ organizationId: org.id })
+          .onConflictDoNothing();
+        const used: SetupTokenState = { usedAt: new Date().toISOString(), usedBy: userId };
+        await tx
+          .update(schema.systemSetting)
+          .set({ value: used as Record<string, unknown> })
+          .where(eq(schema.systemSetting.key, SETUP_TOKEN_KEY));
+        await recordAudit(tx, actor, {
+          action: "system.setup",
+          organizationId: org.id,
+          targetType: "user",
+          targetId: userId,
+          targetName: input.name,
+          metadata: { email: input.email, organization: org.name },
+        });
+      });
+      return { userId, organizationId: org.id };
+    } catch (error) {
+      if (organizationId) {
+        await ctx.db.delete(schema.organization).where(eq(schema.organization.id, organizationId));
+      }
+      await ctx.db.delete(schema.user).where(eq(schema.user.id, userId));
+      throw error;
+    }
   } finally {
     await client.query("select pg_advisory_unlock(hashtext('edgeweir.setup'))").catch(() => {});
     client.release();

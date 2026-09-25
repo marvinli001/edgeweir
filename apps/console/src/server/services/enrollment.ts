@@ -66,30 +66,33 @@ export async function createEnrollmentToken(
 
   const token = generateToken();
   const expiresAt = new Date(Date.now() + input.ttlMinutes * 60_000);
-  const [row] = await db
-    .insert(schema.enrollmentToken)
-    .values({
-      clusterId: input.clusterId,
-      nodeGroupId,
-      tokenHash: hashToken(token),
-      tokenPrefix: token.slice(0, TOKEN_PREFIX.length + 6),
-      nodeName: input.nodeName,
-      expiresAt,
-      createdByUserId: ctx.actor.type === "user" ? ctx.actor.id : null,
-    })
-    .returning();
-  if (!row) throw new Error("token insert failed");
-  await recordAudit(db, ctx.actor, {
-    action: "enrollment_token.create",
-    targetType: "cluster",
-    targetId: input.clusterId,
-    targetName: clusterRow.name,
-    metadata: {
-      tokenId: row.id,
-      expiresAt: expiresAt.toISOString(),
-      nodeName: input.nodeName,
-      nodeGroupId,
-    },
+  const row = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(schema.enrollmentToken)
+      .values({
+        clusterId: input.clusterId,
+        nodeGroupId,
+        tokenHash: hashToken(token),
+        tokenPrefix: token.slice(0, TOKEN_PREFIX.length + 6),
+        nodeName: input.nodeName,
+        expiresAt,
+        createdByUserId: ctx.actor.type === "user" ? ctx.actor.id : null,
+      })
+      .returning();
+    if (!inserted) throw new Error("token insert failed");
+    await recordAudit(tx, ctx.actor, {
+      action: "enrollment_token.create",
+      targetType: "cluster",
+      targetId: input.clusterId,
+      targetName: clusterRow.name,
+      metadata: {
+        tokenId: inserted.id,
+        expiresAt: expiresAt.toISOString(),
+        nodeName: input.nodeName,
+        nodeGroupId,
+      },
+    });
+    return inserted;
   });
   return {
     tokenId: row.id,

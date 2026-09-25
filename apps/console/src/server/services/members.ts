@@ -129,42 +129,49 @@ export async function addMember(
   input: { organizationId: string; userId: string; role: OrgRole },
   ctx: ManagerContext,
 ): Promise<Member> {
-  return db.transaction(async (tx) => {
-    const org = await findOrganization(tx, input.organizationId);
-    assertMayGrant(ctx, input.role);
-    const [user] = await tx.select().from(schema.user).where(eq(schema.user.id, input.userId));
-    if (!user) fail("USER_NOT_FOUND", "user not found");
-    const [existing] = await tx
-      .select({ id: schema.member.id })
-      .from(schema.member)
-      .where(
-        and(
-          eq(schema.member.organizationId, input.organizationId),
-          eq(schema.member.userId, input.userId),
-        ),
-      );
-    if (existing) fail("ALREADY_MEMBER", `already a member: ${user.email}`, { email: user.email });
-    const id = newId();
-    await tx.insert(schema.member).values({
-      id,
-      organizationId: input.organizationId,
-      userId: input.userId,
-      role: input.role,
-      createdAt: new Date(),
-    });
-    await recordAudit(tx, ctx.actor, {
-      action: "member.add",
-      organizationId: org.id,
-      targetType: "user",
-      targetId: user.id,
-      targetName: user.name,
-      metadata: { organization: org.name, role: input.role, email: user.email },
-    });
-    const [row] = await memberRows(tx, input.organizationId, id);
-    const [dto] = toMemberDtos(row ? [row] : []);
-    if (!dto) throw new Error("member not readable");
-    return dto;
+  return db.transaction((tx) => addMemberTx(tx, input, ctx));
+}
+
+/** addMember inside the caller's transaction (membership and audit entry commit together). */
+export async function addMemberTx(
+  tx: Executor,
+  input: { organizationId: string; userId: string; role: OrgRole },
+  ctx: ManagerContext,
+): Promise<Member> {
+  const org = await findOrganization(tx, input.organizationId);
+  assertMayGrant(ctx, input.role);
+  const [user] = await tx.select().from(schema.user).where(eq(schema.user.id, input.userId));
+  if (!user) fail("USER_NOT_FOUND", "user not found");
+  const [existing] = await tx
+    .select({ id: schema.member.id })
+    .from(schema.member)
+    .where(
+      and(
+        eq(schema.member.organizationId, input.organizationId),
+        eq(schema.member.userId, input.userId),
+      ),
+    );
+  if (existing) fail("ALREADY_MEMBER", `already a member: ${user.email}`, { email: user.email });
+  const id = newId();
+  await tx.insert(schema.member).values({
+    id,
+    organizationId: input.organizationId,
+    userId: input.userId,
+    role: input.role,
+    createdAt: new Date(),
   });
+  await recordAudit(tx, ctx.actor, {
+    action: "member.add",
+    organizationId: org.id,
+    targetType: "user",
+    targetId: user.id,
+    targetName: user.name,
+    metadata: { organization: org.name, role: input.role, email: user.email },
+  });
+  const [row] = await memberRows(tx, input.organizationId, id);
+  const [dto] = toMemberDtos(row ? [row] : []);
+  if (!dto) throw new Error("member not readable");
+  return dto;
 }
 
 export async function updateMemberRole(
@@ -299,24 +306,26 @@ export async function cancelInvitation(
   input: { organizationId: string; id: string },
   actor: Actor,
 ): Promise<void> {
-  const [row] = await db
-    .update(schema.invitation)
-    .set({ status: "canceled" })
-    .where(
-      and(
-        eq(schema.invitation.id, input.id),
-        eq(schema.invitation.organizationId, input.organizationId),
-        eq(schema.invitation.status, "pending"),
-      ),
-    )
-    .returning();
-  if (!row) fail("INVITATION_NOT_FOUND", "invitation not found");
-  await recordAudit(db, actor, {
-    action: "invitation.cancel",
-    organizationId: input.organizationId,
-    targetType: "invitation",
-    targetId: row.id,
-    targetName: row.email,
+  await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(schema.invitation)
+      .set({ status: "canceled" })
+      .where(
+        and(
+          eq(schema.invitation.id, input.id),
+          eq(schema.invitation.organizationId, input.organizationId),
+          eq(schema.invitation.status, "pending"),
+        ),
+      )
+      .returning();
+    if (!row) fail("INVITATION_NOT_FOUND", "invitation not found");
+    await recordAudit(tx, actor, {
+      action: "invitation.cancel",
+      organizationId: input.organizationId,
+      targetType: "invitation",
+      targetId: row.id,
+      targetName: row.email,
+    });
   });
 }
 

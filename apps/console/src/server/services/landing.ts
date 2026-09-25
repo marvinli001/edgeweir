@@ -4,7 +4,7 @@ import {
   type LandingStats,
   landingSettings,
 } from "@edgeweir/contract";
-import { schema } from "@edgeweir/db";
+import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, eq, gt, sql } from "drizzle-orm";
 import { type Actor, recordAudit } from "./audit";
 import { ONLINE_WINDOW_SECONDS } from "./nodes";
@@ -39,27 +39,29 @@ export async function getLandingSettings(db: Executor): Promise<LandingSettings>
 }
 
 export async function updateLandingSettings(
-  db: Executor,
+  db: Database,
   input: LandingSettings,
   actor: Actor,
 ): Promise<LandingSettings> {
-  const before = await getLandingSettings(db);
-  const value = input as unknown as Record<string, unknown>;
-  await db
-    .insert(schema.systemSetting)
-    .values({ key: LANDING_KEY, value })
-    .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value } });
-  cache.delete(db);
-  const changed = (Object.keys(input) as (keyof LandingSettings)[]).filter(
-    (key) => input[key] !== before[key],
-  );
-  await recordAudit(db, actor, {
-    action: "system.landing_update",
-    targetType: "system_setting",
-    targetId: LANDING_KEY,
-    targetName: input.brandName,
-    metadata: { template: input.template, changed },
+  await db.transaction(async (tx) => {
+    const before = await getLandingSettings(tx);
+    const value = input as unknown as Record<string, unknown>;
+    await tx
+      .insert(schema.systemSetting)
+      .values({ key: LANDING_KEY, value })
+      .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value } });
+    const changed = (Object.keys(input) as (keyof LandingSettings)[]).filter(
+      (key) => input[key] !== before[key],
+    );
+    await recordAudit(tx, actor, {
+      action: "system.landing_update",
+      targetType: "system_setting",
+      targetId: LANDING_KEY,
+      targetName: input.brandName,
+      metadata: { template: input.template, changed },
+    });
   });
+  cache.delete(db);
   return getLandingSettings(db);
 }
 

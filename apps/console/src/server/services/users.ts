@@ -4,7 +4,7 @@ import { asc, eq, ilike, inArray, or } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import { addMember, parseRole } from "./members";
+import { addMemberTx, parseRole } from "./members";
 import type { Executor } from "./revisions";
 
 type UserRow = typeof schema.user.$inferSelect;
@@ -112,21 +112,41 @@ export async function createUser(
       role: input.isAdmin ? "admin" : "user",
     },
   });
-  await recordAudit(ctx.db, actor, {
-    action: "user.create",
-    targetType: "user",
-    targetId: created.user.id,
-    targetName: input.name,
-    metadata: { email: input.email, isAdmin: input.isAdmin },
+  const userId = created.user.id;
+  const organizationId = input.organizationId;
+  await withCreatedUser(ctx.db, userId, async (tx) => {
+    await recordAudit(tx, actor, {
+      action: "user.create",
+      targetType: "user",
+      targetId: userId,
+      targetName: input.name,
+      metadata: { email: input.email, isAdmin: input.isAdmin },
+    });
+    if (organizationId) {
+      await addMemberTx(tx, { organizationId, userId, role: input.role }, { actor, role: "owner" });
+    }
   });
-  if (input.organizationId) {
-    await addMember(
-      ctx.db,
-      { organizationId: input.organizationId, userId: created.user.id, role: input.role },
-      { actor, role: "owner" },
-    );
+  return getUser(ctx.db, userId);
+}
+
+/**
+ * better-auth creates accounts in its own statements, outside our
+ * transaction. The rest of the change (audit entry, membership, ...) runs in
+ * one transaction right after; if it fails, the account is deleted again
+ * (sessions, credentials and memberships cascade), so no account exists
+ * without its audit entry.
+ */
+export async function withCreatedUser<T>(
+  db: Database,
+  userId: string,
+  rest: (tx: Executor) => Promise<T>,
+): Promise<T> {
+  try {
+    return await db.transaction(rest);
+  } catch (error) {
+    await db.delete(schema.user).where(eq(schema.user.id, userId));
+    throw error;
   }
-  return getUser(ctx.db, created.user.id);
 }
 
 export async function setUserAdmin(

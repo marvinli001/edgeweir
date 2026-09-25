@@ -8,6 +8,7 @@ import { type Actor, recordAudit } from "./audit";
 import { closeInvitation, findOpenInvitation, newId, parseRole } from "./members";
 import { organizationSettings } from "./organizations";
 import type { Executor } from "./revisions";
+import { withCreatedUser } from "./users";
 
 export interface Membership {
   id: string;
@@ -137,6 +138,7 @@ export async function acceptInvitation(
   const [existing] = await ctx.db.select().from(schema.user).where(eq(schema.user.email, email));
   let userId: string;
   let name: string;
+  let createdUser = false;
   if (existing) {
     if (!session || session.userId !== existing.id) {
       fail("INVITATION_EMAIL_MISMATCH", `sign in as ${email} to accept this invitation`, {
@@ -155,10 +157,11 @@ export async function acceptInvitation(
     });
     userId = created.user.id;
     name = input.name;
+    createdUser = true;
   }
   const actor: Actor = { type: "user", id: userId, name, ...meta };
   const organizationId = row.invitation.organizationId;
-  await ctx.db.transaction(async (tx) => {
+  const join = async (tx: Executor) => {
     const [member] = await tx
       .select({ id: schema.member.id })
       .from(schema.member)
@@ -183,6 +186,10 @@ export async function acceptInvitation(
       targetName: row.organizationName,
       metadata: { invitationId: row.invitation.id, email, role: row.invitation.role },
     });
-  });
+  };
+  // A new account comes from better-auth outside this transaction; it is
+  // removed again if the membership or its audit entry cannot be written.
+  if (createdUser) await withCreatedUser(ctx.db, userId, join);
+  else await ctx.db.transaction(join);
   return { userId, organizationId };
 }
