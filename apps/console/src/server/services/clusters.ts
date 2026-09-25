@@ -1,4 +1,4 @@
-import type { Cluster } from "@edgeweir/contract";
+import type { Cluster, Revision } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, eq, gt, ne, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
@@ -8,6 +8,7 @@ import {
   type Executor,
   latestRevision,
   publishRevision,
+  rollbackToRevision,
   type Tx,
   toRevisionDto,
 } from "./revisions";
@@ -159,6 +160,41 @@ export async function deleteCluster(db: Database, id: string, actor: Actor): Pro
       targetName: row.name,
       metadata: { name: row.name },
     });
+  });
+}
+
+/**
+ * Publishes the content of an older revision as the cluster's next revision
+ * and audits it in the same transaction (nothing is written when the
+ * revision does not exist).
+ */
+export async function rollbackCluster(
+  db: Database,
+  input: { id: string; revision: number },
+  actor: Actor,
+): Promise<Revision> {
+  return db.transaction(async (tx) => {
+    const cluster = await findCluster(tx, input.id);
+    const result = await rollbackToRevision(tx, {
+      clusterId: cluster.id,
+      revision: input.revision,
+      userId: actor.type === "user" || actor.type === "api_key" ? actor.id : null,
+    });
+    if (!result) fail("REVISION_NOT_FOUND", "revision not found");
+    await recordAudit(tx, actor, {
+      action: "cluster.rollback",
+      targetType: "cluster",
+      targetId: cluster.id,
+      targetName: cluster.name,
+      metadata: {
+        toRevision: input.revision,
+        revision: result.row.revision,
+        contentHash: result.row.contentHash,
+        // false: the target's content is already the latest revision.
+        created: result.created,
+      },
+    });
+    return toRevisionDto(result.row);
   });
 }
 

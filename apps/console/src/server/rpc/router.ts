@@ -17,6 +17,7 @@ import {
   deleteCluster,
   getCluster,
   listClusters,
+  rollbackCluster,
   updateCluster,
 } from "../services/clusters";
 import { createEnrollmentToken } from "../services/enrollment";
@@ -51,7 +52,7 @@ import {
 } from "../services/organizations";
 import { siteOriginHealth } from "../services/origin-health";
 import { createRegion, deleteRegion, listRegions, updateRegion } from "../services/regions";
-import { rollbackToRevision, toRevisionDto } from "../services/revisions";
+import { toRevisionDto } from "../services/revisions";
 import { isInitialized, runSetup, setupCompletedAt } from "../services/setup";
 import {
   countSites,
@@ -168,17 +169,9 @@ export const router = os.router({
         .limit(100);
       return rows.map(toRevisionDto);
     }),
-    rollback: admin.clusters.rollback.handler(async ({ input, context }) => {
-      const result = await context.app.db.transaction((tx) =>
-        rollbackToRevision(tx, {
-          clusterId: input.id,
-          revision: input.revision,
-          userId: context.actor.id,
-        }),
-      );
-      if (!result) fail("REVISION_NOT_FOUND", "revision not found");
-      return toRevisionDto(result.row);
-    }),
+    rollback: admin.clusters.rollback.handler(({ input, context }) =>
+      rollbackCluster(context.app.db, input, context.actor),
+    ),
     createEnrollmentToken: admin.clusters.createEnrollmentToken.handler(({ input, context }) =>
       createEnrollmentToken(context.app.db, input, {
         actor: context.actor,
