@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { clone, create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
   CacheAction,
+  CacheKeyPolicySchema,
+  CacheKeyQuery,
   type CacheRule,
   CacheRuleSchema,
   type CacheZone,
@@ -17,9 +19,12 @@ import {
   NodeConfigDiffSchema,
   NodeConfigSchema,
   OriginCacheControl,
+  OriginConnectionSchema,
   OriginPoolSchema,
   OriginSchema,
   OriginScheme,
+  PassiveHealthCheckSchema,
+  S3AuthSchema,
   type Site,
   SiteSchema,
 } from "@edgeweir/proto";
@@ -34,17 +39,47 @@ export interface OriginModel {
   backup: boolean;
   hostHeader: string;
   sni: string;
+  /** Set for S3-compatible origins (requests signed with AWS Signature V4). */
+  s3?: { region: string; bucket: string; credentialId: string; credentialVersion: number } | null;
 }
 
 export interface CacheRuleModel {
   id: string;
   priority: number;
   pathPrefixes: string[];
+  paths?: string[];
   extensions: string[];
+  statusCodes?: number[];
+  minSizeBytes?: number;
+  maxSizeBytes?: number;
   expression: string;
   action: "cache" | "bypass";
   edgeTtlSeconds: number;
   originCacheControl: "override" | "respect";
+  staleWhileRevalidateSeconds?: number;
+  staleIfErrorSeconds?: number;
+}
+
+export interface OriginPoolSettingsModel {
+  tlsVerify: boolean;
+  maxFails: number;
+  recoverySeconds: number;
+  connectTimeoutMs: number;
+  sendTimeoutMs: number;
+  readTimeoutMs: number;
+  keepalive: boolean;
+  keepaliveIdleSeconds: number;
+  keepaliveMaxRequests: number;
+}
+
+export interface CacheKeyModel {
+  query: "all" | "ignore" | "include";
+  queryParams: string[];
+  sortQuery: boolean;
+  headers: string[];
+  cookies: string[];
+  deviceType: boolean;
+  includeHost: boolean;
 }
 
 export interface SiteModel {
@@ -57,8 +92,15 @@ export interface SiteModel {
     id: string;
     policy: "weighted_random" | "round_robin" | "consistent_hash";
     origins: OriginModel[];
+    /** Omitted: node defaults (verify TLS, 3 failures / 30 s, default timeouts, keep-alive). */
+    settings?: OriginPoolSettingsModel;
   };
   cacheRules: CacheRuleModel[];
+  /** Omitted: the default cache key. */
+  cacheKey?: CacheKeyModel;
+  rangeSlice?: boolean;
+  /** Defaults to true. */
+  websocket?: boolean;
 }
 
 export interface ListenerModel {
@@ -114,6 +156,16 @@ const policyMap = {
   consistent_hash: LoadBalancePolicy.CONSISTENT_HASH,
 } as const;
 
+const queryMap = {
+  all: CacheKeyQuery.ALL,
+  ignore: CacheKeyQuery.IGNORE,
+  include: CacheKeyQuery.INCLUDE,
+} as const;
+
+/** Sorted, de-duplicated copy: list order carries no meaning in these fields. */
+const sortedSet = <T extends string | number>(values: readonly T[] | undefined): T[] =>
+  [...new Set(values ?? [])].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
 const byString =
   <T>(key: (item: T) => string) =>
   (a: T, b: T) => {
@@ -123,6 +175,8 @@ const byString =
   };
 
 function compileSite(model: SiteModel): Site {
+  const settings = model.originPool.settings;
+  const key = model.cacheKey;
   return create(SiteSchema, {
     id: model.id,
     name: model.name,
@@ -143,8 +197,33 @@ function compileSite(model: SiteModel): Site {
           backup: o.backup,
           hostHeader: o.hostHeader,
           sni: o.sni,
+          s3: o.s3
+            ? create(S3AuthSchema, {
+                region: o.s3.region,
+                bucket: o.s3.bucket,
+                credentialId: o.s3.credentialId,
+                credentialVersion: BigInt(o.s3.credentialVersion),
+              })
+            : undefined,
         }),
       ),
+      ...(settings
+        ? {
+            skipTlsVerify: !settings.tlsVerify,
+            healthCheck: create(PassiveHealthCheckSchema, {
+              maxFails: settings.maxFails,
+              recoverySeconds: settings.recoverySeconds,
+            }),
+            connection: create(OriginConnectionSchema, {
+              connectTimeoutMs: settings.connectTimeoutMs,
+              sendTimeoutMs: settings.sendTimeoutMs,
+              readTimeoutMs: settings.readTimeoutMs,
+              keepaliveDisabled: !settings.keepalive,
+              keepaliveIdleSeconds: settings.keepaliveIdleSeconds,
+              keepaliveMaxRequests: settings.keepaliveMaxRequests,
+            }),
+          }
+        : {}),
     }),
     cacheRules: model.cacheRules.map(
       (r): CacheRule =>
@@ -155,6 +234,10 @@ function compileSite(model: SiteModel): Site {
             pathPrefixes: [...r.pathPrefixes],
             extensions: r.extensions.map((e) => e.toLowerCase()),
             expression: r.expression,
+            paths: sortedSet(r.paths),
+            statusCodes: sortedSet(r.statusCodes),
+            minSizeBytes: BigInt(r.minSizeBytes ?? 0),
+            maxSizeBytes: BigInt(r.maxSizeBytes ?? 0),
           },
           action: r.action === "bypass" ? CacheAction.BYPASS : CacheAction.CACHE,
           edgeTtlSeconds: r.edgeTtlSeconds,
@@ -162,8 +245,23 @@ function compileSite(model: SiteModel): Site {
             r.originCacheControl === "respect"
               ? OriginCacheControl.RESPECT
               : OriginCacheControl.OVERRIDE,
+          staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds ?? 0,
+          staleIfErrorSeconds: r.staleIfErrorSeconds ?? 0,
         }),
     ),
+    cacheKey: key
+      ? create(CacheKeyPolicySchema, {
+          query: queryMap[key.query],
+          queryParams: key.query === "include" ? sortedSet(key.queryParams) : [],
+          sortQuery: key.sortQuery,
+          headers: sortedSet(key.headers.map((h) => h.toLowerCase())),
+          cookies: sortedSet(key.cookies),
+          deviceType: key.deviceType,
+          excludeHost: !key.includeHost,
+        })
+      : undefined,
+    rangeSlice: model.rangeSlice ?? false,
+    websocketDisabled: model.websocket === false,
   });
 }
 
