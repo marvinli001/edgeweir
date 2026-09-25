@@ -700,6 +700,8 @@ export const originHealth = z.object({
 
 export const cacheTaskType = z.enum(["url", "prefix", "site", "prefetch"]);
 export const cacheTaskState = z.enum(["pending", "running", "succeeded", "failed"]);
+/** A node's delivery: also "skipped" when the node was disabled before it ran the task. */
+export const cacheTaskNodeState = z.enum(["pending", "running", "succeeded", "failed", "skipped"]);
 
 export const MAX_CACHE_TASK_URLS = 500;
 
@@ -719,7 +721,7 @@ export const cacheTaskCreateInput = z
 export const cacheTaskNode = z.object({
   nodeId: uuid,
   nodeName: z.string(),
-  state: cacheTaskState,
+  state: cacheTaskNodeState,
   /** The node's text of the outcome (English fallback for unknown codes) ... */
   message: z.string(),
   /** ... and its stable code (taskErrorDefs) with parameters; empty on success. */
@@ -735,7 +737,10 @@ export const cacheTask = z.object({
   type: cacheTaskType,
   targets: z.array(z.string()),
   sites: z.array(z.object({ id: z.string(), name: z.string() })),
-  /** pending: no node finished; running: some finished; then succeeded or failed. */
+  /**
+   * pending: no node finished; running: some finished; then succeeded or
+   * failed. Skipped (disabled) nodes do not count.
+   */
   state: cacheTaskState,
   nodes: z.array(cacheTaskNode),
   createdByName: z.string(),
@@ -983,4 +988,5 @@ export type OriginHealth = z.infer<typeof originHealth>;
 export type CacheTask = z.infer<typeof cacheTask>;
 export type CacheTaskType = z.infer<typeof cacheTaskType>;
 export type CacheTaskState = z.infer<typeof cacheTaskState>;
+export type CacheTaskNodeState = z.infer<typeof cacheTaskNodeState>;
 export type CacheTaskCreateInput = z.input<typeof cacheTaskCreateInput>;

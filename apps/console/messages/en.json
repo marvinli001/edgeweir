@@ -620,6 +620,7 @@
   "purge_state_running": "Running",
   "purge_state_succeeded": "Succeeded",
   "purge_state_failed": "Failed",
+  "purge_state_skipped": "Skipped",
   "purge_nodes": "Nodes",
   "purge_nodes_progress": "{done}/{total} nodes",
   "purge_no_nodes": "No nodes",

@@ -620,6 +620,7 @@
   "purge_state_running": "执行中",
   "purge_state_succeeded": "成功",
   "purge_state_failed": "失败",
+  "purge_state_skipped": "已跳过",
   "purge_nodes": "节点",
   "purge_nodes_progress": "{done}/{total} 个节点",
   "purge_no_nodes": "无节点",

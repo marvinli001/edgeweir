@@ -1,6 +1,6 @@
 import {
   type CacheTask,
-  type CacheTaskState,
+  type CacheTaskNodeState,
   type CacheTaskType,
   MAX_CACHE_TASK_URLS,
   type Site,
@@ -60,7 +60,7 @@ const placeholders: Record<Exclude<CacheTaskType, "site">, string> = {
   prefetch: "https://www.example.com/video.mp4\nhttps://www.example.com/app.js",
 };
 
-const finished = (state: CacheTaskState) => state === "succeeded" || state === "failed";
+const finished = (state: CacheTaskNodeState) => state === "succeeded" || state === "failed";
 
 function PurgePage() {
   const search = Route.useSearch();
@@ -384,8 +384,14 @@ function SitePicker({
   );
 }
 
-function StateBadge({ state, testId }: { state: CacheTaskState; testId: string }) {
+function StateBadge({ state, testId }: { state: CacheTaskNodeState; testId: string }) {
   switch (state) {
+    case "skipped":
+      return (
+        <Badge variant="outline" className="text-muted-foreground" data-testid={testId}>
+          {m.purge_state_skipped()}
+        </Badge>
+      );
     case "pending":
       return (
         <Badge variant="outline" className="text-muted-foreground" data-testid={testId}>
@@ -416,10 +422,12 @@ function StateBadge({ state, testId }: { state: CacheTaskState; testId: string }
 }
 
 function NodeProgress({ task }: { task: CacheTask }) {
-  const total = task.nodes.length;
+  // Disabled (skipped) nodes are listed in the details but not counted.
+  const nodes = task.nodes.filter((n) => n.state !== "skipped");
+  const total = nodes.length;
   if (total === 0) return <span data-testid="cache-task-progress">{m.purge_no_nodes()}</span>;
-  const done = task.nodes.filter((n) => finished(n.state)).length;
-  const failed = task.nodes.some((n) => n.state === "failed");
+  const done = nodes.filter((n) => finished(n.state)).length;
+  const failed = nodes.some((n) => n.state === "failed");
   return (
     <div className="inline-flex items-center gap-2">
       <Progress

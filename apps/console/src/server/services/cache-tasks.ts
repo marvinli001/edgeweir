@@ -1,5 +1,6 @@
 import type {
   CacheTask,
+  CacheTaskNodeState,
   CacheTaskState,
   CacheTaskType,
   cacheTaskCreateInput,
@@ -113,7 +114,12 @@ async function resolveHosts(db: Executor, hosts: string[], scope: SiteScope) {
   return resolved;
 }
 
-function taskState(nodes: Pick<TaskNodeRow, "state">[]): CacheTaskState {
+/** English text of a delivery skipped because its node was disabled (code node_disabled). */
+export const NODE_DISABLED_MESSAGE = "skipped: the node is disabled";
+
+function taskState(rows: Pick<TaskNodeRow, "state">[]): CacheTaskState {
+  // Disabled nodes neither run the task nor hold it up.
+  const nodes = rows.filter((n) => n.state !== "skipped");
   if (nodes.length === 0) return "succeeded";
   const finished = nodes.filter((n) => n.state === "succeeded" || n.state === "failed");
   if (finished.length === nodes.length) {
@@ -158,7 +164,7 @@ async function toTaskDtos(db: Executor, rows: TaskRow[]): Promise<CacheTask[]> {
         return {
           nodeId: n.nodeId,
           nodeName: n.nodeName,
-          state: n.state as CacheTaskState,
+          state: n.state as CacheTaskNodeState,
           message: n.message,
           errorCode: error.code,
           errorParams: error.params,
@@ -249,9 +255,17 @@ export async function createCacheTask(
     const organizations = [...new Set([...siteMeta.values()].map((s) => s.organizationId))];
     const clusterIds = [...new Set(items.map((i) => i.clusterId))];
     const nodes = await tx
-      .select({ id: schema.node.id, name: schema.node.name, clusterId: schema.node.clusterId })
+      .select({
+        id: schema.node.id,
+        name: schema.node.name,
+        clusterId: schema.node.clusterId,
+        status: schema.node.status,
+      })
       .from(schema.node)
       .where(inArray(schema.node.clusterId, clusterIds));
+    // Only enabled nodes get the task; disabled ones are listed as skipped.
+    const active = nodes.filter((n) => n.status === "active");
+    const now = new Date();
     const [task] = await tx
       .insert(schema.cacheTask)
       .values({
@@ -263,7 +277,7 @@ export async function createCacheTask(
         createdByUserId:
           ctx.actor.type === "user" || ctx.actor.type === "api_key" ? ctx.actor.id : null,
         createdByName: ctx.actor.name ?? "",
-        finishedAt: nodes.length === 0 ? new Date() : null,
+        finishedAt: active.length === 0 ? now : null,
       })
       .returning();
     if (!task) throw new Error("cache task insert failed");
@@ -274,8 +288,18 @@ export async function createCacheTask(
           nodeId: n.id,
           clusterId: n.clusterId,
           nodeName: n.name,
+          ...(n.status === "active"
+            ? {}
+            : {
+                state: "skipped",
+                message: NODE_DISABLED_MESSAGE,
+                errorCode: "node_disabled",
+                finishedAt: now,
+              }),
         })),
       );
+    }
+    if (active.length) {
       await tx.execute(sql`select pg_notify(${TASKS_CHANNEL}, ${JSON.stringify({ clusterIds })})`);
     }
     await recordAudit(tx, ctx.actor, {
@@ -289,7 +313,8 @@ export async function createCacheTask(
         targets: targets.slice(0, 20),
         count: targets.length,
         sites: [...siteMeta.values()].map((s) => s.name),
-        nodes: nodes.length,
+        nodes: active.length,
+        skippedNodes: nodes.length - active.length,
       },
     });
     const [dto] = await toTaskDtos(tx, [task]);
@@ -452,6 +477,33 @@ async function finishIfDone(tx: Executor, taskIds: string[]) {
         sql`not exists (select 1 from ${schema.cacheTaskNode} where ${schema.cacheTaskNode.taskId} = ${schema.cacheTask.id} and ${schema.cacheTaskNode.state} in ('pending', 'running'))`,
       ),
     );
+}
+
+/**
+ * Marks the unfinished deliveries of a node that is being disabled as
+ * skipped (node_disabled) instead of leaving them pending or running until
+ * they expire; tasks that only waited for this node finish. Runs in the
+ * transaction that disables the node.
+ */
+export async function skipNodeTasks(tx: Executor, nodeId: string, now = new Date()) {
+  const skipped = await tx
+    .update(schema.cacheTaskNode)
+    .set({
+      state: "skipped",
+      message: NODE_DISABLED_MESSAGE,
+      errorCode: "node_disabled",
+      errorParams: {},
+      finishedAt: now,
+    })
+    .where(
+      and(
+        eq(schema.cacheTaskNode.nodeId, nodeId),
+        inArray(schema.cacheTaskNode.state, ["pending", "running"]),
+      ),
+    )
+    .returning({ taskId: schema.cacheTaskNode.taskId });
+  await finishIfDone(tx, [...new Set(skipped.map((s) => s.taskId))]);
+  return skipped.length;
 }
 
 /** Fails deliveries that no node picked up within CACHE_TASK_TTL_MS (node offline). */

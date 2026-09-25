@@ -3,6 +3,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { asc, eq, inArray } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
+import { skipNodeTasks } from "./cache-tasks";
 import { findNodeGroup } from "./node-groups";
 import type { Executor } from "./revisions";
 
@@ -142,7 +143,8 @@ export async function updateNode(
 
 /**
  * Disables or re-enables a node. A disabled node is refused by the node
- * channel (it keeps serving its last-known-good configuration) until enabled.
+ * channel (it keeps serving its last-known-good configuration) until enabled;
+ * its unfinished cache task deliveries are marked skipped.
  */
 export async function setNodeStatus(
   db: Database,
@@ -153,11 +155,13 @@ export async function setNodeStatus(
   return db.transaction(async (tx) => {
     const row = await findNode(tx, id);
     await tx.update(schema.node).set({ status }).where(eq(schema.node.id, id));
+    const skippedTasks = status === "disabled" ? await skipNodeTasks(tx, id) : 0;
     await recordAudit(tx, actor, {
       action: status === "disabled" ? "node.disable" : "node.enable",
       targetType: "node",
       targetId: id,
       targetName: row.name,
+      ...(skippedTasks ? { metadata: { skippedTasks } } : {}),
     });
     return getNode(tx, id);
   });
