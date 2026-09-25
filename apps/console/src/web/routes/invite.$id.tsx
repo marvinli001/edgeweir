@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { AuthShell } from "@/components/auth-shell";
 import { roleLabel } from "@/components/members";
 import { ErrorState, LoadingState } from "@/components/states";
+import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -72,11 +73,12 @@ function InvitePage() {
               <CardTitle className="text-xl" data-testid="invite-title">
                 {m.invite_title({ organization: info.data.organizationName })}
               </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                {info.data.email} · {roleLabel(info.data.role)}
-              </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-wrap justify-center gap-2">
+                <Badge variant="outline">{info.data.email}</Badge>
+                <Badge variant="secondary">{roleLabel(info.data.role)}</Badge>
+              </div>
               {info.data.userExists ? (
                 signedInAs === info.data.email ? (
                   <FieldGroup>

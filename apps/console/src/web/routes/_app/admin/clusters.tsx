@@ -235,57 +235,59 @@ function ClusterSummary({
             </Badge>
           </CardDescription>
         </div>
-        {clusters.length > 1 ? (
-          <Select
-            value={selected.id}
-            onValueChange={(value) => value && onSelect(String(value))}
-            items={clusters.map((c) => ({ label: c.name, value: c.id }))}
-          >
-            <SelectTrigger
-              className="w-48"
-              aria-label={m.clusters_select()}
-              data-testid="cluster-select"
+        <div className="flex items-center gap-2">
+          {clusters.length > 1 ? (
+            <Select
+              value={selected.id}
+              onValueChange={(value) => value && onSelect(String(value))}
+              items={clusters.map((c) => ({ label: c.name, value: c.id }))}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {clusters.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : null}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={m.common_actions()}
-                data-testid="cluster-actions"
-              />
-            }
-          >
-            <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setEditOpen(true)}>
-              <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
-              {m.clusters_edit()}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() => setDeleteOpen(true)}
-              data-testid="cluster-delete"
+              <SelectTrigger
+                className="w-48"
+                aria-label={m.clusters_select()}
+                data-testid="cluster-select"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {clusters.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={m.common_actions()}
+                  data-testid="cluster-actions"
+                />
+              }
             >
-              <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-              {m.common_delete()}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
+                {m.clusters_edit()}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => setDeleteOpen(true)}
+                data-testid="cluster-delete"
+              >
+                <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                {m.common_delete()}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </CardHeader>
       <ClusterDialog
         key={selected.id}
