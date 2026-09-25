@@ -107,3 +107,9 @@ Phase 0 范围：
 > 更新记录：
 > - 2026-09-25（MVP M1）：revision 的原因改为 `reason_code` + `reason_params`（`cluster_created`、`site_created`、`site_updated`、`site_deleted`、`site_purged`、`rollback`），界面按语言渲染；`reason` 列仍写英文文本给 API 读者，旧 revision 没有原因码时界面显示原文。网站编辑（名称、域名、源站、缓存规则）每次保存都发布新 revision，内容哈希不变时返回当前 revision。
 > - 2026-09-25（MVP M2，proto `v0.2.0`）：IR 扩展：`OriginPool` 增加 `skip_tls_verify`（默认校验）、`health_check`（被动健康检查的失败次数与恢复时间）和 `connection`（连接 / 发送 / 读取超时与 keep-alive）；`Origin` 增加 `s3`（区域、路径式 bucket、`credential_id` 与 `credential_version`，密钥不进 IR，版本号变化使节点重新获取）；`Site` 增加 `cache_key`（缓存键策略按站点，使 URL 刷新能覆盖同一 URL 的所有变体）、`range_slice`、`websocket_disabled`；`CacheRuleMatch` 增加精确路径、状态码与大小范围，`CacheRule` 增加 stale-while-revalidate / stale-if-error 秒数。编译器对无序语义的列表（状态码、查询参数、请求头、Cookie、精确路径）排序去重，规范化规则本身不变；新增第二组跨语言哈希向量 `content_hash_vector_m2.json`，TS 与 Go 两端测试共用。
+> - 2026-09-25（收尾，proto `v0.2.1`）：
+>   - `NodeConfig.origin_allowed_cidrs` 是平台的源站地址允许清单（[ADR-0018](0018-trust-and-security-baseline.md) 收尾记录），规范化为按字节序（ASCII）升序、去重的集合，与 Go 端的排序一致；控制台存储前已把每个 CIDR 规范化（主机位清零、IPv6 小写）。清单与 `listeners`、`cache_zones`、`certificates` 一样在 diff 中全量下发（决策第 12 条多了这一项）。清单变化时控制台给每个集群发布新 revision（原因码 `origin_allow_list_updated`）。
+>   - 回滚沿用当前的允许清单，不恢复旧 revision 里的清单（清单是平台策略，不是集群内容）；清单变过时，回滚后的内容哈希与旧 revision 不同，决策第 16 条"哈希相同"只在清单未变时成立。
+>   - `CacheRule.cache_authorized`（默认 false）：为 false 时带 `Authorization` 的请求不查缓存、响应也不存入缓存（RFC 9111 §3.5），即使规则覆盖源站缓存头。
+>   - 第三组跨语言哈希向量 `content_hash_vector_v021.json`：M2 向量加上一个未排序、含重复项的允许清单，并在第一个站点的第一条规则上打开 `cache_authorized`；TS 与 Go 两端测试断言同一个哈希。
+>   - 节点侧校验收紧：站点、源站、规则的 id 只能由 `[A-Za-z0-9_-]` 组成且不超过 128 个字符，否则整个配置被拒绝（控制台用 UUID）；IP 字面量落在特殊用途地址且不在允许清单里的源站留在站点里、标为禁止并告警，只有这类源站的站点返回 502 而不是 404。

@@ -73,3 +73,6 @@ Phase 0 范围：
 
 > 更新记录：
 > - 2026-09-25：GoReleaser 的 `signs.if` 是 Pro 功能，开源版的 `cmd` 也不支持模板。因此签名配置用 `cmd: sh` + 模板化参数：snapshot 构建只打印跳过信息，正式发布执行 `cosign sign-blob --yes --bundle=checksums.txt.sigstore.json checksums.txt`。SBOM 由 syft 为归档和 deb/rpm 生成。本机没有 git remote 时，GoReleaser snapshot 使用占位的 commit 信息（`0.0.1-snapshot+none`），CI 中是真实值。
+> - 2026-09-25（收尾）：
+>   - **Go 工具链固定到补丁版本（决策第 5 条）。** edgeweir-node 的 `go.mod` 从 `go 1.27` 改为 `go 1.27.1`，CI 的 setup-go 读取它，本地构建和 CI 用同一个工具链。控制台 `helpers/certd/go.mod` 仍是 `go 1.27`（镜像构建用 `golang:1.27.1-alpine`，但 CI 的 setup-go 读 go.mod），同样要改成 `go 1.27.1`。
+>   - **首次发布前按 digest / SHA 固定（延后项 D5）。** 目前容器基础镜像只按 tag 固定（`node:24.21.0-alpine`、`golang:1.27.1-alpine`、`openresty/openresty:1.31.1.1-bookworm`、`postgres:18.6-alpine` 等），GitHub Actions 只按主版本 tag 引用（`actions/checkout@v7`、`sigstore/cosign-installer@v4`、`goreleaser/goreleaser-action@v7` 等）。tag 可以被移动，不满足"同一个 tag、同一个工具链重建出相同产物"。首个正式 tag 之前，两个仓库的 Dockerfile、compose 文件和工作流改为按 digest（`image@sha256:...`）和完整 commit SHA（`uses: owner/action@<40 位 SHA> # vX.Y.Z`）固定；列入 [ROADMAP.md](../../ROADMAP.md)「首次发布前」。
