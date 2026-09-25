@@ -1,0 +1,66 @@
+# End-to-end environment: postgres + console + one edge node (OpenResty) + a
+# whoami origin. Used by scripts/e2e.sh and CI:
+#   docker compose -f compose.e2e.yml up -d --build
+#   pnpm e2e
+# The node image is built from the sibling edgeweir-node checkout.
+# Test-only secrets below are fixed on purpose; never reuse them.
+name: edgeweir-e2e
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_USER: edgeweir
+      POSTGRES_PASSWORD: e2e-only-password
+      POSTGRES_DB: edgeweir
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edgeweir -d edgeweir"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  console:
+    build:
+      context: .
+    image: edgeweir:e2e
+    environment:
+      ROLE: all
+      DATABASE_URL: postgres://edgeweir:e2e-only-password@postgres:5432/edgeweir
+      EDGEWEIR_MASTER_KEY: ZTJlLW9ubHktbWFzdGVyLWtleS1kby1ub3QtcmV1c2UhIQ==
+      BETTER_AUTH_SECRET: e2e-only-better-auth-secret-do-not-reuse
+      EDGEWEIR_PUBLIC_URL: http://localhost:${E2E_CONSOLE_PORT:-13000}
+      EDGEWEIR_NODE_API_URL: https://console:8443
+      LOG_LEVEL: debug
+    ports:
+      - "${E2E_CONSOLE_PORT:-13000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  whoami:
+    image: traefik/whoami:v1.12.0
+
+  node:
+    build:
+      context: ${EDGEWEIR_NODE_CONTEXT:-../edgeweir-node}
+    image: edgeweir-node:e2e
+    hostname: edge-e2e-1
+    ports:
+      - "${E2E_NODE_PORT:-18080}:80"
+    volumes:
+      - node-state:/var/lib/edgeweir-node
+    depends_on:
+      console:
+        condition: service_healthy
+      whoami:
+        condition: service_started
+
+volumes:
+  node-state:
