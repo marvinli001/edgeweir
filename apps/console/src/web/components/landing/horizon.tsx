@@ -36,7 +36,7 @@ const outlineDark =
 const outlineLight =
   "inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/80 px-5 text-sm font-medium text-white transition-colors hover:bg-white hover:text-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
 
-/** Black hero, warm paper sections and a violet-to-orange glow (after fastly.com/products/cdn). */
+/** Black hero, warm paper sections and a violet-to-orange glow. */
 export function HorizonLanding(props: LandingProps) {
   const { page } = props;
   const { brandName, contactEmail, icp } = page.settings;
@@ -178,7 +178,7 @@ export function HorizonLanding(props: LandingProps) {
             <Reveal
               key={card.title()}
               delay={i * 90}
-              className="group flex min-h-64 flex-col border md:min-h-80 border-(--hz-line) bg-white p-8 transition-[border-color,box-shadow,translate] duration-300 hover:-translate-y-1 hover:border-(--hz-ink) hover:shadow-[0_24px_48px_-24px_rgba(0,0,0,0.25)] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+              className="group flex min-h-64 flex-col border md:min-h-80 border-(--hz-line) bg-white p-8 transition-[border-color,box-shadow,translate] duration-300 hover:-translate-y-1 hover:border-(--hz-ink) hover:shadow-(--hz-shadow-card) motion-reduce:transition-none motion-reduce:hover:translate-y-0"
             >
               <span className="flex size-11 items-center justify-center border border-(--hz-line) transition-colors group-hover:border-(--hz-ink)">
                 <HugeiconsIcon icon={card.icon} strokeWidth={1.5} className="size-5" />

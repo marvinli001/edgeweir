@@ -3,7 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { CodeBlock } from "@/components/copy-button";
 import { FormDialog } from "@/components/form-dialog";
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { SafetyNote } from "@/components/safety-note";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -98,7 +99,7 @@ export function InviteDialog({
         <Field>
           <FieldLabel>{m.members_invite_link()}</FieldLabel>
           <CodeBlock value={invitationLink(result.invitation.id)} testId="invite-link" />
-          <FieldDescription>{result.invitation.email}</FieldDescription>
+          <SafetyNote>{result.invitation.email}</SafetyNote>
         </Field>
       </FormDialog>
     );

@@ -505,9 +505,9 @@
   "landing_template_none": "关闭",
   "landing_template_none_hint": "直接进入控制台",
   "landing_template_horizon": "Horizon",
-  "landing_template_horizon_hint": "黑白极简 · Fastly 风格",
+  "landing_template_horizon_hint": "黑白极简 · 暖色光晕",
   "landing_template_orbit": "Orbit",
-  "landing_template_orbit_hint": "明快卡片 · bunny.net 风格",
+  "landing_template_orbit_hint": "明快卡片 · 太空插画",
   "landing_settings_brand": "品牌名称",
   "landing_settings_headline": "主标题",
   "landing_settings_description": "描述",
@@ -618,5 +618,10 @@
   "purge_node_counts": "成功 {succeeded} · 失败 {failed}",
   "purge_details": "详情",
   "purge_targets": "目标",
-  "error_invitation_account_required": "请填写姓名和密码来创建账号"
+  "error_invitation_account_required": "请填写姓名和密码来创建账号",
+  "a11y_breadcrumb": "面包屑导航",
+  "a11y_more": "更多",
+  "a11y_sidebar": "侧边栏",
+  "a11y_toggle_sidebar": "展开或收起侧边栏",
+  "a11y_command_palette": "命令面板"
 }

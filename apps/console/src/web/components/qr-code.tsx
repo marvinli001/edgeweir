@@ -31,7 +31,7 @@ export function QrCode({
       className={cn("size-44 rounded-xl bg-white p-1", className)}
     >
       <title>{label}</title>
-      <path d={path} fill="#000" />
+      <path d={path} className="fill-black" />
     </svg>
   );
 }
