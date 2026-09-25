@@ -9,7 +9,7 @@ import * as React from "react";
 import * as z from "zod";
 import { HorizonLanding } from "@/components/landing/horizon";
 import { OrbitLanding } from "@/components/landing/orbit";
-import { ErrorState } from "@/components/states";
+import { ErrorState, LoadingState } from "@/components/states";
 import { useLightTheme } from "@/components/theme-provider";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/lib/orpc";
@@ -20,7 +20,7 @@ import { releaseInitialLightLock } from "@/lib/theme";
  * settings; otherwise it goes straight to the console. Administrators can
  * preview a template with `?preview=<template>` before switching it on.
  * The landing page is light-only; theme-init.js paints the first load of `/`
- * light for it and keeps that until the route resolves.
+ * light for it and that stays (also behind the loader) until the route resolves.
  */
 export const Route = createFileRoute("/")({
   validateSearch: z.object({ preview: landingTemplate.exclude(["none"]).optional() }),
@@ -45,9 +45,22 @@ export const Route = createFileRoute("/")({
     if (template === "none") throw leave("/overview");
     return { page, template, signedIn: !!session };
   },
+  // The three requests above can take a moment: show the loader instead of a blank page (it fades
+  // in after 200ms, so fast answers never flash it).
+  pendingMs: 0,
+  pendingMinMs: 0,
+  pendingComponent: LandingPending,
   component: LandingPage,
   errorComponent: LandingError,
 });
+
+function LandingPending() {
+  return (
+    <div className="flex min-h-svh" data-testid="landing-pending">
+      <LoadingState />
+    </div>
+  );
+}
 
 function LandingError({ error }: ErrorComponentProps) {
   const router = useRouter();
