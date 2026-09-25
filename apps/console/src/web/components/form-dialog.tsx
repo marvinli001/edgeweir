@@ -1,0 +1,85 @@
+import * as React from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { FieldError, FieldGroup } from "@/components/ui/field";
+import { Spinner } from "@/components/ui/spinner";
+import { errorMessage } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
+
+/**
+ * A dialog around one form. `onSubmit` receives the form data; while it runs the submit button
+ * shows a spinner, and a thrown error is shown localized under the fields. It closes the dialog
+ * itself (via `onOpenChange(false)`) when it is done.
+ */
+export function FormDialog({
+  open,
+  onOpenChange,
+  title,
+  submitLabel,
+  onSubmit,
+  children,
+  submitTestId,
+  className,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  submitLabel: string;
+  onSubmit: (data: FormData) => Promise<void>;
+  children: React.ReactNode;
+  submitTestId?: string;
+  className?: string;
+}) {
+  const [pending, setPending] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setError(null);
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className={cn("max-h-[calc(100svh-2rem)] overflow-y-auto", className)}>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setPending(true);
+            setError(null);
+            try {
+              await onSubmit(new FormData(event.currentTarget));
+            } catch (err) {
+              setError(errorMessage(err));
+            } finally {
+              setPending(false);
+            }
+          }}
+        >
+          <FieldGroup>
+            {children}
+            {error ? (
+              <FieldError data-testid="form-error" className="animate-in fade-in">
+                {error}
+              </FieldError>
+            ) : null}
+            <DialogFooter>
+              <Button type="submit" disabled={pending} data-testid={submitTestId}>
+                {pending ? <Spinner /> : null}
+                {submitLabel}
+              </Button>
+            </DialogFooter>
+          </FieldGroup>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

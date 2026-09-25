@@ -12,8 +12,15 @@ export const Route = createFileRoute("/_app")({
     if (!status.initialized) throw redirect({ to: "/setup" });
     const { data } = await authClient.getSession();
     if (!data) throw redirect({ to: "/login", search: { redirect: location.href } });
-    const role = (data.user as { role?: string | null }).role ?? "";
-    return { session: data, isAdmin: role.split(",").includes("admin") };
+    const me = await context.queryClient.fetchQuery({
+      ...orpc.account.me.queryOptions(),
+      staleTime: 30_000,
+    });
+    // An organization that requires 2FA holds its members on the security page until enabled.
+    if (me.twoFactorRequired && location.pathname !== "/security") {
+      throw redirect({ to: "/security" });
+    }
+    return { session: data, me, isAdmin: me.user.isAdmin };
   },
   component: AppLayout,
 });

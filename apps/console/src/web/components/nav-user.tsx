@@ -7,6 +7,7 @@ import {
   Sun03Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTheme } from "@/components/theme-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -48,6 +49,7 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -138,8 +140,11 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
             </DropdownMenuSub>
             <DropdownMenuSeparator />
             <DropdownMenuItem
+              data-testid="logout"
               onClick={async () => {
                 await authClient.signOut();
+                // Nothing of this account may leak into the next sign-in.
+                queryClient.clear();
                 await navigate({ to: "/login" });
               }}
             >

@@ -7,7 +7,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { adminNav, consoleNav } from "@/components/app-sidebar";
+import { adminNav, consoleNav, useManageMembers } from "@/components/app-sidebar";
 import { useTheme } from "@/components/theme-provider";
 import {
   CommandDialog,
@@ -25,6 +25,7 @@ export function CommandMenu({ isAdmin }: { isAdmin: boolean }) {
   const [open, setOpen] = React.useState(false);
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const manageMembers = useManageMembers();
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -48,7 +49,7 @@ export function CommandMenu({ isAdmin }: { isAdmin: boolean }) {
       <CommandList>
         <CommandEmpty>{m.command_empty()}</CommandEmpty>
         <CommandGroup heading={m.command_group_navigation()}>
-          {consoleNav().map((item) => (
+          {consoleNav({ manageMembers }).map((item) => (
             <CommandItem key={String(item.to)} onSelect={run(() => navigate({ to: item.to }))}>
               {item.icon}
               {item.title}

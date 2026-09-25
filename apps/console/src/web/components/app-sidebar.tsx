@@ -1,32 +1,30 @@
 import {
   Audit01Icon,
+  Building03Icon,
   DashboardSquare01Icon,
   GlobeIcon,
+  Location01Icon,
+  SecurityLockIcon,
   ServerStack01Icon,
   Settings05Icon,
   SlidersHorizontalIcon,
+  UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import type * as React from "react";
-import { Logo } from "@/components/logo";
 import { type NavItem, NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
+import { OrgSwitcher } from "@/components/org-switcher";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/components/ui/sidebar";
 import { useArea } from "@/lib/area";
 import { m } from "@/lib/i18n";
+import { orpc } from "@/lib/orpc";
 
 const icon = (i: typeof GlobeIcon) => <HugeiconsIcon icon={i} strokeWidth={2} />;
 
-export function consoleNav(): NavItem[] {
+/** Console navigation; "members" only for organization owners/admins (and platform admins). */
+export function consoleNav(opts: { manageMembers: boolean }): NavItem[] {
   return [
     {
       title: m.nav_overview(),
@@ -36,6 +34,22 @@ export function consoleNav(): NavItem[] {
       exact: true,
     },
     { title: m.nav_sites(), to: "/sites", icon: icon(GlobeIcon), testId: "nav-sites" },
+    ...(opts.manageMembers
+      ? [
+          {
+            title: m.nav_members(),
+            to: "/members" as const,
+            icon: icon(UserGroupIcon),
+            testId: "nav-members",
+          },
+        ]
+      : []),
+    {
+      title: m.nav_security(),
+      to: "/security",
+      icon: icon(SecurityLockIcon),
+      testId: "nav-security",
+    },
     {
       title: m.nav_settings(),
       to: "/settings",
@@ -43,6 +57,12 @@ export function consoleNav(): NavItem[] {
       testId: "nav-settings",
     },
   ];
+}
+
+export function useManageMembers(): boolean {
+  const me = useQuery(orpc.account.me.queryOptions());
+  const role = me.data?.activeOrganization?.role;
+  return role === "owner" || role === "admin";
 }
 
 export function adminNav(): NavItem[] {
@@ -59,6 +79,18 @@ export function adminNav(): NavItem[] {
       to: "/admin/clusters",
       icon: icon(ServerStack01Icon),
       testId: "nav-clusters",
+    },
+    {
+      title: m.nav_regions(),
+      to: "/admin/regions",
+      icon: icon(Location01Icon),
+      testId: "nav-regions",
+    },
+    {
+      title: m.nav_organizations(),
+      to: "/admin/organizations",
+      icon: icon(Building03Icon),
+      testId: "nav-organizations",
     },
     { title: m.nav_audit(), to: "/admin/audit", icon: icon(Audit01Icon), testId: "nav-audit" },
     {
@@ -77,26 +109,17 @@ export function AppSidebar({
   user: { name: string; email: string };
 }) {
   const area = useArea();
+  const manageMembers = useManageMembers();
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              className="data-[slot=sidebar-menu-button]:p-1.5!"
-              render={<Link to={area === "admin" ? "/admin" : "/"} />}
-            >
-              <Logo className="size-5!" />
-              <span className="text-base font-semibold">{m.app_name()}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <OrgSwitcher />
       </SidebarHeader>
       <SidebarContent>
         {area === "admin" ? (
           <NavMain key="admin" items={adminNav()} label={m.area_admin()} />
         ) : (
-          <NavMain key="console" items={consoleNav()} showNewSite />
+          <NavMain key="console" items={consoleNav({ manageMembers })} showNewSite />
         )}
       </SidebarContent>
       <SidebarFooter>
