@@ -6,12 +6,24 @@ import type {
   cacheTaskCreateInput,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { and, arrayContains, count, desc, eq, inArray, lt, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  arrayContains,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import type * as z from "zod";
 import { fail } from "../lib/errors";
 import { TASKS_CHANNEL } from "../lib/events";
 import { cleanErrorCode, cleanErrorParams, taskError } from "../lib/node-errors";
-import { type Actor, recordAudit } from "./audit";
+import { type Actor, recordAudit, systemActor } from "./audit";
 import type { Executor } from "./revisions";
 import type { SiteScope } from "./sites";
 
@@ -171,8 +183,10 @@ async function toTaskDtos(db: Executor, rows: TaskRow[]): Promise<CacheTask[]> {
           succeeded: n.succeeded,
           failed: n.failed,
           finishedAt: n.finishedAt?.toISOString() ?? null,
+          recoveredAt: n.recoveredAt?.toISOString() ?? null,
         };
       }),
+      source: r.source === "recovery" ? "recovery" : "user",
       createdByName: r.createdByName,
       createdAt: r.createdAt.toISOString(),
       finishedAt: r.finishedAt?.toISOString() ?? null,
@@ -372,17 +386,165 @@ function deliverable(nodeId: string, now: Date) {
   );
 }
 
+/** Purge types: a purge a node missed leaves stale objects in its cache. */
+const PURGE_TYPES = ["url", "prefix", "site"];
+
+/**
+ * Purges an enabled node missed: never executed within CACHE_TASK_TTL_MS
+ * (task_expired) or skipped while it was disabled (node_disabled), and not
+ * made up yet.
+ */
+function missedPurges(nodeId: string) {
+  return and(
+    eq(schema.cacheTaskNode.nodeId, nodeId),
+    isNull(schema.cacheTaskNode.recoveredAt),
+    or(
+      and(
+        eq(schema.cacheTaskNode.state, "failed"),
+        eq(schema.cacheTaskNode.errorCode, "task_expired"),
+      ),
+      and(
+        eq(schema.cacheTaskNode.state, "skipped"),
+        eq(schema.cacheTaskNode.errorCode, "node_disabled"),
+      ),
+    ),
+    inArray(schema.cacheTask.type, PURGE_TYPES),
+    eq(schema.node.status, "active"),
+  );
+}
+
+/** Whether a node has tasks to pull: deliverable ones, or missed purges to make up. */
 export async function hasDeliverableTasks(db: Executor, nodeId: string): Promise<boolean> {
   const [row] = await db
     .select({ n: count() })
     .from(schema.cacheTaskNode)
     .where(deliverable(nodeId, new Date()));
-  return (row?.n ?? 0) > 0;
+  if ((row?.n ?? 0) > 0) return true;
+  const [missed] = await db
+    .select({ n: count() })
+    .from(schema.cacheTaskNode)
+    .innerJoin(schema.cacheTask, eq(schema.cacheTask.id, schema.cacheTaskNode.taskId))
+    .innerJoin(schema.node, eq(schema.node.id, schema.cacheTaskNode.nodeId))
+    .where(missedPurges(nodeId));
+  return (missed?.n ?? 0) > 0;
+}
+
+/**
+ * N-M4: a node that comes back after purges expired unexecuted (or were
+ * skipped while it was disabled) still holds the objects they should have
+ * removed. For every site those purges touched, it gets one whole-site purge
+ * (one task per organization, only for this node, source "recovery"), and
+ * the missed deliveries are flagged with recovered_at so this happens once.
+ */
+async function recoverMissedPurges(
+  tx: Executor,
+  node: { id: string; clusterId: string },
+  now: Date,
+): Promise<number> {
+  const missed = await tx
+    .select({
+      taskId: schema.cacheTaskNode.taskId,
+      payload: schema.cacheTask.payload,
+      nodeName: schema.node.name,
+    })
+    .from(schema.cacheTaskNode)
+    .innerJoin(schema.cacheTask, eq(schema.cacheTask.id, schema.cacheTaskNode.taskId))
+    .innerJoin(schema.node, eq(schema.node.id, schema.cacheTaskNode.nodeId))
+    .where(missedPurges(node.id))
+    .for("update", { of: schema.cacheTaskNode, skipLocked: true });
+  if (missed.length === 0) return 0;
+  const nodeName = missed[0]?.nodeName ?? "";
+  const siteIds = [
+    ...new Set(
+      missed.flatMap((m) =>
+        (m.payload as unknown as CacheTaskItem[])
+          .filter((i) => i.clusterId === node.clusterId)
+          .map((i) => i.siteId),
+      ),
+    ),
+  ];
+  // Sites deleted since, or moved to another cluster, are no longer on this node.
+  const sites = siteIds.length
+    ? await tx
+        .select({
+          id: schema.site.id,
+          name: schema.site.name,
+          organizationId: schema.site.organizationId,
+        })
+        .from(schema.site)
+        .where(and(inArray(schema.site.id, siteIds), eq(schema.site.clusterId, node.clusterId)))
+        .orderBy(schema.site.name)
+    : [];
+  const byOrganization = new Map<string, typeof sites>();
+  for (const site of sites) {
+    byOrganization.set(site.organizationId, [
+      ...(byOrganization.get(site.organizationId) ?? []),
+      site,
+    ]);
+  }
+  const missedTasks = missed.map((m) => m.taskId);
+  for (const [organizationId, orgSites] of byOrganization) {
+    const items: CacheTaskItem[] = orgSites.map((site) => ({
+      siteId: site.id,
+      clusterId: node.clusterId,
+      type: "site",
+      host: "",
+      path: "",
+      query: "",
+      url: "",
+    }));
+    const targets = orgSites.map((s) => s.name);
+    const [task] = await tx
+      .insert(schema.cacheTask)
+      .values({
+        organizationId,
+        type: "site",
+        source: "recovery",
+        targets,
+        siteIds: orgSites.map((s) => s.id),
+        payload: items as unknown as Record<string, string>[],
+        createdAt: now,
+      })
+      .returning();
+    if (!task) throw new Error("recovery task insert failed");
+    await tx
+      .insert(schema.cacheTaskNode)
+      .values({ taskId: task.id, nodeId: node.id, clusterId: node.clusterId, nodeName });
+    await recordAudit(tx, systemActor, {
+      action: "cache.purge",
+      organizationId,
+      targetType: "cache_task",
+      targetId: task.id,
+      targetName: targets.length === 1 ? (targets[0] ?? "") : `${targets.length} × site`,
+      metadata: {
+        type: "site",
+        recovery: true,
+        nodeId: node.id,
+        node: nodeName,
+        sites: targets,
+        missedTasks: missedTasks.slice(0, 20),
+        missedCount: missedTasks.length,
+      },
+    });
+  }
+  await tx
+    .update(schema.cacheTaskNode)
+    .set({ recoveredAt: now })
+    .where(
+      and(
+        eq(schema.cacheTaskNode.nodeId, node.id),
+        inArray(schema.cacheTaskNode.taskId, missedTasks),
+      ),
+    );
+  return byOrganization.size;
 }
 
 /**
  * Hands out the oldest deliverable tasks of a node and marks them running.
- * Only the items for the node's cluster are returned.
+ * Only the items for the node's cluster are returned. Purges older than
+ * CACHE_TASK_TTL_MS are not run any more: they expire, and together with
+ * purges skipped while the node was disabled they are made up with
+ * whole-site purges (recoverMissedPurges).
  */
 export async function pullCacheTasks(
   db: Database,
@@ -391,6 +553,8 @@ export async function pullCacheTasks(
 ): Promise<{ id: string; type: string; createdAt: Date; items: CacheTaskItem[] }[]> {
   const now = new Date();
   return db.transaction(async (tx) => {
+    await expireDeliveries(tx, now, node.id);
+    await recoverMissedPurges(tx, node, now);
     const rows = await tx
       .select({ task: schema.cacheTask })
       .from(schema.cacheTaskNode)
@@ -506,33 +670,46 @@ export async function skipNodeTasks(tx: Executor, nodeId: string, now = new Date
   return skipped.length;
 }
 
-/** Fails deliveries that no node picked up within CACHE_TASK_TTL_MS (node offline). */
-export async function expireCacheTasks(db: Database, now = new Date()): Promise<number> {
-  return db.transaction(async (tx) => {
-    const cutoff = new Date(now.getTime() - CACHE_TASK_TTL_MS);
-    const expired = await tx
-      .update(schema.cacheTaskNode)
-      .set({
-        state: "failed",
-        message: "expired: the node did not report a result",
-        errorCode: "task_expired",
-        errorParams: {},
-        finishedAt: now,
-      })
-      .where(
-        and(
-          inArray(schema.cacheTaskNode.state, ["pending", "running"]),
-          inArray(
-            schema.cacheTaskNode.taskId,
-            tx
-              .select({ id: schema.cacheTask.id })
-              .from(schema.cacheTask)
-              .where(lt(schema.cacheTask.createdAt, cutoff)),
-          ),
+/** English text of a delivery that expired unexecuted (code task_expired). */
+export const TASK_EXPIRED_MESSAGE = "expired: the node did not report a result";
+
+/**
+ * Fails the unfinished deliveries (of one node, or all) of tasks older than
+ * CACHE_TASK_TTL_MS with task_expired; the tasks finish once nothing is left.
+ */
+async function expireDeliveries(tx: Executor, now: Date, nodeId?: string): Promise<number> {
+  const cutoff = new Date(now.getTime() - CACHE_TASK_TTL_MS);
+  const expired = await tx
+    .update(schema.cacheTaskNode)
+    .set({
+      state: "failed",
+      message: TASK_EXPIRED_MESSAGE,
+      errorCode: "task_expired",
+      errorParams: {},
+      finishedAt: now,
+    })
+    .where(
+      and(
+        nodeId ? eq(schema.cacheTaskNode.nodeId, nodeId) : undefined,
+        inArray(schema.cacheTaskNode.state, ["pending", "running"]),
+        inArray(
+          schema.cacheTaskNode.taskId,
+          tx
+            .select({ id: schema.cacheTask.id })
+            .from(schema.cacheTask)
+            .where(lt(schema.cacheTask.createdAt, cutoff)),
         ),
-      )
-      .returning({ taskId: schema.cacheTaskNode.taskId });
-    await finishIfDone(tx, [...new Set(expired.map((e) => e.taskId))]);
-    return expired.length;
-  });
+      ),
+    )
+    .returning({ taskId: schema.cacheTaskNode.taskId });
+  await finishIfDone(tx, [...new Set(expired.map((e) => e.taskId))]);
+  return expired.length;
+}
+
+/**
+ * Fails deliveries that no node ran within CACHE_TASK_TTL_MS (node offline);
+ * missed purges are made up when the node pulls tasks again.
+ */
+export async function expireCacheTasks(db: Database, now = new Date()): Promise<number> {
+  return db.transaction((tx) => expireDeliveries(tx, now));
 }

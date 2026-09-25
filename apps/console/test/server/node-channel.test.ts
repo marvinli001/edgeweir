@@ -636,6 +636,50 @@ describe("node channel", async () => {
     });
   });
 
+  it("hands a node back after more than 7 days a whole-site purge for expired purges (N-M4)", async () => {
+    const { nodeId, mtls } = await enroll("edge-away");
+    const { site } = await demoSite("away");
+    const task = await createCacheTask(
+      ctx.db,
+      { type: "url", urls: ["http://away.test/a.js", "http://away.test/b.js"], siteIds: [] },
+      { scope: { all: true }, actor },
+    );
+    await ctx.db
+      .update(schema.cacheTask)
+      .set({ createdAt: new Date(Date.now() - 8 * 24 * 3600 * 1000) })
+      .where(eq(schema.cacheTask.id, task.id));
+
+    const status = await mtls.reportStatus({ appliedRevision: 1n, state: ApplyState.APPLIED });
+    expect(status.tasksPending).toBe(true);
+    const pulled = await mtls.pullTasks({});
+    expect(pulled.tasks).toHaveLength(1);
+    const [recovery] = pulled.tasks;
+    expect(recovery?.id).not.toBe(task.id);
+    expect(recovery?.kind.case).toBe("purge");
+    if (recovery?.kind.case === "purge") {
+      expect(recovery.kind.value.targets).toEqual([
+        expect.objectContaining({ siteId: site.id, type: PurgeType.SITE, host: "", path: "" }),
+      ]);
+    }
+    await mtls.reportTaskResult({
+      taskId: recovery?.id ?? "",
+      state: TaskState.SUCCEEDED,
+      succeeded: 1,
+      finishedAt: timestampFromDate(new Date()),
+    });
+    // Once: nothing further, and the heartbeat stops asking the node to pull.
+    expect((await mtls.pullTasks({})).tasks).toHaveLength(0);
+    expect(
+      (await mtls.reportStatus({ appliedRevision: 1n, state: ApplyState.APPLIED })).tasksPending,
+    ).toBe(false);
+    const original = await getCacheTask(ctx.db, task.id, { all: true });
+    const mine = original.nodes.find((n) => n.nodeId === nodeId);
+    expect(mine).toMatchObject({ state: "failed", errorCode: "task_expired" });
+    expect(mine?.recoveredAt).not.toBeNull();
+    const made = await getCacheTask(ctx.db, recovery?.id ?? "", { all: true });
+    expect(made).toMatchObject({ source: "recovery", state: "succeeded", targets: ["away"] });
+  });
+
   it("rejects unknown tokens", async () => {
     const { csrPem } = await nodeKeyAndCsr();
     await expect(anonymous().enroll({ token: "ewt_nope", csrPem })).rejects.toMatchObject({

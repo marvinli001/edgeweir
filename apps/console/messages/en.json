@@ -621,6 +621,8 @@
   "purge_state_succeeded": "Succeeded",
   "purge_state_failed": "Failed",
   "purge_state_skipped": "Skipped",
+  "purge_source_recovery": "System (make-up whole-site purge)",
+  "purge_node_recovered": "Made up with a whole-site purge when the node came back",
   "purge_nodes": "Nodes",
   "purge_nodes_progress": "{done}/{total} nodes",
   "purge_no_nodes": "No nodes",

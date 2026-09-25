@@ -730,7 +730,11 @@ export const cacheTaskNode = z.object({
   succeeded: z.number().int(),
   failed: z.number().int(),
   finishedAt: isoDateTime.nullable(),
+  /** When a missed purge (task_expired, node_disabled) was made up with a whole-site purge. */
+  recoveredAt: isoDateTime.nullable(),
 });
+
+export const cacheTaskSource = z.enum(["user", "recovery"]);
 
 export const cacheTask = z.object({
   id: uuid,
@@ -743,6 +747,12 @@ export const cacheTask = z.object({
    */
   state: cacheTaskState,
   nodes: z.array(cacheTaskNode),
+  /**
+   * user: requested in the console or the API; recovery: a whole-site purge
+   * the console sent a node that missed purges (offline beyond the delivery
+   * window, or disabled).
+   */
+  source: cacheTaskSource,
   createdByName: z.string(),
   createdAt: isoDateTime,
   finishedAt: isoDateTime.nullable(),

@@ -621,6 +621,8 @@
   "purge_state_succeeded": "成功",
   "purge_state_failed": "失败",
   "purge_state_skipped": "已跳过",
+  "purge_source_recovery": "系统（补发整站刷新）",
+  "purge_node_recovered": "节点重新连接时已补发整站刷新",
   "purge_nodes": "节点",
   "purge_nodes_progress": "{done}/{total} 个节点",
   "purge_no_nodes": "无节点",

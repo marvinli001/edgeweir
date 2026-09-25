@@ -516,7 +516,9 @@ function TaskRow({
             />
           </CollapsibleTrigger>
           <div className="order-5 flex basis-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span>{task.createdByName || "—"}</span>
+            <span data-testid="cache-task-creator">
+              {task.source === "recovery" ? m.purge_source_recovery() : task.createdByName || "—"}
+            </span>
             <span title={formatDateTime(task.createdAt)}>{timeAgo(task.createdAt)}</span>
             <NodeProgress task={task} />
           </div>
@@ -584,6 +586,15 @@ function TaskRow({
                             data-code={node.errorCode || undefined}
                           >
                             {outcome}
+                          </p>
+                        ) : null}
+                        {node.recoveredAt ? (
+                          <p
+                            className="basis-full text-xs text-muted-foreground"
+                            title={formatDateTime(node.recoveredAt)}
+                            data-testid="cache-task-node-recovered"
+                          >
+                            {m.purge_node_recovered()}
                           </p>
                         ) : null}
                       </li>

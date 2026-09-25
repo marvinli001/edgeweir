@@ -1,8 +1,9 @@
 import { schema } from "@edgeweir/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import {
+  expireCacheTasks,
   hasDeliverableTasks,
   pullCacheTasks,
   reportCacheTaskResult,
@@ -24,6 +25,20 @@ describe("cache task delivery", async () => {
   let tenant: ApiClient;
   let clusterId: string;
   let siteId: string;
+  let platformSiteId: string;
+
+  const DAY = 24 * 3600 * 1000;
+  /** Pretends the tasks were created `days` ago. */
+  const backdate = (taskIds: string[], days: number) =>
+    ctx.db
+      .update(schema.cacheTask)
+      .set({ createdAt: new Date(Date.now() - days * DAY) })
+      .where(inArray(schema.cacheTask.id, taskIds));
+  const nodeRow = async (id: string) => {
+    const [row] = await ctx.db.select().from(schema.node).where(eq(schema.node.id, id));
+    if (!row) throw new Error("node missing");
+    return row;
+  };
 
   const addNode = async (name: string, status: "active" | "disabled" = "active") => {
     const [row] = await ctx.db
@@ -68,6 +83,14 @@ describe("cache task delivery", async () => {
       await tenant.sites.create({
         name: "shop",
         domains: ["shop.test"],
+        origins: [{ address: "origin.test" }],
+      })
+    ).site.id;
+    platformSiteId = (
+      await admin.sites.create({
+        name: "platform",
+        clusterId,
+        domains: ["www.platform.test"],
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
@@ -156,6 +179,145 @@ describe("cache task delivery", async () => {
         .update(schema.node)
         .set({ status: "active" })
         .where(eq(schema.node.clusterId, clusterId));
+    });
+  });
+
+  describe("purges a node missed (N-M4)", () => {
+    it("makes up purges that expired while the node was offline, once, with a whole-site purge", async () => {
+      await ctx.db.delete(schema.node).where(eq(schema.node.clusterId, clusterId));
+      const node = await addNode("edge-back");
+      const url = await tenant.cacheTasks.create({ type: "url", urls: ["http://shop.test/x"] });
+      const prefix = await tenant.cacheTasks.create({
+        type: "prefix",
+        urls: ["http://shop.test/p/"],
+      });
+      const prefetch = await tenant.cacheTasks.create({
+        type: "prefetch",
+        urls: ["http://shop.test/big"],
+      });
+      // Eight days pass without the node pulling anything.
+      await backdate([url.id, prefix.id, prefetch.id], 8);
+      expect(await hasDeliverableTasks(ctx.db, node.id)).toBe(true);
+
+      const pulled = await pullCacheTasks(ctx.db, node, 10);
+      // Not the stale purges and not the stale prefetch: one whole-site purge instead.
+      expect(pulled).toHaveLength(1);
+      expect(pulled[0]).toMatchObject({
+        type: "site",
+        items: [expect.objectContaining({ siteId, clusterId, type: "site" })],
+      });
+      const recovery = await tenant.cacheTasks.get({ id: pulled[0]?.id ?? "" });
+      expect(recovery).toMatchObject({
+        type: "site",
+        source: "recovery",
+        targets: ["shop"],
+        sites: [{ id: siteId, name: "shop" }],
+        createdByName: "",
+      });
+      expect(recovery.nodes).toEqual([
+        expect.objectContaining({ nodeName: "edge-back", state: "running" }),
+      ]);
+      for (const task of [url, prefix]) {
+        const d = await delivery(task.id, node.id);
+        expect(d).toMatchObject({ state: "failed", errorCode: "task_expired" });
+        expect(d?.recoveredAt).not.toBeNull();
+        const dto = await tenant.cacheTasks.get({ id: task.id });
+        expect(dto.state).toBe("failed");
+        expect(dto.nodes[0]).toMatchObject({ errorCode: "task_expired" });
+        expect(dto.nodes[0]?.recoveredAt).not.toBeNull();
+      }
+      // A missed prefetch needs no make-up.
+      expect(await delivery(prefetch.id, node.id)).toMatchObject({
+        state: "failed",
+        errorCode: "task_expired",
+        recoveredAt: null,
+      });
+      const [audit] = (await admin.auditLogs.list({ action: "cache.purge" })).items;
+      expect(audit).toMatchObject({
+        actorType: "system",
+        targetId: recovery.id,
+        metadata: { recovery: true, node: "edge-back", missedCount: 2, sites: ["shop"] },
+      });
+
+      // Once: the next pulls hand out nothing new.
+      expect(await pullCacheTasks(ctx.db, node, 10)).toEqual([]);
+      await succeed(node, recovery.id);
+      expect(await hasDeliverableTasks(ctx.db, node.id)).toBe(false);
+      expect(await pullCacheTasks(ctx.db, node, 10)).toEqual([]);
+      expect((await tenant.cacheTasks.get({ id: recovery.id })).state).toBe("succeeded");
+    });
+
+    it("also makes up deliveries the expiry job failed, and only for the node that missed them", async () => {
+      const offline = await addNode("edge-offline");
+      const online = await addNode("edge-online");
+      const task = await tenant.cacheTasks.create({ type: "url", urls: ["http://shop.test/z"] });
+      await pullCacheTasks(ctx.db, online, 10);
+      await succeed(online, task.id);
+      expect(await expireCacheTasks(ctx.db, new Date(Date.now() + 8 * DAY))).toBeGreaterThan(0);
+      expect(await delivery(task.id, offline.id)).toMatchObject({
+        state: "failed",
+        errorCode: "task_expired",
+        recoveredAt: null,
+      });
+      expect(await hasDeliverableTasks(ctx.db, online.id)).toBe(false);
+      expect(await pullCacheTasks(ctx.db, online, 10)).toEqual([]);
+      const pulled = await pullCacheTasks(ctx.db, offline, 10);
+      expect(pulled.map((t) => t.type)).toEqual(["site"]);
+      expect((await delivery(task.id, offline.id))?.recoveredAt).not.toBeNull();
+      await succeed(offline, pulled[0]?.id ?? "");
+    });
+
+    it("makes up the purges a node skipped while disabled, per organization, once it is enabled again", async () => {
+      const node = await addNode("edge-away");
+      await admin.nodes.disable({ id: node.id });
+      const own = await tenant.cacheTasks.create({ type: "url", urls: ["http://shop.test/y"] });
+      const both = await admin.cacheTasks.create({
+        type: "site",
+        siteIds: [siteId, platformSiteId],
+      });
+      expect((await delivery(own.id, node.id))?.state).toBe("skipped");
+      expect((await delivery(both.id, node.id))?.state).toBe("skipped");
+      // Nothing is handed to a node while it is disabled.
+      expect(await hasDeliverableTasks(ctx.db, node.id)).toBe(false);
+      expect(await pullCacheTasks(ctx.db, await nodeRow(node.id), 10)).toEqual([]);
+      expect((await delivery(own.id, node.id))?.recoveredAt).toBeNull();
+
+      await admin.nodes.enable({ id: node.id });
+      expect(await hasDeliverableTasks(ctx.db, node.id)).toBe(true);
+      const pulled = await pullCacheTasks(ctx.db, await nodeRow(node.id), 10);
+      // One task per organization, each with its own sites.
+      expect(pulled.map((t) => t.items.map((i) => i.siteId)).sort()).toEqual(
+        [[platformSiteId], [siteId]].sort(),
+      );
+      const ids = pulled.map((t) => t.id);
+      const tenantVisible = (await tenant.cacheTasks.list({ pageSize: 100 })).items.filter((t) =>
+        ids.includes(t.id),
+      );
+      expect(tenantVisible.map((t) => t.targets)).toEqual([["shop"]]);
+      const adminVisible = (await admin.cacheTasks.list({ pageSize: 100 })).items.filter((t) =>
+        ids.includes(t.id),
+      );
+      expect(adminVisible.map((t) => t.source)).toEqual(["recovery", "recovery"]);
+      for (const task of [own, both]) {
+        expect((await delivery(task.id, node.id))?.recoveredAt).not.toBeNull();
+      }
+      expect(await pullCacheTasks(ctx.db, await nodeRow(node.id), 10)).toEqual([]);
+    });
+
+    it("flags missed purges of deleted sites without sending anything", async () => {
+      const node = await addNode("edge-late");
+      const temp = await tenant.sites.create({
+        name: "temp",
+        domains: ["temp.test"],
+        origins: [{ address: "origin.test" }],
+      });
+      const task = await tenant.cacheTasks.create({ type: "url", urls: ["http://temp.test/"] });
+      await backdate([task.id], 9);
+      await tenant.sites.delete({ id: temp.site.id });
+      expect(await pullCacheTasks(ctx.db, node, 10)).toEqual([]);
+      expect(await delivery(task.id, node.id)).toMatchObject({ errorCode: "task_expired" });
+      expect((await delivery(task.id, node.id))?.recoveredAt).not.toBeNull();
+      expect(await hasDeliverableTasks(ctx.db, node.id)).toBe(false);
     });
   });
 });

@@ -144,7 +144,8 @@ export async function updateNode(
 /**
  * Disables or re-enables a node. A disabled node is refused by the node
  * channel (it keeps serving its last-known-good configuration) until enabled;
- * its unfinished cache task deliveries are marked skipped.
+ * its unfinished cache task deliveries are marked skipped, and the purges it
+ * missed are made up with whole-site purges once it pulls tasks again.
  */
 export async function setNodeStatus(
   db: Database,
