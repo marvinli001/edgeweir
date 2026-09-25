@@ -1,15 +1,13 @@
 import {
   Add01Icon,
-  DashboardSquare01Icon,
-  GlobeIcon,
   LanguageSkillIcon,
   Moon02Icon,
   ServerStack01Icon,
-  Settings05Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
+import { adminNav, consoleNav } from "@/components/app-sidebar";
 import { useTheme } from "@/components/theme-provider";
 import {
   CommandDialog,
@@ -50,25 +48,23 @@ export function CommandMenu({ isAdmin }: { isAdmin: boolean }) {
       <CommandList>
         <CommandEmpty>{m.command_empty()}</CommandEmpty>
         <CommandGroup heading={m.command_group_navigation()}>
-          <CommandItem onSelect={run(() => navigate({ to: "/" }))}>
-            <HugeiconsIcon icon={DashboardSquare01Icon} strokeWidth={2} />
-            {m.nav_overview()}
-          </CommandItem>
-          {isAdmin ? (
-            <CommandItem onSelect={run(() => navigate({ to: "/clusters" }))}>
-              <HugeiconsIcon icon={ServerStack01Icon} strokeWidth={2} />
-              {m.nav_clusters()}
+          {consoleNav().map((item) => (
+            <CommandItem key={String(item.to)} onSelect={run(() => navigate({ to: item.to }))}>
+              {item.icon}
+              {item.title}
             </CommandItem>
-          ) : null}
-          <CommandItem onSelect={run(() => navigate({ to: "/sites" }))}>
-            <HugeiconsIcon icon={GlobeIcon} strokeWidth={2} />
-            {m.nav_sites()}
-          </CommandItem>
-          <CommandItem onSelect={run(() => navigate({ to: "/settings" }))}>
-            <HugeiconsIcon icon={Settings05Icon} strokeWidth={2} />
-            {m.nav_settings()}
-          </CommandItem>
+          ))}
         </CommandGroup>
+        {isAdmin ? (
+          <CommandGroup heading={m.area_admin()}>
+            {adminNav().map((item) => (
+              <CommandItem key={String(item.to)} onSelect={run(() => navigate({ to: item.to }))}>
+                {item.icon}
+                {item.title}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ) : null}
         <CommandSeparator />
         <CommandGroup heading={m.command_group_actions()}>
           <CommandItem onSelect={run(() => navigate({ to: "/sites", search: { create: true } }))}>
@@ -77,7 +73,7 @@ export function CommandMenu({ isAdmin }: { isAdmin: boolean }) {
           </CommandItem>
           {isAdmin ? (
             <CommandItem
-              onSelect={run(() => navigate({ to: "/clusters", search: { enroll: true } }))}
+              onSelect={run(() => navigate({ to: "/admin/clusters", search: { enroll: true } }))}
             >
               <HugeiconsIcon icon={ServerStack01Icon} strokeWidth={2} />
               {m.nav_add_node()}

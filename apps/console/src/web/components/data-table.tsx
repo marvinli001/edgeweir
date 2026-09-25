@@ -47,7 +47,7 @@ export function DataTable<T extends RowData>({
     getRowId: (row) => getRowId(row),
   });
   return (
-    <div className="overflow-hidden rounded-2xl border" data-testid={testId}>
+    <div className="overflow-hidden rounded-2xl border bg-card shadow-xs" data-testid={testId}>
       <Table>
         <TableHeader className="bg-muted/60">
           {table.getHeaderGroups().map((group) => (
@@ -61,8 +61,13 @@ export function DataTable<T extends RowData>({
           ))}
         </TableHeader>
         <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id} data-row-id={row.id}>
+          {table.getRowModel().rows.map((row, index) => (
+            <TableRow
+              key={row.id}
+              data-row-id={row.id}
+              className="animate-enter"
+              style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+            >
               {row.getAllCells().map((cell) => (
                 <TableCell key={cell.id} className="align-top">
                   <FlexRender cell={cell} />

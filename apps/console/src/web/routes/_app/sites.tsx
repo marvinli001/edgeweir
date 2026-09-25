@@ -15,19 +15,11 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-  FieldSeparator,
-} from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -161,8 +153,7 @@ function SitesPage() {
                 </Button>
               }
               destructive
-              title={m.common_delete()}
-              description={m.sites_delete_confirm({ name: row.original.name })}
+              title={m.sites_delete_confirm({ name: row.original.name })}
               confirmLabel={m.common_delete()}
               onConfirm={async () => {
                 try {
@@ -184,7 +175,6 @@ function SitesPage() {
   return (
     <Page
       title={m.sites_title()}
-      description={m.sites_description()}
       actions={
         <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="new-site">
           <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
@@ -197,11 +187,7 @@ function SitesPage() {
       ) : sites.isError ? (
         <ErrorState error={sites.error} onRetry={() => sites.refetch()} />
       ) : sites.data.length === 0 ? (
-        <EmptyState
-          icon={GlobeIcon}
-          title={m.sites_empty_title()}
-          description={m.sites_empty_description()}
-        >
+        <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
           <Button onClick={() => setCreateOpen(true)}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.nav_new_site()}
@@ -244,7 +230,6 @@ function CreateSiteDialog({
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{m.site_form_title()}</DialogTitle>
-          <DialogDescription>{m.site_form_description()}</DialogDescription>
         </DialogHeader>
         <form
           onSubmit={async (event) => {
@@ -290,8 +275,13 @@ function CreateSiteDialog({
             </Field>
             <Field>
               <FieldLabel htmlFor="domains">{m.site_form_domains()}</FieldLabel>
-              <Textarea id="domains" name="domains" required rows={2} placeholder="demo.test" />
-              <FieldDescription>{m.site_form_domains_hint()}</FieldDescription>
+              <Textarea
+                id="domains"
+                name="domains"
+                required
+                rows={2}
+                placeholder={"demo.test\n*.demo.test"}
+              />
             </Field>
             <div className="grid gap-4 sm:grid-cols-[1fr_7rem_8rem]">
               <Field>
@@ -331,8 +321,12 @@ function CreateSiteDialog({
             </div>
             <Field>
               <FieldLabel htmlFor="hostHeader">{m.site_form_host_header()}</FieldLabel>
-              <Input id="hostHeader" name="hostHeader" maxLength={253} />
-              <FieldDescription>{m.site_form_host_header_hint()}</FieldDescription>
+              <Input
+                id="hostHeader"
+                name="hostHeader"
+                maxLength={253}
+                placeholder={m.site_form_host_header_placeholder()}
+              />
             </Field>
             <FieldSeparator />
             <Field orientation="horizontal">

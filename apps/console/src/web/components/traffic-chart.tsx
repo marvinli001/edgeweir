@@ -1,7 +1,7 @@
 import type { TrafficPoint } from "@edgeweir/contract";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 import { EmptyState } from "@/components/states";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   type ChartConfig,
   ChartContainer,
@@ -18,10 +18,9 @@ export function TrafficChart({ data }: { data: TrafficPoint[] }) {
   } satisfies ChartConfig;
   const time = new Intl.DateTimeFormat(getLocale(), { hour: "2-digit", minute: "2-digit" });
   return (
-    <Card className="@container/card">
+    <Card className="@container/card animate-enter" style={{ animationDelay: "240ms" }}>
       <CardHeader>
         <CardTitle>{m.overview_traffic_title()}</CardTitle>
-        <CardDescription>{m.overview_traffic_description()}</CardDescription>
       </CardHeader>
       <CardContent className="px-2 pt-2 sm:px-6">
         {data.length === 0 ? (

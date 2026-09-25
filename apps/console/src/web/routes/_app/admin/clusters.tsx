@@ -6,6 +6,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import * as z from "zod";
+import { Countdown } from "@/components/appica/countdown";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
@@ -17,7 +18,6 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -35,7 +35,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
-export const Route = createFileRoute("/_app/clusters")({
+export const Route = createFileRoute("/_app/admin/clusters")({
   validateSearch: z.object({
     cluster: z.string().optional(),
     enroll: z.boolean().optional(),
@@ -46,7 +46,11 @@ export const Route = createFileRoute("/_app/clusters")({
 function ClustersPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const clusters = useQuery({ ...orpc.clusters.list.queryOptions(), refetchInterval: 5_000 });
+  const clusters = useQuery({
+    ...orpc.clusters.list.queryOptions(),
+    refetchInterval: 5_000,
+    meta: { background: true },
+  });
   const selected = clusters.data?.find((c) => c.id === search.cluster) ?? clusters.data?.[0];
 
   const setEnrollOpen = (open: boolean) =>
@@ -55,7 +59,6 @@ function ClustersPage() {
   return (
     <Page
       title={m.clusters_title()}
-      description={m.clusters_description()}
       actions={
         selected ? (
           <Button size="sm" onClick={() => setEnrollOpen(true)} data-testid="add-node">
@@ -70,11 +73,7 @@ function ClustersPage() {
       ) : clusters.isError ? (
         <ErrorState error={clusters.error} onRetry={() => clusters.refetch()} />
       ) : !selected ? (
-        <EmptyState
-          icon={ServerStack01Icon}
-          title={m.clusters_empty_title()}
-          description={m.clusters_empty_description()}
-        />
+        <EmptyState icon={ServerStack01Icon} title={m.clusters_empty_title()} />
       ) : (
         <>
           <ClusterSummary
@@ -167,6 +166,7 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
   const nodes = useQuery({
     ...orpc.nodes.list.queryOptions({ input: { clusterId: cluster.id } }),
     refetchInterval: 5_000,
+    meta: { background: true },
   });
   const latest = cluster.latestRevision?.revision ?? 0;
   const columns = React.useMemo<Columns<Node>>(
@@ -191,7 +191,10 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
             <Badge variant="outline">{m.nodes_disabled()}</Badge>
           ) : row.original.online ? (
             <Badge data-testid="node-online">
-              <span className="size-1.5 rounded-full bg-current" />
+              <span className="relative flex size-1.5">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-current opacity-60 motion-reduce:hidden" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-current" />
+              </span>
               {m.nodes_online()}
             </Badge>
           ) : (
@@ -250,15 +253,11 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-medium">{m.nodes_title()}</h2>
       {nodes.isPending ? (
-        <LoadingState rows={2} />
+        <LoadingState />
       ) : nodes.isError ? (
         <ErrorState error={nodes.error} onRetry={() => nodes.refetch()} />
       ) : nodes.data.length === 0 ? (
-        <EmptyState
-          icon={ServerStack01Icon}
-          title={m.nodes_empty_title()}
-          description={m.nodes_empty_description()}
-        >
+        <EmptyState icon={ServerStack01Icon} title={m.nodes_empty_title()}>
           <Button onClick={onEnroll}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.nav_add_node()}
@@ -355,11 +354,11 @@ function RevisionsSection({ cluster }: { cluster: Cluster }) {
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-medium">{m.revisions_title()}</h2>
       {revisions.isPending ? (
-        <LoadingState rows={2} />
+        <LoadingState />
       ) : revisions.isError ? (
         <ErrorState error={revisions.error} onRetry={() => revisions.refetch()} />
       ) : revisions.data.length === 0 ? (
-        <EmptyState title={m.overview_revisions_empty()} />
+        <EmptyState title={m.admin_revisions_empty()} />
       ) : (
         <DataTable
           data={revisions.data.slice(0, 20)}
@@ -405,7 +404,6 @@ function EnrollDialog({
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{m.enroll_title()}</DialogTitle>
-          <DialogDescription>{m.enroll_description()}</DialogDescription>
         </DialogHeader>
         {result ? (
           <div className="flex flex-col gap-4">
@@ -413,8 +411,10 @@ function EnrollDialog({
               <Field>
                 <FieldLabel>{m.enroll_command()}</FieldLabel>
                 <CodeBlock value={result.installCommand} testId="install-command" />
-                <FieldDescription>
-                  {m.enroll_expires({ time: formatDateTime(result.expiresAt) })} ·{" "}
+                <FieldDescription className="flex items-center gap-1.5">
+                  <span title={formatDateTime(result.expiresAt)}>{m.enroll_expires_in()}</span>
+                  <Countdown target={result.expiresAt} className="text-foreground" />
+                  <span aria-hidden="true">·</span>
                   {m.enroll_shown_once()}
                 </FieldDescription>
               </Field>

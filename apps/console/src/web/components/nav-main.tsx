@@ -1,6 +1,6 @@
 import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, type LinkProps, useRouterState } from "@tanstack/react-router";
 import type * as React from "react";
 import {
   SidebarGroup,
@@ -14,34 +14,49 @@ import { m } from "@/lib/i18n";
 
 export interface NavItem {
   title: string;
-  to: "/" | "/clusters" | "/sites" | "/settings";
+  to: NonNullable<LinkProps["to"]>;
   icon: React.ReactNode;
   testId: string;
+  /** Match the path exactly instead of as a prefix (for area roots). */
+  exact?: boolean;
 }
 
-export function NavMain({ items }: { items: NavItem[] }) {
+export function NavMain({
+  items,
+  label,
+  showNewSite,
+}: {
+  items: NavItem[];
+  label?: string;
+  showNewSite?: boolean;
+}) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <SidebarGroup>
       <SidebarGroupContent className="flex flex-col gap-2">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip={m.nav_new_site()}
-              className="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
-              render={<Link to="/sites" search={{ create: true }} />}
-            >
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-              <span>{m.nav_new_site()}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-        <SidebarGroupLabel>{m.nav_section_platform()}</SidebarGroupLabel>
+        {showNewSite ? (
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip={m.nav_new_site()}
+                className="min-w-8 bg-primary text-primary-foreground shadow-md shadow-primary/20 duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
+                render={<Link to="/sites" search={{ create: true }} />}
+              >
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                <span>{m.nav_new_site()}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        ) : null}
+        {label ? <SidebarGroupLabel>{label}</SidebarGroupLabel> : null}
         <SidebarMenu>
           {items.map((item) => {
-            const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
+            const to = String(item.to);
+            const active = item.exact
+              ? pathname === to
+              : pathname === to || pathname.startsWith(`${to}/`);
             return (
-              <SidebarMenuItem key={item.to}>
+              <SidebarMenuItem key={to}>
                 <SidebarMenuButton
                   tooltip={item.title}
                   isActive={active}

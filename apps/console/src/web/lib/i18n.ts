@@ -28,3 +28,10 @@ export function formatDateTime(iso: string): string {
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat(getLocale()).format(value);
 }
+
+/** 0–100 → "87.5%" in the current locale. */
+export function formatPercent(value: number): string {
+  return new Intl.NumberFormat(getLocale(), { style: "percent", maximumFractionDigits: 1 }).format(
+    value / 100,
+  );
+}

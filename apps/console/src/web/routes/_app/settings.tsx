@@ -1,13 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import type * as React from "react";
 import { CodeBlock } from "@/components/copy-button";
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useTheme } from "@/components/theme-provider";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,73 +25,21 @@ import {
   locales,
   m,
   setLocale,
+  timeAgo,
 } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { errorMessage } from "@/lib/orpc";
 
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsPage,
 });
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid gap-1 py-3 sm:grid-cols-[14rem_1fr] sm:gap-4">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-sm break-all">{children}</dd>
-    </div>
-  );
-}
-
 function SettingsPage() {
-  const settings = useQuery(orpc.settings.get.queryOptions());
   const { theme, setTheme } = useTheme();
   return (
     <Page title={m.settings_title()}>
       <Card>
         <CardHeader>
-          <CardTitle>{m.settings_general()}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {settings.isPending ? (
-            <LoadingState rows={3} />
-          ) : settings.isError ? (
-            <ErrorState error={settings.error} onRetry={() => settings.refetch()} />
-          ) : (
-            <dl className="divide-y">
-              <Row label={m.settings_version()}>{settings.data.version}</Row>
-              <Row label={m.settings_console_url()}>{settings.data.consoleUrl}</Row>
-              <Row label={m.settings_node_api_url()}>
-                <span className="font-mono">{settings.data.nodeApiUrl}</span>
-                <p className="mt-1 text-xs text-muted-foreground">{m.settings_node_api_hint()}</p>
-              </Row>
-              <Row label={m.settings_ca_fingerprint()}>
-                <code className="font-mono text-xs" data-testid="ca-fingerprint">
-                  {settings.data.nodeCaSha256}
-                </code>
-              </Row>
-              <Row label={m.settings_analytics()}>
-                <Badge variant="outline">{settings.data.analyticsMode}</Badge>
-              </Row>
-              <Row label={m.settings_telemetry()}>
-                {settings.data.telemetryEnabled
-                  ? m.settings_telemetry_on()
-                  : m.settings_telemetry_off()}
-              </Row>
-              <Row label={m.settings_openapi()}>
-                <a
-                  className="font-mono text-primary underline-offset-4 hover:underline"
-                  href="/api/v1/openapi.json"
-                >
-                  /api/v1/openapi.json
-                </a>
-              </Row>
-            </dl>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{m.settings_appearance()}</CardTitle>
+          <CardTitle>{m.settings_preferences()}</CardTitle>
         </CardHeader>
         <CardContent>
           <FieldGroup className="sm:flex-row">
@@ -169,7 +115,6 @@ function ApiKeysCard() {
     <Card>
       <CardHeader>
         <CardTitle>{m.settings_api_keys()}</CardTitle>
-        <CardDescription>{m.settings_api_keys_description()}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <form
@@ -193,28 +138,32 @@ function ApiKeysCard() {
           <FieldError>{errorMessage(create.error, m.common_unknown_error())}</FieldError>
         ) : null}
         {create.data?.key ? (
-          <Field>
-            <FieldDescription>{m.settings_api_key_created()}</FieldDescription>
+          <Field className="animate-enter">
             <CodeBlock value={create.data.key} testId="new-api-key" />
+            <FieldDescription>{m.settings_api_key_created()}</FieldDescription>
           </Field>
         ) : null}
         {keys.isPending ? (
-          <LoadingState rows={1} />
+          <LoadingState className="min-h-24" />
         ) : keys.isError ? (
           <ErrorState error={keys.error} onRetry={() => keys.refetch()} />
         ) : keys.data.length === 0 ? (
           <EmptyState title={m.settings_api_keys_empty()} />
         ) : (
-          <ul className="divide-y rounded-2xl border text-sm">
-            {keys.data.map((k) => (
-              <li key={k.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
+          <ul className="divide-y rounded-2xl border bg-card text-sm shadow-xs">
+            {keys.data.map((k, index) => (
+              <li
+                key={k.id}
+                className="flex flex-wrap items-center gap-3 px-3 py-2.5 animate-enter"
+                style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+              >
                 <span className="font-medium">{k.name ?? "—"}</span>
-                <code className="text-xs text-muted-foreground">
-                  {m.settings_api_key_prefix()}: {k.start ?? k.prefix ?? "—"}
-                </code>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {m.settings_api_key_created_at()}:{" "}
-                  {formatDateTime(new Date(k.createdAt).toISOString())}
+                <code className="text-xs text-muted-foreground">{k.start ?? k.prefix ?? "—"}…</code>
+                <span
+                  className="ml-auto text-xs text-muted-foreground"
+                  title={formatDateTime(new Date(k.createdAt).toISOString())}
+                >
+                  {timeAgo(new Date(k.createdAt).toISOString())}
                 </span>
               </li>
             ))}

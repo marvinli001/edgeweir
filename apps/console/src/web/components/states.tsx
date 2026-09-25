@@ -1,30 +1,29 @@
 import { Alert02Icon, InboxIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type * as React from "react";
+import { Loader } from "@/components/appica/loader";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { m } from "@/lib/i18n";
 import { errorMessage } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
 
-/** Loading placeholder shaped like a card/table. */
-export function LoadingState({ rows = 4, label }: { rows?: number; label?: string }) {
+/**
+ * First-load placeholder: a centered loader, faded in after a short delay so fast responses
+ * never flash it. Refreshes of loaded data keep the old content and only run the top progress bar.
+ */
+export function LoadingState({ className }: { className?: string }) {
   return (
-    <div className="flex flex-col gap-3" role="status" aria-live="polite" aria-busy="true">
-      <span className="sr-only">{label ?? m.common_loading()}</span>
-      <Skeleton className="h-8 w-1/3" />
-      {Array.from({ length: rows }, (_, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: static placeholder rows
-        <Skeleton key={i} className="h-10 w-full" />
-      ))}
+    <div
+      role="status"
+      aria-live="polite"
+      className={cn(
+        "flex min-h-40 flex-1 items-center justify-center animate-in fade-in fill-mode-both delay-200 duration-300",
+        className,
+      )}
+    >
+      <Loader label={m.common_loading()} />
     </div>
   );
 }
@@ -48,23 +47,20 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
 
 export function EmptyState({
   title,
-  description,
   icon = InboxIcon,
   children,
 }: {
   title: string;
-  description?: string;
   icon?: typeof InboxIcon;
   children?: React.ReactNode;
 }) {
   return (
-    <Empty className="border border-dashed">
+    <Empty className="border border-dashed bg-linear-to-b from-muted/40 to-transparent animate-enter">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <HugeiconsIcon icon={icon} strokeWidth={2} />
         </EmptyMedia>
         <EmptyTitle>{title}</EmptyTitle>
-        {description ? <EmptyDescription>{description}</EmptyDescription> : null}
       </EmptyHeader>
       {children ? <EmptyContent>{children}</EmptyContent> : null}
     </Empty>

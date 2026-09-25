@@ -29,11 +29,7 @@ function AppLayout() {
         } as React.CSSProperties
       }
     >
-      <AppSidebar
-        variant="inset"
-        user={{ name: session.user.name, email: session.user.email }}
-        isAdmin={isAdmin}
-      />
+      <AppSidebar variant="inset" user={{ name: session.user.name, email: session.user.email }} />
       <SidebarInset>
         <Outlet />
       </SidebarInset>
