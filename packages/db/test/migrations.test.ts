@@ -18,7 +18,7 @@ afterAll(async () => {
 });
 
 describe("migrations", () => {
-  it("create every v0 table", async () => {
+  it("create every table", async () => {
     const result = await client.query<{ table_name: string }>(
       "select table_name from information_schema.tables where table_schema = 'public' order by 1",
     );
@@ -41,6 +41,10 @@ describe("migrations", () => {
       "config_revision",
       "node_config_status",
       "audit_log",
+      "region",
+      "organization_settings",
+      "node_certificate_revocation",
+      "system_setting",
     ]) {
       expect(tables).toContain(name);
     }
@@ -81,5 +85,39 @@ describe("migrations", () => {
     ).rejects.toThrow();
     // The same name as a wildcard suffix is a different route.
     await db.insert(schema.siteDomain).values({ siteId: b.id, name: "demo.test", wildcard: true });
+  });
+
+  it("detaches regions and default clusters instead of cascading deletes", async () => {
+    await db.insert(schema.organization).values({
+      id: "org_2",
+      name: "Tenant",
+      slug: "tenant",
+      createdAt: new Date(),
+    });
+    const [cl] = await db.insert(schema.cluster).values({ name: "edge-b" }).returning();
+    const [rg] = await db.insert(schema.region).values({ name: "East", code: "east" }).returning();
+    if (!cl || !rg) throw new Error("not inserted");
+    const [group] = await db
+      .insert(schema.nodeGroup)
+      .values({ clusterId: cl.id, name: "g", regionId: rg.id })
+      .returning();
+    await db
+      .insert(schema.organizationSettings)
+      .values({ organizationId: "org_2", defaultClusterId: cl.id });
+    await expect(db.insert(schema.region).values({ name: "Dup", code: "east" })).rejects.toThrow();
+
+    await db.delete(schema.region).where(eq(schema.region.id, rg.id));
+    const [detached] = await db
+      .select()
+      .from(schema.nodeGroup)
+      .where(eq(schema.nodeGroup.id, group?.id ?? ""));
+    expect(detached?.regionId).toBeNull();
+
+    await db.delete(schema.cluster).where(eq(schema.cluster.id, cl.id));
+    const [settings] = await db
+      .select()
+      .from(schema.organizationSettings)
+      .where(eq(schema.organizationSettings.organizationId, "org_2"));
+    expect(settings?.defaultClusterId).toBeNull();
   });
 });

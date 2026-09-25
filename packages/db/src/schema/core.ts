@@ -38,6 +38,15 @@ export const cluster = pgTable("cluster", {
   updatedAt: updatedAt(),
 });
 
+/** Platform-wide region dictionary (e.g. "cn-east"), used by node groups and later scheduling. */
+export const region = pgTable("region", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  /** Stable lowercase code, unique across the platform. */
+  code: text("code").notNull().unique(),
+  createdAt: createdAt(),
+});
+
 /** Node groups partition a cluster, e.g. canary nodes that receive revisions first. */
 export const nodeGroup = pgTable(
   "node_group",
@@ -47,6 +56,7 @@ export const nodeGroup = pgTable(
       .notNull()
       .references(() => cluster.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    regionId: uuid("region_id").references(() => region.id, { onDelete: "set null" }),
     isDefault: boolean("is_default").notNull().default(false),
     isCanary: boolean("is_canary").notNull().default(false),
     createdAt: createdAt(),
@@ -225,7 +235,14 @@ export const configRevision = pgTable(
     /** Binary NodeConfig protobuf. */
     ir: bytea("ir").notNull(),
     siteCount: integer("site_count").notNull().default(0),
+    /** English rendering of the reason, kept for API readers; the UI localizes reason_code. */
     reason: text("reason").notNull().default(""),
+    /** Stable reason code (e.g. "site_updated"); empty for revisions published before it existed. */
+    reasonCode: text("reason_code").notNull().default(""),
+    reasonParams: jsonb("reason_params")
+      .$type<Record<string, string | number>>()
+      .notNull()
+      .default({}),
     createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
@@ -290,10 +307,14 @@ export const auditLog = pgTable(
     /** user | api_key | node | system */
     actorType: text("actor_type").notNull(),
     actorId: text("actor_id").notNull().default(""),
+    /** Display name of the actor at the time of the action. */
+    actorName: text("actor_name").notNull().default(""),
     organizationId: text("organization_id"),
     action: text("action").notNull(),
     targetType: text("target_type").notNull().default(""),
     targetId: text("target_id").notNull().default(""),
+    /** Display name of the target at the time of the action (survives deletion). */
+    targetName: text("target_name").notNull().default(""),
     ip: text("ip").notNull().default(""),
     userAgent: text("user_agent").notNull().default(""),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
@@ -301,5 +322,40 @@ export const auditLog = pgTable(
   (t) => [
     index("audit_log_occurred_idx").on(t.occurredAt),
     index("audit_log_org_idx").on(t.organizationId, t.occurredAt),
+    index("audit_log_action_idx").on(t.action, t.occurredAt),
   ],
 );
+
+/** Per-organization policy that better-auth's organization table does not model. */
+export const organizationSettings = pgTable("organization_settings", {
+  organizationId: text("organization_id")
+    .primaryKey()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  /** Cluster that sites created by the organization's members land on. */
+  defaultClusterId: uuid("default_cluster_id").references(() => cluster.id, {
+    onDelete: "set null",
+  }),
+  /** Members must enable two-factor authentication before using the console. */
+  requireTwoFactor: boolean("require_two_factor").notNull().default(false),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * Node certificates revoked when a node is deleted. The node channel refuses
+ * any client certificate whose serial is listed here.
+ */
+export const nodeCertificateRevocation = pgTable("node_certificate_revocation", {
+  serial: text("serial").primaryKey(),
+  /** Not a foreign key: the node row is gone by the time the entry matters. */
+  nodeId: uuid("node_id").notNull(),
+  fingerprintSha256: text("fingerprint_sha256").notNull().default(""),
+  reason: text("reason").notNull().default(""),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** Platform-wide key/value settings (setup token state, later SMTP, GeoIP ...). */
+export const systemSetting = pgTable("system_setting", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
+  updatedAt: updatedAt(),
+});
