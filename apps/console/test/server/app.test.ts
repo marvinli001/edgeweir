@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { schema } from "@edgeweir/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { createClusterTx } from "../../src/server/services/clusters";
@@ -166,5 +167,39 @@ describe("HTTP API", async () => {
     const audit = await call("/api/v1/audit-logs", { headers: { "x-api-key": key } });
     const entries = (await audit.json()) as { action: string; actorType: string }[];
     expect(entries.find((e) => e.action === "site.create")?.actorType).toBe("api_key");
+
+    // System settings belong to the admin area.
+    expect((await call("/api/v1/settings", { headers: { "x-api-key": key } })).status).toBe(200);
+  });
+
+  it("keeps platform procedures away from tenant members", async () => {
+    const [org] = await ctx.db.select().from(schema.organization).limit(1);
+    if (!org) throw new Error("organization missing");
+    const member = await ctx.auth.api.createUser({
+      body: { email: "member@example.com", password: "correct horse battery", name: "Member" },
+    });
+    await ctx.db.insert(schema.member).values({
+      id: "member_tenant",
+      organizationId: org.id,
+      userId: member.user.id,
+      role: "member",
+      createdAt: new Date(),
+    });
+    const signIn = await call("/api/auth/sign-in/email", {
+      method: "POST",
+      body: JSON.stringify({ email: "member@example.com", password: "correct horse battery" }),
+    });
+    const cookie = (signIn.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+    const rpc = (path: string) =>
+      call(`/rpc/${path}`, {
+        method: "POST",
+        headers: { cookie, "x-csrf-token": "orpc" },
+        body: "{}",
+      });
+
+    expect((await rpc("sites/list")).status).toBe(200);
+    for (const path of ["settings/get", "clusters/list", "auditLogs/list"]) {
+      expect((await rpc(path)).status, path).toBe(403);
+    }
   });
 });
