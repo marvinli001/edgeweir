@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { cn } from "cn";
 import type * as React from "react";
 import { Button } from "@/components/ui/button";
+import { m } from "@/lib/i18n";
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -66,7 +67,7 @@ function DialogContent({
             }
           >
             <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{m.common_close()}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Popup>
@@ -96,7 +97,9 @@ function DialogFooter({
     >
       {children}
       {showCloseButton && (
-        <DialogPrimitive.Close render={<Button variant="outline" />}>Close</DialogPrimitive.Close>
+        <DialogPrimitive.Close render={<Button variant="outline" />}>
+          {m.common_close()}
+        </DialogPrimitive.Close>
       )}
     </div>
   );

@@ -617,5 +617,10 @@
   "purge_no_nodes": "无节点",
   "purge_node_counts": "成功 {succeeded} · 失败 {failed}",
   "purge_details": "详情",
-  "purge_targets": "目标"
+  "purge_targets": "目标",
+  "a11y_breadcrumb": "面包屑导航",
+  "a11y_more": "更多",
+  "a11y_sidebar": "侧边栏",
+  "a11y_toggle_sidebar": "展开或收起侧边栏",
+  "a11y_command_palette": "命令面板"
 }

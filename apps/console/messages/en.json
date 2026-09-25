@@ -617,5 +617,10 @@
   "purge_no_nodes": "No nodes",
   "purge_node_counts": "{succeeded} ok · {failed} failed",
   "purge_details": "Details",
-  "purge_targets": "Targets"
+  "purge_targets": "Targets",
+  "a11y_breadcrumb": "Breadcrumb",
+  "a11y_more": "More",
+  "a11y_sidebar": "Sidebar",
+  "a11y_toggle_sidebar": "Toggle sidebar",
+  "a11y_command_palette": "Command palette"
 }
