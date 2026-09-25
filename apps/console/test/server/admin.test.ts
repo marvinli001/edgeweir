@@ -98,6 +98,20 @@ describe("admin area procedures", async () => {
       ["users.setAdmin", () => member.users.setAdmin({ id: "u", isAdmin: true })],
       ["users.setDisabled", () => member.users.setDisabled({ id: "u", disabled: true })],
       ["settings.get", () => member.settings.get()],
+      [
+        "landing.update",
+        () =>
+          member.landing.update({
+            template: "horizon",
+            brandName: "x",
+            headline: "",
+            description: "",
+            contactEmail: "",
+            signupUrl: "",
+            icp: "",
+            showStats: true,
+          }),
+      ],
       ["auditLogs.list", () => member.auditLogs.list({})],
       ["auditLogs.facets", () => member.auditLogs.facets()],
       ["analytics.topNodes", () => member.analytics.topNodes({})],

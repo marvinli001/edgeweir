@@ -14,6 +14,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { API_KEY_HEADER } from "./lib/auth";
 import type { AppContext } from "./lib/context";
 import { type RequestContext, router } from "./rpc/router";
+import { getLandingPage } from "./services/landing";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -21,6 +22,32 @@ const here = dirname(fileURLToPath(import.meta.url));
 export function assetPath(...segments: string[]): string {
   const candidates = [join(here, ...segments), join(here, "..", ...segments)];
   return candidates.find((p) => existsSync(p)) ?? (candidates[0] as string);
+}
+
+const escapeHtml = (value: string) =>
+  value.replace(
+    /[&<>"']/g,
+    (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch] ?? ch,
+  );
+
+/**
+ * The SPA shell is `noindex`; a public landing page at `/` is meant to be
+ * found, so it gets the brand as title, its description, and no robots block.
+ */
+export function landingShell(
+  indexHtml: string,
+  landing: { brandName: string; headline: string; description: string },
+): string {
+  const title = landing.headline ? `${landing.headline} | ${landing.brandName}` : landing.brandName;
+  const head = [
+    `<title>${escapeHtml(title)}</title>`,
+    landing.description
+      ? `<meta name="description" content="${escapeHtml(landing.description)}" />`
+      : "",
+  ].join("");
+  return indexHtml
+    .replace(/\s*<meta name="robots"[^>]*>/, "")
+    .replace(/<title>[^<]*<\/title>/, () => head);
 }
 
 function clientIp(c: Parameters<typeof getConnInfo>[0]): string {
@@ -131,6 +158,11 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
   if (opts.webDist) {
     const root = resolve(opts.webDist);
     const indexHtml = readFileSync(join(root, "index.html"), "utf8");
+    app.get("/", async (c) => {
+      const { settings } = await getLandingPage(ctx.db).catch(() => ({ settings: null }));
+      if (!settings || settings.template === "none") return c.html(indexHtml);
+      return c.html(landingShell(indexHtml, settings));
+    });
     app.use(
       "/assets/*",
       serveStatic({

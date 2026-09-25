@@ -19,6 +19,7 @@ import {
   updateCluster,
 } from "../services/clusters";
 import { createEnrollmentToken } from "../services/enrollment";
+import { getLandingPage, updateLandingSettings } from "../services/landing";
 import {
   addMember,
   cancelInvitation,
@@ -393,6 +394,12 @@ export const router = os.router({
       analyticsMode: context.app.env.EDGEWEIR_ANALYTICS,
       setupCompletedAt: await setupCompletedAt(context.app.db),
     })),
+  },
+  landing: {
+    get: os.landing.get.handler(({ context }) => getLandingPage(context.app.db)),
+    update: admin.landing.update.handler(({ input, context }) =>
+      updateLandingSettings(context.app.db, input, context.actor),
+    ),
   },
   auditLogs: {
     list: admin.auditLogs.list.handler(({ input, context }) =>

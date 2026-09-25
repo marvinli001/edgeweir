@@ -295,6 +295,14 @@ export const contract = {
   settings: {
     get: oc.route({ method: "GET", path: "/settings", tags: ["settings"] }).output(s.settings),
   },
+  landing: {
+    /** Public: the landing page at `/` (template "none" means there is none). */
+    get: oc.route({ method: "GET", path: "/landing", tags: ["landing"] }).output(s.landingPage),
+    update: oc
+      .route({ method: "PUT", path: "/landing", tags: ["landing"] })
+      .input(s.landingSettings)
+      .output(s.landingSettings),
+  },
   auditLogs: {
     list: oc
       .route({ method: "GET", path: "/audit-logs", tags: ["audit"] })
