@@ -148,6 +148,21 @@ export const site = pgTable(
   (t) => [index("site_org_idx").on(t.organizationId), index("site_cluster_idx").on(t.clusterId)],
 );
 
+/** Sites a user starred; they lead the site list on the console home. */
+export const siteStar = pgTable(
+  "site_star",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.siteId] }), index("site_star_site_idx").on(t.siteId)],
+);
+
 export const siteDomain = pgTable(
   "site_domain",
   {
