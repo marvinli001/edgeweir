@@ -79,6 +79,7 @@ URL、目录、全站刷新和 URL 预热不走 revision，而是类型化的节
 - 内部 CA（ECDSA P-256，10 年）首次启动生成，私钥用 `EDGEWEIR_MASTER_KEY` 派生的密钥做 AES-256-GCM 信封加密后入库。信封的附加认证数据绑定表、字段和记录 id（v2），旧版本写入的 v1 密文在启动时自动升级。
 - 服务端证书每次启动由内部 CA 签发，SAN 包含 `EDGEWEIR_NODE_API_URL` 的主机名和 `EDGEWEIR_NODE_API_HOSTNAMES`。
 - 注册：安装命令带一次性 token（经 `EDGEWEIR_TOKEN` 环境变量传递）和 CA 证书指纹（`--ca-sha256`）。节点先校验服务端证书链里的 CA 指纹，再发送 token 和本地生成的 CSR；控制台验证 CSR 签名，签发 30 天、CN=节点 ID、仅限客户端认证的证书；token 原子地标记为已用。
+- 控制面绝不保存节点 SSH 凭据，也没有保存的选项；节点只通过控制台生成的一次性安装命令接入，由节点主动注册（[ADR-0016](docs/adr/0016-one-line-install.md)、[ADR-0018](docs/adr/0018-trust-and-security-baseline.md) 的收尾更新记录）。
 - 除 `Enroll` 外的 RPC 都要求经 CA 校验的客户端证书，且证书序列号必须等于库里记录的当前序列号（轮换后旧证书立即失效；删除节点时序列号写入吊销表）。停用的节点每次 RPC 都被拒绝。剩余有效期不足三分之一时，`ReportStatus` 提示节点调用 `RenewCertificate`。
 - RPC：`Enroll`、`RenewCertificate`、`WatchConfig`、`GetConfig`、`ReportStatus`（含源站健康与错误码）、`ReportStats`（每次一条 upsert 语句）、`GetOriginCredentials`（只返回本集群站点引用的 S3 密钥）、`PullTasks`、`ReportTaskResult`。proto 当前为 `v0.2.2`（[ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) 更新记录）。
 
