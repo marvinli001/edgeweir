@@ -3,6 +3,8 @@ import type { Revision, Site, siteCreateInput, siteUpdateInput } from "@edgeweir
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, eq, exists, ilike, inArray, ne, or, type SQL, sql } from "drizzle-orm";
 import type * as z from "zod";
+import { readCacheKey } from "../lib/cache-key";
+import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { defaultClusterId } from "./clusters";
@@ -12,6 +14,11 @@ type SiteCreate = z.output<typeof siteCreateInput>;
 type SiteUpdate = z.output<typeof siteUpdateInput>;
 type OriginInput = SiteCreate["origins"][number];
 type CacheRuleInput = SiteCreate["cacheRules"][number];
+type OriginSettingsInput = SiteCreate["originSettings"];
+type CacheSettingsInput = SiteCreate["cacheSettings"];
+
+/** Envelope purpose of S3 secret access keys (bound as AAD). */
+export const S3_SECRET_PURPOSE = "origin-credential/s3-secret";
 
 /** Which sites a caller may see: all (platform admin) or one organization. */
 export type SiteScope = { all: true } | { all: false; organizationId: string };
@@ -62,8 +69,16 @@ async function toSiteDtos(
         )
         .orderBy(asc(schema.origin.createdAt), asc(schema.origin.id))
     : [];
+  const credentials = await db
+    .select({ id: schema.originCredential.id, accessKeyId: schema.originCredential.accessKeyId })
+    .from(schema.originCredential)
+    .where(inArray(schema.originCredential.siteId, ids));
   return rows.map((r) => {
-    const poolIds = new Set(pools.filter((p) => p.siteId === r.id).map((p) => p.id));
+    const sitePools = pools
+      .filter((p) => p.siteId === r.id)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const poolIds = new Set(sitePools.map((p) => p.id));
+    const pool = sitePools[0];
     return {
       id: r.id,
       name: r.name,
@@ -84,6 +99,14 @@ async function toSiteDtos(
           weight: o.weight,
           backup: o.backup,
           hostHeader: o.hostHeader,
+          sni: o.sni,
+          s3: o.credentialId
+            ? {
+                region: o.s3Region,
+                bucket: o.s3Bucket,
+                accessKeyId: credentials.find((c) => c.id === o.credentialId)?.accessKeyId ?? "",
+              }
+            : null,
         })),
       cacheRules: rules
         .filter((c) => c.siteId === r.id)
@@ -91,11 +114,31 @@ async function toSiteDtos(
           id: c.id,
           priority: c.priority,
           pathPrefixes: c.pathPrefixes,
+          paths: c.paths,
           extensions: c.extensions,
+          statusCodes: c.statusCodes,
+          minSizeBytes: c.minSizeBytes,
+          maxSizeBytes: c.maxSizeBytes,
           action: c.action === "bypass" ? "bypass" : "cache",
           edgeTtlSeconds: c.edgeTtlSeconds,
           originCacheControl: c.originCacheControl === "respect" ? "respect" : "override",
+          staleWhileRevalidateSeconds: c.staleWhileRevalidateSeconds,
+          staleIfErrorSeconds: c.staleIfErrorSeconds,
         })),
+      originSettings: {
+        policy: (pool?.policy ?? "weighted_random") as Site["originSettings"]["policy"],
+        tlsVerify: pool?.tlsVerify ?? true,
+        maxFails: pool?.maxFails ?? 3,
+        recoverySeconds: pool?.recoverySeconds ?? 30,
+        connectTimeoutMs: pool?.connectTimeoutMs ?? 10_000,
+        sendTimeoutMs: pool?.sendTimeoutMs ?? 60_000,
+        readTimeoutMs: pool?.readTimeoutMs ?? 60_000,
+        keepalive: pool?.keepalive ?? true,
+        keepaliveIdleSeconds: pool?.keepaliveIdleSeconds ?? 60,
+        keepaliveMaxRequests: pool?.keepaliveMaxRequests ?? 1000,
+        websocket: r.websocket,
+      },
+      cacheSettings: { cacheKey: readCacheKey(r.cacheKey), rangeSlice: r.rangeSlice },
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
@@ -155,7 +198,7 @@ export async function listSites(
   return { items: await toSiteDtos(db, rows), total: total?.n ?? 0 };
 }
 
-async function findSite(db: Executor, id: string, scope: SiteScope) {
+export async function findSite(db: Executor, id: string, scope: SiteScope) {
   const [row] = await db
     .select()
     .from(schema.site)
@@ -206,19 +249,101 @@ async function assertDomainsFree(
   }
 }
 
-async function insertOrigins(tx: Tx, poolId: string, origins: OriginInput[]) {
+/**
+ * Resolves the credential of every S3 origin: a given secret creates or
+ * rotates the site's credential for that access key (version + 1); without a
+ * secret the stored credential of the same access key is kept. Credentials no
+ * origin uses any more are deleted.
+ */
+async function syncCredentials(
+  tx: Tx,
+  siteId: string,
+  origins: OriginInput[],
+  masterKey: MasterKey,
+): Promise<Map<string, string>> {
+  const existing = await tx
+    .select()
+    .from(schema.originCredential)
+    .where(eq(schema.originCredential.siteId, siteId));
+  const byKey = new Map(existing.map((c) => [c.accessKeyId, c]));
+  const used = new Map<string, string>();
+  for (const o of origins) {
+    if (!o.s3) continue;
+    const { accessKeyId, secretAccessKey } = o.s3;
+    const current = byKey.get(accessKeyId);
+    if (secretAccessKey) {
+      const secretEnvelope = JSON.stringify(masterKey.seal(secretAccessKey, S3_SECRET_PURPOSE));
+      if (current) {
+        const [row] = await tx
+          .update(schema.originCredential)
+          .set({ secretEnvelope, version: current.version + 1 })
+          .where(eq(schema.originCredential.id, current.id))
+          .returning();
+        if (row) byKey.set(accessKeyId, row);
+      } else {
+        const [row] = await tx
+          .insert(schema.originCredential)
+          .values({ siteId, accessKeyId, secretEnvelope })
+          .returning();
+        if (row) byKey.set(accessKeyId, row);
+      }
+    } else if (!current) {
+      fail("S3_SECRET_REQUIRED", `secret access key required for ${accessKeyId}`, {
+        accessKeyId,
+      });
+    }
+    const credential = byKey.get(accessKeyId);
+    if (credential) used.set(accessKeyId, credential.id);
+  }
+  const unused = existing.filter((c) => !used.has(c.accessKeyId)).map((c) => c.id);
+  if (unused.length) {
+    await tx.delete(schema.originCredential).where(inArray(schema.originCredential.id, unused));
+  }
+  return used;
+}
+
+async function insertOrigins(
+  tx: Tx,
+  pool: { id: string; siteId: string },
+  origins: OriginInput[],
+  masterKey: MasterKey,
+) {
+  const credentials = await syncCredentials(tx, pool.siteId, origins, masterKey);
   await tx.insert(schema.origin).values(
     origins.map((o, i) => ({
       createdAt: ordered(i),
-      poolId,
+      poolId: pool.id,
       address: o.address,
       port: o.port,
       scheme: o.scheme,
       weight: o.weight,
       backup: o.backup,
       hostHeader: o.hostHeader,
+      sni: o.sni,
+      credentialId: o.s3 ? (credentials.get(o.s3.accessKeyId) ?? null) : null,
+      s3Region: o.s3?.region ?? "",
+      s3Bucket: o.s3?.bucket ?? "",
     })),
   );
+}
+
+function poolSettingsValues(settings: OriginSettingsInput) {
+  return {
+    policy: settings.policy,
+    tlsVerify: settings.tlsVerify,
+    maxFails: settings.maxFails,
+    recoverySeconds: settings.recoverySeconds,
+    connectTimeoutMs: settings.connectTimeoutMs,
+    sendTimeoutMs: settings.sendTimeoutMs,
+    readTimeoutMs: settings.readTimeoutMs,
+    keepalive: settings.keepalive,
+    keepaliveIdleSeconds: settings.keepaliveIdleSeconds,
+    keepaliveMaxRequests: settings.keepaliveMaxRequests,
+  };
+}
+
+function cacheSettingsValues(settings: CacheSettingsInput) {
+  return { cacheKey: settings.cacheKey, rangeSlice: settings.rangeSlice };
 }
 
 async function insertCacheRules(tx: Tx, siteId: string, rules: CacheRuleInput[]) {
@@ -229,12 +354,31 @@ async function insertCacheRules(tx: Tx, siteId: string, rules: CacheRuleInput[])
       siteId,
       priority: r.priority,
       pathPrefixes: r.pathPrefixes,
+      paths: r.paths,
       extensions: r.extensions,
+      statusCodes: r.statusCodes,
+      minSizeBytes: r.minSizeBytes,
+      maxSizeBytes: r.maxSizeBytes,
       action: r.action,
       edgeTtlSeconds: r.edgeTtlSeconds,
       originCacheControl: r.originCacheControl,
+      staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
+      staleIfErrorSeconds: r.staleIfErrorSeconds,
     })),
   );
+}
+
+/** The site's origin pool (the oldest one; sites have exactly one). */
+async function sitePool(tx: Tx, siteId: string) {
+  let [pool] = await tx
+    .select()
+    .from(schema.originPool)
+    .where(eq(schema.originPool.siteId, siteId))
+    .orderBy(asc(schema.originPool.createdAt))
+    .limit(1);
+  if (!pool) [pool] = await tx.insert(schema.originPool).values({ siteId }).returning();
+  if (!pool) throw new Error("origin pool missing");
+  return pool;
 }
 
 /**
@@ -245,7 +389,7 @@ async function insertCacheRules(tx: Tx, siteId: string, rules: CacheRuleInput[])
 export async function createSite(
   db: Database,
   input: SiteCreate,
-  ctx: { organizationId: string; actor: Actor },
+  ctx: { organizationId: string; actor: Actor; masterKey: MasterKey },
 ): Promise<{ site: Site; revision: Revision }> {
   const domains = uniqueDomains(input.domains);
   return db.transaction(async (tx) => {
@@ -259,15 +403,24 @@ export async function createSite(
 
     const [siteRow] = await tx
       .insert(schema.site)
-      .values({ organizationId: ctx.organizationId, clusterId, name: input.name })
+      .values({
+        organizationId: ctx.organizationId,
+        clusterId,
+        name: input.name,
+        websocket: input.originSettings.websocket,
+        ...cacheSettingsValues(input.cacheSettings),
+      })
       .returning();
     if (!siteRow) throw new Error("site insert failed");
     await tx
       .insert(schema.siteDomain)
       .values(domains.map((d, i) => ({ siteId: siteRow.id, createdAt: ordered(i), ...d })));
-    const [pool] = await tx.insert(schema.originPool).values({ siteId: siteRow.id }).returning();
+    const [pool] = await tx
+      .insert(schema.originPool)
+      .values({ siteId: siteRow.id, ...poolSettingsValues(input.originSettings) })
+      .returning();
     if (!pool) throw new Error("origin pool insert failed");
-    await insertOrigins(tx, pool.id, input.origins);
+    await insertOrigins(tx, pool, input.origins, ctx.masterKey);
     await insertCacheRules(tx, siteRow.id, input.cacheRules);
     const { row: revision } = await publishRevision(tx, {
       clusterId,
@@ -296,7 +449,7 @@ export async function createSite(
 export async function updateSite(
   db: Database,
   input: SiteUpdate,
-  ctx: { scope: SiteScope; actor: Actor },
+  ctx: { scope: SiteScope; actor: Actor; masterKey: MasterKey },
 ): Promise<{ site: Site; revision: Revision }> {
   return db.transaction(async (tx) => {
     const row = await findSite(tx, input.id, ctx.scope);
@@ -315,17 +468,29 @@ export async function updateSite(
       changed.push("domains");
     }
     if (input.origins) {
-      let [pool] = await tx
-        .select()
-        .from(schema.originPool)
-        .where(eq(schema.originPool.siteId, row.id))
-        .orderBy(asc(schema.originPool.createdAt))
-        .limit(1);
-      if (!pool) [pool] = await tx.insert(schema.originPool).values({ siteId: row.id }).returning();
-      if (!pool) throw new Error("origin pool missing");
+      const pool = await sitePool(tx, row.id);
       await tx.delete(schema.origin).where(eq(schema.origin.poolId, pool.id));
-      await insertOrigins(tx, pool.id, input.origins);
+      await insertOrigins(tx, pool, input.origins, ctx.masterKey);
       changed.push("origins");
+    }
+    if (input.originSettings) {
+      const pool = await sitePool(tx, row.id);
+      await tx
+        .update(schema.originPool)
+        .set(poolSettingsValues(input.originSettings))
+        .where(eq(schema.originPool.id, pool.id));
+      await tx
+        .update(schema.site)
+        .set({ websocket: input.originSettings.websocket })
+        .where(eq(schema.site.id, row.id));
+      changed.push("originSettings");
+    }
+    if (input.cacheSettings) {
+      await tx
+        .update(schema.site)
+        .set(cacheSettingsValues(input.cacheSettings))
+        .where(eq(schema.site.id, row.id));
+      changed.push("cacheSettings");
     }
     if (input.cacheRules) {
       await tx.delete(schema.cacheRule).where(eq(schema.cacheRule.siteId, row.id));
@@ -358,6 +523,8 @@ export async function updateSite(
           ? { origins: input.origins.map((o) => `${o.scheme}://${o.address}:${o.port}`) }
           : {}),
         ...(input.cacheRules ? { cacheRules: input.cacheRules.length } : {}),
+        ...(input.originSettings ? { originSettings: input.originSettings } : {}),
+        ...(input.cacheSettings ? { cacheSettings: input.cacheSettings } : {}),
         revision: revision.revision,
       },
     });

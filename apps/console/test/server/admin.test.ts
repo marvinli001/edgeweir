@@ -1,3 +1,4 @@
+import { contract } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -11,6 +12,40 @@ import {
   setupPlatform,
   signIn,
 } from "./helpers";
+
+/** Every contract procedure outside the admin area (checked against the contract below). */
+const CONSOLE_PROCEDURES = [
+  "system.status",
+  "system.setup",
+  "account.me",
+  "account.setActiveOrganization",
+  "overview.get",
+  "sites.list",
+  "sites.get",
+  "sites.create",
+  "sites.update",
+  "sites.delete",
+  "sites.purgeAll",
+  "sites.originHealth",
+  "cacheTasks.list",
+  "cacheTasks.get",
+  "cacheTasks.create",
+  "members.list",
+  "members.invite",
+  "members.cancelInvitation",
+  "members.updateRole",
+  "members.remove",
+  "organization.update",
+  "invitations.get",
+  "invitations.accept",
+];
+
+function procedureNames(node: unknown, prefix = ""): string[] {
+  if (node && typeof node === "object" && "~orpc" in node) return [prefix];
+  return Object.entries(node as Record<string, unknown>).flatMap(([key, child]) =>
+    procedureNames(child, prefix ? `${prefix}.${key}` : key),
+  );
+}
 
 describe("admin area procedures", async () => {
   const { ctx, client: pglite } = await createTestContext();
@@ -105,6 +140,9 @@ describe("admin area procedures", async () => {
       const error = await rpcError(call());
       expect(error.status, name).toBe(403);
     }
+    // Every procedure is either in the console list or covered by this table.
+    const covered = [...CONSOLE_PROCEDURES, ...calls.map(([name]) => name)].sort();
+    expect(covered).toEqual(procedureNames(contract).sort());
     // A member still reaches the console.
     expect((await member.sites.list({})).total).toBe(0);
     expect((await member.account.me()).user.isAdmin).toBe(false);
