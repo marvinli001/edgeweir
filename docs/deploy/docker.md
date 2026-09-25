@@ -15,8 +15,8 @@
 
 ```bash
 mkdir -p /opt/edgeweir && cd /opt/edgeweir
-curl -fsSLO https://raw.githubusercontent.com/edgeweir/edgeweir/main/compose.yml
-curl -fsSL -o .env https://raw.githubusercontent.com/edgeweir/edgeweir/main/.env.example
+curl -fsSLO https://raw.githubusercontent.com/edgeweir/edgeweir/master/compose.yml
+curl -fsSL -o .env https://raw.githubusercontent.com/edgeweir/edgeweir/master/.env.example
 ```
 
 编辑 `.env`，至少填写：

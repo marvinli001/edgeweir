@@ -17,11 +17,11 @@
 
 ## 支持的版本
 
-1.0 之前只支持 `main` 分支的最新代码。安全修复只进入 `main`，不回移到旧版本或旧的预发布版本。
+1.0 之前只支持 `master` 分支的最新代码。安全修复只进入 `master`，不回移到旧版本或旧的预发布版本。
 
 | 版本 | 是否支持 |
 | --- | --- |
-| `main` 最新代码 | 支持 |
+| `master` 最新代码 | 支持 |
 | 其他任何版本 | 不支持 |
 
 1.0 发布时会更新本节，写明各版本的支持周期。
@@ -123,7 +123,7 @@ This policy covers [edgeweir/edgeweir](https://github.com/edgeweir/edgeweir) (co
 
 **Trust baseline.** No phone-home of any kind and no licence-check code. Telemetry is off by default and requires explicit opt-in. Secrets (CA key, certificate keys, DNS API credentials, optionally saved SSH credentials) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` (AES-256-GCM, a random data key per record) before they reach the database. Every management action is written to an audit log. Every release is signed with cosign keyless, ships with an SBOM and SLSA provenance, and is built reproducibly from the tagged source.
 
-**Supported versions.** Before 1.0, only the latest `main` is supported. Security fixes land on `main` only.
+**Supported versions.** Before 1.0, only the latest `master` is supported. Security fixes land on `master` only.
 
 **Reporting a vulnerability.** Do not open a public issue. Email [security@edgeweir.dev](mailto:security@edgeweir.dev) or open a private advisory on GitHub ([console](https://github.com/edgeweir/edgeweir/security/advisories/new), [node](https://github.com/edgeweir/edgeweir-node/security/advisories/new)). We acknowledge reports within 3 working days and follow a 90-day coordinated disclosure window, counted from the day we receive the report.
 

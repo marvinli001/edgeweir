@@ -1,6 +1,6 @@
 # 路线图
 
-本文件是 Edgeweir 的功能全集与阶段划分，内容来自 [BOOTSTRAP.md](BOOTSTRAP.md) §3（Phase 0）和 §4（MVP、v1、v2），覆盖 edgeweir（控制面）和 edgeweir-node（节点）两个仓库。每个阶段内按领域分组；勾选表示已完成并合入 main。设计依据见 [docs/adr/](docs/adr/README.md)。
+本文件是 Edgeweir 的功能全集与阶段划分，内容来自 [BOOTSTRAP.md](BOOTSTRAP.md) §3（Phase 0）和 §4（MVP、v1、v2），覆盖 edgeweir（控制面）和 edgeweir-node（节点）两个仓库。每个阶段内按领域分组；勾选表示已完成并合入 master。设计依据见 [docs/adr/](docs/adr/README.md)。
 
 ## Phase 0（已完成于本仓库初始化）
 

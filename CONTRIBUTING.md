@@ -126,7 +126,7 @@ BREAKING CHANGE: nodes built from proto/v0.x must be regenerated.
    ```
 
 4. 运行 `pnpm proto:gen`，把 proto 改动和 `packages/proto` 下的生成代码放在同一个提交里。
-5. 合入 `main` 后，由维护者打 tag：`proto/vX.Y.Z`。新增字段或 RPC 升 minor，只改注释升 patch。
+5. 合入 `master` 后，由维护者打 tag：`proto/vX.Y.Z`。新增字段或 RPC 升 minor，只改注释升 patch。
 6. 在 edgeweir-node 仓库中重新生成 Go 代码并适配：
 
    ```sh
