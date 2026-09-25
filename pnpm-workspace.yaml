@@ -1,0 +1,30 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  esbuild: true
+  "@bufbuild/buf": true
+  "@biomejs/biome": true
+  turbo: true
+  msw: false
+
+minimumReleaseAgeExclude:
+  - '@better-auth/api-key@1.7.6'
+  - '@better-auth/core@1.7.6'
+  - '@better-auth/drizzle-adapter@1.7.6'
+  - '@better-auth/kysely-adapter@1.7.6'
+  - '@better-auth/memory-adapter@1.7.6'
+  - '@better-auth/mongo-adapter@1.7.6'
+  - '@better-auth/passkey@1.7.6'
+  - '@better-auth/prisma-adapter@1.7.6'
+  - '@better-auth/telemetry@1.7.6'
+  - '@turbo/darwin-64@2.11.4'
+  - '@turbo/darwin-arm64@2.11.4'
+  - '@turbo/linux-64@2.11.4'
+  - '@turbo/linux-arm64@2.11.4'
+  - '@turbo/windows-64@2.11.4'
+  - '@turbo/windows-arm64@2.11.4'
+  - better-auth@1.7.6
+  - turbo@2.11.4
+  - vite@8.3.1
