@@ -1,0 +1,23 @@
+{
+  "name": "@edgeweir/contract",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "oRPC contract (zod schemas) shared by the console UI, server and the public OpenAPI.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@orpc/contract": "1.15.4",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "vitest": "5.0.1"
+  }
+}
