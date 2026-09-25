@@ -1,0 +1,3 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`compileNodeConfig > keeps a stable hash for an empty cluster (cross-language vector) 1`] = `"1a2430303030303030302d303030302d303030302d303030302d3030303030303030303030302204085010012a120a0764656661756c7410805018402080f524"`;
