@@ -5,6 +5,9 @@ const password = process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123";
 const expectedRevision = process.env.E2E_EXPECT_REVISION;
 
 test("login -> clusters & nodes -> sites, then switch to English", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
   // Login (zh-CN is the default locale).
   await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
@@ -19,7 +22,7 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   await expect(page.getByTestId("page-title")).toHaveText("集群与节点");
   const nodes = page.getByTestId("nodes-table");
   await expect(nodes).toBeVisible();
-  await expect(nodes.getByText("edge-e2e-1")).toBeVisible();
+  await expect(nodes.getByTestId("node-name")).toHaveText("edge-e2e-1");
   await expect(nodes.getByTestId("node-online")).toBeVisible();
   if (expectedRevision) {
     await expect(nodes.getByTestId("node-applied-revision")).toHaveText(`#${expectedRevision}`);
@@ -27,10 +30,27 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   }
   await expect(page.getByTestId("revisions-table")).toBeVisible();
 
-  // Sites: demo.test created through the API is listed.
+  // The "add node" dialog produces a one-time install command with the CA pin.
+  await page.getByTestId("add-node").click();
+  await page.getByLabel("节点名称（可选）").fill("edge-ui");
+  await page.getByTestId("generate-install-command").click();
+  const command = page.getByTestId("install-command");
+  await expect(command).toContainText("/install.sh | sudo bash -s --");
+  await expect(command).toContainText("--token ewt_");
+  await expect(command).toContainText(/--ca-sha256 [0-9a-f]{64}/);
+  await page.keyboard.press("Escape");
+
+  // Sites: demo.test created through the API is listed; create one through the UI.
   await page.getByTestId("nav-sites").click();
   await expect(page.getByTestId("page-title")).toHaveText("网站");
-  await expect(page.getByTestId("sites-table").getByText("demo.test")).toBeVisible();
+  const sites = page.getByTestId("sites-table");
+  await expect(sites.getByText("demo.test")).toBeVisible();
+  await page.getByTestId("new-site").click();
+  await page.getByLabel("名称").fill("ui-site");
+  await page.getByLabel("域名").fill("ui.test");
+  await page.getByLabel("源站地址").fill("whoami");
+  await page.getByTestId("create-site-submit").click();
+  await expect(sites.getByText("ui.test")).toBeVisible();
 
   // i18n: switch to English from the user menu; the UI reloads in English.
   await page.getByTestId("user-menu").click();
@@ -39,4 +59,6 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   await expect(page.getByTestId("page-title")).toHaveText("Sites");
   await page.getByTestId("nav-clusters").click();
   await expect(page.getByTestId("page-title")).toHaveText("Clusters & nodes");
+
+  expect(pageErrors).toEqual([]);
 });
