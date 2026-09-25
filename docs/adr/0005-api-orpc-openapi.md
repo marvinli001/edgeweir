@@ -74,3 +74,4 @@ Phase 0 范围：
 
 > 更新记录：
 > - 2026-09-25：npm `latest` 为 oRPC 1.15.4，2.0 仍是 beta（2.0.0-beta.40，路由改为 `.meta(openapi())`）。采用 1.15 稳定版的 `.route({ method, path })`，zod 4 转换器从 `@orpc/zod/zod4` 引入；2.0 GA 后另行评估迁移。`/rpc` 额外启用 oRPC 的 SimpleCsrfProtection（`x-csrf-token` 头）；`/rpc` 丢弃 `x-api-key`，`/api/v1` 丢弃 cookie，两个入口各自只认一种凭据。
+> - 2026-09-25（MVP M1）：错误改为稳定错误码。契约里的 `errors.ts` 列出每个错误码及其 HTTP 状态和消息参数（例如 `DOMAIN_IN_USE` 409 `{domains}`、`CLUSTER_NOT_EMPTY` 409 `{nodes, sites}`）；服务端用 `fail(code, message, data)` 抛出 `ORPCError`，响应体的 `code` 就是错误码，`data` 放参数，`message` 保留英文。界面按错误码本地化（`error_<code>` 消息），未知错误码回退到服务端文本；测试检查每个错误码在两种语言里都有带同样参数的消息。`sites.list` 与 `auditLogs.list` 的输出从数组改为 `{ items, total }`（分页），属于 1.0 之前的不兼容变更。

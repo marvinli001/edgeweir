@@ -80,3 +80,11 @@ Phase 0 范围：
 > 更新记录：
 > - 2026-09-25：better-auth 1.7.6；schema 由官方 CLI（现为 `auth` 包，`pnpm dlx auth@1.7.6 generate`）生成。better-auth 自带的遥测默认关闭，但可被 `BETTER_AUTH_TELEMETRY` 环境变量打开；控制台在代码里显式 `telemetry: { enabled: false }` 并在启动时删除该变量。AccessKey 使用 api-key 插件，前缀 `ewk_`，`enableSessionForAPIKeys` 让 AccessKey 以其所有者身份走同一套 RBAC，限速 600 次/分钟。
 > - 2026-09-25：界面按角色分为**控制台**与**后台**。所有用户（包括平台管理员）的主视图都是控制台（概览、网站、设置），平台管理员拥有控制台的全部功能；此外顶栏多一个 [控制台 | 后台] 分段切换，进入 `/admin/*`（平台概览、集群与节点、审计日志、系统设置；以后还有组织与用户、套餐、DNS 服务商等系统级配置）。`/admin` 路由在前端对非管理员重定向到 `/`，对应的 oRPC 过程在服务端使用 `admin` 守卫。`settings.get`（节点通道地址、CA 指纹、遥测、统计模式）随之改为仅平台管理员可调用，测试覆盖租户成员调用 `settings`、`clusters`、`auditLogs` 返回 403。
+> - 2026-09-25（MVP M1）：
+>   - **setup token**：未初始化时控制台生成 `ews_` 开头的随机 token，用主密钥信封加密后存入 `system_setting`（另存 SHA-256 用于比对），每次启动打印到日志（多实例、重启打印同一个 token；主密钥更换后重新生成）。`system.setup` 必须带正确的 token，否则返回 `SETUP_TOKEN_INVALID` 并写审计日志；初始化成功后 token 作废，系统设置页显示使用时间。上文"初始化窗口风险"由此关闭。
+>   - **组织设置**：默认集群和"要求成员启用两步验证"存在自有表 `organization_settings`，不改 better-auth 生成的 `organization` 表。租户新建网站落在组织的默认集群（未设置时是最早的集群）；只有平台管理员能指定集群（否则 `CLUSTER_SELECTION_FORBIDDEN`）。
+>   - **成员与邀请**：成员管理、邀请、改角色、移除由控制台自己的 oRPC 过程完成（直接读写 better-auth 的 `member`、`invitation` 表），规则是：组织 owner/admin 可管理成员，只有 owner（或平台管理员）能授予、修改、移除 owner，组织至少保留一个 owner。邀请以链接形式交付（`/invite/<id>`，7 天有效，同一地址的新邀请替换旧邀请）；邀请 id 就是链接里的凭据。已有账号必须以受邀邮箱登录后接受，新用户在接受时设置姓名和密码。SMTP 在 M5 接入前不发邮件。
+>   - **当前组织**：`account.setActiveOrganization` 校验成员关系后写入 session 的 `activeOrganizationId`；中间件每次请求都重新核对成员关系，失效时回退到最早加入的组织。侧边栏在用户属于多个组织时显示切换。
+>   - **两步验证策略**：组织要求 2FA 而成员未启用时，租户过程返回 `TWO_FACTOR_REQUIRED`，界面把成员留在账户安全页，直到启用 TOTP。平台管理员不受组织策略约束。TOTP 与 passkey 使用 better-auth 的 twoFactor / passkey 插件和对应的客户端插件；登录时有 2FA 的账号进入验证码（或备用码）步骤。
+>   - **账号停用**：后台停用账号时设置 better-auth 的 `banned` 并删除该用户所有会话；中间件对 `banned` 的用户（包括其 AccessKey）一律返回 `USER_DISABLED`。平台管理员不能停用自己或取消自己的管理员角色（`CANNOT_MODIFY_SELF`）。
+>   - better-auth 默认的登录限速（每个客户端 10 秒 3 次）保持不变；界面对 429 显示本地化提示。

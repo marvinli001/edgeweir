@@ -136,3 +136,4 @@ Phase 0 范围：
 
 > 更新记录：
 > - 2026-09-25：proto v0（tag `proto/v0.1.0`）在 BOOTSTRAP 列出的 5 个 RPC 之外增加了 `RenewCertificate`，用于证书自动轮换。控制台记录每个节点当前证书的序列号，轮换后旧证书立即失效；`ReportStatus` 在剩余有效期不足 1/3 时返回 `renew_certificate`。服务端用 `node:http2` 的 `createSecureServer({ requestCert: true, rejectUnauthorized: false })`，在 Connect 的 `contextValues` 中读取已验证的对端证书。
+> - 2026-09-25（MVP M1）：节点可以停用、启用和删除。停用的节点每次 RPC 都返回 `permission_denied`，已打开的 WatchConfig 流在下一次唤醒（最多 15 秒的 keepalive）时结束；agent 按原有逻辑继续用 last-known-good 配置服务。删除节点时把证书序列号写入 `node_certificate_revocation`，通道在查节点之前先拒绝已吊销的序列号（`unauthenticated`，"certificate has been revoked"），节点只能用新的注册 token 重新注册。节点组只在控制面使用，不进入 proto，节点在同一集群的节点组之间移动不影响配置版本。

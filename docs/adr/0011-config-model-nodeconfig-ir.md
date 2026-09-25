@@ -103,3 +103,6 @@ Phase 0 范围：
 | @bufbuild/protobuf | 2.15.0 | npm registry |
 | google.golang.org/protobuf | v1.36.12 | proxy.golang.org |
 | buf | 1.73.0 | proxy.golang.org（github.com/bufbuild/buf） |
+
+> 更新记录：
+> - 2026-09-25（MVP M1）：revision 的原因改为 `reason_code` + `reason_params`（`cluster_created`、`site_created`、`site_updated`、`site_deleted`、`site_purged`、`rollback`），界面按语言渲染；`reason` 列仍写英文文本给 API 读者，旧 revision 没有原因码时界面显示原文。网站编辑（名称、域名、源站、缓存规则）每次保存都发布新 revision，内容哈希不变时返回当前 revision。
