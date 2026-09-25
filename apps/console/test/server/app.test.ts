@@ -63,7 +63,7 @@ describe("HTTP API", async () => {
         await call("/rpc/sites/list", {
           method: "POST",
           headers: { "x-csrf-token": "orpc" },
-          body: "{}",
+          body: JSON.stringify({ json: {} }),
         })
       ).status,
     ).toBe(401);
@@ -133,27 +133,27 @@ describe("HTTP API", async () => {
 
     const list = await call("/api/v1/sites", { headers: { "x-api-key": key } });
     expect(list.status).toBe(200);
-    expect(((await list.json()) as unknown[]).length).toBe(1);
+    expect(((await list.json()) as { items: unknown[]; total: number }).total).toBe(1);
 
     // Each surface accepts only its own credential.
     expect((await call("/api/v1/sites", { headers: { cookie } })).status).toBe(401);
     const rpcWithKey = await call("/rpc/sites/list", {
       method: "POST",
       headers: { "x-api-key": key, "x-csrf-token": "orpc" },
-      body: "{}",
+      body: JSON.stringify({ json: {} }),
     });
     expect(rpcWithKey.status).toBe(401);
     const rpcWithCookie = await call("/rpc/sites/list", {
       method: "POST",
       headers: { cookie, "x-csrf-token": "orpc" },
-      body: "{}",
+      body: JSON.stringify({ json: {} }),
     });
     expect(rpcWithCookie.status).toBe(200);
     // Without the CSRF header the UI surface refuses the request.
     const rpcNoCsrf = await call("/rpc/sites/list", {
       method: "POST",
       headers: { cookie },
-      body: "{}",
+      body: JSON.stringify({ json: {} }),
     });
     expect(rpcNoCsrf.status).toBe(403);
 
@@ -164,9 +164,18 @@ describe("HTTP API", async () => {
     });
     expect(invalid.status).toBe(400);
 
-    const audit = await call("/api/v1/audit-logs", { headers: { "x-api-key": key } });
-    const entries = (await audit.json()) as { action: string; actorType: string }[];
-    expect(entries.find((e) => e.action === "site.create")?.actorType).toBe("api_key");
+    const audit = await call("/api/v1/audit-logs?action=site.create", {
+      headers: { "x-api-key": key },
+    });
+    const entries = (await audit.json()) as {
+      items: { action: string; actorType: string; actorName: string; targetName: string }[];
+    };
+    expect(entries.items).toHaveLength(1);
+    expect(entries.items[0]).toMatchObject({
+      actorType: "api_key",
+      actorName: "Admin",
+      targetName: "demo",
+    });
 
     // System settings belong to the admin area.
     expect((await call("/api/v1/settings", { headers: { "x-api-key": key } })).status).toBe(200);
@@ -194,7 +203,7 @@ describe("HTTP API", async () => {
       call(`/rpc/${path}`, {
         method: "POST",
         headers: { cookie, "x-csrf-token": "orpc" },
-        body: "{}",
+        body: JSON.stringify({ json: {} }),
       });
 
     expect((await rpc("sites/list")).status).toBe(200);

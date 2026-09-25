@@ -1,77 +1,68 @@
-import { contract } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { implement, ORPCError } from "@orpc/server";
 import { and, asc, count, desc, eq, gt, sql } from "drizzle-orm";
-import { API_KEY_HEADER } from "../lib/auth";
-import type { AppContext } from "../lib/context";
-import type { Actor } from "../services/audit";
-import { createCluster, getCluster, listClusters } from "../services/clusters";
-import { createEnrollmentToken } from "../services/enrollment";
-import { getNode, listNodes, ONLINE_WINDOW_SECONDS } from "../services/nodes";
-import { rollbackToRevision, toRevisionDto } from "../services/revisions";
-import { isInitialized, runSetup } from "../services/setup";
+import { fail } from "../lib/errors";
 import {
+  acceptInvitation,
+  getInvitationInfo,
+  resolveCaller,
+  setActiveOrganization,
+  toMe,
+} from "../services/account";
+import { auditFacets, listAuditLogs } from "../services/audit";
+import {
+  createCluster,
+  deleteCluster,
+  getCluster,
+  listClusters,
+  updateCluster,
+} from "../services/clusters";
+import { createEnrollmentToken } from "../services/enrollment";
+import {
+  addMember,
+  cancelInvitation,
+  createInvitation,
+  invitationUrl,
+  listMembers,
+  removeMember,
+  updateMemberRole,
+} from "../services/members";
+import {
+  createNodeGroup,
+  deleteNodeGroup,
+  listNodeGroups,
+  updateNodeGroup,
+} from "../services/node-groups";
+import {
+  deleteNode,
+  getNode,
+  listNodes,
+  ONLINE_WINDOW_SECONDS,
+  setNodeStatus,
+  updateNode,
+} from "../services/nodes";
+import {
+  createOrganization,
+  listOrganizations,
+  updateOrganization,
+} from "../services/organizations";
+import { createRegion, deleteRegion, listRegions, updateRegion } from "../services/regions";
+import { rollbackToRevision, toRevisionDto } from "../services/revisions";
+import { isInitialized, runSetup, setupCompletedAt } from "../services/setup";
+import {
+  allSites,
   createSite,
   deleteSite,
   getSite,
   listSites,
   purgeSite,
-  type SiteScope,
+  updateSite,
 } from "../services/sites";
+import { createUser, listUsers, setUserAdmin, setUserDisabled } from "../services/users";
+import { admin, authed, maybeAuthed, orgManager, os, tenant } from "./base";
 
-export interface RequestContext {
-  app: AppContext;
-  headers: Headers;
-  ip: string;
-  userAgent: string;
-}
+export type { RequestContext } from "./base";
 
-const os = implement(contract).$context<RequestContext>();
-
-/** Resolves the session (cookie or x-api-key) and the caller's tenant. */
-const authed = os.use(async ({ context, next }) => {
-  let result: Awaited<ReturnType<typeof context.app.auth.api.getSession>>;
-  try {
-    result = await context.app.auth.api.getSession({ headers: context.headers });
-  } catch (error) {
-    // better-auth rejects invalid/expired API keys by throwing a 4xx APIError.
-    const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
-    if (statusCode >= 500) throw error;
-    throw new ORPCError("UNAUTHORIZED", { message: "invalid credentials" });
-  }
-  if (!result) throw new ORPCError("UNAUTHORIZED", { message: "authentication required" });
-  const { user, session } = result;
-  const roles = String((user as { role?: string | null }).role ?? "").split(",");
-  const isAdmin = roles.includes("admin");
-  let organizationId = (session as { activeOrganizationId?: string | null }).activeOrganizationId;
-  if (!organizationId) {
-    const [membership] = await context.app.db
-      .select({ organizationId: schema.member.organizationId })
-      .from(schema.member)
-      .where(eq(schema.member.userId, user.id))
-      .orderBy(asc(schema.member.createdAt))
-      .limit(1);
-    organizationId = membership?.organizationId ?? null;
-  }
-  const actor: Actor = {
-    type: context.headers.has(API_KEY_HEADER) ? "api_key" : "user",
-    id: user.id,
-    ip: context.ip,
-    userAgent: context.userAgent,
-  };
-  const scope: SiteScope = isAdmin
-    ? { all: true }
-    : organizationId
-      ? { all: false, organizationId }
-      : { all: false, organizationId: "__none__" };
-  return next({ context: { user, isAdmin, organizationId, actor, scope } });
-});
-
-/** Platform infrastructure (clusters, nodes, audit) is administrator-only. */
-const admin = authed.use(async ({ context, next }) => {
-  if (!context.isAdmin) throw new ORPCError("FORBIDDEN", { message: "administrator only" });
-  return next();
-});
+const ok = { ok: true as const };
 
 export const router = os.router({
   system: {
@@ -83,8 +74,27 @@ export const router = os.router({
       runSetup(context.app, input, { ip: context.ip, userAgent: context.userAgent }),
     ),
   },
+  account: {
+    me: authed.account.me.handler(({ context }) => toMe(context.caller)),
+    setActiveOrganization: authed.account.setActiveOrganization.handler(
+      async ({ input, context }) => {
+        await setActiveOrganization(context.app.db, {
+          sessionId: context.sessionId,
+          caller: context.caller,
+          organizationId: input.organizationId,
+        });
+        const caller = await resolveCaller(
+          context.app.db,
+          context.user,
+          context.isAdmin,
+          input.organizationId,
+        );
+        return toMe(caller);
+      },
+    ),
+  },
   overview: {
-    get: authed.overview.get.handler(async ({ context }) => {
+    get: tenant.overview.get.handler(async ({ context }) => {
       const db = context.app.db;
       const since = sql`now() - make_interval(secs => ${ONLINE_WINDOW_SECONDS})`;
       const stats = schema.nodeMinuteStats;
@@ -92,7 +102,7 @@ export const router = os.router({
         db.select({ n: count() }).from(schema.cluster),
         db.select({ n: count() }).from(schema.node),
         db.select({ n: count() }).from(schema.node).where(gt(schema.node.lastSeenAt, since)),
-        listSites(db, context.scope),
+        allSites(db, context.scope),
         db
           .select()
           .from(schema.configRevision)
@@ -134,7 +144,15 @@ export const router = os.router({
     create: admin.clusters.create.handler(({ input, context }) =>
       createCluster(context.app.db, input, context.actor),
     ),
+    update: admin.clusters.update.handler(({ input, context }) =>
+      updateCluster(context.app.db, input, context.actor),
+    ),
+    delete: admin.clusters.delete.handler(async ({ input, context }) => {
+      await deleteCluster(context.app.db, input.id, context.actor);
+      return ok;
+    }),
     revisions: admin.clusters.revisions.handler(async ({ input, context }) => {
+      await getCluster(context.app.db, input.id);
       const rows = await context.app.db
         .select()
         .from(schema.configRevision)
@@ -151,7 +169,7 @@ export const router = os.router({
           userId: context.actor.id,
         }),
       );
-      if (!result) throw new ORPCError("NOT_FOUND", { message: "revision not found" });
+      if (!result) fail("REVISION_NOT_FOUND", "revision not found");
       return toRevisionDto(result.row);
     }),
     createEnrollmentToken: admin.clusters.createEnrollmentToken.handler(({ input, context }) =>
@@ -163,61 +181,209 @@ export const router = os.router({
       }),
     ),
   },
+  nodeGroups: {
+    list: admin.nodeGroups.list.handler(({ input, context }) =>
+      listNodeGroups(context.app.db, input.clusterId),
+    ),
+    create: admin.nodeGroups.create.handler(({ input, context }) =>
+      createNodeGroup(context.app.db, input, context.actor),
+    ),
+    update: admin.nodeGroups.update.handler(({ input, context }) =>
+      updateNodeGroup(context.app.db, input, context.actor),
+    ),
+    delete: admin.nodeGroups.delete.handler(async ({ input, context }) => {
+      await deleteNodeGroup(context.app.db, input.id, context.actor);
+      return ok;
+    }),
+  },
+  regions: {
+    list: admin.regions.list.handler(({ context }) => listRegions(context.app.db)),
+    create: admin.regions.create.handler(({ input, context }) =>
+      createRegion(context.app.db, input, context.actor),
+    ),
+    update: admin.regions.update.handler(({ input, context }) =>
+      updateRegion(context.app.db, input, context.actor),
+    ),
+    delete: admin.regions.delete.handler(async ({ input, context }) => {
+      await deleteRegion(context.app.db, input.id, context.actor);
+      return ok;
+    }),
+  },
   nodes: {
     list: admin.nodes.list.handler(({ input, context }) =>
       listNodes(context.app.db, input.clusterId),
     ),
     get: admin.nodes.get.handler(({ input, context }) => getNode(context.app.db, input.id)),
+    update: admin.nodes.update.handler(({ input, context }) =>
+      updateNode(context.app.db, input, context.actor),
+    ),
+    disable: admin.nodes.disable.handler(({ input, context }) =>
+      setNodeStatus(context.app.db, input.id, "disabled", context.actor),
+    ),
+    enable: admin.nodes.enable.handler(({ input, context }) =>
+      setNodeStatus(context.app.db, input.id, "active", context.actor),
+    ),
+    delete: admin.nodes.delete.handler(async ({ input, context }) => {
+      await deleteNode(context.app.db, input.id, context.actor);
+      return ok;
+    }),
   },
   sites: {
-    list: authed.sites.list.handler(({ context }) => listSites(context.app.db, context.scope)),
-    get: authed.sites.get.handler(({ input, context }) =>
+    list: tenant.sites.list.handler(({ input, context }) =>
+      listSites(context.app.db, context.scope, {
+        ...input,
+        // Clusters are platform infrastructure: tenants cannot filter by them.
+        clusterId: context.isAdmin ? input.clusterId : undefined,
+      }),
+    ),
+    get: tenant.sites.get.handler(({ input, context }) =>
       getSite(context.app.db, input.id, context.scope),
     ),
-    create: authed.sites.create.handler(({ input, context }) => {
+    create: tenant.sites.create.handler(({ input, context }) => {
       if (!context.organizationId) {
-        throw new ORPCError("FORBIDDEN", { message: "caller is not a member of any organization" });
+        fail("NOT_A_MEMBER", "caller is not a member of any organization");
+      }
+      if (input.clusterId && !context.isAdmin) {
+        fail("CLUSTER_SELECTION_FORBIDDEN", "only platform administrators choose the cluster");
       }
       return createSite(context.app.db, input, {
         organizationId: context.organizationId,
         actor: context.actor,
       });
     }),
-    delete: authed.sites.delete.handler(({ input, context }) =>
+    update: tenant.sites.update.handler(({ input, context }) =>
+      updateSite(context.app.db, input, { scope: context.scope, actor: context.actor }),
+    ),
+    delete: tenant.sites.delete.handler(({ input, context }) =>
       deleteSite(context.app.db, input.id, { scope: context.scope, actor: context.actor }),
     ),
-    purgeAll: authed.sites.purgeAll.handler(({ input, context }) =>
+    purgeAll: tenant.sites.purgeAll.handler(({ input, context }) =>
       purgeSite(context.app.db, input.id, { scope: context.scope, actor: context.actor }),
     ),
   },
+  members: {
+    list: orgManager.members.list.handler(({ context }) =>
+      listMembers(context.app.db, context.organizationId),
+    ),
+    invite: orgManager.members.invite.handler(async ({ input, context }) => {
+      const invitation = await createInvitation(
+        context.app.db,
+        { organizationId: context.organizationId, ...input },
+        context.manager,
+      );
+      return {
+        invitation,
+        url: invitationUrl(context.app.env.EDGEWEIR_PUBLIC_URL, invitation.id),
+      };
+    }),
+    cancelInvitation: orgManager.members.cancelInvitation.handler(async ({ input, context }) => {
+      await cancelInvitation(
+        context.app.db,
+        { organizationId: context.organizationId, id: input.id },
+        context.actor,
+      );
+      return ok;
+    }),
+    updateRole: orgManager.members.updateRole.handler(({ input, context }) =>
+      updateMemberRole(
+        context.app.db,
+        { organizationId: context.organizationId, memberId: input.id, role: input.role },
+        context.manager,
+      ),
+    ),
+    remove: orgManager.members.remove.handler(async ({ input, context }) => {
+      await removeMember(
+        context.app.db,
+        { organizationId: context.organizationId, memberId: input.id },
+        context.manager,
+      );
+      return ok;
+    }),
+  },
+  organization: {
+    update: orgManager.organization.update.handler(async ({ input, context }) => {
+      await updateOrganization(
+        context.app.db,
+        { id: context.organizationId, requireTwoFactor: input.requireTwoFactor },
+        context.actor,
+      );
+      const caller = await resolveCaller(
+        context.app.db,
+        context.user,
+        context.isAdmin,
+        context.organizationId,
+      );
+      return toMe(caller);
+    }),
+  },
+  invitations: {
+    get: os.invitations.get.handler(({ input, context }) =>
+      getInvitationInfo(context.app.db, input.id),
+    ),
+    accept: maybeAuthed.invitations.accept.handler(({ input, context }) =>
+      acceptInvitation(context.app, input, context.session, {
+        ip: context.ip,
+        userAgent: context.userAgent,
+      }),
+    ),
+  },
+  organizations: {
+    list: admin.organizations.list.handler(({ context }) => listOrganizations(context.app.db)),
+    create: admin.organizations.create.handler(({ input, context }) =>
+      createOrganization(context.app.db, input, context.actor),
+    ),
+    update: admin.organizations.update.handler(({ input, context }) =>
+      updateOrganization(context.app.db, input, context.actor),
+    ),
+    members: admin.organizations.members.handler(({ input, context }) =>
+      listMembers(context.app.db, input.id),
+    ),
+    addMember: admin.organizations.addMember.handler(({ input, context }) =>
+      addMember(context.app.db, input, context.manager),
+    ),
+    updateMember: admin.organizations.updateMember.handler(({ input, context }) =>
+      updateMemberRole(context.app.db, input, context.manager),
+    ),
+    removeMember: admin.organizations.removeMember.handler(async ({ input, context }) => {
+      await removeMember(context.app.db, input, context.manager);
+      return ok;
+    }),
+    invite: admin.organizations.invite.handler(async ({ input, context }) => {
+      const invitation = await createInvitation(context.app.db, input, context.manager);
+      return {
+        invitation,
+        url: invitationUrl(context.app.env.EDGEWEIR_PUBLIC_URL, invitation.id),
+      };
+    }),
+  },
+  users: {
+    list: admin.users.list.handler(({ input, context }) => listUsers(context.app.db, input.search)),
+    create: admin.users.create.handler(({ input, context }) =>
+      createUser(context.app, input, context.actor),
+    ),
+    setAdmin: admin.users.setAdmin.handler(({ input, context }) =>
+      setUserAdmin(context.app.db, input, context.actor),
+    ),
+    setDisabled: admin.users.setDisabled.handler(({ input, context }) =>
+      setUserDisabled(context.app.db, input, context.actor),
+    ),
+  },
   settings: {
-    get: admin.settings.get.handler(({ context }) => ({
+    get: admin.settings.get.handler(async ({ context }) => ({
       version: context.app.env.version,
       consoleUrl: context.app.env.EDGEWEIR_PUBLIC_URL,
       nodeApiUrl: context.app.env.nodeApiUrl,
       nodeCaSha256: context.app.nodeCa.fingerprintSha256,
       telemetryEnabled: context.app.env.EDGEWEIR_TELEMETRY,
       analyticsMode: context.app.env.EDGEWEIR_ANALYTICS,
+      setupCompletedAt: await setupCompletedAt(context.app.db),
     })),
   },
   auditLogs: {
-    list: admin.auditLogs.list.handler(async ({ input, context }) => {
-      const rows = await context.app.db
-        .select()
-        .from(schema.auditLog)
-        .orderBy(desc(schema.auditLog.id))
-        .limit(input.limit);
-      return rows.map((r) => ({
-        id: r.id,
-        occurredAt: r.occurredAt.toISOString(),
-        actorType: r.actorType,
-        actorId: r.actorId,
-        action: r.action,
-        targetType: r.targetType,
-        targetId: r.targetId,
-        metadata: r.metadata,
-      }));
-    }),
+    list: admin.auditLogs.list.handler(({ input, context }) =>
+      listAuditLogs(context.app.db, input),
+    ),
+    facets: admin.auditLogs.facets.handler(({ context }) => auditFacets(context.app.db)),
   },
 });
 
