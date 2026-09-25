@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import type { Contract } from "@edgeweir/contract";
 import { type Database, defaultMigrationsFolder, schema } from "@edgeweir/db";
 import { PGlite } from "@electric-sql/pglite";
@@ -144,4 +145,46 @@ export async function rpcError(promise: Promise<unknown>): Promise<ORPCError<str
   );
   expect(error, "expected the call to fail").toBeInstanceOf(ORPCError);
   return error as ORPCError<string, unknown>;
+}
+
+/** RFC 6238 TOTP (SHA-1, 6 digits, 30 s), as authenticator apps compute it. */
+export function totp(secretBase32: string, now = Date.now()): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+  for (const ch of secretBase32.replace(/=+$/, "").toUpperCase()) {
+    bits += alphabet.indexOf(ch).toString(2).padStart(5, "0");
+  }
+  const key = Buffer.from(bits.match(/.{8}/g)?.map((b) => Number.parseInt(b, 2)) ?? []);
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(now / 1000 / 30)));
+  const hmac = createHmac("sha1", key).update(counter).digest();
+  const offset = (hmac[hmac.length - 1] ?? 0) & 0xf;
+  const code = (hmac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000;
+  return String(code).padStart(6, "0");
+}
+
+/** A browser-like cookie jar for multi-step better-auth flows. */
+export class CookieJar {
+  private readonly cookies = new Map<string, string>();
+
+  store(res: Response): Response {
+    for (const line of res.headers.getSetCookie?.() ?? []) {
+      const [pair = "", ...attrs] = line.split(";");
+      const eq = pair.indexOf("=");
+      const name = pair.slice(0, eq).trim();
+      const value = pair.slice(eq + 1).trim();
+      const expired = attrs.some((a) => /^\s*max-age=0\s*$/i.test(a));
+      if (!value || expired) this.cookies.delete(name);
+      else this.cookies.set(name, value);
+    }
+    return res;
+  }
+
+  get header(): string {
+    return [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ");
+  }
+
+  clear() {
+    this.cookies.clear();
+  }
 }

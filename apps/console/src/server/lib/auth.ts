@@ -4,6 +4,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, organization, twoFactor } from "better-auth/plugins";
+import { authAuditDatabaseHooks, authAuditPlugin } from "./auth-audit";
 import { CLIENT_IP_HEADER } from "./client-ip";
 
 // Edgeweir never phones home. better-auth's own telemetry is opt-in via this
@@ -80,6 +81,8 @@ export function createAuth(opts: {
     // Counters live in PostgreSQL so every instance shares them and a restart
     // does not reset them.
     rateLimit: { enabled: opts.rateLimit, storage: "database", modelName: "rateLimit" },
+    // Audit entries for two-factor changes; the rest comes from authAuditPlugin.
+    databaseHooks: authAuditDatabaseHooks(opts.db),
     emailAndPassword: {
       enabled: true,
       // Accounts are created by the setup wizard and by administrators only.
@@ -105,6 +108,9 @@ export function createAuth(opts: {
         enableSessionForAPIKeys: true,
         rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 600 },
       }),
+      // Last, so its hooks see the other plugins' final responses: audit entries
+      // for sign-in, password, passkey and API key changes.
+      authAuditPlugin(opts.db),
     ],
   });
 }
