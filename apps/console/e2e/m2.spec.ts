@@ -100,11 +100,20 @@ test("M2: purge tasks, origin health, origin and cache settings", async ({ page 
     await expect(rules.getByTestId("cache-rule-row")).toHaveCount(before + 1);
     const announcement = page.locator('[role="status"][aria-live="assertive"]');
     const added = before + 1;
+    // Let the new row's entrance animation end before picking it up.
+    for (const row of await rules.getByTestId("cache-rule-row").all()) {
+      await row.evaluate((el) =>
+        Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)),
+      );
+    }
     await rules.getByTestId("cache-rule-handle").last().focus();
     await page.keyboard.press("Space");
     await expect(announcement).toHaveText(
       new RegExp(`^(已拿起规则 ${added}|规则 ${added} 移到第 ${added} 位)$`),
     );
+    // dnd-kit's KeyboardSensor attaches its keydown listener in a timeout after the pickup, so a
+    // key pressed within milliseconds can be lost (no person types that fast).
+    await page.waitForTimeout(200);
     await page.keyboard.press("ArrowUp");
     await expect(announcement).toHaveText(`规则 ${added} 移到第 ${before} 位`);
     await page.keyboard.press("Space");
