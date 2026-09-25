@@ -47,12 +47,23 @@ MVP M1 新增（2026-09-25）：
 15. **停用节点的数据面**：停用只拒绝控制面通道（不再接收新配置、心跳失败），节点继续用 last-known-good 配置服务；从 DNS 摘除属于 M5。
     **默认**如此。
 16. **列表接口的不兼容变更**：`sites.list`、`auditLogs.list` 改为分页的 `{ items, total }`（1.0 之前，ADR-0005 更新记录）。
-    **默认**：不保留旧的数组形式。
+    **默认**：不保留旧的数组形式。**2026-09-25 已确认**。
 17. **setup token 的交付**：打印在控制台日志（JSON 的 `setupToken` 字段），多实例、重启打印同一个 token；不提供环境变量预置。
     **默认**如此；需要全自动部署时可再加 `EDGEWEIR_SETUP_TOKEN`。
 18. **租户选择集群**：租户成员新建网站不能指定集群（`CLUSTER_SELECTION_FORBIDDEN`），落在组织默认集群；平台管理员可指定。
     **默认**如此。
 19. **TOTP 二维码依赖**：用 uqr 0.1.3（MIT、无依赖）生成二维码矩阵，自己画 SVG。**默认**采用。
+
+对标调研补充（2026-09-25，详见 [docs/research/benchmark.md](docs/research/benchmark.md)）：
+
+20. **License**：设计会话按默认选了 AGPL-3.0（防止闭源倒卖），备选 Apache-2.0（更利于企业采用），维护者没有明确回答过。
+    **默认**：保持 AGPL-3.0。
+21. **按集群的长期注册 token**：国内面板常见（批量上节点方便），与"注册 token 一次性、只存哈希"的原则冲突。
+    **默认**：不做；批量上节点用"一次生成多条一次性命令"替代。
+22. **批量 SSH 安装节点**：与"绝不存 SSH 凭据"冲突。**默认**：不做。
+23. **DNSLA、51dns 等服务商**：先确认是否有可用的 libdns 实现，没有则放到 v1 用自定义 webhook 协议接入。**默认**：MVP 只做 mvp.md 列出的四家。
+24. **调研原始资料**：goedge.rip 文档抓取等第三方内容只保存在本机 `~/Developer/edgeweir-research/`，不进仓库。
+25. **品牌**：`edgeweir.com`、`edgeweir.dev` 域名和 GitHub org 需要维护者自己注册；README 已加读音说明（EDGE-weer）。
 
 ## 版本核实记录（2026-09-25，来源：npm registry / proxy.golang.org / Docker Hub / nodejs.org / GitHub Releases）
 

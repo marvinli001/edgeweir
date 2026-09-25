@@ -6,11 +6,11 @@ Edgeweir is a self-hosted CDN, WAF and edge traffic-steering platform. It covers
 
 ## The name
 
-Edgeweir is named after a weir. Around 256 BC, Li Bing built the Dujiangyan irrigation system on the Min River. One of its parts, the Feisha ("flying sand") Weir, sits at the edge of the inner channel: in normal times it lets water flow on through the Bottle-Neck Channel to irrigate the Chengdu Plain; in floods, the river bend flings sand and excess water over the weir back into the outer channel. Edgeweir aims to do the same at the network edge: let good traffic through, shed attacks, and steer the flow.
+Edgeweir (pronounced *EDGE-weer*) is named after a weir. Around 256 BC, Li Bing built the Dujiangyan irrigation system on the Min River. One of its parts, the Feisha ("flying sand") Weir, sits at the edge of the inner channel: in normal times it lets water flow on through the Bottle-Neck Channel to irrigate the Chengdu Plain; in floods, the river bend flings sand and excess water over the weir back into the outer channel. Edgeweir aims to do the same at the network edge: let good traffic through, shed attacks, and steer the flow.
 
 ## Status
 
-**Phase 0: skeleton and a minimal end-to-end loop.** A node enrolls over mTLS, receives its configuration, and serves a site through OpenResty with caching (`X-Cache: MISS`, then `HIT`); the console shows the node online with its applied config revision. Edgeweir is not ready for production use. See [ROADMAP.md](ROADMAP.md) for what comes next.
+**MVP in progress (milestone 1 of 6 done).** Phase 0 delivered the end-to-end loop: a node enrolls over mTLS, receives its configuration and serves a site through OpenResty with caching. MVP M1 added clusters, node groups and regions, organizations with members, invitations and 2FA/passkeys, site editing with a revision per save, a filterable audit log and a one-time setup token. Edgeweir is not ready for production use. See [docs/specs/mvp.md](docs/specs/mvp.md) and [ROADMAP.md](ROADMAP.md) for what comes next.
 
 ## Components
 
