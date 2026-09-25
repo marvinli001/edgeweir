@@ -191,7 +191,7 @@ export const router = os.router({
     ),
   },
   settings: {
-    get: authed.settings.get.handler(({ context }) => ({
+    get: admin.settings.get.handler(({ context }) => ({
       version: context.app.env.version,
       consoleUrl: context.app.env.EDGEWEIR_PUBLIC_URL,
       nodeApiUrl: context.app.env.nodeApiUrl,
