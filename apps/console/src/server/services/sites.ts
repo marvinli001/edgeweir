@@ -28,6 +28,7 @@ import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { defaultClusterId } from "./clusters";
+import { assertOriginsAllowed } from "./origin-allow-list";
 import { type Executor, publishRevision, type Tx, toRevisionDto } from "./revisions";
 
 type SiteCreate = z.output<typeof siteCreateInput>;
@@ -449,6 +450,7 @@ export async function createSite(
       .where(eq(schema.cluster.id, clusterId));
     if (!clusterRow) fail("CLUSTER_NOT_FOUND", "cluster not found");
     await assertDomainsFree(tx, domains);
+    await assertOriginsAllowed(tx, input.origins);
 
     const [siteRow] = await tx
       .insert(schema.site)
@@ -517,6 +519,7 @@ export async function updateSite(
       changed.push("domains");
     }
     if (input.origins) {
+      await assertOriginsAllowed(tx, input.origins);
       const pool = await sitePool(tx, row.id);
       await writeOrigins(tx, pool, input.origins, ctx.masterKey);
       changed.push("origins");

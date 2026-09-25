@@ -39,6 +39,7 @@ export const errorDefs = {
   INVITATION_EMAIL_MISMATCH: { status: 403, params: ["email"] },
   INVITATION_ACCOUNT_REQUIRED: { status: 400, params: [] },
   S3_SECRET_REQUIRED: { status: 400, params: ["accessKeyId"] },
+  ORIGIN_ADDRESS_FORBIDDEN: { status: 400, params: ["address", "range"] },
   CACHE_TASK_NOT_FOUND: { status: 404, params: [] },
   CACHE_TASK_URL_INVALID: { status: 400, params: ["urls"] },
   CACHE_TASK_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
@@ -63,6 +64,7 @@ export const revisionReasonDefs = {
   site_deleted: { params: ["site"], en: "site {site} deleted" },
   site_purged: { params: ["site"], en: "site {site} purged" },
   rollback: { params: ["revision"], en: "rollback to revision {revision}" },
+  origin_allow_list_updated: { params: [], en: "origin allow list updated" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

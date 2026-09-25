@@ -20,7 +20,7 @@ describe("console procedures", async () => {
   let tenantOrgId: string;
   let clusterB: string;
 
-  const origins = [{ address: "10.0.0.10", port: 8080 }];
+  const origins = [{ address: "origin.internal", port: 8080 }];
 
   beforeAll(async () => {
     ({ organizationId: defaultOrgId } = await setupPlatform(ctx));

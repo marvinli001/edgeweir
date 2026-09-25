@@ -134,7 +134,7 @@ describe("landing page", async () => {
     await admin.sites.create({
       name: "shop",
       domains: ["shop.acme.test", "www.acme.test"],
-      origins: [{ address: "10.0.0.1" }],
+      origins: [{ address: "origin.internal" }],
     });
     const [cluster] = await admin.clusters.list();
     await ctx.db.insert(schema.node).values([

@@ -50,6 +50,7 @@ import {
   listOrganizations,
   updateOrganization,
 } from "../services/organizations";
+import { getOriginAllowList, setOriginAllowList } from "../services/origin-allow-list";
 import { siteOriginHealth } from "../services/origin-health";
 import { createRegion, deleteRegion, listRegions, updateRegion } from "../services/regions";
 import { toRevisionDto } from "../services/revisions";
@@ -408,6 +409,12 @@ export const router = os.router({
       analyticsMode: context.app.env.EDGEWEIR_ANALYTICS,
       setupCompletedAt: await setupCompletedAt(context.app.db),
     })),
+    originAllowList: admin.settings.originAllowList.handler(({ context }) =>
+      getOriginAllowList(context.app.db),
+    ),
+    setOriginAllowList: admin.settings.setOriginAllowList.handler(({ input, context }) =>
+      setOriginAllowList(context.app.db, input, context.actor),
+    ),
   },
   landing: {
     get: os.landing.get.handler(({ context }) => getLandingPage(context.app.db)),

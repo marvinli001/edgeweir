@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { normalizeCidr, parseIp } from "./addresses";
 
 const LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
 const HOSTNAME_RE = new RegExp(`^(?:${LABEL}\\.)*${LABEL}$`);
@@ -14,7 +15,18 @@ export const domainName = z
     return host.includes(".") || host === "localhost" ? HOSTNAME_RE.test(host) : false;
   }, "invalid domain name");
 
-/** Origin address: host name or IPv4/IPv6 literal (without port). */
+/**
+ * A last label that resolvers (inet_aton) read as a number, as in "127.1",
+ * "0x7f000001" or "2130706433": such names are ambiguous IP literals, and no
+ * real top-level domain is numeric.
+ */
+const NUMERIC_LABEL_RE = /(?:^|\.)(?:[0-9]+|0x[0-9a-f]*)$/i;
+
+/**
+ * Origin address: host name or IPv4/IPv6 literal (without port or brackets).
+ * Special-purpose IP literals are refused by the service unless the platform
+ * allows them (see addresses.ts).
+ */
 export const originAddress = z
   .string()
   .trim()
@@ -22,11 +34,24 @@ export const originAddress = z
   .max(253)
   .refine(
     (value) =>
-      HOSTNAME_RE.test(value.toLowerCase()) ||
-      z.ipv4().safeParse(value).success ||
-      z.ipv6().safeParse(value).success,
+      parseIp(value) !== null ||
+      (HOSTNAME_RE.test(value.toLowerCase()) && !NUMERIC_LABEL_RE.test(value)),
     "invalid origin address",
   );
+
+/** An IPv4 or IPv6 CIDR (a bare address is a single host), normalized ("10.1.2.3/8" → "10.0.0.0/8"). */
+export const cidr = z
+  .string()
+  .trim()
+  .max(64)
+  .transform((value, ctx) => {
+    const normalized = normalizeCidr(value);
+    if (normalized === null) {
+      ctx.addIssue({ code: "custom", message: "invalid CIDR", input: value });
+      return z.NEVER;
+    }
+    return normalized;
+  });
 
 export const port = z.number().int().min(1).max(65535);
 export const uuid = z.uuid();
@@ -530,6 +555,18 @@ export const setupInput = z.object({
   organizationName: z.string().trim().min(1).max(100),
 });
 
+/** Special-purpose origin addresses the platform allows (compiled into every cluster). */
+export const originAllowList = z.object({
+  /** Sorted, without duplicates. */
+  cidrs: z.array(z.string()),
+});
+
+export const MAX_ORIGIN_ALLOWED_CIDRS = 256;
+
+export const originAllowListInput = z.object({
+  cidrs: z.array(cidr).max(MAX_ORIGIN_ALLOWED_CIDRS),
+});
+
 export const settings = z.object({
   version: z.string(),
   consoleUrl: z.string(),
@@ -888,6 +925,7 @@ export const userCreateInput = z.object({
 export const userSetAdminInput = z.object({ id: userId, isAdmin: z.boolean() });
 export const userSetDisabledInput = z.object({ id: userId, disabled: z.boolean() });
 
+export type OriginAllowList = z.infer<typeof originAllowList>;
 export type SiteCreateInput = z.input<typeof siteCreateInput>;
 export type Site = z.infer<typeof site>;
 export type Cluster = z.infer<typeof cluster>;

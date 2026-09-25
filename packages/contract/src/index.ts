@@ -2,6 +2,7 @@ import { oc } from "@orpc/contract";
 import * as z from "zod";
 import * as s from "./schemas";
 
+export * from "./addresses";
 export * from "./errors";
 export * from "./schemas";
 
@@ -330,6 +331,15 @@ export const contract = {
   },
   settings: {
     get: oc.route({ method: "GET", path: "/settings", tags: ["settings"] }).output(s.settings),
+    /** Special-purpose origin addresses (private, loopback...) sites may use anyway. */
+    originAllowList: oc
+      .route({ method: "GET", path: "/settings/origin-allow-list", tags: ["settings"] })
+      .output(s.originAllowList),
+    /** Replaces the list and publishes a new revision for every cluster. */
+    setOriginAllowList: oc
+      .route({ method: "PUT", path: "/settings/origin-allow-list", tags: ["settings"] })
+      .input(s.originAllowListInput)
+      .output(s.originAllowList),
   },
   landing: {
     /** Public: the landing page at `/` (template "none" means there is none). */

@@ -1,10 +1,13 @@
 import {
+  canonicalize,
   compileNodeConfig,
+  contentHash,
   decodeNodeConfig,
   encodeNodeConfig,
   type SiteModel,
 } from "@edgeweir/config-compiler";
 import {
+  normalizeCidr,
   type ReasonParams,
   type Revision,
   type RevisionReasonCode,
@@ -34,6 +37,27 @@ export function toRevisionDto(row: RevisionRow): Revision {
     reasonParams: row.reasonParams,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/** system_setting key of the platform's origin allow list: `{ cidrs: string[] }`. */
+export const ORIGIN_ALLOW_LIST_KEY = "origin_allow_list";
+
+/**
+ * The special-purpose CIDRs origins may use anyway (normalized, sorted,
+ * without duplicates). Every cluster's NodeConfig carries it.
+ */
+export async function loadOriginAllowList(db: Executor): Promise<string[]> {
+  const [row] = await db
+    .select({ value: schema.systemSetting.value })
+    .from(schema.systemSetting)
+    .where(eq(schema.systemSetting.key, ORIGIN_ALLOW_LIST_KEY));
+  const stored = row?.value.cidrs;
+  const cidrs = Array.isArray(stored) ? stored : [];
+  const normalized = cidrs.flatMap((c) => {
+    const n = typeof c === "string" ? normalizeCidr(c) : null;
+    return n ? [n] : [];
+  });
+  return [...new Set(normalized)].sort();
 }
 
 /** Loads every site of a cluster with its domains, origins and rules. */
@@ -240,16 +264,22 @@ export async function publishRevision(
     sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.publish.${opts.clusterId}`}))`,
   );
   const sites = await loadSiteModels(tx, opts.clusterId);
+  const originAllowedCidrs = await loadOriginAllowList(tx);
   return insertRevision(
     tx,
     opts.clusterId,
-    (revision) => compileNodeConfig({ clusterId: opts.clusterId, sites }, revision),
+    (revision) =>
+      compileNodeConfig({ clusterId: opts.clusterId, sites, originAllowedCidrs }, revision),
     opts.reason,
     opts.userId ?? null,
   );
 }
 
-/** Publishes the content of an older revision as a new revision. */
+/**
+ * Publishes the content of an older revision as a new revision. The origin
+ * allow list is platform policy, not cluster content: the new revision
+ * carries the current list, not the one the old revision had.
+ */
 export async function rollbackToRevision(
   tx: Tx,
   opts: { clusterId: string; revision: number; userId?: string | null },
@@ -259,14 +289,16 @@ export async function rollbackToRevision(
   );
   const target = await getRevision(tx, opts.clusterId, opts.revision);
   if (!target) return undefined;
-  const old = decodeNodeConfig(target.ir);
+  const originAllowedCidrs = await loadOriginAllowList(tx);
   return insertRevision(
     tx,
     opts.clusterId,
     (revision) => {
-      const config = decodeNodeConfig(target.ir);
-      config.revision = revision;
-      config.contentHash = old.contentHash;
+      const old = decodeNodeConfig(target.ir);
+      old.revision = revision;
+      old.originAllowedCidrs = originAllowedCidrs;
+      const config = canonicalize(old);
+      config.contentHash = contentHash(config);
       return config;
     },
     { code: "rollback", params: { revision: opts.revision } },

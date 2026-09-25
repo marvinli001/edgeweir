@@ -50,7 +50,7 @@ describe("analytics", async () => {
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   const db = ctx.db;
-  const origins = [{ address: "10.0.0.10", port: 8080 }];
+  const origins = [{ address: "origin.internal", port: 8080 }];
   let admin: ApiClient;
   let owner: ApiClient;
   let member: ApiClient;

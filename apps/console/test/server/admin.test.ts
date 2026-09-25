@@ -139,6 +139,11 @@ describe("admin area procedures", async () => {
       ["users.setAdmin", () => member.users.setAdmin({ id: "u", isAdmin: true })],
       ["users.setDisabled", () => member.users.setDisabled({ id: "u", disabled: true })],
       ["settings.get", () => member.settings.get()],
+      ["settings.originAllowList", () => member.settings.originAllowList()],
+      [
+        "settings.setOriginAllowList",
+        () => member.settings.setOriginAllowList({ cidrs: ["0.0.0.0/0"] }),
+      ],
       [
         "landing.update",
         () =>
@@ -185,7 +190,7 @@ describe("admin area procedures", async () => {
       name: "pinned",
       clusterId: created.id,
       domains: ["pinned.test"],
-      origins: [{ address: "10.0.0.1" }],
+      origins: [{ address: "origin.internal" }],
     });
     const busy = await rpcError(admin.clusters.delete({ id: created.id }));
     expect(busy).toMatchObject({

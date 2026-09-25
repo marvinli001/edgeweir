@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import type * as React from "react";
 import { CopyButton } from "@/components/copy-button";
 import { LandingSettingsCard } from "@/components/landing-settings";
+import { OriginAllowListCard } from "@/components/origin-allow-list";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -84,6 +85,7 @@ function SystemSettingsPage() {
           )}
         </CardContent>
       </Card>
+      <OriginAllowListCard />
       <LandingSettingsCard />
     </Page>
   );
