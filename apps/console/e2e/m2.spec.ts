@@ -103,7 +103,11 @@ test("M2: purge tasks, origin health, origin and cache settings", async ({ page 
     // Let the new row's entrance animation end before picking it up.
     for (const row of await rules.getByTestId("cache-rule-row").all()) {
       await row.evaluate((el) =>
-        Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)),
+        Promise.all(
+          el
+            .getAnimations({ subtree: true })
+            .map((a: { finished: Promise<unknown> }) => a.finished),
+        ),
       );
     }
     await rules.getByTestId("cache-rule-handle").last().focus();
