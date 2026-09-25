@@ -4,6 +4,7 @@ import { RPCLink } from "@orpc/client/fetch";
 import { SimpleCsrfProtectionLinkPlugin } from "@orpc/client/plugins";
 import type { ContractRouterClient } from "@orpc/contract";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
+import { localizeError } from "@/lib/errors";
 
 const link = new RPCLink({
   url: () => `${window.location.origin}/rpc`,
@@ -17,12 +18,9 @@ export const client: ContractRouterClient<Contract> = createORPCClient(link);
 /** TanStack Query helpers: orpc.sites.list.queryOptions(), .mutationOptions(), ... */
 export const orpc = createTanstackQueryUtils(client);
 
-export function errorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === "object" && "message" in error) {
-    const message = String((error as { message: unknown }).message);
-    if (message) return message;
-  }
-  return fallback;
+/** A user-facing message for an API error, localized by its stable code. */
+export function errorMessage(error: unknown, fallback?: string): string {
+  return localizeError(error, fallback);
 }
 
 export function isUnauthorized(error: unknown): boolean {

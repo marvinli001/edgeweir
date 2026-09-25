@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { errorCodes, errorDefs, revisionReasonCodes, revisionReasonDefs } from "@edgeweir/contract";
 import { describe, expect, it } from "vitest";
 
 const load = (locale: string) =>
@@ -31,6 +32,19 @@ describe("i18n messages", () => {
       expect(zh[key]?.trim(), key).toBeTruthy();
       expect(en[key]?.trim(), key).toBeTruthy();
       expect(placeholders(en[key] ?? ""), key).toEqual(placeholders(zh[key] ?? ""));
+    }
+  });
+
+  it("localizes every API error code and revision reason with the same parameters", () => {
+    for (const code of errorCodes) {
+      const key = `error_${code.toLowerCase()}`;
+      expect(zh[key], key).toBeTruthy();
+      expect(placeholders(zh[key] ?? ""), key).toEqual([...errorDefs[code].params].sort());
+    }
+    for (const code of revisionReasonCodes) {
+      const key = `revision_reason_${code}`;
+      expect(zh[key], key).toBeTruthy();
+      expect(placeholders(zh[key] ?? ""), key).toEqual([...revisionReasonDefs[code].params].sort());
     }
   });
 

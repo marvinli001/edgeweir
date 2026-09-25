@@ -537,6 +537,7 @@ export type Region = z.infer<typeof region>;
 export type Me = z.infer<typeof me>;
 export type Member = z.infer<typeof member>;
 export type Invitation = z.infer<typeof invitation>;
+export type InvitationResult = z.infer<typeof invitationResult>;
 export type InvitationInfo = z.infer<typeof invitationInfo>;
 export type Organization = z.infer<typeof organization>;
 export type OrgRole = z.infer<typeof orgRole>;
