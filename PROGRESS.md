@@ -288,3 +288,15 @@ MVP M2 新增（2026-09-25）：
 - [x] 功能归属符合 0.2：刷新预热、网站源站 / 缓存 Tab 在控制台；未新增后台过程
 - [x] e2e：`scripts/e2e.sh` 覆盖第 2 节「验收」全部场景（另加全站刷新、预热、S3、证书校验、stale-if-error、控制台显示源站故障），Playwright `e2e/m2.spec.ts` 覆盖刷新任务提交和结果展示，断言无 `pageerror`；M1 链路仍通过
 - [x] proto 改动只加字段、枚举值和 RPC（`buf breaking` 对 v0.1.0 通过）；TS 与 Go 共用新的哈希向量 `content_hash_vector_m2.json`
+
+### 验证记录（2026-09-25，本机实跑，`mvp-m2` worktree；edgeweir-node 在主工作区的 `master`）
+
+| # | 验收项 | 命令 | 结果 |
+| --- | --- | --- | --- |
+| 1 | 功能、遗留项与仓库状态 | 本节清单；`git status`、`git log` | 全部勾选；两个仓库的 ROADMAP 已勾选源站与缓存条目；提交为 Conventional Commits 小步提交；`git status` 干净 |
+| 2 | 控制面 | `pnpm install && pnpm lint && pnpm typecheck --force && pnpm test --force && pnpm build --force` | 全部 exit 0；测试 81 个（console 49、contract 17、compiler 12、db 3），含 M2 过程的用例、租户隔离与租户成员调用后台过程 403，以及"每个过程都已归类"的断言；`test/web` 的 i18n 与 ui-rules 通过 |
+| 3 | proto / 节点 | `buf lint proto`；`buf breaking` 对 `proto/v0.1.0`；tag `proto/v0.2.0`；edgeweir-node `go vet ./...`、`go test ./...`、`make proto-check`、`make lua-test`、`bash test/e2e/run.sh` | 全部 exit 0；`make proto-check` 从 `proto/v0.2.0` 重新生成无差异；Lua 36 个用例（数据面 20、SigV4 16）；节点容器冒烟测试通过 |
+| 4 | 端到端 | `docker compose -f compose.e2e.yml down -v && docker compose -f compose.e2e.yml up -d --build`、`bash scripts/e2e.sh`（环境变量见待决策 39） | 输出 `E2E OK`：M1 全链路（含 Playwright 冒烟与 M1）→ URL 刷新后 `MISS`、其他 URL 仍 `HIT` → 前缀刷新只影响前缀 → 预热后首个请求 `HIT`、全站刷新后 `MISS` → 忽略查询参数 `?a=1` 与 `?a=2` 同一缓存、参数排序 `?a=1&b=2` 与 `?b=2&a=1` 同一缓存 → Range 请求命中 slice 缓存且字节与源站一致 → whoami `/echo` 经节点收发 WebSocket、关闭 WebSocket 的站点返回 403 → 自签名 HTTPS 源站校验失败 502、关闭校验后 200 → S3 网关 SigV4 签名回源成功并缓存、POST 返回 405 → 主源停掉后 stale-if-error 返回 `STALE`、流量落到备用源、控制台显示主源不可用，恢复后回到主源 → Playwright M2（提交 URL 刷新和目录刷新并看到节点结果、源站健康徽标、设置卡片、键盘拖动排序，无 `pageerror`）→ 节点停用 / 启用 / 删除 |
+| 5 | 界面规范 | Playwright 截图（浅色/深色、1280/375，断言无横向溢出与 `pageerror`）；`ui-rules.test.ts` | 源站 Tab、缓存 Tab、刷新预热页无副标题与说明段落、无骨架屏、appica 只经 `components/appica`；375px 下无横向滚动 |
+
+说明：Claude 桌面应用的内置浏览器会拦截 `GET /api/auth/*`，界面检查继续用 Playwright 截图完成。
