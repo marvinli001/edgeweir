@@ -6,7 +6,7 @@ import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { m } from "@/lib/i18n";
+import { formatDateTime, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
 export const Route = createFileRoute("/_app/admin/settings")({
@@ -60,6 +60,15 @@ function SystemSettingsPage() {
                   {settings.data.telemetryEnabled
                     ? m.system_telemetry_on()
                     : m.system_telemetry_off()}
+                </Badge>
+              </Row>
+              <Row label={m.system_setup_token()}>
+                <Badge variant="secondary" data-testid="setup-token-state">
+                  {settings.data.setupCompletedAt
+                    ? m.system_setup_token_used({
+                        time: formatDateTime(settings.data.setupCompletedAt),
+                      })
+                    : m.system_setup_token_pending()}
                 </Badge>
               </Row>
               <Row label={m.system_openapi()}>

@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumber, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { revisionReason } from "@/lib/revisions";
 
 export const Route = createFileRoute("/_app/admin/")({
   component: AdminOverviewPage,
@@ -89,7 +90,7 @@ function AdminOverviewPage() {
                       <Badge variant="outline" className="font-mono">
                         #{r.revision}
                       </Badge>
-                      <span className="flex-1 truncate">{r.reason}</span>
+                      <span className="flex-1 truncate">{revisionReason(r)}</span>
                       <code className="hidden text-xs text-muted-foreground sm:inline">
                         {r.contentHash.slice(0, 12)}
                       </code>
