@@ -37,11 +37,19 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
     .orderBy(asc(schema.site.id));
   if (sites.length === 0) return [];
   const siteIds = sites.map((s) => s.id);
-  const [domains, pools, rules] = await Promise.all([
-    db.select().from(schema.siteDomain).where(inArray(schema.siteDomain.siteId, siteIds)),
-    db.select().from(schema.originPool).where(inArray(schema.originPool.siteId, siteIds)),
-    db.select().from(schema.cacheRule).where(inArray(schema.cacheRule.siteId, siteIds)),
-  ]);
+  // Sequential on purpose: `db` may be a transaction, i.e. a single connection.
+  const domains = await db
+    .select()
+    .from(schema.siteDomain)
+    .where(inArray(schema.siteDomain.siteId, siteIds));
+  const pools = await db
+    .select()
+    .from(schema.originPool)
+    .where(inArray(schema.originPool.siteId, siteIds));
+  const rules = await db
+    .select()
+    .from(schema.cacheRule)
+    .where(inArray(schema.cacheRule.siteId, siteIds));
   const origins = pools.length
     ? await db
         .select()

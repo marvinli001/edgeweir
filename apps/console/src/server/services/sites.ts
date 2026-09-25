@@ -23,20 +23,24 @@ async function toSiteDtos(
 ): Promise<Site[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [domains, pools, rules, clusters] = await Promise.all([
-    db
-      .select()
-      .from(schema.siteDomain)
-      .where(inArray(schema.siteDomain.siteId, ids))
-      .orderBy(asc(schema.siteDomain.createdAt), asc(schema.siteDomain.name)),
-    db.select().from(schema.originPool).where(inArray(schema.originPool.siteId, ids)),
-    db
-      .select()
-      .from(schema.cacheRule)
-      .where(inArray(schema.cacheRule.siteId, ids))
-      .orderBy(asc(schema.cacheRule.priority), asc(schema.cacheRule.id)),
-    db.select({ id: schema.cluster.id, name: schema.cluster.name }).from(schema.cluster),
-  ]);
+  // Sequential on purpose: `db` may be a transaction, i.e. a single connection.
+  const domains = await db
+    .select()
+    .from(schema.siteDomain)
+    .where(inArray(schema.siteDomain.siteId, ids))
+    .orderBy(asc(schema.siteDomain.createdAt), asc(schema.siteDomain.name));
+  const pools = await db
+    .select()
+    .from(schema.originPool)
+    .where(inArray(schema.originPool.siteId, ids));
+  const rules = await db
+    .select()
+    .from(schema.cacheRule)
+    .where(inArray(schema.cacheRule.siteId, ids))
+    .orderBy(asc(schema.cacheRule.priority), asc(schema.cacheRule.id));
+  const clusters = await db
+    .select({ id: schema.cluster.id, name: schema.cluster.name })
+    .from(schema.cluster);
   const origins = pools.length
     ? await db
         .select()
