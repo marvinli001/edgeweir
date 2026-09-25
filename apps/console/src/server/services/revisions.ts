@@ -4,7 +4,12 @@ import {
   encodeNodeConfig,
   type SiteModel,
 } from "@edgeweir/config-compiler";
-import type { Revision } from "@edgeweir/contract";
+import {
+  type ReasonParams,
+  type Revision,
+  type RevisionReasonCode,
+  reasonText,
+} from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import type { NodeConfig } from "@edgeweir/proto";
 import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
@@ -24,6 +29,8 @@ export function toRevisionDto(row: RevisionRow): Revision {
     contentHash: row.contentHash,
     siteCount: row.siteCount,
     reason: row.reason,
+    reasonCode: row.reasonCode,
+    reasonParams: row.reasonParams,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -134,11 +141,17 @@ export async function getRevision(
   return row;
 }
 
+/** Why a revision is published; rendered per locale in the UI. */
+export interface RevisionReason {
+  code: RevisionReasonCode;
+  params: ReasonParams;
+}
+
 async function insertRevision(
   tx: Tx,
   clusterId: string,
   build: (revision: bigint) => NodeConfig,
-  reason: string,
+  reason: RevisionReason,
   userId: string | null,
 ): Promise<{ row: RevisionRow; created: boolean }> {
   const latest = await latestRevision(tx, clusterId);
@@ -155,7 +168,9 @@ async function insertRevision(
       contentHash: config.contentHash,
       ir: encodeNodeConfig(config),
       siteCount: config.sites.length,
-      reason,
+      reason: reasonText(reason.code, reason.params),
+      reasonCode: reason.code,
+      reasonParams: reason.params,
       createdByUserId: userId,
     })
     .returning();
@@ -178,7 +193,7 @@ async function insertRevision(
  */
 export async function publishRevision(
   tx: Tx,
-  opts: { clusterId: string; reason: string; userId?: string | null },
+  opts: { clusterId: string; reason: RevisionReason; userId?: string | null },
 ): Promise<{ row: RevisionRow; created: boolean }> {
   await tx.execute(
     sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.publish.${opts.clusterId}`}))`,
@@ -213,7 +228,7 @@ export async function rollbackToRevision(
       config.contentHash = old.contentHash;
       return config;
     },
-    `rollback to revision ${opts.revision}`,
+    { code: "rollback", params: { revision: opts.revision } },
     opts.userId ?? null,
   );
 }
