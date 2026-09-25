@@ -78,3 +78,15 @@ export function formatChartTime(iso: string): string {
     hourCycle: "h23",
   }).format(new Date(iso));
 }
+
+/** Axis tick of a chart point: the time of day (the date at midnight), or the date for long ranges. */
+export function formatAxisTime(iso: string, days: boolean): string {
+  const date = new Date(iso);
+  const midnight = date.getHours() === 0 && date.getMinutes() === 0;
+  return new Intl.DateTimeFormat(
+    getLocale(),
+    days || midnight
+      ? { month: "numeric", day: "numeric" }
+      : { hour: "2-digit", minute: "2-digit", hourCycle: "h23" },
+  ).format(date);
+}

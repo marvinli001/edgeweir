@@ -1,6 +1,6 @@
 import type { TrafficTopItem, TrafficTotals } from "@edgeweir/contract";
 import type * as React from "react";
-import { Panel, PanelHeader } from "@/components/analytics/panel";
+import { OpenCardButton, OpenCardHint, Panel, PanelHeader } from "@/components/analytics/panel";
 import { STATUS_CLASSES } from "@/lib/analytics";
 import { formatCompact, formatPercent, m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -17,11 +17,32 @@ function NoTraffic() {
  * Responses by status class: one segmented bar plus the counts, so no value hides in color.
  * `wide` lays the classes out side by side when the card spans the whole row.
  */
-export function StatusCodesCard({ totals, wide }: { totals: TrafficTotals; wide?: boolean }) {
+export function StatusCodesCard({
+  totals,
+  wide,
+  onOpen,
+}: {
+  totals: TrafficTotals;
+  wide?: boolean;
+  /** Opens the per-code breakdown. */
+  onOpen?: () => void;
+}) {
   const total = STATUS_CLASSES.reduce((sum, c) => sum + totals[c.key], 0);
   return (
-    <Panel data-testid="status-codes" className="h-full">
-      <PanelHeader title={m.analytics_status_codes()} />
+    <Panel
+      data-testid="status-codes"
+      className={cn("h-full", onOpen && "group/panel transition-colors hover:border-foreground/20")}
+    >
+      {onOpen ? (
+        <OpenCardButton
+          label={m.analytics_details({ metric: m.analytics_status_codes() })}
+          onOpen={onOpen}
+        />
+      ) : null}
+      <PanelHeader
+        title={m.analytics_status_codes()}
+        aside={onOpen ? <OpenCardHint /> : undefined}
+      />
       {total === 0 ? (
         <NoTraffic />
       ) : (

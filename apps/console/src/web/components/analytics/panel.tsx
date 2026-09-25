@@ -1,4 +1,8 @@
-import { ArrowDownRight01Icon, ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
+import {
+  ArrowDownRight01Icon,
+  ArrowExpandDiagonal01Icon,
+  ArrowUpRight01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type * as React from "react";
 import { AnimatedValue } from "@/components/appica/effects";
@@ -76,6 +80,34 @@ export function ChangeIndicator({
   );
 }
 
+/**
+ * The whole card opens `onOpen` (its breakdown dialog), through a button stretched under the
+ * chart: the chart stays above it for its tooltip and forwards clicks itself.
+ */
+export function OpenCardButton({ label, onOpen }: { label: string; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onOpen}
+      className="absolute inset-0 cursor-pointer rounded-[inherit] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      data-slot="card-open"
+    />
+  );
+}
+
+/** Shown on hover, so the card reads as something that opens. */
+export function OpenCardHint() {
+  return (
+    <HugeiconsIcon
+      icon={ArrowExpandDiagonal01Icon}
+      strokeWidth={2}
+      className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/panel:opacity-100 group-has-focus-visible/panel:opacity-100"
+      aria-hidden
+    />
+  );
+}
+
 /** Title, headline value with its change, and a chart underneath. */
 export function MetricCard({
   title,
@@ -83,6 +115,7 @@ export function MetricCard({
   change,
   better,
   size,
+  onOpen,
   children,
   testId,
 }: {
@@ -91,19 +124,35 @@ export function MetricCard({
   change: number | null;
   better: "up" | "down";
   size: "lg" | "sm";
+  onOpen?: () => void;
   children: React.ReactNode;
   testId?: string;
 }) {
   return (
-    <Panel data-testid={testId} className={size === "lg" ? "h-64" : "h-52 @3xl/main:h-60"}>
-      <PanelHeader title={title} />
+    <Panel
+      data-testid={testId}
+      className={cn(
+        size === "lg" ? "h-64" : "h-52 @3xl/main:h-60",
+        onOpen && "group/panel transition-colors hover:border-foreground/20",
+      )}
+    >
+      {onOpen ? (
+        <OpenCardButton label={m.analytics_details({ metric: title })} onOpen={onOpen} />
+      ) : null}
+      <PanelHeader title={title} aside={onOpen ? <OpenCardHint /> : undefined} />
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-4 pt-1">
         <span className="text-2xl font-semibold tracking-tight" data-slot="metric-value">
           <AnimatedValue value={value} />
         </span>
         <ChangeIndicator change={change} better={better} />
       </div>
-      <div className={cn("min-h-0 flex-1", size === "lg" ? "px-4 pt-3 pb-3" : "pt-3")}>
+      <div
+        className={cn(
+          "relative min-h-0 flex-1",
+          size === "lg" ? "px-4 pt-3 pb-3" : "pt-3",
+          onOpen && "cursor-pointer",
+        )}
+      >
         {children}
       </div>
     </Panel>

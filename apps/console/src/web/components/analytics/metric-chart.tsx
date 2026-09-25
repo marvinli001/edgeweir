@@ -19,6 +19,7 @@ export function MetricChart({
   format,
   axis = false,
   domain,
+  onClick,
   className,
 }: {
   data: MetricDatum[];
@@ -26,13 +27,18 @@ export function MetricChart({
   format: (value: number) => string;
   axis?: boolean;
   domain?: [number, number];
+  onClick?: () => void;
   className?: string;
 }) {
   const reducedMotion = useReducedMotion();
   const config = { value: { label, color: "var(--metric)" } } satisfies ChartConfig;
   return (
     <ChartContainer config={config} className={cn("aspect-auto h-full w-full", className)}>
-      <AreaChart data={data} margin={{ top: axis ? 12 : 6, right: 0, bottom: 0, left: 0 }}>
+      <AreaChart
+        data={data}
+        margin={{ top: axis ? 12 : 6, right: 0, bottom: 0, left: 0 }}
+        onClick={onClick}
+      >
         {axis ? <CartesianGrid vertical={false} stroke="var(--border)" /> : null}
         <XAxis dataKey="time" hide />
         <YAxis

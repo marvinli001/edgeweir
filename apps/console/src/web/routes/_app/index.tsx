@@ -72,6 +72,7 @@ function OverviewPage() {
                 ),
               },
             ]}
+            admin={isAdmin}
             delay={120}
           />
         </>

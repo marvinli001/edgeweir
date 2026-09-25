@@ -44,7 +44,7 @@ function SiteDetailPage() {
   const { id } = Route.useParams();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const { session } = Route.useRouteContext();
+  const { session, isAdmin } = Route.useRouteContext();
   const site = useQuery(orpc.sites.get.queryOptions({ input: { id } }));
   const stars = useSiteStars();
   const tab: SiteTab = search.tab ?? "overview";
@@ -109,6 +109,7 @@ function SiteDetailPage() {
           <TabsContent value="analytics" className="animate-enter">
             <AnalyticsSection
               siteId={site.data.id}
+              admin={isAdmin}
               range={search.range ?? DEFAULT_RANGE}
               onRangeChange={(range) =>
                 navigate({

@@ -122,6 +122,17 @@
   --status-3xx: #1baf7a;
   --status-4xx: #eda100;
   --status-5xx: #d03b3b;
+  /*
+   * Breakdown series in the metric dialogs, assigned in this order (dataviz categorical slots
+   * 1–5). Adjacent pairs pass the CVD and normal-vision checks on the card surface in each mode;
+   * slots 3–5 sit below 3:1 in light mode, so the legend and the list always print the values.
+   */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-other: #898781;
   --delta-good: #006300;
   --delta-bad: #c62f2f;
   --star: #e2a400;
@@ -168,6 +179,12 @@
   --status-3xx: #199e70;
   --status-4xx: #c98500;
   --status-5xx: #d03b3b;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-other: #898781;
   --delta-good: #0ca30c;
   --delta-bad: #e66767;
   --star: #f0b429;
