@@ -1,7 +1,10 @@
-import { schema } from "@edgeweir/db";
-import { ORPCError } from "@orpc/server";
-import { count } from "drizzle-orm";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { type Database, schema } from "@edgeweir/db";
+import { count, eq } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
+import type { Envelope, MasterKey } from "../lib/envelope";
+import { fail } from "../lib/errors";
+import type { Logger } from "../lib/logger";
 import { recordAudit } from "./audit";
 import { createClusterTx } from "./clusters";
 import type { Executor } from "./revisions";
@@ -11,31 +14,122 @@ export async function isInitialized(db: Executor): Promise<boolean> {
   return (row?.n ?? 0) > 0;
 }
 
-function slugify(name: string): string {
+export function slugify(name: string): string {
   const slug = name
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
-  return slug || "default";
+  return slug || "org";
+}
+
+const SETUP_TOKEN_KEY = "setup_token";
+const SETUP_TOKEN_PURPOSE = "system/setup-token";
+export const SETUP_TOKEN_PREFIX = "ews_";
+
+interface SetupTokenState {
+  /** The token, sealed with the master key so every instance prints the same one. */
+  envelope?: Envelope;
+  hash?: string;
+  createdAt?: string;
+  usedAt?: string;
+  usedBy?: string;
+}
+
+const sha256 = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
+
+async function readSetupToken(db: Executor): Promise<SetupTokenState> {
+  const [row] = await db
+    .select()
+    .from(schema.systemSetting)
+    .where(eq(schema.systemSetting.key, SETUP_TOKEN_KEY));
+  return (row?.value ?? {}) as SetupTokenState;
+}
+
+/**
+ * Makes sure an uninitialized console has a one-time setup token and returns
+ * it (null once setup is done). The first run wizard refuses to create the
+ * administrator without it, which closes the window in which anyone who can
+ * reach the console could claim it.
+ */
+export async function ensureSetupToken(ctx: {
+  db: Database;
+  masterKey: MasterKey;
+}): Promise<string | null> {
+  if (await isInitialized(ctx.db)) return null;
+  const state = await readSetupToken(ctx.db);
+  if (state.usedAt) return null;
+  if (state.envelope) {
+    try {
+      return ctx.masterKey.open(state.envelope, SETUP_TOKEN_PURPOSE).toString("utf8");
+    } catch {
+      // Sealed with a previous master key: issue a new token below.
+    }
+  }
+  const token = `${SETUP_TOKEN_PREFIX}${randomBytes(24).toString("base64url")}`;
+  const value: SetupTokenState = {
+    envelope: ctx.masterKey.seal(token, SETUP_TOKEN_PURPOSE),
+    hash: sha256(token),
+    createdAt: new Date().toISOString(),
+  };
+  await ctx.db
+    .insert(schema.systemSetting)
+    .values({ key: SETUP_TOKEN_KEY, value: value as Record<string, unknown> })
+    .onConflictDoUpdate({
+      target: schema.systemSetting.key,
+      set: { value: value as Record<string, unknown> },
+    });
+  return token;
+}
+
+/** Prints the setup token to the log, where the operator reads it (`docker compose logs`). */
+export function announceSetupToken(log: Logger, token: string, publicUrl: string) {
+  log.warn("first-run setup: open the console and enter this setup token", {
+    setupToken: token,
+    url: `${publicUrl.replace(/\/$/, "")}/setup`,
+  });
+}
+
+export async function setupCompletedAt(db: Executor): Promise<string | null> {
+  return (await readSetupToken(db)).usedAt ?? null;
+}
+
+function tokenMatches(state: SetupTokenState, candidate: string): boolean {
+  if (!state.hash || state.usedAt) return false;
+  const a = Buffer.from(state.hash, "hex");
+  const b = Buffer.from(sha256(candidate.trim()), "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /**
  * First-run setup: creates the platform administrator, the first tenant
- * organization and the default cluster. Only allowed while no user exists.
+ * organization and the default cluster. Only allowed while no user exists,
+ * and only with the setup token printed at startup.
  */
 export async function runSetup(
   ctx: AppContext,
-  input: { name: string; email: string; password: string; organizationName: string },
+  input: {
+    setupToken: string;
+    name: string;
+    email: string;
+    password: string;
+    organizationName: string;
+  },
   meta: { ip: string; userAgent: string },
 ): Promise<{ userId: string; organizationId: string }> {
   const client = await ctx.pool.connect();
   try {
     // Session-level lock so two concurrent setup requests cannot both pass.
     await client.query("select pg_advisory_lock(hashtext('edgeweir.setup'))");
-    if (await isInitialized(ctx.db)) {
-      throw new ORPCError("FORBIDDEN", { message: "setup has already been completed" });
+    if (await isInitialized(ctx.db)) fail("SETUP_DONE", "setup has already been completed");
+    if (!tokenMatches(await readSetupToken(ctx.db), input.setupToken)) {
+      await recordAudit(
+        ctx.db,
+        { type: "system", id: "", name: "setup", ...meta },
+        { action: "system.setup_rejected", metadata: { email: input.email } },
+      );
+      fail("SETUP_TOKEN_INVALID", "invalid setup token");
     }
     const created = await ctx.auth.api.createUser({
       body: { email: input.email, password: input.password, name: input.name, role: "admin" },
@@ -45,18 +139,28 @@ export async function runSetup(
       body: { name: input.organizationName, slug: slugify(input.organizationName), userId },
     });
     if (!org) throw new Error("organization creation failed");
-    const actor = { type: "user" as const, id: userId, ...meta };
+    const actor = { type: "user" as const, id: userId, name: input.name, ...meta };
     await ctx.db.transaction(async (tx) => {
       const [clusters] = await tx.select({ n: count() }).from(schema.cluster);
       if ((clusters?.n ?? 0) === 0) {
         await createClusterTx(tx, { name: "default", description: "Default cluster" }, actor);
       }
+      await tx
+        .insert(schema.organizationSettings)
+        .values({ organizationId: org.id })
+        .onConflictDoNothing();
+      const used: SetupTokenState = { usedAt: new Date().toISOString(), usedBy: userId };
+      await tx
+        .update(schema.systemSetting)
+        .set({ value: used as Record<string, unknown> })
+        .where(eq(schema.systemSetting.key, SETUP_TOKEN_KEY));
       await recordAudit(tx, actor, {
         action: "system.setup",
         organizationId: org.id,
         targetType: "user",
         targetId: userId,
-        metadata: { email: input.email },
+        targetName: input.name,
+        metadata: { email: input.email, organization: org.name },
       });
     });
     return { userId, organizationId: org.id };

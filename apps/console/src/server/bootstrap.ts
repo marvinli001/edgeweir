@@ -11,6 +11,7 @@ import { ConfigEventBus } from "./lib/events";
 import { logger, setLogLevel } from "./lib/logger";
 import { startNodeChannel } from "./node-channel/server";
 import { loadOrCreateNodeCa } from "./pki/store";
+import { announceSetupToken, ensureSetupToken } from "./services/setup";
 
 async function waitForDatabase(pool: import("pg").Pool, timeoutMs = 60_000) {
   const started = Date.now();
@@ -60,6 +61,8 @@ export async function bootstrap(): Promise<Running> {
   let http: Server | undefined;
 
   if (env.ROLE === "app" || env.ROLE === "all") {
+    const setupToken = await ensureSetupToken(ctx);
+    if (setupToken) announceSetupToken(log, setupToken, env.EDGEWEIR_PUBLIC_URL);
     await events.start();
     nodeChannel = await startNodeChannel(ctx);
   }

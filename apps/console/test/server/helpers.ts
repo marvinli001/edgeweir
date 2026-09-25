@@ -1,8 +1,15 @@
+import type { Contract } from "@edgeweir/contract";
 import { type Database, defaultMigrationsFolder, schema } from "@edgeweir/db";
 import { PGlite } from "@electric-sql/pglite";
+import { createORPCClient, ORPCError } from "@orpc/client";
+import { RPCLink } from "@orpc/client/fetch";
+import { SimpleCsrfProtectionLinkPlugin } from "@orpc/client/plugins";
+import type { ContractRouterClient } from "@orpc/contract";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import type pg from "pg";
+import { expect } from "vitest";
+import type { createApp } from "../../src/server/app";
 import { createAuth } from "../../src/server/lib/auth";
 import type { AppContext } from "../../src/server/lib/context";
 import { loadEnv } from "../../src/server/lib/env";
@@ -10,8 +17,10 @@ import { MasterKey } from "../../src/server/lib/envelope";
 import { ConfigEventBus } from "../../src/server/lib/events";
 import { createLogger, setLogLevel } from "../../src/server/lib/logger";
 import { CertificateAuthority, generateCa } from "../../src/server/pki/ca";
+import { ensureSetupToken, runSetup } from "../../src/server/services/setup";
 
 export const TEST_MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
+export const PASSWORD = "correct horse battery";
 
 /** An in-process PostgreSQL (PGlite) with the real migrations applied. */
 export async function createTestDatabase() {
@@ -41,10 +50,17 @@ export async function createTestContext(overrides: Record<string, string> = {}) 
   });
   setLogLevel("error");
   const log = createLogger({ test: true });
+  // PGlite is a single connection; the pool only has to hand it out.
+  const pool = {
+    connect: async () => ({
+      query: (text: string) => client.query(text),
+      release: () => {},
+    }),
+  } as unknown as pg.Pool;
   const ctx: AppContext = {
     env,
     db,
-    pool: undefined as unknown as pg.Pool,
+    pool,
     auth: createAuth({ db, secret: env.BETTER_AUTH_SECRET, publicUrl: env.EDGEWEIR_PUBLIC_URL }),
     masterKey: new MasterKey(TEST_MASTER_KEY),
     nodeCa: await CertificateAuthority.load(await generateCa("Test CA")),
@@ -69,4 +85,55 @@ export async function seedOrganization(db: Database, id = "org_test") {
     createdAt: new Date(),
   });
   return { organizationId: id, userId: "user_admin" };
+}
+
+/** Runs the real first-run setup (platform admin, first organization, default cluster). */
+export async function setupPlatform(ctx: AppContext) {
+  const setupToken = await ensureSetupToken(ctx);
+  if (!setupToken) throw new Error("already initialized");
+  return runSetup(
+    ctx,
+    {
+      setupToken,
+      name: "Platform Admin",
+      email: "admin@example.com",
+      password: PASSWORD,
+      organizationName: "Default",
+    },
+    { ip: "127.0.0.1", userAgent: "vitest" },
+  );
+}
+
+type App = ReturnType<typeof createApp>;
+export type ApiClient = ContractRouterClient<Contract>;
+
+export async function signIn(app: App, origin: string, email: string, password = PASSWORD) {
+  const res = await app.request(`${origin}/api/auth/sign-in/email`, {
+    method: "POST",
+    headers: { origin, "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  expect(res.status, `sign in ${email}`).toBe(200);
+  return (res.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+}
+
+/** The typed oRPC client the web UI uses, talking to the in-process app over /rpc. */
+export function rpcClient(app: App, origin: string, cookie = ""): ApiClient {
+  const link = new RPCLink({
+    url: `${origin}/rpc`,
+    headers: () => ({ origin, ...(cookie ? { cookie } : {}) }),
+    fetch: (request) => Promise.resolve(app.fetch(request)),
+    plugins: [new SimpleCsrfProtectionLinkPlugin()],
+  });
+  return createORPCClient(link);
+}
+
+/** Awaits a rejected call and returns its oRPC error (fails the test otherwise). */
+export async function rpcError(promise: Promise<unknown>): Promise<ORPCError<string, unknown>> {
+  const error = await promise.then(
+    () => undefined,
+    (e: unknown) => e,
+  );
+  expect(error, "expected the call to fail").toBeInstanceOf(ORPCError);
+  return error as ORPCError<string, unknown>;
 }
