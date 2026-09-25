@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file edgeweir/node/v1/node.proto.
  */
 export const file_edgeweir_node_v1_node: GenFile = /*@__PURE__*/
-  fileDesc("ChtlZGdld2Vpci9ub2RlL3YxL25vZGUucHJvdG8SEGVkZ2V3ZWlyLm5vZGUudjEiiwEKCE5vZGVJbmZvEhAKCGhvc3RuYW1lGAEgASgJEhUKDWFnZW50X3ZlcnNpb24YAiABKAkSCgoCb3MYAyABKAkSDAoEYXJjaBgEIAEoCRIOCgZlbmdpbmUYBSABKAkSFgoOZW5naW5lX3ZlcnNpb24YBiABKAkSFAoMaXBfYWRkcmVzc2VzGAcgAygJIlkKDUVucm9sbFJlcXVlc3QSDQoFdG9rZW4YASABKAkSDwoHY3NyX3BlbRgCIAEoCRIoCgRpbmZvGAMgASgLMhouZWRnZXdlaXIubm9kZS52MS5Ob2RlSW5mbyKsAQoORW5yb2xsUmVzcG9uc2USDwoHbm9kZV9pZBgBIAEoCRISCgpjbHVzdGVyX2lkGAIgASgJEhEKCW5vZGVfbmFtZRgDIAEoCRIXCg9jZXJ0aWZpY2F0ZV9wZW0YBCABKAkSGgoSY2FfY2VydGlmaWNhdGVfcGVtGAUgASgJEi0KCW5vdF9hZnRlchgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiKgoXUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QSDwoHY3NyX3BlbRgBIAEoCSJ+ChhSZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USFwoPY2VydGlmaWNhdGVfcGVtGAEgASgJEhoKEmNhX2NlcnRpZmljYXRlX3BlbRgCIAEoCRItCglub3RfYWZ0ZXIYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIiwKEldhdGNoQ29uZmlnUmVxdWVzdBIWCg5rbm93bl9yZXZpc2lvbhgBIAEoBCJxChNXYXRjaENvbmZpZ1Jlc3BvbnNlEisKBWV2ZW50GAEgASgOMhwuZWRnZXdlaXIubm9kZS52MS5XYXRjaEV2ZW50EhcKD2xhdGVzdF9yZXZpc2lvbhgCIAEoBBIUCgxjb250ZW50X2hhc2gYAyABKAkiOwoQR2V0Q29uZmlnUmVxdWVzdBIQCghyZXZpc2lvbhgBIAEoBBIVCg1iYXNlX3JldmlzaW9uGAIgASgEIrQBChFHZXRDb25maWdSZXNwb25zZRIwCghzbmFwc2hvdBgBIAEoCzIcLmVkZ2V3ZWlyLm5vZGUudjEuTm9kZUNvbmZpZ0gAEjAKBGRpZmYYAiABKAsyIC5lZGdld2Vpci5ub2RlLnYxLk5vZGVDb25maWdEaWZmSAASMAoMZ2VuZXJhdGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEIJCgdwYXlsb2FkIrwCChNSZXBvcnRTdGF0dXNSZXF1ZXN0EhgKEGFwcGxpZWRfcmV2aXNpb24YASABKAQSHAoUYXBwbGllZF9jb250ZW50X2hhc2gYAiABKAkSKwoFc3RhdGUYAyABKA4yHC5lZGdld2Vpci5ub2RlLnYxLkFwcGx5U3RhdGUSDwoHbWVzc2FnZRgEIAEoCRIoCgRpbmZvGAUgASgLMhouZWRnZXdlaXIubm9kZS52MS5Ob2RlSW5mbxIuCgphcHBsaWVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIaChJkYXRhX3BsYW5lX2hlYWx0aHkYByABKAgSOQoVY2VydGlmaWNhdGVfbm90X2FmdGVyGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJrChRSZXBvcnRTdGF0dXNSZXNwb25zZRIXCg9sYXRlc3RfcmV2aXNpb24YASABKAQSGQoRcmVuZXdfY2VydGlmaWNhdGUYAiABKAgSHwoXcmVwb3J0X2ludGVydmFsX3NlY29uZHMYAyABKA0irAIKC01pbnV0ZVN0YXRzEioKBm1pbnV0ZRgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDwoHc2l0ZV9pZBgCIAEoCRIQCghyZXF1ZXN0cxgDIAEoBBISCgpieXRlc19zZW50GAQgASgEEhYKDmJ5dGVzX3JlY2VpdmVkGAUgASgEEhIKCmNhY2hlX2hpdHMYBiABKAQSFAoMY2FjaGVfbWlzc2VzGAcgASgEEkQKDHN0YXR1c19jb2RlcxgIIAMoCzIuLmVkZ2V3ZWlyLm5vZGUudjEuTWludXRlU3RhdHMuU3RhdHVzQ29kZXNFbnRyeRoyChBTdGF0dXNDb2Rlc0VudHJ5EgsKA2tleRgBIAEoDRINCgV2YWx1ZRgCIAEoBDoCOAEiQgoSUmVwb3J0U3RhdHNSZXF1ZXN0EiwKBXN0YXRzGAEgAygLMh0uZWRnZXdlaXIubm9kZS52MS5NaW51dGVTdGF0cyInChNSZXBvcnRTdGF0c1Jlc3BvbnNlEhAKCGFjY2VwdGVkGAEgASgNKl4KCldhdGNoRXZlbnQSGwoXV0FUQ0hfRVZFTlRfVU5TUEVDSUZJRUQQABIYChRXQVRDSF9FVkVOVF9SRVZJU0lPThABEhkKFVdBVENIX0VWRU5UX0tFRVBBTElWRRACKnQKCkFwcGx5U3RhdGUSGwoXQVBQTFlfU1RBVEVfVU5TUEVDSUZJRUQQABIYChRBUFBMWV9TVEFURV9BUFBMWUlORxABEhcKE0FQUExZX1NUQVRFX0FQUExJRUQQAhIWChJBUFBMWV9TVEFURV9GQUlMRUQQAzK0BAoLTm9kZVNlcnZpY2USSwoGRW5yb2xsEh8uZWRnZXdlaXIubm9kZS52MS5FbnJvbGxSZXF1ZXN0GiAuZWRnZXdlaXIubm9kZS52MS5FbnJvbGxSZXNwb25zZRJpChBSZW5ld0NlcnRpZmljYXRlEikuZWRnZXdlaXIubm9kZS52MS5SZW5ld0NlcnRpZmljYXRlUmVxdWVzdBoqLmVkZ2V3ZWlyLm5vZGUudjEuUmVuZXdDZXJ0aWZpY2F0ZVJlc3BvbnNlElwKC1dhdGNoQ29uZmlnEiQuZWRnZXdlaXIubm9kZS52MS5XYXRjaENvbmZpZ1JlcXVlc3QaJS5lZGdld2Vpci5ub2RlLnYxLldhdGNoQ29uZmlnUmVzcG9uc2UwARJUCglHZXRDb25maWcSIi5lZGdld2Vpci5ub2RlLnYxLkdldENvbmZpZ1JlcXVlc3QaIy5lZGdld2Vpci5ub2RlLnYxLkdldENvbmZpZ1Jlc3BvbnNlEl0KDFJlcG9ydFN0YXR1cxIlLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0U3RhdHVzUmVxdWVzdBomLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0U3RhdHVzUmVzcG9uc2USWgoLUmVwb3J0U3RhdHMSJC5lZGdld2Vpci5ub2RlLnYxLlJlcG9ydFN0YXRzUmVxdWVzdBolLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0U3RhdHNSZXNwb25zZWIGcHJvdG8z", [file_edgeweir_node_v1_config, file_google_protobuf_timestamp]);
+  fileDesc("ChtlZGdld2Vpci9ub2RlL3YxL25vZGUucHJvdG8SEGVkZ2V3ZWlyLm5vZGUudjEiiwEKCE5vZGVJbmZvEhAKCGhvc3RuYW1lGAEgASgJEhUKDWFnZW50X3ZlcnNpb24YAiABKAkSCgoCb3MYAyABKAkSDAoEYXJjaBgEIAEoCRIOCgZlbmdpbmUYBSABKAkSFgoOZW5naW5lX3ZlcnNpb24YBiABKAkSFAoMaXBfYWRkcmVzc2VzGAcgAygJIlkKDUVucm9sbFJlcXVlc3QSDQoFdG9rZW4YASABKAkSDwoHY3NyX3BlbRgCIAEoCRIoCgRpbmZvGAMgASgLMhouZWRnZXdlaXIubm9kZS52MS5Ob2RlSW5mbyKsAQoORW5yb2xsUmVzcG9uc2USDwoHbm9kZV9pZBgBIAEoCRISCgpjbHVzdGVyX2lkGAIgASgJEhEKCW5vZGVfbmFtZRgDIAEoCRIXCg9jZXJ0aWZpY2F0ZV9wZW0YBCABKAkSGgoSY2FfY2VydGlmaWNhdGVfcGVtGAUgASgJEi0KCW5vdF9hZnRlchgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiKgoXUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QSDwoHY3NyX3BlbRgBIAEoCSJ+ChhSZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USFwoPY2VydGlmaWNhdGVfcGVtGAEgASgJEhoKEmNhX2NlcnRpZmljYXRlX3BlbRgCIAEoCRItCglub3RfYWZ0ZXIYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIiwKEldhdGNoQ29uZmlnUmVxdWVzdBIWCg5rbm93bl9yZXZpc2lvbhgBIAEoBCJxChNXYXRjaENvbmZpZ1Jlc3BvbnNlEisKBWV2ZW50GAEgASgOMhwuZWRnZXdlaXIubm9kZS52MS5XYXRjaEV2ZW50EhcKD2xhdGVzdF9yZXZpc2lvbhgCIAEoBBIUCgxjb250ZW50X2hhc2gYAyABKAkiOwoQR2V0Q29uZmlnUmVxdWVzdBIQCghyZXZpc2lvbhgBIAEoBBIVCg1iYXNlX3JldmlzaW9uGAIgASgEIrQBChFHZXRDb25maWdSZXNwb25zZRIwCghzbmFwc2hvdBgBIAEoCzIcLmVkZ2V3ZWlyLm5vZGUudjEuTm9kZUNvbmZpZ0gAEjAKBGRpZmYYAiABKAsyIC5lZGdld2Vpci5ub2RlLnYxLk5vZGVDb25maWdEaWZmSAASMAoMZ2VuZXJhdGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEIJCgdwYXlsb2FkIvMCChNSZXBvcnRTdGF0dXNSZXF1ZXN0EhgKEGFwcGxpZWRfcmV2aXNpb24YASABKAQSHAoUYXBwbGllZF9jb250ZW50X2hhc2gYAiABKAkSKwoFc3RhdGUYAyABKA4yHC5lZGdld2Vpci5ub2RlLnYxLkFwcGx5U3RhdGUSDwoHbWVzc2FnZRgEIAEoCRIoCgRpbmZvGAUgASgLMhouZWRnZXdlaXIubm9kZS52MS5Ob2RlSW5mbxIuCgphcHBsaWVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIaChJkYXRhX3BsYW5lX2hlYWx0aHkYByABKAgSOQoVY2VydGlmaWNhdGVfbm90X2FmdGVyGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBI1Cg1vcmlnaW5faGVhbHRoGAkgAygLMh4uZWRnZXdlaXIubm9kZS52MS5PcmlnaW5IZWFsdGgi2gEKDE9yaWdpbkhlYWx0aBIPCgdzaXRlX2lkGAEgASgJEhEKCW9yaWdpbl9pZBgCIAEoCRIPCgdoZWFsdGh5GAMgASgIEhwKFGNvbnNlY3V0aXZlX2ZhaWx1cmVzGAQgASgNEjMKD2xhc3RfZmFpbHVyZV9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKZG93bl91bnRpbBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEgoKbGFzdF9lcnJvchgHIAEoCSKCAQoUUmVwb3J0U3RhdHVzUmVzcG9uc2USFwoPbGF0ZXN0X3JldmlzaW9uGAEgASgEEhkKEXJlbmV3X2NlcnRpZmljYXRlGAIgASgIEh8KF3JlcG9ydF9pbnRlcnZhbF9zZWNvbmRzGAMgASgNEhUKDXRhc2tzX3BlbmRpbmcYBCABKAgirAIKC01pbnV0ZVN0YXRzEioKBm1pbnV0ZRgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDwoHc2l0ZV9pZBgCIAEoCRIQCghyZXF1ZXN0cxgDIAEoBBISCgpieXRlc19zZW50GAQgASgEEhYKDmJ5dGVzX3JlY2VpdmVkGAUgASgEEhIKCmNhY2hlX2hpdHMYBiABKAQSFAoMY2FjaGVfbWlzc2VzGAcgASgEEkQKDHN0YXR1c19jb2RlcxgIIAMoCzIuLmVkZ2V3ZWlyLm5vZGUudjEuTWludXRlU3RhdHMuU3RhdHVzQ29kZXNFbnRyeRoyChBTdGF0dXNDb2Rlc0VudHJ5EgsKA2tleRgBIAEoDRINCgV2YWx1ZRgCIAEoBDoCOAEiQgoSUmVwb3J0U3RhdHNSZXF1ZXN0EiwKBXN0YXRzGAEgAygLMh0uZWRnZXdlaXIubm9kZS52MS5NaW51dGVTdGF0cyInChNSZXBvcnRTdGF0c1Jlc3BvbnNlEhAKCGFjY2VwdGVkGAEgASgNIioKG0dldE9yaWdpbkNyZWRlbnRpYWxzUmVxdWVzdBILCgNpZHMYASADKAkiYQoQT3JpZ2luQ3JlZGVudGlhbBIKCgJpZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEhUKDWFjY2Vzc19rZXlfaWQYAyABKAkSGQoRc2VjcmV0X2FjY2Vzc19rZXkYBCABKAkiVwocR2V0T3JpZ2luQ3JlZGVudGlhbHNSZXNwb25zZRI3CgtjcmVkZW50aWFscxgBIAMoCzIiLmVkZ2V3ZWlyLm5vZGUudjEuT3JpZ2luQ3JlZGVudGlhbCIlChBQdWxsVGFza3NSZXF1ZXN0EhEKCW1heF90YXNrcxgBIAEoDSI+ChFQdWxsVGFza3NSZXNwb25zZRIpCgV0YXNrcxgBIAMoCzIaLmVkZ2V3ZWlyLm5vZGUudjEuTm9kZVRhc2sisAEKCE5vZGVUYXNrEgoKAmlkGAEgASgJEi4KCmNyZWF0ZWRfYXQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBXB1cmdlGAMgASgLMhsuZWRnZXdlaXIubm9kZS52MS5QdXJnZVRhc2tIABIyCghwcmVmZXRjaBgEIAEoCzIeLmVkZ2V3ZWlyLm5vZGUudjEuUHJlZmV0Y2hUYXNrSABCBgoEa2luZCJ0CgtQdXJnZVRhcmdldBIPCgdzaXRlX2lkGAEgASgJEikKBHR5cGUYAiABKA4yGy5lZGdld2Vpci5ub2RlLnYxLlB1cmdlVHlwZRIMCgRob3N0GAMgASgJEgwKBHBhdGgYBCABKAkSDQoFcXVlcnkYBSABKAkiOwoJUHVyZ2VUYXNrEi4KB3RhcmdldHMYASADKAsyHS5lZGdld2Vpci5ub2RlLnYxLlB1cmdlVGFyZ2V0Ii4KDlByZWZldGNoVGFyZ2V0Eg8KB3NpdGVfaWQYASABKAkSCwoDdXJsGAIgASgJIkEKDFByZWZldGNoVGFzaxIxCgd0YXJnZXRzGAEgAygLMiAuZWRnZXdlaXIubm9kZS52MS5QcmVmZXRjaFRhcmdldCK7AQoXUmVwb3J0VGFza1Jlc3VsdFJlcXVlc3QSDwoHdGFza19pZBgBIAEoCRIqCgVzdGF0ZRgCIAEoDjIbLmVkZ2V3ZWlyLm5vZGUudjEuVGFza1N0YXRlEg8KB21lc3NhZ2UYAyABKAkSEQoJc3VjY2VlZGVkGAQgASgNEg4KBmZhaWxlZBgFIAEoDRIvCgtmaW5pc2hlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiGgoYUmVwb3J0VGFza1Jlc3VsdFJlc3BvbnNlKnUKCldhdGNoRXZlbnQSGwoXV0FUQ0hfRVZFTlRfVU5TUEVDSUZJRUQQABIYChRXQVRDSF9FVkVOVF9SRVZJU0lPThABEhkKFVdBVENIX0VWRU5UX0tFRVBBTElWRRACEhUKEVdBVENIX0VWRU5UX1RBU0tTEAMqdAoKQXBwbHlTdGF0ZRIbChdBUFBMWV9TVEFURV9VTlNQRUNJRklFRBAAEhgKFEFQUExZX1NUQVRFX0FQUExZSU5HEAESFwoTQVBQTFlfU1RBVEVfQVBQTElFRBACEhYKEkFQUExZX1NUQVRFX0ZBSUxFRBADKmcKCVB1cmdlVHlwZRIaChZQVVJHRV9UWVBFX1VOU1BFQ0lGSUVEEAASEgoOUFVSR0VfVFlQRV9VUkwQARIVChFQVVJHRV9UWVBFX1BSRUZJWBACEhMKD1BVUkdFX1RZUEVfU0lURRADKlgKCVRhc2tTdGF0ZRIaChZUQVNLX1NUQVRFX1VOU1BFQ0lGSUVEEAASGAoUVEFTS19TVEFURV9TVUNDRUVERUQQARIVChFUQVNLX1NUQVRFX0ZBSUxFRBACMuwGCgtOb2RlU2VydmljZRJLCgZFbnJvbGwSHy5lZGdld2Vpci5ub2RlLnYxLkVucm9sbFJlcXVlc3QaIC5lZGdld2Vpci5ub2RlLnYxLkVucm9sbFJlc3BvbnNlEmkKEFJlbmV3Q2VydGlmaWNhdGUSKS5lZGdld2Vpci5ub2RlLnYxLlJlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0GiouZWRnZXdlaXIubm9kZS52MS5SZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USXAoLV2F0Y2hDb25maWcSJC5lZGdld2Vpci5ub2RlLnYxLldhdGNoQ29uZmlnUmVxdWVzdBolLmVkZ2V3ZWlyLm5vZGUudjEuV2F0Y2hDb25maWdSZXNwb25zZTABElQKCUdldENvbmZpZxIiLmVkZ2V3ZWlyLm5vZGUudjEuR2V0Q29uZmlnUmVxdWVzdBojLmVkZ2V3ZWlyLm5vZGUudjEuR2V0Q29uZmlnUmVzcG9uc2USXQoMUmVwb3J0U3RhdHVzEiUuZWRnZXdlaXIubm9kZS52MS5SZXBvcnRTdGF0dXNSZXF1ZXN0GiYuZWRnZXdlaXIubm9kZS52MS5SZXBvcnRTdGF0dXNSZXNwb25zZRJaCgtSZXBvcnRTdGF0cxIkLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0U3RhdHNSZXF1ZXN0GiUuZWRnZXdlaXIubm9kZS52MS5SZXBvcnRTdGF0c1Jlc3BvbnNlEnUKFEdldE9yaWdpbkNyZWRlbnRpYWxzEi0uZWRnZXdlaXIubm9kZS52MS5HZXRPcmlnaW5DcmVkZW50aWFsc1JlcXVlc3QaLi5lZGdld2Vpci5ub2RlLnYxLkdldE9yaWdpbkNyZWRlbnRpYWxzUmVzcG9uc2USVAoJUHVsbFRhc2tzEiIuZWRnZXdlaXIubm9kZS52MS5QdWxsVGFza3NSZXF1ZXN0GiMuZWRnZXdlaXIubm9kZS52MS5QdWxsVGFza3NSZXNwb25zZRJpChBSZXBvcnRUYXNrUmVzdWx0EikuZWRnZXdlaXIubm9kZS52MS5SZXBvcnRUYXNrUmVzdWx0UmVxdWVzdBoqLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0VGFza1Jlc3VsdFJlc3BvbnNlYgZwcm90bzM", [file_edgeweir_node_v1_config, file_google_protobuf_timestamp]);
 
 /**
  * NodeInfo describes the host and software of a node.
@@ -364,6 +364,14 @@ export type ReportStatusRequest = Message<"edgeweir.node.v1.ReportStatusRequest"
    * @generated from field: google.protobuf.Timestamp certificate_not_after = 8;
    */
   certificateNotAfter?: Timestamp | undefined;
+
+  /**
+   * Passive health state of the origins this node has seen failing; origins
+   * without failures may be omitted and count as healthy.
+   *
+   * @generated from field: repeated edgeweir.node.v1.OriginHealth origin_health = 9;
+   */
+  originHealth: OriginHealth[];
 };
 
 /**
@@ -372,6 +380,61 @@ export type ReportStatusRequest = Message<"edgeweir.node.v1.ReportStatusRequest"
  */
 export const ReportStatusRequestSchema: GenMessage<ReportStatusRequest> = /*@__PURE__*/
   messageDesc(file_edgeweir_node_v1_node, 9);
+
+/**
+ * OriginHealth is the passive health state of one origin on one node.
+ *
+ * @generated from message edgeweir.node.v1.OriginHealth
+ */
+export type OriginHealth = Message<"edgeweir.node.v1.OriginHealth"> & {
+  /**
+   * @generated from field: string site_id = 1;
+   */
+  siteId: string;
+
+  /**
+   * @generated from field: string origin_id = 2;
+   */
+  originId: string;
+
+  /**
+   * False while the origin is marked down.
+   *
+   * @generated from field: bool healthy = 3;
+   */
+  healthy: boolean;
+
+  /**
+   * @generated from field: uint32 consecutive_failures = 4;
+   */
+  consecutiveFailures: number;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp last_failure_at = 5;
+   */
+  lastFailureAt?: Timestamp | undefined;
+
+  /**
+   * End of the current down period, unset while healthy.
+   *
+   * @generated from field: google.protobuf.Timestamp down_until = 6;
+   */
+  downUntil?: Timestamp | undefined;
+
+  /**
+   * Short description of the last failure, e.g. "connect timeout".
+   *
+   * @generated from field: string last_error = 7;
+   */
+  lastError: string;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.OriginHealth.
+ * Use `create(OriginHealthSchema)` to create a new message.
+ */
+export const OriginHealthSchema: GenMessage<OriginHealth> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 10);
 
 /**
  * ReportStatusResponse tells the node what the console expects next.
@@ -397,6 +460,13 @@ export type ReportStatusResponse = Message<"edgeweir.node.v1.ReportStatusRespons
    * @generated from field: uint32 report_interval_seconds = 3;
    */
   reportIntervalSeconds: number;
+
+  /**
+   * Tasks are waiting for this node (fallback for a missed watch event).
+   *
+   * @generated from field: bool tasks_pending = 4;
+   */
+  tasksPending: boolean;
 };
 
 /**
@@ -404,7 +474,7 @@ export type ReportStatusResponse = Message<"edgeweir.node.v1.ReportStatusRespons
  * Use `create(ReportStatusResponseSchema)` to create a new message.
  */
 export const ReportStatusResponseSchema: GenMessage<ReportStatusResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 10);
+  messageDesc(file_edgeweir_node_v1_node, 11);
 
 /**
  * MinuteStats is traffic of one site during one minute on one node.
@@ -462,7 +532,7 @@ export type MinuteStats = Message<"edgeweir.node.v1.MinuteStats"> & {
  * Use `create(MinuteStatsSchema)` to create a new message.
  */
 export const MinuteStatsSchema: GenMessage<MinuteStats> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 11);
+  messageDesc(file_edgeweir_node_v1_node, 12);
 
 /**
  * ReportStatsRequest uploads a batch of minute buckets.
@@ -481,7 +551,7 @@ export type ReportStatsRequest = Message<"edgeweir.node.v1.ReportStatsRequest"> 
  * Use `create(ReportStatsRequestSchema)` to create a new message.
  */
 export const ReportStatsRequestSchema: GenMessage<ReportStatsRequest> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 12);
+  messageDesc(file_edgeweir_node_v1_node, 13);
 
 /**
  * ReportStatsResponse acknowledges a stats batch.
@@ -500,7 +570,344 @@ export type ReportStatsResponse = Message<"edgeweir.node.v1.ReportStatsResponse"
  * Use `create(ReportStatsResponseSchema)` to create a new message.
  */
 export const ReportStatsResponseSchema: GenMessage<ReportStatsResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 13);
+  messageDesc(file_edgeweir_node_v1_node, 14);
+
+/**
+ * GetOriginCredentialsRequest names the credentials to fetch.
+ *
+ * @generated from message edgeweir.node.v1.GetOriginCredentialsRequest
+ */
+export type GetOriginCredentialsRequest = Message<"edgeweir.node.v1.GetOriginCredentialsRequest"> & {
+  /**
+   * Ids from S3Auth.credential_id.
+   *
+   * @generated from field: repeated string ids = 1;
+   */
+  ids: string[];
+};
+
+/**
+ * Describes the message edgeweir.node.v1.GetOriginCredentialsRequest.
+ * Use `create(GetOriginCredentialsRequestSchema)` to create a new message.
+ */
+export const GetOriginCredentialsRequestSchema: GenMessage<GetOriginCredentialsRequest> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 15);
+
+/**
+ * OriginCredential is an access key pair for an S3-compatible origin.
+ *
+ * @generated from message edgeweir.node.v1.OriginCredential
+ */
+export type OriginCredential = Message<"edgeweir.node.v1.OriginCredential"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * Matches S3Auth.credential_version of the configuration.
+   *
+   * @generated from field: uint64 version = 2;
+   */
+  version: bigint;
+
+  /**
+   * @generated from field: string access_key_id = 3;
+   */
+  accessKeyId: string;
+
+  /**
+   * @generated from field: string secret_access_key = 4;
+   */
+  secretAccessKey: string;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.OriginCredential.
+ * Use `create(OriginCredentialSchema)` to create a new message.
+ */
+export const OriginCredentialSchema: GenMessage<OriginCredential> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 16);
+
+/**
+ * GetOriginCredentialsResponse carries the credentials the node may use.
+ * Unknown ids and credentials of other clusters are left out.
+ *
+ * @generated from message edgeweir.node.v1.GetOriginCredentialsResponse
+ */
+export type GetOriginCredentialsResponse = Message<"edgeweir.node.v1.GetOriginCredentialsResponse"> & {
+  /**
+   * @generated from field: repeated edgeweir.node.v1.OriginCredential credentials = 1;
+   */
+  credentials: OriginCredential[];
+};
+
+/**
+ * Describes the message edgeweir.node.v1.GetOriginCredentialsResponse.
+ * Use `create(GetOriginCredentialsResponseSchema)` to create a new message.
+ */
+export const GetOriginCredentialsResponseSchema: GenMessage<GetOriginCredentialsResponse> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 17);
+
+/**
+ * PullTasksRequest asks for pending tasks.
+ *
+ * @generated from message edgeweir.node.v1.PullTasksRequest
+ */
+export type PullTasksRequest = Message<"edgeweir.node.v1.PullTasksRequest"> & {
+  /**
+   * Upper bound of tasks to return; 0 means the console's default.
+   *
+   * @generated from field: uint32 max_tasks = 1;
+   */
+  maxTasks: number;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.PullTasksRequest.
+ * Use `create(PullTasksRequestSchema)` to create a new message.
+ */
+export const PullTasksRequestSchema: GenMessage<PullTasksRequest> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 18);
+
+/**
+ * PullTasksResponse carries pending tasks, oldest first.
+ *
+ * @generated from message edgeweir.node.v1.PullTasksResponse
+ */
+export type PullTasksResponse = Message<"edgeweir.node.v1.PullTasksResponse"> & {
+  /**
+   * @generated from field: repeated edgeweir.node.v1.NodeTask tasks = 1;
+   */
+  tasks: NodeTask[];
+};
+
+/**
+ * Describes the message edgeweir.node.v1.PullTasksResponse.
+ * Use `create(PullTasksResponseSchema)` to create a new message.
+ */
+export const PullTasksResponseSchema: GenMessage<PullTasksResponse> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 19);
+
+/**
+ * NodeTask is a typed one-off operation. Nodes never execute anything that
+ * is not one of these types.
+ *
+ * @generated from message edgeweir.node.v1.NodeTask
+ */
+export type NodeTask = Message<"edgeweir.node.v1.NodeTask"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * Creation time; purge tasks use it as the purge epoch.
+   *
+   * @generated from field: google.protobuf.Timestamp created_at = 2;
+   */
+  createdAt?: Timestamp | undefined;
+
+  /**
+   * What to do.
+   *
+   * @generated from oneof edgeweir.node.v1.NodeTask.kind
+   */
+  kind: {
+    /**
+     * @generated from field: edgeweir.node.v1.PurgeTask purge = 3;
+     */
+    value: PurgeTask;
+    case: "purge";
+  } | {
+    /**
+     * @generated from field: edgeweir.node.v1.PrefetchTask prefetch = 4;
+     */
+    value: PrefetchTask;
+    case: "prefetch";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message edgeweir.node.v1.NodeTask.
+ * Use `create(NodeTaskSchema)` to create a new message.
+ */
+export const NodeTaskSchema: GenMessage<NodeTask> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 20);
+
+/**
+ * PurgeTarget is one thing to purge.
+ *
+ * @generated from message edgeweir.node.v1.PurgeTarget
+ */
+export type PurgeTarget = Message<"edgeweir.node.v1.PurgeTarget"> & {
+  /**
+   * @generated from field: string site_id = 1;
+   */
+  siteId: string;
+
+  /**
+   * @generated from field: edgeweir.node.v1.PurgeType type = 2;
+   */
+  type: PurgeType;
+
+  /**
+   * Lowercase host without port; empty for PURGE_TYPE_SITE.
+   *
+   * @generated from field: string host = 3;
+   */
+  host: string;
+
+  /**
+   * URI path (URL) or path prefix (PREFIX) as requested, percent-encoded.
+   *
+   * @generated from field: string path = 4;
+   */
+  path: string;
+
+  /**
+   * Raw query string of a URL target, without the "?".
+   *
+   * @generated from field: string query = 5;
+   */
+  query: string;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.PurgeTarget.
+ * Use `create(PurgeTargetSchema)` to create a new message.
+ */
+export const PurgeTargetSchema: GenMessage<PurgeTarget> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 21);
+
+/**
+ * PurgeTask invalidates cached objects. Purged objects are never served
+ * again; their storage is reclaimed by the cache manager.
+ *
+ * @generated from message edgeweir.node.v1.PurgeTask
+ */
+export type PurgeTask = Message<"edgeweir.node.v1.PurgeTask"> & {
+  /**
+   * @generated from field: repeated edgeweir.node.v1.PurgeTarget targets = 1;
+   */
+  targets: PurgeTarget[];
+};
+
+/**
+ * Describes the message edgeweir.node.v1.PurgeTask.
+ * Use `create(PurgeTaskSchema)` to create a new message.
+ */
+export const PurgeTaskSchema: GenMessage<PurgeTask> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 22);
+
+/**
+ * PrefetchTarget is one URL to load into the cache.
+ *
+ * @generated from message edgeweir.node.v1.PrefetchTarget
+ */
+export type PrefetchTarget = Message<"edgeweir.node.v1.PrefetchTarget"> & {
+  /**
+   * @generated from field: string site_id = 1;
+   */
+  siteId: string;
+
+  /**
+   * Absolute http(s) URL whose host belongs to the site.
+   *
+   * @generated from field: string url = 2;
+   */
+  url: string;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.PrefetchTarget.
+ * Use `create(PrefetchTargetSchema)` to create a new message.
+ */
+export const PrefetchTargetSchema: GenMessage<PrefetchTarget> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 23);
+
+/**
+ * PrefetchTask requests URLs through the node's own data plane so that the
+ * responses are cached.
+ *
+ * @generated from message edgeweir.node.v1.PrefetchTask
+ */
+export type PrefetchTask = Message<"edgeweir.node.v1.PrefetchTask"> & {
+  /**
+   * @generated from field: repeated edgeweir.node.v1.PrefetchTarget targets = 1;
+   */
+  targets: PrefetchTarget[];
+};
+
+/**
+ * Describes the message edgeweir.node.v1.PrefetchTask.
+ * Use `create(PrefetchTaskSchema)` to create a new message.
+ */
+export const PrefetchTaskSchema: GenMessage<PrefetchTask> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 24);
+
+/**
+ * ReportTaskResultRequest reports the outcome of a task.
+ *
+ * @generated from message edgeweir.node.v1.ReportTaskResultRequest
+ */
+export type ReportTaskResultRequest = Message<"edgeweir.node.v1.ReportTaskResultRequest"> & {
+  /**
+   * @generated from field: string task_id = 1;
+   */
+  taskId: string;
+
+  /**
+   * @generated from field: edgeweir.node.v1.TaskState state = 2;
+   */
+  state: TaskState;
+
+  /**
+   * Human-readable detail, e.g. the URLs that failed to prefetch.
+   *
+   * @generated from field: string message = 3;
+   */
+  message: string;
+
+  /**
+   * Targets that succeeded and failed.
+   *
+   * @generated from field: uint32 succeeded = 4;
+   */
+  succeeded: number;
+
+  /**
+   * @generated from field: uint32 failed = 5;
+   */
+  failed: number;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp finished_at = 6;
+   */
+  finishedAt?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.ReportTaskResultRequest.
+ * Use `create(ReportTaskResultRequestSchema)` to create a new message.
+ */
+export const ReportTaskResultRequestSchema: GenMessage<ReportTaskResultRequest> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 25);
+
+/**
+ * ReportTaskResultResponse acknowledges a task result.
+ *
+ * @generated from message edgeweir.node.v1.ReportTaskResultResponse
+ */
+export type ReportTaskResultResponse = Message<"edgeweir.node.v1.ReportTaskResultResponse"> & {
+};
+
+/**
+ * Describes the message edgeweir.node.v1.ReportTaskResultResponse.
+ * Use `create(ReportTaskResultResponseSchema)` to create a new message.
+ */
+export const ReportTaskResultResponseSchema: GenMessage<ReportTaskResultResponse> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 26);
 
 /**
  * WatchEvent is the kind of a WatchConfig message.
@@ -526,6 +933,13 @@ export enum WatchEvent {
    * @generated from enum value: WATCH_EVENT_KEEPALIVE = 2;
    */
   KEEPALIVE = 2,
+
+  /**
+   * Tasks are waiting for this node; fetch them with PullTasks.
+   *
+   * @generated from enum value: WATCH_EVENT_TASKS = 3;
+   */
+  TASKS = 3,
 }
 
 /**
@@ -566,6 +980,73 @@ export enum ApplyState {
  */
 export const ApplyStateSchema: GenEnum<ApplyState> = /*@__PURE__*/
   enumDesc(file_edgeweir_node_v1_node, 1);
+
+/**
+ * PurgeType is the scope of a purge target.
+ *
+ * @generated from enum edgeweir.node.v1.PurgeType
+ */
+export enum PurgeType {
+  /**
+   * @generated from enum value: PURGE_TYPE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * One URL (host, path and query), with every cache key variant of it.
+   *
+   * @generated from enum value: PURGE_TYPE_URL = 1;
+   */
+  URL = 1,
+
+  /**
+   * Every URL of the host whose path starts with the given prefix.
+   *
+   * @generated from enum value: PURGE_TYPE_PREFIX = 2;
+   */
+  PREFIX = 2,
+
+  /**
+   * Every object of the site.
+   *
+   * @generated from enum value: PURGE_TYPE_SITE = 3;
+   */
+  SITE = 3,
+}
+
+/**
+ * Describes the enum edgeweir.node.v1.PurgeType.
+ */
+export const PurgeTypeSchema: GenEnum<PurgeType> = /*@__PURE__*/
+  enumDesc(file_edgeweir_node_v1_node, 2);
+
+/**
+ * TaskState is the outcome of a task on a node.
+ *
+ * @generated from enum edgeweir.node.v1.TaskState
+ */
+export enum TaskState {
+  /**
+   * @generated from enum value: TASK_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: TASK_STATE_SUCCEEDED = 1;
+   */
+  SUCCEEDED = 1,
+
+  /**
+   * @generated from enum value: TASK_STATE_FAILED = 2;
+   */
+  FAILED = 2,
+}
+
+/**
+ * Describes the enum edgeweir.node.v1.TaskState.
+ */
+export const TaskStateSchema: GenEnum<TaskState> = /*@__PURE__*/
+  enumDesc(file_edgeweir_node_v1_node, 3);
 
 /**
  * NodeService is the channel between edgeweir-node agents and the console.
@@ -645,6 +1126,39 @@ export const NodeService: GenService<{
     methodKind: "unary";
     input: typeof ReportStatsRequestSchema;
     output: typeof ReportStatsResponseSchema;
+  },
+  /**
+   * GetOriginCredentials returns origin credentials (e.g. S3 access keys)
+   * referenced by the node's cluster configuration. Secrets only travel over
+   * this mutually authenticated channel and never inside NodeConfig.
+   *
+   * @generated from rpc edgeweir.node.v1.NodeService.GetOriginCredentials
+   */
+  getOriginCredentials: {
+    methodKind: "unary";
+    input: typeof GetOriginCredentialsRequestSchema;
+    output: typeof GetOriginCredentialsResponseSchema;
+  },
+  /**
+   * PullTasks hands out pending typed tasks (cache purge, prefetch). Tasks
+   * are idempotent: a task is handed out again when no result arrives.
+   *
+   * @generated from rpc edgeweir.node.v1.NodeService.PullTasks
+   */
+  pullTasks: {
+    methodKind: "unary";
+    input: typeof PullTasksRequestSchema;
+    output: typeof PullTasksResponseSchema;
+  },
+  /**
+   * ReportTaskResult records the outcome of a task on the calling node.
+   *
+   * @generated from rpc edgeweir.node.v1.NodeService.ReportTaskResult
+   */
+  reportTaskResult: {
+    methodKind: "unary";
+    input: typeof ReportTaskResultRequestSchema;
+    output: typeof ReportTaskResultResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_edgeweir_node_v1_node, 0);

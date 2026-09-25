@@ -94,6 +94,44 @@ message Site {
   uint64 cache_generation = 8;
   // Id of an entry in NodeConfig.certificates, empty for HTTP-only sites.
   string certificate_id = 9;
+  // How cache keys are composed; unset means the default key (full query
+  // string, host included, no request headers, cookies or device type).
+  CacheKeyPolicy cache_key = 10;
+  // Fetch and cache cacheable GET requests in fixed-size slices (1 MiB), so
+  // that Range requests on large files are served from cached slices.
+  bool range_slice = 11;
+  // Reject WebSocket upgrades. WebSocket is proxied to the origin by default.
+  bool websocket_disabled = 12;
+}
+
+// CacheKeyQuery selects which part of the query string enters the cache key.
+enum CacheKeyQuery {
+  // Same as CACHE_KEY_QUERY_ALL.
+  CACHE_KEY_QUERY_UNSPECIFIED = 0;
+  // The whole query string as sent by the client.
+  CACHE_KEY_QUERY_ALL = 1;
+  // No query string at all.
+  CACHE_KEY_QUERY_IGNORE = 2;
+  // Only the parameters listed in CacheKeyPolicy.query_params.
+  CACHE_KEY_QUERY_INCLUDE = 3;
+}
+
+// CacheKeyPolicy describes the cache key of a site. Every request of the
+// site uses the same policy, so that purging a URL covers all its variants.
+message CacheKeyPolicy {
+  CacheKeyQuery query = 1;
+  // Parameter names kept by CACHE_KEY_QUERY_INCLUDE, sorted.
+  repeated string query_params = 2;
+  // Sort the kept parameters so that "?a=1&b=2" and "?b=2&a=1" share a key.
+  bool sort_query = 3;
+  // Lowercase request header names whose values enter the key, sorted.
+  repeated string headers = 4;
+  // Cookie names whose values enter the key, sorted.
+  repeated string cookies = 5;
+  // Separate mobile and desktop user agents.
+  bool device_type = 6;
+  // Leave the Host out of the key: all domains of the site share objects.
+  bool exclude_host = 7;
 }
 
 // Domain is a host name routed to a site.
@@ -118,6 +156,38 @@ message OriginPool {
   string id = 1;
   LoadBalancePolicy policy = 2;
   repeated Origin origins = 3;
+  // Skip certificate verification for HTTPS origins. Certificates are
+  // verified against the system trust store by default.
+  bool skip_tls_verify = 4;
+  // Passive health checking of the origins.
+  PassiveHealthCheck health_check = 5;
+  // Connection reuse and timeouts towards the origins.
+  OriginConnection connection = 6;
+}
+
+// PassiveHealthCheck marks an origin down after consecutive failures seen by
+// real traffic (connect errors, timeouts and 502/503/504 responses). Zero
+// values use the node defaults (3 failures, 30 seconds).
+message PassiveHealthCheck {
+  // Consecutive failures that mark an origin down.
+  uint32 max_fails = 1;
+  // Seconds an origin stays down before traffic tries it again.
+  uint32 recovery_seconds = 2;
+}
+
+// OriginConnection configures upstream connections. Zero values use the
+// node defaults (connect 10 s, send 60 s, read 60 s, keep-alive 60 s and
+// 1000 requests per connection).
+message OriginConnection {
+  uint32 connect_timeout_ms = 1;
+  uint32 send_timeout_ms = 2;
+  uint32 read_timeout_ms = 3;
+  // Close upstream connections after every request.
+  bool keepalive_disabled = 4;
+  // Seconds an idle upstream connection stays in the pool.
+  uint32 keepalive_idle_seconds = 5;
+  // Requests served over one upstream connection before it is closed.
+  uint32 keepalive_max_requests = 6;
 }
 
 // OriginScheme is the protocol used to talk to an origin.
@@ -142,6 +212,24 @@ message Origin {
   string host_header = 7;
   // TLS SNI for HTTPS origins; empty means derive from host_header/address.
   string sni = 8;
+  // Sign requests with AWS Signature Version 4 (S3-compatible object
+  // storage). Only GET and HEAD requests are forwarded to such origins.
+  S3Auth s3 = 9;
+}
+
+// S3Auth references the credential used to sign requests to an S3-compatible
+// origin. The secret itself is never part of the configuration; nodes fetch
+// it with NodeService.GetOriginCredentials over mutual TLS.
+message S3Auth {
+  // Signing region, e.g. "us-east-1".
+  string region = 1;
+  // Bucket for path-style requests ("/<bucket>/<key>"); empty when the
+  // origin address already names the bucket (virtual-hosted style).
+  string bucket = 2;
+  // Id of the credential to fetch.
+  string credential_id = 3;
+  // Changes whenever the credential changes, so that nodes fetch it again.
+  uint64 credential_version = 4;
 }
 
 // CacheAction is what a matching cache rule does.
@@ -170,18 +258,36 @@ message CacheRule {
   CacheAction action = 4;
   uint32 edge_ttl_seconds = 5;
   OriginCacheControl origin_cache_control = 6;
+  // Serve a stale object for this long after it expired while it is being
+  // refreshed in the background (RFC 5861); 0 disables it.
+  uint32 stale_while_revalidate_seconds = 7;
+  // Serve a stale object for this long after it expired when the origin
+  // fails (RFC 5861); 0 disables it.
+  uint32 stale_if_error_seconds = 8;
 }
 
 // CacheRuleMatch is the condition of a cache rule. Empty lists match all
-// requests. When several lists are set, all of them must match.
+// requests. When several conditions are set, all of them must match.
+// Request conditions (paths, prefixes, extensions) are checked when the
+// request arrives; response conditions (status codes, size) when the origin
+// answers. A rule whose response conditions fail passes the decision on to
+// the next rule whose request conditions matched.
 message CacheRuleMatch {
   // URI path prefixes, e.g. "/static/".
   repeated string path_prefixes = 1;
   // File extensions without the dot, lowercase, e.g. "png".
   repeated string extensions = 2;
   // Reserved for the rule-engine expression language (wirefilter style).
-  // Phase 0 nodes reject configs where this is non-empty.
+  // Nodes reject configs where this is non-empty.
   string expression = 3;
+  // Exact URI paths, e.g. "/index.html".
+  repeated string paths = 4;
+  // Response status codes, sorted; empty means any status the rule may cache.
+  repeated uint32 status_codes = 5;
+  // Minimum response size in bytes (Content-Length); 0 means no minimum.
+  uint64 min_size_bytes = 6;
+  // Maximum response size in bytes (Content-Length); 0 means no maximum.
+  uint64 max_size_bytes = 7;
 }
 
 // CertificateRef points at a certificate stored in the console.

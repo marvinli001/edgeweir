@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file edgeweir/node/v1/config.proto.
  */
 export const file_edgeweir_node_v1_config: GenFile = /*@__PURE__*/
-  fileDesc("Ch1lZGdld2Vpci9ub2RlL3YxL2NvbmZpZy5wcm90bxIQZWRnZXdlaXIubm9kZS52MSKIAgoKTm9kZUNvbmZpZxIQCghyZXZpc2lvbhgBIAEoBBIUCgxjb250ZW50X2hhc2gYAiABKAkSEgoKY2x1c3Rlcl9pZBgDIAEoCRItCglsaXN0ZW5lcnMYBCADKAsyGi5lZGdld2Vpci5ub2RlLnYxLkxpc3RlbmVyEjAKC2NhY2hlX3pvbmVzGAUgAygLMhsuZWRnZXdlaXIubm9kZS52MS5DYWNoZVpvbmUSJQoFc2l0ZXMYBiADKAsyFi5lZGdld2Vpci5ub2RlLnYxLlNpdGUSNgoMY2VydGlmaWNhdGVzGAcgAygLMiAuZWRnZXdlaXIubm9kZS52MS5DZXJ0aWZpY2F0ZVJlZiLGAgoOTm9kZUNvbmZpZ0RpZmYSFQoNYmFzZV9yZXZpc2lvbhgBIAEoBBIQCghyZXZpc2lvbhgCIAEoBBIUCgxjb250ZW50X2hhc2gYAyABKAkSEgoKY2x1c3Rlcl9pZBgEIAEoCRItCglsaXN0ZW5lcnMYBSADKAsyGi5lZGdld2Vpci5ub2RlLnYxLkxpc3RlbmVyEjAKC2NhY2hlX3pvbmVzGAYgAygLMhsuZWRnZXdlaXIubm9kZS52MS5DYWNoZVpvbmUSLgoOdXBzZXJ0ZWRfc2l0ZXMYByADKAsyFi5lZGdld2Vpci5ub2RlLnYxLlNpdGUSGAoQcmVtb3ZlZF9zaXRlX2lkcxgIIAMoCRI2CgxjZXJ0aWZpY2F0ZXMYCSADKAsyIC5lZGdld2Vpci5ub2RlLnYxLkNlcnRpZmljYXRlUmVmIoQBCghMaXN0ZW5lchIMCgRwb3J0GAEgASgNEjQKCHByb3RvY29sGAIgASgOMiIuZWRnZXdlaXIubm9kZS52MS5MaXN0ZW5lclByb3RvY29sEg0KBWh0dHAyGAMgASgIEg0KBWh0dHAzGAQgASgIEhYKDnByb3h5X3Byb3RvY29sGAUgASgIIl4KCUNhY2hlWm9uZRIMCgRuYW1lGAEgASgJEhMKC21heF9zaXplX21iGAIgASgEEhQKDGtleXNfem9uZV9tYhgDIAEoDRIYChBpbmFjdGl2ZV9zZWNvbmRzGAQgASgNIocCCgRTaXRlEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDwoHZW5hYmxlZBgDIAEoCBIpCgdkb21haW5zGAQgAygLMhguZWRnZXdlaXIubm9kZS52MS5Eb21haW4SMQoLb3JpZ2luX3Bvb2wYBSABKAsyHC5lZGdld2Vpci5ub2RlLnYxLk9yaWdpblBvb2wSMAoLY2FjaGVfcnVsZXMYBiADKAsyGy5lZGdld2Vpci5ub2RlLnYxLkNhY2hlUnVsZRISCgpjYWNoZV96b25lGAcgASgJEhgKEGNhY2hlX2dlbmVyYXRpb24YCCABKAQSFgoOY2VydGlmaWNhdGVfaWQYCSABKAkiKAoGRG9tYWluEgwKBG5hbWUYASABKAkSEAoId2lsZGNhcmQYAiABKAgieAoKT3JpZ2luUG9vbBIKCgJpZBgBIAEoCRIzCgZwb2xpY3kYAiABKA4yIy5lZGdld2Vpci5ub2RlLnYxLkxvYWRCYWxhbmNlUG9saWN5EikKB29yaWdpbnMYAyADKAsyGC5lZGdld2Vpci5ub2RlLnYxLk9yaWdpbiKlAQoGT3JpZ2luEgoKAmlkGAEgASgJEg8KB2FkZHJlc3MYAiABKAkSDAoEcG9ydBgDIAEoDRIuCgZzY2hlbWUYBCABKA4yHi5lZGdld2Vpci5ub2RlLnYxLk9yaWdpblNjaGVtZRIOCgZ3ZWlnaHQYBSABKA0SDgoGYmFja3VwGAYgASgIEhMKC2hvc3RfaGVhZGVyGAcgASgJEgsKA3NuaRgIIAEoCSLnAQoJQ2FjaGVSdWxlEgoKAmlkGAEgASgJEhAKCHByaW9yaXR5GAIgASgNEi8KBW1hdGNoGAMgASgLMiAuZWRnZXdlaXIubm9kZS52MS5DYWNoZVJ1bGVNYXRjaBItCgZhY3Rpb24YBCABKA4yHS5lZGdld2Vpci5ub2RlLnYxLkNhY2hlQWN0aW9uEhgKEGVkZ2VfdHRsX3NlY29uZHMYBSABKA0SQgoUb3JpZ2luX2NhY2hlX2NvbnRyb2wYBiABKA4yJC5lZGdld2Vpci5ub2RlLnYxLk9yaWdpbkNhY2hlQ29udHJvbCJPCg5DYWNoZVJ1bGVNYXRjaBIVCg1wYXRoX3ByZWZpeGVzGAEgAygJEhIKCmV4dGVuc2lvbnMYAiADKAkSEgoKZXhwcmVzc2lvbhgDIAEoCSJ2Cg5DZXJ0aWZpY2F0ZVJlZhIKCgJpZBgBIAEoCRINCgVuYW1lcxgCIAMoCRIaChJzaGEyNTZfZmluZ2VycHJpbnQYAyABKAkSLQoJbm90X2FmdGVyGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCpuChBMaXN0ZW5lclByb3RvY29sEiEKHUxJU1RFTkVSX1BST1RPQ09MX1VOU1BFQ0lGSUVEEAASGgoWTElTVEVORVJfUFJPVE9DT0xfSFRUUBABEhsKF0xJU1RFTkVSX1BST1RPQ09MX0hUVFBTEAIqrwEKEUxvYWRCYWxhbmNlUG9saWN5EiMKH0xPQURfQkFMQU5DRV9QT0xJQ1lfVU5TUEVDSUZJRUQQABInCiNMT0FEX0JBTEFOQ0VfUE9MSUNZX1dFSUdIVEVEX1JBTkRPTRABEiMKH0xPQURfQkFMQU5DRV9QT0xJQ1lfUk9VTkRfUk9CSU4QAhInCiNMT0FEX0JBTEFOQ0VfUE9MSUNZX0NPTlNJU1RFTlRfSEFTSBADKl4KDE9yaWdpblNjaGVtZRIdChlPUklHSU5fU0NIRU1FX1VOU1BFQ0lGSUVEEAASFgoST1JJR0lOX1NDSEVNRV9IVFRQEAESFwoTT1JJR0lOX1NDSEVNRV9IVFRQUxACKlwKC0NhY2hlQWN0aW9uEhwKGENBQ0hFX0FDVElPTl9VTlNQRUNJRklFRBAAEhYKEkNBQ0hFX0FDVElPTl9DQUNIRRABEhcKE0NBQ0hFX0FDVElPTl9CWVBBU1MQAip/ChJPcmlnaW5DYWNoZUNvbnRyb2wSJAogT1JJR0lOX0NBQ0hFX0NPTlRST0xfVU5TUEVDSUZJRUQQABIhCh1PUklHSU5fQ0FDSEVfQ09OVFJPTF9PVkVSUklERRABEiAKHE9SSUdJTl9DQUNIRV9DT05UUk9MX1JFU1BFQ1QQAmIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("Ch1lZGdld2Vpci9ub2RlL3YxL2NvbmZpZy5wcm90bxIQZWRnZXdlaXIubm9kZS52MSKIAgoKTm9kZUNvbmZpZxIQCghyZXZpc2lvbhgBIAEoBBIUCgxjb250ZW50X2hhc2gYAiABKAkSEgoKY2x1c3Rlcl9pZBgDIAEoCRItCglsaXN0ZW5lcnMYBCADKAsyGi5lZGdld2Vpci5ub2RlLnYxLkxpc3RlbmVyEjAKC2NhY2hlX3pvbmVzGAUgAygLMhsuZWRnZXdlaXIubm9kZS52MS5DYWNoZVpvbmUSJQoFc2l0ZXMYBiADKAsyFi5lZGdld2Vpci5ub2RlLnYxLlNpdGUSNgoMY2VydGlmaWNhdGVzGAcgAygLMiAuZWRnZXdlaXIubm9kZS52MS5DZXJ0aWZpY2F0ZVJlZiLGAgoOTm9kZUNvbmZpZ0RpZmYSFQoNYmFzZV9yZXZpc2lvbhgBIAEoBBIQCghyZXZpc2lvbhgCIAEoBBIUCgxjb250ZW50X2hhc2gYAyABKAkSEgoKY2x1c3Rlcl9pZBgEIAEoCRItCglsaXN0ZW5lcnMYBSADKAsyGi5lZGdld2Vpci5ub2RlLnYxLkxpc3RlbmVyEjAKC2NhY2hlX3pvbmVzGAYgAygLMhsuZWRnZXdlaXIubm9kZS52MS5DYWNoZVpvbmUSLgoOdXBzZXJ0ZWRfc2l0ZXMYByADKAsyFi5lZGdld2Vpci5ub2RlLnYxLlNpdGUSGAoQcmVtb3ZlZF9zaXRlX2lkcxgIIAMoCRI2CgxjZXJ0aWZpY2F0ZXMYCSADKAsyIC5lZGdld2Vpci5ub2RlLnYxLkNlcnRpZmljYXRlUmVmIoQBCghMaXN0ZW5lchIMCgRwb3J0GAEgASgNEjQKCHByb3RvY29sGAIgASgOMiIuZWRnZXdlaXIubm9kZS52MS5MaXN0ZW5lclByb3RvY29sEg0KBWh0dHAyGAMgASgIEg0KBWh0dHAzGAQgASgIEhYKDnByb3h5X3Byb3RvY29sGAUgASgIIl4KCUNhY2hlWm9uZRIMCgRuYW1lGAEgASgJEhMKC21heF9zaXplX21iGAIgASgEEhQKDGtleXNfem9uZV9tYhgDIAEoDRIYChBpbmFjdGl2ZV9zZWNvbmRzGAQgASgNIu0CCgRTaXRlEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDwoHZW5hYmxlZBgDIAEoCBIpCgdkb21haW5zGAQgAygLMhguZWRnZXdlaXIubm9kZS52MS5Eb21haW4SMQoLb3JpZ2luX3Bvb2wYBSABKAsyHC5lZGdld2Vpci5ub2RlLnYxLk9yaWdpblBvb2wSMAoLY2FjaGVfcnVsZXMYBiADKAsyGy5lZGdld2Vpci5ub2RlLnYxLkNhY2hlUnVsZRISCgpjYWNoZV96b25lGAcgASgJEhgKEGNhY2hlX2dlbmVyYXRpb24YCCABKAQSFgoOY2VydGlmaWNhdGVfaWQYCSABKAkSMwoJY2FjaGVfa2V5GAogASgLMiAuZWRnZXdlaXIubm9kZS52MS5DYWNoZUtleVBvbGljeRITCgtyYW5nZV9zbGljZRgLIAEoCBIaChJ3ZWJzb2NrZXRfZGlzYWJsZWQYDCABKAgitwEKDkNhY2hlS2V5UG9saWN5Ei4KBXF1ZXJ5GAEgASgOMh8uZWRnZXdlaXIubm9kZS52MS5DYWNoZUtleVF1ZXJ5EhQKDHF1ZXJ5X3BhcmFtcxgCIAMoCRISCgpzb3J0X3F1ZXJ5GAMgASgIEg8KB2hlYWRlcnMYBCADKAkSDwoHY29va2llcxgFIAMoCRITCgtkZXZpY2VfdHlwZRgGIAEoCBIUCgxleGNsdWRlX2hvc3QYByABKAgiKAoGRG9tYWluEgwKBG5hbWUYASABKAkSEAoId2lsZGNhcmQYAiABKAgihQIKCk9yaWdpblBvb2wSCgoCaWQYASABKAkSMwoGcG9saWN5GAIgASgOMiMuZWRnZXdlaXIubm9kZS52MS5Mb2FkQmFsYW5jZVBvbGljeRIpCgdvcmlnaW5zGAMgAygLMhguZWRnZXdlaXIubm9kZS52MS5PcmlnaW4SFwoPc2tpcF90bHNfdmVyaWZ5GAQgASgIEjoKDGhlYWx0aF9jaGVjaxgFIAEoCzIkLmVkZ2V3ZWlyLm5vZGUudjEuUGFzc2l2ZUhlYWx0aENoZWNrEjYKCmNvbm5lY3Rpb24YBiABKAsyIi5lZGdld2Vpci5ub2RlLnYxLk9yaWdpbkNvbm5lY3Rpb24iQQoSUGFzc2l2ZUhlYWx0aENoZWNrEhEKCW1heF9mYWlscxgBIAEoDRIYChByZWNvdmVyeV9zZWNvbmRzGAIgASgNIrwBChBPcmlnaW5Db25uZWN0aW9uEhoKEmNvbm5lY3RfdGltZW91dF9tcxgBIAEoDRIXCg9zZW5kX3RpbWVvdXRfbXMYAiABKA0SFwoPcmVhZF90aW1lb3V0X21zGAMgASgNEhoKEmtlZXBhbGl2ZV9kaXNhYmxlZBgEIAEoCBIeChZrZWVwYWxpdmVfaWRsZV9zZWNvbmRzGAUgASgNEh4KFmtlZXBhbGl2ZV9tYXhfcmVxdWVzdHMYBiABKA0iywEKBk9yaWdpbhIKCgJpZBgBIAEoCRIPCgdhZGRyZXNzGAIgASgJEgwKBHBvcnQYAyABKA0SLgoGc2NoZW1lGAQgASgOMh4uZWRnZXdlaXIubm9kZS52MS5PcmlnaW5TY2hlbWUSDgoGd2VpZ2h0GAUgASgNEg4KBmJhY2t1cBgGIAEoCBITCgtob3N0X2hlYWRlchgHIAEoCRILCgNzbmkYCCABKAkSJAoCczMYCSABKAsyGC5lZGdld2Vpci5ub2RlLnYxLlMzQXV0aCJbCgZTM0F1dGgSDgoGcmVnaW9uGAEgASgJEg4KBmJ1Y2tldBgCIAEoCRIVCg1jcmVkZW50aWFsX2lkGAMgASgJEhoKEmNyZWRlbnRpYWxfdmVyc2lvbhgEIAEoBCKvAgoJQ2FjaGVSdWxlEgoKAmlkGAEgASgJEhAKCHByaW9yaXR5GAIgASgNEi8KBW1hdGNoGAMgASgLMiAuZWRnZXdlaXIubm9kZS52MS5DYWNoZVJ1bGVNYXRjaBItCgZhY3Rpb24YBCABKA4yHS5lZGdld2Vpci5ub2RlLnYxLkNhY2hlQWN0aW9uEhgKEGVkZ2VfdHRsX3NlY29uZHMYBSABKA0SQgoUb3JpZ2luX2NhY2hlX2NvbnRyb2wYBiABKA4yJC5lZGdld2Vpci5ub2RlLnYxLk9yaWdpbkNhY2hlQ29udHJvbBImCh5zdGFsZV93aGlsZV9yZXZhbGlkYXRlX3NlY29uZHMYByABKA0SHgoWc3RhbGVfaWZfZXJyb3Jfc2Vjb25kcxgIIAEoDSKkAQoOQ2FjaGVSdWxlTWF0Y2gSFQoNcGF0aF9wcmVmaXhlcxgBIAMoCRISCgpleHRlbnNpb25zGAIgAygJEhIKCmV4cHJlc3Npb24YAyABKAkSDQoFcGF0aHMYBCADKAkSFAoMc3RhdHVzX2NvZGVzGAUgAygNEhYKDm1pbl9zaXplX2J5dGVzGAYgASgEEhYKDm1heF9zaXplX2J5dGVzGAcgASgEInYKDkNlcnRpZmljYXRlUmVmEgoKAmlkGAEgASgJEg0KBW5hbWVzGAIgAygJEhoKEnNoYTI1Nl9maW5nZXJwcmludBgDIAEoCRItCglub3RfYWZ0ZXIYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wKm4KEExpc3RlbmVyUHJvdG9jb2wSIQodTElTVEVORVJfUFJPVE9DT0xfVU5TUEVDSUZJRUQQABIaChZMSVNURU5FUl9QUk9UT0NPTF9IVFRQEAESGwoXTElTVEVORVJfUFJPVE9DT0xfSFRUUFMQAiqCAQoNQ2FjaGVLZXlRdWVyeRIfChtDQUNIRV9LRVlfUVVFUllfVU5TUEVDSUZJRUQQABIXChNDQUNIRV9LRVlfUVVFUllfQUxMEAESGgoWQ0FDSEVfS0VZX1FVRVJZX0lHTk9SRRACEhsKF0NBQ0hFX0tFWV9RVUVSWV9JTkNMVURFEAMqrwEKEUxvYWRCYWxhbmNlUG9saWN5EiMKH0xPQURfQkFMQU5DRV9QT0xJQ1lfVU5TUEVDSUZJRUQQABInCiNMT0FEX0JBTEFOQ0VfUE9MSUNZX1dFSUdIVEVEX1JBTkRPTRABEiMKH0xPQURfQkFMQU5DRV9QT0xJQ1lfUk9VTkRfUk9CSU4QAhInCiNMT0FEX0JBTEFOQ0VfUE9MSUNZX0NPTlNJU1RFTlRfSEFTSBADKl4KDE9yaWdpblNjaGVtZRIdChlPUklHSU5fU0NIRU1FX1VOU1BFQ0lGSUVEEAASFgoST1JJR0lOX1NDSEVNRV9IVFRQEAESFwoTT1JJR0lOX1NDSEVNRV9IVFRQUxACKlwKC0NhY2hlQWN0aW9uEhwKGENBQ0hFX0FDVElPTl9VTlNQRUNJRklFRBAAEhYKEkNBQ0hFX0FDVElPTl9DQUNIRRABEhcKE0NBQ0hFX0FDVElPTl9CWVBBU1MQAip/ChJPcmlnaW5DYWNoZUNvbnRyb2wSJAogT1JJR0lOX0NBQ0hFX0NPTlRST0xfVU5TUEVDSUZJRUQQABIhCh1PUklHSU5fQ0FDSEVfQ09OVFJPTF9PVkVSUklERRABEiAKHE9SSUdJTl9DQUNIRV9DT05UUk9MX1JFU1BFQ1QQAmIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * NodeConfig is the engine-agnostic intermediate representation (IR) that the
@@ -295,6 +295,29 @@ export type Site = Message<"edgeweir.node.v1.Site"> & {
    * @generated from field: string certificate_id = 9;
    */
   certificateId: string;
+
+  /**
+   * How cache keys are composed; unset means the default key (full query
+   * string, host included, no request headers, cookies or device type).
+   *
+   * @generated from field: edgeweir.node.v1.CacheKeyPolicy cache_key = 10;
+   */
+  cacheKey?: CacheKeyPolicy | undefined;
+
+  /**
+   * Fetch and cache cacheable GET requests in fixed-size slices (1 MiB), so
+   * that Range requests on large files are served from cached slices.
+   *
+   * @generated from field: bool range_slice = 11;
+   */
+  rangeSlice: boolean;
+
+  /**
+   * Reject WebSocket upgrades. WebSocket is proxied to the origin by default.
+   *
+   * @generated from field: bool websocket_disabled = 12;
+   */
+  websocketDisabled: boolean;
 };
 
 /**
@@ -303,6 +326,68 @@ export type Site = Message<"edgeweir.node.v1.Site"> & {
  */
 export const SiteSchema: GenMessage<Site> = /*@__PURE__*/
   messageDesc(file_edgeweir_node_v1_config, 4);
+
+/**
+ * CacheKeyPolicy describes the cache key of a site. Every request of the
+ * site uses the same policy, so that purging a URL covers all its variants.
+ *
+ * @generated from message edgeweir.node.v1.CacheKeyPolicy
+ */
+export type CacheKeyPolicy = Message<"edgeweir.node.v1.CacheKeyPolicy"> & {
+  /**
+   * @generated from field: edgeweir.node.v1.CacheKeyQuery query = 1;
+   */
+  query: CacheKeyQuery;
+
+  /**
+   * Parameter names kept by CACHE_KEY_QUERY_INCLUDE, sorted.
+   *
+   * @generated from field: repeated string query_params = 2;
+   */
+  queryParams: string[];
+
+  /**
+   * Sort the kept parameters so that "?a=1&b=2" and "?b=2&a=1" share a key.
+   *
+   * @generated from field: bool sort_query = 3;
+   */
+  sortQuery: boolean;
+
+  /**
+   * Lowercase request header names whose values enter the key, sorted.
+   *
+   * @generated from field: repeated string headers = 4;
+   */
+  headers: string[];
+
+  /**
+   * Cookie names whose values enter the key, sorted.
+   *
+   * @generated from field: repeated string cookies = 5;
+   */
+  cookies: string[];
+
+  /**
+   * Separate mobile and desktop user agents.
+   *
+   * @generated from field: bool device_type = 6;
+   */
+  deviceType: boolean;
+
+  /**
+   * Leave the Host out of the key: all domains of the site share objects.
+   *
+   * @generated from field: bool exclude_host = 7;
+   */
+  excludeHost: boolean;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.CacheKeyPolicy.
+ * Use `create(CacheKeyPolicySchema)` to create a new message.
+ */
+export const CacheKeyPolicySchema: GenMessage<CacheKeyPolicy> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_config, 5);
 
 /**
  * Domain is a host name routed to a site.
@@ -331,7 +416,7 @@ export type Domain = Message<"edgeweir.node.v1.Domain"> & {
  * Use `create(DomainSchema)` to create a new message.
  */
 export const DomainSchema: GenMessage<Domain> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 5);
+  messageDesc(file_edgeweir_node_v1_config, 6);
 
 /**
  * OriginPool is the set of upstream servers of a site.
@@ -353,6 +438,28 @@ export type OriginPool = Message<"edgeweir.node.v1.OriginPool"> & {
    * @generated from field: repeated edgeweir.node.v1.Origin origins = 3;
    */
   origins: Origin[];
+
+  /**
+   * Skip certificate verification for HTTPS origins. Certificates are
+   * verified against the system trust store by default.
+   *
+   * @generated from field: bool skip_tls_verify = 4;
+   */
+  skipTlsVerify: boolean;
+
+  /**
+   * Passive health checking of the origins.
+   *
+   * @generated from field: edgeweir.node.v1.PassiveHealthCheck health_check = 5;
+   */
+  healthCheck?: PassiveHealthCheck | undefined;
+
+  /**
+   * Connection reuse and timeouts towards the origins.
+   *
+   * @generated from field: edgeweir.node.v1.OriginConnection connection = 6;
+   */
+  connection?: OriginConnection | undefined;
 };
 
 /**
@@ -360,7 +467,89 @@ export type OriginPool = Message<"edgeweir.node.v1.OriginPool"> & {
  * Use `create(OriginPoolSchema)` to create a new message.
  */
 export const OriginPoolSchema: GenMessage<OriginPool> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 6);
+  messageDesc(file_edgeweir_node_v1_config, 7);
+
+/**
+ * PassiveHealthCheck marks an origin down after consecutive failures seen by
+ * real traffic (connect errors, timeouts and 502/503/504 responses). Zero
+ * values use the node defaults (3 failures, 30 seconds).
+ *
+ * @generated from message edgeweir.node.v1.PassiveHealthCheck
+ */
+export type PassiveHealthCheck = Message<"edgeweir.node.v1.PassiveHealthCheck"> & {
+  /**
+   * Consecutive failures that mark an origin down.
+   *
+   * @generated from field: uint32 max_fails = 1;
+   */
+  maxFails: number;
+
+  /**
+   * Seconds an origin stays down before traffic tries it again.
+   *
+   * @generated from field: uint32 recovery_seconds = 2;
+   */
+  recoverySeconds: number;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.PassiveHealthCheck.
+ * Use `create(PassiveHealthCheckSchema)` to create a new message.
+ */
+export const PassiveHealthCheckSchema: GenMessage<PassiveHealthCheck> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_config, 8);
+
+/**
+ * OriginConnection configures upstream connections. Zero values use the
+ * node defaults (connect 10 s, send 60 s, read 60 s, keep-alive 60 s and
+ * 1000 requests per connection).
+ *
+ * @generated from message edgeweir.node.v1.OriginConnection
+ */
+export type OriginConnection = Message<"edgeweir.node.v1.OriginConnection"> & {
+  /**
+   * @generated from field: uint32 connect_timeout_ms = 1;
+   */
+  connectTimeoutMs: number;
+
+  /**
+   * @generated from field: uint32 send_timeout_ms = 2;
+   */
+  sendTimeoutMs: number;
+
+  /**
+   * @generated from field: uint32 read_timeout_ms = 3;
+   */
+  readTimeoutMs: number;
+
+  /**
+   * Close upstream connections after every request.
+   *
+   * @generated from field: bool keepalive_disabled = 4;
+   */
+  keepaliveDisabled: boolean;
+
+  /**
+   * Seconds an idle upstream connection stays in the pool.
+   *
+   * @generated from field: uint32 keepalive_idle_seconds = 5;
+   */
+  keepaliveIdleSeconds: number;
+
+  /**
+   * Requests served over one upstream connection before it is closed.
+   *
+   * @generated from field: uint32 keepalive_max_requests = 6;
+   */
+  keepaliveMaxRequests: number;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.OriginConnection.
+ * Use `create(OriginConnectionSchema)` to create a new message.
+ */
+export const OriginConnectionSchema: GenMessage<OriginConnection> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_config, 9);
 
 /**
  * Origin is one upstream server.
@@ -417,6 +606,14 @@ export type Origin = Message<"edgeweir.node.v1.Origin"> & {
    * @generated from field: string sni = 8;
    */
   sni: string;
+
+  /**
+   * Sign requests with AWS Signature Version 4 (S3-compatible object
+   * storage). Only GET and HEAD requests are forwarded to such origins.
+   *
+   * @generated from field: edgeweir.node.v1.S3Auth s3 = 9;
+   */
+  s3?: S3Auth | undefined;
 };
 
 /**
@@ -424,7 +621,52 @@ export type Origin = Message<"edgeweir.node.v1.Origin"> & {
  * Use `create(OriginSchema)` to create a new message.
  */
 export const OriginSchema: GenMessage<Origin> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 7);
+  messageDesc(file_edgeweir_node_v1_config, 10);
+
+/**
+ * S3Auth references the credential used to sign requests to an S3-compatible
+ * origin. The secret itself is never part of the configuration; nodes fetch
+ * it with NodeService.GetOriginCredentials over mutual TLS.
+ *
+ * @generated from message edgeweir.node.v1.S3Auth
+ */
+export type S3Auth = Message<"edgeweir.node.v1.S3Auth"> & {
+  /**
+   * Signing region, e.g. "us-east-1".
+   *
+   * @generated from field: string region = 1;
+   */
+  region: string;
+
+  /**
+   * Bucket for path-style requests ("/<bucket>/<key>"); empty when the
+   * origin address already names the bucket (virtual-hosted style).
+   *
+   * @generated from field: string bucket = 2;
+   */
+  bucket: string;
+
+  /**
+   * Id of the credential to fetch.
+   *
+   * @generated from field: string credential_id = 3;
+   */
+  credentialId: string;
+
+  /**
+   * Changes whenever the credential changes, so that nodes fetch it again.
+   *
+   * @generated from field: uint64 credential_version = 4;
+   */
+  credentialVersion: bigint;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.S3Auth.
+ * Use `create(S3AuthSchema)` to create a new message.
+ */
+export const S3AuthSchema: GenMessage<S3Auth> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_config, 11);
 
 /**
  * CacheRule decides whether and for how long a response is cached.
@@ -462,6 +704,22 @@ export type CacheRule = Message<"edgeweir.node.v1.CacheRule"> & {
    * @generated from field: edgeweir.node.v1.OriginCacheControl origin_cache_control = 6;
    */
   originCacheControl: OriginCacheControl;
+
+  /**
+   * Serve a stale object for this long after it expired while it is being
+   * refreshed in the background (RFC 5861); 0 disables it.
+   *
+   * @generated from field: uint32 stale_while_revalidate_seconds = 7;
+   */
+  staleWhileRevalidateSeconds: number;
+
+  /**
+   * Serve a stale object for this long after it expired when the origin
+   * fails (RFC 5861); 0 disables it.
+   *
+   * @generated from field: uint32 stale_if_error_seconds = 8;
+   */
+  staleIfErrorSeconds: number;
 };
 
 /**
@@ -469,11 +727,15 @@ export type CacheRule = Message<"edgeweir.node.v1.CacheRule"> & {
  * Use `create(CacheRuleSchema)` to create a new message.
  */
 export const CacheRuleSchema: GenMessage<CacheRule> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 8);
+  messageDesc(file_edgeweir_node_v1_config, 12);
 
 /**
  * CacheRuleMatch is the condition of a cache rule. Empty lists match all
- * requests. When several lists are set, all of them must match.
+ * requests. When several conditions are set, all of them must match.
+ * Request conditions (paths, prefixes, extensions) are checked when the
+ * request arrives; response conditions (status codes, size) when the origin
+ * answers. A rule whose response conditions fail passes the decision on to
+ * the next rule whose request conditions matched.
  *
  * @generated from message edgeweir.node.v1.CacheRuleMatch
  */
@@ -494,11 +756,39 @@ export type CacheRuleMatch = Message<"edgeweir.node.v1.CacheRuleMatch"> & {
 
   /**
    * Reserved for the rule-engine expression language (wirefilter style).
-   * Phase 0 nodes reject configs where this is non-empty.
+   * Nodes reject configs where this is non-empty.
    *
    * @generated from field: string expression = 3;
    */
   expression: string;
+
+  /**
+   * Exact URI paths, e.g. "/index.html".
+   *
+   * @generated from field: repeated string paths = 4;
+   */
+  paths: string[];
+
+  /**
+   * Response status codes, sorted; empty means any status the rule may cache.
+   *
+   * @generated from field: repeated uint32 status_codes = 5;
+   */
+  statusCodes: number[];
+
+  /**
+   * Minimum response size in bytes (Content-Length); 0 means no minimum.
+   *
+   * @generated from field: uint64 min_size_bytes = 6;
+   */
+  minSizeBytes: bigint;
+
+  /**
+   * Maximum response size in bytes (Content-Length); 0 means no maximum.
+   *
+   * @generated from field: uint64 max_size_bytes = 7;
+   */
+  maxSizeBytes: bigint;
 };
 
 /**
@@ -506,7 +796,7 @@ export type CacheRuleMatch = Message<"edgeweir.node.v1.CacheRuleMatch"> & {
  * Use `create(CacheRuleMatchSchema)` to create a new message.
  */
 export const CacheRuleMatchSchema: GenMessage<CacheRuleMatch> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 9);
+  messageDesc(file_edgeweir_node_v1_config, 13);
 
 /**
  * CertificateRef points at a certificate stored in the console.
@@ -540,7 +830,7 @@ export type CertificateRef = Message<"edgeweir.node.v1.CertificateRef"> & {
  * Use `create(CertificateRefSchema)` to create a new message.
  */
 export const CertificateRefSchema: GenMessage<CertificateRef> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 10);
+  messageDesc(file_edgeweir_node_v1_config, 14);
 
 /**
  * ListenerProtocol is the application protocol of a listener.
@@ -569,6 +859,47 @@ export enum ListenerProtocol {
  */
 export const ListenerProtocolSchema: GenEnum<ListenerProtocol> = /*@__PURE__*/
   enumDesc(file_edgeweir_node_v1_config, 0);
+
+/**
+ * CacheKeyQuery selects which part of the query string enters the cache key.
+ *
+ * @generated from enum edgeweir.node.v1.CacheKeyQuery
+ */
+export enum CacheKeyQuery {
+  /**
+   * Same as CACHE_KEY_QUERY_ALL.
+   *
+   * @generated from enum value: CACHE_KEY_QUERY_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * The whole query string as sent by the client.
+   *
+   * @generated from enum value: CACHE_KEY_QUERY_ALL = 1;
+   */
+  ALL = 1,
+
+  /**
+   * No query string at all.
+   *
+   * @generated from enum value: CACHE_KEY_QUERY_IGNORE = 2;
+   */
+  IGNORE = 2,
+
+  /**
+   * Only the parameters listed in CacheKeyPolicy.query_params.
+   *
+   * @generated from enum value: CACHE_KEY_QUERY_INCLUDE = 3;
+   */
+  INCLUDE = 3,
+}
+
+/**
+ * Describes the enum edgeweir.node.v1.CacheKeyQuery.
+ */
+export const CacheKeyQuerySchema: GenEnum<CacheKeyQuery> = /*@__PURE__*/
+  enumDesc(file_edgeweir_node_v1_config, 1);
 
 /**
  * LoadBalancePolicy selects how an origin is picked from a pool.
@@ -601,7 +932,7 @@ export enum LoadBalancePolicy {
  * Describes the enum edgeweir.node.v1.LoadBalancePolicy.
  */
 export const LoadBalancePolicySchema: GenEnum<LoadBalancePolicy> = /*@__PURE__*/
-  enumDesc(file_edgeweir_node_v1_config, 1);
+  enumDesc(file_edgeweir_node_v1_config, 2);
 
 /**
  * OriginScheme is the protocol used to talk to an origin.
@@ -629,7 +960,7 @@ export enum OriginScheme {
  * Describes the enum edgeweir.node.v1.OriginScheme.
  */
 export const OriginSchemeSchema: GenEnum<OriginScheme> = /*@__PURE__*/
-  enumDesc(file_edgeweir_node_v1_config, 2);
+  enumDesc(file_edgeweir_node_v1_config, 3);
 
 /**
  * CacheAction is what a matching cache rule does.
@@ -657,7 +988,7 @@ export enum CacheAction {
  * Describes the enum edgeweir.node.v1.CacheAction.
  */
 export const CacheActionSchema: GenEnum<CacheAction> = /*@__PURE__*/
-  enumDesc(file_edgeweir_node_v1_config, 3);
+  enumDesc(file_edgeweir_node_v1_config, 4);
 
 /**
  * OriginCacheControl decides whether origin caching headers win.
@@ -690,5 +1021,5 @@ export enum OriginCacheControl {
  * Describes the enum edgeweir.node.v1.OriginCacheControl.
  */
 export const OriginCacheControlSchema: GenEnum<OriginCacheControl> = /*@__PURE__*/
-  enumDesc(file_edgeweir_node_v1_config, 4);
+  enumDesc(file_edgeweir_node_v1_config, 5);
 
