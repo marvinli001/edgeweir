@@ -1,6 +1,11 @@
-/* Landing page templates: palettes and decorative motion. Loaded with the landing route only. */
+/*
+ * Landing page templates: palettes and decorative motion. Loaded with the landing route, and by the
+ * system settings for the template thumbnails. The templates are light-only and keep every color
+ * here as a token: TSX never spells out a color (test/web/ui-rules.test.ts).
+ */
 
-.landing-horizon {
+.landing-horizon,
+.landing-horizon-palette {
   --hz-black: #000;
   --hz-ink: #141414;
   --hz-paper: #f8f5f4;
@@ -11,19 +16,113 @@
   --hz-violet: #7b3ff2;
   --hz-magenta: #e0368e;
   --hz-orange: #ff6a1a;
-  color-scheme: light;
+  --hz-shadow-card: 0 24px 48px -24px rgb(0 0 0 / 0.25);
 }
 
-.landing-orbit {
-  font-family:
-    "Rubik Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+.landing-orbit,
+.landing-orbit-palette {
   --ob-text: #183d6d;
   --ob-sky: #e1f2ff;
   --ob-deep: #041d38;
   --ob-card: #062a52;
   --ob-final: #1c416f;
   --ob-orange: #ff8a3d;
+  --ob-sea-edge: #b9dbf7;
+  /* Illustration scale --ob-<hue>-<n>: n = (1 - HSL lightness) x 1000, so lower is lighter. */
+  --ob-rose-314: #ff5f6d;
+  --ob-rose-345: #ff4f64;
+  --ob-rose-349: #ff4d6d;
+  --ob-rose-365: #ff5f45;
+  --ob-coral-380: #ff6a3d;
+  --ob-orange-235: #f7b98f;
+  --ob-orange-380: #ff7a3d;
+  --ob-orange-453: #e8662f;
+  --ob-amber-116: #ffe3c4;
+  --ob-amber-171: #ffd9a8;
+  --ob-amber-229: #ffd08a;
+  --ob-amber-284: #ffbd6e;
+  --ob-amber-320: #ffb35c;
+  --ob-amber-355: #ffb14a;
+  --ob-amber-359: #ffb048;
+  --ob-amber-361: #ffb347;
+  --ob-amber-371: #ff9d42;
+  --ob-gold-25: #fffaf2;
+  --ob-gold-139: #fff0b8;
+  --ob-gold-198: #ffe29a;
+  --ob-gold-324: #ffc15a;
+  --ob-green-314: #7ee0a4;
+  --ob-blue-20: #f5faff;
+  --ob-blue-25: #f2f8ff;
+  --ob-blue-27: #f1f8ff;
+  --ob-blue-41: #eaf5ff;
+  --ob-blue-57: #e4f1fd;
+  --ob-blue-86: #d6ebfc;
+  --ob-blue-102: #cfe6fb;
+  --ob-blue-125: #bfe0ff;
+  --ob-blue-153: #bcd9f4;
+  --ob-blue-208: #9ccaf8;
+  --ob-blue-245: #8fc1f2;
+  --ob-blue-269: #8cbde9;
+  --ob-blue-296: #8fb0d8;
+  --ob-blue-314: #6fa8ef;
+  --ob-blue-355: #6aa6df;
+  --ob-blue-363: #5b95ea;
+  --ob-blue-398: #4d8ae6;
+  --ob-blue-437: #3f7fe0;
+  --ob-blue-457: #3f6fd6;
+  --ob-blue-537: #2c5cc0;
+  --ob-blue-557: #2a55b8;
+  --ob-blue-578: #2754b0;
+  --ob-blue-639: #2c4f8c;
+  --ob-blue-676: #1f3f86;
+  --ob-blue-727: #1d3b6e;
+  --ob-blue-798: #152b52;
+  --ob-indigo-404: #5a5fd6;
+  --ob-indigo-476: #3a67d1;
+  --ob-indigo-498: #3c5cc4;
+  --ob-indigo-510: #4146b9;
+  --ob-indigo-541: #3d44ad;
+  --ob-indigo-584: #3a4a9a;
+  --ob-indigo-678: #2a2d7a;
+  --ob-indigo-686: #262b7a;
+  --ob-indigo-708: #1d3478;
+  --ob-indigo-718: #1b2f75;
+  --ob-indigo-739: #26275f;
+  --ob-indigo-775: #15225e;
+  --ob-indigo-784: #191d55;
+  --ob-indigo-818: #121b4b;
+  --ob-indigo-839: #0e1a44;
+  --ob-indigo-843: #11173f;
+  --ob-indigo-853: #0b1640;
+  --ob-indigo-869: #0b1638;
+  --ob-indigo-875: #0b0f35;
+  --ob-violet-139: #b9b8ff;
+  --ob-violet-145: #b7b5ff;
+  --ob-violet-173: #a9a7ff;
+  --ob-violet-225: #8e8cff;
+  --ob-violet-282: #7a78f6;
+  --ob-violet-308: #6e62ff;
+  --ob-violet-367: #6e6bd8;
+  --ob-violet-649: #3b2b88;
+  --ob-violet-749: #211d63;
+  --ob-shadow-cta: 0 14px 30px -14px rgb(255 110 60 / 0.9);
+  --ob-shadow-header: 0 16px 40px -20px rgb(4 16 48 / 0.8);
+  --ob-shadow-live: 0 0 10px 2px rgb(52 211 153 / 0.6);
+  --ob-shadow-card: 0 6px 24px -10px rgb(24 61 109 / 0.22);
+  --ob-shadow-card-hover: 0 18px 36px -14px rgb(24 61 109 / 0.35);
+  --ob-shadow-float: 0 30px 60px -28px rgb(24 61 109 / 0.5);
+  --ob-shadow-drop: 0 20px 30px rgb(24 61 109 / 0.35);
+  --ob-step-active: linear-gradient(90deg, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0.1));
+}
+
+.landing-horizon,
+.landing-orbit {
   color-scheme: light;
+}
+
+.landing-orbit {
+  font-family:
+    "Rubik Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
 }
 
 /* Dashes that travel along mesh links. */

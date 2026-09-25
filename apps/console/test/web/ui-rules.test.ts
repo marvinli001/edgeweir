@@ -34,6 +34,21 @@ describe("UI rules (ADR-0003)", () => {
     expect(found).toEqual([]);
   });
 
+  it("spells out no colors in TS/TSX: they come from CSS tokens", () => {
+    // Hex (#rgb, #rrggbb, #rrggbbaa) and functional notation with literal channels. Named keywords
+    // (white, transparent, currentColor) and Tailwind palette classes are tokens already.
+    const color =
+      /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![0-9a-zA-Z])|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(\s*[\d.]/;
+    const found = allWeb
+      .filter((file) => !file.endsWith(".css"))
+      .flatMap((file) =>
+        read(file)
+          .split("\n")
+          .flatMap((line, i) => (color.test(line) ? [`${file}:${i + 1} ${line.trim()}`] : [])),
+      );
+    expect(found).toEqual([]);
+  });
+
   it("imports appica-ui only through src/web/components/appica", () => {
     const outside = webSources.filter(
       (file) => !file.includes("components/appica/") && read(file).includes("@appica/ui-react"),

@@ -20,6 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
+// The template palettes, for the thumbnails.
+import "./landing/landing.css";
 
 const templateLabels: Record<LandingTemplate, { name: () => string; hint: () => string }> = {
   none: { name: m.landing_template_none, hint: m.landing_template_none_hint },
@@ -194,19 +196,22 @@ function LandingForm({ initial }: { initial: LandingSettings }) {
   );
 }
 
-/** A miniature of each template's look, drawn with plain blocks. */
+/** A miniature of each template's look, drawn with plain blocks in the template's palette. */
 function TemplateThumb({ template }: { template: LandingTemplate }) {
   const frame =
     "relative aspect-[16/10] w-full overflow-hidden rounded-xl ring-1 ring-foreground/10 transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none";
   if (template === "horizon") {
     return (
-      <span aria-hidden="true" className={cn(frame, "flex flex-col bg-[#f8f5f4]")}>
+      <span
+        aria-hidden="true"
+        className={cn(frame, "landing-horizon-palette flex flex-col bg-(--hz-paper)")}
+      >
         <span className="h-[9%] border-b border-black/10 bg-white" />
         <span className="relative h-[52%] overflow-hidden bg-black p-[7%]">
-          <span className="absolute -right-[18%] -bottom-[70%] size-[90%] rounded-full bg-[radial-gradient(circle,#ff6a1a_0%,#e0368e_35%,#7b3ff2_55%,transparent_70%)] opacity-80 blur-md" />
+          <span className="absolute -right-[18%] -bottom-[70%] size-[90%] rounded-full bg-[radial-gradient(circle,var(--hz-orange)_0%,var(--hz-magenta)_35%,var(--hz-violet)_55%,transparent_70%)] opacity-80 blur-md" />
           <span className="block h-[14%] w-[55%] rounded-[1px] bg-white/90" />
           <span className="mt-[4%] block h-[14%] w-[40%] rounded-[1px] bg-white/90" />
-          <span className="mt-[8%] block h-[12%] w-[22%] rounded-[1px] bg-[#2b5ce6]" />
+          <span className="mt-[8%] block h-[12%] w-[22%] rounded-[1px] bg-(--hz-blue)" />
         </span>
         <span className="grid flex-1 grid-cols-3 gap-[4%] p-[6%]">
           <span className="border border-black/10 bg-white" />
@@ -218,14 +223,17 @@ function TemplateThumb({ template }: { template: LandingTemplate }) {
   }
   if (template === "orbit") {
     return (
-      <span aria-hidden="true" className={cn(frame, "flex flex-col bg-[#e1f2ff] p-[2%]")}>
-        <span className="relative h-[60%] overflow-hidden rounded-[10px] bg-[radial-gradient(120%_90%_at_78%_8%,#3b2b88,#121b4b_68%,#0b1638)] px-[6%] pt-[4%]">
+      <span
+        aria-hidden="true"
+        className={cn(frame, "landing-orbit-palette flex flex-col bg-(--ob-sky) p-[2%]")}
+      >
+        <span className="relative h-[60%] overflow-hidden rounded-[10px] bg-[radial-gradient(120%_90%_at_78%_8%,var(--ob-violet-649),var(--ob-indigo-818)_68%,var(--ob-indigo-869))] px-[6%] pt-[4%]">
           <span className="block h-[15%] w-full rounded-[4px] border border-white/15" />
           <span className="mt-[9%] block h-[11%] w-[46%] rounded-sm bg-white/90" />
           <span className="mt-[4%] block h-[11%] w-[34%] rounded-sm bg-white/90" />
-          <span className="mt-[7%] block h-[12%] w-[22%] rounded-[2px] bg-[linear-gradient(85deg,#ff4f64_-70%,#ffb048)]" />
-          <span className="absolute right-[9%] bottom-[14%] aspect-square h-[58%] rounded-full bg-[radial-gradient(circle_at_32%_26%,#7a78f6,#262b7a_78%)]" />
-          <span className="absolute right-[4%] bottom-[34%] h-[3%] w-[42%] -rotate-12 rounded-full bg-[#a9a7ff]/60" />
+          <span className="mt-[7%] block h-[12%] w-[22%] rounded-[2px] bg-[linear-gradient(85deg,var(--ob-rose-345)_-70%,var(--ob-amber-359))]" />
+          <span className="absolute right-[9%] bottom-[14%] aspect-square h-[58%] rounded-full bg-[radial-gradient(circle_at_32%_26%,var(--ob-violet-282),var(--ob-indigo-686)_78%)]" />
+          <span className="absolute right-[4%] bottom-[34%] h-[3%] w-[42%] -rotate-12 rounded-full bg-(--ob-violet-173)/60" />
         </span>
         <span className="grid flex-1 grid-cols-3 gap-[4%] p-[5%]">
           <span className="rounded-sm bg-white shadow-sm" />

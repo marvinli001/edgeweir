@@ -211,3 +211,22 @@
     @apply font-sans;
   }
 }
+
+/*
+ * shadcn chart: recharts draws grids, reference lines and dot or sector outlines in its default
+ * #ccc / #fff; restyle exactly those with the theme tokens (moved here from the arbitrary variants
+ * in components/ui/chart.tsx, which carries no color literals).
+ */
+@layer components {
+  [data-slot="chart"] .recharts-cartesian-grid line[stroke="#ccc"] {
+    stroke: color-mix(in oklab, var(--border) 50%, transparent);
+  }
+  [data-slot="chart"] .recharts-polar-grid [stroke="#ccc"],
+  [data-slot="chart"] .recharts-reference-line [stroke="#ccc"] {
+    stroke: var(--border);
+  }
+  [data-slot="chart"] .recharts-dot[stroke="#fff"],
+  [data-slot="chart"] .recharts-sector[stroke="#fff"] {
+    stroke: transparent;
+  }
+}

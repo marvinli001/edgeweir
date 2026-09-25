@@ -34,7 +34,7 @@ import {
 } from "./shared";
 
 const cta =
-  "group inline-flex items-center justify-center rounded-[6px] bg-[linear-gradient(85deg,#ff4f64_-70%,#ffb048_106%)] font-medium text-white shadow-[0_14px_30px_-14px_rgba(255,110,60,0.9)] transition-[filter,translate] duration-200 hover:brightness-[1.06] active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ff9d42]";
+  "group inline-flex items-center justify-center rounded-[6px] bg-[linear-gradient(85deg,var(--ob-rose-345)_-70%,var(--ob-amber-359)_106%)] font-medium text-white shadow-(--ob-shadow-cta) transition-[filter,translate] duration-200 hover:brightness-[1.06] active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ob-amber-371)";
 const ctaLarge = cn(cta, "h-[62px] gap-6 px-8 text-lg sm:h-[70px] sm:text-xl");
 const ctaMedium = cn(cta, "h-[54px] gap-5 px-7 text-lg");
 const outlineLight =
@@ -103,7 +103,7 @@ export function OrbitLanding(props: LandingProps) {
           className={cn(
             "mx-auto flex h-[64px] max-w-[1140px] items-center gap-3 rounded-[14px] border border-white/10 px-3 text-white sm:h-[72px] sm:gap-8 transition-[background-color,box-shadow] duration-300 sm:px-5",
             scrolled
-              ? "bg-[#0e1a44]/90 shadow-[0_16px_40px_-20px_rgba(4,16,48,0.8)] backdrop-blur-md"
+              ? "bg-(--ob-indigo-839)/90 shadow-(--ob-shadow-header) backdrop-blur-md"
               : "bg-white/[0.03]",
           )}
         >
@@ -151,7 +151,7 @@ export function OrbitLanding(props: LandingProps) {
         </header>
       </div>
 
-      <section className="relative mx-1.5 -mt-[70px] overflow-hidden rounded-[28px] bg-[radial-gradient(120%_90%_at_78%_8%,#3b2b88_0%,#211d63_36%,#121b4b_68%,#0b1638_100%)] text-white sm:mx-2 sm:-mt-[84px]">
+      <section className="relative mx-1.5 -mt-[70px] overflow-hidden rounded-[28px] bg-[radial-gradient(120%_90%_at_78%_8%,var(--ob-violet-649)_0%,var(--ob-violet-749)_36%,var(--ob-indigo-818)_68%,var(--ob-indigo-869)_100%)] text-white sm:mx-2 sm:-mt-[84px]">
         <RingedPlanet className="pointer-events-none absolute top-16 -left-44 hidden w-[440px] opacity-50 md:block" />
         <Comet
           className="landing-comet pointer-events-none absolute bottom-40 left-6 hidden w-36 md:block"
@@ -191,7 +191,7 @@ export function OrbitLanding(props: LandingProps) {
           <div className="relative z-10 flex flex-col items-center gap-4 px-6 pb-12 text-center">
             <div className="flex flex-wrap items-center justify-center gap-3">
               <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-sm ring-1 ring-white/15">
-                <span className="size-2 rounded-full bg-emerald-400 shadow-[0_0_10px_2px_rgba(52,211,153,0.6)]" />
+                <span className="size-2 rounded-full bg-emerald-400 shadow-(--ob-shadow-live)" />
                 {m.landing_live_nodes({ count: formatNumber(stats.onlineNodes) })}
               </span>
               <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-sm ring-1 ring-white/15">
@@ -248,13 +248,13 @@ export function OrbitLanding(props: LandingProps) {
                   key={feature.id}
                   delay={i * 80}
                   className={cn(
-                    "group flex items-start gap-4 rounded-lg bg-white px-5 py-6 sm:gap-6 sm:px-7 shadow-[0_6px_24px_-10px_rgba(24,61,109,0.22)] transition-[translate,box-shadow] duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-14px_rgba(24,61,109,0.35)] motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+                    "group flex items-start gap-4 rounded-lg bg-white px-5 py-6 sm:gap-6 sm:px-7 shadow-(--ob-shadow-card) transition-[translate,box-shadow] duration-300 hover:-translate-y-0.5 hover:shadow-(--ob-shadow-card-hover) motion-reduce:transition-none motion-reduce:hover:translate-y-0",
                     (i === 0 || i === 3) && (side === 0 ? "lg:ml-[70px]" : "lg:mr-[70px]"),
                   )}
                 >
                   <SpotIcon id={feature.id} className="size-16 shrink-0" />
                   <div>
-                    <h3 className="text-xl font-bold transition-colors group-hover:text-[#ff8a3d]">
+                    <h3 className="text-xl font-bold transition-colors group-hover:text-(--ob-orange)">
                       {feature.title()}
                     </h3>
                     <p className="mt-1.5 text-[17px] leading-[1.6]">{feature.text()}</p>
@@ -302,7 +302,7 @@ export function OrbitLanding(props: LandingProps) {
                 <Chevrons />
               </PrimaryCta>
             </div>
-            <p className="mt-8 text-sm font-medium text-[#8fb0d8]">
+            <p className="mt-8 text-sm font-medium text-(--ob-blue-296)">
               {m.landing_orbit_ahead_text()}
             </p>
           </div>
@@ -332,7 +332,7 @@ export function OrbitLanding(props: LandingProps) {
               { label: m.landing_stat_sites(), value: stats.sites },
             ].map((item, i) => (
               <Reveal key={item.label} delay={i * 90} className="text-center">
-                <p className="text-[64px] leading-none font-bold tracking-tight text-[#ff8a3d] tabular-nums sm:text-[80px]">
+                <p className="text-[64px] leading-none font-bold tracking-tight text-(--ob-orange) tabular-nums sm:text-[80px]">
                   {formatNumber(item.value)}
                 </p>
                 <p className="mt-2 text-xl sm:text-2xl">{item.label}</p>
@@ -423,7 +423,7 @@ export function OrbitLanding(props: LandingProps) {
         </Reveal>
       </section>
 
-      <footer className="relative overflow-hidden bg-[linear-gradient(180deg,#e1f2ff_0%,#f5faff_100%)]">
+      <footer className="relative overflow-hidden bg-[linear-gradient(180deg,var(--ob-sky)_0%,var(--ob-blue-20)_100%)]">
         <div className="relative mx-auto grid max-w-[1110px] gap-10 px-6 pt-6 pb-14 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex items-center gap-2.5 self-start">
             <Logo className="size-9 text-(--ob-orange)" />
@@ -494,7 +494,7 @@ function FooterColumn({ title, children }: { title: string; children: React.Reac
   return (
     <div>
       <p className="text-2xl font-bold">{title}</p>
-      <div className="mt-6 flex flex-col items-start gap-2 text-lg [&>*]:transition-colors [&>*:hover]:text-[#ff8a3d]">
+      <div className="mt-6 flex flex-col items-start gap-2 text-lg [&>*]:transition-colors [&>*:hover]:text-(--ob-orange)">
         {children}
       </div>
     </div>
@@ -554,7 +554,7 @@ function Steps() {
                 className={cn(
                   "border-l-[3px] px-5 py-5 text-left transition-[background-color,border-color] duration-300",
                   on
-                    ? "border-[#ff8a3d] bg-[linear-gradient(90deg,rgba(255,255,255,0.95),rgba(255,255,255,0.1))]"
+                    ? "border-(--ob-orange) bg-(image:--ob-step-active)"
                     : "border-transparent hover:bg-white/40",
                 )}
               >
@@ -580,7 +580,7 @@ function Steps() {
       <Reveal className="mx-auto mt-20 grid max-w-[1110px] gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
         {chips.map((chip) => (
           <span key={chip()} className="flex items-center gap-2 text-lg font-bold">
-            <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-[#ff8a3d] text-white">
+            <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-(--ob-orange) text-white">
               <HugeiconsIcon icon={Tick02Icon} strokeWidth={3.5} className="size-3" />
             </span>
             {chip()}
@@ -592,7 +592,7 @@ function Steps() {
 }
 
 const card =
-  "absolute rounded-2xl bg-white p-5 shadow-[0_30px_60px_-28px_rgba(24,61,109,0.5)] ring-1 ring-(--ob-text)/6";
+  "absolute rounded-2xl bg-white p-5 shadow-(--ob-shadow-float) ring-1 ring-(--ob-text)/6";
 
 /** Floating UI cards in perspective, one composition per step. */
 function StepVisual({ step }: { step: StepId }) {
@@ -621,10 +621,7 @@ function StepVisual({ step }: { step: StepId }) {
               ))}
             </div>
             <div className="landing-float-slow absolute right-2 bottom-4 [transform:translateZ(80px)]">
-              <SpotIcon
-                id="cache"
-                className="size-36 drop-shadow-[0_20px_30px_rgba(24,61,109,0.35)]"
-              />
+              <SpotIcon id="cache" className="size-36 drop-shadow-(--ob-shadow-drop)" />
             </div>
           </>
         ) : step === "configure" ? (
@@ -647,7 +644,7 @@ function StepVisual({ step }: { step: StepId }) {
                   <span
                     className={cn(
                       "ml-auto flex h-5 w-9 items-center rounded-full p-0.5",
-                      i < 2 ? "justify-end bg-[#ff8a3d]" : "bg-(--ob-text)/15",
+                      i < 2 ? "justify-end bg-(--ob-orange)" : "bg-(--ob-text)/15",
                     )}
                   >
                     <span className="size-4 rounded-full bg-white shadow" />
@@ -656,10 +653,7 @@ function StepVisual({ step }: { step: StepId }) {
               ))}
             </div>
             <div className="landing-float absolute right-0 bottom-2 [transform:translateZ(90px)]">
-              <SpotIcon
-                id="rollback"
-                className="size-28 drop-shadow-[0_20px_30px_rgba(24,61,109,0.35)]"
-              />
+              <SpotIcon id="rollback" className="size-28 drop-shadow-(--ob-shadow-drop)" />
             </div>
           </>
         ) : (
@@ -669,8 +663,8 @@ function StepVisual({ step }: { step: StepId }) {
               <svg viewBox="0 0 320 120" className="mt-4 h-auto w-full" aria-hidden="true">
                 <defs>
                   <linearGradient id="orbit-area" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#ff8a3d" stopOpacity="0.35" />
-                    <stop offset="1" stopColor="#ff8a3d" stopOpacity="0" />
+                    <stop offset="0" stopColor="var(--ob-orange)" stopOpacity="0.35" />
+                    <stop offset="1" stopColor="var(--ob-orange)" stopOpacity="0" />
                   </linearGradient>
                 </defs>
                 <path
@@ -680,25 +674,25 @@ function StepVisual({ step }: { step: StepId }) {
                 <path
                   d="M0 90C30 80 44 50 74 56S120 96 150 70 196 20 226 34 280 70 320 30"
                   fill="none"
-                  stroke="#ff8a3d"
+                  stroke="var(--ob-orange)"
                   strokeWidth={3}
                   strokeLinecap="round"
                 />
                 <path
                   d="M0 104C40 98 70 84 100 88S160 104 200 84 270 72 320 64"
                   fill="none"
-                  stroke="#3f7fe0"
+                  stroke="var(--ob-blue-437)"
                   strokeWidth={3}
                   strokeLinecap="round"
                 />
               </svg>
               <div className="mt-3 flex gap-5 text-sm">
                 <span className="flex items-center gap-2">
-                  <span className="size-2.5 rounded-full bg-[#ff8a3d]" />
+                  <span className="size-2.5 rounded-full bg-(--ob-orange)" />
                   {m.landing_orbit_traffic_requests()}
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="size-2.5 rounded-full bg-[#3f7fe0]" />
+                  <span className="size-2.5 rounded-full bg-(--ob-blue-437)" />
                   {m.landing_orbit_traffic_hits()}
                 </span>
               </div>
@@ -710,13 +704,13 @@ function StepVisual({ step }: { step: StepId }) {
               )}
             >
               <svg viewBox="0 0 48 48" className="size-14" aria-hidden="true">
-                <circle cx={24} cy={24} r={18} fill="none" stroke="#e1f2ff" strokeWidth={8} />
+                <circle cx={24} cy={24} r={18} fill="none" stroke="var(--ob-sky)" strokeWidth={8} />
                 <circle
                   cx={24}
                   cy={24}
                   r={18}
                   fill="none"
-                  stroke="#ff8a3d"
+                  stroke="var(--ob-orange)"
                   strokeWidth={8}
                   strokeDasharray="96 113"
                   strokeLinecap="round"

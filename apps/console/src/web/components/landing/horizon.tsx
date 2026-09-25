@@ -178,7 +178,7 @@ export function HorizonLanding(props: LandingProps) {
             <Reveal
               key={card.title()}
               delay={i * 90}
-              className="group flex min-h-64 flex-col border md:min-h-80 border-(--hz-line) bg-white p-8 transition-[border-color,box-shadow,translate] duration-300 hover:-translate-y-1 hover:border-(--hz-ink) hover:shadow-[0_24px_48px_-24px_rgba(0,0,0,0.25)] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+              className="group flex min-h-64 flex-col border md:min-h-80 border-(--hz-line) bg-white p-8 transition-[border-color,box-shadow,translate] duration-300 hover:-translate-y-1 hover:border-(--hz-ink) hover:shadow-(--hz-shadow-card) motion-reduce:transition-none motion-reduce:hover:translate-y-0"
             >
               <span className="flex size-11 items-center justify-center border border-(--hz-line) transition-colors group-hover:border-(--hz-ink)">
                 <HugeiconsIcon icon={card.icon} strokeWidth={1.5} className="size-5" />
