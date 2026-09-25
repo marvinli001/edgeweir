@@ -12,6 +12,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   inArray,
   isNull,
   lt,
@@ -195,6 +196,79 @@ async function toTaskDtos(db: Executor, rows: TaskRow[]): Promise<CacheTask[]> {
 }
 
 /**
+ * How many purge and prefetch requests one organization may make (N-H3):
+ * nodes keep a marker per purged URL for days, so an unbounded stream of
+ * purges would fill their purge store. Platform administrators are exempt,
+ * and whole-site purges the console sends on its own (source "recovery")
+ * do not count.
+ */
+export const CACHE_TASK_LIMITS = { tasksPerMinute: 10, urlsPerHour: 2000 } as const;
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
+
+/**
+ * Refuses a request of `count` targets (URLs, prefixes or sites) that would
+ * take the organization over CACHE_TASK_LIMITS, with the seconds until it
+ * would fit. Serialized per organization for the rest of the transaction.
+ */
+async function assertCacheTaskQuota(
+  tx: Executor,
+  organizationId: string,
+  count: number,
+  now: Date,
+) {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.cache-task-quota.${organizationId}`}))`,
+  );
+  const recent = await tx
+    .select({
+      createdAt: schema.cacheTask.createdAt,
+      targets: sql<number>`cardinality(${schema.cacheTask.targets})`.mapWith(Number),
+    })
+    .from(schema.cacheTask)
+    .where(
+      and(
+        eq(schema.cacheTask.organizationId, organizationId),
+        eq(schema.cacheTask.source, "user"),
+        gt(schema.cacheTask.createdAt, new Date(now.getTime() - HOUR_MS)),
+      ),
+    )
+    .orderBy(schema.cacheTask.createdAt);
+  const { tasksPerMinute, urlsPerHour } = CACHE_TASK_LIMITS;
+  let waitMs = 0;
+  const lastMinute = recent.filter((r) => r.createdAt.getTime() > now.getTime() - MINUTE_MS);
+  if (lastMinute.length >= tasksPerMinute) {
+    // Until enough of them are older than a minute to make room for one more.
+    const oldest = lastMinute[lastMinute.length - tasksPerMinute];
+    waitMs = Math.max(
+      waitMs,
+      (oldest?.createdAt.getTime() ?? now.getTime()) + MINUTE_MS - now.getTime(),
+    );
+  }
+  let used = recent.reduce((sum, r) => sum + r.targets, 0);
+  if (used + count > urlsPerHour) {
+    let until = now.getTime() + HOUR_MS;
+    for (const r of recent) {
+      used -= r.targets;
+      if (used + count <= urlsPerHour) {
+        until = r.createdAt.getTime() + HOUR_MS;
+        break;
+      }
+    }
+    waitMs = Math.max(waitMs, until - now.getTime());
+  }
+  if (waitMs > 0) {
+    const retryAfterSeconds = Math.max(1, Math.ceil(waitMs / 1000));
+    fail(
+      "CACHE_TASK_RATE_LIMITED",
+      `too many cache tasks: at most ${tasksPerMinute} per minute and ${urlsPerHour} URLs per hour per organization; retry in ${retryAfterSeconds} s`,
+      { tasksPerMinute, urlsPerHour, retryAfterSeconds },
+    );
+  }
+}
+
+/**
  * Creates a purge or prefetch task: resolves URLs to sites (within the
  * caller's scope), fans the task out to every node of the affected clusters
  * and wakes their watch streams.
@@ -266,6 +340,10 @@ export async function createCacheTask(
       }
     }
 
+    // Platform administrators are exempt; tenants' scope is their organization.
+    if (!ctx.scope.all) {
+      await assertCacheTaskQuota(tx, ctx.scope.organizationId, targets.length, new Date());
+    }
     const organizations = [...new Set([...siteMeta.values()].map((s) => s.organizationId))];
     const clusterIds = [...new Set(items.map((i) => i.clusterId))];
     const nodes = await tx

@@ -105,6 +105,7 @@ gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edge
 | 客户端 IP 取 TCP 对端地址；`X-Forwarded-For` / `X-Real-IP` 只在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用；登录、2FA 等认证接口的限速计数存 PostgreSQL，多实例共享、重启不清零 | 伪造 IP 绕过登录与 2FA 限速，审计日志里的 IP 失真 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
 | `install.sh` 与 agent 自升级都先校验 cosign 签名和 sha256 再执行；控制台镜像转发（`/downloads`，`EDGEWEIR_DOWNLOADS_DIR`）只是传输通道，未镜像的文件返回 404 | 下载链路或镜像转发被篡改 | [ADR-0016](docs/adr/0016-one-line-install.md)、[ADR-0017](docs/adr/0017-release-supply-chain.md) |
 | 源站不能是特殊用途地址（回环、链路本地、私网、CGNAT、组播等）或 `localhost`：控制台拒绝保存这类 IP 字面量，节点对配置和每个 DNS 解析结果执行同一清单；只有平台管理员能通过审计过的允许清单放行地址段 | 租户借 CDN 回源读取云元数据（`169.254.169.254`）、探测内网，或让节点回源到自己造成回环 | [docs/guide/origins-and-cache.md](docs/guide/origins-and-cache.md) |
+| 每个组织的刷新预热有频率上限（每分钟 10 个任务、每小时 2000 条），平台管理员不受限；节点端清缓存标记超过上限时合并为站点级标记 | 租户用大量刷新请求填满节点的清缓存存储，拖累同节点的其他网站 | [docs/guide/origins-and-cache.md](docs/guide/origins-and-cache.md) |
 | agent 只执行类型化操作，不提供执行任意命令的接口 | 控制面失陷后在节点上执行任意代码 | [ADR-0014](docs/adr/0014-node-agent-responsibilities.md) |
 | 发布物 keyless 签名、SBOM、SLSA provenance、可复现构建 | 发布的二进制与源码不一致，或被投毒 | [ADR-0017](docs/adr/0017-release-supply-chain.md) |
 

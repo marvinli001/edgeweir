@@ -227,6 +227,7 @@
   "error_cache_task_not_found": "任务不存在",
   "error_cache_task_url_invalid": "URL 无效：{urls}",
   "error_cache_task_host_unknown": "没有网站使用 {hosts}",
+  "error_cache_task_rate_limited": "刷新预热太频繁：每个组织每分钟最多 {tasksPerMinute} 个任务、每小时最多 {urlsPerHour} 条，请 {retryAfterSeconds} 秒后再试",
   "error_unauthorized": "请先登录",
   "error_forbidden": "没有权限",
   "error_bad_request": "输入有误",

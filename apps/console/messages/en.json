@@ -227,6 +227,7 @@
   "error_cache_task_not_found": "Task not found",
   "error_cache_task_url_invalid": "Invalid URL: {urls}",
   "error_cache_task_host_unknown": "No site serves {hosts}",
+  "error_cache_task_rate_limited": "Too many purges: each organization may submit {tasksPerMinute} tasks a minute and {urlsPerHour} URLs an hour. Try again in {retryAfterSeconds} s",
   "error_unauthorized": "Please sign in",
   "error_forbidden": "Permission denied",
   "error_bad_request": "Invalid input",

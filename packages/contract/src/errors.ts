@@ -43,6 +43,10 @@ export const errorDefs = {
   CACHE_TASK_NOT_FOUND: { status: 404, params: [] },
   CACHE_TASK_URL_INVALID: { status: 400, params: ["urls"] },
   CACHE_TASK_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
+  CACHE_TASK_RATE_LIMITED: {
+    status: 429,
+    params: ["tasksPerMinute", "urlsPerHour", "retryAfterSeconds"],
+  },
 } as const satisfies Record<string, { status: number; params: readonly string[] }>;
 
 export type ErrorCode = keyof typeof errorDefs;

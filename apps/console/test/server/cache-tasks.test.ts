@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import {
+  CACHE_TASK_LIMITS,
   expireCacheTasks,
   hasDeliverableTasks,
   pullCacheTasks,
@@ -13,6 +14,7 @@ import {
   createTestContext,
   PASSWORD,
   rpcClient,
+  rpcError,
   setupPlatform,
   signIn,
 } from "./helpers";
@@ -26,6 +28,7 @@ describe("cache task delivery", async () => {
   let clusterId: string;
   let siteId: string;
   let platformSiteId: string;
+  let tenantOrgId: string;
 
   const DAY = 24 * 3600 * 1000;
   /** Pretends the tasks were created `days` ago. */
@@ -72,6 +75,7 @@ describe("cache task delivery", async () => {
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
     clusterId = (await admin.clusters.create({ name: "edge-t" })).id;
     const org = await admin.organizations.create({ name: "Tenant", defaultClusterId: clusterId });
+    tenantOrgId = org.id;
     await admin.users.create({
       name: "Tina",
       email: "tina@tenant.test",
@@ -318,6 +322,115 @@ describe("cache task delivery", async () => {
       expect(await delivery(task.id, node.id)).toMatchObject({ errorCode: "task_expired" });
       expect((await delivery(task.id, node.id))?.recoveredAt).not.toBeNull();
       expect(await hasDeliverableTasks(ctx.db, node.id)).toBe(false);
+    });
+  });
+
+  describe("per-organization rate limit (N-H3)", () => {
+    let burst: ApiClient;
+    let burstOrgId: string;
+    const tasksOf = async (organizationId: string) =>
+      ctx.db
+        .select({ id: schema.cacheTask.id })
+        .from(schema.cacheTask)
+        .where(eq(schema.cacheTask.organizationId, organizationId));
+    const urls = (n: number, from = 0) =>
+      Array.from({ length: n }, (_, i) => `http://burst.test/f/${from + i}`);
+
+    beforeAll(async () => {
+      burstOrgId = (
+        await admin.organizations.create({ name: "Burst", defaultClusterId: clusterId })
+      ).id;
+      await admin.users.create({
+        name: "Bea",
+        email: "bea@burst.test",
+        password: PASSWORD,
+        organizationId: burstOrgId,
+      });
+      burst = rpcClient(app, origin, await signIn(app, origin, "bea@burst.test"));
+      await burst.sites.create({
+        name: "burst",
+        domains: ["burst.test"],
+        origins: [{ address: "origin.test" }],
+      });
+    });
+
+    it("refuses more than the tasks per minute with CACHE_TASK_RATE_LIMITED and a retry time", async () => {
+      expect(CACHE_TASK_LIMITS).toEqual({ tasksPerMinute: 10, urlsPerHour: 2000 });
+      for (let i = 0; i < CACHE_TASK_LIMITS.tasksPerMinute; i++) {
+        await burst.cacheTasks.create({ type: "url", urls: [`http://burst.test/${i}`] });
+      }
+      const before = (await tasksOf(burstOrgId)).length;
+      const error = await rpcError(
+        burst.cacheTasks.create({ type: "prefix", urls: ["http://burst.test/x/"] }),
+      );
+      expect(error).toMatchObject({
+        code: "CACHE_TASK_RATE_LIMITED",
+        status: 429,
+        data: { tasksPerMinute: 10, urlsPerHour: 2000 },
+      });
+      const retry = (error.data as { retryAfterSeconds: number }).retryAfterSeconds;
+      expect(retry).toBeGreaterThanOrEqual(1);
+      expect(retry).toBeLessThanOrEqual(60);
+      expect((await tasksOf(burstOrgId)).length).toBe(before);
+
+      // Other organizations are not affected.
+      await tenant.cacheTasks.create({ type: "url", urls: ["http://shop.test/fine"] });
+      // A minute later there is room again.
+      await backdate(
+        (await tasksOf(burstOrgId)).map((t) => t.id),
+        2 / (24 * 60),
+      );
+      await burst.cacheTasks.create({ type: "prefix", urls: ["http://burst.test/x/"] });
+    });
+
+    it("refuses more than the URLs per hour, counting every target", async () => {
+      // 11 targets used so far this hour; three tasks of 500 bring it to 1511.
+      for (let i = 0; i < 3; i++) {
+        await burst.cacheTasks.create({ type: "url", urls: urls(500, i * 500) });
+      }
+      const error = await rpcError(burst.cacheTasks.create({ type: "url", urls: urls(500, 1500) }));
+      expect(error.code).toBe("CACHE_TASK_RATE_LIMITED");
+      // The oldest requests of the hour must age out first: about 58 minutes.
+      const retry = (error.data as { retryAfterSeconds: number }).retryAfterSeconds;
+      expect(retry).toBeGreaterThan(3000);
+      expect(retry).toBeLessThanOrEqual(3600);
+      // What still fits goes through.
+      await burst.cacheTasks.create({ type: "url", urls: urls(489, 1500) });
+      expect(
+        (await rpcError(burst.cacheTasks.create({ type: "url", urls: urls(1, 5000) }))).code,
+      ).toBe("CACHE_TASK_RATE_LIMITED");
+      // An hour later the budget is back.
+      await backdate(
+        (await tasksOf(burstOrgId)).map((t) => t.id),
+        61 / (24 * 60),
+      );
+      await burst.cacheTasks.create({ type: "url", urls: urls(500, 1500) });
+    });
+
+    it("does not limit platform administrators, and make-up purges do not count", async () => {
+      const ownTasks = async () => (await tasksOf(tenantOrgId)).map((t) => t.id);
+      await backdate(await ownTasks(), 2 / (24 * 60));
+      for (let i = 0; i < CACHE_TASK_LIMITS.tasksPerMinute + 2; i++) {
+        await admin.cacheTasks.create({ type: "site", siteIds: [siteId] });
+      }
+      // They purge the organization's objects too, so they count for its budget.
+      const limited = await rpcError(
+        tenant.cacheTasks.create({ type: "url", urls: ["http://shop.test/1"] }),
+      );
+      expect(limited.code).toBe("CACHE_TASK_RATE_LIMITED");
+
+      await backdate(await ownTasks(), 2 / (24 * 60));
+      // Ten whole-site purges the console sent on its own this minute use none of it.
+      await ctx.db.insert(schema.cacheTask).values(
+        Array.from({ length: CACHE_TASK_LIMITS.tasksPerMinute }, () => ({
+          organizationId: tenantOrgId,
+          type: "site",
+          source: "recovery",
+          targets: ["shop"],
+          siteIds: [siteId],
+        })),
+      );
+      await tenant.cacheTasks.create({ type: "url", urls: ["http://shop.test/2"] });
     });
   });
 });
