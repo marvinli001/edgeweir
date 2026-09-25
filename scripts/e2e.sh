@@ -306,8 +306,10 @@ TLS_SITE="$(m2_site m2-tls '{domains: ["tls.m2.test"], origins: [{address: "file
 m2_site m2-s3 '{domains: ["s3.m2.test"], origins: [{address: "s3", port: 7070,
   s3: {region: "us-east-1", bucket: "media", accessKeyId: "e2e-access-key", secretAccessKey: "e2e-only-s3-secret-key"}}]}' >/dev/null
 m2_site m2-ws-off '{domains: ["wsoff.m2.test"], origins: [{address: "whoami"}], originSettings: {websocket: false}}' >/dev/null
+m2_site m2-stale '{domains: ["stale.m2.test"], origins: [{address: "origin-primary"}],
+  cacheRules: [{pathPrefixes: ["/"], edgeTtlSeconds: 1, staleIfErrorSeconds: 300}]}' >/dev/null
 wait_node_latest
-pass "8 M2 sites published and applied by the node"
+pass "9 M2 sites published and applied by the node"
 
 step "M2: URL purge makes the next request a MISS, other URLs stay cached"
 U1="/m2/url-$RANDOM.js"
@@ -396,7 +398,14 @@ step "M2: failover to the backup origin and back"
 origin_name() { curl -sS -H 'Host: failover.m2.test' "$NODE_HTTP/whoami" | awk '/^Name:/ { print $2 }'; }
 [[ "$(origin_name)" == "primary" ]] || fail "failover site should be served by the primary"
 echo "before: Name: $(origin_name)"
+expect_cache MISS stale.m2.test /stale.txt
 "${COMPOSE[@]}" stop origin-primary >/dev/null 2>&1
+sleep 2 # the stale site's object (TTL 1 s) is now expired
+STALE_H="$(curl -sS -D - -o "$STATE_DIR/stale.body" -H 'Host: stale.m2.test' "$NODE_HTTP/stale.txt" | tr -d '\r')"
+grep -q '^HTTP/1.1 200' <<<"$STALE_H" && grep -qi '^x-cache: STALE' <<<"$STALE_H" && grep -q '^Name: primary' "$STATE_DIR/stale.body" ||
+  fail "expired object must be served stale while its only origin is down: $STALE_H"
+grep -iE '^(HTTP|x-cache)' <<<"$STALE_H"
+pass "stale-if-error: expired object served (X-Cache: STALE) while its origin is down"
 served_by_backup() { [[ "$(origin_name)" == "backup" ]]; }
 wait_for 30 "requests served by the backup" served_by_backup
 echo "primary stopped: Name: $(origin_name)"
