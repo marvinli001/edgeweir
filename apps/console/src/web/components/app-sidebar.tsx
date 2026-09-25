@@ -2,6 +2,7 @@ import {
   Audit01Icon,
   Building03Icon,
   DashboardSquare01Icon,
+  DatabaseSync01Icon,
   GlobeIcon,
   Location01Icon,
   SecurityLockIcon,
@@ -34,6 +35,12 @@ export function consoleNav(opts: { manageMembers: boolean }): NavItem[] {
       exact: true,
     },
     { title: m.nav_sites(), to: "/sites", icon: icon(GlobeIcon), testId: "nav-sites" },
+    {
+      title: m.nav_purge(),
+      to: "/purge",
+      icon: icon(DatabaseSync01Icon),
+      testId: "nav-purge",
+    },
     ...(opts.manageMembers
       ? [
           {
