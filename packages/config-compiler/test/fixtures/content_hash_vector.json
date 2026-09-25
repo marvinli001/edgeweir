@@ -1,0 +1,63 @@
+{
+  "description": "NodeConfig content_hash test vector: sha256(deterministic binary encoding with revision=0 and content_hash=\"\") after canonical sorting",
+  "config": {
+    "revision": "7",
+    "contentHash": "ignored",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "1024",
+        "keysZoneMb": 10,
+        "inactiveSeconds": 600
+      }
+    ],
+    "sites": [
+      {
+        "id": "s1",
+        "name": "demo",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "demo.test"
+          }
+        ],
+        "originPool": {
+          "id": "p1",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o1",
+              "address": "whoami",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheRules": [
+          {
+            "id": "r1",
+            "priority": 10,
+            "match": {
+              "pathPrefixes": ["/"]
+            },
+            "action": "CACHE_ACTION_CACHE",
+            "edgeTtlSeconds": 60,
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_OVERRIDE"
+          }
+        ],
+        "cacheZone": "default",
+        "cacheGeneration": "1"
+      }
+    ]
+  },
+  "canonical_hex": "1a0263312204085010012a110a0764656661756c74108008180a20d80432530a027331120464656d6f1801220b0a0964656d6f2e746573742a1a0a02703110011a120a026f31120677686f616d6918502001280132110a027231100a1a030a012f2001283c30013a0764656661756c744001",
+  "content_hash": "e08d8586cc3b832c54d536dd5faadc87b1afe26be7e47ee8194e450ee1e2867e"
+}
