@@ -43,7 +43,7 @@ export async function bootstrap(): Promise<Running> {
 
   const { db, pool } = createDatabase(env.DATABASE_URL);
   await waitForDatabase(pool);
-  await runMigrations(db);
+  await runMigrations(pool);
   log.info("database migrated");
 
   const masterKey = new MasterKey(env.EDGEWEIR_MASTER_KEY);
