@@ -36,6 +36,13 @@
       "when": 1790332098423,
       "tag": "0004_wrapup_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790335218796,
+      "tag": "0005_wrapup_console",
+      "breakpoints": true
     }
   ]
 }

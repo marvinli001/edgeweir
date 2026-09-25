@@ -288,6 +288,8 @@ export const cacheRule = pgTable(
     originCacheControl: text("origin_cache_control").notNull().default("override"),
     staleWhileRevalidateSeconds: integer("stale_while_revalidate_seconds").notNull().default(0),
     staleIfErrorSeconds: integer("stale_if_error_seconds").notNull().default(0),
+    /** Cache responses to requests with an Authorization header (RFC 9111 section 3.5). */
+    cacheAuthorized: boolean("cache_authorized").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [index("cache_rule_site_idx").on(t.siteId)],
@@ -446,7 +448,14 @@ export const originHealth = pgTable(
       .references(() => site.id, { onDelete: "cascade" }),
     healthy: boolean("healthy").notNull(),
     consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+    /** Text of the last failure as the node wrote it (fallback for unknown codes). */
     lastError: text("last_error").notNull().default(""),
+    /** Stable code of the last failure (e.g. "timeout"); empty for older nodes. */
+    lastErrorCode: text("last_error_code").notNull().default(""),
+    lastErrorParams: jsonb("last_error_params")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
     lastFailureAt: timestamp("last_failure_at", { withTimezone: true }),
     downUntil: timestamp("down_until", { withTimezone: true }),
     reportedAt: timestamp("reported_at", { withTimezone: true }).defaultNow().notNull(),
@@ -480,6 +489,8 @@ export const cacheTask = pgTable(
       onDelete: "set null",
     }),
     createdByName: text("created_by_name").notNull().default(""),
+    /** user | recovery (a whole-site purge for purges a node missed) */
+    source: text("source").notNull().default("user"),
     createdAt: createdAt(),
     /** Set once every node reported a result (or the task expired). */
     finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -500,13 +511,19 @@ export const cacheTaskNode = pgTable(
     clusterId: uuid("cluster_id").notNull(),
     /** Node name when the task was created (survives renames in the list). */
     nodeName: text("node_name").notNull().default(""),
-    /** pending | running | succeeded | failed */
+    /** pending | running | succeeded | failed | skipped (node disabled) */
     state: text("state").notNull().default("pending"),
+    /** Text of the outcome (from the node, or the console's English fallback). */
     message: text("message").notNull().default(""),
+    /** Stable code of a failed or skipped outcome (e.g. "prefetch_failed", "task_expired"). */
+    errorCode: text("error_code").notNull().default(""),
+    errorParams: jsonb("error_params").$type<Record<string, string>>().notNull().default({}),
     succeeded: integer("succeeded").notNull().default(0),
     failed: integer("failed").notNull().default(0),
     dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** When a missed purge (expired or skipped) was made up with a whole-site purge. */
+    recoveredAt: timestamp("recovered_at", { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.taskId, t.nodeId] }),
