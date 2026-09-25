@@ -11,7 +11,7 @@
 1. **没有 phone-home。** 控制面和节点不主动连接 Edgeweir 项目的任何服务器（edgeweir.com、edgeweir.dev 等），版本检查也不例外。
 2. **没有授权校验。** 代码中没有许可证密钥、联网授权或功能锁。
 3. **遥测默认关闭。** 只有管理员显式开启后才发送，开启界面列出将要发送的字段和目的地址。
-4. **敏感数据信封加密后入库。** 内部 CA 私钥、ACME 账户私钥、证书私钥、DNS 服务商 API 密钥、SSH 凭据（仅在运营者明确选择保存时）等，用主密钥 `EDGEWEIR_MASTER_KEY` 做信封加密：每条记录一个随机数据密钥，数据和数据密钥都用 AES-256-GCM 加密，附加认证数据绑定表、字段和记录 id。一次性注册 token、API key、用户密码只存哈希。
+4. **敏感数据信封加密后入库。** 内部 CA 私钥、ACME 账户私钥、证书私钥、DNS 服务商 API 密钥、S3 源站密钥、setup token 等，用主密钥 `EDGEWEIR_MASTER_KEY` 做信封加密：每条记录一个随机数据密钥，数据和数据密钥都用 AES-256-GCM 加密，附加认证数据绑定表、字段和记录 id（密文格式 v2；旧版本写入、只绑定表和字段的 v1 密文在控制台启动时自动重新加密，读取路径不再接受 v1）。一次性注册 token、API key、用户密码只存哈希。**控制面绝不保存 SSH 凭据**，没有"选择保存"的选项；节点只通过一次性安装命令接入。
 5. **所有管理操作写审计日志。** 写操作、登录与认证事件（登录成功与失败、改密码、两步验证开关、passkey 增删、API key 创建与删除）、初始化、安装命令生成、节点注册与删除都写入 `audit_log`，不记录密码、token 或密钥明文。Edgeweir 自己的写操作与审计在同一事务内提交；登录、改密码、两步验证、passkey 和 API key 由 better-auth 完成并提交，审计在其后立即写入（better-auth 的钩子不在同一事务里）。
 6. **发布物可验证。** 所有发布物都用 cosign keyless 签名，附 SBOM 和 SLSA provenance；CI 构建产物与源码一一对应，构建可复现（[ADR-0017](docs/adr/0017-release-supply-chain.md)）。
 
@@ -96,7 +96,7 @@ gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edge
 
 | 设计 | 防范的问题 | 依据 |
 | --- | --- | --- |
-| 控制面默认不保存节点 SSH 凭据；SSH 远程安装是可选的一次性操作，凭据用完即弃 | 控制面失陷后借 SSH 凭据横向控制所有节点（GoEdge 2025 年 RingH23 事件） | [ADR-0016](docs/adr/0016-one-line-install.md) |
+| 控制面绝不保存节点 SSH 凭据；节点只通过控制台生成的一次性安装命令接入，由节点主动注册 | 控制面失陷后借 SSH 凭据横向控制所有节点（GoEdge 2025 年 RingH23 事件） | [ADR-0016](docs/adr/0016-one-line-install.md) |
 | 节点私钥在节点本地生成，从不离开节点；控制面只签发证书 | 控制面数据库泄露后冒充节点 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
 | 节点通道：安装命令固定 CA 指纹，节点先核对指纹再发送 token；token 一次性、带过期时间、只存哈希；除 `Enroll` 外强制 mTLS；证书 30 天有效期并自动轮换；删除或禁用节点立即生效（删除时吊销证书序列号，节点再连接被拒绝） | 首次连接被中间人劫持；token 泄露或重放；已下线节点继续拉配置 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
 | 敏感数据信封加密入库，主密钥不进数据库 | 数据库备份或只读 SQL 注入泄露证书私钥和 DNS 密钥 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
@@ -125,7 +125,7 @@ gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edge
 
 This policy covers [edgeweir/edgeweir](https://github.com/edgeweir/edgeweir) (console), [edgeweir/edgeweir-node](https://github.com/edgeweir/edgeweir-node) (edge node), and their official images and release artifacts.
 
-**Trust baseline.** No phone-home of any kind and no licence-check code. Telemetry is off by default and requires explicit opt-in. Secrets (CA key, certificate keys, DNS API credentials, optionally saved SSH credentials) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` (AES-256-GCM, a random data key per record) before they reach the database. Every management action is written to an audit log. Every release is signed with cosign keyless, ships with an SBOM and SLSA provenance, and is built reproducibly from the tagged source.
+**Trust baseline.** No phone-home of any kind and no licence-check code. Telemetry is off by default and requires explicit opt-in. SSH credentials are never stored. Secrets (CA key, certificate keys, DNS API credentials) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` (AES-256-GCM, a random data key per record) before they reach the database. Every management action is written to an audit log. Every release is signed with cosign keyless, ships with an SBOM and SLSA provenance, and is built reproducibly from the tagged source.
 
 **Supported versions.** Before 1.0, only the latest `master` is supported. Security fixes land on `master` only.
 

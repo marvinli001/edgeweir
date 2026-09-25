@@ -97,3 +97,7 @@ Phase 0 范围：
 | Node.js（`node:crypto` 提供 AES-256-GCM） | 24.21.0 LTS | nodejs.org |
 | better-auth（API key 哈希、scrypt 密码哈希） | 1.7.6 | npm registry |
 | cosign | 3.1.3 | proxy.golang.org（github.com/sigstore/cosign） |
+
+> 更新记录：
+> - 2026-09-25（收尾）：
+>   - **绝不保存 SSH 凭据。** 决策第 2 条加密范围中的"运营者明确选择保存的 SSH 凭据"和第 5 条"控制面默认不保存节点 SSH 凭据"中的"默认"不再适用：控制面绝不保存节点 SSH 凭据，没有保存的选项（与 [ADR-0016](0016-one-line-install.md) 同日的更新记录一致）。

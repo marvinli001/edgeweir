@@ -86,3 +86,5 @@ Phase 0 范围：
 
 > 更新记录：
 > - 2026-09-25：控制台 `GET /install.sh` 提供安装脚本（`apps/console/src/server/install/install.sh`），先用 `cosign verify-blob --bundle checksums.txt.sigstore.json` 校验签名（身份为 edgeweir-node 的 release 工作流），再 `sha256sum -c` 校验归档，全部通过后才安装和执行；只有显式传入 `--allow-unsigned`（仅供开发）才跳过签名校验，SHA-256 仍会校验。命令里的 `--ca-sha256` 是内部 CA 证书 DER 的 SHA-256。
+> - 2026-09-25（收尾）：
+>   - **绝不保存 SSH 凭据。** 决策第 5 条中"运营者明确选择保存时，凭据用主密钥信封加密后入库"一句不再适用，以 [mvp.md](../../docs/specs/mvp.md) 0.3 与 [SECURITY.md](../../SECURITY.md) 为准：控制面不保存 SSH 凭据，也没有保存的选项。SSH 一次性远程安装没有实现，也不在 MVP 计划内（批量 SSH 安装见 PROGRESS「待决策」22）；将来如果实现，凭据只在内存中使用一次，不写入数据库、日志和审计明细。
