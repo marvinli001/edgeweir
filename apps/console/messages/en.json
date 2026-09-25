@@ -617,5 +617,6 @@
   "purge_no_nodes": "No nodes",
   "purge_node_counts": "{succeeded} ok · {failed} failed",
   "purge_details": "Details",
-  "purge_targets": "Targets"
+  "purge_targets": "Targets",
+  "error_invitation_account_required": "Enter your name and a password to create your account"
 }

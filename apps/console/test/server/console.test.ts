@@ -189,6 +189,22 @@ describe("console procedures", async () => {
     expect((await owner.sites.list({ clusterId: defaultCluster?.id })).total).toBe(1);
   });
 
+  it("asks a new invitee for a name and password with a stable error code", async () => {
+    const owner = await as("owner@tenant.test");
+    const { invitation } = await owner.members.invite({ email: "later@tenant.test" });
+    const anonymous = rpcClient(app, origin);
+    const error = await rpcError(anonymous.invitations.accept({ id: invitation.id }));
+    expect(error).toMatchObject({ code: "INVITATION_ACCOUNT_REQUIRED", status: 400 });
+    const nameOnly = await rpcError(
+      anonymous.invitations.accept({ id: invitation.id, name: "Later" }),
+    );
+    expect(nameOnly.code).toBe("INVITATION_ACCOUNT_REQUIRED");
+    // Nothing was created; the invitation is still open.
+    expect(await anonymous.invitations.get({ id: invitation.id })).toMatchObject({
+      userExists: false,
+    });
+  });
+
   it("lets organization owners invite, re-role and remove members", async () => {
     const owner = await as("owner@tenant.test");
     const invited = await owner.members.invite({ email: "New.Person@tenant.test", role: "admin" });

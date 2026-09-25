@@ -37,6 +37,7 @@ export const errorDefs = {
   LAST_OWNER: { status: 409, params: [] },
   INVITATION_NOT_FOUND: { status: 404, params: [] },
   INVITATION_EMAIL_MISMATCH: { status: 403, params: ["email"] },
+  INVITATION_ACCOUNT_REQUIRED: { status: 400, params: [] },
   S3_SECRET_REQUIRED: { status: 400, params: ["accessKeyId"] },
   CACHE_TASK_NOT_FOUND: { status: 404, params: [] },
   CACHE_TASK_URL_INVALID: { status: 400, params: ["urls"] },

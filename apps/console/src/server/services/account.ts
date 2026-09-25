@@ -1,6 +1,5 @@
 import type { InvitationInfo, Me, OrgRole } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { ORPCError } from "@orpc/server";
 import { and, asc, eq } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
@@ -150,7 +149,7 @@ export async function acceptInvitation(
     name = existing.name;
   } else {
     if (!input.name || !input.password) {
-      throw new ORPCError("BAD_REQUEST", { message: "name and password are required" });
+      fail("INVITATION_ACCOUNT_REQUIRED", "name and password are required to create the account");
     }
     const created = await ctx.auth.api.createUser({
       body: { email, password: input.password, name: input.name, role: "user" },
