@@ -85,3 +85,8 @@ Phase 0 范围：
 
 > 更新记录：
 > - 2026-09-25：Drizzle 采用 npm `latest` 0.45.3（1.0 仍为 beta）。迁移由 `drizzle-orm/node-postgres/migrator` 在启动时执行，外加 advisory lock 保证多实例安全。单元/集成测试用 PGlite（进程内 PostgreSQL）跑同一套 SQL 迁移，`pnpm test` 不依赖 Docker。pg-boss 12 使用命名导出 `PgBoss`，schema 为 `pgboss`。
+> - 2026-09-25（收尾）：
+>   - 迁移锁（决策第 3 条）改为在从连接池借出的一个专用连接上获取、执行迁移并释放：advisory lock 属于会话，此前经连接池的 `db.execute` 加锁和解锁可能落在不同连接上，锁会一直留着；迁移失败时这个连接被丢弃而不是还回连接池。
+>   - 合并 `mvp-m2` 时 M2 的迁移重新生成为 `0003_m2`（`0002_site_star` 保留），收尾新增 `0004_wrapup_auth`（`rate_limit`）和 `0005_wrapup_console`。测试检查 journal 的 tag 唯一、编号连续、时间严格递增，每条记录正好对应一个 SQL 文件和一个快照。
+>   - better-auth 的限速计数存 PostgreSQL（`rateLimit.storage: "database"`，[ADR-0007](0007-auth-better-auth-multitenancy.md) 收尾记录），不经过 Valkey。决策第 6 条的 Valkey 目前没有任何代码使用，`--profile cache` 只启动容器。
+>   - 除 `edgeweir_config` 外还有 M2 起的频道 `edgeweir_tasks`（新的刷新预热任务，payload 是集群 id 列表，[ADR-0008](0008-node-channel-connect-rpc-mtls.md) 更新记录）。
