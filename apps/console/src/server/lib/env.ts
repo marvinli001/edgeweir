@@ -34,6 +34,9 @@ const schema = z.object({
   EDGEWEIR_WEB_DIST: z.string().optional(),
 });
 
+/** Every environment variable the console reads (documented in .env.example). */
+export const ENV_VARIABLES = [...Object.keys(schema.shape), "EDGEWEIR_VERSION"];
+
 export type Env = z.infer<typeof schema> & {
   nodeApiUrl: string;
   nodeApiHostnames: string[];
