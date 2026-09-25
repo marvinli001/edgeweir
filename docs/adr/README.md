@@ -2,6 +2,8 @@
 
 本目录记录 Edgeweir 的架构决策。每篇 ADR 说明一个决策的背景、结论、放弃的备选方案、后果和落地情况。Phase 0 的 18 篇 ADR 与 [BOOTSTRAP.md](../../BOOTSTRAP.md) §2 的决策逐条对应。
 
+本目录是 ADR 的唯一来源；edgeweir-node 仓库的 `docs/adr` 是它的镜像（由该仓库的 `scripts/sync-adr.sh` 生成，只把指向控制面仓库文件的相对链接改写为 GitHub 链接）。修改 ADR 请在这里提交，再在节点仓库运行同步脚本。
+
 ADR 编号在 edgeweir 与 edgeweir-node 两个仓库之间统一，"适用仓库"一列说明该决策约束哪个仓库。
 
 ## 索引
