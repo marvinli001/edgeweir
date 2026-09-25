@@ -1,4 +1,4 @@
-import { existsSync, globSync, readFileSync } from "node:fs";
+import { existsSync, globSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -46,6 +46,37 @@ describe("UI rules (ADR-0003)", () => {
           .split("\n")
           .flatMap((line, i) => (color.test(line) ? [`${file}:${i + 1} ${line.trim()}`] : [])),
       );
+    expect(found).toEqual([]);
+  });
+
+  it("links nothing on other sites except a short allow list (no phone-home, self-hosted assets)", () => {
+    const allowed = [
+      // ICP filing lookup: sites served from mainland China must link their filing number here.
+      "https://beian.miit.gov.cn/",
+      // This project's own source ("Powered by Edgeweir", the AGPL source offer).
+      "https://github.com/edgeweir/edgeweir",
+      // XML namespace name, never fetched.
+      "http://www.w3.org/2000/svg",
+    ];
+    // Reserved documentation names (RFC 2606, RFC 6761) in placeholders and examples.
+    const reserved = /^(?:[a-z0-9-]+\.)*(?:example(?:\.(?:com|net|org))?|test|invalid|localhost)$/;
+    const files = [
+      ...allWeb,
+      "index.html",
+      ...globSync("public/**/*", { cwd: root }).filter((file) =>
+        statSync(resolve(root, file)).isFile(),
+      ),
+    ];
+    const found = files.flatMap((file) =>
+      [...read(file).matchAll(/\b(?:https?|wss?):\/\/[^\s"'`)<>\\]*/g)]
+        .map((m) => m[0])
+        .filter((url) => {
+          if (allowed.includes(url)) return false;
+          const host = /^[a-z]+:\/\/([^/:?#]+)/.exec(url)?.[1];
+          return host === undefined ? false : !reserved.test(host);
+        })
+        .map((url) => `${file}: ${url}`),
+    );
     expect(found).toEqual([]);
   });
 
