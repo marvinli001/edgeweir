@@ -7,6 +7,11 @@
 #   second organization and member, member-only console, site editing, clusters,
 #   node groups, audit log and English (Playwright) -> the node keeps serving the
 #   edited site -> disabled nodes are refused, deleted nodes stay revoked.
+#   MVP M2: URL / prefix / whole-site purge and prefetch as node tasks, query
+#   ignoring and sorting in cache keys, Range requests from slice cache,
+#   WebSocket through the node, origin certificate verification, S3 SigV4
+#   origins, failover to the backup origin and back, origin health in the
+#   console; Playwright submits purges and reads the per-node results.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -251,6 +256,167 @@ if ! $SKIP_UI; then
   BODY="$(curl -fsS -H 'Host: www.tenant.test' "$NODE_HTTP/e2e-tenant")"
   grep -q "^GET /e2e-tenant " <<<"$BODY" || fail "www.tenant.test did not reach whoami: $BODY"
   pass "curl -H 'Host: www.tenant.test' -> whoami (domain and origin edited by the tenant member)"
+fi
+
+step "MVP M2: sites for origins and cache"
+xcache() { # xcache HOST PATH [curl args...] -> value of X-Cache
+  local host="$1" path="$2"
+  shift 2
+  curl -sS -o /dev/null -D - -H "Host: $host" "$@" "$NODE_HTTP$path" | tr -d '\r' |
+    awk 'tolower($1) == "x-cache:" { print $2 }'
+}
+expect_cache() { # expect_cache WANT HOST PATH [curl args...]
+  local want="$1" got
+  shift
+  got="$(xcache "$@")"
+  echo "curl -H 'Host: $1' $NODE_HTTP$2 ${*:3} -> X-Cache: $got"
+  [[ "$got" == "$want" ]] || fail "expected X-Cache: $want for $1$2, got '$got'"
+}
+cluster_latest() { api GET "/clusters/$CLUSTER_ID" | jq -r .latestRevision.revision; }
+wait_node_latest() {
+  local latest
+  latest="$(cluster_latest)"
+  node_on_latest() { [[ "$(node_json | jq -r '"\(.appliedRevision) \(.applyState)"')" == "$latest applied" ]]; }
+  wait_for 60 "node applies revision #$latest" node_on_latest
+  echo "node applied revision #$latest"
+}
+m2_site() { # m2_site NAME JQ-OBJECT -> site id (the object overrides the defaults)
+  local body
+  body="$(jq -nc --arg c "$CLUSTER_ID" --arg n "$1" \
+    "{name: \$n, clusterId: \$c, cacheRules: [{pathPrefixes: [\"/\"], edgeTtlSeconds: 300}]} + $2")" ||
+    fail "bad site definition for $1"
+  api POST /sites "$body" | jq -r .site.id
+}
+cache_task() { # cache_task JSON -> final task JSON (waits until it finished)
+  local id task
+  id="$(api POST /cache-tasks "$1" | jq -r .id)"
+  task_done() { [[ "$(api GET "/cache-tasks/$id" | jq -r .state)" =~ ^(succeeded|failed)$ ]]; }
+  wait_for 60 "cache task $id finished on every node" task_done
+  task="$(api GET "/cache-tasks/$id")"
+  echo "task $(jq -c '{type, targets, state, nodes: [.nodes[] | {nodeName, state, succeeded, failed, message}]}' <<<"$task")"
+  [[ "$(jq -r .state <<<"$task")" == "succeeded" ]] || fail "cache task did not succeed: $task"
+}
+CACHE_SITE="$(m2_site m2-cache '{domains: ["cache.m2.test"], origins: [{address: "whoami"}]}')"
+m2_site m2-ignore '{domains: ["ignore.m2.test"], origins: [{address: "whoami"}], cacheSettings: {cacheKey: {query: "ignore"}}}' >/dev/null
+m2_site m2-sort '{domains: ["sort.m2.test"], origins: [{address: "whoami"}], cacheSettings: {cacheKey: {sortQuery: true}}}' >/dev/null
+m2_site m2-slice '{domains: ["slice.m2.test"], origins: [{address: "files"}], cacheSettings: {rangeSlice: true}}' >/dev/null
+FAILOVER_SITE="$(m2_site m2-failover '{domains: ["failover.m2.test"], origins: [{address: "origin-primary"}, {address: "origin-backup", backup: true}],
+  cacheRules: [], originSettings: {maxFails: 1, recoverySeconds: 5, connectTimeoutMs: 1000}}')"
+TLS_SITE="$(m2_site m2-tls '{domains: ["tls.m2.test"], origins: [{address: "files", port: 443, scheme: "https"}], cacheRules: []}')"
+m2_site m2-s3 '{domains: ["s3.m2.test"], origins: [{address: "s3", port: 7070,
+  s3: {region: "us-east-1", bucket: "media", accessKeyId: "e2e-access-key", secretAccessKey: "e2e-only-s3-secret-key"}}]}' >/dev/null
+m2_site m2-ws-off '{domains: ["wsoff.m2.test"], origins: [{address: "whoami"}], originSettings: {websocket: false}}' >/dev/null
+wait_node_latest
+pass "8 M2 sites published and applied by the node"
+
+step "M2: URL purge makes the next request a MISS, other URLs stay cached"
+U1="/m2/url-$RANDOM.js"
+U2="/m2/other-$RANDOM.js"
+expect_cache MISS cache.m2.test "$U1"
+expect_cache HIT cache.m2.test "$U1"
+expect_cache MISS cache.m2.test "$U2"
+expect_cache HIT cache.m2.test "$U2"
+cache_task "$(jq -nc --arg u "http://cache.m2.test$U1" '{type: "url", urls: [$u]}')"
+expect_cache MISS cache.m2.test "$U1"
+expect_cache HIT cache.m2.test "$U1"
+expect_cache HIT cache.m2.test "$U2"
+pass "URL purge: $U1 MISS after the purge, $U2 still HIT"
+
+step "M2: prefix purge only affects the prefix"
+expect_cache MISS cache.m2.test /pa/1.css
+expect_cache HIT cache.m2.test /pa/1.css
+expect_cache MISS cache.m2.test /pb/1.css
+expect_cache HIT cache.m2.test /pb/1.css
+cache_task '{"type": "prefix", "urls": ["http://cache.m2.test/pa/"]}'
+expect_cache MISS cache.m2.test /pa/1.css
+expect_cache HIT cache.m2.test /pb/1.css
+pass "prefix purge of /pa/: /pa/1.css MISS, /pb/1.css HIT"
+
+step "M2: prefetch loads a URL into the cache, whole-site purge empties it"
+PF="/m2/prefetched-$RANDOM.txt"
+cache_task "$(jq -nc --arg u "http://cache.m2.test$PF" '{type: "prefetch", urls: [$u]}')"
+expect_cache HIT cache.m2.test "$PF"
+cache_task "$(jq -nc --arg s "$CACHE_SITE" '{type: "site", siteIds: [$s]}')"
+expect_cache MISS cache.m2.test "$PF"
+expect_cache MISS cache.m2.test /pb/1.css
+pass "prefetched URL was a HIT on the first client request; whole-site purge made everything MISS"
+
+step "M2: cache keys ignore or sort query parameters"
+Q="/m2/q-$RANDOM"
+expect_cache MISS ignore.m2.test "$Q?a=1"
+expect_cache HIT ignore.m2.test "$Q?a=2"
+expect_cache MISS sort.m2.test "$Q?a=1&b=2"
+expect_cache HIT sort.m2.test "$Q?b=2&a=1"
+expect_cache MISS sort.m2.test "$Q?a=1&b=3"
+pass "ignored query: ?a=1 and ?a=2 share one object; sorted query: ?a=1&b=2 and ?b=2&a=1 share one object"
+
+step "M2: Range requests are served from the slice cache"
+docker_files() { "${COMPOSE[@]}" exec -T files sh -c "$1"; }
+ORIGIN_BYTES="$(docker_files 'dd if=/srv/big.bin bs=1 skip=1048000 count=1000 2>/dev/null | sha256sum' | cut -d' ' -f1)"
+range() { curl -sS -o "$STATE_DIR/range.bin" -D "$STATE_DIR/range.h" -H 'Host: slice.m2.test' -r "$1" "$NODE_HTTP/big.bin"; }
+range 1048000-1048999
+grep -qi '^x-cache: MISS' "$STATE_DIR/range.h" && grep -qi '^content-range: bytes 1048000-1048999/3145728' "$STATE_DIR/range.h" ||
+  fail "first range request: $(cat "$STATE_DIR/range.h")"
+range 1048000-1048999
+grep -qi '^x-cache: HIT' "$STATE_DIR/range.h" || fail "repeated range request not a HIT: $(cat "$STATE_DIR/range.h")"
+[[ "$(sha256sum "$STATE_DIR/range.bin" 2>/dev/null || shasum -a 256 "$STATE_DIR/range.bin")" == "$ORIGIN_BYTES"* ]] ||
+  fail "range body differs from the origin"
+range 1048576-1048600
+grep -qi '^x-cache: HIT' "$STATE_DIR/range.h" || fail "another range in a cached slice not a HIT: $(cat "$STATE_DIR/range.h")"
+grep -iE '^(HTTP|x-cache|content-range|content-length)' "$STATE_DIR/range.h" | tr -d '\r'
+pass "bytes 1048000-1048999: MISS then HIT with the origin's bytes; bytes 1048576-1048600 of the cached slice: HIT"
+
+step "M2: WebSocket through the node"
+WS="$(node scripts/ws-echo.mjs localhost "${E2E_NODE_PORT:-18080}" cache.m2.test /echo hello-edgeweir)" || fail "WebSocket through the node failed: $WS"
+echo "$WS"
+[[ "$WS" == *"echo: hello-edgeweir"* ]] || fail "no echo over WebSocket: $WS"
+WS_OFF="$(node scripts/ws-echo.mjs localhost "${E2E_NODE_PORT:-18080}" wsoff.m2.test /echo x 2>&1 || true)"
+[[ "$WS_OFF" == *"handshake failed: HTTP/1.1 403"* ]] || fail "WebSocket should be refused when disabled: $WS_OFF"
+pass "whoami /echo echoed over the node; the site with WebSocket off refused the upgrade (403)"
+
+step "M2: HTTPS origins are verified unless verification is turned off"
+TLS_CODE="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: tls.m2.test' "$NODE_HTTP/static/a.txt")"
+[[ "$TLS_CODE" == "502" ]] || fail "self-signed origin certificate must fail verification, got $TLS_CODE"
+"${COMPOSE[@]}" logs --since 60s node 2>&1 | grep -m1 "upstream SSL certificate verify error" | cut -c1-200 || true
+api PATCH "/sites/$TLS_SITE" '{"originSettings": {"tlsVerify": false}}' >/dev/null
+wait_node_latest
+TLS_BODY="$(curl -fsS -H 'Host: tls.m2.test' "$NODE_HTTP/static/a.txt")" || fail "origin without verification unreachable"
+[[ "$TLS_BODY" == "static" ]] || fail "unexpected body over HTTPS: $TLS_BODY"
+pass "verification on: 502 for the self-signed origin; verification off: 200 over HTTPS"
+
+step "M2: S3-compatible origin with SigV4 signing"
+S3_BODY="$(curl -fsS -H 'Host: s3.m2.test' "$NODE_HTTP/hello.txt")" || fail "S3 origin request failed: $(curl -sS -H 'Host: s3.m2.test' "$NODE_HTTP/hello.txt")"
+[[ "$S3_BODY" == "hello from s3" ]] || fail "unexpected S3 body: $S3_BODY"
+expect_cache HIT s3.m2.test /hello.txt
+S3_POST="$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Host: s3.m2.test' "$NODE_HTTP/hello.txt")"
+[[ "$S3_POST" == "405" ]] || fail "POST to an S3 origin must be refused, got $S3_POST"
+pass "signed GET returned the object (then cached); POST refused with 405"
+
+step "M2: failover to the backup origin and back"
+origin_name() { curl -sS -H 'Host: failover.m2.test' "$NODE_HTTP/whoami" | awk '/^Name:/ { print $2 }'; }
+[[ "$(origin_name)" == "primary" ]] || fail "failover site should be served by the primary"
+echo "before: Name: $(origin_name)"
+"${COMPOSE[@]}" stop origin-primary >/dev/null 2>&1
+served_by_backup() { [[ "$(origin_name)" == "backup" ]]; }
+wait_for 30 "requests served by the backup" served_by_backup
+echo "primary stopped: Name: $(origin_name)"
+primary_down_in_console() {
+  api GET "/sites/$FAILOVER_SITE/origin-health" | jq -e 'map(select(.downNodes > 0)) | length == 1' >/dev/null
+}
+wait_for 60 "console shows the primary origin down" primary_down_in_console
+api GET "/sites/$FAILOVER_SITE/origin-health" | jq -c '.[] | {originId, downNodes, onlineNodes, lastError}'
+"${COMPOSE[@]}" start origin-primary >/dev/null 2>&1
+served_by_primary() { [[ "$(origin_name)" == "primary" ]]; }
+wait_for 60 "requests back on the primary" served_by_primary
+echo "primary started: Name: $(origin_name)"
+pass "primary down -> backup, console shows the primary down, primary back -> primary"
+
+if ! $SKIP_UI; then
+  step "Playwright M2: submit purges and read the per-node results"
+  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    E2E_NODE_NAME="edge-e2e-1" pnpm --filter @edgeweir/console run test:e2e e2e/m2.spec.ts \
+    || fail "Playwright M2 test failed"
+  pass "Playwright M2 passed"
 fi
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"

@@ -1,9 +1,12 @@
-# End-to-end environment: postgres + console + one edge node (OpenResty) + a
-# whoami origin. Used by scripts/e2e.sh and CI:
+# End-to-end environment: postgres + console + one edge node (OpenResty) +
+# test origins. Used by scripts/e2e.sh and CI:
 #   docker compose -f compose.e2e.yml up -d --build
 #   pnpm e2e
 # The node image is built from the sibling edgeweir-node checkout.
 # Test-only secrets below are fixed on purpose; never reuse them.
+# A second environment can run next to this one with its own project name,
+# ports and image tag, e.g.:
+#   COMPOSE_PROJECT_NAME=edgeweir-e2e-2 E2E_CONSOLE_PORT=13100 E2E_NODE_PORT=18180 E2E_TAG=e2e-2 ...
 name: edgeweir-e2e
 
 services:
@@ -24,7 +27,7 @@ services:
   console:
     build:
       context: .
-    image: edgeweir:e2e
+    image: edgeweir:${E2E_TAG:-e2e}
     environment:
       ROLE: all
       DATABASE_URL: postgres://edgeweir:e2e-only-password@postgres:5432/edgeweir
@@ -47,10 +50,46 @@ services:
   whoami:
     image: traefik/whoami:v1.12.0
 
+  # MVP M2: failover pair (scripts/e2e.sh stops and starts the primary).
+  origin-primary:
+    image: traefik/whoami:v1.12.0
+    command: ["--name", "primary"]
+
+  origin-backup:
+    image: traefik/whoami:v1.12.0
+    command: ["--name", "backup"]
+
+  # MVP M2: static files over HTTP (Range / slice) and HTTPS with a
+  # self-signed certificate (origin certificate verification).
+  files:
+    image: openresty/openresty:1.31.1.1-bookworm
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mkdir -p /srv/static &&
+        head -c 3145728 /dev/urandom > /srv/big.bin &&
+        echo static > /srv/static/a.txt &&
+        openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=files
+        -addext subjectAltName=DNS:files -keyout /tmp/files.key -out /tmp/files.crt 2>/dev/null &&
+        exec openresty -g 'daemon off;' -c /etc/e2e/files.conf
+    volumes:
+      - ./docker/e2e/files.conf:/etc/e2e/files.conf:ro
+
+  # MVP M2: S3-compatible object storage (Versity S3 Gateway, Apache-2.0)
+  # for SigV4-signed origin requests: bucket "media" with one object.
+  s3:
+    image: versity/versitygw:v1.8.0
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mkdir -p /data/media &&
+        printf 'hello from s3\n' > /data/media/hello.txt &&
+        exec versitygw --port :7070 --access e2e-access-key --secret e2e-only-s3-secret-key posix /data
+
   node:
     build:
       context: ${EDGEWEIR_NODE_CONTEXT:-../edgeweir-node}
-    image: edgeweir-node:e2e
+    image: edgeweir-node:${E2E_TAG:-e2e}
     hostname: edge-e2e-1
     ports:
       - "${E2E_NODE_PORT:-18080}:80"
@@ -60,6 +99,14 @@ services:
       console:
         condition: service_healthy
       whoami:
+        condition: service_started
+      origin-primary:
+        condition: service_started
+      origin-backup:
+        condition: service_started
+      files:
+        condition: service_started
+      s3:
         condition: service_started
 
 volumes:
