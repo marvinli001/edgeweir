@@ -8,38 +8,38 @@
 
 ### 仓库基础
 
-- [ ] 两个仓库：LICENSE（AGPL-3.0）、中英双语 README（含品牌故事）、ARCHITECTURE.md、docs/adr/、ROADMAP.md、SECURITY.md、CONTRIBUTING.md、CLAUDE.md、.editorconfig
-- [ ] edgeweir 的 GitHub Actions：lint、typecheck、test、构建镜像
-- [ ] edgeweir-node 的 GitHub Actions：go test、goreleaser snapshot
+- [x] 两个仓库：LICENSE（AGPL-3.0）、中英双语 README（含品牌故事）、ARCHITECTURE.md、docs/adr/、ROADMAP.md、SECURITY.md、CONTRIBUTING.md、CLAUDE.md、.editorconfig
+- [x] edgeweir 的 GitHub Actions：lint、typecheck、test、构建镜像
+- [x] edgeweir-node 的 GitHub Actions：go test、goreleaser snapshot
 
 ### 控制面骨架
 
-- [ ] monorepo：`apps/console`（Hono 服务端在 `src/server`，React 在 `src/web`）、`packages/db`、`packages/contract`、`packages/config-compiler`、`proto/`；保持一个应用包、一个进程
-- [ ] 数据模型 v0：organization 与 user（better-auth）、cluster、node_group、node、node_ip、enrollment_token、site、site_domain、origin_pool、origin、cache_rule、config_revision、node_config_status、audit_log
-- [ ] 后台页面（zh-CN / en）：登录、首次初始化向导（创建管理员）、概览、集群与节点（生成一次性安装命令，显示节点在线状态和已应用的 revision）、网站（新增站点：域名 + 源站 + 简单缓存规则）、设置
-- [ ] 每个页面都有空状态、加载态和错误态
-- [ ] proto v0：`NodeService` 包含 `Enroll`、`WatchConfig`（服务端流，推送 revision 通知）、`GetConfig`（按 revision 取快照或 diff）、`ReportStatus`、`ReportStats`（另含 `RenewCertificate`）
-- [ ] `NodeConfig` IR 覆盖 listeners、sites、domains、origins、cache rules 和 TLS 证书引用
+- [x] monorepo：`apps/console`（Hono 服务端在 `src/server`，React 在 `src/web`）、`packages/db`、`packages/contract`、`packages/config-compiler`、`proto/`；保持一个应用包、一个进程
+- [x] 数据模型 v0：organization 与 user（better-auth）、cluster、node_group、node、node_ip、enrollment_token、site、site_domain、origin_pool、origin、cache_rule、config_revision、node_config_status、audit_log
+- [x] 后台页面（zh-CN / en）：登录、首次初始化向导（创建管理员）、概览、集群与节点（生成一次性安装命令，显示节点在线状态和已应用的 revision）、网站（新增站点：域名 + 源站 + 简单缓存规则）、设置
+- [x] 每个页面都有空状态、加载态和错误态
+- [x] proto v0：`NodeService` 包含 `Enroll`、`WatchConfig`（服务端流，推送 revision 通知）、`GetConfig`（按 revision 取快照或 diff）、`ReportStatus`、`ReportStats`（另含 `RenewCertificate`）
+- [x] `NodeConfig` IR 覆盖 listeners、sites、domains、origins、cache rules 和 TLS 证书引用
 
 ### 节点骨架（edgeweir-node）
 
-- [ ] Go agent 走通：注册 → mTLS → watch → 快照落盘 → 渲染最小 nginx.conf → 经 unix socket 把站点表推给 Lua
-- [ ] Lua 按 Host 路由到上游并开启 proxy_cache，响应带 `X-Cache` 头
-- [ ] agent 回报已应用的 revision
+- [x] Go agent 走通：注册 → mTLS → watch → 快照落盘 → 渲染最小 nginx.conf → 经 unix socket 把站点表推给 Lua
+- [x] Lua 按 Host 路由到上游并开启 proxy_cache，响应带 `X-Cache` 头
+- [x] agent 回报已应用的 revision
 
 ### 端到端验证
 
-- [ ] `docker compose -f compose.e2e.yml up` 拉起 postgres、console、node（OpenResty 容器）和一个 whoami 源站
-- [ ] 通过 API 创建站点后，`curl -H "Host: demo.test" http://<node>` 第一次返回 `MISS`、第二次返回 `HIT`
-- [ ] 控制台能看到节点在线以及它的 revision
-- [ ] 以上流程写成测试并放进 CI
+- [x] `docker compose -f compose.e2e.yml up` 拉起 postgres、console、node（OpenResty 容器）和一个 whoami 源站
+- [x] 通过 API 创建站点后，`curl -H "Host: demo.test" http://<node>` 第一次返回 `MISS`、第二次返回 `HIT`
+- [x] 控制台能看到节点在线以及它的 revision
+- [x] 以上流程写成测试并放进 CI
 
 ### 部署
 
-- [ ] 多阶段 Dockerfile：非 root 运行、镜像尽量小、`ROLE=app|worker|all`（默认 `all`）
-- [ ] `compose.yml`：console + postgres:18；`--profile analytics` 加 ClickHouse，`--profile cache` 加 Valkey
-- [ ] `compose.baota.yml` + `docs/deploy/baota.md`：宝塔 Docker 编排导入、反代站点到 `:3000`；节点端口 `:8443` 直接暴露或用 stream 透传，TLS 不能由宝塔 nginx 终结
-- [ ] `docs/deploy/docker.md`
+- [x] 多阶段 Dockerfile：非 root 运行、镜像尽量小、`ROLE=app|worker|all`（默认 `all`）
+- [x] `compose.yml`：console + postgres:18；`--profile analytics` 加 ClickHouse，`--profile cache` 加 Valkey
+- [x] `compose.baota.yml` + `docs/deploy/baota.md`：宝塔 Docker 编排导入、反代站点到 `:3000`；节点端口 `:8443` 直接暴露或用 stream 透传，TLS 不能由宝塔 nginx 终结
+- [x] `docs/deploy/docker.md`
 
 ## MVP
 

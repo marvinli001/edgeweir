@@ -21,6 +21,10 @@
    SECURITY 中文 + 英文摘要；CLAUDE.md 英文。**默认**如此，若希望全部英文再调整。
 6. **集群归属**：BOOTSTRAP 未说明集群/节点属于平台还是租户。**默认**：集群、节点、revision、审计日志
    只有平台管理员可见和管理；网站属于组织（租户），租户成员只能看到本组织网站（ADR-0007）。
+   **2026-09-25 已确认**：所有人的主视图是控制台，平台管理员另有顶栏 [控制台 | 后台] 切换进入 `/admin`（ADR-0007 更新记录）。
+10. **appica-ui 1.2.0 发布不满 1 天**：pnpm 的最小发布时间检查把 `@appica/ui-react@1.2.0` 自动加入
+    `minimumReleaseAgeExclude`（与已有的 better-auth、turbo、vite 例外做法一致）。**默认**：保留 1.2.0；若要严格执行
+    发布时间门槛，可改用 1.1.0（2026-08-11 发布），需要重新核对用到的组件。
 7. **初始化窗口风险**：初始化向导完成前，任何能访问控制台的人都能创建管理员。**默认**：文档中提示
    "先完成向导再对公网开放 3000"；后续可增加一次性 setup token（写入 ROADMAP 风险项）。
 8. **开放 API 与 UI 的凭据分离**：`/api/v1` 只接受 `x-api-key`，`/rpc` 只接受会话 cookie（且要求 CSRF 头）。
@@ -130,3 +134,19 @@
 | 6 | 部署 | `docker build .`、`docker compose -f compose.yml config -q`、`docker compose -f compose.baota.yml config -q` | 全部 exit 0；镜像约 265MB；docs/deploy/docker.md、baota.md 存在 |
 
 完整命令输出见最终汇报。
+
+## Phase 0 之后：界面规范调整（2026-09-25）
+
+维护者确定的界面规范，已落地到现有页面，作为 MVP 的样板（详见 ADR-0003 决策 7–9、ADR-0007 更新记录）：
+
+- [x] 文案精简：去掉所有页面副标题、对话框和卡片说明段落、空状态描述；消息从 178 条减到 164 条，zh-CN / en 同步。
+- [x] 加载：不用骨架屏。顶部 2px 进度条（路由、请求、提交）+ 首次加载居中 appica Loader + 按钮内 spinner；轮询不触发进度条。
+- [x] appica-ui 1.2.0 接入：`appica-bridge.css`（逐组件 `@source`、作用域 token 映射）+ `src/web/components/appica/` 封装；用于 Loader、Sparkline、Meter、Countdown、BorderBeam、GradientGlow、BackgroundPattern、TextAnimate。
+- [x] 动效：页面、统计卡片、表格行依次入场；概览统计区光晕；节点在线状态卡片 BorderBeam（全部在线为绿色，有离线为红色）；在线节点徽标脉冲；登录与初始化页点阵背景 + 光标聚光；注册命令倒计时。
+- [x] 控制台 / 后台拆分：控制台（概览、网站、设置）人人可用；平台管理员经顶栏切换进入后台（平台概览、集群与节点、审计日志、系统设置）。`/admin` 对非管理员重定向；`settings.get` 改为仅管理员。
+- [x] 测试：`test/web/ui-rules.test.ts`（禁止骨架屏、appica 导入范围、不导入 appica 全局样式、`@source` 与导入一致）；服务端新增租户成员调用 `settings`、`clusters`、`auditLogs` 返回 403 的用例；Playwright 冒烟改为走控制台 → 后台 → 控制台。
+- [x] 验证：`pnpm lint`、`pnpm typecheck`、`pnpm test`（console 23 个用例）、`pnpm build` 通过；`docker compose -f compose.e2e.yml up -d --build` + `bash scripts/e2e.sh` 输出 E2E OK；浅色与深色下人工检查了登录、概览、平台概览、集群与节点、注册对话框、审计日志、网站、新建网站。
+
+## 下一步：MVP
+
+规格与每个里程碑的 `/goal` 提示词见 [docs/specs/mvp.md](docs/specs/mvp.md)。MVP 分为 5 个里程碑（M1 集群、租户与站点基础 → M2 源站与缓存 → M3 HTTPS、证书与协议 → M4 访问控制与规则引擎 → M5 DNS、统计、告警与开放 API），Phase 0 的已知限制已分配到对应里程碑。
