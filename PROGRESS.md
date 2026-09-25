@@ -86,6 +86,8 @@ MVP M2 新增（2026-09-25）：
 38. **e2e 的 S3 服务**：用 Versity S3 Gateway `v1.8.0`（Apache-2.0，镜像约 29 MB，posix 后端）验证真实的 SigV4 校验。**默认**如此。
 39. **e2e 环境隔离**：M2 验证期间另一个会话占用了默认的 `edgeweir-e2e` compose 项目（端口 13000/18080）。compose.e2e.yml 的镜像标签改为可覆盖（`E2E_TAG`），M2 的验证在独立项目中运行：
     `COMPOSE_PROJECT_NAME=edgeweir-m2 E2E_CONSOLE_PORT=13100 E2E_NODE_PORT=18180 E2E_TAG=m2`（命令本身不变）。**默认**：默认值不变，单独运行时与以前完全一样。
+40. **edgeweir 的 master 暂未快进**：M2 完成时，主工作区 `~/Developer/edgeweir`（`master`）里有另一个会话未提交的改动（落地页，36 个文件，与 M2 改动的 router、contract、messages、e2e.sh、PROGRESS 等重叠），快进会覆盖这些改动，因此 M2 留在 `mvp-m2` 分支（相对 `master` 只领先、不落后，可直接快进）。edgeweir-node 的 `master` 已快进，`proto/v0.2.0` tag 已打在 edgeweir 仓库。
+    **默认**：等主工作区的改动提交后执行 `git merge --ff-only mvp-m2`（若 `master` 已前进则先 `git rebase master mvp-m2` 并重跑验证）；另一会话若新增过程，`admin.test.ts` 的归类断言会要求把它加入控制台清单或 403 表。
 
 ## 版本核实记录（2026-09-25，来源：npm registry / proxy.golang.org / Docker Hub / nodejs.org / GitHub Releases）
 
