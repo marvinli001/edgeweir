@@ -36,7 +36,7 @@
 2. **CI 校验 preset 不漂移。** `shadcn preset resolve --json` 能从项目文件（`components.json` 与全局 CSS）反推出 preset code。CI 用固定版本的 shadcn CLI 执行它，结果必须等于 `b2D0wqNxT`，否则失败。主题色、圆角、字体、图标库被意外改动时会在 CI 里暴露。
 3. **设计 token 以 shadcn 为准。** 颜色、圆角、图表色、侧边栏色都使用 shadcn 生成的 CSS 变量。业务代码使用 Tailwind 语义类（`bg-background`、`text-muted-foreground`、`border-border` 等），不写裸色值。
 4. **appica-ui 的使用边界：**
-   - 只用于 shadcn 没有的组件，包括动效和数据展示类组件（Loader、Sparkline、Meter、Countdown、BorderBeam、GradientGlow、BackgroundPattern、TextAnimate 等），并鼓励在合适处使用它们提升层次感。shadcn 已有的组件（按钮、输入框、对话框、表格、复制按钮等）一律用 shadcn。
+   - 只用于 shadcn 没有的组件。shadcn 已有的组件（按钮、输入框、对话框、表格等）一律用 shadcn。
    - 不引入 appica-ui 的全局主题样式（如果它提供），不在 `:root` 上定义它的变量。
    - 通过 `appica-bridge.css` 在局部作用域内映射变量：appica 组件放在一个作用域容器内（例如由 `<AppicaScope>` 渲染、带固定 class 的元素），bridge 只在这个 class 下把 appica 期望的变量赋值为对应的 shadcn token。
    - 同名变量不能在作用域内自引用（`--primary: var(--primary)` 是循环引用，结果无效）。需要时先在 `:root` 为 shadcn token 定义别名（例如 `--ew-primary: var(--primary)`），bridge 再引用别名。
@@ -82,6 +82,7 @@ Phase 0 范围：
 
 后续：
 
+- appica-ui 在第一次需要 shadcn 缺失的组件时引入，同时创建 `appica-bridge.css` 和作用域容器组件。
 - dashboard、chart 区块随 MVP 的统计功能接入真实数据。
 
 ## 版本核实
@@ -121,3 +122,4 @@ Phase 0 范围：
 >   - 一行安全提示改用 `SafetyNote`（`components/safety-note.tsx`）；`*Description` 组件（CardDescription、DialogDescription、FieldDescription 等）不再使用，Alert 的 AlertDescription 是提示内容本身，保留。确认对话框的 `note` 仍通过 `aria-describedby` 描述对话框。移除未使用的 Skeleton 与 SidebarMenuSkeleton。
 >   - shadcn 组件里的无障碍文字（Spinner 的"加载中"、对话框和抽屉的"关闭"、侧边栏、面包屑、命令面板）改走 Paraglide；命令面板和移动端侧边栏的隐藏说明删除（Base UI 的对话框不要求说明）。
 >   - `ui-rules.test.ts` 相应收紧：`src/web` 任何地方（包括 shadcn 组件）都不能有 Skeleton 和 `animate-pulse`；不能用 `*Description` 组件（AlertDescription 除外）；TS/TSX 里不能写十六进制或 `rgb()`、`hsl()`、`oklch()` 等颜色字面量；`src/web`、`index.html`、`public/` 里指向其他站点的 URL 只允许 ICP 备案查询、本项目仓库和 SVG 命名空间（另有 example.com、.test 等保留名称）；落地页代码和 `landing_*` 文案里不能出现其他厂商的名称。`i18n.test.ts` 用 Vite 导出的 oxc 解析器检查组件里的英文：JSX 文本、`aria-label` 等纯文本属性、`title`、`alt`，以及 `placeholder`、`label`、`description` 里成句的英文（启发式，允许清单只有产品名 Edgeweir）。
+> - 2026-09-25（收尾：原地修改的恢复）：决策第 4 条第一项在「Phase 0 之后的 UI 调整」时被原地改写，落地情况「后续」里的 appica 引入一项同时被删除，现都恢复原文（ADR README：已接受的 ADR 不改写结论）。上一条记录所说的"决策第 4 条现在的写法"以本条为准，作为更新生效：appica-ui 也用于 shadcn 没有的动效和数据展示类组件（Loader、Countdown、BorderBeam、GradientGlow、BackgroundPattern、TextAnimate、OTPField 等），鼓励在合适处使用；复制按钮等 shadcn 已有的组件一律用 shadcn。appica-ui 已于「Phase 0 之后的 UI 调整」引入（见该条记录），Sparkline、Meter 的封装在「数据展示重做」时移除。决策第 7–9 条是同一次调整新增的，内容以当时的写法为准。

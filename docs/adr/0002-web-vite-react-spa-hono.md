@@ -61,7 +61,7 @@
 
 Phase 0 范围：
 
-- 页面：登录、首次初始化向导、概览、集群与节点、网站、设置。每个页面都有空状态、加载态和错误态。（2026-09-25 起集群与节点移入后台 `/admin`，另增平台概览、审计日志、系统设置，见 [ADR-0007](0007-auth-better-auth-multitenancy.md) 更新记录。）
+- 页面：登录、首次初始化向导、概览、集群与节点、网站、设置。每个页面都有空状态、加载态和错误态。
 - 生产环境静态托管与 `index.html` 回退。
 - 开发环境单进程：Vite middleware + Hono + `:8443` 节点通道。
 
@@ -86,3 +86,6 @@ Phase 0 范围：
 
 > 更新记录：
 > - 2026-09-25：Vite 8.3（Rolldown）。开发模式由 `tsx watch src/server/dev.ts` 启动一个进程：Hono（API、better-auth、/install.sh）+ 节点通道 :8443 + Vite middleware 模式（HMR 复用同一 HTTP 端口）。生产由 esbuild 把服务端及全部依赖打成单个 ESM 文件，镜像运行时不需要 node_modules；@hono/node-server 2.1 的 `serve`、`getRequestListener`、`serveStatic` API 与 1.x 一致。
+> - 2026-09-25（收尾）：
+>   - 「Phase 0 落地情况」的页面清单曾被原地加注，现恢复原文，改记在这里：2026-09-25 起集群与节点移入后台 `/admin`，另增平台概览、审计日志、系统设置（[ADR-0007](0007-auth-better-auth-multitenancy.md) 更新记录）；控制台首页是 `/overview`，`/` 是可选的公开落地页，关闭时跳到 `/overview`（[ADR-0003](0003-ui-shadcn-preset.md) 收尾记录）。开启落地页时，生产服务器在 `/` 返回的 `index.html` 带落地页的标题和描述，去掉 `noindex`。
+>   - `index.html` 回退只覆盖前端路由：`/api`、`/rpc`、`/downloads`、`/install.sh`、`/healthz` 及其子路径上没有匹配的请求一律返回 404（JSON），不再返回 200 的 `index.html`，否则 install.sh 会把 HTML 当成下载的文件。开发模式的 Vite middleware 把同一组路径直接交给 Hono。
