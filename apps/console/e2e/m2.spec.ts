@@ -48,7 +48,12 @@ test("M2: purge tasks, origin health, origin and cache settings", async ({ page 
 
   await test.step("a directory purge is listed", async () => {
     await page.getByTestId("purge-type-prefix").click();
+    // The type lives in the URL: the tab (and its field) switch once the navigation lands, so a
+    // fill right after the click could still reach the URL tab's field.
+    await expect(page.getByTestId("purge-type-prefix")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByLabel("目录", { exact: true })).toBeVisible();
     await page.getByTestId("purge-urls").fill("http://demo.test/static/");
+    await expect(page.getByLabel("目录", { exact: true })).toHaveValue("http://demo.test/static/");
     await page.getByTestId("purge-submit").click();
     const task = page.getByTestId("cache-task").first();
     await expect(task).toHaveAttribute("data-type", "prefix");
