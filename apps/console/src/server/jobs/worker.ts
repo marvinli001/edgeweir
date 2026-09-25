@@ -1,0 +1,46 @@
+import { schema } from "@edgeweir/db";
+import { and, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { PgBoss } from "pg-boss";
+import type { AppContext } from "../lib/context";
+import { pruneRevisions } from "../services/revisions";
+
+export const QUEUES = {
+  pruneRevisions: "maintenance.prune-revisions",
+  expireEnrollmentTokens: "maintenance.expire-enrollment-tokens",
+} as const;
+
+/**
+ * Background worker (ROLE=worker|all): pg-boss queues and cron schedules.
+ * Certificate issuance via edgeweir-certd will be added here.
+ */
+export async function startWorker(ctx: AppContext): Promise<PgBoss> {
+  const log = ctx.log.child({ component: "worker" });
+  const boss = new PgBoss({ connectionString: ctx.env.DATABASE_URL, schema: "pgboss" });
+  boss.on("error", (error) => log.error("pg-boss error", { error }));
+  await boss.start();
+
+  for (const name of Object.values(QUEUES)) await boss.createQueue(name);
+
+  await boss.work(QUEUES.pruneRevisions, async () => {
+    const removed = await pruneRevisions(ctx.db);
+    if (removed) log.info("pruned revisions", { removed });
+  });
+  await boss.work(QUEUES.expireEnrollmentTokens, async () => {
+    const cutoff = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const deleted = await ctx.db
+      .delete(schema.enrollmentToken)
+      .where(
+        or(
+          and(isNull(schema.enrollmentToken.usedAt), lt(schema.enrollmentToken.expiresAt, cutoff)),
+          and(isNotNull(schema.enrollmentToken.usedAt), lt(schema.enrollmentToken.usedAt, cutoff)),
+        ),
+      )
+      .returning({ id: schema.enrollmentToken.id });
+    if (deleted.length) log.info("deleted stale enrollment tokens", { count: deleted.length });
+  });
+
+  await boss.schedule(QUEUES.pruneRevisions, "17 * * * *");
+  await boss.schedule(QUEUES.expireEnrollmentTokens, "*/30 * * * *");
+  log.info("worker started", { queues: Object.values(QUEUES) });
+  return boss;
+}
