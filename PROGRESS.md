@@ -65,8 +65,8 @@
 - [x] edgeweir：git init、LICENSE (AGPL-3.0)、README.md / README.zh-CN.md（含品牌故事）
 - [x] edgeweir：ARCHITECTURE.md、docs/adr/（§2 每条决策一篇，0001–0018）、ROADMAP.md、SECURITY.md、CONTRIBUTING.md、CLAUDE.md、.editorconfig
 - [x] edgeweir：GitHub Actions（ci.yml：lint、proto 生成一致性、typecheck、test、build、镜像构建、e2e；release.yml：镜像签名 + provenance）
-- [ ] edgeweir-node：同上全套文档（进行中，ADR 由本仓库镜像过去）
-- [ ] edgeweir-node：GitHub Actions（go test、goreleaser snapshot）
+- [x] edgeweir-node：同上全套文档（LICENSE、中英 README、ARCHITECTURE、ROADMAP、SECURITY、CONTRIBUTING、CLAUDE.md、.editorconfig；docs/adr 镜像自本仓库，18 篇）
+- [x] edgeweir-node：GitHub Actions（ci.yml：vet、test -race、proto 一致性、goreleaser check + snapshot、docker build、Lua 测试；release.yml：goreleaser + cosign keyless + SLSA provenance）
 
 ### 2. 控制面骨架
 - [x] monorepo：apps/console（src/server + src/web）、packages/db、packages/contract、packages/config-compiler、packages/proto、proto/
@@ -82,16 +82,16 @@
 - [x] helpers/certd（Go 骨架 + 测试，多阶段构建进镜像）
 
 ### 3. 节点骨架（edgeweir-node）
-- [ ] Go agent：enroll → mTLS → watch → 快照落盘 → 渲染最小 nginx.conf → unix socket 推站点表
-- [ ] Lua：按 Host 路由 + proxy_cache + X-Cache 头
-- [ ] agent 回报已应用 revision
-- [ ] goreleaser 配置（deb/rpm/tar.gz，amd64/arm64，cosign、SBOM）
+- [x] Go agent：enroll（先校验 CA 指纹）→ mTLS → watch + 轮询 → 快照/diff 校验哈希并落盘（LKG + 备份）→ 渲染 nginx.conf（仅结构性变更 reload）→ unix socket 推站点表
+- [x] Lua：按 Host 路由（精确 + 泛域名）+ 双层 proxy_cache（TTL 可热更新）+ X-Cache 头；未知 Host 404
+- [x] agent 回报已应用 revision（ReportStatus 心跳 + 回执）、证书轮换、ReportStats 分钟统计
+- [x] goreleaser 配置（deb/rpm/tar.gz，amd64/arm64，SBOM；cosign keyless 仅正式发布，snapshot 跳过）
 
 ### 4. 端到端
 - [x] compose.e2e.yml（postgres + console + node + whoami）
 - [x] e2e 脚本 scripts/e2e.sh（注册 + CA 指纹校验 + token 单次使用 + mTLS、创建 demo.test、MISS→HIT、控制台显示在线 + revision）
 - [x] Playwright 冒烟（登录 → 集群节点 → 网站 → 切换英文）
-- [ ] 全流程实跑通过（等待节点仓库完成）
+- [x] 全流程实跑通过（`docker compose -f compose.e2e.yml up -d --build` + `bash scripts/e2e.sh`，含 Playwright）
 
 ### 5. 部署
 - [x] 多阶段 Dockerfile（非 root、tini、单文件服务端、ROLE）
@@ -108,6 +108,25 @@
 - Phase 0 未用到 shadcn 缺失的组件，appica-ui 与 appica-bridge.css 推迟到首次需要时（ADR-0003）。
 - 开发模式的"单进程"用 Vite middleware 模式实现（等价于 @hono/vite-dev-server），因为节点通道 :8443 也必须在同一进程内（ADR-0002）。
 
-## 验证记录
+## 已知限制（Phase 0 范围之外，已写入 ROADMAP / ADR 更新记录）
 
-（最终轮贴出每条验收命令与输出）
+- proto v0.1.0 没有下发证书材料的接口，节点暂不启用 HTTPS 监听；回源 HTTPS 暂不校验证书。
+- 清缓存只支持全站（cache generation），URL/前缀/tag 清除和预热、节点自升级、访问日志采样上报属于 MVP。
+- 负载均衡的 round_robin / consistent_hash 在节点侧暂按加权随机处理，无被动健康检查。
+- 节点仓库 CI 的 proto 一致性检查从 `github.com/edgeweir/edgeweir` 拉 tag，仓库公开前会失败（本地用 `make proto-check` 从同级仓库校验）。
+- 修订记录里的"原因"文本（如 `site demo created`）目前是服务端生成的英文，未本地化。
+
+## 验证记录（2026-09-25，全部在本机实跑）
+
+| # | 验收项 | 命令 | 结果 |
+| --- | --- | --- | --- |
+| 1 | 两个独立仓库、干净、Conventional Commits、文档齐全 | `git status`、`git log`、文件检查 | 两仓库 `## main` 无改动；提交全部符合 Conventional Commits 且带 Co-Authored-By；8 个文档 + 18 篇 ADR 均存在 |
+| 2 | pnpm install / lint / typecheck / test / build | `pnpm install && pnpm lint && pnpm typecheck --force && pnpm test --force && pnpm build --force` | 全部 exit 0；测试 36 个（contract 6、db 2、compiler 10、console 18） |
+| 2 | shadcn preset | `cat apps/console/components.json`、`shadcn preset resolve --json` | style `base-luma`、hugeicons；反推 code `b2D0wqNxT` |
+| 2 | i18n | Paraglide `baseLocale: zh-CN`，`locales: [zh-CN, en]`；Playwright 中切换到英文 | 通过 |
+| 3 | go vet / go test / goreleaser | `go vet ./...`、`go test ./...`、`goreleaser release --snapshot --clean` | 全部 exit 0；dist 含 amd64/arm64 的 tar.gz、deb、rpm、SBOM、checksums |
+| 4 | buf lint + 生成代码来源 | `buf lint proto`、`pnpm proto:gen && git diff --exit-code packages/proto`、`make proto-check`（从 `../edgeweir/.git#tag=proto/v0.1.0,subdir=proto`） | 全部 exit 0；TS 与 Go 的内容哈希测试向量一致 |
+| 5 | 端到端 | `docker compose -f compose.e2e.yml up -d --build`、`bash scripts/e2e.sh` | 一次性 token 注册 → mTLS；错误 CA 指纹被拒；token 复用被拒；无客户端证书 401；创建 demo.test 后节点应用 revision #2（哈希一致）；`X-Cache: MISS` → `HIT`；API 显示节点在线与 revision；Playwright 冒烟通过 |
+| 6 | 部署 | `docker build .`、`docker compose -f compose.yml config -q`、`docker compose -f compose.baota.yml config -q` | 全部 exit 0；镜像约 265MB；docs/deploy/docker.md、baota.md 存在 |
+
+完整命令输出见最终汇报。
