@@ -129,7 +129,7 @@
 
 ## 首次正式发布前
 
-- [ ] 容器基础镜像按 digest、GitHub Actions 按完整 commit SHA 固定，两个仓库都要做（收尾延后 D5，[ADR-0017](docs/adr/0017-release-supply-chain.md) 收尾记录）；`helpers/certd/go.mod` 与节点一样固定到 `go 1.27.1`
+- [ ] 容器基础镜像按 digest、GitHub Actions 按完整 commit SHA 固定，两个仓库都要做（收尾延后 D5，[ADR-0017](docs/adr/0017-release-supply-chain.md) 收尾记录）
 - [ ] 两个仓库的 release 工作流（签名、provenance、推送镜像）按 [SECURITY.md](SECURITY.md) 演练一遍校验命令
 - [ ] 仓库公开后，edgeweir-node CI 的 proto 一致性检查从 GitHub 拉取控制面的 tag（MVP 期间用本地 `make proto-check`，收尾延后 D6）
 
