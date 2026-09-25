@@ -18,10 +18,12 @@ const vite = await createViteServer({
   appType: "spa",
   server: { middlewareMode: true, hmr: { server } },
 });
-const backendPrefixes = ["/api/", "/rpc/", "/install.sh", "/healthz"];
+// Server paths the SPA must never answer (same set as app.ts).
+const backendPaths = ["/api", "/rpc", "/downloads", "/install.sh", "/healthz"];
 server.on("request", (req, res) => {
   const url = req.url ?? "/";
-  if (backendPrefixes.some((p) => url.startsWith(p))) return void hono(req, res);
+  const path = url.split("?")[0] ?? url;
+  if (backendPaths.some((p) => path === p || path.startsWith(`${p}/`))) return void hono(req, res);
   vite.middlewares(req, res, () => void hono(req, res));
 });
 server.listen(env.PORT, env.HOST, () => {

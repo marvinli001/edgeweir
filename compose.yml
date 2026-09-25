@@ -16,6 +16,8 @@ x-console-env: &console-env
   EDGEWEIR_ANALYTICS: ${EDGEWEIR_ANALYTICS:-lite}
   EDGEWEIR_TELEMETRY: ${EDGEWEIR_TELEMETRY:-false}
   LOG_LEVEL: ${LOG_LEVEL:-info}
+  # Release mirror for install.sh; mount it below (see docs/deploy/docker.md).
+  EDGEWEIR_DOWNLOADS_DIR: ${EDGEWEIR_DOWNLOADS_DIR:-}
   # Reverse proxies whose X-Forwarded-For is believed (IPs/CIDRs, comma separated).
   EDGEWEIR_TRUSTED_PROXIES: ${EDGEWEIR_TRUSTED_PROXIES:-}
 
@@ -40,6 +42,9 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    # Release mirror for install.sh, with EDGEWEIR_DOWNLOADS_DIR=/srv/edgeweir-downloads:
+    # volumes:
+    #   - ./downloads:/srv/edgeweir-downloads:ro
     security_opt:
       - no-new-privileges:true
 

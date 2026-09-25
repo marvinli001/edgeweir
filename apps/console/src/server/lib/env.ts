@@ -32,6 +32,11 @@ const schema = z.object({
   EDGEWEIR_TELEMETRY: bool.default(false),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   EDGEWEIR_WEB_DIST: z.string().optional(),
+  /**
+   * Release mirror served at /downloads (edgeweir-node/latest,
+   * edgeweir-node/v<version>/<file>, cosign/v<version>/<file>). Unset: 404.
+   */
+  EDGEWEIR_DOWNLOADS_DIR: z.string().optional(),
 });
 
 /** Every environment variable the console reads (documented in .env.example). */

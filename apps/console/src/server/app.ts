@@ -11,6 +11,7 @@ import { SimpleCsrfProtectionHandlerPlugin } from "@orpc/server/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
+import { serveDownload } from "./downloads";
 import { API_KEY_HEADER, AUTH_BASE_PATH, isAllowedAuthRoute } from "./lib/auth";
 import { resolveClientIp, withClientIp } from "./lib/client-ip";
 import type { AppContext } from "./lib/context";
@@ -174,7 +175,20 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
     );
   });
 
-  app.all("/api/*", (c) => c.json({ error: "not found" }, 404));
+  app.on(["GET", "HEAD"], "/downloads/*", (c) =>
+    serveDownload(ctx.env.EDGEWEIR_DOWNLOADS_DIR, c.req.raw),
+  );
+
+  // Server paths never fall through to the SPA shell: an unknown API route or
+  // a file missing from the mirror must be a 404, not a 200 index.html
+  // (install.sh would otherwise "download" HTML).
+  const notFound = (c: HonoContext) => c.json({ error: "not found" }, 404);
+  for (const prefix of ["/api", "/rpc", "/downloads"]) {
+    app.all(prefix, notFound);
+    app.all(`${prefix}/*`, notFound);
+  }
+  app.all("/install.sh", notFound);
+  app.all("/healthz", notFound);
 
   if (opts.webDist) {
     const root = resolve(opts.webDist);
