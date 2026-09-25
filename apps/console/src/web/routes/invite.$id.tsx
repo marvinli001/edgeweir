@@ -47,7 +47,7 @@ function InvitePage() {
       await client.account.setActiveOrganization({ organizationId: joined.organizationId });
       queryClient.clear();
       toast.success(m.invite_joined({ organization: info.data?.organizationName ?? "" }));
-      await navigate({ to: "/" });
+      await navigate({ to: "/overview" });
     } catch (err) {
       setError(errorMessage(err));
     } finally {

@@ -58,7 +58,7 @@ function SetupPage() {
                 // The cached status still says "not initialized"; start from a clean cache.
                 queryClient.clear();
                 toast.success(m.setup_done());
-                await navigate({ to: "/" });
+                await navigate({ to: "/overview" });
               } finally {
                 setSigningIn(false);
               }

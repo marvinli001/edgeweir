@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import type * as React from "react";
 import { CopyButton } from "@/components/copy-button";
+import { LandingSettingsCard } from "@/components/landing-settings";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -83,6 +84,7 @@ function SystemSettingsPage() {
           )}
         </CardContent>
       </Card>
+      <LandingSettingsCard />
     </Page>
   );
 }

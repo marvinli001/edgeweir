@@ -21,7 +21,7 @@ export function AreaSwitch() {
         )}
       />
       <Link
-        to="/"
+        to="/overview"
         data-testid="area-console"
         aria-current={area === "console" ? "page" : undefined}
         className={cn(

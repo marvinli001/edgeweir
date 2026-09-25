@@ -24,7 +24,7 @@ function LoginPage() {
   const enter = async () => {
     // Start from a clean cache: nothing of a previous account may show up.
     queryClient.clear();
-    const target = search.redirect?.startsWith("/") ? search.redirect : "/";
+    const target = search.redirect?.startsWith("/") ? search.redirect : "/overview";
     await navigate({ to: target });
   };
   const hasPasskeys = typeof window !== "undefined" && "PublicKeyCredential" in window;

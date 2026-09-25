@@ -1,0 +1,229 @@
+/* Landing page templates: palettes and decorative motion. Loaded with the landing route only. */
+
+.landing-horizon {
+  --hz-black: #000;
+  --hz-ink: #141414;
+  --hz-paper: #f8f5f4;
+  --hz-line: #e2dcd9;
+  --hz-muted: #5c5654;
+  --hz-blue: #2b5ce6;
+  --hz-blue-hover: #1f4acb;
+  --hz-violet: #7b3ff2;
+  --hz-magenta: #e0368e;
+  --hz-orange: #ff6a1a;
+  color-scheme: light;
+}
+
+.landing-orbit {
+  font-family:
+    "Rubik Variable", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --ob-text: #183d6d;
+  --ob-sky: #e1f2ff;
+  --ob-deep: #041d38;
+  --ob-card: #062a52;
+  --ob-final: #1c416f;
+  --ob-orange: #ff8a3d;
+  color-scheme: light;
+}
+
+/* Dashes that travel along mesh links. */
+.hz-flow {
+  animation: hz-flow 2.4s linear infinite;
+}
+
+@keyframes hz-flow {
+  from {
+    stroke-dashoffset: 40;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* An expanding ring around a node or a point of presence. */
+.landing-ping {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: landing-ping 3.2s ease-out infinite;
+}
+
+@keyframes landing-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  80%,
+  100% {
+    transform: scale(4.5);
+    opacity: 0;
+  }
+}
+
+.landing-float {
+  animation: landing-float 7s ease-in-out infinite;
+}
+
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+.landing-twinkle {
+  animation: landing-twinkle 4s ease-in-out infinite;
+}
+
+@keyframes landing-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.landing-flame {
+  transform-box: fill-box;
+  transform-origin: top center;
+  animation: landing-flame 0.35s ease-in-out infinite alternate;
+}
+
+@keyframes landing-flame {
+  from {
+    transform: scaleY(0.82);
+  }
+  to {
+    transform: scaleY(1.12);
+  }
+}
+
+.landing-glow {
+  animation: landing-glow 12s ease-in-out infinite alternate;
+}
+
+@keyframes landing-glow {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(-4%, -6%) scale(1.08);
+  }
+}
+
+.landing-float-slow {
+  animation: landing-float 10s ease-in-out infinite;
+}
+
+.landing-bob {
+  animation: landing-bob 3.6s ease-in-out infinite;
+}
+
+@keyframes landing-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.landing-spin-slow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: landing-spin-slow 9s ease-in-out infinite;
+}
+
+@keyframes landing-spin-slow {
+  0%,
+  100% {
+    transform: rotate(-10deg) scale(1);
+  }
+  50% {
+    transform: rotate(12deg) scale(1.12);
+  }
+}
+
+.landing-puff {
+  animation: landing-puff 5s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: top center;
+}
+
+@keyframes landing-puff {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05) translateY(4px);
+  }
+}
+
+.landing-blink {
+  animation: landing-blink 1.8s ease-in-out infinite;
+}
+
+@keyframes landing-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.landing-comet {
+  transform: rotate(var(--angle, 0deg));
+  animation: landing-comet 6s ease-in-out infinite;
+}
+
+@keyframes landing-comet {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(var(--angle, 0deg));
+  }
+  50% {
+    transform: translate(10px, -8px) rotate(var(--angle, 0deg));
+  }
+}
+
+.landing-marquee {
+  animation: landing-marquee 40s linear infinite;
+}
+
+@keyframes landing-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-float-slow,
+  .landing-bob,
+  .landing-spin-slow,
+  .landing-puff,
+  .landing-blink,
+  .landing-marquee,
+  .landing-comet,
+  .hz-flow,
+  .landing-ping,
+  .landing-float,
+  .landing-twinkle,
+  .landing-flame,
+  .landing-glow {
+    animation: none;
+  }
+  .landing-ping {
+    opacity: 0;
+  }
+}

@@ -28,7 +28,7 @@ export function consoleNav(opts: { manageMembers: boolean }): NavItem[] {
   return [
     {
       title: m.nav_overview(),
-      to: "/",
+      to: "/overview",
       icon: icon(DashboardSquare01Icon),
       testId: "nav-overview",
       exact: true,

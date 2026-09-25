@@ -19,7 +19,7 @@ import { siteTabLabel } from "@/lib/site-tabs";
 
 const LIST_SIZE = 5;
 
-export const Route = createFileRoute("/_app/")({
+export const Route = createFileRoute("/_app/overview")({
   validateSearch: z.object({ range: analyticsRange.optional() }),
   component: OverviewPage,
 });

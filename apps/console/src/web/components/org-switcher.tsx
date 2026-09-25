@@ -44,7 +44,7 @@ export function OrgSwitcher() {
         <SidebarMenuItem>
           <SidebarMenuButton
             className="data-[slot=sidebar-menu-button]:p-1.5!"
-            render={<Link to={area === "admin" ? "/admin" : "/"} />}
+            render={<Link to={area === "admin" ? "/admin" : "/overview"} />}
           >
             <Logo className="size-5!" />
             <span className="text-base font-semibold">{m.app_name()}</span>

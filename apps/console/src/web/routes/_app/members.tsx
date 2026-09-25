@@ -22,7 +22,7 @@ import { errorMessage, orpc } from "@/lib/orpc";
 export const Route = createFileRoute("/_app/members")({
   beforeLoad: ({ context }) => {
     const role = context.me.activeOrganization?.role;
-    if (role !== "owner" && role !== "admin") throw redirect({ to: "/" });
+    if (role !== "owner" && role !== "admin") throw redirect({ to: "/overview" });
   },
   component: MembersPage,
 });

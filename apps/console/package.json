@@ -31,6 +31,7 @@
     "@edgeweir/db": "workspace:*",
     "@edgeweir/proto": "workspace:*",
     "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/rubik": "5.3.0",
     "@hono/node-server": "2.1.1",
     "@hugeicons/core-free-icons": "4.3.5",
     "@hugeicons/react": "1.1.10",
