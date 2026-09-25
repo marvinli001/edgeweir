@@ -582,6 +582,7 @@
   "site_rule_no_limit": "No limit",
   "site_rule_stale_while_revalidate": "Stale while revalidate (s)",
   "site_rule_stale_if_error": "Stale if error (s)",
+  "site_rule_cache_authorized": "Cache requests with Authorization",
   "site_rule_off": "Off",
   "site_cache_key_title": "Cache key & slicing",
   "site_cache_key_query": "Query string",

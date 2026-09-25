@@ -58,6 +58,8 @@ export interface CacheRuleModel {
   originCacheControl: "override" | "respect";
   staleWhileRevalidateSeconds?: number;
   staleIfErrorSeconds?: number;
+  /** Cache responses to requests with an Authorization header; defaults to false. */
+  cacheAuthorized?: boolean;
 }
 
 export interface OriginPoolSettingsModel {
@@ -247,6 +249,7 @@ function compileSite(model: SiteModel): Site {
               : OriginCacheControl.OVERRIDE,
           staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds ?? 0,
           staleIfErrorSeconds: r.staleIfErrorSeconds ?? 0,
+          cacheAuthorized: r.cacheAuthorized ?? false,
         }),
     ),
     cacheKey: key

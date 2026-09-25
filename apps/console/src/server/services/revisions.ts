@@ -143,6 +143,7 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
           originCacheControl: r.originCacheControl === "respect" ? "respect" : "override",
           staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
           staleIfErrorSeconds: r.staleIfErrorSeconds,
+          cacheAuthorized: r.cacheAuthorized,
         })),
       cacheKey: readCacheKey(s.cacheKey),
       rangeSlice: s.rangeSlice,

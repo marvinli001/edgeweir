@@ -582,6 +582,7 @@
   "site_rule_no_limit": "不限",
   "site_rule_stale_while_revalidate": "过期后后台更新（秒）",
   "site_rule_stale_if_error": "回源出错时用旧缓存（秒）",
+  "site_rule_cache_authorized": "缓存带 Authorization 头的请求",
   "site_rule_off": "关闭",
   "site_cache_key_title": "缓存键与分片",
   "site_cache_key_query": "查询参数",

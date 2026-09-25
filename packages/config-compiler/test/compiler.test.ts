@@ -90,6 +90,50 @@ describe("compileNodeConfig", () => {
     expect(c.contentHash).not.toBe(a.contentHash);
   });
 
+  it("compiles cacheAuthorized per rule, off unless a rule asks for it", () => {
+    const cfg = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [
+          site("a", {
+            cacheRules: [
+              {
+                id: "r1",
+                priority: 10,
+                pathPrefixes: ["/api/"],
+                extensions: [],
+                expression: "",
+                action: "cache",
+                edgeTtlSeconds: 60,
+                originCacheControl: "respect",
+                cacheAuthorized: true,
+              },
+              {
+                id: "r2",
+                priority: 20,
+                pathPrefixes: ["/"],
+                extensions: [],
+                expression: "",
+                action: "cache",
+                edgeTtlSeconds: 60,
+                originCacheControl: "override",
+              },
+            ],
+          }),
+        ],
+      },
+      1n,
+    );
+    expect(cfg.sites[0]?.cacheRules.map((r) => [r.id, r.cacheAuthorized])).toEqual([
+      ["r1", true],
+      ["r2", false],
+    ]);
+    // It is part of the content: switching it publishes a different hash.
+    const off = compileNodeConfig({ clusterId: "c", sites: [site("a")] }, 1n);
+    expect(off.sites[0]?.cacheRules.every((r) => !r.cacheAuthorized)).toBe(true);
+    expect(cfg.contentHash).not.toBe(off.contentHash);
+  });
+
   it("drops disabled sites", () => {
     const cfg = compileNodeConfig(
       { clusterId: "c", sites: [site("a"), site("b", { enabled: false })] },

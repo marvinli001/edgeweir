@@ -146,6 +146,36 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect(updated.revision.revision).toBe(revision.revision + 1);
   });
 
+  it("stores cacheAuthorized per rule (off by default) and compiles it", async () => {
+    const { site } = await tenant.sites.create({
+      name: "api",
+      domains: ["api.test"],
+      origins: [{ address: "origin-api" }],
+      cacheRules: [
+        { pathPrefixes: ["/public/"], originCacheControl: "respect", cacheAuthorized: true },
+        { pathPrefixes: ["/"] },
+      ],
+    });
+    expect(site.cacheRules.map((r) => r.cacheAuthorized)).toEqual([true, false]);
+    const compiled = async () =>
+      decodeNodeConfig((await latestRevision(ctx.db, clusterB))?.ir ?? new Uint8Array()).sites.find(
+        (s) => s.id === site.id,
+      );
+    expect(
+      (await compiled())?.cacheRules.map((r) => [r.match?.pathPrefixes[0], r.cacheAuthorized]),
+    ).toEqual([
+      ["/public/", true],
+      ["/", false],
+    ]);
+
+    const updated = await tenant.sites.update({
+      id: site.id,
+      cacheRules: [{ pathPrefixes: ["/public/"], originCacheControl: "respect" }],
+    });
+    expect(updated.site.cacheRules[0]?.cacheAuthorized).toBe(false);
+    expect((await compiled())?.cacheRules[0]?.cacheAuthorized).toBe(false);
+  });
+
   it("keeps S3 secrets encrypted, write-only and versioned", async () => {
     const created = await tenant.sites.create({
       name: "bucket",

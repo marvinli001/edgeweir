@@ -150,6 +150,7 @@ async function toSiteDtos(
           originCacheControl: c.originCacheControl === "respect" ? "respect" : "override",
           staleWhileRevalidateSeconds: c.staleWhileRevalidateSeconds,
           staleIfErrorSeconds: c.staleIfErrorSeconds,
+          cacheAuthorized: c.cacheAuthorized,
         })),
       originSettings: {
         policy: (pool?.policy ?? "weighted_random") as Site["originSettings"]["policy"],
@@ -411,6 +412,7 @@ async function insertCacheRules(tx: Tx, siteId: string, rules: CacheRuleInput[])
       originCacheControl: r.originCacheControl,
       staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
       staleIfErrorSeconds: r.staleIfErrorSeconds,
+      cacheAuthorized: r.cacheAuthorized,
     })),
   );
 }

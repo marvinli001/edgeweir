@@ -240,6 +240,19 @@ describe("M2 origin and cache inputs", () => {
     expect(cacheRuleInput.safeParse({ paths: ["no-slash"] }).success).toBe(false);
   });
 
+  it("does not cache requests with Authorization unless a rule allows it", () => {
+    expect(cacheRuleInput.parse({}).cacheAuthorized).toBe(false);
+    expect(cacheRuleInput.parse({ cacheAuthorized: true }).cacheAuthorized).toBe(true);
+    expect(cacheRuleInput.safeParse({ cacheAuthorized: "yes" }).success).toBe(false);
+    const parsed = siteCreateInput.parse({
+      name: "api",
+      domains: ["api.test"],
+      origins: [{ address: "origin.test" }],
+      cacheRules: [{ pathPrefixes: ["/"] }],
+    });
+    expect(parsed.cacheRules[0]?.cacheAuthorized).toBe(false);
+  });
+
   it("validates cache key policies", () => {
     expect(cacheKeyPolicy.parse({ headers: ["Accept-Language"] }).headers).toEqual([
       "accept-language",

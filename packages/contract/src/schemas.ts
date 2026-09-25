@@ -134,6 +134,11 @@ export const cacheRuleInput = z
     originCacheControl: originCacheControl.default("override"),
     staleWhileRevalidateSeconds: z.number().int().min(0).max(MAX_STALE).default(0),
     staleIfErrorSeconds: z.number().int().min(0).max(MAX_STALE).default(0),
+    /**
+     * Cache responses to requests that carry an Authorization header. Off, such
+     * requests bypass the cache (RFC 9111 section 3.5).
+     */
+    cacheAuthorized: z.boolean().default(false),
   })
   .refine((r) => r.maxSizeBytes === 0 || r.maxSizeBytes >= r.minSizeBytes, {
     message: "maximum size must not be below the minimum size",
@@ -214,6 +219,7 @@ export const cacheRule = z.object({
   originCacheControl,
   staleWhileRevalidateSeconds: z.number().int(),
   staleIfErrorSeconds: z.number().int(),
+  cacheAuthorized: z.boolean(),
 });
 
 export const site = z.object({

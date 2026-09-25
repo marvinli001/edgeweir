@@ -78,6 +78,7 @@ interface RuleDraft {
   respect: boolean;
   staleWhileRevalidate: string;
   staleIfError: string;
+  cacheAuthorized: boolean;
 }
 
 const bytesToKb = (bytes: number) => (bytes > 0 ? String(bytes / 1024) : "");
@@ -95,7 +96,7 @@ const toSeconds = (value: string) => {
 const moreCount = (r: RuleDraft) =>
   [r.paths, r.statusCodes, r.minSizeKb, r.maxSizeKb, r.staleWhileRevalidate, r.staleIfError].filter(
     (v) => v.trim() !== "",
-  ).length;
+  ).length + (r.cacheAuthorized ? 1 : 0);
 
 const toDraft = (r: CacheRule): RuleDraft => ({
   key: nextDraftKey(),
@@ -110,6 +111,7 @@ const toDraft = (r: CacheRule): RuleDraft => ({
   respect: r.originCacheControl === "respect",
   staleWhileRevalidate: secondsOrEmpty(r.staleWhileRevalidateSeconds),
   staleIfError: secondsOrEmpty(r.staleIfErrorSeconds),
+  cacheAuthorized: r.cacheAuthorized,
 });
 
 const newRule = (): RuleDraft => ({
@@ -125,6 +127,7 @@ const newRule = (): RuleDraft => ({
   respect: false,
   staleWhileRevalidate: "",
   staleIfError: "",
+  cacheAuthorized: false,
 });
 
 /** Rows only move up and down. */
@@ -178,6 +181,7 @@ function CacheRulesCard({ site }: { site: Site }) {
               originCacheControl: r.respect ? "respect" : "override",
               staleWhileRevalidateSeconds: toSeconds(r.staleWhileRevalidate),
               staleIfErrorSeconds: toSeconds(r.staleIfError),
+              cacheAuthorized: r.cacheAuthorized,
             })),
           });
         }}
@@ -471,6 +475,15 @@ function SortableRule({
                 placeholder={m.site_rule_off()}
                 disabled={bypass}
                 onChange={(staleIfError) => onChange({ staleIfError })}
+              />
+              <SwitchField
+                className="sm:col-span-2 lg:col-span-3"
+                id={id("authorized")}
+                label={m.site_rule_cache_authorized()}
+                checked={row.cacheAuthorized}
+                disabled={bypass}
+                onCheckedChange={(cacheAuthorized) => onChange({ cacheAuthorized })}
+                testId="cache-rule-authorized"
               />
             </div>
           </CollapsibleContent>
