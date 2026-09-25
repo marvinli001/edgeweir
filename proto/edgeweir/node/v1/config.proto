@@ -31,6 +31,11 @@ message NodeConfig {
   repeated Site sites = 6;
   // TLS certificates referenced by sites.
   repeated CertificateRef certificates = 7;
+  // CIDRs origins may use although they are special-purpose addresses
+  // (loopback, link-local, private, CGNAT...), which nodes otherwise refuse
+  // both as configured literals and as DNS answers. Set by the platform
+  // administrator; empty by default. Added in v0.2.1.
+  repeated string origin_allowed_cidrs = 8;
 }
 
 // NodeConfigDiff transforms the config at base_revision into revision.
@@ -54,6 +59,8 @@ message NodeConfigDiff {
   repeated string removed_site_ids = 8;
   // Full certificate reference set of the target revision.
   repeated CertificateRef certificates = 9;
+  // Full origin allow list of the target revision (NodeConfig field 8).
+  repeated string origin_allowed_cidrs = 10;
 }
 
 // ListenerProtocol is the application protocol of a listener.
@@ -264,6 +271,11 @@ message CacheRule {
   // Serve a stale object for this long after it expired when the origin
   // fails (RFC 5861); 0 disables it.
   uint32 stale_if_error_seconds = 8;
+  // Cache responses to requests that carry an Authorization header. Off
+  // (the default), such requests bypass the cache and their responses are
+  // never stored (RFC 9111 section 3.5). Added in v0.2.1; older agents
+  // ignore it and keep their previous behavior.
+  bool cache_authorized = 9;
 }
 
 // CacheRuleMatch is the condition of a cache rule. Empty lists match all
