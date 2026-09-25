@@ -7,6 +7,8 @@
 #   second organization and member, member-only console, site editing, clusters,
 #   node groups, audit log and English (Playwright) -> the node keeps serving the
 #   edited site -> disabled nodes are refused, deleted nodes stay revoked.
+#   Analytics: the node's per-minute stats reach the console API, and the home,
+#   site and platform analytics show them (Playwright).
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -251,6 +253,24 @@ if ! $SKIP_UI; then
   BODY="$(curl -fsS -H 'Host: www.tenant.test' "$NODE_HTTP/e2e-tenant")"
   grep -q "^GET /e2e-tenant " <<<"$BODY" || fail "www.tenant.test did not reach whoami: $BODY"
   pass "curl -H 'Host: www.tenant.test' -> whoami (domain and origin edited by the tenant member)"
+fi
+
+step "analytics: the node's per-minute stats reach the console"
+SITE_ID="$(jq -r .site.id <<<"$SITE")"
+site_traffic() { api GET "/analytics/traffic?range=1h&siteId=$SITE_ID"; }
+# The agent uploads completed minutes once a minute.
+stats_arrived() { [[ "$(site_traffic | jq -r '.totals.requests >= 3 and .totals.cacheHits >= 1 and .totals.status2xx >= 3')" == "true" ]]; }
+wait_for 180 "demo.test requests, cache hits and 2xx responses in the 1h analytics" stats_arrived
+pass "demo.test in the last hour: $(site_traffic | jq -c '.totals | {requests, cacheHits, cacheMisses, status2xx, status4xx, bytesSent}')"
+[[ "$(api GET "/analytics/top-nodes?range=1h" | jq -r '.[0].name')" == "edge-e2e-1" ]] || fail "top nodes should list edge-e2e-1"
+pass "top nodes: $(api GET "/analytics/top-nodes?range=1h" | jq -c '[.[] | {name, parentName, requests}]')"
+
+if ! $SKIP_UI; then
+  step "Playwright analytics: home lists and charts, stars, site and platform analytics"
+  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    E2E_NODE_NAME="edge-e2e-1" pnpm --filter @edgeweir/console run test:e2e e2e/analytics.spec.ts \
+    || fail "Playwright analytics test failed"
+  pass "Playwright analytics passed"
 fi
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
