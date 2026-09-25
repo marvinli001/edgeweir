@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { login } from "./helpers";
 
 const email = process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test";
 const password = process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123";
@@ -14,10 +15,7 @@ test("login -> admin clusters & nodes -> console sites, then switch to English",
   await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
   await expect(page.getByTestId("login-submit")).toHaveText("登录");
-  await page.getByLabel("邮箱").fill(email);
-  await page.getByLabel("密码").fill(password);
-  await page.getByTestId("login-submit").click();
-  await expect(page.getByTestId("page-title")).toHaveText("概览");
+  await login(page, email, password);
 
   // Admins switch to the admin area for clusters & nodes.
   await page.getByTestId("area-admin").click();
@@ -39,7 +37,7 @@ test("login -> admin clusters & nodes -> console sites, then switch to English",
 
   // The "add node" dialog produces a one-time install command with the CA pin.
   await page.getByTestId("add-node").click();
-  await page.getByLabel("节点名称").fill("edge-ui");
+  await page.getByLabel("节点名称", { exact: true }).fill("edge-ui");
   await page.getByTestId("generate-install-command").click();
   const command = page.getByTestId("install-command");
   await expect(command).toContainText("/install.sh | sudo bash -s --");
@@ -55,10 +53,13 @@ test("login -> admin clusters & nodes -> console sites, then switch to English",
   const sites = page.getByTestId("sites-table");
   await expect(sites.getByText("demo.test")).toBeVisible();
   await page.getByTestId("new-site").click();
-  await page.getByLabel("名称").fill("ui-site");
-  await page.getByLabel("域名").fill("ui.test");
-  await page.getByLabel("源站地址").fill("whoami");
+  await page.getByLabel("名称", { exact: true }).fill("ui-site");
+  await page.getByLabel("域名", { exact: true }).fill("ui.test");
+  await page.getByLabel("源站地址", { exact: true }).fill("whoami");
   await page.getByTestId("create-site-submit").click();
+  // The new site opens on its detail page; the list shows it too.
+  await expect(page.getByTestId("page-title")).toHaveText("ui-site");
+  await page.getByTestId("nav-sites").click();
   await expect(sites.getByText("ui.test")).toBeVisible();
 
   // i18n: switch to English from the user menu; the UI reloads in English.

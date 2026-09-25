@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# End-to-end test of the Phase 0 loop against compose.e2e.yml:
-#   enroll a node with a one-time token -> mTLS -> create site demo.test via the
-#   public API -> node applies the new revision -> X-Cache MISS then HIT ->
-#   console API shows the node online with its revision -> Playwright smoke.
+# End-to-end test against compose.e2e.yml:
+#   Phase 0: enroll a node with a one-time token -> mTLS -> create site demo.test
+#   via the public API -> node applies the new revision -> X-Cache MISS then HIT
+#   -> console API shows the node online with its revision -> Playwright smoke.
+#   MVP M1: setup needs the setup token from the console log (Playwright) ->
+#   second organization and member, member-only console, site editing, clusters,
+#   node groups, audit log and English (Playwright) -> the node keeps serving the
+#   edited site -> disabled nodes are refused, deleted nodes stay revoked.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -86,14 +90,32 @@ step "wait for the console"
 wait_for 180 "console /healthz" curl -fsS "$CONSOLE/healthz"
 pass "console healthy: $(curl -fsS "$CONSOLE/healthz")"
 
-step "first-run setup (platform admin + default organization + default cluster)"
-if [[ "$(api GET /system/status | jq -r .initialized)" == "false" ]]; then
-  api POST /system/setup "$(jq -nc --arg e "$ADMIN_EMAIL" --arg p "$ADMIN_PASSWORD" \
-    '{name:"E2E Admin", email:$e, password:$p, organizationName:"E2E Org"}')" >/dev/null
-  pass "setup completed"
-else
+step "first-run setup needs the one-time setup token from the console log"
+[[ "$(api GET /system/status | jq -r .initialized)" == "false" ]] ||
   fail "the e2e environment is not fresh (console already initialized); reset it with: docker compose -f compose.e2e.yml down -v && docker compose -f compose.e2e.yml up -d --build"
+setup_token() {
+  "${COMPOSE[@]}" logs console 2>/dev/null | grep -o '"setupToken":"ews_[A-Za-z0-9_-]*"' | tail -n1 | cut -d'"' -f4
+}
+wait_for 30 "setup token in the console log" test -n "$(setup_token)"
+SETUP_TOKEN="$(setup_token)"
+pass "console log shows setup token ${SETUP_TOKEN:0:8}… ($("${COMPOSE[@]}" logs console 2>/dev/null | grep -c '"setupToken"') log line(s))"
+REFUSED="$(curl -sS -w ' %{http_code}' -X POST "$CONSOLE/api/v1/system/setup" -H 'content-type: application/json' \
+  --data "$(jq -nc --arg e "$ADMIN_EMAIL" --arg p "$ADMIN_PASSWORD" \
+    '{setupToken:"ews_wrong", name:"Intruder", email:$e, password:$p, organizationName:"X"}')")"
+[[ "$REFUSED" == *'"code":"SETUP_TOKEN_INVALID"'*' 403' ]] || fail "setup without the token must be refused, got: $REFUSED"
+pass "setup with a wrong token refused: $REFUSED"
+
+if ! $SKIP_UI; then
+  step "Playwright: setup wizard with the setup token (platform admin + default organization + default cluster)"
+  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    E2E_SETUP_TOKEN="$SETUP_TOKEN" pnpm --filter @edgeweir/console run test:e2e e2e/setup.spec.ts \
+    || fail "Playwright setup failed"
+else
+  api POST /system/setup "$(jq -nc --arg t "$SETUP_TOKEN" --arg e "$ADMIN_EMAIL" --arg p "$ADMIN_PASSWORD" \
+    '{setupToken:$t, name:"E2E Admin", email:$e, password:$p, organizationName:"E2E Org"}')" >/dev/null
 fi
+[[ "$(api GET /system/status | jq -r .initialized)" == "true" ]] || fail "setup did not complete"
+pass "setup completed with the setup token"
 
 step "sign in and create an API AccessKey"
 curl -fsS -c "$COOKIES" -o /dev/null "$CONSOLE/api/auth/sign-in/email" \
@@ -200,9 +222,56 @@ pass "cluster latest revision #$REVISION, $(jq -r .onlineNodeCount <<<"$CLUSTER"
 if ! $SKIP_UI; then
   step "Playwright smoke: login -> admin clusters & nodes -> console sites"
   E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-    E2E_EXPECT_REVISION="$REVISION" pnpm --filter @edgeweir/console run test:e2e \
+    E2E_EXPECT_REVISION="$REVISION" pnpm --filter @edgeweir/console run test:e2e e2e/smoke.spec.ts \
     || fail "Playwright smoke test failed"
   pass "Playwright smoke passed"
+
+  step "Playwright M1: organizations, members, site editing, clusters, node groups, audit, English"
+  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    E2E_NODE_NAME="edge-e2e-1" pnpm --filter @edgeweir/console run test:e2e e2e/m1.spec.ts \
+    || fail "Playwright M1 test failed"
+  pass "Playwright M1 passed"
+
+  step "the node serves the site the tenant member edited in the UI"
+  NODE="$(node_json)"
+  CLUSTER="$(api GET "/clusters/$CLUSTER_ID")"
+  [[ "$(jq -r .nodeGroupName <<<"$NODE")" == "group-a" && "$(jq -r .regionName <<<"$NODE")" == "华东" ]] ||
+    fail "node should be in node group group-a (华东): $(jq -c '{nodeGroupName, regionName}' <<<"$NODE")"
+  LATEST="$(jq -r .latestRevision.revision <<<"$CLUSTER")"
+  node_synced() { [[ "$(node_json | jq -r '.online and .applyState == "applied"')" == "true" && "$(node_json | jq -r .appliedRevision)" == "$LATEST" ]]; }
+  wait_for 60 "node online on revision #$LATEST after the move" node_synced
+  pass "node $(jq -r .name <<<"$NODE") in group-a (华东), online, applied #$LATEST = cluster latest #$LATEST"
+  TENANT_SITE="$(api GET "/sites?search=tenant-site" | jq -c '.items[0]')"
+  [[ "$(jq -r '.domains | join(",")' <<<"$TENANT_SITE")" == "tenant.test,www.tenant.test" &&
+    "$(jq -r '.origins[0].address' <<<"$TENANT_SITE")" == "whoami" &&
+    "$(jq -r .organizationName <<<"$TENANT_SITE")" == "Tenant Org" ]] ||
+    fail "tenant site not as edited in the UI: $TENANT_SITE"
+  wait_for 30 "www.tenant.test routed to the edited origin" \
+    curl -fsS -o /dev/null -H 'Host: www.tenant.test' "$NODE_HTTP/e2e-tenant-probe"
+  BODY="$(curl -fsS -H 'Host: www.tenant.test' "$NODE_HTTP/e2e-tenant")"
+  grep -q "^GET /e2e-tenant " <<<"$BODY" || fail "www.tenant.test did not reach whoami: $BODY"
+  pass "curl -H 'Host: www.tenant.test' -> whoami (domain and origin edited by the tenant member)"
 fi
+
+step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
+NODE_ID="$(node_json | jq -r .id)"
+api POST "/nodes/$NODE_ID/disable" >/dev/null
+node_refused() { "${COMPOSE[@]}" logs --since 90s node 2>&1 | grep -qi "rejected this node's credentials"; }
+wait_for 60 "agent reports the console refusing the disabled node" node_refused
+pass "disabled node refused: $("${COMPOSE[@]}" logs --since 90s node 2>&1 | grep -i "rejected this node's credentials" | tail -n1 | cut -c1-160)"
+api POST "/nodes/$NODE_ID/enable" >/dev/null
+node_heartbeat_after() { [[ "$(api GET "/nodes/$NODE_ID" | jq -r .lastSeenAt)" > "$1" ]]; }
+ENABLED_AT="$(date -u +%Y-%m-%dT%H:%M:%S)"
+wait_for 60 "node heartbeat after enable" node_heartbeat_after "$ENABLED_AT"
+pass "enabled node reconnected: $(api GET "/nodes/$NODE_ID" | jq -c '{status, online, lastSeenAt}')"
+DELETED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+api DELETE "/nodes/$NODE_ID" >/dev/null
+node_revoked() { "${COMPOSE[@]}" logs --since "$DELETED_AT" node 2>&1 | grep -qi "rejected this node's credentials"; }
+wait_for 60 "agent refused after deletion" node_revoked
+[[ "$(api GET "/audit-logs?action=node.delete" | jq -r '.items[0] | "\(.actorName)|\(.targetName)"')" == "E2E Admin|edge-e2e-1" ]] ||
+  fail "node.delete audit entry lacks names"
+pass "deleted node revoked and refused: $("${COMPOSE[@]}" logs --since "$DELETED_AT" node 2>&1 | grep -i "rejected this node's credentials" | tail -n1 | cut -c1-160)"
+curl -fsS -o /dev/null -H 'Host: demo.test' "$NODE_HTTP/after-revoke" || fail "node must keep serving last-known-good config"
+pass "node keeps serving its last-known-good configuration after being refused"
 
 printf '\n\033[1;32mE2E OK\033[0m\n'
