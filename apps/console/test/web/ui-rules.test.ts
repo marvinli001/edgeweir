@@ -58,4 +58,22 @@ describe("UI rules (ADR-0003)", () => {
     );
     expect([...scanned].sort()).toEqual([...needed].sort());
   });
+
+  it("keeps the landing templates neutral: no other vendor's name in their code or copy", () => {
+    // The templates must not read as a copy of a commercial CDN's site (mvp.md 0.1).
+    const vendors = /fastly|bunny|cloudflare|akamai|cloudfront|gcore|edgio|vercel|netlify/i;
+    const files = [
+      ...globSync("src/web/components/landing/**/*", { cwd: root }),
+      "src/web/components/landing-settings.tsx",
+      "src/web/routes/index.tsx",
+    ];
+    expect(files.length).toBeGreaterThan(4);
+    for (const file of files) expect(read(file), file).not.toMatch(vendors);
+    for (const locale of ["zh-CN", "en"]) {
+      const messages = JSON.parse(read(`messages/${locale}.json`)) as Record<string, string>;
+      for (const [key, text] of Object.entries(messages)) {
+        if (key.startsWith("landing_")) expect(text, `${locale} ${key}`).not.toMatch(vendors);
+      }
+    }
+  });
 });

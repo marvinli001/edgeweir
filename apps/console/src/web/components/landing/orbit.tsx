@@ -78,7 +78,7 @@ function useScrolled(threshold = 24) {
   return scrolled;
 }
 
-/** Navy space hero, sky-blue body, white cards and orange accents (after bunny.net). */
+/** Navy space hero, sky-blue body, white cards and orange accents. */
 export function OrbitLanding(props: LandingProps) {
   const { page } = props;
   const { brandName, contactEmail, icp } = page.settings;

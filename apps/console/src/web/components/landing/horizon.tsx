@@ -36,7 +36,7 @@ const outlineDark =
 const outlineLight =
   "inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/80 px-5 text-sm font-medium text-white transition-colors hover:bg-white hover:text-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
 
-/** Black hero, warm paper sections and a violet-to-orange glow (after fastly.com/products/cdn). */
+/** Black hero, warm paper sections and a violet-to-orange glow. */
 export function HorizonLanding(props: LandingProps) {
   const { page } = props;
   const { brandName, contactEmail, icp } = page.settings;
