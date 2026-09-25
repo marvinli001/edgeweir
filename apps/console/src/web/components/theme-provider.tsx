@@ -28,9 +28,11 @@ type ThemeProviderState = {
 
 const COLOR_SCHEME_QUERY = "(prefers-color-scheme: dark)";
 
-// public/theme-init.js marks the first paint of the landing route as light-locked.
-if (typeof document !== "undefined") {
-  setInitialLightLock(document.documentElement.dataset.themeLock === "light");
+// public/theme-init.js marks the first paint of the landing route as light-locked; read it once
+// (a hot reload of this module must not lock again).
+if (typeof document !== "undefined" && document.documentElement.dataset.themeLock === "light") {
+  document.documentElement.removeAttribute("data-theme-lock");
+  setInitialLightLock(true);
 }
 
 const ThemeProviderContext = React.createContext<ThemeProviderState | undefined>(undefined);
