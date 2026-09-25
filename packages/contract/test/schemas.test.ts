@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { contract, domainName, extension, siteCreateInput } from "../src/index";
+import {
+  auditLogListInput,
+  contract,
+  domainName,
+  errorCodes,
+  errorDefs,
+  extension,
+  isErrorCode,
+  reasonText,
+  regionCode,
+  revisionReasonCodes,
+  revisionReasonDefs,
+  siteCreateInput,
+  siteListInput,
+  siteUpdateInput,
+  userCreateInput,
+} from "../src/index";
 
 describe("domainName", () => {
   it("normalises case and whitespace", () => {
@@ -70,5 +86,77 @@ describe("contract", () => {
     walk(contract);
     expect(new Set(routes).size).toBe(routes.length);
     expect(routes).toContain("POST /sites");
+  });
+});
+
+describe("siteUpdateInput", () => {
+  it("accepts partial updates and validates what is present", () => {
+    expect(siteUpdateInput.parse({ id: "8f2f9c3a-2c61-4f6b-9f68-2f43b8a3a0d1" })).toEqual({
+      id: "8f2f9c3a-2c61-4f6b-9f68-2f43b8a3a0d1",
+    });
+    const parsed = siteUpdateInput.parse({
+      id: "8f2f9c3a-2c61-4f6b-9f68-2f43b8a3a0d1",
+      domains: ["*.Demo.test"],
+    });
+    expect(parsed.domains).toEqual(["*.demo.test"]);
+    expect(
+      siteUpdateInput.safeParse({ id: "8f2f9c3a-2c61-4f6b-9f68-2f43b8a3a0d1", domains: [] })
+        .success,
+    ).toBe(false);
+    expect(
+      siteUpdateInput.safeParse({ id: "8f2f9c3a-2c61-4f6b-9f68-2f43b8a3a0d1", origins: [] })
+        .success,
+    ).toBe(false);
+  });
+});
+
+describe("list inputs", () => {
+  it("coerce query-string numbers and apply defaults", () => {
+    expect(siteListInput.parse({})).toEqual({ page: 1, pageSize: 20 });
+    expect(siteListInput.parse({ page: "3", pageSize: "50" })).toMatchObject({
+      page: 3,
+      pageSize: 50,
+    });
+    expect(siteListInput.safeParse({ pageSize: 1000 }).success).toBe(false);
+    expect(auditLogListInput.parse({ offset: "40" })).toMatchObject({ limit: 50, offset: 40 });
+    expect(auditLogListInput.safeParse({ from: "yesterday" }).success).toBe(false);
+  });
+});
+
+describe("identity inputs", () => {
+  it("normalise region codes and user e-mails", () => {
+    expect(regionCode.parse(" CN-East ")).toBe("cn-east");
+    expect(regionCode.safeParse("east asia").success).toBe(false);
+    const user = userCreateInput.parse({
+      name: "Member",
+      email: " Member@Example.COM ",
+      password: "correct horse battery",
+    });
+    expect(user).toMatchObject({ email: "member@example.com", isAdmin: false, role: "member" });
+    expect(
+      userCreateInput.safeParse({ name: "x", email: "x@example.com", password: "short" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("error and reason codes", () => {
+  it("are stable identifiers with HTTP error statuses", () => {
+    expect(errorCodes.length).toBeGreaterThan(10);
+    for (const code of errorCodes) {
+      expect(code).toMatch(/^[A-Z][A-Z0-9_]+$/);
+      expect(errorDefs[code].status).toBeGreaterThanOrEqual(400);
+      expect(errorDefs[code].status).toBeLessThan(500);
+    }
+    expect(isErrorCode("DOMAIN_IN_USE")).toBe(true);
+    expect(isErrorCode("toString")).toBe(false);
+  });
+
+  it("render revision reasons in English with every declared parameter", () => {
+    expect(reasonText("site_updated", { site: "demo" })).toBe("site demo updated");
+    expect(reasonText("rollback", { revision: 3 })).toBe("rollback to revision 3");
+    for (const code of revisionReasonCodes) {
+      const placeholders = [...revisionReasonDefs[code].en.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
+      expect(placeholders.sort(), code).toEqual([...revisionReasonDefs[code].params].sort());
+    }
   });
 });
