@@ -1,6 +1,6 @@
 # 路线图
 
-本文件是 Edgeweir 的功能全集与阶段划分，内容来自 [BOOTSTRAP.md](BOOTSTRAP.md) §3（Phase 0）和 §4（MVP、v1、v2），以及对标调研补充的条目（[docs/research/benchmark.md](docs/research/benchmark.md)），覆盖 edgeweir（控制面）和 edgeweir-node（节点）两个仓库。每个阶段内按领域分组；勾选表示已完成并合入 master。设计依据见 [docs/adr/](docs/adr/README.md)。
+本文件是 Edgeweir 的功能全集与阶段划分，内容来自 [BOOTSTRAP.md](BOOTSTRAP.md) §3（Phase 0）和 §4（MVP、v1、v2），对标调研补充的条目（[docs/research/benchmark.md](docs/research/benchmark.md)），以及 2026-09-25 收尾审计的延后项（[docs/audits/2026-09-25-wrapup.md](docs/audits/2026-09-25-wrapup.md) 第 3 节，标为「收尾延后」，归属见 [docs/specs/mvp.md](docs/specs/mvp.md) 0.5），覆盖 edgeweir（控制面）和 edgeweir-node（节点）两个仓库。每个阶段内按领域分组；勾选表示已完成并合入 master。设计依据见 [docs/adr/](docs/adr/README.md)。
 
 ## Phase 0（已完成于本仓库初始化）
 
@@ -37,7 +37,7 @@
 ### 部署
 
 - [x] 多阶段 Dockerfile：非 root 运行、镜像尽量小、`ROLE=app|worker|all`（默认 `all`）
-- [x] `compose.yml`：console + postgres:18；`--profile analytics` 加 ClickHouse，`--profile cache` 加 Valkey
+- [x] `compose.yml`：console + postgres:18；`--profile analytics` 加 ClickHouse，`--profile cache` 加 Valkey（这两个容器是预留的，控制台目前都不使用）
 - [x] `compose.baota.yml` + `docs/deploy/baota.md`：宝塔 Docker 编排导入、反代站点到 `:3000`；节点端口 `:8443` 直接暴露或用 stream 透传，TLS 不能由宝塔 nginx 终结
 - [x] `docs/deploy/docker.md`
 
@@ -57,6 +57,7 @@
 - [x] 平台用户管理：创建、平台管理员、停用
 - [x] 账户安全：修改密码、TOTP、passkey；组织可要求两步验证
 - [x] 一次性 setup token 保护首次初始化
+- [x] 认证加固（收尾）：`/api/auth/*` 只放行界面用到的端点，API key 只在 `/api/v1` 生效；客户端 IP 只信任 `EDGEWEIR_TRUSTED_PROXIES` 的转发头；登录限速计数存数据库；登录、改密码、两步验证、passkey、API key 变更写审计
 
 ### 源站
 
@@ -68,6 +69,7 @@
 - [x] 回源 HTTPS 证书校验（默认开启，可按站点关闭）
 - [x] 对象存储源站鉴权
 - [x] 回源连接池与超时、WebSocket 透传
+- [x] 源站地址限制：拒绝回环、私网、链路本地等特殊用途地址，平台允许清单放行；回环检测（`CDN-Loop`）（收尾）
 
 ### 缓存
 
@@ -78,6 +80,8 @@
 - [x] Range 和 slice
 - [x] 刷新：URL、前缀、全量
 - [x] 预热
+- [x] 带 `Authorization` 的请求默认不缓存，规则可显式放行（收尾）
+- [x] 刷新预热按组织限频；节点端清缓存标记有上限，溢出时合并为站点级标记；离线超过 7 天或停用期间错过的刷新补发整站刷新（收尾）
 
 ### 协议与证书
 
@@ -88,6 +92,7 @@
 - [ ] HTTP/3
 - [ ] Gzip、Brotli、Zstd
 - [ ] 最低 TLS 版本、OCSP stapling、ZeroSSL
+- [ ] 最低 agent 版本门槛：不满足的节点拿不到需要新语义的配置，节点拒绝未知枚举值（proto v0.3.0，随 M3；收尾延后 D1）
 
 ### 访问控制与规则
 
@@ -111,7 +116,8 @@
 
 ### 运维
 
-- [x] 分钟级统计：请求数、流量、带宽、命中率、状态码（lite 模式；小时/天汇总与清理待做）
+- [x] 分钟级统计：请求数、流量、带宽、命中率、状态码（lite 模式）
+- [ ] 统计上报幂等（批次序号）、小时 / 天汇总与分钟明细保留期（M5，收尾延后 D2）
 - [ ] 分钟级统计：Top URL、Top IP
 - [ ] 告警渠道：邮件、Webhook、钉钉、企业微信、Telegram
 - [x] 审计日志
@@ -119,7 +125,13 @@
 - [ ] 节点自升级（验签、按节点组灰度、失败回滚）
 - [ ] 访问日志采样上报与检索
 - [ ] AccessKey 吊销与只读范围
-- [ ] 性能基线（bench）与备份恢复演练
+- [ ] 性能基线（bench）与备份恢复演练（恢复后节点继续接受新 revision：配置 epoch 或跳过节点已应用的最大 revision，收尾延后 D3）
+
+## 首次正式发布前
+
+- [ ] 容器基础镜像按 digest、GitHub Actions 按完整 commit SHA 固定，两个仓库都要做（收尾延后 D5，[ADR-0017](docs/adr/0017-release-supply-chain.md) 收尾记录）；`helpers/certd/go.mod` 与节点一样固定到 `go 1.27.1`
+- [ ] 两个仓库的 release 工作流（签名、provenance、推送镜像）按 [SECURITY.md](SECURITY.md) 演练一遍校验命令
+- [ ] 仓库公开后，edgeweir-node CI 的 proto 一致性检查从 GitHub 拉取控制面的 tag（MVP 期间用本地 `make proto-check`，收尾延后 D6）
 
 ## v1
 
@@ -148,6 +160,7 @@
 - [ ] 节点租期
 - [ ] 组内缓存索引节点
 - [ ] 源站主动健康检查、会话保持
+- [ ] 预热：前缀和全站预热；按缓存键变体（例如移动端）预热，目前只预热桌面变体（收尾延后 D4）
 
 ### 日志
 

@@ -1,8 +1,8 @@
 # MVP 规格
 
-来源：[BOOTSTRAP.md](../../BOOTSTRAP.md) §2、§4，[ROADMAP.md](../../ROADMAP.md) 的 MVP 部分，[PROGRESS.md](../../PROGRESS.md) 的已知限制，2026-09-25 确定的界面规范（[ADR-0003](../adr/0003-ui-shadcn-preset.md) 决策 7–9、[ADR-0007](../adr/0007-auth-better-auth-multitenancy.md) 更新记录），以及对标调研（[docs/research/benchmark.md](../research/benchmark.md)）。标有「对标补充」的条目是 2026-09-25 对照调研补进来的。
+来源：[BOOTSTRAP.md](../../BOOTSTRAP.md) §2、§4，[ROADMAP.md](../../ROADMAP.md) 的 MVP 部分，[PROGRESS.md](../../PROGRESS.md) 的已知限制，2026-09-25 确定的界面规范（[ADR-0003](../adr/0003-ui-shadcn-preset.md) 决策 7–9、[ADR-0007](../adr/0007-auth-better-auth-multitenancy.md) 更新记录），对标调研（[docs/research/benchmark.md](../research/benchmark.md)），以及 2026-09-25 的收尾审计（[docs/audits/2026-09-25-wrapup.md](../audits/2026-09-25-wrapup.md)）。标有「对标补充」的条目是 2026-09-25 对照调研补进来的，标有「收尾延后」的条目来自收尾审计第 3 节（见 0.5）。
 
-MVP 分成 6 个里程碑，每个里程碑对应一个 `/goal` 会话（第 8 节）。按 M1 → M6 的顺序做，后一个里程碑依赖前一个的页面和数据模型。每个会话结束时更新 PROGRESS.md 和 ROADMAP.md 的勾选。M1 已于 2026-09-25 完成（PROGRESS「MVP M1」）。
+MVP 分成 6 个里程碑，每个里程碑对应一个 `/goal` 会话（第 8 节）。按 M1 → M6 的顺序做，后一个里程碑依赖前一个的页面和数据模型。每个会话结束时更新 PROGRESS.md 和 ROADMAP.md 的勾选。M1、M2 已于 2026-09-25 完成（PROGRESS「MVP M1」「MVP M2」），M2 在收尾时合入 `master`；下一个是 M3。
 
 ## 0. 所有里程碑都要遵守
 
@@ -22,11 +22,12 @@ MVP 分成 6 个里程碑，每个里程碑对应一个 `/goal` 会话（第 8 �
 
 `/` 是可选的公开落地页：平台管理员在后台系统设置里选模板（`landing` 过程），关闭（默认）时 `/` 直接跳到 `/overview`（未登录再去 `/login`）。落地页不属于控制台，不放管理功能，文案规则见 0.1「营销页例外」。
 
-新功能按下表归属：
+功能按下表归属（「已有」是当前代码里的页面，新功能放进「计划」对应的一侧）：
 
-| 控制台（`/overview` 等） | 后台（`/admin`） |
-| --- | --- |
-| 概览、网站（详情页含域名、源站、缓存、HTTPS、规则、统计等 Tab）、证书、刷新预热、统计、IP 名单、告警订阅、AccessKey、组织成员、账户安全、偏好设置 | 平台概览、集群 / 节点组 / 区域 / 节点、配置版本、组织与用户、平台 DNS（服务商、CNAME 域、线路）、告警渠道、审计日志、系统设置（SMTP、GeoIP 数据、setup token 等） |
+| | 控制台（`/overview` 等） | 后台（`/admin/*`） |
+| --- | --- | --- |
+| 已有 | 概览 `/overview`；网站 `/sites`（详情页 Tab：概览、统计、域名、源站、缓存）；刷新预热 `/purge`；组织成员 `/members`（组织 owner / admin 可见）；账户安全 `/security`；设置 `/settings`（偏好、AccessKey 的创建和删除） | 平台概览 `/admin`；集群与节点 `/admin/clusters`（节点组、节点、安装命令、配置版本与回滚）；区域 `/admin/regions`；组织与用户 `/admin/organizations`；审计日志 `/admin/audit`；系统设置 `/admin/settings`（节点通道与 CA 指纹、setup token、源站地址允许清单、落地页模板） |
+| 计划 | 网站详情页的 HTTPS、规则、日志 Tab；证书；IP 名单；告警订阅；AccessKey 的吊销、最后使用时间和只读范围 | 平台 DNS（服务商、CNAME 域、线路）、平台级 IP 名单、告警渠道、节点版本与升级、系统设置里的 SMTP 和 GeoIP 数据 |
 
 后台过程在服务端一律用 `admin` 守卫；控制台过程按组织隔离（ADR-0007），平台管理员在控制台里看到的是全部组织的数据。
 
@@ -53,6 +54,19 @@ MVP 分成 6 个里程碑，每个里程碑对应一个 `/goal` 会话（第 8 �
 | 回源 HTTPS 不校验证书 | M2 |
 | proto 没有下发证书材料的接口，节点不开 HTTPS 监听 | M3 |
 | 节点仓库 CI 的 proto 一致性检查依赖公开的 GitHub 仓库 | 仓库公开时处理，MVP 期间保持本地 `make proto-check` |
+
+### 0.5 收尾审计延后项的归属
+
+2026-09-25 收尾审计第 3 节列出的问题不在收尾时修，按下表归到对应的里程碑，写在该里程碑的章节里并进入它的「验收」。
+
+| 编号 | 问题 | 归属 |
+| --- | --- | --- |
+| D1 | 没有最低 agent 版本门槛：旧节点遇到新的枚举值会退回宽松默认（监听协议变 HTTP、源站协议变 http、缓存头变覆盖），只保证不崩溃，不保证行为正确 | M3（第 3 节「兼容性」） |
+| D2 | `ReportStats` 重试会重复计数；`node_minute_stats` 没有保留期和小时 / 天汇总 | M5（第 5 节「统计」） |
+| D3 | 控制台从备份恢复后，节点把恢复后的 revision 当成"更旧"而忽略，停在 last-known-good | M6（第 6 节「备份与恢复」） |
+| D4 | 预热只预热桌面变体；前缀与全站预热 | v1（ROADMAP v1「缓存与调度」，节点 ROADMAP 同） |
+| D5 | 容器镜像与 GitHub Actions 没有按 digest / commit SHA 固定 | 首次正式发布前（ROADMAP「首次发布前」，[ADR-0017](../adr/0017-release-supply-chain.md) 收尾记录） |
+| D6 | 节点仓库 CI 的 proto 一致性检查依赖公开的控制面仓库 | 仓库公开时（同 0.4 最后一行） |
 
 ## 1. M1 集群、租户与站点基础
 
@@ -110,11 +124,16 @@ MVP 分成 6 个里程碑，每个里程碑对应一个 `/goal` 会话（第 8 �
 - HTTP/3、Brotli、Zstd：先核实官方 OpenResty 包是否包含对应模块；缺少的按 ADR-0015 做自定义构建，工作量过大时记入「待决策」并在界面上把该开关标为不可用。
 - Gzip 按类型和最小长度配置。
 
+**兼容性（收尾延后 D1）**
+
+- 最低 agent 版本门槛：proto v0.3.0 加 `min_agent_version` 或 `required_features`（实现时二选一，记入 ADR-0008 / ADR-0011 更新记录）。M3 新增的枚举值和语义（HTTPS 监听、证书、TLS 选项等）只下发给满足门槛的节点：控制台按节点上报的 `NodeInfo.agent_version` 判断，不满足的节点拿不到需要新功能的 revision（继续用 last-known-good），后台节点列表显示"需要升级"。
+- 节点遇到不认识的枚举值时拒绝整个配置（回报 `FAILED`，继续用 last-known-good），不再退回宽松默认；自身版本低于门槛时同样拒绝。
+
 **控制台**
 
 - 证书页面：列表、到期倒计时、自动续期状态、手动续期；网站详情页新增 HTTPS Tab（证书选择、强制 HTTPS、HSTS、HTTP/2、HTTP/3、压缩）。
 
-**验收**：compose.e2e.yml 加入 Pebble（ACME 测试服务器）；e2e 证明：为 `demo.test` 签发证书后，`curl --resolve` 走 HTTPS 成功且证书由 Pebble 签发；HTTP 请求被 301 到 HTTPS；响应带 HSTS；ALPN 协商为 h2；证书续期后节点无需 reload 就生效。Playwright 覆盖申请证书和开启强制 HTTPS。
+**验收**：compose.e2e.yml 加入 Pebble（ACME 测试服务器）；e2e 证明：为 `demo.test` 签发证书后，`curl --resolve` 走 HTTPS 成功且证书由 Pebble 签发；HTTP 请求被 301 到 HTTPS；响应带 HSTS；ALPN 协商为 h2；证书续期后节点无需 reload 就生效；上报的 agent 版本低于门槛的节点拿不到需要 HTTPS 的 revision，后台显示需要升级；节点收到含未知枚举值的配置时回报失败并继续按 last-known-good 服务（D1）。Playwright 覆盖申请证书和开启强制 HTTPS。
 
 ## 4. M4 访问控制与规则引擎
 
@@ -130,11 +149,12 @@ MVP 分成 6 个里程碑，每个里程碑对应一个 `/goal` 会话（第 8 �
 - 域名所有权校验（对标补充）：租户添加的顶级域先通过 TXT 记录校验再发布到节点，防止抢注和泛域名劫持；平台管理员可免校验。
 - 发布分两路（对标补充，参考 ATC）：DNS 记录变更与节点配置 revision 分开发布，DNS 侧也有版本和回滚。
 - 平台 DNS（后台）：接入 DNSPod、阿里云、华为云、Cloudflare（经 certd / libdns）；配置 CNAME 域和线路（节点组 → 线路）；每个网站自动生成 CNAME 目标并写入记录；节点健康检查失败时自动摘除记录、恢复后加回；定时的 DNS 记录修复任务；节点健康检查失败自动下线。
-- 统计：分钟级请求数、流量、带宽、命中率、状态码分布、Top URL、Top IP（节点预聚合，Top-K 用近似算法）；lite 模式存 Postgres，ClickHouse 可选。控制台有网站级统计页，后台有平台级统计。
+- 统计：分钟级请求数、流量、带宽、命中率、状态码分布、Top URL、Top IP（节点预聚合，Top-K 用近似算法）；lite 模式存 Postgres，ClickHouse 可选。控制台有网站级统计页，后台有平台级统计。请求数、流量、带宽、命中率、状态码和图表已在「数据展示重做」时完成（PROGRESS），本里程碑补 Top URL、Top IP 和下面两项。
+- 统计的幂等与保留（收尾延后 D2）：节点给每批 `ReportStats` 带单调递增的批次序号（proto 新字段），控制台按（节点、序号）去重，重试不重复计数；pg-boss 定时任务生成小时 / 天汇总表并按保留期清理分钟明细（ADR-0009 决策 3），长时间范围的查询读汇总表。
 - 告警：渠道（邮件、Webhook、钉钉、企业微信、Telegram）在后台配置；规则（节点离线、证书将到期、源站不可用、5xx 比例超阈值）；租户在控制台订阅自己网站的告警。
 - 开放 API：所有控制台过程都出现在 `/api/v1` 的 OpenAPI 文档里；后台系统设置页显示 API 文档入口。
 
-**验收**：e2e 使用一个模拟 DNS 服务商（本地假服务器）证明：未通过 TXT 校验的租户域名不下发到节点，校验通过后下发；创建网站后写入 CNAME 记录；停掉节点后记录被摘除、恢复后加回；Webhook 渠道收到节点离线告警；统计页显示请求数、命中率和状态码分布。Playwright 覆盖 DNS 服务商配置、统计页和告警订阅。
+**验收**：e2e 使用一个模拟 DNS 服务商（本地假服务器）证明：未通过 TXT 校验的租户域名不下发到节点，校验通过后下发；创建网站后写入 CNAME 记录；停掉节点后记录被摘除、恢复后加回；Webhook 渠道收到节点离线告警；统计页显示请求数、命中率和状态码分布；同一批统计重复上报不改变计数，汇总任务运行后长时间范围的数值与分钟明细一致，超过保留期的分钟明细被清理（D2）。Playwright 覆盖 DNS 服务商配置、统计页和告警订阅。
 
 ## 6. M6 节点运维与基线
 
@@ -152,8 +172,9 @@ BOOTSTRAP §2 把节点自升级和访问日志采样上报定为节点职责，
 - AccessKey 管理：列表显示最后使用时间，可吊销；创建时选只读或读写（只读 key 调用写过程返回 403）。
 - 性能基线：`scripts/bench.sh` 用 oha（或 k6）对 e2e 节点测缓存命中的 QPS、p50/p99 延迟和节点内存，结果写入 PROGRESS；CI 不设硬门槛，只记录，回退超过 20% 在 PROGRESS 标出。
 - 备份与恢复：`docs/deploy/backup.md`（pg_dump + 主密钥分开保存），e2e 演练一次"备份 → 新库恢复 → 节点照常在线"。
+- 恢复后配置能继续下发（收尾延后 D3）：备份里的最大 revision 可能低于节点已应用的 revision，节点会把恢复后发布的 revision 当成"更旧"而忽略。二选一实现并记入 ADR-0011 更新记录：`NodeConfig` 增加配置 epoch（恢复时换新的 epoch，节点在 epoch 变化时接受较小的 revision），或恢复后控制台把每个集群的 revision 序号跳过节点上报的最大 `applied_revision`。
 
-**验收**：e2e 证明：节点从 A 版本升级到 B 版本且签名错误的包被拒绝、失败时回滚；访问日志在日志 Tab 可查并能按状态码过滤；只读 AccessKey 调用写接口返回 403，吊销后 401；`scripts/bench.sh` 输出基线；备份恢复演练后节点在线、配置版本一致。Playwright 覆盖发起升级、日志查询和 AccessKey 吊销。
+**验收**：e2e 证明：节点从 A 版本升级到 B 版本且签名错误的包被拒绝、失败时回滚；访问日志在日志 Tab 可查并能按状态码过滤；只读 AccessKey 调用写接口返回 403，吊销后 401；`scripts/bench.sh` 输出基线；备份恢复演练后节点在线、配置版本一致，且恢复前节点已应用的 revision 高于备份时，恢复后发布的新配置仍被节点应用（D3）。Playwright 覆盖发起升级、日志查询和 AccessKey 吊销。
 
 ## 7. 暂不做
 
@@ -183,9 +204,9 @@ v1 及以后的内容（WAF 托管规则、CC 防护、Tiered Cache、日志推�
 | 里程碑 | 名称 | 第 1 条中的章节 | 第 3 条 |
 | --- | --- | --- | --- |
 | M2 | 源站与缓存 | 第 2 节 + 0.4 节归到 M2 的遗留项 | 必须满足（proto v0.2.0 已打 tag，节点仓库已重新生成） |
-| M3 | HTTPS、证书与协议 | 第 3 节 + 0.4 节归到 M3 的遗留项 | 必须满足（proto v0.3.0），另加 helpers/certd 的 go vet、go test exit 0 |
+| M3 | HTTPS、证书与协议 | 第 3 节 + 0.4 节归到 M3 的遗留项 + 0.5 节的 D1 | 必须满足（proto v0.3.0），另加 helpers/certd 的 go vet、go test exit 0 |
 | M4 | 访问控制与规则引擎 | 第 4 节 | 必须满足，另加 TS 与 Lua 共用测试向量的测试输出 |
-| M5 | DNS、统计、告警与开放 API | 第 5 节 | 必须满足，另加 helpers/certd 的 go vet、go test exit 0 |
-| M6 | 节点运维与基线 | 第 6 节 | 必须满足（proto 新 tag，节点仓库已重新生成），另加 `bash scripts/bench.sh` 的输出 |
+| M5 | DNS、统计、告警与开放 API | 第 5 节 + 0.5 节的 D2 | 必须满足，另加 helpers/certd 的 go vet、go test exit 0 |
+| M6 | 节点运维与基线 | 第 6 节 + 0.5 节的 D3 | 必须满足（proto 新 tag，节点仓库已重新生成），另加 `bash scripts/bench.sh` 的输出 |
 
 同时把"先读 docs/specs/mvp.md 第 0 节和第 1 节"和"第 1 节「验收」"中的节号改成对应里程碑的节号，把「MVP M1」改成对应名称。
