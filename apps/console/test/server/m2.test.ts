@@ -152,8 +152,13 @@ describe("M2 origins, cache settings and cache tasks", async () => {
       domains: ["api.test"],
       origins: [{ address: "origin-api" }],
       cacheRules: [
-        { pathPrefixes: ["/public/"], originCacheControl: "respect", cacheAuthorized: true },
-        { pathPrefixes: ["/"] },
+        {
+          priority: 10,
+          pathPrefixes: ["/public/"],
+          originCacheControl: "respect",
+          cacheAuthorized: true,
+        },
+        { priority: 20, pathPrefixes: ["/"] },
       ],
     });
     expect(site.cacheRules.map((r) => r.cacheAuthorized)).toEqual([true, false]);
@@ -263,7 +268,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect(missing.data).toMatchObject({ accessKeyId: "AKIDNEW" });
 
     // Removing the S3 origin deletes the credential.
-    await tenant.sites.update({ id: created.site.id, origins: [{ address: "10.0.0.1" }] });
+    await tenant.sites.update({ id: created.site.id, origins: [{ address: "origin.internal" }] });
     const left = await ctx.db
       .select()
       .from(schema.originCredential)
