@@ -234,6 +234,12 @@ if ! $SKIP_UI; then
     || fail "Playwright M1 test failed"
   pass "Playwright M1 passed"
 
+  step "Playwright landing page: template, login-aware header, switched off again"
+  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    pnpm --filter @edgeweir/console run test:e2e e2e/landing.spec.ts \
+    || fail "Playwright landing test failed"
+  pass "Playwright landing passed"
+
   step "the node serves the site the tenant member edited in the UI"
   NODE="$(node_json)"
   CLUSTER="$(api GET "/clusters/$CLUSTER_ID")"
