@@ -1,0 +1,6 @@
+{
+  "target": "react",
+  "autoCodeSplitting": true,
+  "routesDirectory": "./src/web/routes",
+  "generatedRouteTree": "./src/web/routeTree.gen.ts"
+}

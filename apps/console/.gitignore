@@ -1,0 +1,6 @@
+# generated at dev/build/typecheck time
+src/web/paraglide/
+src/web/routeTree.gen.ts
+project.inlang/cache/
+project.inlang/.gitignore
+project.inlang/README.md
