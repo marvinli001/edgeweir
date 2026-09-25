@@ -79,3 +79,4 @@ Phase 0 范围：
 
 > 更新记录：
 > - 2026-09-25：better-auth 1.7.6；schema 由官方 CLI（现为 `auth` 包，`pnpm dlx auth@1.7.6 generate`）生成。better-auth 自带的遥测默认关闭，但可被 `BETTER_AUTH_TELEMETRY` 环境变量打开；控制台在代码里显式 `telemetry: { enabled: false }` 并在启动时删除该变量。AccessKey 使用 api-key 插件，前缀 `ewk_`，`enableSessionForAPIKeys` 让 AccessKey 以其所有者身份走同一套 RBAC，限速 600 次/分钟。
+> - 2026-09-25：界面按角色分为**控制台**与**后台**。所有用户（包括平台管理员）的主视图都是控制台（概览、网站、设置），平台管理员拥有控制台的全部功能；此外顶栏多一个 [控制台 | 后台] 分段切换，进入 `/admin/*`（平台概览、集群与节点、审计日志、系统设置；以后还有组织与用户、套餐、DNS 服务商等系统级配置）。`/admin` 路由在前端对非管理员重定向到 `/`，对应的 oRPC 过程在服务端使用 `admin` 守卫。`settings.get`（节点通道地址、CA 指纹、遥测、统计模式）随之改为仅平台管理员可调用，测试覆盖租户成员调用 `settings`、`clusters`、`auditLogs` 返回 403。
