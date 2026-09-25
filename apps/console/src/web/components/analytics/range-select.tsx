@@ -32,7 +32,12 @@ export function RangeSelect({
           onValueChange={(next) => onChange(next as AnalyticsRange)}
         >
           {ANALYTICS_RANGES.map((range) => (
-            <DropdownMenuRadioItem key={range} value={range} data-testid={`range-${range}`}>
+            <DropdownMenuRadioItem
+              key={range}
+              value={range}
+              closeOnClick
+              data-testid={`range-${range}`}
+            >
               {rangeLabel(range)}
             </DropdownMenuRadioItem>
           ))}
