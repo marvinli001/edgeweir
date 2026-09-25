@@ -19,6 +19,7 @@
     "ui:preset": "shadcn preset resolve --json"
   },
   "dependencies": {
+    "@appica/ui-react": "1.2.0",
     "@base-ui/react": "1.8.0",
     "@better-auth/api-key": "1.7.6",
     "@better-auth/passkey": "1.7.6",
