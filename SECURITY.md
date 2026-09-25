@@ -98,7 +98,7 @@ gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edge
 | --- | --- | --- |
 | 控制面默认不保存节点 SSH 凭据；SSH 远程安装是可选的一次性操作，凭据用完即弃 | 控制面失陷后借 SSH 凭据横向控制所有节点（GoEdge 2025 年 RingH23 事件） | [ADR-0016](docs/adr/0016-one-line-install.md) |
 | 节点私钥在节点本地生成，从不离开节点；控制面只签发证书 | 控制面数据库泄露后冒充节点 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
-| 节点通道：安装命令固定 CA 指纹，节点先核对指纹再发送 token；token 一次性、带过期时间、只存哈希；除 `Enroll` 外强制 mTLS；证书 30 天有效期并自动轮换；删除或禁用节点立即生效 | 首次连接被中间人劫持；token 泄露或重放；已下线节点继续拉配置 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
+| 节点通道：安装命令固定 CA 指纹，节点先核对指纹再发送 token；token 一次性、带过期时间、只存哈希；除 `Enroll` 外强制 mTLS；证书 30 天有效期并自动轮换；删除或禁用节点立即生效（删除时吊销证书序列号，节点再连接被拒绝） | 首次连接被中间人劫持；token 泄露或重放；已下线节点继续拉配置 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
 | 敏感数据信封加密入库，主密钥不进数据库 | 数据库备份或只读 SQL 注入泄露证书私钥和 DNS 密钥 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
 | 管理操作写审计日志，与变更同事务提交 | 越权或误操作无法追溯 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
 | `install.sh` 与 agent 自升级都先校验 cosign 签名和 sha256 再执行；控制台镜像转发只是传输通道 | 下载链路或镜像转发被篡改 | [ADR-0016](docs/adr/0016-one-line-install.md)、[ADR-0017](docs/adr/0017-release-supply-chain.md) |
@@ -110,7 +110,7 @@ gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edge
 - `install.sh` 由控制台提供，信任控制台（运营者自己的服务器）是前提。需要更强保证时，先下载脚本审阅，或与 GitHub 上同版本的脚本比对。
 - 控制面被攻破时，攻击者可以下发恶意配置（例如把站点指向恶意源站），但不能让节点运行未签名的程序，也拿不到节点私钥。
 - 主密钥与数据库同时泄露时，信封加密失去作用。请通过 secret 文件或编排平台的 secret 机制注入 `EDGEWEIR_MASTER_KEY`，并与数据库备份分开保存。
-- 首次初始化完成之前，能访问 `:3000` 的任何人都可以创建平台管理员。完成初始化之前不要把控制台暴露到公网。
+- 首次初始化需要控制台启动时打印在日志里的一次性 setup token（主密钥加密后入库，只比对 SHA-256）。能读控制台日志的人就能完成初始化，请像对待主密钥一样控制日志的访问。
 - 节点通道 `:8443` 不能放在反向代理后面由代理终结 TLS，否则 mTLS 失效；只能直接暴露或四层透传。
 
 ---

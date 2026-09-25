@@ -52,11 +52,11 @@ EOF
 docker compose up -d
 ```
 
-Open <http://localhost:3000>. The first-run setup wizard creates the platform administrator and a default organization.
+Open <http://localhost:3000>. The first-run setup wizard creates the platform administrator and a default organization. It asks for the one-time setup token that the console prints to its log (`docker compose logs console | grep setupToken`).
 
 - `EDGEWEIR_MASTER_KEY` encrypts secrets at rest (internal CA key, certificate keys, DNS API credentials). **Back it up separately from your database.** Without it, that data cannot be recovered.
 - `BETTER_AUTH_SECRET` signs login sessions.
-- Finish the setup wizard before exposing port 3000 to the internet. Until an administrator exists, anyone who can reach the console can create one.
+- Setup is refused without the setup token, so nobody else can claim the console before you finish the wizard. The token is spent by the first successful setup.
 
 Optional components:
 

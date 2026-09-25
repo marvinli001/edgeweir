@@ -52,11 +52,11 @@ EOF
 docker compose up -d
 ```
 
-打开 <http://localhost:3000>，首次初始化向导会创建平台管理员和默认组织。
+打开 <http://localhost:3000>，首次初始化向导会创建平台管理员和默认组织。向导需要控制台打印在日志里的一次性 setup token（`docker compose logs console | grep setupToken`）。
 
 - `EDGEWEIR_MASTER_KEY` 用于加密入库的敏感数据（内部 CA 私钥、证书私钥、DNS API 凭据）。**请把它与数据库备份分开保存。** 丢失后这些数据无法恢复。
 - `BETTER_AUTH_SECRET` 用于签名登录会话。
-- 完成初始化向导之前，不要把 3000 端口暴露到公网。管理员创建之前，任何能访问控制台的人都可以创建管理员。
+- 没有 setup token 的初始化请求会被拒绝，所以在你完成向导之前，别人无法抢先创建管理员。token 在第一次初始化成功后作废。
 
 可选组件：
 
