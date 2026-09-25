@@ -1,0 +1,60 @@
+# Edgeweir 控制台 · 宝塔面板（BT Panel）Docker 编排模板
+#
+# 用法见 docs/deploy/baota.md，要点：
+#   1. 宝塔「Docker → 容器编排 → 添加编排」，粘贴本文件，并在同目录的 .env 里填写
+#      EDGEWEIR_MASTER_KEY、BETTER_AUTH_SECRET、POSTGRES_PASSWORD、EDGEWEIR_PUBLIC_URL
+#      （可用 openssl rand -base64 32 生成）。
+#   2. Web 控制台只监听 127.0.0.1:3000，由宝塔站点「反向代理」到 http://127.0.0.1:3000，
+#      HTTPS 证书在宝塔上配置即可。
+#   3. 节点通道 8443 端口必须直接暴露（或用 nginx stream 四层透传），
+#      TLS 由控制台自己终结（节点证书双向认证），不能交给宝塔 nginx 终结。
+#      记得在宝塔「安全」和云厂商安全组里放行 8443/TCP。
+name: edgeweir
+
+services:
+  console:
+    image: ghcr.io/edgeweir/edgeweir:${EDGEWEIR_VERSION:-latest}
+    container_name: edgeweir-console
+    restart: unless-stopped
+    environment:
+      ROLE: all
+      DATABASE_URL: postgres://edgeweir:${POSTGRES_PASSWORD:-edgeweir}@postgres:5432/edgeweir
+      EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      # 浏览器访问控制台的地址，即宝塔站点的域名，例如 https://cdn-admin.example.com
+      EDGEWEIR_PUBLIC_URL: ${EDGEWEIR_PUBLIC_URL:-http://localhost:3000}
+      # 节点连接控制台的地址，例如 https://cdn-admin.example.com:8443
+      EDGEWEIR_NODE_API_URL: ${EDGEWEIR_NODE_API_URL:-}
+      EDGEWEIR_NODE_API_HOSTNAMES: ${EDGEWEIR_NODE_API_HOSTNAMES:-}
+    ports:
+      # 仅本机可访问，交给宝塔 nginx 反向代理
+      - "127.0.0.1:${EDGEWEIR_HTTP_PORT:-3000}:3000"
+      # 节点通道：直接对外（或由 stream 透传），不要用宝塔反代
+      - "${EDGEWEIR_NODE_API_PORT:-8443}:8443"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  postgres:
+    image: postgres:18.6-alpine
+    container_name: edgeweir-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: edgeweir
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-edgeweir}
+      POSTGRES_DB: edgeweir
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edgeweir -d edgeweir"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres-data:

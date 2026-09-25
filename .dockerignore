@@ -1,0 +1,17 @@
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/test-results
+**/playwright-report
+.git
+.e2e
+.env
+.env.*
+!.env.example
+apps/console/src/web/paraglide
+apps/console/src/web/routeTree.gen.ts
+helpers/certd/bin
+docs
+*.md
+!apps/console/src/web/**/*.md
