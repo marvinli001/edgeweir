@@ -65,7 +65,14 @@ test("M1: tenants, members, site editing, clusters, node groups, audit and i18n"
     await page.getByTestId("new-site").click();
     await page.getByLabel("名称", { exact: true }).fill("tenant-site");
     await page.getByLabel("域名", { exact: true }).fill("tenant.test");
+    // Private and other special-purpose origin addresses are refused unless the platform allows
+    // them (the e2e allow list is only the Docker network), with the range named in the error.
     await page.getByLabel("源站地址", { exact: true }).fill("10.0.0.10");
+    await page.getByTestId("create-site-submit").click();
+    await expect(page.getByTestId("site-form-error")).toHaveText(
+      "源站地址 10.0.0.10 属于特殊用途地址段 10.0.0.0/8，平台未放行",
+    );
+    await page.getByLabel("源站地址", { exact: true }).fill("origin.tenant.test");
     await page.getByTestId("create-site-submit").click();
     // Creating a site opens its detail page.
     await expect(page.getByTestId("page-title")).toHaveText("tenant-site");

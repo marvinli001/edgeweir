@@ -35,14 +35,18 @@ test("login -> admin clusters & nodes -> console sites, then switch to English",
   }
   await expect(page.getByTestId("revisions-table")).toBeVisible();
 
-  // The "add node" dialog produces a one-time install command with the CA pin.
+  // The "add node" dialog produces a one-time install command with the CA pin. The token
+  // travels in EDGEWEIR_TOKEN, never as an argument (the process list would show it).
   await page.getByTestId("add-node").click();
   await page.getByLabel("节点名称", { exact: true }).fill("edge-ui");
   await page.getByTestId("generate-install-command").click();
   const command = page.getByTestId("install-command");
-  await expect(command).toContainText("/install.sh | sudo bash -s --");
-  await expect(command).toContainText("--token ewt_");
+  await expect(command).toContainText(/export EDGEWEIR_TOKEN='ewt_[A-Za-z0-9_-]+'/);
+  await expect(command).toContainText(
+    "/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server https://",
+  );
   await expect(command).toContainText(/--ca-sha256 [0-9a-f]{64}/);
+  await expect(command).not.toContainText("--token");
   await page.keyboard.press("Escape");
 
   // Back to the console. Sites: demo.test created through the API is listed; create one through the UI.
@@ -75,6 +79,8 @@ test("login -> admin clusters & nodes -> console sites, then switch to English",
 });
 
 test("follows the OS color scheme and keeps a manual choice", async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   const html = page.locator("html");
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/login");
@@ -93,4 +99,6 @@ test("follows the OS color scheme and keeps a manual choice", async ({ page }) =
   await page.getByTestId("theme-toggle").click();
   await page.getByTestId("theme-system").click();
   await expect(html).toHaveClass(/\blight\b/);
+
+  expect(pageErrors).toEqual([]);
 });

@@ -14,10 +14,21 @@
 #   WebSocket through the node, origin certificate verification, S3 SigV4
 #   origins, failover to the backup origin and back, origin health in the
 #   console; Playwright submits purges and reads the per-node results.
+#   Wrap-up (docs/audits/2026-09-25-wrapup.md): better-auth's organization and
+#   admin endpoints are closed and API keys never become sessions (CP-C1);
+#   origins on special-purpose addresses are refused by the console and, for
+#   DNS answers, by the node, and CDN-Loop stops loops (N-H2); HTTPS origins
+#   are verified against their name with the trusted CA (N-H4); the origin
+#   sees 1 MiB slices (CP-M2); S3 origins never receive the client's x-amz-*
+#   headers (N-L); install.sh installs goreleaser snapshot packages in a clean
+#   Debian container and enrolls the node (N-H1, --no-start: no systemd).
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
 #   bash scripts/e2e.sh [--up] [--down] [--skip-ui]
+# Needs curl, jq, docker, node, and for the install step goreleaser, syft and
+# Go (it builds snapshot packages in $EDGEWEIR_NODE_CONTEXT, ../edgeweir-node
+# by default). E2E_SUBNET / E2E_ISOLATED_SUBNET must match compose.e2e.yml.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -28,6 +39,12 @@ NODE_HTTP="http://localhost:${E2E_NODE_PORT:-18080}"
 ADMIN_EMAIL="admin@e2e.test"
 ADMIN_PASSWORD="e2e-admin-password-123"
 STATE_DIR=".e2e"
+E2E_SUBNET="${E2E_SUBNET:-172.28.213.0/24}"
+E2E_ISOLATED_SUBNET="${E2E_ISOLATED_SUBNET:-172.28.214.0/24}"
+NODE_CONTEXT="${EDGEWEIR_NODE_CONTEXT:-../edgeweir-node}"
+# Clean machine for install.sh (a throwaway container on the e2e network).
+INSTALL_IMAGE="${E2E_INSTALL_IMAGE:-debian:bookworm-slim}"
+INSTALL_CONTAINER="${COMPOSE_PROJECT_NAME:-edgeweir-e2e}-install"
 UP=false
 DOWN=false
 SKIP_UI=false
@@ -54,6 +71,7 @@ need() { command -v "$1" >/dev/null || fail "missing required tool: $1"; }
 need curl
 need jq
 need docker
+need node
 
 mkdir -p "$STATE_DIR"
 COOKIES="$STATE_DIR/cookies.txt"
@@ -63,9 +81,11 @@ if $UP; then
   step "docker compose -f compose.e2e.yml up -d --build"
   "${COMPOSE[@]}" up -d --build
 fi
-if $DOWN; then
-  trap '"${COMPOSE[@]}" down -v >/dev/null 2>&1 || true' EXIT
-fi
+cleanup() {
+  docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
+  if $DOWN; then "${COMPOSE[@]}" down -v >/dev/null 2>&1 || true; fi
+}
+trap cleanup EXIT
 
 # api METHOD PATH [JSON] -> body on stdout; fails on non-2xx.
 api() {
@@ -81,6 +101,36 @@ api() {
   fi
   cat "$out"
   rm -f "$out"
+}
+
+# api_status METHOD PATH [JSON] -> "STATUS BODY", whatever the status.
+api_status() {
+  local method="$1" path="$2" body="${3:-}" out status
+  out="$(mktemp)"
+  status="$(curl -sS -o "$out" -w '%{http_code}' -X "$method" "$CONSOLE/api/v1$path" \
+    -H 'content-type: application/json' ${API_KEY:+-H "x-api-key: $API_KEY"} \
+    ${body:+--data "$body"})"
+  printf '%s %s' "$status" "$(cat "$out")"
+  rm -f "$out"
+}
+
+# auth_post PATH JSON [curl args...] -> "STATUS BODY" of POST /api/auth/PATH.
+auth_post() {
+  local path="$1" body="$2" out status
+  shift 2
+  out="$(mktemp)"
+  status="$(curl -sS -o "$out" -w '%{http_code}' -X POST "$CONSOLE/api/auth$path" \
+    -H 'content-type: application/json' -H "origin: $CONSOLE" "$@" --data "$body")"
+  printf '%s %s' "$status" "$(cat "$out")"
+  rm -f "$out"
+}
+
+sha256() { if command -v sha256sum >/dev/null; then sha256sum; else shasum -a 256; fi; }
+
+# The Docker network of the e2e project (the console is only on the default one).
+e2e_network() {
+  docker inspect "$("${COMPOSE[@]}" ps -q console)" \
+    --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}'
 }
 
 wait_for() { # wait_for SECONDS DESCRIPTION COMMAND...
@@ -140,13 +190,88 @@ CLUSTER_ID="$(jq -r .id <<<"$CLUSTER")"
 [[ -n "$CLUSTER_ID" && "$CLUSTER_ID" != null ]] || fail "no cluster"
 pass "cluster $(jq -r .name <<<"$CLUSTER") ($CLUSTER_ID), latest revision #$(jq -r .latestRevision.revision <<<"$CLUSTER")"
 
+step "CP-C1: better-auth's organization and admin endpoints are closed, even for an owner and platform admin"
+ME="$(api GET /me)"
+ADMIN_ID="$(jq -r .user.id <<<"$ME")"
+ORG_ID="$(jq -r '.organizations[] | select(.name == "E2E Org") | .id' <<<"$ME")"
+[[ "$(jq -r .user.isAdmin <<<"$ME")" == "true" &&
+  "$(jq -r '.organizations[] | select(.name == "E2E Org") | .role' <<<"$ME")" == "owner" ]] ||
+  fail "the e2e admin should be a platform admin and owner of E2E Org: $ME"
+SESSION_USER="$(curl -fsS -b "$COOKIES" "$CONSOLE/api/auth/get-session" | jq -r .user.id)"
+[[ "$SESSION_USER" == "$ADMIN_ID" ]] || fail "the admin session cookie must be valid for these checks (got user '$SESSION_USER')"
+NOT_FOUND='404 {"error":"not found"}'
+closed() { # closed PATH JSON: POST with the admin's session must be refused by the route allow list
+  local got
+  got="$(auth_post "$1" "$2" -b "$COOKIES")"
+  echo "POST /api/auth$1 (owner + platform admin session) -> $got"
+  [[ "$got" == "$NOT_FOUND" ]] || fail "POST /api/auth$1 must be refused, got: $got"
+}
+ORG_BODY="$(jq -nc --arg o "$ORG_ID" '{organizationId: $o}')"
+closed /organization/delete "$ORG_BODY"
+closed /organization/update "$(jq -nc --arg o "$ORG_ID" '{organizationId: $o, data: {name: "Renamed"}}')"
+closed /organization/invite-member "$(jq -nc --arg o "$ORG_ID" '{organizationId: $o, email: "x@e2e.test", role: "owner"}')"
+closed /organization/update-member-role "$(jq -nc --arg o "$ORG_ID" --arg u "$ADMIN_ID" '{organizationId: $o, memberId: $u, role: "member"}')"
+closed /organization/remove-member "$(jq -nc --arg o "$ORG_ID" --arg u "$ADMIN_ID" '{organizationId: $o, memberIdOrEmail: $u}')"
+closed /admin/impersonate-user "$(jq -nc --arg u "$ADMIN_ID" '{userId: $u}')"
+closed /admin/set-user-password "$(jq -nc --arg u "$ADMIN_ID" '{userId: $u, newPassword: "e2e-hijacked-password-1"}')"
+closed /admin/set-role "$(jq -nc --arg u "$ADMIN_ID" '{userId: $u, role: "user"}')"
+closed /admin/create-user '{"email":"intruder@e2e.test","password":"e2e-intruder-password-1","name":"Intruder","role":"admin"}'
+closed /admin/ban-user "$(jq -nc --arg u "$ADMIN_ID" '{userId: $u}')"
+closed /admin/remove-user "$(jq -nc --arg u "$ADMIN_ID" '{userId: $u}')"
+ORGS="$(api GET /organizations)"
+jq -e --arg o "$ORG_ID" 'any(.[]; .id == $o and .name == "E2E Org")' <<<"$ORGS" >/dev/null ||
+  fail "E2E Org must still exist: $ORGS"
+ME_AFTER="$(api GET /me)"
+[[ "$(jq -r .user.isAdmin <<<"$ME_AFTER")" == "true" &&
+  "$(jq -r '.organizations[] | select(.id == "'"$ORG_ID"'") | .role' <<<"$ME_AFTER")" == "owner" ]] ||
+  fail "the admin's role or membership changed: $ME_AFTER"
+[[ "$(api GET "/users?search=intruder" | jq length)" == "0" ]] || fail "admin/create-user created a user"
+curl -fsS -o /dev/null "$CONSOLE/api/auth/sign-in/email" -H 'content-type: application/json' -H "origin: $CONSOLE" \
+  --data "$(jq -nc --arg e "$ADMIN_EMAIL" --arg p "$ADMIN_PASSWORD" '{email:$e,password:$p}')" ||
+  fail "the admin can no longer sign in with the original password (set-user-password / ban-user went through?)"
+pass "organization/* and admin/* answer 404 to the owner and platform admin; E2E Org exists, the admin's role, membership and password are unchanged, no user was created"
+
+step "CP-C1: an x-api-key alone never becomes a better-auth session"
+KEY_SESSION="$(curl -sS -H "x-api-key: $API_KEY" "$CONSOLE/api/auth/get-session")"
+echo "GET /api/auth/get-session (x-api-key only) -> $KEY_SESSION"
+[[ "$KEY_SESSION" == "null" ]] || fail "an API key must not yield a session on /api/auth, got: $KEY_SESSION"
+KEY_CREATE="$(auth_post /api-key/create '{"name":"minted-with-a-key"}' -H "x-api-key: $API_KEY")"
+echo "POST /api/auth/api-key/create (x-api-key only) -> $KEY_CREATE"
+[[ "$KEY_CREATE" == 401* && "$KEY_CREATE" != *ewk_* ]] || fail "creating an API key with only an API key must be refused, got: $KEY_CREATE"
+KEY_LIST="$(curl -sS -H "x-api-key: $API_KEY" "$CONSOLE/api/auth/api-key/list")"
+[[ "$KEY_LIST" != *'"name":"e2e"'* ]] || fail "api-key/list answered to an API key: $KEY_LIST"
+KEYS="$(curl -fsS -b "$COOKIES" "$CONSOLE/api/auth/api-key/list")"
+[[ "$(jq -c '[(if type == "array" then . else .apiKeys end)[] | .name]' <<<"$KEYS")" == '["e2e"]' ]] ||
+  fail "the admin should still have exactly the e2e key: $KEYS"
+KEY_RPC="$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$CONSOLE/rpc/account/me" -H "x-api-key: $API_KEY" \
+  -H 'x-csrf-token: orpc' -H 'content-type: application/json' --data '{}')"
+[[ "$KEY_RPC" == 401 ]] || fail "/rpc must not accept an API key, got HTTP $KEY_RPC"
+pass "get-session with only x-api-key -> null; api-key/create -> 401 (no key minted); /rpc with only x-api-key -> 401"
+
+step "N-H2: origin allow list = the e2e Docker network only (the special-purpose defaults stay)"
+NETWORK="$(e2e_network)"
+SUBNETS="$(docker network inspect "$NETWORK" --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}')"
+[[ " $SUBNETS" == *" $E2E_SUBNET "* ]] || fail "network $NETWORK has subnets '$SUBNETS', expected E2E_SUBNET=$E2E_SUBNET (compose.e2e.yml)"
+[[ "$(api GET /settings/origin-allow-list | jq -c .cidrs)" == "[]" ]] ||
+  fail "a fresh console must not allow any special-purpose range"
+REV_BEFORE="$(api GET "/clusters/$CLUSTER_ID" | jq -r .latestRevision.revision)"
+ALLOW="$(api PUT /settings/origin-allow-list "$(jq -nc --arg s "$E2E_SUBNET" '{cidrs: [$s]}')")"
+[[ "$(jq -c .cidrs <<<"$ALLOW")" == "[\"$E2E_SUBNET\"]" ]] || fail "unexpected allow list: $ALLOW"
+REV_AFTER="$(api GET "/clusters/$CLUSTER_ID" | jq -r .latestRevision.revision)"
+((REV_AFTER > REV_BEFORE)) || fail "changing the allow list must publish a revision (#$REV_BEFORE -> #$REV_AFTER)"
+pass "allow list $(jq -c .cidrs <<<"$ALLOW") (network $NETWORK), revision #$REV_BEFORE -> #$REV_AFTER; the isolated network $E2E_ISOLATED_SUBNET stays refused"
+
 step "node enrollment with a one-time token"
 TOKEN_JSON="$(api POST /enrollment-tokens "$(jq -nc --arg c "$CLUSTER_ID" '{clusterId:$c,nodeName:"edge-e2e-1",ttlMinutes:15}')")"
 TOKEN="$(jq -r .token <<<"$TOKEN_JSON")"
 CA_SHA256="$(jq -r .caSha256 <<<"$TOKEN_JSON")"
 SERVER_URL="$(jq -r .serverUrl <<<"$TOKEN_JSON")"
+INSTALL_COMMAND="$(jq -r .installCommand <<<"$TOKEN_JSON")"
 echo "install command (as shown in the console):"
-jq -r .installCommand <<<"$TOKEN_JSON" | sed -E 's/(--token )[^ ]+/\1<redacted>/'
+sed -E "s/(EDGEWEIR_TOKEN=')[^']+/\1<redacted>/" <<<"$INSTALL_COMMAND"
+[[ "$INSTALL_COMMAND" == "export EDGEWEIR_TOKEN='$TOKEN'"$'\n'*"/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server $SERVER_URL --ca-sha256 $CA_SHA256" &&
+  "$INSTALL_COMMAND" != *--token* ]] ||
+  fail "the install command must pass the token through EDGEWEIR_TOKEN, never as an argument"
 
 if "${COMPOSE[@]}" exec -T node edgeweir-node enroll --server "$SERVER_URL" --token "$TOKEN" \
   --ca-sha256 "$(printf '0%.0s' {1..64})" --state-dir /tmp/pin-mismatch >"$STATE_DIR/pin.log" 2>&1; then
@@ -178,7 +303,9 @@ node_online() { [[ "$(node_json | jq -r .online)" == "true" ]]; }
 wait_for 60 "node online (heartbeat over mTLS)" node_online
 NODE="$(node_json)"
 pass "node online over mTLS: id=$(jq -r .id <<<"$NODE") cert=$(jq -r '.certFingerprint[0:16]' <<<"$NODE")… applied=#$(jq -r .appliedRevision <<<"$NODE")"
-"${COMPOSE[@]}" logs node 2>&1 | grep -i "mtls" | tail -n 2 || true
+"${COMPOSE[@]}" logs node >"$STATE_DIR/node.log" 2>&1
+grep -q "switched to mTLS channel" "$STATE_DIR/node.log" || fail "the agent did not log the switch to the mTLS channel"
+grep -i "switched to mTLS channel" "$STATE_DIR/node.log" | tail -n 1 | cut -c1-200
 
 step "create site demo.test through the public API"
 SITE="$(api POST /sites "$(jq -nc --arg c "$CLUSTER_ID" '{
@@ -329,13 +456,47 @@ m2_site m2-slice '{domains: ["slice.m2.test"], origins: [{address: "files"}], ca
 FAILOVER_SITE="$(m2_site m2-failover '{domains: ["failover.m2.test"], origins: [{address: "origin-primary"}, {address: "origin-backup", backup: true}],
   cacheRules: [], originSettings: {maxFails: 1, recoverySeconds: 5, connectTimeoutMs: 1000}}')"
 TLS_SITE="$(m2_site m2-tls '{domains: ["tls.m2.test"], origins: [{address: "files", port: 443, scheme: "https"}], cacheRules: []}')"
+# files:9443 has a certificate for "files" from the test CA the node trusts.
+m2_site m2-tls-ca '{domains: ["tls-ca.m2.test"], origins: [{address: "files", port: 9443, scheme: "https"}], cacheRules: []}' >/dev/null
+TLS_NAME_SITE="$(m2_site m2-tls-name '{domains: ["tls-name.m2.test"],
+  origins: [{address: "files", port: 9443, scheme: "https", sni: "wrong.m2.test"}], cacheRules: []}')"
 m2_site m2-s3 '{domains: ["s3.m2.test"], origins: [{address: "s3", port: 7070,
   s3: {region: "us-east-1", bucket: "media", accessKeyId: "e2e-access-key", secretAccessKey: "e2e-only-s3-secret-key"}}]}' >/dev/null
+# An "S3 origin" that echoes the request: shows exactly what the node sends to object storage.
+m2_site m2-s3-echo '{domains: ["s3-echo.m2.test"], origins: [{address: "whoami",
+  s3: {region: "us-east-1", bucket: "media", accessKeyId: "e2e-access-key", secretAccessKey: "e2e-only-s3-secret-key"}}], cacheRules: []}' >/dev/null
 m2_site m2-ws-off '{domains: ["wsoff.m2.test"], origins: [{address: "whoami"}], originSettings: {websocket: false}}' >/dev/null
 m2_site m2-stale '{domains: ["stale.m2.test"], origins: [{address: "origin-primary"}],
   cacheRules: [{pathPrefixes: ["/"], edgeTtlSeconds: 1, staleIfErrorSeconds: 300}]}' >/dev/null
+# N-H2: "hidden" resolves into the isolated network (outside the allow list);
+# "node" is the edge node itself (inside it).
+HIDDEN_SITE="$(m2_site m2-hidden '{domains: ["hidden.m2.test"], origins: [{address: "hidden"}], cacheRules: []}')"
+m2_site m2-loop '{domains: ["loop.m2.test"], origins: [{address: "node"}], cacheRules: []}' >/dev/null
 wait_node_latest
-pass "9 M2 sites published and applied by the node"
+pass "14 M2 sites published and applied by the node"
+
+step "N-H2: origins on 127.0.0.1 and 169.254.169.254 are refused by the console, nothing is published"
+LATEST_BEFORE="$(cluster_latest)"
+forbidden() { # forbidden ADDRESS RANGE
+  local got
+  got="$(api_status POST /sites "$(jq -nc --arg c "$CLUSTER_ID" --arg a "$1" \
+    '{name: "m2-forbidden", clusterId: $c, domains: ["forbidden.m2.test"], origins: [{address: $a}]}')")"
+  echo "POST /sites origin $1 -> ${got:0:220}"
+  [[ "${got%% *}" == 400 ]] || fail "origin $1 must be refused with 400, got: $got"
+  [[ "$(jq -r '"\(.code) \(.data.address) \(.data.range)"' <<<"${got#* }")" == "ORIGIN_ADDRESS_FORBIDDEN $1 $2" ]] ||
+    fail "origin $1 must be refused with ORIGIN_ADDRESS_FORBIDDEN ($2), got: $got"
+}
+forbidden 127.0.0.1 127.0.0.0/8
+forbidden 169.254.169.254 169.254.0.0/16
+forbidden 10.0.0.10 10.0.0.0/8
+PATCHED="$(api_status PATCH "/sites/$CACHE_SITE" '{"origins": [{"address": "169.254.169.254"}]}')"
+[[ "${PATCHED%% *}" == 400 && "$(jq -r .code <<<"${PATCHED#* }")" == ORIGIN_ADDRESS_FORBIDDEN ]] ||
+  fail "changing an origin to 169.254.169.254 must be refused, got: $PATCHED"
+[[ "$(api GET "/sites/$CACHE_SITE" | jq -r '[.origins[].address] | join(",")')" == "whoami" ]] ||
+  fail "the refused change must leave the site's origins alone"
+[[ "$(api GET '/sites?search=m2-forbidden' | jq '.items | length')" == 0 ]] || fail "a refused site was created"
+[[ "$(cluster_latest)" == "$LATEST_BEFORE" ]] || fail "a refused origin published a revision (#$LATEST_BEFORE -> #$(cluster_latest))"
+pass "127.0.0.1, 169.254.169.254 and 10.0.0.10 refused with ORIGIN_ADDRESS_FORBIDDEN (create and update); no site, still revision #$LATEST_BEFORE"
 
 step "M2: URL purge makes the next request a MISS, other URLs stay cached"
 U1="/m2/url-$RANDOM.js"
@@ -378,9 +539,10 @@ expect_cache HIT sort.m2.test "$Q?b=2&a=1"
 expect_cache MISS sort.m2.test "$Q?a=1&b=3"
 pass "ignored query: ?a=1 and ?a=2 share one object; sorted query: ?a=1&b=2 and ?b=2&a=1 share one object"
 
-step "M2: Range requests are served from the slice cache"
+step "M2 / CP-M2: Range requests are served from the slice cache; the origin only sees 1 MiB slices"
 docker_files() { "${COMPOSE[@]}" exec -T files sh -c "$1"; }
 ORIGIN_BYTES="$(docker_files 'dd if=/srv/big.bin bs=1 skip=1048000 count=1000 2>/dev/null | sha256sum' | cut -d' ' -f1)"
+docker_files ': > /tmp/access.log'
 range() { curl -sS -o "$STATE_DIR/range.bin" -D "$STATE_DIR/range.h" -H 'Host: slice.m2.test' -r "$1" "$NODE_HTTP/big.bin"; }
 range 1048000-1048999
 grep -qi '^x-cache: MISS' "$STATE_DIR/range.h" && grep -qi '^content-range: bytes 1048000-1048999/3145728' "$STATE_DIR/range.h" ||
@@ -392,7 +554,15 @@ grep -qi '^x-cache: HIT' "$STATE_DIR/range.h" || fail "repeated range request no
 range 1048576-1048600
 grep -qi '^x-cache: HIT' "$STATE_DIR/range.h" || fail "another range in a cached slice not a HIT: $(cat "$STATE_DIR/range.h")"
 grep -iE '^(HTTP|x-cache|content-range|content-length)' "$STATE_DIR/range.h" | tr -d '\r'
-pass "bytes 1048000-1048999: MISS then HIT with the origin's bytes; bytes 1048576-1048600 of the cached slice: HIT"
+# The client range 1048000-1048999 spans slices 0 and 1: the origin must have
+# been asked for exactly those two 1 MiB slices, never the client's range or the
+# whole object, and nothing for the later HITs.
+ORIGIN_RANGES="$(docker_files "grep ' /big.bin ' /tmp/access.log" || true)"
+echo "files origin access log for /big.bin:"
+echo "$ORIGIN_RANGES"
+[[ "$ORIGIN_RANGES" == '80 GET /big.bin range="bytes=0-1048575" status=206'$'\n''80 GET /big.bin range="bytes=1048576-2097151" status=206' ]] ||
+  fail "the origin should have received exactly the two slice-aligned ranges, got: $ORIGIN_RANGES"
+pass "bytes 1048000-1048999: MISS then HIT with the origin's bytes; bytes 1048576-1048600 of the cached slice: HIT; the origin saw only bytes=0-1048575 and bytes=1048576-2097151"
 
 step "M2: WebSocket through the node"
 WS="$(node scripts/ws-echo.mjs localhost "${E2E_NODE_PORT:-18080}" cache.m2.test /echo hello-edgeweir)" || fail "WebSocket through the node failed: $WS"
@@ -402,15 +572,36 @@ WS_OFF="$(node scripts/ws-echo.mjs localhost "${E2E_NODE_PORT:-18080}" wsoff.m2.
 [[ "$WS_OFF" == *"handshake failed: HTTP/1.1 403"* ]] || fail "WebSocket should be refused when disabled: $WS_OFF"
 pass "whoami /echo echoed over the node; the site with WebSocket off refused the upgrade (403)"
 
-step "M2: HTTPS origins are verified unless verification is turned off"
-TLS_CODE="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: tls.m2.test' "$NODE_HTTP/static/a.txt")"
-[[ "$TLS_CODE" == "502" ]] || fail "self-signed origin certificate must fail verification, got $TLS_CODE"
-"${COMPOSE[@]}" logs --since 60s node 2>&1 | grep -m1 "upstream SSL certificate verify error" | cut -c1-200 || true
+step "M2 / N-H4: HTTPS origins are verified against their name with the trusted CA, unless verification is off"
+tls_get() { curl -sS -o "$STATE_DIR/tls.body" -w '%{http_code}' -H "Host: $1" "$NODE_HTTP/static/a.txt"; }
+expect_tls() { # expect_tls HOST WANT-STATUS WHAT
+  local got
+  got="$(tls_get "$1")"
+  echo "curl -H 'Host: $1' $NODE_HTTP/static/a.txt -> $got ($3)"
+  [[ "$got" == "$2" ]] || fail "$3: expected HTTP $2 for $1, got $got: $(head -c 200 "$STATE_DIR/tls.body")"
+  [[ "$2" != 200 || "$(cat "$STATE_DIR/tls.body")" == "static" ]] || fail "unexpected body over HTTPS: $(cat "$STATE_DIR/tls.body")"
+}
+# tls-ca and tls-name share files:9443: a connection verified for "files" must
+# never be reused for "wrong.m2.test", and a failed one never poisons "files".
+expect_tls tls-ca.m2.test 200 "trusted CA, name files matches"
+expect_tls tls-name.m2.test 502 "trusted CA, name wrong.m2.test does not match"
+expect_tls tls-ca.m2.test 200 "trusted CA, matching name after a mismatch"
+expect_tls tls-name.m2.test 502 "wrong name after a verified connection"
+expect_tls tls.m2.test 502 "self-signed certificate"
+"${COMPOSE[@]}" logs node >"$STATE_DIR/node.log" 2>&1
+grep -m1 "upstream SSL certificate verify error" "$STATE_DIR/node.log" | cut -c1-240 ||
+  fail "the node did not log the self-signed origin's verification error"
+grep -m1 -E 'upstream SSL certificate does not match .{0,2}wrong\.m2\.test' "$STATE_DIR/node.log" | cut -c1-240 ||
+  fail "the node did not log the certificate name mismatch for wrong.m2.test"
+tls_failed_in_console() {
+  api GET "/sites/$TLS_NAME_SITE/origin-health" | jq -e '.[0].lastErrorCode == "tls_failed"' >/dev/null
+}
+wait_for 60 "console shows tls_failed for the name-mismatch origin" tls_failed_in_console
+api GET "/sites/$TLS_NAME_SITE/origin-health" | jq -c '.[] | {downNodes, onlineNodes, lastErrorCode, lastError}'
 api PATCH "/sites/$TLS_SITE" '{"originSettings": {"tlsVerify": false}}' >/dev/null
 wait_node_latest
-TLS_BODY="$(curl -fsS -H 'Host: tls.m2.test' "$NODE_HTTP/static/a.txt")" || fail "origin without verification unreachable"
-[[ "$TLS_BODY" == "static" ]] || fail "unexpected body over HTTPS: $TLS_BODY"
-pass "verification on: 502 for the self-signed origin; verification off: 200 over HTTPS"
+expect_tls tls.m2.test 200 "self-signed certificate, verification off"
+pass "trusted CA + matching name 200; trusted CA + wrong name 502 (tls_failed in the console, no connection reuse either way); self-signed 502; verification off 200"
 
 step "M2: S3-compatible origin with SigV4 signing"
 S3_BODY="$(curl -fsS -H 'Host: s3.m2.test' "$NODE_HTTP/hello.txt")" || fail "S3 origin request failed: $(curl -sS -H 'Host: s3.m2.test' "$NODE_HTTP/hello.txt")"
@@ -419,6 +610,55 @@ expect_cache HIT s3.m2.test /hello.txt
 S3_POST="$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Host: s3.m2.test' "$NODE_HTTP/hello.txt")"
 [[ "$S3_POST" == "405" ]] || fail "POST to an S3 origin must be refused, got $S3_POST"
 pass "signed GET returned the object (then cached); POST refused with 405"
+
+step "N-L: S3 origins never receive the client's x-amz-* headers"
+AMZ=(-H 'x-amz-security-token: e2e-forged-session-token' -H 'x-amz-server-side-encryption-customer-algorithm: AES256'
+  -H 'x-amz-date: 20000101T000000Z' -H 'x-amz-content-sha256: e2e-forged-payload-hash' -H 'x-amz-request-payer: requester')
+# A new cache key (the query string is not forwarded to object storage), so this goes to the origin.
+S3_AMZ_H="$(curl -sS -D - -o "$STATE_DIR/s3amz.body" -H 'Host: s3.m2.test' "${AMZ[@]}" "$NODE_HTTP/hello.txt?e2e-amz=$RANDOM" | tr -d '\r')"
+grep -iE '^(HTTP|x-cache)' <<<"$S3_AMZ_H"
+grep -q '^HTTP/1.1 200' <<<"$S3_AMZ_H" && grep -qi '^x-cache: MISS' <<<"$S3_AMZ_H" &&
+  [[ "$(cat "$STATE_DIR/s3amz.body")" == "hello from s3" ]] ||
+  fail "a signed request with client x-amz-* headers must still succeed at the origin: $S3_AMZ_H $(cat "$STATE_DIR/s3amz.body")"
+S3_ECHO="$(curl -fsS -H 'Host: s3-echo.m2.test' "${AMZ[@]}" "$NODE_HTTP/amz.txt" | tr -d '\r')" ||
+  fail "the echoing S3 origin was not reachable"
+grep -iE '^(GET|Authorization|X-Amz-)' <<<"$S3_ECHO" | cut -c1-160
+grep -q '^GET /media/amz.txt ' <<<"$S3_ECHO" && grep -qi '^Authorization: AWS4-HMAC-SHA256 Credential=e2e-access-key/' <<<"$S3_ECHO" ||
+  fail "the echoing origin did not receive a SigV4-signed path-style request: $S3_ECHO"
+if grep -qiE '^X-Amz-(Security-Token|Server-Side-Encryption|Request-Payer)' <<<"$S3_ECHO" ||
+  grep -qiE '^X-Amz-Date: 20000101T000000Z|^X-Amz-Content-Sha256: e2e-forged' <<<"$S3_ECHO"; then
+  fail "client x-amz-* headers reached the S3 origin: $S3_ECHO"
+fi
+pass "with forged x-amz-* headers the signed GET still succeeded (MISS, 200); the origin saw only the node's own X-Amz-Date / X-Amz-Content-Sha256"
+
+step "N-H2: a host name resolving outside the allow list is refused by the node (502, address_forbidden)"
+HIDDEN_CODE="$(curl -sS -o "$STATE_DIR/hidden.body" -w '%{http_code}' -H 'Host: hidden.m2.test' "$NODE_HTTP/")"
+echo "curl -H 'Host: hidden.m2.test' $NODE_HTTP/ -> $HIDDEN_CODE"
+[[ "$HIDDEN_CODE" == 502 ]] || fail "origin resolving into $E2E_ISOLATED_SUBNET must be refused with 502, got $HIDDEN_CODE"
+! grep -q '^Name: hidden' "$STATE_DIR/hidden.body" || fail "the hidden origin was reached"
+HIDDEN_IP="$(docker inspect "$("${COMPOSE[@]}" ps -q hidden)" --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')"
+# The node reports the refused DNS answer through origin health (code + address).
+hidden_forbidden() {
+  api GET "/sites/$HIDDEN_SITE/origin-health" |
+    jq -e --arg ip "$HIDDEN_IP" '.[0] | .lastErrorCode == "address_forbidden" and .lastErrorParams.address == $ip' >/dev/null
+}
+wait_for 60 "console shows address_forbidden ($HIDDEN_IP) for the hidden origin" hidden_forbidden
+api GET "/sites/$HIDDEN_SITE/origin-health" | jq -c '.[] | {downNodes, onlineNodes, lastErrorCode, lastErrorParams, lastError}'
+pass "hidden -> $HIDDEN_IP ($E2E_ISOLATED_SUBNET): 502 from the node, origin health address_forbidden in the console"
+
+step "N-H2: CDN-Loop: the node appends its cdn-id and stops a site whose origin is the node itself (508)"
+CDN_ID="edgeweir-$(printf '%s' "$(node_json | jq -r .id)" | sha256 | cut -c1-16)"
+LOOP_ECHO="$(curl -fsS -H 'Host: cache.m2.test' -H 'CDN-Loop: other-cdn.example; v=1' "$NODE_HTTP/cdn-loop-$RANDOM" | tr -d '\r')"
+grep -i '^Cdn-Loop:' <<<"$LOOP_ECHO"
+grep -qix "Cdn-Loop: other-cdn.example; v=1, $CDN_ID" <<<"$LOOP_ECHO" ||
+  fail "the origin did not receive CDN-Loop with this node's cdn-id ($CDN_ID) appended: $LOOP_ECHO"
+LOOP_H="$(curl -sS --max-time 10 -D - -o /dev/null -H 'Host: loop.m2.test' "$NODE_HTTP/loop" | tr -d '\r')" ||
+  fail "a request to a site whose origin is the node itself did not come back"
+grep -iE '^(HTTP|x-edgeweir-error)' <<<"$LOOP_H"
+grep -q '^HTTP/1.1 508' <<<"$LOOP_H" || fail "origin = the node itself must end in 508 Loop Detected: $LOOP_H"
+SELF_CODE="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Host: cache.m2.test' -H "CDN-Loop: other-cdn.example, $CDN_ID" "$NODE_HTTP/looped-$RANDOM")"
+[[ "$SELF_CODE" == 508 ]] || fail "a request already carrying this node's cdn-id must get 508, got $SELF_CODE"
+pass "CDN-Loop forwarded as 'other-cdn.example; v=1, $CDN_ID'; origin = node -> 508; a request carrying $CDN_ID -> 508"
 
 step "M2: failover to the backup origin and back"
 origin_name() { curl -sS -H 'Host: failover.m2.test' "$NODE_HTTP/whoami" | awk '/^Name:/ { print $2 }'; }
@@ -453,6 +693,143 @@ if ! $SKIP_UI; then
     || fail "Playwright M2 test failed"
   pass "Playwright M2 passed"
 fi
+
+step "N-H1: the console's release mirror serves goreleaser snapshot packages, anything else is 404"
+need goreleaser
+need go
+need syft
+[[ -f "$NODE_CONTEXT/.goreleaser.yaml" ]] || fail "no edgeweir-node checkout at $NODE_CONTEXT (EDGEWEIR_NODE_CONTEXT)"
+echo "goreleaser release --snapshot --clean (in $NODE_CONTEXT, log in $STATE_DIR/goreleaser.log)"
+(cd "$NODE_CONTEXT" && goreleaser release --snapshot --clean) >"$STATE_DIR/goreleaser.log" 2>&1 ||
+  { tail -n 40 "$STATE_DIR/goreleaser.log" >&2; fail "goreleaser snapshot build failed"; }
+DIST="$(cd "$NODE_CONTEXT" && pwd)/dist"
+NODE_VERSION="$(jq -r .version "$DIST/metadata.json")"
+echo "snapshot $NODE_VERSION: $(awk '{ print $2 }' "$DIST/checksums.txt" | grep -v '\.sbom\.json$' | tr '\n' ' ')"
+MIRROR_VOLUME="$(docker inspect "$("${COMPOSE[@]}" ps -q console)" \
+  --format '{{range .Mounts}}{{if eq .Destination "/srv/downloads"}}{{.Name}}{{end}}{{end}}')"
+[[ -n "$MIRROR_VOLUME" ]] || fail "the console has no /srv/downloads volume (compose.e2e.yml)"
+# Documented layout: edgeweir-node/latest and edgeweir-node/v<version>/<file>.
+docker run --rm -v "$MIRROR_VOLUME:/mirror" -v "$DIST:/dist:ro" -e VERSION="$NODE_VERSION" "$INSTALL_IMAGE" sh -ec '
+  dir="/mirror/edgeweir-node/v$VERSION"
+  rm -rf /mirror/edgeweir-node
+  mkdir -p "$dir"
+  cp /dist/checksums.txt "$dir/"
+  awk "{ print \$2 }" /dist/checksums.txt | while read -r f; do cp "/dist/$f" "$dir/"; done
+  printf "%s\n" "$VERSION" >/mirror/edgeweir-node/latest
+  chmod -R a+rX /mirror' || fail "could not fill the release mirror"
+[[ "$(curl -fsS "$CONSOLE/downloads/edgeweir-node/latest")" == "$NODE_VERSION" ]] || fail "the mirror's latest is not $NODE_VERSION"
+curl -fsS "$CONSOLE/downloads/edgeweir-node/v$NODE_VERSION/checksums.txt" | cmp -s - "$DIST/checksums.txt" ||
+  fail "the mirror serves a different checksums.txt"
+for missing in "/downloads/edgeweir-node/v9.9.9/checksums.txt" "/downloads/edgeweir-node/v$NODE_VERSION/missing.deb" \
+  "/downloads/edgeweir-node/v$NODE_VERSION/..%2F..%2Flatest" "/downloads/edgeweir-node/v$NODE_VERSION" \
+  "/downloads/other/latest" "/downloads/"; do
+  got="$(curl -sS --path-as-is -o /dev/null -w '%{http_code} %{content_type}' "$CONSOLE$missing")"
+  [[ "$got" == "404 application/json" ]] || fail "GET $missing must be a JSON 404 (never the SPA shell), got: $got"
+done
+pass "mirror: latest = $NODE_VERSION, checksums.txt identical to dist/; unknown versions, files and projects are JSON 404s"
+
+step "N-H1: install.sh in a clean $INSTALL_IMAGE container (.deb from the mirror, --no-start: no systemd in Docker)"
+INSTALL_CLUSTER="$(api POST /clusters '{"name": "install-e2e"}' | jq -r .id)"
+INSTALL_TOKEN_JSON="$(api POST /enrollment-tokens "$(jq -nc --arg c "$INSTALL_CLUSTER" '{clusterId: $c, nodeName: "edge-install-1", ttlMinutes: 15}')")"
+INSTALL_SERVER="$(jq -r .serverUrl <<<"$INSTALL_TOKEN_JSON")"
+INSTALL_CA="$(jq -r .caSha256 <<<"$INSTALL_TOKEN_JSON")"
+docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
+docker run -d --name "$INSTALL_CONTAINER" --network "$NETWORK" "$INSTALL_IMAGE" sleep infinity >/dev/null ||
+  fail "could not start the install container"
+in_install() { docker exec "$INSTALL_CONTAINER" bash -ec "$@"; }
+in_install 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends curl ca-certificates >/dev/null' ||
+  fail "could not install curl in the install container"
+# The token is never an argument (process list): --token is refused outright.
+if in_install 'curl -fsSL http://console:3000/install.sh | bash -s -- --token ewt_x --server https://console:8443 --ca-sha256 '"$INSTALL_CA" \
+  >"$STATE_DIR/install-token-arg.log" 2>&1; then
+  fail "install.sh must refuse --token"
+fi
+grep -q -- "--token is not accepted" "$STATE_DIR/install-token-arg.log" || fail "install.sh --token: $(cat "$STATE_DIR/install-token-arg.log")"
+# As the console's command, but as root without sudo and with the mirror on the e2e network.
+EDGEWEIR_TOKEN="$(jq -r .token <<<"$INSTALL_TOKEN_JSON")" docker exec -e EDGEWEIR_TOKEN "$INSTALL_CONTAINER" bash -ec '
+  set -o pipefail
+  curl -fsSL http://console:3000/install.sh | bash -s -- --server "$1" --ca-sha256 "$2" \
+    --mirror http://console:3000/downloads/edgeweir-node --mirror-only --allow-unsigned --no-start' \
+  _ "$INSTALL_SERVER" "$INSTALL_CA" >"$STATE_DIR/install.log" 2>&1 ||
+  { tail -n 60 "$STATE_DIR/install.log" >&2; fail "install.sh failed"; }
+grep '\[edgeweir\]' "$STATE_DIR/install.log" | tr -d '\033' | sed -E 's/\[[0-9;]*m//g' || true
+grep -q "installing edgeweir-node $NODE_VERSION (deb, " "$STATE_DIR/install.log" &&
+  grep -qE "SHA-256 verified: edgeweir-node_.*_(amd64|arm64)\.deb" "$STATE_DIR/install.log" &&
+  grep -q "done: installed and enrolled; --no-start given" "$STATE_DIR/install.log" ||
+  fail "install.sh did not install the verified .deb and enroll"
+LAYOUT="$(in_install '
+  getent passwd edgeweir | cut -d: -f1,6,7
+  stat -c "%U:%G %a %n" /usr/bin/edgeweir-node /usr/lib/systemd/system/edgeweir-node.service /etc/default/edgeweir-node \
+    /usr/share/edgeweir-node/lua/edgeweir /var/lib/edgeweir-node /var/cache/edgeweir-node \
+    /var/lib/edgeweir-node/node.key /var/lib/edgeweir-node/node.crt /var/lib/edgeweir-node/ca.crt /var/lib/edgeweir-node/identity.json
+  find /usr/share/edgeweir-node/lua/edgeweir -name "*.lua" \( ! -perm 644 -o ! -user root \)
+  dpkg-query -W -f "\${Package}: \${Status}\n" edgeweir-node openresty
+  edgeweir-node version')"
+echo "$LAYOUT"
+EXPECTED_LAYOUT="edgeweir:/var/lib/edgeweir-node:/usr/sbin/nologin
+root:root 755 /usr/bin/edgeweir-node
+root:root 644 /usr/lib/systemd/system/edgeweir-node.service
+root:root 644 /etc/default/edgeweir-node
+root:root 755 /usr/share/edgeweir-node/lua/edgeweir
+edgeweir:edgeweir 700 /var/lib/edgeweir-node
+edgeweir:edgeweir 750 /var/cache/edgeweir-node
+edgeweir:edgeweir 600 /var/lib/edgeweir-node/node.key
+edgeweir:edgeweir 644 /var/lib/edgeweir-node/node.crt
+edgeweir:edgeweir 644 /var/lib/edgeweir-node/ca.crt
+edgeweir:edgeweir 644 /var/lib/edgeweir-node/identity.json
+edgeweir-node: install ok installed
+openresty: install ok installed"
+[[ "$LAYOUT" == "$EXPECTED_LAYOUT"$'\n'*"$NODE_VERSION"* ]] || fail "unexpected install layout (expected, then the version):
+$EXPECTED_LAYOUT"
+[[ "$(in_install 'ls /usr/share/edgeweir-node/lua/edgeweir/*.lua | wc -l')" -ge 10 ]] || fail "the Lua modules are missing"
+IDENTITY="$(in_install 'cat /var/lib/edgeweir-node/identity.json')"
+CERT_SHA="$(in_install 'openssl x509 -in /var/lib/edgeweir-node/node.crt -outform DER | sha256sum | cut -d" " -f1')"
+INSTALLED_NODE="$(api GET "/nodes?clusterId=$INSTALL_CLUSTER" | jq -c '.[] | select(.name == "edge-install-1")')"
+echo "console: $(jq -c '{id, name, clusterName, status, online, enrolledAt, certFingerprint}' <<<"$INSTALLED_NODE")"
+[[ "$(jq -r .id <<<"$INSTALLED_NODE")" == "$(jq -r .node_id <<<"$IDENTITY")" &&
+  "$(jq -r .cluster_id <<<"$IDENTITY")" == "$INSTALL_CLUSTER" &&
+  "$(jq -r .ca_sha256 <<<"$IDENTITY")" == "$INSTALL_CA" &&
+  "$(jq -r .certFingerprint <<<"$INSTALLED_NODE")" == "$CERT_SHA" &&
+  "$(jq -r .status <<<"$INSTALLED_NODE")" == "active" &&
+  "$(jq -r .enrolledAt <<<"$INSTALLED_NODE")" != null ]] ||
+  fail "the console does not show the installed node with the identity on disk: $INSTALLED_NODE / $IDENTITY"
+pass "install.sh: .deb $NODE_VERSION + OpenResty installed, edgeweir system user, files and modes as packaged, enrolled as $(jq -r .id <<<"$INSTALLED_NODE") (certificate $CERT_SHA matches the console)"
+
+step "N-H1: the installed node runs as in its systemd unit (User=, Environment=, ExecStart=) and comes online"
+# systemd is not available in the container: start ExecStart= as User= with the
+# unit's Environment= and the RuntimeDirectory= systemd would create.
+docker exec -d "$INSTALL_CONTAINER" bash -ec '
+  unit=/usr/lib/systemd/system/edgeweir-node.service
+  user="$(sed -n "s/^User=//p" "$unit")"
+  mapfile -t envs < <(sed -n "s/^Environment=//p" "$unit")
+  read -ra cmd < <(sed -n "s/^ExecStart=//p" "$unit")
+  install -d -o "$user" -g "$user" -m 0750 /run/edgeweir-node
+  exec runuser -u "$user" -- env "${envs[@]}" "${cmd[@]}" >/var/log/edgeweir-node.log 2>&1' ||
+  fail "could not start the installed agent"
+installed_online() {
+  [[ "$(api GET "/nodes?clusterId=$INSTALL_CLUSTER" | jq -r '.[] | select(.name == "edge-install-1") | "\(.online) \(.agentVersion)"')" == "true $NODE_VERSION" ]]
+}
+ONLINE_DEADLINE=$((SECONDS + 90))
+until installed_online; do
+  if ((SECONDS >= ONLINE_DEADLINE)); then
+    in_install 'tail -n 40 /var/log/edgeweir-node.log' >&2 || true
+    fail "timed out after 90s waiting for the installed node to come online"
+  fi
+  sleep 1
+done
+# No ps in the slim image: the owner and command line of every agent / nginx
+# process (runuser, root, is only the launcher).
+PROCS="$(in_install 'for d in /proc/[0-9]*; do
+    c="$(tr "\0" " " <"$d/cmdline" 2>/dev/null || true)"
+    case "$c" in /usr/bin/edgeweir-node\ run*|nginx:*) echo "$(stat -c %U "$d") ${c:0:100}" ;; esac
+  done')"
+echo "$PROCS"
+grep -q '^edgeweir /usr/bin/edgeweir-node run --manage-nginx' <<<"$PROCS" && grep -q '^edgeweir nginx: master process' <<<"$PROCS" &&
+  grep -q '^edgeweir nginx: worker process' <<<"$PROCS" && ! grep -qv '^edgeweir ' <<<"$PROCS" ||
+  fail "the agent and OpenResty must run as the edgeweir user: $PROCS"
+api GET "/nodes?clusterId=$INSTALL_CLUSTER" | jq -c '.[] | {name, online, agentVersion, engine, engineVersion, os, arch, appliedRevision, applyState}'
+docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
+pass "the installed agent ($NODE_VERSION) runs as the edgeweir user and is online over mTLS"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"

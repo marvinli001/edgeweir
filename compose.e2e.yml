@@ -5,8 +5,14 @@
 # The node image is built from the sibling edgeweir-node checkout.
 # Test-only secrets below are fixed on purpose; never reuse them.
 # A second environment can run next to this one with its own project name,
-# ports and image tag, e.g.:
-#   COMPOSE_PROJECT_NAME=edgeweir-e2e-2 E2E_CONSOLE_PORT=13100 E2E_NODE_PORT=18180 E2E_TAG=e2e-2 ...
+# ports, image tag and subnets, e.g.:
+#   COMPOSE_PROJECT_NAME=edgeweir-e2e-2 E2E_CONSOLE_PORT=13100 E2E_NODE_PORT=18180 E2E_TAG=e2e-2 \
+#   E2E_SUBNET=172.28.223.0/24 E2E_ISOLATED_SUBNET=172.28.224.0/24 ...
+#
+# Networks: origins on private addresses are refused by default (N-H2), so
+# scripts/e2e.sh puts the default network's subnet (E2E_SUBNET, pinned here
+# so that it is known) on the platform's origin allow list. The "isolated"
+# network stays outside it: its "hidden" origin must be refused by the node.
 name: edgeweir-e2e
 
 services:
@@ -35,9 +41,14 @@ services:
       BETTER_AUTH_SECRET: e2e-only-better-auth-secret-do-not-reuse
       EDGEWEIR_PUBLIC_URL: http://localhost:${E2E_CONSOLE_PORT:-13000}
       EDGEWEIR_NODE_API_URL: https://console:8443
+      # Release mirror for install.sh; scripts/e2e.sh fills the volume with
+      # goreleaser snapshot packages of the node.
+      EDGEWEIR_DOWNLOADS_DIR: /srv/downloads
       LOG_LEVEL: debug
     ports:
       - "${E2E_CONSOLE_PORT:-13000}:3000"
+    volumes:
+      - downloads:/srv/downloads:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,8 +70,17 @@ services:
     image: traefik/whoami:v1.12.0
     command: ["--name", "backup"]
 
-  # MVP M2: static files over HTTP (Range / slice) and HTTPS with a
-  # self-signed certificate (origin certificate verification).
+  # N-H2: an origin only on the isolated network. The node resolves "hidden"
+  # to an address outside the allow list and must refuse it (502).
+  hidden:
+    image: traefik/whoami:v1.12.0
+    command: ["--name", "hidden"]
+    networks: [isolated]
+
+  # MVP M2: static files over HTTP (Range / slice; the access log records the
+  # Range header each request carried) and HTTPS: :443 with a self-signed
+  # certificate, :9443 with a certificate for "files" issued by a test CA
+  # that the node trusts (written to the origin-ca volume).
   files:
     image: openresty/openresty:1.31.1.1-bookworm
     entrypoint: ["/bin/sh", "-c"]
@@ -71,9 +91,23 @@ services:
         echo static > /srv/static/a.txt &&
         openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj /CN=files
         -addext subjectAltName=DNS:files -keyout /tmp/files.key -out /tmp/files.crt 2>/dev/null &&
+        openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj '/CN=Edgeweir e2e origin CA'
+        -addext basicConstraints=critical,CA:TRUE -addext keyUsage=critical,keyCertSign,cRLSign
+        -keyout /tmp/ca.key -out /tmp/ca.crt 2>/dev/null &&
+        openssl req -new -newkey rsa:2048 -nodes -subj /CN=files -keyout /tmp/trusted.key -out /tmp/trusted.csr 2>/dev/null &&
+        printf 'basicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=DNS:files\n' > /tmp/trusted.ext &&
+        openssl x509 -req -in /tmp/trusted.csr -CA /tmp/ca.crt -CAkey /tmp/ca.key -CAcreateserial -days 2
+        -extfile /tmp/trusted.ext -out /tmp/trusted.crt 2>/dev/null &&
+        cp /tmp/ca.crt /shared/origin-ca.pem.tmp && mv /shared/origin-ca.pem.tmp /shared/origin-ca.pem &&
         exec openresty -g 'daemon off;' -c /etc/e2e/files.conf
     volumes:
       - ./docker/e2e/files.conf:/etc/e2e/files.conf:ro
+      - origin-ca:/shared
+    # The node's nginx.conf references the test CA: start the node once it exists.
+    healthcheck:
+      test: ["CMD", "test", "-s", "/shared/origin-ca.pem"]
+      interval: 1s
+      retries: 30
 
   # MVP M2: S3-compatible object storage (Versity S3 Gateway, Apache-2.0)
   # for SigV4-signed origin requests: bucket "media" with one object.
@@ -91,10 +125,16 @@ services:
       context: ${EDGEWEIR_NODE_CONTEXT:-../edgeweir-node}
     image: edgeweir-node:${E2E_TAG:-e2e}
     hostname: edge-e2e-1
+    environment:
+      # Trust store for HTTPS origins (instead of the system bundle): the
+      # test CA only, so the self-signed :443 of "files" stays untrusted.
+      EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
     ports:
       - "${E2E_NODE_PORT:-18080}:80"
     volumes:
       - node-state:/var/lib/edgeweir-node
+      - origin-ca:/etc/edgeweir-e2e:ro
+    networks: [default, isolated]
     depends_on:
       console:
         condition: service_healthy
@@ -104,10 +144,24 @@ services:
         condition: service_started
       origin-backup:
         condition: service_started
-      files:
+      hidden:
         condition: service_started
+      files:
+        condition: service_healthy
       s3:
         condition: service_started
 
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${E2E_SUBNET:-172.28.213.0/24}
+  isolated:
+    ipam:
+      config:
+        - subnet: ${E2E_ISOLATED_SUBNET:-172.28.214.0/24}
+
 volumes:
   node-state:
+  origin-ca:
+  downloads:
