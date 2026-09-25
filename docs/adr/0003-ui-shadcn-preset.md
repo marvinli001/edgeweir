@@ -114,3 +114,10 @@ Phase 0 范围：
 >   - 决策第 9 条在「数据展示重做」时被原地改写，现已恢复原文；那次的变化只以上面的「数据展示重做」记录为准（ADR README：已接受的 ADR 不改写结论）。决策第 4 条现在的写法（appica 也用于动效与数据展示类组件，复制按钮用 shadcn）是「Phase 0 之后的 UI 调整」时定下的，那条记录当时没有写明，在此补记。
 >   - 营销页例外：`/` 是可选的公开落地页（后台系统设置里选模板；关闭时 `/` 直接跳到控制台首页 `/overview`，见 mvp.md 0.2）。落地页面向访客，可以有营销文案（标语、说明段落、FAQ），不受决策第 7 条限制，但文案仍全部走 Paraglide（zh-CN、en）。控制台和后台没有这条例外。
 >   - 模板用中性名称 Horizon、Orbit；界面、文案和代码注释里不出现其他厂商的名称，也不写"仿照某站"。
+>   - 落地页只用浅色（模板是固定的浅色色板）：`public/theme-init.js` 在 `/` 上不加 `.dark`，并在根节点标记浅色锁（`data-theme-lock`）；ThemeProvider 在锁被持有时显示浅色（`useLightTheme`，落地页挂载时持有，离开后恢复用户的主题），`/` 跳转到控制台或初始化页时释放首屏的锁（悬停预加载不释放）。锁在唯一的 ThemeProvider 里，决策第 5 条不变。锁住时快捷键 `d` 不改动保存的选择，sonner 跟随屏幕上的配色。所有 localStorage 访问都经过 `lib/theme.ts` 里带 try/catch 的函数，浏览器禁用站点数据时主题仍然可用。
+>   - `/` 在三个请求完成前显示 `LoadingState`（`pendingMs: 0`，Loader 自带 200ms 延迟淡入，快的请求看不到），失败时显示错误态。
+>   - Rubik 字体保留，只用于 Orbit 模板：`@fontsource-variable/rubik` 5.3.0，字体许可为 SIL Open Font License 1.1（包内附 LICENSE）。woff2 文件由 Vite 打包进 `dist/web/assets`，与控制台同源提供，不请求第三方字体服务；Playwright（`e2e/landing.spec.ts`）断言落地页不向其他源发请求。
+>   - 模板配色是 `landing.css` 里的 CSS 变量（`--hz-*`、`--ob-*`；Orbit 插画用 `--ob-<色相>-<n>` 色阶，n = (1 − HSL 亮度) × 1000；阴影也是变量），后台设置里的模板缩略图用同一套变量。二维码用 `fill-black`。shadcn chart 里匹配 recharts 默认描边色的选择器移到 `index.css`（与上游 `chart.tsx` 的差异）。
+>   - 一行安全提示改用 `SafetyNote`（`components/safety-note.tsx`）；`*Description` 组件（CardDescription、DialogDescription、FieldDescription 等）不再使用，Alert 的 AlertDescription 是提示内容本身，保留。确认对话框的 `note` 仍通过 `aria-describedby` 描述对话框。移除未使用的 Skeleton 与 SidebarMenuSkeleton。
+>   - shadcn 组件里的无障碍文字（Spinner 的"加载中"、对话框和抽屉的"关闭"、侧边栏、面包屑、命令面板）改走 Paraglide；命令面板和移动端侧边栏的隐藏说明删除（Base UI 的对话框不要求说明）。
+>   - `ui-rules.test.ts` 相应收紧：`src/web` 任何地方（包括 shadcn 组件）都不能有 Skeleton 和 `animate-pulse`；不能用 `*Description` 组件（AlertDescription 除外）；TS/TSX 里不能写十六进制或 `rgb()`、`hsl()`、`oklch()` 等颜色字面量；`src/web`、`index.html`、`public/` 里指向其他站点的 URL 只允许 ICP 备案查询、本项目仓库和 SVG 命名空间（另有 example.com、.test 等保留名称）；落地页代码和 `landing_*` 文案里不能出现其他厂商的名称。`i18n.test.ts` 用 Vite 导出的 oxc 解析器检查组件里的英文：JSX 文本、`aria-label` 等纯文本属性、`title`、`alt`，以及 `placeholder`、`label`、`description` 里成句的英文（启发式，允许清单只有产品名 Edgeweir）。
