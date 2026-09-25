@@ -180,12 +180,21 @@ export const enrollmentTokenResult = z.object({
   installCommand: z.string(),
 });
 
+export const trafficPoint = z.object({
+  minute: isoDateTime,
+  requests: z.number().int(),
+  cacheHits: z.number().int(),
+  cacheMisses: z.number().int(),
+});
+
 export const overview = z.object({
   clusters: z.number().int(),
   nodes: z.number().int(),
   onlineNodes: z.number().int(),
   sites: z.number().int(),
   revisions: z.array(revision),
+  /** Per-minute totals over the last 60 minutes (lite analytics). */
+  traffic: z.array(trafficPoint),
 });
 
 export const systemStatus = z.object({
@@ -226,6 +235,7 @@ export type Cluster = z.infer<typeof cluster>;
 export type Node = z.infer<typeof node>;
 export type Revision = z.infer<typeof revision>;
 export type Overview = z.infer<typeof overview>;
+export type TrafficPoint = z.infer<typeof trafficPoint>;
 export type EnrollmentTokenResult = z.infer<typeof enrollmentTokenResult>;
 export type Settings = z.infer<typeof settings>;
 export type AuditLogEntry = z.infer<typeof auditLogEntry>;

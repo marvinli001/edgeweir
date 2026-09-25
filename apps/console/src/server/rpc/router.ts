@@ -1,7 +1,7 @@
 import { contract } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { implement, ORPCError } from "@orpc/server";
-import { asc, count, desc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, sql } from "drizzle-orm";
 import { API_KEY_HEADER } from "../lib/auth";
 import type { AppContext } from "../lib/context";
 import type { Actor } from "../services/audit";
@@ -87,7 +87,8 @@ export const router = os.router({
     get: authed.overview.get.handler(async ({ context }) => {
       const db = context.app.db;
       const since = sql`now() - make_interval(secs => ${ONLINE_WINDOW_SECONDS})`;
-      const [[clusters], [nodes], [online], sites, revisions] = await Promise.all([
+      const stats = schema.nodeMinuteStats;
+      const [[clusters], [nodes], [online], sites, revisions, traffic] = await Promise.all([
         db.select({ n: count() }).from(schema.cluster),
         db.select({ n: count() }).from(schema.node),
         db.select({ n: count() }).from(schema.node).where(gt(schema.node.lastSeenAt, since)),
@@ -97,6 +98,25 @@ export const router = os.router({
           .from(schema.configRevision)
           .orderBy(desc(schema.configRevision.createdAt))
           .limit(10),
+        db
+          .select({
+            minute: stats.minute,
+            requests: sql<number>`sum(${stats.requests})::bigint`.mapWith(Number),
+            cacheHits: sql<number>`sum(${stats.cacheHits})::bigint`.mapWith(Number),
+            cacheMisses: sql<number>`sum(${stats.cacheMisses})::bigint`.mapWith(Number),
+          })
+          .from(stats)
+          .innerJoin(schema.site, eq(schema.site.id, stats.siteId))
+          .where(
+            and(
+              gt(stats.minute, sql`now() - interval '60 minutes'`),
+              context.scope.all
+                ? undefined
+                : eq(schema.site.organizationId, context.scope.organizationId),
+            ),
+          )
+          .groupBy(stats.minute)
+          .orderBy(asc(stats.minute)),
       ]);
       return {
         clusters: context.isAdmin ? (clusters?.n ?? 0) : 0,
@@ -104,6 +124,7 @@ export const router = os.router({
         onlineNodes: context.isAdmin ? (online?.n ?? 0) : 0,
         sites: sites.length,
         revisions: context.isAdmin ? revisions.map(toRevisionDto) : [],
+        traffic: traffic.map((t) => ({ ...t, minute: new Date(t.minute).toISOString() })),
       };
     }),
   },
