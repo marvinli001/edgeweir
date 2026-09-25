@@ -429,6 +429,31 @@ describe("node channel", async () => {
     expect(health).toEqual([
       expect.objectContaining({ originId: primary, healthy: false, lastError: "connect timeout" }),
     ]);
+
+    // Stats are summed per minute and site in one upsert; other clusters' sites are dropped.
+    const minute = timestampFromDate(new Date(Date.UTC(2026, 0, 1, 0, 0, 30)));
+    const stats = await mtls.reportStats({
+      stats: [
+        { minute, siteId: own.site.id, requests: 2n, cacheHits: 1n, statusCodes: { 200: 2n } },
+        { minute, siteId: own.site.id, requests: 3n, statusCodes: { 200: 1n, 404: 2n } },
+        { minute, siteId: foreign.site.id, requests: 7n },
+      ],
+    });
+    expect(stats.accepted).toBe(2);
+    await mtls.reportStats({ stats: [{ minute, siteId: own.site.id, requests: 1n }] });
+    const counted = await ctx.db
+      .select()
+      .from(schema.nodeMinuteStats)
+      .where(eq(schema.nodeMinuteStats.nodeId, enrolled.nodeId));
+    expect(counted).toEqual([
+      expect.objectContaining({
+        minute: new Date(Date.UTC(2026, 0, 1)),
+        siteId: own.site.id,
+        requests: 6,
+        cacheHits: 1,
+        statusCodes: { "200": 3, "404": 2 },
+      }),
+    ]);
   });
 
   it("rejects unknown tokens", async () => {

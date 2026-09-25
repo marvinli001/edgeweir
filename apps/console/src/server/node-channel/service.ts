@@ -24,7 +24,7 @@ import {
   WatchConfigResponseSchema,
   WatchEvent,
 } from "@edgeweir/proto";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { NODE_CERT_LIFETIME_DAYS } from "../pki/ca";
 import { recordAudit } from "../services/audit";
@@ -39,6 +39,7 @@ import { isSerialRevoked, normalizeSerial } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
 import { getRevision, latestRevision } from "../services/revisions";
 import { s3SecretBinding } from "../services/sites";
+import { ingestMinuteStats, MAX_STATS_PER_REPORT } from "../services/stats";
 
 export const HEARTBEAT_SECONDS = 15;
 export const KEEPALIVE_MS = 15_000;
@@ -494,49 +495,28 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
 
     async reportStats(req, ctx) {
       const node = await requireNode(ctx);
-      let accepted = 0;
-      for (const s of req.stats.slice(0, 5000)) {
-        if (!s.minute || !s.siteId) continue;
-        const [site] = await app.db
-          .select({ id: schema.site.id })
-          .from(schema.site)
-          .where(and(eq(schema.site.id, s.siteId), eq(schema.site.clusterId, node.clusterId)));
-        if (!site) continue;
-        const minute = timestampDate(s.minute);
-        minute.setUTCSeconds(0, 0);
-        const codes: Record<string, number> = {};
-        for (const [code, n] of Object.entries(s.statusCodes)) codes[code] = Number(n);
-        await app.db
-          .insert(schema.nodeMinuteStats)
-          .values({
-            minute,
-            nodeId: node.id,
-            siteId: s.siteId,
-            requests: Number(s.requests),
-            bytesSent: Number(s.bytesSent),
-            bytesReceived: Number(s.bytesReceived),
-            cacheHits: Number(s.cacheHits),
-            cacheMisses: Number(s.cacheMisses),
-            statusCodes: codes,
-          })
-          .onConflictDoUpdate({
-            target: [
-              schema.nodeMinuteStats.minute,
-              schema.nodeMinuteStats.nodeId,
-              schema.nodeMinuteStats.siteId,
-            ],
-            set: {
-              requests: sql`${schema.nodeMinuteStats.requests} + excluded.requests`,
-              bytesSent: sql`${schema.nodeMinuteStats.bytesSent} + excluded.bytes_sent`,
-              bytesReceived: sql`${schema.nodeMinuteStats.bytesReceived} + excluded.bytes_received`,
-              cacheHits: sql`${schema.nodeMinuteStats.cacheHits} + excluded.cache_hits`,
-              cacheMisses: sql`${schema.nodeMinuteStats.cacheMisses} + excluded.cache_misses`,
-              // Sum per-status counters key by key.
-              statusCodes: sql`(select coalesce(jsonb_object_agg(k, coalesce((${schema.nodeMinuteStats.statusCodes} ->> k)::bigint, 0) + coalesce((excluded.status_codes ->> k)::bigint, 0)), '{}'::jsonb) from jsonb_object_keys(${schema.nodeMinuteStats.statusCodes} || excluded.status_codes) as k)`,
-            },
-          });
-        accepted++;
-      }
+      const accepted = await ingestMinuteStats(
+        app.db,
+        node,
+        req.stats.slice(0, MAX_STATS_PER_REPORT).flatMap((s) =>
+          s.minute && s.siteId
+            ? [
+                {
+                  minute: timestampDate(s.minute),
+                  siteId: s.siteId,
+                  requests: Number(s.requests),
+                  bytesSent: Number(s.bytesSent),
+                  bytesReceived: Number(s.bytesReceived),
+                  cacheHits: Number(s.cacheHits),
+                  cacheMisses: Number(s.cacheMisses),
+                  statusCodes: Object.fromEntries(
+                    Object.entries(s.statusCodes).map(([code, n]) => [code, Number(n)]),
+                  ),
+                },
+              ]
+            : [],
+        ),
+      );
       return { accepted };
     },
 
