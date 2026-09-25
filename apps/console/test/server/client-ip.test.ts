@@ -1,4 +1,6 @@
+import type { AddressInfo } from "node:net";
 import { schema } from "@edgeweir/db";
+import { serve } from "@hono/node-server";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
@@ -159,6 +161,30 @@ describe("client IP on audit entries and sessions", async () => {
     expect(await createCluster(cookie, "203.0.113.5", "1.2.3.4", "edge-untrusted")).toBe(
       "203.0.113.5",
     );
+  });
+
+  it("uses the socket address of a real HTTP connection", async () => {
+    // Through @hono/node-server, as in production: a streamed POST body is
+    // forwarded to better-auth, and the peer comes from the socket.
+    const server = serve({ fetch: app.fetch, port: 0, hostname: "127.0.0.1" });
+    await new Promise<void>((resolve) => server.once("listening", () => resolve()));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const res = await fetch(`http://127.0.0.1:${port}/api/auth/sign-in/email`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json", "x-forwarded-for": "6.6.6.6" },
+        body: JSON.stringify({ email: "admin@example.com", password: PASSWORD }),
+      });
+      expect(res.status).toBe(200);
+      const { token } = (await res.json()) as { token: string };
+      const [session] = await ctx.db
+        .select()
+        .from(schema.session)
+        .where(eq(schema.session.token, token));
+      expect(session?.ipAddress).toBe("127.0.0.1");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it("honors X-Forwarded-For from a trusted proxy", async () => {
