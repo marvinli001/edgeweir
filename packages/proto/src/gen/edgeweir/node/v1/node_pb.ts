@@ -429,10 +429,11 @@ export type OriginHealth = Message<"edgeweir.node.v1.OriginHealth"> & {
   lastError: string;
 
   /**
-   * Stable code of the last failure, e.g. "connect_timeout", with its
-   * parameters (e.g. "status" for "upstream_status"); the console localizes
-   * the code and falls back to last_error for codes it does not know.
-   * Added in v0.2.1.
+   * Stable code of the last failure with its parameters: connect_failed,
+   * timeout, upstream_status {status}, dns_failed {host},
+   * address_forbidden {address}, tls_failed; empty for anything else. The
+   * console localizes the code and falls back to last_error for codes it
+   * does not know. Added in v0.2.1.
    *
    * @generated from field: string last_error_code = 8;
    */
@@ -902,10 +903,13 @@ export type ReportTaskResultRequest = Message<"edgeweir.node.v1.ReportTaskResult
   finishedAt?: Timestamp | undefined;
 
   /**
-   * Stable code of the outcome when something failed, e.g.
-   * "prefetch_failed", with its parameters (e.g. "failed", "total",
-   * "first_url", "first_error"); the console localizes the code and falls
-   * back to message for codes it does not know. Added in v0.2.1.
+   * Stable code of the outcome when something failed, with its parameters:
+   * prefetch_failed {failed, total, url, reason, status} (url is the first
+   * failed URL; reason is status, connect_failed, timeout, https_unsupported
+   * or other; status only with reason=status), prefetch_timeout {done,
+   * total}, task_unsupported {type}, purge_failed. The console localizes the
+   * code and falls back to message for codes it does not know. Added in
+   * v0.2.1.
    *
    * @generated from field: string error_code = 7;
    */
