@@ -47,6 +47,11 @@ export const contract = {
       .route({ method: "GET", path: "/analytics/top-sites", tags: ["analytics"] })
       .input(s.trafficTopInput)
       .output(z.array(s.trafficTopItem)),
+    /** Leading sites, nodes (platform administrators only) or status codes over time. */
+    breakdown: oc
+      .route({ method: "GET", path: "/analytics/breakdown", tags: ["analytics"] })
+      .input(s.trafficBreakdownInput)
+      .output(s.trafficBreakdown),
     /** Platform administrators only. */
     topNodes: oc
       .route({ method: "GET", path: "/analytics/top-nodes", tags: ["analytics"] })

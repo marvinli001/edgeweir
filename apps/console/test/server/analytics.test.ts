@@ -5,6 +5,7 @@ import {
   rangeWindow,
   topNodes,
   topSites,
+  trafficBreakdown,
   trafficSeries,
 } from "../../src/server/services/analytics";
 import {
@@ -214,6 +215,86 @@ describe("analytics", async () => {
     ]);
   });
 
+  it("breaks traffic down by site, node and status code with the remainder's total", async () => {
+    const bySite = await trafficBreakdown(
+      db,
+      { all: true },
+      { range: "1h", by: "site", metric: "requests", limit: 10 },
+      NOW,
+    );
+    expect(bySite.times).toHaveLength(60);
+    expect(bySite.times.at(0)).toBe(at(11, 35).toISOString());
+    expect(bySite.items.map((i) => [i.name, i.parentName, i.total])).toEqual([
+      ["alpha", "Default", 100],
+      ["bravo", "Default", 10],
+      ["tango", "Tenant", 7],
+    ]);
+    const alpha = bySite.items[0]?.series ?? [];
+    expect(alpha).toHaveLength(60);
+    expect(alpha[bySite.times.indexOf(at(12, 30).toISOString())]).toBe(100);
+    expect(alpha.reduce((a, b) => a + b, 0)).toBe(100);
+    expect(bySite.total).toBe(117);
+    expect(bySite.totalSeries[bySite.times.indexOf(at(12, 30).toISOString())]).toBe(107);
+
+    // Ranked by bytes, sites that sent nothing drop out; the total still covers the scope.
+    const bytes = await trafficBreakdown(
+      db,
+      { all: true },
+      { range: "1h", by: "site", metric: "bytesSent", limit: 1 },
+      NOW,
+    );
+    expect(bytes.items.map((i) => [i.name, i.total])).toEqual([["alpha", 6_000]]);
+    expect(bytes.total).toBe(7_200);
+
+    const byNode = await trafficBreakdown(
+      db,
+      { all: true },
+      { range: "24h", by: "node", metric: "requests", limit: 10 },
+      NOW,
+    );
+    expect(byNode.items.map((i) => [i.name, i.parentName, i.total])).toEqual([
+      ["edge-a", "default", 1_159],
+      ["edge-b1", "edge-b", 7],
+    ]);
+
+    const byStatus = await trafficBreakdown(
+      db,
+      { all: true },
+      { range: "1h", by: "status", metric: "requests", limit: 10 },
+      NOW,
+    );
+    expect(byStatus.items.map((i) => [i.id, i.name, i.parentName, i.total])).toEqual([
+      ["200", "200", null, 105],
+      ["404", "404", null, 8],
+      ["304", "304", null, 2],
+      ["502", "502", null, 2],
+    ]);
+    expect(byStatus.total).toBe(117);
+    const errors = await trafficBreakdown(
+      db,
+      { all: true },
+      { range: "1h", by: "status", metric: "requests", statusClass: 4, limit: 10 },
+      NOW,
+    );
+    expect(errors.items.map((i) => i.id)).toEqual(["404"]);
+    expect(errors.total).toBe(8);
+
+    const tenant = await trafficBreakdown(
+      db,
+      { all: false, organizationId: tenantOrgId },
+      { range: "1h", by: "status", metric: "requests", limit: 10 },
+      NOW,
+    );
+    expect(tenant.items.map((i) => [i.id, i.total])).toEqual([["200", 7]]);
+    const one = await trafficBreakdown(
+      db,
+      { all: true },
+      { range: "1h", siteId: siteB, by: "node", metric: "requests", limit: 10 },
+      NOW,
+    );
+    expect(one.items.map((i) => [i.name, i.total])).toEqual([["edge-a", 10]]);
+  });
+
   it("scopes the procedures to the caller's organization", async () => {
     const traffic = await member.analytics.traffic({ range: "1h" });
     expect(traffic.points).toHaveLength(60);
@@ -237,6 +318,16 @@ describe("analytics", async () => {
       "edge-a",
       "edge-b1",
     ]);
+
+    const sites = await member.analytics.breakdown({ range: "1h", by: "site" });
+    expect(sites.items.map((i) => [i.name, i.total])).toEqual([["tango", 3]]);
+    expect(sites.total).toBe(3);
+    const nodes = await rpcError(member.analytics.breakdown({ by: "node" }));
+    expect(nodes).toMatchObject({ code: "FORBIDDEN", status: 403 });
+    const foreign = await rpcError(member.analytics.breakdown({ by: "status", siteId: siteA }));
+    expect(foreign).toMatchObject({ code: "SITE_NOT_FOUND", status: 404 });
+    const edge = await admin.analytics.breakdown({ range: "1h", by: "node", siteId: siteA });
+    expect(edge.items.map((i) => [i.name, i.total])).toEqual([["edge-a", 5]]);
   });
 
   it("keeps stars per user and within the caller's scope", async () => {

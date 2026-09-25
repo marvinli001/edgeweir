@@ -325,6 +325,46 @@ export const trafficTopItem = z.object({
   cacheMisses: z.number().int(),
 });
 
+export const trafficBreakdownInput = z.object({
+  range: analyticsRange.default("24h"),
+  /** Only this site; it must be visible to the caller. */
+  siteId: uuid.optional(),
+  /** Sites of the scope, edge nodes (platform administrators only) or HTTP status codes. */
+  by: z.enum(["site", "node", "status"]),
+  /** What the items are ranked and plotted by; status codes always count requests. */
+  metric: z.enum(["requests", "bytesSent"]).default("requests"),
+  /** With `by: status`, only codes of this class (4 → 4xx). */
+  statusClass: z.coerce.number().int().min(1).max(5).optional(),
+  limit: z.coerce.number().int().min(1).max(20).default(10),
+});
+
+/** One site, node or status code with its share of the metric. */
+export const trafficBreakdownItem = z.object({
+  /** Site or node id, or the status code ("404"). */
+  id: z.string(),
+  name: z.string(),
+  /** The site's organization or the node's cluster; null for status codes. */
+  parentId: z.string().nullable(),
+  parentName: z.string().nullable(),
+  total: z.number().int(),
+  /** Per bucket, aligned with `times`. */
+  series: z.array(z.number().int()),
+});
+
+export const trafficBreakdown = z.object({
+  range: analyticsRange,
+  bucketSeconds: z.number().int(),
+  from: isoDateTime,
+  to: isoDateTime,
+  /** Start of each bucket, oldest first. */
+  times: z.array(isoDateTime),
+  /** The leading items over the range, largest first. */
+  items: z.array(trafficBreakdownItem),
+  /** The metric over everything the breakdown covers, so the remainder beyond `items` is known. */
+  total: z.number().int(),
+  totalSeries: z.array(z.number().int()),
+});
+
 /** A starred site, as the console home lists it. */
 export const starredSite = z.object({
   id: uuid,
@@ -595,6 +635,9 @@ export type TrafficPoint = z.infer<typeof trafficPoint>;
 export type TrafficTotals = z.infer<typeof trafficTotals>;
 export type Traffic = z.infer<typeof traffic>;
 export type TrafficTopItem = z.infer<typeof trafficTopItem>;
+export type TrafficBreakdownInput = z.infer<typeof trafficBreakdownInput>;
+export type TrafficBreakdownItem = z.infer<typeof trafficBreakdownItem>;
+export type TrafficBreakdown = z.infer<typeof trafficBreakdown>;
 export type StarredSite = z.infer<typeof starredSite>;
 export type EnrollmentTokenResult = z.infer<typeof enrollmentTokenResult>;
 export type Settings = z.infer<typeof settings>;

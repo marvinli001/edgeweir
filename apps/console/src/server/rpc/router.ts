@@ -1,4 +1,5 @@
 import { schema } from "@edgeweir/db";
+import { ORPCError } from "@orpc/server";
 import { count, desc, eq, gt, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import {
@@ -8,7 +9,7 @@ import {
   setActiveOrganization,
   toMe,
 } from "../services/account";
-import { topNodes, topSites, trafficSeries } from "../services/analytics";
+import { topNodes, topSites, trafficBreakdown, trafficSeries } from "../services/analytics";
 import { auditFacets, listAuditLogs } from "../services/audit";
 import {
   createCluster,
@@ -129,6 +130,14 @@ export const router = os.router({
     topSites: tenant.analytics.topSites.handler(({ input, context }) =>
       topSites(context.app.db, context.scope, input),
     ),
+    breakdown: tenant.analytics.breakdown.handler(async ({ input, context }) => {
+      // Nodes are platform infrastructure, like `topNodes`.
+      if (input.by === "node" && !context.isAdmin) {
+        throw new ORPCError("FORBIDDEN", { message: "administrator only" });
+      }
+      if (input.siteId) await getSite(context.app.db, input.siteId, context.scope);
+      return trafficBreakdown(context.app.db, context.scope, input);
+    }),
     topNodes: admin.analytics.topNodes.handler(({ input, context }) =>
       topNodes(context.app.db, input),
     ),
