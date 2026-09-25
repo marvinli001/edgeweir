@@ -106,3 +106,4 @@ Phase 0 范围：
 
 > 更新记录：
 > - 2026-09-25（MVP M1）：revision 的原因改为 `reason_code` + `reason_params`（`cluster_created`、`site_created`、`site_updated`、`site_deleted`、`site_purged`、`rollback`），界面按语言渲染；`reason` 列仍写英文文本给 API 读者，旧 revision 没有原因码时界面显示原文。网站编辑（名称、域名、源站、缓存规则）每次保存都发布新 revision，内容哈希不变时返回当前 revision。
+> - 2026-09-25（MVP M2，proto `v0.2.0`）：IR 扩展：`OriginPool` 增加 `skip_tls_verify`（默认校验）、`health_check`（被动健康检查的失败次数与恢复时间）和 `connection`（连接 / 发送 / 读取超时与 keep-alive）；`Origin` 增加 `s3`（区域、路径式 bucket、`credential_id` 与 `credential_version`，密钥不进 IR，版本号变化使节点重新获取）；`Site` 增加 `cache_key`（缓存键策略按站点，使 URL 刷新能覆盖同一 URL 的所有变体）、`range_slice`、`websocket_disabled`；`CacheRuleMatch` 增加精确路径、状态码与大小范围，`CacheRule` 增加 stale-while-revalidate / stale-if-error 秒数。编译器对无序语义的列表（状态码、查询参数、请求头、Cookie、精确路径）排序去重，规范化规则本身不变；新增第二组跨语言哈希向量 `content_hash_vector_m2.json`，TS 与 Go 两端测试共用。
