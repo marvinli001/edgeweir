@@ -11,6 +11,12 @@ const textIdParam = z.object({ id: z.string().min(1).max(100) });
 const ok = z.object({ ok: z.literal(true) });
 
 /**
+ * OpenAPI operation of a procedure that needs no credentials: it overrides
+ * the document-wide API-key requirement with an empty one.
+ */
+const publicOperation = <T extends object>(operation: T) => ({ ...operation, security: [] });
+
+/**
  * The single API contract of the console. The web UI calls it over `/rpc`
  * (session cookie); third parties call the same procedures through the
  * generated OpenAPI surface under `/api/v1` with an `x-api-key` header.
@@ -20,10 +26,10 @@ const ok = z.object({ ok: z.literal(true) });
 export const contract = {
   system: {
     status: oc
-      .route({ method: "GET", path: "/system/status", tags: ["system"] })
+      .route({ method: "GET", path: "/system/status", tags: ["system"], spec: publicOperation })
       .output(s.systemStatus),
     setup: oc
-      .route({ method: "POST", path: "/system/setup", tags: ["system"] })
+      .route({ method: "POST", path: "/system/setup", tags: ["system"], spec: publicOperation })
       .input(s.setupInput)
       .output(z.object({ userId: z.string(), organizationId: z.string() })),
   },
@@ -237,11 +243,21 @@ export const contract = {
   /** Public: opened from an invitation link. */
   invitations: {
     get: oc
-      .route({ method: "GET", path: "/invitations/{id}", tags: ["members"] })
+      .route({
+        method: "GET",
+        path: "/invitations/{id}",
+        tags: ["members"],
+        spec: publicOperation,
+      })
       .input(textIdParam)
       .output(s.invitationInfo),
     accept: oc
-      .route({ method: "POST", path: "/invitations/{id}/accept", tags: ["members"] })
+      .route({
+        method: "POST",
+        path: "/invitations/{id}/accept",
+        tags: ["members"],
+        spec: publicOperation,
+      })
       .input(s.invitationAcceptInput)
       .output(z.object({ userId: z.string(), organizationId: z.string() })),
   },
@@ -317,7 +333,9 @@ export const contract = {
   },
   landing: {
     /** Public: the landing page at `/` (template "none" means there is none). */
-    get: oc.route({ method: "GET", path: "/landing", tags: ["landing"] }).output(s.landingPage),
+    get: oc
+      .route({ method: "GET", path: "/landing", tags: ["landing"], spec: publicOperation })
+      .output(s.landingPage),
     update: oc
       .route({ method: "PUT", path: "/landing", tags: ["landing"] })
       .input(s.landingSettings)
