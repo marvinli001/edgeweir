@@ -283,6 +283,32 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect(b).toMatchObject({ downNodes: 0, nodes: [] });
     expect(p?.onlineNodes).toBeGreaterThanOrEqual(1);
 
+    // Editing the pool keeps the ids (and the health) of unchanged origins.
+    const edited = await tenant.sites.update({
+      id: site.id,
+      origins: [
+        { address: "added" },
+        { address: "primary", weight: 5 },
+        { address: "backup", backup: true },
+      ],
+    });
+    expect(edited.site.origins.map((o) => o.address)).toEqual(["added", "primary", "backup"]);
+    expect(edited.site.origins[1]).toMatchObject({ id: primary?.id, weight: 5 });
+    expect(edited.site.origins[2]?.id).toBe(backup?.id);
+    expect(edited.site.origins[0]?.id).not.toBe(primary?.id);
+    const kept = await tenant.sites.originHealth({ id: site.id });
+    expect(kept.find((h) => h.originId === primary?.id)?.downNodes).toBe(1);
+    // A changed port is another origin.
+    const moved = await tenant.sites.update({
+      id: site.id,
+      origins: [
+        { address: "primary", port: 8080 },
+        { address: "backup", backup: true },
+      ],
+    });
+    expect(moved.site.origins[0]?.id).not.toBe(primary?.id);
+    expect(moved.site.origins[1]?.id).toBe(backup?.id);
+
     // The next report without failures clears the state.
     await replaceOriginHealth(ctx.db, node, []);
     expect((await tenant.sites.originHealth({ id: site.id })).every((h) => h.downNodes === 0)).toBe(

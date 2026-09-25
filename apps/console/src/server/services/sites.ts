@@ -302,16 +302,33 @@ async function syncCredentials(
   return used;
 }
 
-async function insertOrigins(
+/**
+ * Writes a pool's origins in the given order. An existing origin with the
+ * same scheme, address and port keeps its id (and with it the passive health
+ * state nodes report for it); the others are inserted or deleted.
+ */
+async function writeOrigins(
   tx: Tx,
   pool: { id: string; siteId: string },
   origins: OriginInput[],
   masterKey: MasterKey,
 ) {
   const credentials = await syncCredentials(tx, pool.siteId, origins, masterKey);
-  await tx.insert(schema.origin).values(
-    origins.map((o, i) => ({
-      createdAt: ordered(i),
+  const existing = await tx
+    .select({
+      id: schema.origin.id,
+      address: schema.origin.address,
+      port: schema.origin.port,
+      scheme: schema.origin.scheme,
+    })
+    .from(schema.origin)
+    .where(eq(schema.origin.poolId, pool.id))
+    .orderBy(asc(schema.origin.createdAt));
+  const base = Date.now();
+  const kept = new Set<string>();
+  for (const [i, o] of origins.entries()) {
+    const values = {
+      createdAt: ordered(i, base),
       poolId: pool.id,
       address: o.address,
       port: o.port,
@@ -323,8 +340,20 @@ async function insertOrigins(
       credentialId: o.s3 ? (credentials.get(o.s3.accessKeyId) ?? null) : null,
       s3Region: o.s3?.region ?? "",
       s3Bucket: o.s3?.bucket ?? "",
-    })),
-  );
+    };
+    const match = existing.find(
+      (e) =>
+        !kept.has(e.id) && e.address === o.address && e.port === o.port && e.scheme === o.scheme,
+    );
+    if (match) {
+      kept.add(match.id);
+      await tx.update(schema.origin).set(values).where(eq(schema.origin.id, match.id));
+    } else {
+      await tx.insert(schema.origin).values(values);
+    }
+  }
+  const removed = existing.filter((e) => !kept.has(e.id)).map((e) => e.id);
+  if (removed.length) await tx.delete(schema.origin).where(inArray(schema.origin.id, removed));
 }
 
 function poolSettingsValues(settings: OriginSettingsInput) {
@@ -420,7 +449,7 @@ export async function createSite(
       .values({ siteId: siteRow.id, ...poolSettingsValues(input.originSettings) })
       .returning();
     if (!pool) throw new Error("origin pool insert failed");
-    await insertOrigins(tx, pool, input.origins, ctx.masterKey);
+    await writeOrigins(tx, pool, input.origins, ctx.masterKey);
     await insertCacheRules(tx, siteRow.id, input.cacheRules);
     const { row: revision } = await publishRevision(tx, {
       clusterId,
@@ -469,8 +498,7 @@ export async function updateSite(
     }
     if (input.origins) {
       const pool = await sitePool(tx, row.id);
-      await tx.delete(schema.origin).where(eq(schema.origin.poolId, pool.id));
-      await insertOrigins(tx, pool, input.origins, ctx.masterKey);
+      await writeOrigins(tx, pool, input.origins, ctx.masterKey);
       changed.push("origins");
     }
     if (input.originSettings) {
