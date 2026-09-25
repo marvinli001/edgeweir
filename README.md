@@ -76,7 +76,7 @@ Deployment guides: [docs/deploy/docker.md](docs/deploy/docker.md) and [docs/depl
 
 ## Adding a node
 
-1. In the console, open **Clusters**, pick a cluster and generate a one-time install command. It contains a single-use token and the SHA-256 fingerprint of the console's internal CA.
+1. Sign in as a platform admin, switch to **Admin** in the top bar, open **Clusters & nodes**, pick a cluster and generate a one-time install command. It contains a single-use token and the SHA-256 fingerprint of the console's internal CA.
 2. Run the command as root on the node (Linux with systemd, amd64 or arm64). The node must be able to reach the console on port 8443.
 
    ```sh

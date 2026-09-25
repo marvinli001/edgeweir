@@ -105,6 +105,8 @@ BREAKING CHANGE: nodes built from proto/v0.x must be regenerated.
 - TypeScript 开启 `strict`。避免 `any`；系统边界（API 输入、环境变量、外部数据）用 zod 校验。
 - Go 代码（`helpers/certd`）使用 `gofmt`，通过 `go vet`。
 - UI 只使用 shadcn 的设计 token 和 Tailwind 语义类，不写裸色值；appica-ui 的使用规则见 [ADR-0003](docs/adr/0003-ui-shadcn-preset.md)。
+- 文案面向用户、简短明确：页面不加副标题，对话框和卡片不加说明段落，空状态只有标题和操作按钮；只保留与安全相关的一句话提示（例如"仅显示一次"）。
+- 加载不用骨架屏：路由、请求、提交统一由顶部进度条表示，首次加载显示居中 Loader，提交按钮内显示 spinner 并禁用。
 
 ## i18n 规则
 

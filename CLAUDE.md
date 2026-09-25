@@ -26,6 +26,10 @@ docker compose -f compose.e2e.yml up -d --build && pnpm e2e   # needs ../edgewei
 - Conventional Commits, small steps. Scopes: console, web, api, db, contract, compiler, proto, node-channel, certd, deploy, e2e.
 - Every UI string goes through Paraglide (`apps/console/messages/{zh-CN,en}.json`, keys in snake_case); tests enforce key/placeholder parity and no hard-coded CJK in components.
 - UI: shadcn components under `components/ui` (Base UI `render` prop, not `asChild`); one ThemeProvider; every page has loading, empty and error states.
+- UI copy is short and user-facing: no page subtitles, no dialog/card description paragraphs, empty states are a title plus an action. Keep only one-line safety notes (e.g. "shown once").
+- Loading: never skeletons. `TopProgress` (2px bar) covers route loads, fetches and mutations; first loads render `LoadingState` (appica Loader); submit buttons show `Spinner` and disable. Polling queries set `meta: { background: true }`.
+- appica-ui only through `src/web/components/appica/` and `appica-bridge.css` (scoped tokens, one `@source` per component); tests in `test/web/ui-rules.test.ts` enforce it. Entrances use `animate-enter` with a staggered `animationDelay`; respect reduced motion.
+- Console vs admin: everyone uses the console (`/`, `/sites`, `/settings`); platform admins also get the header [Console | Admin] switch to `/admin/*` (platform overview, clusters & nodes, audit log, system settings). Admin-area procedures use the `admin` guard.
 - API changes start in `packages/contract`; the same procedure serves `/rpc` (UI) and `/api/v1` (OpenAPI).
 - Proto changes: edit `proto/`, `pnpm proto:lint`, `pnpm proto:gen`, tag `proto/vX.Y.Z`, regenerate in edgeweir-node.
 - Schema changes: edit `packages/db/src/schema`, `pnpm db:generate`, commit the SQL.
