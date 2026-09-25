@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ export const Route = createFileRoute("/setup")({
 
 function SetupPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const setup = useMutation(orpc.system.setup.mutationOptions());
   const [signingIn, setSigningIn] = React.useState(false);
   const pending = setup.isPending || signingIn;
@@ -40,6 +41,7 @@ function SetupPage() {
               event.preventDefault();
               const data = new FormData(event.currentTarget);
               const input = {
+                setupToken: String(data.get("setupToken") ?? "").trim(),
                 name: String(data.get("adminName") ?? ""),
                 email: String(data.get("email") ?? ""),
                 password: String(data.get("password") ?? ""),
@@ -53,6 +55,8 @@ function SetupPage() {
               setSigningIn(true);
               try {
                 await authClient.signIn.email({ email: input.email, password: input.password });
+                // The cached status still says "not initialized"; start from a clean cache.
+                queryClient.clear();
                 toast.success(m.setup_done());
                 await navigate({ to: "/" });
               } finally {
@@ -61,6 +65,18 @@ function SetupPage() {
             }}
           >
             <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="setupToken">{m.setup_token()}</FieldLabel>
+                <Input
+                  id="setupToken"
+                  name="setupToken"
+                  required
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="font-mono"
+                  placeholder={m.setup_token_placeholder()}
+                />
+              </Field>
               <Field>
                 <FieldLabel htmlFor="adminName">{m.setup_name()}</FieldLabel>
                 <Input id="adminName" name="adminName" required autoComplete="name" />
@@ -91,7 +107,7 @@ function SetupPage() {
                 />
               </Field>
               {setup.isError ? (
-                <FieldError>{errorMessage(setup.error, m.common_unknown_error())}</FieldError>
+                <FieldError data-testid="setup-error">{errorMessage(setup.error)}</FieldError>
               ) : null}
               <Button type="submit" disabled={pending} data-testid="setup-submit">
                 {pending ? <Spinner /> : null}
