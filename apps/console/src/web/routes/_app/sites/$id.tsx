@@ -211,7 +211,7 @@ function OverviewTab({ site }: { site: Site }) {
           <ConfirmDialog
             trigger={<Button variant="outline">{m.sites_purge()}</Button>}
             title={m.sites_purge()}
-            description={site.domains.join(", ")}
+            note={site.domains.join(", ")}
             onConfirm={async () => {
               try {
                 const result = await purge.mutateAsync({ id: site.id });

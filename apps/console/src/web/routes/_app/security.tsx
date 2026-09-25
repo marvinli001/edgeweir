@@ -9,12 +9,13 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { Page } from "@/components/page";
 import { QrCode } from "@/components/qr-code";
+import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
@@ -190,7 +191,7 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
           <Field className="animate-enter">
             <FieldLabel>{m.security_backup_codes()}</FieldLabel>
             <CodeBlock value={backupCodes.join("\n")} testId="backup-codes" />
-            <FieldDescription>{m.enroll_shown_once()}</FieldDescription>
+            <SafetyNote>{m.enroll_shown_once()}</SafetyNote>
           </Field>
         ) : null}
         {enrollment ? (

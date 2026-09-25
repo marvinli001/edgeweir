@@ -5,13 +5,33 @@ import { describe, expect, it } from "vitest";
 const root = resolve(import.meta.dirname, "../..");
 const read = (file: string) => readFileSync(resolve(root, file), "utf8");
 const webSources = globSync("src/web/{routes,components,lib}/**/*.{ts,tsx}", { cwd: root });
+/** Everything the browser gets from src/web, minus generated code. */
+const allWeb = globSync("src/web/**/*.{ts,tsx,css}", {
+  cwd: root,
+  exclude: ["src/web/paraglide/**", "src/web/routeTree.gen.ts"],
+});
 
 describe("UI rules (ADR-0003)", () => {
-  it("never uses skeleton placeholders outside the shadcn primitives", () => {
-    for (const file of webSources) {
-      if (file.includes("components/ui/")) continue;
-      expect(/\bSkeleton\b|skeleton-shimmer/.test(read(file)), file).toBe(false);
+  it("never uses skeleton placeholders or pulsing blocks (loading is TopProgress and LoadingState)", () => {
+    expect(allWeb.length).toBeGreaterThan(20);
+    for (const file of allWeb) {
+      const source = read(file);
+      expect(/\bSkeleton\b|skeleton-shimmer/.test(source), file).toBe(false);
+      expect(/\banimate-pulse\b/.test(source), file).toBe(false);
     }
+  });
+
+  it("uses no description slots: one-line safety notes use SafetyNote, alerts keep their message", () => {
+    // CardDescription, DialogDescription, SheetDescription, AlertDialogDescription,
+    // FieldDescription, EmptyDescription… are the explanatory paragraphs decision 7 rules out.
+    // An alert's AlertDescription is the alert message itself (ErrorState), so it stays.
+    const found = webSources.flatMap((file) =>
+      [...read(file).matchAll(/<([A-Z][A-Za-z]*Description)\b/g)]
+        .map((m) => m[1] as string)
+        .filter((name) => name !== "AlertDescription")
+        .map((name) => `${file}: <${name}>`),
+    );
+    expect(found).toEqual([]);
   });
 
   it("imports appica-ui only through src/web/components/appica", () => {

@@ -25,6 +25,7 @@ import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { Page } from "@/components/page";
+import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Dot, StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +45,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -974,7 +975,7 @@ function RevisionsSection({ cluster }: { cluster: Cluster }) {
                 </Button>
               }
               title={m.revisions_rollback()}
-              description={m.revisions_rollback_confirm({ revision: row.original.revision })}
+              note={m.revisions_rollback_confirm({ revision: row.original.revision })}
               onConfirm={async () => {
                 try {
                   const result = await rollback.mutateAsync({
@@ -1062,12 +1063,12 @@ function EnrollDialog({
               <Field>
                 <FieldLabel>{m.enroll_command()}</FieldLabel>
                 <CodeBlock value={result.installCommand} testId="install-command" />
-                <FieldDescription className="flex items-center gap-1.5">
+                <SafetyNote className="flex items-center gap-1.5">
                   <span title={formatDateTime(result.expiresAt)}>{m.enroll_expires_in()}</span>
                   <Countdown target={result.expiresAt} className="text-foreground" />
                   <span aria-hidden="true">·</span>
                   {m.enroll_shown_once()}
-                </FieldDescription>
+                </SafetyNote>
               </Field>
               <Field>
                 <FieldLabel>{m.enroll_ca_fingerprint()}</FieldLabel>

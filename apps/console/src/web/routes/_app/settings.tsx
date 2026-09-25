@@ -2,11 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { CodeBlock } from "@/components/copy-button";
 import { Page } from "@/components/page";
+import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -140,7 +141,7 @@ function ApiKeysCard() {
         {create.data?.key ? (
           <Field className="animate-enter">
             <CodeBlock value={create.data.key} testId="new-api-key" />
-            <FieldDescription>{m.settings_api_key_created()}</FieldDescription>
+            <SafetyNote>{m.settings_api_key_created()}</SafetyNote>
           </Field>
         ) : null}
         {keys.isPending ? (

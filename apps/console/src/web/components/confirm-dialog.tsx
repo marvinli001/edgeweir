@@ -1,10 +1,10 @@
 import * as React from "react";
+import { SafetyNote } from "@/components/safety-note";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -16,30 +16,32 @@ import { m } from "@/lib/i18n";
 export function ConfirmDialog({
   trigger,
   title,
-  description,
+  note,
   confirmLabel,
   destructive,
   onConfirm,
 }: {
   trigger: React.ReactElement;
   title: string;
-  description?: string;
+  /** One line on what exactly the action touches (a safety note, not an explanation). */
+  note?: string;
   confirmLabel?: string;
   destructive?: boolean;
   onConfirm: () => Promise<unknown>;
 }) {
   const [open, setOpen] = React.useState(false);
   const [pending, setPending] = React.useState(false);
+  const noteId = React.useId();
   return (
     <>
       {React.cloneElement(trigger as React.ReactElement<{ onClick?: () => void }>, {
         onClick: () => setOpen(true),
       })}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent aria-describedby={note ? noteId : undefined}>
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
-            {description ? <DialogDescription>{description}</DialogDescription> : null}
+            {note ? <SafetyNote id={noteId}>{note}</SafetyNote> : null}
           </DialogHeader>
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>{m.common_cancel()}</DialogClose>
