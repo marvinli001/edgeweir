@@ -361,7 +361,7 @@ function CreateSiteDialog({
             <div className="grid gap-4 sm:grid-cols-[1fr_7rem_8rem]">
               <Field>
                 <FieldLabel htmlFor="origin">{m.site_form_origin()}</FieldLabel>
-                <Input id="origin" name="origin" required placeholder="10.0.0.10" />
+                <Input id="origin" name="origin" required placeholder="origin.example.com" />
               </Field>
               <Field>
                 <FieldLabel htmlFor="port">{m.site_form_port()}</FieldLabel>

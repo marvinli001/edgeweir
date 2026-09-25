@@ -243,7 +243,7 @@ function OriginRow({
             required
             maxLength={253}
             onChange={(event) => onChange({ address: event.target.value })}
-            placeholder="10.0.0.10"
+            placeholder="origin.example.com"
             data-testid="origin-address"
           />
         </Field>
