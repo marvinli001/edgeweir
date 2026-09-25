@@ -70,3 +70,6 @@ Phase 0 范围：
 | syft | 1.52.0 | proxy.golang.org（github.com/anchore/syft） |
 | cosign | 3.1.3 | proxy.golang.org（github.com/sigstore/cosign） |
 | Go | 1.27.1 | proxy.golang.org（golang.org/toolchain） |
+
+> 更新记录：
+> - 2026-09-25：GoReleaser 的 `signs.if` 是 Pro 功能，开源版的 `cmd` 也不支持模板。因此签名配置用 `cmd: sh` + 模板化参数：snapshot 构建只打印跳过信息，正式发布执行 `cosign sign-blob --yes --bundle=checksums.txt.sigstore.json checksums.txt`。SBOM 由 syft 为归档和 deb/rpm 生成。本机没有 git remote 时，GoReleaser snapshot 使用占位的 commit 信息（`0.0.1-snapshot+none`），CI 中是真实值。

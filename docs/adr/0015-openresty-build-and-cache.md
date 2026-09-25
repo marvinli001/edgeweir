@@ -95,3 +95,6 @@ Phase 0 范围：
 | 组件 | 版本 | 来源 |
 | --- | --- | --- |
 | OpenResty | 1.31.1.1，镜像 `openresty/openresty:1.31.1.1-bookworm` | Docker Hub |
+
+> 更新记录：
+> - 2026-09-25：双层设计已按本 ADR 实现：外层公共监听按站点选择 cache zone 做 `proxy_cache`，响应头 `X-Cache: $upstream_cache_status`；内层监听 unix socket（`/run/edgeweir-node/origin.sock`）选源站回源，并按规则在响应上设置 `X-Accel-Expires`。没有匹配缓存规则的请求为 BYPASS；未知 Host 返回 404 并带 `X-Edgeweir-Error: unknown-host`。proto v0.1.0 尚无下发证书材料的 RPC，因此 HTTPS 监听暂被跳过（需要后续 proto 增加 GetCertificate 一类接口）；回源 HTTPS 暂不校验证书（IR 缺少对应开关）。

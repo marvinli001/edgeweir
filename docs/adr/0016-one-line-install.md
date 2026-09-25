@@ -83,3 +83,6 @@ Phase 0 范围：
 | --- | --- | --- |
 | cosign | 3.1.3 | proxy.golang.org（github.com/sigstore/cosign） |
 | OpenResty | 1.31.1.1 | Docker Hub（`openresty/openresty:1.31.1.1-bookworm`） |
+
+> 更新记录：
+> - 2026-09-25：控制台 `GET /install.sh` 提供安装脚本（`apps/console/src/server/install/install.sh`），先用 `cosign verify-blob --bundle checksums.txt.sigstore.json` 校验签名（身份为 edgeweir-node 的 release 工作流），再 `sha256sum -c` 校验归档，全部通过后才安装和执行；只有显式传入 `--allow-unsigned`（仅供开发）才跳过签名校验，SHA-256 仍会校验。命令里的 `--ca-sha256` 是内部 CA 证书 DER 的 SHA-256。

@@ -111,3 +111,6 @@ Phase 0 范围：
 | OpenResty | 1.31.1.1，镜像 `openresty/openresty:1.31.1.1-bookworm` | Docker Hub |
 | connectrpc.com/connect | v1.21.0 | proxy.golang.org |
 | google.golang.org/protobuf | v1.36.12 | proxy.golang.org |
+
+> 更新记录：
+> - 2026-09-25：Phase 0 已实现：注册（先校验 CA 指纹再发送 token）、WatchConfig + 30 秒 GetConfig 轮询 + 45 秒无消息即重连、快照/diff 均校验内容哈希（diff 异常回退快照）、last-known-good 落盘并保留备份、结构性变更才重渲染 nginx.conf（`nginx -t` 后 HUP）、其余经 unix socket 热更新 Lua 站点表、剩余有效期不足 1/3 时轮换证书、按站点按分钟 ReportStats。Lua 控制接口仅监听 unix socket：`GET /v1/health`、`GET /v1/status`、`PUT /v1/sites`、`POST /v1/stats/drain`。尚未实现：按 URL/前缀/tag 清缓存与预热（Phase 0 只有以 cache generation 实现的全站清除）、自升级、访问日志采样上报。

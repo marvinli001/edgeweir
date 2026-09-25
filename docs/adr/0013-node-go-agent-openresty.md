@@ -70,3 +70,6 @@ Phase 0 范围：
 | OpenResty | 1.31.1.1，镜像 `openresty/openresty:1.31.1.1-bookworm` | Docker Hub |
 | connectrpc.com/connect | v1.21.0 | proxy.golang.org |
 | google.golang.org/protobuf | v1.36.12 | proxy.golang.org |
+
+> 更新记录：
+> - 2026-09-25：agent 只依赖 connect-go v1.21.0 与 protobuf-go v1.36.12（其余全部标准库）。容器镜像基于 `openresty/openresty:1.31.1.1-bookworm`，以非 root 用户（uid 10001）运行，`STOPSIGNAL SIGTERM`；agent 以 `--manage-nginx` 把 OpenResty 作为子进程管理，收到 SIGTERM 时向 OpenResty 发 SIGQUIT（优雅退出），8 秒后仍未退出再 SIGKILL。
