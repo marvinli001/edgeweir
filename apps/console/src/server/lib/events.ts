@@ -3,6 +3,7 @@ import pg from "pg";
 import type { Logger } from "./logger";
 
 export const CONFIG_CHANNEL = "edgeweir_config";
+export const TASKS_CHANNEL = "edgeweir_tasks";
 
 export interface ConfigPublishedEvent {
   clusterId: string;
@@ -10,9 +11,14 @@ export interface ConfigPublishedEvent {
   contentHash: string;
 }
 
+/** New node tasks exist for nodes of these clusters. */
+export interface TasksCreatedEvent {
+  clusterIds: string[];
+}
+
 /**
- * Fan-out of configuration changes across console instances using
- * PostgreSQL LISTEN/NOTIFY. Each instance keeps one dedicated connection and
+ * Fan-out of configuration changes and new node tasks across console
+ * instances using PostgreSQL LISTEN/NOTIFY. Each instance keeps one dedicated connection and
  * re-emits notifications locally; it reconnects with backoff on failure.
  */
 export class ConfigEventBus {
@@ -39,9 +45,12 @@ export class ConfigEventBus {
       application_name: "edgeweir-listen",
     });
     client.on("notification", (msg) => {
-      if (msg.channel !== CONFIG_CHANNEL || !msg.payload) return;
+      if (!msg.payload) return;
+      const event =
+        msg.channel === CONFIG_CHANNEL ? "config" : msg.channel === TASKS_CHANNEL ? "tasks" : null;
+      if (!event) return;
       try {
-        this.emitter.emit("config", JSON.parse(msg.payload) as ConfigPublishedEvent);
+        this.emitter.emit(event, JSON.parse(msg.payload));
       } catch (error) {
         this.log.warn("ignoring malformed notification", { error });
       }
@@ -54,6 +63,7 @@ export class ConfigEventBus {
     try {
       await client.connect();
       await client.query(`LISTEN ${CONFIG_CHANNEL}`);
+      await client.query(`LISTEN ${TASKS_CHANNEL}`);
       this.client = client;
       this.retryMs = 500;
       // Consumers re-read the latest revision after a reconnect, since
@@ -76,6 +86,7 @@ export class ConfigEventBus {
   }
 
   on(event: "config", listener: (e: ConfigPublishedEvent) => void): () => void;
+  on(event: "tasks", listener: (e: TasksCreatedEvent) => void): () => void;
   on(event: "reconnected", listener: () => void): () => void;
   on(event: string, listener: (...args: never[]) => void): () => void {
     const fn = listener as (...args: unknown[]) => void;
@@ -86,6 +97,11 @@ export class ConfigEventBus {
   /** Emits locally, for callers in the same process that must not wait for NOTIFY. */
   emitLocal(event: ConfigPublishedEvent) {
     this.emitter.emit("config", event);
+  }
+
+  /** Local counterpart of a TASKS_CHANNEL notification. */
+  emitTasksLocal(event: TasksCreatedEvent) {
+    this.emitter.emit("tasks", event);
   }
 
   async stop(): Promise<void> {

@@ -1,14 +1,17 @@
 import "reflect-metadata";
 import { webcrypto } from "node:crypto";
 import type { Http2SecureServer } from "node:http2";
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
+import { siteCreateInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { ApplyState, NodeService, WatchEvent } from "@edgeweir/proto";
+import { ApplyState, NodeService, PurgeType, TaskState, WatchEvent } from "@edgeweir/proto";
 import * as x509 from "@peculiar/x509";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startNodeChannel } from "../../src/server/node-channel/server";
+import { createCacheTask } from "../../src/server/services/cache-tasks";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
 import { deleteNode, listNodes, setNodeStatus } from "../../src/server/services/nodes";
@@ -142,7 +145,7 @@ describe("node channel", async () => {
     // Creating a site publishes revision 2 and notifies the stream.
     const { site, revision } = await createSite(
       ctx.db,
-      {
+      siteCreateInput.parse({
         name: "demo",
         domains: ["demo.test"],
         origins: [
@@ -158,8 +161,8 @@ describe("node channel", async () => {
             originCacheControl: "override",
           },
         ],
-      },
-      { organizationId, actor },
+      }),
+      { organizationId, actor, masterKey: ctx.masterKey },
     );
     expect(revision.revision).toBe(2);
     ctx.events.emitLocal({ clusterId, revision: 2, contentHash: revision.contentHash });
@@ -273,6 +276,154 @@ describe("node channel", async () => {
     expect(refused).toBeInstanceOf(ConnectError);
     expect((refused as ConnectError).code).toBe(Code.Unauthenticated);
     expect((refused as ConnectError).rawMessage).toContain("revoked");
+  });
+
+  it("delivers origin credentials, typed tasks and origin health over mTLS", async () => {
+    const token = await createEnrollmentToken(
+      ctx.db,
+      { clusterId, nodeName: "edge-3", ttlMinutes: 10 },
+      {
+        actor,
+        consoleUrl: ctx.env.EDGEWEIR_PUBLIC_URL,
+        serverUrl: ctx.env.nodeApiUrl,
+        caSha256: ctx.nodeCa.fingerprintSha256,
+      },
+    );
+    const { csrPem, keyPem } = await nodeKeyAndCsr();
+    const enrolled = await anonymous().enroll({ token: token.token, csrPem });
+    const mtls = createClient(
+      NodeService,
+      createConnectTransport({
+        baseUrl,
+        httpVersion: "2",
+        nodeOptions: {
+          ca: enrolled.caCertificatePem,
+          cert: enrolled.certificatePem,
+          key: keyPem,
+          servername: "localhost",
+        },
+      }),
+    );
+    const s3Origin = (accessKeyId: string, secretAccessKey: string) => ({
+      address: "minio",
+      port: 9000,
+      s3: { region: "us-east-1", bucket: "media", accessKeyId, secretAccessKey },
+    });
+    const own = await createSite(
+      ctx.db,
+      siteCreateInput.parse({
+        name: "bucket-own",
+        domains: ["own.bucket.test"],
+        origins: [s3Origin("AKIDOWN", "own-secret"), { address: "backup", backup: true }],
+      }),
+      { organizationId, actor, masterKey: ctx.masterKey },
+    );
+    const otherCluster = await ctx.db.transaction((tx) =>
+      createClusterTx(tx, { name: "other", description: "" }, actor),
+    );
+    const foreign = await createSite(
+      ctx.db,
+      siteCreateInput.parse({
+        name: "bucket-foreign",
+        clusterId: otherCluster.id,
+        domains: ["foreign.bucket.test"],
+        origins: [s3Origin("AKIDFOREIGN", "foreign-secret")],
+      }),
+      { organizationId, actor, masterKey: ctx.masterKey },
+    );
+    const credentialOf = async (siteId: string) =>
+      (
+        await ctx.db
+          .select()
+          .from(schema.originCredential)
+          .where(eq(schema.originCredential.siteId, siteId))
+      )[0]?.id ?? "";
+    const ownId = await credentialOf(own.site.id);
+    const foreignId = await credentialOf(foreign.site.id);
+
+    // Only credentials of the node's own cluster are handed out.
+    const creds = await mtls.getOriginCredentials({ ids: [ownId, foreignId, "not-a-uuid"] });
+    expect(creds.credentials).toHaveLength(1);
+    expect(creds.credentials[0]).toMatchObject({
+      id: ownId,
+      version: 1n,
+      accessKeyId: "AKIDOWN",
+      secretAccessKey: "own-secret",
+    });
+
+    // A new task wakes the watch stream with a TASKS event.
+    const abort = new AbortController();
+    const stream = mtls.watchConfig({ knownRevision: 0n }, { signal: abort.signal });
+    const iterator = stream[Symbol.asyncIterator]();
+    expect((await iterator.next()).value?.event).toBe(WatchEvent.REVISION);
+    const task = await createCacheTask(
+      ctx.db,
+      { type: "url", urls: ["http://own.bucket.test/a.png?x=1"], siteIds: [] },
+      { scope: { all: true }, actor },
+    );
+    ctx.events.emitTasksLocal({ clusterIds: [clusterId] });
+    expect((await iterator.next()).value?.event).toBe(WatchEvent.TASKS);
+    abort.abort();
+
+    const heartbeat = await mtls.reportStatus({ appliedRevision: 1n, state: ApplyState.APPLIED });
+    expect(heartbeat.tasksPending).toBe(true);
+    const pulled = await mtls.pullTasks({ maxTasks: 5 });
+    expect(pulled.tasks).toHaveLength(1);
+    const nodeTask = pulled.tasks[0];
+    expect(nodeTask?.id).toBe(task.id);
+    expect(nodeTask?.kind.case).toBe("purge");
+    if (nodeTask?.kind.case === "purge") {
+      expect(nodeTask.kind.value.targets).toEqual([
+        expect.objectContaining({
+          siteId: own.site.id,
+          type: PurgeType.URL,
+          host: "own.bucket.test",
+          path: "/a.png",
+          query: "x=1",
+        }),
+      ]);
+    }
+    expect((await mtls.pullTasks({})).tasks).toHaveLength(0);
+
+    await mtls.reportTaskResult({
+      taskId: task.id,
+      state: TaskState.SUCCEEDED,
+      succeeded: 1,
+      finishedAt: timestampFromDate(new Date()),
+    });
+    const [delivery] = await ctx.db
+      .select()
+      .from(schema.cacheTaskNode)
+      .where(eq(schema.cacheTaskNode.nodeId, enrolled.nodeId));
+    expect(delivery).toMatchObject({ state: "succeeded", succeeded: 1 });
+    await expect(
+      mtls.reportTaskResult({ taskId: task.id, state: TaskState.UNSPECIFIED }),
+    ).rejects.toMatchObject({ code: Code.InvalidArgument });
+
+    // Origin health rides on the heartbeat.
+    const primary = own.site.origins[0]?.id ?? "";
+    const after = await mtls.reportStatus({
+      appliedRevision: 1n,
+      state: ApplyState.APPLIED,
+      originHealth: [
+        {
+          siteId: own.site.id,
+          originId: primary,
+          healthy: false,
+          consecutiveFailures: 3,
+          lastError: "connect timeout",
+          lastFailureAt: timestampFromDate(new Date()),
+        },
+      ],
+    });
+    expect(after.tasksPending).toBe(false);
+    const health = await ctx.db
+      .select()
+      .from(schema.originHealth)
+      .where(eq(schema.originHealth.nodeId, enrolled.nodeId));
+    expect(health).toEqual([
+      expect.objectContaining({ originId: primary, healthy: false, lastError: "connect timeout" }),
+    ]);
   });
 
   it("rejects unknown tokens", async () => {
