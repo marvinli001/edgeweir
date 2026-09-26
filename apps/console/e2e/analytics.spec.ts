@@ -32,6 +32,9 @@ test("home lists and charts, stars, site and platform analytics with breakdowns"
     await page.getByTestId("nav-sites").click();
     const row = page.getByTestId("sites-table").getByRole("row").filter({ hasText: "demo.test" });
     const star = row.getByTestId("site-star");
+    // Restore the fixture on retries; the previous attempt may have starred it.
+    await expect(star).toBeVisible();
+    if ((await star.getAttribute("aria-pressed")) === "true") await star.click();
     await expect(star).toHaveAttribute("aria-pressed", "false");
     await star.click();
     await expect(star).toHaveAttribute("aria-pressed", "true");
@@ -60,7 +63,7 @@ test("home lists and charts, stars, site and platform analytics with breakdowns"
   await test.step("a metric card opens its breakdown by node and status code", async () => {
     await openCard(page, "请求总数详情");
     const dialog = page.getByTestId("metric-detail");
-    await expect(dialog.getByRole("heading", { name: "请求总数" })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "请求总数", exact: true })).toBeVisible();
     // One site: no per-site view; administrators get nodes first.
     await expect(dialog.getByTestId("detail-view-site")).toHaveCount(0);
     await expect(dialog.getByTestId("detail-chart").locator(".recharts-line")).toBeVisible();
