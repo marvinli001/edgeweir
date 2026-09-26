@@ -23,6 +23,8 @@ Edgeweir (pronounced *EDGE-weer*) is named after a weir. Around 256 BC, Li Bing 
 
 Remaining MVP work: **M5** adds DNS scheduling, domain ownership, analytics retention and alerts; **M6** adds signed upgrades, sampled logs, scoped AccessKeys, performance and restore drills.
 
+M5 core flows are now implemented and tested locally: domain proof, independent DNS publication, deduplicated statistics, rollups, alert subscriptions and notifications. Optional ClickHouse storage is being completed with M6 access logs. See [DNS and alert guide](docs/guide/dns-and-alerts.md).
+
 M4 has passed real-node tests for IP/GeoIP rules, WAF, rate limits, redirects, rewrites and header transforms; policy updates do not reload nginx. See the [rule guide](docs/guide/rules.md) for scope and limits.
 
 M3's local Pebble test proves HTTP-01 issuance through a real edge node, trusted HTTPS, HTTP/2, HTTP/3 and certificate rotation without an nginx reload. DNS provider adapters and ZeroSSL EAB require operator credentials for live-service acceptance. Brotli and Zstd remain unavailable on the selected stock engine. See [HTTPS guide](docs/guide/https.md), [MVP specification](docs/specs/mvp.md) and [implementation evidence](docs/implementation/mvp-completion.md).

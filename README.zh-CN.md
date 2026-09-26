@@ -23,6 +23,8 @@ Edgeweir（读作 EDGE-weer）的名字来自「堰」（weir）。公元前 256
 
 MVP 剩余工作：**M5** 补齐 DNS 调度、域名归属、统计保留和告警；**M6** 补齐验签升级、采样日志、AccessKey 范围、性能基线和恢复演练。
 
+M5 核心链路已实现并通过本地验收：域名归属、独立 DNS 发布、统计去重与汇总、告警和订阅。可选 ClickHouse 存储正与 M6 访问日志一并完成。见 [DNS 与告警指南](docs/guide/dns-and-alerts.md)。
+
 M4 已通过真实节点验收：IP/GeoIP 规则、WAF、限速、重定向、改写和头变换；名单与规则热更新无需 reload。具体范围与限制见 [规则指南](docs/guide/rules.md)。
 
 本地 Pebble 测试已验证真实节点 HTTP-01 签发、受信任 HTTPS、HTTP/2、HTTP/3，以及不重载 nginx 的证书轮换。DNS 服务商适配器与 ZeroSSL EAB 的真实账户验收需要运营者凭据；当前官方引擎没有 Brotli 和 Zstd 模块，界面明确保持不可用。详见 [HTTPS 指南](docs/guide/https.md)、[MVP 规格](docs/specs/mvp.md)和[实施验证记录](docs/implementation/mvp-completion.md)。

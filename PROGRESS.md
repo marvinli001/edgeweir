@@ -483,3 +483,19 @@ M4–M6 仍继续实施，详见 docs/implementation/mvp-completion.md。基础�
 - [x] 回归补充：LKG 落盘失败回滚后对同一版本退避，避免轮询反复短暂激活未持久化配置；回归用例连续 15 次通过。
 
 M3 的两个仓库远端 CI 已通过（控制面 e300f8f，节点 25c5d1a）。M4 使用 proto/v0.4.0；发布后的远端 CI 单独追踪。后续范围仍为 M5、M6，不扩展 v1/v2。
+
+## MVP M5 核心检查点（2026-09-27）
+
+- [x] 注册域 TXT 验证、管理员单独批准、待验证不保留路由、撤销/删除和回滚边界；PSL 包含 private 后缀。
+- [x] 四类 DNS 服务商接口、平台 CNAME 与节点组线路、独立 DNS 版本/回滚、健康摘除与恢复、漂移修复和局部写入恢复；凭据可原地轮换。
+- [x] ReportStatsV2 持久批次序号与游标，丢失回执/重启不重复累加；小时/天汇总、UTC 边界、迟到重算和 7/90/365 天保留。
+- [x] 节点有界 Space-Saving Top URL/IP，界面明确标为估算。
+- [x] 邮件、Webhook、钉钉、企业微信、Telegram；SMTP 信封加密且强制验证 TLS；告警订阅及每次投递的成员/禁用/两步验证权限复查。
+- [x] 新接口进入同一 OpenAPI 契约，后台 403 矩阵同步；系统设置保留文档入口。
+- [x] `M5 E2E OK`：真实 TXT 查询、Go helper、DNS 摘除/恢复/修复、对应租户的离线 Webhook、真实节点统计与 Top URL。
+- [x] Playwright M5：DNS 创建/保存、渠道配置、域名归属、统计和订阅；375px 深色，无 pageerror 与横向溢出。
+- [x] workspace 测试通过（随后新增的供应商协议测试另行通过）、TypeScript、Biome/buf lint、Go race 与 Lua 测试；实际 TLS SMTP 通过本地接收器验收。
+- [ ] ClickHouse 可选存储与 M6 访问日志一并完成；M6 运维验收尚未完成。
+- [ ] 不声明外部 DNS/钉钉/企业微信/Telegram/ZeroSSL 真实账户验收已完成。
+
+协议版本 proto/v0.5.0。可复核范围和迁移注意事项见 [DNS 与告警](docs/guide/dns-and-alerts.md)。

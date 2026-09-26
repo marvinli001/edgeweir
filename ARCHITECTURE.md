@@ -69,6 +69,10 @@ PostgreSQL 是唯一的外部依赖。`compose.yml` 的 `analytics`（ClickHouse
 
 `0009_m4_rules` 增加 `edge_rule`（有阶段、表达式、动作与名单引用的站点/平台规则）和 `ip_list`（组织或平台作用域的规范化 CIDR 名单）。发布时解析为结构化 AST，列表名绑定到受权限检查的 ID。
 
+`0010_m5_stats` 增加 `node_stats_cursor` 的永久批次高水位，以及 `node_hour_stats`、`node_day_stats`、`stats_rollup_dirty`。`traffic_hour_stats` 视图在已完成汇总与待汇总分钟数据之间避免重复。`0011_m5_domain_ownership` 增加 `domain_ownership` 和域名的 verified 路由标记；待校验记录不保留全局主机名使用权。
+
+`0012_m5_dns` 与 `0013_m5_dns_managed_names` 增加 `platform_dns_provider`、`dns_state`、`dns_revision`、`dns_managed_name`，用于独立 DNS 发布与可重试的外部记录维护。`0014_m5_alerts`、`0015_m5_alert_order`、`0016_m5_alert_privacy_default` 增加 `alert_channel`、`alert_subscription`、`alert_state`、`alert_event`、`alert_delivery`：通知凭据加密，事件带顺序，发送时重新检查订阅权限，平台全量通知默认关闭。
+
 ## 4. 配置发布流水线
 
 1. 改变节点配置的操作（网站新增、编辑、删除，全站清除缓存代际号加一，源站允许清单变更，回滚）在同一个事务里：写业务表 → `publishRevision()` → 写审计。
