@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import type * as React from "react";
 import { CopyButton } from "@/components/copy-button";
+import { GeoIpSettings } from "@/components/geoip-settings";
 import { LandingSettingsCard } from "@/components/landing-settings";
 import { OriginAllowListCard } from "@/components/origin-allow-list";
 import { Page } from "@/components/page";
@@ -86,6 +87,7 @@ function SystemSettingsPage() {
         </CardContent>
       </Card>
       <OriginAllowListCard />
+      <GeoIpSettings />
       <LandingSettingsCard />
     </Page>
   );

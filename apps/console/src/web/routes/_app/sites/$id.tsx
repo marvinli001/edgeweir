@@ -12,6 +12,7 @@ import { Page } from "@/components/page";
 import { CacheTab } from "@/components/site/cache-tab";
 import { HttpsTab } from "@/components/site/https-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
+import { RulesTab } from "@/components/site/rules-tab";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { ErrorState, LoadingState } from "@/components/states";
@@ -125,6 +126,9 @@ function SiteDetailPage() {
           </TabsContent>
           <TabsContent value="https" className="animate-enter">
             <HttpsTab site={site.data} />
+          </TabsContent>
+          <TabsContent value="rules" className="animate-enter">
+            <RulesTab siteId={site.data.id} />
           </TabsContent>
           <TabsContent value="cache" className="animate-enter">
             <CacheTab site={site.data} />

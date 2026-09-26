@@ -10,7 +10,11 @@ import {
   CacheZoneSchema,
   type CertificateRef,
   DomainSchema,
+  type EdgeRule,
+  EdgeRuleSchema,
   type HttpChallenge,
+  type IpList,
+  IpListSchema,
   type Listener,
   ListenerProtocol,
   ListenerSchema,
@@ -30,6 +34,7 @@ import {
   SiteSchema,
   type TlsOptions,
 } from "@edgeweir/proto";
+import { type Expression, phases } from "@edgeweir/rule-engine";
 
 /** Console-side model of an origin, independent of the database layer. */
 export interface OriginModel {
@@ -107,6 +112,52 @@ export interface SiteModel {
   websocket?: boolean;
   certificateId?: string;
   tls?: Omit<TlsOptions, "$typeName" | "$unknown">;
+  rules?: RuleModel[];
+}
+
+export interface RuleModel {
+  id: string;
+  phase: string;
+  expression: Expression;
+  action: {
+    kind: string;
+    value?: string;
+    header?: string;
+    statusCode?: number;
+    limit?: number;
+    windowSeconds?: number;
+    key?: string;
+    cacheBypass?: boolean;
+    forceHttps?: boolean;
+    gzip?: boolean;
+    remove?: boolean;
+  };
+}
+export interface IpListModel {
+  id: string;
+  name: string;
+  entries: string[];
+  kind: string;
+  platform: boolean;
+}
+export function compileRules(rules: RuleModel[] = []): EdgeRule[] {
+  return [...rules]
+    .sort(
+      (a, b) =>
+        phases.indexOf(a.phase as (typeof phases)[number]) -
+        phases.indexOf(b.phase as (typeof phases)[number]),
+    )
+    .map((rule) => create(EdgeRuleSchema, rule));
+}
+export function geoFeatures(expression: Expression): string[] {
+  return [
+    ...(expression.field === "ip.geoip.asnum"
+      ? ["geoip-asn-v1"]
+      : expression.field.startsWith("ip.geoip.")
+        ? ["geoip-city-v1"]
+        : []),
+    ...expression.children.flatMap(geoFeatures),
+  ];
 }
 
 export interface ListenerModel {
@@ -136,6 +187,8 @@ export interface CompileInput {
   originAllowedCidrs?: string[];
   certificates?: CertificateRef[];
   httpChallenges?: HttpChallenge[];
+  ipLists?: IpListModel[];
+  platformRules?: RuleModel[];
 }
 
 export const DEFAULT_CACHE_ZONE = "default";
@@ -278,6 +331,7 @@ function compileSite(model: SiteModel): Site {
     websocketDisabled: model.websocket === false,
     certificateId: model.certificateId ?? "",
     tls: model.tls,
+    rules: compileRules(model.rules),
   });
 }
 
@@ -292,6 +346,8 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   out.originAllowedCidrs = sortedSet(out.originAllowedCidrs);
   out.requiredFeatures = sortedSet(out.requiredFeatures);
   out.httpChallenges.sort(byString((c) => `${c.domain}/${c.token}`));
+  out.ipLists.sort(byString((list: IpList) => list.id));
+  for (const list of out.ipLists) list.entries = sortedSet(list.entries);
   for (const site of out.sites) {
     if (site.tls) site.tls.gzipTypes = sortedSet(site.tls.gzipTypes);
     site.domains.sort(byString((d) => `${d.name}\u0000${d.wildcard ? 1 : 0}`));
@@ -357,10 +413,23 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       sites,
       certificates: input.certificates ?? [],
       httpChallenges: input.httpChallenges ?? [],
+      ipLists: (input.ipLists ?? []).map((list) =>
+        create(IpListSchema, { ...list, entries: sortedSet(list.entries) }),
+      ),
+      platformRules: compileRules(input.platformRules),
       requiredFeatures: [
         ...(input.sites.some((s) => s.enabled && s.tls) ? ["tls-v1"] : []),
         ...(input.httpChallenges?.length ? ["http01-v1"] : []),
         ...(input.sites.some((s) => s.enabled && s.tls?.http3) ? ["http3-v1"] : []),
+        ...(input.sites.some((s) => s.enabled && s.rules?.length) ||
+        input.platformRules?.length ||
+        input.ipLists?.some((l) => l.platform && l.kind !== "collection")
+          ? ["rules-v1"]
+          : []),
+        ...[
+          ...(input.platformRules ?? []),
+          ...input.sites.filter((s) => s.enabled).flatMap((s) => s.rules ?? []),
+        ].flatMap((r) => geoFeatures(r.expression)),
       ],
       originAllowedCidrs: [...(input.originAllowedCidrs ?? [])],
     }),
@@ -398,6 +467,8 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     originAllowedCidrs: target.originAllowedCidrs,
     requiredFeatures: target.requiredFeatures,
     httpChallenges: target.httpChallenges,
+    ipLists: target.ipLists,
+    platformRules: target.platformRules,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -426,6 +497,8 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       originAllowedCidrs: diff.originAllowedCidrs,
       requiredFeatures: diff.requiredFeatures,
       httpChallenges: diff.httpChallenges,
+      ipLists: diff.ipLists,
+      platformRules: diff.platformRules,
       sites,
     }),
   );

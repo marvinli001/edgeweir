@@ -12,13 +12,18 @@ Edgeweir（读作 EDGE-weer）的名字来自「堰」（weir）。公元前 256
 
 ## 当前状态
 
-**MVP 开发中：M1–M3 已实现，接下来完成 M4–M6。目前不适合生产使用。**
+**MVP 开发中：M1–M4 已实现，接下来完成 M5–M6。目前不适合生产使用。**
 
-| 已实现并进行本地验证 | 后续里程碑 |
+| 范围 | 已实现 |
 | --- | --- |
-| 集群、节点组、区域、组织、邀请、两步验证、passkey 与审计日志 | M4：访问规则、WAF 表达式、限速与 IP 名单 |
-| 源站池、回源 TLS 校验、S3 签名、WebSocket、缓存键、切片、刷新与预热 | M5：DNS 调度、域名归属验证、统计保留与告警 |
-| 上传证书、ACME HTTP-01/DNS-01 通道、续期调度、HTTPS、HSTS、HTTP/2、HTTP/3 | M6：验签升级、采样日志、AccessKey 范围、性能与恢复演练 |
+| 集群与访问 | 节点组、区域、组织、邀请、两步验证、passkey 与审计日志 |
+| 源站与缓存 | 源站池、TLS 校验、S3 签名、WebSocket、缓存键、切片、刷新与预热 |
+| 证书与协议 | 上传、ACME HTTP-01/DNS-01、续期调度、HTTPS、HSTS、HTTP/2、HTTP/3 |
+| 访问规则 | IP 名单、本地 GeoIP、分阶段规则、WAF、限速、跳转、改写和头变换 |
+
+MVP 剩余工作：**M5** 补齐 DNS 调度、域名归属、统计保留和告警；**M6** 补齐验签升级、采样日志、AccessKey 范围、性能基线和恢复演练。
+
+M4 已通过真实节点验收：IP/GeoIP 规则、WAF、限速、重定向、改写和头变换；名单与规则热更新无需 reload。具体范围与限制见 [规则指南](docs/guide/rules.md)。
 
 本地 Pebble 测试已验证真实节点 HTTP-01 签发、受信任 HTTPS、HTTP/2、HTTP/3，以及不重载 nginx 的证书轮换。DNS 服务商适配器与 ZeroSSL EAB 的真实账户验收需要运营者凭据；当前官方引擎没有 Brotli 和 Zstd 模块，界面明确保持不可用。详见 [HTTPS 指南](docs/guide/https.md)、[MVP 规格](docs/specs/mvp.md)和[实施验证记录](docs/implementation/mvp-completion.md)。
 

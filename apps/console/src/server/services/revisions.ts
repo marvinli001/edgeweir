@@ -3,9 +3,12 @@ import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
   canonicalize,
   compileNodeConfig,
+  compileRules,
   contentHash,
   decodeNodeConfig,
   encodeNodeConfig,
+  geoFeatures,
+  type RuleModel,
   type SiteModel,
 } from "@edgeweir/config-compiler";
 import {
@@ -14,10 +17,17 @@ import {
   type Revision,
   type RevisionReasonCode,
   reasonText,
+  ruleAction,
   tlsSettings,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { CertificateRefSchema, HttpChallengeSchema, type NodeConfig } from "@edgeweir/proto";
+import {
+  CertificateRefSchema,
+  HttpChallengeSchema,
+  IpListSchema,
+  type NodeConfig,
+} from "@edgeweir/proto";
+import { bindLists, listReferences, type Phase, parseExpression } from "@edgeweir/rule-engine";
 import { and, asc, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
@@ -103,11 +113,27 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
     .from(schema.originCredential)
     .where(inArray(schema.originCredential.siteId, siteIds));
 
+  const edgeRules = await db
+    .select()
+    .from(schema.edgeRule)
+    .where(and(inArray(schema.edgeRule.siteId, siteIds), eq(schema.edgeRule.enabled, true)))
+    .orderBy(asc(schema.edgeRule.priority));
+  const lists = await db.select().from(schema.ipList);
   return sites.map((s): SiteModel => {
     const pool = pools
       .filter((p) => p.siteId === s.id)
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
     return {
+      rules: edgeRules
+        .filter((rule) => rule.siteId === s.id)
+        .map((rule) =>
+          compileRuleModel(
+            rule,
+            lists.filter(
+              (list) => list.organizationId === null || list.organizationId === s.organizationId,
+            ),
+          ),
+        ),
       id: s.id,
       name: s.name,
       enabled: s.enabled,
@@ -235,6 +261,21 @@ export async function getRevision(
   return row;
 }
 
+function compileRuleModel(
+  row: typeof schema.edgeRule.$inferSelect,
+  lists: (typeof schema.ipList.$inferSelect)[],
+): RuleModel {
+  const bindings: Record<string, string> = Object.create(null);
+  for (const list of lists.filter((l) => l.organizationId === null)) bindings[list.name] = list.id;
+  for (const list of lists.filter((l) => l.organizationId !== null)) bindings[list.name] = list.id;
+  return {
+    id: row.id,
+    phase: row.phase,
+    expression: bindLists(parseExpression(row.expression, row.phase as Phase), bindings),
+    action: ruleAction.parse(row.action),
+  };
+}
+
 /** Why a revision is published; rendered per locale in the UI. */
 export interface RevisionReason {
   code: RevisionReasonCode;
@@ -293,6 +334,33 @@ export async function publishRevision(
     sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.publish.${opts.clusterId}`}))`,
   );
   const sites = await loadSiteModels(tx, opts.clusterId);
+  const organizations = await tx
+    .selectDistinct({ id: schema.site.organizationId })
+    .from(schema.site)
+    .where(and(eq(schema.site.clusterId, opts.clusterId), eq(schema.site.enabled, true)));
+  const allLists = await tx.select().from(schema.ipList);
+  const lists = allLists.filter(
+    (list) =>
+      list.organizationId === null || organizations.some((org) => org.id === list.organizationId),
+  );
+  const ipLists = lists.map((list) => ({
+    id: list.id,
+    name: list.name,
+    entries: list.entries,
+    kind: list.kind,
+    platform: list.organizationId === null,
+  }));
+  const globalRules = await tx
+    .select()
+    .from(schema.edgeRule)
+    .where(and(sql`${schema.edgeRule.siteId} is null`, eq(schema.edgeRule.enabled, true)))
+    .orderBy(asc(schema.edgeRule.priority));
+  const platformRules = globalRules.map((rule) =>
+    compileRuleModel(
+      rule,
+      lists.filter((list) => list.organizationId === null),
+    ),
+  );
   const originAllowedCidrs = await loadOriginAllowList(tx);
   const certIds = [
     ...new Set(
@@ -351,7 +419,15 @@ export async function publishRevision(
     opts.clusterId,
     (revision) =>
       compileNodeConfig(
-        { clusterId: opts.clusterId, sites, originAllowedCidrs, certificates, httpChallenges },
+        {
+          clusterId: opts.clusterId,
+          sites,
+          originAllowedCidrs,
+          certificates,
+          httpChallenges,
+          ipLists,
+          platformRules,
+        },
         revision,
       ),
     opts.reason,
@@ -425,6 +501,59 @@ export async function rollbackToRevision(
       ref.notAfter = timestampFromDate(cert.notAfter);
     }
   }
+  const currentLists = (await tx.select().from(schema.ipList)).filter(
+    (list) =>
+      list.organizationId === null ||
+      currentSites.some((site) => site.organizationId === list.organizationId),
+  );
+  for (const site of restored.sites) {
+    const org = currentSites.find((s) => s.id === site.id)?.organizationId;
+    for (const rule of site.rules) {
+      if (
+        !rule.expression ||
+        listReferences(rule.expression).some(
+          (id) =>
+            !currentLists.some(
+              (list) =>
+                list.id === id && (list.organizationId === null || list.organizationId === org),
+            ),
+        )
+      )
+        fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback IP list is unavailable");
+    }
+  }
+  // Access lists and platform enforcement are current security policy.
+  restored.ipLists = currentLists.map((list) =>
+    create(IpListSchema, {
+      id: list.id,
+      name: list.name,
+      kind: list.kind,
+      entries: list.entries,
+      platform: list.organizationId === null,
+    }),
+  );
+  const platformRules = await tx
+    .select()
+    .from(schema.edgeRule)
+    .where(and(sql`${schema.edgeRule.siteId} is null`, eq(schema.edgeRule.enabled, true)))
+    .orderBy(asc(schema.edgeRule.priority));
+  restored.platformRules = compileRules(
+    platformRules.map((rule) =>
+      compileRuleModel(
+        rule,
+        currentLists.filter((list) => list.organizationId === null),
+      ),
+    ),
+  );
+  restored.requiredFeatures = restored.requiredFeatures.filter(
+    (f) => f !== "rules-v1" && !f.startsWith("geoip-"),
+  );
+  const rules = [...restored.platformRules, ...restored.sites.flatMap((s) => s.rules)];
+  if (rules.length || restored.ipLists.some((l) => l.platform && l.kind !== "collection"))
+    restored.requiredFeatures.push("rules-v1");
+  restored.requiredFeatures.push(
+    ...rules.flatMap((r) => (r.expression ? geoFeatures(r.expression) : [])),
+  );
   // Challenge tokens are short-lived issuance state, never rollback content.
   restored.httpChallenges = [];
   restored.requiredFeatures = restored.requiredFeatures.filter((f) => f !== "http01-v1");

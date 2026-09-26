@@ -15,6 +15,13 @@ import {
 
 /** Every contract procedure outside the admin area (checked against the contract below). */
 const CONSOLE_PROCEDURES = [
+  "rules.get",
+  "rules.save",
+  "rules.validate",
+  "ipLists.list",
+  "ipLists.create",
+  "ipLists.update",
+  "ipLists.delete",
   "certificates.list",
   "certificates.upload",
   "certificates.request",
@@ -92,6 +99,18 @@ describe("admin area procedures", async () => {
     const id = cluster?.id ?? "";
     const uuid = "00000000-0000-4000-8000-000000000000";
     const calls: [string, () => Promise<unknown>][] = [
+      ["platformRules.get", () => member.platformRules.get()],
+      ["platformRules.save", () => member.platformRules.save({ rules: [] })],
+      ["platformIpLists.list", () => member.platformIpLists.list()],
+      [
+        "platformIpLists.create",
+        () => member.platformIpLists.create({ name: "blocked", entries: [] }),
+      ],
+      [
+        "platformIpLists.update",
+        () => member.platformIpLists.update({ id: uuid, entries: [], kind: "block" }),
+      ],
+      ["platformIpLists.delete", () => member.platformIpLists.delete({ id: uuid })],
       ["clusters.list", () => member.clusters.list()],
       ["clusters.get", () => member.clusters.get({ id })],
       ["clusters.create", () => member.clusters.create({ name: "x" })],

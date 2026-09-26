@@ -1,0 +1,476 @@
+[
+  {
+    "source": "true or false and false",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "or",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "literal",
+          "field": "",
+          "valueType": "boolean",
+          "value": "true",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "and",
+          "field": "",
+          "valueType": "",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "literal",
+              "field": "",
+              "valueType": "boolean",
+              "value": "false",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "literal",
+              "field": "",
+              "valueType": "boolean",
+              "value": "false",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.host eq \"example.test\" and not http.request.method in {\"POST\" \"PUT\"}",
+    "phase": "waf-custom",
+    "request": {
+      "http.host": "example.test",
+      "http.request.method": "GET"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "eq",
+          "field": "http.host",
+          "valueType": "string",
+          "value": "example.test",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "not",
+          "field": "",
+          "valueType": "",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "in",
+              "field": "http.request.method",
+              "valueType": "string",
+              "value": "",
+              "values": ["POST", "PUT"],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.host eq \"example.test\" or http.request.method eq \"PUT\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.host": "other.test",
+      "http.request.method": "GET"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "or",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "eq",
+          "field": "http.host",
+          "valueType": "string",
+          "value": "example.test",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "eq",
+          "field": "http.request.method",
+          "valueType": "string",
+          "value": "PUT",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/(api|assets)/\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/assets/app.js"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/(api|assets)/",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a.$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a中"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a.$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path contains \"中\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/中"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "contains",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "中",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.headers[\"X-Region\"] eq \"nz\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.headers.x-region": "nz"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.headers.x-region",
+      "valueType": "string",
+      "value": "nz",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "ssl eq true and http.host contains \"example\"",
+    "phase": "waf-custom",
+    "request": {
+      "ssl": true,
+      "http.host": "example.test"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "eq",
+          "field": "ssl",
+          "valueType": "boolean",
+          "value": "true",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "contains",
+          "field": "http.host",
+          "valueType": "string",
+          "value": "example",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "ip.src in {192.0.2.0/24 2001:db8::/32}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "192.0.2.12"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["192.0.2.0/24", "2001:db8::/32"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {192.0.2.0/24}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "::ffff:192.0.2.12"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["192.0.2.0/24"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {192.0.2.0/24}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "64:ff9b::c000:020c"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["192.0.2.0/24"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in {2001:db8::/32}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "2001:db8:ffff::1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "",
+      "values": ["2001:db8::/32"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src ne 192.0.2.1",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "192.0.2.2"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "ne",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "192.0.2.1/32",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in $blocked",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "192.0.2.5"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in_list",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "list-1",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.src in $blocked",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "198.51.100.5"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in_list",
+      "field": "ip.src",
+      "valueType": "ip",
+      "value": "list-1",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.geoip.asnum in {13335 15169}",
+    "phase": "waf-custom",
+    "request": {
+      "ip.geoip.asnum": 13335
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "ip.geoip.asnum",
+      "valueType": "number",
+      "value": "",
+      "values": ["13335", "15169"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.geoip.country eq \"NZ\" and ip.geoip.subdivision eq \"AUK\"",
+    "phase": "waf-custom",
+    "request": {
+      "ip.geoip.country": "NZ",
+      "ip.geoip.subdivision": "AUK"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "eq",
+          "field": "ip.geoip.country",
+          "valueType": "string",
+          "value": "NZ",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "eq",
+          "field": "ip.geoip.subdivision",
+          "valueType": "string",
+          "value": "AUK",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.response.code ge 500",
+    "phase": "response-transform",
+    "request": {
+      "http.response.code": 503
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "ge",
+      "field": "http.response.code",
+      "valueType": "number",
+      "value": "500",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.response.headers[\"X-Test\"] ne \"\"",
+    "phase": "response-transform",
+    "request": {
+      "http.response.headers.x-test": "yes"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "ne",
+      "field": "http.response.headers.x-test",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    }
+  }
+]

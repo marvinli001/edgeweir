@@ -55,6 +55,9 @@ describe("UI rules (ADR-0003)", () => {
       "https://beian.miit.gov.cn/",
       // This project's own source ("Powered by Edgeweir", the AGPL source offer).
       "https://github.com/marvinli001/edgeweir",
+      // This project's operating guide and the MMDB data provider's required attribution.
+      "https://github.com/marvinli001/edgeweir/blob/master/docs/guide/rules.md",
+      "https://db-ip.com",
       // XML namespace name, never fetched.
       "http://www.w3.org/2000/svg",
     ];

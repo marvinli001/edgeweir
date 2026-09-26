@@ -67,6 +67,8 @@ PostgreSQL 是唯一的外部依赖。`compose.yml` 的 `analytics`（ClickHouse
 
 迁移：`0000_init`、`0001_m1`、`0002_site_star`、`0003_m2`、`0004_wrapup_auth`（`rate_limit`）、`0005_wrapup_console`（`cache_authorized`、任务来源与节点错误码）。控制台启动时在一个专用连接上持 advisory lock 执行迁移，多实例同时启动也安全。
 
+`0009_m4_rules` 增加 `edge_rule`（有阶段、表达式、动作与名单引用的站点/平台规则）和 `ip_list`（组织或平台作用域的规范化 CIDR 名单）。发布时解析为结构化 AST，列表名绑定到受权限检查的 ID。
+
 ## 4. 配置发布流水线
 
 1. 改变节点配置的操作（网站新增、编辑、删除，全站清除缓存代际号加一，源站允许清单变更，回滚）在同一个事务里：写业务表 → `publishRevision()` → 写审计。

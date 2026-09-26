@@ -1,9 +1,8 @@
 {
-  "name": "@edgeweir/config-compiler",
+  "name": "@edgeweir/rule-engine",
   "version": "0.0.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "description": "Compiles console models (sites, origins, cache rules) into the engine-agnostic NodeConfig IR.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
@@ -13,9 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "2.15.0",
-    "@edgeweir/proto": "workspace:*",
-    "@edgeweir/rule-engine": "workspace:*"
+    "ipaddr.js": "2.5.0"
   },
   "devDependencies": {
     "@types/node": "24.13.6",

@@ -839,6 +839,13 @@ if ! $SKIP_UI; then
 fi
 pass "M3 certificate and protocol checks passed"
 
+step "M4: rules, IP lists, rate limits, transformations and local GeoIP"
+node scripts/e2e-m4.mjs || fail "M4 protocol test failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" pnpm --filter @edgeweir/console test:e2e e2e/m4.spec.ts || fail "M4 browser test failed"
+fi
+pass "M4 policy checks passed"
+
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
 api POST "/nodes/$NODE_ID/disable" >/dev/null

@@ -64,6 +64,13 @@
       "when": 1790421386500,
       "tag": "0008_m3_dns_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790426400281,
+      "tag": "0009_m4_rules",
+      "breakpoints": true
     }
   ]
 }

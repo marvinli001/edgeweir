@@ -1,7 +1,15 @@
 import { m } from "@/lib/i18n";
 
 /** Tabs of the site detail page, in display order. */
-export const SITE_TABS = ["overview", "analytics", "domains", "origins", "cache", "https"] as const;
+export const SITE_TABS = [
+  "overview",
+  "analytics",
+  "domains",
+  "origins",
+  "cache",
+  "https",
+  "rules",
+] as const;
 
 export type SiteTab = (typeof SITE_TABS)[number];
 
@@ -17,5 +25,6 @@ export function siteTabLabel(tab: SiteTab): string {
     origins: m.site_tab_origins,
     cache: m.site_tab_cache,
     https: m.site_tab_https,
+    rules: m.site_tab_rules,
   }[tab]();
 }

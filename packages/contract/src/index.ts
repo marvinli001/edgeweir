@@ -1,12 +1,19 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
+import {
+  ipListsContract,
+  platformIpListsContract,
+  platformRulesContract,
+  rulesContract,
+} from "./rules";
 import * as s from "./schemas";
 
 export * from "./addresses";
 export * from "./certificates";
 export * from "./errors";
 export * from "./node-errors";
+export * from "./rules";
 export * from "./schemas";
 
 const idParam = z.object({ id: s.uuid });
@@ -28,6 +35,10 @@ const publicOperation = <T extends object>(operation: T) => ({ ...operation, sec
  * Errors carry a stable `code` (see errors.ts) that clients localize.
  */
 export const contract = {
+  rules: rulesContract,
+  platformRules: platformRulesContract,
+  ipLists: ipListsContract,
+  platformIpLists: platformIpListsContract,
   certificates: certificatesContract,
   dnsCredentials: dnsCredentialsContract,
   https: httpsContract,

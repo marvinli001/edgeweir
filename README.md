@@ -12,13 +12,18 @@ Edgeweir (pronounced *EDGE-weer*) is named after a weir. Around 256 BC, Li Bing 
 
 ## Status
 
-**MVP in progress: M1–M3 implemented; M4–M6 are next. Not production-ready.**
+**MVP in progress: M1–M4 implemented; M5–M6 are next. Not production-ready.**
 
-| Available and exercised locally | Planned next |
+| Area | Implemented |
 | --- | --- |
-| Clusters, groups, regions, organizations, invitations, 2FA/passkeys and audit logs | M4: access rules, WAF expressions, rate limits and IP lists |
-| Origin pools, TLS verification, S3 signing, WebSocket, cache keys, slicing, purge and prefetch | M5: DNS scheduling, ownership checks, analytics retention and alerts |
-| Certificate upload, ACME HTTP-01/DNS-01 plumbing, renewal scheduling, HTTPS, HSTS, HTTP/2 and HTTP/3 | M6: signed upgrades, sampled logs, scoped AccessKeys, benchmark and restore drills |
+| Clusters and access | Groups, regions, organizations, invitations, 2FA/passkeys and audit logs |
+| Origins and cache | Pools, TLS verification, S3 signing, WebSocket, cache keys, slicing, purge and prefetch |
+| Certificates and protocols | Upload, ACME HTTP-01/DNS-01, renewal scheduling, HTTPS, HSTS, HTTP/2 and HTTP/3 |
+| Policy | IP lists, local GeoIP, phased rules, WAF, rate limits, redirects, rewrites and header transforms |
+
+Remaining MVP work: **M5** adds DNS scheduling, domain ownership, analytics retention and alerts; **M6** adds signed upgrades, sampled logs, scoped AccessKeys, performance and restore drills.
+
+M4 has passed real-node tests for IP/GeoIP rules, WAF, rate limits, redirects, rewrites and header transforms; policy updates do not reload nginx. See the [rule guide](docs/guide/rules.md) for scope and limits.
 
 M3's local Pebble test proves HTTP-01 issuance through a real edge node, trusted HTTPS, HTTP/2, HTTP/3 and certificate rotation without an nginx reload. DNS provider adapters and ZeroSSL EAB require operator credentials for live-service acceptance. Brotli and Zstd remain unavailable on the selected stock engine. See [HTTPS guide](docs/guide/https.md), [MVP specification](docs/specs/mvp.md) and [implementation evidence](docs/implementation/mvp-completion.md).
 
@@ -160,7 +165,7 @@ packages/contract/         oRPC contract and zod schemas
 packages/config-compiler/  database model → NodeConfig IR
 packages/proto/            TypeScript generated from proto/
 proto/                     protobuf managed by buf; the single source of truth shared with edgeweir-node
-helpers/certd/             edgeweir-certd (Go) skeleton: ACME via lego and DNS records via libdns, from MVP M3
+helpers/certd/             edgeweir-certd (Go): ACME via lego and DNS records via libdns
 scripts/e2e.sh             end-to-end test driver
 docs/adr/                  architecture decision records
 docs/specs/                MVP specification

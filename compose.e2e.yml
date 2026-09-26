@@ -136,6 +136,14 @@ services:
         printf 'hello from s3\n' > /data/media/hello.txt &&
         exec versitygw --port :7070 --access e2e-access-key --secret e2e-only-s3-secret-key posix /data
 
+  geoip-fixture:
+    build:
+      context: ${EDGEWEIR_NODE_CONTEXT:-../edgeweir-node}
+      target: geoip-fixture
+    image: edgeweir-geoip-fixture:${E2E_TAG:-e2e}
+    volumes:
+      - geoip-test-data:/data
+
   node:
     build:
       context: ${EDGEWEIR_NODE_CONTEXT:-../edgeweir-node}
@@ -145,18 +153,23 @@ services:
       # Trust store for HTTPS origins (instead of the system bundle): the
       # test CA only, so the self-signed :443 of "files" stays untrusted.
       EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
+      EDGEWEIR_GEOIP_CITY: /etc/edgeweir-geoip/city.mmdb
+      EDGEWEIR_GEOIP_ASN: /etc/edgeweir-geoip/asn.mmdb
     ports:
       - "${E2E_NODE_PORT:-18080}:80"
       - "${E2E_NODE_TLS_PORT:-18443}:443"
       - "${E2E_NODE_TLS_PORT:-18443}:443/udp"
     volumes:
       - node-state:/var/lib/edgeweir-node
+      - geoip-test-data:/etc/edgeweir-geoip:ro
       - origin-ca:/etc/edgeweir-e2e:ro
     networks:
       default:
         aliases: [demo.test, https.m3.test]
       isolated: {}
     depends_on:
+      geoip-fixture:
+        condition: service_completed_successfully
       console:
         condition: service_healthy
       whoami:
@@ -183,6 +196,7 @@ networks:
         - subnet: ${E2E_ISOLATED_SUBNET:-172.28.214.0/24}
 
 volumes:
+  geoip-test-data:
   node-state:
   origin-ca:
   downloads:

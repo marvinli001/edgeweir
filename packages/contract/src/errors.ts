@@ -5,6 +5,11 @@
  * to the server's English `message`.
  */
 export const errorDefs = {
+  RULE_INVALID: { status: 400, params: [] },
+  IP_LIST_NOT_FOUND: { status: 404, params: [] },
+  IP_LIST_NAME_TAKEN: { status: 409, params: [] },
+  IP_LIST_LIMIT: { status: 409, params: [] },
+  IP_LIST_IN_USE: { status: 409, params: [] },
   CERTIFICATE_NOT_FOUND: { status: 404, params: [] },
   CERTIFICATE_INVALID: { status: 400, params: [] },
   CERTIFICATE_DOMAIN_MISMATCH: { status: 400, params: [] },
@@ -72,6 +77,7 @@ export function isErrorCode(code: unknown): code is ErrorCode {
  * UI renders it per locale, `reasonText` gives the English form for the API.
  */
 export const revisionReasonDefs = {
+  rules_updated: { params: [], en: "rules and IP lists updated" },
   certificate_updated: { params: ["site"], en: "certificate policy for {site} updated" },
   acme_challenge_updated: { params: [], en: "ACME challenge updated" },
   cluster_created: { params: ["cluster"], en: "cluster {cluster} created" },

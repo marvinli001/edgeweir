@@ -23,6 +23,7 @@ COPY packages/proto/package.json packages/proto/
 COPY packages/contract/package.json packages/contract/
 COPY packages/db/package.json packages/db/
 COPY packages/config-compiler/package.json packages/config-compiler/
+COPY packages/rule-engine/package.json packages/rule-engine/
 RUN pnpm install --frozen-lockfile
 COPY apps/console apps/console
 COPY packages packages

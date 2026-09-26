@@ -41,6 +41,8 @@ message NodeConfig {
   repeated string required_features = 9;
   // Short-lived public ACME HTTP-01 responses, hot-updated with the site table.
   repeated HttpChallenge http_challenges = 10;
+  repeated IpList ip_lists = 11;
+  repeated EdgeRule platform_rules = 12;
 }
 
 // NodeConfigDiff transforms the config at base_revision into revision.
@@ -68,6 +70,8 @@ message NodeConfigDiff {
   repeated string origin_allowed_cidrs = 10;
   repeated string required_features = 11;
   repeated HttpChallenge http_challenges = 12;
+  repeated IpList ip_lists = 13;
+  repeated EdgeRule platform_rules = 14;
 }
 
 // ListenerProtocol is the application protocol of a listener.
@@ -117,6 +121,49 @@ message Site {
   // Reject WebSocket upgrades. WebSocket is proxied to the origin by default.
   bool websocket_disabled = 12;
   TlsOptions tls = 13;
+  repeated EdgeRule rules = 14;
+}
+
+// RuleExpression is a bounded, typed AST, never source code to execute.
+message RuleExpression {
+  string op = 1;
+  string field = 2;
+  string value_type = 3;
+  string value = 4;
+  repeated string values = 5;
+  repeated RuleExpression children = 6;
+}
+
+// RuleAction contains only the arguments of the validated action kind.
+message RuleAction {
+  string kind = 1;
+  string value = 2;
+  string header = 3;
+  uint32 status_code = 4;
+  uint32 limit = 5;
+  uint32 window_seconds = 6;
+  string key = 7;
+  optional bool cache_bypass = 8;
+  optional bool force_https = 9;
+  optional bool gzip = 10;
+  bool remove = 11;
+}
+
+// EdgeRule is executed in list order inside its fixed phase.
+message EdgeRule {
+  string id = 1;
+  string phase = 2;
+  RuleExpression expression = 3;
+  RuleAction action = 4;
+}
+
+// IpList is a named collection or an automatically applied platform allow/block list.
+message IpList {
+  string id = 1;
+  string name = 2;
+  repeated string entries = 3;
+  string kind = 4;
+  bool platform = 5;
 }
 
 // HTTP and TLS policy. Cipher strings are never accepted from tenants.

@@ -226,6 +226,9 @@ importers:
       '@edgeweir/proto':
         specifier: workspace:*
         version: link:../../packages/proto
+      '@edgeweir/rule-engine':
+        specifier: workspace:*
+        version: link:../../packages/rule-engine
       '@fontsource-variable/geist':
         specifier: 5.3.0
         version: 5.3.0
@@ -386,6 +389,9 @@ importers:
       '@edgeweir/proto':
         specifier: workspace:*
         version: link:../proto
+      '@edgeweir/rule-engine':
+        specifier: workspace:*
+        version: link:../rule-engine
     devDependencies:
       '@types/node':
         specifier: 24.13.6
@@ -396,6 +402,9 @@ importers:
 
   packages/contract:
     dependencies:
+      '@edgeweir/rule-engine':
+        specifier: workspace:*
+        version: link:../rule-engine
       '@orpc/contract':
         specifier: 1.15.4
         version: 1.15.4
@@ -444,6 +453,19 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+
+  packages/rule-engine:
+    dependencies:
+      ipaddr.js:
+        specifier: 2.5.0
+        version: 2.5.0
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+      vitest:
+        specifier: 5.0.1
+        version: 5.0.1(@types/node@24.13.6)(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
 packages:
 
@@ -3461,6 +3483,10 @@ packages:
   ipaddr.js@1.9.1:
     resolution: {integrity: sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g==}
     engines: {node: '>= 0.10'}
+
+  ipaddr.js@2.5.0:
+    resolution: {integrity: sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w==}
+    engines: {node: '>= 10'}
 
   is-arrayish@0.2.1:
     resolution: {integrity: sha512-zz06S8t0ozoDXMG+ube26zeCTNXcKIPJZJi8hBrF4idCLms4CG9QtK7qBl1boi5ODzFpjswb5JPmHCbMpjaYzg==}
@@ -7439,6 +7465,8 @@ snapshots:
   ip-address@10.7.2: {}
 
   ipaddr.js@1.9.1: {}
+
+  ipaddr.js@2.5.0: {}
 
   is-arrayish@0.2.1: {}
 

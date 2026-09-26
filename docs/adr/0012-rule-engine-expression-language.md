@@ -80,3 +80,11 @@ Phase 0 范围：
 | 组件 | 版本 | 来源 |
 | --- | --- | --- |
 | OpenResty（节点端执行环境） | 1.31.1.1，镜像 `openresty/openresty:1.31.1.1-bookworm` | Docker Hub |
+
+## 2026-09-27 M4 更新
+
+- 独立 `@edgeweir/rule-engine` 完成受限语法解析，IR 使用 `EdgeRule` / `RuleExpression` / `RuleAction` / `IpList`。Lua 将 AST 编译为固定函数组合，不使用 load/loadstring；Go 对类型、阶段、名单引用和复杂度做第二次验证，拒绝整个无效配置。
+- `rules-v1` 是基础能力，City / ASN 数据分别协商 `geoip-city-v1` / `geoip-asn-v1`。表达式与名单通过原有原子 site-table Unix socket 通道热更新。
+- 正则限 ASCII 子集与 PCRE 匹配预算，失败关闭；IP 前缀树查询按地址位数有界。限速使用不会强制淘汰已有键的共享内存操作，内存不足拒绝请求。
+- 默认数据源 DB-IP Lite（CC BY 4.0），由运维者自行下载并在节点提供 City / ASN MMDB；无自动外连。maxminddb-golang v2.6.0，测试数据由 mmdbwriter v1.2.0 自行生成。外部服务、UI 和具体规则语义见 [规则指南](../../docs/guide/rules.md)。
+- 平台规则先于同阶段的站点规则；回滚不能撤销当前平台规则与 IP 名单。阶段顺序、放行范围、固定窗口和字段限制在指南中明确。

@@ -42,6 +42,12 @@ export function consoleNav(opts: { manageMembers: boolean }): NavItem[] {
     },
     { title: m.nav_sites(), to: "/sites", icon: icon(GlobeIcon), testId: "nav-sites" },
     {
+      title: m.ip_lists_title(),
+      to: "/ip-lists",
+      icon: icon(SecurityLockIcon),
+      testId: "nav-ip-lists",
+    },
+    {
       title: m.nav_purge(),
       to: "/purge",
       icon: icon(DatabaseSync01Icon),
@@ -92,6 +98,18 @@ export function adminNav(): NavItem[] {
       to: "/admin/clusters",
       icon: icon(ServerStack01Icon),
       testId: "nav-clusters",
+    },
+    {
+      title: m.rules_platform(),
+      to: "/admin/rules",
+      icon: icon(SecurityLockIcon),
+      testId: "nav-platform-rules",
+    },
+    {
+      title: m.ip_lists_platform(),
+      to: "/admin/ip-lists",
+      icon: icon(SecurityLockIcon),
+      testId: "nav-platform-ip-lists",
     },
     {
       title: m.nav_regions(),

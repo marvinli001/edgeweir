@@ -66,6 +66,15 @@ import { getOriginAllowList, setOriginAllowList } from "../services/origin-allow
 import { siteOriginHealth } from "../services/origin-health";
 import { createRegion, deleteRegion, listRegions, updateRegion } from "../services/regions";
 import { toRevisionDto } from "../services/revisions";
+import {
+  createIpList,
+  deleteIpList,
+  getRules,
+  listIpLists,
+  saveRules,
+  updateIpList,
+  validateExpression,
+} from "../services/rules";
 import { isInitialized, runSetup, setupCompletedAt } from "../services/setup";
 import {
   countSites,
@@ -85,7 +94,60 @@ export type { RequestContext } from "./base";
 
 const ok = { ok: true as const };
 
+const listTenant = tenant.use(({ context, next }) => {
+  if (!context.organizationId) fail("NOT_A_MEMBER", "select an organization first");
+  return next({ context: { organizationId: context.organizationId } });
+});
+
 export const router = os.router({
+  rules: {
+    get: tenant.rules.get.handler(({ input, context }) => getRules(context.app, input.id, context)),
+    save: tenant.rules.save.handler(({ input, context }) =>
+      saveRules(context.app, input.id, input.rules, context),
+    ),
+    validate: tenant.rules.validate.handler(({ input }) =>
+      validateExpression(input.expression, input.phase),
+    ),
+  },
+  platformRules: {
+    get: admin.platformRules.get.handler(({ context }) => getRules(context.app, null, context)),
+    save: admin.platformRules.save.handler(({ input, context }) =>
+      saveRules(context.app, null, input.rules, context),
+    ),
+  },
+  ipLists: {
+    list: listTenant.ipLists.list.handler(({ context }) =>
+      listIpLists(context.app, context.organizationId),
+    ),
+    create: listTenant.ipLists.create.handler(({ input, context }) =>
+      createIpList(context.app, input, context.organizationId, context.actor),
+    ),
+    update: listTenant.ipLists.update.handler(({ input, context }) =>
+      updateIpList(
+        context.app,
+        input.id,
+        input.entries,
+        input.kind,
+        context.organizationId,
+        context.actor,
+      ),
+    ),
+    delete: listTenant.ipLists.delete.handler(({ input, context }) =>
+      deleteIpList(context.app, input.id, context.organizationId, context.actor),
+    ),
+  },
+  platformIpLists: {
+    list: admin.platformIpLists.list.handler(({ context }) => listIpLists(context.app, null)),
+    create: admin.platformIpLists.create.handler(({ input, context }) =>
+      createIpList(context.app, input, null, context.actor),
+    ),
+    update: admin.platformIpLists.update.handler(({ input, context }) =>
+      updateIpList(context.app, input.id, input.entries, input.kind, null, context.actor),
+    ),
+    delete: admin.platformIpLists.delete.handler(({ input, context }) =>
+      deleteIpList(context.app, input.id, null, context.actor),
+    ),
+  },
   certificates: {
     list: tenant.certificates.list.handler(({ context }) =>
       listCertificates(context.app, context.scope),
