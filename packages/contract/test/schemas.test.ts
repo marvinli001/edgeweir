@@ -177,8 +177,10 @@ describe("error and reason codes", () => {
     for (const code of errorCodes) {
       expect(code).toMatch(/^[A-Z][A-Z0-9_]+$/);
       expect(errorDefs[code].status).toBeGreaterThanOrEqual(400);
-      expect(errorDefs[code].status).toBeLessThan(500);
+      expect(errorDefs[code].status).toBeLessThan(600);
     }
+    // Provider delivery failures are server-side HTTP errors, not invalid input.
+    expect(errorDefs.ALERT_SEND_FAILED.status).toBe(502);
     expect(isErrorCode("DOMAIN_IN_USE")).toBe(true);
     expect(isErrorCode("toString")).toBe(false);
   });

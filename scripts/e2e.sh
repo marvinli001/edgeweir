@@ -846,6 +846,13 @@ if ! $SKIP_UI; then
 fi
 pass "M4 policy checks passed"
 
+step "M5: domain proof, DNS health reconciliation, statistics and notifications"
+node scripts/e2e-m5.mjs || fail "M5 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/m5.spec.ts || fail "M5 browser test failed"
+fi
+pass "M5 DNS, statistics and alert checks passed"
+
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
 api POST "/nodes/$NODE_ID/disable" >/dev/null

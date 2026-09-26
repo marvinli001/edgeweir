@@ -6,6 +6,7 @@ import { createApp } from "../../src/server/app";
 import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
+  approveSiteDomains,
   createTestContext,
   PASSWORD,
   rpcClient,
@@ -46,10 +47,11 @@ describe("M4 rules and IP list boundaries", async () => {
     otherSiteId = (
       await tenant.sites.create({
         name: "own",
-        domains: ["own.rules.test"],
+        domains: ["own-tenant-rules.test"],
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
+    await approveSiteDomains(admin, otherSiteId);
   });
   afterAll(() => db.close());
   const config = async () =>
@@ -60,7 +62,7 @@ describe("M4 rules and IP list boundaries", async () => {
     ).toMatchObject({ valid: false, position: 10 });
     expect(
       await tenant.rules.validate({
-        expression: 'http.host eq "own.rules.test"',
+        expression: 'http.host eq "own-tenant-rules.test"',
         phase: "waf-custom",
       }),
     ).toMatchObject({ valid: true });

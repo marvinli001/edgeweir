@@ -10,6 +10,8 @@ import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Page } from "@/components/page";
 import { CacheTab } from "@/components/site/cache-tab";
+import { CnameTarget } from "@/components/site/cname-target";
+import { DomainOwnershipPanel } from "@/components/site/domain-ownership";
 import { HttpsTab } from "@/components/site/https-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
 import { RulesTab } from "@/components/site/rules-tab";
@@ -119,7 +121,7 @@ function SiteDetailPage() {
             />
           </TabsContent>
           <TabsContent value="domains" className="animate-enter">
-            <DomainsTab key={site.data.updatedAt} site={site.data} />
+            <DomainsTab key={site.data.updatedAt} site={site.data} isAdmin={isAdmin} />
           </TabsContent>
           <TabsContent value="origins" className="animate-enter">
             <OriginsTab site={site.data} />
@@ -257,7 +259,7 @@ function OverviewTab({ site }: { site: Site }) {
   );
 }
 
-function DomainsTab({ site }: { site: Site }) {
+function DomainsTab({ site, isAdmin }: { site: Site; isAdmin: boolean }) {
   const [domains, setDomains] = React.useState(site.domains);
   const [draft, setDraft] = React.useState("");
   const { save, error, pending } = useSaveSite(site.id);
@@ -272,64 +274,68 @@ function DomainsTab({ site }: { site: Site }) {
   };
 
   return (
-    <Card>
-      <form
-        className="flex flex-col gap-(--card-spacing)"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save({ domains });
-        }}
-      >
-        <CardHeader>
-          <CardTitle>{m.site_tab_domains()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <ul className="divide-y rounded-2xl border" data-testid="domain-list">
-            {domains.map((domain, index) => (
-              <li
-                key={domain}
-                className="flex items-center gap-2 px-3 py-2 animate-enter"
-                style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
-              >
-                <span className="flex-1 font-mono text-sm break-all">{domain}</span>
-                {domain.startsWith("*.") ? (
-                  <Badge variant="secondary">{m.site_domain_wildcard()}</Badge>
-                ) : null}
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={m.common_remove()}
-                  disabled={domains.length === 1}
-                  onClick={() => setDomains(domains.filter((d) => d !== domain))}
+    <div className="flex flex-col gap-4">
+      <CnameTarget siteId={site.id} />
+      <DomainOwnershipPanel siteId={site.id} isAdmin={isAdmin} />
+      <Card>
+        <form
+          className="flex flex-col gap-(--card-spacing)"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save({ domains });
+          }}
+        >
+          <CardHeader>
+            <CardTitle>{m.site_tab_domains()}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <ul className="divide-y rounded-2xl border" data-testid="domain-list">
+              {domains.map((domain, index) => (
+                <li
+                  key={domain}
+                  className="flex items-center gap-2 px-3 py-2 animate-enter"
+                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
                 >
-                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                </Button>
-              </li>
-            ))}
-          </ul>
-          <div className="flex gap-2">
-            <Input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  add();
-                }
-              }}
-              placeholder="www.example.com, *.example.com"
-              aria-label={m.site_domain_add()}
-              data-testid="domain-input"
-            />
-            <Button type="button" variant="outline" onClick={add} data-testid="domain-add">
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-              {m.site_domain_add()}
-            </Button>
-          </div>
-        </CardContent>
-        <SaveBar dirty={dirty} pending={pending} error={error} testId="domains-save" />
-      </form>
-    </Card>
+                  <span className="flex-1 font-mono text-sm break-all">{domain}</span>
+                  {domain.startsWith("*.") ? (
+                    <Badge variant="secondary">{m.site_domain_wildcard()}</Badge>
+                  ) : null}
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={m.common_remove()}
+                    disabled={domains.length === 1}
+                    onClick={() => setDomains(domains.filter((d) => d !== domain))}
+                  >
+                    <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2">
+              <Input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    add();
+                  }
+                }}
+                placeholder="www.example.com, *.example.com"
+                aria-label={m.site_domain_add()}
+                data-testid="domain-input"
+              />
+              <Button type="button" variant="outline" onClick={add} data-testid="domain-add">
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                {m.site_domain_add()}
+              </Button>
+            </div>
+          </CardContent>
+          <SaveBar dirty={dirty} pending={pending} error={error} testId="domains-save" />
+        </form>
+      </Card>
+    </div>
   );
 }

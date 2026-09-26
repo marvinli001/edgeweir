@@ -147,3 +147,8 @@ Phase 0 范围：
 >   - `ReportStats` 每次上报只用一条 SQL：同一分钟、同一网站的桶先合并，整批作为一个 JSON 参数传入，不属于该节点集群的网站被 join 过滤，已有行累加；每次最多接受 5000 个桶。重试时的重复计数没有解决（归 M5，见 [mvp.md](../../docs/specs/mvp.md) 第 5 节）。
 
 > 更新记录（2026-09-27，MVP M3）：proto `v0.3.0` 新增 `NodeInfo.supported_features`、`NodeConfig.required_features` 和证书材料 RPC。控制面拒绝给缺少能力的节点下发该版本；节点拒绝未知能力与枚举，继续使用 last-known-good。`GetCertificates` 只下发集群当前目标配置引用的 ID/指纹，不通过历史引用授予新私钥访问权。
+
+## 2026-09-27 M5 更新
+
+- proto/v0.5.0 新增独立 `ReportStatsV2` 消息、单调批次序号及 Top URL/IP。空 V2 批次读取永久游标，统计与游标同事务提交；旧未编号批次被拒绝。
+- 新节点在旧控制面上得到未实现 V2 的响应，保持未发送数据在有界队列中，不回退到可能重复计数的旧 RPC。

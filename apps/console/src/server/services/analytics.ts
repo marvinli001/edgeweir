@@ -36,28 +36,32 @@ export function rangeWindow(range: AnalyticsRange, now = Date.now()) {
   };
 }
 
+type StatsSource = typeof schema.nodeMinuteStats | typeof schema.trafficHourStats;
 const stats = schema.nodeMinuteStats;
+const sourceFor = (range: AnalyticsRange): StatsSource =>
+  range === "7d" || range === "30d" ? schema.trafficHourStats : schema.nodeMinuteStats;
 
 const sum = (expression: SQLWrapper) =>
   sql<number>`coalesce(sum(${expression}), 0)::bigint`.mapWith(Number);
 
 /** Responses of one status class ("2" → 2xx) in a row's per-code counters. */
-const statusClass = (digit: 2 | 3 | 4 | 5) =>
+const statusClass = (stats: StatsSource, digit: 2 | 3 | 4 | 5) =>
   sum(
     sql`(select sum(value::bigint) from jsonb_each_text(${stats.statusCodes}) where key like ${sql.raw(`'${digit}%'`)})`,
   );
 
-const counters = {
+const counterFields = (stats: StatsSource) => ({
   requests: sum(stats.requests),
   bytesSent: sum(stats.bytesSent),
   bytesReceived: sum(stats.bytesReceived),
   cacheHits: sum(stats.cacheHits),
   cacheMisses: sum(stats.cacheMisses),
-  status2xx: statusClass(2),
-  status3xx: statusClass(3),
-  status4xx: statusClass(4),
-  status5xx: statusClass(5),
-};
+  status2xx: statusClass(stats, 2),
+  status3xx: statusClass(stats, 3),
+  status4xx: statusClass(stats, 4),
+  status5xx: statusClass(stats, 5),
+});
+const counters = counterFields(stats);
 
 type Counters = { [K in keyof typeof counters]: number };
 
@@ -86,7 +90,7 @@ function totalsOf(points: Counters[], bucketSeconds: number): TrafficTotals {
 }
 
 /** Epoch seconds of the bucket a row's minute falls in. */
-function bucketOf(bucketSeconds: number) {
+function bucketOf(bucketSeconds: number, stats: StatsSource = schema.nodeMinuteStats) {
   // A fixed literal from RANGES, so the expression renders the same in SELECT and GROUP BY.
   return sql<number>`extract(epoch from date_bin(${sql.raw(`'${bucketSeconds} seconds'`)}::interval, ${stats.minute}, timestamptz 'epoch'))::bigint`;
 }
@@ -106,9 +110,11 @@ export async function trafficSeries(
   query: { range: AnalyticsRange; siteId?: string },
   now = Date.now(),
 ): Promise<Traffic> {
+  const stats = sourceFor(query.range);
   const window = rangeWindow(query.range, now);
   const { bucketSeconds } = window;
-  const bucket = bucketOf(bucketSeconds);
+  const counters = counterFields(stats);
+  const bucket = bucketOf(bucketSeconds, stats);
   const rows = await db
     .select({ bucket: bucket.mapWith(Number), ...counters })
     .from(stats)
@@ -146,12 +152,12 @@ export async function trafficSeries(
   };
 }
 
-const topColumns = {
-  requests: counters.requests,
-  bytesSent: counters.bytesSent,
-  cacheHits: counters.cacheHits,
-  cacheMisses: counters.cacheMisses,
-};
+const topFields = (stats: StatsSource) => ({
+  requests: sum(stats.requests),
+  bytesSent: sum(stats.bytesSent),
+  cacheHits: sum(stats.cacheHits),
+  cacheMisses: sum(stats.cacheMisses),
+});
 
 /** Sites of the scope with the most requests over the range. */
 export async function topSites(
@@ -160,7 +166,9 @@ export async function topSites(
   query: { range: AnalyticsRange; limit: number },
   now = Date.now(),
 ): Promise<TrafficTopItem[]> {
+  const stats = sourceFor(query.range);
   const window = rangeWindow(query.range, now);
+  const topColumns = topFields(stats);
   return db
     .select({
       id: schema.site.id,
@@ -184,7 +192,9 @@ export async function topNodes(
   query: { range: AnalyticsRange; limit: number },
   now = Date.now(),
 ): Promise<TrafficTopItem[]> {
+  const stats = sourceFor(query.range);
   const window = rangeWindow(query.range, now);
+  const topColumns = topFields(stats);
   return db
     .select({
       id: schema.node.id,
@@ -213,6 +223,7 @@ export async function trafficBreakdown(
     Required<Pick<TrafficBreakdownInput, "range" | "metric" | "limit">>,
   now = Date.now(),
 ): Promise<TrafficBreakdown> {
+  const stats = sourceFor(query.range);
   const window = rangeWindow(query.range, now);
   const bucketMs = window.bucketSeconds * 1000;
   const times: number[] = [];
@@ -225,8 +236,8 @@ export async function trafficBreakdown(
     query.siteId ? eq(stats.siteId, query.siteId) : undefined,
   );
   const result = await (query.by === "status"
-    ? statusBreakdown(db, where, window.bucketSeconds, query.statusClass)
-    : entityBreakdown(db, where, window.bucketSeconds, query.by, query.metric, query.limit));
+    ? statusBreakdown(db, where, window.bucketSeconds, query.statusClass, stats)
+    : entityBreakdown(db, where, window.bucketSeconds, query.by, query.metric, query.limit, stats));
 
   const seriesOf = (rows: { bucket: number; value: number }[]) => {
     const series = times.map(() => 0);
@@ -273,9 +284,10 @@ async function entityBreakdown(
   by: "site" | "node",
   metric: "requests" | "bytesSent",
   limit: number,
+  stats: StatsSource,
 ): Promise<BreakdownRows> {
   const value = sum(metric === "requests" ? stats.requests : stats.bytesSent);
-  const bucket = bucketOf(bucketSeconds).mapWith(Number);
+  const bucket = bucketOf(bucketSeconds, stats).mapWith(Number);
   const key = by === "site" ? stats.siteId : stats.nodeId;
   const items =
     by === "site"
@@ -345,6 +357,7 @@ async function statusBreakdown(
   where: SQL | undefined,
   bucketSeconds: number,
   statusClass: number | undefined,
+  stats: StatsSource,
 ): Promise<BreakdownRows> {
   const classFilter =
     statusClass === undefined ? sql`` : sql` and code.key like ${`${statusClass}%`}`;
@@ -353,7 +366,7 @@ async function statusBreakdown(
     code: string;
     value: string | number;
   }>(
-    sql`select ${bucketOf(bucketSeconds)} as bucket, code.key as code, sum(code.value::bigint)::bigint as value
+    sql`select ${bucketOf(bucketSeconds, stats)} as bucket, code.key as code, sum(code.value::bigint)::bigint as value
       from ${stats}
       inner join ${schema.site} on ${schema.site.id} = ${stats.siteId}
       cross join lateral jsonb_each_text(${stats.statusCodes}) as code(key, value)
@@ -377,4 +390,33 @@ async function statusBreakdown(
     .sort((a, b) => b.total - a.total || a.id.localeCompare(b.id));
   const totals = [...byBucket].map(([bucket, value]) => ({ bucket, value }));
   return { items, points, totals };
+}
+
+/** Bounded heavy hitters from node pre-aggregation, always marked approximate. */
+export async function topRequests(
+  db: Database,
+  scope: SiteScope,
+  query: { range: AnalyticsRange; siteId?: string; by: "url" | "ip"; limit: number },
+  now = Date.now(),
+) {
+  const stats = sourceFor(query.range),
+    window = rangeWindow(query.range, now);
+  const column = query.by === "url" ? stats.topUrls : stats.topIps;
+  const where = and(
+    gte(stats.minute, window.from),
+    lt(stats.minute, window.end),
+    scopeFilter(scope),
+    query.siteId ? eq(stats.siteId, query.siteId) : undefined,
+  );
+  const result = await db.execute<{
+    value: string;
+    requests: string | number;
+  }>(sql`select entry.key as value,sum(entry.value::bigint)::bigint as requests from ${stats}
+   inner join ${schema.site} on ${schema.site.id}=${stats.siteId}
+   cross join lateral jsonb_each_text(${column}) entry
+   where ${where ?? sql`true`} group by entry.key order by requests desc,value limit ${query.limit}`);
+  return {
+    approximate: true as const,
+    items: result.rows.map((row) => ({ value: row.value, requests: Number(row.requests) })),
+  };
 }

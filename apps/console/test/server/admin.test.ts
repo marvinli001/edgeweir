@@ -15,6 +15,16 @@ import {
 
 /** Every contract procedure outside the admin area (checked against the contract below). */
 const CONSOLE_PROCEDURES = [
+  "alerts.availableChannels",
+  "alerts.subscriptions",
+  "alerts.subscribe",
+  "alerts.unsubscribe",
+  "alerts.events",
+  "dns.siteTarget",
+  "domainOwnership.get",
+  "domainOwnership.prepare",
+  "domainOwnership.verify",
+  "domainOwnership.revoke",
   "rules.get",
   "rules.save",
   "rules.validate",
@@ -47,6 +57,7 @@ const CONSOLE_PROCEDURES = [
   "sites.originHealth",
   "sites.starred",
   "sites.setStarred",
+  "analytics.topRequests",
   "analytics.traffic",
   "analytics.topSites",
   "analytics.breakdown",
@@ -99,6 +110,56 @@ describe("admin area procedures", async () => {
     const id = cluster?.id ?? "";
     const uuid = "00000000-0000-4000-8000-000000000000";
     const calls: [string, () => Promise<unknown>][] = [
+      ["alerts.channels", () => member.alerts.channels()],
+      [
+        "alerts.createChannel",
+        () =>
+          member.alerts.createChannel({
+            name: "x",
+            config: { kind: "webhook", url: "https://example.test/webhook" },
+          }),
+      ],
+      ["alerts.updateChannel", () => member.alerts.updateChannel({ id: uuid, name: "x" })],
+      ["alerts.deleteChannel", () => member.alerts.deleteChannel({ id: uuid })],
+      ["alerts.testChannel", () => member.alerts.testChannel({ id: uuid })],
+      ["alerts.policy", () => member.alerts.policy()],
+      ["alerts.setPolicy", () => member.alerts.setPolicy({})],
+      ["alerts.smtp", () => member.alerts.smtp()],
+      [
+        "alerts.setSmtp",
+        () =>
+          member.alerts.setSmtp({
+            host: "smtp.example.test",
+            from: "alerts@example.test",
+            username: "test",
+            password: "test",
+          }),
+      ],
+      [
+        "dns.updateProvider",
+        () => member.dns.updateProvider({ id: uuid, credentials: { api_token: "test" } }),
+      ],
+      ["dns.providers", () => member.dns.providers()],
+      [
+        "dns.createProvider",
+        () =>
+          member.dns.createProvider({
+            name: "test",
+            provider: "cloudflare",
+            zone: "example.test",
+            credentials: { api_token: "test" },
+          }),
+      ],
+      ["dns.deleteProvider", () => member.dns.deleteProvider({ id: uuid })],
+      ["dns.get", () => member.dns.get()],
+      ["dns.save", () => member.dns.save({ enabled: false })],
+      ["dns.revisions", () => member.dns.revisions()],
+      ["dns.rollback", () => member.dns.rollback({ revision: 1 })],
+      ["dns.reconcile", () => member.dns.reconcile()],
+      [
+        "domainOwnership.approve",
+        () => member.domainOwnership.approve({ siteId: uuid, domain: "example.test" }),
+      ],
       ["platformRules.get", () => member.platformRules.get()],
       ["platformRules.save", () => member.platformRules.save({ rules: [] })],
       ["platformIpLists.list", () => member.platformIpLists.list()],

@@ -32,7 +32,7 @@ export async function runCertd<T = Record<string, unknown>>(
 ): Promise<T> {
   const child = spawn(app.env.EDGEWEIR_CERTD_BIN, [], {
     stdio: ["pipe", "pipe", "pipe"],
-    env: { PATH: process.env.PATH },
+    env: { PATH: process.env.PATH, EDGEWEIR_DNS_TEST_ENDPOINT: app.env.EDGEWEIR_DNS_TEST_ENDPOINT },
   });
   const exit = new Promise<number | null>((resolve, reject) => {
     child.once("error", reject);
@@ -48,7 +48,7 @@ export async function runCertd<T = Record<string, unknown>>(
   const timer = setTimeout(stop, 5 * 60_000);
   child.stdout.on("data", (chunk) => {
     bytes += chunk.length;
-    if (bytes > 2 * 1024 * 1024) stop();
+    if (bytes > (command.startsWith("dns.") ? 16 : 2) * 1024 * 1024) stop();
   });
   child.stderr.resume(); // dependency diagnostics may quote credentials
   child.stdin.on("error", () => {});
@@ -85,6 +85,7 @@ async function assertIssuanceNames(
     .where(
       and(
         eq(schema.site.organizationId, certificate.organizationId),
+        eq(schema.siteDomain.verified, true),
         eq(schema.site.enabled, true),
       ),
     );
@@ -221,6 +222,7 @@ async function challengeEvent(
       .where(
         and(
           eq(schema.site.organizationId, certificate.organizationId),
+          eq(schema.siteDomain.verified, true),
           eq(schema.siteDomain.name, domain),
           eq(schema.siteDomain.wildcard, false),
           eq(schema.site.enabled, true),

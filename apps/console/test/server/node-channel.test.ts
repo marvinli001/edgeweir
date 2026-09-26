@@ -469,8 +469,11 @@ describe("node channel", async () => {
     ]);
 
     // Stats are summed per minute and site in one upsert; other clusters' sites are dropped.
-    const minute = timestampFromDate(new Date(Date.UTC(2026, 0, 1, 0, 0, 30)));
-    const stats = await mtls.reportStats({
+    const bucketStart = Math.floor(Date.now() / 60000) * 60000 - 120000;
+    const minute = timestampFromDate(new Date(bucketStart + 30000));
+    expect((await mtls.reportStatsV2({})).batchSequence).toBe(0n);
+    const stats = await mtls.reportStatsV2({
+      batchSequence: 1n,
       stats: [
         { minute, siteId: own.site.id, requests: 2n, cacheHits: 1n, statusCodes: { 200: 2n } },
         { minute, siteId: own.site.id, requests: 3n, statusCodes: { 200: 1n, 404: 2n } },
@@ -478,14 +481,26 @@ describe("node channel", async () => {
       ],
     });
     expect(stats.accepted).toBe(2);
-    await mtls.reportStats({ stats: [{ minute, siteId: own.site.id, requests: 1n }] });
+    expect(
+      (
+        await mtls.reportStatsV2({
+          batchSequence: 1n,
+          stats: [{ minute, siteId: own.site.id, requests: 100n }],
+        })
+      ).accepted,
+    ).toBe(0);
+    await mtls.reportStatsV2({
+      batchSequence: 2n,
+      stats: [{ minute, siteId: own.site.id, requests: 1n }],
+    });
+    expect((await mtls.reportStatsV2({})).batchSequence).toBe(2n);
     const counted = await ctx.db
       .select()
       .from(schema.nodeMinuteStats)
       .where(eq(schema.nodeMinuteStats.nodeId, enrolled.nodeId));
     expect(counted).toEqual([
       expect.objectContaining({
-        minute: new Date(Date.UTC(2026, 0, 1)),
+        minute: new Date(bucketStart),
         siteId: own.site.id,
         requests: 6,
         cacheHits: 1,
@@ -712,7 +727,10 @@ describe("node channel", async () => {
       true,
     );
     await mtls.reportStatus({
-      info: { agentVersion: "dev", supportedFeatures: ["tls-v1", "http01-v1", "http3-v1"] },
+      info: {
+        agentVersion: "dev",
+        supportedFeatures: ["tls-v1", "http01-v1", "http3-v1", "stats-sequence-v1"],
+      },
     });
     expect((await mtls.getConfig({})).payload.case).toBe("snapshot");
     expect((await listNodes(ctx.db, clusterId)).find((n) => n.id === nodeId)?.upgradeRequired).toBe(

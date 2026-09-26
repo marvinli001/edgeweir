@@ -1,6 +1,9 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
+import { alertsContract } from "./alerts";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
+import { dnsContract } from "./dns";
+import { domainOwnershipContract } from "./domains";
 import {
   ipListsContract,
   platformIpListsContract,
@@ -35,6 +38,9 @@ const publicOperation = <T extends object>(operation: T) => ({ ...operation, sec
  * Errors carry a stable `code` (see errors.ts) that clients localize.
  */
 export const contract = {
+  alerts: alertsContract,
+  dns: dnsContract,
+  domainOwnership: domainOwnershipContract,
   rules: rulesContract,
   platformRules: platformRulesContract,
   ipLists: ipListsContract,
@@ -63,6 +69,22 @@ export const contract = {
   },
   /** Lite analytics (per-minute node statistics), scoped like sites. */
   analytics: {
+    topRequests: oc
+      .route({ method: "GET", path: "/analytics/top-requests", tags: ["analytics"] })
+      .input(
+        z.object({
+          range: s.analyticsRange.default("24h"),
+          siteId: s.uuid.optional(),
+          by: z.enum(["url", "ip"]),
+          limit: z.number().int().min(1).max(50).default(10),
+        }),
+      )
+      .output(
+        z.object({
+          approximate: z.literal(true),
+          items: z.array(z.object({ value: z.string(), requests: z.number() })),
+        }),
+      ),
     traffic: oc
       .route({ method: "GET", path: "/analytics/traffic", tags: ["analytics"] })
       .input(s.trafficInput)
@@ -380,3 +402,7 @@ export const contract = {
 };
 
 export type Contract = typeof contract;
+
+export * from "./alerts";
+export * from "./dns";
+export * from "./domains";

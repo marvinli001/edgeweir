@@ -96,7 +96,7 @@ describe("migrations", () => {
     }
   });
 
-  it("stores revisions as bytea and enforces one site per domain", async () => {
+  it("stores revisions as bytea and permits only one verified route per domain", async () => {
     await db.insert(schema.organization).values({
       id: "org_1",
       name: "Default",
@@ -125,12 +125,14 @@ describe("migrations", () => {
       .values({ organizationId: "org_1", clusterId: cl.id, name: "b" })
       .returning();
     if (!a || !b) throw new Error("sites not inserted");
-    await db.insert(schema.siteDomain).values({ siteId: a.id, name: "demo.test" });
+    await db.insert(schema.siteDomain).values({ siteId: a.id, name: "demo.test", verified: true });
     await expect(
-      db.insert(schema.siteDomain).values({ siteId: b.id, name: "demo.test" }),
+      db.insert(schema.siteDomain).values({ siteId: b.id, name: "demo.test", verified: true }),
     ).rejects.toThrow();
     // The same name as a wildcard suffix is a different route.
-    await db.insert(schema.siteDomain).values({ siteId: b.id, name: "demo.test", wildcard: true });
+    await db
+      .insert(schema.siteDomain)
+      .values({ siteId: b.id, name: "demo.test", verified: true, wildcard: true });
   });
 
   it("detaches regions and default clusters instead of cascading deletes", async () => {

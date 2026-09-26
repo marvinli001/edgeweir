@@ -20,6 +20,7 @@ import {
   type NodeService,
   NodeTaskSchema,
   PurgeType,
+  type ReportStatsRequest,
   TaskState,
   WatchConfigResponseSchema,
   WatchEvent,
@@ -40,7 +41,7 @@ import { isSerialRevoked, normalizeSerial } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
 import { getRevision, latestRevision } from "../services/revisions";
 import { s3SecretBinding } from "../services/sites";
-import { ingestMinuteStats, MAX_STATS_PER_REPORT } from "../services/stats";
+import { ingestStatsBatch, MAX_STATS_PER_REPORT } from "../services/stats";
 
 export const HEARTBEAT_SECONDS = 15;
 export const KEEPALIVE_MS = 15_000;
@@ -160,6 +161,51 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       throw new ConnectError("certificate has been superseded", Code.Unauthenticated);
     }
   }
+
+  const statsHandler = async (
+    req: Pick<ReportStatsRequest, "stats" | "batchSequence">,
+    ctx: HandlerContext,
+  ) => {
+    const node = await requireNode(ctx);
+    if (req.batchSequence === 0n && req.stats.length === 0) {
+      const [cursor] = await app.db
+        .select()
+        .from(schema.nodeStatsCursor)
+        .where(eq(schema.nodeStatsCursor.nodeId, node.id));
+      return { accepted: 0, batchSequence: cursor?.sequence ?? 0n };
+    }
+    if (req.batchSequence < 1n || req.batchSequence > 9223372036854775807n)
+      throw new ConnectError(
+        "statistics sequence required; upgrade the node",
+        Code.FailedPrecondition,
+      );
+    const accepted = await ingestStatsBatch(
+      app.db,
+      node,
+      req.batchSequence,
+      req.stats.slice(0, MAX_STATS_PER_REPORT).flatMap((s) =>
+        s.minute && s.siteId
+          ? [
+              {
+                minute: timestampDate(s.minute),
+                siteId: s.siteId,
+                requests: Number(s.requests),
+                bytesSent: Number(s.bytesSent),
+                bytesReceived: Number(s.bytesReceived),
+                cacheHits: Number(s.cacheHits),
+                cacheMisses: Number(s.cacheMisses),
+                topUrls: Object.fromEntries(s.topUrls.map((v) => [v.value, Number(v.count)])),
+                topIps: Object.fromEntries(s.topIps.map((v) => [v.value, Number(v.count)])),
+                statusCodes: Object.fromEntries(
+                  Object.entries(s.statusCodes).map(([code, n]) => [code, Number(n)]),
+                ),
+              },
+            ]
+          : [],
+      ),
+    );
+    return { accepted, batchSequence: req.batchSequence };
+  };
 
   return {
     async enroll(req, ctx) {
@@ -508,32 +554,8 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       };
     },
 
-    async reportStats(req, ctx) {
-      const node = await requireNode(ctx);
-      const accepted = await ingestMinuteStats(
-        app.db,
-        node,
-        req.stats.slice(0, MAX_STATS_PER_REPORT).flatMap((s) =>
-          s.minute && s.siteId
-            ? [
-                {
-                  minute: timestampDate(s.minute),
-                  siteId: s.siteId,
-                  requests: Number(s.requests),
-                  bytesSent: Number(s.bytesSent),
-                  bytesReceived: Number(s.bytesReceived),
-                  cacheHits: Number(s.cacheHits),
-                  cacheMisses: Number(s.cacheMisses),
-                  statusCodes: Object.fromEntries(
-                    Object.entries(s.statusCodes).map(([code, n]) => [code, Number(n)]),
-                  ),
-                },
-              ]
-            : [],
-        ),
-      );
-      return { accepted };
-    },
+    reportStats: statsHandler,
+    reportStatsV2: statsHandler,
 
     async getCertificates(req, ctx) {
       const node = await requireNode(ctx);

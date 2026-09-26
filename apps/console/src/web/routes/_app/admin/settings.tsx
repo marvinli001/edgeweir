@@ -6,6 +6,7 @@ import { GeoIpSettings } from "@/components/geoip-settings";
 import { LandingSettingsCard } from "@/components/landing-settings";
 import { OriginAllowListCard } from "@/components/origin-allow-list";
 import { Page } from "@/components/page";
+import { SmtpSettings } from "@/components/smtp-settings";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -88,6 +89,7 @@ function SystemSettingsPage() {
       </Card>
       <OriginAllowListCard />
       <GeoIpSettings />
+      <SmtpSettings />
       <LandingSettingsCard />
     </Page>
   );

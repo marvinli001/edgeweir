@@ -88,7 +88,7 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
   const domains = await db
     .select()
     .from(schema.siteDomain)
-    .where(inArray(schema.siteDomain.siteId, siteIds));
+    .where(and(inArray(schema.siteDomain.siteId, siteIds), eq(schema.siteDomain.verified, true)));
   const pools = await db
     .select()
     .from(schema.originPool)
@@ -119,116 +119,118 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
     .where(and(inArray(schema.edgeRule.siteId, siteIds), eq(schema.edgeRule.enabled, true)))
     .orderBy(asc(schema.edgeRule.priority));
   const lists = await db.select().from(schema.ipList);
-  return sites.map((s): SiteModel => {
-    const pool = pools
-      .filter((p) => p.siteId === s.id)
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
-    return {
-      rules: edgeRules
-        .filter((rule) => rule.siteId === s.id)
-        .map((rule) =>
-          compileRuleModel(
-            rule,
-            lists.filter(
-              (list) => list.organizationId === null || list.organizationId === s.organizationId,
+  return sites
+    .map((s): SiteModel => {
+      const pool = pools
+        .filter((p) => p.siteId === s.id)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
+      return {
+        rules: edgeRules
+          .filter((rule) => rule.siteId === s.id)
+          .map((rule) =>
+            compileRuleModel(
+              rule,
+              lists.filter(
+                (list) => list.organizationId === null || list.organizationId === s.organizationId,
+              ),
             ),
           ),
-        ),
-      id: s.id,
-      name: s.name,
-      enabled: s.enabled,
-      cacheGeneration: s.cacheGeneration,
-      domains: domains
-        .filter((d) => d.siteId === s.id)
-        .map((d) => ({ name: d.name, wildcard: d.wildcard })),
-      originPool: {
-        id: pool?.id ?? s.id,
-        policy: (pool?.policy ?? "weighted_random") as SiteModel["originPool"]["policy"],
-        origins: origins
-          .filter((o) => o.poolId === pool?.id)
-          .map((o) => {
-            const credential = credentials.find((c) => c.id === o.credentialId);
-            return {
-              id: o.id,
-              address: o.address,
-              port: o.port,
-              scheme: o.scheme === "https" ? "https" : "http",
-              weight: o.weight,
-              backup: o.backup,
-              hostHeader: o.hostHeader,
-              sni: o.sni,
-              s3: credential
-                ? {
-                    region: o.s3Region,
-                    bucket: o.s3Bucket,
-                    credentialId: credential.id,
-                    credentialVersion: credential.version,
-                  }
-                : null,
-            };
-          }),
-        settings: pool
-          ? {
-              tlsVerify: pool.tlsVerify,
-              maxFails: pool.maxFails,
-              recoverySeconds: pool.recoverySeconds,
-              connectTimeoutMs: pool.connectTimeoutMs,
-              sendTimeoutMs: pool.sendTimeoutMs,
-              readTimeoutMs: pool.readTimeoutMs,
-              keepalive: pool.keepalive,
-              keepaliveIdleSeconds: pool.keepaliveIdleSeconds,
-              keepaliveMaxRequests: pool.keepaliveMaxRequests,
-            }
-          : undefined,
-      },
-      cacheRules: rules
-        .filter((r) => r.siteId === s.id)
-        .map((r) => ({
-          id: r.id,
-          priority: r.priority,
-          pathPrefixes: r.pathPrefixes,
-          paths: r.paths,
-          extensions: r.extensions,
-          statusCodes: r.statusCodes,
-          minSizeBytes: r.minSizeBytes,
-          maxSizeBytes: r.maxSizeBytes,
-          expression: r.expression,
-          action: r.action === "bypass" ? "bypass" : "cache",
-          edgeTtlSeconds: r.edgeTtlSeconds,
-          originCacheControl: r.originCacheControl === "respect" ? "respect" : "override",
-          staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
-          staleIfErrorSeconds: r.staleIfErrorSeconds,
-          cacheAuthorized: r.cacheAuthorized,
-        })),
-      cacheKey: readCacheKey(s.cacheKey),
-      rangeSlice: s.rangeSlice,
-      websocket: s.websocket,
-      certificateId: s.certificateId ?? "",
-      tls:
-        s.certificateId || Object.keys(s.tlsSettings).length
-          ? (() => {
-              const settings = tlsSettings.parse({
-                ...s.tlsSettings,
-                certificateId: s.certificateId,
-              });
+        id: s.id,
+        name: s.name,
+        enabled: s.enabled,
+        cacheGeneration: s.cacheGeneration,
+        domains: domains
+          .filter((d) => d.siteId === s.id)
+          .map((d) => ({ name: d.name, wildcard: d.wildcard })),
+        originPool: {
+          id: pool?.id ?? s.id,
+          policy: (pool?.policy ?? "weighted_random") as SiteModel["originPool"]["policy"],
+          origins: origins
+            .filter((o) => o.poolId === pool?.id)
+            .map((o) => {
+              const credential = credentials.find((c) => c.id === o.credentialId);
               return {
-                forceHttps: settings.forceHttps,
-                hstsMaxAge: settings.hstsMaxAge,
-                hstsIncludeSubdomains: settings.hstsIncludeSubdomains,
-                hstsPreload: settings.hstsPreload,
-                minimumVersion: settings.minimumVersion,
-                cipherProfile: settings.cipherProfile,
-                http2: settings.http2,
-                http3: settings.http3,
-                gzip: settings.gzip,
-                gzipMinLength: settings.gzipMinLength,
-                gzipTypes: settings.gzipTypes,
-                ocspStapling: settings.ocspStapling,
+                id: o.id,
+                address: o.address,
+                port: o.port,
+                scheme: o.scheme === "https" ? "https" : "http",
+                weight: o.weight,
+                backup: o.backup,
+                hostHeader: o.hostHeader,
+                sni: o.sni,
+                s3: credential
+                  ? {
+                      region: o.s3Region,
+                      bucket: o.s3Bucket,
+                      credentialId: credential.id,
+                      credentialVersion: credential.version,
+                    }
+                  : null,
               };
-            })()
-          : undefined,
-    };
-  });
+            }),
+          settings: pool
+            ? {
+                tlsVerify: pool.tlsVerify,
+                maxFails: pool.maxFails,
+                recoverySeconds: pool.recoverySeconds,
+                connectTimeoutMs: pool.connectTimeoutMs,
+                sendTimeoutMs: pool.sendTimeoutMs,
+                readTimeoutMs: pool.readTimeoutMs,
+                keepalive: pool.keepalive,
+                keepaliveIdleSeconds: pool.keepaliveIdleSeconds,
+                keepaliveMaxRequests: pool.keepaliveMaxRequests,
+              }
+            : undefined,
+        },
+        cacheRules: rules
+          .filter((r) => r.siteId === s.id)
+          .map((r) => ({
+            id: r.id,
+            priority: r.priority,
+            pathPrefixes: r.pathPrefixes,
+            paths: r.paths,
+            extensions: r.extensions,
+            statusCodes: r.statusCodes,
+            minSizeBytes: r.minSizeBytes,
+            maxSizeBytes: r.maxSizeBytes,
+            expression: r.expression,
+            action: r.action === "bypass" ? "bypass" : "cache",
+            edgeTtlSeconds: r.edgeTtlSeconds,
+            originCacheControl: r.originCacheControl === "respect" ? "respect" : "override",
+            staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
+            staleIfErrorSeconds: r.staleIfErrorSeconds,
+            cacheAuthorized: r.cacheAuthorized,
+          })),
+        cacheKey: readCacheKey(s.cacheKey),
+        rangeSlice: s.rangeSlice,
+        websocket: s.websocket,
+        certificateId: s.certificateId ?? "",
+        tls:
+          s.certificateId || Object.keys(s.tlsSettings).length
+            ? (() => {
+                const settings = tlsSettings.parse({
+                  ...s.tlsSettings,
+                  certificateId: s.certificateId,
+                });
+                return {
+                  forceHttps: settings.forceHttps,
+                  hstsMaxAge: settings.hstsMaxAge,
+                  hstsIncludeSubdomains: settings.hstsIncludeSubdomains,
+                  hstsPreload: settings.hstsPreload,
+                  minimumVersion: settings.minimumVersion,
+                  cipherProfile: settings.cipherProfile,
+                  http2: settings.http2,
+                  http3: settings.http3,
+                  gzip: settings.gzip,
+                  gzipMinLength: settings.gzipMinLength,
+                  gzipTypes: settings.gzipTypes,
+                  ocspStapling: settings.ocspStapling,
+                };
+              })()
+            : undefined,
+      };
+    })
+    .filter((site) => site.domains.length > 0);
 }
 
 export async function latestRevision(
@@ -394,6 +396,7 @@ export async function publishRevision(
       schema.siteDomain,
       and(
         eq(schema.siteDomain.siteId, schema.site.id),
+        eq(schema.siteDomain.verified, true),
         eq(schema.siteDomain.name, schema.acmeChallenge.domain),
         eq(schema.siteDomain.wildcard, false),
       ),
@@ -475,7 +478,11 @@ export async function rollbackToRevision(
       site.domains.some(
         (domain) =>
           !currentDomains.some(
-            (d) => d.siteId === site.id && d.name === domain.name && d.wildcard === domain.wildcard,
+            (d) =>
+              d.verified &&
+              d.siteId === site.id &&
+              d.name === domain.name &&
+              d.wildcard === domain.wildcard,
           ),
       )
     ) {

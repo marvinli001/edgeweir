@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import {
   type ApiClient,
+  approveSiteDomains,
   createTestContext,
   PASSWORD,
   rpcClient,
@@ -82,9 +83,11 @@ describe("console procedures", async () => {
     });
     expect(created.revision).toMatchObject({
       clusterId: clusterB,
-      reasonCode: "site_created",
-      reasonParams: { site: "shop" },
+      reasonCode: "cluster_created",
+      siteCount: 0,
     });
+    expect((await owner.domainOwnership.get({ siteId: created.site.id }))[0]?.verified).toBe(false);
+    await approveSiteDomains(admin, created.site.id);
     const forbidden = await rpcError(
       owner.sites.create({ name: "x", clusterId: clusterB, domains: ["x.test"], origins }),
     );

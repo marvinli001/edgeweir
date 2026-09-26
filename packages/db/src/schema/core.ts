@@ -185,10 +185,12 @@ export const siteDomain = pgTable(
     /** Lowercase host name; for wildcards the suffix without "*." */
     name: text("name").notNull(),
     wildcard: boolean("wildcard").notNull().default(false),
+    verified: boolean("verified").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [
-    uniqueIndex("site_domain_name_uq").on(t.name, t.wildcard),
+    uniqueIndex("site_domain_name_uq").on(t.name, t.wildcard).where(sql`${t.verified} = true`),
+    uniqueIndex("site_domain_site_name_uq").on(t.siteId, t.name, t.wildcard),
     index("site_domain_site_idx").on(t.siteId),
   ],
 );
@@ -359,6 +361,8 @@ export const nodeMinuteStats = pgTable(
     bytesReceived: bigint("bytes_received", { mode: "number" }).notNull().default(0),
     cacheHits: bigint("cache_hits", { mode: "number" }).notNull().default(0),
     cacheMisses: bigint("cache_misses", { mode: "number" }).notNull().default(0),
+    topUrls: jsonb("top_urls").$type<Record<string, number>>().notNull().default({}),
+    topIps: jsonb("top_ips").$type<Record<string, number>>().notNull().default({}),
     statusCodes: jsonb("status_codes").$type<Record<string, number>>().notNull().default({}),
   },
   (t) => [

@@ -1,0 +1,1 @@
+ALTER TABLE "dns_revision" ADD COLUMN "managed_names" jsonb DEFAULT '[]'::jsonb NOT NULL;

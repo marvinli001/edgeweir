@@ -25,11 +25,18 @@ import {
 import type * as z from "zod";
 import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
+import { domainRoot } from "../lib/domain-root";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { assertCacheTaskQuota } from "./cache-tasks";
 import { defaultClusterId } from "./clusters";
+import {
+  actorIsPlatformAdmin,
+  ensureDomainClaims,
+  lockDomainRoots,
+  releaseUnusedDomainClaims,
+} from "./domain-ownership";
 import { assertOriginsAllowed } from "./origin-allow-list";
 import { type Executor, publishRevision, type Tx, toRevisionDto } from "./revisions";
 
@@ -249,13 +256,16 @@ const ordered = (index: number, base = Date.now()) => new Date(base + index);
 async function assertDomainsFree(
   tx: Tx,
   domains: { name: string; wildcard: boolean }[],
+  organizationId: string,
   exceptSiteId?: string,
 ) {
   const taken = await tx
     .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
     .from(schema.siteDomain)
+    .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
     .where(
       and(
+        or(eq(schema.site.organizationId, organizationId), eq(schema.siteDomain.verified, true)),
         or(
           ...domains.map((d) =>
             and(eq(schema.siteDomain.name, d.name), eq(schema.siteDomain.wildcard, d.wildcard)),
@@ -442,7 +452,7 @@ async function sitePool(tx: Tx, siteId: string) {
 export async function createSite(
   db: Database,
   input: SiteCreate,
-  ctx: { organizationId: string; actor: Actor; masterKey: MasterKey },
+  ctx: { organizationId: string; actor: Actor; masterKey: MasterKey; isAdmin?: boolean },
 ): Promise<{ site: Site; revision: Revision }> {
   const domains = uniqueDomains(input.domains);
   return db.transaction(async (tx) => {
@@ -452,7 +462,14 @@ export async function createSite(
       .from(schema.cluster)
       .where(eq(schema.cluster.id, clusterId));
     if (!clusterRow) fail("CLUSTER_NOT_FOUND", "cluster not found");
-    await assertDomainsFree(tx, domains);
+    const claims = await ensureDomainClaims(
+      tx,
+      ctx.organizationId,
+      domains,
+      ctx.isAdmin ?? (await actorIsPlatformAdmin(tx, ctx.actor)),
+      ctx.actor,
+    );
+    await assertDomainsFree(tx, domains, ctx.organizationId);
     await assertOriginsAllowed(tx, input.origins);
 
     const [siteRow] = await tx
@@ -466,9 +483,16 @@ export async function createSite(
       })
       .returning();
     if (!siteRow) throw new Error("site insert failed");
-    await tx
-      .insert(schema.siteDomain)
-      .values(domains.map((d, i) => ({ siteId: siteRow.id, createdAt: ordered(i), ...d })));
+    await tx.insert(schema.siteDomain).values(
+      domains.map((d, i) => ({
+        siteId: siteRow.id,
+        createdAt: ordered(i),
+        ...d,
+        verified: claims.proofs.some(
+          (proof) => proof.domain === domainRoot(d.name) && !!proof.verifiedAt,
+        ),
+      })),
+    );
     const [pool] = await tx
       .insert(schema.originPool)
       .values({ siteId: siteRow.id, ...poolSettingsValues(input.originSettings) })
@@ -476,11 +500,13 @@ export async function createSite(
     if (!pool) throw new Error("origin pool insert failed");
     await writeOrigins(tx, pool, input.origins, ctx.masterKey);
     await insertCacheRules(tx, siteRow.id, input.cacheRules);
-    const { row: revision } = await publishRevision(tx, {
+    const revision = await publishSiteClusters(
+      tx,
       clusterId,
-      reason: { code: "site_created", params: { site: input.name } },
-      userId: userId(ctx.actor),
-    });
+      claims.changedClusters,
+      { code: "site_created", params: { site: input.name } },
+      ctx.actor,
+    );
     await recordAudit(tx, ctx.actor, {
       action: "site.create",
       organizationId: ctx.organizationId,
@@ -508,12 +534,29 @@ export async function updateSite(
   return db.transaction(async (tx) => {
     const row = await findSite(tx, input.id, ctx.scope, true);
     const changed: string[] = [];
+    const changedClusters: string[] = [];
     if (input.name !== undefined && input.name !== row.name) {
       await tx.update(schema.site).set({ name: input.name }).where(eq(schema.site.id, row.id));
       changed.push("name");
     }
     if (input.domains) {
       const domains = uniqueDomains(input.domains);
+      const oldDomains = await tx
+        .select({ name: schema.siteDomain.name })
+        .from(schema.siteDomain)
+        .where(eq(schema.siteDomain.siteId, row.id));
+      await lockDomainRoots(
+        tx,
+        [...oldDomains, ...domains].map((d) => d.name),
+      );
+      const claims = await ensureDomainClaims(
+        tx,
+        row.organizationId,
+        domains,
+        ctx.scope.all,
+        ctx.actor,
+      );
+      changedClusters.push(...claims.changedClusters);
       if (row.certificateId) {
         const [certificate] = await tx
           .select()
@@ -522,11 +565,23 @@ export async function updateSite(
         if (!certificate) fail("CERTIFICATE_NOT_FOUND", "bound certificate not found");
         assertCertificateNames(certificate.chainPem, certificate.names, domains);
       }
-      await assertDomainsFree(tx, domains, row.id);
+      await assertDomainsFree(tx, domains, row.organizationId, row.id);
       await tx.delete(schema.siteDomain).where(eq(schema.siteDomain.siteId, row.id));
-      await tx
-        .insert(schema.siteDomain)
-        .values(domains.map((d, i) => ({ siteId: row.id, createdAt: ordered(i), ...d })));
+      await tx.insert(schema.siteDomain).values(
+        domains.map((d, i) => ({
+          siteId: row.id,
+          createdAt: ordered(i),
+          ...d,
+          verified: claims.proofs.some(
+            (proof) => proof.domain === domainRoot(d.name) && !!proof.verifiedAt,
+          ),
+        })),
+      );
+      await releaseUnusedDomainClaims(
+        tx,
+        row.organizationId,
+        oldDomains.map((d) => d.name),
+      );
       changed.push("domains");
     }
     if (input.origins) {
@@ -566,11 +621,13 @@ export async function updateSite(
       .where(eq(schema.site.id, row.id))
       .returning();
     if (!updated) throw new Error("site update failed");
-    const { row: revision } = await publishRevision(tx, {
-      clusterId: row.clusterId,
-      reason: { code: "site_updated", params: { site: updated.name } },
-      userId: userId(ctx.actor),
-    });
+    const revision = await publishSiteClusters(
+      tx,
+      row.clusterId,
+      changedClusters,
+      { code: "site_updated", params: { site: updated.name } },
+      ctx.actor,
+    );
     await recordAudit(tx, ctx.actor, {
       action: "site.update",
       organizationId: row.organizationId,
@@ -603,7 +660,20 @@ export async function deleteSite(
 ): Promise<{ revision: Revision }> {
   return db.transaction(async (tx) => {
     const row = await findSite(tx, id, ctx.scope);
+    const oldDomains = await tx
+      .select({ name: schema.siteDomain.name })
+      .from(schema.siteDomain)
+      .where(eq(schema.siteDomain.siteId, id));
+    await lockDomainRoots(
+      tx,
+      oldDomains.map((d) => d.name),
+    );
     await tx.delete(schema.site).where(eq(schema.site.id, row.id));
+    await releaseUnusedDomainClaims(
+      tx,
+      row.organizationId,
+      oldDomains.map((d) => d.name),
+    );
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,
       reason: { code: "site_deleted", params: { site: row.name } },
@@ -712,4 +782,20 @@ export async function setSiteStarred(
       .delete(schema.siteStar)
       .where(and(eq(schema.siteStar.userId, input.userId), eq(schema.siteStar.siteId, row.id)));
   }
+}
+
+async function publishSiteClusters(
+  tx: Tx,
+  primary: string,
+  affected: string[],
+  reason: Parameters<typeof publishRevision>[1]["reason"],
+  actor: Actor,
+) {
+  let selected: Awaited<ReturnType<typeof publishRevision>>["row"] | undefined;
+  for (const clusterId of [...new Set([primary, ...affected])].sort()) {
+    const result = await publishRevision(tx, { clusterId, reason, userId: userId(actor) });
+    if (clusterId === primary) selected = result.row;
+  }
+  if (!selected) throw new Error("site revision missing");
+  return selected;
 }

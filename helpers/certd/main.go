@@ -44,7 +44,11 @@ func handle(req Request, session *protocolSession) Response {
 	case "providers":
 		return Response{OK: true, Result: Providers}
 	case "obtain", "renew", "revoke", "dns.list", "dns.set", "dns.present", "dns.cleanup":
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		timeout := 5 * time.Minute
+		if strings.HasPrefix(req.Command, "dns.") {
+			timeout = 30 * time.Second
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		var result any
 		var err error

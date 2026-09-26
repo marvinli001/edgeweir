@@ -64,9 +64,9 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
       enrolledAt: r.enrolledAt?.toISOString() ?? null,
       agentVersion: r.agentVersion,
       supportedFeatures: r.supportedFeatures,
-      upgradeRequired: (required.get(r.clusterId) ?? []).some(
-        (f) => !r.supportedFeatures.includes(f),
-      ),
+      upgradeRequired:
+        (!!r.agentVersion && !r.supportedFeatures.includes("stats-sequence-v1")) ||
+        (required.get(r.clusterId) ?? []).some((f) => !r.supportedFeatures.includes(f)),
       engine: r.engine,
       engineVersion: r.engineVersion,
       os: r.os,

@@ -71,6 +71,55 @@
       "when": 1790426400281,
       "tag": "0009_m4_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790429750626,
+      "tag": "0010_m5_stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790431248036,
+      "tag": "0011_m5_domain_ownership",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790432582921,
+      "tag": "0012_m5_dns",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790432812181,
+      "tag": "0013_m5_dns_managed_names",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790435227209,
+      "tag": "0014_m5_alerts",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790435837077,
+      "tag": "0015_m5_alert_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790435993906,
+      "tag": "0016_m5_alert_privacy_default",
+      "breakpoints": true
     }
   ]
 }

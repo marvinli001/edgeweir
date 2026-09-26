@@ -1,0 +1,1 @@
+ALTER TABLE "alert_channel" ALTER COLUMN "platform" SET DEFAULT false;

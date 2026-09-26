@@ -45,6 +45,9 @@ services:
       # goreleaser snapshot packages of the node.
       EDGEWEIR_DOWNLOADS_DIR: /srv/downloads
       LOG_LEVEL: debug
+      EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${E2E_SUBNET:-172.28.213.0/24}
+      EDGEWEIR_DNS_TEST_ENDPOINT: http://mock-services:8080
+      EDGEWEIR_DNS_RESOLVERS: mock-services:5353
       EDGEWEIR_ACME_DIRECTORY: https://pebble:14000/dir
       EDGEWEIR_ACME_CA_FILE: /e2e/pebble/test-only.crt
     ports:
@@ -135,6 +138,19 @@ services:
         mkdir -p /data/media &&
         printf 'hello from s3\n' > /data/media/hello.txt &&
         exec versitygw --port :7070 --access e2e-access-key --secret e2e-only-s3-secret-key posix /data
+
+  mock-services:
+    image: node:24.21.0-alpine
+    command: ["node", "/mock/server.mjs"]
+    volumes:
+      - ./docker/e2e/mock-services:/mock:ro
+    ports:
+      - "${E2E_MOCK_PORT:-19090}:8080"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
 
   geoip-fixture:
     build:

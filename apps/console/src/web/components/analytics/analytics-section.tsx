@@ -8,6 +8,7 @@ import { type DetailTarget, MetricDetailDialog } from "@/components/analytics/de
 import { MetricChart } from "@/components/analytics/metric-chart";
 import { MetricCard } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
+import { TopRequestsCard } from "@/components/analytics/top-requests";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { detailViews, METRICS, relativeChange } from "@/lib/analytics";
@@ -198,6 +199,10 @@ export function AnalyticsSection({
                 </div>
               );
             })}
+          </div>
+          <div className="grid gap-3 @3xl/main:grid-cols-2">
+            <TopRequestsCard range={range} siteId={siteId} by="url" />
+            <TopRequestsCard range={range} siteId={siteId} by="ip" />
           </div>
         </div>
       )}

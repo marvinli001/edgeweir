@@ -34,6 +34,8 @@ async function addStats(
     cacheHits?: number;
     cacheMisses?: number;
     statusCodes?: Record<string, number>;
+    topUrls?: Record<string, number>;
+    topIps?: Record<string, number>;
   },
 ) {
   await db.insert(schema.nodeMinuteStats).values({
@@ -307,8 +309,22 @@ describe("analytics", async () => {
     expect((await member.analytics.traffic({ siteId: siteT })).range).toBe("24h");
 
     const now = new Date(Math.floor(Date.now() / MINUTE) * MINUTE);
-    await addStats(db, { minute: now, nodeId: nodeB, siteId: siteT, requests: 3 });
-    await addStats(db, { minute: now, nodeId: nodeA, siteId: siteA, requests: 5 });
+    await addStats(db, {
+      minute: now,
+      nodeId: nodeB,
+      siteId: siteT,
+      requests: 3,
+      topUrls: { "/tenant": 3 },
+      topIps: { "192.0.2.2": 3 },
+    });
+    await addStats(db, {
+      minute: now,
+      nodeId: nodeA,
+      siteId: siteA,
+      requests: 5,
+      topUrls: { "/private": 5 },
+      topIps: { "192.0.2.1": 5 },
+    });
     expect((await member.analytics.traffic({ range: "1h" })).totals.requests).toBe(3);
     expect((await admin.analytics.traffic({ range: "1h" })).totals.requests).toBe(8);
     expect((await member.analytics.topSites({ range: "1h" })).map((s) => s.name)).toEqual([
@@ -319,6 +335,17 @@ describe("analytics", async () => {
       "edge-b1",
     ]);
 
+    expect(await member.analytics.topRequests({ range: "1h", by: "url" })).toEqual({
+      approximate: true,
+      items: [{ value: "/tenant", requests: 3 }],
+    });
+    expect((await member.analytics.topRequests({ range: "30d", by: "ip" })).items).toEqual([
+      { value: "192.0.2.2", requests: 3 },
+    ]);
+    expect((await admin.analytics.topRequests({ by: "url" })).items).toHaveLength(2);
+    expect((await rpcError(member.analytics.topRequests({ by: "ip", siteId: siteA }))).code).toBe(
+      "SITE_NOT_FOUND",
+    );
     const sites = await member.analytics.breakdown({ range: "1h", by: "site" });
     expect(sites.items.map((i) => [i.name, i.total])).toEqual([["tango", 3]]);
     expect(sites.total).toBe(3);

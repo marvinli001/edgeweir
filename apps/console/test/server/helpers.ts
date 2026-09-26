@@ -188,3 +188,14 @@ export class CookieJar {
     this.cookies.clear();
   }
 }
+
+/** Provision routing rights explicitly in tests whose subject is downstream of onboarding. */
+export async function approveSiteDomains(admin: ApiClient, siteId: string) {
+  const proofs = await admin.domainOwnership.get({ siteId });
+  for (const proof of proofs)
+    if (!proof.verified) await admin.domainOwnership.approve({ siteId, domain: proof.domain });
+  const site = await admin.sites.get({ id: siteId });
+  const cluster = await admin.clusters.get({ id: site.clusterId });
+  if (!cluster.latestRevision) throw new Error("approved site has no revision");
+  return cluster.latestRevision;
+}

@@ -1,0 +1,1 @@
+ALTER TABLE "alert_event" ADD COLUMN "ordinal" bigserial NOT NULL;

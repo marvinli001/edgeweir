@@ -32,6 +32,9 @@ service NodeService {
   rpc ReportStatus(ReportStatusRequest) returns (ReportStatusResponse);
   // ReportStats uploads per-minute pre-aggregated traffic statistics.
   rpc ReportStats(ReportStatsRequest) returns (ReportStatsResponse);
+  // Sequenced statistics endpoint. A pre-M5 console returns Unimplemented
+  // instead of processing retryable batches without deduplication.
+  rpc ReportStatsV2(ReportStatsV2Request) returns (ReportStatsV2Response);
   // GetOriginCredentials returns origin credentials (e.g. S3 access keys)
   // referenced by the node's cluster configuration. Secrets only travel over
   // this mutually authenticated channel and never inside NodeConfig.
@@ -223,16 +226,41 @@ message MinuteStats {
   uint64 cache_misses = 7;
   // Response count per HTTP status code.
   map<uint32, uint64> status_codes = 8;
+  repeated TopCounter top_urls = 9;
+  repeated TopCounter top_ips = 10;
+}
+
+// TopCounter is a bounded, approximate heavy-hitter counter (no query strings).
+message TopCounter {
+  string value = 1;
+  uint64 count = 2;
 }
 
 // ReportStatsRequest uploads a batch of minute buckets.
 message ReportStatsRequest {
   repeated MinuteStats stats = 1;
+  // Persisted monotonic counter. Zero queries the cursor when stats is empty;
+  // zero with a non-empty legacy batch is rejected.
+  uint64 batch_sequence = 2;
 }
 
 // ReportStatsResponse acknowledges a stats batch.
 message ReportStatsResponse {
   uint32 accepted = 1;
+  // Acknowledges this exact sequence, including already-accepted retries.
+  uint64 batch_sequence = 2;
+}
+
+// ReportStatsV2Request is a sequenced batch or an empty cursor query.
+message ReportStatsV2Request {
+  repeated MinuteStats stats = 1;
+  uint64 batch_sequence = 2;
+}
+
+// ReportStatsV2Response acknowledges the sequence (or returns the durable cursor).
+message ReportStatsV2Response {
+  uint32 accepted = 1;
+  uint64 batch_sequence = 2;
 }
 
 // GetOriginCredentialsRequest names the credentials to fetch.

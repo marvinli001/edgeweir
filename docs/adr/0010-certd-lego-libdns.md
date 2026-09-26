@@ -74,3 +74,9 @@ Phase 0 范围：
 | pg-boss | 12.34.0 | npm registry |
 
 > 更新记录（2026-09-27，MVP M3）：M3 已接入 lego 的签发、ARI 与 EAB，以及 Cloudflare/阿里云/华为云的 libdns 适配器。DNSPod 的已发布适配器仍依赖旧 libdns，使用本项目的有界传统 API 适配。HTTP-01/DNS-01 使用带确认的 stdin/stdout 事件；账户和挑战在继续执行之前由父进程持久化。DNS TXT 清理责任可跨失败与重启恢复。生产 helper 日志不携带凭据。
+
+## 2026-09-27 M5 更新
+
+- 组织域名须完成 TXT 证明或管理员明确批准；证书签发/续期和 HTTP-01 发布复查当前授权。
+- 平台 DNS 复用 certd 的 libdns 接口，凭据通过绑定记录的信封保存，仅从 stdin 传给 helper。DNS 命令限时三十秒。
+- 本地模拟 DNS 服务商仅在运营者设置 `EDGEWEIR_DNS_TEST_ENDPOINT` 时可用，API 不能指定它的地址，真实服务商不会被改向。用于完整的本地 DNS/离线恢复验收。

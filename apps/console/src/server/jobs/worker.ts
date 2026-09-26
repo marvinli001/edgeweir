@@ -2,11 +2,19 @@ import { schema } from "@edgeweir/db";
 import { and, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { PgBoss } from "pg-boss";
 import type { AppContext } from "../lib/context";
+import { sweepAlerts } from "../services/alerts";
 import { expireCacheTasks } from "../services/cache-tasks";
 import { sweepCertificates } from "../services/certificate-worker";
+import { reconcileDns } from "../services/dns";
+import { enforceDomainOwnershipOnce } from "../services/domain-ownership";
 import { pruneRevisions } from "../services/revisions";
+import { maintainTraffic } from "../services/stats-rollup";
 
 export const QUEUES = {
+  alerts: "alerts.sweep",
+  dns: "dns.reconcile",
+  domainMigration: "domains.enforce-ownership",
+  traffic: "traffic.rollup",
   certificates: "certificates.sweep",
   pruneRevisions: "maintenance.prune-revisions",
   expireEnrollmentTokens: "maintenance.expire-enrollment-tokens",
@@ -24,6 +32,26 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   await boss.start();
 
   for (const name of Object.values(QUEUES)) await boss.createQueue(name);
+  await boss.work(QUEUES.alerts, async () => {
+    await sweepAlerts(ctx);
+  });
+  await boss.schedule(QUEUES.alerts, "* * * * *");
+  await boss.send(QUEUES.alerts, {}, { singletonKey: "alerts-sweep" });
+  await boss.work(QUEUES.dns, async () => {
+    await reconcileDns(ctx);
+  });
+  await boss.schedule(QUEUES.dns, "* * * * *");
+  await boss.send(QUEUES.dns, {}, { singletonKey: "dns-reconcile" });
+  await boss.work(QUEUES.domainMigration, async () => {
+    await enforceDomainOwnershipOnce(ctx);
+  });
+  await boss.send(QUEUES.domainMigration, {}, { singletonKey: "domain-ownership-v1" });
+  await boss.work(QUEUES.traffic, async () => {
+    await maintainTraffic(ctx.db);
+  });
+  await boss.schedule(QUEUES.traffic, "* * * * *");
+  await boss.send(QUEUES.traffic, {}, { singletonKey: "traffic-rollup" });
+
   await boss.work(QUEUES.certificates, async () => {
     await sweepCertificates(ctx);
   });

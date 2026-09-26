@@ -14,6 +14,7 @@ import { latestRevision } from "../../src/server/services/revisions";
 import { s3SecretBinding } from "../../src/server/services/sites";
 import {
   type ApiClient,
+  approveSiteDomains,
   createTestContext,
   PASSWORD,
   rpcClient,
@@ -72,7 +73,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
   afterAll(() => pglite.close());
 
   it("stores origin settings, cache settings and new rule conditions and compiles them", async () => {
-    const { site, revision } = await tenant.sites.create({
+    const { site, revision: pendingRevision } = await tenant.sites.create({
       name: "assets",
       domains: ["assets.test", "*.cdn.test"],
       origins: [
@@ -106,6 +107,8 @@ describe("M2 origins, cache settings and cache tasks", async () => {
         },
       ],
     });
+    const revision = await approveSiteDomains(admin, site.id);
+    expect(revision.revision).toBeGreaterThan(pendingRevision.revision);
     expect(site.originSettings).toMatchObject({
       policy: "consistent_hash",
       tlsVerify: false,
@@ -161,6 +164,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
         { priority: 20, pathPrefixes: ["/"] },
       ],
     });
+    await approveSiteDomains(admin, site.id);
     expect(site.cacheRules.map((r) => r.cacheAuthorized)).toEqual([true, false]);
     const compiled = async () =>
       decodeNodeConfig((await latestRevision(ctx.db, clusterB))?.ir ?? new Uint8Array()).sites.find(
@@ -198,6 +202,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
         },
       ],
     });
+    await approveSiteDomains(admin, created.site.id);
     expect(created.site.origins[0]?.s3).toEqual({
       region: "us-east-1",
       bucket: "assets",

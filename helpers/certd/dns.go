@@ -50,6 +50,8 @@ func providerFor(p dnsParams) (dnsProvider, error) {
 	}
 	var provider dnsProvider
 	switch p.Provider {
+	case "test":
+		provider = &testDNSProvider{}
 	case "cloudflare":
 		provider = &cloudflare.Provider{}
 	case "alidns":

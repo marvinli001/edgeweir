@@ -6,6 +6,7 @@ import { createApp } from "../../src/server/app";
 import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
+  approveSiteDomains,
   createTestContext,
   PASSWORD,
   rpcClient,
@@ -57,6 +58,8 @@ describe("overview, whole-site purge and tenant isolation", async () => {
     otherSiteId = (
       await other.sites.create({ name: "other-blog", domains: ["blog.other.test"], origins })
     ).site.id;
+    await approveSiteDomains(admin, tenantSiteId);
+    await approveSiteDomains(admin, otherSiteId);
     await admin.sites.create({ name: "platform", domains: ["www.platform.test"], origins });
   });
   afterAll(() => pglite.close());

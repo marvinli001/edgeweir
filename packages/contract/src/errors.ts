@@ -5,6 +5,23 @@
  * to the server's English `message`.
  */
 export const errorDefs = {
+  ALERT_CHANNEL_NOT_FOUND: { status: 404, params: [] },
+  ALERT_CHANNEL_LIMIT: { status: 409, params: [] },
+  ALERT_SEND_FAILED: { status: 502, params: [] },
+  ALERT_SUBSCRIPTION_NOT_FOUND: { status: 404, params: [] },
+  SMTP_PASSWORD_REQUIRED: { status: 400, params: [] },
+  DNS_ZONE_MISMATCH: { status: 400, params: [] },
+  DNS_PROVIDER_NOT_FOUND: { status: 404, params: [] },
+  DNS_TEST_DISABLED: { status: 400, params: [] },
+  DNS_PROVIDER_IN_USE: { status: 409, params: [] },
+  DNS_POLICY_INVALID: { status: 400, params: [] },
+  DNS_REVISION_NOT_FOUND: { status: 404, params: [] },
+  DNS_RECORD_CONFLICT: { status: 409, params: [] },
+  DOMAIN_VERIFY_REQUIRED: { status: 403, params: [] },
+  DOMAIN_ROOT_INVALID: { status: 400, params: [] },
+  DOMAIN_VERIFY_FAILED: { status: 400, params: [] },
+  DOMAIN_VERIFY_BUSY: { status: 429, params: [] },
+  DOMAIN_PROOF_NOT_FOUND: { status: 404, params: [] },
   RULE_INVALID: { status: 400, params: [] },
   IP_LIST_NOT_FOUND: { status: 404, params: [] },
   IP_LIST_NAME_TAKEN: { status: 409, params: [] },
@@ -77,6 +94,8 @@ export function isErrorCode(code: unknown): code is ErrorCode {
  * UI renders it per locale, `reasonText` gives the English form for the API.
  */
 export const revisionReasonDefs = {
+  domain_verified: { params: [], en: "domain ownership verified" },
+  domain_revoked: { params: [], en: "domain ownership revoked" },
   rules_updated: { params: [], en: "rules and IP lists updated" },
   certificate_updated: { params: ["site"], en: "certificate policy for {site} updated" },
   acme_challenge_updated: { params: [], en: "ACME challenge updated" },

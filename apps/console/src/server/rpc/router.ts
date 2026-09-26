@@ -9,7 +9,29 @@ import {
   setActiveOrganization,
   toMe,
 } from "../services/account";
-import { topNodes, topSites, trafficBreakdown, trafficSeries } from "../services/analytics";
+import {
+  availableAlertChannels,
+  createAlertChannel,
+  deleteAlertChannel,
+  getAlertPolicy,
+  getSmtpConfig,
+  listAlertChannels,
+  listAlertEvents,
+  listAlertSubscriptions,
+  setAlertPolicy,
+  setSmtpConfig,
+  subscribeAlerts,
+  testAlertChannel,
+  unsubscribeAlerts,
+  updateAlertChannel,
+} from "../services/alerts";
+import {
+  topNodes,
+  topRequests,
+  topSites,
+  trafficBreakdown,
+  trafficSeries,
+} from "../services/analytics";
 import { auditFacets, listAuditLogs } from "../services/audit";
 import { createCacheTask, getCacheTask, listCacheTasks } from "../services/cache-tasks";
 import {
@@ -32,6 +54,24 @@ import {
   rollbackCluster,
   updateCluster,
 } from "../services/clusters";
+import {
+  createDnsProvider,
+  deleteDnsProvider,
+  getDnsConfig,
+  listDnsProviders,
+  listDnsRevisions,
+  reconcileDns,
+  rollbackDnsConfig,
+  saveDnsConfig,
+  siteDnsTarget,
+  updateDnsProvider,
+} from "../services/dns";
+import {
+  getDomainOwnership,
+  prepareDomainOwnership,
+  revokeDomainOwnership,
+  verifyDomainOwnership,
+} from "../services/domain-ownership";
 import { createEnrollmentToken } from "../services/enrollment";
 import { getLandingPage, updateLandingSettings } from "../services/landing";
 import {
@@ -236,7 +276,92 @@ export const router = os.router({
       };
     }),
   },
+  alerts: {
+    channels: admin.alerts.channels.handler(({ context }) => listAlertChannels(context.app)),
+    createChannel: admin.alerts.createChannel.handler(({ input, context }) =>
+      createAlertChannel(context.app, input, context.actor),
+    ),
+    updateChannel: admin.alerts.updateChannel.handler(({ input, context }) =>
+      updateAlertChannel(context.app, input, context.actor),
+    ),
+    deleteChannel: admin.alerts.deleteChannel.handler(({ input, context }) =>
+      deleteAlertChannel(context.app, input.id, context.actor),
+    ),
+    testChannel: admin.alerts.testChannel.handler(({ input, context }) =>
+      testAlertChannel(context.app, input.id, context.actor),
+    ),
+    policy: admin.alerts.policy.handler(({ context }) => getAlertPolicy(context.app)),
+    setPolicy: admin.alerts.setPolicy.handler(({ input, context }) =>
+      setAlertPolicy(context.app, input, context.actor),
+    ),
+    smtp: admin.alerts.smtp.handler(({ context }) => getSmtpConfig(context.app)),
+    setSmtp: admin.alerts.setSmtp.handler(({ input, context }) =>
+      setSmtpConfig(context.app, input, context.actor),
+    ),
+    availableChannels: tenant.alerts.availableChannels.handler(({ context }) =>
+      availableAlertChannels(context.app, context.scope),
+    ),
+    subscriptions: tenant.alerts.subscriptions.handler(({ context }) =>
+      listAlertSubscriptions(context.app, { ...context, userId: context.user.id }),
+    ),
+    subscribe: tenant.alerts.subscribe.handler(({ input, context }) =>
+      subscribeAlerts(context.app, input, { ...context, userId: context.user.id }),
+    ),
+    unsubscribe: tenant.alerts.unsubscribe.handler(({ input, context }) =>
+      unsubscribeAlerts(context.app, input.id, { ...context, userId: context.user.id }),
+    ),
+    events: tenant.alerts.events.handler(({ input, context }) =>
+      listAlertEvents(context.app, context.scope, input.siteId),
+    ),
+  },
+  dns: {
+    updateProvider: admin.dns.updateProvider.handler(({ input, context }) =>
+      updateDnsProvider(context.app, input, context.actor),
+    ),
+    providers: admin.dns.providers.handler(({ context }) => listDnsProviders(context.app)),
+    createProvider: admin.dns.createProvider.handler(({ input, context }) =>
+      createDnsProvider(context.app, input, context.actor),
+    ),
+    deleteProvider: admin.dns.deleteProvider.handler(({ input, context }) =>
+      deleteDnsProvider(context.app, input.id, context.actor),
+    ),
+    get: admin.dns.get.handler(({ context }) => getDnsConfig(context.app)),
+    save: admin.dns.save.handler(({ input, context }) =>
+      saveDnsConfig(context.app, input, context.actor),
+    ),
+    revisions: admin.dns.revisions.handler(({ context }) => listDnsRevisions(context.app)),
+    rollback: admin.dns.rollback.handler(({ input, context }) =>
+      rollbackDnsConfig(context.app, input.revision, context.actor),
+    ),
+    reconcile: admin.dns.reconcile.handler(({ context }) =>
+      reconcileDns(context.app, context.actor),
+    ),
+    siteTarget: tenant.dns.siteTarget.handler(({ input, context }) =>
+      siteDnsTarget(context.app, input.siteId, context.scope),
+    ),
+  },
+  domainOwnership: {
+    approve: admin.domainOwnership.approve.handler(({ input, context }) =>
+      prepareDomainOwnership(context.app, input.siteId, { all: true }, context.actor, input.domain),
+    ),
+    get: tenant.domainOwnership.get.handler(({ input, context }) =>
+      getDomainOwnership(context.app, input.siteId, context.scope),
+    ),
+    prepare: tenant.domainOwnership.prepare.handler(({ input, context }) =>
+      prepareDomainOwnership(context.app, input.siteId, context.scope, context.actor),
+    ),
+    verify: tenant.domainOwnership.verify.handler(({ input, context }) =>
+      verifyDomainOwnership(context.app, input.siteId, input.domain, context.scope, context.actor),
+    ),
+    revoke: tenant.domainOwnership.revoke.handler(({ input, context }) =>
+      revokeDomainOwnership(context.app, input.siteId, input.domain, context.scope, context.actor),
+    ),
+  },
   analytics: {
+    topRequests: tenant.analytics.topRequests.handler(async ({ input, context }) => {
+      if (input.siteId) await getSite(context.app.db, input.siteId, context.scope);
+      return topRequests(context.app.db, context.scope, input);
+    }),
     traffic: tenant.analytics.traffic.handler(async ({ input, context }) => {
       // Fails with SITE_NOT_FOUND for sites outside the caller's scope.
       if (input.siteId) await getSite(context.app.db, input.siteId, context.scope);
@@ -359,6 +484,7 @@ export const router = os.router({
       }
       return createSite(context.app.db, input, {
         organizationId: context.organizationId,
+        isAdmin: context.isAdmin,
         actor: context.actor,
         masterKey: context.app.masterKey,
       });
