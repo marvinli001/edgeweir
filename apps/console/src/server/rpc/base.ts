@@ -1,8 +1,11 @@
 import { contract } from "@edgeweir/contract";
+import { schema } from "@edgeweir/db";
 import { implement, ORPCError } from "@orpc/server";
+import { and, eq } from "drizzle-orm";
 import { API_KEY_HEADER } from "../lib/auth";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { keyScope } from "../services/access-keys";
 import { type Caller, resolveCaller } from "../services/account";
 import type { Actor } from "../services/audit";
 import type { ManagerContext } from "../services/members";
@@ -14,13 +17,15 @@ export interface RequestContext {
   headers: Headers;
   ip: string;
   userAgent: string;
+  apiSession?: SessionResult;
 }
 
-export const os = implement(contract).$context<RequestContext>();
+const implementation = implement(contract).$context<RequestContext>();
 
 type SessionResult = NonNullable<Awaited<ReturnType<AppContext["auth"]["api"]["getSession"]>>>;
 
 async function readSession(context: RequestContext): Promise<SessionResult | null> {
+  if (context.apiSession) return context.apiSession;
   try {
     return await context.app.auth.api.getSession({ headers: context.headers });
   } catch (error) {
@@ -30,6 +35,30 @@ async function readSession(context: RequestContext): Promise<SessionResult | nul
     throw new ORPCError("UNAUTHORIZED", { message: "invalid credentials" });
   }
 }
+
+/** Scope applies before every public/optional-auth procedure as well as authed routes. */
+export const os = implementation.use(async ({ context, next, procedure, path }) => {
+  if (!context.headers.has(API_KEY_HEADER)) return next();
+  const session = await readSession(context);
+  if (!session) throw new ORPCError("UNAUTHORIZED");
+  if ((session.user as { banned?: boolean }).banned)
+    fail("USER_DISABLED", "this account is disabled");
+  const [key] = await context.app.db
+    .select()
+    .from(schema.apikey)
+    .where(
+      and(eq(schema.apikey.id, session.session.id), eq(schema.apikey.referenceId, session.user.id)),
+    );
+  if (!key?.enabled) throw new ORPCError("UNAUTHORIZED");
+  const method = procedure["~orpc"].route.method ?? "POST";
+  if (
+    keyScope(key.permissions) === "read" &&
+    method !== "GET" &&
+    path.join(".") !== "rules.validate"
+  )
+    fail("ACCESS_KEY_READ_ONLY", "access key is read only");
+  return next({ context: { apiSession: session } });
+});
 
 /** Resolves the session (cookie or x-api-key), the caller's organizations and data scope. */
 export const authed = os.use(async ({ context, next }) => {

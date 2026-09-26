@@ -153,16 +153,19 @@ describe("CP-M11: README.md, README.zh-CN.md and ARCHITECTURE.md describe what i
     ).toEqual([]);
   });
 
-  it.each(STATUS_DOCS)("%s says the console does not use ClickHouse or Valkey yet", (file) => {
-    const mentions = paragraphs(read(file)).filter((p) => /ClickHouse|Valkey/.test(p));
-    expect(
-      mentions.some(
-        (p) => /ClickHouse/.test(p) && /Valkey/.test(p) && NOT_USED.test(p) && LATER.test(p),
-      ),
-    ).toBe(true);
-    const claims = mentions.filter((p) => !NOT_USED.test(p) && !LATER.test(p));
-    expect(claims).toEqual([]);
-  });
+  it.each(STATUS_DOCS)(
+    "%s describes optional ClickHouse logs while Valkey remains unused",
+    (file) => {
+      const text = read(file);
+      expect(text).toContain("EDGEWEIR_ANALYTICS=clickhouse");
+      expect(text).toMatch(/sampl|采样/i);
+      expect(text).toMatch(/7 days|7 天/);
+      const valkey = paragraphs(text).filter((p) => /Valkey/.test(p));
+      expect(valkey.length).toBeGreaterThan(0);
+      expect(valkey.every((p) => NOT_USED.test(p) && LATER.test(p))).toBe(true);
+      expect(text).not.toMatch(/console does not use either yet|控制台目前都不使用/);
+    },
+  );
 });
 
 describe("CP-M11: ARCHITECTURE.md data model matches packages/db", () => {

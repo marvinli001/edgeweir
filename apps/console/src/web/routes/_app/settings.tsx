@@ -1,10 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import * as React from "react";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
+import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useTheme } from "@/components/theme-provider";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -17,7 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { authClient } from "@/lib/auth-client";
 import {
   formatDateTime,
   getLocale,
@@ -28,7 +31,7 @@ import {
   setLocale,
   timeAgo,
 } from "@/lib/i18n";
-import { errorMessage } from "@/lib/orpc";
+import { errorMessage, orpc } from "@/lib/orpc";
 
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsPage,
@@ -95,21 +98,15 @@ function SettingsPage() {
 
 function ApiKeysCard() {
   const queryClient = useQueryClient();
-  const keys = useQuery({
-    queryKey: ["api-keys"],
-    queryFn: async () => {
-      const { data, error } = await authClient.apiKey.list();
-      if (error) throw new Error(error.message ?? error.statusText);
-      return Array.isArray(data) ? data : (data?.apiKeys ?? []);
-    },
-  });
+  const [scope, setScope] = React.useState<"read" | "write">("write");
+  const keys = useQuery(orpc.accessKeys.list.queryOptions());
   const create = useMutation({
-    mutationFn: async (name: string) => {
-      const { data, error } = await authClient.apiKey.create({ name });
-      if (error) throw new Error(error.message ?? error.statusText);
-      return data;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["api-keys"] }),
+    ...orpc.accessKeys.create.mutationOptions(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: orpc.accessKeys.key() }),
+  });
+  const revoke = useMutation({
+    ...orpc.accessKeys.revoke.mutationOptions(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: orpc.accessKeys.key() }),
   });
 
   return (
@@ -123,14 +120,24 @@ function ApiKeysCard() {
           onSubmit={(event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
-            create.mutate(String(data.get("keyName") ?? "").trim() || "default");
+            create.mutate({ name: String(data.get("keyName") ?? "").trim() || "default", scope });
           }}
         >
           <Field className="w-64">
             <FieldLabel htmlFor="keyName">{m.settings_api_key_name()}</FieldLabel>
             <Input id="keyName" name="keyName" maxLength={64} placeholder="terraform" />
           </Field>
-          <Button type="submit" disabled={create.isPending}>
+          <FormSelect
+            id="keyScope"
+            label={m.access_key_scope()}
+            value={scope}
+            onChange={(value) => setScope(value as typeof scope)}
+            options={[
+              { value: "read", label: m.access_key_read() },
+              { value: "write", label: m.access_key_write() },
+            ]}
+          />
+          <Button type="submit" disabled={create.isPending} data-testid="access-key-create">
             {create.isPending ? <Spinner /> : null}
             {m.settings_api_key_create()}
           </Button>
@@ -144,6 +151,7 @@ function ApiKeysCard() {
             <SafetyNote>{m.settings_api_key_created()}</SafetyNote>
           </Field>
         ) : null}
+        {revoke.isError ? <FieldError>{errorMessage(revoke.error)}</FieldError> : null}
         {keys.isPending ? (
           <LoadingState className="min-h-24" />
         ) : keys.isError ? (
@@ -159,13 +167,35 @@ function ApiKeysCard() {
                 style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
               >
                 <span className="font-medium">{k.name ?? "—"}</span>
-                <code className="text-xs text-muted-foreground">{k.start ?? k.prefix ?? "—"}…</code>
+                <code className="text-xs text-muted-foreground">{k.prefix}…</code>
+                <Badge variant="outline">
+                  {k.scope === "read" ? m.access_key_read() : m.access_key_write()}
+                </Badge>
+                {!k.enabled ? <Badge variant="secondary">{m.access_key_revoked()}</Badge> : null}
+                <span className="text-xs text-muted-foreground">
+                  {m.access_key_last_used({
+                    time: k.lastUsedAt ? timeAgo(k.lastUsedAt) : m.common_never(),
+                  })}
+                </span>
                 <span
                   className="ml-auto text-xs text-muted-foreground"
                   title={formatDateTime(new Date(k.createdAt).toISOString())}
                 >
                   {timeAgo(new Date(k.createdAt).toISOString())}
                 </span>
+                {k.enabled ? (
+                  <ConfirmDialog
+                    title={m.access_key_revoke()}
+                    trigger={
+                      <Button size="sm" variant="outline" disabled={revoke.isPending}>
+                        {m.access_key_revoke()}
+                      </Button>
+                    }
+                    onConfirm={async () => {
+                      await revoke.mutateAsync({ id: k.id }).catch(() => {});
+                    }}
+                  />
+                ) : null}
               </li>
             ))}
           </ul>

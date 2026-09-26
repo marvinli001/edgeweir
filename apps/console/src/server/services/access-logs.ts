@@ -1,0 +1,229 @@
+import { isIP } from "node:net";
+import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { Code, ConnectError } from "@connectrpc/connect";
+import type { LogEntry, LogQuery } from "@edgeweir/contract";
+import { type Database, schema } from "@edgeweir/db";
+import type { AccessLog } from "@edgeweir/proto";
+import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import type { AppContext } from "../lib/context";
+import type { Actor } from "./audit";
+import { recordAudit } from "./audit";
+import { insertClickHouseLogs, queryClickHouseLogs } from "./clickhouse";
+import { type Executor, publishRevision } from "./revisions";
+import { findSite, type SiteScope } from "./sites";
+
+const DAY = 86400000;
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const logCutoff = (now = Date.now()) => Math.floor(now / DAY) * DAY - 6 * DAY;
+async function partition(tx: Executor, day: number) {
+  const from = new Date(day).toISOString(),
+    to = new Date(day + DAY).toISOString();
+  const name = `access_log_${from.slice(0, 10).replaceAll("-", "")}`;
+  // All identifiers and bounds come exclusively from bounded, validated UTC dates.
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${name}))`);
+  await tx.execute(
+    sql.raw(
+      `CREATE TABLE IF NOT EXISTS "${name}" PARTITION OF access_log FOR VALUES FROM ('${from}') TO ('${to}')`,
+    ),
+  );
+}
+export async function maintainLogs(db: Database, now = Date.now()) {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.logs.partitions'))`);
+    for (let d = logCutoff(now); d <= Math.floor(now / DAY) * DAY + DAY; d += DAY)
+      await partition(tx, d);
+    const rows = await tx.execute<{ relname: string }>(
+      sql`select c.relname from pg_inherits i join pg_class c on c.oid=i.inhrelid where i.inhparent='access_log'::regclass`,
+    );
+    const cutoff = new Date(logCutoff(now)).toISOString().slice(0, 10).replaceAll("-", "");
+    for (const row of rows.rows)
+      if (/^access_log_\d{8}$/.test(row.relname) && row.relname.slice(-8) < cutoff)
+        await tx.execute(sql.raw(`DROP TABLE "${row.relname}"`));
+  });
+}
+export async function ingestLogs(
+  app: AppContext,
+  node: { id: string; clusterId: string },
+  sequence: bigint,
+  logs: AccessLog[],
+  now = Date.now(),
+) {
+  if (sequence < 1n || sequence > 9223372036854775807n || logs.length > 1000)
+    throw new ConnectError("invalid log batch", Code.InvalidArgument);
+  const ids = [...new Set(logs.map((l) => l.siteId).filter((id) => uuid.test(id)))];
+  const sites = ids.length
+    ? await app.db
+        .select({ id: schema.site.id })
+        .from(schema.site)
+        .where(
+          and(
+            inArray(schema.site.id, ids),
+            eq(schema.site.clusterId, node.clusterId),
+            sql`${schema.site.logSampleRate} > 0`,
+          ),
+        )
+    : [];
+  const allowed = new Set(sites.map((s) => s.id));
+  const entries: LogEntry[] = logs.flatMap((l, index) => {
+    const time = l.time ? timestampDate(l.time).getTime() : NaN,
+      bytes = Number(l.bytesSent);
+    if (
+      !allowed.has(l.siteId) ||
+      !Number.isFinite(time) ||
+      time < logCutoff(now) ||
+      time > now + 300000 ||
+      !isIP(l.clientIp) ||
+      !/^[A-Z_-]{1,32}$/.test(l.method) ||
+      l.status < 100 ||
+      l.status > 599 ||
+      !Number.isSafeInteger(bytes) ||
+      bytes < 0 ||
+      l.sampleRate < 1 ||
+      l.sampleRate > 10000 ||
+      l.durationMs > 86400000
+    )
+      return [];
+    const clean = (v: string, n: number) => v.replace(/\p{Cc}/gu, "").slice(0, n);
+    return [
+      {
+        id: `${node.id}/${sequence}/${index}`,
+        nodeId: node.id,
+        siteId: l.siteId,
+        time: new Date(time).toISOString(),
+        clientIp: l.clientIp,
+        method: l.method,
+        host: clean(l.host, 253),
+        path: clean(l.path.split(/[?#]/, 1)[0] ?? "", 2048),
+        status: l.status,
+        bytesSent: bytes,
+        durationMs: l.durationMs,
+        cacheStatus: [
+          "HIT",
+          "MISS",
+          "BYPASS",
+          "EXPIRED",
+          "STALE",
+          "UPDATING",
+          "REVALIDATED",
+        ].includes(l.cacheStatus)
+          ? l.cacheStatus
+          : "",
+        sampleRate: l.sampleRate,
+      },
+    ];
+  });
+  return app.db.transaction(async (tx) => {
+    const lock = await tx.execute<{ locked: boolean }>(
+      sql`select pg_try_advisory_xact_lock(hashtext(${`logs/${node.id}`})) AS locked`,
+    );
+    if (!lock.rows[0]?.locked)
+      throw new ConnectError("log batch already in progress", Code.ResourceExhausted);
+    const cursor = schema.nodeLogCursor;
+    await tx.insert(cursor).values({ nodeId: node.id }).onConflictDoNothing();
+    const [current] = await tx
+      .select()
+      .from(cursor)
+      .where(eq(cursor.nodeId, node.id))
+      .for("update");
+    if (!current) throw new Error("missing log cursor");
+    if (sequence <= current.sequence) return 0;
+    if (app.env.EDGEWEIR_ANALYTICS === "clickhouse") {
+      // Immutable IDs + ReplacingMergeTree/FINAL cover a lost PG commit after a CH write.
+      await insertClickHouseLogs(app.env, entries);
+    } else if (entries.length) {
+      for (const d of [
+        ...new Set(entries.map((e) => Math.floor(Date.parse(e.time) / DAY) * DAY)),
+      ].sort())
+        await partition(tx, d);
+      await tx
+        .insert(schema.accessLog)
+        .values(entries.map((e) => ({ ...e, time: new Date(e.time) })))
+        .onConflictDoNothing();
+    }
+    await tx.update(cursor).set({ sequence }).where(eq(cursor.nodeId, node.id));
+    return entries.length;
+  });
+}
+export async function logSettings(app: AppContext, scope: SiteScope, siteId: string) {
+  const site = await findSite(app.db, siteId, scope);
+  return { sampleRate: site.logSampleRate, storage: app.env.EDGEWEIR_ANALYTICS };
+}
+export async function configureLogs(
+  app: AppContext,
+  scope: SiteScope,
+  actor: Actor,
+  input: { siteId: string; sampleRate: number },
+) {
+  return app.db.transaction(async (tx) => {
+    const site = await findSite(tx, input.siteId, scope, true);
+    await tx
+      .update(schema.site)
+      .set({ logSampleRate: input.sampleRate, updatedAt: new Date() })
+      .where(eq(schema.site.id, site.id));
+    await publishRevision(tx, {
+      clusterId: site.clusterId,
+      reason: { code: "site_updated", params: { site: site.name } },
+      userId: actor.id,
+    });
+    await recordAudit(tx, actor, {
+      action: "site.logs_configure",
+      targetType: "site",
+      targetId: site.id,
+      targetName: site.name,
+      organizationId: site.organizationId,
+      metadata: { sampleRate: input.sampleRate },
+    });
+    return { ok: true as const };
+  });
+}
+export async function queryLogs(app: AppContext, scope: SiteScope, input: LogQuery) {
+  await findSite(app.db, input.siteId, scope);
+  const from = Math.max(Date.parse(input.from), logCutoff()),
+    to = Math.min(Date.parse(input.to), Date.now() + 300000);
+  if (from >= to) return { entries: [], truncated: false };
+  const bounded = { ...input, from: new Date(from).toISOString(), to: new Date(to).toISOString() };
+  const entries: LogEntry[] =
+    app.env.EDGEWEIR_ANALYTICS === "clickhouse"
+      ? await queryClickHouseLogs(app.env, bounded)
+      : (
+          await app.db
+            .select()
+            .from(schema.accessLog)
+            .where(
+              and(
+                eq(schema.accessLog.siteId, input.siteId),
+                gte(schema.accessLog.time, new Date(from)),
+                lt(schema.accessLog.time, new Date(to)),
+                input.status ? eq(schema.accessLog.status, input.status) : undefined,
+                input.ip ? eq(schema.accessLog.clientIp, input.ip) : undefined,
+                input.path ? sql`starts_with(${schema.accessLog.path}, ${input.path})` : undefined,
+              ),
+            )
+            .orderBy(desc(schema.accessLog.time), desc(schema.accessLog.id))
+            .limit(input.limit + 1)
+        ).map((e) => ({ ...e, time: e.time.toISOString() }));
+  return { entries: entries.slice(0, input.limit), truncated: entries.length > input.limit };
+}
+export function logsCsv(entries: LogEntry[]) {
+  const fields = [
+    "time",
+    "clientIp",
+    "method",
+    "host",
+    "path",
+    "status",
+    "bytesSent",
+    "durationMs",
+    "cacheStatus",
+    "sampleRate",
+    "nodeId",
+  ] as const;
+  const cell = (value: unknown) => {
+    let text = String(value);
+    if (/^[\s]*[=+@-]/.test(text)) text = `'${text}`;
+    return `"${text.replaceAll('"', '""')}"`;
+  };
+  return [fields.join(","), ...entries.map((e) => fields.map((f) => cell(e[f])).join(","))].join(
+    "\r\n",
+  );
+}

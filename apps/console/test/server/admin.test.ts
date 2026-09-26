@@ -15,6 +15,13 @@ import {
 
 /** Every contract procedure outside the admin area (checked against the contract below). */
 const CONSOLE_PROCEDURES = [
+  "logs.settings",
+  "logs.configure",
+  "logs.query",
+  "logs.export",
+  "accessKeys.list",
+  "accessKeys.create",
+  "accessKeys.revoke",
   "alerts.availableChannels",
   "alerts.subscriptions",
   "alerts.subscribe",

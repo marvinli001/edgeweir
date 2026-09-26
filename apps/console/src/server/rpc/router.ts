@@ -2,6 +2,8 @@ import { schema } from "@edgeweir/db";
 import { ORPCError } from "@orpc/server";
 import { count, desc, eq, gt, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
+import { createAccessKey, listAccessKeys, revokeAccessKey } from "../services/access-keys";
+import { configureLogs, logSettings, logsCsv, queryLogs } from "../services/access-logs";
 import {
   acceptInvitation,
   getInvitationInfo,
@@ -276,6 +278,17 @@ export const router = os.router({
       };
     }),
   },
+  accessKeys: {
+    list: authed.accessKeys.list.handler(({ context }) =>
+      listAccessKeys(context.app, context.user.id),
+    ),
+    create: tenant.accessKeys.create.handler(({ input, context }) =>
+      createAccessKey(context.app, context.user.id, input, context.actor),
+    ),
+    revoke: authed.accessKeys.revoke.handler(({ input, context }) =>
+      revokeAccessKey(context.app, context.user.id, input.id, context.actor),
+    ),
+  },
   alerts: {
     channels: admin.alerts.channels.handler(({ context }) => listAlertChannels(context.app)),
     createChannel: admin.alerts.createChannel.handler(({ input, context }) =>
@@ -356,6 +369,21 @@ export const router = os.router({
     revoke: tenant.domainOwnership.revoke.handler(({ input, context }) =>
       revokeDomainOwnership(context.app, input.siteId, input.domain, context.scope, context.actor),
     ),
+  },
+  logs: {
+    settings: tenant.logs.settings.handler(({ input, context }) =>
+      logSettings(context.app, context.scope, input.siteId),
+    ),
+    configure: tenant.logs.configure.handler(({ input, context }) =>
+      configureLogs(context.app, context.scope, context.actor, input),
+    ),
+    query: tenant.logs.query.handler(({ input, context }) =>
+      queryLogs(context.app, context.scope, input),
+    ),
+    export: tenant.logs.export.handler(async ({ input, context }) => {
+      const result = await queryLogs(context.app, context.scope, input);
+      return { csv: logsCsv(result.entries), truncated: result.truncated };
+    }),
   },
   analytics: {
     topRequests: tenant.analytics.topRequests.handler(async ({ input, context }) => {

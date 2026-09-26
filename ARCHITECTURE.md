@@ -30,7 +30,7 @@
                                    └───────────────────────────────┘
 ```
 
-PostgreSQL 是唯一的外部依赖。`compose.yml` 的 `analytics`（ClickHouse）和 `cache`（Valkey）profile 只启动容器，控制台目前都不使用（ClickHouse 模式见 [ADR-0009](docs/adr/0009-analytics-clickhouse-and-lite.md)，排在后续里程碑）。`edgeweir-certd` 随镜像发布，由 pg-boss 通过 stdin/stdout 调用，完成 ACME 签发、续期及 DNS 记录操作；凭据不放在进程参数中。
+PostgreSQL 是唯一的外部依赖。`EDGEWEIR_ANALYTICS=clickhouse` 配合 `analytics` profile 可把原始日志及分钟统计写入 ClickHouse。采样默认关闭，日志保留 7 天；控制台图表和告警共用 PostgreSQL 汇总。`cache` profile 启动 Valkey，控制台目前尚未使用（见 [ADR-0009](docs/adr/0009-analytics-clickhouse-and-lite.md)）。`edgeweir-certd` 随镜像发布，由 pg-boss 通过 stdin/stdout 调用，完成 ACME 签发、续期及 DNS 记录操作；凭据不放在进程参数中。
 
 ## 2. 仓库布局
 
@@ -72,6 +72,8 @@ PostgreSQL 是唯一的外部依赖。`compose.yml` 的 `analytics`（ClickHouse
 `0010_m5_stats` 增加 `node_stats_cursor` 的永久批次高水位，以及 `node_hour_stats`、`node_day_stats`、`stats_rollup_dirty`。`traffic_hour_stats` 视图在已完成汇总与待汇总分钟数据之间避免重复。`0011_m5_domain_ownership` 增加 `domain_ownership` 和域名的 verified 路由标记；待校验记录不保留全局主机名使用权。
 
 `0012_m5_dns` 与 `0013_m5_dns_managed_names` 增加 `platform_dns_provider`、`dns_state`、`dns_revision`、`dns_managed_name`，用于独立 DNS 发布与可重试的外部记录维护。`0014_m5_alerts`、`0015_m5_alert_order`、`0016_m5_alert_privacy_default` 增加 `alert_channel`、`alert_subscription`、`alert_state`、`alert_event`、`alert_delivery`：通知凭据加密，事件带顺序，发送时重新检查订阅权限，平台全量通知默认关闭。
+
+`0017_m6_logs` 增加 `access_log`（UTC 日分区）、`node_log_cursor` 与站点采样率。`0018_retain_node_traffic` 移除流量历史对节点的级联删除，删除节点不再擦除网站统计。
 
 ## 4. 配置发布流水线
 
@@ -118,4 +120,4 @@ URL、目录、全站刷新和 URL 预热不走 revision，而是类型化的节
 
 - 结构化 JSON 日志（stdout/stderr），级别由 `LOG_LEVEL` 控制。
 - `/healthz` 供容器健康检查；worker 角色只检查进程存活。
-- 节点预聚合的分钟级统计写入 `node_minute_stats`。控制台首页、网站统计 Tab 和平台概览按时间范围（1 小时到 30 天）用 `date_bin` 直接从分钟明细分桶，显示请求数、流量、带宽峰值、命中率和状态码分布，并与上一等长时段比较。小时 / 天汇总与明细清理、Top URL / IP 在 M5；ClickHouse 模式属于后续版本（[ADR-0009](docs/adr/0009-analytics-clickhouse-and-lite.md)）。
+- 节点预聚合的分钟级统计写入 `node_minute_stats`。控制台首页、网站统计 Tab 和平台概览按时间范围（1 小时到 30 天）用 `date_bin` 直接从分钟明细分桶，显示请求数、流量、带宽峰值、命中率和状态码分布，并与上一等长时段比较。小时 / 天汇总、明细清理、Top URL / IP 已完成；ClickHouse 可选存储原始日志与分钟统计（[ADR-0009](docs/adr/0009-analytics-clickhouse-and-lite.md)）。

@@ -5,6 +5,8 @@
  * to the server's English `message`.
  */
 export const errorDefs = {
+  ACCESS_KEY_NOT_FOUND: { status: 404, params: [] },
+  ACCESS_KEY_READ_ONLY: { status: 403, params: [] },
   ALERT_CHANNEL_NOT_FOUND: { status: 404, params: [] },
   ALERT_CHANNEL_LIMIT: { status: 409, params: [] },
   ALERT_SEND_FAILED: { status: 502, params: [] },

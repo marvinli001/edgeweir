@@ -1,0 +1,43 @@
+import { sql } from "drizzle-orm";
+import {
+  bigint,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { node, site } from "./core";
+export const nodeLogCursor = pgTable("node_log_cursor", {
+  nodeId: uuid("node_id")
+    .primaryKey()
+    .references(() => node.id, { onDelete: "cascade" }),
+  sequence: bigint("sequence", { mode: "bigint" }).notNull().default(sql`0`),
+});
+// The SQL migration adds RANGE(time) partitioning; daily partitions are maintained by the worker.
+export const accessLog = pgTable(
+  "access_log",
+  {
+    time: timestamp("time", { withTimezone: true }).notNull(),
+    id: text("id").notNull(),
+    nodeId: uuid("node_id").notNull(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    clientIp: text("client_ip").notNull(),
+    method: text("method").notNull(),
+    host: text("host").notNull(),
+    path: text("path").notNull(),
+    status: integer("status").notNull(),
+    bytesSent: bigint("bytes_sent", { mode: "number" }).notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    cacheStatus: text("cache_status").notNull(),
+    sampleRate: integer("sample_rate").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.time, t.id] }),
+    index("access_log_site_time_idx").on(t.siteId, t.time),
+  ],
+);

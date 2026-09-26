@@ -1,5 +1,10 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
+import { logsContract } from "./logs";
+
+export * from "./logs";
+
+import { accessKeysContract } from "./access-keys";
 import { alertsContract } from "./alerts";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
@@ -38,6 +43,8 @@ const publicOperation = <T extends object>(operation: T) => ({ ...operation, sec
  * Errors carry a stable `code` (see errors.ts) that clients localize.
  */
 export const contract = {
+  accessKeys: accessKeysContract,
+  logs: logsContract,
   alerts: alertsContract,
   dns: dnsContract,
   domainOwnership: domainOwnershipContract,
@@ -403,6 +410,7 @@ export const contract = {
 
 export type Contract = typeof contract;
 
+export * from "./access-keys";
 export * from "./alerts";
 export * from "./dns";
 export * from "./domains";

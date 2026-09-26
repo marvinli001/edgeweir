@@ -18,9 +18,9 @@
 | --- | --- | --- |
 | 原有功能与上述修复 | 单元检查通过，等待最终全链路回归 | M3 开始前控制台 192 个测试通过；新增修复测试位于 setup、console、cache-tasks 和 env 测试文件 |
 | M3 证书、HTTPS、协议 | 已发布 proto/v0.3.0，两个仓库远端 CI 通过 | `M3 E2E OK`；Playwright 申请证书与 HTTPS 设置通过；375px 深色截图无横向溢出；Go race、Lua、类型检查及控制台测试通过 |
-| M4 访问控制与规则 | 本地实现与验收完成，准备 proto/v0.4.0 发布 | M4 E2E OK；Playwright 排序/保存/375px 深色；19 个 TS/Lua 共享向量；Go race、类型与 API/权限测试 |
-| M5 DNS、统计、告警与 API | 待实现 | 不标记为完成 |
-| M6 升级、日志、AccessKey、性能与恢复 | 待实现 | 不标记为完成 |
+| M4 访问控制与规则 | proto/v0.4.0 已发布，两个仓库 CI 通过 | M4 E2E OK；Playwright 排序/保存/375px 深色；19 个 TS/Lua 共享向量；Go race、类型与 API/权限测试 |
+| M5 DNS、统计、告警与 API | 核心已发布，ClickHouse 本地验收通过 | M5 E2E、浏览器、真实 ClickHouse 26.9 集成 |
+| M6 升级、日志、AccessKey、性能与恢复 | 日志、AccessKey、恢复验收完成；升级与最终回归待完成 | M6 LOGS E2E OK、Playwright、pg_dump/pg_restore 92→93→94 |
 
 ## 集成记录
 

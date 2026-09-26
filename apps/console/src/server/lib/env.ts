@@ -31,6 +31,25 @@ const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   NODE_API_PORT: z.coerce.number().int().min(0).max(65535).default(8443),
   EDGEWEIR_ANALYTICS: z.enum(["lite", "clickhouse"]).default("lite"),
+  EDGEWEIR_CLICKHOUSE_URL: z
+    .url()
+    .refine((v) => {
+      const u = new URL(v);
+      return (
+        ["http:", "https:"].includes(u.protocol) &&
+        !u.username &&
+        !u.password &&
+        !u.search &&
+        !u.hash
+      );
+    })
+    .default("http://clickhouse:8123"),
+  EDGEWEIR_CLICKHOUSE_DATABASE: z
+    .string()
+    .regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/)
+    .default("edgeweir"),
+  EDGEWEIR_CLICKHOUSE_USER: z.string().default("edgeweir"),
+  EDGEWEIR_CLICKHOUSE_PASSWORD: z.string().default(""),
   /** Anonymous usage telemetry. Off unless explicitly enabled; Phase 0 sends nothing. */
   EDGEWEIR_TELEMETRY: bool.default(false),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),

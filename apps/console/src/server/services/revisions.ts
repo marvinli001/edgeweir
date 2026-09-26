@@ -139,6 +139,7 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
         name: s.name,
         enabled: s.enabled,
         cacheGeneration: s.cacheGeneration,
+        logSampleRate: s.logSampleRate,
         domains: domains
           .filter((d) => d.siteId === s.id)
           .map((d) => ({ name: d.name, wildcard: d.wildcard })),
@@ -292,9 +293,19 @@ async function insertRevision(
   userId: string | null,
 ): Promise<{ row: RevisionRow; created: boolean }> {
   const latest = await latestRevision(tx, clusterId);
-  const next = BigInt((latest?.revision ?? 0) + 1);
+  // Restoring a database cannot rewind an edge node's durable LKG revision.
+  // Even unchanged content needs a fresh revision when a node is ahead.
+  const [reported] = await tx
+    .select({ revision: sql<number>`coalesce(max(${schema.nodeConfigStatus.appliedRevision}), 0)` })
+    .from(schema.nodeConfigStatus)
+    .innerJoin(schema.node, eq(schema.node.id, schema.nodeConfigStatus.nodeId))
+    .where(eq(schema.node.clusterId, clusterId));
+  const highest = Math.max(latest?.revision ?? 0, Number(reported?.revision ?? 0));
+  if (!Number.isSafeInteger(highest) || highest >= Number.MAX_SAFE_INTEGER)
+    throw new Error("configuration revision exhausted");
+  const next = BigInt(highest) + 1n;
   const config = build(next);
-  if (latest && latest.contentHash === config.contentHash) {
+  if (latest && latest.revision >= highest && latest.contentHash === config.contentHash) {
     return { row: latest, created: false };
   }
   const [row] = await tx
@@ -488,6 +499,8 @@ export async function rollbackToRevision(
     ) {
       fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback references a removed site or domain");
     }
+    // Sampling is current privacy policy; rollback must not revive disabled collection.
+    site.logSampleRate = current.logSampleRate;
     if (site.certificateId) {
       const [cert] = await tx
         .select()
@@ -529,6 +542,9 @@ export async function rollbackToRevision(
         fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback IP list is unavailable");
     }
   }
+  restored.requiredFeatures = restored.requiredFeatures.filter((f) => f !== "access-logs-v1");
+  if (restored.sites.some((s) => s.logSampleRate > 0))
+    restored.requiredFeatures.push("access-logs-v1");
   // Access lists and platform enforcement are current security policy.
   restored.ipLists = currentLists.map((list) =>
     create(IpListSchema, {

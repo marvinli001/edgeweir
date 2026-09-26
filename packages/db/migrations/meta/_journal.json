@@ -120,6 +120,20 @@
       "when": 1790435993906,
       "tag": "0016_m5_alert_privacy_default",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790460252316,
+      "tag": "0017_m6_logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790461043953,
+      "tag": "0018_retain_node_traffic",
+      "breakpoints": true
     }
   ]
 }

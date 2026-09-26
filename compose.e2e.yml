@@ -44,6 +44,9 @@ services:
       # Release mirror for install.sh; scripts/e2e.sh fills the volume with
       # goreleaser snapshot packages of the node.
       EDGEWEIR_DOWNLOADS_DIR: /srv/downloads
+      EDGEWEIR_ANALYTICS: ${E2E_ANALYTICS:-lite}
+      EDGEWEIR_CLICKHOUSE_URL: http://clickhouse:8123
+      EDGEWEIR_CLICKHOUSE_PASSWORD: e2e-clickhouse-password
       LOG_LEVEL: debug
       EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${E2E_SUBNET:-172.28.213.0/24}
       EDGEWEIR_DNS_TEST_ENDPOINT: http://mock-services:8080
@@ -63,6 +66,21 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.9-alpine
+    profiles: ["analytics"]
+    environment:
+      CLICKHOUSE_DB: edgeweir
+      CLICKHOUSE_USER: edgeweir
+      CLICKHOUSE_PASSWORD: e2e-clickhouse-password
+    ports:
+      - "127.0.0.1:${E2E_CLICKHOUSE_PORT:-19123}:8123"
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user", "edgeweir", "--password", "e2e-clickhouse-password", "--query", "SELECT 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
   whoami:
     image: traefik/whoami:v1.12.0

@@ -23,7 +23,7 @@ Edgeweir (pronounced *EDGE-weer*) is named after a weir. Around 256 BC, Li Bing 
 
 Remaining MVP work: **M5** adds DNS scheduling, domain ownership, analytics retention and alerts; **M6** adds signed upgrades, sampled logs, scoped AccessKeys, performance and restore drills.
 
-M5 core flows are now implemented and tested locally: domain proof, independent DNS publication, deduplicated statistics, rollups, alert subscriptions and notifications. Optional ClickHouse storage is not used yet; it is being completed with M6 access logs. See [DNS and alert guide](docs/guide/dns-and-alerts.md).
+M5 core flows are now implemented and tested locally: domain proof, independent DNS publication, deduplicated statistics, rollups, alert subscriptions and notifications. Optional ClickHouse storage and sampled access logs are now available; node self-upgrade is still being implemented. See [DNS and alert guide](docs/guide/dns-and-alerts.md).
 
 M4 has passed real-node tests for IP/GeoIP rules, WAF, rate limits, redirects, rewrites and header transforms; policy updates do not reload nginx. See the [rule guide](docs/guide/rules.md) for scope and limits.
 
@@ -78,7 +78,7 @@ Open <http://localhost:3000> (every variable is described in [.env.example](.env
 - `BETTER_AUTH_SECRET` signs login sessions.
 - Setup is refused without the setup token, so nobody else can claim the console before you finish the wizard. The token is spent by the first successful setup.
 
-`compose.yml` also has an `analytics` profile (ClickHouse) and a `cache` profile (Valkey). They only start the containers for later milestones: the console does not use either yet, and traffic statistics are stored in PostgreSQL.
+`EDGEWEIR_ANALYTICS=clickhouse` with the `analytics` Compose profile enables optional ClickHouse raw logs and minute statistics. Sampling is off by default; access logs are retained for 7 days. Console charts and alerts use the shared PostgreSQL rollups. The `cache` profile starts Valkey, which the console does not use yet. See [logs and AccessKeys](docs/guide/access-logs.md) and [backup and restore](docs/deploy/backup.md).
 
 Ports:
 

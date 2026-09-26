@@ -23,7 +23,7 @@ Edgeweir（读作 EDGE-weer）的名字来自「堰」（weir）。公元前 256
 
 MVP 剩余工作：**M5** 补齐 DNS 调度、域名归属、统计保留和告警；**M6** 补齐验签升级、采样日志、AccessKey 范围、性能基线和恢复演练。
 
-M5 核心链路已实现并通过本地验收：域名归属、独立 DNS 发布、统计去重与汇总、告警和订阅。可选 ClickHouse 存储目前尚未接入，正与 M6 访问日志一并完成。见 [DNS 与告警指南](docs/guide/dns-and-alerts.md)。
+M5 核心链路已实现并通过本地验收：域名归属、独立 DNS 发布、统计去重与汇总、告警和订阅。可选 ClickHouse 存储及采样日志现已接入；节点自升级仍在实施。见 [DNS 与告警指南](docs/guide/dns-and-alerts.md)。
 
 M4 已通过真实节点验收：IP/GeoIP 规则、WAF、限速、重定向、改写和头变换；名单与规则热更新无需 reload。具体范围与限制见 [规则指南](docs/guide/rules.md)。
 
@@ -78,7 +78,7 @@ docker compose up -d --build
 - `BETTER_AUTH_SECRET` 用于签名登录会话。
 - 没有 setup token 的初始化请求会被拒绝，所以在你完成向导之前，别人无法抢先创建管理员。token 在第一次初始化成功后作废。
 
-`compose.yml` 另有 `analytics`（ClickHouse）和 `cache`（Valkey）两个 profile，只是为后续里程碑启动容器：控制台目前都不使用，流量统计存在 PostgreSQL 里。
+`EDGEWEIR_ANALYTICS=clickhouse` 配合 `analytics` Compose profile 启用可选 ClickHouse 原始日志与分钟统计。访问日志采样默认关闭，保留 7 天；控制台图表和告警共用 PostgreSQL 汇总。`cache` profile 启动 Valkey，控制台目前尚未使用。见[日志与 AccessKey](docs/guide/access-logs.md)及[备份恢复](docs/deploy/backup.md)。
 
 端口：
 

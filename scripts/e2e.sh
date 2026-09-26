@@ -853,6 +853,17 @@ if ! $SKIP_UI; then
 fi
 pass "M5 DNS, statistics and alert checks passed"
 
+step "M6: sampled logs, scoped API keys, optional ClickHouse and backup recovery"
+node scripts/e2e-m6-logs.mjs || fail "M6 logs and AccessKey checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/m6-logs.spec.ts || fail "M6 logs browser test failed"
+fi
+docker compose -f compose.e2e.yml --profile analytics up -d --wait clickhouse
+pnpm --filter @edgeweir/console exec tsx scripts/e2e-clickhouse.ts "http://localhost:${E2E_CLICKHOUSE_PORT:-19123}" || fail "ClickHouse integration failed"
+node scripts/e2e-restore.mjs || fail "backup recovery failed"
+pass "M6 log, AccessKey, ClickHouse and recovery checks passed"
+
+
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
 api POST "/nodes/$NODE_ID/disable" >/dev/null

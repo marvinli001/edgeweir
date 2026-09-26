@@ -21,9 +21,7 @@ export const nodeStatsCursor = pgTable("node_stats_cursor", {
 });
 const trafficColumns = () => ({
   minute: timestamp("minute", { withTimezone: true }).notNull(),
-  nodeId: uuid("node_id")
-    .notNull()
-    .references(() => node.id, { onDelete: "cascade" }),
+  nodeId: uuid("node_id").notNull(),
   siteId: uuid("site_id")
     .notNull()
     .references(() => site.id, { onDelete: "cascade" }),
@@ -49,9 +47,7 @@ export const statsRollupDirty = pgTable(
   {
     granularity: text("granularity").notNull(),
     bucket: timestamp("bucket", { withTimezone: true }).notNull(),
-    nodeId: uuid("node_id")
-      .notNull()
-      .references(() => node.id, { onDelete: "cascade" }),
+    nodeId: uuid("node_id").notNull(),
     siteId: uuid("site_id")
       .notNull()
       .references(() => site.id, { onDelete: "cascade" }),

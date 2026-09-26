@@ -143,6 +143,7 @@ export const site = pgTable(
     name: text("name").notNull(),
     enabled: boolean("enabled").notNull().default(true),
     /** Bumped to purge every cached object of the site. */
+    logSampleRate: integer("log_sample_rate").notNull().default(0),
     cacheGeneration: bigint("cache_generation", { mode: "number" }).notNull().default(1),
     /** Cache key policy (contract `cacheKeyPolicy`); `{}` means the defaults. */
     cacheKey: jsonb("cache_key").$type<Record<string, unknown>>().notNull().default({}),
@@ -350,9 +351,7 @@ export const nodeMinuteStats = pgTable(
   "node_minute_stats",
   {
     minute: timestamp("minute", { withTimezone: true }).notNull(),
-    nodeId: uuid("node_id")
-      .notNull()
-      .references(() => node.id, { onDelete: "cascade" }),
+    nodeId: uuid("node_id").notNull(),
     siteId: uuid("site_id")
       .notNull()
       .references(() => site.id, { onDelete: "cascade" }),

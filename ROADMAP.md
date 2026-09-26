@@ -37,7 +37,7 @@
 ### 部署
 
 - [x] 多阶段 Dockerfile：非 root 运行、镜像尽量小、`ROLE=app|worker|all`（默认 `all`）
-- [x] `compose.yml`：console + postgres:18；`--profile analytics` 加 ClickHouse，`--profile cache` 加 Valkey（这两个容器是预留的，控制台目前都不使用）
+- [x] `compose.yml`：console + postgres:18；`--profile analytics` 加 ClickHouse，`--profile cache` 加 Valkey（ClickHouse 可选写入日志和分钟统计，Valkey 仍预留）
 - [x] `compose.baota.yml` + `docs/deploy/baota.md`：宝塔 Docker 编排导入、反代站点到 `:3000`；节点端口 `:8443` 直接暴露或用 stream 透传，TLS 不能由宝塔 nginx 终结
 - [x] `docs/deploy/docker.md`
 
@@ -124,9 +124,9 @@
 - [x] 审计日志
 - [ ] 开放 API
 - [ ] 节点自升级（验签、按节点组灰度、失败回滚）
-- [ ] 访问日志采样上报与检索
-- [ ] AccessKey 吊销与只读范围
-- [ ] 性能基线（bench）与备份恢复演练（恢复后节点继续接受新 revision：配置 epoch 或跳过节点已应用的最大 revision，收尾延后 D3）
+- [x] 访问日志采样上报与检索（默认关闭、PostgreSQL 日分区 / 可选 ClickHouse、CSV）
+- [x] AccessKey 吊销与只读范围
+- [x] 性能基线（bench）与备份恢复演练（恢复后节点继续接受新 revision：配置 epoch 或跳过节点已应用的最大 revision，收尾延后 D3）
 
 ## 首次正式发布前
 
@@ -165,7 +165,7 @@
 
 ### 日志
 
-- [ ] 原始日志写入 ClickHouse
+- [x] 原始日志写入 ClickHouse（提前纳入 MVP M6）
 - [ ] Logpush：S3、HTTP、Kafka
 - [ ] 访问日志检索与导出、攻击大盘、回源质量
 - [ ] 短信告警渠道

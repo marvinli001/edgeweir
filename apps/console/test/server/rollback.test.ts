@@ -150,4 +150,16 @@ describe("configuration rollback", async () => {
     expect(revision).toMatchObject({ revision: (before?.revision ?? 0) + 1, siteCount: 0 });
     expect(await rollbackAudits()).toHaveLength(3);
   });
+  it("does not revive log collection when rolling back an old sampled configuration", async () => {
+    await admin.logs.configure({ siteId, sampleRate: 10000 });
+    const sampled = await latestRevision(ctx.db, clusterId);
+    if (!sampled) throw new Error("no sampled revision");
+    expect(decodeNodeConfig(sampled.ir).sites[0]?.logSampleRate).toBe(10000);
+    await admin.logs.configure({ siteId, sampleRate: 0 });
+    const restored = await admin.clusters.rollback({ id: clusterId, revision: sampled.revision });
+    const row = await getRevision(ctx.db, clusterId, restored.revision);
+    if (!row) throw new Error("no restored revision");
+    expect(decodeNodeConfig(row.ir).sites[0]?.logSampleRate).toBe(0);
+    expect(decodeNodeConfig(row.ir).requiredFeatures).not.toContain("access-logs-v1");
+  });
 });

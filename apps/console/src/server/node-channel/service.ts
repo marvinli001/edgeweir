@@ -28,6 +28,7 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { NODE_CERT_LIFETIME_DAYS } from "../pki/ca";
+import { ingestLogs } from "../services/access-logs";
 import { recordAudit } from "../services/audit";
 import {
   type CacheTaskItem,
@@ -36,6 +37,7 @@ import {
   reportCacheTaskResult,
 } from "../services/cache-tasks";
 import { nodeCertificates } from "../services/certificates";
+import { mirrorMinuteStats } from "../services/clickhouse";
 import { claimEnrollmentToken } from "../services/enrollment";
 import { isSerialRevoked, normalizeSerial } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
@@ -203,6 +205,23 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
             ]
           : [],
       ),
+      undefined,
+      app.env.EDGEWEIR_ANALYTICS === "clickhouse"
+        ? (tx) =>
+            mirrorMinuteStats(
+              app.env,
+              tx,
+              node.id,
+              req.batchSequence,
+              req.stats
+                .slice(0, MAX_STATS_PER_REPORT)
+                .flatMap((s) =>
+                  s.minute
+                    ? [{ siteId: s.siteId, minute: timestampDate(s.minute).toISOString() }]
+                    : [],
+                ),
+            )
+        : undefined,
     );
     return { accepted, batchSequence: req.batchSequence };
   };
@@ -472,6 +491,8 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       const node = await requireNode(ctx);
       const peer = ctx.values.get(peerKey);
       const now = new Date();
+      if (req.appliedRevision < 0n || req.appliedRevision >= BigInt(Number.MAX_SAFE_INTEGER))
+        throw new ConnectError("invalid applied revision", Code.InvalidArgument);
       const info = req.info;
       const state =
         req.state === ApplyState.APPLIED
@@ -554,6 +575,20 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       };
     },
 
+    async reportLogs(req, ctx) {
+      const node = await requireNode(ctx);
+      if (req.batchSequence === 0n && !req.logs.length) {
+        const [cursor] = await app.db
+          .select()
+          .from(schema.nodeLogCursor)
+          .where(eq(schema.nodeLogCursor.nodeId, node.id));
+        return { accepted: 0, batchSequence: cursor?.sequence ?? 0n };
+      }
+      return {
+        accepted: await ingestLogs(app, node, req.batchSequence, req.logs),
+        batchSequence: req.batchSequence,
+      };
+    },
     reportStats: statsHandler,
     reportStatsV2: statsHandler,
 

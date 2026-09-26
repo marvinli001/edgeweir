@@ -107,6 +107,18 @@ test("M1: tenants, members, site editing, clusters, node groups, audit and i18n"
 
   await test.step("admin adds a region, a cluster and a node group, and moves the node", async () => {
     await login(page, adminEmail, adminPassword);
+    // M5 requires an explicit domain proof/approval before the tenant route can be published.
+    await page.getByTestId("nav-sites").click();
+    await page.getByTestId("sites-table").getByText("tenant-site", { exact: true }).click();
+    await page.getByTestId("tab-domains").click();
+    await page
+      .getByTestId("domain-ownership")
+      .getByRole("button", { name: "免验证并发布", exact: true })
+      .click();
+    await page.getByTestId("confirm-action").click();
+    await expect(
+      page.getByTestId("domain-ownership").getByText("管理员已确认", { exact: true }),
+    ).toBeVisible();
     await page.getByTestId("area-admin").click();
 
     await page.getByTestId("nav-regions").click();
@@ -190,8 +202,8 @@ test("M1: tenants, members, site editing, clusters, node groups, audit and i18n"
     await expect(page.getByTestId("page-title")).toHaveText("Clusters & nodes");
     await expect(page.getByTestId("cluster-name")).toHaveText("default");
     const reasons = page.getByTestId("revisions-table").getByTestId("revision-reason");
-    await expect(reasons.filter({ hasText: "Site tenant-site updated" }).first()).toBeVisible();
-    await expect(reasons.filter({ hasText: "Site tenant-site created" })).toHaveCount(1);
+    await expect(reasons.filter({ hasText: "Domain verified" }).first()).toBeVisible();
+    await expect(reasons.filter({ hasText: "Cluster default created" })).toHaveCount(1);
 
     // A refused action explains itself in English (stable error code, localized in the UI).
     await page.getByTestId("cluster-actions").click();

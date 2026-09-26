@@ -499,3 +499,14 @@ M3 的两个仓库远端 CI 已通过（控制面 e300f8f，节点 25c5d1a）。
 - [ ] 不声明外部 DNS/钉钉/企业微信/Telegram/ZeroSSL 真实账户验收已完成。
 
 协议版本 proto/v0.5.0。可复核范围和迁移注意事项见 [DNS 与告警](docs/guide/dns-and-alerts.md)。
+
+## MVP M6 日志、AccessKey 与恢复检查点（节点升级仍待完成）
+
+- [x] 默认关闭的站点采样日志、脱敏、节点私有有界队列、持久批次去重、PostgreSQL 日分区 / 7 天保留、筛选与 CSV。
+- [x] 可选 ClickHouse 原始日志与分钟快照，真实 26.9 容器通过 FINAL 去重、路径/状态筛选与重试测试。界面/告警仍共用 PostgreSQL 精确汇总。
+- [x] AccessKey 只读/读写、最后使用、吊销；REST 写请求 403，吊销后 401。
+- [x] 删除节点保留网站流量与日志；备份恢复 D3：数据库 92 → 节点 93 → 恢复后发布 94，真实新数据库 pg_restore 与节点回执验收通过。
+- [x] `M6 LOGS E2E OK`；Playwright 日志查询、导出、吊销通过。
+- [ ] 节点签名升级、灰度推进、失败回滚，以及最终全链路回归，继续实施。
+
+性能初始基线（2026-09-27，本机 macOS arm64 / Colima，oha 1.16.0，30 万个已预热缓存请求、并发 32）：35,212.91 成功请求/秒，p50 0.827 ms，p99 2.371 ms，200 响应 100%，节点进程 VmRSS 合计 75.06 MiB，容器内存 53.73 MiB。命令：`OHA_BIN=.e2e/tools/oha BENCH_REQUESTS=300000 BENCH_OUTPUT=.e2e/bench-final.json bash scripts/bench.sh`。这是首个基线，不是线上容量保证；没有可比的历史版本回退结论。`BENCH_BASELINE` 可对照同机器、同参数的 summary.json，超过 20% 回退会在结果中标出，CI 不设硬门槛。

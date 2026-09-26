@@ -13,6 +13,7 @@ import { CacheTab } from "@/components/site/cache-tab";
 import { CnameTarget } from "@/components/site/cname-target";
 import { DomainOwnershipPanel } from "@/components/site/domain-ownership";
 import { HttpsTab } from "@/components/site/https-tab";
+import { LogsTab } from "@/components/site/logs-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
 import { RulesTab } from "@/components/site/rules-tab";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
@@ -47,6 +48,23 @@ function SiteDetailPage() {
   const stars = useSiteStars();
   const tab: SiteTab = search.tab ?? "overview";
   const name = site.data?.name;
+  const tabsList = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const list = tabsList.current;
+    if (!list || !site.isSuccess) return;
+    const reveal = () => {
+      const active = list.querySelector<HTMLElement>(`[data-testid="tab-${tab}"]`);
+      if (!active) return;
+      const bounds = list.getBoundingClientRect(),
+        item = active.getBoundingClientRect();
+      if (item.left < bounds.left) list.scrollLeft += item.left - bounds.left;
+      else if (item.right > bounds.right) list.scrollLeft += item.right - bounds.right;
+    };
+    reveal();
+    const observer = new ResizeObserver(reveal);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [tab, site.isSuccess]);
 
   React.useEffect(() => {
     if (name) {
@@ -94,7 +112,7 @@ function SiteDetailPage() {
             })
           }
         >
-          <TabsList className="max-w-full overflow-x-auto">
+          <TabsList ref={tabsList} className="max-w-full justify-start overflow-x-auto">
             {SITE_TABS.map((value) => (
               <TabsTrigger key={value} value={value} data-testid={`tab-${value}`}>
                 {siteTabLabel(value)}
@@ -131,6 +149,9 @@ function SiteDetailPage() {
           </TabsContent>
           <TabsContent value="rules" className="animate-enter">
             <RulesTab siteId={site.data.id} />
+          </TabsContent>
+          <TabsContent value="logs" className="animate-enter">
+            <LogsTab siteId={site.data.id} />
           </TabsContent>
           <TabsContent value="cache" className="animate-enter">
             <CacheTab site={site.data} />

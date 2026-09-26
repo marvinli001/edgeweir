@@ -121,6 +121,8 @@ message Site {
   // Reject WebSocket upgrades. WebSocket is proxied to the origin by default.
   bool websocket_disabled = 12;
   TlsOptions tls = 13;
+  // Basis points, 0 disables sampled access logs, 10000 records every request.
+  uint32 log_sample_rate = 15;
   repeated EdgeRule rules = 14;
 }
 

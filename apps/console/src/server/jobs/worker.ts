@@ -2,6 +2,7 @@ import { schema } from "@edgeweir/db";
 import { and, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { PgBoss } from "pg-boss";
 import type { AppContext } from "../lib/context";
+import { maintainLogs } from "../services/access-logs";
 import { sweepAlerts } from "../services/alerts";
 import { expireCacheTasks } from "../services/cache-tasks";
 import { sweepCertificates } from "../services/certificate-worker";
@@ -48,6 +49,7 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   await boss.send(QUEUES.domainMigration, {}, { singletonKey: "domain-ownership-v1" });
   await boss.work(QUEUES.traffic, async () => {
     await maintainTraffic(ctx.db);
+    await maintainLogs(ctx.db);
   });
   await boss.schedule(QUEUES.traffic, "* * * * *");
   await boss.send(QUEUES.traffic, {}, { singletonKey: "traffic-rollup" });

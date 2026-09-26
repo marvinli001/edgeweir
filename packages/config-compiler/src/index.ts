@@ -96,6 +96,7 @@ export interface SiteModel {
   name: string;
   enabled: boolean;
   cacheGeneration: number;
+  logSampleRate?: number;
   domains: { name: string; wildcard: boolean }[];
   originPool: {
     id: string;
@@ -249,6 +250,7 @@ function compileSite(model: SiteModel): Site {
     enabled: model.enabled,
     cacheZone: DEFAULT_CACHE_ZONE,
     cacheGeneration: BigInt(model.cacheGeneration),
+    logSampleRate: model.logSampleRate ?? 0,
     domains: model.domains.map((d) => create(DomainSchema, { name: d.name, wildcard: d.wildcard })),
     originPool: create(OriginPoolSchema, {
       id: model.originPool.id,
@@ -418,6 +420,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       ),
       platformRules: compileRules(input.platformRules),
       requiredFeatures: [
+        ...(input.sites.some((s) => s.enabled && s.logSampleRate) ? ["access-logs-v1"] : []),
         ...(input.sites.some((s) => s.enabled && s.tls) ? ["tls-v1"] : []),
         ...(input.httpChallenges?.length ? ["http01-v1"] : []),
         ...(input.sites.some((s) => s.enabled && s.tls?.http3) ? ["http3-v1"] : []),

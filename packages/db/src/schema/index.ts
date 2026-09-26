@@ -5,4 +5,5 @@ export * from "./certificates";
 export * from "./core";
 export * from "./dns";
 export * from "./domains";
+export * from "./logs";
 export * from "./rules";

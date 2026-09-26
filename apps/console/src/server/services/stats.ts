@@ -178,6 +178,7 @@ export async function ingestStatsBatch(
   sequence: bigint,
   reported: ReportedMinuteStats[],
   now?: number,
+  mirror?: (tx: Executor) => Promise<void>,
 ) {
   if (sequence < 1n || sequence > 9223372036854775807n)
     throw new Error("invalid statistics sequence");
@@ -202,6 +203,7 @@ export async function ingestStatsBatch(
       node,
       reported.filter((s) => s.minute.getTime() >= cutoff && s.minute.getTime() <= clock + 300000),
     );
+    await mirror?.(tx);
     await tx.update(cursor).set({ sequence }).where(eq(cursor.nodeId, node.id));
     return accepted;
   });

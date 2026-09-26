@@ -9,6 +9,7 @@ export const SITE_TABS = [
   "cache",
   "https",
   "rules",
+  "logs",
 ] as const;
 
 export type SiteTab = (typeof SITE_TABS)[number];
@@ -26,5 +27,6 @@ export function siteTabLabel(tab: SiteTab): string {
     cache: m.site_tab_cache,
     https: m.site_tab_https,
     rules: m.site_tab_rules,
+    logs: m.site_tab_logs,
   }[tab]();
 }
