@@ -652,5 +652,6 @@
   "task_error_task_unsupported": "The node does not support this task type ({type}); upgrade edgeweir-node",
   "task_error_purge_failed": "The purge did not fully apply",
   "task_error_task_expired": "Not executed by the node within 7 days",
-  "task_error_node_disabled": "Not sent: the node is disabled"
+  "task_error_node_disabled": "Not sent: the node is disabled",
+  "error_setup_in_progress": "Setup is already in progress. Retry shortly."
 }

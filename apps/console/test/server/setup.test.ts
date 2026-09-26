@@ -1,9 +1,9 @@
 import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
 import { MasterKey } from "../../src/server/lib/envelope";
-import { ensureSetupToken, SETUP_TOKEN_PREFIX } from "../../src/server/services/setup";
+import { ensureSetupToken, runSetup, SETUP_TOKEN_PREFIX } from "../../src/server/services/setup";
 import { createTestContext, PASSWORD, rpcClient, rpcError, signIn } from "./helpers";
 
 describe("first-run setup token", async () => {
@@ -19,6 +19,22 @@ describe("first-run setup token", async () => {
     password: PASSWORD,
     organizationName: "Acme Edge",
   };
+
+  it("returns immediately and releases the connection when another instance owns setup", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ locked: false }] });
+    const release = vi.fn();
+    const connect = vi.spyOn(ctx.pool, "connect").mockResolvedValue({ query, release } as never);
+    try {
+      await expect(
+        runSetup(ctx, { ...input, setupToken: "ews_wrong" }, { ip: "", userAgent: "" }),
+      ).rejects.toMatchObject({ code: "SETUP_IN_PROGRESS" });
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(query.mock.calls[0]?.[0]).toContain("pg_try_advisory_lock");
+      expect(release).toHaveBeenCalledOnce();
+    } finally {
+      connect.mockRestore();
+    }
+  });
 
   it("issues one token, stored sealed and hashed, and repeats it on restart", async () => {
     const token = await ensureSetupToken(ctx);

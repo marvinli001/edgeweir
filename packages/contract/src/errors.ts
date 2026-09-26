@@ -6,6 +6,7 @@
  */
 export const errorDefs = {
   SETUP_DONE: { status: 403, params: [] },
+  SETUP_IN_PROGRESS: { status: 409, params: [] },
   SETUP_TOKEN_INVALID: { status: 403, params: [] },
   NOT_A_MEMBER: { status: 403, params: [] },
   ORG_ADMIN_REQUIRED: { status: 403, params: [] },

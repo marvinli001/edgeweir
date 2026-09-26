@@ -104,10 +104,17 @@ function toInvitationDto(
 export async function listMembers(
   db: Database,
   organizationId: string,
+  role: OrgRole,
 ): Promise<{ members: Member[]; invitations: Invitation[] }> {
   await findOrganization(db, organizationId);
   const members = toMemberDtos(await memberRows(db, organizationId));
-  return { members, invitations: await pendingInvitations(db, organizationId) };
+  // An invitation ID is a bearer credential until the account exists. A
+  // manager must never obtain an invitation granting more authority than
+  // they themselves may grant (notably admin -> owner).
+  const invitations = (await pendingInvitations(db, organizationId)).filter(
+    (invitation) => role === "owner" || invitation.role !== "owner",
+  );
+  return { members, invitations };
 }
 
 async function ownerCount(db: Executor, organizationId: string): Promise<number> {

@@ -134,9 +134,15 @@ export async function runSetup(
   meta: { ip: string; userAgent: string },
 ): Promise<{ userId: string; organizationId: string }> {
   const client = await ctx.pool.connect();
+  let locked = false;
   try {
-    // Session-level lock so two concurrent setup requests cannot both pass.
-    await client.query("select pg_advisory_lock(hashtext('edgeweir.setup'))");
+    // Never queue pool connections behind this lock: the winning request
+    // still needs the pool for better-auth and its transaction.
+    const result = await client.query(
+      "select pg_try_advisory_lock(hashtext('edgeweir.setup')) as locked",
+    );
+    locked = result.rows[0]?.locked === true;
+    if (!locked) fail("SETUP_IN_PROGRESS", "setup is already in progress; retry shortly");
     if (await isInitialized(ctx.db)) fail("SETUP_DONE", "setup has already been completed");
     if (!tokenMatches(await readSetupToken(ctx.db), input.setupToken)) {
       await recordAudit(
@@ -194,7 +200,9 @@ export async function runSetup(
       throw error;
     }
   } finally {
-    await client.query("select pg_advisory_unlock(hashtext('edgeweir.setup'))").catch(() => {});
+    if (locked) {
+      await client.query("select pg_advisory_unlock(hashtext('edgeweir.setup'))").catch(() => {});
+    }
     client.release();
   }
 }

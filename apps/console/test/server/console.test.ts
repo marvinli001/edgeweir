@@ -248,6 +248,17 @@ describe("console procedures", async () => {
     expect(
       (await rpcError(newcomer.members.invite({ email: "boss@tenant.test", role: "owner" }))).code,
     ).toBe("OWNER_REQUIRED");
+    const ownerInvite = await owner.members.invite({
+      email: "future-owner@tenant.test",
+      role: "owner",
+    });
+    expect((await owner.members.list()).invitations.map((i) => i.id)).toContain(
+      ownerInvite.invitation.id,
+    );
+    expect((await newcomer.members.list()).invitations.map((i) => i.id)).not.toContain(
+      ownerInvite.invitation.id,
+    );
+    await owner.members.cancelInvitation({ id: ownerInvite.invitation.id });
     expect((await rpcError(owner.members.remove({ id: ownerRow?.id ?? "" }))).code).toBe(
       "LAST_OWNER",
     );

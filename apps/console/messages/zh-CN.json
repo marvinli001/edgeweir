@@ -652,5 +652,6 @@
   "task_error_task_unsupported": "节点不支持此任务类型（{type}），请升级 edgeweir-node",
   "task_error_purge_failed": "刷新未能全部生效",
   "task_error_task_expired": "节点 7 天内没有执行",
-  "task_error_node_disabled": "节点已停用，未下发"
+  "task_error_node_disabled": "节点已停用，未下发",
+  "error_setup_in_progress": "初始化正在进行，请稍后重试"
 }

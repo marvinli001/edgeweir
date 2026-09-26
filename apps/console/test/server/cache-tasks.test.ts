@@ -372,6 +372,13 @@ describe("cache task delivery", async () => {
       expect(retry).toBeGreaterThanOrEqual(1);
       expect(retry).toBeLessThanOrEqual(60);
       expect((await tasksOf(burstOrgId)).length).toBe(before);
+      const [burstSite] = (await burst.sites.list({})).items;
+      if (!burstSite) throw new Error("missing burst site");
+      const beforePurge = await burst.sites.get({ id: burstSite.id });
+      expect((await rpcError(burst.sites.purgeAll({ id: burstSite.id }))).code).toBe(
+        "CACHE_TASK_RATE_LIMITED",
+      );
+      expect(await burst.sites.get({ id: burstSite.id })).toEqual(beforePurge);
 
       // Other organizations are not affected.
       await tenant.cacheTasks.create({ type: "url", urls: ["http://shop.test/fine"] });

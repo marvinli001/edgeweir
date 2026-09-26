@@ -294,7 +294,7 @@ export const router = os.router({
   },
   members: {
     list: orgManager.members.list.handler(({ context }) =>
-      listMembers(context.app.db, context.organizationId),
+      listMembers(context.app.db, context.organizationId, context.manager.role),
     ),
     invite: orgManager.members.invite.handler(async ({ input, context }) => {
       const invitation = await createInvitation(
@@ -367,7 +367,7 @@ export const router = os.router({
       updateOrganization(context.app.db, input, context.actor),
     ),
     members: admin.organizations.members.handler(({ input, context }) =>
-      listMembers(context.app.db, input.id),
+      listMembers(context.app.db, input.id, context.manager.role),
     ),
     addMember: admin.organizations.addMember.handler(({ input, context }) =>
       addMember(context.app.db, input, context.manager),

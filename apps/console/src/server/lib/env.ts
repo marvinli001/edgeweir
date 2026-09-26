@@ -16,7 +16,10 @@ const schema = z.object({
   /** Public URL of the web console (behind a reverse proxy this is the proxy URL). */
   EDGEWEIR_PUBLIC_URL: z.url().default("http://localhost:3000"),
   /** URL nodes use to reach the node channel. TLS is terminated by the console itself. */
-  EDGEWEIR_NODE_API_URL: z.url().optional(),
+  EDGEWEIR_NODE_API_URL: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.url().optional(),
+  ),
   /** Extra DNS names / IPs for the node-channel server certificate, comma separated. */
   EDGEWEIR_NODE_API_HOSTNAMES: z.string().default(""),
   /**

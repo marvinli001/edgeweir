@@ -27,6 +27,7 @@ import { readCacheKey } from "../lib/cache-key";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
+import { assertCacheTaskQuota } from "./cache-tasks";
 import { defaultClusterId } from "./clusters";
 import { assertOriginsAllowed } from "./origin-allow-list";
 import { type Executor, publishRevision, type Tx, toRevisionDto } from "./revisions";
@@ -618,6 +619,9 @@ export async function purgeSite(
 ): Promise<{ site: Site; revision: Revision }> {
   return db.transaction(async (tx) => {
     const row = await findSite(tx, id, ctx.scope);
+    if (!ctx.scope.all) {
+      await assertCacheTaskQuota(tx, ctx.scope.organizationId, 1, new Date());
+    }
     const [updated] = await tx
       .update(schema.site)
       .set({ cacheGeneration: sql`${schema.site.cacheGeneration} + 1` })
@@ -635,7 +639,11 @@ export async function purgeSite(
       targetType: "site",
       targetId: row.id,
       targetName: row.name,
-      metadata: { cacheGeneration: updated.cacheGeneration, revision: revision.revision },
+      metadata: {
+        cacheGeneration: updated.cacheGeneration,
+        revision: revision.revision,
+        quotaLimited: !ctx.scope.all,
+      },
     });
     const [dto] = await toSiteDtos(tx, [updated]);
     if (!dto) throw new Error("site not readable after update");

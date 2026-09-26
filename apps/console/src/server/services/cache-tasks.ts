@@ -212,7 +212,7 @@ const HOUR_MS = 3_600_000;
  * take the organization over CACHE_TASK_LIMITS, with the seconds until it
  * would fit. Serialized per organization for the rest of the transaction.
  */
-async function assertCacheTaskQuota(
+export async function assertCacheTaskQuota(
   tx: Executor,
   organizationId: string,
   count: number,
@@ -235,6 +235,21 @@ async function assertCacheTaskQuota(
       ),
     )
     .orderBy(schema.cacheTask.createdAt);
+  // The legacy site purge endpoint publishes a cache generation instead of
+  // creating a typed task. Both entry points consume the same quota.
+  const legacy = await tx
+    .select({ createdAt: schema.auditLog.occurredAt })
+    .from(schema.auditLog)
+    .where(
+      and(
+        eq(schema.auditLog.organizationId, organizationId),
+        eq(schema.auditLog.action, "site.purge_all"),
+        sql`${schema.auditLog.metadata}->>'quotaLimited' = 'true'`,
+        gt(schema.auditLog.occurredAt, new Date(now.getTime() - HOUR_MS)),
+      ),
+    );
+  recent.push(...legacy.map((row) => ({ ...row, targets: 1 })));
+  recent.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   const { tasksPerMinute, urlsPerHour } = CACHE_TASK_LIMITS;
   let waitMs = 0;
   const lastMinute = recent.filter((r) => r.createdAt.getTime() > now.getTime() - MINUTE_MS);
