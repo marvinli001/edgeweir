@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import http from "node:http";
 import { promisify } from "node:util";
+import { signInResponse } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile);
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
@@ -11,11 +12,7 @@ const compose = ["compose", "-f", "compose.e2e.yml"];
 async function run(args) {
   return (await execute("docker", args, { maxBuffer: 4 * 1024 * 1024 })).stdout;
 }
-const login = await fetch(`${base}/api/auth/sign-in/email`, {
-  method: "POST",
-  headers: { "content-type": "application/json", origin: base },
-  body: JSON.stringify({ email: "admin@e2e.test", password: "e2e-admin-password-123" }),
-});
+const login = await signInResponse(base, "admin@e2e.test", "e2e-admin-password-123");
 assert.equal(login.status, 200);
 const cookie = login.headers
   .getSetCookie()

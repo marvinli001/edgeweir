@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
+import { signInResponse } from "./e2e-auth.mjs";
 
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const state = JSON.parse(await readFile(".e2e/m5-state.json", "utf8"));
-const login = await fetch(`${base}/api/auth/sign-in/email`, {
-  method: "POST",
-  headers: { "content-type": "application/json", origin: base },
-  body: JSON.stringify({ email: "admin@e2e.test", password: "e2e-admin-password-123" }),
-});
+const login = await signInResponse(base, "admin@e2e.test", "e2e-admin-password-123");
 assert.equal(login.status, 200);
 const cookie = login.headers
   .getSetCookie()

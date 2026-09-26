@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { promisify } from "node:util";
+import { signInResponse } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile);
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`,
@@ -13,11 +14,7 @@ async function run(args) {
   return (await execute("docker", args, { maxBuffer: 2 * 1024 * 1024 })).stdout;
 }
 async function login(email, password) {
-  const response = await fetch(`${base}/api/auth/sign-in/email`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: base },
-    body: JSON.stringify({ email, password }),
-  });
+  const response = await signInResponse(base, email, password);
   assert.equal(response.status, 200);
   const cookie = response.headers
     .getSetCookie()
