@@ -144,8 +144,8 @@ stream {
 - 校验镜像签名：
 
 ```bash
-cosign verify ghcr.io/edgeweir/edgeweir:<版本> \
-  --certificate-identity-regexp '^https://github\.com/edgeweir/edgeweir/\.github/workflows/release\.yml@refs/tags/v.*$' \
+cosign verify ghcr.io/marvinli001/edgeweir:<版本> \
+  --certificate-identity-regexp '^https://github\.com/marvinli001/edgeweir/\.github/workflows/release\.yml@refs/tags/v.*$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
