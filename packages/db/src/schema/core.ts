@@ -15,6 +15,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { organization, user } from "./auth";
+import { certificate } from "./certificates";
 
 const bytea = customType<{ data: Uint8Array; driverData: Buffer | Uint8Array }>({
   dataType: () => "bytea",
@@ -77,6 +78,7 @@ export const node = pgTable(
     /** active | disabled */
     status: text("status").notNull().default("active"),
     agentVersion: text("agent_version").notNull().default(""),
+    supportedFeatures: text("supported_features").array().notNull().default(sql`'{}'::text[]`),
     engine: text("engine").notNull().default(""),
     engineVersion: text("engine_version").notNull().default(""),
     os: text("os").notNull().default(""),
@@ -148,6 +150,10 @@ export const site = pgTable(
     rangeSlice: boolean("range_slice").notNull().default(false),
     /** Proxy WebSocket upgrades to the origin. */
     websocket: boolean("websocket").notNull().default(true),
+    certificateId: uuid("certificate_id").references(() => certificate.id, {
+      onDelete: "restrict",
+    }),
+    tlsSettings: jsonb("tls_settings").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

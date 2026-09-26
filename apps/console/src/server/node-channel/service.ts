@@ -34,6 +34,7 @@ import {
   pullCacheTasks,
   reportCacheTaskResult,
 } from "../services/cache-tasks";
+import { nodeCertificates } from "../services/certificates";
 import { claimEnrollmentToken } from "../services/enrollment";
 import { isSerialRevoked, normalizeSerial } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
@@ -196,6 +197,9 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
             name: token.nodeName || info?.hostname || `node-${token.id.slice(0, 8)}`,
             hostname: info?.hostname ?? "",
             agentVersion: info?.agentVersion ?? "",
+            supportedFeatures: [...new Set(info?.supportedFeatures ?? [])]
+              .filter((f) => /^[a-z0-9-]{1,64}$/.test(f))
+              .slice(0, 64),
             engine: info?.engine ?? "",
             engineVersion: info?.engineVersion ?? "",
             os: info?.os ?? "",
@@ -392,6 +396,12 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           : await getRevision(app.db, node.clusterId, Number(req.revision));
       if (!target) throw new ConnectError("revision not found", Code.NotFound);
       const snapshot = decodeNodeConfig(target.ir);
+      if (snapshot.requiredFeatures.some((feature) => !node.supportedFeatures.includes(feature))) {
+        throw new ConnectError(
+          "agent upgrade required for this configuration",
+          Code.FailedPrecondition,
+        );
+      }
       const generatedAt = timestampFromDate(new Date());
       if (req.baseRevision > 0n && req.baseRevision < BigInt(target.revision)) {
         const base = await getRevision(app.db, node.clusterId, Number(req.baseRevision));
@@ -432,6 +442,9 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
               ? {
                   hostname: info.hostname || node.hostname,
                   agentVersion: info.agentVersion,
+                  supportedFeatures: [...new Set(info.supportedFeatures)]
+                    .filter((f) => /^[a-z0-9-]{1,64}$/.test(f))
+                    .slice(0, 64),
                   engine: info.engine,
                   engineVersion: info.engineVersion,
                   os: info.os,
@@ -520,6 +533,11 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         ),
       );
       return { accepted };
+    },
+
+    async getCertificates(req, ctx) {
+      const node = await requireNode(ctx);
+      return { certificates: await nodeCertificates(app, node.clusterId, req.ids) };
     },
 
     async getOriginCredentials(req, ctx) {

@@ -14,7 +14,7 @@ name: edgeweir
 
 services:
   console:
-    image: ghcr.io/edgeweir/edgeweir:${EDGEWEIR_VERSION:-latest}
+    image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}
     container_name: edgeweir-console
     restart: unless-stopped
     environment:

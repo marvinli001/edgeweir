@@ -831,6 +831,14 @@ api GET "/nodes?clusterId=$INSTALL_CLUSTER" | jq -c '.[] | {name, online, agentV
 docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
 pass "the installed agent ($NODE_VERSION) runs as the edgeweir user and is online over mTLS"
 
+step "M3: ACME issuance, HTTPS, HTTP/2, HTTP/3, renewal and TLS policy"
+node scripts/e2e-m3.mjs || fail "M3 protocol test failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+    pnpm --filter @edgeweir/console test:e2e e2e/m3.spec.ts || fail "M3 browser test failed"
+fi
+pass "M3 certificate and protocol checks passed"
+
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
 api POST "/nodes/$NODE_ID/disable" >/dev/null

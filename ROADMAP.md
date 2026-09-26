@@ -48,7 +48,7 @@
 - [x] 多集群
 - [x] 节点组
 - [x] 区域
-- [ ] 站点支持 HTTP 和 HTTPS
+- [x] 站点支持 HTTP 和 HTTPS
 - [x] 站点支持多域名（含泛域名）
 
 ### 租户与账户
@@ -85,14 +85,15 @@
 
 ### 协议与证书
 
-- [ ] ACME 自动证书
-- [ ] 上传证书
-- [ ] HSTS
-- [ ] HTTP/2
-- [ ] HTTP/3
-- [ ] Gzip、Brotli、Zstd
-- [ ] 最低 TLS 版本、OCSP stapling、ZeroSSL
-- [ ] 最低 agent 版本门槛：不满足的节点拿不到需要新语义的配置，节点拒绝未知枚举值（proto v0.3.0，随 M3；收尾延后 D1）
+- [x] ACME 自动证书
+- [x] 上传证书
+- [x] HSTS
+- [x] HTTP/2
+- [x] HTTP/3
+- [x] Gzip（类型和最小长度）
+- [ ] Brotli、Zstd（官方引擎无模块，界面保持不可用）
+- [x] 最低 TLS 版本、OCSP stapling、ZeroSSL
+- [x] 最低 agent 能力门槛：不满足的节点拿不到需要新语义的配置，节点拒绝未知枚举值（proto v0.3.0，随 M3；收尾延后 D1）
 
 ### 访问控制与规则
 

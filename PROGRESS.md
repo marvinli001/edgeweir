@@ -454,3 +454,18 @@ MVP M2 新增（2026-09-25）：
 | 4 | 节点 | `go vet ./...`、`go test -race ./...`、`make proto-check`、`make lua-test`、`goreleaser check` | 全部 exit 0；Lua 36 + 16 个用例；`make proto-check` 从 `proto/v0.2.2` 生成无差异 |
 | 5 | 端到端 | `COMPOSE_PROJECT_NAME=edgeweir-wrapup E2E_CONSOLE_PORT=13200 E2E_NODE_PORT=18280 E2E_TAG=wrapup`：`docker compose -f compose.e2e.yml down -v && docker compose -f compose.e2e.yml up -d --build && bash scripts/e2e.sh` | 输出 `E2E OK`，50 个 PASS、0 个 FAIL；Playwright setup、smoke（2）、M1、landing、analytics、M2 全部通过，无 `pageerror`；收尾新增的 7 类用例见上方各项的 e2e 步骤；结束后只清理了 `edgeweir-wrapup` 项目 |
 | 6 | 仓库与文档 | `git status`（两个仓库）；README、ARCHITECTURE、SECURITY、ROADMAP、CLAUDE.md 对照代码 | 两个仓库干净；文档由收尾各环节对照代码更新（见 CP-M11、N-M11） |
+
+## MVP M3（2026-09-27）
+
+- [x] 证书上传、链与私钥匹配/域名校验、信封加密；证书与 DNS 凭据按组织隔离。
+- [x] lego ACME HTTP-01/DNS-01、ARI 续期时间、ZeroSSL EAB 参数；pg-boss 调度与操作标识隔离；TXT 清理责任持久化。
+- [x] SNI HTTPS、HSTS、TLS 1.2/1.3、固定密码档位、HTTP/2、HTTP/3、Gzip；证书材料热更新。
+- [x] proto/v0.3.0 能力协商；未知枚举与能力拒绝；后台需要升级提示。
+- [x] 配置激活失败恢复；LKG 持久化失败回报失败；当前与上一版配置所需密钥保留。
+- [x] 本地 `scripts/e2e-m3.mjs` 输出 `M3 E2E OK`；真实 Pebble HTTP-01、HTTPS、HSTS、HTTP/2/3、无 reload 轮换、最低 TLS 版本均通过。
+- [x] Playwright M3 完成申请证书、绑定与保存，桌面及 375px 深色截图，无 pageerror 和横向溢出。
+- [x] TypeScript 类型检查、Vitest、Go race 与 Lua 检查通过；全部 M1/M2 测试链路输出 `E2E OK`。
+- [ ] DNS 服务商/ZeroSSL 的真实账户验收需要运营者凭据，当前不声明已完成。
+- [ ] Brotli/Zstd：官方镜像缺少模块，按规格保留不可用状态，不声称已实现。
+
+M4–M6 仍继续实施，详见 docs/implementation/mvp-completion.md。基础安全修复已发布：控制面 1539652、节点 06a074f，两个 SHA 的 GitHub CI 都通过。

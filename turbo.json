@@ -11,11 +11,12 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": []
     },
     "dev": {
       "cache": false,
       "persistent": true
     }
-  }
+  },
+  "globalPassThroughEnv": ["E2E_*"]
 }

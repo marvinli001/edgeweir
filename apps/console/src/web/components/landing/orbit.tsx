@@ -476,7 +476,7 @@ export function OrbitLanding(props: LandingProps) {
             </span>
             <Icp icp={icp} className="text-white/85 hover:text-white" />
             <a
-              href="https://github.com/edgeweir/edgeweir"
+              href="https://github.com/marvinli001/edgeweir"
               target="_blank"
               rel="noreferrer"
               className="text-white/85 hover:text-white sm:ml-auto"

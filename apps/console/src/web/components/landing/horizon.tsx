@@ -351,7 +351,7 @@ export function HorizonLanding(props: LandingProps) {
           </span>
           <Icp icp={icp} className="hover:text-white" />
           <a
-            href="https://github.com/edgeweir/edgeweir"
+            href="https://github.com/marvinli001/edgeweir"
             target="_blank"
             rel="noreferrer"
             className="ml-auto hover:text-white"

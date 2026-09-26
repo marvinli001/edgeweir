@@ -2,7 +2,9 @@
 
 [English](README.md) | 简体中文
 
-Edgeweir 是一个开源、自托管的 CDN / WAF / 边缘调度平台。功能范围对标 GoEdge 和 FlexCDN（自建边缘节点、缓存、WAF、DNS 调度、多租户分销），站点优化能力对标 Cloudflare。它的第一卖点是"可验证的信任"：GoEdge 发布过与公开源码不一致的官方二进制，之后又被发现遭到投毒；2025 年的 RingH23 攻击则利用其控制面保存的节点 SSH root 凭据，横向投毒边缘节点。Edgeweir 从设计上杜绝这两类问题：控制面不保存节点 SSH 凭据，节点私钥从不离开节点，每个发布物都用 Sigstore 签名并附 SBOM 和 SLSA provenance，代码中没有任何 phone-home 或授权校验。
+Edgeweir 是开源、自托管的 CDN 控制台与边缘节点系统，统一管理节点、源站池、缓存、HTTPS 和组织权限。这个项目希望让 CDN 的信任建立在可检查的证据上：源码可读，配置变更有审计，节点回执可核对，发布物可以独立验签。
+
+控制面绝不保存 SSH 凭据；节点身份私钥留在节点本机；证书私钥和源站密钥加密后入库。核心没有官方回连和许可证校验。这些设计针对具体风险，不代表系统不可能被攻破。
 
 ## 名字的由来
 
@@ -10,14 +12,24 @@ Edgeweir（读作 EDGE-weer）的名字来自「堰」（weir）。公元前 256
 
 ## 当前状态
 
-**MVP 进行中（6 个里程碑完成 2 个）。** Phase 0 打通了端到端闭环：节点经 mTLS 注册、拉取配置，通过 OpenResty 代理并缓存站点。MVP M1 增加了集群、节点组和区域，组织、成员、邀请与两步验证 / passkey，网站编辑（每次保存生成配置版本），可筛选的审计日志，以及一次性 setup token。MVP M2 增加了源站池（权重、备用源站、加权随机 / 轮询 / 一致性哈希、被动健康检查、回源 Host 和 SNI、回源证书校验、S3 签名回源、超时、长连接与 WebSocket）、缓存规则与缓存键、过期内容兜底、Range 分片，以及作为类型化节点任务下发的 URL / 目录 / 全站刷新和 URL 预热。控制台另有存在 PostgreSQL 里的分钟级流量统计（lite 模式），并可以在 `/` 提供可选的公开落地页。边缘 HTTPS、证书和规则引擎还没有做。目前还不能用于生产。后续计划见 [docs/specs/mvp.md](docs/specs/mvp.md) 和 [ROADMAP.md](ROADMAP.md)。
+**MVP 开发中：M1–M3 已实现，接下来完成 M4–M6。目前不适合生产使用。**
+
+| 已实现并进行本地验证 | 后续里程碑 |
+| --- | --- |
+| 集群、节点组、区域、组织、邀请、两步验证、passkey 与审计日志 | M4：访问规则、WAF 表达式、限速与 IP 名单 |
+| 源站池、回源 TLS 校验、S3 签名、WebSocket、缓存键、切片、刷新与预热 | M5：DNS 调度、域名归属验证、统计保留与告警 |
+| 上传证书、ACME HTTP-01/DNS-01 通道、续期调度、HTTPS、HSTS、HTTP/2、HTTP/3 | M6：验签升级、采样日志、AccessKey 范围、性能与恢复演练 |
+
+本地 Pebble 测试已验证真实节点 HTTP-01 签发、受信任 HTTPS、HTTP/2、HTTP/3，以及不重载 nginx 的证书轮换。DNS 服务商适配器与 ZeroSSL EAB 的真实账户验收需要运营者凭据；当前官方引擎没有 Brotli 和 Zstd 模块，界面明确保持不可用。详见 [HTTPS 指南](docs/guide/https.md)、[MVP 规格](docs/specs/mvp.md)和[实施验证记录](docs/implementation/mvp-completion.md)。
+
+目前没有正式二进制发布。工作流已定义签名、SBOM 和 provenance，但实际发布物仍需独立校验。现阶段请从源码构建后评估。
 
 ## 组成
 
 | 仓库 | 内容 |
 | --- | --- |
-| [edgeweir/edgeweir](https://github.com/edgeweir/edgeweir)（本仓库） | 控制台：Web UI、管理 API（含对外的 OpenAPI `/api/v1`）和节点通道，一个 Node.js 进程、一个镜像。镜像里另有 `edgeweir-certd`，将来负责 ACME 证书和 DNS 记录的 Go helper；目前只有骨架（请求协议和测试），证书功能在 MVP M3 实现。 |
-| [edgeweir/edgeweir-node](https://github.com/edgeweir/edgeweir-node) | 边缘节点：`edgeweir-node` Go agent 加 OpenResty。 |
+| [edgeweir](https://github.com/marvinli001/edgeweir)（本仓库） | 控制台：Web UI、管理 API（含对外的 OpenAPI `/api/v1`）和节点通道，一个 Node.js 进程、一个镜像。镜像里另有 `edgeweir-certd`，处理 ACME 证书和 DNS 记录的 Go helper；由 pg-boss 通过有界 stdin/stdout 协议调用，凭据不出现在进程参数中。 |
+| [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | 边缘节点：`edgeweir-node` Go agent 加 OpenResty。 |
 
 ```
 浏览器、API 调用方 ─:3000──▶ ┌───────────────────────────────────┐
@@ -33,14 +45,14 @@ Edgeweir（读作 EDGE-weer）的名字来自「堰」（weir）。公元前 256
                              └───────────────────────────────────┘
 ```
 
-镜像：`ghcr.io/edgeweir/edgeweir`、`ghcr.io/edgeweir/edgeweir-node`（Docker Hub 同名 `edgeweir/edgeweir`、`edgeweir/edgeweir-node`）。
+发布镜像命名空间为 `ghcr.io/marvinli001/edgeweir` 和 `ghcr.io/marvinli001/edgeweir-node`。当前工作流没有发布 Docker Hub 镜像副本。
 
 ## 快速开始（Docker）
 
 需要 Docker 和 Compose v2。
 
 ```sh
-git clone https://github.com/edgeweir/edgeweir.git
+git clone https://github.com/marvinli001/edgeweir.git
 cd edgeweir
 
 # 必填密钥，Compose 从 .env 读取；openssl 的输出原样使用
@@ -50,7 +62,7 @@ BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 EOF
 
-docker compose up -d
+docker compose up -d --build
 ```
 
 打开 <http://localhost:3000>（所有变量的说明见 [.env.example](.env.example)），首次初始化向导会创建平台管理员和默认组织。向导需要控制台打印在日志里的一次性 setup token（`docker compose logs console | grep setupToken`）。
@@ -148,7 +160,7 @@ packages/contract/         oRPC 契约与 zod schema
 packages/config-compiler/  数据库模型 → NodeConfig IR
 packages/proto/            由 proto/ 生成的 TypeScript
 proto/                     buf 管理的 protobuf，与 edgeweir-node 共享的唯一契约来源
-helpers/certd/             edgeweir-certd（Go）骨架：MVP M3 起由 lego 负责 ACME，libdns 负责 DNS 记录
+helpers/certd/             edgeweir-certd（Go）：lego 负责 ACME，libdns 及适配器负责 DNS 记录
 scripts/e2e.sh             端到端测试脚本
 docs/adr/                  架构决策记录
 docs/specs/                MVP 规格
@@ -164,8 +176,9 @@ docs/deploy/               部署文档
 - [docs/guide/origins-and-cache.md](docs/guide/origins-and-cache.md)：源站池、缓存规则、刷新与预热
 - [SECURITY.md](SECURITY.md)：信任基线、漏洞报告、发布物校验
 - [CONTRIBUTING.md](CONTRIBUTING.md)：贡献指南
-- 文档站：<https://edgeweir.dev> · 官网：<https://edgeweir.com>
+- [云端开发](docs/development/cloud.md)：Claude 云端检出的准备与验证边界
+- [HTTPS 与证书](docs/guide/https.md)：签发、续期与协议限制
 
 ## 许可证
 
-[AGPL-3.0-only](LICENSE)。[edgeweir-node](https://github.com/edgeweir/edgeweir-node) 使用相同的许可证。
+[AGPL-3.0-only](LICENSE)。[edgeweir-node](https://github.com/marvinli001/edgeweir-node) 使用相同的许可证。

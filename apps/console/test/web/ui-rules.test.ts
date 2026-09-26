@@ -54,7 +54,7 @@ describe("UI rules (ADR-0003)", () => {
       // ICP filing lookup: sites served from mainland China must link their filing number here.
       "https://beian.miit.gov.cn/",
       // This project's own source ("Powered by Edgeweir", the AGPL source offer).
-      "https://github.com/edgeweir/edgeweir",
+      "https://github.com/marvinli001/edgeweir",
       // XML namespace name, never fetched.
       "http://www.w3.org/2000/svg",
     ];

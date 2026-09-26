@@ -36,6 +36,11 @@ message NodeConfig {
   // both as configured literals and as DNS answers. Set by the platform
   // administrator; empty by default. Added in v0.2.1.
   repeated string origin_allowed_cidrs = 8;
+  // Feature identifiers every receiving agent must implement. Unknown features
+  // reject the whole configuration and retain last-known-good.
+  repeated string required_features = 9;
+  // Short-lived public ACME HTTP-01 responses, hot-updated with the site table.
+  repeated HttpChallenge http_challenges = 10;
 }
 
 // NodeConfigDiff transforms the config at base_revision into revision.
@@ -61,6 +66,8 @@ message NodeConfigDiff {
   repeated CertificateRef certificates = 9;
   // Full origin allow list of the target revision (NodeConfig field 8).
   repeated string origin_allowed_cidrs = 10;
+  repeated string required_features = 11;
+  repeated HttpChallenge http_challenges = 12;
 }
 
 // ListenerProtocol is the application protocol of a listener.
@@ -109,6 +116,31 @@ message Site {
   bool range_slice = 11;
   // Reject WebSocket upgrades. WebSocket is proxied to the origin by default.
   bool websocket_disabled = 12;
+  TlsOptions tls = 13;
+}
+
+// HTTP and TLS policy. Cipher strings are never accepted from tenants.
+message TlsOptions {
+  bool force_https = 1;
+  uint32 hsts_max_age = 2;
+  bool hsts_include_subdomains = 3;
+  bool hsts_preload = 4;
+  string minimum_version = 5;
+  bool http2 = 6;
+  bool gzip = 7;
+  uint32 gzip_min_length = 8;
+  repeated string gzip_types = 9;
+  bool ocsp_stapling = 10;
+  string cipher_profile = 11;
+  bool http3 = 12;
+}
+
+// An HTTP-01 response is public; private account and certificate keys are not IR.
+message HttpChallenge {
+  string domain = 1;
+  string token = 2;
+  string key_authorization = 3;
+  google.protobuf.Timestamp expires_at = 4;
 }
 
 // CacheKeyQuery selects which part of the query string enters the cache key.

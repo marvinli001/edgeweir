@@ -36,6 +36,8 @@ service NodeService {
   // referenced by the node's cluster configuration. Secrets only travel over
   // this mutually authenticated channel and never inside NodeConfig.
   rpc GetOriginCredentials(GetOriginCredentialsRequest) returns (GetOriginCredentialsResponse);
+  // Certificate material is returned only to nodes serving the referencing site.
+  rpc GetCertificates(GetCertificatesRequest) returns (GetCertificatesResponse);
   // PullTasks hands out pending typed tasks (cache purge, prefetch). Tasks
   // are idempotent: a task is handed out again when no result arrives.
   rpc PullTasks(PullTasksRequest) returns (PullTasksResponse);
@@ -53,6 +55,26 @@ message NodeInfo {
   string engine = 5;
   string engine_version = 6;
   repeated string ip_addresses = 7;
+  // Explicit capability negotiation also works for development builds.
+  repeated string supported_features = 8;
+}
+
+// GetCertificatesRequest names certificate references from the desired revision.
+message GetCertificatesRequest {
+  repeated string ids = 1;
+}
+
+// CertificateMaterial contains secret key material, delivered over mTLS only.
+message CertificateMaterial {
+  string id = 1;
+  string chain_pem = 2;
+  string private_key_pem = 3;
+  string sha256_fingerprint = 4;
+}
+
+// GetCertificatesResponse includes only material authorized by the node's cluster.
+message GetCertificatesResponse {
+  repeated CertificateMaterial certificates = 1;
 }
 
 // EnrollRequest carries the one-time token and the node's CSR.

@@ -13,6 +13,18 @@ import { topNodes, topSites, trafficBreakdown, trafficSeries } from "../services
 import { auditFacets, listAuditLogs } from "../services/audit";
 import { createCacheTask, getCacheTask, listCacheTasks } from "../services/cache-tasks";
 import {
+  createDnsCredential,
+  deleteCertificate,
+  deleteDnsCredential,
+  getHttps,
+  listCertificates,
+  listDnsCredentials,
+  renewCertificate,
+  requestCertificate,
+  updateHttps,
+  uploadCertificate,
+} from "../services/certificates";
+import {
   createCluster,
   deleteCluster,
   getCluster,
@@ -74,6 +86,42 @@ export type { RequestContext } from "./base";
 const ok = { ok: true as const };
 
 export const router = os.router({
+  certificates: {
+    list: tenant.certificates.list.handler(({ context }) =>
+      listCertificates(context.app, context.scope),
+    ),
+    upload: tenant.certificates.upload.handler(({ input, context }) =>
+      uploadCertificate(context.app, input, context),
+    ),
+    request: tenant.certificates.request.handler(({ input, context }) =>
+      requestCertificate(context.app, input, context),
+    ),
+    renew: tenant.certificates.renew.handler(({ input, context }) =>
+      renewCertificate(context.app, input.id, context),
+    ),
+    delete: tenant.certificates.delete.handler(({ input, context }) =>
+      deleteCertificate(context.app, input.id, context),
+    ),
+  },
+  https: {
+    get: tenant.https.get.handler(({ input, context }) =>
+      getHttps(context.app, input.id, context.scope),
+    ),
+    update: tenant.https.update.handler(({ input, context }) =>
+      updateHttps(context.app, input.id, input.settings, context),
+    ),
+  },
+  dnsCredentials: {
+    list: tenant.dnsCredentials.list.handler(({ context }) =>
+      listDnsCredentials(context.app, context.scope),
+    ),
+    create: tenant.dnsCredentials.create.handler(({ input, context }) =>
+      createDnsCredential(context.app, input, context),
+    ),
+    delete: tenant.dnsCredentials.delete.handler(({ input, context }) =>
+      deleteDnsCredential(context.app, input.id, context),
+    ),
+  },
   system: {
     status: os.system.status.handler(async ({ context }) => ({
       initialized: await isInitialized(context.app.db),

@@ -45,10 +45,13 @@ services:
       # goreleaser snapshot packages of the node.
       EDGEWEIR_DOWNLOADS_DIR: /srv/downloads
       LOG_LEVEL: debug
+      EDGEWEIR_ACME_DIRECTORY: https://pebble:14000/dir
+      EDGEWEIR_ACME_CA_FILE: /e2e/pebble/test-only.crt
     ports:
       - "${E2E_CONSOLE_PORT:-13000}:3000"
     volumes:
       - downloads:/srv/downloads:ro
+      - ./docker/e2e/pebble/test-only.crt:/e2e/pebble/test-only.crt:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,6 +63,19 @@ services:
 
   whoami:
     image: traefik/whoami:v1.12.0
+
+  # Real HTTP-01 validation against the node; no ALWAYS_VALID bypass.
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:2.10.1
+    command: ["-config", "/e2e/config.json", "-strict"]
+    environment:
+      PEBBLE_VA_NOSLEEP: "1"
+      PEBBLE_WFE_NONCEREJECT: "0"
+    volumes:
+      - ./docker/e2e/pebble:/e2e:ro
+    ports:
+      - "127.0.0.1:${E2E_ACME_PORT:-14000}:14000"
+      - "127.0.0.1:${E2E_ACME_MGMT_PORT:-15000}:15000"
 
   # MVP M2: failover pair (scripts/e2e.sh stops and starts the primary).
   origin-primary:
@@ -131,10 +147,15 @@ services:
       EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
     ports:
       - "${E2E_NODE_PORT:-18080}:80"
+      - "${E2E_NODE_TLS_PORT:-18443}:443"
+      - "${E2E_NODE_TLS_PORT:-18443}:443/udp"
     volumes:
       - node-state:/var/lib/edgeweir-node
       - origin-ca:/etc/edgeweir-e2e:ro
-    networks: [default, isolated]
+    networks:
+      default:
+        aliases: [demo.test, https.m3.test]
+      isolated: {}
     depends_on:
       console:
         condition: service_healthy

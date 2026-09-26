@@ -1,10 +1,11 @@
+import { updateHttps, uploadCertificate } from "../../src/server/services/certificates";
 import "reflect-metadata";
 import { webcrypto } from "node:crypto";
 import type { Http2SecureServer } from "node:http2";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
-import { siteCreateInput } from "@edgeweir/contract";
+import { siteCreateInput, tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { ApplyState, NodeService, PurgeType, TaskState, WatchEvent } from "@edgeweir/proto";
 import * as x509 from "@peculiar/x509";
@@ -685,5 +686,43 @@ describe("node channel", async () => {
     await expect(anonymous().enroll({ token: "ewt_nope", csrPem })).rejects.toMatchObject({
       code: Code.PermissionDenied,
     });
+  });
+  it("withholds TLS revisions from old agents and gates certificate material with mTLS", async () => {
+    const { mtls, nodeId } = await enroll("capability-test");
+    const { site } = await demoSite("capability");
+    const material = await ctx.nodeCa.issueServerCertificate(["capability.test"]);
+    const certificateContext = { scope: { all: true as const }, actor, organizationId };
+    const certificate = await uploadCertificate(
+      ctx,
+      {
+        name: "capability",
+        chainPem: material.certificatePem,
+        privateKeyPem: material.privateKeyPem,
+      },
+      certificateContext,
+    );
+    await updateHttps(
+      ctx,
+      site.id,
+      tlsSettings.parse({ certificateId: certificate.id }),
+      certificateContext,
+    );
+    await expect(mtls.getConfig({})).rejects.toMatchObject({ code: Code.FailedPrecondition });
+    expect((await listNodes(ctx.db, clusterId)).find((n) => n.id === nodeId)?.upgradeRequired).toBe(
+      true,
+    );
+    await mtls.reportStatus({
+      info: { agentVersion: "dev", supportedFeatures: ["tls-v1", "http01-v1", "http3-v1"] },
+    });
+    expect((await mtls.getConfig({})).payload.case).toBe("snapshot");
+    expect((await listNodes(ctx.db, clusterId)).find((n) => n.id === nodeId)?.upgradeRequired).toBe(
+      false,
+    );
+    await expect(anonymous().getCertificates({ ids: [certificate.id] })).rejects.toMatchObject({
+      code: Code.Unauthenticated,
+    });
+    expect(
+      (await mtls.getCertificates({ ids: [certificate.id] })).certificates[0]?.privateKeyPem,
+    ).toBe(material.privateKeyPem);
   });
 });

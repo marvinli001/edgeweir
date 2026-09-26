@@ -24,6 +24,7 @@ import {
 } from "drizzle-orm";
 import type * as z from "zod";
 import { readCacheKey } from "../lib/cache-key";
+import { assertCertificateNames } from "../lib/certificate-names";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
@@ -217,11 +218,12 @@ export async function listSites(
   return { items: await toSiteDtos(db, rows), total: total?.n ?? 0 };
 }
 
-export async function findSite(db: Executor, id: string, scope: SiteScope) {
-  const [row] = await db
+export async function findSite(db: Executor, id: string, scope: SiteScope, lock = false) {
+  const query = db
     .select()
     .from(schema.site)
     .where(and(eq(schema.site.id, id), scopeFilter(scope)));
+  const [row] = await (lock ? query.for("update") : query);
   if (!row) fail("SITE_NOT_FOUND", "site not found");
   return row;
 }
@@ -504,7 +506,7 @@ export async function updateSite(
   ctx: { scope: SiteScope; actor: Actor; masterKey: MasterKey },
 ): Promise<{ site: Site; revision: Revision }> {
   return db.transaction(async (tx) => {
-    const row = await findSite(tx, input.id, ctx.scope);
+    const row = await findSite(tx, input.id, ctx.scope, true);
     const changed: string[] = [];
     if (input.name !== undefined && input.name !== row.name) {
       await tx.update(schema.site).set({ name: input.name }).where(eq(schema.site.id, row.id));
@@ -512,6 +514,14 @@ export async function updateSite(
     }
     if (input.domains) {
       const domains = uniqueDomains(input.domains);
+      if (row.certificateId) {
+        const [certificate] = await tx
+          .select()
+          .from(schema.certificate)
+          .where(eq(schema.certificate.id, row.certificateId));
+        if (!certificate) fail("CERTIFICATE_NOT_FOUND", "bound certificate not found");
+        assertCertificateNames(certificate.chainPem, certificate.names, domains);
+      }
       await assertDomainsFree(tx, domains, row.id);
       await tx.delete(schema.siteDomain).where(eq(schema.siteDomain.siteId, row.id));
       await tx

@@ -107,3 +107,5 @@ Phase 0 范围：
 >   - **Host 缓存分开。** 解码后的站点、Host 命中、Host 未命中各用一个 worker 内缓存；未命中的 Host 用一个 1024 条的小缓存，泛域名命中按父域名缓存一次，伪造 Host 的洪泛不再挤掉站点和它们的轮询、哈希环状态。
 >   - **回环与特殊地址。** 边缘层先做 `CDN-Loop` 检查（带本节点标识的请求返回 508），源站层丢弃落在特殊用途地址的 DNS 结果（[ADR-0018](0018-trust-and-security-baseline.md) 收尾记录）；被动健康状态改为按"站点 + 源站"区分。
 >   - **PROXY protocol 与 S3。** 使用 PROXY protocol 的监听从 PROXY 头取客户端地址（`real_ip_header proxy_protocol`），发往源站的 `$remote_addr`、`X-Real-IP`、`X-Forwarded-For` 是真实客户端而不是负载均衡器。S3 源站是候选时，源站层删除访问者带来的全部 `x-amz-*` 请求头（节点只签 `host`、`x-amz-date`、`x-amz-content-sha256`）。
+
+> 更新记录（2026-09-27，MVP M3）：实际检查官方 `openresty/openresty:1.31.1.1-bookworm` 的 `-V`：同时包含 HTTP/2 与 HTTP/3，M3 已以真实客户端验证。未包含 Brotli/Zstd，按 MVP 规格暂保持不可用；自定义构建留待单独验收。TLS 证书通过 Lua 热替换，协议和压缩档位通过受限模板生成。

@@ -122,3 +122,5 @@ Phase 0 范围：
 >   - **清缓存优先于预热。** 一批任务中清缓存先执行；预热共用一个从拉取时算起的时间预算（`--prefetch-budget`，默认 4 分钟，短于控制台重新交出任务前的 5 分钟），超时未完成的 URL 记为失败（`prefetch_timeout`）。预热请求走第一个不要求 PROXY protocol 的监听，全部要求时走本机 unix socket 上的边缘监听（`--edge-socket`）。
 >   - **兜底轮询一直运行（与第 4 条不同）。** `GetConfig` 和 `PullTasks` 的兜底轮询不因流恢复而停止，每次间隔在配置值（默认 30 秒）的 0.8–1.2 倍之间随机取；节点已是最新时轮询只得到空 diff，开销很小，而流看起来正常但漏掉通知时也能追上。
 >   - **reload 之后核实生效（第 8 条的补充）。** 每个渲染出的 nginx.conf 带一个配置 id（不含 id 时渲染结果的哈希），`init_by_lua` 记下它，`GET /v1/status` 上报；发出 HUP 后 agent 最多等 15 秒，直到有 worker 报告新的 id。等不到时该 revision 回报 `FAILED`，放回上一个 nginx.conf（这样重启时运行的就是正在运行的配置），last-known-good 继续服务。
+
+> 更新记录（2026-09-27，MVP M3）：M3 增加 SNI 动态证书、HTTP/2、HTTP/3、HSTS、TLS 档位与 Gzip。证书材料仅保存在私有状态目录的 0600 文件中。证书内容变化不 reload；监听、SNI 名称和静态 TLS/压缩选项改变时验证后 reload。表推送失败会恢复原配置；持久化失败不能回报 APPLIED。OCSP 请求有地址、大小、时间与签名/有效期限制。

@@ -380,6 +380,8 @@ export const node = z.object({
   lastSeenAt: isoDateTime.nullable(),
   enrolledAt: isoDateTime.nullable(),
   agentVersion: z.string(),
+  supportedFeatures: z.array(z.string()),
+  upgradeRequired: z.boolean(),
   engine: z.string(),
   engineVersion: z.string(),
   os: z.string(),

@@ -34,6 +34,12 @@ export function consoleNav(opts: { manageMembers: boolean }): NavItem[] {
       testId: "nav-overview",
       exact: true,
     },
+    {
+      title: m.cert_title(),
+      to: "/certificates",
+      icon: icon(SecurityLockIcon),
+      testId: "nav-certificates",
+    },
     { title: m.nav_sites(), to: "/sites", icon: icon(GlobeIcon), testId: "nav-sites" },
     {
       title: m.nav_purge(),

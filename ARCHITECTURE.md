@@ -30,7 +30,7 @@
                                    └───────────────────────────────┘
 ```
 
-PostgreSQL 是唯一的外部依赖。`compose.yml` 的 `analytics`（ClickHouse）和 `cache`（Valkey）profile 只启动容器，控制台目前都不使用（ClickHouse 模式见 [ADR-0009](docs/adr/0009-analytics-clickhouse-and-lite.md)，排在后续里程碑）。`edgeweir-certd` 随镜像发布，但只有骨架（stdin/stdout 的 JSON 协议和测试），签发证书在 MVP M3 实现。
+PostgreSQL 是唯一的外部依赖。`compose.yml` 的 `analytics`（ClickHouse）和 `cache`（Valkey）profile 只启动容器，控制台目前都不使用（ClickHouse 模式见 [ADR-0009](docs/adr/0009-analytics-clickhouse-and-lite.md)，排在后续里程碑）。`edgeweir-certd` 随镜像发布，由 pg-boss 通过 stdin/stdout 调用，完成 ACME 签发、续期及 DNS 记录操作；凭据不放在进程参数中。
 
 ## 2. 仓库布局
 
@@ -44,8 +44,8 @@ PostgreSQL 是唯一的外部依赖。`compose.yml` 的 `analytics`（ClickHouse
 | `packages/db` | Drizzle schema（`src/schema/auth.ts` 为 better-auth 表，`core.ts` 为业务表）和纯 SQL 迁移（`migrations/`，启动时自动执行） |
 | `packages/config-compiler` | 把站点、源站、缓存规则和平台的源站允许清单编译成 NodeConfig IR；规范排序、内容哈希、diff；跨语言哈希向量在 `test/fixtures/` |
 | `packages/proto` | 由 `proto/` 生成的 TypeScript 代码（protoc-gen-es），不手改 |
-| `proto/` | buf 模块：`edgeweir/node/v1/{node,config}.proto`，两个仓库唯一的契约来源（当前 tag `proto/v0.2.2`） |
-| `helpers/certd` | Go 编写的 `edgeweir-certd` 骨架，多阶段构建进同一镜像 |
+| `proto/` | buf 模块：`edgeweir/node/v1/{node,config}.proto`，两个仓库唯一的契约来源（当前 tag `proto/v0.3.0`） |
+| `helpers/certd` | Go 编写的 `edgeweir-certd`（ACME 与 DNS helper），多阶段构建进同一镜像 |
 | `compose*.yml`、`Dockerfile`、`docker/` | 部署；`compose.dev.yml` 是本地开发数据库，`compose.e2e.yml` 用于端到端测试 |
 | `scripts/e2e.sh` | 端到端测试脚本：注册、配置下发、缓存、刷新预热、源站、S3、故障切换，认证路由白名单、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、分片 Range，`install.sh` 在干净容器里安装 goreleaser snapshot 包；中间穿插 Playwright |
 | `docs/` | `adr/`（架构决策，edgeweir-node 的 `docs/adr` 由该仓库的 `scripts/sync-adr.sh` 镜像）、`specs/mvp.md`、`guide/`、`deploy/`、`audits/`、`research/` |
@@ -53,6 +53,10 @@ PostgreSQL 是唯一的外部依赖。`compose.yml` 的 `analytics`（ClickHouse
 ## 3. 数据模型
 
 表定义以 `packages/db/src/schema` 为准。
+
+- **DNS 挑战恢复**：`dns_challenge_lease` 由 `0008_m3_dns_cleanup` 创建。在发送 DNS 写请求之前保存 TXT 清理责任，超时、失败与重启后只清理本次操作的记录值。
+
+- **证书与 DNS 凭据（M3 集成中）**：`certificate` 存证书链、指纹、到期与续期状态，私钥和 ACME 账户分别信封加密；`dns_credential` 存组织级 DNS 服务商凭据的信封；`acme_challenge` 存短期公开的 HTTP-01 响应。迁移 `0006_m3_certificates` 同时增加节点能力清单与网站 TLS 策略；`0007_m3_challenge_attempts` 为 `acme_challenge` 增加必填的操作开始时间 `operation_started_at`。
 
 - **身份与租户**（better-auth 生成）：`user`、`session`、`account`、`verification`、`organization`、`member`、`invitation`、`two_factor`、`passkey`、`apikey`、`rate_limit`（认证接口的限速计数）。平台管理员 = `user.role` 含 `admin`；租户 = organization；成员角色在 `member.role`。组织的默认集群和"要求两步验证"在自有表 `organization_settings`。
 - **基础设施**（平台管理员）：`region`（区域字典）；`cluster` → `node_group`（可引用区域）→ `node`（`node_ip`）；`enrollment_token`（只存 SHA-256）；`node_certificate_revocation`（删除节点时吊销的证书序列号）。

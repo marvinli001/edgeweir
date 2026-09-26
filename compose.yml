@@ -23,7 +23,7 @@ x-console-env: &console-env
 
 services:
   console:
-    image: ghcr.io/edgeweir/edgeweir:${EDGEWEIR_VERSION:-latest}
+    image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}
     build:
       context: .
     restart: unless-stopped

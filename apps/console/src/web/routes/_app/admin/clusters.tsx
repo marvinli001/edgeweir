@@ -613,6 +613,13 @@ function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
 }
 
 function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
+  if (node.upgradeRequired) {
+    return (
+      <Badge variant="outline" data-testid="node-upgrade-required">
+        {m.node_upgrade_required()}
+      </Badge>
+    );
+  }
   if (node.applyState === "failed") {
     return (
       <Badge variant="destructive" title={node.applyMessage}>

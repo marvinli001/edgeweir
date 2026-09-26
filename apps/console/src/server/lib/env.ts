@@ -40,6 +40,9 @@ const schema = z.object({
    * edgeweir-node/v<version>/<file>, cosign/v<version>/<file>). Unset: 404.
    */
   EDGEWEIR_DOWNLOADS_DIR: z.string().optional(),
+  EDGEWEIR_CERTD_BIN: z.string().default("edgeweir-certd"),
+  EDGEWEIR_ACME_DIRECTORY: z.string().default(""),
+  EDGEWEIR_ACME_CA_FILE: z.string().default(""),
 });
 
 /** Every environment variable the console reads (documented in .env.example). */

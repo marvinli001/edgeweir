@@ -35,7 +35,7 @@ FROM ${NODE_IMAGE} AS runtime
 ARG VERSION=0.1.0-dev
 LABEL org.opencontainers.image.title="edgeweir" \
       org.opencontainers.image.description="Edgeweir console: self-hosted CDN / WAF / edge scheduling control plane" \
-      org.opencontainers.image.source="https://github.com/edgeweir/edgeweir" \
+      org.opencontainers.image.source="https://github.com/marvinli001/edgeweir" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
       org.opencontainers.image.version="${VERSION}"
 RUN apk add --no-cache tini

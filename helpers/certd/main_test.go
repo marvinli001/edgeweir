@@ -36,7 +36,7 @@ func TestRejectsUnknownAndMalformed(t *testing.T) {
 	if resp, code := call(t, `{"command":"version","extra":1}`); code != 2 || resp.OK {
 		t.Fatalf("unknown field accepted: %+v", resp)
 	}
-	if resp, code := call(t, `{"command":"obtain"}`); code == 0 || !strings.Contains(resp.Error, "not implemented") {
-		t.Fatalf("obtain should be a clear stub: %+v", resp)
+	if resp, code := call(t, `{"command":"obtain"}`); code == 0 || !strings.Contains(resp.Error, "invalid ACME request") {
+		t.Fatalf("obtain must reject missing parameters before networking: %+v", resp)
 	}
 }

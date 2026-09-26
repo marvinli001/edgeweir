@@ -1,3 +1,4 @@
+import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import type { Node } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { asc, eq, inArray } from "drizzle-orm";
@@ -5,7 +6,7 @@ import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { skipNodeTasks } from "./cache-tasks";
 import { findNodeGroup } from "./node-groups";
-import type { Executor } from "./revisions";
+import { type Executor, latestRevision } from "./revisions";
 
 /** A node counts as online if it sent a heartbeat within this window. */
 export const ONLINE_WINDOW_SECONDS = 45;
@@ -40,6 +41,11 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
         .leftJoin(schema.region, eq(schema.region.id, schema.nodeGroup.regionId))
         .where(inArray(schema.nodeGroup.id, groupIds))
     : [];
+  const required = new Map<string, string[]>();
+  for (const clusterId of new Set(rows.map((r) => r.clusterId))) {
+    const latest = await latestRevision(db, clusterId);
+    required.set(clusterId, latest ? decodeNodeConfig(latest.ir).requiredFeatures : []);
+  }
   return rows.map((r) => {
     const st = statuses.find((s) => s.nodeId === r.id);
     const group = groups.find((g) => g.id === r.nodeGroupId);
@@ -57,6 +63,10 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
       lastSeenAt: r.lastSeenAt?.toISOString() ?? null,
       enrolledAt: r.enrolledAt?.toISOString() ?? null,
       agentVersion: r.agentVersion,
+      supportedFeatures: r.supportedFeatures,
+      upgradeRequired: (required.get(r.clusterId) ?? []).some(
+        (f) => !r.supportedFeatures.includes(f),
+      ),
       engine: r.engine,
       engineVersion: r.engineVersion,
       os: r.os,

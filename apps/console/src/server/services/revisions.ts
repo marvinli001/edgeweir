@@ -1,3 +1,5 @@
+import { create } from "@bufbuild/protobuf";
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
   canonicalize,
   compileNodeConfig,
@@ -12,11 +14,14 @@ import {
   type Revision,
   type RevisionReasonCode,
   reasonText,
+  tlsSettings,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import type { NodeConfig } from "@edgeweir/proto";
-import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { CertificateRefSchema, HttpChallengeSchema, type NodeConfig } from "@edgeweir/proto";
+import { and, asc, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { readCacheKey } from "../lib/cache-key";
+import { assertCertificateNames } from "../lib/certificate-names";
+import { fail } from "../lib/errors";
 import { CONFIG_CHANNEL } from "../lib/events";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -172,6 +177,30 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
       cacheKey: readCacheKey(s.cacheKey),
       rangeSlice: s.rangeSlice,
       websocket: s.websocket,
+      certificateId: s.certificateId ?? "",
+      tls:
+        s.certificateId || Object.keys(s.tlsSettings).length
+          ? (() => {
+              const settings = tlsSettings.parse({
+                ...s.tlsSettings,
+                certificateId: s.certificateId,
+              });
+              return {
+                forceHttps: settings.forceHttps,
+                hstsMaxAge: settings.hstsMaxAge,
+                hstsIncludeSubdomains: settings.hstsIncludeSubdomains,
+                hstsPreload: settings.hstsPreload,
+                minimumVersion: settings.minimumVersion,
+                cipherProfile: settings.cipherProfile,
+                http2: settings.http2,
+                http3: settings.http3,
+                gzip: settings.gzip,
+                gzipMinLength: settings.gzipMinLength,
+                gzipTypes: settings.gzipTypes,
+                ocspStapling: settings.ocspStapling,
+              };
+            })()
+          : undefined,
     };
   });
 }
@@ -265,11 +294,66 @@ export async function publishRevision(
   );
   const sites = await loadSiteModels(tx, opts.clusterId);
   const originAllowedCidrs = await loadOriginAllowList(tx);
+  const certIds = [
+    ...new Set(
+      sites.filter((s) => s.enabled && s.certificateId).map((s) => s.certificateId as string),
+    ),
+  ];
+  const certRows = certIds.length
+    ? await tx.select().from(schema.certificate).where(inArray(schema.certificate.id, certIds))
+    : [];
+  const certificates = certRows.map((c) =>
+    create(CertificateRefSchema, {
+      id: c.id,
+      names: c.names,
+      sha256Fingerprint: c.fingerprint,
+      notAfter: c.notAfter ? timestampFromDate(c.notAfter) : undefined,
+    }),
+  );
+  const challenges = await tx
+    .selectDistinct({ challenge: schema.acmeChallenge })
+    .from(schema.acmeChallenge)
+    .innerJoin(schema.certificate, eq(schema.certificate.id, schema.acmeChallenge.certificateId))
+    .innerJoin(
+      schema.site,
+      and(
+        eq(schema.site.organizationId, schema.certificate.organizationId),
+        eq(schema.site.clusterId, opts.clusterId),
+        eq(schema.site.enabled, true),
+      ),
+    )
+    .innerJoin(
+      schema.siteDomain,
+      and(
+        eq(schema.siteDomain.siteId, schema.site.id),
+        eq(schema.siteDomain.name, schema.acmeChallenge.domain),
+        eq(schema.siteDomain.wildcard, false),
+      ),
+    )
+    .where(
+      and(
+        gt(schema.acmeChallenge.expiresAt, new Date()),
+        eq(schema.acmeChallenge.operationStartedAt, schema.certificate.operationStartedAt),
+      ),
+    );
+  const httpChallenges = challenges
+    .map(({ challenge }) => challenge)
+    .map((c) =>
+      create(HttpChallengeSchema, {
+        domain: c.domain,
+        token: c.token,
+        keyAuthorization: c.keyAuthorization,
+        expiresAt: timestampFromDate(c.expiresAt),
+      }),
+    );
   return insertRevision(
     tx,
     opts.clusterId,
     (revision) =>
-      compileNodeConfig({ clusterId: opts.clusterId, sites, originAllowedCidrs }, revision),
+      compileNodeConfig(
+        { clusterId: opts.clusterId, sites, originAllowedCidrs, certificates, httpChallenges },
+        revision,
+      ),
     opts.reason,
     opts.userId ?? null,
   );
@@ -290,11 +374,65 @@ export async function rollbackToRevision(
   const target = await getRevision(tx, opts.clusterId, opts.revision);
   if (!target) return undefined;
   const originAllowedCidrs = await loadOriginAllowList(tx);
+  const restored = decodeNodeConfig(target.ir);
+  const currentSites = await tx
+    .select()
+    .from(schema.site)
+    .where(eq(schema.site.clusterId, opts.clusterId));
+  const currentDomains = currentSites.length
+    ? await tx
+        .select()
+        .from(schema.siteDomain)
+        .where(
+          inArray(
+            schema.siteDomain.siteId,
+            currentSites.map((site) => site.id),
+          ),
+        )
+    : [];
+  for (const site of restored.sites) {
+    const current = currentSites.find((s) => s.id === site.id);
+    // Rollback is configuration history, never authorization to resurrect a
+    // deleted/transferred resource or reclaim a released tenant hostname.
+    if (
+      !current ||
+      site.domains.some(
+        (domain) =>
+          !currentDomains.some(
+            (d) => d.siteId === site.id && d.name === domain.name && d.wildcard === domain.wildcard,
+          ),
+      )
+    ) {
+      fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback references a removed site or domain");
+    }
+    if (site.certificateId) {
+      const [cert] = await tx
+        .select()
+        .from(schema.certificate)
+        .where(
+          and(
+            eq(schema.certificate.id, site.certificateId),
+            eq(schema.certificate.organizationId, current.organizationId),
+          ),
+        );
+      if (!cert?.notAfter || cert.notAfter.getTime() <= Date.now())
+        fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate is unavailable or expired");
+      assertCertificateNames(cert.chainPem, cert.names, site.domains);
+      const ref = restored.certificates.find((c) => c.id === cert.id);
+      if (!ref) fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate reference is missing");
+      ref.names = cert.names;
+      ref.sha256Fingerprint = cert.fingerprint;
+      ref.notAfter = timestampFromDate(cert.notAfter);
+    }
+  }
+  // Challenge tokens are short-lived issuance state, never rollback content.
+  restored.httpChallenges = [];
+  restored.requiredFeatures = restored.requiredFeatures.filter((f) => f !== "http01-v1");
   return insertRevision(
     tx,
     opts.clusterId,
     (revision) => {
-      const old = decodeNodeConfig(target.ir);
+      const old = restored;
       old.revision = revision;
       old.originAllowedCidrs = originAllowedCidrs;
       const config = canonicalize(old);

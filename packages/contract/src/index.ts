@@ -1,8 +1,10 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
+import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import * as s from "./schemas";
 
 export * from "./addresses";
+export * from "./certificates";
 export * from "./errors";
 export * from "./node-errors";
 export * from "./schemas";
@@ -26,6 +28,9 @@ const publicOperation = <T extends object>(operation: T) => ({ ...operation, sec
  * Errors carry a stable `code` (see errors.ts) that clients localize.
  */
 export const contract = {
+  certificates: certificatesContract,
+  dnsCredentials: dnsCredentialsContract,
+  https: httpsContract,
   system: {
     status: oc
       .route({ method: "GET", path: "/system/status", tags: ["system"], spec: publicOperation })

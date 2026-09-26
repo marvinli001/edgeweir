@@ -138,17 +138,19 @@ describe("CP-H8: SSH credentials are never stored", () => {
 const STATUS_DOCS = ["README.md", "README.zh-CN.md", "ARCHITECTURE.md"];
 
 describe("CP-M11: README.md, README.zh-CN.md and ARCHITECTURE.md describe what is not built yet", () => {
-  const SKELETON = /skeleton|骨架/i;
-  const NOT_YET = /skeleton|骨架|not yet|尚未|还没|MVP M3/i;
-  const CERTD_WORK = /ACME|certificate|证书|DNS|lego|libdns/i;
   const NOT_USED = /does not use|doesn't use|not used|不使用|未使用|没有使用/i;
   const LATER = /\byet\b|目前|尚未|later|后续|将来|以后/i;
 
-  it.each(STATUS_DOCS)("%s calls edgeweir-certd a skeleton that does not work yet", (file) => {
-    const certd = sentences(read(file)).filter((s) => /certd/.test(s));
-    expect(certd.some((s) => SKELETON.test(s))).toBe(true);
-    const claims = certd.filter((s) => CERTD_WORK.test(s) && !NOT_YET.test(s));
-    expect(claims).toEqual([]);
+  it.each(STATUS_DOCS)("%s documents the active ACME helper and its process boundary", (file) => {
+    const text = read(file);
+    expect(text).toMatch(/certd/);
+    expect(text).toMatch(/ACME/);
+    expect(text).toMatch(/stdin\/stdout/);
+    expect(
+      sentences(text).filter(
+        (sentence) => /certd/.test(sentence) && /only a skeleton|只有骨架/.test(sentence),
+      ),
+    ).toEqual([]);
   });
 
   it.each(STATUS_DOCS)("%s says the console does not use ClickHouse or Valkey yet", (file) => {

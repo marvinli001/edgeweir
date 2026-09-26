@@ -72,3 +72,5 @@ Phase 0 范围：
 | lego | v4.35.2（github.com/go-acme/lego/v4） | proxy.golang.org |
 | libdns | v1.1.1（github.com/libdns/libdns） | proxy.golang.org |
 | pg-boss | 12.34.0 | npm registry |
+
+> 更新记录（2026-09-27，MVP M3）：M3 已接入 lego 的签发、ARI 与 EAB，以及 Cloudflare/阿里云/华为云的 libdns 适配器。DNSPod 的已发布适配器仍依赖旧 libdns，使用本项目的有界传统 API 适配。HTTP-01/DNS-01 使用带确认的 stdin/stdout 事件；账户和挑战在继续执行之前由父进程持久化。DNS TXT 清理责任可跨失败与重启恢复。生产 helper 日志不携带凭据。

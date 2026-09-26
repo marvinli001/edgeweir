@@ -10,6 +10,7 @@ import {
   CacheZoneSchema,
   type CertificateRef,
   DomainSchema,
+  type HttpChallenge,
   type Listener,
   ListenerProtocol,
   ListenerSchema,
@@ -27,6 +28,7 @@ import {
   S3AuthSchema,
   type Site,
   SiteSchema,
+  type TlsOptions,
 } from "@edgeweir/proto";
 
 /** Console-side model of an origin, independent of the database layer. */
@@ -103,6 +105,8 @@ export interface SiteModel {
   rangeSlice?: boolean;
   /** Defaults to true. */
   websocket?: boolean;
+  certificateId?: string;
+  tls?: Omit<TlsOptions, "$typeName" | "$unknown">;
 }
 
 export interface ListenerModel {
@@ -130,6 +134,8 @@ export interface CompileInput {
    * (the platform's origin allow list); any order, duplicates allowed.
    */
   originAllowedCidrs?: string[];
+  certificates?: CertificateRef[];
+  httpChallenges?: HttpChallenge[];
 }
 
 export const DEFAULT_CACHE_ZONE = "default";
@@ -270,6 +276,8 @@ function compileSite(model: SiteModel): Site {
       : undefined,
     rangeSlice: model.rangeSlice ?? false,
     websocketDisabled: model.websocket === false,
+    certificateId: model.certificateId ?? "",
+    tls: model.tls,
   });
 }
 
@@ -282,7 +290,10 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   out.sites.sort(byString((s: Site) => s.id));
   // A set: ascending (byte order, ASCII) without duplicates, as the Go agent sorts it.
   out.originAllowedCidrs = sortedSet(out.originAllowedCidrs);
+  out.requiredFeatures = sortedSet(out.requiredFeatures);
+  out.httpChallenges.sort(byString((c) => `${c.domain}/${c.token}`));
   for (const site of out.sites) {
+    if (site.tls) site.tls.gzipTypes = sortedSet(site.tls.gzipTypes);
     site.domains.sort(byString((d) => `${d.name}\u0000${d.wildcard ? 1 : 0}`));
     site.originPool?.origins.sort(byString((o) => o.id));
     site.cacheRules.sort((a, b) =>
@@ -305,7 +316,19 @@ export function contentHash(config: NodeConfig): string {
 
 /** Compiles console models into a canonical, hashed NodeConfig for `revision`. */
 export function compileNodeConfig(input: CompileInput, revision: bigint): NodeConfig {
-  const listeners = (input.listeners ?? defaultListeners).map(
+  const tlsSites = input.sites.filter((s) => s.enabled && s.certificateId);
+  const defaults: ListenerModel[] = tlsSites.length
+    ? [
+        ...defaultListeners,
+        {
+          port: 443,
+          protocol: "https",
+          http2: tlsSites.some((s) => s.tls?.http2),
+          http3: tlsSites.some((s) => s.tls?.http3),
+        },
+      ]
+    : defaultListeners;
+  const listeners = (input.listeners ?? defaults).map(
     (l): Listener =>
       create(ListenerSchema, {
         port: l.port,
@@ -332,7 +355,13 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       listeners,
       cacheZones,
       sites,
-      certificates: [],
+      certificates: input.certificates ?? [],
+      httpChallenges: input.httpChallenges ?? [],
+      requiredFeatures: [
+        ...(input.sites.some((s) => s.enabled && s.tls) ? ["tls-v1"] : []),
+        ...(input.httpChallenges?.length ? ["http01-v1"] : []),
+        ...(input.sites.some((s) => s.enabled && s.tls?.http3) ? ["http3-v1"] : []),
+      ],
       originAllowedCidrs: [...(input.originAllowedCidrs ?? [])],
     }),
   );
@@ -367,6 +396,8 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     cacheZones: target.cacheZones,
     certificates: target.certificates,
     originAllowedCidrs: target.originAllowedCidrs,
+    requiredFeatures: target.requiredFeatures,
+    httpChallenges: target.httpChallenges,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -393,6 +424,8 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       cacheZones: diff.cacheZones,
       certificates: diff.certificates,
       originAllowedCidrs: diff.originAllowedCidrs,
+      requiredFeatures: diff.requiredFeatures,
+      httpChallenges: diff.httpChallenges,
       sites,
     }),
   );

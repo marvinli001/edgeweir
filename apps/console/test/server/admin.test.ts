@@ -15,6 +15,17 @@ import {
 
 /** Every contract procedure outside the admin area (checked against the contract below). */
 const CONSOLE_PROCEDURES = [
+  "certificates.list",
+  "certificates.upload",
+  "certificates.request",
+  "certificates.renew",
+  "certificates.delete",
+  "https.get",
+  "https.update",
+  "dnsCredentials.list",
+  "dnsCredentials.create",
+  "dnsCredentials.delete",
+
   "system.status",
   "system.setup",
   "account.me",

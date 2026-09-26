@@ -3,9 +3,11 @@ import { and, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { PgBoss } from "pg-boss";
 import type { AppContext } from "../lib/context";
 import { expireCacheTasks } from "../services/cache-tasks";
+import { sweepCertificates } from "../services/certificate-worker";
 import { pruneRevisions } from "../services/revisions";
 
 export const QUEUES = {
+  certificates: "certificates.sweep",
   pruneRevisions: "maintenance.prune-revisions",
   expireEnrollmentTokens: "maintenance.expire-enrollment-tokens",
   expireCacheTasks: "maintenance.expire-cache-tasks",
@@ -22,6 +24,11 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   await boss.start();
 
   for (const name of Object.values(QUEUES)) await boss.createQueue(name);
+  await boss.work(QUEUES.certificates, async () => {
+    await sweepCertificates(ctx);
+  });
+  await boss.schedule(QUEUES.certificates, "* * * * *");
+  await boss.send(QUEUES.certificates, {}, { singletonKey: "certificate-sweep" });
 
   await boss.work(QUEUES.pruneRevisions, async () => {
     const removed = await pruneRevisions(ctx.db);

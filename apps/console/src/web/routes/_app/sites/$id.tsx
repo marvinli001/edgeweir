@@ -10,6 +10,7 @@ import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Page } from "@/components/page";
 import { CacheTab } from "@/components/site/cache-tab";
+import { HttpsTab } from "@/components/site/https-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { StarButton, useSiteStars } from "@/components/site-star";
@@ -121,6 +122,9 @@ function SiteDetailPage() {
           </TabsContent>
           <TabsContent value="origins" className="animate-enter">
             <OriginsTab site={site.data} />
+          </TabsContent>
+          <TabsContent value="https" className="animate-enter">
+            <HttpsTab site={site.data} />
           </TabsContent>
           <TabsContent value="cache" className="animate-enter">
             <CacheTab site={site.data} />

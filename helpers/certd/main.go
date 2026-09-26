@@ -9,11 +9,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"time"
 )
 
 // Version is set at build time with -ldflags "-X main.Version=...".
@@ -35,16 +37,26 @@ type Response struct {
 // Providers lists the DNS providers the helper will support through libdns.
 var Providers = []string{"dnspod", "alidns", "huaweicloud", "cloudflare"}
 
-var errNotImplemented = errors.New("not implemented in Phase 0")
-
-func handle(req Request) Response {
+func handle(req Request, session *protocolSession) Response {
 	switch req.Command {
 	case "version":
 		return Response{OK: true, Result: map[string]string{"version": Version}}
 	case "providers":
 		return Response{OK: true, Result: Providers}
-	case "obtain", "renew", "revoke", "dns.present", "dns.cleanup":
-		return Response{OK: false, Error: fmt.Sprintf("%s: %v", req.Command, errNotImplemented)}
+	case "obtain", "renew", "revoke", "dns.list", "dns.set", "dns.present", "dns.cleanup":
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		var result any
+		var err error
+		if strings.HasPrefix(req.Command, "dns.") {
+			result, err = dnsCommand(ctx, req.Command, req.Params)
+		} else {
+			result, err = acmeCommand(ctx, req.Command, req.Params, session)
+		}
+		if err != nil {
+			return Response{Error: err.Error()}
+		}
+		return Response{OK: true, Result: result}
 	default:
 		return Response{OK: false, Error: fmt.Sprintf("unknown command %q", req.Command)}
 	}
@@ -58,7 +70,7 @@ func run(in io.Reader, out io.Writer) int {
 		_ = json.NewEncoder(out).Encode(Response{Error: "invalid request: " + err.Error()})
 		return 2
 	}
-	resp := handle(req)
+	resp := handle(req, &protocolSession{input: dec, output: json.NewEncoder(out)})
 	if err := json.NewEncoder(out).Encode(resp); err != nil {
 		return 1
 	}

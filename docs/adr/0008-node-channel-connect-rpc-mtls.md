@@ -145,3 +145,5 @@ Phase 0 范围：
 >   - 错过的清缓存用整站刷新补上（N-M4）：节点拉取任务时，控制台先找出它错过的清缓存（7 天内未执行而过期，或因停用被跳过，且还没补过），对涉及的每个仍在该集群的网站生成一次整站刷新（每个组织一个任务，只发给这个节点，`source = recovery`，写系统审计，不计入组织的频率限制），并把原交付标记 `recovered_at`，只补一次。有待补的刷新时 `ReportStatusResponse.tasks_pending` 为 true。
 >   - 清缓存时间点由节点分配（N-M3，[ADR-0014](0014-node-agent-responsibilities.md) 收尾记录），`NodeTask.created_at` 不再用作清缓存时间点；`node.proto` 里"purge tasks use it as the purge epoch"的注释是旧说法，下次改 proto 时更正。
 >   - `ReportStats` 每次上报只用一条 SQL：同一分钟、同一网站的桶先合并，整批作为一个 JSON 参数传入，不属于该节点集群的网站被 join 过滤，已有行累加；每次最多接受 5000 个桶。重试时的重复计数没有解决（归 M5，见 [mvp.md](../../docs/specs/mvp.md) 第 5 节）。
+
+> 更新记录（2026-09-27，MVP M3）：proto `v0.3.0` 新增 `NodeInfo.supported_features`、`NodeConfig.required_features` 和证书材料 RPC。控制面拒绝给缺少能力的节点下发该版本；节点拒绝未知能力与枚举，继续使用 last-known-good。`GetCertificates` 只下发集群当前目标配置引用的 ID/指纹，不通过历史引用授予新私钥访问权。

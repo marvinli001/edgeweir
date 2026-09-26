@@ -2,7 +2,7 @@
 
 [English summary](#english)
 
-本策略适用于 [edgeweir/edgeweir](https://github.com/edgeweir/edgeweir)（控制面）和 [edgeweir/edgeweir-node](https://github.com/edgeweir/edgeweir-node)（边缘节点）两个仓库，以及它们的官方镜像和发布物。设计依据见 [ADR-0018](docs/adr/0018-trust-and-security-baseline.md)。
+本策略适用于 [edgeweir/edgeweir](https://github.com/marvinli001/edgeweir)（控制面）和 [edgeweir/edgeweir-node](https://github.com/marvinli001/edgeweir-node)（边缘节点）两个仓库，以及它们的官方镜像和发布物。设计依据见 [ADR-0018](docs/adr/0018-trust-and-security-baseline.md)。
 
 ## 信任基线
 
@@ -32,8 +32,7 @@
 
 报告渠道（任选其一）：
 
-- 邮件：[security@edgeweir.dev](mailto:security@edgeweir.dev)
-- GitHub 私密安全公告：[控制面](https://github.com/edgeweir/edgeweir/security/advisories/new)、[节点](https://github.com/edgeweir/edgeweir-node/security/advisories/new)
+- GitHub 私密安全公告：[控制面](https://github.com/marvinli001/edgeweir/security/advisories/new)、[节点](https://github.com/marvinli001/edgeweir-node/security/advisories/new)
 
 请尽量提供：
 
@@ -57,13 +56,13 @@
 
 ### 节点包（deb、rpm、tar.gz）
 
-从 [edgeweir-node 的 Release 页面](https://github.com/edgeweir/edgeweir-node/releases) 下载要安装的包、`checksums.txt` 和它的签名 bundle，然后执行：
+从 [edgeweir-node 的 Release 页面](https://github.com/marvinli001/edgeweir-node/releases) 下载要安装的包、`checksums.txt` 和它的签名 bundle，然后执行：
 
 ```sh
 # 1. 验证 checksums.txt 由 edgeweir-node 的 release 工作流在某个 v* tag 上签名
 cosign verify-blob \
   --bundle checksums.txt.sigstore.json \
-  --certificate-identity-regexp '^https://github\.com/edgeweir/edgeweir-node/\.github/workflows/release\.yml@refs/tags/v.*$' \
+  --certificate-identity-regexp '^https://github\.com/marvinli001/edgeweir-node/\.github/workflows/release\.yml@refs/tags/v.*$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   checksums.txt
 
@@ -71,7 +70,7 @@ cosign verify-blob \
 sha256sum -c checksums.txt --ignore-missing
 
 # 3. （可选）验证构建来源证明
-gh attestation verify edgeweir-node_<版本>_linux_amd64.tar.gz --repo edgeweir/edgeweir-node
+gh attestation verify edgeweir-node_<版本>_linux_amd64.tar.gz --repo marvinli001/edgeweir-node
 ```
 
 第 1、2 步都通过后再安装。一键安装脚本 `install.sh` 在执行任何下载的程序之前会自动完成同样的校验，而且更严格：证书身份必须精确等于要安装的版本 tag（`...release.yml@refs/tags/v<版本>`）；机器上没有 cosign 时，先下载固定版本的 cosign 并核对脚本里写死的 SHA-256。注册 token 只经 `EDGEWEIR_TOKEN` 环境变量或 `--token-file` 传递，不出现在命令行参数里（[ADR-0016](docs/adr/0016-one-line-install.md)）。
@@ -79,14 +78,14 @@ gh attestation verify edgeweir-node_<版本>_linux_amd64.tar.gz --repo edgeweir/
 ### 控制面镜像
 
 ```sh
-cosign verify ghcr.io/edgeweir/edgeweir:<tag> \
-  --certificate-identity-regexp '^https://github\.com/edgeweir/edgeweir/\.github/workflows/release\.yml@refs/tags/v.*$' \
+cosign verify ghcr.io/marvinli001/edgeweir:<tag> \
+  --certificate-identity-regexp '^https://github\.com/marvinli001/edgeweir/\.github/workflows/release\.yml@refs/tags/v.*$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
-gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edgeweir
+gh attestation verify oci://ghcr.io/marvinli001/edgeweir:<tag> --repo marvinli001/edgeweir
 ```
 
-验证通过后，建议在 compose 文件中按 digest（`ghcr.io/edgeweir/edgeweir@sha256:...`）固定镜像，而不是只写 tag。
+验证通过后，建议在 compose 文件中按 digest（`ghcr.io/marvinli001/edgeweir@sha256:...`）固定镜像，而不是只写 tag。
 
 ### 从源码重建
 
@@ -124,7 +123,7 @@ gh attestation verify oci://ghcr.io/edgeweir/edgeweir:<tag> --repo edgeweir/edge
 
 ## English
 
-This policy covers [edgeweir/edgeweir](https://github.com/edgeweir/edgeweir) (console), [edgeweir/edgeweir-node](https://github.com/edgeweir/edgeweir-node) (edge node), and their official images and release artifacts.
+This policy covers [edgeweir/edgeweir](https://github.com/marvinli001/edgeweir) (console), [edgeweir/edgeweir-node](https://github.com/marvinli001/edgeweir-node) (edge node), and their official images and release artifacts.
 
 **Trust baseline.** No phone-home of any kind and no licence-check code. Telemetry is off by default and requires explicit opt-in. The console never stores SSH credentials; nodes join only through the one-time install command. Secrets (the internal CA key, S3 origin keys, the setup token, and later certificate keys and DNS API credentials) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they reach the database: AES-256-GCM with a random data key per record, and additional authenticated data that binds table, column and record id (envelope format v2; v1 envelopes written by older versions are re-encrypted at startup and no longer read otherwise). Enrollment tokens, API keys and passwords are stored as hashes only. Every management action is written to the audit log: Edgeweir's own changes commit their audit entry in the same transaction, while sign-ins (successful and failed), password changes, two-factor on/off, passkey add/delete and API key create/delete are completed by better-auth and audited right after it commits. Every release is signed with cosign keyless, ships with an SBOM and SLSA provenance, and is built reproducibly from the tagged source.
 
@@ -139,6 +138,6 @@ This policy covers [edgeweir/edgeweir](https://github.com/edgeweir/edgeweir) (co
 
 **Supported versions.** Before 1.0, only the latest `master` is supported. Security fixes land on `master` only.
 
-**Reporting a vulnerability.** Do not open a public issue. Email [security@edgeweir.dev](mailto:security@edgeweir.dev) or open a private advisory on GitHub ([console](https://github.com/edgeweir/edgeweir/security/advisories/new), [node](https://github.com/edgeweir/edgeweir-node/security/advisories/new)). We acknowledge reports within 3 working days and follow a 90-day coordinated disclosure window, counted from the day we receive the report.
+**Reporting a vulnerability.** Do not open a public issue. Open a private advisory on GitHub ([console](https://github.com/marvinli001/edgeweir/security/advisories/new), [node](https://github.com/marvinli001/edgeweir-node/security/advisories/new)). We acknowledge reports within 3 working days and follow a 90-day coordinated disclosure window, counted from the day we receive the report.
 
-**Verifying releases.** Node packages: verify `checksums.txt` with `cosign verify-blob`, pinning the certificate identity to the `edgeweir/edgeweir-node` release workflow on a `v*` tag and the issuer to `https://token.actions.githubusercontent.com`, then run `sha256sum -c checksums.txt --ignore-missing`. Console image: `cosign verify ghcr.io/edgeweir/edgeweir:<tag>` with the same kind of identity pinning, and `gh attestation verify` for provenance. The exact commands are in [验证发布物](#验证发布物) above.
+**Verifying releases.** Node packages: verify `checksums.txt` with `cosign verify-blob`, pinning the certificate identity to the `edgeweir/edgeweir-node` release workflow on a `v*` tag and the issuer to `https://token.actions.githubusercontent.com`, then run `sha256sum -c checksums.txt --ignore-missing`. Console image: `cosign verify ghcr.io/marvinli001/edgeweir:<tag>` with the same kind of identity pinning, and `gh attestation verify` for provenance. The exact commands are in [验证发布物](#验证发布物) above.
