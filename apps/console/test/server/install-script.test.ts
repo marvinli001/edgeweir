@@ -69,7 +69,7 @@ describe("install.sh", () => {
     const shellVar = (name: string) => `\${${name}}`;
     const identity = `https://github.com/${shellVar("REPO")}/.github/workflows/release.yml@refs/tags/v${shellVar("VERSION")}`;
     expect(script).toContain(`--certificate-identity "${identity}"`);
-    expect(script).toContain('REPO="edgeweir/edgeweir-node"');
+    expect(script).toContain('REPO="marvinli001/edgeweir-node"');
     expect(script).not.toContain("certificate-identity-regexp");
     const main = script.slice(script.indexOf("main() {"));
     const order = [

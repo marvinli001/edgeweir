@@ -20,6 +20,7 @@ playwright/.cache/
 .e2e/
 # Go helper build output
 helpers/certd/bin/
-# Claude Code local settings (launch.json is shared)
+# Claude Code local settings (launch.json and settings.json are shared)
 .claude/*
 !.claude/launch.json
+!.claude/settings.json

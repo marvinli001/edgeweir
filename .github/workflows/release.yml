@@ -29,7 +29,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/edgeweir/edgeweir
+          images: ghcr.io/marvinli001/edgeweir
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -45,9 +45,9 @@ jobs:
           sbom: true
           provenance: mode=max
       - name: Sign the image (cosign keyless)
-        run: cosign sign --yes "ghcr.io/edgeweir/edgeweir@${{ steps.build.outputs.digest }}"
+        run: cosign sign --yes "ghcr.io/marvinli001/edgeweir@${{ steps.build.outputs.digest }}"
       - uses: actions/attest-build-provenance@v4
         with:
-          subject-name: ghcr.io/edgeweir/edgeweir
+          subject-name: ghcr.io/marvinli001/edgeweir
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true

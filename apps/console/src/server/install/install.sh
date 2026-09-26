@@ -32,7 +32,7 @@ set -euo pipefail
 
 constants() {
   CONSOLE_URL="__EDGEWEIR_CONSOLE_URL__"
-  REPO="edgeweir/edgeweir-node"
+  REPO="marvinli001/edgeweir-node"
   OIDC_ISSUER="https://token.actions.githubusercontent.com"
   STATE_DIR="/var/lib/edgeweir-node"
   CACHE_DIR="/var/cache/edgeweir-node"
@@ -98,7 +98,9 @@ parse_args() {
       *) die "unknown option: $1" ;;
     esac
   done
-  [ -n "$SERVER" ] && [ -n "$CA_SHA256" ] || usage
+  if [ -z "$SERVER" ] || [ -z "$CA_SHA256" ]; then
+    usage
+  fi
   [[ "$SERVER" =~ ^https://[^[:space:]/]+(/[^[:space:]]*)?$ ]] || die "--server must be an https:// URL"
   [[ "$CA_SHA256" =~ ^[0-9a-f]{64}$ ]] || die "--ca-sha256 must be 64 lowercase hex characters"
   case "$FORMAT" in auto | deb | rpm | tar) ;; *) die "--format must be auto, deb, rpm or tar" ;; esac
@@ -131,8 +133,9 @@ check_system() {
   command -v sha256sum >/dev/null 2>&1 || die "sha256sum is required"
   command -v tar >/dev/null 2>&1 || die "tar is required"
   if [ "$NO_START" != "true" ]; then
-    command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] \
-      || die "systemd is required (use --no-start to only install and enroll)"
+    if ! command -v systemctl >/dev/null 2>&1 || [ ! -d /run/systemd/system ]; then
+      die "systemd is required (use --no-start to only install and enroll)"
+    fi
   fi
   case "$(uname -m)" in
     x86_64 | amd64) ARCH="amd64"; RPM_ARCH="x86_64"; COSIGN_SHA256="$COSIGN_SHA256_AMD64" ;;
@@ -360,8 +363,10 @@ install_tarball() {
   mkdir -p "${WORK}/extract"
   tar -xzf "${WORK}/${ARTIFACT}" -C "${WORK}/extract"
   dir="${WORK}/extract/${top}"
-  [ -f "${dir}/edgeweir-node" ] && [ -f "${dir}/systemd/edgeweir-node.service" ] \
-    && [ -d "${dir}/lua/edgeweir" ] || die "unexpected archive layout in ${ARTIFACT}"
+  if [ ! -f "${dir}/edgeweir-node" ] || [ ! -f "${dir}/systemd/edgeweir-node.service" ] \
+    || [ ! -d "${dir}/lua/edgeweir" ]; then
+    die "unexpected archive layout in ${ARTIFACT}"
+  fi
   if ! getent group edgeweir >/dev/null 2>&1; then
     groupadd --system edgeweir
   fi

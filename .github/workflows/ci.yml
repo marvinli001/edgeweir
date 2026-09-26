@@ -70,7 +70,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/checkout@v7
         with:
-          repository: edgeweir/edgeweir-node
+          repository: marvinli001/edgeweir-node
           path: edgeweir-node
           fetch-depth: 0
       # scripts/e2e.sh builds goreleaser snapshot packages of the node for the
