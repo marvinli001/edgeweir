@@ -23,7 +23,7 @@ Edgeweir（读作 EDGE-weer）的名字来自「堰」（weir）。公元前 256
 
 MVP 剩余工作：**M5** 补齐 DNS 调度、域名归属、统计保留和告警；**M6** 补齐验签升级、采样日志、AccessKey 范围、性能基线和恢复演练。
 
-M5 核心链路已实现并通过本地验收：域名归属、独立 DNS 发布、统计去重与汇总、告警和订阅。可选 ClickHouse 存储正与 M6 访问日志一并完成。见 [DNS 与告警指南](docs/guide/dns-and-alerts.md)。
+M5 核心链路已实现并通过本地验收：域名归属、独立 DNS 发布、统计去重与汇总、告警和订阅。可选 ClickHouse 存储目前尚未接入，正与 M6 访问日志一并完成。见 [DNS 与告警指南](docs/guide/dns-and-alerts.md)。
 
 M4 已通过真实节点验收：IP/GeoIP 规则、WAF、限速、重定向、改写和头变换；名单与规则热更新无需 reload。具体范围与限制见 [规则指南](docs/guide/rules.md)。
 
