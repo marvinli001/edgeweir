@@ -137,6 +137,13 @@ BREAKING CHANGE: nodes built from proto/v0.x must be regenerated.
 
 7. 发布时先升级控制面，再升级节点。控制面必须兼容上一个 proto 版本的节点。
 
+## 更新固定的镜像与 Actions
+
+第三方镜像按 `tag@sha256:<digest>`、GitHub Actions 按 `owner/action@<40 位 SHA> # vX.Y.Z` 引用（[ADR-0017](docs/adr/0017-release-supply-chain.md)），`pnpm test` 会拒绝未固定的写法；节点仓库用 `make pin-check` 做同样的检查。升级时 tag 与 digest（或 SHA 与版本注释）一起改：
+
+- 镜像：`docker buildx imagetools inspect <镜像>:<tag>` 输出的 `Digest` 就是多架构 index 的 digest（不要用单一平台的 digest）。
+- Actions：`git ls-remote --tags https://github.com/<owner>/<action>` 找到版本 tag 对应的提交；带 `^{}` 的行是附注 tag 指向的提交，要用这一行的 SHA。
+
 ## ADR 流程
 
 1. 复制 [docs/adr/template.md](docs/adr/template.md) 为 `docs/adr/NNNN-slug.md`。`NNNN` 取现有最大编号加一（两个仓库共用一套编号），`slug` 用英文小写加连字符。

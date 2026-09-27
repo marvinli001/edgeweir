@@ -43,7 +43,7 @@ E2E_SUBNET="${E2E_SUBNET:-172.28.213.0/24}"
 E2E_ISOLATED_SUBNET="${E2E_ISOLATED_SUBNET:-172.28.214.0/24}"
 NODE_CONTEXT="${EDGEWEIR_NODE_CONTEXT:-../edgeweir-node}"
 # Clean machine for install.sh (a throwaway container on the e2e network).
-INSTALL_IMAGE="${E2E_INSTALL_IMAGE:-debian:bookworm-slim}"
+INSTALL_IMAGE="${E2E_INSTALL_IMAGE:-debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251}"
 INSTALL_CONTAINER="${COMPOSE_PROJECT_NAME:-edgeweir-e2e}-install"
 UP=false
 DOWN=false

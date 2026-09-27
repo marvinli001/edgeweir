@@ -17,7 +17,7 @@ name: edgeweir-e2e
 
 services:
   postgres:
-    image: postgres:18.6-alpine
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     environment:
       POSTGRES_USER: edgeweir
       POSTGRES_PASSWORD: e2e-only-password
@@ -69,7 +69,7 @@ services:
       - no-new-privileges:true
 
   clickhouse:
-    image: clickhouse/clickhouse-server:26.9-alpine
+    image: clickhouse/clickhouse-server:26.9-alpine@sha256:7ad5e1f369d243e3d5d3bb1fe926147b251bb14c08cdb833bd421d191d476b9f
     profiles: ["analytics"]
     environment:
       CLICKHOUSE_DB: edgeweir
@@ -84,11 +84,11 @@ services:
       retries: 30
 
   whoami:
-    image: traefik/whoami:v1.12.0
+    image: traefik/whoami:v1.12.0@sha256:c4717a8d1f0134a7444e24f881160e033991f23027c6c5a9a3f8fd22e70d1d44
 
   # Real HTTP-01 validation against the node; no ALWAYS_VALID bypass.
   pebble:
-    image: ghcr.io/letsencrypt/pebble:2.10.1
+    image: ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199
     command: ["-config", "/e2e/config.json", "-strict"]
     environment:
       PEBBLE_VA_NOSLEEP: "1"
@@ -101,17 +101,17 @@ services:
 
   # MVP M2: failover pair (scripts/e2e.sh stops and starts the primary).
   origin-primary:
-    image: traefik/whoami:v1.12.0
+    image: traefik/whoami:v1.12.0@sha256:c4717a8d1f0134a7444e24f881160e033991f23027c6c5a9a3f8fd22e70d1d44
     command: ["--name", "primary"]
 
   origin-backup:
-    image: traefik/whoami:v1.12.0
+    image: traefik/whoami:v1.12.0@sha256:c4717a8d1f0134a7444e24f881160e033991f23027c6c5a9a3f8fd22e70d1d44
     command: ["--name", "backup"]
 
   # N-H2: an origin only on the isolated network. The node resolves "hidden"
   # to an address outside the allow list and must refuse it (502).
   hidden:
-    image: traefik/whoami:v1.12.0
+    image: traefik/whoami:v1.12.0@sha256:c4717a8d1f0134a7444e24f881160e033991f23027c6c5a9a3f8fd22e70d1d44
     command: ["--name", "hidden"]
     networks: [isolated]
 
@@ -120,7 +120,7 @@ services:
   # certificate, :9443 with a certificate for "files" issued by a test CA
   # that the node trusts (written to the origin-ca volume).
   files:
-    image: openresty/openresty:1.31.1.1-bookworm
+    image: openresty/openresty:1.31.1.1-bookworm@sha256:8005b87dcb25df5e202e71dcc4b8a2c20a4845a75302b2bb6ee816b5392883e4
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
@@ -150,7 +150,7 @@ services:
   # MVP M2: S3-compatible object storage (Versity S3 Gateway, Apache-2.0)
   # for SigV4-signed origin requests: bucket "media" with one object.
   s3:
-    image: versity/versitygw:v1.8.0
+    image: versity/versitygw:v1.8.0@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
@@ -159,7 +159,7 @@ services:
         exec versitygw --port :7070 --access e2e-access-key --secret e2e-only-s3-secret-key posix /data
 
   mock-services:
-    image: node:24.21.0-alpine
+    image: node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
     command: ["node", "/mock/server.mjs"]
     volumes:
       - ./docker/e2e/mock-services:/mock:ro
@@ -225,7 +225,7 @@ services:
         condition: service_started
 
   upgrade-files:
-    image: openresty/openresty:1.31.1.1-bookworm
+    image: openresty/openresty:1.31.1.1-bookworm@sha256:8005b87dcb25df5e202e71dcc4b8a2c20a4845a75302b2bb6ee816b5392883e4
     profiles: ["upgrades"]
     command: ["openresty", "-g", "daemon off;", "-c", "/etc/nginx/upgrade.conf"]
     volumes:

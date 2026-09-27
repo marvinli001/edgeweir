@@ -1,9 +1,12 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.26.0@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 # Edgeweir console: one image, one Node.js process serving the web UI, the
 # API and the node channel. ROLE=app|worker|all selects what runs (default all).
+#
+# Every base image is pinned by tag and multi-arch index digest; the digest is
+# what gets pulled (ADR-0017). Refresh tag and digest together (CONTRIBUTING.md).
 
-ARG NODE_IMAGE=node:24.21.0-alpine
-ARG GO_IMAGE=golang:1.27.1-alpine
+ARG NODE_IMAGE=node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
+ARG GO_IMAGE=golang:1.27.1-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414
 
 # --- edgeweir-certd (Go helper) ------------------------------------------------
 FROM ${GO_IMAGE} AS certd

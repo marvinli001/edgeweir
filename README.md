@@ -154,7 +154,7 @@ Besides curl, jq, Docker and Node.js it needs a checkout of edgeweir-node next t
 | `E2E_TAG` | `e2e` | Tag of the console and node images |
 | `E2E_SUBNET` | `172.28.213.0/24` | Default network, put on the origin allow list |
 | `E2E_ISOLATED_SUBNET` | `172.28.214.0/24` | Network outside the allow list (its origin must be refused) |
-| `E2E_INSTALL_IMAGE` | `debian:bookworm-slim` | Clean machine for `install.sh` |
+| `E2E_INSTALL_IMAGE` | `debian:bookworm-slim` (pinned by digest in `scripts/e2e.sh`) | Clean machine for `install.sh` |
 | `EDGEWEIR_NODE_CONTEXT` | `../edgeweir-node` | edgeweir-node checkout |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for commit conventions, the proto change flow and the i18n rules.

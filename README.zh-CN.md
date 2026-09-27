@@ -154,7 +154,7 @@ pnpm e2e     # --up 先启动环境，--down 结束后删除环境及其卷，--
 | `E2E_TAG` | `e2e` | 控制台和节点镜像的 tag |
 | `E2E_SUBNET` | `172.28.213.0/24` | 默认网络，加入源站允许清单 |
 | `E2E_ISOLATED_SUBNET` | `172.28.214.0/24` | 允许清单之外的网络（其中的源站必须被拒绝） |
-| `E2E_INSTALL_IMAGE` | `debian:bookworm-slim` | 运行 `install.sh` 的干净机器 |
+| `E2E_INSTALL_IMAGE` | `debian:bookworm-slim`（`scripts/e2e.sh` 中按 digest 固定） | 运行 `install.sh` 的干净机器 |
 | `EDGEWEIR_NODE_CONTEXT` | `../edgeweir-node` | edgeweir-node 检出目录 |
 
 提交规范、proto 变更流程和 i18n 规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。

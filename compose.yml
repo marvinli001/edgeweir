@@ -60,7 +60,7 @@ services:
       - no-new-privileges:true
 
   postgres:
-    image: postgres:18.6-alpine
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
     restart: unless-stopped
     environment:
       POSTGRES_USER: edgeweir
@@ -76,7 +76,7 @@ services:
       retries: 20
 
   clickhouse:
-    image: clickhouse/clickhouse-server:26.9-alpine
+    image: clickhouse/clickhouse-server:26.9-alpine@sha256:7ad5e1f369d243e3d5d3bb1fe926147b251bb14c08cdb833bd421d191d476b9f
     profiles: ["analytics"]
     restart: unless-stopped
     environment:
@@ -92,7 +92,7 @@ services:
         hard: 262144
 
   valkey:
-    image: valkey/valkey:9.2-alpine
+    image: valkey/valkey:9.2-alpine@sha256:cdcb7b1c7b6f1c9cb9442c71ac6275e78184657448407b2c1fdde7ee8024f4fb
     profiles: ["cache"]
     restart: unless-stopped
     command: ["valkey-server", "--save", "", "--appendonly", "no"]
