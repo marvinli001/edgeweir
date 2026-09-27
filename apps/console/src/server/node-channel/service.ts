@@ -41,9 +41,16 @@ import { mirrorMinuteStats } from "../services/clickhouse";
 import { claimEnrollmentToken } from "../services/enrollment";
 import { isSerialRevoked, normalizeSerial } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
+import { mintRevisionReceipt, verifyRevisionReceipt } from "../services/revision-receipts";
 import { getRevision, latestRevision } from "../services/revisions";
 import { s3SecretBinding } from "../services/sites";
 import { ingestStatsBatch, MAX_STATS_PER_REPORT } from "../services/stats";
+import {
+  hasUpgradeTasks,
+  pullUpgrade,
+  recordUpgradeHealth,
+  reportUpgrade,
+} from "../services/upgrades";
 
 export const HEARTBEAT_SECONDS = 15;
 export const KEEPALIVE_MS = 15_000;
@@ -468,6 +475,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         );
       }
       const generatedAt = timestampFromDate(new Date());
+      const revisionReceipt = mintRevisionReceipt(app, node, target.revision, target.contentHash);
       if (req.baseRevision > 0n && req.baseRevision < BigInt(target.revision)) {
         const base = await getRevision(app.db, node.clusterId, Number(req.baseRevision));
         if (base) {
@@ -478,12 +486,14 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           return create(GetConfigResponseSchema, {
             payload: { case: "diff", value: diff },
             generatedAt,
+            revisionReceipt,
           });
         }
       }
       return create(GetConfigResponseSchema, {
         payload: { case: "snapshot", value: snapshot },
         generatedAt,
+        revisionReceipt,
       });
     },
 
@@ -493,6 +503,19 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       const now = new Date();
       if (req.appliedRevision < 0n || req.appliedRevision >= BigInt(Number.MAX_SAFE_INTEGER))
         throw new ConnectError("invalid applied revision", Code.InvalidArgument);
+      const issued = await latestRevision(app.db, node.clusterId);
+      const revisionReceiptVerified = verifyRevisionReceipt(
+        app,
+        node,
+        Number(req.appliedRevision),
+        req.appliedContentHash,
+        req.revisionReceipt,
+      );
+      if (req.appliedRevision > BigInt(issued?.revision ?? 0) && !revisionReceiptVerified)
+        throw new ConnectError(
+          "unverifiable restored revision; a persisted console receipt is required",
+          Code.FailedPrecondition,
+        );
       const info = req.info;
       const state =
         req.state === ApplyState.APPLIED
@@ -523,6 +546,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         const values = {
           nodeId: node.id,
           appliedRevision: Number(req.appliedRevision),
+          revisionReceiptVerified,
           appliedContentHash: req.appliedContentHash,
           state,
           message: req.message.slice(0, 4000),
@@ -534,6 +558,12 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           .insert(schema.nodeConfigStatus)
           .values(values)
           .onConflictDoUpdate({ target: schema.nodeConfigStatus.nodeId, set: values });
+        await recordUpgradeHealth(
+          tx,
+          { ...node, agentVersion: info?.agentVersion ?? node.agentVersion },
+          values,
+          now,
+        );
         const ips = [...new Set(info?.ipAddresses ?? [])].slice(0, 64);
         if (ips.length) {
           await tx
@@ -559,7 +589,8 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         );
       });
       const latest = await latestRevision(app.db, node.clusterId);
-      const tasksPending = await hasDeliverableTasks(app.db, node.id);
+      const tasksPending =
+        (await hasDeliverableTasks(app.db, node.id)) || (await hasUpgradeTasks(app.db, node.id));
       const expiresIn = (node.certNotAfter?.getTime() ?? 0) - now.getTime();
       log.debug("status", {
         nodeId: node.id,
@@ -638,9 +669,10 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
     async pullTasks(req, ctx) {
       const node = await requireNode(ctx);
       const max = Math.min(req.maxTasks || MAX_TASKS_PER_PULL, MAX_TASKS_PER_PULL);
-      const tasks = await pullCacheTasks(app.db, node, max);
-      if (tasks.length) log.info("tasks handed out", { nodeId: node.id, tasks: tasks.length });
-      return { tasks: tasks.map(toNodeTask) };
+      const upgrade = await pullUpgrade(app, node);
+      const limit = max - (upgrade ? 1 : 0);
+      const tasks = limit > 0 ? await pullCacheTasks(app.db, node, limit) : [];
+      return { tasks: [...tasks.map(toNodeTask), ...(upgrade ? [upgrade] : [])] };
     },
 
     async reportTaskResult(req, ctx) {
@@ -651,6 +683,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       if (req.state !== TaskState.SUCCEEDED && req.state !== TaskState.FAILED) {
         throw new ConnectError("state must be SUCCEEDED or FAILED", Code.InvalidArgument);
       }
+      if (await reportUpgrade(app, node.id, req)) return {};
       const recorded = await reportCacheTaskResult(app.db, node, {
         taskId: req.taskId,
         state: req.state === TaskState.SUCCEEDED ? "succeeded" : "failed",

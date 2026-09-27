@@ -14,8 +14,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * A dialog around one form. `onSubmit` receives the form data; while it runs the submit button
- * shows a spinner, and a thrown error is shown localized under the fields. It closes the dialog
- * itself (via `onOpenChange(false)`) when it is done.
+ * shows a spinner, and a thrown error is shown localized under the fields. The caller controls closing
+ * with `onOpenChange(false)`, so a form can also show its result inside the dialog.
  */
 export function FormDialog({
   open,

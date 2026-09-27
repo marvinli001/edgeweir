@@ -10,6 +10,7 @@ import { reconcileDns } from "../services/dns";
 import { enforceDomainOwnershipOnce } from "../services/domain-ownership";
 import { pruneRevisions } from "../services/revisions";
 import { maintainTraffic } from "../services/stats-rollup";
+import { expireUpgrades } from "../services/upgrades";
 
 export const QUEUES = {
   alerts: "alerts.sweep",
@@ -50,6 +51,7 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   await boss.work(QUEUES.traffic, async () => {
     await maintainTraffic(ctx.db);
     await maintainLogs(ctx.db);
+    await expireUpgrades(ctx.db);
   });
   await boss.schedule(QUEUES.traffic, "* * * * *");
   await boss.send(QUEUES.traffic, {}, { singletonKey: "traffic-rollup" });

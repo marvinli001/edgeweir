@@ -134,6 +134,27 @@
       "when": 1790461043953,
       "tag": "0018_retain_node_traffic",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790463615890,
+      "tag": "0019_m6_upgrades",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790464301475,
+      "tag": "0020_m6_upgrade_health",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790467382037,
+      "tag": "0021_authenticated_revision_floor",
+      "breakpoints": true
     }
   ]
 }

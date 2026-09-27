@@ -30,6 +30,19 @@ const schema = z.object({
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   NODE_API_PORT: z.coerce.number().int().min(0).max(65535).default(8443),
+  EDGEWEIR_NODE_RELEASE_BASE_URL: z
+    .url()
+    .refine((v) => {
+      const u = new URL(v);
+      return (
+        ["https:", "http:"].includes(u.protocol) &&
+        !u.username &&
+        !u.password &&
+        !u.search &&
+        !u.hash
+      );
+    })
+    .default("https://github.com/marvinli001/edgeweir-node/releases/download"),
   EDGEWEIR_ANALYTICS: z.enum(["lite", "clickhouse"]).default("lite"),
   EDGEWEIR_CLICKHOUSE_URL: z
     .url()

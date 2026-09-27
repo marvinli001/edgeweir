@@ -230,6 +230,11 @@ verify_signature() {
     --certificate-oidc-issuer "$OIDC_ISSUER" \
     "${WORK}/checksums.txt" >/dev/null || die "cosign signature verification FAILED"
   log "cosign signature verified (release workflow, tag v${VERSION})"
+  # Keep the verified verifier available to the unprivileged upgrade supervisor.
+  if [ "$COSIGN" = "${WORK}/cosign" ]; then
+    install -m 0755 "$COSIGN" /usr/local/bin/cosign
+    COSIGN=/usr/local/bin/cosign
+  fi
 }
 
 # The package file for this machine, as listed in the signed checksums.txt.

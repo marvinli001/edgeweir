@@ -12,24 +12,22 @@ Edgeweir（读作 EDGE-weer）的名字来自「堰」（weir）。公元前 256
 
 ## 当前状态
 
-**MVP 开发中：M1–M4 已实现，接下来完成 M5–M6。目前不适合生产使用。**
+**MVP 功能已实现并通过本地验收，仍处于预发布阶段，尚无正式二进制发布。**
 
-| 范围 | 已实现 |
+| 领域 | 已提供 |
 | --- | --- |
-| 集群与访问 | 节点组、区域、组织、邀请、两步验证、passkey 与审计日志 |
-| 源站与缓存 | 源站池、TLS 校验、S3 签名、WebSocket、缓存键、切片、刷新与预热 |
-| 证书与协议 | 上传、ACME HTTP-01/DNS-01、续期调度、HTTPS、HSTS、HTTP/2、HTTP/3 |
-| 访问规则 | IP 名单、本地 GeoIP、分阶段规则、WAF、限速、跳转、改写和头变换 |
+| 集群与权限 | 节点组、区域、组织、邀请、2FA / Passkey、管理审计 |
+| 源站与缓存 | 源站池、回源 TLS 校验、S3 签名、WebSocket、缓存键、切片、刷新与预热 |
+| 证书与协议 | 上传、ACME HTTP-01 / DNS-01、续期、HTTPS、HSTS、HTTP/2 与 HTTP/3 |
+| 策略 | 组织 / 平台 IP 名单、本地 GeoIP、分阶段规则、WAF、限速、重定向、改写及头部变换 |
+| DNS 与观测 | 域名归属、独立 DNS 版本、健康节点调度、统计去重与汇总、Top URL/IP、告警及订阅 |
+| 运维 | 采样日志与 CSV、可选 ClickHouse、只读及可吊销 AccessKey、签名灰度升级与回滚、性能基线、备份恢复 |
 
-MVP 剩余工作：**M5** 补齐 DNS 调度、域名归属、统计保留和告警；**M6** 补齐验签升级、采样日志、AccessKey 范围、性能基线和恢复演练。
+验收使用真实 OpenResty 节点、PostgreSQL、Pebble、ClickHouse、本地 DNS 和通知模拟服务，并覆盖浏览器流程。升级测试用本地临时密钥签署真实 Linux 归档，验证错误密钥签名拒绝，以及已签名坏程序启动失败后的回滚。恢复测试执行真实 pg_dump / pg_restore，并证明恢复后仍可向已应用更高 revision 的节点发布配置。见[实现证据](docs/implementation/mvp-completion.md)、[MVP 规格](docs/specs/mvp.md)及公开 CI。
 
-M5 核心链路已实现并通过本地验收：域名归属、独立 DNS 发布、统计去重与汇总、告警和订阅。可选 ClickHouse 存储及采样日志现已接入；节点自升级仍在实施。见 [DNS 与告警指南](docs/guide/dns-and-alerts.md)。
+真实 DNS 服务商、ZeroSSL EAB 和外部通知账户仍需按运维方自己的凭据验收。所选原版引擎不含 Brotli / Zstd；正式 GitHub OIDC 签名二进制尚未发布和验收，当前请从源码构建评估。这里提供可复现的证据，不作线上可靠性或绝对安全保证。
 
-M4 已通过真实节点验收：IP/GeoIP 规则、WAF、限速、重定向、改写和头变换；名单与规则热更新无需 reload。具体范围与限制见 [规则指南](docs/guide/rules.md)。
-
-本地 Pebble 测试已验证真实节点 HTTP-01 签发、受信任 HTTPS、HTTP/2、HTTP/3，以及不重载 nginx 的证书轮换。DNS 服务商适配器与 ZeroSSL EAB 的真实账户验收需要运营者凭据；当前官方引擎没有 Brotli 和 Zstd 模块，界面明确保持不可用。详见 [HTTPS 指南](docs/guide/https.md)、[MVP 规格](docs/specs/mvp.md)和[实施验证记录](docs/implementation/mvp-completion.md)。
-
-目前没有正式二进制发布。工作流已定义签名、SBOM 和 provenance，但实际发布物仍需独立校验。现阶段请从源码构建后评估。
+指南：[HTTPS](docs/guide/https.md) · [规则](docs/guide/rules.md) · [DNS 与告警](docs/guide/dns-and-alerts.md) · [日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) · [备份恢复](docs/deploy/backup.md)。
 
 ## 组成
 

@@ -18,5 +18,5 @@
       "persistent": true
     }
   },
-  "globalPassThroughEnv": ["E2E_*"]
+  "globalPassThroughEnv": ["E2E_*", "EDGEWEIR_NODE_CONTEXT"]
 }

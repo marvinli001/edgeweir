@@ -1,3 +1,7 @@
+import { upgradesContract } from "./upgrades";
+
+export * from "./upgrades";
+
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { logsContract } from "./logs";
@@ -45,6 +49,7 @@ const publicOperation = <T extends object>(operation: T) => ({ ...operation, sec
 export const contract = {
   accessKeys: accessKeysContract,
   logs: logsContract,
+  upgrades: upgradesContract,
   alerts: alertsContract,
   dns: dnsContract,
   domainOwnership: domainOwnershipContract,

@@ -12,24 +12,22 @@ Edgeweir (pronounced *EDGE-weer*) is named after a weir. Around 256 BC, Li Bing 
 
 ## Status
 
-**MVP in progress: M1–M4 implemented; M5–M6 are next. Not production-ready.**
+**MVP functionality is implemented and locally validated. Pre-release; there is no official binary release yet.**
 
-| Area | Implemented |
+| Area | Available |
 | --- | --- |
 | Clusters and access | Groups, regions, organizations, invitations, 2FA/passkeys and audit logs |
-| Origins and cache | Pools, TLS verification, S3 signing, WebSocket, cache keys, slicing, purge and prefetch |
-| Certificates and protocols | Upload, ACME HTTP-01/DNS-01, renewal scheduling, HTTPS, HSTS, HTTP/2 and HTTP/3 |
-| Policy | IP lists, local GeoIP, phased rules, WAF, rate limits, redirects, rewrites and header transforms |
+| Origins and cache | Pools, origin TLS verification, S3 signing, WebSocket, cache keys, slicing, purge and prefetch |
+| Certificates and protocols | Upload, ACME HTTP-01/DNS-01, renewal, HTTPS, HSTS, HTTP/2 and HTTP/3 |
+| Policy | Scoped IP lists, local GeoIP, phased rules, WAF, rate limits, redirects, rewrites and header transforms |
+| DNS and visibility | Domain proof, independent DNS revisions, healthy-node reconciliation, deduplicated traffic, rollups, Top URL/IP, alerts and subscriptions |
+| Operations | Sampled logs and CSV, optional ClickHouse, read-only/revocable AccessKeys, signed canary upgrades with rollback, benchmark and backup recovery |
 
-Remaining MVP work: **M5** adds DNS scheduling, domain ownership, analytics retention and alerts; **M6** adds signed upgrades, sampled logs, scoped AccessKeys, performance and restore drills.
+Verification uses real OpenResty nodes, PostgreSQL, Pebble, ClickHouse, local DNS and notification fixtures, plus browser flows. Upgrade tests sign real Linux archives with a local fixture key, check wrong-key rejection, and recover from a signed executable that fails to start. Recovery tests restore a real database backup and prove that newer node revisions remain updateable. See [implementation evidence](docs/implementation/mvp-completion.md), [MVP specification](docs/specs/mvp.md), and the public CI runs.
 
-M5 core flows are now implemented and tested locally: domain proof, independent DNS publication, deduplicated statistics, rollups, alert subscriptions and notifications. Optional ClickHouse storage and sampled access logs are now available; node self-upgrade is still being implemented. See [DNS and alert guide](docs/guide/dns-and-alerts.md).
+Live DNS-provider accounts, ZeroSSL EAB and external notification accounts still require operator-specific acceptance. The stock engine does not include Brotli or Zstd. No official GitHub OIDC-signed binary release has been published or accepted yet; evaluate with a source build. These checks are reproducible evidence, not a production reliability or security guarantee.
 
-M4 has passed real-node tests for IP/GeoIP rules, WAF, rate limits, redirects, rewrites and header transforms; policy updates do not reload nginx. See the [rule guide](docs/guide/rules.md) for scope and limits.
-
-M3's local Pebble test proves HTTP-01 issuance through a real edge node, trusted HTTPS, HTTP/2, HTTP/3 and certificate rotation without an nginx reload. DNS provider adapters and ZeroSSL EAB require operator credentials for live-service acceptance. Brotli and Zstd remain unavailable on the selected stock engine. See [HTTPS guide](docs/guide/https.md), [MVP specification](docs/specs/mvp.md) and [implementation evidence](docs/implementation/mvp-completion.md).
-
-There is no official binary release yet. Release workflows define signing, SBOM and provenance; a published release must still be verified independently. Use a source build for evaluation.
+Guides: [HTTPS](docs/guide/https.md) · [rules](docs/guide/rules.md) · [DNS and alerts](docs/guide/dns-and-alerts.md) · [logs and AccessKeys](docs/guide/access-logs.md) · [node upgrades](docs/guide/node-upgrades.md) · [backup recovery](docs/deploy/backup.md).
 
 ## Components
 

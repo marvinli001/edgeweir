@@ -25,8 +25,19 @@ it("publishes unchanged content above a restored cluster's reported LKG, ignorin
     nodes.map((node, index) => ({
       nodeId: node.id,
       appliedRevision: index === 0 ? 1234 : 9999,
+      revisionReceiptVerified: true,
     })),
   );
+  const [untrusted] = await ctx.db
+    .insert(schema.node)
+    .values({ clusterId: cluster.id, name: "legacy unverified" })
+    .returning();
+  if (!untrusted) throw new Error("missing node");
+  await ctx.db.insert(schema.nodeConfigStatus).values({
+    nodeId: untrusted.id,
+    appliedRevision: Number.MAX_SAFE_INTEGER - 1,
+    revisionReceiptVerified: false,
+  });
   const publish = () =>
     ctx.db.transaction((tx) =>
       publishRevision(tx, {

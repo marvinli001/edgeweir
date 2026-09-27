@@ -338,6 +338,7 @@ export const nodeConfigStatus = pgTable("node_config_status", {
     .references(() => node.id, { onDelete: "cascade" }),
   appliedRevision: bigint("applied_revision", { mode: "number" }).notNull().default(0),
   appliedContentHash: text("applied_content_hash").notNull().default(""),
+  revisionReceiptVerified: boolean("revision_receipt_verified").notNull().default(false),
   /** applying | applied | failed */
   state: text("state").notNull().default("applying"),
   message: text("message").notNull().default(""),

@@ -223,6 +223,19 @@ describe("node channel", async () => {
       expect(diff.payload.value.contentHash).toBe(revision.contentHash);
     }
 
+    // A node cannot poison the cluster's restore floor with an unissued revision.
+    expect(diff.revisionReceipt).not.toBe("");
+    await expect(
+      mtls.reportStatus({
+        appliedRevision: BigInt(Number.MAX_SAFE_INTEGER - 1),
+        appliedContentHash: revision.contentHash,
+        state: ApplyState.APPLIED,
+        dataPlaneHealthy: true,
+        revisionReceipt: diff.revisionReceipt,
+      }),
+    ).rejects.toMatchObject({ code: Code.FailedPrecondition });
+    expect((await latestRevision(ctx.db, clusterId))?.revision).toBe(2);
+
     // Apply receipt makes the node online with its revision.
     const status = await mtls.reportStatus({
       appliedRevision: 2n,

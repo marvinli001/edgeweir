@@ -821,10 +821,10 @@ done
 # process (runuser, root, is only the launcher).
 PROCS="$(in_install 'for d in /proc/[0-9]*; do
     c="$(tr "\0" " " <"$d/cmdline" 2>/dev/null || true)"
-    case "$c" in /usr/bin/edgeweir-node\ run*|nginx:*) echo "$(stat -c %U "$d") ${c:0:100}" ;; esac
+    case "$c" in /usr/bin/edgeweir-node\ run*|/usr/bin/edgeweir-node\ supervise*|nginx:*) echo "$(stat -c %U "$d") ${c:0:100}" ;; esac
   done')"
 echo "$PROCS"
-grep -q '^edgeweir /usr/bin/edgeweir-node run --manage-nginx' <<<"$PROCS" && grep -q '^edgeweir nginx: master process' <<<"$PROCS" &&
+grep -q '^edgeweir /usr/bin/edgeweir-node supervise --manage-nginx' <<<"$PROCS" && grep -q '^edgeweir /usr/bin/edgeweir-node run --manage-nginx' <<<"$PROCS" && grep -q '^edgeweir nginx: master process' <<<"$PROCS" &&
   grep -q '^edgeweir nginx: worker process' <<<"$PROCS" && ! grep -qv '^edgeweir ' <<<"$PROCS" ||
   fail "the agent and OpenResty must run as the edgeweir user: $PROCS"
 api GET "/nodes?clusterId=$INSTALL_CLUSTER" | jq -c '.[] | {name, online, agentVersion, engine, engineVersion, os, arch, appliedRevision, applyState}'
@@ -862,6 +862,16 @@ docker compose -f compose.e2e.yml --profile analytics up -d --wait clickhouse
 pnpm --filter @edgeweir/console exec tsx scripts/e2e-clickhouse.ts "http://localhost:${E2E_CLICKHOUSE_PORT:-19123}" || fail "ClickHouse integration failed"
 node scripts/e2e-restore.mjs || fail "backup recovery failed"
 pass "M6 log, AccessKey, ClickHouse and recovery checks passed"
+
+step "M6: signed node upgrade, canary promotion and automatic rollback"
+node scripts/e2e-upgrade-fixtures.mjs || fail "could not prepare signed upgrade fixtures"
+docker compose -f compose.e2e.yml --profile upgrades up -d upgrade-files node-upgrade-peer
+node scripts/e2e-m6-upgrades.mjs || fail "signed upgrade checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/m6-upgrades.spec.ts || fail "upgrade browser checks failed"
+fi
+pass "M6 signed upgrades and rollback passed"
+
 
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"

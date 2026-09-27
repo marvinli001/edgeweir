@@ -7,3 +7,4 @@ export * from "./dns";
 export * from "./domains";
 export * from "./logs";
 export * from "./rules";
+export * from "./upgrades";

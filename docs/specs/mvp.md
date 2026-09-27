@@ -2,7 +2,7 @@
 
 来源：[BOOTSTRAP.md](../../BOOTSTRAP.md) §2、§4，[ROADMAP.md](../../ROADMAP.md) 的 MVP 部分，[PROGRESS.md](../../PROGRESS.md) 的已知限制，2026-09-25 确定的界面规范（[ADR-0003](../adr/0003-ui-shadcn-preset.md) 决策 7–9、[ADR-0007](../adr/0007-auth-better-auth-multitenancy.md) 更新记录），对标调研（[docs/research/benchmark.md](../research/benchmark.md)），以及 2026-09-25 的收尾审计（[docs/audits/2026-09-25-wrapup.md](../audits/2026-09-25-wrapup.md)）。标有「对标补充」的条目是 2026-09-25 对照调研补进来的，标有「收尾延后」的条目来自收尾审计第 3 节（见 0.5）。
 
-MVP 分成 6 个里程碑，每个里程碑对应一个 `/goal` 会话（第 8 节）。按 M1 → M6 的顺序做，后一个里程碑依赖前一个的页面和数据模型。每个会话结束时更新 PROGRESS.md 和 ROADMAP.md 的勾选。M1、M2 已于 2026-09-25 完成；M3 于 2026-09-27 完成核心实现与本地验收（PROGRESS「MVP M3」）。M4 于 2026-09-27 完成本地验收；M5 核心链路已完成本地验收，可选 ClickHouse 与 M6 日志一并收尾；M6 仍在实施。
+MVP 分成 6 个里程碑，每个里程碑对应一个 `/goal` 会话（第 8 节）。按 M1 → M6 的顺序做，后一个里程碑依赖前一个的页面和数据模型。每个会话结束时更新 PROGRESS.md 和 ROADMAP.md 的勾选。M1、M2 已于 2026-09-25 完成；M3 于 2026-09-27 完成核心实现与本地验收（PROGRESS「MVP M3」）。M4 于 2026-09-27 完成本地验收；M5 与 M6 已完成核心实现和本地专项验收，包含 ClickHouse、签名升级和恢复；最终审查与整套 CI 记录以 PROGRESS 和 implementation/mvp-completion.md 为准。
 
 ## 0. 所有里程碑都要遵守
 

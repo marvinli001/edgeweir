@@ -299,7 +299,12 @@ async function insertRevision(
     .select({ revision: sql<number>`coalesce(max(${schema.nodeConfigStatus.appliedRevision}), 0)` })
     .from(schema.nodeConfigStatus)
     .innerJoin(schema.node, eq(schema.node.id, schema.nodeConfigStatus.nodeId))
-    .where(eq(schema.node.clusterId, clusterId));
+    .where(
+      and(
+        eq(schema.node.clusterId, clusterId),
+        eq(schema.nodeConfigStatus.revisionReceiptVerified, true),
+      ),
+    );
   const highest = Math.max(latest?.revision ?? 0, Number(reported?.revision ?? 0));
   if (!Number.isSafeInteger(highest) || highest >= Number.MAX_SAFE_INTEGER)
     throw new Error("configuration revision exhausted");

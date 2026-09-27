@@ -5,6 +5,12 @@
  * to the server's English `message`.
  */
 export const errorDefs = {
+  UPGRADE_RELEASE_UNAVAILABLE: { status: 502, params: [] },
+  UPGRADE_NOT_FOUND: { status: 404, params: [] },
+  UPGRADE_BUSY: { status: 409, params: [] },
+  UPGRADE_NODES_UNAVAILABLE: { status: 409, params: [] },
+  UPGRADE_NOT_READY: { status: 409, params: [] },
+
   ACCESS_KEY_NOT_FOUND: { status: 404, params: [] },
   ACCESS_KEY_READ_ONLY: { status: 403, params: [] },
   ALERT_CHANNEL_NOT_FOUND: { status: 404, params: [] },

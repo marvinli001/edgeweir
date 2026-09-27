@@ -1,0 +1,1 @@
+ALTER TABLE "node_upgrade_delivery" ADD COLUMN "healthy_since" timestamp with time zone;

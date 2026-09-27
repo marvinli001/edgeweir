@@ -44,6 +44,7 @@ services:
       # Release mirror for install.sh; scripts/e2e.sh fills the volume with
       # goreleaser snapshot packages of the node.
       EDGEWEIR_DOWNLOADS_DIR: /srv/downloads
+      EDGEWEIR_NODE_RELEASE_BASE_URL: http://upgrade-files/releases
       EDGEWEIR_ANALYTICS: ${E2E_ANALYTICS:-lite}
       EDGEWEIR_CLICKHOUSE_URL: http://clickhouse:8123
       EDGEWEIR_CLICKHOUSE_PASSWORD: e2e-clickhouse-password
@@ -187,6 +188,9 @@ services:
       # Trust store for HTTPS origins (instead of the system bundle): the
       # test CA only, so the self-signed :443 of "files" stays untrusted.
       EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
+      EDGEWEIR_UPGRADE_SOURCE: http://upgrade-files/releases
+      EDGEWEIR_UPGRADE_PUBLIC_KEY: /etc/edgeweir-upgrade/release.pub
+      EDGEWEIR_UPGRADE_ALLOW_HTTP: "true"
       EDGEWEIR_GEOIP_CITY: /etc/edgeweir-geoip/city.mmdb
       EDGEWEIR_GEOIP_ASN: /etc/edgeweir-geoip/asn.mmdb
     ports:
@@ -195,6 +199,7 @@ services:
       - "${E2E_NODE_TLS_PORT:-18443}:443/udp"
     volumes:
       - node-state:/var/lib/edgeweir-node
+      - upgrade-trust:/etc/edgeweir-upgrade:ro
       - geoip-test-data:/etc/edgeweir-geoip:ro
       - origin-ca:/etc/edgeweir-e2e:ro
     networks:
@@ -219,6 +224,34 @@ services:
       s3:
         condition: service_started
 
+  upgrade-files:
+    image: openresty/openresty:1.31.1.1-bookworm
+    profiles: ["upgrades"]
+    command: ["openresty", "-g", "daemon off;", "-c", "/etc/nginx/upgrade.conf"]
+    volumes:
+      - ./docker/e2e/upgrade.conf:/etc/nginx/upgrade.conf:ro
+      - upgrade-releases:/srv/upgrades:ro
+
+  node-upgrade-peer:
+    image: edgeweir-node:${E2E_TAG:-e2e}
+    profiles: ["upgrades"]
+    hostname: edge-upgrade-peer
+    environment:
+      EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
+      EDGEWEIR_GEOIP_CITY: /etc/edgeweir-geoip/city.mmdb
+      EDGEWEIR_GEOIP_ASN: /etc/edgeweir-geoip/asn.mmdb
+      EDGEWEIR_UPGRADE_SOURCE: http://upgrade-files/releases
+      EDGEWEIR_UPGRADE_PUBLIC_KEY: /etc/edgeweir-upgrade/release.pub
+      EDGEWEIR_UPGRADE_ALLOW_HTTP: "true"
+    volumes:
+      - node-upgrade-peer-state:/var/lib/edgeweir-node
+      - geoip-test-data:/etc/edgeweir-geoip:ro
+      - origin-ca:/etc/edgeweir-e2e:ro
+      - upgrade-trust:/etc/edgeweir-upgrade:ro
+    networks:
+      default: {}
+      isolated: {}
+
 networks:
   default:
     ipam:
@@ -230,6 +263,9 @@ networks:
         - subnet: ${E2E_ISOLATED_SUBNET:-172.28.214.0/24}
 
 volumes:
+  upgrade-trust:
+  upgrade-releases:
+  node-upgrade-peer-state:
   geoip-test-data:
   node-state:
   origin-ca:

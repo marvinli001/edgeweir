@@ -1,0 +1,1 @@
+ALTER TABLE "node_config_status" ADD COLUMN "revision_receipt_verified" boolean DEFAULT false NOT NULL;

@@ -24,6 +24,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
+import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -127,6 +128,7 @@ function ClustersPage() {
           />
           <NodeGroupsSection cluster={selected} />
           <NodesSection cluster={selected} onEnroll={() => setEnrollOpen(true)} />
+          <NodeUpgrades key={selected.id} clusterId={selected.id} />
           <RevisionsSection cluster={selected} />
           <EnrollDialog
             cluster={selected}

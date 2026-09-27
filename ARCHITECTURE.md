@@ -75,6 +75,10 @@ PostgreSQL 是唯一的外部依赖。`EDGEWEIR_ANALYTICS=clickhouse` 配合 `an
 
 `0017_m6_logs` 增加 `access_log`（UTC 日分区）、`node_log_cursor` 与站点采样率。`0018_retain_node_traffic` 移除流量历史对节点的级联删除，删除节点不再擦除网站统计。
 
+`0019_m6_upgrades` 与 `0020_m6_upgrade_health` 增加 `node_upgrade`、`node_upgrade_delivery`：任务按节点组试运行，负面心跳重置健康观察，显式推进剩余节点。节点用固定监督进程执行已验签程序与 Lua 的版本切换，启动失败恢复前一程序和配置，结果持久到控制面确认。
+
+`0021_authenticated_revision_floor` 为节点回执增加验证标记。GetConfig 发放绑定节点、集群、revision 和内容哈希的控制台认证凭证；节点保存到私有配置目录，在心跳中返回。恢复跳号只使用已验证的版本，旧的未认证上报不会影响发布序号。
+
 ## 4. 配置发布流水线
 
 1. 改变节点配置的操作（网站新增、编辑、删除，全站清除缓存代际号加一，源站允许清单变更，回滚）在同一个事务里：写业务表 → `publishRevision()` → 写审计。

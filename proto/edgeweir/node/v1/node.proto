@@ -156,6 +156,8 @@ message GetConfigResponse {
     NodeConfigDiff diff = 2;
   }
   google.protobuf.Timestamp generated_at = 3;
+  // Opaque console-authenticated proof of this node's issued revision.
+  string revision_receipt = 4;
 }
 
 // ApplyState is the outcome of applying a revision on a node.
@@ -182,6 +184,8 @@ message ReportStatusRequest {
   // Passive health state of the origins this node has seen failing; origins
   // without failures may be omitted and count as healthy.
   repeated OriginHealth origin_health = 9;
+  // Persisted with the LKG; authenticates higher revisions after a DB restore.
+  string revision_receipt = 10;
 }
 
 // OriginHealth is the passive health state of one origin on one node.
@@ -307,6 +311,7 @@ message NodeTask {
   oneof kind {
     PurgeTask purge = 3;
     PrefetchTask prefetch = 4;
+    UpgradeTask upgrade = 5;
   }
 }
 
@@ -406,4 +411,14 @@ message ReportLogsRequest {
 message ReportLogsResponse {
   uint64 batch_sequence = 1;
   uint32 accepted = 2;
+}
+
+// UpgradeTask selects one signed release. Trust roots and allowed download
+// sources are configured on the node, never supplied by this task.
+message UpgradeTask {
+  string version = 1;
+  string archive_url = 2;
+  string sha256 = 3;
+  string checksums_url = 4;
+  string signature_url = 5;
 }

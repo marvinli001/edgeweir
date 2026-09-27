@@ -129,6 +129,13 @@ import {
   starredSites,
   updateSite,
 } from "../services/sites";
+import {
+  cancelUpgrade,
+  createUpgrade,
+  listUpgrades,
+  nodeRelease,
+  promoteUpgrade,
+} from "../services/upgrades";
 import { createUser, listUsers, setUserAdmin, setUserDisabled } from "../services/users";
 import { admin, authed, maybeAuthed, orgManager, os, tenant } from "./base";
 
@@ -368,6 +375,23 @@ export const router = os.router({
     ),
     revoke: tenant.domainOwnership.revoke.handler(({ input, context }) =>
       revokeDomainOwnership(context.app, input.siteId, input.domain, context.scope, context.actor),
+    ),
+  },
+  upgrades: {
+    release: admin.upgrades.release.handler(({ input, context }) =>
+      nodeRelease(context.app, input.version),
+    ),
+    list: admin.upgrades.list.handler(({ input, context }) =>
+      listUpgrades(context.app, input.clusterId),
+    ),
+    create: admin.upgrades.create.handler(({ input, context }) =>
+      createUpgrade(context.app, input, context.actor),
+    ),
+    promote: admin.upgrades.promote.handler(({ input, context }) =>
+      promoteUpgrade(context.app, input.id, context.actor),
+    ),
+    cancel: admin.upgrades.cancel.handler(({ input, context }) =>
+      cancelUpgrade(context.app, input.id, context.actor),
     ),
   },
   logs: {

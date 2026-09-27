@@ -22,6 +22,11 @@ export const nodeErrorDefs = {
  * set by the console (task_expired, node_disabled).
  */
 export const taskErrorDefs = {
+  upgrade_interrupted: { params: ["version"] },
+  upgrade_rejected: { params: ["version"] },
+  upgrade_rolled_back: { params: ["version"] },
+  upgrade_expired: { params: [] },
+  upgrade_cancelled: { params: [] },
   /** The first failed URL; {reason} is one of prefetchFailureReasonDefs. */
   prefetch_failed: { params: ["failed", "total", "url", "reason"] },
   prefetch_timeout: { params: ["done", "total"] },
