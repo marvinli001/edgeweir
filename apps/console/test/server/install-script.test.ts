@@ -21,6 +21,18 @@ for (const name of ["curl", "cosign", "apt-get", "dnf", "yum", "systemctl", "tar
   writeFileSync(path, `#!/bin/sh\necho "${name} $*" >> "${calls}"\nexit 97\n`);
   chmodSync(path, 0o755);
 }
+/**
+ * The host the script checks: an unprivileged user on Linux, whoever runs the
+ * tests (as root the checks would go on to depend on the machine, e.g. systemd).
+ */
+for (const [name, answer] of Object.entries({
+  uname: '[ "$1" = "-s" ] && echo Linux',
+  id: '[ "$1" = "-u" ] && echo 1000',
+})) {
+  const path = join(stubs, name);
+  writeFileSync(path, `#!/bin/sh\n${answer} && exit 0\necho "${name} $*" >> "${calls}"\nexit 97\n`);
+  chmodSync(path, 0o755);
+}
 afterAll(() => rmSync(stubs, { recursive: true, force: true }));
 
 function run(args: string[], env: Record<string, string> = {}, input = script) {
@@ -110,13 +122,13 @@ describe("install.sh", () => {
 
     const file = join(stubs, "token");
     writeFileSync(file, `${TOKEN}\n`);
-    // Past token validation, the next check (Linux / root) stops an unprivileged test run.
+    // Past token validation, the root check stops the (stubbed) unprivileged run.
     for (const res of [
       run([...valid, "--token-file", file]),
       run(valid, { EDGEWEIR_TOKEN: TOKEN }),
     ]) {
       expect(res.status).toBe(1);
-      expect(res.stderr).toMatch(/Linux only|run as root/);
+      expect(res.stderr).toContain("run as root");
       expect(res.calls).toBe("");
     }
   });
