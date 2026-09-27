@@ -25,7 +25,7 @@ Edgeweir (pronounced *EDGE-weer*) is named after a weir. Around 256 BC, Li Bing 
 | DNS and visibility | Domain proof, independent DNS revisions, healthy-node reconciliation, deduplicated traffic, rollups, Top URL/IP, alerts and subscriptions |
 | Operations | Sampled logs and CSV, optional ClickHouse, read-only/revocable AccessKeys, signed canary upgrades with rollback, benchmark and backup recovery |
 
-Verification uses real OpenResty nodes, PostgreSQL, Pebble, ClickHouse, local DNS and notification fixtures, plus browser flows. Upgrade tests sign real Linux archives with a local fixture key, check wrong-key rejection, and recover from a signed executable that fails to start. Recovery tests restore a real database backup and prove that newer node revisions remain updateable. See [implementation evidence](docs/implementation/mvp-completion.md), [MVP specification](docs/specs/mvp.md), and [console CI](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml) / [node CI](https://github.com/marvinli001/edgeweir-node/actions/workflows/ci.yml).
+Verification uses real OpenResty nodes, PostgreSQL, Pebble, ClickHouse, local DNS and notification fixtures, plus browser flows. Upgrade tests sign real Linux archives with a local fixture key, check wrong-key rejection, and recover from a signed executable that fails to start. Recovery tests restore a real database backup and prove that newer node revisions remain updateable. See [console CI](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml) / [node CI](https://github.com/marvinli001/edgeweir-node/actions/workflows/ci.yml).
 
 Live DNS-provider accounts, ZeroSSL EAB and external notification accounts still require operator-specific acceptance. The stock engine does not include Brotli or Zstd. No official GitHub OIDC-signed binary release has been published or accepted yet; evaluate with a source build. These checks are reproducible evidence, not a production reliability or security guarantee.
 
@@ -173,7 +173,6 @@ proto/                     protobuf managed by buf; the single source of truth s
 helpers/certd/             edgeweir-certd (Go): ACME via lego and DNS records via libdns
 scripts/e2e.sh             end-to-end test driver
 docs/adr/                  architecture decision records
-docs/specs/                MVP specification
 docs/guide/                behaviour guides (origins and cache)
 docs/deploy/               deployment guides
 ```
@@ -182,11 +181,10 @@ docs/deploy/               deployment guides
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): how the pieces fit together
 - [docs/adr/](docs/adr/README.md): architecture decision records (in Chinese)
-- [ROADMAP.md](ROADMAP.md): MVP, v1 and v2 feature plan; [docs/specs/mvp.md](docs/specs/mvp.md): the MVP milestones
+- [ROADMAP.md](ROADMAP.md): MVP, v1 and v2 feature plan
 - [docs/guide/origins-and-cache.md](docs/guide/origins-and-cache.md): origin pools, cache rules, purge and prefetch (in Chinese)
 - [SECURITY.md](SECURITY.md): trust baseline, vulnerability reporting, verifying releases
 - [CONTRIBUTING.md](CONTRIBUTING.md): how to contribute
-- [Cloud development](docs/development/cloud.md): preparing a Claude cloud checkout
 - [HTTPS and certificates](docs/guide/https.md): issuance, renewal and protocol limits
 
 ## License

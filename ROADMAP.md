@@ -2,7 +2,7 @@
 
 产品范围按 2026-09-26 的 [ADR-0019](docs/adr/0019-open-core-and-commercial-products.md) 划分：本文件跟踪 AGPL-3.0-only 开源核心；客户门户、套餐计费、财务和分销另属商业运营产品。BOOTSTRAP 中这些功能的旧归属已被取代，已实现的组织、成员和隔离能力保留。
 
-本文件是 Edgeweir 开源核心的功能范围与阶段划分，历史需求来自 [BOOTSTRAP.md](BOOTSTRAP.md) §3（Phase 0）和 §4（MVP、v1、v2），对标调研补充的条目（[docs/research/benchmark.md](docs/research/benchmark.md)），以及 2026-09-25 收尾审计的延后项（[docs/audits/2026-09-25-wrapup.md](docs/audits/2026-09-25-wrapup.md) 第 3 节，标为「收尾延后」，归属见 [docs/specs/mvp.md](docs/specs/mvp.md) 0.5），按 ADR-0019 的商业边界整理后覆盖 edgeweir（控制面）和 edgeweir-node（节点）两个仓库。每个阶段内按领域分组；勾选表示已完成并合入 master。设计依据见 [docs/adr/](docs/adr/README.md)。
+本文件是 Edgeweir 开源核心的功能范围与阶段划分，历史需求来自 BOOTSTRAP §3（Phase 0）和 §4（MVP、v1、v2），对标调研补充的条目，以及 2026-09-25 收尾审计的延后项（标为「收尾延后」），按 ADR-0019 的商业边界整理后覆盖 edgeweir（控制面）和 edgeweir-node（节点）两个仓库。每个阶段内按领域分组；勾选表示已完成并合入 master。设计依据见 [docs/adr/](docs/adr/README.md)。
 
 ## Phase 0（已完成于本仓库初始化）
 
@@ -10,7 +10,7 @@
 
 ### 仓库基础
 
-- [x] 两个仓库：LICENSE（AGPL-3.0）、中英双语 README（含品牌故事）、ARCHITECTURE.md、docs/adr/、ROADMAP.md、SECURITY.md、CONTRIBUTING.md、CLAUDE.md、.editorconfig
+- [x] 两个仓库：LICENSE（AGPL-3.0）、中英双语 README（含品牌故事）、ARCHITECTURE.md、docs/adr/、ROADMAP.md、SECURITY.md、CONTRIBUTING.md、.editorconfig
 - [x] edgeweir 的 GitHub Actions：lint、typecheck、test、构建镜像
 - [x] edgeweir-node 的 GitHub Actions：go test、goreleaser snapshot
 

@@ -50,7 +50,7 @@ PostgreSQL 是唯一的外部依赖。`EDGEWEIR_ANALYTICS=clickhouse` 配合 `an
 | `helpers/certd` | Go 编写的 `edgeweir-certd`（ACME 与 DNS helper），多阶段构建进同一镜像 |
 | `compose*.yml`、`Dockerfile`、`docker/` | 部署；`compose.dev.yml` 是本地开发数据库，`compose.e2e.yml` 用于端到端测试 |
 | `scripts/e2e.sh` | 端到端测试脚本：注册、配置下发、缓存、刷新预热、源站、S3、故障切换，认证路由白名单、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、分片 Range，`install.sh` 在干净容器里安装 goreleaser snapshot 包；中间穿插 Playwright |
-| `docs/` | `adr/`（架构决策，edgeweir-node 的 `docs/adr` 由该仓库的 `scripts/sync-adr.sh` 镜像）、`specs/mvp.md`、`guide/`、`deploy/`、`audits/`、`research/` |
+| `docs/` | `adr/`（架构决策，edgeweir-node 的 `docs/adr` 由该仓库的 `scripts/sync-adr.sh` 镜像）、`guide/`、`deploy/` |
 
 ## 3. 数据模型
 

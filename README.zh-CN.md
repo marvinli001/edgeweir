@@ -25,7 +25,7 @@ Edgeweir（读作 EDGE-weer）的名字来自「堰」（weir）。公元前 256
 | DNS 与观测 | 域名归属、独立 DNS 版本、健康节点调度、统计去重与汇总、Top URL/IP、告警及订阅 |
 | 运维 | 采样日志与 CSV、可选 ClickHouse、只读及可吊销 AccessKey、签名灰度升级与回滚、性能基线、备份恢复 |
 
-验收使用真实 OpenResty 节点、PostgreSQL、Pebble、ClickHouse、本地 DNS 和通知模拟服务，并覆盖浏览器流程。升级测试用本地临时密钥签署真实 Linux 归档，验证错误密钥签名拒绝，以及已签名坏程序启动失败后的回滚。恢复测试执行真实 pg_dump / pg_restore，并证明恢复后仍可向已应用更高 revision 的节点发布配置。见[实现证据](docs/implementation/mvp-completion.md)、[MVP 规格](docs/specs/mvp.md)及[控制面 CI](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml) / [节点 CI](https://github.com/marvinli001/edgeweir-node/actions/workflows/ci.yml)。
+验收使用真实 OpenResty 节点、PostgreSQL、Pebble、ClickHouse、本地 DNS 和通知模拟服务，并覆盖浏览器流程。升级测试用本地临时密钥签署真实 Linux 归档，验证错误密钥签名拒绝，以及已签名坏程序启动失败后的回滚。恢复测试执行真实 pg_dump / pg_restore，并证明恢复后仍可向已应用更高 revision 的节点发布配置。见[控制面 CI](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml) / [节点 CI](https://github.com/marvinli001/edgeweir-node/actions/workflows/ci.yml)。
 
 真实 DNS 服务商、ZeroSSL EAB 和外部通知账户仍需按运维方自己的凭据验收。所选原版引擎不含 Brotli / Zstd；正式 GitHub OIDC 签名二进制尚未发布和验收，当前请从源码构建评估。这里提供可复现的证据，不作线上可靠性或绝对安全保证。
 
@@ -173,7 +173,6 @@ proto/                     buf 管理的 protobuf，与 edgeweir-node 共享的�
 helpers/certd/             edgeweir-certd（Go）：lego 负责 ACME，libdns 及适配器负责 DNS 记录
 scripts/e2e.sh             端到端测试脚本
 docs/adr/                  架构决策记录
-docs/specs/                MVP 规格
 docs/guide/                行为说明（源站与缓存）
 docs/deploy/               部署文档
 ```
@@ -182,11 +181,10 @@ docs/deploy/               部署文档
 
 - [ARCHITECTURE.md](ARCHITECTURE.md)：整体架构
 - [docs/adr/](docs/adr/README.md)：架构决策记录
-- [ROADMAP.md](ROADMAP.md)：MVP、v1、v2 功能规划；[docs/specs/mvp.md](docs/specs/mvp.md)：MVP 各里程碑
+- [ROADMAP.md](ROADMAP.md)：MVP、v1、v2 功能规划
 - [docs/guide/origins-and-cache.md](docs/guide/origins-and-cache.md)：源站池、缓存规则、刷新与预热
 - [SECURITY.md](SECURITY.md)：信任基线、漏洞报告、发布物校验
 - [CONTRIBUTING.md](CONTRIBUTING.md)：贡献指南
-- [云端开发](docs/development/cloud.md)：Claude 云端检出的准备与验证边界
 - [HTTPS 与证书](docs/guide/https.md)：签发、续期与协议限制
 
 ## 许可证

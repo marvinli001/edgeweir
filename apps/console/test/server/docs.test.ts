@@ -1,4 +1,4 @@
-import { globSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, globSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { schema } from "@edgeweir/db";
 import { getTableName, is, Table } from "drizzle-orm";
@@ -97,11 +97,13 @@ describe("CP-H8: SSH credentials are never stored", () => {
   const docs: [string, string][] = [
     ["SECURITY.md (Chinese)", chinese],
     ["SECURITY.md (English summary)", english],
-    ["CLAUDE.md", read("CLAUDE.md")],
-    ["docs/specs/mvp.md", read("docs/specs/mvp.md")],
     ["README.md", read("README.md")],
     ["README.zh-CN.md", read("README.zh-CN.md")],
     ["ARCHITECTURE.md", read("ARCHITECTURE.md")],
+    // Git-ignored maintainer documents: checked in checkouts that have them.
+    ...["CLAUDE.md", "docs/specs/mvp.md"]
+      .filter((file) => existsSync(resolve(repo, file)))
+      .map((file): [string, string] => [file, read(file)]),
   ];
 
   it("finds both parts of SECURITY.md", () => {

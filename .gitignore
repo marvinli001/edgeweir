@@ -1,26 +1,74 @@
+# Dependencies and build output
 node_modules/
+.pnpm-store/
 dist/
 .turbo/
+*.tsbuildinfo
 coverage/
+.eslintcache
+
+# Logs and local overrides
 *.log
 *.local
+
+# Environment and secrets (test-only fixtures are allow-listed)
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+!docker/e2e/pebble/test-only.key
+
+# OS and editors
 .DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
 # Playwright
 test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
 # e2e runtime state
 .e2e/
+
 # Go helper build output
-helpers/certd/bin/
-# Claude Code local settings (launch.json and settings.json are shared)
-.claude/*
-!.claude/launch.json
-!.claude/settings.json
+helpers/*/bin/
+
+# AI coding assistants: instructions, settings and session state stay local
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.gemini/
+.codex/
+.cursor/
+.cursorrules
+.windsurf/
+.windsurfrules
+.clinerules
+.roo/
+.kiro/
+.continue/
+.aider*
+.mcp.json
+.github/copilot-instructions.md
+
+# Internal development records (maintainer-only, not published)
+/BOOTSTRAP.md
+/PROGRESS.md
+/docs/audits/
+/docs/development/
+/docs/implementation/
+/docs/research/
+/docs/specs/
