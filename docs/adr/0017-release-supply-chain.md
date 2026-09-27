@@ -76,3 +76,9 @@ Phase 0 范围：
 > - 2026-09-25（收尾）：
 >   - **Go 工具链固定到补丁版本（决策第 5 条）。** edgeweir-node 的 `go.mod` 从 `go 1.27` 改为 `go 1.27.1`，CI 的 setup-go 读取它，本地构建和 CI 用同一个工具链。控制台 `helpers/certd/go.mod` 同样改为 `go 1.27.1`（镜像构建用 `golang:1.27.1-alpine`，CI 的 setup-go 读 go.mod）。
 >   - **首次发布前按 digest / SHA 固定（延后项 D5）。** 目前容器基础镜像只按 tag 固定（`node:24.21.0-alpine`、`golang:1.27.1-alpine`、`openresty/openresty:1.31.1.1-bookworm`、`postgres:18.6-alpine` 等），GitHub Actions 只按主版本 tag 引用（`actions/checkout@v7`、`sigstore/cosign-installer@v4`、`goreleaser/goreleaser-action@v7` 等）。tag 可以被移动，不满足"同一个 tag、同一个工具链重建出相同产物"。首个正式 tag 之前，两个仓库的 Dockerfile、compose 文件和工作流改为按 digest（`image@sha256:...`）和完整 commit SHA（`uses: owner/action@<40 位 SHA> # vX.Y.Z`）固定；列入 [ROADMAP.md](../../ROADMAP.md)「首次发布前」。
+> - 2026-09-27（首次发布前，延后项 D5 完成）：
+>   - **镜像按 digest、Actions 按完整 SHA 固定。** 两个仓库的 Dockerfile（含 `# syntax=` 前端，`docker/dockerfile:1` 当时解析为 1.26.0）、compose 文件、Makefile 与 e2e 用到的第三方镜像写成 `tag@sha256:<多架构 index digest>`，工作流写成 `owner/action@<40 位 commit SHA> # vX.Y.Z`。固定的是当时各主版本 tag 指向的同一提交和同一 index，CI 行为不变。控制台和节点自己构建的镜像（`edgeweir`、`edgeweir-node`、`ghcr.io/marvinli001/edgeweir:<版本>`）仍按 tag 引用：它们不是输入依赖，正式发布后由签名与 digest 校验（SECURITY.md）。
+>   - **CI 的 goreleaser 与发布一致。** CI 中的 `version: "~> v2"` 改为与 release 工作流相同的 `v2.18.2`（当时的最新稳定版），快照构建验证的就是发布用的工具链。
+>   - **防回退。** 控制台由 Vitest（`apps/console/test/server/supply-chain-pins.test.ts`）、节点由 `scripts/check-pins.sh`（`make pin-check`，CI 的 test 任务执行）检查：未固定的第三方镜像或 Action 直接失败。更新方法见 CONTRIBUTING.md「更新固定的镜像与 Actions」。
+>   - **仍未固定的输入**：控制台 Dockerfile 的 `apk add tini` 在构建时取 Alpine 软件源当时的版本；setup-node 按 `.nvmrc` 的主版本 `24` 选择补丁版本（只影响 CI 检查，不进入镜像）。它们影响的是逐字节可复现，留给"独立重建比对"一并处理。
+

@@ -132,7 +132,7 @@
 
 ## 首次正式发布前
 
-- [ ] 容器基础镜像按 digest、GitHub Actions 按完整 commit SHA 固定，两个仓库都要做（收尾延后 D5，[ADR-0017](docs/adr/0017-release-supply-chain.md) 收尾记录）
+- [x] 容器基础镜像按 digest、GitHub Actions 按完整 commit SHA 固定，两个仓库都要做（收尾延后 D5，[ADR-0017](docs/adr/0017-release-supply-chain.md) 收尾与 2026-09-27 记录；控制台测试与节点 `make pin-check` 防回退）
 - [ ] 两个仓库的 release 工作流（签名、provenance、推送镜像）按 [SECURITY.md](SECURITY.md) 演练一遍校验命令
 - [x] 公开仓库的节点 CI 从 GitHub 拉取 proto/v0.7.0，并检查生成代码一致性（收尾延后 D6）
 
