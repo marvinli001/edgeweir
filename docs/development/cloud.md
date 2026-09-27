@@ -13,7 +13,7 @@ pnpm test
 pnpm build
 ```
 
-这些检查使用内存 PostgreSQL（PGlite），不要求 Docker。涉及 Go helper 或节点时，还需要对应 `go.mod` 的 Go 工具链。完整 `pnpm e2e` 需要两个仓库、Docker、Go、goreleaser 和 syft；是否可在云端运行由实际环境能力决定，不能用单元测试代替该项验收。
+这些检查使用内存 PostgreSQL（PGlite），不要求 Docker。涉及 Go helper 或节点时，还需要对应 `go.mod` 的 Go 工具链。完整 `pnpm e2e` 需要两个仓库、Docker、Go、goreleaser、syft 和 cosign（版本见 CI 工作流）；是否可在云端运行由实际环境能力决定，不能用单元测试代替该项验收。
 
 2026-09-26 已在干净的 `node:22-bookworm` 容器中验证远端启动分支：安装仓库要求的 Node/pnpm 后，lint 和全部 workspace 类型检查通过；本地启动分支验证为无操作。Anthropic 实际云端的网络策略和会话钩子触发仍需在首次云端会话读回确认。
 

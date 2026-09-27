@@ -56,7 +56,7 @@ PostgreSQL 是唯一的外部依赖。`EDGEWEIR_ANALYTICS=clickhouse` 配合 `an
 
 - **DNS 挑战恢复**：`dns_challenge_lease` 由 `0008_m3_dns_cleanup` 创建。在发送 DNS 写请求之前保存 TXT 清理责任，超时、失败与重启后只清理本次操作的记录值。
 
-- **证书与 DNS 凭据（M3 集成中）**：`certificate` 存证书链、指纹、到期与续期状态，私钥和 ACME 账户分别信封加密；`dns_credential` 存组织级 DNS 服务商凭据的信封；`acme_challenge` 存短期公开的 HTTP-01 响应。迁移 `0006_m3_certificates` 同时增加节点能力清单与网站 TLS 策略；`0007_m3_challenge_attempts` 为 `acme_challenge` 增加必填的操作开始时间 `operation_started_at`。
+- **证书与 DNS 凭据（M3）**：`certificate` 存证书链、指纹、到期与续期状态，私钥和 ACME 账户分别信封加密；`dns_credential` 存组织级 DNS 服务商凭据的信封；`acme_challenge` 存短期公开的 HTTP-01 响应。迁移 `0006_m3_certificates` 同时增加节点能力清单与网站 TLS 策略；`0007_m3_challenge_attempts` 为 `acme_challenge` 增加必填的操作开始时间 `operation_started_at`。
 
 - **身份与租户**（better-auth 生成）：`user`、`session`、`account`、`verification`、`organization`、`member`、`invitation`、`two_factor`、`passkey`、`apikey`、`rate_limit`（认证接口的限速计数）。平台管理员 = `user.role` 含 `admin`；租户 = organization；成员角色在 `member.role`。组织的默认集群和"要求两步验证"在自有表 `organization_settings`。
 - **基础设施**（平台管理员）：`region`（区域字典）；`cluster` → `node_group`（可引用区域）→ `node`（`node_ip`）；`enrollment_token`（只存 SHA-256）；`node_certificate_revocation`（删除节点时吊销的证书序列号）。
@@ -78,6 +78,10 @@ PostgreSQL 是唯一的外部依赖。`EDGEWEIR_ANALYTICS=clickhouse` 配合 `an
 `0019_m6_upgrades` 与 `0020_m6_upgrade_health` 增加 `node_upgrade`、`node_upgrade_delivery`：任务按节点组试运行，负面心跳重置健康观察，显式推进剩余节点。节点用固定监督进程执行已验签程序与 Lua 的版本切换，启动失败恢复前一程序和配置，结果持久到控制面确认。
 
 `0021_authenticated_revision_floor` 为节点回执增加验证标记。GetConfig 发放绑定节点、集群、revision 和内容哈希的控制台认证凭证；节点保存到私有配置目录，在心跳中返回。恢复跳号只使用已验证的版本，旧的未认证上报不会影响发布序号。
+
+`0022_bound_traffic_counters` 将既有流量计数归一到 API 可精确表示的非负整数范围。分钟写入及小时/天汇总使用有上限的 numeric 中间运算，防止累计值使维护事务反复失败；流量、日志和升级到期维护分别执行。
+
+每集群最多发布 512 个网站，对应节点固定的逐站点限速分区。普通租户与后台任务不能引入现有活动节点尚不支持的新能力；平台管理员仍可明确发布需要升级的配置，节点继续执行原有的能力门槛。
 
 ## 4. 配置发布流水线
 

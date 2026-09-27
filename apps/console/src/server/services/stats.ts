@@ -2,6 +2,7 @@ import { isIP } from "node:net";
 import { type Database, schema } from "@edgeweir/db";
 import { eq, sql } from "drizzle-orm";
 import type { Executor } from "./revisions";
+import { addTrafficCounter } from "./stats-counter";
 
 /** Buckets accepted per ReportStats call; the rest of a larger batch is dropped. */
 export const MAX_STATS_PER_REPORT = 5000;
@@ -87,15 +88,16 @@ export async function ingestMinuteStats(
       });
       continue;
     }
-    b.requests += s.requests;
-    b.bytes_sent += s.bytesSent;
-    b.bytes_received += s.bytesReceived;
-    b.cache_hits += s.cacheHits;
-    b.cache_misses += s.cacheMisses;
+    b.requests = addTrafficCounter(b.requests, s.requests);
+    b.bytes_sent = addTrafficCounter(b.bytes_sent, s.bytesSent);
+    b.bytes_received = addTrafficCounter(b.bytes_received, s.bytesReceived);
+    b.cache_hits = addTrafficCounter(b.cache_hits, s.cacheHits);
+    b.cache_misses = addTrafficCounter(b.cache_misses, s.cacheMisses);
     b.top_urls = mergeTop(b.top_urls, cleanTop(s.topUrls, "url"));
     b.top_ips = mergeTop(b.top_ips, cleanTop(s.topIps, "ip"));
     for (const [code, n] of Object.entries(s.statusCodes)) {
-      if (/^[1-5][0-9]{2}$/.test(code)) b.status_codes[code] = (b.status_codes[code] ?? 0) + n;
+      if (/^[1-5][0-9]{2}$/.test(code))
+        b.status_codes[code] = addTrafficCounter(b.status_codes[code] ?? 0, n);
     }
   }
   if (buckets.size === 0) return 0;
@@ -111,21 +113,21 @@ export async function ingestMinuteStats(
       cache_hits bigint, cache_misses bigint, status_codes jsonb, top_urls jsonb, top_ips jsonb)
     join ${schema.site} on ${schema.site.id} = b.site_id and ${schema.site.clusterId} = ${node.clusterId}::uuid
     on conflict (minute, node_id, site_id) do update set
-      requests = ${t}.requests + excluded.requests,
-      bytes_sent = ${t}.bytes_sent + excluded.bytes_sent,
-      bytes_received = ${t}.bytes_received + excluded.bytes_received,
-      cache_hits = ${t}.cache_hits + excluded.cache_hits,
-      cache_misses = ${t}.cache_misses + excluded.cache_misses,
+      requests = least(9007199254740991::numeric, ${t}.requests::numeric + excluded.requests),
+      bytes_sent = least(9007199254740991::numeric, ${t}.bytes_sent::numeric + excluded.bytes_sent),
+      bytes_received = least(9007199254740991::numeric, ${t}.bytes_received::numeric + excluded.bytes_received),
+      cache_hits = least(9007199254740991::numeric, ${t}.cache_hits::numeric + excluded.cache_hits),
+      cache_misses = least(9007199254740991::numeric, ${t}.cache_misses::numeric + excluded.cache_misses),
       top_urls = (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (
-        select k, coalesce((${t}.top_urls ->> k)::bigint,0)+coalesce((excluded.top_urls ->> k)::bigint,0) as n
+        select k, least(9007199254740991::numeric, coalesce((${t}.top_urls ->> k)::numeric,0)+coalesce((excluded.top_urls ->> k)::numeric,0)) as n
         from jsonb_object_keys(${t}.top_urls || excluded.top_urls) as k order by n desc,k limit 50) q),
       top_ips = (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (
-        select k, coalesce((${t}.top_ips ->> k)::bigint,0)+coalesce((excluded.top_ips ->> k)::bigint,0) as n
+        select k, least(9007199254740991::numeric, coalesce((${t}.top_ips ->> k)::numeric,0)+coalesce((excluded.top_ips ->> k)::numeric,0)) as n
         from jsonb_object_keys(${t}.top_ips || excluded.top_ips) as k order by n desc,k limit 50) q),
       -- Sum per-status counters key by key.
       status_codes = (
-        select coalesce(jsonb_object_agg(k, coalesce((${t}.status_codes ->> k)::bigint, 0)
-          + coalesce((excluded.status_codes ->> k)::bigint, 0)), '{}'::jsonb)
+        select coalesce(jsonb_object_agg(k, least(9007199254740991::numeric, coalesce((${t}.status_codes ->> k)::numeric, 0)
+          + coalesce((excluded.status_codes ->> k)::numeric, 0))), '{}'::jsonb)
         from jsonb_object_keys(${t}.status_codes || excluded.status_codes) as k
       )
     returning site_id, minute
@@ -164,7 +166,8 @@ function cleanTop(
 }
 function mergeTop(left: Record<string, number>, right: Record<string, number>) {
   const values: Record<string, number> = Object.assign(Object.create(null), left);
-  for (const [key, n] of Object.entries(right)) values[key] = (values[key] ?? 0) + n;
+  for (const [key, n] of Object.entries(right))
+    values[key] = addTrafficCounter(values[key] ?? 0, n);
   return Object.fromEntries(
     Object.entries(values)
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))

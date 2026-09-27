@@ -468,7 +468,7 @@ MVP M2 新增（2026-09-25）：
 - [ ] DNS 服务商/ZeroSSL 的真实账户验收需要运营者凭据，当前不声明已完成。
 - [ ] Brotli/Zstd：官方镜像缺少模块，按规格保留不可用状态，不声称已实现。
 
-M4–M6 仍继续实施，详见 docs/implementation/mvp-completion.md。基础安全修复已发布：控制面 1539652、节点 06a074f，两个 SHA 的 GitHub CI 都通过。
+M4–M6 后续已完成实现，当前状态见 docs/implementation/mvp-completion.md。基础安全修复已发布：控制面 1539652、节点 06a074f，两个 SHA 的 GitHub CI 都通过。
 
 ## MVP M4（2026-09-27）
 
@@ -495,19 +495,19 @@ M3 的两个仓库远端 CI 已通过（控制面 e300f8f，节点 25c5d1a）。
 - [x] `M5 E2E OK`：真实 TXT 查询、Go helper、DNS 摘除/恢复/修复、对应租户的离线 Webhook、真实节点统计与 Top URL。
 - [x] Playwright M5：DNS 创建/保存、渠道配置、域名归属、统计和订阅；375px 深色，无 pageerror 与横向溢出。
 - [x] workspace 测试通过（随后新增的供应商协议测试另行通过）、TypeScript、Biome/buf lint、Go race 与 Lua 测试；实际 TLS SMTP 通过本地接收器验收。
-- [ ] ClickHouse 可选存储与 M6 访问日志一并完成；M6 运维验收尚未完成。
+- [x] ClickHouse 可选存储已随 M6 访问日志完成，真实 26.9 容器通过写入、去重和查询验收。
 - [ ] 不声明外部 DNS/钉钉/企业微信/Telegram/ZeroSSL 真实账户验收已完成。
 
 协议版本 proto/v0.5.0。可复核范围和迁移注意事项见 [DNS 与告警](docs/guide/dns-and-alerts.md)。
 
-## MVP M6 日志、AccessKey 与恢复检查点（节点升级仍待完成）
+## MVP M6 日志、AccessKey 与恢复检查点（升级验收见后续记录）
 
 - [x] 默认关闭的站点采样日志、脱敏、节点私有有界队列、持久批次去重、PostgreSQL 日分区 / 7 天保留、筛选与 CSV。
 - [x] 可选 ClickHouse 原始日志与分钟快照，真实 26.9 容器通过 FINAL 去重、路径/状态筛选与重试测试。界面/告警仍共用 PostgreSQL 精确汇总。
 - [x] AccessKey 只读/读写、最后使用、吊销；REST 写请求 403，吊销后 401。
 - [x] 删除节点保留网站流量与日志；备份恢复 D3：数据库 92 → 节点 93 → 恢复后发布 94，真实新数据库 pg_restore 与节点回执验收通过。
 - [x] `M6 LOGS E2E OK`；Playwright 日志查询、导出、吊销通过。
-- [ ] 节点签名升级、灰度推进、失败回滚，以及最终全链路回归，继续实施。
+- [x] 节点签名升级、试运行组推进与失败回滚已完成本地验收；最终全链路回归见后续记录。
 
 性能初始基线（2026-09-27，本机 macOS arm64 / Colima，oha 1.16.0，30 万个已预热缓存请求、并发 32）：35,212.91 成功请求/秒，p50 0.827 ms，p99 2.371 ms，200 响应 100%，节点进程 VmRSS 合计 75.06 MiB，容器内存 53.73 MiB。命令：`OHA_BIN=.e2e/tools/oha BENCH_REQUESTS=300000 BENCH_OUTPUT=.e2e/bench-final.json bash scripts/bench.sh`。这是首个基线，不是线上容量保证；没有可比的历史版本回退结论。`BENCH_BASELINE` 可对照同机器、同参数的 summary.json，超过 20% 回退会在结果中标出，CI 不设硬门槛。
 
@@ -519,8 +519,30 @@ M3 的两个仓库远端 CI 已通过（控制面 e300f8f，节点 25c5d1a）。
 - [x] Playwright 从界面发起 `0.0.5-m6`、等待试运行组、推进第二台节点，通过 375px 深色检查；修正提交后未关闭的对话框。
 - [x] Go race 覆盖重启恢复、ACK 写入失败不丢结果、第二个监督进程不能回滚正在执行的任务、归档穿越/链接/尺寸上限及输出限额。
 - [x] M5 + M6 日志/权限/恢复的完整远端 CI 已通过：控制面 `0b6ffd6`，节点协议文档修正后的 `4bf7e4e`。
-- [ ] 签名升级所在最终 revision 的安全复核、全链路 CI 和发布后的 SHA 核对仍在收尾。
+- [x] 签名升级实现的源码复核及本地验收已完成；`e6b6ddd` 的远端 M1–M6 全链路 CI 通过。后续修复按对应提交的公开 CI 核对。
 
-升级指南见 [docs/guide/node-upgrades.md](docs/guide/node-upgrades.md)。活动 agent 与 Lua 可自升级；固定监督进程、cosign 和 OpenResty 的安全更新仍通过完整镜像或系统包部署。协议准备更新为 proto/v0.7.0；未发布正式二进制发行版。
+升级指南见 [docs/guide/node-upgrades.md](docs/guide/node-upgrades.md)。活动 agent 与 Lua 可自升级；固定监督进程、cosign 和 OpenResty 的安全更新仍通过完整镜像或系统包部署。协议已发布为 proto/v0.7.0；未发布正式二进制发行版。
 
 最终复核补强：恢复跳号改为验证控制台签发的配置回执，阻止被攻陷节点用极大版本号锁死集群；验证节点、集群、版本和哈希绑定，忽略旧版未认证高水位。监督进程识别系统包 / 镜像中的程序与 Lua 变更，新安装的基础版本不再被状态卷中的旧自升级程序遮蔽。两者均补充回归测试。
+
+## MVP 工程收尾（2026-09-27）
+
+- [x] 修复 CI/发布工作流中不存在的 cosign installer 主版本标签，固定到官方 v4.1.0 对应完整 SHA；修正节点 goreleaser 的发布仓库为 marvinli001/edgeweir-node。
+- [x] 复现并修复预热误选 TLS 监听的问题；普通 HTTP 和仅有不兼容 TCP 监听时的 Unix socket 回退均通过 Go race 回归。
+- [x] README、部署与云端开发指南对齐实际能力、工具依赖、源码构建和未发布状态；M5/M6 与公开 proto CI 的路线图勾选已补齐。
+- [x] 启用配置认证回执后的真实恢复演练：备份 95 → 节点 96 → 新库 97，节点健康、版本和哈希一致。
+- [x] 最终性能基线：同机、30 万请求、并发 32、全部 HTTP 200；31,854.33 QPS，p50 0.853 ms，p99 3.288 ms，进程 RSS 合计 89.79 MiB，容器 63.17 MiB。相较初始 35,212.91 QPS 低 9.54%，未超过 20% 标记阈值；最终栈另含监督进程和第二节点，不是生产容量承诺。结果在 .e2e/bench-mvp-final.summary.json。
+- [x] M3–M6 固定提交的独立源码复核完成：控制面 157/157、节点 84/84 个变更源文件；修复另有完整单元和本地组件回归。公开 CI 按下方链接核对各提交。
+
+准确范围、复现入口及外部验收边界见 [MVP 完成与复核记录](docs/implementation/mvp-completion.md)。
+
+## 最终源码修复与本地复验
+
+- [x] 创建 AccessKey 需要用户登录会话；读写和旧版 key 不可派生新凭据。数值累计及小时/天汇总饱和到 API 可表示范围，迁移0022修整旧值；维护任务独立执行。
+- [x] Webhook/SMTP 有总时限；租户和后台任务新增能力需所有活动节点支持。逐站点限速字典固定256KiB，最多512个已发布站点，总上限128MiB；规则更新仍热更新，增删其他站点不会调整既有字典尺寸。
+- [x] 自定义 HTTP/3 端口通告、切站点日志状态、宝塔可选环境变量、发布与安全报告文档已同步。
+- [x] workspace341个测试（console243），类型检查、构建、lint；Go vet/全包race、Lua、proto与ADR一致性通过。新M4真实节点规则流程、新M6日志/密钥与缓存导航浏览器流程通过。
+- [x] 最终真实恢复112→113→114；双节点签名升级、错误签名拒绝、已签名启动失败回滚均通过。
+- [x] 最终基线：38,145.38QPS，p50 0.764ms，p99 2.169ms，RSS合计118.57MiB，容器117.6MiB，30万请求全部200。相较初始基线吞吐+8.33%，RSS+57.97%；**内存增长超过20%已标记**，脚本现在逐项报告吞吐/延迟/RSS变化。结果：`.e2e/bench-audit-final.summary.json`。RSS包含共享/映射页，当前环境还包含监督进程与自升级发行文件缓存，未发现旧进程残留；不作生产容量承诺。
+
+本轮源码审查未执行攻击链复现实验，普通修复回归照常完成。远端完整结果以[控制面CI](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml)及[节点CI](https://github.com/marvinli001/edgeweir-node/actions/workflows/ci.yml)对应提交为准。正式二进制发布、生产部署、真实外部服务账户和实际Claude云端会话均属于尚未执行的验收边界。

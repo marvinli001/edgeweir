@@ -118,11 +118,11 @@
 ### 运维
 
 - [x] 分钟级统计：请求数、流量、带宽、命中率、状态码（lite 模式）
-- [ ] 统计上报幂等（批次序号）、小时 / 天汇总与分钟明细保留期（M5，收尾延后 D2）
-- [ ] 分钟级统计：Top URL、Top IP
-- [ ] 告警渠道：邮件、Webhook、钉钉、企业微信、Telegram
+- [x] 统计上报幂等（批次序号）、小时 / 天汇总与分钟明细保留期（M5，收尾延后 D2）
+- [x] 分钟级统计：Top URL、Top IP
+- [x] 告警渠道：邮件、Webhook、钉钉、企业微信、Telegram
 - [x] 审计日志
-- [ ] 开放 API
+- [x] 开放 API
 - [x] 节点自升级（验签、按节点组灰度、失败回滚；监督进程和引擎通过系统包 / 镜像维护）
 - [x] 访问日志采样上报与检索（默认关闭、PostgreSQL 日分区 / 可选 ClickHouse、CSV）
 - [x] AccessKey 吊销与只读范围
@@ -132,7 +132,7 @@
 
 - [ ] 容器基础镜像按 digest、GitHub Actions 按完整 commit SHA 固定，两个仓库都要做（收尾延后 D5，[ADR-0017](docs/adr/0017-release-supply-chain.md) 收尾记录）
 - [ ] 两个仓库的 release 工作流（签名、provenance、推送镜像）按 [SECURITY.md](SECURITY.md) 演练一遍校验命令
-- [ ] 仓库公开后，edgeweir-node CI 的 proto 一致性检查从 GitHub 拉取控制面的 tag（MVP 期间用本地 `make proto-check`，收尾延后 D6）
+- [x] 公开仓库的节点 CI 从 GitHub 拉取 proto/v0.7.0，并检查生成代码一致性（收尾延后 D6）
 
 ## v1
 
@@ -167,7 +167,8 @@
 
 - [x] 原始日志写入 ClickHouse（提前纳入 MVP M6）
 - [ ] Logpush：S3、HTTP、Kafka
-- [ ] 访问日志检索与导出、攻击大盘、回源质量
+- [x] 访问日志检索与 CSV 导出（已提前在 M6 完成）
+- [ ] 攻击大盘、回源质量
 - [ ] 短信告警渠道
 
 ### 协议与优化

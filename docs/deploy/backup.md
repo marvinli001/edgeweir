@@ -33,4 +33,4 @@ ClickHouse 与 PostgreSQL 必须来自同一恢复点，或使用新的 ClickHou
 
 `node scripts/e2e-restore.mjs` 只针对 `compose.e2e.yml` 的测试数据库：制作真实 pg_dump，先让节点应用高于备份的 revision，创建新数据库并执行 pg_restore，切换控制台连接，收到新心跳后发布相同内容，确认节点继续接受更高 revision。脚本随后切回原测试数据库并重新同步，保留恢复数据库供检查。
 
-本轮本地结果：备份 revision 92 → 节点 93 → 新库恢复后的发布 94，节点在线、健康、版本与内容哈希一致。证据在 `.e2e/restore-result.json`；测试数据和凭据不能用于正式部署。
+本轮本地结果：启用认证回执后，备份 revision 112 → 节点 113 → 新库恢复后的发布 114，节点在线、健康、版本与内容哈希一致。证据在 `.e2e/restore-result.json`；测试数据和凭据不能用于正式部署。

@@ -39,6 +39,7 @@ export async function createAccessKey(
   input: { name: string; scope: "read" | "write" },
   actor: Actor,
 ) {
+  if (actor.type !== "user") fail("ACCESS_KEY_SESSION_REQUIRED", "sign in to create an access key");
   const created = await app.auth.api.createApiKey({
     body: {
       userId,

@@ -101,6 +101,7 @@ function SiteDetailPage() {
         <ErrorState error={site.error} onRetry={() => site.refetch()} />
       ) : (
         <Tabs
+          key={site.data.id}
           value={tab}
           onValueChange={(value) =>
             navigate({

@@ -96,3 +96,5 @@ Phase 0 范围：
 >   - **账号事件写审计。** 经 better-auth 端点完成的变更由钩子写审计：插件 `edgeweir-audit`（排在其他插件之后）的 after 钩子写 `auth.sign_in`（带登录方式 password、totp、backup_code 或 passkey；密码正确但还要第二步验证时不写）、`auth.sign_in_failed`（带错误码和邮箱）、`account.password_change`、`account.passkey_add`、`account.passkey_delete`、`api_key.create`（只记 id、名称、前缀和过期时间，不记 key）、`api_key.delete`；`databaseHooks.user.update.after` 写 `account.two_factor_enable`、`account.two_factor_disable`。better-auth 先提交自己的变更再调用钩子，所以这些审计不与变更同事务，写入失败只记日志。控制台自己经 `auth.api.createUser` 建账号的三个地方（初始化、后台创建用户、新用户接受邀请）在紧接着的一个事务里完成其余变更和审计，失败时删除刚建的账号。
 
 > - 2026-09-27（MVP M6）：AccessKey 增加只读/读写范围、最后使用时间及吊销。全局 oRPC 中间件在包括可选登录在内的过程之前校验范围，只读拒绝写入过程；better-auth HTTP 路由不接受 x-api-key，防止借管理密钥接口提权。旧版 null permissions 保持读写兼容，非空但不合法的 permissions 按只读处理。
+
+> - 2026-09-27（MVP 审查）：创建 AccessKey 必须由已登录控制台的用户会话发起，服务层拒绝 api_key actor。读写与旧版 API key 仍可执行原有授权业务操作及吊销，但不能签发新的独立凭据；公开接口说明和浏览器流程同步更新。

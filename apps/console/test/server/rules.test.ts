@@ -189,4 +189,44 @@ describe("M4 rules and IP list boundaries", async () => {
       (await rpcError(admin.clusters.rollback({ id: clusterId, revision: target }))).code,
     ).toBe("ROLLBACK_RESOURCE_UNAVAILABLE");
   });
+  it("admits tenant capabilities only after all active nodes support them", async () => {
+    const [node] = await ctx.db
+      .insert(schema.node)
+      .values({
+        clusterId,
+        name: "capability-admission",
+        supportedFeatures: ["rules-v1"],
+      })
+      .returning();
+    if (!node) throw new Error("missing node");
+    const rules = [
+      {
+        name: "country",
+        phase: "waf-custom" as const,
+        expression: 'ip.geoip.country eq "NZ"',
+        action: { kind: "log" as const },
+      },
+    ];
+    const before = (await config()).revision;
+    expect((await rpcError(tenant.rules.save({ id: otherSiteId, rules }))).code).toBe(
+      "NODE_CAPABILITY_REQUIRED",
+    );
+    expect(await tenant.rules.get({ id: otherSiteId })).toEqual([]);
+    expect((await config()).revision).toBe(before);
+    await admin.rules.save({
+      id: siteId,
+      rules: [
+        { name: "ordinary", phase: "waf-custom", expression: "true", action: { kind: "log" } },
+      ],
+    });
+    expect((await config()).revision).toBeGreaterThan(before);
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: ["rules-v1", "geoip-city-v1"] })
+      .where(eq(schema.node.id, node.id));
+    await tenant.rules.save({ id: otherSiteId, rules });
+    expect((await config()).requiredFeatures).toContain("geoip-city-v1");
+    await tenant.rules.save({ id: otherSiteId, rules: [] });
+    await ctx.db.delete(schema.node).where(eq(schema.node.id, node.id));
+  });
 });

@@ -49,9 +49,14 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   });
   await boss.send(QUEUES.domainMigration, {}, { singletonKey: "domain-ownership-v1" });
   await boss.work(QUEUES.traffic, async () => {
-    await maintainTraffic(ctx.db);
-    await maintainLogs(ctx.db);
-    await expireUpgrades(ctx.db);
+    // Each maintenance family must run even when another one needs a retry.
+    const results = await Promise.allSettled([
+      maintainTraffic(ctx.db),
+      maintainLogs(ctx.db),
+      expireUpgrades(ctx.db),
+    ]);
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
   });
   await boss.schedule(QUEUES.traffic, "* * * * *");
   await boss.send(QUEUES.traffic, {}, { singletonKey: "traffic-rollup" });

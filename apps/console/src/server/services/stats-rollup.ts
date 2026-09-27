@@ -47,10 +47,10 @@ export async function rollupTraffic(db: Database, now = new Date(), limit = 200)
         await tx.execute(sql`
       insert into ${target} (minute,node_id,site_id,requests,bytes_sent,bytes_received,cache_hits,cache_misses,status_codes,top_urls,top_ips)
       select ${key.bucket.toISOString()}::timestamptz,${key.nodeId}::uuid,${key.siteId}::uuid,
-        coalesce(sum(requests),0),coalesce(sum(bytes_sent),0),coalesce(sum(bytes_received),0),coalesce(sum(cache_hits),0),coalesce(sum(cache_misses),0),
-        (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (select code.key as k,sum(code.value::bigint) as n from ${source},lateral jsonb_each_text(status_codes) code where ${where} group by code.key) codes),
-        (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (select entry.key as k,sum(entry.value::bigint) as n from ${source},lateral jsonb_each_text(top_urls) entry where ${where} group by entry.key order by n desc,k limit 50) urls),
-        (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (select entry.key as k,sum(entry.value::bigint) as n from ${source},lateral jsonb_each_text(top_ips) entry where ${where} group by entry.key order by n desc,k limit 50) ips)
+        least(9007199254740991::numeric,coalesce(sum(requests),0)),least(9007199254740991::numeric,coalesce(sum(bytes_sent),0)),least(9007199254740991::numeric,coalesce(sum(bytes_received),0)),least(9007199254740991::numeric,coalesce(sum(cache_hits),0)),least(9007199254740991::numeric,coalesce(sum(cache_misses),0)),
+        (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (select code.key as k,least(9007199254740991::numeric,sum(code.value::numeric)) as n from ${source},lateral jsonb_each_text(status_codes) code where ${where} group by code.key) codes),
+        (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (select entry.key as k,least(9007199254740991::numeric,sum(entry.value::numeric)) as n from ${source},lateral jsonb_each_text(top_urls) entry where ${where} group by entry.key order by n desc,k limit 50) urls),
+        (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (select entry.key as k,least(9007199254740991::numeric,sum(entry.value::numeric)) as n from ${source},lateral jsonb_each_text(top_ips) entry where ${where} group by entry.key order by n desc,k limit 50) ips)
       from ${source} where ${where}
       on conflict(minute,node_id,site_id) do update set requests=excluded.requests,bytes_sent=excluded.bytes_sent,bytes_received=excluded.bytes_received,cache_hits=excluded.cache_hits,cache_misses=excluded.cache_misses,status_codes=excluded.status_codes,top_urls=excluded.top_urls,top_ips=excluded.top_ips
     `);

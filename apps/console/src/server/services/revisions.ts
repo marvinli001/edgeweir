@@ -1,6 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
+  ConfigCapacityError,
   canonicalize,
   compileNodeConfig,
   compileRules,
@@ -8,6 +9,7 @@ import {
   decodeNodeConfig,
   encodeNodeConfig,
   geoFeatures,
+  MAX_SITES_PER_CLUSTER,
   type RuleModel,
   type SiteModel,
 } from "@edgeweir/config-compiler";
@@ -33,6 +35,7 @@ import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { CONFIG_CHANNEL } from "../lib/events";
+import { isAdminRole } from "./users";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export type Executor = Database | Tx;
@@ -309,9 +312,44 @@ async function insertRevision(
   if (!Number.isSafeInteger(highest) || highest >= Number.MAX_SAFE_INTEGER)
     throw new Error("configuration revision exhausted");
   const next = BigInt(highest) + 1n;
-  const config = build(next);
+  let config: NodeConfig;
+  try {
+    config = build(next);
+  } catch (error) {
+    if (error instanceof ConfigCapacityError)
+      fail("CLUSTER_SITE_LIMIT", "cluster site capacity reached", { limit: MAX_SITES_PER_CLUSTER });
+    throw error;
+  }
+  // Rollback also passes through this guard, rather than only the compiler.
+  if (config.sites.length > MAX_SITES_PER_CLUSTER)
+    fail("CLUSTER_SITE_LIMIT", "cluster site capacity reached", { limit: MAX_SITES_PER_CLUSTER });
   if (latest && latest.revision >= highest && latest.contentHash === config.contentHash) {
     return { row: latest, created: false };
+  }
+  const previousFeatures = new Set(latest ? decodeNodeConfig(latest.ir).requiredFeatures : []);
+  const addedFeatures = config.requiredFeatures.filter((feature) => !previousFeatures.has(feature));
+  if (addedFeatures.length) {
+    const [user] = userId
+      ? await tx
+          .select({ role: schema.user.role })
+          .from(schema.user)
+          .where(eq(schema.user.id, userId))
+      : [];
+    // Only a platform administrator may deliberately require an upgrade across
+    // the cluster. Tenant and background changes must preserve other sites' delivery.
+    if (!isAdminRole(user?.role)) {
+      const nodes = await tx
+        .select({ features: schema.node.supportedFeatures })
+        .from(schema.node)
+        .where(and(eq(schema.node.clusterId, clusterId), eq(schema.node.status, "active")));
+      const missing = addedFeatures.filter((feature) =>
+        nodes.some((node) => !node.features.includes(feature)),
+      );
+      if (missing.length)
+        fail("NODE_CAPABILITY_REQUIRED", "cluster nodes do not support this change", {
+          features: missing.join(", "),
+        });
+    }
   }
   const [row] = await tx
     .insert(schema.configRevision)

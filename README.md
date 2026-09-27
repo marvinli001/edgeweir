@@ -23,7 +23,7 @@ Edgeweir (pronounced *EDGE-weer*) is named after a weir. Around 256 BC, Li Bing 
 | DNS and visibility | Domain proof, independent DNS revisions, healthy-node reconciliation, deduplicated traffic, rollups, Top URL/IP, alerts and subscriptions |
 | Operations | Sampled logs and CSV, optional ClickHouse, read-only/revocable AccessKeys, signed canary upgrades with rollback, benchmark and backup recovery |
 
-Verification uses real OpenResty nodes, PostgreSQL, Pebble, ClickHouse, local DNS and notification fixtures, plus browser flows. Upgrade tests sign real Linux archives with a local fixture key, check wrong-key rejection, and recover from a signed executable that fails to start. Recovery tests restore a real database backup and prove that newer node revisions remain updateable. See [implementation evidence](docs/implementation/mvp-completion.md), [MVP specification](docs/specs/mvp.md), and the public CI runs.
+Verification uses real OpenResty nodes, PostgreSQL, Pebble, ClickHouse, local DNS and notification fixtures, plus browser flows. Upgrade tests sign real Linux archives with a local fixture key, check wrong-key rejection, and recover from a signed executable that fails to start. Recovery tests restore a real database backup and prove that newer node revisions remain updateable. See [implementation evidence](docs/implementation/mvp-completion.md), [MVP specification](docs/specs/mvp.md), and [console CI](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml) / [node CI](https://github.com/marvinli001/edgeweir-node/actions/workflows/ci.yml).
 
 Live DNS-provider accounts, ZeroSSL EAB and external notification accounts still require operator-specific acceptance. The stock engine does not include Brotli or Zstd. No official GitHub OIDC-signed binary release has been published or accepted yet; evaluate with a source build. These checks are reproducible evidence, not a production reliability or security guarantee.
 
@@ -61,6 +61,7 @@ git clone https://github.com/marvinli001/edgeweir.git
 cd edgeweir
 
 # Required secrets. Compose reads them from .env; use the openssl output as is.
+umask 077
 cat > .env <<EOF
 EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
 BETTER_AUTH_SECRET=$(openssl rand -base64 32)
@@ -72,7 +73,7 @@ docker compose up -d --build
 
 Open <http://localhost:3000> (every variable is described in [.env.example](.env.example)). The first-run setup wizard creates the platform administrator and a default organization. It asks for the one-time setup token that the console prints to its log (`docker compose logs console | grep setupToken`).
 
-- `EDGEWEIR_MASTER_KEY` encrypts secrets at rest (the internal CA key, S3 origin keys, the setup token, and later certificate keys and DNS API credentials). **Back it up separately from your database.** Without it, that data cannot be recovered.
+- `EDGEWEIR_MASTER_KEY` encrypts secrets at rest (the internal CA key, S3 origin keys, the setup token, certificate keys and DNS API credentials). **Back it up separately from your database.** Without it, that data cannot be recovered.
 - `BETTER_AUTH_SECRET` signs login sessions.
 - Setup is refused without the setup token, so nobody else can claim the console before you finish the wizard. The token is spent by the first successful setup.
 
@@ -88,6 +89,8 @@ Ports:
 Deployment guides: [docs/deploy/docker.md](docs/deploy/docker.md) and [docs/deploy/baota.md](docs/deploy/baota.md) (BaoTa panel).
 
 ## Adding a node
+
+The signed installer flow below applies after an official release is published. For the current pre-release, build the [node from source](https://github.com/marvinli001/edgeweir-node#build-and-test).
 
 1. Sign in as a platform admin, switch to **Admin** in the top bar, open **Clusters & nodes**, pick a cluster and generate a one-time install command. It contains a single-use token and the SHA-256 fingerprint of the console's internal CA.
 2. Run the command on the node with an account that may use sudo (Linux with systemd, amd64 or arm64). The node must be able to reach the console on port 8443.
@@ -137,7 +140,7 @@ docker compose -f compose.e2e.yml up -d --build
 pnpm e2e     # --up starts the stack, --down removes it and its volumes afterwards, --skip-ui skips Playwright
 ```
 
-Besides curl, jq, Docker and Node.js it needs a checkout of edgeweir-node next to this repository (or `EDGEWEIR_NODE_CONTEXT`), and for the install step goreleaser v2, syft and Go 1.27.1 on the host, plus network access to deb.debian.org and openresty.org. On top of enrollment, config rollout, cache, purge and prefetch, origins, S3, failover and the Playwright suites it checks the auth route allow list (better-auth's organization and admin endpoints are closed, API keys never become sessions), the origin address policy and CDN-Loop, HTTPS origin name verification, Range requests from 1 MiB slices, and `install.sh` in a clean container installing goreleaser snapshot packages from the console's mirror.
+Besides curl, jq, Docker and Node.js it needs a checkout of edgeweir-node next to this repository (or `EDGEWEIR_NODE_CONTEXT`), and for the install step goreleaser v2, syft, cosign and Go 1.27.1 on the host, plus network access to deb.debian.org and openresty.org. On top of enrollment, config rollout, cache, purge and prefetch, origins, S3, failover and the Playwright suites it checks the auth route allow list (better-auth's organization and admin endpoints are closed, API keys never become sessions), the origin address policy and CDN-Loop, HTTPS origin name verification, Range requests from 1 MiB slices, and `install.sh` in a clean container installing goreleaser snapshot packages from the console's mirror.
 
 `compose.e2e.yml` and `scripts/e2e.sh` read these variables; give both the same values. With another project name, ports, tag and subnets a second environment runs next to the first one.
 

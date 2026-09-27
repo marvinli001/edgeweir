@@ -13,6 +13,7 @@ export const errorDefs = {
 
   ACCESS_KEY_NOT_FOUND: { status: 404, params: [] },
   ACCESS_KEY_READ_ONLY: { status: 403, params: [] },
+  ACCESS_KEY_SESSION_REQUIRED: { status: 403, params: [] },
   ALERT_CHANNEL_NOT_FOUND: { status: 404, params: [] },
   ALERT_CHANNEL_LIMIT: { status: 409, params: [] },
   ALERT_SEND_FAILED: { status: 502, params: [] },
@@ -53,6 +54,8 @@ export const errorDefs = {
   USER_DISABLED: { status: 403, params: [] },
   CLUSTER_SELECTION_FORBIDDEN: { status: 403, params: [] },
   CLUSTER_NOT_FOUND: { status: 404, params: [] },
+  CLUSTER_SITE_LIMIT: { status: 409, params: ["limit"] },
+  NODE_CAPABILITY_REQUIRED: { status: 409, params: ["features"] },
   CLUSTER_NAME_TAKEN: { status: 409, params: ["name"] },
   CLUSTER_NOT_EMPTY: { status: 409, params: ["nodes", "sites"] },
   NO_CLUSTER: { status: 412, params: [] },

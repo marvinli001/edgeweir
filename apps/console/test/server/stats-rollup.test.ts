@@ -148,4 +148,42 @@ describe("M5 statistics identity, rollups and retention", async () => {
       await ingestStatsBatch(ctx.db, edge, 7n, [bucket("2026-09-10T10:01:00Z")], now.getTime()),
     ).toBe(0);
   });
+  it("keeps combined minute and rollup counters inside the API numeric range", async () => {
+    const maximum = Number.MAX_SAFE_INTEGER;
+    const item: ReportedMinuteStats = {
+      ...bucket("2026-09-25T10:01:00Z", 1),
+      requests: maximum - 1,
+      bytesSent: maximum - 1,
+      bytesReceived: maximum - 1,
+      cacheHits: maximum - 1,
+      cacheMisses: maximum - 1,
+      statusCodes: { "200": maximum - 1 },
+      topUrls: { "/counter-range": maximum - 1 },
+      topIps: { "192.0.2.1": maximum - 1 },
+    };
+    await ingestMinuteStats(ctx.db, edge, [item, item]);
+    await ingestMinuteStats(ctx.db, edge, [
+      item,
+      { ...item, minute: new Date("2026-09-25T10:02:00Z") },
+    ]);
+    const minute = (await ctx.db.select().from(schema.nodeMinuteStats)).find(
+      (row) => row.minute.getUTCDate() === 25,
+    );
+    expect(minute).toMatchObject({
+      requests: maximum,
+      bytesSent: maximum,
+      statusCodes: { "200": maximum },
+    });
+    expect(await rollupTraffic(ctx.db, now)).toBeGreaterThan(0);
+    const day = (await ctx.db.select().from(schema.nodeDayStats)).find(
+      (row) => row.minute.getUTCDate() === 25,
+    );
+    expect(day).toMatchObject({
+      requests: maximum,
+      bytesSent: maximum,
+      statusCodes: { "200": maximum },
+      topUrls: { "/counter-range": maximum },
+    });
+    expect(await rollupTraffic(ctx.db, now)).toBe(0);
+  });
 });

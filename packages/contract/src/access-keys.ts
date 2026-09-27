@@ -15,7 +15,13 @@ export const accessKeysContract = {
     .route({ method: "GET", path: "/access-keys", tags: ["access-keys"] })
     .output(z.array(key)),
   create: oc
-    .route({ method: "POST", path: "/access-keys", tags: ["access-keys"] })
+    .route({
+      method: "POST",
+      path: "/access-keys",
+      tags: ["access-keys"],
+      description:
+        "Requires a signed-in console session through RPC. API keys cannot create credentials.",
+    })
     .input(
       z.object({
         name: z.string().trim().min(1).max(64),

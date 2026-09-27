@@ -28,6 +28,37 @@ test("M6: log filters, CSV export and scoped AccessKey revocation", async ({ pag
   await page.getByLabel("状态码", { exact: true }).fill("200");
   await page.getByRole("button", { name: "查询", exact: true }).click();
   await expect(page.getByRole("table")).toBeVisible();
+  // Back/forward navigation can reuse cached site data without a loading remount.
+  const originalUrl = `${new URL(page.url()).pathname}?tab=logs`;
+  const originalTitle = await page.getByTestId("page-title").innerText();
+  await page.getByTestId("nav-sites").click();
+  const other = page
+    .getByTestId("sites-table")
+    .getByRole("row")
+    .filter({ hasText: "rules.m4.test" })
+    .getByRole("link")
+    .first();
+  await other.click();
+  await page.getByTestId("tab-logs").click();
+  const otherUrl = `${new URL(page.url()).pathname}?tab=logs`;
+  const otherTitle = await page.getByTestId("page-title").innerText();
+  await page.getByLabel("路径前缀").fill("previous-site-filter");
+  const visitCached = async (url: string, title: string) => {
+    await page.evaluate((target) => {
+      window.history.pushState({}, "", target);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }, url);
+    await expect(page.getByTestId("page-title")).toHaveText(title);
+    await expect(page.getByLabel("路径前缀")).toHaveValue("");
+  };
+  await visitCached(originalUrl, originalTitle);
+  await page.getByLabel("路径前缀").fill("original-site-filter");
+  await visitCached(otherUrl, otherTitle);
+  await visitCached(originalUrl, originalTitle);
+  await page.getByLabel("状态码", { exact: true }).fill("200");
+  await page.getByLabel("路径前缀").fill(state.path);
+  await page.getByRole("button", { name: "查询", exact: true }).click();
+  await expect(page.getByRole("table")).toBeVisible();
   await page.screenshot({
     path: "../../.e2e/m6-logs-desktop.png",
     fullPage: true,

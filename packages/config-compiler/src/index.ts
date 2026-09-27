@@ -36,6 +36,15 @@ import {
 } from "@edgeweir/proto";
 import { type Expression, phases } from "@edgeweir/rule-engine";
 
+/** Matches the node's fixed 256 KiB site partitions (128 MiB at full capacity). */
+export const MAX_SITES_PER_CLUSTER = 512;
+export class ConfigCapacityError extends Error {
+  constructor() {
+    super(`A cluster supports at most ${MAX_SITES_PER_CLUSTER} published sites`);
+    this.name = "ConfigCapacityError";
+  }
+}
+
 /** Console-side model of an origin, independent of the database layer. */
 export interface OriginModel {
   id: string;
@@ -374,6 +383,8 @@ export function contentHash(config: NodeConfig): string {
 
 /** Compiles console models into a canonical, hashed NodeConfig for `revision`. */
 export function compileNodeConfig(input: CompileInput, revision: bigint): NodeConfig {
+  if (input.sites.filter((site) => site.enabled).length > MAX_SITES_PER_CLUSTER)
+    throw new ConfigCapacityError();
   const tlsSites = input.sites.filter((s) => s.enabled && s.certificateId);
   const defaults: ListenerModel[] = tlsSites.length
     ? [

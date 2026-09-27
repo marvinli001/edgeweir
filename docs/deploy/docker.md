@@ -11,12 +11,15 @@
   - `3000/TCP`：Web 控制台与 API。可以放在反向代理后面（在代理上配置 HTTPS）。
   - `8443/TCP`：节点通道。**必须直连或四层透传**：TLS 由控制台自己终结，节点用客户端证书做双向认证，反向代理终结 TLS 会让双向认证失效。
 
-## 2. 获取编排文件并生成密钥
+## 2. 获取源码并生成密钥
+
+目前尚无正式二进制发行版，先从公开仓库构建评估。生产使用前应完成自己的容量、外部 DNS/ACME 凭据和恢复验收；正式镜像发布后可按发布 tag 或 digest 固定版本。
 
 ```bash
-mkdir -p /opt/edgeweir && cd /opt/edgeweir
-curl -fsSLO https://raw.githubusercontent.com/edgeweir/edgeweir/master/compose.yml
-curl -fsSL -o .env https://raw.githubusercontent.com/edgeweir/edgeweir/master/.env.example
+git clone https://github.com/marvinli001/edgeweir.git /opt/edgeweir
+cd /opt/edgeweir
+umask 077
+cp .env.example .env
 ```
 
 编辑 `.env`，至少填写：
@@ -42,7 +45,7 @@ sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
 ## 3. 启动
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 docker compose logs -f console
 ```
 
@@ -56,14 +59,16 @@ docker compose logs console | grep setupToken
 
 浏览器打开 `EDGEWEIR_PUBLIC_URL`，在初始化向导里填入 setup token，创建平台管理员和第一个组织；默认集群会自动创建。没有 token 的初始化请求一律被拒绝（写入审计日志），所以初始化之前控制台暴露在网络上，别人也无法抢先创建管理员。token 用主密钥加密后存在数据库里；更换主密钥后会重新生成。
 
-`compose.yml` 另有两个 profile，只为后续版本预留容器，控制台目前都不使用（流量统计存在 PostgreSQL 里）：
+`compose.yml` 另有两个可选 profile。在 `.env` 中设置 `EDGEWEIR_ANALYTICS=clickhouse` 和独立的 `CLICKHOUSE_PASSWORD` 后，`analytics` 启用 ClickHouse 原始访问日志与分钟快照。控制台图表和告警仍使用 PostgreSQL 精确汇总。站点访问日志采样默认关闭，需在站点日志页面显式开启；原始日志保留 7 天。切换存储模式不会迁移历史数据，详见[日志与 AccessKey](../guide/access-logs.md)。
 
 ```bash
-docker compose --profile analytics up -d   # ClickHouse：后续版本的原始日志与分析
+docker compose --profile analytics up -d   # ClickHouse：可选日志与分钟统计
 docker compose --profile cache up -d       # Valkey：预留
 ```
 
 ## 4. 添加节点
+
+以下一键安装命令适用于已发布的签名版本。目前请按[节点仓库](https://github.com/marvinli001/edgeweir-node)的源码构建说明评估；不要把未发布的示例版本号当成可下载的发行版。
 
 平台管理员在后台「集群与节点」为集群生成一条一次性安装命令，在节点服务器上用有 sudo 权限的账号执行：
 
@@ -118,7 +123,7 @@ server {
 }
 ```
 
-控制台默认**不信任** `X-Forwarded-For` / `X-Real-IP`：审计日志里的 IP 和登录限速都按 TCP 对端地址计算，否则任何人都能伪造 IP 绕过限速。放在反向代理后面时，把代理连到控制台时使用的地址写进 `.env` 的 `EDGEWEIR_TRUSTED_PROXIES`（逗号分隔的 IP 或 CIDR），只有来自这些地址的转发头才会被采用。代理跑在宿主机、经 Docker 端口映射访问 `127.0.0.1:3000` 时，对端是 Docker 网桥的网关地址，可以写 `EDGEWEIR_TRUSTED_PROXIES=172.16.0.0/12`（以 `docker network inspect edgeweir_default` 显示的网关为准）；不要写客户端也能直接连进来的网段。
+控制台默认**不信任** `X-Forwarded-For` / `X-Real-IP`：审计日志里的 IP 和登录限速都按 TCP 对端地址计算，否则任何人都能伪造 IP 绕过限速。放在反向代理后面时，把代理连到控制台时使用的地址写进 `.env` 的 `EDGEWEIR_TRUSTED_PROXIES`（逗号分隔的 IP 或 CIDR），只有来自这些地址的转发头才会被采用。代理跑在宿主机、经 Docker 端口映射访问 `127.0.0.1:3000` 时，先用 `docker network inspect edgeweir_default` 核实网关及控制台实际看到的对端地址，再配置该单一地址；不要信任整个私网范围或客户端可直接进入的网段。
 
 登录、改密码等认证接口的限速计数存在 PostgreSQL 里，多个 `app` 副本共享，重启后也不会清零。
 
@@ -139,8 +144,9 @@ stream {
 
 ## 7. 升级、备份与验证
 
-- 升级：`docker compose pull && docker compose up -d`。迁移在启动时自动执行（带锁，多实例安全）。启动时还会把旧版本写入的信封密文（附加数据未绑定记录 id）用主密钥重新加密一次；新版本不再读取旧格式，所以多个控制台实例要一起升级。
-- 备份：`docker compose exec postgres pg_dump -U edgeweir edgeweir > edgeweir.sql`，同时备份 `.env` 里的 `EDGEWEIR_MASTER_KEY`。
+- 控制台升级：源码评估环境先检出目标提交，再执行 `docker compose up -d --build`；正式镜像发布后才使用 `docker compose pull && docker compose up -d`。迁移在启动时自动执行（带锁，多实例安全）。启动时还会把旧版本写入的信封密文（附加数据未绑定记录 id）用主密钥重新加密一次；新版本不再读取旧格式，所以多个控制台实例要一起升级。
+- 节点升级：[签名升级、试运行与回滚](../guide/node-upgrades.md)。固定监督进程、cosign 和 OpenResty 使用完整镜像或系统包更新。
+- 备份与恢复：见[完整操作步骤](backup.md)，包括数据库、独立保管的主密钥、节点状态、经过认证的 revision 回执，以及可选 ClickHouse 的一致恢复点。
 - 校验镜像签名：
 
 ```bash

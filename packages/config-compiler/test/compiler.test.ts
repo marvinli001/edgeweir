@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   applyNodeConfigDiff,
+  ConfigCapacityError,
   compileNodeConfig,
   contentHash,
   decodeNodeConfig,
   diffNodeConfig,
   encodeNodeConfig,
+  MAX_SITES_PER_CLUSTER,
   parseDomain,
   type SiteModel,
 } from "../src/index";
@@ -68,6 +70,21 @@ const site = (id: string, overrides: Partial<SiteModel> = {}): SiteModel => ({
 });
 
 describe("compileNodeConfig", () => {
+  it("bounds published sites while allowing disabled drafts", () => {
+    const sites = Array.from({ length: MAX_SITES_PER_CLUSTER }, (_, i) => site(`s${i}`));
+    expect(compileNodeConfig({ clusterId: "c", sites }, 1n).sites).toHaveLength(
+      MAX_SITES_PER_CLUSTER,
+    );
+    expect(() =>
+      compileNodeConfig({ clusterId: "c", sites: [...sites, site("extra")] }, 1n),
+    ).toThrow(ConfigCapacityError);
+    expect(
+      compileNodeConfig(
+        { clusterId: "c", sites: [...sites, site("draft", { enabled: false })] },
+        1n,
+      ).sites,
+    ).toHaveLength(MAX_SITES_PER_CLUSTER);
+  });
   it("produces canonical ordering", () => {
     const cfg = compileNodeConfig({ clusterId: "c", sites: [site("b"), site("a")] }, 1n);
     expect(cfg.sites.map((s) => s.id)).toEqual(["a", "b"]);

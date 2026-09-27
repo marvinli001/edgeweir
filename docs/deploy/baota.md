@@ -2,6 +2,8 @@
 
 适用于已安装宝塔面板（BT Panel）9.x 并启用 Docker 功能的服务器。思路：用宝塔的「容器编排」运行控制台和 PostgreSQL；Web 控制台交给宝塔 nginx 反向代理（可以在宝塔上配置 HTTPS）；**节点通道 8443 不经过宝塔 nginx 的 HTTP 反代**。
 
+当前尚无正式镜像发行版。先在源码目录执行 `docker build -t edgeweir-console:local .`，再将模板的 console image 改为 `edgeweir-console:local` 进行评估；正式发布后再使用已验证的 tag/digest。
+
 ## 1. 为什么 8443 不能交给宝塔反代
 
 节点和控制台之间是双向 TLS（mTLS）：节点注册时校验控制台内部 CA 的指纹，注册后每个请求都带客户端证书。这要求 TLS 由控制台自己终结。如果宝塔 nginx 在 8443 上终结 TLS，节点看到的是宝塔的证书（指纹对不上，注册失败），控制台也拿不到节点的客户端证书。所以 8443 只能：
@@ -23,6 +25,7 @@
 
 ```bash
 cd /www/dk_project/edgeweir
+umask 077
 cat > .env <<ENV
 EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
 BETTER_AUTH_SECRET=$(openssl rand -base64 32)

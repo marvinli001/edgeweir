@@ -73,7 +73,14 @@ for (let i = 0; i < 60; i++) {
 assert.ok(found.entries.length > 0, "no sampled log arrived");
 assert.ok(found.entries.every((l) => l.path === path && l.status === 200));
 assert.ok(!JSON.stringify(found).includes("never-store"));
-const read = await call("POST", "/access-keys", { name: "m6-readonly", scope: "read" });
+// Credential creation requires the signed-in browser surface, independently of API scope.
+const scoped = await fetch(`${base}/rpc/accessKeys/create`, {
+  method: "POST",
+  headers: { "content-type": "application/json", "x-csrf-token": "orpc", origin: base, cookie },
+  body: JSON.stringify({ json: { name: "m6-readonly", scope: "read" } }),
+});
+assert.equal(scoped.status, 200);
+const { json: read } = await scoped.json();
 let response = await fetch(`${base}/api/v1/sites/${state.siteId}/logs/settings`, {
   method: "PUT",
   headers: { "content-type": "application/json", "x-api-key": read.key },

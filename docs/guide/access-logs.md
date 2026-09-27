@@ -12,6 +12,8 @@
 
 节点通过 mTLS 上报固定批次，控制台使用持久游标防止重试重复计数。ClickHouse 写入失败时不确认批次，也不偷偷改写入 PostgreSQL。内存队列最多约 2000 条，磁盘队列最多 10000 条、32 MiB、权限 0600；队列满时丢弃旧的未发送日志并记录警告。采样日志是有上限的诊断数据，不能当作零丢失的审计账本。请求结束到批次落盘之间，进程或机器崩溃也可能丢失日志。
 
-「设置」中的 AccessKey 可创建为只读或读写，密钥只显示一次。列表显示最后使用时间与吊销状态；吊销后再次请求返回 401，只读密钥调用写接口返回 403。只读也不能通过创建新密钥、邀请等可选登录接口绕过限制。旧版未设置范围的密钥保持原有读写权限，建议按用途吊销并重建。
+「设置」中的 AccessKey 可创建为只读或读写，密钥只显示一次。创建新密钥必须使用已登录控制台的会话；读写及旧版 API key 同样不能签发新凭据。列表显示最后使用时间与吊销状态；吊销后再次请求返回 401，只读密钥调用写接口返回 403。旧版未设置范围的密钥保持原有业务读写权限，建议按用途吊销并重建。
+
+单个节点/站点/时间桶的累计计数最多为 `Number.MAX_SAFE_INTEGER`（9,007,199,254,740,991）。超过范围时保持该上限，避免整数溢出阻塞汇总与保留任务；迁移会修整旧数据中的超范围计数。正常范围内的统计保持原有精确口径。
 
 验证入口：`scripts/e2e-m6-logs.mjs`、`apps/console/e2e/m6-logs.spec.ts`、`apps/console/scripts/e2e-clickhouse.ts`。ClickHouse 的 HTTP 参数绑定与 FINAL 行为参考[官方 HTTP 文档](https://clickhouse.com/docs/interfaces/http)和[ReplacingMergeTree 文档](https://clickhouse.com/docs/engines/table-engines/mergetree-family/replacingmergetree)。

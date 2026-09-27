@@ -68,6 +68,11 @@ describe("M6 AccessKey scope, revocation and auth boundaries", async () => {
   });
   it("allows a read-write key and keeps pre-M6 keys compatible", async () => {
     const key = await admin.accessKeys.create({ name: "writer", scope: "write" });
+    const count = (await admin.accessKeys.list()).length;
+    const denied = await api(key.key, "POST", "/access-keys", { name: "new", scope: "write" });
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toMatchObject({ code: "ACCESS_KEY_SESSION_REQUIRED" });
+    expect((await admin.accessKeys.list()).length).toBe(count);
     expect(
       (
         await api(key.key, "POST", "/sites", {
@@ -81,6 +86,9 @@ describe("M6 AccessKey scope, revocation and auth boundaries", async () => {
       .update(schema.apikey)
       .set({ permissions: null })
       .where(eq(schema.apikey.id, key.id));
+    expect(
+      (await api(key.key, "POST", "/access-keys", { name: "legacy-new", scope: "read" })).status,
+    ).toBe(403);
     expect(
       (
         await api(key.key, "POST", "/sites", {

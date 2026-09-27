@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import { m } from "../../web/paraglide/messages.js";
 import type { AppContext } from "../lib/context";
-import { outboundAddress, postNotification } from "../lib/outbound";
+import { outboundAddress, postNotification, withinDeadline } from "../lib/outbound";
 
 export const SMTP_KEY = "notification_smtp";
 export const smtpBinding = { purpose: "system_setting.notification_smtp", recordId: SMTP_KEY };
@@ -70,7 +70,12 @@ export async function deliverNotification(
   if (config.kind === "email") {
     const smtp = await loadSmtp(app);
     if (!smtp?.password) throw new Error("SMTP not configured");
-    const address = await outboundAddress(app, smtp.host);
+    const signal = AbortSignal.timeout(10000);
+    const address = await withinDeadline(outboundAddress(app, smtp.host), signal);
+    const ca = app.env.EDGEWEIR_SMTP_CA_FILE
+      ? await withinDeadline(readFile(app.env.EDGEWEIR_SMTP_CA_FILE), signal)
+      : undefined;
+    signal.throwIfAborted();
     const transport = nodemailer.createTransport({
       host: address.address,
       port: smtp.port,
@@ -81,9 +86,7 @@ export async function deliverNotification(
       tls: {
         servername: isIP(address.servername) ? undefined : address.servername,
         rejectUnauthorized: true,
-        ...(app.env.EDGEWEIR_SMTP_CA_FILE
-          ? { ca: await readFile(app.env.EDGEWEIR_SMTP_CA_FILE) }
-          : {}),
+        ...(ca ? { ca } : {}),
       },
       connectionTimeout: 5000,
       greetingTimeout: 5000,
@@ -92,13 +95,16 @@ export async function deliverNotification(
       disableUrlAccess: true,
     });
     try {
-      await transport.sendMail({
-        from: smtp.from,
-        to: config.to,
-        subject: m.alert_notice_subject({ site, event: status }, { locale }),
-        text,
-        messageId: `<${event.id}@${new URL(app.env.EDGEWEIR_PUBLIC_URL).hostname}>`,
-      });
+      await withinDeadline(
+        transport.sendMail({
+          from: smtp.from,
+          to: config.to,
+          subject: m.alert_notice_subject({ site, event: status }, { locale }),
+          text,
+          messageId: `<${event.id}@${new URL(app.env.EDGEWEIR_PUBLIC_URL).hostname}>`,
+        }),
+        signal,
+      );
     } finally {
       transport.close();
     }

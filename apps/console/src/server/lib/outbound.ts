@@ -5,6 +5,28 @@ import { isIP } from "node:net";
 import { forbiddenOriginRange, normalizeCidr } from "@edgeweir/contract";
 import type { AppContext } from "./context";
 
+/** Bounds resolver/transport promises; their consumers must stop after cancellation. */
+export function withinDeadline<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort);
+      reject(signal.reason ?? new Error("notification deadline exceeded"));
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    operation.then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      },
+    );
+  });
+}
+
 /** Resolve once, reject special-purpose answers, then connect to the pinned IP. */
 export async function outboundAddress(app: AppContext, host: string) {
   const name = host.replace(/^\[|\]$/g, "");
@@ -33,10 +55,13 @@ export async function postNotification(
   payload: unknown,
   bearer?: string,
 ): Promise<unknown> {
+  // A socket inactivity timeout alone does not bound a complete delivery.
+  const signal = AbortSignal.timeout(10000);
   const url = new URL(target);
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.hash)
     throw new Error("invalid notification URL");
-  const address = await outboundAddress(app, url.hostname);
+  const address = await withinDeadline(outboundAddress(app, url.hostname), signal);
+  signal.throwIfAborted();
   // Cleartext HTTP is only permitted for explicitly allowed private fixtures/LAN endpoints.
   if (url.protocol === "http:" && forbiddenOriginRange(address.address, []) === null)
     throw new Error("HTTPS required for public notifications");
@@ -58,6 +83,7 @@ export async function postNotification(
           ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
         },
         timeout: 10000,
+        signal,
       },
       (response) => {
         let size = 0;
