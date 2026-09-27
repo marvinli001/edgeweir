@@ -44,10 +44,9 @@ test("M6: log filters, CSV export and scoped AccessKey revocation", async ({ pag
   const otherTitle = await page.getByTestId("page-title").innerText();
   await page.getByLabel("路径前缀").fill("previous-site-filter");
   const visitCached = async (url: string, title: string) => {
-    await page.evaluate((target) => {
-      window.history.pushState({}, "", target);
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    }, url);
+    await page.evaluate(
+      `history.pushState({}, "", ${JSON.stringify(url)}); dispatchEvent(new PopStateEvent("popstate"));`,
+    );
     await expect(page.getByTestId("page-title")).toHaveText(title);
     await expect(page.getByLabel("路径前缀")).toHaveValue("");
   };

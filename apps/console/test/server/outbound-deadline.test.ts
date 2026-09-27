@@ -13,6 +13,10 @@ it("settles pending work when its deadline is cancelled", async () => {
 });
 
 it("cancels the HTTP response at the total deadline and still accepts a normal response", async () => {
+  let pendingStarted!: () => void;
+  const pendingRequest = new Promise<void>((resolve) => {
+    pendingStarted = resolve;
+  });
   const server = http.createServer((request, response) => {
     if (request.url === "/ready") {
       response.end('{"ok":true}');
@@ -20,19 +24,22 @@ it("cancels the HTTP response at the total deadline and still accepts a normal r
     }
     response.writeHead(200);
     response.flushHeaders();
+    pendingStarted();
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const target = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const app = { env: { EDGEWEIR_OUTBOUND_ALLOW_CIDRS: "127.0.0.1/32" } } as AppContext;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new Error("deadline")), 100);
   const deadline = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
   try {
     await expect(postNotification(app, `${target}/ready`, {})).resolves.toEqual({ ok: true });
-    await expect(postNotification(app, `${target}/pending`, {})).rejects.toThrow();
+    const cancelled = expect(postNotification(app, `${target}/pending`, {})).rejects.toThrow();
+    await pendingRequest;
+    controller.abort(new Error("deadline"));
+    await cancelled;
+    expect(deadline).toHaveBeenCalledWith(10000);
     expect(controller.signal.aborted).toBe(true);
   } finally {
-    clearTimeout(timer);
     deadline.mockRestore();
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
