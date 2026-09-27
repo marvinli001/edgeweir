@@ -1,3 +1,4 @@
+import { nodeSupportsFeature } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -5,11 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
-// Country and ASN come from the IPinfo Lite database bundled into node images;
-// subdivisions need an operator-provided City MMDB.
+// Country and ASN come from the IPinfo Lite database bundled into node images
+// (or operator MMDBs); subdivisions need an operator-provided City MMDB.
 const features = [
-  ["geoip-country-v1", () => m.geo_country()],
-  ["geoip-city-v1", () => m.geo_subdivision()],
+  ["geoip-city-v1", () => m.geo_country()],
+  ["geoip-subdivision-v1", () => m.geo_subdivision()],
   ["geoip-asn-v1", () => m.geo_asn()],
 ] as const;
 
@@ -50,7 +51,7 @@ export function GeoIpSettings() {
                   <Badge key={feature} variant="outline">
                     {label()}
                     {m.geo_state({
-                      state: node.supportedFeatures.includes(feature)
+                      state: nodeSupportsFeature(node.supportedFeatures, feature)
                         ? m.geo_available()
                         : m.geo_unavailable(),
                     })}

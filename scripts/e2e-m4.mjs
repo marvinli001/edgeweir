@@ -67,7 +67,6 @@ await waitFor("M4 node capabilities", async () =>
     (n) =>
       n.online &&
       n.supportedFeatures.includes("rules-v1") &&
-      n.supportedFeatures.includes("geoip-country-v1") &&
       n.supportedFeatures.includes("geoip-city-v1") &&
       n.supportedFeatures.includes("geoip-asn-v1"),
   ),
@@ -198,14 +197,18 @@ assert.equal((await request("/rate")).status, 429);
 console.log(
   "PASS WAF log/block, cache override, redirect, rewrite, request/response headers, rate limit",
 );
+// Nodes that read the synthetic IPinfo database (they report geoip-country-v1)
+// answer AS64513 for the test network where the ASN database says AS64512, so
+// the block proves IPinfo answers the ASN while the City MMDB still adds the
+// subdivision. Older nodes ignore EDGEWEIR_GEOIP_IPINFO.
+const ipinfo = (await api("GET", "/nodes")).some(
+  (n) => n.online && n.supportedFeatures.includes("geoip-country-v1"),
+);
 await save([
   rule(
     "Synthetic GeoIP",
     "waf-custom",
-    // The synthetic IPinfo database says AS64513 where the ASN database says
-    // AS64512: the block proves IPinfo answers country/ASN and the City MMDB
-    // still adds the subdivision.
-    'ip.geoip.country eq "NZ" and ip.geoip.subdivision eq "AUK" and ip.geoip.asnum eq 64513',
+    `ip.geoip.country eq "NZ" and ip.geoip.subdivision eq "AUK" and ip.geoip.asnum eq ${ipinfo ? 64513 : 64512}`,
     { kind: "block" },
   ),
 ]);
@@ -222,7 +225,9 @@ const geoStatus = (
   ])
 ).trim();
 assert.equal(geoStatus, "403");
-console.log("PASS local IPinfo Lite + City MMDB lookup participates in WAF rules");
+console.log(
+  `PASS local ${ipinfo ? "IPinfo Lite + " : ""}City/ASN MMDB lookup participates in WAF rules`,
+);
 await save([]);
 await api("DELETE", `/ip-lists/${list.id}`);
 await api("DELETE", `/platform-ip-lists/${global.id}`);

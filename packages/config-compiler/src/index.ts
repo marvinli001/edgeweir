@@ -29,6 +29,7 @@ import {
   OriginSchema,
   OriginScheme,
   PassiveHealthCheckSchema,
+  type RuleExpression,
   S3AuthSchema,
   type Site,
   SiteSchema,
@@ -160,19 +161,37 @@ export function compileRules(rules: RuleModel[] = []): EdgeRule[] {
     .map((rule) => create(EdgeRuleSchema, rule));
 }
 /**
- * Node capability each GeoIP field needs: country comes from IPinfo Lite or a
- * City MMDB, subdivision only from a City MMDB, ASN from IPinfo Lite or an ASN
- * MMDB. Keep the "geoip-" prefix: rollback recomputes every geoip-* feature.
+ * requiredFeatures for GeoIP fields. geoip-city-v1 keeps its original name so
+ * nodes of every version accept the configuration; nodes now report it for any
+ * country data (IPinfo Lite or a City MMDB). Subdivisions are checked by the
+ * console only, see nodeRequirements.
  */
-const GEO_FEATURES: Record<string, string> = {
-  "ip.geoip.country": "geoip-country-v1",
-  "ip.geoip.subdivision": "geoip-city-v1",
-  "ip.geoip.asnum": "geoip-asn-v1",
-};
-
 export function geoFeatures(expression: Expression): string[] {
-  const feature = GEO_FEATURES[expression.field];
-  return [...(feature ? [feature] : []), ...expression.children.flatMap(geoFeatures)];
+  return [
+    ...(expression.field === "ip.geoip.asnum"
+      ? ["geoip-asn-v1"]
+      : expression.field.startsWith("ip.geoip.")
+        ? ["geoip-city-v1"]
+        : []),
+    ...expression.children.flatMap(geoFeatures),
+  ];
+}
+
+/**
+ * Capabilities a node needs for `config`: its requiredFeatures, plus
+ * geoip-subdivision-v1 when a rule reads ip.geoip.subdivision. That one never
+ * enters requiredFeatures, which nodes check against their own list, so nodes
+ * that predate it keep accepting the configuration. Compare with
+ * nodeSupportsFeature from @edgeweir/contract.
+ */
+export function nodeRequirements(config: NodeConfig): string[] {
+  const readsSubdivision = (expression: RuleExpression | undefined): boolean =>
+    !!expression &&
+    (expression.field === "ip.geoip.subdivision" || expression.children.some(readsSubdivision));
+  const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
+  return rules.some((rule) => readsSubdivision(rule.expression))
+    ? [...config.requiredFeatures, "geoip-subdivision-v1"]
+    : [...config.requiredFeatures];
 }
 
 export interface ListenerModel {

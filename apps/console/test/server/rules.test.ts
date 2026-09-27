@@ -220,22 +220,13 @@ describe("M4 rules and IP list boundaries", async () => {
       ],
     });
     expect((await config()).revision).toBeGreaterThan(before);
-    // Nodes from before geoip-country-v1 (City MMDB only) must upgrade for country rules.
+    // IPinfo Lite answers country (reported as geoip-city-v1) and ASN, not subdivisions.
     await ctx.db
       .update(schema.node)
-      .set({ supportedFeatures: ["rules-v1", "geoip-city-v1", "geoip-asn-v1"] })
-      .where(eq(schema.node.id, node.id));
-    expect((await rpcError(tenant.rules.save({ id: otherSiteId, rules }))).code).toBe(
-      "NODE_CAPABILITY_REQUIRED",
-    );
-    // IPinfo Lite answers country and ASN, but not subdivisions.
-    await ctx.db
-      .update(schema.node)
-      .set({ supportedFeatures: ["rules-v1", "geoip-country-v1", "geoip-asn-v1"] })
+      .set({ supportedFeatures: ["rules-v1", "geoip-country-v1", "geoip-city-v1", "geoip-asn-v1"] })
       .where(eq(schema.node.id, node.id));
     await tenant.rules.save({ id: otherSiteId, rules });
-    expect((await config()).requiredFeatures).toContain("geoip-country-v1");
-    expect((await config()).requiredFeatures).not.toContain("geoip-city-v1");
+    expect((await config()).requiredFeatures).toContain("geoip-city-v1");
     const subdivision = [
       {
         name: "subdivision",
@@ -246,6 +237,14 @@ describe("M4 rules and IP list boundaries", async () => {
     ];
     const error = await rpcError(tenant.rules.save({ id: otherSiteId, rules: subdivision }));
     expect(error.code).toBe("NODE_CAPABILITY_REQUIRED");
+    // Subdivisions never enter requiredFeatures, so older nodes keep accepting the
+    // configuration; for them geoip-city-v1 always meant a City MMDB.
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: ["rules-v1", "geoip-city-v1"] })
+      .where(eq(schema.node.id, node.id));
+    await tenant.rules.save({ id: otherSiteId, rules: subdivision });
+    expect((await config()).requiredFeatures).not.toContain("geoip-subdivision-v1");
     await tenant.rules.save({ id: otherSiteId, rules: [] });
     await ctx.db.delete(schema.node).where(eq(schema.node.id, node.id));
   });

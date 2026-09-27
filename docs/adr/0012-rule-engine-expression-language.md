@@ -92,7 +92,7 @@ Phase 0 范围：
 ## 2026-09-27 GeoIP 数据源更新
 
 - 默认数据源改为 [IPinfo Lite](https://ipinfo.io/lite)（国家与 ASN，CC BY-SA 4.0，每日更新）。节点发布镜像在构建时用 BuildKit secret 传入的 IPinfo token 下载 MMDB，按 IPinfo 公布的 sha256 校验后内置于 `/usr/share/edgeweir-node/geoip/`；运行时仍只读本地文件，没有外连。上一条中 DB-IP Lite 作为默认数据源、由运维者下载的做法被取代；DB-IP 等 City MMDB 仍可由运维者提供，用于省份。
-- 能力拆分为 `geoip-country-v1`（IPinfo 或 City）、`geoip-city-v1`（City，一级行政区）、`geoip-asn-v1`（IPinfo 或 ASN）。国家和 ASN 优先取 IPinfo，一级行政区只在 City 与国家一致时采用。旧节点只上报 `geoip-city-v1`，按国家匹配的规则需要先升级节点。
+- 国家和 ASN 优先取 IPinfo，一级行政区只来自 City，且仅在 City 与国家一致时采用。为保持控制台先升级、兼容上一版本节点的约定，配置的 requiredFeatures 不变：国家和省份规则仍要求 `geoip-city-v1`，ASN 要求 `geoip-asn-v1`。节点改为在有任何国家数据（IPinfo 或 City）时上报 `geoip-city-v1`，另报 `geoip-country-v1` 表示按新语义上报，并只在有 City 时上报 `geoip-subdivision-v1`。控制台在发布准入、配置下发和"需要升级"标记中额外检查省份规则的 `geoip-subdivision-v1`，没有 `geoip-country-v1` 的旧节点以 `geoip-city-v1` 视为具备；节点逐条表达式校验时省份字段需要本机 City 数据。
 - 镜像内的数据随构建日期变化，是 [ADR-0017](0017-release-supply-chain.md) 可复现构建的例外，所含副本由镜像内 `NOTICE` 的 sha256 标识。安装包和压缩包不内置数据。
 
 ## 2026-09-27 MVP 审查补充

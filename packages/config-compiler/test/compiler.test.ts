@@ -10,6 +10,7 @@ import {
   encodeNodeConfig,
   geoFeatures,
   MAX_SITES_PER_CLUSTER,
+  nodeRequirements,
   parseDomain,
   type SiteModel,
 } from "../src/index";
@@ -182,16 +183,44 @@ describe("compileNodeConfig", () => {
   });
 });
 
-describe("geoFeatures", () => {
-  it("asks for the capability that answers each GeoIP field", () => {
-    const features = (source: string) => [...new Set(geoFeatures(parseExpression(source)))].sort();
-    expect(features('ip.geoip.country eq "NZ"')).toEqual(["geoip-country-v1"]);
+describe("GeoIP capabilities", () => {
+  const features = (source: string) => [...new Set(geoFeatures(parseExpression(source)))].sort();
+  const requirements = (source: string) =>
+    nodeRequirements(
+      compileNodeConfig(
+        {
+          clusterId: "c",
+          sites: [],
+          platformRules: [
+            {
+              id: "r",
+              phase: "waf-custom",
+              expression: parseExpression(source),
+              action: { kind: "log" },
+            },
+          ],
+        },
+        1n,
+      ),
+    ).sort();
+
+  it("keeps the requiredFeatures every node version understands", () => {
+    expect(features('ip.geoip.country eq "NZ"')).toEqual(["geoip-city-v1"]);
     expect(features('ip.geoip.subdivision eq "AUK"')).toEqual(["geoip-city-v1"]);
     expect(features("ip.geoip.asnum in {13335 15169}")).toEqual(["geoip-asn-v1"]);
     expect(
       features('not (ip.geoip.country in {"NZ" "AU"} and ip.geoip.asnum eq 64512) or ssl eq true'),
-    ).toEqual(["geoip-asn-v1", "geoip-country-v1"]);
+    ).toEqual(["geoip-asn-v1", "geoip-city-v1"]);
     expect(features('http.host eq "a.test"')).toEqual([]);
+  });
+
+  it("adds the console-only subdivision requirement", () => {
+    expect(requirements('ip.geoip.country eq "NZ"')).toEqual(["geoip-city-v1", "rules-v1"]);
+    expect(requirements('not (ssl eq true or ip.geoip.subdivision eq "AUK")')).toEqual([
+      "geoip-city-v1",
+      "geoip-subdivision-v1",
+      "rules-v1",
+    ]);
   });
 });
 

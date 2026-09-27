@@ -12,7 +12,13 @@ import {
   type ServiceImpl,
 } from "@connectrpc/connect";
 import type { ConnectNodeAdapterOptions } from "@connectrpc/connect-node";
-import { applyNodeConfigDiff, decodeNodeConfig, diffNodeConfig } from "@edgeweir/config-compiler";
+import {
+  applyNodeConfigDiff,
+  decodeNodeConfig,
+  diffNodeConfig,
+  nodeRequirements,
+} from "@edgeweir/config-compiler";
+import { nodeSupportsFeature } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
   ApplyState,
@@ -468,7 +474,11 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           : await getRevision(app.db, node.clusterId, Number(req.revision));
       if (!target) throw new ConnectError("revision not found", Code.NotFound);
       const snapshot = decodeNodeConfig(target.ir);
-      if (snapshot.requiredFeatures.some((feature) => !node.supportedFeatures.includes(feature))) {
+      if (
+        nodeRequirements(snapshot).some(
+          (feature) => !nodeSupportsFeature(node.supportedFeatures, feature),
+        )
+      ) {
         throw new ConnectError(
           "agent upgrade required for this configuration",
           Code.FailedPrecondition,

@@ -10,10 +10,12 @@ import {
   encodeNodeConfig,
   geoFeatures,
   MAX_SITES_PER_CLUSTER,
+  nodeRequirements,
   type RuleModel,
   type SiteModel,
 } from "@edgeweir/config-compiler";
 import {
+  nodeSupportsFeature,
   normalizeCidr,
   type ReasonParams,
   type Revision,
@@ -326,8 +328,10 @@ async function insertRevision(
   if (latest && latest.revision >= highest && latest.contentHash === config.contentHash) {
     return { row: latest, created: false };
   }
-  const previousFeatures = new Set(latest ? decodeNodeConfig(latest.ir).requiredFeatures : []);
-  const addedFeatures = config.requiredFeatures.filter((feature) => !previousFeatures.has(feature));
+  const previousFeatures = new Set(latest ? nodeRequirements(decodeNodeConfig(latest.ir)) : []);
+  const addedFeatures = nodeRequirements(config).filter(
+    (feature) => !previousFeatures.has(feature),
+  );
   if (addedFeatures.length) {
     const [user] = userId
       ? await tx
@@ -343,7 +347,7 @@ async function insertRevision(
         .from(schema.node)
         .where(and(eq(schema.node.clusterId, clusterId), eq(schema.node.status, "active")));
       const missing = addedFeatures.filter((feature) =>
-        nodes.some((node) => !node.features.includes(feature)),
+        nodes.some((node) => !nodeSupportsFeature(node.features, feature)),
       );
       if (missing.length)
         fail("NODE_CAPABILITY_REQUIRED", "cluster nodes do not support this change", {
