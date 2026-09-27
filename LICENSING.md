@@ -4,7 +4,7 @@
 
 ## 开源核心
 
-`edgeweir` 控制面与 `edgeweir-node` 节点继续采用 **AGPL-3.0-only**。第三方组件遵循各自的许可证。
+`edgeweir` 控制面与 `edgeweir-node` 节点继续采用 **AGPL-3.0-only**。第三方组件遵循各自的许可证。节点发布镜像内置的 GeoIP 数据是 [IPinfo Lite](https://ipinfo.io/lite)，按 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 原样再分发，不属于 AGPL 代码；署名：IP address data is powered by [IPinfo](https://ipinfo.io)。
 
 - 允许个人和企业在遵守 AGPL 的前提下使用、修改、分发以及提供收费服务；没有“仅限个人”“禁止商用”或必须购买官方授权才能运营的附加条款。
 - 组织、成员、邀请、角色权限、组织隔离、站点控制台、平台后台、节点管理和开放 API 属于开源核心。组织可以用于内部团队，也可以被运营者用于管理客户资源；“内部协作”描述产品定位，不限制合法用途。
@@ -26,7 +26,7 @@
 
 ## English summary
 
-Both `edgeweir` and `edgeweir-node` remain **AGPL-3.0-only**. Commercial use, modification, redistribution and paid services are permitted subject to that license. There is no personal-use-only restriction or requirement to buy an official license to operate the open-source core.
+Both `edgeweir` and `edgeweir-node` remain **AGPL-3.0-only**. Commercial use, modification, redistribution and paid services are permitted subject to that license. There is no personal-use-only restriction or requirement to buy an official license to operate the open-source core. Node release images bundle the [IPinfo Lite](https://ipinfo.io/lite) GeoIP database unmodified under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); it is data, not AGPL code. IP address data is powered by [IPinfo](https://ipinfo.io).
 
 Organizations, memberships, invitations, access control, organization isolation, the site console, platform administration, node management and public APIs remain in the core. Internal collaboration is a product focus, not a restriction on who may use these features. Core functionality has no official licensing gates based on node, organization, member or site counts, and no vendor phone-home or commercial license checks.
 

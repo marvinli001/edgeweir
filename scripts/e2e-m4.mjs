@@ -67,6 +67,7 @@ await waitFor("M4 node capabilities", async () =>
     (n) =>
       n.online &&
       n.supportedFeatures.includes("rules-v1") &&
+      n.supportedFeatures.includes("geoip-country-v1") &&
       n.supportedFeatures.includes("geoip-city-v1") &&
       n.supportedFeatures.includes("geoip-asn-v1"),
   ),
@@ -201,7 +202,10 @@ await save([
   rule(
     "Synthetic GeoIP",
     "waf-custom",
-    'ip.geoip.country eq "NZ" and ip.geoip.subdivision eq "AUK" and ip.geoip.asnum eq 64512',
+    // The synthetic IPinfo database says AS64513 where the ASN database says
+    // AS64512: the block proves IPinfo answers country/ASN and the City MMDB
+    // still adds the subdivision.
+    'ip.geoip.country eq "NZ" and ip.geoip.subdivision eq "AUK" and ip.geoip.asnum eq 64513',
     { kind: "block" },
   ),
 ]);
@@ -218,7 +222,7 @@ const geoStatus = (
   ])
 ).trim();
 assert.equal(geoStatus, "403");
-console.log("PASS local City/ASN MMDB lookup participates in WAF rules");
+console.log("PASS local IPinfo Lite + City MMDB lookup participates in WAF rules");
 await save([]);
 await api("DELETE", `/ip-lists/${list.id}`);
 await api("DELETE", `/platform-ip-lists/${global.id}`);

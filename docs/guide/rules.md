@@ -45,9 +45,9 @@ http.response.code ge 500
 | `http.response.headers["name"]` | 字符串，仅 response-transform 可用 |
 | `ip.src` | TCP 客户端地址；启用 PROXY 协议时为受信负载均衡提供的地址 |
 | `ssl` | 布尔值 |
-| `ip.geoip.country` | ISO 国家代码，无记录为空字符串 |
-| `ip.geoip.subdivision` | 数据库中的一级行政区代码；DB-IP 无代码时使用其英文名称 |
-| `ip.geoip.asnum` | ASN 整数，无记录为 0 |
+| `ip.geoip.country` | ISO 国家代码，无记录为空字符串；需要 `geoip-country-v1` |
+| `ip.geoip.subdivision` | City MMDB 中的一级行政区代码，无代码时使用其英文名称；只在 City MMDB 与国家结果一致时有值；需要 `geoip-city-v1` |
+| `ip.geoip.asnum` | ASN 整数，无记录为 0；需要 `geoip-asn-v1` |
 
 支持 `eq`、`ne`、整数的 `lt/le/gt/ge`、字符串 `contains/matches`、集合或命名名单的 `in`、`not/and/or` 及括号；优先级为 not → and → or。IP 的 eq/ne 使用地址或 CIDR 包含关系。IPv4-mapped IPv6 与对应 IPv4 一致；NAT64 是独立 IPv6 地址。CIDR 保存前会清除主机位，拒绝八进制简写、zone ID 和歧义地址。
 
@@ -59,18 +59,29 @@ Host、Authorization、Cookie、Set-Cookie、消息边界/连接头、CDN-Loop �
 
 ## 本地 GeoIP 数据
 
-默认选用 [DB-IP Lite](https://db-ip.com/db/lite.php) 的 City 和 ASN MMDB，许可证为 CC BY 4.0，按月更新，精度低于商业数据库。引用数据的页面应保留 [IP Geolocation by DB-IP](https://db-ip.com) 署名。项目没有捆绑真实 IP 数据，也不会向数据商发送访客地址或自动下载更新。
+国家和 ASN 默认来自 [IPinfo Lite](https://ipinfo.io/lite)。节点发布镜像在**构建时**用 IPinfo token 下载 `ipinfo_lite.mmdb`，按 IPinfo 公布的 sha256 校验后放在 `/usr/share/edgeweir-node/geoip/`，同目录 `NOTICE` 记录下载时间和 sha256。许可证为 CC BY-SA 4.0，IPinfo 每日更新数据；镜像里的是构建当天的快照。引用数据的页面应保留署名 IP address data is powered by [IPinfo](https://ipinfo.io)，后台 GeoIP 卡片已带有该链接。节点运行时只读本地文件，不向 IPinfo 或其他数据商发送访客地址，也不自动下载更新；token 只用于构建，不进入镜像。
 
-1. 运维者从 DB-IP 下载并解压 City / ASN Lite MMDB；核对来源、许可和完整性，保留下载月份。
-2. 文件放在节点可读的只读目录，设置 `EDGEWEIR_GEOIP_CITY=/path/city.mmdb`、`EDGEWEIR_GEOIP_ASN=/path/asn.mmdb`（或对应 `--geoip-city` / `--geoip-asn`）。容器需挂载该目录。
-3. 重启节点以装入新数据库。后台系统设置显示各节点的国家/省份和 ASN 能力；未配置的数据类型不会上报能力，对应规则不会下发给该节点。
-4. 更新时先在一个节点替换数据库并重启、验证，再更新其余节点。不要原地改写正在使用的 MMDB。
+| 能力 | 数据来源 | 回答的字段 |
+| --- | --- | --- |
+| `geoip-country-v1` | IPinfo Lite 或 City MMDB | `ip.geoip.country` |
+| `geoip-city-v1` | City MMDB | `ip.geoip.subdivision` |
+| `geoip-asn-v1` | IPinfo Lite 或 ASN MMDB | `ip.geoip.asnum` |
 
-Go agent 使用 [maxminddb-golang v2.6.0](https://github.com/oschwald/maxminddb-golang) 校验、读取本地文件，仅通过权限为 0600 的 Unix socket 向同机 Lua worker 提供结果。每个 worker 缓存最多 10000 个结果、有效期五分钟；服务不可用时依赖 GeoIP 的请求返回 503。Compose 验收使用自行生成的合成 MMDB，测试网段映射到 NZ/AUK/64512，不代表真实地理信息。
+国家和 ASN 优先取 IPinfo，IPinfo 没有记录时回落到运维提供的 City / ASN MMDB；一级行政区只来自 City MMDB，且 City MMDB 的国家与最终国家一致时才采用。IPinfo Lite 不含省份，需要按省份匹配时另行提供 City MMDB（例如 [DB-IP Lite](https://db-ip.com/db/lite.php) City，CC BY 4.0，按月更新，使用时保留 [IP Geolocation by DB-IP](https://db-ip.com) 署名）。
+
+1. 容器节点：使用发布镜像即可获得 IPinfo Lite；需要新数据时拉取新镜像，或挂载自己的副本并设置 `EDGEWEIR_GEOIP_IPINFO=/path/ipinfo_lite.mmdb`。自行构建镜像时执行 `IPINFO_TOKEN=... make docker`（节点仓库），token 以 BuildKit secret 传入；不提供 token 时镜像不含数据。
+2. 安装包 / 压缩包节点不内置数据：从 IPinfo 下载 `ipinfo_lite.mmdb`（免费账号），放在节点可读的只读目录，并在 `/etc/default/edgeweir-node` 设置 `EDGEWEIR_GEOIP_IPINFO`。
+3. 需要省份时另设 `EDGEWEIR_GEOIP_CITY=/path/city.mmdb`；也可设置 `EDGEWEIR_GEOIP_ASN`。对应命令行为 `--geoip-ipinfo`（默认 `auto`：镜像内置时使用，`off` 关闭）、`--geoip-city`、`--geoip-asn`。容器需挂载相应目录。
+4. 重启节点以装入新数据库。后台系统设置显示各节点的国家、省份和 ASN 能力；未配置的数据类型不会上报能力，对应规则不会下发给该节点。
+5. 更新时先在一个节点替换数据库并重启、验证，再更新其余节点。不要原地改写正在使用的 MMDB。
+
+`geoip-country-v1` 由新版节点上报。旧节点即使配置了 City MMDB 也只上报 `geoip-city-v1`，按国家匹配的规则需要先升级这些节点；升级顺序为先节点、后控制台。
+
+Go agent 使用 [maxminddb-golang v2.6.0](https://github.com/oschwald/maxminddb-golang) 校验、读取本地文件（按数据库类型拒绝放错位置的文件），仅通过权限为 0600 的 Unix socket 向同机 Lua worker 提供结果。每个 worker 缓存最多 10000 个结果、有效期五分钟；服务不可用时依赖 GeoIP 的请求返回 503。Compose 验收使用自行生成的合成 MMDB：测试网段在 City / ASN 中为 NZ/AUK/64512，在 IPinfo Lite 结构中为 NZ/64513，用于证明国家和 ASN 取自 IPinfo、省份取自 City，不代表真实地理信息。
 
 ## 验收
 
 - `pnpm --filter @edgeweir/rule-engine test`：解析、类型、复杂度及共享向量。
 - `make lua-test`（节点仓库）：同一份表达式向量，含 IPv4-mapped、IPv6、GeoIP 属性、响应阶段和 UTF-8 字符串。
-- `node scripts/e2e-m4.mjs`：真实节点规则执行、热更新无 reload、合成 GeoIP 数据查询。
+- `node scripts/e2e-m4.mjs`：真实节点规则执行、热更新无 reload、合成 IPinfo Lite + City/ASN 数据查询。
 - `pnpm --filter @edgeweir/console exec playwright test e2e/m4.spec.ts`：名单、错误字符定位、规则顺序、375px 深色和 pageerror。

@@ -1,3 +1,4 @@
+import { parseExpression } from "@edgeweir/rule-engine";
 import { describe, expect, it } from "vitest";
 import {
   applyNodeConfigDiff,
@@ -7,6 +8,7 @@ import {
   decodeNodeConfig,
   diffNodeConfig,
   encodeNodeConfig,
+  geoFeatures,
   MAX_SITES_PER_CLUSTER,
   parseDomain,
   type SiteModel,
@@ -177,6 +179,19 @@ describe("compileNodeConfig", () => {
     expect(
       Buffer.from(encodeNodeConfig({ ...cfg, revision: 0n, contentHash: "" })).toString("hex"),
     ).toMatchSnapshot();
+  });
+});
+
+describe("geoFeatures", () => {
+  it("asks for the capability that answers each GeoIP field", () => {
+    const features = (source: string) => [...new Set(geoFeatures(parseExpression(source)))].sort();
+    expect(features('ip.geoip.country eq "NZ"')).toEqual(["geoip-country-v1"]);
+    expect(features('ip.geoip.subdivision eq "AUK"')).toEqual(["geoip-city-v1"]);
+    expect(features("ip.geoip.asnum in {13335 15169}")).toEqual(["geoip-asn-v1"]);
+    expect(
+      features('not (ip.geoip.country in {"NZ" "AU"} and ip.geoip.asnum eq 64512) or ssl eq true'),
+    ).toEqual(["geoip-asn-v1", "geoip-country-v1"]);
+    expect(features('http.host eq "a.test"')).toEqual([]);
   });
 });
 

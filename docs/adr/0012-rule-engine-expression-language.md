@@ -89,6 +89,12 @@ Phase 0 范围：
 - 默认数据源 DB-IP Lite（CC BY 4.0），由运维者自行下载并在节点提供 City / ASN MMDB；无自动外连。maxminddb-golang v2.6.0，测试数据由 mmdbwriter v1.2.0 自行生成。外部服务、UI 和具体规则语义见 [规则指南](../../docs/guide/rules.md)。
 - 平台规则先于同阶段的站点规则；回滚不能撤销当前平台规则与 IP 名单。阶段顺序、放行范围、固定窗口和字段限制在指南中明确。
 
+## 2026-09-27 GeoIP 数据源更新
+
+- 默认数据源改为 [IPinfo Lite](https://ipinfo.io/lite)（国家与 ASN，CC BY-SA 4.0，每日更新）。节点发布镜像在构建时用 BuildKit secret 传入的 IPinfo token 下载 MMDB，按 IPinfo 公布的 sha256 校验后内置于 `/usr/share/edgeweir-node/geoip/`；运行时仍只读本地文件，没有外连。上一条中 DB-IP Lite 作为默认数据源、由运维者下载的做法被取代；DB-IP 等 City MMDB 仍可由运维者提供，用于省份。
+- 能力拆分为 `geoip-country-v1`（IPinfo 或 City）、`geoip-city-v1`（City，一级行政区）、`geoip-asn-v1`（IPinfo 或 ASN）。国家和 ASN 优先取 IPinfo，一级行政区只在 City 与国家一致时采用。旧节点只上报 `geoip-city-v1`，按国家匹配的规则需要先升级节点。
+- 镜像内的数据随构建日期变化，是 [ADR-0017](0017-release-supply-chain.md) 可复现构建的例外，所含副本由镜像内 `NOTICE` 的 sha256 标识。安装包和压缩包不内置数据。
+
 ## 2026-09-27 MVP 审查补充
 
 - 限速改为每个已发布站点固定 256 KiB 的独立共享字典，最多 512 个站点，合计上限 128 MiB。分区名从验证后的站点 ID 无碰撞编码，保留名称前缀不得用于缓存区；WAF 记录去重使用独立 1 MiB 字典。一个站点的键数量不会耗尽其他站点的计数空间。

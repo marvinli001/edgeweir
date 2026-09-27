@@ -5,6 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
+// Country and ASN come from the IPinfo Lite database bundled into node images;
+// subdivisions need an operator-provided City MMDB.
+const features = [
+  ["geoip-country-v1", () => m.geo_country()],
+  ["geoip-city-v1", () => m.geo_subdivision()],
+  ["geoip-asn-v1", () => m.geo_asn()],
+] as const;
+
 export function GeoIpSettings() {
   const nodes = useQuery(
     orpc.nodes.list.queryOptions({
@@ -38,9 +46,9 @@ export function GeoIpSettings() {
             {nodes.data.map((node) => (
               <li key={node.id} className="flex flex-wrap items-center gap-2 py-3">
                 <span className="min-w-0 flex-1 break-all text-sm">{node.name}</span>
-                {(["geoip-city-v1", "geoip-asn-v1"] as const).map((feature) => (
+                {features.map(([feature, label]) => (
                   <Badge key={feature} variant="outline">
-                    {feature === "geoip-city-v1" ? m.geo_city() : m.geo_asn()}
+                    {label()}
                     {m.geo_state({
                       state: node.supportedFeatures.includes(feature)
                         ? m.geo_available()
@@ -54,7 +62,7 @@ export function GeoIpSettings() {
         )}
         <a
           className="mt-3 inline-block text-xs text-muted-foreground hover:underline"
-          href="https://db-ip.com"
+          href="https://ipinfo.io"
           target="_blank"
           rel="noreferrer"
         >

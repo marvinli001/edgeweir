@@ -220,12 +220,32 @@ describe("M4 rules and IP list boundaries", async () => {
       ],
     });
     expect((await config()).revision).toBeGreaterThan(before);
+    // Nodes from before geoip-country-v1 (City MMDB only) must upgrade for country rules.
     await ctx.db
       .update(schema.node)
-      .set({ supportedFeatures: ["rules-v1", "geoip-city-v1"] })
+      .set({ supportedFeatures: ["rules-v1", "geoip-city-v1", "geoip-asn-v1"] })
+      .where(eq(schema.node.id, node.id));
+    expect((await rpcError(tenant.rules.save({ id: otherSiteId, rules }))).code).toBe(
+      "NODE_CAPABILITY_REQUIRED",
+    );
+    // IPinfo Lite answers country and ASN, but not subdivisions.
+    await ctx.db
+      .update(schema.node)
+      .set({ supportedFeatures: ["rules-v1", "geoip-country-v1", "geoip-asn-v1"] })
       .where(eq(schema.node.id, node.id));
     await tenant.rules.save({ id: otherSiteId, rules });
-    expect((await config()).requiredFeatures).toContain("geoip-city-v1");
+    expect((await config()).requiredFeatures).toContain("geoip-country-v1");
+    expect((await config()).requiredFeatures).not.toContain("geoip-city-v1");
+    const subdivision = [
+      {
+        name: "subdivision",
+        phase: "waf-custom" as const,
+        expression: 'ip.geoip.subdivision eq "AUK"',
+        action: { kind: "log" as const },
+      },
+    ];
+    const error = await rpcError(tenant.rules.save({ id: otherSiteId, rules: subdivision }));
+    expect(error.code).toBe("NODE_CAPABILITY_REQUIRED");
     await tenant.rules.save({ id: otherSiteId, rules: [] });
     await ctx.db.delete(schema.node).where(eq(schema.node.id, node.id));
   });

@@ -46,6 +46,7 @@ GoEdge 发布的二进制与源码不一致，用户无法验证手里的程序�
 - 依赖 GitHub Actions 和 Sigstore 公共基础设施。
 - 用户验证时需要安装 cosign（或 `gh`）。
 - deb、rpm 和压缩包的逐字节可复现还受文件元数据、压缩实现等因素影响，需要持续验证；二进制本身的可复现是第一目标。
+- 2026-09-27 起节点容器镜像内置构建时下载的 IPinfo Lite 数据库（[ADR-0012](0012-rule-engine-expression-language.md)），镜像内容因此随构建日期变化；二进制、安装包和压缩包不受影响。下载用的 token 以 BuildKit secret 传入，不进入构建参数和 mode=max provenance；发布工作流缺少 `IPINFO_TOKEN` 时失败。
 
 ## Phase 0 落地情况
 

@@ -159,15 +159,20 @@ export function compileRules(rules: RuleModel[] = []): EdgeRule[] {
     )
     .map((rule) => create(EdgeRuleSchema, rule));
 }
+/**
+ * Node capability each GeoIP field needs: country comes from IPinfo Lite or a
+ * City MMDB, subdivision only from a City MMDB, ASN from IPinfo Lite or an ASN
+ * MMDB. Keep the "geoip-" prefix: rollback recomputes every geoip-* feature.
+ */
+const GEO_FEATURES: Record<string, string> = {
+  "ip.geoip.country": "geoip-country-v1",
+  "ip.geoip.subdivision": "geoip-city-v1",
+  "ip.geoip.asnum": "geoip-asn-v1",
+};
+
 export function geoFeatures(expression: Expression): string[] {
-  return [
-    ...(expression.field === "ip.geoip.asnum"
-      ? ["geoip-asn-v1"]
-      : expression.field.startsWith("ip.geoip.")
-        ? ["geoip-city-v1"]
-        : []),
-    ...expression.children.flatMap(geoFeatures),
-  ];
+  const feature = GEO_FEATURES[expression.field];
+  return [...(feature ? [feature] : []), ...expression.children.flatMap(geoFeatures)];
 }
 
 export interface ListenerModel {
