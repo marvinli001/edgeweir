@@ -44,6 +44,7 @@ docker compose -f compose.e2e.yml up -d --build && pnpm e2e   # needs ../edgewei
 
 ## Non-negotiable principles
 
+- Product boundary: core stays AGPL-3.0-only and permits compliant commercial use. Organizations, memberships, RBAC, isolation and the current console/admin stay open; customer commerce portals, plans/billing, finance and reselling belong to a separate commercial product (LICENSING.md, ADR-0019). Do not implement them as license-gated core code. BOOTSTRAP is historical where it conflicts with this boundary.
 - No phone-home, no license checks; telemetry off unless explicitly enabled (third-party telemetry, e.g. better-auth's, is hard-disabled).
 - Secrets (private keys, DNS API keys) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they touch the database. Never store SSH credentials.
 - The node channel terminates its own TLS; after enrollment every node RPC requires mTLS. Enrollment tokens are single-use and stored as SHA-256 only.

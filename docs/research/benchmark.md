@@ -46,7 +46,7 @@ Edgeweir 的定位：开源（AGPL-3.0）、自托管、无授权校验，数据
 - 按集群的长期注册 token（国内面板常见）与"一次性 token"原则冲突。
 - 批量 SSH 安装节点与"绝不存 SSH 凭据"原则冲突。
 - DNSLA、51dns 等服务商是否有可用的 libdns 实现。
-- License 维持 AGPL-3.0 还是改 Apache-2.0。
+- License 与商业功能归属已于 2026-09-26 确定：核心保留 AGPL-3.0-only，客户门户、套餐计费、财务与分销由独立商业运营产品提供，见 [ADR-0019](../adr/0019-open-core-and-commercial-products.md)。
 
 ## 非功能参考值
 

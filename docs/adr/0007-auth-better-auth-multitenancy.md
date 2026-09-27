@@ -1,6 +1,6 @@
 # ADR-0007: 认证与多租户：better-auth
 
-- 状态：已接受
+- 状态：已接受（租户门户与自助注册归属已被 ADR-0019 取代）
 - 日期：2026-09-25
 - 适用仓库：edgeweir
 
@@ -78,6 +78,7 @@ Phase 0 范围：
 | @better-auth/api-key | 1.7.6 | npm registry |
 
 > 更新记录：
+> - 2026-09-26：按 [ADR-0019](0019-open-core-and-commercial-products.md)，组织、成员、邀请、权限、组织隔离和现有控制台 / 后台继续属于开源核心；本 ADR 中未来租户门户、自助注册购买与套餐的产品归属改为独立商业运营产品。原结论保留为历史记录，现有登录、组织和邀请行为不变。`organization` 是资源隔离单位，不等于商业客户或订阅账户。
 > - 2026-09-25：better-auth 1.7.6；schema 由官方 CLI（现为 `auth` 包，`pnpm dlx auth@1.7.6 generate`）生成。better-auth 自带的遥测默认关闭，但可被 `BETTER_AUTH_TELEMETRY` 环境变量打开；控制台在代码里显式 `telemetry: { enabled: false }` 并在启动时删除该变量。AccessKey 使用 api-key 插件，前缀 `ewk_`，`enableSessionForAPIKeys` 让 AccessKey 以其所有者身份走同一套 RBAC，限速 600 次/分钟。
 > - 2026-09-25：界面按角色分为**控制台**与**后台**。所有用户（包括平台管理员）的主视图都是控制台（概览、网站、设置），平台管理员拥有控制台的全部功能；此外顶栏多一个 [控制台 | 后台] 分段切换，进入 `/admin/*`（平台概览、集群与节点、审计日志、系统设置；以后还有组织与用户、套餐、DNS 服务商等系统级配置）。`/admin` 路由在前端对非管理员重定向到 `/`，对应的 oRPC 过程在服务端使用 `admin` 守卫。`settings.get`（节点通道地址、CA 指纹、遥测、统计模式）随之改为仅平台管理员可调用，测试覆盖租户成员调用 `settings`、`clusters`、`auditLogs` 返回 403。
 > - 2026-09-25（MVP M1）：

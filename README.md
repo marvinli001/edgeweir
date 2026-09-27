@@ -6,6 +6,8 @@ Edgeweir is an open-source, self-hosted CDN control plane and edge runtime. It b
 
 The console never stores SSH credentials. Node identity keys stay on their nodes; certificate and origin secrets are encrypted in the database. The core has no vendor phone-home or licence checks. These controls reduce specific risks; they are not a claim that compromise is impossible.
 
+The core includes organizations, members, access control, organization isolation and the existing console and admin area. A customer commerce portal, plans and billing, finance and reselling are planned as a separate commercial operations product. The open-source core remains usable for commercial purposes under AGPL; see [licensing and product boundaries](LICENSING.md).
+
 ## The name
 
 Edgeweir (pronounced *EDGE-weer*) is named after a weir. Around 256 BC, Li Bing built the Dujiangyan irrigation system on the Min River. One of its parts, the Feisha ("flying sand") Weir, sits at the edge of the inner channel: in normal times it lets water flow on through the Bottle-Neck Channel to irrigate the Chengdu Plain; in floods, the river bend flings sand and excess water over the weir back into the outer channel. Edgeweir aims to do the same at the network edge: let good traffic through, shed attacks, and steer the flow.
@@ -189,4 +191,4 @@ docs/deploy/               deployment guides
 
 ## License
 
-[AGPL-3.0-only](LICENSE). The same license applies to [edgeweir-node](https://github.com/marvinli001/edgeweir-node).
+[AGPL-3.0-only](LICENSE). The same license applies to [edgeweir-node](https://github.com/marvinli001/edgeweir-node). Commercial use is permitted subject to the license. Separate commercial products do not add restrictions to the core; see [LICENSING.md](LICENSING.md).

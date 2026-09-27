@@ -6,7 +6,7 @@
 
 ## 信任基线
 
-以下规则是硬性约束，两个仓库的代码都必须遵守。
+以下规则是硬性约束，`edgeweir` 与 `edgeweir-node` 两个开源核心仓库的代码都必须遵守。独立商业产品的范围见 [ADR-0019](docs/adr/0019-open-core-and-commercial-products.md)：它们可在管理员主动启用后按明示条款使用授权和云服务，但不能向核心加入商业功能锁，不能因官方许可证失效或授权服务故障中断已有 CDN 流量。
 
 1. **没有 phone-home。** 控制面和节点不主动连接 Edgeweir 项目的任何服务器（edgeweir.com、edgeweir.dev 等），版本检查也不例外。
 2. **没有授权校验。** 代码中没有许可证密钥、联网授权或功能锁。
@@ -122,6 +122,8 @@ gh attestation verify oci://ghcr.io/marvinli001/edgeweir:<tag> --repo marvinli00
 <a id="english"></a>
 
 ## English
+
+**Product scope.** These guarantees cover the open-source `edgeweir` and `edgeweir-node` repositories. Separate commercial products may offer explicitly enabled licensing and cloud services under their own terms; an expired vendor license or licensing outage must not gate core functionality or interrupt existing CDN traffic. See [LICENSING.md](LICENSING.md).
 
 This policy covers [edgeweir/edgeweir](https://github.com/marvinli001/edgeweir) (console), [edgeweir/edgeweir-node](https://github.com/marvinli001/edgeweir-node) (edge node), and their official images and release artifacts.
 

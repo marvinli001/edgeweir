@@ -99,6 +99,7 @@ Phase 0 范围：
 | cosign | 3.1.3 | proxy.golang.org（github.com/sigstore/cosign） |
 
 > 更新记录：
+> - 2026-09-26：[ADR-0019](0019-open-core-and-commercial-products.md) 补充独立商业产品的边界。无官方回连、无商业授权校验继续约束 `edgeweir` 和 `edgeweir-node` 开源核心；原“商业版加联网授权”的取舍针对把核心改成授权产品，不禁止独立、主动启用且明示数据用途的商业组件。官方授权到期或服务故障不得中断已有 CDN 流量，不得修改核心使用权；本次只调整文档，不加入授权代码。
 > - 2026-09-25（收尾）：
 >   - **绝不保存 SSH 凭据。** 决策第 2 条加密范围中的"运营者明确选择保存的 SSH 凭据"和第 5 条"控制面默认不保存节点 SSH 凭据"中的"默认"不再适用：控制面绝不保存节点 SSH 凭据，没有保存的选项（与 [ADR-0016](0016-one-line-install.md) 同日的更新记录一致）。
 >   - **信封密文绑定记录 id（密文格式 v2）。** 决策第 2 条要求 AAD 绑定表、字段和记录 id，此前的实现（v1）只绑定一个固定的用途字符串（例如 `origin-credential/s3-secret`），有数据库写权限的人可以在行之间互换密文。v2 的 AAD 是 `edgeweir/envelope/v2`、`<表>.<字段>`、`<记录 id>` 三段（`\0` 分隔），包装数据密钥时另附主密钥 id；覆盖 S3 源站密钥（`origin_credential.secret_envelope`）、内部 CA 私钥（`pki_authority.private_key_envelope`）和 setup token（`system_setting.setup_token`）。控制台启动时在迁移之后、读取任何密文之前，持 advisory lock 把 v1 密文解开并重新封装成 v2（幂等；打不开的只记日志）；正常读取路径拒绝 v1，所以多个实例要一起升级。

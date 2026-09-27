@@ -1,6 +1,8 @@
 # 路线图
 
-本文件是 Edgeweir 的功能全集与阶段划分，内容来自 [BOOTSTRAP.md](BOOTSTRAP.md) §3（Phase 0）和 §4（MVP、v1、v2），对标调研补充的条目（[docs/research/benchmark.md](docs/research/benchmark.md)），以及 2026-09-25 收尾审计的延后项（[docs/audits/2026-09-25-wrapup.md](docs/audits/2026-09-25-wrapup.md) 第 3 节，标为「收尾延后」，归属见 [docs/specs/mvp.md](docs/specs/mvp.md) 0.5），覆盖 edgeweir（控制面）和 edgeweir-node（节点）两个仓库。每个阶段内按领域分组；勾选表示已完成并合入 master。设计依据见 [docs/adr/](docs/adr/README.md)。
+产品范围按 2026-09-26 的 [ADR-0019](docs/adr/0019-open-core-and-commercial-products.md) 划分：本文件跟踪 AGPL-3.0-only 开源核心；客户门户、套餐计费、财务和分销另属商业运营产品。BOOTSTRAP 中这些功能的旧归属已被取代，已实现的组织、成员和隔离能力保留。
+
+本文件是 Edgeweir 开源核心的功能范围与阶段划分，历史需求来自 [BOOTSTRAP.md](BOOTSTRAP.md) §3（Phase 0）和 §4（MVP、v1、v2），对标调研补充的条目（[docs/research/benchmark.md](docs/research/benchmark.md)），以及 2026-09-25 收尾审计的延后项（[docs/audits/2026-09-25-wrapup.md](docs/audits/2026-09-25-wrapup.md) 第 3 节，标为「收尾延后」，归属见 [docs/specs/mvp.md](docs/specs/mvp.md) 0.5），按 ADR-0019 的商业边界整理后覆盖 edgeweir（控制面）和 edgeweir-node（节点）两个仓库。每个阶段内按领域分组；勾选表示已完成并合入 master。设计依据见 [docs/adr/](docs/adr/README.md)。
 
 ## Phase 0（已完成于本仓库初始化）
 
@@ -189,18 +191,11 @@
 - [ ] 规则版本与回滚
 - [ ] 节点 CLI 诊断、时钟偏差告警、节点日志页
 
-### 租户
+### 组织与资源接口（开源核心）
 
-- [ ] 租户门户
-- [ ] 套餐和配额
-- [ ] 流量包
-- [ ] 余额
-- [ ] 95 计费
-- [ ] 支付接口
-- [ ] 实名认证
-- [ ] 工单
-- [ ] 优惠券、邀请码、白标、自助注册、欠费停用
-- [ ] 短信与微信支付
+组织、成员、邀请、角色、租户隔离及现有控制台 / 后台已在 MVP 中提供，继续开源。用量统计、资源保护和管理 API 留在核心；商业套餐、订阅状态和账本不进入核心数据模型。
+
+原本列在本节的客户门户、自助注册购买、套餐与商业配额、流量包、余额、95 计费、支付、实名认证、工单、优惠券、白标、欠费流程和短信 / 微信支付移入独立商业运营产品，不再作为开源 v1 的交付项。归属见 [ADR-0019](docs/adr/0019-open-core-and-commercial-products.md)，商业产品另行排期。
 
 ## v2
 
@@ -225,5 +220,6 @@
 
 ### 产品模块
 
-- [ ] 高防 IP 售卖模块
 - [ ] Tunnels 内网穿透
+
+高防 IP 的售卖、订单与结算归独立商业运营产品；节点防护与调度能力仍按开源路线图推进。

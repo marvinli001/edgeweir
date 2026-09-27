@@ -148,3 +148,5 @@ BREAKING CHANGE: nodes built from proto/v0.x must be regenerated.
 ## 许可证
 
 Edgeweir 以 [AGPL-3.0-only](LICENSE) 发布。提交贡献即表示你同意以 AGPL-3.0-only 授权你的贡献，并确认你有权这样做。
+
+开源核心允许合规商用；组织、成员、权限与隔离保留开源，对外客户门户、套餐计费、财务和分销属于独立商业运营产品，见 [LICENSING.md](LICENSING.md) 与 [ADR-0019](docs/adr/0019-open-core-and-commercial-products.md)。向核心贡献不自动授予项目方闭源再许可权；如需双许可或插件链接例外，应另行核实代码权利和贡献授权。

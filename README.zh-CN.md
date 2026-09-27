@@ -6,6 +6,8 @@ Edgeweir 是开源、自托管的 CDN 控制台与边缘节点系统，统一管
 
 控制面绝不保存 SSH 凭据；节点身份私钥留在节点本机；证书私钥和源站密钥加密后入库。核心没有官方回连和许可证校验。这些设计针对具体风险，不代表系统不可能被攻破。
 
+组织、成员、权限、组织隔离以及现有控制台和后台属于开源核心。对外客户门户、套餐计费、财务和分销计划由独立商业运营产品提供。开源核心允许按 AGPL 用于商业经营，完整边界见 [开源许可与商业产品边界](LICENSING.md)。
+
 ## 名字的由来
 
 Edgeweir（读作 EDGE-weer）的名字来自「堰」（weir）。公元前 256 年前后，李冰主持修建都江堰，其中的飞沙堰位于内江的边缘：平时它让江水顺畅流向宝瓶口，灌溉成都平原；洪水来时，弯道环流把泥沙和多余的水甩过堰顶、排回外江。Edgeweir 想在网络的边缘做同样的事：放行正常流量，筛掉攻击，按需调度分流。
@@ -189,4 +191,4 @@ docs/deploy/               部署文档
 
 ## 许可证
 
-[AGPL-3.0-only](LICENSE)。[edgeweir-node](https://github.com/marvinli001/edgeweir-node) 使用相同的许可证。
+[AGPL-3.0-only](LICENSE)。[edgeweir-node](https://github.com/marvinli001/edgeweir-node) 使用相同的许可证，允许在遵守协议的前提下商用。独立商业产品不为开源核心增加使用限制，详见 [LICENSING.md](LICENSING.md)。

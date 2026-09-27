@@ -16,7 +16,7 @@ ADR 编号在 edgeweir 与 edgeweir-node 两个仓库之间统一，"适用仓�
 | [ADR-0004](0004-i18n-paraglide.md) | 国际化：Paraglide JS 2 | 已接受 | edgeweir |
 | [ADR-0005](0005-api-orpc-openapi.md) | API：oRPC 契约优先，同时服务 UI 与 OpenAPI | 已接受 | edgeweir |
 | [ADR-0006](0006-data-postgresql-drizzle-pgboss.md) | 数据层：PostgreSQL 18 + Drizzle + pg-boss | 已接受 | edgeweir |
-| [ADR-0007](0007-auth-better-auth-multitenancy.md) | 认证与多租户：better-auth | 已接受 | edgeweir |
+| [ADR-0007](0007-auth-better-auth-multitenancy.md) | 认证与多租户：better-auth | 已接受（租户门户与自助注册归属已被 ADR-0019 取代） | edgeweir |
 | [ADR-0008](0008-node-channel-connect-rpc-mtls.md) | 节点通道：Connect-RPC、内部 CA 与 mTLS | 已接受 | 两者 |
 | [ADR-0009](0009-analytics-clickhouse-and-lite.md) | 分析与日志：ClickHouse 可选，lite 模式存 Postgres | 已接受 | 两者 |
 | [ADR-0010](0010-certd-lego-libdns.md) | 证书与 DNS helper：edgeweir-certd（lego + libdns） | 已接受 | edgeweir |
@@ -28,6 +28,7 @@ ADR 编号在 edgeweir 与 edgeweir-node 两个仓库之间统一，"适用仓�
 | [ADR-0016](0016-one-line-install.md) | 节点一键安装 | 已接受 | 两者 |
 | [ADR-0017](0017-release-supply-chain.md) | 发布与供应链 | 已接受 | 两者 |
 | [ADR-0018](0018-trust-and-security-baseline.md) | 信任与安全基线 | 已接受 | 两者 |
+| [ADR-0019](0019-open-core-and-commercial-products.md) | 开源核心、租户与独立商业产品边界 | 已接受 | 两者 |
 
 ## 状态说明
 

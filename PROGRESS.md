@@ -56,8 +56,7 @@ MVP M1 新增（2026-09-25）：
 
 对标调研补充（2026-09-25，详见 [docs/research/benchmark.md](docs/research/benchmark.md)）：
 
-20. **License**：设计会话按默认选了 AGPL-3.0（防止闭源倒卖），备选 Apache-2.0（更利于企业采用），维护者没有明确回答过。
-    **默认**：保持 AGPL-3.0。
+20. **License 与商业边界（2026-09-26 已确定）**：核心继续使用 AGPL-3.0-only，允许合规商用；组织、成员、权限和隔离开源。维护者选择把对外客户门户、套餐计费、财务和分销整体放入独立商业运营产品，详见 [LICENSING.md](LICENSING.md) 与 [ADR-0019](docs/adr/0019-open-core-and-commercial-products.md)。本次更新文档与路线图，未迁移现有功能、未增加授权校验；AGPL 不禁止收费或竞争，也不能保证软件不被破解。
 21. **按集群的长期注册 token**：国内面板常见（批量上节点方便），与"注册 token 一次性、只存哈希"的原则冲突。
     **默认**：不做；批量上节点用"一次生成多条一次性命令"替代。
 22. **批量 SSH 安装节点**：与"绝不存 SSH 凭据"冲突。**默认**：不做。
@@ -454,6 +453,7 @@ MVP M2 新增（2026-09-25）：
 | 4 | 节点 | `go vet ./...`、`go test -race ./...`、`make proto-check`、`make lua-test`、`goreleaser check` | 全部 exit 0；Lua 36 + 16 个用例；`make proto-check` 从 `proto/v0.2.2` 生成无差异 |
 | 5 | 端到端 | `COMPOSE_PROJECT_NAME=edgeweir-wrapup E2E_CONSOLE_PORT=13200 E2E_NODE_PORT=18280 E2E_TAG=wrapup`：`docker compose -f compose.e2e.yml down -v && docker compose -f compose.e2e.yml up -d --build && bash scripts/e2e.sh` | 输出 `E2E OK`，50 个 PASS、0 个 FAIL；Playwright setup、smoke（2）、M1、landing、analytics、M2 全部通过，无 `pageerror`；收尾新增的 7 类用例见上方各项的 e2e 步骤；结束后只清理了 `edgeweir-wrapup` 项目 |
 | 6 | 仓库与文档 | `git status`（两个仓库）；README、ARCHITECTURE、SECURITY、ROADMAP、CLAUDE.md 对照代码 | 两个仓库干净；文档由收尾各环节对照代码更新（见 CP-M11、N-M11） |
+
 
 ## MVP M3（2026-09-27）
 
