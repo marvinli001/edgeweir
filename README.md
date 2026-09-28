@@ -52,7 +52,7 @@ browser, API clients ──:3000──▶ ┌───────────�
                                 └───────────────────────────────────┘
 ```
 
-Release image namespace: `ghcr.io/marvinli001/edgeweir` and `ghcr.io/marvinli001/edgeweir-node`. No Docker Hub mirror is currently published by these workflows.
+The console image `ghcr.io/marvinli001/edgeweir` (public, amd64 / arm64) is released on a rolling basis: every `master` commit that passes CI is published as a `<YYYYMMDD>-<commit>` tag (for example `20260929-a1b2c3d`) and `latest` follows the newest one. There are no `v1.2.3`-style version numbers. Nodes are still released as signed edgeweir-node Releases. No Docker Hub mirror is currently published by these workflows.
 
 ## Quick start (Docker)
 
@@ -70,7 +70,8 @@ BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 EOF
 
-docker compose up -d --build
+docker compose pull     # rolling image from ghcr.io; `docker compose up -d --build` builds from source
+docker compose up -d
 ```
 
 Open <http://localhost:3000> (every variable is described in [.env.example](.env.example)). The first-run setup wizard creates the platform administrator and a default organization. It asks for the one-time setup token that the console prints to its log (`docker compose logs console | grep setupToken`).
@@ -88,7 +89,7 @@ Ports:
 | 3000 | Web console and API | Allowed. A proxy such as BaoTa (宝塔) nginx can terminate TLS in front of it. Set `EDGEWEIR_TRUSTED_PROXIES` to the proxy's address so that audit entries and sign-in rate limits see the client IP; forwarding headers from anyone else are ignored. |
 | 8443 | Node channel | Expose it directly, or pass it through at layer 4 with nginx `stream`. **Never terminate TLS on a proxy**: the console terminates TLS itself and enforces mTLS. |
 
-Deployment guides: [docs/deploy/docker.md](docs/deploy/docker.md) and [docs/deploy/baota.md](docs/deploy/baota.md) (BaoTa panel).
+Deployment guides: [docs/deploy/docker.md](docs/deploy/docker.md) and [docs/deploy/baota.md](docs/deploy/baota.md) (BaoTa panel / aaPanel).
 
 ## Adding a node
 

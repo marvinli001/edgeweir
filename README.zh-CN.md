@@ -52,7 +52,7 @@ Edgeweir（读作 EDGE-weer）的名字来自「堰」（weir）。公元前 256
                              └───────────────────────────────────┘
 ```
 
-发布镜像命名空间为 `ghcr.io/marvinli001/edgeweir` 和 `ghcr.io/marvinli001/edgeweir-node`。当前工作流没有发布 Docker Hub 镜像副本。
+控制台镜像 `ghcr.io/marvinli001/edgeweir`（公开，amd64 / arm64）滚动发布：`master` 上通过 CI 的每个提交发布为 `日期-提交` 格式的 tag（例如 `20260929-a1b2c3d`），`latest` 指向最新一个，不发布 `v1.2.3` 式的版本号。节点仍按 edgeweir-node 的签名 Release 发布。当前工作流没有发布 Docker Hub 镜像副本。
 
 ## 快速开始（Docker）
 
@@ -70,7 +70,8 @@ BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 EOF
 
-docker compose up -d --build
+docker compose pull     # 拉取 ghcr.io 上的滚动版本；从源码构建改用 docker compose up -d --build
+docker compose up -d
 ```
 
 打开 <http://localhost:3000>（所有变量的说明见 [.env.example](.env.example)），首次初始化向导会创建平台管理员和默认组织。向导需要控制台打印在日志里的一次性 setup token（`docker compose logs console | grep setupToken`）。
@@ -88,7 +89,7 @@ docker compose up -d --build
 | 3000 | Web 控制台与 API | 可以。宝塔 nginx 等代理可以在前面终结 TLS。把代理的地址写进 `EDGEWEIR_TRUSTED_PROXIES`，审计日志和登录限速才能拿到访客 IP；其他来源的转发头一律忽略。 |
 | 8443 | 节点通道 | 直接暴露，或用 nginx `stream` 做四层透传。**不能由代理终结 TLS**：控制台自己终结 TLS 并强制 mTLS。 |
 
-部署文档：[docs/deploy/docker.md](docs/deploy/docker.md)、[docs/deploy/baota.md](docs/deploy/baota.md)（宝塔面板）。
+部署文档：[docs/deploy/docker.md](docs/deploy/docker.md)、[docs/deploy/baota.md](docs/deploy/baota.md)（宝塔面板 / aaPanel）。
 
 ## 添加节点
 

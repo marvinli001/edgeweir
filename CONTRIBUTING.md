@@ -144,6 +144,10 @@ BREAKING CHANGE: nodes built from proto/v0.x must be regenerated.
 - 镜像：`docker buildx imagetools inspect <镜像>:<tag>` 输出的 `Digest` 就是多架构 index 的 digest（不要用单一平台的 digest）。
 - Actions：`git ls-remote --tags https://github.com/<owner>/<action>` 找到版本 tag 对应的提交；带 `^{}` 的行是附注 tag 指向的提交，要用这一行的 SHA。
 
+## 控制台镜像发布
+
+控制台镜像滚动发布，不打版本 tag：合入 `master` 且 CI 通过后，Release 工作流把该提交发布为 `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<提交前 7 位>`（`scripts/image-version.sh`），它仍是 `master` 最新提交时同时移动 `latest`。基础镜像更新等需要重建时，在 Actions 里手动运行 Release（只重建 `master` 最新提交）。节点仍按 edgeweir-node 的 `v*` tag 发布，proto 仍用 `proto/vX.Y.Z`。
+
 ## ADR 流程
 
 1. 复制 [docs/adr/template.md](docs/adr/template.md) 为 `docs/adr/NNNN-slug.md`。`NNNN` 取现有最大编号加一（两个仓库共用一套编号），`slug` 用英文小写加连字符。

@@ -77,19 +77,21 @@ gh attestation verify edgeweir-node_<版本>_linux_amd64.tar.gz --repo marvinli0
 
 ### 控制面镜像
 
+控制面镜像滚动发布，没有版本 tag：`master` 上通过 CI 的每个提交发布为 `<YYYYMMDD>-<提交前 7 位>`（例如 `20260929-a1b2c3d`），签名证书身份是 `master` 分支上的 release 工作流。
+
 ```sh
-cosign verify ghcr.io/marvinli001/edgeweir:<tag> \
-  --certificate-identity-regexp '^https://github\.com/marvinli001/edgeweir/\.github/workflows/release\.yml@refs/tags/v.*$' \
+cosign verify ghcr.io/marvinli001/edgeweir:<日期-提交> \
+  --certificate-identity https://github.com/marvinli001/edgeweir/.github/workflows/release.yml@refs/heads/master \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
-gh attestation verify oci://ghcr.io/marvinli001/edgeweir:<tag> --repo marvinli001/edgeweir
+gh attestation verify oci://ghcr.io/marvinli001/edgeweir:<日期-提交> --repo marvinli001/edgeweir
 ```
 
-验证通过后，建议在 compose 文件中按 digest（`ghcr.io/marvinli001/edgeweir@sha256:...`）固定镜像，而不是只写 tag。
+验证通过后，建议按 digest 固定镜像（`.env` 里 `EDGEWEIR_VERSION=<日期-提交>@sha256:...`），而不是只写 tag。镜像标签 `org.opencontainers.image.revision` 是完整的提交 ID。
 
 ### 从源码重建
 
-检出发布对应的 tag，使用 `go.mod` 中固定的 Go 版本执行与 CI 相同的 goreleaser 构建，得到的二进制 sha256 应与发布物一致。构建可复现的做法见 [ADR-0017](docs/adr/0017-release-supply-chain.md)。
+节点：检出发布对应的 tag，使用 `go.mod` 中固定的 Go 版本执行与 CI 相同的 goreleaser 构建，得到的二进制 sha256 应与发布物一致。构建可复现的做法见 [ADR-0017](docs/adr/0017-release-supply-chain.md)。控制面镜像：检出 tag 中的提交，`scripts/image-version.sh` 会得到同一个版本号，按 release 工作流的参数（`VERSION`、`REVISION`）构建。
 
 ## 威胁模型要点
 
@@ -142,4 +144,4 @@ This policy covers [edgeweir/edgeweir](https://github.com/marvinli001/edgeweir) 
 
 **Reporting a vulnerability.** Do not open a public issue. Open a private advisory on GitHub ([console](https://github.com/marvinli001/edgeweir/security/advisories/new), [node](https://github.com/marvinli001/edgeweir-node/security/advisories/new)). We acknowledge reports within 3 working days and follow a 90-day coordinated disclosure window, counted from the day we receive the report.
 
-**Verifying releases.** Node packages: verify `checksums.txt` with `cosign verify-blob`, pinning the certificate identity to the `edgeweir/edgeweir-node` release workflow on a `v*` tag and the issuer to `https://token.actions.githubusercontent.com`, then run `sha256sum -c checksums.txt --ignore-missing`. Console image: `cosign verify ghcr.io/marvinli001/edgeweir:<tag>` with the same kind of identity pinning, and `gh attestation verify` for provenance. The exact commands are in [验证发布物](#验证发布物) above.
+**Verifying releases.** Node packages: verify `checksums.txt` with `cosign verify-blob`, pinning the certificate identity to the `edgeweir/edgeweir-node` release workflow on a `v*` tag and the issuer to `https://token.actions.githubusercontent.com`, then run `sha256sum -c checksums.txt --ignore-missing`. Console image: rolling releases, no version tags; every `master` commit that passes CI is published as `<YYYYMMDD>-<commit>`. Verify with `cosign verify ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>` pinning the identity to the release workflow on `refs/heads/master`, and `gh attestation verify` for provenance. The exact commands are in [验证发布物](#验证发布物) above.

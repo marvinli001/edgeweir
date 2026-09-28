@@ -82,3 +82,8 @@ Phase 0 范围：
 >   - **防回退。** 控制台由 Vitest（`apps/console/test/server/supply-chain-pins.test.ts`）、节点由 `scripts/check-pins.sh`（`make pin-check`，CI 的 test 任务执行）检查：未固定的第三方镜像或 Action 直接失败。更新方法见 CONTRIBUTING.md「更新固定的镜像与 Actions」。
 >   - **仍未固定的输入**：控制台 Dockerfile 的 `apk add tini` 在构建时取 Alpine 软件源当时的版本；setup-node 按 `.nvmrc` 的主版本 `24` 选择补丁版本（只影响 CI 检查，不进入镜像）。它们影响的是逐字节可复现，留给"独立重建比对"一并处理。
 
+> - 2026-09-29（控制面镜像改为滚动发布）：
+>   - **不再打版本 tag。** 控制面镜像 `ghcr.io/marvinli001/edgeweir` 的版本号是 `<YYYYMMDD>-<提交前 7 位>`（UTC 提交日期，`scripts/image-version.sh` 计算，同一提交永远得到同一版本号）。`master` 上的提交通过 CI 后，release 工作流由 `workflow_run` 触发，对 CI 实际验证过的提交构建多架构镜像，推送该版本 tag；只有这个提交仍是 `master` 最新提交时才移动 `latest`，所以 `latest` 不会回退。手动触发只重建 `master` 的最新提交。原来的 `v*` tag 触发与 semver 标签（决策第 7 条的发布方式）停用。
+>   - **签名与来源证明不变。** cosign keyless 签名、SBOM 与 provenance attestation 照旧；证书身份从 `release.yml@refs/tags/v*` 变为 `https://github.com/marvinli001/edgeweir/.github/workflows/release.yml@refs/heads/master`，校验命令见 SECURITY.md。镜像 `org.opencontainers.image.revision` 标签记录完整提交 ID。
+>   - **镜像内的版本号。** Dockerfile 的 `VERSION` 默认值从 `0.1.0-dev` 改为 `dev`（源码构建），发布构建传入日期版本号，`/healthz` 与后台系统设置显示它；certd 同样。
+>   - **范围。** edgeweir-node 的发布（goreleaser、`v*` tag、install.sh 按 `refs/tags/v<版本>` 精确校验签名身份、节点升级按版本号匹配）以及 proto 的 `proto/vX.Y.Z` tag 不在此次变更内，仍按原决策执行。决策第 7 条中的 `ghcr.io/edgeweir/edgeweir` 命名空间实际为 `ghcr.io/marvinli001/edgeweir`，Docker Hub 副本仍未发布。

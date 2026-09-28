@@ -2,7 +2,17 @@
 
 控制台是**一个镜像、一个进程**：同时提供 Web 控制台和 API（`:3000`）、节点通道（`:8443`）和后台任务。唯一的外部依赖是 PostgreSQL 18。
 
-> 宝塔面板用户请看 [baota.md](baota.md)。
+> 宝塔 / aaPanel 用户请看 [baota.md](baota.md)。
+
+## 版本与镜像
+
+镜像是公开的 `ghcr.io/marvinli001/edgeweir`（linux/amd64、linux/arm64），不需要登录即可拉取。
+
+发布采用**滚动更新**，没有 `v1.2.3` 这类版本号和发布 tag：`master` 上每个通过 CI 的提交都会发布成 `日期-提交` 格式的镜像 tag，例如 `20260929-a1b2c3d`（UTC 提交日期 + 提交 ID 前 7 位，同一个提交永远是同一个 tag），`latest` 随之指向最新一个。
+
+- 生产环境在 `.env` 里用 `EDGEWEIR_VERSION` 固定一个日期 tag，升级就是换成更新的 tag；只有评估环境才建议直接跟 `latest`。也可以连 digest 一起固定：`EDGEWEIR_VERSION=20260929-a1b2c3d@sha256:<digest>`。
+- 全部 tag 见 [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir)；tag 里的 7 位提交 ID 可以直接打开 `https://github.com/marvinli001/edgeweir/commit/<提交 ID>` 查看改动。
+- 正在运行的版本：`curl -s http://127.0.0.1:3000/healthz` 返回的 `version`，后台「系统设置」里也有显示。从源码构建的镜像显示 `dev`。
 
 ## 1. 准备
 
@@ -11,16 +21,18 @@
   - `3000/TCP`：Web 控制台与 API。可以放在反向代理后面（在代理上配置 HTTPS）。
   - `8443/TCP`：节点通道。**必须直连或四层透传**：TLS 由控制台自己终结，节点用客户端证书做双向认证，反向代理终结 TLS 会让双向认证失效。
 
-## 2. 获取源码并生成密钥
+## 2. 获取编排文件并生成密钥
 
-目前尚无正式二进制发行版，先从公开仓库构建评估。生产使用前应完成自己的容量、外部 DNS/ACME 凭据和恢复验收；正式镜像发布后可按发布 tag 或 digest 固定版本。
+服务器上只需要 `compose.yml` 和 `.env`，不需要源码。生产使用前应完成自己的容量、外部 DNS/ACME 凭据和恢复验收。
 
 ```bash
-git clone https://github.com/marvinli001/edgeweir.git /opt/edgeweir
-cd /opt/edgeweir
+mkdir -p /opt/edgeweir && cd /opt/edgeweir
+curl -fsSLO https://raw.githubusercontent.com/marvinli001/edgeweir/master/compose.yml
 umask 077
-cp .env.example .env
+curl -fsSL -o .env https://raw.githubusercontent.com/marvinli001/edgeweir/master/.env.example
 ```
+
+想从源码构建时改用 `git clone https://github.com/marvinli001/edgeweir.git /opt/edgeweir`，其余步骤相同，启动时加 `--build`。
 
 编辑 `.env`，至少填写：
 
@@ -31,6 +43,7 @@ cp .env.example .env
 | `POSTGRES_PASSWORD` | 内置 PostgreSQL 的密码（数据库端口不对外暴露），`openssl rand -hex 24` 生成（会拼进 `DATABASE_URL`，只用字母和数字）。 |
 | `EDGEWEIR_PUBLIC_URL` | 浏览器访问控制台的地址，例如 `https://cdn-admin.example.com`。 |
 | `EDGEWEIR_NODE_API_URL` | 节点连接节点通道的地址，例如 `https://cdn-admin.example.com:8443`。留空时取 `EDGEWEIR_PUBLIC_URL` 的主机名加 `:8443`。 |
+| `EDGEWEIR_VERSION` | 要运行的镜像 tag，默认 `latest`；生产固定为某个日期 tag，见[版本与镜像](#版本与镜像)。 |
 
 一次性生成三个密钥（`openssl rand -base64 32` 的输出原样使用，不要删掉其中的 `/`、`+`、`=`，否则解码后可能不足 32 字节，控制台会拒绝启动；数据库密码要放进 `DATABASE_URL`，所以用十六进制）：
 
@@ -45,9 +58,12 @@ sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
 ## 3. 启动
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose logs -f console
 ```
+
+从源码目录构建则执行 `docker compose up -d --build`（本地镜像会占用同名 tag，之后要回到发布镜像先 `docker compose pull`）。
 
 首次启动会自动执行数据库迁移、生成节点通道的内部 CA（私钥用主密钥加密后入库），然后监听 `:3000` 和 `:8443`。
 
@@ -142,18 +158,58 @@ stream {
 
 ## 6. 扩展与角色
 
-同一个镜像用 `ROLE` 选择角色：`all`（默认）、`app`（Web/API/节点通道）、`worker`（pg-boss 后台任务）。流量大时可以运行多个 `app` 副本和一个或多个 `worker`，它们共享 PostgreSQL，通过 LISTEN/NOTIFY 广播配置变更。
+同一个镜像用 `ROLE` 选择角色：`all`（默认）、`app`（Web/API/节点通道）、`worker`（pg-boss 后台任务）。流量大时可以运行多个 `app` 副本和一个或多个 `worker`，它们共享 PostgreSQL，通过 LISTEN/NOTIFY 广播配置变更。所有实例使用同一个镜像 tag。
+
+### 不用 Compose：单独的容器
+
+`compose.yml` 等价于一个专用网络上的两个容器，也可以直接用 `docker run` 创建（面板的「容器」功能按同样的参数填写，见 [baota.md](baota.md#不用编排单独创建容器)）。已有 PostgreSQL 18 时跳过第一个容器，把 `DATABASE_URL` 指向它即可（容器里的 `127.0.0.1` 是容器自己，不是宿主机）。
+
+```bash
+cd /opt/edgeweir
+umask 077
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
+cat > console.env <<ENV
+DATABASE_URL=postgres://edgeweir:${POSTGRES_PASSWORD}@edgeweir-postgres:5432/edgeweir
+EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
+BETTER_AUTH_SECRET=$(openssl rand -base64 32)
+EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com
+EDGEWEIR_NODE_API_URL=https://cdn-admin.example.com:8443
+ENV
+
+docker network create edgeweir
+docker run -d --name edgeweir-postgres --network edgeweir --restart unless-stopped \
+  -e POSTGRES_USER=edgeweir -e POSTGRES_DB=edgeweir -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+  -v edgeweir-postgres:/var/lib/postgresql \
+  postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+docker run -d --name edgeweir-console --network edgeweir --restart unless-stopped \
+  --env-file console.env -e ROLE=all \
+  -p 127.0.0.1:3000:3000 -p 8443:8443 \
+  --read-only --tmpfs /tmp --security-opt no-new-privileges:true \
+  ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
+```
+
+`console.env` 里的变量与 `compose.yml` 的 `environment` 相同，其余可选变量按需加入；不要写 `EDGEWEIR_VERSION`，它在镜像里表示运行中的版本。升级时拉取新 tag，删除旧的 `edgeweir-console` 容器，用同样的参数和新 tag 重新创建；数据在 `edgeweir-postgres` 卷里，不受影响。
 
 ## 7. 升级、备份与验证
 
-- 控制台升级：源码评估环境先检出目标提交，再执行 `docker compose up -d --build`；正式镜像发布后才使用 `docker compose pull && docker compose up -d`。迁移在启动时自动执行（带锁，多实例安全）。启动时还会把旧版本写入的信封密文（附加数据未绑定记录 id）用主密钥重新加密一次；新版本不再读取旧格式，所以多个控制台实例要一起升级。
+- 控制台升级（滚动）：先[备份](backup.md)，把 `.env` 的 `EDGEWEIR_VERSION` 改成新的日期 tag，然后：
+
+  ```bash
+  docker compose pull
+  docker compose up -d
+  curl -s http://127.0.0.1:3000/healthz
+  ```
+
+  迁移在启动时自动执行（带锁，多实例安全）。启动时还会把旧版本写入的信封密文（附加数据未绑定记录 id）用主密钥重新加密一次；新版本不再读取旧格式，所以多个控制台实例要一起升级。源码评估环境则检出目标提交后执行 `docker compose up -d --build`。
+- 回滚：把 `EDGEWEIR_VERSION` 改回上一个 tag 再 `docker compose up -d`。迁移只向前执行、没有 down 脚本，所以只有两个版本之间没有新增迁移（对比两次提交的 `packages/db/migrations/`）时才能直接换回旧镜像；否则恢复升级前的备份。
+- 不建议用 Watchtower 之类的工具无人值守地跟随 `latest`：每次启动都可能执行迁移，升级应当在备份之后、有人看着时进行。
 - 节点升级：[签名升级、试运行与回滚](../guide/node-upgrades.md)。固定监督进程、cosign 和 OpenResty 使用完整镜像或系统包更新。
 - 备份与恢复：见[完整操作步骤](backup.md)，包括数据库、独立保管的主密钥、节点状态、经过认证的 revision 回执，以及可选 ClickHouse 的一致恢复点。
-- 校验镜像签名：
+- 校验镜像签名（证书身份是 `master` 分支上的 release 工作流）：
 
 ```bash
 cosign verify ghcr.io/marvinli001/edgeweir:<版本> \
-  --certificate-identity-regexp '^https://github\.com/marvinli001/edgeweir/\.github/workflows/release\.yml@refs/tags/v.*$' \
+  --certificate-identity https://github.com/marvinli001/edgeweir/.github/workflows/release.yml@refs/heads/master \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
