@@ -88,7 +88,8 @@ export type Env = z.infer<typeof schema> & {
   version: string;
 };
 
-export const VERSION = process.env.EDGEWEIR_VERSION ?? "0.1.0-dev";
+/** Rolling image version `<YYYYMMDD>-<commit>` baked in by the Dockerfile; `dev` from source. */
+export const VERSION = process.env.EDGEWEIR_VERSION ?? "dev";
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const parsed = schema.safeParse(source);

@@ -2,6 +2,9 @@
 # Edgeweir console: one image, one Node.js process serving the web UI, the
 # API and the node channel. ROLE=app|worker|all selects what runs (default all).
 #
+# VERSION is the rolling version <YYYYMMDD>-<commit> (scripts/image-version.sh);
+# the release workflow passes it with REVISION, the full commit id.
+#
 # Every base image is pinned by tag and multi-arch index digest; the digest is
 # what gets pulled (ADR-0017). Refresh tag and digest together (CONTRIBUTING.md).
 
@@ -12,7 +15,7 @@ ARG GO_IMAGE=golang:1.27.1-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d37430
 FROM ${GO_IMAGE} AS certd
 WORKDIR /src
 COPY helpers/certd/ ./
-ARG VERSION=0.1.0-dev
+ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -trimpath -buildvcs=false \
       -ldflags "-s -w -X main.Version=${VERSION}" -o /out/edgeweir-certd .
 
@@ -30,18 +33,20 @@ COPY packages/rule-engine/package.json packages/rule-engine/
 RUN pnpm install --frozen-lockfile
 COPY apps/console apps/console
 COPY packages packages
-ARG VERSION=0.1.0-dev
+ARG VERSION=dev
 ENV EDGEWEIR_VERSION=${VERSION}
 RUN pnpm --filter @edgeweir/console run build
 
 # --- runtime --------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS runtime
-ARG VERSION=0.1.0-dev
+ARG VERSION=dev
+ARG REVISION=unknown
 LABEL org.opencontainers.image.title="edgeweir" \
       org.opencontainers.image.description="Edgeweir console: self-hosted CDN / WAF / edge scheduling control plane" \
       org.opencontainers.image.source="https://github.com/marvinli001/edgeweir" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
-      org.opencontainers.image.version="${VERSION}"
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}"
 RUN apk add --no-cache tini
 WORKDIR /app
 # The server is bundled into a single file: no node_modules at runtime.

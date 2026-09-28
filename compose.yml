@@ -4,6 +4,9 @@
 #   docker compose --profile cache up -d        # + Valkey
 # Secrets come from .env (see .env.example). The console refuses to start
 # without EDGEWEIR_MASTER_KEY and BETTER_AUTH_SECRET.
+# The console image is pulled from ghcr.io (rolling <YYYYMMDD>-<commit> tags,
+# pinned with EDGEWEIR_VERSION); `docker compose up -d --build` builds it from
+# this checkout instead.
 name: edgeweir
 
 x-console-env: &console-env
