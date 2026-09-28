@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, X509Certificate } from "node:crypto";
 import {
   type AlertChannelConfig,
   type AlertChannelInput,
@@ -206,17 +206,33 @@ export async function getSmtpConfig(app: AppContext) {
   const config = await loadSmtp(app);
   if (!config) return null;
   const { password: _password, ...safe } = config;
-  return safe;
+  return { ...safe, caFile: !!app.env.EDGEWEIR_SMTP_CA_FILE };
+}
+/** Every PEM block must be a certificate; an empty bundle means the system store. */
+function assertCaBundle(pem: string) {
+  if (!pem) return;
+  const blocks = pem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) ?? [];
+  const rest = pem.replace(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g, "");
+  try {
+    if (!blocks.length || rest.trim()) throw new Error("not a certificate bundle");
+    for (const block of blocks) new X509Certificate(block);
+  } catch {
+    fail("SMTP_CA_INVALID", "the CA bundle must contain only PEM certificates");
+  }
 }
 export async function setSmtpConfig(app: AppContext, input: SmtpInput, actor: Actor) {
+  assertCaBundle(input.ca);
   const old = await loadSmtp(app);
+  // A new trust anchor could hand the stored password to another server, so
+  // it counts as a destination change.
   if (
     !input.password &&
     (!old?.password ||
       old.host !== input.host ||
       old.port !== input.port ||
       old.secure !== input.secure ||
-      old.username !== input.username)
+      old.username !== input.username ||
+      old.ca !== input.ca)
   )
     fail("SMTP_PASSWORD_REQUIRED", "supply a new password when changing SMTP destination");
   const config = { ...input, password: input.password ?? old?.password };
@@ -232,7 +248,7 @@ export async function setSmtpConfig(app: AppContext, input: SmtpInput, actor: Ac
       action: "alert.smtp_update",
       targetType: "system_setting",
       targetId: SMTP_KEY,
-      metadata: { host: input.host, credentialsRotated: !!input.password },
+      metadata: { host: input.host, credentialsRotated: !!input.password, customCa: !!input.ca },
     });
     return { ok: true as const };
   });

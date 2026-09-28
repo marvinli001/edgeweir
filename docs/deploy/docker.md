@@ -59,6 +59,8 @@ docker compose logs console | grep setupToken
 
 浏览器打开 `EDGEWEIR_PUBLIC_URL`，在初始化向导里填入 setup token，创建平台管理员和第一个组织；默认集群会自动创建。没有 token 的初始化请求一律被拒绝（写入审计日志），所以初始化之前控制台暴露在网络上，别人也无法抢先创建管理员。token 用主密钥加密后存在数据库里；更换主密钥后会重新生成。
 
+初始化之后，SMTP（含私有 CA 证书）、节点发布源、源站地址允许清单、GeoIP 和首页都在 **后台 → 系统设置** 填写，保存即生效，不需要改 `.env` 或重启。`.env` 只保留密钥、访问地址、端口和网络信任边界（`EDGEWEIR_TRUSTED_PROXIES`、`EDGEWEIR_OUTBOUND_ALLOW_CIDRS`、`EDGEWEIR_DNS_RESOLVERS`）等必须由运营者在宿主机上决定的项。
+
 `compose.yml` 另有两个可选 profile。在 `.env` 中设置 `EDGEWEIR_ANALYTICS=clickhouse` 和独立的 `CLICKHOUSE_PASSWORD` 后，`analytics` 启用 ClickHouse 原始访问日志与分钟快照。控制台图表和告警仍使用 PostgreSQL 精确汇总。站点访问日志采样默认关闭，需在站点日志页面显式开启；原始日志保留 7 天。切换存储模式不会迁移历史数据，详见[日志与 AccessKey](../guide/access-logs.md)。
 
 ```bash

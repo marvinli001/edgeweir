@@ -247,6 +247,11 @@ describe("admin area procedures", async () => {
         "settings.setOriginAllowList",
         () => member.settings.setOriginAllowList({ cidrs: ["0.0.0.0/0"] }),
       ],
+      ["settings.releaseSource", () => member.settings.releaseSource()],
+      [
+        "settings.setReleaseSource",
+        () => member.settings.setReleaseSource({ url: "https://mirror.example.test" }),
+      ],
       [
         "landing.update",
         () =>

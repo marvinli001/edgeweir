@@ -296,6 +296,43 @@ describe("M5 notification delivery and subscription authorization", async () => 
       expect(authenticated).toBe(true);
       expect(messages).toHaveLength(1);
       expect(messages[0]).toContain("Message-ID:");
+      const notify = () =>
+        deliverNotification(ctx, rawChannel, {
+          id: crypto.randomUUID(),
+          siteId: null,
+          siteName: "SMTP test",
+          kind: "test",
+          status: "firing",
+          occurredAt: new Date().toISOString(),
+        });
+      // The CA saved with the SMTP settings replaces the operator's file.
+      ctx.env.EDGEWEIR_SMTP_CA_FILE = "";
+      const destination = {
+        host: "127.0.0.1",
+        port: bound.port,
+        secure: true,
+        from: "alerts@example.test",
+        username: "fixture",
+      };
+      await expect(notify()).rejects.toThrow();
+      expect(
+        (await rpcError(admin.alerts.setSmtp({ ...destination, ca: "not a certificate" }))).code,
+      ).toBe("SMTP_CA_INVALID");
+      expect(
+        (await rpcError(admin.alerts.setSmtp({ ...destination, ca: ctx.nodeCa.certificatePem })))
+          .code,
+      ).toBe("SMTP_PASSWORD_REQUIRED");
+      await admin.alerts.setSmtp({
+        ...destination,
+        password: "smtp-test-secret",
+        ca: ctx.nodeCa.certificatePem,
+      });
+      expect(await admin.alerts.smtp()).toMatchObject({
+        ca: ctx.nodeCa.certificatePem.trim(),
+        caFile: false,
+      });
+      await notify();
+      expect(messages).toHaveLength(2);
       await admin.alerts.deleteChannel({ id: channel.id });
     } finally {
       await new Promise<void>((resolve) => smtp.close(() => resolve()));

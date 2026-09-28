@@ -47,6 +47,7 @@ chmod 600 .env
 2. 站点设置 →「反向代理 → 添加反向代理」，目标 URL 填 `http://127.0.0.1:3000`，发送域名保持 `$host`。
 3. 站点设置 →「SSL」申请或上传证书，开启「强制 HTTPS」。
 4. 在宝塔「Docker → 容器 → console → 日志」里找到 `setupToken`（一次性 setup token），浏览器打开 `https://cdn-admin.example.com`，在初始化向导里填入它并创建管理员。
+5. SMTP、节点发布源、源站地址允许清单、GeoIP 和首页在控制台 **后台 → 系统设置** 填写，不需要改 `.env`。
 
 `EDGEWEIR_PUBLIC_URL` 必须与浏览器实际访问的地址一致（含 `https://`），否则登录会因来源校验失败。
 

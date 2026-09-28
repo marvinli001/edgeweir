@@ -107,6 +107,7 @@ import {
 import { getOriginAllowList, setOriginAllowList } from "../services/origin-allow-list";
 import { siteOriginHealth } from "../services/origin-health";
 import { createRegion, deleteRegion, listRegions, updateRegion } from "../services/regions";
+import { getReleaseSource, setReleaseSource } from "../services/release-source";
 import { toRevisionDto } from "../services/revisions";
 import {
   createIpList,
@@ -702,6 +703,12 @@ export const router = os.router({
     ),
     setOriginAllowList: admin.settings.setOriginAllowList.handler(({ input, context }) =>
       setOriginAllowList(context.app.db, input, context.actor),
+    ),
+    releaseSource: admin.settings.releaseSource.handler(({ context }) =>
+      getReleaseSource(context.app),
+    ),
+    setReleaseSource: admin.settings.setReleaseSource.handler(({ input, context }) =>
+      setReleaseSource(context.app, input, context.actor),
     ),
   },
   landing: {

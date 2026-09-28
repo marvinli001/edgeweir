@@ -8,6 +8,7 @@ import { ErrorState, LoadingState } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 export function SmtpSettings() {
@@ -27,14 +28,20 @@ export function SmtpSettings() {
     </Card>
   );
 }
-function SmtpEditor({ initial }: { initial: Omit<SmtpInput, "password"> | null }) {
+function SmtpEditor({
+  initial,
+}: {
+  initial: (Omit<SmtpInput, "password"> & { caFile: boolean }) | null;
+}) {
+  const { caFile = false, ...saved } = initial ?? {};
   const base = {
     host: "",
     port: 465,
     secure: true,
     from: "",
     username: "",
-    ...initial,
+    ca: "",
+    ...saved,
     password: "",
   };
   const [form, setForm] = React.useState(base),
@@ -98,6 +105,21 @@ function SmtpEditor({ initial }: { initial: Omit<SmtpInput, "password"> | null }
           checked={form.secure}
           onCheckedChange={(secure) => setForm({ ...form, secure })}
         />
+        <Field className="sm:col-span-2">
+          <FieldLabel htmlFor="smtp-ca">{m.alert_smtp_ca()}</FieldLabel>
+          <Textarea
+            id="smtp-ca"
+            rows={3}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            value={form.ca}
+            onChange={(e) => setForm({ ...form, ca: e.target.value })}
+            placeholder={caFile ? "EDGEWEIR_SMTP_CA_FILE" : m.alert_smtp_ca_system()}
+            className="min-h-20 font-mono text-xs"
+            data-testid="smtp-ca"
+          />
+        </Field>
       </CardContent>
       <SaveBar
         dirty={JSON.stringify(base) !== JSON.stringify(form)}

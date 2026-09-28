@@ -113,3 +113,69 @@ export async function postNotification(
     request.end(body);
   });
 }
+
+/**
+ * GET a document under the same policy as notifications: every hop (redirects
+ * included) is resolved once, checked against the special-purpose ranges and
+ * the operator's allow list, and connected by the pinned IP.
+ */
+export async function outboundGet(
+  app: AppContext,
+  target: string,
+  limits: { maxBytes: number; timeoutMs: number; maxRedirects: number },
+): Promise<Buffer> {
+  const signal = AbortSignal.timeout(limits.timeoutMs);
+  let url = new URL(target);
+  for (let hop = 0; ; hop++) {
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password)
+      throw new Error("invalid outbound URL");
+    const address = await withinDeadline(outboundAddress(app, url.hostname), signal);
+    signal.throwIfAborted();
+    if (url.protocol === "http:" && forbiddenOriginRange(address.address, []) === null)
+      throw new Error("HTTPS required for public destinations");
+    const response = await new Promise<{ status: number; location?: string; body: Buffer }>(
+      (resolve, reject) => {
+        const request = (url.protocol === "https:" ? https : http).request(
+          {
+            hostname: address.address,
+            family: address.family,
+            servername: isIP(address.servername) ? undefined : address.servername,
+            port: url.port || undefined,
+            path: url.pathname + url.search,
+            method: "GET",
+            headers: { host: url.host },
+            timeout: limits.timeoutMs,
+            signal,
+          },
+          (res) => {
+            const status = res.statusCode ?? 0;
+            if (status >= 300 && status < 400) {
+              res.resume();
+              resolve({ status, location: res.headers.location, body: Buffer.alloc(0) });
+              return;
+            }
+            let size = 0;
+            const chunks: Buffer[] = [];
+            res.on("data", (chunk: Buffer) => {
+              size += chunk.length;
+              if (size > limits.maxBytes) res.destroy(new Error("outbound response too large"));
+              else chunks.push(chunk);
+            });
+            res.once("error", reject);
+            res.once("end", () => resolve({ status, body: Buffer.concat(chunks) }));
+          },
+        );
+        request.once("error", () => reject(new Error("outbound transport failed")));
+        request.once("timeout", () => request.destroy(new Error("outbound timeout")));
+        request.end();
+      },
+    );
+    if (response.status >= 300 && response.status < 400 && response.location) {
+      if (hop >= limits.maxRedirects) throw new Error("too many redirects");
+      url = new URL(response.location, url);
+      continue;
+    }
+    if (response.status !== 200) throw new Error("outbound request rejected");
+    return response.body;
+  }
+}

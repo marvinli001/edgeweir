@@ -30,7 +30,7 @@
 
 ## 私有镜像与自有发行
 
-控制台的 `EDGEWEIR_NODE_RELEASE_BASE_URL` 和节点本机的 `EDGEWEIR_UPGRADE_SOURCE` 应指向同一个按 `v<version>/` 分目录的发布源。镜像应直接提供文件；除官方 GitHub 下载跳转外，节点拒绝跨来源重定向。
+控制台的发布源在 **后台 → 系统设置 → 节点发布源** 填写；未填写时依次使用环境变量 `EDGEWEIR_NODE_RELEASE_BASE_URL`（旧部署的后备）和官方 GitHub Releases。它和节点本机的 `EDGEWEIR_UPGRADE_SOURCE` 应指向同一个按 `v<version>/` 分目录的发布源。后台填写的地址与通知一样受出站策略约束：保存和读取清单时解析并固定 IP，每次跳转重新检查，公网地址必须 HTTPS，内网镜像需运营者在 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 中放行。镜像应直接提供文件；除官方 GitHub 下载跳转外，节点拒绝跨来源重定向。
 
 自有发行可以在节点配置 `EDGEWEIR_UPGRADE_PUBLIC_KEY`，指向由运维部署的本机公钥。此模式验证固定公钥签名，不使用公共透明日志；只更改控制台数据库无法切换节点信任的公钥。`EDGEWEIR_UPGRADE_ALLOW_HTTP=true` 仅用于明确选择的本地测试或隔离镜像，默认关闭。签名生成与验证方法见 [Sigstore 文档](https://docs.sigstore.dev/cosign/signing/signing_with_blobs/)。
 

@@ -391,6 +391,14 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/origin-allow-list", tags: ["settings"] })
       .input(s.originAllowListInput)
       .output(s.originAllowList),
+    /** Mirror the console reads node release manifests from. */
+    releaseSource: oc
+      .route({ method: "GET", path: "/settings/release-source", tags: ["settings"] })
+      .output(s.releaseSource),
+    setReleaseSource: oc
+      .route({ method: "PUT", path: "/settings/release-source", tags: ["settings"] })
+      .input(s.releaseSourceInput)
+      .output(s.releaseSource),
   },
   landing: {
     /** Public: the landing page at `/` (template "none" means there is none). */

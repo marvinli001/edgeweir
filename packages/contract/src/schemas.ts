@@ -580,6 +580,38 @@ export const settings = z.object({
   setupCompletedAt: isoDateTime.nullable(),
 });
 
+/** Where the console reads node release manifests unless configured otherwise. */
+export const DEFAULT_NODE_RELEASE_BASE_URL =
+  "https://github.com/marvinli001/edgeweir-node/releases/download";
+
+/** Base URL of a node release mirror (`<base>/v<version>/checksums.txt`). */
+export const releaseBaseUrl = z
+  .url()
+  .max(2048)
+  .refine((value) => {
+    const url = new URL(value);
+    return (
+      ["https:", "http:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash
+    );
+  });
+
+export const releaseSource = z.object({
+  /** Saved in system settings; empty when none is saved. */
+  url: z.string(),
+  /** The base URL upgrades use now. */
+  effectiveUrl: z.string(),
+  source: z.enum(["setting", "environment", "default"]),
+});
+
+/** Empty clears the saved value (the environment or the default applies). */
+export const releaseSourceInput = z.object({
+  url: z.union([z.literal(""), releaseBaseUrl]),
+});
+
 /** Landing page templates; "none" sends `/` straight to the console. */
 export const landingTemplates = ["none", "horizon", "orbit"] as const;
 export const landingTemplate = z.enum(landingTemplates);
@@ -973,6 +1005,8 @@ export type TrafficBreakdown = z.infer<typeof trafficBreakdown>;
 export type StarredSite = z.infer<typeof starredSite>;
 export type EnrollmentTokenResult = z.infer<typeof enrollmentTokenResult>;
 export type Settings = z.infer<typeof settings>;
+export type ReleaseSource = z.infer<typeof releaseSource>;
+export type ReleaseSourceInput = z.infer<typeof releaseSourceInput>;
 export type LandingTemplate = z.infer<typeof landingTemplate>;
 export type LandingSettings = z.infer<typeof landingSettings>;
 export type LandingStats = z.infer<typeof landingStats>;

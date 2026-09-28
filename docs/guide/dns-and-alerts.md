@@ -41,7 +41,7 @@ Top URL/IP 使用节点端有界 Space-Saving 近似计数，界面标明「估�
 同一条件只在进入告警或解除时产生事件；事件 ID 固定，投递失败退避重试最多五次。网络回执丢失可能导致接收方收到重复通知，Webhook 应用事件 ID 去重。事件保留九十天。外部供应商账户的真实送达需要运营者自己的配置与验收。
 
 - Webhook：HTTP POST JSON，包含事件 ID、网站 ID、种类、状态、时间和控制台链接；可配置 Bearer token。
-- SMTP：TLS 校验始终启用；关闭直接 TLS 后要求 STARTTLS。更换 SMTP 主机、端口或账户必须重新填写密码。私有 CA 可通过运营者控制的 `EDGEWEIR_SMTP_CA_FILE` 提供。
+- SMTP：TLS 校验始终启用；关闭直接 TLS 后要求 STARTTLS。更换 SMTP 主机、端口、账户或 CA 证书必须重新填写密码。私有 SMTP 服务器的 CA 证书（PEM）在 SMTP 设置中填写，它替代系统信任库；未填写时使用旧部署的 `EDGEWEIR_SMTP_CA_FILE`。
 - 钉钉：文本消息，可选 timestamp/HMAC-SHA256 加签。
 - 企业微信：文本群机器人 Webhook。
 - Telegram：Bot API `sendMessage`，关闭链接预览，不启用付费广播。

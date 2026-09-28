@@ -64,6 +64,8 @@ export const smtpInput = z.object({
   from: z.email(),
   username: z.string().min(1).max(320),
   password: z.string().min(1).max(4096).optional(),
+  /** PEM certificates that replace the system trust store for this server's TLS. */
+  ca: z.string().trim().max(65536).default(""),
 });
 const subscription = z.object({
   id: uuid,
@@ -109,9 +111,12 @@ export const alertsContract = {
     .route({ method: "PUT", path: "/alerts/policy", tags: ["alerts"] })
     .input(alertPolicy)
     .output(alertPolicy),
-  smtp: oc
-    .route({ method: "GET", path: "/alerts/smtp", tags: ["alerts"] })
-    .output(smtpInput.omit({ password: true }).nullable()),
+  smtp: oc.route({ method: "GET", path: "/alerts/smtp", tags: ["alerts"] }).output(
+    smtpInput
+      .omit({ password: true })
+      .extend({ caFile: z.boolean().describe("EDGEWEIR_SMTP_CA_FILE is set") })
+      .nullable(),
+  ),
   setSmtp: oc
     .route({ method: "PUT", path: "/alerts/smtp", tags: ["alerts"] })
     .input(smtpInput)

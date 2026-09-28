@@ -6,6 +6,7 @@
  */
 export const errorDefs = {
   UPGRADE_RELEASE_UNAVAILABLE: { status: 502, params: [] },
+  RELEASE_SOURCE_REFUSED: { status: 400, params: [] },
   UPGRADE_NOT_FOUND: { status: 404, params: [] },
   UPGRADE_BUSY: { status: 409, params: [] },
   UPGRADE_NODES_UNAVAILABLE: { status: 409, params: [] },
@@ -19,6 +20,7 @@ export const errorDefs = {
   ALERT_SEND_FAILED: { status: 502, params: [] },
   ALERT_SUBSCRIPTION_NOT_FOUND: { status: 404, params: [] },
   SMTP_PASSWORD_REQUIRED: { status: 400, params: [] },
+  SMTP_CA_INVALID: { status: 400, params: [] },
   DNS_ZONE_MISMATCH: { status: 400, params: [] },
   DNS_PROVIDER_NOT_FOUND: { status: 404, params: [] },
   DNS_TEST_DISABLED: { status: 400, params: [] },

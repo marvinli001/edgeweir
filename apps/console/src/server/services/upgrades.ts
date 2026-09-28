@@ -12,7 +12,9 @@ import {
 import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { outboundGet } from "../lib/outbound";
 import { type Actor, recordAudit } from "./audit";
+import { getReleaseSource } from "./release-source";
 import { type Executor, latestRevision } from "./revisions";
 
 const job = schema.nodeUpgrade,
@@ -27,22 +29,33 @@ export async function nodeRelease(
   version: string,
 ): Promise<{ version: string; artifacts: UpgradeArtifact[] }> {
   version = releaseVersion.parse(version);
-  const base = app.env.EDGEWEIR_NODE_RELEASE_BASE_URL.replace(/\/+$/, "") + `/v${version}/`;
+  const source = await getReleaseSource(app);
+  const base = `${source.effectiveUrl.replace(/\/+$/, "")}/v${version}/`;
   let text = "";
   try {
-    const res = await fetch(`${base}checksums.txt`, {
-      signal: AbortSignal.timeout(15000),
-      redirect: "follow",
-    });
-    if (!res.ok || !res.body) throw new Error("manifest unavailable");
-    const chunks: Uint8Array[] = [];
-    let length = 0;
-    for await (const chunk of res.body) {
-      length += chunk.byteLength;
-      if (length > 2 * 1024 * 1024) throw new Error("manifest too large");
-      chunks.push(chunk);
+    if (source.source === "setting") {
+      text = (
+        await outboundGet(app, `${base}checksums.txt`, {
+          maxBytes: 2 * 1024 * 1024,
+          timeoutMs: 15000,
+          maxRedirects: 3,
+        })
+      ).toString("utf8");
+    } else {
+      const res = await fetch(`${base}checksums.txt`, {
+        signal: AbortSignal.timeout(15000),
+        redirect: "follow",
+      });
+      if (!res.ok || !res.body) throw new Error("manifest unavailable");
+      const chunks: Uint8Array[] = [];
+      let length = 0;
+      for await (const chunk of res.body) {
+        length += chunk.byteLength;
+        if (length > 2 * 1024 * 1024) throw new Error("manifest too large");
+        chunks.push(chunk);
+      }
+      text = Buffer.concat(chunks).toString("utf8");
     }
-    text = Buffer.concat(chunks).toString("utf8");
   } catch {
     fail("UPGRADE_RELEASE_UNAVAILABLE", "release manifest is unavailable");
   }

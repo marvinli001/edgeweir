@@ -72,9 +72,11 @@ export async function deliverNotification(
     if (!smtp?.password) throw new Error("SMTP not configured");
     const signal = AbortSignal.timeout(10000);
     const address = await withinDeadline(outboundAddress(app, smtp.host), signal);
-    const ca = app.env.EDGEWEIR_SMTP_CA_FILE
-      ? await withinDeadline(readFile(app.env.EDGEWEIR_SMTP_CA_FILE), signal)
-      : undefined;
+    const ca = smtp.ca
+      ? smtp.ca
+      : app.env.EDGEWEIR_SMTP_CA_FILE
+        ? await withinDeadline(readFile(app.env.EDGEWEIR_SMTP_CA_FILE), signal)
+        : undefined;
     signal.throwIfAborted();
     const transport = nodemailer.createTransport({
       host: address.address,
