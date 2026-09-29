@@ -10,12 +10,15 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sync"
 	"time"
 
+	"github.com/go-acme/lego/v4/acme"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/lego"
@@ -178,6 +181,14 @@ func acmeCommand(ctx context.Context, command string, raw json.RawMessage, sessi
 		return nil, client.Certificate.Revoke([]byte(p.PreviousCertificate))
 	}
 	resource, err := client.Certificate.Obtain(req)
+	if err != nil && req.ReplacesCertID != "" && newOrderRejected(config.HTTPClient, p.DirectoryURL, err) {
+		// "replaces" is only a hint (RFC 9773 §5). lego already retries a 409
+		// alreadyReplaced; a CA that cannot match the certificate at all (one
+		// from another CA, or Pebble 2.10.1 for serials whose first byte is
+		// >= 0x80) must not block the renewal either.
+		req.ReplacesCertID = ""
+		resource, err = client.Certificate.Obtain(req)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("ACME issuance failed: %w", err)
 	}
@@ -198,4 +209,23 @@ func acmeCommand(ctx context.Context, command string, raw json.RawMessage, sessi
 		}
 	}
 	return map[string]any{"chainPem": string(resource.Certificate), "privateKeyPem": string(resource.PrivateKey), "account": p.Account, "renewAt": renewAt.UTC().Format(time.RFC3339), "ari": ari}, nil
+}
+
+// newOrderRejected reports whether err is the CA's answer to the new-order
+// request itself, i.e. nothing was authorized or issued yet.
+func newOrderRejected(httpClient *http.Client, directoryURL string, err error) bool {
+	var problem *acme.ProblemDetails
+	if !errors.As(err, &problem) || problem.Method != http.MethodPost {
+		return false
+	}
+	resp, err := httpClient.Get(directoryURL)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	var directory acme.Directory
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&directory) != nil {
+		return false
+	}
+	return directory.NewOrderURL != "" && problem.URL == directory.NewOrderURL
 }
