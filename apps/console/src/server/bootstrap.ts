@@ -1,5 +1,4 @@
 import type { Server } from "node:http";
-import type { Http2SecureServer } from "node:http2";
 import { createDatabase, runMigrations } from "@edgeweir/db";
 import type { PgBoss } from "pg-boss";
 import { startWorker } from "./jobs/worker";
@@ -10,7 +9,7 @@ import { loadEnv } from "./lib/env";
 import { MasterKey } from "./lib/envelope";
 import { ConfigEventBus } from "./lib/events";
 import { logger, setLogLevel } from "./lib/logger";
-import { startNodeChannel } from "./node-channel/server";
+import { type NodeChannel, startNodeChannel } from "./node-channel/server";
 import { loadOrCreateNodeCa } from "./pki/store";
 import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
 import { announceSetupToken, ensureSetupToken } from "./services/setup";
@@ -63,7 +62,7 @@ export async function bootstrap(): Promise<Running> {
   const events = new ConfigEventBus(env.DATABASE_URL, log.child({ component: "events" }));
   const ctx: AppContext = { env, db, pool, auth, masterKey, nodeCa, events, log };
 
-  let nodeChannel: Http2SecureServer | undefined;
+  let nodeChannel: NodeChannel | undefined;
   let boss: PgBoss | undefined;
   let http: Server | undefined;
 
@@ -85,7 +84,8 @@ export async function bootstrap(): Promise<Running> {
     const closeServer = (s?: { close(cb: (err?: Error) => void): unknown }) =>
       new Promise<void>((resolve) => (s ? s.close(() => resolve()) : resolve()));
     (http as { closeAllConnections?: () => void } | undefined)?.closeAllConnections?.();
-    await Promise.all([closeServer(http), closeServer(nodeChannel)]);
+    // Also stops rotating the node channel certificate.
+    await Promise.all([closeServer(http), nodeChannel?.close()]);
     await boss?.stop({ graceful: true, timeout: 5000 }).catch(() => {});
     await events.stop();
     await pool.end();

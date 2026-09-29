@@ -12,12 +12,21 @@ const EC_ALG = { name: "ECDSA", namedCurve: "P-256", hash: "SHA-256" } as const;
 const SIGNING_ALG = { name: "ECDSA", hash: "SHA-256" } as const;
 
 export const NODE_CERT_LIFETIME_DAYS = 30;
+/** Node channel server certificate; the listener reissues it in-process before expiry. */
+export const SERVER_CERT_LIFETIME_DAYS = 90;
 const DAY = 24 * 3600 * 1000;
 
 export interface IssuedCertificate {
   certificatePem: string;
   serialNumber: string;
   fingerprintSha256: string;
+  notAfter: Date;
+}
+
+export interface IssuedServerCertificate {
+  certificatePem: string;
+  privateKeyPem: string;
+  serialNumber: string;
   notAfter: Date;
 }
 
@@ -139,10 +148,10 @@ export class CertificateAuthority {
   /** Issues a short-lived server certificate for the node channel listener. */
   async issueServerCertificate(
     names: string[],
-    lifetimeDays = 90,
-  ): Promise<{ certificatePem: string; privateKeyPem: string }> {
+    issuedAt = new Date(),
+  ): Promise<IssuedServerCertificate> {
     const keys = (await subtle.generateKey(EC_ALG, true, ["sign", "verify"])) as CryptoKeyPair;
-    const now = Date.now();
+    const now = issuedAt.getTime();
     const sans: x509.JsonGeneralName[] = [];
     for (const name of new Set(names)) {
       sans.push(isIP(name) ? { type: "ip", value: name } : { type: "dns", value: name });
@@ -152,7 +161,7 @@ export class CertificateAuthority {
       subject: "CN=edgeweir-node-api, O=Edgeweir",
       issuer: this.certificate.subject,
       notBefore: new Date(now - 5 * 60 * 1000),
-      notAfter: new Date(now + lifetimeDays * DAY),
+      notAfter: new Date(now + SERVER_CERT_LIFETIME_DAYS * DAY),
       signingAlgorithm: SIGNING_ALG,
       publicKey: keys.publicKey,
       signingKey: this.privateKey,
@@ -168,6 +177,8 @@ export class CertificateAuthority {
     return {
       certificatePem: `${cert.toString("pem").trim()}\n`,
       privateKeyPem: pemFromDer("PRIVATE KEY", pkcs8),
+      serialNumber: cert.serialNumber,
+      notAfter: cert.notAfter,
     };
   }
 }

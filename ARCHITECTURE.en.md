@@ -168,7 +168,7 @@ Connect-RPC over HTTPS; the console process terminates TLS itself ([ADR-0008](do
 | Item | Value |
 | --- | --- |
 | Internal CA | ECDSA P-256, valid for 10 years, generated on first start; private key envelope-encrypted in `pki_authority` |
-| Server certificate | Issued by the internal CA at every start, valid for 90 days; SANs are the host name of `EDGEWEIR_NODE_API_URL` (the host name of `EDGEWEIR_PUBLIC_URL` when unset), `EDGEWEIR_NODE_API_HOSTNAMES`, `localhost`, `127.0.0.1`, `::1`, and the container host name |
+| Server certificate | Issued by the internal CA at every start, valid for 90 days; checked hourly and reissued in-process when less than a third of the lifetime remains, so new handshakes get the new certificate and established connections keep theirs; SANs are the host name of `EDGEWEIR_NODE_API_URL` (the host name of `EDGEWEIR_PUBLIC_URL` when unset), `EDGEWEIR_NODE_API_HOSTNAMES`, `localhost`, `127.0.0.1`, `::1`, and the container host name |
 | Node certificate | CN is the node ID, client authentication only, valid for 30 days; with less than a third of the lifetime left, `ReportStatus` asks the node to call `RenewCertificate` |
 | Heartbeat | Every 15 seconds; `WatchConfig` sends a keepalive every 15 seconds |
 

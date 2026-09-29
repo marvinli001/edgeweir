@@ -1,7 +1,6 @@
 import { updateHttps, uploadCertificate } from "../../src/server/services/certificates";
 import "reflect-metadata";
 import { webcrypto } from "node:crypto";
-import type { Http2SecureServer } from "node:http2";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
@@ -11,7 +10,7 @@ import { ApplyState, NodeService, PurgeType, TaskState, WatchEvent } from "@edge
 import * as x509 from "@peculiar/x509";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { startNodeChannel } from "../../src/server/node-channel/server";
+import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
 import { createCacheTask, getCacheTask } from "../../src/server/services/cache-tasks";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
@@ -41,7 +40,7 @@ async function nodeKeyAndCsr() {
 
 describe("node channel", async () => {
   const { ctx, client: pglite } = await createTestContext();
-  let server: Http2SecureServer;
+  let channel: NodeChannel;
   let baseUrl: string;
   let clusterId: string;
   let organizationId: string;
@@ -98,14 +97,14 @@ describe("node channel", async () => {
       createClusterTx(tx, { name: "default", description: "" }, actor),
     );
     clusterId = cluster.id;
-    server = await startNodeChannel(ctx);
-    const address = server.address();
+    channel = await startNodeChannel(ctx);
+    const address = channel.server.address();
     if (!address || typeof address === "string") throw new Error("no address");
     baseUrl = `https://localhost:${address.port}`;
   });
 
   afterAll(async () => {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await channel.close();
     await pglite.close();
   });
 
