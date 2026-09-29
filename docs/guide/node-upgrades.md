@@ -121,7 +121,8 @@ EDGEWEIR_UPGRADE_PUBLIC_KEY=/etc/edgeweir-node/release.pub
 | `http3-v1` | 网站开启 HTTP/3 |
 | `rules-v1` | 规则、平台拦截或放行名单 |
 | `access-logs-v1` | 访问日志采样 |
-| `geoip-city-v1` / `geoip-asn-v1` | 规则使用 GeoIP 字段；节点配置了对应数据库时才上报 |
+| `geoip-city-v1` / `geoip-asn-v1` | 规则使用 GeoIP 字段；节点有国家 / ASN 数据时才上报 |
+| `geoip-subdivision-v1` | 规则使用 `ip.geoip.subdivision`；节点配置了 City MMDB 时上报，只由控制台检查；未上报 `geoip-country-v1` 的旧版节点以 `geoip-city-v1` 代替 |
 | `stats-sequence-v1` | 带序号的统计上报；缺少时节点始终显示「需要升级」 |
 | `self-upgrade-v1` | 签名升级；监督进程运行且找到 `cosign` 时上报 |
 

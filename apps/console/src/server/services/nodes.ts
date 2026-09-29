@@ -1,5 +1,5 @@
-import { decodeNodeConfig } from "@edgeweir/config-compiler";
-import type { Node } from "@edgeweir/contract";
+import { decodeNodeConfig, nodeRequirements } from "@edgeweir/config-compiler";
+import { type Node, nodeSupportsFeature } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { asc, eq, inArray } from "drizzle-orm";
 import { fail } from "../lib/errors";
@@ -44,7 +44,7 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
   const required = new Map<string, string[]>();
   for (const clusterId of new Set(rows.map((r) => r.clusterId))) {
     const latest = await latestRevision(db, clusterId);
-    required.set(clusterId, latest ? decodeNodeConfig(latest.ir).requiredFeatures : []);
+    required.set(clusterId, latest ? nodeRequirements(decodeNodeConfig(latest.ir)) : []);
   }
   return rows.map((r) => {
     const st = statuses.find((s) => s.nodeId === r.id);
@@ -66,7 +66,7 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
       supportedFeatures: r.supportedFeatures,
       upgradeRequired:
         (!!r.agentVersion && !r.supportedFeatures.includes("stats-sequence-v1")) ||
-        (required.get(r.clusterId) ?? []).some((f) => !r.supportedFeatures.includes(f)),
+        (required.get(r.clusterId) ?? []).some((f) => !nodeSupportsFeature(r.supportedFeatures, f)),
       engine: r.engine,
       engineVersion: r.engineVersion,
       os: r.os,

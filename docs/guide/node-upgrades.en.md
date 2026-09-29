@@ -121,7 +121,8 @@ Signing and verification are covered in the [Sigstore documentation](https://doc
 | `http3-v1` | Sites with HTTP/3 on |
 | `rules-v1` | Rules, platform block or allow lists |
 | `access-logs-v1` | Access log sampling |
-| `geoip-city-v1` / `geoip-asn-v1` | Rules using GeoIP fields; reported only when the node has the database configured |
+| `geoip-city-v1` / `geoip-asn-v1` | Rules using GeoIP fields; reported only when the node has country / ASN data |
+| `geoip-subdivision-v1` | Rules using `ip.geoip.subdivision`; reported when the node has a City MMDB, checked by the console only; older nodes that do not report `geoip-country-v1` count `geoip-city-v1` instead |
 | `stats-sequence-v1` | Sequenced analytics reports; without it the node always shows **Upgrade required** |
 | `self-upgrade-v1` | Signed upgrades; reported when the supervisor runs and finds `cosign` |
 

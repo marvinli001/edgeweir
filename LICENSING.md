@@ -11,6 +11,7 @@
 | `edgeweir`（控制台） | AGPL-3.0-only |
 | `edgeweir-node`（节点） | AGPL-3.0-only |
 | 第三方组件 | 各自的许可证 |
+| 节点发布镜像内置的 GeoIP 数据 [IPinfo Lite](https://ipinfo.io/lite) | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)，原样再分发，不属于 AGPL 代码；署名：IP address data is powered by [IPinfo](https://ipinfo.io) |
 
 ## 使用权
 

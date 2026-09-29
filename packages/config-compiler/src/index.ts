@@ -29,6 +29,7 @@ import {
   OriginSchema,
   OriginScheme,
   PassiveHealthCheckSchema,
+  type RuleExpression,
   S3AuthSchema,
   type Site,
   SiteSchema,
@@ -159,6 +160,12 @@ export function compileRules(rules: RuleModel[] = []): EdgeRule[] {
     )
     .map((rule) => create(EdgeRuleSchema, rule));
 }
+/**
+ * requiredFeatures for GeoIP fields. geoip-city-v1 keeps its original name so
+ * nodes of every version accept the configuration; nodes now report it for any
+ * country data (IPinfo Lite or a City MMDB). Subdivisions are checked by the
+ * console only, see nodeRequirements.
+ */
 export function geoFeatures(expression: Expression): string[] {
   return [
     ...(expression.field === "ip.geoip.asnum"
@@ -168,6 +175,23 @@ export function geoFeatures(expression: Expression): string[] {
         : []),
     ...expression.children.flatMap(geoFeatures),
   ];
+}
+
+/**
+ * Capabilities a node needs for `config`: its requiredFeatures, plus
+ * geoip-subdivision-v1 when a rule reads ip.geoip.subdivision. That one never
+ * enters requiredFeatures, which nodes check against their own list, so nodes
+ * that predate it keep accepting the configuration. Compare with
+ * nodeSupportsFeature from @edgeweir/contract.
+ */
+export function nodeRequirements(config: NodeConfig): string[] {
+  const readsSubdivision = (expression: RuleExpression | undefined): boolean =>
+    !!expression &&
+    (expression.field === "ip.geoip.subdivision" || expression.children.some(readsSubdivision));
+  const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
+  return rules.some((rule) => readsSubdivision(rule.expression))
+    ? [...config.requiredFeatures, "geoip-subdivision-v1"]
+    : [...config.requiredFeatures];
 }
 
 export interface ListenerModel {

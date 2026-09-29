@@ -25,6 +25,7 @@ export * from "./addresses";
 export * from "./certificates";
 export * from "./errors";
 export * from "./node-errors";
+export * from "./node-features";
 export * from "./rules";
 export * from "./schemas";
 

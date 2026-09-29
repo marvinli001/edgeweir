@@ -191,6 +191,7 @@ services:
       EDGEWEIR_UPGRADE_SOURCE: http://upgrade-files/releases
       EDGEWEIR_UPGRADE_PUBLIC_KEY: /etc/edgeweir-upgrade/release.pub
       EDGEWEIR_UPGRADE_ALLOW_HTTP: "true"
+      EDGEWEIR_GEOIP_IPINFO: /etc/edgeweir-geoip/ipinfo_lite.mmdb
       EDGEWEIR_GEOIP_CITY: /etc/edgeweir-geoip/city.mmdb
       EDGEWEIR_GEOIP_ASN: /etc/edgeweir-geoip/asn.mmdb
     ports:
@@ -238,6 +239,7 @@ services:
     hostname: edge-upgrade-peer
     environment:
       EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
+      EDGEWEIR_GEOIP_IPINFO: /etc/edgeweir-geoip/ipinfo_lite.mmdb
       EDGEWEIR_GEOIP_CITY: /etc/edgeweir-geoip/city.mmdb
       EDGEWEIR_GEOIP_ASN: /etc/edgeweir-geoip/asn.mmdb
       EDGEWEIR_UPGRADE_SOURCE: http://upgrade-files/releases

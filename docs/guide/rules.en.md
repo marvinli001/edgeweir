@@ -132,7 +132,7 @@ http.response.code ge 500
 | `ip.src` | IP | The TCP client address; with the PROXY protocol on the listener, the address the load balancer passed |
 | `ssl` | Boolean | `true` for HTTPS requests |
 | `ip.geoip.country` | String | ISO country code; empty string without a record |
-| `ip.geoip.subdivision` | String | First-level subdivision code from the database; DB-IP's English name when it has no code |
+| `ip.geoip.subdivision` | String | First-level subdivision code from the City MMDB, or its English name when it has no code; empty string without a record or when the City MMDB's country differs from `ip.geoip.country` |
 | `ip.geoip.asnum` | Integer | ASN; 0 without a record |
 
 ### Operators and literals
@@ -210,39 +210,61 @@ Platform IP lists are maintained in **Admin → Platform IP lists**, platform ad
 
 | Item | Behavior |
 | --- | --- |
-| Capabilities | Rules and platform block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1` |
+| Capabilities | Rules and platform block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
 | Tenant publishing | When a tenant save or an automatic background publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the save is refused ("Cluster nodes need these capabilities first: …") and the rules and revision stay unchanged |
 | Platform administrators | Can deliberately publish a configuration that needs an upgrade; nodes lacking the capability keep their last-known-good configuration and the admin area shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md) |
 | Unknown capabilities | Nodes reject configurations with unknown capabilities or enum values and keep last-known-good |
 
 ## Configure GeoIP databases
 
-GeoIP fields read MMDB files on the node. The default choice is the [DB-IP Lite](https://db-ip.com/db/lite.php) City and ASN databases: CC BY 4.0 license, monthly updates, less precise than commercial databases. Pages that use the data keep the [IP Geolocation by DB-IP](https://db-ip.com) attribution. The project bundles no IP data, downloads no updates, and sends no visitor addresses to the data vendor.
+GeoIP fields read MMDB files on the node. Nodes download no updates and send no visitor addresses to data vendors.
 
-1. Download and unpack the City Lite and ASN Lite MMDB files from DB-IP; check source, license, and integrity, and record the download month.
-2. Put the files in a read-only directory the node can read, and set the node environment variables (or the flags `--geoip-city` and `--geoip-asn`):
+| Database | Fields | Source | License and updates | Attribution |
+| --- | --- | --- | --- | --- |
+| [IPinfo Lite](https://ipinfo.io/lite) | Country, ASN | Bundled in node release images; package and archive nodes download it from IPinfo (free account) | CC BY-SA 4.0; IPinfo updates daily, images carry a snapshot from their build day | IP address data is powered by [IPinfo](https://ipinfo.io) |
+| City MMDB, e.g. [DB-IP Lite](https://db-ip.com/db/lite.php) City | Country, first-level subdivision | Downloaded by the operator | DB-IP Lite: CC BY 4.0, monthly updates | [IP Geolocation by DB-IP](https://db-ip.com) |
+| ASN MMDB, e.g. DB-IP Lite ASN | ASN | Downloaded by the operator | Same as above | Same as above |
+
+| Item | Behavior |
+| --- | --- |
+| Precedence | Country and ASN come from IPinfo Lite first, then from the City / ASN MMDB when IPinfo has no record |
+| Subdivision | Comes only from the City MMDB, and only when the City MMDB's country matches the final country |
+| Bundled data | `/usr/share/edgeweir-node/geoip/ipinfo_lite.mmdb`, checked at build time against the sha256 IPinfo publishes; `NOTICE` in the same directory records the download time and sha256 |
+| Admin attribution | **Admin → System → GeoIP databases** carries the IPinfo attribution link |
+
+1. Container nodes running a release image need no configuration for country and ASN; for newer data, pull a newer image, or mount a separately downloaded copy and set `EDGEWEIR_GEOIP_IPINFO`.
+2. Package or archive nodes: download `ipinfo_lite.mmdb` from IPinfo. To match on subdivisions, also download a City MMDB. Check source, license, and integrity, and record the download date.
+3. Put the files in a read-only directory the node can read, and set the node environment variables:
 
    ```bash title="/etc/default/edgeweir-node"
+   EDGEWEIR_GEOIP_IPINFO=/etc/edgeweir-node/geoip/ipinfo_lite.mmdb
    EDGEWEIR_GEOIP_CITY=/etc/edgeweir-node/geoip/dbip-city-lite.mmdb
-   EDGEWEIR_GEOIP_ASN=/etc/edgeweir-node/geoip/dbip-asn-lite.mmdb
    ```
 
    For container deployments, mount the directory and pass the same variables with `-e`.
-3. Restart the node to load the databases:
+4. Restart the node to load the databases:
 
    ```bash
    sudo systemctl restart edgeweir-node
    ```
 
-4. Verify: **Admin → System → GeoIP databases** shows "Country / subdivision: Ready" and "ASN: Ready" for the node.
+5. Verify: **Admin → System → GeoIP databases** shows "Country: Ready" and "ASN: Ready" for the node, plus "Subdivision: Ready" when a City MMDB is configured.
+
+| Variable | Flag | Default | Description |
+| --- | --- | --- | --- |
+| `EDGEWEIR_GEOIP_IPINFO` | `--geoip-ipinfo` | `auto` | IPinfo Lite MMDB path; `auto` uses the database bundled in the image when present, `off` disables it |
+| `EDGEWEIR_GEOIP_CITY` | `--geoip-city` | Empty | City MMDB path |
+| `EDGEWEIR_GEOIP_ASN` | `--geoip-asn` | Empty | ASN MMDB path |
 
 | Item | Behavior |
 | --- | --- |
-| Capability reporting | A node with a City database reports `geoip-city-v1`, one with an ASN database reports `geoip-asn-v1`; a node lacking a capability rejects configurations that use its fields and keeps last-known-good |
-| Invalid file | The node agent does not start with an invalid MMDB file |
+| Capability reporting | A node with country data (IPinfo Lite or a City MMDB) reports `geoip-city-v1`, one with a City MMDB reports `geoip-subdivision-v1`, one with ASN data reports `geoip-asn-v1`; current nodes also report `geoip-country-v1` |
+| Older nodes | A node that does not report `geoip-country-v1` reports `geoip-city-v1` only with a City MMDB, and the console treats it as having `geoip-subdivision-v1` |
+| Missing capability | A node rejects configurations that use GeoIP fields it lacks and keeps last-known-good |
+| Invalid file | The node agent does not start when a configured MMDB file is invalid or of the wrong database type; an invalid bundled IPinfo Lite database is logged and left unused |
 | Lookups | The agent reads the files and serves results to Lua workers over a local Unix socket with mode 0600; each worker caches up to 10,000 results for 5 minutes; a lookup times out after 200 milliseconds |
 | Lookup failure | When site or platform rules use GeoIP fields, every request of that site needs a lookup; while the service is unavailable, those requests get 503 |
-| Updates | Replace the file on one node, restart, and verify before updating the others; never overwrite an MMDB file in use |
+| Updates | Replace the file or image on one node, restart, and verify before updating the others; never overwrite an MMDB file in use |
 
 ## Limits
 
@@ -252,7 +274,7 @@ GeoIP fields read MMDB files on the node. The default choice is the [DB-IP Lite]
 | Expressions | A wirefilter-style subset; no custom functions, string transformations, or raw Lua |
 | Protected headers | See [Action fields](#action-fields); rules cannot change them |
 | Compression | Override settings can only turn Gzip off; they cannot turn on modules that are not built |
-| GeoIP data | The operator downloads and updates the databases; accuracy depends on the chosen database |
+| GeoIP data | The bundled IPinfo Lite database is a snapshot from the image build day; subdivisions need an operator-provided City MMDB; accuracy depends on the chosen database |
 
 ## Troubleshooting
 

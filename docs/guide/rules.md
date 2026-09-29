@@ -132,7 +132,7 @@ http.response.code ge 500
 | `ip.src` | IP | TCP 客户端地址；监听启用 PROXY 协议时为负载均衡器传入的地址 |
 | `ssl` | 布尔 | HTTPS 请求为 `true` |
 | `ip.geoip.country` | 字符串 | ISO 国家代码；无记录时为空字符串 |
-| `ip.geoip.subdivision` | 字符串 | 数据库中的一级行政区代码；DB-IP 没有代码时为其英文名称 |
+| `ip.geoip.subdivision` | 字符串 | City MMDB 中的一级行政区代码，没有代码时为其英文名称；无记录或 City MMDB 的国家与 `ip.geoip.country` 不一致时为空字符串 |
 | `ip.geoip.asnum` | 整数 | ASN；无记录时为 0 |
 
 ### 运算符与字面量
@@ -210,39 +210,61 @@ http.response.code ge 500
 
 | 项目 | 行为 |
 | --- | --- |
-| 能力 | 规则和平台拦截/放行名单需要节点能力 `rules-v1`；`ip.geoip.country`、`ip.geoip.subdivision` 需要 `geoip-city-v1`；`ip.geoip.asnum` 需要 `geoip-asn-v1` |
+| 能力 | 规则和平台拦截/放行名单需要节点能力 `rules-v1`；`ip.geoip.country`、`ip.geoip.subdivision` 需要 `geoip-city-v1`；`ip.geoip.asnum` 需要 `geoip-asn-v1`；使用 `ip.geoip.subdivision` 时控制台另外检查 `geoip-subdivision-v1`（不写入配置） |
 | 租户发布 | 租户保存或后台自动发布引入新能力时，检查集群内所有活动节点（含暂时离线的节点）；有节点缺少能力时拒绝本次保存（「请先由管理员为集群节点启用这些能力：…」），原规则与版本不变 |
 | 平台管理员 | 可明确发布需要升级的配置；缺少能力的节点保留 last-known-good 配置，后台显示「需要升级」，见[节点升级](node-upgrades.md) |
 | 未知能力 | 节点拒绝含未知能力或未知枚举的配置，继续使用 last-known-good |
 
 ## 配置 GeoIP 数据库
 
-GeoIP 字段读取节点本地的 MMDB 文件。默认选用 [DB-IP Lite](https://db-ip.com/db/lite.php) 的 City 和 ASN 数据库：许可证 CC BY 4.0，按月更新，精度低于商业数据库。引用这些数据的页面保留 [IP Geolocation by DB-IP](https://db-ip.com) 署名。项目不捆绑 IP 数据、不自动下载更新，也不向数据商发送访客地址。
+GeoIP 字段读取节点本地的 MMDB 文件。节点不自动下载更新，也不向数据商发送访客地址。
 
-1. 从 DB-IP 下载并解压 City Lite 和 ASN Lite 的 MMDB 文件；核对来源、许可和完整性，记录下载月份。
-2. 把文件放在节点可读的只读目录，为节点设置环境变量（或对应参数 `--geoip-city`、`--geoip-asn`）：
+| 数据库 | 字段 | 获取方式 | 许可证与更新 | 署名 |
+| --- | --- | --- | --- | --- |
+| [IPinfo Lite](https://ipinfo.io/lite) | 国家、ASN | 节点发布镜像内置；安装包和压缩包节点从 IPinfo 下载（免费账号） | CC BY-SA 4.0；IPinfo 每日更新，镜像内为构建当天的快照 | IP address data is powered by [IPinfo](https://ipinfo.io) |
+| City MMDB，如 [DB-IP Lite](https://db-ip.com/db/lite.php) City | 国家、一级行政区 | 运营者下载 | DB-IP Lite：CC BY 4.0，按月更新 | [IP Geolocation by DB-IP](https://db-ip.com) |
+| ASN MMDB，如 DB-IP Lite ASN | ASN | 运营者下载 | 同上 | 同上 |
+
+| 项目 | 行为 |
+| --- | --- |
+| 优先级 | 国家和 ASN 优先取 IPinfo Lite，无记录时取 City / ASN MMDB |
+| 一级行政区 | 只来自 City MMDB；City MMDB 的国家与最终国家一致时才有值 |
+| 镜像内置数据 | `/usr/share/edgeweir-node/geoip/ipinfo_lite.mmdb`，构建时按 IPinfo 公布的 sha256 校验；同目录 `NOTICE` 记录下载时间和 sha256 |
+| 后台署名 | **后台 → 系统设置 → GeoIP 数据库** 带 IPinfo 署名链接 |
+
+1. 容器节点使用发布镜像时，国家和 ASN 无需配置；更新数据时拉取新镜像，或挂载另行下载的副本并设置 `EDGEWEIR_GEOIP_IPINFO`。
+2. 安装包或压缩包节点：从 IPinfo 下载 `ipinfo_lite.mmdb`。需要按一级行政区匹配时，另外下载 City MMDB。核对来源、许可和完整性，记录下载日期。
+3. 把文件放在节点可读的只读目录，为节点设置环境变量：
 
    ```bash title="/etc/default/edgeweir-node"
+   EDGEWEIR_GEOIP_IPINFO=/etc/edgeweir-node/geoip/ipinfo_lite.mmdb
    EDGEWEIR_GEOIP_CITY=/etc/edgeweir-node/geoip/dbip-city-lite.mmdb
-   EDGEWEIR_GEOIP_ASN=/etc/edgeweir-node/geoip/dbip-asn-lite.mmdb
    ```
 
    容器部署挂载该目录并以 `-e` 传入同样的变量。
-3. 重启节点，装入数据库：
+4. 重启节点，装入数据库：
 
    ```bash
    sudo systemctl restart edgeweir-node
    ```
 
-4. 验证：**后台 → 系统设置 → GeoIP 数据库** 中该节点显示「国家 / 省份：可用」和「ASN：可用」。
+5. 验证：**后台 → 系统设置 → GeoIP 数据库** 中该节点显示「国家：可用」「ASN：可用」；配置了 City MMDB 时另显示「省份：可用」。
+
+| 变量 | 参数 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `EDGEWEIR_GEOIP_IPINFO` | `--geoip-ipinfo` | `auto` | IPinfo Lite MMDB 路径；`auto` 使用镜像内置的数据库（存在时），`off` 关闭 |
+| `EDGEWEIR_GEOIP_CITY` | `--geoip-city` | 空 | City MMDB 路径 |
+| `EDGEWEIR_GEOIP_ASN` | `--geoip-asn` | 空 | ASN MMDB 路径 |
 
 | 项目 | 行为 |
 | --- | --- |
-| 能力上报 | 配置了 City 数据库的节点上报 `geoip-city-v1`，配置了 ASN 数据库的节点上报 `geoip-asn-v1`；缺少对应能力的节点拒绝使用该字段的配置，保留 last-known-good |
-| 文件无效 | MMDB 文件无效时节点 agent 不能启动 |
+| 能力上报 | 有国家数据（IPinfo Lite 或 City MMDB）时上报 `geoip-city-v1`，有 City MMDB 时上报 `geoip-subdivision-v1`，有 ASN 数据时上报 `geoip-asn-v1`；当前版本节点另报 `geoip-country-v1` |
+| 旧版节点 | 未上报 `geoip-country-v1` 的节点只在有 City MMDB 时上报 `geoip-city-v1`，控制台视其具备 `geoip-subdivision-v1` |
+| 缺少能力 | 节点拒绝使用其缺少的 GeoIP 字段的配置，保留 last-known-good |
+| 文件无效 | 指定的 MMDB 文件无效或数据库类型不符时节点 agent 不能启动；镜像内置的 IPinfo Lite 无效时 agent 记录错误并不使用它 |
 | 查询 | agent 读取文件，经权限 0600 的本机 Unix socket 向 Lua worker 提供结果；每个 worker 缓存最多 10000 个结果、有效期 5 分钟；单次查询超时 200 毫秒 |
 | 查询失败 | 网站或平台规则使用 GeoIP 字段时，该网站的每个请求都要查询；服务不可用时这些请求返回 503 |
-| 更新 | 先在一个节点替换文件并重启、验证，再更新其余节点；不要原地改写正在使用的 MMDB |
+| 更新 | 先在一个节点替换文件或镜像并重启、验证，再更新其余节点；不要原地改写正在使用的 MMDB |
 
 ## 限制
 
@@ -252,7 +274,7 @@ GeoIP 字段读取节点本地的 MMDB 文件。默认选用 [DB-IP Lite](https:
 | 表达式 | wirefilter 风格子集；不支持自定义函数、字符串变换和原始 Lua |
 | 受保护头 | 见[动作字段](#动作字段)；不能通过规则修改 |
 | 压缩 | 覆盖设置只能关闭 Gzip，不能开启未构建的压缩模块 |
-| GeoIP 数据 | 运营者自行下载和更新；精度取决于所选数据库 |
+| GeoIP 数据 | 镜像内置的 IPinfo Lite 是构建当天的快照；一级行政区需运营者提供 City MMDB；精度取决于所选数据库 |
 
 ## 故障排查
 

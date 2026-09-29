@@ -248,7 +248,7 @@ Each node also pins its own release source and signature trust locally, out of t
 
 ### GeoIP databases
 
-Read-only. Shows, per node, the state of the **Country / subdivision** and **ASN** databases (**Ready** / **Unavailable**). Databases are configured locally on each node; **Configure databases** links to [Rules, IP lists, and GeoIP](rules.en.md).
+Read-only. Shows, per node, the state of the **Country**, **Subdivision**, and **ASN** data (**Ready** / **Unavailable**), with the IPinfo attribution link. Country and ASN data ship in node release images; other databases are configured locally on each node; **Configure databases** links to [Rules, IP lists, and GeoIP](rules.en.md).
 
 ### SMTP
 

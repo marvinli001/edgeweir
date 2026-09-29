@@ -17,6 +17,7 @@ import { createEnrollmentToken } from "../../src/server/services/enrollment";
 import { deleteNode, listNodes, setNodeStatus } from "../../src/server/services/nodes";
 import { siteOriginHealth } from "../../src/server/services/origin-health";
 import { latestRevision } from "../../src/server/services/revisions";
+import { saveRules } from "../../src/server/services/rules";
 import { createSite } from "../../src/server/services/sites";
 import { createTestContext, seedOrganization } from "./helpers";
 
@@ -754,5 +755,46 @@ describe("node channel", async () => {
     expect(
       (await mtls.getCertificates({ ids: [certificate.id] })).certificates[0]?.privateKeyPem,
     ).toBe(material.privateKeyPem);
+  });
+  it("withholds subdivision rules from nodes without a City MMDB", async () => {
+    const { mtls, nodeId } = await enroll("subdivision-test");
+    const agent = [
+      "tls-v1",
+      "http01-v1",
+      "http3-v1",
+      "rules-v1",
+      "stats-sequence-v1",
+      "access-logs-v1",
+    ];
+    const report = (geo: string[]) =>
+      mtls.reportStatus({ info: { agentVersion: "dev", supportedFeatures: [...agent, ...geo] } });
+    const upgradeRequired = async () =>
+      (await listNodes(ctx.db, clusterId)).find((n) => n.id === nodeId)?.upgradeRequired;
+    const platform = { scope: { all: true as const }, actor, organizationId: null };
+    await saveRules(
+      ctx,
+      null,
+      [
+        {
+          name: "subdivision",
+          phase: "waf-custom",
+          expression: 'ip.geoip.subdivision eq "AUK"',
+          enabled: true,
+          action: { kind: "log" },
+        },
+      ],
+      platform,
+    );
+    // IPinfo Lite alone: country data (geoip-city-v1), no subdivisions.
+    await report(["geoip-country-v1", "geoip-city-v1", "geoip-asn-v1"]);
+    await expect(mtls.getConfig({})).rejects.toMatchObject({ code: Code.FailedPrecondition });
+    expect(await upgradeRequired()).toBe(true);
+    // Before geoip-country-v1, geoip-city-v1 always came from a City MMDB.
+    await report(["geoip-city-v1"]);
+    expect((await mtls.getConfig({})).payload.case).toBe("snapshot");
+    await report(["geoip-country-v1", "geoip-city-v1", "geoip-subdivision-v1"]);
+    expect((await mtls.getConfig({})).payload.case).toBe("snapshot");
+    expect(await upgradeRequired()).toBe(false);
+    await saveRules(ctx, null, [], platform);
   });
 });

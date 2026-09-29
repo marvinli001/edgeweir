@@ -51,9 +51,9 @@ describe("UI rules (ADR-0003)", () => {
 
   it("links nothing on other sites except a short allow list (no phone-home, self-hosted assets)", () => {
     const allowed = [
-      // This project's operating guide and the MMDB data provider's required attribution.
+      // This project's operating guide and the bundled GeoIP data's required attribution.
       "https://github.com/marvinli001/edgeweir/blob/master/docs/guide/rules.md",
-      "https://db-ip.com",
+      "https://ipinfo.io",
       // XML namespace name, never fetched.
       "http://www.w3.org/2000/svg",
     ];

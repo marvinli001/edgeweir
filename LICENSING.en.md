@@ -11,6 +11,7 @@ Effective date: 2026-09-26. This document describes product scope. It does not r
 | `edgeweir` (console) | AGPL-3.0-only |
 | `edgeweir-node` (node) | AGPL-3.0-only |
 | Third-party components | Their own licenses |
+| GeoIP data bundled in node release images, [IPinfo Lite](https://ipinfo.io/lite) | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), redistributed unmodified, not AGPL code; attribution: IP address data is powered by [IPinfo](https://ipinfo.io) |
 
 ## Rights of use
 

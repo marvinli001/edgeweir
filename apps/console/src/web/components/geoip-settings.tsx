@@ -1,9 +1,18 @@
+import { nodeSupportsFeature } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+
+// Country and ASN come from the IPinfo Lite database bundled into node images
+// (or operator MMDBs); subdivisions need an operator-provided City MMDB.
+const features = [
+  ["geoip-city-v1", () => m.geo_country()],
+  ["geoip-subdivision-v1", () => m.geo_subdivision()],
+  ["geoip-asn-v1", () => m.geo_asn()],
+] as const;
 
 export function GeoIpSettings() {
   const nodes = useQuery(
@@ -38,11 +47,11 @@ export function GeoIpSettings() {
             {nodes.data.map((node) => (
               <li key={node.id} className="flex flex-wrap items-center gap-2 py-3">
                 <span className="min-w-0 flex-1 break-all text-sm">{node.name}</span>
-                {(["geoip-city-v1", "geoip-asn-v1"] as const).map((feature) => (
+                {features.map(([feature, label]) => (
                   <Badge key={feature} variant="outline">
-                    {feature === "geoip-city-v1" ? m.geo_city() : m.geo_asn()}
+                    {label()}
                     {m.geo_state({
-                      state: node.supportedFeatures.includes(feature)
+                      state: nodeSupportsFeature(node.supportedFeatures, feature)
                         ? m.geo_available()
                         : m.geo_unavailable(),
                     })}
@@ -54,7 +63,7 @@ export function GeoIpSettings() {
         )}
         <a
           className="mt-3 inline-block text-xs text-muted-foreground hover:underline"
-          href="https://db-ip.com"
+          href="https://ipinfo.io"
           target="_blank"
           rel="noreferrer"
         >
