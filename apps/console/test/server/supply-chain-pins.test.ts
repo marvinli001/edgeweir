@@ -23,7 +23,13 @@ describe("supply-chain pins", () => {
   });
 
   it("pins third-party images in the compose files by digest", () => {
-    for (const file of ["compose.yml", "compose.dev.yml", "compose.baota.yml", "compose.e2e.yml"]) {
+    for (const file of [
+      "compose.yml",
+      "compose.dev.yml",
+      "compose.baota.yml",
+      "compose.baota-host.yml",
+      "compose.e2e.yml",
+    ]) {
       const images = [...read(file).matchAll(/^\s*image:\s*(\S+)\s*$/gm)].map((m) => m[1] ?? "");
       expect(images.length, file).toBeGreaterThan(0);
       for (const image of images) {

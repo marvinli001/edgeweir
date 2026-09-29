@@ -1,6 +1,8 @@
-# Edgeweir 控制台 · 宝塔面板（BT Panel）/ aaPanel Docker 编排模板
+# Edgeweir 控制台 · 宝塔面板（BT Panel）/ aaPanel · 编排内置 PostgreSQL（Docker 网桥）
 #
-# 用法见 docs/deploy/baota.md，要点：
+# 推荐用 deploy.sh 安装和升级（docs/deploy/baota.md），它会对话式生成 .env 并启动本编排；
+# PostgreSQL 装在本机（宝塔「数据库 → PgSQL」）或云上时用 compose.baota-host.yml。
+# 手动使用的要点：
 #   1. 宝塔「Docker → 容器编排 → 添加编排」（aaPanel「Docker → Compose → Add」），粘贴本文件，
 #      并在编排的 .env 里填写 EDGEWEIR_MASTER_KEY、POSTGRES_PASSWORD、EDGEWEIR_PUBLIC_URL
 #      （主密钥用 openssl rand -base64 32 生成并原样使用，POSTGRES_PASSWORD 会拼进

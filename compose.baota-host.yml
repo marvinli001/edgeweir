@@ -1,0 +1,56 @@
+# Edgeweir 控制台 · 宝塔面板（BT Panel）/ aaPanel · 本机或云 PostgreSQL（host 网络）
+#
+# 推荐用 deploy.sh 安装和升级（docs/deploy/baota.md），它会对话式生成 .env 并启动本编排。
+# 与 compose.baota.yml（编排内置 PostgreSQL，Docker 网桥）的区别：
+#   - 容器使用宿主机网络（network_mode: host），DATABASE_URL 可以直接写 127.0.0.1，
+#     宝塔「数据库 → PgSQL」装在本机、只监听回环地址的 PostgreSQL 无需改 listen_addresses
+#     和 pg_hba；云数据库照常填它的地址（sslmode=verify-full）。
+#   - host 网络下没有端口映射：Web 控制台自己只监听 127.0.0.1:EDGEWEIR_HTTP_PORT（交给
+#     宝塔站点反向代理），节点通道监听 0.0.0.0:EDGEWEIR_NODE_API_PORT（直接对外，TLS 由
+#     控制台自己终结，不能交给宝塔 nginx）。这里的两个端口只能是数字。
+#   - 宝塔 nginx 从 127.0.0.1 转发，EDGEWEIR_TRUSTED_PROXIES 默认只信任本机回环地址。
+# .env 至少需要 DATABASE_URL、EDGEWEIR_MASTER_KEY、EDGEWEIR_PUBLIC_URL；镜像 tag 用
+# EDGEWEIR_VERSION 固定（滚动发布的「日期-提交」，例如 20260929-a1b2c3d）。
+name: edgeweir
+
+services:
+  console:
+    image: ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}
+    container_name: edgeweir-console
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      ROLE: all
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      # 浏览器访问控制台的地址，即宝塔站点的域名，例如 https://cdn-admin.example.com
+      EDGEWEIR_PUBLIC_URL: ${EDGEWEIR_PUBLIC_URL:-http://localhost:3000}
+      # 节点连接控制台的地址，例如 https://cdn-admin.example.com:8443
+      EDGEWEIR_NODE_API_URL: ${EDGEWEIR_NODE_API_URL:-}
+      EDGEWEIR_NODE_API_HOSTNAMES: ${EDGEWEIR_NODE_API_HOSTNAMES:-}
+      # Web 控制台只在本机回环地址监听；节点通道对外
+      HOST: 127.0.0.1
+      PORT: ${EDGEWEIR_HTTP_PORT:-3000}
+      NODE_API_HOST: 0.0.0.0
+      NODE_API_PORT: ${EDGEWEIR_NODE_API_PORT:-8443}
+      EDGEWEIR_ANALYTICS: ${EDGEWEIR_ANALYTICS:-lite}
+      # 可选外部 ClickHouse；此模板不额外创建分析服务。
+      EDGEWEIR_CLICKHOUSE_URL: ${EDGEWEIR_CLICKHOUSE_URL:-http://localhost:8123}
+      EDGEWEIR_CLICKHOUSE_DATABASE: ${EDGEWEIR_CLICKHOUSE_DATABASE:-edgeweir}
+      EDGEWEIR_CLICKHOUSE_USER: ${EDGEWEIR_CLICKHOUSE_USER:-edgeweir}
+      EDGEWEIR_CLICKHOUSE_PASSWORD: ${EDGEWEIR_CLICKHOUSE_PASSWORD:-${CLICKHOUSE_PASSWORD:-edgeweir}}
+      EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${EDGEWEIR_OUTBOUND_ALLOW_CIDRS:-}
+      EDGEWEIR_ACME_DIRECTORY: ${EDGEWEIR_ACME_DIRECTORY:-}
+      EDGEWEIR_ACME_CA_FILE: ${EDGEWEIR_ACME_CA_FILE:-}
+      # 旧部署的后备值：「后台 → 系统设置」里保存的值优先
+      EDGEWEIR_NODE_RELEASE_BASE_URL: ${EDGEWEIR_NODE_RELEASE_BASE_URL:-}
+      EDGEWEIR_SMTP_CA_FILE: ${EDGEWEIR_SMTP_CA_FILE:-}
+      EDGEWEIR_DNS_RESOLVERS: ${EDGEWEIR_DNS_RESOLVERS:-}
+      # 宝塔 nginx 从本机回环地址转发，只信任它的 X-Forwarded-For
+      EDGEWEIR_TRUSTED_PROXIES: ${EDGEWEIR_TRUSTED_PROXIES:-127.0.0.1,::1}
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true

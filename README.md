@@ -89,7 +89,7 @@ Ports:
 | 3000 | Web console and API | Allowed. A proxy such as BaoTa (宝塔) nginx can terminate TLS in front of it. Set `EDGEWEIR_TRUSTED_PROXIES` to the proxy's address so that audit entries and sign-in rate limits see the client IP; forwarding headers from anyone else are ignored. |
 | 8443 | Node channel | Expose it directly, or pass it through at layer 4 with nginx `stream`. **Never terminate TLS on a proxy**: the console terminates TLS itself and enforces mTLS. |
 
-Deployment guides: [docs/deploy/docker.md](docs/deploy/docker.md) and [docs/deploy/baota.md](docs/deploy/baota.md) (BaoTa panel / aaPanel).
+Deployment guides: [docs/deploy/docker.md](docs/deploy/docker.md) and [docs/deploy/baota.md](docs/deploy/baota.md) (BaoTa panel / aaPanel). On a server, `deploy.sh` installs and upgrades the console interactively, with a local or cloud PostgreSQL (host network) or a bundled one: `curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh && sudo bash deploy.sh install`.
 
 ## Adding a node
 

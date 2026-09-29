@@ -14,6 +14,8 @@ pg_restore --list edgeweir.dump > edgeweir.dump.list
 
 另行备份 ClickHouse（若启用），以及节点的私有状态目录 `/var/lib/edgeweir-node`。缓存目录可以重建。节点私钥留在节点备份内，不上传到控制台。主密钥备份应与数据库备份分开保存并确认可取回。
 
+用 [deploy.sh](baota.md#6-日常维护) 部署的，`./deploy.sh backup`（`update` 前也会自动执行）把同样格式的 `edgeweir.dump` 连同 `.env` 和编排文件写进安装目录的 `backups/<时间>/`。
+
 ## 恢复到新数据库
 
 ```sh

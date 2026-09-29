@@ -53,6 +53,9 @@ WORKDIR /app
 COPY --from=build --chown=root:root /repo/apps/console/dist ./dist
 COPY --from=certd --chown=root:root /out/edgeweir-certd /usr/local/bin/edgeweir-certd
 COPY --chmod=0755 docker/healthcheck.sh /usr/local/bin/edgeweir-healthcheck
+# Installer and upgrade script for the 宝塔 / aaPanel compose deployments, so a
+# server can refresh it from the image it runs (docs/deploy/baota.md).
+COPY --chmod=0755 deploy.sh ./deploy.sh
 ENV NODE_ENV=production \
     ROLE=all \
     HOST=0.0.0.0 \

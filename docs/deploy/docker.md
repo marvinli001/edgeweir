@@ -2,7 +2,7 @@
 
 控制台是**一个镜像、一个进程**：同时提供 Web 控制台和 API（`:3000`）、节点通道（`:8443`）和后台任务。唯一的外部依赖是 PostgreSQL 18。
 
-> 宝塔 / aaPanel 用户请看 [baota.md](baota.md)。
+> 宝塔 / aaPanel 用户请看 [baota.md](baota.md)：安装脚本 `deploy.sh` 对话式生成 `.env` 并启动编排，数据库可以用本机或云 PostgreSQL（host 网络）或编排内置的 PostgreSQL，其他装有 Docker 的 Linux 也能用。
 
 ## 版本与镜像
 

@@ -16,7 +16,7 @@ describe(".env.example", () => {
   });
 
   it("documents the variables compose files interpolate", () => {
-    for (const file of ["compose.yml", "compose.baota.yml"]) {
+    for (const file of ["compose.yml", "compose.baota.yml", "compose.baota-host.yml"]) {
       const compose = readFileSync(resolve(repo, file), "utf8");
       for (const m of compose.matchAll(/\$\{([A-Z][A-Z0-9_]*)(?::-[^}]*)?\}/g)) {
         expect(documented, `${file}: ${m[1]}`).toContain(m[1]);

@@ -89,7 +89,7 @@ docker compose up -d
 | 3000 | Web 控制台与 API | 可以。宝塔 nginx 等代理可以在前面终结 TLS。把代理的地址写进 `EDGEWEIR_TRUSTED_PROXIES`，审计日志和登录限速才能拿到访客 IP；其他来源的转发头一律忽略。 |
 | 8443 | 节点通道 | 直接暴露，或用 nginx `stream` 做四层透传。**不能由代理终结 TLS**：控制台自己终结 TLS 并强制 mTLS。 |
 
-部署文档：[docs/deploy/docker.md](docs/deploy/docker.md)、[docs/deploy/baota.md](docs/deploy/baota.md)（宝塔面板 / aaPanel）。
+部署文档：[docs/deploy/docker.md](docs/deploy/docker.md)、[docs/deploy/baota.md](docs/deploy/baota.md)（宝塔面板 / aaPanel）。服务器上可以用 `deploy.sh` 对话式安装和升级，数据库选本机或云 PostgreSQL（host 网络）或编排内置：`curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh && sudo bash deploy.sh install`。
 
 ## 添加节点
 
