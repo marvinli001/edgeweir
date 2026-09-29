@@ -3,9 +3,12 @@
 简体中文 | [English](README.en.md)
 
 [![CI](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml)
+[![Docs](https://github.com/marvinli001/edgeweir/actions/workflows/docs.yml/badge.svg?branch=master)](https://marvinli001.github.io/edgeweir/zh/)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSE)
 
 自托管的 CDN / WAF / 边缘调度控制平面。统一管理边缘节点、源站池、缓存、HTTPS、访问策略、DNS 调度与组织权限。边缘节点见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。
+
+文档：<https://marvinli001.github.io/edgeweir/zh/>
 
 > [!IMPORTANT]
 > 预发布阶段。MVP 功能已完成并通过端到端验收；尚无正式二进制发布，评估请从源码构建。
@@ -111,16 +114,22 @@ docker compose logs console | grep setupToken
 | 3000 | Web 控制台与 API | 支持在前端终结 TLS（如宝塔 nginx）。须将代理地址写入 `EDGEWEIR_TRUSTED_PROXIES`，否则审计日志与登录限速取不到真实客户端 IP；其他来源的转发头一律忽略。 |
 | 8443 | 节点通道 | 直接暴露，或经 nginx `stream` 四层透传。**禁止由代理终结 TLS**：控制台自行终结 TLS 并强制 mTLS。 |
 
-### 服务器部署
+### 部署方式
 
-- [Docker Compose 部署](docs/deploy/docker.md)
-- [宝塔面板 / aaPanel 部署](docs/deploy/baota.md)
-- 交互式安装与升级脚本 `deploy.sh`，支持本机、云端或内置 PostgreSQL：
+| 平台 | 文档 |
+| --- | --- |
+| Docker Compose / `docker run` | [Docker Compose 部署](docs/deploy/docker.md) |
+| 宝塔面板 / aaPanel | [宝塔面板 / aaPanel](docs/deploy/baota.md)、[deploy.sh 参考](docs/deploy/deploy-script.md) |
+| Railway | [Railway](docs/deploy/railway.md) |
+| Fly.io | [Fly.io](docs/deploy/fly.md) |
+| Vercel | 不支持，原因见[部署概览](docs/deploy/README.md#vercel) |
 
-  ```sh
-  curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh
-  sudo bash deploy.sh install
-  ```
+交互式安装与升级脚本 `deploy.sh` 适用于任何装有 Docker 与 Compose v2 的 Linux，支持本机、云端或内置 PostgreSQL：
+
+```sh
+curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh
+sudo bash deploy.sh install
+```
 
 ## 接入节点
 
@@ -147,7 +156,7 @@ docker compose logs console | grep setupToken
 - 优先安装 .deb / .rpm，否则使用 tar.gz；配置了控制台 `/downloads` 镜像时从镜像下载，否则从 GitHub Releases 下载。
 - agent 先核对 CA 指纹再提交 token，本地生成私钥，此后仅经 mTLS 与控制台通信。
 
-参见 [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md)、[ADR-0016](docs/adr/0016-one-line-install.md)。
+安装参数与发布物镜像见[接入节点](docs/deploy/nodes.md)；设计见 [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md)、[ADR-0016](docs/adr/0016-one-line-install.md)。
 
 ## API
 
@@ -230,27 +239,22 @@ proto/                     protobuf（buf 管理），与 edgeweir-node 共享�
 helpers/certd/             edgeweir-certd（Go）：lego 负责 ACME，libdns 负责 DNS 记录
 scripts/e2e.sh             端到端测试脚本
 docs/adr/                  架构决策记录
-docs/guide/                功能指南
 docs/deploy/               部署文档
+docs/guide/                使用指南
+docs/reference/            参考：环境变量、命令行、API
+doc/                       文档站（Fumadocs），发布至 GitHub Pages
 ```
 
 ## 文档
 
-| 文档 | 内容 |
+文档站 <https://marvinli001.github.io/edgeweir/zh/> 由以下 Markdown 生成。每篇文档另有英文版 `*.en.md`；架构决策记录仅有中文。
+
+| 分类 | 文档 |
 | --- | --- |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 架构与数据模型 |
-| [docs/adr/](docs/adr/README.md) | 架构决策记录 |
-| [ROADMAP.md](ROADMAP.md) | 功能规划 |
-| [SECURITY.md](SECURITY.md) | 信任基线、漏洞报告、发布物校验 |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | 开发规范与贡献流程 |
-| [LICENSING.md](LICENSING.md) | 许可证与商业产品边界 |
-| [源站与缓存](docs/guide/origins-and-cache.md) | 源站池、缓存规则、刷新与预热 |
-| [HTTPS 与证书](docs/guide/https.md) | 证书签发、续期与协议限制 |
-| [规则](docs/guide/rules.md) | 规则、IP 名单与 GeoIP |
-| [DNS 与告警](docs/guide/dns-and-alerts.md) | 域名、DNS 调度与告警 |
-| [访问日志与 AccessKey](docs/guide/access-logs.md) | 日志采集、存储与 AccessKey |
-| [节点升级](docs/guide/node-upgrades.md) | 签名升级、灰度与回滚 |
-| [备份与恢复](docs/deploy/backup.md) | 数据库备份与恢复 |
+| 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
+| 使用 | [快速上手](docs/guide/first-site.md) · [组织与成员](docs/guide/organizations.md) · [平台管理](docs/guide/admin.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [DNS 与告警](docs/guide/dns-and-alerts.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
+| 参考 | [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [API 与端点](docs/reference/api.md) |
+| 项目 | [架构](ARCHITECTURE.md) · [架构决策记录](docs/adr/README.md) · [路线图](ROADMAP.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |
 
 ## 许可证
 

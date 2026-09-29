@@ -1,0 +1,70 @@
+name: Docs
+
+# Builds the documentation site (doc/, Fumadocs static export) from the
+# repository's Markdown and publishes master to GitHub Pages:
+#   https://marvinli001.github.io/edgeweir/
+# Pull requests only build it, which also fails on broken relative links.
+on:
+  push:
+    branches: [master]
+    paths:
+      - "doc/**"
+      - "docs/**"
+      - "*.md"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "doc/**"
+      - "docs/**"
+      - "*.md"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build site
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: doc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          package_json_file: doc/package.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: doc/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run build
+        env:
+          DOCS_BASE_PATH: /edgeweir
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.event_name != 'pull_request'
+        with:
+          path: doc/out
+
+  deploy:
+    name: deploy to GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

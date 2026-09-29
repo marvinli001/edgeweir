@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+:root {
+  --font-cjk:
+    "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei",
+    sans-serif;
+}
+
+body {
+  font-family: var(--font-geist-sans), var(--font-cjk);
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+/* CJK headers in narrow columns otherwise wrap one character per line. */
+.prose th {
+  white-space: nowrap;
+}

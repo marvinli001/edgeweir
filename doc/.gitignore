@@ -1,0 +1,8 @@
+node_modules/
+.next/
+out/
+.source/
+next-env.d.ts
+*.tsbuildinfo
+# Generated from the repository's Markdown by scripts/sync-content.mjs
+content/

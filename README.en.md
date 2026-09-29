@@ -3,9 +3,12 @@
 [简体中文](README.md) | English
 
 [![CI](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/marvinli001/edgeweir/actions/workflows/ci.yml)
+[![Docs](https://github.com/marvinli001/edgeweir/actions/workflows/docs.yml/badge.svg?branch=master)](https://marvinli001.github.io/edgeweir/en/)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSE)
 
 Self-hosted CDN / WAF / edge scheduling control plane. Manages edge nodes, origin pools, caching, HTTPS, access policy, DNS steering and organization access control from one console. Edge nodes: [edgeweir-node](https://github.com/marvinli001/edgeweir-node).
+
+Documentation: <https://marvinli001.github.io/edgeweir/en/>
 
 > [!IMPORTANT]
 > Pre-release. MVP functionality is complete and passes end-to-end acceptance. No official binary release has been published; build from source for evaluation.
@@ -42,7 +45,7 @@ browser, API clients ──:3000──▶ ┌───────────�
                                 └───────────────────────────────────┘
 ```
 
-The only contract between console and node is the protobuf in `proto/`, managed with buf. Design details: [ARCHITECTURE.md](ARCHITECTURE.md) and the [architecture decision records](docs/adr/README.md) (Chinese).
+The only contract between console and node is the protobuf in `proto/`, managed with buf. Design details: [ARCHITECTURE.en.md](ARCHITECTURE.en.md) and the [architecture decision records](docs/adr/README.md) (Chinese).
 
 ## Security baseline
 
@@ -53,7 +56,7 @@ The only contract between console and node is the protobuf in `proto/`, managed 
 - `/api/v1` accepts only `x-api-key`; `/rpc` accepts only the session cookie plus the CSRF header.
 - No vendor phone-home and no license checks. Telemetry is off by default; third-party telemetry is hard-disabled.
 
-Trust baseline, vulnerability reporting and release verification: [SECURITY.md](SECURITY.md).
+Trust baseline, vulnerability reporting and release verification: [SECURITY.en.md](SECURITY.en.md).
 
 ## Releases
 
@@ -102,7 +105,7 @@ All other variables have defaults; see [.env.example](.env.example). SMTP, the n
 | `analytics` | ClickHouse | With `EDGEWEIR_ANALYTICS=clickhouse`, stores raw access logs and per-minute statistics. Access-log sampling is off by default; logs are retained for 7 days. Console charts and alerts use PostgreSQL rollups. |
 | `cache` | Valkey | Not used by the console yet. |
 
-See [access logs and AccessKeys](docs/guide/access-logs.md) and [backup and recovery](docs/deploy/backup.md) (Chinese).
+See [access logs and AccessKeys](docs/guide/access-logs.en.md) and [backup and recovery](docs/deploy/backup.en.md).
 
 ### Ports
 
@@ -111,16 +114,22 @@ See [access logs and AccessKeys](docs/guide/access-logs.md) and [backup and reco
 | 3000 | Web console and API | TLS may be terminated in front (e.g. BaoTa nginx). Add the proxy address to `EDGEWEIR_TRUSTED_PROXIES` so audit entries and sign-in rate limits see the client IP; forwarding headers from other sources are ignored. |
 | 8443 | Node channel | Expose directly or pass through at layer 4 with nginx `stream`. **Never terminate TLS on a proxy**: the console terminates TLS itself and enforces mTLS. |
 
-### Server deployment
+### Deployment options
 
-- [Docker Compose](docs/deploy/docker.md) (Chinese)
-- [BaoTa panel / aaPanel](docs/deploy/baota.md) (Chinese)
-- `deploy.sh`: interactive install and upgrade with a local, cloud or bundled PostgreSQL:
+| Platform | Guide |
+| --- | --- |
+| Docker Compose / `docker run` | [Docker Compose](docs/deploy/docker.en.md) |
+| BT Panel / aaPanel | [BT Panel / aaPanel](docs/deploy/baota.en.md), [deploy.sh reference](docs/deploy/deploy-script.en.md) |
+| Railway | [Railway](docs/deploy/railway.en.md) |
+| Fly.io | [Fly.io](docs/deploy/fly.en.md) |
+| Vercel | Not supported; see the [deployment overview](docs/deploy/README.en.md#vercel) |
 
-  ```sh
-  curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh
-  sudo bash deploy.sh install
-  ```
+The interactive install and upgrade script `deploy.sh` runs on any Linux host with Docker and Compose v2, with a local, cloud or bundled PostgreSQL:
+
+```sh
+curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh
+sudo bash deploy.sh install
+```
 
 ## Adding a node
 
@@ -147,7 +156,7 @@ Installer behavior:
 - Installs the .deb / .rpm package where possible, otherwise the tar.gz; downloads from the console's `/downloads` mirror when configured, otherwise from GitHub Releases.
 - The agent checks the CA fingerprint before sending the token, generates its private key locally, and talks to the console only over mTLS from then on.
 
-See [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) and [ADR-0016](docs/adr/0016-one-line-install.md).
+Installer options and the release mirror: [Adding nodes](docs/deploy/nodes.en.md). Design: [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md), [ADR-0016](docs/adr/0016-one-line-install.md).
 
 ## API
 
@@ -180,7 +189,7 @@ pnpm dev                                  # UI and API on :3000, node channel on
 | `pnpm db:generate` | Generate a SQL migration from changes in `packages/db/src/schema` |
 | `pnpm e2e` | End-to-end tests; see [End-to-end tests](#end-to-end-tests) |
 
-Commit conventions, the proto change flow and i18n rules: [CONTRIBUTING.md](CONTRIBUTING.md) (Chinese).
+Commit conventions, the proto change flow and i18n rules: [CONTRIBUTING.en.md](CONTRIBUTING.en.md).
 
 ### End-to-end tests
 
@@ -230,32 +239,25 @@ proto/                     protobuf managed by buf; the single contract shared w
 helpers/certd/             edgeweir-certd (Go): ACME via lego, DNS records via libdns
 scripts/e2e.sh             end-to-end test driver
 docs/adr/                  architecture decision records
-docs/guide/                feature guides
 docs/deploy/               deployment guides
+docs/guide/                usage guides
+docs/reference/            reference: environment variables, command line, API
+doc/                       documentation site (Fumadocs), published to GitHub Pages
 ```
 
 ## Documentation
 
-Documents other than the READMEs are in Chinese; SECURITY.md and LICENSING.md include an English summary.
+The documentation site <https://marvinli001.github.io/edgeweir/en/> is generated from the Markdown below. Every document has an English version `*.en.md`; the architecture decision records are Chinese only.
 
-| Document | Contents |
+| Area | Documents |
 | --- | --- |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture and data model |
-| [docs/adr/](docs/adr/README.md) | Architecture decision records |
-| [ROADMAP.md](ROADMAP.md) | Feature plan |
-| [SECURITY.md](SECURITY.md) | Trust baseline, vulnerability reporting, release verification |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development conventions and contribution flow |
-| [LICENSING.md](LICENSING.md) | License and commercial product boundary |
-| [Origins and cache](docs/guide/origins-and-cache.md) | Origin pools, cache rules, purge and prefetch |
-| [HTTPS and certificates](docs/guide/https.md) | Issuance, renewal and protocol limits |
-| [Rules](docs/guide/rules.md) | Rules, IP lists and GeoIP |
-| [DNS and alerts](docs/guide/dns-and-alerts.md) | Domains, DNS steering and alerts |
-| [Access logs and AccessKeys](docs/guide/access-logs.md) | Log collection, storage and AccessKeys |
-| [Node upgrades](docs/guide/node-upgrades.md) | Signed upgrades, canaries and rollback |
-| [Backup and recovery](docs/deploy/backup.md) | Database backup and restore |
+| Deployment | [Overview](docs/deploy/README.en.md) · [Docker Compose](docs/deploy/docker.en.md) · [BT Panel / aaPanel](docs/deploy/baota.en.md) · [deploy.sh](docs/deploy/deploy-script.en.md) · [Railway](docs/deploy/railway.en.md) · [Fly.io](docs/deploy/fly.en.md) · [Ports and reverse proxy](docs/deploy/networking.en.md) · [Adding nodes](docs/deploy/nodes.en.md) · [Versions and upgrades](docs/deploy/upgrade.en.md) · [Backup and recovery](docs/deploy/backup.en.md) |
+| Usage | [Quick start](docs/guide/first-site.en.md) · [Organizations and members](docs/guide/organizations.en.md) · [Platform administration](docs/guide/admin.en.md) · [Origins and cache](docs/guide/origins-and-cache.en.md) · [HTTPS and certificates](docs/guide/https.en.md) · [Rules](docs/guide/rules.en.md) · [DNS and alerts](docs/guide/dns-and-alerts.en.md) · [Access logs and AccessKeys](docs/guide/access-logs.en.md) · [Node upgrades](docs/guide/node-upgrades.en.md) |
+| Reference | [Environment variables](docs/reference/environment.en.md) · [Command line](docs/reference/cli.en.md) · [API and endpoints](docs/reference/api.en.md) |
+| Project | [Architecture](ARCHITECTURE.en.md) · [Architecture decisions](docs/adr/README.md) (Chinese) · [Roadmap](ROADMAP.en.md) · [Security](SECURITY.en.md) · [Contributing](CONTRIBUTING.en.md) · [Licensing](LICENSING.en.md) |
 
 ## License
 
 [AGPL-3.0-only](LICENSE); [edgeweir-node](https://github.com/marvinli001/edgeweir-node) uses the same license. Commercial use is permitted subject to the license.
 
-Organizations, members, access control, organization isolation and the console and admin area are part of the open-source core. Customer portals, plans and billing, finance and reselling belong to a separate commercial product and add no restrictions to the core. See [LICENSING.md](LICENSING.md).
+Organizations, members, access control, organization isolation and the console and admin area are part of the open-source core. Customer portals, plans and billing, finance and reselling belong to a separate commercial product and add no restrictions to the core. See [LICENSING.en.md](LICENSING.en.md).

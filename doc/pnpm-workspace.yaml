@@ -1,0 +1,7 @@
+# The docs site is its own pnpm workspace: its dependencies stay out of the
+# console's lockfile, image and CI (the root workspace is apps/* + packages/*).
+packages:
+  - .
+
+allowBuilds:
+  esbuild: true

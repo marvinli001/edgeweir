@@ -1,0 +1,38 @@
+---
+title: Edgeweir 文档
+description: 自托管 CDN / WAF / 边缘调度控制平面的部署、使用与参考文档。
+---
+
+| 组件 | 仓库 | 形态 |
+| --- | --- | --- |
+| 控制台：Web UI、管理 API、节点通道、后台任务 | [edgeweir](https://github.com/marvinli001/edgeweir) | 单一镜像 `ghcr.io/marvinli001/edgeweir`，依赖 PostgreSQL 18 |
+| 边缘节点：Go agent 与 OpenResty 数据面 | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | Linux systemd 服务，经 mTLS 连接控制台 |
+
+## 部署
+
+<Cards>
+  <Card title="部署概览" href="/zh/deploy" description="组件、环境要求、支持的平台" />
+  <Card title="Docker Compose" href="/zh/deploy/docker" description="编排文件、密钥、启动与运维" />
+  <Card title="宝塔 / aaPanel" href="/zh/deploy/baota" description="deploy.sh 安装、面板反向代理" />
+  <Card title="Railway" href="/zh/deploy/railway" description="镜像服务、PostgreSQL、TCP Proxy" />
+  <Card title="Fly.io" href="/zh/deploy/fly" description="fly.toml、专用 IPv4、TCP 透传" />
+  <Card title="接入节点" href="/zh/deploy/nodes" description="注册命令、安装校验、发布物镜像" />
+</Cards>
+
+## 使用
+
+<Cards>
+  <Card title="快速上手" href="/zh/guide/first-site" description="初始化、接入节点、第一个网站" />
+  <Card title="组织与成员" href="/zh/guide/organizations" description="角色、邀请、两步验证、Passkey" />
+  <Card title="平台管理" href="/zh/guide/admin" description="集群、区域、系统设置、审计日志" />
+  <Card title="源站与缓存" href="/zh/guide/origins-and-cache" description="源站池、缓存规则、刷新预热" />
+</Cards>
+
+## 参考
+
+<Cards>
+  <Card title="环境变量" href="/zh/reference/environment" />
+  <Card title="命令行" href="/zh/reference/cli" />
+  <Card title="API 与端点" href="/zh/reference/api" />
+  <Card title="架构" href="/zh/project/architecture" />
+</Cards>

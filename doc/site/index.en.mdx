@@ -1,0 +1,38 @@
+---
+title: Edgeweir documentation
+description: Deployment, usage and reference for the self-hosted CDN / WAF / edge scheduling control plane.
+---
+
+| Component | Repository | Form |
+| --- | --- | --- |
+| Console: web UI, management API, node channel, background jobs | [edgeweir](https://github.com/marvinli001/edgeweir) | One image `ghcr.io/marvinli001/edgeweir`, requires PostgreSQL 18 |
+| Edge node: Go agent and OpenResty data plane | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | Linux systemd service, connects to the console over mTLS |
+
+## Deployment
+
+<Cards>
+  <Card title="Deployment overview" href="/en/deploy" description="Components, requirements, supported platforms" />
+  <Card title="Docker Compose" href="/en/deploy/docker" description="Compose file, secrets, startup, operations" />
+  <Card title="BT Panel / aaPanel" href="/en/deploy/baota" description="deploy.sh install, panel reverse proxy" />
+  <Card title="Railway" href="/en/deploy/railway" description="Image service, PostgreSQL, TCP Proxy" />
+  <Card title="Fly.io" href="/en/deploy/fly" description="fly.toml, dedicated IPv4, TCP passthrough" />
+  <Card title="Adding nodes" href="/en/deploy/nodes" description="Enrollment command, installer checks, release mirror" />
+</Cards>
+
+## Usage
+
+<Cards>
+  <Card title="Quick start" href="/en/guide/first-site" description="Setup, first node, first site" />
+  <Card title="Organizations and members" href="/en/guide/organizations" description="Roles, invitations, 2FA, passkeys" />
+  <Card title="Platform administration" href="/en/guide/admin" description="Clusters, regions, system settings, audit log" />
+  <Card title="Origins and cache" href="/en/guide/origins-and-cache" description="Origin pools, cache rules, purge and prefetch" />
+</Cards>
+
+## Reference
+
+<Cards>
+  <Card title="Environment variables" href="/en/reference/environment" />
+  <Card title="Command line" href="/en/reference/cli" />
+  <Card title="API and endpoints" href="/en/reference/api" />
+  <Card title="Architecture" href="/en/project/architecture" />
+</Cards>
