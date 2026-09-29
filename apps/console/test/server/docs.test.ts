@@ -98,7 +98,7 @@ describe("CP-H8: SSH credentials are never stored", () => {
     ["SECURITY.md (Chinese)", chinese],
     ["SECURITY.md (English summary)", english],
     ["README.md", read("README.md")],
-    ["README.zh-CN.md", read("README.zh-CN.md")],
+    ["README.en.md", read("README.en.md")],
     ["ARCHITECTURE.md", read("ARCHITECTURE.md")],
     // Git-ignored maintainer documents: checked in checkouts that have them.
     ...["CLAUDE.md", "docs/specs/mvp.md"]
@@ -137,9 +137,9 @@ describe("CP-H8: SSH credentials are never stored", () => {
 
 // --- CP-M11 ------------------------------------------------------------------
 
-const STATUS_DOCS = ["README.md", "README.zh-CN.md", "ARCHITECTURE.md"];
+const STATUS_DOCS = ["README.md", "README.en.md", "ARCHITECTURE.md"];
 
-describe("CP-M11: README.md, README.zh-CN.md and ARCHITECTURE.md describe what is not built yet", () => {
+describe("CP-M11: README.md, README.en.md and ARCHITECTURE.md describe what is not built yet", () => {
   const NOT_USED = /does not use|doesn't use|not used|不使用|未使用|没有使用/i;
   const LATER = /\byet\b|目前|尚未|later|后续|将来|以后/i;
 

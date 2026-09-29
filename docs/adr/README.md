@@ -1,10 +1,10 @@
 # 架构决策记录（ADR）
 
-本目录记录 Edgeweir 的架构决策。每篇 ADR 说明一个决策的背景、结论、放弃的备选方案、后果和落地情况。Phase 0 的 18 篇 ADR 与 BOOTSTRAP §2 的决策逐条对应。
+Edgeweir 的架构决策记录。每篇 ADR 包含背景、决策、备选方案、后果与落地情况；Phase 0 的 18 篇 ADR 与 BOOTSTRAP §2 的决策逐条对应。
 
-本目录是 ADR 的唯一来源；edgeweir-node 仓库的 `docs/adr` 是它的镜像（由该仓库的 `scripts/sync-adr.sh` 生成，只把指向控制面仓库文件的相对链接改写为 GitHub 链接）。修改 ADR 请在这里提交，再在节点仓库运行同步脚本。
-
-ADR 编号在 edgeweir 与 edgeweir-node 两个仓库之间统一，"适用仓库"一列说明该决策约束哪个仓库。
+- 本目录为 ADR 唯一来源。edgeweir-node 仓库的 `docs/adr` 为其镜像，由该仓库的 `scripts/sync-adr.sh` 生成，仅将指向控制面仓库文件的相对链接改写为 GitHub 链接。
+- ADR 在本仓库修改，再于 edgeweir-node 执行同步脚本。
+- ADR 编号在两个仓库间统一；「适用仓库」列标明决策约束的仓库。
 
 ## 索引
 
@@ -30,7 +30,7 @@ ADR 编号在 edgeweir 与 edgeweir-node 两个仓库之间统一，"适用仓�
 | [ADR-0018](0018-trust-and-security-baseline.md) | 信任与安全基线 | 已接受 | 两者 |
 | [ADR-0019](0019-open-core-and-commercial-products.md) | 开源核心、租户与独立商业产品边界 | 已接受 | 两者 |
 
-## 状态说明
+## 状态
 
 | 状态 | 含义 |
 | --- | --- |
@@ -39,17 +39,19 @@ ADR 编号在 edgeweir 与 edgeweir-node 两个仓库之间统一，"适用仓�
 | 已废弃 | 不再适用，且没有替代决策 |
 | 已被 ADR-NNNN 取代 | 由新的 ADR 取代，正文保留作历史记录 |
 
-## 什么时候需要写 ADR
+## 适用范围
+
+下列变更须编写 ADR：
 
 - 引入新的外部依赖：数据库、运行时组件、队列、关键库。
-- 改变进程、端口、镜像或部署形态。
-- 改变节点通道协议、proto 包版本或 NodeConfig IR 的语义。
+- 变更进程、端口、镜像或部署形态。
+- 变更节点通道协议、proto 包版本或 NodeConfig IR 语义。
 - 影响 [ADR-0018](0018-trust-and-security-baseline.md) 规定的信任与安全基线。
 
-## 新增流程
+## 流程
 
-1. 复制 [template.md](template.md) 为 `NNNN-slug.md`：`NNNN` 取两个仓库中现有最大编号加一，`slug` 用英文小写加连字符。
-2. 状态写"提议"，随 PR 提交，并在上面的索引表中加一行。
-3. 评审通过后把状态改为"已接受"再合入。
-4. 已接受的 ADR 不改写结论。决策变化时写一篇新 ADR，把旧 ADR 的状态改为"已被 ADR-NNNN 取代"。
-5. 版本号、落地情况等事实性内容可以直接更新，并在该 ADR 的"更新记录"里注明日期和内容。
+1. 复制 [template.md](template.md) 为 `NNNN-slug.md`：`NNNN` 取两个仓库现有最大编号加一，`slug` 使用小写英文与连字符。
+2. 状态设为「提议」，随 PR 提交，并在索引表中新增一行。
+3. 评审通过后将状态改为「已接受」，再合入。
+4. 已接受的 ADR 不改写结论。决策变更时新建 ADR，并将原 ADR 状态改为「已被 ADR-NNNN 取代」。
+5. 版本号、落地情况等事实性内容可直接更新，并在该 ADR 的「更新记录」中注明日期与内容。

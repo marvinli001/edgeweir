@@ -13,7 +13,7 @@ const DOCS = [
   "docs/deploy/docker.md",
   "docs/deploy/baota.md",
   "README.md",
-  "README.zh-CN.md",
+  "README.en.md",
 ];
 const RUNS = 200;
 

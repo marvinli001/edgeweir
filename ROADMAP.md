@@ -10,7 +10,7 @@
 
 ### 仓库基础
 
-- [x] 两个仓库：LICENSE（AGPL-3.0）、中英双语 README（含品牌故事）、ARCHITECTURE.md、docs/adr/、ROADMAP.md、SECURITY.md、CONTRIBUTING.md、.editorconfig
+- [x] 两个仓库：LICENSE（AGPL-3.0）、中英双语 README、ARCHITECTURE.md、docs/adr/、ROADMAP.md、SECURITY.md、CONTRIBUTING.md、.editorconfig
 - [x] edgeweir 的 GitHub Actions：lint、typecheck、test、构建镜像
 - [x] edgeweir-node 的 GitHub Actions：go test、goreleaser snapshot
 

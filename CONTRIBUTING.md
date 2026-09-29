@@ -41,7 +41,7 @@ pnpm dev
 | `pnpm test`（Vitest，数据库用 PGlite，不需要 Docker） | 每次提交前 |
 | `pnpm build` | 改动构建配置或依赖时 |
 | `pnpm proto:lint` | 改动 `proto/` 时 |
-| `pnpm e2e` | 改动节点通道、配置编译、安装脚本或页面流程时：先 `docker compose -f compose.e2e.yml up -d --build`（需要 Docker、同级目录的 edgeweir-node，以及 goreleaser v2、syft 和对 deb.debian.org、openresty.org 的网络访问；变量见 README 的[端到端测试](README.zh-CN.md#端到端测试)） |
+| `pnpm e2e` | 改动节点通道、配置编译、安装脚本或页面流程时：先 `docker compose -f compose.e2e.yml up -d --build`（需要 Docker、同级目录的 edgeweir-node，以及 goreleaser v2、syft 和对 deb.debian.org、openresty.org 的网络访问；变量见 README 的[端到端测试](README.md#端到端测试)） |
 
 格式问题可以用 `pnpm exec biome check --write .` 自动修复。
 
