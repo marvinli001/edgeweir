@@ -119,7 +119,6 @@ See [access logs and AccessKeys](docs/guide/access-logs.en.md) and [backup and r
 | BT Panel / aaPanel | [BT Panel / aaPanel](docs/deploy/baota.en.md), [deploy.sh reference](docs/deploy/deploy-script.en.md) |
 | Railway | [Railway](docs/deploy/railway.en.md) |
 | Fly.io | [Fly.io](docs/deploy/fly.en.md) |
-| Vercel | Not supported; see the [deployment overview](docs/deploy/README.en.md#vercel) |
 
 The interactive install and upgrade script `deploy.sh` runs on any Linux host with Docker and Compose v2, with a local, cloud or bundled PostgreSQL:
 

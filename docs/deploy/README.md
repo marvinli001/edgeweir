@@ -34,7 +34,6 @@
 | 宝塔 / aaPanel，或任意 Docker 主机 | `deploy.sh` 与 `compose.baota.yml`（内置 PostgreSQL）或 `compose.baota-host.yml`（本机或云 PostgreSQL，host 网络） | [baota.md](baota.md)、[deploy-script.md](deploy-script.md) | 支持 |
 | Railway | 控制台镜像 | [railway.md](railway.md) | 支持 |
 | Fly.io | 控制台镜像 | [fly.md](fly.md) | 支持 |
-| Vercel | — | [Vercel](#vercel) | 不支持 |
 
 ### 平台条件
 
@@ -47,14 +46,6 @@
 | PostgreSQL 18 | 控制台可达，满足上文权限 | 控制台等待 60 秒后退出。 |
 | 持久密钥 | `EDGEWEIR_MASTER_KEY`（及已设置的 `BETTER_AUTH_SECRET`）在重启与重新部署间不变 | 已加密数据不可解密；控制台拒绝启动。 |
 | 可信代理地址 | 3000 直接接收客户端连接，或平台代理的来源地址固定，可写入 `EDGEWEIR_TRUSTED_PROXIES` | 审计日志与登录限速只能取到代理地址。 |
-
-### Vercel
-
-| 控制台要求 | Vercel 能力 | 结果 |
-| --- | --- | --- |
-| 节点通道：公网原始 TCP 端口，控制台终结 TLS 并校验客户端证书 | Vercel Functions（含 OCI 容器镜像，Beta）只经 Vercel 代理接收 HTTP，单端口 `PORT`（默认 80）；无原始 TCP 端口 | 节点无法注册与连接。 |
-| 常驻进程 | 生产环境 5 分钟无流量后缩容，预览环境 30 秒 | pg-boss worker（证书续期、定时任务）与 LISTEN/NOTIFY 事件总线停止。 |
-| 客户端 IP 取自 TCP 对端或固定的可信代理 | TCP 对端是 Vercel 代理 | `EDGEWEIR_TRUSTED_PROXIES` 无稳定地址可信任。 |
 
 ## 进程角色
 

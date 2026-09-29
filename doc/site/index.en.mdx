@@ -1,12 +1,14 @@
 ---
 title: Edgeweir documentation
-description: Deployment, usage and reference for the self-hosted CDN / WAF / edge scheduling control plane.
+description: Welcome to the official Edgeweir documentation.
 ---
 
-| Component | Repository | Form |
-| --- | --- | --- |
-| Console: web UI, management API, node channel, background jobs | [edgeweir](https://github.com/marvinli001/edgeweir) | One image `ghcr.io/marvinli001/edgeweir`, requires PostgreSQL 18 |
-| Edge node: Go agent and OpenResty data plane | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | Linux systemd service, connects to the console over mTLS |
+Edgeweir is a self-hosted CDN, WAF and intelligent edge scheduling platform. The system has two core parts:
+
+- **Console (control plane)**: handles the web UI, the OpenAPI, certificate issuance, rule compilation and configuration delivery to edge nodes. Ships as a single image and depends only on PostgreSQL 18.
+- **Edge nodes (data plane)**: run on your Linux edge servers. The Go agent keeps the mTLS connection to the console alive and syncs configuration; OpenResty proxies traffic and fetches from origins at high throughput.
+
+Whether you want a quick acceleration gateway for your own sites on a single VPS or are planning a multi-region, multi-cluster, multi-tenant edge network, start with the deployment guides below.
 
 ## Deployment
 

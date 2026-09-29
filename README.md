@@ -119,7 +119,6 @@ docker compose logs console | grep setupToken
 | 宝塔面板 / aaPanel | [宝塔面板 / aaPanel](docs/deploy/baota.md)、[deploy.sh 参考](docs/deploy/deploy-script.md) |
 | Railway | [Railway](docs/deploy/railway.md) |
 | Fly.io | [Fly.io](docs/deploy/fly.md) |
-| Vercel | 不支持，原因见[部署概览](docs/deploy/README.md#vercel) |
 
 交互式安装与升级脚本 `deploy.sh` 适用于任何装有 Docker 与 Compose v2 的 Linux，支持本机、云端或内置 PostgreSQL：
 

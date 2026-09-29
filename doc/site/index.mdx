@@ -1,12 +1,14 @@
 ---
 title: Edgeweir 文档
-description: 自托管 CDN / WAF / 边缘调度控制平面的部署、使用与参考文档。
+description: 欢迎查阅 Edgeweir 官方技术文档。
 ---
 
-| 组件 | 仓库 | 形态 |
-| --- | --- | --- |
-| 控制台：Web UI、管理 API、节点通道、后台任务 | [edgeweir](https://github.com/marvinli001/edgeweir) | 单一镜像 `ghcr.io/marvinli001/edgeweir`，依赖 PostgreSQL 18 |
-| 边缘节点：Go agent 与 OpenResty 数据面 | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | Linux systemd 服务，经 mTLS 连接控制台 |
+Edgeweir 是一套自托管的 CDN、WAF 与智能边缘调度平台。整个系统分为两个核心部分：
+
+- **控制台（Control Plane）**：负责 Web 交互、OpenAPI、证书申请、规则编译及向边缘节点分发配置。单一镜像交付，只依赖 PostgreSQL 18。
+- **边缘节点（Data Plane）**：部署在你的多台 Linux 边缘服务器上，由 Go Agent 负责 mTLS 双向保活与配置同步，OpenResty 负责高性能流量代理与回源。
+
+无论你是想在单台 VPS 上快速搭建自用加速网关，还是规划跨地域的多集群多租户边缘网络，都可以从下方的部署指南开始。
 
 ## 部署
 

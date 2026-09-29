@@ -1,6 +1,17 @@
 # Quick start
 
-From a running console to a first site served by a node: setup, node enrollment, site, DNS, HTTPS, and verification.
+Your first site running in 5 minutes: from console setup and the first edge node to DNS resolution and HTTPS traffic served by the edge.
+
+## The whole flow
+
+A complete edge acceleration service usually takes these 6 steps:
+
+1. **Complete the setup wizard**: create the platform administrator account and the default organization.
+2. **Enroll the first edge node**: run the one-line enrollment script on the node server to establish a trusted mTLS connection.
+3. **Add a site and its origin**: configure the accelerated domains, the origin fetch policy, and basic cache rules.
+4. **Configure DNS**: point the domain's authoritative DNS at the edge nodes' public IPs or the CNAME scheduling domain.
+5. **Request and bind a certificate**: issue a free ACME certificate in one click and serve the whole site over HTTPS.
+6. **Verify origin fetch and caching**: check with curl that requests hit the edge node cache.
 
 ## Prerequisites
 

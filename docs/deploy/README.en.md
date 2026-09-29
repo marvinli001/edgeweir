@@ -34,7 +34,6 @@ Console components, runtime requirements, supported platforms, and process roles
 | BaoTa / aaPanel, or any Docker host | `deploy.sh` with `compose.baota.yml` (bundled PostgreSQL) or `compose.baota-host.yml` (local or cloud PostgreSQL, host network) | [baota.en.md](baota.en.md), [deploy-script.en.md](deploy-script.en.md) | Supported |
 | Railway | Console image | [railway.en.md](railway.en.md) | Supported |
 | Fly.io | Console image | [fly.en.md](fly.en.md) | Supported |
-| Vercel | — | [Vercel](#vercel) | Not supported |
 
 ### Platform conditions
 
@@ -47,14 +46,6 @@ A platform not listed above must meet every condition in this table.
 | PostgreSQL 18 | Reachable from the console, with the privileges above | The console waits 60 seconds, then exits. |
 | Persistent secrets | `EDGEWEIR_MASTER_KEY` (and `BETTER_AUTH_SECRET` when set) stay the same across restarts and redeploys | Encrypted data becomes unreadable; the console refuses to start. |
 | Trusted proxy address | Port 3000 receives client connections directly, or the platform proxy connects from fixed addresses that can go into `EDGEWEIR_TRUSTED_PROXIES` | Audit entries and sign-in rate limits see only the proxy address. |
-
-### Vercel
-
-| Console requirement | Vercel capability | Result |
-| --- | --- | --- |
-| Node channel: public raw TCP port, TLS terminated by the console with client-certificate verification | Vercel Functions, including OCI container images (beta), receive only HTTP through Vercel's proxy on one port, `PORT` (default 80); no raw TCP port | Nodes cannot enroll or connect. |
-| Always-on process | Instances scale down after 5 minutes without traffic in production, 30 seconds in preview | The pg-boss worker (certificate renewal, scheduled jobs) and the LISTEN/NOTIFY event bus stop. |
-| Client IP from the TCP peer or a fixed trusted proxy | The TCP peer is Vercel's proxy | `EDGEWEIR_TRUSTED_PROXIES` has no stable address to trust. |
 
 ## Process roles
 

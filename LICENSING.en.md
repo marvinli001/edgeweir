@@ -2,7 +2,20 @@
 
 License, permitted use, and commercial product boundaries of the open core.
 
-Effective date: 2026-09-26. This document describes product scope. It does not replace or amend [LICENSE](LICENSE), add usage restrictions, or grant a plugin linking exception.
+## Open source principles and licensing
+
+Edgeweir follows the design principle of **"no gates on the open core, a clear boundary for commercial extensions"**. We know that the worst things an infrastructure project can do are to change its terms later or to hide backdoors, so we state the following explicitly:
+
+### 1. Real open source, no hidden gates
+
+- **AGPL-3.0-only**: the console and edge node source code is fully open. Personal use, acceleration inside a company, and paid services to the public are all free to use, modify, and distribute, as long as they meet the license terms.
+- **No node or scale limits**: we will never limit the number of nodes, sites, tenant quotas, or bandwidth of the open-source edition.
+- **No phone-home, no online activation locks**: the open core sends no telemetry to official servers and contains no hidden feature locks that need online activation to unlock.
+
+### 2. A clear boundary between the open core and commercial extensions
+
+- **What does the open-source edition include?** Single-tenant and multi-organization management, the full edge proxy, certificate automation, the 8-phase WAF, intelligent scheduling, logging and auditing, and the open API: enough for the full production needs of any self-built CDN.
+- **What does the commercial edition (Business) address?** It is built for IDCs and operators that sell services to their own customers: customer self-service sign-up, plan purchases, 95th-percentile bandwidth and traffic billing and settlement, online reconciliation, and a multi-level reseller system. The commercial modules run independently and leave the open core untouched.
 
 ## License
 
@@ -12,20 +25,6 @@ Effective date: 2026-09-26. This document describes product scope. It does not r
 | `edgeweir-node` (node) | AGPL-3.0-only |
 | Third-party components | Their own licenses |
 | GeoIP data bundled in node release images, [IPinfo Lite](https://ipinfo.io/lite) | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), redistributed unmodified, not AGPL code; attribution: IP address data is powered by [IPinfo](https://ipinfo.io) |
-
-## Rights of use
-
-- Individuals and companies may use, modify, and redistribute the software and provide paid services with it, subject to the AGPL.
-- There is no personal-use-only clause, no ban on commercial use, and no requirement to buy an official license to operate the software.
-- The AGPL does not prohibit charging fees or competing. Source obligations for distribution, modification, and network interaction follow LICENSE, in particular section 13.
-- Rights lawfully obtained under an existing version are not withdrawn when product plans change.
-
-## No license gates
-
-- The core has no vendor phone-home, no commercial license checks, and no paid feature locks.
-- There are no official paid license gates based on the number of nodes, organizations, members, or sites.
-- Resource protection, permissions, and operational quotas are not commercial feature locks.
-- Separate commercial products do not change the rights of use of the core.
 
 ## Product boundary
 
@@ -40,6 +39,8 @@ Effective date: 2026-09-26. This document describes product scope. It does not r
 - The separate commercial operations product and commercial services are official product plans. No product is currently available for purchase, and no feature has been delivered.
 - The product boundary governs what the project officially develops and delivers. It does not prohibit the community from implementing similar features as the AGPL permits.
 - Buying an open-source plugin does not remove the open-source rights the buyer holds under law.
+- Resource protection, permissions, and operational quotas are not commercial feature locks.
+- Separate commercial products do not change the rights of use of the core.
 
 ## Commercial code and the AGPL
 
