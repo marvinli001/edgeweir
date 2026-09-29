@@ -31,7 +31,7 @@ x-console-env: &console-env
   EDGEWEIR_DNS_RESOLVERS: ${EDGEWEIR_DNS_RESOLVERS:-}
   EDGEWEIR_TELEMETRY: ${EDGEWEIR_TELEMETRY:-false}
   LOG_LEVEL: ${LOG_LEVEL:-info}
-  # Release mirror for install.sh; mount it below (see docs/deploy/docker.md).
+  # Release mirror for install.sh; mount it below (see docs/deploy/nodes.md).
   EDGEWEIR_DOWNLOADS_DIR: ${EDGEWEIR_DOWNLOADS_DIR:-}
   # Reverse proxies whose X-Forwarded-For is believed (IPs/CIDRs, comma separated).
   EDGEWEIR_TRUSTED_PROXIES: ${EDGEWEIR_TRUSTED_PROXIES:-}

@@ -1,65 +1,63 @@
-# 在宝塔面板 / aaPanel 中部署 Edgeweir 控制台
+# 宝塔面板 / aaPanel
 
-适用于已安装宝塔面板（BT Panel）9.x 或 aaPanel（宝塔国际版）并启用 Docker 功能的服务器，两者的 Docker 菜单相同，下文写作「宝塔 / aaPanel」。推荐用仓库根目录的安装脚本 [`deploy.sh`](../../deploy.sh)：它对话式生成 `.env`、启动 Docker Compose 编排，之后的升级、备份、重启也都用它。脚本同样适用于没有面板、装了 Docker 的 Linux。Web 控制台交给面板 nginx 反向代理（在面板上配置 HTTPS）；**节点通道 8443 不经过面板 nginx 的 HTTP 反代**。
+在宝塔面板或 aaPanel 上用 Docker Compose 部署控制台：编排模式、面板配置与手动部署。
 
-镜像是公开的 `ghcr.io/marvinli001/edgeweir`，不需要在面板里添加镜像仓库或登录。版本是滚动发布的 `日期-提交` tag（例如 `20260929-a1b2c3d`），`latest` 指向最新一个，没有 `v1.2.3` 式的版本号；脚本安装时把 `latest` 当前对应的日期 tag 固定进 `.env`，详见 [docker.md](docker.md#版本与镜像)。脚本在等价的 Linux Docker 主机上验证过两种编排；面板的点击流程按官方文档整理，尚未在真实面板服务器上逐项验收。
+> [!NOTE]
+> 面板菜单路径按宝塔与 aaPanel 官方文档整理，尚未在真实面板服务器上验收。`deploy.sh` 与两种编排已在等价的 Linux Docker 主机上验证。
 
-## 1. 两种编排
+## 编排模式
 
-安装时先选数据库放在哪里，脚本据此选用编排文件：
+`deploy.sh install` 按所选数据库模式写入对应的编排文件。
 
-| | 本机或云 PostgreSQL（host 网络） | 编排内置 PostgreSQL |
+| 项目 | host | bundled |
 | --- | --- | --- |
+| 数据库 | 本机 PostgreSQL（宝塔 **数据库 → PgSQL**）或云数据库 | 编排内置 `postgres:18.6-alpine`，数据在 Docker 卷 `edgeweir_postgres-data` |
 | 编排文件 | [`compose.baota-host.yml`](../../compose.baota-host.yml) | [`compose.baota.yml`](../../compose.baota.yml) |
-| 数据库 | 宝塔「数据库 → PgSQL」装在本机的 PostgreSQL，或云数据库 | 编排里的 `postgres:18.6`，数据在 Docker 卷 `edgeweir_postgres-data` |
-| 容器网络 | `network_mode: host`，容器里的 `127.0.0.1` 就是宿主机 | Docker 网桥，数据库不对外 |
-| Web 控制台 | 进程自己只监听 `127.0.0.1:3000` | 端口映射 `127.0.0.1:3000 → 3000` |
-| 节点通道 | 进程监听 `0.0.0.0:8443` | 端口映射 `8443 → 8443` |
-| 可信代理 | 宝塔 nginx 从 `127.0.0.1` 转发，默认信任回环地址 | 宝塔 nginx 经 Docker 网关转发，脚本把网关写进 `EDGEWEIR_TRUSTED_PROXIES` |
+| 容器网络 | `network_mode: host`；容器内 `127.0.0.1` 即宿主机，只监听回环地址的本机 PostgreSQL 无需修改 `listen_addresses` 与 `pg_hba.conf` | Docker 网桥；数据库不对外 |
+| Web 控制台 | 进程监听 `127.0.0.1:3000`（`EDGEWEIR_HTTP_PORT`） | 端口映射 `127.0.0.1:3000`（`EDGEWEIR_HTTP_PORT`）→ `3000` |
+| 节点通道 | 进程监听 `0.0.0.0:8443`（`EDGEWEIR_NODE_API_PORT`） | 端口映射 `8443`（`EDGEWEIR_NODE_API_PORT`）→ `8443` |
+| 端口变量格式 | 只能是数字 | `EDGEWEIR_HTTP_PORT` 只能是数字；`EDGEWEIR_NODE_API_PORT` 可带绑定地址，例如 `127.0.0.1:18443` |
+| `EDGEWEIR_TRUSTED_PROXIES` | 默认 `127.0.0.1,::1` | Docker 网关地址，由 `deploy.sh` 写入并在启动时同步 |
+| 面板容器列表的端口列 | 空（host 网络没有端口映射） | 显示映射 |
 
-host 网络的好处：宝塔装的 PostgreSQL 默认只监听 `127.0.0.1`，网桥里的容器连不到它，要改 `listen_addresses`、`pg_hba.conf` 和防火墙；host 网络下容器直接用 `127.0.0.1:5432`，不需要这些改动。代价是容器不再有自己的网络命名空间，端口直接占用宿主机端口（面板「容器」列表里也不显示端口映射，这是正常的）。
+镜像 `ghcr.io/marvinli001/edgeweir` 公开，面板中无需添加镜像仓库或登录。tag 格式与版本固定见 [upgrade.md](upgrade.md)。
 
-## 2. 为什么 8443 不能交给宝塔反代
+## 1. 准备
 
-节点和控制台之间是双向 TLS（mTLS）：节点注册时校验控制台内部 CA 的指纹，注册后每个请求都带客户端证书。这要求 TLS 由控制台自己终结。如果宝塔 nginx 在 8443 上终结 TLS，节点看到的是宝塔的证书（指纹对不上，注册失败），控制台也拿不到节点的客户端证书。所以 8443 只能：
+| 项目 | 要求 | 宝塔面板 | aaPanel |
+| --- | --- | --- | --- |
+| Docker | Docker Engine 与 Compose v2（`docker compose`） | **Docker** 页面安装 | **Docker** 页面安装 |
+| 防火墙 | 放行节点通道端口（默认 8443/TCP）；Web 端口 3000 不对外放行 | **安全 → 系统防火墙 → 添加端口规则**：协议 TCP，来源所有 IP，策略允许 | **Security → Firewall → Add Port Rule**：Protocol TCP，Source IP All，Strategy Allow |
+| 云安全组 | 放行同一端口 | — | — |
+| 域名 | 控制台域名（例如 `cdn-admin.example.com`）解析到本机 | — | — |
+| 数据库（host） | PostgreSQL 18；空数据库及其所有者用户；云数据库白名单包含本机 IP | **数据库 → PgSQL → 添加数据库** | **Databases → PgSQL → Add DB** |
+| 镜像 | 能访问 `ghcr.io`；否则预先 `docker load` 导入，见 [deploy-script.md](deploy-script.md#无人值守安装) 的 `EDGEWEIR_NO_PULL` | — | — |
+| 终端 | root | **终端** 或 SSH | **Terminal** 或 SSH |
 
-- **直接暴露**（默认，最简单）；或
-- 用 nginx **stream 四层透传**（不解密，只转发 TCP），见[第 7 节](#7-可选用-stream-透传-8443)。
+其余运行要求见 [部署概览](README.md#运行要求)。
 
-## 3. 准备
+## 2. 用 deploy.sh 安装
 
-1. 宝塔「Docker」页面安装 Docker（需要 Compose v2，即 `docker compose`）。
-2. 在宝塔「安全」和云厂商安全组中放行 **8443/TCP**。3000 不需要对外放行（只给宝塔 nginx 本机访问）。
-3. 准备一个控制台域名，例如 `cdn-admin.example.com`，解析到这台服务器。
-4. 用本机或云 PostgreSQL 时，先建好空数据库和它的**所有者**用户：宝塔「数据库 → PgSQL → 添加数据库」，库名和用户名例如 `edgeweir`，密码随机。控制台在 PostgreSQL 18 上测试，更低版本脚本会提示。云数据库要把这台服务器的 IP 加进白名单。
+1. 下载脚本：
 
-## 4. 用 deploy.sh 安装
+   ```bash
+   curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh
+   ```
 
-在服务器终端（宝塔「终端」或 SSH）以 root 执行：
+2. 运行安装，依次回答安装目录、数据库模式、数据库连接、控制台地址、节点通道地址。提示与默认值见 [deploy-script.md](deploy-script.md#install)。
 
-```bash
-curl -fsSL -o deploy.sh https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh
-sudo bash deploy.sh install
-```
+   ```bash
+   sudo bash deploy.sh install
+   ```
 
-脚本依次询问：
+   存在 `/www/server/panel` 时默认安装目录为 `/www/dk_project/edgeweir`，否则为 `/opt/edgeweir`。控制台地址填浏览器访问的地址，例如 `https://cdn-admin.example.com`；节点通道地址默认 `https://<控制台域名>:8443`。
 
-1. **安装目录**：检测到宝塔时默认 `/www/dk_project/edgeweir`，否则 `/opt/edgeweir`。
-2. **数据库方式**：`1` 本机或云 PostgreSQL（host 网络），`2` 编排内置 PostgreSQL。
-3. 选 `1` 时的**数据库连接**：逐项填写地址（默认 `127.0.0.1`）、端口、库名、用户、密码（输入不回显），非本机地址会询问是否使用 TLS 并校验证书（`sslmode=verify-full`，云数据库推荐）；也可以直接粘贴 `postgres://` 连接串。脚本用一个临时的 PostgreSQL 客户端容器实际连接一次，检查版本以及该用户能否建表、建 schema，失败时给出原因并允许重填。
-4. **控制台地址**（`EDGEWEIR_PUBLIC_URL`）：浏览器打开的地址，例如 `https://cdn-admin.example.com`。
-5. **节点通道地址**（`EDGEWEIR_NODE_API_URL`）：默认同一域名加 `:8443`；地址里的端口就是对外开放的节点通道端口。端口被占用时脚本会提示换一个。
+3. 记录输出末尾的 setup token。
 
-确认后脚本：
+> [!IMPORTANT]
+> 安装目录中的 `.env` 含 `EDGEWEIR_MASTER_KEY`。离线备份；丢失后已加密的数据无法恢复。见 [backup.md](backup.md)。
 
-- 拉取 `latest`，把它对应的日期 tag 写进 `EDGEWEIR_VERSION`；
-- 生成主密钥（`openssl rand -base64 32`）和内置数据库的密码（`openssl rand -hex 24`），写入 `.env`（权限 600）；
-- 写入所选的编排文件 `compose.yml`，并把自己复制为 `<安装目录>/deploy.sh`；
-- 启动编排并等待健康检查通过，最后打印一次性初始化令牌和后续步骤。
-
-安装目录里的 `.env` 含主密钥：`EDGEWEIR_MASTER_KEY` 用于加密入库的私钥和 DNS 密钥，并派生登录会话 secret，**请离线备份**，丢失后已加密的数据无法恢复。
-
-无人值守安装用环境变量回答全部问题：
+无人值守安装（以 root 运行；变量表见 [deploy-script.md](deploy-script.md#无人值守安装)）：
 
 ```bash
 EDGEWEIR_YES=1 EDGEWEIR_DB=host \
@@ -68,117 +66,202 @@ DATABASE_URL='postgres://edgeweir:<URL 编码的密码>@127.0.0.1:5432/edgeweir'
 bash deploy.sh install
 ```
 
-可选 `EDGEWEIR_DIR`、`EDGEWEIR_NODE_API_URL`、`EDGEWEIR_VERSION`（固定某个 tag）、`EDGEWEIR_HTTP_PORT`；`EDGEWEIR_DB=bundled` 时不需要 `DATABASE_URL`。服务器访问 GHCR 困难时，可以先用 `docker load` 导入镜像（控制台镜像，以及 host 模式下用于连接检查和备份的 `postgres:18.6-alpine`），再加 `EDGEWEIR_NO_PULL=1`。
+`EDGEWEIR_DB=bundled` 时不设置 `DATABASE_URL`。
 
-## 5. 反向代理 Web 控制台
+## 3. 反向代理与 HTTPS
 
-1. 宝塔「网站 → 添加站点」，域名填 `cdn-admin.example.com`，PHP 选「纯静态」。
-2. 站点设置 →「反向代理 → 添加反向代理」，目标 URL 填 `http://127.0.0.1:3000`，发送域名保持 `$host`。
-3. 站点设置 →「SSL」申请或上传证书，开启「强制 HTTPS」。
-4. 浏览器打开 `https://cdn-admin.example.com/setup`，填入脚本打印的初始化令牌并创建管理员（令牌可以用 `./deploy.sh setup-token` 再次查看）。
-5. SMTP、节点发布源、所有权校验 DNS、源站地址允许清单和 GeoIP 在控制台 **后台 → 系统设置** 填写，不需要改 `.env`。
+面板 nginx 终结 HTTPS，并反向代理到 `http://127.0.0.1:3000`（`EDGEWEIR_HTTP_PORT` 改过时替换端口）。
 
-`EDGEWEIR_PUBLIC_URL` 必须与浏览器实际访问的地址一致（含 `https://`），否则登录会因来源校验失败；改地址用 `./deploy.sh config`。
+| 步骤 | 宝塔面板 | aaPanel |
+| --- | --- | --- |
+| 1. 站点 | **网站 → PHP项目 → 添加站点**：域名填控制台域名，PHP 版本选「纯静态」 | **Website → Proxy Project** 添加站点：域名填控制台域名，代理目标填 `http://127.0.0.1:3000` |
+| 2. 证书 | 站点设置 **SSL → Let's Encrypt → 申请证书**，开启强制 HTTPS | 站点设置 **SSL → Let's Encrypt** 申请证书 |
+| 3. 反向代理 | 站点设置 **反向代理 → 添加反向代理**：目标 URL 填 `http://127.0.0.1:3000` | 第 1 步已设置 |
 
-审计日志和登录限速要拿到访客的真实 IP，控制台必须信任宝塔 nginx 的 `X-Forwarded-For`：host 编排默认信任 `127.0.0.1,::1`；内置数据库编排由脚本把 Docker 网关地址写进 `EDGEWEIR_TRUSTED_PROXIES`，编排网络重建（网关变化）后，下一次 `./deploy.sh start`、`restart` 或 `update` 会自动改正。不设置时控制台不采信任何转发头。
+- 证书文件验证失败时改用 DNS 验证。
+- 发送域名（`Host`）保持默认值：控制台只按 `EDGEWEIR_PUBLIC_URL` 校验请求来源。
+- 安装时填写的控制台地址不是 `https://` 时，证书生效后运行 `./deploy.sh config` 改为 `https://`。
 
-## 6. 日常维护
+通用 nginx 配置与请求头见 [networking.md](networking.md#反向代理-web-控制台)。
 
-在安装目录里运行（`cd /www/dk_project/edgeweir`）：
+## 4. 初始化与验证
 
-| 命令 | 作用 |
+1. 读取 setup token（安装输出中已打印）：
+
+   ```bash
+   cd /www/dk_project/edgeweir   # 安装目录
+   ./deploy.sh setup-token
+   ```
+
+2. 打开 `https://cdn-admin.example.com/setup`，填入 setup token，创建平台管理员。初始化向导见 [快速上手](../guide/first-site.md)。
+
+3. 验证 Web 控制台：
+
+   ```bash
+   curl -s http://127.0.0.1:3000/healthz
+   ```
+
+   预期：`{"status":"ok","version":"<.env 中的 EDGEWEIR_VERSION>"}`。
+
+4. 验证节点通道（在另一台主机执行）：
+
+   ```bash
+   openssl s_client -connect cdn-admin.example.com:8443 -servername cdn-admin.example.com </dev/null 2>/dev/null \
+     | openssl x509 -noout -issuer
+   ```
+
+   预期：签发者含 `Edgeweir Node Channel CA`。
+
+SMTP、节点发布源、所有权校验 DNS、源站地址允许清单与 GeoIP 数据库在 **后台 → 系统设置** 配置，见 [平台管理](../guide/admin.md#系统设置)。添加节点见 [接入节点](nodes.md)；安装命令中的 `--server` 即 `EDGEWEIR_NODE_API_URL`。
+
+## 节点通道端口
+
+| 方式 | 配置 | 约束 |
+| --- | --- | --- |
+| 直接暴露（默认） | 防火墙与安全组放行 `EDGEWEIR_NODE_API_PORT` | — |
+| nginx `stream` 四层透传 | 控制台监听本机 `18443`，面板 nginx 在 `8443` 透传 TCP | 面板 nginx 需包含 stream 模块 |
+| 面板 HTTP 反向代理、CDN | 不支持 | 终结 TLS 使节点注册报 `CA pin mismatch`，mTLS 无法建立 |
+
+`stream` 块、原理与验证见 [networking.md](networking.md#节点通道四层透传)。宝塔 / aaPanel 上的步骤：
+
+1. 确认面板 nginx 包含 stream 模块：
+
+   ```bash
+   /www/server/nginx/sbin/nginx -V 2>&1 | grep -o -- '--with-stream[^ ]*'
+   ```
+
+   预期：其中一行恰为 `--with-stream`。没有该行时使用直接暴露。
+
+2. 将节点通道改到本机 `18443`，`EDGEWEIR_NODE_API_URL` 保持 `:8443`：
+
+   | 模式 | 修改 |
+   | --- | --- |
+   | bundled | `.env`：`EDGEWEIR_NODE_API_PORT=127.0.0.1:18443` |
+   | host | `.env`：`EDGEWEIR_NODE_API_PORT=18443`；`compose.yml`：`NODE_API_HOST: 127.0.0.1` |
+
+   ```bash
+   ./deploy.sh start
+   ```
+
+3. 在 `/www/server/nginx/conf/nginx.conf` 的 `http { }` 块之外加入 `stream` 块（`listen 8443;`，`proxy_pass 127.0.0.1:18443;`），检查并重载：
+
+   ```bash
+   /www/server/nginx/sbin/nginx -t && /www/server/nginx/sbin/nginx -s reload
+   ```
+
+4. 按第 4 节第 4 步验证。
+
+| 场景 | 约束 |
 | --- | --- |
-| `./deploy.sh update` | 拉取 `latest`，把它对应的日期 tag 写进 `.env`，先备份再重建容器；数据库迁移在启动时自动执行 |
-| `./deploy.sh update <tag>` | 升级（或回退）到指定 tag，例如 `20260929-a1b2c3d` |
-| `./deploy.sh backup` | 备份到 `backups/<时间>/`：`edgeweir.dump`（`pg_dump --format=custom`）、`env`（含主密钥）和编排文件 |
-| `./deploy.sh status` / `logs [console]` | 容器状态与运行版本 / 跟随日志 |
-| `./deploy.sh start` / `stop` / `restart` | 启动（等待健康检查）/ 停止 / 重启 |
-| `./deploy.sh config` | 修改控制台地址和节点通道地址并重建容器 |
-| `./deploy.sh setup-token` | 显示首次初始化令牌 |
-| `./deploy.sh template host\|bundled` | 输出编排模板 |
-| `./deploy.sh self-update` | 从 GitHub 更新脚本本身 |
+| `./deploy.sh config` | 把 `EDGEWEIR_NODE_API_PORT` 改回节点通道地址中的端口（8443），与 nginx 冲突。运行后恢复第 2 步的值，再 `./deploy.sh start`。 |
+| host 模式 `./deploy.sh update` | 询问是否用内置模板替换 `compose.yml` 时回答 `n`；替换会恢复 `NODE_API_HOST: 0.0.0.0`。 |
+| host 模式启动 | 脚本警告节点通道只监听回环地址；透传配置下该警告不适用。 |
 
-- `update` 发现 `compose.yml` 与脚本自带的模板不同（模板更新过，或你改过它）时，会询问是否替换；旧文件已在这次的备份里。无人值守运行时保留现有文件。
-- 回退：迁移只向前执行，只有两个版本之间没有新增迁移时才能直接 `./deploy.sh update <旧 tag>`，否则用升级前的备份恢复（[backup.md](backup.md)）。
-- 备份目录含主密钥和全部数据，复制到别的机器保管；`backups/` 不会自动清理。ClickHouse（若启用）另行备份。
-- 确认版本：`curl -s http://127.0.0.1:3000/healthz` 返回的 `version`。
-- 不要用 Watchtower 等工具无人值守地跟随 `latest`。
+## 不用脚本部署
 
-## 7. （可选）用 stream 透传 8443
+### 容器编排
 
-如果想让 8443 也经过宝塔的 nginx（例如统一端口管理），只能做四层透传：
+1. 取得模板：`bash deploy.sh template bundled`（或 `host`）的输出，或仓库中的 [`compose.baota.yml`](../../compose.baota.yml)、[`compose.baota-host.yml`](../../compose.baota-host.yml)。
 
-1. 让节点通道只监听本机另一个端口：
-   - 内置数据库编排：`.env` 里改 `EDGEWEIR_NODE_API_PORT=127.0.0.1:18443`；
-   - host 编排：`.env` 里改 `EDGEWEIR_NODE_API_PORT=18443`，并把 `compose.yml` 中的 `NODE_API_HOST: 0.0.0.0` 改成 `NODE_API_HOST: 127.0.0.1`（以后 `update` 询问替换模板时选 n）。
+2. 在面板终端生成 `.env` 内容（bundled）：
 
-   然后 `./deploy.sh start`。节点通道地址（`EDGEWEIR_NODE_API_URL`）保持 `:8443` 不变。
-2. 宝塔「软件商店 → Nginx → 设置 → 配置修改」，在 `http { ... }` 块**之外**加入：
+   ```bash
+   cat <<ENV
+   EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
+   POSTGRES_PASSWORD=$(openssl rand -hex 24)
+   EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com
+   EDGEWEIR_NODE_API_URL=https://cdn-admin.example.com:8443
+   EDGEWEIR_VERSION=20260929-a1b2c3d
+   ENV
+   ```
 
-```nginx
-stream {
-    server {
-        listen 8443;
-        proxy_pass 127.0.0.1:18443;
-        proxy_timeout 1h;   # 节点通道有长连接（WatchConfig 流）
-    }
-}
-```
+   host 模式把 `POSTGRES_PASSWORD` 一行换成 `DATABASE_URL=postgres://edgeweir:<URL 编码的密码>@127.0.0.1:5432/edgeweir`（云数据库追加 `?sslmode=verify-full`）。
 
-3. 保存并重载 Nginx。注意不要写 `ssl` 或 `proxy_ssl`，这里只转发 TCP。
+3. 添加编排：宝塔 **Docker → 容器编排 → 添加容器编排**；aaPanel **Docker → Compose → Add Compose**。名称填 `edgeweir`，编排内容粘贴模板，`.env` 栏（aaPanel **.env Content**）粘贴上一步的输出，创建编排。
 
-## 8. 不用脚本：面板里手动编排
+4. 确认容器：`edgeweir-console` 为 healthy；bundled 另有 `edgeweir-postgres`。
 
-1. 宝塔「Docker → 容器编排 → 添加容器编排」（aaPanel「Docker → Compose → Add」），名称填 `edgeweir`，粘贴 [`compose.baota.yml`](../../compose.baota.yml)（内置数据库）或 [`compose.baota-host.yml`](../../compose.baota-host.yml)（本机或云数据库）的内容。
-2. 在编排的 `.env` 栏填入变量（面板把它保存为编排目录里的 `.env`，一般是 `/www/dk_project/edgeweir/.env`）。面板没有 `.env` 栏时，在面板终端里进入编排目录生成。内置数据库：
+5. bundled 模式设置可信代理：把 `deploy.sh` 放入编排目录后运行 `./deploy.sh restart`，脚本把 Docker 网关地址写入 `EDGEWEIR_TRUSTED_PROXIES` 并重建容器。手动设置时写入以下命令输出的地址；环境变量在重建容器后生效。
+
+   ```bash
+   docker inspect -f '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}' edgeweir-postgres
+   ```
+
+6. 读取 setup token，按 [第 4 节](#4-初始化与验证) 继续：
+
+   ```bash
+   docker logs edgeweir-console 2>&1 | grep -o '"setupToken":"[^"]*"' | tail -n 1
+   ```
+
+| 变量 | 约束 |
+| --- | --- |
+| `.env` 栏 | 面板不执行其中的命令；填入终端生成的实际值。 |
+| `EDGEWEIR_VERSION` | [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir) 上的日期 tag；`latest` 仅用于评估环境。 |
+| `BETTER_AUTH_SECRET` | 新部署不设置。已设置的部署保留原值；移除后控制台拒绝启动。 |
+| 其他变量 | 见 [环境变量](../reference/environment.md)。 |
+
+### 不用编排：单独创建容器
+
+面板 **创建容器** 表单无法设置编排中的只读根文件系统、`tmpfs` 与 `no-new-privileges`。需要这些加固时在终端执行 [docker.md](docker.md#不用-compose单独的容器) 中的 `docker run` 命令。
+
+1. 创建网络 `edgeweir`：宝塔 **Docker → 网络**；aaPanel **Docker → Network → Add Network**；或终端：
+
+   ```bash
+   docker network create edgeweir
+   ```
+
+2. 创建两个容器：宝塔 **Docker → 容器 → 创建容器**；aaPanel **Docker → Container → Create Container**。
+
+   | 字段 | `edgeweir-postgres` | `edgeweir-console` |
+   | --- | --- | --- |
+   | 镜像 | `postgres:18.6-alpine` | `ghcr.io/marvinli001/edgeweir:<日期 tag>` |
+   | 网络 | `edgeweir` | `edgeweir` |
+   | 端口 | 不映射 | `127.0.0.1:3000` → `3000`；`8443` → `8443` |
+   | 卷 | `edgeweir-postgres` → `/var/lib/postgresql` | — |
+   | 环境变量 | `POSTGRES_USER=edgeweir`、`POSTGRES_DB=edgeweir`、`POSTGRES_PASSWORD=<openssl rand -hex 24 的输出>` | `ROLE=all`、`DATABASE_URL=postgres://edgeweir:<同一密码>@edgeweir-postgres:5432/edgeweir`、`EDGEWEIR_MASTER_KEY`、`EDGEWEIR_PUBLIC_URL`、`EDGEWEIR_NODE_API_URL`、`EDGEWEIR_TRUSTED_PROXIES=<edgeweir 网络的网关>` |
+   | 重启策略 | `unless-stopped` 或 `always` | `unless-stopped` 或 `always` |
+
+   - 控制台容器不设置 `EDGEWEIR_VERSION`：镜像内该变量表示运行中的版本。
+   - 已设置 `BETTER_AUTH_SECRET` 的部署保留原值。
+   - 网关地址：
+
+     ```bash
+     docker network inspect -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}' edgeweir
+     ```
+
+   - 表单无法把端口绑定到 `127.0.0.1` 时改用终端 `docker run`。
+
+3. 升级：拉取新 tag，删除 `edgeweir-console`，以相同参数和新 tag 重建。数据在 `edgeweir-postgres` 卷中。升级前备份，见 [backup.md](backup.md)。
+
+## 升级与备份
+
+在部署目录运行：
 
 ```bash
 cd /www/dk_project/edgeweir
-umask 077
-cat > .env <<ENV
-EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
-POSTGRES_PASSWORD=$(openssl rand -hex 24)
-EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com
-EDGEWEIR_NODE_API_URL=https://cdn-admin.example.com:8443
-EDGEWEIR_VERSION=20260929-a1b2c3d
-ENV
-chmod 600 .env
+./deploy.sh update                     # 备份后升级到 latest 对应的日期 tag
+./deploy.sh update 20260929-a1b2c3d    # 升级或回退到指定 tag
+./deploy.sh backup                     # 备份到 backups/<时间>/
 ```
 
-   host 编排把 `POSTGRES_PASSWORD` 这一行换成 `DATABASE_URL=postgres://edgeweir:<URL 编码的密码>@127.0.0.1:5432/edgeweir`（云数据库加 `?sslmode=verify-full`），其余相同。
+命令、备份布局与中止行为见 [deploy-script.md](deploy-script.md)；版本策略与回退约束见 [upgrade.md](upgrade.md)；恢复见 [backup.md](backup.md)。
 
-   - 不需要再填 `BETTER_AUTH_SECRET`。已经填过它的旧编排要保留原值，删掉后控制台拒绝启动（否则所有人会被登出，已启用的两步验证也无法读取）。
-   - `EDGEWEIR_VERSION` 换成 [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir) 上当前最新的日期 tag；评估环境可以写 `latest`。
-   - 在 `.env` 栏里填写时，等号右边要填在终端里生成好的实际值，面板不会执行其中的命令。
-   - 内置数据库编排还要加 `EDGEWEIR_TRUSTED_PROXIES=<Docker 网关>`（`docker network inspect edgeweir_default` 显示的 Gateway），否则审计日志和登录限速看到的都是网关地址。
-
-3. 点击「确定/启动」，面板会先拉取镜像。在「容器」列表里应看到 `edgeweir-console`（healthy），内置数据库编排还有 `edgeweir-postgres`。初始化令牌在「容器 → edgeweir-console → 日志」里的 `setupToken`。
-
-面板创建的编排也可以交给脚本维护：把 `deploy.sh` 放进编排目录再运行 `./deploy.sh update` 等命令（脚本按容器 `edgeweir-console` 找到编排）。升级时也可以只在面板里改 `EDGEWEIR_VERSION` 再「更新镜像」，但这样不会先备份。
-
-## 9. 不用编排：单独创建容器
-
-面板的「容器 → 创建容器」也能部署，但表单无法设置编排里的只读根文件系统、`tmpfs` 和 `no-new-privileges` 加固，所以推荐用编排。确实要用时，按 [docker.md 的等价命令](docker.md#不用-compose单独的容器)创建：
-
-1. 「Docker → 网络」新建网络 `edgeweir`（或在终端 `docker network create edgeweir`）。
-2. PostgreSQL 容器：镜像 `postgres:18.6-alpine`，名称 `edgeweir-postgres`，网络 `edgeweir`，不映射端口；环境变量 `POSTGRES_USER=edgeweir`、`POSTGRES_DB=edgeweir`、`POSTGRES_PASSWORD=<openssl rand -hex 24 的输出>`；卷 `edgeweir-postgres` 挂到 `/var/lib/postgresql`；重启策略「总是 / unless-stopped」。
-3. 控制台容器：镜像 `ghcr.io/marvinli001/edgeweir:<日期 tag>`，名称 `edgeweir-console`，网络 `edgeweir`；端口 `127.0.0.1:3000 → 3000` 和 `8443 → 8443`；环境变量 `ROLE=all`、`DATABASE_URL=postgres://edgeweir:<上面的密码>@edgeweir-postgres:5432/edgeweir`、`EDGEWEIR_MASTER_KEY`、`EDGEWEIR_PUBLIC_URL`、`EDGEWEIR_NODE_API_URL`（其余可选变量见 `compose.baota.yml`；旧部署设置过的 `BETTER_AUTH_SECRET` 要保留；不要填 `EDGEWEIR_VERSION`）。
-
-升级单独创建的容器：拉取新 tag，删除旧的 `edgeweir-console`，用相同参数和新 tag 重建。数据在 PostgreSQL 的卷里，不受影响。
-
-## 10. 添加节点
-
-平台管理员在后台「集群与节点」生成一次性安装命令（先 `export EDGEWEIR_TOKEN=...`，再 `curl ... | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- ...`），在**节点服务器**（不是这台控制台服务器）上用有 sudo 权限的账号执行。token 只经环境变量传递，不出现在命令行参数里。命令里的 `--server` 就是 `EDGEWEIR_NODE_API_URL`，`--ca-sha256` 是内部 CA 指纹，节点注册前会校验。节点访问 GitHub 慢时可以配置控制台镜像，见 [docker.md](docker.md#控制台镜像可选)。
-
-## 11. 常见问题
-
-| 现象 | 处理 |
+| 场景 | 行为 |
 | --- | --- |
-| 安装时数据库连接失败 | 按脚本提示检查：`refused` 是地址或端口不对、数据库没启动；`password` 是密码错误；`pg_hba` 是数据库没有放行这台服务器；云数据库超时多半是白名单或安全组。 |
-| 提示用户不能建表或建 schema | 该用户不是数据库所有者。宝塔新建数据库时选择这个用户，或执行 `ALTER DATABASE edgeweir OWNER TO edgeweir;` 和 `ALTER SCHEMA public OWNER TO edgeweir;`。 |
-| host 编排提示节点通道只监听回环地址 | 镜像太旧，不支持 `NODE_API_HOST`；`./deploy.sh update` 升级。 |
-| 登录后立刻退出 / 提示来源不受信任 | `EDGEWEIR_PUBLIC_URL` 与实际访问地址不一致（协议、域名、端口），用 `./deploy.sh config` 修改。 |
-| 节点注册报 CA 指纹不匹配 | 8443 被宝塔或 CDN 终结了 TLS；改为直连或 stream 透传。 |
-| 节点注册超时 | 安全组/宝塔防火墙未放行 8443；`EDGEWEIR_NODE_API_URL` 的域名解析是否正确。 |
-| 审计日志里的 IP 都是 `172.x.x.1` | 内置数据库编排的 `EDGEWEIR_TRUSTED_PROXIES` 与 Docker 网关不一致，运行 `./deploy.sh restart`。 |
-| 控制台容器反复重启 | `./deploy.sh logs console` 查看原因，通常是 `.env` 缺少密钥或数据库连不上。 |
+| 面板创建的编排 | 把 `deploy.sh` 放入编排目录后可用全部命令；脚本按 `.env` 与含 `container_name: edgeweir-console` 的编排文件识别部署，沿用面板的 Compose 项目名。 |
+| 面板中修改 `EDGEWEIR_VERSION` 后更新镜像（aaPanel **Update Image**） | 不备份数据库。 |
+
+## 常见问题
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| 安装时数据库检查失败 | 地址、密码、`pg_hba.conf`、白名单或 TLS 证书 | 按脚本输出的提示处理，对照 [数据库检查](deploy-script.md#数据库检查)。 |
+| 提示用户不能建表或建 schema | 用户不是数据库所有者 | 宝塔新建数据库时选择该用户，或执行 `ALTER DATABASE edgeweir OWNER TO edgeweir;` 与 `ALTER SCHEMA public OWNER TO edgeweir;`。 |
+| `无法访问 Docker` | 非 root 运行或 Docker 未启动 | 用 `sudo` 运行；在面板 **Docker** 页面启动 Docker。 |
+| 拉取镜像失败 | 无法访问 `ghcr.io` | `docker load` 导入镜像后设置 `EDGEWEIR_NO_PULL=1`。 |
+| 登录失败或登录后立即退出 | `EDGEWEIR_PUBLIC_URL` 与浏览器地址的协议、域名或端口不一致 | `./deploy.sh config`。 |
+| 节点注册报 `CA pin mismatch` | 节点通道端口上的 TLS 被面板 nginx 或 CDN 终结 | 直接暴露或 `stream` 透传；按第 4 节第 4 步验证。 |
+| 节点注册超时 | 防火墙或安全组未放行节点通道端口，或节点通道域名解析错误 | 放行端口；检查 `EDGEWEIR_NODE_API_URL` 的域名解析。 |
+| host 模式警告节点通道只监听回环地址 | 镜像不支持 `NODE_API_HOST`，或已按 `stream` 透传改为回环监听 | 前者 `./deploy.sh update`；后者无需处理。 |
+| 审计日志中的 IP 均为 Docker 网关（`172.x.x.1`） | bundled 模式 `EDGEWEIR_TRUSTED_PROXIES` 与当前网关不一致 | `./deploy.sh restart`。 |
+| `./deploy.sh start` 报「启动失败」 | `.env` 缺少变量或数据库不可达 | `./deploy.sh logs console`；修正 `.env` 后 `./deploy.sh start`。 |
