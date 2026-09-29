@@ -194,7 +194,6 @@ A tenant change that introduces a capability some active node of the cluster lac
 | Compression | Gzip only; Brotli and Zstd are unavailable. Compression settings apply after the site's **HTTPS** tab is saved for the first time |
 | Node packages | The node Docker image is based on OpenResty 1.31.1.1 with HTTP/2 and HTTP/3; deb/rpm installs use the distribution's `openresty` package |
 | Failure reasons | Neither the UI nor the console log shows the reason a CA or DNS provider returned |
-| Validation scope | Real DNS provider accounts, ZeroSSL EAB, CA rate limits, DNS propagation, and public firewalls must be verified by the operator |
 
 ## Troubleshooting
 

@@ -10,9 +10,6 @@
 
 文档：<https://marvinli001.github.io/edgeweir/zh/>
 
-> [!IMPORTANT]
-> 预发布阶段。MVP 功能已完成并通过端到端验收；尚无正式二进制发布，评估请从源码构建。
-
 ## 功能
 
 | 领域 | 能力 |
@@ -45,7 +42,7 @@
                              └───────────────────────────────────┘
 ```
 
-控制台与节点之间的唯一契约为 `proto/` 中的 protobuf（buf 管理）。设计细节见 [ARCHITECTURE.md](ARCHITECTURE.md) 与 [架构决策记录](docs/adr/README.md)。
+控制台与节点之间的唯一契约为 `proto/` 中的 protobuf（buf 管理）。设计细节见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ## 安全基线
 
@@ -133,9 +130,6 @@ sudo bash deploy.sh install
 
 ## 接入节点
 
-> [!NOTE]
-> 以下流程适用于正式发布之后。预发布阶段请[从源码构建节点](https://github.com/marvinli001/edgeweir-node#构建与测试)。
-
 节点要求：Linux（systemd），amd64 / arm64，可访问控制台 8443 端口。
 
 1. 以平台管理员登录，切换至 **后台 → 集群与节点**，选择集群并生成安装命令。命令包含单次有效 token 与控制台内部 CA 的 SHA-256 指纹。
@@ -156,7 +150,7 @@ sudo bash deploy.sh install
 - 优先安装 .deb / .rpm，否则使用 tar.gz；配置了控制台 `/downloads` 镜像时从镜像下载，否则从 GitHub Releases 下载。
 - agent 先核对 CA 指纹再提交 token，本地生成私钥，此后仅经 mTLS 与控制台通信。
 
-安装参数与发布物镜像见[接入节点](docs/deploy/nodes.md)；设计见 [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md)、[ADR-0016](docs/adr/0016-one-line-install.md)。
+安装参数与发布物镜像见[接入节点](docs/deploy/nodes.md)。
 
 ## API
 
@@ -221,9 +215,7 @@ pnpm e2e     # --up 启动环境；--down 结束后删除环境与卷；--skip-u
 
 ## 已知限制
 
-- 未经验收：真实 DNS 服务商账户、ZeroSSL EAB、外部通知渠道。
 - 节点所用 OpenResty 原版引擎不含 Brotli / Zstd。
-- 尚无经 GitHub OIDC 签名的正式二进制发布。
 
 ## 目录结构
 
@@ -238,7 +230,6 @@ packages/proto/            由 proto/ 生成的 TypeScript
 proto/                     protobuf（buf 管理），与 edgeweir-node 共享的唯一契约
 helpers/certd/             edgeweir-certd（Go）：lego 负责 ACME，libdns 负责 DNS 记录
 scripts/e2e.sh             端到端测试脚本
-docs/adr/                  架构决策记录
 docs/deploy/               部署文档
 docs/guide/                使用指南
 docs/reference/            参考：环境变量、命令行、API
@@ -247,14 +238,14 @@ doc/                       文档站（Fumadocs），发布至 GitHub Pages
 
 ## 文档
 
-文档站 <https://marvinli001.github.io/edgeweir/zh/> 由以下 Markdown 生成。每篇文档另有英文版 `*.en.md`；架构决策记录仅有中文。
+文档站 <https://marvinli001.github.io/edgeweir/zh/> 由以下 Markdown 生成。每篇文档另有英文版 `*.en.md`。
 
 | 分类 | 文档 |
 | --- | --- |
 | 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
 | 使用 | [快速上手](docs/guide/first-site.md) · [组织与成员](docs/guide/organizations.md) · [平台管理](docs/guide/admin.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [DNS 与告警](docs/guide/dns-and-alerts.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
 | 参考 | [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [API 与端点](docs/reference/api.md) |
-| 项目 | [架构](ARCHITECTURE.md) · [架构决策记录](docs/adr/README.md) · [路线图](ROADMAP.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |
+| 项目 | [架构](ARCHITECTURE.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |
 
 ## 许可证
 

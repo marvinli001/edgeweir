@@ -13,8 +13,6 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | 控制台镜像 | `ghcr.io/marvinli001/edgeweir` |
 | 节点发布物 | [edgeweir-node Releases](https://github.com/marvinli001/edgeweir-node/releases) |
 
-设计依据见 [ADR-0018](docs/adr/0018-trust-and-security-baseline.md)。
-
 ## 报告漏洞
 
 > [!WARNING]
@@ -46,9 +44,9 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | 组件 | 支持 | 不支持 |
 | --- | --- | --- |
 | 控制台 | 最新滚动版本：`master` 最新提交对应的 `<YYYYMMDD>-<commit>` 镜像（`latest`） | 更早的滚动版本 |
-| edgeweir-node | `master` 最新代码（尚无正式发布） | 其他提交 |
+| edgeweir-node | `master` 最新代码 | 其他提交 |
 
-安全修复只进入 `master`，不回移到旧版本。控制台的修复随 `master` 上下一个通过 CI 的提交发布为新的滚动版本。edgeweir-node 发布 1.0 时补充节点各版本的支持周期。
+安全修复只进入 `master`，不回移到旧版本。控制台的修复随 `master` 上下一个通过 CI 的提交发布为新的滚动版本。
 
 ## 信任基线
 
@@ -64,7 +62,7 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | 管理操作写审计 | 见 [审计日志](#审计日志) |
 | 发布物可验证 | cosign keyless 签名、SBOM、SLSA provenance（见 [验证发布物](#验证发布物)） |
 
-独立商业产品（[ADR-0019](docs/adr/0019-open-core-and-commercial-products.md)）可在管理员主动启用后按明示条款使用授权与云服务，但不得向开源核心加入商业功能锁，不得因官方许可证失效或授权服务故障中断已有 CDN 流量。
+独立商业产品（见 [LICENSING.md](LICENSING.md)）可在管理员主动启用后按明示条款使用授权与云服务，但不得向开源核心加入商业功能锁，不得因官方许可证失效或授权服务故障中断已有 CDN 流量。
 
 ## 敏感数据
 
@@ -121,25 +119,25 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 
 ## 威胁与控制
 
-| 控制 | 防范 | 依据 |
-| --- | --- | --- |
-| 控制台绝不保存 SSH 凭据；节点只经一次性安装命令接入，由节点主动注册 | 控制台失陷后借 SSH 凭据控制所有节点 | [ADR-0016](docs/adr/0016-one-line-install.md) |
-| 节点私钥在节点本地生成，不离开节点；控制台只签发证书 | 控制台数据库泄露后冒充节点 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
-| 安装命令固定 CA 指纹，节点先核对指纹再发送 token；token 一次性、有过期时间、只存 SHA-256 | 首次连接被中间人劫持；token 泄露或重放 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md)、[ADR-0016](docs/adr/0016-one-line-install.md) |
-| 除 `Enroll` 外强制 mTLS，客户端证书序列号须等于库中记录的当前值；证书 30 天有效并自动轮换；停用或删除节点立即生效，删除时吊销证书序列号 | 已下线节点继续拉取配置 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
-| 证书私钥与 S3 源站密钥只经 mTLS 通道发给服务引用网站的集群节点，不写入 NodeConfig | 其他集群的节点或配置快照泄露密钥 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
-| revision 回执由主密钥封装并绑定节点；节点报告高于控制台最新 revision 的版本时必须附有效回执，只有经验证的版本参与 revision 序号计算 | 数据库从备份恢复后，未经认证的上报操纵 revision 序号 | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
-| 敏感数据信封加密，主密钥不入库；附加认证数据绑定表、字段与记录 id | 数据库备份或只读 SQL 注入泄露私钥与凭据；有库写权限者在行之间互换密文 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
-| 管理操作写审计，与变更同事务提交 | 越权或误操作无法追溯 | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
-| `/api/auth/*` 只放行控制台界面用到的 better-auth 端点，其余 404；组织、成员与用户管理只走 Edgeweir 自己的接口；`x-api-key` 在 `/api/auth/*` 与 `/rpc` 上被丢弃，只在 `/api/v1` 生效 | 借 better-auth 插件端点绕过权限检查、审计与配置版本（删除组织、冒充用户、改他人密码）；API key 变成会话后签发新 key | [ADR-0005](docs/adr/0005-api-orpc-openapi.md)、[ADR-0007](docs/adr/0007-auth-better-auth-multitenancy.md) |
-| `/rpc` 要求 `x-csrf-token` 头；响应带 CSP `default-src 'self'`、`frame-ancestors 'none'` | 跨站请求伪造；页面被嵌入第三方站点 | [ADR-0002](docs/adr/0002-web-vite-react-spa-hono.md)、[ADR-0005](docs/adr/0005-api-orpc-openapi.md) |
-| 客户端 IP 取 TCP 对端地址，转发头只信任 `EDGEWEIR_TRUSTED_PROXIES`；登录与两步验证的限速计数存 PostgreSQL，多实例共享，重启不清零 | 伪造 IP 绕过登录与两步验证限速；审计日志中的 IP 失真 | [ADR-0007](docs/adr/0007-auth-better-auth-multitenancy.md)、[ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
-| `install.sh` 与 agent 自升级先校验 cosign 签名（证书身份精确匹配待安装版本的 release 工作流）与 SHA-256，再执行；控制台 `/downloads` 镜像（`EDGEWEIR_DOWNLOADS_DIR`）只是传输通道，未镜像的文件返回 404 | 下载链路或镜像被篡改 | [ADR-0016](docs/adr/0016-one-line-install.md)、[ADR-0017](docs/adr/0017-release-supply-chain.md) |
-| 源站不能是特殊用途地址（回环、链路本地、私网、CGNAT、组播等）或 `localhost`：控制台拒绝这类 IP 字面量，节点对配置和每个 DNS 解析结果执行同一清单（`packages/contract/src/addresses.ts`）；只有平台管理员能经审计的允许清单放行地址段；节点回源请求带 `CDN-Loop`（RFC 8586），收到带自身标识的请求返回 508 | 租户借回源访问云元数据（`169.254.169.254`）、探测内网，或造成回环 | [源站与缓存](docs/guide/origins-and-cache.md)、[ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
-| 控制台向 Web 界面保存的目标（告警 webhook、SMTP 服务器、节点发布源、DNS 解析器）发起的请求先解析一次、拒绝特殊用途地址，再连接该地址；`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 放行指定地址段 | 借控制台的出站请求访问内网 | `apps/console/src/server/lib/outbound.ts` |
-| 每个组织的刷新预热频率上限为每分钟 10 个任务、每小时 2000 个目标，平台管理员不受限；节点端清缓存标记超过上限时合并为站点级标记 | 租户填满节点的清缓存存储，影响同节点其他网站 | [源站与缓存](docs/guide/origins-and-cache.md) |
-| agent 只执行类型化操作，没有执行任意命令的接口 | 控制台失陷后在节点上执行任意代码 | [ADR-0014](docs/adr/0014-node-agent-responsibilities.md) |
-| 发布物 keyless 签名、SBOM、SLSA provenance | 发布的程序与源码不一致，或被投毒 | [ADR-0017](docs/adr/0017-release-supply-chain.md) |
+| 控制 | 防范 |
+| --- | --- |
+| 控制台绝不保存 SSH 凭据；节点只经一次性安装命令接入，由节点主动注册 | 控制台失陷后借 SSH 凭据控制所有节点 |
+| 节点私钥在节点本地生成，不离开节点；控制台只签发证书 | 控制台数据库泄露后冒充节点 |
+| 安装命令固定 CA 指纹，节点先核对指纹再发送 token；token 一次性、有过期时间、只存 SHA-256 | 首次连接被中间人劫持；token 泄露或重放 |
+| 除 `Enroll` 外强制 mTLS，客户端证书序列号须等于库中记录的当前值；证书 30 天有效并自动轮换；停用或删除节点立即生效，删除时吊销证书序列号 | 已下线节点继续拉取配置 |
+| 证书私钥与 S3 源站密钥只经 mTLS 通道发给服务引用网站的集群节点，不写入 NodeConfig | 其他集群的节点或配置快照泄露密钥 |
+| revision 回执由主密钥封装并绑定节点；节点报告高于控制台最新 revision 的版本时必须附有效回执，只有经验证的版本参与 revision 序号计算 | 数据库从备份恢复后，未经认证的上报操纵 revision 序号 |
+| 敏感数据信封加密，主密钥不入库；附加认证数据绑定表、字段与记录 id | 数据库备份或只读 SQL 注入泄露私钥与凭据；有库写权限者在行之间互换密文 |
+| 管理操作写审计，与变更同事务提交 | 越权或误操作无法追溯 |
+| `/api/auth/*` 只放行控制台界面用到的 better-auth 端点，其余 404；组织、成员与用户管理只走 Edgeweir 自己的接口；`x-api-key` 在 `/api/auth/*` 与 `/rpc` 上被丢弃，只在 `/api/v1` 生效 | 借 better-auth 插件端点绕过权限检查、审计与配置版本（删除组织、冒充用户、改他人密码）；API key 变成会话后签发新 key |
+| `/rpc` 要求 `x-csrf-token` 头；响应带 CSP `default-src 'self'`、`frame-ancestors 'none'` | 跨站请求伪造；页面被嵌入第三方站点 |
+| 客户端 IP 取 TCP 对端地址，转发头只信任 `EDGEWEIR_TRUSTED_PROXIES`；登录与两步验证的限速计数存 PostgreSQL，多实例共享，重启不清零 | 伪造 IP 绕过登录与两步验证限速；审计日志中的 IP 失真 |
+| `install.sh` 与 agent 自升级先校验 cosign 签名（证书身份精确匹配待安装版本的 release 工作流）与 SHA-256，再执行；控制台 `/downloads` 镜像（`EDGEWEIR_DOWNLOADS_DIR`）只是传输通道，未镜像的文件返回 404 | 下载链路或镜像被篡改 |
+| 源站不能是特殊用途地址（回环、链路本地、私网、CGNAT、组播等）或 `localhost`：控制台拒绝这类 IP 字面量，节点对配置和每个 DNS 解析结果执行同一清单（`packages/contract/src/addresses.ts`）；只有平台管理员能经审计的允许清单放行地址段；节点回源请求带 `CDN-Loop`（RFC 8586），收到带自身标识的请求返回 508 | 租户借回源访问云元数据（`169.254.169.254`）、探测内网，或造成回环 |
+| 控制台向 Web 界面保存的目标（告警 webhook、SMTP 服务器、节点发布源、DNS 解析器）发起的请求先解析一次、拒绝特殊用途地址，再连接该地址；`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 放行指定地址段 | 借控制台的出站请求访问内网 |
+| 每个组织的刷新预热频率上限为每分钟 10 个任务、每小时 2000 个目标，平台管理员不受限；节点端清缓存标记超过上限时合并为站点级标记 | 租户填满节点的清缓存存储，影响同节点其他网站 |
+| agent 只执行类型化操作，没有执行任意命令的接口 | 控制台失陷后在节点上执行任意代码 |
+| 发布物 keyless 签名、SBOM、SLSA provenance | 发布的程序与源码不一致，或被投毒 |
 
 ## 已知限制
 
@@ -162,9 +160,6 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | [GitHub CLI](https://cli.github.com/) | 验证 provenance（`gh attestation verify`） |
 
 ### 节点包（deb、rpm、tar.gz）
-
-> [!NOTE]
-> edgeweir-node 尚无正式发布（没有 `v*` tag）。以下步骤从第一个正式发布开始适用；签名文件的确切名称以 Release 页面为准。
 
 1. 从 [edgeweir-node Releases](https://github.com/marvinli001/edgeweir-node/releases) 下载要安装的包、`checksums.txt` 与 `checksums.txt.sigstore.json`。
 2. 验证 `checksums.txt` 由 edgeweir-node 的 release 工作流在 `v*` tag 上签名：
@@ -193,7 +188,7 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
    gh attestation verify edgeweir-node_<版本>_linux_amd64.tar.gz --repo marvinli001/edgeweir-node
    ```
 
-第 2、3 步都通过后再安装。`install.sh` 在执行任何下载的程序之前自动完成同样的校验，且更严格：证书身份必须精确等于 `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<版本>`；机器上没有 cosign 时，先下载 cosign v3.1.3 并核对脚本中固定的 SHA-256。注册 token 只经 `EDGEWEIR_TOKEN` 环境变量或 `--token-file` 传递，不出现在命令行参数中（[ADR-0016](docs/adr/0016-one-line-install.md)）。
+第 2、3 步都通过后再安装。`install.sh` 在执行任何下载的程序之前自动完成同样的校验，且更严格：证书身份必须精确等于 `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<版本>`；机器上没有 cosign 时，先下载 cosign v3.1.3 并核对脚本中固定的 SHA-256。注册 token 只经 `EDGEWEIR_TOKEN` 环境变量或 `--token-file` 传递，不出现在命令行参数中。
 
 ### 控制台镜像
 
@@ -234,7 +229,7 @@ SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct) docker buildx build \
   -t edgeweir:rebuild .
 ```
 
-控制台 Dockerfile 的 `apk add tini` 取构建时 Alpine 软件源中的版本，镜像不保证逐字节一致。可复现构建的范围见 [ADR-0017](docs/adr/0017-release-supply-chain.md)。
+控制台 Dockerfile 的 `apk add tini` 取构建时 Alpine 软件源中的版本，镜像不保证逐字节一致。
 
 ---
 
@@ -248,7 +243,7 @@ Full English policy: [SECURITY.en.md](SECURITY.en.md).
 
 **Reporting a vulnerability.** Do not open a public issue, discussion, or pull request. Open a private GitHub security advisory ([console](https://github.com/marvinli001/edgeweir/security/advisories/new), [node](https://github.com/marvinli001/edgeweir-node/security/advisories/new)). Reports are acknowledged within 3 working days. Coordinated disclosure window: 90 days from the day the report is received; the advisory is published after the fix, with credit when the reporter agrees.
 
-**Supported versions.** Console: the latest rolling image (`<YYYYMMDD>-<commit>` of the newest `master` commit, `latest`). Node: the latest `master`; there is no release yet. Security fixes land on `master` only.
+**Supported versions.** Console: the latest rolling image (`<YYYYMMDD>-<commit>` of the newest `master` commit, `latest`). Node: the latest `master`. Security fixes land on `master` only.
 
 **Trust baseline.** No phone-home of any kind and no license-check code. Telemetry is off by default and requires explicit opt-in; the current version sends no telemetry, and better-auth's own telemetry is hard-disabled. The console never stores SSH credentials; nodes join only through the one-time install command. Private keys and third-party credentials (internal CA key, certificate keys, ACME accounts, DNS provider credentials, S3 origin keys, alert channel and SMTP settings, the setup token) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they reach the database: AES-256-GCM with a random data key per record, and additional authenticated data that binds table, column, and record id (envelope format v2; v1 envelopes written by older versions are re-encrypted at startup and rejected otherwise). Enrollment tokens, API keys, and passwords are stored as hashes only. Unless `BETTER_AUTH_SECRET` is set, better-auth's session secret (session cookie signatures, TOTP secrets and backup codes at rest) is derived from `EDGEWEIR_MASTER_KEY` with HKDF-SHA256 (salt `edgeweir/auth-secret/v1`, info `better-auth.secret`, 32 bytes, base64url), independent of the envelope KEK (salt `edgeweir/kek/v1`, info `envelope`); the database keeps only an HMAC check value, and the console refuses to start when the derived secret differs from the one the database was used with (for example `BETTER_AUTH_SECRET` removed from an existing deployment). With the derived secret, a leaked master key also allows forging sessions. Every management action is written to the audit log: Edgeweir's own changes commit their audit entry in the same transaction; sign-ins, password changes, two-factor changes, passkeys, and API keys are completed by better-auth and audited right after it commits. Releases are signed with cosign keyless and ship with an SBOM and SLSA provenance.
 

@@ -2,9 +2,6 @@
 
 Deploy the console with Docker Compose on BaoTa Panel (宝塔) or aaPanel: compose modes, panel setup, and manual installs.
 
-> [!NOTE]
-> Panel menu paths follow the official BaoTa and aaPanel documentation and have not yet been accepted on a real panel server. `deploy.sh` and both compose files are verified on an equivalent Linux Docker host.
-
 ## Compose modes
 
 `deploy.sh install` writes the compose file for the selected database mode.

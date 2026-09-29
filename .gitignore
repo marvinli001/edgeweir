@@ -64,11 +64,6 @@ GEMINI.md
 .mcp.json
 .github/copilot-instructions.md
 
-# Internal development records (maintainer-only, not published)
-/BOOTSTRAP.md
-/PROGRESS.md
-/docs/audits/
-/docs/development/
-/docs/implementation/
-/docs/research/
-/docs/specs/
+# Development records of edgeweir and edgeweir-node: ADRs, roadmaps, specs,
+# audits, progress notes (maintainer-only, not published)
+/dev-docs/

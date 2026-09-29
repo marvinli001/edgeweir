@@ -194,7 +194,6 @@ ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主
 | 压缩 | 只有 Gzip；Brotli、Zstd 不可用。压缩设置在网站首次保存「HTTPS」页签后生效 |
 | 节点软件包 | 节点 Docker 镜像基于 OpenResty 1.31.1.1，含 HTTP/2 与 HTTP/3；deb/rpm 安装使用发行版的 `openresty` 软件包 |
 | 失败原因 | 界面和控制台日志不显示 CA 或 DNS 服务商返回的失败原因 |
-| 验证范围 | DNS 服务商真实账户、ZeroSSL EAB、CA 频率限额、DNS 传播和公网防火墙需运营者自行验证 |
 
 ## 故障排查
 

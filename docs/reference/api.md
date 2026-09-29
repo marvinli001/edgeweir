@@ -170,4 +170,3 @@ HTTP 服务监听即返回，不检查数据库。容器健康检查见[命令�
 > [!WARNING]
 > 节点通道必须直连或四层透传；终结 TLS 的代理会使节点 mTLS 失败。见[端口、反向代理与可信代理](../deploy/networking.md)。
 
-设计记录：[ADR-0008](../adr/0008-node-channel-connect-rpc-mtls.md)。

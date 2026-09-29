@@ -5,9 +5,9 @@ Development environment, checks, code conventions, and change procedures.
 ## Ground rules
 
 - Open an issue before a large change.
-- Write an ADR first (see [ADR process](#adr-process)) for a new dependency, a change to the process or deployment model, the node channel protocol, `NodeConfig` IR semantics, or the security baseline.
+- Settle the design in an issue first for a new dependency, a change to the process or deployment model, the node channel protocol, `NodeConfig` IR semantics, or the security baseline.
 - Report security vulnerabilities privately as described in [SECURITY.en.md](SECURITY.en.md), not in a public issue.
-- Pull requests that break the principles below are not merged ([ADR-0018](docs/adr/0018-trust-and-security-baseline.md), [ADR-0019](docs/adr/0019-open-core-and-commercial-products.md)).
+- Pull requests that break the principles below are not merged.
 
 | Principle | Requirement |
 | --- | --- |
@@ -116,7 +116,7 @@ Tests enforce these conventions:
 | `.env.example` lists every variable the console reads and compose interpolates | `apps/console/test/server/env-example.test.ts` |
 | Third-party images pinned by digest, Actions by commit SHA | `apps/console/test/server/supply-chain-pins.test.ts` |
 | The compose templates embedded in `deploy.sh` match the repository files byte for byte | `apps/console/test/server/deploy-script.test.ts` |
-| Relative doc links resolve; the ADR index is complete; the `ARCHITECTURE.md` data model lists every migration and table | `apps/console/test/server/docs.test.ts` |
+| Relative doc links resolve; the `ARCHITECTURE.md` data model lists every migration and table | `apps/console/test/server/docs.test.ts` |
 | Migrations have contiguous numbers, increasing timestamps, and one SQL file plus one snapshot each | `packages/db/test/migrations.test.ts` |
 
 Every new API procedure has a Vitest case.
@@ -192,8 +192,6 @@ feat(console)!: drop the public landing page from the open core
 
 ## UI rules
 
-Based on [ADR-0003](docs/adr/0003-ui-shadcn-preset.md).
-
 | Area | Rule |
 | --- | --- |
 | Components | shadcn components live in `components/ui` and use the Base UI `render` prop, not `asChild`; one ThemeProvider for the app |
@@ -204,11 +202,9 @@ Based on [ADR-0003](docs/adr/0003-ui-shadcn-preset.md).
 | External links | No links to other sites, except the allow list in `ui-rules.test.ts` |
 | appica-ui | Only through `src/web/components/appica/` and `appica-bridge.css` (scoped tokens, one `@source` per component) |
 | Motion | Entrances use `animate-enter` with a staggered `animationDelay`; reduced motion is respected |
-| Page scope | No marketing pages in the open core (ADR-0019) |
+| Page scope | No marketing pages in the open core |
 
 ## Internationalization
-
-Based on [ADR-0004](docs/adr/0004-i18n-paraglide.md).
 
 - Every UI string goes through a Paraglide message function. Message files: `apps/console/messages/zh-CN.json` (default locale) and `apps/console/messages/en.json`.
 - Keys are snake_case and start with the page or feature, e.g., `nav_sites`, `cert_brotli_unavailable`.
@@ -246,9 +242,9 @@ Based on [ADR-0004](docs/adr/0004-i18n-paraglide.md).
 
 ## Proto changes
 
-`proto/` is the only contract between the console and edgeweir-node ([ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md)).
+`proto/` is the only contract between the console and edgeweir-node.
 
-1. Edit the `.proto` files under `proto/`. Within the `edgeweir.node.v1` package, only backward-compatible additions; a breaking change needs a new `v2` package. `NodeConfig` follows the canonical-encoding constraints of [ADR-0011](docs/adr/0011-config-model-nodeconfig-ir.md): no `map` fields, fields declared in ascending field-number order.
+1. Edit the `.proto` files under `proto/`. Within the `edgeweir.node.v1` package, only backward-compatible additions; a breaking change needs a new `v2` package. `NodeConfig` follows canonical-encoding constraints: no `map` fields, fields declared in ascending field-number order.
 2. Run the linter.
 
    ```bash
@@ -310,7 +306,7 @@ Operator configuration belongs in **Admin → System**; environment variables ke
 
 ## Updating pinned images and actions
 
-Third-party inputs are pinned by immutable references ([ADR-0017](docs/adr/0017-release-supply-chain.md)); `pnpm test` rejects unpinned references, and edgeweir-node runs the same check with `make pin-check`. Images built from this repository or edgeweir-node are referenced by tag.
+Third-party inputs are pinned by immutable references; `pnpm test` rejects unpinned references, and edgeweir-node runs the same check with `make pin-check`. Images built from this repository or edgeweir-node are referenced by tag.
 
 | Input | Form | Location |
 | --- | --- | --- |
@@ -351,17 +347,9 @@ After a base image update, run the Release workflow manually in Actions to rebui
 
 Version pinning, upgrades, and rollback: [Versions, upgrades, and rollback](docs/deploy/upgrade.en.md). Artifact signatures and verification: [SECURITY.en.md](SECURITY.en.md).
 
-## ADR process
-
-1. Copy [docs/adr/template.md](docs/adr/template.md) to `docs/adr/NNNN-slug.md`. `NNNN` is the highest existing number plus one (both repositories share the numbering); `slug` is lowercase English with hyphens.
-2. Set the status to 提议 (proposed), put the ADR in the same pull request as the related code, and add a row to the index in [docs/adr/README.md](docs/adr/README.md).
-3. After review, set the status to 已接受 (accepted), then merge.
-4. To overturn an accepted decision, write a new ADR and set the old one's status to 已被 ADR-NNNN 取代 (superseded by ADR-NNNN). The body of an accepted ADR is never rewritten; factual changes such as implementation status or versions go into a dated update record appended at the end.
-5. ADRs are edited only in this repository and are written in Chinese. `docs/adr` in edgeweir-node is a mirror: run `scripts/sync-adr.sh` in the node repository to sync it, and `scripts/sync-adr.sh --check` to verify.
-
 ## Documentation
 
-- Published docs are plain GitHub Markdown: `name.md` (Simplified Chinese, default) and `name.en.md` (English, same sections as `name.md`). ADRs are Chinese only.
+- Published docs are plain GitHub Markdown: `name.md` (Simplified Chinese, default) and `name.en.md` (English, same sections as `name.md`).
 - The documentation site lives in `doc/` (Fumadocs, Next.js static export) as its own pnpm workspace (`doc/pnpm-workspace.yaml`, `doc/pnpm-lock.yaml`). `.github/workflows/docs.yml` builds the site on pull requests and publishes it to GitHub Pages on pushes to `master`: <https://marvinli001.github.io/edgeweir/>.
 - `doc/scripts/sync-content.mjs` holds the page map (`SECTIONS`) and converts the Markdown. A new page must be added to the page map.
 
@@ -383,7 +371,7 @@ Version pinning, upgrades, and rollback: [Versions, upgrades, and rollback](docs
 
 ## Pull request checklist
 
-- [ ] One topic per pull request; the description states the motivation, the changes, and how they were verified, and links the issue or ADR.
+- [ ] One topic per pull request; the description states the motivation, the changes, and how they were verified, and links the issue.
 - [ ] `pnpm lint`, `pnpm typecheck`, and `pnpm test` pass; `pnpm build` and `pnpm e2e` run as listed in [Commands](#commands).
 - [ ] Commits follow the [commit conventions](#commit-conventions).
 - [ ] UI copy is updated in both zh-CN and en; new error codes have messages.
@@ -391,11 +379,11 @@ Version pinning, upgrades, and rollback: [Versions, upgrades, and rollback](docs
 - [ ] New environment variables are in `env.ts`, `.env.example`, and the environment variables reference.
 - [ ] Management actions write the audit log.
 - [ ] UI changes include screenshots.
-- [ ] Behavior changes are reflected in the Chinese and English docs (README, deployment docs, ADR implementation status).
+- [ ] Behavior changes are reflected in the Chinese and English docs (README, deployment docs).
 - [ ] No test was skipped, deleted, or weakened.
 
 ## License
 
 Edgeweir is released under [AGPL-3.0-only](LICENSE). Submitting a contribution licenses it under AGPL-3.0-only and confirms the right to do so.
 
-The open core permits compliant commercial use. Organizations, members, access control, and isolation stay in the open core; the customer-facing portal, plans and billing, finance, and reselling belong to a separate commercial operations product ([LICENSING.en.md](LICENSING.en.md), [ADR-0019](docs/adr/0019-open-core-and-commercial-products.md)). Contributing to the core does not automatically grant the project a right to relicense under proprietary terms; a dual license or a plugin linking exception requires separate verification of code ownership and contributor authorization.
+The open core permits compliant commercial use. Organizations, members, access control, and isolation stay in the open core; the customer-facing portal, plans and billing, finance, and reselling belong to a separate commercial operations product ([LICENSING.en.md](LICENSING.en.md)). Contributing to the core does not automatically grant the project a right to relicense under proprietary terms; a dual license or a plugin linking exception requires separate verification of code ownership and contributor authorization.

@@ -2,9 +2,6 @@
 
 为集群生成安装命令，在 Linux 主机上安装并注册边缘节点。
 
-> [!NOTE]
-> edgeweir-node 尚无正式发布。本页流程从第一个签名发布开始适用；预发布阶段 [从源码构建节点](https://github.com/marvinli001/edgeweir-node#构建与测试)。
-
 ## 要求
 
 | 项目 | 要求 |
@@ -153,4 +150,3 @@ downloads/
 | `x509: certificate is valid for ..., not ...` | 节点连接的名称不在节点通道证书中 | 将该名称加入 `EDGEWEIR_NODE_API_HOSTNAMES`，重启控制台，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
 | 注册超时，或节点一直离线 | 防火墙或安全组未放行 8443；`EDGEWEIR_NODE_API_URL` 解析错误 | 放行 8443；核对域名解析。 |
 
-参见 [ADR-0008](../adr/0008-node-channel-connect-rpc-mtls.md)、[ADR-0016](../adr/0016-one-line-install.md)。

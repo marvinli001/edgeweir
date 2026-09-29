@@ -10,9 +10,6 @@ Self-hosted CDN / WAF / edge scheduling control plane. Manages edge nodes, origi
 
 Documentation: <https://marvinli001.github.io/edgeweir/en/>
 
-> [!IMPORTANT]
-> Pre-release. MVP functionality is complete and passes end-to-end acceptance. No official binary release has been published; build from source for evaluation.
-
 ## Features
 
 | Area | Capabilities |
@@ -45,7 +42,7 @@ browser, API clients ──:3000──▶ ┌───────────�
                                 └───────────────────────────────────┘
 ```
 
-The only contract between console and node is the protobuf in `proto/`, managed with buf. Design details: [ARCHITECTURE.en.md](ARCHITECTURE.en.md) and the [architecture decision records](docs/adr/README.md) (Chinese).
+The only contract between console and node is the protobuf in `proto/`, managed with buf. Design details: [ARCHITECTURE.en.md](ARCHITECTURE.en.md) (Chinese).
 
 ## Security baseline
 
@@ -133,9 +130,6 @@ sudo bash deploy.sh install
 
 ## Adding a node
 
-> [!NOTE]
-> This flow applies once an official release is published. During pre-release, [build the node from source](https://github.com/marvinli001/edgeweir-node/blob/master/README.en.md#build-and-test).
-
 Node requirements: Linux with systemd, amd64 / arm64, access to port 8443 of the console.
 
 1. Sign in as a platform administrator, switch to **Admin → Clusters & nodes**, pick a cluster and generate an install command. The command carries a single-use token and the SHA-256 fingerprint of the console's internal CA.
@@ -156,7 +150,7 @@ Installer behavior:
 - Installs the .deb / .rpm package where possible, otherwise the tar.gz; downloads from the console's `/downloads` mirror when configured, otherwise from GitHub Releases.
 - The agent checks the CA fingerprint before sending the token, generates its private key locally, and talks to the console only over mTLS from then on.
 
-Installer options and the release mirror: [Adding nodes](docs/deploy/nodes.en.md). Design: [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md), [ADR-0016](docs/adr/0016-one-line-install.md).
+Installer options and the release mirror: [Adding nodes](docs/deploy/nodes.en.md).
 
 ## API
 
@@ -221,9 +215,7 @@ Coverage: enrollment, config rollout, caching, purge and prefetch, origins and S
 
 ## Known limitations
 
-- Not yet accepted: live DNS-provider accounts, ZeroSSL EAB, external notification channels.
 - The stock OpenResty engine used by nodes does not include Brotli / Zstd.
-- No official GitHub OIDC-signed binary release has been published.
 
 ## Repository layout
 
@@ -238,7 +230,6 @@ packages/proto/            TypeScript generated from proto/
 proto/                     protobuf managed by buf; the single contract shared with edgeweir-node
 helpers/certd/             edgeweir-certd (Go): ACME via lego, DNS records via libdns
 scripts/e2e.sh             end-to-end test driver
-docs/adr/                  architecture decision records
 docs/deploy/               deployment guides
 docs/guide/                usage guides
 docs/reference/            reference: environment variables, command line, API
@@ -254,7 +245,7 @@ The documentation site <https://marvinli001.github.io/edgeweir/en/> is generated
 | Deployment | [Overview](docs/deploy/README.en.md) · [Docker Compose](docs/deploy/docker.en.md) · [BT Panel / aaPanel](docs/deploy/baota.en.md) · [deploy.sh](docs/deploy/deploy-script.en.md) · [Railway](docs/deploy/railway.en.md) · [Fly.io](docs/deploy/fly.en.md) · [Ports and reverse proxy](docs/deploy/networking.en.md) · [Adding nodes](docs/deploy/nodes.en.md) · [Versions and upgrades](docs/deploy/upgrade.en.md) · [Backup and recovery](docs/deploy/backup.en.md) |
 | Usage | [Quick start](docs/guide/first-site.en.md) · [Organizations and members](docs/guide/organizations.en.md) · [Platform administration](docs/guide/admin.en.md) · [Origins and cache](docs/guide/origins-and-cache.en.md) · [HTTPS and certificates](docs/guide/https.en.md) · [Rules](docs/guide/rules.en.md) · [DNS and alerts](docs/guide/dns-and-alerts.en.md) · [Access logs and AccessKeys](docs/guide/access-logs.en.md) · [Node upgrades](docs/guide/node-upgrades.en.md) |
 | Reference | [Environment variables](docs/reference/environment.en.md) · [Command line](docs/reference/cli.en.md) · [API and endpoints](docs/reference/api.en.md) |
-| Project | [Architecture](ARCHITECTURE.en.md) · [Architecture decisions](docs/adr/README.md) (Chinese) · [Roadmap](ROADMAP.en.md) · [Security](SECURITY.en.md) · [Contributing](CONTRIBUTING.en.md) · [Licensing](LICENSING.en.md) |
+| Project | [Architecture](ARCHITECTURE.en.md) · [Security](SECURITY.en.md) · [Contributing](CONTRIBUTING.en.md) · [Licensing](LICENSING.en.md) |
 
 ## License
 

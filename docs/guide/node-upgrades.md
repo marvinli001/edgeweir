@@ -134,7 +134,6 @@ EDGEWEIR_UPGRADE_PUBLIC_KEY=/etc/edgeweir-node/release.pub
 | 中断 | 升级重启 agent 和 OpenResty，不是无中断升级 |
 | 平台 | 只支持 Linux amd64 和 arm64 |
 | 范围 | 自升级只更新 agent 程序和 Lua |
-| 验证范围 | 仓库尚无正式节点发布；由 GitHub OIDC 签名的正式发布物需在发布后由运营者独立验证 |
 
 ## 故障排查
 

@@ -47,9 +47,6 @@
 
 ## 2. 接入节点
 
-> [!NOTE]
-> edgeweir-node 尚无正式发布物时，安装命令无法下载节点软件包；按 edgeweir-node 的 [构建与测试](https://github.com/marvinli001/edgeweir-node#构建与测试) 从源码构建。
-
 1. 打开 **后台 → 集群与节点**，选择集群 `default`，点击 **添加节点**。
 
 2. 填写表单，点击 **生成安装命令**。

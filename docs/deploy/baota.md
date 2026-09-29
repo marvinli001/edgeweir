@@ -2,9 +2,6 @@
 
 在宝塔面板或 aaPanel 上用 Docker Compose 部署控制台：编排模式、面板配置与手动部署。
 
-> [!NOTE]
-> 面板菜单路径按宝塔与 aaPanel 官方文档整理，尚未在真实面板服务器上验收。`deploy.sh` 与两种编排已在等价的 Linux Docker 主机上验证。
-
 ## 编排模式
 
 `deploy.sh install` 按所选数据库模式写入对应的编排文件。

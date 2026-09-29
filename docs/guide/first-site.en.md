@@ -47,9 +47,6 @@ Objects created by setup:
 
 ## 2. Enroll a node
 
-> [!NOTE]
-> Until edgeweir-node publishes an official release, the install command cannot download node packages; build the node from source as described in edgeweir-node's [Build and test](https://github.com/marvinli001/edgeweir-node/blob/master/README.en.md#build-and-test).
-
 1. Open **Admin → Clusters & nodes**, select the cluster `default`, and click **Add node**.
 
 2. Fill in the form and click **Generate command**.

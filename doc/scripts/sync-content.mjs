@@ -12,7 +12,7 @@
 // Site-only pages come from doc/site. Output is generated and git-ignored.
 import { execFileSync } from "node:child_process";
 import { existsSync, globSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, posix, resolve } from "node:path";
+import { dirname, join, posix, resolve } from "node:path";
 import remarkGfm from "remark-gfm";
 import remarkMdx from "remark-mdx";
 import remarkParse from "remark-parse";
@@ -78,18 +78,6 @@ const SECTIONS = [
       ["security", "SECURITY.md"],
       ["contributing", "CONTRIBUTING.md"],
       ["licensing", "LICENSING.md"],
-      ["roadmap", "ROADMAP.md"],
-      ["adr", null],
-    ],
-  },
-  {
-    dir: "project/adr",
-    title: { zh: "架构决策记录", en: "Architecture decisions" },
-    pages: [
-      ["index", "docs/adr/README.md"],
-      ...globSync("docs/adr/[0-9][0-9][0-9][0-9]-*.md", { cwd: repo })
-        .sort()
-        .map((file) => [basename(file, ".md"), file]),
     ],
   },
 ];

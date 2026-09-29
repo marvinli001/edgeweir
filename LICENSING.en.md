@@ -2,7 +2,7 @@
 
 License, permitted use, and commercial product boundaries of the open core.
 
-Effective date: 2026-09-26. This document describes product scope. It does not replace or amend [LICENSE](LICENSE), add usage restrictions, or grant a plugin linking exception. The product boundary decision is recorded in [ADR-0019](docs/adr/0019-open-core-and-commercial-products.md).
+Effective date: 2026-09-26. This document describes product scope. It does not replace or amend [LICENSE](LICENSE), add usage restrictions, or grant a plugin linking exception.
 
 ## License
 

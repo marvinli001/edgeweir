@@ -22,7 +22,7 @@
 └── 子进程 stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA、DNS 服务商 API
 ```
 
-控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.7.0`）。开源核心与商业产品的边界见 [ADR-0019](docs/adr/0019-open-core-and-commercial-products.md)。
+控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.7.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
 
 ## 仓库布局
 
@@ -43,7 +43,7 @@
 | `Dockerfile`、`docker/` | 镜像构建、容器健康检查脚本、端到端测试夹具 |
 | `compose*.yml`、`deploy.sh` | `compose.yml`（生产）、`compose.baota.yml` 与 `compose.baota-host.yml`（宝塔 / aaPanel）、`compose.dev.yml`（开发数据库）、`compose.e2e.yml`（端到端）；`deploy.sh` 为宝塔 / aaPanel 安装与升级脚本 |
 | `scripts/` | `e2e.sh`（端到端测试）、`image-version.sh`（滚动版本号）、`bench.sh`（缓存命中性能基线） |
-| `docs/` | `adr/`（架构决策记录）、`deploy/`（部署）、`guide/`（功能说明） |
+| `docs/` | `deploy/`（部署）、`guide/`（功能说明）、`reference/`（参考） |
 
 ## 进程与角色
 
@@ -121,7 +121,7 @@
 | `admin` | 平台管理员（`user.role` 含 `admin`） |
 | `maybeAuthed` | 任何人；登录时返回结果不同（邀请） |
 
-客户端 IP（审计日志、登录限速）取 TCP 对端地址；`X-Forwarded-For` 与 `X-Real-IP` 只在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用（`resolveClientIp`）。认证接口的限速计数存在 `rate_limit` 表，多实例共享。经 better-auth 完成的登录与账号变更由 `lib/auth-audit.ts` 的钩子写审计（[ADR-0007](docs/adr/0007-auth-better-auth-multitenancy.md)）。
+客户端 IP（审计日志、登录限速）取 TCP 对端地址；`X-Forwarded-For` 与 `X-Real-IP` 只在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用（`resolveClientIp`）。认证接口的限速计数存在 `rate_limit` 表，多实例共享。经 better-auth 完成的登录与账号变更由 `lib/auth-audit.ts` 的钩子写审计。
 
 ## 配置发布
 
@@ -143,7 +143,7 @@
 | revision 保留 | 每个集群保留最新 200 个，每小时清理 |
 | 回滚 | 以旧 revision 的 IR 发布新 revision，源站允许清单取当前值，审计动作 `cluster.rollback` |
 
-revision 原因是代码（`revision_reason_<code>`），定义在 `packages/contract/src/errors.ts`。IR 语义见 [ADR-0011](docs/adr/0011-config-model-nodeconfig-ir.md)，规则语言见 [ADR-0012](docs/adr/0012-rule-engine-expression-language.md)。
+revision 原因是代码（`revision_reason_<code>`），定义在 `packages/contract/src/errors.ts`。规则语言见 [规则](docs/guide/rules.md)。
 
 ## 节点任务
 
@@ -163,7 +163,7 @@ URL、目录、整站刷新与 URL 预热不产生 revision，以类型化任务
 
 ## 节点通道
 
-Connect-RPC over HTTPS，由控制台进程自己终结 TLS（[ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md)）。
+Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 
 | 项 | 值 |
 | --- | --- |
@@ -180,7 +180,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS（[ADR-0008](docs/ad
 
 安装命令与 `install.sh` 的校验见 [接入节点](docs/deploy/nodes.md)。
 
-控制台绝不保存 SSH 凭据；节点只经控制台生成的一次性安装命令接入，由节点主动注册（[ADR-0016](docs/adr/0016-one-line-install.md)）。
+控制台绝不保存 SSH 凭据；节点只经控制台生成的一次性安装命令接入，由节点主动注册。
 
 除 `Enroll` 外的 RPC 都要求经内部 CA 校验的客户端证书，且序列号等于库中记录的当前序列号：证书轮换后旧证书立即失效，删除节点时序列号写入 `node_certificate_revocation`。停用或删除的节点每次 RPC 都被拒绝，打开的 `WatchConfig` 流随之关闭。
 
@@ -197,11 +197,11 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS（[ADR-0008](docs/ad
 | `GetCertificates` | 本集群网站引用的证书链与私钥 |
 | `PullTasks`、`ReportTaskResult` | 刷新预热与升级任务 |
 
-revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节点 ID），内容为集群、revision 与内容哈希。节点把回执保存在本地并在 `ReportStatus` 中带回；节点报告的已应用 revision 高于控制台最新 revision 且回执无效时，请求被拒绝（[ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md)）。
+revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节点 ID），内容为集群、revision 与内容哈希。节点把回执保存在本地并在 `ReportStatus` 中带回；节点报告的已应用 revision 高于控制台最新 revision 且回执无效时，请求被拒绝。
 
 ## 证书与 DNS
 
-`edgeweir-certd` 负责 ACME 签发、续期、吊销与 DNS 记录操作（[ADR-0010](docs/adr/0010-certd-lego-libdns.md)）。
+`edgeweir-certd` 负责 ACME 签发、续期、吊销与 DNS 记录操作。
 
 1. pg-boss 队列 `certificates.sweep` 每分钟选出待签发与到达 `renew_at` 的证书。
 2. worker 启动 `EDGEWEIR_CERTD_BIN`（镜像内为 `/usr/local/bin/edgeweir-certd`），环境变量只保留 `PATH` 与 `EDGEWEIR_DNS_TEST_ENDPOINT`。
@@ -235,7 +235,7 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 | 小时统计 | 90 天 |
 | 天统计 | 365 天 |
 
-Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey（[ADR-0009](docs/adr/0009-analytics-clickhouse-and-lite.md)）。
+Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
 告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高，生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook 或邮件）发送；投递时重新检查成员资格、封禁状态、两步验证与渠道可见性。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
 
@@ -380,7 +380,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey（[ADR-0
 | Dockerfile 阶段 `build` | `node:24.21.0-alpine`、pnpm 12.6.0 构建控制台 |
 | Dockerfile 阶段 `runtime` | `node:24.21.0-alpine` + tini；无 `node_modules`；以 `node` 用户运行；`EXPOSE 3000 8443`；健康检查 `edgeweir-healthcheck` |
 
-基础镜像按 tag 与多架构 index digest 固定（[ADR-0017](docs/adr/0017-release-supply-chain.md)）。镜像版本号为 `<YYYYMMDD>-<commit>`（`scripts/image-version.sh`），写入 `EDGEWEIR_VERSION` 与镜像标签 `org.opencontainers.image.version`；完整提交 ID 写入 `org.opencontainers.image.revision`。开发命令与测试见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+基础镜像按 tag 与多架构 index digest 固定。镜像版本号为 `<YYYYMMDD>-<commit>`（`scripts/image-version.sh`），写入 `EDGEWEIR_VERSION` 与镜像标签 `org.opencontainers.image.version`；完整提交 ID 写入 `org.opencontainers.image.revision`。开发命令与测试见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 可观测性
 

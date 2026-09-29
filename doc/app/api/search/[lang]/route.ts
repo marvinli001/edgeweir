@@ -9,7 +9,7 @@ export function generateStaticParams() {
   return i18n.languages.map((lang) => ({ lang }));
 }
 
-/** A page shown in another language because its translation is missing (the ADRs). */
+/** A page shown in another language because its translation is missing. */
 function isFallback(page: { path: string }, lang: string): boolean {
   return lang !== i18n.defaultLanguage && !page.path.endsWith(`.${lang}.mdx`);
 }

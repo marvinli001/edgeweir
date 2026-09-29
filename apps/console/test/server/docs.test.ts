@@ -5,10 +5,13 @@ import { getTableName, is, Table } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 // Documentation-consistency checks for the wrap-up audit items that only
-// touched documents (docs/audits/2026-09-25-wrapup.md CP-H8 and CP-M11).
+// touched documents (dev-docs/audits/2026-09-25-wrapup.md CP-H8 and CP-M11).
 
 const repo = resolve(import.meta.dirname, "../../../..");
 const read = (file: string) => readFileSync(resolve(repo, file), "utf8");
+/** Git-ignored maintainer records (ADRs, roadmaps, specs): checked in checkouts that have them. */
+const DEV_DOCS = "dev-docs";
+const hasDevDocs = existsSync(resolve(repo, DEV_DOCS, "adr"));
 
 /** Sentence ends, semicolons, table cells and line breaks end a clause. */
 function clauses(text: string): string[] {
@@ -101,7 +104,7 @@ describe("CP-H8: SSH credentials are never stored", () => {
     ["README.en.md", read("README.en.md")],
     ["ARCHITECTURE.md", read("ARCHITECTURE.md")],
     // Git-ignored maintainer documents: checked in checkouts that have them.
-    ...["CLAUDE.md", "docs/specs/mvp.md"]
+    ...["CLAUDE.md", `${DEV_DOCS}/specs/mvp.md`]
       .filter((file) => existsSync(resolve(repo, file)))
       .map((file): [string, string] => [file, read(file)]),
   ];
@@ -125,14 +128,16 @@ describe("CP-H8: SSH credentials are never stored", () => {
     for (const text of before) expect(storageStatements(text), text).not.toEqual([]);
   });
 
-  it.each(["docs/adr/0016-one-line-install.md", "docs/adr/0018-trust-and-security-baseline.md"])(
-    "%s has an update record saying they are never stored",
-    (file) => {
+  describe.runIf(hasDevDocs)("ADR update records", () => {
+    it.each([
+      `${DEV_DOCS}/adr/0016-one-line-install.md`,
+      `${DEV_DOCS}/adr/0018-trust-and-security-baseline.md`,
+    ])("%s has an update record saying they are never stored", (file) => {
       const record = updateRecord(file);
       expect(record).not.toBe("");
       expect(saysNeverStored(record)).toBe(true);
-    },
-  );
+    });
+  });
 });
 
 // --- CP-M11 ------------------------------------------------------------------
@@ -221,17 +226,17 @@ describe("CP-M11: relative Markdown links", () => {
       "README*.md",
       "ARCHITECTURE.md",
       "SECURITY.md",
-      "ROADMAP.md",
       "CONTRIBUTING.md",
       "CLAUDE.md",
       "docs/**/*.md",
+      `${DEV_DOCS}/**/*.md`,
     ],
     { cwd: repo },
   ).sort();
   const links = files.flatMap(relativeLinks);
 
   it("finds the documents and their links", () => {
-    expect(files).toEqual(expect.arrayContaining(["README.md", "docs/adr/README.md"]));
+    expect(files).toEqual(expect.arrayContaining(["README.md", "docs/deploy/README.md"]));
     expect(links).toContainEqual({ file: "README.md", target: "ARCHITECTURE.md" });
   });
 
@@ -245,24 +250,36 @@ describe("CP-M11: relative Markdown links", () => {
     });
     expect(broken).toEqual([]);
   });
+
+  it("never point from a published document into the git-ignored dev-docs", () => {
+    const leaks = links.filter(({ file, target }) => {
+      if (file.startsWith(`${DEV_DOCS}/`) || file === "CLAUDE.md") return false;
+      const path = decodeURIComponent(target.replace(/[?#].*$/, ""));
+      const abs = path.startsWith("/")
+        ? resolve(repo, `.${path}`)
+        : resolve(repo, dirname(file), path);
+      return abs === resolve(repo, DEV_DOCS) || abs.startsWith(`${resolve(repo, DEV_DOCS)}/`);
+    });
+    expect(leaks).toEqual([]);
+  });
 });
 
-describe("CP-M11: docs/adr/README.md index", () => {
+describe.runIf(hasDevDocs)("CP-M11: dev-docs/adr/README.md index", () => {
   it("lists every ADR file with its number, title and status", () => {
-    const files = readdirSync(resolve(repo, "docs/adr"))
+    const files = readdirSync(resolve(repo, DEV_DOCS, "adr"))
       .filter((f) => /^\d{4}-[a-z0-9-]+\.md$/.test(f))
       .sort();
     expect(files.length).toBeGreaterThan(0);
     const rows = new Map(
       [
-        ...read("docs/adr/README.md").matchAll(
+        ...read(`${DEV_DOCS}/adr/README.md`).matchAll(
           /^\| \[ADR-(\d{4})\]\((\d{4}-[a-z0-9-]+\.md)\) \| ([^|]+?) \| ([^|]+?) \|/gm,
         ),
       ].map((m) => [m[2] ?? "", { id: m[1], title: m[3], status: m[4] }]),
     );
     expect([...rows.keys()].sort()).toEqual(files);
     for (const file of files) {
-      const text = read(`docs/adr/${file}`);
+      const text = read(`${DEV_DOCS}/adr/${file}`);
       const heading = /^# ADR-(\d{4}): (.+)$/m.exec(text);
       const status = /^- 状态：(.+)$/m.exec(text);
       expect(rows.get(file), file).toEqual({

@@ -2,9 +2,6 @@
 
 Generate an install command for a cluster, then install and enroll an edge node on a Linux host.
 
-> [!NOTE]
-> edgeweir-node has no official release yet. This flow applies from the first signed release; during pre-release, [build the node from source](https://github.com/marvinli001/edgeweir-node/blob/master/README.en.md#build-and-test).
-
 ## Requirements
 
 | Item | Requirement |
@@ -153,4 +150,3 @@ The release source for agent self-upgrades is set in **Admin → System → Node
 | `x509: certificate is valid for ..., not ...` | The name the node connects to is not in the node channel certificate | Add the name to `EDGEWEIR_NODE_API_HOSTNAMES` and restart the console; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
 | Enrollment times out, or the node stays offline | Firewall or security group blocks 8443; `EDGEWEIR_NODE_API_URL` resolves incorrectly | Open 8443; check DNS resolution. |
 
-See [ADR-0008](../adr/0008-node-channel-connect-rpc-mtls.md) and [ADR-0016](../adr/0016-one-line-install.md) (Chinese).

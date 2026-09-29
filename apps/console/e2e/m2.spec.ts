@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
 
 /**
- * MVP M2 console acceptance (docs/specs/mvp.md §2): the platform admin submits a URL purge on
+ * MVP M2 console acceptance (dev-docs/specs/mvp.md §2): the platform admin submits a URL purge on
  * 刷新预热 and sees the e2e node report it done, submits a directory purge and sees it listed,
  * then checks the demo site's origin health and the origin pool and cache settings cards.
  */

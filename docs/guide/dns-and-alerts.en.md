@@ -211,7 +211,6 @@ Tenants can subscribe only to sites they can see and to channels with **Allow te
 | Smart resolution | No carrier or geographic resolution from the provider; a line is a node group |
 | Active probing | No active reachability probes; origin state comes only from real traffic |
 | Local simulator | **Local simulator** appears only when `EDGEWEIR_DNS_TEST_ENDPOINT` is set and is for testing only |
-| Validation scope | Delivery through real DNS provider, DingTalk, WeCom, Telegram, and external SMTP accounts must be verified by the operator |
 
 ## Troubleshooting
 

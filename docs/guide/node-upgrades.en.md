@@ -134,7 +134,6 @@ When a node lacks a capability the cluster's current configuration needs, or lac
 | Interruption | An upgrade restarts the agent and OpenResty; it is not hitless |
 | Platforms | Linux amd64 and arm64 only |
 | Scope | Self-upgrade updates only the agent program and Lua |
-| Validation scope | The repository has no official node release yet; official releases signed through GitHub OIDC must be verified independently by the operator once published |
 
 ## Troubleshooting
 

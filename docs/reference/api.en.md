@@ -170,4 +170,3 @@ The response comes from the listening HTTP server; the database is not checked. 
 > [!WARNING]
 > The node channel must be reached directly or through TCP passthrough; a proxy that terminates TLS breaks node mTLS. See [Ports, reverse proxy, and trusted proxies](../deploy/networking.en.md).
 
-Design record: [ADR-0008](../adr/0008-node-channel-connect-rpc-mtls.md).

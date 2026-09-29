@@ -14,7 +14,7 @@
 #   WebSocket through the node, origin certificate verification, S3 SigV4
 #   origins, failover to the backup origin and back, origin health in the
 #   console; Playwright submits purges and reads the per-node results.
-#   Wrap-up (docs/audits/2026-09-25-wrapup.md): better-auth's organization and
+#   Wrap-up (dev-docs/audits/2026-09-25-wrapup.md): better-auth's organization and
 #   admin endpoints are closed and API keys never become sessions (CP-C1);
 #   origins on special-purpose addresses are refused by the console and, for
 #   DNS answers, by the node, and CDN-Loop stops loops (N-H2); HTTPS origins

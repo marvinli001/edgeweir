@@ -13,8 +13,6 @@ Vulnerability reporting, supported versions, trust baseline, threat controls, an
 | Console image | `ghcr.io/marvinli001/edgeweir` |
 | Node release artifacts | [edgeweir-node Releases](https://github.com/marvinli001/edgeweir-node/releases) |
 
-Design basis: [ADR-0018](docs/adr/0018-trust-and-security-baseline.md).
-
 ## Reporting a vulnerability
 
 > [!WARNING]
@@ -46,9 +44,9 @@ Handling:
 | Component | Supported | Not supported |
 | --- | --- | --- |
 | Console | The latest rolling version: the `<YYYYMMDD>-<commit>` image of the newest `master` commit (`latest`) | Earlier rolling versions |
-| edgeweir-node | The latest `master` (no release yet) | Other commits |
+| edgeweir-node | The latest `master` | Other commits |
 
-Security fixes land on `master` only and are not backported. A console fix ships as a new rolling version with the next `master` commit that passes CI. When edgeweir-node reaches 1.0, this section will list the support period of each node version.
+Security fixes land on `master` only and are not backported. A console fix ships as a new rolling version with the next `master` commit that passes CI.
 
 ## Trust baseline
 
@@ -64,7 +62,7 @@ These rules are hard constraints on all code in `edgeweir` and `edgeweir-node`.
 | Management actions are audited | See [Audit log](#audit-log) |
 | Verifiable releases | cosign keyless signatures, SBOMs, SLSA provenance (see [Verifying releases](#verifying-releases)) |
 
-Separate commercial products ([ADR-0019](docs/adr/0019-open-core-and-commercial-products.md)) may use licensing and cloud services under explicit terms after an administrator enables them, but must not add commercial feature locks to the open core and must not interrupt existing CDN traffic because an official license expired or a licensing service failed.
+Separate commercial products (see [LICENSING.en.md](LICENSING.en.md)) may use licensing and cloud services under explicit terms after an administrator enables them, but must not add commercial feature locks to the open core and must not interrupt existing CDN traffic because an official license expired or a licensing service failed.
 
 ## Sensitive data
 
@@ -121,25 +119,25 @@ better-auth's session secret signs session cookies and encrypts TOTP secrets and
 
 ## Threats and controls
 
-| Control | Threat | Basis |
-| --- | --- | --- |
-| The console never stores SSH credentials; nodes join only through the one-time install command and enroll themselves | A compromised console uses SSH credentials to take over every node | [ADR-0016](docs/adr/0016-one-line-install.md) |
-| Node private keys are generated on the node and never leave it; the console only issues certificates | A leaked console database is used to impersonate nodes | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
-| The install command pins the CA fingerprint, and the node checks it before sending the token; tokens are single-use, expire, and are stored as SHA-256 only | Man-in-the-middle on first contact; leaked or replayed tokens | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md), [ADR-0016](docs/adr/0016-one-line-install.md) |
-| mTLS on every RPC except `Enroll`, with the client certificate serial equal to the stored current value; 30-day certificates with automatic rotation; disabling or deleting a node takes effect at once, and deletion revokes the certificate serial | A retired node keeps pulling configuration | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
-| Certificate private keys and S3 origin keys travel only over the mTLS channel to nodes of the cluster serving the referencing site, never inside NodeConfig | Nodes of other clusters or configuration snapshots leak keys | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
-| Revision receipts are sealed with the master key and bound to the node; a node reporting a revision above the console's latest must present a valid receipt, and only verified revisions count toward revision numbering | Unauthenticated reports manipulate revision numbering after a database restore | [ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md) |
-| Envelope encryption of secrets with the master key kept out of the database; additional authenticated data binds table, column, and record id | Database backups or read-only SQL injection leak private keys and credentials; someone with database write access swaps ciphertexts between rows | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
-| Management actions are audited in the same transaction as the change | Abuse or mistakes cannot be traced | [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
-| `/api/auth/*` serves only the better-auth endpoints the console UI uses, everything else returns 404; organization, member, and user management goes through Edgeweir's own procedures only; `x-api-key` is dropped on `/api/auth/*` and `/rpc` and works on `/api/v1` only | better-auth plugin endpoints bypass permission checks, audit, and revisions (deleting organizations, impersonating users, changing other users' passwords); an API key turned into a session issues new keys | [ADR-0005](docs/adr/0005-api-orpc-openapi.md), [ADR-0007](docs/adr/0007-auth-better-auth-multitenancy.md) |
-| `/rpc` requires the `x-csrf-token` header; responses carry the CSP `default-src 'self'`, `frame-ancestors 'none'` | Cross-site request forgery; the console embedded in a third-party page | [ADR-0002](docs/adr/0002-web-vite-react-spa-hono.md), [ADR-0005](docs/adr/0005-api-orpc-openapi.md) |
-| The client IP is the TCP peer, and forwarding headers are trusted only from `EDGEWEIR_TRUSTED_PROXIES`; sign-in and two-factor rate-limit counters live in PostgreSQL, shared by all instances and kept across restarts | Spoofed IPs bypass sign-in and two-factor rate limits; wrong IPs in the audit log | [ADR-0007](docs/adr/0007-auth-better-auth-multitenancy.md), [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
-| `install.sh` and agent self-upgrades verify the cosign signature (certificate identity exactly the release workflow of the version being installed) and the SHA-256 before running anything; the console's `/downloads` mirror (`EDGEWEIR_DOWNLOADS_DIR`) is only a transport and returns 404 for files it does not hold | Tampered downloads or mirror | [ADR-0016](docs/adr/0016-one-line-install.md), [ADR-0017](docs/adr/0017-release-supply-chain.md) |
-| Origins may not be special-purpose addresses (loopback, link-local, private, CGNAT, multicast, and so on) or `localhost`: the console refuses such IP literals, and nodes apply the same list to configured literals and to every DNS answer (`packages/contract/src/addresses.ts`); only a platform administrator can allow ranges, through an audited allow list; nodes send `CDN-Loop` (RFC 8586) upstream and answer 508 to requests that already carry their own ID | Tenants reach cloud metadata (`169.254.169.254`) or scan internal networks through origin fetches, or create loops | [Origins and cache](docs/guide/origins-and-cache.en.md), [ADR-0018](docs/adr/0018-trust-and-security-baseline.md) |
-| Requests from the console to targets saved in the web UI (alert webhooks, SMTP servers, node release source, DNS resolvers) resolve the name once, reject special-purpose addresses, and connect to that address; `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` allows specific ranges | The console's outbound requests are used to reach internal networks | `apps/console/src/server/lib/outbound.ts` |
-| Purge and prefetch limits per organization: 10 tasks per minute and 2000 targets per hour, platform administrators exempt; a node collapses a site's purge markers into one site-level marker beyond its cap | A tenant fills a node's purge store and degrades other sites on the node | [Origins and cache](docs/guide/origins-and-cache.en.md) |
-| The agent runs typed operations only and has no interface for arbitrary commands | A compromised console runs arbitrary code on nodes | [ADR-0014](docs/adr/0014-node-agent-responsibilities.md) |
-| Keyless-signed releases, SBOMs, SLSA provenance | Released programs differ from the source, or are poisoned | [ADR-0017](docs/adr/0017-release-supply-chain.md) |
+| Control | Threat |
+| --- | --- |
+| The console never stores SSH credentials; nodes join only through the one-time install command and enroll themselves | A compromised console uses SSH credentials to take over every node |
+| Node private keys are generated on the node and never leave it; the console only issues certificates | A leaked console database is used to impersonate nodes |
+| The install command pins the CA fingerprint, and the node checks it before sending the token; tokens are single-use, expire, and are stored as SHA-256 only | Man-in-the-middle on first contact; leaked or replayed tokens |
+| mTLS on every RPC except `Enroll`, with the client certificate serial equal to the stored current value; 30-day certificates with automatic rotation; disabling or deleting a node takes effect at once, and deletion revokes the certificate serial | A retired node keeps pulling configuration |
+| Certificate private keys and S3 origin keys travel only over the mTLS channel to nodes of the cluster serving the referencing site, never inside NodeConfig | Nodes of other clusters or configuration snapshots leak keys |
+| Revision receipts are sealed with the master key and bound to the node; a node reporting a revision above the console's latest must present a valid receipt, and only verified revisions count toward revision numbering | Unauthenticated reports manipulate revision numbering after a database restore |
+| Envelope encryption of secrets with the master key kept out of the database; additional authenticated data binds table, column, and record id | Database backups or read-only SQL injection leak private keys and credentials; someone with database write access swaps ciphertexts between rows |
+| Management actions are audited in the same transaction as the change | Abuse or mistakes cannot be traced |
+| `/api/auth/*` serves only the better-auth endpoints the console UI uses, everything else returns 404; organization, member, and user management goes through Edgeweir's own procedures only; `x-api-key` is dropped on `/api/auth/*` and `/rpc` and works on `/api/v1` only | better-auth plugin endpoints bypass permission checks, audit, and revisions (deleting organizations, impersonating users, changing other users' passwords); an API key turned into a session issues new keys |
+| `/rpc` requires the `x-csrf-token` header; responses carry the CSP `default-src 'self'`, `frame-ancestors 'none'` | Cross-site request forgery; the console embedded in a third-party page |
+| The client IP is the TCP peer, and forwarding headers are trusted only from `EDGEWEIR_TRUSTED_PROXIES`; sign-in and two-factor rate-limit counters live in PostgreSQL, shared by all instances and kept across restarts | Spoofed IPs bypass sign-in and two-factor rate limits; wrong IPs in the audit log |
+| `install.sh` and agent self-upgrades verify the cosign signature (certificate identity exactly the release workflow of the version being installed) and the SHA-256 before running anything; the console's `/downloads` mirror (`EDGEWEIR_DOWNLOADS_DIR`) is only a transport and returns 404 for files it does not hold | Tampered downloads or mirror |
+| Origins may not be special-purpose addresses (loopback, link-local, private, CGNAT, multicast, and so on) or `localhost`: the console refuses such IP literals, and nodes apply the same list to configured literals and to every DNS answer (`packages/contract/src/addresses.ts`); only a platform administrator can allow ranges, through an audited allow list; nodes send `CDN-Loop` (RFC 8586) upstream and answer 508 to requests that already carry their own ID | Tenants reach cloud metadata (`169.254.169.254`) or scan internal networks through origin fetches, or create loops |
+| Requests from the console to targets saved in the web UI (alert webhooks, SMTP servers, node release source, DNS resolvers) resolve the name once, reject special-purpose addresses, and connect to that address; `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` allows specific ranges | The console's outbound requests are used to reach internal networks |
+| Purge and prefetch limits per organization: 10 tasks per minute and 2000 targets per hour, platform administrators exempt; a node collapses a site's purge markers into one site-level marker beyond its cap | A tenant fills a node's purge store and degrades other sites on the node |
+| The agent runs typed operations only and has no interface for arbitrary commands | A compromised console runs arbitrary code on nodes |
+| Keyless-signed releases, SBOMs, SLSA provenance | Released programs differ from the source, or are poisoned |
 
 ## Known limitations
 
@@ -162,9 +160,6 @@ All signatures are cosign keyless signatures: the certificate identity is the re
 | [GitHub CLI](https://cli.github.com/) | Verify provenance (`gh attestation verify`) |
 
 ### Node packages (deb, rpm, tar.gz)
-
-> [!NOTE]
-> edgeweir-node has no release yet (no `v*` tag). These steps apply from the first release on; the exact names of the signature files are those on the Releases page.
 
 1. Download the package to install, `checksums.txt`, and `checksums.txt.sigstore.json` from [edgeweir-node Releases](https://github.com/marvinli001/edgeweir-node/releases).
 2. Verify that `checksums.txt` was signed by the edgeweir-node release workflow on a `v*` tag:
@@ -193,7 +188,7 @@ All signatures are cosign keyless signatures: the certificate identity is the re
    gh attestation verify edgeweir-node_<version>_linux_amd64.tar.gz --repo marvinli001/edgeweir-node
    ```
 
-Install only after steps 2 and 3 pass. `install.sh` runs the same checks before it executes anything it downloaded, and is stricter: the certificate identity must equal `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<version>` exactly; without cosign on the machine, it downloads cosign v3.1.3 and checks the SHA-256 pinned in the script first. The enrollment token travels only in the `EDGEWEIR_TOKEN` environment variable or `--token-file`, never on a command line ([ADR-0016](docs/adr/0016-one-line-install.md)).
+Install only after steps 2 and 3 pass. `install.sh` runs the same checks before it executes anything it downloaded, and is stricter: the certificate identity must equal `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<version>` exactly; without cosign on the machine, it downloads cosign v3.1.3 and checks the SHA-256 pinned in the script first. The enrollment token travels only in the `EDGEWEIR_TOKEN` environment variable or `--token-file`, never on a command line.
 
 ### Console image
 
@@ -234,4 +229,4 @@ SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct) docker buildx build \
   -t edgeweir:rebuild .
 ```
 
-The console Dockerfile's `apk add tini` installs the version in the Alpine repository at build time, so the image is not guaranteed to be byte-for-byte identical. The scope of reproducible builds is defined in [ADR-0017](docs/adr/0017-release-supply-chain.md).
+The console Dockerfile's `apk add tini` installs the version in the Alpine repository at build time, so the image is not guaranteed to be byte-for-byte identical.

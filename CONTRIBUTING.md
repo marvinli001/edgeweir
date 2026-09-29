@@ -5,9 +5,9 @@
 ## 基本要求
 
 - 较大的改动先开 issue。
-- 以下改动先写 ADR（见 [ADR 流程](#adr-流程)）：新依赖、进程或部署形态、节点通道协议、`NodeConfig` IR 语义、安全基线。
+- 新依赖、进程或部署形态、节点通道协议、`NodeConfig` IR 语义、安全基线的改动，先在 issue 中确定设计。
 - 安全漏洞按 [SECURITY.md](SECURITY.md) 私下报告，不开公开 issue。
-- 违反下表原则的 PR 不合入（[ADR-0018](docs/adr/0018-trust-and-security-baseline.md)、[ADR-0019](docs/adr/0019-open-core-and-commercial-products.md)）。
+- 违反下表原则的 PR 不合入。
 
 | 原则 | 要求 |
 | --- | --- |
@@ -116,7 +116,7 @@ pnpm exec vitest run test/server/docs.test.ts
 | `.env.example` 列出控制台读取与 compose 插值的全部变量 | `apps/console/test/server/env-example.test.ts` |
 | 第三方镜像按 digest、Actions 按 commit SHA 固定 | `apps/console/test/server/supply-chain-pins.test.ts` |
 | `deploy.sh` 内嵌的 compose 模板与仓库文件逐字一致 | `apps/console/test/server/deploy-script.test.ts` |
-| 文档相对链接可解析；ADR 索引完整；`ARCHITECTURE.md` 数据模型列出全部迁移与表 | `apps/console/test/server/docs.test.ts` |
+| 文档相对链接可解析；`ARCHITECTURE.md` 数据模型列出全部迁移与表 | `apps/console/test/server/docs.test.ts` |
 | 迁移编号连续、时间戳递增、每条迁移一个 SQL 文件与一个快照 | `packages/db/test/migrations.test.ts` |
 
 新增的 API 过程都要有 Vitest 用例。
@@ -192,8 +192,6 @@ feat(console)!: drop the public landing page from the open core
 
 ## 界面规则
 
-依据 [ADR-0003](docs/adr/0003-ui-shadcn-preset.md)。
-
 | 范围 | 规则 |
 | --- | --- |
 | 组件 | shadcn 组件位于 `components/ui`，使用 Base UI 的 `render` prop，不用 `asChild`；全局只有一个 ThemeProvider |
@@ -204,11 +202,9 @@ feat(console)!: drop the public landing page from the open core
 | 外部链接 | 不链接其他站点，`ui-rules.test.ts` 的允许清单除外 |
 | appica-ui | 只经 `src/web/components/appica/` 与 `appica-bridge.css`（作用域 token，每个组件一条 `@source`）使用 |
 | 动效 | 入场用 `animate-enter` 加递增的 `animationDelay`；遵循减少动态效果设置 |
-| 页面范围 | 开源核心不含营销页面（ADR-0019） |
+| 页面范围 | 开源核心不含营销页面 |
 
 ## 国际化
-
-依据 [ADR-0004](docs/adr/0004-i18n-paraglide.md)。
 
 - 所有 UI 字符串经 Paraglide 消息函数输出。消息文件为 `apps/console/messages/zh-CN.json`（默认语言）与 `apps/console/messages/en.json`。
 - key 用 snake_case，以页面或功能开头，如 `nav_sites`、`cert_brotli_unavailable`。
@@ -246,9 +242,9 @@ feat(console)!: drop the public landing page from the open core
 
 ## proto 变更
 
-`proto/` 是控制台与 edgeweir-node 之间唯一的契约（[ADR-0008](docs/adr/0008-node-channel-connect-rpc-mtls.md)）。
+`proto/` 是控制台与 edgeweir-node 之间唯一的契约。
 
-1. 修改 `proto/` 下的 `.proto` 文件。`edgeweir.node.v1` 包内只做向后兼容的新增；破坏性变更新建 `v2` 包。`NodeConfig` 遵守 [ADR-0011](docs/adr/0011-config-model-nodeconfig-ir.md) 的规范化约束：不用 `map` 字段，字段按字段号升序声明。
+1. 修改 `proto/` 下的 `.proto` 文件。`edgeweir.node.v1` 包内只做向后兼容的新增；破坏性变更新建 `v2` 包。`NodeConfig` 遵守规范化约束：不用 `map` 字段，字段按字段号升序声明。
 2. 运行 lint。
 
    ```bash
@@ -310,7 +306,7 @@ feat(console)!: drop the public landing page from the open core
 
 ## 更新固定的镜像与 Actions
 
-第三方输入按不可变引用固定（[ADR-0017](docs/adr/0017-release-supply-chain.md)），`pnpm test` 拒绝未固定的写法；edgeweir-node 用 `make pin-check` 做同样的检查。本仓库与 edgeweir-node 构建的镜像按 tag 引用。
+第三方输入按不可变引用固定，`pnpm test` 拒绝未固定的写法；edgeweir-node 用 `make pin-check` 做同样的检查。本仓库与 edgeweir-node 构建的镜像按 tag 引用。
 
 | 输入 | 写法 | 位置 |
 | --- | --- | --- |
@@ -351,17 +347,9 @@ feat(console)!: drop the public landing page from the open core
 
 版本固定、升级与回滚见[版本、升级与回滚](docs/deploy/upgrade.md)；发布物的签名与校验见 [SECURITY.md](SECURITY.md)。
 
-## ADR 流程
-
-1. 复制 [docs/adr/template.md](docs/adr/template.md) 为 `docs/adr/NNNN-slug.md`。`NNNN` 取现有最大编号加一（两个仓库共用编号），`slug` 用英文小写与连字符。
-2. 状态写“提议”，与相关代码放在同一个 PR，并在 [docs/adr/README.md](docs/adr/README.md) 的索引表加一行。
-3. 评审通过后把状态改为“已接受”，再合入。
-4. 推翻已接受的决策时写新 ADR，旧 ADR 的状态改为“已被 ADR-NNNN 取代”。已接受 ADR 的正文不改写；落地情况、版本号等事实变化在末尾追加带日期的更新记录。
-5. ADR 只在本仓库修改。edgeweir-node 的 `docs/adr` 是镜像，在节点仓库运行 `scripts/sync-adr.sh` 同步，`scripts/sync-adr.sh --check` 检查一致性。
-
 ## 文档
 
-- 发布的文档是纯 GitHub Markdown：`name.md`（简体中文，默认）与 `name.en.md`（英文，章节与 `name.md` 相同）。ADR 只有中文。
+- 发布的文档是纯 GitHub Markdown：`name.md`（简体中文，默认）与 `name.en.md`（英文，章节与 `name.md` 相同）。
 - 文档站点位于 `doc/`（Fumadocs，Next.js 静态导出），是独立的 pnpm workspace（`doc/pnpm-workspace.yaml`、`doc/pnpm-lock.yaml`）。`.github/workflows/docs.yml` 在 PR 中构建站点，在 `master` 推送后发布到 GitHub Pages：<https://marvinli001.github.io/edgeweir/>。
 - `doc/scripts/sync-content.mjs` 保存页面表（`SECTIONS`）并转换 Markdown。新页面须加入页面表。
 
@@ -383,7 +371,7 @@ feat(console)!: drop the public landing page from the open core
 
 ## Pull Request 检查清单
 
-- [ ] 一个 PR 一个主题；描述写明动机、改动内容与验证方式，关联 issue 或 ADR。
+- [ ] 一个 PR 一个主题；描述写明动机、改动内容与验证方式，关联 issue。
 - [ ] `pnpm lint`、`pnpm typecheck`、`pnpm test` 通过；按[命令](#命令)表的时机运行 `pnpm build`、`pnpm e2e`。
 - [ ] 提交符合[提交规范](#提交规范)。
 - [ ] UI 文案 zh-CN 与 en 同时更新；新错误码有对应消息。
@@ -391,11 +379,11 @@ feat(console)!: drop the public landing page from the open core
 - [ ] 新环境变量写入 `env.ts`、`.env.example` 与环境变量参考页。
 - [ ] 管理操作写审计日志。
 - [ ] UI 改动附截图。
-- [ ] 行为变化同步更新中英文文档（README、部署文档、ADR 落地情况）。
+- [ ] 行为变化同步更新中英文文档（README、部署文档）。
 - [ ] 没有跳过、删除或弱化测试。
 
 ## 许可证
 
 Edgeweir 以 [AGPL-3.0-only](LICENSE) 发布。提交贡献即表示同意以 AGPL-3.0-only 授权该贡献，并确认有权这样授权。
 
-开源核心允许合规商用；组织、成员、权限与隔离保留在开源核心，对外客户门户、套餐计费、财务与分销属于独立商业运营产品（[LICENSING.md](LICENSING.md)、[ADR-0019](docs/adr/0019-open-core-and-commercial-products.md)）。向核心贡献不自动授予项目方闭源再许可的权利；双许可或插件链接例外须另行核实代码权利与贡献授权。
+开源核心允许合规商用；组织、成员、权限与隔离保留在开源核心，对外客户门户、套餐计费、财务与分销属于独立商业运营产品（[LICENSING.md](LICENSING.md)）。向核心贡献不自动授予项目方闭源再许可的权利；双许可或插件链接例外须另行核实代码权利与贡献授权。

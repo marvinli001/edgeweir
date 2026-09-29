@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { login, logout, pick } from "./helpers";
 
 /**
- * MVP M1 acceptance (docs/specs/mvp.md §1): second organization and member → member sees only
+ * MVP M1 acceptance (dev-docs/specs/mvp.md §1): second organization and member → member sees only
  * the console → member creates and edits a site → admin creates a cluster, a region and a node
  * group and moves the e2e node into it (still online, revision in sync) → audit log shows names
  * and filters by action → English shows revision reasons and errors in English.
