@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { lookup, Resolver } from "node:dns/promises";
-import { isIP } from "node:net";
+import { Resolver } from "node:dns/promises";
 import type { DomainOwnership } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
@@ -8,6 +7,7 @@ import type { AppContext } from "../lib/context";
 import { domainRoot } from "../lib/domain-root";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
+import { resolverAddresses } from "./dns-resolvers";
 import { type Executor, publishRevision, type Tx } from "./revisions";
 import { findSite, type SiteScope } from "./sites";
 
@@ -217,21 +217,8 @@ export async function verifyDomainOwnership(
   let found = false;
   try {
     const resolver = new Resolver({ timeout: 2500, tries: 2 });
-    const servers = app.env.EDGEWEIR_DNS_RESOLVERS.split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (servers.length) {
-      const resolved = await Promise.all(
-        servers.map(async (server) => {
-          if (isIP(server)) return server;
-          const url = new URL(`dns://${server}`),
-            host = url.hostname.replace(/^\[|\]$/g, "");
-          const address = isIP(host) ? host : (await lookup(host)).address;
-          return `${isIP(address) === 6 ? `[${address}]` : address}:${url.port || "53"}`;
-        }),
-      );
-      resolver.setServers(resolved);
-    }
+    const servers = await resolverAddresses(app);
+    if (servers.length) resolver.setServers(servers);
     const records = await resolver.resolveTxt(TXT_PREFIX + domain);
     found = records.some((chunks) => chunks.join("") === `edgeweir=${proof.token}`);
   } catch {

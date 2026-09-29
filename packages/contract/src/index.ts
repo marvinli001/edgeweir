@@ -399,6 +399,14 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/release-source", tags: ["settings"] })
       .input(s.releaseSourceInput)
       .output(s.releaseSource),
+    /** Recursive DNS servers for domain ownership TXT checks. */
+    dnsResolvers: oc
+      .route({ method: "GET", path: "/settings/dns-resolvers", tags: ["settings"] })
+      .output(s.dnsResolvers),
+    setDnsResolvers: oc
+      .route({ method: "PUT", path: "/settings/dns-resolvers", tags: ["settings"] })
+      .input(s.dnsResolversInput)
+      .output(s.dnsResolvers),
   },
   auditLogs: {
     list: oc

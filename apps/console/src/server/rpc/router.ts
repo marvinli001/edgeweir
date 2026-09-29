@@ -68,6 +68,7 @@ import {
   siteDnsTarget,
   updateDnsProvider,
 } from "../services/dns";
+import { getDnsResolvers, setDnsResolvers } from "../services/dns-resolvers";
 import {
   getDomainOwnership,
   prepareDomainOwnership,
@@ -708,6 +709,12 @@ export const router = os.router({
     ),
     setReleaseSource: admin.settings.setReleaseSource.handler(({ input, context }) =>
       setReleaseSource(context.app, input, context.actor),
+    ),
+    dnsResolvers: admin.settings.dnsResolvers.handler(({ context }) =>
+      getDnsResolvers(context.app),
+    ),
+    setDnsResolvers: admin.settings.setDnsResolvers.handler(({ input, context }) =>
+      setDnsResolvers(context.app, input, context.actor),
     ),
   },
   auditLogs: {

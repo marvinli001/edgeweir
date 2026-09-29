@@ -28,6 +28,7 @@ export const errorDefs = {
   DNS_POLICY_INVALID: { status: 400, params: [] },
   DNS_REVISION_NOT_FOUND: { status: 404, params: [] },
   DNS_RECORD_CONFLICT: { status: 409, params: [] },
+  DNS_RESOLVER_REFUSED: { status: 400, params: [] },
   DOMAIN_VERIFY_REQUIRED: { status: 403, params: [] },
   DOMAIN_ROOT_INVALID: { status: 400, params: [] },
   DOMAIN_VERIFY_FAILED: { status: 400, params: [] },

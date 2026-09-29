@@ -612,6 +612,49 @@ export const releaseSourceInput = z.object({
   url: z.union([z.literal(""), releaseBaseUrl]),
 });
 
+export const MAX_DNS_RESOLVERS = 8;
+
+/**
+ * A recursive DNS server for ownership TXT checks, as EDGEWEIR_DNS_RESOLVERS
+ * takes it: an IP, `IPv4:port`, `[IPv6]:port`, or a host name with an
+ * optional port. Returns the host (IPv6 without brackets) and port, or null.
+ */
+export function parseDnsResolver(text: string): { host: string; port: number } | null {
+  const value = text.trim().toLowerCase();
+  if (parseIp(value)) return { host: value, port: 53 };
+  const match = /^(?:\[([0-9a-f:.]+)\]|([^\s:/[\]]+))(?::([0-9]{1,5}))?$/.exec(value);
+  if (!match) return null;
+  const port = match[3] === undefined ? 53 : Number(match[3]);
+  if (port < 1 || port > 65535) return null;
+  if (match[1] !== undefined)
+    return parseIp(match[1])?.version === 6 ? { host: match[1], port } : null;
+  const host = match[2] ?? "";
+  if (parseIp(host)?.version === 4) return { host, port };
+  return host.length <= 253 && HOSTNAME_RE.test(host) && !NUMERIC_LABEL_RE.test(host)
+    ? { host, port }
+    : null;
+}
+
+export const dnsResolver = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(260)
+  .refine((value) => parseDnsResolver(value) !== null, "invalid DNS server");
+
+export const dnsResolvers = z.object({
+  /** Saved in system settings, in query order; empty when none is saved. */
+  servers: z.array(z.string()),
+  /** The servers ownership checks use now; empty means the system resolver. */
+  effectiveServers: z.array(z.string()),
+  source: z.enum(["setting", "environment", "default"]),
+});
+
+/** An empty list clears the saved value (the environment or the system resolver applies). */
+export const dnsResolversInput = z.object({
+  servers: z.array(dnsResolver).max(MAX_DNS_RESOLVERS),
+});
+
 export const auditLogEntry = z.object({
   id: z.number().int(),
   occurredAt: isoDateTime,
@@ -962,6 +1005,8 @@ export type EnrollmentTokenResult = z.infer<typeof enrollmentTokenResult>;
 export type Settings = z.infer<typeof settings>;
 export type ReleaseSource = z.infer<typeof releaseSource>;
 export type ReleaseSourceInput = z.infer<typeof releaseSourceInput>;
+export type DnsResolvers = z.infer<typeof dnsResolvers>;
+export type DnsResolversInput = z.infer<typeof dnsResolversInput>;
 export type AuditLogEntry = z.infer<typeof auditLogEntry>;
 export type NodeGroup = z.infer<typeof nodeGroup>;
 export type Region = z.infer<typeof region>;

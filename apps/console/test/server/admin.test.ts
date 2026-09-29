@@ -251,6 +251,8 @@ describe("admin area procedures", async () => {
         "settings.setReleaseSource",
         () => member.settings.setReleaseSource({ url: "https://mirror.example.test" }),
       ],
+      ["settings.dnsResolvers", () => member.settings.dnsResolvers()],
+      ["settings.setDnsResolvers", () => member.settings.setDnsResolvers({ servers: ["1.1.1.1"] })],
       ["auditLogs.list", () => member.auditLogs.list({})],
       ["auditLogs.facets", () => member.auditLogs.facets()],
       ["analytics.topNodes", () => member.analytics.topNodes({})],
