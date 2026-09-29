@@ -10,7 +10,7 @@ import { Toaster as Sonner, type ToasterProps } from "sonner";
 import { useTheme } from "@/components/theme-provider";
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  // The scheme on screen (a light-only page overrides the saved choice).
+  // The scheme on screen (the OS preference while the choice is "system").
   const { resolvedTheme } = useTheme();
 
   return (

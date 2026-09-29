@@ -83,3 +83,4 @@ Phase 0 范围：
 >   - 只加字段的输出变化：缓存规则 `cacheAuthorized`（输入默认 false）；源站健康 `lastErrorCode`、`lastErrorParams`；刷新任务 `source`（`user` 或控制台补发的 `recovery`），节点结果 `errorCode`、`errorParams`、`recoveredAt`，节点状态多了 `skipped`（停用的节点不接收任务）。
 >   - 源站地址的 schema 收紧：只接受 IP 字面量，或最后一段不是数字的主机名（`127.1`、`2130706433`、`0x7f000001` 这类会被解析器当成数字的名称被拒绝）；特殊用途地址由服务端按允许清单检查（[ADR-0018](0018-trust-and-security-baseline.md) 收尾记录）。
 >   - 决策第 4 条"key 只用于 `/api/v1`"补上了 better-auth 自己的端点：`/api/auth/*` 上的 `x-api-key` 被剥掉（[ADR-0007](0007-auth-better-auth-multitenancy.md) 收尾记录）。
+> - 2026-09-29：删除 `landing.get`（`GET /landing`，公开）、`landing.update`（`PUT /landing`）及其 schema，属于 1.0 之前的不兼容变更；公开营销页归入独立商业运营产品（[ADR-0019](0019-open-core-and-commercial-products.md) 更新记录）。不需要凭据的公开过程只剩 `system.status`、`system.setup`、`invitations.get`、`invitations.accept`。

@@ -15,7 +15,7 @@ import { authClient } from "@/lib/auth-client";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 
-/** Public landing page of an invitation link. */
+/** Public page of an invitation link. */
 export const Route = createFileRoute("/invite/$id")({
   component: InvitePage,
 });

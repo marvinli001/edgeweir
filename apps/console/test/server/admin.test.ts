@@ -68,7 +68,6 @@ const CONSOLE_PROCEDURES = [
   "analytics.traffic",
   "analytics.topSites",
   "analytics.breakdown",
-  "landing.get",
   "cacheTasks.list",
   "cacheTasks.get",
   "cacheTasks.create",
@@ -251,20 +250,6 @@ describe("admin area procedures", async () => {
       [
         "settings.setReleaseSource",
         () => member.settings.setReleaseSource({ url: "https://mirror.example.test" }),
-      ],
-      [
-        "landing.update",
-        () =>
-          member.landing.update({
-            template: "horizon",
-            brandName: "x",
-            headline: "",
-            description: "",
-            contactEmail: "",
-            signupUrl: "",
-            icp: "",
-            showStats: true,
-          }),
       ],
       ["auditLogs.list", () => member.auditLogs.list({})],
       ["auditLogs.facets", () => member.auditLogs.facets()],

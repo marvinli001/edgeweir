@@ -75,3 +75,6 @@ Edgeweir 保留开源 CDN / WAF / 边缘调度核心，同时需要通过商业�
 - [AGPL-3.0 原文](https://www.gnu.org/licenses/agpl.html)：使用、分发、源码及网络交互义务。
 - [OSI 开源定义](https://opensource.org/osd)：开源许可不能排除商业用途。
 - [GNU 关于插件与组合作品的说明](https://www.gnu.org/licenses/gpl-faq.html#GPLPlugins)：插件许可取决于实际结合方式，进程或仓库边界不是自动豁免。
+
+> 更新记录：
+> - 2026-09-29：公开营销落地页归入独立商业运营产品，决策第 2 节表格中「营销落地页、登录页和邀请加入」一行以本条为准：登录页和邀请加入仍属开源核心，营销落地页不再属于。开源核心删除落地页模板、后台的落地页设置和 `landing.get` / `landing.update`；打开站点时 `/` 未初始化进入 `/setup`，已登录进入 `/overview`，否则进入 `/login`。已部署数据库里键为 `landing` 的 `system_setting` 行不再读取，也不做删除迁移；历史审计里的 `system.landing_update` 仍按原文显示。

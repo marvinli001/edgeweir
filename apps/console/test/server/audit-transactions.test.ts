@@ -128,16 +128,15 @@ describe("audit entries share the business transaction", async () => {
     await signIn(app, origin, "new@example.com");
   });
 
-  it("leaves the landing page settings unchanged", async () => {
-    const before = await admin.landing.get();
-    await failAuditFor("system.landing_update");
-    await rpcError(
-      admin.landing.update({ ...before.settings, template: "horizon", brandName: "Changed" }),
-    );
+  it("stores no origin allow list and publishes nothing when the update cannot be audited", async () => {
+    const revisions = await count("config_revision");
+    await failAuditFor("system.origin_allow_list_update");
+    await rpcError(admin.settings.setOriginAllowList({ cidrs: ["10.0.0.0/8"] }));
     const [row] = await ctx.db
       .select()
       .from(schema.systemSetting)
-      .where(eq(schema.systemSetting.key, "landing"));
+      .where(eq(schema.systemSetting.key, "origin_allow_list"));
     expect(row).toBeUndefined();
+    expect(await count("config_revision")).toBe(revisions);
   });
 });

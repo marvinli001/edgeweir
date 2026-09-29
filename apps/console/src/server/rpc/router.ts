@@ -75,7 +75,6 @@ import {
   verifyDomainOwnership,
 } from "../services/domain-ownership";
 import { createEnrollmentToken } from "../services/enrollment";
-import { getLandingPage, updateLandingSettings } from "../services/landing";
 import {
   addMember,
   cancelInvitation,
@@ -709,12 +708,6 @@ export const router = os.router({
     ),
     setReleaseSource: admin.settings.setReleaseSource.handler(({ input, context }) =>
       setReleaseSource(context.app, input, context.actor),
-    ),
-  },
-  landing: {
-    get: os.landing.get.handler(({ context }) => getLandingPage(context.app.db)),
-    update: admin.landing.update.handler(({ input, context }) =>
-      updateLandingSettings(context.app.db, input, context.actor),
     ),
   },
   auditLogs: {

@@ -612,51 +612,6 @@ export const releaseSourceInput = z.object({
   url: z.union([z.literal(""), releaseBaseUrl]),
 });
 
-/** Landing page templates; "none" sends `/` straight to the console. */
-export const landingTemplates = ["none", "horizon", "orbit"] as const;
-export const landingTemplate = z.enum(landingTemplates);
-
-export const landingSettings = z.object({
-  template: landingTemplate,
-  /** Shown in the header, the footer and the page title. */
-  brandName: z.string().trim().min(1).max(60),
-  /** Hero copy; empty means the template's default (localized) copy. */
-  headline: z.string().trim().max(120),
-  description: z.string().trim().max(300),
-  contactEmail: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .pipe(z.union([z.literal(""), z.email()])),
-  /**
-   * Target of the sign-up button. Self sign-up is off (ADR-0007), so this is
-   * typically a contact or application form; empty hides the button.
-   */
-  signupUrl: z
-    .string()
-    .trim()
-    .max(500)
-    .pipe(z.union([z.literal(""), z.httpUrl()])),
-  /** ICP filing number for the footer (sites served from mainland China). */
-  icp: z.string().trim().max(60),
-  /** Show live network numbers (regions, online nodes, sites) on the page. */
-  showStats: z.boolean(),
-});
-
-export const landingStats = z.object({
-  regions: z.array(z.object({ name: z.string(), code: z.string() })),
-  onlineNodes: z.number().int(),
-  sites: z.number().int(),
-  domains: z.number().int(),
-});
-
-/** Public: everything the landing page renders. */
-export const landingPage = z.object({
-  settings: landingSettings,
-  /** Only when the page is on and `showStats` is set. */
-  stats: landingStats.nullable(),
-});
-
 export const auditLogEntry = z.object({
   id: z.number().int(),
   occurredAt: isoDateTime,
@@ -1007,10 +962,6 @@ export type EnrollmentTokenResult = z.infer<typeof enrollmentTokenResult>;
 export type Settings = z.infer<typeof settings>;
 export type ReleaseSource = z.infer<typeof releaseSource>;
 export type ReleaseSourceInput = z.infer<typeof releaseSourceInput>;
-export type LandingTemplate = z.infer<typeof landingTemplate>;
-export type LandingSettings = z.infer<typeof landingSettings>;
-export type LandingStats = z.infer<typeof landingStats>;
-export type LandingPage = z.infer<typeof landingPage>;
 export type AuditLogEntry = z.infer<typeof auditLogEntry>;
 export type NodeGroup = z.infer<typeof nodeGroup>;
 export type Region = z.infer<typeof region>;

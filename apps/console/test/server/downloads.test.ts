@@ -120,10 +120,12 @@ describe("/downloads release mirror", async () => {
       expect(res.status, `${method} ${path}`).toBe(404);
       expect(await res.text(), `${method} ${path}`).not.toContain("spa shell");
     }
-    // Client-side routes still get the shell.
-    const route = await get("/sites/some-id");
-    expect(route.status).toBe(200);
-    expect(await route.text()).toContain("spa shell");
+    // `/` and client-side routes still get the shell.
+    for (const path of ["/", "/sites/some-id"]) {
+      const route = await get(path);
+      expect(route.status, path).toBe(200);
+      expect(await route.text(), path).toContain("spa shell");
+    }
   });
 });
 

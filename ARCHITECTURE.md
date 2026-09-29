@@ -12,7 +12,7 @@
 ┌─────────────────────────────▼──────────────────────────────────────┐
 │ edgeweir console（一个镜像、一个 Node.js 进程，ROLE=app|worker|all） │
 │                                                                    │
-│  Hono ── /            可选的公开落地页，关闭时跳到 /overview         │
+│  Hono ── /            前端按状态跳到 /setup、/overview 或 /login     │
 │      ├── /*           React SPA（Vite 构建产物，前端路由回退）       │
 │      ├── /api/auth/*  better-auth，只放行白名单里的端点              │
 │      ├── /rpc/*       oRPC（UI 专用，会话 cookie + CSRF 头）          │
@@ -39,9 +39,9 @@ PostgreSQL 是唯一的外部依赖。`EDGEWEIR_ANALYTICS=clickhouse` 配合 `an
 | 路径 | 内容 |
 | --- | --- |
 | `apps/console/src/server` | Hono 应用（`app.ts`）、oRPC 路由实现（`rpc/`）、节点通道（`node-channel/`）、内部 CA（`pki/`）、领域服务（`services/`）、pg-boss 任务（`jobs/`）、认证与基础设施（`lib/`：better-auth 配置与审计钩子、环境变量、信封加密、客户端 IP）、安装脚本（`install/install.sh`）、发布物镜像（`downloads.ts`）；入口 `main.ts`（生产）和 `dev.ts`（开发：同一进程内嵌 Vite middleware） |
-| `apps/console/src/web` | React 19 SPA：TanStack Router 文件路由（`routes/`）、TanStack Query、shadcn 组件（`components/ui`，preset `b2D0wqNxT`）、appica 封装（`components/appica/`）、统计面板（`components/analytics/`）、落地页模板（`components/landing/`）；Paraglide 消息在 `apps/console/messages/{zh-CN,en}.json`，编译到 `src/web/paraglide` |
+| `apps/console/src/web` | React 19 SPA：TanStack Router 文件路由（`routes/`）、TanStack Query、shadcn 组件（`components/ui`，preset `b2D0wqNxT`）、appica 封装（`components/appica/`）、统计面板（`components/analytics/`）；Paraglide 消息在 `apps/console/messages/{zh-CN,en}.json`，编译到 `src/web/paraglide` |
 | `apps/console/test` | Vitest：`server/`（过程、权限、审计、节点通道，数据库用 PGlite）与 `web/`（i18n、界面规则、preset） |
-| `apps/console/e2e` | Playwright：`setup`、`smoke`、`m1`、`m2`、`analytics`、`landing` |
+| `apps/console/e2e` | Playwright：`setup`、`smoke`、`m1`、`m2`、`analytics` |
 | `packages/contract` | oRPC 契约 + zod schema、错误码（`errors.ts`）、节点错误码（`node-errors.ts`）、源站地址规则（`addresses.ts`），UI、服务端和 OpenAPI 共用 |
 | `packages/db` | Drizzle schema（`src/schema/auth.ts` 为 better-auth 表，`core.ts` 为业务表）和纯 SQL 迁移（`migrations/`，启动时自动执行） |
 | `packages/config-compiler` | 把站点、源站、缓存规则和平台的源站允许清单编译成 NodeConfig IR；规范排序、内容哈希、diff；跨语言哈希向量在 `test/fixtures/` |
@@ -65,7 +65,7 @@ PostgreSQL 是唯一的外部依赖。`EDGEWEIR_ANALYTICS=clickhouse` 配合 `an
 - **站点**（租户）：`site` → `site_domain`、`origin_pool` → `origin`、`origin_credential`（S3 源站密钥，信封加密）、`cache_rule`；`site_star`（按用户的星标）。
 - **配置发布**：`config_revision`（每个集群单调递增的 revision、内容哈希、二进制 IR、原因码），`node_config_status`（节点回执 + 心跳）。
 - **节点上报与任务**：`node_minute_stats`（按节点、网站、分钟的 lite 统计），`origin_health`（节点上报的被动健康状态与错误码），`cache_task` → `cache_task_node`（刷新预热任务及其在每个节点上的交付和结果，含跳过与补发）。
-- **其他**：`pki_authority`（内部 CA，私钥信封加密），`system_setting`（setup token、落地页设置、源站允许清单），`audit_log`（所有管理操作）。
+- **其他**：`pki_authority`（内部 CA，私钥信封加密），`system_setting`（setup token、源站允许清单），`audit_log`（所有管理操作）。
 
 迁移：`0000_init`、`0001_m1`、`0002_site_star`、`0003_m2`、`0004_wrapup_auth`（`rate_limit`）、`0005_wrapup_console`（`cache_authorized`、任务来源与节点错误码）。控制台启动时在一个专用连接上持 advisory lock 执行迁移，多实例同时启动也安全。
 

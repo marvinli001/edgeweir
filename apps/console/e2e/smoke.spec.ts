@@ -16,6 +16,10 @@ test("login -> admin clusters & nodes -> console sites, then switch to English",
   await expect(page).toHaveURL(/\/login/);
   await expect(page.getByTestId("login-submit")).toHaveText("登录");
   await login(page, email, password);
+  // Signed in, `/` goes straight to the console.
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/overview$/);
+  await expect(page.getByTestId("page-title")).toHaveText("概览");
 
   // Admins switch to the admin area for clusters & nodes.
   await page.getByTestId("area-admin").click();

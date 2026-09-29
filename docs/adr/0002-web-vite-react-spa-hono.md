@@ -89,3 +89,4 @@ Phase 0 范围：
 > - 2026-09-25（收尾）：
 >   - 「Phase 0 落地情况」的页面清单曾被原地加注，现恢复原文，改记在这里：2026-09-25 起集群与节点移入后台 `/admin`，另增平台概览、审计日志、系统设置（[ADR-0007](0007-auth-better-auth-multitenancy.md) 更新记录）；控制台首页是 `/overview`，`/` 是可选的公开落地页，关闭时跳到 `/overview`（[ADR-0003](0003-ui-shadcn-preset.md) 收尾记录）。开启落地页时，生产服务器在 `/` 返回的 `index.html` 带落地页的标题和描述，去掉 `noindex`。
 >   - `index.html` 回退只覆盖前端路由：`/api`、`/rpc`、`/downloads`、`/install.sh`、`/healthz` 及其子路径上没有匹配的请求一律返回 404（JSON），不再返回 200 的 `index.html`，否则 install.sh 会把 HTML 当成下载的文件。开发模式的 Vite middleware 把同一组路径直接交给 Hono。
+> - 2026-09-29：公开落地页从开源核心移除（[ADR-0003](0003-ui-shadcn-preset.md) 更新记录）。`/` 与其他前端路由一样返回同一份带 `noindex` 的 `index.html`，由前端按状态跳到 `/setup`、`/overview` 或 `/login`；控制台首页仍是 `/overview`。

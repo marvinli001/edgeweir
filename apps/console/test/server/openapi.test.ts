@@ -2,11 +2,10 @@ import { afterAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { createTestContext } from "./helpers";
 
-/** Procedures anyone may call: first-run setup, the landing page, invitation links. */
+/** Procedures anyone may call: first-run setup and invitation links. */
 const PUBLIC_OPERATIONS = [
   "system.status",
   "system.setup",
-  "landing.get",
   "invitations.get",
   "invitations.accept",
 ];
