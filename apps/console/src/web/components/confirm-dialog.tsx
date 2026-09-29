@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { useAction } from "@/hooks/use-action";
 import { m } from "@/lib/i18n";
 
 /** Confirmation for irreversible or publishing actions. */
@@ -30,7 +31,7 @@ export function ConfirmDialog({
   onConfirm: () => Promise<unknown>;
 }) {
   const [open, setOpen] = React.useState(false);
-  const [pending, setPending] = React.useState(false);
+  const action = useAction();
   const noteId = React.useId();
   return (
     <>
@@ -47,19 +48,14 @@ export function ConfirmDialog({
             <DialogClose render={<Button variant="outline" />}>{m.common_cancel()}</DialogClose>
             <Button
               variant={destructive ? "destructive" : "default"}
-              disabled={pending}
+              disabled={action.pending}
               data-testid="confirm-action"
               onClick={async () => {
-                setPending(true);
-                try {
-                  await onConfirm();
-                  setOpen(false);
-                } finally {
-                  setPending(false);
-                }
+                await action.run(onConfirm);
+                setOpen(false);
               }}
             >
-              {pending ? <Spinner /> : null}
+              {action.pending ? <Spinner /> : null}
               {confirmLabel ?? m.common_confirm()}
             </Button>
           </DialogFooter>

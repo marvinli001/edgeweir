@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { useAction } from "@/hooks/use-action";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 
@@ -42,7 +43,7 @@ export function LogsTab({ siteId }: { siteId: string }) {
     limit: 100,
   }));
   const logs = useQuery(orpc.logs.query.queryOptions({ input: query }));
-  const [exporting, setExporting] = React.useState(false);
+  const exporter = useAction();
   return (
     <div className="min-w-0 space-y-5">
       <Card>
@@ -126,11 +127,12 @@ export function LogsTab({ siteId }: { siteId: string }) {
               <Button
                 type="button"
                 variant="outline"
-                disabled={exporting}
+                disabled={exporter.pending}
                 onClick={async () => {
-                  setExporting(true);
                   try {
-                    const output = await client.logs.export({ ...query, limit: 1000 });
+                    const output = await exporter.run(() =>
+                      client.logs.export({ ...query, limit: 1000 }),
+                    );
                     const url = URL.createObjectURL(
                       new Blob(["\uFEFF", output.csv], { type: "text/csv;charset=utf-8" }),
                     );
@@ -142,12 +144,10 @@ export function LogsTab({ siteId }: { siteId: string }) {
                     if (output.truncated) toast.info(m.logs_export_limit());
                   } catch (error) {
                     toast.error(errorMessage(error));
-                  } finally {
-                    setExporting(false);
                   }
                 }}
               >
-                {exporting && <Spinner />}
+                {exporter.pending && <Spinner />}
                 {m.logs_export()}
               </Button>
             </div>

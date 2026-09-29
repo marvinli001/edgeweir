@@ -56,6 +56,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { useAction } from "@/hooks/use-action";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { revisionReason } from "@/lib/revisions";
@@ -353,7 +354,7 @@ function ControlledConfirm({
   title: string;
   onConfirm: () => Promise<void>;
 }) {
-  const [pending, setPending] = React.useState(false);
+  const action = useAction();
   const [error, setError] = React.useState<string | null>(null);
   return (
     <Dialog
@@ -378,22 +379,19 @@ function ControlledConfirm({
           </Button>
           <Button
             variant="destructive"
-            disabled={pending}
+            disabled={action.pending}
             data-testid="confirm-action"
             onClick={async () => {
-              setPending(true);
               setError(null);
               try {
-                await onConfirm();
+                await action.run(onConfirm);
                 onOpenChange(false);
               } catch (err) {
                 setError(errorMessage(err));
-              } finally {
-                setPending(false);
               }
             }}
           >
-            {pending ? <Spinner /> : null}
+            {action.pending ? <Spinner /> : null}
             {m.common_confirm()}
           </Button>
         </DialogFooter>

@@ -42,8 +42,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAction } from "@/hooks/use-action";
 import { m, timeAgo } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 
@@ -339,10 +341,13 @@ function OrgMembersDialog({
   const [role, setRole] = React.useState<OrgRole>("member");
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const refresh = () => queryClient.invalidateQueries();
+  const action = useAction();
   const run = async (fn: () => Promise<unknown>) => {
     try {
-      await fn();
-      await refresh();
+      await action.run(async () => {
+        await fn();
+        await refresh();
+      });
     } catch (error) {
       toast.error(errorMessage(error));
     }
@@ -374,6 +379,7 @@ function OrgMembersDialog({
                     <RoleSelect
                       value={member.role}
                       canGrantOwner
+                      disabled={action.pending}
                       onChange={(next) =>
                         run(() =>
                           client.organizations.updateMember({
@@ -388,6 +394,7 @@ function OrgMembersDialog({
                       size="icon-sm"
                       variant="ghost"
                       aria-label={m.common_remove()}
+                      disabled={action.pending}
                       onClick={() =>
                         run(() =>
                           client.organizations.removeMember({
@@ -434,7 +441,7 @@ function OrgMembersDialog({
               </Field>
               <RoleSelect value={role} onChange={setRole} canGrantOwner />
               <Button
-                disabled={!userId}
+                disabled={!userId || action.pending}
                 onClick={() =>
                   run(async () => {
                     await client.organizations.addMember({
@@ -446,6 +453,7 @@ function OrgMembersDialog({
                   })
                 }
               >
+                {action.pending ? <Spinner /> : null}
                 {m.orgs_add()}
               </Button>
             </div>

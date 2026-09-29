@@ -337,6 +337,7 @@
   "login_use_totp": "使用验证器",
   "login_or": "或",
   "login_passkey": "使用通行密钥登录",
+  "login_back": "返回登录",
   "setup_token": "Setup token",
   "setup_token_placeholder": "见控制台启动日志",
   "invite_title": "加入 {organization}",

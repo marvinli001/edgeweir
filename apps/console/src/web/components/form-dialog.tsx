@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { FieldError, FieldGroup } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
+import { useAction } from "@/hooks/use-action";
 import { errorMessage } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +37,7 @@ export function FormDialog({
   submitTestId?: string;
   className?: string;
 }) {
-  const [pending, setPending] = React.useState(false);
+  const action = useAction();
   const [error, setError] = React.useState<string | null>(null);
   return (
     <Dialog
@@ -53,14 +54,12 @@ export function FormDialog({
         <form
           onSubmit={async (event) => {
             event.preventDefault();
-            setPending(true);
+            const data = new FormData(event.currentTarget);
             setError(null);
             try {
-              await onSubmit(new FormData(event.currentTarget));
+              await action.run(() => onSubmit(data));
             } catch (err) {
               setError(errorMessage(err));
-            } finally {
-              setPending(false);
             }
           }}
         >
@@ -72,8 +71,8 @@ export function FormDialog({
               </FieldError>
             ) : null}
             <DialogFooter>
-              <Button type="submit" disabled={pending} data-testid={submitTestId}>
-                {pending ? <Spinner /> : null}
+              <Button type="submit" disabled={action.pending} data-testid={submitTestId}>
+                {action.pending ? <Spinner /> : null}
                 {submitLabel}
               </Button>
             </DialogFooter>

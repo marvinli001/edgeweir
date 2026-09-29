@@ -31,6 +31,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAction } from "@/hooks/use-action";
 import { authClient } from "@/lib/auth-client";
 import { getLocale, type Locale, localeLabels, locales, m, setLocale } from "@/lib/i18n";
 
@@ -50,6 +51,7 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const signOut = useAction();
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -144,12 +146,15 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               data-testid="logout"
-              onClick={async () => {
-                await authClient.signOut();
-                // Nothing of this account may leak into the next sign-in.
-                queryClient.clear();
-                await navigate({ to: "/login" });
-              }}
+              disabled={signOut.pending}
+              onClick={() =>
+                signOut.run(async () => {
+                  await authClient.signOut();
+                  // Nothing of this account may leak into the next sign-in.
+                  queryClient.clear();
+                  await navigate({ to: "/login" });
+                })
+              }
             >
               <HugeiconsIcon icon={Logout01Icon} strokeWidth={2} />
               {m.user_menu_logout()}

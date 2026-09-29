@@ -14,6 +14,24 @@
   }
 }
 
+/*
+ * Auth card swap (AuthViews): the incoming card comes forward while the outgoing one sinks back
+ * and away; the side comes from a slide-in-from-* / slide-out-to-* class.
+ */
+@utility animate-card-in {
+  @apply animate-in fade-in zoom-in-95 fill-mode-both duration-300 ease-out;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility animate-card-out {
+  @apply animate-out fade-out zoom-out-90 fill-mode-forwards duration-300 ease-in;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
 /* Indeterminate sweep for the top progress bar. */
 @utility animate-progress-sweep {
   animation: progress-sweep 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;

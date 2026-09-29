@@ -5,7 +5,10 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-/** Full-screen frame for sign-in and first-run setup. */
+/**
+ * Full-screen frame for sign-in and first-run setup. Put the card in an `AuthFrame`, or several
+ * cards that take turns in `AuthViews`.
+ */
 export function AuthShell({
   children,
   className,
@@ -26,10 +29,17 @@ export function AuthShell({
           <Logo className="size-6" />
           {m.app_name()}
         </div>
-        <GradientGlow>
-          <BorderBeam speed={8}>{children}</BorderBeam>
-        </GradientGlow>
+        {children}
       </div>
     </BackgroundPattern>
+  );
+}
+
+/** Glow and border beam around one auth card, so the card moves as one piece with them. */
+export function AuthFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <GradientGlow>
+      <BorderBeam speed={8}>{children}</BorderBeam>
+    </GradientGlow>
   );
 }

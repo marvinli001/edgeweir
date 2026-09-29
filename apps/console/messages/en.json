@@ -337,6 +337,7 @@
   "login_use_totp": "Use the authenticator",
   "login_or": "or",
   "login_passkey": "Sign in with a passkey",
+  "login_back": "Back to sign in",
   "setup_token": "Setup token",
   "setup_token_placeholder": "Printed in the console log",
   "invite_title": "Join {organization}",

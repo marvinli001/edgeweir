@@ -3,6 +3,7 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import { LoadingState } from "@/components/states";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -24,6 +25,9 @@ const router = createRouter({
   context: { queryClient },
   defaultPreload: "intent",
   scrollRestoration: true,
+  // Until a route resolves nothing of it is on screen (not even TopProgress on a first load); one
+  // slower than `defaultPendingMs` (session check, code chunk) shows the loader instead of a blank page.
+  defaultPendingComponent: () => <LoadingState className="min-h-svh" />,
 });
 
 declare module "@tanstack/react-router" {
