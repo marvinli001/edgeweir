@@ -36,7 +36,7 @@ export async function startNodeChannel(app: AppContext): Promise<http2.Http2Secu
   server.on("sessionError", (error) => app.log.debug("node channel session error", { error }));
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(app.env.NODE_API_PORT, app.env.HOST, () => {
+    server.listen(app.env.NODE_API_PORT, app.env.nodeApiHost, () => {
       server.off("error", reject);
       resolve();
     });

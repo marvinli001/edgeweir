@@ -37,6 +37,11 @@ const schema = z.object({
   EDGEWEIR_TRUSTED_PROXIES: z.string().default(""),
   HOST: z.string().default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  /**
+   * Listen address of the node channel; empty or unset: HOST. Lets a host-network
+   * deployment keep the web console on loopback while nodes reach the channel.
+   */
+  NODE_API_HOST: z.preprocess((value) => (value === "" ? undefined : value), z.string().optional()),
   NODE_API_PORT: z.coerce.number().int().min(0).max(65535).default(8443),
   /**
    * Fallback node release mirror when none is saved in system settings; empty
@@ -89,6 +94,7 @@ const schema = z.object({
 export const ENV_VARIABLES = [...Object.keys(schema.shape), "EDGEWEIR_VERSION"];
 
 export type Env = z.infer<typeof schema> & {
+  nodeApiHost: string;
   nodeApiUrl: string;
   nodeApiHostnames: string[];
   trustedProxies: TrustedProxies;
@@ -121,5 +127,12 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   for (const extra of env.EDGEWEIR_NODE_API_HOSTNAMES.split(",")) {
     if (extra.trim()) names.add(extra.trim());
   }
-  return { ...env, nodeApiUrl, nodeApiHostnames: [...names], trustedProxies, version: VERSION };
+  return {
+    ...env,
+    nodeApiHost: env.NODE_API_HOST ?? env.HOST,
+    nodeApiUrl,
+    nodeApiHostnames: [...names],
+    trustedProxies,
+    version: VERSION,
+  };
 }

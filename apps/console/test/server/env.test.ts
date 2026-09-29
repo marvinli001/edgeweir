@@ -20,3 +20,16 @@ describe("documented node channel defaults", () => {
     );
   });
 });
+
+describe("node channel listen address", () => {
+  it.each([undefined, ""])("follows HOST when NODE_API_HOST is %j", (value) => {
+    expect(loadEnv({ ...base, HOST: "127.0.0.1", NODE_API_HOST: value }).nodeApiHost).toBe(
+      "127.0.0.1",
+    );
+  });
+  it("binds the node channel apart from the web console", () => {
+    const env = loadEnv({ ...base, HOST: "127.0.0.1", NODE_API_HOST: "0.0.0.0" });
+    expect(env.HOST).toBe("127.0.0.1");
+    expect(env.nodeApiHost).toBe("0.0.0.0");
+  });
+});
