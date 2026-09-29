@@ -66,7 +66,6 @@ cd edgeweir
 umask 077
 cat > .env <<EOF
 EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
-BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 EOF
 
@@ -74,10 +73,11 @@ docker compose pull     # rolling image from ghcr.io; `docker compose up -d --bu
 docker compose up -d
 ```
 
-Open <http://localhost:3000> (every variable is described in [.env.example](.env.example)). The first-run setup wizard creates the platform administrator and a default organization. It asks for the one-time setup token that the console prints to its log (`docker compose logs console | grep setupToken`).
+Open <http://localhost:3000>. The first-run setup wizard creates the platform administrator and a default organization. It asks for the one-time setup token that the console prints to its log (`docker compose logs console | grep setupToken`).
 
-- `EDGEWEIR_MASTER_KEY` encrypts secrets at rest (the internal CA key, S3 origin keys, the setup token, certificate keys and DNS API credentials). **Back it up separately from your database.** Without it, that data cannot be recovered.
-- `BETTER_AUTH_SECRET` signs login sessions.
+- `EDGEWEIR_MASTER_KEY` encrypts secrets at rest (the internal CA key, S3 origin keys, the setup token, certificate keys and DNS API credentials) and derives the session secret. **Back it up separately from your database.** Without it, that data cannot be recovered.
+- `BETTER_AUTH_SECRET` is optional: unset, the session secret is derived from the master key. Deployments that already set it must keep it; the console refuses to start once it is removed.
+- Everything else has a default. After setup, SMTP, the node release source, DNS servers for ownership checks, the origin allow list and GeoIP are set in **Admin → System**. [.env.example](.env.example) lists every variable and why the remaining ones stay there (needed before any administrator can sign in, host ports and paths, the node channel's TLS names, trust boundaries).
 - Setup is refused without the setup token, so nobody else can claim the console before you finish the wizard. The token is spent by the first successful setup.
 
 `EDGEWEIR_ANALYTICS=clickhouse` with the `analytics` Compose profile enables optional ClickHouse raw logs and minute statistics. Sampling is off by default; access logs are retained for 7 days. Console charts and alerts use the shared PostgreSQL rollups. The `cache` profile starts Valkey, which the console does not use yet. See [logs and AccessKeys](docs/guide/access-logs.md) and [backup and restore](docs/deploy/backup.md).
@@ -117,7 +117,7 @@ Requirements: Node.js 24+, pnpm 12, Docker. Go 1.27.1 is needed only for `helper
 ```sh
 pnpm install
 docker compose -f compose.dev.yml up -d   # local PostgreSQL
-cp .env.example .env                      # fill in EDGEWEIR_MASTER_KEY and BETTER_AUTH_SECRET
+cp .env.example .env                      # fill in EDGEWEIR_MASTER_KEY
 pnpm dev
 ```
 

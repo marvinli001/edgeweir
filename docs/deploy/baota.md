@@ -28,7 +28,6 @@ cd /www/dk_project/edgeweir
 umask 077
 cat > .env <<ENV
 EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
-BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com
 EDGEWEIR_NODE_API_URL=https://cdn-admin.example.com:8443
@@ -37,7 +36,8 @@ ENV
 chmod 600 .env
 ```
 
-   - `EDGEWEIR_MASTER_KEY` 用于加密入库的私钥和 DNS 密钥，**请离线备份**。
+   - `EDGEWEIR_MASTER_KEY` 用于加密入库的私钥和 DNS 密钥，并派生登录会话 secret，**请离线备份**。
+   - 不需要再填 `BETTER_AUTH_SECRET`。已经填过它的旧编排要保留原值，删掉后控制台拒绝启动（否则所有人会被登出，已启用的两步验证也无法读取）。
    - `EDGEWEIR_VERSION` 换成 [GitHub Packages](https://github.com/marvinli001/edgeweir/pkgs/container/edgeweir) 上当前最新的日期 tag；评估环境可以写 `latest`。
    - 在 `.env` 栏里填写时，等号右边要填在终端里生成好的实际值，面板不会执行其中的命令。
 
@@ -49,7 +49,7 @@ chmod 600 .env
 2. 站点设置 →「反向代理 → 添加反向代理」，目标 URL 填 `http://127.0.0.1:3000`，发送域名保持 `$host`。
 3. 站点设置 →「SSL」申请或上传证书，开启「强制 HTTPS」。
 4. 在宝塔「Docker → 容器 → console → 日志」里找到 `setupToken`（一次性 setup token），浏览器打开 `https://cdn-admin.example.com`，在初始化向导里填入它并创建管理员。
-5. SMTP、节点发布源、源站地址允许清单、GeoIP 和首页在控制台 **后台 → 系统设置** 填写，不需要改 `.env`。
+5. SMTP、节点发布源、所有权校验 DNS、源站地址允许清单和 GeoIP 在控制台 **后台 → 系统设置** 填写，不需要改 `.env`。
 
 `EDGEWEIR_PUBLIC_URL` 必须与浏览器实际访问的地址一致（含 `https://`），否则登录会因来源校验失败。
 
@@ -80,7 +80,7 @@ stream {
 
 1. 「Docker → 网络」新建网络 `edgeweir`（或在终端 `docker network create edgeweir`）。
 2. PostgreSQL 容器：镜像 `postgres:18.6-alpine`，名称 `edgeweir-postgres`，网络 `edgeweir`，不映射端口；环境变量 `POSTGRES_USER=edgeweir`、`POSTGRES_DB=edgeweir`、`POSTGRES_PASSWORD=<openssl rand -hex 24 的输出>`；卷 `edgeweir-postgres` 挂到 `/var/lib/postgresql`；重启策略「总是 / unless-stopped」。
-3. 控制台容器：镜像 `ghcr.io/marvinli001/edgeweir:<日期 tag>`，名称 `edgeweir-console`，网络 `edgeweir`；端口 `127.0.0.1:3000 → 3000` 和 `8443 → 8443`；环境变量 `ROLE=all`、`DATABASE_URL=postgres://edgeweir:<上面的密码>@edgeweir-postgres:5432/edgeweir`、`EDGEWEIR_MASTER_KEY`、`BETTER_AUTH_SECRET`、`EDGEWEIR_PUBLIC_URL`、`EDGEWEIR_NODE_API_URL`（其余可选变量见 `compose.baota.yml`，不要填 `EDGEWEIR_VERSION`）。
+3. 控制台容器：镜像 `ghcr.io/marvinli001/edgeweir:<日期 tag>`，名称 `edgeweir-console`，网络 `edgeweir`；端口 `127.0.0.1:3000 → 3000` 和 `8443 → 8443`；环境变量 `ROLE=all`、`DATABASE_URL=postgres://edgeweir:<上面的密码>@edgeweir-postgres:5432/edgeweir`、`EDGEWEIR_MASTER_KEY`、`EDGEWEIR_PUBLIC_URL`、`EDGEWEIR_NODE_API_URL`（其余可选变量见 `compose.baota.yml`；旧部署设置过的 `BETTER_AUTH_SECRET` 要保留；不要填 `EDGEWEIR_VERSION`）。
 
 升级单独创建的容器：拉取新 tag，删除旧的 `edgeweir-console`，用相同参数和新 tag 重建。数据在 PostgreSQL 的卷里，不受影响。
 

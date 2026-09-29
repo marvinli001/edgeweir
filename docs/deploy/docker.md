@@ -34,26 +34,30 @@ curl -fsSL -o .env https://raw.githubusercontent.com/marvinli001/edgeweir/master
 
 想从源码构建时改用 `git clone https://github.com/marvinli001/edgeweir.git /opt/edgeweir`，其余步骤相同，启动时加 `--build`。
 
-编辑 `.env`，至少填写：
+编辑 `.env`，必填项只有：
 
 | 变量 | 说明 |
 | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | 主密钥，用于信封加密入库的私钥和 DNS API 密钥。`openssl rand -base64 32` 生成，**务必离线备份**，丢失后已加密的数据无法恢复。 |
-| `BETTER_AUTH_SECRET` | 会话签名密钥，`openssl rand -base64 32` 生成。 |
+| `EDGEWEIR_MASTER_KEY` | 主密钥，用于信封加密入库的私钥和 DNS API 密钥，并派生登录会话 secret。`openssl rand -base64 32` 生成，**务必离线备份**，丢失后已加密的数据无法恢复。 |
 | `POSTGRES_PASSWORD` | 内置 PostgreSQL 的密码（数据库端口不对外暴露），`openssl rand -hex 24` 生成（会拼进 `DATABASE_URL`，只用字母和数字）。 |
 | `EDGEWEIR_PUBLIC_URL` | 浏览器访问控制台的地址，例如 `https://cdn-admin.example.com`。 |
+
+常用的可选项在 `.env` 的注释里，取消注释再填写：
+
+| 变量 | 说明 |
+| --- | --- |
 | `EDGEWEIR_NODE_API_URL` | 节点连接节点通道的地址，例如 `https://cdn-admin.example.com:8443`。留空时取 `EDGEWEIR_PUBLIC_URL` 的主机名加 `:8443`。 |
 | `EDGEWEIR_VERSION` | 要运行的镜像 tag，默认 `latest`；生产固定为某个日期 tag，见[版本与镜像](#版本与镜像)。 |
+| `BETTER_AUTH_SECRET` | 不设置时，会话 secret 由主密钥派生。从旧版本升级、已经设置过它的部署**必须保留原值**：删掉或换掉会让所有人重新登录，已启用的两步验证也无法再读取，所以删掉后控制台拒绝启动。 |
 
-一次性生成三个密钥（`openssl rand -base64 32` 的输出原样使用，不要删掉其中的 `/`、`+`、`=`，否则解码后可能不足 32 字节，控制台会拒绝启动；数据库密码要放进 `DATABASE_URL`，所以用十六进制）：
+生成两个密钥（`openssl rand -base64 32` 的输出原样使用，不要删掉其中的 `/`、`+`、`=`，否则解码后可能不足 32 字节，控制台会拒绝启动；数据库密码要放进 `DATABASE_URL`，所以用十六进制）：
 
 ```bash
 sed -i "s|^EDGEWEIR_MASTER_KEY=.*|EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)|" .env
-sed -i "s|^BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET=$(openssl rand -base64 32)|" .env
 sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
 ```
 
-控制台缺少 `EDGEWEIR_MASTER_KEY` 或 `BETTER_AUTH_SECRET` 时会拒绝启动，并在日志里写明原因。
+控制台缺少 `EDGEWEIR_MASTER_KEY` 时会拒绝启动，并在日志里写明原因。
 
 ## 3. 启动
 
@@ -75,7 +79,7 @@ docker compose logs console | grep setupToken
 
 浏览器打开 `EDGEWEIR_PUBLIC_URL`，在初始化向导里填入 setup token，创建平台管理员和第一个组织；默认集群会自动创建。没有 token 的初始化请求一律被拒绝（写入审计日志），所以初始化之前控制台暴露在网络上，别人也无法抢先创建管理员。token 用主密钥加密后存在数据库里；更换主密钥后会重新生成。
 
-初始化之后，SMTP（含私有 CA 证书）、节点发布源、源站地址允许清单、GeoIP 和首页都在 **后台 → 系统设置** 填写，保存即生效，不需要改 `.env` 或重启。`.env` 只保留密钥、访问地址、端口和网络信任边界（`EDGEWEIR_TRUSTED_PROXIES`、`EDGEWEIR_OUTBOUND_ALLOW_CIDRS`、`EDGEWEIR_DNS_RESOLVERS`）等必须由运营者在宿主机上决定的项。
+初始化之后，SMTP（含私有 CA 证书）、节点发布源、所有权校验 DNS、源站地址允许清单和 GeoIP 都在 **后台 → 系统设置** 填写，保存即生效，不需要改 `.env` 或重启；后台保存的值优先于旧部署留在 `.env` 里的同名变量。`.env` 只保留管理员登录之前就要用到的项（主密钥、数据库、访问地址、`EDGEWEIR_TRUSTED_PROXIES`）、宿主机端口和路径、节点通道证书的名称（`EDGEWEIR_NODE_API_URL`、`EDGEWEIR_NODE_API_HOSTNAMES`，证书在启动时签发，已注册节点会校验）、出站网络边界 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`（后台保存的地址受它约束，后台不能放宽），以及 ClickHouse、私有 ACME 目录这类基础设施接线。每一项的理由写在 `.env.example` 的注释里。
 
 `compose.yml` 另有两个可选 profile。在 `.env` 中设置 `EDGEWEIR_ANALYTICS=clickhouse` 和独立的 `CLICKHOUSE_PASSWORD` 后，`analytics` 启用 ClickHouse 原始访问日志与分钟快照。控制台图表和告警仍使用 PostgreSQL 精确汇总。站点访问日志采样默认关闭，需在站点日志页面显式开启；原始日志保留 7 天。切换存储模式不会迁移历史数据，详见[日志与 AccessKey](../guide/access-logs.md)。
 
@@ -171,7 +175,6 @@ POSTGRES_PASSWORD=$(openssl rand -hex 24)
 cat > console.env <<ENV
 DATABASE_URL=postgres://edgeweir:${POSTGRES_PASSWORD}@edgeweir-postgres:5432/edgeweir
 EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
-BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com
 EDGEWEIR_NODE_API_URL=https://cdn-admin.example.com:8443
 ENV
@@ -188,7 +191,7 @@ docker run -d --name edgeweir-console --network edgeweir --restart unless-stoppe
   ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
 ```
 
-`console.env` 里的变量与 `compose.yml` 的 `environment` 相同，其余可选变量按需加入；不要写 `EDGEWEIR_VERSION`，它在镜像里表示运行中的版本。升级时拉取新 tag，删除旧的 `edgeweir-console` 容器，用同样的参数和新 tag 重新创建；数据在 `edgeweir-postgres` 卷里，不受影响。
+`console.env` 里的变量与 `compose.yml` 的 `environment` 相同，其余可选变量按需加入（已经设置过 `BETTER_AUTH_SECRET` 的旧部署要带上它）；不要写 `EDGEWEIR_VERSION`，它在镜像里表示运行中的版本。升级时拉取新 tag，删除旧的 `edgeweir-console` 容器，用同样的参数和新 tag 重新创建；数据在 `edgeweir-postgres` 卷里，不受影响。
 
 ## 7. 升级、备份与验证
 

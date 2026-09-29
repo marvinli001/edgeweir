@@ -66,7 +66,6 @@ cd edgeweir
 umask 077
 cat > .env <<EOF
 EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
-BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 EOF
 
@@ -74,10 +73,11 @@ docker compose pull     # 拉取 ghcr.io 上的滚动版本；从源码构建改
 docker compose up -d
 ```
 
-打开 <http://localhost:3000>（所有变量的说明见 [.env.example](.env.example)），首次初始化向导会创建平台管理员和默认组织。向导需要控制台打印在日志里的一次性 setup token（`docker compose logs console | grep setupToken`）。
+打开 <http://localhost:3000>，首次初始化向导会创建平台管理员和默认组织。向导需要控制台打印在日志里的一次性 setup token（`docker compose logs console | grep setupToken`）。
 
-- `EDGEWEIR_MASTER_KEY` 用于加密入库的敏感数据（内部 CA 私钥、S3 源站密钥、setup token、证书私钥和 DNS API 凭据）。**请把它与数据库备份分开保存。** 丢失后这些数据无法恢复。
-- `BETTER_AUTH_SECRET` 用于签名登录会话。
+- `EDGEWEIR_MASTER_KEY` 用于加密入库的敏感数据（内部 CA 私钥、S3 源站密钥、setup token、证书私钥和 DNS API 凭据），并派生登录会话 secret。**请把它与数据库备份分开保存。** 丢失后这些数据无法恢复。
+- `BETTER_AUTH_SECRET` 可选：不设置时会话 secret 由主密钥派生。已经设置过的部署必须保留它，删掉后控制台拒绝启动。
+- 其余变量都有默认值。初始化之后，SMTP、节点发布源、所有权校验 DNS、源站地址允许清单和 GeoIP 在**后台 → 系统设置**填写。[.env.example](.env.example) 列出所有变量，并说明剩下的为什么留在环境变量里（管理员登录之前就要用到、宿主机端口和路径、节点通道 TLS 证书的名称、信任边界）。
 - 没有 setup token 的初始化请求会被拒绝，所以在你完成向导之前，别人无法抢先创建管理员。token 在第一次初始化成功后作废。
 
 `EDGEWEIR_ANALYTICS=clickhouse` 配合 `analytics` Compose profile 启用可选 ClickHouse 原始日志与分钟统计。访问日志采样默认关闭，保留 7 天；控制台图表和告警共用 PostgreSQL 汇总。`cache` profile 启动 Valkey，控制台目前尚未使用。见[日志与 AccessKey](docs/guide/access-logs.md)及[备份恢复](docs/deploy/backup.md)。
@@ -117,7 +117,7 @@ docker compose up -d
 ```sh
 pnpm install
 docker compose -f compose.dev.yml up -d   # 本地 PostgreSQL
-cp .env.example .env                      # 填写 EDGEWEIR_MASTER_KEY 和 BETTER_AUTH_SECRET
+cp .env.example .env                      # 填写 EDGEWEIR_MASTER_KEY
 pnpm dev
 ```
 

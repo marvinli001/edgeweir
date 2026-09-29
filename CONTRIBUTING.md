@@ -24,7 +24,7 @@
 ```sh
 pnpm install
 docker compose -f compose.dev.yml up -d   # 本地 PostgreSQL
-cp .env.example .env                      # 填写 EDGEWEIR_MASTER_KEY 和 BETTER_AUTH_SECRET
+cp .env.example .env                      # 填写 EDGEWEIR_MASTER_KEY
 pnpm dev
 ```
 
