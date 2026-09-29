@@ -99,3 +99,5 @@ Phase 0 范围：
 > - 2026-09-27（MVP M6）：AccessKey 增加只读/读写范围、最后使用时间及吊销。全局 oRPC 中间件在包括可选登录在内的过程之前校验范围，只读拒绝写入过程；better-auth HTTP 路由不接受 x-api-key，防止借管理密钥接口提权。旧版 null permissions 保持读写兼容，非空但不合法的 permissions 按只读处理。
 
 > - 2026-09-27（MVP 审查）：创建 AccessKey 必须由已登录控制台的用户会话发起，服务层拒绝 api_key actor。读写与旧版 API key 仍可执行原有授权业务操作及吊销，但不能签发新的独立凭据；公开接口说明和浏览器流程同步更新。
+
+> - 2026-09-29：`BETTER_AUTH_SECRET` 改为可选。未设置（或为空）时，会话 secret 由 `EDGEWEIR_MASTER_KEY` 经 HKDF-SHA256 派生（salt `edgeweir/auth-secret/v1`，info `better-auth.secret`，32 字节，base64url），与信封加密 KEK 的派生参数不同；显式设置的值优先，已有部署的会话和两步验证不受影响。better-auth 1.7.6 用这个 secret 签名会话 cookie，并加密 TOTP 密钥和备用码，所以它不能被悄悄换掉：`system_setting` 的 `auth_secret_check` 行保存 secret 的 HMAC-SHA256 校验值（不保存 secret），启动时派生值与之不符，或者数据库在本版本之前已有用户（旧版本一律显式设置了 secret）时，控制台拒绝启动并提示恢复原来的 `BETTER_AUTH_SECRET`。运营者显式换成新值时照常启动，只记录警告日志。上文第 6 条“签名密钥来自环境变量 `BETTER_AUTH_SECRET`”以本条为准。

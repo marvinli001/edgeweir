@@ -65,7 +65,7 @@ PostgreSQL 是唯一的外部依赖。`EDGEWEIR_ANALYTICS=clickhouse` 配合 `an
 - **站点**（租户）：`site` → `site_domain`、`origin_pool` → `origin`、`origin_credential`（S3 源站密钥，信封加密）、`cache_rule`；`site_star`（按用户的星标）。
 - **配置发布**：`config_revision`（每个集群单调递增的 revision、内容哈希、二进制 IR、原因码），`node_config_status`（节点回执 + 心跳）。
 - **节点上报与任务**：`node_minute_stats`（按节点、网站、分钟的 lite 统计），`origin_health`（节点上报的被动健康状态与错误码），`cache_task` → `cache_task_node`（刷新预热任务及其在每个节点上的交付和结果，含跳过与补发）。
-- **其他**：`pki_authority`（内部 CA，私钥信封加密），`system_setting`（setup token、源站允许清单），`audit_log`（所有管理操作）。
+- **其他**：`pki_authority`（内部 CA，私钥信封加密），`system_setting`（setup token、源站允许清单等后台系统设置、会话 secret 的 HMAC 校验值），`audit_log`（所有管理操作）。
 
 迁移：`0000_init`、`0001_m1`、`0002_site_star`、`0003_m2`、`0004_wrapup_auth`（`rate_limit`）、`0005_wrapup_console`（`cache_authorized`、任务来源与节点错误码）。控制台启动时在一个专用连接上持 advisory lock 执行迁移，多实例同时启动也安全。
 

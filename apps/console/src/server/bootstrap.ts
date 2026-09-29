@@ -4,6 +4,7 @@ import { createDatabase, runMigrations } from "@edgeweir/db";
 import type { PgBoss } from "pg-boss";
 import { startWorker } from "./jobs/worker";
 import { createAuth } from "./lib/auth";
+import { assertAuthSecret, resolveAuthSecret } from "./lib/auth-secret";
 import type { AppContext } from "./lib/context";
 import { loadEnv } from "./lib/env";
 import { MasterKey } from "./lib/envelope";
@@ -48,12 +49,15 @@ export async function bootstrap(): Promise<Running> {
   log.info("database migrated");
 
   const masterKey = new MasterKey(env.EDGEWEIR_MASTER_KEY);
+  const authSecret = resolveAuthSecret(env);
+  await assertAuthSecret(db, authSecret, log);
+  log.info("session secret", { source: authSecret.source });
   // Secrets sealed before envelopes were bound to their record id.
   await upgradeLegacyEnvelopes(db, masterKey, log);
   const nodeCa = await loadOrCreateNodeCa(db, masterKey);
   const auth = createAuth({
     db,
-    secret: env.BETTER_AUTH_SECRET,
+    secret: authSecret.value,
     publicUrl: env.EDGEWEIR_PUBLIC_URL,
   });
   const events = new ConfigEventBus(env.DATABASE_URL, log.child({ component: "events" }));

@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { createAuth } from "../../src/server/lib/auth";
+import { resolveAuthSecret } from "../../src/server/lib/auth-secret";
 import {
   CLIENT_IP_HEADER,
   resolveClientIp,
@@ -234,7 +235,7 @@ describe("better-auth rate limiting", async () => {
       ...ctx,
       auth: createAuth({
         db: ctx.db,
-        secret: ctx.env.BETTER_AUTH_SECRET,
+        secret: resolveAuthSecret(ctx.env).value,
         publicUrl: ctx.env.EDGEWEIR_PUBLIC_URL,
         rateLimit: true,
       }),

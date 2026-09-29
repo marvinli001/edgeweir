@@ -45,17 +45,23 @@ function bindingAad(binding: EnvelopeBinding): string {
   return `edgeweir/envelope/v2\u0000${binding.purpose}\u0000${binding.recordId}`;
 }
 
+/** The raw bytes of EDGEWEIR_MASTER_KEY; throws unless it decodes to 32+ bytes. */
+export function decodeMasterKey(encoded: string): Buffer {
+  const raw = Buffer.from(encoded, "base64");
+  if (raw.length < 32) {
+    throw new Error(
+      "EDGEWEIR_MASTER_KEY must be at least 32 bytes, base64 encoded (generate one with `openssl rand -base64 32` and use the output as is)",
+    );
+  }
+  return raw;
+}
+
 export class MasterKey {
   readonly kid: string;
   private readonly kek: Buffer;
 
   constructor(encoded: string) {
-    const raw = Buffer.from(encoded, "base64");
-    if (raw.length < 32) {
-      throw new Error(
-        "EDGEWEIR_MASTER_KEY must be at least 32 bytes, base64 encoded (generate one with `openssl rand -base64 32` and use the output as is)",
-      );
-    }
+    const raw = decodeMasterKey(encoded);
     this.kid = createHash("sha256").update(raw).digest("hex").slice(0, 16);
     this.kek = Buffer.from(hkdfSync("sha256", raw, "edgeweir/kek/v1", "envelope", 32));
   }

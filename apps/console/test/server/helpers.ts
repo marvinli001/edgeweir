@@ -12,6 +12,7 @@ import type pg from "pg";
 import { expect } from "vitest";
 import type { createApp } from "../../src/server/app";
 import { createAuth } from "../../src/server/lib/auth";
+import { resolveAuthSecret } from "../../src/server/lib/auth-secret";
 import type { AppContext } from "../../src/server/lib/context";
 import { loadEnv } from "../../src/server/lib/env";
 import { MasterKey } from "../../src/server/lib/envelope";
@@ -67,7 +68,7 @@ export async function createTestContext(
     pool,
     auth: createAuth({
       db,
-      secret: env.BETTER_AUTH_SECRET,
+      secret: resolveAuthSecret(env).value,
       publicUrl: env.EDGEWEIR_PUBLIC_URL,
       rateLimit: opts.rateLimit,
     }),

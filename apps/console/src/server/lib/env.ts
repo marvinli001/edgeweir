@@ -13,7 +13,14 @@ const schema = z.object({
   DATABASE_URL: z.string().min(1),
   /** Base64-encoded 32+ byte key used to envelope-encrypt secrets at rest. */
   EDGEWEIR_MASTER_KEY: z.string().min(1),
-  BETTER_AUTH_SECRET: z.string().min(32),
+  /**
+   * better-auth's secret (session signatures, two-factor secrets at rest).
+   * Empty or unset: derived from EDGEWEIR_MASTER_KEY (lib/auth-secret.ts).
+   */
+  BETTER_AUTH_SECRET: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().min(32).optional(),
+  ),
   /** Public URL of the web console (behind a reverse proxy this is the proxy URL). */
   EDGEWEIR_PUBLIC_URL: z.url().default("http://localhost:3000"),
   /** URL nodes use to reach the node channel. TLS is terminated by the console itself. */
