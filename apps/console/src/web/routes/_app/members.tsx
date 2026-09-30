@@ -27,6 +27,59 @@ export const Route = createFileRoute("/_app/members")({
   component: MembersPage,
 });
 
+/**
+ * Role of a member. Components of their own (this and `RemoveMemberAction`)
+ * so that the table's cell renderers keep their identity: a new renderer per
+ * render would remount the cell and close an open select or dialog whenever
+ * the page re-renders.
+ */
+function MemberRoleSelect({ member, canGrantOwner }: { member: Member; canGrantOwner: boolean }) {
+  const queryClient = useQueryClient();
+  const updateRole = useMutation(orpc.members.updateRole.mutationOptions());
+  return (
+    <RoleSelect
+      value={member.role}
+      canGrantOwner={canGrantOwner}
+      disabled={member.role === "owner" && !canGrantOwner}
+      onChange={async (next) => {
+        try {
+          await updateRole.mutateAsync({ id: member.id, role: next });
+          toast.success(m.members_role_updated({ name: member.name }));
+        } catch (error) {
+          toast.error(errorMessage(error));
+        } finally {
+          await queryClient.invalidateQueries({ queryKey: orpc.members.key() });
+        }
+      }}
+    />
+  );
+}
+
+function RemoveMemberAction({ member }: { member: Member }) {
+  const queryClient = useQueryClient();
+  const remove = useMutation(orpc.members.remove.mutationOptions());
+  return (
+    <ConfirmDialog
+      trigger={
+        <Button size="icon-sm" variant="ghost" aria-label={m.common_remove()}>
+          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+        </Button>
+      }
+      destructive
+      title={m.members_remove_confirm({ name: member.name })}
+      confirmLabel={m.common_remove()}
+      onConfirm={async () => {
+        try {
+          await remove.mutateAsync({ id: member.id });
+          await queryClient.invalidateQueries({ queryKey: orpc.members.key() });
+        } catch (error) {
+          toast.error(errorMessage(error));
+        }
+      }}
+    />
+  );
+}
+
 function MembersPage() {
   const { me } = Route.useRouteContext();
   const queryClient = useQueryClient();
@@ -35,8 +88,6 @@ function MembersPage() {
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const role = current.data.activeOrganization?.role ?? "member";
   const canGrantOwner = role === "owner";
-  const updateRole = useMutation(orpc.members.updateRole.mutationOptions());
-  const remove = useMutation(orpc.members.remove.mutationOptions());
   const cancel = useMutation(orpc.members.cancelInvitation.mutationOptions());
   const invite = useMutation(orpc.members.invite.mutationOptions());
   const refresh = React.useCallback(
@@ -63,21 +114,7 @@ function MembersPage() {
           row.original.userId === current.data.user.id ? (
             <Badge variant="secondary">{roleLabel(row.original.role)}</Badge>
           ) : (
-            <RoleSelect
-              value={row.original.role}
-              canGrantOwner={canGrantOwner}
-              disabled={row.original.role === "owner" && !canGrantOwner}
-              onChange={async (next) => {
-                try {
-                  await updateRole.mutateAsync({ id: row.original.id, role: next });
-                  toast.success(m.members_role_updated({ name: row.original.name }));
-                } catch (error) {
-                  toast.error(errorMessage(error));
-                } finally {
-                  await refresh();
-                }
-              }}
-            />
+            <MemberRoleSelect member={row.original} canGrantOwner={canGrantOwner} />
           ),
       },
       {
@@ -110,29 +147,12 @@ function MembersPage() {
           row.original.userId === current.data.user.id ||
           (row.original.role === "owner" && !canGrantOwner) ? null : (
             <div className="flex justify-end">
-              <ConfirmDialog
-                trigger={
-                  <Button size="icon-sm" variant="ghost" aria-label={m.common_remove()}>
-                    <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                  </Button>
-                }
-                destructive
-                title={m.members_remove_confirm({ name: row.original.name })}
-                confirmLabel={m.common_remove()}
-                onConfirm={async () => {
-                  try {
-                    await remove.mutateAsync({ id: row.original.id });
-                    await refresh();
-                  } catch (error) {
-                    toast.error(errorMessage(error));
-                  }
-                }}
-              />
+              <RemoveMemberAction member={row.original} />
             </div>
           ),
       },
     ],
-    [current.data.user.id, canGrantOwner, updateRole, remove, refresh],
+    [current.data.user.id, canGrantOwner],
   );
 
   return (
