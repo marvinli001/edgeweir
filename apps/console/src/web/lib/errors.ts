@@ -1,4 +1,5 @@
 import { errorDefs, isErrorCode } from "@edgeweir/contract";
+import { orgLimitLabel } from "@/lib/org-limits";
 import { m } from "@/paraglide/messages.js";
 
 type MessageFn = (params?: Record<string, string | number>) => string;
@@ -53,6 +54,7 @@ export function localizeError(error: unknown, fallback: string = m.common_unknow
       const value = values[name];
       params[name] = typeof value === "number" ? value : String(value ?? "");
     }
+    if (code === "ORG_LIMIT_EXCEEDED") params.resource = orgLimitLabel(String(params.resource));
     const fn = messages[`error_${code.toLowerCase()}`];
     if (fn) return fn(params);
   }
