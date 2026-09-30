@@ -39,6 +39,9 @@ const CONSOLE_PROCEDURES = [
   "ipLists.create",
   "ipLists.update",
   "ipLists.delete",
+  "bans.list",
+  "bans.create",
+  "bans.delete",
   "certificates.list",
   "certificates.upload",
   "certificates.request",
@@ -300,6 +303,20 @@ describe("admin area procedures", async () => {
         "admin.organizations.setLimits",
         () => member.admin.organizations.setLimits({ id: "x", limits: {} }),
       ],
+      ["admin.bans.list", () => member.admin.bans.list({})],
+      [
+        "admin.bans.create",
+        () =>
+          member.admin.bans.create({
+            scope: "platform",
+            cidr: "203.0.113.0/24",
+            reason: "attack",
+            durationSeconds: 3600,
+          }),
+      ],
+      ["admin.bans.delete", () => member.admin.bans.delete({ id: uuid })],
+      ["settings.bans", () => member.settings.bans()],
+      ["settings.setBans", () => member.settings.setBans({ maxTotal: 100, shareAutoBans: false })],
     ];
     for (const [name, call] of calls) {
       const error = await rpcError(call());

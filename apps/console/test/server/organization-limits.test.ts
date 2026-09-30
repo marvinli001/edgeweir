@@ -37,6 +37,7 @@ describe("organization technical limits", async () => {
     purgeTasksPerMinute: null,
     purgeUrlsPerHour: null,
     members: null,
+    bans: null,
   };
 
   beforeAll(async () => {

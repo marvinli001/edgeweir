@@ -175,6 +175,14 @@ describe("service accounts, scopes and idempotency keys", async () => {
       ["POST", "/service-accounts", { name: "escalate", scopes: [] }],
       ["GET", "/audit-logs", undefined],
       ["GET", "/members", undefined],
+      ["GET", "/bans", undefined],
+      ["GET", "/admin/bans", undefined],
+      [
+        "POST",
+        "/admin/bans",
+        { scope: "platform", cidr: "203.0.113.0/24", reason: "attack", durationSeconds: 3600 },
+      ],
+      ["GET", "/settings/bans", undefined],
       ["POST", "/sites", { name: "x", domains: ["x.test"], origins: [{ address: "o.test" }] }],
     ] as const) {
       const res = await api(full, method, path, body);
