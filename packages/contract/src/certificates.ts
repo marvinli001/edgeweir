@@ -2,6 +2,28 @@ import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { domainName, uuid } from "./schemas";
 
+/** Response compression: MIME types, the defaults of every algorithm. */
+const compressionTypes = z.array(z.string().regex(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/)).max(32);
+export const DEFAULT_COMPRESSION_TYPES = [
+  "text/html",
+  "text/plain",
+  "text/css",
+  "application/javascript",
+  "application/json",
+  "image/svg+xml",
+];
+/** Minimum response size compressed, in bytes (every algorithm). */
+export const COMPRESSION_MIN_LENGTH_RANGE = { min: 1, max: 1_048_576 } as const;
+/** Compression levels; nodes read 0 as their default, so the console never sends it. */
+export const BROTLI_LEVEL_RANGE = { min: 1, max: 11 } as const;
+export const ZSTD_LEVEL_RANGE = { min: 1, max: 19 } as const;
+const minLength = z
+  .number()
+  .int()
+  .min(COMPRESSION_MIN_LENGTH_RANGE.min)
+  .max(COMPRESSION_MIN_LENGTH_RANGE.max)
+  .default(256);
+
 export const tlsSettings = z
   .object({
     certificateId: uuid.nullable().default(null),
@@ -14,21 +36,27 @@ export const tlsSettings = z
     http2: z.boolean().default(true),
     // The stock engine is capability-checked; unsupported modules cannot be enabled.
     http3: z.boolean().default(false),
-    brotli: z.literal(false).default(false),
-    zstd: z.literal(false).default(false),
+    /**
+     * Brotli and Zstandard need every active node of the site's cluster to
+     * report brotli-v1 / zstd-v1 (see sites.features). Clients that accept
+     * several encodings get zstd, then br, then gzip at equal q-values.
+     */
+    brotli: z.boolean().default(false),
+    brotliLevel: z
+      .number()
+      .int()
+      .min(BROTLI_LEVEL_RANGE.min)
+      .max(BROTLI_LEVEL_RANGE.max)
+      .default(6),
+    brotliMinLength: minLength,
+    brotliTypes: compressionTypes.default(() => [...DEFAULT_COMPRESSION_TYPES]),
+    zstd: z.boolean().default(false),
+    zstdLevel: z.number().int().min(ZSTD_LEVEL_RANGE.min).max(ZSTD_LEVEL_RANGE.max).default(3),
+    zstdMinLength: minLength,
+    zstdTypes: compressionTypes.default(() => [...DEFAULT_COMPRESSION_TYPES]),
     gzip: z.boolean().default(true),
-    gzipMinLength: z.number().int().min(1).max(1_048_576).default(256),
-    gzipTypes: z
-      .array(z.string().regex(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/))
-      .max(32)
-      .default([
-        "text/html",
-        "text/plain",
-        "text/css",
-        "application/javascript",
-        "application/json",
-        "image/svg+xml",
-      ]),
+    gzipMinLength: minLength,
+    gzipTypes: compressionTypes.default(() => [...DEFAULT_COMPRESSION_TYPES]),
     ocspStapling: z.boolean().default(false),
   })
   .refine((s) => (!s.forceHttps && s.hstsMaxAge === 0) || s.certificateId !== null, {

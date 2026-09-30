@@ -26,6 +26,10 @@ export const logEntry = z.object({
   sampleRate: z.number(),
   /** JA4 TLS client fingerprint; empty unless the site records it. */
   ja4: z.string().default(""),
+  /** OWASP CRS rules the request matched (at most 16, ascending). */
+  wafRuleIds: z.array(z.number().int()).default([]),
+  /** CRS blocked the request (block mode, anomaly score at or above the threshold). */
+  wafBlocked: z.boolean().default(false),
 });
 export type LogEntry = z.infer<typeof logEntry>;
 export const logsContract = {

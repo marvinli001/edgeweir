@@ -24,6 +24,7 @@ import {
 import * as s from "./schemas";
 import { serviceAccountsContract } from "./service-accounts";
 import { usageContract, usageSettings } from "./usage";
+import { siteFeatures, wafContract, wafSettings } from "./waf";
 
 export * from "./addresses";
 export * from "./bans";
@@ -34,6 +35,7 @@ export * from "./node-features";
 export * from "./protection";
 export * from "./rules";
 export * from "./schemas";
+export * from "./waf";
 
 const idParam = z.object({ id: s.uuid });
 /** better-auth ids (users, organizations, members, invitations) are opaque strings. */
@@ -74,6 +76,8 @@ export const contract = {
   protection: protectionContract,
   /** CC mitigation levels and events of a site, as the nodes report them. */
   security: securityContract,
+  /** OWASP CRS managed rules of a site and the rules it matched. */
+  waf: wafContract,
   certificates: certificatesContract,
   dnsCredentials: dnsCredentialsContract,
   https: httpsContract,
@@ -293,6 +297,11 @@ export const contract = {
       .route({ method: "GET", path: "/sites/{id}/origin-health", tags: ["sites"] })
       .input(idParam)
       .output(z.array(s.originHealth)),
+    /** Whether Brotli, Zstandard and OWASP CRS can be turned on for the site now. */
+    features: oc
+      .route({ method: "GET", path: "/sites/{id}/features", tags: ["sites"] })
+      .input(idParam)
+      .output(siteFeatures),
   },
   /** Cache purge (URL, prefix, whole site) and prefetch tasks with per-node results. */
   cacheTasks: {
@@ -516,6 +525,13 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/cc-template", tags: ["settings"] })
       .input(ccTemplate)
       .output(ccTemplate),
+    /** Whether tenants may turn on OWASP CRS for their sites. */
+    waf: oc.route({ method: "GET", path: "/settings/waf", tags: ["settings"] }).output(wafSettings),
+    /** Sites that already run CRS keep it; tenants can then only turn it off. */
+    setWaf: oc
+      .route({ method: "PUT", path: "/settings/waf", tags: ["settings"] })
+      .input(wafSettings)
+      .output(wafSettings),
     /** Recursive DNS servers for domain ownership TXT checks. */
     dnsResolvers: oc
       .route({ method: "GET", path: "/settings/dns-resolvers", tags: ["settings"] })

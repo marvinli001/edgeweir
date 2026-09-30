@@ -1148,5 +1148,7 @@
   "protection_platform_off_confirm": "关闭平台 Under Attack？",
   "protection_platform_note": "所有集群都会发布新配置",
   "protection_retention": "安全事件保留天数",
-  "logs_ja4": "JA4"
+  "logs_ja4": "JA4",
+  "error_waf_crs_forbidden": "平台不允许租户开启 OWASP CRS",
+  "revision_reason_site_waf_updated": "修改网站 {site} 的 OWASP CRS"
 }

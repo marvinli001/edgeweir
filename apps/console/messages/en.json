@@ -1148,5 +1148,7 @@
   "protection_platform_off_confirm": "Turn off platform Under Attack?",
   "protection_platform_note": "Every cluster gets a new configuration",
   "protection_retention": "Security event retention (days)",
-  "logs_ja4": "JA4"
+  "logs_ja4": "JA4",
+  "error_waf_crs_forbidden": "The platform does not allow tenants to turn on OWASP CRS",
+  "revision_reason_site_waf_updated": "OWASP CRS of {site} updated"
 }
