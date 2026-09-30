@@ -14,6 +14,7 @@ export function FormSelect({
   options,
   onChange,
   disabled,
+  testId,
 }: {
   id: string;
   label: string;
@@ -21,6 +22,7 @@ export function FormSelect({
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
   disabled?: boolean;
+  testId?: string;
 }) {
   return (
     <Field>
@@ -32,7 +34,7 @@ export function FormSelect({
         }}
         disabled={disabled}
       >
-        <SelectTrigger id={id} className="w-full">
+        <SelectTrigger id={id} className="w-full" data-testid={testId}>
           <SelectValue>{options.find((option) => option.value === value)?.label ?? ""}</SelectValue>
         </SelectTrigger>
         <SelectContent>

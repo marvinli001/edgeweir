@@ -43,6 +43,8 @@ export function LogsTab({ siteId }: { siteId: string }) {
     limit: 100,
   }));
   const logs = useQuery(orpc.logs.query.queryOptions({ input: query }));
+  // The JA4 column appears when an entry carries a fingerprint (the site records it).
+  const withJa4 = !!logs.data?.entries.some((entry) => entry.ja4);
   const exporter = useAction();
   return (
     <div className="min-w-0 space-y-5">
@@ -161,7 +163,7 @@ export function LogsTab({ siteId }: { siteId: string }) {
           ) : (
             <>
               {logs.data.truncated && <SafetyNote>{m.logs_query_limit()}</SafetyNote>}
-              <div className="max-w-full overflow-x-auto">
+              <div className="max-w-full overflow-x-auto" data-testid="logs-table">
                 <table className="w-full min-w-[60rem] text-left text-sm">
                   <thead>
                     <tr className="border-b text-muted-foreground">
@@ -173,6 +175,7 @@ export function LogsTab({ siteId }: { siteId: string }) {
                         m.logs_bytes(),
                         m.logs_duration(),
                         m.logs_cache(),
+                        ...(withJa4 ? [m.logs_ja4()] : []),
                       ].map((label) => (
                         <th key={label} className="whitespace-nowrap p-3 font-medium">
                           {label}
@@ -197,6 +200,14 @@ export function LogsTab({ siteId }: { siteId: string }) {
                         <td className="p-3 tabular-nums">{row.bytesSent}</td>
                         <td className="p-3 tabular-nums">{row.durationMs}</td>
                         <td className="p-3">{row.cacheStatus}</td>
+                        {withJa4 ? (
+                          <td
+                            className="whitespace-nowrap p-3 font-mono text-xs"
+                            data-testid="log-ja4"
+                          >
+                            {row.ja4}
+                          </td>
+                        ) : null}
                       </tr>
                     ))}
                   </tbody>

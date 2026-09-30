@@ -47,6 +47,7 @@ import {
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
+import { challengeLabel } from "@/lib/protection";
 
 const phaseLabel = (phase: Phase) =>
   ({
@@ -103,13 +104,6 @@ function defaultAction(kind: RuleInput["action"]["kind"]): RuleInput["action"] {
       return { kind };
   }
 }
-export const challengeLabel = (type: (typeof challengeTypes)[number]) =>
-  ({
-    cookie302: m.challenge_cookie302,
-    js: m.challenge_js,
-    pow: m.challenge_pow,
-    captcha: m.challenge_captcha,
-  })[type]();
 const HEADER_KEY = "http.request.headers.";
 /** Rate limit keys offered in the select; a request header is the last choice. */
 const keyChoice = (key: string) => (key.startsWith(HEADER_KEY) ? "header" : key);

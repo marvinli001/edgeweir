@@ -17,6 +17,7 @@ import { LogsTab } from "@/components/site/logs-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
 import { RulesTab } from "@/components/site/rules-tab";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
+import { SecurityTab } from "@/components/site/security-tab";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { SiteStatus, suspendReasonLabel } from "@/components/site-status";
 import { ErrorState, LoadingState } from "@/components/states";
@@ -45,7 +46,7 @@ function SiteDetailPage() {
   const { id } = Route.useParams();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const { session, isAdmin } = Route.useRouteContext();
+  const { session, isAdmin, me } = Route.useRouteContext();
   const site = useQuery(orpc.sites.get.queryOptions({ input: { id } }));
   const stars = useSiteStars();
   const tab: SiteTab = search.tab ?? "overview";
@@ -164,6 +165,9 @@ function SiteDetailPage() {
             </TabsContent>
             <TabsContent value="rules" className="animate-enter">
               <RulesTab siteId={site.data.id} />
+            </TabsContent>
+            <TabsContent value="security" className="animate-enter">
+              <SecurityTab siteId={site.data.id} organizationRole={me.activeOrganization?.role} />
             </TabsContent>
             <TabsContent value="logs" className="animate-enter">
               <LogsTab siteId={site.data.id} />

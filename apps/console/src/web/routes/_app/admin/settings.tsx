@@ -7,6 +7,7 @@ import { DnsResolversCard } from "@/components/dns-resolvers";
 import { GeoIpSettings } from "@/components/geoip-settings";
 import { OriginAllowListCard } from "@/components/origin-allow-list";
 import { Page } from "@/components/page";
+import { ProtectionSettingsCards } from "@/components/protection-settings";
 import { ReleaseSourceCard } from "@/components/release-source";
 import { SmtpSettings } from "@/components/smtp-settings";
 import { ErrorState, LoadingState } from "@/components/states";
@@ -95,6 +96,7 @@ function SystemSettingsPage() {
       <DnsResolversCard />
       <UsageSettingsCard />
       <BanSettingsCard />
+      <ProtectionSettingsCards />
       <GeoIpSettings />
       <SmtpSettings />
     </Page>

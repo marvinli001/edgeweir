@@ -1,0 +1,584 @@
+import {
+  CHALLENGE_TYPES,
+  type ChallengeType,
+  PASS_TTL_RANGE,
+  POW_DIFFICULTY_RANGE,
+  POW_HIGH_DIFFICULTY_RANGE,
+  type SecurityEventKind,
+  type SiteProtection,
+  type SiteProtectionUpdateInput,
+  securityEventKind,
+} from "@edgeweir/contract";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
+import * as React from "react";
+import { toast } from "sonner";
+import {
+  type CcDraft,
+  CcThresholdFields,
+  fromCcDraft,
+  toCcDraft,
+} from "@/components/cc-thresholds";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { FormSelect } from "@/components/form-select";
+import { Pager } from "@/components/pager";
+import { SafetyNote } from "@/components/safety-note";
+import { NumberField, SwitchField } from "@/components/site/fields";
+import { SaveBar } from "@/components/site/save-site";
+import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { StatusDot } from "@/components/status-dot";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Switch } from "@/components/ui/switch";
+import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
+import { errorMessage, orpc } from "@/lib/orpc";
+import { challengeLabel, eventKindLabel, levelLabel, metricLabel } from "@/lib/protection";
+
+const PAGE_SIZE = 20;
+const ALL = "all";
+const HOURS = [1, 24, 168] as const;
+
+/** Saves part of the site's protection and refreshes it; returns whether it worked. */
+function useUpdateProtection(siteId: string) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation(orpc.protection.update.mutationOptions());
+  const [error, setError] = React.useState<string | null>(null);
+  const save = async (patch: Omit<SiteProtectionUpdateInput, "id">) => {
+    setError(null);
+    try {
+      const saved = await mutation.mutateAsync({ id: siteId, ...patch });
+      queryClient.setQueryData(orpc.protection.get.queryKey({ input: { id: siteId } }), saved);
+      toast.success(m.common_saved());
+      return true;
+    } catch (err) {
+      setError(errorMessage(err));
+      toast.error(errorMessage(err));
+      return false;
+    }
+  };
+  return { save, error, pending: mutation.isPending };
+}
+
+/** The site's security tab: Under Attack, challenges, CC policy and what the nodes report. */
+export function SecurityTab({
+  siteId,
+  organizationRole,
+}: {
+  siteId: string;
+  organizationRole?: string;
+}) {
+  const { isAdmin } = useRouteContext({ from: "/_app" });
+  const canEdit = isAdmin || organizationRole === "owner" || organizationRole === "admin";
+  const protection = useQuery(orpc.protection.get.queryOptions({ input: { id: siteId } }));
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      {protection.isPending ? (
+        <LoadingState />
+      ) : protection.isError ? (
+        <ErrorState error={protection.error} onRetry={() => void protection.refetch()} />
+      ) : (
+        <>
+          <UnderAttackCard siteId={siteId} protection={protection.data} canEdit={canEdit} />
+          <ChallengeSettingsCard
+            key={`challenge-${protection.data.updatedAt}`}
+            siteId={siteId}
+            protection={protection.data}
+            canEdit={canEdit}
+          />
+          <CcPolicyCard
+            key={`cc-${protection.data.updatedAt}`}
+            siteId={siteId}
+            protection={protection.data}
+            canEdit={canEdit}
+          />
+        </>
+      )}
+      <NodeLevelsCard siteId={siteId} />
+      <TopCard siteId={siteId} />
+      <EventsCard siteId={siteId} />
+    </div>
+  );
+}
+
+function UnderAttackCard({
+  siteId,
+  protection,
+  canEdit,
+}: {
+  siteId: string;
+  protection: SiteProtection;
+  canEdit: boolean;
+}) {
+  const { save, pending } = useUpdateProtection(siteId);
+  const turningOn = !protection.underAttack;
+  const toggle = (
+    <Switch
+      id="protection-under-attack"
+      checked={protection.underAttack}
+      disabled={!canEdit || pending}
+      data-testid="protection-under-attack"
+    />
+  );
+  return (
+    <Card className="animate-enter">
+      <CardHeader>
+        <CardTitle>{m.protection_under_attack()}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        <Field orientation="horizontal" className="min-h-9 w-auto self-end">
+          {canEdit ? (
+            <ConfirmDialog
+              trigger={toggle}
+              destructive={turningOn}
+              title={turningOn ? m.protection_under_attack_on() : m.protection_under_attack_off()}
+              note={turningOn ? m.protection_under_attack_on_note() : undefined}
+              confirmLabel={turningOn ? m.protection_turn_on() : m.protection_turn_off()}
+              onConfirm={() => save({ underAttack: turningOn })}
+            />
+          ) : (
+            toggle
+          )}
+          <FieldLabel htmlFor="protection-under-attack">{m.protection_under_attack()}</FieldLabel>
+          {protection.underAttack ? (
+            <Badge variant="destructive" data-testid="protection-under-attack-on">
+              {m.protection_on()}
+            </Badge>
+          ) : null}
+        </Field>
+        <FormSelect
+          id="protection-under-attack-type"
+          label={m.rules_challenge_type()}
+          value={protection.underAttackChallenge}
+          disabled={!canEdit || pending}
+          testId="protection-under-attack-type"
+          options={CHALLENGE_TYPES.map((type) => ({ value: type, label: challengeLabel(type) }))}
+          onChange={(type) => void save({ underAttackChallenge: type as ChallengeType })}
+        />
+        {protection.platformUnderAttack ? (
+          <SafetyNote className="sm:col-span-2" data-testid="protection-platform-on">
+            {m.protection_platform_on()}
+          </SafetyNote>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ChallengeSettingsCard({
+  siteId,
+  protection,
+  canEdit,
+}: {
+  siteId: string;
+  protection: SiteProtection;
+  canEdit: boolean;
+}) {
+  const { save, error, pending } = useUpdateProtection(siteId);
+  const initial = {
+    passTtlSeconds: String(protection.passTtlSeconds),
+    powDifficulty: String(protection.powDifficulty),
+    powHighDifficulty: String(protection.powHighDifficulty),
+    logJa4: protection.logJa4,
+  };
+  const [draft, setDraft] = React.useState(initial);
+  return (
+    <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
+      <form
+        className="flex flex-col gap-(--card-spacing)"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save({
+            passTtlSeconds: Number(draft.passTtlSeconds),
+            powDifficulty: Number(draft.powDifficulty),
+            powHighDifficulty: Number(draft.powHighDifficulty),
+            logJa4: draft.logJa4,
+          });
+        }}
+      >
+        <CardHeader>
+          <CardTitle>{m.protection_challenge_title()}</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <NumberField
+            id="protection-pass-ttl"
+            label={m.protection_pass_ttl()}
+            value={draft.passTtlSeconds}
+            min={PASS_TTL_RANGE.min}
+            max={PASS_TTL_RANGE.max}
+            step={1}
+            required
+            disabled={!canEdit}
+            testId="protection-pass-ttl"
+            onChange={(passTtlSeconds) => setDraft({ ...draft, passTtlSeconds })}
+          />
+          <NumberField
+            id="protection-pow"
+            label={m.protection_pow()}
+            value={draft.powDifficulty}
+            min={POW_DIFFICULTY_RANGE.min}
+            max={POW_DIFFICULTY_RANGE.max}
+            step={1}
+            required
+            disabled={!canEdit}
+            testId="protection-pow"
+            onChange={(powDifficulty) => setDraft({ ...draft, powDifficulty })}
+          />
+          <NumberField
+            id="protection-pow-high"
+            label={m.protection_pow_high()}
+            value={draft.powHighDifficulty}
+            min={Math.max(POW_HIGH_DIFFICULTY_RANGE.min, Number(draft.powDifficulty) || 0)}
+            max={POW_HIGH_DIFFICULTY_RANGE.max}
+            step={1}
+            required
+            disabled={!canEdit}
+            testId="protection-pow-high"
+            onChange={(powHighDifficulty) => setDraft({ ...draft, powHighDifficulty })}
+          />
+          <SwitchField
+            id="protection-log-ja4"
+            label={m.protection_log_ja4()}
+            checked={draft.logJa4}
+            disabled={!canEdit}
+            testId="protection-log-ja4"
+            onCheckedChange={(logJa4) => setDraft({ ...draft, logJa4 })}
+          />
+        </CardContent>
+        {canEdit ? (
+          <SaveBar
+            dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
+            pending={pending}
+            error={error}
+            testId="protection-save"
+          />
+        ) : null}
+      </form>
+    </Card>
+  );
+}
+
+function CcPolicyCard({
+  siteId,
+  protection,
+  canEdit,
+}: {
+  siteId: string;
+  protection: SiteProtection;
+  canEdit: boolean;
+}) {
+  const { save, error, pending } = useUpdateProtection(siteId);
+  const initial = {
+    enabled: protection.cc.enabled,
+    followTemplate: protection.cc.followTemplate,
+    thresholds: toCcDraft(protection.cc),
+  };
+  const [draft, setDraft] = React.useState(initial);
+  // While following, the fields show the platform template.
+  const shown: CcDraft = draft.followTemplate ? toCcDraft(protection.ccTemplate) : draft.thresholds;
+  return (
+    <Card className="animate-enter" style={{ animationDelay: "120ms" }}>
+      <form
+        className="flex flex-col gap-(--card-spacing)"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save({
+            cc: {
+              enabled: draft.enabled,
+              followTemplate: draft.followTemplate,
+              ...(draft.followTemplate ? {} : fromCcDraft(draft.thresholds)),
+            },
+          });
+        }}
+      >
+        <CardHeader>
+          <CardTitle>{m.cc_title()}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-wrap gap-x-6 gap-y-3">
+            <SwitchField
+              id="cc-enabled"
+              label={m.cc_enabled()}
+              checked={draft.enabled}
+              disabled={!canEdit}
+              testId="cc-enabled"
+              onCheckedChange={(enabled) => setDraft({ ...draft, enabled })}
+            />
+            <SwitchField
+              id="cc-follow-template"
+              label={m.cc_follow_template()}
+              checked={draft.followTemplate}
+              disabled={!canEdit}
+              testId="cc-follow-template"
+              onCheckedChange={(followTemplate) =>
+                setDraft({
+                  ...draft,
+                  followTemplate,
+                  // Custom thresholds start from the template the site followed.
+                  thresholds: followTemplate ? draft.thresholds : shown,
+                })
+              }
+            />
+          </div>
+          <CcThresholdFields
+            prefix="cc"
+            value={shown}
+            disabled={!canEdit || draft.followTemplate}
+            onChange={(thresholds) => setDraft({ ...draft, thresholds })}
+          />
+          <SafetyNote>{m.cc_per_node_note()}</SafetyNote>
+        </CardContent>
+        {canEdit ? (
+          <SaveBar
+            dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
+            pending={pending}
+            error={error}
+            testId="cc-save"
+          />
+        ) : null}
+      </form>
+    </Card>
+  );
+}
+
+function NodeLevelsCard({ siteId }: { siteId: string }) {
+  const state = useQuery(
+    orpc.security.state.queryOptions({
+      input: { id: siteId, hours: 24 },
+      refetchInterval: 15_000,
+      meta: { background: true },
+    }),
+  );
+  return (
+    <Card className="animate-enter" style={{ animationDelay: "180ms" }}>
+      <CardHeader>
+        <CardTitle>{m.security_nodes_title()}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {state.isPending ? (
+          <LoadingState />
+        ) : state.isError ? (
+          <ErrorState error={state.error} onRetry={() => void state.refetch()} />
+        ) : state.data.nodes.length === 0 ? (
+          <EmptyState title={m.security_no_nodes()} />
+        ) : (
+          <ul className="divide-y rounded-2xl border" data-testid="security-nodes">
+            {state.data.nodes.map((node, index) => (
+              <li
+                key={node.id}
+                className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2.5 animate-enter"
+                style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                data-testid="security-node-row"
+                data-node-id={node.id}
+                data-level={node.level}
+              >
+                <span className="min-w-32 flex-1 truncate text-sm font-medium">{node.name}</span>
+                <StatusDot tone={node.online ? "good" : "idle"}>
+                  {node.online ? m.security_online() : m.security_offline()}
+                </StatusDot>
+                <Badge
+                  variant={node.level === "normal" ? "outline" : "destructive"}
+                  data-testid="security-node-level"
+                >
+                  {levelLabel(node.level)}
+                </Badge>
+                {node.escalatedPaths ? (
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {m.security_escalated_paths({ count: formatNumber(node.escalatedPaths) })}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TopList({
+  title,
+  items,
+  testId,
+  mono,
+}: {
+  title: string;
+  items: { value: string; count: number }[];
+  testId: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2" data-testid={testId}>
+      <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{m.security_top_empty()}</p>
+      ) : (
+        <ol className="divide-y rounded-2xl border">
+          {items.map((item) => (
+            <li key={item.value} className="flex items-center gap-3 px-3 py-2 text-sm">
+              <span className={`min-w-0 flex-1 break-all ${mono ? "font-mono text-xs" : ""}`}>
+                {item.value}
+              </span>
+              <span className="tabular-nums text-muted-foreground">{formatNumber(item.count)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function TopCard({ siteId }: { siteId: string }) {
+  const [hours, setHours] = React.useState<(typeof HOURS)[number]>(24);
+  const state = useQuery({
+    ...orpc.security.state.queryOptions({ input: { id: siteId, hours } }),
+    placeholderData: keepPreviousData,
+  });
+  return (
+    <Card className="animate-enter" style={{ animationDelay: "240ms" }}>
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+        <CardTitle>{m.security_top_title()}</CardTitle>
+        <div className="w-full sm:w-44">
+          <FormSelect
+            id="security-hours"
+            label={m.security_hours()}
+            value={String(hours)}
+            testId="security-hours"
+            options={HOURS.map((value) => ({
+              value: String(value),
+              label: m.security_hours_value({ hours: value }),
+            }))}
+            onChange={(value) => setHours(Number(value) as (typeof HOURS)[number])}
+          />
+        </div>
+      </CardHeader>
+      <CardContent>
+        {state.isPending ? (
+          <LoadingState />
+        ) : state.isError ? (
+          <ErrorState error={state.error} onRetry={() => void state.refetch()} />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            <TopList
+              title={m.security_top_ips()}
+              items={state.data.topIps}
+              testId="security-top-ips"
+              mono
+            />
+            <TopList
+              title={m.security_top_paths()}
+              items={state.data.topPaths}
+              testId="security-top-paths"
+              mono
+            />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function EventsCard({ siteId }: { siteId: string }) {
+  const [page, setPage] = React.useState(1);
+  const [kind, setKind] = React.useState<SecurityEventKind | undefined>();
+  const events = useQuery({
+    ...orpc.security.events.queryOptions({
+      input: { id: siteId, kind, page, pageSize: PAGE_SIZE },
+    }),
+    placeholderData: keepPreviousData,
+    refetchInterval: 30_000,
+    meta: { background: true },
+  });
+  return (
+    <Card className="animate-enter" style={{ animationDelay: "300ms" }}>
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+        <CardTitle>{m.security_events_title()}</CardTitle>
+        <div className="w-full sm:w-44">
+          <FormSelect
+            id="security-event-kind"
+            label={m.security_event_kind()}
+            value={kind ?? ALL}
+            testId="security-event-kind"
+            options={[
+              { value: ALL, label: m.security_event_kind_all() },
+              ...securityEventKind.options.map((value) => ({
+                value,
+                label: eventKindLabel(value),
+              })),
+            ]}
+            onChange={(value) => {
+              setPage(1);
+              setKind(value === ALL ? undefined : (value as SecurityEventKind));
+            }}
+          />
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {events.isPending ? (
+          <LoadingState />
+        ) : events.isError ? (
+          <ErrorState error={events.error} onRetry={() => void events.refetch()} />
+        ) : events.data.items.length === 0 ? (
+          <EmptyState title={m.security_events_empty()} />
+        ) : (
+          <>
+            <ol className="flex flex-col gap-2" data-testid="security-events">
+              {events.data.items.map((event, index) => (
+                <li
+                  key={event.id}
+                  className="flex flex-col gap-1 rounded-2xl border px-3 py-2.5 animate-enter"
+                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                  data-testid="security-event-row"
+                  data-kind={event.kind}
+                >
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <Badge variant={event.kind === "ip_banned" ? "destructive" : "secondary"}>
+                      {eventKindLabel(event.kind)}
+                    </Badge>
+                    {event.kind === "ip_banned" ? (
+                      <span className="font-mono text-xs break-all">{event.address}</span>
+                    ) : (
+                      <span>
+                        {m.security_level_change({
+                          from: levelLabel(event.previousLevel),
+                          to: levelLabel(event.level),
+                        })}
+                      </span>
+                    )}
+                    {event.path ? (
+                      <span className="font-mono text-xs break-all">{event.path}</span>
+                    ) : null}
+                    <span
+                      className="ml-auto text-xs text-muted-foreground"
+                      title={formatDateTime(event.occurredAt)}
+                    >
+                      {timeAgo(event.occurredAt)}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                    <span>{event.node?.name || m.security_node_deleted()}</span>
+                    {event.metric ? (
+                      <span className="tabular-nums">
+                        {m.security_metric_value({
+                          metric: metricLabel(event.metric),
+                          observed: formatNumber(event.observed),
+                          threshold: formatNumber(event.threshold),
+                        })}
+                      </span>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <Pager
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={events.data.total}
+              onPageChange={setPage}
+            />
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

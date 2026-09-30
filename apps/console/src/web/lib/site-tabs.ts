@@ -9,6 +9,7 @@ export const SITE_TABS = [
   "cache",
   "https",
   "rules",
+  "security",
   "logs",
 ] as const;
 
@@ -27,6 +28,7 @@ export function siteTabLabel(tab: SiteTab): string {
     cache: m.site_tab_cache,
     https: m.site_tab_https,
     rules: m.site_tab_rules,
+    security: m.site_tab_security,
     logs: m.site_tab_logs,
   }[tab]();
 }
