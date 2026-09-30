@@ -85,10 +85,39 @@ function SuspendDialog({
   );
 }
 
+/**
+ * Resume with confirmation. A component of its own so that the table's cell
+ * renderers keep their identity: a new renderer per render would remount the
+ * cell and close an open dialog whenever the page re-renders.
+ */
+function ResumeAction({ site }: { site: Site }) {
+  const queryClient = useQueryClient();
+  const resume = useMutation(orpc.admin.sites.resume.mutationOptions());
+  return (
+    <ConfirmDialog
+      trigger={
+        <Button size="sm" variant="outline" data-testid="site-resume">
+          {m.site_resume()}
+        </Button>
+      }
+      title={m.site_resume_confirm({ name: site.name })}
+      confirmLabel={m.site_resume()}
+      onConfirm={async () => {
+        try {
+          await resume.mutateAsync({ id: site.id, expectedUpdatedAt: site.updatedAt });
+          await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
+          toast.success(m.site_resumed_toast());
+        } catch (err) {
+          toast.error(errorMessage(err));
+        }
+      }}
+    />
+  );
+}
+
 function AdminSitesPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const queryClient = useQueryClient();
   const page = search.page ?? 1;
   const sites = useQuery({
     ...orpc.sites.list.queryOptions({
@@ -96,7 +125,6 @@ function AdminSitesPage() {
     }),
     placeholderData: keepPreviousData,
   });
-  const resume = useMutation(orpc.admin.sites.resume.mutationOptions());
   const [suspending, setSuspending] = React.useState<Site | null>(null);
   const columns = React.useMemo<Columns<Site>>(
     () => [
@@ -154,27 +182,7 @@ function AdminSitesPage() {
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) =>
           row.original.suspended ? (
-            <ConfirmDialog
-              trigger={
-                <Button size="sm" variant="outline" data-testid="site-resume">
-                  {m.site_resume()}
-                </Button>
-              }
-              title={m.site_resume_confirm({ name: row.original.name })}
-              confirmLabel={m.site_resume()}
-              onConfirm={async () => {
-                try {
-                  await resume.mutateAsync({
-                    id: row.original.id,
-                    expectedUpdatedAt: row.original.updatedAt,
-                  });
-                  await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
-                  toast.success(m.site_resumed_toast());
-                } catch (err) {
-                  toast.error(errorMessage(err));
-                }
-              }}
-            />
+            <ResumeAction site={row.original} />
           ) : (
             <Button
               size="sm"
@@ -187,7 +195,7 @@ function AdminSitesPage() {
           ),
       },
     ],
-    [queryClient, resume],
+    [],
   );
 
   return (
