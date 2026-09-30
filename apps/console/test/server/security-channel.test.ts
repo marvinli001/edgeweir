@@ -336,13 +336,24 @@ describe("challenge keys, security events and JA4 over the node channel", async 
     await sweepAlerts(ctx);
     expect((await alertEvents()).map((e) => e.status)).toEqual(["firing"]);
     // …and resolves once none does (and the last raise is older than two minutes).
+    // A site back at normal whose attacked paths are still escalated is shown
+    // with them, but it no longer holds the alert.
     await ctx.db
       .update(schema.securityEvent)
       .set({ receivedAt: new Date(Date.now() - 600_000) })
       .where(eq(schema.securityEvent.siteId, siteId));
-    await mtls.reportStatus({ appliedRevision: 0n, state: ApplyState.APPLIED, security: [] });
+    await mtls.reportStatus({
+      appliedRevision: 0n,
+      state: ApplyState.APPLIED,
+      security: [{ siteId, level: "normal", escalatedPaths: 2 }],
+    });
     const [cleared] = await ctx.db.select().from(schema.node).where(eq(schema.node.id, nodeId));
-    expect(cleared?.securityState).toEqual([]);
+    expect(cleared?.securityState).toEqual([{ siteId, level: "normal", escalatedPaths: 2 }]);
+    expect(
+      (await siteSecurityState(ctx.db, siteId, { all: true }, 24)).nodes.find(
+        (n) => n.id === nodeId,
+      ),
+    ).toMatchObject({ level: "normal", escalatedPaths: 2 });
     await ctx.db
       .insert(schema.siteDomain)
       .values({ siteId, name: "alerts.guarded.test", verified: true })

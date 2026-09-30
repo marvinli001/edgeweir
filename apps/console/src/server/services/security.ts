@@ -200,7 +200,10 @@ export async function reportSecurityEvents(
   return accepted.length;
 }
 
-/** The CC state of a heartbeat as stored on the node row: known levels, valid site ids. */
+/**
+ * The CC state of a heartbeat as stored on the node row: known levels, valid
+ * site ids; sites at normal only while some of their paths are escalated.
+ */
 export function toNodeSecurityState(
   security: { siteId: string; level: string; escalatedPaths: number }[],
 ): schema.NodeSiteSecurity[] {
@@ -209,18 +212,13 @@ export function toNodeSecurityState(
     .flatMap((entry) => {
       const siteId = entry.siteId.toLowerCase();
       if (!UUID_RE.test(siteId) || seen.has(siteId) || !isLevel(entry.level)) return [];
-      if (entry.level === "normal") return [];
+      const escalatedPaths = Math.max(
+        0,
+        Math.min(Math.trunc(finite(entry.escalatedPaths)), 1_000_000),
+      );
+      if (entry.level === "normal" && escalatedPaths === 0) return [];
       seen.add(siteId);
-      return [
-        {
-          siteId,
-          level: entry.level,
-          escalatedPaths: Math.max(
-            0,
-            Math.min(Math.trunc(finite(entry.escalatedPaths)), 1_000_000),
-          ),
-        },
-      ];
+      return [{ siteId, level: entry.level, escalatedPaths }];
     })
     .slice(0, 2000);
 }
@@ -234,7 +232,8 @@ export async function elevatedSites(db: Executor, now = Date.now()): Promise<Set
   const elevated = new Set<string>();
   for (const node of nodes)
     if (isOnline(node.lastSeenAt, now))
-      for (const entry of node.securityState) elevated.add(entry.siteId);
+      for (const entry of node.securityState)
+        if (entry.level !== "normal") elevated.add(entry.siteId);
   // A raise reported moments ago counts until the next heartbeat carries it.
   const recent = await db
     .selectDistinct({ siteId: schema.securityEvent.siteId })

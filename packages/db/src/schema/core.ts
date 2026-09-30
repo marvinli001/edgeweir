@@ -79,10 +79,13 @@ export interface NodeBanStatus {
   reportedAt: string;
 }
 
-/** CC mitigation level of one site on a node (ReportStatus.security), sites above normal only. */
+/**
+ * CC mitigation level of one site on a node (ReportStatus.security): sites
+ * above normal, or at normal with escalated paths.
+ */
 export interface NodeSiteSecurity {
   siteId: string;
-  /** cookie302 | js | pow | captcha */
+  /** normal | cookie302 | js | pow | captcha */
   level: string;
   /** Paths challenged above the site's level. */
   escalatedPaths: number;
