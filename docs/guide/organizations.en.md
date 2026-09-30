@@ -24,6 +24,7 @@ Organization roles: **Owner** (`owner`), **Admin** (`admin`), and **Member** (`m
 | Capability | Owner | Admin | Member |
 | --- | --- | --- | --- |
 | Sites, domain ownership, certificates and DNS credentials, IP lists, purge & prefetch, access logs, alert subscriptions | ✓ | ✓ | ✓ |
+| Enable / disable sites | ✓ | ✓ | — |
 | Create AccessKeys (calling `/api/v1` as their creator) | ✓ | ✓ | ✓ |
 | Open **Members**: members and pending invitations | ✓ | ✓ | — |
 | Invite, change the role of, and remove **Admin** and **Member** | ✓ | ✓ | — |
@@ -71,6 +72,48 @@ Switch: **Members → Organization policy → Require two-factor authentication*
 | API | The member's calls on organization resources, including `/api/v1` calls with their AccessKeys, return `TWO_FACTOR_REQUIRED` |
 | Exemption | Platform administrators are not bound by the organization policy |
 | Status | The **2FA** column in **Members** shows **On** / **Off** |
+
+## Site enabling and platform suspension
+
+A site has two independent states; it is shipped to nodes only when both allow it:
+
+| State | Changed by | Where |
+| --- | --- | --- |
+| Enabled / disabled | Organization owners and admins; platform administrators | **Disable** / **Enable** under **Overview → Status** of the site (confirmed) |
+| Suspended | Platform administrators | **Admin → Sites**, see [Administration](admin.en.md#sites) |
+
+| Item | Behavior |
+| --- | --- |
+| List | The **Status** column of **Sites** shows **Active**, **Disabled**, **Suspended** |
+| Nodes | A disabled or suspended site is not shipped; nodes answer 404 for its domains (`X-Edgeweir-Error: unknown-host`) |
+| DNS | Records stay, see [Generated records](dns-and-alerts.en.md#generated-records) |
+| Certificates | Renewal continues; HTTP-01 challenges are answered |
+| Purge & prefetch | Return `SITE_DISABLED` / `SITE_SUSPENDED` |
+| Suspension notice | The site page shows **The platform suspended this site: {reason}** (Billing, Abuse, Security, Other); members cannot lift it, and enabling or disabling does not affect it |
+| Revisions and audit | A change publishes a revision and writes an audit entry; an unchanged state does neither |
+
+## Technical limits
+
+Limits are resource protection the operator sets; by default nothing is limited. Platform administrators set them under **Admin → Organizations and users → Organizations → Limits**; an empty field means no limit (only the global hard limits apply).
+
+| Limit | Counts |
+| --- | --- |
+| Sites | The organization's sites |
+| Domains | Domains of all of its sites (wildcards and unverified domains included) |
+| Certificates | The organization's certificates (uploaded and ACME) |
+| IP list entries | Entries of all of its IP lists |
+| Purge tasks per minute | Purge and prefetch tasks submitted in the last minute; 10 when empty |
+| Purge targets per hour | URLs, prefixes and sites submitted in the last hour; 2000 when empty |
+| Members | Organization members; checked on invitation and on joining |
+
+| Item | Behavior |
+| --- | --- |
+| Exceeded | Creation is refused with `ORG_LIMIT_EXCEEDED` (resource, limit, current use); purge rates without an organization limit still return `CACHE_TASK_RATE_LIMITED` |
+| Concurrency | Creation locks the organization before counting in the same transaction; concurrent creations cannot pass a limit |
+| Lowering | Allowed below current use; existing resources stay, new ones are refused |
+| Platform administrators | Creating resources in the organization is limited the same way, except purge rates |
+| Viewing | The **Limits** card on **Settings** lists the limits that are set with their use (all members) |
+| Audit | `organization.limits_update` with the values before and after |
 
 ## Account security
 

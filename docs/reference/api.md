@@ -53,6 +53,138 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 
 未设置权限范围的旧密钥按读写处理。创建与吊销写入审计日志（`api_key.create`、`api_key.revoke`）；经 AccessKey 执行的操作在审计日志中的操作者类型为 `api_key`。
 
+### 服务账号
+
+服务账号是平台级的机器身份，供集成调用 `/api/v1`。它不能登录：没有密码、passkey 或会话，只有 key。在 **后台 → 服务账号** 中由平台管理员管理。
+
+| 操作 | 说明 |
+| --- | --- |
+| 新建、编辑 | 名称（最长 64 字符，唯一）、scope、启用状态。停用后该账号的全部 key 返回 401 |
+| 新建 key | key 以 `ews_` 开头，只显示一次；只保存 SHA-256。列表显示前缀与最后使用时间（精度 1 分钟） |
+| 吊销 key | 吊销后使用该 key 的请求返回 401 |
+| 删除 | 同时删除全部 key |
+
+以上变更写入审计日志（`service_account.create`、`service_account.update`、`service_account.delete`、`service_account.key_create`、`service_account.key_revoke`）；服务账号执行的操作在审计日志中的操作者类型为 `service_account`。服务账号 key 只在 `/api/v1` 生效。
+
+服务账号只能调用下表列出的过程，每个过程需要对应的 scope：
+
+| 过程 | 端点 | scope |
+| --- | --- | --- |
+| `system.status` | `GET /system/status` | — |
+| `account.me` | `GET /me` | — |
+| `settings.get` | `GET /settings` | `system:read` |
+| `clusters.list`、`clusters.get` | `GET /clusters`、`GET /clusters/{id}` | `clusters:read` |
+| `organizations.list` | `GET /organizations` | `organizations:read` |
+| `organizations.create`、`organizations.update` | `POST /organizations`、`PATCH /organizations/{id}` | `organizations:write` |
+| `organizations.members` | `GET /organizations/{id}/members` | `members:read` |
+| `organizations.invite` | `POST /organizations/{organizationId}/invitations` | `invitations:write` |
+| `sites.list`、`sites.get` | `GET /sites`、`GET /sites/{id}` | `sites:read` |
+| `sites.setEnabled` | `PUT /sites/{id}/enabled` | `sites:write` |
+| `admin.sites.suspend`、`admin.sites.resume` | `POST /admin/sites/{id}/suspend`、`POST /admin/sites/{id}/resume` | `sites:suspend` |
+| `admin.organizations.getLimits` | `GET /admin/organizations/{id}/limits` | `limits:read` |
+| `admin.organizations.setLimits` | `PUT /admin/organizations/{id}/limits` | `limits:write` |
+| `usage.list`、`usage.changes` | `GET /usage`、`GET /usage/changes` | `usage:read` |
+
+| 情况 | 响应 |
+| --- | --- |
+| 缺少 scope | 403 `SCOPE_REQUIRED`，`data.scope` 为所需的 scope |
+| 过程不在上表 | 403 `SERVICE_ACCOUNT_FORBIDDEN` |
+| key 无效、已吊销，或账号已停用 | 401 |
+
+`GET /me` 对服务账号返回 `serviceAccount: { id, name, scopes }`，`user` 为服务账号的 id 与名称（`email` 为空，`isAdmin` 为 `false`），`organizations` 为空。用户的 AccessKey 仍按只读 / 读写处理。
+
+### 幂等键
+
+`/api/v1` 的 `POST`、`PUT`、`PATCH` 接受请求头 `Idempotency-Key`：1–255 个可打印 ASCII 字符，可写成 RFC 8941 字符串（`"key"`）或原样。
+
+| 情况 | 响应 |
+| --- | --- |
+| 第一次请求 | 正常执行，保存方法、路径（含查询串）、请求体 SHA-256 与最终响应 |
+| 同一调用方、同一 key、同一请求 | 返回保存的响应（状态码与响应体），带 `Idempotent-Replayed: true` |
+| 同一 key、不同的方法、路径或请求体 | 422 `IDEMPOTENCY_KEY_MISMATCH` |
+| 第一次请求仍在执行 | 409 `IDEMPOTENCY_IN_PROGRESS` |
+| key 格式无效 | 400 `IDEMPOTENCY_KEY_INVALID` |
+
+- key 按调用方区分：同一用户的全部 AccessKey 共用，每个服务账号单独一份。
+- 保存 24 小时，每小时清理过期记录。
+- 5xx 响应不保存，调用方可以用同一个 key 重试；401 与 429（未进入过程）也不保存。4xx 响应保存，重放返回同一错误。
+- 执行中的记录 10 分钟后视为中断（控制台实例崩溃），下一个请求接管并重新执行。
+- `GET` 与 `DELETE` 忽略该请求头。
+
+### 乐观并发
+
+以下写操作接受可选的 `expectedUpdatedAt`（ISO 8601，调用方读取时的 `updatedAt`）。值不一致时返回 409 `UPDATED_AT_MISMATCH`，`data.updatedAt` 为当前值。
+
+| 过程 | 资源的 `updatedAt` |
+| --- | --- |
+| `sites.setEnabled`、`admin.sites.suspend`、`admin.sites.resume` | 网站 |
+| `organizations.update` | 组织 |
+| `admin.organizations.setLimits` | 组织限额（未保存过时为 `null`，此时传入任何值都不一致） |
+| `clusters.setRolloutPolicy` | 集群的金丝雀策略 |
+
+状态已经是请求的目标值时，站点启停与暂停直接返回当前状态，不比较 `expectedUpdatedAt`。
+
+### 站点启停与暂停
+
+| 状态 | 修改者 | 端点 |
+| --- | --- | --- |
+| `enabled` | 组织 owner / admin、平台管理员、`sites:write` 服务账号 | `PUT /sites/{id}/enabled`，`{"enabled":false}` |
+| `suspended` | 平台管理员、`sites:suspend` 服务账号 | `POST /admin/sites/{id}/suspend`，`{"reason":"billing","note":"…"}`；`POST /admin/sites/{id}/resume` |
+
+- `reason`：`billing`、`abuse`、`security`、`other`；`note` 最长 256 字符，只有平台管理员与服务账号能读到。
+- 两个状态都允许时网站才下发到节点。停用或暂停的网站不下发，节点对其域名返回 404；DNS 记录保留；证书续期继续，HTTP-01 挑战照常应答。
+- 状态有变化时生成新的配置版本（原因码 `site_enabled`、`site_disabled`、`site_suspended`、`site_resumed`）并写审计（`site.enable`、`site.disable`、`site.suspend`、`site.resume`）；没有变化时返回当前状态，不生成版本、不写审计。
+- 对停用或暂停的网站清缓存或预热：409 `SITE_DISABLED` / `SITE_SUSPENDED`。
+- 响应为 `{ site, revision }`；`site` 带 `enabled`、`suspended`、`suspendReason`、`suspendNote`、`suspendedAt`。
+
+### 组织限额
+
+| 过程 | 端点 | 调用方 |
+| --- | --- | --- |
+| `admin.organizations.getLimits` | `GET /admin/organizations/{id}/limits` | 平台管理员、`limits:read` 服务账号 |
+| `admin.organizations.setLimits` | `PUT /admin/organizations/{id}/limits` | 平台管理员、`limits:write` 服务账号 |
+| `organization.limits` | `GET /organization/limits` | 当前组织的成员 |
+
+响应为 `{ organizationId, limits, usage, updatedAt }`。`limits` 与 `usage` 的字段：`sites`、`domains`、`certificates`、`ipListEntries`、`purgeTasksPerMinute`、`purgeUrlsPerHour`、`members`；`limits` 中 `null` 表示不限。`setLimits` 替换全部限额，省略的字段为 `null`，写审计 `organization.limits_update`（修改前后的值）。超限返回 409 `ORG_LIMIT_EXCEEDED`，`data` 为 `{ resource, limit, current }`。行为见 [组织与成员](../guide/organizations.md#技术限额)。
+
+### 用量
+
+每个网站、每个 UTC 5 分钟窗口 `[windowStart, windowEnd)` 一条记录，数值为该窗口内全部节点上报的分钟统计之和。
+
+| 过程 | 端点 | 查询参数 |
+| --- | --- | --- |
+| `usage.list` | `GET /usage` | `from`、`to`（按 5 分钟对齐，UTC，半开区间）、`siteId`、`organizationId`、`cursor`、`limit`（1–5000，默认 1000） |
+| `usage.changes` | `GET /usage/changes` | `afterSeq`（默认 `"0"`）、`limit`（1–5000，默认 1000）、`organizationId` |
+
+记录字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | `<siteId>.<windowStart 的 Unix 秒>`，同一网站同一窗口永远相同 |
+| `siteId`、`organizationId` | 网站删除后记录仍保留 |
+| `windowStart`、`windowEnd` | ISO 8601 |
+| `requests`、`bytesSent`、`bytesReceived` | 十进制整数字符串（出站、入站字节），超过 2^53 时仍精确 |
+| `revision` | 从 1 开始；重算后数值变化时加 1 |
+| `seq` | 全局单调递增（十进制字符串，可有间隔）；创建或修订时分配 |
+| `updatedAt` | 最近一次写入时间 |
+
+- `usage.list` 按（窗口，网站）排序，响应 `{ items, nextCursor, completeUntil }`；`nextCursor` 为 `null` 时没有下一页。`from`、`to` 未对齐或 `to` 不晚于 `from`：400 `USAGE_RANGE_INVALID`；游标无效：400 `USAGE_CURSOR_INVALID`。
+- `usage.changes` 按 `seq` 返回 `afterSeq` 之后创建或修订的记录，响应 `{ items, lastSeq, completeUntil }`；下次以 `lastSeq` 作为 `afterSeq`。被修订的记录会再次出现。
+- 没有流量的窗口没有记录。
+- 窗口结束后每分钟重算一次；迟到数据改变数值时 `revision` 加 1 并分配新的 `seq`，数值不变时两者都不变。同一统计批次重复上报不改变结果。
+- 成员只能读取本组织的记录，`organizationId` 被忽略；平台管理员与 `usage:read` 服务账号可以按组织过滤。
+- 保留期默认 100 天，**后台 → 系统设置 → 用量** 可调（35–400 天）。
+
+`completeUntil`（ISO 8601 或 `null`）：结束时间不晚于它的窗口，已包含当时所有活动节点的数据。
+
+| 规则 | 说明 |
+| --- | --- |
+| 节点水位 | 节点在全部统计批次确认后上报 `complete_until`：最近一次成功取出统计时所在分钟的开始，之前的分钟都已上报 |
+| 参与的节点 | 状态为启用、且在离线阈值内上报过心跳的节点。阈值默认 60 分钟，**后台 → 系统设置 → 用量** 可调（5–1440 分钟） |
+| 计算 | 参与节点水位的最小值；从未上报水位的节点（旧版本节点）按注册时间计；尚未重算的窗口不计入；向下取整到 5 分钟 |
+| 单调 | 只前移不后退。离线超过阈值的节点恢复后，它补报的更早窗口的数据按修订处理（`revision` 加 1） |
+| 停用或删除的节点 | 不参与 |
+
 ### 示例
 
 列出网站（过程 `sites.list`，`GET /api/v1/sites`）：

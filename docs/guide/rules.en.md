@@ -159,12 +159,21 @@ http.response.code ge 500
 
 ### Regular expressions
 
-| Item | Limit |
+Console validation, node validation and node execution (PCRE) accept the same subset; constructs whose meaning differs between the engines are refused.
+
+| Item | Rule |
 | --- | --- |
-| Length and characters | Up to 256 printable ASCII characters |
-| Unsupported | Backreferences, groups starting with `(?` (lookaround, named groups, inline flags), `\p` `\P` `\k` `\K` `\g` `\G`, quantified groups, nested quantifiers, empty character classes |
-| Repetition | Numbers in `{m,n}` up to 1000; a literal `}` must be escaped |
+| Subject | The value's UTF-8 bytes, case-sensitive; `.`, `[^…]`, `\D`, `\W` match one byte (a CJK character is 3 bytes) |
+| Length and characters | Up to 256 printable ASCII characters; write others as `\t` `\n` `\r` `\f` or `\x00`–`\x7f` |
+| Anchors | `^` start of the value; `$` end of the value; `\b` `\B` ASCII word boundary |
+| Characters | `.` is any byte except `\n`; `\d` `\D` `\w` `\W` are ASCII; a backslash before ASCII punctuation matches that character; escape literal `]` `{` `}` |
+| Classes | `[…]` `[^…]` of characters, `\d` `\D` `\w` `\W` and ranges such as `a-z`; `-` is literal only first or last, elsewhere `\-`; escape `[` inside a class |
+| Quantifiers | `*` `+` `?` `{n}` `{n,}` `{n,m}` (n ≤ m ≤ 1000, no leading zeros), optionally lazy with `?`; only after a character, class or escape |
+| Groups | `( )` and `\|`; groups take no quantifier |
+| Unsupported | `\s` `\S` `\v` (write an explicit class such as `[ \t\r\n\f]`), `\xHH` above `\x7f`, `\z` `\A` `\Q` `\p{…}` `\K` and other escapes, backreferences and octal, groups starting with `(?`, possessive and stacked quantifiers, `{,n}`, `[[:alpha:]]`, empty classes and `[]…]` |
 | Execution budget | Nodes use PCRE with a match limit of 10000 and a depth limit of 100; an execution error returns 503 (`X-Edgeweir-Error: policy-unavailable`) |
+
+A saved rule that uses a construct no longer supported (such as `\s`) fails to save or publish with `RULE_INVALID`; rewrite it and save again.
 
 The language is a wirefilter-style subset, not a complete wirefilter implementation.
 

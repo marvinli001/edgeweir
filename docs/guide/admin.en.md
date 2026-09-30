@@ -70,11 +70,11 @@ A cluster publishes at most 512 sites.
 
 | Action | Description |
 | --- | --- |
-| **New node group** | **Node group**: name, at most 64 characters, unique within the cluster; **Region**: optional, see [Regions](#regions) |
-| **Edit node group** | Change name and region |
+| **New node group** | **Node group**: name, at most 64 characters, unique within the cluster; **Region**: optional, see [Regions](#regions); **Canary group**: see [Configuration canary](#configuration-canary) |
+| **Edit node group** | Change name, region and **Canary group** |
 | Delete | The default node group (marked **Default**) cannot be deleted; deleting another group moves its nodes back to the default group |
 
-Node groups serve as platform DNS lines and as canary groups for node upgrades.
+Node groups serve as platform DNS lines, as canary groups for node upgrades and for the configuration canary.
 
 ### Adding a node
 
@@ -96,7 +96,7 @@ Result: the **Install command** (shown once, with a countdown) and the **CA fing
 | **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled** |
 | **Node group** | Node group and region |
 | **IP** | Addresses reported by the node |
-| **Applied** | The revision the node has applied; badge **In sync**, **Behind**, **Apply failed** (hover for the reason), or **Upgrade required** |
+| **Applied** | The revision the node has applied; badge **In sync** (the node's target revision reached), **Behind**, **Apply failed** (hover for the reason), or **Upgrade required** |
 | **Agent / engine** | Agent version, engine, and engine version |
 | **Heartbeat** | Time of the last heartbeat |
 
@@ -110,6 +110,43 @@ Result: the **Install command** (shown once, with a countdown) and the **CA fing
 ### Node upgrades
 
 The **Node upgrades** section runs signed upgrades with a canary node group and explicit promotion; see [Node upgrades](node-upgrades.en.md).
+
+### Configuration canary
+
+The **Configuration canary** card sets the cluster's policy and shows the current rollout. Off by default.
+
+| Policy field | Values | Default |
+| --- | --- | --- |
+| **Enable canary** | On / off | Off |
+| **Observation window (minutes)** | 1–60 | 5 |
+| **Promote automatically** | On: promote to every node when the window passes; off: wait for **Promote to all now** | On |
+| **5xx ratio multiple of the baseline** | 1–100 | 2 |
+| **5xx ratio floor (%)** | 0.1–100 | 5 |
+| **Minimum requests** | 1–1000000 | 100 |
+
+| Item | Behavior |
+| --- | --- |
+| Canary nodes | Enabled nodes of the cluster's **Canary group** node groups; those online when the window starts decide the outcome |
+| Target revisions | Canary nodes get the candidate, the other nodes the stable revision; a node never gets a revision newer than its target |
+| DNS | Each node is compared with its own target; non-canary nodes are not removed during the window |
+| Rollback when (any, within the window) | A canary node fails to apply; its data plane is unhealthy or it goes offline; the canary 5xx ratio exceeds max(the non-canary nodes' 5xx ratio × multiple, floor) with at least the minimum requests; a canary node has not applied the candidate one window after the window ended |
+| Rollback | The stable content is published as a new revision and every node returns to it; audited as the system and the platform alert "Configuration canary rolled back" fires |
+| After a rollback | The cluster stays on the stable revision. The database keeps the change; the next publication goes through the canary again |
+| New publication during the window | The new candidate replaces the old one and the window restarts |
+| No canary node online | The change goes to every node, `cluster.rollout_direct` is audited and a platform alert fires; publishing is not blocked |
+| Changes that reach every node at once | ACME HTTP-01 challenges (the stable revision takes them too); **Roll back** in **Revisions** |
+| Turning the policy off | A running candidate is promoted to every node |
+
+| State | Meaning |
+| --- | --- |
+| **Idle** | No candidate |
+| **Canary** | The candidate runs on the canary nodes under observation |
+| **Awaiting promotion** | The window passed; waiting for an administrator |
+| **Promoted** | The candidate is every node's revision |
+| **Rolled back** | The canary nodes returned to the stable revision |
+| **Published to all** | No canary node was online; the change went to every node |
+
+**Promote to all now** (audited as `cluster.rollout_promote`) and **Abort and roll back** (audited as `cluster.rollout_abort`) need confirmation and are available in **Canary** and **Awaiting promotion** only. Policy changes are audited as `cluster.rollout_policy_update`.
 
 ### Revisions
 
@@ -126,6 +163,8 @@ Every change that affects node configuration publishes a new revision in the clu
 | Domain verified / Domain verification revoked | Domain ownership changes |
 | Origin allow list updated | [Origin allow list](#origin-allow-list) changed; every cluster publishes one revision |
 | Rolled back to #{revision} | **Roll back** |
+| Site {site} enabled / disabled / suspended / resumed | Site state changes |
+| Canary of revision {revision} rolled back | [Configuration canary](#configuration-canary) rollback |
 
 **Roll back** publishes the content of the chosen revision as a new revision; history is kept. A rollback is refused when certificates, domains, or other resources it references were removed, transferred, or are unavailable; unverified domains cannot return through a rollback.
 
@@ -156,6 +195,21 @@ A region is a label for node groups (for example East China), shown in the node 
 | **Edit region** | Change name and code |
 | Delete | Node groups that reference the region stay, without a region |
 
+## Sites
+
+**Admin → Sites** lists the sites of every organization, with search.
+
+| Action | Description |
+| --- | --- |
+| **Suspend** | Choose a **Reason** (Billing, Abuse, Security, Other) and an optional **Note** (up to 256 characters, visible to platform administrators and service accounts only). A suspended site is not shipped to nodes and keeps its DNS records; members see the localized reason and cannot lift it |
+| **Resume** | Needs confirmation |
+
+Suspending and resuming are audited (`site.suspend`, `site.resume`) and publish a revision. Behavior: [Site enabling and platform suspension](organizations.en.md#site-enabling-and-platform-suspension).
+
+## Service accounts
+
+**Admin → Service accounts** manages the service accounts integrations use on `/api/v1`: name, scopes, enabled, and keys (shown once) with revocation. Scopes and callable procedures: [Service accounts](../reference/api.en.md#service-accounts).
+
 ## Organizations and users
 
 The page has two tabs: **Organizations** and **Users**.
@@ -167,6 +221,7 @@ The page has two tabs: **Organizations** and **Users**.
 | **New organization** | **Organization**: at most 100 characters; **Slug**: derived from the name when empty, lowercase letters, digits, and `-`, at most 48 characters, unique on the platform; **Default cluster**: **Oldest cluster** when empty; **Require two-factor authentication** |
 | **Edit** | Change name, default cluster, and two-factor policy |
 | **Members** | Opens **Members of {name}**: **Add user** (an existing user with a role), **Invite member** (creates an invitation link), change roles, remove |
+| **Limits** | Each limit with its current use; empty means no limit, see [Technical limits](organizations.en.md#technical-limits) |
 
 Platform administrators manage the members of any organization with owner rights, owners included. Organizations cannot be deleted. For member and invitation rules, see [Organizations, members, and account security](organizations.en.md#invitations-and-member-management).
 
@@ -188,7 +243,7 @@ Every management action is written to the audit log. The console's own changes c
 | Field | Content |
 | --- | --- |
 | Time | When the action happened |
-| Actor | Type (**User**, **AccessKey**, **Node**, **System**), ID, name |
+| Actor | Type (**User**, **AccessKey**, **Service account**, **Node**, **System**), ID, name |
 | IP, User-Agent | Request origin; stored only in the `audit_log` table, not returned by the UI or the API. For how the IP is determined, see [Trusted proxies and client IP](../deploy/networking.en.md#trusted-proxies-and-client-ip) |
 | Organization | The organization concerned, if any |
 | Action | For example `site.create` |
@@ -203,10 +258,11 @@ The page shows **Time**, **Actor**, **Action**, and **Target**, 50 entries per p
 | `auth.*` | Successful (`auth.sign_in`, with the sign-in method) and failed (`auth.sign_in_failed`) sign-ins |
 | `account.*` | Password change, two-factor enable / disable, passkey add / delete |
 | `api_key.*` | AccessKey create, delete, revoke |
+| `service_account.*` | Service accounts and their keys |
 | `user.*`, `organization.*`, `member.*`, `invitation.*` | Users, organizations, members, and invitations |
-| `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters, node groups, regions, nodes (including enrollment, certificate renewal, upgrades), install commands |
+| `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters (including the configuration canary), node groups, regions, nodes (including enrollment, certificate renewal, upgrades), install commands |
 | `site.*`, `cache.*`, `domain.*`, `certificate.*`, `dns_credential.*`, `ip_list.*`, `platform.*` | Sites, purge & prefetch, domain ownership, certificates, DNS credentials, IP lists, platform rules |
-| `dns.*`, `alert.*` | Platform DNS, alert channels, alert rules, SMTP, alert subscriptions |
+| `dns.*`, `alert.*` | Platform DNS (including mass removal protection and forced publications), alert channels, alert rules, SMTP, alert subscriptions |
 
 ## System settings
 
@@ -245,6 +301,15 @@ Each node also pins its own release source and signature trust locally, out of t
 ### Ownership check DNS
 
 **Recursive DNS servers**: the recursive resolvers used for domain ownership TXT checks, at most 8. Format: IP, `IPv4:port`, `[IPv6]:port`, or host name with optional port; default port 53. Addresses are resolved and pinned on save and must be public or allowed by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`. Enter trusted recursive resolvers only: their answers decide domain ownership. With an empty field, the placeholder shows the servers in effect or **System resolver**.
+
+### Usage
+
+| Field | Values | Default | Description |
+| --- | --- | --- | --- |
+| **Retention (days)** | 35–400 | 100 | How long usage records are kept |
+| **Offline nodes stop holding completeness (minutes)** | 5–1440 | 60 | Nodes without a heartbeat for longer no longer hold back `completeUntil` |
+
+Changes are audited as `system.usage_update`. The usage API and the definition of `completeUntil`: [Usage](../reference/api.en.md#usage).
 
 ### GeoIP databases
 

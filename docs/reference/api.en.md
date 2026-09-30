@@ -53,6 +53,138 @@ Managed in **Settings → Access keys**. Each user sees and revokes only their o
 
 Keys from before scopes existed count as read and write. Creation and revocation are written to the audit log (`api_key.create`, `api_key.revoke`); actions performed with an AccessKey appear in the audit log with actor type `api_key`.
 
+### Service accounts
+
+A service account is a platform-level machine identity for integrations calling `/api/v1`. It cannot sign in: it has no password, passkey or session, only keys. Platform administrators manage service accounts in **Admin → Service accounts**.
+
+| Action | Notes |
+| --- | --- |
+| Create, edit | Name (up to 64 characters, unique), scopes, enabled. A disabled account's keys return 401 |
+| Create key | Keys start with `ews_` and are shown once; only their SHA-256 is stored. The list shows the prefix and the last use (1-minute resolution) |
+| Revoke key | Requests with the key return 401 afterwards |
+| Delete | Deletes every key too |
+
+These changes are written to the audit log (`service_account.create`, `service_account.update`, `service_account.delete`, `service_account.key_create`, `service_account.key_revoke`); actions of a service account appear with actor type `service_account`. Service account keys work on `/api/v1` only.
+
+A service account can call only the procedures below, each with its scope:
+
+| Procedure | Endpoint | Scope |
+| --- | --- | --- |
+| `system.status` | `GET /system/status` | — |
+| `account.me` | `GET /me` | — |
+| `settings.get` | `GET /settings` | `system:read` |
+| `clusters.list`, `clusters.get` | `GET /clusters`, `GET /clusters/{id}` | `clusters:read` |
+| `organizations.list` | `GET /organizations` | `organizations:read` |
+| `organizations.create`, `organizations.update` | `POST /organizations`, `PATCH /organizations/{id}` | `organizations:write` |
+| `organizations.members` | `GET /organizations/{id}/members` | `members:read` |
+| `organizations.invite` | `POST /organizations/{organizationId}/invitations` | `invitations:write` |
+| `sites.list`, `sites.get` | `GET /sites`, `GET /sites/{id}` | `sites:read` |
+| `sites.setEnabled` | `PUT /sites/{id}/enabled` | `sites:write` |
+| `admin.sites.suspend`, `admin.sites.resume` | `POST /admin/sites/{id}/suspend`, `POST /admin/sites/{id}/resume` | `sites:suspend` |
+| `admin.organizations.getLimits` | `GET /admin/organizations/{id}/limits` | `limits:read` |
+| `admin.organizations.setLimits` | `PUT /admin/organizations/{id}/limits` | `limits:write` |
+| `usage.list`, `usage.changes` | `GET /usage`, `GET /usage/changes` | `usage:read` |
+
+| Case | Response |
+| --- | --- |
+| Missing scope | 403 `SCOPE_REQUIRED`; `data.scope` names the scope |
+| Procedure not in the table | 403 `SERVICE_ACCOUNT_FORBIDDEN` |
+| Invalid or revoked key, disabled account | 401 |
+
+For a service account, `GET /me` returns `serviceAccount: { id, name, scopes }`; `user` carries the service account's id and name (empty `email`, `isAdmin` `false`) and `organizations` is empty. User AccessKeys keep their read-only / read-and-write scopes.
+
+### Idempotency keys
+
+`POST`, `PUT` and `PATCH` on `/api/v1` accept the `Idempotency-Key` header: 1–255 printable ASCII characters, as an RFC 8941 string (`"key"`) or bare.
+
+| Case | Response |
+| --- | --- |
+| First request | Runs normally; method, path (with query), request body SHA-256 and the final response are kept |
+| Same caller, same key, same request | The stored response (status and body) with `Idempotent-Replayed: true` |
+| Same key, other method, path or body | 422 `IDEMPOTENCY_KEY_MISMATCH` |
+| The first request is still running | 409 `IDEMPOTENCY_IN_PROGRESS` |
+| Invalid key | 400 `IDEMPOTENCY_KEY_INVALID` |
+
+- Keys are per caller: all AccessKeys of a user share them, each service account has its own.
+- Records are kept 24 hours; expired ones are deleted hourly.
+- 5xx responses are not kept, so the caller can retry with the same key; neither are 401 and 429 (the procedure did not run). 4xx responses are kept and replayed.
+- A record still running after 10 minutes counts as interrupted (a crashed console instance); the next request takes it over and runs again.
+- `GET` and `DELETE` ignore the header.
+
+### Optimistic concurrency
+
+These writes accept an optional `expectedUpdatedAt` (ISO 8601, the `updatedAt` the caller read). A different value returns 409 `UPDATED_AT_MISMATCH` with the current value in `data.updatedAt`.
+
+| Procedure | `updatedAt` of |
+| --- | --- |
+| `sites.setEnabled`, `admin.sites.suspend`, `admin.sites.resume` | The site |
+| `organizations.update` | The organization |
+| `admin.organizations.setLimits` | The organization's limits (`null` until first saved; then any value differs) |
+| `clusters.setRolloutPolicy` | The cluster's canary policy |
+
+When a site already has the requested state, enabling and suspension return the current state without comparing `expectedUpdatedAt`.
+
+### Site enabling and suspension
+
+| State | Changed by | Endpoint |
+| --- | --- | --- |
+| `enabled` | Organization owners / admins, platform administrators, `sites:write` service accounts | `PUT /sites/{id}/enabled`, `{"enabled":false}` |
+| `suspended` | Platform administrators, `sites:suspend` service accounts | `POST /admin/sites/{id}/suspend`, `{"reason":"billing","note":"…"}`; `POST /admin/sites/{id}/resume` |
+
+- `reason`: `billing`, `abuse`, `security`, `other`; `note` up to 256 characters, readable by platform administrators and service accounts only.
+- A site is shipped to nodes only when both states allow it. A disabled or suspended site is not shipped and nodes answer 404 for its domains; its DNS records stay; certificate renewal continues and HTTP-01 challenges are answered.
+- A change publishes a configuration revision (reason codes `site_enabled`, `site_disabled`, `site_suspended`, `site_resumed`) and writes an audit entry (`site.enable`, `site.disable`, `site.suspend`, `site.resume`); an unchanged state returns the current state without a revision or audit entry.
+- Purging or prefetching a disabled or suspended site: 409 `SITE_DISABLED` / `SITE_SUSPENDED`.
+- The response is `{ site, revision }`; `site` carries `enabled`, `suspended`, `suspendReason`, `suspendNote`, `suspendedAt`.
+
+### Organization limits
+
+| Procedure | Endpoint | Caller |
+| --- | --- | --- |
+| `admin.organizations.getLimits` | `GET /admin/organizations/{id}/limits` | Platform administrators, `limits:read` service accounts |
+| `admin.organizations.setLimits` | `PUT /admin/organizations/{id}/limits` | Platform administrators, `limits:write` service accounts |
+| `organization.limits` | `GET /organization/limits` | Members of the active organization |
+
+The response is `{ organizationId, limits, usage, updatedAt }`. Fields of `limits` and `usage`: `sites`, `domains`, `certificates`, `ipListEntries`, `purgeTasksPerMinute`, `purgeUrlsPerHour`, `members`; `null` in `limits` means no limit. `setLimits` replaces every limit (omitted fields become `null`) and writes the audit entry `organization.limits_update` with the values before and after. Exceeding a limit returns 409 `ORG_LIMIT_EXCEEDED` with `data` `{ resource, limit, current }`. Behavior: [Organizations and members](../guide/organizations.en.md#technical-limits).
+
+### Usage
+
+One record per site and UTC 5-minute window `[windowStart, windowEnd)`, summing the minute statistics every node reported for the window.
+
+| Procedure | Endpoint | Query parameters |
+| --- | --- | --- |
+| `usage.list` | `GET /usage` | `from`, `to` (5-minute aligned, UTC, half-open), `siteId`, `organizationId`, `cursor`, `limit` (1–5000, default 1000) |
+| `usage.changes` | `GET /usage/changes` | `afterSeq` (default `"0"`), `limit` (1–5000, default 1000), `organizationId` |
+
+Record fields:
+
+| Field | Notes |
+| --- | --- |
+| `id` | `<siteId>.<Unix seconds of windowStart>`; always the same for a site and window |
+| `siteId`, `organizationId` | Records remain after the site is deleted |
+| `windowStart`, `windowEnd` | ISO 8601 |
+| `requests`, `bytesSent`, `bytesReceived` | Decimal integer strings (bytes out and in), exact beyond 2^53 |
+| `revision` | Starts at 1; +1 when a recomputation changes a value |
+| `seq` | Globally increasing (decimal string, gaps allowed); assigned on creation and revision |
+| `updatedAt` | Last write |
+
+- `usage.list` is ordered by (window, site) and returns `{ items, nextCursor, completeUntil }`; `nextCursor` `null` means the last page. Unaligned `from` / `to`, or `to` not after `from`: 400 `USAGE_RANGE_INVALID`; an invalid cursor: 400 `USAGE_CURSOR_INVALID`.
+- `usage.changes` returns records created or revised after `afterSeq`, in `seq` order, as `{ items, lastSeq, completeUntil }`; pass `lastSeq` as the next `afterSeq`. Revised records appear again.
+- Windows without traffic have no record.
+- Closed windows are recomputed every minute; late data that changes a value increments `revision` and assigns a new `seq`; otherwise neither changes. A statistics batch reported twice does not change the result.
+- Members read their own organization's records only (`organizationId` is ignored); platform administrators and `usage:read` service accounts may filter by organization.
+- Kept 100 days by default, adjustable in **Admin → System settings → Usage** (35–400 days).
+
+`completeUntil` (ISO 8601 or `null`): windows that end at or before it contain the data of every node that was active then.
+
+| Rule | Notes |
+| --- | --- |
+| Node watermark | Once every statistics batch is acknowledged, a node reports `complete_until`: the start of the minute of its last successful statistics drain; every earlier minute has been uploaded |
+| Nodes taken into account | Enabled nodes with a heartbeat within the offline threshold: 60 minutes by default, adjustable in **Admin → System settings → Usage** (5–1440 minutes) |
+| Computation | The lowest watermark of those nodes; a node that never reported one (older node versions) counts from its enrollment; windows still waiting to be recomputed hold it back; rounded down to 5 minutes |
+| Monotonic | It only moves forward. Data a node sends after being offline longer than the threshold is a revision (`revision` + 1) |
+| Disabled or deleted nodes | Not taken into account |
+
 ### Example
 
 List sites (procedure `sites.list`, `GET /api/v1/sites`):

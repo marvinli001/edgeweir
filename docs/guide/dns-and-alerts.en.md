@@ -103,7 +103,7 @@ One configuration holds at most 128 lines and 10,000 system-managed records.
 
 ### Generated records
 
-Every enabled site with at least one verified domain gets these records:
+Every site with at least one verified domain gets these records (disabled and suspended sites keep them):
 
 | Name | Type | Content |
 | --- | --- | --- |
@@ -123,6 +123,19 @@ Lines are explicit node group host names; provider-specific carrier or geographi
 | Drift repair | System-managed names deleted or changed outside the console are restored at the next check; **Repair records** runs a check immediately |
 | Ownership | Only names registered as system-managed are changed; a new name that already has an unmanaged record is refused (`DNS_RECORD_CONFLICT`) |
 | Write order | Registers managed names first, then removes extra records, adds missing ones, and reads back; on failure the registration stays and the next cycle retries |
+| Configuration canary | Each node is compared with its own target revision: during a canary window the non-canary nodes run the stable revision and stay, see [Configuration canary](admin.en.md#configuration-canary) |
+
+### Mass removal protection
+
+A publication that would empty a non-empty `all.` or line record set, or remove more address records than the threshold allows, keeps the previous records and does not write the provider. The same applies when the console loses its node channel and every node looks offline.
+
+| Item | Behavior |
+| --- | --- |
+| Threshold | Share of the previous address records one publication may remove: 50% by default, adjustable in **Admin → Platform DNS → Mass removal protection** (5%–100%) |
+| Not counted | Names no longer managed (deleted sites, removed lines); a changed provider or CNAME domain; turning DNS off |
+| When held back | The DNS page shows the held-back change (address records it would remove), the DNS revision list shows it as **Held back**, and the platform alert "DNS mass removal blocked" fires |
+| Recovery | The hold ends by itself once a publication passes; the alert resolves |
+| Force | An administrator clicks **Publish anyway** on the DNS page and confirms; the current state is published and `dns.force_publish` is audited |
 
 ### DNS revisions and rollback
 
@@ -179,7 +192,17 @@ The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `st
 
 **Origin unavailable** has no threshold of its own: it fires when one node reports every origin of the site unhealthy within the offline threshold. Origin state comes from passive health checks, see [Origins and cache](origins-and-cache.en.md#passive-health-check).
 
-Alerts cover only enabled sites with at least one verified domain.
+Site alerts cover only enabled, unsuspended sites with at least one verified domain.
+
+### Platform alerts
+
+These alerts belong to the platform, not to a site. They go only to channels with "Receive alerts of all sites", cannot be subscribed to, and **Console → Alerts** shows them to platform administrators only.
+
+| Alert | Fires | Resolves |
+| --- | --- | --- |
+| Configuration canary rolled back | A canary rolled back automatically or an administrator aborted it | The next promotion in that cluster |
+| No canary node online; configuration published to every node | A publication in a cluster with the canary on found no canary node online | The next publication in that cluster with a canary node online |
+| DNS mass removal blocked | The [mass removal protection](#mass-removal-protection) held a publication back | The next publication that passes, or a forced one |
 
 ## Subscribe to alerts
 
