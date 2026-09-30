@@ -33,6 +33,16 @@
 #   the control client is served, and the unban lets it back; short
 #   prefixes, protected addresses, tenants on /admin/bans, other
 #   organizations' sites and maxBans are refused; Playwright e2e/g1.spec.ts.
+#   Core gaps G2 (scripts/e2e-g2.mjs): headless Chromium passes the js and
+#   pow challenges of an Under Attack site; its pass works on the other node
+#   from the same /24 and User-Agent only (client-c on the isolated network
+#   is challenged), forged passes and POST without a pass are refused,
+#   /.edgeweir/ never reaches the origin; allow and challenge rules, platform
+#   Under Attack; CC escalates only the attacked path and bans a client over
+#   its rate (auto ban and events in the console); JA4 from the sampled logs
+#   in block, challenge and rate limit rules; leaves ua-bench.test for
+#   BENCH_SCENARIO=pass|challenge in scripts/bench.sh; Playwright
+#   e2e/g2.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -891,6 +901,13 @@ if ! $SKIP_UI; then
   E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g1.spec.ts || fail "G1 browser checks failed"
 fi
 pass "G1 checks passed"
+
+step "G2: challenges in a browser, passes across nodes, Under Attack, tiered CC and JA4 rules"
+node scripts/e2e-g2.mjs || fail "G2 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g2.spec.ts || fail "G2 browser checks failed"
+fi
+pass "G2 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
