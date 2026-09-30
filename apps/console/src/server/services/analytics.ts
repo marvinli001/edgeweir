@@ -36,9 +36,10 @@ export function rangeWindow(range: AnalyticsRange, now = Date.now()) {
   };
 }
 
-type StatsSource = typeof schema.nodeMinuteStats | typeof schema.trafficHourStats;
+export type StatsSource = typeof schema.nodeMinuteStats | typeof schema.trafficHourStats;
 const stats = schema.nodeMinuteStats;
-const sourceFor = (range: AnalyticsRange): StatsSource =>
+/** Minute rows for short ranges, hourly rollups (with the pending minutes) for 7d and 30d. */
+export const sourceFor = (range: AnalyticsRange): StatsSource =>
   range === "7d" || range === "30d" ? schema.trafficHourStats : schema.nodeMinuteStats;
 
 const sum = (expression: SQLWrapper) =>

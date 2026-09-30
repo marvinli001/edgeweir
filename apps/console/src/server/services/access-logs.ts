@@ -16,6 +16,8 @@ const DAY = 86400000;
 /** a_b_c: protocol, version, SNI, counts and ALPN, then two truncated SHA-256 hashes. */
 const JA4_RE = /^[a-z][a-z0-9]{2}[di][0-9]{4}[a-zA-Z0-9]{2}_[0-9a-f]{12}_[0-9a-f]{12}$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** CRS rule ids kept per log entry (nodes send at most 16). */
+const MAX_WAF_RULE_IDS = 16;
 export const logCutoff = (now = Date.now()) => Math.floor(now / DAY) * DAY - 6 * DAY;
 async function partition(tx: Executor, day: number) {
   const from = new Date(day).toISOString(),
@@ -115,6 +117,10 @@ export async function ingestLogs(
           : "",
         sampleRate: l.sampleRate,
         ja4: ja4Sites.has(l.siteId) && JA4_RE.test(l.ja4) ? l.ja4 : "",
+        wafRuleIds: [...new Set(l.wafRuleIds.filter((id) => id > 0))]
+          .sort((a, b) => a - b)
+          .slice(0, MAX_WAF_RULE_IDS),
+        wafBlocked: l.wafBlocked,
       },
     ];
   });
@@ -224,9 +230,11 @@ export function logsCsv(entries: LogEntry[]) {
     "sampleRate",
     "nodeId",
     "ja4",
+    "wafRuleIds",
+    "wafBlocked",
   ] as const;
   const cell = (value: unknown) => {
-    let text = String(value);
+    let text = Array.isArray(value) ? value.join(" ") : String(value);
     if (/^[\s]*[=+@-]/.test(text)) text = `'${text}`;
     return `"${text.replaceAll('"', '""')}"`;
   };

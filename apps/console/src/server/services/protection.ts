@@ -25,10 +25,10 @@ export const CC_TEMPLATE_KEY = "cc_template";
 type ProtectionRow = typeof schema.siteProtection.$inferSelect;
 
 /** The user whose role decides the capability gate of a publish (see insertRevision). */
-const publisher = (actor: Actor) =>
+export const publisher = (actor: Actor) =>
   actor.type === "user" || actor.type === "api_key" ? actor.id : null;
 
-async function readSetting(db: Executor, key: string) {
+export async function readSetting(db: Executor, key: string) {
   const [row] = await db
     .select({ value: schema.systemSetting.value })
     .from(schema.systemSetting)
@@ -36,7 +36,7 @@ async function readSetting(db: Executor, key: string) {
   return row?.value;
 }
 
-async function writeSetting(db: Executor, key: string, value: Record<string, unknown>) {
+export async function writeSetting(db: Executor, key: string, value: Record<string, unknown>) {
   await db
     .insert(schema.systemSetting)
     .values({ key, value })

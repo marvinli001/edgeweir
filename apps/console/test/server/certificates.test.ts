@@ -105,7 +105,7 @@ describe("M3 certificate lifecycle and isolation", async () => {
       "CERTIFICATE_IN_USE",
     );
   });
-  it("rejects a certificate for an unrelated hostname and unsupported protocol modules", async () => {
+  it("rejects a certificate for an unrelated hostname and compression settings out of range", async () => {
     const site = await api.sites.create({
       name: "different",
       domains: ["different.test"],
@@ -118,7 +118,9 @@ describe("M3 certificate lifecycle and isolation", async () => {
         )
       ).code,
     ).toBe("CERTIFICATE_DOMAIN_MISMATCH");
-    expect(tlsSettings.safeParse({ brotli: true }).success).toBe(false);
+    // Brotli and Zstandard are switches now, gated by node capabilities (waf.test.ts).
+    expect(tlsSettings.safeParse({ brotli: true, brotliLevel: 12 }).success).toBe(false);
+    expect(tlsSettings.safeParse({ zstd: true, zstdLevel: 0 }).success).toBe(false);
     expect(tlsSettings.safeParse({ forceHttps: true }).success).toBe(false);
   });
   it("keeps DNS credentials write-only and bound to their organization", async () => {

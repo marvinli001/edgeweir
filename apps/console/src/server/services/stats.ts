@@ -21,6 +21,8 @@ export interface ReportedMinuteStats {
   statusCodes: Record<string, number>;
   topUrls?: Record<string, number>;
   topIps?: Record<string, number>;
+  /** OWASP CRS rule id → matched requests. */
+  wafRules?: Record<string, number>;
 }
 
 interface Bucket {
@@ -34,6 +36,7 @@ interface Bucket {
   status_codes: Record<string, number>;
   top_urls: Record<string, number>;
   top_ips: Record<string, number>;
+  waf_rules: Record<string, number>;
 }
 
 /**
@@ -85,6 +88,7 @@ export async function ingestMinuteStats(
         ),
         top_urls: cleanTop(s.topUrls, "url"),
         top_ips: cleanTop(s.topIps, "ip"),
+        waf_rules: cleanTop(s.wafRules, "rule"),
       });
       continue;
     }
@@ -95,6 +99,7 @@ export async function ingestMinuteStats(
     b.cache_misses = addTrafficCounter(b.cache_misses, s.cacheMisses);
     b.top_urls = mergeTop(b.top_urls, cleanTop(s.topUrls, "url"));
     b.top_ips = mergeTop(b.top_ips, cleanTop(s.topIps, "ip"));
+    b.waf_rules = mergeTop(b.waf_rules, cleanTop(s.wafRules, "rule"));
     for (const [code, n] of Object.entries(s.statusCodes)) {
       if (/^[1-5][0-9]{2}$/.test(code))
         b.status_codes[code] = addTrafficCounter(b.status_codes[code] ?? 0, n);
@@ -105,12 +110,12 @@ export async function ingestMinuteStats(
   const t = schema.nodeMinuteStats;
   const result = await db.execute<{ site_id: string }>(sql`
     with stored as (
-    insert into ${t} (minute, node_id, site_id, requests, bytes_sent, bytes_received, cache_hits, cache_misses, status_codes, top_urls, top_ips)
+    insert into ${t} (minute, node_id, site_id, requests, bytes_sent, bytes_received, cache_hits, cache_misses, status_codes, top_urls, top_ips, waf_rules)
     select b.minute, ${node.id}::uuid, b.site_id, b.requests, b.bytes_sent, b.bytes_received,
-           b.cache_hits, b.cache_misses, coalesce(b.status_codes, '{}'::jsonb), b.top_urls, b.top_ips
+           b.cache_hits, b.cache_misses, coalesce(b.status_codes, '{}'::jsonb), b.top_urls, b.top_ips, b.waf_rules
     from jsonb_to_recordset(${JSON.stringify([...buckets.values()])}::jsonb) as b(
       minute timestamptz, site_id uuid, requests bigint, bytes_sent bigint, bytes_received bigint,
-      cache_hits bigint, cache_misses bigint, status_codes jsonb, top_urls jsonb, top_ips jsonb)
+      cache_hits bigint, cache_misses bigint, status_codes jsonb, top_urls jsonb, top_ips jsonb, waf_rules jsonb)
     join ${schema.site} on ${schema.site.id} = b.site_id and ${schema.site.clusterId} = ${node.clusterId}::uuid
     on conflict (minute, node_id, site_id) do update set
       requests = least(9007199254740991::numeric, ${t}.requests::numeric + excluded.requests),
@@ -124,6 +129,9 @@ export async function ingestMinuteStats(
       top_ips = (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (
         select k, least(9007199254740991::numeric, coalesce((${t}.top_ips ->> k)::numeric,0)+coalesce((excluded.top_ips ->> k)::numeric,0)) as n
         from jsonb_object_keys(${t}.top_ips || excluded.top_ips) as k order by n desc,k limit 50) q),
+      waf_rules = (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (
+        select k, least(9007199254740991::numeric, coalesce((${t}.waf_rules ->> k)::numeric,0)+coalesce((excluded.waf_rules ->> k)::numeric,0)) as n
+        from jsonb_object_keys(${t}.waf_rules || excluded.waf_rules) as k order by n desc,k limit ${MAX_WAF_RULES}) q),
       -- Sum per-status counters key by key.
       status_codes = (
         select coalesce(jsonb_object_agg(k, least(9007199254740991::numeric, coalesce((${t}.status_codes ->> k)::numeric, 0)
@@ -145,9 +153,16 @@ export async function ingestMinuteStats(
   return accepted;
 }
 
+/** Heavy hitters kept per site, node and minute (URLs and addresses; CRS rules below). */
+const MAX_TOP = 50;
+/** CRS rules kept per site, node and minute, heaviest first. */
+export const MAX_WAF_RULES = 50;
+/** A CRS rule id as nodes report it: a uint32 in decimal. */
+const isRuleId = (value: string) => /^[1-9][0-9]{0,9}$/.test(value) && Number(value) <= 4294967295;
+
 function cleanTop(
   input: Record<string, number> | undefined,
-  kind: "url" | "ip",
+  kind: "url" | "ip" | "rule",
 ): Record<string, number> {
   return Object.fromEntries(
     Object.entries(input ?? {})
@@ -157,13 +172,15 @@ function cleanTop(
           count > 0 &&
           (kind === "ip"
             ? isIP(value) > 0
-            : value.startsWith("/") &&
-              value.length <= 2048 &&
-              !value.includes("?") &&
-              ![...value].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)),
+            : kind === "rule"
+              ? isRuleId(value)
+              : value.startsWith("/") &&
+                value.length <= 2048 &&
+                !value.includes("?") &&
+                ![...value].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)),
       )
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, 50),
+      .slice(0, kind === "rule" ? MAX_WAF_RULES : MAX_TOP),
   );
 }
 function mergeTop(left: Record<string, number>, right: Record<string, number>) {
@@ -173,7 +190,7 @@ function mergeTop(left: Record<string, number>, right: Record<string, number>) {
   return Object.fromEntries(
     Object.entries(values)
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, 50),
+      .slice(0, MAX_TOP),
   );
 }
 /** Only the authenticated node can advance its cursor; counter and cursor writes are atomic. */

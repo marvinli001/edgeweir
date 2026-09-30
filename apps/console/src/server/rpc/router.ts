@@ -166,6 +166,14 @@ import {
 } from "../services/upgrades";
 import { getUsageSettings, listUsage, setUsageSettings, usageChanges } from "../services/usage";
 import { createUser, listUsers, setUserAdmin, setUserDisabled } from "../services/users";
+import {
+  getSiteWaf,
+  getWafSettings,
+  setWafSettings,
+  siteFeatures,
+  topWafRules,
+  updateSiteWaf,
+} from "../services/waf";
 import { admin, authed, maybeAuthed, orgManager, os, tenant } from "./base";
 
 export type { RequestContext } from "./base";
@@ -273,6 +281,21 @@ export const router = os.router({
     ),
     update: tenantManager.protection.update.handler(({ input, context }) =>
       updateSiteProtection(context.app.db, input, { scope: context.scope, actor: context.actor }),
+    ),
+  },
+  waf: {
+    get: tenant.waf.get.handler(({ input, context }) =>
+      getSiteWaf(context.app.db, input.id, context.scope),
+    ),
+    update: tenantManager.waf.update.handler(({ input, context }) =>
+      updateSiteWaf(context.app.db, input, {
+        scope: context.scope,
+        actor: context.actor,
+        isAdmin: context.isAdmin,
+      }),
+    ),
+    topRules: tenant.waf.topRules.handler(({ input, context }) =>
+      topWafRules(context.app.db, context.scope, input),
     ),
   },
   security: {
@@ -694,6 +717,9 @@ export const router = os.router({
     originHealth: tenant.sites.originHealth.handler(({ input, context }) =>
       siteOriginHealth(context.app.db, input.id, context.scope),
     ),
+    features: tenant.sites.features.handler(({ input, context }) =>
+      siteFeatures(context.app.db, input.id, { scope: context.scope, isAdmin: context.isAdmin }),
+    ),
   },
   cacheTasks: {
     list: tenant.cacheTasks.list.handler(({ input, context }) =>
@@ -884,6 +910,10 @@ export const router = os.router({
     ccTemplate: admin.settings.ccTemplate.handler(({ context }) => getCcTemplate(context.app.db)),
     setCcTemplate: admin.settings.setCcTemplate.handler(({ input, context }) =>
       setCcTemplate(context.app.db, input, context.actor),
+    ),
+    waf: admin.settings.waf.handler(({ context }) => getWafSettings(context.app.db)),
+    setWaf: admin.settings.setWaf.handler(({ input, context }) =>
+      setWafSettings(context.app.db, input, context.actor),
     ),
     usage: admin.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
     setUsage: admin.settings.setUsage.handler(({ input, context }) =>

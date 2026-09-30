@@ -488,8 +488,24 @@ describe("node channel", async () => {
     const stats = await mtls.reportStatsV2({
       batchSequence: 1n,
       stats: [
-        { minute, siteId: own.site.id, requests: 2n, cacheHits: 1n, statusCodes: { 200: 2n } },
-        { minute, siteId: own.site.id, requests: 3n, statusCodes: { 200: 1n, 404: 2n } },
+        {
+          minute,
+          siteId: own.site.id,
+          requests: 2n,
+          cacheHits: 1n,
+          statusCodes: { 200: 2n },
+          wafRules: [{ value: "942100", count: 2n }],
+        },
+        {
+          minute,
+          siteId: own.site.id,
+          requests: 3n,
+          statusCodes: { 200: 1n, 404: 2n },
+          wafRules: [
+            { value: "942100", count: 1n },
+            { value: "920350", count: 1n },
+          ],
+        },
         { minute, siteId: foreign.site.id, requests: 7n },
       ],
     });
@@ -536,6 +552,7 @@ describe("node channel", async () => {
         requests: 6,
         cacheHits: 1,
         statusCodes: { "200": 3, "404": 2 },
+        wafRules: { "942100": 3, "920350": 1 },
       }),
     ]);
   });

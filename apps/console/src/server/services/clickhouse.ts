@@ -51,23 +51,36 @@ export async function ensureClickHouse(env: Env) {
         time DateTime64(3, 'UTC'), id String, node_id UUID, site_id UUID,
         client_ip String, method LowCardinality(String), host String, path String,
         status UInt16, bytes_sent UInt64, duration_ms UInt32, cache_status LowCardinality(String), sample_rate UInt16,
-        ja4 String DEFAULT ''
+        ja4 String DEFAULT '', waf_rule_ids Array(UInt32) DEFAULT [], waf_blocked Bool DEFAULT false
       ) ENGINE = ReplacingMergeTree ORDER BY (site_id, time, id)
         PARTITION BY toDate(time) TTL toDateTime(time) + INTERVAL 7 DAY`,
       );
-      // Tables created before JA4 logging.
+      // Tables created before JA4 logging and CRS.
       await clickhouse(
         env,
         "ALTER TABLE access_log ADD COLUMN IF NOT EXISTS ja4 String DEFAULT ''",
       );
       await clickhouse(
         env,
+        "ALTER TABLE access_log ADD COLUMN IF NOT EXISTS waf_rule_ids Array(UInt32) DEFAULT []",
+      );
+      await clickhouse(
+        env,
+        "ALTER TABLE access_log ADD COLUMN IF NOT EXISTS waf_blocked Bool DEFAULT false",
+      );
+      await clickhouse(
+        env,
         `CREATE TABLE IF NOT EXISTS minute_stats (
         minute DateTime('UTC'), node_id UUID, site_id UUID, revision UInt64,
         requests UInt64, bytes_sent UInt64, bytes_received UInt64, cache_hits UInt64, cache_misses UInt64,
-        status_codes Map(String, UInt64), top_urls Map(String, UInt64), top_ips Map(String, UInt64)
+        status_codes Map(String, UInt64), top_urls Map(String, UInt64), top_ips Map(String, UInt64),
+        waf_rules Map(String, UInt64)
       ) ENGINE = ReplacingMergeTree(revision) ORDER BY (site_id, minute, node_id)
         PARTITION BY toDate(minute) TTL minute + INTERVAL 7 DAY`,
+      );
+      await clickhouse(
+        env,
+        "ALTER TABLE minute_stats ADD COLUMN IF NOT EXISTS waf_rules Map(String, UInt64)",
       );
     })();
     ready.set(env, job);
@@ -95,6 +108,8 @@ export async function insertClickHouseLogs(env: Env, rows: LogEntry[]) {
         cache_status: r.cacheStatus,
         sample_rate: r.sampleRate,
         ja4: r.ja4,
+        waf_rule_ids: r.wafRuleIds,
+        waf_blocked: r.wafBlocked,
       }),
     )
     .join("\n");
@@ -106,7 +121,8 @@ export async function queryClickHouseLogs(env: Env, input: LogQuery): Promise<Lo
     env,
     `SELECT id, formatDateTime(time, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS timeIso,
     toString(node_id) AS nodeId, toString(site_id) AS siteId, client_ip AS clientIp, method, host, path, status,
-    toFloat64(bytes_sent) AS bytesSent, duration_ms AS durationMs, cache_status AS cacheStatus, sample_rate AS sampleRate, ja4
+    toFloat64(bytes_sent) AS bytesSent, duration_ms AS durationMs, cache_status AS cacheStatus, sample_rate AS sampleRate, ja4,
+    waf_rule_ids AS wafRuleIds, waf_blocked AS wafBlocked
     FROM access_log FINAL WHERE site_id = {site:UUID}
       AND time >= fromUnixTimestamp64Milli({from:Int64}) AND time < fromUnixTimestamp64Milli({to:Int64})
       AND ({status:UInt16} = 0 OR status = {status:UInt16}) AND ({ip:String} = '' OR client_ip = {ip:String})
@@ -148,7 +164,7 @@ export async function mirrorMinuteStats(
   const result = await tx.execute<Record<string, unknown>>(sql`
     select to_char(s.minute AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS minute,
       s.node_id, s.site_id, s.requests, s.bytes_sent, s.bytes_received, s.cache_hits, s.cache_misses,
-      s.status_codes, s.top_urls, s.top_ips
+      s.status_codes, s.top_urls, s.top_ips, s.waf_rules
     from node_minute_stats s inner join (
       select distinct x."siteId", date_trunc('minute', x.minute::timestamptz, 'UTC') AS minute
       from jsonb_to_recordset(${JSON.stringify(keys)}::jsonb) AS x("siteId" text, minute text)

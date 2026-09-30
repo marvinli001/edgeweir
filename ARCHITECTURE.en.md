@@ -345,6 +345,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `ip_list` | Organization or platform IP lists (normalized CIDRs) |
 | `ip_ban` | Dynamic bans: scope (platform / site), normalized CIDR, reason code, source (manual / auto; auto bans keep the node and trigger), expiry and removal time, `seq` (sequence `ip_ban_seq`), whether it is delivered |
 | `site_protection` | Site protection: Under Attack and its challenge type, pass lifetime, proof-of-work difficulty, CC policy (template or custom), JA4 logging; no row means the defaults |
+| `site_waf` | A site's OWASP CRS: mode (off, detect, block), paranoia level, anomaly threshold, excluded rule ids, request body limit; no row means off |
 | `challenge_key` | Challenge keys of a cluster (`next`, `current`, `previous`), secrets envelope-encrypted |
 | `config_revision` | Revisions per cluster: number, content hash, binary IR, reason code |
 | `node_config_status` | Node apply receipts and heartbeats, with the receipt verification flag |
@@ -368,13 +369,13 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 
 | Table | Contents |
 | --- | --- |
-| `node_minute_stats` | Traffic per node, site, and minute |
+| `node_minute_stats` | Traffic per node, site, and minute, with top URLs, top IPs and matched CRS rules |
 | `node_hour_stats` | Hourly rollups |
 | `node_day_stats` | Daily rollups |
 | `stats_rollup_dirty` | Time buckets waiting for a rollup (hours, days, usage windows) |
 | `node_stats_cursor` | Per-node high-water mark of statistics batch sequences and the statistics watermark (`complete_until`) |
 | `site_usage` | Recomputable usage per site and UTC 5-minute window (requests, bytes out and in, exact decimals), revision and global `seq` (sequence `site_usage_seq`) |
-| `access_log` | Sampled access logs (with JA4 when the site records it), one partition per UTC day |
+| `access_log` | Sampled access logs (with JA4 when the site records it; matched CRS rules and whether CRS blocked the request), one partition per UTC day |
 | `security_event` | CC mitigation events reported by nodes: level changes, escalated paths, automatic bans, with the top addresses and paths of the moment |
 | `node_log_cursor` | Per-node high-water mark of log batches |
 | `origin_health` | Passive origin health and error codes reported by nodes |
@@ -424,6 +425,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0027_p0_config_canary` | `cluster_rollout`; `alert_event.site_id` and `alert_state.site_id` nullable (platform alerts) |
 | `0028_g1_dynamic_bans` | `ip_ban`, sequence `ip_ban_seq`; `node.ban_status`; `organization_limit.max_bans` |
 | `0029_g2_challenges` | `site_protection`, `challenge_key`, `security_event`; `node.security_state`; `access_log.ja4` |
+| `0030_g3_waf` | `site_waf`; `waf_rules` in minute, hour and day statistics and the view `traffic_hour_stats`; `access_log.waf_rule_ids`, `waf_blocked` |
 
 ## Build output
 

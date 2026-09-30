@@ -193,6 +193,17 @@ describe("service accounts, scopes and idempotency keys", async () => {
       ["PATCH", "/sites/00000000-0000-4000-8000-000000000000/protection", { underAttack: true }],
       ["GET", "/sites/00000000-0000-4000-8000-000000000000/security", undefined],
       ["GET", "/sites/00000000-0000-4000-8000-000000000000/security/events", undefined],
+      ["GET", "/settings/waf", undefined],
+      ["PUT", "/settings/waf", { tenantCrs: false }],
+      ["GET", "/sites/00000000-0000-4000-8000-000000000000/waf", undefined],
+      ["PATCH", "/sites/00000000-0000-4000-8000-000000000000/waf", { mode: "block" }],
+      ["GET", "/sites/00000000-0000-4000-8000-000000000000/waf/rules", undefined],
+      ["GET", "/sites/00000000-0000-4000-8000-000000000000/features", undefined],
+      [
+        "PUT",
+        "/sites/00000000-0000-4000-8000-000000000000/https",
+        { settings: { brotli: true, zstd: true } },
+      ],
       ["POST", "/sites", { name: "x", domains: ["x.test"], origins: [{ address: "o.test" }] }],
     ] as const) {
       const res = await api(full, method, path, body);

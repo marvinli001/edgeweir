@@ -1,6 +1,7 @@
 import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
+  BROTLI_FEATURE,
   ConfigCapacityError,
   canonicalize,
   compileNodeConfig,
@@ -11,11 +12,14 @@ import {
   encodeNodeConfig,
   geoFeatures,
   MAX_SITES_PER_CLUSTER,
+  MODSECURITY_FEATURE,
+  moduleFeatures,
   nodeRequirements,
   protectionFeatures,
   type RuleModel,
   type SiteModel,
   usesChallenges,
+  ZSTD_FEATURE,
 } from "@edgeweir/config-compiler";
 import {
   nodeSupportsFeature,
@@ -51,6 +55,7 @@ import { ensureChallengeKeys } from "./challenge-keys";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
 import { isAdminRole } from "./users";
+import { loadSiteWafModels } from "./waf";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export type Executor = Database | Tx;
@@ -138,6 +143,7 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
     .orderBy(asc(schema.edgeRule.priority));
   const lists = await db.select().from(schema.ipList);
   const protection = await loadSiteProtectionModels(db, siteIds);
+  const waf = await loadSiteWafModels(db, siteIds);
   return sites
     .map((s): SiteModel => {
       const pool = pools
@@ -224,6 +230,7 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
           })),
         cacheKey: readCacheKey(s.cacheKey),
         protection: protection.get(s.id),
+        waf: waf.get(s.id) ?? null,
         rangeSlice: s.rangeSlice,
         websocket: s.websocket,
         certificateId: s.certificateId ?? "",
@@ -243,6 +250,14 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
                   cipherProfile: settings.cipherProfile,
                   http2: settings.http2,
                   http3: settings.http3,
+                  brotli: settings.brotli,
+                  brotliLevel: settings.brotliLevel,
+                  brotliMinLength: settings.brotliMinLength,
+                  brotliTypes: settings.brotliTypes,
+                  zstd: settings.zstd,
+                  zstdLevel: settings.zstdLevel,
+                  zstdMinLength: settings.zstdMinLength,
+                  zstdTypes: settings.zstdTypes,
                   gzip: settings.gzip,
                   gzipMinLength: settings.gzipMinLength,
                   gzipTypes: settings.gzipTypes,
@@ -883,6 +898,10 @@ export async function rollbackToRevision(
   restored.requiredFeatures.push(
     ...rules.flatMap((r) => (r.expression ? geoFeatures(r.expression) : [])),
   );
+  // Sites dropped above no longer need the modules they used.
+  const modules = [BROTLI_FEATURE, ZSTD_FEATURE, MODSECURITY_FEATURE];
+  restored.requiredFeatures = restored.requiredFeatures.filter((f) => !modules.includes(f));
+  restored.requiredFeatures.push(...moduleFeatures(restored));
   // Challenge tokens are short-lived issuance state, never rollback content.
   restored.httpChallenges = [];
   restored.requiredFeatures = restored.requiredFeatures.filter((f) => f !== "http01-v1");

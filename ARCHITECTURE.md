@@ -345,6 +345,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `ip_list` | 组织或平台 IP 名单（规范化 CIDR） |
 | `ip_ban` | 动态封禁：范围（平台 / 网站）、规范化 CIDR、原因码、来源（手动 / 自动，自动带来源节点与触发条件）、到期与解封时间、序号 `seq`（序列 `ip_ban_seq`）、是否下发 |
 | `site_protection` | 网站防护：Under Attack 与挑战类型、通行凭证有效期、PoW 难度、CC 策略（跟随模板或自定义）、JA4 日志；没有行即默认值 |
+| `site_waf` | 网站的 OWASP CRS：模式（关闭 / 仅检测 / 拦截）、paranoia level、异常分数阈值、排除的规则 id、请求体检查上限；没有行即关闭 |
 | `challenge_key` | 集群的挑战密钥（`next`、`current`、`previous`），密钥信封加密 |
 | `config_revision` | 每个集群的 revision：序号、内容哈希、二进制 IR、原因码 |
 | `node_config_status` | 节点应用回执与心跳，含回执验证标记 |
@@ -368,13 +369,13 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
 | 表 | 内容 |
 | --- | --- |
-| `node_minute_stats` | 按节点、网站、分钟的流量统计 |
+| `node_minute_stats` | 按节点、网站、分钟的流量统计，含 Top URL、Top IP 与命中的 CRS 规则 |
 | `node_hour_stats` | 小时汇总 |
 | `node_day_stats` | 天汇总 |
 | `stats_rollup_dirty` | 待重新汇总的时间桶（小时、天、用量窗口） |
 | `node_stats_cursor` | 每个节点统计批次的序号高水位与统计水位（`complete_until`） |
 | `site_usage` | 按网站、UTC 5 分钟窗口的可复算用量（请求数、出站与入站字节，十进制精确值）、修订号与全局序号 `seq`（序列 `site_usage_seq`） |
-| `access_log` | 采样访问日志（网站开启时含 JA4），按 UTC 日分区 |
+| `access_log` | 采样访问日志（网站开启时含 JA4；命中的 CRS 规则与是否被拦截），按 UTC 日分区 |
 | `security_event` | 节点上报的 CC 防护事件：级别变化、路径升降级、自动封禁，带当时的 Top IP 与 Top 路径 |
 | `node_log_cursor` | 每个节点日志批次的序号高水位 |
 | `origin_health` | 节点上报的源站被动健康状态与错误码 |
@@ -424,6 +425,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0027_p0_config_canary` | `cluster_rollout`；`alert_event.site_id`、`alert_state.site_id` 可空（平台告警） |
 | `0028_g1_dynamic_bans` | `ip_ban`、序列 `ip_ban_seq`；`node.ban_status`；`organization_limit.max_bans` |
 | `0029_g2_challenges` | `site_protection`、`challenge_key`、`security_event`；`node.security_state`；`access_log.ja4` |
+| `0030_g3_waf` | `site_waf`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `waf_rules`；`access_log.waf_rule_ids`、`waf_blocked` |
 
 ## 构建产物
 

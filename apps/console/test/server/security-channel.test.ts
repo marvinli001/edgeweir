@@ -439,7 +439,7 @@ describe("challenge keys, security events and JA4 over the node channel", async 
     expect(byPath).toEqual({ "/off": "", "/on": JA4, "/bad": "" });
     expect(found.entries.every((e) => e.nodeId === nodeId)).toBe(true);
     const csv = logsCsv(found.entries);
-    expect(csv.split("\r\n")[0]).toMatch(/,ja4$/);
+    expect(csv.split("\r\n")[0]).toMatch(/,ja4,wafRuleIds,wafBlocked$/);
     expect(csv).toContain(JA4);
   });
 });
