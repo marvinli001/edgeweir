@@ -209,14 +209,17 @@ message ReportStatusRequest {
   // State of the dynamic bans on this node; unset on nodes without bans-v1.
   // Added in v0.9.0.
   BanStatus bans = 11;
-  // Current CC mitigation level of every site above normal. Added in v0.10.0.
+  // Current CC mitigation level of every site above normal or with escalated
+  // paths. Added in v0.10.0; sites at normal with escalated paths since
+  // v0.10.1 (earlier nodes leave them out).
   repeated SiteSecurity security = 12;
 }
 
 // SiteSecurity is the CC mitigation state of one site on one node.
 message SiteSecurity {
   string site_id = 1;
-  // cookie302, js, pow or captcha; normal sites are left out.
+  // normal, cookie302, js, pow or captcha; sites at normal without escalated
+  // paths are left out.
   string level = 2;
   // Paths challenged above the site's level.
   uint32 escalated_paths = 3;

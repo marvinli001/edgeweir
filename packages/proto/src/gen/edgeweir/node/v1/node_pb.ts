@@ -483,7 +483,9 @@ export type ReportStatusRequest = Message<"edgeweir.node.v1.ReportStatusRequest"
   bans?: BanStatus | undefined;
 
   /**
-   * Current CC mitigation level of every site above normal. Added in v0.10.0.
+   * Current CC mitigation level of every site above normal or with escalated
+   * paths. Added in v0.10.0; sites at normal with escalated paths since
+   * v0.10.1 (earlier nodes leave them out).
    *
    * @generated from field: repeated edgeweir.node.v1.SiteSecurity security = 12;
    */
@@ -509,7 +511,8 @@ export type SiteSecurity = Message<"edgeweir.node.v1.SiteSecurity"> & {
   siteId: string;
 
   /**
-   * cookie302, js, pow or captcha; normal sites are left out.
+   * normal, cookie302, js, pow or captcha; sites at normal without escalated
+   * paths are left out.
    *
    * @generated from field: string level = 2;
    */
