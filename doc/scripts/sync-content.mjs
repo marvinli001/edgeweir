@@ -57,6 +57,7 @@ const SECTIONS = [
       ["https", "docs/guide/https.md"],
       ["rules", "docs/guide/rules.md"],
       ["bans", "docs/guide/bans.md"],
+      ["challenges", "docs/guide/challenges.md"],
       ["dns-and-alerts", "docs/guide/dns-and-alerts.md"],
       ["access-logs", "docs/guide/access-logs.md"],
       ["node-upgrades", "docs/guide/node-upgrades.md"],

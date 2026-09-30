@@ -61,7 +61,9 @@ Traffic analytics, access log sampling, search, and export, analytics storage mo
 | --- | --- |
 | Time, client IP, method, Host, path, status, bytes sent, duration (ms), cache status, sample rate, node ID | Query strings, request headers, cookies, request and response bodies |
 
-Access logs need the node capability `access-logs-v1`. A configuration rollback keeps the current sample rate and never re-enables logging that was turned off.
+With **Record JA4 in access logs** on (**Security → Challenges** of the site), logs also record the JA4 TLS client fingerprint (empty over plain HTTP): the table gets a **JA4** column and the CSV a `ja4` column. Once it is off, the console stops keeping the field. JA4 format: [JA4](challenges.en.md#ja4).
+
+Access logs need the node capability `access-logs-v1`, and JA4 also `ja4-v1`. A configuration rollback keeps the current sample rate and JA4 setting and never re-enables logging that was turned off.
 
 ## Search and export logs
 

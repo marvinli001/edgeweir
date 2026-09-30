@@ -43,7 +43,7 @@
 | 请求变换 | 改写路径、请求头 | 改写回源路径；设置或移除请求头 |
 | 重定向 | 重定向 | 返回 301、302、307 或 308 |
 | 配置 | 覆盖设置 | 覆盖绕过缓存、强制 HTTPS；关闭 Gzip |
-| 自定义 WAF | 拦截、记录、放行 | 拦截返回 403 或 451；记录只写日志；放行跳过同一作用域剩余的自定义 WAF 规则 |
+| 自定义 WAF | 拦截、记录、放行、挑战 | 拦截返回 403 或 451；记录只写日志；放行跳过同一作用域剩余的自定义 WAF 规则；挑战要求访客先通过挑战 |
 | 限速 | 限速 | 固定窗口计数，超额返回 429 或 403 |
 | 缓存 | 覆盖设置 | 覆盖缓存相关设置 |
 | 回源 | 请求头 | 设置或移除发往源站的请求头 |
@@ -54,6 +54,7 @@
 | 动作 | 字段 | 取值 | 默认值 |
 | --- | --- | --- | --- |
 | 拦截 | 状态码 | 403 / 451 | 403 |
+| 挑战 | 挑战类型 | Cookie 跳转 / JS 计算 / 工作量证明 / 图片验证码 | JS 计算 |
 | 重定向 | 值 | 站内绝对路径（以 `/` 开头、不以 `//` 开头），或不含账号和空白的 `http(s)` URL；最长 4096 字符 | `/` |
 | 重定向 | 状态码 | 301 / 302 / 307 / 308 | 301 |
 | 改写路径 | 值 | 以 `/` 开头，不以 `//` 开头，不含 `?`、`#`、`\` | `/` |
@@ -65,7 +66,7 @@
 | 覆盖设置 | Gzip | 不更改 / 关闭 | 不更改 |
 | 限速 | 每个窗口请求数 | 1–100000 | 100 |
 | 限速 | 窗口（秒） | 1–3600 | 60 |
-| 限速 | 限速键 | `ip.src`、`http.host` 或 `http.request.headers.<名称>` | `ip.src` |
+| 限速 | 限速键 | `ip.src`、`http.host`、`tls.ja4` 或 `http.request.headers.<名称>`（选择「请求头」后填写名称） | `ip.src` |
 | 限速 | 状态码 | 429 / 403 | 429 |
 
 受保护头不能通过规则设置或移除：`Host`、`Authorization`、`Proxy-Authorization`、`Cookie`、`Set-Cookie`、`Content-Length`、`Transfer-Encoding`、`Connection`、`Upgrade`、`TE`、`Trailer`、`CDN-Loop`，以及以 `X-Edgeweir-` 开头的头。
@@ -93,6 +94,7 @@
 | 覆盖设置：Gzip 关闭 | 移除发往源站的 `Accept-Encoding` 并绕过缓存，避免取出此前缓存的压缩响应；规则不能开启未构建的压缩模块 |
 | 覆盖设置：强制 HTTPS | 网站没有证书时请求返回 503 |
 | 拦截、限速超额 | 响应头 `X-Edgeweir-Error: policy-denied`；限速超额另带 `Retry-After`（窗口秒数） |
+| 挑战 | 请求带有级别足够的通行凭证时继续执行后续规则，否则返回挑战页（非 GET/HEAD 请求返回 403 与 `X-Edgeweir-Challenge: required`）；放行规则跳过 Under Attack 与 CC 挑战，但在放行之前命中的挑战规则仍然生效。见[挑战与 CC 防护](challenges.md) |
 | 记录 | 不改变响应。每条规则在每个节点每 60 秒最多写一条 NOTICE 级 nginx 错误日志，内容为网站 ID 和规则 ID；nginx 为请求期间的日志附加客户端 IP、请求行和 Host |
 
 ### 限速
@@ -134,6 +136,7 @@ http.response.code ge 500
 | `ip.geoip.country` | 字符串 | ISO 国家代码；无记录时为空字符串 |
 | `ip.geoip.subdivision` | 字符串 | City MMDB 中的一级行政区代码，没有代码时为其英文名称；无记录或 City MMDB 的国家与 `ip.geoip.country` 不一致时为空字符串 |
 | `ip.geoip.asnum` | 整数 | ASN；无记录时为 0 |
+| `tls.ja4` | 字符串 | 连接的 JA4 TLS 客户端指纹；明文 HTTP 为空字符串，见 [JA4](challenges.md#ja4) |
 
 ### 运算符与字面量
 
@@ -219,7 +222,7 @@ http.response.code ge 500
 
 | 项目 | 行为 |
 | --- | --- |
-| 能力 | 规则和平台拦截/放行名单需要节点能力 `rules-v1`；`ip.geoip.country`、`ip.geoip.subdivision` 需要 `geoip-city-v1`；`ip.geoip.asnum` 需要 `geoip-asn-v1`；使用 `ip.geoip.subdivision` 时控制台另外检查 `geoip-subdivision-v1`（不写入配置） |
+| 能力 | 规则和平台拦截/放行名单需要节点能力 `rules-v1`；`ip.geoip.country`、`ip.geoip.subdivision` 需要 `geoip-city-v1`；`ip.geoip.asnum` 需要 `geoip-asn-v1`；挑战动作需要 `challenge-v1`；`tls.ja4`（字段或限速键）需要 `ja4-v1`；使用 `ip.geoip.subdivision` 时控制台另外检查 `geoip-subdivision-v1`（不写入配置） |
 | 租户发布 | 租户保存或后台自动发布引入新能力时，检查集群内所有活动节点（含暂时离线的节点）；有节点缺少能力时拒绝本次保存（「请先由管理员为集群节点启用这些能力：…」），原规则与版本不变 |
 | 平台管理员 | 可明确发布需要升级的配置；缺少能力的节点保留 last-known-good 配置，后台显示「需要升级」，见[节点升级](node-upgrades.md) |
 | 未知能力 | 节点拒绝含未知能力或未知枚举的配置，继续使用 last-known-good |

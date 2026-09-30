@@ -326,6 +326,20 @@ Changes are audited as `system.usage_update`. The usage API and the definition o
 
 Changes are audited as `system.bans_update`. See [Bans](bans.en.md).
 
+### Protection
+
+| Field | Values | Default | Description |
+| --- | --- | --- | --- |
+| **Platform Under Attack** | On / off | Off | Every GET/HEAD request without a pass is challenged first, on every site; switching asks for confirmation and publishes a configuration revision to every cluster |
+| **Challenge type** | Cookie redirect / JavaScript / Proof of work / Image captcha | JavaScript | Challenge type of platform Under Attack |
+| **Security event retention (days)** | 7–365 | 30 | How long CC mitigation events reported by nodes are kept |
+
+Changes are audited as `system.protection_update`. Platform Under Attack needs the node capability `challenge-v1`; publications by platform administrators skip the tenant capability check, and nodes without the capability keep their configuration.
+
+### CC template
+
+Thresholds for sites whose CC mitigation follows the platform template: highest level, high proof of work instead of the captcha, window, site QPS, per-URL QPS, per-IP QPS, IP ban duration, origin error rate, minimum origin requests, escalate after, step down after. Fields, ranges, and defaults: [CC mitigation](challenges.en.md#cc-mitigation). Saving publishes a configuration revision to every cluster with a following site; changes are audited as `system.cc_template_update`.
+
 ### GeoIP databases
 
 Read-only. Shows, per node, the state of the **Country**, **Subdivision**, and **ASN** data (**Ready** / **Unavailable**), with the IPinfo attribution link. Country and ASN data ship in node release images; other databases are configured locally on each node; **Configure databases** links to [Rules, IP lists, and GeoIP](rules.en.md).

@@ -75,7 +75,7 @@ Automatic bans count toward neither of the first two. Over the organization limi
 
 ## Automatic bans
 
-A node bans a single address on a trigger (for example one IP's request rate). The ban applies on that node at once and is reported to the console in batches every 5 seconds.
+A node bans a single address on a trigger (the per-IP QPS of CC mitigation, see [Challenges and CC mitigation](challenges.en.md#cc-mitigation)). The ban applies on that node at once and is reported to the console in batches every 5 seconds.
 
 | Item | Behavior |
 | --- | --- |

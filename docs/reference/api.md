@@ -205,6 +205,53 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 行为见 [封禁](../guide/bans.md)。
 
+### 挑战与 CC 防护
+
+| 过程 | 端点 | 调用方 |
+| --- | --- | --- |
+| `protection.get` | `GET /sites/{id}/protection` | 组织成员、平台管理员 |
+| `protection.update` | `PATCH /sites/{id}/protection` | 组织 owner / admin、平台管理员 |
+| `security.state` | `GET /sites/{id}/security` | 组织成员、平台管理员 |
+| `security.events` | `GET /sites/{id}/security/events` | 组织成员、平台管理员 |
+| `settings.protection`、`settings.setProtection` | `GET`、`PUT /settings/protection` | 平台管理员 |
+| `settings.ccTemplate`、`settings.setCcTemplate` | `GET`、`PUT /settings/cc-template` | 平台管理员 |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。挑战类型与 CC 级别取值：`cookie302`、`js`、`pow`、`captcha`（级别另有 `normal`）。
+
+| 请求 | 字段 |
+| --- | --- |
+| `PATCH /sites/{id}/protection` | 只修改给出的字段：`underAttack`、`underAttackChallenge`、`passTtlSeconds`（300–86400）、`powDifficulty`（8–24）、`powHighDifficulty`（8–26，不低于 `powDifficulty`）、`logJa4`、`cc`（部分字段，合并到已保存的策略） |
+| `cc` | `enabled`、`followTemplate`、`maxLevel`、`highPowInsteadOfCaptcha`、`windowSeconds`（5–60）、`siteQps`、`urlQps`、`ipQps`（0–1000000，0 关闭该条件）、`ipBanSeconds`（60–86400）、`originErrorPercent`（0–100）、`originErrorMinRequests`、`escalateAfterSeconds`（1–3600）、`cooldownSeconds`（1–86400） |
+| `GET /sites/{id}/security` | 查询参数 `hours`（1–168，默认 24） |
+| `GET /sites/{id}/security/events` | 查询参数 `kind`（`site_level` / `path_level` / `ip_banned`）、`page`、`pageSize`（1–100，默认 50） |
+| `PUT /settings/protection` | `underAttack`、`underAttackChallenge`、`eventRetentionDays`（7–365，默认 30） |
+| `PUT /settings/cc-template` | `cc` 中除 `enabled`、`followTemplate` 外的全部字段 |
+
+响应：
+
+| 过程 | 内容 |
+| --- | --- |
+| `protection.get`、`protection.update` | 上述字段，另有 `siteId`、`cc`（跟随模板时阈值为模板值）、`ccTemplate`（平台当前模板）、`effectiveCc`（节点使用的阈值，策略关闭时为 `null`）、`platformUnderAttack`、`updatedAt` |
+| `security.state` | `nodes`：集群中每个活动节点的 `{ id, name, online, level, escalatedPaths, reportedAt }`；`topIps`、`topPaths`：近 `hours` 小时事件中的 `{ value, count }`（各最多 10 个，近似值）；`hours` |
+| `security.events` | `{ items, total }`，按发生时间倒序；事件字段 `id`、`node`（`{ id, name }`，节点删除后为 `null`）、`occurredAt`、`kind`、`level`、`previousLevel`、`path`、`address`、`metric`、`observed`、`threshold`、`topIps`、`topPaths` |
+
+- 修改发布网站所在集群的配置版本（原因 `site_protection_updated`），审计 `site.protection_update`；平台 Under Attack 变化时发布所有集群（`platform_protection_updated`），审计 `system.protection_update`；修改 CC 模板发布有网站跟随模板的集群（`cc_template_updated`），审计 `system.cc_template_update`。挑战密钥每日轮换发布 `challenge_keys_rotated`。
+
+| 错误代码 | 状态 | 场景 |
+| --- | --- | --- |
+| `PROTECTION_POW_DIFFICULTY` | 400 | `powHighDifficulty` 低于 `powDifficulty`；`data.min` 为最小允许值 |
+| `NODE_CAPABILITY_REQUIRED` | 409 | 集群内有活动节点缺少 `challenge-v1` 或 `ja4-v1`（租户调用）；`data.features` |
+| `ORG_ADMIN_REQUIRED` | 403 | 组织成员调用 `protection.update` |
+| `SITE_NOT_FOUND` | 404 | 网站不存在或不在调用方范围内 |
+
+```bash
+curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"underAttack":true,"underAttackChallenge":"pow","cc":{"enabled":true,"followTemplate":true}}' \
+  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/protection
+```
+
+行为见 [挑战与 CC 防护](../guide/challenges.md)。
+
 ### 用量
 
 每个网站、每个 UTC 5 分钟窗口 `[windowStart, windowEnd)` 一条记录，数值为该窗口内全部节点上报的分钟统计之和。

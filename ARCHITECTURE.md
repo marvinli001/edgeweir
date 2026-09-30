@@ -178,6 +178,23 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 
 行为见 [封禁](docs/guide/bans.md)。
 
+## 挑战与 CC 防护
+
+挑战、Under Attack 与分级 CC 由节点在本地执行，控制台负责配置、密钥与事件：
+
+1. 网站的防护（`site_protection`）、平台 Under Attack（系统设置 `protection_settings`）与 CC 模板（`cc_template`）编译进 NodeConfig。只有集群用到挑战（平台 Under Attack、网站 Under Attack、启用的 CC 策略或 `challenge` 规则）时，IR 才带 `challenge_keys`、`platform_protection` 与每个网站的 `protection`，`required_features` 加 `challenge-v1`；只开 JA4 日志的网站单独带 `protection`。规则读取 `tls.ja4`（或按它限速）、网站记录 JA4 时加 `ja4-v1`。其余集群的内容哈希不变。
+2. 通行凭证的 HMAC 密钥按集群，每个集群三把（`next`、`current`、`previous`），集群第一次用到挑战时创建。IR 只含密钥 id 与角色（按 id 排序）；节点以 `GetChallengeKeys` 取得 32 字节的密钥，只能取到本集群的。密钥在第一次被取用时生成，以信封加密保存（用途 `challenge_key.secret`，绑定行 id）。
+3. `maintenance.rotate-challenge-keys` 每小时检查一次，最新的密钥满一天就轮换：`previous` 删除、`current` 变 `previous`、`next` 变 `current`、新建 `next`；最新 revision 带密钥的集群发布新 revision（原因 `challenge_keys_rotated`），审计 `cluster.challenge_keys_rotate`。
+4. 节点以 `ReportSecurityEvents` 上报级别变化、路径升降级与自动封禁（每次最多 500 条），控制台按（节点、事件 id）幂等写入 `security_event`；网站从正常升级时触发告警 `cc_mitigation`，同一网站 15 分钟内最多一次。心跳的 `ReportStatus.security` 保存在 `node.security_state`。`maintenance.prune-security-events` 按保留天数（默认 30 天）删除事件。
+
+| 管理操作 | 审计 |
+| --- | --- |
+| 修改网站防护 | `site.protection_update`（发布该网站的集群） |
+| 平台 Under Attack、事件保留天数 | `system.protection_update`（Under Attack 变化时发布全部集群） |
+| CC 模板 | `system.cc_template_update`（发布有网站跟随模板的集群） |
+
+行为见 [挑战与 CC 防护](docs/guide/challenges.md)。
+
 ## 节点通道
 
 Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
@@ -255,7 +272,7 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 
 Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
-告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高，生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook 或邮件）发送；投递时重新检查成员资格、封禁状态、两步验证与渠道可见性。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
+告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook 或邮件）发送；投递时重新检查成员资格、封禁状态、两步验证与渠道可见性。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
 
 ## 后台任务
 
@@ -270,6 +287,8 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `maintenance.expire-cache-tasks` | 每小时第 43 分 | 把超期未完成的刷新预热交付记为失败 |
 | `maintenance.expire-enrollment-tokens` | 每 30 分钟 | 删除过期或使用超过 7 天的注册 token |
 | `maintenance.prune-bans` | 每 10 分钟 | 删除到期超过一小时的封禁 |
+| `maintenance.rotate-challenge-keys` | 每小时第 11 分 | 轮换满一天的挑战密钥 |
+| `maintenance.prune-security-events` | 每小时第 37 分 | 删除超过保留天数的安全事件 |
 
 ## 数据模型
 
@@ -303,12 +322,12 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `region` | 区域字典 |
 | `cluster` | 集群：共享一条 revision 序列的节点集合 |
 | `node_group` | 节点组，可关联区域 |
-| `node` | 节点：状态、能力清单、证书序列号与指纹、最近心跳、最近上报的封禁状态 |
+| `node` | 节点：状态、能力清单、证书序列号与指纹、最近心跳、最近上报的封禁状态与各网站的 CC 级别 |
 | `node_ip` | 节点上报的 IP 地址 |
 | `enrollment_token` | 注册 token 的 SHA-256 与使用状态 |
 | `node_certificate_revocation` | 删除节点时吊销的证书序列号 |
 | `pki_authority` | 内部 CA，私钥信封加密 |
-| `system_setting` | 平台键值设置：setup token、会话 secret 的 HMAC 校验值、源站允许清单、SMTP、节点发布源、DNS 解析器、告警策略、一次性迁移标记 |
+| `system_setting` | 平台键值设置：setup token、会话 secret 的 HMAC 校验值、源站允许清单、SMTP、节点发布源、DNS 解析器、告警策略、封禁、平台防护与 CC 模板、一次性迁移标记 |
 | `audit_log` | 管理操作审计 |
 
 ### 网站与配置
@@ -325,6 +344,8 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `edge_rule` | 网站或平台规则：阶段、表达式、动作、名单引用 |
 | `ip_list` | 组织或平台 IP 名单（规范化 CIDR） |
 | `ip_ban` | 动态封禁：范围（平台 / 网站）、规范化 CIDR、原因码、来源（手动 / 自动，自动带来源节点与触发条件）、到期与解封时间、序号 `seq`（序列 `ip_ban_seq`）、是否下发 |
+| `site_protection` | 网站防护：Under Attack 与挑战类型、通行凭证有效期、PoW 难度、CC 策略（跟随模板或自定义）、JA4 日志；没有行即默认值 |
+| `challenge_key` | 集群的挑战密钥（`next`、`current`、`previous`），密钥信封加密 |
 | `config_revision` | 每个集群的 revision：序号、内容哈希、二进制 IR、原因码 |
 | `node_config_status` | 节点应用回执与心跳，含回执验证标记 |
 | `cluster_rollout` | 集群的配置金丝雀：策略（开关、观察窗口、自动推进、5xx 阈值）与当前发布（稳定版本、候选版本、窗口、结果） |
@@ -353,7 +374,8 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `stats_rollup_dirty` | 待重新汇总的时间桶（小时、天、用量窗口） |
 | `node_stats_cursor` | 每个节点统计批次的序号高水位与统计水位（`complete_until`） |
 | `site_usage` | 按网站、UTC 5 分钟窗口的可复算用量（请求数、出站与入站字节，十进制精确值）、修订号与全局序号 `seq`（序列 `site_usage_seq`） |
-| `access_log` | 采样访问日志，按 UTC 日分区 |
+| `access_log` | 采样访问日志（网站开启时含 JA4），按 UTC 日分区 |
+| `security_event` | 节点上报的 CC 防护事件：级别变化、路径升降级、自动封禁，带当时的 Top IP 与 Top 路径 |
 | `node_log_cursor` | 每个节点日志批次的序号高水位 |
 | `origin_health` | 节点上报的源站被动健康状态与错误码 |
 | `cache_task` | 刷新预热任务 |
@@ -401,6 +423,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0026_p0_usage` | `site_usage`、序列 `site_usage_seq`、`node_stats_cursor.complete_until`；为已有分钟统计标记用量窗口 |
 | `0027_p0_config_canary` | `cluster_rollout`；`alert_event.site_id`、`alert_state.site_id` 可空（平台告警） |
 | `0028_g1_dynamic_bans` | `ip_ban`、序列 `ip_ban_seq`；`node.ban_status`；`organization_limit.max_bans` |
+| `0029_g2_challenges` | `site_protection`、`challenge_key`、`security_event`；`node.security_state`；`access_log.ja4` |
 
 ## 构建产物
 

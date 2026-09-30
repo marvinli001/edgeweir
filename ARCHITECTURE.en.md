@@ -178,6 +178,23 @@ IP bans (`ip_ban`) create no revision and skip the configuration canary; they ha
 
 Behavior: [Bans](docs/guide/bans.en.md).
 
+## Challenges and CC mitigation
+
+Nodes enforce challenges, Under Attack and tiered CC mitigation locally; the console holds the settings, keys and events:
+
+1. A site's protection (`site_protection`), platform Under Attack (system setting `protection_settings`) and the CC template (`cc_template`) are compiled into NodeConfig. Only clusters that use challenges (platform Under Attack, a site's Under Attack, an enabled CC policy or a `challenge` rule) carry `challenge_keys`, `platform_protection` and every site's `protection`, with `challenge-v1` in `required_features`; a site that only records JA4 carries its `protection` alone. Rules that read `tls.ja4` (or rate limit by it) and sites that record JA4 add `ja4-v1`. Other clusters keep their content hash.
+2. Pass HMAC keys are per cluster, three of them (`next`, `current`, `previous`), created the first time a cluster uses challenges. The IR holds only key ids and roles (sorted by id); nodes fetch the 32-byte secrets with `GetChallengeKeys`, only those of their own cluster. A secret is generated the first time it is fetched and stored envelope-encrypted (purpose `challenge_key.secret`, bound to the row id).
+3. `maintenance.rotate-challenge-keys` checks every hour and rotates keys once the newest one is a day old: `previous` is deleted, `current` becomes `previous`, `next` becomes `current` and a new `next` is created; clusters whose latest revision carries keys get a new revision (reason `challenge_keys_rotated`), audited as `cluster.challenge_keys_rotate`.
+4. Nodes report level changes, escalated paths and automatic bans with `ReportSecurityEvents` (at most 500 per call); the console stores them in `security_event`, idempotent by (node, event id). A site leaving the normal level raises the `cc_mitigation` alert, at most once per site in 15 minutes. `ReportStatus.security` of the heartbeat is kept in `node.security_state`. `maintenance.prune-security-events` deletes events after the retention (default 30 days).
+
+| Management action | Audit |
+| --- | --- |
+| Site protection | `site.protection_update` (publishes the site's cluster) |
+| Platform Under Attack, event retention | `system.protection_update` (publishes every cluster when Under Attack changes) |
+| CC template | `system.cc_template_update` (publishes clusters with sites that follow it) |
+
+Behavior: [Challenges and CC mitigation](docs/guide/challenges.en.md).
+
 ## Node channel
 
 Connect-RPC over HTTPS; the console process terminates TLS itself.
@@ -255,7 +272,7 @@ Access logs are sampled per site; the sample rate defaults to 0 (off). Per-minut
 
 The Compose profile `cache` starts Valkey; the console does not use Valkey yet.
 
-Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificates, unavailable origins, and high 5xx rates, create `alert_event` rows, fan them out to `alert_delivery` by `alert_subscription`, and send them through an `alert_channel` (webhook or email); membership, bans, two-factor, and channel visibility are checked again at delivery. Access logs and AccessKeys: [Access logs and AccessKeys](docs/guide/access-logs.en.md).
+Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificates, unavailable origins, and high 5xx rates (the `cc_mitigation` alert fires on a node's event and resolves once no node reports the site above normal), create `alert_event` rows, fan them out to `alert_delivery` by `alert_subscription`, and send them through an `alert_channel` (webhook or email); membership, bans, two-factor, and channel visibility are checked again at delivery. Access logs and AccessKeys: [Access logs and AccessKeys](docs/guide/access-logs.en.md).
 
 ## Background jobs
 
@@ -270,6 +287,8 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | `maintenance.expire-cache-tasks` | Minute 43 of every hour | Fails purge and prefetch deliveries past their deadline |
 | `maintenance.expire-enrollment-tokens` | Every 30 minutes | Deletes enrollment tokens expired or used more than 7 days ago |
 | `maintenance.prune-bans` | Every 10 minutes | Deletes bans that expired more than an hour ago |
+| `maintenance.rotate-challenge-keys` | Hourly at minute 11 | Rotates challenge keys that are a day old |
+| `maintenance.prune-security-events` | Hourly at minute 37 | Deletes security events past the retention |
 
 ## Data model
 
@@ -303,12 +322,12 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `region` | Region dictionary |
 | `cluster` | Clusters: sets of nodes that share one revision stream |
 | `node_group` | Node groups, optionally tied to a region |
-| `node` | Nodes: status, capabilities, certificate serial and fingerprint, last heartbeat, last reported ban state |
+| `node` | Nodes: status, capabilities, certificate serial and fingerprint, last heartbeat, last reported ban state and CC level per site |
 | `node_ip` | IP addresses reported by nodes |
 | `enrollment_token` | SHA-256 and usage of enrollment tokens |
 | `node_certificate_revocation` | Certificate serials revoked when a node is deleted |
 | `pki_authority` | Internal CA, private key envelope-encrypted |
-| `system_setting` | Platform key/value settings: setup token, session secret HMAC check value, origin allow list, SMTP, node release source, DNS resolvers, alert policy, one-time migration markers |
+| `system_setting` | Platform key/value settings: setup token, session secret HMAC check value, origin allow list, SMTP, node release source, DNS resolvers, alert policy, bans, platform protection and the CC template, one-time migration markers |
 | `audit_log` | Audit of management actions |
 
 ### Sites and configuration
@@ -325,6 +344,8 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `edge_rule` | Site or platform rules: phase, expression, action, list references |
 | `ip_list` | Organization or platform IP lists (normalized CIDRs) |
 | `ip_ban` | Dynamic bans: scope (platform / site), normalized CIDR, reason code, source (manual / auto; auto bans keep the node and trigger), expiry and removal time, `seq` (sequence `ip_ban_seq`), whether it is delivered |
+| `site_protection` | Site protection: Under Attack and its challenge type, pass lifetime, proof-of-work difficulty, CC policy (template or custom), JA4 logging; no row means the defaults |
+| `challenge_key` | Challenge keys of a cluster (`next`, `current`, `previous`), secrets envelope-encrypted |
 | `config_revision` | Revisions per cluster: number, content hash, binary IR, reason code |
 | `node_config_status` | Node apply receipts and heartbeats, with the receipt verification flag |
 | `cluster_rollout` | Configuration canary of a cluster: policy (switch, observation window, auto promotion, 5xx thresholds) and the current rollout (stable and candidate revisions, window, outcome) |
@@ -353,7 +374,8 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `stats_rollup_dirty` | Time buckets waiting for a rollup (hours, days, usage windows) |
 | `node_stats_cursor` | Per-node high-water mark of statistics batch sequences and the statistics watermark (`complete_until`) |
 | `site_usage` | Recomputable usage per site and UTC 5-minute window (requests, bytes out and in, exact decimals), revision and global `seq` (sequence `site_usage_seq`) |
-| `access_log` | Sampled access logs, one partition per UTC day |
+| `access_log` | Sampled access logs (with JA4 when the site records it), one partition per UTC day |
+| `security_event` | CC mitigation events reported by nodes: level changes, escalated paths, automatic bans, with the top addresses and paths of the moment |
 | `node_log_cursor` | Per-node high-water mark of log batches |
 | `origin_health` | Passive origin health and error codes reported by nodes |
 | `cache_task` | Purge and prefetch tasks |
@@ -401,6 +423,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0026_p0_usage` | `site_usage`, sequence `site_usage_seq`, `node_stats_cursor.complete_until`; marks usage windows for existing minute statistics |
 | `0027_p0_config_canary` | `cluster_rollout`; `alert_event.site_id` and `alert_state.site_id` nullable (platform alerts) |
 | `0028_g1_dynamic_bans` | `ip_ban`, sequence `ip_ban_seq`; `node.ban_status`; `organization_limit.max_bans` |
+| `0029_g2_challenges` | `site_protection`, `challenge_key`, `security_event`; `node.security_state`; `access_log.ja4` |
 
 ## Build output
 

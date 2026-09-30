@@ -205,6 +205,53 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 Behavior: [Bans](../guide/bans.en.md).
 
+### Challenges and CC mitigation
+
+| Procedure | Endpoint | Caller |
+| --- | --- | --- |
+| `protection.get` | `GET /sites/{id}/protection` | Organization members, platform administrators |
+| `protection.update` | `PATCH /sites/{id}/protection` | Organization owners and admins, platform administrators |
+| `security.state` | `GET /sites/{id}/security` | Organization members, platform administrators |
+| `security.events` | `GET /sites/{id}/security/events` | Organization members, platform administrators |
+| `settings.protection`, `settings.setProtection` | `GET`, `PUT /settings/protection` | Platform administrators |
+| `settings.ccTemplate`, `settings.setCcTemplate` | `GET`, `PUT /settings/cc-template` | Platform administrators |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `GET` only. Challenge types and CC levels: `cookie302`, `js`, `pow`, `captcha` (levels also `normal`).
+
+| Request | Fields |
+| --- | --- |
+| `PATCH /sites/{id}/protection` | Changes only the fields given: `underAttack`, `underAttackChallenge`, `passTtlSeconds` (300–86400), `powDifficulty` (8–24), `powHighDifficulty` (8–26, at least `powDifficulty`), `logJa4`, `cc` (any of its fields, merged into the saved policy) |
+| `cc` | `enabled`, `followTemplate`, `maxLevel`, `highPowInsteadOfCaptcha`, `windowSeconds` (5–60), `siteQps`, `urlQps`, `ipQps` (0–1000000, 0 turns the trigger off), `ipBanSeconds` (60–86400), `originErrorPercent` (0–100), `originErrorMinRequests`, `escalateAfterSeconds` (1–3600), `cooldownSeconds` (1–86400) |
+| `GET /sites/{id}/security` | Query parameter `hours` (1–168, default 24) |
+| `GET /sites/{id}/security/events` | Query parameters `kind` (`site_level` / `path_level` / `ip_banned`), `page`, `pageSize` (1–100, default 50) |
+| `PUT /settings/protection` | `underAttack`, `underAttackChallenge`, `eventRetentionDays` (7–365, default 30) |
+| `PUT /settings/cc-template` | Every field of `cc` except `enabled` and `followTemplate` |
+
+Responses:
+
+| Procedure | Content |
+| --- | --- |
+| `protection.get`, `protection.update` | The fields above plus `siteId`, `cc` (template thresholds while it follows the template), `ccTemplate` (the platform's current template), `effectiveCc` (thresholds the nodes use, `null` while the policy is off), `platformUnderAttack`, `updatedAt` |
+| `security.state` | `nodes`: `{ id, name, online, level, escalatedPaths, reportedAt }` for every active node of the cluster; `topIps`, `topPaths`: `{ value, count }` from the events of the last `hours` hours (up to 10 each, approximate); `hours` |
+| `security.events` | `{ items, total }`, newest first; event fields `id`, `node` (`{ id, name }`, `null` once the node is deleted), `occurredAt`, `kind`, `level`, `previousLevel`, `path`, `address`, `metric`, `observed`, `threshold`, `topIps`, `topPaths` |
+
+- A change publishes the site's cluster (reason `site_protection_updated`) and is audited as `site.protection_update`; a change of platform Under Attack publishes every cluster (`platform_protection_updated`), audited as `system.protection_update`; a template change publishes clusters with sites that follow it (`cc_template_updated`), audited as `system.cc_template_update`. The daily key rotation publishes `challenge_keys_rotated`.
+
+| Error code | Status | When |
+| --- | --- | --- |
+| `PROTECTION_POW_DIFFICULTY` | 400 | `powHighDifficulty` is below `powDifficulty`; `data.min` is the lowest allowed value |
+| `NODE_CAPABILITY_REQUIRED` | 409 | An active node of the cluster lacks `challenge-v1` or `ja4-v1` (tenant calls); `data.features` |
+| `ORG_ADMIN_REQUIRED` | 403 | An organization member calls `protection.update` |
+| `SITE_NOT_FOUND` | 404 | The site does not exist or is outside the caller's scope |
+
+```bash
+curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"underAttack":true,"underAttackChallenge":"pow","cc":{"enabled":true,"followTemplate":true}}' \
+  https://cdn-admin.example.com/api/v1/sites/<site ID>/protection
+```
+
+Behavior: [Challenges and CC mitigation](../guide/challenges.en.md).
+
 ### Usage
 
 One record per site and UTC 5-minute window `[windowStart, windowEnd)`, summing the minute statistics every node reported for the window.

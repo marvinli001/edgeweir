@@ -43,7 +43,7 @@ Phases run in the order of this table.
 | Request transform | Rewrite path, Request header | Rewrites the origin path; sets or removes request headers |
 | Redirect | Redirect | Returns 301, 302, 307, or 308 |
 | Configuration | Override settings | Overrides cache bypass and HTTPS redirect; turns off Gzip |
-| Custom WAF | Block, Log, Allow | Block returns 403 or 451; Log only writes a log line; Allow skips the remaining custom WAF rules of the same scope |
+| Custom WAF | Block, Log, Allow, Challenge | Block returns 403 or 451; Log only writes a log line; Allow skips the remaining custom WAF rules of the same scope; Challenge makes visitors pass a challenge first |
 | Rate limit | Rate limit | Fixed-window counting; over the limit returns 429 or 403 |
 | Cache | Override settings | Overrides cache-related settings |
 | Origin | Request header | Sets or removes headers sent to the origin |
@@ -54,6 +54,7 @@ Phases run in the order of this table.
 | Action | Field | Values | Default |
 | --- | --- | --- | --- |
 | Block | Status code | 403 / 451 | 403 |
+| Challenge | Challenge type | Cookie redirect / JavaScript / Proof of work / Image captcha | JavaScript |
 | Redirect | Value | An absolute path on the site (starts with `/`, not `//`), or an `http(s)` URL without credentials or whitespace; up to 4096 characters | `/` |
 | Redirect | Status code | 301 / 302 / 307 / 308 | 301 |
 | Rewrite path | Value | Starts with `/`, not `//`; no `?`, `#`, or `\` | `/` |
@@ -65,7 +66,7 @@ Phases run in the order of this table.
 | Override settings | Gzip | Unchanged / Off | Unchanged |
 | Rate limit | Requests per window | 1–100000 | 100 |
 | Rate limit | Window (seconds) | 1–3600 | 60 |
-| Rate limit | Rate limit key | `ip.src`, `http.host`, or `http.request.headers.<name>` | `ip.src` |
+| Rate limit | Rate limit key | `ip.src`, `http.host`, `tls.ja4`, or `http.request.headers.<name>` (pick **Request header** and enter the name) | `ip.src` |
 | Rate limit | Status code | 429 / 403 | 429 |
 
 Protected headers cannot be set or removed by rules: `Host`, `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Upgrade`, `TE`, `Trailer`, `CDN-Loop`, and headers starting with `X-Edgeweir-`.
@@ -93,6 +94,7 @@ Protected headers cannot be set or removed by rules: `Host`, `Authorization`, `P
 | Override settings: Gzip off | Removes `Accept-Encoding` towards the origin and bypasses the cache so previously cached compressed responses are not served; rules cannot turn on compression modules that are not built |
 | Override settings: Redirect HTTP to HTTPS | Requests get 503 when the site has no certificate |
 | Block, rate limit exceeded | Response header `X-Edgeweir-Error: policy-denied`; rate-limited responses also carry `Retry-After` (the window in seconds) |
+| Challenge | A request with a pass of a sufficient level continues with the following rules; otherwise it gets the challenge page (non-GET/HEAD requests get 403 with `X-Edgeweir-Challenge: required`). Allow rules skip Under Attack and CC challenges, but a challenge rule that matched before the allow still applies. See [Challenges and CC mitigation](challenges.en.md) |
 | Log | Does not change the response. Each rule writes at most one NOTICE-level nginx error log line per node per 60 seconds, containing the site ID and rule ID; nginx appends the client IP, request line, and Host to log lines written during a request |
 
 ### Rate limiting
@@ -134,6 +136,7 @@ http.response.code ge 500
 | `ip.geoip.country` | String | ISO country code; empty string without a record |
 | `ip.geoip.subdivision` | String | First-level subdivision code from the City MMDB, or its English name when it has no code; empty string without a record or when the City MMDB's country differs from `ip.geoip.country` |
 | `ip.geoip.asnum` | Integer | ASN; 0 without a record |
+| `tls.ja4` | String | JA4 TLS client fingerprint of the connection; empty string over plain HTTP, see [JA4](challenges.en.md#ja4) |
 
 ### Operators and literals
 
@@ -219,7 +222,7 @@ Platform IP lists are maintained in **Admin → Platform IP lists**, platform ad
 
 | Item | Behavior |
 | --- | --- |
-| Capabilities | Rules and platform block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
+| Capabilities | Rules and platform block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; the challenge action needs `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
 | Tenant publishing | When a tenant save or an automatic background publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the save is refused ("Cluster nodes need these capabilities first: …") and the rules and revision stay unchanged |
 | Platform administrators | Can deliberately publish a configuration that needs an upgrade; nodes lacking the capability keep their last-known-good configuration and the admin area shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md) |
 | Unknown capabilities | Nodes reject configurations with unknown capabilities or enum values and keep last-known-good |
