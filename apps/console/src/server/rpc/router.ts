@@ -60,12 +60,15 @@ import {
 import {
   createDnsProvider,
   deleteDnsProvider,
+  forceDnsPublish,
   getDnsConfig,
+  getDnsProtection,
   listDnsProviders,
   listDnsRevisions,
   reconcileDns,
   rollbackDnsConfig,
   saveDnsConfig,
+  setDnsProtection,
   siteDnsTarget,
   updateDnsProvider,
 } from "../services/dns";
@@ -396,6 +399,13 @@ export const router = os.router({
     revisions: admin.dns.revisions.handler(({ context }) => listDnsRevisions(context.app)),
     rollback: admin.dns.rollback.handler(({ input, context }) =>
       rollbackDnsConfig(context.app, input.revision, context.actor),
+    ),
+    protection: admin.dns.protection.handler(({ context }) => getDnsProtection(context.app.db)),
+    setProtection: admin.dns.setProtection.handler(({ input, context }) =>
+      setDnsProtection(context.app, input, context.actor),
+    ),
+    forcePublish: admin.dns.forcePublish.handler(({ input, context }) =>
+      forceDnsPublish(context.app, input.revision, context.actor),
     ),
     reconcile: admin.dns.reconcile.handler(({ context }) =>
       reconcileDns(context.app, context.actor),

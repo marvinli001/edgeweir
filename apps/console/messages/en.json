@@ -1007,5 +1007,12 @@
   "rollout_aborted_toast": "Rolled back",
   "rollout_participating": "In the window",
   "node_groups_canary": "Canary",
-  "node_groups_canary_label": "Canary group"
+  "node_groups_canary_label": "Canary group",
+  "dns_blocked": "Held back",
+  "dns_held_back": "DNS mass removal held back: {removed} of {previous} address records would go; the current records stay",
+  "dns_force_publish": "Publish anyway",
+  "dns_force_publish_confirm": "Publish this DNS change anyway?",
+  "dns_protection_title": "Mass removal protection",
+  "dns_protection_ratio": "Most address records one publication may remove (%)",
+  "error_dns_not_blocked": "This DNS revision is not held back"
 }

@@ -1,11 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   type DnsPolicy,
+  type DnsProtection,
   type DnsProviderInput,
   type DnsRecord,
   type DnsRevision,
   dnsCredentialInput,
   dnsPolicy,
+  dnsProtection,
   forbiddenOriginRange,
   formatIp,
   parseIp,
@@ -17,6 +19,7 @@ import { fail } from "../lib/errors";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { runCertd } from "./certificate-worker";
 import { isOnline } from "./nodes";
+import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import {
   type Executor,
   type RolloutTargets,
@@ -293,7 +296,66 @@ export async function compileDnsPlan(
     managedNames: [...names.values()].sort((a, b) => compare(nameKey(a), nameKey(b))),
   };
 }
-async function publish(tx: Tx, policy: DnsPolicy, reason: string) {
+const PROTECTION_KEY = "dns_protection";
+const DEFAULT_PROTECTION: DnsProtection = { massRemovalRatio: 0.5 };
+const addressRecord = (r: { type: string }) => r.type === "A" || r.type === "AAAA";
+const addressKey = (r: DnsRecord) => `${r.name}|${r.type}|${r.data}`;
+
+export async function getDnsProtection(db: Executor): Promise<DnsProtection> {
+  const [row] = await db
+    .select()
+    .from(schema.systemSetting)
+    .where(eq(schema.systemSetting.key, PROTECTION_KEY));
+  const parsed = dnsProtection.safeParse({ ...DEFAULT_PROTECTION, ...(row?.value ?? {}) });
+  return parsed.success ? parsed.data : DEFAULT_PROTECTION;
+}
+
+export async function setDnsProtection(app: AppContext, input: DnsProtection, actor: Actor) {
+  return app.db.transaction(async (tx) => {
+    const before = await getDnsProtection(tx);
+    await tx
+      .insert(schema.systemSetting)
+      .values({ key: PROTECTION_KEY, value: input })
+      .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value: input } });
+    await recordAudit(tx, actor, {
+      action: "dns.protection_update",
+      targetType: "system_setting",
+      targetId: PROTECTION_KEY,
+      metadata: { from: before, to: input },
+    });
+    return input;
+  });
+}
+
+/**
+ * What a plan would remove from the previous address records: record sets
+ * (names still managed) that would become empty, and how many address
+ * records would go. Names the plan no longer manages (deleted sites,
+ * removed lines) are not counted.
+ */
+export function massRemoval(
+  previous: DnsRecord[],
+  next: { records: DnsRecord[]; managedNames: ManagedName[] },
+) {
+  const managed = new Set(next.managedNames.map(nameKey));
+  const before = previous.filter((r) => addressRecord(r) && managed.has(nameKey(r)));
+  const after = new Set(next.records.filter(addressRecord).map(addressKey));
+  const removed = before.filter((r) => !after.has(addressKey(r))).length;
+  const names = (records: DnsRecord[]) => new Set(records.filter(addressRecord).map((r) => r.name));
+  const remaining = names(next.records);
+  const cleared = [...names(before)].filter((name) => !remaining.has(name));
+  return { removed, previous: before.length, cleared };
+}
+
+/**
+ * Publishes the DNS plan unless the mass removal protection holds it back:
+ * a plan that would empty a non-empty record set (`all.` or a line) or
+ * remove more than the configured share of address records keeps the
+ * previous revision, is stored as a blocked revision and raises the
+ * dns_mass_removal_blocked alert, until a plan passes or an administrator
+ * forces it. Covers the console losing its nodes (all of them look offline).
+ */
+async function publish(tx: Tx, policy: DnsPolicy, reason: string, opts: { force?: boolean } = {}) {
   await tx.select().from(schema.dnsState).where(eq(schema.dnsState.id, 1)).for("update");
   const plan = await compileDnsPlan(tx, policy);
   const contentHash = createHash("sha256")
@@ -306,6 +368,57 @@ async function publish(tx: Tx, policy: DnsPolicy, reason: string) {
           .from(schema.dnsRevision)
           .where(eq(schema.dnsRevision.revision, s.desiredRevision))
       : [];
+  const previousPolicy = previous ? dnsPolicy.safeParse(previous.policy) : undefined;
+  if (
+    !opts.force &&
+    previous &&
+    previousPolicy?.success &&
+    previousPolicy.data.enabled &&
+    policy.enabled &&
+    previousPolicy.data.providerId === policy.providerId &&
+    previousPolicy.data.cnameSuffix === policy.cnameSuffix &&
+    previous.contentHash !== contentHash
+  ) {
+    const check = massRemoval(previous.records, plan);
+    const { massRemovalRatio } = await getDnsProtection(tx);
+    if (
+      check.cleared.length > 0 ||
+      (check.previous > 0 && check.removed / check.previous > massRemovalRatio)
+    ) {
+      const [held] = await tx
+        .select()
+        .from(schema.dnsRevision)
+        .where(
+          and(
+            eq(schema.dnsRevision.status, "blocked"),
+            eq(schema.dnsRevision.contentHash, contentHash),
+          ),
+        );
+      if (!held) {
+        await tx
+          .update(schema.dnsRevision)
+          .set({ status: "superseded" })
+          .where(eq(schema.dnsRevision.status, "blocked"));
+        await tx.insert(schema.dnsRevision).values({
+          providerId: policy.providerId,
+          policy,
+          ...plan,
+          contentHash,
+          reason,
+          status: "blocked",
+          lastError: "dns_mass_removal_blocked",
+        });
+      }
+      await raisePlatformAlert(tx, "dns_mass_removal_blocked", "dns", "DNS");
+      return previous;
+    }
+  }
+  // A plan that passes (or is forced) ends any hold.
+  await tx
+    .update(schema.dnsRevision)
+    .set({ status: "superseded" })
+    .where(eq(schema.dnsRevision.status, "blocked"));
+  await resolvePlatformAlert(tx, "dns_mass_removal_blocked", "dns", "DNS");
   if (previous?.contentHash === contentHash) return previous;
   const [row] = await tx
     .insert(schema.dnsRevision)
@@ -332,11 +445,48 @@ export async function getDnsConfig(app: AppContext) {
         .from(schema.dnsRevision)
         .where(eq(schema.dnsRevision.revision, s.desiredRevision))
     : [];
+  const [blocked] = await app.db
+    .select()
+    .from(schema.dnsRevision)
+    .where(eq(schema.dnsRevision.status, "blocked"))
+    .orderBy(desc(schema.dnsRevision.revision))
+    .limit(1);
+  const check = blocked
+    ? massRemoval(revision?.records ?? [], blocked)
+    : { removed: 0, previous: 0 };
   return {
     policy: dnsPolicy.parse(s.policy),
     revision: revision ? revisionDto(revision) : null,
     records: revision?.records ?? [],
+    blocked: blocked
+      ? { ...revisionDto(blocked), removedRecords: check.removed, previousRecords: check.previous }
+      : null,
   };
+}
+
+/** Publishes the current plan although the protection held one back (audited). */
+export async function forceDnsPublish(app: AppContext, blockedRevision: number, actor: Actor) {
+  return app.db.transaction(async (tx) => {
+    const [held] = await tx
+      .select()
+      .from(schema.dnsRevision)
+      .where(
+        and(
+          eq(schema.dnsRevision.revision, blockedRevision),
+          eq(schema.dnsRevision.status, "blocked"),
+        ),
+      );
+    if (!held) fail("DNS_NOT_BLOCKED", "this DNS revision is not held back");
+    const current = await state(tx);
+    const revision = await publish(tx, dnsPolicy.parse(current.policy), "force", { force: true });
+    await recordAudit(tx, actor, {
+      action: "dns.force_publish",
+      targetType: "dns_revision",
+      targetId: String(revision.revision),
+      metadata: { blockedRevision, recordCount: revision.records.length },
+    });
+    return revisionDto(revision);
+  });
 }
 export async function saveDnsConfig(app: AppContext, input: DnsPolicy, actor: Actor) {
   await validatePolicy(app.db, input);

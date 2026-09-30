@@ -1007,5 +1007,12 @@
   "rollout_aborted_toast": "已回滚",
   "rollout_participating": "参与窗口",
   "node_groups_canary": "金丝雀",
-  "node_groups_canary_label": "金丝雀组"
+  "node_groups_canary_label": "金丝雀组",
+  "dns_blocked": "已阻止",
+  "dns_held_back": "DNS 大面积摘除已阻止：将删除 {removed} / {previous} 条地址记录，当前记录保留",
+  "dns_force_publish": "强制发布",
+  "dns_force_publish_confirm": "仍然发布这次 DNS 变更？",
+  "dns_protection_title": "大面积摘除保护",
+  "dns_protection_ratio": "单次最多摘除地址记录（%）",
+  "error_dns_not_blocked": "这个 DNS 版本没有被阻止"
 }

@@ -70,12 +70,17 @@ const record = z.object({
 });
 const revision = z.object({
   revision: z.number(),
-  status: z.enum(["pending", "applied", "failed", "superseded"]),
+  /** blocked: the mass removal protection kept the previous records instead. */
+  status: z.enum(["pending", "applied", "failed", "superseded", "blocked"]),
   reason: z.string(),
   recordCount: z.number(),
   createdAt: z.string(),
   appliedAt: z.string().nullable(),
   lastError: z.string(),
+});
+export const dnsProtection = z.object({
+  /** Share of the previous address records (0.05-1, default 0.5). */
+  massRemovalRatio: z.number().min(0.05).max(1),
 });
 export const dnsContract = {
   updateProvider: oc
@@ -102,8 +107,29 @@ export const dnsContract = {
   get: oc
     .route({ method: "GET", path: "/dns/config", tags: ["dns"] })
     .output(
-      z.object({ policy: dnsPolicy, revision: revision.nullable(), records: z.array(record) }),
+      z.object({
+        policy: dnsPolicy,
+        revision: revision.nullable(),
+        records: z.array(record),
+        /** The latest plan the mass removal protection held back, until a publication passes. */
+        blocked: revision
+          .extend({ removedRecords: z.number().int(), previousRecords: z.number().int() })
+          .nullable(),
+      }),
     ),
+  /** Mass removal protection: the largest share of address records one publication may remove. */
+  protection: oc
+    .route({ method: "GET", path: "/dns/protection", tags: ["dns"] })
+    .output(dnsProtection),
+  setProtection: oc
+    .route({ method: "PUT", path: "/dns/protection", tags: ["dns"] })
+    .input(dnsProtection)
+    .output(dnsProtection),
+  /** Publishes the held-back plan anyway (confirmed by an administrator, audited). */
+  forcePublish: oc
+    .route({ method: "POST", path: "/dns/force-publish", tags: ["dns"] })
+    .input(z.object({ revision: z.number().int().positive() }))
+    .output(revision),
   save: oc
     .route({ method: "PUT", path: "/dns/config", tags: ["dns"] })
     .input(dnsPolicy)
@@ -134,3 +160,4 @@ export type DnsPolicy = z.infer<typeof dnsPolicy>;
 export type DnsProviderInput = z.infer<typeof providerInput>;
 export type DnsRecord = z.infer<typeof record>;
 export type DnsRevision = z.infer<typeof revision>;
+export type DnsProtection = z.infer<typeof dnsProtection>;

@@ -2,6 +2,7 @@ import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
+import { massRemoval } from "../../src/server/services/dns";
 import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
@@ -146,14 +147,63 @@ describe("M5 independent DNS publication and recovery", async () => {
       "DNS_PROVIDER_IN_USE",
     );
   });
-  it("withdraws unhealthy nodes and restores them with fresh health, including drift repair", async () => {
+  it("keeps a disabled or suspended site's records (nodes answer 404 for it)", async () => {
+    const before = structuredClone(fixture.records);
+    await admin.sites.setEnabled({ id: siteId, enabled: false });
+    await admin.dns.reconcile();
+    expect(fixture.records).toEqual(before);
+    await admin.admin.sites.suspend({ id: siteId, reason: "billing" });
+    await admin.dns.reconcile();
+    expect(fixture.records).toEqual(before);
+    await admin.admin.sites.resume({ id: siteId });
+    await admin.sites.setEnabled({ id: siteId, enabled: true });
+    // The node applies the resulting revision again before the next reconciliation.
+    const revision = await latestRevision(ctx.db, clusterId);
+    await ctx.db
+      .update(schema.nodeConfigStatus)
+      .set({ appliedRevision: revision?.revision, appliedContentHash: revision?.contentHash })
+      .where(eq(schema.nodeConfigStatus.nodeId, nodeId));
+    await admin.dns.reconcile();
+    expect(fixture.records).toEqual(before);
+  });
+  it("keeps the records when every node looks offline, alerts, and removes them only when forced", async () => {
+    // All nodes look offline, e.g. the node channel is cut off from the console.
     await ctx.db
       .update(schema.node)
       .set({ lastSeenAt: new Date(0) })
       .where(eq(schema.node.id, nodeId));
     await admin.dns.reconcile();
+    await admin.dns.reconcile();
+    expect(fixture.records.filter((r) => r.type === "A")).toHaveLength(2);
+    expect((await admin.dns.siteTarget({ siteId })).healthy).toBe(true);
+    const held = await admin.dns.get();
+    expect(held.blocked).toMatchObject({
+      status: "blocked",
+      lastError: "dns_mass_removal_blocked",
+      removedRecords: 2,
+      previousRecords: 2,
+    });
+    expect((await admin.dns.revisions()).filter((r) => r.status === "blocked")).toHaveLength(1);
+    const alerts = await admin.alerts.events({});
+    expect(alerts.find((e) => e.kind === "dns_mass_removal_blocked")).toMatchObject({
+      siteId: null,
+      status: "firing",
+    });
+    expect(
+      (await rpcError(admin.dns.forcePublish({ revision: held.revision?.revision ?? 1 }))).code,
+    ).toBe("DNS_NOT_BLOCKED");
+    await admin.dns.forcePublish({ revision: held.blocked?.revision ?? 0 });
+    await admin.dns.reconcile();
     expect(fixture.records.filter((r) => r.type === "A")).toHaveLength(0);
     expect((await admin.dns.siteTarget({ siteId })).healthy).toBe(false);
+    expect((await admin.dns.get()).blocked).toBeNull();
+    const [entry] = (await admin.auditLogs.list({ action: "dns.force_publish" })).items;
+    expect(entry?.metadata).toMatchObject({ blockedRevision: held.blocked?.revision });
+    expect(
+      (await admin.alerts.events({})).find((e) => e.kind === "dns_mass_removal_blocked")?.status,
+    ).toBe("resolved");
+  });
+  it("restores nodes with fresh health, including drift repair", async () => {
     await ctx.db
       .update(schema.node)
       .set({ lastSeenAt: new Date() })
@@ -165,9 +215,47 @@ describe("M5 independent DNS publication and recovery", async () => {
     expect(fixture.records.filter((r) => r.type === "A")).toHaveLength(2);
     expect(fixture.records.find((r) => r.name === "unrelated")?.data).toBe("preserve");
   });
+  it("measures mass removal by record sets and share, with an adjustable threshold", async () => {
+    const a = (name: string, data: string) => ({ name, type: "A" as const, data, ttl: 60 });
+    const managed = [
+      { name: "all.x", type: "A" },
+      { name: "all.y", type: "A" },
+    ];
+    const previous = [a("all.x", "10.0.0.1"), a("all.x", "10.0.0.2"), a("all.y", "10.0.0.3")];
+    // One of three addresses: no set becomes empty, a third is removed.
+    expect(
+      massRemoval(previous, {
+        records: [a("all.x", "10.0.0.1"), a("all.y", "10.0.0.3")],
+        managedNames: managed,
+      }),
+    ).toEqual({ removed: 1, previous: 3, cleared: [] });
+    // Emptying all.y blocks even though only one address goes.
+    expect(
+      massRemoval(previous, {
+        records: [a("all.x", "10.0.0.1"), a("all.x", "10.0.0.2")],
+        managedNames: managed,
+      }).cleared,
+    ).toEqual(["all.y"]);
+    // Names that are no longer managed (a deleted site) do not count.
+    expect(
+      massRemoval(previous, {
+        records: [a("all.x", "10.0.0.1"), a("all.x", "10.0.0.2")],
+        managedNames: [{ name: "all.x", type: "A" }],
+      }),
+    ).toEqual({ removed: 0, previous: 2, cleared: [] });
+    expect(await admin.dns.protection()).toEqual({ massRemovalRatio: 0.5 });
+    await admin.dns.setProtection({ massRemovalRatio: 0.3 });
+    expect(await admin.dns.protection()).toEqual({ massRemovalRatio: 0.3 });
+    expect((await rpcError(admin.dns.setProtection({ massRemovalRatio: 0.01 }))).status).toBe(400);
+    expect((await rpcError(tenant.dns.protection())).status).toBe(403);
+    expect((await admin.auditLogs.list({ action: "dns.protection_update" })).total).toBe(1);
+    await admin.dns.setProtection({ massRemovalRatio: 0.5 });
+  });
   it("repairs a partial provider write and rolls back DNS policy independently", async () => {
     const before = await admin.dns.get();
     const oldRevision = before.revision?.revision ?? 0;
+    // DNS publication and rollback never publish a node configuration revision.
+    const configRevision = (await latestRevision(ctx.db, clusterId))?.revision;
     const next = await admin.dns.save({ ...before.policy, cnameSuffix: "next.cdn.test" });
     fixture.failAfterWrite = true;
     await rpcError(admin.dns.reconcile());
@@ -180,7 +268,7 @@ describe("M5 independent DNS publication and recovery", async () => {
     await admin.dns.reconcile();
     expect(fixture.records.some((r) => r.name === `${siteId}.edge`)).toBe(true);
     expect(fixture.records.some((r) => r.name === `${siteId}.next`)).toBe(false);
-    expect((await latestRevision(ctx.db, clusterId))?.revision).toBe(initialRevision);
+    expect((await latestRevision(ctx.db, clusterId))?.revision).toBe(configRevision);
     expect((await admin.dns.revisions()).some((r) => r.reason === "rollback")).toBe(true);
   });
   it("cleans managed records on disable and allows credential removal", async () => {

@@ -171,6 +171,9 @@ describe("admin area procedures", async () => {
       ["dns.revisions", () => member.dns.revisions()],
       ["dns.rollback", () => member.dns.rollback({ revision: 1 })],
       ["dns.reconcile", () => member.dns.reconcile()],
+      ["dns.protection", () => member.dns.protection()],
+      ["dns.setProtection", () => member.dns.setProtection({ massRemovalRatio: 0.5 })],
+      ["dns.forcePublish", () => member.dns.forcePublish({ revision: 1 })],
       [
         "domainOwnership.approve",
         () => member.domainOwnership.approve({ siteId: uuid, domain: "example.test" }),
