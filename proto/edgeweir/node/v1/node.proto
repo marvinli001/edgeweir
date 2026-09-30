@@ -290,6 +290,9 @@ message MinuteStats {
   map<uint32, uint64> status_codes = 8;
   repeated TopCounter top_urls = 9;
   repeated TopCounter top_ips = 10;
+  // CRS rules that matched, value = rule id, with the number of requests
+  // (bounded, heaviest first). Added in v0.11.0.
+  repeated TopCounter waf_rules = 11;
 }
 
 // TopCounter is a bounded, approximate heavy-hitter counter (no query strings).
@@ -467,6 +470,10 @@ message AccessLog {
   // JA4 TLS client fingerprint, only when the site records it (log_ja4).
   // Added in v0.10.0.
   string ja4 = 12;
+  // CRS rules that matched this request (at most 16), and whether CRS
+  // blocked it. Added in v0.11.0.
+  repeated uint32 waf_rule_ids = 13;
+  bool waf_blocked = 14;
 }
 // ReportLogsRequest is an immutable, ordered batch from the private node spool.
 message ReportLogsRequest {

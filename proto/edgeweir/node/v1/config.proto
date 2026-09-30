@@ -135,6 +135,23 @@ message Site {
   // Challenges and CC mitigation; unset means none. Added in v0.10.0
   // (feature challenge-v1).
   SiteProtection protection = 16;
+  // OWASP CRS managed rules; unset means off. Added in v0.11.0 (feature
+  // modsecurity-v1).
+  SiteWaf waf = 17;
+}
+
+// SiteWaf runs the OWASP Core Rule Set bundled with the node.
+message SiteWaf {
+  // detect (log only) or block; anything else rejects the configuration.
+  string mode = 1;
+  // Paranoia level 1-4.
+  uint32 paranoia_level = 2;
+  // Inbound anomaly score threshold, 1-1000 (CRS default 5).
+  uint32 anomaly_threshold = 3;
+  // CRS rule ids that never run for this site, sorted and unique.
+  repeated uint32 excluded_rule_ids = 4;
+  // Request body bytes inspected, 0-134217728; 0 inspects no body.
+  uint32 request_body_limit = 5;
 }
 
 // SiteProtection holds a site's challenge and CC mitigation settings.
@@ -256,6 +273,17 @@ message TlsOptions {
   bool ocsp_stapling = 10;
   string cipher_profile = 11;
   bool http3 = 12;
+  // Brotli and Zstandard response compression (features brotli-v1 and
+  // zstd-v1). Levels: brotli 0-11, zstd 1-19; 0 means the default (brotli
+  // 6, zstd 3). Types are MIME types like gzip_types. Added in v0.11.0.
+  bool brotli = 13;
+  uint32 brotli_level = 14;
+  uint32 brotli_min_length = 15;
+  repeated string brotli_types = 16;
+  bool zstd = 17;
+  uint32 zstd_level = 18;
+  uint32 zstd_min_length = 19;
+  repeated string zstd_types = 20;
 }
 
 // An HTTP-01 response is public; private account and certificate keys are not IR.
