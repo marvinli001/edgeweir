@@ -17,7 +17,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { ErrorState, LoadingState } from "@/components/states";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
@@ -184,10 +184,10 @@ function HttpsEditor({
             />
           ))}
         </CardContent>
-        <CardHeader className="border-t pt-6">
-          <CardTitle>{m.compression_title()}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6 pt-4">
+        <CardContent className="flex flex-col gap-6 pt-6">
+          <div className="border-t pt-6">
+            <CardTitle>{m.compression_title()}</CardTitle>
+          </div>
           {(["zstd", "brotli", "gzip"] as const).map((algorithm) => (
             <CompressionGroup
               key={algorithm}
@@ -236,7 +236,8 @@ function CompressionGroup({
       <FieldLegend variant="label" className="text-muted-foreground">
         {algorithmLabel(algorithm)}
       </FieldLegend>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Shared columns (switch, level, minimum, types) line the algorithms up. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[8rem_8rem_11rem_minmax(0,1fr)]">
         <SwitchField
           id={algorithm}
           label={m.compression_enabled()}
@@ -260,18 +261,20 @@ function CompressionGroup({
             }
           />
         ) : null}
-        <NumberField
-          id={id("Min")}
-          label={m.cert_gzip_min()}
-          value={String(settings[fields.min])}
-          min={COMPRESSION_MIN_LENGTH_RANGE.min}
-          max={COMPRESSION_MIN_LENGTH_RANGE.max}
-          step={1}
-          required
-          testId={`https-${algorithm}-min`}
-          onChange={(value) => onChange({ ...settings, [fields.min]: Number(value) })}
-        />
-        <Field className={fields.level ? undefined : "sm:col-span-2"}>
+        <div className={fields.level ? undefined : "lg:col-start-3"}>
+          <NumberField
+            id={id("Min")}
+            label={m.cert_gzip_min()}
+            value={String(settings[fields.min])}
+            min={COMPRESSION_MIN_LENGTH_RANGE.min}
+            max={COMPRESSION_MIN_LENGTH_RANGE.max}
+            step={1}
+            required
+            testId={`https-${algorithm}-min`}
+            onChange={(value) => onChange({ ...settings, [fields.min]: Number(value) })}
+          />
+        </div>
+        <Field className={fields.level ? undefined : "sm:col-span-2 lg:col-span-1"}>
           <FieldLabel htmlFor={id("Types")}>{m.cert_gzip_types()}</FieldLabel>
           <Input
             id={id("Types")}
