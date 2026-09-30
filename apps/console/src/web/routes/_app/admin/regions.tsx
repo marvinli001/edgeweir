@@ -85,10 +85,38 @@ function RegionDialog({
   );
 }
 
-function RegionsPage() {
+/**
+ * Delete with confirmation. A component of its own so that the table's cell
+ * renderers keep their identity: a new renderer per render would remount the
+ * cell and close an open dialog whenever the page re-renders.
+ */
+function DeleteRegionAction({ region }: { region: Region }) {
   const queryClient = useQueryClient();
-  const regions = useQuery(orpc.regions.list.queryOptions());
   const remove = useMutation(orpc.regions.delete.mutationOptions());
+  return (
+    <ConfirmDialog
+      trigger={
+        <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
+          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+        </Button>
+      }
+      destructive
+      title={m.regions_delete_confirm({ name: region.name })}
+      confirmLabel={m.common_delete()}
+      onConfirm={async () => {
+        try {
+          await remove.mutateAsync({ id: region.id });
+          await queryClient.invalidateQueries();
+        } catch (error) {
+          toast.error(errorMessage(error));
+        }
+      }}
+    />
+  );
+}
+
+function RegionsPage() {
+  const regions = useQuery(orpc.regions.list.queryOptions());
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Region | null>(null);
   const columns = React.useMemo<Columns<Region>>(
@@ -136,29 +164,12 @@ function RegionsPage() {
             >
               <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
             </Button>
-            <ConfirmDialog
-              trigger={
-                <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
-                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                </Button>
-              }
-              destructive
-              title={m.regions_delete_confirm({ name: row.original.name })}
-              confirmLabel={m.common_delete()}
-              onConfirm={async () => {
-                try {
-                  await remove.mutateAsync({ id: row.original.id });
-                  await queryClient.invalidateQueries();
-                } catch (error) {
-                  toast.error(errorMessage(error));
-                }
-              }}
-            />
+            <DeleteRegionAction region={row.original} />
           </div>
         ),
       },
     ],
-    [remove, queryClient],
+    [],
   );
 
   return (
