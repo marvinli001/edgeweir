@@ -42,7 +42,7 @@ The only contract between the console and the nodes is `edgeweir.node.v1` in `pr
 | `helpers/http3probe` | HTTP/3 probe used in CI |
 | `Dockerfile`, `docker/` | Image build, container health check script, end-to-end fixtures |
 | `compose*.yml`, `deploy.sh` | `compose.yml` (production), `compose.baota.yml` and `compose.baota-host.yml` (宝塔 / aaPanel), `compose.dev.yml` (development database), `compose.e2e.yml` (end-to-end); `deploy.sh` installs and upgrades 宝塔 / aaPanel deployments |
-| `scripts/` | `e2e.sh` (end-to-end tests), `image-version.sh` (rolling version), `bench.sh` (cache-hit performance baseline) |
+| `scripts/` | `e2e.sh` (end-to-end tests), `image-version.sh` (rolling version), `bench.sh` (performance baseline of cache hits, requests with a pass and challenge pages) |
 | `docs/` | `deploy/` (deployment), `guide/` (feature guides), `reference/` (reference) |
 
 ## Processes and roles

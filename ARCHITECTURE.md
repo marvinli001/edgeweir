@@ -42,7 +42,7 @@
 | `helpers/http3probe` | CI 使用的 HTTP/3 探测程序 |
 | `Dockerfile`、`docker/` | 镜像构建、容器健康检查脚本、端到端测试夹具 |
 | `compose*.yml`、`deploy.sh` | `compose.yml`（生产）、`compose.baota.yml` 与 `compose.baota-host.yml`（宝塔 / aaPanel）、`compose.dev.yml`（开发数据库）、`compose.e2e.yml`（端到端）；`deploy.sh` 为宝塔 / aaPanel 安装与升级脚本 |
-| `scripts/` | `e2e.sh`（端到端测试）、`image-version.sh`（滚动版本号）、`bench.sh`（缓存命中性能基线） |
+| `scripts/` | `e2e.sh`（端到端测试）、`image-version.sh`（滚动版本号）、`bench.sh`（缓存命中、持有通行凭证与挑战页的性能基线） |
 | `docs/` | `deploy/`（部署）、`guide/`（功能说明）、`reference/`（参考） |
 
 ## 进程与角色

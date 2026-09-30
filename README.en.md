@@ -198,7 +198,7 @@ Dependencies:
 - an edgeweir-node checkout next to this repository (or `EDGEWEIR_NODE_CONTEXT`)
 - for the install step: goreleaser v2, syft, cosign, Go 1.27.1 and network access to deb.debian.org and openresty.org
 
-Coverage: enrollment, config rollout, caching, purge and prefetch, origins and S3, failover, the auth route allow list (better-auth organization and admin endpoints closed; API keys never become sessions), the origin address policy and CDN-Loop, HTTPS origin name verification, Range requests over 1 MiB slices, `install.sh` in a clean container installing from the console's mirror, dynamic bans (delivery p95 ≤ 5 s, site bans, platform bans dropped by nftables), and Playwright UI flows.
+Coverage: enrollment, config rollout, caching, purge and prefetch, origins and S3, failover, the auth route allow list (better-auth organization and admin endpoints closed; API keys never become sessions), the origin address policy and CDN-Loop, HTTPS origin name verification, Range requests over 1 MiB slices, `install.sh` in a clean container installing from the console's mirror, dynamic bans (delivery p95 ≤ 5 s, site bans, platform bans dropped by nftables), challenges and passes (a headless browser passes the js and pow challenges; the pass works on another node and fails from another prefix, with another User-Agent or when forged), tiered CC (only the attacked path escalates, per-IP automatic bans), JA4 in rule matching, and Playwright UI flows.
 
 `compose.e2e.yml` and `scripts/e2e.sh` both read the variables below; give both the same values. A different project name, ports, tag and subnets run a second stack side by side.
 
