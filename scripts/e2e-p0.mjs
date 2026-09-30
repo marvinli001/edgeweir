@@ -27,13 +27,13 @@ const run = async (args, opts = {}) =>
 const pass = (message) => console.log(`PASS ${message}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function waitFor(label, fn, seconds = 180) {
+async function waitFor(label, fn, seconds = 180, interval = 1000) {
   const deadline = Date.now() + seconds * 1000;
   let last;
   while (Date.now() < deadline) {
     last = await fn();
     if (last) return last;
-    await sleep(1000);
+    await sleep(interval);
   }
   throw new Error(`timeout: ${label}`);
 }
@@ -72,13 +72,17 @@ async function session(email, password) {
     .getSetCookie()
     .map((v) => v.split(";")[0])
     .join("; ");
+  return { cookie, key: await createKey(cookie) };
+}
+
+async function createKey(cookie) {
   const created = await fetch(`${base}/api/auth/api-key/create`, {
     method: "POST",
     headers: { "content-type": "application/json", origin: base, cookie },
     body: JSON.stringify({ name: "p0-e2e" }),
   });
   assert.equal(created.status, 200);
-  return { cookie, key: (await created.json()).key };
+  return (await created.json()).key;
 }
 
 /** GET through the real edge node (host port), returns the status. */
@@ -127,7 +131,13 @@ const containerIp = async (service) => {
 
 // ---------------------------------------------------------------- setup
 const admin = await session("admin@e2e.test", "e2e-admin-password-123");
-const a = (method, path, body) => ok(admin.key, method, path, body);
+// An AccessKey allows 600 requests until it has been idle for 60 seconds;
+// the polling below runs longer than that, so it moves to a fresh key.
+let adminCalls = 0;
+async function a(method, path, body) {
+  if (++adminCalls % 500 === 0) admin.key = await createKey(admin.cookie);
+  return ok(admin.key, method, path, body);
+}
 const m5 = JSON.parse(await readFile(".e2e/m5-state.json", "utf8"));
 const upgrade = JSON.parse(await readFile(".e2e/m6-upgrade-state.json", "utf8"));
 const clusterId = upgrade.clusterId;
@@ -428,6 +438,7 @@ await waitFor(
     return rollout.state === "promoted";
   },
   300,
+  3000,
 );
 assert.equal(rollout.outcome, "auto_promote");
 await synced();
@@ -460,6 +471,7 @@ await waitFor(
     return rollout.state === "rolled_back";
   },
   280,
+  3000,
 );
 assert.equal(peerSawBad, false, "the non-canary node received the candidate");
 assert.equal(rollout.outcome, "error_ratio");
@@ -504,6 +516,7 @@ const usageAfter = await waitFor(
     return page.completeUntil && page.completeUntil >= windowEnd && page.items.length ? page : null;
   },
   600,
+  3000,
 );
 const [record] = usageAfter.items;
 const reported = (
