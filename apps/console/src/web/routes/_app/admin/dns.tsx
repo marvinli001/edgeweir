@@ -16,6 +16,14 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 
@@ -64,7 +72,7 @@ function DnsPage() {
                       className="flex flex-wrap items-center gap-3 py-3 animate-enter"
                       style={{ animationDelay: `${index * 40}ms` }}
                     >
-                      <span className="min-w-0 flex-1 text-sm break-all">
+                      <span className="min-w-48 flex-1 text-sm break-words">
                         <span>{p.name}</span>
                         <span className="ml-2 text-muted-foreground">{p.zone}</span>
                       </span>
@@ -106,62 +114,60 @@ function DnsPage() {
               {!bindings.data.length ? (
                 <EmptyState title={m.clusters_empty_title()} />
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm" data-testid="dns-bindings">
-                    <thead>
-                      <tr className="text-muted-foreground">
-                        <th className="p-2">{m.dns_cluster()}</th>
-                        <th className="p-2">{m.dns_mode()}</th>
-                        <th className="p-2">{m.dns_cluster_domain()}</th>
-                        <th className="p-2">{m.dns_status()}</th>
-                        <th className="p-2">{m.common_actions()}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bindings.data.map((b) => (
-                        <tr key={b.clusterId} className="border-t">
-                          <td className="p-2">{b.clusterName}</td>
-                          <td className="p-2">
-                            <Badge variant="outline">{modeLabel(b.mode)}</Badge>
-                          </td>
-                          <td className="p-2 font-mono text-xs break-all">{b.domain}</td>
-                          <td className="p-2">
-                            {b.mode === "auto" && b.revision ? (
-                              <span className="flex flex-wrap items-center gap-2">
-                                <Badge variant={b.blocked ? "destructive" : "outline"}>
-                                  {b.blocked
-                                    ? m.dns_blocked()
-                                    : b.applied
-                                      ? m.dns_applied()
-                                      : statusLabel(b.revision.status)}
-                                </Badge>
-                                {b.revision.lastError && !b.blocked ? (
-                                  <span className="text-xs text-muted-foreground">
-                                    {revisionError(b.revision.lastError)}
-                                  </span>
-                                ) : null}
-                              </span>
-                            ) : null}
-                          </td>
-                          <td className="p-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              render={
-                                <Link
-                                  to="/admin/clusters"
-                                  search={{ cluster: b.clusterId, tab: "dns" }}
-                                />
-                              }
-                            >
-                              {m.dns_open_cluster()}
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Table data-testid="dns-bindings">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{m.dns_cluster()}</TableHead>
+                      <TableHead>{m.dns_mode()}</TableHead>
+                      <TableHead>{m.dns_cluster_domain()}</TableHead>
+                      <TableHead>{m.dns_status()}</TableHead>
+                      <TableHead>{m.common_actions()}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bindings.data.map((b) => (
+                      <TableRow key={b.clusterId}>
+                        <TableCell>{b.clusterName}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{modeLabel(b.mode)}</Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{b.domain}</TableCell>
+                        <TableCell>
+                          {b.mode === "auto" && b.revision ? (
+                            <span className="flex items-center gap-2">
+                              <Badge variant={b.blocked ? "destructive" : "outline"}>
+                                {b.blocked
+                                  ? m.dns_blocked()
+                                  : b.applied
+                                    ? m.dns_applied()
+                                    : statusLabel(b.revision.status)}
+                              </Badge>
+                              {b.revision.lastError && !b.blocked ? (
+                                <span className="text-xs text-muted-foreground">
+                                  {revisionError(b.revision.lastError)}
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            render={
+                              <Link
+                                to="/admin/clusters"
+                                search={{ cluster: b.clusterId, tab: "dns" }}
+                              />
+                            }
+                          >
+                            {m.dns_open_cluster()}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>

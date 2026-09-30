@@ -17,6 +17,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { formatDateTime, m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { modeLabel, revisionError, statusLabel } from "./labels";
@@ -325,28 +333,26 @@ function RecordTable({
 }) {
   if (!records.length) return <EmptyState title={m.dns_no_records()} />;
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm" data-testid={testId}>
-        <thead>
-          <tr className="text-muted-foreground">
-            <th className="p-2">{m.dns_record_name()}</th>
-            <th className="p-2">{m.dns_record_type()}</th>
-            <th className="p-2">{m.dns_record_data()}</th>
-            <th className="p-2">{m.dns_ttl()}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((r) => (
-            <tr key={`${r.name}|${r.type}|${r.data}`} className="border-t">
-              <td className="p-2 font-mono text-xs break-all">{r.name}</td>
-              <td className="p-2">{r.type}</td>
-              <td className="p-2 font-mono text-xs break-all">{r.data}</td>
-              <td className="p-2 tabular-nums">{r.ttl}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table data-testid={testId}>
+      <TableHeader>
+        <TableRow>
+          <TableHead>{m.dns_record_name()}</TableHead>
+          <TableHead>{m.dns_record_type()}</TableHead>
+          <TableHead>{m.dns_record_data()}</TableHead>
+          <TableHead>{m.dns_ttl()}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {records.map((r) => (
+          <TableRow key={`${r.name}|${r.type}|${r.data}`}>
+            <TableCell className="font-mono text-xs">{r.name}</TableCell>
+            <TableCell>{r.type}</TableCell>
+            <TableCell className="font-mono text-xs">{r.data}</TableCell>
+            <TableCell className="tabular-nums">{r.ttl}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -434,7 +440,7 @@ function ManualRecords({ clusterId, updatedAt }: { clusterId: string; updatedAt:
             {exported.data.zoneFile ? (
               <div className="grid gap-2">
                 <h3 className="text-sm font-medium">{m.dns_zone_file()}</h3>
-                <CodeBlock value={exported.data.zoneFile} testId="dns-zone-file" />
+                <CodeBlock value={exported.data.zoneFile} testId="dns-zone-file" wrap={false} />
               </div>
             ) : null}
           </>
@@ -466,59 +472,57 @@ function Revisions({ clusterId }: { clusterId: string }) {
         ) : !history.data.length ? (
           <EmptyState title={m.dns_no_revisions()} />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm" data-testid="dns-revisions">
-              <thead>
-                <tr className="text-muted-foreground">
-                  <th className="p-2">{m.dns_version()}</th>
-                  <th className="p-2">{m.dns_status()}</th>
-                  <th className="p-2">{m.dns_records()}</th>
-                  <th className="p-2">{m.dns_time()}</th>
-                  <th className="p-2">{m.common_actions()}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.data.map((r) => (
-                  <tr key={r.revision} className="border-t">
-                    <td className="p-2 font-mono">{r.revision}</td>
-                    <td className="p-2">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline">{statusLabel(r.status)}</Badge>
-                        {r.lastError ? (
-                          <span className="text-xs text-muted-foreground">
-                            {revisionError(r.lastError)}
-                          </span>
-                        ) : null}
-                      </span>
-                    </td>
-                    <td className="p-2 tabular-nums">{r.recordCount}</td>
-                    <td className="p-2 text-xs whitespace-nowrap text-muted-foreground">
-                      {formatDateTime(r.createdAt)}
-                    </td>
-                    <td className="p-2">
-                      <ConfirmDialog
-                        title={m.dns_rollback()}
-                        note={m.dns_rollback_note({ revision: r.revision })}
-                        trigger={
-                          <Button size="sm" variant="outline">
-                            {m.dns_rollback()}
-                          </Button>
+          <Table data-testid="dns-revisions">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{m.dns_version()}</TableHead>
+                <TableHead>{m.dns_status()}</TableHead>
+                <TableHead>{m.dns_records()}</TableHead>
+                <TableHead>{m.dns_time()}</TableHead>
+                <TableHead>{m.common_actions()}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {history.data.map((r) => (
+                <TableRow key={r.revision}>
+                  <TableCell className="font-mono">{r.revision}</TableCell>
+                  <TableCell>
+                    <span className="flex items-center gap-2">
+                      <Badge variant="outline">{statusLabel(r.status)}</Badge>
+                      {r.lastError ? (
+                        <span className="text-xs text-muted-foreground">
+                          {revisionError(r.lastError)}
+                        </span>
+                      ) : null}
+                    </span>
+                  </TableCell>
+                  <TableCell className="tabular-nums">{r.recordCount}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {formatDateTime(r.createdAt)}
+                  </TableCell>
+                  <TableCell>
+                    <ConfirmDialog
+                      title={m.dns_rollback()}
+                      note={m.dns_rollback_note({ revision: r.revision })}
+                      trigger={
+                        <Button size="sm" variant="outline">
+                          {m.dns_rollback()}
+                        </Button>
+                      }
+                      onConfirm={async () => {
+                        try {
+                          await client.dns.rollbackBinding({ clusterId, revision: r.revision });
+                          await queries.invalidateQueries({ queryKey: orpc.dns.key() });
+                        } catch (e) {
+                          toast.error(errorMessage(e));
                         }
-                        onConfirm={async () => {
-                          try {
-                            await client.dns.rollbackBinding({ clusterId, revision: r.revision });
-                            await queries.invalidateQueries({ queryKey: orpc.dns.key() });
-                          } catch (e) {
-                            toast.error(errorMessage(e));
-                          }
-                        }}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      }}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </CardContent>
     </Card>

@@ -75,8 +75,11 @@ export function SiteDnsRecords({ siteId }: { siteId: string }) {
                 style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
                 data-testid="site-dns-record"
               >
-                <span className="min-w-0 flex-1 font-mono text-xs break-all">
-                  {record.name} {record.type} {record.data}
+                <span className="min-w-48 flex-1 font-mono text-xs break-all">
+                  <span className="block">{record.name}</span>
+                  <span className="block text-muted-foreground">
+                    {record.type} {record.data}
+                  </span>
                 </span>
                 <Badge
                   variant={

@@ -10,6 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useAction } from "@/hooks/use-action";
@@ -218,16 +225,41 @@ export function DnsCredentialDialog({
           <Field>
             <FieldLabel htmlFor="dns-zone">{m.dns_zone()}</FieldLabel>
             <div className="flex flex-wrap gap-2">
-              <Input
-                id="dns-zone"
-                name="dns-zone"
-                className="min-w-0 flex-1"
-                required
-                disabled={!!initial}
-                value={zone}
-                onChange={(e) => setZone(e.target.value.trim().toLowerCase())}
-                data-testid="dns-zone-input"
-              />
+              {zones?.length && !initial ? (
+                // Listed zones replace the text field: one zone field either way.
+                <Select
+                  value={zone}
+                  onValueChange={(next) => {
+                    if (next !== null) setZone(String(next));
+                  }}
+                >
+                  <SelectTrigger
+                    id="dns-zone"
+                    className="min-w-0 flex-1"
+                    data-testid="dns-zone-select"
+                  >
+                    <SelectValue>{zone}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {zones.map((z) => (
+                      <SelectItem key={z} value={z}>
+                        {z}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="dns-zone"
+                  name="dns-zone"
+                  className="min-w-0 flex-1"
+                  required
+                  disabled={!!initial}
+                  value={zone}
+                  onChange={(e) => setZone(e.target.value.trim().toLowerCase())}
+                  data-testid="dns-zone-input"
+                />
+              )}
               {!initial && entry?.capabilities.listZones ? (
                 <Button
                   type="button"
@@ -242,15 +274,6 @@ export function DnsCredentialDialog({
               ) : null}
             </div>
           </Field>
-          {zones?.length && !initial ? (
-            <FormSelect
-              id="dns-zone-select"
-              label={m.dns_zone()}
-              value={zone}
-              onChange={setZone}
-              options={zones.map((z) => ({ value: z, label: z }))}
-            />
-          ) : null}
           {scope === "tenant" ? (
             <SwitchField
               id="dns-auto-records"

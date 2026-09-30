@@ -64,7 +64,7 @@ test("DNS: an account from the catalog form, zones listed and the connection tes
   await dialog.getByLabel("API Token", { exact: true }).fill("e2e-dns-token-b");
   await dialog.getByTestId("dns-list-zones").click();
   await expect(dialog.getByTestId("dns-probe-result")).toHaveText("找到 1 个区域");
-  await expect(dialog.getByTestId("dns-zone-input")).toHaveValue("cdn-b.dns.test");
+  await expect(dialog.getByTestId("dns-zone-select")).toHaveText("cdn-b.dns.test");
   await dialog.getByTestId("dns-test-connection").click();
   await expect(dialog.getByTestId("dns-probe-result")).toContainText("连接正常");
   await check(page, "account-dialog");

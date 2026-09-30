@@ -150,9 +150,9 @@ function CertificatesPage() {
                 key={credential.id}
                 className="flex flex-wrap items-center justify-between gap-2 border-b py-3 last:border-0"
               >
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium break-all">{credential.name}</p>
-                  <p className="text-sm break-all text-muted-foreground">{credential.zone}</p>
+                <div className="min-w-48 flex-1">
+                  <p className="font-medium break-words">{credential.name}</p>
+                  <p className="text-sm break-words text-muted-foreground">{credential.zone}</p>
                 </div>
                 <Badge variant="outline">{providerLabel(credential.provider)}</Badge>
                 {credential.autoRecords ? (
