@@ -229,10 +229,40 @@ function KeysDialog({ account, onClose }: { account: ServiceAccount; onClose: ()
   );
 }
 
-function ServiceAccountsPage() {
+/**
+ * Delete with confirmation. A component of its own so that the table's cell
+ * renderers keep their identity: a new renderer per render would remount the
+ * cell and close an open dialog whenever the page re-renders.
+ */
+function DeleteAccountAction({ account }: { account: ServiceAccount }) {
   const queryClient = useQueryClient();
-  const accounts = useQuery(orpc.serviceAccounts.list.queryOptions());
   const remove = useMutation(orpc.serviceAccounts.delete.mutationOptions());
+  return (
+    <ConfirmDialog
+      trigger={
+        <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
+          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+        </Button>
+      }
+      destructive
+      title={m.service_accounts_delete_confirm({ name: account.name })}
+      note={m.service_accounts_delete_note()}
+      confirmLabel={m.common_delete()}
+      onConfirm={async () => {
+        try {
+          await remove.mutateAsync({ id: account.id });
+          await queryClient.invalidateQueries({ queryKey: orpc.serviceAccounts.key() });
+          toast.success(m.service_accounts_deleted());
+        } catch (err) {
+          toast.error(errorMessage(err));
+        }
+      }}
+    />
+  );
+}
+
+function ServiceAccountsPage() {
+  const accounts = useQuery(orpc.serviceAccounts.list.queryOptions());
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ServiceAccount | null>(null);
   const [keysOf, setKeysOf] = React.useState<string | null>(null);
@@ -296,31 +326,12 @@ function ServiceAccountsPage() {
             <Button size="sm" variant="ghost" onClick={() => setEditing(row.original)}>
               {m.orgs_edit()}
             </Button>
-            <ConfirmDialog
-              trigger={
-                <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
-                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                </Button>
-              }
-              destructive
-              title={m.service_accounts_delete_confirm({ name: row.original.name })}
-              note={m.service_accounts_delete_note()}
-              confirmLabel={m.common_delete()}
-              onConfirm={async () => {
-                try {
-                  await remove.mutateAsync({ id: row.original.id });
-                  await queryClient.invalidateQueries({ queryKey: orpc.serviceAccounts.key() });
-                  toast.success(m.service_accounts_deleted());
-                } catch (err) {
-                  toast.error(errorMessage(err));
-                }
-              }}
-            />
+            <DeleteAccountAction account={row.original} />
           </div>
         ),
       },
     ],
-    [queryClient, remove],
+    [],
   );
   return (
     <Page
