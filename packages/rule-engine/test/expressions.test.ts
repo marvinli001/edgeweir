@@ -42,6 +42,25 @@ describe("typed rule expressions", () => {
     'http.request.headers.bad<name> eq "x"',
     "ip.src in {::ffff:010.0.0.1}",
   ])("rejects %s", (source) => expect(() => parseExpression(source)).toThrow(ExpressionError));
+  it.each([
+    ['http.host matches "a{,2}"', "{,2}", 0],
+    ['http.host matches "x\\\\s"', "\\\\s", 0],
+    ['http.host matches "\\u0078[:a:]"', "[:a:]", 0],
+    ['http.host matches "(a)+"', "+", 0],
+    ['http.host matches "(a"', '"', 1],
+  ] as const)("positions the regular expression error in %s", (source, at, from) => {
+    const error = (() => {
+      try {
+        parseExpression(source);
+      } catch (e) {
+        return e;
+      }
+    })();
+    expect(error).toBeInstanceOf(ExpressionError);
+    expect((error as ExpressionError).position).toBe(
+      source.indexOf(at, source.indexOf('"') + from),
+    );
+  });
   it("rejects response fields before the response phase", () => {
     expect(() => parseExpression("http.response.code ge 500")).toThrow();
     expect(

@@ -472,5 +472,2324 @@
       "values": [],
       "children": []
     }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/admin$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/admin"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/admin$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/admin$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/admin\n"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/admin$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/admin\\\\n$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/admin\n"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/admin\\n$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/(admin$|api)\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/admin\n"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/(admin$|api)",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a\\\\$$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a$"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a\\$$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a[$]$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a$"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a[$]$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"/admin$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/x/admin"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/admin$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^admin\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/admin"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^admin",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^$\"",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/x"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a.$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a\r"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a.$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a.$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a\n"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a.$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a[^x]$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a\n"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a[^x]$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a\\\\D\\\\W$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a\n\n"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a\\D\\W$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a\\\\r\\\\n$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a\r\n"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a\\r\\n$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a\\\\x0b\\\\t\\\\f$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a\u000b\t\f"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a\\x0b\\t\\f$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^a\\\\x00b$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "a\u0000b"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^a\\x00b$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/Admin\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/admin"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/Admin",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/[Aa]dmin\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/Admin"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/[Aa]dmin",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/\\\\x41\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/\\x41",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/[A-Z]+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/abc"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/[A-Z]+$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\bapi\\\\b\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/v1/api/x"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\bapi\\b",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\bapi\\\\b\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/v1/apix"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\bapi\\b",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\bapi\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/éapi"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\bapi",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a\\\\Bpi\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/api"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a\\Bpi",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/\\\\w+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/é"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/\\w+$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/\\\\W{2}$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/é"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/\\W{2}$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/.{2}$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/é"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/.{2}$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a...$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a中"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a...$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/[^/]{3}$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/中"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/[^/]{3}$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[^\\\\x00-\\\\x7f]\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/中"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[^\\x00-\\x7f]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[^\\\\x00-\\\\x7f]\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/abc"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[^\\x00-\\x7f]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/[a-z0-9-]+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/abc-123"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/[a-z0-9-]+$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/[^/]+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a/b"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/[^/]+$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^[.]$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "x"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^[.]$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^[\\\\w.-]+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "file.name-1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^[\\w.-]+$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^[\\\\]\\\\\\\\]+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "]\\"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^[\\]\\\\]+$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^[a^]$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "^"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^[a^]$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^[-a]+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "-a-"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^[-a]+$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^[!-\\\\/]+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "+-,"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^[!-\\/]+$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^[\\\\t-\\\\r]$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "\u000b"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^[\\t-\\r]$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^[\\\\--/]+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "-./"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^[\\--/]+$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^[-a-z\\\\d-]+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "-a-1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^[-a-z\\d-]+$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^[:]$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": ":"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^[:]$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^[.]$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "."
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^[.]$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^\\\\x7F$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": ""
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^\\x7F$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^a{2}$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "aa"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^a{2}$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^a{2}$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "aaa"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^a{2}$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^a{2,}$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "aaaa"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^a{2,}$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^a{0}$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": ""
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^a{0}$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^a{1,2}?b\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "aab"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^a{1,2}?b",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a*?$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/aaa"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a*?$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/(|x)y$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/y"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/(|x)y$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/(a|b)c$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/bc"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/(a|b)c$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^a{0,1000}?$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "aaa"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^a{0,1000}?$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\bx\\\\B\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/xy"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\bx\\B",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a$|^b\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "bz"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a$|^b",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri matches \"^/a\\\\.b\\\\?c=\\\\{1\\\\}$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri": "/a.b?c={1}"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri",
+      "valueType": "string",
+      "value": "^/a\\.b\\?c=\\{1\\}$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^/a\\\\.b$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/axb"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^/a\\.b$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.headers[\"User-Agent\"] matches \"^curl/[0-9.]+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.headers.user-agent": "curl/8.5.0"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "http.request.headers.user-agent",
+      "valueType": "string",
+      "value": "^curl/[0-9.]+$",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a{,2}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 reads {,n} as {0,n}; JavaScript and RE2 read it literally",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a{,2}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a{ 2 }\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 allows spaces inside {n}; JavaScript and RE2 read it literally",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a{ 2 }",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a{01}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "RE2 reads {01} literally; JavaScript and PCRE2 repeat",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a{01}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a{2,1}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "reversed repetition bounds",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a{2,1}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a{1001}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "RE2 repeats at most 1000 times",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a{1001}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a{0,1001}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "RE2 repeats at most 1000 times",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a{0,1001}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a{1000000000000000000000}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "RE2 repeats at most 1000 times",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a{1000000000000000000000}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a{x}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "an unescaped { must start a repetition",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a{x}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "unescaped }: literal only by engine leniency",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "unescaped ] outside a class: literal only by engine leniency",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a**\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "stacked quantifiers: errors in JavaScript and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a**",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a{1,}{2}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "stacked quantifiers: errors in JavaScript and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a{1,}{2}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a???\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "only one lazy ? may follow a quantifier",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a???",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a*+\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "possessive in PCRE2; errors in JavaScript and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a*+",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a{2}+\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "possessive in PCRE2; errors in JavaScript and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a{2}+",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(a)+\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "repeated group (backtracking cost)",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(a)+",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(ab|a)*c\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "repeated group (backtracking cost)",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(ab|a)*c",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(a){2}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "repeated group (backtracking cost)",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(a){2}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"^*a\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "repeated anchor: RE2 accepts it, JavaScript and PCRE2 refuse it",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "^*a",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\b+a\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "repeated assertion: RE2 accepts it, JavaScript and PCRE2 refuse it",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\b+a",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"*a\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "nothing to repeat",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "*a",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a|*\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "nothing to repeat",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a|*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(|+)\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "nothing to repeat",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(|+)",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(*LF)a\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 start-of-pattern option; errors in JavaScript and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(*LF)a",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(?i)admin\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "inline flags",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(?i)admin",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(?:a)\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "all (? groups are refused; plain parentheses group",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(?:a)",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(?=a)\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "lookahead: RE2 has none",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(?=a)",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(?<=a)b\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "lookbehind: RE2 has none",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(?<=a)b",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(?P<n>a)\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "named group: JavaScript has no (?P<",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(?P<n>a)",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(?<n>a)\\\\k<n>\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "named group and backreference",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(?<n>a)\\k<n>",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(a)\\\\1\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "backreference: RE2 has none; JavaScript reads a missing group as octal",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(a)\\1",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(a\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "unbalanced parenthesis",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(a",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a)\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "unbalanced parenthesis",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a)",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"(()\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "unbalanced parenthesis",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "(()",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\s\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "\\s: JavaScript and PCRE2 include \\x0b, RE2 does not; JavaScript also 0xa0",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\s",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\S\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "\\S: JavaScript and PCRE2 exclude \\x0b, RE2 does not; JavaScript also 0xa0",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\S",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\v\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 reads \\v as any vertical space; JavaScript and RE2 as \\x0b",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\v",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\z\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "end of subject in PCRE2 and RE2, the letter z in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\z",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\Z\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "end or before a final newline in PCRE2, the letter Z in JavaScript, an error in RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\Z",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\Aa\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "start of subject in PCRE2 and RE2, the letter A in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\Aa",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\Qa.b\\\\E\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "quoting in PCRE2 and RE2, the letters Q and E in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\Qa.b\\E",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\p{L}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "Unicode property: PCRE2 over bytes, RE2 over code points, letters in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\p{L}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\x{41}\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "A in PCRE2 and RE2; x repeated 41 times in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\x{41}",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\x1\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "one hex digit: 0x01 in PCRE2, x1 in JavaScript, an error in RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\x1",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\x\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "no hex digits: the letter x in JavaScript, an error in PCRE2 and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\x",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\xe9\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "above \\x7f: a byte in PCRE2 and JavaScript, a code point in RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\xe9",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\u0041\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "JavaScript only",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\u0041",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\0\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "NUL in JavaScript, octal in PCRE2 and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\0",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\101\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "octal in PCRE2 and RE2, octal or a backreference in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\101",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\8\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "the digit 8 in JavaScript, an error in PCRE2 and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\8",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\a\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "BEL in PCRE2 and RE2, the letter a in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\a",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\e\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "ESC in PCRE2, the letter e in JavaScript, an error in RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\e",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\cA\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "control-A in JavaScript and PCRE2, an error in RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\cA",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\K\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 only (reset match start); the letter K in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\K",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\C\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 only (one code unit); the letter C in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\C",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\N\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 only (not a newline); the letter N in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\N",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\R\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 only (any newline); the letter R in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\R",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\h\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 only (horizontal space); the letter h in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\h",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\X\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 only (grapheme cluster); the letter X in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\X",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\G\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 only (match start); the letter G in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\G",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"\\\\q\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "unknown escape: the letter q in JavaScript, an error in PCRE2 and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "\\q",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a\\\\\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "trailing backslash",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a\\",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[]a]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "JavaScript: an empty class, then a]; PCRE2 and RE2: ] or a",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[]a]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[^]a]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "JavaScript: any character, then a]; PCRE2 and RE2: neither ] nor a",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[^]a]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[^]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "any character in JavaScript, unterminated in PCRE2 and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[^]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[[:alpha:]]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "POSIX class in PCRE2 and RE2; [, :, a, l, p, h, then ] in JavaScript",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[[:alpha:]]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[:alpha:]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 refuses POSIX syntax outside a class; JavaScript and RE2 read a class",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[:alpha:]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[::]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 refuses POSIX syntax outside a class; JavaScript and RE2 read a class",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[::]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[:\\\\:]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 reads [:...:] as POSIX syntax even with an escaped last :",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[:\\:]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[.a.]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 refuses collating elements; JavaScript and RE2 read a class",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[.a.]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[=a=]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "PCRE2 refuses equivalence classes; JavaScript and RE2 read a class",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[=a=]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[\\\\d-z]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "class escape as a range end: an error in PCRE2, a union in JavaScript and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[\\d-z]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[a-\\\\w]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "class escape as a range end: an error in PCRE2, a union in JavaScript and RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[a-\\w]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[a-b-c]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "a bare - is literal only first or last in a class",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[a-b-c]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[--a]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "a bare - is literal only first or last in a class",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[--a]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[z-a]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "reversed range",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[z-a]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[\\\\b]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "backspace in JavaScript and PCRE2, an error in RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[\\b]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[\\\\s]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "\\s differs, as outside a class",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[\\s]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[a-]]\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "unescaped ] outside a class: literal only by engine leniency",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[a-]]",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"[a\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "unterminated class",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "[a",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"é\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "non-ASCII: one character in JavaScript, two bytes in PCRE2, one code point in RE2",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "é",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"a\\tb\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "control character: write \\t",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a\tb",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path matches \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "longer than 256 characters",
+    "ir": {
+      "op": "matches",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "values": [],
+      "children": []
+    }
   }
 ]
