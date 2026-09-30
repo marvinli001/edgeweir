@@ -26,6 +26,13 @@
 #   Idempotency-Key, organization limits, platform suspension, usage and its
 #   completeness watermark, configuration canary with automatic promotion and
 #   rollback, DNS mass removal protection; Playwright e2e/p0.spec.ts.
+#   Core gaps G1 (scripts/e2e-g1.mjs): the nodes report bans-v1 and
+#   kernel-ban-v1; bans and unbans reach a client container within 5 s (p95);
+#   a site ban answers 403 ip-banned to one client on one site only; a
+#   platform ban drops the client in nftables (TCP connect times out) while
+#   the control client is served, and the unban lets it back; short
+#   prefixes, protected addresses, tenants on /admin/bans, other
+#   organizations' sites and maxBans are refused; Playwright e2e/g1.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -878,7 +885,12 @@ if ! $SKIP_UI; then
 fi
 pass "P0 checks passed"
 
-
+step "G1: dynamic bans: delivery latency, site bans at the edge, platform bans in nftables, limits and permissions"
+node scripts/e2e-g1.mjs || fail "G1 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g1.spec.ts || fail "G1 browser checks failed"
+fi
+pass "G1 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
