@@ -16,6 +16,7 @@ export const RECENT_PAGES = {
   "/admin/regions": () => [m.area_admin(), m.nav_regions()],
   "/admin/sites": () => [m.area_admin(), m.nav_admin_sites()],
   "/admin/organizations": () => [m.area_admin(), m.nav_organizations()],
+  "/admin/service-accounts": () => [m.area_admin(), m.nav_service_accounts()],
   "/admin/audit": () => [m.area_admin(), m.nav_audit()],
   "/admin/settings": () => [m.area_admin(), m.nav_system()],
 } as const satisfies Record<string, () => [string, string]>;

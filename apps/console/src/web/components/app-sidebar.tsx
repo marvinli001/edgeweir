@@ -4,6 +4,7 @@ import {
   DashboardSquare01Icon,
   DatabaseSync01Icon,
   GlobeIcon,
+  Key01Icon,
   Location01Icon,
   SecurityLockIcon,
   ServerStack01Icon,
@@ -146,6 +147,12 @@ export function adminNav(): NavItem[] {
       to: "/admin/organizations",
       icon: icon(Building03Icon),
       testId: "nav-organizations",
+    },
+    {
+      title: m.nav_service_accounts(),
+      to: "/admin/service-accounts",
+      icon: icon(Key01Icon),
+      testId: "nav-service-accounts",
     },
     { title: m.nav_audit(), to: "/admin/audit", icon: icon(Audit01Icon), testId: "nav-audit" },
     {

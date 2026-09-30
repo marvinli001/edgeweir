@@ -37,6 +37,7 @@ export const Route = createFileRoute("/_app/admin/audit")({
 const actorLabels: Record<string, () => string> = {
   user: () => m.audit_actor_user(),
   api_key: () => m.audit_actor_api_key(),
+  service_account: () => m.audit_actor_service_account(),
   node: () => m.audit_actor_node(),
   system: () => m.audit_actor_system(),
 };
