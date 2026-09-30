@@ -292,7 +292,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 
 | Table | Contents |
 | --- | --- |
-| `site` | Sites: organization and cluster, cache key, slicing, WebSocket, certificate, TLS settings, cache generation, log sample rate |
+| `site` | Sites: organization and cluster, enabled state, platform suspension (reason, note), cache key, slicing, WebSocket, certificate, TLS settings, cache generation, log sample rate |
 | `site_domain` | Site domains and their routing verification state |
 | `site_star` | Per-user stars |
 | `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification |
@@ -369,6 +369,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0020_m6_upgrade_health` | `node_upgrade_delivery.healthy_since` |
 | `0021_authenticated_revision_floor` | `node_config_status.revision_receipt_verified` |
 | `0022_bound_traffic_counters` | Existing traffic counters clamped to 0 through 2^53−1 |
+| `0023_p0_site_state` | `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at` (platform suspension) |
 
 ## Build output
 

@@ -24,6 +24,7 @@ import type * as z from "zod";
 import { fail } from "../lib/errors";
 import { TASKS_CHANNEL } from "../lib/events";
 import { cleanErrorCode, cleanErrorParams, taskError } from "../lib/node-errors";
+import { assertServing } from "../lib/site-state";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import type { Executor } from "./revisions";
 import type { SiteScope } from "./sites";
@@ -101,6 +102,8 @@ async function resolveHosts(db: Executor, hosts: string[], scope: SiteScope) {
       siteName: schema.site.name,
       clusterId: schema.site.clusterId,
       organizationId: schema.site.organizationId,
+      enabled: schema.site.enabled,
+      suspended: schema.site.suspended,
     })
     .from(schema.siteDomain)
     .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
@@ -305,6 +308,7 @@ export async function createCacheTask(
         .from(schema.site)
         .where(and(inArray(schema.site.id, ids), scopeFilter(ctx.scope)));
       if (sites.length !== ids.length) fail("SITE_NOT_FOUND", "site not found");
+      for (const site of sites) assertServing(site);
       for (const site of sites) {
         siteMeta.set(site.id, { name: site.name, organizationId: site.organizationId });
         targets.push(site.name);
@@ -336,6 +340,7 @@ export async function createCacheTask(
         const hosts = unknown.slice(0, 5).join(", ");
         fail("CACHE_TASK_HOST_UNKNOWN", `no site serves: ${hosts}`, { hosts });
       }
+      for (const site of resolved.values()) assertServing(site);
       const seen = new Set<string>();
       for (const target of parsed) {
         const site = resolved.get(target.host);

@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { formatDomain, parseDomain } from "@edgeweir/config-compiler";
-import type {
-  Revision,
-  Site,
-  StarredSite,
-  siteCreateInput,
-  siteUpdateInput,
+import {
+  type Revision,
+  type Site,
+  type SiteSuspendReason,
+  type StarredSite,
+  type siteCreateInput,
+  siteSuspendReason,
+  type siteUpdateInput,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import {
@@ -28,6 +30,7 @@ import { assertCertificateNames } from "../lib/certificate-names";
 import { domainRoot } from "../lib/domain-root";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
+import { assertServing, isServing } from "../lib/site-state";
 import { type Actor, recordAudit } from "./audit";
 import { assertCacheTaskQuota } from "./cache-tasks";
 import { defaultClusterId } from "./clusters";
@@ -38,7 +41,13 @@ import {
   releaseUnusedDomainClaims,
 } from "./domain-ownership";
 import { assertOriginsAllowed } from "./origin-allow-list";
-import { type Executor, publishRevision, type Tx, toRevisionDto } from "./revisions";
+import {
+  type Executor,
+  latestRevision,
+  publishRevision,
+  type Tx,
+  toRevisionDto,
+} from "./revisions";
 
 type SiteCreate = z.output<typeof siteCreateInput>;
 type SiteUpdate = z.output<typeof siteUpdateInput>;
@@ -65,9 +74,12 @@ function scopeFilter(scope: SiteScope) {
 
 const userId = (actor: Actor) => (actor.type === "user" ? actor.id : null);
 
+type SiteRow = typeof schema.site.$inferSelect;
+
 async function toSiteDtos(
   db: Executor,
-  rows: (typeof schema.site.$inferSelect)[],
+  rows: SiteRow[],
+  opts: { platform?: boolean } = {},
 ): Promise<Site[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
@@ -119,6 +131,10 @@ async function toSiteDtos(
       id: r.id,
       name: r.name,
       enabled: r.enabled,
+      suspended: r.suspended,
+      suspendReason: r.suspended ? readSuspendReason(r.suspendReason) : null,
+      suspendNote: r.suspended && opts.platform ? r.suspendNote : "",
+      suspendedAt: r.suspended ? (r.suspendedAt?.toISOString() ?? null) : null,
       organizationId: r.organizationId,
       organizationName: orgs.find((o) => o.id === r.organizationId)?.name ?? "",
       clusterId: r.clusterId,
@@ -182,6 +198,11 @@ async function toSiteDtos(
   });
 }
 
+function readSuspendReason(value: string | null): SiteSuspendReason {
+  const parsed = siteSuspendReason.safeParse(value);
+  return parsed.success ? parsed.data : "other";
+}
+
 /** One page of sites, filtered by name/domain search and (for admins) cluster. */
 export async function listSites(
   db: Database,
@@ -222,7 +243,7 @@ export async function listSites(
     .orderBy(asc(schema.site.createdAt), asc(schema.site.id))
     .limit(query.pageSize)
     .offset((query.page - 1) * query.pageSize);
-  return { items: await toSiteDtos(db, rows), total: total?.n ?? 0 };
+  return { items: await toSiteDtos(db, rows, { platform: scope.all }), total: total?.n ?? 0 };
 }
 
 export async function findSite(db: Executor, id: string, scope: SiteScope, lock = false) {
@@ -237,7 +258,7 @@ export async function findSite(db: Executor, id: string, scope: SiteScope, lock 
 
 export async function getSite(db: Database, id: string, scope: SiteScope): Promise<Site> {
   const row = await findSite(db, id, scope);
-  const [dto] = await toSiteDtos(db, [row]);
+  const [dto] = await toSiteDtos(db, [row], { platform: scope.all });
   if (!dto) fail("SITE_NOT_FOUND", "site not found");
   return dto;
 }
@@ -647,7 +668,7 @@ export async function updateSite(
         revision: revision.revision,
       },
     });
-    const [dto] = await toSiteDtos(tx, [updated]);
+    const [dto] = await toSiteDtos(tx, [updated], { platform: ctx.scope.all });
     if (!dto) throw new Error("site not readable after update");
     return { site: dto, revision: toRevisionDto(revision) };
   });
@@ -699,6 +720,7 @@ export async function purgeSite(
 ): Promise<{ site: Site; revision: Revision }> {
   return db.transaction(async (tx) => {
     const row = await findSite(tx, id, ctx.scope);
+    assertServing(row);
     if (!ctx.scope.all) {
       await assertCacheTaskQuota(tx, ctx.scope.organizationId, 1, new Date());
     }
@@ -725,10 +747,153 @@ export async function purgeSite(
         quotaLimited: !ctx.scope.all,
       },
     });
-    const [dto] = await toSiteDtos(tx, [updated]);
+    const [dto] = await toSiteDtos(tx, [updated], { platform: ctx.scope.all });
     if (!dto) throw new Error("site not readable after update");
     return { site: dto, revision: toRevisionDto(revision) };
   });
+}
+
+/** 409 UPDATED_AT_MISMATCH (with the current value) when the caller read an older version. */
+export function assertUpdatedAt(current: Date, expected: string | undefined) {
+  if (expected !== undefined && current.getTime() !== Date.parse(expected))
+    fail("UPDATED_AT_MISMATCH", "the resource changed since it was read", {
+      updatedAt: current.toISOString(),
+    });
+}
+
+const STATE_REASONS = {
+  enable: "site_enabled",
+  disable: "site_disabled",
+  suspend: "site_suspended",
+  resume: "site_resumed",
+} as const;
+
+type SiteStateChange =
+  | { kind: "enable"; enabled: boolean }
+  | { kind: "suspend"; reason: SiteSuspendReason; note: string }
+  | { kind: "resume" };
+
+/**
+ * Applies an enable/disable or suspend/resume. Unchanged state returns the
+ * current site and revision without a new revision or audit entry; a change
+ * publishes the cluster and writes the audit entry in the same transaction.
+ */
+async function changeSiteState(
+  db: Database,
+  id: string,
+  change: SiteStateChange,
+  ctx: { scope: SiteScope; actor: Actor; expectedUpdatedAt?: string },
+): Promise<{ site: Site; revision: Revision }> {
+  return db.transaction(async (tx) => {
+    const row = await findSite(tx, id, ctx.scope, true);
+    const next =
+      change.kind === "enable"
+        ? { enabled: change.enabled }
+        : change.kind === "suspend"
+          ? {
+              suspended: true,
+              suspendReason: change.reason,
+              suspendNote: change.note,
+              suspendedAt: row.suspended ? row.suspendedAt : new Date(),
+            }
+          : { suspended: false, suspendReason: null, suspendNote: "", suspendedAt: null };
+    const unchanged =
+      change.kind === "enable"
+        ? row.enabled === change.enabled
+        : change.kind === "suspend"
+          ? row.suspended && row.suspendReason === change.reason && row.suspendNote === change.note
+          : !row.suspended;
+    if (unchanged) {
+      const latest = await latestRevision(tx, row.clusterId);
+      if (!latest) throw new Error("cluster has no revision");
+      const [dto] = await toSiteDtos(tx, [row], { platform: ctx.scope.all });
+      if (!dto) throw new Error("site not readable");
+      return { site: dto, revision: toRevisionDto(latest) };
+    }
+    assertUpdatedAt(row.updatedAt, ctx.expectedUpdatedAt);
+    const [updated] = await tx
+      .update(schema.site)
+      .set({ ...next, updatedAt: new Date() })
+      .where(eq(schema.site.id, row.id))
+      .returning();
+    if (!updated) throw new Error("site update failed");
+    const action =
+      change.kind === "enable"
+        ? change.enabled
+          ? "enable"
+          : "disable"
+        : change.kind === "suspend"
+          ? "suspend"
+          : "resume";
+    const { row: revision } = await publishRevision(tx, {
+      clusterId: row.clusterId,
+      reason: { code: STATE_REASONS[action], params: { site: row.name } },
+      userId: userId(ctx.actor),
+    });
+    await recordAudit(tx, ctx.actor, {
+      action: `site.${action}`,
+      organizationId: row.organizationId,
+      targetType: "site",
+      targetId: row.id,
+      targetName: row.name,
+      metadata: {
+        ...(change.kind === "suspend"
+          ? {
+              reason: change.reason,
+              note: change.note,
+              ...(row.suspended
+                ? { from: { reason: row.suspendReason, note: row.suspendNote } }
+                : {}),
+            }
+          : {}),
+        ...(change.kind === "resume" ? { reason: row.suspendReason } : {}),
+        serving: isServing(updated),
+        revision: revision.revision,
+      },
+    });
+    const [dto] = await toSiteDtos(tx, [updated], { platform: ctx.scope.all });
+    if (!dto) throw new Error("site not readable after update");
+    return { site: dto, revision: toRevisionDto(revision) };
+  });
+}
+
+export function setSiteEnabled(
+  db: Database,
+  input: { id: string; enabled: boolean; expectedUpdatedAt?: string },
+  ctx: { scope: SiteScope; actor: Actor },
+) {
+  return changeSiteState(
+    db,
+    input.id,
+    { kind: "enable", enabled: input.enabled },
+    { ...ctx, expectedUpdatedAt: input.expectedUpdatedAt },
+  );
+}
+
+export function suspendSite(
+  db: Database,
+  input: { id: string; reason: SiteSuspendReason; note: string; expectedUpdatedAt?: string },
+  actor: Actor,
+) {
+  return changeSiteState(
+    db,
+    input.id,
+    { kind: "suspend", reason: input.reason, note: input.note },
+    { scope: { all: true }, actor, expectedUpdatedAt: input.expectedUpdatedAt },
+  );
+}
+
+export function resumeSite(
+  db: Database,
+  input: { id: string; expectedUpdatedAt?: string },
+  actor: Actor,
+) {
+  return changeSiteState(
+    db,
+    input.id,
+    { kind: "resume" },
+    { scope: { all: true }, actor, expectedUpdatedAt: input.expectedUpdatedAt },
+  );
 }
 
 export async function countSites(db: Database, scope: SiteScope): Promise<number> {

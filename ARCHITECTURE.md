@@ -292,7 +292,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
 | 表 | 内容 |
 | --- | --- |
-| `site` | 网站：所属组织与集群、缓存键、分片、WebSocket、证书、TLS 设置、缓存代际号、日志采样率 |
+| `site` | 网站：所属组织与集群、启用状态、平台暂停（原因、备注）、缓存键、分片、WebSocket、证书、TLS 设置、缓存代际号、日志采样率 |
 | `site_domain` | 网站域名与路由校验状态 |
 | `site_star` | 用户星标 |
 | `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验 |
@@ -369,6 +369,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0020_m6_upgrade_health` | `node_upgrade_delivery.healthy_since` |
 | `0021_authenticated_revision_floor` | `node_config_status.revision_receipt_verified` |
 | `0022_bound_traffic_counters` | 既有流量计数截断到 0 至 2^53−1 |
+| `0023_p0_site_state` | `site.suspended`、`suspend_reason`、`suspend_note`、`suspended_at`（平台暂停） |
 
 ## 构建产物
 

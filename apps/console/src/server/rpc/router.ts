@@ -126,8 +126,11 @@ import {
   getSite,
   listSites,
   purgeSite,
+  resumeSite,
+  setSiteEnabled,
   setSiteStarred,
   starredSites,
+  suspendSite,
   updateSite,
 } from "../services/sites";
 import {
@@ -566,6 +569,13 @@ export const router = os.router({
       });
       return ok;
     }),
+    setEnabled: tenant.sites.setEnabled.handler(({ input, context }) => {
+      // Organization owners and admins; platform administrators act as owners.
+      const role = context.isAdmin ? "owner" : context.caller.organization?.role;
+      if (role !== "owner" && role !== "admin")
+        fail("ORG_ADMIN_REQUIRED", "organization owners and admins only");
+      return setSiteEnabled(context.app.db, input, { scope: context.scope, actor: context.actor });
+    }),
     originHealth: tenant.sites.originHealth.handler(({ input, context }) =>
       siteOriginHealth(context.app.db, input.id, context.scope),
     ),
@@ -646,6 +656,16 @@ export const router = os.router({
         userAgent: context.userAgent,
       }),
     ),
+  },
+  admin: {
+    sites: {
+      suspend: admin.admin.sites.suspend.handler(({ input, context }) =>
+        suspendSite(context.app.db, input, context.actor),
+      ),
+      resume: admin.admin.sites.resume.handler(({ input, context }) =>
+        resumeSite(context.app.db, input, context.actor),
+      ),
+    },
   },
   organizations: {
     list: admin.organizations.list.handler(({ context }) => listOrganizations(context.app.db)),

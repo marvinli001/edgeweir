@@ -86,7 +86,6 @@ async function assertIssuanceNames(
       and(
         eq(schema.site.organizationId, certificate.organizationId),
         eq(schema.siteDomain.verified, true),
-        eq(schema.site.enabled, true),
       ),
     );
   const names = new Set(rows.map((d) => `${d.wildcard ? "*." : ""}${d.name}`));
@@ -225,7 +224,6 @@ async function challengeEvent(
           eq(schema.siteDomain.verified, true),
           eq(schema.siteDomain.name, domain),
           eq(schema.siteDomain.wildcard, false),
-          eq(schema.site.enabled, true),
         ),
       );
     const out: { clusterId: string; revision: number }[] = [];

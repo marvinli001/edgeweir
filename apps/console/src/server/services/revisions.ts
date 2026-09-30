@@ -37,6 +37,7 @@ import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { CONFIG_CHANNEL } from "../lib/events";
+import { isServing } from "../lib/site-state";
 import { isAdminRole } from "./users";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -142,7 +143,8 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
           ),
         id: s.id,
         name: s.name,
-        enabled: s.enabled,
+        // Disabled or suspended sites are not shipped (their DNS records stay).
+        enabled: isServing(s),
         cacheGeneration: s.cacheGeneration,
         logSampleRate: s.logSampleRate,
         domains: domains
@@ -397,7 +399,13 @@ export async function publishRevision(
   const organizations = await tx
     .selectDistinct({ id: schema.site.organizationId })
     .from(schema.site)
-    .where(and(eq(schema.site.clusterId, opts.clusterId), eq(schema.site.enabled, true)));
+    .where(
+      and(
+        eq(schema.site.clusterId, opts.clusterId),
+        eq(schema.site.enabled, true),
+        eq(schema.site.suspended, false),
+      ),
+    );
   const allLists = await tx.select().from(schema.ipList);
   const lists = allLists.filter(
     (list) =>
@@ -444,10 +452,10 @@ export async function publishRevision(
     .innerJoin(schema.certificate, eq(schema.certificate.id, schema.acmeChallenge.certificateId))
     .innerJoin(
       schema.site,
+      // Disabled and suspended sites keep answering HTTP-01: renewals continue.
       and(
         eq(schema.site.organizationId, schema.certificate.organizationId),
         eq(schema.site.clusterId, opts.clusterId),
-        eq(schema.site.enabled, true),
       ),
     )
     .innerJoin(
@@ -516,6 +524,12 @@ export async function rollbackToRevision(
     .select()
     .from(schema.site)
     .where(eq(schema.site.clusterId, opts.clusterId));
+  // Enabling and suspension are current policy: rollback never ships a site
+  // that is disabled or suspended now.
+  restored.sites = restored.sites.filter((site) => {
+    const current = currentSites.find((s) => s.id === site.id);
+    return !current || isServing(current);
+  });
   const currentDomains = currentSites.length
     ? await tx
         .select()

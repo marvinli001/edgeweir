@@ -245,6 +245,14 @@ export const contract = {
       .route({ method: "PUT", path: "/sites/{id}/starred", tags: ["sites"] })
       .input(s.siteStarInput)
       .output(ok),
+    /**
+     * Turns the site on or off (organization owners and admins). A disabled
+     * site is not shipped to nodes; its DNS records stay.
+     */
+    setEnabled: oc
+      .route({ method: "PUT", path: "/sites/{id}/enabled", tags: ["sites"] })
+      .input(s.siteSetEnabledInput)
+      .output(s.siteMutationResult),
     /** Passive health of the site's origins, as reported by the nodes. */
     originHealth: oc
       .route({ method: "GET", path: "/sites/{id}/origin-health", tags: ["sites"] })
@@ -313,6 +321,20 @@ export const contract = {
       })
       .input(s.invitationAcceptInput)
       .output(z.object({ userId: z.string(), organizationId: z.string() })),
+  },
+  /** Platform actions on tenant resources (platform administrators and scoped service accounts). */
+  admin: {
+    sites: {
+      /** Stops shipping the site until the platform resumes it; tenants cannot lift it. */
+      suspend: oc
+        .route({ method: "POST", path: "/admin/sites/{id}/suspend", tags: ["sites"] })
+        .input(s.siteSuspendInput)
+        .output(s.siteMutationResult),
+      resume: oc
+        .route({ method: "POST", path: "/admin/sites/{id}/resume", tags: ["sites"] })
+        .input(s.siteResumeInput)
+        .output(s.siteMutationResult),
+    },
   },
   organizations: {
     list: oc

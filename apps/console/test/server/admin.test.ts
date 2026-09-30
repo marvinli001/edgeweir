@@ -62,6 +62,7 @@ const CONSOLE_PROCEDURES = [
   "sites.delete",
   "sites.purgeAll",
   "sites.originHealth",
+  "sites.setEnabled",
   "sites.starred",
   "sites.setStarred",
   "analytics.topRequests",
@@ -256,6 +257,8 @@ describe("admin area procedures", async () => {
       ["auditLogs.list", () => member.auditLogs.list({})],
       ["auditLogs.facets", () => member.auditLogs.facets()],
       ["analytics.topNodes", () => member.analytics.topNodes({})],
+      ["admin.sites.suspend", () => member.admin.sites.suspend({ id: uuid, reason: "billing" })],
+      ["admin.sites.resume", () => member.admin.sites.resume({ id: uuid })],
     ];
     for (const [name, call] of calls) {
       const error = await rpcError(call());

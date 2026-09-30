@@ -403,7 +403,13 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
     })
     .from(schema.site)
     .innerJoin(schema.siteDomain, eq(schema.siteDomain.siteId, schema.site.id))
-    .where(and(eq(schema.site.enabled, true), eq(schema.siteDomain.verified, true)));
+    .where(
+      and(
+        eq(schema.site.enabled, true),
+        eq(schema.site.suspended, false),
+        eq(schema.siteDomain.verified, true),
+      ),
+    );
   const nodes = await app.db.select().from(schema.node),
     receipts = await app.db.select().from(schema.nodeConfigStatus),
     certificates = await app.db.select().from(schema.certificate),
