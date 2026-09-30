@@ -471,7 +471,8 @@ describe("dynamic bans", async () => {
     const key = await owner.accessKeys.create({ name: "bans-read", scope: "read" });
     const read = await api(key.key, "GET", `/bans?siteId=${siteId}`);
     expect(read.status).toBe(200);
-    expect((await read.json()).items.map((b: { id: string }) => b.id)).toEqual([ban.id]);
+    const readBody = (await read.json()) as { items: { id: string }[] };
+    expect(readBody.items.map((b) => b.id)).toEqual([ban.id]);
     const post = await api(key.key, "POST", "/bans", {
       siteId,
       cidr: "192.0.2.81",
