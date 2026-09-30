@@ -496,8 +496,59 @@ function OrgMembersDialog({
   );
 }
 
-function UsersTab() {
+/**
+ * The actions menu of a user. A component of its own so that the table's cell
+ * renderers keep their identity: a new renderer per render would remount the
+ * cell and close an open menu whenever the page re-renders.
+ */
+function UserActions({ user, onAddToOrg }: { user: User; onAddToOrg: (user: User) => void }) {
   const queryClient = useQueryClient();
+  const setAdmin = useMutation(orpc.users.setAdmin.mutationOptions());
+  const setDisabled = useMutation(orpc.users.setDisabled.mutationOptions());
+  const run = async (fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+      toast.success(m.common_saved());
+      await queryClient.invalidateQueries();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  };
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={m.common_actions()}
+            data-testid="user-actions"
+          />
+        }
+      >
+        <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onAddToOrg(user)}>{m.orgs_add_to_org()}</DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => run(() => setAdmin.mutateAsync({ id: user.id, isAdmin: !user.isAdmin }))}
+        >
+          {user.isAdmin ? m.users_revoke_admin() : m.users_grant_admin()}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          variant={user.disabled ? "default" : "destructive"}
+          onClick={() =>
+            run(() => setDisabled.mutateAsync({ id: user.id, disabled: !user.disabled }))
+          }
+        >
+          {user.disabled ? m.users_enable() : m.users_disable()}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function UsersTab() {
   const { me } = Route.useRouteContext();
   const [search, setSearch] = React.useState("");
   const [query, setQuery] = React.useState("");
@@ -506,21 +557,7 @@ function UsersTab() {
     return () => clearTimeout(timer);
   }, [search]);
   const users = useQuery(orpc.users.list.queryOptions({ input: { search: query || undefined } }));
-  const setAdmin = useMutation(orpc.users.setAdmin.mutationOptions());
-  const setDisabled = useMutation(orpc.users.setDisabled.mutationOptions());
   const [addTo, setAddTo] = React.useState<User | null>(null);
-  const run = React.useCallback(
-    async (fn: () => Promise<unknown>) => {
-      try {
-        await fn();
-        toast.success(m.common_saved());
-        await queryClient.invalidateQueries();
-      } catch (error) {
-        toast.error(errorMessage(error));
-      }
-    },
-    [queryClient],
-  );
   const columns = React.useMemo<Columns<User>>(
     () => [
       {
@@ -576,55 +613,12 @@ function UsersTab() {
         cell: ({ row }) =>
           row.original.id === me.user.id ? null : (
             <div className="flex justify-end">
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={m.common_actions()}
-                      data-testid="user-actions"
-                    />
-                  }
-                >
-                  <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setAddTo(row.original)}>
-                    {m.orgs_add_to_org()}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() =>
-                      run(() =>
-                        setAdmin.mutateAsync({
-                          id: row.original.id,
-                          isAdmin: !row.original.isAdmin,
-                        }),
-                      )
-                    }
-                  >
-                    {row.original.isAdmin ? m.users_revoke_admin() : m.users_grant_admin()}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant={row.original.disabled ? "default" : "destructive"}
-                    onClick={() =>
-                      run(() =>
-                        setDisabled.mutateAsync({
-                          id: row.original.id,
-                          disabled: !row.original.disabled,
-                        }),
-                      )
-                    }
-                  >
-                    {row.original.disabled ? m.users_enable() : m.users_disable()}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <UserActions user={row.original} onAddToOrg={setAddTo} />
             </div>
           ),
       },
     ],
-    [me.user.id, run, setAdmin, setDisabled],
+    [me.user.id],
   );
   return (
     <>
