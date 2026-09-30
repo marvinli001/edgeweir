@@ -23,6 +23,7 @@ const label = (kind: AlertEventKind) =>
     certificate_expiring: m.alert_kind_certificate_expiring,
     origin_unavailable: m.alert_kind_origin_unavailable,
     high_5xx: m.alert_kind_high_5xx,
+    cc_mitigation: m.alert_kind_cc_mitigation,
     config_rollout_failed: m.alert_kind_config_rollout_failed,
     config_rollout_no_canary: m.alert_kind_config_rollout_no_canary,
     dns_mass_removal_blocked: m.alert_kind_dns_mass_removal_blocked,

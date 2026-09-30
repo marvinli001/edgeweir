@@ -15,7 +15,15 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type RuleDto, type RuleInput, ruleInput } from "@edgeweir/contract";
-import { ExpressionError, type Phase, parseExpression, phases } from "@edgeweir/rule-engine";
+import {
+  challengeTypes,
+  ExpressionError,
+  fields,
+  type Phase,
+  parseExpression,
+  phases,
+  rateLimitKeys,
+} from "@edgeweir/rule-engine";
 import { Delete02Icon, DragDropVerticalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,6 +37,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
@@ -48,7 +63,7 @@ const kinds = {
   "request-transform": ["rewrite", "request_header"],
   redirect: ["redirect"],
   config: ["config"],
-  "waf-custom": ["block", "log", "allow"],
+  "waf-custom": ["block", "log", "allow", "challenge"],
   ratelimit: ["rate_limit"],
   cache: ["config"],
   origin: ["request_header"],
@@ -59,6 +74,7 @@ const actionLabel = (kind: RuleInput["action"]["kind"]) =>
     block: m.rules_block,
     log: m.rules_log,
     allow: m.rules_allow,
+    challenge: m.rules_challenge,
     redirect: m.rules_redirect,
     rewrite: m.rules_rewrite,
     request_header: m.rules_request_header,
@@ -81,10 +97,22 @@ function defaultAction(kind: RuleInput["action"]["kind"]): RuleInput["action"] {
       return { kind, cacheBypass: true };
     case "rate_limit":
       return { kind, limit: 100, windowSeconds: 60, key: "ip.src", statusCode: 429 };
+    case "challenge":
+      return { kind, type: "js" };
     default:
       return { kind };
   }
 }
+export const challengeLabel = (type: (typeof challengeTypes)[number]) =>
+  ({
+    cookie302: m.challenge_cookie302,
+    js: m.challenge_js,
+    pow: m.challenge_pow,
+    captcha: m.challenge_captcha,
+  })[type]();
+const HEADER_KEY = "http.request.headers.";
+/** Rate limit keys offered in the select; a request header is the last choice. */
+const keyChoice = (key: string) => (key.startsWith(HEADER_KEY) ? "header" : key);
 
 export function RulesTab({ siteId }: { siteId?: string }) {
   const query = useQuery(
@@ -355,15 +383,47 @@ function RuleRow({
                 max={3600}
                 onChange={(value) => patch({ action: { ...a, windowSeconds: Number(value) } })}
               />
-              <Field>
-                <FieldLabel htmlFor={`key-${row.id}`}>{m.rules_key()}</FieldLabel>
-                <Input
-                  id={`key-${row.id}`}
-                  value={a.key}
-                  onChange={(e) => patch({ action: { ...a, key: e.target.value } })}
-                />
-              </Field>
+              <FormSelect
+                id={`key-${row.id}`}
+                label={m.rules_key()}
+                value={keyChoice(a.key)}
+                options={[
+                  ...rateLimitKeys.map((key) => ({ value: key, label: key })),
+                  { value: "header", label: m.rules_key_header() },
+                ]}
+                onChange={(choice) =>
+                  patch({
+                    action: {
+                      ...a,
+                      key: choice === "header" ? `${HEADER_KEY}x-client-id` : choice,
+                    },
+                  })
+                }
+              />
+              {keyChoice(a.key) === "header" ? (
+                <Field>
+                  <FieldLabel htmlFor={`key-header-${row.id}`}>{m.rules_header()}</FieldLabel>
+                  <Input
+                    id={`key-header-${row.id}`}
+                    value={a.key.slice(HEADER_KEY.length)}
+                    onChange={(e) =>
+                      patch({
+                        action: { ...a, key: `${HEADER_KEY}${e.target.value.toLowerCase()}` },
+                      })
+                    }
+                  />
+                </Field>
+              ) : null}
             </>
+          ) : null}
+          {a.kind === "challenge" ? (
+            <FormSelect
+              id={`challenge-${row.id}`}
+              label={m.rules_challenge_type()}
+              value={a.type}
+              options={challengeTypes.map((type) => ({ value: type, label: challengeLabel(type) }))}
+              onChange={(type) => patch({ action: { ...a, type: type as typeof a.type } })}
+            />
           ) : null}
           {a.kind === "config"
             ? (["cacheBypass", "forceHttps", "gzip"] as const).map((key) => (
@@ -417,9 +477,31 @@ function ExpressionEditor({
     /("(?:\\.|[^"\\])*"|\b(?:and|or|not|eq|ne|lt|le|gt|ge|contains|matches|in|true|false)\b|\$[\w]+)/g,
   );
   let offset = 0;
+  const available = Object.keys(fields).filter(
+    (field) => !field.startsWith("http.response.") || phase === "response-transform",
+  );
   return (
     <Field>
-      <FieldLabel htmlFor={id}>{m.rules_expression()}</FieldLabel>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <FieldLabel htmlFor={id}>{m.rules_expression()}</FieldLabel>
+        <Select
+          value={null}
+          onValueChange={(field) => {
+            if (field) onChange(`${value.trimEnd()}${value.trim() ? " and " : ""}${field} `);
+          }}
+        >
+          <SelectTrigger size="sm" aria-label={m.rules_insert_field()} data-testid={`${id}-field`}>
+            <SelectValue placeholder={m.rules_insert_field()} />
+          </SelectTrigger>
+          <SelectContent>
+            {available.map((field) => (
+              <SelectItem key={field} value={field}>
+                {field}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <div className="relative min-h-24 rounded-lg border bg-background font-mono text-sm leading-6 focus-within:ring-2 focus-within:ring-ring">
         <pre aria-hidden className="pointer-events-none whitespace-pre-wrap break-all p-3">
           {tokens.filter(Boolean).map((token) => {
