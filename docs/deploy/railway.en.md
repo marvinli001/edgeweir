@@ -1,12 +1,12 @@
 # Railway
 
-Deploy the console on Railway from the console image, with Railway PostgreSQL 18.
+Deploy the console on Railway from the console image, with Railway PostgreSQL 18: web console steps with CLI equivalents.
 
 ## Requirements
 
 | Item | Requirement |
 | --- | --- |
-| Railway | An account that can create projects; the CLI steps use the `railway` CLI after `railway login` |
+| Railway | An account that can create projects; [CLI deployment](#cli-deployment) also needs the `railway` CLI after `railway login` |
 | Console image | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`, public; tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
 | PostgreSQL | Railway PostgreSQL service, image `ghcr.io/railwayapp-templates/postgres-ssl:18` |
 | Master key | Generated with `openssl rand -base64 32`; stored outside Railway and apart from database backups |
@@ -24,42 +24,37 @@ Deploy the console on Railway from the console image, with Railway PostgreSQL 18
 
 General rules for ports and the node channel certificate: [Ports, reverse proxy, and trusted proxies](networking.en.md).
 
-## 1. Create the project and PostgreSQL
+## 1. Create the project
 
-Create an **Empty project** on Railway and add PostgreSQL with **+ New** on the project canvas. CLI:
+On the Railway Dashboard, click **New Project** → **Empty project**.
 
-```bash
-railway init --name edgeweir
-railway add --database postgres
-```
+## 2. Add PostgreSQL
 
-In the `Postgres` service, check under **Settings → Source** that the image is `ghcr.io/railwayapp-templates/postgres-ssl:18`. For an earlier major version, upgrade to 18 with **Database → Config → Major Version Upgrade**.
+1. On the project canvas, top right: **Create** → **Database** → **Add PostgreSQL**.
+2. `Postgres` service, **Settings → Source**: the image is `ghcr.io/railwayapp-templates/postgres-ssl:18`.
+3. For an earlier major version: **Database → Config → Major Version Upgrade** → **Upgrade to PostgreSQL 18**.
 
-## 2. Create the console service
+## 3. Add the console service
 
-Add a service on the project canvas with the source **Docker Image**, image `ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d` (replace with the target tag), and name it `edgeweir`. CLI:
+1. On the project canvas: **Create** → **Docker Image**, enter `ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d` (replace with the target tag) in **Image name**, and press Enter.
+2. Right-click the service card → **Update Info**, rename it to `edgeweir`.
 
-```bash
-railway add --service edgeweir --image ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
-```
+The service is staged and deployed in [step 7](#7-deployment-settings).
 
-## 3. Expose 3000 and 8443
+## 4. Expose 3000 and 8443
 
-In **Settings → Networking** of the `edgeweir` service, in this order:
+`edgeweir` service, **Settings → Networking**, in this order:
 
 | Order | Action | Result |
 | --- | --- | --- |
 | 1 | **Public Networking → Generate Domain**, port `3000` | `<name>.up.railway.app` |
 | 2 | **TCP Proxy**, port `8443` | `<name>.proxy.rlwy.net:<port>`, port assigned by Railway |
 
-Generate the domain before creating the TCP proxy: a service with a TCP proxy must remove it before a domain can be added. CLI:
+Networking changes apply immediately and are not staged. **Generate Domain** is hidden while the service has a TCP proxy: delete the TCP proxy, generate the domain, then add the TCP proxy again.
 
-```bash
-railway domain --service edgeweir --port 3000
-railway tcp-proxy create --service edgeweir --port 8443
-```
+## 5. Generate the master key
 
-## 4. Generate the master key
+On your machine:
 
 ```bash
 umask 077
@@ -68,52 +63,80 @@ openssl rand -base64 32 > edgeweir-master-key
 
 Use the output as is. Store `edgeweir-master-key` offline, apart from database backups; see [Backup and recovery](backup.en.md).
 
-## 5. Set variables
+## 6. Set variables
 
-In **Variables → Raw Editor** of the `edgeweir` service, enter:
+1. `edgeweir` service, **Variables → Raw Editor**, enter and save:
 
-```ini
-PORT=3000
-DATABASE_URL=${{Postgres.DATABASE_URL}}
-EDGEWEIR_PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
-EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}
-EDGEWEIR_MASTER_KEY=<contents of edgeweir-master-key>
-```
+   ```ini
+   PORT=3000
+   DATABASE_URL=${{Postgres.DATABASE_URL}}
+   EDGEWEIR_PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
+   EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}
+   EDGEWEIR_MASTER_KEY=<contents of edgeweir-master-key>
+   ```
 
-CLI (each command triggers a deployment):
+2. **⋮** menu of the `EDGEWEIR_MASTER_KEY` row → **Seal**.
 
-```bash
-railway variable set --service edgeweir PORT=3000 \
-  'DATABASE_URL=${{Postgres.DATABASE_URL}}' \
-  'EDGEWEIR_PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}' \
-  'EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}'
-railway variable set --service edgeweir EDGEWEIR_MASTER_KEY --stdin < edgeweir-master-key
-```
+A sealed value no longer appears in the Railway UI, API, or CLI and cannot be unsealed; the Raw Editor no longer edits it, use the **⋮** menu instead. Each variable is described under [Variables](#variables).
 
-**Seal** `EDGEWEIR_MASTER_KEY` from the variable menu: a sealed value no longer appears in the Railway UI, API, or CLI. Each variable is described under [Variables](#variables).
+## 7. Deployment settings
 
-## 6. Deployment settings
+1. In the `edgeweir` service, set:
 
-In the `edgeweir` service, set:
+   | Setting | Location | Value |
+   | --- | --- | --- |
+   | Healthcheck Path | **Settings → Deploy** | `/healthz` |
+   | Serverless | **Settings → Deploy → Enable Serverless** | Off |
+   | Restart Policy | **Settings → Deploy** | `Always`; not offered on the Free plan, keep the default `On Failure` there |
+   | Regions | **Settings → Scale** | Same as the `Postgres` service |
 
-| Setting | Location | Value |
-| --- | --- | --- |
-| Healthcheck Path | **Settings → Deploy** | `/healthz` |
-| Serverless | **Settings → Deploy** | Off |
-| Region | **Settings** | Same as the `Postgres` service |
-| Restart Policy | **Settings** | `Always`; not offered on the Free plan, keep the default `On Failure` there |
+2. Click **Deploy** in the staged-changes banner at the top of the canvas to apply all changes from steps 3, 6, and 7.
 
-Changes made in the Railway UI are staged; click **Deploy** in the canvas banner to apply them.
+## 8. Run setup
 
-## 7. Run setup
+An uninitialized console logs the same setup token on every start.
 
-An uninitialized console logs the same setup token on every start:
+1. `edgeweir` service, **Deployments** → current deployment → **Deploy Logs**, filter by `"first-run setup"`.
+2. The line's `setupToken` field is the setup token; its `url` field is the setup wizard address (`<EDGEWEIR_PUBLIC_URL>/setup`).
+3. Open the wizard and enter the setup token; see [Quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
 
-```bash
-railway logs --service edgeweir --lines 500 --json | grep setupToken
-```
+## CLI deployment
 
-In the Railway log view, filter by `"first-run setup"` and expand the line to read `setupToken`. Open the address in the line's `url` field (`<EDGEWEIR_PUBLIC_URL>/setup`) and enter the setup token in the setup wizard; see [Quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
+Equivalent to steps 1–8. The step 7 deployment settings and **Seal** are available only in the web console.
+
+1. Create the project, PostgreSQL, and the console service:
+
+   ```bash
+   railway init --name edgeweir
+   railway add --database postgres
+   railway add --service edgeweir --image ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
+   ```
+
+2. Expose 3000 and 8443:
+
+   ```bash
+   railway domain --service edgeweir --port 3000
+   railway tcp-proxy create --service edgeweir --port 8443
+   ```
+
+3. Generate the master key and set the variables; commands with `--skip-deploys` do not deploy, the last command does:
+
+   ```bash
+   umask 077
+   openssl rand -base64 32 > edgeweir-master-key
+   railway variable set --service edgeweir --skip-deploys EDGEWEIR_MASTER_KEY --stdin < edgeweir-master-key
+   railway variable set --service edgeweir PORT=3000 \
+     'DATABASE_URL=${{Postgres.DATABASE_URL}}' \
+     'EDGEWEIR_PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}' \
+     'EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}'
+   ```
+
+4. In the web console, complete [step 7](#7-deployment-settings) and the **Seal** from [step 6](#6-set-variables).
+5. Read the setup token:
+
+   ```bash
+   railway logs --service edgeweir --lines 500 --json | grep setupToken
+   ```
 
 ## Variables
 
@@ -135,6 +158,7 @@ In the Railway log view, filter by `"first-run setup"` and expand the line to re
 
 | Check | Command or location | Expected |
 | --- | --- | --- |
+| Deployment | **Deployments** of the `edgeweir` service | Current deployment `Active` |
 | Web and API | `curl -fsS https://<name>.up.railway.app/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
 | Node channel TLS | `openssl` command below | Issuer `Edgeweir Node Channel CA`; SAN includes the TCP proxy domain |
 | Node channel URL | **Admin → System**, "Node channel" | `https://<name>.proxy.rlwy.net:<port>` |
@@ -159,24 +183,48 @@ Any other issuer means a device in the path terminates TLS.
 
 Complete this before enrolling nodes.
 
-| Entry point | Action | Variable |
-| --- | --- | --- |
-| Web console | **Settings → Networking → + Custom Domain**, port `3000`, then add the `CNAME` and `TXT` records shown; or `railway domain console.example.com --service edgeweir --port 3000` | `EDGEWEIR_PUBLIC_URL=https://console.example.com` |
-| Node channel | DNS `CNAME` from `nodes.example.com` to `<name>.proxy.rlwy.net` (no port); the port stays the one Railway assigned | `EDGEWEIR_NODE_API_URL=https://nodes.example.com:<port>` |
+1. Web console: `edgeweir` service, **Settings → Networking → + Custom Domain**, enter `console.example.com`, port `3000`; add the `CNAME` and `TXT` records shown there in DNS. Without the `TXT` record the domain returns 404.
+2. Node channel: in DNS, point `nodes.example.com` with a `CNAME` to `<name>.proxy.rlwy.net` (no port); the port stays the one Railway assigned.
+3. Change in **Variables**:
 
-Without the `TXT` record the custom domain returns 404. Changing the node channel address for enrolled nodes: [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate).
+   ```ini
+   EDGEWEIR_PUBLIC_URL=https://console.example.com
+   EDGEWEIR_NODE_API_URL=https://nodes.example.com:<port>
+   ```
+
+4. Click **Deploy** in the staged-changes banner.
+5. Verify: run the `curl` and `openssl` commands from [Verification](#verification) against the new domains.
+
+CLI:
+
+```bash
+railway domain console.example.com --service edgeweir --port 3000
+railway variable set --service edgeweir \
+  EDGEWEIR_PUBLIC_URL=https://console.example.com \
+  EDGEWEIR_NODE_API_URL=https://nodes.example.com:<port>
+```
+
+Changing the node channel address for enrolled nodes: [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate).
 
 ## Upgrade
 
 1. Back up the database; see [Backup and recovery](backup.en.md).
-2. In **Settings → Source** of the `edgeweir` service, change the image to the new tag and click **Deploy**.
-3. Verify:
+2. `edgeweir` service, **Settings → Source**: change the image to the new tag.
+3. Click **Deploy** in the staged-changes banner.
+4. Verify:
 
    ```bash
    curl -fsS https://<name>.up.railway.app/healthz
    ```
 
    Expected: `version` is the new tag.
+
+CLI (steps 2–3):
+
+```bash
+railway service source connect --service edgeweir --image ghcr.io/marvinli001/edgeweir:<new tag>
+railway redeploy --service edgeweir --from-source --yes
+```
 
 Migrations, signature verification, and rollback: [Versions, upgrades, and rollback](upgrade.en.md).
 

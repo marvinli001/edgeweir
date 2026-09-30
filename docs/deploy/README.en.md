@@ -32,8 +32,8 @@ Console components, runtime requirements, supported platforms, and process roles
 | Docker Compose | `compose.yml`: console and bundled PostgreSQL 18 | [docker.en.md](docker.en.md) | Supported |
 | docker run | Console and PostgreSQL containers on a dedicated Docker network | [docker.en.md](docker.en.md#without-compose-standalone-containers) | Supported |
 | BaoTa / aaPanel, or any Docker host | `deploy.sh` with `compose.baota.yml` (bundled PostgreSQL) or `compose.baota-host.yml` (local or cloud PostgreSQL, host network) | [baota.en.md](baota.en.md), [deploy-script.en.md](deploy-script.en.md) | Supported |
-| Railway | Console image | [railway.en.md](railway.en.md) | Supported |
-| Fly.io | Console image | [fly.en.md](fly.en.md) | Supported |
+| Railway | Console image with Railway PostgreSQL 18; web console, optional Railway CLI | [railway.en.md](railway.en.md) | Supported |
+| Fly.io | Console image with an external PostgreSQL 18; flyctl deployment, Dashboard for secrets, IPs, certificates, and logs | [fly.en.md](fly.en.md) | Supported |
 
 ### Platform conditions
 
@@ -82,8 +82,8 @@ Worker schedules:
 | [Docker Compose](docker.en.md) | Compose and `docker run` deployment |
 | [BaoTa / aaPanel](baota.en.md) | Panel deployment, nginx site, stream passthrough |
 | [deploy.sh reference](deploy-script.en.md) | Install and upgrade script |
-| [Railway](railway.en.md) | Railway deployment |
-| [Fly.io](fly.en.md) | Fly.io deployment |
+| [Railway](railway.en.md) | Web console deployment with CLI equivalents |
+| [Fly.io](fly.en.md) | flyctl deployment and Dashboard steps |
 | [Ports, reverse proxy, and trusted proxies](networking.en.md) | 3000 and 8443, nginx examples, `EDGEWEIR_TRUSTED_PROXIES` |
 | [Adding nodes](nodes.en.md) | Install command, `install.sh` checks, downloads mirror |
 | [Versions, upgrades, and rollback](upgrade.en.md) | Image tags, pinning, upgrade, rollback, signature verification |

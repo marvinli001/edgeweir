@@ -1,18 +1,19 @@
 # Fly.io
 
-Deploy the console on Fly.io from the console image, with an external PostgreSQL 18.
+Deploy the console on Fly.io from the console image, with an external PostgreSQL 18: Dashboard steps with flyctl equivalents.
 
 ## Requirements
 
 | Item | Requirement |
 | --- | --- |
-| Fly.io | An organization that can create apps; the `fly` CLI after `fly auth login` |
+| Fly.io | An organization that can create apps |
+| flyctl | The `fly` CLI after `fly auth login`; app creation, deployment, and upgrades use flyctl, see [Methods](#methods) |
 | Console image | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`, public; tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
 | PostgreSQL | PostgreSQL 18 reachable from the Machine. Fly Managed Postgres offers only 16 and 17 and does not qualify |
 | Public addresses | Dedicated IPv4 and dedicated IPv6 |
 | Master key | Generated with `openssl rand -base64 32`; stored outside Fly.io and apart from database backups |
 | Always on | `auto_stop_machines = "off"` |
-| Local commands | `openssl`, `curl` |
+| Local commands | `fly`, `openssl`, `curl` |
 
 ## Topology
 
@@ -25,6 +26,21 @@ Deploy the console on Fly.io from the console image, with an external PostgreSQL
 | External PostgreSQL 18 | Secret `DATABASE_URL` | Database |
 
 General rules for ports and the node channel certificate: [Ports, reverse proxy, and trusted proxies](networking.en.md).
+
+## Methods
+
+The Fly.io Dashboard builds and deploys only from a GitHub repository; it does not deploy images. App creation, image deployment, and upgrades use flyctl; the other steps are done in the Dashboard, with flyctl as the equivalent.
+
+| Step | Dashboard | flyctl |
+| --- | --- | --- |
+| [1. Create the app](#1-create-the-app) | — | `fly apps create` |
+| [2. Write fly.toml](#2-write-flytoml) | — | Local file |
+| [3. Set secrets](#3-set-secrets) | **Secrets** | `fly secrets set` |
+| [4. Deploy](#4-deploy) | — | `fly deploy` |
+| [5. Allocate a dedicated IPv4](#5-allocate-a-dedicated-ipv4) | Networking section of **Overview** | `fly ips` |
+| [6. Run setup](#6-run-setup) | **Search logs in Grafana** | `fly logs` |
+| [Custom domains](#custom-domains) | **Certificates** | `fly certs add` |
+| [Upgrade](#upgrade) | — | `fly deploy` |
 
 ## 1. Create the app
 
@@ -95,17 +111,35 @@ primary_region = "nrt"
 
 ## 3. Set secrets
 
+1. Generate the master key locally:
+
+   ```bash
+   umask 077
+   openssl rand -base64 32 > edgeweir-master-key
+   ```
+
+2. Dashboard → `edgeweir-console` → **Secrets**, add:
+
+   | Secret | Value |
+   | --- | --- |
+   | `EDGEWEIR_MASTER_KEY` | Contents of `edgeweir-master-key`, as is |
+   | `DATABASE_URL` | `postgres://edgeweir:<password>@<host>:5432/edgeweir` |
+
+3. Keep them staged; do not click **Deploy Secrets**. The secrets take effect with the deployment in step 4.
+
+flyctl:
+
 ```bash
-umask 077
-openssl rand -base64 32 > edgeweir-master-key
 fly secrets set --stage \
   EDGEWEIR_MASTER_KEY="$(cat edgeweir-master-key)" \
   DATABASE_URL='postgres://edgeweir:<password>@<host>:5432/edgeweir'
 ```
 
-Use the master key output as is. Fly.io does not reveal secret values; store `edgeweir-master-key` offline, apart from database backups; see [Backup and recovery](backup.en.md).
+Fly.io does not reveal secret values; store `edgeweir-master-key` offline, apart from database backups; see [Backup and recovery](backup.en.md).
 
 ## 4. Deploy
+
+In the directory that holds `fly.toml`:
 
 ```bash
 fly deploy --ha=false
@@ -115,23 +149,34 @@ fly deploy --ha=false
 
 ## 5. Allocate a dedicated IPv4
 
+1. Dashboard → `edgeweir-console` → Networking section of **Overview**, assign a **Dedicated IPv4**.
+2. In the same section, remove the **Shared IPv4**.
+
+`edgeweir-console.fly.dev` then resolves to the dedicated addresses.
+
+flyctl:
+
 ```bash
 fly ips allocate-v4 --yes
 fly ips list
 fly ips release <shared IPv4>
 ```
 
-Release the shared IPv4 after allocating the dedicated one; `edgeweir-console.fly.dev` then resolves to the dedicated addresses.
-
 ## 6. Run setup
 
-An uninitialized console logs the same setup token on every start:
+An uninitialized console logs the same setup token on every start.
+
+1. Dashboard → `edgeweir-console` → **Logs & Errors** → **Search logs in Grafana**, query `"first-run setup"`. Logs are kept for 7 days.
+2. The line's `setupToken` field is the setup token; its `url` field is the setup wizard address (`<EDGEWEIR_PUBLIC_URL>/setup`).
+3. Open the wizard and enter the setup token; see [Quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
+
+flyctl:
 
 ```bash
 fly logs --no-tail | grep setupToken
 ```
 
-If the line is no longer in the log buffer, run `fly apps restart edgeweir-console` and read it again. Open the address in the line's `url` field (`<EDGEWEIR_PUBLIC_URL>/setup`) and enter the setup token in the setup wizard; see [Quick start](../guide/first-site.en.md#1-complete-the-setup-wizard).
+`fly logs --no-tail` returns only recent logs; if the line is missing, run `fly apps restart edgeweir-console` and read it again.
 
 ## Variables
 
@@ -150,10 +195,10 @@ A secret takes precedence over an `[env]` entry with the same name. `ROLE`, `HOS
 
 ## Verification
 
-| Check | Command or location | Expected |
+| Check | Dashboard or command | Expected |
 | --- | --- | --- |
-| Machine | `fly status` | 1 Machine, state `started`, all checks passing |
-| Public addresses | `fly ips list` | Dedicated IPv4 and IPv6, no shared IPv4 |
+| Machine | **Machines**; `fly status` | 1 Machine, state `started`, all checks passing |
+| Public addresses | Networking section of **Overview**; `fly ips list` | Dedicated IPv4 and IPv6, no shared IPv4 |
 | Web and API | `curl -fsS https://edgeweir-console.fly.dev/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
 | Node channel TLS | `openssl` command below | Issuer `Edgeweir Node Channel CA`; SAN includes `edgeweir-console.fly.dev` |
 | Node channel URL | **Admin → System**, "Node channel" | `https://edgeweir-console.fly.dev:8443` |
@@ -178,14 +223,8 @@ Any other issuer means a device in the path terminates TLS.
 
 Complete this before enrolling nodes.
 
-1. Add a certificate:
-
-   ```bash
-   fly certs add console.example.com
-   ```
-
-2. Create the `A` (dedicated IPv4) and `AAAA` records from the output in DNS.
-3. Change `[env]` in `fly.toml`:
+1. Dashboard → `edgeweir-console` → **Certificates**, add `console.example.com`; create the `A` (dedicated IPv4) and `AAAA` records shown there in DNS. flyctl: `fly certs add console.example.com`.
+2. Change `[env]` in `fly.toml`:
 
    ```toml title="fly.toml"
    [env]
@@ -193,13 +232,13 @@ Complete this before enrolling nodes.
      EDGEWEIR_NODE_API_URL = "https://console.example.com:8443"
    ```
 
-4. Deploy:
+3. Deploy:
 
    ```bash
    fly deploy
    ```
 
-5. Verify: run the `curl` and `openssl` commands from [Verification](#verification) against `console.example.com`.
+4. Verify: run the `curl` and `openssl` commands from [Verification](#verification) against `console.example.com`.
 
 Changing the node channel address for enrolled nodes: [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate).
 
@@ -232,6 +271,6 @@ Migrations, signature verification, and rollback: [Versions, upgrades, and rollb
 | No dedicated IPv4 | 8443 is reachable only over the dedicated IPv6 | Nodes without IPv6 cannot connect |
 | Deployment strategy | Default `rolling`: each old Machine is stopped and replaced in turn | With one Machine, the web console and the node channel are down during a deployment; conditions for several instances: [Deployment overview](README.en.md#scaling) |
 | Auto stop | With `auto_stop_machines` set to `stop` or `suspend`, Fly Proxy stops idle Machines | Must be `off`: a stopped Machine halts the worker's scheduled jobs and the node channel |
-| Machine size | Changes made with `fly scale vm` or `fly scale memory` are reset to `[[vm]]` on the next `fly deploy` | Change the size in `fly.toml` |
+| Configuration source | Machine size and HTTP service settings changed in the Dashboard or with `fly scale vm` / `fly scale memory` are reset to `fly.toml` on the next `fly deploy` | Change them in `fly.toml` |
 | Secrets | Values cannot be read back | Keep the master key outside Fly.io |
 | `/downloads/*` | No downloads mirror directory in the container; `EDGEWEIR_DOWNLOADS_DIR` unset | Returns 404; `install.sh` downloads from GitHub; see [Adding nodes](nodes.en.md#downloads-mirror) |

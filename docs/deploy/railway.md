@@ -1,12 +1,12 @@
 # Railway
 
-在 Railway 上用控制台镜像与 Railway PostgreSQL 18 部署控制台。
+在 Railway 上用控制台镜像与 Railway PostgreSQL 18 部署控制台：网页控制台步骤与命令行等效操作。
 
 ## 要求
 
 | 项目 | 要求 |
 | --- | --- |
-| Railway | 可创建项目的账户；命令行步骤使用 `railway` CLI，已执行 `railway login` |
+| Railway | 可创建项目的账户；[命令行部署](#命令行部署) 另需 `railway` CLI，已执行 `railway login` |
 | 控制台镜像 | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`，公开拉取；tag 规则见 [版本、升级与回滚](upgrade.md) |
 | PostgreSQL | Railway PostgreSQL 服务，镜像 `ghcr.io/railwayapp-templates/postgres-ssl:18` |
 | 主密钥 | `openssl rand -base64 32` 生成；保存在 Railway 之外，与数据库备份分开 |
@@ -24,42 +24,37 @@
 
 端口与节点通道证书的通用规则见 [端口、反向代理与可信代理](networking.md)。
 
-## 1. 创建项目与 PostgreSQL
+## 1. 创建项目
 
-在 Railway 新建 **Empty project**，在项目画布上用 **+ New** 添加 PostgreSQL。命令行：
+在 Railway Dashboard 点击 **New Project** → **Empty project**。
 
-```bash
-railway init --name edgeweir
-railway add --database postgres
-```
+## 2. 添加 PostgreSQL
 
-在 `Postgres` 服务的 **Settings → Source** 确认镜像为 `ghcr.io/railwayapp-templates/postgres-ssl:18`。主版本低于 18 时，用 **Database → Config → Major Version Upgrade** 升级到 18。
+1. 项目画布右上角 **Create** → **Database** → **Add PostgreSQL**。
+2. `Postgres` 服务 **Settings → Source**：镜像为 `ghcr.io/railwayapp-templates/postgres-ssl:18`。
+3. 主版本低于 18 时：**Database → Config → Major Version Upgrade** → **Upgrade to PostgreSQL 18**。
 
-## 2. 创建控制台服务
+## 3. 添加控制台服务
 
-在项目画布添加服务，来源选 **Docker Image**，镜像填写 `ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d`（替换为目标 tag），服务命名为 `edgeweir`。命令行：
+1. 项目画布 **Create** → **Docker Image**，**Image name** 填 `ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d`（替换为目标 tag），回车。
+2. 右键服务卡片 → **Update Info**，名称改为 `edgeweir`。
 
-```bash
-railway add --service edgeweir --image ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
-```
+服务进入暂存区，在 [第 7 步](#7-部署设置) 部署。
 
-## 3. 公开 3000 与 8443
+## 4. 公开 3000 与 8443
 
-在 `edgeweir` 服务的 **Settings → Networking** 中依次操作：
+`edgeweir` 服务 **Settings → Networking**，按顺序操作：
 
 | 顺序 | 操作 | 结果 |
 | --- | --- | --- |
 | 1 | **Public Networking → Generate Domain**，端口 `3000` | `<名称>.up.railway.app` |
 | 2 | **TCP Proxy**，端口 `8443` | `<名称>.proxy.rlwy.net:<端口>`，端口由 Railway 分配 |
 
-先生成域名，再创建 TCP 代理：已有 TCP 代理的服务添加域名前须删除 TCP 代理。命令行：
+网络设置立即生效，不进入暂存区。服务已有 TCP 代理时不显示 **Generate Domain**：先删除 TCP 代理，生成域名后重新添加。
 
-```bash
-railway domain --service edgeweir --port 3000
-railway tcp-proxy create --service edgeweir --port 8443
-```
+## 5. 生成主密钥
 
-## 4. 生成主密钥
+在本机执行：
 
 ```bash
 umask 077
@@ -68,52 +63,80 @@ openssl rand -base64 32 > edgeweir-master-key
 
 输出原样使用。`edgeweir-master-key` 离线保存，与数据库备份分开，见 [备份与恢复](backup.md)。
 
-## 5. 设置变量
+## 6. 设置变量
 
-在 `edgeweir` 服务的 **Variables → Raw Editor** 写入：
+1. `edgeweir` 服务 **Variables → Raw Editor**，写入后保存：
 
-```ini
-PORT=3000
-DATABASE_URL=${{Postgres.DATABASE_URL}}
-EDGEWEIR_PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
-EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}
-EDGEWEIR_MASTER_KEY=<edgeweir-master-key 的内容>
-```
+   ```ini
+   PORT=3000
+   DATABASE_URL=${{Postgres.DATABASE_URL}}
+   EDGEWEIR_PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
+   EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}
+   EDGEWEIR_MASTER_KEY=<edgeweir-master-key 的内容>
+   ```
 
-命令行（每次设置触发一次部署）：
+2. `EDGEWEIR_MASTER_KEY` 行的 **⋮** 菜单 → **Seal**。
 
-```bash
-railway variable set --service edgeweir PORT=3000 \
-  'DATABASE_URL=${{Postgres.DATABASE_URL}}' \
-  'EDGEWEIR_PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}' \
-  'EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}'
-railway variable set --service edgeweir EDGEWEIR_MASTER_KEY --stdin < edgeweir-master-key
-```
+封存后其值不再出现在 Railway 界面、API 与 CLI 中，不可解封；Raw Editor 不再编辑该变量，修改经 **⋮** 菜单。各变量见 [变量](#变量)。
 
-在变量菜单中对 `EDGEWEIR_MASTER_KEY` 执行 **Seal**：封存后其值不再出现在 Railway 界面、API 与 CLI 中。各变量见 [变量](#变量)。
+## 7. 部署设置
 
-## 6. 部署设置
+1. `edgeweir` 服务中设置：
 
-在 `edgeweir` 服务中设置：
+   | 设置 | 位置 | 值 |
+   | --- | --- | --- |
+   | Healthcheck Path | **Settings → Deploy** | `/healthz` |
+   | Serverless | **Settings → Deploy → Enable Serverless** | 关闭 |
+   | Restart Policy | **Settings → Deploy** | `Always`；Free 计划不提供，保持默认 `On Failure` |
+   | Regions | **Settings → Scale** | 与 `Postgres` 服务相同 |
 
-| 设置 | 位置 | 值 |
-| --- | --- | --- |
-| Healthcheck Path | **Settings → Deploy** | `/healthz` |
-| Serverless | **Settings → Deploy** | 关闭 |
-| Region | **Settings** | 与 `Postgres` 服务相同 |
-| Restart Policy | **Settings** | `Always`；免费计划不提供，保持默认 `On Failure` |
+2. 画布顶部暂存横幅点击 **Deploy**，应用第 3、6、7 步的全部变更。
 
-Railway 界面中的变更先进入暂存区；点击画布横幅上的 **Deploy** 应用。
+## 8. 初始化
 
-## 7. 初始化
+未初始化的控制台每次启动都在日志中输出同一个 setup token。
 
-未初始化的控制台每次启动都在日志中输出同一个 setup token：
+1. `edgeweir` 服务 **Deployments** → 当前部署 → **Deploy Logs**，过滤框输入 `"first-run setup"`。
+2. 该行 `setupToken` 字段为 setup token，`url` 字段为初始化向导地址（`<EDGEWEIR_PUBLIC_URL>/setup`）。
+3. 打开向导，填入 setup token，见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
 
-```bash
-railway logs --service edgeweir --lines 500 --json | grep setupToken
-```
+## 命令行部署
 
-Railway 日志页面按 `"first-run setup"` 过滤，展开该行查看 `setupToken`。打开该行 `url` 字段的地址（`<EDGEWEIR_PUBLIC_URL>/setup`），在初始化向导中填入 setup token，见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
+与第 1–8 步等效。第 7 步部署设置与 **Seal** 只能在网页控制台完成。
+
+1. 创建项目、PostgreSQL 与控制台服务：
+
+   ```bash
+   railway init --name edgeweir
+   railway add --database postgres
+   railway add --service edgeweir --image ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
+   ```
+
+2. 公开 3000 与 8443：
+
+   ```bash
+   railway domain --service edgeweir --port 3000
+   railway tcp-proxy create --service edgeweir --port 8443
+   ```
+
+3. 生成主密钥并设置变量；`--skip-deploys` 的命令不触发部署，最后一条触发部署：
+
+   ```bash
+   umask 077
+   openssl rand -base64 32 > edgeweir-master-key
+   railway variable set --service edgeweir --skip-deploys EDGEWEIR_MASTER_KEY --stdin < edgeweir-master-key
+   railway variable set --service edgeweir PORT=3000 \
+     'DATABASE_URL=${{Postgres.DATABASE_URL}}' \
+     'EDGEWEIR_PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}' \
+     'EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}'
+   ```
+
+4. 在网页控制台完成 [第 7 步](#7-部署设置) 与 [第 6 步](#6-设置变量) 的 **Seal**。
+5. 读取 setup token：
+
+   ```bash
+   railway logs --service edgeweir --lines 500 --json | grep setupToken
+   ```
 
 ## 变量
 
@@ -135,6 +158,7 @@ Railway 日志页面按 `"first-run setup"` 过滤，展开该行查看 `setupTo
 
 | 检查 | 命令或位置 | 预期 |
 | --- | --- | --- |
+| 部署 | `edgeweir` 服务 **Deployments** | 当前部署状态 `Active` |
 | Web 与 API | `curl -fsS https://<名称>.up.railway.app/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
 | 节点通道 TLS | 下方 `openssl` 命令 | 签发者为 `Edgeweir Node Channel CA`，SAN 含 TCP 代理域名 |
 | 节点通道地址 | **后台 → 系统设置** 的「节点通道」 | `https://<名称>.proxy.rlwy.net:<端口>` |
@@ -159,24 +183,48 @@ openssl s_client -connect <名称>.proxy.rlwy.net:<端口> -servername <名称>.
 
 在注册节点之前完成。
 
-| 入口 | 操作 | 变量 |
-| --- | --- | --- |
-| Web 控制台 | **Settings → Networking → + Custom Domain**，端口 `3000`，添加界面给出的 `CNAME` 与 `TXT` 记录；或 `railway domain console.example.com --service edgeweir --port 3000` | `EDGEWEIR_PUBLIC_URL=https://console.example.com` |
-| 节点通道 | DNS 中将 `nodes.example.com` 以 `CNAME` 指向 `<名称>.proxy.rlwy.net`（不含端口）；端口仍为 Railway 分配的端口 | `EDGEWEIR_NODE_API_URL=https://nodes.example.com:<端口>` |
+1. Web 控制台：`edgeweir` 服务 **Settings → Networking → + Custom Domain**，填 `console.example.com`，端口 `3000`；在 DNS 中添加界面给出的 `CNAME` 与 `TXT` 记录。`TXT` 记录缺失时该域名返回 404。
+2. 节点通道：在 DNS 中将 `nodes.example.com` 以 `CNAME` 指向 `<名称>.proxy.rlwy.net`（不含端口）；端口仍为 Railway 分配的端口。
+3. **Variables** 中修改：
 
-`TXT` 记录缺失时自定义域名返回 404。已注册节点更换节点通道地址见 [节点通道地址与证书](networking.md#节点通道地址与证书)。
+   ```ini
+   EDGEWEIR_PUBLIC_URL=https://console.example.com
+   EDGEWEIR_NODE_API_URL=https://nodes.example.com:<端口>
+   ```
+
+4. 暂存横幅点击 **Deploy**。
+5. 验证：以新域名执行 [验证](#验证) 中的 `curl` 与 `openssl` 命令。
+
+命令行：
+
+```bash
+railway domain console.example.com --service edgeweir --port 3000
+railway variable set --service edgeweir \
+  EDGEWEIR_PUBLIC_URL=https://console.example.com \
+  EDGEWEIR_NODE_API_URL=https://nodes.example.com:<端口>
+```
+
+已注册节点更换节点通道地址见 [节点通道地址与证书](networking.md#节点通道地址与证书)。
 
 ## 升级
 
 1. 备份数据库，见 [备份与恢复](backup.md)。
-2. 在 `edgeweir` 服务的 **Settings → Source** 将镜像改为新 tag，点击 **Deploy**。
-3. 验证：
+2. `edgeweir` 服务 **Settings → Source**，镜像改为新 tag。
+3. 暂存横幅点击 **Deploy**。
+4. 验证：
 
    ```bash
    curl -fsS https://<名称>.up.railway.app/healthz
    ```
 
    预期：`version` 为新 tag。
+
+命令行（第 2–3 步）：
+
+```bash
+railway service source connect --service edgeweir --image ghcr.io/marvinli001/edgeweir:<新 tag>
+railway redeploy --service edgeweir --from-source --yes
+```
 
 迁移、签名校验与回滚见 [版本、升级与回滚](upgrade.md)。
 
