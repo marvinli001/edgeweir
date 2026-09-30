@@ -1,4 +1,4 @@
-import { type AlertKind, alertKind } from "@edgeweir/contract";
+import { type AlertEventKind, type AlertKind, alertKind } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
@@ -17,12 +17,15 @@ import { Input } from "@/components/ui/input";
 import { formatDateTime, m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 export const Route = createFileRoute("/_app/alerts")({ component: AlertsPage });
-const label = (kind: AlertKind) =>
+const label = (kind: AlertEventKind) =>
   ({
     node_offline: m.alert_kind_node_offline,
     certificate_expiring: m.alert_kind_certificate_expiring,
     origin_unavailable: m.alert_kind_origin_unavailable,
     high_5xx: m.alert_kind_high_5xx,
+    config_rollout_failed: m.alert_kind_config_rollout_failed,
+    config_rollout_no_canary: m.alert_kind_config_rollout_no_canary,
+    dns_mass_removal_blocked: m.alert_kind_dns_mass_removal_blocked,
   })[kind]();
 function AlertsPage() {
   const subscriptions = useQuery(orpc.alerts.subscriptions.queryOptions()),
