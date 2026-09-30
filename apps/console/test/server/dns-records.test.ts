@@ -22,6 +22,9 @@ vi.mock("../../src/server/services/certificate-worker", async (importOriginal) =
   return { ...actual, runCertd: vi.fn(makeFakeCertd(actual.CertdError)) };
 });
 
+/** Credentials match the provider formats of the catalog (DigitalOcean: 64 hex digits). */
+const doToken = "0".repeat(64);
+
 describe("automatic records in an organization's own zones", async () => {
   const authority = await txtAuthority();
   const { ctx, client: db } = await createTestContext({
@@ -40,8 +43,8 @@ describe("automatic records in an organization's own zones", async () => {
   const publish = () => {
     authority.records.clear();
     for (const [token, name] of [
-      ["cf-token", "acme.test"],
-      ["do-token", "acme.net"],
+      ["cf-token-0123456789abcdef", "acme.test"],
+      [doToken, "acme.net"],
     ] as const)
       for (const r of zone(token, name).filter((r) => r.type === "TXT"))
         authority.records.set(`${r.name}.${name}`, [
@@ -56,10 +59,12 @@ describe("automatic records in an organization's own zones", async () => {
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
     providers.reset();
     providers.accounts.set("platform-token", { zones: ["platform.test"] });
-    providers.accounts.set("cf-token", { zones: ["acme.test"] });
-    providers.accounts.set("do-token", { zones: ["acme.net"] });
-    providers.accounts.set("evil-token", { zones: ["acme.test"] });
-    providers.set("cf-token", "acme.test", [
+    providers.accounts.set("cf-token-0123456789abcdef", { zones: ["acme.test"] });
+    providers.accounts.set(doToken, {
+      zones: ["acme.net"],
+    });
+    providers.accounts.set("evil-token-0123456789abcdef", { zones: ["acme.test"] });
+    providers.set("cf-token-0123456789abcdef", "acme.test", [
       { name: "shop", type: "A", data: "192.0.2.10", ttl: 300 },
       { name: "_edgeweir-verification", type: "TXT", data: "someone-else", ttl: 300 },
       { name: "keep", type: "TXT", data: "x", ttl: 300 },
@@ -95,13 +100,13 @@ describe("automatic records in an organization's own zones", async () => {
     expect(
       await acme.dnsCredentials.zones({
         provider: "cloudflare",
-        credentials: { api_token: "cf-token" },
+        credentials: { api_token: "cf-token-0123456789abcdef" },
       }),
     ).toEqual({ zones: ["acme.test"] });
     expect(
       await acme.dnsCredentials.test({
         provider: "cloudflare",
-        credentials: { api_token: "cf-token" },
+        credentials: { api_token: "cf-token-0123456789abcdef" },
         zone: "acme.test",
       }),
     ).toEqual({ ok: true, records: 3 });
@@ -110,7 +115,7 @@ describe("automatic records in an organization's own zones", async () => {
         name: "Acme Cloudflare",
         provider: "cloudflare",
         zone: "acme.test",
-        credentials: { api_token: "cf-token" },
+        credentials: { api_token: "cf-token-0123456789abcdef" },
         autoRecords: true,
       })
     ).id;
@@ -118,7 +123,9 @@ describe("automatic records in an organization's own zones", async () => {
       name: "Acme DigitalOcean",
       provider: "digitalocean",
       zone: "acme.net",
-      credentials: { api_token: "do-token" },
+      credentials: {
+        api_token: doToken,
+      },
       autoRecords: true,
     });
     // Another organization's credential for the same zone never writes Acme's domains.
@@ -126,7 +133,7 @@ describe("automatic records in an organization's own zones", async () => {
       name: "Squatter",
       provider: "cloudflare",
       zone: "acme.test",
-      credentials: { api_token: "evil-token" },
+      credentials: { api_token: "evil-token-0123456789abcdef" },
       autoRecords: true,
     });
     expect((await acme.dnsCredentials.list()).map((c) => c.name)).toEqual([
@@ -162,7 +169,7 @@ describe("automatic records in an organization's own zones", async () => {
     expect(await records()).toEqual([]);
     expect((await acme.siteDns.records({ siteId })).managed).toBe(true);
     await syncTenantRecords(ctx);
-    const acmeTest = zone("cf-token", "acme.test");
+    const acmeTest = zone("cf-token-0123456789abcdef", "acme.test");
     const proof = (await acme.domainOwnership.get({ siteId })).find(
       (p) => p.domain === "acme.test",
     );
@@ -179,7 +186,7 @@ describe("automatic records in an organization's own zones", async () => {
     );
     expect(acmeTest.some((r) => r.name === "shop" && r.type === "CNAME")).toBe(false);
     // The apex of a provider without CNAME flattening or ALIAS is only shown.
-    expect(zone("do-token", "acme.net").map((r) => `${r.name} ${r.type}`)).toEqual([
+    expect(zone(doToken, "acme.net").map((r) => `${r.name} ${r.type}`)).toEqual([
       "_edgeweir-verification TXT",
     ]);
     const items = await records();
@@ -194,7 +201,9 @@ describe("automatic records in an organization's own zones", async () => {
     expect(status("_edgeweir-verification.acme.net", "TXT")).toBe("written");
     // Nothing from the other organization's credential.
     expect(
-      providers.calls.filter((c) => c.token === "evil-token" && c.command !== "dns.list"),
+      providers.calls.filter(
+        (c) => c.token === "evil-token-0123456789abcdef" && c.command !== "dns.list",
+      ),
     ).toEqual([]);
     const audit = await admin.auditLogs.list({ action: "dns_record.create" });
     expect(audit.items.length).toBeGreaterThanOrEqual(5);
@@ -212,13 +221,15 @@ describe("automatic records in an organization's own zones", async () => {
 
   it("replaces a conflict only after a member confirms it", async () => {
     await syncTenantRecords(ctx);
-    expect(zone("cf-token", "acme.test").find((r) => r.name === "shop")?.type).toBe("A");
+    expect(
+      zone("cf-token-0123456789abcdef", "acme.test").find((r) => r.name === "shop")?.type,
+    ).toBe("A");
     const shop = (await records()).find((i) => i.name === "shop.acme.test");
     const after = await acme.siteDns.confirm({ siteId, id: shop?.id ?? "" });
     expect(after.items.find((i) => i.id === shop?.id)?.status).toBe("written");
-    expect(zone("cf-token", "acme.test").filter((r) => r.name === "shop")).toEqual([
-      { name: "shop", type: "CNAME", data: target, ttl: 600 },
-    ]);
+    expect(zone("cf-token-0123456789abcdef", "acme.test").filter((r) => r.name === "shop")).toEqual(
+      [{ name: "shop", type: "CNAME", data: target, ttl: 600 }],
+    );
     const [entry] = (await admin.auditLogs.list({ action: "dns_record.overwrite" })).items;
     expect(entry).toMatchObject({ organizationId: acmeOrg });
     expect(entry?.metadata).toMatchObject({ replaced: [{ type: "A", data: "192.0.2.10" }] });
@@ -232,7 +243,7 @@ describe("automatic records in an organization's own zones", async () => {
     const proofs = await acme.domainOwnership.get({ siteId });
     expect(proofs.every((p) => p.verified)).toBe(true);
     await syncTenantRecords(ctx);
-    expect(zone("cf-token", "acme.test").filter((r) => r.type === "TXT")).toEqual([
+    expect(zone("cf-token-0123456789abcdef", "acme.test").filter((r) => r.type === "TXT")).toEqual([
       { name: "_edgeweir-verification", type: "TXT", data: "someone-else", ttl: 300 },
       { name: "keep", type: "TXT", data: "x", ttl: 300 },
     ]);
@@ -241,12 +252,14 @@ describe("automatic records in an organization's own zones", async () => {
 
   it("repairs a record deleted outside the console", async () => {
     providers.set(
-      "cf-token",
+      "cf-token-0123456789abcdef",
       "acme.test",
-      zone("cf-token", "acme.test").filter((r) => r.name !== "www"),
+      zone("cf-token-0123456789abcdef", "acme.test").filter((r) => r.name !== "www"),
     );
     await acme.siteDns.sync({ siteId });
-    expect(zone("cf-token", "acme.test").find((r) => r.name === "www")?.data).toBe(target);
+    expect(zone("cf-token-0123456789abcdef", "acme.test").find((r) => r.name === "www")?.data).toBe(
+      target,
+    );
   });
 
   it("removes only its own records when a domain or the site is deleted", async () => {
@@ -256,18 +269,20 @@ describe("automatic records in an organization's own zones", async () => {
       domains: site.domains.filter((d) => d !== "www.acme.test"),
     });
     await syncTenantRecords(ctx);
-    expect(zone("cf-token", "acme.test").some((r) => r.name === "www")).toBe(false);
+    expect(zone("cf-token-0123456789abcdef", "acme.test").some((r) => r.name === "www")).toBe(
+      false,
+    );
     expect((await admin.auditLogs.list({ action: "dns_record.delete" })).total).toBeGreaterThan(0);
     expect((await rpcError(acme.dnsCredentials.delete({ id: cloudflareId }))).code).toBe(
       "DNS_CREDENTIAL_IN_USE",
     );
     await acme.sites.delete({ id: siteId });
     await syncTenantRecords(ctx);
-    expect(zone("cf-token", "acme.test")).toEqual([
+    expect(zone("cf-token-0123456789abcdef", "acme.test")).toEqual([
       { name: "_edgeweir-verification", type: "TXT", data: "someone-else", ttl: 300 },
       { name: "keep", type: "TXT", data: "x", ttl: 300 },
     ]);
-    expect(zone("do-token", "acme.net")).toEqual([]);
+    expect(zone(doToken, "acme.net")).toEqual([]);
     const owned = await ctx.db
       .select()
       .from(schema.dnsOwnedRecord)

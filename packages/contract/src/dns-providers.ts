@@ -51,30 +51,31 @@ export interface DnsProviderEntry {
 }
 
 const ALL: readonly DnsRecordKind[] = ["A", "AAAA", "CNAME", "TXT"];
-const region = (placeholder: string): DnsProviderField => ({
-  key: "region_id",
-  type: "text",
-  secret: false,
-  required: false,
-  placeholder,
-  pattern: "^[a-z0-9-]{1,32}$",
-  maxLength: 32,
-});
-const id = (key: string, placeholder?: string): DnsProviderField => ({
+type Extra = Partial<Pick<DnsProviderField, "placeholder" | "pattern" | "default">>;
+const text = (key: string, maxLength: number, extra: Extra = {}): DnsProviderField => ({
   key,
   type: "text",
   secret: false,
   required: true,
-  maxLength: 256,
-  ...(placeholder ? { placeholder } : {}),
+  maxLength,
+  ...extra,
 });
-const secret = (key: string, placeholder?: string, maxLength = 1024): DnsProviderField => ({
+const secret = (key: string, maxLength: number, extra: Extra = {}): DnsProviderField => ({
   key,
   type: "secret",
   secret: true,
   required: true,
   maxLength,
-  ...(placeholder ? { placeholder } : {}),
+  ...extra,
+});
+const select = (key: string, options: readonly string[], extra: Extra = {}): DnsProviderField => ({
+  key,
+  type: "select",
+  secret: false,
+  required: true,
+  maxLength: Math.max(...options.map((o) => o.length)),
+  options,
+  ...extra,
 });
 const optional = (field: DnsProviderField): DnsProviderField => ({ ...field, required: false });
 const caps = (
@@ -83,80 +84,122 @@ const caps = (
   apex: DnsProviderCapabilities["apex"] = null,
   endpoint: DnsProviderCapabilities["endpoint"] = "fixed",
 ): DnsProviderCapabilities => ({ recordTypes: ALL, listZones, lines, apex, endpoint });
+const GUID = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
+const guid = { placeholder: "00000000-0000-0000-0000-000000000000", pattern: GUID };
+const region = (placeholder: string) =>
+  optional(text("region_id", 32, { placeholder, pattern: "^[a-z0-9-]{1,32}$" }));
+const cloudflareToken = { pattern: "^[A-Za-z0-9_.-]{20,256}$" };
 
+/**
+ * apex: "cname" only where the provider flattens a CNAME at the apex on
+ * every plan, "alias" where an ALIAS record points the apex at any host
+ * name; plan-dependent or plain (unflattened) apex CNAMEs count as null.
+ */
 export const dnsProviderCatalog = [
   {
     id: "cloudflare",
     name: "Cloudflare",
-    fields: [secret("api_token"), optional(secret("zone_token"))],
+    fields: [
+      secret("api_token", 256, cloudflareToken),
+      optional(secret("zone_token", 256, cloudflareToken)),
+    ],
     capabilities: caps(true, false, "cname"),
   },
   {
     id: "alidns",
     name: "Alibaba Cloud DNS",
     fields: [
-      id("access_key_id"),
-      secret("access_key_secret"),
+      text("access_key_id", 128, { pattern: "^[A-Za-z0-9.]{1,128}$" }),
+      secret("access_key_secret", 256),
       region("cn-hangzhou"),
-      optional(secret("security_token", undefined, 4096)),
+      optional(secret("security_token", 4096)),
     ],
     capabilities: caps(true, true),
   },
   {
     id: "huaweicloud",
     name: "Huawei Cloud DNS",
-    fields: [id("access_key_id"), secret("secret_access_key"), region("cn-south-1")],
+    fields: [
+      text("access_key_id", 128, { pattern: "^[A-Za-z0-9]{1,128}$" }),
+      secret("secret_access_key", 256),
+      region("cn-north-4"),
+    ],
     capabilities: caps(true, true),
   },
   {
     id: "dnspod",
     name: "DNSPod (token API)",
     fields: [
-      {
-        ...secret("auth_token", "12345,0123456789abcdef0123456789abcdef"),
-        pattern: "^[0-9]+,[0-9A-Za-z]+$",
-      },
+      secret("auth_token", 149, {
+        placeholder: "123456,0123456789abcdef0123456789abcdef",
+        pattern: "^[0-9]{1,20},[0-9A-Za-z]{8,128}$",
+      }),
     ],
     capabilities: caps(true, true),
   },
   {
     id: "tencentcloud",
     name: "Tencent Cloud DNSPod (API 3.0)",
-    fields: [id("secret_id"), secret("secret_key")],
+    fields: [
+      text("secret_id", 128, { pattern: "^[A-Za-z0-9]{1,128}$" }),
+      secret("secret_key", 256),
+      optional(select("site", ["cn", "intl"], { default: "cn" })),
+    ],
     capabilities: caps(true, true),
   },
   {
     id: "volcengine",
     name: "Volcengine DNS",
-    fields: [id("access_key_id"), secret("secret_access_key")],
+    fields: [
+      text("access_key_id", 128, {
+        placeholder: "AKLT…",
+        pattern: "^[A-Za-z0-9]{16,128}$",
+      }),
+      secret("secret_access_key", 256),
+    ],
     capabilities: caps(true, true),
   },
   {
     id: "baiducloud",
     name: "Baidu AI Cloud DNS",
-    fields: [id("access_key_id"), secret("secret_access_key")],
+    fields: [
+      text("access_key_id", 128, {
+        placeholder: "0123456789abcdef0123456789abcdef",
+        pattern: "^[A-Za-z0-9]{16,128}$",
+      }),
+      secret("secret_access_key", 256),
+    ],
     capabilities: caps(true, true),
   },
   {
     id: "westcn",
     name: "West.cn",
-    fields: [id("username"), secret("api_password")],
-    capabilities: caps(false, false),
+    fields: [text("username", 64), secret("api_password", 256)],
+    capabilities: caps(true, true),
   },
   {
     id: "dnsla",
     name: "DNS.LA",
-    fields: [id("api_id"), secret("api_secret")],
+    fields: [
+      text("api_id", 128, { pattern: "^[\\x21-\\x39\\x3B-\\x7E]{1,128}$" }),
+      secret("api_secret", 256),
+    ],
     capabilities: caps(true, true),
   },
   {
     id: "route53",
     name: "Amazon Route 53",
     fields: [
-      id("access_key_id", "AKIAIOSFODNN7EXAMPLE"),
-      secret("secret_access_key"),
-      optional(secret("session_token", undefined, 4096)),
-      optional(id("hosted_zone_id", "Z0123456789ABCDEFGHIJ")),
+      text("access_key_id", 128, { placeholder: "AKIAIOSFODNN7EXAMPLE", pattern: "^\\w{16,128}$" }),
+      secret("secret_access_key", 128),
+      optional(secret("session_token", 8192)),
+      optional(
+        text("hosted_zone_id", 44, {
+          placeholder: "Z0123456789ABCDEFGHIJ",
+          pattern: "^(/hostedzone/)?[A-Z0-9]{1,32}$",
+        }),
+      ),
+      optional(select("partition", ["aws", "aws-cn", "aws-us-gov"], { default: "aws" })),
     ],
     capabilities: caps(true, true),
   },
@@ -165,91 +208,135 @@ export const dnsProviderCatalog = [
     name: "Google Cloud DNS",
     fields: [
       {
-        ...secret("service_account_json", '{"type":"service_account",…}', 16384),
+        ...secret("service_account_json", 16384, { placeholder: '{"type":"service_account",…}' }),
         type: "textarea",
       },
-      optional(id("project_id")),
-      optional(id("managed_zone")),
+      optional(
+        text("project_id", 100, {
+          placeholder: "my-project-123456",
+          pattern: "^([a-z][a-z0-9.-]{0,62}:)?[a-z][a-z0-9-]{4,28}[a-z0-9]$",
+        }),
+      ),
+      optional(
+        text("managed_zone", 63, {
+          placeholder: "example-com",
+          pattern: "^([a-z][a-z0-9-]{0,62}|[0-9]{1,20})$",
+        }),
+      ),
     ],
-    capabilities: caps(true, true),
+    capabilities: caps(true, true, "alias"),
   },
   {
     id: "azure",
     name: "Azure DNS",
     fields: [
-      id("tenant_id"),
-      id("client_id"),
-      secret("client_secret"),
-      id("subscription_id"),
-      id("resource_group"),
+      text("tenant_id", 253, {
+        placeholder: guid.placeholder,
+        pattern:
+          "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+)$",
+      }),
+      text("client_id", 36, guid),
+      secret("client_secret", 1024),
+      text("subscription_id", 36, guid),
+      text("resource_group", 90, {
+        placeholder: "dns-rg",
+        pattern: "^[A-Za-z0-9_().-]{0,89}[A-Za-z0-9_()-]$",
+      }),
     ],
     capabilities: caps(true, false),
   },
   {
     id: "digitalocean",
     name: "DigitalOcean",
-    fields: [secret("api_token")],
+    fields: [
+      secret("api_token", 128, { placeholder: "dop_v1_…", pattern: "^(dop_v1_)?[0-9a-f]{64}$" }),
+    ],
     capabilities: caps(true, false),
   },
-  { id: "vultr", name: "Vultr", fields: [secret("api_key")], capabilities: caps(true, false) },
+  {
+    id: "vultr",
+    name: "Vultr",
+    fields: [secret("api_key", 64, { placeholder: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" })],
+    capabilities: caps(true, false),
+  },
   {
     id: "linode",
     name: "Akamai Cloud (Linode)",
-    fields: [secret("api_token")],
+    fields: [secret("api_token", 128)],
     capabilities: caps(true, false),
   },
   {
     id: "hetzner",
-    name: "Hetzner",
-    fields: [secret("api_token")],
+    name: "Hetzner Cloud DNS",
+    fields: [secret("api_token", 128)],
     capabilities: caps(true, false),
   },
   {
     id: "ovh",
     name: "OVHcloud",
     fields: [
-      {
-        key: "endpoint",
-        type: "select",
-        secret: false,
-        required: true,
-        maxLength: 32,
-        options: ["ovh-eu", "ovh-ca", "ovh-us"],
-        default: "ovh-eu",
-      },
-      id("application_key"),
-      secret("application_secret"),
-      secret("consumer_key"),
+      select("endpoint", ["ovh-eu", "ovh-ca", "ovh-us"], { default: "ovh-eu" }),
+      text("application_key", 128, { pattern: "^[A-Za-z0-9]{8,128}$" }),
+      secret("application_secret", 128, { pattern: "^[A-Za-z0-9]{8,128}$" }),
+      secret("consumer_key", 128, { pattern: "^[A-Za-z0-9]{8,128}$" }),
     ],
     capabilities: caps(true, false),
   },
-  { id: "gandi", name: "Gandi", fields: [secret("bearer_token")], capabilities: caps(true, false) },
+  {
+    id: "gandi",
+    name: "Gandi LiveDNS",
+    fields: [secret("bearer_token", 512, { pattern: "^[A-Za-z0-9_.-]{16,512}$" })],
+    capabilities: caps(true, false, "alias"),
+  },
   {
     id: "godaddy",
     name: "GoDaddy",
-    fields: [secret("api_token", "key:secret")],
+    fields: [
+      secret("api_token", 4096, {
+        placeholder: "key:secret",
+        pattern: "^([A-Za-z0-9_]{8,128}:[A-Za-z0-9_]{8,128}|[A-Za-z0-9_.~+/=-]{16,})$",
+      }),
+    ],
     capabilities: caps(true, false),
   },
   {
     id: "porkbun",
     name: "Porkbun",
-    fields: [secret("api_key"), secret("api_secret_key")],
-    capabilities: caps(true, false),
+    fields: [
+      secret("api_key", 260, { placeholder: "pk1_…", pattern: "^pk1_[A-Za-z0-9_]{8,256}$" }),
+      secret("api_secret_key", 260, { placeholder: "sk1_…", pattern: "^sk1_[A-Za-z0-9_]{8,256}$" }),
+    ],
+    capabilities: caps(true, false, "alias"),
   },
   {
     id: "namesilo",
     name: "NameSilo",
-    fields: [secret("api_token")],
+    fields: [secret("api_token", 128, { pattern: "^[A-Za-z0-9]{8,128}$" })],
     capabilities: caps(true, false),
   },
-  { id: "gcore", name: "Gcore", fields: [secret("api_key")], capabilities: caps(true, false) },
+  {
+    id: "gcore",
+    name: "Gcore",
+    fields: [
+      secret("api_key", 4096, {
+        placeholder: "1234$0123456789abcdef",
+        pattern: "^[0-9]+\\$[A-Za-z0-9._~+/=-]+$",
+      }),
+    ],
+    capabilities: caps(true, true, "cname"),
+  },
   {
     id: "bunny",
     name: "Bunny DNS",
-    fields: [secret("access_key")],
+    fields: [secret("access_key", 128, { pattern: "^[A-Za-z0-9-]{16,128}$" })],
+    capabilities: caps(true, true, "cname"),
+  },
+  {
+    id: "desec",
+    name: "deSEC",
+    fields: [secret("token", 128, { pattern: "^[A-Za-z0-9_-]{16,128}$" })],
     capabilities: caps(true, false),
   },
-  { id: "desec", name: "deSEC", fields: [secret("token")], capabilities: caps(true, false) },
   {
     id: "powerdns",
     name: "PowerDNS",
@@ -263,8 +350,14 @@ export const dnsProviderCatalog = [
         pattern: "^https?://[^/?#@\\s]+/?$",
         maxLength: 256,
       },
-      secret("api_key"),
-      optional({ ...id("server_id", "localhost"), pattern: "^[A-Za-z0-9._-]{1,64}$" }),
+      secret("api_key", 256),
+      optional(
+        text("server_id", 64, {
+          placeholder: "localhost",
+          pattern: "^[A-Za-z0-9._-]{1,64}$",
+          default: "localhost",
+        }),
+      ),
     ],
     capabilities: caps(true, false, null, "custom"),
   },
@@ -272,21 +365,22 @@ export const dnsProviderCatalog = [
     id: "rfc2136",
     name: "RFC 2136 (TSIG)",
     fields: [
-      {
-        ...id("server", "ns1.example.net:53"),
-        pattern: "^[A-Za-z0-9.:\\[\\]-]{1,255}$",
-      },
-      id("tsig_key_name", "edgeweir-key."),
-      {
-        key: "tsig_algorithm",
-        type: "select",
-        secret: false,
-        required: true,
-        maxLength: 16,
-        options: ["hmac-sha256", "hmac-sha512", "hmac-sha384", "hmac-sha224", "hmac-sha1"],
-        default: "hmac-sha256",
-      },
-      secret("tsig_secret"),
+      text("server", 261, {
+        placeholder: "ns1.example.net:53",
+        pattern: "^[A-Za-z0-9._:\\[\\]-]{1,261}$",
+      }),
+      text("tsig_key_name", 253, {
+        placeholder: "edgeweir-key",
+        pattern: "^[A-Za-z0-9._-]{1,253}$",
+      }),
+      select(
+        "tsig_algorithm",
+        ["hmac-sha256", "hmac-sha512", "hmac-sha384", "hmac-sha224", "hmac-sha1"],
+        {
+          default: "hmac-sha256",
+        },
+      ),
+      secret("tsig_secret", 512, { pattern: "^[A-Za-z0-9+/]+={0,2}$" }),
     ],
     capabilities: caps(false, false, null, "custom"),
   },
@@ -303,14 +397,14 @@ export const dnsProviderCatalog = [
         pattern: "^https?://[^\\s@#]+$",
         maxLength: 512,
       },
-      { ...secret("secret"), pattern: "^.{16,}$" },
+      secret("secret", 256, { pattern: "^.{16,}$" }),
     ],
     capabilities: caps(true, false, null, "custom"),
   },
   {
     id: "test",
     name: "Local test fixture",
-    fields: [secret("api_token")],
+    fields: [secret("api_token", 1024)],
     capabilities: caps(true, false),
     hidden: true,
   },

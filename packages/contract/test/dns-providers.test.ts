@@ -60,9 +60,19 @@ describe("DNS provider catalog", () => {
       problem: "invalid_field",
     });
     // Optional empty values are dropped; secrets are kept verbatim.
-    expect(checkDnsCredentials("cloudflare", { api_token: " t ", zone_token: "" })).toEqual({
+    const token = "0123456789abcdefghij";
+    expect(checkDnsCredentials("cloudflare", { api_token: token, zone_token: "" })).toEqual({
       ok: true,
-      value: { api_token: " t " },
+      value: { api_token: token },
+    });
+    expect(checkDnsCredentials("vultr", { api_key: " k " })).toEqual({
+      ok: true,
+      value: { api_key: " k " },
+    });
+    // Patterns come from the provider documentation (Cloudflare tokens: 20+ characters).
+    expect(checkDnsCredentials("cloudflare", { api_token: "short" })).toMatchObject({
+      problem: "invalid_field",
+      field: "api_token",
     });
     expect(
       checkDnsCredentials("huaweicloud", {
@@ -87,5 +97,21 @@ describe("DNS provider catalog", () => {
     expect(
       checkDnsCredentials("webhook", { url: "https://h.test/", secret: "short" }),
     ).toMatchObject({ field: "secret" });
+  });
+});
+
+describe("outbound address policy of edgeweir-certd", () => {
+  it("refuses the same special-purpose ranges as the console", async () => {
+    const { SPECIAL_PURPOSE_IPV4, SPECIAL_PURPOSE_IPV6 } = await import("../src/addresses");
+    const source = readFileSync(
+      resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../../helpers/certd/internal/dnsx/policy.go",
+      ),
+      "utf8",
+    );
+    const list = source.slice(source.indexOf("var SpecialPurpose = []string{"));
+    const ranges = [...list.slice(0, list.indexOf("}")).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(ranges).toEqual([...SPECIAL_PURPOSE_IPV4, ...SPECIAL_PURPOSE_IPV6]);
   });
 });

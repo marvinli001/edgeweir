@@ -93,9 +93,6 @@ func Code(err error) string {
 	if errors.As(err, &status) {
 		return status.Kind().Error()
 	}
-	if last := LastStatus(); last != 0 {
-		return (&StatusError{Status: last}).Kind().Error()
-	}
 	var timeout interface{ Timeout() bool }
 	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &timeout) && timeout.Timeout()) {
 		return ErrUnreachable.Error()

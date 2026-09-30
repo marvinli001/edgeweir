@@ -8,14 +8,16 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 256,
+        "pattern": "^[A-Za-z0-9_.-]{20,256}$"
       },
       {
         "key": "zone_token",
         "type": "secret",
         "secret": true,
         "required": false,
-        "maxLength": 1024
+        "maxLength": 256,
+        "pattern": "^[A-Za-z0-9_.-]{20,256}$"
       }
     ],
     "capabilities": {
@@ -35,23 +37,24 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9.]{1,128}$"
       },
       {
         "key": "access_key_secret",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 256
       },
       {
         "key": "region_id",
         "type": "text",
         "secret": false,
         "required": false,
+        "maxLength": 32,
         "placeholder": "cn-hangzhou",
-        "pattern": "^[a-z0-9-]{1,32}$",
-        "maxLength": 32
+        "pattern": "^[a-z0-9-]{1,32}$"
       },
       {
         "key": "security_token",
@@ -78,23 +81,24 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{1,128}$"
       },
       {
         "key": "secret_access_key",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 256
       },
       {
         "key": "region_id",
         "type": "text",
         "secret": false,
         "required": false,
-        "placeholder": "cn-south-1",
-        "pattern": "^[a-z0-9-]{1,32}$",
-        "maxLength": 32
+        "maxLength": 32,
+        "placeholder": "cn-north-4",
+        "pattern": "^[a-z0-9-]{1,32}$"
       }
     ],
     "capabilities": {
@@ -114,9 +118,9 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024,
-        "placeholder": "12345,0123456789abcdef0123456789abcdef",
-        "pattern": "^[0-9]+,[0-9A-Za-z]+$"
+        "maxLength": 149,
+        "placeholder": "123456,0123456789abcdef0123456789abcdef",
+        "pattern": "^[0-9]{1,20},[0-9A-Za-z]{8,128}$"
       }
     ],
     "capabilities": {
@@ -136,14 +140,24 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{1,128}$"
       },
       {
         "key": "secret_key",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 256
+      },
+      {
+        "key": "site",
+        "type": "select",
+        "secret": false,
+        "required": false,
+        "maxLength": 4,
+        "options": ["cn", "intl"],
+        "default": "cn"
       }
     ],
     "capabilities": {
@@ -163,14 +177,16 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 128,
+        "placeholder": "AKLT…",
+        "pattern": "^[A-Za-z0-9]{16,128}$"
       },
       {
         "key": "secret_access_key",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 256
       }
     ],
     "capabilities": {
@@ -190,14 +206,16 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 128,
+        "placeholder": "0123456789abcdef0123456789abcdef",
+        "pattern": "^[A-Za-z0-9]{16,128}$"
       },
       {
         "key": "secret_access_key",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 256
       }
     ],
     "capabilities": {
@@ -217,20 +235,20 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 64
       },
       {
         "key": "api_password",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 256
       }
     ],
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
-      "listZones": false,
-      "lines": false,
+      "listZones": true,
+      "lines": true,
       "apex": null,
       "endpoint": "fixed"
     }
@@ -244,14 +262,15 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 128,
+        "pattern": "^[\\x21-\\x39\\x3B-\\x7E]{1,128}$"
       },
       {
         "key": "api_secret",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 256
       }
     ],
     "capabilities": {
@@ -271,30 +290,41 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256,
-        "placeholder": "AKIAIOSFODNN7EXAMPLE"
+        "maxLength": 128,
+        "placeholder": "AKIAIOSFODNN7EXAMPLE",
+        "pattern": "^\\w{16,128}$"
       },
       {
         "key": "secret_access_key",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 128
       },
       {
         "key": "session_token",
         "type": "secret",
         "secret": true,
         "required": false,
-        "maxLength": 4096
+        "maxLength": 8192
       },
       {
         "key": "hosted_zone_id",
         "type": "text",
         "secret": false,
         "required": false,
-        "maxLength": 256,
-        "placeholder": "Z0123456789ABCDEFGHIJ"
+        "maxLength": 44,
+        "placeholder": "Z0123456789ABCDEFGHIJ",
+        "pattern": "^(/hostedzone/)?[A-Z0-9]{1,32}$"
+      },
+      {
+        "key": "partition",
+        "type": "select",
+        "secret": false,
+        "required": false,
+        "maxLength": 10,
+        "options": ["aws", "aws-cn", "aws-us-gov"],
+        "default": "aws"
       }
     ],
     "capabilities": {
@@ -322,21 +352,25 @@
         "type": "text",
         "secret": false,
         "required": false,
-        "maxLength": 256
+        "maxLength": 100,
+        "placeholder": "my-project-123456",
+        "pattern": "^([a-z][a-z0-9.-]{0,62}:)?[a-z][a-z0-9-]{4,28}[a-z0-9]$"
       },
       {
         "key": "managed_zone",
         "type": "text",
         "secret": false,
         "required": false,
-        "maxLength": 256
+        "maxLength": 63,
+        "placeholder": "example-com",
+        "pattern": "^([a-z][a-z0-9-]{0,62}|[0-9]{1,20})$"
       }
     ],
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
       "lines": true,
-      "apex": null,
+      "apex": "alias",
       "endpoint": "fixed"
     }
   },
@@ -349,14 +383,18 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 253,
+        "placeholder": "00000000-0000-0000-0000-000000000000",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+)$"
       },
       {
         "key": "client_id",
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 36,
+        "placeholder": "00000000-0000-0000-0000-000000000000",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
       },
       {
         "key": "client_secret",
@@ -370,14 +408,18 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 36,
+        "placeholder": "00000000-0000-0000-0000-000000000000",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
       },
       {
         "key": "resource_group",
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 90,
+        "placeholder": "dns-rg",
+        "pattern": "^[A-Za-z0-9_().-]{0,89}[A-Za-z0-9_()-]$"
       }
     ],
     "capabilities": {
@@ -397,7 +439,9 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 128,
+        "placeholder": "dop_v1_…",
+        "pattern": "^(dop_v1_)?[0-9a-f]{64}$"
       }
     ],
     "capabilities": {
@@ -417,7 +461,8 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 64,
+        "placeholder": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
       }
     ],
     "capabilities": {
@@ -437,7 +482,7 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 128
       }
     ],
     "capabilities": {
@@ -450,14 +495,14 @@
   },
   {
     "id": "hetzner",
-    "name": "Hetzner",
+    "name": "Hetzner Cloud DNS",
     "fields": [
       {
         "key": "api_token",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 128
       }
     ],
     "capabilities": {
@@ -477,7 +522,7 @@
         "type": "select",
         "secret": false,
         "required": true,
-        "maxLength": 32,
+        "maxLength": 6,
         "options": ["ovh-eu", "ovh-ca", "ovh-us"],
         "default": "ovh-eu"
       },
@@ -486,21 +531,24 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{8,128}$"
       },
       {
         "key": "application_secret",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{8,128}$"
       },
       {
         "key": "consumer_key",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{8,128}$"
       }
     ],
     "capabilities": {
@@ -513,21 +561,22 @@
   },
   {
     "id": "gandi",
-    "name": "Gandi",
+    "name": "Gandi LiveDNS",
     "fields": [
       {
         "key": "bearer_token",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 512,
+        "pattern": "^[A-Za-z0-9_.-]{16,512}$"
       }
     ],
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
       "lines": false,
-      "apex": null,
+      "apex": "alias",
       "endpoint": "fixed"
     }
   },
@@ -540,8 +589,9 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024,
-        "placeholder": "key:secret"
+        "maxLength": 4096,
+        "placeholder": "key:secret",
+        "pattern": "^([A-Za-z0-9_]{8,128}:[A-Za-z0-9_]{8,128}|[A-Za-z0-9_.~+/=-]{16,})$"
       }
     ],
     "capabilities": {
@@ -561,21 +611,25 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 260,
+        "placeholder": "pk1_…",
+        "pattern": "^pk1_[A-Za-z0-9_]{8,256}$"
       },
       {
         "key": "api_secret_key",
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 260,
+        "placeholder": "sk1_…",
+        "pattern": "^sk1_[A-Za-z0-9_]{8,256}$"
       }
     ],
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
       "lines": false,
-      "apex": null,
+      "apex": "alias",
       "endpoint": "fixed"
     }
   },
@@ -588,7 +642,8 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{8,128}$"
       }
     ],
     "capabilities": {
@@ -608,14 +663,16 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 4096,
+        "placeholder": "1234$0123456789abcdef",
+        "pattern": "^[0-9]+\\$[A-Za-z0-9._~+/=-]+$"
       }
     ],
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
-      "apex": null,
+      "lines": true,
+      "apex": "cname",
       "endpoint": "fixed"
     }
   },
@@ -628,14 +685,15 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9-]{16,128}$"
       }
     ],
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
-      "apex": null,
+      "lines": true,
+      "apex": "cname",
       "endpoint": "fixed"
     }
   },
@@ -648,7 +706,8 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9_-]{16,128}$"
       }
     ],
     "capabilities": {
@@ -677,16 +736,17 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 256
       },
       {
         "key": "server_id",
         "type": "text",
         "secret": false,
         "required": false,
-        "maxLength": 256,
+        "maxLength": 64,
         "placeholder": "localhost",
-        "pattern": "^[A-Za-z0-9._-]{1,64}$"
+        "pattern": "^[A-Za-z0-9._-]{1,64}$",
+        "default": "localhost"
       }
     ],
     "capabilities": {
@@ -706,24 +766,25 @@
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256,
+        "maxLength": 261,
         "placeholder": "ns1.example.net:53",
-        "pattern": "^[A-Za-z0-9.:\\[\\]-]{1,255}$"
+        "pattern": "^[A-Za-z0-9._:\\[\\]-]{1,261}$"
       },
       {
         "key": "tsig_key_name",
         "type": "text",
         "secret": false,
         "required": true,
-        "maxLength": 256,
-        "placeholder": "edgeweir-key."
+        "maxLength": 253,
+        "placeholder": "edgeweir-key",
+        "pattern": "^[A-Za-z0-9._-]{1,253}$"
       },
       {
         "key": "tsig_algorithm",
         "type": "select",
         "secret": false,
         "required": true,
-        "maxLength": 16,
+        "maxLength": 11,
         "options": ["hmac-sha256", "hmac-sha512", "hmac-sha384", "hmac-sha224", "hmac-sha1"],
         "default": "hmac-sha256"
       },
@@ -732,7 +793,8 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024
+        "maxLength": 512,
+        "pattern": "^[A-Za-z0-9+/]+={0,2}$"
       }
     ],
     "capabilities": {
@@ -761,7 +823,7 @@
         "type": "secret",
         "secret": true,
         "required": true,
-        "maxLength": 1024,
+        "maxLength": 256,
         "pattern": "^.{16,}$"
       }
     ],

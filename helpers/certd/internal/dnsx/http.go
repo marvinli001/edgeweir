@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sync/atomic"
 )
 
 // MaxBody bounds every provider response.
@@ -89,29 +88,4 @@ func JSON(ctx context.Context, client *http.Client, method, target string, heade
 		return fmt.Errorf("%w: invalid JSON response", ErrProvider)
 	}
 	return nil
-}
-
-var lastStatus atomic.Int64
-
-// LastStatus is the most recent non-2xx status seen by RecordStatus, used to
-// classify errors of third-party libdns modules. certd handles one request
-// per process, so a process-wide value is enough.
-func LastStatus() int { return int(lastStatus.Load()) }
-
-// ResetStatus clears LastStatus (tests).
-func ResetStatus() { lastStatus.Store(0) }
-
-// RecordStatus wraps a transport and remembers the last non-2xx status.
-func RecordStatus(next http.RoundTripper) http.RoundTripper {
-	return statusRecorder{next}
-}
-
-type statusRecorder struct{ next http.RoundTripper }
-
-func (s statusRecorder) RoundTrip(req *http.Request) (*http.Response, error) {
-	res, err := s.next.RoundTrip(req)
-	if err == nil && (res.StatusCode < 200 || res.StatusCode > 299) {
-		lastStatus.Store(int64(res.StatusCode))
-	}
-	return res, err
 }
