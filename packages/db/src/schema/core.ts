@@ -9,6 +9,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -337,6 +338,41 @@ export const configRevision = pgTable(
   },
   (t) => [uniqueIndex("config_revision_cluster_revision_uq").on(t.clusterId, t.revision)],
 );
+
+/**
+ * Configuration canary of a cluster: the policy (set in the admin area) and
+ * the current rollout. With the policy on, nodes in canary node groups get
+ * `candidate_revision` while the others stay on `stable_revision`; without
+ * it (or without a row) every node gets the latest revision.
+ */
+export const clusterRollout = pgTable("cluster_rollout", {
+  clusterId: uuid("cluster_id")
+    .primaryKey()
+    .references(() => cluster.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  windowSeconds: integer("window_seconds").notNull().default(300),
+  autoPromote: boolean("auto_promote").notNull().default(true),
+  /** Roll back when the canary 5xx ratio exceeds max(baseline × multiplier, floor)… */
+  errorRatioMultiplier: real("error_ratio_multiplier").notNull().default(2),
+  errorRatioFloor: real("error_ratio_floor").notNull().default(0.05),
+  /** …and the canary nodes served at least this many requests in the window. */
+  minRequests: integer("min_requests").notNull().default(100),
+  /** idle | canary | awaiting_promotion | promoted | rolled_back | direct */
+  state: text("state").notNull().default("idle"),
+  /** Revision of the non-canary nodes; null means the latest revision. */
+  stableRevision: bigint("stable_revision", { mode: "number" }),
+  /** Revision of the canary nodes while a rollout runs. */
+  candidateRevision: bigint("candidate_revision", { mode: "number" }),
+  /** The candidate that was rolled back or promoted last. */
+  lastCandidateRevision: bigint("last_candidate_revision", { mode: "number" }),
+  windowStartedAt: timestamp("window_started_at", { withTimezone: true }),
+  /** Canary nodes online when the window started; they decide the outcome. */
+  canaryNodeIds: uuid("canary_node_ids").array().notNull().default(sql`'{}'::uuid[]`),
+  /** Why the last rollout ended (auto_promote, manual_promote, apply_failed, ...). */
+  outcome: text("outcome").notNull().default(""),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  updatedAt: updatedAt(),
+});
 
 /** Latest apply receipt / heartbeat of each node. */
 export const nodeConfigStatus = pgTable("node_config_status", {

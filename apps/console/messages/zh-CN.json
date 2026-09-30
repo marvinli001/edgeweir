@@ -960,5 +960,10 @@
   "error_usage_cursor_invalid": "分页游标无效",
   "system_usage_title": "用量",
   "system_usage_retention": "保留天数",
-  "system_usage_offline_threshold": "离线节点不阻塞完整性（分钟）"
+  "system_usage_offline_threshold": "离线节点不阻塞完整性（分钟）",
+  "alert_kind_config_rollout_failed": "配置金丝雀发布已回滚",
+  "alert_kind_config_rollout_no_canary": "没有在线的金丝雀节点，配置已直接发布到全部节点",
+  "alert_kind_dns_mass_removal_blocked": "DNS 大面积摘除已阻止",
+  "error_rollout_not_active": "没有进行中的金丝雀发布",
+  "revision_reason_rollout_rollback": "版本 #{revision} 的金丝雀发布已回滚"
 }

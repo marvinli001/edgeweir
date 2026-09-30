@@ -307,6 +307,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `ip_list` | Organization or platform IP lists (normalized CIDRs) |
 | `config_revision` | Revisions per cluster: number, content hash, binary IR, reason code |
 | `node_config_status` | Node apply receipts and heartbeats, with the receipt verification flag |
+| `cluster_rollout` | Configuration canary of a cluster: policy (switch, observation window, auto promotion, 5xx thresholds) and the current rollout (stable and candidate revisions, window, outcome) |
 
 ### Certificates, DNS, and domains
 
@@ -341,7 +342,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `node_upgrade_delivery` | Phase, state, and health observation of an upgrade on each node |
 | `alert_channel` | Alert channels, configuration envelope-encrypted |
 | `alert_subscription` | User subscriptions per site and channel |
-| `alert_state` | Current alert state |
+| `alert_state` | Current alert state (site and platform alerts) |
 | `alert_event` | Alert events with an ordinal |
 | `alert_delivery` | Delivery and retries of an event on a channel |
 
@@ -378,6 +379,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0024_p0_organization_limits` | `organization_limit` |
 | `0025_p0_service_accounts` | `service_account`, `service_account_key`, `idempotency_key`; `invitation.inviter_id` nullable, new `inviter_service_account_id` |
 | `0026_p0_usage` | `site_usage`, sequence `site_usage_seq`, `node_stats_cursor.complete_until`; marks usage windows for existing minute statistics |
+| `0027_p0_config_canary` | `cluster_rollout`; `alert_event.site_id` and `alert_state.site_id` nullable (platform alerts) |
 
 ## Build output
 

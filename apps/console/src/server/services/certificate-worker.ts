@@ -12,7 +12,7 @@ import {
   findDnsCredential,
   inspectCertificate,
 } from "./certificates";
-import { publishRevision } from "./revisions";
+import { publishRevision, rolloutTargets, targetFor } from "./revisions";
 
 type HelperEvent = {
   event: string;
@@ -242,6 +242,7 @@ async function challengeEvent(
     .select({
       id: schema.node.id,
       clusterId: schema.node.clusterId,
+      nodeGroupId: schema.node.nodeGroupId,
       features: schema.node.supportedFeatures,
     })
     .from(schema.node)
@@ -257,6 +258,16 @@ async function challengeEvent(
     );
   if (!nodes.length || nodes.some((n) => !n.features.includes("http01-v1")))
     throw new Error("online ACME-capable nodes are required");
+  // Each node must run its own target (with a canary, the stable or the candidate
+  // revision); both carry the challenge.
+  const targets = new Map<string, number>();
+  for (const clusterId of new Set(nodes.map((n) => n.clusterId))) {
+    const clusterTargets = await rolloutTargets(app.db, clusterId);
+    for (const node of nodes.filter((n) => n.clusterId === clusterId)) {
+      const target = targetFor(node, clusterTargets);
+      if (target) targets.set(node.id, target.revision);
+    }
+  }
   const deadline = Date.now() + 40_000;
   while (Date.now() < deadline) {
     const status = await app.db
@@ -274,8 +285,7 @@ async function challengeEvent(
           (s) =>
             s.nodeId === node.id &&
             s.state === "applied" &&
-            s.appliedRevision >=
-              (revisions.find((r) => r.clusterId === node.clusterId)?.revision ?? Infinity),
+            s.appliedRevision >= (targets.get(node.id) ?? Infinity),
         ),
       )
     )

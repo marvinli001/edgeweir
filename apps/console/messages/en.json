@@ -960,5 +960,10 @@
   "error_usage_cursor_invalid": "Invalid page cursor",
   "system_usage_title": "Usage",
   "system_usage_retention": "Retention (days)",
-  "system_usage_offline_threshold": "Offline nodes stop holding completeness (minutes)"
+  "system_usage_offline_threshold": "Offline nodes stop holding completeness (minutes)",
+  "alert_kind_config_rollout_failed": "Configuration canary rolled back",
+  "alert_kind_config_rollout_no_canary": "No canary node online; configuration published to every node",
+  "alert_kind_dns_mass_removal_blocked": "DNS mass removal blocked",
+  "error_rollout_not_active": "No canary rollout is running",
+  "revision_reason_rollout_rollback": "Canary of revision {revision} rolled back"
 }

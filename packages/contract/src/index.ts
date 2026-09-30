@@ -151,6 +151,25 @@ export const contract = {
       .route({ method: "POST", path: "/clusters/{id}/rollback", tags: ["clusters"] })
       .input(idParam.extend({ revision: z.number().int().min(1) }))
       .output(s.revision),
+    /** Configuration canary: policy, current rollout, canary nodes and window traffic. */
+    rollout: oc
+      .route({ method: "GET", path: "/clusters/{id}/rollout", tags: ["clusters"] })
+      .input(idParam)
+      .output(s.clusterRollout),
+    setRolloutPolicy: oc
+      .route({ method: "PUT", path: "/clusters/{id}/rollout-policy", tags: ["clusters"] })
+      .input(s.rolloutPolicyInput)
+      .output(s.clusterRollout),
+    /** Gives the candidate to every node now. */
+    promoteRollout: oc
+      .route({ method: "POST", path: "/clusters/{id}/rollout/promote", tags: ["clusters"] })
+      .input(idParam)
+      .output(s.clusterRollout),
+    /** Returns the canary nodes to the stable revision. */
+    abortRollout: oc
+      .route({ method: "POST", path: "/clusters/{id}/rollout/abort", tags: ["clusters"] })
+      .input(idParam)
+      .output(s.clusterRollout),
     createEnrollmentToken: oc
       .route({ method: "POST", path: "/enrollment-tokens", tags: ["nodes"] })
       .input(s.enrollmentTokenInput)

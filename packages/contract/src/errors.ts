@@ -83,6 +83,7 @@ export const errorDefs = {
   UPDATED_AT_MISMATCH: { status: 409, params: [] },
   DOMAIN_IN_USE: { status: 409, params: ["domains"] },
   REVISION_NOT_FOUND: { status: 404, params: [] },
+  ROLLOUT_NOT_ACTIVE: { status: 409, params: [] },
   ROLLBACK_RESOURCE_UNAVAILABLE: { status: 409, params: [] },
   ORGANIZATION_NOT_FOUND: { status: 404, params: [] },
   ORGANIZATION_SLUG_TAKEN: { status: 409, params: ["slug"] },
@@ -137,6 +138,10 @@ export const revisionReasonDefs = {
   site_suspended: { params: ["site"], en: "site {site} suspended" },
   site_resumed: { params: ["site"], en: "site {site} resumed" },
   rollback: { params: ["revision"], en: "rollback to revision {revision}" },
+  rollout_rollback: {
+    params: ["revision"],
+    en: "canary of revision {revision} rolled back",
+  },
   origin_allow_list_updated: { params: [], en: "origin allow list updated" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 

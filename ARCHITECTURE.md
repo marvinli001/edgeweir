@@ -307,6 +307,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `ip_list` | 组织或平台 IP 名单（规范化 CIDR） |
 | `config_revision` | 每个集群的 revision：序号、内容哈希、二进制 IR、原因码 |
 | `node_config_status` | 节点应用回执与心跳，含回执验证标记 |
+| `cluster_rollout` | 集群的配置金丝雀：策略（开关、观察窗口、自动推进、5xx 阈值）与当前发布（稳定版本、候选版本、窗口、结果） |
 
 ### 证书、DNS 与域名
 
@@ -341,7 +342,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `node_upgrade_delivery` | 升级在每个节点上的阶段、状态与健康观察 |
 | `alert_channel` | 告警渠道，配置信封加密 |
 | `alert_subscription` | 用户按网站与渠道的订阅 |
-| `alert_state` | 告警当前状态 |
+| `alert_state` | 告警当前状态（网站告警与平台告警） |
 | `alert_event` | 告警事件，带顺序号 |
 | `alert_delivery` | 事件在渠道上的投递与重试 |
 
@@ -378,6 +379,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0024_p0_organization_limits` | `organization_limit` |
 | `0025_p0_service_accounts` | `service_account`、`service_account_key`、`idempotency_key`；`invitation.inviter_id` 可空，新增 `inviter_service_account_id` |
 | `0026_p0_usage` | `site_usage`、序列 `site_usage_seq`、`node_stats_cursor.complete_until`；为已有分钟统计标记用量窗口 |
+| `0027_p0_config_canary` | `cluster_rollout`；`alert_event.site_id`、`alert_state.site_id` 可空（平台告警） |
 
 ## 构建产物
 

@@ -3,17 +3,13 @@ import { type Node, nodeSupportsFeature } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { asc, eq, inArray } from "drizzle-orm";
 import { fail } from "../lib/errors";
+import { isOnline, ONLINE_WINDOW_SECONDS } from "../lib/node-online";
 import { type Actor, recordAudit } from "./audit";
 import { skipNodeTasks } from "./cache-tasks";
 import { findNodeGroup } from "./node-groups";
-import { type Executor, latestRevision } from "./revisions";
+import { type Executor, latestRevision, notifyClusterTargets } from "./revisions";
 
-/** A node counts as online if it sent a heartbeat within this window. */
-export const ONLINE_WINDOW_SECONDS = 45;
-
-export function isOnline(lastSeenAt: Date | null, now = Date.now()): boolean {
-  return !!lastSeenAt && now - lastSeenAt.getTime() <= ONLINE_WINDOW_SECONDS * 1000;
-}
+export { isOnline, ONLINE_WINDOW_SECONDS };
 
 type NodeRow = typeof schema.node.$inferSelect;
 
@@ -136,6 +132,8 @@ export async function updateNode(
       .returning();
     if (!updated) throw new Error("node update failed");
     const moved = input.nodeGroupId !== undefined && input.nodeGroupId !== before.nodeGroupId;
+    // Moving in or out of a canary group changes the node's target revision.
+    if (moved) await notifyClusterTargets(tx, before.clusterId);
     await recordAudit(tx, actor, {
       action: moved && input.name === undefined ? "node.move" : "node.update",
       targetType: "node",

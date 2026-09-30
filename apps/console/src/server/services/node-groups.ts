@@ -3,7 +3,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, desc, eq, inArray, ne } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import type { Executor } from "./revisions";
+import { type Executor, notifyClusterTargets } from "./revisions";
 
 type GroupRow = typeof schema.nodeGroup.$inferSelect;
 
@@ -29,6 +29,7 @@ async function toDtos(db: Executor, rows: GroupRow[]): Promise<NodeGroup[]> {
       regionId: r.regionId,
       regionName: region?.name ?? null,
       regionCode: region?.code ?? null,
+      isCanary: r.isCanary,
       nodeCount: counts.find((c) => c.groupId === r.id)?.n ?? 0,
       createdAt: r.createdAt.toISOString(),
     };
@@ -75,7 +76,7 @@ async function assertRegion(db: Executor, regionId: string | null | undefined) {
 
 export async function createNodeGroup(
   db: Database,
-  input: { clusterId: string; name: string; regionId: string | null },
+  input: { clusterId: string; name: string; regionId: string | null; isCanary: boolean },
   actor: Actor,
 ): Promise<NodeGroup> {
   const row = await db.transaction(async (tx) => {
@@ -93,7 +94,12 @@ export async function createNodeGroup(
       targetType: "node_group",
       targetId: created.id,
       targetName: created.name,
-      metadata: { clusterId: cluster.id, cluster: cluster.name, regionId: input.regionId },
+      metadata: {
+        clusterId: cluster.id,
+        cluster: cluster.name,
+        regionId: input.regionId,
+        isCanary: input.isCanary,
+      },
     });
     return created;
   });
@@ -104,7 +110,7 @@ export async function createNodeGroup(
 
 export async function updateNodeGroup(
   db: Database,
-  input: { id: string; name?: string; regionId?: string | null },
+  input: { id: string; name?: string; regionId?: string | null; isCanary?: boolean },
   actor: Actor,
 ): Promise<NodeGroup> {
   const row = await db.transaction(async (tx) => {
@@ -116,16 +122,23 @@ export async function updateNodeGroup(
       .set({
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.regionId !== undefined ? { regionId: input.regionId } : {}),
+        ...(input.isCanary !== undefined ? { isCanary: input.isCanary } : {}),
       })
       .where(eq(schema.nodeGroup.id, input.id))
       .returning();
     if (!updated) throw new Error("node group update failed");
+    // Canary membership decides which revision the group's nodes get.
+    if (input.isCanary !== undefined && input.isCanary !== before.isCanary)
+      await notifyClusterTargets(tx, before.clusterId);
     await recordAudit(tx, actor, {
       action: "node_group.update",
       targetType: "node_group",
       targetId: updated.id,
       targetName: updated.name,
-      metadata: { from: { name: before.name, regionId: before.regionId }, ...input },
+      metadata: {
+        from: { name: before.name, regionId: before.regionId, isCanary: before.isCanary },
+        ...input,
+      },
     });
     return updated;
   });

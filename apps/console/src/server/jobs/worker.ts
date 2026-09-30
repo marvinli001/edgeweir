@@ -10,12 +10,14 @@ import { sweepCertificates } from "../services/certificate-worker";
 import { reconcileDns } from "../services/dns";
 import { enforceDomainOwnershipOnce } from "../services/domain-ownership";
 import { pruneRevisions } from "../services/revisions";
+import { evaluateRollouts } from "../services/rollout";
 import { maintainTraffic } from "../services/stats-rollup";
 import { expireUpgrades } from "../services/upgrades";
 import { maintainUsage } from "../services/usage";
 
 export const QUEUES = {
   alerts: "alerts.sweep",
+  rollouts: "rollouts.evaluate",
   dns: "dns.reconcile",
   domainMigration: "domains.enforce-ownership",
   traffic: "traffic.rollup",
@@ -42,6 +44,10 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   });
   await boss.schedule(QUEUES.alerts, "* * * * *");
   await boss.send(QUEUES.alerts, {}, { singletonKey: "alerts-sweep" });
+  await boss.work(QUEUES.rollouts, async () => {
+    await evaluateRollouts(ctx);
+  });
+  await boss.schedule(QUEUES.rollouts, "* * * * *");
   await boss.work(QUEUES.dns, async () => {
     await reconcileDns(ctx);
   });

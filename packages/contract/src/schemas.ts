@@ -373,6 +373,8 @@ export const nodeGroup = z.object({
   clusterId: uuid,
   name: z.string(),
   isDefault: z.boolean(),
+  /** Nodes of canary groups get candidate revisions first (configuration canary). */
+  isCanary: z.boolean(),
   regionId: uuid.nullable(),
   regionName: z.string().nullable(),
   regionCode: z.string().nullable(),
@@ -386,13 +388,91 @@ export const nodeGroupCreateInput = z.object({
   clusterId: uuid,
   name: nodeGroupName,
   regionId: uuid.nullable().default(null),
+  isCanary: z.boolean().default(false),
 });
 
 export const nodeGroupUpdateInput = z.object({
   id: uuid,
   name: nodeGroupName.optional(),
   regionId: uuid.nullable().optional(),
+  isCanary: z.boolean().optional(),
 });
+
+/** Configuration canary policy of a cluster. */
+export const rolloutPolicy = z.object({
+  enabled: z.boolean(),
+  /** Observation window. */
+  windowSeconds: z.number().int().min(60).max(3600),
+  /** Promote automatically when the window passes; otherwise wait for an administrator. */
+  autoPromote: z.boolean(),
+  /** Roll back when the canary 5xx ratio exceeds max(baseline × multiplier, floor). */
+  errorRatioMultiplier: z.number().min(1).max(100),
+  errorRatioFloor: z.number().min(0.001).max(1),
+  /** …and the canary nodes served at least this many requests in the window. */
+  minRequests: z.number().int().min(1).max(1_000_000),
+});
+
+export const rolloutState = z.enum([
+  "idle",
+  "canary",
+  "awaiting_promotion",
+  "promoted",
+  "rolled_back",
+  "direct",
+]);
+
+export const rolloutOutcome = z.enum([
+  "",
+  "auto_promote",
+  "manual_promote",
+  "apply_failed",
+  "apply_timeout",
+  "unhealthy",
+  "error_ratio",
+  "manual_abort",
+  "no_canary",
+  "policy_disabled",
+  "manual_rollback",
+  "withdrawn",
+]);
+
+export const clusterRollout = z.object({
+  clusterId: uuid,
+  policy: rolloutPolicy,
+  state: rolloutState,
+  /** Revision of the non-canary nodes. */
+  stableRevision: z.number().int().nullable(),
+  /** Revision of the canary nodes while a rollout runs. */
+  candidateRevision: z.number().int().nullable(),
+  /** The candidate that was promoted or rolled back last. */
+  lastCandidateRevision: z.number().int().nullable(),
+  windowStartedAt: isoDateTime.nullable(),
+  windowEndsAt: isoDateTime.nullable(),
+  outcome: rolloutOutcome,
+  finishedAt: isoDateTime.nullable(),
+  canaryNodes: z.array(
+    z.object({
+      id: uuid,
+      name: z.string(),
+      online: z.boolean(),
+      appliedRevision: z.number().int(),
+      /** Takes part in the running window. */
+      participating: z.boolean(),
+    }),
+  ),
+  /** Traffic of the running window: canary nodes and the others (baseline). */
+  window: z
+    .object({
+      canaryRequests: z.number().int(),
+      canary5xx: z.number().int(),
+      baselineRequests: z.number().int(),
+      baseline5xx: z.number().int(),
+    })
+    .nullable(),
+  updatedAt: isoDateTime,
+});
+
+export const rolloutPolicyInput = rolloutPolicy.extend({ id: uuid, expectedUpdatedAt });
 
 export const node = z.object({
   id: uuid,
@@ -1107,6 +1187,10 @@ export type DnsResolvers = z.infer<typeof dnsResolvers>;
 export type DnsResolversInput = z.infer<typeof dnsResolversInput>;
 export type AuditLogEntry = z.infer<typeof auditLogEntry>;
 export type NodeGroup = z.infer<typeof nodeGroup>;
+export type RolloutPolicy = z.infer<typeof rolloutPolicy>;
+export type ClusterRollout = z.infer<typeof clusterRollout>;
+export type RolloutState = z.infer<typeof rolloutState>;
+export type RolloutOutcome = z.infer<typeof rolloutOutcome>;
 export type Region = z.infer<typeof region>;
 export type Me = z.infer<typeof me>;
 export type Member = z.infer<typeof member>;

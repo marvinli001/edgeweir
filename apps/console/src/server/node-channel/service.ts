@@ -49,7 +49,8 @@ import { claimEnrollmentToken } from "../services/enrollment";
 import { isSerialRevoked, normalizeSerial } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
 import { mintRevisionReceipt, verifyRevisionReceipt } from "../services/revision-receipts";
-import { getRevision, latestRevision } from "../services/revisions";
+import { getRevision, latestRevision, nodeTarget } from "../services/revisions";
+import { evaluateAfterHeartbeat } from "../services/rollout";
 import { s3SecretBinding } from "../services/sites";
 import { ingestStatsBatch, MAX_STATS_PER_REPORT } from "../services/stats";
 import {
@@ -164,6 +165,15 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       throw new ConnectError("certificate has been superseded", Code.Unauthenticated);
     }
     return row;
+  }
+
+  /** The node's target revision, with its current node group. */
+  async function currentTarget(nodeId: string) {
+    const [row] = await app.db
+      .select({ clusterId: schema.node.clusterId, nodeGroupId: schema.node.nodeGroupId })
+      .from(schema.node)
+      .where(eq(schema.node.id, nodeId));
+    return row ? nodeTarget(app.db, row) : undefined;
   }
 
   /** Ends an open watch stream once its node is disabled, deleted or re-keyed. */
@@ -394,16 +404,17 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         queue.push(item);
         wake?.();
       };
+      // A node follows its own target: the candidate in a canary group, else the stable revision.
       const refresh = async () => {
-        const latest = await latestRevision(app.db, node.clusterId);
-        if (latest) push({ revision: latest.revision, contentHash: latest.contentHash });
+        const target = await currentTarget(node.id);
+        if (target) push({ revision: target.revision, contentHash: target.contentHash });
         if (await hasDeliverableTasks(app.db, node.id)) {
           tasksPending = true;
           wake?.();
         }
       };
       const offConfig = app.events.on("config", (e) => {
-        if (e.clusterId === node.clusterId) push(e);
+        if (e.clusterId === node.clusterId) void refresh();
       });
       const offTasks = app.events.on("tasks", (e) => {
         if (e.clusterIds.includes(node.clusterId)) {
@@ -477,10 +488,13 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
 
     async getConfig(req, ctx) {
       const node = await requireNode(ctx);
+      const own = await nodeTarget(app.db, node);
+      // A node never gets a revision newer than its target (a canary candidate
+      // stays with the canary nodes).
+      if (req.revision !== 0n && own && req.revision > BigInt(own.revision))
+        throw new ConnectError("revision is not published to this node", Code.FailedPrecondition);
       const target =
-        req.revision === 0n
-          ? await latestRevision(app.db, node.clusterId)
-          : await getRevision(app.db, node.clusterId, Number(req.revision));
+        req.revision === 0n ? own : await getRevision(app.db, node.clusterId, Number(req.revision));
       if (!target) throw new ConnectError("revision not found", Code.NotFound);
       const snapshot = decodeNodeConfig(target.ir);
       if (
@@ -607,7 +621,8 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           now,
         );
       });
-      const latest = await latestRevision(app.db, node.clusterId);
+      const latest = await currentTarget(node.id);
+      await evaluateAfterHeartbeat(app, node);
       const tasksPending =
         (await hasDeliverableTasks(app.db, node.id)) || (await hasUpgradeTasks(app.db, node.id));
       const expiresIn = (node.certNotAfter?.getTime() ?? 0) - now.getTime();

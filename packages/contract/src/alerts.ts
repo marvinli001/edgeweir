@@ -7,6 +7,13 @@ export const alertKind = z.enum([
   "origin_unavailable",
   "high_5xx",
 ]);
+/** Platform alerts (clusters, DNS): platform channels only, no subscriptions. */
+export const platformAlertKind = z.enum([
+  "config_rollout_failed",
+  "config_rollout_no_canary",
+  "dns_mass_removal_blocked",
+]);
+export const alertEventKind = z.enum([...alertKind.options, ...platformAlertKind.options]);
 const endpoint = z
   .url()
   .max(4096)
@@ -149,16 +156,20 @@ export const alertsContract = {
       z.array(
         z.object({
           id: uuid,
-          siteId: uuid,
-          kind: alertKind,
+          /** Null for platform alerts (platform administrators only). */
+          siteId: uuid.nullable(),
+          kind: alertEventKind,
           status: z.enum(["firing", "resolved"]),
           occurredAt: z.string(),
+          /** The site, or the cluster / "DNS" of a platform alert. */
           siteName: z.string(),
         }),
       ),
     ),
 };
 export type AlertKind = z.infer<typeof alertKind>;
+export type PlatformAlertKind = z.infer<typeof platformAlertKind>;
+export type AlertEventKind = z.infer<typeof alertEventKind>;
 export type AlertPolicy = z.infer<typeof alertPolicy>;
 export type AlertChannelInput = z.infer<typeof alertChannelInput>;
 export type AlertChannelConfig = z.infer<typeof alertChannelConfig>;

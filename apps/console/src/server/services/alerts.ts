@@ -4,12 +4,13 @@ import {
   type AlertChannelInput,
   type AlertKind,
   type AlertPolicy,
+  alertEventKind,
   alertKind,
   alertPolicy,
   type SmtpInput,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { and, desc, eq, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
@@ -365,10 +366,15 @@ export async function listAlertEvents(app: AppContext, scope: SiteScope, siteId?
   const rows = await app.db
     .select({ event: schema.alertEvent, siteName: schema.site.name })
     .from(schema.alertEvent)
-    .innerJoin(schema.site, eq(schema.site.id, schema.alertEvent.siteId))
+    .leftJoin(schema.site, eq(schema.site.id, schema.alertEvent.siteId))
     .where(
       and(
-        scope.all ? undefined : eq(schema.site.organizationId, scope.organizationId),
+        // Platform alerts (no site) are for platform administrators only.
+        scope.all
+          ? siteId
+            ? undefined
+            : or(isNull(schema.alertEvent.siteId), isNotNull(schema.site.id))
+          : eq(schema.site.organizationId, scope.organizationId),
         siteId ? eq(schema.site.id, siteId) : undefined,
       ),
     )
@@ -377,15 +383,16 @@ export async function listAlertEvents(app: AppContext, scope: SiteScope, siteId?
   return rows.map(({ event, siteName }) => ({
     id: event.id,
     siteId: event.siteId,
-    kind: alertKind.parse(event.kind),
+    kind: alertEventKind.parse(event.kind),
     status: event.status === "resolved" ? ("resolved" as const) : ("firing" as const),
     occurredAt: event.occurredAt.toISOString(),
-    siteName,
+    siteName: siteName ?? event.payload.siteName,
   }));
 }
 
-const keyOf = (kind: string, siteId: string, resourceId: string) =>
-  `${kind}/${siteId}/${resourceId}`;
+/** Site alerts are keyed by site; platform alerts (no site) by "platform". */
+const keyOf = (kind: string, siteId: string | null, resourceId: string) =>
+  `${kind}/${siteId ?? "platform"}/${resourceId}`;
 interface Condition {
   siteId: string;
   kind: AlertKind;
@@ -484,6 +491,9 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
 async function eligible(app: AppContext, c: Channel, event: Event) {
   if (!c.enabled) return false;
   if (c.platform) return true;
+  // Platform alerts have no subscribers: platform channels only.
+  if (event.siteId === null) return false;
+  const siteId = event.siteId;
   const rows = await app.db
     .select({
       sub: schema.alertSubscription,
@@ -506,7 +516,7 @@ async function eligible(app: AppContext, c: Channel, event: Event) {
     )
     .where(
       and(
-        eq(schema.alertSubscription.siteId, event.siteId),
+        eq(schema.alertSubscription.siteId, siteId),
         eq(schema.alertSubscription.channelId, c.id),
         eq(schema.alertSubscription.enabled, true),
       ),
@@ -558,13 +568,16 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
           occurredAt: new Date(now),
         });
       }
-      for (const old of previous.filter((s) => s.active && !snapshot.active.has(s.key))) {
+      // Platform alerts (no site) are raised and resolved where they happen, not here.
+      for (const old of previous.filter(
+        (s) => s.active && s.siteId !== null && !snapshot.active.has(s.key),
+      )) {
         await tx
           .update(schema.alertState)
           .set({ active: false, updatedAt: new Date(now) })
           .where(eq(schema.alertState.key, old.key));
         const site = snapshot.sites.find((s) => s.id === old.siteId);
-        if (site)
+        if (site && old.siteId)
           await tx.insert(schema.alertEvent).values({
             siteId: site.id,
             kind: old.kind,
@@ -641,7 +654,7 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
           id: event.id,
           siteId: event.siteId,
           siteName: event.payload.siteName,
-          kind: alertKind.parse(event.kind),
+          kind: alertEventKind.parse(event.kind),
           status: event.status === "resolved" ? "resolved" : "firing",
           occurredAt: event.occurredAt.toISOString(),
           resourceId: event.resourceId,

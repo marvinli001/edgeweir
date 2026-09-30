@@ -17,7 +17,13 @@ import { fail } from "../lib/errors";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { runCertd } from "./certificate-worker";
 import { isOnline } from "./nodes";
-import type { Executor, Tx } from "./revisions";
+import {
+  type Executor,
+  type RolloutTargets,
+  rolloutTargets,
+  type Tx,
+  targetFor,
+} from "./revisions";
 import { findSite, type SiteScope } from "./sites";
 
 type Provider = typeof schema.platformDnsProvider.$inferSelect;
@@ -215,10 +221,11 @@ export async function compileDnsPlan(
   const receipts = await db.select().from(schema.nodeConfigStatus);
   const addresses = await db.select().from(schema.nodeIp);
   const groups = await db.select().from(schema.nodeGroup);
-  const revisions = await db
-    .selectDistinctOn([schema.configRevision.clusterId])
-    .from(schema.configRevision)
-    .orderBy(schema.configRevision.clusterId, desc(schema.configRevision.revision));
+  // Each node is compared with its own target: during a canary window the
+  // non-canary nodes run the stable revision and stay in the plan.
+  const targets = new Map<string, RolloutTargets>();
+  for (const clusterId of [...new Set(nodes.map((n) => n.clusterId))].sort())
+    targets.set(clusterId, await rolloutTargets(db, clusterId));
   const records: DnsRecord[] = [];
   const names = new Map<string, ManagedName>();
   const declare = (name: string, type: DnsRecord["type"]) => {
@@ -250,13 +257,14 @@ export async function compileDnsPlan(
           isOnline(n.lastSeenAt, now),
       )) {
         const receipt = receipts.find((r) => r.nodeId === node.id),
-          revision = revisions.find((r) => r.clusterId === node.clusterId);
+          clusterTargets = targets.get(node.clusterId),
+          target = clusterTargets ? targetFor(node, clusterTargets) : undefined;
+        // Same content as the target (a rollback copy has a higher number but the same hash).
         if (
           !receipt?.dataPlaneHealthy ||
           receipt.state !== "applied" ||
-          !revision ||
-          receipt.appliedRevision !== revision.revision ||
-          receipt.appliedContentHash !== revision.contentHash
+          !target ||
+          receipt.appliedContentHash !== target.contentHash
         )
           continue;
         const override = line.overrides.find((o) => o.nodeId === node.id);

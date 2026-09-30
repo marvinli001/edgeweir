@@ -15,7 +15,8 @@ import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { assertOrgLimit } from "./organization-limits";
-import { type Executor, latestRevision, publishRevision } from "./revisions";
+import { type Executor, getRevision, publishRevision } from "./revisions";
+import { publishedRevisions } from "./rollout";
 import type { SiteScope } from "./sites";
 
 export type CertificateContext = { scope: SiteScope; actor: Actor; organizationId: string | null };
@@ -456,11 +457,15 @@ export async function deleteDnsCredential(app: AppContext, id: string, ctx: Cert
 export async function nodeCertificates(app: AppContext, clusterId: string, ids: string[]) {
   const valid = [...new Set(ids)].filter((id) => /^[0-9a-f-]{36}$/i.test(id)).slice(0, 100);
   if (!valid.length) return [];
-  const latest = await latestRevision(app.db, clusterId);
-  if (!latest) return [];
-  const authorized = new Map(
-    decodeNodeConfig(latest.ir).certificates.map((cert) => [cert.id, cert.sha256Fingerprint]),
-  );
+  // Certificates of every revision the cluster's nodes may run (stable, candidate, latest).
+  const authorized = new Map<string, string>();
+  for (const revision of await publishedRevisions(app.db, clusterId)) {
+    const row = await getRevision(app.db, clusterId, revision);
+    if (!row) continue;
+    for (const cert of decodeNodeConfig(row.ir).certificates)
+      authorized.set(cert.id, cert.sha256Fingerprint);
+  }
+  if (!authorized.size) return [];
   const rows = await app.db
     .selectDistinct({ certificate: schema.certificate })
     .from(schema.certificate)

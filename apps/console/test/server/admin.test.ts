@@ -194,6 +194,22 @@ describe("admin area procedures", async () => {
       ["clusters.delete", () => member.clusters.delete({ id })],
       ["clusters.revisions", () => member.clusters.revisions({ id })],
       ["clusters.rollback", () => member.clusters.rollback({ id, revision: 1 })],
+      ["clusters.rollout", () => member.clusters.rollout({ id })],
+      [
+        "clusters.setRolloutPolicy",
+        () =>
+          member.clusters.setRolloutPolicy({
+            id,
+            enabled: true,
+            windowSeconds: 300,
+            autoPromote: true,
+            errorRatioMultiplier: 2,
+            errorRatioFloor: 0.05,
+            minRequests: 100,
+          }),
+      ],
+      ["clusters.promoteRollout", () => member.clusters.promoteRollout({ id })],
+      ["clusters.abortRollout", () => member.clusters.abortRollout({ id })],
       [
         "clusters.createEnrollmentToken",
         () => member.clusters.createEnrollmentToken({ clusterId: id }),

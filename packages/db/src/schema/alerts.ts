@@ -49,9 +49,8 @@ export const alertSubscription = pgTable(
 );
 export const alertState = pgTable("alert_state", {
   key: text("key").primaryKey(),
-  siteId: uuid("site_id")
-    .notNull()
-    .references(() => site.id, { onDelete: "cascade" }),
+  /** Null for platform alerts (clusters, DNS). */
+  siteId: uuid("site_id").references(() => site.id, { onDelete: "cascade" }),
   kind: text("kind").notNull(),
   resourceId: text("resource_id").notNull(),
   active: boolean("active").notNull(),
@@ -62,9 +61,8 @@ export const alertEvent = pgTable(
   {
     ordinal: bigserial("ordinal", { mode: "number" }).notNull(),
     id: uuid("id").primaryKey().defaultRandom(),
-    siteId: uuid("site_id")
-      .notNull()
-      .references(() => site.id, { onDelete: "cascade" }),
+    /** Null for platform alerts, which go to platform channels only. */
+    siteId: uuid("site_id").references(() => site.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
     resourceId: text("resource_id").notNull(),
     status: text("status").notNull(),

@@ -15,7 +15,13 @@ import { fail } from "../lib/errors";
 import { outboundGet } from "../lib/outbound";
 import { type Actor, recordAudit } from "./audit";
 import { getReleaseSource } from "./release-source";
-import { type Executor, latestRevision } from "./revisions";
+import {
+  type Executor,
+  nodeTarget,
+  type RolloutTargets,
+  rolloutTargets,
+  targetFor,
+} from "./revisions";
 
 const job = schema.nodeUpgrade,
   delivery = schema.nodeUpgradeDelivery;
@@ -102,22 +108,18 @@ async function dtos(db: Executor, rows: JobRow[], now = Date.now()): Promise<Upg
         .where(inArray(schema.node.id, ids))
     : [];
   const nodeMap = new Map(nodes.map((n) => [n.node.id, n]));
-  const revisions = await db
-    .selectDistinctOn([schema.configRevision.clusterId], {
-      clusterId: schema.configRevision.clusterId,
-      revision: schema.configRevision.revision,
-      hash: schema.configRevision.contentHash,
-    })
-    .from(schema.configRevision)
-    .where(inArray(schema.configRevision.clusterId, [...new Set(rows.map((r) => r.clusterId))]))
-    .orderBy(asc(schema.configRevision.clusterId), desc(schema.configRevision.revision));
-  const desired = new Map(revisions.map((r) => [r.clusterId, r]));
+  // Healthy means running the node's own target (canary groups may run a candidate).
+  const targets = new Map<string, RolloutTargets>();
+  for (const clusterId of [...new Set(rows.map((r) => r.clusterId))])
+    targets.set(clusterId, await rolloutTargets(db, clusterId));
   return rows.map((r) => {
     const items = deliveries.filter((d) => d.upgradeId === r.id),
       canary = items.filter((d) => d.phase === "canary"),
-      target = desired.get(r.clusterId);
+      clusterTargets = targets.get(r.clusterId);
     const healthy = (d: typeof delivery.$inferSelect) => {
       const current = nodeMap.get(d.nodeId);
+      const target =
+        current && clusterTargets ? targetFor(current.node, clusterTargets) : undefined;
       return (
         d.state === "succeeded" &&
         d.healthySince &&
@@ -130,8 +132,7 @@ async function dtos(db: Executor, rows: JobRow[], now = Date.now()): Promise<Upg
         current.status?.dataPlaneHealthy &&
         current.status.state === "applied" &&
         target &&
-        current.status.appliedRevision === target.revision &&
-        current.status.appliedContentHash === target.hash
+        current.status.appliedContentHash === target.contentHash
       );
     };
     return {
@@ -246,7 +247,7 @@ export async function createUpgrade(
       .leftJoin(schema.nodeConfigStatus, eq(schema.nodeConfigStatus.nodeId, schema.node.id))
       .where(and(eq(schema.node.clusterId, cluster.id), eq(schema.node.status, "active")))
       .limit(1001);
-    const desired = await latestRevision(tx, cluster.id);
+    const clusterTargets = await rolloutTargets(tx, cluster.id);
     const canary = nodes.filter((n) => n.node.nodeGroupId === group.id),
       now = Date.now();
     if (
@@ -261,9 +262,7 @@ export async function createUpgrade(
           now - n.lastSeenAt.getTime() > FRESH ||
           !s?.dataPlaneHealthy ||
           s.state !== "applied" ||
-          !desired ||
-          s.appliedRevision !== desired.revision ||
-          s.appliedContentHash !== desired.contentHash,
+          s.appliedContentHash !== targetFor(n, clusterTargets)?.contentHash,
       )
     )
       fail(
@@ -484,7 +483,7 @@ export async function reportUpgrade(
         .from(schema.node)
         .leftJoin(schema.nodeConfigStatus, eq(schema.nodeConfigStatus.nodeId, schema.node.id))
         .where(eq(schema.node.id, nodeId));
-      const desired = await latestRevision(tx, found.job.clusterId);
+      const desired = receipt ? await nodeTarget(tx, receipt.node) : undefined;
       if (
         !receipt ||
         receipt.node.status !== "active" ||
@@ -495,7 +494,6 @@ export async function reportUpgrade(
         !receipt.status?.dataPlaneHealthy ||
         receipt.status.state !== "applied" ||
         !desired ||
-        receipt.status.appliedRevision !== desired.revision ||
         receipt.status.appliedContentHash !== desired.contentHash
       )
         throw new ConnectError(
@@ -542,6 +540,7 @@ export async function recordUpgradeHealth(
   node: {
     id: string;
     clusterId: string;
+    nodeGroupId: string | null;
     status: string;
     agentVersion: string;
     lastSeenAt: Date | null;
@@ -567,15 +566,14 @@ export async function recordUpgradeHealth(
       ),
     );
   if (!rows.length) return;
-  const desired = await latestRevision(tx, node.clusterId);
+  const desired = await nodeTarget(tx, node);
   for (const row of rows) {
     const healthy =
       node.status === "active" &&
       node.agentVersion.replace(/^v/, "") === row.version &&
       report.state === "applied" &&
       report.dataPlaneHealthy &&
-      desired?.revision === report.appliedRevision &&
-      desired.contentHash === report.appliedContentHash;
+      desired?.contentHash === report.appliedContentHash;
     const continuous = !!node.lastSeenAt && now.getTime() - node.lastSeenAt.getTime() <= FRESH;
     await tx
       .update(delivery)

@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isIP } from "node:net";
-import { type AlertKind, alertChannelConfig, smtpInput } from "@edgeweir/contract";
+import { type AlertEventKind, alertChannelConfig, smtpInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import nodemailer from "nodemailer";
@@ -19,7 +19,7 @@ export type Notification = {
   id: string;
   siteId: string | null;
   siteName: string;
-  kind: AlertKind | "test";
+  kind: AlertEventKind | "test";
   status: "firing" | "resolved";
   occurredAt: string;
   resourceId?: string;
@@ -55,12 +55,21 @@ export async function deliverNotification(
     certificate_expiring: m.alert_kind_certificate_expiring,
     origin_unavailable: m.alert_kind_origin_unavailable,
     high_5xx: m.alert_kind_high_5xx,
+    config_rollout_failed: m.alert_kind_config_rollout_failed,
+    config_rollout_no_canary: m.alert_kind_config_rollout_no_canary,
+    dns_mass_removal_blocked: m.alert_kind_dns_mass_removal_blocked,
     test: m.alert_test_message,
   }[event.kind]({}, { locale });
   const status = event.status === "resolved" ? m.alert_recovered({}, { locale }) : kind;
   const site = event.siteName.replace(/[\r\n\0]/g, " ").slice(0, 100);
   const url = new URL(
-    event.siteId ? `/sites/${event.siteId}` : "/admin/alerts",
+    event.siteId
+      ? `/sites/${event.siteId}`
+      : event.kind === "dns_mass_removal_blocked"
+        ? "/admin/dns"
+        : event.kind === "test"
+          ? "/admin/alerts"
+          : "/admin/clusters",
     app.env.EDGEWEIR_PUBLIC_URL,
   ).toString();
   const text = m.alert_notice_body(

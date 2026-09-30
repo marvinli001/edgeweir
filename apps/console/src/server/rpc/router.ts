@@ -111,6 +111,7 @@ import { siteOriginHealth } from "../services/origin-health";
 import { createRegion, deleteRegion, listRegions, updateRegion } from "../services/regions";
 import { getReleaseSource, setReleaseSource } from "../services/release-source";
 import { toRevisionDto } from "../services/revisions";
+import { abortRollout, getRollout, promoteRollout, setRolloutPolicy } from "../services/rollout";
 import {
   createIpList,
   deleteIpList,
@@ -502,6 +503,18 @@ export const router = os.router({
     }),
     rollback: admin.clusters.rollback.handler(({ input, context }) =>
       rollbackCluster(context.app.db, input, context.actor),
+    ),
+    rollout: admin.clusters.rollout.handler(({ input, context }) =>
+      getRollout(context.app.db, input.id),
+    ),
+    setRolloutPolicy: admin.clusters.setRolloutPolicy.handler(({ input, context }) =>
+      setRolloutPolicy(context.app.db, input, context.actor),
+    ),
+    promoteRollout: admin.clusters.promoteRollout.handler(({ input, context }) =>
+      promoteRollout(context.app.db, input.id, context.actor),
+    ),
+    abortRollout: admin.clusters.abortRollout.handler(({ input, context }) =>
+      abortRollout(context.app.db, input.id, context.actor),
     ),
     createEnrollmentToken: admin.clusters.createEnrollmentToken.handler(({ input, context }) =>
       createEnrollmentToken(context.app.db, input, {

@@ -1,4 +1,4 @@
-import { create } from "@bufbuild/protobuf";
+import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
   ConfigCapacityError,
@@ -30,14 +30,18 @@ import {
   HttpChallengeSchema,
   IpListSchema,
   type NodeConfig,
+  NodeConfigSchema,
 } from "@edgeweir/proto";
 import { bindLists, listReferences, type Phase, parseExpression } from "@edgeweir/rule-engine";
-import { and, asc, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lt, notInArray, sql } from "drizzle-orm";
 import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { CONFIG_CHANNEL } from "../lib/events";
+import { isOnline } from "../lib/node-online";
 import { isServing } from "../lib/site-state";
+import { recordAudit, systemActor } from "./audit";
+import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { isAdminRole } from "./users";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -292,7 +296,7 @@ export interface RevisionReason {
   params: ReasonParams;
 }
 
-async function insertRevision(
+export async function insertRevision(
   tx: Tx,
   clusterId: string,
   build: (revision: bigint) => NodeConfig,
@@ -483,25 +487,247 @@ export async function publishRevision(
         expiresAt: timestampFromDate(c.expiresAt),
       }),
     );
-  return insertRevision(
-    tx,
-    opts.clusterId,
-    (revision) =>
-      compileNodeConfig(
-        {
-          clusterId: opts.clusterId,
-          sites,
-          originAllowedCidrs,
-          certificates,
-          httpChallenges,
-          ipLists,
-          platformRules,
-        },
-        revision,
-      ),
-    opts.reason,
-    opts.userId ?? null,
+  const build = (revision: bigint) =>
+    compileNodeConfig(
+      {
+        clusterId: opts.clusterId,
+        sites,
+        originAllowedCidrs,
+        certificates,
+        httpChallenges,
+        ipLists,
+        platformRules,
+      },
+      revision,
+    );
+  const rollout = await loadRollout(tx, opts.clusterId);
+  if (!rollout?.enabled)
+    return insertRevision(tx, opts.clusterId, build, opts.reason, opts.userId ?? null);
+  return publishThroughCanary(tx, rollout, build, opts.reason, opts.userId ?? null);
+}
+
+type RolloutRow = typeof schema.clusterRollout.$inferSelect;
+
+export async function loadRollout(
+  db: Executor,
+  clusterId: string,
+): Promise<RolloutRow | undefined> {
+  const [row] = await db
+    .select()
+    .from(schema.clusterRollout)
+    .where(eq(schema.clusterRollout.clusterId, clusterId));
+  return row;
+}
+
+export async function updateRollout(
+  tx: Executor,
+  clusterId: string,
+  values: Partial<Omit<RolloutRow, "clusterId">>,
+) {
+  await tx
+    .update(schema.clusterRollout)
+    .set({ ...values, updatedAt: new Date() })
+    .where(eq(schema.clusterRollout.clusterId, clusterId));
+}
+
+/** The revisions nodes of a cluster get: canary groups the candidate (if any), all others the stable one. */
+export interface RolloutTargets {
+  stable: RevisionRow | undefined;
+  candidate: RevisionRow | undefined;
+  canaryGroupIds: Set<string>;
+}
+
+export async function rolloutTargets(db: Executor, clusterId: string): Promise<RolloutTargets> {
+  const rollout = await loadRollout(db, clusterId);
+  const latest = await latestRevision(db, clusterId);
+  if (!rollout?.enabled) return { stable: latest, candidate: undefined, canaryGroupIds: new Set() };
+  const stable =
+    rollout.stableRevision === null
+      ? latest
+      : ((await getRevision(db, clusterId, rollout.stableRevision)) ?? latest);
+  const candidate =
+    rollout.candidateRevision === null
+      ? undefined
+      : await getRevision(db, clusterId, rollout.candidateRevision);
+  const groups = await db
+    .select({ id: schema.nodeGroup.id })
+    .from(schema.nodeGroup)
+    .where(and(eq(schema.nodeGroup.clusterId, clusterId), eq(schema.nodeGroup.isCanary, true)));
+  return { stable, candidate, canaryGroupIds: new Set(groups.map((g) => g.id)) };
+}
+
+export function targetFor(
+  node: { nodeGroupId: string | null },
+  targets: RolloutTargets,
+): RevisionRow | undefined {
+  if (targets.candidate && node.nodeGroupId && targets.canaryGroupIds.has(node.nodeGroupId))
+    return targets.candidate;
+  return targets.stable;
+}
+
+/** The revision a node should run (its target), per the cluster's rollout. */
+export async function nodeTarget(
+  db: Executor,
+  node: { clusterId: string; nodeGroupId: string | null },
+): Promise<RevisionRow | undefined> {
+  return targetFor(node, await rolloutTargets(db, node.clusterId));
+}
+
+/** Tells every console instance's watch streams of the cluster to re-read their targets. */
+export async function notifyClusterTargets(tx: Executor, clusterId: string) {
+  const latest = await latestRevision(tx, clusterId);
+  if (!latest) return;
+  await tx.execute(
+    sql`select pg_notify(${CONFIG_CHANNEL}, ${JSON.stringify({
+      clusterId,
+      revision: latest.revision,
+      contentHash: latest.contentHash,
+    })})`,
   );
+}
+
+/** Active canary-group nodes of a cluster that are online now. */
+export async function onlineCanaryNodes(tx: Executor, clusterId: string, now = Date.now()) {
+  const rows = await tx
+    .select({ id: schema.node.id, name: schema.node.name, lastSeenAt: schema.node.lastSeenAt })
+    .from(schema.node)
+    .innerJoin(schema.nodeGroup, eq(schema.nodeGroup.id, schema.node.nodeGroupId))
+    .where(
+      and(
+        eq(schema.node.clusterId, clusterId),
+        eq(schema.node.status, "active"),
+        eq(schema.nodeGroup.isCanary, true),
+      ),
+    );
+  return rows.filter((n) => isOnline(n.lastSeenAt, now));
+}
+
+/**
+ * `config` with the ACME HTTP-01 challenges of `challenges`: issuance
+ * state that every node needs at once, so it never waits for a canary.
+ */
+export function withChallenges(config: NodeConfig, challenges: NodeConfig["httpChallenges"]) {
+  const out = clone(NodeConfigSchema, config);
+  out.httpChallenges = challenges.map((c) => clone(HttpChallengeSchema, c));
+  out.requiredFeatures = out.requiredFeatures.filter((f) => f !== "http01-v1");
+  if (out.httpChallenges.length) out.requiredFeatures.push("http01-v1");
+  const canonical = canonicalize(out);
+  canonical.contentHash = contentHash(canonical);
+  return canonical;
+}
+
+/**
+ * Publishing with the configuration canary on. A change that only differs
+ * from the stable revision in ACME challenges goes to every node. Without
+ * an online canary node the change goes to every node too (audited and
+ * alerted). Otherwise the stable revision first takes the current
+ * challenges, then the change becomes the candidate for the canary nodes
+ * and the observation window (re)starts.
+ */
+async function publishThroughCanary(
+  tx: Tx,
+  rollout: RolloutRow,
+  build: (revision: bigint) => NodeConfig,
+  reason: RevisionReason,
+  userId: string | null,
+): Promise<{ row: RevisionRow; created: boolean }> {
+  const clusterId = rollout.clusterId;
+  const preview = previewConfig(build);
+  const stable =
+    (rollout.stableRevision !== null
+      ? await getRevision(tx, clusterId, rollout.stableRevision)
+      : undefined) ?? (await latestRevision(tx, clusterId));
+  if (!stable) return insertRevision(tx, clusterId, build, reason, userId);
+  const patched = withChallenges(decodeNodeConfig(stable.ir), preview.httpChallenges);
+  const now = new Date();
+  if (preview.contentHash === patched.contentHash) {
+    const result = await insertRevision(tx, clusterId, build, reason, userId);
+    if (result.row.revision !== stable.revision || rollout.candidateRevision !== null)
+      await updateRollout(tx, clusterId, {
+        stableRevision: result.row.revision,
+        candidateRevision: null,
+        ...(rollout.candidateRevision !== null
+          ? {
+              state: "idle",
+              outcome: "withdrawn",
+              lastCandidateRevision: rollout.candidateRevision,
+              finishedAt: now,
+            }
+          : {}),
+      });
+    return result;
+  }
+  const canary = await onlineCanaryNodes(tx, clusterId, now.getTime());
+  if (canary.length === 0) {
+    const result = await insertRevision(tx, clusterId, build, reason, userId);
+    if (result.created) {
+      await updateRollout(tx, clusterId, {
+        stableRevision: result.row.revision,
+        candidateRevision: null,
+        lastCandidateRevision: rollout.candidateRevision,
+        state: "direct",
+        outcome: "no_canary",
+        windowStartedAt: null,
+        canaryNodeIds: [],
+        finishedAt: now,
+      });
+      const [cluster] = await tx
+        .select({ name: schema.cluster.name })
+        .from(schema.cluster)
+        .where(eq(schema.cluster.id, clusterId));
+      await recordAudit(tx, systemActor, {
+        action: "cluster.rollout_direct",
+        targetType: "cluster",
+        targetId: clusterId,
+        targetName: cluster?.name ?? "",
+        metadata: { revision: result.row.revision, reason: "no_canary" },
+      });
+      await raisePlatformAlert(tx, "config_rollout_no_canary", clusterId, cluster?.name ?? "", now);
+    }
+    return result;
+  }
+  if (patched.contentHash !== stable.contentHash) {
+    const restabled = await insertRevision(
+      tx,
+      clusterId,
+      (revision) => {
+        const config = clone(NodeConfigSchema, patched);
+        config.revision = revision;
+        return config;
+      },
+      { code: "acme_challenge_updated", params: {} },
+      null,
+    );
+    await updateRollout(tx, clusterId, { stableRevision: restabled.row.revision });
+  }
+  const result = await insertRevision(tx, clusterId, build, reason, userId);
+  if (result.created || rollout.candidateRevision === null) {
+    await updateRollout(tx, clusterId, {
+      candidateRevision: result.row.revision,
+      state: "canary",
+      windowStartedAt: now,
+      canaryNodeIds: canary.map((n) => n.id),
+      outcome: "",
+      finishedAt: null,
+    });
+    const [cluster] = await tx
+      .select({ name: schema.cluster.name })
+      .from(schema.cluster)
+      .where(eq(schema.cluster.id, clusterId));
+    await resolvePlatformAlert(tx, "config_rollout_no_canary", clusterId, cluster?.name ?? "", now);
+  }
+  return result;
+}
+
+/** The compiled content (revision 0) of a build, with capacity errors as API errors. */
+function previewConfig(build: (revision: bigint) => NodeConfig): NodeConfig {
+  try {
+    return build(0n);
+  } catch (error) {
+    if (error instanceof ConfigCapacityError)
+      fail("CLUSTER_SITE_LIMIT", "cluster site capacity reached", { limit: MAX_SITES_PER_CLUSTER });
+    throw error;
+  }
 }
 
 /**
@@ -641,7 +867,7 @@ export async function rollbackToRevision(
   // Challenge tokens are short-lived issuance state, never rollback content.
   restored.httpChallenges = [];
   restored.requiredFeatures = restored.requiredFeatures.filter((f) => f !== "http01-v1");
-  return insertRevision(
+  const result = await insertRevision(
     tx,
     opts.clusterId,
     (revision) => {
@@ -655,6 +881,18 @@ export async function rollbackToRevision(
     { code: "rollback", params: { revision: opts.revision } },
     opts.userId ?? null,
   );
+  // An administrator's rollback restores known content: it goes to every node, no canary.
+  const rollout = await loadRollout(tx, opts.clusterId);
+  if (rollout?.enabled)
+    await updateRollout(tx, opts.clusterId, {
+      stableRevision: result.row.revision,
+      candidateRevision: null,
+      lastCandidateRevision: rollout.candidateRevision ?? rollout.lastCandidateRevision,
+      state: "promoted",
+      outcome: "manual_rollback",
+      finishedAt: new Date(),
+    });
+  return result;
 }
 
 /** Deletes revisions beyond the retention window, keeping the newest ones. */
@@ -664,12 +902,18 @@ export async function pruneRevisions(db: Executor, keep = REVISION_RETENTION): P
   for (const { id } of clusters) {
     const latest = await latestRevision(db, id);
     if (!latest || latest.revision <= keep) continue;
+    // The stable and candidate revisions of a rollout are kept however old they are.
+    const rollout = await loadRollout(db, id);
+    const pinned = [rollout?.stableRevision, rollout?.candidateRevision].filter(
+      (r): r is number => typeof r === "number",
+    );
     const deleted = await db
       .delete(schema.configRevision)
       .where(
         and(
           eq(schema.configRevision.clusterId, id),
           lt(schema.configRevision.revision, latest.revision - keep + 1),
+          pinned.length ? notInArray(schema.configRevision.revision, pinned) : undefined,
         ),
       )
       .returning({ id: schema.configRevision.id });
