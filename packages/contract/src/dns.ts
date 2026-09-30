@@ -268,6 +268,47 @@ export const dnsContract = {
       }),
     ),
 };
+export const siteDnsRecord = z.object({
+  id: uuid,
+  credentialId: uuid,
+  credentialName: z.string(),
+  /** The site domain (or registrable domain for ownership TXT) the record serves. */
+  domain: z.string(),
+  /** Absolute record name. */
+  name: z.string(),
+  type: z.string(),
+  data: z.string(),
+  purpose: z.enum(["ownership", "target"]),
+  /** unsupported: an apex the provider cannot point at a host name (shown, never written). */
+  status: z.enum(["pending", "written", "conflict", "failed", "deleting", "unsupported"]),
+  /** Records of other owners at the name (conflict). */
+  conflicts: z.array(z.object({ type: z.string(), data: z.string() })),
+  lastError: z.string(),
+  updatedAt: isoDateTime,
+});
+const siteDnsRecords = z.object({
+  /** An automatic-records credential of the organization covers one of the site's domains. */
+  managed: z.boolean(),
+  items: z.array(siteDnsRecord),
+});
+/** Records written into the organization's own zones for a site (automatic records). */
+export const siteDnsContract = {
+  records: oc
+    .route({ method: "GET", path: "/sites/{siteId}/dns-records", tags: ["dns"] })
+    .input(z.object({ siteId: uuid }))
+    .output(siteDnsRecords),
+  /** Replaces the records that conflict with the site's CNAME (a member's explicit consent). */
+  confirm: oc
+    .route({ method: "POST", path: "/sites/{siteId}/dns-records/{id}/confirm", tags: ["dns"] })
+    .input(z.object({ siteId: uuid, id: uuid }))
+    .output(siteDnsRecords),
+  /** Writes and cleans the organization's automatic records now. */
+  sync: oc
+    .route({ method: "POST", path: "/sites/{siteId}/dns-records/sync", tags: ["dns"] })
+    .input(z.object({ siteId: uuid }))
+    .output(siteDnsRecords),
+};
+export type SiteDnsRecord = z.infer<typeof siteDnsRecord>;
 /** The catalog as served by `dns.catalog`. */
 export const dnsCatalogDto = (dnsProviderCatalog as readonly DnsProviderEntry[]).map((p) => ({
   id: p.id as DnsProviderId,

@@ -82,6 +82,7 @@ import {
   updateDnsProvider,
 } from "../services/dns";
 import { failFromCertd } from "../services/dns-providers";
+import { confirmDnsRecord, siteDnsRecords, syncSiteDnsRecords } from "../services/dns-records";
 import { getDnsResolvers, setDnsResolvers } from "../services/dns-resolvers";
 import {
   getDomainOwnership,
@@ -472,6 +473,17 @@ export const router = os.router({
     }),
     siteTarget: tenant.dns.siteTarget.handler(({ input, context }) =>
       siteDnsTarget(context.app, input.siteId, context.scope),
+    ),
+  },
+  siteDns: {
+    records: tenant.siteDns.records.handler(({ input, context }) =>
+      siteDnsRecords(context.app, input.siteId, context.scope),
+    ),
+    confirm: tenant.siteDns.confirm.handler(({ input, context }) =>
+      confirmDnsRecord(context.app, input.siteId, input.id, context.scope, context.actor),
+    ),
+    sync: tenant.siteDns.sync.handler(({ input, context }) =>
+      syncSiteDnsRecords(context.app, input.siteId, context.scope, context.actor),
     ),
   },
   domainOwnership: {

@@ -165,7 +165,8 @@ export async function prepareDomainOwnership(
       await publishRevision(tx, {
         clusterId,
         reason: { code: "domain_verified", params: {} },
-        userId: actor.id,
+        // Automatic records verify as the system (no user).
+        userId: actor.type === "user" ? actor.id : null,
       });
     await recordAudit(tx, actor, {
       action: "domain.prepare",
@@ -246,7 +247,8 @@ export async function verifyDomainOwnership(
       await publishRevision(tx, {
         clusterId,
         reason: { code: "domain_verified", params: {} },
-        userId: actor.id,
+        // Automatic records verify as the system (no user).
+        userId: actor.type === "user" ? actor.id : null,
       });
     await recordAudit(tx, actor, {
       action: "domain.verify",

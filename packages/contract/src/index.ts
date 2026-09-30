@@ -12,7 +12,7 @@ import { accessKeysContract } from "./access-keys";
 import { alertsContract } from "./alerts";
 import { adminBansContract, banSettings, bansContract } from "./bans";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
-import { dnsContract } from "./dns";
+import { dnsContract, siteDnsContract } from "./dns";
 import { domainOwnershipContract } from "./domains";
 import {
   ipListsContract,
@@ -61,6 +61,7 @@ export const contract = {
   upgrades: upgradesContract,
   alerts: alertsContract,
   dns: dnsContract,
+  siteDns: siteDnsContract,
   domainOwnership: domainOwnershipContract,
   rules: rulesContract,
   platformRules: platformRulesContract,

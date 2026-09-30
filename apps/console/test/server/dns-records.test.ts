@@ -1,0 +1,279 @@
+import { schema } from "@edgeweir/db";
+import { eq } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { createApp } from "../../src/server/app";
+import { syncTenantRecords } from "../../src/server/services/dns-records";
+import { dnsFixture as providers } from "./dns-fixture";
+import { dnsFixture as txtAuthority } from "./dns-server";
+import {
+  type ApiClient,
+  createTestContext,
+  PASSWORD,
+  rpcClient,
+  rpcError,
+  setupPlatform,
+  signIn,
+} from "./helpers";
+
+vi.mock("../../src/server/services/certificate-worker", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/server/services/certificate-worker")>();
+  const { makeFakeCertd } = await import("./dns-fixture");
+  return { ...actual, runCertd: vi.fn(makeFakeCertd(actual.CertdError)) };
+});
+
+describe("automatic records in an organization's own zones", async () => {
+  const authority = await txtAuthority();
+  const { ctx, client: db } = await createTestContext({
+    EDGEWEIR_DNS_TEST_ENDPOINT: "http://fixture.invalid",
+    EDGEWEIR_DNS_RESOLVERS: authority.address,
+  });
+  const app = createApp(ctx),
+    origin = ctx.env.EDGEWEIR_PUBLIC_URL;
+  let admin: ApiClient, acme: ApiClient, other: ApiClient;
+  let siteId = "",
+    acmeOrg = "",
+    cloudflareId = "",
+    target = "";
+  const zone = (token: string, name: string) => providers.records(token, name);
+  /** The TXT authority answers what the provider zones hold (as the Internet would). */
+  const publish = () => {
+    authority.records.clear();
+    for (const [token, name] of [
+      ["cf-token", "acme.test"],
+      ["do-token", "acme.net"],
+    ] as const)
+      for (const r of zone(token, name).filter((r) => r.type === "TXT"))
+        authority.records.set(`${r.name}.${name}`, [
+          ...(authority.records.get(`${r.name}.${name}`) ?? []),
+          r.data,
+        ]);
+  };
+  const records = async () => (await acme.siteDns.records({ siteId })).items;
+
+  beforeAll(async () => {
+    await setupPlatform(ctx);
+    admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
+    providers.reset();
+    providers.accounts.set("platform-token", { zones: ["platform.test"] });
+    providers.accounts.set("cf-token", { zones: ["acme.test"] });
+    providers.accounts.set("do-token", { zones: ["acme.net"] });
+    providers.accounts.set("evil-token", { zones: ["acme.test"] });
+    providers.set("cf-token", "acme.test", [
+      { name: "shop", type: "A", data: "192.0.2.10", ttl: 300 },
+      { name: "_edgeweir-verification", type: "TXT", data: "someone-else", ttl: 300 },
+      { name: "keep", type: "TXT", data: "x", ttl: 300 },
+    ]);
+    const clusterId = (await admin.clusters.list())[0]?.id ?? "";
+    const provider = await admin.dns.createProvider({
+      name: "Platform",
+      provider: "test",
+      zone: "platform.test",
+      credentials: { api_token: "platform-token" },
+    });
+    await admin.dns.saveBinding({
+      clusterId,
+      binding: { mode: "auto", providerId: provider.id, domain: "cdn.platform.test" },
+    });
+    for (const [name, email] of [
+      ["Acme", "owner@acme.test"],
+      ["Other", "owner@other.test"],
+    ] as const) {
+      const org = await admin.organizations.create({ name, defaultClusterId: clusterId });
+      if (name === "Acme") acmeOrg = org.id;
+      await admin.users.create({ name, email, password: PASSWORD, organizationId: org.id });
+    }
+    acme = rpcClient(app, origin, await signIn(app, origin, "owner@acme.test"));
+    other = rpcClient(app, origin, await signIn(app, origin, "owner@other.test"));
+  });
+  afterAll(async () => {
+    await authority.close();
+    await db.close();
+  });
+
+  it("links credentials to zones with automatic records, tested before saving", async () => {
+    expect(
+      await acme.dnsCredentials.zones({
+        provider: "cloudflare",
+        credentials: { api_token: "cf-token" },
+      }),
+    ).toEqual({ zones: ["acme.test"] });
+    expect(
+      await acme.dnsCredentials.test({
+        provider: "cloudflare",
+        credentials: { api_token: "cf-token" },
+        zone: "acme.test",
+      }),
+    ).toEqual({ ok: true, records: 3 });
+    cloudflareId = (
+      await acme.dnsCredentials.create({
+        name: "Acme Cloudflare",
+        provider: "cloudflare",
+        zone: "acme.test",
+        credentials: { api_token: "cf-token" },
+        autoRecords: true,
+      })
+    ).id;
+    await acme.dnsCredentials.create({
+      name: "Acme DigitalOcean",
+      provider: "digitalocean",
+      zone: "acme.net",
+      credentials: { api_token: "do-token" },
+      autoRecords: true,
+    });
+    // Another organization's credential for the same zone never writes Acme's domains.
+    await other.dnsCredentials.create({
+      name: "Squatter",
+      provider: "cloudflare",
+      zone: "acme.test",
+      credentials: { api_token: "evil-token" },
+      autoRecords: true,
+    });
+    expect((await acme.dnsCredentials.list()).map((c) => c.name)).toEqual([
+      "Acme Cloudflare",
+      "Acme DigitalOcean",
+    ]);
+    expect((await rpcError(other.dnsCredentials.test({ id: cloudflareId }))).code).toBe(
+      "DNS_CREDENTIAL_NOT_FOUND",
+    );
+    expect(
+      (
+        await rpcError(
+          acme.dnsCredentials.create({
+            name: "x",
+            provider: "cloudflare",
+            zone: "acme.test",
+            credentials: { api_token: "" },
+          }),
+        )
+      ).code,
+    ).toBe("DNS_CREDENTIAL_INVALID");
+  });
+
+  it("writes the ownership TXT and CNAMEs when domains are added, without overwriting conflicts", async () => {
+    siteId = (
+      await acme.sites.create({
+        name: "acme",
+        domains: ["acme.test", "www.acme.test", "shop.acme.test", "*.img.acme.test", "acme.net"],
+        origins: [{ address: "origin.test" }],
+      })
+    ).site.id;
+    target = `${siteId}.cdn.platform.test`;
+    expect(await records()).toEqual([]);
+    expect((await acme.siteDns.records({ siteId })).managed).toBe(true);
+    await syncTenantRecords(ctx);
+    const acmeTest = zone("cf-token", "acme.test");
+    const proof = (await acme.domainOwnership.get({ siteId })).find(
+      (p) => p.domain === "acme.test",
+    );
+    expect(acmeTest).toEqual(
+      expect.arrayContaining([
+        { name: "_edgeweir-verification", type: "TXT", data: proof?.txtValue, ttl: 600 },
+        { name: "_edgeweir-verification", type: "TXT", data: "someone-else", ttl: 300 },
+        { name: "@", type: "CNAME", data: target, ttl: 600 },
+        { name: "www", type: "CNAME", data: target, ttl: 600 },
+        { name: "*.img", type: "CNAME", data: target, ttl: 600 },
+        { name: "shop", type: "A", data: "192.0.2.10", ttl: 300 },
+        { name: "keep", type: "TXT", data: "x", ttl: 300 },
+      ]),
+    );
+    expect(acmeTest.some((r) => r.name === "shop" && r.type === "CNAME")).toBe(false);
+    // The apex of a provider without CNAME flattening or ALIAS is only shown.
+    expect(zone("do-token", "acme.net").map((r) => `${r.name} ${r.type}`)).toEqual([
+      "_edgeweir-verification TXT",
+    ]);
+    const items = await records();
+    const status = (name: string, type: string) =>
+      items.find((i) => i.name === name && i.type === type)?.status;
+    expect(status("shop.acme.test", "CNAME")).toBe("conflict");
+    expect(items.find((i) => i.name === "shop.acme.test")?.conflicts).toEqual([
+      { type: "A", data: "192.0.2.10" },
+    ]);
+    expect(status("acme.test", "CNAME")).toBe("written");
+    expect(status("acme.net", "CNAME")).toBe("unsupported");
+    expect(status("_edgeweir-verification.acme.net", "TXT")).toBe("written");
+    // Nothing from the other organization's credential.
+    expect(
+      providers.calls.filter((c) => c.token === "evil-token" && c.command !== "dns.list"),
+    ).toEqual([]);
+    const audit = await admin.auditLogs.list({ action: "dns_record.create" });
+    expect(audit.items.length).toBeGreaterThanOrEqual(5);
+    expect(audit.items.every((e) => e.organizationId === acmeOrg)).toBe(true);
+    expect((await admin.auditLogs.list({ action: "dns_record.conflict" })).total).toBe(1);
+  });
+
+  it("isolates records by organization", async () => {
+    expect((await rpcError(other.siteDns.records({ siteId }))).code).toBe("SITE_NOT_FOUND");
+    const shop = (await records()).find((i) => i.name === "shop.acme.test");
+    expect((await rpcError(other.siteDns.confirm({ siteId, id: shop?.id ?? "" }))).code).toBe(
+      "SITE_NOT_FOUND",
+    );
+  });
+
+  it("replaces a conflict only after a member confirms it", async () => {
+    await syncTenantRecords(ctx);
+    expect(zone("cf-token", "acme.test").find((r) => r.name === "shop")?.type).toBe("A");
+    const shop = (await records()).find((i) => i.name === "shop.acme.test");
+    const after = await acme.siteDns.confirm({ siteId, id: shop?.id ?? "" });
+    expect(after.items.find((i) => i.id === shop?.id)?.status).toBe("written");
+    expect(zone("cf-token", "acme.test").filter((r) => r.name === "shop")).toEqual([
+      { name: "shop", type: "CNAME", data: target, ttl: 600 },
+    ]);
+    const [entry] = (await admin.auditLogs.list({ action: "dns_record.overwrite" })).items;
+    expect(entry).toMatchObject({ organizationId: acmeOrg });
+    expect(entry?.metadata).toMatchObject({ replaced: [{ type: "A", data: "192.0.2.10" }] });
+  });
+
+  it("verifies ownership through the written TXT, then removes only its own TXT", async () => {
+    publish();
+    // Checks of the same domain are at least 5 s apart; the earlier runs just checked.
+    await ctx.db.update(schema.domainOwnership).set({ lastCheckedAt: null });
+    await syncTenantRecords(ctx);
+    const proofs = await acme.domainOwnership.get({ siteId });
+    expect(proofs.every((p) => p.verified)).toBe(true);
+    await syncTenantRecords(ctx);
+    expect(zone("cf-token", "acme.test").filter((r) => r.type === "TXT")).toEqual([
+      { name: "_edgeweir-verification", type: "TXT", data: "someone-else", ttl: 300 },
+      { name: "keep", type: "TXT", data: "x", ttl: 300 },
+    ]);
+    expect((await records()).some((i) => i.purpose === "ownership")).toBe(false);
+  });
+
+  it("repairs a record deleted outside the console", async () => {
+    providers.set(
+      "cf-token",
+      "acme.test",
+      zone("cf-token", "acme.test").filter((r) => r.name !== "www"),
+    );
+    await acme.siteDns.sync({ siteId });
+    expect(zone("cf-token", "acme.test").find((r) => r.name === "www")?.data).toBe(target);
+  });
+
+  it("removes only its own records when a domain or the site is deleted", async () => {
+    const site = await acme.sites.get({ id: siteId });
+    await acme.sites.update({
+      id: siteId,
+      domains: site.domains.filter((d) => d !== "www.acme.test"),
+    });
+    await syncTenantRecords(ctx);
+    expect(zone("cf-token", "acme.test").some((r) => r.name === "www")).toBe(false);
+    expect((await admin.auditLogs.list({ action: "dns_record.delete" })).total).toBeGreaterThan(0);
+    expect((await rpcError(acme.dnsCredentials.delete({ id: cloudflareId }))).code).toBe(
+      "DNS_CREDENTIAL_IN_USE",
+    );
+    await acme.sites.delete({ id: siteId });
+    await syncTenantRecords(ctx);
+    expect(zone("cf-token", "acme.test")).toEqual([
+      { name: "_edgeweir-verification", type: "TXT", data: "someone-else", ttl: 300 },
+      { name: "keep", type: "TXT", data: "x", ttl: 300 },
+    ]);
+    expect(zone("do-token", "acme.net")).toEqual([]);
+    const owned = await ctx.db
+      .select()
+      .from(schema.dnsOwnedRecord)
+      .where(eq(schema.dnsOwnedRecord.organizationId, acmeOrg));
+    expect(owned).toEqual([]);
+    await acme.dnsCredentials.update({ id: cloudflareId, autoRecords: false });
+    await acme.dnsCredentials.delete({ id: cloudflareId });
+  });
+});
