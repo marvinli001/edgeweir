@@ -10,7 +10,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dns:catalog": "node scripts/dns-catalog.mjs"
   },
   "dependencies": {
     "@orpc/contract": "1.15.4",
