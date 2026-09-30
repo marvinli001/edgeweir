@@ -1015,5 +1015,12 @@
   "dns_protection_title": "Mass removal protection",
   "dns_protection_ratio": "Most address records one publication may remove (%)",
   "error_dns_not_blocked": "This DNS revision is not held back",
-  "error_api_key_rate_limited": "Too many requests with this AccessKey. Try again in {retryAfterSeconds} s"
+  "error_api_key_rate_limited": "Too many requests with this AccessKey. Try again in {retryAfterSeconds} s",
+  "org_limit_resource_bans": "bans",
+  "error_ban_invalid_cidr": "Invalid IP address or CIDR",
+  "error_ban_prefix_too_short": "The prefix is too short; the shortest allowed is /{min}",
+  "error_ban_expiry_out_of_range": "A ban lasts from 1 minute to 7 days",
+  "error_ban_protected_address": "The ban covers the protected address {address}",
+  "error_ban_platform_limit": "The platform holds at most {limit} bans",
+  "error_ban_not_found": "Ban not found or no longer active"
 }

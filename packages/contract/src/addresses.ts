@@ -154,6 +154,12 @@ export function cidrContains(cidr: Cidr, ip: IpAddress): boolean {
   return masked.every((b, i) => b === cidr.bytes[i]);
 }
 
+/** Whether two CIDRs share at least one address (one of them contains the other). */
+export function cidrsOverlap(a: Cidr, b: Cidr): boolean {
+  if (a.version !== b.version) return false;
+  return a.prefix <= b.prefix ? cidrContains(a, b) : cidrContains(b, a);
+}
+
 /** Special-purpose IPv4 ranges (RFC 6890 and friends) origins may not use by default. */
 export const SPECIAL_PURPOSE_IPV4 = [
   "0.0.0.0/8",

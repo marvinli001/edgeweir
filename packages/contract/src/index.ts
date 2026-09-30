@@ -10,6 +10,7 @@ export * from "./logs";
 
 import { accessKeysContract } from "./access-keys";
 import { alertsContract } from "./alerts";
+import { adminBansContract, banSettings, bansContract } from "./bans";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
 import { domainOwnershipContract } from "./domains";
@@ -24,6 +25,7 @@ import { serviceAccountsContract } from "./service-accounts";
 import { usageContract, usageSettings } from "./usage";
 
 export * from "./addresses";
+export * from "./bans";
 export * from "./certificates";
 export * from "./errors";
 export * from "./node-errors";
@@ -64,6 +66,8 @@ export const contract = {
   platformRules: platformRulesContract,
   ipLists: ipListsContract,
   platformIpLists: platformIpListsContract,
+  /** Dynamic IP bans of the caller's sites. */
+  bans: bansContract,
   certificates: certificatesContract,
   dnsCredentials: dnsCredentialsContract,
   https: httpsContract,
@@ -383,6 +387,8 @@ export const contract = {
         .input(s.organizationLimitsInput)
         .output(s.organizationLimits),
     },
+    /** Every ban, including platform bans. */
+    bans: adminBansContract,
   },
   organizations: {
     list: oc
@@ -478,6 +484,14 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/usage", tags: ["settings"] })
       .input(usageSettings)
       .output(usageSettings),
+    /** Platform limit of manual bans and sharing of automatic bans in a cluster. */
+    bans: oc
+      .route({ method: "GET", path: "/settings/bans", tags: ["settings"] })
+      .output(banSettings),
+    setBans: oc
+      .route({ method: "PUT", path: "/settings/bans", tags: ["settings"] })
+      .input(banSettings)
+      .output(banSettings),
     /** Recursive DNS servers for domain ownership TXT checks. */
     dnsResolvers: oc
       .route({ method: "GET", path: "/settings/dns-resolvers", tags: ["settings"] })

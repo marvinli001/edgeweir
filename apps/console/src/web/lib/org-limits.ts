@@ -9,6 +9,7 @@ const LABELS: Record<OrgLimitResource, () => string> = {
   purgeTasksPerMinute: () => m.org_limit_resource_purge_tasks_per_minute(),
   purgeUrlsPerHour: () => m.org_limit_resource_purge_urls_per_hour(),
   members: () => m.org_limit_resource_members(),
+  bans: () => m.org_limit_resource_bans(),
 };
 
 export const ORG_LIMIT_RESOURCES = Object.keys(LABELS) as OrgLimitResource[];

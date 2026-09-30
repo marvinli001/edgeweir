@@ -474,6 +474,22 @@ export const clusterRollout = z.object({
 
 export const rolloutPolicyInput = rolloutPolicy.extend({ id: uuid, expectedUpdatedAt });
 
+/** How a node holds the dynamic bans, from its last heartbeat (nodes with bans-v1). */
+export const nodeBanStatus = z.object({
+  /** Highest ban sequence applied to the data plane (decimal). */
+  appliedSequence: z.string(),
+  entries: z.number().int(),
+  capacity: z.number().int(),
+  /** Manual bans the node could not hold (at most 100 ids). */
+  unappliedIds: z.array(z.string()),
+  unapplied: z.number().int(),
+  /** Platform bans held by nftables (kernel-ban-v1). */
+  kernelEntries: z.number().int(),
+  /** Automatic bans dropped to make room since the agent started (decimal). */
+  autoEvicted: z.string(),
+  reportedAt: isoDateTime,
+});
+
 export const node = z.object({
   id: uuid,
   name: z.string(),
@@ -504,6 +520,8 @@ export const node = z.object({
   applyState: applyState.nullable(),
   applyMessage: z.string(),
   dataPlaneHealthy: z.boolean(),
+  /** Null for nodes without dynamic bans (bans-v1). */
+  banStatus: nodeBanStatus.nullable(),
 });
 
 export const nodeUpdateInput = z.object({
@@ -1063,6 +1081,7 @@ export const orgLimitResource = z.enum([
   "purgeTasksPerMinute",
   "purgeUrlsPerHour",
   "members",
+  "bans",
 ]);
 
 const limitValue = z.number().int().min(0).max(1_000_000_000).nullable();
@@ -1077,6 +1096,8 @@ export const organizationLimitValues = z.object({
   purgeTasksPerMinute: limitValue,
   purgeUrlsPerHour: limitValue,
   members: limitValue,
+  /** Active manual site bans. */
+  bans: limitValue,
 });
 
 export const organizationLimits = z.object({
@@ -1091,6 +1112,7 @@ export const organizationLimits = z.object({
     purgeTasksPerMinute: usageValue,
     purgeUrlsPerHour: usageValue,
     members: usageValue,
+    bans: usageValue,
   }),
   /** Null until limits were first saved. */
   updatedAt: isoDateTime.nullable(),
@@ -1107,6 +1129,7 @@ export const organizationLimitsInput = z.object({
     purgeTasksPerMinute: limitValue.default(null),
     purgeUrlsPerHour: limitValue.default(null),
     members: limitValue.default(null),
+    bans: limitValue.default(null),
   }),
   expectedUpdatedAt,
 });
