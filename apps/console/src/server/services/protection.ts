@@ -68,7 +68,10 @@ export async function loadPlatformProtection(db: Executor): Promise<PlatformProt
   };
 }
 
-/** A site's saved CC policy: off and following the template until first saved. */
+/**
+ * A site's CC policy: off and following the template until first saved.
+ * While it follows the template, its thresholds are the template's.
+ */
 function savedCc(row: ProtectionRow | undefined, template: CcThresholds): SiteCcPolicy {
   const parsed = siteCcPolicy.safeParse({
     enabled: false,
@@ -76,7 +79,8 @@ function savedCc(row: ProtectionRow | undefined, template: CcThresholds): SiteCc
     ...template,
     ...(row?.cc ?? {}),
   });
-  return parsed.success ? parsed.data : { enabled: false, followTemplate: true, ...template };
+  const cc = parsed.success ? parsed.data : { enabled: false, followTemplate: true, ...template };
+  return cc.followTemplate ? { ...cc, ...template } : cc;
 }
 
 /** The thresholds nodes use: null while off, the template while following it. */
@@ -143,6 +147,7 @@ function toDto(
     powDifficulty: row?.powDifficulty ?? 16,
     powHighDifficulty: row?.powHighDifficulty ?? 20,
     cc,
+    ccTemplate: template,
     effectiveCc: effectiveCc(cc, template),
     logJa4: row?.logJa4 ?? false,
     platformUnderAttack: platform.underAttack,
@@ -221,6 +226,7 @@ export async function updateSiteProtection(
       siteId: _s,
       platformUnderAttack: _p,
       updatedAt: _u,
+      ccTemplate: _t,
       ...rest
     }: SiteProtection) => rest;
     await recordAudit(tx, ctx.actor, {

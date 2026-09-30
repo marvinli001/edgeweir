@@ -124,6 +124,7 @@ describe("site protection, platform protection and challenge keys", async () => 
         escalateAfterSeconds: 10,
         cooldownSeconds: 60,
       },
+      ccTemplate: { maxLevel: "captcha", siteQps: 1000, ipBanSeconds: 600 },
       effectiveCc: null,
       logJa4: false,
       platformUnderAttack: false,
@@ -265,6 +266,7 @@ describe("site protection, platform protection and challenge keys", async () => 
     const following = await owner.protection.update({ id: siteId, cc: { enabled: true } });
     expect(following.cc).toMatchObject({ enabled: true, followTemplate: true, ...template });
     expect(following.effectiveCc).toEqual(template);
+    expect(following.ccTemplate).toEqual(template);
     const cc = (await config()).sites.find((site) => site.id === siteId)?.protection?.cc;
     expect(cc).toMatchObject({ enabled: true, ...template });
 
@@ -294,6 +296,8 @@ describe("site protection, platform protection and challenge keys", async () => 
       siteQps: 42,
       maxLevel: "js",
     });
+    // A custom policy keeps its thresholds; the template is still shown beside them.
+    expect((await member.protection.get({ id: siteId })).ccTemplate.siteQps).toBe(700);
     const off = await owner.protection.update({ id: siteId, cc: { enabled: false } });
     expect(off.effectiveCc).toBeNull();
     expect(off.cc).toMatchObject({ enabled: false, followTemplate: false, siteQps: 42 });

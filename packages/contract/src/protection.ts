@@ -80,8 +80,10 @@ export const siteProtection = z.object({
   passTtlSeconds: z.number().int(),
   powDifficulty: z.number().int(),
   powHighDifficulty: z.number().int(),
-  /** The saved policy (off and following the template until first saved). */
+  /** The policy (off and following the template until first saved); thresholds are the template's while following it. */
   cc: siteCcPolicy,
+  /** The platform's current CC template. */
+  ccTemplate: ccThresholds,
   /** Thresholds the nodes use; null while the policy is off. */
   effectiveCc: ccThresholds.nullable(),
   /** Record the JA4 fingerprint in sampled access logs. */
