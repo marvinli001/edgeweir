@@ -42,6 +42,10 @@ const CONSOLE_PROCEDURES = [
   "bans.list",
   "bans.create",
   "bans.delete",
+  "protection.get",
+  "protection.update",
+  "security.state",
+  "security.events",
   "certificates.list",
   "certificates.upload",
   "certificates.request",
@@ -317,6 +321,34 @@ describe("admin area procedures", async () => {
       ["admin.bans.delete", () => member.admin.bans.delete({ id: uuid })],
       ["settings.bans", () => member.settings.bans()],
       ["settings.setBans", () => member.settings.setBans({ maxTotal: 100, shareAutoBans: false })],
+      ["settings.protection", () => member.settings.protection()],
+      [
+        "settings.setProtection",
+        () =>
+          member.settings.setProtection({
+            underAttack: true,
+            underAttackChallenge: "js",
+            eventRetentionDays: 30,
+          }),
+      ],
+      ["settings.ccTemplate", () => member.settings.ccTemplate()],
+      [
+        "settings.setCcTemplate",
+        () =>
+          member.settings.setCcTemplate({
+            maxLevel: "js",
+            highPowInsteadOfCaptcha: false,
+            windowSeconds: 10,
+            siteQps: 1,
+            urlQps: 1,
+            ipQps: 1,
+            ipBanSeconds: 600,
+            originErrorPercent: 50,
+            originErrorMinRequests: 100,
+            escalateAfterSeconds: 10,
+            cooldownSeconds: 60,
+          }),
+      ],
     ];
     for (const [name, call] of calls) {
       const error = await rpcError(call());

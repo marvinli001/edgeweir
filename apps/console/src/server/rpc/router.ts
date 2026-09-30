@@ -112,6 +112,14 @@ import {
 } from "../services/organizations";
 import { getOriginAllowList, setOriginAllowList } from "../services/origin-allow-list";
 import { siteOriginHealth } from "../services/origin-health";
+import {
+  getCcTemplate,
+  getProtectionSettings,
+  getSiteProtection,
+  setCcTemplate,
+  setProtectionSettings,
+  updateSiteProtection,
+} from "../services/protection";
 import { createRegion, deleteRegion, listRegions, updateRegion } from "../services/regions";
 import { getReleaseSource, setReleaseSource } from "../services/release-source";
 import { toRevisionDto } from "../services/revisions";
@@ -125,6 +133,7 @@ import {
   updateIpList,
   validateExpression,
 } from "../services/rules";
+import { listSecurityEvents, siteSecurityState } from "../services/security";
 import {
   createServiceAccount,
   createServiceAccountKey,
@@ -256,6 +265,22 @@ export const router = os.router({
         scope: context.scope,
         actor: context.actor,
       }),
+    ),
+  },
+  protection: {
+    get: tenant.protection.get.handler(({ input, context }) =>
+      getSiteProtection(context.app.db, input.id, context.scope),
+    ),
+    update: tenantManager.protection.update.handler(({ input, context }) =>
+      updateSiteProtection(context.app.db, input, { scope: context.scope, actor: context.actor }),
+    ),
+  },
+  security: {
+    state: tenant.security.state.handler(({ input, context }) =>
+      siteSecurityState(context.app.db, input.id, context.scope, input.hours),
+    ),
+    events: tenant.security.events.handler(({ input, context }) =>
+      listSecurityEvents(context.app.db, input, context.scope),
     ),
   },
   platformIpLists: {
@@ -849,6 +874,16 @@ export const router = os.router({
     bans: admin.settings.bans.handler(({ context }) => getBanSettings(context.app.db)),
     setBans: admin.settings.setBans.handler(({ input, context }) =>
       setBanSettings(context.app.db, input, context.actor),
+    ),
+    protection: admin.settings.protection.handler(({ context }) =>
+      getProtectionSettings(context.app.db),
+    ),
+    setProtection: admin.settings.setProtection.handler(({ input, context }) =>
+      setProtectionSettings(context.app.db, input, context.actor),
+    ),
+    ccTemplate: admin.settings.ccTemplate.handler(({ context }) => getCcTemplate(context.app.db)),
+    setCcTemplate: admin.settings.setCcTemplate.handler(({ input, context }) =>
+      setCcTemplate(context.app.db, input, context.actor),
     ),
     usage: admin.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
     setUsage: admin.settings.setUsage.handler(({ input, context }) =>

@@ -183,6 +183,16 @@ describe("service accounts, scopes and idempotency keys", async () => {
         { scope: "platform", cidr: "203.0.113.0/24", reason: "attack", durationSeconds: 3600 },
       ],
       ["GET", "/settings/bans", undefined],
+      ["GET", "/settings/protection", undefined],
+      [
+        "PUT",
+        "/settings/protection",
+        { underAttack: true, underAttackChallenge: "js", eventRetentionDays: 30 },
+      ],
+      ["GET", "/settings/cc-template", undefined],
+      ["PATCH", "/sites/00000000-0000-4000-8000-000000000000/protection", { underAttack: true }],
+      ["GET", "/sites/00000000-0000-4000-8000-000000000000/security", undefined],
+      ["GET", "/sites/00000000-0000-4000-8000-000000000000/security/events", undefined],
       ["POST", "/sites", { name: "x", domains: ["x.test"], origins: [{ address: "o.test" }] }],
     ] as const) {
       const res = await api(full, method, path, body);

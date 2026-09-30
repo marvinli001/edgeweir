@@ -50,9 +50,15 @@ export async function ensureClickHouse(env: Env) {
         `CREATE TABLE IF NOT EXISTS access_log (
         time DateTime64(3, 'UTC'), id String, node_id UUID, site_id UUID,
         client_ip String, method LowCardinality(String), host String, path String,
-        status UInt16, bytes_sent UInt64, duration_ms UInt32, cache_status LowCardinality(String), sample_rate UInt16
+        status UInt16, bytes_sent UInt64, duration_ms UInt32, cache_status LowCardinality(String), sample_rate UInt16,
+        ja4 String DEFAULT ''
       ) ENGINE = ReplacingMergeTree ORDER BY (site_id, time, id)
         PARTITION BY toDate(time) TTL toDateTime(time) + INTERVAL 7 DAY`,
+      );
+      // Tables created before JA4 logging.
+      await clickhouse(
+        env,
+        "ALTER TABLE access_log ADD COLUMN IF NOT EXISTS ja4 String DEFAULT ''",
       );
       await clickhouse(
         env,
@@ -88,6 +94,7 @@ export async function insertClickHouseLogs(env: Env, rows: LogEntry[]) {
         duration_ms: r.durationMs,
         cache_status: r.cacheStatus,
         sample_rate: r.sampleRate,
+        ja4: r.ja4,
       }),
     )
     .join("\n");
@@ -99,7 +106,7 @@ export async function queryClickHouseLogs(env: Env, input: LogQuery): Promise<Lo
     env,
     `SELECT id, formatDateTime(time, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS timeIso,
     toString(node_id) AS nodeId, toString(site_id) AS siteId, client_ip AS clientIp, method, host, path, status,
-    toFloat64(bytes_sent) AS bytesSent, duration_ms AS durationMs, cache_status AS cacheStatus, sample_rate AS sampleRate
+    toFloat64(bytes_sent) AS bytesSent, duration_ms AS durationMs, cache_status AS cacheStatus, sample_rate AS sampleRate, ja4
     FROM access_log FINAL WHERE site_id = {site:UUID}
       AND time >= fromUnixTimestamp64Milli({from:Int64}) AND time < fromUnixTimestamp64Milli({to:Int64})
       AND ({status:UInt16} = 0 OR status = {status:UInt16}) AND ({ip:String} = '' OR client_ip = {ip:String})

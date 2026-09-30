@@ -22,6 +22,7 @@ import {
   smtpBinding,
 } from "./notification-delivery";
 import type { Executor } from "./revisions";
+import { elevatedSites } from "./security";
 import { findSite, type SiteScope } from "./sites";
 import { isAdminRole } from "./users";
 
@@ -433,6 +434,7 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
   }>(
     sql`select site_id,sum(requests) as requests,sum((select coalesce(sum(value::bigint),0) from jsonb_each_text(status_codes) where key like '5%')) as errors from node_minute_stats where minute>=${new Date(now - policy.windowMinutes * 60000).toISOString()}::timestamptz and minute<=${new Date(now).toISOString()}::timestamptz group by site_id`,
   );
+  const elevated = await elevatedSites(app.db, now);
   const active = new Map<string, Condition>();
   for (const site of sites) {
     const base = {
@@ -484,6 +486,8 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
       Number(metric.errors) / Number(metric.requests) >= policy.errorRatio
     )
       add("high_5xx", site.id);
+    // Fired by the nodes' events (reportSecurityEvents); held while a node reports the site above normal.
+    if (elevated.has(site.id)) add("cc_mitigation", site.id);
   }
   return { active, sites };
 }
@@ -545,6 +549,8 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
       const previous = await tx.select().from(schema.alertState);
       for (const [key, c] of snapshot.active) {
         if (previous.find((s) => s.key === key)?.active) continue;
+        // cc_mitigation fires on a node's event only, at most once per site in 15 minutes.
+        if (c.kind === "cc_mitigation") continue;
         await tx
           .insert(schema.alertState)
           .values({

@@ -1070,5 +1070,19 @@
   "bans_filter_scope": "Filter by scope",
   "system_bans_title": "Bans",
   "system_bans_max_total": "Platform limit of manual bans",
-  "system_bans_share_auto": "Share automatic bans in the cluster"
+  "system_bans_share_auto": "Share automatic bans in the cluster",
+  "alert_kind_cc_mitigation": "CC mitigation raised",
+  "error_protection_pow_difficulty": "The high proof-of-work difficulty must be at least {min}",
+  "revision_reason_site_protection_updated": "Protection of {site} updated",
+  "revision_reason_platform_protection_updated": "Platform Under Attack updated",
+  "revision_reason_cc_template_updated": "CC template updated",
+  "revision_reason_challenge_keys_rotated": "Challenge keys rotated",
+  "rules_challenge": "Challenge",
+  "rules_challenge_type": "Challenge type",
+  "rules_key_header": "Request header",
+  "rules_insert_field": "Insert field",
+  "challenge_cookie302": "Cookie redirect",
+  "challenge_js": "JavaScript",
+  "challenge_pow": "Proof of work",
+  "challenge_captcha": "Image captcha"
 }

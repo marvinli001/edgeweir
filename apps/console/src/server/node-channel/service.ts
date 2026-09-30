@@ -32,6 +32,7 @@ import {
   PurgeType,
   type ReportStatsRequest,
   type ReportStatsV2Request,
+  SecurityEventKind,
   TaskState,
   WatchConfigResponseSchema,
   WatchEvent,
@@ -49,6 +50,7 @@ import {
   reportCacheTaskResult,
 } from "../services/cache-tasks";
 import { nodeCertificates } from "../services/certificates";
+import { challengeKeySecrets } from "../services/challenge-keys";
 import { mirrorMinuteStats } from "../services/clickhouse";
 import { claimEnrollmentToken } from "../services/enrollment";
 import { isSerialRevoked, normalizeSerial } from "../services/nodes";
@@ -56,6 +58,11 @@ import { replaceOriginHealth } from "../services/origin-health";
 import { mintRevisionReceipt, verifyRevisionReceipt } from "../services/revision-receipts";
 import { getRevision, latestRevision, nodeTarget } from "../services/revisions";
 import { evaluateAfterHeartbeat } from "../services/rollout";
+import {
+  MAX_REPORTED_SECURITY_EVENTS,
+  reportSecurityEvents,
+  toNodeSecurityState,
+} from "../services/security";
 import { s3SecretBinding } from "../services/sites";
 import { ingestStatsBatch, MAX_STATS_PER_REPORT } from "../services/stats";
 import {
@@ -610,6 +617,8 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
             lastSeenAt: now,
             // Nodes without bans-v1 send no BanStatus.
             banStatus: req.bans ? toNodeBanStatus(req.bans, now) : null,
+            // Sites above the normal CC level; nodes without challenge-v1 send none.
+            securityState: toNodeSecurityState(req.security),
             ...(info
               ? {
                   hostname: info.hostname || node.hostname,
@@ -832,6 +841,49 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         })),
       );
       log.debug("automatic bans", { nodeId: node.id, reported: req.bans.length, accepted });
+      return { accepted };
+    },
+
+    async getChallengeKeys(req, ctx) {
+      const node = await requireNode(ctx);
+      // Only keys of the node's own cluster; unknown ids are left out.
+      const keys = await challengeKeySecrets(app, node.clusterId, req.ids);
+      log.info("challenge keys delivered", { nodeId: node.id, keys: keys.map((k) => k.id) });
+      return { keys };
+    },
+
+    async reportSecurityEvents(req, ctx) {
+      const node = await requireNode(ctx);
+      if (req.events.length > MAX_REPORTED_SECURITY_EVENTS)
+        throw new ConnectError(
+          `at most ${MAX_REPORTED_SECURITY_EVENTS} events per request`,
+          Code.InvalidArgument,
+        );
+      const kinds = {
+        [SecurityEventKind.SITE_LEVEL]: "site_level",
+        [SecurityEventKind.PATH_LEVEL]: "path_level",
+        [SecurityEventKind.IP_BANNED]: "ip_banned",
+      } as const;
+      const accepted = await reportSecurityEvents(
+        app.db,
+        node,
+        req.events.map((event) => ({
+          id: event.id,
+          siteId: event.siteId,
+          occurredAt: event.occurredAt ? timestampDate(event.occurredAt) : null,
+          kind: kinds[event.kind as keyof typeof kinds] ?? null,
+          level: event.level,
+          previousLevel: event.previousLevel,
+          path: event.path,
+          address: event.address,
+          metric: event.metric,
+          observed: event.observed,
+          threshold: event.threshold,
+          topIps: event.topIps.map((t) => ({ value: t.value, count: Number(t.count) })),
+          topPaths: event.topPaths.map((t) => ({ value: t.value, count: Number(t.count) })),
+        })),
+      );
+      log.debug("security events", { nodeId: node.id, reported: req.events.length, accepted });
       return { accepted };
     },
   };

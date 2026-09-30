@@ -6,13 +6,16 @@ import {
   compileNodeConfig,
   compileRules,
   contentHash,
+  DEFAULT_SITE_PROTECTION,
   decodeNodeConfig,
   encodeNodeConfig,
   geoFeatures,
   MAX_SITES_PER_CLUSTER,
   nodeRequirements,
+  protectionFeatures,
   type RuleModel,
   type SiteModel,
+  usesChallenges,
 } from "@edgeweir/config-compiler";
 import {
   nodeSupportsFeature,
@@ -27,10 +30,13 @@ import {
 import { type Database, schema } from "@edgeweir/db";
 import {
   CertificateRefSchema,
+  ChallengeKeyRefSchema,
   HttpChallengeSchema,
   IpListSchema,
   type NodeConfig,
   NodeConfigSchema,
+  PlatformProtectionSchema,
+  SiteProtectionSchema,
 } from "@edgeweir/proto";
 import { bindLists, listReferences, type Phase, parseExpression } from "@edgeweir/rule-engine";
 import { and, asc, desc, eq, gt, inArray, lt, notInArray, sql } from "drizzle-orm";
@@ -41,7 +47,9 @@ import { CONFIG_CHANNEL } from "../lib/events";
 import { isOnline } from "../lib/node-online";
 import { isServing } from "../lib/site-state";
 import { recordAudit, systemActor } from "./audit";
+import { ensureChallengeKeys } from "./challenge-keys";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
+import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
 import { isAdminRole } from "./users";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -129,6 +137,7 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
     .where(and(inArray(schema.edgeRule.siteId, siteIds), eq(schema.edgeRule.enabled, true)))
     .orderBy(asc(schema.edgeRule.priority));
   const lists = await db.select().from(schema.ipList);
+  const protection = await loadSiteProtectionModels(db, siteIds);
   return sites
     .map((s): SiteModel => {
       const pool = pools
@@ -214,6 +223,7 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
             cacheAuthorized: r.cacheAuthorized,
           })),
         cacheKey: readCacheKey(s.cacheKey),
+        protection: protection.get(s.id),
         rangeSlice: s.rangeSlice,
         websocket: s.websocket,
         certificateId: s.certificateId ?? "",
@@ -495,19 +505,20 @@ export async function publishRevision(
         expiresAt: timestampFromDate(c.expiresAt),
       }),
     );
-  const build = (revision: bigint) =>
-    compileNodeConfig(
-      {
-        clusterId: opts.clusterId,
-        sites,
-        originAllowedCidrs,
-        certificates,
-        httpChallenges,
-        ipLists,
-        platformRules,
-      },
-      revision,
-    );
+  const platformProtection = await loadPlatformProtection(tx);
+  const input = {
+    clusterId: opts.clusterId,
+    sites,
+    originAllowedCidrs,
+    certificates,
+    httpChallenges,
+    ipLists,
+    platformRules,
+    platformProtection,
+  };
+  // A cluster gets its challenge keys the first time its configuration uses challenges.
+  const challengeKeys = usesChallenges(input) ? await ensureChallengeKeys(tx, opts.clusterId) : [];
+  const build = (revision: bigint) => compileNodeConfig({ ...input, challengeKeys }, revision);
   const rollout = await loadRollout(tx, opts.clusterId);
   if (!rollout?.enabled)
     return insertRevision(tx, opts.clusterId, build, opts.reason, opts.userId ?? null);
@@ -875,6 +886,7 @@ export async function rollbackToRevision(
   // Challenge tokens are short-lived issuance state, never rollback content.
   restored.httpChallenges = [];
   restored.requiredFeatures = restored.requiredFeatures.filter((f) => f !== "http01-v1");
+  await restoreProtection(tx, opts.clusterId, restored, currentSites);
   const result = await insertRevision(
     tx,
     opts.clusterId,
@@ -901,6 +913,58 @@ export async function rollbackToRevision(
       finishedAt: new Date(),
     });
   return result;
+}
+
+/**
+ * Brings the protection of a restored configuration in line with current
+ * policy: platform Under Attack and JA4 logging are current settings, and
+ * challenge keys are always the cluster's current keys (older ones are gone).
+ * Sites keep their restored Under Attack and CC policy.
+ */
+async function restoreProtection(
+  tx: Tx,
+  clusterId: string,
+  restored: NodeConfig,
+  currentSites: { id: string }[],
+) {
+  const platform = await loadPlatformProtection(tx);
+  const current = await loadSiteProtectionModels(
+    tx,
+    currentSites.map((site) => site.id),
+  );
+  const rules = [...restored.platformRules, ...restored.sites.flatMap((site) => site.rules)];
+  const challenges =
+    platform.underAttack ||
+    rules.some((rule) => rule.action?.kind === "challenge") ||
+    restored.sites.some((site) => site.protection?.underAttack || site.protection?.cc?.enabled);
+  const keys = challenges ? await ensureChallengeKeys(tx, clusterId) : [];
+  restored.challengeKeys = keys.map((key) => create(ChallengeKeyRefSchema, key));
+  restored.platformProtection = challenges ? create(PlatformProtectionSchema, platform) : undefined;
+  for (const site of restored.sites) {
+    const logJa4 = current.get(site.id)?.logJa4 ?? false;
+    if (!challenges && !logJa4) {
+      site.protection = undefined;
+      continue;
+    }
+    // A site without protection in the restored revision had neither Under Attack nor CC.
+    const defaults = current.get(site.id) ?? DEFAULT_SITE_PROTECTION;
+    site.protection ??= create(SiteProtectionSchema, {
+      underAttack: false,
+      underAttackChallenge: defaults.underAttackChallenge,
+      passTtlSeconds: defaults.passTtlSeconds,
+      powDifficulty: defaults.powDifficulty,
+      powHighDifficulty: defaults.powHighDifficulty,
+    });
+    site.protection.logJa4 = logJa4;
+    if (!challenges) {
+      site.protection.underAttack = false;
+      site.protection.cc = undefined;
+    }
+  }
+  restored.requiredFeatures = restored.requiredFeatures.filter(
+    (f) => f !== "challenge-v1" && f !== "ja4-v1",
+  );
+  restored.requiredFeatures.push(...protectionFeatures(restored));
 }
 
 /** Deletes revisions beyond the retention window, keeping the newest ones. */

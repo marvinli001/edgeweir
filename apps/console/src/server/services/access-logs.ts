@@ -13,6 +13,8 @@ import { type Executor, publishRevision } from "./revisions";
 import { findSite, type SiteScope } from "./sites";
 
 const DAY = 86400000;
+/** a_b_c: protocol, version, SNI, counts and ALPN, then two truncated SHA-256 hashes. */
+const JA4_RE = /^[a-z][a-z0-9]{2}[di][0-9]{4}[a-zA-Z0-9]{2}_[0-9a-f]{12}_[0-9a-f]{12}$/;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const logCutoff = (now = Date.now()) => Math.floor(now / DAY) * DAY - 6 * DAY;
 async function partition(tx: Executor, day: number) {
@@ -53,8 +55,9 @@ export async function ingestLogs(
   const ids = [...new Set(logs.map((l) => l.siteId).filter((id) => uuid.test(id)))];
   const sites = ids.length
     ? await app.db
-        .select({ id: schema.site.id })
+        .select({ id: schema.site.id, logJa4: schema.siteProtection.logJa4 })
         .from(schema.site)
+        .leftJoin(schema.siteProtection, eq(schema.siteProtection.siteId, schema.site.id))
         .where(
           and(
             inArray(schema.site.id, ids),
@@ -64,6 +67,8 @@ export async function ingestLogs(
         )
     : [];
   const allowed = new Set(sites.map((s) => s.id));
+  // JA4 is kept only while the site records it (current privacy policy).
+  const ja4Sites = new Set(sites.filter((s) => s.logJa4).map((s) => s.id));
   const entries: LogEntry[] = logs.flatMap((l, index) => {
     const time = l.time ? timestampDate(l.time).getTime() : NaN,
       bytes = Number(l.bytesSent);
@@ -109,6 +114,7 @@ export async function ingestLogs(
           ? l.cacheStatus
           : "",
         sampleRate: l.sampleRate,
+        ja4: ja4Sites.has(l.siteId) && JA4_RE.test(l.ja4) ? l.ja4 : "",
       },
     ];
   });
@@ -217,6 +223,7 @@ export function logsCsv(entries: LogEntry[]) {
     "cacheStatus",
     "sampleRate",
     "nodeId",
+    "ja4",
   ] as const;
   const cell = (value: unknown) => {
     let text = String(value);

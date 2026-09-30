@@ -8,10 +8,12 @@ import { sweepAlerts } from "../services/alerts";
 import { pruneBans } from "../services/bans";
 import { expireCacheTasks } from "../services/cache-tasks";
 import { sweepCertificates } from "../services/certificate-worker";
+import { rotateChallengeKeys } from "../services/challenge-keys";
 import { reconcileDns } from "../services/dns";
 import { enforceDomainOwnershipOnce } from "../services/domain-ownership";
 import { pruneRevisions } from "../services/revisions";
 import { evaluateRollouts } from "../services/rollout";
+import { pruneSecurityEvents } from "../services/security";
 import { maintainTraffic } from "../services/stats-rollup";
 import { expireUpgrades } from "../services/upgrades";
 import { maintainUsage } from "../services/usage";
@@ -28,6 +30,8 @@ export const QUEUES = {
   expireCacheTasks: "maintenance.expire-cache-tasks",
   pruneIdempotencyKeys: "maintenance.prune-idempotency-keys",
   pruneBans: "maintenance.prune-bans",
+  rotateChallengeKeys: "maintenance.rotate-challenge-keys",
+  pruneSecurityEvents: "maintenance.prune-security-events",
 } as const;
 
 /**
@@ -112,7 +116,20 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     if (removed) log.info("deleted expired bans", { removed });
   });
 
+  // Hourly check; a cluster's keys rotate once they are a day old.
+  await boss.work(QUEUES.rotateChallengeKeys, async () => {
+    const rotated = await rotateChallengeKeys(ctx);
+    if (rotated.length) log.info("rotated challenge keys", { clusters: rotated });
+  });
+
+  await boss.work(QUEUES.pruneSecurityEvents, async () => {
+    const removed = await pruneSecurityEvents(ctx.db);
+    if (removed) log.info("deleted old security events", { removed });
+  });
+
   await boss.schedule(QUEUES.pruneBans, "*/10 * * * *");
+  await boss.schedule(QUEUES.rotateChallengeKeys, "11 * * * *");
+  await boss.schedule(QUEUES.pruneSecurityEvents, "37 * * * *");
   await boss.schedule(QUEUES.pruneRevisions, "17 * * * *");
   await boss.schedule(QUEUES.pruneIdempotencyKeys, "29 * * * *");
   await boss.schedule(QUEUES.expireCacheTasks, "43 * * * *");

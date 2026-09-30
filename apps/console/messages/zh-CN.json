@@ -1070,5 +1070,19 @@
   "bans_filter_scope": "按范围筛选",
   "system_bans_title": "封禁",
   "system_bans_max_total": "平台手动封禁上限",
-  "system_bans_share_auto": "集群内共享自动封禁"
+  "system_bans_share_auto": "集群内共享自动封禁",
+  "alert_kind_cc_mitigation": "CC 防护升级",
+  "error_protection_pow_difficulty": "高难度计算验证的难度不能低于 {min}",
+  "revision_reason_site_protection_updated": "修改网站 {site} 的防护",
+  "revision_reason_platform_protection_updated": "修改平台 Under Attack",
+  "revision_reason_cc_template_updated": "修改 CC 模板",
+  "revision_reason_challenge_keys_rotated": "轮换挑战密钥",
+  "rules_challenge": "挑战",
+  "rules_challenge_type": "挑战类型",
+  "rules_key_header": "请求头",
+  "rules_insert_field": "插入字段",
+  "challenge_cookie302": "Cookie 跳转",
+  "challenge_js": "JS 计算",
+  "challenge_pow": "工作量证明",
+  "challenge_captcha": "图片验证码"
 }
