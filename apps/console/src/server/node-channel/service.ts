@@ -18,10 +18,14 @@ import {
   diffNodeConfig,
   nodeRequirements,
 } from "@edgeweir/config-compiler";
-import { nodeSupportsFeature } from "@edgeweir/contract";
+import { MAX_REPORTED_BANS, nodeSupportsFeature } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
   ApplyState,
+  BanSchema,
+  BanScope,
+  BanSource,
+  type BanStatus,
   GetConfigResponseSchema,
   type NodeService,
   NodeTaskSchema,
@@ -37,6 +41,7 @@ import type { AppContext } from "../lib/context";
 import { NODE_CERT_LIFETIME_DAYS } from "../pki/ca";
 import { ingestLogs } from "../services/access-logs";
 import { recordAudit } from "../services/audit";
+import { banChanges, currentBanSequence, reportAutoBans } from "../services/bans";
 import {
   type CacheTaskItem,
   hasDeliverableTasks,
@@ -67,6 +72,27 @@ export const KEEPALIVE_MS = 15_000;
 const RENEW_BEFORE_MS = (NODE_CERT_LIFETIME_DAYS * 24 * 3600 * 1000) / 3;
 /** Tasks handed out per PullTasks call unless the node asks for fewer. */
 export const MAX_TASKS_PER_PULL = 20;
+/** Nodes with this feature receive dynamic bans (GetBans, WATCH_EVENT_BANS). */
+export const BANS_FEATURE = "bans-v1";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UINT32_MAX = 4294967295;
+
+/** The BanStatus of a heartbeat as stored on the node row. */
+function toNodeBanStatus(status: BanStatus, now: Date): schema.NodeBanStatus {
+  const count = (value: number) => Math.max(0, Math.min(Math.trunc(value), UINT32_MAX));
+  return {
+    appliedSequence: status.appliedSequence.toString(),
+    entries: count(status.entries),
+    capacity: count(status.capacity),
+    unappliedIds: [...new Set(status.unappliedIds.filter((id) => UUID_RE.test(id)))]
+      .slice(0, 100)
+      .map((id) => id.toLowerCase()),
+    unapplied: count(status.unapplied),
+    kernelEntries: count(status.kernelEntries),
+    autoEvicted: status.autoEvicted.toString(),
+    reportedAt: now.toISOString(),
+  };
+}
 
 const purgeTypes = {
   url: PurgeType.URL,
@@ -422,7 +448,19 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           wake?.();
         }
       });
-      const offReconnect = app.events.on("reconnected", () => void refresh());
+      // Nodes with bans-v1 learn the ban sequence when the stream opens and on every change.
+      const bans = nodeSupportsFeature(node.supportedFeatures, BANS_FEATURE);
+      let bansPending = bans;
+      const offBans = app.events.on("bans", (e) => {
+        if (bans && (e.clusterIds === null || e.clusterIds.includes(node.clusterId))) {
+          bansPending = true;
+          wake?.();
+        }
+      });
+      const offReconnect = app.events.on("reconnected", () => {
+        bansPending ||= bans;
+        void refresh();
+      });
       const onAbort = () => wake?.();
       ctx.signal.addEventListener("abort", onAbort);
       log.info("watch stream opened", { nodeId: node.id });
@@ -444,7 +482,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
             });
             continue;
           }
-          if (queue.length === 0) {
+          if (queue.length === 0 && !bansPending) {
             await new Promise<void>((resolve) => {
               const timer = setTimeout(resolve, KEEPALIVE_MS);
               wake = () => {
@@ -470,16 +508,25 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
               latestRevision: BigInt(item.revision),
               contentHash: item.contentHash,
             });
-          } else if (!item) {
+          } else if (!item && !bansPending) {
             yield create(WatchConfigResponseSchema, {
               event: WatchEvent.KEEPALIVE,
               latestRevision: BigInt(Math.max(lastSent, 0)),
+            });
+          }
+          if (bansPending) {
+            bansPending = false;
+            yield create(WatchConfigResponseSchema, {
+              event: WatchEvent.BANS,
+              latestRevision: BigInt(Math.max(lastSent, 0)),
+              banSequence: await currentBanSequence(app.db),
             });
           }
         }
       } finally {
         offConfig();
         offTasks();
+        offBans();
         offReconnect();
         ctx.signal.removeEventListener("abort", onAbort);
         log.info("watch stream closed", { nodeId: node.id });
@@ -561,6 +608,8 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           .update(schema.node)
           .set({
             lastSeenAt: now,
+            // Nodes without bans-v1 send no BanStatus.
+            banStatus: req.bans ? toNodeBanStatus(req.bans, now) : null,
             ...(info
               ? {
                   hostname: info.hostname || node.hostname,
@@ -735,6 +784,55 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         recorded,
       });
       return {};
+    },
+
+    async getBans(req, ctx) {
+      const node = await requireNode(ctx);
+      const page = await banChanges(app.db, node.clusterId, req.afterSequence, req.limit);
+      return {
+        reset: page.reset,
+        bans: page.bans.map((ban) =>
+          create(BanSchema, {
+            id: ban.id,
+            cidr: ban.cidr,
+            scope: ban.scope === "platform" ? BanScope.PLATFORM : BanScope.SITE,
+            siteId: ban.siteId ?? "",
+            expiresAt: timestampFromDate(ban.expiresAt),
+            source: ban.source === "auto" ? BanSource.AUTO : BanSource.MANUAL,
+            reason: ban.reason,
+            createdAt: timestampFromDate(ban.createdAt),
+          }),
+        ),
+        removedIds: page.removedIds,
+        sequence: page.sequence,
+        more: page.more,
+      };
+    },
+
+    async reportBans(req, ctx) {
+      const node = await requireNode(ctx);
+      if (req.bans.length > MAX_REPORTED_BANS)
+        throw new ConnectError(
+          `at most ${MAX_REPORTED_BANS} bans per request`,
+          Code.InvalidArgument,
+        );
+      const accepted = await reportAutoBans(
+        app.db,
+        node,
+        req.bans.map((ban) => ({
+          siteId: ban.siteId,
+          cidr: ban.cidr,
+          createdAt: ban.createdAt ? timestampDate(ban.createdAt) : null,
+          expiresAt: ban.expiresAt ? timestampDate(ban.expiresAt) : null,
+          reason: ban.reason,
+          metric: ban.metric,
+          observed: ban.observed,
+          threshold: ban.threshold,
+          windowSeconds: ban.windowSeconds,
+        })),
+      );
+      log.debug("automatic bans", { nodeId: node.id, reported: req.bans.length, accepted });
+      return { accepted };
     },
   };
 }
