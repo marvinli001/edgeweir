@@ -55,6 +55,13 @@ service NodeService {
   // ReportBans uploads bans the node created itself (automatic mitigation).
   // Idempotent: the console keys them by (node, site, cidr). Added in v0.9.0.
   rpc ReportBans(ReportBansRequest) returns (ReportBansResponse);
+  // GetChallengeKeys returns the HMAC secrets of challenge passes named by
+  // NodeConfig.challenge_keys. Added in v0.10.0 (feature challenge-v1).
+  rpc GetChallengeKeys(GetChallengeKeysRequest) returns (GetChallengeKeysResponse);
+  // ReportSecurityEvents uploads CC mitigation events: level changes, attacked
+  // paths and banned addresses. Idempotent by (node, event id). Added in
+  // v0.10.0.
+  rpc ReportSecurityEvents(ReportSecurityEventsRequest) returns (ReportSecurityEventsResponse);
 }
 
 // NodeInfo describes the host and software of a node.
@@ -202,6 +209,17 @@ message ReportStatusRequest {
   // State of the dynamic bans on this node; unset on nodes without bans-v1.
   // Added in v0.9.0.
   BanStatus bans = 11;
+  // Current CC mitigation level of every site above normal. Added in v0.10.0.
+  repeated SiteSecurity security = 12;
+}
+
+// SiteSecurity is the CC mitigation state of one site on one node.
+message SiteSecurity {
+  string site_id = 1;
+  // cookie302, js, pow or captcha; normal sites are left out.
+  string level = 2;
+  // Paths challenged above the site's level.
+  uint32 escalated_paths = 3;
 }
 
 // BanStatus reports how the node holds the bans it received.
@@ -443,6 +461,9 @@ message AccessLog {
   uint32 duration_ms = 9;
   string cache_status = 10;
   uint32 sample_rate = 11;
+  // JA4 TLS client fingerprint, only when the site records it (log_ja4).
+  // Added in v0.10.0.
+  string ja4 = 12;
 }
 // ReportLogsRequest is an immutable, ordered batch from the private node spool.
 message ReportLogsRequest {
@@ -548,5 +569,69 @@ message ReportBansRequest {
 
 // ReportBansResponse acknowledges the bans.
 message ReportBansResponse {
+  uint32 accepted = 1;
+}
+
+// GetChallengeKeysRequest names the keys to fetch.
+message GetChallengeKeysRequest {
+  // Ids from NodeConfig.challenge_keys.
+  repeated string ids = 1;
+}
+
+// ChallengeKey is one HMAC-SHA256 key for challenge passes.
+message ChallengeKey {
+  string id = 1;
+  // 32 random bytes.
+  bytes secret = 2;
+}
+
+// GetChallengeKeysResponse carries the keys of the node's cluster; unknown
+// ids and keys of other clusters are left out.
+message GetChallengeKeysResponse {
+  repeated ChallengeKey keys = 1;
+}
+
+// SecurityEventKind is what a CC mitigation event records.
+enum SecurityEventKind {
+  SECURITY_EVENT_KIND_UNSPECIFIED = 0;
+  // The site's level changed.
+  SECURITY_EVENT_KIND_SITE_LEVEL = 1;
+  // An attacked path's level changed.
+  SECURITY_EVENT_KIND_PATH_LEVEL = 2;
+  // An address over the per-address rate was banned (see ReportBans).
+  SECURITY_EVENT_KIND_IP_BANNED = 3;
+}
+
+// SecurityEvent is one CC mitigation decision of a node.
+message SecurityEvent {
+  // Unique per node; retries carry the same id.
+  string id = 1;
+  string site_id = 2;
+  google.protobuf.Timestamp occurred_at = 3;
+  SecurityEventKind kind = 4;
+  // Level after and before the change: normal, cookie302, js, pow, captcha.
+  string level = 5;
+  string previous_level = 6;
+  // Path of a PATH_LEVEL event (no query string).
+  string path = 7;
+  // Address of an IP_BANNED event.
+  string address = 8;
+  // Trigger: site_qps, url_qps, ip_qps, origin_error_rate or cooldown, with
+  // the observed value and the threshold.
+  string metric = 9;
+  double observed = 10;
+  double threshold = 11;
+  // Heaviest addresses and paths of the window (bounded, approximate).
+  repeated TopCounter top_ips = 12;
+  repeated TopCounter top_paths = 13;
+}
+
+// ReportSecurityEventsRequest uploads at most 500 events.
+message ReportSecurityEventsRequest {
+  repeated SecurityEvent events = 1;
+}
+
+// ReportSecurityEventsResponse acknowledges the events.
+message ReportSecurityEventsResponse {
   uint32 accepted = 1;
 }

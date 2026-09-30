@@ -43,6 +43,11 @@ message NodeConfig {
   repeated HttpChallenge http_challenges = 10;
   repeated IpList ip_lists = 11;
   repeated EdgeRule platform_rules = 12;
+  // Platform-wide Under Attack. Added in v0.10.0 (feature challenge-v1).
+  PlatformProtection platform_protection = 13;
+  // Challenge pass keys of the cluster, sorted by id. Secrets are fetched
+  // with GetChallengeKeys and never travel here. Added in v0.10.0.
+  repeated ChallengeKeyRef challenge_keys = 14;
 }
 
 // NodeConfigDiff transforms the config at base_revision into revision.
@@ -72,6 +77,9 @@ message NodeConfigDiff {
   repeated HttpChallenge http_challenges = 12;
   repeated IpList ip_lists = 13;
   repeated EdgeRule platform_rules = 14;
+  // Always sent in full, like listeners. Added in v0.10.0.
+  PlatformProtection platform_protection = 15;
+  repeated ChallengeKeyRef challenge_keys = 16;
 }
 
 // ListenerProtocol is the application protocol of a listener.
@@ -124,6 +132,69 @@ message Site {
   // Basis points, 0 disables sampled access logs, 10000 records every request.
   uint32 log_sample_rate = 15;
   repeated EdgeRule rules = 14;
+  // Challenges and CC mitigation; unset means none. Added in v0.10.0
+  // (feature challenge-v1).
+  SiteProtection protection = 16;
+}
+
+// SiteProtection holds a site's challenge and CC mitigation settings.
+// Challenge types and levels are cookie302, js, pow and captcha (in rising
+// strength); anything else rejects the configuration.
+message SiteProtection {
+  // Challenge every GET/HEAD request that carries no valid pass.
+  bool under_attack = 1;
+  // Challenge type of Under Attack.
+  string under_attack_challenge = 2;
+  // Lifetime of a pass, 300 to 86400 seconds.
+  uint32 pass_ttl_seconds = 3;
+  // Leading zero bits of the proof of work, and of the high-difficulty
+  // proof of work that replaces the image captcha (accessible path, or
+  // CcPolicy.high_pow_instead_of_captcha).
+  uint32 pow_difficulty = 4;
+  uint32 pow_high_difficulty = 5;
+  CcPolicy cc = 6;
+  // Record the JA4 fingerprint in sampled access logs (feature ja4-v1).
+  bool log_ja4 = 7;
+}
+
+// CcPolicy raises the challenge level of a site or of attacked paths while
+// a trigger holds, and bans addresses over their rate. Decisions are local
+// to each node.
+message CcPolicy {
+  bool enabled = 1;
+  // Highest level the policy may reach.
+  string max_level = 2;
+  // At the captcha level, challenge with the high-difficulty proof of work.
+  bool high_pow_instead_of_captcha = 3;
+  // Sliding window of every rate, in seconds.
+  uint32 window_seconds = 4;
+  // Thresholds in requests per second; 0 disables the trigger.
+  uint32 site_qps = 5;
+  uint32 url_qps = 6;
+  uint32 ip_qps = 7;
+  // Automatic ban (source auto, reason cc_ip_rate) of an address over ip_qps.
+  uint32 ip_ban_seconds = 8;
+  // Origin error rate (5xx and failed attempts) in percent, only counted
+  // with at least origin_error_min_requests origin requests in the window.
+  uint32 origin_error_percent = 9;
+  uint32 origin_error_min_requests = 10;
+  // A trigger that holds this long raises the level by one step.
+  uint32 escalate_after_seconds = 11;
+  // Without triggers for this long, the level falls by one step.
+  uint32 cooldown_seconds = 12;
+}
+
+// PlatformProtection is set by platform administrators for every site.
+message PlatformProtection {
+  bool under_attack = 1;
+  string under_attack_challenge = 2;
+}
+
+// ChallengeKeyRef names one HMAC key for challenge passes.
+message ChallengeKeyRef {
+  string id = 1;
+  // next, current or previous. Nodes sign with current and accept all three.
+  string role = 2;
 }
 
 // RuleExpression is a bounded, typed AST, never source code to execute.
@@ -149,6 +220,9 @@ message RuleAction {
   optional bool force_https = 9;
   optional bool gzip = 10;
   bool remove = 11;
+  // Challenge type of kind "challenge" (waf-custom): cookie302, js, pow or
+  // captcha. Added in v0.10.0 (feature challenge-v1).
+  string challenge = 12;
 }
 
 // EdgeRule is executed in list order inside its fixed phase.
