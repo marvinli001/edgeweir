@@ -92,6 +92,9 @@ describe("migrations", () => {
       "cache_task_node",
       "rate_limit",
       "ip_ban",
+      "site_protection",
+      "challenge_key",
+      "security_event",
     ]) {
       expect(tables).toContain(name);
     }
@@ -134,6 +137,52 @@ describe("migrations", () => {
     await db
       .insert(schema.siteDomain)
       .values({ siteId: b.id, name: "demo.test", verified: true, wildcard: true });
+  });
+
+  it("keeps one challenge key per role and cluster and one security event per node event", async () => {
+    await db.insert(schema.organization).values({
+      id: "org_g2",
+      name: "G2",
+      slug: "g2",
+      createdAt: new Date(),
+    });
+    const [cl] = await db.insert(schema.cluster).values({ name: "g2" }).returning();
+    if (!cl) throw new Error("cluster not inserted");
+    await db.insert(schema.challengeKey).values({ clusterId: cl.id, role: "current" });
+    await expect(
+      db.insert(schema.challengeKey).values({ clusterId: cl.id, role: "current" }),
+    ).rejects.toThrow();
+    const [site] = await db
+      .insert(schema.site)
+      .values({ organizationId: "org_g2", clusterId: cl.id, name: "g2" })
+      .returning();
+    const [node] = await db.insert(schema.node).values({ clusterId: cl.id, name: "n" }).returning();
+    if (!site || !node) throw new Error("not inserted");
+    expect(node.securityState).toEqual([]);
+    const event = {
+      nodeId: node.id,
+      nodeEventId: "e1",
+      siteId: site.id,
+      organizationId: "org_g2",
+      occurredAt: new Date(),
+      kind: "site_level",
+    };
+    await db.insert(schema.securityEvent).values(event);
+    await expect(db.insert(schema.securityEvent).values(event)).rejects.toThrow();
+    await db.insert(schema.siteProtection).values({ siteId: site.id });
+    const [protection] = await db.select().from(schema.siteProtection);
+    expect(protection).toMatchObject({
+      underAttack: false,
+      underAttackChallenge: "js",
+      passTtlSeconds: 1800,
+      powDifficulty: 16,
+      powHighDifficulty: 20,
+      cc: null,
+      logJa4: false,
+    });
+    await db.delete(schema.node).where(eq(schema.node.id, node.id));
+    const [kept] = await db.select().from(schema.securityEvent);
+    expect(kept?.nodeId).toBeNull();
   });
 
   it("detaches regions and default clusters instead of cascading deletes", async () => {

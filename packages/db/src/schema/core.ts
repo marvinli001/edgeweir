@@ -79,6 +79,15 @@ export interface NodeBanStatus {
   reportedAt: string;
 }
 
+/** CC mitigation level of one site on a node (ReportStatus.security), sites above normal only. */
+export interface NodeSiteSecurity {
+  siteId: string;
+  /** cookie302 | js | pow | captcha */
+  level: string;
+  /** Paths challenged above the site's level. */
+  escalatedPaths: number;
+}
+
 export const node = pgTable(
   "node",
   {
@@ -104,6 +113,8 @@ export const node = pgTable(
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     /** Last BanStatus the node reported; null for nodes without dynamic bans. */
     banStatus: jsonb("ban_status").$type<NodeBanStatus>(),
+    /** Sites above the normal CC level in the last heartbeat. */
+    securityState: jsonb("security_state").$type<NodeSiteSecurity[]>().notNull().default([]),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -35,6 +35,8 @@ export const accessLog = pgTable(
     durationMs: integer("duration_ms").notNull(),
     cacheStatus: text("cache_status").notNull(),
     sampleRate: integer("sample_rate").notNull(),
+    /** JA4 TLS client fingerprint; empty unless the site records it. */
+    ja4: text("ja4").notNull().default(""),
   },
   (t) => [
     primaryKey({ columns: [t.time, t.id] }),

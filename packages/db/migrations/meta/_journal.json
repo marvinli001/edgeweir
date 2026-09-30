@@ -204,6 +204,13 @@
       "when": 1790741841567,
       "tag": "0028_g1_dynamic_bans",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790748836985,
+      "tag": "0029_g2_challenges",
+      "breakpoints": true
     }
   ]
 }
