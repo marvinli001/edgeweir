@@ -123,7 +123,7 @@ Every new API procedure has a Vitest case.
 
 ## End-to-end tests
 
-1. Build and start the test stack (postgres, console, node, and test origins).
+1. Build and start the test stack (postgres, console, node, test origins, and test clients).
 
    ```bash
    docker compose -f compose.e2e.yml up -d --build

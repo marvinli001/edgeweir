@@ -193,11 +193,11 @@ pnpm e2e     # --up 启动环境；--down 结束后删除环境与卷；--skip-u
 
 依赖：
 
-- curl、jq、Docker、Node.js
+- curl、jq、Docker（节点容器需要 `NET_ADMIN`）、Node.js
 - 与本仓库同级的 edgeweir-node 检出（或 `EDGEWEIR_NODE_CONTEXT`）
 - 安装步骤：goreleaser v2、syft、cosign、Go 1.27.1，以及对 deb.debian.org、openresty.org 的网络访问
 
-覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 组织与管理端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、Playwright 页面流程。
+覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 组织与管理端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、动态封禁（下发延迟 p95 ≤ 5 秒、站点封禁、平台封禁由 nftables 丢包）、Playwright 页面流程。
 
 以下变量由 `compose.e2e.yml` 与 `scripts/e2e.sh` 共同读取，两侧取值须一致。更换项目名、端口、tag 与子网即可并行运行第二套环境。
 

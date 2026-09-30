@@ -123,7 +123,7 @@ pnpm exec vitest run test/server/docs.test.ts
 
 ## 端到端测试
 
-1. 构建并启动测试环境（postgres、console、node 与测试源站）。
+1. 构建并启动测试环境（postgres、console、node、测试源站与测试客户端）。
 
    ```bash
    docker compose -f compose.e2e.yml up -d --build
