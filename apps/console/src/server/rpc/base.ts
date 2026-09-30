@@ -44,7 +44,10 @@ async function readSession(context: RequestContext): Promise<SessionResult | nul
     };
     if (statusCode >= 500) throw error;
     if (statusCode === 429) {
-      const retryAfterSeconds = Math.max(1, Math.ceil((body?.details?.tryAgainIn ?? 60_000) / 1000));
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((body?.details?.tryAgainIn ?? 60_000) / 1000),
+      );
       fail("API_KEY_RATE_LIMITED", "too many requests with this access key", {
         retryAfterSeconds,
       });

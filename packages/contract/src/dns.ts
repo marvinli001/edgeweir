@@ -104,19 +104,17 @@ export const dnsContract = {
     .route({ method: "DELETE", path: "/dns/providers/{id}", tags: ["dns"] })
     .input(z.object({ id: uuid }))
     .output(z.object({ ok: z.literal(true) })),
-  get: oc
-    .route({ method: "GET", path: "/dns/config", tags: ["dns"] })
-    .output(
-      z.object({
-        policy: dnsPolicy,
-        revision: revision.nullable(),
-        records: z.array(record),
-        /** The latest plan the mass removal protection held back, until a publication passes. */
-        blocked: revision
-          .extend({ removedRecords: z.number().int(), previousRecords: z.number().int() })
-          .nullable(),
-      }),
-    ),
+  get: oc.route({ method: "GET", path: "/dns/config", tags: ["dns"] }).output(
+    z.object({
+      policy: dnsPolicy,
+      revision: revision.nullable(),
+      records: z.array(record),
+      /** The latest plan the mass removal protection held back, until a publication passes. */
+      blocked: revision
+        .extend({ removedRecords: z.number().int(), previousRecords: z.number().int() })
+        .nullable(),
+    }),
+  ),
   /** Mass removal protection: the largest share of address records one publication may remove. */
   protection: oc
     .route({ method: "GET", path: "/dns/protection", tags: ["dns"] })

@@ -9,8 +9,6 @@ import { logsContract } from "./logs";
 export * from "./logs";
 
 import { accessKeysContract } from "./access-keys";
-import { serviceAccountsContract } from "./service-accounts";
-import { usageContract, usageSettings } from "./usage";
 import { alertsContract } from "./alerts";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
@@ -22,6 +20,8 @@ import {
   rulesContract,
 } from "./rules";
 import * as s from "./schemas";
+import { serviceAccountsContract } from "./service-accounts";
+import { usageContract, usageSettings } from "./usage";
 
 export * from "./addresses";
 export * from "./certificates";
@@ -501,8 +501,8 @@ export const contract = {
 export type Contract = typeof contract;
 
 export * from "./access-keys";
-export * from "./service-accounts";
-export * from "./usage";
 export * from "./alerts";
 export * from "./dns";
 export * from "./domains";
+export * from "./service-accounts";
+export * from "./usage";
