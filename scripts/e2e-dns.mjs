@@ -361,10 +361,10 @@ if (!org) {
 const t = await actor(tenantEmail, tenantPassword);
 assert.deepEqual(
   await t("POST", "/dns-credentials/zones", { provider: "webhook", credentials: WEBHOOK }),
-  { zones: ["tenant.dns.test"] },
+  { zones: ["dns-tenant.test"] },
 );
 await fixture("/dns/append", {
-  zone: "tenant.dns.test",
+  zone: "dns-tenant.test",
   records: [
     { name: "shop", type: "A", data: "192.0.2.44", ttl: 300 },
     { name: "keep", type: "TXT", data: "unrelated", ttl: 300 },
@@ -374,7 +374,7 @@ assert.deepEqual(
   await t("POST", "/dns-credentials/test", {
     provider: "webhook",
     credentials: WEBHOOK,
-    zone: "tenant.dns.test",
+    zone: "dns-tenant.test",
   }),
   { ok: true, records: 2 },
 );
@@ -382,23 +382,23 @@ if (!(await t("GET", "/dns-credentials")).some((c) => c.name === "Tenant zone"))
   await t("POST", "/dns-credentials", {
     name: "Tenant zone",
     provider: "webhook",
-    zone: "tenant.dns.test",
+    zone: "dns-tenant.test",
     credentials: WEBHOOK,
     autoRecords: true,
   });
 const site = (
   await t("POST", "/sites", {
     name: "dns-tenant-site",
-    domains: ["www.tenant.dns.test", "shop.tenant.dns.test"],
+    domains: ["www.dns-tenant.test", "shop.dns-tenant.test"],
     origins: [{ address: "whoami" }],
   })
 ).site;
 const target = `${site.id}.edge.cdn.m5.test`;
 let records = await t("POST", `/sites/${site.id}/dns-records/sync`);
 const proof = (await t("GET", `/sites/${site.id}/ownership`)).find(
-  (p) => p.domain === "tenant.dns.test",
+  (p) => p.domain === "dns-tenant.test",
 );
-let tenantZone = await zone("tenant.dns.test");
+let tenantZone = await zone("dns-tenant.test");
 assert.ok(
   tenantZone.includes(`_edgeweir-verification TXT ${proof.txtValue}`),
   JSON.stringify(tenantZone),
@@ -406,7 +406,7 @@ assert.ok(
 assert.ok(tenantZone.includes(`www CNAME ${target}`));
 assert.ok(tenantZone.includes("shop A 192.0.2.44"));
 assert.ok(!tenantZone.includes(`shop CNAME ${target}`));
-const shop = records.items.find((r) => r.name === "shop.tenant.dns.test");
+const shop = records.items.find((r) => r.name === "shop.dns-tenant.test");
 assert.equal(shop.status, "conflict");
 assert.deepEqual(shop.conflicts, [{ type: "A", data: "192.0.2.44" }]);
 pass(
@@ -424,7 +424,7 @@ await waitFor(
   6000,
 );
 await t("POST", `/sites/${site.id}/dns-records/sync`);
-tenantZone = await zone("tenant.dns.test");
+tenantZone = await zone("dns-tenant.test");
 assert.ok(
   !tenantZone.some((r) => r.startsWith("_edgeweir-verification")),
   JSON.stringify(tenantZone),
@@ -433,14 +433,14 @@ pass("the domain verified through the written TXT, which was then removed");
 
 records = await t("POST", `/sites/${site.id}/dns-records/${shop.id}/confirm`);
 assert.equal(records.items.find((r) => r.id === shop.id).status, "written");
-tenantZone = await zone("tenant.dns.test");
+tenantZone = await zone("dns-tenant.test");
 assert.ok(tenantZone.includes(`shop CNAME ${target}`));
 assert.ok(!tenantZone.includes("shop A 192.0.2.44"));
 pass("after the tenant's confirmation the CNAME replaced shop's A record");
 
-await t("PATCH", `/sites/${site.id}`, { domains: ["shop.tenant.dns.test"] });
+await t("PATCH", `/sites/${site.id}`, { domains: ["shop.dns-tenant.test"] });
 await t("POST", `/sites/${site.id}/dns-records/sync`);
-tenantZone = await zone("tenant.dns.test");
+tenantZone = await zone("dns-tenant.test");
 assert.deepEqual(tenantZone, [`keep TXT unrelated`, `shop CNAME ${target}`].sort());
 const audit = await a("GET", "/audit-logs?action=dns_record.overwrite");
 assert.equal(audit.items[0]?.organizationId, org.id);

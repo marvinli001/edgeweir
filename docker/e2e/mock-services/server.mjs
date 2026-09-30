@@ -17,7 +17,7 @@ const ACCOUNTS = {
   "e2e-dns-token-b": ["cdn-b.dns.test"],
 };
 const WEBHOOK_SECRET = "e2e-webhook-secret-0123";
-const WEBHOOK_ZONES = ["tenant.dns.test"];
+const WEBHOOK_ZONES = ["dns-tenant.test"];
 
 const zones = new Map(),
   txt = new Map(),

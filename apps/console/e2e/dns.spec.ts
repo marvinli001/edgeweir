@@ -139,7 +139,7 @@ test("DNS: CNAME targets on the site page, with the tenant's automatic records",
   );
   const records = page.getByTestId("site-dns-records");
   await expect(records.getByTestId("site-dns-record")).toHaveCount(1);
-  await expect(records).toContainText("shop.tenant.dns.test");
+  await expect(records).toContainText("shop.dns-tenant.test");
   await expect(records.locator("[data-status=written]")).toHaveCount(1);
   await records.getByTestId("site-dns-sync").click();
   await expect(records.locator("[data-status=written]")).toHaveCount(1);
