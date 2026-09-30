@@ -113,4 +113,26 @@ describe("M6 AccessKey scope, revocation and auth boundaries", async () => {
     ).toBe(403);
     await admin.accessKeys.revoke({ id: key.id });
   });
+  it("answers a key over its request limit with 429, not as invalid credentials", async () => {
+    const key = await admin.accessKeys.create({ name: "busy", scope: "read" });
+    expect((await api(key.key, "GET", "/sites")).status).toBe(200);
+    const [row] = await ctx.db.select().from(schema.apikey).where(eq(schema.apikey.id, key.id));
+    await ctx.db
+      .update(schema.apikey)
+      .set({ requestCount: row?.rateLimitMax ?? 600, lastRequest: new Date() })
+      .where(eq(schema.apikey.id, key.id));
+    const limited = await api(key.key, "GET", "/sites");
+    expect(limited.status).toBe(429);
+    const body = (await limited.json()) as { code: string; data: { retryAfterSeconds: number } };
+    expect(body).toMatchObject({ code: "API_KEY_RATE_LIMITED" });
+    expect(body.data.retryAfterSeconds).toBeGreaterThan(0);
+    expect(body.data.retryAfterSeconds).toBeLessThanOrEqual(60);
+    // The count starts over once the key has been idle for the window.
+    await ctx.db
+      .update(schema.apikey)
+      .set({ lastRequest: new Date(Date.now() - 61_000) })
+      .where(eq(schema.apikey.id, key.id));
+    expect((await api(key.key, "GET", "/sites")).status).toBe(200);
+    await admin.accessKeys.revoke({ id: key.id });
+  });
 });

@@ -1014,5 +1014,6 @@
   "dns_force_publish_confirm": "仍然发布这次 DNS 变更？",
   "dns_protection_title": "大面积摘除保护",
   "dns_protection_ratio": "单次最多摘除地址记录（%）",
-  "error_dns_not_blocked": "这个 DNS 版本没有被阻止"
+  "error_dns_not_blocked": "这个 DNS 版本没有被阻止",
+  "error_api_key_rate_limited": "AccessKey 请求太频繁，请 {retryAfterSeconds} 秒后再试"
 }

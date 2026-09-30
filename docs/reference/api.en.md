@@ -33,7 +33,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 - An AccessKey acts as its creator, with the creator's role and organization scope. A platform administrator's key can call Admin procedures.
 - When the creator's organization requires two-factor authentication and the creator has not enabled it, tenant procedures return 403 `TWO_FACTOR_REQUIRED`.
 - Invalid, revoked, or missing key: 401. Once the creator's account is disabled, requests with the creator's AccessKeys are refused.
-- Each AccessKey is limited to 600 requests per 60 seconds.
+- Each AccessKey allows up to 600 requests in a row; the count restarts when more than 60 seconds pass since the previous request. Beyond that the answer is 429 `API_KEY_RATE_LIMITED` with `data.retryAfterSeconds`. Use a service account key for continuous polling; service account keys are not counted.
 - Procedures that need no key (`security: []` in OpenAPI): `GET /system/status`, `POST /system/setup`, `GET /invitations/{id}`, and `POST /invitations/{id}/accept`.
 
 ### AccessKey

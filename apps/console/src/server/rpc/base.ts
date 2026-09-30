@@ -36,9 +36,19 @@ async function readSession(context: RequestContext): Promise<SessionResult | nul
   try {
     return await context.app.auth.api.getSession({ headers: context.headers });
   } catch (error) {
-    // better-auth rejects invalid/expired API keys by throwing a 4xx APIError.
-    const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
+    // better-auth rejects invalid/expired API keys by throwing a 4xx APIError,
+    // and keys over their request limit with a 429 (retry time in ms).
+    const { statusCode = 500, body } = error as {
+      statusCode?: number;
+      body?: { details?: { tryAgainIn?: number } };
+    };
     if (statusCode >= 500) throw error;
+    if (statusCode === 429) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((body?.details?.tryAgainIn ?? 60_000) / 1000));
+      fail("API_KEY_RATE_LIMITED", "too many requests with this access key", {
+        retryAfterSeconds,
+      });
+    }
     throw new ORPCError("UNAUTHORIZED", { message: "invalid credentials" });
   }
 }

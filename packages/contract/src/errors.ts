@@ -109,6 +109,7 @@ export const errorDefs = {
     status: 429,
     params: ["tasksPerMinute", "urlsPerHour", "retryAfterSeconds"],
   },
+  API_KEY_RATE_LIMITED: { status: 429, params: ["retryAfterSeconds"] },
 } as const satisfies Record<string, { status: number; params: readonly string[] }>;
 
 export type ErrorCode = keyof typeof errorDefs;

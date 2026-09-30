@@ -1014,5 +1014,6 @@
   "dns_force_publish_confirm": "Publish this DNS change anyway?",
   "dns_protection_title": "Mass removal protection",
   "dns_protection_ratio": "Most address records one publication may remove (%)",
-  "error_dns_not_blocked": "This DNS revision is not held back"
+  "error_dns_not_blocked": "This DNS revision is not held back",
+  "error_api_key_rate_limited": "Too many requests with this AccessKey. Try again in {retryAfterSeconds} s"
 }

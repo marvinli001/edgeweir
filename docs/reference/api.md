@@ -33,7 +33,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 - AccessKey 以创建者身份调用，适用创建者的角色与组织范围。平台管理员的密钥可调用后台过程。
 - 所属组织要求两步验证而创建者未启用时，租户过程返回 403 `TWO_FACTOR_REQUIRED`。
 - 密钥无效、已吊销或缺失：401。创建者账户被禁用后，其 AccessKey 请求被拒绝。
-- 每个 AccessKey 每 60 秒最多 600 次请求。
+- 每个 AccessKey 连续最多 600 次请求：距上一次请求超过 60 秒时计数清零。超出返回 429 `API_KEY_RATE_LIMITED`，`data.retryAfterSeconds` 为需等待的秒数。持续轮询用服务账号 key，服务账号 key 不计数。
 - 无需密钥的过程（OpenAPI 中 `security: []`）：`GET /system/status`、`POST /system/setup`、`GET /invitations/{id}`、`POST /invitations/{id}/accept`。
 
 ### AccessKey
