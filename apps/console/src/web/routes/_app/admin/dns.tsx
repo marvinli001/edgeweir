@@ -13,6 +13,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DnsHeldBack, DnsProtectionCard } from "@/components/dns-protection";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
@@ -49,6 +50,7 @@ const statusLabel = (value: DnsRevision["status"]) =>
     applied: m.dns_applied,
     failed: m.dns_failed,
     superseded: m.dns_superseded,
+    blocked: m.dns_blocked,
   })[value]?.() ?? value;
 function DnsPage() {
   const providers = useQuery(orpc.dns.providers.queryOptions()),
@@ -104,6 +106,7 @@ function DnsPage() {
         <LoadingState />
       ) : (
         <>
+          {config.data.blocked ? <DnsHeldBack blocked={config.data.blocked} /> : null}
           <Card>
             <CardHeader>
               <CardTitle>{m.dns_providers()}</CardTitle>
@@ -155,6 +158,7 @@ function DnsPage() {
             nodes={nodes.data}
             clusters={clusters.data}
           />
+          <DnsProtectionCard />
         </>
       )}
       <Card>
