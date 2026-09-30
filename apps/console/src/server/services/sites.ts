@@ -31,6 +31,7 @@ import { domainRoot } from "../lib/domain-root";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { assertServing, isServing } from "../lib/site-state";
+import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { assertCacheTaskQuota } from "./cache-tasks";
 import { defaultClusterId } from "./clusters";
@@ -40,6 +41,7 @@ import {
   lockDomainRoots,
   releaseUnusedDomainClaims,
 } from "./domain-ownership";
+import { assertOrgLimit } from "./organization-limits";
 import { assertOriginsAllowed } from "./origin-allow-list";
 import {
   type Executor,
@@ -477,6 +479,9 @@ export async function createSite(
 ): Promise<{ site: Site; revision: Revision }> {
   const domains = uniqueDomains(input.domains);
   return db.transaction(async (tx) => {
+    // Organization limits first: the organization lock precedes domain and publish locks.
+    await assertOrgLimit(tx, ctx.organizationId, "sites", 1);
+    await assertOrgLimit(tx, ctx.organizationId, "domains", domains.length);
     const clusterId = input.clusterId ?? (await defaultClusterId(tx, ctx.organizationId));
     const [clusterRow] = await tx
       .select({ id: schema.cluster.id })
@@ -566,6 +571,7 @@ export async function updateSite(
         .select({ name: schema.siteDomain.name })
         .from(schema.siteDomain)
         .where(eq(schema.siteDomain.siteId, row.id));
+      await assertOrgLimit(tx, row.organizationId, "domains", domains.length - oldDomains.length);
       await lockDomainRoots(
         tx,
         [...oldDomains, ...domains].map((d) => d.name),
@@ -751,14 +757,6 @@ export async function purgeSite(
     if (!dto) throw new Error("site not readable after update");
     return { site: dto, revision: toRevisionDto(revision) };
   });
-}
-
-/** 409 UPDATED_AT_MISMATCH (with the current value) when the caller read an older version. */
-export function assertUpdatedAt(current: Date, expected: string | undefined) {
-  if (expected !== undefined && current.getTime() !== Date.parse(expected))
-    fail("UPDATED_AT_MISMATCH", "the resource changed since it was read", {
-      updatedAt: current.toISOString(),
-    });
 }
 
 const STATE_REASONS = {

@@ -431,6 +431,27 @@ export const organizationSettings = pgTable("organization_settings", {
 });
 
 /**
+ * Technical limits the operator sets per organization (resource protection,
+ * not a plan). Null means no organization-specific limit: only the global
+ * hard limits apply (for purges: CACHE_TASK_LIMITS).
+ */
+export const organizationLimit = pgTable("organization_limit", {
+  organizationId: text("organization_id")
+    .primaryKey()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  maxSites: integer("max_sites"),
+  /** Domains across all of the organization's sites. */
+  maxDomains: integer("max_domains"),
+  maxCertificates: integer("max_certificates"),
+  /** Entries across all of the organization's IP lists. */
+  maxIpListEntries: integer("max_ip_list_entries"),
+  maxPurgeTasksPerMinute: integer("max_purge_tasks_per_minute"),
+  maxPurgeUrlsPerHour: integer("max_purge_urls_per_hour"),
+  maxMembers: integer("max_members"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
  * Node certificates revoked when a node is deleted. The node channel refuses
  * any client certificate whose serial is listed here.
  */

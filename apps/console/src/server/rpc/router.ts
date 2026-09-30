@@ -99,6 +99,7 @@ import {
   setNodeStatus,
   updateNode,
 } from "../services/nodes";
+import { getOrganizationLimits, setOrganizationLimits } from "../services/organization-limits";
 import {
   createOrganization,
   listOrganizations,
@@ -631,6 +632,9 @@ export const router = os.router({
     }),
   },
   organization: {
+    limits: listTenant.organization.limits.handler(({ context }) =>
+      getOrganizationLimits(context.app.db, context.organizationId),
+    ),
     update: orgManager.organization.update.handler(async ({ input, context }) => {
       await updateOrganization(
         context.app.db,
@@ -664,6 +668,14 @@ export const router = os.router({
       ),
       resume: admin.admin.sites.resume.handler(({ input, context }) =>
         resumeSite(context.app.db, input, context.actor),
+      ),
+    },
+    organizations: {
+      getLimits: admin.admin.organizations.getLimits.handler(({ input, context }) =>
+        getOrganizationLimits(context.app.db, input.id),
+      ),
+      setLimits: admin.admin.organizations.setLimits.handler(({ input, context }) =>
+        setOrganizationLimits(context.app.db, input, context.actor),
       ),
     },
   },

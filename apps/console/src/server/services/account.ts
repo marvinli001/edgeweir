@@ -5,6 +5,7 @@ import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { closeInvitation, findOpenInvitation, newId, parseRole } from "./members";
+import { assertOrgLimit } from "./organization-limits";
 import { organizationSettings } from "./organizations";
 import type { Executor } from "./revisions";
 import { withCreatedUser } from "./users";
@@ -168,6 +169,7 @@ export async function acceptInvitation(
         and(eq(schema.member.organizationId, organizationId), eq(schema.member.userId, userId)),
       );
     if (!member) {
+      await assertOrgLimit(tx, organizationId, "members", 1);
       await tx.insert(schema.member).values({
         id: newId(),
         organizationId,

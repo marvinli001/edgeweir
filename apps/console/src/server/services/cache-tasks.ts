@@ -12,7 +12,6 @@ import {
   count,
   desc,
   eq,
-  gt,
   inArray,
   isNull,
   lt,
@@ -26,6 +25,7 @@ import { TASKS_CHANNEL } from "../lib/events";
 import { cleanErrorCode, cleanErrorParams, taskError } from "../lib/node-errors";
 import { assertServing } from "../lib/site-state";
 import { type Actor, recordAudit, systemActor } from "./audit";
+import { loadOrganizationLimits, orgLimitExceeded, recentPurges } from "./organization-limits";
 import type { Executor } from "./revisions";
 import type { SiteScope } from "./sites";
 
@@ -224,38 +224,18 @@ export async function assertCacheTaskQuota(
   await tx.execute(
     sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.cache-task-quota.${organizationId}`}))`,
   );
-  const recent = await tx
-    .select({
-      createdAt: schema.cacheTask.createdAt,
-      targets: sql<number>`cardinality(${schema.cacheTask.targets})`.mapWith(Number),
-    })
-    .from(schema.cacheTask)
-    .where(
-      and(
-        eq(schema.cacheTask.organizationId, organizationId),
-        eq(schema.cacheTask.source, "user"),
-        gt(schema.cacheTask.createdAt, new Date(now.getTime() - HOUR_MS)),
-      ),
-    )
-    .orderBy(schema.cacheTask.createdAt);
-  // The legacy site purge endpoint publishes a cache generation instead of
-  // creating a typed task. Both entry points consume the same quota.
-  const legacy = await tx
-    .select({ createdAt: schema.auditLog.occurredAt })
-    .from(schema.auditLog)
-    .where(
-      and(
-        eq(schema.auditLog.organizationId, organizationId),
-        eq(schema.auditLog.action, "site.purge_all"),
-        sql`${schema.auditLog.metadata}->>'quotaLimited' = 'true'`,
-        gt(schema.auditLog.occurredAt, new Date(now.getTime() - HOUR_MS)),
-      ),
-    );
-  recent.push(...legacy.map((row) => ({ ...row, targets: 1 })));
-  recent.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const { tasksPerMinute, urlsPerHour } = CACHE_TASK_LIMITS;
+  const recent = await recentPurges(tx, organizationId, now);
+  // Organization limits replace the defaults; exceeding one is ORG_LIMIT_EXCEEDED.
+  const { limits } = await loadOrganizationLimits(tx, organizationId);
+  const tasksPerMinute = limits.purgeTasksPerMinute ?? CACHE_TASK_LIMITS.tasksPerMinute;
+  const urlsPerHour = limits.purgeUrlsPerHour ?? CACHE_TASK_LIMITS.urlsPerHour;
   let waitMs = 0;
   const lastMinute = recent.filter((r) => r.createdAt.getTime() > now.getTime() - MINUTE_MS);
+  if (limits.purgeTasksPerMinute !== null && lastMinute.length >= tasksPerMinute)
+    orgLimitExceeded("purgeTasksPerMinute", tasksPerMinute, lastMinute.length);
+  const hourUsed = recent.reduce((sum, r) => sum + r.targets, 0);
+  if (limits.purgeUrlsPerHour !== null && hourUsed + count > urlsPerHour)
+    orgLimitExceeded("purgeUrlsPerHour", urlsPerHour, hourUsed);
   if (lastMinute.length >= tasksPerMinute) {
     // Until enough of them are older than a minute to make room for one more.
     const oldest = lastMinute[lastMinute.length - tasksPerMinute];

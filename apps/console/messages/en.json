@@ -908,5 +908,19 @@
   "revision_reason_site_enabled": "Site {site} enabled",
   "revision_reason_site_disabled": "Site {site} disabled",
   "revision_reason_site_suspended": "Site {site} suspended",
-  "revision_reason_site_resumed": "Site {site} resumed"
+  "revision_reason_site_resumed": "Site {site} resumed",
+  "error_org_limit_exceeded": "The organization reached its {resource} limit: {current} / {limit}",
+  "org_limit_resource_sites": "sites",
+  "org_limit_resource_domains": "domains",
+  "org_limit_resource_certificates": "certificates",
+  "org_limit_resource_ip_list_entries": "IP list entries",
+  "org_limit_resource_purge_tasks_per_minute": "purge tasks per minute",
+  "org_limit_resource_purge_urls_per_hour": "purge targets per hour",
+  "org_limit_resource_members": "members",
+  "org_limits_title": "Limits",
+  "org_limits_edit": "Limits",
+  "org_limits_edit_title": "Limits for {name}",
+  "org_limits_unlimited": "No limit",
+  "org_limits_usage": "{current} used",
+  "org_limits_saved": "Limits saved"
 }

@@ -272,6 +272,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `apikey` | AccessKeys: hash, permissions, enabled state |
 | `rate_limit` | Rate-limit counters of the authentication endpoints |
 | `organization_settings` | Organization default cluster, required two-factor |
+| `organization_limit` | Technical limits per organization (sites, domains, certificates, IP list entries, purge rates, members); null means no limit |
 
 ### Infrastructure
 
@@ -370,6 +371,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0021_authenticated_revision_floor` | `node_config_status.revision_receipt_verified` |
 | `0022_bound_traffic_counters` | Existing traffic counters clamped to 0 through 2^53−1 |
 | `0023_p0_site_state` | `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at` (platform suspension) |
+| `0024_p0_organization_limits` | `organization_limit` |
 
 ## Build output
 

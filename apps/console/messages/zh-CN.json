@@ -908,5 +908,19 @@
   "revision_reason_site_enabled": "启用网站 {site}",
   "revision_reason_site_disabled": "停用网站 {site}",
   "revision_reason_site_suspended": "暂停网站 {site}",
-  "revision_reason_site_resumed": "恢复网站 {site}"
+  "revision_reason_site_resumed": "恢复网站 {site}",
+  "error_org_limit_exceeded": "组织的{resource}已达上限：{current} / {limit}",
+  "org_limit_resource_sites": "网站数",
+  "org_limit_resource_domains": "域名总数",
+  "org_limit_resource_certificates": "证书数",
+  "org_limit_resource_ip_list_entries": "IP 名单条目总数",
+  "org_limit_resource_purge_tasks_per_minute": "每分钟清缓存任务数",
+  "org_limit_resource_purge_urls_per_hour": "每小时清缓存目标数",
+  "org_limit_resource_members": "成员数",
+  "org_limits_title": "限额",
+  "org_limits_edit": "限额",
+  "org_limits_edit_title": "{name} 的限额",
+  "org_limits_unlimited": "不限",
+  "org_limits_usage": "已用 {current}",
+  "org_limits_saved": "限额已保存"
 }

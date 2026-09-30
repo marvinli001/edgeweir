@@ -4,6 +4,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, eq, gt } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
+import { assertOrgLimit } from "./organization-limits";
 import type { Executor } from "./revisions";
 
 export const INVITATION_TTL_DAYS = 7;
@@ -147,6 +148,7 @@ export async function addMemberTx(
 ): Promise<Member> {
   const org = await findOrganization(tx, input.organizationId);
   assertMayGrant(ctx, input.role);
+  await assertOrgLimit(tx, org.id, "members", 1);
   const [user] = await tx.select().from(schema.user).where(eq(schema.user.id, input.userId));
   if (!user) fail("USER_NOT_FOUND", "user not found");
   const [existing] = await tx
@@ -260,6 +262,8 @@ export async function createInvitation(
   return db.transaction(async (tx) => {
     const org = await findOrganization(tx, input.organizationId);
     assertMayGrant(ctx, input.role);
+    // A full organization cannot take more members: refuse the invitation up front.
+    await assertOrgLimit(tx, org.id, "members", 1);
     const [already] = await tx
       .select({ id: schema.member.id })
       .from(schema.member)

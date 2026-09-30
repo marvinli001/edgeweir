@@ -78,6 +78,7 @@ const CONSOLE_PROCEDURES = [
   "members.updateRole",
   "members.remove",
   "organization.update",
+  "organization.limits",
   "invitations.get",
   "invitations.accept",
 ];
@@ -259,6 +260,11 @@ describe("admin area procedures", async () => {
       ["analytics.topNodes", () => member.analytics.topNodes({})],
       ["admin.sites.suspend", () => member.admin.sites.suspend({ id: uuid, reason: "billing" })],
       ["admin.sites.resume", () => member.admin.sites.resume({ id: uuid })],
+      ["admin.organizations.getLimits", () => member.admin.organizations.getLimits({ id: "x" })],
+      [
+        "admin.organizations.setLimits",
+        () => member.admin.organizations.setLimits({ id: "x", limits: {} }),
+      ],
     ];
     for (const [name, call] of calls) {
       const error = await rpcError(call());

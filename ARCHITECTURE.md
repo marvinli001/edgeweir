@@ -272,6 +272,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `apikey` | AccessKey：哈希、权限、启用状态 |
 | `rate_limit` | 认证接口限速计数 |
 | `organization_settings` | 组织默认集群、要求两步验证 |
+| `organization_limit` | 组织技术限额（站点、域名、证书、IP 名单条目、清缓存频率、成员），空值为不限 |
 
 ### 基础设施
 
@@ -370,6 +371,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0021_authenticated_revision_floor` | `node_config_status.revision_receipt_verified` |
 | `0022_bound_traffic_counters` | 既有流量计数截断到 0 至 2^53−1 |
 | `0023_p0_site_state` | `site.suspended`、`suspend_reason`、`suspend_note`、`suspended_at`（平台暂停） |
+| `0024_p0_organization_limits` | `organization_limit` |
 
 ## 构建产物
 

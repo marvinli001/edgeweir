@@ -78,6 +78,7 @@ export const errorDefs = {
   ROLLBACK_RESOURCE_UNAVAILABLE: { status: 409, params: [] },
   ORGANIZATION_NOT_FOUND: { status: 404, params: [] },
   ORGANIZATION_SLUG_TAKEN: { status: 409, params: ["slug"] },
+  ORG_LIMIT_EXCEEDED: { status: 409, params: ["resource", "limit", "current"] },
   USER_NOT_FOUND: { status: 404, params: [] },
   EMAIL_TAKEN: { status: 409, params: ["email"] },
   CANNOT_MODIFY_SELF: { status: 409, params: [] },
