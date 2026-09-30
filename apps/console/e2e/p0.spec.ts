@@ -7,6 +7,8 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/p0-state.json"), "utf8
   clusterId: string;
   siteId: string;
   organizationId: string;
+  /** The node group of the upgrade canary node (named by earlier milestones). */
+  canaryGroupName: string;
 };
 const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
 const OWNER = ["owner@p0.test", "p0-owner-password-123"] as const;
@@ -71,7 +73,13 @@ test("P0: the platform suspends a site with a reason; the tenant sees it; the pl
 }) => {
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
-  await page.goto("/admin/sites");
+  // The table is paginated; search finds the site on any page.
+  const openAdminSite = async () => {
+    await page.goto("/admin/sites");
+    await page.getByTestId("sites-search").fill("p0-site");
+    await expect(page).toHaveURL(/q=p0-site/);
+  };
+  await openAdminSite();
   const row = page.getByTestId("admin-sites-table").getByRole("row", { name: /p0-site/ });
   await row.getByTestId("site-suspend").click();
   await pick(page, page.getByLabel("原因", { exact: true }), "安全");
@@ -92,7 +100,7 @@ test("P0: the platform suspends a site with a reason; the tenant sees it; the pl
   await logout(page);
 
   await login(page, ...ADMIN);
-  await page.goto("/admin/sites");
+  await openAdminSite();
   await row.getByTestId("site-resume").click();
   await page.getByTestId("confirm-action").click();
   await expect(row.getByTestId("site-status")).toHaveAttribute("data-state", "active");
@@ -170,10 +178,11 @@ test("P0: configuration canary status, promote to all and abort", async ({ page 
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
   await page.goto(`/admin/clusters?cluster=${state.clusterId}`);
-  // Mark the upgrade canary group as a canary group.
+  // Mark the upgrade canary node's group as a canary group.
   const groupRow = page
     .getByTestId("node-groups-table")
-    .getByRole("row", { name: /upgrade-canary/ });
+    .getByRole("row")
+    .filter({ has: page.getByText(state.canaryGroupName, { exact: true }) });
   await groupRow.getByRole("button", { name: "编辑节点组" }).click();
   await page.getByTestId("node-group-canary").click();
   await page.getByTestId("node-group-submit").click();

@@ -617,8 +617,21 @@ const recovered = await reconcileDns();
 assert.equal(recovered.blocked, null);
 assert.deepEqual(await providerRecords(), beforeOutage);
 
+const canaryGroupName = (await a("GET", `/node-groups?clusterId=${clusterId}`)).find(
+  (g) => g.id === canaryGroupId,
+).name;
 await writeFile(
   ".e2e/p0-state.json",
-  `${JSON.stringify({ clusterId, siteId: site.id, organizationId: org.id, serviceAccountId: created.id }, null, 2)}\n`,
+  `${JSON.stringify(
+    {
+      clusterId,
+      siteId: site.id,
+      organizationId: org.id,
+      serviceAccountId: created.id,
+      canaryGroupName,
+    },
+    null,
+    2,
+  )}\n`,
 );
 console.log("P0 E2E OK");
