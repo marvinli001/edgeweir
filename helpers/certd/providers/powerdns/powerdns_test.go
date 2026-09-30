@@ -100,7 +100,8 @@ func TestAppendRecords(t *testing.T) {
 			{"name": "www.example.com.", "type": "A", "ttl": 600, "changetype": "REPLACE", "records": []map[string]any{
 				{"content": "192.0.2.1", "disabled": false}, {"content": "192.0.2.2", "disabled": false}, {"content": "192.0.2.9", "disabled": false},
 			}},
-			{"name": "_acme-challenge.example.com.", "type": "TXT", "ttl": 120, "changetype": "REPLACE", "records": []map[string]any{
+			// An existing RRset keeps its TTL (60): appending never changes the records already there.
+			{"name": "_acme-challenge.example.com.", "type": "TXT", "ttl": 60, "changetype": "REPLACE", "records": []map[string]any{
 				{"content": `"token-1"`}, {"content": `"caf\195\169" "x"`}, {"content": `"token \"2\""`},
 			}},
 			// A new RRset.

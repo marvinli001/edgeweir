@@ -235,7 +235,7 @@ type zoneInfo struct {
 }
 
 func toRR(r record, zone string) libdns.RR {
-	return dnsx.RR(dnsx.Relative(r.Host, zone), r.Type, r.Value, r.TTL)
+	return dnsx.RR(dnsx.Name(r.Host, zone), r.Type, r.Value, r.TTL)
 }
 
 func isDefault(r record) bool { return r.Line == "" || r.Line == defaultLine }

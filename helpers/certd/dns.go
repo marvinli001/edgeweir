@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/netip"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -127,18 +128,26 @@ func providerFor(p dnsParams) (dnsx.Provider, error) {
 
 var recordTypes = map[string]bool{"TXT": true, "CNAME": true, "A": true, "AAAA": true, "ALIAS": true}
 
+// Record names are "@" or relative names (a leading "*" label allowed); zones
+// are plain host names. Anything else (empty names, absolute names, paths,
+// query characters) is refused before it reaches an adapter.
+var (
+	recordName = regexp.MustCompile(`^(?i)(@|\*|(\*\.)?[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?)*)$`)
+	zoneName   = regexp.MustCompile(`^(?i)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.?$`)
+)
+
 func dnsCommand(ctx context.Context, command string, raw json.RawMessage) (any, error) {
 	var p dnsParams
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return nil, fmt.Errorf("%w: invalid DNS request", dnsx.ErrInvalid)
 	}
-	if command != "dns.zones" && (p.Zone == "" || strings.ContainsAny(p.Zone, "/ :\r\n")) {
+	if command != "dns.zones" && (len(p.Zone) > 253 || !zoneName.MatchString(p.Zone)) {
 		return nil, fmt.Errorf("%w: invalid DNS zone", dnsx.ErrInvalid)
 	}
 	zone := strings.TrimSuffix(p.Zone, ".") + "."
 	var records []libdns.Record
 	for _, r := range p.Records {
-		if r.TTL < 30 || r.TTL > 86400 || len(r.Data) > 4096 || strings.ContainsAny(r.Name, " /\r\n") {
+		if r.TTL < 30 || r.TTL > 86400 || len(r.Data) > 4096 || len(r.Name) > 253 || !recordName.MatchString(r.Name) {
 			return nil, fmt.Errorf("%w: invalid DNS record", dnsx.ErrInvalid)
 		}
 		if !recordTypes[r.Type] {
@@ -213,15 +222,13 @@ func (p *dnsChallenge) Present(domain, token, authorization string) error {
 	if err := p.session.event(map[string]any{"event": "dns01.prepare", "domain": domain, "token": token, "record": dnsRecord{Name: name, Type: "TXT", Data: info.Value, TTL: 60}}); err != nil {
 		return err
 	}
+	// Cleanup deletes exactly this record (name, TXT, value), never what the
+	// provider echoed back: an empty value there would delete the whole set,
+	// including a sibling challenge (apex and wildcard) still in use.
 	p.mu.Lock()
 	p.installed[token] = intent
 	p.mu.Unlock()
-	records, err := p.provider.AppendRecords(p.ctx, p.zone, intent)
-	if err == nil {
-		p.mu.Lock()
-		p.installed[token] = records
-		p.mu.Unlock()
-	}
+	_, err := p.provider.AppendRecords(p.ctx, p.zone, intent)
 	return err
 }
 func (p *dnsChallenge) CleanUp(domain string, token, _ string) error {

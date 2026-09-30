@@ -193,10 +193,14 @@ type session struct {
 func (p *Provider) dial(ctx context.Context) (*session, error) {
 	c, err := dnsx.DialPolicy(ctx, p.allow, "tcp", p.server)
 	if err != nil {
-		if errors.Is(err, dnsx.ErrRefused) || errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) {
 			return nil, err
 		}
-		return nil, fmt.Errorf("%w: %s", dnsx.ErrUnreachable, dnsx.Short(err.Error()))
+		// Neither message names the resolved address.
+		if errors.Is(err, dnsx.ErrRefused) {
+			return nil, fmt.Errorf("%w: server refused by the outbound policy", dnsx.ErrRefused)
+		}
+		return nil, fmt.Errorf("%w: cannot connect to the DNS server", dnsx.ErrUnreachable)
 	}
 	// Closing the connection unblocks reads when the context ends.
 	return &session{conn: &dns.Conn{Conn: c}, stop: context.AfterFunc(ctx, func() { _ = c.Close() })}, nil

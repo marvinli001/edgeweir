@@ -144,7 +144,7 @@ func toRR(r record, zone string) libdns.RR {
 			data = dnsx.Zone(zone) + "."
 		}
 	}
-	return dnsx.RR(dnsx.Relative(r.Name, zone), r.Type, data, r.TTL)
+	return dnsx.RR(dnsx.Name(r.Name, zone), r.Type, data, r.TTL)
 }
 
 // normalize makes input names relative ("@" for the apex), types upper
@@ -152,7 +152,7 @@ func toRR(r record, zone string) libdns.RR {
 func normalize(records []libdns.Record, zone string) []libdns.RR {
 	out := dnsx.RRs(records)
 	for i := range out {
-		out[i].Name = dnsx.Relative(out[i].Name, zone)
+		out[i].Name = dnsx.Name(out[i].Name, zone)
 		out[i].Type = strings.ToUpper(out[i].Type)
 		out[i] = dnsx.RR(out[i].Name, out[i].Type, out[i].Data, ttlOf(out[i]))
 	}
@@ -276,7 +276,7 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 	}
 	input := dnsx.RRs(records)
 	for i := range input {
-		input[i].Name = dnsx.Relative(input[i].Name, zone)
+		input[i].Name = dnsx.Name(input[i].Name, zone)
 	}
 	var deleted []libdns.Record
 	for _, old := range existing {

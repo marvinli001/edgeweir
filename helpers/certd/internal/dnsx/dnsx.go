@@ -165,6 +165,28 @@ func Relative(name, zone string) string {
 	}
 }
 
+// Host normalizes a name the provider already returns relative to the zone
+// ("www", "@", ""): lower case, no trailing dot, "@" for the apex. Unlike
+// Relative it never strips the zone, so a record literally named
+// "www.example.com" inside example.com stays distinct from "www".
+func Host(name string) string {
+	name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
+	if name == "" {
+		return "@"
+	}
+	return name
+}
+
+// Name reads a record name from a provider that stores names relative to
+// the zone: a name ending in "." is absolute (zone-file convention) and is
+// made relative; any other name is kept as it is (Host).
+func Name(name, zone string) string {
+	if strings.HasSuffix(strings.TrimSpace(name), ".") {
+		return Relative(name, zone)
+	}
+	return Host(name)
+}
+
 // Seconds converts a libdns TTL to whole seconds (at least 1).
 func Seconds(ttl time.Duration) int {
 	if s := int(ttl / time.Second); s > 0 {

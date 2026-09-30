@@ -81,7 +81,7 @@ func TestAppendRecords(t *testing.T) {
 		},
 	)
 	done, err := provider(t, s).AppendRecords(context.Background(), "example.com.", []libdns.Record{
-		dnstest.CNAME("cdn", "edge.example.net", 60), dnstest.TXT("_acme-challenge.example.com.", "token-value", 10),
+		dnstest.CNAME("cdn", "edge.example.net", 60), dnstest.TXT("_acme-challenge", "token-value", 10),
 	})
 	if err != nil || len(done) != 2 || done[1].RR().Name != "_acme-challenge" || done[1].RR().TTL.Seconds() != 30 {
 		t.Fatalf("done %v err %v", done, err)

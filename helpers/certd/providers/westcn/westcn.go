@@ -215,7 +215,7 @@ func (r record) rr(zone string) libdns.RR {
 	if strings.EqualFold(r.Type, "TXT") {
 		data = dnsx.Unquote(data)
 	}
-	return dnsx.RR(dnsx.Relative(r.Item, zone), r.Type, data, int(r.TTL))
+	return dnsx.RR(dnsx.Name(r.Item, zone), r.Type, data, int(r.TTL))
 }
 
 func (r record) main() bool { return r.Line == "" }

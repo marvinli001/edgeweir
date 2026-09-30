@@ -178,7 +178,7 @@ func toRR(r record, zone string) libdns.RR {
 	if r.Type == types["MX"] {
 		data = fmt.Sprintf("%d %s", r.Preference, r.Data)
 	}
-	return dnsx.RR(dnsx.Relative(r.Host, zone), typeName(r.Type), data, r.TTL)
+	return dnsx.RR(dnsx.Name(r.Host, zone), typeName(r.Type), data, r.TTL)
 }
 
 // isDefault reports whether a record is on the default line (empty lineId).

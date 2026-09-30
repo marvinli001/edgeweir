@@ -488,7 +488,9 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 			}
 			continue
 		}
-		if len(stored) != len(seen) || !subset(seen, stored) {
+		// Compare with the stored values themselves: two stored values with the
+		// same canonical form must still collapse to the input.
+		if len(old.Records) != len(seen) || !subset(seen, stored) {
 			if err := p.mutate(ctx, http.MethodPost, rrsetPath(zp, name, typ)+"/actions/set_records", map[string]any{"records": values}); err != nil {
 				return out, err
 			}

@@ -249,7 +249,8 @@ func replace(name, typ string, ttl int, records []record) rrset {
 }
 
 // AppendRecords adds the records to their RRsets (REPLACE with the union of
-// the existing and the new members; the RRset takes the input TTL).
+// the existing and the new members). An existing RRset keeps its TTL, so the
+// records already there are not changed; a new RRset takes the input TTL.
 func (p *Provider) AppendRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -264,7 +265,11 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 		in := input[key]
 		var members []record
 		have := map[string]int{}
+		ttl := dnsx.Seconds(in.members[0].TTL)
 		if es := existing[key]; es != nil {
+			if es.ttl > 0 {
+				ttl = es.ttl
+			}
 			for _, m := range es.members {
 				have[dnsx.Key(m.rr)] = len(members)
 				members = append(members, record{Content: m.content, Disabled: m.disabled})
@@ -277,7 +282,7 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 			}
 			members = append(members, record{Content: toContent(in.typ, r.Data)})
 		}
-		patch = append(patch, replace(fqdn(in.name, zone), in.typ, dnsx.Seconds(in.members[0].TTL), members))
+		patch = append(patch, replace(fqdn(in.name, zone), in.typ, ttl, members))
 	}
 	if err := p.patch(ctx, zone, patch); err != nil {
 		return nil, err

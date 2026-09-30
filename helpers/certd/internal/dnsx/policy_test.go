@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"testing"
 )
 
@@ -79,5 +80,14 @@ func TestRecordHelpers(t *testing.T) {
 	}
 	if CanonicalData("CNAME", "Target.Example.COM.") != "target.example.com" {
 		t.Fatal("canonical CNAME")
+	}
+}
+
+func TestRefusalDoesNotNameTheAddress(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+	_, _, err := Do(Options{}.PolicyClient(), mustRequest(t, server.URL))
+	if !errors.Is(err, ErrRefused) || strings.Contains(err.Error(), "127.0.0.1") {
+		t.Fatalf("refusal: %v", err)
 	}
 }

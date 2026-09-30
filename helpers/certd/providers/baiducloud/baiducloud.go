@@ -239,7 +239,7 @@ func toRR(r record, zone string) libdns.RR {
 	if strings.EqualFold(r.Type, "MX") {
 		data = fmt.Sprintf("%d %s", r.Priority, r.Value)
 	}
-	return dnsx.RR(dnsx.Relative(r.RR, zone), r.Type, data, r.TTL)
+	return dnsx.RR(dnsx.Name(r.RR, zone), r.Type, data, r.TTL)
 }
 
 // supported are the record types the API accepts.

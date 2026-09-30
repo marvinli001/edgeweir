@@ -138,3 +138,29 @@ func TestErrorCodes(t *testing.T) {
 		}
 	}
 }
+
+func TestRecordNamesAndZonesAreChecked(t *testing.T) {
+	for _, c := range []struct{ zone, name string }{
+		{"example.com", ""},                 // an empty name would mean the apex to some APIs
+		{"example.com", "www.example.com."}, // absolute
+		{"example.com", "a..b"},             // empty label
+		{"example.com", "a/b"},              // path
+		{"example.com?x=1", "www"},          // query characters in the zone
+		{"example com", "www"},
+		{"-bad.example", "www"},
+	} {
+		body, _ := json.Marshal(map[string]any{"command": "dns.set", "params": map[string]any{
+			"provider": "test", "zone": c.zone, "credentials": map[string]string{"api_token": "t"},
+			"records": []map[string]any{{"name": c.name, "type": "TXT", "data": "x", "ttl": 60}},
+		}})
+		resp, _ := call(t, string(body))
+		if resp.OK || resp.Code != "dns_invalid_request" {
+			t.Errorf("zone %q name %q accepted: %+v", c.zone, c.name, resp)
+		}
+	}
+	for _, name := range []string{"@", "*", "*.img", "_acme-challenge", "_edgeweir-verification.shop", "a-b.c_d"} {
+		if !recordName.MatchString(name) {
+			t.Errorf("valid name %q refused", name)
+		}
+	}
+}

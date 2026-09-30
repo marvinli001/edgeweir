@@ -25,7 +25,8 @@ func Do(client *http.Client, req *http.Request) (int, []byte, error) {
 			err = urlErr.Err
 		}
 		if errors.Is(err, ErrRefused) {
-			return 0, nil, err
+			// Without the dial error text, which names the resolved address.
+			return 0, nil, fmt.Errorf("%w: destination refused by the outbound policy", ErrRefused)
 		}
 		if errors.Is(err, context.Canceled) {
 			return 0, nil, err

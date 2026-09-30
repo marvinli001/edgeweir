@@ -170,13 +170,13 @@ func toRR(r record, zone string) libdns.RR {
 	if strings.EqualFold(r.Type, "TXT") {
 		data = dnsx.Unquote(data)
 	}
-	return dnsx.RR(dnsx.Relative(r.Name, zone), r.Type, data, r.TTL)
+	return dnsx.RR(dnsx.Name(r.Name, zone), r.Type, data, r.TTL)
 }
 
 func normalize(records []libdns.Record, zone string) []libdns.RR {
 	out := dnsx.RRs(records)
 	for i := range out {
-		out[i] = dnsx.RR(dnsx.Relative(out[i].Name, zone), out[i].Type, out[i].Data, dnsx.Seconds(out[i].TTL))
+		out[i] = dnsx.RR(dnsx.Name(out[i].Name, zone), out[i].Type, out[i].Data, dnsx.Seconds(out[i].TTL))
 	}
 	return out
 }
@@ -302,7 +302,7 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 	}
 	input := dnsx.RRs(records)
 	for i := range input {
-		input[i].Name = dnsx.Relative(input[i].Name, zone)
+		input[i].Name = dnsx.Name(input[i].Name, zone)
 	}
 	var deleted []libdns.Record
 	for _, old := range existing {

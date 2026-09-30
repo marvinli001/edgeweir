@@ -459,7 +459,7 @@ func body(typ string, ttl int, items []json.RawMessage, previous *recordSet) (an
 }
 
 func toRRs(s recordSet, zone string) []libdns.RR {
-	name := dnsx.Relative(s.Name, zone)
+	name := dnsx.Name(s.Name, zone)
 	var out []libdns.RR
 	for _, e := range s.entries() {
 		out = append(out, dnsx.RR(name, s.kind(), e.data, s.ttl()))

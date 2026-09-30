@@ -54,7 +54,8 @@ func TestGetRecordsPaginates(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(records) != 5 || !dnstest.Has(records, "www", "A", "192.0.2.1") || !dnstest.Has(records, "@", "TXT", "keep") ||
-		!dnstest.Has(records, "cdn", "CNAME", "edge.example.net") {
+		// A host the provider stores as "cdn.example.com" is that name, not "cdn".
+		!dnstest.Has(records, "cdn.example.com", "CNAME", "edge.example.net") {
 		t.Fatalf("records: %+v", records)
 	}
 	if records[2].RR().Data != "keep" || records[0].RR().TTL.Seconds() != 600 {
@@ -193,5 +194,29 @@ func TestRepeatedCursorStops(t *testing.T) {
 	)
 	if _, err := provider(t, s).GetRecords(context.Background(), "example.com."); !errors.Is(err, dnsx.ErrProvider) {
 		t.Fatalf("repeated cursor: %v", err)
+	}
+}
+
+// A record the provider stores as "_acme-challenge.example.com" (typed as a
+// full name in the zone) is a different name from "_acme-challenge": deleting
+// or replacing the latter never touches it.
+func TestNamesAreNotStrippedOfTheZone(t *testing.T) {
+	const records = `{"id":"a1","type":"TXT","name":"_acme-challenge","data":"\"ours\"","priority":-1,"ttl":60},
+{"id":"a2","type":"TXT","name":"_acme-challenge.example.com","data":"\"theirs\"","priority":-1,"ttl":60}`
+	s := dnstest.Serve(t,
+		listCall("", records, ""),
+		dnstest.Exchange{Method: "DELETE", Path: "/v2/domains/example.com/records/a1", Header: auth, Status: 204},
+		listCall("", records, ""),
+		dnstest.Exchange{Method: "DELETE", Path: "/v2/domains/example.com/records/a1", Header: auth, Status: 204},
+		dnstest.Exchange{Method: "POST", Path: "/v2/domains/example.com/records", Header: auth, Status: 201,
+			Response: `{"record":{"id":"a3","type":"TXT","name":"_acme-challenge","data":"\"new\"","priority":-1,"ttl":60}}`},
+	)
+	p := provider(t, s)
+	deleted, err := p.DeleteRecords(context.Background(), "example.com.", []libdns.Record{dnstest.TXT("_acme-challenge", "", 0)})
+	if err != nil || len(deleted) != 1 || !dnstest.Has(deleted, "_acme-challenge", "TXT", "ours") {
+		t.Fatalf("deleted %v err %v", deleted, err)
+	}
+	if _, err := p.SetRecords(context.Background(), "example.com.", []libdns.Record{dnstest.TXT("_acme-challenge", "new", 60)}); err != nil {
+		t.Fatal(err)
 	}
 }

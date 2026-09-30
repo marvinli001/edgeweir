@@ -185,7 +185,7 @@ func wire(zone string, input []libdns.Record, deleting bool) ([]record, error) {
 		if deleting {
 			ttl = int(r.TTL / time.Second)
 		}
-		out = append(out, record{Name: dnsx.Relative(r.Name, zone), Type: strings.ToUpper(r.Type), Data: r.Data, TTL: ttl})
+		out = append(out, record{Name: dnsx.Name(r.Name, zone), Type: strings.ToUpper(r.Type), Data: r.Data, TTL: ttl})
 	}
 	return out, nil
 }
@@ -193,7 +193,7 @@ func wire(zone string, input []libdns.Record, deleting bool) ([]record, error) {
 func toLibdns(zone string, in []record) []libdns.Record {
 	out := make([]libdns.Record, 0, len(in))
 	for _, r := range in {
-		out = append(out, dnsx.RR(dnsx.Relative(r.Name, zone), r.Type, r.Data, r.TTL))
+		out = append(out, dnsx.RR(dnsx.Name(r.Name, zone), r.Type, r.Data, r.TTL))
 	}
 	return out
 }
