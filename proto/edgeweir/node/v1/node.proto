@@ -261,6 +261,13 @@ message ReportStatsResponse {
 message ReportStatsV2Request {
   repeated MinuteStats stats = 1;
   uint64 batch_sequence = 2;
+  // The node's statistics watermark: every minute that starts before this
+  // time is in this batch or in batches the console already acknowledged
+  // (the drain boundary, a whole minute). Set on the last batch of a drain,
+  // and on an empty cursor query (batch_sequence 0) once every batch is
+  // acknowledged; unset leaves the console's value unchanged. The console
+  // keeps the highest value it received. Added in v0.8.0.
+  google.protobuf.Timestamp complete_until = 3;
 }
 
 // ReportStatsV2Response acknowledges the sequence (or returns the durable cursor).
