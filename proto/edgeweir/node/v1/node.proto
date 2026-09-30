@@ -48,6 +48,13 @@ service NodeService {
   rpc PullTasks(PullTasksRequest) returns (PullTasksResponse);
   // ReportTaskResult records the outcome of a task on the calling node.
   rpc ReportTaskResult(ReportTaskResultRequest) returns (ReportTaskResultResponse);
+  // GetBans returns the dynamic IP bans of the node's cluster, incrementally
+  // by sequence. Bans never travel in NodeConfig and never create a
+  // revision. Added in v0.9.0 (feature bans-v1).
+  rpc GetBans(GetBansRequest) returns (GetBansResponse);
+  // ReportBans uploads bans the node created itself (automatic mitigation).
+  // Idempotent: the console keys them by (node, site, cidr). Added in v0.9.0.
+  rpc ReportBans(ReportBansRequest) returns (ReportBansResponse);
 }
 
 // NodeInfo describes the host and software of a node.
@@ -130,6 +137,9 @@ enum WatchEvent {
   WATCH_EVENT_KEEPALIVE = 2;
   // Tasks are waiting for this node; fetch them with PullTasks.
   WATCH_EVENT_TASKS = 3;
+  // Bans changed; fetch them with GetBans from the node's applied sequence.
+  // Only sent to nodes that report bans-v1. Added in v0.9.0.
+  WATCH_EVENT_BANS = 4;
 }
 
 // WatchConfigResponse notifies the node about the latest revision.
@@ -137,6 +147,9 @@ message WatchConfigResponse {
   WatchEvent event = 1;
   uint64 latest_revision = 2;
   string content_hash = 3;
+  // Latest ban sequence of the node's cluster (WATCH_EVENT_BANS). Added in
+  // v0.9.0.
+  uint64 ban_sequence = 4;
 }
 
 // GetConfigRequest selects the revision to fetch.
@@ -186,6 +199,28 @@ message ReportStatusRequest {
   repeated OriginHealth origin_health = 9;
   // Persisted with the LKG; authenticates higher revisions after a DB restore.
   string revision_receipt = 10;
+  // State of the dynamic bans on this node; unset on nodes without bans-v1.
+  // Added in v0.9.0.
+  BanStatus bans = 11;
+}
+
+// BanStatus reports how the node holds the bans it received.
+message BanStatus {
+  // Highest ban sequence applied to the data plane.
+  uint64 applied_sequence = 1;
+  // Bans held by the data plane (console bans and the node's own).
+  uint32 entries = 2;
+  // Maximum number of bans the data plane holds.
+  uint32 capacity = 3;
+  // Manual bans the data plane could not hold, at most 100 ids. Manual bans
+  // never fail silently: they stay here until they fit or expire.
+  repeated string unapplied_ids = 4;
+  // Number of manual bans that could not be held (may exceed the ids).
+  uint32 unapplied = 5;
+  // Platform bans held by the kernel (nftables); 0 without kernel-ban-v1.
+  uint32 kernel_entries = 6;
+  // Automatic bans dropped to make room, since the agent started.
+  uint64 auto_evicted = 7;
 }
 
 // OriginHealth is the passive health state of one origin on one node.
@@ -428,4 +463,90 @@ message UpgradeTask {
   string sha256 = 3;
   string checksums_url = 4;
   string signature_url = 5;
+}
+
+// BanScope is where a ban applies.
+enum BanScope {
+  BAN_SCOPE_UNSPECIFIED = 0;
+  // Every site of the node; also enforced by the kernel with kernel-ban-v1.
+  BAN_SCOPE_PLATFORM = 1;
+  // One site only (HTTP 403 at the edge layer).
+  BAN_SCOPE_SITE = 2;
+}
+
+// BanSource tells who created a ban.
+enum BanSource {
+  BAN_SOURCE_UNSPECIFIED = 0;
+  // An operator or a tenant.
+  BAN_SOURCE_MANUAL = 1;
+  // A node's automatic mitigation, shared with the cluster.
+  BAN_SOURCE_AUTO = 2;
+}
+
+// Ban blocks a client address or prefix until it expires.
+message Ban {
+  string id = 1;
+  // Canonical CIDR (host bits zero, lowercase IPv6), e.g. "203.0.113.7/32".
+  // Prefixes are at least /16 (IPv4) or /48 (IPv6).
+  string cidr = 2;
+  BanScope scope = 3;
+  // Site of a BAN_SCOPE_SITE ban; empty for platform bans.
+  string site_id = 4;
+  // At most 7 days after created_at.
+  google.protobuf.Timestamp expires_at = 5;
+  BanSource source = 6;
+  // Reason code: abuse, attack, scanner, spam, other (manual) or cc_ip_rate
+  // (automatic).
+  string reason = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+// GetBansRequest continues from the sequence the node has applied.
+message GetBansRequest {
+  // Highest sequence the node has applied; 0 asks for a full snapshot.
+  uint64 after_sequence = 1;
+  // Page size; 0 means the console's default. The console caps it.
+  uint32 limit = 2;
+}
+
+// GetBansResponse is one page of ban changes in sequence order.
+message GetBansResponse {
+  // The node drops every console ban it holds before applying this page:
+  // after_sequence was 0 or the console cannot continue from it (for
+  // example after a database restore).
+  bool reset = 1;
+  // Bans added or changed after after_sequence, active ones only.
+  repeated Ban bans = 2;
+  // Bans removed after after_sequence (unbanned before they expired).
+  repeated string removed_ids = 3;
+  // Sequence this page reaches; the next request continues from it.
+  uint64 sequence = 4;
+  // More pages follow.
+  bool more = 5;
+}
+
+// AutoBan is a ban a node created by itself.
+message AutoBan {
+  string site_id = 1;
+  // A single address: "/32" or "/128".
+  string cidr = 2;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  // Reason code, e.g. cc_ip_rate.
+  string reason = 5;
+  // Trigger: metric (e.g. ip_qps), observed value, threshold and window.
+  string metric = 6;
+  double observed = 7;
+  double threshold = 8;
+  uint32 window_seconds = 9;
+}
+
+// ReportBansRequest uploads automatic bans, at most 1000 per request.
+message ReportBansRequest {
+  repeated AutoBan bans = 1;
+}
+
+// ReportBansResponse acknowledges the bans.
+message ReportBansResponse {
+  uint32 accepted = 1;
 }

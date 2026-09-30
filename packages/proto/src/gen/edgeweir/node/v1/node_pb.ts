@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file edgeweir/node/v1/node.proto.
  */
 export const file_edgeweir_node_v1_node: GenFile = /*@__PURE__*/
-  fileDesc("ChtlZGdld2Vpci9ub2RlL3YxL25vZGUucHJvdG8SEGVkZ2V3ZWlyLm5vZGUudjEipwEKCE5vZGVJbmZvEhAKCGhvc3RuYW1lGAEgASgJEhUKDWFnZW50X3ZlcnNpb24YAiABKAkSCgoCb3MYAyABKAkSDAoEYXJjaBgEIAEoCRIOCgZlbmdpbmUYBSABKAkSFgoOZW5naW5lX3ZlcnNpb24YBiABKAkSFAoMaXBfYWRkcmVzc2VzGAcgAygJEhoKEnN1cHBvcnRlZF9mZWF0dXJlcxgIIAMoCSIlChZHZXRDZXJ0aWZpY2F0ZXNSZXF1ZXN0EgsKA2lkcxgBIAMoCSJpChNDZXJ0aWZpY2F0ZU1hdGVyaWFsEgoKAmlkGAEgASgJEhEKCWNoYWluX3BlbRgCIAEoCRIXCg9wcml2YXRlX2tleV9wZW0YAyABKAkSGgoSc2hhMjU2X2ZpbmdlcnByaW50GAQgASgJIlYKF0dldENlcnRpZmljYXRlc1Jlc3BvbnNlEjsKDGNlcnRpZmljYXRlcxgBIAMoCzIlLmVkZ2V3ZWlyLm5vZGUudjEuQ2VydGlmaWNhdGVNYXRlcmlhbCJZCg1FbnJvbGxSZXF1ZXN0Eg0KBXRva2VuGAEgASgJEg8KB2Nzcl9wZW0YAiABKAkSKAoEaW5mbxgDIAEoCzIaLmVkZ2V3ZWlyLm5vZGUudjEuTm9kZUluZm8irAEKDkVucm9sbFJlc3BvbnNlEg8KB25vZGVfaWQYASABKAkSEgoKY2x1c3Rlcl9pZBgCIAEoCRIRCglub2RlX25hbWUYAyABKAkSFwoPY2VydGlmaWNhdGVfcGVtGAQgASgJEhoKEmNhX2NlcnRpZmljYXRlX3BlbRgFIAEoCRItCglub3RfYWZ0ZXIYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIioKF1JlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0Eg8KB2Nzcl9wZW0YASABKAkifgoYUmVuZXdDZXJ0aWZpY2F0ZVJlc3BvbnNlEhcKD2NlcnRpZmljYXRlX3BlbRgBIAEoCRIaChJjYV9jZXJ0aWZpY2F0ZV9wZW0YAiABKAkSLQoJbm90X2FmdGVyGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIsChJXYXRjaENvbmZpZ1JlcXVlc3QSFgoOa25vd25fcmV2aXNpb24YASABKAQicQoTV2F0Y2hDb25maWdSZXNwb25zZRIrCgVldmVudBgBIAEoDjIcLmVkZ2V3ZWlyLm5vZGUudjEuV2F0Y2hFdmVudBIXCg9sYXRlc3RfcmV2aXNpb24YAiABKAQSFAoMY29udGVudF9oYXNoGAMgASgJIjsKEEdldENvbmZpZ1JlcXVlc3QSEAoIcmV2aXNpb24YASABKAQSFQoNYmFzZV9yZXZpc2lvbhgCIAEoBCLOAQoRR2V0Q29uZmlnUmVzcG9uc2USMAoIc25hcHNob3QYASABKAsyHC5lZGdld2Vpci5ub2RlLnYxLk5vZGVDb25maWdIABIwCgRkaWZmGAIgASgLMiAuZWRnZXdlaXIubm9kZS52MS5Ob2RlQ29uZmlnRGlmZkgAEjAKDGdlbmVyYXRlZF9hdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASGAoQcmV2aXNpb25fcmVjZWlwdBgEIAEoCUIJCgdwYXlsb2FkIo0DChNSZXBvcnRTdGF0dXNSZXF1ZXN0EhgKEGFwcGxpZWRfcmV2aXNpb24YASABKAQSHAoUYXBwbGllZF9jb250ZW50X2hhc2gYAiABKAkSKwoFc3RhdGUYAyABKA4yHC5lZGdld2Vpci5ub2RlLnYxLkFwcGx5U3RhdGUSDwoHbWVzc2FnZRgEIAEoCRIoCgRpbmZvGAUgASgLMhouZWRnZXdlaXIubm9kZS52MS5Ob2RlSW5mbxIuCgphcHBsaWVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIaChJkYXRhX3BsYW5lX2hlYWx0aHkYByABKAgSOQoVY2VydGlmaWNhdGVfbm90X2FmdGVyGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBI1Cg1vcmlnaW5faGVhbHRoGAkgAygLMh4uZWRnZXdlaXIubm9kZS52MS5PcmlnaW5IZWFsdGgSGAoQcmV2aXNpb25fcmVjZWlwdBgKIAEoCSL7AgoMT3JpZ2luSGVhbHRoEg8KB3NpdGVfaWQYASABKAkSEQoJb3JpZ2luX2lkGAIgASgJEg8KB2hlYWx0aHkYAyABKAgSHAoUY29uc2VjdXRpdmVfZmFpbHVyZXMYBCABKA0SMwoPbGFzdF9mYWlsdXJlX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgpkb3duX3VudGlsGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgpsYXN0X2Vycm9yGAcgASgJEhcKD2xhc3RfZXJyb3JfY29kZRgIIAEoCRJOChFsYXN0X2Vycm9yX3BhcmFtcxgJIAMoCzIzLmVkZ2V3ZWlyLm5vZGUudjEuT3JpZ2luSGVhbHRoLkxhc3RFcnJvclBhcmFtc0VudHJ5GjYKFExhc3RFcnJvclBhcmFtc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiggEKFFJlcG9ydFN0YXR1c1Jlc3BvbnNlEhcKD2xhdGVzdF9yZXZpc2lvbhgBIAEoBBIZChFyZW5ld19jZXJ0aWZpY2F0ZRgCIAEoCBIfChdyZXBvcnRfaW50ZXJ2YWxfc2Vjb25kcxgDIAEoDRIVCg10YXNrc19wZW5kaW5nGAQgASgIIosDCgtNaW51dGVTdGF0cxIqCgZtaW51dGUYASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg8KB3NpdGVfaWQYAiABKAkSEAoIcmVxdWVzdHMYAyABKAQSEgoKYnl0ZXNfc2VudBgEIAEoBBIWCg5ieXRlc19yZWNlaXZlZBgFIAEoBBISCgpjYWNoZV9oaXRzGAYgASgEEhQKDGNhY2hlX21pc3NlcxgHIAEoBBJECgxzdGF0dXNfY29kZXMYCCADKAsyLi5lZGdld2Vpci5ub2RlLnYxLk1pbnV0ZVN0YXRzLlN0YXR1c0NvZGVzRW50cnkSLgoIdG9wX3VybHMYCSADKAsyHC5lZGdld2Vpci5ub2RlLnYxLlRvcENvdW50ZXISLQoHdG9wX2lwcxgKIAMoCzIcLmVkZ2V3ZWlyLm5vZGUudjEuVG9wQ291bnRlchoyChBTdGF0dXNDb2Rlc0VudHJ5EgsKA2tleRgBIAEoDRINCgV2YWx1ZRgCIAEoBDoCOAEiKgoKVG9wQ291bnRlchINCgV2YWx1ZRgBIAEoCRINCgVjb3VudBgCIAEoBCJaChJSZXBvcnRTdGF0c1JlcXVlc3QSLAoFc3RhdHMYASADKAsyHS5lZGdld2Vpci5ub2RlLnYxLk1pbnV0ZVN0YXRzEhYKDmJhdGNoX3NlcXVlbmNlGAIgASgEIj8KE1JlcG9ydFN0YXRzUmVzcG9uc2USEAoIYWNjZXB0ZWQYASABKA0SFgoOYmF0Y2hfc2VxdWVuY2UYAiABKAQikAEKFFJlcG9ydFN0YXRzVjJSZXF1ZXN0EiwKBXN0YXRzGAEgAygLMh0uZWRnZXdlaXIubm9kZS52MS5NaW51dGVTdGF0cxIWCg5iYXRjaF9zZXF1ZW5jZRgCIAEoBBIyCg5jb21wbGV0ZV91bnRpbBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiQQoVUmVwb3J0U3RhdHNWMlJlc3BvbnNlEhAKCGFjY2VwdGVkGAEgASgNEhYKDmJhdGNoX3NlcXVlbmNlGAIgASgEIioKG0dldE9yaWdpbkNyZWRlbnRpYWxzUmVxdWVzdBILCgNpZHMYASADKAkiYQoQT3JpZ2luQ3JlZGVudGlhbBIKCgJpZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgEEhUKDWFjY2Vzc19rZXlfaWQYAyABKAkSGQoRc2VjcmV0X2FjY2Vzc19rZXkYBCABKAkiVwocR2V0T3JpZ2luQ3JlZGVudGlhbHNSZXNwb25zZRI3CgtjcmVkZW50aWFscxgBIAMoCzIiLmVkZ2V3ZWlyLm5vZGUudjEuT3JpZ2luQ3JlZGVudGlhbCIlChBQdWxsVGFza3NSZXF1ZXN0EhEKCW1heF90YXNrcxgBIAEoDSI+ChFQdWxsVGFza3NSZXNwb25zZRIpCgV0YXNrcxgBIAMoCzIaLmVkZ2V3ZWlyLm5vZGUudjEuTm9kZVRhc2si4gEKCE5vZGVUYXNrEgoKAmlkGAEgASgJEi4KCmNyZWF0ZWRfYXQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEiwKBXB1cmdlGAMgASgLMhsuZWRnZXdlaXIubm9kZS52MS5QdXJnZVRhc2tIABIyCghwcmVmZXRjaBgEIAEoCzIeLmVkZ2V3ZWlyLm5vZGUudjEuUHJlZmV0Y2hUYXNrSAASMAoHdXBncmFkZRgFIAEoCzIdLmVkZ2V3ZWlyLm5vZGUudjEuVXBncmFkZVRhc2tIAEIGCgRraW5kInQKC1B1cmdlVGFyZ2V0Eg8KB3NpdGVfaWQYASABKAkSKQoEdHlwZRgCIAEoDjIbLmVkZ2V3ZWlyLm5vZGUudjEuUHVyZ2VUeXBlEgwKBGhvc3QYAyABKAkSDAoEcGF0aBgEIAEoCRINCgVxdWVyeRgFIAEoCSI7CglQdXJnZVRhc2sSLgoHdGFyZ2V0cxgBIAMoCzIdLmVkZ2V3ZWlyLm5vZGUudjEuUHVyZ2VUYXJnZXQiLgoOUHJlZmV0Y2hUYXJnZXQSDwoHc2l0ZV9pZBgBIAEoCRILCgN1cmwYAiABKAkiQQoMUHJlZmV0Y2hUYXNrEjEKB3RhcmdldHMYASADKAsyIC5lZGdld2Vpci5ub2RlLnYxLlByZWZldGNoVGFyZ2V0ItUCChdSZXBvcnRUYXNrUmVzdWx0UmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJEioKBXN0YXRlGAIgASgOMhsuZWRnZXdlaXIubm9kZS52MS5UYXNrU3RhdGUSDwoHbWVzc2FnZRgDIAEoCRIRCglzdWNjZWVkZWQYBCABKA0SDgoGZmFpbGVkGAUgASgNEi8KC2ZpbmlzaGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgplcnJvcl9jb2RlGAcgASgJElAKDGVycm9yX3BhcmFtcxgIIAMoCzI6LmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0VGFza1Jlc3VsdFJlcXVlc3QuRXJyb3JQYXJhbXNFbnRyeRoyChBFcnJvclBhcmFtc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiGgoYUmVwb3J0VGFza1Jlc3VsdFJlc3BvbnNlIukBCglBY2Nlc3NMb2cSKAoEdGltZRgBIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDwoHc2l0ZV9pZBgCIAEoCRIRCgljbGllbnRfaXAYAyABKAkSDgoGbWV0aG9kGAQgASgJEgwKBGhvc3QYBSABKAkSDAoEcGF0aBgGIAEoCRIOCgZzdGF0dXMYByABKA0SEgoKYnl0ZXNfc2VudBgIIAEoBBITCgtkdXJhdGlvbl9tcxgJIAEoDRIUCgxjYWNoZV9zdGF0dXMYCiABKAkSEwoLc2FtcGxlX3JhdGUYCyABKA0iVgoRUmVwb3J0TG9nc1JlcXVlc3QSFgoOYmF0Y2hfc2VxdWVuY2UYASABKAQSKQoEbG9ncxgCIAMoCzIbLmVkZ2V3ZWlyLm5vZGUudjEuQWNjZXNzTG9nIj4KElJlcG9ydExvZ3NSZXNwb25zZRIWCg5iYXRjaF9zZXF1ZW5jZRgBIAEoBBIQCghhY2NlcHRlZBgCIAEoDSJxCgtVcGdyYWRlVGFzaxIPCgd2ZXJzaW9uGAEgASgJEhMKC2FyY2hpdmVfdXJsGAIgASgJEg4KBnNoYTI1NhgDIAEoCRIVCg1jaGVja3N1bXNfdXJsGAQgASgJEhUKDXNpZ25hdHVyZV91cmwYBSABKAkqdQoKV2F0Y2hFdmVudBIbChdXQVRDSF9FVkVOVF9VTlNQRUNJRklFRBAAEhgKFFdBVENIX0VWRU5UX1JFVklTSU9OEAESGQoVV0FUQ0hfRVZFTlRfS0VFUEFMSVZFEAISFQoRV0FUQ0hfRVZFTlRfVEFTS1MQAyp0CgpBcHBseVN0YXRlEhsKF0FQUExZX1NUQVRFX1VOU1BFQ0lGSUVEEAASGAoUQVBQTFlfU1RBVEVfQVBQTFlJTkcQARIXChNBUFBMWV9TVEFURV9BUFBMSUVEEAISFgoSQVBQTFlfU1RBVEVfRkFJTEVEEAMqZwoJUHVyZ2VUeXBlEhoKFlBVUkdFX1RZUEVfVU5TUEVDSUZJRUQQABISCg5QVVJHRV9UWVBFX1VSTBABEhUKEVBVUkdFX1RZUEVfUFJFRklYEAISEwoPUFVSR0VfVFlQRV9TSVRFEAMqWAoJVGFza1N0YXRlEhoKFlRBU0tfU1RBVEVfVU5TUEVDSUZJRUQQABIYChRUQVNLX1NUQVRFX1NVQ0NFRURFRBABEhUKEVRBU0tfU1RBVEVfRkFJTEVEEAIyjwkKC05vZGVTZXJ2aWNlEksKBkVucm9sbBIfLmVkZ2V3ZWlyLm5vZGUudjEuRW5yb2xsUmVxdWVzdBogLmVkZ2V3ZWlyLm5vZGUudjEuRW5yb2xsUmVzcG9uc2USaQoQUmVuZXdDZXJ0aWZpY2F0ZRIpLmVkZ2V3ZWlyLm5vZGUudjEuUmVuZXdDZXJ0aWZpY2F0ZVJlcXVlc3QaKi5lZGdld2Vpci5ub2RlLnYxLlJlbmV3Q2VydGlmaWNhdGVSZXNwb25zZRJcCgtXYXRjaENvbmZpZxIkLmVkZ2V3ZWlyLm5vZGUudjEuV2F0Y2hDb25maWdSZXF1ZXN0GiUuZWRnZXdlaXIubm9kZS52MS5XYXRjaENvbmZpZ1Jlc3BvbnNlMAESVAoJR2V0Q29uZmlnEiIuZWRnZXdlaXIubm9kZS52MS5HZXRDb25maWdSZXF1ZXN0GiMuZWRnZXdlaXIubm9kZS52MS5HZXRDb25maWdSZXNwb25zZRJdCgxSZXBvcnRTdGF0dXMSJS5lZGdld2Vpci5ub2RlLnYxLlJlcG9ydFN0YXR1c1JlcXVlc3QaJi5lZGdld2Vpci5ub2RlLnYxLlJlcG9ydFN0YXR1c1Jlc3BvbnNlEloKC1JlcG9ydFN0YXRzEiQuZWRnZXdlaXIubm9kZS52MS5SZXBvcnRTdGF0c1JlcXVlc3QaJS5lZGdld2Vpci5ub2RlLnYxLlJlcG9ydFN0YXRzUmVzcG9uc2USYAoNUmVwb3J0U3RhdHNWMhImLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0U3RhdHNWMlJlcXVlc3QaJy5lZGdld2Vpci5ub2RlLnYxLlJlcG9ydFN0YXRzVjJSZXNwb25zZRJXCgpSZXBvcnRMb2dzEiMuZWRnZXdlaXIubm9kZS52MS5SZXBvcnRMb2dzUmVxdWVzdBokLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0TG9nc1Jlc3BvbnNlEnUKFEdldE9yaWdpbkNyZWRlbnRpYWxzEi0uZWRnZXdlaXIubm9kZS52MS5HZXRPcmlnaW5DcmVkZW50aWFsc1JlcXVlc3QaLi5lZGdld2Vpci5ub2RlLnYxLkdldE9yaWdpbkNyZWRlbnRpYWxzUmVzcG9uc2USZgoPR2V0Q2VydGlmaWNhdGVzEiguZWRnZXdlaXIubm9kZS52MS5HZXRDZXJ0aWZpY2F0ZXNSZXF1ZXN0GikuZWRnZXdlaXIubm9kZS52MS5HZXRDZXJ0aWZpY2F0ZXNSZXNwb25zZRJUCglQdWxsVGFza3MSIi5lZGdld2Vpci5ub2RlLnYxLlB1bGxUYXNrc1JlcXVlc3QaIy5lZGdld2Vpci5ub2RlLnYxLlB1bGxUYXNrc1Jlc3BvbnNlEmkKEFJlcG9ydFRhc2tSZXN1bHQSKS5lZGdld2Vpci5ub2RlLnYxLlJlcG9ydFRhc2tSZXN1bHRSZXF1ZXN0GiouZWRnZXdlaXIubm9kZS52MS5SZXBvcnRUYXNrUmVzdWx0UmVzcG9uc2ViBnByb3RvMw", [file_edgeweir_node_v1_config, file_google_protobuf_timestamp]);
+  fileDesc("ChtlZGdld2Vpci9ub2RlL3YxL25vZGUucHJvdG8SEGVkZ2V3ZWlyLm5vZGUudjEipwEKCE5vZGVJbmZvEhAKCGhvc3RuYW1lGAEgASgJEhUKDWFnZW50X3ZlcnNpb24YAiABKAkSCgoCb3MYAyABKAkSDAoEYXJjaBgEIAEoCRIOCgZlbmdpbmUYBSABKAkSFgoOZW5naW5lX3ZlcnNpb24YBiABKAkSFAoMaXBfYWRkcmVzc2VzGAcgAygJEhoKEnN1cHBvcnRlZF9mZWF0dXJlcxgIIAMoCSIlChZHZXRDZXJ0aWZpY2F0ZXNSZXF1ZXN0EgsKA2lkcxgBIAMoCSJpChNDZXJ0aWZpY2F0ZU1hdGVyaWFsEgoKAmlkGAEgASgJEhEKCWNoYWluX3BlbRgCIAEoCRIXCg9wcml2YXRlX2tleV9wZW0YAyABKAkSGgoSc2hhMjU2X2ZpbmdlcnByaW50GAQgASgJIlYKF0dldENlcnRpZmljYXRlc1Jlc3BvbnNlEjsKDGNlcnRpZmljYXRlcxgBIAMoCzIlLmVkZ2V3ZWlyLm5vZGUudjEuQ2VydGlmaWNhdGVNYXRlcmlhbCJZCg1FbnJvbGxSZXF1ZXN0Eg0KBXRva2VuGAEgASgJEg8KB2Nzcl9wZW0YAiABKAkSKAoEaW5mbxgDIAEoCzIaLmVkZ2V3ZWlyLm5vZGUudjEuTm9kZUluZm8irAEKDkVucm9sbFJlc3BvbnNlEg8KB25vZGVfaWQYASABKAkSEgoKY2x1c3Rlcl9pZBgCIAEoCRIRCglub2RlX25hbWUYAyABKAkSFwoPY2VydGlmaWNhdGVfcGVtGAQgASgJEhoKEmNhX2NlcnRpZmljYXRlX3BlbRgFIAEoCRItCglub3RfYWZ0ZXIYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIioKF1JlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0Eg8KB2Nzcl9wZW0YASABKAkifgoYUmVuZXdDZXJ0aWZpY2F0ZVJlc3BvbnNlEhcKD2NlcnRpZmljYXRlX3BlbRgBIAEoCRIaChJjYV9jZXJ0aWZpY2F0ZV9wZW0YAiABKAkSLQoJbm90X2FmdGVyGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIsChJXYXRjaENvbmZpZ1JlcXVlc3QSFgoOa25vd25fcmV2aXNpb24YASABKAQihwEKE1dhdGNoQ29uZmlnUmVzcG9uc2USKwoFZXZlbnQYASABKA4yHC5lZGdld2Vpci5ub2RlLnYxLldhdGNoRXZlbnQSFwoPbGF0ZXN0X3JldmlzaW9uGAIgASgEEhQKDGNvbnRlbnRfaGFzaBgDIAEoCRIUCgxiYW5fc2VxdWVuY2UYBCABKAQiOwoQR2V0Q29uZmlnUmVxdWVzdBIQCghyZXZpc2lvbhgBIAEoBBIVCg1iYXNlX3JldmlzaW9uGAIgASgEIs4BChFHZXRDb25maWdSZXNwb25zZRIwCghzbmFwc2hvdBgBIAEoCzIcLmVkZ2V3ZWlyLm5vZGUudjEuTm9kZUNvbmZpZ0gAEjAKBGRpZmYYAiABKAsyIC5lZGdld2Vpci5ub2RlLnYxLk5vZGVDb25maWdEaWZmSAASMAoMZ2VuZXJhdGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIYChByZXZpc2lvbl9yZWNlaXB0GAQgASgJQgkKB3BheWxvYWQiuAMKE1JlcG9ydFN0YXR1c1JlcXVlc3QSGAoQYXBwbGllZF9yZXZpc2lvbhgBIAEoBBIcChRhcHBsaWVkX2NvbnRlbnRfaGFzaBgCIAEoCRIrCgVzdGF0ZRgDIAEoDjIcLmVkZ2V3ZWlyLm5vZGUudjEuQXBwbHlTdGF0ZRIPCgdtZXNzYWdlGAQgASgJEigKBGluZm8YBSABKAsyGi5lZGdld2Vpci5ub2RlLnYxLk5vZGVJbmZvEi4KCmFwcGxpZWRfYXQYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhoKEmRhdGFfcGxhbmVfaGVhbHRoeRgHIAEoCBI5ChVjZXJ0aWZpY2F0ZV9ub3RfYWZ0ZXIYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjUKDW9yaWdpbl9oZWFsdGgYCSADKAsyHi5lZGdld2Vpci5ub2RlLnYxLk9yaWdpbkhlYWx0aBIYChByZXZpc2lvbl9yZWNlaXB0GAogASgJEikKBGJhbnMYCyABKAsyGy5lZGdld2Vpci5ub2RlLnYxLkJhblN0YXR1cyKgAQoJQmFuU3RhdHVzEhgKEGFwcGxpZWRfc2VxdWVuY2UYASABKAQSDwoHZW50cmllcxgCIAEoDRIQCghjYXBhY2l0eRgDIAEoDRIVCg11bmFwcGxpZWRfaWRzGAQgAygJEhEKCXVuYXBwbGllZBgFIAEoDRIWCg5rZXJuZWxfZW50cmllcxgGIAEoDRIUCgxhdXRvX2V2aWN0ZWQYByABKAQi+wIKDE9yaWdpbkhlYWx0aBIPCgdzaXRlX2lkGAEgASgJEhEKCW9yaWdpbl9pZBgCIAEoCRIPCgdoZWFsdGh5GAMgASgIEhwKFGNvbnNlY3V0aXZlX2ZhaWx1cmVzGAQgASgNEjMKD2xhc3RfZmFpbHVyZV9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLgoKZG93bl91bnRpbBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEgoKbGFzdF9lcnJvchgHIAEoCRIXCg9sYXN0X2Vycm9yX2NvZGUYCCABKAkSTgoRbGFzdF9lcnJvcl9wYXJhbXMYCSADKAsyMy5lZGdld2Vpci5ub2RlLnYxLk9yaWdpbkhlYWx0aC5MYXN0RXJyb3JQYXJhbXNFbnRyeRo2ChRMYXN0RXJyb3JQYXJhbXNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIoIBChRSZXBvcnRTdGF0dXNSZXNwb25zZRIXCg9sYXRlc3RfcmV2aXNpb24YASABKAQSGQoRcmVuZXdfY2VydGlmaWNhdGUYAiABKAgSHwoXcmVwb3J0X2ludGVydmFsX3NlY29uZHMYAyABKA0SFQoNdGFza3NfcGVuZGluZxgEIAEoCCKLAwoLTWludXRlU3RhdHMSKgoGbWludXRlGAEgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIPCgdzaXRlX2lkGAIgASgJEhAKCHJlcXVlc3RzGAMgASgEEhIKCmJ5dGVzX3NlbnQYBCABKAQSFgoOYnl0ZXNfcmVjZWl2ZWQYBSABKAQSEgoKY2FjaGVfaGl0cxgGIAEoBBIUCgxjYWNoZV9taXNzZXMYByABKAQSRAoMc3RhdHVzX2NvZGVzGAggAygLMi4uZWRnZXdlaXIubm9kZS52MS5NaW51dGVTdGF0cy5TdGF0dXNDb2Rlc0VudHJ5Ei4KCHRvcF91cmxzGAkgAygLMhwuZWRnZXdlaXIubm9kZS52MS5Ub3BDb3VudGVyEi0KB3RvcF9pcHMYCiADKAsyHC5lZGdld2Vpci5ub2RlLnYxLlRvcENvdW50ZXIaMgoQU3RhdHVzQ29kZXNFbnRyeRILCgNrZXkYASABKA0SDQoFdmFsdWUYAiABKAQ6AjgBIioKClRvcENvdW50ZXISDQoFdmFsdWUYASABKAkSDQoFY291bnQYAiABKAQiWgoSUmVwb3J0U3RhdHNSZXF1ZXN0EiwKBXN0YXRzGAEgAygLMh0uZWRnZXdlaXIubm9kZS52MS5NaW51dGVTdGF0cxIWCg5iYXRjaF9zZXF1ZW5jZRgCIAEoBCI/ChNSZXBvcnRTdGF0c1Jlc3BvbnNlEhAKCGFjY2VwdGVkGAEgASgNEhYKDmJhdGNoX3NlcXVlbmNlGAIgASgEIpABChRSZXBvcnRTdGF0c1YyUmVxdWVzdBIsCgVzdGF0cxgBIAMoCzIdLmVkZ2V3ZWlyLm5vZGUudjEuTWludXRlU3RhdHMSFgoOYmF0Y2hfc2VxdWVuY2UYAiABKAQSMgoOY29tcGxldGVfdW50aWwYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIkEKFVJlcG9ydFN0YXRzVjJSZXNwb25zZRIQCghhY2NlcHRlZBgBIAEoDRIWCg5iYXRjaF9zZXF1ZW5jZRgCIAEoBCIqChtHZXRPcmlnaW5DcmVkZW50aWFsc1JlcXVlc3QSCwoDaWRzGAEgAygJImEKEE9yaWdpbkNyZWRlbnRpYWwSCgoCaWQYASABKAkSDwoHdmVyc2lvbhgCIAEoBBIVCg1hY2Nlc3Nfa2V5X2lkGAMgASgJEhkKEXNlY3JldF9hY2Nlc3Nfa2V5GAQgASgJIlcKHEdldE9yaWdpbkNyZWRlbnRpYWxzUmVzcG9uc2USNwoLY3JlZGVudGlhbHMYASADKAsyIi5lZGdld2Vpci5ub2RlLnYxLk9yaWdpbkNyZWRlbnRpYWwiJQoQUHVsbFRhc2tzUmVxdWVzdBIRCgltYXhfdGFza3MYASABKA0iPgoRUHVsbFRhc2tzUmVzcG9uc2USKQoFdGFza3MYASADKAsyGi5lZGdld2Vpci5ub2RlLnYxLk5vZGVUYXNrIuIBCghOb2RlVGFzaxIKCgJpZBgBIAEoCRIuCgpjcmVhdGVkX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIsCgVwdXJnZRgDIAEoCzIbLmVkZ2V3ZWlyLm5vZGUudjEuUHVyZ2VUYXNrSAASMgoIcHJlZmV0Y2gYBCABKAsyHi5lZGdld2Vpci5ub2RlLnYxLlByZWZldGNoVGFza0gAEjAKB3VwZ3JhZGUYBSABKAsyHS5lZGdld2Vpci5ub2RlLnYxLlVwZ3JhZGVUYXNrSABCBgoEa2luZCJ0CgtQdXJnZVRhcmdldBIPCgdzaXRlX2lkGAEgASgJEikKBHR5cGUYAiABKA4yGy5lZGdld2Vpci5ub2RlLnYxLlB1cmdlVHlwZRIMCgRob3N0GAMgASgJEgwKBHBhdGgYBCABKAkSDQoFcXVlcnkYBSABKAkiOwoJUHVyZ2VUYXNrEi4KB3RhcmdldHMYASADKAsyHS5lZGdld2Vpci5ub2RlLnYxLlB1cmdlVGFyZ2V0Ii4KDlByZWZldGNoVGFyZ2V0Eg8KB3NpdGVfaWQYASABKAkSCwoDdXJsGAIgASgJIkEKDFByZWZldGNoVGFzaxIxCgd0YXJnZXRzGAEgAygLMiAuZWRnZXdlaXIubm9kZS52MS5QcmVmZXRjaFRhcmdldCLVAgoXUmVwb3J0VGFza1Jlc3VsdFJlcXVlc3QSDwoHdGFza19pZBgBIAEoCRIqCgVzdGF0ZRgCIAEoDjIbLmVkZ2V3ZWlyLm5vZGUudjEuVGFza1N0YXRlEg8KB21lc3NhZ2UYAyABKAkSEQoJc3VjY2VlZGVkGAQgASgNEg4KBmZhaWxlZBgFIAEoDRIvCgtmaW5pc2hlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEgoKZXJyb3JfY29kZRgHIAEoCRJQCgxlcnJvcl9wYXJhbXMYCCADKAsyOi5lZGdld2Vpci5ub2RlLnYxLlJlcG9ydFRhc2tSZXN1bHRSZXF1ZXN0LkVycm9yUGFyYW1zRW50cnkaMgoQRXJyb3JQYXJhbXNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIhoKGFJlcG9ydFRhc2tSZXN1bHRSZXNwb25zZSLpAQoJQWNjZXNzTG9nEigKBHRpbWUYASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg8KB3NpdGVfaWQYAiABKAkSEQoJY2xpZW50X2lwGAMgASgJEg4KBm1ldGhvZBgEIAEoCRIMCgRob3N0GAUgASgJEgwKBHBhdGgYBiABKAkSDgoGc3RhdHVzGAcgASgNEhIKCmJ5dGVzX3NlbnQYCCABKAQSEwoLZHVyYXRpb25fbXMYCSABKA0SFAoMY2FjaGVfc3RhdHVzGAogASgJEhMKC3NhbXBsZV9yYXRlGAsgASgNIlYKEVJlcG9ydExvZ3NSZXF1ZXN0EhYKDmJhdGNoX3NlcXVlbmNlGAEgASgEEikKBGxvZ3MYAiADKAsyGy5lZGdld2Vpci5ub2RlLnYxLkFjY2Vzc0xvZyI+ChJSZXBvcnRMb2dzUmVzcG9uc2USFgoOYmF0Y2hfc2VxdWVuY2UYASABKAQSEAoIYWNjZXB0ZWQYAiABKA0icQoLVXBncmFkZVRhc2sSDwoHdmVyc2lvbhgBIAEoCRITCgthcmNoaXZlX3VybBgCIAEoCRIOCgZzaGEyNTYYAyABKAkSFQoNY2hlY2tzdW1zX3VybBgEIAEoCRIVCg1zaWduYXR1cmVfdXJsGAUgASgJIvgBCgNCYW4SCgoCaWQYASABKAkSDAoEY2lkchgCIAEoCRIpCgVzY29wZRgDIAEoDjIaLmVkZ2V3ZWlyLm5vZGUudjEuQmFuU2NvcGUSDwoHc2l0ZV9pZBgEIAEoCRIuCgpleHBpcmVzX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIrCgZzb3VyY2UYBiABKA4yGy5lZGdld2Vpci5ub2RlLnYxLkJhblNvdXJjZRIOCgZyZWFzb24YByABKAkSLgoKY3JlYXRlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiNwoOR2V0QmFuc1JlcXVlc3QSFgoOYWZ0ZXJfc2VxdWVuY2UYASABKAQSDQoFbGltaXQYAiABKA0iegoPR2V0QmFuc1Jlc3BvbnNlEg0KBXJlc2V0GAEgASgIEiMKBGJhbnMYAiADKAsyFS5lZGdld2Vpci5ub2RlLnYxLkJhbhITCgtyZW1vdmVkX2lkcxgDIAMoCRIQCghzZXF1ZW5jZRgEIAEoBBIMCgRtb3JlGAUgASgIIuUBCgdBdXRvQmFuEg8KB3NpdGVfaWQYASABKAkSDAoEY2lkchgCIAEoCRIuCgpjcmVhdGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgpleHBpcmVzX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZyZWFzb24YBSABKAkSDgoGbWV0cmljGAYgASgJEhAKCG9ic2VydmVkGAcgASgBEhEKCXRocmVzaG9sZBgIIAEoARIWCg53aW5kb3dfc2Vjb25kcxgJIAEoDSI8ChFSZXBvcnRCYW5zUmVxdWVzdBInCgRiYW5zGAEgAygLMhkuZWRnZXdlaXIubm9kZS52MS5BdXRvQmFuIiYKElJlcG9ydEJhbnNSZXNwb25zZRIQCghhY2NlcHRlZBgBIAEoDSqLAQoKV2F0Y2hFdmVudBIbChdXQVRDSF9FVkVOVF9VTlNQRUNJRklFRBAAEhgKFFdBVENIX0VWRU5UX1JFVklTSU9OEAESGQoVV0FUQ0hfRVZFTlRfS0VFUEFMSVZFEAISFQoRV0FUQ0hfRVZFTlRfVEFTS1MQAxIUChBXQVRDSF9FVkVOVF9CQU5TEAQqdAoKQXBwbHlTdGF0ZRIbChdBUFBMWV9TVEFURV9VTlNQRUNJRklFRBAAEhgKFEFQUExZX1NUQVRFX0FQUExZSU5HEAESFwoTQVBQTFlfU1RBVEVfQVBQTElFRBACEhYKEkFQUExZX1NUQVRFX0ZBSUxFRBADKmcKCVB1cmdlVHlwZRIaChZQVVJHRV9UWVBFX1VOU1BFQ0lGSUVEEAASEgoOUFVSR0VfVFlQRV9VUkwQARIVChFQVVJHRV9UWVBFX1BSRUZJWBACEhMKD1BVUkdFX1RZUEVfU0lURRADKlgKCVRhc2tTdGF0ZRIaChZUQVNLX1NUQVRFX1VOU1BFQ0lGSUVEEAASGAoUVEFTS19TVEFURV9TVUNDRUVERUQQARIVChFUQVNLX1NUQVRFX0ZBSUxFRBACKlEKCEJhblNjb3BlEhkKFUJBTl9TQ09QRV9VTlNQRUNJRklFRBAAEhYKEkJBTl9TQ09QRV9QTEFURk9STRABEhIKDkJBTl9TQ09QRV9TSVRFEAIqUwoJQmFuU291cmNlEhoKFkJBTl9TT1VSQ0VfVU5TUEVDSUZJRUQQABIVChFCQU5fU09VUkNFX01BTlVBTBABEhMKD0JBTl9TT1VSQ0VfQVVUTxACMrgKCgtOb2RlU2VydmljZRJLCgZFbnJvbGwSHy5lZGdld2Vpci5ub2RlLnYxLkVucm9sbFJlcXVlc3QaIC5lZGdld2Vpci5ub2RlLnYxLkVucm9sbFJlc3BvbnNlEmkKEFJlbmV3Q2VydGlmaWNhdGUSKS5lZGdld2Vpci5ub2RlLnYxLlJlbmV3Q2VydGlmaWNhdGVSZXF1ZXN0GiouZWRnZXdlaXIubm9kZS52MS5SZW5ld0NlcnRpZmljYXRlUmVzcG9uc2USXAoLV2F0Y2hDb25maWcSJC5lZGdld2Vpci5ub2RlLnYxLldhdGNoQ29uZmlnUmVxdWVzdBolLmVkZ2V3ZWlyLm5vZGUudjEuV2F0Y2hDb25maWdSZXNwb25zZTABElQKCUdldENvbmZpZxIiLmVkZ2V3ZWlyLm5vZGUudjEuR2V0Q29uZmlnUmVxdWVzdBojLmVkZ2V3ZWlyLm5vZGUudjEuR2V0Q29uZmlnUmVzcG9uc2USXQoMUmVwb3J0U3RhdHVzEiUuZWRnZXdlaXIubm9kZS52MS5SZXBvcnRTdGF0dXNSZXF1ZXN0GiYuZWRnZXdlaXIubm9kZS52MS5SZXBvcnRTdGF0dXNSZXNwb25zZRJaCgtSZXBvcnRTdGF0cxIkLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0U3RhdHNSZXF1ZXN0GiUuZWRnZXdlaXIubm9kZS52MS5SZXBvcnRTdGF0c1Jlc3BvbnNlEmAKDVJlcG9ydFN0YXRzVjISJi5lZGdld2Vpci5ub2RlLnYxLlJlcG9ydFN0YXRzVjJSZXF1ZXN0GicuZWRnZXdlaXIubm9kZS52MS5SZXBvcnRTdGF0c1YyUmVzcG9uc2USVwoKUmVwb3J0TG9ncxIjLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0TG9nc1JlcXVlc3QaJC5lZGdld2Vpci5ub2RlLnYxLlJlcG9ydExvZ3NSZXNwb25zZRJ1ChRHZXRPcmlnaW5DcmVkZW50aWFscxItLmVkZ2V3ZWlyLm5vZGUudjEuR2V0T3JpZ2luQ3JlZGVudGlhbHNSZXF1ZXN0Gi4uZWRnZXdlaXIubm9kZS52MS5HZXRPcmlnaW5DcmVkZW50aWFsc1Jlc3BvbnNlEmYKD0dldENlcnRpZmljYXRlcxIoLmVkZ2V3ZWlyLm5vZGUudjEuR2V0Q2VydGlmaWNhdGVzUmVxdWVzdBopLmVkZ2V3ZWlyLm5vZGUudjEuR2V0Q2VydGlmaWNhdGVzUmVzcG9uc2USVAoJUHVsbFRhc2tzEiIuZWRnZXdlaXIubm9kZS52MS5QdWxsVGFza3NSZXF1ZXN0GiMuZWRnZXdlaXIubm9kZS52MS5QdWxsVGFza3NSZXNwb25zZRJpChBSZXBvcnRUYXNrUmVzdWx0EikuZWRnZXdlaXIubm9kZS52MS5SZXBvcnRUYXNrUmVzdWx0UmVxdWVzdBoqLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0VGFza1Jlc3VsdFJlc3BvbnNlEk4KB0dldEJhbnMSIC5lZGdld2Vpci5ub2RlLnYxLkdldEJhbnNSZXF1ZXN0GiEuZWRnZXdlaXIubm9kZS52MS5HZXRCYW5zUmVzcG9uc2USVwoKUmVwb3J0QmFucxIjLmVkZ2V3ZWlyLm5vZGUudjEuUmVwb3J0QmFuc1JlcXVlc3QaJC5lZGdld2Vpci5ub2RlLnYxLlJlcG9ydEJhbnNSZXNwb25zZWIGcHJvdG8z", [file_edgeweir_node_v1_config, file_google_protobuf_timestamp]);
 
 /**
  * NodeInfo describes the host and software of a node.
@@ -316,6 +316,14 @@ export type WatchConfigResponse = Message<"edgeweir.node.v1.WatchConfigResponse"
    * @generated from field: string content_hash = 3;
    */
   contentHash: string;
+
+  /**
+   * Latest ban sequence of the node's cluster (WATCH_EVENT_BANS). Added in
+   * v0.9.0.
+   *
+   * @generated from field: uint64 ban_sequence = 4;
+   */
+  banSequence: bigint;
 };
 
 /**
@@ -465,6 +473,14 @@ export type ReportStatusRequest = Message<"edgeweir.node.v1.ReportStatusRequest"
    * @generated from field: string revision_receipt = 10;
    */
   revisionReceipt: string;
+
+  /**
+   * State of the dynamic bans on this node; unset on nodes without bans-v1.
+   * Added in v0.9.0.
+   *
+   * @generated from field: edgeweir.node.v1.BanStatus bans = 11;
+   */
+  bans?: BanStatus | undefined;
 };
 
 /**
@@ -473,6 +489,70 @@ export type ReportStatusRequest = Message<"edgeweir.node.v1.ReportStatusRequest"
  */
 export const ReportStatusRequestSchema: GenMessage<ReportStatusRequest> = /*@__PURE__*/
   messageDesc(file_edgeweir_node_v1_node, 12);
+
+/**
+ * BanStatus reports how the node holds the bans it received.
+ *
+ * @generated from message edgeweir.node.v1.BanStatus
+ */
+export type BanStatus = Message<"edgeweir.node.v1.BanStatus"> & {
+  /**
+   * Highest ban sequence applied to the data plane.
+   *
+   * @generated from field: uint64 applied_sequence = 1;
+   */
+  appliedSequence: bigint;
+
+  /**
+   * Bans held by the data plane (console bans and the node's own).
+   *
+   * @generated from field: uint32 entries = 2;
+   */
+  entries: number;
+
+  /**
+   * Maximum number of bans the data plane holds.
+   *
+   * @generated from field: uint32 capacity = 3;
+   */
+  capacity: number;
+
+  /**
+   * Manual bans the data plane could not hold, at most 100 ids. Manual bans
+   * never fail silently: they stay here until they fit or expire.
+   *
+   * @generated from field: repeated string unapplied_ids = 4;
+   */
+  unappliedIds: string[];
+
+  /**
+   * Number of manual bans that could not be held (may exceed the ids).
+   *
+   * @generated from field: uint32 unapplied = 5;
+   */
+  unapplied: number;
+
+  /**
+   * Platform bans held by the kernel (nftables); 0 without kernel-ban-v1.
+   *
+   * @generated from field: uint32 kernel_entries = 6;
+   */
+  kernelEntries: number;
+
+  /**
+   * Automatic bans dropped to make room, since the agent started.
+   *
+   * @generated from field: uint64 auto_evicted = 7;
+   */
+  autoEvicted: bigint;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.BanStatus.
+ * Use `create(BanStatusSchema)` to create a new message.
+ */
+export const BanStatusSchema: GenMessage<BanStatus> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 13);
 
 /**
  * OriginHealth is the passive health state of one origin on one node.
@@ -543,7 +623,7 @@ export type OriginHealth = Message<"edgeweir.node.v1.OriginHealth"> & {
  * Use `create(OriginHealthSchema)` to create a new message.
  */
 export const OriginHealthSchema: GenMessage<OriginHealth> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 13);
+  messageDesc(file_edgeweir_node_v1_node, 14);
 
 /**
  * ReportStatusResponse tells the node what the console expects next.
@@ -583,7 +663,7 @@ export type ReportStatusResponse = Message<"edgeweir.node.v1.ReportStatusRespons
  * Use `create(ReportStatusResponseSchema)` to create a new message.
  */
 export const ReportStatusResponseSchema: GenMessage<ReportStatusResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 14);
+  messageDesc(file_edgeweir_node_v1_node, 15);
 
 /**
  * MinuteStats is traffic of one site during one minute on one node.
@@ -651,7 +731,7 @@ export type MinuteStats = Message<"edgeweir.node.v1.MinuteStats"> & {
  * Use `create(MinuteStatsSchema)` to create a new message.
  */
 export const MinuteStatsSchema: GenMessage<MinuteStats> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 15);
+  messageDesc(file_edgeweir_node_v1_node, 16);
 
 /**
  * TopCounter is a bounded, approximate heavy-hitter counter (no query strings).
@@ -675,7 +755,7 @@ export type TopCounter = Message<"edgeweir.node.v1.TopCounter"> & {
  * Use `create(TopCounterSchema)` to create a new message.
  */
 export const TopCounterSchema: GenMessage<TopCounter> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 16);
+  messageDesc(file_edgeweir_node_v1_node, 17);
 
 /**
  * ReportStatsRequest uploads a batch of minute buckets.
@@ -702,7 +782,7 @@ export type ReportStatsRequest = Message<"edgeweir.node.v1.ReportStatsRequest"> 
  * Use `create(ReportStatsRequestSchema)` to create a new message.
  */
 export const ReportStatsRequestSchema: GenMessage<ReportStatsRequest> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 17);
+  messageDesc(file_edgeweir_node_v1_node, 18);
 
 /**
  * ReportStatsResponse acknowledges a stats batch.
@@ -728,7 +808,7 @@ export type ReportStatsResponse = Message<"edgeweir.node.v1.ReportStatsResponse"
  * Use `create(ReportStatsResponseSchema)` to create a new message.
  */
 export const ReportStatsResponseSchema: GenMessage<ReportStatsResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 18);
+  messageDesc(file_edgeweir_node_v1_node, 19);
 
 /**
  * ReportStatsV2Request is a sequenced batch or an empty cursor query.
@@ -764,7 +844,7 @@ export type ReportStatsV2Request = Message<"edgeweir.node.v1.ReportStatsV2Reques
  * Use `create(ReportStatsV2RequestSchema)` to create a new message.
  */
 export const ReportStatsV2RequestSchema: GenMessage<ReportStatsV2Request> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 19);
+  messageDesc(file_edgeweir_node_v1_node, 20);
 
 /**
  * ReportStatsV2Response acknowledges the sequence (or returns the durable cursor).
@@ -788,7 +868,7 @@ export type ReportStatsV2Response = Message<"edgeweir.node.v1.ReportStatsV2Respo
  * Use `create(ReportStatsV2ResponseSchema)` to create a new message.
  */
 export const ReportStatsV2ResponseSchema: GenMessage<ReportStatsV2Response> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 20);
+  messageDesc(file_edgeweir_node_v1_node, 21);
 
 /**
  * GetOriginCredentialsRequest names the credentials to fetch.
@@ -809,7 +889,7 @@ export type GetOriginCredentialsRequest = Message<"edgeweir.node.v1.GetOriginCre
  * Use `create(GetOriginCredentialsRequestSchema)` to create a new message.
  */
 export const GetOriginCredentialsRequestSchema: GenMessage<GetOriginCredentialsRequest> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 21);
+  messageDesc(file_edgeweir_node_v1_node, 22);
 
 /**
  * OriginCredential is an access key pair for an S3-compatible origin.
@@ -845,7 +925,7 @@ export type OriginCredential = Message<"edgeweir.node.v1.OriginCredential"> & {
  * Use `create(OriginCredentialSchema)` to create a new message.
  */
 export const OriginCredentialSchema: GenMessage<OriginCredential> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 22);
+  messageDesc(file_edgeweir_node_v1_node, 23);
 
 /**
  * GetOriginCredentialsResponse carries the credentials the node may use.
@@ -865,7 +945,7 @@ export type GetOriginCredentialsResponse = Message<"edgeweir.node.v1.GetOriginCr
  * Use `create(GetOriginCredentialsResponseSchema)` to create a new message.
  */
 export const GetOriginCredentialsResponseSchema: GenMessage<GetOriginCredentialsResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 23);
+  messageDesc(file_edgeweir_node_v1_node, 24);
 
 /**
  * PullTasksRequest asks for pending tasks.
@@ -886,7 +966,7 @@ export type PullTasksRequest = Message<"edgeweir.node.v1.PullTasksRequest"> & {
  * Use `create(PullTasksRequestSchema)` to create a new message.
  */
 export const PullTasksRequestSchema: GenMessage<PullTasksRequest> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 24);
+  messageDesc(file_edgeweir_node_v1_node, 25);
 
 /**
  * PullTasksResponse carries pending tasks, oldest first.
@@ -905,7 +985,7 @@ export type PullTasksResponse = Message<"edgeweir.node.v1.PullTasksResponse"> & 
  * Use `create(PullTasksResponseSchema)` to create a new message.
  */
 export const PullTasksResponseSchema: GenMessage<PullTasksResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 25);
+  messageDesc(file_edgeweir_node_v1_node, 26);
 
 /**
  * NodeTask is a typed one-off operation. Nodes never execute anything that
@@ -957,7 +1037,7 @@ export type NodeTask = Message<"edgeweir.node.v1.NodeTask"> & {
  * Use `create(NodeTaskSchema)` to create a new message.
  */
 export const NodeTaskSchema: GenMessage<NodeTask> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 26);
+  messageDesc(file_edgeweir_node_v1_node, 27);
 
 /**
  * PurgeTarget is one thing to purge.
@@ -1002,7 +1082,7 @@ export type PurgeTarget = Message<"edgeweir.node.v1.PurgeTarget"> & {
  * Use `create(PurgeTargetSchema)` to create a new message.
  */
 export const PurgeTargetSchema: GenMessage<PurgeTarget> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 27);
+  messageDesc(file_edgeweir_node_v1_node, 28);
 
 /**
  * PurgeTask invalidates cached objects. Purged objects are never served
@@ -1022,7 +1102,7 @@ export type PurgeTask = Message<"edgeweir.node.v1.PurgeTask"> & {
  * Use `create(PurgeTaskSchema)` to create a new message.
  */
 export const PurgeTaskSchema: GenMessage<PurgeTask> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 28);
+  messageDesc(file_edgeweir_node_v1_node, 29);
 
 /**
  * PrefetchTarget is one URL to load into the cache.
@@ -1048,7 +1128,7 @@ export type PrefetchTarget = Message<"edgeweir.node.v1.PrefetchTarget"> & {
  * Use `create(PrefetchTargetSchema)` to create a new message.
  */
 export const PrefetchTargetSchema: GenMessage<PrefetchTarget> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 29);
+  messageDesc(file_edgeweir_node_v1_node, 30);
 
 /**
  * PrefetchTask requests URLs through the node's own data plane so that the
@@ -1068,7 +1148,7 @@ export type PrefetchTask = Message<"edgeweir.node.v1.PrefetchTask"> & {
  * Use `create(PrefetchTaskSchema)` to create a new message.
  */
 export const PrefetchTaskSchema: GenMessage<PrefetchTask> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 30);
+  messageDesc(file_edgeweir_node_v1_node, 31);
 
 /**
  * ReportTaskResultRequest reports the outcome of a task.
@@ -1134,7 +1214,7 @@ export type ReportTaskResultRequest = Message<"edgeweir.node.v1.ReportTaskResult
  * Use `create(ReportTaskResultRequestSchema)` to create a new message.
  */
 export const ReportTaskResultRequestSchema: GenMessage<ReportTaskResultRequest> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 31);
+  messageDesc(file_edgeweir_node_v1_node, 32);
 
 /**
  * ReportTaskResultResponse acknowledges a task result.
@@ -1149,7 +1229,7 @@ export type ReportTaskResultResponse = Message<"edgeweir.node.v1.ReportTaskResul
  * Use `create(ReportTaskResultResponseSchema)` to create a new message.
  */
 export const ReportTaskResultResponseSchema: GenMessage<ReportTaskResultResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 32);
+  messageDesc(file_edgeweir_node_v1_node, 33);
 
 /**
  * AccessLog is a sampled request. Query strings, headers and bodies are excluded.
@@ -1218,7 +1298,7 @@ export type AccessLog = Message<"edgeweir.node.v1.AccessLog"> & {
  * Use `create(AccessLogSchema)` to create a new message.
  */
 export const AccessLogSchema: GenMessage<AccessLog> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 33);
+  messageDesc(file_edgeweir_node_v1_node, 34);
 
 /**
  * ReportLogsRequest is an immutable, ordered batch from the private node spool.
@@ -1242,7 +1322,7 @@ export type ReportLogsRequest = Message<"edgeweir.node.v1.ReportLogsRequest"> & 
  * Use `create(ReportLogsRequestSchema)` to create a new message.
  */
 export const ReportLogsRequestSchema: GenMessage<ReportLogsRequest> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 34);
+  messageDesc(file_edgeweir_node_v1_node, 35);
 
 /**
  * ReportLogsResponse acknowledges the batch, including already stored retries.
@@ -1266,7 +1346,7 @@ export type ReportLogsResponse = Message<"edgeweir.node.v1.ReportLogsResponse"> 
  * Use `create(ReportLogsResponseSchema)` to create a new message.
  */
 export const ReportLogsResponseSchema: GenMessage<ReportLogsResponse> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 35);
+  messageDesc(file_edgeweir_node_v1_node, 36);
 
 /**
  * UpgradeTask selects one signed release. Trust roots and allowed download
@@ -1306,7 +1386,253 @@ export type UpgradeTask = Message<"edgeweir.node.v1.UpgradeTask"> & {
  * Use `create(UpgradeTaskSchema)` to create a new message.
  */
 export const UpgradeTaskSchema: GenMessage<UpgradeTask> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_node, 36);
+  messageDesc(file_edgeweir_node_v1_node, 37);
+
+/**
+ * Ban blocks a client address or prefix until it expires.
+ *
+ * @generated from message edgeweir.node.v1.Ban
+ */
+export type Ban = Message<"edgeweir.node.v1.Ban"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * Canonical CIDR (host bits zero, lowercase IPv6), e.g. "203.0.113.7/32".
+   * Prefixes are at least /16 (IPv4) or /48 (IPv6).
+   *
+   * @generated from field: string cidr = 2;
+   */
+  cidr: string;
+
+  /**
+   * @generated from field: edgeweir.node.v1.BanScope scope = 3;
+   */
+  scope: BanScope;
+
+  /**
+   * Site of a BAN_SCOPE_SITE ban; empty for platform bans.
+   *
+   * @generated from field: string site_id = 4;
+   */
+  siteId: string;
+
+  /**
+   * At most 7 days after created_at.
+   *
+   * @generated from field: google.protobuf.Timestamp expires_at = 5;
+   */
+  expiresAt?: Timestamp | undefined;
+
+  /**
+   * @generated from field: edgeweir.node.v1.BanSource source = 6;
+   */
+  source: BanSource;
+
+  /**
+   * Reason code: abuse, attack, scanner, spam, other (manual) or cc_ip_rate
+   * (automatic).
+   *
+   * @generated from field: string reason = 7;
+   */
+  reason: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 8;
+   */
+  createdAt?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.Ban.
+ * Use `create(BanSchema)` to create a new message.
+ */
+export const BanSchema: GenMessage<Ban> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 38);
+
+/**
+ * GetBansRequest continues from the sequence the node has applied.
+ *
+ * @generated from message edgeweir.node.v1.GetBansRequest
+ */
+export type GetBansRequest = Message<"edgeweir.node.v1.GetBansRequest"> & {
+  /**
+   * Highest sequence the node has applied; 0 asks for a full snapshot.
+   *
+   * @generated from field: uint64 after_sequence = 1;
+   */
+  afterSequence: bigint;
+
+  /**
+   * Page size; 0 means the console's default. The console caps it.
+   *
+   * @generated from field: uint32 limit = 2;
+   */
+  limit: number;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.GetBansRequest.
+ * Use `create(GetBansRequestSchema)` to create a new message.
+ */
+export const GetBansRequestSchema: GenMessage<GetBansRequest> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 39);
+
+/**
+ * GetBansResponse is one page of ban changes in sequence order.
+ *
+ * @generated from message edgeweir.node.v1.GetBansResponse
+ */
+export type GetBansResponse = Message<"edgeweir.node.v1.GetBansResponse"> & {
+  /**
+   * The node drops every console ban it holds before applying this page:
+   * after_sequence was 0 or the console cannot continue from it (for
+   * example after a database restore).
+   *
+   * @generated from field: bool reset = 1;
+   */
+  reset: boolean;
+
+  /**
+   * Bans added or changed after after_sequence, active ones only.
+   *
+   * @generated from field: repeated edgeweir.node.v1.Ban bans = 2;
+   */
+  bans: Ban[];
+
+  /**
+   * Bans removed after after_sequence (unbanned before they expired).
+   *
+   * @generated from field: repeated string removed_ids = 3;
+   */
+  removedIds: string[];
+
+  /**
+   * Sequence this page reaches; the next request continues from it.
+   *
+   * @generated from field: uint64 sequence = 4;
+   */
+  sequence: bigint;
+
+  /**
+   * More pages follow.
+   *
+   * @generated from field: bool more = 5;
+   */
+  more: boolean;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.GetBansResponse.
+ * Use `create(GetBansResponseSchema)` to create a new message.
+ */
+export const GetBansResponseSchema: GenMessage<GetBansResponse> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 40);
+
+/**
+ * AutoBan is a ban a node created by itself.
+ *
+ * @generated from message edgeweir.node.v1.AutoBan
+ */
+export type AutoBan = Message<"edgeweir.node.v1.AutoBan"> & {
+  /**
+   * @generated from field: string site_id = 1;
+   */
+  siteId: string;
+
+  /**
+   * A single address: "/32" or "/128".
+   *
+   * @generated from field: string cidr = 2;
+   */
+  cidr: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 3;
+   */
+  createdAt?: Timestamp | undefined;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp expires_at = 4;
+   */
+  expiresAt?: Timestamp | undefined;
+
+  /**
+   * Reason code, e.g. cc_ip_rate.
+   *
+   * @generated from field: string reason = 5;
+   */
+  reason: string;
+
+  /**
+   * Trigger: metric (e.g. ip_qps), observed value, threshold and window.
+   *
+   * @generated from field: string metric = 6;
+   */
+  metric: string;
+
+  /**
+   * @generated from field: double observed = 7;
+   */
+  observed: number;
+
+  /**
+   * @generated from field: double threshold = 8;
+   */
+  threshold: number;
+
+  /**
+   * @generated from field: uint32 window_seconds = 9;
+   */
+  windowSeconds: number;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.AutoBan.
+ * Use `create(AutoBanSchema)` to create a new message.
+ */
+export const AutoBanSchema: GenMessage<AutoBan> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 41);
+
+/**
+ * ReportBansRequest uploads automatic bans, at most 1000 per request.
+ *
+ * @generated from message edgeweir.node.v1.ReportBansRequest
+ */
+export type ReportBansRequest = Message<"edgeweir.node.v1.ReportBansRequest"> & {
+  /**
+   * @generated from field: repeated edgeweir.node.v1.AutoBan bans = 1;
+   */
+  bans: AutoBan[];
+};
+
+/**
+ * Describes the message edgeweir.node.v1.ReportBansRequest.
+ * Use `create(ReportBansRequestSchema)` to create a new message.
+ */
+export const ReportBansRequestSchema: GenMessage<ReportBansRequest> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 42);
+
+/**
+ * ReportBansResponse acknowledges the bans.
+ *
+ * @generated from message edgeweir.node.v1.ReportBansResponse
+ */
+export type ReportBansResponse = Message<"edgeweir.node.v1.ReportBansResponse"> & {
+  /**
+   * @generated from field: uint32 accepted = 1;
+   */
+  accepted: number;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.ReportBansResponse.
+ * Use `create(ReportBansResponseSchema)` to create a new message.
+ */
+export const ReportBansResponseSchema: GenMessage<ReportBansResponse> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_node, 43);
 
 /**
  * WatchEvent is the kind of a WatchConfig message.
@@ -1339,6 +1665,14 @@ export enum WatchEvent {
    * @generated from enum value: WATCH_EVENT_TASKS = 3;
    */
   TASKS = 3,
+
+  /**
+   * Bans changed; fetch them with GetBans from the node's applied sequence.
+   * Only sent to nodes that report bans-v1. Added in v0.9.0.
+   *
+   * @generated from enum value: WATCH_EVENT_BANS = 4;
+   */
+  BANS = 4,
 }
 
 /**
@@ -1446,6 +1780,70 @@ export enum TaskState {
  */
 export const TaskStateSchema: GenEnum<TaskState> = /*@__PURE__*/
   enumDesc(file_edgeweir_node_v1_node, 3);
+
+/**
+ * BanScope is where a ban applies.
+ *
+ * @generated from enum edgeweir.node.v1.BanScope
+ */
+export enum BanScope {
+  /**
+   * @generated from enum value: BAN_SCOPE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Every site of the node; also enforced by the kernel with kernel-ban-v1.
+   *
+   * @generated from enum value: BAN_SCOPE_PLATFORM = 1;
+   */
+  PLATFORM = 1,
+
+  /**
+   * One site only (HTTP 403 at the edge layer).
+   *
+   * @generated from enum value: BAN_SCOPE_SITE = 2;
+   */
+  SITE = 2,
+}
+
+/**
+ * Describes the enum edgeweir.node.v1.BanScope.
+ */
+export const BanScopeSchema: GenEnum<BanScope> = /*@__PURE__*/
+  enumDesc(file_edgeweir_node_v1_node, 4);
+
+/**
+ * BanSource tells who created a ban.
+ *
+ * @generated from enum edgeweir.node.v1.BanSource
+ */
+export enum BanSource {
+  /**
+   * @generated from enum value: BAN_SOURCE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * An operator or a tenant.
+   *
+   * @generated from enum value: BAN_SOURCE_MANUAL = 1;
+   */
+  MANUAL = 1,
+
+  /**
+   * A node's automatic mitigation, shared with the cluster.
+   *
+   * @generated from enum value: BAN_SOURCE_AUTO = 2;
+   */
+  AUTO = 2,
+}
+
+/**
+ * Describes the enum edgeweir.node.v1.BanSource.
+ */
+export const BanSourceSchema: GenEnum<BanSource> = /*@__PURE__*/
+  enumDesc(file_edgeweir_node_v1_node, 5);
 
 /**
  * NodeService is the channel between edgeweir-node agents and the console.
@@ -1589,6 +1987,29 @@ export const NodeService: GenService<{
     methodKind: "unary";
     input: typeof ReportTaskResultRequestSchema;
     output: typeof ReportTaskResultResponseSchema;
+  },
+  /**
+   * GetBans returns the dynamic IP bans of the node's cluster, incrementally
+   * by sequence. Bans never travel in NodeConfig and never create a
+   * revision. Added in v0.9.0 (feature bans-v1).
+   *
+   * @generated from rpc edgeweir.node.v1.NodeService.GetBans
+   */
+  getBans: {
+    methodKind: "unary";
+    input: typeof GetBansRequestSchema;
+    output: typeof GetBansResponseSchema;
+  },
+  /**
+   * ReportBans uploads bans the node created itself (automatic mitigation).
+   * Idempotent: the console keys them by (node, site, cidr). Added in v0.9.0.
+   *
+   * @generated from rpc edgeweir.node.v1.NodeService.ReportBans
+   */
+  reportBans: {
+    methodKind: "unary";
+    input: typeof ReportBansRequestSchema;
+    output: typeof ReportBansResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_edgeweir_node_v1_node, 0);
