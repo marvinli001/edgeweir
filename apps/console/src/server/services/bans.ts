@@ -579,6 +579,7 @@ export async function reportAutoBans(
       ).map((row) => [`${row.siteId}|${row.cidr}`, row]),
     );
     let changed = false;
+    let added = false;
     const inserts: (typeof schema.ipBan.$inferInsert)[] = [];
     for (const item of accepted) {
       const row = existing.get(`${item.siteId}|${item.cidr.text}`);
@@ -608,6 +609,7 @@ export async function reportAutoBans(
           })
           .where(eq(schema.ipBan.id, row.id));
         changed ||= shareAutoBans;
+        added = true;
       } else {
         inserts.push({
           scope: "site",
@@ -632,8 +634,10 @@ export async function reportAutoBans(
         .insert(schema.ipBan)
         .values(inserts.map((row, i) => ({ ...row, seq: seqs[i] ?? 0n })));
       changed ||= shareAutoBans;
+      added = true;
     }
-    changed = (await capAutoBans(tx, node.clusterId, now)) || changed;
+    // Only new active entries can push the cluster over the cap.
+    if (added) changed = (await capAutoBans(tx, node.clusterId, now)) || changed;
     if (changed) await notifyBans(tx, [node.clusterId]);
     return accepted.length;
   });
