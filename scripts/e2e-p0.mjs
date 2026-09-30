@@ -175,9 +175,9 @@ await a("PUT", "/settings/usage", { retentionDays: 100, offlineThresholdMinutes:
 const edgeIp = await containerIp("node");
 const peerIp = await containerIp("node-upgrade-peer");
 const policy = {
-  enabled: true,
+  mode: "auto",
   providerId: m5.providerId,
-  cnameSuffix: "edge.cdn.m5.test",
+  domain: "edge.cdn.m5.test",
   ttl: 60,
   lines: [
     {
@@ -192,9 +192,10 @@ const policy = {
     },
   ],
 };
-await a("PUT", "/dns/config", policy);
-const held = (await a("GET", "/dns/config")).blocked;
-if (held) await a("POST", "/dns/force-publish", { revision: held.revision });
+const dnsBinding = `/clusters/${clusterId}/dns`;
+await a("PUT", dnsBinding, { binding: policy });
+const held = (await a("GET", dnsBinding)).blocked;
+if (held) await a("POST", `${dnsBinding}/force-publish`, { revision: held.revision });
 const zone = (await a("GET", "/dns/providers")).items.find((p) => p.id === m5.providerId).zone;
 const providerRecords = async () =>
   ((await (await fetch(`${mock}/records`)).json())[zone] ?? [])
@@ -202,12 +203,13 @@ const providerRecords = async () =>
     .map((r) => `${r.name} ${r.type} ${r.data}`)
     .sort();
 async function reconcileDns() {
-  await a("POST", "/dns/reconcile");
-  return a("GET", "/dns/config");
+  await a("POST", "/dns/reconcile", { clusterId });
+  return a("GET", dnsBinding);
 }
-const planAddresses = async (siteId) =>
+// Addresses of the cluster's all-lines record (one per cluster, not per site).
+const planAddresses = async () =>
   (await reconcileDns()).records
-    .filter((r) => r.name === `all.${siteId}.edge` && r.type === "A")
+    .filter((r) => r.name === "all.edge" && r.type === "A")
     .map((r) => r.data)
     .sort();
 
@@ -423,7 +425,7 @@ const canaryPolicy = {
 };
 await a("PUT", `/clusters/${clusterId}/rollout-policy`, canaryPolicy);
 await synced();
-const peerAddress = async () => (await planAddresses(site.id)).includes(peerIp);
+const peerAddress = async () => (await planAddresses()).includes(peerIp);
 assert.ok(await peerAddress(), "peer is in the DNS plan before the canary");
 
 const good = (await a("PATCH", `/sites/${site.id}`, { name: "p0-site-renamed" })).revision.revision;

@@ -33,6 +33,12 @@
 #   the control client is served, and the unban lets it back; short
 #   prefixes, protected addresses, tenants on /admin/bans, other
 #   organizations' sites and maxBans are refused; Playwright e2e/g1.spec.ts.
+#   DNS (scripts/e2e-dns.mjs): two clusters bound to two provider accounts
+#   and domains publish cluster-level records; an offline node leaves only
+#   its cluster's records and returns; one account down does not stop the
+#   other cluster; manual mode writes nothing and exports a BIND zone file;
+#   a tenant zone (Custom HTTP provider) gets the ownership TXT and CNAMEs,
+#   conflicts wait for confirmation; Playwright e2e/dns.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -891,6 +897,14 @@ if ! $SKIP_UI; then
   E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g1.spec.ts || fail "G1 browser checks failed"
 fi
 pass "G1 checks passed"
+
+step "DNS: cluster bindings on two accounts, offline removal, provider outage, manual zone file, tenant automatic records"
+"${COMPOSE[@]}" --profile dns up -d node-dns
+node scripts/e2e-dns.mjs || fail "DNS end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/dns.spec.ts || fail "DNS browser checks failed"
+fi
+pass "DNS checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
