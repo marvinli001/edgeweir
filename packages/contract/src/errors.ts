@@ -54,6 +54,7 @@ export const errorDefs = {
   BAN_PROTECTED_ADDRESS: { status: 400, params: ["address"] },
   BAN_PLATFORM_LIMIT: { status: 409, params: ["limit"] },
   BAN_NOT_FOUND: { status: 404, params: [] },
+  PROTECTION_POW_DIFFICULTY: { status: 400, params: ["min"] },
   CERTIFICATE_NOT_FOUND: { status: 404, params: [] },
   CERTIFICATE_INVALID: { status: 400, params: [] },
   CERTIFICATE_DOMAIN_MISMATCH: { status: 400, params: [] },
@@ -151,6 +152,10 @@ export const revisionReasonDefs = {
     en: "canary of revision {revision} rolled back",
   },
   origin_allow_list_updated: { params: [], en: "origin allow list updated" },
+  site_protection_updated: { params: ["site"], en: "protection of {site} updated" },
+  platform_protection_updated: { params: [], en: "platform Under Attack updated" },
+  cc_template_updated: { params: [], en: "CC template updated" },
+  challenge_keys_rotated: { params: [], en: "challenge keys rotated" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

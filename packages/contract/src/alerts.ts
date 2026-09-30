@@ -6,6 +6,7 @@ export const alertKind = z.enum([
   "certificate_expiring",
   "origin_unavailable",
   "high_5xx",
+  "cc_mitigation",
 ]);
 /** Platform alerts (clusters, DNS): platform channels only, no subscriptions. */
 export const platformAlertKind = z.enum([
@@ -140,7 +141,7 @@ export const alertsContract = {
       z.object({
         siteId: uuid,
         channelId: uuid,
-        kinds: z.array(alertKind).min(1).max(4),
+        kinds: z.array(alertKind).min(1).max(alertKind.options.length),
         enabled: z.boolean().default(true),
       }),
     )

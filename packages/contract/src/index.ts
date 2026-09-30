@@ -14,6 +14,7 @@ import { adminBansContract, banSettings, bansContract } from "./bans";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
 import { domainOwnershipContract } from "./domains";
+import { ccTemplate, protectionContract, protectionSettings, securityContract } from "./protection";
 import {
   ipListsContract,
   platformIpListsContract,
@@ -30,6 +31,7 @@ export * from "./certificates";
 export * from "./errors";
 export * from "./node-errors";
 export * from "./node-features";
+export * from "./protection";
 export * from "./rules";
 export * from "./schemas";
 
@@ -68,6 +70,10 @@ export const contract = {
   platformIpLists: platformIpListsContract,
   /** Dynamic IP bans of the caller's sites. */
   bans: bansContract,
+  /** Under Attack, CC policy, pass lifetime, proof of work and JA4 logging of a site. */
+  protection: protectionContract,
+  /** CC mitigation levels and events of a site, as the nodes report them. */
+  security: securityContract,
   certificates: certificatesContract,
   dnsCredentials: dnsCredentialsContract,
   https: httpsContract,
@@ -492,6 +498,24 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/bans", tags: ["settings"] })
       .input(banSettings)
       .output(banSettings),
+    /** Platform Under Attack and the retention of security events. */
+    protection: oc
+      .route({ method: "GET", path: "/settings/protection", tags: ["settings"] })
+      .output(protectionSettings),
+    /** Publishes a new revision for every cluster when Under Attack changes. */
+    setProtection: oc
+      .route({ method: "PUT", path: "/settings/protection", tags: ["settings"] })
+      .input(protectionSettings)
+      .output(protectionSettings),
+    /** Default CC policy that sites can follow. */
+    ccTemplate: oc
+      .route({ method: "GET", path: "/settings/cc-template", tags: ["settings"] })
+      .output(ccTemplate),
+    /** Publishes a new revision for clusters with sites that follow the template. */
+    setCcTemplate: oc
+      .route({ method: "PUT", path: "/settings/cc-template", tags: ["settings"] })
+      .input(ccTemplate)
+      .output(ccTemplate),
     /** Recursive DNS servers for domain ownership TXT checks. */
     dnsResolvers: oc
       .route({ method: "GET", path: "/settings/dns-resolvers", tags: ["settings"] })

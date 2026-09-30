@@ -24,6 +24,8 @@ export const logEntry = z.object({
   durationMs: z.number(),
   cacheStatus: z.string(),
   sampleRate: z.number(),
+  /** JA4 TLS client fingerprint; empty unless the site records it. */
+  ja4: z.string().default(""),
 });
 export type LogEntry = z.infer<typeof logEntry>;
 export const logsContract = {

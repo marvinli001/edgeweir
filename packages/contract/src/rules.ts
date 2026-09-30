@@ -1,4 +1,11 @@
-import { canonicalCidr, parseExpression, phases } from "@edgeweir/rule-engine";
+import {
+  actionPhases,
+  canonicalCidr,
+  challengeTypes,
+  isRateLimitKey,
+  parseExpression,
+  phases,
+} from "@edgeweir/rule-engine";
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { uuid } from "./schemas";
@@ -33,6 +40,8 @@ export const ruleAction = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("log") }),
   z.object({ kind: z.literal("allow") }),
+  /** Challenges requests without a pass of this type's level or higher. */
+  z.object({ kind: z.literal("challenge"), type: z.enum(challengeTypes).default("js") }),
   z.object({
     kind: z.literal("redirect"),
     value: text.refine(
@@ -89,23 +98,10 @@ export const ruleAction = z.discriminatedUnion("kind", [
     statusCode: z.union([z.literal(403), z.literal(429)]).default(429),
     limit: z.number().int().min(1).max(100000),
     windowSeconds: z.number().int().min(1).max(3600),
-    key: z
-      .string()
-      .regex(/^(ip\.src|http\.host|http\.request\.headers\.[a-z0-9-]{1,64})$/)
-      .default("ip.src"),
+    /** ip.src, http.host, tls.ja4 or http.request.headers.<name>. */
+    key: z.string().refine(isRateLimitKey).default("ip.src"),
   }),
 ]);
-const actionPhases: Record<string, string[]> = {
-  block: ["waf-custom"],
-  log: ["waf-custom"],
-  allow: ["waf-custom"],
-  redirect: ["redirect"],
-  rewrite: ["request-transform"],
-  request_header: ["request-transform", "origin"],
-  response_header: ["response-transform"],
-  config: ["config", "cache"],
-  rate_limit: ["ratelimit"],
-};
 export const ruleInput = z
   .object({
     id: uuid.optional(),
