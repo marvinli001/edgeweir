@@ -199,7 +199,7 @@ pnpm e2e
 | Argument | Effect |
 | --- | --- |
 | `--up` | Run `docker compose -f compose.e2e.yml up -d --build` first |
-| `--down` | Run `docker compose -f compose.e2e.yml down -v` at the end |
+| `--down` | Run `docker compose -f compose.e2e.yml --profile '*' down -v` at the end, removing the profile services (ClickHouse, upgrade test node) and their volumes as well |
 | `--skip-ui` | Skip the Playwright browser tests |
 
 Arguments follow the script: `bash scripts/e2e.sh --up --down`.

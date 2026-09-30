@@ -87,7 +87,8 @@ if $UP; then
 fi
 cleanup() {
   docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
-  if $DOWN; then "${COMPOSE[@]}" down -v >/dev/null 2>&1 || true; fi
+  # Every profile: the upgrade peer and ClickHouse keep their state otherwise.
+  if $DOWN; then "${COMPOSE[@]}" --profile '*' down -v >/dev/null 2>&1 || true; fi
 }
 trap cleanup EXIT
 
@@ -153,7 +154,7 @@ pass "console healthy: $(curl -fsS "$CONSOLE/healthz")"
 
 step "first-run setup needs the one-time setup token from the console log"
 [[ "$(api GET /system/status | jq -r .initialized)" == "false" ]] ||
-  fail "the e2e environment is not fresh (console already initialized); reset it with: docker compose -f compose.e2e.yml down -v && docker compose -f compose.e2e.yml up -d --build"
+  fail "the e2e environment is not fresh (console already initialized); reset it with: docker compose -f compose.e2e.yml --profile '*' down -v && docker compose -f compose.e2e.yml up -d --build"
 setup_token() {
   "${COMPOSE[@]}" logs console 2>/dev/null | grep -o '"setupToken":"ews_[A-Za-z0-9_-]*"' | tail -n1 | cut -d'"' -f4
 }
