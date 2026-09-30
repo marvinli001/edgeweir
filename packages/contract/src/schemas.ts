@@ -499,6 +499,8 @@ export const node = z.object({
   certNotAfter: isoDateTime.nullable(),
   appliedRevision: z.number().int(),
   appliedContentHash: z.string(),
+  /** The revision this node should run (with a canary: stable or candidate). */
+  targetRevision: z.number().int().nullable(),
   applyState: applyState.nullable(),
   applyMessage: z.string(),
   dataPlaneHealthy: z.boolean(),

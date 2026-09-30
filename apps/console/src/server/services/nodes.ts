@@ -7,7 +7,14 @@ import { isOnline, ONLINE_WINDOW_SECONDS } from "../lib/node-online";
 import { type Actor, recordAudit } from "./audit";
 import { skipNodeTasks } from "./cache-tasks";
 import { findNodeGroup } from "./node-groups";
-import { type Executor, latestRevision, notifyClusterTargets } from "./revisions";
+import {
+  type Executor,
+  latestRevision,
+  notifyClusterTargets,
+  type RolloutTargets,
+  rolloutTargets,
+  targetFor,
+} from "./revisions";
 
 export { isOnline, ONLINE_WINDOW_SECONDS };
 
@@ -38,9 +45,11 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
         .where(inArray(schema.nodeGroup.id, groupIds))
     : [];
   const required = new Map<string, string[]>();
+  const targets = new Map<string, RolloutTargets>();
   for (const clusterId of new Set(rows.map((r) => r.clusterId))) {
     const latest = await latestRevision(db, clusterId);
     required.set(clusterId, latest ? nodeRequirements(decodeNodeConfig(latest.ir)) : []);
+    targets.set(clusterId, await rolloutTargets(db, clusterId));
   }
   return rows.map((r) => {
     const st = statuses.find((s) => s.nodeId === r.id);
@@ -74,6 +83,10 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
       certFingerprint: r.certFingerprint,
       certNotAfter: r.certNotAfter?.toISOString() ?? null,
       appliedRevision: st?.appliedRevision ?? 0,
+      targetRevision: (() => {
+        const clusterTargets = targets.get(r.clusterId);
+        return clusterTargets ? (targetFor(r, clusterTargets)?.revision ?? null) : null;
+      })(),
       appliedContentHash: st?.appliedContentHash ?? "",
       applyState: (st?.state as Node["applyState"]) ?? null,
       applyMessage: st?.message ?? "",
