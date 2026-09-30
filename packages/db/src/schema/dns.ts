@@ -136,6 +136,11 @@ export const dnsOwnedRecord = pgTable(
     conflicts: jsonb("conflicts").$type<{ type: string; data: string }[]>().notNull().default([]),
     /** A member confirmed replacing the conflicting records. */
     confirmed: boolean("confirmed").notNull().default(false),
+    /**
+     * The console created the record. An identical record that was already
+     * there is adopted (tracked) but never deleted by the console.
+     */
+    created: boolean("created").notNull().default(false),
     lastError: text("last_error").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -146,3 +151,13 @@ export const dnsOwnedRecord = pgTable(
     index("dns_owned_record_site_idx").on(t.siteId),
   ],
 );
+/**
+ * Short leases that serialize DNS work across console processes without
+ * holding a database connection: one per binding (`binding:<cluster id>`)
+ * and per organization credential (`credential:<id>`).
+ */
+export const dnsLease = pgTable("dns_lease", {
+  key: text("key").primaryKey(),
+  holder: uuid("holder").notNull(),
+  until: timestamp("until", { withTimezone: true }).notNull(),
+});

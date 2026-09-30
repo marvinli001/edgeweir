@@ -343,6 +343,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `dns_revision` | 集群的 DNS revision：绑定设置、记录集、托管名称、状态 |
 | `dns_managed_name` | 已登记的托管 DNS 名称及所属集群 |
 | `dns_owned_record` | 控制台写入组织自有区域的记录（所有权 TXT、CNAME）及其状态 |
+| `dns_lease` | DNS 工作的租约（集群绑定、租户 DNS 凭据），同一时间只有一个进程写同一区域 |
 
 ### 统计、日志、任务与告警
 
@@ -402,7 +403,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0026_p0_usage` | `site_usage`、序列 `site_usage_seq`、`node_stats_cursor.complete_until`；为已有分钟统计标记用量窗口 |
 | `0027_p0_config_canary` | `cluster_rollout`；`alert_event.site_id`、`alert_state.site_id` 可空（平台告警） |
 | `0028_g1_dynamic_bans` | `ip_ban`、序列 `ip_ban_seq`；`node.ban_status`；`organization_limit.max_bans` |
-| `0029_dns_cluster_bindings` | `dns_binding`、`dns_owned_record`；`dns_revision.cluster_id`、`dns_managed_name.cluster_id`、`dns_credential.auto_records`；平台 DNS 策略转换为各集群的绑定，删除 `dns_state` |
+| `0029_dns_cluster_bindings` | `dns_binding`、`dns_owned_record`、`dns_lease`；`dns_revision.cluster_id`、`dns_managed_name.cluster_id`、`dns_credential.auto_records`；平台 DNS 策略转换为各集群的绑定，删除 `dns_state` |
 
 ## 构建产物
 

@@ -1,5 +1,5 @@
 {
-  "id": "364cc03f-b1b7-483f-bce9-e8556446e162",
+  "id": "4c85573d-c6dd-47d9-ae1c-49733d6874b6",
   "prevId": "dc2dd028-2994-4888-b6c1-237c643bb4ef",
   "version": "7",
   "dialect": "postgresql",
@@ -6260,6 +6260,37 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.dns_lease": {
+      "name": "dns_lease",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "holder": {
+          "name": "holder",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "until": {
+          "name": "until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.dns_managed_name": {
       "name": "dns_managed_name",
       "schema": "",
@@ -6431,6 +6462,13 @@
         },
         "confirmed": {
           "name": "confirmed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created": {
+          "name": "created",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,

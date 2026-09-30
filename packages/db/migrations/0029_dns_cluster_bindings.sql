@@ -11,6 +11,11 @@ CREATE TABLE "dns_binding" (
 	"applied_revision" bigint,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );--> statement-breakpoint
+CREATE TABLE "dns_lease" (
+	"key" text PRIMARY KEY NOT NULL,
+	"holder" uuid NOT NULL,
+	"until" timestamp with time zone NOT NULL
+);--> statement-breakpoint
 CREATE TABLE "dns_owned_record" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"organization_id" text NOT NULL,
@@ -24,6 +29,7 @@ CREATE TABLE "dns_owned_record" (
 	"status" text DEFAULT 'pending' NOT NULL,
 	"conflicts" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"confirmed" boolean DEFAULT false NOT NULL,
+	"created" boolean DEFAULT false NOT NULL,
 	"last_error" text DEFAULT '' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
