@@ -25,6 +25,8 @@ Organization roles: **Owner** (`owner`), **Admin** (`admin`), and **Member** (`m
 | --- | --- | --- | --- |
 | Sites, domain ownership, certificates and DNS credentials, IP lists, purge & prefetch, access logs, alert subscriptions | ✓ | ✓ | ✓ |
 | Enable / disable sites | ✓ | ✓ | — |
+| View bans | ✓ | ✓ | ✓ |
+| Ban and unban addresses of sites | ✓ | ✓ | — |
 | Create AccessKeys (calling `/api/v1` as their creator) | ✓ | ✓ | ✓ |
 | Open **Members**: members and pending invitations | ✓ | ✓ | — |
 | Invite, change the role of, and remove **Admin** and **Member** | ✓ | ✓ | — |
@@ -105,6 +107,7 @@ Limits are resource protection the operator sets; by default nothing is limited.
 | Purge tasks per minute | Purge and prefetch tasks submitted in the last minute; 10 when empty |
 | Purge targets per hour | URLs, prefixes and sites submitted in the last hour; 2000 when empty |
 | Members | Organization members; checked on invitation and on joining |
+| Bans | Active manual bans of the organization's sites; automatic bans do not count, see [Bans](bans.en.md) |
 
 | Item | Behavior |
 | --- | --- |
@@ -173,6 +176,7 @@ Every user works in the console; platform administrators also have the Admin are
 | **Sites** | `/sites` | Site list and details | All |
 | **Alerts** | `/alerts` | Alert subscriptions and recent events; see [Domains, DNS, and alerts](dns-and-alerts.en.md) | All |
 | **IP lists** | `/ip-lists` | The organization's IP lists; see [Rules, IP lists, and GeoIP](rules.en.md) | All |
+| **Bans** | `/bans` | Bans of the organization's sites; see [Bans](bans.en.md) | All (banning and unbanning: owners, admins) |
 | **Purge & prefetch** | `/purge` | URL, directory, and site purges, URL prefetch, and tasks; see [Origins and cache](origins-and-cache.en.md) | All |
 | **Members** | `/members` | Members, invitations, organization policy | Owners, admins |
 | **Security** | `/security` | Password, two-factor authentication, passkeys | All |

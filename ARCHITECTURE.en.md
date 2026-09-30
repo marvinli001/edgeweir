@@ -161,6 +161,23 @@ URL, prefix, and full-site purges and URL prefetches produce no revision; they a
 
 Node upgrades are delivered through `PullTasks` as well: an upgrade first runs on one node group, and a platform administrator promotes it to the remaining nodes after the health observation passes. Behavior: [Node upgrades](docs/guide/node-upgrades.en.md).
 
+## Dynamic bans
+
+IP bans (`ip_ban`) create no revision and skip the configuration canary; they have their own path over the node channel:
+
+1. Every write (create, ban again, unban, automatic ban writes and overflow removal) takes `nextval('ip_ban_seq')` as the row's `seq` under one transaction-level advisory lock, so commits follow sequence order; the same transaction runs `pg_notify('edgeweir_bans', …)` with the affected clusters (all of them for platform bans). Manual actions are audited as `ban.create`, `ban.update`, `ban.delete`.
+2. Nodes with `bans-v1` receive `WATCH_EVENT_BANS` (`ban_sequence` is the sequence's current value) when their `WatchConfig` stream opens and after every notification.
+3. The node calls `GetBans(after_sequence)`: from 0, or from a sequence above the current value (after a database restore), it returns a snapshot (`reset`); otherwise the active bans and lifted ids changed afterwards. Expired bans are left out; nodes drop them at expiry. Reads take the same lock in shared mode first, so the current value never passes an uncommitted write. Pages hold 2000 entries by default and at most 5000; `sequence` is the page's highest sequence, or the current value on the last page.
+4. Nodes upload their own automatic bans with `ReportBans` (at most 1000 per call), merged per node, site and address, and report the applied sequence, capacity and unapplied bans in `ReportStatus.bans`, kept in `node.ban_status`.
+
+| Limit | Value |
+| --- | --- |
+| Shortest prefix | IPv4 `/16`, IPv6 `/48` |
+| Lifetime | 1 minute to 7 days; deleted by `maintenance.prune-bans` an hour after expiry |
+| Count | Organization limit `bans` (manual site bans); platform limit of manual bans (system settings, 10000 by default); at most 10000 automatic bans per cluster |
+
+Behavior: [Bans](docs/guide/bans.en.md).
+
 ## Node channel
 
 Connect-RPC over HTTPS; the console process terminates TLS itself.
@@ -188,14 +205,15 @@ Every RPC other than `Enroll` requires a client certificate verified by the inte
 | --- | --- |
 | `Enroll` | Exchange a single-use token and a CSR for a node certificate |
 | `RenewCertificate` | Rotate the node certificate |
-| `WatchConfig` | Server stream: revision notifications, task notifications, keepalives |
+| `WatchConfig` | Server stream: revision notifications, task notifications, ban notifications (`bans-v1`), keepalives |
 | `GetConfig` | Snapshot, or diff against `base_revision`, with a revision receipt |
-| `ReportStatus` | Heartbeat, apply receipt, passive origin health and error codes |
+| `ReportStatus` | Heartbeat, apply receipt, passive origin health and error codes, ban state |
 | `ReportStats`, `ReportStatsV2` | Per-minute pre-aggregated traffic statistics; deduplicated by batch sequence |
 | `ReportLogs` | Sampled access logs; deduplicated by batch sequence |
 | `GetOriginCredentials` | S3 origin keys referenced by the cluster's sites |
 | `GetCertificates` | Certificate chains and private keys referenced by the cluster's sites |
 | `PullTasks`, `ReportTaskResult` | Purge, prefetch, and upgrade tasks |
+| `GetBans`, `ReportBans` | Incremental ban changes of the node's cluster by sequence; upload of the node's automatic bans |
 
 A revision receipt is sealed with the master key (purpose `node.revision_receipt`, bound to the node ID) and carries the cluster, the revision, and the content hash. The node stores the receipt locally and returns it in `ReportStatus`; a report of an applied revision above the console's latest revision without a valid receipt is refused.
 
@@ -251,6 +269,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | `maintenance.prune-revisions` | Minute 17 of every hour | Deletes revisions beyond the retention count |
 | `maintenance.expire-cache-tasks` | Minute 43 of every hour | Fails purge and prefetch deliveries past their deadline |
 | `maintenance.expire-enrollment-tokens` | Every 30 minutes | Deletes enrollment tokens expired or used more than 7 days ago |
+| `maintenance.prune-bans` | Every 10 minutes | Deletes bans that expired more than an hour ago |
 
 ## Data model
 

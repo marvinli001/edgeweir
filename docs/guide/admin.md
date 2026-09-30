@@ -34,6 +34,7 @@
 | **平台 DNS** | `/admin/dns` | DNS 服务商、DNS 配置与 DNS 版本 |
 | **平台规则** | `/admin/rules` | 作用于所有网站的规则 |
 | **平台 IP 名单** | `/admin/ip-lists` | 平台级 IP 名单 |
+| **封禁** | `/admin/bans` | 全部组织的封禁与平台封禁 |
 | **区域** | `/admin/regions` | 节点组的区域标签 |
 | **组织与用户** | `/admin/organizations` | 组织、成员、用户账户 |
 | **审计日志** | `/admin/audit` | 全部管理操作记录 |
@@ -185,6 +186,10 @@
 
 表达式、阶段与名单上限见 [规则、IP 名单与 GeoIP](rules.md)。
 
+## 封禁
+
+**后台 → 封禁** 列出全部组织的有效封禁与平台封禁，可按范围、网站与来源筛选。**新建封禁** 的「范围」为「平台」时作用于所有网站，并在具备 `kernel-ban-v1` 的节点上由内核丢包；为「网站」时选择任一组织的网站。封禁规则、权限与内核封禁的启用方法见 [封禁](bans.md)。
+
 ## 区域
 
 区域是节点组的标签（如华东），在节点组与节点表中显示。
@@ -254,7 +259,7 @@
 
 | 操作前缀 | 内容 |
 | --- | --- |
-| `system.*` | 初始化（含 setup token 错误的 `system.setup_rejected`）、源站地址允许清单、节点发布源、所有权校验 DNS |
+| `system.*` | 初始化（含 setup token 错误的 `system.setup_rejected`）、源站地址允许清单、节点发布源、所有权校验 DNS、用量设置、封禁设置 |
 | `auth.*` | 登录成功（`auth.sign_in`，含登录方式）与失败（`auth.sign_in_failed`） |
 | `account.*` | 修改密码、启用 / 停用两步验证、添加 / 删除通行密钥 |
 | `api_key.*` | AccessKey 创建、删除、吊销 |
@@ -262,6 +267,7 @@
 | `user.*`、`organization.*`、`member.*`、`invitation.*` | 用户、组织、成员与邀请 |
 | `cluster.*`、`node_group.*`、`region.*`、`node.*`、`enrollment_token.*` | 集群（含配置金丝雀）、节点组、区域、节点（含注册、证书续期、升级）、安装命令 |
 | `site.*`、`cache.*`、`domain.*`、`certificate.*`、`dns_credential.*`、`ip_list.*`、`platform.*` | 网站、刷新预热、域名归属、证书、DNS 凭据、IP 名单、平台规则 |
+| `ban.*` | 手动封禁：`ban.create`、`ban.update`（再次封禁）、`ban.delete`（解封） |
 | `dns.*`、`alert.*` | 平台 DNS（含大面积摘除保护与强制发布）、告警渠道、告警规则、SMTP、告警订阅 |
 
 ## 系统设置
@@ -311,6 +317,15 @@
 
 修改写审计 `system.usage_update`。用量接口与 `completeUntil` 的定义见 [用量](../reference/api.md#用量)。
 
+### 封禁
+
+| 字段 | 取值 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| **平台手动封禁上限** | 100–100000 | 10000 | 全平台有效的手动封禁（平台与网站）总数；超出返回 `BAN_PLATFORM_LIMIT` |
+| **集群内共享自动封禁** | 开 / 关 | 开 | 节点产生的自动封禁是否下发到同集群的其他节点；关闭时只保存供查看 |
+
+修改写审计 `system.bans_update`。见 [封禁](bans.md)。
+
 ### GeoIP 数据库
 
 只读。逐个节点显示 **国家**、**省份** 与 **ASN** 数据状态（**可用** / **未配置**），并带 IPinfo 署名链接。国家和 ASN 数据随节点发布镜像内置，其余数据库由各节点本机配置；**配置数据库** 链接到 [规则、IP 名单与 GeoIP](rules.md)。
@@ -345,6 +360,8 @@
 | SMTP CA 证书 | **SMTP → CA 证书（PEM）** | `EDGEWEIR_SMTP_CA_FILE`（PEM 文件路径） | 系统信任库 |
 | SMTP 服务器与账户 | **SMTP** | 无 | 未配置 |
 | 源站地址允许清单 | **源站地址允许清单** | 无 | 空 |
+| 用量 | **用量** | 无 | 保留 100 天，离线阈值 60 分钟 |
+| 封禁 | **封禁** | 无 | 上限 10000，共享自动封禁 |
 
 **节点发布源** 与 **所有权校验 DNS** 的标签显示当前生效值的来源：**后台设置**、**环境变量** 或 **默认**。后台保存的地址受 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 约束；环境变量中的值由运维设置，不经该检查。全部环境变量见 [环境变量](../reference/environment.md)。
 

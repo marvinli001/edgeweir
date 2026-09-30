@@ -145,7 +145,65 @@ When a site already has the requested state, enabling and suspension return the 
 | `admin.organizations.setLimits` | `PUT /admin/organizations/{id}/limits` | Platform administrators, `limits:write` service accounts |
 | `organization.limits` | `GET /organization/limits` | Members of the active organization |
 
-The response is `{ organizationId, limits, usage, updatedAt }`. Fields of `limits` and `usage`: `sites`, `domains`, `certificates`, `ipListEntries`, `purgeTasksPerMinute`, `purgeUrlsPerHour`, `members`; `null` in `limits` means no limit. `setLimits` replaces every limit (omitted fields become `null`) and writes the audit entry `organization.limits_update` with the values before and after. Exceeding a limit returns 409 `ORG_LIMIT_EXCEEDED` with `data` `{ resource, limit, current }`. Behavior: [Organizations and members](../guide/organizations.en.md#technical-limits).
+The response is `{ organizationId, limits, usage, updatedAt }`. Fields of `limits` and `usage`: `sites`, `domains`, `certificates`, `ipListEntries`, `purgeTasksPerMinute`, `purgeUrlsPerHour`, `members`, `bans` (active manual site bans); `null` in `limits` means no limit. `setLimits` replaces every limit (omitted fields become `null`) and writes the audit entry `organization.limits_update` with the values before and after. Exceeding a limit returns 409 `ORG_LIMIT_EXCEEDED` with `data` `{ resource, limit, current }`. Behavior: [Organizations and members](../guide/organizations.en.md#technical-limits).
+
+### Bans
+
+| Procedure | Endpoint | Caller |
+| --- | --- | --- |
+| `bans.list` | `GET /bans` | Organization members (the organization's site bans); platform administrators (every site ban) |
+| `bans.create` | `POST /bans` | Organization owners and admins, platform administrators |
+| `bans.delete` | `DELETE /bans/{id}` | Organization owners and admins, platform administrators; site bans only, automatic ones included |
+| `admin.bans.list` | `GET /admin/bans` | Platform administrators |
+| `admin.bans.create` | `POST /admin/bans` | Platform administrators |
+| `admin.bans.delete` | `DELETE /admin/bans/{id}` | Platform administrators |
+| `settings.bans`, `settings.setBans` | `GET`, `PUT /settings/bans` | Platform administrators |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `GET` only.
+
+| Request | Fields |
+| --- | --- |
+| `POST /bans` | `siteId`, `cidr` (IP address or CIDR), `reason` (`abuse`, `attack`, `scanner`, `spam`, `other`), `durationSeconds` (60–604800) |
+| `POST /admin/bans` | Also `scope` (`platform` / `site`): `site` requires `siteId`, `platform` does not allow it |
+| `GET /bans` | Query parameters `siteId`, `source` (`manual` / `auto`), `page`, `pageSize` (1–100, default 50) |
+| `GET /admin/bans` | Also `scope`, `organizationId` |
+| `PUT /settings/bans` | `maxTotal` (100–100000, default 10000), `shareAutoBans` (default `true`) |
+
+Lists answer `{ items, total }` with active bans only (neither expired nor lifted), newest first. Ban fields:
+
+| Field | Description |
+| --- | --- |
+| `id`, `scope`, `cidr` | `cidr` is canonical, e.g. `203.0.113.7/32` |
+| `reason`, `source` | `source` is `manual` or `auto`; automatic bans have the `reason` `cc_ip_rate` |
+| `siteId`, `siteName`, `organizationId`, `organizationName` | `null` for platform bans |
+| `node`, `trigger` | The node `{ id, name }` and trigger `{ metric, observed, threshold, windowSeconds }` of an automatic ban; `null` for manual bans |
+| `createdBy` | Who created a manual ban `{ type, id, name }` |
+| `createdAt`, `expiresAt` | ISO 8601 |
+| `seq` | Ban change sequence (decimal string) |
+| `distributed` | Whether nodes receive it; `false` for automatic bans that are not shared |
+| `unappliedNodes` | Online nodes that report they could not hold the ban |
+
+- When an active manual ban of the same scope, site and address exists, `create` sets the new `reason` and expiry and returns the same `id` (audit `ban.update`); otherwise the audit entry is `ban.create`. `delete` writes `ban.delete`.
+- A node's ban state: `banStatus` of `GET /nodes/{id}` (`appliedSequence`, `entries`, `capacity`, `unappliedIds`, `unapplied`, `kernelEntries`, `autoEvicted`, `reportedAt`), `null` when the node reports none; capabilities are in `supportedFeatures` (`bans-v1`, `kernel-ban-v1`).
+
+| Error code | Status | When |
+| --- | --- | --- |
+| `BAN_INVALID_CIDR` | 400 | Not an IP address or CIDR |
+| `BAN_PREFIX_TOO_SHORT` | 400 | Prefix shorter than `/16` (IPv4) or `/48` (IPv6); `data.min` is the minimum |
+| `BAN_EXPIRY_OUT_OF_RANGE` | 400 | `durationSeconds` outside 60–604800 |
+| `BAN_PROTECTED_ADDRESS` | 400 | Covers a node address, loopback or an unspecified address, or overlaps a platform allow list; `data.address` is the conflicting address |
+| `BAN_PLATFORM_LIMIT` | 409 | Platform limit of manual bans reached; `data.limit` |
+| `BAN_NOT_FOUND` | 404 | The ban does not exist, expired, was lifted, or is outside the caller's scope |
+| `ORG_LIMIT_EXCEEDED` | 409 | Organization limit reached, `data.resource` is `bans` |
+| `ORG_ADMIN_REQUIRED` | 403 | A member called `create` or `delete` |
+
+```bash
+curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"scope":"platform","cidr":"203.0.113.0/24","reason":"attack","durationSeconds":86400}' \
+  https://cdn-admin.example.com/api/v1/admin/bans
+```
+
+Behavior: [Bans](../guide/bans.en.md).
 
 ### Usage
 

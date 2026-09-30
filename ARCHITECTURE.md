@@ -161,6 +161,23 @@ URL、目录、整站刷新与 URL 预热不产生 revision，以类型化任务
 
 节点升级同样经 `PullTasks` 下发：升级任务先在一个节点组试运行，健康观察通过后由平台管理员推进到其余节点。行为说明见 [节点升级](docs/guide/node-upgrades.md)。
 
+## 动态封禁
+
+IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点通道单独下发：
+
+1. 每次写入（新建、再次封禁、解封、自动封禁的写入与超额移除）在同一个事务级 advisory lock 下取 `nextval('ip_ban_seq')` 作为该行的 `seq`，提交顺序与序号顺序一致；同一事务内 `pg_notify('edgeweir_bans', …)`（载荷为受影响的集群，平台封禁为全部）。手动操作写审计 `ban.create`、`ban.update`、`ban.delete`。
+2. 具备 `bans-v1` 的节点在 `WatchConfig` 流建立时与每次通知后收到 `WATCH_EVENT_BANS`（`ban_sequence` 为序列当前值）。
+3. 节点调用 `GetBans(after_sequence)`：从 0 或从大于序列当前值的序号（数据库恢复后）开始时返回快照（`reset`），否则返回之后变化的有效封禁与已解封的 id；到期的封禁不返回，节点按到期时间失效。读取先取同一把锁的共享模式，序列当前值不会越过未提交的写入。每页默认 2000 条、最多 5000 条；`sequence` 为本页最大序号，最后一页为序列当前值。
+4. 节点以 `ReportBans` 上报自己产生的自动封禁（每次最多 1000 条），控制台按（节点、网站、地址）合并；以 `ReportStatus.bans` 上报已应用序号、容量与未生效的封禁，保存在 `node.ban_status`。
+
+| 限制 | 值 |
+| --- | --- |
+| 前缀下限 | IPv4 `/16`，IPv6 `/48` |
+| 有效期 | 1 分钟到 7 天；到期一小时后由 `maintenance.prune-bans` 删除 |
+| 数量 | 组织限额 `bans`（手动网站封禁）；平台手动封禁上限（系统设置，默认 10000）；每个集群最多 10000 条自动封禁 |
+
+行为见 [封禁](docs/guide/bans.md)。
+
 ## 节点通道
 
 Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
@@ -188,14 +205,15 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | --- | --- |
 | `Enroll` | 用一次性 token 和 CSR 换取节点证书 |
 | `RenewCertificate` | 轮换节点证书 |
-| `WatchConfig` | 服务端流：revision 通知、任务通知、keepalive |
+| `WatchConfig` | 服务端流：revision 通知、任务通知、封禁通知（`bans-v1`）、keepalive |
 | `GetConfig` | 快照或相对 `base_revision` 的 diff，附 revision 回执 |
-| `ReportStatus` | 心跳、应用回执、源站被动健康状态与错误码 |
+| `ReportStatus` | 心跳、应用回执、源站被动健康状态与错误码、封禁状态 |
 | `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计；按批次序号去重 |
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
 | `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥 |
 | `GetCertificates` | 本集群网站引用的证书链与私钥 |
 | `PullTasks`、`ReportTaskResult` | 刷新预热与升级任务 |
+| `GetBans`、`ReportBans` | 按序号增量拉取本集群的封禁；上报节点的自动封禁 |
 
 revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节点 ID），内容为集群、revision 与内容哈希。节点把回执保存在本地并在 `ReportStatus` 中带回；节点报告的已应用 revision 高于控制台最新 revision 且回执无效时，请求被拒绝。
 
@@ -251,6 +269,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `maintenance.prune-revisions` | 每小时第 17 分 | 删除超出保留数量的 revision |
 | `maintenance.expire-cache-tasks` | 每小时第 43 分 | 把超期未完成的刷新预热交付记为失败 |
 | `maintenance.expire-enrollment-tokens` | 每 30 分钟 | 删除过期或使用超过 7 天的注册 token |
+| `maintenance.prune-bans` | 每 10 分钟 | 删除到期超过一小时的封禁 |
 
 ## 数据模型
 

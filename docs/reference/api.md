@@ -145,7 +145,65 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | `admin.organizations.setLimits` | `PUT /admin/organizations/{id}/limits` | 平台管理员、`limits:write` 服务账号 |
 | `organization.limits` | `GET /organization/limits` | 当前组织的成员 |
 
-响应为 `{ organizationId, limits, usage, updatedAt }`。`limits` 与 `usage` 的字段：`sites`、`domains`、`certificates`、`ipListEntries`、`purgeTasksPerMinute`、`purgeUrlsPerHour`、`members`；`limits` 中 `null` 表示不限。`setLimits` 替换全部限额，省略的字段为 `null`，写审计 `organization.limits_update`（修改前后的值）。超限返回 409 `ORG_LIMIT_EXCEEDED`，`data` 为 `{ resource, limit, current }`。行为见 [组织与成员](../guide/organizations.md#技术限额)。
+响应为 `{ organizationId, limits, usage, updatedAt }`。`limits` 与 `usage` 的字段：`sites`、`domains`、`certificates`、`ipListEntries`、`purgeTasksPerMinute`、`purgeUrlsPerHour`、`members`、`bans`（有效的手动网站封禁）；`limits` 中 `null` 表示不限。`setLimits` 替换全部限额，省略的字段为 `null`，写审计 `organization.limits_update`（修改前后的值）。超限返回 409 `ORG_LIMIT_EXCEEDED`，`data` 为 `{ resource, limit, current }`。行为见 [组织与成员](../guide/organizations.md#技术限额)。
+
+### 封禁
+
+| 过程 | 端点 | 调用方 |
+| --- | --- | --- |
+| `bans.list` | `GET /bans` | 组织成员（本组织的网站封禁）；平台管理员（全部网站封禁） |
+| `bans.create` | `POST /bans` | 组织 owner / admin、平台管理员 |
+| `bans.delete` | `DELETE /bans/{id}` | 组织 owner / admin、平台管理员；只针对网站封禁，含自动封禁 |
+| `admin.bans.list` | `GET /admin/bans` | 平台管理员 |
+| `admin.bans.create` | `POST /admin/bans` | 平台管理员 |
+| `admin.bans.delete` | `DELETE /admin/bans/{id}` | 平台管理员 |
+| `settings.bans`、`settings.setBans` | `GET`、`PUT /settings/bans` | 平台管理员 |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `POST /bans` | `siteId`、`cidr`（IP 地址或 CIDR）、`reason`（`abuse`、`attack`、`scanner`、`spam`、`other`）、`durationSeconds`（60–604800） |
+| `POST /admin/bans` | 另加 `scope`（`platform` / `site`）：`site` 必须带 `siteId`，`platform` 不能带 |
+| `GET /bans` | 查询参数 `siteId`、`source`（`manual` / `auto`）、`page`、`pageSize`（1–100，默认 50） |
+| `GET /admin/bans` | 另加 `scope`、`organizationId` |
+| `PUT /settings/bans` | `maxTotal`（100–100000，默认 10000）、`shareAutoBans`（默认 `true`） |
+
+列表响应 `{ items, total }`，只含有效的封禁（未到期、未解封），按创建时间倒序。封禁字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `id`、`scope`、`cidr` | `cidr` 为规范化的 CIDR，如 `203.0.113.7/32` |
+| `reason`、`source` | `source` 为 `manual` 或 `auto`；自动封禁的 `reason` 为 `cc_ip_rate` |
+| `siteId`、`siteName`、`organizationId`、`organizationName` | 平台封禁为 `null` |
+| `node`、`trigger` | 自动封禁的来源节点 `{ id, name }` 与触发条件 `{ metric, observed, threshold, windowSeconds }`；手动封禁为 `null` |
+| `createdBy` | 手动封禁的操作者 `{ type, id, name }` |
+| `createdAt`、`expiresAt` | ISO 8601 |
+| `seq` | 封禁变化序号（十进制字符串） |
+| `distributed` | 是否下发到节点；未共享的自动封禁为 `false` |
+| `unappliedNodes` | 上报未能保存该封禁的在线节点数 |
+
+- 同一范围、网站与地址已有有效的手动封禁时，`create` 更新 `reason` 与到期时间并返回同一 `id`，审计 `ban.update`；否则审计 `ban.create`。`delete` 审计 `ban.delete`。
+- 节点的封禁状态：`GET /nodes/{id}` 的 `banStatus`（`appliedSequence`、`entries`、`capacity`、`unappliedIds`、`unapplied`、`kernelEntries`、`autoEvicted`、`reportedAt`），节点未上报时为 `null`；节点能力见 `supportedFeatures`（`bans-v1`、`kernel-ban-v1`）。
+
+| 错误代码 | 状态 | 场景 |
+| --- | --- | --- |
+| `BAN_INVALID_CIDR` | 400 | 不是 IP 地址或 CIDR |
+| `BAN_PREFIX_TOO_SHORT` | 400 | 前缀短于 `/16`（IPv4）或 `/48`（IPv6）；`data.min` 为下限 |
+| `BAN_EXPIRY_OUT_OF_RANGE` | 400 | `durationSeconds` 不在 60–604800 |
+| `BAN_PROTECTED_ADDRESS` | 400 | 包含节点地址、回环或未指定地址，或与平台放行名单重叠；`data.address` 为冲突的地址 |
+| `BAN_PLATFORM_LIMIT` | 409 | 达到平台手动封禁上限；`data.limit` |
+| `BAN_NOT_FOUND` | 404 | 封禁不存在、已到期或已解封，或不在调用方范围内 |
+| `ORG_LIMIT_EXCEEDED` | 409 | 达到组织限额，`data.resource` 为 `bans` |
+| `ORG_ADMIN_REQUIRED` | 403 | 组织成员调用 `create` 或 `delete` |
+
+```bash
+curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"scope":"platform","cidr":"203.0.113.0/24","reason":"attack","durationSeconds":86400}' \
+  https://cdn-admin.example.com/api/v1/admin/bans
+```
+
+行为见 [封禁](../guide/bans.md)。
 
 ### 用量
 

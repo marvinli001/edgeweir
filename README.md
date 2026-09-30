@@ -17,7 +17,7 @@
 | 集群与权限 | 节点组、区域、组织、成员邀请、2FA / Passkey、管理审计 |
 | 源站与缓存 | 源站池、回源 TLS 校验、S3 签名回源、WebSocket、缓存键、切片、刷新与预热 |
 | 证书与协议 | 证书上传、ACME HTTP-01 / DNS-01 签发与续期、HTTPS、HSTS、HTTP/2、HTTP/3 |
-| 访问策略 | 组织 / 平台 IP 名单、本地 GeoIP、分阶段规则、WAF、限速、重定向、改写、请求头与响应头变换 |
+| 访问策略 | 组织 / 平台 IP 名单、本地 GeoIP、分阶段规则、WAF、限速、重定向、改写、请求头与响应头变换；秒级下发的 IP 封禁，平台封禁可由 nftables 在内核丢包 |
 | DNS 与观测 | 域名归属验证、独立 DNS 版本、健康节点调度、流量统计去重与汇总、Top URL / IP、告警与订阅 |
 | 运维 | 采样访问日志与 CSV 导出、可选 ClickHouse、只读及可吊销 AccessKey、签名灰度升级与回滚、性能基线、备份恢复 |
 
@@ -242,7 +242,7 @@ doc/                       文档站（Fumadocs），发布至 GitHub Pages
 | 分类 | 文档 |
 | --- | --- |
 | 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
-| 使用 | [快速上手](docs/guide/first-site.md) · [组织与成员](docs/guide/organizations.md) · [平台管理](docs/guide/admin.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [DNS 与告警](docs/guide/dns-and-alerts.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
+| 使用 | [快速上手](docs/guide/first-site.md) · [组织与成员](docs/guide/organizations.md) · [平台管理](docs/guide/admin.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [封禁](docs/guide/bans.md) · [DNS 与告警](docs/guide/dns-and-alerts.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
 | 参考 | [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [API 与端点](docs/reference/api.md) |
 | 项目 | [架构](ARCHITECTURE.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |
 

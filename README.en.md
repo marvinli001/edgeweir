@@ -17,7 +17,7 @@ Documentation: <https://marvinli001.github.io/edgeweir/en/>
 | Clusters and access | Node groups, regions, organizations, member invitations, 2FA / passkeys, management audit log |
 | Origins and cache | Origin pools, origin TLS verification, S3-signed origins, WebSocket, cache keys, slicing, purge and prefetch |
 | Certificates and protocols | Certificate upload, ACME HTTP-01 / DNS-01 issuance and renewal, HTTPS, HSTS, HTTP/2, HTTP/3 |
-| Access policy | Organization / platform IP lists, local GeoIP, phased rules, WAF, rate limits, redirects, rewrites, request and response header transforms |
+| Access policy | Organization / platform IP lists, local GeoIP, phased rules, WAF, rate limits, redirects, rewrites, request and response header transforms; IP bans delivered within seconds, platform bans optionally dropped in the kernel by nftables |
 | DNS and observability | Domain ownership verification, independent DNS revisions, healthy-node steering, deduplicated traffic statistics and rollups, Top URL / IP, alerts and subscriptions |
 | Operations | Sampled access logs with CSV export, optional ClickHouse, read-only and revocable AccessKeys, signed canary upgrades with rollback, performance baseline, backup and recovery |
 
@@ -242,7 +242,7 @@ The documentation site <https://marvinli001.github.io/edgeweir/en/> is generated
 | Area | Documents |
 | --- | --- |
 | Deployment | [Overview](docs/deploy/README.en.md) · [Docker Compose](docs/deploy/docker.en.md) · [BT Panel / aaPanel](docs/deploy/baota.en.md) · [deploy.sh](docs/deploy/deploy-script.en.md) · [Railway](docs/deploy/railway.en.md) · [Fly.io](docs/deploy/fly.en.md) · [Ports and reverse proxy](docs/deploy/networking.en.md) · [Adding nodes](docs/deploy/nodes.en.md) · [Versions and upgrades](docs/deploy/upgrade.en.md) · [Backup and recovery](docs/deploy/backup.en.md) |
-| Usage | [Quick start](docs/guide/first-site.en.md) · [Organizations and members](docs/guide/organizations.en.md) · [Platform administration](docs/guide/admin.en.md) · [Origins and cache](docs/guide/origins-and-cache.en.md) · [HTTPS and certificates](docs/guide/https.en.md) · [Rules](docs/guide/rules.en.md) · [DNS and alerts](docs/guide/dns-and-alerts.en.md) · [Access logs and AccessKeys](docs/guide/access-logs.en.md) · [Node upgrades](docs/guide/node-upgrades.en.md) |
+| Usage | [Quick start](docs/guide/first-site.en.md) · [Organizations and members](docs/guide/organizations.en.md) · [Platform administration](docs/guide/admin.en.md) · [Origins and cache](docs/guide/origins-and-cache.en.md) · [HTTPS and certificates](docs/guide/https.en.md) · [Rules](docs/guide/rules.en.md) · [Bans](docs/guide/bans.en.md) · [DNS and alerts](docs/guide/dns-and-alerts.en.md) · [Access logs and AccessKeys](docs/guide/access-logs.en.md) · [Node upgrades](docs/guide/node-upgrades.en.md) |
 | Reference | [Environment variables](docs/reference/environment.en.md) · [Command line](docs/reference/cli.en.md) · [API and endpoints](docs/reference/api.en.md) |
 | Project | [Architecture](ARCHITECTURE.en.md) · [Security](SECURITY.en.md) · [Contributing](CONTRIBUTING.en.md) · [Licensing](LICENSING.en.md) |
 

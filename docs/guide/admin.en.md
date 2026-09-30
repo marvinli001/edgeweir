@@ -34,6 +34,7 @@ Platform administrators see a segmented switch **Console | Admin** in the header
 | **Platform DNS** | `/admin/dns` | DNS providers, DNS configuration, and DNS revisions |
 | **Platform rules** | `/admin/rules` | Rules applied to every site |
 | **Platform IP lists** | `/admin/ip-lists` | Platform-level IP lists |
+| **Bans** | `/admin/bans` | Bans of every organization and platform bans |
 | **Regions** | `/admin/regions` | Region labels for node groups |
 | **Organizations & users** | `/admin/organizations` | Organizations, members, user accounts |
 | **Audit log** | `/admin/audit` | Record of every management action |
@@ -185,6 +186,10 @@ Notification channels (Webhook, Email, DingTalk, WeCom, Telegram) and **Alert ru
 
 For expressions, phases, and list limits, see [Rules, IP lists, and GeoIP](rules.en.md).
 
+## Bans
+
+**Admin → Bans** lists the active bans of every organization and the platform bans, filtered by scope, site, and source. **New ban** with "Scope" "Platform" applies to every site and is dropped in the kernel on nodes with `kernel-ban-v1`; with "Site" it targets a site of any organization. Ban rules, permissions, and how to enable kernel bans: [Bans](bans.en.md).
+
 ## Regions
 
 A region is a label for node groups (for example East China), shown in the node group and node tables.
@@ -254,7 +259,7 @@ The page shows **Time**, **Actor**, **Action**, and **Target**, 50 entries per p
 
 | Action prefix | Content |
 | --- | --- |
-| `system.*` | Setup (including `system.setup_rejected` for a wrong setup token), origin allow list, node release source, ownership check DNS |
+| `system.*` | Setup (including `system.setup_rejected` for a wrong setup token), origin allow list, node release source, ownership check DNS, usage settings, ban settings |
 | `auth.*` | Successful (`auth.sign_in`, with the sign-in method) and failed (`auth.sign_in_failed`) sign-ins |
 | `account.*` | Password change, two-factor enable / disable, passkey add / delete |
 | `api_key.*` | AccessKey create, delete, revoke |
@@ -262,6 +267,7 @@ The page shows **Time**, **Actor**, **Action**, and **Target**, 50 entries per p
 | `user.*`, `organization.*`, `member.*`, `invitation.*` | Users, organizations, members, and invitations |
 | `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters (including the configuration canary), node groups, regions, nodes (including enrollment, certificate renewal, upgrades), install commands |
 | `site.*`, `cache.*`, `domain.*`, `certificate.*`, `dns_credential.*`, `ip_list.*`, `platform.*` | Sites, purge & prefetch, domain ownership, certificates, DNS credentials, IP lists, platform rules |
+| `ban.*` | Manual bans: `ban.create`, `ban.update` (banned again), `ban.delete` (unbanned) |
 | `dns.*`, `alert.*` | Platform DNS (including mass removal protection and forced publications), alert channels, alert rules, SMTP, alert subscriptions |
 
 ## System settings
@@ -311,6 +317,15 @@ Each node also pins its own release source and signature trust locally, out of t
 
 Changes are audited as `system.usage_update`. The usage API and the definition of `completeUntil`: [Usage](../reference/api.en.md#usage).
 
+### Bans
+
+| Field | Values | Default | Description |
+| --- | --- | --- | --- |
+| **Platform limit of manual bans** | 100–100000 | 10000 | Active manual bans (platform and site) across the platform; beyond it `BAN_PLATFORM_LIMIT` |
+| **Share automatic bans in the cluster** | On / off | On | Whether automatic bans of a node go to the other nodes of its cluster; off keeps them for viewing only |
+
+Changes are audited as `system.bans_update`. See [Bans](bans.en.md).
+
 ### GeoIP databases
 
 Read-only. Shows, per node, the state of the **Country**, **Subdivision**, and **ASN** data (**Ready** / **Unavailable**), with the IPinfo attribution link. Country and ASN data ship in node release images; other databases are configured locally on each node; **Configure databases** links to [Rules, IP lists, and GeoIP](rules.en.md).
@@ -345,6 +360,8 @@ A value saved in Admin wins over the environment variable, which wins over the d
 | SMTP CA certificates | **SMTP → CA certificates (PEM)** | `EDGEWEIR_SMTP_CA_FILE` (path to a PEM file) | System trust store |
 | SMTP server and account | **SMTP** | None | Not configured |
 | Origin allow list | **Origin allow list** | None | Empty |
+| Usage | **Usage** | None | 100 days retention, 60-minute offline threshold |
+| Bans | **Bans** | None | Limit 10000, automatic bans shared |
 
 The badges of **Node release source** and **Ownership check DNS** show where the value in effect comes from: **Saved**, **Environment**, or **Default**. Addresses saved in Admin are bounded by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`; values in environment variables are set by the operator and skip that check. For every environment variable, see [Environment variables](../reference/environment.en.md).
 
