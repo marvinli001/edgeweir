@@ -5,6 +5,7 @@ import type { AppContext } from "../lib/context";
 import { pruneIdempotencyKeys } from "../lib/idempotency";
 import { maintainLogs } from "../services/access-logs";
 import { sweepAlerts } from "../services/alerts";
+import { pruneBans } from "../services/bans";
 import { expireCacheTasks } from "../services/cache-tasks";
 import { sweepCertificates } from "../services/certificate-worker";
 import { reconcileDns } from "../services/dns";
@@ -26,6 +27,7 @@ export const QUEUES = {
   expireEnrollmentTokens: "maintenance.expire-enrollment-tokens",
   expireCacheTasks: "maintenance.expire-cache-tasks",
   pruneIdempotencyKeys: "maintenance.prune-idempotency-keys",
+  pruneBans: "maintenance.prune-bans",
 } as const;
 
 /**
@@ -105,6 +107,12 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     if (removed) log.info("pruned idempotency keys", { removed });
   });
 
+  await boss.work(QUEUES.pruneBans, async () => {
+    const removed = await pruneBans(ctx.db);
+    if (removed) log.info("deleted expired bans", { removed });
+  });
+
+  await boss.schedule(QUEUES.pruneBans, "*/10 * * * *");
   await boss.schedule(QUEUES.pruneRevisions, "17 * * * *");
   await boss.schedule(QUEUES.pruneIdempotencyKeys, "29 * * * *");
   await boss.schedule(QUEUES.expireCacheTasks, "43 * * * *");
