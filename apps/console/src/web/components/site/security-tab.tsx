@@ -1,14 +1,26 @@
 import {
+  type AnalyticsRange,
   CHALLENGE_TYPES,
   type ChallengeType,
+  type FeatureAvailability,
   PASS_TTL_RANGE,
   POW_DIFFICULTY_RANGE,
   POW_HIGH_DIFFICULTY_RANGE,
   type SecurityEventKind,
   type SiteProtection,
   type SiteProtectionUpdateInput,
+  type SiteWaf,
   securityEventKind,
+  WAF_ANOMALY_THRESHOLD_RANGE,
+  WAF_BODY_LIMIT_RANGE,
+  WAF_MAX_EXCLUSIONS,
+  WAF_MODES,
+  WAF_PARANOIA_RANGE,
+  type WafMode,
+  wafExcludedRuleIds,
 } from "@edgeweir/contract";
+import { Cancel01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import * as React from "react";
@@ -28,12 +40,22 @@ import { SaveBar } from "@/components/site/save-site";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { ANALYTICS_RANGES, rangeLabel } from "@/lib/analytics";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
-import { challengeLabel, eventKindLabel, levelLabel, metricLabel } from "@/lib/protection";
+import {
+  challengeLabel,
+  eventKindLabel,
+  levelLabel,
+  metricLabel,
+  unavailableReason,
+  wafModeLabel,
+} from "@/lib/protection";
 
 const PAGE_SIZE = 20;
 const ALL = "all";
@@ -94,8 +116,10 @@ export function SecurityTab({
           />
         </>
       )}
+      <WafCard siteId={siteId} canEdit={canEdit} />
       <NodeLevelsCard siteId={siteId} />
       <TopCard siteId={siteId} />
+      <WafRulesCard siteId={siteId} />
       <EventsCard siteId={siteId} />
     </div>
   );
@@ -337,6 +361,295 @@ function CcPolicyCard({
           />
         ) : null}
       </form>
+    </Card>
+  );
+}
+
+/** The site's OWASP CRS: mode, paranoia level, threshold, exclusions and body limit. */
+function WafCard({ siteId, canEdit }: { siteId: string; canEdit: boolean }) {
+  const waf = useQuery(orpc.waf.get.queryOptions({ input: { id: siteId } }));
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
+  return (
+    <Card className="animate-enter" style={{ animationDelay: "150ms" }} data-testid="waf-card">
+      <CardHeader className="flex flex-wrap items-center gap-2">
+        <CardTitle>{m.waf_title()}</CardTitle>
+        {waf.data && waf.data.mode !== "off" ? (
+          <Badge
+            variant={waf.data.mode === "block" ? "destructive" : "secondary"}
+            data-testid="waf-mode-badge"
+          >
+            {wafModeLabel(waf.data.mode)}
+          </Badge>
+        ) : null}
+      </CardHeader>
+      {waf.isPending || features.isPending ? (
+        <CardContent>
+          <LoadingState />
+        </CardContent>
+      ) : waf.isError ? (
+        <CardContent>
+          <ErrorState error={waf.error} onRetry={() => void waf.refetch()} />
+        </CardContent>
+      ) : features.isError ? (
+        <CardContent>
+          <ErrorState error={features.error} onRetry={() => void features.refetch()} />
+        </CardContent>
+      ) : (
+        <WafForm
+          key={waf.data.updatedAt ?? "default"}
+          siteId={siteId}
+          waf={waf.data}
+          availability={features.data.crs}
+          canEdit={canEdit}
+        />
+      )}
+    </Card>
+  );
+}
+
+/** "942100, 920350 941100" → sorted unique ids, or null when a token is not a CRS rule id. */
+function parseRuleIds(value: string): number[] | null {
+  const tokens = value.split(/[\s,]+/).filter(Boolean);
+  if (!tokens.every((token) => /^\d{6}$/.test(token))) return null;
+  return tokens.map(Number);
+}
+
+function WafForm({
+  siteId,
+  waf,
+  availability,
+  canEdit,
+}: {
+  siteId: string;
+  waf: SiteWaf;
+  availability: FeatureAvailability;
+  canEdit: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation(orpc.waf.update.mutationOptions());
+  const initial = {
+    mode: waf.mode,
+    paranoiaLevel: String(waf.paranoiaLevel),
+    anomalyThreshold: String(waf.anomalyThreshold),
+    requestBodyLimit: String(waf.requestBodyLimit),
+    excludedRuleIds: waf.excludedRuleIds,
+  };
+  const [draft, setDraft] = React.useState(initial);
+  const [ruleInput, setRuleInput] = React.useState("");
+  const [ruleError, setRuleError] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  // Turning CRS on needs the feature; a site that runs it can still be turned off.
+  const locked = !canEdit || (!availability.available && waf.mode === "off");
+  const invalidRules = () => m.waf_exclusions_invalid({ max: WAF_MAX_EXCLUSIONS });
+  const addRules = () => {
+    const ids = parseRuleIds(ruleInput);
+    const next = ids
+      ? [...new Set([...draft.excludedRuleIds, ...ids])].sort((a, b) => a - b)
+      : null;
+    if (!next || !wafExcludedRuleIds.safeParse(next).success) {
+      setRuleError(invalidRules());
+      return;
+    }
+    setRuleError(null);
+    setRuleInput("");
+    setDraft({ ...draft, excludedRuleIds: next });
+  };
+  return (
+    <form
+      className="flex flex-col gap-(--card-spacing)"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setError(null);
+        try {
+          const saved = await mutation.mutateAsync({
+            id: siteId,
+            mode: draft.mode,
+            paranoiaLevel: Number(draft.paranoiaLevel),
+            anomalyThreshold: Number(draft.anomalyThreshold),
+            requestBodyLimit: Number(draft.requestBodyLimit),
+            excludedRuleIds: draft.excludedRuleIds,
+          });
+          queryClient.setQueryData(orpc.waf.get.queryKey({ input: { id: siteId } }), saved);
+          toast.success(m.common_saved());
+        } catch (err) {
+          setError(errorMessage(err));
+        }
+      }}
+    >
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <FormSelect
+            id="waf-mode"
+            label={m.waf_mode()}
+            value={draft.mode}
+            disabled={locked}
+            testId="waf-mode"
+            options={WAF_MODES.map((mode) => ({ value: mode, label: wafModeLabel(mode) }))}
+            onChange={(mode) => setDraft({ ...draft, mode: mode as WafMode })}
+          />
+          <FormSelect
+            id="waf-paranoia"
+            label={m.waf_paranoia()}
+            value={draft.paranoiaLevel}
+            disabled={!canEdit}
+            testId="waf-paranoia"
+            options={Array.from(
+              { length: WAF_PARANOIA_RANGE.max - WAF_PARANOIA_RANGE.min + 1 },
+              (_, i) => String(WAF_PARANOIA_RANGE.min + i),
+            ).map((level) => ({ value: level, label: m.waf_paranoia_value({ level }) }))}
+            onChange={(paranoiaLevel) => setDraft({ ...draft, paranoiaLevel })}
+          />
+          <NumberField
+            id="waf-threshold"
+            label={m.waf_threshold()}
+            value={draft.anomalyThreshold}
+            min={WAF_ANOMALY_THRESHOLD_RANGE.min}
+            max={WAF_ANOMALY_THRESHOLD_RANGE.max}
+            step={1}
+            required
+            disabled={!canEdit}
+            testId="waf-threshold"
+            onChange={(anomalyThreshold) => setDraft({ ...draft, anomalyThreshold })}
+          />
+          <NumberField
+            id="waf-body-limit"
+            label={m.waf_body_limit()}
+            value={draft.requestBodyLimit}
+            min={WAF_BODY_LIMIT_RANGE.min}
+            max={WAF_BODY_LIMIT_RANGE.max}
+            step={1}
+            required
+            disabled={!canEdit}
+            testId="waf-body-limit"
+            onChange={(requestBodyLimit) => setDraft({ ...draft, requestBodyLimit })}
+          />
+        </div>
+        <Field data-invalid={ruleError ? true : undefined}>
+          <FieldLabel htmlFor="waf-exclusion-input">{m.waf_exclusions()}</FieldLabel>
+          {canEdit ? (
+            <div className="flex min-w-0 gap-2">
+              <Input
+                id="waf-exclusion-input"
+                className="min-w-0 flex-1 font-mono"
+                inputMode="numeric"
+                value={ruleInput}
+                aria-invalid={ruleError ? true : undefined}
+                data-testid="waf-exclusion-input"
+                onChange={(event) => {
+                  setRuleInput(event.target.value);
+                  setRuleError(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addRules();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!ruleInput.trim()}
+                data-testid="waf-exclusion-add"
+                onClick={addRules}
+              >
+                {m.waf_exclusions_add()}
+              </Button>
+            </div>
+          ) : null}
+          {ruleError ? (
+            <FieldError data-testid="waf-exclusion-error">{ruleError}</FieldError>
+          ) : null}
+          {draft.excludedRuleIds.length ? (
+            <ul className="flex flex-wrap gap-1.5" data-testid="waf-exclusions">
+              {draft.excludedRuleIds.map((id) => (
+                <li key={id}>
+                  <Badge
+                    variant="outline"
+                    className="gap-1 font-mono tabular-nums"
+                    data-testid="waf-exclusion"
+                    data-rule-id={id}
+                  >
+                    {id}
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        className="-mr-1 rounded-full p-0.5 text-muted-foreground hover:text-foreground"
+                        aria-label={m.waf_exclusions_remove({ id: String(id) })}
+                        data-testid="waf-exclusion-remove"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            excludedRuleIds: draft.excludedRuleIds.filter((rule) => rule !== id),
+                          })
+                        }
+                      >
+                        <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} className="size-3" />
+                      </button>
+                    ) : null}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </Field>
+        {availability.available ? null : (
+          <SafetyNote data-testid="waf-unavailable" data-reason={availability.reason ?? undefined}>
+            {unavailableReason(availability)}
+          </SafetyNote>
+        )}
+      </CardContent>
+      {canEdit ? (
+        <SaveBar
+          dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
+          pending={mutation.isPending}
+          error={error}
+          testId="waf-save"
+        />
+      ) : null}
+    </form>
+  );
+}
+
+/** Most-matched CRS rules of the site over a range (approximate). */
+function WafRulesCard({ siteId }: { siteId: string }) {
+  const [range, setRange] = React.useState<AnalyticsRange>("24h");
+  const rules = useQuery({
+    ...orpc.waf.topRules.queryOptions({ input: { id: siteId, range, limit: 10 } }),
+    placeholderData: keepPreviousData,
+  });
+  return (
+    <Card className="animate-enter" style={{ animationDelay: "270ms" }}>
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+        <CardTitle>{m.waf_top_title()}</CardTitle>
+        <div className="w-full sm:w-44">
+          <FormSelect
+            id="waf-top-range"
+            label={m.security_hours()}
+            value={range}
+            testId="waf-top-range"
+            options={ANALYTICS_RANGES.map((value) => ({ value, label: rangeLabel(value) }))}
+            onChange={(value) => setRange(value as AnalyticsRange)}
+          />
+        </div>
+      </CardHeader>
+      <CardContent>
+        {rules.isPending ? (
+          <LoadingState />
+        ) : rules.isError ? (
+          <ErrorState error={rules.error} onRetry={() => void rules.refetch()} />
+        ) : (
+          <TopList
+            title={m.waf_top_rules()}
+            items={rules.data.items.map((item) => ({
+              value: String(item.ruleId),
+              count: item.requests,
+            }))}
+            testId="waf-top-rules"
+            mono
+          />
+        )}
+      </CardContent>
     </Card>
   );
 }

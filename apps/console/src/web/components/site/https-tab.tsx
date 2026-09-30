@@ -1,43 +1,83 @@
-import { type CertificateDto, type Site, type TlsSettings, tlsSettings } from "@edgeweir/contract";
+import {
+  BROTLI_LEVEL_RANGE,
+  type CertificateDto,
+  COMPRESSION_MIN_LENGTH_RANGE,
+  type FeatureAvailability,
+  type Site,
+  type SiteFeatures,
+  type TlsSettings,
+  tlsSettings,
+  ZSTD_LEVEL_RANGE,
+} from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import { FormSelect } from "@/components/form-select";
+import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { ErrorState, LoadingState } from "@/components/states";
-import { Card, CardContent } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { unavailableReason } from "@/lib/protection";
 
 export function HttpsTab({ site }: { site: Site }) {
   const policy = useQuery(orpc.https.get.queryOptions({ input: { id: site.id } }));
   const certificates = useQuery(orpc.certificates.list.queryOptions());
-  if (policy.isPending || certificates.isPending) return <LoadingState />;
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
+  if (policy.isPending || certificates.isPending || features.isPending) return <LoadingState />;
   if (policy.isError)
     return <ErrorState error={policy.error} onRetry={() => void policy.refetch()} />;
   if (certificates.isError)
     return <ErrorState error={certificates.error} onRetry={() => void certificates.refetch()} />;
+  if (features.isError)
+    return <ErrorState error={features.error} onRetry={() => void features.refetch()} />;
   return (
     <HttpsEditor
       key={JSON.stringify(policy.data)}
       site={site}
       initial={policy.data}
       certificates={certificates.data}
+      features={features.data}
     />
   );
 }
+
+type Algorithm = "gzip" | "brotli" | "zstd";
+
+/** The settings fields of each compression algorithm (gzip has no level). */
+const ALGORITHMS = {
+  gzip: { on: "gzip", level: null, min: "gzipMinLength", types: "gzipTypes" },
+  brotli: {
+    on: "brotli",
+    level: { key: "brotliLevel", range: BROTLI_LEVEL_RANGE },
+    min: "brotliMinLength",
+    types: "brotliTypes",
+  },
+  zstd: {
+    on: "zstd",
+    level: { key: "zstdLevel", range: ZSTD_LEVEL_RANGE },
+    min: "zstdMinLength",
+    types: "zstdTypes",
+  },
+} as const;
+
+const algorithmLabel = (algorithm: Algorithm) =>
+  ({ gzip: m.cert_gzip, brotli: m.compression_brotli, zstd: m.compression_zstd })[algorithm]();
 
 function HttpsEditor({
   site,
   initial,
   certificates,
+  features,
 }: {
   site: Site;
   initial: TlsSettings;
   certificates: CertificateDto[];
+  features: SiteFeatures;
 }) {
   const [settings, setSettings] = React.useState(initial);
   const [error, setError] = React.useState<string | null>(null);
@@ -50,9 +90,13 @@ function HttpsEditor({
     ["http3", m.cert_http3()],
     ["hstsIncludeSubdomains", m.cert_hsts_subdomains()],
     ["hstsPreload", m.cert_hsts_preload()],
-    ["gzip", m.cert_gzip()],
     ["ocspStapling", m.cert_ocsp()],
   ] as const;
+  const availability: Record<Algorithm, FeatureAvailability> = {
+    gzip: { available: true, reason: null },
+    brotli: features.brotli,
+    zstd: features.zstd,
+  };
   return (
     <Card>
       <form
@@ -139,41 +183,21 @@ function HttpsEditor({
               onCheckedChange={(value) => setSettings({ ...settings, [key]: value })}
             />
           ))}
-          <NumberField
-            id="gzipMin"
-            label={m.cert_gzip_min()}
-            value={String(settings.gzipMinLength)}
-            min={1}
-            max={1048576}
-            onChange={(value) => setSettings({ ...settings, gzipMinLength: Number(value) })}
-          />
-          <Field>
-            <FieldLabel htmlFor="gzipTypes">{m.cert_gzip_types()}</FieldLabel>
-            <Input
-              id="gzipTypes"
-              value={settings.gzipTypes.join(", ")}
-              onChange={(e) =>
-                setSettings({
-                  ...settings,
-                  gzipTypes: e.target.value.split(/[,\s]+/).filter(Boolean),
-                })
-              }
+        </CardContent>
+        <CardHeader className="border-t pt-6">
+          <CardTitle>{m.compression_title()}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-6 pt-4">
+          {(["zstd", "brotli", "gzip"] as const).map((algorithm) => (
+            <CompressionGroup
+              key={algorithm}
+              algorithm={algorithm}
+              settings={settings}
+              saved={initial}
+              availability={availability[algorithm]}
+              onChange={setSettings}
             />
-          </Field>
-          <SwitchField
-            id="brotli"
-            label={m.cert_brotli_unavailable()}
-            checked={false}
-            disabled
-            onCheckedChange={() => {}}
-          />
-          <SwitchField
-            id="zstd"
-            label={m.cert_zstd_unavailable()}
-            checked={false}
-            disabled
-            onCheckedChange={() => {}}
-          />
+          ))}
         </CardContent>
         <SaveBar
           dirty={JSON.stringify(settings) !== JSON.stringify(initial)}
@@ -183,5 +207,90 @@ function HttpsEditor({
         />
       </form>
     </Card>
+  );
+}
+
+/**
+ * Switch, level, minimum length and types of one algorithm. An algorithm the
+ * cluster's nodes lack cannot be turned on (it can still be turned off).
+ */
+function CompressionGroup({
+  algorithm,
+  settings,
+  saved,
+  availability,
+  onChange,
+}: {
+  algorithm: Algorithm;
+  settings: TlsSettings;
+  saved: TlsSettings;
+  availability: FeatureAvailability;
+  onChange: (next: TlsSettings) => void;
+}) {
+  const fields = ALGORITHMS[algorithm];
+  const blocked = !availability.available && !saved[fields.on];
+  // gzip keeps the ids it always had.
+  const id = (suffix: string) => (algorithm === "gzip" ? `gzip${suffix}` : `${algorithm}${suffix}`);
+  return (
+    <FieldSet className="gap-0" data-testid={`compression-${algorithm}`}>
+      <FieldLegend variant="label" className="text-muted-foreground">
+        {algorithmLabel(algorithm)}
+      </FieldLegend>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SwitchField
+          id={algorithm}
+          label={m.compression_enabled()}
+          checked={settings[fields.on]}
+          disabled={blocked}
+          testId={`https-${algorithm}`}
+          onCheckedChange={(value) => onChange({ ...settings, [fields.on]: value })}
+        />
+        {fields.level ? (
+          <NumberField
+            id={id("Level")}
+            label={m.compression_level()}
+            value={String(settings[fields.level.key])}
+            min={fields.level.range.min}
+            max={fields.level.range.max}
+            step={1}
+            required
+            testId={`https-${algorithm}-level`}
+            onChange={(value) =>
+              fields.level && onChange({ ...settings, [fields.level.key]: Number(value) })
+            }
+          />
+        ) : null}
+        <NumberField
+          id={id("Min")}
+          label={m.cert_gzip_min()}
+          value={String(settings[fields.min])}
+          min={COMPRESSION_MIN_LENGTH_RANGE.min}
+          max={COMPRESSION_MIN_LENGTH_RANGE.max}
+          step={1}
+          required
+          testId={`https-${algorithm}-min`}
+          onChange={(value) => onChange({ ...settings, [fields.min]: Number(value) })}
+        />
+        <Field className={fields.level ? undefined : "sm:col-span-2"}>
+          <FieldLabel htmlFor={id("Types")}>{m.cert_gzip_types()}</FieldLabel>
+          <Input
+            id={id("Types")}
+            value={settings[fields.types].join(", ")}
+            data-testid={`https-${algorithm}-types`}
+            onChange={(e) =>
+              onChange({
+                ...settings,
+                [fields.types]: e.target.value.split(/[,\s]+/).filter(Boolean),
+              })
+            }
+          />
+        </Field>
+      </div>
+      {availability.available ? null : (
+        <SafetyNote className="mt-2" data-testid={`https-${algorithm}-unavailable`}>
+          {unavailableReason(availability)}
+        </SafetyNote>
+      )}
+    </FieldSet>
   );
 }

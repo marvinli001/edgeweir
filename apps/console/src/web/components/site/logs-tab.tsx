@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { FormSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -45,6 +46,10 @@ export function LogsTab({ siteId }: { siteId: string }) {
   const logs = useQuery(orpc.logs.query.queryOptions({ input: query }));
   // The JA4 column appears when an entry carries a fingerprint (the site records it).
   const withJa4 = !!logs.data?.entries.some((entry) => entry.ja4);
+  // The CRS column appears when an entry matched CRS rules.
+  const withWaf = !!logs.data?.entries.some(
+    (entry) => entry.wafRuleIds.length > 0 || entry.wafBlocked,
+  );
   const exporter = useAction();
   return (
     <div className="min-w-0 space-y-5">
@@ -176,6 +181,7 @@ export function LogsTab({ siteId }: { siteId: string }) {
                         m.logs_duration(),
                         m.logs_cache(),
                         ...(withJa4 ? [m.logs_ja4()] : []),
+                        ...(withWaf ? [m.logs_waf()] : []),
                       ].map((label) => (
                         <th key={label} className="whitespace-nowrap p-3 font-medium">
                           {label}
@@ -206,6 +212,26 @@ export function LogsTab({ siteId }: { siteId: string }) {
                             data-testid="log-ja4"
                           >
                             {row.ja4}
+                          </td>
+                        ) : null}
+                        {withWaf ? (
+                          <td className="min-w-40 p-3" data-testid="log-waf">
+                            <div className="flex flex-wrap items-center gap-1">
+                              {row.wafBlocked ? (
+                                <Badge variant="destructive" data-testid="log-waf-blocked">
+                                  {m.logs_waf_blocked()}
+                                </Badge>
+                              ) : null}
+                              {row.wafRuleIds.map((id) => (
+                                <span
+                                  key={id}
+                                  className="font-mono text-xs tabular-nums"
+                                  data-testid="log-waf-rule"
+                                >
+                                  {id}
+                                </span>
+                              ))}
+                            </div>
                           </td>
                         ) : null}
                       </tr>
