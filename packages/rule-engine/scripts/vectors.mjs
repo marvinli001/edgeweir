@@ -1,7 +1,7 @@
 // node --experimental-transform-types scripts/vectors.mjs writes test/vectors.json; copy it to
 // edgeweir-node test/lua/expression-vectors.json, then `pnpm exec biome format --write` this copy.
 import { writeFileSync } from "node:fs";
-import { bindLists, parseExpression } from "../src/index.ts";
+import { bindLists, parseExpression, validActionIr } from "../src/index.ts";
 
 const cases = [
   ["true or false and false", {}, true],
@@ -49,6 +49,109 @@ const cases = [
     "response-transform",
   ],
   ...regexCases(),
+  ...ja4Cases(),
+];
+
+// tls.ja4 (a string, empty over plain HTTP) and the actions that go with it. The optional fifth
+// element is the compiled action (config.proto RuleAction, JSON names) of the rule the vector
+// belongs to: nodes accept it in the vector's phase (validActionIr).
+function ja4Cases() {
+  const ja4 = "t13d1516h2_8daaf6152771_02713d6af862";
+  return [
+    [
+      `tls.ja4 eq "${ja4}"`,
+      { "tls.ja4": ja4 },
+      true,
+      "waf-custom",
+      { kind: "challenge", challenge: "js" },
+    ],
+    [
+      'tls.ja4 matches "^t13d[0-9]{4}h2_"',
+      { "tls.ja4": ja4 },
+      true,
+      "waf-custom",
+      { kind: "challenge", challenge: "pow" },
+    ],
+    [
+      'tls.ja4 matches "^t13d[0-9]{4}h2_"',
+      { "tls.ja4": "q13d0310h3_55b375c5d22e_cd85d2d88918" },
+      false,
+      "waf-custom",
+      { kind: "challenge", challenge: "captcha" },
+    ],
+    [
+      'ssl eq false and tls.ja4 eq ""',
+      { ssl: false },
+      true,
+      "waf-custom",
+      { kind: "challenge", challenge: "cookie302" },
+    ],
+    [
+      `tls.ja4 in {"${ja4}" "t13d1517h2_8daaf6152771_b0da82dd1658"}`,
+      { "tls.ja4": "t12d1209h1_d34a8e72043a_b39be8c56a14" },
+      false,
+      "waf-custom",
+      { kind: "block", statusCode: 403 },
+    ],
+    [
+      'tls.ja4 contains "_8daaf6152771_"',
+      { "tls.ja4": ja4 },
+      true,
+      "ratelimit",
+      { kind: "rate_limit", statusCode: 429, limit: 100, windowSeconds: 60, key: "tls.ja4" },
+    ],
+    [
+      'tls.ja4 ne ""',
+      { "tls.ja4": ja4 },
+      true,
+      "request-transform",
+      { kind: "request_header", header: "x-ja4-seen", value: "1" },
+    ],
+    [
+      'http.request.uri.path eq "/login" and not tls.ja4 in {"t13d1516h2_8daaf6152771_02713d6af862"}',
+      { "http.request.uri.path": "/login", "tls.ja4": "" },
+      true,
+      "waf-custom",
+      { kind: "challenge", challenge: "js" },
+    ],
+  ];
+}
+
+// Valid expressions whose action nodes refuse in that phase; old consumers read them as
+// accepted expression vectors.
+const rejectedActions = [
+  [
+    'tls.ja4 eq ""',
+    { "tls.ja4": "" },
+    true,
+    "ratelimit",
+    { kind: "challenge", challenge: "js" },
+    "challenge runs in waf-custom only",
+  ],
+  [
+    'http.request.uri.path eq "/"',
+    { "http.request.uri.path": "/" },
+    true,
+    "waf-custom",
+    { kind: "challenge", challenge: "slider" },
+    "unknown challenge type (there is no slider)",
+  ],
+  [
+    'http.request.uri.path eq "/"',
+    { "http.request.uri.path": "/" },
+    true,
+    "waf-custom",
+    { kind: "challenge" },
+    "challenge type required",
+  ],
+  [
+    'tls.ja4 ne ""',
+    { "tls.ja4": "x" },
+    true,
+    "ratelimit",
+    { kind: "rate_limit", statusCode: 429, limit: 10, windowSeconds: 10, key: "tls.ja3" },
+    "unknown rate limit key",
+  ],
 ];
 
 // `matches` on http.request.uri.path (or `field`); an undefined subject leaves the field unset.
@@ -222,17 +325,39 @@ const rejected = [
   ["a\tb", "control character: write \\t"],
   ["a".repeat(257), "longer than 256 characters"],
 ];
+// Rejected patterns on tls.ja4 (field, reason, pattern).
+const rejectedJa4 = [
+  ["(?i)^T13", "inline flags"],
+  ["^t13\\s", "\\s differs between engines"],
+];
 const field = "http.request.uri.path";
-const vectors = [
-  ...cases.map(([source, request, expected, phase = "waf-custom"]) => ({
+const accepted = ([source, request, expected, phase = "waf-custom", action]) => {
+  const vector = {
     source,
     phase,
     request,
     expected,
     lists: { "list-1": ["192.0.2.0/24"] },
     ir: bindLists(parseExpression(source, phase), { blocked: "list-1" }),
-  })),
-  ...rejected.map(([pattern, reason]) => {
+  };
+  if (action && !validActionIr(phase, action)) throw new Error(`action refused: ${source}`);
+  return action ? { ...vector, action } : vector;
+};
+const vectors = [
+  ...cases.map(accepted),
+  ...rejectedActions.map(([source, request, expected, phase, action, reason]) => {
+    if (validActionIr(phase, action)) throw new Error(`action not rejected: ${source}`);
+    return {
+      ...accepted([source, request, expected, phase]),
+      action,
+      actionRejected: true,
+      reason,
+    };
+  }),
+  ...[
+    ...rejected.map(([pattern, reason]) => [field, pattern, reason]),
+    ...rejectedJa4.map(([pattern, reason]) => ["tls.ja4", pattern, reason]),
+  ].map(([field, pattern, reason]) => {
     const source = `${field} matches ${JSON.stringify(pattern)}`;
     try {
       parseExpression(source);

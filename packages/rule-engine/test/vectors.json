@@ -1631,6 +1631,340 @@
     }
   },
   {
+    "source": "tls.ja4 eq \"t13d1516h2_8daaf6152771_02713d6af862\"",
+    "phase": "waf-custom",
+    "request": {
+      "tls.ja4": "t13d1516h2_8daaf6152771_02713d6af862"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "tls.ja4",
+      "valueType": "string",
+      "value": "t13d1516h2_8daaf6152771_02713d6af862",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "challenge",
+      "challenge": "js"
+    }
+  },
+  {
+    "source": "tls.ja4 matches \"^t13d[0-9]{4}h2_\"",
+    "phase": "waf-custom",
+    "request": {
+      "tls.ja4": "t13d1516h2_8daaf6152771_02713d6af862"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "tls.ja4",
+      "valueType": "string",
+      "value": "^t13d[0-9]{4}h2_",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "challenge",
+      "challenge": "pow"
+    }
+  },
+  {
+    "source": "tls.ja4 matches \"^t13d[0-9]{4}h2_\"",
+    "phase": "waf-custom",
+    "request": {
+      "tls.ja4": "q13d0310h3_55b375c5d22e_cd85d2d88918"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "tls.ja4",
+      "valueType": "string",
+      "value": "^t13d[0-9]{4}h2_",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "challenge",
+      "challenge": "captcha"
+    }
+  },
+  {
+    "source": "ssl eq false and tls.ja4 eq \"\"",
+    "phase": "waf-custom",
+    "request": {
+      "ssl": false
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "eq",
+          "field": "ssl",
+          "valueType": "boolean",
+          "value": "false",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "eq",
+          "field": "tls.ja4",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "action": {
+      "kind": "challenge",
+      "challenge": "cookie302"
+    }
+  },
+  {
+    "source": "tls.ja4 in {\"t13d1516h2_8daaf6152771_02713d6af862\" \"t13d1517h2_8daaf6152771_b0da82dd1658\"}",
+    "phase": "waf-custom",
+    "request": {
+      "tls.ja4": "t12d1209h1_d34a8e72043a_b39be8c56a14"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "tls.ja4",
+      "valueType": "string",
+      "value": "",
+      "values": ["t13d1516h2_8daaf6152771_02713d6af862", "t13d1517h2_8daaf6152771_b0da82dd1658"],
+      "children": []
+    },
+    "action": {
+      "kind": "block",
+      "statusCode": 403
+    }
+  },
+  {
+    "source": "tls.ja4 contains \"_8daaf6152771_\"",
+    "phase": "ratelimit",
+    "request": {
+      "tls.ja4": "t13d1516h2_8daaf6152771_02713d6af862"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "contains",
+      "field": "tls.ja4",
+      "valueType": "string",
+      "value": "_8daaf6152771_",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "rate_limit",
+      "statusCode": 429,
+      "limit": 100,
+      "windowSeconds": 60,
+      "key": "tls.ja4"
+    }
+  },
+  {
+    "source": "tls.ja4 ne \"\"",
+    "phase": "request-transform",
+    "request": {
+      "tls.ja4": "t13d1516h2_8daaf6152771_02713d6af862"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "ne",
+      "field": "tls.ja4",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "request_header",
+      "header": "x-ja4-seen",
+      "value": "1"
+    }
+  },
+  {
+    "source": "http.request.uri.path eq \"/login\" and not tls.ja4 in {\"t13d1516h2_8daaf6152771_02713d6af862\"}",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/login",
+      "tls.ja4": ""
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "eq",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "/login",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "not",
+          "field": "",
+          "valueType": "",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "in",
+              "field": "tls.ja4",
+              "valueType": "string",
+              "value": "",
+              "values": ["t13d1516h2_8daaf6152771_02713d6af862"],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "action": {
+      "kind": "challenge",
+      "challenge": "js"
+    }
+  },
+  {
+    "source": "tls.ja4 eq \"\"",
+    "phase": "ratelimit",
+    "request": {
+      "tls.ja4": ""
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "tls.ja4",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "challenge",
+      "challenge": "js"
+    },
+    "actionRejected": true,
+    "reason": "challenge runs in waf-custom only"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "challenge",
+      "challenge": "slider"
+    },
+    "actionRejected": true,
+    "reason": "unknown challenge type (there is no slider)"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "challenge"
+    },
+    "actionRejected": true,
+    "reason": "challenge type required"
+  },
+  {
+    "source": "tls.ja4 ne \"\"",
+    "phase": "ratelimit",
+    "request": {
+      "tls.ja4": "x"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "ne",
+      "field": "tls.ja4",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "rate_limit",
+      "statusCode": 429,
+      "limit": 10,
+      "windowSeconds": 10,
+      "key": "tls.ja3"
+    },
+    "actionRejected": true,
+    "reason": "unknown rate limit key"
+  },
+  {
     "source": "http.request.uri.path matches \"a{,2}\"",
     "phase": "waf-custom",
     "rejected": true,
@@ -2788,6 +3122,34 @@
       "field": "http.request.uri.path",
       "valueType": "string",
       "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "tls.ja4 matches \"(?i)^T13\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "inline flags",
+    "ir": {
+      "op": "matches",
+      "field": "tls.ja4",
+      "valueType": "string",
+      "value": "(?i)^T13",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "tls.ja4 matches \"^t13\\\\s\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "reason": "\\s differs between engines",
+    "ir": {
+      "op": "matches",
+      "field": "tls.ja4",
+      "valueType": "string",
+      "value": "^t13\\s",
       "values": [],
       "children": []
     }

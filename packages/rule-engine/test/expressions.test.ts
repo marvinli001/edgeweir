@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { canonicalCidr, ExpressionError, evaluate, parseExpression } from "../src/index";
+import {
+  actionPhases,
+  canonicalCidr,
+  challengeTypes,
+  ExpressionError,
+  evaluate,
+  isRateLimitKey,
+  parseExpression,
+  phases,
+  usesJa4,
+  validActionIr,
+} from "../src/index";
 
 describe("typed rule expressions", () => {
   it.each([
@@ -79,6 +90,40 @@ describe("typed rule expressions", () => {
           "}",
       ),
     ).toThrow();
+  });
+  it("types tls.ja4 as a string in every phase, empty when unset", () => {
+    for (const phase of phases)
+      expect(
+        parseExpression('tls.ja4 eq "t13d1516h2_8daaf6152771_02713d6af862"', phase).field,
+      ).toBe("tls.ja4");
+    expect(() => parseExpression("tls.ja4 gt 1")).toThrow(ExpressionError);
+    expect(() => parseExpression("tls.ja4 eq 1")).toThrow(ExpressionError);
+    expect(() => parseExpression("tls.ja4 in $blocked")).toThrow(ExpressionError);
+    expect(evaluate(parseExpression('tls.ja4 eq ""'), {})).toBe(true);
+    expect(usesJa4(parseExpression('ssl eq true and not tls.ja4 contains "_"'))).toBe(true);
+    expect(usesJa4(parseExpression('http.host eq "a"'))).toBe(false);
+  });
+  it("allows the challenge action in waf-custom with a known type only", () => {
+    expect(actionPhases.challenge).toEqual(["waf-custom"]);
+    for (const challenge of challengeTypes)
+      expect(validActionIr("waf-custom", { kind: "challenge", challenge })).toBe(true);
+    expect(validActionIr("waf-custom", { kind: "challenge", challenge: "slider" })).toBe(false);
+    expect(validActionIr("waf-custom", { kind: "challenge" })).toBe(false);
+    expect(validActionIr("redirect", { kind: "challenge", challenge: "js" })).toBe(false);
+  });
+  it("counts rate limits by tls.ja4", () => {
+    expect(isRateLimitKey("tls.ja4")).toBe(true);
+    expect(isRateLimitKey("http.request.headers.x-client")).toBe(true);
+    expect(isRateLimitKey("tls.ja3")).toBe(false);
+    expect(
+      validActionIr("ratelimit", {
+        kind: "rate_limit",
+        statusCode: 429,
+        limit: 10,
+        windowSeconds: 10,
+        key: "tls.ja4",
+      }),
+    ).toBe(true);
   });
   it("normalizes networks without widening ambiguous input", () => {
     expect(canonicalCidr("192.0.2.123/24")).toBe("192.0.2.0/24");

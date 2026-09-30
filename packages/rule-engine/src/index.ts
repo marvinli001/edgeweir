@@ -41,7 +41,129 @@ export const fields: Record<string, ValueType> = {
   "ip.geoip.country": "string",
   "ip.geoip.subdivision": "string",
   "ip.geoip.asnum": "number",
+  // JA4 TLS client fingerprint of the connection; empty over plain HTTP.
+  "tls.ja4": "string",
 };
+
+/** Challenge types of the `challenge` action and of Under Attack, levels 1 to 4. */
+export const challengeTypes = ["cookie302", "js", "pow", "captcha"] as const;
+export type ChallengeType = (typeof challengeTypes)[number];
+
+/** Phases each rule action kind may run in. */
+export const actionPhases: Record<string, readonly Phase[]> = {
+  block: ["waf-custom"],
+  log: ["waf-custom"],
+  allow: ["waf-custom"],
+  challenge: ["waf-custom"],
+  redirect: ["redirect"],
+  rewrite: ["request-transform"],
+  request_header: ["request-transform", "origin"],
+  response_header: ["response-transform"],
+  config: ["config", "cache"],
+  rate_limit: ["ratelimit"],
+};
+
+/** Keys a rate_limit rule counts by, besides one request header. */
+export const rateLimitKeys = ["ip.src", "http.host", "tls.ja4"] as const;
+export function isRateLimitKey(key: string): boolean {
+  return (
+    (rateLimitKeys as readonly string[]).includes(key) ||
+    /^http\.request\.headers\.[a-z0-9-]{1,64}$/.test(key)
+  );
+}
+
+/** A compiled rule action (config.proto RuleAction, JSON field names). */
+export interface ActionIr {
+  kind: string;
+  value?: string;
+  header?: string;
+  statusCode?: number;
+  limit?: number;
+  windowSeconds?: number;
+  key?: string;
+  cacheBypass?: boolean;
+  forceHttps?: boolean;
+  gzip?: boolean;
+  remove?: boolean;
+  challenge?: string;
+}
+
+const headerName = /^[!#$%&'*+.^_`|~0-9a-z-]{1,64}$/;
+const protectedRuleHeaders = new Set([
+  "host",
+  "authorization",
+  "proxy-authorization",
+  "cookie",
+  "set-cookie",
+  "content-length",
+  "transfer-encoding",
+  "connection",
+  "upgrade",
+  "te",
+  "trailer",
+  "cdn-loop",
+]);
+const ruleHeader = (name: string) =>
+  headerName.test(name) && !protectedRuleHeaders.has(name) && !name.startsWith("x-edgeweir-");
+
+/**
+ * Whether a compiled action is valid in `phase`, as the node validates it
+ * (edgeweir-node configir/rules.go). The console validates its own input with
+ * the stricter ruleAction schema of @edgeweir/contract.
+ */
+export function validActionIr(phase: string, action: ActionIr): boolean {
+  if (!(actionPhases[action.kind] as readonly string[] | undefined)?.includes(phase)) return false;
+  const value = action.value ?? "";
+  if (
+    value.length > 4096 ||
+    [...value].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)
+  )
+    return false;
+  const status = action.statusCode ?? 0;
+  switch (action.kind) {
+    case "block":
+      return status === 403 || status === 451;
+    case "log":
+    case "allow":
+      return true;
+    case "challenge":
+      return (challengeTypes as readonly string[]).includes(action.challenge ?? "");
+    case "redirect": {
+      let absolute = false;
+      try {
+        const url = new URL(value);
+        absolute = ["http:", "https:"].includes(url.protocol) && !!url.hostname && !url.username;
+      } catch {}
+      const local = value.startsWith("/") && !value.startsWith("//") && !value.includes("\\");
+      return (local || absolute) && [301, 302, 307, 308].includes(status);
+    }
+    case "rewrite":
+      return value.startsWith("/") && !value.startsWith("//") && !/[?\\#]/.test(value);
+    case "request_header":
+    case "response_header":
+      return ruleHeader(action.header ?? "");
+    case "config":
+      return (
+        action.gzip !== true &&
+        (action.cacheBypass !== undefined ||
+          action.forceHttps !== undefined ||
+          action.gzip !== undefined)
+      );
+    case "rate_limit": {
+      const limit = action.limit ?? 0;
+      const window = action.windowSeconds ?? 0;
+      return (
+        (status === 403 || status === 429) &&
+        limit >= 1 &&
+        limit <= 100000 &&
+        window >= 1 &&
+        window <= 3600 &&
+        isRateLimitKey(action.key ?? "")
+      );
+    }
+  }
+  return false;
+}
 const node = (op: string, patch: Partial<Expression> = {}): Expression => ({
   op,
   field: "",
@@ -441,6 +563,10 @@ export function listReferences(expression: Expression): string[] {
       ...expression.children.flatMap(listReferences),
     ]),
   ];
+}
+/** Whether the expression reads the JA4 fingerprint (node feature ja4-v1). */
+export function usesJa4(expression: Expression): boolean {
+  return expression.field === "tls.ja4" || expression.children.some(usesJa4);
 }
 export function usesGeo(expression: Expression): boolean {
   return expression.field.startsWith("ip.geoip.") || expression.children.some(usesGeo);
