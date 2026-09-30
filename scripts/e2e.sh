@@ -771,15 +771,17 @@ EDGEWEIR_TOKEN="$(jq -r .token <<<"$INSTALL_TOKEN_JSON")" docker exec -e EDGEWEI
 grep '\[edgeweir\]' "$STATE_DIR/install.log" | tr -d '\033' | sed -E 's/\[[0-9;]*m//g' || true
 grep -q "installing edgeweir-node $NODE_VERSION (deb, " "$STATE_DIR/install.log" &&
   grep -qE "SHA-256 verified: edgeweir-node_.*_(amd64|arm64)\.deb" "$STATE_DIR/install.log" &&
+  grep -qE "SHA-256 verified: edgeweir-openresty_.*_(amd64|arm64)\.deb" "$STATE_DIR/install.log" &&
+  grep -qE "SHA-256 verified: edgeweir-openresty-modsecurity_.*_(amd64|arm64)\.deb" "$STATE_DIR/install.log" &&
   grep -q "done: installed and enrolled; --no-start given" "$STATE_DIR/install.log" ||
-  fail "install.sh did not install the verified .deb and enroll"
+  fail "install.sh did not install the verified .deb packages and enroll"
 LAYOUT="$(in_install '
   getent passwd edgeweir | cut -d: -f1,6,7
   stat -c "%U:%G %a %n" /usr/bin/edgeweir-node /usr/lib/systemd/system/edgeweir-node.service /etc/default/edgeweir-node \
     /usr/share/edgeweir-node/lua/edgeweir /var/lib/edgeweir-node /var/cache/edgeweir-node \
     /var/lib/edgeweir-node/node.key /var/lib/edgeweir-node/node.crt /var/lib/edgeweir-node/ca.crt /var/lib/edgeweir-node/identity.json
   find /usr/share/edgeweir-node/lua/edgeweir -name "*.lua" \( ! -perm 644 -o ! -user root \)
-  dpkg-query -W -f "\${Package}: \${Status}\n" edgeweir-node openresty
+  dpkg-query -W -f "\${Package}: \${Status}\n" edgeweir-node edgeweir-openresty edgeweir-openresty-modsecurity
   edgeweir-node version')"
 echo "$LAYOUT"
 EXPECTED_LAYOUT="edgeweir:/var/lib/edgeweir-node:/usr/sbin/nologin
@@ -794,7 +796,8 @@ edgeweir:edgeweir 644 /var/lib/edgeweir-node/node.crt
 edgeweir:edgeweir 644 /var/lib/edgeweir-node/ca.crt
 edgeweir:edgeweir 644 /var/lib/edgeweir-node/identity.json
 edgeweir-node: install ok installed
-openresty: install ok installed"
+edgeweir-openresty: install ok installed
+edgeweir-openresty-modsecurity: install ok installed"
 [[ "$LAYOUT" == "$EXPECTED_LAYOUT"$'\n'*"$NODE_VERSION"* ]] || fail "unexpected install layout (expected, then the version):
 $EXPECTED_LAYOUT"
 [[ "$(in_install 'ls /usr/share/edgeweir-node/lua/edgeweir/*.lua | wc -l')" -ge 10 ]] || fail "the Lua modules are missing"
@@ -809,7 +812,7 @@ echo "console: $(jq -c '{id, name, clusterName, status, online, enrolledAt, cert
   "$(jq -r .status <<<"$INSTALLED_NODE")" == "active" &&
   "$(jq -r .enrolledAt <<<"$INSTALLED_NODE")" != null ]] ||
   fail "the console does not show the installed node with the identity on disk: $INSTALLED_NODE / $IDENTITY"
-pass "install.sh: .deb $NODE_VERSION + OpenResty installed, edgeweir system user, files and modes as packaged, enrolled as $(jq -r .id <<<"$INSTALLED_NODE") (certificate $CERT_SHA matches the console)"
+pass "install.sh: .deb $NODE_VERSION + edgeweir-openresty and its ModSecurity module installed, edgeweir system user, files and modes as packaged, enrolled as $(jq -r .id <<<"$INSTALLED_NODE") (certificate $CERT_SHA matches the console)"
 
 step "N-H1: the installed node runs as in its systemd unit (User=, Environment=, ExecStart=) and comes online"
 # systemd is not available in the container: start ExecStart= as User= with the

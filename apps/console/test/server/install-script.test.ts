@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -150,6 +158,10 @@ describe("install.sh", () => {
       expect(res.stderr, args.join(" ")).toMatch(message);
       expect(res.calls).toBe("");
     }
+    // --no-modsecurity is an option like the others (past validation, the root check stops the run).
+    const optOut = run([...valid, "--no-modsecurity"], { EDGEWEIR_TOKEN: TOKEN });
+    expect(optOut.stderr).toContain("run as root");
+    expect(optOut.calls).toBe("");
     for (const version of ["0.2.0", "v0.2.0", "1.0.0-rc.1", "0.2.1-snapshot+abc1234"]) {
       const res = run([...valid, "--version", version], { EDGEWEIR_TOKEN: TOKEN });
       expect(res.stderr, version).not.toContain("semantic version");
@@ -157,99 +169,192 @@ describe("install.sh", () => {
     expect(run(["--help"]).status).toBe(2);
   });
 
-  it("adds the openresty.org APT repository of the distribution and architecture", () => {
+  it("never adds the openresty.org repositories", () => {
+    expect(script).not.toContain("openresty.org");
+    expect(script).not.toMatch(/sources\.list\.d|yum\.repos\.d|pubkey\.gpg/);
+    expect(script).toContain('OPENRESTY_PACKAGE="edgeweir-openresty"');
+    expect(script).toContain('MODSECURITY_PACKAGE="edgeweir-openresty-modsecurity"');
+    expect(script).toContain('NGINX_BIN="/usr/lib/edgeweir-openresty/nginx/sbin/nginx"');
+  });
+
+  it("downloads and verifies the OpenResty packages with edgeweir-node and installs them first", () => {
+    const main = script.slice(script.indexOf("main() {"));
+    const order = [
+      'fetch "checksums.txt"',
+      "verify_signature",
+      "pick_artifact",
+      "pick_openresty",
+      'fetch "$ARTIFACT"',
+      "fetch_openresty",
+      "verify_checksum",
+      "install_openresty",
+      "install_package",
+      "enroll",
+    ].map((step) => main.indexOf(`\n  ${step}\n`));
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // Every package is checked against the same signed checksums.txt.
+    const verify = script.slice(script.indexOf("verify_checksum() {"));
+    for (const name of ["$ARTIFACT", "$OPENRESTY_ARTIFACT", "$MODSECURITY_ARTIFACT"])
+      expect(verify.slice(0, verify.indexOf("\n}"))).toContain(`verify_file "${name}"`);
+    // From the same release source as edgeweir-node (mirror, then GitHub).
+    const fetchOpenresty = script.slice(script.indexOf("fetch_openresty() {"));
+    expect(fetchOpenresty.slice(0, fetchOpenresty.indexOf("\n}"))).toMatch(
+      /fetch "\$OPENRESTY_ARTIFACT"[\s\S]*fetch "\$MODSECURITY_ARTIFACT"/,
+    );
+  });
+
+  it("picks exactly one edgeweir-openresty file per package, format and architecture", () => {
+    const names = [
+      "edgeweir-node_0.3.0_amd64.deb",
+      "edgeweir-node-0.3.0-1.x86_64.rpm",
+      "edgeweir-node_0.3.0_linux_amd64.tar.gz",
+      "edgeweir-openresty_1.31.1.1-1_amd64.deb",
+      "edgeweir-openresty_1.31.1.1-1_arm64.deb",
+      "edgeweir-openresty_1.31.1.1-1_amd64.deb.sbom.json",
+      "edgeweir-openresty-1.31.1.1-1.x86_64.rpm",
+      "edgeweir-openresty-1.31.1.1-1.aarch64.rpm",
+      "edgeweir-openresty-modsecurity_1.31.1.1-1_amd64.deb",
+      "edgeweir-openresty-modsecurity_1.31.1.1-1_arm64.deb",
+      "edgeweir-openresty-modsecurity-1.31.1.1-1.x86_64.rpm",
+      "edgeweir-openresty-modsecurity-1.31.1.1-1.aarch64.rpm",
+    ];
     // The script's own function, called in place of `main`.
-    const aptSource = (...args: string[]) =>
+    const pick = (list: string[], ...args: string[]) =>
       spawnSync("bash", ["-s", "--", ...args], {
-        input: script.replace(/main "\$@"\s*$/, 'openresty_apt_source "$@"\n'),
+        input: script.replace(
+          /main "\$@"\s*$/,
+          `openresty_artifact "$@" <<'NAMES'\n${list.join("\n")}\nNAMES\n`,
+        ),
         encoding: "utf8",
       });
-    const repo = "[ARCH signed-by=/usr/share/keyrings/openresty.gpg] https://openresty.org/package";
     const cases: [string[], string][] = [
-      [["debian", "bookworm", "amd64"], `deb ${repo}/debian bookworm openresty`],
-      [["debian", "bookworm", "arm64"], `deb ${repo}/arm64/debian bookworm openresty`],
-      [["ubuntu", "noble", "amd64"], `deb ${repo}/ubuntu noble main`],
-      [["ubuntu", "noble", "arm64"], `deb ${repo}/arm64/ubuntu noble main`],
+      [["deb", "amd64", "edgeweir-openresty"], "edgeweir-openresty_1.31.1.1-1_amd64.deb"],
+      [["deb", "arm64", "edgeweir-openresty"], "edgeweir-openresty_1.31.1.1-1_arm64.deb"],
+      [["rpm", "x86_64", "edgeweir-openresty"], "edgeweir-openresty-1.31.1.1-1.x86_64.rpm"],
+      [["rpm", "aarch64", "edgeweir-openresty"], "edgeweir-openresty-1.31.1.1-1.aarch64.rpm"],
+      [
+        ["deb", "amd64", "edgeweir-openresty-modsecurity"],
+        "edgeweir-openresty-modsecurity_1.31.1.1-1_amd64.deb",
+      ],
+      [
+        ["rpm", "aarch64", "edgeweir-openresty-modsecurity"],
+        "edgeweir-openresty-modsecurity-1.31.1.1-1.aarch64.rpm",
+      ],
     ];
-    for (const [args, line] of cases) {
-      const res = aptSource(...args);
+    for (const [args, file] of cases) {
+      const res = pick(names, ...args);
       expect(res.status, args.join(" ")).toBe(0);
-      expect(res.stdout).toBe(`${line.replace("ARCH", `arch=${args[2]}`)}\n`);
+      expect(res.stdout).toBe(`${file}\n`);
     }
-    for (const args of [
-      ["linuxmint", "wilma", "amd64"],
-      ["debian", "bookworm", "riscv64"],
-      ["debian", "", "amd64"],
-      ["debian", "bookworm main", "amd64"],
-    ]) {
-      const res = aptSource(...args);
+    const refused: [string[], string[]][] = [
+      // Two versions of the same package, or none.
+      [
+        [...names, "edgeweir-openresty_1.31.1.2-1_amd64.deb"],
+        ["deb", "amd64", "edgeweir-openresty"],
+      ],
+      [
+        names.filter((n) => !n.startsWith("edgeweir-openresty-1")),
+        ["rpm", "x86_64", "edgeweir-openresty"],
+      ],
+      // Architectures are named per format.
+      [names, ["deb", "x86_64", "edgeweir-openresty"]],
+      [names, ["rpm", "amd64", "edgeweir-openresty"]],
+      [names, ["tar", "amd64", "edgeweir-openresty"]],
+      [names, ["deb", "amd64", "edgeweir-openresty.*"]],
+      [
+        ["edgeweir-openresty_1.31.1.1-1_amd64.deb; rm -rf /"],
+        ["deb", "amd64", "edgeweir-openresty"],
+      ],
+    ];
+    for (const [list, args] of refused) {
+      const res = pick(list, ...args);
       expect(res.status, args.join(" ")).not.toBe(0);
       expect(res.stdout).toBe("");
     }
   });
 
-  it("adds the openresty.org yum/dnf repository of the distribution and release", () => {
-    // The script's own function on the fields of a fake /etc/os-release (read
-    // as install_openresty reads them), called in place of `main`.
-    expect(script).toContain('repo="$(openresty_rpm_repo "$id" "$like" "$version" "$ARCH")"');
-    const osRelease = join(stubs, "os-release");
-    const rpmRepo = (fields: string, arch: string) => {
-      writeFileSync(osRelease, `${fields}\n`);
-      return spawnSync("bash", ["-s", "--", osRelease, arch], {
+  it("picks the OpenResty packages for the machine, with --no-modsecurity and glibc checks", () => {
+    const work = mkdtempSync(join(tmpdir(), "edgeweir-openresty-"));
+    const tools = join(work, "bin");
+    mkdirSync(tools);
+    for (const tool of ["awk", "grep"]) {
+      const found = spawnSync("sh", ["-c", `command -v ${tool}`], {
+        encoding: "utf8",
+      }).stdout.trim();
+      symlinkSync(found, join(tools, tool));
+    }
+    const lines = [
+      "edgeweir-node_0.3.0_amd64.deb",
+      "edgeweir-openresty_1.31.1.1-1_amd64.deb",
+      "edgeweir-openresty-modsecurity_1.31.1.1-1_amd64.deb",
+      "edgeweir-openresty-1.31.1.1-1.x86_64.rpm",
+      "edgeweir-openresty-modsecurity-1.31.1.1-1.x86_64.rpm",
+    ];
+    writeFileSync(
+      join(work, "checksums.txt"),
+      lines.map((name, i) => `${String(i).repeat(64)}  ${name}`).join("\n"),
+    );
+    const stub = (name: string, body: string) => {
+      writeFileSync(join(tools, name), `#!/bin/sh\n${body}\n`);
+      chmodSync(join(tools, name), 0o755);
+    };
+    const bash = spawnSync("sh", ["-c", "command -v bash"], { encoding: "utf8" }).stdout.trim();
+    const pickFor = (format: string, extra = "") =>
+      spawnSync(bash, ["-s"], {
         input: script.replace(
           /main "\$@"\s*$/,
-          'ID= ID_LIKE= VERSION_ID=\n. "$1"\nopenresty_rpm_repo "$ID" "$ID_LIKE" "$VERSION_ID" "$2"\n',
+          `constants\nWORK="${work}" FORMAT=${format} ARCH=amd64 RPM_ARCH=x86_64 WITH_MODSECURITY=true\n${extra}\npick_openresty\necho "$OPENRESTY_FORMAT $OPENRESTY_ARTIFACT $MODSECURITY_ARTIFACT"\n`,
         ),
         encoding: "utf8",
+        env: { PATH: tools },
       });
-    };
-    /** ID, ID_LIKE and VERSION_ID as the distributions' images ship them. */
-    const os = (id: string, like: string, version?: string) =>
-      [`ID="${id}"`, like && `ID_LIKE="${like}"`, version && `VERSION_ID="${version}"`]
-        .filter(Boolean)
-        .join("\n");
-    const el = "rhel centos fedora";
-    const cases: [string, string, string][] = [
-      [os("rocky", el, "9.8"), "amd64", "rocky/openresty2.repo"],
-      [os("rocky", el, "9.8"), "arm64", "rocky/openresty2.repo"],
-      [os("rocky", el, "8.10"), "arm64", "rocky/openresty.repo"],
-      [os("rhel", "fedora", "9.8"), "amd64", "rhel/openresty2.repo"],
-      [os("rhel", "fedora", "8.10"), "arm64", "rhel/openresty.repo"],
-      [os("centos", "rhel fedora", "9"), "arm64", "centos/openresty2.repo"],
-      [os("centos", "rhel fedora", "7"), "amd64", "centos/openresty.repo"],
-      // RHEL rebuilds without a repository of their own use RHEL's.
-      [os("almalinux", el, "9.8"), "arm64", "rhel/openresty2.repo"],
-      [os("almalinux", el, "8.10"), "amd64", "rhel/openresty.repo"],
-      [os("ol", "fedora", "8.10"), "arm64", "oracle/openresty.repo"],
-      ["ID=fedora\nVERSION_ID=42", "arm64", "fedora/openresty.repo"],
-      [os("amzn", "fedora", "2023"), "arm64", "amazon/openresty.repo"],
-      [os("amzn", "centos rhel fedora", "2"), "amd64", "amazon/openresty.repo"],
-      [os("amzn", "centos rhel fedora", "2018.03"), "amd64", "amazon/openresty.repo"],
-      [os("alinux", "rhel fedora centos anolis", "3"), "arm64", "alinux/openresty.repo"],
-      [os("tencentos", "rhel fedora centos", "3.1"), "amd64", "tlinux/openresty.repo"],
-      ['ID=mariner\nVERSION_ID="2.0"', "arm64", "mariner/openresty.repo"],
-    ];
-    for (const [fields, arch, path] of cases) {
-      const res = rpmRepo(fields, arch);
-      expect(res.status, `${fields} ${arch}`).toBe(0);
-      expect(res.stdout, `${fields} ${arch}`).toBe(`https://openresty.org/package/${path}\n`);
+    try {
+      stub("getconf", 'echo "glibc 2.36"');
+      expect(pickFor("deb").stdout).toBe(
+        "deb edgeweir-openresty_1.31.1.1-1_amd64.deb edgeweir-openresty-modsecurity_1.31.1.1-1_amd64.deb\n",
+      );
+      expect(pickFor("rpm").stdout).toBe(
+        "rpm edgeweir-openresty-1.31.1.1-1.x86_64.rpm edgeweir-openresty-modsecurity-1.31.1.1-1.x86_64.rpm\n",
+      );
+      expect(pickFor("deb", "WITH_MODSECURITY=false").stdout).toBe(
+        "deb edgeweir-openresty_1.31.1.1-1_amd64.deb \n",
+      );
+      // The tar.gz takes the machine's package format, else an installed edgeweir-openresty.
+      const noPackages = pickFor("tar");
+      expect(noPackages.status).toBe(1);
+      expect(noPackages.stderr).toContain("edgeweir-openresty comes as .deb and .rpm only");
+      stub("rpm", "exit 0");
+      expect(pickFor("tar").stdout).toMatch(/^rpm edgeweir-openresty-1\.31\.1\.1-1\.x86_64\.rpm /);
+      stub("dpkg", "exit 0");
+      expect(pickFor("tar").stdout).toMatch(/^deb edgeweir-openresty_1\.31\.1\.1-1_amd64\.deb /);
+      // Older C libraries cannot run the packages.
+      stub("getconf", 'echo "glibc 2.31"');
+      const old = pickFor("deb");
+      expect(old.status).toBe(1);
+      expect(old.stderr).toContain("needs glibc 2.34 or later (this machine has 2.31)");
+      // Without the module in the release, only --no-modsecurity goes on.
+      stub("getconf", 'echo "glibc 2.34"');
+      writeFileSync(join(work, "checksums.txt"), `${"a".repeat(64)}  ${lines[1]}\n`);
+      expect(pickFor("deb").stderr).toContain("--no-modsecurity skips it");
+      expect(pickFor("deb", "WITH_MODSECURITY=false").status).toBe(0);
+    } finally {
+      rmSync(work, { recursive: true, force: true });
     }
-    const refused: [string, string][] = [
-      // openresty.org packages Oracle Linux 7 and 8 only, Amazon Linux 1 for x86_64 only.
-      [os("ol", "fedora", "9.8"), "amd64"],
-      [os("amzn", "centos rhel fedora", "2018.03"), "arm64"],
-      [os("centos", "rhel fedora", "6.10"), "amd64"],
-      [os("rocky", el, "9.8"), "riscv64"],
-      [os("opensuse-leap", "suse opensuse", "15.6"), "amd64"],
-      [os("azurelinux", "", "3.0"), "amd64"],
-      [os("rhel", "fedora"), "amd64"],
-      [os("rhel", "fedora", "9; rm -rf /"), "amd64"],
-    ];
-    for (const [fields, arch] of refused) {
-      const res = rpmRepo(fields, arch);
-      expect(res.status, `${fields} ${arch}`).not.toBe(0);
-      expect(res.stdout).toBe("");
-    }
+  });
+
+  it("compares glibc versions numerically", () => {
+    const atLeast = (have: string, want: string) =>
+      spawnSync("bash", ["-s", "--", have, want], {
+        input: script.replace(/main "\$@"\s*$/, 'version_at_least "$@"\n'),
+      }).status;
+    expect(atLeast("2.34", "2.34")).toBe(0);
+    expect(atLeast("2.36", "2.34")).toBe(0);
+    expect(atLeast("3.0", "2.34")).toBe(0);
+    expect(atLeast("2.4", "2.34")).not.toBe(0);
+    expect(atLeast("2.31", "2.34")).not.toBe(0);
+    expect(atLeast("1.99", "2.34")).not.toBe(0);
+    expect(atLeast("2.36; rm", "2.34")).not.toBe(0);
   });
 
   it("executes nothing when the download is cut short", () => {

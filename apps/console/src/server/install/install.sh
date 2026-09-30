@@ -16,12 +16,14 @@
 #      be the edgeweir-node release workflow at exactly the tag being
 #      installed. Without cosign on the machine, a pinned cosign release is
 #      downloaded and checked against its SHA-256 first;
-#   3. downloads the .deb, .rpm or tar.gz package and verifies its SHA-256
-#      against the signed checksums.txt; nothing is executed before steps 2
-#      and 3 pass;
-#   4. installs OpenResty from the official openresty.org repository if
-#      needed, then the package (deb/rpm create the `edgeweir` user and the
-#      state directories; for the tar.gz this script does it);
+#   3. downloads the .deb, .rpm or tar.gz package, and the edgeweir-openresty
+#      and edgeweir-openresty-modsecurity packages of the same release (unless
+#      --no-modsecurity), and verifies their SHA-256 against the signed
+#      checksums.txt; nothing is executed before steps 2 and 3 pass;
+#   4. installs edgeweir-openresty (OpenResty built for Edgeweir, under
+#      /usr/lib/edgeweir-openresty) and its ModSecurity module first, then
+#      the package (deb/rpm create the `edgeweir` user and the state
+#      directories; for the tar.gz this script does it);
 #   5. enrolls the node with the one-time token (the private key is generated
 #      locally and never leaves this machine) and starts the service.
 # It never stores SSH credentials and never phones home.
@@ -37,6 +39,12 @@ constants() {
   STATE_DIR="/var/lib/edgeweir-node"
   CACHE_DIR="/var/cache/edgeweir-node"
   LUA_DIR="/usr/share/edgeweir-node/lua"
+  # OpenResty built for Edgeweir, released with edgeweir-node (deb and rpm only).
+  OPENRESTY_PACKAGE="edgeweir-openresty"
+  MODSECURITY_PACKAGE="edgeweir-openresty-modsecurity"
+  NGINX_BIN="/usr/lib/edgeweir-openresty/nginx/sbin/nginx"
+  # The oldest C library the packages run on (RHEL 9, Debian 12, Ubuntu 22.04).
+  GLIBC_MIN="2.34"
   # Pinned cosign for machines without one; SHA-256 values from the official
   # cosign_checksums.txt of the sigstore/cosign v3.1.3 release.
   COSIGN_VERSION="3.1.3"
@@ -65,6 +73,7 @@ Usage:
   --mirror URL         edgeweir-node mirror (URL/latest, URL/v<version>/<file>);
                        default: the console's /downloads/edgeweir-node
   --mirror-only        never fall back to GitHub
+  --no-modsecurity     do not install edgeweir-openresty-modsecurity (no OWASP CRS on this node)
   --no-start           install and enroll only: do not require, enable or start systemd
   --allow-unsigned     skip the cosign signature check (development only; SHA-256 is still verified)
 USAGE
@@ -81,6 +90,7 @@ parse_args() {
   MIRROR_ONLY="false"
   NO_START="false"
   ALLOW_UNSIGNED="false"
+  WITH_MODSECURITY="true"
   while [ $# -gt 0 ]; do
     case "$1" in
       --server) SERVER="${2:-}"; shift 2 || usage ;;
@@ -90,6 +100,7 @@ parse_args() {
       --format) FORMAT="${2:-}"; shift 2 || usage ;;
       --mirror) MIRROR="${2:-}"; shift 2 || usage ;;
       --mirror-only) MIRROR_ONLY="true"; shift ;;
+      --no-modsecurity) WITH_MODSECURITY="false"; shift ;;
       --no-start) NO_START="true"; shift ;;
       --allow-unsigned) ALLOW_UNSIGNED="true"; shift ;;
       --token | --token=*)
@@ -254,111 +265,115 @@ pick_artifact() {
   [[ "$ARTIFACT" =~ ^[A-Za-z0-9._+~-]+$ ]] || die "unexpected package name: ${ARTIFACT}"
 }
 
+# verify_file NAME: $WORK/NAME matches its SHA-256 in the signed checksums.txt.
+verify_file() {
+  (cd "$WORK" && awk -v f="$1" '{ n = $2; sub(/^\*/, "", n) } n == f' checksums.txt \
+    | sha256sum -c --status -) || die "SHA-256 verification FAILED for $1"
+  log "SHA-256 verified: $1"
+}
+
 verify_checksum() {
-  (cd "$WORK" && awk -v f="$ARTIFACT" '{ n = $2; sub(/^\*/, "", n) } n == f' checksums.txt \
-    | sha256sum -c --status -) || die "SHA-256 verification FAILED for ${ARTIFACT}"
-  log "SHA-256 verified: ${ARTIFACT}"
+  verify_file "$ARTIFACT"
+  [ -z "$OPENRESTY_ARTIFACT" ] || verify_file "$OPENRESTY_ARTIFACT"
+  [ -z "$MODSECURITY_ARTIFACT" ] || verify_file "$MODSECURITY_ARTIFACT"
 }
 
-# openresty_apt_source ID CODENAME ARCH: the openresty.org APT source line
-# (https://openresty.org/en/linux-packages.html). arm64 packages live under
-# /package/arm64/; the component is "openresty" on Debian and "main" on
-# Ubuntu. Fails for anything openresty.org does not package.
-openresty_apt_source() {
-  local id="$1" codename="$2" arch="$3" path component
-  case "$id" in
-    debian) component="openresty" ;;
-    ubuntu) component="main" ;;
+# openresty_artifact FORMAT ARCH PACKAGE: the one release file of PACKAGE
+# for FORMAT (deb or rpm) and ARCH (amd64 or arm64 for deb, x86_64 or
+# aarch64 for rpm) among the file names on stdin (those of checksums.txt).
+# nfpm names them PACKAGE_VERSION_ARCH.deb and PACKAGE-VERSION.ARCH.rpm; the
+# version starts with a digit, so edgeweir-openresty never matches
+# edgeweir-openresty-modsecurity. Fails unless exactly one file matches.
+openresty_artifact() {
+  local format="$1" arch="$2" package="$3" pattern matches count
+  [[ "$package" =~ ^[a-z][a-z0-9-]*$ ]] || return 1
+  case "$format:$arch" in
+    deb:amd64 | deb:arm64) pattern="^${package}_[0-9][A-Za-z0-9.+~-]*_${arch}\.deb$" ;;
+    rpm:x86_64 | rpm:aarch64) pattern="^${package}-[0-9][A-Za-z0-9.+~_-]*\.${arch}\.rpm$" ;;
     *) return 1 ;;
   esac
-  [[ "$codename" =~ ^[a-z]+$ ]] || return 1
-  case "$arch" in
-    amd64) path="$id" ;;
-    arm64) path="arm64/$id" ;;
-    *) return 1 ;;
-  esac
-  printf 'deb [arch=%s signed-by=/usr/share/keyrings/openresty.gpg] https://openresty.org/package/%s %s %s\n' \
-    "$arch" "$path" "$codename" "$component"
+  matches="$(grep -E "$pattern" || true)"
+  count="$(printf '%s' "$matches" | grep -c . || true)"
+  [ "$count" = "1" ] || return 1
+  printf '%s\n' "$matches"
 }
 
-# openresty_rpm_repo ID ID_LIKE VERSION_ID ARCH: the URL of the openresty.org
-# yum/dnf .repo file (https://openresty.org/en/linux-packages.html). One file
-# serves x86_64 and aarch64 (its baseurl ends in $releasever/$basearch).
-# CentOS, RHEL and Rocky 9 or later use openresty2.repo (packages signed with
-# the newer key); RHEL rebuilds without a repository of their own (AlmaLinux,
-# ...) use RHEL's, found through ID_LIKE. Fails for anything openresty.org
-# does not package.
-openresty_rpm_repo() {
-  local id="$1" like="$2" version="$3" arch="$4" major dir min max=999999 file="openresty.repo"
-  case "$arch" in amd64 | arm64) ;; *) return 1 ;; esac
-  [[ "$version" =~ ^[0-9]{1,6}(\.[0-9]+)*$ ]] || return 1
-  major="${version%%.*}"
-  case "$id" in
-    centos | rhel | rocky | ol | fedora | amzn | alinux | tencentos | mariner) ;;
-    *)
-      [[ " $like " == *" rhel "* ]] || return 1
-      id="rhel"
-      ;;
-  esac
-  case "$id" in
-    centos | rhel) dir="$id" min=7 ;;
-    rocky) dir="rocky" min=8 ;;
-    ol) dir="oracle" min=7 max=8 ;;
-    fedora) dir="fedora" min=32 ;;
-    amzn)
-      # Amazon Linux 2 and 2023; Amazon Linux 1 (2018.03) on x86_64 only.
-      dir="amazon" min=0
-      case "$version" in 2 | 2023) ;; 2018.03) [ "$arch" = amd64 ] || return 1 ;; *) return 1 ;; esac
-      ;;
-    alinux) dir="alinux" min=2 max=3 ;;
-    tencentos) dir="tlinux" min=2 max=3 ;;
-    mariner) dir="mariner" min=2 max=2 ;;
-  esac
-  [ "$major" -ge "$min" ] && [ "$major" -le "$max" ] || return 1
-  case "$id" in centos | rhel | rocky) [ "$major" -lt 9 ] || file="openresty2.repo" ;; esac
-  printf 'https://openresty.org/package/%s/%s\n' "$dir" "$file"
+# version_at_least VERSION MIN: VERSION (e.g. 2.36) is MIN (e.g. 2.34) or later.
+version_at_least() {
+  local have="$1" want="$2"
+  [[ "$have" =~ ^[0-9]+\.[0-9]+$ ]] && [[ "$want" =~ ^[0-9]+\.[0-9]+$ ]] || return 1
+  [ "${have%%.*}" -gt "${want%%.*}" ] \
+    || { [ "${have%%.*}" -eq "${want%%.*}" ] && [ "${have#*.}" -ge "${want#*.}" ]; }
 }
 
-install_openresty() {
-  if command -v openresty >/dev/null 2>&1; then
-    return 0
-  fi
-  log "installing OpenResty from openresty.org"
-  if command -v apt-get >/dev/null 2>&1; then
-    local id codename apt_source
-    # shellcheck source=/dev/null
-    id="$(. /etc/os-release && printf '%s' "${ID:-}")"
-    # shellcheck source=/dev/null
-    codename="$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-}")"
-    apt_source="$(openresty_apt_source "$id" "$codename" "$ARCH")" \
-      || die "openresty.org has no packages for ${id:-this distribution} ${codename} (${ARCH}); install OpenResty manually and re-run"
-    apt-get update -y
-    apt-get install -y --no-install-recommends wget gnupg ca-certificates
-    wget -qO - https://openresty.org/package/pubkey.gpg | gpg --dearmor --yes -o /usr/share/keyrings/openresty.gpg
-    printf '%s\n' "$apt_source" >/etc/apt/sources.list.d/openresty.list
-    apt-get update -y
-    apt-get install -y --no-install-recommends openresty
-  elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
-    local pm id like version repo
-    pm="$(command -v dnf || command -v yum)"
-    # shellcheck source=/dev/null
-    id="$(. /etc/os-release && printf '%s' "${ID:-}")"
-    # shellcheck source=/dev/null
-    like="$(. /etc/os-release && printf '%s' "${ID_LIKE:-}")"
-    # shellcheck source=/dev/null
-    version="$(. /etc/os-release && printf '%s' "${VERSION_ID:-}")"
-    repo="$(openresty_rpm_repo "$id" "$like" "$version" "$ARCH")" \
-      || die "openresty.org has no packages for ${id:-this distribution} ${version} (${RPM_ARCH}); install OpenResty manually and re-run"
-    log "adding ${repo}"
-    download "$repo" /etc/yum.repos.d/openresty.repo || die "could not download ${repo}"
-    if ! "$pm" install -y openresty; then
-      # A repository without metadata for this release would break every later dnf/yum run.
-      rm -f /etc/yum.repos.d/openresty.repo
-      die "could not install OpenResty from ${repo}; install OpenResty manually and re-run"
+# The edgeweir-openresty packages of this release, as listed in the signed
+# checksums.txt. deb and rpm installs use their own format; the tar.gz uses
+# the machine's package manager, or an edgeweir-openresty already installed.
+pick_openresty() {
+  local names arch glibc=""
+  OPENRESTY_ARTIFACT=""
+  MODSECURITY_ARTIFACT=""
+  OPENRESTY_FORMAT="$FORMAT"
+  if [ "$FORMAT" = "tar" ]; then
+    if command -v dpkg >/dev/null 2>&1; then
+      OPENRESTY_FORMAT="deb"
+    elif command -v rpm >/dev/null 2>&1; then
+      OPENRESTY_FORMAT="rpm"
+    elif [ -x "$NGINX_BIN" ]; then
+      log "using the installed ${OPENRESTY_PACKAGE} (${NGINX_BIN})"
+      return 0
+    else
+      die "${OPENRESTY_PACKAGE} comes as .deb and .rpm only: install it first (${NGINX_BIN}), then re-run"
     fi
-  else
-    die "unsupported package manager; install OpenResty manually and re-run"
   fi
+  if command -v getconf >/dev/null 2>&1; then
+    glibc="$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{ print $2 }' || true)"
+  fi
+  if [[ "$glibc" =~ ^[0-9]+\.[0-9]+$ ]] && ! version_at_least "$glibc" "$GLIBC_MIN"; then
+    die "${OPENRESTY_PACKAGE} needs glibc ${GLIBC_MIN} or later (this machine has ${glibc}): RHEL, Rocky or AlmaLinux 9, Debian 12, Ubuntu 22.04 or later"
+  fi
+  if [ "$OPENRESTY_FORMAT" = "deb" ]; then arch="$ARCH"; else arch="$RPM_ARCH"; fi
+  names="$(awk '{ sub(/^\*/, "", $2); print $2 }' "${WORK}/checksums.txt")"
+  OPENRESTY_ARTIFACT="$(printf '%s\n' "$names" | openresty_artifact "$OPENRESTY_FORMAT" "$arch" "$OPENRESTY_PACKAGE")" \
+    || die "checksums.txt does not list exactly one ${OPENRESTY_FORMAT} package of ${OPENRESTY_PACKAGE} for ${arch}"
+  if [ "$WITH_MODSECURITY" = "true" ]; then
+    MODSECURITY_ARTIFACT="$(printf '%s\n' "$names" | openresty_artifact "$OPENRESTY_FORMAT" "$arch" "$MODSECURITY_PACKAGE")" \
+      || die "checksums.txt does not list exactly one ${OPENRESTY_FORMAT} package of ${MODSECURITY_PACKAGE} for ${arch} (--no-modsecurity skips it)"
+  fi
+}
+
+fetch_openresty() {
+  [ -z "$OPENRESTY_ARTIFACT" ] || fetch "$OPENRESTY_ARTIFACT"
+  [ -z "$MODSECURITY_ARTIFACT" ] || fetch "$MODSECURITY_ARTIFACT"
+}
+
+# Installs the verified edgeweir-openresty packages before edgeweir-node,
+# which depends on edgeweir-openresty and recommends the ModSecurity module.
+install_openresty() {
+  if [ -n "$OPENRESTY_ARTIFACT" ]; then
+    local main="${WORK}/${OPENRESTY_ARTIFACT}" module=""
+    [ -z "$MODSECURITY_ARTIFACT" ] || module="${WORK}/${MODSECURITY_ARTIFACT}"
+    log "installing ${OPENRESTY_ARTIFACT}${MODSECURITY_ARTIFACT:+ and ${MODSECURITY_ARTIFACT}}"
+    case "$OPENRESTY_FORMAT" in
+      deb)
+        if command -v apt-get >/dev/null 2>&1; then
+          apt-get install -y --no-install-recommends "$main" ${module:+"$module"}
+        else
+          dpkg -i "$main" ${module:+"$module"}
+        fi
+        ;;
+      rpm)
+        if command -v dnf >/dev/null 2>&1; then
+          dnf install -y "$main" ${module:+"$module"}
+        elif command -v yum >/dev/null 2>&1; then
+          yum install -y "$main" ${module:+"$module"}
+        else
+          rpm -Uvh --replacepkgs "$main" ${module:+"$module"}
+        fi
+        ;;
+    esac
+  fi
+  [ -x "$NGINX_BIN" ] || die "${OPENRESTY_PACKAGE} did not install ${NGINX_BIN}"
 }
 
 # The tar.gz has no install scripts: user, directories and unit are set up here,
@@ -391,7 +406,6 @@ install_tarball() {
 }
 
 install_package() {
-  install_openresty
   log "installing ${ARTIFACT}"
   case "$FORMAT" in
     deb)
@@ -449,8 +463,11 @@ main() {
   fetch "checksums.txt"
   verify_signature
   pick_artifact
+  pick_openresty
   fetch "$ARTIFACT"
+  fetch_openresty
   verify_checksum
+  install_openresty
   install_package
   enroll
   start_service
