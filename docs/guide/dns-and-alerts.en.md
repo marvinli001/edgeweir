@@ -139,6 +139,7 @@ Earlier versions had one global platform DNS configuration. On upgrade it become
 - A configuration that was on becomes Automatic with **Keep per-site line targets** on, so the line targets tenants were shown, `<line>.<site UUID>.<CNAME domain>`, keep resolving; one that was off becomes Not managed, with account, domain, and lines kept in the form.
 - When several clusters share the former CNAME domain, their all-lines records are named `all`, `all-2`, … (clusters with sites first) and each site's CNAME points at its cluster's record.
 - The former per-site address records `all.<site UUID>.<CNAME domain>` are removed by the next reconciliation, which deletes only names the console registered.
+- If the first publication after the upgrade would leave only CNAMEs and no address records (for example before any node has reconnected), the cluster keeps its previous records and the revision shows **Held back**, as in [Mass removal protection](#mass-removal-protection); it continues once nodes are back, or with **Publish anyway**.
 - Earlier DNS revisions stay in the database and are no longer shown.
 
 ### Health removal and repair
@@ -151,7 +152,9 @@ Earlier versions had one global platform DNS configuration. On upgrade it become
 | Propagation | Subject to TTL and resolver caches; not an instant switch |
 | Drift repair | Managed names deleted or changed outside the console are restored by the next check; **Repair records** runs one for the cluster immediately |
 | Takeover scope | Only names this cluster registered are changed; a new name that already has unmanaged records is refused (`DNS_RECORD_CONFLICT`), as is a name managed by another cluster (`DNS_BINDING_CONFLICT`) |
-| Write order | Names are registered first; a name that changes record type loses its old records first; changed address RRsets are replaced as a whole, then CNAMEs; records no longer needed are deleted; the result is read back; on failure the registration stays and the next cycle retries |
+| Write order | Names are registered first; a name that changes record type loses its old records first; changed address RRsets are replaced as a whole, then CNAMEs, in batches of at most 100 records; records no longer needed are deleted; the result is read back; on failure the registration stays and the next cycle retries |
+| TTL | A provider raising the TTL to its own minimum is not drift; after the binding's TTL changes, the next reconciliation rewrites the records with the new TTL |
+| Concurrency | One console process at a time reconciles a cluster (a 15-minute lease that expires if the process exits) |
 | Configuration canary | Each node is compared with its own target revision: during a canary window, non-canary nodes run the stable revision and are not removed, see [Configuration canary](admin.en.md#configuration-canary) |
 
 A failed DNS revision shows its reason: provider authentication failed, zone not found at the provider, provider unreachable, provider rate limit, a name has unmanaged records, a name belongs to another cluster, server address refused by the outbound policy, and so on.
@@ -164,7 +167,7 @@ When a publication would empty a cluster's previously non-empty `all.` or line r
 | --- | --- |
 | Threshold | Share of the cluster's previous address records one publication may remove; 50% by default, adjustable under **Admin → Platform DNS → Mass removal protection** (5%–100%) for all clusters |
 | Not counted | Names no longer managed (deleted sites, removed lines); a change of provider account, cluster domain, or all-lines record name; modes other than Automatic |
-| While held | The top of the cluster's **DNS** tab shows the blocked change (address records it would delete); the revision list shows **Blocked**, and the **Cluster bindings** table shows the cluster as **Blocked**; the platform alert **DNS mass removal blocked** fires for the cluster |
+| While held | The top of the cluster's **DNS** tab shows the blocked change (address records it would delete); the revision list shows **Held back**, and the **Cluster bindings** table shows the cluster as **Held back**; the platform alert **DNS mass removal blocked** fires for the cluster |
 | Recovery | The hold ends when a later publication passes, and the alert resolves |
 | Force publish | An administrator clicks **Force publish** on the cluster's **DNS** tab and confirms; the current state is published; audited as `dns.force_publish` |
 
@@ -283,10 +286,12 @@ An organization can link its own DNS credential to a zone and turn on **Write re
 
 | Item | Behavior |
 | --- | --- |
-| Conflicts | A name that already has A, AAAA, or CNAME records is not overwritten: the record shows **Conflict** with those records; after a member clicks **Replace** and confirms, they are deleted and the CNAME is written, audited as `dns_record.overwrite` |
-| Removal | Deleting a site or domain, or turning automatic records off, deletes only records the console wrote (matched by name, type, and value) |
+| Conflicts | A CNAME cannot share its name with other records: a name that already has any other record is not overwritten; the record shows **Conflict** with those records; after an organization owner or admin clicks **Replace** and confirms, they are deleted and the CNAME is written, audited as `dns_record.overwrite`. If the records at the name change after the confirmation, it has to be confirmed again |
+| Existing identical records | A record that existed before and matches exactly shows **Written**; the console never deletes it |
+| Removal | Deleting a site or domain, or turning automatic records off, deletes only records the console created (matched by name, type, and value) |
 | Drift | A written record deleted outside the console is written again by the next sync |
-| Sync | A background job syncs every minute; **Sync** on the card runs it immediately |
+| Sync | A background job syncs every minute; **Sync** on the card runs it immediately. One sync or certificate DNS-01 challenge runs per credential at a time, in batches of at most 100 records |
+| One credential per zone | Only one credential of the organization can have automatic records on for a zone; another is refused with `DNS_AUTO_RECORDS_EXISTS` |
 | Target changes | After the cluster domain changes, the CNAME follows the new target |
 | Isolation | Records are written only for the organization's own sites; another organization's credential for the same zone never writes this organization's domains |
 | Audit | `dns_record.create`, `dns_record.update`, `dns_record.delete`, `dns_record.conflict`, `dns_record.confirm`, `dns_record.overwrite`, with the organization |
@@ -401,7 +406,8 @@ Tenants can subscribe only to sites they can see and to channels with **Allow te
 | "Turn the cluster's DNS off and wait for its records to be removed" | The cluster to delete is still Automatic or still owns records | Switch to Not managed and wait for cleanup |
 | "The DNS provider rejected the credentials" | Wrong, expired, or under-privileged credentials; some providers also require the console's egress IP to be allowed | Check the permissions in [Providers and credentials](#providers-and-credentials), then **Test connection** |
 | "The server address is private or special-purpose, or a public address without HTTPS" | The outbound policy refused a self-hosted endpoint | Use HTTPS, or allow the internal range in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
-| An automatic record shows **Conflict** | The name already has A, AAAA, or CNAME records | Confirm with **Replace**, or fix it by hand and **Sync** |
+| An automatic record shows **Conflict** | The name already has other records | An organization owner or admin confirms with **Replace**, or fix it by hand and **Sync** |
+| "Another DNS credential of the organization already writes records in this zone" | Another credential has automatic records on for the zone | Use that credential, or turn its automatic records off first |
 | **CNAME target** shows **No healthy nodes** | No node in the lines meets the address set conditions | Check node heartbeats, data plane state, and applied revision |
 | Channel shows **Notification delivery failed** | The target refused or timed out, or the outbound policy refused the address | Reproduce with **Send test**; add internal targets to `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | "Notification channel limit reached" | 32 channels exist | Delete unused channels |
