@@ -91,6 +91,7 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
       applyState: (st?.state as Node["applyState"]) ?? null,
       applyMessage: st?.message ?? "",
       dataPlaneHealthy: st?.dataPlaneHealthy ?? false,
+      banStatus: r.banStatus ?? null,
     };
   });
 }

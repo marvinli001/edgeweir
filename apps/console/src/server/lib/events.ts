@@ -4,6 +4,7 @@ import type { Logger } from "./logger";
 
 export const CONFIG_CHANNEL = "edgeweir_config";
 export const TASKS_CHANNEL = "edgeweir_tasks";
+export const BANS_CHANNEL = "edgeweir_bans";
 
 export interface ConfigPublishedEvent {
   clusterId: string;
@@ -16,8 +17,13 @@ export interface TasksCreatedEvent {
   clusterIds: string[];
 }
 
+/** Dynamic bans of these clusters changed; null means every cluster (platform bans). */
+export interface BansChangedEvent {
+  clusterIds: string[] | null;
+}
+
 /**
- * Fan-out of configuration changes and new node tasks across console
+ * Fan-out of configuration changes, new node tasks and ban changes across console
  * instances using PostgreSQL LISTEN/NOTIFY. Each instance keeps one dedicated connection and
  * re-emits notifications locally; it reconnects with backoff on failure.
  */
@@ -47,7 +53,13 @@ export class ConfigEventBus {
     client.on("notification", (msg) => {
       if (!msg.payload) return;
       const event =
-        msg.channel === CONFIG_CHANNEL ? "config" : msg.channel === TASKS_CHANNEL ? "tasks" : null;
+        msg.channel === CONFIG_CHANNEL
+          ? "config"
+          : msg.channel === TASKS_CHANNEL
+            ? "tasks"
+            : msg.channel === BANS_CHANNEL
+              ? "bans"
+              : null;
       if (!event) return;
       try {
         this.emitter.emit(event, JSON.parse(msg.payload));
@@ -64,6 +76,7 @@ export class ConfigEventBus {
       await client.connect();
       await client.query(`LISTEN ${CONFIG_CHANNEL}`);
       await client.query(`LISTEN ${TASKS_CHANNEL}`);
+      await client.query(`LISTEN ${BANS_CHANNEL}`);
       this.client = client;
       this.retryMs = 500;
       // Consumers re-read the latest revision after a reconnect, since
@@ -87,6 +100,7 @@ export class ConfigEventBus {
 
   on(event: "config", listener: (e: ConfigPublishedEvent) => void): () => void;
   on(event: "tasks", listener: (e: TasksCreatedEvent) => void): () => void;
+  on(event: "bans", listener: (e: BansChangedEvent) => void): () => void;
   on(event: "reconnected", listener: () => void): () => void;
   on(event: string, listener: (...args: never[]) => void): () => void {
     const fn = listener as (...args: unknown[]) => void;
@@ -102,6 +116,11 @@ export class ConfigEventBus {
   /** Local counterpart of a TASKS_CHANNEL notification. */
   emitTasksLocal(event: TasksCreatedEvent) {
     this.emitter.emit("tasks", event);
+  }
+
+  /** Local counterpart of a BANS_CHANNEL notification. */
+  emitBansLocal(event: BansChangedEvent) {
+    this.emitter.emit("bans", event);
   }
 
   async stop(): Promise<void> {

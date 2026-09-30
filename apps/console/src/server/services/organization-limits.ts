@@ -1,6 +1,6 @@
 import type { OrganizationLimits, OrgLimitResource } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { and, count, eq, gt, sql } from "drizzle-orm";
+import { and, count, eq, gt, isNull, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
@@ -18,6 +18,7 @@ const COLUMNS = {
   purgeTasksPerMinute: "maxPurgeTasksPerMinute",
   purgeUrlsPerHour: "maxPurgeUrlsPerHour",
   members: "maxMembers",
+  bans: "maxBans",
 } as const satisfies Record<OrgLimitResource, keyof LimitRow>;
 
 const RESOURCES = Object.keys(COLUMNS) as OrgLimitResource[];
@@ -129,6 +130,22 @@ async function usageOf(
         .select({ n: count() })
         .from(schema.member)
         .where(eq(schema.member.organizationId, org));
+      return row?.n ?? 0;
+    }
+    case "bans": {
+      // Active manual site bans; automatic bans are not counted.
+      const [row] = await db
+        .select({ n: count() })
+        .from(schema.ipBan)
+        .where(
+          and(
+            eq(schema.ipBan.organizationId, org),
+            eq(schema.ipBan.scope, "site"),
+            eq(schema.ipBan.source, "manual"),
+            isNull(schema.ipBan.removedAt),
+            gt(schema.ipBan.expiresAt, now),
+          ),
+        );
       return row?.n ?? 0;
     }
     case "purgeTasksPerMinute":

@@ -36,6 +36,7 @@ import {
   trafficSeries,
 } from "../services/analytics";
 import { auditFacets, listAuditLogs } from "../services/audit";
+import { createBan, deleteBan, getBanSettings, listBans, setBanSettings } from "../services/bans";
 import { createCacheTask, getCacheTask, listCacheTasks } from "../services/cache-tasks";
 import {
   createDnsCredential,
@@ -167,6 +168,14 @@ const listTenant = tenant.use(({ context, next }) => {
   return next({ context: { organizationId: context.organizationId } });
 });
 
+/** Organization owners and admins (platform administrators act as owners). */
+const tenantManager = tenant.use(({ context, next }) => {
+  const role = context.isAdmin ? "owner" : context.caller.organization?.role;
+  if (role !== "owner" && role !== "admin")
+    fail("ORG_ADMIN_REQUIRED", "organization owners and admins only");
+  return next();
+});
+
 export const router = os.router({
   usage: {
     list: tenant.usage.list.handler(({ input, context }) =>
@@ -228,6 +237,25 @@ export const router = os.router({
     ),
     delete: listTenant.ipLists.delete.handler(({ input, context }) =>
       deleteIpList(context.app, input.id, context.organizationId, context.actor),
+    ),
+  },
+  bans: {
+    list: tenant.bans.list.handler(({ input, context }) =>
+      listBans(context.app.db, input, { platform: false, scope: context.scope }),
+    ),
+    create: tenantManager.bans.create.handler(({ input, context }) =>
+      createBan(
+        context.app.db,
+        { ...input, scope: "site" },
+        { scope: context.scope, actor: context.actor },
+      ),
+    ),
+    delete: tenantManager.bans.delete.handler(({ input, context }) =>
+      deleteBan(context.app.db, input.id, {
+        platform: false,
+        scope: context.scope,
+        actor: context.actor,
+      }),
     ),
   },
   platformIpLists: {
@@ -739,6 +767,21 @@ export const router = os.router({
         setOrganizationLimits(context.app.db, input, context.actor),
       ),
     },
+    bans: {
+      list: admin.admin.bans.list.handler(({ input, context }) =>
+        listBans(context.app.db, input, { platform: true, scope: { all: true } }),
+      ),
+      create: admin.admin.bans.create.handler(({ input, context }) =>
+        createBan(context.app.db, input, { scope: { all: true }, actor: context.actor }),
+      ),
+      delete: admin.admin.bans.delete.handler(({ input, context }) =>
+        deleteBan(context.app.db, input.id, {
+          platform: true,
+          scope: { all: true },
+          actor: context.actor,
+        }),
+      ),
+    },
   },
   organizations: {
     list: admin.organizations.list.handler(({ context }) => listOrganizations(context.app.db)),
@@ -802,6 +845,10 @@ export const router = os.router({
     ),
     setReleaseSource: admin.settings.setReleaseSource.handler(({ input, context }) =>
       setReleaseSource(context.app, input, context.actor),
+    ),
+    bans: admin.settings.bans.handler(({ context }) => getBanSettings(context.app.db)),
+    setBans: admin.settings.setBans.handler(({ input, context }) =>
+      setBanSettings(context.app.db, input, context.actor),
     ),
     usage: admin.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
     setUsage: admin.settings.setUsage.handler(({ input, context }) =>
