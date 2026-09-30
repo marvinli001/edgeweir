@@ -24,6 +24,7 @@ import { ClusterRolloutCard } from "@/components/cluster-rollout";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
+import { ClusterDns } from "@/components/dns/cluster-dns";
 import { FormDialog } from "@/components/form-dialog";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
@@ -58,6 +59,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAction } from "@/hooks/use-action";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -68,6 +70,7 @@ export const Route = createFileRoute("/_app/admin/clusters")({
   validateSearch: z.object({
     cluster: z.string().optional(),
     enroll: z.boolean().optional(),
+    tab: z.enum(["overview", "dns"]).optional(),
   }),
   component: ClustersPage,
 });
@@ -129,11 +132,34 @@ function ClustersPage() {
             selected={selected}
             onSelect={(id) => navigate({ search: (prev) => ({ ...prev, cluster: id }) })}
           />
-          <NodeGroupsSection cluster={selected} />
-          <NodesSection cluster={selected} onEnroll={() => setEnrollOpen(true)} />
-          <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
-          <NodeUpgrades key={selected.id} clusterId={selected.id} />
-          <RevisionsSection cluster={selected} />
+          <Tabs
+            value={search.tab ?? "overview"}
+            onValueChange={(value) =>
+              navigate({
+                search: (prev) => ({ ...prev, tab: value === "dns" ? "dns" : undefined }),
+                replace: true,
+              })
+            }
+          >
+            <TabsList>
+              <TabsTrigger value="overview" data-testid="cluster-tab-overview">
+                {m.dns_tab_overview()}
+              </TabsTrigger>
+              <TabsTrigger value="dns" data-testid="cluster-tab-dns">
+                {m.dns_tab_dns()}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="overview" className="flex flex-col gap-4 animate-enter">
+              <NodeGroupsSection cluster={selected} />
+              <NodesSection cluster={selected} onEnroll={() => setEnrollOpen(true)} />
+              <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
+              <NodeUpgrades key={selected.id} clusterId={selected.id} />
+              <RevisionsSection cluster={selected} />
+            </TabsContent>
+            <TabsContent value="dns" className="animate-enter">
+              <ClusterDns key={selected.id} clusterId={selected.id} />
+            </TabsContent>
+          </Tabs>
           <EnrollDialog
             cluster={selected}
             open={search.enroll === true}
