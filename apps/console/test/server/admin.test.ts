@@ -261,6 +261,15 @@ describe("admin area procedures", async () => {
       ["admin.sites.suspend", () => member.admin.sites.suspend({ id: uuid, reason: "billing" })],
       ["admin.sites.resume", () => member.admin.sites.resume({ id: uuid })],
       ["admin.organizations.getLimits", () => member.admin.organizations.getLimits({ id: "x" })],
+      ["serviceAccounts.list", () => member.serviceAccounts.list()],
+      ["serviceAccounts.create", () => member.serviceAccounts.create({ name: "x", scopes: [] })],
+      ["serviceAccounts.update", () => member.serviceAccounts.update({ id: uuid, enabled: false })],
+      ["serviceAccounts.delete", () => member.serviceAccounts.delete({ id: uuid })],
+      ["serviceAccounts.createKey", () => member.serviceAccounts.createKey({ id: uuid })],
+      [
+        "serviceAccounts.revokeKey",
+        () => member.serviceAccounts.revokeKey({ id: uuid, keyId: uuid }),
+      ],
       [
         "admin.organizations.setLimits",
         () => member.admin.organizations.setLimits({ id: "x", limits: {} }),

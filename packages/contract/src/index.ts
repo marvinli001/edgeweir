@@ -9,6 +9,7 @@ import { logsContract } from "./logs";
 export * from "./logs";
 
 import { accessKeysContract } from "./access-keys";
+import { serviceAccountsContract } from "./service-accounts";
 import { alertsContract } from "./alerts";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
@@ -49,6 +50,8 @@ const publicOperation = <T extends object>(operation: T) => ({ ...operation, sec
  */
 export const contract = {
   accessKeys: accessKeysContract,
+  /** Platform administrators only. */
+  serviceAccounts: serviceAccountsContract,
   logs: logsContract,
   upgrades: upgradesContract,
   alerts: alertsContract,
@@ -468,6 +471,7 @@ export const contract = {
 export type Contract = typeof contract;
 
 export * from "./access-keys";
+export * from "./service-accounts";
 export * from "./alerts";
 export * from "./dns";
 export * from "./domains";

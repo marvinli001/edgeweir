@@ -431,6 +431,75 @@ export const organizationSettings = pgTable("organization_settings", {
 });
 
 /**
+ * Platform-level machine identity for integrations. It cannot sign in: it
+ * has no password, passkey or session, only keys that work on /api/v1 and
+ * the scopes listed here.
+ */
+export const serviceAccount = pgTable("service_account", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  scopes: text("scopes").array().notNull().default(sql`'{}'::text[]`),
+  enabled: boolean("enabled").notNull().default(true),
+  createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/** Keys of a service account; only the SHA-256 of a key is stored, shown once at creation. */
+export const serviceAccountKey = pgTable(
+  "service_account_key",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    serviceAccountId: uuid("service_account_id")
+      .notNull()
+      .references(() => serviceAccount.id, { onDelete: "cascade" }),
+    name: text("name").notNull().default(""),
+    /** Hex SHA-256 of the full key. */
+    keyHash: text("key_hash").notNull().unique(),
+    /** First characters of the key, for recognizing it in lists. */
+    prefix: text("prefix").notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("service_account_key_account_idx").on(t.serviceAccountId)],
+);
+
+/**
+ * Idempotency-Key records of /api/v1 writes, per caller: the request's
+ * method, path and body hash, and the final response once it completed.
+ * Kept 24 hours; 5xx responses are not kept.
+ */
+export const idempotencyKey = pgTable(
+  "idempotency_key",
+  {
+    /** "user:<id>" or "service_account:<id>". */
+    principal: text("principal").notNull(),
+    key: text("key").notNull(),
+    method: text("method").notNull(),
+    path: text("path").notNull(),
+    bodyHash: text("body_hash").notNull(),
+    /** in_progress | completed */
+    state: text("state").notNull().default("in_progress"),
+    responseStatus: integer("response_status"),
+    responseHeaders: jsonb("response_headers")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
+    /** Base64 of the response body. */
+    responseBody: text("response_body").notNull().default(""),
+    /** An in-progress record older than this was abandoned (crash) and may be taken over. */
+    lockedUntil: timestamp("locked_until", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.principal, t.key] }),
+    index("idempotency_key_expires_idx").on(t.expiresAt),
+  ],
+);
+
+/**
  * Technical limits the operator sets per organization (resource protection,
  * not a plan). Null means no organization-specific limit: only the global
  * hard limits apply (for purges: CACHE_TASK_LIMITS).

@@ -2,6 +2,7 @@ import type { Organization } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { asc, count, eq, inArray } from "drizzle-orm";
 import { fail } from "../lib/errors";
+import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { findOrganization, newId } from "./members";
 import type { Executor } from "./revisions";
@@ -40,6 +41,7 @@ async function toDtos(db: Executor, rows: OrgRow[]): Promise<Organization[]> {
       defaultClusterId: schema.organizationSettings.defaultClusterId,
       defaultClusterName: schema.cluster.name,
       requireTwoFactor: schema.organizationSettings.requireTwoFactor,
+      updatedAt: schema.organizationSettings.updatedAt,
     })
     .from(schema.organizationSettings)
     .leftJoin(schema.cluster, eq(schema.cluster.id, schema.organizationSettings.defaultClusterId))
@@ -56,6 +58,7 @@ async function toDtos(db: Executor, rows: OrgRow[]): Promise<Organization[]> {
       defaultClusterName: s?.defaultClusterName ?? null,
       requireTwoFactor: s?.requireTwoFactor ?? false,
       createdAt: r.createdAt.toISOString(),
+      updatedAt: (s?.updatedAt ?? r.createdAt).toISOString(),
     };
   });
 }
@@ -123,11 +126,20 @@ export async function updateOrganization(
     name?: string;
     defaultClusterId?: string | null;
     requireTwoFactor?: boolean;
+    expectedUpdatedAt?: string;
   },
   actor: Actor,
 ): Promise<Organization> {
   const row = await db.transaction(async (tx) => {
     const before = await findOrganization(tx, input.id);
+    // organization_settings.updated_at versions the whole organization.
+    const [settings] = await tx
+      .select({ updatedAt: schema.organizationSettings.updatedAt })
+      .from(schema.organizationSettings)
+      .where(eq(schema.organizationSettings.organizationId, input.id))
+      .for("update");
+    const version = settings?.updatedAt ?? before.createdAt;
+    assertUpdatedAt(version, input.expectedUpdatedAt);
     await assertCluster(tx, input.defaultClusterId);
     if (input.name !== undefined) {
       await tx
@@ -138,20 +150,29 @@ export async function updateOrganization(
     const policy = {
       ...(input.defaultClusterId !== undefined ? { defaultClusterId: input.defaultClusterId } : {}),
       ...(input.requireTwoFactor !== undefined ? { requireTwoFactor: input.requireTwoFactor } : {}),
+      // Strictly later than the version the caller read, even within the same millisecond.
+      updatedAt: new Date(Math.max(Date.now(), version.getTime() + 1)),
     };
-    if (Object.keys(policy).length) {
-      await tx
-        .insert(schema.organizationSettings)
-        .values({ organizationId: input.id, ...policy })
-        .onConflictDoUpdate({ target: schema.organizationSettings.organizationId, set: policy });
-    }
+    await tx
+      .insert(schema.organizationSettings)
+      .values({ organizationId: input.id, ...policy })
+      .onConflictDoUpdate({ target: schema.organizationSettings.organizationId, set: policy });
     await recordAudit(tx, actor, {
       action: "organization.update",
       organizationId: input.id,
       targetType: "organization",
       targetId: input.id,
       targetName: input.name ?? before.name,
-      metadata: { from: { name: before.name }, ...input },
+      metadata: {
+        from: { name: before.name },
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.defaultClusterId !== undefined
+          ? { defaultClusterId: input.defaultClusterId }
+          : {}),
+        ...(input.requireTwoFactor !== undefined
+          ? { requireTwoFactor: input.requireTwoFactor }
+          : {}),
+      },
     });
     return findOrganization(tx, input.id);
   });

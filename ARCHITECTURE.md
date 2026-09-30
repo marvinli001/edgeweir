@@ -266,10 +266,13 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `verification` | better-auth 验证记录 |
 | `organization` | 组织，资源与权限边界 |
 | `member` | 组织成员与角色 |
-| `invitation` | 成员邀请 |
+| `invitation` | 成员邀请（邀请人为用户或服务账号） |
 | `two_factor` | TOTP 密钥与备用码 |
 | `passkey` | passkey 公钥 |
 | `apikey` | AccessKey：哈希、权限、启用状态 |
+| `service_account` | 服务账号：名称、scope、启用状态（不能登录） |
+| `service_account_key` | 服务账号 key 的 SHA-256、前缀、最后使用与吊销时间 |
+| `idempotency_key` | `/api/v1` 写请求的幂等键：调用方、方法、路径、请求体哈希与最终响应，保留 24 小时 |
 | `rate_limit` | 认证接口限速计数 |
 | `organization_settings` | 组织默认集群、要求两步验证 |
 | `organization_limit` | 组织技术限额（站点、域名、证书、IP 名单条目、清缓存频率、成员），空值为不限 |
@@ -372,6 +375,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0022_bound_traffic_counters` | 既有流量计数截断到 0 至 2^53−1 |
 | `0023_p0_site_state` | `site.suspended`、`suspend_reason`、`suspend_note`、`suspended_at`（平台暂停） |
 | `0024_p0_organization_limits` | `organization_limit` |
+| `0025_p0_service_accounts` | `service_account`、`service_account_key`、`idempotency_key`；`invitation.inviter_id` 可空，新增 `inviter_service_account_id` |
 
 ## 构建产物
 

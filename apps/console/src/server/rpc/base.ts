@@ -1,4 +1,4 @@
-import { contract } from "@edgeweir/contract";
+import { contract, serviceAccountScopeFor } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { implement, ORPCError } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
@@ -9,6 +9,11 @@ import { keyScope } from "../services/access-keys";
 import { type Caller, resolveCaller } from "../services/account";
 import type { Actor } from "../services/audit";
 import type { ManagerContext } from "../services/members";
+import {
+  authenticateServiceAccountKey,
+  isServiceAccountKey,
+  type ServicePrincipal,
+} from "../services/service-accounts";
 import type { SiteScope } from "../services/sites";
 import { isAdminRole } from "../services/users";
 
@@ -18,6 +23,8 @@ export interface RequestContext {
   ip: string;
   userAgent: string;
   apiSession?: SessionResult;
+  /** Set when the request authenticated with a service account key. */
+  serviceAccount?: ServicePrincipal;
 }
 
 const implementation = implement(contract).$context<RequestContext>();
@@ -38,7 +45,19 @@ async function readSession(context: RequestContext): Promise<SessionResult | nul
 
 /** Scope applies before every public/optional-auth procedure as well as authed routes. */
 export const os = implementation.use(async ({ context, next, procedure, path }) => {
-  if (!context.headers.has(API_KEY_HEADER)) return next();
+  const apiKey = context.headers.get(API_KEY_HEADER);
+  if (!apiKey) return next();
+  if (isServiceAccountKey(apiKey)) {
+    // Service accounts reach only the procedures listed with a scope in the contract.
+    const principal = await authenticateServiceAccountKey(context.app.db, apiKey);
+    if (!principal) throw new ORPCError("UNAUTHORIZED", { message: "invalid credentials" });
+    const access = serviceAccountScopeFor(path.join("."));
+    if (!access.allowed)
+      fail("SERVICE_ACCOUNT_FORBIDDEN", "service accounts cannot call this procedure");
+    if (access.scope && !principal.scopes.includes(access.scope))
+      fail("SCOPE_REQUIRED", `this call needs the ${access.scope} scope`, { scope: access.scope });
+    return next({ context: { serviceAccount: principal } });
+  }
   const session = await readSession(context);
   if (!session) throw new ORPCError("UNAUTHORIZED");
   if ((session.user as { banned?: boolean }).banned)
@@ -62,6 +81,37 @@ export const os = implementation.use(async ({ context, next, procedure, path }) 
 
 /** Resolves the session (cookie or x-api-key), the caller's organizations and data scope. */
 export const authed = os.use(async ({ context, next }) => {
+  const account = context.serviceAccount;
+  if (account) {
+    // A platform-level identity without organizations; `os` already enforced its scopes.
+    const caller: Caller = {
+      user: { id: account.id, name: account.name, email: "", twoFactorEnabled: false },
+      isAdmin: true,
+      memberships: [],
+      organization: null,
+      requireTwoFactor: false,
+      twoFactorRequired: false,
+    };
+    const actor: Actor = {
+      type: "service_account",
+      id: account.id,
+      name: account.name,
+      ip: context.ip,
+      userAgent: context.userAgent,
+    };
+    const scope: SiteScope = { all: true };
+    return next({
+      context: {
+        user: { id: account.id, name: account.name, email: "" } as SessionResult["user"],
+        isAdmin: true,
+        caller,
+        organizationId: null as string | null,
+        actor,
+        scope,
+        sessionId: null as string | null,
+      },
+    });
+  }
   const result = await readSession(context);
   if (!result) throw new ORPCError("UNAUTHORIZED", { message: "authentication required" });
   const { user, session } = result;

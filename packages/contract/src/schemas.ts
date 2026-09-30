@@ -873,6 +873,13 @@ export const me = z.object({
     .nullable(),
   /** The active organization requires 2FA and the caller has not enabled it yet. */
   twoFactorRequired: z.boolean(),
+  /**
+   * Set when the caller is a service account (then `user` carries its id and
+   * name, with no e-mail, and there are no organizations).
+   */
+  serviceAccount: z
+    .object({ id: z.string(), name: z.string(), scopes: z.array(z.string()) })
+    .nullable(),
 });
 
 export const member = z.object({
@@ -940,6 +947,8 @@ export const organization = z.object({
   defaultClusterName: z.string().nullable(),
   requireTwoFactor: z.boolean(),
   createdAt: isoDateTime,
+  /** Changes with every update; pass it back as expectedUpdatedAt. */
+  updatedAt: isoDateTime,
 });
 
 export const organizationSlug = z
@@ -960,6 +969,7 @@ export const organizationUpdateInput = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   defaultClusterId: uuid.nullable().optional(),
   requireTwoFactor: z.boolean().optional(),
+  expectedUpdatedAt,
 });
 
 /** Resources an organization's technical limits cover. */

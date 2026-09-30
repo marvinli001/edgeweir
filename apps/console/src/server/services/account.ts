@@ -88,6 +88,24 @@ export function toMe(caller: Caller): Me {
         }
       : null,
     twoFactorRequired: caller.twoFactorRequired,
+    serviceAccount: null,
+  };
+}
+
+/** `/me` of a service account: its identity and scopes, no organizations. */
+export function serviceAccountMe(account: { id: string; name: string; scopes: string[] }): Me {
+  return {
+    user: {
+      id: account.id,
+      name: account.name,
+      email: "",
+      isAdmin: false,
+      twoFactorEnabled: false,
+    },
+    organizations: [],
+    activeOrganization: null,
+    twoFactorRequired: false,
+    serviceAccount: { id: account.id, name: account.name, scopes: account.scopes },
   };
 }
 

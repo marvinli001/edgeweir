@@ -15,6 +15,7 @@ import { serveDownload } from "./downloads";
 import { API_KEY_HEADER, AUTH_BASE_PATH, isAllowedAuthRoute } from "./lib/auth";
 import { resolveClientIp, withClientIp } from "./lib/client-ip";
 import type { AppContext } from "./lib/context";
+import { withIdempotency } from "./lib/idempotency";
 import { type RequestContext, router } from "./rpc/router";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -131,11 +132,17 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
   });
 
   app.use("/api/v1/*", async (c, next) => {
-    const { matched, response } = await openapi.handle(c.req.raw, {
-      prefix: "/api/v1",
-      context: requestContext(c, "api"),
-    });
-    if (matched) return c.newResponse(response.body, response);
+    const context = requestContext(c, "api");
+    const response = await withIdempotency(
+      ctx.db,
+      c.req.raw,
+      c.req.header(API_KEY_HEADER) ?? null,
+      async (request) => {
+        const result = await openapi.handle(request, { prefix: "/api/v1", context });
+        return result.matched ? result.response : null;
+      },
+    );
+    if (response) return c.newResponse(response.body, response);
     await next();
   });
 

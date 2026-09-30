@@ -266,10 +266,13 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `verification` | better-auth verification records |
 | `organization` | Organizations, the resource and permission boundary |
 | `member` | Organization members and roles |
-| `invitation` | Member invitations |
+| `invitation` | Member invitations (invited by a user or a service account) |
 | `two_factor` | TOTP secrets and backup codes |
 | `passkey` | Passkey public keys |
 | `apikey` | AccessKeys: hash, permissions, enabled state |
+| `service_account` | Service accounts: name, scopes, enabled (cannot sign in) |
+| `service_account_key` | Service account keys: SHA-256, prefix, last use, revocation |
+| `idempotency_key` | Idempotency keys of `/api/v1` writes: caller, method, path, body hash and final response, kept 24 hours |
 | `rate_limit` | Rate-limit counters of the authentication endpoints |
 | `organization_settings` | Organization default cluster, required two-factor |
 | `organization_limit` | Technical limits per organization (sites, domains, certificates, IP list entries, purge rates, members); null means no limit |
@@ -372,6 +375,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0022_bound_traffic_counters` | Existing traffic counters clamped to 0 through 2^53−1 |
 | `0023_p0_site_state` | `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at` (platform suspension) |
 | `0024_p0_organization_limits` | `organization_limit` |
+| `0025_p0_service_accounts` | `service_account`, `service_account_key`, `idempotency_key`; `invitation.inviter_id` nullable, new `inviter_service_account_id` |
 
 ## Build output
 

@@ -8,6 +8,7 @@ import {
   acceptInvitation,
   getInvitationInfo,
   resolveCaller,
+  serviceAccountMe,
   setActiveOrganization,
   toMe,
 } from "../services/account";
@@ -119,6 +120,14 @@ import {
   updateIpList,
   validateExpression,
 } from "../services/rules";
+import {
+  createServiceAccount,
+  createServiceAccountKey,
+  deleteServiceAccount,
+  listServiceAccounts,
+  revokeServiceAccountKey,
+  updateServiceAccount,
+} from "../services/service-accounts";
 import { isInitialized, runSetup, setupCompletedAt } from "../services/setup";
 import {
   countSites,
@@ -154,6 +163,24 @@ const listTenant = tenant.use(({ context, next }) => {
 });
 
 export const router = os.router({
+  serviceAccounts: {
+    list: admin.serviceAccounts.list.handler(({ context }) => listServiceAccounts(context.app.db)),
+    create: admin.serviceAccounts.create.handler(({ input, context }) =>
+      createServiceAccount(context.app.db, input, context.actor),
+    ),
+    update: admin.serviceAccounts.update.handler(({ input, context }) =>
+      updateServiceAccount(context.app.db, input, context.actor),
+    ),
+    delete: admin.serviceAccounts.delete.handler(({ input, context }) =>
+      deleteServiceAccount(context.app.db, input.id, context.actor),
+    ),
+    createKey: admin.serviceAccounts.createKey.handler(({ input, context }) =>
+      createServiceAccountKey(context.app.db, input, context.actor),
+    ),
+    revokeKey: admin.serviceAccounts.revokeKey.handler(({ input, context }) =>
+      revokeServiceAccountKey(context.app.db, input, context.actor),
+    ),
+  },
   rules: {
     get: tenant.rules.get.handler(({ input, context }) => getRules(context.app, input.id, context)),
     save: tenant.rules.save.handler(({ input, context }) =>
@@ -248,7 +275,9 @@ export const router = os.router({
     ),
   },
   account: {
-    me: authed.account.me.handler(({ context }) => toMe(context.caller)),
+    me: authed.account.me.handler(({ context }) =>
+      context.serviceAccount ? serviceAccountMe(context.serviceAccount) : toMe(context.caller),
+    ),
     setActiveOrganization: authed.account.setActiveOrganization.handler(
       async ({ input, context }) => {
         await setActiveOrganization(context.app.db, {

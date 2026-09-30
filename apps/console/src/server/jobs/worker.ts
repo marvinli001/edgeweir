@@ -2,6 +2,7 @@ import { schema } from "@edgeweir/db";
 import { and, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { PgBoss } from "pg-boss";
 import type { AppContext } from "../lib/context";
+import { pruneIdempotencyKeys } from "../lib/idempotency";
 import { maintainLogs } from "../services/access-logs";
 import { sweepAlerts } from "../services/alerts";
 import { expireCacheTasks } from "../services/cache-tasks";
@@ -21,6 +22,7 @@ export const QUEUES = {
   pruneRevisions: "maintenance.prune-revisions",
   expireEnrollmentTokens: "maintenance.expire-enrollment-tokens",
   expireCacheTasks: "maintenance.expire-cache-tasks",
+  pruneIdempotencyKeys: "maintenance.prune-idempotency-keys",
 } as const;
 
 /**
@@ -90,7 +92,13 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     if (expired) log.info("expired undelivered cache tasks", { deliveries: expired });
   });
 
+  await boss.work(QUEUES.pruneIdempotencyKeys, async () => {
+    const removed = await pruneIdempotencyKeys(ctx.db);
+    if (removed) log.info("pruned idempotency keys", { removed });
+  });
+
   await boss.schedule(QUEUES.pruneRevisions, "17 * * * *");
+  await boss.schedule(QUEUES.pruneIdempotencyKeys, "29 * * * *");
   await boss.schedule(QUEUES.expireCacheTasks, "43 * * * *");
   await boss.schedule(QUEUES.expireEnrollmentTokens, "*/30 * * * *");
   log.info("worker started", { queues: Object.values(QUEUES) });

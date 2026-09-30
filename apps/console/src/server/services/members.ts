@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Invitation, Member, OrgRole } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { and, asc, count, eq, gt } from "drizzle-orm";
+import { and, asc, count, eq, gt, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { assertOrgLimit } from "./organization-limits";
@@ -74,9 +74,16 @@ async function findMember(db: Executor, organizationId: string, memberId: string
 
 async function pendingInvitations(db: Executor, organizationId: string): Promise<Invitation[]> {
   const rows = await db
-    .select({ invitation: schema.invitation, inviterName: schema.user.name })
+    .select({
+      invitation: schema.invitation,
+      inviterName: sql<string | null>`coalesce(${schema.user.name}, ${schema.serviceAccount.name})`,
+    })
     .from(schema.invitation)
     .leftJoin(schema.user, eq(schema.user.id, schema.invitation.inviterId))
+    .leftJoin(
+      schema.serviceAccount,
+      eq(schema.serviceAccount.id, schema.invitation.inviterServiceAccountId),
+    )
     .where(
       and(
         eq(schema.invitation.organizationId, organizationId),
@@ -296,7 +303,8 @@ export async function createInvitation(
         role: input.role,
         status: "pending",
         expiresAt: new Date(Date.now() + INVITATION_TTL_DAYS * 24 * 3600 * 1000),
-        inviterId: ctx.actor.id,
+        inviterId: ctx.actor.type === "service_account" ? null : ctx.actor.id,
+        inviterServiceAccountId: ctx.actor.type === "service_account" ? ctx.actor.id : null,
       })
       .returning();
     if (!row) throw new Error("invitation insert failed");
@@ -346,11 +354,15 @@ export async function findOpenInvitation(db: Executor, id: string) {
     .select({
       invitation: schema.invitation,
       organizationName: schema.organization.name,
-      inviterName: schema.user.name,
+      inviterName: sql<string | null>`coalesce(${schema.user.name}, ${schema.serviceAccount.name})`,
     })
     .from(schema.invitation)
     .innerJoin(schema.organization, eq(schema.organization.id, schema.invitation.organizationId))
     .leftJoin(schema.user, eq(schema.user.id, schema.invitation.inviterId))
+    .leftJoin(
+      schema.serviceAccount,
+      eq(schema.serviceAccount.id, schema.invitation.inviterServiceAccountId),
+    )
     .where(
       and(
         eq(schema.invitation.id, id),

@@ -4,7 +4,7 @@ import { and, count, desc, eq, gte, inArray, lte, type SQL } from "drizzle-orm";
 import type { Executor } from "./revisions";
 
 export interface Actor {
-  type: "user" | "api_key" | "node" | "system";
+  type: "user" | "api_key" | "service_account" | "node" | "system";
   id: string;
   /** Display name at the time of the action (user name, node name ...). */
   name?: string;
