@@ -79,7 +79,7 @@ A node bans a single address on a trigger (for example one IP's request rate). T
 
 | Item | Behavior |
 | --- | --- |
-| Sharing | **Admin → System settings → Bans → Share automatic bans in the cluster**, on by default: on, the ban goes to every node of the cluster; off, it is kept for viewing only and marked "Not shared". A change applies to bans reported afterwards |
+| Sharing | **Admin → System settings → Bans → Share automatic bans in the cluster**, on by default: on, the ban goes to every node of the cluster; off, it is kept for viewing only and marked "Not shared". A change applies to automatic bans added afterwards |
 | Merging | One entry per node, site and address; a repeated report extends the expiry |
 | Checks | The site must belong to the node's cluster; single addresses only; at most 7 days after creation; protected addresses are not stored |
 | Unban | Organization owners and admins can lift automatic bans of their sites |
