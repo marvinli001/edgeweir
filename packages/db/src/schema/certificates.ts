@@ -23,6 +23,8 @@ export const dnsCredential = pgTable("dns_credential", {
   provider: text("provider").notNull(),
   zone: text("zone").notNull(),
   credentialEnvelope: text("credential_envelope").notNull(),
+  /** Write ownership TXT and CNAME records for the organization's domains in the zone. */
+  autoRecords: boolean("auto_records").notNull().default(false),
   createdAt: now(),
 });
 

@@ -1,5 +1,6 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
+import { type DnsProviderId, dnsProviderIds } from "./dns-providers";
 import { domainName, uuid } from "./schemas";
 
 export const tlsSettings = z
@@ -115,20 +116,32 @@ export const httpsContract = {
     .input(id.extend({ settings: tlsSettings }))
     .output(tlsSettings),
 };
-export const dnsCredentialInput = z
-  .object({
-    name: label,
-    provider: z.enum(["cloudflare", "alidns", "huaweicloud", "dnspod"]),
-    zone: domainName.refine((s) => !s.startsWith("*.")),
-    credentials: z.record(z.string().max(64), z.string().min(1).max(4096)),
-  })
-  .refine((s) => Object.keys(s.credentials).length > 0 && Object.keys(s.credentials).length <= 10);
+const tenantProviders = dnsProviderIds.filter((id) => id !== "test") as [
+  Exclude<DnsProviderId, "test">,
+  ...Exclude<DnsProviderId, "test">[],
+];
+const credentialFields = z
+  .record(z.string().max(64), z.string().max(16384))
+  .refine((c) => Object.keys(c).length > 0 && Object.keys(c).length <= 10);
+export const dnsCredentialInput = z.object({
+  name: label,
+  provider: z.enum(tenantProviders),
+  zone: domainName.refine((s) => !s.startsWith("*.")),
+  credentials: credentialFields,
+  /** Write ownership TXT and CNAME records for the organization's domains in this zone. */
+  autoRecords: z.boolean().default(false),
+});
 export const dnsCredentialDto = z.object({
   id: uuid,
   name: z.string(),
   provider: z.string(),
   zone: z.string(),
+  autoRecords: z.boolean(),
 });
+const credentialSource = z.union([
+  z.object({ id: uuid }),
+  z.object({ provider: z.enum(tenantProviders), credentials: credentialFields }),
+]);
 export const dnsCredentialsContract = {
   list: oc
     .route({ method: "GET", path: "/dns-credentials", tags: ["certificates"] })
@@ -137,10 +150,41 @@ export const dnsCredentialsContract = {
     .route({ method: "POST", path: "/dns-credentials", tags: ["certificates"] })
     .input(dnsCredentialInput)
     .output(dnsCredentialDto),
+  /** Renames, rotates the credentials (all fields again) or turns automatic records on or off. */
+  update: oc
+    .route({ method: "PUT", path: "/dns-credentials/{id}", tags: ["certificates"] })
+    .input(
+      z.object({
+        id: uuid,
+        name: label.optional(),
+        credentials: credentialFields.optional(),
+        autoRecords: z.boolean().optional(),
+      }),
+    )
+    .output(dnsCredentialDto),
   delete: oc
     .route({ method: "DELETE", path: "/dns-credentials/{id}", tags: ["certificates"] })
     .input(id)
     .output(z.object({ ok: z.literal(true) })),
+  /** Zones the credentials can manage (providers that can list zones). */
+  zones: oc
+    .route({ method: "POST", path: "/dns-credentials/zones", tags: ["certificates"] })
+    .input(credentialSource)
+    .output(z.object({ zones: z.array(z.string()) })),
+  /** Reads the zone's records with the credentials (connection test). */
+  test: oc
+    .route({ method: "POST", path: "/dns-credentials/test", tags: ["certificates"] })
+    .input(
+      z.union([
+        z.object({ id: uuid }),
+        z.object({
+          provider: z.enum(tenantProviders),
+          credentials: credentialFields,
+          zone: domainName.refine((s) => !s.startsWith("*.")),
+        }),
+      ]),
+    )
+    .output(z.object({ ok: z.literal(true), records: z.number().int() })),
 };
 export type TlsSettings = z.infer<typeof tlsSettings>;
 export type CertificateDto = z.infer<typeof certificateDto>;

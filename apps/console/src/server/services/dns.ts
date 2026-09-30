@@ -1,23 +1,28 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
-  type DnsPolicy,
+  type DnsBinding,
+  type DnsBindingInput,
   type DnsProtection,
-  type DnsProviderInput,
   type DnsRecord,
   type DnsRevision,
-  dnsCredentialInput,
-  dnsPolicy,
+  dnsBindingInput,
   dnsProtection,
   forbiddenOriginRange,
   formatIp,
   parseIp,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit, systemActor } from "./audit";
-import { runCertd } from "./certificate-worker";
+import {
+  certdDns,
+  errorCode,
+  findProvider,
+  openProvider,
+  type ProviderRecord,
+} from "./dns-providers";
 import { isOnline } from "./nodes";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import {
@@ -29,20 +34,25 @@ import {
 } from "./revisions";
 import { findSite, type SiteScope } from "./sites";
 
+export {
+  createDnsProvider,
+  deleteDnsProvider,
+  listDnsProviders,
+  listProviderZones,
+  testProvider,
+  updateDnsProvider,
+} from "./dns-providers";
+
 type Provider = typeof schema.platformDnsProvider.$inferSelect;
 type Revision = typeof schema.dnsRevision.$inferSelect;
+type BindingRow = typeof schema.dnsBinding.$inferSelect;
 type ManagedName = { name: string; type: string };
+/** What a revision stores and a plan is compiled from. */
+export type BindingPolicy = DnsBindingInput & { allLabel: string };
+type Plan = { records: DnsRecord[]; managedNames: ManagedName[] };
+
 const privateNetworks = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"];
-const binding = (id: string) => ({
-  purpose: "platform_dns_provider.credential_envelope",
-  recordId: id,
-});
-const providerDto = (p: Provider) => ({
-  id: p.id,
-  name: p.name,
-  zone: p.zone,
-  provider: p.provider as DnsProviderInput["provider"],
-});
+const MAX_RECORDS = 10000;
 const revisionDto = (r: Revision): DnsRevision => ({
   revision: r.revision,
   status: r.status as DnsRevision["status"],
@@ -53,148 +63,109 @@ const revisionDto = (r: Revision): DnsRevision => ({
   lastError: r.lastError,
 });
 const nameKey = (r: ManagedName) => `${r.name}|${r.type}`;
-const recordKey = (r: DnsRecord) => `${nameKey(r)}|${r.data}|${r.ttl}`;
+const recordKey = (r: { name: string; type: string; data: string; ttl: number }) =>
+  `${nameKey(r)}|${r.data}|${r.ttl}`;
 const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-function relative(name: string, zone: string) {
+/** A name relative to the zone ("@" for the apex); DNS_ZONE_MISMATCH outside it. */
+export function relative(name: string, zone: string) {
   if (name === zone) return "@";
-  if (!name.endsWith(`.${zone}`))
-    fail("DNS_ZONE_MISMATCH", "CNAME suffix is outside the provider zone");
+  if (!name.endsWith(`.${zone}`)) fail("DNS_ZONE_MISMATCH", "DNS name is outside the zone");
   return name.slice(0, -zone.length - 1);
 }
-async function state(db: Executor) {
-  const [s] = await db.select().from(schema.dnsState).where(eq(schema.dnsState.id, 1));
-  if (!s) throw new Error("DNS state missing");
-  return s;
-}
-async function provider(db: Executor, id: string) {
-  const [p] = await db
-    .select()
-    .from(schema.platformDnsProvider)
-    .where(eq(schema.platformDnsProvider.id, id));
-  if (!p) fail("DNS_PROVIDER_NOT_FOUND", "DNS provider not found");
-  return p;
-}
+const absolute = (name: string, zone: string) => (name === "@" ? zone : `${name}.${zone}`);
 
-export async function listDnsProviders(app: AppContext) {
+const defaultRow = (clusterId: string): BindingRow => ({
+  clusterId,
+  mode: "off",
+  providerId: null,
+  domain: "",
+  ttl: 600,
+  lines: [],
+  allLabel: "all",
+  lineAliases: false,
+  desiredRevision: null,
+  appliedRevision: null,
+  updatedAt: new Date(0),
+});
+async function assertCluster(db: Executor, clusterId: string) {
+  const [cluster] = await db.select().from(schema.cluster).where(eq(schema.cluster.id, clusterId));
+  if (!cluster) fail("CLUSTER_NOT_FOUND", "cluster not found");
+  return cluster;
+}
+/** The binding row, or an unsaved "off" binding. */
+export async function loadBinding(db: Executor, clusterId: string): Promise<BindingRow> {
+  const [row] = await db
+    .select()
+    .from(schema.dnsBinding)
+    .where(eq(schema.dnsBinding.clusterId, clusterId));
+  return row ?? defaultRow(clusterId);
+}
+/** Creates the row when missing and locks it (all publications of a binding are serialized). */
+async function lockBinding(tx: Tx, clusterId: string): Promise<BindingRow> {
+  await tx.insert(schema.dnsBinding).values({ clusterId }).onConflictDoNothing();
+  const [row] = await tx
+    .select()
+    .from(schema.dnsBinding)
+    .where(eq(schema.dnsBinding.clusterId, clusterId))
+    .for("update");
+  if (!row) throw new Error("DNS binding missing");
+  return row;
+}
+export function bindingPolicy(row: BindingRow): BindingPolicy {
   return {
-    items: (
-      await app.db
-        .select()
-        .from(schema.platformDnsProvider)
-        .orderBy(schema.platformDnsProvider.name)
-    ).map(providerDto),
-    testEnabled: !!app.env.EDGEWEIR_DNS_TEST_ENDPOINT,
+    mode: row.mode as BindingPolicy["mode"],
+    providerId: row.providerId,
+    domain: row.domain,
+    ttl: row.ttl,
+    lines: row.lines,
+    lineAliases: row.lineAliases,
+    allLabel: row.allLabel,
   };
 }
-export async function createDnsProvider(app: AppContext, input: DnsProviderInput, actor: Actor) {
-  if (input.provider === "test") {
-    if (!app.env.EDGEWEIR_DNS_TEST_ENDPOINT)
-      fail("DNS_TEST_DISABLED", "DNS test provider is disabled");
-  } else dnsCredentialInput.parse(input);
-  const id = randomUUID();
-  const credentialEnvelope = JSON.stringify(
-    app.masterKey.seal(JSON.stringify(input.credentials), binding(id)),
-  );
-  return app.db.transaction(async (tx) => {
-    const [p] = await tx
-      .insert(schema.platformDnsProvider)
-      .values({
-        id,
-        name: input.name,
-        provider: input.provider,
-        zone: input.zone,
-        credentialEnvelope,
-      })
-      .returning();
-    if (!p) throw new Error("DNS provider insert failed");
-    await recordAudit(tx, actor, {
-      action: "dns.provider_create",
-      targetType: "dns_provider",
-      targetId: id,
-      targetName: p.name,
-      metadata: { provider: p.provider, zone: p.zone },
-    });
-    return providerDto(p);
-  });
+function parsePolicy(value: Record<string, unknown>, allLabel: string): BindingPolicy | null {
+  const parsed = dnsBindingInput.safeParse(value);
+  if (!parsed.success) return null;
+  const label = typeof value.allLabel === "string" ? value.allLabel : allLabel;
+  return { ...parsed.data, allLabel: label };
 }
-/** Rotate secrets without retargeting an existing credential to another provider or zone. */
-export async function updateDnsProvider(
-  app: AppContext,
-  input: { id: string; name?: string; credentials?: Record<string, string> },
-  actor: Actor,
-) {
-  return app.db.transaction(async (tx) => {
-    const [p] = await tx
-      .select()
-      .from(schema.platformDnsProvider)
-      .where(eq(schema.platformDnsProvider.id, input.id))
-      .for("update");
-    if (!p) fail("DNS_PROVIDER_NOT_FOUND", "DNS provider not found");
-    if (input.credentials && p.provider !== "test")
-      dnsCredentialInput.parse({
-        name: p.name,
-        provider: p.provider,
-        zone: p.zone,
-        credentials: input.credentials,
-      });
-    const [updated] = await tx
-      .update(schema.platformDnsProvider)
-      .set({
-        ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.credentials
-          ? {
-              credentialEnvelope: JSON.stringify(
-                app.masterKey.seal(JSON.stringify(input.credentials), binding(p.id)),
-              ),
-            }
-          : {}),
-      })
-      .where(eq(schema.platformDnsProvider.id, p.id))
-      .returning();
-    if (!updated) throw new Error("DNS provider disappeared");
-    await recordAudit(tx, actor, {
-      action: "dns.provider_update",
-      targetType: "dns_provider",
-      targetId: p.id,
-      targetName: updated.name,
-      metadata: { credentialsRotated: !!input.credentials },
-    });
-    return providerDto(updated);
-  });
+async function bindingDto(db: Executor, row: BindingRow): Promise<DnsBinding> {
+  const provider = row.providerId ? await findProvider(db, row.providerId) : null;
+  return {
+    clusterId: row.clusterId,
+    mode: row.mode as DnsBinding["mode"],
+    providerId: row.providerId,
+    zone: provider?.zone ?? "",
+    domain: row.domain,
+    ttl: row.ttl,
+    lines: row.lines,
+    lineAliases: row.lineAliases,
+    allLabel: row.allLabel,
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
-export async function deleteDnsProvider(app: AppContext, id: string, actor: Actor) {
-  return app.db.transaction(async (tx) => {
-    await tx.select().from(schema.dnsState).where(eq(schema.dnsState.id, 1)).for("update");
-    const s = await state(tx);
-    if (dnsPolicy.parse(s.policy).providerId === id)
-      fail("DNS_PROVIDER_IN_USE", "provider is selected by DNS policy");
-    const managed = await tx
-      .select({ name: schema.dnsManagedName.name })
-      .from(schema.dnsManagedName)
-      .where(eq(schema.dnsManagedName.providerId, id))
-      .limit(1);
-    if (managed.length)
-      fail("DNS_PROVIDER_IN_USE", "provider still owns DNS records; reconcile first");
-    const p = await provider(tx, id);
-    await tx.delete(schema.platformDnsProvider).where(eq(schema.platformDnsProvider.id, id));
-    await recordAudit(tx, actor, {
-      action: "dns.provider_delete",
-      targetType: "dns_provider",
-      targetId: id,
-      targetName: p.name,
-    });
-    return { ok: true as const };
-  });
+
+/** The zone of a binding: the account's, or the domain itself (manual mode without an account). */
+function zoneOf(policy: BindingPolicy, provider: Provider | null) {
+  return provider?.zone ?? policy.domain;
 }
-async function validatePolicy(db: Executor, policy: DnsPolicy) {
-  if (!policy.enabled) return;
-  const p = await provider(db, policy.providerId ?? "");
-  relative(policy.cnameSuffix, p.zone);
-  const groups = await db.select().from(schema.nodeGroup);
-  const nodes = await db.select().from(schema.node);
+/** The fixed names of a binding (all-lines record and lines), relative to its domain. */
+const fixedLabels = (policy: BindingPolicy) => [
+  policy.allLabel,
+  ...policy.lines.map((l) => l.name),
+];
+
+async function validateBinding(db: Executor, clusterId: string, policy: BindingPolicy) {
+  if (policy.mode === "off") return;
+  const provider = policy.providerId ? await findProvider(db, policy.providerId) : null;
+  relative(policy.domain, zoneOf(policy, provider));
+  const groups = await db
+    .select()
+    .from(schema.nodeGroup)
+    .where(eq(schema.nodeGroup.clusterId, clusterId));
+  const nodes = await db.select().from(schema.node).where(eq(schema.node.clusterId, clusterId));
   for (const line of policy.lines) {
     if (!groups.some((g) => g.id === line.nodeGroupId))
-      fail("NODE_GROUP_NOT_FOUND", "DNS line references an unknown node group");
+      fail("NODE_GROUP_NOT_FOUND", "DNS line references a node group outside this cluster");
     if (new Set(line.overrides.map((o) => o.nodeId)).size !== line.overrides.length)
       fail("DNS_POLICY_INVALID", "duplicate node address override");
     for (const override of line.overrides) {
@@ -204,98 +175,144 @@ async function validatePolicy(db: Executor, policy: DnsPolicy) {
         fail("DNS_POLICY_INVALID", "DNS target must be a unicast address");
     }
   }
+  if (!provider) return;
+  // Bindings of other clusters in the same zone and domain may not plan the same names.
+  const others = await db
+    .select({ binding: schema.dnsBinding, zone: schema.platformDnsProvider.zone })
+    .from(schema.dnsBinding)
+    .innerJoin(
+      schema.platformDnsProvider,
+      eq(schema.platformDnsProvider.id, schema.dnsBinding.providerId),
+    )
+    .where(
+      and(
+        ne(schema.dnsBinding.clusterId, clusterId),
+        ne(schema.dnsBinding.mode, "off"),
+        eq(schema.dnsBinding.domain, policy.domain),
+      ),
+    );
+  const mine = new Set(fixedLabels(policy));
+  for (const other of others)
+    if (
+      other.zone === provider.zone &&
+      fixedLabels(bindingPolicy(other.binding)).some((label) => mine.has(label))
+    )
+      fail("DNS_BINDING_CONFLICT", "another cluster uses the same record names");
 }
-/** Current routing rights and healthy nodes determine addresses; DNS history never restores a dead node. */
-export async function compileDnsPlan(
+
+/**
+ * The cluster's records. auto: addresses of nodes that are active, online,
+ * healthy and run their target revision (current routing rights; DNS history
+ * never restores a dead node). manual: every active node's addresses (hand-made
+ * records do not follow health).
+ */
+export async function compileBindingPlan(
   db: Executor,
-  policy: DnsPolicy,
+  clusterId: string,
+  policy: BindingPolicy,
   now = Date.now(),
-): Promise<{ records: DnsRecord[]; managedNames: ManagedName[] }> {
-  if (!policy.enabled || !policy.providerId) return { records: [], managedNames: [] };
-  const p = await provider(db, policy.providerId);
-  relative(policy.cnameSuffix, p.zone);
+): Promise<Plan> {
+  if (policy.mode === "off" || !policy.domain) return { records: [], managedNames: [] };
+  const provider = policy.providerId ? await findProvider(db, policy.providerId) : null;
+  if (policy.mode === "auto" && !provider) return { records: [], managedNames: [] };
+  const zone = zoneOf(policy, provider);
+  relative(policy.domain, zone);
+  const manual = policy.mode === "manual";
   const sites = await db
-    .selectDistinct({ id: schema.site.id, clusterId: schema.site.clusterId })
+    .selectDistinct({ id: schema.site.id })
     .from(schema.site)
     .innerJoin(schema.siteDomain, eq(schema.siteDomain.siteId, schema.site.id))
     // Disabled and suspended sites keep their records; nodes answer 404 for them.
-    .where(eq(schema.siteDomain.verified, true));
-  const nodes = await db.select().from(schema.node);
-  const receipts = await db.select().from(schema.nodeConfigStatus);
-  const addresses = await db.select().from(schema.nodeIp);
-  const groups = await db.select().from(schema.nodeGroup);
+    .where(and(eq(schema.site.clusterId, clusterId), eq(schema.siteDomain.verified, true)))
+    .orderBy(schema.site.id);
+  const nodes = await db.select().from(schema.node).where(eq(schema.node.clusterId, clusterId));
+  const nodeIds = nodes.map((n) => n.id);
+  const receipts = nodeIds.length
+    ? await db
+        .select()
+        .from(schema.nodeConfigStatus)
+        .where(inArray(schema.nodeConfigStatus.nodeId, nodeIds))
+    : [];
+  const addresses = nodeIds.length
+    ? await db.select().from(schema.nodeIp).where(inArray(schema.nodeIp.nodeId, nodeIds))
+    : [];
+  const groups = await db
+    .select()
+    .from(schema.nodeGroup)
+    .where(eq(schema.nodeGroup.clusterId, clusterId));
   // Each node is compared with its own target: during a canary window the
   // non-canary nodes run the stable revision and stay in the plan.
-  const targets = new Map<string, RolloutTargets>();
-  for (const clusterId of [...new Set(nodes.map((n) => n.clusterId))].sort())
-    targets.set(clusterId, await rolloutTargets(db, clusterId));
+  const targets: RolloutTargets | undefined = manual
+    ? undefined
+    : await rolloutTargets(db, clusterId);
   const records: DnsRecord[] = [];
   const names = new Map<string, ManagedName>();
   const declare = (name: string, type: DnsRecord["type"]) => {
-    const relativeName = relative(name, p.zone);
-    const row = { name: relativeName, type };
+    const row = { name: relative(name, zone), type };
     names.set(nameKey(row), row);
-    return relativeName;
+    return row.name;
   };
   const add = (name: string, type: DnsRecord["type"], data: string) =>
     records.push({ name: declare(name, type), type, data, ttl: policy.ttl });
-  for (const site of sites) {
-    const target = `${site.id}.${policy.cnameSuffix}`,
-      allTarget = `all.${target}`;
-    add(target, "CNAME", allTarget);
-    declare(allTarget, "A");
-    declare(allTarget, "AAAA");
-    const all = new Set<string>();
-    for (const line of policy.lines) {
-      if (!groups.some((g) => g.id === line.nodeGroupId && g.clusterId === site.clusterId))
-        continue;
-      const lineTarget = `${line.name}.${target}`;
-      declare(lineTarget, "A");
-      declare(lineTarget, "AAAA");
-      const ips = new Set<string>();
-      for (const node of nodes.filter(
-        (n) =>
-          n.nodeGroupId === line.nodeGroupId &&
-          n.status === "active" &&
-          isOnline(n.lastSeenAt, now),
-      )) {
+  const allName = `${policy.allLabel}.${policy.domain}`;
+  declare(allName, "A");
+  declare(allName, "AAAA");
+  const all = new Set<string>();
+  const lines: { name: string; target: string }[] = [];
+  for (const line of policy.lines) {
+    if (!groups.some((g) => g.id === line.nodeGroupId)) continue;
+    const lineTarget = `${line.name}.${policy.domain}`;
+    lines.push({ name: line.name, target: lineTarget });
+    declare(lineTarget, "A");
+    declare(lineTarget, "AAAA");
+    const ips = new Set<string>();
+    for (const node of nodes.filter((n) => n.nodeGroupId === line.nodeGroupId)) {
+      if (node.status !== "active") continue;
+      if (!manual) {
         const receipt = receipts.find((r) => r.nodeId === node.id),
-          clusterTargets = targets.get(node.clusterId),
-          target = clusterTargets ? targetFor(node, clusterTargets) : undefined;
+          target = targets ? targetFor(node, targets) : undefined;
         // Same content as the target (a rollback copy has a higher number but the same hash).
         if (
+          !isOnline(node.lastSeenAt, now) ||
           !receipt?.dataPlaneHealthy ||
           receipt.state !== "applied" ||
           !target ||
           receipt.appliedContentHash !== target.contentHash
         )
           continue;
-        const override = line.overrides.find((o) => o.nodeId === node.id);
-        const candidates =
-          override?.addresses ??
-          addresses
-            .filter((a) => a.nodeId === node.id && forbiddenOriginRange(a.address, []) === null)
-            .map((a) => a.address);
-        for (const address of candidates) {
-          const parsed = parseIp(address);
-          if (!parsed || forbiddenOriginRange(address, override ? privateNetworks : []) !== null)
-            continue;
-          const ip = formatIp(parsed);
-          ips.add(ip);
-          all.add(ip);
-        }
       }
-      for (const ip of ips) add(lineTarget, ip.includes(":") ? "AAAA" : "A", ip);
+      const override = line.overrides.find((o) => o.nodeId === node.id);
+      const candidates =
+        override?.addresses ??
+        addresses
+          .filter((a) => a.nodeId === node.id && forbiddenOriginRange(a.address, []) === null)
+          .map((a) => a.address);
+      for (const address of candidates) {
+        const parsed = parseIp(address);
+        if (!parsed || forbiddenOriginRange(address, override ? privateNetworks : []) !== null)
+          continue;
+        const ip = formatIp(parsed);
+        ips.add(ip);
+        all.add(ip);
+      }
     }
-    for (const ip of all) add(allTarget, ip.includes(":") ? "AAAA" : "A", ip);
+    for (const ip of ips) add(lineTarget, ip.includes(":") ? "AAAA" : "A", ip);
   }
-  if (names.size > 10000 || records.length > 10000)
+  for (const ip of all) add(allName, ip.includes(":") ? "AAAA" : "A", ip);
+  for (const site of sites) {
+    add(`${site.id}.${policy.domain}`, "CNAME", allName);
+    if (policy.lineAliases)
+      for (const line of lines)
+        add(`${line.name}.${site.id}.${policy.domain}`, "CNAME", line.target);
+  }
+  if (names.size > MAX_RECORDS || records.length > MAX_RECORDS)
     fail("DNS_POLICY_INVALID", "DNS managed record limit exceeded");
   return {
     records: records.sort((a, b) => compare(recordKey(a), recordKey(b))),
     managedNames: [...names.values()].sort((a, b) => compare(nameKey(a), nameKey(b))),
   };
 }
+
 const PROTECTION_KEY = "dns_protection";
 const DEFAULT_PROTECTION: DnsProtection = { massRemovalRatio: 0.5 };
 const addressRecord = (r: { type: string }) => r.type === "A" || r.type === "AAAA";
@@ -333,10 +350,7 @@ export async function setDnsProtection(app: AppContext, input: DnsProtection, ac
  * records would go. Names the plan no longer manages (deleted sites,
  * removed lines) are not counted.
  */
-export function massRemoval(
-  previous: DnsRecord[],
-  next: { records: DnsRecord[]; managedNames: ManagedName[] },
-) {
+export function massRemoval(previous: DnsRecord[], next: Plan) {
   const managed = new Set(next.managedNames.map(nameKey));
   const before = previous.filter((r) => addressRecord(r) && managed.has(nameKey(r)));
   const after = new Set(next.records.filter(addressRecord).map(addressKey));
@@ -348,35 +362,56 @@ export function massRemoval(
 }
 
 /**
- * Publishes the DNS plan unless the mass removal protection holds it back:
- * a plan that would empty a non-empty record set (`all.` or a line) or
- * remove more than the configured share of address records keeps the
+ * Publishes a binding's plan unless the mass removal protection holds it
+ * back: a plan that would empty a non-empty record set (all-lines or a line)
+ * or remove more than the configured share of address records keeps the
  * previous revision, is stored as a blocked revision and raises the
- * dns_mass_removal_blocked alert, until a plan passes or an administrator
- * forces it. Covers the console losing its nodes (all of them look offline).
+ * dns_mass_removal_blocked alert of the cluster, until a plan passes or an
+ * administrator forces it. Covers the console losing its nodes (all of them
+ * look offline). Manual bindings are "applied" as soon as they are saved:
+ * the console does not write them.
  */
-async function publish(tx: Tx, policy: DnsPolicy, reason: string, opts: { force?: boolean } = {}) {
-  await tx.select().from(schema.dnsState).where(eq(schema.dnsState.id, 1)).for("update");
-  const plan = await compileDnsPlan(tx, policy);
+async function publishBinding(
+  tx: Tx,
+  clusterId: string,
+  policy: BindingPolicy,
+  reason: string,
+  opts: { force?: boolean; save?: boolean } = {},
+) {
+  const row = await lockBinding(tx, clusterId);
+  const cluster = await assertCluster(tx, clusterId);
+  if (opts.save)
+    await tx
+      .update(schema.dnsBinding)
+      .set({
+        mode: policy.mode,
+        providerId: policy.providerId,
+        domain: policy.domain,
+        ttl: policy.ttl,
+        lines: policy.lines,
+        lineAliases: policy.lineAliases,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.dnsBinding.clusterId, clusterId));
+  const plan = await compileBindingPlan(tx, clusterId, policy);
   const contentHash = createHash("sha256")
     .update(JSON.stringify({ policy, ...plan }))
     .digest("hex");
-  const s = await state(tx),
-    [previous] = s.desiredRevision
-      ? await tx
-          .select()
-          .from(schema.dnsRevision)
-          .where(eq(schema.dnsRevision.revision, s.desiredRevision))
-      : [];
-  const previousPolicy = previous ? dnsPolicy.safeParse(previous.policy) : undefined;
+  const [previous] = row.desiredRevision
+    ? await tx
+        .select()
+        .from(schema.dnsRevision)
+        .where(eq(schema.dnsRevision.revision, row.desiredRevision))
+    : [];
+  const previousPolicy = previous ? parsePolicy(previous.policy, row.allLabel) : null;
   if (
     !opts.force &&
     previous &&
-    previousPolicy?.success &&
-    previousPolicy.data.enabled &&
-    policy.enabled &&
-    previousPolicy.data.providerId === policy.providerId &&
-    previousPolicy.data.cnameSuffix === policy.cnameSuffix &&
+    previousPolicy?.mode === "auto" &&
+    policy.mode === "auto" &&
+    previousPolicy.providerId === policy.providerId &&
+    previousPolicy.domain === policy.domain &&
+    previousPolicy.allLabel === policy.allLabel &&
     previous.contentHash !== contentHash
   ) {
     const check = massRemoval(previous.records, plan);
@@ -390,16 +425,15 @@ async function publish(tx: Tx, policy: DnsPolicy, reason: string, opts: { force?
         .from(schema.dnsRevision)
         .where(
           and(
+            eq(schema.dnsRevision.clusterId, clusterId),
             eq(schema.dnsRevision.status, "blocked"),
             eq(schema.dnsRevision.contentHash, contentHash),
           ),
         );
       if (!held) {
-        await tx
-          .update(schema.dnsRevision)
-          .set({ status: "superseded" })
-          .where(eq(schema.dnsRevision.status, "blocked"));
+        await supersede(tx, clusterId, "blocked");
         await tx.insert(schema.dnsRevision).values({
+          clusterId,
           providerId: policy.providerId,
           policy,
           ...plan,
@@ -409,132 +443,251 @@ async function publish(tx: Tx, policy: DnsPolicy, reason: string, opts: { force?
           lastError: "dns_mass_removal_blocked",
         });
       }
-      await raisePlatformAlert(tx, "dns_mass_removal_blocked", "dns", "DNS");
+      await raisePlatformAlert(tx, "dns_mass_removal_blocked", clusterId, cluster.name);
       return previous;
     }
   }
   // A plan that passes (or is forced) ends any hold.
-  await tx
-    .update(schema.dnsRevision)
-    .set({ status: "superseded" })
-    .where(eq(schema.dnsRevision.status, "blocked"));
-  await resolvePlatformAlert(tx, "dns_mass_removal_blocked", "dns", "DNS");
+  await supersede(tx, clusterId, "blocked");
+  await resolvePlatformAlert(tx, "dns_mass_removal_blocked", clusterId, cluster.name);
   if (previous?.contentHash === contentHash) return previous;
-  const [row] = await tx
+  const manual = policy.mode === "manual";
+  const [inserted] = await tx
     .insert(schema.dnsRevision)
-    .values({ providerId: policy.providerId, policy, ...plan, contentHash, reason })
+    .values({
+      clusterId,
+      providerId: policy.providerId,
+      policy,
+      ...plan,
+      contentHash,
+      reason,
+      ...(manual ? { status: "applied", appliedAt: new Date() } : {}),
+    })
     .returning();
-  if (!row) throw new Error("DNS revision insert failed");
+  if (!inserted) throw new Error("DNS revision insert failed");
   await tx
     .update(schema.dnsRevision)
     .set({ status: "superseded" })
     .where(
-      and(eq(schema.dnsRevision.status, "pending"), ne(schema.dnsRevision.revision, row.revision)),
+      and(
+        eq(schema.dnsRevision.clusterId, clusterId),
+        eq(schema.dnsRevision.status, "pending"),
+        ne(schema.dnsRevision.revision, inserted.revision),
+      ),
     );
   await tx
-    .update(schema.dnsState)
-    .set({ policy, desiredRevision: row.revision })
-    .where(eq(schema.dnsState.id, 1));
+    .update(schema.dnsBinding)
+    .set({
+      desiredRevision: inserted.revision,
+      ...(manual ? { appliedRevision: inserted.revision } : {}),
+    })
+    .where(eq(schema.dnsBinding.clusterId, clusterId));
+  return inserted;
+}
+async function supersede(tx: Tx, clusterId: string, status: "blocked" | "pending") {
+  await tx
+    .update(schema.dnsRevision)
+    .set({ status: "superseded" })
+    .where(and(eq(schema.dnsRevision.clusterId, clusterId), eq(schema.dnsRevision.status, status)));
+}
+
+async function revisionRow(db: Executor, clusterId: string, revision: number | null) {
+  if (!revision) return undefined;
+  const [row] = await db
+    .select()
+    .from(schema.dnsRevision)
+    .where(
+      and(eq(schema.dnsRevision.revision, revision), eq(schema.dnsRevision.clusterId, clusterId)),
+    );
   return row;
 }
-export async function getDnsConfig(app: AppContext) {
-  const s = await state(app.db);
-  const [revision] = s.desiredRevision
-    ? await app.db
-        .select()
-        .from(schema.dnsRevision)
-        .where(eq(schema.dnsRevision.revision, s.desiredRevision))
-    : [];
+export async function getBinding(app: AppContext, clusterId: string) {
+  await assertCluster(app.db, clusterId);
+  const row = await loadBinding(app.db, clusterId);
+  const revision = await revisionRow(app.db, clusterId, row.desiredRevision);
   const [blocked] = await app.db
     .select()
     .from(schema.dnsRevision)
-    .where(eq(schema.dnsRevision.status, "blocked"))
+    .where(
+      and(eq(schema.dnsRevision.clusterId, clusterId), eq(schema.dnsRevision.status, "blocked")),
+    )
     .orderBy(desc(schema.dnsRevision.revision))
     .limit(1);
   const check = blocked
     ? massRemoval(revision?.records ?? [], blocked)
     : { removed: 0, previous: 0 };
   return {
-    policy: dnsPolicy.parse(s.policy),
+    binding: await bindingDto(app.db, row),
     revision: revision ? revisionDto(revision) : null,
+    applied:
+      !!revision && row.appliedRevision === row.desiredRevision && revision.status === "applied",
     records: revision?.records ?? [],
     blocked: blocked
       ? { ...revisionDto(blocked), removedRecords: check.removed, previousRecords: check.previous }
       : null,
   };
 }
+export async function listBindings(app: AppContext) {
+  const clusters = await app.db.select().from(schema.cluster).orderBy(schema.cluster.name);
+  const rows = await app.db.select().from(schema.dnsBinding);
+  const providers = await app.db.select().from(schema.platformDnsProvider);
+  const desired = rows.map((r) => r.desiredRevision).filter((r): r is number => !!r);
+  const revisions = desired.length
+    ? await app.db
+        .select()
+        .from(schema.dnsRevision)
+        .where(inArray(schema.dnsRevision.revision, desired))
+    : [];
+  const blocked = await app.db
+    .select({ clusterId: schema.dnsRevision.clusterId })
+    .from(schema.dnsRevision)
+    .where(eq(schema.dnsRevision.status, "blocked"));
+  return clusters.map((cluster) => {
+    const row = rows.find((r) => r.clusterId === cluster.id) ?? defaultRow(cluster.id);
+    const revision = revisions.find((r) => r.revision === row.desiredRevision);
+    return {
+      clusterId: cluster.id,
+      clusterName: cluster.name,
+      mode: row.mode as DnsBinding["mode"],
+      providerId: row.providerId,
+      zone: providers.find((p) => p.id === row.providerId)?.zone ?? "",
+      domain: row.domain,
+      revision: revision ? revisionDto(revision) : null,
+      applied:
+        !!revision && row.appliedRevision === row.desiredRevision && revision.status === "applied",
+      blocked: blocked.some((b) => b.clusterId === cluster.id),
+    };
+  });
+}
 
-/** Publishes the current plan although the protection held one back (audited). */
-export async function forceDnsPublish(app: AppContext, blockedRevision: number, actor: Actor) {
+/** Saves a binding and publishes its plan as a new DNS revision (no node revision). */
+export async function saveBinding(
+  app: AppContext,
+  clusterId: string,
+  input: DnsBindingInput,
+  actor: Actor,
+) {
+  await assertCluster(app.db, clusterId);
+  const current = await loadBinding(app.db, clusterId);
+  const policy: BindingPolicy = { ...input, allLabel: current.allLabel };
+  await validateBinding(app.db, clusterId, policy);
   return app.db.transaction(async (tx) => {
-    const [held] = await tx
-      .select()
-      .from(schema.dnsRevision)
-      .where(
-        and(
-          eq(schema.dnsRevision.revision, blockedRevision),
-          eq(schema.dnsRevision.status, "blocked"),
-        ),
-      );
-    if (!held) fail("DNS_NOT_BLOCKED", "this DNS revision is not held back");
-    const current = await state(tx);
-    const revision = await publish(tx, dnsPolicy.parse(current.policy), "force", { force: true });
+    const revision = await publishBinding(tx, clusterId, policy, "manual", { save: true });
     await recordAudit(tx, actor, {
-      action: "dns.force_publish",
-      targetType: "dns_revision",
-      targetId: String(revision.revision),
-      metadata: { blockedRevision, recordCount: revision.records.length },
+      action: "dns.binding_update",
+      targetType: "cluster",
+      targetId: clusterId,
+      metadata: {
+        mode: policy.mode,
+        providerId: policy.providerId,
+        domain: policy.domain,
+        lines: policy.lines.length,
+        revision: revision?.revision ?? null,
+        recordCount: revision?.records.length ?? 0,
+      },
     });
-    return revisionDto(revision);
+    return revision ? revisionDto(revision) : null;
   });
 }
-export async function saveDnsConfig(app: AppContext, input: DnsPolicy, actor: Actor) {
-  await validatePolicy(app.db, input);
-  return app.db.transaction(async (tx) => {
-    const revision = await publish(tx, input, "manual");
-    await recordAudit(tx, actor, {
-      action: "dns.publish",
-      targetType: "dns_revision",
-      targetId: String(revision.revision),
-      metadata: { enabled: input.enabled, recordCount: revision.records.length },
-    });
-    return revisionDto(revision);
-  });
-}
-export async function listDnsRevisions(app: AppContext) {
+export async function listBindingRevisions(app: AppContext, clusterId: string) {
+  await assertCluster(app.db, clusterId);
   return (
     await app.db
       .select()
       .from(schema.dnsRevision)
+      .where(eq(schema.dnsRevision.clusterId, clusterId))
       .orderBy(desc(schema.dnsRevision.revision))
       .limit(200)
   ).map(revisionDto);
 }
-export async function rollbackDnsConfig(app: AppContext, revision: number, actor: Actor) {
-  const [row] = await app.db
-    .select()
-    .from(schema.dnsRevision)
-    .where(eq(schema.dnsRevision.revision, revision));
+/** Restores the binding settings of a revision; addresses follow current health. */
+export async function rollbackBinding(
+  app: AppContext,
+  clusterId: string,
+  revision: number,
+  actor: Actor,
+) {
+  const row = await revisionRow(app.db, clusterId, revision);
   if (!row) fail("DNS_REVISION_NOT_FOUND", "DNS revision not found");
-  const policy = dnsPolicy.parse(row.policy);
-  await validatePolicy(app.db, policy);
+  const current = await loadBinding(app.db, clusterId);
+  const policy = parsePolicy(row.policy, current.allLabel);
+  if (!policy) fail("DNS_REVISION_NOT_FOUND", "DNS revision cannot be restored");
+  policy.allLabel = current.allLabel;
+  await validateBinding(app.db, clusterId, policy);
   return app.db.transaction(async (tx) => {
-    const result = await publish(tx, policy, "rollback");
+    const result = await publishBinding(tx, clusterId, policy, "rollback", { save: true });
     await recordAudit(tx, actor, {
       action: "dns.rollback",
-      targetType: "dns_revision",
-      targetId: String(result.revision),
-      metadata: { fromRevision: revision },
+      targetType: "cluster",
+      targetId: clusterId,
+      metadata: { fromRevision: revision, revision: result.revision },
     });
     return revisionDto(result);
   });
 }
+/** Publishes the current plan although the protection held one back (audited). */
+export async function forceBindingPublish(
+  app: AppContext,
+  clusterId: string,
+  blockedRevision: number,
+  actor: Actor,
+) {
+  return app.db.transaction(async (tx) => {
+    const held = await revisionRow(tx, clusterId, blockedRevision);
+    if (held?.status !== "blocked") fail("DNS_NOT_BLOCKED", "this DNS revision is not held back");
+    const row = await lockBinding(tx, clusterId);
+    const revision = await publishBinding(tx, clusterId, bindingPolicy(row), "force", {
+      force: true,
+    });
+    await recordAudit(tx, actor, {
+      action: "dns.force_publish",
+      targetType: "cluster",
+      targetId: clusterId,
+      metadata: {
+        blockedRevision,
+        revision: revision.revision,
+        recordCount: revision.records.length,
+      },
+    });
+    return revisionDto(revision);
+  });
+}
+
+/** The binding's records as absolute names plus a BIND zone file. */
+export async function exportBinding(app: AppContext, clusterId: string) {
+  await assertCluster(app.db, clusterId);
+  const row = await loadBinding(app.db, clusterId);
+  const policy = bindingPolicy(row);
+  const provider = row.providerId ? await findProvider(app.db, row.providerId) : null;
+  const zone = zoneOf(policy, provider);
+  let records: DnsRecord[] = [];
+  if (policy.mode === "manual")
+    records = (await compileBindingPlan(app.db, clusterId, policy)).records;
+  else if (policy.mode === "auto")
+    records = (await revisionRow(app.db, clusterId, row.desiredRevision))?.records ?? [];
+  const absoluteRecords = records.map((r) => ({
+    ...r,
+    name: absolute(r.name, zone),
+  }));
+  const width = Math.max(1, ...records.map((r) => r.name.length));
+  const zoneFile = zone
+    ? [
+        `$ORIGIN ${zone}.`,
+        `$TTL ${policy.ttl}`,
+        ...records.map(
+          (r) =>
+            `${r.name.padEnd(width)} ${r.ttl} IN ${r.type.padEnd(5)} ${r.type === "CNAME" ? `${r.data}.` : r.data}`,
+        ),
+        "",
+      ].join("\n")
+    : "";
+  return { origin: zone, records: absoluteRecords, zoneFile };
+}
 
 class Superseded extends Error {}
-async function assertCurrent(app: AppContext, revision: number) {
-  if ((await state(app.db)).desiredRevision !== revision) throw new Superseded();
+async function assertCurrent(app: AppContext, clusterId: string, revision: number) {
+  if ((await loadBinding(app.db, clusterId)).desiredRevision !== revision) throw new Superseded();
 }
-type ProviderRecord = { name: string; type: string; data: string; ttl: number };
 function normalizeRecord(record: ProviderRecord): ProviderRecord {
   const type = record.type.toUpperCase(),
     ip = type === "A" || type === "AAAA" ? parseIp(record.data) : null;
@@ -549,18 +702,38 @@ function normalizeRecord(record: ProviderRecord): ProviderRecord {
         : record.data,
   };
 }
+/** Groups RRsets into batches of at most 100 records without splitting a set. */
+function batches(sets: DnsRecord[][]) {
+  const out: DnsRecord[][] = [];
+  let current: DnsRecord[] = [];
+  for (const set of sets) {
+    if (current.length && current.length + set.length > 100) {
+      out.push(current);
+      current = [];
+    }
+    current.push(...set);
+  }
+  if (current.length) out.push(current);
+  return out;
+}
+/**
+ * Brings one provider zone in line with the binding's plan: claims the
+ * planned names, replaces changed RRsets (address sets before CNAMEs; a name
+ * changing type loses its old records first), deletes managed records the
+ * plan no longer has, reads back, then releases retired names. Only names
+ * this cluster claimed are ever changed.
+ */
 async function reconcileProvider(
   app: AppContext,
+  clusterId: string,
   p: Provider,
   revision: Revision,
   desired: DnsRecord[],
   desiredNames: ManagedName[],
 ) {
-  const credentials = JSON.parse(
-    app.masterKey.open(JSON.parse(p.credentialEnvelope), binding(p.id)).toString("utf8"),
-  );
-  const call = async (command: string, records?: ProviderRecord[]) =>
-    runCertd<ProviderRecord[]>(app, command, {
+  const credentials = openProvider(app, p);
+  const call = (command: "dns.list" | "dns.set" | "dns.cleanup", records?: ProviderRecord[]) =>
+    certdDns<ProviderRecord[]>(app, command, {
       provider: p.provider,
       zone: p.zone,
       credentials,
@@ -571,88 +744,136 @@ async function reconcileProvider(
     .select()
     .from(schema.dnsManagedName)
     .where(eq(schema.dnsManagedName.providerId, p.id));
-  const existingNames = new Set(stored.map((r) => r.name));
-  for (const name of desiredNames)
-    if (!existingNames.has(name.name) && actual.some((r) => r.name === name.name))
+  const own = stored.filter((r) => r.clusterId === clusterId);
+  const ownNames = new Set(own.map((r) => r.name));
+  const otherNames = new Set(stored.filter((r) => r.clusterId !== clusterId).map((r) => r.name));
+  for (const name of desiredNames) {
+    if (otherNames.has(name.name))
+      fail("DNS_BINDING_CONFLICT", "another cluster manages this DNS name");
+    if (!ownNames.has(name.name) && actual.some((r) => r.name === name.name))
       fail("DNS_RECORD_CONFLICT", "DNS name contains an unmanaged record");
-  await assertCurrent(app, revision.revision);
+  }
+  await assertCurrent(app, clusterId, revision.revision);
   if (desiredNames.length)
     await app.db
       .insert(schema.dnsManagedName)
-      .values(desiredNames.map((r) => ({ ...r, providerId: p.id })))
+      .values(desiredNames.map((r) => ({ ...r, providerId: p.id, clusterId })))
       .onConflictDoNothing();
-  const managed = new Map([...stored, ...desiredNames].map((r) => [nameKey(r), r]));
-  const wanted = new Set(desired.map(recordKey));
-  const present = new Set(actual.map((r) => recordKey(r as DnsRecord)));
-  const remove = actual.filter(
-    (r) => managed.has(nameKey(r)) && !wanted.has(recordKey(r as DnsRecord)),
-  );
-  const add = desired.filter((r) => !present.has(recordKey(r)));
-  for (const [command, records] of [
-    ["dns.cleanup", remove],
-    ["dns.present", add],
-  ] as const) {
-    for (let index = 0; index < records.length; index += 100) {
-      await assertCurrent(app, revision.revision);
-      await call(command, records.slice(index, index + 100));
+  const managed = new Set([...own, ...desiredNames].map(nameKey));
+  const desiredSets = new Map<string, DnsRecord[]>();
+  for (const r of desired) desiredSets.set(nameKey(r), [...(desiredSets.get(nameKey(r)) ?? []), r]);
+  const actualManaged = actual.filter((r) => managed.has(nameKey(r)));
+  const actualSets = new Map<string, ProviderRecord[]>();
+  for (const r of actualManaged)
+    actualSets.set(nameKey(r), [...(actualSets.get(nameKey(r)) ?? []), r]);
+  const changed = [...desiredSets.entries()]
+    .filter(([key, set]) => {
+      const current = actualSets.get(key) ?? [];
+      const wanted = new Set(set.map(recordKey));
+      return current.length !== set.length || current.some((r) => !wanted.has(recordKey(r)));
+    })
+    .map(([, set]) => set);
+  const stale = actualManaged.filter((r) => !desiredSets.has(nameKey(r)));
+  const desiredByName = new Set(desired.map((r) => r.name));
+  const typeChanges = stale.filter((r) => desiredByName.has(r.name));
+  const rest = stale.filter((r) => !desiredByName.has(r.name));
+  const steps: ["dns.set" | "dns.cleanup", ProviderRecord[][]][] = [
+    ["dns.cleanup", batches([typeChanges as DnsRecord[]])],
+    ["dns.set", batches(changed.filter((set) => set[0]?.type !== "CNAME"))],
+    ["dns.set", batches(changed.filter((set) => set[0]?.type === "CNAME"))],
+    ["dns.cleanup", batches([rest as DnsRecord[]])],
+  ];
+  for (const [command, groups] of steps)
+    for (const group of groups) {
+      await assertCurrent(app, clusterId, revision.revision);
+      await call(command, group);
     }
-  }
+  const wanted = new Set(desired.map(recordKey));
   const after = (await call("dns.list"))
     .map(normalizeRecord)
     .filter((r) => managed.has(nameKey(r)));
-  if (after.length !== desired.length || after.some((r) => !wanted.has(recordKey(r as DnsRecord))))
+  if (after.length !== desired.length || after.some((r) => !wanted.has(recordKey(r))))
     throw new Error("DNS readback mismatch");
   const keep = new Set(desiredNames.map(nameKey));
-  const retired = stored.filter((name) => !keep.has(nameKey(name))).map(nameKey);
+  const retired = own.filter((name) => !keep.has(nameKey(name))).map(nameKey);
   if (retired.length)
     await app.db.execute(
-      sql`delete from dns_managed_name where provider_id=${p.id}::uuid and (name || '|' || type) in (select jsonb_array_elements_text(${JSON.stringify(retired)}::jsonb))`,
+      sql`delete from dns_managed_name where provider_id=${p.id}::uuid and cluster_id=${clusterId}::uuid and (name || '|' || type) in (select jsonb_array_elements_text(${JSON.stringify(retired)}::jsonb))`,
     );
 }
-/** One worker at a time, with a non-blocking session lock; API policy updates remain responsive. */
-export async function reconcileDns(app: AppContext, actor: Actor = systemActor) {
+
+/** A stable 32-bit key for the binding's advisory lock. */
+const lockKey = (clusterId: string) =>
+  Number.parseInt(clusterId.replace(/-/g, "").slice(0, 8), 16) | 0;
+
+/**
+ * Publishes (health) and writes one binding's records. One worker per
+ * binding at a time (non-blocking session lock); other bindings are not
+ * affected by this one's provider.
+ */
+export async function reconcileBinding(
+  app: AppContext,
+  clusterId: string,
+  actor: Actor = systemActor,
+) {
   const connection = await app.pool.connect();
   let locked = false;
   try {
-    const lock = await connection.query("select pg_try_advisory_lock(550075, 5) as locked");
+    // lockKey is an integer; the pool of tests passes no bind parameters.
+    const lock = await connection.query(
+      `select pg_try_advisory_lock(550076, ${lockKey(clusterId)}) as locked`,
+    );
     locked = lock.rows[0]?.locked === true;
-    if (!locked) return { ok: true as const };
+    if (!locked) return;
+    const row = await loadBinding(app.db, clusterId);
+    const owned = await app.db
+      .select({ providerId: schema.dnsManagedName.providerId })
+      .from(schema.dnsManagedName)
+      .where(eq(schema.dnsManagedName.clusterId, clusterId));
+    // Manual bindings are not written; off bindings only while they still own records.
+    if (row.mode === "manual" || (row.mode === "off" && !owned.length && !row.desiredRevision))
+      return;
     const revision = await app.db.transaction(async (tx) => {
-      await tx.select().from(schema.dnsState).where(eq(schema.dnsState.id, 1)).for("update");
-      const current = await state(tx);
-      return publish(tx, dnsPolicy.parse(current.policy), "health");
+      const current = await lockBinding(tx, clusterId);
+      return publishBinding(tx, clusterId, bindingPolicy(current), "health");
     });
+    const policy = parsePolicy(revision.policy, row.allLabel);
     try {
-      const providers = await app.db.select().from(schema.platformDnsProvider);
-      const names = await app.db.select().from(schema.dnsManagedName);
-      for (const p of providers) {
-        if (p.id !== revision.providerId && !names.some((r) => r.providerId === p.id)) continue;
+      const providerIds = new Set(owned.map((o) => o.providerId));
+      const active = policy?.mode === "auto" ? revision.providerId : null;
+      if (active) providerIds.add(active);
+      for (const providerId of [...providerIds].sort()) {
+        const p = await findProvider(app.db, providerId);
         await reconcileProvider(
           app,
+          clusterId,
           p,
           revision,
-          p.id === revision.providerId ? revision.records : [],
-          p.id === revision.providerId ? revision.managedNames : [],
+          providerId === active ? revision.records : [],
+          providerId === active ? revision.managedNames : [],
         );
       }
-      await assertCurrent(app, revision.revision);
+      await assertCurrent(app, clusterId, revision.revision);
       await app.db.transaction(async (tx) => {
         await tx
           .update(schema.dnsRevision)
           .set({ status: "applied", lastError: "", appliedAt: new Date() })
           .where(eq(schema.dnsRevision.revision, revision.revision));
         await tx
-          .update(schema.dnsState)
+          .update(schema.dnsBinding)
           .set({ appliedRevision: revision.revision })
           .where(
-            and(eq(schema.dnsState.id, 1), eq(schema.dnsState.desiredRevision, revision.revision)),
+            and(
+              eq(schema.dnsBinding.clusterId, clusterId),
+              eq(schema.dnsBinding.desiredRevision, revision.revision),
+            ),
           );
         if (revision.status !== "applied")
           await recordAudit(tx, actor, {
             action: "dns.applied",
-            targetType: "dns_revision",
-            targetId: String(revision.revision),
-            metadata: { records: revision.records.length },
+            targetType: "cluster",
+            targetId: clusterId,
+            metadata: { revision: revision.revision, records: revision.records.length },
           });
       });
     } catch (error) {
@@ -661,47 +882,116 @@ export async function reconcileDns(app: AppContext, actor: Actor = systemActor) 
           .update(schema.dnsRevision)
           .set({ status: "superseded" })
           .where(eq(schema.dnsRevision.revision, revision.revision));
-        return { ok: true as const };
+        return;
       }
       await app.db
         .update(schema.dnsRevision)
-        .set({ status: "failed", lastError: "dns_reconcile_failed" })
+        .set({ status: "failed", lastError: errorCode(error) })
         .where(eq(schema.dnsRevision.revision, revision.revision));
-      app.log.warn("DNS reconciliation failed", { revision: revision.revision });
+      app.log.warn("DNS reconciliation failed", {
+        clusterId,
+        revision: revision.revision,
+        code: errorCode(error),
+      });
       throw error;
     }
-    return { ok: true as const };
   } finally {
-    if (locked) await connection.query("select pg_advisory_unlock(550075, 5)");
+    if (locked) await connection.query(`select pg_advisory_unlock(550076, ${lockKey(clusterId)})`);
     connection.release();
   }
 }
+
+/**
+ * Reconciles every binding that is automatic or still owns records, four at
+ * a time; a failing provider only fails its own clusters. With a cluster id,
+ * reconciles that binding and reports its error.
+ */
+export async function reconcileDns(
+  app: AppContext,
+  actor: Actor = systemActor,
+  clusterId?: string,
+) {
+  if (clusterId) {
+    await assertCluster(app.db, clusterId);
+    await reconcileBinding(app, clusterId, actor);
+    return { ok: true as const };
+  }
+  const bindings = await app.db
+    .select({ clusterId: schema.dnsBinding.clusterId })
+    .from(schema.dnsBinding)
+    .where(ne(schema.dnsBinding.mode, "manual"));
+  const owners = await app.db
+    .selectDistinct({ clusterId: schema.dnsManagedName.clusterId })
+    .from(schema.dnsManagedName);
+  const queue = [...new Set([...bindings, ...owners].map((b) => b.clusterId))].sort();
+  const failures: string[] = [];
+  const worker = async () => {
+    for (let id = queue.shift(); id; id = queue.shift()) {
+      try {
+        await reconcileBinding(app, id, actor);
+      } catch {
+        failures.push(id);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: 4 }, worker));
+  return { ok: true as const, failures };
+}
+
+/** Refused while the cluster's binding still owns records at a provider. */
+export async function assertBindingReleased(db: Executor, clusterId: string) {
+  const [owned] = await db
+    .select({ name: schema.dnsManagedName.name })
+    .from(schema.dnsManagedName)
+    .where(eq(schema.dnsManagedName.clusterId, clusterId))
+    .limit(1);
+  const row = await loadBinding(db, clusterId);
+  if (owned || row.mode === "auto")
+    fail("DNS_BINDING_IN_USE", "turn the cluster's DNS off and wait for its records to be removed");
+}
+
 export async function siteDnsTarget(app: AppContext, siteId: string, scope: SiteScope) {
-  const site = await findSite(app.db, siteId, scope),
-    s = await state(app.db),
-    policy = dnsPolicy.parse(s.policy);
-  if (!policy.enabled || !policy.providerId)
-    return { target: null, published: false, healthy: false, lines: [] };
-  const p = await provider(app.db, policy.providerId);
-  const target = `${site.id}.${policy.cnameSuffix}`;
-  const [revision] = s.desiredRevision
-    ? await app.db
-        .select()
-        .from(schema.dnsRevision)
-        .where(eq(schema.dnsRevision.revision, s.desiredRevision))
-    : [];
+  const site = await findSite(app.db, siteId, scope);
+  const row = await loadBinding(app.db, site.clusterId);
+  if (row.mode === "off" || !row.domain)
+    return { target: null, mode: "off" as const, published: false, healthy: false, lines: [] };
+  const target = `${site.id}.${row.domain}`;
   const groups = await app.db
     .select()
     .from(schema.nodeGroup)
     .where(eq(schema.nodeGroup.clusterId, site.clusterId));
+  const lines = row.lines
+    .filter((l) => groups.some((g) => g.id === l.nodeGroupId))
+    .map((l) => ({
+      name: l.name,
+      target: row.lineAliases ? `${l.name}.${target}` : `${l.name}.${row.domain}`,
+    }));
+  if (row.mode === "manual")
+    return { target, mode: "manual" as const, published: false, healthy: false, lines };
+  const provider = row.providerId ? await findProvider(app.db, row.providerId) : null;
+  const revision = await revisionRow(app.db, site.clusterId, row.desiredRevision);
+  const allName = provider ? relative(`${row.allLabel}.${row.domain}`, provider.zone) : "";
   return {
     target,
-    published: s.appliedRevision === s.desiredRevision && revision?.status === "applied",
-    healthy: !!revision?.records.some(
-      (r) => r.name === relative(`all.${target}`, p.zone) && (r.type === "A" || r.type === "AAAA"),
-    ),
-    lines: policy.lines
-      .filter((l) => groups.some((g) => g.id === l.nodeGroupId))
-      .map((l) => ({ name: l.name, target: `${l.name}.${target}` })),
+    mode: "auto" as const,
+    published: row.appliedRevision === row.desiredRevision && revision?.status === "applied",
+    healthy: !!revision?.records.some((r) => r.name === allName && addressRecord(r)),
+    lines,
   };
+}
+
+/** The target of every site of a cluster that has DNS (tenant automatic records). */
+export async function siteTargets(db: Executor, clusterIds: string[]) {
+  if (!clusterIds.length) return new Map<string, string>();
+  const rows = await db
+    .select()
+    .from(schema.dnsBinding)
+    .where(
+      and(
+        inArray(schema.dnsBinding.clusterId, clusterIds),
+        ne(schema.dnsBinding.mode, "off"),
+        isNotNull(schema.dnsBinding.domain),
+      ),
+    );
+  return new Map(rows.filter((r) => r.domain).map((r) => [r.clusterId, r.domain]));
 }

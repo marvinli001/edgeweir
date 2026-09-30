@@ -164,6 +164,19 @@ describe("service accounts, scopes and idempotency keys", async () => {
       data: { scope: "organizations:write" },
     });
     expect((await api(narrow, "GET", "/sites")).status).toBe(200);
+    // DNS: the catalog needs no scope, a site's CNAME target needs sites:read.
+    expect((await api(narrow, "GET", "/dns/catalog")).status).toBe(200);
+    const missing = "00000000-0000-4000-8000-000000000000";
+    expect((await api(narrow, "GET", `/sites/${missing}/cname`)).json.code).toBe("SITE_NOT_FOUND");
+    const clusters = await admin.serviceAccounts.create({
+      name: "infra",
+      scopes: ["clusters:read"],
+    });
+    const infra = (await admin.serviceAccounts.createKey({ id: clusters.id })).secret;
+    expect((await api(infra, "GET", `/sites/${missing}/cname`)).json).toMatchObject({
+      code: "SCOPE_REQUIRED",
+      data: { scope: "sites:read" },
+    });
     const me = await api(narrow, "GET", "/me");
     expect(me.json.serviceAccount).toMatchObject({ scopes: ["sites:read"] });
   });
@@ -183,6 +196,12 @@ describe("service accounts, scopes and idempotency keys", async () => {
         { scope: "platform", cidr: "203.0.113.0/24", reason: "attack", durationSeconds: 3600 },
       ],
       ["GET", "/settings/bans", undefined],
+      ["GET", "/dns/providers", undefined],
+      ["GET", "/dns/bindings", undefined],
+      ["PUT", "/clusters/00000000-0000-4000-8000-000000000000/dns", { binding: { mode: "off" } }],
+      ["POST", "/dns/reconcile", {}],
+      ["POST", "/dns/zones", { id: "00000000-0000-4000-8000-000000000000" }],
+      ["GET", "/dns-credentials", undefined],
       ["POST", "/sites", { name: "x", domains: ["x.test"], origins: [{ address: "o.test" }] }],
     ] as const) {
       const res = await api(full, method, path, body);

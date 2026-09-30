@@ -3,6 +3,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, eq, gt, ne, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
+import { assertBindingReleased } from "./dns";
 import { ONLINE_WINDOW_SECONDS } from "./nodes";
 import {
   type Executor,
@@ -152,6 +153,7 @@ export async function deleteCluster(db: Database, id: string, actor: Actor): Pro
         sites: siteCount,
       });
     }
+    await assertBindingReleased(tx, id);
     await tx.delete(schema.cluster).where(eq(schema.cluster.id, id));
     await recordAudit(tx, actor, {
       action: "cluster.delete",

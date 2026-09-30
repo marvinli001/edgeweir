@@ -235,7 +235,7 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 | 命令 | `version`、`providers`、`obtain`、`renew`、`revoke`、`dns.list`、`dns.set`、`dns.present`、`dns.cleanup` |
 | DNS 服务商 | `cloudflare`、`alidns`、`huaweicloud`、`dnspod` |
 
-平台 DNS（`dns.reconcile`，每分钟）按健康节点与域名路由权计算记录，生成 `dns_revision`，写入 `platform_dns_provider` 指定的区域；写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复。域名路由权需要 TXT 校验（`_edgeweir-verification.<域名>`），状态存在 `domain_ownership`。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 与告警](docs/guide/dns-and-alerts.md)。
+平台 DNS 按集群绑定（`dns_binding`）：`dns.reconcile` 每分钟按健康节点与域名路由权计算每个集群的记录（集群级地址记录，每个站点一条 CNAME），生成该集群的 `dns_revision`，写入绑定所选账号（`platform_dns_provider`）的区域，各集群并发、互不阻塞；写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复。域名路由权需要 TXT 校验（`_edgeweir-verification.<域名>`），状态存在 `domain_ownership`。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 与告警](docs/guide/dns-and-alerts.md)。
 
 ## 统计、日志与告警
 
@@ -335,13 +335,14 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | --- | --- |
 | `certificate` | 证书链、指纹、到期与续期状态；私钥与 ACME 账户信封加密 |
 | `acme_challenge` | 短期公开的 HTTP-01 响应 |
-| `dns_credential` | 组织的 DNS 服务商凭据，信封加密 |
+| `dns_credential` | 组织的 DNS 服务商凭据，信封加密；可开启自动写记录 |
 | `dns_challenge_lease` | DNS-01 TXT 记录的清理责任 |
 | `domain_ownership` | 域名归属校验 |
-| `platform_dns_provider` | 平台 DNS 服务商与区域，凭据信封加密 |
-| `dns_state` | 平台 DNS 策略与期望 / 已应用的 DNS revision |
-| `dns_revision` | DNS revision：记录集、托管名称、状态 |
-| `dns_managed_name` | 已登记的托管 DNS 名称 |
+| `platform_dns_provider` | 平台 DNS 服务商账号与区域，凭据信封加密 |
+| `dns_binding` | 集群的 DNS 绑定：模式、服务商账号、集群域名、TTL、线路、期望 / 已应用的 DNS revision |
+| `dns_revision` | 集群的 DNS revision：绑定设置、记录集、托管名称、状态 |
+| `dns_managed_name` | 已登记的托管 DNS 名称及所属集群 |
+| `dns_owned_record` | 控制台写入组织自有区域的记录（所有权 TXT、CNAME）及其状态 |
 
 ### 统计、日志、任务与告警
 
@@ -401,6 +402,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0026_p0_usage` | `site_usage`、序列 `site_usage_seq`、`node_stats_cursor.complete_until`；为已有分钟统计标记用量窗口 |
 | `0027_p0_config_canary` | `cluster_rollout`；`alert_event.site_id`、`alert_state.site_id` 可空（平台告警） |
 | `0028_g1_dynamic_bans` | `ip_ban`、序列 `ip_ban_seq`；`node.ban_status`；`organization_limit.max_bans` |
+| `0029_dns_cluster_bindings` | `dns_binding`、`dns_owned_record`；`dns_revision.cluster_id`、`dns_managed_name.cluster_id`、`dns_credential.auto_records`；平台 DNS 策略转换为各集群的绑定，删除 `dns_state` |
 
 ## 构建产物
 

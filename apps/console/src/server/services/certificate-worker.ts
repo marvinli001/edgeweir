@@ -8,10 +8,11 @@ import { recordAudit, systemActor } from "./audit";
 import {
   certificateAccountBinding,
   certificateKeyBinding,
-  dnsCredentialBinding,
   findDnsCredential,
   inspectCertificate,
+  openDnsCredential,
 } from "./certificates";
+import { certdDns, outboundAllowCidrs } from "./dns-providers";
 import { publishRevision, rolloutTargets, targetFor } from "./revisions";
 
 type HelperEvent = {
@@ -22,6 +23,16 @@ type HelperEvent = {
   keyAuthorization?: string;
   account?: Record<string, unknown>;
 };
+
+/** A failed helper command; `code` classifies DNS provider errors (dns_auth_failed, …). */
+export class CertdError extends Error {
+  constructor(
+    command: string,
+    readonly code: string,
+  ) {
+    super(`certificate helper ${command} failed`);
+  }
+}
 
 /** Secrets travel over stdin/stdout only, never shell arguments or logs. */
 export async function runCertd<T = Record<string, unknown>>(
@@ -53,7 +64,7 @@ export async function runCertd<T = Record<string, unknown>>(
   child.stderr.resume(); // dependency diagnostics may quote credentials
   child.stdin.on("error", () => {});
   child.stdin.write(`${JSON.stringify({ command, params })}\n`);
-  let result: { ok?: boolean; result?: T } | undefined;
+  let result: { ok?: boolean; result?: T; code?: string } | undefined;
   try {
     for await (const line of createInterface({ input: child.stdout })) {
       const message = JSON.parse(line);
@@ -65,7 +76,13 @@ export async function runCertd<T = Record<string, unknown>>(
     }
     const code = await exit;
     if (killed) throw new Error("certificate helper exceeded its time or output limit");
-    if (code !== 0 || !result?.ok) throw new Error(`certificate helper ${command} failed`);
+    if (code !== 0 || !result?.ok)
+      throw new CertdError(
+        command,
+        typeof result?.code === "string" && /^[a-z0-9_]{1,40}$/.test(result.code)
+          ? result.code
+          : "certd_failed",
+      );
     return result.result as T;
   } finally {
     clearTimeout(timer);
@@ -334,11 +351,8 @@ export async function issueCertificate(app: AppContext, id: string) {
       dns = {
         provider: credential.provider,
         zone: `${credential.zone}.`,
-        credentials: JSON.parse(
-          app.masterKey
-            .open(JSON.parse(credential.credentialEnvelope), dnsCredentialBinding(credential.id))
-            .toString("utf8"),
-        ),
+        credentials: openDnsCredential(app, credential),
+        outbound: { allowCidrs: outboundAllowCidrs(app) },
       };
     }
     const result = await runCertd(
@@ -476,14 +490,10 @@ async function cleanupDnsLease(
     .where(eq(schema.dnsCredential.id, lease.credentialId));
   if (!credential) return;
   try {
-    await runCertd(app, "dns.cleanup", {
+    await certdDns(app, "dns.cleanup", {
       provider: credential.provider,
       zone: credential.zone,
-      credentials: JSON.parse(
-        app.masterKey
-          .open(JSON.parse(credential.credentialEnvelope), dnsCredentialBinding(credential.id))
-          .toString("utf8"),
-      ),
+      credentials: openDnsCredential(app, credential),
       records: [lease.record],
     });
     await app.db.delete(schema.dnsChallengeLease).where(eq(schema.dnsChallengeLease.id, lease.id));

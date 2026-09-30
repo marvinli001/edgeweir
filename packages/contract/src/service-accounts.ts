@@ -38,6 +38,8 @@ export const serviceAccountProcedures = {
   "sites.list": "sites:read",
   "sites.get": "sites:read",
   "sites.setEnabled": "sites:write",
+  "dns.catalog": null,
+  "dns.siteTarget": "sites:read",
   "admin.sites.suspend": "sites:suspend",
   "admin.sites.resume": "sites:suspend",
   "admin.organizations.getLimits": "limits:read",

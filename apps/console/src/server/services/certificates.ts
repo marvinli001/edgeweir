@@ -5,6 +5,7 @@ import {
   type CertificateRequest,
   type CertificateUpload,
   type DnsCredentialInput,
+  dnsProviderEntry,
   type TlsSettings,
   tlsSettings,
 } from "@edgeweir/contract";
@@ -14,6 +15,7 @@ import { assertCertificateNames } from "../lib/certificate-names";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
+import { certdDns, probe, validCredentials } from "./dns-providers";
 import { assertOrgLimit } from "./organization-limits";
 import { type Executor, getRevision, publishRevision } from "./revisions";
 import { publishedRevisions } from "./rollout";
@@ -354,8 +356,8 @@ export async function updateHttps(
   });
 }
 
-export async function findDnsCredential(db: Executor, id: string, scope: SiteScope) {
-  const [row] = await db
+export async function findDnsCredential(db: Executor, id: string, scope: SiteScope, lock = false) {
+  const query = db
     .select()
     .from(schema.dnsCredential)
     .where(
@@ -364,6 +366,7 @@ export async function findDnsCredential(db: Executor, id: string, scope: SiteSco
         scope.all ? undefined : eq(schema.dnsCredential.organizationId, scope.organizationId),
       ),
     );
+  const [row] = lock ? await query.for("update") : await query;
   if (!row) fail("DNS_CREDENTIAL_NOT_FOUND", "DNS credential not found");
   return row;
 }
@@ -374,10 +377,30 @@ export async function listDnsCredentials(app: AppContext, scope: SiteScope) {
       name: schema.dnsCredential.name,
       provider: schema.dnsCredential.provider,
       zone: schema.dnsCredential.zone,
+      autoRecords: schema.dnsCredential.autoRecords,
     })
     .from(schema.dnsCredential)
-    .where(scope.all ? undefined : eq(schema.dnsCredential.organizationId, scope.organizationId));
+    .where(scope.all ? undefined : eq(schema.dnsCredential.organizationId, scope.organizationId))
+    .orderBy(schema.dnsCredential.name);
 }
+const credentialDto = (row: typeof schema.dnsCredential.$inferSelect) => ({
+  id: row.id,
+  name: row.name,
+  provider: row.provider,
+  zone: row.zone,
+  autoRecords: row.autoRecords,
+});
+const sealCredential = (app: AppContext, id: string, credentials: Record<string, string>) =>
+  JSON.stringify(app.masterKey.seal(JSON.stringify(credentials), dnsCredentialBinding(id)));
+export const openDnsCredential = (
+  app: AppContext,
+  row: typeof schema.dnsCredential.$inferSelect,
+): Record<string, string> =>
+  JSON.parse(
+    app.masterKey
+      .open(JSON.parse(row.credentialEnvelope), dnsCredentialBinding(row.id))
+      .toString("utf8"),
+  );
 export async function createDnsCredential(
   app: AppContext,
   input: DnsCredentialInput,
@@ -385,63 +408,130 @@ export async function createDnsCredential(
 ) {
   const id = randomUUID();
   const organizationId = orgFor(ctx);
-  const allowed: Record<string, string[]> = {
-    cloudflare: ["api_token", "zone_token"],
-    alidns: ["access_key_id", "access_key_secret", "region_id", "security_token"],
-    huaweicloud: ["access_key_id", "secret_access_key", "region_id"],
-    dnspod: ["auth_token"],
-  };
-  if (Object.keys(input.credentials).some((key) => !allowed[input.provider]?.includes(key)))
-    fail("DNS_CREDENTIAL_INVALID", "unknown DNS credential field");
-  const required: Record<string, string[]> = {
-    cloudflare: ["api_token"],
-    alidns: ["access_key_id", "access_key_secret"],
-    huaweicloud: ["access_key_id", "secret_access_key"],
-    dnspod: ["auth_token"],
-  };
-  if (
-    required[input.provider]?.some((key) => !input.credentials[key]) ||
-    Object.values(input.credentials).some((value) =>
-      [...value].some(
-        (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
-      ),
-    )
-  ) {
-    fail("DNS_CREDENTIAL_INVALID", "missing or malformed DNS credential");
-  }
-  if (input.credentials.region_id && !/^[a-z0-9-]{1,32}$/.test(input.credentials.region_id)) {
-    fail("DNS_CREDENTIAL_INVALID", "invalid DNS provider region");
-  }
+  const credentials = validCredentials(
+    app,
+    input.provider,
+    input.credentials,
+    "DNS_CREDENTIAL_INVALID",
+  );
   return app.db.transaction(async (tx) => {
-    await tx.insert(schema.dnsCredential).values({
-      id,
-      organizationId,
-      name: input.name,
-      provider: input.provider,
-      zone: input.zone,
-      credentialEnvelope: JSON.stringify(
-        app.masterKey.seal(JSON.stringify(input.credentials), dnsCredentialBinding(id)),
-      ),
-    });
+    const [row] = await tx
+      .insert(schema.dnsCredential)
+      .values({
+        id,
+        organizationId,
+        name: input.name,
+        provider: input.provider,
+        zone: input.zone,
+        autoRecords: input.autoRecords,
+        credentialEnvelope: sealCredential(app, id, credentials),
+      })
+      .returning();
+    if (!row) throw new Error("DNS credential insert failed");
     await recordAudit(tx, ctx.actor, {
       action: "dns_credential.create",
       organizationId,
       targetType: "dns_credential",
       targetId: id,
       targetName: input.name,
+      metadata: { provider: input.provider, zone: input.zone, autoRecords: input.autoRecords },
     });
-    return { id, name: input.name, provider: input.provider, zone: input.zone };
+    return credentialDto(row);
   });
+}
+/** Renames, rotates the credentials (every field again) or switches automatic records. */
+export async function updateDnsCredential(
+  app: AppContext,
+  input: { id: string; name?: string; credentials?: Record<string, string>; autoRecords?: boolean },
+  ctx: CertificateContext,
+) {
+  return app.db.transaction(async (tx) => {
+    const row = await findDnsCredential(tx, input.id, ctx.scope, true);
+    const credentials = input.credentials
+      ? validCredentials(app, row.provider, input.credentials, "DNS_CREDENTIAL_INVALID")
+      : undefined;
+    const [updated] = await tx
+      .update(schema.dnsCredential)
+      .set({
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.autoRecords !== undefined ? { autoRecords: input.autoRecords } : {}),
+        ...(credentials ? { credentialEnvelope: sealCredential(app, row.id, credentials) } : {}),
+      })
+      .where(eq(schema.dnsCredential.id, row.id))
+      .returning();
+    if (!updated) throw new Error("DNS credential disappeared");
+    await recordAudit(tx, ctx.actor, {
+      action: "dns_credential.update",
+      organizationId: row.organizationId,
+      targetType: "dns_credential",
+      targetId: row.id,
+      targetName: updated.name,
+      metadata: {
+        credentialsRotated: !!credentials,
+        ...(input.autoRecords !== undefined ? { autoRecords: input.autoRecords } : {}),
+      },
+    });
+    return credentialDto(updated);
+  });
+}
+async function credentialSource(
+  app: AppContext,
+  input: { id: string } | { provider: string; credentials: Record<string, string> },
+  scope: SiteScope,
+) {
+  if ("id" in input) {
+    const row = await findDnsCredential(app.db, input.id, scope);
+    return { provider: row.provider, zone: row.zone, credentials: openDnsCredential(app, row) };
+  }
+  return {
+    provider: input.provider,
+    zone: undefined,
+    credentials: validCredentials(app, input.provider, input.credentials, "DNS_CREDENTIAL_INVALID"),
+  };
+}
+/** Zones the credentials can manage (providers that can list zones). */
+export async function dnsCredentialZones(
+  app: AppContext,
+  input: { id: string } | { provider: string; credentials: Record<string, string> },
+  scope: SiteScope,
+) {
+  const { provider, credentials } = await credentialSource(app, input, scope);
+  if (!dnsProviderEntry(provider)?.capabilities.listZones)
+    fail("DNS_ZONES_UNSUPPORTED", "this provider cannot list zones");
+  const zones = await probe(() => certdDns<string[]>(app, "dns.zones", { provider, credentials }));
+  return {
+    zones: [...new Set(zones.map((z) => z.replace(/\.$/, "").toLowerCase()))].sort().slice(0, 1000),
+  };
+}
+/** Reads the zone's records with the credentials (connection test). */
+export async function testDnsCredential(
+  app: AppContext,
+  input: { id: string } | { provider: string; credentials: Record<string, string>; zone: string },
+  scope: SiteScope,
+) {
+  const resolved = await credentialSource(app, input, scope);
+  const zone = "zone" in input ? input.zone : resolved.zone;
+  const result = await probe(() =>
+    certdDns<{ records: number }>(app, "dns.test", { ...resolved, zone }),
+  );
+  return { ok: true as const, records: result.records };
 }
 export async function deleteDnsCredential(app: AppContext, id: string, ctx: CertificateContext) {
   return app.db.transaction(async (tx) => {
-    const row = await findDnsCredential(tx, id, ctx.scope);
+    const row = await findDnsCredential(tx, id, ctx.scope, true);
     const refs = await tx
       .select({ id: schema.certificate.id })
       .from(schema.certificate)
       .where(sql`${schema.certificate.acme}->>'dnsCredentialId' = ${id}`)
       .limit(1);
     if (refs.length) fail("CERTIFICATE_IN_USE", "DNS credential is referenced by a certificate");
+    const [owned] = await tx
+      .select({ id: schema.dnsOwnedRecord.id })
+      .from(schema.dnsOwnedRecord)
+      .where(eq(schema.dnsOwnedRecord.credentialId, id))
+      .limit(1);
+    if (owned)
+      fail("DNS_CREDENTIAL_IN_USE", "turn automatic records off and wait for them to be removed");
     await tx.delete(schema.dnsCredential).where(eq(schema.dnsCredential.id, id));
     await recordAudit(tx, ctx.actor, {
       action: "dns_credential.delete",

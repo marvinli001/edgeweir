@@ -3,7 +3,7 @@ import { schema } from "@edgeweir/db";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
-import { compileDnsPlan } from "../../src/server/services/dns";
+import { compileBindingPlan } from "../../src/server/services/dns";
 import {
   latestRevision,
   nodeTarget,
@@ -81,10 +81,12 @@ describe("configuration canary with automatic rollback", async () => {
   };
   const later = (seconds: number) => new Date(Date.now() + seconds * 1000);
   const dnsPolicy = () => ({
-    enabled: true,
+    mode: "auto" as const,
     providerId,
-    cnameSuffix: "edge.cdn.test",
+    domain: "edge.cdn.test",
     ttl: 60,
+    lineAliases: false,
+    allLabel: "all",
     lines: [
       {
         name: "stable",
@@ -99,8 +101,8 @@ describe("configuration canary with automatic rollback", async () => {
     ],
   });
   const planned = async (now = Date.now()) =>
-    (await compileDnsPlan(ctx.db, dnsPolicy(), now)).records
-      .filter((r) => r.name.startsWith("all."))
+    (await compileBindingPlan(ctx.db, clusterId, dnsPolicy(), now)).records
+      .filter((r) => r.name === "all.edge")
       .map((r) => r.data)
       .sort();
 
