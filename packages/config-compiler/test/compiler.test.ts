@@ -2,9 +2,11 @@ import { parseExpression } from "@edgeweir/rule-engine";
 import { describe, expect, it } from "vitest";
 import {
   applyNodeConfigDiff,
+  type CcPolicyModel,
   ConfigCapacityError,
   compileNodeConfig,
   contentHash,
+  DEFAULT_SITE_PROTECTION,
   decodeNodeConfig,
   diffNodeConfig,
   encodeNodeConfig,
@@ -12,7 +14,9 @@ import {
   MAX_SITES_PER_CLUSTER,
   nodeRequirements,
   parseDomain,
+  type RuleModel,
   type SiteModel,
+  usesChallenges,
 } from "../src/index";
 
 const site = (id: string, overrides: Partial<SiteModel> = {}): SiteModel => ({
@@ -272,5 +276,228 @@ describe("diffNodeConfig", () => {
     const diff = diffNodeConfig(base, target);
     diff.contentHash = "0".repeat(64);
     expect(() => applyNodeConfigDiff(base, diff)).toThrow(/hash mismatch/);
+  });
+});
+
+describe("challenges and CC mitigation", () => {
+  const keys = [
+    { id: "k3", role: "next" },
+    { id: "k1", role: "previous" },
+    { id: "k2", role: "current" },
+  ];
+  const cc: CcPolicyModel = {
+    maxLevel: "pow",
+    highPowInsteadOfCaptcha: true,
+    windowSeconds: 10,
+    siteQps: 1000,
+    urlQps: 200,
+    ipQps: 50,
+    ipBanSeconds: 600,
+    originErrorPercent: 50,
+    originErrorMinRequests: 100,
+    escalateAfterSeconds: 10,
+    cooldownSeconds: 60,
+  };
+  const rule = (overrides: Partial<RuleModel> = {}): RuleModel => ({
+    id: "r1",
+    phase: "waf-custom",
+    expression: parseExpression('http.request.uri.path eq "/login"'),
+    action: { kind: "challenge", type: "pow" },
+    ...overrides,
+  });
+  const plain = compileNodeConfig({ clusterId: "c", sites: [site("a"), site("b")] }, 1n);
+
+  it("leaves protection, keys and features out unless the cluster uses challenges", () => {
+    const unused = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [
+          site("a", { protection: { ...DEFAULT_SITE_PROTECTION, passTtlSeconds: 600 } }),
+          // A disabled site's Under Attack does not count.
+          site("x", {
+            enabled: false,
+            protection: { ...DEFAULT_SITE_PROTECTION, underAttack: true },
+          }),
+          site("b"),
+        ],
+        platformProtection: { underAttack: false, underAttackChallenge: "pow" },
+        challengeKeys: keys,
+      },
+      1n,
+    );
+    expect(unused.platformProtection).toBeUndefined();
+    expect(unused.challengeKeys).toEqual([]);
+    expect(unused.sites.every((s) => s.protection === undefined)).toBe(true);
+    expect(unused.requiredFeatures).not.toContain("challenge-v1");
+    expect(unused.contentHash).toBe(plain.contentHash);
+  });
+
+  it("compiles Under Attack with the keys sorted by id and every site's protection", () => {
+    const input = {
+      clusterId: "c",
+      sites: [
+        site("a", { protection: { ...DEFAULT_SITE_PROTECTION, underAttack: true } }),
+        site("b"),
+      ],
+      challengeKeys: keys,
+    };
+    expect(usesChallenges(input)).toBe(true);
+    const config = compileNodeConfig(input, 1n);
+    expect(config.challengeKeys.map((k) => [k.id, k.role])).toEqual([
+      ["k1", "previous"],
+      ["k2", "current"],
+      ["k3", "next"],
+    ]);
+    expect(config.platformProtection).toMatchObject({
+      underAttack: false,
+      underAttackChallenge: "js",
+    });
+    expect(config.sites.map((s) => s.protection?.underAttack)).toEqual([true, false]);
+    expect(config.sites[1]?.protection).toMatchObject({
+      passTtlSeconds: 1800,
+      powDifficulty: 16,
+      powHighDifficulty: 20,
+      underAttackChallenge: "js",
+    });
+    expect(config.sites[1]?.protection?.cc).toBeUndefined();
+    expect(config.requiredFeatures).toContain("challenge-v1");
+    expect(config.requiredFeatures).not.toContain("ja4-v1");
+    // Input order of the keys does not change the hash.
+    const reversed = compileNodeConfig({ ...input, challengeKeys: [...keys].reverse() }, 1n);
+    expect(reversed.contentHash).toBe(config.contentHash);
+  });
+
+  it("compiles an enabled CC policy and leaves a disabled one out", () => {
+    const config = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [site("a", { protection: { ...DEFAULT_SITE_PROTECTION, cc } })],
+        challengeKeys: keys,
+      },
+      1n,
+    );
+    expect(config.sites[0]?.protection?.cc).toMatchObject({ enabled: true, ...cc });
+    expect(config.requiredFeatures).toContain("challenge-v1");
+    const off = compileNodeConfig(
+      { clusterId: "c", sites: [site("a", { protection: DEFAULT_SITE_PROTECTION })] },
+      1n,
+    );
+    expect(off.sites[0]?.protection).toBeUndefined();
+  });
+
+  it("uses challenges for a challenge rule and compiles its type", () => {
+    const siteRule = compileNodeConfig(
+      { clusterId: "c", sites: [site("a", { rules: [rule()] }), site("b")], challengeKeys: keys },
+      1n,
+    );
+    expect(siteRule.sites[0]?.rules[0]?.action).toMatchObject({
+      kind: "challenge",
+      challenge: "pow",
+    });
+    expect(siteRule.challengeKeys).toHaveLength(3);
+    expect(siteRule.requiredFeatures).toEqual(expect.arrayContaining(["challenge-v1", "rules-v1"]));
+    const platformRule = compileNodeConfig(
+      { clusterId: "c", sites: [site("a")], platformRules: [rule()], challengeKeys: keys },
+      1n,
+    );
+    expect(platformRule.platformRules[0]?.action?.challenge).toBe("pow");
+    expect(platformRule.sites[0]?.protection).toBeDefined();
+  });
+
+  it("uses challenges for platform Under Attack", () => {
+    const config = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [site("a")],
+        platformProtection: { underAttack: true, underAttackChallenge: "cookie302" },
+        challengeKeys: keys,
+      },
+      1n,
+    );
+    expect(config.platformProtection).toMatchObject({
+      underAttack: true,
+      underAttackChallenge: "cookie302",
+    });
+    expect(config.sites[0]?.protection?.underAttack).toBe(false);
+    expect(config.requiredFeatures).toContain("challenge-v1");
+  });
+
+  it("requires ja4-v1 for tls.ja4 rules, JA4 rate limit keys and JA4 logging", () => {
+    const expression = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [
+          site("a", {
+            rules: [
+              rule({
+                expression: parseExpression('tls.ja4 eq "t13d1516h2_8daaf6152771_02713d6af862"'),
+                action: { kind: "block", statusCode: 403 },
+              }),
+            ],
+          }),
+        ],
+      },
+      1n,
+    );
+    expect(expression.requiredFeatures).toContain("ja4-v1");
+    expect(expression.requiredFeatures).not.toContain("challenge-v1");
+    const key = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [],
+        platformRules: [
+          rule({
+            phase: "ratelimit",
+            expression: parseExpression("true"),
+            action: {
+              kind: "rate_limit",
+              statusCode: 429,
+              limit: 5,
+              windowSeconds: 10,
+              key: "tls.ja4",
+            },
+          }),
+        ],
+      },
+      1n,
+    );
+    expect(key.requiredFeatures).toContain("ja4-v1");
+    // JA4 logging alone ships that site's protection, without keys.
+    const logging = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [site("a", { protection: { ...DEFAULT_SITE_PROTECTION, logJa4: true } }), site("b")],
+        challengeKeys: keys,
+      },
+      1n,
+    );
+    expect(logging.sites[0]?.protection?.logJa4).toBe(true);
+    expect(logging.sites[1]?.protection).toBeUndefined();
+    expect(logging.challengeKeys).toEqual([]);
+    expect(logging.platformProtection).toBeUndefined();
+    expect(logging.requiredFeatures).toEqual(expect.arrayContaining(["challenge-v1", "ja4-v1"]));
+  });
+
+  it("carries platform protection and keys in full in diffs", () => {
+    const protectedConfig = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [site("a"), site("b")],
+        platformProtection: { underAttack: true, underAttackChallenge: "js" },
+        challengeKeys: keys,
+      },
+      2n,
+    );
+    const diff = diffNodeConfig(plain, protectedConfig);
+    expect(diff.platformProtection?.underAttack).toBe(true);
+    expect(diff.challengeKeys.map((k) => k.id)).toEqual(["k1", "k2", "k3"]);
+    expect(applyNodeConfigDiff(plain, diff).contentHash).toBe(protectedConfig.contentHash);
+    const back = diffNodeConfig(
+      protectedConfig,
+      compileNodeConfig({ clusterId: "c", sites: [site("a"), site("b")] }, 3n),
+    );
+    const applied = applyNodeConfigDiff(protectedConfig, back);
+    expect(applied.platformProtection).toBeUndefined();
+    expect(applied.challengeKeys).toEqual([]);
   });
 });

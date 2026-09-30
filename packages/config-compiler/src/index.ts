@@ -8,7 +8,10 @@ import {
   CacheRuleSchema,
   type CacheZone,
   CacheZoneSchema,
+  CcPolicySchema,
   type CertificateRef,
+  type ChallengeKeyRef,
+  ChallengeKeyRefSchema,
   DomainSchema,
   type EdgeRule,
   EdgeRuleSchema,
@@ -29,9 +32,11 @@ import {
   OriginSchema,
   OriginScheme,
   PassiveHealthCheckSchema,
+  PlatformProtectionSchema,
   type RuleExpression,
   S3AuthSchema,
   type Site,
+  SiteProtectionSchema,
   SiteSchema,
   type TlsOptions,
 } from "@edgeweir/proto";
@@ -124,6 +129,56 @@ export interface SiteModel {
   certificateId?: string;
   tls?: Omit<TlsOptions, "$typeName" | "$unknown">;
   rules?: RuleModel[];
+  /** Omitted: the defaults (DEFAULT_SITE_PROTECTION, everything off). */
+  protection?: SiteProtectionModel;
+}
+
+/** Thresholds of an enabled CC policy (config.proto CcPolicy). */
+export interface CcPolicyModel {
+  maxLevel: string;
+  highPowInsteadOfCaptcha: boolean;
+  windowSeconds: number;
+  siteQps: number;
+  urlQps: number;
+  ipQps: number;
+  ipBanSeconds: number;
+  originErrorPercent: number;
+  originErrorMinRequests: number;
+  escalateAfterSeconds: number;
+  cooldownSeconds: number;
+}
+
+/** Challenges and CC mitigation of a site (config.proto SiteProtection). */
+export interface SiteProtectionModel {
+  underAttack: boolean;
+  underAttackChallenge: string;
+  passTtlSeconds: number;
+  powDifficulty: number;
+  powHighDifficulty: number;
+  /** The effective thresholds (template or the site's own); null while CC is off. */
+  cc: CcPolicyModel | null;
+  logJa4: boolean;
+}
+
+export const DEFAULT_SITE_PROTECTION: SiteProtectionModel = {
+  underAttack: false,
+  underAttackChallenge: "js",
+  passTtlSeconds: 1800,
+  powDifficulty: 16,
+  powHighDifficulty: 20,
+  cc: null,
+  logJa4: false,
+};
+
+export interface PlatformProtectionModel {
+  underAttack: boolean;
+  underAttackChallenge: string;
+}
+
+/** A challenge pass key of the cluster: next, current or previous. */
+export interface ChallengeKeyModel {
+  id: string;
+  role: string;
 }
 
 export interface RuleModel {
@@ -142,6 +197,8 @@ export interface RuleModel {
     forceHttps?: boolean;
     gzip?: boolean;
     remove?: boolean;
+    /** Challenge type of a challenge action (RuleAction.challenge). */
+    type?: string;
   };
 }
 export interface IpListModel {
@@ -158,7 +215,13 @@ export function compileRules(rules: RuleModel[] = []): EdgeRule[] {
         phases.indexOf(a.phase as (typeof phases)[number]) -
         phases.indexOf(b.phase as (typeof phases)[number]),
     )
-    .map((rule) => create(EdgeRuleSchema, rule));
+    .map((rule) => {
+      const { type, ...action } = rule.action;
+      return create(EdgeRuleSchema, {
+        ...rule,
+        action: rule.action.kind === "challenge" ? { ...action, challenge: type ?? "" } : action,
+      });
+    });
 }
 /**
  * requiredFeatures for GeoIP fields. geoip-city-v1 keeps its original name so
@@ -223,6 +286,70 @@ export interface CompileInput {
   httpChallenges?: HttpChallenge[];
   ipLists?: IpListModel[];
   platformRules?: RuleModel[];
+  /** Platform-wide Under Attack; omitted: off. */
+  platformProtection?: PlatformProtectionModel;
+  /**
+   * The cluster's challenge pass keys. Required when usesChallenges(input);
+   * compiled only then, sorted by id.
+   */
+  challengeKeys?: ChallengeKeyModel[];
+}
+
+/**
+ * Whether the cluster's configuration uses challenges: platform Under
+ * Attack, a platform or site rule with the challenge action, or a served site
+ * with Under Attack or an enabled CC policy. Only then does the configuration
+ * carry challenge keys, the platform protection and every site's protection
+ * (feature challenge-v1); other clusters keep their content hash.
+ */
+export function usesChallenges(input: CompileInput): boolean {
+  const challengeRule = (rules: RuleModel[] | undefined) =>
+    (rules ?? []).some((rule) => rule.action.kind === "challenge");
+  return (
+    !!input.platformProtection?.underAttack ||
+    challengeRule(input.platformRules) ||
+    input.sites.some(
+      (site) =>
+        site.enabled &&
+        (!!site.protection?.underAttack || !!site.protection?.cc || challengeRule(site.rules)),
+    )
+  );
+}
+
+function compileSiteProtection(model: SiteProtectionModel) {
+  return create(SiteProtectionSchema, {
+    underAttack: model.underAttack,
+    underAttackChallenge: model.underAttackChallenge,
+    passTtlSeconds: model.passTtlSeconds,
+    powDifficulty: model.powDifficulty,
+    powHighDifficulty: model.powHighDifficulty,
+    cc: model.cc ? create(CcPolicySchema, { enabled: true, ...model.cc }) : undefined,
+    logJa4: model.logJa4,
+  });
+}
+
+/**
+ * Features that the protection of a compiled configuration needs:
+ * challenge-v1 when it carries site or platform protection, challenge keys
+ * or a challenge rule; ja4-v1 when a rule reads tls.ja4 (or counts by it) or
+ * a site records JA4 in its access logs.
+ */
+export function protectionFeatures(config: NodeConfig): string[] {
+  const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
+  const readsJa4 = (expression: RuleExpression | undefined): boolean =>
+    !!expression && (expression.field === "tls.ja4" || expression.children.some(readsJa4));
+  return [
+    ...(config.platformProtection ||
+    config.challengeKeys.length ||
+    config.sites.some((site) => site.protection) ||
+    rules.some((rule) => rule.action?.kind === "challenge")
+      ? ["challenge-v1"]
+      : []),
+    ...(config.sites.some((site) => site.protection?.logJa4) ||
+    rules.some((rule) => readsJa4(rule.expression) || rule.action?.key === "tls.ja4")
+      ? ["ja4-v1"]
+      : []),
+  ];
 }
 
 export const DEFAULT_CACHE_ZONE = "default";
@@ -274,7 +401,7 @@ const byString =
     return ka < kb ? -1 : ka > kb ? 1 : 0;
   };
 
-function compileSite(model: SiteModel): Site {
+function compileSite(model: SiteModel, challenges: boolean): Site {
   const settings = model.originPool.settings;
   const key = model.cacheKey;
   return create(SiteSchema, {
@@ -367,6 +494,12 @@ function compileSite(model: SiteModel): Site {
     certificateId: model.certificateId ?? "",
     tls: model.tls,
     rules: compileRules(model.rules),
+    // Sites in clusters with challenges get their protection (defaults included);
+    // elsewhere only a site that records JA4 carries it.
+    protection:
+      challenges || model.protection?.logJa4
+        ? compileSiteProtection(model.protection ?? DEFAULT_SITE_PROTECTION)
+        : undefined,
   });
 }
 
@@ -382,6 +515,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   out.requiredFeatures = sortedSet(out.requiredFeatures);
   out.httpChallenges.sort(byString((c) => `${c.domain}/${c.token}`));
   out.ipLists.sort(byString((list: IpList) => list.id));
+  out.challengeKeys.sort(byString((key: ChallengeKeyRef) => key.id));
   for (const list of out.ipLists) list.entries = sortedSet(list.entries);
   for (const site of out.sites) {
     if (site.tls) site.tls.gzipTypes = sortedSet(site.tls.gzipTypes);
@@ -439,39 +573,49 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       inactiveSeconds: z.inactiveSeconds,
     }),
   );
+  const challenges = usesChallenges(input);
   // Disabled sites are not shipped to nodes; unknown hosts get a 404 there.
-  const sites = input.sites.filter((s) => s.enabled).map(compileSite);
-  const config = canonicalize(
-    create(NodeConfigSchema, {
-      revision,
-      clusterId: input.clusterId,
-      listeners,
-      cacheZones,
-      sites,
-      certificates: input.certificates ?? [],
-      httpChallenges: input.httpChallenges ?? [],
-      ipLists: (input.ipLists ?? []).map((list) =>
-        create(IpListSchema, { ...list, entries: sortedSet(list.entries) }),
-      ),
-      platformRules: compileRules(input.platformRules),
-      requiredFeatures: [
-        ...(input.sites.some((s) => s.enabled && s.logSampleRate) ? ["access-logs-v1"] : []),
-        ...(input.sites.some((s) => s.enabled && s.tls) ? ["tls-v1"] : []),
-        ...(input.httpChallenges?.length ? ["http01-v1"] : []),
-        ...(input.sites.some((s) => s.enabled && s.tls?.http3) ? ["http3-v1"] : []),
-        ...(input.sites.some((s) => s.enabled && s.rules?.length) ||
-        input.platformRules?.length ||
-        input.ipLists?.some((l) => l.platform && l.kind !== "collection")
-          ? ["rules-v1"]
-          : []),
-        ...[
-          ...(input.platformRules ?? []),
-          ...input.sites.filter((s) => s.enabled).flatMap((s) => s.rules ?? []),
-        ].flatMap((r) => geoFeatures(r.expression)),
-      ],
-      originAllowedCidrs: [...(input.originAllowedCidrs ?? [])],
-    }),
-  );
+  const sites = input.sites.filter((s) => s.enabled).map((s) => compileSite(s, challenges));
+  const compiled = create(NodeConfigSchema, {
+    revision,
+    clusterId: input.clusterId,
+    listeners,
+    cacheZones,
+    sites,
+    certificates: input.certificates ?? [],
+    httpChallenges: input.httpChallenges ?? [],
+    ipLists: (input.ipLists ?? []).map((list) =>
+      create(IpListSchema, { ...list, entries: sortedSet(list.entries) }),
+    ),
+    platformRules: compileRules(input.platformRules),
+    requiredFeatures: [
+      ...(input.sites.some((s) => s.enabled && s.logSampleRate) ? ["access-logs-v1"] : []),
+      ...(input.sites.some((s) => s.enabled && s.tls) ? ["tls-v1"] : []),
+      ...(input.httpChallenges?.length ? ["http01-v1"] : []),
+      ...(input.sites.some((s) => s.enabled && s.tls?.http3) ? ["http3-v1"] : []),
+      ...(input.sites.some((s) => s.enabled && s.rules?.length) ||
+      input.platformRules?.length ||
+      input.ipLists?.some((l) => l.platform && l.kind !== "collection")
+        ? ["rules-v1"]
+        : []),
+      ...[
+        ...(input.platformRules ?? []),
+        ...input.sites.filter((s) => s.enabled).flatMap((s) => s.rules ?? []),
+      ].flatMap((r) => geoFeatures(r.expression)),
+    ],
+    originAllowedCidrs: [...(input.originAllowedCidrs ?? [])],
+    platformProtection: challenges
+      ? create(PlatformProtectionSchema, {
+          underAttack: input.platformProtection?.underAttack ?? false,
+          underAttackChallenge: input.platformProtection?.underAttackChallenge ?? "js",
+        })
+      : undefined,
+    challengeKeys: challenges
+      ? (input.challengeKeys ?? []).map((key) => create(ChallengeKeyRefSchema, key))
+      : [],
+  });
+  compiled.requiredFeatures.push(...protectionFeatures(compiled));
+  const config = canonicalize(compiled);
   config.contentHash = contentHash(config);
   return config;
 }
@@ -507,6 +651,8 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     httpChallenges: target.httpChallenges,
     ipLists: target.ipLists,
     platformRules: target.platformRules,
+    platformProtection: target.platformProtection,
+    challengeKeys: target.challengeKeys,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -537,6 +683,8 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       httpChallenges: diff.httpChallenges,
       ipLists: diff.ipLists,
       platformRules: diff.platformRules,
+      platformProtection: diff.platformProtection,
+      challengeKeys: diff.challengeKeys,
       sites,
     }),
   );
