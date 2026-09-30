@@ -33,6 +33,7 @@ Edgeweir follows the design principle of **"no gates on the open core, a clear b
 | Organizations, members, invitations, roles and permissions, organization isolation | Open core |
 | Site console, platform administration, node management, public API | Open core |
 | Customer-facing portal, self-service sign-up and purchase, plans and billing, balances and finance, reselling and settlement | Separate commercial operations product |
+| L2 origin aggregation nodes and Tiered Cache (with Topologies and latency-based parent selection), cache sharing within a group (consistent-hash sharding, cache index nodes), automatic node removal when a lease or server term expires, access log push to custom sinks and Logpush, Prometheus metrics, GeoIP hot reload, OIDC SSO, 103 Early Hints, Speculation-Rules, 0-RTT, Tunnels, edge compute with approval of tenant scripts, self-hosted authoritative DNS / GTM, XDP / eBPF | Separate commercial product |
 | Official accounts, subscriptions, licensing, plugin distribution | Separate commercial services |
 
 - Organizations may serve internal teams, and operators may use them to manage their customers' resources. "Internal collaboration" describes the product focus; it does not restrict lawful use.
