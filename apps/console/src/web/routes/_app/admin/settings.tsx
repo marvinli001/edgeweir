@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import type * as React from "react";
+import { BanSettingsCard } from "@/components/ban-settings";
 import { CopyButton } from "@/components/copy-button";
 import { DnsResolversCard } from "@/components/dns-resolvers";
 import { GeoIpSettings } from "@/components/geoip-settings";
@@ -93,6 +94,7 @@ function SystemSettingsPage() {
       <ReleaseSourceCard />
       <DnsResolversCard />
       <UsageSettingsCard />
+      <BanSettingsCard />
       <GeoIpSettings />
       <SmtpSettings />
     </Page>

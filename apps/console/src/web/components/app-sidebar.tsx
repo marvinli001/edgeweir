@@ -1,5 +1,6 @@
 import {
   Audit01Icon,
+  BlockedIcon,
   Building03Icon,
   DashboardSquare01Icon,
   DatabaseSync01Icon,
@@ -54,6 +55,7 @@ export function consoleNav(opts: { manageMembers: boolean }): NavItem[] {
       icon: icon(SecurityLockIcon),
       testId: "nav-ip-lists",
     },
+    { title: m.bans_title(), to: "/bans", icon: icon(BlockedIcon), testId: "nav-bans" },
     {
       title: m.nav_purge(),
       to: "/purge",
@@ -129,6 +131,12 @@ export function adminNav(): NavItem[] {
       to: "/admin/ip-lists",
       icon: icon(SecurityLockIcon),
       testId: "nav-platform-ip-lists",
+    },
+    {
+      title: m.bans_title(),
+      to: "/admin/bans",
+      icon: icon(BlockedIcon),
+      testId: "nav-admin-bans",
     },
     {
       title: m.nav_regions(),
