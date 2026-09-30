@@ -265,12 +265,46 @@ function BanDialog({ platform, onClose }: { platform: boolean; onClose: () => vo
 }
 
 /**
+ * Unban with confirmation. A component of its own so that the table's cell
+ * renderers keep their identity: a new renderer per render would remount the
+ * cell and close an open dialog whenever the page re-renders.
+ */
+function UnbanAction({ ban, platform }: { ban: Ban; platform: boolean }) {
+  const queryClient = useQueryClient();
+  const unban = useMutation({
+    mutationFn: (id: string) =>
+      platform ? client.admin.bans.delete({ id }) : client.bans.delete({ id }),
+  });
+  return (
+    <ConfirmDialog
+      trigger={
+        <Button size="sm" variant="outline" data-testid="ban-unban">
+          {m.bans_unban()}
+        </Button>
+      }
+      destructive
+      title={m.bans_unban_confirm({ address: ban.cidr })}
+      confirmLabel={m.bans_unban()}
+      onConfirm={async () => {
+        try {
+          await unban.mutateAsync(ban.id);
+          await queryClient.invalidateQueries({ queryKey: orpc.bans.key() });
+          await queryClient.invalidateQueries({ queryKey: orpc.admin.bans.key() });
+          toast.success(m.bans_unbanned());
+        } catch (err) {
+          toast.error(errorMessage(err));
+        }
+      }}
+    />
+  );
+}
+
+/**
  * Dynamic IP bans. The console page shows the site bans of the organization
  * (owners and admins ban and unban); the admin page (`platform`) shows every
  * ban and also creates platform bans.
  */
 export function BansPage({ platform = false }: { platform?: boolean }) {
-  const queryClient = useQueryClient();
   const { isAdmin } = useRouteContext({ from: "/_app" });
   const me = useQuery(orpc.account.me.queryOptions());
   const role = me.data?.activeOrganization?.role;
@@ -290,10 +324,6 @@ export function BansPage({ platform = false }: { platform?: boolean }) {
     meta: { background: true },
   });
   const sites = useQuery(orpc.sites.list.queryOptions({ input: { page: 1, pageSize: 100 } }));
-  const unban = useMutation({
-    mutationFn: (id: string) =>
-      platform ? client.admin.bans.delete({ id }) : client.bans.delete({ id }),
-  });
   const filtered = !!(siteId || source || scope);
   const filter =
     <T,>(set: (value: T) => void) =>
@@ -366,33 +396,14 @@ export function BansPage({ platform = false }: { platform?: boolean }) {
               header: () => <span className="sr-only">{m.common_actions()}</span>,
               cell: ({ row }: { row: { original: Ban } }) => (
                 <div className="flex justify-end">
-                  <ConfirmDialog
-                    trigger={
-                      <Button size="sm" variant="outline" data-testid="ban-unban">
-                        {m.bans_unban()}
-                      </Button>
-                    }
-                    destructive
-                    title={m.bans_unban_confirm({ address: row.original.cidr })}
-                    confirmLabel={m.bans_unban()}
-                    onConfirm={async () => {
-                      try {
-                        await unban.mutateAsync(row.original.id);
-                        await queryClient.invalidateQueries({ queryKey: orpc.bans.key() });
-                        await queryClient.invalidateQueries({ queryKey: orpc.admin.bans.key() });
-                        toast.success(m.bans_unbanned());
-                      } catch (err) {
-                        toast.error(errorMessage(err));
-                      }
-                    }}
-                  />
+                  <UnbanAction ban={row.original} platform={platform} />
                 </div>
               ),
             } satisfies Columns<Ban>[number],
           ]
         : []),
     ],
-    [canManage, platform, queryClient, unban],
+    [canManage, platform],
   );
 
   const createButton = canManage ? (
