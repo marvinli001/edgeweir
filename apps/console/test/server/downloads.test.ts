@@ -93,6 +93,16 @@ describe("/downloads release mirror", async () => {
       "v1.2.3",
       "a.deb",
     ]);
+    // The edgeweir-openresty packages are released next to edgeweir-node.
+    for (const file of [
+      "edgeweir-openresty_1.31.1.1-1_arm64.deb",
+      "edgeweir-openresty-modsecurity-1.31.1.1-1.x86_64.rpm",
+    ])
+      expect(mirrorPath(`/downloads/edgeweir-node/v0.3.0/${file}`)).toEqual([
+        "edgeweir-node",
+        "v0.3.0",
+        file,
+      ]);
     for (const bad of [
       "/downloads/edgeweir-node/v1.2.3/.hidden",
       "/downloads/edgeweir-node/v1.2.3/a/b",
