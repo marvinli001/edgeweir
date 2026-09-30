@@ -31,7 +31,7 @@ Platform administrators see a segmented switch **Console | Admin** in the header
 | **Platform** | `/admin` | Clusters, nodes, recent revisions, and platform-wide analytics |
 | **Clusters & nodes** | `/admin/clusters` | Clusters, node groups, nodes, node upgrades, revisions |
 | **Alert channels** | `/admin/alerts` | Notification channels and alert rules |
-| **Platform DNS** | `/admin/dns` | DNS providers, DNS configuration, and DNS revisions |
+| **Platform DNS** | `/admin/dns` | DNS provider accounts, each cluster's DNS binding, and mass removal protection |
 | **Platform rules** | `/admin/rules` | Rules applied to every site |
 | **Platform IP lists** | `/admin/ip-lists` | Platform-level IP lists |
 | **Bans** | `/admin/bans` | Bans of every organization and platform bans |
@@ -53,7 +53,7 @@ The page refreshes every 10 seconds.
 
 ## Clusters and nodes
 
-The top of the page holds **New cluster**, **Add node**, and a summary of the current cluster (**Nodes online**, **Sites**, **Latest revision**). With several clusters, **Select cluster** switches between them.
+The top of the page holds **New cluster**, **Add node**, and a summary of the current cluster (**Nodes online**, **Sites**, **Latest revision**). With several clusters, **Select cluster** switches between them. The **Overview** tab holds node groups, nodes, configuration rollout, node upgrades, and revisions; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster).
 
 ### Clusters
 
@@ -63,7 +63,7 @@ A cluster is a set of nodes plus the sites assigned to them; each cluster has it
 | --- | --- |
 | **New cluster** | **Cluster name**: lowercase letters, digits, and `-`, starting with a letter or digit, at most 64 characters, unique on the platform; **Description**: at most 500 characters. Creation adds the default node group `default` and publishes revision #1 |
 | **Edit cluster** | Change name and description |
-| **Delete** | Only when the cluster has no nodes and no sites |
+| **Delete** | Only when the cluster has no nodes and no sites, its DNS is Not managed, and its written records are removed |
 
 A cluster publishes at most 512 sites.
 
@@ -175,7 +175,7 @@ Notification channels (Webhook, Email, DingTalk, WeCom, Telegram) and **Alert ru
 
 ## Platform DNS
 
-**DNS providers** (Cloudflare, Alibaba Cloud, Huawei Cloud, DNSPod), **DNS configuration** (CNAME domain, TTL, lines mapped to node groups, target addresses), and **DNS revisions** (**Roll back DNS**, **Repair records**). Once configured, a site's **Domains** tab shows the **CNAME target**. See [Configure platform DNS](dns-and-alerts.en.md#configure-platform-dns).
+**DNS provider accounts** (credential forms generated from the provider catalog, **List zones**, **Test connection**), **Cluster bindings** (each cluster's mode, cluster domain, and publication state), and **Mass removal protection**. Each cluster's DNS is set on the **DNS** tab of the **Clusters** page: mode (Not managed / Manual / Automatic), provider account, cluster domain, TTL, lines, plus **Current records**, the manual record list and zone file, and **DNS revisions** (**Roll back DNS**, **Repair records**). Once configured, a site's **Domains** tab shows the **CNAME target**. See [Configure platform DNS](dns-and-alerts.en.md#configure-platform-dns).
 
 ## Platform rules and IP lists
 

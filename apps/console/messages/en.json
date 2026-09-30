@@ -1085,7 +1085,7 @@
   "dns_provider_powerdns": "PowerDNS",
   "dns_provider_rfc2136": "RFC 2136 (TSIG)",
   "dns_provider_webhook": "Custom HTTP",
-  "dns_provider_test": "Local test fixture",
+  "dns_provider_test": "Local simulator",
   "dns_field_api_token": "API token",
   "dns_field_zone_token": "Zone token",
   "dns_field_access_key_id": "Access key ID",

@@ -112,7 +112,7 @@ Add a record for every site domain in the domain's authoritative DNS.
 | Platform DNS | Record |
 | --- | --- |
 | Not configured | `A` / `AAAA` records to the node's public address. The **IP** column of the node table in **Admin → Clusters & nodes** lists the addresses the node reports. One record per node |
-| Configured (**Admin → Platform DNS**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** tab (`<site ID>.<CNAME domain>`). The card shows **Published** once the records are written to the provider |
+| Configured (**Admin → Platform DNS**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** tab (`<site ID>.<cluster domain>`). The card shows **Published** once the records are written to the provider |
 
 For lines, health-based removal, and TTL of platform DNS, see [Configure platform DNS](dns-and-alerts.en.md#configure-platform-dns).
 
