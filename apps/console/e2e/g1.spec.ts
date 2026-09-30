@@ -217,7 +217,8 @@ test("G1: a platform administrator bans a range on every site and an address on 
   const siteRow = banRow(page, "203.0.113.9/32");
   await expect(siteRow).toContainText(state.siteName);
   await expect(siteRow).toContainText(state.organizationName);
-  await expect(siteRow).toContainText(/剩 2[34] 小时/);
+  // The console clock may run a few seconds ahead of the browser: a new 1-day ban shows 23 hours or 1 day.
+  await expect(siteRow).toContainText(/剩 (2[34] 小时|1 天)/);
 
   await pick(page, page.getByTestId("ban-filter-scope"), "平台");
   await expect(platformRow).toBeVisible();
