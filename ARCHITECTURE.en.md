@@ -275,7 +275,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `idempotency_key` | Idempotency keys of `/api/v1` writes: caller, method, path, body hash and final response, kept 24 hours |
 | `rate_limit` | Rate-limit counters of the authentication endpoints |
 | `organization_settings` | Organization default cluster, required two-factor |
-| `organization_limit` | Technical limits per organization (sites, domains, certificates, IP list entries, purge rates, members); null means no limit |
+| `organization_limit` | Technical limits per organization (sites, domains, certificates, IP list entries, purge rates, members, bans); null means no limit |
 
 ### Infrastructure
 
@@ -284,7 +284,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `region` | Region dictionary |
 | `cluster` | Clusters: sets of nodes that share one revision stream |
 | `node_group` | Node groups, optionally tied to a region |
-| `node` | Nodes: status, capabilities, certificate serial and fingerprint, last heartbeat |
+| `node` | Nodes: status, capabilities, certificate serial and fingerprint, last heartbeat, last reported ban state |
 | `node_ip` | IP addresses reported by nodes |
 | `enrollment_token` | SHA-256 and usage of enrollment tokens |
 | `node_certificate_revocation` | Certificate serials revoked when a node is deleted |
@@ -305,6 +305,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `cache_rule` | Cache rules |
 | `edge_rule` | Site or platform rules: phase, expression, action, list references |
 | `ip_list` | Organization or platform IP lists (normalized CIDRs) |
+| `ip_ban` | Dynamic bans: scope (platform / site), normalized CIDR, reason code, source (manual / auto; auto bans keep the node and trigger), expiry and removal time, `seq` (sequence `ip_ban_seq`), whether it is delivered |
 | `config_revision` | Revisions per cluster: number, content hash, binary IR, reason code |
 | `node_config_status` | Node apply receipts and heartbeats, with the receipt verification flag |
 | `cluster_rollout` | Configuration canary of a cluster: policy (switch, observation window, auto promotion, 5xx thresholds) and the current rollout (stable and candidate revisions, window, outcome) |
@@ -380,6 +381,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0025_p0_service_accounts` | `service_account`, `service_account_key`, `idempotency_key`; `invitation.inviter_id` nullable, new `inviter_service_account_id` |
 | `0026_p0_usage` | `site_usage`, sequence `site_usage_seq`, `node_stats_cursor.complete_until`; marks usage windows for existing minute statistics |
 | `0027_p0_config_canary` | `cluster_rollout`; `alert_event.site_id` and `alert_state.site_id` nullable (platform alerts) |
+| `0028_g1_dynamic_bans` | `ip_ban`, sequence `ip_ban_seq`; `node.ban_status`; `organization_limit.max_bans` |
 
 ## Build output
 

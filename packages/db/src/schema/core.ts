@@ -66,6 +66,19 @@ export const nodeGroup = pgTable(
   (t) => [uniqueIndex("node_group_cluster_name_uq").on(t.clusterId, t.name)],
 );
 
+/** How a node holds the dynamic bans (ReportStatus.bans). uint64 values are decimal strings. */
+export interface NodeBanStatus {
+  appliedSequence: string;
+  entries: number;
+  capacity: number;
+  /** Manual bans the node could not hold (at most 100 ids). */
+  unappliedIds: string[];
+  unapplied: number;
+  kernelEntries: number;
+  autoEvicted: string;
+  reportedAt: string;
+}
+
 export const node = pgTable(
   "node",
   {
@@ -89,6 +102,8 @@ export const node = pgTable(
     certNotAfter: timestamp("cert_not_after", { withTimezone: true }),
     enrolledAt: timestamp("enrolled_at", { withTimezone: true }),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    /** Last BanStatus the node reported; null for nodes without dynamic bans. */
+    banStatus: jsonb("ban_status").$type<NodeBanStatus>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -553,6 +568,8 @@ export const organizationLimit = pgTable("organization_limit", {
   maxPurgeTasksPerMinute: integer("max_purge_tasks_per_minute"),
   maxPurgeUrlsPerHour: integer("max_purge_urls_per_hour"),
   maxMembers: integer("max_members"),
+  /** Active manual site bans of the organization. */
+  maxBans: integer("max_bans"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

@@ -1,6 +1,7 @@
 export * from "./alerts";
 export * from "./analytics";
 export * from "./auth";
+export * from "./bans";
 export * from "./certificates";
 export * from "./core";
 export * from "./dns";

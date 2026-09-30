@@ -275,7 +275,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `idempotency_key` | `/api/v1` 写请求的幂等键：调用方、方法、路径、请求体哈希与最终响应，保留 24 小时 |
 | `rate_limit` | 认证接口限速计数 |
 | `organization_settings` | 组织默认集群、要求两步验证 |
-| `organization_limit` | 组织技术限额（站点、域名、证书、IP 名单条目、清缓存频率、成员），空值为不限 |
+| `organization_limit` | 组织技术限额（站点、域名、证书、IP 名单条目、清缓存频率、成员、封禁），空值为不限 |
 
 ### 基础设施
 
@@ -284,7 +284,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `region` | 区域字典 |
 | `cluster` | 集群：共享一条 revision 序列的节点集合 |
 | `node_group` | 节点组，可关联区域 |
-| `node` | 节点：状态、能力清单、证书序列号与指纹、最近心跳 |
+| `node` | 节点：状态、能力清单、证书序列号与指纹、最近心跳、最近上报的封禁状态 |
 | `node_ip` | 节点上报的 IP 地址 |
 | `enrollment_token` | 注册 token 的 SHA-256 与使用状态 |
 | `node_certificate_revocation` | 删除节点时吊销的证书序列号 |
@@ -305,6 +305,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `cache_rule` | 缓存规则 |
 | `edge_rule` | 网站或平台规则：阶段、表达式、动作、名单引用 |
 | `ip_list` | 组织或平台 IP 名单（规范化 CIDR） |
+| `ip_ban` | 动态封禁：范围（平台 / 网站）、规范化 CIDR、原因码、来源（手动 / 自动，自动带来源节点与触发条件）、到期与解封时间、序号 `seq`（序列 `ip_ban_seq`）、是否下发 |
 | `config_revision` | 每个集群的 revision：序号、内容哈希、二进制 IR、原因码 |
 | `node_config_status` | 节点应用回执与心跳，含回执验证标记 |
 | `cluster_rollout` | 集群的配置金丝雀：策略（开关、观察窗口、自动推进、5xx 阈值）与当前发布（稳定版本、候选版本、窗口、结果） |
@@ -380,6 +381,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0025_p0_service_accounts` | `service_account`、`service_account_key`、`idempotency_key`；`invitation.inviter_id` 可空，新增 `inviter_service_account_id` |
 | `0026_p0_usage` | `site_usage`、序列 `site_usage_seq`、`node_stats_cursor.complete_until`；为已有分钟统计标记用量窗口 |
 | `0027_p0_config_canary` | `cluster_rollout`；`alert_event.site_id`、`alert_state.site_id` 可空（平台告警） |
+| `0028_g1_dynamic_bans` | `ip_ban`、序列 `ip_ban_seq`；`node.ban_status`；`organization_limit.max_bans` |
 
 ## 构建产物
 

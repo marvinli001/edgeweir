@@ -91,6 +91,7 @@ describe("migrations", () => {
       "cache_task",
       "cache_task_node",
       "rate_limit",
+      "ip_ban",
     ]) {
       expect(tables).toContain(name);
     }
