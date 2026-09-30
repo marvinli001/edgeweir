@@ -282,10 +282,18 @@ function compileRuleModel(
   const bindings: Record<string, string> = Object.create(null);
   for (const list of lists.filter((l) => l.organizationId === null)) bindings[list.name] = list.id;
   for (const list of lists.filter((l) => l.organizationId !== null)) bindings[list.name] = list.id;
+  let expression: ReturnType<typeof parseExpression>;
+  try {
+    expression = parseExpression(row.expression, row.phase as Phase);
+  } catch (error) {
+    // A stored rule the current validator refuses (e.g. regex syntax that is no
+    // longer accepted) blocks publication until it is rewritten.
+    fail("RULE_INVALID", `rule ${row.name} is no longer valid: ${(error as Error).message}`);
+  }
   return {
     id: row.id,
     phase: row.phase,
-    expression: bindLists(parseExpression(row.expression, row.phase as Phase), bindings),
+    expression: bindLists(expression, bindings),
     action: ruleAction.parse(row.action),
   };
 }
