@@ -500,10 +500,39 @@ function NodeGroupDialog({
   );
 }
 
-function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
+/**
+ * Delete with confirmation. The row actions of the tables below are components
+ * of their own so that the table's cell renderers keep their identity: a new
+ * renderer per render would remount the cell and close an open dialog or menu
+ * whenever the section re-renders (the node list polls).
+ */
+function DeleteNodeGroupAction({ group }: { group: NodeGroup }) {
   const queryClient = useQueryClient();
-  const groups = useQuery(orpc.nodeGroups.list.queryOptions({ input: { clusterId: cluster.id } }));
   const remove = useMutation(orpc.nodeGroups.delete.mutationOptions());
+  return (
+    <ConfirmDialog
+      trigger={
+        <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
+          <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+        </Button>
+      }
+      destructive
+      title={m.node_groups_delete_confirm({ name: group.name })}
+      confirmLabel={m.common_delete()}
+      onConfirm={async () => {
+        try {
+          await remove.mutateAsync({ id: group.id });
+          await queryClient.invalidateQueries();
+        } catch (error) {
+          toast.error(errorMessage(error));
+        }
+      }}
+    />
+  );
+}
+
+function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
+  const groups = useQuery(orpc.nodeGroups.list.queryOptions({ input: { clusterId: cluster.id } }));
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<NodeGroup | null>(null);
   const columns = React.useMemo<Columns<NodeGroup>>(
@@ -557,31 +586,12 @@ function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
             >
               <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
             </Button>
-            {row.original.isDefault ? null : (
-              <ConfirmDialog
-                trigger={
-                  <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
-                    <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                  </Button>
-                }
-                destructive
-                title={m.node_groups_delete_confirm({ name: row.original.name })}
-                confirmLabel={m.common_delete()}
-                onConfirm={async () => {
-                  try {
-                    await remove.mutateAsync({ id: row.original.id });
-                    await queryClient.invalidateQueries();
-                  } catch (error) {
-                    toast.error(errorMessage(error));
-                  }
-                }}
-              />
-            )}
+            {row.original.isDefault ? null : <DeleteNodeGroupAction group={row.original} />}
           </div>
         ),
       },
     ],
-    [remove, queryClient],
+    [],
   );
 
   return (
@@ -657,29 +667,60 @@ function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
 
 type NodeAction = { kind: "rename" | "move" | "delete"; node: Node };
 
-function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () => void }) {
+function NodeActions({ node, onAction }: { node: Node; onAction: (action: NodeAction) => void }) {
   const queryClient = useQueryClient();
+  const disable = useMutation(orpc.nodes.disable.mutationOptions());
+  const enable = useMutation(orpc.nodes.enable.mutationOptions());
+  const toggle = async () => {
+    try {
+      if (node.status === "disabled") await enable.mutateAsync({ id: node.id });
+      else await disable.mutateAsync({ id: node.id });
+      await queryClient.invalidateQueries();
+    } catch (error) {
+      toast.error(errorMessage(error));
+    }
+  };
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={m.common_actions()}
+            data-testid="node-actions"
+          />
+        }
+      >
+        <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onAction({ kind: "rename", node })}>
+          {m.nodes_rename()}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction({ kind: "move", node })} data-testid="node-move">
+          {m.nodes_move()}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={toggle} data-testid="node-toggle">
+          {node.status === "disabled" ? m.nodes_enable() : m.nodes_disable()}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onClick={() => onAction({ kind: "delete", node })}>
+          {m.common_delete()}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () => void }) {
   const nodes = useQuery({
     ...orpc.nodes.list.queryOptions({ input: { clusterId: cluster.id } }),
     refetchInterval: 5_000,
     meta: { background: true },
   });
-  const disable = useMutation(orpc.nodes.disable.mutationOptions());
-  const enable = useMutation(orpc.nodes.enable.mutationOptions());
   const [action, setAction] = React.useState<NodeAction | null>(null);
   const latest = cluster.latestRevision?.revision ?? 0;
-  const toggle = React.useCallback(
-    async (node: Node) => {
-      try {
-        if (node.status === "disabled") await enable.mutateAsync({ id: node.id });
-        else await disable.mutateAsync({ id: node.id });
-        await queryClient.invalidateQueries();
-      } catch (error) {
-        toast.error(errorMessage(error));
-      }
-    },
-    [enable, disable, queryClient],
-  );
   const columns = React.useMemo<Columns<Node>>(
     () => [
       {
@@ -771,46 +812,12 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={m.common_actions()}
-                    data-testid="node-actions"
-                  />
-                }
-              >
-                <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setAction({ kind: "rename", node: row.original })}>
-                  {m.nodes_rename()}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setAction({ kind: "move", node: row.original })}
-                  data-testid="node-move"
-                >
-                  {m.nodes_move()}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toggle(row.original)} data-testid="node-toggle">
-                  {row.original.status === "disabled" ? m.nodes_enable() : m.nodes_disable()}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => setAction({ kind: "delete", node: row.original })}
-                >
-                  {m.common_delete()}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <NodeActions node={row.original} onAction={setAction} />
           </div>
         ),
       },
     ],
-    [latest, toggle],
+    [latest],
   );
 
   return (
@@ -941,10 +948,33 @@ function DeleteNodeDialog({ node, onClose }: { node: Node; onClose: () => void }
   );
 }
 
-function RevisionsSection({ cluster }: { cluster: Cluster }) {
+function RollbackAction({ clusterId, revision }: { clusterId: string; revision: number }) {
   const queryClient = useQueryClient();
-  const revisions = useQuery(orpc.clusters.revisions.queryOptions({ input: { id: cluster.id } }));
   const rollback = useMutation(orpc.clusters.rollback.mutationOptions());
+  return (
+    <ConfirmDialog
+      trigger={
+        <Button size="sm" variant="ghost">
+          {m.revisions_rollback()}
+        </Button>
+      }
+      title={m.revisions_rollback()}
+      note={m.revisions_rollback_confirm({ revision })}
+      onConfirm={async () => {
+        try {
+          const result = await rollback.mutateAsync({ id: clusterId, revision });
+          toast.success(m.revisions_rolled_back({ revision: result.revision }));
+          await queryClient.invalidateQueries();
+        } catch (error) {
+          toast.error(errorMessage(error));
+        }
+      }}
+    />
+  );
+}
+
+function RevisionsSection({ cluster }: { cluster: Cluster }) {
+  const revisions = useQuery(orpc.clusters.revisions.queryOptions({ input: { id: cluster.id } }));
   const latest = cluster.latestRevision?.revision ?? 0;
   const columns = React.useMemo<Columns<Revision>>(
     () => [
@@ -993,31 +1023,11 @@ function RevisionsSection({ cluster }: { cluster: Cluster }) {
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) =>
           row.original.revision === latest ? null : (
-            <ConfirmDialog
-              trigger={
-                <Button size="sm" variant="ghost">
-                  {m.revisions_rollback()}
-                </Button>
-              }
-              title={m.revisions_rollback()}
-              note={m.revisions_rollback_confirm({ revision: row.original.revision })}
-              onConfirm={async () => {
-                try {
-                  const result = await rollback.mutateAsync({
-                    id: cluster.id,
-                    revision: row.original.revision,
-                  });
-                  toast.success(m.revisions_rolled_back({ revision: result.revision }));
-                  await queryClient.invalidateQueries();
-                } catch (error) {
-                  toast.error(errorMessage(error));
-                }
-              }}
-            />
+            <RollbackAction clusterId={cluster.id} revision={row.original.revision} />
           ),
       },
     ],
-    [cluster.id, latest, rollback, queryClient],
+    [cluster.id, latest],
   );
 
   return (
