@@ -252,6 +252,53 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 
 行为见 [挑战与 CC 防护](../guide/challenges.md)。
 
+### 压缩与 OWASP CRS
+
+| 过程 | 端点 | 调用方 |
+| --- | --- | --- |
+| `https.get`、`https.update` | `GET`、`PUT /sites/{id}/https` | 组织成员、平台管理员 |
+| `sites.features` | `GET /sites/{id}/features` | 组织成员、平台管理员 |
+| `waf.get` | `GET /sites/{id}/waf` | 组织成员、平台管理员 |
+| `waf.update` | `PATCH /sites/{id}/waf` | 组织 owner / admin、平台管理员 |
+| `waf.topRules` | `GET /sites/{id}/waf/rules` | 组织成员、平台管理员 |
+| `settings.waf`、`settings.setWaf` | `GET`、`PUT /settings/waf` | 平台管理员 |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `PUT /sites/{id}/https` | `settings` 替换网站的全部 HTTPS 设置，缺省字段取默认值；先 `GET` 再修改。压缩字段：`brotli`、`brotliLevel`（1–11，默认 6）、`brotliMinLength`、`brotliTypes`，`zstd`、`zstdLevel`（1–19，默认 3）、`zstdMinLength`、`zstdTypes`，`gzip`、`gzipMinLength`、`gzipTypes`；最小长度 1–1048576（默认 256），类型为 MIME 类型数组（最多 32 个） |
+| `PATCH /sites/{id}/waf` | 只修改给出的字段：`mode`（`off` / `detect` / `block`）、`paranoiaLevel`（1–4）、`anomalyThreshold`（1–1000）、`excludedRuleIds`（900000–999999，不重复，最多 200 个）、`requestBodyLimit`（0–134217728 字节） |
+| `GET /sites/{id}/waf/rules` | 查询参数 `range`（`1h` / `6h` / `24h` / `7d` / `30d`，默认 `24h`）、`limit`（1–50，默认 10） |
+| `PUT /settings/waf` | `tenantCrs`：是否允许租户开启 CRS |
+
+响应：
+
+| 过程 | 内容 |
+| --- | --- |
+| `sites.features` | `brotli`、`zstd`、`crs`，各为 `{ available, reason }`；`reason` 为 `nodes`（集群有活动节点缺少 `brotli-v1` / `zstd-v1` / `modsecurity-v1`）、`platform`（平台不允许租户开启 CRS，只对租户返回）或 `null` |
+| `waf.get`、`waf.update` | `siteId`、上述字段（`excludedRuleIds` 升序）、`updatedAt`（从未保存时为 `null`，此时为默认值：`off`、1、5、`[]`、131072） |
+| `waf.topRules` | `{ approximate: true, items: [{ ruleId, requests }] }`，按命中次数倒序 |
+
+- `https.update` 发布网站所在集群（原因 `certificate_updated`），审计 `site.https_update`；`waf.update` 发布（`site_waf_updated`），审计 `site.waf_update`；`settings.setWaf` 不发布，审计 `system.waf_update`。
+
+| 错误代码 | 状态 | 场景 |
+| --- | --- | --- |
+| `NODE_CAPABILITY_REQUIRED` | 409 | 集群内有活动节点缺少 `brotli-v1`、`zstd-v1` 或 `modsecurity-v1`（租户调用）；`data.features` |
+| `WAF_CRS_FORBIDDEN` | 403 | 平台不允许租户开启 CRS 时，租户的修改使 `mode` 不为 `off` |
+| `ORG_ADMIN_REQUIRED` | 403 | 组织成员调用 `waf.update` |
+| `SITE_NOT_FOUND` | 404 | 网站不存在或不在调用方范围内 |
+
+```bash
+curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"mode":"block","paranoiaLevel":1,"excludedRuleIds":[920350]}' \
+  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/waf
+curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
+  'https://cdn-admin.example.com/api/v1/sites/<网站 ID>/waf/rules?range=1h'
+```
+
+行为见 [HTTPS 与证书](../guide/https.md#压缩) 与 [OWASP CRS 托管规则](../guide/waf.md)。
+
 ### 用量
 
 每个网站、每个 UTC 5 分钟窗口 `[windowStart, windowEnd)` 一条记录，数值为该窗口内全部节点上报的分钟统计之和。
@@ -391,7 +438,7 @@ HTTP 服务监听即返回，不检查数据库。容器健康检查见[命令�
 | `/downloads/<项目>/latest` | 最新版本号，文本 | `no-cache` |
 | `/downloads/<项目>/v<语义化版本>/<文件>` | 发布文件 | `public, max-age=86400, immutable` |
 
-`<项目>` 为 `edgeweir-node` 或 `cosign`。其他路径、不存在的文件、指向目录外的符号链接返回 404。目录准备见[接入节点](../deploy/nodes.md)。
+`<项目>` 为 `edgeweir-node` 或 `cosign`；`edgeweir-openresty`、`edgeweir-openresty-modsecurity` 软件包放在 `edgeweir-node` 的同一版本目录。其他路径、不存在的文件、指向目录外的符号链接返回 404。目录准备见[接入节点](../deploy/nodes.md)。
 
 ## 节点通道
 

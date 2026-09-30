@@ -16,8 +16,9 @@
 | --- | --- |
 | 集群与权限 | 节点组、区域、组织、成员邀请、2FA / Passkey、管理审计 |
 | 源站与缓存 | 源站池、回源 TLS 校验、S3 签名回源、WebSocket、缓存键、切片、刷新与预热 |
-| 证书与协议 | 证书上传、ACME HTTP-01 / DNS-01 签发与续期、HTTPS、HSTS、HTTP/2、HTTP/3 |
+| 证书与协议 | 证书上传、ACME HTTP-01 / DNS-01 签发与续期、HTTPS、HSTS、HTTP/2、HTTP/3；Zstandard、Brotli、Gzip 压缩 |
 | 访问策略 | 组织 / 平台 IP 名单、本地 GeoIP、分阶段规则、WAF、限速、重定向、改写、请求头与响应头变换；秒级下发的 IP 封禁，平台封禁可由 nftables 在内核丢包 |
+| 托管规则 | OWASP CRS：仅检测或拦截、paranoia level、异常分数阈值、按规则 ID 排除、请求体检查上限；命中规则的统计与访问日志；平台可禁止租户开启 |
 | 挑战与 CC 防护 | Cookie 跳转、JS 计算、工作量证明、图片验证码四级挑战；网站或平台 Under Attack；节点本地分级 CC 自动升级（站点、单 URL、单 IP 自动封禁、源站错误率）；集群内通用的签名通行凭证；JA4 指纹用于规则、限速与访问日志 |
 | DNS 与观测 | 域名归属验证、独立 DNS 版本、健康节点调度、流量统计去重与汇总、Top URL / IP、告警与订阅 |
 | 运维 | 采样访问日志与 CSV 导出、可选 ClickHouse、只读及可吊销 AccessKey、签名灰度升级与回滚、性能基线、备份恢复 |
@@ -130,7 +131,7 @@ sudo bash deploy.sh install
 
 ## 接入节点
 
-节点要求：Linux（systemd），amd64 / arm64，可访问控制台 8443 端口。
+节点要求：Linux（systemd），amd64 / arm64，glibc 2.34 及以上（RHEL / Rocky / AlmaLinux 9+、Debian 12+、Ubuntu 22.04+），可访问控制台 8443 端口。
 
 1. 以平台管理员登录，切换至 **后台 → 集群与节点**，选择集群并生成安装命令。命令包含单次有效 token 与控制台内部 CA 的 SHA-256 指纹。
 2. 在节点上以具备 sudo 权限的账户执行：
@@ -148,6 +149,7 @@ sudo bash deploy.sh install
 - token 仅经 `EDGEWEIR_TOKEN` 环境变量或 `--token-file` 传递，不出现在进程参数中。
 - 安装前校验 checksums 的 cosign 签名（签发身份须为 edgeweir-node release 工作流及待安装的 tag）与每个包的 SHA-256。
 - 优先安装 .deb / .rpm，否则使用 tar.gz；配置了控制台 `/downloads` 镜像时从镜像下载，否则从 GitHub Releases 下载。
+- 先安装同一发布中为 Edgeweir 构建的 OpenResty（`edgeweir-openresty`）与 ModSecurity 模块（`edgeweir-openresty-modsecurity`，`--no-modsecurity` 跳过），再安装 edgeweir-node。
 - agent 先核对 CA 指纹再提交 token，本地生成私钥，此后仅经 mTLS 与控制台通信。
 
 安装参数与发布物镜像见[接入节点](docs/deploy/nodes.md)。
@@ -213,10 +215,6 @@ pnpm e2e     # --up 启动环境；--down 结束后删除环境与卷；--skip-u
 | `E2E_INSTALL_IMAGE` | `debian:bookworm-slim`（`scripts/e2e.sh` 中按 digest 固定） | 运行 `install.sh` 的干净环境 |
 | `EDGEWEIR_NODE_CONTEXT` | `../edgeweir-node` | edgeweir-node 检出目录 |
 
-## 已知限制
-
-- 节点所用 OpenResty 原版引擎不含 Brotli / Zstd。
-
 ## 目录结构
 
 ```
@@ -243,7 +241,7 @@ doc/                       文档站（Fumadocs），发布至 GitHub Pages
 | 分类 | 文档 |
 | --- | --- |
 | 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
-| 使用 | [快速上手](docs/guide/first-site.md) · [组织与成员](docs/guide/organizations.md) · [平台管理](docs/guide/admin.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [DNS 与告警](docs/guide/dns-and-alerts.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
+| 使用 | [快速上手](docs/guide/first-site.md) · [组织与成员](docs/guide/organizations.md) · [平台管理](docs/guide/admin.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 与告警](docs/guide/dns-and-alerts.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
 | 参考 | [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [API 与端点](docs/reference/api.md) |
 | 项目 | [架构](ARCHITECTURE.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |
 

@@ -45,6 +45,7 @@ curl -fsSL https://<控制台>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN b
 | `--format` | `auto`\|`deb`\|`rpm`\|`tar` | `auto` | 安装包格式。`auto`：有 `dpkg` 与 `apt-get` 时用 deb；有 `rpm` 与 `dnf` 或 `yum` 时用 rpm；否则用 tar。 |
 | `--mirror` | URL | `<控制台>/downloads/edgeweir-node` | edgeweir-node 发布镜像，文件位于 `URL/latest`、`URL/v<版本>/<文件>`；cosign 取自同级的 `cosign/v<版本>/`。每个文件先从镜像下载，失败后从 GitHub 下载。 |
 | `--mirror-only` | 无 | 关 | 不回退到 GitHub。 |
+| `--no-modsecurity` | 无 | 关 | 不安装 `edgeweir-openresty-modsecurity`：该节点不支持 OWASP CRS。 |
 | `--no-start` | 无 | 关 | 只安装和注册：不要求 systemd，不启用、不启动服务。 |
 | `--allow-unsigned` | 无 | 关 | 跳过 cosign 签名校验，仅限开发；仍校验 SHA-256。 |
 | `-h`、`--help` | 无 | 无 | 输出用法。 |

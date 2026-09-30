@@ -45,6 +45,7 @@ curl -fsSL https://<console>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bas
 | `--format` | `auto`\|`deb`\|`rpm`\|`tar` | `auto` | Package format. `auto`: deb with `dpkg` and `apt-get`; rpm with `rpm` and `dnf` or `yum`; otherwise tar. |
 | `--mirror` | URL | `<console>/downloads/edgeweir-node` | edgeweir-node release mirror, with files at `URL/latest` and `URL/v<version>/<file>`; cosign comes from the sibling `cosign/v<version>/`. Each file is tried from the mirror first, then from GitHub. |
 | `--mirror-only` | None | Off | Never fall back to GitHub. |
+| `--no-modsecurity` | None | Off | Do not install `edgeweir-openresty-modsecurity`: the node does not support OWASP CRS. |
 | `--no-start` | None | Off | Install and enroll only: do not require systemd, do not enable or start the service. |
 | `--allow-unsigned` | None | Off | Skip the cosign signature check; development only. SHA-256 is still verified. |
 | `-h`, `--help` | None | None | Print usage. |

@@ -99,7 +99,7 @@ A certificate used by a site, in **Issuing**, or with DNS-01 records still to cl
 
 1. Open **Console → Sites**, select the site, and open the **HTTPS** tab.
 2. Select a certificate in **Certificates**. The list contains the organization's unexpired certificates; **HTTP only** disables HTTPS.
-3. Set **Minimum TLS version**, **Cipher profile**, **HSTS lifetime (seconds)**, and the switches.
+3. Set **Minimum TLS version**, **Cipher profile**, **HSTS lifetime (seconds)**, the switches, and **Compression**.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision.
 5. Verify: after the node applies the revision:
 
@@ -124,11 +124,7 @@ A configuration is in effect on a node only once the node reports the revision a
 | HTTP/3 | On / off | Off | Serves QUIC on UDP 443 and sends `Alt-Svc: h3=":443"; ma=86400` |
 | HSTS for subdomains | On / off | Off | Adds `includeSubDomains` to HSTS |
 | HSTS preload | On / off | Off | Adds `preload` to HSTS |
-| Gzip | On / off | On | Compresses responses and adds `Vary: Accept-Encoding` |
 | OCSP stapling | On / off | Off | Staples an OCSP response in the handshake |
-| Minimum compression size (bytes) | 1–1048576 | 256 | Shorter responses are not compressed |
-| Compressed content types | MIME types, separated by commas or spaces, up to 32 | `text/html`, `text/plain`, `text/css`, `application/javascript`, `application/json`, `image/svg+xml` | Response types to compress; `text/html` is always compressed |
-| Brotli / Zstd | Unavailable | Off | The engine is built without these modules; they cannot be turned on |
 
 Selecting **HTTP only** turns off **Redirect HTTP to HTTPS** and resets the HSTS lifetime to 0.
 
@@ -138,6 +134,34 @@ Selecting **HTTP only** turns off **Redirect HTTP to HTTPS** and resets the HSTS
 | Compatible | The modern suites plus `ECDHE-ECDSA-AES256-GCM-SHA384` and `ECDHE-RSA-AES256-GCM-SHA384` |
 
 TLS session tickets are off.
+
+### Compression
+
+**Compression** has a group of settings each for Zstandard, Brotli, and Gzip:
+
+| Field | Values | Default | Effect |
+| --- | --- | --- | --- |
+| On | On / off | Gzip on, Brotli and Zstandard off | Compresses responses with the algorithm |
+| Level | Brotli 1–11, Zstandard 1–19 | Brotli 6, Zstandard 3 | Higher levels compress more and use more CPU; Gzip has no level |
+| Minimum compression size (bytes) | 1–1048576 | 256 | Shorter responses are not compressed |
+| Compressed content types | MIME types, separated by commas or spaces, up to 32 | `text/html`, `text/plain`, `text/css`, `application/javascript`, `application/json`, `image/svg+xml` | Response types to compress; `text/html` is always compressed |
+
+| Behavior | Description |
+| --- | --- |
+| Negotiation | One enabled algorithm is chosen by the q-values of the request's `Accept-Encoding`; at equal q-values the order is zstd > br > gzip, and `q=0` means not acceptable. Each response is compressed by one algorithm only |
+| `Vary` | Compressed responses carry `Vary: Accept-Encoding` |
+| No double compression | Responses that already have a `Content-Encoding` (for example compressed by the origin) are passed through |
+| Cache | The cache keeps uncompressed or origin-encoded content and each response is compressed for its request; cache hits negotiate the encoding the same way |
+| Capabilities | Brotli needs `brotli-v1` on every active node of the cluster, Zstandard needs `zstd-v1`. While a node lacks it, the switch is unavailable with "Some nodes of the site's cluster do not support it yet"; an algorithm already on can still be turned off |
+
+Verify after the node applies the revision:
+
+```bash
+curl -s -o /dev/null -D - -H 'Accept-Encoding: zstd' --resolve www.example.com:443:<node IP> https://www.example.com/
+curl -s -o /dev/null -D - -H 'Accept-Encoding: br' --resolve www.example.com:443:<node IP> https://www.example.com/
+```
+
+They return `content-encoding: zstd` and `content-encoding: br`, with `vary: Accept-Encoding`.
 
 ### Listening ports
 
@@ -166,7 +190,7 @@ The ports cannot be changed. The SNI of an HTTPS request must equal its `Host`; 
 | Checks | Nodes verify the fingerprint, the key match, and name coverage |
 | Storage | `certificates.json` (0600) in the node state directory; private keys on the node are not encrypted, and the host administrator can read them |
 | Hot updates | Certificate content and minimum TLS version changes do not reload nginx |
-| Reloads | Changes to HTTP/2, HTTP/3, Gzip, cipher profile, certificate presence, domain lists, or the set of sites are tested first and then reloaded; on failure the previous configuration is restored |
+| Reloads | Changes to HTTP/2, HTTP/3, compression, cipher profile, certificate presence, domain lists, or the set of sites are tested first and then reloaded; on failure the previous configuration is restored |
 | Applied | A node reports a revision as applied only after persisting it; keys referenced by the current and previous last-known-good configurations are kept |
 | Rollback | A configuration rollback uses the current certificate material; it is refused when the certificate is deleted, expired, or does not cover the target domains |
 
@@ -181,6 +205,8 @@ ACME account keys, certificate private keys, and DNS credentials are each envelo
 | `tls-v1` | Sites whose **HTTPS** tab has been saved |
 | `http01-v1` | HTTP-01 validation |
 | `http3-v1` | Any site with HTTP/3 on |
+| `brotli-v1` | Any site with Brotli on |
+| `zstd-v1` | Any site with Zstandard on |
 
 A tenant change that introduces a capability some active node of the cluster lacks is refused ("Cluster nodes need these capabilities first: …") and the configuration stays unchanged. Nodes lacking a capability keep their last-known-good configuration and the admin area shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md).
 
@@ -191,8 +217,8 @@ A tenant change that introduces a capability some active node of the cluster lac
 | Certificate authorities | The UI offers Let's Encrypt and ZeroSSL. `EDGEWEIR_ACME_DIRECTORY` and `EDGEWEIR_ACME_CA_FILE` move every certificate to a private or staging ACME directory, see [Environment variables](../reference/environment.en.md) |
 | TLS versions | TLS 1.0 and 1.1 are not supported |
 | Cipher suites | Only the **Modern** and **Compatible** profiles; no custom nginx configuration |
-| Compression | Gzip only; Brotli and Zstd are unavailable. Compression settings apply after the site's **HTTPS** tab is saved for the first time |
-| Node packages | The node Docker image is based on OpenResty 1.31.1.1 with HTTP/2 and HTTP/3; deb/rpm installs use the distribution's `openresty` package |
+| Compression | Gzip, Brotli, and Zstandard; compression settings apply after the site's **HTTPS** tab is saved for the first time |
+| Node packages | Nodes use OpenResty 1.31.1.1 built for Edgeweir (`edgeweir-openresty`) with HTTP/2, HTTP/3, Brotli, and Zstandard, see [Adding nodes](../deploy/nodes.en.md) |
 | Failure reasons | Neither the UI nor the console log shows the reason a CA or DNS provider returned |
 
 ## Troubleshooting
@@ -209,4 +235,6 @@ A tenant change that introduces a capability some active node of the cluster lac
 | "Cluster nodes need these capabilities first: …" | An active node of the cluster lacks a required capability | Upgrade the nodes; a platform administrator can publish deliberately |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | TLS SNI differs from `Host`, for example a client reused a connection opened for another domain | The client opens a connection for the requested domain |
 | Browsers do not use HTTP/3 | UDP 443 is blocked; the node lacks `http3-v1`; clients read `Alt-Svc` only after a first visit | Open UDP 443 and check node capabilities |
-| Responses are not compressed | The **HTTPS** tab was never saved; the content type is not listed; the response is below the minimum size; the client sent no `Accept-Encoding` | Save the **HTTPS** tab and check the compression settings |
+| Responses are not compressed | The **HTTPS** tab was never saved; the content type is not listed; the response is below the minimum size; the client sent no `Accept-Encoding`; the origin response already has a `Content-Encoding` | Save the **HTTPS** tab and check the compression settings |
+| gzip instead of br or zstd | The client's `Accept-Encoding` lacks the algorithm or gives it a lower q-value; the algorithm is off | Check the request header and the **Compression** settings |
+| The Brotli or Zstandard switch is unavailable | An active node of the cluster lacks `brotli-v1` / `zstd-v1` | Upgrade the nodes |

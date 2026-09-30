@@ -6,20 +6,20 @@
 
 | 项目 | 要求 |
 | --- | --- |
-| 系统 | Linux，amd64 或 arm64；systemd（`--no-start` 时不要求） |
+| 系统 | Linux，amd64 或 arm64，glibc 2.34 及以上：RHEL、Rocky、AlmaLinux 9 及以上，Debian 12 及以上，Ubuntu 22.04 及以上；systemd（`--no-start` 时不要求） |
 | 权限 | root 或 sudo |
 | 命令 | `curl`、`sha256sum`、`tar` |
 | 访问控制台 | `EDGEWEIR_PUBLIC_URL`（`/install.sh`、`/downloads/*`）与 `EDGEWEIR_NODE_API_URL`（节点通道，默认 8443），见 [端口与反向代理](networking.md) |
-| 访问外部 | GitHub Releases 与 `api.github.com`（未使用 `--mirror-only` 时）；`openresty.org`（主机未安装 OpenResty 时） |
+| 访问外部 | GitHub Releases 与 `api.github.com`（未使用 `--mirror-only` 时） |
 
-主机未安装 OpenResty 时，`install.sh` 从 openresty.org 官方仓库安装，支持范围：
+节点使用为 Edgeweir 构建的 OpenResty，与 edgeweir-node 一起发布，列在同一个已签名的 `checksums.txt` 中：
 
-| 包管理器 | 发行版 |
-| --- | --- |
-| apt | Debian、Ubuntu（amd64、arm64） |
-| dnf / yum | CentOS、RHEL 7 及以上；Rocky 8 及以上；Oracle Linux 7–8；Fedora 32 及以上；Amazon Linux 2、2023（2018.03 仅 amd64）；Alibaba Cloud Linux 2–3；TencentOS 2–3；CBL-Mariner 2；`ID_LIKE` 含 `rhel` 的发行版按 RHEL 处理 |
+| 软件包 | 内容 | 安装 |
+| --- | --- | --- |
+| `edgeweir-openresty` | OpenResty 1.31.1.1，含 HTTP/2、HTTP/3、Brotli、Zstandard；`/usr/lib/edgeweir-openresty/`（nginx 为 `/usr/lib/edgeweir-openresty/nginx/sbin/nginx`） | `edgeweir-node` 依赖它，始终安装 |
+| `edgeweir-openresty-modsecurity` | ModSecurity 动态模块 `/usr/lib/edgeweir-openresty/modules/ngx_http_modsecurity_module.so` 与 OWASP CRS 规则 `/usr/share/edgeweir-openresty/crs/` | `edgeweir-node` 推荐安装；`install.sh` 默认安装，`--no-modsecurity` 跳过，此时节点不支持 [OWASP CRS](../guide/waf.md) |
 
-其他发行版先手动安装 OpenResty。
+两个软件包只有 deb 与 rpm 格式（amd64、arm64）。不再使用 openresty.org 的软件源；早先由 `install.sh` 添加的 openresty.org 软件源与 `openresty` 软件包可以自行删除。
 
 ## 1. 生成安装命令
 
@@ -65,8 +65,8 @@ journalctl -u edgeweir-node -f
 | 3 | 解析版本：`--version`，或下载镜像的 `latest` 文件，再回退到 GitHub 最新发布 | 退出，提示传入 `--version` |
 | 4 | 下载 `checksums.txt` 与 `checksums.txt.sigstore.json`：先下载镜像，后 GitHub | 退出 |
 | 5 | `cosign verify-blob` 校验签名：证书身份必须为 `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<版本>`，签发者 `https://token.actions.githubusercontent.com`。主机无 cosign 时下载 cosign v3.1.3，核对脚本内固定的 SHA-256 后安装到 `/usr/local/bin/cosign` | 退出 |
-| 6 | 从已签名的 `checksums.txt` 选出本机的安装包，下载并校验 SHA-256 | 退出 |
-| 7 | 未安装 OpenResty 时从 openresty.org 安装 | 退出，提示手动安装 |
+| 6 | 从已签名的 `checksums.txt` 选出本机的安装包，以及同一发布的 `edgeweir-openresty`、`edgeweir-openresty-modsecurity`（每个软件包、格式、架构恰好一个文件）；glibc 低于 2.34 时退出；下载（先镜像，后 GitHub）并校验 SHA-256 | 退出 |
+| 7 | 先安装 `edgeweir-openresty` 与 `edgeweir-openresty-modsecurity`。tar.gz 安装时按主机的 `dpkg` 或 `rpm` 选择格式；两者都没有时要求已安装 `edgeweir-openresty` | 退出 |
 | 8 | 安装 deb、rpm 或 tar.gz | 退出 |
 | 9 | `edgeweir-node enroll`：核对 CA 指纹后提交 token，本机生成私钥，以 CSR 换取节点证书；此后仅经 mTLS 通信 | 退出 |
 | 10 | 停用 `openresty.service`，启用并启动 `edgeweir-node.service`（`--no-start` 时跳过） | — |
@@ -81,6 +81,8 @@ journalctl -u edgeweir-node -f
 | --- | --- |
 | `/usr/bin/edgeweir-node` | agent |
 | `/usr/share/edgeweir-node/lua/edgeweir/` | OpenResty Lua 模块 |
+| `/usr/lib/edgeweir-openresty/` | OpenResty（`edgeweir-openresty`）；`modules/` 下为 ModSecurity 模块 |
+| `/usr/share/edgeweir-openresty/crs/` | OWASP CRS 规则（`edgeweir-openresty-modsecurity`，版本随软件包固定，运行时不下载） |
 | `/var/lib/edgeweir-node/` | 状态目录（`edgeweir` 用户，0700）：`node.key`、`node.crt`、`ca.crt`、`identity.json`、`config/`（最后可用配置与 `receipts.json`） |
 | `/var/cache/edgeweir-node/` | 缓存目录（`edgeweir` 用户，0750） |
 | `edgeweir-node.service` | deb、rpm：`/usr/lib/systemd/system/`；tar.gz：`/etc/systemd/system/` |
@@ -112,6 +114,10 @@ downloads/
       edgeweir-node_0.2.0_amd64.deb
       edgeweir-node-0.2.0-1.x86_64.rpm
       edgeweir-node_0.2.0_linux_amd64.tar.gz
+      edgeweir-openresty_1.31.1.1-1_amd64.deb
+      edgeweir-openresty-1.31.1.1-1.x86_64.rpm
+      edgeweir-openresty-modsecurity_1.31.1.1-1_amd64.deb
+      edgeweir-openresty-modsecurity-1.31.1.1-1.x86_64.rpm
       ...
   cosign/
     v3.1.3/
@@ -142,7 +148,9 @@ downloads/
 | `the enrollment token is malformed (expected ewt_...)` | token 复制不完整 | 重新复制安装命令。 |
 | `systemd is required` | 主机无 systemd | 使用 systemd 主机，或加 `--no-start` 只安装与注册。 |
 | `could not determine the latest edgeweir-node version; pass --version` | 下载镜像无 `latest`，且 GitHub 不可达或无发布 | 加 `--version`，或配置下载镜像。 |
-| `openresty.org has no packages for ...` | 发行版不在 openresty.org 支持范围 | 手动安装 OpenResty 后重新执行。 |
+| `edgeweir-openresty needs glibc 2.34 or later` | 发行版过旧 | 使用 RHEL、Rocky、AlmaLinux 9，Debian 12，Ubuntu 22.04 或更新的系统。 |
+| `checksums.txt does not list exactly one ... package of edgeweir-openresty...` | 镜像或发布缺少该软件包，或同一架构有多个版本 | 按 `checksums.txt` 补齐镜像目录；发布不含 ModSecurity 模块时加 `--no-modsecurity`。 |
+| `edgeweir-openresty comes as .deb and .rpm only` | tar.gz 安装，主机没有 `dpkg` 与 `rpm`，也没有安装 `edgeweir-openresty` | 改用有 deb 或 rpm 包管理的主机。 |
 | `cosign signature verification FAILED`、`SHA-256 verification FAILED` | 下载内容与签名或校验和不符 | 检查下载源与镜像目录内容；不跳过校验。 |
 | `CA pin mismatch` | 8443 被代理或 CDN 终结 TLS，或 `--server` 指向其他服务 | 直连或 [四层透传](networking.md#节点通道四层透传)。 |
 | `console rejected the enrollment token (expired or already used)` | token 已过期或已使用 | 重新生成安装命令。 |

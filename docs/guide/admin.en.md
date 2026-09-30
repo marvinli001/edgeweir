@@ -336,6 +336,14 @@ Changes are audited as `system.bans_update`. See [Bans](bans.en.md).
 
 Changes are audited as `system.protection_update`. Platform Under Attack needs the node capability `challenge-v1`; publications by platform administrators skip the tenant capability check, and nodes without the capability keep their configuration.
 
+### OWASP CRS
+
+| Field | Values | Default | Description |
+| --- | --- | --- | --- |
+| **Tenants may turn on OWASP CRS** | On / off | On | Off: tenants cannot turn CRS on or change it while it runs, only turn it off; sites already running it keep it, and platform administrators are not limited |
+
+Saving publishes nothing; changes are audited as `system.waf_update`. See [OWASP CRS managed rules](waf.en.md).
+
 ### CC template
 
 Thresholds for sites whose CC mitigation follows the platform template: highest level, high proof of work instead of the captcha, window, site QPS, per-URL QPS, per-IP QPS, IP ban duration, origin error rate, minimum origin requests, escalate after, step down after. Fields, ranges, and defaults: [CC mitigation](challenges.en.md#cc-mitigation). Saving publishes a configuration revision to every cluster with a following site; changes are audited as `system.cc_template_update`.

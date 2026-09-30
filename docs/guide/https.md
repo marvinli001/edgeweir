@@ -99,7 +99,7 @@ DNS-01 验证需要先添加凭据。
 
 1. 打开 **控制台 → 网站**，选择网站，进入「HTTPS」页签。
 2. 在「证书」中选择证书。列表只包含本组织未过期的证书；「仅 HTTP」表示不启用 HTTPS。
-3. 设置「最低 TLS 版本」「密码套件」「HSTS 有效期（秒）」和各开关。
+3. 设置「最低 TLS 版本」「密码套件」「HSTS 有效期（秒）」、各开关和「压缩」。
 4. 点击「保存」。控制台提示「已保存」，并发布新的配置版本。
 5. 验证：节点应用该版本后：
 
@@ -124,11 +124,7 @@ DNS-01 验证需要先添加凭据。
 | HTTP/3 | 开 / 关 | 关 | 在 UDP 443 提供 QUIC，并发送 `Alt-Svc: h3=":443"; ma=86400` |
 | HSTS 包含子域名 | 开 / 关 | 关 | HSTS 附加 `includeSubDomains` |
 | HSTS 预加载 | 开 / 关 | 关 | HSTS 附加 `preload` |
-| Gzip | 开 / 关 | 开 | 压缩响应，附带 `Vary: Accept-Encoding` |
 | OCSP 装订 | 开 / 关 | 关 | 在握手中附带 OCSP 响应 |
-| 最小压缩大小（字节） | 1–1048576 | 256 | 小于该长度的响应不压缩 |
-| 压缩内容类型 | MIME 类型，逗号或空格分隔，最多 32 个 | `text/html`、`text/plain`、`text/css`、`application/javascript`、`application/json`、`image/svg+xml` | 压缩的响应类型；`text/html` 始终压缩 |
-| Brotli / Zstd | 不可用 | 关 | 当前引擎未构建这些模块，不能开启 |
 
 选择「仅 HTTP」时，「强制 HTTPS」关闭、HSTS 有效期归零。
 
@@ -138,6 +134,34 @@ DNS-01 验证需要先添加凭据。
 | 兼容 | 现代档位加 `ECDHE-ECDSA-AES256-GCM-SHA384`、`ECDHE-RSA-AES256-GCM-SHA384` |
 
 TLS 会话票据（session ticket）关闭。
+
+### 压缩
+
+「压缩」下 Zstandard、Brotli、Gzip 各有一组设置：
+
+| 字段 | 取值 | 默认值 | 作用 |
+| --- | --- | --- | --- |
+| 开启 | 开 / 关 | Gzip 开，Brotli、Zstandard 关 | 按该算法压缩响应 |
+| 压缩级别 | Brotli 1–11，Zstandard 1–19 | Brotli 6，Zstandard 3 | 级别越高压缩率越高、CPU 开销越大；Gzip 没有此项 |
+| 最小压缩大小（字节） | 1–1048576 | 256 | 小于该长度的响应不压缩 |
+| 压缩内容类型 | MIME 类型，逗号或空格分隔，最多 32 个 | `text/html`、`text/plain`、`text/css`、`application/javascript`、`application/json`、`image/svg+xml` | 压缩的响应类型；`text/html` 始终压缩 |
+
+| 行为 | 说明 |
+| --- | --- |
+| 协商 | 按请求 `Accept-Encoding` 的 q 值选择一种已开启的算法；q 值相同时顺序为 zstd > br > gzip，`q=0` 表示不接受。每个响应只由一种算法压缩 |
+| `Vary` | 压缩的响应带 `Vary: Accept-Encoding` |
+| 不重复压缩 | 响应已有 `Content-Encoding`（如源站已压缩）时原样返回 |
+| 缓存 | 缓存保存未压缩或源站原样的内容，每次响应时按请求压缩；缓存命中后编码同样按请求协商 |
+| 能力 | 开启 Brotli 需要集群全部活动节点支持 `brotli-v1`，Zstandard 需要 `zstd-v1`。有节点不支持时开关不可用，并显示「所在集群有节点不支持，暂时无法开启」；已开启的算法仍可关闭 |
+
+验证（节点应用该版本后）：
+
+```bash
+curl -s -o /dev/null -D - -H 'Accept-Encoding: zstd' --resolve www.example.com:443:<节点 IP> https://www.example.com/
+curl -s -o /dev/null -D - -H 'Accept-Encoding: br' --resolve www.example.com:443:<节点 IP> https://www.example.com/
+```
+
+分别返回 `content-encoding: zstd` 与 `content-encoding: br`，并带 `vary: Accept-Encoding`。
 
 ### 监听端口
 
@@ -166,7 +190,7 @@ TLS 会话票据（session ticket）关闭。
 | 校验 | 节点检查指纹、私钥匹配和域名覆盖 |
 | 存储 | 节点状态目录的 `certificates.json`（0600）；节点上的私钥不加密，主机管理员可读取 |
 | 热更新 | 证书内容与最低 TLS 版本变化不重载 nginx |
-| 重载 | HTTP/2、HTTP/3、Gzip、密码套件、是否有证书、域名列表或网站集合变化时，先执行配置测试再重载；失败时恢复原配置 |
+| 重载 | HTTP/2、HTTP/3、压缩、密码套件、是否有证书、域名列表或网站集合变化时，先执行配置测试再重载；失败时恢复原配置 |
 | 应用成功 | 配置持久化成功后才报告已应用；当前与上一份 last-known-good 配置引用的密钥都保留 |
 | 回滚 | 配置回滚使用仍可用的当前证书材料；证书已删除、过期或不覆盖目标域名时拒绝回滚 |
 
@@ -181,6 +205,8 @@ ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主
 | `tls-v1` | 网站保存过「HTTPS」页签 |
 | `http01-v1` | HTTP-01 验证 |
 | `http3-v1` | 任一网站开启 HTTP/3 |
+| `brotli-v1` | 任一网站开启 Brotli |
+| `zstd-v1` | 任一网站开启 Zstandard |
 
 租户的改动引入集群中活动节点不支持的能力时被拒绝（「请先由管理员为集群节点启用这些能力：…」），原配置不变。缺少能力的节点保留 last-known-good 配置，后台显示「需要升级」，见[节点升级](node-upgrades.md)。
 
@@ -191,8 +217,8 @@ ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主
 | 证书颁发机构 | 界面只提供 Let's Encrypt 和 ZeroSSL。`EDGEWEIR_ACME_DIRECTORY` 和 `EDGEWEIR_ACME_CA_FILE` 可把全部证书改到私有或测试 ACME 目录，见[环境变量](../reference/environment.md) |
 | TLS 版本 | 不支持 TLS 1.0 和 1.1 |
 | 密码套件 | 只有「现代」「兼容」两档，不能写入任意 nginx 配置 |
-| 压缩 | 只有 Gzip；Brotli、Zstd 不可用。压缩设置在网站首次保存「HTTPS」页签后生效 |
-| 节点软件包 | 节点 Docker 镜像基于 OpenResty 1.31.1.1，含 HTTP/2 与 HTTP/3；deb/rpm 安装使用发行版的 `openresty` 软件包 |
+| 压缩 | Gzip、Brotli、Zstandard；压缩设置在网站首次保存「HTTPS」页签后生效 |
+| 节点软件包 | 节点使用为 Edgeweir 构建的 OpenResty 1.31.1.1（`edgeweir-openresty`），含 HTTP/2、HTTP/3、Brotli 与 Zstandard，见[接入节点](../deploy/nodes.md) |
 | 失败原因 | 界面和控制台日志不显示 CA 或 DNS 服务商返回的失败原因 |
 
 ## 故障排查
@@ -209,4 +235,6 @@ ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主
 | 「请先由管理员为集群节点启用这些能力：…」 | 集群中有活动节点不支持所需能力 | 升级节点；平台管理员可明确发布 |
 | 421，`X-Edgeweir-Error: sni-host-mismatch` | TLS SNI 与 `Host` 不一致，例如客户端复用了其他域名的连接 | 客户端按请求的域名建立连接 |
 | 浏览器不使用 HTTP/3 | UDP 443 未放通；节点缺少 `http3-v1`；客户端首次访问后才读取 `Alt-Svc` | 放通 UDP 443，检查节点能力 |
-| 响应未压缩 | 从未保存「HTTPS」页签；内容类型不在列表中；响应小于最小压缩大小；客户端未发送 `Accept-Encoding` | 保存「HTTPS」页签并检查压缩设置 |
+| 响应未压缩 | 从未保存「HTTPS」页签；内容类型不在列表中；响应小于最小压缩大小；客户端未发送 `Accept-Encoding`；源站响应已带 `Content-Encoding` | 保存「HTTPS」页签并检查压缩设置 |
+| 拿到 gzip 而不是 br / zstd | 客户端的 `Accept-Encoding` 不含该算法或 q 值更低；该算法未开启 | 检查请求头与「压缩」设置 |
+| Brotli / Zstandard 开关不可用 | 集群中有活动节点不支持 `brotli-v1` / `zstd-v1` | 升级节点 |

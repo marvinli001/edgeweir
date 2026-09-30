@@ -16,8 +16,9 @@ Documentation: <https://marvinli001.github.io/edgeweir/en/>
 | --- | --- |
 | Clusters and access | Node groups, regions, organizations, member invitations, 2FA / passkeys, management audit log |
 | Origins and cache | Origin pools, origin TLS verification, S3-signed origins, WebSocket, cache keys, slicing, purge and prefetch |
-| Certificates and protocols | Certificate upload, ACME HTTP-01 / DNS-01 issuance and renewal, HTTPS, HSTS, HTTP/2, HTTP/3 |
+| Certificates and protocols | Certificate upload, ACME HTTP-01 / DNS-01 issuance and renewal, HTTPS, HSTS, HTTP/2, HTTP/3; Zstandard, Brotli and Gzip compression |
 | Access policy | Organization / platform IP lists, local GeoIP, phased rules, WAF, rate limits, redirects, rewrites, request and response header transforms; IP bans delivered within seconds, platform bans optionally dropped in the kernel by nftables |
+| Managed rules | OWASP CRS: detect or block, paranoia level, anomaly threshold, exclusions by rule ID, request body limit; matched-rule statistics and access logs; the platform can forbid it for tenants |
 | Challenges and CC mitigation | Four challenge levels (cookie redirect, JavaScript, proof of work, image captcha); site or platform Under Attack; tiered CC escalation decided locally on each node (site, per-URL, per-IP automatic bans, origin error rate); signed passes valid across the cluster; JA4 fingerprints in rules, rate limits and access logs |
 | DNS and observability | Domain ownership verification, independent DNS revisions, healthy-node steering, deduplicated traffic statistics and rollups, Top URL / IP, alerts and subscriptions |
 | Operations | Sampled access logs with CSV export, optional ClickHouse, read-only and revocable AccessKeys, signed canary upgrades with rollback, performance baseline, backup and recovery |
@@ -130,7 +131,7 @@ sudo bash deploy.sh install
 
 ## Adding a node
 
-Node requirements: Linux with systemd, amd64 / arm64, access to port 8443 of the console.
+Node requirements: Linux with systemd, amd64 / arm64, glibc 2.34 or later (RHEL / Rocky / AlmaLinux 9+, Debian 12+, Ubuntu 22.04+), access to port 8443 of the console.
 
 1. Sign in as a platform administrator, switch to **Admin → Clusters & nodes**, pick a cluster and generate an install command. The command carries a single-use token and the SHA-256 fingerprint of the console's internal CA.
 2. Run it on the node with an account that may use sudo:
@@ -148,6 +149,7 @@ Installer behavior:
 - The token is passed only through `EDGEWEIR_TOKEN` or `--token-file`, never as a process argument.
 - Before installing, it verifies the cosign signature of the checksums (issued to the edgeweir-node release workflow at the exact tag being installed) and the SHA-256 of every package.
 - Installs the .deb / .rpm package where possible, otherwise the tar.gz; downloads from the console's `/downloads` mirror when configured, otherwise from GitHub Releases.
+- Installs OpenResty built for Edgeweir (`edgeweir-openresty`) and its ModSecurity module (`edgeweir-openresty-modsecurity`, skipped with `--no-modsecurity`) from the same release before edgeweir-node.
 - The agent checks the CA fingerprint before sending the token, generates its private key locally, and talks to the console only over mTLS from then on.
 
 Installer options and the release mirror: [Adding nodes](docs/deploy/nodes.en.md).
@@ -213,10 +215,6 @@ Coverage: enrollment, config rollout, caching, purge and prefetch, origins and S
 | `E2E_INSTALL_IMAGE` | `debian:bookworm-slim` (pinned by digest in `scripts/e2e.sh`) | Clean machine for `install.sh` |
 | `EDGEWEIR_NODE_CONTEXT` | `../edgeweir-node` | edgeweir-node checkout |
 
-## Known limitations
-
-- The stock OpenResty engine used by nodes does not include Brotli / Zstd.
-
 ## Repository layout
 
 ```
@@ -243,7 +241,7 @@ The documentation site <https://marvinli001.github.io/edgeweir/en/> is generated
 | Area | Documents |
 | --- | --- |
 | Deployment | [Overview](docs/deploy/README.en.md) · [Docker Compose](docs/deploy/docker.en.md) · [BT Panel / aaPanel](docs/deploy/baota.en.md) · [deploy.sh](docs/deploy/deploy-script.en.md) · [Railway](docs/deploy/railway.en.md) · [Fly.io](docs/deploy/fly.en.md) · [Ports and reverse proxy](docs/deploy/networking.en.md) · [Adding nodes](docs/deploy/nodes.en.md) · [Versions and upgrades](docs/deploy/upgrade.en.md) · [Backup and recovery](docs/deploy/backup.en.md) |
-| Usage | [Quick start](docs/guide/first-site.en.md) · [Organizations and members](docs/guide/organizations.en.md) · [Platform administration](docs/guide/admin.en.md) · [Origins and cache](docs/guide/origins-and-cache.en.md) · [HTTPS and certificates](docs/guide/https.en.md) · [Rules](docs/guide/rules.en.md) · [Bans](docs/guide/bans.en.md) · [Challenges and CC mitigation](docs/guide/challenges.en.md) · [DNS and alerts](docs/guide/dns-and-alerts.en.md) · [Access logs and AccessKeys](docs/guide/access-logs.en.md) · [Node upgrades](docs/guide/node-upgrades.en.md) |
+| Usage | [Quick start](docs/guide/first-site.en.md) · [Organizations and members](docs/guide/organizations.en.md) · [Platform administration](docs/guide/admin.en.md) · [Origins and cache](docs/guide/origins-and-cache.en.md) · [HTTPS and certificates](docs/guide/https.en.md) · [Rules](docs/guide/rules.en.md) · [Bans](docs/guide/bans.en.md) · [Challenges and CC mitigation](docs/guide/challenges.en.md) · [OWASP CRS managed rules](docs/guide/waf.en.md) · [DNS and alerts](docs/guide/dns-and-alerts.en.md) · [Access logs and AccessKeys](docs/guide/access-logs.en.md) · [Node upgrades](docs/guide/node-upgrades.en.md) |
 | Reference | [Environment variables](docs/reference/environment.en.md) · [Command line](docs/reference/cli.en.md) · [API and endpoints](docs/reference/api.en.md) |
 | Project | [Architecture](ARCHITECTURE.en.md) · [Security](SECURITY.en.md) · [Contributing](CONTRIBUTING.en.md) · [Licensing](LICENSING.en.md) |
 

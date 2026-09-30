@@ -195,6 +195,23 @@ Nodes enforce challenges, Under Attack and tiered CC mitigation locally; the con
 
 Behavior: [Challenges and CC mitigation](docs/guide/challenges.en.md).
 
+## Compression and OWASP CRS
+
+Nodes compress and run CRS with OpenResty built for Edgeweir (`edgeweir-openresty`, optional module package `edgeweir-openresty-modsecurity`) and report `brotli-v1`, `zstd-v1` and `modsecurity-v1` according to their build. The console holds the settings, the capability gate and the match statistics:
+
+1. A site's Brotli and Zstandard settings live with Gzip in `site.tls_settings` and are compiled into `TlsOptions`; only algorithms that are on carry their level, minimum length and types (types sorted and unique), so the content hash stays the same while they are off. Enabled sites with them on add `brotli-v1` / `zstd-v1` to `required_features`.
+2. A site's CRS settings live in `site_waf`; unless the mode is off they compile into `Site.waf` (excluded rule ids ascending and unique) and add `modsecurity-v1`. While the system setting `waf_settings.tenantCrs` is off, a tenant change that leaves the mode other than off gets `WAF_CRS_FORBIDDEN`; sites already running CRS are not republished.
+3. As with other capabilities, a tenant change that introduces a capability an active node of the cluster lacks gets `NODE_CAPABILITY_REQUIRED`; platform administrators may publish it. `sites.features` tells per site whether each feature can be turned on and why not (`nodes` / `platform`), and the UI disables the switches accordingly. Rollback recomputes the three capabilities from the sites it ships.
+4. `waf_rules` of `ReportStats` (rule id → requests) keeps at most 50 rules per node, site and minute, rolls up into hours and days with the other per-minute statistics and is copied to ClickHouse `minute_stats`; `waf.topRules` sums a range. Access logs keep the matched rule ids (at most 16, ascending) and `waf_blocked` (PostgreSQL, ClickHouse, CSV).
+
+| Management action | Audit |
+| --- | --- |
+| A site's HTTPS and compression | `site.https_update` (publishes the site's cluster) |
+| A site's CRS | `site.waf_update` (publishes the site's cluster, reason `site_waf_updated`) |
+| Tenants may turn on CRS | `system.waf_update` (publishes nothing) |
+
+Behavior: [HTTPS and certificates](docs/guide/https.en.md#compression) and [OWASP CRS managed rules](docs/guide/waf.en.md).
+
 ## Node channel
 
 Connect-RPC over HTTPS; the console process terminates TLS itself.

@@ -6,20 +6,20 @@ Generate an install command for a cluster, then install and enroll an edge node 
 
 | Item | Requirement |
 | --- | --- |
-| System | Linux, amd64 or arm64; systemd (not required with `--no-start`) |
+| System | Linux, amd64 or arm64, glibc 2.34 or later: RHEL, Rocky, AlmaLinux 9 or later, Debian 12 or later, Ubuntu 22.04 or later; systemd (not required with `--no-start`) |
 | Privileges | root or sudo |
 | Commands | `curl`, `sha256sum`, `tar` |
 | Console access | `EDGEWEIR_PUBLIC_URL` (`/install.sh`, `/downloads/*`) and `EDGEWEIR_NODE_API_URL` (node channel, 8443 by default); see [ports and reverse proxy](networking.en.md) |
-| External access | GitHub Releases and `api.github.com` (unless `--mirror-only`); `openresty.org` (when OpenResty is not installed) |
+| External access | GitHub Releases and `api.github.com` (unless `--mirror-only`) |
 
-When OpenResty is not installed, `install.sh` installs it from the official openresty.org repositories, which cover:
+Nodes use OpenResty built for Edgeweir, released with edgeweir-node and listed in the same signed `checksums.txt`:
 
-| Package manager | Distributions |
-| --- | --- |
-| apt | Debian, Ubuntu (amd64, arm64) |
-| dnf / yum | CentOS, RHEL 7 or later; Rocky 8 or later; Oracle Linux 7–8; Fedora 32 or later; Amazon Linux 2, 2023 (2018.03 amd64 only); Alibaba Cloud Linux 2–3; TencentOS 2–3; CBL-Mariner 2; distributions whose `ID_LIKE` contains `rhel` are treated as RHEL |
+| Package | Contents | Installed |
+| --- | --- | --- |
+| `edgeweir-openresty` | OpenResty 1.31.1.1 with HTTP/2, HTTP/3, Brotli, and Zstandard; `/usr/lib/edgeweir-openresty/` (nginx at `/usr/lib/edgeweir-openresty/nginx/sbin/nginx`) | `edgeweir-node` depends on it; always installed |
+| `edgeweir-openresty-modsecurity` | The ModSecurity dynamic module `/usr/lib/edgeweir-openresty/modules/ngx_http_modsecurity_module.so` and the OWASP CRS rules in `/usr/share/edgeweir-openresty/crs/` | Recommended by `edgeweir-node`; `install.sh` installs it unless `--no-modsecurity` is given, in which case the node does not support [OWASP CRS](../guide/waf.en.md) |
 
-On other distributions, install OpenResty manually first.
+Both packages come as deb and rpm only (amd64, arm64). The openresty.org repositories are no longer used; an openresty.org repository and `openresty` package added by an earlier `install.sh` can be removed.
 
 ## 1. Generate the install command
 
@@ -65,8 +65,8 @@ Expected: `edgeweir-node.service` is `active (running)`; in **Admin → Clusters
 | 3 | Resolves the version: `--version`, or the `latest` file of the downloads mirror, falling back to the latest GitHub release | Exit, asking for `--version` |
 | 4 | Downloads `checksums.txt` and `checksums.txt.sigstore.json`: mirror first, then GitHub | Exit |
 | 5 | Verifies the signature with `cosign verify-blob`: the certificate identity must be `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<version>`, the issuer `https://token.actions.githubusercontent.com`. Without cosign on the host, downloads cosign v3.1.3, checks it against the SHA-256 pinned in the script, and installs it to `/usr/local/bin/cosign` | Exit |
-| 6 | Picks the package for this host from the signed `checksums.txt`, downloads it, and verifies its SHA-256 | Exit |
-| 7 | Installs OpenResty from openresty.org when missing | Exit, asking for a manual install |
+| 6 | Picks the package for this host from the signed `checksums.txt`, and `edgeweir-openresty` and `edgeweir-openresty-modsecurity` of the same release (exactly one file per package, format, and architecture); exits on glibc older than 2.34; downloads them (mirror first, then GitHub) and verifies their SHA-256 | Exit |
+| 7 | Installs `edgeweir-openresty` and `edgeweir-openresty-modsecurity` first. A tar.gz install uses the host's `dpkg` or `rpm` for them; without either, `edgeweir-openresty` must already be installed | Exit |
 | 8 | Installs the deb, rpm, or tar.gz | Exit |
 | 9 | `edgeweir-node enroll`: checks the CA fingerprint before sending the token, generates the private key locally, and exchanges a CSR for the node certificate; from then on, mTLS only | Exit |
 | 10 | Disables `openresty.service`, enables and starts `edgeweir-node.service` (skipped with `--no-start`) | — |
@@ -81,6 +81,8 @@ Installed files:
 | --- | --- |
 | `/usr/bin/edgeweir-node` | Agent |
 | `/usr/share/edgeweir-node/lua/edgeweir/` | OpenResty Lua modules |
+| `/usr/lib/edgeweir-openresty/` | OpenResty (`edgeweir-openresty`); the ModSecurity module in `modules/` |
+| `/usr/share/edgeweir-openresty/crs/` | OWASP CRS rules (`edgeweir-openresty-modsecurity`; the version is fixed by the package, nothing is downloaded at run time) |
 | `/var/lib/edgeweir-node/` | State directory (user `edgeweir`, 0700): `node.key`, `node.crt`, `ca.crt`, `identity.json`, `config/` (last-known-good configuration and `receipts.json`) |
 | `/var/cache/edgeweir-node/` | Cache directory (user `edgeweir`, 0750) |
 | `edgeweir-node.service` | deb, rpm: `/usr/lib/systemd/system/`; tar.gz: `/etc/systemd/system/` |
@@ -112,6 +114,10 @@ downloads/
       edgeweir-node_0.2.0_amd64.deb
       edgeweir-node-0.2.0-1.x86_64.rpm
       edgeweir-node_0.2.0_linux_amd64.tar.gz
+      edgeweir-openresty_1.31.1.1-1_amd64.deb
+      edgeweir-openresty-1.31.1.1-1.x86_64.rpm
+      edgeweir-openresty-modsecurity_1.31.1.1-1_amd64.deb
+      edgeweir-openresty-modsecurity-1.31.1.1-1.x86_64.rpm
       ...
   cosign/
     v3.1.3/
@@ -142,7 +148,9 @@ The release source for agent self-upgrades is set in **Admin → System → Node
 | `the enrollment token is malformed (expected ewt_...)` | Token copied incompletely | Copy the install command again. |
 | `systemd is required` | No systemd on the host | Use a systemd host, or add `--no-start` to install and enroll only. |
 | `could not determine the latest edgeweir-node version; pass --version` | No `latest` in the mirror, and GitHub unreachable or without a release | Add `--version`, or set up the downloads mirror. |
-| `openresty.org has no packages for ...` | Distribution not covered by openresty.org | Install OpenResty manually and run again. |
+| `edgeweir-openresty needs glibc 2.34 or later` | The distribution is too old | Use RHEL, Rocky, AlmaLinux 9, Debian 12, Ubuntu 22.04, or later. |
+| `checksums.txt does not list exactly one ... package of edgeweir-openresty...` | The mirror or release lacks the package, or lists several versions for the architecture | Complete the mirror directory from `checksums.txt`; add `--no-modsecurity` when the release has no ModSecurity module. |
+| `edgeweir-openresty comes as .deb and .rpm only` | A tar.gz install on a host without `dpkg`, `rpm`, or an installed `edgeweir-openresty` | Use a host with deb or rpm package management. |
 | `cosign signature verification FAILED`, `SHA-256 verification FAILED` | Downloaded content does not match the signature or checksum | Check the download source and the mirror contents; do not skip verification. |
 | `CA pin mismatch` | A proxy or CDN terminates TLS on 8443, or `--server` points at another service | Connect directly or use [layer-4 passthrough](networking.en.md#node-channel-passthrough). |
 | `console rejected the enrollment token (expired or already used)` | Token expired or already used | Generate a new install command. |

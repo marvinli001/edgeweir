@@ -195,6 +195,23 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 
 行为见 [挑战与 CC 防护](docs/guide/challenges.md)。
 
+## 压缩与 OWASP CRS
+
+节点以为 Edgeweir 构建的 OpenResty（`edgeweir-openresty`，可选模块 `edgeweir-openresty-modsecurity`）执行压缩与 CRS，按实际构建上报 `brotli-v1`、`zstd-v1`、`modsecurity-v1`。控制台负责设置、能力门槛与命中统计：
+
+1. 网站的 Brotli、Zstandard 设置与 Gzip 一起保存在 `site.tls_settings`，编译进 `TlsOptions`；只有开启的算法带级别、最小长度与类型（类型排序去重），未开启时内容哈希不变。有启用网站开启时 `required_features` 加 `brotli-v1` / `zstd-v1`。
+2. 网站的 CRS 设置保存在 `site_waf`；模式不为关闭时编译为 `Site.waf`（排除的规则 id 升序去重），`required_features` 加 `modsecurity-v1`。系统设置 `waf_settings.tenantCrs` 关闭时，租户的修改只要模式不为关闭就返回 `WAF_CRS_FORBIDDEN`；已开启的网站不重新发布。
+3. 与其他能力相同，租户的改动引入集群活动节点缺少的能力时返回 `NODE_CAPABILITY_REQUIRED`，平台管理员可以发布。`sites.features` 按网站给出三项功能能否开启及原因（`nodes` / `platform`），界面据此禁用开关。回滚按保留的网站重新计算这三项能力。
+4. `ReportStats` 的 `waf_rules`（规则 id → 请求数）按节点、网站、分钟最多保留 50 条，与其他分钟统计一起汇总到小时和天，并写入 ClickHouse `minute_stats` 副本；`waf.topRules` 按时间范围汇总。访问日志保存命中的规则 id（最多 16 个，升序）与 `waf_blocked`（PostgreSQL、ClickHouse、CSV）。
+
+| 管理操作 | 审计 |
+| --- | --- |
+| 修改网站 HTTPS 与压缩 | `site.https_update`（发布该网站的集群） |
+| 修改网站 CRS | `site.waf_update`（发布该网站的集群，原因 `site_waf_updated`） |
+| 允许租户开启 CRS | `system.waf_update`（不发布） |
+
+行为见 [HTTPS 与证书](docs/guide/https.md#压缩) 与 [OWASP CRS 托管规则](docs/guide/waf.md)。
+
 ## 节点通道
 
 Connect-RPC over HTTPS，由控制台进程自己终结 TLS。

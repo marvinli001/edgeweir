@@ -252,6 +252,53 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 
 Behavior: [Challenges and CC mitigation](../guide/challenges.en.md).
 
+### Compression and OWASP CRS
+
+| Procedure | Endpoint | Caller |
+| --- | --- | --- |
+| `https.get`, `https.update` | `GET`, `PUT /sites/{id}/https` | Organization members, platform administrators |
+| `sites.features` | `GET /sites/{id}/features` | Organization members, platform administrators |
+| `waf.get` | `GET /sites/{id}/waf` | Organization members, platform administrators |
+| `waf.update` | `PATCH /sites/{id}/waf` | Organization owners / admins, platform administrators |
+| `waf.topRules` | `GET /sites/{id}/waf/rules` | Organization members, platform administrators |
+| `settings.waf`, `settings.setWaf` | `GET`, `PUT /settings/waf` | Platform administrators |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys can call `GET` only.
+
+| Request | Fields |
+| --- | --- |
+| `PUT /sites/{id}/https` | `settings` replaces all HTTPS settings of the site; missing fields take their defaults, so `GET` first and change what you need. Compression fields: `brotli`, `brotliLevel` (1–11, default 6), `brotliMinLength`, `brotliTypes`; `zstd`, `zstdLevel` (1–19, default 3), `zstdMinLength`, `zstdTypes`; `gzip`, `gzipMinLength`, `gzipTypes`; minimum lengths 1–1048576 (default 256), types are arrays of MIME types (up to 32) |
+| `PATCH /sites/{id}/waf` | Changes only the fields given: `mode` (`off` / `detect` / `block`), `paranoiaLevel` (1–4), `anomalyThreshold` (1–1000), `excludedRuleIds` (900000–999999, unique, up to 200), `requestBodyLimit` (0–134217728 bytes) |
+| `GET /sites/{id}/waf/rules` | Query parameters `range` (`1h` / `6h` / `24h` / `7d` / `30d`, default `24h`), `limit` (1–50, default 10) |
+| `PUT /settings/waf` | `tenantCrs`: whether tenants may turn CRS on |
+
+Responses:
+
+| Procedure | Content |
+| --- | --- |
+| `sites.features` | `brotli`, `zstd`, `crs`, each `{ available, reason }`; `reason` is `nodes` (an active node of the cluster lacks `brotli-v1` / `zstd-v1` / `modsecurity-v1`), `platform` (the platform does not let tenants turn CRS on; tenants only), or `null` |
+| `waf.get`, `waf.update` | `siteId`, the fields above (`excludedRuleIds` ascending), `updatedAt` (`null` until first saved, with the defaults `off`, 1, 5, `[]`, 131072) |
+| `waf.topRules` | `{ approximate: true, items: [{ ruleId, requests }] }`, most matched first |
+
+- `https.update` publishes the site's cluster (reason `certificate_updated`), audited as `site.https_update`; `waf.update` publishes (`site_waf_updated`), audited as `site.waf_update`; `settings.setWaf` publishes nothing and is audited as `system.waf_update`.
+
+| Error code | Status | When |
+| --- | --- | --- |
+| `NODE_CAPABILITY_REQUIRED` | 409 | An active node of the cluster lacks `brotli-v1`, `zstd-v1`, or `modsecurity-v1` (tenant calls); `data.features` |
+| `WAF_CRS_FORBIDDEN` | 403 | While the platform does not let tenants turn CRS on, a tenant change leaves `mode` other than `off` |
+| `ORG_ADMIN_REQUIRED` | 403 | An organization member calls `waf.update` |
+| `SITE_NOT_FOUND` | 404 | The site does not exist or is outside the caller's scope |
+
+```bash
+curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"mode":"block","paranoiaLevel":1,"excludedRuleIds":[920350]}' \
+  https://cdn-admin.example.com/api/v1/sites/<site ID>/waf
+curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
+  'https://cdn-admin.example.com/api/v1/sites/<site ID>/waf/rules?range=1h'
+```
+
+Behavior: [HTTPS and certificates](../guide/https.en.md#compression) and [OWASP CRS managed rules](../guide/waf.en.md).
+
 ### Usage
 
 One record per site and UTC 5-minute window `[windowStart, windowEnd)`, summing the minute statistics every node reported for the window.
@@ -391,7 +438,7 @@ The response comes from the listening HTTP server; the database is not checked. 
 | `/downloads/<project>/latest` | Latest version number, text | `no-cache` |
 | `/downloads/<project>/v<semver>/<file>` | Release file | `public, max-age=86400, immutable` |
 
-`<project>` is `edgeweir-node` or `cosign`. Other paths, missing files, and symbolic links leading out of the directory return 404. Preparing the directory: [Adding nodes](../deploy/nodes.en.md).
+`<project>` is `edgeweir-node` or `cosign`; the `edgeweir-openresty` and `edgeweir-openresty-modsecurity` packages go into the same version directory as `edgeweir-node`. Other paths, missing files, and symbolic links leading out of the directory return 404. Preparing the directory: [Adding nodes](../deploy/nodes.en.md).
 
 ## Node channel
 
