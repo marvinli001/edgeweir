@@ -9,7 +9,9 @@ import * as z from "zod";
 import { type Columns, DataTable } from "@/components/data-table";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
+import { SearchBox } from "@/components/search-box";
 import { StarButton, useSiteStars } from "@/components/site-star";
+import { SiteStatus } from "@/components/site-status";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import {
   Select,
   SelectContent,
@@ -102,6 +103,11 @@ function SitesPage() {
             <span className="text-xs text-muted-foreground">{timeAgo(row.original.createdAt)}</span>
           </div>
         ),
+      },
+      {
+        id: "status",
+        header: () => m.sites_col_status(),
+        cell: ({ row }) => <SiteStatus site={row.original} />,
       },
       {
         id: "domains",
@@ -240,34 +246,6 @@ function SitesPage() {
       )}
       <CreateSiteDialog open={search.create === true} onOpenChange={setCreateOpen} />
     </Page>
-  );
-}
-
-/** Search input that updates the URL a moment after typing stops. */
-function SearchBox({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [text, setText] = React.useState(value);
-  const latest = React.useRef(onChange);
-  latest.current = onChange;
-  React.useEffect(() => setText(value), [value]);
-  React.useEffect(() => {
-    if (text === value) return;
-    const timer = setTimeout(() => latest.current(text.trim()), 300);
-    return () => clearTimeout(timer);
-  }, [text, value]);
-  return (
-    <InputGroup className="w-full sm:w-72">
-      <InputGroupAddon>
-        <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
-      </InputGroupAddon>
-      <InputGroupInput
-        type="search"
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        placeholder={m.sites_search_placeholder()}
-        aria-label={m.sites_search_placeholder()}
-        data-testid="sites-search"
-      />
-    </InputGroup>
   );
 }
 

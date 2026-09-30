@@ -18,7 +18,9 @@ import { OriginsTab } from "@/components/site/origins-tab";
 import { RulesTab } from "@/components/site/rules-tab";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { StarButton, useSiteStars } from "@/components/site-star";
+import { SiteStatus, suspendReasonLabel } from "@/components/site-status";
 import { ErrorState, LoadingState } from "@/components/states";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -100,64 +102,77 @@ function SiteDetailPage() {
       ) : site.isError ? (
         <ErrorState error={site.error} onRetry={() => site.refetch()} />
       ) : (
-        <Tabs
-          key={site.data.id}
-          value={tab}
-          onValueChange={(value) =>
-            navigate({
-              search: (prev) => ({
-                ...prev,
-                tab: value === "overview" ? undefined : (value as SiteTab),
-              }),
-              replace: true,
-            })
-          }
-        >
-          <TabsList ref={tabsList} className="max-w-full justify-start overflow-x-auto">
-            {SITE_TABS.map((value) => (
-              <TabsTrigger key={value} value={value} data-testid={`tab-${value}`}>
-                {siteTabLabel(value)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <TabsContent value="overview" className="animate-enter">
-            <OverviewTab key={site.data.updatedAt} site={site.data} />
-          </TabsContent>
-          <TabsContent value="analytics" className="animate-enter">
-            <AnalyticsSection
-              siteId={site.data.id}
-              admin={isAdmin}
-              range={search.range ?? DEFAULT_RANGE}
-              onRangeChange={(range) =>
-                navigate({
-                  search: (prev) => ({
-                    ...prev,
-                    range: range === DEFAULT_RANGE ? undefined : range,
-                  }),
-                  replace: true,
-                })
-              }
-            />
-          </TabsContent>
-          <TabsContent value="domains" className="animate-enter">
-            <DomainsTab key={site.data.updatedAt} site={site.data} isAdmin={isAdmin} />
-          </TabsContent>
-          <TabsContent value="origins" className="animate-enter">
-            <OriginsTab site={site.data} />
-          </TabsContent>
-          <TabsContent value="https" className="animate-enter">
-            <HttpsTab site={site.data} />
-          </TabsContent>
-          <TabsContent value="rules" className="animate-enter">
-            <RulesTab siteId={site.data.id} />
-          </TabsContent>
-          <TabsContent value="logs" className="animate-enter">
-            <LogsTab siteId={site.data.id} />
-          </TabsContent>
-          <TabsContent value="cache" className="animate-enter">
-            <CacheTab site={site.data} />
-          </TabsContent>
-        </Tabs>
+        <>
+          {site.data.suspended ? (
+            <Alert
+              variant="destructive"
+              className="animate-enter"
+              data-testid="site-suspended-notice"
+            >
+              <AlertTitle>
+                {m.site_suspended_notice({ reason: suspendReasonLabel(site.data.suspendReason) })}
+              </AlertTitle>
+            </Alert>
+          ) : null}
+          <Tabs
+            key={site.data.id}
+            value={tab}
+            onValueChange={(value) =>
+              navigate({
+                search: (prev) => ({
+                  ...prev,
+                  tab: value === "overview" ? undefined : (value as SiteTab),
+                }),
+                replace: true,
+              })
+            }
+          >
+            <TabsList ref={tabsList} className="max-w-full justify-start overflow-x-auto">
+              {SITE_TABS.map((value) => (
+                <TabsTrigger key={value} value={value} data-testid={`tab-${value}`}>
+                  {siteTabLabel(value)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <TabsContent value="overview" className="animate-enter">
+              <OverviewTab key={site.data.updatedAt} site={site.data} />
+            </TabsContent>
+            <TabsContent value="analytics" className="animate-enter">
+              <AnalyticsSection
+                siteId={site.data.id}
+                admin={isAdmin}
+                range={search.range ?? DEFAULT_RANGE}
+                onRangeChange={(range) =>
+                  navigate({
+                    search: (prev) => ({
+                      ...prev,
+                      range: range === DEFAULT_RANGE ? undefined : range,
+                    }),
+                    replace: true,
+                  })
+                }
+              />
+            </TabsContent>
+            <TabsContent value="domains" className="animate-enter">
+              <DomainsTab key={site.data.updatedAt} site={site.data} isAdmin={isAdmin} />
+            </TabsContent>
+            <TabsContent value="origins" className="animate-enter">
+              <OriginsTab site={site.data} />
+            </TabsContent>
+            <TabsContent value="https" className="animate-enter">
+              <HttpsTab site={site.data} />
+            </TabsContent>
+            <TabsContent value="rules" className="animate-enter">
+              <RulesTab siteId={site.data.id} />
+            </TabsContent>
+            <TabsContent value="logs" className="animate-enter">
+              <LogsTab siteId={site.data.id} />
+            </TabsContent>
+            <TabsContent value="cache" className="animate-enter">
+              <CacheTab site={site.data} />
+            </TabsContent>
+          </Tabs>
+        </>
       )}
     </Page>
   );
@@ -173,7 +188,10 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 }
 
 function OverviewTab({ site }: { site: Site }) {
-  const { isAdmin } = Route.useRouteContext();
+  const { isAdmin, me } = Route.useRouteContext();
+  const role = me.activeOrganization?.role;
+  const canSwitch = isAdmin || role === "owner" || role === "admin";
+  const setEnabled = useMutation(orpc.sites.setEnabled.mutationOptions());
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
   const [name, setName] = React.useState(site.name);
@@ -207,6 +225,43 @@ function OverviewTab({ site }: { site: Site }) {
               />
             </Field>
             <dl className="divide-y">
+              <InfoRow label={m.sites_col_status()}>
+                <SiteStatus site={site} />
+                {canSwitch ? (
+                  <ConfirmDialog
+                    trigger={
+                      <Button size="sm" variant="outline" data-testid="site-toggle-enabled">
+                        {site.enabled ? m.site_disable() : m.site_enable()}
+                      </Button>
+                    }
+                    destructive={site.enabled}
+                    title={
+                      site.enabled
+                        ? m.site_disable_confirm({ name: site.name })
+                        : m.site_enable_confirm({ name: site.name })
+                    }
+                    note={site.enabled ? m.site_disable_note() : undefined}
+                    confirmLabel={site.enabled ? m.site_disable() : m.site_enable()}
+                    onConfirm={async () => {
+                      try {
+                        const result = await setEnabled.mutateAsync({
+                          id: site.id,
+                          enabled: !site.enabled,
+                          expectedUpdatedAt: site.updatedAt,
+                        });
+                        toast.success(
+                          result.site.enabled
+                            ? m.site_enabled_toast({ revision: result.revision.revision })
+                            : m.site_disabled_toast({ revision: result.revision.revision }),
+                        );
+                        await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
+                      } catch (err) {
+                        toast.error(errorMessage(err));
+                      }
+                    }}
+                  />
+                ) : null}
+              </InfoRow>
               <InfoRow label={m.sites_col_domains()}>
                 {site.domains.map((d) => (
                   <Badge key={d} variant="outline" className="font-mono">

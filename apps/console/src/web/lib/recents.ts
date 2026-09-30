@@ -14,6 +14,7 @@ export const RECENT_PAGES = {
   "/settings": () => [m.area_console(), m.nav_settings()],
   "/admin/clusters": () => [m.area_admin(), m.nav_clusters()],
   "/admin/regions": () => [m.area_admin(), m.nav_regions()],
+  "/admin/sites": () => [m.area_admin(), m.nav_admin_sites()],
   "/admin/organizations": () => [m.area_admin(), m.nav_organizations()],
   "/admin/audit": () => [m.area_admin(), m.nav_audit()],
   "/admin/settings": () => [m.area_admin(), m.nav_system()],
