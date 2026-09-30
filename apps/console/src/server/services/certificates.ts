@@ -10,7 +10,7 @@ import {
   tlsSettings,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { assertCertificateNames } from "../lib/certificate-names";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
@@ -401,6 +401,28 @@ export const openDnsCredential = (
       .open(JSON.parse(row.credentialEnvelope), dnsCredentialBinding(row.id))
       .toString("utf8"),
   );
+/** One credential per organization and zone writes automatic records (each owns what it wrote). */
+async function assertAutoRecordsFree(
+  tx: Executor,
+  organizationId: string,
+  zone: string,
+  exceptId?: string,
+) {
+  const [other] = await tx
+    .select({ id: schema.dnsCredential.id })
+    .from(schema.dnsCredential)
+    .where(
+      and(
+        eq(schema.dnsCredential.organizationId, organizationId),
+        eq(schema.dnsCredential.zone, zone),
+        eq(schema.dnsCredential.autoRecords, true),
+        exceptId ? ne(schema.dnsCredential.id, exceptId) : undefined,
+      ),
+    )
+    .limit(1);
+  if (other)
+    fail("DNS_AUTO_RECORDS_EXISTS", "another credential already writes records in this zone");
+}
 export async function createDnsCredential(
   app: AppContext,
   input: DnsCredentialInput,
@@ -415,6 +437,7 @@ export async function createDnsCredential(
     "DNS_CREDENTIAL_INVALID",
   );
   return app.db.transaction(async (tx) => {
+    if (input.autoRecords) await assertAutoRecordsFree(tx, organizationId, input.zone);
     const [row] = await tx
       .insert(schema.dnsCredential)
       .values({
@@ -450,6 +473,8 @@ export async function updateDnsCredential(
     const credentials = input.credentials
       ? validCredentials(app, row.provider, input.credentials, "DNS_CREDENTIAL_INVALID")
       : undefined;
+    if (input.autoRecords && !row.autoRecords)
+      await assertAutoRecordsFree(tx, row.organizationId, row.zone, row.id);
     const [updated] = await tx
       .update(schema.dnsCredential)
       .set({

@@ -72,6 +72,7 @@ export const errorDefs = {
   DNS_CREDENTIAL_NOT_FOUND: { status: 404, params: [] },
   DNS_CREDENTIAL_INVALID: { status: 400, params: [] },
   DNS_CREDENTIAL_IN_USE: { status: 409, params: [] },
+  DNS_AUTO_RECORDS_EXISTS: { status: 409, params: [] },
 
   SETUP_DONE: { status: 403, params: [] },
   SETUP_IN_PROGRESS: { status: 409, params: [] },

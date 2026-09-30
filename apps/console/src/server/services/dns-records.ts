@@ -6,6 +6,7 @@ import { domainRoot } from "../lib/domain-root";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { openDnsCredential } from "./certificates";
+import { withLease } from "./dns-lease";
 import { certdDns, errorCode, type ProviderRecord } from "./dns-providers";
 import { verifyDomainOwnership } from "./domain-ownership";
 import type { Executor } from "./revisions";
@@ -25,8 +26,6 @@ type Desired = {
 };
 const TXT_PREFIX = "_edgeweir-verification.";
 const TTL = 600;
-/** Records other owners may hold at a name where the console writes a CNAME. */
-const exclusive = new Set(["A", "AAAA", "CNAME", "ALIAS"]);
 const key = (r: { name: string; type: string; purpose: string }) =>
   `${r.name}|${r.type}|${r.purpose}`;
 const within = (name: string, zone: string) => name === zone || name.endsWith(`.${zone}`);
@@ -146,12 +145,26 @@ async function audit(
   });
 }
 
+type Change = { row: Owned; want: Desired; created: boolean };
+const sameConflicts = (
+  a: { type: string; data: string }[],
+  b: { type: string; data: string }[],
+) => {
+  const key = (r: { type: string; data: string }) => `${r.type}|${canonical(r.type, r.data)}`;
+  const left = a.map(key).sort(),
+    right = b.map(key).sort();
+  return left.length === right.length && left.every((k, i) => k === right[i]);
+};
+
 /**
- * Brings one credential's zone in line: writes missing records, reports
- * conflicts (other A/AAAA/CNAME records at a CNAME's name) without touching
- * them until a member confirms, replaces confirmed conflicts, rewrites
- * drifted records and removes records that are no longer wanted. Only
- * records in dns_owned_record are ever changed or deleted.
+ * Brings one credential's zone in line with three batched provider calls
+ * (delete, set, add): writes missing records, reports conflicts (any other
+ * record at a CNAME's name) without touching them until a member confirms
+ * exactly the records they were shown, replaces confirmed conflicts,
+ * rewrites drifted records and removes records that are no longer wanted.
+ * Only records the console created are ever deleted; an identical record
+ * that was already there is tracked but left in place. A provider failure
+ * stops this credential's run and marks its pending changes.
  */
 async function syncCredential(app: AppContext, credential: Credential, actor: Actor) {
   const desired = await desiredRecords(app.db, credential);
@@ -174,6 +187,12 @@ async function syncCredential(app: AppContext, credential: Credential, actor: Ac
       .update(schema.dnsOwnedRecord)
       .set({ ...set, updatedAt: new Date() })
       .where(eq(schema.dnsOwnedRecord.id, row.id));
+  const record = (d: { name: string; type: string; data: string }): ProviderRecord => ({
+    name: d.name,
+    type: d.type,
+    data: d.data,
+    ttl: TTL,
+  });
   let actual: ProviderRecord[];
   try {
     actual = (await call("dns.list")).map((r) => ({ ...r, type: r.type.toUpperCase() }));
@@ -182,31 +201,19 @@ async function syncCredential(app: AppContext, credential: Credential, actor: Ac
       if (row.status !== "unsupported") await update(row, { lastError: errorCode(error) });
     throw error;
   }
-  const record = (d: { name: string; type: string; data: string }): ProviderRecord => ({
-    name: d.name,
-    type: d.type,
-    data: d.data,
-    ttl: TTL,
-  });
   const byKey = new Map(owned.map((row) => [key(row), row]));
-  // Records no longer wanted: remove exactly what the console wrote.
+  const cleanup: ProviderRecord[] = [];
+  const toSet: Change[] = [],
+    toAdd: Change[] = [],
+    removed: Owned[] = [],
+    overwrites: { want: Desired; replaced: { type: string; data: string }[] }[] = [];
+  // Records no longer wanted: remove exactly what the console created.
   for (const row of owned) {
-    if (
-      desired.some((d) => key(d) === key(row) && !d.unsupported === (row.status !== "unsupported"))
-    )
-      continue;
-    try {
-      if (row.status === "written" || row.status === "deleting" || row.status === "failed") {
-        await update(row, { status: "deleting" });
-        if (actual.some((r) => sameRecord(r, row))) await call("dns.cleanup", [record(row)]);
-      }
-      await app.db.delete(schema.dnsOwnedRecord).where(eq(schema.dnsOwnedRecord.id, row.id));
-      byKey.delete(key(row));
-      if (row.status !== "unsupported" && row.status !== "conflict")
-        await audit(app, actor, credential, "dns_record.delete", row);
-    } catch (error) {
-      await update(row, { status: "failed", lastError: errorCode(error) });
-    }
+    const want = desired.find((d) => key(d) === key(row));
+    if (want && !!want.unsupported === (row.status === "unsupported")) continue;
+    if (row.created && actual.some((r) => sameRecord(r, row))) cleanup.push(record(row));
+    removed.push(row);
+    byKey.delete(key(row));
   }
   for (const want of desired) {
     let row = byKey.get(key(want));
@@ -235,57 +242,101 @@ async function syncCredential(app: AppContext, credential: Credential, actor: Ac
       continue;
     }
     const present = actual.some((r) => sameRecord(r, want));
-    if (row.status === "written" && row.data === want.data && present) continue;
-    try {
-      if (want.type === "TXT") {
-        // TXT sets hold other values too: add ours, remove only our old value.
-        if (!present) await call("dns.present", [record(want)]);
-        if (row.data !== want.data && actual.some((r) => sameRecord(r, row)))
-          await call("dns.cleanup", [record(row)]);
-      } else {
-        const others = actual.filter(
-          (r) =>
-            sameName(r.name.replace(/\.$/, ""), want.name) &&
-            exclusive.has(r.type) &&
-            !sameRecord(r, want) &&
-            !sameRecord(r, row),
-        );
-        if (others.length && !row.confirmed) {
-          const conflicts = others.map((r) => ({ type: r.type, data: r.data }));
-          if (row.status !== "conflict")
-            await audit(app, actor, credential, "dns_record.conflict", want, { conflicts });
-          await update(row, { status: "conflict", conflicts, data: want.data, lastError: "" });
-          continue;
-        }
-        if (others.length) {
-          await call("dns.cleanup", others);
-          await audit(app, actor, credential, "dns_record.overwrite", want, {
-            replaced: others.map((r) => ({ type: r.type, data: r.data })),
-          });
-        }
-        if (!present) await call("dns.set", [record(want)]);
-      }
-      const created = row.status !== "written";
+    const oldValue =
+      row.data !== want.data && row.created && actual.some((r) => sameRecord(r, row))
+        ? record(row)
+        : null;
+    if (want.type === "TXT") {
+      // TXT sets hold other values too: add ours, remove only our old value.
+      if (oldValue) cleanup.push(oldValue);
+      if (present) {
+        if (row.status !== "written" || row.data !== want.data)
+          await update(row, { status: "written", data: want.data, lastError: "" });
+      } else toAdd.push({ row, want, created: true });
+      continue;
+    }
+    // A CNAME (or ALIAS) cannot share its name with any other record.
+    const others = actual.filter(
+      (r) =>
+        sameName(r.name.replace(/\.$/, ""), want.name) &&
+        !sameRecord(r, want) &&
+        !(row.created && sameRecord(r, row)),
+    );
+    const shown = others.map((r) => ({ type: r.type, data: r.data }));
+    if (others.length && !(row.confirmed && sameConflicts(shown, row.conflicts))) {
+      // Not confirmed, or the records changed since the member confirmed.
+      if (row.status !== "conflict" || !sameConflicts(shown, row.conflicts))
+        await audit(app, actor, credential, "dns_record.conflict", want, { conflicts: shown });
       await update(row, {
-        status: "written",
-        data: want.data,
-        siteId: want.siteId,
-        domain: want.domain,
-        conflicts: [],
+        status: "conflict",
+        conflicts: shown,
         confirmed: false,
+        data: want.data,
         lastError: "",
       });
-      if (created || row.data !== want.data)
-        await audit(
-          app,
-          actor,
-          credential,
-          created ? "dns_record.create" : "dns_record.update",
-          want,
-        );
-    } catch (error) {
-      await update(row, { status: "failed", lastError: errorCode(error) });
+      continue;
     }
+    if (others.length) {
+      cleanup.push(...others.map((r) => record(r)));
+      overwrites.push({ want, replaced: shown });
+    }
+    if (oldValue && oldValue.type !== want.type) cleanup.push(oldValue);
+    if (present) {
+      // Identical record already there: tracked, adopted only if the console did not create it.
+      if (row.status !== "written" || row.data !== want.data)
+        await update(row, { status: "written", data: want.data, conflicts: [], lastError: "" });
+    } else toSet.push({ row, want, created: true });
+  }
+  const run = async (
+    command: "dns.cleanup" | "dns.set" | "dns.present",
+    records: ProviderRecord[],
+    rows: Owned[],
+  ) => {
+    for (let i = 0; i < records.length; i += 100) {
+      try {
+        await call(command, records.slice(i, i + 100));
+      } catch (error) {
+        for (const row of rows)
+          await update(row, { status: "failed", lastError: errorCode(error) });
+        throw error;
+      }
+    }
+  };
+  await run("dns.cleanup", cleanup, removed);
+  for (const row of removed) {
+    await app.db.delete(schema.dnsOwnedRecord).where(eq(schema.dnsOwnedRecord.id, row.id));
+    if (row.created) await audit(app, actor, credential, "dns_record.delete", row);
+  }
+  for (const { want, replaced } of overwrites)
+    await audit(app, actor, credential, "dns_record.overwrite", want, { replaced });
+  await run(
+    "dns.set",
+    toSet.map((c) => record(c.want)),
+    toSet.map((c) => c.row),
+  );
+  await run(
+    "dns.present",
+    toAdd.map((c) => record(c.want)),
+    toAdd.map((c) => c.row),
+  );
+  for (const { row, want } of [...toSet, ...toAdd]) {
+    await update(row, {
+      status: "written",
+      data: want.data,
+      siteId: want.siteId,
+      domain: want.domain,
+      conflicts: [],
+      confirmed: false,
+      created: true,
+      lastError: "",
+    });
+    await audit(
+      app,
+      actor,
+      credential,
+      row.status === "written" || row.created ? "dns_record.update" : "dns_record.create",
+      want,
+    );
   }
 }
 
@@ -317,23 +368,6 @@ async function verifyWritten(app: AppContext, organizationId: string, actor: Act
   }
 }
 
-/** One run for one credential at a time (non-blocking); other credentials are independent. */
-async function locked(app: AppContext, credentialId: string, run: () => Promise<void>) {
-  const lockKey = Number.parseInt(credentialId.replace(/-/g, "").slice(0, 8), 16) | 0;
-  const connection = await app.pool.connect();
-  let held = false;
-  try {
-    const lock = await connection.query(
-      `select pg_try_advisory_lock(550077, ${lockKey}) as locked`,
-    );
-    held = lock.rows[0]?.locked === true;
-    if (held) await run();
-  } finally {
-    if (held) await connection.query(`select pg_advisory_unlock(550077, ${lockKey})`);
-    connection.release();
-  }
-}
-
 /**
  * Synchronizes automatic records of every credential (or one organization's)
  * that writes records or still owns some. A failing provider only marks its
@@ -360,15 +394,21 @@ export async function syncTenantRecords(
     ).map((r) => r.id),
   );
   const organizations = new Set<string>();
-  for (const credential of credentials) {
-    if (!credential.autoRecords && !owners.has(credential.id)) continue;
-    try {
-      await locked(app, credential.id, () => syncCredential(app, credential, actor));
-      organizations.add(credential.organizationId);
-    } catch {
-      app.log.warn("automatic DNS records failed", { credentialId: credential.id });
+  const queue = credentials.filter((c) => c.autoRecords || owners.has(c.id));
+  // Four credentials at a time: one slow endpoint does not hold up the others.
+  const worker = async () => {
+    for (let credential = queue.shift(); credential; credential = queue.shift()) {
+      try {
+        const result = await withLease(app.db, `credential:${credential.id}`, 10 * 60, () =>
+          syncCredential(app, credential, actor),
+        );
+        if (result.ran) organizations.add(credential.organizationId);
+      } catch {
+        app.log.warn("automatic DNS records failed", { credentialId: credential.id });
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: 4 }, worker));
   for (const organizationId of organizations) await verifyWritten(app, organizationId, actor);
 }
 

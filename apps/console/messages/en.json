@@ -1195,5 +1195,6 @@
   "dns_record_apex_unsupported": "Set the apex by hand",
   "dns_sync_records": "Sync",
   "dns_record_replace": "Replace",
-  "dns_record_replace_confirm": "Replace the existing records at {name} with the CNAME?"
+  "dns_record_replace_confirm": "Replace the existing records at {name} with the CNAME?",
+  "error_dns_auto_records_exists": "Another DNS credential of the organization already writes records in this zone"
 }

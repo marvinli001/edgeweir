@@ -479,7 +479,8 @@ export const router = os.router({
     records: tenant.siteDns.records.handler(({ input, context }) =>
       siteDnsRecords(context.app, input.siteId, context.scope),
     ),
-    confirm: tenant.siteDns.confirm.handler(({ input, context }) =>
+    // Replacing other records in the organization's zone: owners and admins.
+    confirm: tenantManager.siteDns.confirm.handler(({ input, context }) =>
       confirmDnsRecord(context.app, input.siteId, input.id, context.scope, context.actor),
     ),
     sync: tenant.siteDns.sync.handler(({ input, context }) =>

@@ -1195,5 +1195,6 @@
   "dns_record_apex_unsupported": "根域需手动设置",
   "dns_sync_records": "同步",
   "dns_record_replace": "覆盖",
-  "dns_record_replace_confirm": "用 CNAME 覆盖 {name} 上已有的记录？"
+  "dns_record_replace_confirm": "用 CNAME 覆盖 {name} 上已有的记录？",
+  "error_dns_auto_records_exists": "本组织已有另一个 DNS 凭据在该区域自动写记录"
 }

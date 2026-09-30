@@ -86,7 +86,13 @@ describe("automatic records in an organization's own zones", async () => {
     ] as const) {
       const org = await admin.organizations.create({ name, defaultClusterId: clusterId });
       if (name === "Acme") acmeOrg = org.id;
-      await admin.users.create({ name, email, password: PASSWORD, organizationId: org.id });
+      await admin.users.create({
+        name,
+        email,
+        password: PASSWORD,
+        organizationId: org.id,
+        role: "owner",
+      });
     }
     acme = rpcClient(app, origin, await signIn(app, origin, "owner@acme.test"));
     other = rpcClient(app, origin, await signIn(app, origin, "owner@other.test"));
@@ -219,12 +225,24 @@ describe("automatic records in an organization's own zones", async () => {
     );
   });
 
-  it("replaces a conflict only after a member confirms it", async () => {
+  it("replaces a conflict only after an owner or admin confirms it", async () => {
     await syncTenantRecords(ctx);
     expect(
       zone("cf-token-0123456789abcdef", "acme.test").find((r) => r.name === "shop")?.type,
     ).toBe("A");
     const shop = (await records()).find((i) => i.name === "shop.acme.test");
+    await admin.users.create({
+      name: "Acme member",
+      email: "member@acme.test",
+      password: PASSWORD,
+      organizationId: acmeOrg,
+      role: "member",
+    });
+    const member = rpcClient(app, origin, await signIn(app, origin, "member@acme.test"));
+    expect((await rpcError(member.siteDns.confirm({ siteId, id: shop?.id ?? "" }))).code).toBe(
+      "ORG_ADMIN_REQUIRED",
+    );
+    expect((await member.siteDns.records({ siteId })).items.length).toBeGreaterThan(0);
     const after = await acme.siteDns.confirm({ siteId, id: shop?.id ?? "" });
     expect(after.items.find((i) => i.id === shop?.id)?.status).toBe("written");
     expect(zone("cf-token-0123456789abcdef", "acme.test").filter((r) => r.name === "shop")).toEqual(
@@ -260,6 +278,69 @@ describe("automatic records in an organization's own zones", async () => {
     expect(zone("cf-token-0123456789abcdef", "acme.test").find((r) => r.name === "www")?.data).toBe(
       target,
     );
+  });
+
+  it("adopts identical records without owning them, and holds conflicts of any type", async () => {
+    const cf = "cf-token-0123456789abcdef";
+    const before = zone(cf, "acme.test");
+    providers.set(cf, "acme.test", [
+      ...before,
+      { name: "adopt", type: "CNAME", data: target, ttl: 300 },
+      { name: "txt", type: "TXT", data: "hello", ttl: 300 },
+    ]);
+    const site = await acme.sites.get({ id: siteId });
+    await acme.sites.update({
+      id: siteId,
+      domains: [...site.domains, "adopt.acme.test", "txt.acme.test"],
+    });
+    await syncTenantRecords(ctx);
+    const status = async (name: string) =>
+      (await records()).find((i) => i.name === name && i.type === "CNAME");
+    expect((await status("adopt.acme.test"))?.status).toBe("written");
+    // A CNAME cannot share its name with any record, a TXT included.
+    expect((await status("txt.acme.test"))?.conflicts).toEqual([{ type: "TXT", data: "hello" }]);
+    // Consent covers the records shown: a record added afterwards needs a new confirmation.
+    await ctx.db
+      .update(schema.dnsOwnedRecord)
+      .set({ confirmed: true })
+      .where(eq(schema.dnsOwnedRecord.domain, "txt.acme.test"));
+    providers.set(cf, "acme.test", [
+      ...zone(cf, "acme.test"),
+      { name: "txt", type: "A", data: "192.0.2.99", ttl: 300 },
+    ]);
+    await syncTenantRecords(ctx);
+    expect((await status("txt.acme.test"))?.status).toBe("conflict");
+    expect((await status("txt.acme.test"))?.conflicts).toHaveLength(2);
+    expect(zone(cf, "acme.test").filter((r) => r.name === "txt")).toHaveLength(2);
+    // The adopted record stays when the domain goes: the console did not create it.
+    await acme.sites.update({ id: siteId, domains: site.domains });
+    await syncTenantRecords(ctx);
+    expect(zone(cf, "acme.test")).toContainEqual({
+      name: "adopt",
+      type: "CNAME",
+      data: target,
+      ttl: 300,
+    });
+    expect(await status("adopt.acme.test")).toBeUndefined();
+    providers.set(
+      cf,
+      "acme.test",
+      zone(cf, "acme.test").filter((r) => r.name !== "adopt" && r.name !== "txt"),
+    );
+    // One credential per organization and zone writes automatic records.
+    expect(
+      (
+        await rpcError(
+          acme.dnsCredentials.create({
+            name: "Second",
+            provider: "cloudflare",
+            zone: "acme.test",
+            credentials: { api_token: cf },
+            autoRecords: true,
+          }),
+        )
+      ).code,
+    ).toBe("DNS_AUTO_RECORDS_EXISTS");
   });
 
   it("removes only its own records when a domain or the site is deleted", async () => {
