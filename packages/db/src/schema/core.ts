@@ -436,6 +436,8 @@ export const nodeMinuteStats = pgTable(
     topUrls: jsonb("top_urls").$type<Record<string, number>>().notNull().default({}),
     topIps: jsonb("top_ips").$type<Record<string, number>>().notNull().default({}),
     statusCodes: jsonb("status_codes").$type<Record<string, number>>().notNull().default({}),
+    /** OWASP CRS rule id → matched requests (bounded, heaviest first). */
+    wafRules: jsonb("waf_rules").$type<Record<string, number>>().notNull().default({}),
   },
   (t) => [
     primaryKey({ columns: [t.minute, t.nodeId, t.siteId] }),

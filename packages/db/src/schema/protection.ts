@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   doublePrecision,
@@ -33,6 +34,27 @@ export interface StoredCcPolicy {
   escalateAfterSeconds: number;
   cooldownSeconds: number;
 }
+
+/** OWASP CRS managed rules of a site; no row means off with the defaults. */
+export const siteWaf = pgTable("site_waf", {
+  siteId: uuid("site_id")
+    .primaryKey()
+    .references(() => site.id, { onDelete: "cascade" }),
+  /** off | detect | block */
+  mode: text("mode").notNull().default("off"),
+  /** 1 to 4. */
+  paranoiaLevel: integer("paranoia_level").notNull().default(1),
+  /** Inbound anomaly score threshold, 1 to 1000. */
+  anomalyThreshold: integer("anomaly_threshold").notNull().default(5),
+  /** CRS rule ids that never run for the site, ascending and unique. */
+  excludedRuleIds: integer("excluded_rule_ids").array().notNull().default(sql`'{}'`),
+  /** Request body bytes inspected, 0 to 134217728. */
+  requestBodyLimit: integer("request_body_limit").notNull().default(131_072),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
 
 /** Challenges and CC mitigation of a site; no row means the defaults (everything off). */
 export const siteProtection = pgTable("site_protection", {

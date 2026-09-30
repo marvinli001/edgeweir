@@ -95,6 +95,7 @@ describe("migrations", () => {
       "site_protection",
       "challenge_key",
       "security_event",
+      "site_waf",
     ]) {
       expect(tables).toContain(name);
     }
@@ -183,6 +184,50 @@ describe("migrations", () => {
     await db.delete(schema.node).where(eq(schema.node.id, node.id));
     const [kept] = await db.select().from(schema.securityEvent);
     expect(kept?.nodeId).toBeNull();
+  });
+
+  it("defaults a site's CRS to off and carries WAF rule hits through the traffic view", async () => {
+    await db.insert(schema.organization).values({
+      id: "org_g3",
+      name: "G3",
+      slug: "g3",
+      createdAt: new Date(),
+    });
+    const [cl] = await db.insert(schema.cluster).values({ name: "g3" }).returning();
+    if (!cl) throw new Error("cluster not inserted");
+    const [site] = await db
+      .insert(schema.site)
+      .values({ organizationId: "org_g3", clusterId: cl.id, name: "g3" })
+      .returning();
+    if (!site) throw new Error("site not inserted");
+    await db.insert(schema.siteWaf).values({ siteId: site.id });
+    const [waf] = await db.select().from(schema.siteWaf);
+    expect(waf).toMatchObject({
+      mode: "off",
+      paranoiaLevel: 1,
+      anomalyThreshold: 5,
+      excludedRuleIds: [],
+      requestBodyLimit: 131072,
+    });
+    const minute = new Date("2026-10-01T10:05:00Z");
+    const nodeId = "00000000-0000-4000-8000-0000000000a1";
+    await db.insert(schema.nodeMinuteStats).values({
+      minute,
+      nodeId,
+      siteId: site.id,
+      requests: 3,
+      wafRules: { "942100": 2, "920350": 1 },
+    });
+    const [row] = await db.select().from(schema.trafficHourStats);
+    expect(row).toMatchObject({ requests: 3, wafRules: { "942100": 2, "920350": 1 } });
+    // Minute rows written before G3 read as no matches.
+    const [old] = await db
+      .insert(schema.nodeMinuteStats)
+      .values({ minute: new Date("2026-10-01T10:06:00Z"), nodeId, siteId: site.id })
+      .returning();
+    expect(old?.wafRules).toEqual({});
+    await db.delete(schema.site).where(eq(schema.site.id, site.id));
+    expect(await db.select().from(schema.siteWaf)).toEqual([]);
   });
 
   it("detaches regions and default clusters instead of cascading deletes", async () => {

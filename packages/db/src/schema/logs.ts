@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   index,
   integer,
   pgTable,
@@ -37,6 +38,10 @@ export const accessLog = pgTable(
     sampleRate: integer("sample_rate").notNull(),
     /** JA4 TLS client fingerprint; empty unless the site records it. */
     ja4: text("ja4").notNull().default(""),
+    /** OWASP CRS rules the request matched (at most 16, ascending). */
+    wafRuleIds: bigint("waf_rule_ids", { mode: "number" }).array().notNull().default(sql`'{}'`),
+    /** CRS blocked the request. */
+    wafBlocked: boolean("waf_blocked").notNull().default(false),
   },
   (t) => [
     primaryKey({ columns: [t.time, t.id] }),

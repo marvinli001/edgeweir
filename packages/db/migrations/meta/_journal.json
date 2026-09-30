@@ -211,6 +211,13 @@
       "when": 1790748836985,
       "tag": "0029_g2_challenges",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790771419307,
+      "tag": "0030_g3_waf",
+      "breakpoints": true
     }
   ]
 }

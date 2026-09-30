@@ -68,6 +68,7 @@ const trafficColumns = () => ({
   statusCodes: jsonb("status_codes").$type<Record<string, number>>().notNull().default({}),
   topUrls: jsonb("top_urls").$type<Record<string, number>>().notNull().default({}),
   topIps: jsonb("top_ips").$type<Record<string, number>>().notNull().default({}),
+  wafRules: jsonb("waf_rules").$type<Record<string, number>>().notNull().default({}),
 });
 const rollup = <T extends string>(name: T) =>
   pgTable(name, trafficColumns(), (t) => [
