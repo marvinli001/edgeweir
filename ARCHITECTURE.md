@@ -329,8 +329,9 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `node_minute_stats` | 按节点、网站、分钟的流量统计 |
 | `node_hour_stats` | 小时汇总 |
 | `node_day_stats` | 天汇总 |
-| `stats_rollup_dirty` | 待重新汇总的时间桶 |
-| `node_stats_cursor` | 每个节点统计批次的序号高水位 |
+| `stats_rollup_dirty` | 待重新汇总的时间桶（小时、天、用量窗口） |
+| `node_stats_cursor` | 每个节点统计批次的序号高水位与统计水位（`complete_until`） |
+| `site_usage` | 按网站、UTC 5 分钟窗口的可复算用量（请求数、出站与入站字节，十进制精确值）、修订号与全局序号 `seq`（序列 `site_usage_seq`） |
 | `access_log` | 采样访问日志，按 UTC 日分区 |
 | `node_log_cursor` | 每个节点日志批次的序号高水位 |
 | `origin_health` | 节点上报的源站被动健康状态与错误码 |
@@ -376,6 +377,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0023_p0_site_state` | `site.suspended`、`suspend_reason`、`suspend_note`、`suspended_at`（平台暂停） |
 | `0024_p0_organization_limits` | `organization_limit` |
 | `0025_p0_service_accounts` | `service_account`、`service_account_key`、`idempotency_key`；`invitation.inviter_id` 可空，新增 `inviter_service_account_id` |
+| `0026_p0_usage` | `site_usage`、序列 `site_usage_seq`、`node_stats_cursor.complete_until`；为已有分钟统计标记用量窗口 |
 
 ## 构建产物
 

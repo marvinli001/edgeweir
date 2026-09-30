@@ -150,6 +150,7 @@ import {
   nodeRelease,
   promoteUpgrade,
 } from "../services/upgrades";
+import { getUsageSettings, listUsage, setUsageSettings, usageChanges } from "../services/usage";
 import { createUser, listUsers, setUserAdmin, setUserDisabled } from "../services/users";
 import { admin, authed, maybeAuthed, orgManager, os, tenant } from "./base";
 
@@ -163,6 +164,14 @@ const listTenant = tenant.use(({ context, next }) => {
 });
 
 export const router = os.router({
+  usage: {
+    list: tenant.usage.list.handler(({ input, context }) =>
+      listUsage(context.app.db, context.scope, input),
+    ),
+    changes: tenant.usage.changes.handler(({ input, context }) =>
+      usageChanges(context.app.db, context.scope, input),
+    ),
+  },
   serviceAccounts: {
     list: admin.serviceAccounts.list.handler(({ context }) => listServiceAccounts(context.app.db)),
     create: admin.serviceAccounts.create.handler(({ input, context }) =>
@@ -770,6 +779,10 @@ export const router = os.router({
     ),
     setReleaseSource: admin.settings.setReleaseSource.handler(({ input, context }) =>
       setReleaseSource(context.app, input, context.actor),
+    ),
+    usage: admin.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
+    setUsage: admin.settings.setUsage.handler(({ input, context }) =>
+      setUsageSettings(context.app.db, input, context.actor),
     ),
     dnsResolvers: admin.settings.dnsResolvers.handler(({ context }) =>
       getDnsResolvers(context.app),

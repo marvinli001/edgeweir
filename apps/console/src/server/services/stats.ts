@@ -134,6 +134,8 @@ export async function ingestMinuteStats(
     ), dirty as (
       insert into stats_rollup_dirty (granularity,bucket,node_id,site_id)
       select distinct 'hour',date_trunc('hour',minute,'UTC'),${node.id}::uuid,site_id from stored
+      union
+      select distinct 'usage',to_timestamp(floor(extract(epoch from minute)/300)*300),${node.id}::uuid,site_id from stored
       on conflict do nothing
     ) select site_id from stored
   `);

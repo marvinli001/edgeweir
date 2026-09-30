@@ -12,6 +12,7 @@ import { enforceDomainOwnershipOnce } from "../services/domain-ownership";
 import { pruneRevisions } from "../services/revisions";
 import { maintainTraffic } from "../services/stats-rollup";
 import { expireUpgrades } from "../services/upgrades";
+import { maintainUsage } from "../services/usage";
 
 export const QUEUES = {
   alerts: "alerts.sweep",
@@ -54,6 +55,7 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     // Each maintenance family must run even when another one needs a retry.
     const results = await Promise.allSettled([
       maintainTraffic(ctx.db),
+      maintainUsage(ctx.db),
       maintainLogs(ctx.db),
       expireUpgrades(ctx.db),
     ]);

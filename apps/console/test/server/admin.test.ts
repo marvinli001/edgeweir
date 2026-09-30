@@ -81,6 +81,8 @@ const CONSOLE_PROCEDURES = [
   "organization.limits",
   "invitations.get",
   "invitations.accept",
+  "usage.list",
+  "usage.changes",
 ];
 
 function procedureNames(node: unknown, prefix = ""): string[] {
@@ -261,6 +263,11 @@ describe("admin area procedures", async () => {
       ["admin.sites.suspend", () => member.admin.sites.suspend({ id: uuid, reason: "billing" })],
       ["admin.sites.resume", () => member.admin.sites.resume({ id: uuid })],
       ["admin.organizations.getLimits", () => member.admin.organizations.getLimits({ id: "x" })],
+      ["settings.usage", () => member.settings.usage()],
+      [
+        "settings.setUsage",
+        () => member.settings.setUsage({ retentionDays: 100, offlineThresholdMinutes: 60 }),
+      ],
       ["serviceAccounts.list", () => member.serviceAccounts.list()],
       ["serviceAccounts.create", () => member.serviceAccounts.create({ name: "x", scopes: [] })],
       ["serviceAccounts.update", () => member.serviceAccounts.update({ id: uuid, enabled: false })],

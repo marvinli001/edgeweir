@@ -10,6 +10,7 @@ import {
   type ReportedMinuteStats,
 } from "../../src/server/services/stats";
 import { pruneTraffic, rollupTraffic } from "../../src/server/services/stats-rollup";
+import { rollupUsage } from "../../src/server/services/usage";
 import { createTestContext, seedOrganization } from "./helpers";
 
 describe("M5 statistics identity, rollups and retention", async () => {
@@ -135,6 +136,14 @@ describe("M5 statistics identity, rollups and retention", async () => {
       { range: "30d", siteId },
       now.getTime(),
     );
+    // The usage window of the minute is not computed yet: the minute stays.
+    await pruneTraffic(ctx.db, now);
+    expect(
+      (await ctx.db.select().from(schema.nodeMinuteStats)).some(
+        (r) => r.minute.getUTCDate() === 10,
+      ),
+    ).toBe(true);
+    await rollupUsage(ctx.db, now);
     await pruneTraffic(ctx.db, now);
     expect(
       (await ctx.db.select().from(schema.nodeMinuteStats)).some(

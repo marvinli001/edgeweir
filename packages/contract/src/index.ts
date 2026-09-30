@@ -10,6 +10,7 @@ export * from "./logs";
 
 import { accessKeysContract } from "./access-keys";
 import { serviceAccountsContract } from "./service-accounts";
+import { usageContract, usageSettings } from "./usage";
 import { alertsContract } from "./alerts";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
@@ -52,6 +53,8 @@ export const contract = {
   accessKeys: accessKeysContract,
   /** Platform administrators only. */
   serviceAccounts: serviceAccountsContract,
+  /** Recomputable 5-minute usage per site (members: their organization). */
+  usage: usageContract,
   logs: logsContract,
   upgrades: upgradesContract,
   alerts: alertsContract,
@@ -448,6 +451,14 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/release-source", tags: ["settings"] })
       .input(s.releaseSourceInput)
       .output(s.releaseSource),
+    /** Usage record retention and the offline threshold of completeUntil. */
+    usage: oc
+      .route({ method: "GET", path: "/settings/usage", tags: ["settings"] })
+      .output(usageSettings),
+    setUsage: oc
+      .route({ method: "PUT", path: "/settings/usage", tags: ["settings"] })
+      .input(usageSettings)
+      .output(usageSettings),
     /** Recursive DNS servers for domain ownership TXT checks. */
     dnsResolvers: oc
       .route({ method: "GET", path: "/settings/dns-resolvers", tags: ["settings"] })
@@ -472,6 +483,7 @@ export type Contract = typeof contract;
 
 export * from "./access-keys";
 export * from "./service-accounts";
+export * from "./usage";
 export * from "./alerts";
 export * from "./dns";
 export * from "./domains";

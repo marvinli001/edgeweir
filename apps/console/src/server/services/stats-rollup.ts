@@ -93,7 +93,8 @@ export async function pruneTraffic(db: Database, now = new Date()) {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.stats.retention'))`);
     await tx.execute(sql`delete from node_minute_stats m where m.minute<${minuteCutoff}::timestamptz
    and exists(select 1 from node_hour_stats h where h.minute=date_trunc('hour',m.minute,'UTC') and h.node_id=m.node_id and h.site_id=m.site_id)
-   and not exists(select 1 from stats_rollup_dirty d where d.granularity='hour' and d.bucket=date_trunc('hour',m.minute,'UTC') and d.node_id=m.node_id and d.site_id=m.site_id)`);
+   and not exists(select 1 from stats_rollup_dirty d where d.granularity='hour' and d.bucket=date_trunc('hour',m.minute,'UTC') and d.node_id=m.node_id and d.site_id=m.site_id)
+   and not exists(select 1 from stats_rollup_dirty d where d.granularity='usage' and d.site_id=m.site_id and d.bucket=to_timestamp(floor(extract(epoch from m.minute)/300)*300))`);
     await tx.execute(sql`delete from node_hour_stats h where h.minute<${hourCutoff}::timestamptz
    and exists(select 1 from node_day_stats d where d.minute=date_trunc('day',h.minute,'UTC') and d.node_id=h.node_id and d.site_id=h.site_id)
    and not exists(select 1 from stats_rollup_dirty d where d.granularity='day' and d.bucket=date_trunc('day',h.minute,'UTC') and d.node_id=h.node_id and d.site_id=h.site_id)`);

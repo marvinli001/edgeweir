@@ -507,6 +507,24 @@ describe("node channel", async () => {
       stats: [{ minute, siteId: own.site.id, requests: 1n }],
     });
     expect((await mtls.reportStatsV2({})).batchSequence).toBe(2n);
+    // The statistics watermark rides on cursor queries: whole minutes, never backwards,
+    // never more than a minute ahead of the console clock.
+    const watermark = async () =>
+      (
+        await ctx.db
+          .select({ at: schema.nodeStatsCursor.completeUntil })
+          .from(schema.nodeStatsCursor)
+          .where(eq(schema.nodeStatsCursor.nodeId, enrolled.nodeId))
+      )[0]?.at;
+    await mtls.reportStatsV2({ completeUntil: timestampFromDate(new Date(bucketStart + 60030)) });
+    expect(await watermark()).toEqual(new Date(bucketStart + 60000));
+    expect(
+      (await mtls.reportStatsV2({ completeUntil: timestampFromDate(new Date(bucketStart)) }))
+        .batchSequence,
+    ).toBe(2n);
+    expect(await watermark()).toEqual(new Date(bucketStart + 60000));
+    await mtls.reportStatsV2({ completeUntil: timestampFromDate(new Date(Date.now() + 3600000)) });
+    expect((await watermark())?.getTime()).toBeLessThanOrEqual(Date.now() + 60000);
     const counted = await ctx.db
       .select()
       .from(schema.nodeMinuteStats)

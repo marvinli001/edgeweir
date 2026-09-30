@@ -27,6 +27,7 @@ import {
   NodeTaskSchema,
   PurgeType,
   type ReportStatsRequest,
+  type ReportStatsV2Request,
   TaskState,
   WatchConfigResponseSchema,
   WatchEvent,
@@ -57,6 +58,7 @@ import {
   recordUpgradeHealth,
   reportUpgrade,
 } from "../services/upgrades";
+import { recordStatsWatermark } from "../services/usage";
 
 export const HEARTBEAT_SECONDS = 15;
 export const KEEPALIVE_MS = 15_000;
@@ -178,11 +180,16 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
   }
 
   const statsHandler = async (
-    req: Pick<ReportStatsRequest, "stats" | "batchSequence">,
+    req: Pick<ReportStatsRequest, "stats" | "batchSequence"> & {
+      completeUntil?: ReportStatsV2Request["completeUntil"];
+    },
     ctx: HandlerContext,
   ) => {
     const node = await requireNode(ctx);
     if (req.batchSequence === 0n && req.stats.length === 0) {
+      // The node's statistics watermark comes with a cursor query once nothing is pending.
+      if (req.completeUntil)
+        await recordStatsWatermark(app.db, node.id, timestampDate(req.completeUntil));
       const [cursor] = await app.db
         .select()
         .from(schema.nodeStatsCursor)
@@ -236,6 +243,8 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
             )
         : undefined,
     );
+    if (req.completeUntil)
+      await recordStatsWatermark(app.db, node.id, timestampDate(req.completeUntil));
     return { accepted, batchSequence: req.batchSequence };
   };
 

@@ -955,5 +955,10 @@
   "service_accounts_active": "Enabled",
   "service_accounts_saved": "Service account saved",
   "service_accounts_deleted": "Service account deleted",
-  "service_accounts_no_keys": "No keys yet"
+  "service_accounts_no_keys": "No keys yet",
+  "error_usage_range_invalid": "The range must be aligned to 5 minutes and end after it starts",
+  "error_usage_cursor_invalid": "Invalid page cursor",
+  "system_usage_title": "Usage",
+  "system_usage_retention": "Retention (days)",
+  "system_usage_offline_threshold": "Offline nodes stop holding completeness (minutes)"
 }

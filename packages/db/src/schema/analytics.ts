@@ -2,12 +2,16 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   index,
+  integer,
   jsonb,
+  numeric,
+  pgSequence,
   pgTable,
   pgView,
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { node, site } from "./core";
@@ -18,7 +22,38 @@ export const nodeStatsCursor = pgTable("node_stats_cursor", {
     .primaryKey()
     .references(() => node.id, { onDelete: "cascade" }),
   sequence: bigint("sequence", { mode: "bigint" }).notNull().default(sql`0`),
+  /** The node's statistics watermark (ReportStatsV2.complete_until); only moves forward. */
+  completeUntil: timestamp("complete_until", { withTimezone: true }),
 });
+
+/** Global, gap-tolerant order in which usage rows were created or revised. */
+export const siteUsageSeq = pgSequence("site_usage_seq");
+
+/**
+ * Recomputable usage per site and UTC 5-minute window [window_start, +5 min),
+ * summed over every node from node_minute_stats. Counters are exact decimal
+ * integers. A recomputation that changes a value increments `revision` and
+ * takes a new `seq`. Not tied to the site row: usage outlives deleted sites.
+ */
+export const siteUsage = pgTable(
+  "site_usage",
+  {
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    siteId: uuid("site_id").notNull(),
+    organizationId: text("organization_id").notNull(),
+    requests: numeric("requests", { precision: 38, scale: 0 }).notNull().default("0"),
+    bytesSent: numeric("bytes_sent", { precision: 38, scale: 0 }).notNull().default("0"),
+    bytesReceived: numeric("bytes_received", { precision: 38, scale: 0 }).notNull().default("0"),
+    revision: integer("revision").notNull().default(1),
+    seq: bigint("seq", { mode: "bigint" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.windowStart, t.siteId] }),
+    uniqueIndex("site_usage_seq_uq").on(t.seq),
+    index("site_usage_org_idx").on(t.organizationId, t.windowStart),
+  ],
+);
 const trafficColumns = () => ({
   minute: timestamp("minute", { withTimezone: true }).notNull(),
   nodeId: uuid("node_id").notNull(),

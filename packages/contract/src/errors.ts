@@ -99,6 +99,8 @@ export const errorDefs = {
   S3_SECRET_REQUIRED: { status: 400, params: ["accessKeyId"] },
   ORIGIN_ADDRESS_FORBIDDEN: { status: 400, params: ["address", "range"] },
   CACHE_TASK_NOT_FOUND: { status: 404, params: [] },
+  USAGE_RANGE_INVALID: { status: 400, params: [] },
+  USAGE_CURSOR_INVALID: { status: 400, params: [] },
   CACHE_TASK_URL_INVALID: { status: 400, params: ["urls"] },
   CACHE_TASK_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
   CACHE_TASK_RATE_LIMITED: {

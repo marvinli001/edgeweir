@@ -329,8 +329,9 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `node_minute_stats` | Traffic per node, site, and minute |
 | `node_hour_stats` | Hourly rollups |
 | `node_day_stats` | Daily rollups |
-| `stats_rollup_dirty` | Time buckets waiting for a rollup |
-| `node_stats_cursor` | Per-node high-water mark of statistics batches |
+| `stats_rollup_dirty` | Time buckets waiting for a rollup (hours, days, usage windows) |
+| `node_stats_cursor` | Per-node high-water mark of statistics batch sequences and the statistics watermark (`complete_until`) |
+| `site_usage` | Recomputable usage per site and UTC 5-minute window (requests, bytes out and in, exact decimals), revision and global `seq` (sequence `site_usage_seq`) |
 | `access_log` | Sampled access logs, one partition per UTC day |
 | `node_log_cursor` | Per-node high-water mark of log batches |
 | `origin_health` | Passive origin health and error codes reported by nodes |
@@ -376,6 +377,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0023_p0_site_state` | `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at` (platform suspension) |
 | `0024_p0_organization_limits` | `organization_limit` |
 | `0025_p0_service_accounts` | `service_account`, `service_account_key`, `idempotency_key`; `invitation.inviter_id` nullable, new `inviter_service_account_id` |
+| `0026_p0_usage` | `site_usage`, sequence `site_usage_seq`, `node_stats_cursor.complete_until`; marks usage windows for existing minute statistics |
 
 ## Build output
 

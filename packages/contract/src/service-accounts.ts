@@ -42,6 +42,8 @@ export const serviceAccountProcedures = {
   "admin.sites.resume": "sites:suspend",
   "admin.organizations.getLimits": "limits:read",
   "admin.organizations.setLimits": "limits:write",
+  "usage.list": "usage:read",
+  "usage.changes": "usage:read",
 } as const satisfies Record<string, ServiceAccountScope | null>;
 
 export function serviceAccountScopeFor(
