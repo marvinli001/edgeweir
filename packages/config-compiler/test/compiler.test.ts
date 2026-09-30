@@ -12,10 +12,12 @@ import {
   encodeNodeConfig,
   geoFeatures,
   MAX_SITES_PER_CLUSTER,
+  moduleFeatures,
   nodeRequirements,
   parseDomain,
   type RuleModel,
   type SiteModel,
+  type TlsModel,
   usesChallenges,
 } from "../src/index";
 
@@ -499,5 +501,138 @@ describe("challenges and CC mitigation", () => {
     const applied = applyNodeConfigDiff(protectedConfig, back);
     expect(applied.platformProtection).toBeUndefined();
     expect(applied.challengeKeys).toEqual([]);
+  });
+});
+
+describe("Brotli, Zstandard and OWASP CRS", () => {
+  const tls: TlsModel = {
+    forceHttps: false,
+    hstsMaxAge: 0,
+    hstsIncludeSubdomains: false,
+    hstsPreload: false,
+    minimumVersion: "1.2",
+    cipherProfile: "modern",
+    http2: true,
+    http3: false,
+    gzip: true,
+    gzipMinLength: 256,
+    gzipTypes: ["text/html"],
+    ocspStapling: false,
+  };
+  const types = ["text/plain", "text/html", "text/html"];
+  const compile = (sites: SiteModel[]) => compileNodeConfig({ clusterId: "c", sites }, 1n);
+  const waf = {
+    mode: "block" as const,
+    paranoiaLevel: 2,
+    anomalyThreshold: 7,
+    excludedRuleIds: [942100, 920350, 942100],
+    requestBodyLimit: 65536,
+  };
+
+  it("leaves the fields and features out while off, keeping the content hash", () => {
+    const before = compile([site("a", { tls })]);
+    const off = compile([
+      site("a", {
+        tls: {
+          ...tls,
+          brotli: false,
+          brotliLevel: 6,
+          brotliMinLength: 256,
+          brotliTypes: types,
+          zstd: false,
+          zstdLevel: 3,
+          zstdMinLength: 256,
+          zstdTypes: types,
+        },
+        waf: null,
+      }),
+    ]);
+    expect(off.contentHash).toBe(before.contentHash);
+    expect(off.sites[0]?.tls).toMatchObject({ brotli: false, brotliLevel: 0, brotliTypes: [] });
+    expect(off.sites[0]?.waf).toBeUndefined();
+    expect(off.requiredFeatures).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/^(brotli|zstd|modsecurity)-v1$/)]),
+    );
+  });
+
+  it("compiles Brotli and Zstandard with sorted types and requires their features", () => {
+    const config = compile([
+      site("a", {
+        tls: { ...tls, brotli: true, brotliLevel: 11, brotliMinLength: 512, brotliTypes: types },
+      }),
+      site("b", {
+        tls: { ...tls, zstd: true, zstdLevel: 19, zstdMinLength: 1024, zstdTypes: types },
+      }),
+    ]);
+    expect(config.sites[0]?.tls).toMatchObject({
+      brotli: true,
+      brotliLevel: 11,
+      brotliMinLength: 512,
+      brotliTypes: ["text/html", "text/plain"],
+      zstd: false,
+      zstdTypes: [],
+    });
+    expect(config.sites[1]?.tls).toMatchObject({
+      brotli: false,
+      zstd: true,
+      zstdLevel: 19,
+      zstdMinLength: 1024,
+      zstdTypes: ["text/html", "text/plain"],
+    });
+    expect(config.requiredFeatures).toEqual(
+      expect.arrayContaining(["brotli-v1", "zstd-v1", "tls-v1"]),
+    );
+    expect(config.requiredFeatures).not.toContain("modsecurity-v1");
+    // Only enabled sites count.
+    const disabled = compile([
+      site("a", { enabled: false, tls: { ...tls, brotli: true, brotliLevel: 6 } }),
+    ]);
+    expect(disabled.requiredFeatures).not.toContain("brotli-v1");
+  });
+
+  it("compiles CRS with sorted, unique exclusions and requires modsecurity-v1", () => {
+    const config = compile([site("a", { waf }), site("b")]);
+    expect(config.sites[0]?.waf).toMatchObject({
+      mode: "block",
+      paranoiaLevel: 2,
+      anomalyThreshold: 7,
+      excludedRuleIds: [920350, 942100],
+      requestBodyLimit: 65536,
+    });
+    expect(config.sites[1]?.waf).toBeUndefined();
+    expect(config.requiredFeatures).toContain("modsecurity-v1");
+    expect(nodeRequirements(config)).toContain("modsecurity-v1");
+    // The features follow the compiled sites (rollback recomputes them the same way).
+    expect(moduleFeatures(config)).toEqual(["modsecurity-v1"]);
+    config.sites = config.sites.filter((s) => s.id !== "a");
+    expect(moduleFeatures(config)).toEqual([]);
+    const detect = compile([site("a", { waf: { ...waf, mode: "detect", requestBodyLimit: 0 } })]);
+    expect(detect.sites[0]?.waf).toMatchObject({ mode: "detect", requestBodyLimit: 0 });
+    expect(compile([site("a", { enabled: false, waf })]).requiredFeatures).not.toContain(
+      "modsecurity-v1",
+    );
+  });
+
+  it("hashes and diffs the new fields like every other site field", () => {
+    const plain = compile([site("a", { tls }), site("b")]);
+    const changed = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [
+          site("a", {
+            tls: { ...tls, zstd: true, zstdLevel: 3, zstdMinLength: 256, zstdTypes: types },
+          }),
+          site("b", { waf }),
+        ],
+      },
+      2n,
+    );
+    expect(changed.contentHash).not.toBe(plain.contentHash);
+    const diff = diffNodeConfig(plain, changed);
+    expect(diff.upsertedSites.map((s) => s.id).sort()).toEqual(["a", "b"]);
+    expect(applyNodeConfigDiff(plain, diff).contentHash).toBe(changed.contentHash);
+    const decoded = decodeNodeConfig(encodeNodeConfig(changed));
+    expect(decoded.sites.find((s) => s.id === "b")?.waf?.excludedRuleIds).toEqual([920350, 942100]);
+    expect(contentHash(decoded)).toBe(changed.contentHash);
   });
 });

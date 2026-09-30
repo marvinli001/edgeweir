@@ -38,7 +38,9 @@ import {
   type Site,
   SiteProtectionSchema,
   SiteSchema,
+  SiteWafSchema,
   type TlsOptions,
+  TlsOptionsSchema,
 } from "@edgeweir/proto";
 import { type Expression, phases } from "@edgeweir/rule-engine";
 
@@ -106,6 +108,35 @@ export interface CacheKeyModel {
   includeHost: boolean;
 }
 
+/** Features of the compression modules and ModSecurity (reported by nodes built with them). */
+export const BROTLI_FEATURE = "brotli-v1";
+export const ZSTD_FEATURE = "zstd-v1";
+export const MODSECURITY_FEATURE = "modsecurity-v1";
+
+type TlsFields = Omit<TlsOptions, "$typeName" | "$unknown">;
+type CompressionField =
+  | "brotli"
+  | "brotliLevel"
+  | "brotliMinLength"
+  | "brotliTypes"
+  | "zstd"
+  | "zstdLevel"
+  | "zstdMinLength"
+  | "zstdTypes";
+/** A site's TLS options; Brotli and Zstandard default to off. */
+export type TlsModel = Omit<TlsFields, CompressionField> &
+  Partial<Pick<TlsFields, CompressionField>>;
+
+/** OWASP CRS of a site that runs it (config.proto SiteWaf). */
+export interface SiteWafModel {
+  mode: "detect" | "block";
+  paranoiaLevel: number;
+  anomalyThreshold: number;
+  /** Any order; compiled ascending without duplicates. */
+  excludedRuleIds: number[];
+  requestBodyLimit: number;
+}
+
 export interface SiteModel {
   id: string;
   name: string;
@@ -127,8 +158,10 @@ export interface SiteModel {
   /** Defaults to true. */
   websocket?: boolean;
   certificateId?: string;
-  tls?: Omit<TlsOptions, "$typeName" | "$unknown">;
+  tls?: TlsModel;
   rules?: RuleModel[];
+  /** Omitted or null: CRS off. */
+  waf?: SiteWafModel | null;
   /** Omitted: the defaults (DEFAULT_SITE_PROTECTION, everything off). */
   protection?: SiteProtectionModel;
 }
@@ -352,6 +385,18 @@ export function protectionFeatures(config: NodeConfig): string[] {
   ];
 }
 
+/**
+ * Features of the optional OpenResty modules that the sites of a compiled
+ * configuration use: brotli-v1, zstd-v1 and modsecurity-v1.
+ */
+export function moduleFeatures(config: NodeConfig): string[] {
+  return [
+    ...(config.sites.some((site) => site.tls?.brotli) ? [BROTLI_FEATURE] : []),
+    ...(config.sites.some((site) => site.tls?.zstd) ? [ZSTD_FEATURE] : []),
+    ...(config.sites.some((site) => site.waf) ? [MODSECURITY_FEATURE] : []),
+  ];
+}
+
 export const DEFAULT_CACHE_ZONE = "default";
 
 export const defaultListeners: ListenerModel[] = [{ port: 80, protocol: "http" }];
@@ -400,6 +445,44 @@ const byString =
     const kb = key(b);
     return ka < kb ? -1 : ka > kb ? 1 : 0;
   };
+
+/**
+ * TLS options of a site. Brotli and Zstandard carry their level, minimum
+ * length and types only while on, so sites without them keep the encoding
+ * (and content hash) they had before these fields existed.
+ */
+function compileTls(model: TlsModel) {
+  const {
+    brotli,
+    brotliLevel,
+    brotliMinLength,
+    brotliTypes,
+    zstd,
+    zstdLevel,
+    zstdMinLength,
+    zstdTypes,
+    ...rest
+  } = model;
+  return create(TlsOptionsSchema, {
+    ...rest,
+    ...(brotli
+      ? {
+          brotli: true,
+          brotliLevel: brotliLevel ?? 0,
+          brotliMinLength: brotliMinLength ?? 0,
+          brotliTypes: [...(brotliTypes ?? [])],
+        }
+      : {}),
+    ...(zstd
+      ? {
+          zstd: true,
+          zstdLevel: zstdLevel ?? 0,
+          zstdMinLength: zstdMinLength ?? 0,
+          zstdTypes: [...(zstdTypes ?? [])],
+        }
+      : {}),
+  });
+}
 
 function compileSite(model: SiteModel, challenges: boolean): Site {
   const settings = model.originPool.settings;
@@ -492,8 +575,17 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
     rangeSlice: model.rangeSlice ?? false,
     websocketDisabled: model.websocket === false,
     certificateId: model.certificateId ?? "",
-    tls: model.tls,
+    tls: model.tls ? compileTls(model.tls) : undefined,
     rules: compileRules(model.rules),
+    waf: model.waf
+      ? create(SiteWafSchema, {
+          mode: model.waf.mode,
+          paranoiaLevel: model.waf.paranoiaLevel,
+          anomalyThreshold: model.waf.anomalyThreshold,
+          excludedRuleIds: sortedSet(model.waf.excludedRuleIds),
+          requestBodyLimit: model.waf.requestBodyLimit,
+        })
+      : undefined,
     // Sites in clusters with challenges get their protection (defaults included);
     // elsewhere only a site that records JA4 carries it.
     protection:
@@ -518,7 +610,12 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   out.challengeKeys.sort(byString((key: ChallengeKeyRef) => key.id));
   for (const list of out.ipLists) list.entries = sortedSet(list.entries);
   for (const site of out.sites) {
-    if (site.tls) site.tls.gzipTypes = sortedSet(site.tls.gzipTypes);
+    if (site.tls) {
+      site.tls.gzipTypes = sortedSet(site.tls.gzipTypes);
+      site.tls.brotliTypes = sortedSet(site.tls.brotliTypes);
+      site.tls.zstdTypes = sortedSet(site.tls.zstdTypes);
+    }
+    if (site.waf) site.waf.excludedRuleIds = sortedSet(site.waf.excludedRuleIds);
     site.domains.sort(byString((d) => `${d.name}\u0000${d.wildcard ? 1 : 0}`));
     site.originPool?.origins.sort(byString((o) => o.id));
     site.cacheRules.sort((a, b) =>
@@ -614,7 +711,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       ? (input.challengeKeys ?? []).map((key) => create(ChallengeKeyRefSchema, key))
       : [],
   });
-  compiled.requiredFeatures.push(...protectionFeatures(compiled));
+  compiled.requiredFeatures.push(...protectionFeatures(compiled), ...moduleFeatures(compiled));
   const config = canonicalize(compiled);
   config.contentHash = contentHash(config);
   return config;
