@@ -10,12 +10,15 @@ export const dnsFixture = {
   zones: new Map<string, FixtureRecord[]>(),
   down: new Set<string>(),
   failAfterWrite: new Set<string>(),
+  /** Providers that raise TTLs to a minimum (as NameSilo, deSEC or Linode do). */
+  minTtl: new Map<string, number>(),
   calls: [] as { command: string; token: string; zone?: string; records?: FixtureRecord[] }[],
   reset() {
     this.accounts.clear();
     this.zones.clear();
     this.down.clear();
     this.failAfterWrite.clear();
+    this.minTtl.clear();
     this.calls = [];
   },
   records(token: string, zone: string) {
@@ -56,7 +59,8 @@ export const makeFakeCertd = (CertdError: CertdErrorClass) =>
     const zone = (input.zone ?? "").replace(/\.$/, "");
     if (!account.zones.includes(zone)) throw new CertdError(command, "dns_zone_not_found");
     let records = dnsFixture.records(token, zone).map((r) => ({ ...r }));
-    const given = input.records ?? [];
+    const floor = dnsFixture.minTtl.get(token) ?? 0;
+    const given = (input.records ?? []).map((r) => ({ ...r, ttl: Math.max(r.ttl, floor) }));
     if (command === "dns.test") return { records: records.length };
     if (command === "dns.list") return records;
     if (command === "dns.set")

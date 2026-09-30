@@ -1,5 +1,5 @@
 import { schema } from "@edgeweir/db";
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
 import { massRemoval, reconcileDns } from "../../src/server/services/dns";
@@ -547,6 +547,117 @@ describe("cluster DNS bindings", async () => {
       mode: "manual",
     });
     await seen(b.nodes[0] ?? "", new Date());
+  });
+
+  it("writes and removes large plans in calls of at most 100 records", async () => {
+    // 150 more verified sites in cluster B (written directly: only the plan size matters).
+    const org = (await ctx.db.select().from(schema.organization))[0]?.id ?? "";
+    for (let i = 0; i < 150; i++) {
+      const [site] = await ctx.db
+        .insert(schema.site)
+        .values({ organizationId: org, clusterId: b.clusterId, name: `bulk-${i}` })
+        .returning();
+      await ctx.db
+        .insert(schema.siteDomain)
+        .values({ siteId: site?.id ?? "", name: `bulk-${i}.customer.test`, verified: true });
+    }
+    await admin.dns.saveBinding({
+      clusterId: b.clusterId,
+      binding: {
+        mode: "auto",
+        providerId: b.providerId,
+        domain: "cdn.b.test",
+        ttl: 120,
+        lineAliases: true,
+        lines: [{ name: "west", nodeGroupId: b.groupId, overrides: [] }],
+      },
+    });
+    const calls = dnsFixture.calls.length;
+    await admin.dns.reconcile({ clusterId: b.clusterId });
+    expect(records("token-b", "b.test").filter((r) => r.type === "CNAME")).toHaveLength(302);
+    await admin.dns.saveBinding({
+      clusterId: b.clusterId,
+      binding: {
+        mode: "auto",
+        providerId: b.providerId,
+        domain: "cdn.b.test",
+        ttl: 120,
+        lines: [{ name: "west", nodeGroupId: b.groupId, overrides: [] }],
+      },
+    });
+    await admin.dns.reconcile({ clusterId: b.clusterId });
+    expect(records("token-b", "b.test").filter((r) => r.type === "CNAME")).toHaveLength(151);
+    const writes = dnsFixture.calls.slice(calls).filter((c) => c.command !== "dns.list");
+    expect(writes.some((c) => c.command === "dns.cleanup")).toBe(true);
+    expect(Math.max(...writes.map((c) => c.records?.length ?? 0))).toBeLessThanOrEqual(100);
+    await ctx.db.delete(schema.site).where(like(schema.site.name, "bulk-%"));
+    await admin.dns.reconcile({ clusterId: b.clusterId });
+    expect(records("token-b", "b.test").filter((r) => r.type === "CNAME")).toHaveLength(1);
+  });
+
+  it("accepts providers that raise TTLs without rewriting every run", async () => {
+    dnsFixture.minTtl.set("token-b", 300);
+    await admin.dns.saveBinding({
+      clusterId: b.clusterId,
+      binding: {
+        mode: "auto",
+        providerId: b.providerId,
+        domain: "cdn.b.test",
+        ttl: 60,
+        lines: [{ name: "west", nodeGroupId: b.groupId, overrides: [] }],
+      },
+    });
+    await admin.dns.reconcile({ clusterId: b.clusterId });
+    expect((await admin.dns.binding({ clusterId: b.clusterId })).applied).toBe(true);
+    expect(records("token-b", "b.test").every((r) => r.ttl === 300)).toBe(true);
+    const calls = dnsFixture.calls.length;
+    await reconcileDns(ctx, undefined, b.clusterId);
+    expect(dnsFixture.calls.slice(calls).map((c) => c.command)).toEqual(["dns.list", "dns.list"]);
+    dnsFixture.minTtl.delete("token-b");
+  });
+
+  it("refuses a line named like the all-lines record", async () => {
+    const error = await rpcError(
+      admin.dns.saveBinding({
+        clusterId: b.clusterId,
+        binding: {
+          mode: "auto",
+          providerId: b.providerId,
+          domain: "cdn.b.test",
+          lines: [{ name: "all", nodeGroupId: b.groupId, overrides: [] }],
+        },
+      }),
+    );
+    expect(error.status).toBe(400);
+  });
+
+  it("keeps writing the active account while a former account fails", async () => {
+    // Cluster A moves to account B; account A (still holding A's records) is down.
+    dnsFixture.down.add("token-a");
+    await admin.dns.saveBinding({
+      clusterId: a.clusterId,
+      binding: {
+        mode: "auto",
+        providerId: b.providerId,
+        domain: "edge2.b.test",
+        ttl: 60,
+        lines: [{ name: "east", nodeGroupId: a.groupId, overrides: [] }],
+      },
+    });
+    await reconcileDns(ctx);
+    expect(records("token-b", "b.test").some((r) => r.name === "all.edge2")).toBe(true);
+    const state = await admin.dns.binding({ clusterId: a.clusterId });
+    expect(state.revision).toMatchObject({
+      status: "failed",
+      lastError: "dns_provider_unreachable",
+    });
+    dnsFixture.down.delete("token-a");
+    await reconcileDns(ctx);
+    expect((await admin.dns.binding({ clusterId: a.clusterId })).applied).toBe(true);
+    expect(records("token-a", "a.test")).toEqual([]);
+    await bindA();
+    await reconcileDns(ctx);
+    expect(records("token-b", "b.test").some((r) => r.name.endsWith("edge2"))).toBe(false);
   });
 
   it("cleans a binding's records when DNS is turned off and releases the account and cluster", async () => {

@@ -12,10 +12,11 @@ import {
   parseIp,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit, systemActor } from "./audit";
+import { withLease } from "./dns-lease";
 import {
   certdDns,
   errorCode,
@@ -164,6 +165,8 @@ async function validateBinding(db: Executor, clusterId: string, policy: BindingP
     .where(eq(schema.nodeGroup.clusterId, clusterId));
   const nodes = await db.select().from(schema.node).where(eq(schema.node.clusterId, clusterId));
   for (const line of policy.lines) {
+    if (line.name === policy.allLabel)
+      fail("DNS_POLICY_INVALID", "a line cannot use the all-lines record name");
     if (!groups.some((g) => g.id === line.nodeGroupId))
       fail("NODE_GROUP_NOT_FOUND", "DNS line references a node group outside this cluster");
     if (new Set(line.overrides.map((o) => o.nodeId)).size !== line.overrides.length)
@@ -404,10 +407,11 @@ async function publishBinding(
         .where(eq(schema.dnsRevision.revision, row.desiredRevision))
     : [];
   const previousPolicy = previous ? parsePolicy(previous.policy, row.allLabel) : null;
+  let hold = false;
   if (
     !opts.force &&
     previous &&
-    previousPolicy?.mode === "auto" &&
+    (previousPolicy?.mode === "auto" || previousPolicy?.mode === "manual") &&
     policy.mode === "auto" &&
     previousPolicy.providerId === policy.providerId &&
     previousPolicy.domain === policy.domain &&
@@ -416,23 +420,39 @@ async function publishBinding(
   ) {
     const check = massRemoval(previous.records, plan);
     const { massRemovalRatio } = await getDnsProtection(tx);
-    if (
+    hold =
       check.cleared.length > 0 ||
-      (check.previous > 0 && check.removed / check.previous > massRemovalRatio)
-    ) {
-      const [held] = await tx
-        .select()
-        .from(schema.dnsRevision)
-        .where(
-          and(
-            eq(schema.dnsRevision.clusterId, clusterId),
-            eq(schema.dnsRevision.status, "blocked"),
-            eq(schema.dnsRevision.contentHash, contentHash),
-          ),
-        );
-      if (!held) {
-        await supersede(tx, clusterId, "blocked");
-        await tx.insert(schema.dnsRevision).values({
+      (check.previous > 0 && check.removed / check.previous > massRemovalRatio);
+  } else if (!opts.force && !previous && policy.mode === "auto") {
+    // No revision to compare with, but records already written for this
+    // cluster (a binding converted from the former global policy): sites
+    // pointed at an empty all-lines set would all stop resolving, e.g. when
+    // the first run after an upgrade finds every node offline.
+    const [owned] = await tx
+      .select({ name: schema.dnsManagedName.name })
+      .from(schema.dnsManagedName)
+      .where(eq(schema.dnsManagedName.clusterId, clusterId))
+      .limit(1);
+    hold =
+      !!owned && plan.records.some((r) => r.type === "CNAME") && !plan.records.some(addressRecord);
+  }
+  if (hold) {
+    const [held] = await tx
+      .select()
+      .from(schema.dnsRevision)
+      .where(
+        and(
+          eq(schema.dnsRevision.clusterId, clusterId),
+          eq(schema.dnsRevision.status, "blocked"),
+          eq(schema.dnsRevision.contentHash, contentHash),
+        ),
+      );
+    let blocked = held;
+    if (!held) {
+      await supersede(tx, clusterId, "blocked");
+      [blocked] = await tx
+        .insert(schema.dnsRevision)
+        .values({
           clusterId,
           providerId: policy.providerId,
           policy,
@@ -441,11 +461,14 @@ async function publishBinding(
           reason,
           status: "blocked",
           lastError: "dns_mass_removal_blocked",
-        });
-      }
-      await raisePlatformAlert(tx, "dns_mass_removal_blocked", clusterId, cluster.name);
-      return previous;
+        })
+        .returning();
     }
+    await raisePlatformAlert(tx, "dns_mass_removal_blocked", clusterId, cluster.name);
+    // The previous revision stays in effect; without one nothing is written.
+    const kept = previous ?? blocked;
+    if (!kept) throw new Error("DNS revision insert failed");
+    return kept;
   }
   // A plan that passes (or is forced) ends any hold.
   await supersede(tx, clusterId, "blocked");
@@ -702,12 +725,13 @@ function normalizeRecord(record: ProviderRecord): ProviderRecord {
         : record.data,
   };
 }
+const BATCH = 100;
 /** Groups RRsets into batches of at most 100 records without splitting a set. */
-function batches(sets: DnsRecord[][]) {
-  const out: DnsRecord[][] = [];
-  let current: DnsRecord[] = [];
+function batches<T>(sets: T[][]) {
+  const out: T[][] = [];
+  let current: T[] = [];
   for (const set of sets) {
-    if (current.length && current.length + set.length > 100) {
+    if (current.length && current.length + set.length > BATCH) {
       out.push(current);
       current = [];
     }
@@ -716,12 +740,18 @@ function batches(sets: DnsRecord[][]) {
   if (current.length) out.push(current);
   return out;
 }
+/** Data equality; TTL counts only when `ttl` (providers round or raise TTLs). */
+const sameAs = (ttl: boolean) => (r: { name: string; type: string; data: string; ttl: number }) =>
+  ttl ? recordKey(r) : `${nameKey(r)}|${r.data}`;
 /**
  * Brings one provider zone in line with the binding's plan: claims the
- * planned names, replaces changed RRsets (address sets before CNAMEs; a name
- * changing type loses its old records first), deletes managed records the
- * plan no longer has, reads back, then releases retired names. Only names
- * this cluster claimed are ever changed.
+ * planned names (and checks that the claim holds), replaces changed RRsets
+ * in batches of 100 (address sets before CNAMEs; within a batch, a name that
+ * changes type first loses its old records, so a name is never empty for
+ * longer than one batch), deletes managed records the plan no longer has,
+ * reads back, then releases retired names. Only names this cluster claimed
+ * are ever changed. TTLs count only when the binding's TTL changed since
+ * the applied revision.
  */
 async function reconcileProvider(
   app: AppContext,
@@ -730,6 +760,7 @@ async function reconcileProvider(
   revision: Revision,
   desired: DnsRecord[],
   desiredNames: ManagedName[],
+  compareTtl: boolean,
 ) {
   const credentials = openProvider(app, p);
   const call = (command: "dns.list" | "dns.set" | "dns.cleanup", records?: ProviderRecord[]) =>
@@ -754,11 +785,21 @@ async function reconcileProvider(
       fail("DNS_RECORD_CONFLICT", "DNS name contains an unmanaged record");
   }
   await assertCurrent(app, clusterId, revision.revision);
-  if (desiredNames.length)
+  if (desiredNames.length) {
     await app.db
       .insert(schema.dnsManagedName)
       .values(desiredNames.map((r) => ({ ...r, providerId: p.id, clusterId })))
       .onConflictDoNothing();
+    // Another cluster may have claimed a name between the check and the insert.
+    const wantedNames = new Set(desiredNames.map(nameKey));
+    const claimed = await app.db
+      .select()
+      .from(schema.dnsManagedName)
+      .where(eq(schema.dnsManagedName.providerId, p.id));
+    if (claimed.some((r) => wantedNames.has(nameKey(r)) && r.clusterId !== clusterId))
+      fail("DNS_BINDING_CONFLICT", "another cluster manages this DNS name");
+  }
+  const key = sameAs(compareTtl);
   const managed = new Set([...own, ...desiredNames].map(nameKey));
   const desiredSets = new Map<string, DnsRecord[]>();
   for (const r of desired) desiredSets.set(nameKey(r), [...(desiredSets.get(nameKey(r)) ?? []), r]);
@@ -767,32 +808,41 @@ async function reconcileProvider(
   for (const r of actualManaged)
     actualSets.set(nameKey(r), [...(actualSets.get(nameKey(r)) ?? []), r]);
   const changed = [...desiredSets.entries()]
-    .filter(([key, set]) => {
-      const current = actualSets.get(key) ?? [];
-      const wanted = new Set(set.map(recordKey));
-      return current.length !== set.length || current.some((r) => !wanted.has(recordKey(r)));
+    .filter(([name, set]) => {
+      const current = actualSets.get(name) ?? [];
+      const wanted = new Set(set.map(key));
+      return current.length !== set.length || current.some((r) => !wanted.has(key(r)));
     })
     .map(([, set]) => set);
   const stale = actualManaged.filter((r) => !desiredSets.has(nameKey(r)));
-  const desiredByName = new Set(desired.map((r) => r.name));
-  const typeChanges = stale.filter((r) => desiredByName.has(r.name));
-  const rest = stale.filter((r) => !desiredByName.has(r.name));
-  const steps: ["dns.set" | "dns.cleanup", ProviderRecord[][]][] = [
-    ["dns.cleanup", batches([typeChanges as DnsRecord[]])],
-    ["dns.set", batches(changed.filter((set) => set[0]?.type !== "CNAME"))],
-    ["dns.set", batches(changed.filter((set) => set[0]?.type === "CNAME"))],
-    ["dns.cleanup", batches([rest as DnsRecord[]])],
-  ];
-  for (const [command, groups] of steps)
-    for (const group of groups) {
+  const deleted = new Set<ProviderRecord>();
+  const send = async (command: "dns.set" | "dns.cleanup", records: ProviderRecord[]) => {
+    for (const chunk of batches(records.map((r) => [r]))) {
       await assertCurrent(app, clusterId, revision.revision);
-      await call(command, group);
+      await call(command, chunk);
     }
-  const wanted = new Set(desired.map(recordKey));
+  };
+  for (const group of [
+    changed.filter((set) => set[0]?.type !== "CNAME"),
+    changed.filter((set) => set[0]?.type === "CNAME"),
+  ])
+    for (const batch of batches(group)) {
+      const names = new Set(batch.map((r) => r.name));
+      const typeChanges = stale.filter((r) => names.has(r.name) && !deleted.has(r));
+      for (const r of typeChanges) deleted.add(r);
+      await send("dns.cleanup", typeChanges);
+      await assertCurrent(app, clusterId, revision.revision);
+      await call("dns.set", batch);
+    }
+  await send(
+    "dns.cleanup",
+    stale.filter((r) => !deleted.has(r)),
+  );
+  const wanted = new Set(desired.map(sameAs(false)));
   const after = (await call("dns.list"))
     .map(normalizeRecord)
     .filter((r) => managed.has(nameKey(r)));
-  if (after.length !== desired.length || after.some((r) => !wanted.has(recordKey(r))))
+  if (after.length !== desired.length || after.some((r) => !wanted.has(sameAs(false)(r))))
     throw new Error("DNS readback mismatch");
   const keep = new Set(desiredNames.map(nameKey));
   const retired = own.filter((name) => !keep.has(nameKey(name))).map(nameKey);
@@ -802,29 +852,19 @@ async function reconcileProvider(
     );
 }
 
-/** A stable 32-bit key for the binding's advisory lock. */
-const lockKey = (clusterId: string) =>
-  Number.parseInt(clusterId.replace(/-/g, "").slice(0, 8), 16) | 0;
-
 /**
- * Publishes (health) and writes one binding's records. One worker per
- * binding at a time (non-blocking session lock); other bindings are not
- * affected by this one's provider.
+ * Publishes (health) and writes one binding's records. One run per binding
+ * at a time (a lease, so no connection waits on a provider); other bindings
+ * are not affected by this one's provider. The active account is written
+ * first; a failing account the cluster used before is cleaned later and only
+ * marks the revision failed.
  */
 export async function reconcileBinding(
   app: AppContext,
   clusterId: string,
   actor: Actor = systemActor,
 ) {
-  const connection = await app.pool.connect();
-  let locked = false;
-  try {
-    // lockKey is an integer; the pool of tests passes no bind parameters.
-    const lock = await connection.query(
-      `select pg_try_advisory_lock(550076, ${lockKey(clusterId)}) as locked`,
-    );
-    locked = lock.rows[0]?.locked === true;
-    if (!locked) return;
+  await withLease(app.db, `binding:${clusterId}`, 15 * 60, async () => {
     const row = await loadBinding(app.db, clusterId);
     const owned = await app.db
       .select({ providerId: schema.dnsManagedName.providerId })
@@ -838,21 +878,36 @@ export async function reconcileBinding(
       return publishBinding(tx, clusterId, bindingPolicy(current), "health");
     });
     const policy = parsePolicy(revision.policy, row.allLabel);
+    // Switched to manual meanwhile (hands off), or held back with nothing to keep.
+    if (!policy || policy.mode === "manual" || revision.status === "blocked") return;
+    const applied = await revisionRow(app.db, clusterId, row.appliedRevision);
+    const compareTtl = parsePolicy(applied?.policy ?? {}, row.allLabel)?.ttl !== policy.ttl;
     try {
-      const providerIds = new Set(owned.map((o) => o.providerId));
-      const active = policy?.mode === "auto" ? revision.providerId : null;
-      if (active) providerIds.add(active);
-      for (const providerId of [...providerIds].sort()) {
-        const p = await findProvider(app.db, providerId);
+      const active = policy.mode === "auto" ? revision.providerId : null;
+      const retired = [...new Set(owned.map((o) => o.providerId))]
+        .filter((id) => id !== active)
+        .sort();
+      if (active)
         await reconcileProvider(
           app,
           clusterId,
-          p,
+          await findProvider(app.db, active),
           revision,
-          providerId === active ? revision.records : [],
-          providerId === active ? revision.managedNames : [],
+          revision.records,
+          revision.managedNames,
+          compareTtl,
         );
+      let retiredError: unknown;
+      for (const providerId of retired) {
+        try {
+          const p = await findProvider(app.db, providerId);
+          await reconcileProvider(app, clusterId, p, revision, [], [], compareTtl);
+        } catch (error) {
+          if (error instanceof Superseded) throw error;
+          retiredError ??= error;
+        }
       }
+      if (retiredError) throw retiredError;
       await assertCurrent(app, clusterId, revision.revision);
       await app.db.transaction(async (tx) => {
         await tx
@@ -895,10 +950,7 @@ export async function reconcileBinding(
       });
       throw error;
     }
-  } finally {
-    if (locked) await connection.query(`select pg_advisory_unlock(550076, ${lockKey(clusterId)})`);
-    connection.release();
-  }
+  });
 }
 
 /**
@@ -978,20 +1030,4 @@ export async function siteDnsTarget(app: AppContext, siteId: string, scope: Site
     healthy: !!revision?.records.some((r) => r.name === allName && addressRecord(r)),
     lines,
   };
-}
-
-/** The target of every site of a cluster that has DNS (tenant automatic records). */
-export async function siteTargets(db: Executor, clusterIds: string[]) {
-  if (!clusterIds.length) return new Map<string, string>();
-  const rows = await db
-    .select()
-    .from(schema.dnsBinding)
-    .where(
-      and(
-        inArray(schema.dnsBinding.clusterId, clusterIds),
-        ne(schema.dnsBinding.mode, "off"),
-        isNotNull(schema.dnsBinding.domain),
-      ),
-    );
-  return new Map(rows.filter((r) => r.domain).map((r) => [r.clusterId, r.domain]));
 }

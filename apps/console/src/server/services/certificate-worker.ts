@@ -12,6 +12,7 @@ import {
   inspectCertificate,
   openDnsCredential,
 } from "./certificates";
+import { withLease } from "./dns-lease";
 import { certdDns, outboundAllowCidrs } from "./dns-providers";
 import { publishRevision, rolloutTargets, targetFor } from "./revisions";
 
@@ -326,7 +327,22 @@ const due = () =>
     ),
   );
 
+/**
+ * Issues or renews a due ACME certificate. DNS-01 runs under the lease of its
+ * DNS credential, so two console processes never rewrite the same
+ * `_acme-challenge` record set at once (a busy credential waits for the next
+ * sweep).
+ */
 export async function issueCertificate(app: AppContext, id: string) {
+  const [row] = await app.db
+    .select({ acme: schema.certificate.acme })
+    .from(schema.certificate)
+    .where(eq(schema.certificate.id, id));
+  const credentialId = row?.acme.challenge === "dns01" ? row.acme.dnsCredentialId : undefined;
+  if (!credentialId) return issueNow(app, id);
+  await withLease(app.db, `credential:${credentialId}`, 10 * 60, () => issueNow(app, id));
+}
+async function issueNow(app: AppContext, id: string) {
   const [row] = await app.db
     .update(schema.certificate)
     .set({ status: "issuing", operationStartedAt: new Date() })
@@ -490,12 +506,15 @@ async function cleanupDnsLease(
     .where(eq(schema.dnsCredential.id, lease.credentialId));
   if (!credential) return;
   try {
-    await certdDns(app, "dns.cleanup", {
-      provider: credential.provider,
-      zone: credential.zone,
-      credentials: openDnsCredential(app, credential),
-      records: [lease.record],
-    });
+    const cleaned = await withLease(app.db, `credential:${credential.id}`, 10 * 60, () =>
+      certdDns(app, "dns.cleanup", {
+        provider: credential.provider,
+        zone: credential.zone,
+        credentials: openDnsCredential(app, credential),
+        records: [lease.record],
+      }),
+    );
+    if (!cleaned.ran) return;
     await app.db.delete(schema.dnsChallengeLease).where(eq(schema.dnsChallengeLease.id, lease.id));
   } catch {
     app.log.warn("DNS challenge cleanup pending", { certificateId: lease.certificateId });

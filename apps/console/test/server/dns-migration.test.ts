@@ -243,6 +243,20 @@ describe("migration 0029: platform-wide DNS policy to cluster bindings", async (
     expect(state?.active).toBe(false);
   });
 
+  it("holds the first publication when every node looks offline after the upgrade", async () => {
+    const at = new Date();
+    await ctx.db.update(schema.node).set({ lastSeenAt: new Date(0) });
+    await reconcileDns(ctx);
+    // The former records stay: no site points at an empty all-lines record.
+    expect(newRecords()).toEqual([...oldRecords, ...unmanaged]);
+    const [held] = await ctx.db
+      .select()
+      .from(schema.dnsRevision)
+      .where(eq(schema.dnsRevision.clusterId, ids.clusterA));
+    expect(held).toMatchObject({ status: "blocked", lastError: "dns_mass_removal_blocked" });
+    await ctx.db.update(schema.node).set({ lastSeenAt: at });
+  });
+
   it("keeps every site target name and resolves every name tenants were shown to the same addresses", async () => {
     const before = Object.fromEntries(
       tenantNames.map((name) => [name, resolve(oldRecords, zone, name)]),
