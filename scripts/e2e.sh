@@ -22,6 +22,10 @@
 #   sees 1 MiB slices (CP-M2); S3 origins never receive the client's x-amz-*
 #   headers (N-L); install.sh installs goreleaser snapshot packages in a clean
 #   Debian container and enrolls the node (N-H1, --no-start: no systemd).
+#   Core gaps P0 (scripts/e2e-p0.mjs): service accounts with scopes and
+#   Idempotency-Key, organization limits, platform suspension, usage and its
+#   completeness watermark, configuration canary with automatic promotion and
+#   rollback, DNS mass removal protection; Playwright e2e/p0.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -865,6 +869,13 @@ if ! $SKIP_UI; then
   E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/m6-upgrades.spec.ts || fail "upgrade browser checks failed"
 fi
 pass "M6 signed upgrades and rollback passed"
+
+step "P0: service accounts, idempotency, limits, suspension, usage, configuration canary, DNS protection"
+node scripts/e2e-p0.mjs || fail "P0 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/p0.spec.ts || fail "P0 browser checks failed"
+fi
+pass "P0 checks passed"
 
 
 

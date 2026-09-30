@@ -208,6 +208,8 @@ await t("POST", "/alerts/subscriptions", {
   kinds: ["node_offline"],
 });
 await a("PUT", "/alerts/policy", { nodeOfflineSeconds: 45 });
+const published = (await records()).filter((r) => r.type === "A" && r.data === address).length;
+assert.ok(published > 0);
 try {
   await run([...compose, "stop", "node"]);
   await waitFor(
@@ -216,8 +218,14 @@ try {
     90,
   );
   await a("POST", "/dns/reconcile");
-  assert.equal((await records()).filter((r) => r.type === "A" && r.data === address).length, 0);
-  console.log("PASS offline node addresses withdrawn from DNS");
+  // Its only node offline would empty the record sets: the mass removal
+  // protection keeps them and holds the change back.
+  assert.equal(
+    (await records()).filter((r) => r.type === "A" && r.data === address).length,
+    published,
+  );
+  assert.equal((await a("GET", "/dns/config")).blocked?.status, "blocked");
+  console.log("PASS the only node offline: its addresses stay in DNS and the change is held back");
   await waitFor(
     "real offline webhook",
     async () => {
@@ -238,6 +246,7 @@ try {
 }
 await synced();
 await a("POST", "/dns/reconcile");
+assert.equal((await a("GET", "/dns/config")).blocked, null);
 target = await t("GET", `/sites/${site.id}/cname`);
 assert.equal(target.healthy, true);
 assert.ok((await records()).some((r) => r.name === "unrelated" && r.data === "preserve"));
