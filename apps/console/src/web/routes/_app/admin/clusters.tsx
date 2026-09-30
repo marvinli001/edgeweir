@@ -20,6 +20,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import * as z from "zod";
 import { Countdown } from "@/components/appica/countdown";
+import { ClusterRolloutCard } from "@/components/cluster-rollout";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
@@ -27,6 +28,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
+import { SwitchField } from "@/components/site/fields";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Dot, StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
@@ -129,6 +131,7 @@ function ClustersPage() {
           />
           <NodeGroupsSection cluster={selected} />
           <NodesSection cluster={selected} onEnroll={() => setEnrollOpen(true)} />
+          <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
           <NodeUpgrades key={selected.id} clusterId={selected.id} />
           <RevisionsSection cluster={selected} />
           <EnrollDialog
@@ -453,6 +456,7 @@ function NodeGroupDialog({
   const create = useMutation(orpc.nodeGroups.create.mutationOptions());
   const update = useMutation(orpc.nodeGroups.update.mutationOptions());
   const [regionId, setRegionId] = React.useState<string | null>(group?.regionId ?? null);
+  const [isCanary, setIsCanary] = React.useState(group?.isCanary ?? false);
   return (
     <FormDialog
       open={open}
@@ -462,8 +466,8 @@ function NodeGroupDialog({
       submitTestId="node-group-submit"
       onSubmit={async (data) => {
         const name = String(data.get("groupName") ?? "").trim();
-        if (group) await update.mutateAsync({ id: group.id, name, regionId });
-        else await create.mutateAsync({ clusterId: cluster.id, name, regionId });
+        if (group) await update.mutateAsync({ id: group.id, name, regionId, isCanary });
+        else await create.mutateAsync({ clusterId: cluster.id, name, regionId, isCanary });
         await queryClient.invalidateQueries();
         toast.success(m.common_saved());
         onOpenChange(false);
@@ -484,6 +488,14 @@ function NodeGroupDialog({
         <FieldLabel>{m.node_groups_region()}</FieldLabel>
         <RegionSelect regions={regions.data ?? []} value={regionId} onChange={setRegionId} />
       </Field>
+      <SwitchField
+        id="groupCanary"
+        label={m.node_groups_canary_label()}
+        checked={isCanary}
+        onCheckedChange={setIsCanary}
+        className="self-start"
+        testId="node-group-canary"
+      />
     </FormDialog>
   );
 }
@@ -506,6 +518,11 @@ function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
             </span>
             {row.original.isDefault ? (
               <Badge variant="outline">{m.node_groups_default()}</Badge>
+            ) : null}
+            {row.original.isCanary ? (
+              <Badge variant="secondary" data-testid="node-group-canary-badge">
+                {m.node_groups_canary()}
+              </Badge>
             ) : null}
           </div>
         ),
@@ -628,7 +645,8 @@ function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
     );
   }
   if (node.appliedRevision === 0) return null;
-  return node.appliedRevision >= latest ? (
+  // A canary rollout gives each node its own target revision.
+  return node.appliedRevision >= (node.targetRevision ?? latest) ? (
     <Badge variant="secondary" data-testid="node-up-to-date">
       {m.nodes_up_to_date()}
     </Badge>
