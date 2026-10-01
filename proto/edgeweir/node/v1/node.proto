@@ -214,6 +214,25 @@ message ReportStatusRequest {
   // paths. Added in v0.10.0; sites at normal with escalated paths since
   // v0.10.1 (earlier nodes leave them out).
   repeated SiteSecurity security = 12;
+  // Host metrics since the previous report (feature metrics-v1). Added in
+  // v0.14.0.
+  NodeMetrics metrics = 13;
+}
+
+// NodeMetrics are host metrics measured by the agent between two reports.
+message NodeMetrics {
+  // CPU time used by everything on the host, 0-100 per host (not per core).
+  double cpu_percent = 1;
+  // Load averages over 1, 5 and 15 minutes.
+  double load1 = 2;
+  double load5 = 3;
+  double load15 = 4;
+  uint64 memory_used_bytes = 5;
+  uint64 memory_total_bytes = 6;
+  // Bits per second sent on non-loopback interfaces.
+  uint64 egress_bps = 7;
+  // Client connections the data plane holds (nginx $connections_active).
+  uint64 active_connections = 8;
 }
 
 // SiteSecurity is the CC mitigation state of one site on one node.
@@ -290,6 +309,10 @@ message ReportStatusResponse {
   uint32 report_interval_seconds = 3;
   // Tasks are waiting for this node (fallback for a missed watch event).
   bool tasks_pending = 4;
+  // The operator lets this node probe the other nodes from its node group's
+  // region: the agent runs the ProbeService loop with its node certificate.
+  // Added in v0.14.0.
+  bool probe = 5;
 }
 
 // MinuteStats is traffic of one site during one minute on one node.
