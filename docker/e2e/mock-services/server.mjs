@@ -4,6 +4,9 @@
 // POST /dns/{list,append,set,delete,zones} with "Authorization: Bearer
 // <token>"; every token in ACCOUNTS may write any zone, "zones" lists the
 // account's zones. POST /fail {token, down} makes an account answer 503.
+// Records carry a resolution line (a missing or empty line is "default");
+// "set" replaces each input (name, type) on every line, "delete" matches
+// the line. GET /records dumps every zone's records with their line.
 // Custom HTTP provider receiver (the "webhook" provider): POST /dns-hook,
 // signed with WEBHOOK_SECRET as documented (X-Edgeweir-Signature: v1=HMAC).
 
@@ -20,11 +23,15 @@ const WEBHOOK_ZONES = ["dns-hook.test"];
 const zones = new Map(),
   events = [],
   down = new Set();
-const same = (a, b) => a.name === b.name && a.type === b.type && a.data === b.data;
+const same = (a, b) =>
+  a.name === b.name && a.type === b.type && a.data === b.data && a.line === b.line;
+/** Stores every record with its line ("default" when missing). */
+const withLine = (r) => ({ ...r, line: r.line || "default" });
 
 /** Applies a provider action to a zone; returns the answer records. */
-function apply(zone, action, records) {
+function apply(zone, action, input) {
   const old = zones.get(zone) ?? [];
+  const records = input.map(withLine);
   if (action === "list") return old;
   if (action === "delete")
     zones.set(
