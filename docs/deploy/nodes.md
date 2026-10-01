@@ -114,10 +114,10 @@ downloads/
       edgeweir-node_0.2.0_amd64.deb
       edgeweir-node-0.2.0-1.x86_64.rpm
       edgeweir-node_0.2.0_linux_amd64.tar.gz
-      edgeweir-openresty_1.31.1.1-1_amd64.deb
-      edgeweir-openresty-1.31.1.1-1.x86_64.rpm
-      edgeweir-openresty-modsecurity_1.31.1.1-1_amd64.deb
-      edgeweir-openresty-modsecurity-1.31.1.1-1.x86_64.rpm
+      edgeweir-openresty_1.31.1.1-2_amd64.deb
+      edgeweir-openresty-1.31.1.1-2.x86_64.rpm
+      edgeweir-openresty-modsecurity_1.31.1.1-2_amd64.deb
+      edgeweir-openresty-modsecurity-1.31.1.1-2.x86_64.rpm
       ...
   cosign/
     v3.1.3/
