@@ -338,7 +338,7 @@ function PurgeForm({
       count={urls.length}
       max={MAX_CACHE_TASK_URLS}
       placeholder={placeholders[t]}
-      testId="purge-urls"
+      testId={`purge-urls-${t}`}
       onChange={(value) => set({ urls: value })}
     />
   );
