@@ -23,6 +23,7 @@ export const errorDefs = {
   IDEMPOTENCY_KEY_INVALID: { status: 400, params: [] },
   IDEMPOTENCY_KEY_MISMATCH: { status: 422, params: [] },
   IDEMPOTENCY_IN_PROGRESS: { status: 409, params: [] },
+  IDEMPOTENCY_KEY_UNSUPPORTED: { status: 400, params: [] },
   ALERT_CHANNEL_NOT_FOUND: { status: 404, params: [] },
   ALERT_CHANNEL_LIMIT: { status: 409, params: [] },
   ALERT_SEND_FAILED: { status: 502, params: [] },

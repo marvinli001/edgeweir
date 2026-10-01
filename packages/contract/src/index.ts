@@ -393,6 +393,18 @@ export const contract = {
 
 export type Contract = typeof contract;
 
+/**
+ * Procedures whose response carries a credential shown once (the console
+ * keeps only its hash). `/api/v1` refuses an Idempotency-Key on them with 400
+ * IDEMPOTENCY_KEY_UNSUPPORTED: replaying the response would mean storing the
+ * credential.
+ */
+export const oneTimeSecretProcedures: ReadonlySet<string> = new Set([
+  "accessKeys.create",
+  "serviceAccounts.createKey",
+  "clusters.createEnrollmentToken",
+]);
+
 export * from "./access-keys";
 export * from "./alerts";
 export * from "./dns";

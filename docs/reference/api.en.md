@@ -100,6 +100,7 @@ For a service account, `GET /me` returns `serviceAccount: { id, name, scopes }`;
 | Same key, other method, path or body | 422 `IDEMPOTENCY_KEY_MISMATCH` |
 | The first request is still running | 409 `IDEMPOTENCY_IN_PROGRESS` |
 | Invalid key | 400 `IDEMPOTENCY_KEY_INVALID` |
+| The response carries a credential shown once: `POST /access-keys`, `POST /service-accounts/{id}/keys`, `POST /enrollment-tokens` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`, nothing runs; send it again without the header |
 
 - Keys are per caller: all AccessKeys share one set, each service account has its own.
 - Records are kept 24 hours; expired ones are deleted hourly.

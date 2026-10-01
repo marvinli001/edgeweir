@@ -774,6 +774,7 @@
   "error_idempotency_key_invalid": "Idempotency-Key 无效",
   "error_idempotency_key_mismatch": "该 Idempotency-Key 已用于另一个请求",
   "error_idempotency_in_progress": "同一 Idempotency-Key 的请求仍在处理中",
+  "error_idempotency_key_unsupported": "该请求只返回一次凭据，不能带 Idempotency-Key",
   "audit_actor_service_account": "服务账号",
   "nav_service_accounts": "服务账号",
   "service_accounts_create": "新建服务账号",

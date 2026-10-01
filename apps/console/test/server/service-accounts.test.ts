@@ -484,4 +484,38 @@ describe("service accounts, scopes and idempotency keys", async () => {
       .where(eq(schema.idempotencyKey.key, "flaky"));
     expect(left?.n).toBe(0);
   });
+  it("refuses an Idempotency-Key where the response carries a credential, and keeps none", async () => {
+    const operator = await admin.accessKeys.create({ name: "issuer", scope: "write" });
+    const [cluster] = await admin.clusters.list();
+    const keysBefore = (await ctx.db.select().from(schema.serviceAccountKey)).length;
+    const tokensBefore = (await ctx.db.select().from(schema.enrollmentToken)).length;
+    for (const [path, body] of [
+      [`/service-accounts/${accountId}/keys`, { name: "retried" }],
+      ["/enrollment-tokens", { clusterId: cluster?.id }],
+      ["/access-keys", { name: "minted", scope: "read" }],
+    ] as const) {
+      for (const attempt of [1, 2]) {
+        const res = await api(operator.key, "POST", path, body, { "idempotency-key": path });
+        expect(res.status, `${path} #${attempt}`).toBe(400);
+        expect(res.json.code, path).toBe("IDEMPOTENCY_KEY_UNSUPPORTED");
+      }
+    }
+    expect((await ctx.db.select().from(schema.serviceAccountKey)).length).toBe(keysBefore);
+    expect((await ctx.db.select().from(schema.enrollmentToken)).length).toBe(tokensBefore);
+    // Without the header the credential is returned once and only its hash is kept.
+    const issued = await api(operator.key, "POST", `/service-accounts/${accountId}/keys`, {
+      name: "once",
+    });
+    expect(issued.status).toBe(201);
+    const token = await api(operator.key, "POST", "/enrollment-tokens", { clusterId: cluster?.id });
+    expect(token.status).toBe(200);
+    const secrets = [issued.json.secret, token.json.token] as string[];
+    expect(secrets[0]).toMatch(/^ews_/);
+    expect(secrets[1]).toMatch(/^ewt_/);
+    const stored = JSON.stringify(await ctx.db.select().from(schema.idempotencyKey));
+    for (const secret of secrets) {
+      expect(stored).not.toContain(secret);
+      expect(stored).not.toContain(Buffer.from(secret).toString("base64").slice(0, 24));
+    }
+  });
 });

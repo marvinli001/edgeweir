@@ -877,6 +877,7 @@
   "error_idempotency_key_invalid": "Invalid Idempotency-Key",
   "error_idempotency_key_mismatch": "This Idempotency-Key was used for another request",
   "error_idempotency_in_progress": "A request with this Idempotency-Key is still in progress",
+  "error_idempotency_key_unsupported": "This request returns a credential once and does not take an Idempotency-Key",
   "audit_actor_service_account": "Service account",
   "nav_service_accounts": "Service accounts",
   "service_accounts_create": "New service account",

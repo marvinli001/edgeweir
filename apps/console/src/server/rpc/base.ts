@@ -1,10 +1,11 @@
-import { contract, serviceAccountScopeFor } from "@edgeweir/contract";
+import { contract, oneTimeSecretProcedures, serviceAccountScopeFor } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { implement, ORPCError } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { API_KEY_HEADER } from "../lib/auth";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { IDEMPOTENCY_HEADER } from "../lib/idempotency";
 import { keyScope } from "../services/access-keys";
 import type { Actor } from "../services/audit";
 import {
@@ -52,6 +53,18 @@ async function readSession(context: RequestContext): Promise<SessionResult | nul
   }
 }
 
+/**
+ * /api/v1 keeps the response of a request with an Idempotency-Key for 24
+ * hours (lib/idempotency.ts); a credential shown once must not end up there.
+ */
+function refuseStoredSecret(context: RequestContext, path: readonly string[]) {
+  if (context.headers.has(IDEMPOTENCY_HEADER) && oneTimeSecretProcedures.has(path.join(".")))
+    fail(
+      "IDEMPOTENCY_KEY_UNSUPPORTED",
+      "this request returns a credential once; send it without Idempotency-Key",
+    );
+}
+
 /** Scope applies before every public/optional-auth procedure as well as authed routes. */
 export const os = implementation.use(async ({ context, next, procedure, path }) => {
   const apiKey = context.headers.get(API_KEY_HEADER);
@@ -65,6 +78,7 @@ export const os = implementation.use(async ({ context, next, procedure, path }) 
       fail("SERVICE_ACCOUNT_FORBIDDEN", "service accounts cannot call this procedure");
     if (access.scope && !principal.scopes.includes(access.scope))
       fail("SCOPE_REQUIRED", `this call needs the ${access.scope} scope`, { scope: access.scope });
+    refuseStoredSecret(context, path);
     return next({ context: { serviceAccount: principal } });
   }
   const session = await readSession(context);
@@ -83,6 +97,7 @@ export const os = implementation.use(async ({ context, next, procedure, path }) 
     path.join(".") !== "rules.validate"
   )
     fail("ACCESS_KEY_READ_ONLY", "access key is read only");
+  refuseStoredSecret(context, path);
   return next({ context: { apiSession: session } });
 });
 
