@@ -193,7 +193,7 @@ function ClusterDialog({
           name="clusterName"
           required
           maxLength={64}
-          pattern="[a-z0-9][a-z0-9-]*"
+          pattern="[a-z0-9][a-z0-9\-]*"
           defaultValue={cluster?.name}
           placeholder="edge-cn"
         />

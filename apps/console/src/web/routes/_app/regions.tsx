@@ -75,7 +75,7 @@ function RegionDialog({
           name="regionCode"
           required
           maxLength={32}
-          pattern="[a-zA-Z0-9][a-zA-Z0-9-]*"
+          pattern="[a-zA-Z0-9][a-zA-Z0-9\-]*"
           defaultValue={region?.code}
           placeholder="cn-east"
           className="font-mono"
