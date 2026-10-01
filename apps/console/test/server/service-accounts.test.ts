@@ -204,6 +204,19 @@ describe("service accounts, scopes and idempotency keys", async () => {
         "/sites/00000000-0000-4000-8000-000000000000/https",
         { settings: { brotli: true, zstd: true } },
       ],
+      ["GET", "/sites/00000000-0000-4000-8000-000000000000/error-pages", undefined],
+      [
+        "PUT",
+        "/sites/00000000-0000-4000-8000-000000000000/error-pages",
+        { pages: [{ status: 503, template: "<p>later</p>" }] },
+      ],
+      ["GET", "/settings/error-pages", undefined],
+      ["PUT", "/settings/error-pages", { unknownHost: "<p>nobody</p>" }],
+      [
+        "POST",
+        "/cache-tasks",
+        { type: "tag", siteIds: ["00000000-0000-4000-8000-000000000000"], tags: ["product"] },
+      ],
       ["POST", "/sites", { name: "x", domains: ["x.test"], origins: [{ address: "o.test" }] }],
     ] as const) {
       const res = await api(full, method, path, body);

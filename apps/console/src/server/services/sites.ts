@@ -30,6 +30,7 @@ import { assertCertificateNames } from "../lib/certificate-names";
 import { domainRoot } from "../lib/domain-root";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
+import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings";
 import { assertServing, isServing } from "../lib/site-state";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
@@ -192,8 +193,14 @@ async function toSiteDtos(
         keepaliveIdleSeconds: pool?.keepaliveIdleSeconds ?? 60,
         keepaliveMaxRequests: pool?.keepaliveMaxRequests ?? 1000,
         websocket: r.websocket,
+        activeHealthCheck: readActiveHealthCheck(pool?.activeHealthCheck),
+        sessionAffinity: readSessionAffinity(pool?.sessionAffinity),
       },
-      cacheSettings: { cacheKey: readCacheKey(r.cacheKey), rangeSlice: r.rangeSlice },
+      cacheSettings: {
+        cacheKey: readCacheKey(r.cacheKey),
+        rangeSlice: r.rangeSlice,
+        keepCacheTag: r.keepCacheTag,
+      },
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
@@ -412,7 +419,11 @@ async function writeOrigins(
   if (removed.length) await tx.delete(schema.origin).where(inArray(schema.origin.id, removed));
 }
 
-function poolSettingsValues(settings: OriginSettingsInput) {
+/** Pool columns of the settings; health check and affinity only when given (kept otherwise). */
+function poolSettingsValues(
+  settings: Omit<OriginSettingsInput, "activeHealthCheck" | "sessionAffinity"> &
+    Partial<Pick<OriginSettingsInput, "activeHealthCheck" | "sessionAffinity">>,
+) {
   return {
     policy: settings.policy,
     tlsVerify: settings.tlsVerify,
@@ -424,11 +435,20 @@ function poolSettingsValues(settings: OriginSettingsInput) {
     keepalive: settings.keepalive,
     keepaliveIdleSeconds: settings.keepaliveIdleSeconds,
     keepaliveMaxRequests: settings.keepaliveMaxRequests,
+    ...(settings.activeHealthCheck ? { activeHealthCheck: settings.activeHealthCheck } : {}),
+    ...(settings.sessionAffinity ? { sessionAffinity: settings.sessionAffinity } : {}),
   };
 }
 
-function cacheSettingsValues(settings: CacheSettingsInput) {
-  return { cacheKey: settings.cacheKey, rangeSlice: settings.rangeSlice };
+/** Site columns of the cache settings; keepCacheTag only when given (kept otherwise). */
+function cacheSettingsValues(
+  settings: Omit<CacheSettingsInput, "keepCacheTag"> & { keepCacheTag?: boolean },
+) {
+  return {
+    cacheKey: settings.cacheKey,
+    rangeSlice: settings.rangeSlice,
+    ...(settings.keepCacheTag !== undefined ? { keepCacheTag: settings.keepCacheTag } : {}),
+  };
 }
 
 async function insertCacheRules(tx: Tx, siteId: string, rules: CacheRuleInput[]) {

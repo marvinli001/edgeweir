@@ -82,6 +82,12 @@ import {
 } from "../services/domain-ownership";
 import { createEnrollmentToken } from "../services/enrollment";
 import {
+  getPlatformErrorPages,
+  getSiteErrorPages,
+  setPlatformErrorPages,
+  updateSiteErrorPages,
+} from "../services/error-pages";
+import {
   addMember,
   cancelInvitation,
   createInvitation,
@@ -296,6 +302,14 @@ export const router = os.router({
     ),
     topRules: tenant.waf.topRules.handler(({ input, context }) =>
       topWafRules(context.app.db, context.scope, input),
+    ),
+  },
+  errorPages: {
+    get: tenant.errorPages.get.handler(({ input, context }) =>
+      getSiteErrorPages(context.app.db, input.id, context.scope),
+    ),
+    update: tenantManager.errorPages.update.handler(({ input, context }) =>
+      updateSiteErrorPages(context.app.db, input, { scope: context.scope, actor: context.actor }),
     ),
   },
   security: {
@@ -914,6 +928,12 @@ export const router = os.router({
     waf: admin.settings.waf.handler(({ context }) => getWafSettings(context.app.db)),
     setWaf: admin.settings.setWaf.handler(({ input, context }) =>
       setWafSettings(context.app.db, input, context.actor),
+    ),
+    errorPages: admin.settings.errorPages.handler(({ context }) =>
+      getPlatformErrorPages(context.app.db),
+    ),
+    setErrorPages: admin.settings.setErrorPages.handler(({ input, context }) =>
+      setPlatformErrorPages(context.app.db, input, context.actor),
     ),
     usage: admin.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
     setUsage: admin.settings.setUsage.handler(({ input, context }) =>

@@ -1,24 +1,31 @@
 import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
+  ACTIVE_HEALTH_FEATURE,
   BROTLI_FEATURE,
   ConfigCapacityError,
   canonicalize,
   compileNodeConfig,
+  compileOfflineHosts,
+  compilePlatformErrorPages,
   compileRules,
   contentHash,
   DEFAULT_SITE_PROTECTION,
   decodeNodeConfig,
+  ERROR_PAGES_FEATURE,
   encodeNodeConfig,
   geoFeatures,
   MAX_SITES_PER_CLUSTER,
   MODSECURITY_FEATURE,
   moduleFeatures,
   nodeRequirements,
+  type OfflineHostModel,
+  poolAndPageFeatures,
   protectionFeatures,
   type RuleModel,
+  SESSION_AFFINITY_FEATURE,
   type SiteModel,
-  usesChallenges,
+  usesChallengeKeys,
   ZSTD_FEATURE,
 } from "@edgeweir/config-compiler";
 import {
@@ -43,15 +50,17 @@ import {
   SiteProtectionSchema,
 } from "@edgeweir/proto";
 import { bindLists, listReferences, type Phase, parseExpression } from "@edgeweir/rule-engine";
-import { and, asc, desc, eq, gt, inArray, lt, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lt, notInArray, or, sql } from "drizzle-orm";
 import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { CONFIG_CHANNEL } from "../lib/events";
 import { isOnline } from "../lib/node-online";
+import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settings";
 import { isServing } from "../lib/site-state";
 import { recordAudit, systemActor } from "./audit";
 import { ensureChallengeKeys } from "./challenge-keys";
+import { loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
 import { isAdminRole } from "./users";
@@ -96,6 +105,38 @@ export async function loadOriginAllowList(db: Executor): Promise<string[]> {
     return n ? [n] : [];
   });
   return [...new Set(normalized)].sort();
+}
+
+/**
+ * Verified domains of the cluster's sites that are not served (disabled, or
+ * suspended by the platform): nodes answer them with the platform's page for
+ * the reason instead of the unknown host page. Current state, also when a
+ * revision is rolled back.
+ */
+export async function loadOfflineHosts(
+  db: Executor,
+  clusterId: string,
+): Promise<OfflineHostModel[]> {
+  const rows = await db
+    .select({
+      name: schema.siteDomain.name,
+      wildcard: schema.siteDomain.wildcard,
+      suspended: schema.site.suspended,
+    })
+    .from(schema.siteDomain)
+    .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
+    .where(
+      and(
+        eq(schema.site.clusterId, clusterId),
+        eq(schema.siteDomain.verified, true),
+        or(eq(schema.site.enabled, false), eq(schema.site.suspended, true)),
+      ),
+    );
+  return rows.map((row) => ({
+    name: row.name,
+    wildcard: row.wildcard,
+    reason: row.suspended ? "suspended" : "disabled",
+  }));
 }
 
 /** Loads every site of a cluster with its domains, origins and rules. */
@@ -144,6 +185,7 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
   const lists = await db.select().from(schema.ipList);
   const protection = await loadSiteProtectionModels(db, siteIds);
   const waf = await loadSiteWafModels(db, siteIds);
+  const errorPages = await loadSiteErrorPages(db, siteIds);
   return sites
     .map((s): SiteModel => {
       const pool = pools
@@ -208,6 +250,9 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
                 keepaliveMaxRequests: pool.keepaliveMaxRequests,
               }
             : undefined,
+          // Compiled only while on; the settings are kept while off.
+          activeHealthCheck: pool ? activeHealthCheckModel(pool.activeHealthCheck) : null,
+          sessionAffinity: pool ? sessionAffinityModel(pool.sessionAffinity) : null,
         },
         cacheRules: rules
           .filter((r) => r.siteId === s.id)
@@ -231,6 +276,10 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
         cacheKey: readCacheKey(s.cacheKey),
         protection: protection.get(s.id),
         waf: waf.get(s.id) ?? null,
+        keepCacheTag: s.keepCacheTag,
+        errorPages: errorPages.has(s.id)
+          ? { pages: errorPages.get(s.id) ?? [], interceptOriginErrors: s.interceptOriginErrors }
+          : null,
         rangeSlice: s.rangeSlice,
         websocket: s.websocket,
         certificateId: s.certificateId ?? "",
@@ -530,9 +579,14 @@ export async function publishRevision(
     ipLists,
     platformRules,
     platformProtection,
+    platformErrorPages: await loadPlatformErrorPages(tx),
+    offlineHosts: await loadOfflineHosts(tx, opts.clusterId),
   };
-  // A cluster gets its challenge keys the first time its configuration uses challenges.
-  const challengeKeys = usesChallenges(input) ? await ensureChallengeKeys(tx, opts.clusterId) : [];
+  // A cluster gets its challenge keys the first time its configuration uses
+  // challenges or session affinity.
+  const challengeKeys = usesChallengeKeys(input)
+    ? await ensureChallengeKeys(tx, opts.clusterId)
+    : [];
   const build = (revision: bigint) => compileNodeConfig({ ...input, challengeKeys }, revision);
   const rollout = await loadRollout(tx, opts.clusterId);
   if (!rollout?.enabled)
@@ -766,8 +820,9 @@ function previewConfig(build: (revision: bigint) => NodeConfig): NodeConfig {
 
 /**
  * Publishes the content of an older revision as a new revision. The origin
- * allow list is platform policy, not cluster content: the new revision
- * carries the current list, not the one the old revision had.
+ * allow list, the platform's error pages and the offline hosts are platform
+ * policy and current state, not cluster content: the new revision carries
+ * the current ones, not those the old revision had.
  */
 export async function rollbackToRevision(
   tx: Tx,
@@ -898,10 +953,20 @@ export async function rollbackToRevision(
   restored.requiredFeatures.push(
     ...rules.flatMap((r) => (r.expression ? geoFeatures(r.expression) : [])),
   );
-  // Sites dropped above no longer need the modules they used.
-  const modules = [BROTLI_FEATURE, ZSTD_FEATURE, MODSECURITY_FEATURE];
-  restored.requiredFeatures = restored.requiredFeatures.filter((f) => !modules.includes(f));
-  restored.requiredFeatures.push(...moduleFeatures(restored));
+  // Sites dropped above no longer need the modules, health checks, affinity
+  // or error pages they used.
+  const siteFeatures = [
+    BROTLI_FEATURE,
+    ZSTD_FEATURE,
+    MODSECURITY_FEATURE,
+    ACTIVE_HEALTH_FEATURE,
+    SESSION_AFFINITY_FEATURE,
+    ERROR_PAGES_FEATURE,
+  ];
+  restored.requiredFeatures = restored.requiredFeatures.filter((f) => !siteFeatures.includes(f));
+  restored.requiredFeatures.push(...moduleFeatures(restored), ...poolAndPageFeatures(restored));
+  restored.platformErrorPages = compilePlatformErrorPages(await loadPlatformErrorPages(tx));
+  restored.offlineHosts = compileOfflineHosts(await loadOfflineHosts(tx, opts.clusterId));
   // Challenge tokens are short-lived issuance state, never rollback content.
   restored.httpChallenges = [];
   restored.requiredFeatures = restored.requiredFeatures.filter((f) => f !== "http01-v1");
@@ -937,7 +1002,8 @@ export async function rollbackToRevision(
 /**
  * Brings the protection of a restored configuration in line with current
  * policy: platform Under Attack and JA4 logging are current settings, and
- * challenge keys are always the cluster's current keys (older ones are gone).
+ * challenge keys are always the cluster's current keys (older ones are gone),
+ * carried whenever challenges or a restored site's session affinity use them.
  * Sites keep their restored Under Attack and CC policy.
  */
 async function restoreProtection(
@@ -956,7 +1022,8 @@ async function restoreProtection(
     platform.underAttack ||
     rules.some((rule) => rule.action?.kind === "challenge") ||
     restored.sites.some((site) => site.protection?.underAttack || site.protection?.cc?.enabled);
-  const keys = challenges ? await ensureChallengeKeys(tx, clusterId) : [];
+  const affinity = restored.sites.some((site) => site.originPool?.sessionAffinity);
+  const keys = challenges || affinity ? await ensureChallengeKeys(tx, clusterId) : [];
   restored.challengeKeys = keys.map((key) => create(ChallengeKeyRefSchema, key));
   restored.platformProtection = challenges ? create(PlatformProtectionSchema, platform) : undefined;
   for (const site of restored.sites) {

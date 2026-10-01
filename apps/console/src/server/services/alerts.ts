@@ -464,6 +464,9 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
     if (cert?.notAfter && cert.notAfter.getTime() <= now + policy.certificateHours * 3600000)
       add("certificate_expiring", cert.id);
     const originIds = origins.filter((o) => o.siteId === site.id).map((o) => o.id);
+    // Unavailable on a node: a recent entry of either check (passive or active)
+    // marks the origin down. The alert holds while some member node has every
+    // origin of the site unavailable.
     if (
       originIds.length &&
       members.some((n) =>

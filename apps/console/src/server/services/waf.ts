@@ -1,6 +1,9 @@
 import {
+  ACTIVE_HEALTH_FEATURE,
   BROTLI_FEATURE,
+  ERROR_PAGES_FEATURE,
   MODSECURITY_FEATURE,
+  SESSION_AFFINITY_FEATURE,
   type SiteWafModel,
   ZSTD_FEATURE,
 } from "@edgeweir/config-compiler";
@@ -8,6 +11,8 @@ import {
   type AnalyticsRange,
   type FeatureAvailability,
   nodeSupportsFeature,
+  PREFETCH_V2_FEATURE,
+  PURGE_TAG_FEATURE,
   type SiteFeatures,
   type SiteWaf,
   type SiteWafUpdateInput,
@@ -173,10 +178,14 @@ export async function updateSiteWaf(
 const AVAILABLE: FeatureAvailability = { available: true, reason: null };
 
 /**
- * Whether Brotli, Zstandard and CRS can be turned on for a site now: every
- * active node of its cluster must report the feature (administrators may
- * still require it through the API, as with other features), and CRS must
- * be allowed for tenants unless the caller is an administrator.
+ * Whether Brotli, Zstandard, CRS, active health checks, session affinity
+ * (which also needs challenge-v1 for its keys) and error pages can be turned
+ * on for a site now: every active node of its cluster must report the
+ * feature (administrators may still require it through the API, as with
+ * other features), and CRS must be allowed for tenants unless the caller is
+ * an administrator. purgeByTag and prefetchVariants tell whether the
+ * cluster's nodes run host and tag purges, and mobile and sitemap
+ * prefetches; nobody can create those tasks otherwise.
  */
 export async function siteFeatures(
   db: Database,
@@ -188,8 +197,8 @@ export async function siteFeatures(
     .select({ features: schema.node.supportedFeatures })
     .from(schema.node)
     .where(and(eq(schema.node.clusterId, site.clusterId), eq(schema.node.status, "active")));
-  const byNodes = (feature: string): FeatureAvailability =>
-    nodes.every((node) => nodeSupportsFeature(node.features, feature))
+  const byNodes = (...features: string[]): FeatureAvailability =>
+    nodes.every((node) => features.every((feature) => nodeSupportsFeature(node.features, feature)))
       ? AVAILABLE
       : { available: false, reason: "nodes" };
   return {
@@ -199,6 +208,11 @@ export async function siteFeatures(
       !ctx.isAdmin && !(await getWafSettings(db)).tenantCrs
         ? { available: false, reason: "platform" }
         : byNodes(MODSECURITY_FEATURE),
+    activeHealthCheck: byNodes(ACTIVE_HEALTH_FEATURE),
+    sessionAffinity: byNodes(SESSION_AFFINITY_FEATURE, "challenge-v1"),
+    errorPages: byNodes(ERROR_PAGES_FEATURE),
+    purgeByTag: byNodes(PURGE_TAG_FEATURE),
+    prefetchVariants: byNodes(PREFETCH_V2_FEATURE),
   };
 }
 

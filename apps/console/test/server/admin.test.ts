@@ -49,6 +49,8 @@ const CONSOLE_PROCEDURES = [
   "waf.get",
   "waf.update",
   "waf.topRules",
+  "errorPages.get",
+  "errorPages.update",
   "certificates.list",
   "certificates.upload",
   "certificates.request",
@@ -337,6 +339,8 @@ describe("admin area procedures", async () => {
       ],
       ["settings.waf", () => member.settings.waf()],
       ["settings.setWaf", () => member.settings.setWaf({ tenantCrs: false })],
+      ["settings.errorPages", () => member.settings.errorPages()],
+      ["settings.setErrorPages", () => member.settings.setErrorPages({ unknownHost: "<p>x</p>" })],
       ["settings.ccTemplate", () => member.settings.ccTemplate()],
       [
         "settings.setCcTemplate",

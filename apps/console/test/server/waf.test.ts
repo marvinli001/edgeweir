@@ -30,6 +30,12 @@ const ALL_FEATURES = [
   "brotli-v1",
   "zstd-v1",
   "modsecurity-v1",
+  "challenge-v1",
+  "active-health-v1",
+  "session-affinity-v1",
+  "error-pages-v1",
+  "purge-tag-v1",
+  "prefetch-v2",
 ];
 
 describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
@@ -112,6 +118,11 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       brotli: available,
       zstd: available,
       crs: available,
+      activeHealthCheck: available,
+      sessionAffinity: available,
+      errorPages: available,
+      purgeByTag: available,
+      prefetchVariants: available,
     });
     expect(await admin.settings.waf()).toEqual({ tenantCrs: true });
     const https = await member.https.get({ id: siteId });
@@ -273,6 +284,11 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       brotli: unavailable,
       zstd: unavailable,
       crs: unavailable,
+      activeHealthCheck: unavailable,
+      sessionAffinity: unavailable,
+      errorPages: unavailable,
+      purgeByTag: unavailable,
+      prefetchVariants: unavailable,
     });
     // Administrators see the same reason; the API still lets them override.
     expect((await admin.sites.features({ id: siteId })).crs).toEqual(unavailable);

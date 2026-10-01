@@ -10,7 +10,20 @@ const PUBLIC_OPERATIONS = [
   "invitations.accept",
 ];
 
-type Operation = { operationId: string; security?: Record<string, string[]>[] };
+type Schema = {
+  enum?: unknown[];
+  properties?: Record<string, Schema>;
+  items?: Schema;
+  default?: unknown;
+  maximum?: number;
+  maxItems?: number;
+};
+type Operation = {
+  operationId: string;
+  security?: Record<string, string[]>[];
+  parameters?: { name: string; in: string }[];
+  requestBody?: { content: Record<string, { schema: Schema }> };
+};
 type Spec = {
   security?: Record<string, string[]>[];
   paths: Record<string, Record<string, Operation>>;
@@ -39,6 +52,48 @@ describe("OpenAPI security requirements", async () => {
         expect(op.security, op.operationId).toBeUndefined();
       }
     }
+  });
+
+  it("documents the error page routes, the new cache task inputs and the request id filter", () => {
+    const routes = operations.map(({ path, method, op }) => `${method} ${path} ${op.operationId}`);
+    expect(routes).toEqual(
+      expect.arrayContaining([
+        "get /sites/{id}/error-pages errorPages.get",
+        "put /sites/{id}/error-pages errorPages.update",
+        "get /settings/error-pages settings.errorPages",
+        "put /settings/error-pages settings.setErrorPages",
+      ]),
+    );
+    const body = (path: string, method: string) =>
+      spec.paths[path]?.[method]?.requestBody?.content["application/json"]?.schema;
+    const task = body("/cache-tasks", "post")?.properties ?? {};
+    expect(task.type?.enum).toEqual([
+      "url",
+      "prefix",
+      "site",
+      "prefetch",
+      "host",
+      "tag",
+      "sitemap",
+    ]);
+    expect(task.hosts?.maxItems).toBe(500);
+    expect(task.tags?.maxItems).toBe(500);
+    expect(task.variants).toMatchObject({
+      default: ["desktop"],
+      items: { enum: ["desktop", "mobile"] },
+    });
+    expect(task.maxUrls).toMatchObject({ default: 1000, maximum: 10000 });
+    expect(
+      body("/sites/{id}/error-pages", "put")?.properties?.pages?.items?.properties?.status?.enum,
+    ).toEqual([403, 429, 502, 503, 504]);
+    expect(Object.keys(body("/settings/error-pages", "put")?.properties ?? {})).toEqual([
+      "unknownHost",
+      "siteDisabled",
+      "siteSuspended",
+    ]);
+    expect(
+      spec.paths["/sites/{siteId}/logs"]?.get?.parameters?.map((parameter) => parameter.name),
+    ).toContain("requestId");
   });
 
   it("matches what the API enforces without credentials", async () => {

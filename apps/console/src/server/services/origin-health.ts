@@ -1,4 +1,4 @@
-import type { OriginHealth } from "@edgeweir/contract";
+import type { OriginHealth, OriginHealthSource } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, eq, gt, inArray } from "drizzle-orm";
 import { cleanErrorCode, cleanErrorParams, originError } from "../lib/node-errors";
@@ -9,6 +9,8 @@ import { findSite, type SiteScope } from "./sites";
 export interface ReportedOriginHealth {
   siteId: string;
   originId: string;
+  /** The check that produced the entry; nodes before v0.12.0 only report passive ones. */
+  source?: OriginHealthSource;
   healthy: boolean;
   consecutiveFailures: number;
   lastError: string;
@@ -22,9 +24,11 @@ export interface ReportedOriginHealth {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Replaces the origin health a node reported. Nodes only list origins that
- * failed recently; everything else counts as healthy. Entries for origins
- * outside the node's cluster (or already deleted) are dropped.
+ * Replaces the origin health a node reported, one entry per origin and check
+ * (passive, active). Nodes only list origins that failed recently; everything
+ * else counts as healthy. Entries for origins outside the node's cluster (or
+ * already deleted) are dropped, and only the first entry per origin and
+ * check is kept.
  */
 export async function replaceOriginHealth(
   tx: Executor,
@@ -45,13 +49,16 @@ export async function replaceOriginHealth(
   const seen = new Set<string>();
   const values = reports.flatMap((r) => {
     const siteId = siteOf.get(r.originId);
-    if (!siteId || seen.has(r.originId)) return [];
-    seen.add(r.originId);
+    const source = r.source ?? "passive";
+    const key = `${r.originId}/${source}`;
+    if (!siteId || seen.has(key)) return [];
+    seen.add(key);
     return [
       {
         nodeId: node.id,
         originId: r.originId,
         siteId,
+        source,
         healthy: r.healthy,
         consecutiveFailures: r.consecutiveFailures,
         lastError: r.lastError.slice(0, 500),
@@ -69,7 +76,8 @@ export async function replaceOriginHealth(
 
 /**
  * Health of a site's origins across the online nodes of its cluster. An
- * origin is down on a node while that node's latest report marks it down.
+ * origin is down on a node while that node's latest report marks it down in
+ * either check (passive or active): downNodes counts each such node once.
  */
 export async function siteOriginHealth(
   db: Database,
@@ -103,20 +111,28 @@ export async function siteOriginHealth(
       .sort((a, b) => (b.lastFailureAt?.getTime() ?? 0) - (a.lastFailureAt?.getTime() ?? 0))[0];
     return {
       originId: o.id,
-      downNodes: rows.filter((r) => !r.healthy).length,
+      downNodes: new Set(rows.filter((r) => !r.healthy).map((r) => r.nodeId)).size,
       onlineNodes: onlineNodes.length,
       ...error(last),
       lastFailureAt: last?.lastFailureAt?.toISOString() ?? null,
-      nodes: rows.map((r) => ({
-        nodeId: r.nodeId,
-        nodeName: online.get(r.nodeId) ?? "",
-        healthy: r.healthy,
-        consecutiveFailures: r.consecutiveFailures,
-        ...error(r),
-        lastFailureAt: r.lastFailureAt?.toISOString() ?? null,
-        downUntil: r.downUntil?.toISOString() ?? null,
-        reportedAt: r.reportedAt.toISOString(),
-      })),
+      nodes: rows
+        .sort(
+          (a, b) =>
+            (online.get(a.nodeId) ?? "").localeCompare(online.get(b.nodeId) ?? "") ||
+            a.nodeId.localeCompare(b.nodeId) ||
+            a.source.localeCompare(b.source),
+        )
+        .map((r) => ({
+          nodeId: r.nodeId,
+          nodeName: online.get(r.nodeId) ?? "",
+          source: r.source === "active" ? ("active" as const) : ("passive" as const),
+          healthy: r.healthy,
+          consecutiveFailures: r.consecutiveFailures,
+          ...error(r),
+          lastFailureAt: r.lastFailureAt?.toISOString() ?? null,
+          downUntil: r.downUntil?.toISOString() ?? null,
+          reportedAt: r.reportedAt.toISOString(),
+        })),
     };
   });
 }
