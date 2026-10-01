@@ -346,9 +346,10 @@ A site's table of exact-match redirects: each entry redirects one source to one 
 | Item | Behavior |
 | --- | --- |
 | Name | All lists share one namespace and names are unique; a name cannot change after creation; saving rules binds names to list IDs |
-| References | Any site rule, global rule, or cache rule condition can reference any list, block and allow lists included |
+| References | Any site rule, global rule, or cache rule condition can reference any list, block and allow lists included; the **Allow lists** and **Block lists** of [L4 apps](l4.en.md#ip-lists-and-connection-limits) can use any list as well |
+| L4 apps | The **Block** and **Allow** actions apply to sites only; L4 apps check only the lists they selected |
 | Changes | Entries and **Action** can change at any time; creating, changing, or deleting a list publishes a new revision to every cluster ("Rules and IP lists updated"); nodes apply it without reload |
-| Deletion | A list referenced by a rule or a cache rule condition cannot be deleted ("IP list is used by a rule") |
+| Deletion | A list referenced by a rule, a cache rule condition, or an L4 app cannot be deleted ("IP list is used by a rule or an L4 application") |
 | Entries | IPv4 / IPv6 addresses or CIDRs; host bits cleared, deduplicated, sorted; leading zeros and zone IDs refused |
 | Quota | Up to 128 lists and 50,000 entries in total; up to 10,000 entries per list; a change that does not add entries always saves |
 | Rollback | Site configuration rollbacks keep the current lists and global rules; a rollback that references a deleted list is refused |
@@ -444,7 +445,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | "Some nodes of the site's cluster do not support the rule extensions yet" | An active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | "IP list not found" | The referenced list does not exist | Create the list in **IP lists** first, or fix the name |
 | "IP list name already exists" | A list with that name exists | Use another name |
-| "IP list is used by a rule" | Deleting a list still referenced by a rule | Remove the reference from the rules first |
+| "IP list is used by a rule or an L4 application" | Deleting a list still referenced by a rule, a cache rule condition, or an L4 app | Remove the reference from the rules and L4 apps first |
 | "IP list limit reached (128 lists, 50,000 entries)" | Over quota | Merge or delete lists |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (`rules-v1`, `rules-v2`, a GeoIP capability, and so on) and keeps its last-known-good configuration | Upgrade the node or configure the GeoIP databases |
 | "Cluster nodes need these capabilities first: …" | A configuration published by a service account or a background job needs `rules-v1`, `rules-v2`, or a GeoIP capability that an active node of the cluster lacks | Upgrade the nodes or configure the GeoIP databases |

@@ -84,7 +84,7 @@ A node bans a single address on a trigger (the per-IP QPS of CC mitigation, see 
 
 ## Kernel bans
 
-The node agent also writes global bans into nftables, which drops the banned addresses' packets in the kernel: a banned client cannot even complete the TCP and TLS handshakes. Site bans apply at the HTTP layer only.
+The node agent also writes global bans into nftables, which drops the banned addresses' packets in the kernel: a banned client cannot even complete the TCP and TLS handshakes. Site bans apply at the HTTP layer only. [L4 apps](l4.en.md#ip-lists-and-connection-limits) are subject to kernel bans only: site bans and HTTP-layer bans do not reach layer-4 traffic.
 
 | Item | Behavior |
 | --- | --- |
