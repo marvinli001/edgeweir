@@ -6,6 +6,7 @@ import {
   jsonb,
   pgTable,
   text,
+  timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -43,4 +44,26 @@ export const ipList = pgTable(
     uniqueIndex("ip_list_org_name_uq").on(t.organizationId, t.name),
     uniqueIndex("ip_list_platform_name_uq").on(t.name).where(sql`${t.organizationId} is null`),
   ],
+);
+
+/**
+ * A site's exact-match redirect table (contract bulkRedirects), at most 5000
+ * entries in the order they were saved; sources unique per site.
+ */
+export const bulkRedirect = pgTable(
+  "bulk_redirect",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    /** "/path" or "host/path". */
+    source: text("source").notNull(),
+    target: text("target").notNull(),
+    statusCode: integer("status_code").notNull().default(301),
+    preserveQuery: boolean("preserve_query").notNull().default(false),
+    position: integer("position").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("bulk_redirect_site_source_uq").on(t.siteId, t.source)],
 );
