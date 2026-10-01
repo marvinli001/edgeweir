@@ -344,6 +344,16 @@ Changes are audited as `system.protection_update`. Platform Under Attack needs t
 
 Saving publishes nothing; changes are audited as `system.waf_update`. See [OWASP CRS managed rules](waf.en.md).
 
+### Platform error pages
+
+| Field | Requests it applies to | Notes |
+| --- | --- | --- |
+| **Unknown host** | The Host belongs to no site of the cluster | Status 404; empty uses the built-in page |
+| **Site disabled** | Verified domains of disabled sites | Status 503 |
+| **Site suspended** | Verified domains of sites the platform suspended | Status 503 |
+
+Each template is at most 65536 bytes (UTF-8); the values of the placeholders `{{status}}`, `{{request_id}}`, `{{client_ip}}` and `{{host}}` are HTML-escaped. Saving publishes one revision in every cluster ("Platform error pages updated") and is audited as `system.error_pages_update`. Older nodes ignore platform error pages. See [Error pages](error-pages.en.md#platform-error-pages).
+
 ### CC template
 
 Thresholds for sites whose CC mitigation follows the platform template: highest level, high proof of work instead of the captcha, window, site QPS, per-URL QPS, per-IP QPS, IP ban duration, origin error rate, minimum origin requests, escalate after, step down after. Fields, ranges, and defaults: [CC mitigation](challenges.en.md#cc-mitigation). Saving publishes a configuration revision to every cluster with a following site; changes are audited as `system.cc_template_update`.

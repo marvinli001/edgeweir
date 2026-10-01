@@ -69,14 +69,15 @@ Access logs need the node capability `access-logs-v1`, and JA4 also `ja4-v1`. A 
 
 ## Search and export logs
 
-1. On the **Logs** tab, enter **From** and **To**, and optionally **Status**, **Client IP**, and **Path prefix**.
+1. On the **Logs** tab, enter **From** and **To**, and optionally **Status**, **Client IP**, **Path prefix**, and **Request ID**.
 2. Click **Search**.
 3. For a file, click **Export CSV**.
 
 | Item | Behavior |
 | --- | --- |
 | Time range | Defaults to the last hour; the earliest is UTC midnight 6 days ago and the latest 5 minutes from now; the end must be after the start |
-| Filters | Status: exact; client IP: exact; path: prefix |
+| Filters | Status: exact; client IP: exact; path: prefix; request ID: exact |
+| Request ID | Each entry shows the request ID the node settled (the same as the `X-Request-Id` response header and the one on [error pages](error-pages.en.md#request-ids)), in the CSV as the `requestId` column; empty for logs of older nodes |
 | Rows | The UI shows at most 100 rows ("Showing the first 100 rows. Narrow your search."); CSV holds at most 1,000 rows ("Exported the first 1,000 rows. Narrow the time range for other records.") |
 | CSV | Every cell is quoted with quotes escaped; values starting with `=`, `+`, `-`, or `@` get a leading `'` so spreadsheets do not treat them as formulas |
 | Permissions | Follow site ownership; tenants cannot query other organizations' sites |
