@@ -204,8 +204,7 @@ async function session(client, host, port) {
   let pending = "";
   child.stdout.on("data", (d) => {
     pending += d;
-    let i;
-    while ((i = pending.indexOf("\n")) >= 0) {
+    for (let i = pending.indexOf("\n"); i >= 0; i = pending.indexOf("\n")) {
       lines.push(JSON.parse(pending.slice(0, i)));
       pending = pending.slice(i + 1);
     }
