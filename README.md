@@ -21,6 +21,7 @@
 | 托管规则 | OWASP CRS：仅检测或拦截、paranoia level、异常分数阈值、按规则 ID 排除、请求体检查上限；命中规则的统计与访问日志 |
 | 挑战与 CC 防护 | Cookie 跳转、JS 计算、工作量证明、图片验证码四级挑战；网站或全局 Under Attack；节点本地分级 CC 自动升级（站点、单 URL、单 IP 自动封禁、源站错误率）；集群内通用的签名通行凭证；JA4 指纹用于规则、限速与访问日志 |
 | DNS 与观测 | 独立 DNS 版本、健康节点调度、流量统计去重与汇总、Top URL / IP、告警与订阅 |
+| 智能调度 | 区域探针（TCP / HTTP / HTTPS 健康端点）、节点主机指标；调度规则按节点指标与探测结果摘除节点、切换到备用节点组或备用 IP，带预览；运营商解析线路（DNSPod、腾讯云、阿里云、华为云）、备用节点组、多级备用 IP |
 | 运维 | 采样访问日志与 CSV 导出、可选 ClickHouse、只读及可吊销 AccessKey、签名灰度升级与回滚、性能基线、备份恢复 |
 
 ## 架构
@@ -202,7 +203,7 @@ pnpm e2e     # --up 启动环境；--down 结束后删除环境与卷；--skip-u
 - G3 步骤：G3 之前的节点镜像 `edgeweir-node:pre-g3`（`E2E_OLD_NODE_IMAGE`，缺少时由 `scripts/e2e-g3.mjs` 从 edgeweir-node 提交 `6da3403` 构建）
 - 网络访问：deb.debian.org、openresty.org；首次构建节点镜像或 edgeweir-openresty 包时另需 github.com、download.gnome.org、vault.almalinux.org
 
-覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 管理与 api-key 端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、动态封禁（下发延迟 p95 ≤ 5 秒、站点封禁、全局封禁由 nftables 丢包）、挑战与通行凭证（无头浏览器通过 js 与 pow 挑战，凭证在另一节点有效，换网段、换 UA 或伪造后失效）、分级 CC（只升级被攻击的路径、单 IP 自动封禁）、JA4 参与规则匹配、Brotli / Zstandard 按 q 值协商（缓存一份未压缩对象，`curl --compressed` 解码）、OWASP CRS 检测与拦截（含缓存命中）、旧节点所在集群无法开启这些功能、edgeweir-openresty 包内容、按 Cache-Tag 与 Host 刷新（含过期内容与分片）、按设备与站点地图预热、主动健康检查摘除与恢复、会话保持与故障切换、网站与平台错误页（转义、no-store、请求 ID）、动态重定向与改写及查询参数编辑（无效目标失败关闭）、批量重定向的热更新、源站覆盖规则与回源超时、表达式缓存规则与浏览器 TTL、压缩规则与不绕过缓存的 `gzip=false`、按规则开关 Under Attack、WebSocket 与日志采样、Playwright 页面流程。
+覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 管理与 api-key 端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、动态封禁（下发延迟 p95 ≤ 5 秒、站点封禁、全局封禁由 nftables 丢包）、挑战与通行凭证（无头浏览器通过 js 与 pow 挑战，凭证在另一节点有效，换网段、换 UA 或伪造后失效）、分级 CC（只升级被攻击的路径、单 IP 自动封禁）、JA4 参与规则匹配、Brotli / Zstandard 按 q 值协商（缓存一份未压缩对象，`curl --compressed` 解码）、OWASP CRS 检测与拦截（含缓存命中）、旧节点所在集群无法开启这些功能、edgeweir-openresty 包内容、按 Cache-Tag 与 Host 刷新（含过期内容与分片）、按设备与站点地图预热、主动健康检查摘除与恢复、会话保持与故障切换、网站与平台错误页（转义、no-store、请求 ID）、动态重定向与改写及查询参数编辑（无效目标失败关闭）、批量重定向的热更新、源站覆盖规则与回源超时、表达式缓存规则与浏览器 TTL、压缩规则与不绕过缓存的 `gzip=false`、按规则开关 Under Attack、WebSocket 与日志采样、区域探针（两个探针容器以一次性令牌注册，节点以自身证书兼任探针）、多数探针到不了主地址时切换到备用地址、限定区域的调度规则摘除节点与线路切换到备用节点组、按解析线路写入的记录、Playwright 页面流程。
 
 以下变量由 `compose.e2e.yml` 与 `scripts/e2e.sh` 共同读取，两侧取值须一致。更换项目名、端口、tag 与子网即可并行运行第二套环境。
 
@@ -243,7 +244,7 @@ doc/                       文档站（Fumadocs），发布至 GitHub Pages
 | 分类 | 文档 |
 | --- | --- |
 | 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
-| 使用 | [快速上手](docs/guide/first-site.md) · [账户与登录](docs/guide/account.md) · [集群与系统](docs/guide/system.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 调度与告警](docs/guide/dns-and-alerts.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
+| 使用 | [快速上手](docs/guide/first-site.md) · [账户与登录](docs/guide/account.md) · [集群与系统](docs/guide/system.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 调度与告警](docs/guide/dns-and-alerts.md) · [区域探针与智能调度](docs/guide/scheduling.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
 | 参考 | [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [API 与端点](docs/reference/api.md) |
 | 项目 | [架构](ARCHITECTURE.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |
 
