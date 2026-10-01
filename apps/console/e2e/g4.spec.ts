@@ -97,6 +97,20 @@ async function submitTask(page: Page, type: string, field: Locator): Promise<Loc
   return task;
 }
 
+/**
+ * Clicks a save button and waits for its RPC to answer: the button turns
+ * disabled while the mutation is still pending, so a reload right after the
+ * click could read the old value.
+ */
+async function saved(page: Page, save: Locator, procedure: string) {
+  const answered = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/rpc/${procedure}`) && response.request().method() === "POST",
+  );
+  await save.click();
+  expect((await answered).ok()).toBe(true);
+}
+
 test("G4: purges by host and Cache-Tag, device variant prefetches and a sitemap reach every node", async ({
   page,
 }) => {
@@ -207,7 +221,7 @@ test("G4: the cache tab forwards Cache-Tag to clients and back", async ({ page }
   await expect(save).toBeDisabled();
   await keep.click();
   await expect(save).toBeEnabled();
-  await save.click();
+  await saved(page, save, "sites/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(keep).toHaveAttribute("aria-checked", "true");
@@ -216,7 +230,7 @@ test("G4: the cache tab forwards Cache-Tag to clients and back", async ({ page }
   await check(page, "cache-tag");
 
   await keep.click();
-  await save.click();
+  await saved(page, save, "sites/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(keep).toHaveAttribute("aria-checked", "false");
@@ -373,7 +387,7 @@ test("G4: the operator sets and clears the platform error pages", async ({ page 
   for (const id of Object.keys(pages)) await expect(card.getByTestId(id)).toHaveValue("");
   await expect(save).toBeDisabled();
   for (const [id, template] of Object.entries(pages)) await card.getByTestId(id).fill(template);
-  await save.click();
+  await saved(page, save, "settings/setErrorPages");
   await expect(save).toBeDisabled();
   await page.reload();
   for (const [id, template] of Object.entries(pages))
@@ -381,7 +395,7 @@ test("G4: the operator sets and clears the platform error pages", async ({ page 
   await check(page, "platform-pages");
 
   for (const id of Object.keys(pages)) await card.getByTestId(id).fill("");
-  await save.click();
+  await saved(page, save, "settings/setErrorPages");
   await expect(save).toBeDisabled();
   await page.reload();
   for (const id of Object.keys(pages)) await expect(card.getByTestId(id)).toHaveValue("");

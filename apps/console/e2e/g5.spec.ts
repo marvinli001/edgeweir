@@ -74,10 +74,27 @@ const phaseRules = (page: Page, phase: string) =>
   page.getByTestId(`rules-phase-${phase}`).getByTestId("rule-row");
 
 /** Saves the rules editor and waits for the saved state. */
+/**
+ * Clicks a save button and waits for its RPC to answer: the button turns
+ * disabled while the mutation is still pending, so a reload right after the
+ * click could read the old value.
+ */
+async function saved(page: Page, save: Locator, procedure: string | RegExp) {
+  const answered = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      (typeof procedure === "string"
+        ? response.url().includes(`/rpc/${procedure}`)
+        : procedure.test(response.url())),
+  );
+  await save.click();
+  expect((await answered).ok()).toBe(true);
+}
+
 async function saveRules(page: Page) {
   const save = page.getByTestId("rules-save");
   await expect(save).toBeEnabled();
-  await save.click();
+  await saved(page, save, /\/rpc\/(rules|platformRules)\/save/);
   await expect(save).toBeDisabled();
   await expect(page.getByTestId("site-save-error")).toHaveCount(0);
 }
@@ -336,7 +353,7 @@ test("G5: bulk redirects are added, imported, saved and removed", async ({ page 
   await page.getByTestId("bulk-redirects-import-submit").click();
   await expect(lines).toHaveCount(0);
   await expect(count).toHaveText(`${before + 3} / 5,000`);
-  await save.click();
+  await saved(page, save, "bulkRedirects/save");
   await expect(save).toBeDisabled();
   await expect(page.getByTestId("site-save-error")).toHaveCount(0);
 
@@ -358,7 +375,7 @@ test("G5: bulk redirects are added, imported, saved and removed", async ({ page 
   // Leave the table as the script left it.
   while (await rows.count())
     await rows.first().getByRole("button", { name: "移除", exact: true }).click();
-  await save.click();
+  await saved(page, save, "bulkRedirects/save");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(count).toHaveText(`${before} / 5,000`);
@@ -409,7 +426,7 @@ test("G5: the cache tab keeps expression rules in advanced mode with their brows
 
   await expression.getByTestId("cache-rule-browser-ttl").fill("300");
   await built.getByTestId("cache-rule-extensions").fill("css, JS");
-  await save.click();
+  await saved(page, save, "sites/update");
   await expect(save).toBeDisabled();
   await expect(page.getByTestId("site-save-error")).toHaveCount(0);
   await page.reload();
@@ -428,7 +445,7 @@ test("G5: the cache tab keeps expression rules in advanced mode with their brows
   // Back to the script's rules.
   await expression.getByTestId("cache-rule-browser-ttl").fill("120");
   await built.getByTestId("cache-rule-extensions").fill("");
-  await save.click();
+  await saved(page, save, "sites/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(expression.getByTestId("cache-rule-browser-ttl")).toHaveValue("120");
@@ -472,7 +489,7 @@ test("G5: the origins tab edits origin groups and keeps the default group and us
   await rows.nth(2).getByTestId("origin-address").fill("g4-origin-b");
   await rows.nth(2).getByTestId("origin-port").fill("8080");
   await rows.nth(2).getByTestId("origin-group").fill("spare");
-  await save.click();
+  await saved(page, save, "sites/update");
   await expect(save).toBeDisabled();
   await expect(page.getByTestId("site-save-error")).toHaveCount(0);
   await page.reload();
@@ -482,7 +499,7 @@ test("G5: the origins tab edits origin groups and keeps the default group and us
   await check(page, "origins");
 
   await rows.nth(2).getByRole("button", { name: "移除", exact: true }).click();
-  await save.click();
+  await saved(page, save, "sites/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(rows).toHaveCount(2);
