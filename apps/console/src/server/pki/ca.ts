@@ -15,6 +15,8 @@ export const NODE_CERT_LIFETIME_DAYS = 30;
 /** Node channel server certificate; the listener reissues it in-process before expiry. */
 export const SERVER_CERT_LIFETIME_DAYS = 90;
 const DAY = 24 * 3600 * 1000;
+/** Certificates are valid from this long before issue, for peers whose clocks run behind. */
+export const CLOCK_SKEW_MS = 3600 * 1000;
 
 export interface IssuedCertificate {
   certificatePem: string;
@@ -58,7 +60,7 @@ export async function generateCa(commonName: string): Promise<CaMaterial> {
   const cert = await x509.X509CertificateGenerator.createSelfSigned({
     serialNumber: randomSerial(),
     name: `CN=${commonName}, O=Edgeweir`,
-    notBefore: new Date(now.getTime() - 5 * 60 * 1000),
+    notBefore: new Date(now.getTime() - CLOCK_SKEW_MS),
     notAfter: new Date(now.getTime() + 3650 * DAY),
     keys,
     signingAlgorithm: SIGNING_ALG,
@@ -124,7 +126,7 @@ export class CertificateAuthority {
       serialNumber: randomSerial(),
       subject: `CN=${nodeId}, O=Edgeweir Node`,
       issuer: this.certificate.subject,
-      notBefore: new Date(now - 5 * 60 * 1000),
+      notBefore: new Date(now - CLOCK_SKEW_MS),
       notAfter,
       signingAlgorithm: SIGNING_ALG,
       publicKey: csr.publicKey,
@@ -160,7 +162,7 @@ export class CertificateAuthority {
       serialNumber: randomSerial(),
       subject: "CN=edgeweir-node-api, O=Edgeweir",
       issuer: this.certificate.subject,
-      notBefore: new Date(now - 5 * 60 * 1000),
+      notBefore: new Date(now - CLOCK_SKEW_MS),
       notAfter: new Date(now + SERVER_CERT_LIFETIME_DAYS * DAY),
       signingAlgorithm: SIGNING_ALG,
       publicKey: keys.publicKey,

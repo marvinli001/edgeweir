@@ -165,7 +165,8 @@ export async function updateNode(
 
 /**
  * Disables or re-enables a node. A disabled node is refused by the node
- * channel (it keeps serving its last-known-good configuration) until enabled;
+ * channel (it keeps serving its last-known-good configuration) until enabled,
+ * except for certificate renewal, so it still has a valid one by then;
  * its unfinished cache task deliveries are marked skipped, and the purges it
  * missed are made up with whole-site purges once it pulls tasks again.
  */
@@ -198,15 +199,26 @@ export async function setNodeStatus(
 export async function deleteNode(db: Database, id: string, actor: Actor): Promise<void> {
   await db.transaction(async (tx) => {
     const row = await findNode(tx, id);
-    if (row.certSerial) {
+    // Also the certificate a renewal replaced, still accepted until the node used the new one.
+    const serials = [
+      ...(row.certSerial
+        ? [{ serial: row.certSerial, fingerprintSha256: row.certFingerprint }]
+        : []),
+      ...(row.previousCertSerial
+        ? [{ serial: row.previousCertSerial, fingerprintSha256: "" }]
+        : []),
+    ];
+    if (serials.length) {
       await tx
         .insert(schema.nodeCertificateRevocation)
-        .values({
-          serial: normalizeSerial(row.certSerial),
-          nodeId: row.id,
-          fingerprintSha256: row.certFingerprint ?? "",
-          reason: "node deleted",
-        })
+        .values(
+          serials.map((s) => ({
+            serial: normalizeSerial(s.serial),
+            nodeId: row.id,
+            fingerprintSha256: s.fingerprintSha256 ?? "",
+            reason: "node deleted",
+          })),
+        )
         .onConflictDoNothing();
     }
     await tx.delete(schema.node).where(eq(schema.node.id, id));
@@ -260,6 +272,20 @@ export async function replaceReportedAddresses(
 /** Canonical form of a certificate serial for comparisons (hex, no colons or leading zeros). */
 export function normalizeSerial(serial: string | null | undefined): string {
   return (serial ?? "").toLowerCase().replace(/:/g, "").replace(/^0+/, "");
+}
+
+/**
+ * Which of a node's certificates a client certificate serial is: the current
+ * one, the one a renewal replaced (until the node uses the new one), or null.
+ */
+export function acceptedCertificate(
+  node: { certSerial: string | null; previousCertSerial: string | null },
+  serial: string | undefined,
+): "current" | "previous" | null {
+  const key = normalizeSerial(serial);
+  if (!key) return null;
+  if (key === normalizeSerial(node.certSerial)) return "current";
+  return key === normalizeSerial(node.previousCertSerial) ? "previous" : null;
 }
 
 export async function isSerialRevoked(db: Executor, serial: string | undefined): Promise<boolean> {

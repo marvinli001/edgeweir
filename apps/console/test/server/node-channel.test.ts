@@ -30,7 +30,12 @@ import { logsCsv, queryLogs } from "../../src/server/services/access-logs";
 import { createCacheTask, getCacheTask } from "../../src/server/services/cache-tasks";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
-import { deleteNode, listNodes, setNodeStatus } from "../../src/server/services/nodes";
+import {
+  deleteNode,
+  listNodes,
+  normalizeSerial,
+  setNodeStatus,
+} from "../../src/server/services/nodes";
 import { siteOriginHealth } from "../../src/server/services/origin-health";
 import { latestRevision } from "../../src/server/services/revisions";
 import { saveRules } from "../../src/server/services/rules";
@@ -291,11 +296,46 @@ describe("node channel", async () => {
     await heartbeat(["::/0", "127.0.0.1"]);
     expect(await addressesNow()).toEqual(["192.0.2.11", "2001:db8::5"]);
 
-    // Certificate rotation supersedes the old certificate.
+    // Certificate rotation: the old certificate is accepted until the node uses the new one.
+    const clientFor = (certificatePem: string, key: string) =>
+      createClient(
+        NodeService,
+        createConnectTransport({
+          baseUrl,
+          httpVersion: "2",
+          nodeOptions: {
+            ca: enrolled.caCertificatePem,
+            cert: certificatePem,
+            key,
+            servername: "localhost",
+          },
+        }),
+      );
     const rotated = await nodeKeyAndCsr();
     const renewed = await mtls.renewCertificate({ csrPem: rotated.csrPem });
-    expect(new x509.X509Certificate(renewed.certificatePem).subject).toContain(enrolled.nodeId);
-    await expect(mtls.getConfig({})).rejects.toMatchObject({ code: Code.Unauthenticated });
+    const issued = new x509.X509Certificate(renewed.certificatePem);
+    expect(issued.subject).toContain(enrolled.nodeId);
+    // Valid from an hour back, for nodes whose clock runs behind.
+    expect(Date.now() - issued.notBefore.getTime()).toBeGreaterThan(59 * 60_000);
+    expect((await mtls.getConfig({})).payload.case).toBe("snapshot");
+    // The node could not install it (clock, lost response, disk) and renews again.
+    const retried = await nodeKeyAndCsr();
+    const second = await mtls.renewCertificate({ csrPem: retried.csrPem });
+    const lost = clientFor(renewed.certificatePem, rotated.keyPem);
+    const refusedLost = await lost.getConfig({}).catch((e: unknown) => e);
+    expect(refusedLost).toMatchObject({ code: Code.Unauthenticated });
+    expect((refusedLost as ConnectError).rawMessage).toContain("superseded");
+    expect((await mtls.getConfig({})).payload.case).toBe("snapshot");
+    // The first request with the new certificate retires the old one.
+    const installed = clientFor(second.certificatePem, retried.keyPem);
+    expect((await installed.getConfig({})).payload.case).toBe("snapshot");
+    const refusedOld = await mtls.getConfig({}).catch((e: unknown) => e);
+    expect(refusedOld).toMatchObject({ code: Code.Unauthenticated });
+    expect((refusedOld as ConnectError).rawMessage).toContain("superseded");
+    await expect(installed.renewCertificate({ csrPem: "garbage" })).rejects.toMatchObject({
+      code: Code.InvalidArgument,
+    });
+    expect((await installed.getConfig({})).payload.case).toBe("snapshot");
 
     const audit = await ctx.db
       .select({ action: schema.auditLog.action })
@@ -353,17 +393,49 @@ describe("node channel", async () => {
     await expect(iterator.next()).rejects.toMatchObject({ code: Code.PermissionDenied });
     await expect(mtls.getConfig({})).rejects.toMatchObject({ code: Code.PermissionDenied });
 
-    await setNodeStatus(ctx.db, enrolled.nodeId, "active", actor);
-    expect((await mtls.getConfig({})).payload.case).toBe("snapshot");
+    // A disabled node still renews its certificate, so it is valid once the node is enabled.
+    const renewal = await nodeKeyAndCsr();
+    const renewed = await mtls.renewCertificate({ csrPem: renewal.csrPem });
+    const fresh = createClient(
+      NodeService,
+      createConnectTransport({
+        baseUrl,
+        httpVersion: "2",
+        nodeOptions: {
+          ca: enrolled.caCertificatePem,
+          cert: renewed.certificatePem,
+          key: renewal.keyPem,
+          servername: "localhost",
+        },
+      }),
+    );
+    await expect(fresh.getConfig({})).rejects.toMatchObject({ code: Code.PermissionDenied });
 
-    // Deleting revokes the certificate: the agent can no longer reconnect.
+    await setNodeStatus(ctx.db, enrolled.nodeId, "active", actor);
+    expect((await fresh.getConfig({})).payload.case).toBe("snapshot");
+    // The renewal is not used yet by `mtls`: renew once more so both serials are on the row.
+    const pending = await nodeKeyAndCsr();
+    await fresh.renewCertificate({ csrPem: pending.csrPem });
+    expect((await fresh.getConfig({})).payload.case).toBe("snapshot");
+
+    // Deleting revokes the certificates: the agent can no longer reconnect.
+    const [before] = await ctx.db
+      .select()
+      .from(schema.node)
+      .where(eq(schema.node.id, enrolled.nodeId));
     await deleteNode(ctx.db, enrolled.nodeId, actor);
-    const [revoked] = await ctx.db
+    const revoked = await ctx.db
       .select()
       .from(schema.nodeCertificateRevocation)
       .where(eq(schema.nodeCertificateRevocation.nodeId, enrolled.nodeId));
-    expect(revoked?.fingerprintSha256).toBe(row?.certFingerprint);
-    const refused = await mtls.getConfig({}).catch((e: unknown) => e);
+    expect(revoked.map((r) => r.serial).sort()).toEqual(
+      [before?.certSerial, before?.previousCertSerial].map((s) => normalizeSerial(s)).sort(),
+    );
+    expect(
+      revoked.find((r) => r.serial === normalizeSerial(before?.certSerial))?.fingerprintSha256,
+    ).toBe(before?.certFingerprint);
+    expect(row?.certFingerprint).not.toBe(before?.certFingerprint);
+    const refused = await fresh.getConfig({}).catch((e: unknown) => e);
     expect(refused).toBeInstanceOf(ConnectError);
     expect((refused as ConnectError).code).toBe(Code.Unauthenticated);
     expect((refused as ConnectError).rawMessage).toContain("revoked");

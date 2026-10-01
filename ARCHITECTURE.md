@@ -226,7 +226,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | --- | --- |
 | 内部 CA | ECDSA P-256，有效期 10 年，首次启动生成；私钥信封加密后存入 `pki_authority` |
 | 服务端证书 | 每次启动由内部 CA 签发，有效期 90 天；进程每小时检查一次，剩余不足三分之一时重新签发，新握手使用新证书，已建立的连接不受影响；SAN 包含 `EDGEWEIR_NODE_API_URL` 的主机名（未设置时为 `EDGEWEIR_PUBLIC_URL` 的主机名）、`EDGEWEIR_NODE_API_HOSTNAMES`、`localhost`、`127.0.0.1`、`::1` 与容器主机名 |
-| 节点证书 | CN 为节点 ID，仅客户端认证，有效期 30 天；剩余不足三分之一时 `ReportStatus` 提示调用 `RenewCertificate` |
+| 节点证书 | CN 为节点 ID，仅客户端认证，有效期 30 天（服务端证书与节点证书都从签发前 1 小时起生效，容忍节点时钟偏慢）；剩余不足三分之一时 `ReportStatus` 提示调用 `RenewCertificate`。续期后旧证书（`node.previous_cert_serial`）继续有效，直到节点第一次用新证书认证；未装上新证书的节点用旧证书再次续期。已停用的节点也可以续期，其他调用仍被拒绝 |
 | 心跳 | 间隔 15 秒；`WatchConfig` 每 15 秒发送 keepalive |
 
 注册顺序：
@@ -340,7 +340,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `region` | 区域字典 |
 | `cluster` | 集群：共享一条 revision 序列的节点集合 |
 | `node_group` | 节点组，可关联区域 |
-| `node` | 节点：状态、能力清单、证书序列号与指纹、最近心跳、最近上报的封禁状态与各网站的 CC 级别 |
+| `node` | 节点：状态、能力清单、证书序列号与指纹（续期后还有被替换证书的序列号）、最近心跳、最近上报的封禁状态与各网站的 CC 级别 |
 | `node_ip` | 节点上报的 IP 地址 |
 | `enrollment_token` | 注册 token 的 SHA-256 与使用状态 |
 | `node_certificate_revocation` | 删除节点时吊销的证书序列号 |
@@ -402,7 +402,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `cache_task` | 刷新预热任务 |
 | `cache_task_node` | 任务在每个节点上的交付与结果 |
 | `node_upgrade` | 节点升级任务 |
-| `node_upgrade_delivery` | 升级在每个节点上的阶段、状态与健康观察 |
+| `node_upgrade_delivery` | 升级在每个节点上的阶段、状态、期限与健康观察 |
 | `alert_channel` | 告警渠道，配置信封加密 |
 | `alert_subscription` | 用户按网站与渠道的订阅 |
 | `alert_state` | 告警当前状态（网站告警与平台告警） |
@@ -453,6 +453,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0035_without_organization_limits` | 删除 `organization_limit`；服务账号去掉 `limits:read`、`limits:write` |
 | `0036_single_operator` | 只保留最早且未停用的平台管理员账号（其余账号的告警订阅合并给它）；IP 名单名称全局唯一（重名的组织名单加后缀并改写其规则），原组织名单改为 collection；删除 `organization`、`member`、`invitation`、`organization_settings` 与各表的 `organization_id`、`session.active_organization_id`、`alert_channel.available_to_tenants`；服务账号去掉组织相关 scope |
 | `0037_dns_cluster_bindings` | `dns_binding`、`dns_lease`；`dns_revision.cluster_id`、`dns_managed_name.cluster_id`；DNS 调度策略转换为各集群的绑定，删除 `dns_state` |
+| `0038_node_lifecycle` | `node.previous_cert_serial`；`node_upgrade_delivery.deadline_at`（已下发的投递沿用创建后 30 分钟的期限） |
 
 ## 构建产物
 

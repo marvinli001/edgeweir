@@ -56,7 +56,7 @@ import { nodeCertificates } from "../services/certificates";
 import { challengeKeySecrets } from "../services/challenge-keys";
 import { mirrorMinuteStats } from "../services/clickhouse";
 import { claimEnrollmentToken } from "../services/enrollment";
-import { isSerialRevoked, normalizeSerial, replaceReportedAddresses } from "../services/nodes";
+import { acceptedCertificate, isSerialRevoked, replaceReportedAddresses } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
 import { mintRevisionReceipt, verifyRevisionReceipt } from "../services/revision-receipts";
 import { getRevision, latestRevision, nodeTarget } from "../services/revisions";
@@ -235,8 +235,11 @@ export function createNodeService(
 ): ServiceImpl<typeof NodeService> {
   const log = app.log.child({ component: "node-channel" });
 
-  /** mTLS gate for every RPC except Enroll. */
-  async function requireNode(ctx: HandlerContext) {
+  /**
+   * mTLS gate for every RPC except Enroll. `disabled` lets a disabled node
+   * through, for RPCs that only concern its identity.
+   */
+  async function requireNode(ctx: HandlerContext, { disabled = false } = {}) {
     const peer = ctx.values.get(peerKey);
     if (!peer.authorized || !peer.commonName) {
       throw new ConnectError(
@@ -252,9 +255,18 @@ export function createNodeService(
       .from(schema.node)
       .where(eq(schema.node.id, peer.commonName));
     if (!row) throw new ConnectError("unknown node", Code.Unauthenticated);
-    if (row.status !== "active") throw new ConnectError("node is disabled", Code.PermissionDenied);
-    if (normalizeSerial(row.certSerial) !== normalizeSerial(peer.serialNumber)) {
+    if (row.status !== "active" && !disabled)
+      throw new ConnectError("node is disabled", Code.PermissionDenied);
+    const certificate = acceptedCertificate(row, peer.serialNumber);
+    if (!certificate)
       throw new ConnectError("certificate has been superseded", Code.Unauthenticated);
+    if (certificate === "current" && row.previousCertSerial) {
+      // The node uses its renewed certificate: the one it replaced is no longer accepted.
+      await app.db
+        .update(schema.node)
+        .set({ previousCertSerial: null })
+        .where(and(eq(schema.node.id, row.id), eq(schema.node.certSerial, row.certSerial ?? "")));
+      return { ...row, previousCertSerial: null };
     }
     return row;
   }
@@ -268,15 +280,19 @@ export function createNodeService(
     return row ? nodeTarget(app.db, row) : undefined;
   }
 
-  /** Ends an open watch stream once its node is disabled, deleted or re-keyed. */
-  async function assertStillActive(node: { id: string; certSerial: string | null }) {
+  /** Ends an open watch stream once its node is disabled, deleted or its certificate superseded. */
+  async function assertStillActive(nodeId: string, serial: string | undefined) {
     const [row] = await app.db
-      .select({ status: schema.node.status, certSerial: schema.node.certSerial })
+      .select({
+        status: schema.node.status,
+        certSerial: schema.node.certSerial,
+        previousCertSerial: schema.node.previousCertSerial,
+      })
       .from(schema.node)
-      .where(eq(schema.node.id, node.id));
+      .where(eq(schema.node.id, nodeId));
     if (!row) throw new ConnectError("unknown node", Code.Unauthenticated);
     if (row.status !== "active") throw new ConnectError("node is disabled", Code.PermissionDenied);
-    if (normalizeSerial(row.certSerial) !== normalizeSerial(node.certSerial)) {
+    if (!acceptedCertificate(row, serial)) {
       throw new ConnectError("certificate has been superseded", Code.Unauthenticated);
     }
   }
@@ -447,7 +463,9 @@ export function createNodeService(
     },
 
     async renewCertificate(req, ctx) {
-      const node = await requireNode(ctx);
+      // Identity only: a disabled node keeps a valid certificate, so it can come back once enabled.
+      const node = await requireNode(ctx, { disabled: true });
+      const peerSerial = ctx.values.get(peerKey).serialNumber;
       let issued: Awaited<ReturnType<typeof app.nodeCa.signNodeCsr>>;
       try {
         issued = await app.nodeCa.signNodeCsr(req.csrPem, node.id);
@@ -455,12 +473,27 @@ export function createNodeService(
         throw new ConnectError(`rejected CSR: ${(error as Error).message}`, Code.InvalidArgument);
       }
       await app.db.transaction(async (tx) => {
+        const [row] = await tx
+          .select({
+            certSerial: schema.node.certSerial,
+            previousCertSerial: schema.node.previousCertSerial,
+          })
+          .from(schema.node)
+          .where(eq(schema.node.id, node.id))
+          .for("update");
+        const certificate = row && acceptedCertificate(row, peerSerial);
+        if (!certificate)
+          throw new ConnectError("certificate has been superseded", Code.Unauthenticated);
+        // The certificate the node authenticated with stays accepted until it uses the new one:
+        // a node that could not install the new certificate keeps working and renews again.
+        const kept = certificate === "current" ? row.certSerial : row.previousCertSerial;
         await tx
           .update(schema.node)
           .set({
             certSerial: issued.serialNumber,
             certFingerprint: issued.fingerprintSha256,
             certNotAfter: issued.notAfter,
+            previousCertSerial: kept,
           })
           .where(eq(schema.node.id, node.id));
         await recordAudit(
@@ -471,7 +504,7 @@ export function createNodeService(
             targetType: "node",
             targetId: node.id,
             targetName: node.name,
-            metadata: { certSerial: issued.serialNumber },
+            metadata: { certSerial: issued.serialNumber, previousCertSerial: kept },
           },
         );
       });
@@ -565,7 +598,7 @@ export function createNodeService(
             wake = undefined;
           }
           if (ended()) break;
-          await assertStillActive(node);
+          await assertStillActive(node.id, ctx.values.get(peerKey).serialNumber);
           if (stale) {
             stale = false;
             await refresh();

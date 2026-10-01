@@ -61,7 +61,7 @@ Result: the **Install command** (shown once, with a countdown) and the **CA fing
 | --- | --- |
 | **Rename** | At most 64 characters |
 | **Move to group** | Node groups of the same cluster only |
-| **Disable** / **Enable** | A disabled node is refused by the node channel and keeps serving its last successfully applied configuration; its unfinished purge & prefetch deliveries are marked **Skipped**. Once the node is enabled and pulls tasks again, it gets one whole-site purge for every site those purges touched |
+| **Disable** / **Enable** | A disabled node is refused by the node channel (except for certificate renewal, so its certificate is still valid when enabled) and keeps serving its last successfully applied configuration; its unfinished purge & prefetch deliveries are marked **Skipped**. Once the node is enabled and pulls tasks again, it gets one whole-site purge for every site those purges touched |
 | **Delete** | Revokes the node certificate; the node must enroll again with a new install command |
 
 ### Node upgrades
