@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { m, timeAgo } from "@/lib/i18n";
 import { originErrorText } from "@/lib/node-errors";
 
-/** Passive health of one origin across the online nodes of the site's cluster. */
+/** Health of one origin across the online nodes of the site's cluster (passive and active checks). */
 export function OriginHealthBadge({ health }: { health: OriginHealth | undefined }) {
   if (!health) return null;
   if (health.onlineNodes === 0) {
@@ -46,7 +46,11 @@ export function OriginHealthBadge({ health }: { health: OriginHealth | undefined
         {down.map((node) => {
           const error = originErrorText(node.lastErrorCode, node.lastErrorParams, node.lastError);
           return (
-            <span key={node.nodeId} className="break-all" data-testid="origin-health-node">
+            <span
+              key={`${node.nodeId}/${node.source}`}
+              className="break-all"
+              data-testid="origin-health-node"
+            >
               <span className="font-medium">{node.nodeName}</span>
               {error ? ` · ${error}` : null}
             </span>
