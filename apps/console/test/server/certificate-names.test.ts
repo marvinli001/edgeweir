@@ -95,7 +95,7 @@ describe("certificate names", async () => {
       name: "DNS",
       provider: "cloudflare",
       zone: "next.test",
-      credentials: { api_token: "unit-test-token" },
+      credentials: { api_token: "unit-test-token-0123456789" },
     });
     const dns01 = { challenge: "dns01", dnsCredentialId: credential.id };
     // Not on any site yet: the certificate can exist before the domain is added.

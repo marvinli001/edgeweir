@@ -253,6 +253,13 @@
       "when": 1790828153378,
       "tag": "0035_single_operator",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790828213378,
+      "tag": "0036_dns_cluster_bindings",
+      "breakpoints": true
     }
   ]
 }

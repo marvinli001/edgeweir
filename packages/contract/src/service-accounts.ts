@@ -26,6 +26,8 @@ export const serviceAccountProcedures = {
   "sites.list": "sites:read",
   "sites.get": "sites:read",
   "sites.setEnabled": "sites:write",
+  "dns.catalog": null,
+  "dns.siteTarget": "sites:read",
   "usage.list": "usage:read",
   "usage.changes": "usage:read",
 } as const satisfies Record<string, ServiceAccountScope | null>;

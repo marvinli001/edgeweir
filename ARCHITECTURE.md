@@ -255,10 +255,10 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 | 单次调用时长 | 5 分钟，超时 `SIGKILL` |
 | stdout 输出上限 | `dns.*` 命令 16 MiB，其他 2 MiB |
 | stderr | 丢弃（依赖库的诊断信息可能包含凭据） |
-| 命令 | `version`、`providers`、`obtain`、`renew`、`revoke`、`dns.list`、`dns.set`、`dns.present`、`dns.cleanup` |
-| DNS 服务商 | `cloudflare`、`alidns`、`huaweicloud`、`dnspod` |
+| 命令 | `version`、`providers`、`obtain`、`renew`、`revoke`、`dns.list`、`dns.set`、`dns.present`、`dns.cleanup`、`dns.zones`、`dns.test` |
+| DNS 服务商 | 服务商目录 `helpers/certd/catalog.json`，见 [服务商与凭据](docs/guide/dns-and-alerts.md#服务商与凭据) |
 
-DNS 调度（`dns.reconcile`，每分钟）按健康节点与网站域名计算记录，生成 `dns_revision`，写入 `platform_dns_provider` 指定的区域；写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 调度与告警](docs/guide/dns-and-alerts.md)。
+DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动）：`dns.reconcile` 每分钟按健康节点与网站域名计算每个自动模式集群的记录（每个集群一份地址记录，每个网站一条 CNAME），生成该集群的 `dns_revision`，写入绑定所选服务商账号（`platform_dns_provider`）的区域；各集群各自发布与对账，一个服务商不可用不影响其他集群；同一集群同一时间只有一个进程在写（`dns_lease`）。写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复。手动模式只生成需要手动创建的记录与 zone 文件，不写 DNS。DNS 调度的服务商账号与 DNS-01 凭据使用同一份服务商目录。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 调度与告警](docs/guide/dns-and-alerts.md)。
 
 ## 统计、日志与告警
 
@@ -328,7 +328,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `enrollment_token` | 注册 token 的 SHA-256 与使用状态 |
 | `node_certificate_revocation` | 删除节点时吊销的证书序列号 |
 | `pki_authority` | 内部 CA，私钥信封加密 |
-| `system_setting` | 平台键值设置：setup token、会话 secret 的 HMAC 校验值、源站允许清单、SMTP、节点发布源、DNS 解析器、告警策略、封禁、平台防护与 CC 模板、平台错误页、一次性迁移标记 |
+| `system_setting` | 平台键值设置：setup token、会话 secret 的 HMAC 校验值、源站允许清单、SMTP、节点发布源、告警策略、封禁、平台防护与 CC 模板、平台错误页、一次性迁移标记 |
 | `audit_log` | 管理操作审计 |
 
 ### 网站与配置
@@ -336,7 +336,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | 表 | 内容 |
 | --- | --- |
 | `site` | 网站：所属集群、启用状态、缓存键、分片、Cache-Tag 转发、WebSocket、证书、TLS 设置、缓存代际号、日志采样率、错误页是否拦截源站错误与保存时间 |
-| `site_domain` | 网站域名与路由校验状态 |
+| `site_domain` | 网站域名（主机名或泛域名），全局唯一 |
 | `site_star` | 用户星标 |
 | `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验、主动健康检查与会话保持（关闭时保留设置） |
 | `origin` | 源站 |
@@ -359,12 +359,13 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | --- | --- |
 | `certificate` | 证书链、指纹、到期与续期状态；私钥与 ACME 账户信封加密 |
 | `acme_challenge` | 短期公开的 HTTP-01 响应 |
-| `dns_credential` | ACME DNS-01 使用的 DNS 服务商凭据，信封加密 |
+| `dns_credential` | ACME DNS-01 使用的 DNS 服务商凭据与区域，信封加密 |
 | `dns_challenge_lease` | DNS-01 TXT 记录的清理责任 |
-| `platform_dns_provider` | DNS 调度的服务商与区域，凭据信封加密 |
-| `dns_state` | DNS 调度策略与期望 / 已应用的 DNS revision |
-| `dns_revision` | DNS revision：记录集、托管名称、状态 |
-| `dns_managed_name` | 已登记的托管 DNS 名称 |
+| `platform_dns_provider` | DNS 调度的服务商账号与区域，凭据信封加密 |
+| `dns_binding` | 集群的 DNS 绑定：模式、服务商账号、集群域名、TTL、线路、期望 / 已应用的 DNS revision |
+| `dns_revision` | 集群的 DNS revision：绑定设置、记录集、托管名称、状态 |
+| `dns_managed_name` | 已登记的托管 DNS 名称及所属集群 |
+| `dns_lease` | DNS 工作的租约（集群绑定、DNS-01 凭据），同一时间只有一个进程处理同一绑定或凭据 |
 
 ### 统计、日志、任务与告警
 
@@ -432,6 +433,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0033_sites_without_suspension` | 删除 `site.suspended`、`suspend_reason`、`suspend_note`、`suspended_at`；已暂停的网站改为停用；服务账号去掉 `sites:suspend` |
 | `0034_without_organization_limits` | 删除 `organization_limit`；服务账号去掉 `limits:read`、`limits:write` |
 | `0035_single_operator` | 只保留最早且未停用的平台管理员账号（其余账号的告警订阅合并给它）；IP 名单名称全局唯一（重名的组织名单加后缀并改写其规则），原组织名单改为 collection；删除 `organization`、`member`、`invitation`、`organization_settings` 与各表的 `organization_id`、`session.active_organization_id`、`alert_channel.available_to_tenants`；服务账号去掉组织相关 scope |
+| `0036_dns_cluster_bindings` | `dns_binding`、`dns_lease`；`dns_revision.cluster_id`、`dns_managed_name.cluster_id`；DNS 调度策略转换为各集群的绑定，删除 `dns_state` |
 
 ## 构建产物
 

@@ -136,6 +136,7 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | `install.sh` 与 agent 自升级先校验 cosign 签名（证书身份精确匹配待安装版本的 release 工作流）与 SHA-256，再执行；控制台 `/downloads` 镜像（`EDGEWEIR_DOWNLOADS_DIR`）只是传输通道，未镜像的文件返回 404 | 下载链路或镜像被篡改 |
 | 源站不能是特殊用途地址（回环、链路本地、私网、CGNAT、组播等）或 `localhost`：控制台拒绝这类 IP 字面量，节点对配置和每个 DNS 解析结果执行同一清单（`packages/contract/src/addresses.ts`）；只有经审计的源站地址允许清单能放行地址段；节点回源请求带 `CDN-Loop`（RFC 8586），收到带自身标识的请求返回 508 | 借回源访问云元数据（`169.254.169.254`）、探测内网，或造成回环 |
 | 控制台向 Web 界面保存的目标（告警 webhook、SMTP 服务器、节点发布源）发起的请求先解析一次、拒绝特殊用途地址，再连接该地址；`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 放行指定地址段 | 借控制台的出站请求访问内网 |
+| 填写地址的 DNS 服务商（PowerDNS、RFC 2136、自定义 HTTP）由证书助手在连接建立时检查实际连接的地址，特殊用途地址只在 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 内放行；公网地址必须使用 HTTPS，不跟随重定向。自定义 HTTP 请求带时间戳与 HMAC-SHA256 签名；DNS 服务商的错误以分类码返回，不回传服务商原文 | 借 DNS 服务商配置访问内网（含 DNS 重绑定），或凭据经明文或错误信息泄露 |
 | 节点端清缓存标记超过上限时合并为站点级标记 | 大量刷新任务填满节点的清缓存存储，影响同节点其他网站 |
 | agent 只执行类型化操作，没有执行任意命令的接口 | 控制台失陷后在节点上执行任意代码 |
 | 发布物 keyless 签名、SBOM、SLSA provenance | 发布的程序与源码不一致，或被投毒 |

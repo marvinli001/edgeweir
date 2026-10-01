@@ -3,6 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DnsCredentialDialog, type EditableCredential } from "@/components/dns/credential-dialog";
+import { providerLabel } from "@/components/dns/labels";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
@@ -30,6 +32,7 @@ function CertificatesPage() {
   const renew = useMutation(orpc.certificates.renew.mutationOptions());
   const removeDns = useMutation(orpc.dnsCredentials.delete.mutationOptions());
   const [dialog, setDialog] = React.useState<"upload" | "request" | "dns" | null>(null);
+  const [editing, setEditing] = React.useState<EditableCredential | null>(null);
   const refresh = () => client.invalidateQueries();
   const status = {
     pending: m.cert_status_pending,
@@ -147,10 +150,14 @@ function CertificatesPage() {
                 key={credential.id}
                 className="flex flex-wrap items-center justify-between gap-2 border-b py-3 last:border-0"
               >
-                <div>
-                  <p className="font-medium">{credential.name}</p>
-                  <p className="text-sm text-muted-foreground">{credential.zone}</p>
+                <div className="min-w-48 flex-1">
+                  <p className="font-medium break-words">{credential.name}</p>
+                  <p className="text-sm break-words text-muted-foreground">{credential.zone}</p>
                 </div>
+                <Badge variant="outline">{providerLabel(credential.provider)}</Badge>
+                <Button variant="ghost" size="sm" onClick={() => setEditing(credential)}>
+                  {m.common_edit()}
+                </Button>
                 <ConfirmDialog
                   title={m.cert_delete_confirm({ name: credential.name })}
                   destructive
@@ -160,8 +167,12 @@ function CertificatesPage() {
                     </Button>
                   }
                   onConfirm={async () => {
-                    await removeDns.mutateAsync({ id: credential.id });
-                    await refresh();
+                    try {
+                      await removeDns.mutateAsync({ id: credential.id });
+                      await refresh();
+                    } catch (e) {
+                      toast.error(errorMessage(e));
+                    }
                   }}
                 />
               </div>
@@ -173,7 +184,19 @@ function CertificatesPage() {
       {dialog === "request" ? (
         <RequestDialog credentials={credentials.data ?? []} onClose={() => setDialog(null)} />
       ) : null}
-      {dialog === "dns" ? <DnsDialog onClose={() => setDialog(null)} /> : null}
+      {dialog === "dns" || editing ? (
+        <DnsCredentialDialog
+          scope="credential"
+          initial={editing ?? undefined}
+          onClose={() => {
+            setDialog(null);
+            setEditing(null);
+          }}
+          onSaved={async () => {
+            await refresh();
+          }}
+        />
+      ) : null}
     </Page>
   );
 }
@@ -332,71 +355,6 @@ function RequestDialog({
           <TextField id="eabHmacKey" label={m.cert_eab_key()} type="password" />
         </>
       ) : null}
-    </FormDialog>
-  );
-}
-function DnsDialog({ onClose }: { onClose: () => void }) {
-  const client = useQueryClient();
-  const create = useMutation(orpc.dnsCredentials.create.mutationOptions());
-  const [provider, setProvider] = React.useState("cloudflare");
-  const fields: Record<string, string[]> = {
-    cloudflare: ["api_token"],
-    alidns: ["access_key_id", "access_key_secret"],
-    huaweicloud: ["access_key_id", "secret_access_key", "region_id"],
-    dnspod: ["auth_token"],
-  };
-  const labels: Record<string, () => string> = {
-    api_token: m.cert_api_token,
-    access_key_id: m.cert_access_id,
-    access_key_secret: m.cert_access_secret,
-    secret_access_key: m.cert_access_secret,
-    region_id: m.cert_region,
-    auth_token: m.cert_api_token,
-  };
-  return (
-    <FormDialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      title={m.cert_dns_add()}
-      submitLabel={m.common_create()}
-      onSubmit={async (data) => {
-        const credentials = Object.fromEntries(
-          (fields[provider] ?? []).map((key) => [key, String(data.get(key))]),
-        );
-        await create.mutateAsync({
-          name: String(data.get("dnsName")),
-          zone: String(data.get("dnsZone")),
-          provider: provider as "cloudflare" | "alidns" | "huaweicloud" | "dnspod",
-          credentials,
-        });
-        await client.invalidateQueries();
-        onClose();
-      }}
-    >
-      <TextField id="dnsName" label={m.cert_name()} />
-      <TextField id="dnsZone" label={m.cert_dns_zone()} />
-      <FormSelect
-        id="dnsProvider"
-        label={m.cert_dns_provider()}
-        value={provider}
-        onChange={setProvider}
-        options={[
-          { value: "cloudflare", label: m.cert_dns_cloudflare() },
-          { value: "alidns", label: m.cert_dns_alidns() },
-          { value: "huaweicloud", label: m.cert_dns_huawei() },
-          { value: "dnspod", label: m.cert_dns_dnspod() },
-        ]}
-      />
-      {(fields[provider] ?? []).map((key) => (
-        <TextField
-          key={key}
-          id={key}
-          label={labels[key]?.() ?? key}
-          type={key === "region_id" ? "text" : "password"}
-        />
-      ))}
     </FormDialog>
   );
 }

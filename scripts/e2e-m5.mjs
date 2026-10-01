@@ -109,18 +109,21 @@ const network = Object.entries(info.NetworkSettings.Networks).find(([name]) =>
 assert.ok(network);
 const address = network[1].IPAddress;
 const before = (await a("GET", `/clusters/${cluster.id}`)).latestRevision.revision;
-await a("PUT", "/dns/config", {
-  enabled: true,
-  providerId: provider.id,
-  cnameSuffix: "edge.cdn.m5.test",
-  ttl: 60,
-  lines: [
-    {
-      name: "default",
-      nodeGroupId: edge.nodeGroupId,
-      overrides: [{ nodeId: edge.id, addresses: [address] }],
-    },
-  ],
+const dnsBinding = `/clusters/${cluster.id}/dns`;
+await a("PUT", dnsBinding, {
+  binding: {
+    mode: "auto",
+    providerId: provider.id,
+    domain: "edge.cdn.m5.test",
+    ttl: 60,
+    lines: [
+      {
+        name: "default",
+        nodeGroupId: edge.nodeGroupId,
+        overrides: [{ nodeId: edge.id, addresses: [address] }],
+      },
+    ],
+  },
 });
 await fixture("/dns/append", {
   zone: provider.zone,
@@ -129,7 +132,7 @@ await fixture("/dns/append", {
 await a("POST", "/dns/reconcile");
 await waitFor(
   "DNS published",
-  async () => (await a("GET", "/dns/config")).revision?.status === "applied",
+  async () => (await a("GET", dnsBinding)).revision?.status === "applied",
 );
 assert.equal((await a("GET", `/clusters/${cluster.id}`)).latestRevision.revision, before);
 let target = await a("GET", `/sites/${site.id}/cname`);
@@ -175,7 +178,7 @@ try {
     (await records()).filter((r) => r.type === "A" && r.data === address).length,
     published,
   );
-  assert.equal((await a("GET", "/dns/config")).blocked?.status, "blocked");
+  assert.equal((await a("GET", dnsBinding)).blocked?.status, "blocked");
   console.log("PASS the only node offline: its addresses stay in DNS and the change is held back");
   await waitFor(
     "real offline webhook",
@@ -197,7 +200,7 @@ try {
 }
 await synced();
 await a("POST", "/dns/reconcile");
-assert.equal((await a("GET", "/dns/config")).blocked, null);
+assert.equal((await a("GET", dnsBinding)).blocked, null);
 target = await a("GET", `/sites/${site.id}/cname`);
 assert.equal(target.healthy, true);
 assert.ok((await records()).some((r) => r.name === "unrelated" && r.data === "preserve"));
@@ -219,6 +222,7 @@ await writeFile(
   JSON.stringify({
     siteId: site.id,
     nodeId: edge.id,
+    clusterId: cluster.id,
     providerId: provider.id,
     domain,
   }),

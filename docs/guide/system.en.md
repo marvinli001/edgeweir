@@ -6,7 +6,7 @@ For **Global rules** and **IP lists**, see [Rules, IP lists, and GeoIP](rules.en
 
 ## Clusters and nodes
 
-Page: **Clusters & nodes** (`/clusters`). The top of the page holds **New cluster**, **Add node**, and a summary of the current cluster (**Nodes online**, **Sites**, **Latest revision**). With several clusters, **Select cluster** switches between them.
+Page: **Clusters & nodes** (`/clusters`). The top of the page holds **New cluster**, **Add node**, and a summary of the current cluster (**Nodes online**, **Sites**, **Latest revision**). With several clusters, **Select cluster** switches between them. The **Overview** tab holds node groups, nodes, configuration canary, node upgrades, and revisions; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster).
 
 ### Clusters
 
@@ -16,7 +16,7 @@ A cluster is a set of nodes plus the sites assigned to them; each cluster has it
 | --- | --- |
 | **New cluster** | **Cluster name**: lowercase letters, digits, and `-`, starting with a letter or digit, at most 64 characters, unique; **Description**: at most 500 characters. Creation adds the default node group `default` and publishes revision #1 |
 | **Edit cluster** | Change name and description |
-| **Delete** | Only when the cluster has no nodes and no sites |
+| **Delete** | Only when the cluster has no nodes and no sites, its DNS is not **Automatic**, and its written DNS records are removed |
 
 | Rule | Description |
 | --- | --- |
@@ -175,10 +175,10 @@ Page: **Service accounts** (`/service-accounts`). A service account is an identi
 
 | Scope | Callable procedures |
 | --- | --- |
-| No scope needed | `system.status`, `account.me` |
+| No scope needed | `system.status`, `account.me`, `dns.catalog` |
 | `system:read` | `settings.get` |
 | `clusters:read` | `clusters.list`, `clusters.get` |
-| `sites:read` | `sites.list`, `sites.get` |
+| `sites:read` | `sites.list`, `sites.get`, `dns.siteTarget` |
 | `sites:write` | `sites.setEnabled` |
 | `usage:read` | `usage.list`, `usage.changes` |
 
@@ -216,7 +216,7 @@ The page shows **Time**, **Actor**, **Action**, and **Target**, 50 entries per p
 | `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters (including the configuration canary, rollbacks, and challenge key rotation), node groups, regions, nodes (including enrollment, certificate renewal, upgrades), install commands |
 | `site.*`, `cache.*`, `certificate.*`, `dns_credential.*`, `ip_list.*`, `platform.*` | Sites (including enabling, HTTPS, logs, protection, OWASP CRS, and site rules), purge & prefetch, certificates, DNS credentials, IP lists, global rules |
 | `ban.*` | Manual bans: `ban.create`, `ban.update` (banned again), `ban.delete` (unbanned) |
-| `dns.*`, `alert.*` | DNS steering (including mass removal protection and forced publications), alert channels, alert rules, SMTP, alert subscriptions |
+| `dns.*`, `alert.*` | DNS steering (including provider accounts, cluster bindings, rollbacks, mass removal protection, and forced publications), alert channels, alert rules, SMTP, alert subscriptions |
 
 ## System settings
 
@@ -339,6 +339,7 @@ The badge of **Node release source** shows where the value in effect comes from:
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | **The cluster still has N node(s) and M site(s)** | The cluster is not empty | Delete its nodes and sites, then retry |
+| **Turn the cluster's DNS off and wait for its records to be removed** | The cluster's DNS is still **Automatic** or still owns records | Switch to **Not managed** on the **DNS** tab, wait for cleanup, then retry |
 | **Cluster name already exists: …** / **Node group already exists: …** / **Region code already exists: …** / **A service account named … exists** | Duplicate name or code | Use another name or code |
 | **The default node group cannot be deleted** | Deleting the default node group | The default node group can only be renamed or given another region |
 | **The node group belongs to another cluster** | Moving a node across clusters | Nodes move only within their cluster; changing clusters means deleting and enrolling again |

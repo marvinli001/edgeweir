@@ -33,18 +33,13 @@ Uploaded certificates do not renew automatically (**Automatic renewal disabled**
 DNS-01 validation needs a credential first.
 
 1. Open **Certificates** and click **Add DNS credential**.
-2. Enter **Name** and **DNS zone**, select **DNS provider**, and fill in the credential fields.
-3. Click **Create**.
-4. Verify: the credential appears in the **DNS credentials** card with its zone.
+2. Enter **Name**, select **DNS provider**, and fill in the credential fields the form shows.
+3. For providers that can list zones, click **List zones** and pick the **Zone**; otherwise type the **Zone**.
+4. Click **Test connection** and check that **Connected** appears.
+5. Click **Create**.
+6. Verify: the credential appears in the **DNS credentials** card with its zone and provider.
 
-| DNS provider | Fields |
-| --- | --- |
-| Cloudflare | API token |
-| Alibaba Cloud | Access key ID, Access key secret |
-| Huawei Cloud | Access key ID, Access key secret, Region |
-| DNSPod | API token (the `ID,Token` of the DNSPod classic API) |
-
-Credentials are envelope-encrypted with the master key and are write-only. Grant the credential the minimum DNS edit permission on the zone.
+The fields and least permissions of every provider are in [Providers and credentials](dns-and-alerts.en.md#providers-and-credentials); DNS steering uses the same provider catalog. Credentials are envelope-encrypted with the master key and are write-only; **Edit** renames the credential or rotates the secrets with **Replace credentials**.
 
 ## Request an ACME certificate
 

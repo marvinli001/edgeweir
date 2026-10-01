@@ -4,27 +4,86 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
+	"net/netip"
 	"regexp"
-	"strconv"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-acme/lego/v4/challenge/dns01"
-	"github.com/libdns/alidns"
-	"github.com/libdns/cloudflare"
-	"github.com/libdns/huaweicloud"
 	"github.com/libdns/libdns"
+	"github.com/marvinli001/edgeweir/helpers/certd/internal/dnsx"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/alidns"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/azure"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/baiducloud"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/bunny"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/cloudflare"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/desec"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/digitalocean"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/dnsla"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/dnspod"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/fixture"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/gandi"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/gcore"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/godaddy"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/googleclouddns"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/hetzner"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/huaweicloud"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/linode"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/namesilo"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/ovh"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/porkbun"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/powerdns"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/rfc2136"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/route53"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/tencentcloud"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/volcengine"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/vultr"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/webhook"
+	"github.com/marvinli001/edgeweir/helpers/certd/providers/westcn"
 )
 
-type dnsProvider interface {
-	libdns.RecordGetter
-	libdns.RecordAppender
-	libdns.RecordSetter
-	libdns.RecordDeleter
+// factories has one adapter per catalog entry (a test keeps both in step).
+var factories = map[string]dnsx.Factory{
+	"alidns":         alidns.New,
+	"azure":          azure.New,
+	"baiducloud":     baiducloud.New,
+	"bunny":          bunny.New,
+	"cloudflare":     cloudflare.New,
+	"desec":          desec.New,
+	"digitalocean":   digitalocean.New,
+	"dnsla":          dnsla.New,
+	"dnspod":         dnspod.New,
+	"gandi":          gandi.New,
+	"gcore":          gcore.New,
+	"godaddy":        godaddy.New,
+	"googleclouddns": googleclouddns.New,
+	"hetzner":        hetzner.New,
+	"huaweicloud":    huaweicloud.New,
+	"linode":         linode.New,
+	"namesilo":       namesilo.New,
+	"ovh":            ovh.New,
+	"porkbun":        porkbun.New,
+	"powerdns":       powerdns.New,
+	"rfc2136":        rfc2136.New,
+	"route53":        route53.New,
+	"tencentcloud":   tencentcloud.New,
+	"test":           fixture.New,
+	"volcengine":     volcengine.New,
+	"vultr":          vultr.New,
+	"webhook":        webhook.New,
+	"westcn":         westcn.New,
+}
+
+// providerIDs lists the supported providers (the "providers" command).
+func providerIDs() []string {
+	ids := make([]string, 0, len(factories))
+	for id := range factories {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 type dnsParams struct {
@@ -32,6 +91,11 @@ type dnsParams struct {
 	Zone        string          `json:"zone"`
 	Credentials json.RawMessage `json:"credentials"`
 	Records     []dnsRecord     `json:"records,omitempty"`
+	// Outbound carries the operator's allow list for endpoints the user
+	// configured (never credentials).
+	Outbound *struct {
+		AllowCIDRs []string `json:"allowCidrs"`
+	} `json:"outbound,omitempty"`
 }
 type dnsRecord struct {
 	Name string `json:"name"`
@@ -40,59 +104,60 @@ type dnsRecord struct {
 	TTL  int    `json:"ttl"`
 }
 
-func providerFor(p dnsParams) (dnsProvider, error) {
-	var fields map[string]string
-	if json.Unmarshal(p.Credentials, &fields) != nil {
-		return nil, fmt.Errorf("invalid DNS credentials")
+func providerFor(p dnsParams) (dnsx.Provider, error) {
+	factory, ok := factories[p.Provider]
+	if !ok {
+		return nil, fmt.Errorf("%w: unsupported DNS provider", dnsx.ErrInvalid)
 	}
-	if region := fields["region_id"]; region != "" && !regexp.MustCompile(`^[a-z0-9-]{1,32}$`).MatchString(region) {
-		return nil, fmt.Errorf("invalid DNS provider region")
+	fields, err := credentialFields(p.Provider, p.Credentials)
+	if err != nil {
+		return nil, err
 	}
-	var provider dnsProvider
-	switch p.Provider {
-	case "test":
-		provider = &testDNSProvider{}
-	case "cloudflare":
-		provider = &cloudflare.Provider{}
-	case "alidns":
-		provider = &alidns.Provider{}
-	case "huaweicloud":
-		provider = &huaweicloud.Provider{}
-	case "dnspod":
-		provider = &dnsPodProvider{}
-	default:
-		return nil, fmt.Errorf("unsupported DNS provider")
+	var opts dnsx.Options
+	if p.Outbound != nil {
+		for _, text := range p.Outbound.AllowCIDRs {
+			prefix, err := netip.ParsePrefix(text)
+			if err != nil {
+				return nil, fmt.Errorf("%w: invalid outbound allow list", dnsx.ErrInvalid)
+			}
+			opts.AllowCIDRs = append(opts.AllowCIDRs, prefix.Masked())
+		}
 	}
-	if err := json.Unmarshal(p.Credentials, provider); err != nil {
-		return nil, fmt.Errorf("invalid DNS credentials")
-	}
-	return provider, nil
+	return factory(fields, opts)
 }
+
+var recordTypes = map[string]bool{"TXT": true, "CNAME": true, "A": true, "AAAA": true, "ALIAS": true}
+
+// Record names are "@" or relative names (a leading "*" label allowed); zones
+// are plain host names. Anything else (empty names, absolute names, paths,
+// query characters) is refused before it reaches an adapter.
+var (
+	recordName = regexp.MustCompile(`^(?i)(@|\*|(\*\.)?[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?)*)$`)
+	zoneName   = regexp.MustCompile(`^(?i)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.?$`)
+)
 
 func dnsCommand(ctx context.Context, command string, raw json.RawMessage) (any, error) {
 	var p dnsParams
 	if err := json.Unmarshal(raw, &p); err != nil {
-		return nil, fmt.Errorf("invalid DNS request")
+		return nil, fmt.Errorf("%w: invalid DNS request", dnsx.ErrInvalid)
 	}
-	if p.Zone == "" || strings.ContainsAny(p.Zone, "/ :\r\n") {
-		return nil, fmt.Errorf("invalid DNS zone")
-	}
-	provider, err := providerFor(p)
-	if err != nil {
-		return nil, err
+	if command != "dns.zones" && (len(p.Zone) > 253 || !zoneName.MatchString(p.Zone)) {
+		return nil, fmt.Errorf("%w: invalid DNS zone", dnsx.ErrInvalid)
 	}
 	zone := strings.TrimSuffix(p.Zone, ".") + "."
 	var records []libdns.Record
 	for _, r := range p.Records {
-		if r.TTL < 30 || r.TTL > 86400 || len(r.Data) > 4096 || strings.ContainsAny(r.Name, " /\r\n") {
-			return nil, fmt.Errorf("invalid DNS record")
+		if r.TTL < 30 || r.TTL > 86400 || len(r.Data) > 4096 || len(r.Name) > 253 || !recordName.MatchString(r.Name) {
+			return nil, fmt.Errorf("%w: invalid DNS record", dnsx.ErrInvalid)
 		}
-		switch r.Type {
-		case "TXT", "CNAME", "A", "AAAA":
-		default:
-			return nil, fmt.Errorf("unsupported DNS record type")
+		if !recordTypes[r.Type] {
+			return nil, fmt.Errorf("%w: unsupported DNS record type", dnsx.ErrInvalid)
 		}
 		records = append(records, libdns.RR{Name: r.Name, Type: r.Type, Data: r.Data, TTL: time.Duration(r.TTL) * time.Second})
+	}
+	provider, err := providerFor(p)
+	if err != nil {
+		return nil, err
 	}
 	var result []libdns.Record
 	switch command {
@@ -104,8 +169,28 @@ func dnsCommand(ctx context.Context, command string, raw json.RawMessage) (any, 
 		result, err = provider.AppendRecords(ctx, zone, records)
 	case "dns.cleanup":
 		result, err = provider.DeleteRecords(ctx, zone, records)
+	case "dns.test":
+		result, err = provider.GetRecords(ctx, zone)
+		if err == nil {
+			return map[string]int{"records": len(result)}, nil
+		}
+	case "dns.zones":
+		lister, ok := provider.(libdns.ZoneLister)
+		if !ok {
+			return nil, fmt.Errorf("%w: this provider cannot list zones", dnsx.ErrUnsupported)
+		}
+		zones, err := lister.ListZones(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("DNS provider request failed: %w", err)
+		}
+		names := make([]string, 0, len(zones))
+		for _, z := range zones {
+			names = append(names, strings.TrimSuffix(strings.ToLower(z.Name), "."))
+		}
+		sort.Strings(names)
+		return names, nil
 	default:
-		return nil, fmt.Errorf("unsupported DNS operation")
+		return nil, fmt.Errorf("%w: unsupported DNS operation", dnsx.ErrInvalid)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("DNS provider request failed: %w", err)
@@ -122,7 +207,7 @@ type dnsChallenge struct {
 	mu        sync.Mutex
 	session   *protocolSession
 	ctx       context.Context
-	provider  dnsProvider
+	provider  dnsx.Provider
 	zone      string
 	installed map[string][]libdns.Record
 }
@@ -137,15 +222,13 @@ func (p *dnsChallenge) Present(domain, token, authorization string) error {
 	if err := p.session.event(map[string]any{"event": "dns01.prepare", "domain": domain, "token": token, "record": dnsRecord{Name: name, Type: "TXT", Data: info.Value, TTL: 60}}); err != nil {
 		return err
 	}
+	// Cleanup deletes exactly this record (name, TXT, value), never what the
+	// provider echoed back: an empty value there would delete the whole set,
+	// including a sibling challenge (apex and wildcard) still in use.
 	p.mu.Lock()
 	p.installed[token] = intent
 	p.mu.Unlock()
-	records, err := p.provider.AppendRecords(p.ctx, p.zone, intent)
-	if err == nil {
-		p.mu.Lock()
-		p.installed[token] = records
-		p.mu.Unlock()
-	}
+	_, err := p.provider.AppendRecords(p.ctx, p.zone, intent)
 	return err
 }
 func (p *dnsChallenge) CleanUp(domain string, token, _ string) error {
@@ -165,128 +248,4 @@ func (p *dnsChallenge) CleanUp(domain string, token, _ string) error {
 }
 func (*dnsChallenge) Timeout() (time.Duration, time.Duration) {
 	return 3 * time.Minute, 2 * time.Second
-}
-
-// DNSPod's published libdns adapter predates libdns v1. This bounded adapter
-// implements the same interface against DNSPod's documented classic API.
-type dnsPodProvider struct {
-	AuthToken string `json:"auth_token"`
-}
-type dnsPodRecord struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Type  string `json:"type"`
-	Value string `json:"value"`
-	TTL   string `json:"ttl"`
-}
-type dnsPodResponse struct {
-	Status struct {
-		Code string `json:"code"`
-	} `json:"status"`
-	Records []dnsPodRecord `json:"records"`
-}
-
-func (p *dnsPodProvider) call(ctx context.Context, method, zone string, fields url.Values) (*dnsPodResponse, error) {
-	if p.AuthToken == "" {
-		return nil, fmt.Errorf("DNSPod auth_token is required")
-	}
-	fields.Set("login_token", p.AuthToken)
-	fields.Set("format", "json")
-	fields.Set("domain", strings.TrimSuffix(zone, "."))
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://dnsapi.cn/"+method, strings.NewReader(fields.Encode()))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	res, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("DNSPod transport failed")
-	}
-	defer res.Body.Close()
-	var out dnsPodResponse
-	if res.StatusCode != 200 || json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&out) != nil {
-		return nil, fmt.Errorf("DNSPod invalid response")
-	}
-	if out.Status.Code != "1" && !(method == "Record.List" && out.Status.Code == "10") {
-		return nil, fmt.Errorf("DNSPod API status %s", out.Status.Code)
-	}
-	return &out, nil
-}
-func (p *dnsPodProvider) records(ctx context.Context, zone string) ([]dnsPodRecord, error) {
-	var all []dnsPodRecord
-	for offset := 0; offset < 100000; offset += 1000 {
-		res, err := p.call(ctx, "Record.List", zone, url.Values{"offset": {strconv.Itoa(offset)}, "length": {"1000"}})
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, res.Records...)
-		if len(res.Records) < 1000 {
-			return all, nil
-		}
-	}
-	return nil, fmt.Errorf("DNSPod zone exceeds record limit")
-}
-func (p *dnsPodProvider) GetRecords(ctx context.Context, zone string) ([]libdns.Record, error) {
-	all, err := p.records(ctx, zone)
-	if err != nil {
-		return nil, err
-	}
-	var out []libdns.Record
-	for _, r := range all {
-		ttl, _ := strconv.Atoi(r.TTL)
-		out = append(out, libdns.RR{Name: r.Name, Type: r.Type, Data: r.Value, TTL: time.Duration(ttl) * time.Second})
-	}
-	return out, nil
-}
-func (p *dnsPodProvider) AppendRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
-	for _, record := range records {
-		r := record.RR()
-		_, err := p.call(ctx, "Record.Create", zone, url.Values{"sub_domain": {r.Name}, "record_type": {r.Type}, "record_line": {"默认"}, "ttl": {strconv.Itoa(int(r.TTL / time.Second))}, "value": {r.Data}})
-		if err != nil {
-			return nil, err
-		}
-	}
-	return records, nil
-}
-func (p *dnsPodProvider) SetRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
-	all, err := p.records(ctx, zone)
-	if err != nil {
-		return nil, err
-	}
-	for _, record := range records {
-		r := record.RR()
-		found := false
-		for _, old := range all {
-			if old.Name == r.Name && old.Type == r.Type {
-				found = true
-				_, err = p.call(ctx, "Record.Modify", zone, url.Values{"record_id": {old.ID}, "sub_domain": {r.Name}, "record_type": {r.Type}, "record_line": {"默认"}, "ttl": {strconv.Itoa(int(r.TTL / time.Second))}, "value": {r.Data}})
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-		if !found {
-			if _, err = p.AppendRecords(ctx, zone, []libdns.Record{record}); err != nil {
-				return nil, err
-			}
-		}
-	}
-	return records, nil
-}
-func (p *dnsPodProvider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
-	all, err := p.records(ctx, zone)
-	if err != nil {
-		return nil, err
-	}
-	for _, record := range records {
-		r := record.RR()
-		for _, old := range all {
-			if old.Name == r.Name && old.Type == r.Type && old.Value == r.Data {
-				if _, err = p.call(ctx, "Record.Remove", zone, url.Values{"record_id": {old.ID}}); err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-	return records, nil
 }

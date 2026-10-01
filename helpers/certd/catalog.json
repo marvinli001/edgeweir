@@ -1,0 +1,859 @@
+[
+  {
+    "id": "cloudflare",
+    "name": "Cloudflare",
+    "fields": [
+      {
+        "key": "api_token",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 256,
+        "pattern": "^[A-Za-z0-9_.-]{20,256}$"
+      },
+      {
+        "key": "zone_token",
+        "type": "secret",
+        "secret": true,
+        "required": false,
+        "maxLength": 256,
+        "pattern": "^[A-Za-z0-9_.-]{20,256}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": "cname",
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "alidns",
+    "name": "Alibaba Cloud DNS",
+    "fields": [
+      {
+        "key": "access_key_id",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9.]{1,128}$"
+      },
+      {
+        "key": "access_key_secret",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 256
+      },
+      {
+        "key": "region_id",
+        "type": "text",
+        "secret": false,
+        "required": false,
+        "maxLength": 32,
+        "placeholder": "cn-hangzhou",
+        "pattern": "^[a-z0-9-]{1,32}$"
+      },
+      {
+        "key": "security_token",
+        "type": "secret",
+        "secret": true,
+        "required": false,
+        "maxLength": 4096
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "huaweicloud",
+    "name": "Huawei Cloud DNS",
+    "fields": [
+      {
+        "key": "access_key_id",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{1,128}$"
+      },
+      {
+        "key": "secret_access_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 256
+      },
+      {
+        "key": "region_id",
+        "type": "text",
+        "secret": false,
+        "required": false,
+        "maxLength": 32,
+        "placeholder": "cn-north-4",
+        "pattern": "^[a-z0-9-]{1,32}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "dnspod",
+    "name": "DNSPod (token API)",
+    "fields": [
+      {
+        "key": "auth_token",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 149,
+        "placeholder": "123456,0123456789abcdef0123456789abcdef",
+        "pattern": "^[0-9]{1,20},[0-9A-Za-z]{8,128}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "tencentcloud",
+    "name": "Tencent Cloud DNSPod (API 3.0)",
+    "fields": [
+      {
+        "key": "secret_id",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{1,128}$"
+      },
+      {
+        "key": "secret_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 256
+      },
+      {
+        "key": "site",
+        "type": "select",
+        "secret": false,
+        "required": false,
+        "maxLength": 4,
+        "options": ["cn", "intl"],
+        "default": "cn"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "volcengine",
+    "name": "Volcengine DNS",
+    "fields": [
+      {
+        "key": "access_key_id",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 128,
+        "placeholder": "AKLT…",
+        "pattern": "^[A-Za-z0-9]{16,128}$"
+      },
+      {
+        "key": "secret_access_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 256
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "baiducloud",
+    "name": "Baidu AI Cloud DNS",
+    "fields": [
+      {
+        "key": "access_key_id",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 128,
+        "placeholder": "0123456789abcdef0123456789abcdef",
+        "pattern": "^[A-Za-z0-9]{16,128}$"
+      },
+      {
+        "key": "secret_access_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 256
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "westcn",
+    "name": "West.cn",
+    "fields": [
+      {
+        "key": "username",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 64
+      },
+      {
+        "key": "api_password",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 256
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "dnsla",
+    "name": "DNS.LA",
+    "fields": [
+      {
+        "key": "api_id",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 128,
+        "pattern": "^[\\x21-\\x39\\x3B-\\x7E]{1,128}$"
+      },
+      {
+        "key": "api_secret",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 256
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "route53",
+    "name": "Amazon Route 53",
+    "fields": [
+      {
+        "key": "access_key_id",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 128,
+        "placeholder": "AKIAIOSFODNN7EXAMPLE",
+        "pattern": "^\\w{16,128}$"
+      },
+      {
+        "key": "secret_access_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 128
+      },
+      {
+        "key": "session_token",
+        "type": "secret",
+        "secret": true,
+        "required": false,
+        "maxLength": 8192
+      },
+      {
+        "key": "hosted_zone_id",
+        "type": "text",
+        "secret": false,
+        "required": false,
+        "maxLength": 44,
+        "placeholder": "Z0123456789ABCDEFGHIJ",
+        "pattern": "^(/hostedzone/)?[A-Z0-9]{1,32}$"
+      },
+      {
+        "key": "partition",
+        "type": "select",
+        "secret": false,
+        "required": false,
+        "maxLength": 10,
+        "options": ["aws", "aws-cn", "aws-us-gov"],
+        "default": "aws"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "googleclouddns",
+    "name": "Google Cloud DNS",
+    "fields": [
+      {
+        "key": "service_account_json",
+        "type": "textarea",
+        "secret": true,
+        "required": true,
+        "maxLength": 16384,
+        "placeholder": "{\"type\":\"service_account\",…}"
+      },
+      {
+        "key": "project_id",
+        "type": "text",
+        "secret": false,
+        "required": false,
+        "maxLength": 100,
+        "placeholder": "my-project-123456",
+        "pattern": "^([a-z][a-z0-9.-]{0,62}:)?[a-z][a-z0-9-]{4,28}[a-z0-9]$"
+      },
+      {
+        "key": "managed_zone",
+        "type": "text",
+        "secret": false,
+        "required": false,
+        "maxLength": 63,
+        "placeholder": "example-com",
+        "pattern": "^([a-z][a-z0-9-]{0,62}|[0-9]{1,20})$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": "alias",
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "azure",
+    "name": "Azure DNS",
+    "fields": [
+      {
+        "key": "tenant_id",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 253,
+        "placeholder": "00000000-0000-0000-0000-000000000000",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+)$"
+      },
+      {
+        "key": "client_id",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 36,
+        "placeholder": "00000000-0000-0000-0000-000000000000",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      },
+      {
+        "key": "client_secret",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 1024
+      },
+      {
+        "key": "subscription_id",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 36,
+        "placeholder": "00000000-0000-0000-0000-000000000000",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+      },
+      {
+        "key": "resource_group",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 90,
+        "placeholder": "dns-rg",
+        "pattern": "^[A-Za-z0-9_().-]{0,89}[A-Za-z0-9_()-]$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "digitalocean",
+    "name": "DigitalOcean",
+    "fields": [
+      {
+        "key": "api_token",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 128,
+        "placeholder": "dop_v1_…",
+        "pattern": "^(dop_v1_)?[0-9a-f]{64}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "vultr",
+    "name": "Vultr",
+    "fields": [
+      {
+        "key": "api_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 64,
+        "placeholder": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "linode",
+    "name": "Akamai Cloud (Linode)",
+    "fields": [
+      {
+        "key": "api_token",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 128
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "hetzner",
+    "name": "Hetzner Cloud DNS",
+    "fields": [
+      {
+        "key": "api_token",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 128
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "ovh",
+    "name": "OVHcloud",
+    "fields": [
+      {
+        "key": "endpoint",
+        "type": "select",
+        "secret": false,
+        "required": true,
+        "maxLength": 6,
+        "options": ["ovh-eu", "ovh-ca", "ovh-us"],
+        "default": "ovh-eu"
+      },
+      {
+        "key": "application_key",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{8,128}$"
+      },
+      {
+        "key": "application_secret",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{8,128}$"
+      },
+      {
+        "key": "consumer_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{8,128}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "gandi",
+    "name": "Gandi LiveDNS",
+    "fields": [
+      {
+        "key": "bearer_token",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 512,
+        "pattern": "^[A-Za-z0-9_.-]{16,512}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": "alias",
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "godaddy",
+    "name": "GoDaddy",
+    "fields": [
+      {
+        "key": "api_token",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 4096,
+        "placeholder": "key:secret",
+        "pattern": "^([A-Za-z0-9_]{8,128}:[A-Za-z0-9_]{8,128}|[A-Za-z0-9_.~+/=-]{16,})$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "porkbun",
+    "name": "Porkbun",
+    "fields": [
+      {
+        "key": "api_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 260,
+        "placeholder": "pk1_…",
+        "pattern": "^pk1_[A-Za-z0-9_]{8,256}$"
+      },
+      {
+        "key": "api_secret_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 260,
+        "placeholder": "sk1_…",
+        "pattern": "^sk1_[A-Za-z0-9_]{8,256}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": "alias",
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "namesilo",
+    "name": "NameSilo",
+    "fields": [
+      {
+        "key": "api_token",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9]{8,128}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "gcore",
+    "name": "Gcore",
+    "fields": [
+      {
+        "key": "api_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 4096,
+        "placeholder": "1234$0123456789abcdef",
+        "pattern": "^[0-9]+\\$[A-Za-z0-9._~+/=-]+$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": "cname",
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "bunny",
+    "name": "Bunny DNS",
+    "fields": [
+      {
+        "key": "access_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9-]{16,128}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": true,
+      "apex": "cname",
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "desec",
+    "name": "deSEC",
+    "fields": [
+      {
+        "key": "token",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9_-]{16,128}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "fixed"
+    }
+  },
+  {
+    "id": "powerdns",
+    "name": "PowerDNS",
+    "fields": [
+      {
+        "key": "server_url",
+        "type": "url",
+        "secret": false,
+        "required": true,
+        "placeholder": "https://pdns.example.net:8081",
+        "pattern": "^https?://[^/?#@\\s]+/?$",
+        "maxLength": 256
+      },
+      {
+        "key": "api_key",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 256
+      },
+      {
+        "key": "server_id",
+        "type": "text",
+        "secret": false,
+        "required": false,
+        "maxLength": 64,
+        "placeholder": "localhost",
+        "pattern": "^[A-Za-z0-9._-]{1,64}$",
+        "default": "localhost"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "custom"
+    }
+  },
+  {
+    "id": "rfc2136",
+    "name": "RFC 2136 (TSIG)",
+    "fields": [
+      {
+        "key": "server",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 261,
+        "placeholder": "ns1.example.net:53",
+        "pattern": "^[A-Za-z0-9._:\\[\\]-]{1,261}$"
+      },
+      {
+        "key": "tsig_key_name",
+        "type": "text",
+        "secret": false,
+        "required": true,
+        "maxLength": 253,
+        "placeholder": "edgeweir-key",
+        "pattern": "^[A-Za-z0-9._-]{1,253}$"
+      },
+      {
+        "key": "tsig_algorithm",
+        "type": "select",
+        "secret": false,
+        "required": true,
+        "maxLength": 11,
+        "options": ["hmac-sha256", "hmac-sha512", "hmac-sha384", "hmac-sha224", "hmac-sha1"],
+        "default": "hmac-sha256"
+      },
+      {
+        "key": "tsig_secret",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 512,
+        "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": false,
+      "lines": false,
+      "apex": null,
+      "endpoint": "custom"
+    }
+  },
+  {
+    "id": "webhook",
+    "name": "Custom HTTP",
+    "fields": [
+      {
+        "key": "url",
+        "type": "url",
+        "secret": false,
+        "required": true,
+        "placeholder": "https://dns-hook.example.net/edgeweir",
+        "pattern": "^https?://[^\\s@#]+$",
+        "maxLength": 512
+      },
+      {
+        "key": "secret",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 256,
+        "pattern": "^.{16,}$"
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "custom"
+    }
+  },
+  {
+    "id": "test",
+    "name": "Local test fixture",
+    "fields": [
+      {
+        "key": "api_token",
+        "type": "secret",
+        "secret": true,
+        "required": true,
+        "maxLength": 1024
+      }
+    ],
+    "capabilities": {
+      "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
+      "listZones": true,
+      "lines": false,
+      "apex": null,
+      "endpoint": "fixed"
+    },
+    "hidden": true
+  }
+]

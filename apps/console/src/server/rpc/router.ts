@@ -1,3 +1,4 @@
+import { dnsCatalogDto } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { count, desc, eq, gt, sql } from "drizzle-orm";
 import { createAccessKey, listAccessKeys, revokeAccessKey } from "../services/access-keys";
@@ -32,11 +33,14 @@ import {
   createDnsCredential,
   deleteCertificate,
   deleteDnsCredential,
+  dnsCredentialZones,
   getHttps,
   listCertificates,
   listDnsCredentials,
   renewCertificate,
   requestCertificate,
+  testDnsCredential,
+  updateDnsCredential,
   updateHttps,
   uploadCertificate,
 } from "../services/certificates";
@@ -51,18 +55,23 @@ import {
 import {
   createDnsProvider,
   deleteDnsProvider,
-  forceDnsPublish,
-  getDnsConfig,
+  exportBinding,
+  forceBindingPublish,
+  getBinding,
   getDnsProtection,
+  listBindingRevisions,
+  listBindings,
   listDnsProviders,
-  listDnsRevisions,
+  listProviderZones,
   reconcileDns,
-  rollbackDnsConfig,
-  saveDnsConfig,
+  rollbackBinding,
+  saveBinding,
   setDnsProtection,
   siteDnsTarget,
+  testProvider,
   updateDnsProvider,
 } from "../services/dns";
+import { failFromCertd } from "../services/dns-providers";
 import { createEnrollmentToken } from "../services/enrollment";
 import {
   getPlatformErrorPages,
@@ -264,8 +273,17 @@ export const router = os.router({
     create: authed.dnsCredentials.create.handler(({ input, context }) =>
       createDnsCredential(context.app, input, context),
     ),
+    update: authed.dnsCredentials.update.handler(({ input, context }) =>
+      updateDnsCredential(context.app, input, context),
+    ),
     delete: authed.dnsCredentials.delete.handler(({ input, context }) =>
       deleteDnsCredential(context.app, input.id, context),
+    ),
+    zones: authed.dnsCredentials.zones.handler(({ input, context }) =>
+      dnsCredentialZones(context.app, input),
+    ),
+    test: authed.dnsCredentials.test.handler(({ input, context }) =>
+      testDnsCredential(context.app, input),
     ),
   },
   system: {
@@ -353,6 +371,7 @@ export const router = os.router({
     ),
   },
   dns: {
+    catalog: authed.dns.catalog.handler(() => dnsCatalogDto),
     updateProvider: authed.dns.updateProvider.handler(({ input, context }) =>
       updateDnsProvider(context.app, input, context.actor),
     ),
@@ -363,24 +382,37 @@ export const router = os.router({
     deleteProvider: authed.dns.deleteProvider.handler(({ input, context }) =>
       deleteDnsProvider(context.app, input.id, context.actor),
     ),
-    get: authed.dns.get.handler(({ context }) => getDnsConfig(context.app)),
-    save: authed.dns.save.handler(({ input, context }) =>
-      saveDnsConfig(context.app, input, context.actor),
+    zones: authed.dns.zones.handler(({ input, context }) => listProviderZones(context.app, input)),
+    testProvider: authed.dns.testProvider.handler(({ input, context }) =>
+      testProvider(context.app, input),
     ),
-    revisions: authed.dns.revisions.handler(({ context }) => listDnsRevisions(context.app)),
-    rollback: authed.dns.rollback.handler(({ input, context }) =>
-      rollbackDnsConfig(context.app, input.revision, context.actor),
+    bindings: authed.dns.bindings.handler(({ context }) => listBindings(context.app)),
+    binding: authed.dns.binding.handler(({ input, context }) =>
+      getBinding(context.app, input.clusterId),
+    ),
+    saveBinding: authed.dns.saveBinding.handler(({ input, context }) =>
+      saveBinding(context.app, input.clusterId, input.binding, context.actor),
+    ),
+    bindingRevisions: authed.dns.bindingRevisions.handler(({ input, context }) =>
+      listBindingRevisions(context.app, input.clusterId),
+    ),
+    rollbackBinding: authed.dns.rollbackBinding.handler(({ input, context }) =>
+      rollbackBinding(context.app, input.clusterId, input.revision, context.actor),
+    ),
+    forcePublishBinding: authed.dns.forcePublishBinding.handler(({ input, context }) =>
+      forceBindingPublish(context.app, input.clusterId, input.revision, context.actor),
+    ),
+    exportBinding: authed.dns.exportBinding.handler(({ input, context }) =>
+      exportBinding(context.app, input.clusterId),
     ),
     protection: authed.dns.protection.handler(({ context }) => getDnsProtection(context.app.db)),
     setProtection: authed.dns.setProtection.handler(({ input, context }) =>
       setDnsProtection(context.app, input, context.actor),
     ),
-    forcePublish: authed.dns.forcePublish.handler(({ input, context }) =>
-      forceDnsPublish(context.app, input.revision, context.actor),
-    ),
-    reconcile: authed.dns.reconcile.handler(({ context }) =>
-      reconcileDns(context.app, context.actor),
-    ),
+    reconcile: authed.dns.reconcile.handler(async ({ input, context }) => {
+      await reconcileDns(context.app, context.actor, input.clusterId).catch(failFromCertd);
+      return ok;
+    }),
     siteTarget: authed.dns.siteTarget.handler(({ input, context }) =>
       siteDnsTarget(context.app, input.siteId),
     ),

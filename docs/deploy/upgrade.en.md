@@ -100,7 +100,7 @@ Other deployment methods:
 
 ## Upgrading a multi-organization console
 
-The console has one account and no organizations, members, roles, or separate admin area. When a version with several organizations or accounts is upgraded, migrations `0031`–`0034` run automatically at startup.
+The console has one account and no organizations, members, roles, or separate admin area. When a version with several organizations or accounts is upgraded, migrations `0032`–`0035` run automatically at startup.
 
 Before the upgrade:
 

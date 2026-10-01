@@ -255,10 +255,10 @@ A revision receipt is sealed with the master key (purpose `node.revision_receipt
 | Duration per call | 5 minutes, then `SIGKILL` |
 | stdout size | 16 MiB for `dns.*` commands, 2 MiB otherwise |
 | stderr | Discarded (dependency diagnostics may quote credentials) |
-| Commands | `version`, `providers`, `obtain`, `renew`, `revoke`, `dns.list`, `dns.set`, `dns.present`, `dns.cleanup` |
-| DNS providers | `cloudflare`, `alidns`, `huaweicloud`, `dnspod` |
+| Commands | `version`, `providers`, `obtain`, `renew`, `revoke`, `dns.list`, `dns.set`, `dns.present`, `dns.cleanup`, `dns.zones`, `dns.test` |
+| DNS providers | The provider catalog `helpers/certd/catalog.json`, see [Providers and credentials](docs/guide/dns-and-alerts.en.md#providers-and-credentials) |
 
-DNS steering (`dns.reconcile`, every minute) computes records from healthy nodes and site domains, creates a `dns_revision`, and writes it to the zone of a `platform_dns_provider`; names are recorded in `dns_managed_name` before external records are written, so partial writes can be repaired. A site's domains route as soon as they are saved; a domain belongs to one site. Behavior: [HTTPS and certificates](docs/guide/https.en.md), [DNS steering and alerts](docs/guide/dns-and-alerts.en.md).
+DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or Automatic): `dns.reconcile` computes, every minute, the records of each cluster in Automatic mode from healthy nodes and site domains (one set of address records per cluster, one CNAME per site), creates a `dns_revision` for that cluster, and writes it to the zone of the binding's provider account (`platform_dns_provider`); clusters publish and reconcile on their own, so an unavailable provider does not affect other clusters, and one process at a time writes a cluster (`dns_lease`). Names are recorded in `dns_managed_name` before external records are written, so partial writes can be repaired. Manual mode only produces the records to create and a zone file and writes no DNS. DNS steering provider accounts and DNS-01 credentials use the same provider catalog. A site's domains route as soon as they are saved; a domain belongs to one site. Behavior: [HTTPS and certificates](docs/guide/https.en.md), [DNS steering and alerts](docs/guide/dns-and-alerts.en.md).
 
 ## Statistics, logs, and alerts
 
@@ -328,7 +328,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `enrollment_token` | SHA-256 and usage of enrollment tokens |
 | `node_certificate_revocation` | Certificate serials revoked when a node is deleted |
 | `pki_authority` | Internal CA, private key envelope-encrypted |
-| `system_setting` | Platform key/value settings: setup token, session secret HMAC check value, origin allow list, SMTP, node release source, DNS resolvers, alert policy, bans, platform protection and the CC template, platform error pages, one-time migration markers |
+| `system_setting` | Platform key/value settings: setup token, session secret HMAC check value, origin allow list, SMTP, node release source, alert policy, bans, platform protection and the CC template, platform error pages, one-time migration markers |
 | `audit_log` | Audit of management actions |
 
 ### Sites and configuration
@@ -336,7 +336,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | Table | Contents |
 | --- | --- |
 | `site` | Sites: cluster, enabled state, cache key, slicing, Cache-Tag forwarding, WebSocket, certificate, TLS settings, cache generation, log sample rate, whether error pages replace origin errors and when they were saved |
-| `site_domain` | Site domains and their routing verification state |
+| `site_domain` | Site domains (host names or wildcards), unique across the console |
 | `site_star` | Per-user stars |
 | `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification, active health check and session affinity (kept while off) |
 | `origin` | Origins |
@@ -359,12 +359,13 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | --- | --- |
 | `certificate` | Chain, fingerprint, expiry, and renewal state; private key and ACME account envelope-encrypted |
 | `acme_challenge` | Short-lived public HTTP-01 responses |
-| `dns_credential` | DNS provider credentials for ACME DNS-01, envelope-encrypted |
+| `dns_credential` | DNS provider credentials and zone for ACME DNS-01, envelope-encrypted |
 | `dns_challenge_lease` | Cleanup obligations of DNS-01 TXT records |
-| `platform_dns_provider` | DNS steering provider and zone, credentials envelope-encrypted |
-| `dns_state` | DNS steering policy and desired / applied DNS revision |
-| `dns_revision` | DNS revisions: record set, managed names, status |
-| `dns_managed_name` | Registered managed DNS names |
+| `platform_dns_provider` | DNS steering provider accounts and their zones, credentials envelope-encrypted |
+| `dns_binding` | A cluster's DNS binding: mode, provider account, cluster domain, TTL, lines, desired / applied DNS revision |
+| `dns_revision` | A cluster's DNS revisions: binding settings, record set, managed names, status |
+| `dns_managed_name` | Registered managed DNS names and the cluster they belong to |
+| `dns_lease` | Leases for DNS work (cluster bindings, DNS-01 credentials): one process at a time handles a binding or credential |
 
 ### Statistics, logs, tasks, and alerts
 
@@ -432,6 +433,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0033_sites_without_suspension` | Drops `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at`; suspended sites become disabled; service accounts lose `sites:suspend` |
 | `0034_without_organization_limits` | Drops `organization_limit`; service accounts lose `limits:read`, `limits:write` |
 | `0035_single_operator` | Keeps only the earliest platform administrator who is not disabled (the other accounts' alert subscriptions move to it); IP list names become unique (organization lists with a taken name get a suffix and their rules follow), former organization lists become collections; drops `organization`, `member`, `invitation`, `organization_settings`, every `organization_id`, `session.active_organization_id` and `alert_channel.available_to_tenants`; service accounts lose the organization scopes |
+| `0036_dns_cluster_bindings` | `dns_binding`, `dns_lease`; `dns_revision.cluster_id`, `dns_managed_name.cluster_id`; the DNS steering policy becomes one binding per cluster; drops `dns_state` |
 
 ## Build output
 

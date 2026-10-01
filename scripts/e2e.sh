@@ -70,6 +70,13 @@
 #   origin errors with escaped placeholders, no-store and request ids (also in
 #   the sampled logs); platform pages for unknown hosts and disabled sites;
 #   Playwright e2e/g4.spec.ts.
+#   DNS (scripts/e2e-dns.mjs, after G4): two clusters bound to two provider
+#   accounts and domains publish cluster-level records; an offline node
+#   leaves only its cluster's records and returns; one account down does not
+#   stop the other cluster; manual mode writes nothing and exports a BIND
+#   zone file; DNS-01 credentials of the Custom HTTP provider (signed
+#   webhook) list their zone and test the connection; Playwright
+#   e2e/dns.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1064,6 +1071,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g4.mjs --cleanup || fail "G4 cleanup failed"
 pass "G4 checks passed"
+
+step "DNS: cluster bindings on two accounts, offline removal, provider outage, manual zone file, Custom HTTP credentials"
+"${COMPOSE[@]}" --profile dns up -d node-dns
+node scripts/e2e-dns.mjs || fail "DNS end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/dns.spec.ts || fail "DNS browser checks failed"
+fi
+pass "DNS checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"

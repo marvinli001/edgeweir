@@ -6,6 +6,7 @@ import { login, pick } from "./helpers";
 test("M5: DNS provider controls, statistics and alert subscriptions", async ({ page }) => {
   const state = JSON.parse(readFileSync(resolve("../../.e2e/m5-state.json"), "utf8")) as {
     siteId: string;
+    clusterId: string;
     domain: string;
   };
   const errors: string[] = [];
@@ -13,22 +14,24 @@ test("M5: DNS provider controls, statistics and alert subscriptions", async ({ p
   await login(page, "admin@e2e.test", "e2e-admin-password-123");
   await page.getByTestId("nav-dns").click();
   await expect(page.getByTestId("page-title")).toHaveText("DNS 调度");
-  await page.getByTestId("dns-provider-create").click();
+  await page.getByTestId("dns-account-create").click();
   const name = `Browser DNS ${Date.now()}`;
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("名称", { exact: true }).fill(name);
-  await dialog.getByLabel("DNS 区域").fill("browser.cdn.test");
   await pick(page, dialog.getByLabel("DNS 服务商", { exact: true }), "本地模拟服务");
-  await dialog.getByLabel("API Token").fill("e2e-dns-token");
-  await page.getByTestId("dns-provider-submit").click();
+  await dialog.getByLabel("API Token", { exact: true }).fill("e2e-dns-token");
+  await dialog.getByTestId("dns-zone-input").fill("browser.cdn.test");
+  await page.getByTestId("dns-credential-submit").click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText(name, { exact: true })).toBeVisible();
+  // The binding of the M5 cluster lives on its DNS tab.
+  await page.goto(`/clusters?cluster=${state.clusterId}&tab=dns`);
   const ttl = page.getByLabel("TTL（秒）", { exact: true });
   await ttl.fill((await ttl.inputValue()) === "120" ? "180" : "120");
-  await page.getByTestId("dns-policy-save").click();
-  await expect(page.getByTestId("dns-policy-save")).toBeDisabled();
+  await page.getByTestId("dns-binding-save").click();
+  await expect(page.getByTestId("dns-binding-save")).toBeDisabled();
   await page.getByTestId("dns-reconcile").click();
-  await expect(page.locator("tbody tr").first()).toContainText("已发布", { timeout: 30000 });
+  await expect(page.getByTestId("dns-binding-status")).toHaveText("已发布", { timeout: 30000 });
   await page.screenshot({
     path: "../../.e2e/m5-dns-desktop.png",
     fullPage: true,

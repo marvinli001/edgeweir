@@ -392,5 +392,6 @@ export type Contract = typeof contract;
 export * from "./access-keys";
 export * from "./alerts";
 export * from "./dns";
+export * from "./dns-providers";
 export * from "./service-accounts";
 export * from "./usage";

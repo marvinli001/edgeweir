@@ -119,7 +119,7 @@ describe("M3 certificate lifecycle and isolation", async () => {
       name: "DNS",
       provider: "cloudflare",
       zone: "secure.test",
-      credentials: { api_token: "unit-test-token" },
+      credentials: { api_token: "unit-test-token-0123456789" },
     });
     expect(JSON.stringify(await api.dnsCredentials.list())).not.toContain("unit-test-token");
     const [row] = await ctx.db

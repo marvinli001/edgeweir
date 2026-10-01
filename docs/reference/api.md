@@ -72,10 +72,12 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | --- | --- | --- |
 | `system.status` | `GET /system/status` | — |
 | `account.me` | `GET /me` | — |
+| `dns.catalog` | `GET /dns/catalog` | — |
 | `settings.get` | `GET /settings` | `system:read` |
 | `clusters.list`、`clusters.get` | `GET /clusters`、`GET /clusters/{id}` | `clusters:read` |
 | `sites.list`、`sites.get` | `GET /sites`、`GET /sites/{id}` | `sites:read` |
 | `sites.setEnabled` | `PUT /sites/{id}/enabled` | `sites:write` |
+| `dns.siteTarget` | `GET /sites/{siteId}/cname` | `sites:read` |
 | `usage.list`、`usage.changes` | `GET /usage`、`GET /usage/changes` | `usage:read` |
 
 | 情况 | 响应 |

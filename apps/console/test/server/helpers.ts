@@ -1,4 +1,7 @@
 import { createHmac } from "node:crypto";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Contract } from "@edgeweir/contract";
 import { type Database, defaultMigrationsFolder, schema } from "@edgeweir/db";
 import { PGlite } from "@electric-sql/pglite";
@@ -24,10 +27,48 @@ import { ensureSetupToken, runSetup } from "../../src/server/services/setup";
 export const TEST_MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
 export const PASSWORD = "correct horse battery";
 
-/** An in-process PostgreSQL (PGlite) with the real migrations applied. */
-export async function createTestDatabase() {
+/**
+ * Migrations up to and including `tag`, in a temporary folder (the migrator
+ * reads the journal and the SQL files), to seed data of an older schema.
+ */
+function migrationsUpTo(tag: string) {
+  const journal = JSON.parse(
+    readFileSync(join(defaultMigrationsFolder, "meta", "_journal.json"), "utf8"),
+  ) as { entries: { tag: string }[] };
+  const index = journal.entries.findIndex((e) => e.tag === tag);
+  if (index < 0) throw new Error(`unknown migration ${tag}`);
+  const folder = mkdtempSync(join(tmpdir(), "edgeweir-migrations-"));
+  mkdirSync(join(folder, "meta"));
+  const entries = journal.entries.slice(0, index + 1);
+  writeFileSync(join(folder, "meta", "_journal.json"), JSON.stringify({ ...journal, entries }));
+  for (const entry of entries)
+    copyFileSync(
+      join(defaultMigrationsFolder, `${entry.tag}.sql`),
+      join(folder, `${entry.tag}.sql`),
+    );
+  return folder;
+}
+
+/**
+ * An in-process PostgreSQL (PGlite) with the real migrations applied. With
+ * `seed`, migrations up to `seed.upTo` run first, then the seed (raw SQL on
+ * the older schema), then the remaining migrations.
+ */
+export async function createTestDatabase(seed?: {
+  upTo: string;
+  run: (client: PGlite) => Promise<void>;
+}) {
   const client = new PGlite();
   const pgliteDb = drizzle({ client, schema, casing: "snake_case" });
+  if (seed) {
+    const folder = migrationsUpTo(seed.upTo);
+    try {
+      await migrate(pgliteDb, { migrationsFolder: folder, migrationsSchema: "drizzle" });
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
+    await seed.run(client);
+  }
   await migrate(pgliteDb, {
     migrationsFolder: defaultMigrationsFolder,
     migrationsSchema: "drizzle",
@@ -38,9 +79,12 @@ export async function createTestDatabase() {
 
 export async function createTestContext(
   overrides: Record<string, string> = {},
-  opts: { rateLimit?: boolean } = {},
+  opts: {
+    rateLimit?: boolean;
+    seed?: { upTo: string; run: (client: PGlite) => Promise<void> };
+  } = {},
 ) {
-  const { client, db } = await createTestDatabase();
+  const { client, db } = await createTestDatabase(opts.seed);
   const env = loadEnv({
     NODE_ENV: "test",
     DATABASE_URL: "postgres://unused",

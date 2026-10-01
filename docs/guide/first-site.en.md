@@ -110,8 +110,8 @@ Add a record for every site domain in the domain's authoritative DNS.
 
 | DNS steering | Record |
 | --- | --- |
-| Not configured | `A` / `AAAA` records to the node's public address. The **IP** column of the node table in **Clusters & nodes** lists the addresses the node reports. One record per node |
-| Configured (**DNS steering**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** tab (`<site ID>.<CNAME domain>`). The card shows **Published** once the records are written to the provider |
+| Not configured (the cluster's DNS is **Not managed**) | `A` / `AAAA` records to the node's public address. The **IP** column of the node table in **Clusters & nodes** lists the addresses the node reports. One record per node |
+| Configured (the **DNS** tab of **Clusters & nodes**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** tab (`<site ID>.<cluster domain>`). In Automatic mode the card shows **Published** once the records are written to the provider; in Manual mode create the cluster's records listed on that tab first |
 
 For lines, health-based removal, and TTL of DNS steering, see [Configure DNS steering](dns-and-alerts.en.md#configure-dns-steering).
 

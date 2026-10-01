@@ -23,14 +23,18 @@ export function CnameTarget({ siteId }: { siteId: string }) {
       </CardHeader>
       <CardContent className="grid gap-3">
         <div className="flex items-center gap-2">
-          <code className="min-w-0 flex-1 break-all text-sm">{query.data.target}</code>
+          <code className="min-w-0 flex-1 break-all text-sm" data-testid="cname-target-value">
+            {query.data.target}
+          </code>
           <CopyButton iconOnly value={query.data.target} />
-          <Badge variant="outline">
-            {query.data.published
-              ? query.data.healthy
-                ? m.dns_applied()
-                : m.dns_no_healthy_nodes()
-              : m.dns_pending()}
+          <Badge variant="outline" data-testid="cname-target-status">
+            {query.data.mode === "manual"
+              ? m.dns_mode_manual()
+              : query.data.published
+                ? query.data.healthy
+                  ? m.dns_applied()
+                  : m.dns_no_healthy_nodes()
+                : m.dns_pending()}
           </Badge>
         </div>
         {query.data.lines.map((line) => (

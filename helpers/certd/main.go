@@ -3,9 +3,9 @@
 // The console (a pg-boss job) runs it as a short-lived process and talks to
 // it with one JSON request on stdin and one JSON response on stdout, so no
 // secrets ever appear on the command line or in the environment of other
-// processes. Certificates will be obtained with lego (ACME, ARI, DNS-01) and
-// DNS records managed with libdns providers (DNSPod, Alibaba Cloud, Huawei
-// Cloud, Cloudflare, ...). Phase 0 ships the protocol and the skeleton only.
+// processes. Certificates are obtained with lego (ACME, ARI, DNS-01); DNS
+// records are managed through the provider adapters in providers/, one per
+// entry of the console's provider catalog (catalog.json).
 package main
 
 import (
@@ -16,6 +16,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/marvinli001/edgeweir/helpers/certd/internal/dnsx"
 )
 
 // Version is set at build time with -ldflags "-X main.Version=...".
@@ -29,24 +31,24 @@ type Request struct {
 
 // Response is the single JSON document written to stdout.
 type Response struct {
-	OK     bool   `json:"ok"`
-	Error  string `json:"error,omitempty"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+	// Code classifies DNS failures (dns_auth_failed, dns_zone_not_found, ...).
+	Code   string `json:"code,omitempty"`
 	Result any    `json:"result,omitempty"`
 }
-
-// Providers lists the DNS providers the helper will support through libdns.
-var Providers = []string{"dnspod", "alidns", "huaweicloud", "cloudflare"}
 
 func handle(req Request, session *protocolSession) Response {
 	switch req.Command {
 	case "version":
 		return Response{OK: true, Result: map[string]string{"version": Version}}
 	case "providers":
-		return Response{OK: true, Result: Providers}
-	case "obtain", "renew", "revoke", "dns.list", "dns.set", "dns.present", "dns.cleanup":
+		return Response{OK: true, Result: providerIDs()}
+	case "obtain", "renew", "revoke", "dns.list", "dns.set", "dns.present", "dns.cleanup", "dns.zones", "dns.test":
 		timeout := 5 * time.Minute
 		if strings.HasPrefix(req.Command, "dns.") {
-			timeout = 30 * time.Second
+			// Some APIs page slowly (one request per record) or apply changes asynchronously.
+			timeout = 2 * time.Minute
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
@@ -58,7 +60,11 @@ func handle(req Request, session *protocolSession) Response {
 			result, err = acmeCommand(ctx, req.Command, req.Params, session)
 		}
 		if err != nil {
-			return Response{Error: err.Error()}
+			resp := Response{Error: err.Error()}
+			if strings.HasPrefix(req.Command, "dns.") {
+				resp.Code = dnsx.Code(err)
+			}
+			return resp
 		}
 		return Response{OK: true, Result: result}
 	default:

@@ -101,9 +101,9 @@ For using and revoking AccessKeys, see [Access logs and access keys](access-logs
 | **Access control** | **IP lists** | `/ip-lists` | Lists referenced by rules, and allow and block lists; see [Rules, IP lists, and GeoIP](rules.en.md) |
 | **Access control** | **Bans** | `/bans` | Site bans and global bans; see [Bans](bans.en.md) |
 | **Access control** | **Global rules** | `/rules` | Rules applied to every site; see [Rules, IP lists, and GeoIP](rules.en.md) |
-| **Infrastructure** | **Clusters & nodes** | `/clusters` | Clusters, node groups, nodes, configuration canary, node upgrades, and revisions; see [Clusters and nodes](system.en.md#clusters-and-nodes) |
+| **Infrastructure** | **Clusters & nodes** | `/clusters` | Clusters, node groups, nodes, configuration canary, node upgrades, revisions, and the cluster's DNS binding; see [Clusters and nodes](system.en.md#clusters-and-nodes) |
 | **Infrastructure** | **Regions** | `/regions` | Region labels for node groups; see [Regions](system.en.md#regions) |
-| **Infrastructure** | **DNS steering** | `/dns` | DNS providers, lines, and DNS revisions; see [Configure DNS steering](dns-and-alerts.en.md#configure-dns-steering) |
+| **Infrastructure** | **DNS steering** | `/dns` | DNS provider accounts, each cluster's DNS binding, and mass removal protection; see [Configure DNS steering](dns-and-alerts.en.md#configure-dns-steering) |
 | **System** | **Alerts** | `/alerts` | Alert channels, subscriptions, recent events, and alert rules; see [Alerts page](dns-and-alerts.en.md#alerts-page) |
 | **System** | **Service accounts** | `/service-accounts` | Service accounts integrations use on `/api/v1`; see [Service accounts](system.en.md#service-accounts) |
 | **System** | **Audit log** | `/audit` | See [Audit log](system.en.md#audit-log) |
