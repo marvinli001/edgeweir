@@ -13,6 +13,7 @@ const load = (name: string) =>
 const vector = load("content_hash_vector.json");
 const vectorM2 = load("content_hash_vector_m2.json");
 const vectorV021 = load("content_hash_vector_v021.json");
+const vectorV0110 = load("content_hash_vector_v0110.json");
 
 /** The console models behind the M2 vector (pools, S3, cache keys, rule conditions). */
 const m2Models = (): CompileInput => ({
@@ -153,6 +154,7 @@ describe("content hash matches the Go agent", () => {
     ["phase 0", vector],
     ["M2", vectorM2],
     ["v0.2.1", vectorV021],
+    ["v0.11.0", vectorV0110],
   ])("encodes the %s vector to the same canonical bytes and hash", (_, v) => {
     const config = canonicalize(fromJson(NodeConfigSchema, v.config));
     const bare = clone(NodeConfigSchema, config);
@@ -179,6 +181,25 @@ describe("content hash matches the Go agent", () => {
     expect(config.contentHash).toBe(vectorV021.content_hash);
     // Without the new fields the v0.2.1 compiler still yields the M2 hash.
     expect(compileNodeConfig(m2Models(), 12n).contentHash).toBe(vectorM2.content_hash);
+  });
+
+  it("canonicalizes the v0.11.0 lists (compression types, excluded CRS rules, features) as the Go agent does", () => {
+    const config = canonicalize(fromJson(NodeConfigSchema, vectorV0110.config));
+    const tls = config.sites.find((site) => site.tls)?.tls;
+    const waf = config.sites.find((site) => site.waf)?.waf;
+    expect(tls?.gzipTypes).toEqual(["application/json", "text/css"]);
+    expect(tls?.brotliTypes).toEqual(["application/json", "text/css"]);
+    expect(tls?.zstdTypes).toEqual(["image/svg+xml", "text/plain"]);
+    expect(waf?.excludedRuleIds).toEqual([920350, 942100]);
+    expect(config.requiredFeatures).toEqual(["brotli-v1", "modsecurity-v1", "zstd-v1"]);
+    expect(contentHash(config)).toBe(vectorV0110.content_hash);
+    // Without the v0.11.0 fields it is the M2 vector again.
+    for (const site of config.sites) {
+      site.tls = undefined;
+      site.waf = undefined;
+    }
+    config.requiredFeatures = [];
+    expect(contentHash(config)).toBe(vectorM2.content_hash);
   });
 
   it("compiles console models into the same hash", () => {
