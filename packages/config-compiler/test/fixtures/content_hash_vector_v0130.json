@@ -1,5 +1,5 @@
 {
-  "description": "proto v0.13.0 NodeConfig content_hash test vector: the M2 vector plus, on site s2, an origin group, site rules with functions and the rules-v2 fields (http.request.full_uri, http.request.uri.path.extension, http.response.content_type.media_type), a rewrite and a redirect with value expression targets (regex_replace, concat, lower), query edits (set_query unsorted, remove_query unsorted with a duplicate) and preserve_query set where it differs from the kind's default, a static redirect with set_query, a config action with every v0.13.0 field (gzip = true, optional booleans false, log_sample_rate 0), an origin action, two compression rules (one with an empty list), a cache rule in the structured shape with browser_ttl_seconds and one with a typed condition, bulk_redirects unsorted (two sources whose UTF-8 byte order differs from UTF-16 order), and a platform rule with set_query unsorted; required_features unsorted with a duplicate. The canonical form sorts bulk_redirects by source (bytes), set_query by name, remove_query as a set and required_features as a set: sha256(deterministic binary encoding with revision=0 and content_hash=\"\") after canonical sorting",
+  "description": "proto v0.13.0 NodeConfig content_hash test vector: the M2 vector plus, on site s2, an origin group, site rules with functions and the rules-v2 fields (http.request.full_uri, http.request.uri.path.extension, http.response.content_type.media_type), a rewrite and a redirect with value expression targets (regex_replace, concat, lower), query edits (set_query and remove_query unsorted) and preserve_query set where it differs from the kind's default, a static redirect with set_query, a config action with every v0.13.0 field (gzip = true, optional booleans false, log_sample_rate 0), an origin action, two compression rules (one with an empty list), a cache rule in the structured shape with browser_ttl_seconds and one with a typed condition, bulk_redirects unsorted (two sources whose UTF-8 byte order differs from UTF-16 order), and a platform rule with set_query unsorted; required_features unsorted with a duplicate. The canonical form sorts bulk_redirects by source (bytes), set_query by name, remove_query sorted and required_features as a set: sha256(deterministic binary encoding with revision=0 and content_hash=\"\") after canonical sorting",
   "config": {
     "revision": "12",
     "contentHash": "ignored",
@@ -221,7 +221,7 @@
                   "value": "en us"
                 }
               ],
-              "removeQuery": ["utm_source", "utm_medium", "utm_source"]
+              "removeQuery": ["utm_source", "utm_medium"]
             }
           },
           {

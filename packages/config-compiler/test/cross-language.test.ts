@@ -184,7 +184,7 @@ const v0130Models = (): CompileInput => {
           { name: "v", value: "2" },
           { name: "lang", value: "en us" },
         ],
-        removeQuery: ["utm_source", "utm_medium", "utm_source"],
+        removeQuery: ["utm_source", "utm_medium"],
       },
     },
     {
