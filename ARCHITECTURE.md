@@ -344,17 +344,17 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `enrollment_token` | 注册 token 的 SHA-256 与使用状态 |
 | `node_certificate_revocation` | 删除节点时吊销的证书序列号 |
 | `pki_authority` | 内部 CA，私钥信封加密 |
-| `system_setting` | 平台键值设置：setup token、会话 secret 的 HMAC 校验值、源站允许清单、SMTP、节点发布源、DNS 解析器、告警策略、封禁、平台防护与 CC 模板、一次性迁移标记 |
+| `system_setting` | 平台键值设置：setup token、会话 secret 的 HMAC 校验值、源站允许清单、SMTP、节点发布源、DNS 解析器、告警策略、封禁、平台防护与 CC 模板、平台错误页、一次性迁移标记 |
 | `audit_log` | 管理操作审计 |
 
 ### 网站与配置
 
 | 表 | 内容 |
 | --- | --- |
-| `site` | 网站：所属组织与集群、启用状态、平台暂停（原因、备注）、缓存键、分片、WebSocket、证书、TLS 设置、缓存代际号、日志采样率 |
+| `site` | 网站：所属组织与集群、启用状态、平台暂停（原因、备注）、缓存键、分片、Cache-Tag 转发、WebSocket、证书、TLS 设置、缓存代际号、日志采样率、错误页是否拦截源站错误与保存时间 |
 | `site_domain` | 网站域名与路由校验状态 |
 | `site_star` | 用户星标 |
-| `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验 |
+| `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验、主动健康检查与会话保持（关闭时保留设置） |
 | `origin` | 源站 |
 | `origin_credential` | S3 源站密钥，信封加密 |
 | `cache_rule` | 缓存规则 |
@@ -363,6 +363,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `ip_ban` | 动态封禁：范围（平台 / 网站）、规范化 CIDR、原因码、来源（手动 / 自动，自动带来源节点与触发条件）、到期与解封时间、序号 `seq`（序列 `ip_ban_seq`）、是否下发 |
 | `site_protection` | 网站防护：Under Attack 与挑战类型、通行凭证有效期、PoW 难度、CC 策略（跟随模板或自定义）、JA4 日志；没有行即默认值 |
 | `site_waf` | 网站的 OWASP CRS：模式（关闭 / 仅检测 / 拦截）、paranoia level、异常分数阈值、排除的规则 id、请求体检查上限；没有行即关闭 |
+| `site_error_page` | 网站错误页：每个状态码（403、429、502、503、504）一个模板 |
 | `challenge_key` | 集群的挑战密钥（`next`、`current`、`previous`），密钥信封加密 |
 | `config_revision` | 每个集群的 revision：序号、内容哈希、二进制 IR、原因码 |
 | `node_config_status` | 节点应用回执与心跳，含回执验证标记 |
@@ -392,10 +393,10 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `stats_rollup_dirty` | 待重新汇总的时间桶（小时、天、用量窗口） |
 | `node_stats_cursor` | 每个节点统计批次的序号高水位与统计水位（`complete_until`） |
 | `site_usage` | 按网站、UTC 5 分钟窗口的可复算用量（请求数、出站与入站字节，十进制精确值）、修订号与全局序号 `seq`（序列 `site_usage_seq`） |
-| `access_log` | 采样访问日志（网站开启时含 JA4；命中的 CRS 规则与是否被拦截），按 UTC 日分区 |
+| `access_log` | 采样访问日志（请求 id；网站开启时含 JA4；命中的 CRS 规则与是否被拦截），按 UTC 日分区 |
 | `security_event` | 节点上报的 CC 防护事件：级别变化、路径升降级、自动封禁，带当时的 Top IP 与 Top 路径 |
 | `node_log_cursor` | 每个节点日志批次的序号高水位 |
-| `origin_health` | 节点上报的源站被动健康状态与错误码 |
+| `origin_health` | 节点上报的源站健康状态与错误码，被动检查与主动检查各一行 |
 | `cache_task` | 刷新预热任务 |
 | `cache_task_node` | 任务在每个节点上的交付与结果 |
 | `node_upgrade` | 节点升级任务 |
@@ -443,6 +444,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0028_g1_dynamic_bans` | `ip_ban`、序列 `ip_ban_seq`；`node.ban_status`；`organization_limit.max_bans` |
 | `0029_g2_challenges` | `site_protection`、`challenge_key`、`security_event`；`node.security_state`；`access_log.ja4` |
 | `0030_g3_waf` | `site_waf`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `waf_rules`；`access_log.waf_rule_ids`、`waf_blocked` |
+| `0031_g4_cache_origins_error_pages` | `site_error_page`；`origin_pool.active_health_check`、`session_affinity`；`site.keep_cache_tag`、`intercept_origin_errors`、`error_pages_updated_at`；`origin_health.source`（进入主键，已有行为被动检查）；`access_log.request_id` |
 
 ## 构建产物
 

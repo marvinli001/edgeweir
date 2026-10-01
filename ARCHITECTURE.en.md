@@ -344,17 +344,17 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `enrollment_token` | SHA-256 and usage of enrollment tokens |
 | `node_certificate_revocation` | Certificate serials revoked when a node is deleted |
 | `pki_authority` | Internal CA, private key envelope-encrypted |
-| `system_setting` | Platform key/value settings: setup token, session secret HMAC check value, origin allow list, SMTP, node release source, DNS resolvers, alert policy, bans, platform protection and the CC template, one-time migration markers |
+| `system_setting` | Platform key/value settings: setup token, session secret HMAC check value, origin allow list, SMTP, node release source, DNS resolvers, alert policy, bans, platform protection and the CC template, platform error pages, one-time migration markers |
 | `audit_log` | Audit of management actions |
 
 ### Sites and configuration
 
 | Table | Contents |
 | --- | --- |
-| `site` | Sites: organization and cluster, enabled state, platform suspension (reason, note), cache key, slicing, WebSocket, certificate, TLS settings, cache generation, log sample rate |
+| `site` | Sites: organization and cluster, enabled state, platform suspension (reason, note), cache key, slicing, Cache-Tag forwarding, WebSocket, certificate, TLS settings, cache generation, log sample rate, whether error pages replace origin errors and when they were saved |
 | `site_domain` | Site domains and their routing verification state |
 | `site_star` | Per-user stars |
-| `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification |
+| `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification, active health check and session affinity (kept while off) |
 | `origin` | Origins |
 | `origin_credential` | S3 origin keys, envelope-encrypted |
 | `cache_rule` | Cache rules |
@@ -363,6 +363,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `ip_ban` | Dynamic bans: scope (platform / site), normalized CIDR, reason code, source (manual / auto; auto bans keep the node and trigger), expiry and removal time, `seq` (sequence `ip_ban_seq`), whether it is delivered |
 | `site_protection` | Site protection: Under Attack and its challenge type, pass lifetime, proof-of-work difficulty, CC policy (template or custom), JA4 logging; no row means the defaults |
 | `site_waf` | A site's OWASP CRS: mode (off, detect, block), paranoia level, anomaly threshold, excluded rule ids, request body limit; no row means off |
+| `site_error_page` | A site's error pages: one template per status (403, 429, 502, 503, 504) |
 | `challenge_key` | Challenge keys of a cluster (`next`, `current`, `previous`), secrets envelope-encrypted |
 | `config_revision` | Revisions per cluster: number, content hash, binary IR, reason code |
 | `node_config_status` | Node apply receipts and heartbeats, with the receipt verification flag |
@@ -392,10 +393,10 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `stats_rollup_dirty` | Time buckets waiting for a rollup (hours, days, usage windows) |
 | `node_stats_cursor` | Per-node high-water mark of statistics batch sequences and the statistics watermark (`complete_until`) |
 | `site_usage` | Recomputable usage per site and UTC 5-minute window (requests, bytes out and in, exact decimals), revision and global `seq` (sequence `site_usage_seq`) |
-| `access_log` | Sampled access logs (with JA4 when the site records it; matched CRS rules and whether CRS blocked the request), one partition per UTC day |
+| `access_log` | Sampled access logs (request id; JA4 when the site records it; matched CRS rules and whether CRS blocked the request), one partition per UTC day |
 | `security_event` | CC mitigation events reported by nodes: level changes, escalated paths, automatic bans, with the top addresses and paths of the moment |
 | `node_log_cursor` | Per-node high-water mark of log batches |
-| `origin_health` | Passive origin health and error codes reported by nodes |
+| `origin_health` | Origin health and error codes reported by nodes, one row each for the passive and the active check |
 | `cache_task` | Purge and prefetch tasks |
 | `cache_task_node` | Delivery and result of a task on each node |
 | `node_upgrade` | Node upgrade jobs |
@@ -443,6 +444,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0028_g1_dynamic_bans` | `ip_ban`, sequence `ip_ban_seq`; `node.ban_status`; `organization_limit.max_bans` |
 | `0029_g2_challenges` | `site_protection`, `challenge_key`, `security_event`; `node.security_state`; `access_log.ja4` |
 | `0030_g3_waf` | `site_waf`; `waf_rules` in minute, hour and day statistics and the view `traffic_hour_stats`; `access_log.waf_rule_ids`, `waf_blocked` |
+| `0031_g4_cache_origins_error_pages` | `site_error_page`; `origin_pool.active_health_check`, `session_affinity`; `site.keep_cache_tag`, `intercept_origin_errors`, `error_pages_updated_at`; `origin_health.source` (joins the primary key, existing rows are passive); `access_log.request_id` |
 
 ## Build output
 
