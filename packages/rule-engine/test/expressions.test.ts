@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
   actionPhases,
+  cacheConditionExpression,
   canonicalCidr,
   challengeTypes,
   ExpressionError,
   evaluate,
+  evaluateValue,
   isRateLimitKey,
+  needsRulesV2,
+  type Phase,
   parseExpression,
+  parseValueExpression,
   phases,
+  structuredCacheCondition,
+  usesGeo,
   usesJa4,
   validActionIr,
+  validRedirectTarget,
+  wildcardSegments,
 } from "../src/index";
 
 describe("typed rule expressions", () => {
@@ -129,5 +138,95 @@ describe("typed rule expressions", () => {
     expect(canonicalCidr("192.0.2.123/24")).toBe("192.0.2.0/24");
     expect(canonicalCidr("::ffff:192.0.2.12/120")).toBe("192.0.2.0/24");
     expect(() => canonicalCidr("0x7f000001")).toThrow();
+  });
+});
+
+describe("rules-v2 functions, value expressions and cache conditions", () => {
+  const position = (source: string, phase: Phase = "waf-custom", value = false) => {
+    try {
+      if (value) parseValueExpression(source, phase);
+      else parseExpression(source, phase);
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExpressionError);
+      return (error as ExpressionError).position;
+    }
+    throw new Error(`accepted: ${source}`);
+  };
+  it("points at the offending part of a call", () => {
+    expect(position('trim(http.host) eq "a"')).toBe(0);
+    expect(position('lower(ip.src) eq "a"')).toBe(6);
+    expect(position('regex_replace(http.host, "(?i)a", "b")', "redirect", true)).toBe(26);
+    expect(position('wildcard_replace(http.host, "/*", "${2}")', "redirect", true)).toBe(35);
+    expect(position('starts_with(http.host, "a", "b")')).toBe(28);
+  });
+  it("allows the replacing functions only in value expressions, once each", () => {
+    expect(() => parseExpression('regex_replace(http.host, "a", "b") eq "c"')).toThrow(
+      "only available in value expressions",
+    );
+    expect(() =>
+      parseValueExpression(
+        'concat(wildcard_replace(http.host, "*", "${1}"), wildcard_replace(http.host, "*", "x"))',
+        "redirect",
+      ),
+    ).toThrow("once per expression");
+    expect(
+      parseValueExpression(
+        'concat(regex_replace(http.host, "a", "b"), wildcard_replace(http.host, "*", "x"))',
+        "redirect",
+      ).children,
+    ).toHaveLength(2);
+  });
+  it("needs rules-v2 only for functions and the new fields", () => {
+    expect(needsRulesV2(parseExpression('http.host eq "a" and ssl'.replace(" and ssl", "")))).toBe(
+      false,
+    );
+    expect(needsRulesV2(parseExpression('lower(http.host) eq "a"'))).toBe(true);
+    expect(needsRulesV2(parseExpression('http.request.uri.path.extension eq "png"'))).toBe(true);
+    expect(needsRulesV2(parseValueExpression('"/x"', "redirect"))).toBe(true);
+    expect(usesJa4(parseExpression('lower(tls.ja4) eq "x"'))).toBe(true);
+    expect(usesGeo(parseExpression('lower(ip.geoip.country) eq "nz"'))).toBe(true);
+  });
+  it("accepts longer cache conditions only when asked", () => {
+    const long = cacheConditionExpression({
+      pathPrefixes: Array.from({ length: 32 }, (_, i) => `/${String(i).padStart(200, "x")}/`),
+      paths: [],
+      extensions: [],
+    });
+    expect(long.length).toBeGreaterThan(4096);
+    expect(() => parseExpression(long, "cache")).toThrow("too long");
+    const ir = parseExpression(long, "cache", { maxLength: 16384 });
+    expect(structuredCacheCondition(ir)?.pathPrefixes).toHaveLength(32);
+  });
+  it("keeps expressions outside the builder's shape as expressions", () => {
+    for (const source of [
+      'starts_with(http.request.uri.path, "/a") or http.host eq "x"',
+      'http.request.uri.path.extension in {"PNG"}',
+      'starts_with(http.request.uri.path, "a")',
+      'starts_with(http.request.uri.path, "/a") and starts_with(http.request.uri.path, "/b")',
+      "false",
+      'http.request.uri.path eq "/x"',
+    ])
+      expect(structuredCacheCondition(parseExpression(source, "cache")), source).toBeNull();
+  });
+  it("bounds computed values and splits wildcard patterns", () => {
+    const big = parseValueExpression(
+      "concat(http.request.uri.path, http.request.uri.path)",
+      "redirect",
+    );
+    expect(() => evaluateValue(big, { "http.request.uri.path": "a".repeat(5000) })).toThrow(
+      "too long",
+    );
+    expect(wildcardSegments("a\\*b*c\\\\")).toEqual(["a*b", "c\\"]);
+    expect(() => wildcardSegments("a\\b")).toThrow(ExpressionError);
+    expect(validRedirectTarget("https://example.test/a")).toBe(true);
+    expect(validRedirectTarget("//example.test")).toBe(false);
+  });
+  it("runs compression rules after response-transform with response fields", () => {
+    expect(phases.at(-1)).toBe("compression");
+    expect(actionPhases.compression).toEqual(["compression"]);
+    expect(actionPhases.origin).toEqual(["origin"]);
+    expect(() =>
+      parseExpression('http.response.content_type.media_type eq "text/html"', "compression"),
+    ).not.toThrow();
   });
 });

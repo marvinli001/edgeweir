@@ -82,6 +82,21 @@
           }
         }
       }
+    },
+    {
+      "includes": [
+        "packages/rule-engine/**",
+        "apps/console/test/**",
+        "apps/console/e2e/**",
+        "scripts/e2e-*.mjs"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
     }
   ]
 }

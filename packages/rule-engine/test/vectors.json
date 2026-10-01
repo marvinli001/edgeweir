@@ -1863,6 +1863,5700 @@
     }
   },
   {
+    "source": "lower(http.host) eq \"example.test\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.host": "EXAMPLE.Test"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "example.test",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "upper(http.request.method) in {\"GET\" \"HEAD\"}",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.method": "get"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": ["GET", "HEAD"],
+      "children": [
+        {
+          "op": "call",
+          "field": "upper",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.method",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "lower(http.request.uri.path) eq \"/é\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/É"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "/é",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "upper(http.request.uri.path) eq \"/é\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/é"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "/é",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "upper",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "upper(http.request.uri.path) eq \"/A中\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a中"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "/A中",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "upper",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(http.request.uri.query) gt 10",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.query": "a=12345678901"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "gt",
+      "field": "",
+      "valueType": "number",
+      "value": "10",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.query",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(http.request.uri.path) eq 4",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/中"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "number",
+      "value": "4",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(http.request.uri.query) eq 0",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "number",
+      "value": "0",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.query",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/api/\")",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/api/v1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/api/",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/API/\")",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/api/v1"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/API/",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"\")",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/x"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/中\")",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/中文"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/中",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "not ends_with(http.request.uri.path, \".php\")",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/index.php"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "not",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "ends_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": ".php",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "ends_with(lower(http.request.uri.path), \".php\")",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/INDEX.PHP"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "ends_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": ".php",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "ends_with(http.host, http.request.headers[\"x-suffix\"])",
+    "phase": "waf-custom",
+    "request": {
+      "http.host": "a.example.test",
+      "http.request.headers.x-suffix": "example.test"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "ends_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.host",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "field",
+          "field": "http.request.headers.x-suffix",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/a\") eq false",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/b"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "boolean",
+      "value": "false",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/a",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "url_decode(http.request.uri.query) contains \"<script\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.query": "q=%3Cscript%3E"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "contains",
+      "field": "",
+      "valueType": "string",
+      "value": "<script",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "url_decode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.query",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "url_decode(http.request.uri.query) eq \"a b+c\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.query": "a+b%2Bc"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "a b+c",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "url_decode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.query",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "url_decode(http.request.uri.query) eq \"%zz%4\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.query": "%zz%4"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "%zz%4",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "url_decode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.query",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "url_decode(http.request.uri.query) eq \"%41\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.query": "%2541"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "%41",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "url_decode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.query",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "url_decode(http.request.uri.query) eq \"a\\u0000b\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.query": "a%00b"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "a\u0000b",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "url_decode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.query",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "url_decode(http.request.uri.path) eq \"/中\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/%E4%B8%ad"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "/中",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "url_decode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(url_decode(http.request.uri.query)) ge 3",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.query": "%41%42%43"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "ge",
+      "field": "",
+      "valueType": "number",
+      "value": "3",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "url_decode",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "field",
+                  "field": "http.request.uri.query",
+                  "valueType": "string",
+                  "value": "",
+                  "values": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "concat(http.request.method, \" \", http.request.uri.path) eq \"GET /x\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.method": "GET",
+      "http.request.uri.path": "/x"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "GET /x",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "concat",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.method",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": " ",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "concat(lower(http.host), http.request.uri.path) matches \"^example\\\\.test/a\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.host": "Example.TEST",
+      "http.request.uri.path": "/a"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "",
+      "valueType": "string",
+      "value": "^example\\.test/a",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "concat",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "lower",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "field",
+                  "field": "http.host",
+                  "valueType": "string",
+                  "value": "",
+                  "values": [],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "starts_with(concat(\"/\", lower(http.request.headers[\"x-region\"])), \"/nz\")",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.headers.x-region": "NZ-1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "concat",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "call",
+              "field": "lower",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "field",
+                  "field": "http.request.headers.x-region",
+                  "valueType": "string",
+                  "value": "",
+                  "values": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/nz",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "lower(http.request.headers[\"x-a\"]) in {\"one\" \"two\"}",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.headers.x-a": "TWO"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": ["one", "two"],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.headers.x-a",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(lower(upper(lower(http.host)))) eq 12",
+    "phase": "waf-custom",
+    "request": {
+      "http.host": "example.test"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "number",
+      "value": "12",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "lower",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "call",
+                  "field": "upper",
+                  "valueType": "string",
+                  "value": "",
+                  "values": [],
+                  "children": [
+                    {
+                      "op": "call",
+                      "field": "lower",
+                      "valueType": "string",
+                      "value": "",
+                      "values": [],
+                      "children": [
+                        {
+                          "op": "field",
+                          "field": "http.host",
+                          "valueType": "string",
+                          "value": "",
+                          "values": [],
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.uri.path.extension in {\"png\" \"jpg\"}",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path.extension": "png"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "http.request.uri.path.extension",
+      "valueType": "string",
+      "value": "",
+      "values": ["jpg", "png"],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.full_uri eq \"https://example.test/a?b=1\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.full_uri": "https://example.test/a?b=1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.full_uri",
+      "valueType": "string",
+      "value": "https://example.test/a?b=1",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.response.content_type.media_type eq \"text/html\"",
+    "phase": "compression",
+    "request": {
+      "http.response.content_type.media_type": "text/html"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.response.content_type.media_type",
+      "valueType": "string",
+      "value": "text/html",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "compression",
+      "compression": ["br", "gzip"]
+    }
+  },
+  {
+    "source": "http.response.headers[\"content-type\"] contains \"json\" and http.response.code eq 200",
+    "phase": "compression",
+    "request": {
+      "http.response.headers.content-type": "application/json",
+      "http.response.code": 200
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "contains",
+          "field": "http.response.headers.content-type",
+          "valueType": "string",
+          "value": "json",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "eq",
+          "field": "http.response.code",
+          "valueType": "number",
+          "value": "200",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "action": {
+      "kind": "compression",
+      "compression": []
+    }
+  },
+  {
+    "source": "http.response.content_type.media_type in {\"image/png\" \"image/jpeg\"}",
+    "phase": "response-transform",
+    "request": {
+      "http.response.content_type.media_type": "image/png"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "http.response.content_type.media_type",
+      "valueType": "string",
+      "value": "",
+      "values": ["image/jpeg", "image/png"],
+      "children": []
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/api/\")",
+    "phase": "origin",
+    "request": {
+      "http.request.uri.path": "/api/v1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/api/",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "action": {
+      "kind": "origin",
+      "originGroup": "api",
+      "hostHeader": "api.example.test",
+      "sni": "api.example.test",
+      "port": 8443
+    }
+  },
+  {
+    "source": "http.request.uri.path eq \"/x\"",
+    "phase": "origin",
+    "request": {
+      "http.request.uri.path": "/x"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/x",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "origin",
+      "port": 8080
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/live/\")",
+    "phase": "config",
+    "request": {
+      "http.request.uri.path": "/live/a"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/live/",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "action": {
+      "kind": "config",
+      "gzip": true,
+      "brotli": false,
+      "zstd": false,
+      "websocket": false,
+      "underAttack": true,
+      "ccEnabled": false,
+      "ccMaxLevel": "js",
+      "originConnectTimeoutMs": 2000,
+      "originSendTimeoutMs": 30000,
+      "originReadTimeoutMs": 5000,
+      "logSampleRate": 10000
+    }
+  },
+  {
+    "source": "http.request.uri.path eq \"/x\"",
+    "phase": "config",
+    "request": {
+      "http.request.uri.path": "/x"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/x",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "logSampleRate": 0
+    }
+  },
+  {
+    "source": "http.request.uri.path eq \"/old\"",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/old"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/old",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "redirect",
+      "value": "https://example.test/new?a=1#top",
+      "statusCode": 308,
+      "preserveQuery": true,
+      "setQuery": [
+        {
+          "name": "lang",
+          "value": "zh CN"
+        },
+        {
+          "name": "src",
+          "value": "old"
+        }
+      ],
+      "removeQuery": ["session", "utm_source"]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/old/\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/old/a"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/old/",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "action": {
+      "kind": "redirect",
+      "target": {
+        "op": "call",
+        "field": "regex_replace",
+        "valueType": "string",
+        "value": "",
+        "values": [],
+        "children": [
+          {
+            "op": "field",
+            "field": "http.request.uri.path",
+            "valueType": "string",
+            "value": "",
+            "values": [],
+            "children": []
+          },
+          {
+            "op": "const",
+            "field": "",
+            "valueType": "string",
+            "value": "^/old/(.*)$",
+            "values": [],
+            "children": []
+          },
+          {
+            "op": "const",
+            "field": "",
+            "valueType": "string",
+            "value": "/new/${1}",
+            "values": [],
+            "children": []
+          }
+        ]
+      },
+      "statusCode": 301
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/v1/\")",
+    "phase": "request-transform",
+    "request": {
+      "http.request.uri.path": "/v1/a"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/v1/",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "action": {
+      "kind": "rewrite",
+      "target": {
+        "op": "call",
+        "field": "wildcard_replace",
+        "valueType": "string",
+        "value": "",
+        "values": [],
+        "children": [
+          {
+            "op": "field",
+            "field": "http.request.uri.path",
+            "valueType": "string",
+            "value": "",
+            "values": [],
+            "children": []
+          },
+          {
+            "op": "const",
+            "field": "",
+            "valueType": "string",
+            "value": "/v1/*",
+            "values": [],
+            "children": []
+          },
+          {
+            "op": "const",
+            "field": "",
+            "valueType": "string",
+            "value": "/v2/${1}",
+            "values": [],
+            "children": []
+          }
+        ]
+      },
+      "preserveQuery": false,
+      "setQuery": [
+        {
+          "name": "v",
+          "value": "2"
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.uri.path eq \"/a\"",
+    "phase": "request-transform",
+    "request": {
+      "http.request.uri.path": "/a"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/a",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "rewrite",
+      "value": "/b",
+      "removeQuery": ["debug"]
+    }
+  },
+  {
+    "source": "concat(\"https://example.test\", http.request.uri.path)",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/a"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "concat",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "https://example.test",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "https://example.test/a"
+  },
+  {
+    "source": "regex_replace(http.request.uri.path, \"^/old/(.*)$\", \"/new/${1}\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/old/a/b"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "regex_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "^/old/(.*)$",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/new/${1}",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/new/a/b"
+  },
+  {
+    "source": "regex_replace(http.request.uri.path, \"^/old/(.*)$\", \"/new/${1}\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/x"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "regex_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "^/old/(.*)$",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/new/${1}",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/x"
+  },
+  {
+    "source": "regex_replace(http.request.uri.path, \"a\", \"b\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/aaa"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "regex_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "a",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "b",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/baa"
+  },
+  {
+    "source": "regex_replace(http.request.uri.path, \"^/(x)|^/(y)$\", \"[${1}|${2}]\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/y"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "regex_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "^/(x)|^/(y)$",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "[${1}|${2}]",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "[|y]"
+  },
+  {
+    "source": "regex_replace(http.request.uri.path, \"^/(p)$\", \"/$1/$${1}\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/p"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "regex_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "^/(p)$",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/$1/$${1}",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/$1/$p"
+  },
+  {
+    "source": "regex_replace(http.request.uri.path, \"^\", \"/v2\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/a"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "regex_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "^",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/v2",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/v2/a"
+  },
+  {
+    "source": "regex_replace(http.request.uri.path, \"^/.{3}\", \"/x\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/中a"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "regex_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "^/.{3}",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/x",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/xa"
+  },
+  {
+    "source": "regex_replace(lower(http.request.uri.path), \"\\\\.html$\", \"\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/A.HTML"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "regex_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "\\.html$",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/a"
+  },
+  {
+    "source": "wildcard_replace(http.request.full_uri, \"https://*.example.test/*\", \"https://example.test/${1}/${2}\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.full_uri": "https://shop.example.test/a/b?c=1"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.full_uri",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "https://*.example.test/*",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "https://example.test/${1}/${2}",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "https://example.test/shop/a/b?c=1"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/IMG/*\", \"/images/${1}\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/img/A.png"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/IMG/*",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/images/${1}",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/images/A.png"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/IMG/*\", \"/images/${1}\", \"s\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/img/A.png"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/IMG/*",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/images/${1}",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "s",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/img/A.png"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/*/*\", \"${1}|${2}\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/a/b/c"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/*/*",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "${1}|${2}",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "a|b/c"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/**\", \"[${1}][${2}]\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/abc"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/**",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "[${1}][${2}]",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "[][abc]"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/a\\\\*b/*\", \"/${1}\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/a*b/x"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/a\\*b/*",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/${1}",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/x"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/a\\\\\\\\b\", \"/c\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/a\\b"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/a\\\\b",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/c",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/c"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/exact\", \"/other\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/exact"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/exact",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/other",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/other"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/exact\", \"/other\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/exactly"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/exact",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/other",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/exactly"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/a*a\", \"${1}\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/a"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/a*a",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "${1}",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/a"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/a*a\", \"<${1}>\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/aa"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/a*a",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "<${1}>",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "<>"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/É*\", \"${1}\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/éx"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/É*",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "${1}",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/éx"
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/*.html\", \"/${1}\")",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/a.html.html"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/*.html",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/${1}",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/a.html"
+  },
+  {
+    "source": "concat(\"/search/\", url_decode(http.request.uri.query))",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.query": "q%20x+y"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "concat",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/search/",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "call",
+          "field": "url_decode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.query",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/search/q x y"
+  },
+  {
+    "source": "\"/static\"",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "const",
+      "field": "",
+      "valueType": "string",
+      "value": "/static",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "expected": "/static"
+  },
+  {
+    "source": "http.request.uri.path",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/p"
+    },
+    "lists": {},
+    "ir": {
+      "op": "field",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "expected": "/p"
+  },
+  {
+    "source": "lower(http.host)",
+    "phase": "redirect",
+    "request": {
+      "http.host": "A.Example.TEST"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "lower",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.host",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "a.example.test"
+  },
+  {
+    "source": "concat(http.request.uri.path, \"?\", http.request.uri.query)",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/中"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "concat",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "?",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "field",
+          "field": "http.request.uri.query",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/中?"
+  },
+  {
+    "source": "regex_replace(http.request.uri.path, \"a\", \"b\") eq \"x\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "regex_replace only in value expressions",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "regex_replace",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "a",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "b",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/*\", \"${1}\") eq \"x\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "wildcard_replace only in value expressions",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "wildcard_replace",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/*",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "${1}",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "concat(regex_replace(http.request.uri.path, \"a\", \"b\"), regex_replace(http.request.uri.path, \"c\", \"d\"))",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "regex_replace at most once per expression",
+    "ir": {
+      "op": "call",
+      "field": "concat",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "regex_replace",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "a",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "b",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "field": "regex_replace",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "c",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "d",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "trim(http.host) eq \"a\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "unknown function",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "a",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "trim",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "starts_with(http.host)",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "starts_with takes two arguments",
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.host",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(ip.src) eq 1",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "arguments are strings",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "number",
+      "value": "1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "ip.src",
+              "valueType": "ip",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(len(http.host)) eq 1",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "arguments are strings",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "number",
+      "value": "1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "len",
+              "valueType": "number",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "field",
+                  "field": "http.host",
+                  "valueType": "string",
+                  "value": "",
+                  "values": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "regex_replace(http.host, http.request.uri.path, \"x\")",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "the pattern is a literal",
+    "ir": {
+      "op": "call",
+      "field": "regex_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.host",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "x",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "regex_replace(http.request.uri.path, \"^/a\", \"${1}\")",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "no group 1",
+    "ir": {
+      "op": "call",
+      "field": "regex_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "^/a",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "${1}",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "regex_replace(http.request.uri.path, \"(?i)a\", \"b\")",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "pattern outside the subset",
+    "ir": {
+      "op": "call",
+      "field": "regex_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "(?i)a",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "b",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"*********\", \"x\")",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "at most 8 wildcards",
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "*********",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "x",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/a\\\\b*\", \"x\")",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "only \\* and \\\\ escapes",
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/a\\b*",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "x",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/*\", \"${2}\")",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "one wildcard, no capture 2",
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/*",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "${2}",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "wildcard_replace(http.request.uri.path, \"/*\", \"x\", \"i\")",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "the only flag is \"s\"",
+    "ir": {
+      "op": "call",
+      "field": "wildcard_replace",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/*",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "x",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "i",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(lower(upper(lower(upper(http.host))))) eq 1",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "functions nest at most 4 deep",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "number",
+      "value": "1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "lower",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "call",
+                  "field": "upper",
+                  "valueType": "string",
+                  "value": "",
+                  "values": [],
+                  "children": [
+                    {
+                      "op": "call",
+                      "field": "lower",
+                      "valueType": "string",
+                      "value": "",
+                      "values": [],
+                      "children": [
+                        {
+                          "op": "call",
+                          "field": "upper",
+                          "valueType": "string",
+                          "value": "",
+                          "values": [],
+                          "children": [
+                            {
+                              "op": "field",
+                              "field": "http.host",
+                              "valueType": "string",
+                              "value": "",
+                              "values": [],
+                              "children": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "concat(http.host) eq \"a\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "concat takes 2-8 arguments",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "a",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "concat",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "concat(http.host, http.host, http.host, http.host, http.host, http.host, http.host, http.host, http.host) eq \"a\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "concat takes 2-8 arguments",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "a",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "concat",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.response.content_type.media_type eq \"text/html\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "response fields only in response phases",
+    "ir": {
+      "op": "eq",
+      "field": "http.response.content_type.media_type",
+      "valueType": "string",
+      "value": "text/html",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "lower(http.host) in $blocked",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "lists only with IP fields",
+    "ir": {
+      "op": "in_list",
+      "field": "",
+      "valueType": "string",
+      "value": "list-1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(http.host) contains \"1\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "contains needs a string",
+    "ir": {
+      "op": "contains",
+      "field": "",
+      "valueType": "number",
+      "value": "1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "lower(http.host) lt 3",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "ordered comparison needs integers",
+    "ir": {
+      "op": "lt",
+      "field": "",
+      "valueType": "string",
+      "value": "3",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "lower(http.host) eq 1",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "lower returns a string",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "number",
+      "value": "1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(http.host)",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "value expressions are strings",
+    "ir": {
+      "op": "call",
+      "field": "len",
+      "valueType": "number",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.host",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "starts_with(http.host, \"a\")",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "value expressions are strings",
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.host",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "a",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.host lower eq \"x\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "a field or a computed left side, never both",
+    "ir": {
+      "op": "eq",
+      "field": "http.host",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "lower(\"x\" eq \"x\")",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "constants are strings",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "1",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.uri.path eq lower(\"x\")",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "one computed left side",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "field",
+          "field": "http.host",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "origin",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "origin"
+    },
+    "actionRejected": true,
+    "reason": "an origin action sets something"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "origin",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "origin",
+      "originGroup": "API"
+    },
+    "actionRejected": true,
+    "reason": "groups are lowercase"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "origin",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "origin",
+      "hostHeader": "bad host"
+    },
+    "actionRejected": true,
+    "reason": "invalid Host"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "origin",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "origin",
+      "port": 70000
+    },
+    "actionRejected": true,
+    "reason": "port out of range"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "config",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "origin",
+      "originGroup": "api"
+    },
+    "actionRejected": true,
+    "reason": "origin actions run in the origin phase"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "websocket": false
+    },
+    "actionRejected": true,
+    "reason": "new config fields only in the config phase"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "config",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "ccMaxLevel": "slider"
+    },
+    "actionRejected": true,
+    "reason": "unknown CC level"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "config",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "originReadTimeoutMs": 50
+    },
+    "actionRejected": true,
+    "reason": "timeouts start at 100 ms"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "config",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "originConnectTimeoutMs": 120001
+    },
+    "actionRejected": true,
+    "reason": "connect timeout at most 120 s"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "config",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "config",
+      "logSampleRate": 10001
+    },
+    "actionRejected": true,
+    "reason": "rate in basis points"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "compression",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "compression",
+      "compression": ["deflate"]
+    },
+    "actionRejected": true,
+    "reason": "unknown coding"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "compression",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "compression",
+      "compression": ["br", "br"]
+    },
+    "actionRejected": true,
+    "reason": "codings are unique"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "response-transform",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "compression",
+      "compression": ["br"]
+    },
+    "actionRejected": true,
+    "reason": "compression rules run in the compression phase"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "redirect",
+      "value": "/a",
+      "target": {
+        "op": "const",
+        "field": "",
+        "valueType": "string",
+        "value": "/b",
+        "values": [],
+        "children": []
+      },
+      "statusCode": 301
+    },
+    "actionRejected": true,
+    "reason": "a static value or a target, not both"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "redirect",
+      "value": "/a",
+      "statusCode": 301,
+      "setQuery": [
+        {
+          "name": "b",
+          "value": "1"
+        },
+        {
+          "name": "a",
+          "value": "2"
+        }
+      ]
+    },
+    "actionRejected": true,
+    "reason": "parameters sorted by name"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "redirect",
+      "value": "/a",
+      "statusCode": 301,
+      "setQuery": [
+        {
+          "name": "a",
+          "value": "1"
+        }
+      ],
+      "removeQuery": ["a"]
+    },
+    "actionRejected": true,
+    "reason": "a parameter is set or removed"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "redirect",
+      "value": "/a",
+      "statusCode": 301,
+      "setQuery": [
+        {
+          "name": "a",
+          "value": "é"
+        }
+      ]
+    },
+    "actionRejected": true,
+    "reason": "values are printable ASCII"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "redirect",
+      "value": "/a",
+      "statusCode": 301,
+      "removeQuery": ["a b"]
+    },
+    "actionRejected": true,
+    "reason": "invalid parameter name"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "request-transform",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "rewrite",
+      "target": {
+        "op": "call",
+        "field": "starts_with",
+        "valueType": "boolean",
+        "value": "",
+        "values": [],
+        "children": [
+          {
+            "op": "field",
+            "field": "http.request.uri.path",
+            "valueType": "string",
+            "value": "",
+            "values": [],
+            "children": []
+          },
+          {
+            "op": "const",
+            "field": "",
+            "valueType": "string",
+            "value": "/",
+            "values": [],
+            "children": []
+          }
+        ]
+      }
+    },
+    "actionRejected": true,
+    "reason": "targets are strings"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "redirect",
+      "value": "/a",
+      "statusCode": 301,
+      "compression": ["br"]
+    },
+    "actionRejected": true,
+    "reason": "fields of another kind"
+  },
+  {
+    "source": "http.request.uri.path eq \"/\"",
+    "phase": "request-transform",
+    "request": {
+      "http.request.uri.path": "/"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "rewrite",
+      "value": "/a",
+      "originGroup": "api"
+    },
+    "actionRejected": true,
+    "reason": "fields of another kind"
+  },
+  {
+    "source": "(starts_with(http.request.uri.path, \"/static/\") or starts_with(http.request.uri.path, \"/assets/\"))",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/static/a.js",
+      "http.request.uri.path.extension": "js"
+    },
+    "lists": {},
+    "ir": {
+      "op": "or",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/static/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/assets/",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": ["/static/", "/assets/"],
+      "paths": [],
+      "extensions": []
+    }
+  },
+  {
+    "source": "(starts_with(http.request.uri.path, \"/static/\") or starts_with(http.request.uri.path, \"/assets/\"))",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/assets",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "or",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/static/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/assets/",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": ["/static/", "/assets/"],
+      "paths": [],
+      "extensions": []
+    }
+  },
+  {
+    "source": "(starts_with(http.request.uri.path, \"/static/\") or starts_with(http.request.uri.path, \"/assets/\"))",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/x/static/",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "or",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/static/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/assets/",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": ["/static/", "/assets/"],
+      "paths": [],
+      "extensions": []
+    }
+  },
+  {
+    "source": "(starts_with(http.request.uri.path, \"/static/\") or starts_with(http.request.uri.path, \"/assets/\"))",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/assets/",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "or",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/static/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/assets/",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": ["/static/", "/assets/"],
+      "paths": [],
+      "extensions": []
+    }
+  },
+  {
+    "source": "http.request.uri.path in {\"/index.html\" \"/\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "in",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "",
+      "values": ["/", "/index.html"],
+      "children": []
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": [],
+      "paths": ["/index.html", "/"],
+      "extensions": []
+    }
+  },
+  {
+    "source": "http.request.uri.path in {\"/index.html\" \"/\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/index.htm",
+      "http.request.uri.path.extension": "htm"
+    },
+    "lists": {},
+    "ir": {
+      "op": "in",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "",
+      "values": ["/", "/index.html"],
+      "children": []
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": [],
+      "paths": ["/index.html", "/"],
+      "extensions": []
+    }
+  },
+  {
+    "source": "http.request.uri.path in {\"/index.html\" \"/\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/index.html",
+      "http.request.uri.path.extension": "html"
+    },
+    "lists": {},
+    "ir": {
+      "op": "in",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "",
+      "values": ["/", "/index.html"],
+      "children": []
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": [],
+      "paths": ["/index.html", "/"],
+      "extensions": []
+    }
+  },
+  {
+    "source": "http.request.uri.path.extension in {\"jpg\" \"png\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/a/b.PNG",
+      "http.request.uri.path.extension": "png"
+    },
+    "lists": {},
+    "ir": {
+      "op": "in",
+      "field": "http.request.uri.path.extension",
+      "valueType": "string",
+      "value": "",
+      "values": ["jpg", "png"],
+      "children": []
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": [],
+      "paths": [],
+      "extensions": ["jpg", "png"]
+    }
+  },
+  {
+    "source": "http.request.uri.path.extension in {\"jpg\" \"png\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/a.png/b",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "in",
+      "field": "http.request.uri.path.extension",
+      "valueType": "string",
+      "value": "",
+      "values": ["jpg", "png"],
+      "children": []
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": [],
+      "paths": [],
+      "extensions": ["jpg", "png"]
+    }
+  },
+  {
+    "source": "http.request.uri.path.extension in {\"jpg\" \"png\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/file.",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "in",
+      "field": "http.request.uri.path.extension",
+      "valueType": "string",
+      "value": "",
+      "values": ["jpg", "png"],
+      "children": []
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": [],
+      "paths": [],
+      "extensions": ["jpg", "png"]
+    }
+  },
+  {
+    "source": "http.request.uri.path.extension in {\"jpg\" \"png\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/.png",
+      "http.request.uri.path.extension": "png"
+    },
+    "lists": {},
+    "ir": {
+      "op": "in",
+      "field": "http.request.uri.path.extension",
+      "valueType": "string",
+      "value": "",
+      "values": ["jpg", "png"],
+      "children": []
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": [],
+      "paths": [],
+      "extensions": ["jpg", "png"]
+    }
+  },
+  {
+    "source": "http.request.uri.path.extension in {\"jpg\" \"png\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/a.tar.png",
+      "http.request.uri.path.extension": "png"
+    },
+    "lists": {},
+    "ir": {
+      "op": "in",
+      "field": "http.request.uri.path.extension",
+      "valueType": "string",
+      "value": "",
+      "values": ["jpg", "png"],
+      "children": []
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": [],
+      "paths": [],
+      "extensions": ["jpg", "png"]
+    }
+  },
+  {
+    "source": "http.request.uri.path.extension in {\"jpg\" \"png\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/png",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "in",
+      "field": "http.request.uri.path.extension",
+      "valueType": "string",
+      "value": "",
+      "values": ["jpg", "png"],
+      "children": []
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": [],
+      "paths": [],
+      "extensions": ["jpg", "png"]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/img/\") and http.request.uri.path.extension in {\"webp\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/img/a.webp",
+      "http.request.uri.path.extension": "webp"
+    },
+    "lists": {},
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/img/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path.extension",
+          "valueType": "string",
+          "value": "",
+          "values": ["webp"],
+          "children": []
+        }
+      ]
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": ["/img/"],
+      "paths": [],
+      "extensions": ["webp"]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/img/\") and http.request.uri.path.extension in {\"webp\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/img/a.png",
+      "http.request.uri.path.extension": "png"
+    },
+    "lists": {},
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/img/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path.extension",
+          "valueType": "string",
+          "value": "",
+          "values": ["webp"],
+          "children": []
+        }
+      ]
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": ["/img/"],
+      "paths": [],
+      "extensions": ["webp"]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/img/\") and http.request.uri.path.extension in {\"webp\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/x/a.webp",
+      "http.request.uri.path.extension": "webp"
+    },
+    "lists": {},
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/img/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path.extension",
+          "valueType": "string",
+          "value": "",
+          "values": ["webp"],
+          "children": []
+        }
+      ]
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": ["/img/"],
+      "paths": [],
+      "extensions": ["webp"]
+    }
+  },
+  {
+    "source": "true",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/anything",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": [],
+      "paths": [],
+      "extensions": []
+    }
+  },
+  {
+    "source": "true",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": [],
+      "paths": [],
+      "extensions": []
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/a\\\"b\\\\c\")",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/a\"b\\c/x",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/a\"b\\c",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": ["/a\"b\\c"],
+      "paths": [],
+      "extensions": []
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/a\\\"b\\\\c\")",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/a",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/a\"b\\c",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": ["/a\"b\\c"],
+      "paths": [],
+      "extensions": []
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/中文/\")",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/中文/x",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/中文/",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": ["/中文/"],
+      "paths": [],
+      "extensions": []
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/中文/\")",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/中",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/中文/",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": ["/中文/"],
+      "paths": [],
+      "extensions": []
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/p/\") and http.request.uri.path in {\"/p/exact\"} and http.request.uri.path.extension in {\"html\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/p/exact",
+      "http.request.uri.path.extension": ""
+    },
+    "lists": {},
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/p/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": ["/p/exact"],
+          "children": []
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path.extension",
+          "valueType": "string",
+          "value": "",
+          "values": ["html"],
+          "children": []
+        }
+      ]
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": ["/p/"],
+      "paths": ["/p/exact"],
+      "extensions": ["html"]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/p/\") and http.request.uri.path in {\"/p/exact\"} and http.request.uri.path.extension in {\"html\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/p/exact.html",
+      "http.request.uri.path.extension": "html"
+    },
+    "lists": {},
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/p/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": ["/p/exact"],
+          "children": []
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path.extension",
+          "valueType": "string",
+          "value": "",
+          "values": ["html"],
+          "children": []
+        }
+      ]
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": ["/p/"],
+      "paths": ["/p/exact"],
+      "extensions": ["html"]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/p/\") and http.request.uri.path in {\"/p/exact\"} and http.request.uri.path.extension in {\"html\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/p/a.html",
+      "http.request.uri.path.extension": "html"
+    },
+    "lists": {},
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/p/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": ["/p/exact"],
+          "children": []
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path.extension",
+          "valueType": "string",
+          "value": "",
+          "values": ["html"],
+          "children": []
+        }
+      ]
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": ["/p/"],
+      "paths": ["/p/exact"],
+      "extensions": ["html"]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/p/\") and http.request.uri.path in {\"/p/exact.html\"} and http.request.uri.path.extension in {\"html\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/p/exact.html",
+      "http.request.uri.path.extension": "html"
+    },
+    "lists": {},
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/p/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": ["/p/exact.html"],
+          "children": []
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path.extension",
+          "valueType": "string",
+          "value": "",
+          "values": ["html"],
+          "children": []
+        }
+      ]
+    },
+    "expected": true,
+    "structured": {
+      "pathPrefixes": ["/p/"],
+      "paths": ["/p/exact.html"],
+      "extensions": ["html"]
+    }
+  },
+  {
+    "source": "starts_with(http.request.uri.path, \"/p/\") and http.request.uri.path in {\"/p/exact.html\"} and http.request.uri.path.extension in {\"html\"}",
+    "phase": "cache",
+    "request": {
+      "http.request.uri.path": "/p/a.html",
+      "http.request.uri.path.extension": "html"
+    },
+    "lists": {},
+    "ir": {
+      "op": "and",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/p/",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": ["/p/exact.html"],
+          "children": []
+        },
+        {
+          "op": "in",
+          "field": "http.request.uri.path.extension",
+          "valueType": "string",
+          "value": "",
+          "values": ["html"],
+          "children": []
+        }
+      ]
+    },
+    "expected": false,
+    "structured": {
+      "pathPrefixes": ["/p/"],
+      "paths": ["/p/exact.html"],
+      "extensions": ["html"]
+    }
+  },
+  {
+    "derive": "extension",
+    "input": "/a/b.PNG",
+    "expected": "png"
+  },
+  {
+    "derive": "extension",
+    "input": "/a.b/c",
+    "expected": ""
+  },
+  {
+    "derive": "extension",
+    "input": "/file.",
+    "expected": ""
+  },
+  {
+    "derive": "extension",
+    "input": "/.htaccess",
+    "expected": "htaccess"
+  },
+  {
+    "derive": "extension",
+    "input": "/a.tar.gz",
+    "expected": "gz"
+  },
+  {
+    "derive": "extension",
+    "input": "/",
+    "expected": ""
+  },
+  {
+    "derive": "extension",
+    "input": "",
+    "expected": ""
+  },
+  {
+    "derive": "extension",
+    "input": "/a/b.Jpeg",
+    "expected": "jpeg"
+  },
+  {
+    "derive": "extension",
+    "input": "/a.中",
+    "expected": "中"
+  },
+  {
+    "derive": "media_type",
+    "input": "text/html; charset=utf-8",
+    "expected": "text/html"
+  },
+  {
+    "derive": "media_type",
+    "input": "Application/JSON",
+    "expected": "application/json"
+  },
+  {
+    "derive": "media_type",
+    "input": "  text/plain ;x=y",
+    "expected": "text/plain"
+  },
+  {
+    "derive": "media_type",
+    "input": "text/html;charset=x",
+    "expected": "text/html"
+  },
+  {
+    "derive": "media_type",
+    "input": "",
+    "expected": ""
+  },
+  {
+    "derive": "media_type",
+    "input": "image/svg+xml",
+    "expected": "image/svg+xml"
+  },
+  {
     "source": "tls.ja4 eq \"\"",
     "phase": "ratelimit",
     "request": {
