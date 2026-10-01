@@ -50,7 +50,7 @@ import {
   parseExpression,
   parseValueExpression,
 } from "@edgeweir/rule-engine";
-import { and, asc, desc, eq, gt, inArray, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lt, notInArray, sql } from "drizzle-orm";
 import { parseCacheCondition } from "../lib/cache-conditions";
 import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
@@ -59,17 +59,24 @@ import { CONFIG_CHANNEL } from "../lib/events";
 import { lockClusterPublish } from "../lib/locks";
 import { isOnline } from "../lib/node-online";
 import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settings";
-import { isServing } from "../lib/site-state";
 import { recordAudit, systemActor } from "./audit";
 import { ensureChallengeKeys } from "./challenge-keys";
 import { loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
-import { isAdminRole } from "./users";
 import { loadSiteWafModels } from "./waf";
 
 export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export type Executor = Database | Tx;
+
+/**
+ * The account behind a change, recorded as a revision's publisher: the
+ * operator, signed in or with an AccessKey. Service accounts and background
+ * jobs publish as nobody, which keeps them behind the capability gate of
+ * insertRevision.
+ */
+export const publisher = (actor: { type: string; id: string }) =>
+  actor.type === "user" || actor.type === "api_key" ? actor.id : null;
 
 export const REVISION_RETENTION = 200;
 
@@ -110,35 +117,20 @@ export async function loadOriginAllowList(db: Executor): Promise<string[]> {
 }
 
 /**
- * Verified domains of the cluster's sites that are not served (disabled, or
- * suspended by the platform): nodes answer them with the platform's page for
- * the reason instead of the unknown host page. Current state, also when a
- * revision is rolled back.
+ * Domains of the cluster's disabled sites: nodes answer them with the
+ * platform's page for disabled sites instead of the unknown host page.
+ * Current state, also when a revision is rolled back.
  */
 export async function loadOfflineHosts(
   db: Executor,
   clusterId: string,
 ): Promise<OfflineHostModel[]> {
   const rows = await db
-    .select({
-      name: schema.siteDomain.name,
-      wildcard: schema.siteDomain.wildcard,
-      suspended: schema.site.suspended,
-    })
+    .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
     .from(schema.siteDomain)
     .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
-    .where(
-      and(
-        eq(schema.site.clusterId, clusterId),
-        eq(schema.siteDomain.verified, true),
-        or(eq(schema.site.enabled, false), eq(schema.site.suspended, true)),
-      ),
-    );
-  return rows.map((row) => ({
-    name: row.name,
-    wildcard: row.wildcard,
-    reason: row.suspended ? "suspended" : "disabled",
-  }));
+    .where(and(eq(schema.site.clusterId, clusterId), eq(schema.site.enabled, false)));
+  return rows.map((row) => ({ ...row, reason: "disabled" as const }));
 }
 
 /**
@@ -167,7 +159,7 @@ export async function loadSiteModels(
   const domains = await db
     .select()
     .from(schema.siteDomain)
-    .where(and(inArray(schema.siteDomain.siteId, siteIds), eq(schema.siteDomain.verified, true)));
+    .where(inArray(schema.siteDomain.siteId, siteIds));
   const pools = await db
     .select()
     .from(schema.originPool)
@@ -205,12 +197,8 @@ export async function loadSiteModels(
     .orderBy(asc(schema.bulkRedirect.position));
   const previous = opts.previous ?? previousConfig(db, clusterId);
   const compiled = new Map<string, Awaited<ReturnType<typeof compileStoredRules>>>();
-  for (const site of sites.filter(isServing)) {
-    const bindings = listBindings(
-      lists.filter(
-        (list) => list.organizationId === null || list.organizationId === site.organizationId,
-      ),
-    );
+  const bindings = listBindings(lists);
+  for (const site of sites.filter((s) => s.enabled)) {
     const last = async () => (await previous())?.sites.find((s) => s.id === site.id);
     compiled.set(
       site.id,
@@ -240,8 +228,8 @@ export async function loadSiteModels(
         rules: site?.rules ?? [],
         id: s.id,
         name: s.name,
-        // Disabled or suspended sites are not shipped (their DNS records stay).
-        enabled: isServing(s) && !site?.missing,
+        // Disabled sites are not shipped (their DNS records stay).
+        enabled: s.enabled && !site?.missing,
         cacheGeneration: s.cacheGeneration,
         logSampleRate: s.logSampleRate,
         domains: domains
@@ -376,13 +364,12 @@ export async function getRevision(
   return row;
 }
 
-/** IP list names to ids: an organization's lists over the platform's lists of the same name. */
+/** IP list names to ids (list names are unique). */
 export function listBindings(
-  lists: Pick<typeof schema.ipList.$inferSelect, "id" | "name" | "organizationId">[],
+  lists: Pick<typeof schema.ipList.$inferSelect, "id" | "name">[],
 ): Record<string, string> {
   const bindings: Record<string, string> = Object.create(null);
-  for (const list of lists.filter((l) => l.organizationId === null)) bindings[list.name] = list.id;
-  for (const list of lists.filter((l) => l.organizationId !== null)) bindings[list.name] = list.id;
+  for (const list of lists) bindings[list.name] = list.id;
   return bindings;
 }
 
@@ -538,17 +525,11 @@ async function platformRuleModels(
     .from(schema.edgeRule)
     .where(and(sql`${schema.edgeRule.siteId} is null`, eq(schema.edgeRule.enabled, true)))
     .orderBy(asc(schema.edgeRule.priority));
-  const platform = await compileStoredRules(
-    "",
-    rows,
-    [],
-    listBindings(lists.filter((list) => list.organizationId === null)),
-    {
-      strict: false,
-      previous: async () => ({ rules: (await previous())?.platformRules ?? [], cacheRules: [] }),
-      invalid,
-    },
-  );
+  const platform = await compileStoredRules("", rows, [], listBindings(lists), {
+    strict: false,
+    previous: async () => ({ rules: (await previous())?.platformRules ?? [], cacheRules: [] }),
+    invalid,
+  });
   if (platform.missing) ruleInvalid(platform.missing);
   return platform.rules;
 }
@@ -632,28 +613,20 @@ export async function insertRevision(
   const addedFeatures = nodeRequirements(config).filter(
     (feature) => !previousFeatures.has(feature),
   );
-  if (addedFeatures.length) {
-    const [user] = userId
-      ? await tx
-          .select({ role: schema.user.role })
-          .from(schema.user)
-          .where(eq(schema.user.id, userId))
-      : [];
-    // Only a platform administrator may deliberately require an upgrade across
-    // the cluster. Tenant and background changes must preserve other sites' delivery.
-    if (!isAdminRole(user?.role)) {
-      const nodes = await tx
-        .select({ features: schema.node.supportedFeatures })
-        .from(schema.node)
-        .where(and(eq(schema.node.clusterId, clusterId), eq(schema.node.status, "active")));
-      const missing = addedFeatures.filter((feature) =>
-        nodes.some((node) => !nodeSupportsFeature(node.features, feature)),
-      );
-      if (missing.length)
-        fail("NODE_CAPABILITY_REQUIRED", "cluster nodes do not support this change", {
-          features: missing.join(", "),
-        });
-    }
+  // Only the operator may deliberately require an upgrade across the cluster;
+  // service accounts and background changes must keep every site delivered.
+  if (addedFeatures.length && !userId) {
+    const nodes = await tx
+      .select({ features: schema.node.supportedFeatures })
+      .from(schema.node)
+      .where(and(eq(schema.node.clusterId, clusterId), eq(schema.node.status, "active")));
+    const missing = addedFeatures.filter((feature) =>
+      nodes.some((node) => !nodeSupportsFeature(node.features, feature)),
+    );
+    if (missing.length)
+      fail("NODE_CAPABILITY_REQUIRED", "cluster nodes do not support this change", {
+        features: missing.join(", "),
+      });
   }
   const [row] = await tx
     .insert(schema.configRevision)
@@ -689,17 +662,13 @@ async function loadHttpChallenges(tx: Executor, clusterId: string) {
     .innerJoin(schema.certificate, eq(schema.certificate.id, schema.acmeChallenge.certificateId))
     .innerJoin(
       schema.site,
-      // Disabled and suspended sites keep answering HTTP-01: renewals continue.
-      and(
-        eq(schema.site.organizationId, schema.certificate.organizationId),
-        eq(schema.site.clusterId, clusterId),
-      ),
+      // Disabled sites keep answering HTTP-01: renewals continue.
+      eq(schema.site.clusterId, clusterId),
     )
     .innerJoin(
       schema.siteDomain,
       and(
         eq(schema.siteDomain.siteId, schema.site.id),
-        eq(schema.siteDomain.verified, true),
         eq(schema.siteDomain.name, schema.acmeChallenge.domain),
         eq(schema.siteDomain.wildcard, false),
       ),
@@ -750,27 +719,15 @@ export async function publishRevision(
     previous,
     invalid,
   });
-  const organizations = await tx
-    .selectDistinct({ id: schema.site.organizationId })
-    .from(schema.site)
-    .where(
-      and(
-        eq(schema.site.clusterId, opts.clusterId),
-        eq(schema.site.enabled, true),
-        eq(schema.site.suspended, false),
-      ),
-    );
-  const allLists = await tx.select().from(schema.ipList);
-  const lists = allLists.filter(
-    (list) =>
-      list.organizationId === null || organizations.some((org) => org.id === list.organizationId),
-  );
+  // Every list is the operator's: allow and block lists apply to every site,
+  // and any rule may refer to any list.
+  const lists = await tx.select().from(schema.ipList);
   const ipLists = lists.map((list) => ({
     id: list.id,
     name: list.name,
     entries: list.entries,
     kind: list.kind,
-    platform: list.organizationId === null,
+    platform: true,
   }));
   const platformRules = await platformRuleModels(tx, lists, previous, invalid);
   await syncRuleAlerts(tx, invalid);
@@ -1072,11 +1029,11 @@ const hostKey = (host: { name: string; wildcard: boolean }) =>
 
 /**
  * The sites of an earlier configuration as they may be published now.
- * Sites that are not served now (disabled, suspended) are dropped; cache
+ * Sites that are disabled now are dropped; cache
  * generations are the current ones (a purge is never undone), certificate
  * references carry the current certificate (one renewed in place exists in
  * its current version only) and the log sampling rate never exceeds the
- * current one. A site or domain removed since: `strict` (an administrator's
+ * current one. A site or domain removed since: `strict` (the operator's
  * rollback) refuses with ROLLBACK_RESOURCE_UNAVAILABLE, as it does for an
  * expired or unavailable certificate; otherwise (the canary's stable
  * revision) it is dropped. Offline hosts follow the current sites.
@@ -1098,12 +1055,9 @@ async function restoreSites(
         .select()
         .from(schema.siteDomain)
         .where(
-          and(
-            inArray(
-              schema.siteDomain.siteId,
-              currentSites.map((site) => site.id),
-            ),
-            eq(schema.siteDomain.verified, true),
+          inArray(
+            schema.siteDomain.siteId,
+            currentSites.map((site) => site.id),
           ),
         )
     : [];
@@ -1118,11 +1072,11 @@ async function restoreSites(
   for (const site of out.sites) {
     const current = currentSites.find((s) => s.id === site.id);
     // Rollback is configuration history, never authorization to resurrect a
-    // deleted/transferred resource or reclaim a released tenant hostname.
+    // deleted site or a domain the site no longer has.
     if (!current && opts.strict)
       fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback references a removed site or domain");
-    // Enabling and suspension are current policy: no site that is offline now is shipped.
-    if (!current || !isServing(current)) continue;
+    // Enabling is current policy: no site that is disabled now is shipped.
+    if (!current?.enabled) continue;
     const live = (domain: { name: string; wildcard: boolean }) =>
       currentDomains.some(
         (d) => d.siteId === site.id && d.name === domain.name && d.wildcard === domain.wildcard,
@@ -1139,9 +1093,7 @@ async function restoreSites(
       ? current.logSampleRate
       : Math.min(site.logSampleRate, current.logSampleRate);
     if (site.certificateId) {
-      const cert = certificates.find(
-        (c) => c.id === site.certificateId && c.organizationId === current.organizationId,
-      );
+      const cert = certificates.find((c) => c.id === site.certificateId);
       const ref = out.certificates.find((c) => c.id === site.certificateId);
       if (opts.strict) {
         if (!cert?.notAfter || cert.notAfter.getTime() <= Date.now())
@@ -1216,21 +1168,10 @@ export async function rollbackToRevision(
     decodeNodeConfig(target.ir),
     { strict: true },
   );
-  const currentLists = (await tx.select().from(schema.ipList)).filter(
-    (list) =>
-      list.organizationId === null ||
-      currentSites.some((site) => site.organizationId === list.organizationId),
-  );
+  const currentLists = await tx.select().from(schema.ipList);
   for (const site of restored.sites) {
-    const org = currentSites.find((s) => s.id === site.id)?.organizationId;
     const unavailable = (expression: RuleExpression) =>
-      listReferences(expression).some(
-        (id) =>
-          !currentLists.some(
-            (list) =>
-              list.id === id && (list.organizationId === null || list.organizationId === org),
-          ),
-      );
+      listReferences(expression).some((id) => !currentLists.some((list) => list.id === id));
     for (const rule of site.rules)
       if (!rule.expression || unavailable(rule.expression))
         fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback IP list is unavailable");
@@ -1245,7 +1186,7 @@ export async function rollbackToRevision(
       name: list.name,
       kind: list.kind,
       entries: list.entries,
-      platform: list.organizationId === null,
+      platform: true,
     }),
   );
   restored.platformRules = compileRules(
@@ -1268,7 +1209,7 @@ export async function rollbackToRevision(
     { code: "rollback", params: { revision: opts.revision } },
     opts.userId ?? null,
   );
-  // An administrator's rollback restores known content: it goes to every node, no canary.
+  // The operator's rollback restores known content: it goes to every node, no canary.
   const rollout = await loadRollout(tx, opts.clusterId);
   if (rollout?.enabled)
     await updateRollout(tx, opts.clusterId, {
@@ -1287,7 +1228,7 @@ export async function rollbackToRevision(
  * policy: platform Under Attack and JA4 logging are current settings, and
  * challenge keys are always the cluster's current keys (older ones are gone),
  * carried whenever challenges or a restored site's session affinity use them.
- * Sites keep their restored CC policy and, after an administrator's rollback
+ * Sites keep their restored CC policy and, after the operator's rollback
  * (`underAttack: "restored"`), their restored Under Attack; the canary's
  * stable revision takes the current one.
  */

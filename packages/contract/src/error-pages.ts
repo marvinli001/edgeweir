@@ -7,7 +7,7 @@ import { expectedUpdatedAt, isoDateTime, uuid } from "./schemas";
  * a site's pages for the responses its nodes generate (403 denied, 429 rate
  * limited, 502/503/504 origin unavailable or failing), optionally also for
  * origin responses with those statuses, and the platform's pages for hosts
- * no site serves and for disabled or suspended sites.
+ * no site serves and for disabled sites.
  */
 export const ERROR_PAGE_STATUSES = [403, 429, 502, 503, 504] as const;
 /** Templates are at most 64 KiB of UTF-8. */
@@ -23,7 +23,6 @@ export const ERROR_PAGE_PLACEHOLDERS = [
 export const PLATFORM_ERROR_PAGE_STATUSES = {
   unknownHost: 404,
   siteDisabled: 503,
-  siteSuspended: 503,
 } as const;
 
 /** Size of a template as nodes receive it (UTF-8), which the limit applies to. */
@@ -68,13 +67,11 @@ export const platformErrorPages = z.object({
   unknownHost: z.string().default(""),
   /** Hosts of disabled sites (503). */
   siteDisabled: z.string().default(""),
-  /** Hosts of sites the platform suspended (503). */
-  siteSuspended: z.string().default(""),
 });
 
 const idParam = z.object({ id: uuid });
 
-/** A site's error pages (members read; owners and admins change them). */
+/** A site's error pages. */
 export const errorPagesContract = {
   get: oc
     .route({ method: "GET", path: "/sites/{id}/error-pages", tags: ["sites"] })

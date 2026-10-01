@@ -16,7 +16,7 @@ A site's origin pool and origin groups, health checks and session affinity, orig
 
 ## Configure origins
 
-1. Open **Console → Sites**, select the site, and open the **Origins** tab.
+1. Open **Sites**, select the site, and open the **Origins** tab.
 2. In the **Origins** card, edit an existing origin or click **Add origin**.
 3. Enter **Origin**, **Port**, **Protocol**, and **Weight**; set **Origin Host**, **SNI**, and **Origin group** as needed; turn on **Backup** or **S3 signing** as needed.
 4. Click **Save** at the bottom of the card. The console shows **Saved, revision #N**.
@@ -134,7 +134,7 @@ Error codes need node proto v0.2.1 or later; other errors and older nodes show t
 | Not probed | S3-compatible origins (an unsigned probe says nothing about signed requests) and origins whose address literal is forbidden |
 | Node stops probing | The data plane's "actively down" marks expire after 3 × the longest interval (at least 90 seconds), back to the passive check only |
 | Reporting | Origins that are unhealthy or have consecutive failures are reported with the heartbeat, source **Active**; the "Origin unavailable" alert uses both sources |
-| Node requirement | Node feature `active-health-v1`; while an active node of the cluster lacks it, tenants cannot turn it on ("Some nodes of the site's cluster do not support it yet") |
+| Node requirement | Node feature `active-health-v1`; while an active node of the cluster lacks it, it cannot be turned on ("Some nodes of the site's cluster do not support it yet") |
 
 #### Merge rule
 
@@ -165,7 +165,7 @@ When every origin is down, the node still tries primaries, then backups (fail op
 | Issued | Only on responses from the origin (never on cache hits); not issued again while a valid cookie has more than half its lifetime left |
 | Reselection | When the pinned origin is down (active or passive check), deleted, or outside the tier taking traffic (a backup while primaries are healthy), the node picks another origin by the load balancing policy and issues a new cookie; tampered or expired cookies are handled the same way |
 | Retries | When the pinned origin fails during a request, the retry rules still move it to another origin, and the response pins the origin that answered |
-| Node requirement | Node features `session-affinity-v1` and `challenge-v1`; while an active node of the cluster lacks them, tenants cannot turn it on |
+| Node requirement | Node features `session-affinity-v1` and `challenge-v1`; while an active node of the cluster lacks them, it cannot be turned on |
 
 ### Origin TLS
 
@@ -195,8 +195,8 @@ WebSocket upgrades (`Upgrade: websocket`) are proxied by default and never cache
 | Overrides | The rule's **Port** applies to every origin of the group; **Origin Host** and **SNI** replace the origin's own settings, and **Origin Host** does not affect S3 origins; an empty SNI still follows the origin Host |
 | Cache key | The origin group is not part of it. When a group is chosen by something outside the cache key (a request header, for example), responses of different groups share cached objects |
 | References | Rules can pick only groups the site has; removing a group a rule still picks fails with "Invalid rule" |
-| Platform rules | A platform **Origin override** cannot pick an origin group; it overrides only the origin Host, SNI, and port |
-| Node requirement | `rules-v2`; while an active node of the cluster lacks it, tenants cannot move origins out of the default group ("Some nodes of the site's cluster do not support it yet") |
+| Global rules | An **Origin override** in the global rules cannot pick an origin group; it overrides only the origin Host, SNI, and port |
+| Node requirement | `rules-v2`; while an active node of the cluster lacks it, the **Origins** card shows "Some nodes of the site's cluster do not support it yet" and origins cannot be moved out of the default group; existing origin groups can still be changed or cleared |
 
 ## Origin address restrictions
 
@@ -212,7 +212,7 @@ Origins cannot point at special-purpose addresses.
 | --- | --- |
 | Console save | IP literals in these ranges are refused (`ORIGIN_ADDRESS_FORBIDDEN`) |
 | Node | Applies the same list to configured addresses and to every DNS answer; special-purpose addresses in an answer are dropped, and when all are dropped the attempt fails with `address_forbidden` |
-| Allow list | Platform administrators allow ranges in **Admin → System → Origin allow list** for every organization, see [Platform administration](admin.en.md); `localhost` cannot be allowed |
+| Allow list | Ranges are allowed in **System → Origin allow list**; saving publishes to every cluster, see [Origin allow list](system.en.md#origin-allow-list); `localhost` cannot be allowed |
 | Loop detection | Nodes send `CDN-Loop` (RFC 8586) to origins; a request that already carries the node's identifier gets 508 (`X-Edgeweir-Error: loop-detected`) |
 
 ## S3-compatible object storage
@@ -235,10 +235,10 @@ Turn on **S3 signing** on an origin and fill in these fields.
 
 ## Configure cache rules
 
-1. Open **Console → Sites**, select the site, and open the **Cache** tab.
+1. Open **Sites**, select the site, and open the **Cache** tab.
 2. In the **Cache rules** card, click **Add rule**.
 3. In **Builder**, enter **Path prefix** and **Extensions**; or switch to **Advanced** and enter the condition in **Expression**, see [Request conditions](#request-conditions).
-4. Select **Action**, enter **TTL (seconds)**, and set **Browser TTL (s)** and turn on **Respect origin** as needed.
+4. Select **Action**, enter **TTL (seconds)**, and set **Browser TTL (s)** as needed; turn off **Respect origin** only for static assets.
 5. For more conditions, click **More** and fill in **Exact paths** (builder only), **Status codes**, **Min size (KB)**, **Max size (KB)**, **Stale while revalidate (s)**, **Stale if error (s)**, or turn on **Cache requests with Authorization**.
 6. Drag the handle on the left of a rule to reorder.
 7. Click **Save**.
@@ -261,7 +261,7 @@ Turn on **S3 signing** on an origin and fill in these fields.
 | Action | Cache / Bypass | Cache | Cache or bypass on match |
 | TTL (seconds) | 0–31536000 | 3600 | The rule's cache lifetime |
 | Browser TTL (s) | 0–31536000 | Empty (origin's) | See [Browser TTL](#browser-ttl); unavailable for **Bypass** rules |
-| Respect origin | On / off | Off | Off: override origin cache headers; on: follow origin `Cache-Control` / `Expires` |
+| Respect origin | On / off | On | On: follow origin `Cache-Control` / `Expires`; off: override origin cache headers |
 | Exact paths | Start with `/`, up to 32 | Empty | Builder: the request path equals one of them |
 | Status codes | 100–599, up to 16 | Empty | Empty: only the default cacheable status codes |
 | Min size (KB) / Max size (KB) | 0 or more; max not below min | Empty (no limit) | Response size range |
@@ -303,13 +303,13 @@ With **Browser TTL (s)** above 0, responses the rule caches reach visitors with 
 | Effect | The `Cache-Control` visitors receive becomes `max-age=N`, on cache hits too; the edge cache keeps using the TTL |
 | Otherwise | Visitors receive the origin's `Cache-Control` |
 | Response transform | Response transform rules can still change `Cache-Control` |
-| Node requirement | `rules-v2`; while an active node of the cluster lacks it, tenants cannot set it ("Some nodes of the site's cluster do not support the rule extensions yet") |
+| Node requirement | `rules-v2`; while an active node of the cluster lacks it, it cannot be newly set ("Some nodes of the site's cluster do not support the rule extensions yet"); a value already set can still be changed or cleared |
 
 ### TTL
 
 | Mode | Behavior |
 | --- | --- |
-| Override (**Respect origin** off) | Uses the rule TTL and ignores origin `Cache-Control` and `Expires` (including `no-store` and `private`); without status codes only 200, 203, 206, 300, 301, and 308 are cached |
+| Override (**Respect origin** off) | Uses the rule TTL and ignores origin `Cache-Control` and `Expires` (including `no-store` and `private`); without status codes only 200, 203, 206, 300, 301, and 308 are cached. Use it only for static assets without user data, or pages of signed-in users reach other visitors |
 | Respect (**Respect origin** on) | Follows origin `Cache-Control` or `Expires` when present; the rule TTL applies only when neither is sent; a `Cache-Control` without a lifetime (for example only `public`) is not cached; `no-store` and `private` apply |
 | Always | Responses with `Set-Cookie` are not cached |
 
@@ -350,13 +350,13 @@ The **Cache key & slicing** card is saved separately and applies to all rules of
 
 ## Purge and prefetch
 
-1. Open **Console → Purge & prefetch**.
+1. Open **Purge & prefetch**.
 2. Select **Purge URLs**, **Purge directories**, **Purge hosts**, **Purge cache tags**, **Purge sites**, **Prefetch URLs**, or **Prefetch a sitemap**.
 3. For URL tasks, enter one URL per line; for **Purge hosts**, one host per line; for **Purge cache tags**, choose the site and enter one tag per line (or comma separated); for **Purge sites**, check the sites; for **Prefetch a sitemap**, enter the **Sitemap URL** and the **URL limit**. For prefetches, check **Desktop** and/or **Mobile** under **Devices**.
 4. Click **Submit**.
 5. Verify: the task appears under **Tasks**; expanded, each node shows **Succeeded**; after a purge, the next request returns `X-Cache: MISS`.
 
-Tasks go to every enabled node of the site's cluster, with a result per node.
+Tasks go to every enabled node of the site's cluster, with a result per node. Disabled sites cannot be purged or prefetched ("The site is disabled").
 
 ### Task types
 
@@ -370,7 +370,7 @@ Tasks go to every enabled node of the site's cluster, with a result per node.
 | Prefetch URLs | Full `http://` or `https://` URLs; devices | The node requests the URL through its own edge layer as a normal request and caches it; a status below 400 is success; redirects are not followed. With **Separate mobile and desktop** on, each checked device is requested once (mobile with a mobile User-Agent); otherwise one request |
 | Prefetch a sitemap | One sitemap URL, a URL limit (1–10000, default 1000); devices | The node fetches the sitemap through its own edge layer (so the origin address policy applies and the console makes no outbound request) and prefetches the site's URLs it lists, see [Sitemaps](#sitemaps) |
 
-URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be a domain of the organization's sites (including subdomains under a wildcard). `https://` URLs are prefetched through the node's first HTTPS listener without the PROXY protocol (the node's own certificate is not verified); without such a listener they fail ("the node has no HTTPS listener yet").
+URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be a domain of a site (including subdomains under a wildcard). `https://` URLs are prefetched through the node's first HTTPS listener without the PROXY protocol (the node's own certificate is not verified); without such a listener they fail ("the node has no HTTPS listener yet").
 
 ### Cache-Tag
 
@@ -384,13 +384,13 @@ The origin lists tags, comma separated, in the `Cache-Tag` response header, e.g.
 | Index | Nodes record the tags of every cached object of sites that use `Cache-Tag`, in shared memory (node flag `--tag-dict-mb`, default 64 MiB), evicting the least recently used |
 | Extra origin requests | Objects the index does not know (evicted, after an nginx restart, cached before the site's first `Cache-Tag` response) go to the origin once while the site has tag purges on record, then hit again |
 | Tag counts | Up to 500 tags per task; nodes keep up to 5000 tag purges per site (node flag `--purge-tags-per-site`) and merge beyond that into one whole-site purge |
-| Node requirement | Node feature `purge-tag-v1`; while an active node of the cluster lacks it, host and tag purges are refused (`NODE_CAPABILITY_REQUIRED`), for platform administrators too |
+| Node requirement | Node feature `purge-tag-v1`; while an active node of the cluster lacks it, host and tag purges are refused (`NODE_CAPABILITY_REQUIRED`) |
 
 ### Sitemaps
 
 | Item | Behavior |
 | --- | --- |
-| Sitemap URL | Must belong to a site of the organization; the node requests it from its own edge layer without following redirects, 30 seconds and at most 50 MiB unpacked per document; gzip-compressed sitemaps are recognized by their content |
+| Sitemap URL | Must belong to a site; the node requests it from its own edge layer without following redirects, 30 seconds and at most 50 MiB unpacked per document; gzip-compressed sitemaps are recognized by their content |
 | Format | `<loc>` of a `urlset`; a `sitemapindex` is followed one level, and its sitemaps must be on the site's domains too |
 | Selection | Only `http(s)` URLs on the site's domains (wildcards included), de-duplicated, the first ones in document order up to the URL limit |
 | Result | Each URL and device counts as one success or failure; a sitemap that cannot be fetched or parsed fails the task (`sitemap_failed`), one without URLs of the site too (`sitemap_empty`) |
@@ -398,15 +398,13 @@ The origin lists tags, comma separated, in the `Cache-Tag` response header, e.g.
 
 ### Purge a site's cache
 
-On the site's **Overview** tab, click **Purge cache** and confirm. The console increments the site's cache generation and publishes a revision ("Site {site} purged"); every cached object of the site becomes stale. It shares the organization rate limit with tasks and counts as one entry.
+On the site's **Overview** tab, click **Purge cache** and confirm. The console increments the site's cache generation and publishes a revision ("Site {site} purged"); every cached object of the site becomes stale. A disabled site cannot be purged.
 
 ### Task limits
 
 | Item | Limit |
 | --- | --- |
 | Per task | Up to 500 URLs, 500 hosts or 500 tags, or 100 sites; each URL up to 2048 characters; one sitemap per sitemap prefetch |
-| Organization rate | Up to 10 tasks per minute and 2000 entries per hour (each URL, directory, host, or site is one entry; tags count per site and tag; a sitemap task is one entry; prefetch devices do not count extra); beyond that 429 (`CACHE_TASK_RATE_LIMITED`, with the seconds to wait) |
-| Platform administrators | Not rate-limited; tasks they submit for an organization's sites count toward that organization's usage; whole-site purges the console sends on its own do not count |
 | Node purge markers | Up to 1000 URL, directory and host markers per site (node flag `--purge-markers-per-site`) and 5000 tag markers (`--purge-tags-per-site`); beyond that they merge into one whole-site purge |
 | Order | A node runs the purges of a batch before its prefetches |
 | Prefetch time | A batch (up to 10 tasks) shares a 4-minute budget (node flag `--prefetch-budget`) counted from the pull; 60 seconds per URL; concurrency 4; URLs unfinished at the deadline fail (`prefetch_timeout`) |
@@ -424,7 +422,7 @@ On the site's **Overview** tab, click **Purge cache** and confirm. The console i
 | Case | Behavior |
 | --- | --- |
 | Not run within 7 days | Failed ("Not executed by the node within 7 days", `task_expired`) |
-| Make-up whole-site purge | A node that reconnects after more than 7 days offline, or is re-enabled, does not run expired purges; it gets one whole-site purge for each affected site instead: one task per organization, source "System (make-up whole-site purge)", sent only to that node; the original task shows "Made up with a whole-site purge when the node came back" for that node |
+| Make-up whole-site purge | A node that reconnects after more than 7 days offline, or is re-enabled, does not run the purges it missed; it gets one whole-site purge for each affected site instead: all in one task, source "System (make-up whole-site purge)", sent only to that node; deleted sites are left out. The original task shows "Made up with a whole-site purge when the node came back" for that node |
 | Prefetch | Missed prefetches are not made up |
 
 ## Limits
@@ -446,11 +444,11 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| Saving shows "Origin address … is in the special-purpose range …, which the platform does not allow" | The origin IP literal is in a special-purpose range | Use a public address, or have a platform administrator add the range to the origin allow list |
+| Saving shows "Origin address … is in the special-purpose range …, which the origin allow list does not include" | The origin IP literal is in a special-purpose range | Use a public address, or add the range to the origin allow list |
 | The origin shows "… is a special-purpose address outside the origin allow list" | Every DNS answer for the origin name is a special-purpose address | Same as above |
 | An HTTPS origin returns 502 and shows "TLS handshake or certificate verification failed" | Self-signed certificate, certificate not covering the SNI, or incomplete chain; missing CA file on the node | Use a trusted certificate or the correct **SNI**; for self-signed origins turn off **Verify origin certificates**; point the node at a CA file with `--trusted-ca` |
 | 502 with `X-Edgeweir-Error: no-origin` | Every origin was dropped before the attempt (resolution failure, forbidden address, missing S3 credentials) | Read the error on the **Origins** tab |
-| 404 with `X-Edgeweir-Error: unknown-host` | The Host belongs to no site the node applied: unverified domain, deleted site, or the node has not applied the latest revision | Complete [domain ownership](dns-and-alerts.en.md#verify-domain-ownership); check the node's **Applied** revision |
+| 404 with `X-Edgeweir-Error: unknown-host` | The Host belongs to no site the node applied: the site is disabled or deleted, or the node has not applied the latest revision | Check the **Status** on the site's **Overview** tab and the node's **Applied** revision |
 | 508 with `X-Edgeweir-Error: loop-detected` | The origin points back at this node or at a CDN in front of it | Change the origin address |
 | 403 with `X-Edgeweir-Error: websocket-disabled` | WebSocket is off for the site | Turn on **WebSocket** |
 | 405 with `X-Edgeweir-Error: method-not-allowed` | S3 origins accept only `GET` and `HEAD` | Add a non-S3 origin for write requests |
@@ -458,10 +456,10 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | Responses always show `X-Cache: MISS` | No applicable rule; in respect mode the origin sent no lifetime; the response has `Set-Cookie`; the TTL is 0 | Check rule order, conditions, and origin headers |
 | The **Origins** card shows "Keep at least one origin in the default group" | Every origin has an **Origin group** | Clear **Origin group** on at least one origin |
 | Saving origins or cache rules shows "Invalid rule" | An origin group that an **Origin override** rule still picks was removed; a cache rule condition is invalid | Change the rule first, or keep an origin in that group; fix the condition |
-| "Cluster nodes need these capabilities first: rules-v2" | An active node of the cluster lacks `rules-v2` and the save uses origin groups, advanced conditions, or a browser TTL | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
+| "Cluster nodes need these capabilities first: rules-v2" | A configuration published by a service account or a background job uses origin groups, advanced conditions, or a browser TTL, and an active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | Requests sent to different origin groups get the same cached object | The cache key does not include the origin group | Pick origin groups by path, or add what decides the group to the cache key |
-| "Too many purges: …" | The organization hit the rate limit | Retry after the stated seconds; merge URLs into a directory purge |
-| "No site serves …" | The URL's Host is not a domain of the organization's sites | Check the domain and its organization |
+| "No site serves …" | The URL's Host is not a domain of any site | Check the spelling of the domain |
+| "The site is disabled" | A task or **Purge cache** concerns a disabled site | Enable the site on its **Overview** tab, then submit again |
 | "Invalid URL: …" | Not an `http(s)` URL, carries credentials, or a directory purge has a query | Fix the URL |
 | "Invalid host: …" | Has a port, is a wildcard, or is not a valid host name | Enter one host name per line |
 | "Invalid cache tag: …" | The tag has a comma or non-ASCII characters, or is longer than 128 bytes | Fix the tag; the origin's `Cache-Tag` follows the same rules |

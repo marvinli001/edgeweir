@@ -8,7 +8,6 @@ import type {
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, desc, eq, gte, inArray, lt, type SQL, type SQLWrapper, sql } from "drizzle-orm";
-import type { SiteScope } from "./sites";
 
 /** Window length and point width of each range (60–168 points). */
 export const RANGES: Record<AnalyticsRange, { seconds: number; bucketSeconds: number }> = {
@@ -96,18 +95,12 @@ function bucketOf(bucketSeconds: number, stats: StatsSource = schema.nodeMinuteS
   return sql<number>`extract(epoch from date_bin(${sql.raw(`'${bucketSeconds} seconds'`)}::interval, ${stats.minute}, timestamptz 'epoch'))::bigint`;
 }
 
-/** Rows of the caller's scope: every site for platform admins, else the organization's. */
-function scopeFilter(scope: SiteScope) {
-  return scope.all ? undefined : eq(schema.site.organizationId, scope.organizationId);
-}
-
 /**
- * Bucketed traffic of the scope (or one site) over a range, plus totals of the range and of the
+ * Bucketed traffic of every site (or one site) over a range, plus totals of the range and of the
  * period before it. Buckets without statistics are filled with zeros.
  */
 export async function trafficSeries(
   db: Database,
-  scope: SiteScope,
   query: { range: AnalyticsRange; siteId?: string },
   now = Date.now(),
 ): Promise<Traffic> {
@@ -124,7 +117,6 @@ export async function trafficSeries(
       and(
         gte(stats.minute, window.previousFrom),
         lt(stats.minute, window.end),
-        scopeFilter(scope),
         query.siteId ? eq(stats.siteId, query.siteId) : undefined,
       ),
     )
@@ -160,10 +152,9 @@ const topFields = (stats: StatsSource) => ({
   cacheMisses: sum(stats.cacheMisses),
 });
 
-/** Sites of the scope with the most requests over the range. */
+/** Sites with the most requests over the range. */
 export async function topSites(
   db: Database,
-  scope: SiteScope,
   query: { range: AnalyticsRange; limit: number },
   now = Date.now(),
 ): Promise<TrafficTopItem[]> {
@@ -174,15 +165,15 @@ export async function topSites(
     .select({
       id: schema.site.id,
       name: schema.site.name,
-      parentId: schema.organization.id,
-      parentName: schema.organization.name,
+      parentId: schema.cluster.id,
+      parentName: schema.cluster.name,
       ...topColumns,
     })
     .from(stats)
     .innerJoin(schema.site, eq(schema.site.id, stats.siteId))
-    .innerJoin(schema.organization, eq(schema.organization.id, schema.site.organizationId))
-    .where(and(gte(stats.minute, window.from), lt(stats.minute, window.end), scopeFilter(scope)))
-    .groupBy(schema.site.id, schema.organization.id)
+    .innerJoin(schema.cluster, eq(schema.cluster.id, schema.site.clusterId))
+    .where(and(gte(stats.minute, window.from), lt(stats.minute, window.end)))
+    .groupBy(schema.site.id, schema.cluster.id)
     .orderBy(desc(topColumns.requests), schema.site.name)
     .limit(query.limit);
 }
@@ -219,7 +210,6 @@ export async function topNodes(
  */
 export async function trafficBreakdown(
   db: Database,
-  scope: SiteScope,
   query: Omit<TrafficBreakdownInput, "range" | "metric" | "limit"> &
     Required<Pick<TrafficBreakdownInput, "range" | "metric" | "limit">>,
   now = Date.now(),
@@ -233,7 +223,6 @@ export async function trafficBreakdown(
   const where = and(
     gte(stats.minute, window.from),
     lt(stats.minute, window.end),
-    scopeFilter(scope),
     query.siteId ? eq(stats.siteId, query.siteId) : undefined,
   );
   const result = await (query.by === "status"
@@ -277,7 +266,7 @@ interface BreakdownRows {
   totals: { bucket: number; value: number }[];
 }
 
-/** Sites or nodes: rank over the range, then fetch the leaders' buckets and the scope's. */
+/** Sites or nodes: rank over the range, then fetch the leaders' buckets and the totals. */
 async function entityBreakdown(
   db: Database,
   where: SQL | undefined,
@@ -296,15 +285,15 @@ async function entityBreakdown(
           .select({
             id: schema.site.id,
             name: schema.site.name,
-            parentId: schema.organization.id,
-            parentName: schema.organization.name,
+            parentId: schema.cluster.id,
+            parentName: schema.cluster.name,
             total: value,
           })
           .from(stats)
           .innerJoin(schema.site, eq(schema.site.id, stats.siteId))
-          .innerJoin(schema.organization, eq(schema.organization.id, schema.site.organizationId))
+          .innerJoin(schema.cluster, eq(schema.cluster.id, schema.site.clusterId))
           .where(where)
-          .groupBy(schema.site.id, schema.organization.id)
+          .groupBy(schema.site.id, schema.cluster.id)
           .having(sql`${value} > 0`)
           .orderBy(desc(value), schema.site.name)
           .limit(limit)
@@ -396,7 +385,6 @@ async function statusBreakdown(
 /** Bounded heavy hitters from node pre-aggregation, always marked approximate. */
 export async function topRequests(
   db: Database,
-  scope: SiteScope,
   query: { range: AnalyticsRange; siteId?: string; by: "url" | "ip"; limit: number },
   now = Date.now(),
 ) {
@@ -406,7 +394,6 @@ export async function topRequests(
   const where = and(
     gte(stats.minute, window.from),
     lt(stats.minute, window.end),
-    scopeFilter(scope),
     query.siteId ? eq(stats.siteId, query.siteId) : undefined,
   );
   const result = await db.execute<{

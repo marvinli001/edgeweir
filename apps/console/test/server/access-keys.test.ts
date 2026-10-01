@@ -5,7 +5,6 @@ import { createApp } from "../../src/server/app";
 import {
   type ApiClient,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -16,17 +15,10 @@ describe("M6 AccessKey scope, revocation and auth boundaries", async () => {
   const { ctx, client: db } = await createTestContext();
   const app = createApp(ctx),
     origin = ctx.env.EDGEWEIR_PUBLIC_URL;
-  let admin: ApiClient, other: ApiClient;
+  let admin: ApiClient;
   beforeAll(async () => {
-    const setup = await setupPlatform(ctx);
+    await setupPlatform(ctx);
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
-    await admin.users.create({
-      name: "other",
-      email: "keys@example.test",
-      password: PASSWORD,
-      organizationId: setup.organizationId,
-    });
-    other = rpcClient(app, origin, await signIn(app, origin, "keys@example.test"));
   });
   afterAll(() => db.close());
   const api = (key: string, method: string, path: string, body?: unknown) =>
@@ -50,16 +42,15 @@ describe("M6 AccessKey scope, revocation and auth boundaries", async () => {
     expect(
       (await api(key.key, "POST", "/access-keys", { name: "elevated", scope: "write" })).status,
     ).toBe(403);
-    expect((await api(key.key, "POST", "/invitations/invalid/accept", {})).status).toBe(403);
     const auth = await app.request(`${origin}/api/auth/api-key/create`, {
       method: "POST",
       headers: { "x-api-key": key.key, origin, "content-type": "application/json" },
       body: JSON.stringify({ name: "via-auth" }),
     });
-    expect(auth.status).toBe(401);
+    expect(auth.status).toBe(404);
     expect((await admin.accessKeys.list()).find((k) => k.id === key.id)?.lastUsedAt).not.toBeNull();
     expect(JSON.stringify(await admin.accessKeys.list())).not.toContain(key.key);
-    expect((await rpcError(other.accessKeys.revoke({ id: key.id }))).code).toBe(
+    expect((await rpcError(admin.accessKeys.revoke({ id: "missing" }))).code).toBe(
       "ACCESS_KEY_NOT_FOUND",
     );
     await admin.accessKeys.revoke({ id: key.id });

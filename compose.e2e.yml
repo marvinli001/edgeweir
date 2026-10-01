@@ -53,7 +53,6 @@ services:
       LOG_LEVEL: debug
       EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${E2E_SUBNET:-172.28.213.0/24}
       EDGEWEIR_DNS_TEST_ENDPOINT: http://mock-services:8080
-      EDGEWEIR_DNS_RESOLVERS: mock-services:5353
       EDGEWEIR_ACME_DIRECTORY: https://pebble:14000/dir
       EDGEWEIR_ACME_CA_FILE: /e2e/pebble/test-only.crt
     ports:
@@ -309,6 +308,24 @@ services:
       default: {}
       isolated: {}
 
+  # Cluster DNS bindings: the only node of a second cluster ("dns-b"), enrolled
+  # by scripts/e2e-dns.mjs, so two clusters publish through two accounts.
+  node-dns:
+    image: edgeweir-node:${E2E_TAG:-e2e}
+    profiles: ["dns"]
+    hostname: edge-dns-b
+    environment:
+      EDGEWEIR_TRUSTED_CA: /etc/edgeweir-e2e/origin-ca.pem
+      EDGEWEIR_GEOIP_IPINFO: /etc/edgeweir-geoip/ipinfo_lite.mmdb
+      EDGEWEIR_GEOIP_CITY: /etc/edgeweir-geoip/city.mmdb
+      EDGEWEIR_GEOIP_ASN: /etc/edgeweir-geoip/asn.mmdb
+    volumes:
+      - node-dns-state:/var/lib/edgeweir-node
+      - geoip-test-data:/etc/edgeweir-geoip:ro
+      - origin-ca:/etc/edgeweir-e2e:ro
+    networks:
+      default: {}
+
 networks:
   default:
     ipam:
@@ -323,6 +340,7 @@ volumes:
   upgrade-trust:
   upgrade-releases:
   node-upgrade-peer-state:
+  node-dns-state:
   geoip-test-data:
   node-state:
   origin-ca:

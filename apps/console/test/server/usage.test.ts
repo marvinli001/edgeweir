@@ -14,7 +14,6 @@ import {
 import {
   type ApiClient,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -28,8 +27,6 @@ describe("recomputable 5-minute usage", async () => {
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
-  let tenant: ApiClient;
-  let other: ApiClient;
   let clusterId: string;
   let siteId: string;
   let otherSiteId: string;
@@ -59,32 +56,15 @@ describe("recomputable 5-minute usage", async () => {
     await setupPlatform(ctx);
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
     clusterId = (await admin.clusters.list())[0]?.id ?? "";
-    const orgs = [];
-    for (const [name, email] of [
-      ["Metered", "owner@metered.test"],
-      ["Other", "owner@other-usage.test"],
-    ] as const) {
-      const org = await admin.organizations.create({ name, defaultClusterId: clusterId });
-      orgs.push(org.id);
-      await admin.users.create({
-        name,
-        email,
-        password: PASSWORD,
-        organizationId: org.id,
-        role: "owner",
-      });
-    }
-    tenant = rpcClient(app, origin, await signIn(app, origin, "owner@metered.test"));
-    other = rpcClient(app, origin, await signIn(app, origin, "owner@other-usage.test"));
     siteId = (
-      await tenant.sites.create({
+      await admin.sites.create({
         name: "metered",
         domains: ["metered.test"],
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
     otherSiteId = (
-      await other.sites.create({
+      await admin.sites.create({
         name: "other",
         domains: ["other-usage.test"],
         origins: [{ address: "origin.test" }],
@@ -122,9 +102,10 @@ describe("recomputable 5-minute usage", async () => {
       revision: 1,
     });
     expect(second).toMatchObject({ requests: "1", bytesSent: "7", revision: 1 });
-    const listed = await tenant.usage.list({
+    const listed = await admin.usage.list({
       from: at(0).toISOString(),
       to: at(2 * WINDOW).toISOString(),
+      siteId,
     });
     expect(listed.items.map((i) => [i.id, i.windowStart, i.windowEnd, i.requests])).toEqual([
       [`${siteId}.${window / 1000}`, at(0).toISOString(), at(WINDOW).toISOString(), "9"],
@@ -213,7 +194,7 @@ describe("recomputable 5-minute usage", async () => {
     ];
     for (const [from, to] of ranges) {
       const error = await rpcError(
-        tenant.usage.list({ from: from.toISOString(), to: to.toISOString() }),
+        admin.usage.list({ from: from.toISOString(), to: to.toISOString() }),
       );
       expect(error.code).toBe("USAGE_RANGE_INVALID");
       expect(error.status).toBe(400);
@@ -221,7 +202,7 @@ describe("recomputable 5-minute usage", async () => {
     expect(
       (
         await rpcError(
-          tenant.usage.list({
+          admin.usage.list({
             from: at(0).toISOString(),
             to: at(WINDOW).toISOString(),
             cursor: "x",
@@ -254,24 +235,11 @@ describe("recomputable 5-minute usage", async () => {
     expect(keys).toEqual([...keys].sort());
   });
 
-  it("scopes members to their organization", async () => {
+  it("filters by site", async () => {
     const range = {
       from: new Date(window - 8 * WINDOW).toISOString(),
       to: at(3 * WINDOW).toISOString(),
     };
-    const own = await tenant.usage.list(range);
-    expect(new Set(own.items.map((i) => i.siteId))).toEqual(new Set([siteId]));
-    const theirs = await other.usage.list(range);
-    expect(theirs.items.map((i) => i.siteId)).toEqual([otherSiteId]);
-    // Another organization's filter or site is ignored or refused.
-    const forced = await tenant.usage.list({ ...range, organizationId: "nope" });
-    expect(forced.items.every((i) => i.siteId === siteId)).toBe(true);
-    expect((await rpcError(tenant.usage.list({ ...range, siteId: otherSiteId }))).code).toBe(
-      "SITE_NOT_FOUND",
-    );
-    const changes = await other.usage.changes({});
-    expect(changes.items.every((i) => i.siteId === otherSiteId)).toBe(true);
-    // Platform administrators may filter by organization.
     const filtered = await admin.usage.list({ ...range, siteId: otherSiteId });
     expect(filtered.items.map((i) => i.siteId)).toEqual([otherSiteId]);
   });
@@ -283,7 +251,7 @@ describe("recomputable 5-minute usage", async () => {
     // B reported up to 1 minute into the second window: only the first window is complete.
     expect(await advanceUsageWatermark(ctx.db, now)).toEqual(at(WINDOW));
     expect(
-      (await tenant.usage.list({ from: at(0).toISOString(), to: at(WINDOW).toISOString() }))
+      (await admin.usage.list({ from: at(0).toISOString(), to: at(WINDOW).toISOString() }))
         .completeUntil,
     ).toBe(at(WINDOW).toISOString());
     // A watermark that goes back is ignored.
@@ -358,7 +326,6 @@ describe("recomputable 5-minute usage", async () => {
       { retentionDays: 100, offlineThresholdMinutes: 4 },
     ])
       expect((await rpcError(admin.settings.setUsage(bad))).status).toBe(400);
-    expect((await rpcError(tenant.settings.usage())).status).toBe(403);
     expect(await pruneUsage(ctx.db, new Date(window + 36 * 86_400_000))).toBeGreaterThan(0);
     expect(await usageRows(ctx.db, siteId, at(-100 * WINDOW), at(10 * WINDOW))).toEqual([]);
   });

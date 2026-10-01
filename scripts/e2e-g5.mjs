@@ -30,7 +30,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import zlib from "node:zlib";
-import { signInResponse } from "./e2e-auth.mjs";
+import { rpc, signInResponse } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile);
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
@@ -73,16 +73,14 @@ async function call(key, method, path, body) {
 }
 
 async function createKey(cookie) {
-  const created = await fetch(`${base}/api/auth/api-key/create`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: base, cookie },
-    body: JSON.stringify({ name: "g5-e2e" }),
-  });
-  assert.equal(created.status, 200);
-  return (await created.json()).key;
+  return (await rpc(base, cookie, "accessKeys/create", { name: "g5-e2e" })).key;
 }
 
-/** A signed-in user whose AccessKey is replaced every 500 calls (better-auth's limit). */
+/**
+ * The signed-in operator with an AccessKey. An AccessKey allows 600 requests until
+ * it has been idle for 60 seconds; the polling below runs longer than that,
+ * so every 500 calls move to a fresh key.
+ */
 async function actor(email, password) {
   const response = await waitFor(
     `sign in ${email}`,
@@ -272,9 +270,6 @@ async function createSite(name, domains, origins, extra = {}) {
     origins,
     ...extra,
   });
-  for (const proof of await admin.ok("GET", `/sites/${site.id}/ownership`))
-    if (!proof.verified)
-      await admin.ok("POST", `/sites/${site.id}/ownership/approve`, { domain: proof.domain });
   return admin.ok("GET", `/sites/${site.id}`);
 }
 const originA = { address: "g4-origin-a", port: 8080 };

@@ -1,5 +1,5 @@
-import { analyticsRange } from "@edgeweir/contract";
-import { Add01Icon, GlobeIcon, HistoryIcon } from "@hugeicons/core-free-icons";
+import { analyticsRange, type Cluster, type Node, type Revision } from "@edgeweir/contract";
+import { Add01Icon, GitCommitIcon, GlobeIcon, HistoryIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -9,20 +9,56 @@ import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { Page } from "@/components/page";
 import { ResourceEmpty, ResourceList, ResourceRow } from "@/components/resource-list";
 import { StarMark, useSiteStars } from "@/components/site-star";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { ErrorState, LoadingState } from "@/components/states";
+import { Dot, type StatusTone } from "@/components/status-dot";
 import { buttonVariants } from "@/components/ui/button";
 import { DEFAULT_RANGE } from "@/lib/analytics";
-import { formatNumber, m } from "@/lib/i18n";
+import { formatNumber, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { RECENT_PAGES, readRecents } from "@/lib/recents";
+import { revisionReason } from "@/lib/revisions";
 import { siteTabLabel } from "@/lib/site-tabs";
 
 const LIST_SIZE = 5;
+const live = { refetchInterval: 10_000, meta: { background: true } } as const;
 
 export const Route = createFileRoute("/_app/overview")({
   validateSearch: z.object({ range: analyticsRange.optional() }),
   component: OverviewPage,
 });
+
+type NodeState = "disabled" | "offline" | "failed" | "behind" | "synced" | "pending";
+
+function nodeState(node: Node, latest: number): NodeState {
+  if (node.status === "disabled") return "disabled";
+  if (!node.online) return "offline";
+  if (node.applyState === "failed") return "failed";
+  if (node.appliedRevision === 0) return "pending";
+  return node.appliedRevision < latest ? "behind" : "synced";
+}
+
+/** Nodes that need a look come first. */
+const STATE_ORDER: NodeState[] = ["offline", "failed", "behind", "pending", "disabled", "synced"];
+
+const STATE_TONE: Record<NodeState, StatusTone> = {
+  offline: "bad",
+  failed: "bad",
+  behind: "warn",
+  pending: "idle",
+  disabled: "idle",
+  synced: "good",
+};
+
+function stateLabel(state: NodeState): string {
+  return {
+    offline: m.nodes_offline,
+    failed: m.nodes_apply_failed,
+    behind: m.nodes_behind,
+    pending: m.nodes_pending,
+    disabled: m.nodes_disabled,
+    synced: m.nodes_up_to_date,
+  }[state]();
+}
 
 function OverviewPage() {
   const search = Route.useSearch();
@@ -33,27 +69,36 @@ function OverviewPage() {
     meta: { background: true },
   });
   const { starred } = useSiteStars();
-  const { isAdmin } = Route.useRouteContext();
+  const overview = useQuery({ ...orpc.overview.get.queryOptions(), ...live });
+  const clusters = useQuery({ ...orpc.clusters.list.queryOptions(), ...live });
+  const nodes = useQuery({ ...orpc.nodes.list.queryOptions({ input: {} }), ...live });
+  const queries = [sites, starred, overview, clusters, nodes];
+  const failed = queries.find((q) => q.isError);
 
   return (
     <Page title={m.overview_title()}>
-      {sites.isPending || starred.isPending ? (
+      {queries.some((q) => q.isPending) ? (
         <LoadingState />
-      ) : sites.isError ? (
-        <ErrorState error={sites.error} onRetry={() => sites.refetch()} />
-      ) : starred.isError ? (
-        <ErrorState error={starred.error} onRetry={() => starred.refetch()} />
-      ) : sites.data.total === 0 ? (
-        <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
-          <Link to="/sites" search={{ create: true }} className={buttonVariants()}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            {m.nav_new_site()}
-          </Link>
-        </EmptyState>
+      ) : failed ? (
+        <ErrorState error={failed.error} onRetry={() => failed.refetch()} />
       ) : (
         <>
           <div className="grid gap-x-10 gap-y-6 @3xl/main:grid-cols-2">
-            <SitesList total={sites.data.total} starred={starred.data} recent={sites.data.items} />
+            <SitesList
+              total={sites.data?.total ?? 0}
+              starred={starred.data ?? []}
+              recent={sites.data?.items ?? []}
+            />
+            <NodesList
+              nodes={nodes.data ?? []}
+              clusters={clusters.data ?? []}
+              online={overview.data?.onlineNodes ?? 0}
+              total={overview.data?.nodes ?? 0}
+            />
+            <RevisionsList
+              revisions={overview.data?.revisions ?? []}
+              clusters={clusters.data ?? []}
+            />
             <RecentsList />
           </div>
           <AnalyticsSection
@@ -65,15 +110,19 @@ function OverviewPage() {
               {
                 id: "sites",
                 title: m.analytics_top_sites(),
-                // Tenants only ever see their own organization.
-                showParent: isAdmin,
                 renderLink: (item, props) => (
                   <Link to="/sites/$id" params={{ id: item.id }} {...props} />
                 ),
               },
+              {
+                id: "nodes",
+                title: m.analytics_top_nodes(),
+                renderLink: (item, props) => (
+                  <Link to="/clusters" search={{ cluster: item.parentId }} {...props} />
+                ),
+              },
             ]}
-            admin={isAdmin}
-            delay={120}
+            delay={240}
           />
         </>
       )}
@@ -104,6 +153,19 @@ function SitesList({
       testId="home-sites"
       className="animate-enter"
     >
+      {rows.length === 0 ? (
+        <ResourceEmpty>
+          <span>{m.sites_empty_title()}</span>
+          <Link
+            to="/sites"
+            search={{ create: true }}
+            className={buttonVariants({ size: "xs", variant: "outline" })}
+          >
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+            {m.nav_new_site()}
+          </Link>
+        </ResourceEmpty>
+      ) : null}
       {rows.map((site) => (
         <ResourceRow
           key={site.id}
@@ -122,6 +184,110 @@ function SitesList({
   );
 }
 
+function NodesList({
+  nodes,
+  clusters,
+  online,
+  total,
+}: {
+  nodes: Node[];
+  clusters: Cluster[];
+  online: number;
+  total: number;
+}) {
+  const latest = new Map(clusters.map((c) => [c.id, c.latestRevision?.revision ?? 0]));
+  const rows = nodes
+    .map((node) => ({ node, state: nodeState(node, latest.get(node.clusterId) ?? 0) }))
+    .sort(
+      (a, b) =>
+        STATE_ORDER.indexOf(a.state) - STATE_ORDER.indexOf(b.state) ||
+        a.node.name.localeCompare(b.node.name),
+    )
+    .slice(0, LIST_SIZE);
+  return (
+    <ResourceList
+      title={m.nodes_title()}
+      count={
+        total === 0 ? (
+          "0"
+        ) : (
+          <>
+            <Dot tone={online < total ? "bad" : "good"} small />
+            {m.clusters_nodes_count({ online, total })}
+          </>
+        )
+      }
+      link={{ to: "/clusters" }}
+      testId="home-nodes"
+      className="animate-enter"
+      style={{ animationDelay: "60ms" }}
+    >
+      {rows.length === 0 ? (
+        <ResourceEmpty>
+          <span>{m.nodes_empty_title()}</span>
+          <Link
+            to="/clusters"
+            search={{ enroll: true }}
+            className={buttonVariants({ size: "xs", variant: "outline" })}
+          >
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+            {m.nav_add_node()}
+          </Link>
+        </ResourceEmpty>
+      ) : (
+        rows.map(({ node, state }) => (
+          <ResourceRow
+            key={node.id}
+            icon={<Dot tone={STATE_TONE[state]} />}
+            link={{ to: "/clusters", search: { cluster: node.clusterId } }}
+            trailing={
+              <span className="shrink-0 text-xs text-muted-foreground">{stateLabel(state)}</span>
+            }
+            testId="home-node"
+          >
+            <span className="truncate font-medium">{node.name}</span>
+            <span className="truncate font-mono text-xs text-muted-foreground">
+              #{node.appliedRevision}
+            </span>
+          </ResourceRow>
+        ))
+      )}
+    </ResourceList>
+  );
+}
+
+function RevisionsList({ revisions, clusters }: { revisions: Revision[]; clusters: Cluster[] }) {
+  const names = new Map(clusters.map((c) => [c.id, c.name]));
+  return (
+    <ResourceList
+      title={m.revisions_recent()}
+      testId="home-revisions"
+      className="animate-enter"
+      style={{ animationDelay: "120ms" }}
+    >
+      {revisions.length === 0 ? (
+        <ResourceEmpty>{m.revisions_empty()}</ResourceEmpty>
+      ) : (
+        revisions.slice(0, LIST_SIZE).map((r) => (
+          <ResourceRow
+            key={`${r.clusterId}-${r.revision}`}
+            icon={<HugeiconsIcon icon={GitCommitIcon} strokeWidth={2} />}
+            link={{ to: "/clusters", search: { cluster: r.clusterId } }}
+            trailing={
+              <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(r.createdAt)}</span>
+            }
+          >
+            <span className="shrink-0 font-mono text-xs text-muted-foreground">#{r.revision}</span>
+            <span className="truncate" title={names.get(r.clusterId)}>
+              {revisionReason(r)}
+            </span>
+          </ResourceRow>
+        ))
+      )}
+    </ResourceList>
+  );
+}
+
 function RecentsList() {
   const { session } = Route.useRouteContext();
   // Read once per visit; this page never records itself.
@@ -131,15 +297,15 @@ function RecentsList() {
       title={m.home_recents()}
       testId="home-recents"
       className="animate-enter"
-      style={{ animationDelay: "60ms" }}
+      style={{ animationDelay: "180ms" }}
     >
       {recents.length === 0 ? (
         <ResourceEmpty>{m.home_recents_empty()}</ResourceEmpty>
       ) : (
         recents.map((recent) => {
-          const [area, title] =
+          const [parent, title] =
             recent.kind === "page"
-              ? RECENT_PAGES[recent.path]()
+              ? [null, RECENT_PAGES[recent.path]()]
               : recent.tab
                 ? [recent.name, siteTabLabel(recent.tab)]
                 : [m.nav_sites(), recent.name];
@@ -159,7 +325,7 @@ function RecentsList() {
               testId="home-recent"
             >
               <span className="truncate">
-                <span className="text-muted-foreground">{area} / </span>
+                {parent ? <span className="text-muted-foreground">{parent} / </span> : null}
                 <span className="font-medium">{title}</span>
               </span>
             </ResourceRow>

@@ -7,9 +7,8 @@ import { type Database, schema } from "@edgeweir/db";
 import { asc, eq } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import { publisher } from "./protection";
-import { type Executor, publishRevision } from "./revisions";
-import { findSite, type SiteScope } from "./sites";
+import { type Executor, publisher, publishRevision } from "./revisions";
+import { findSite } from "./sites";
 
 type RedirectRow = typeof schema.bulkRedirect.$inferSelect;
 
@@ -30,12 +29,8 @@ async function siteRedirects(db: Executor, siteId: string): Promise<BulkRedirect
 }
 
 /** A site's bulk redirects in the order they were saved. */
-export async function getBulkRedirects(
-  db: Database,
-  siteId: string,
-  scope: SiteScope,
-): Promise<BulkRedirect[]> {
-  const site = await findSite(db, siteId, scope);
+export async function getBulkRedirects(db: Database, siteId: string): Promise<BulkRedirect[]> {
+  const site = await findSite(db, siteId);
   return siteRedirects(db, site.id);
 }
 
@@ -50,20 +45,20 @@ function servesHost(domains: { name: string; wildcard: boolean }[], host: string
 const INSERT_CHUNK = 1000;
 
 /**
- * Replaces a site's bulk redirects (organization owners and admins),
- * publishes its cluster and audits the change, in one transaction. The host
+ * Replaces a site's bulk redirects, publishes its cluster and audits the
+ * change, in one transaction. The host
  * of a "host/path" source must be one of the site's domains
  * (BULK_REDIRECT_HOST_UNKNOWN). A table on a cluster whose active nodes lack
- * rules-v2 fails with NODE_CAPABILITY_REQUIRED unless an administrator saves
- * it (insertRevision).
+ * rules-v2 fails with NODE_CAPABILITY_REQUIRED unless the operator saves it
+ * (insertRevision).
  */
 export async function saveBulkRedirects(
   db: Database,
   input: BulkRedirectsInput,
-  ctx: { scope: SiteScope; actor: Actor },
+  ctx: { actor: Actor },
 ): Promise<BulkRedirect[]> {
   return db.transaction(async (tx) => {
-    const site = await findSite(tx, input.id, ctx.scope, true);
+    const site = await findSite(tx, input.id, true);
     const domains = await tx
       .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
       .from(schema.siteDomain)
@@ -97,7 +92,6 @@ export async function saveBulkRedirects(
     });
     await recordAudit(tx, ctx.actor, {
       action: "site.bulk_redirects_update",
-      organizationId: site.organizationId,
       targetType: "site",
       targetId: site.id,
       targetName: site.name,

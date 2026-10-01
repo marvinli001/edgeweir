@@ -6,14 +6,14 @@ Certificate upload, ACME requests and renewal, and a site's HTTPS, TLS, HTTP/2, 
 
 | Term | Definition |
 | --- | --- |
-| Certificate | A certificate chain and private key owned by an organization. Only that organization's sites can use it. |
+| Certificate | A certificate chain and private key. A site can select any certificate that covers all of its domains. |
 | ACME certificate | A certificate the console requests from Let's Encrypt or ZeroSSL and renews automatically. |
-| DNS credential | An organization-level DNS provider credential that DNS-01 validation uses to write TXT records. Separate from the platform DNS provider credentials. |
+| DNS credential | A DNS provider credential that DNS-01 validation uses to write TXT records. Separate from the provider credentials of DNS steering. |
 | HTTPS settings | The certificate choice, redirect, HSTS, TLS, HTTP/2, HTTP/3, and compression options on a site's **HTTPS** tab. |
 
 ## Upload a certificate
 
-1. Open **Console → Certificates** and click **Upload certificate**.
+1. Open **Certificates** and click **Upload certificate**.
 2. Enter **Name**.
 3. In **Certificate chain (PEM)**, choose a file or paste the content: leaf certificate first, then the intermediates in order.
 4. In **Private key (PEM)**, choose a file or paste the content.
@@ -32,29 +32,23 @@ Uploaded certificates do not renew automatically (**Automatic renewal disabled**
 
 DNS-01 validation needs a credential first.
 
-1. Open **Console → Certificates** and click **Add DNS credential**.
-2. Enter **Name** and **DNS zone**, select **DNS provider**, and fill in the credential fields.
-3. Click **Create**.
-4. Verify: the credential appears in the **DNS credentials** card with its zone.
+1. Open **Certificates** and click **Add DNS credential**.
+2. Enter **Name**, select **DNS provider**, and fill in the credential fields the form shows.
+3. For providers that can list zones, click **List zones** and pick the **Zone**; otherwise type the **Zone**.
+4. Click **Test connection** and check that **Connected** appears.
+5. Click **Create**.
+6. Verify: the credential appears in the **DNS credentials** card with its zone and provider.
 
-| DNS provider | Fields |
-| --- | --- |
-| Cloudflare | API token |
-| Alibaba Cloud | Access key ID, Access key secret |
-| Huawei Cloud | Access key ID, Access key secret, Region |
-| DNSPod | API token (the `ID,Token` of the DNSPod classic API) |
-
-Credentials are envelope-encrypted with the master key and are write-only. Grant the credential the minimum DNS edit permission on the zone.
+The fields and least permissions of every provider are in [Providers and credentials](dns-and-alerts.en.md#providers-and-credentials); DNS steering uses the same provider catalog. Credentials are envelope-encrypted with the master key and are write-only; **Edit** renames the credential or rotates the secrets with **Replace credentials**.
 
 ## Request an ACME certificate
 
 Prerequisites:
 
-- Every certificate name is a domain of the organization's sites and has passed [domain ownership](dns-and-alerts.en.md#verify-domain-ownership) verification.
-- HTTP-01: the domains resolve to the nodes, and port 80 on the nodes is reachable from the internet.
-- DNS-01: a DNS credential exists whose zone covers every certificate name.
+- HTTP-01: every certificate name is a domain of a site (not a wildcard), resolves to the nodes, and port 80 on the nodes is reachable from the internet.
+- DNS-01: a DNS credential exists whose zone covers every certificate name; the names need not be on a site.
 
-1. Open **Console → Certificates** and click **Request certificate**.
+1. Open **Certificates** and click **Request certificate**.
 2. Enter **Name**, **Domains**, and **Account email**.
 3. Select **Certificate authority** and **Validation method**. For DNS-01, select the **DNS credentials** entry; for ZeroSSL, enter **EAB key ID** and **EAB HMAC key**.
 4. Click **Request certificate**.
@@ -69,15 +63,15 @@ Prerequisites:
 | Account email | Email address | None | ACME account contact |
 | Certificate authority | Let's Encrypt / ZeroSSL | Let's Encrypt | ACME directory |
 | Validation method | HTTP-01 / DNS-01 | HTTP-01 | Domain control validation; wildcards require DNS-01 |
-| DNS credentials | A DNS credential of the organization | The first credential | Account DNS-01 writes TXT records with; one zone per certificate |
+| DNS credentials | A DNS credential that has been added | The first credential | Account DNS-01 writes TXT records with; one zone per certificate |
 | EAB key ID / EAB HMAC key | EAB credentials from ZeroSSL | None | Required for ZeroSSL; stored encrypted with the ACME account |
 
 ### Validation methods
 
 | Method | Behavior |
 | --- | --- |
-| HTTP-01 | Each name must be a verified, non-wildcard domain of an enabled site of the organization. The console publishes the challenge to that site's cluster; every online node must support `http01-v1` and apply it within 40 seconds before the CA is asked to validate. The challenge is answered on port 80 without redirect or caching and expires after 10 minutes |
-| DNS-01 | Writes TXT records at `_acme-challenge.<domain>` and waits up to 3 minutes for propagation. When issuance ends, times out, or the process is interrupted, the TXT values it wrote are deleted; a certificate with records still to clean up cannot be deleted |
+| HTTP-01 | Each name must be a non-wildcard domain of a site, or the request is refused ("Certificate domains do not match the site or DNS zone"): only the clusters serving a name answer its challenge. The console publishes the challenge to those clusters (also when the site is disabled); every online node there must support `http01-v1` and apply it within 40 seconds before the CA is asked to validate. The challenge is answered on port 80 without redirect or caching and expires after 10 minutes |
+| DNS-01 | Each name must be inside the DNS credential's zone (the zone itself or a name below it), or the request is refused. Writes TXT records at `_acme-challenge.<domain>` and waits up to 3 minutes for propagation. When issuance ends, times out, or the process is interrupted, the TXT values it wrote are deleted; a certificate with records still to clean up cannot be deleted |
 
 ### Renewal
 
@@ -86,8 +80,9 @@ Prerequisites:
 | Automatic renewal | On for certificates requested in the console |
 | Renewal time | The CA's ARI (ACME Renewal Information) window when offered; otherwise when two thirds of the certificate lifetime have passed; at the latest 1 minute before expiry. The card shows "Next renewal: …" |
 | Check interval | A background job checks due certificates every minute and needs a console process with `ROLE=worker` or `ROLE=all` |
+| Renewed names | An HTTP-01 renewal drops the names no site uses any more, as long as at least one name is left; every domain of a site that uses the certificate is kept, so the site stays covered. After a successful renewal the certificate's name list is updated |
 | Effect | After issuance or renewal, a new revision is published for the clusters of the sites that use the certificate |
-| Failure | Status changes to **Issuance failed**, the current certificate is kept, and the next attempt is 1 hour later |
+| Failure | Status changes to **Issuance failed**, the current certificate is kept, and the next attempt is 1 hour later; the console logs the reason, see [Troubleshooting](#troubleshooting) |
 | Manual | ACME certificates have **Renew now**, which runs at the next check; unavailable while **Issuing** |
 | Interruption | **Issuing** for more than 10 minutes counts as interrupted and runs again at the next check; one issuance run is limited to 5 minutes |
 
@@ -97,8 +92,8 @@ A certificate used by a site, in **Issuing**, or with DNS-01 records still to cl
 
 ## Configure a site's HTTPS
 
-1. Open **Console → Sites**, select the site, and open the **HTTPS** tab.
-2. Select a certificate in **Certificates**. The list contains the organization's unexpired certificates; **HTTP only** disables HTTPS.
+1. Open **Sites**, select the site, and open the **HTTPS** tab.
+2. Select a certificate in **Certificates**. The list contains every issued, unexpired certificate; **HTTP only** disables HTTPS.
 3. Set **Minimum TLS version**, **Cipher profile**, **HSTS lifetime (seconds)**, the switches, and **Compression**.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision.
 5. Verify: after the node applies the revision:
@@ -115,7 +110,7 @@ A configuration is in effect on a node only once the node reports the revision a
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
-| Certificates | An unexpired certificate of the organization / HTTP only | HTTP only | Must cover every domain of the site; a wildcard site domain `*.example.com` requires the same `*.example.com` SAN |
+| Certificates | An unexpired certificate / HTTP only | HTTP only | Must cover every domain of the site; a wildcard site domain `*.example.com` requires the same `*.example.com` SAN. Domains added to the site later must be covered as well |
 | Minimum TLS version | TLS 1.2 / TLS 1.3 | TLS 1.2 | Lowest version accepted in the handshake |
 | Cipher profile | Modern / Compatible | Modern | TLS 1.2 cipher suites, see below |
 | HSTS lifetime (seconds) | 0–63072000 | 0 | Above 0, HTTPS responses carry `Strict-Transport-Security`; needs a certificate |
@@ -209,7 +204,7 @@ ACME account keys, certificate private keys, and DNS credentials are each envelo
 | `brotli-v1` | Any site with Brotli on |
 | `zstd-v1` | Any site with Zstandard on |
 
-A tenant change that introduces a capability some active node of the cluster lacks is refused ("Cluster nodes need these capabilities first: …") and the configuration stays unchanged. Nodes lacking a capability keep their last-known-good configuration and the admin area shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md).
+A change saved in the console or with an AccessKey is published even when it needs a capability some active nodes of the cluster lack; those nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md). A configuration published by a service account or a background job that introduces a capability an active node lacks is refused (`NODE_CAPABILITY_REQUIRED`) and the configuration stays unchanged.
 
 ## Limits
 
@@ -220,20 +215,19 @@ A tenant change that introduces a capability some active node of the cluster lac
 | Cipher suites | Only the **Modern** and **Compatible** profiles; no custom nginx configuration |
 | Compression | Gzip, Brotli, and Zstandard; compression settings apply after the site's **HTTPS** tab is saved for the first time |
 | Node packages | Nodes use OpenResty 1.31.1.1 built for Edgeweir (`edgeweir-openresty`) with HTTP/2, HTTP/3, Brotli, and Zstandard, see [Adding nodes](../deploy/nodes.en.md) |
-| Failure reasons | Neither the UI nor the console log shows the reason a CA or DNS provider returned |
+| Failure reasons | The UI shows only **Issuance failed**. The console log records the certificate ID and the console's own reason; the text a CA or DNS provider returned is not logged |
 
 ## Troubleshooting
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | "Invalid or expired certificate, chain or private key" | Wrong chain order, mismatched key, no DNS SAN, not yet valid, or expired | Order the PEM as leaf then intermediates; check the key |
-| "Certificate domains do not match the site or DNS zone" | A requested name is not on the organization's sites; the DNS credential zone does not cover every name; the selected certificate does not cover every site domain | Add the domain to a site first; use a matching DNS credential or certificate |
-| "Verify domain ownership first" | The registrable domain of a certificate name is unverified | Complete [domain ownership](dns-and-alerts.en.md#verify-domain-ownership) verification |
-| Certificate shows **Issuance failed** | HTTP-01: the domain does not resolve to the nodes, port 80 is blocked, a node did not apply the challenge within 40 seconds or lacks `http01-v1`; DNS-01: insufficient credential permissions or propagation over 3 minutes; CA rate limits | Fix the cause and click **Renew now**; otherwise it retries after 1 hour |
+| "Certificate domains do not match the site or DNS zone" | An HTTP-01 name is not a domain of any site; the DNS credential zone does not cover every name; the selected certificate does not cover every site domain, or a domain added to the site is not in its certificate | Add the domain to a site first, or use DNS-01; use a matching DNS credential or certificate |
+| Certificate shows **Issuance failed** | HTTP-01: the domain does not resolve to the nodes, port 80 is blocked, the cluster has no online node, a node did not apply the challenge within 40 seconds or lacks `http01-v1`, no certificate name is a site domain any more; DNS-01: insufficient credential permissions or propagation over 3 minutes; CA rate limits | Find `certificate operation failed` in the log of the console process that runs background jobs, fix the cause given in `reason`, and click **Renew now**; otherwise it retries after 1 hour |
 | Certificate stays **Pending** | No console process runs background jobs | Make sure a process with `ROLE=worker` or `ROLE=all` runs |
 | "Certificate operation is already in progress" | The certificate is **Issuing** | Wait for issuance to finish |
 | "Certificate or credential is still in use" | The certificate is used by a site, issuing, or has DNS records to clean up; the DNS credential is referenced by a certificate | Select another certificate on the sites, or delete the certificates that reference the credential |
-| "Cluster nodes need these capabilities first: …" | An active node of the cluster lacks a required capability | Upgrade the nodes; a platform administrator can publish deliberately |
+| A node shows **Upgrade required** | The node lacks a capability the configuration needs (such as `http3-v1`) and keeps its last-known-good configuration | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | TLS SNI differs from `Host`, for example a client reused a connection opened for another domain | The client opens a connection for the requested domain |
 | Browsers do not use HTTP/3 | UDP 443 is blocked; the node lacks `http3-v1`; clients read `Alt-Svc` only after a first visit | Open UDP 443 and check node capabilities |
 | Responses are not compressed | The **HTTPS** tab was never saved; the content type is not listed; the response is below the minimum size; the client sent no `Accept-Encoding`; the origin response already has a `Content-Encoding` | Save the **HTTPS** tab and check the compression settings |

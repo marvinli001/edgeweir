@@ -1,24 +1,23 @@
 # Rules, IP lists, and GeoIP
 
-Expression rules for sites and the platform, bulk redirects, IP lists, and the node-local GeoIP databases.
+Site rules, global rules, bulk redirects, IP lists, and the node-local GeoIP databases.
 
 ## Concepts
 
 | Term | Definition |
 | --- | --- |
-| Rule | An expression plus an action in one phase. Site rules apply to one site; platform rules apply to every site in every cluster. |
+| Rule | An expression plus an action in one phase. Site rules apply to one site; global rules apply to every site in every cluster. |
 | Phase | A fixed point in request processing where rules run; there are 9. |
 | Expression | A typed, wirefilter-style condition, for example `ip.src in $blocked`. |
 | Value expression | An expression that computes a string per request, used as a redirect target or rewrite path, for example `concat("/new", http.request.uri.path)`. |
 | Bulk redirects | A site's table of exact-match redirects, up to 5000 per site. |
-| IP list | A named set of IP addresses and CIDRs that expressions reference as `$name`. |
-| Platform IP list | A list maintained by platform administrators, used as a set for rules, a block list, or an allow list. |
+| IP list | A named set of IP addresses and CIDRs that expressions reference as `$name`; allow and block lists also apply to every site directly. |
 
-The console parses expressions and checks their fields, types, and actions before publishing a syntax tree; nodes validate the whole configuration and compile the tree. Nodes never run Lua text supplied by tenants.
+The console parses expressions and checks their fields, types, and actions before publishing a syntax tree; nodes validate the whole configuration and compile the tree. The configuration contains no executable Lua text.
 
 ## Edit site rules
 
-1. Open **Console → Sites**, select the site, and open the **Rules** tab.
+1. Open **Sites**, select the site, and open the **Rules** tab.
 2. Click **Add rule** next to the target phase.
 3. Enter the rule name and **Expression**. When the expression is invalid, "Check character N" appears below the editor.
 4. Select **Action** and fill in its fields; turn off **Enabled** as needed.
@@ -32,7 +31,7 @@ The console parses expressions and checks their fields, types, and actions befor
 
    The response is 403 with `X-Edgeweir-Error: policy-denied`.
 
-Platform rules are edited in **Admin → Platform rules** with the same editor (**Origin override** has no **Origin group**) and are published to every cluster on save. Platform administrators only.
+Global rules are edited on the **Global rules** page with the same editor (**Origin override** has no **Origin group**), apply to every site, and are published to every cluster on save. API: `GET` and `PUT /api/v1/platform-rules`.
 
 Disabled rules are not sent to nodes.
 
@@ -97,7 +96,7 @@ Every setting of **Override settings** starts as **Unchanged**; numbers left emp
 | Gzip | Unchanged / On / Off | Configuration, Cache | **Off**: the response does not use gzip; **On**: allows gzip again after an earlier rule turned it off |
 | Brotli, Zstandard | Unchanged / On / Off | Configuration | As Gzip |
 | WebSocket | Unchanged / On / Off | Configuration | Overrides the site's **WebSocket** |
-| Under Attack | Unchanged / On / Off | Configuration | Overrides the site's Under Attack; platform Under Attack is unaffected |
+| Under Attack | Unchanged / On / Off | Configuration | Overrides the site's Under Attack; global Under Attack is unaffected |
 | CC mitigation | Unchanged / On / Off | Configuration | **Off**: the request is exempt from CC level challenges and automatic per-IP bans; it is still counted |
 | CC highest level | Unchanged / Cookie redirect / JavaScript / Proof of work / Image captcha | Configuration | The request's CC level does not exceed the chosen level |
 | Origin connect timeout (s) | 0.1–120 | Configuration | Overrides the pool's connect timeout |
@@ -143,11 +142,11 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 
 | Item | Behavior |
 | --- | --- |
-| Platform IP lists | Run first. An address in a platform block list gets 403; an address in a platform allow list is exempt from the platform block lists but not from rules; an address in both is allowed |
-| Scope | In each phase, platform rules run before site rules; within a scope, in list order |
+| Allow and block lists | Run first. An address in a block list gets 403; an address in an allow list is exempt from the block lists but not from rules; an address in both is allowed |
+| Scope | In each phase, global rules run before site rules; within a scope, in list order |
 | Terminating actions | Block, redirect (bulk redirects included), and exceeding a rate limit end the request |
-| Bulk redirects | Looked up after the platform and site rules of the redirect phase |
-| Allow | Skips only the remaining custom WAF rules of the same scope, not the other scope and not rate limits; a site allow rule cannot bypass a platform block rule |
+| Bulk redirects | Looked up after the global and site rules of the redirect phase |
+| Allow | Skips only the remaining custom WAF rules of the same scope, not the other scope and not rate limits; a site allow rule cannot bypass a block in the global rules |
 | Stacking | Other actions accumulate; a later action overrides an earlier setting; override settings and origin overrides apply field by field, and a later compression rule replaces an earlier one |
 | Ordering | Dragging changes order only within a phase |
 
@@ -170,10 +169,10 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 
 | Item | Behavior |
 | --- | --- |
-| Scope | A fixed window per node, not a network-wide quota; each site counts separately, and platform rate-limit rules are also counted per site |
-| Key | Request header key values are counted by their MD5 digest |
-| Memory | A fixed 256 KiB shared memory partition per published site, never borrowed across sites; at most 512 published sites per cluster (128 MiB in total); log deduplication uses another 1 MiB |
-| Out of memory | When a site's partition cannot create a counter, that site's rate-limited requests get 503; the limit is not relaxed |
+| Scope | A fixed window per node, not a network-wide quota; each site counts separately, and rate limits in the global rules are also counted per site |
+| Key | Counted by an MD5 digest of the scope, rule ID, and key value |
+| Memory | A fixed 256 KiB shared memory partition per published site (node flag `--rate-limit-dict-kb`), holding about 1980 counters, never borrowed across sites; at most 512 published sites per cluster (128 MiB in total by default); log deduplication uses another 1 MiB |
+| Out of memory | When a site's partition is full, requests of new clients pass uncounted while clients that already have a counter stay limited; the node writes at most one WARN-level nginx error log line per site per minute with the running total. A node without the site's partition returns 503 (`X-Edgeweir-Error: rate-limit-unavailable`) |
 | Reload and restart | Counters survive an nginx reload; they reset when the node restarts or when a site is removed and added back |
 | Hot updates | Rule and list changes for the same set of sites do not reload; adding or removing sites reloads, and existing partitions keep their names and sizes |
 
@@ -277,7 +276,7 @@ Every string is handled as UTF-8 bytes. Arguments are fields, string literals, o
 | Unsupported | `\s` `\S` `\v` (write an explicit class such as `[ \t\r\n\f]`), `\xHH` above `\x7f`, `\z` `\A` `\Q` `\p{…}` `\K` and other escapes, backreferences and octal, groups starting with `(?`, possessive and stacked quantifiers, `{,n}`, `[[:alpha:]]`, empty classes and `[]…]` |
 | Execution budget | Nodes use PCRE with a match limit of 10000 and a depth limit of 100; an execution error returns 503 (`X-Edgeweir-Error: policy-unavailable`) |
 
-A saved rule or cache rule condition that uses a construct no longer supported (such as `\s`) makes saving its site or its rules fail with `RULE_INVALID`; rewrite it and save again. Other publications (other sites, ACME challenges, platform settings) go on: the rule keeps its last compiled form and the platform alert "Stored rule no longer valid; its last compiled form is kept" fires; such a rule that was never compiled holds its site back from the nodes. Rules of disabled and suspended sites are not compiled.
+A saved rule or cache rule condition that uses a construct no longer supported (such as `\s`) makes saving its site or its rules fail with `RULE_INVALID`; rewrite it and save again. Other publications (other sites, ACME challenges, system settings) go on: the rule keeps its last compiled form and the alert "Stored rule no longer valid; its last compiled form is kept" fires; such a rule that was never compiled holds its site back from the nodes. Rules of disabled sites are not compiled.
 
 The language is a wirefilter-style subset, not a complete wirefilter implementation.
 
@@ -292,14 +291,14 @@ The language is a wirefilter-style subset, not a complete wirefilter implementat
 | Set elements | 256 |
 | Function nesting | 4 levels |
 | Function results | 8192 bytes |
-| Rules | 64 per site; 32 for the platform |
+| Rules | 64 per site; 32 global rules |
 | Bulk redirects | 5000 per site |
 
 ## Bulk redirects
 
 A site's table of exact-match redirects: each entry redirects one source to one static target. For prefix or wildcard redirects, use a redirect rule with `wildcard_replace`.
 
-1. Open **Console → Sites**, select the site, and open the **Bulk redirects** tab.
+1. Open **Sites**, select the site, and open the **Bulk redirects** tab.
 2. Click **Add redirect**, enter **Source** and **Target**, select **Status code**, and turn on **Keep query string** as needed.
 3. Or click **Import**, enter one entry per line in **Import redirects** ("One per line: source target [status]"), turn on **Replace existing entries** as needed, and click **Import**.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision ("Rules and IP lists updated").
@@ -321,51 +320,51 @@ A site's table of exact-match redirects: each entry redirects one source to one 
 | Item | Behavior |
 | --- | --- |
 | Matching | Exact match on the Host (lowercase, without port) and normalized path of the client's original request, before any rewrite; the query string takes no part; `host/path` entries are looked up before `/path` entries |
-| Order | After the platform and site rules of the redirect phase; a request that matched a redirect rule never reaches the table |
+| Order | After the global and site rules of the redirect phase; a request that matched a redirect rule never reaches the table |
 | Import | Fields separated by whitespace (by commas when a line has no whitespace), status 301 by default; empty lines and lines starting with `#` are skipped; an entry with the same source as an existing one replaces it; **Replace existing entries** replaces the whole table; an invalid line shows "Line N is invalid" and nothing is imported |
 | List | 50 entries per page; **Filter** searches sources and targets |
 | Updates | Nodes apply them without reloading nginx |
-| Permissions | Organization owners and admins change them; members read them; changes are audited as `site.bulk_redirects_update` (with the entry count) |
+| Audit | Changes are audited as `site.bulk_redirects_update` (with the entry count) |
 | Limit | 5000 entries per site, sources unique |
 | Node requirement | `rules-v2`, see [Node capabilities and publishing](#node-capabilities-and-publishing) |
 
 ## IP lists
 
-1. Open **Console → IP lists** and click **Create list**.
+1. Open **IP lists** and click **Create list**.
 2. Enter **Name**: starts with a letter or underscore, contains only letters, digits, and underscores, 1–64 characters.
-3. Enter entries in **IP addresses and CIDRs**, separated by newlines, spaces, or commas.
-4. Click **Save**.
-5. Verify: the list shows `$name` and "N entries"; reference it in rules or cache rule conditions with `ip.src in $name`.
-
-Platform IP lists are maintained in **Admin → Platform IP lists**, platform administrators only. The **Action** of a platform list:
+3. Select **Action**: **Referenced by rules**, **Block**, or **Allow**.
+4. Enter entries in **IP addresses and CIDRs**, separated by newlines, spaces, or commas.
+5. Click **Save**.
+6. Verify: the list shows `$name` and "N entries", block and allow lists also a **Block** or **Allow** badge; reference it in rules or cache rule conditions with `ip.src in $name`.
 
 | Action | Effect |
 | --- | --- |
-| Referenced by rules | Only a set for platform rules |
-| Block | Matching addresses get 403 before any rule runs |
-| Allow | Matching addresses are exempt from platform block lists |
+| Referenced by rules | Only a set for rules to reference |
+| Block | A block list: applies to every site of every cluster without a rule; matching addresses get 403 before any rule runs |
+| Allow | An allow list: applies to every site of every cluster; matching addresses are exempt from block lists and bans, but not from rules |
 
 | Item | Behavior |
 | --- | --- |
-| Name | Cannot change after creation; saving rules binds names to list IDs |
-| Same name | An organization list shadows a platform list of the same name |
-| Visibility | Organization lists can be referenced only by rules of that organization's sites; platform rules can reference only platform lists |
-| Changes | Changing entries publishes a new revision; nodes apply it without reload |
+| Name | All lists share one namespace and names are unique; a name cannot change after creation; saving rules binds names to list IDs |
+| References | Any site rule, global rule, or cache rule condition can reference any list, block and allow lists included |
+| Changes | Entries and **Action** can change at any time; creating, changing, or deleting a list publishes a new revision to every cluster ("Rules and IP lists updated"); nodes apply it without reload |
 | Deletion | A list referenced by a rule or a cache rule condition cannot be deleted ("IP list is used by a rule") |
 | Entries | IPv4 / IPv6 addresses or CIDRs; host bits cleared, deduplicated, sorted; leading zeros and zone IDs refused |
-| Quota | Each organization and the platform: up to 128 lists and 50,000 entries in total; up to 10,000 entries per list |
-| Rollback | Site configuration rollbacks keep the current lists and platform rules; a rollback that references a deleted list is refused |
+| Quota | Up to 128 lists and 50,000 entries in total; up to 10,000 entries per list; a change that does not add entries always saves |
+| Rollback | Site configuration rollbacks keep the current lists and global rules; a rollback that references a deleted list is refused |
+
+API: `GET` and `POST /api/v1/ip-lists`, `PUT` and `DELETE /api/v1/ip-lists/{id}`.
 
 ## Node capabilities and publishing
 
 | Item | Behavior |
 | --- | --- |
-| Capabilities | Rules and platform block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; the challenge action needs `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
+| Capabilities | Rules and block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; the challenge action needs `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
 | Rule engine extensions | Any of these needs `rules-v2`: functions and `http.request.full_uri`, `http.request.uri.path.extension`, `http.response.content_type.media_type`; expression targets, query parameter edits, and a redirect with **Keep query string** on or a rewrite with it off; origin overrides; the compression phase; the overrides available only in the configuration phase and **Gzip** On; cache rule conditions not in the [builder](origins-and-cache.en.md#request-conditions)'s shape and **Browser TTL (s)**; bulk redirects; origin groups other than the default group |
 | Existing configurations | Configurations that use none of the extensions stay as they were and do not need `rules-v2`; cache rules in the builder's shape are still sent as the former structured conditions |
-| Tenant publishing | When a tenant save or an automatic background publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the save is refused ("Cluster nodes need these capabilities first: …") and the rules and revision stay unchanged |
-| UI | While an active node of the cluster lacks `rules-v2`, the **Rules**, **Cache**, and **Bulk redirects** tabs show "Some nodes of the site's cluster do not support the rule extensions yet"; tenants cannot pick the extensions, and settings already in place can still be changed or cleared; **Bulk redirects** is read-only |
-| Platform administrators | Can deliberately publish a configuration that needs an upgrade; nodes lacking the capability keep their last-known-good configuration and the admin area shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md) |
+| Console and AccessKeys | A save is published even when an active node of the cluster lacks a required capability; such nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md) |
+| Service accounts and background jobs | When a configuration they publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the publish is refused (`NODE_CAPABILITY_REQUIRED`, "Cluster nodes need these capabilities first: …") and the configuration and revision stay unchanged |
+| UI | While an active node of the cluster lacks `rules-v2`, the **Rules**, **Cache**, and **Bulk redirects** tabs show "Some nodes of the site's cluster do not support the rule extensions yet"; the extensions cannot be picked there, and settings already in place can still be changed or cleared; **Bulk redirects** is read-only |
 | Unknown capabilities | Nodes reject configurations with unknown capabilities or enum values and keep last-known-good |
 
 ## Configure GeoIP databases
@@ -383,7 +382,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | Precedence | Country and ASN come from IPinfo Lite first, then from the City / ASN MMDB when IPinfo has no record |
 | Subdivision | Comes only from the City MMDB, and only when the City MMDB's country matches the final country |
 | Bundled data | `/usr/share/edgeweir-node/geoip/ipinfo_lite.mmdb`, checked at build time against the sha256 IPinfo publishes; `NOTICE` in the same directory records the download time and sha256 |
-| Admin attribution | **Admin → System → GeoIP databases** carries the IPinfo attribution link |
+| Console attribution | **System → GeoIP databases** carries the IPinfo attribution link |
 
 1. Container nodes running a release image need no configuration for country and ASN; for newer data, pull a newer image, or mount a separately downloaded copy and set `EDGEWEIR_GEOIP_IPINFO`.
 2. Package or archive nodes: download `ipinfo_lite.mmdb` from IPinfo. To match on subdivisions, also download a City MMDB. Check source, license, and integrity, and record the download date.
@@ -401,7 +400,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
    sudo systemctl restart edgeweir-node
    ```
 
-5. Verify: **Admin → System → GeoIP databases** shows "Country: Ready" and "ASN: Ready" for the node, plus "Subdivision: Ready" when a City MMDB is configured.
+5. Verify: **System → GeoIP databases** shows "Country: Ready" and "ASN: Ready" for the node, plus "Subdivision: Ready" when a City MMDB is configured.
 
 | Variable | Flag | Default | Description |
 | --- | --- | --- | --- |
@@ -416,7 +415,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | Missing capability | A node rejects configurations that use GeoIP fields it lacks and keeps last-known-good |
 | Invalid file | The node agent does not start when a configured MMDB file is invalid or of the wrong database type; an invalid bundled IPinfo Lite database is logged and left unused |
 | Lookups | The agent reads the files and serves results to Lua workers over a local Unix socket with mode 0600; each worker caches up to 10,000 results for 5 minutes; a lookup times out after 200 milliseconds |
-| Lookup failure | When site or platform rules (cache rule conditions and value expressions included) use GeoIP fields, every request of that site needs a lookup; while the service is unavailable, those requests get 503 |
+| Lookup failure | When site rules, global rules (value expressions included), or cache rule conditions use GeoIP fields, every request of that site needs a lookup; while the service is unavailable, those requests get 503 |
 | Updates | Replace the file or image on one node, restart, and verify before updating the others; never overwrite an MMDB file in use |
 
 ## Limits
@@ -443,11 +442,13 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | "Line N is invalid" | The field count, source, target, or status code of that imported line is invalid | Fix the line and import again |
 | "N invalid" | The bulk redirect table has invalid entries or repeated sources | Fix the marked entries |
 | "Some nodes of the site's cluster do not support the rule extensions yet" | An active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
-| "IP list not found" | The referenced list does not exist or is not visible to the site | Create the list or check its organization |
-| "IP list name already exists" | The organization or platform already has a list with that name | Use another name |
+| "IP list not found" | The referenced list does not exist | Create the list in **IP lists** first, or fix the name |
+| "IP list name already exists" | A list with that name exists | Use another name |
 | "IP list is used by a rule" | Deleting a list still referenced by a rule | Remove the reference from the rules first |
 | "IP list limit reached (128 lists, 50,000 entries)" | Over quota | Merge or delete lists |
-| "Cluster nodes need these capabilities first: …" | An active node of the cluster lacks `rules-v1`, `rules-v2`, or a GeoIP capability | Upgrade the nodes or configure the GeoIP databases |
+| A node shows **Upgrade required** | The node lacks a capability the configuration needs (`rules-v1`, `rules-v2`, a GeoIP capability, and so on) and keeps its last-known-good configuration | Upgrade the node or configure the GeoIP databases |
+| "Cluster nodes need these capabilities first: …" | A configuration published by a service account or a background job needs `rules-v1`, `rules-v2`, or a GeoIP capability that an active node of the cluster lacks | Upgrade the nodes or configure the GeoIP databases |
 | 503 with `X-Edgeweir-Error: policy-unavailable` | A regular expression exceeded its budget, a function result exceeded 8192 bytes, a dynamic target or rewrite path was invalid, or a GeoIP lookup failed | Simplify the pattern or expression; check what the value expression computes; check the node's GeoIP service |
 | A rule that redirects HTTP to HTTPS makes requests return 503 | The site has no certificate | Select a certificate on the **HTTPS** tab |
 | Rate limits are not shared across nodes | Rate limits count per node | Scale the threshold by the number of nodes |
+| Some visitors are not rate limited and the node log shows `rate limit partition full` | The site's rate-limit partition is full and new clients are not counted | Raise the node flag `--rate-limit-dict-kb` |

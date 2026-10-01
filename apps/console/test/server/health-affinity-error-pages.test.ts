@@ -1,17 +1,17 @@
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
-import { ERROR_PAGE_MAX_BYTES } from "@edgeweir/contract";
+import { ERROR_PAGE_MAX_BYTES, siteErrorPagesInput, siteUpdateInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { sweepAlerts } from "../../src/server/services/alerts";
+import { updateSiteErrorPages } from "../../src/server/services/error-pages";
 import { replaceOriginHealth } from "../../src/server/services/origin-health";
 import { latestRevision } from "../../src/server/services/revisions";
+import { updateSite } from "../../src/server/services/sites";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -43,17 +43,18 @@ const healthCheck = {
   unhealthyThreshold: 4,
 };
 
+/** A change without the operator behind it (service accounts, background jobs). */
+const service = {
+  actor: { type: "service_account" as const, id: "service-account-g4", name: "integration" },
+};
+
 describe("active health checks, session affinity, Cache-Tag and error pages on the console side", async () => {
   const { ctx, client: pglite } = await createTestContext();
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
-  let owner: ApiClient;
-  let member: ApiClient;
-  let outsider: ApiClient;
   let clusterId: string;
   let otherClusterId: string;
-  let orgId: string;
   let siteId: string;
   let otherSiteId: string;
   let nodeId: string;
@@ -84,31 +85,16 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
     clusterId = (await admin.clusters.list())[0]?.id ?? "";
     otherClusterId = (await admin.clusters.create({ name: "elsewhere", description: "" })).id;
-    orgId = (await admin.organizations.create({ name: "Store", defaultClusterId: clusterId })).id;
-    const otherOrgId = (
-      await admin.organizations.create({ name: "Rival", defaultClusterId: clusterId })
-    ).id;
-    const users: [string, string, "owner" | "member"][] = [
-      ["owner@store.test", orgId, "owner"],
-      ["member@store.test", orgId, "member"],
-      ["owner@rival.test", otherOrgId, "owner"],
-    ];
-    for (const [email, organizationId, role] of users)
-      await admin.users.create({ name: email, email, password: PASSWORD, organizationId, role });
-    owner = rpcClient(app, origin, await signIn(app, origin, "owner@store.test"));
-    member = rpcClient(app, origin, await signIn(app, origin, "member@store.test"));
-    outsider = rpcClient(app, origin, await signIn(app, origin, "owner@rival.test"));
     siteId = (
-      await owner.sites.create({
+      await admin.sites.create({
         name: "store",
         domains: ["www.store.test", "*.cdn.store.test"],
         origins,
       })
     ).site.id;
     otherSiteId = (
-      await outsider.sites.create({ name: "rival", domains: ["www.rival.test"], origins })
+      await admin.sites.create({ name: "rival", domains: ["www.rival.test"], origins })
     ).site.id;
-    for (const id of [siteId, otherSiteId]) await approveSiteDomains(admin, id);
     const [node] = await ctx.db
       .insert(schema.node)
       .values({
@@ -125,7 +111,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
   afterAll(() => pglite.close());
 
   it("reads the new settings off, no error pages and every feature available", async () => {
-    const site = await member.sites.get({ id: siteId });
+    const site = await admin.sites.get({ id: siteId });
     expect(site.originSettings.activeHealthCheck).toEqual({
       enabled: false,
       path: "/",
@@ -140,18 +126,14 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     });
     expect(site.originSettings.sessionAffinity).toEqual({ enabled: false, ttlSeconds: 3600 });
     expect(site.cacheSettings.keepCacheTag).toBe(false);
-    expect(await member.errorPages.get({ id: siteId })).toEqual({
+    expect(await admin.errorPages.get({ id: siteId })).toEqual({
       siteId,
       pages: [],
       interceptOriginErrors: false,
       updatedAt: null,
     });
-    expect(await admin.settings.errorPages()).toEqual({
-      unknownHost: "",
-      siteDisabled: "",
-      siteSuspended: "",
-    });
-    const features = await member.sites.features({ id: siteId });
+    expect(await admin.settings.errorPages()).toEqual({ unknownHost: "", siteDisabled: "" });
+    const features = await admin.sites.features({ id: siteId });
     for (const key of [
       "activeHealthCheck",
       "sessionAffinity",
@@ -170,7 +152,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
   });
 
   it("stores health checks, affinity and keepCacheTag, keeps them when an update omits them and compiles them only while on", async () => {
-    const { site, revision } = await owner.sites.update({
+    const { site, revision } = await admin.sites.update({
       id: siteId,
       originSettings: { activeHealthCheck: healthCheck, sessionAffinity: { enabled: false } },
       cacheSettings: { keepCacheTag: true },
@@ -194,7 +176,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     expect(compiled?.originPool?.sessionAffinity).toBeUndefined();
     expect((await config()).requiredFeatures).toContain("active-health-v1");
     // Clients that predate these settings send pool and cache settings without them.
-    const kept = await member.sites.update({
+    const kept = await admin.sites.update({
       id: siteId,
       originSettings: { policy: "round_robin" },
       cacheSettings: { rangeSlice: true },
@@ -206,7 +188,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     });
     expect(kept.site.cacheSettings).toMatchObject({ rangeSlice: true, keepCacheTag: true });
     // Off keeps the settings but compiles nothing and requires nothing.
-    const off = await owner.sites.update({
+    const off = await admin.sites.update({
       id: siteId,
       originSettings: { activeHealthCheck: { ...healthCheck, enabled: false } },
       cacheSettings: { keepCacheTag: false },
@@ -223,7 +205,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
       { path: "no-slash" },
     ])
       expect(
-        (await rpcError(owner.sites.update({ id: siteId, originSettings: { activeHealthCheck } })))
+        (await rpcError(admin.sites.update({ id: siteId, originSettings: { activeHealthCheck } })))
           .status,
       ).toBe(400);
   });
@@ -231,7 +213,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
   it("compiles the cluster's challenge keys for session affinity and keeps them on rollback", async () => {
     const before = await config();
     expect(before.challengeKeys).toEqual([]);
-    await owner.sites.update({
+    await admin.sites.update({
       id: siteId,
       originSettings: { sessionAffinity: { enabled: true, ttlSeconds: 900 } },
     });
@@ -256,7 +238,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
       .where(eq(schema.challengeKey.clusterId, clusterId));
     expect(keys).toHaveLength(3);
     // Off again: the keys and both features leave the configuration.
-    await owner.sites.update({
+    await admin.sites.update({
       id: siteId,
       originSettings: { sessionAffinity: { enabled: false } },
     });
@@ -276,17 +258,17 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     expect(restored.requiredFeatures).toEqual(
       expect.arrayContaining(["challenge-v1", "session-affinity-v1"]),
     );
-    await owner.sites.update({
+    await admin.sites.update({
       id: siteId,
       originSettings: { sessionAffinity: { enabled: false } },
     });
     expect((await config()).challengeKeys).toEqual([]);
   });
 
-  it("refuses tenants health checks, affinity and error pages the cluster's nodes lack; administrators may require them", async () => {
+  it("holds health checks, affinity and error pages the cluster's nodes lack for changes without the operator; the operator may require them", async () => {
     await setNodeFeatures(["rules-v1", "tls-v1", "access-logs-v1"]);
     const unavailable = { available: false, reason: "nodes" };
-    expect(await member.sites.features({ id: siteId })).toMatchObject({
+    expect(await admin.sites.features({ id: siteId })).toMatchObject({
       activeHealthCheck: unavailable,
       sessionAffinity: unavailable,
       errorPages: unavailable,
@@ -295,47 +277,55 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     });
     // Affinity also needs challenge-v1 for the keys it signs with.
     await setNodeFeatures(["rules-v1", "tls-v1", "access-logs-v1", "session-affinity-v1"]);
-    expect((await member.sites.features({ id: siteId })).sessionAffinity).toEqual(unavailable);
+    expect((await admin.sites.features({ id: siteId })).sessionAffinity).toEqual(unavailable);
     await setNodeFeatures(["rules-v1", "tls-v1", "access-logs-v1"]);
     const before = (await config()).revision;
+    const serviceUpdate = (input: unknown) =>
+      updateSite(ctx.db, siteUpdateInput.parse(input), {
+        ...service,
+        masterKey: ctx.masterKey,
+      });
     for (const [call, feature] of [
       [
-        () =>
-          owner.sites.update({ id: siteId, originSettings: { activeHealthCheck: healthCheck } }),
+        () => serviceUpdate({ id: siteId, originSettings: { activeHealthCheck: healthCheck } }),
         "active-health-v1",
       ],
       [
-        () =>
-          owner.sites.update({
-            id: siteId,
-            originSettings: { sessionAffinity: { enabled: true } },
-          }),
+        () => serviceUpdate({ id: siteId, originSettings: { sessionAffinity: { enabled: true } } }),
         "challenge-v1, session-affinity-v1",
       ],
       [
         () =>
-          owner.errorPages.update({ id: siteId, pages: [{ status: 503, template: "<p>x</p>" }] }),
+          updateSiteErrorPages(
+            ctx.db,
+            siteErrorPagesInput.parse({
+              id: siteId,
+              pages: [{ status: 503, template: "<p>x</p>" }],
+            }),
+            service,
+          ),
         "error-pages-v1",
       ],
     ] as const)
-      expect(await rpcError(call())).toMatchObject({
+      await expect(call()).rejects.toMatchObject({
         code: "NODE_CAPABILITY_REQUIRED",
         status: 409,
         data: { features: feature },
       });
     expect((await config()).revision).toBe(before);
-    expect((await member.sites.get({ id: siteId })).originSettings.activeHealthCheck.enabled).toBe(
+    expect((await admin.sites.get({ id: siteId })).originSettings.activeHealthCheck.enabled).toBe(
       false,
     );
-    expect((await member.errorPages.get({ id: siteId })).pages).toEqual([]);
+    expect((await admin.errorPages.get({ id: siteId })).pages).toEqual([]);
     // Cache-Tag forwarding needs no feature: older nodes forward the header anyway.
-    await owner.sites.update({ id: siteId, cacheSettings: { keepCacheTag: true } });
+    await serviceUpdate({ id: siteId, cacheSettings: { keepCacheTag: true } });
     expect((await siteOf())?.keepCacheTag).toBe(true);
-    await owner.sites.update({ id: siteId, cacheSettings: { keepCacheTag: false } });
-    // A disabled node does not count; an administrator may require the upgrade.
+    await serviceUpdate({ id: siteId, cacheSettings: { keepCacheTag: false } });
+    // A disabled node does not count.
     await ctx.db.update(schema.node).set({ status: "disabled" }).where(eq(schema.node.id, nodeId));
-    expect((await member.sites.features({ id: siteId })).errorPages.available).toBe(true);
+    expect((await admin.sites.features({ id: siteId })).errorPages.available).toBe(true);
     await ctx.db.update(schema.node).set({ status: "active" }).where(eq(schema.node.id, nodeId));
+    // The operator may deliberately require the upgrade.
     await admin.errorPages.update({ id: siteId, pages: [{ status: 503, template: "<p>x</p>" }] });
     expect((await config()).requiredFeatures).toContain("error-pages-v1");
     await admin.errorPages.update({ id: siteId, pages: [] });
@@ -343,34 +333,18 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     await setNodeFeatures(G4_FEATURES);
   });
 
-  it("lets owners change error pages, members read them and nobody else reach them", async () => {
+  it("lets read-only AccessKeys read error pages but not change them", async () => {
     const pages = [{ status: 403 as const, template: "<p>denied</p>" }];
-    expect(await rpcError(member.errorPages.update({ id: siteId, pages }))).toMatchObject({
-      code: "ORG_ADMIN_REQUIRED",
-      status: 403,
-    });
-    for (const call of [
-      () => outsider.errorPages.get({ id: siteId }),
-      () => outsider.errorPages.update({ id: siteId, pages }),
-    ])
-      expect(await rpcError(call())).toMatchObject({ code: "SITE_NOT_FOUND", status: 404 });
-    // Tenants never reach the platform pages.
-    for (const call of [
-      () => owner.settings.errorPages(),
-      () => owner.settings.setErrorPages({ unknownHost: "<p>mine</p>" }),
-    ])
-      expect((await rpcError(call())).status).toBe(403);
-    // Read-only AccessKeys read but cannot write.
-    const reader = await owner.accessKeys.create({ name: "pages-read", scope: "read" });
+    const reader = await admin.accessKeys.create({ name: "pages-read", scope: "read" });
     expect((await api(reader.key, "GET", `/sites/${siteId}/error-pages`)).status).toBe(200);
     const res = await api(reader.key, "PUT", `/sites/${siteId}/error-pages`, { pages });
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ code: "ACCESS_KEY_READ_ONLY" });
-    expect((await member.errorPages.get({ id: siteId })).pages).toEqual([]);
+    expect((await admin.errorPages.get({ id: siteId })).pages).toEqual([]);
   });
 
   it("replaces a site's error pages through /api/v1, publishes them sorted by status and audits their sizes", async () => {
-    const writer = await owner.accessKeys.create({ name: "pages-write", scope: "write" });
+    const writer = await admin.accessKeys.create({ name: "pages-write", scope: "write" });
     const res = await api(writer.key, "PUT", `/sites/${siteId}/error-pages`, {
       pages: [
         { status: 503, template: "<h1>{{status}}</h1><p>{{request_id}}</p>" },
@@ -389,7 +363,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
       ],
     });
     expect(saved.updatedAt).not.toBeNull();
-    expect(await member.errorPages.get({ id: siteId })).toEqual(saved);
+    expect(await admin.errorPages.get({ id: siteId })).toEqual(saved);
     expect(await latestRevision(ctx.db, clusterId)).toMatchObject({
       reasonCode: "site_error_pages_updated",
       reasonParams: { site: "store" },
@@ -399,9 +373,9 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     expect(compiled?.errorPages?.interceptOriginErrors).toBe(true);
     expect((await config()).requiredFeatures).toContain("error-pages-v1");
     expect((await siteOf(otherSiteId))?.errorPages).toBeUndefined();
-    // The latest entry: an administrator saved pages earlier.
+    // The latest entry: the operator saved pages earlier.
     const audit = (await audits("site.error_pages_update")).at(-1);
-    expect(audit).toMatchObject({ organizationId: orgId, targetId: siteId, actorType: "api_key" });
+    expect(audit).toMatchObject({ targetId: siteId, actorType: "api_key" });
     expect(audit?.metadata).toMatchObject({
       from: { statuses: [], interceptOriginErrors: false },
       to: { statuses: [403, 503], interceptOriginErrors: true },
@@ -410,7 +384,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     });
     // A stale expectedUpdatedAt is refused with the current value.
     const stale = await rpcError(
-      owner.errorPages.update({
+      admin.errorPages.update({
         id: siteId,
         pages: [],
         expectedUpdatedAt: new Date(Date.parse(saved.updatedAt) - 1000).toISOString(),
@@ -422,7 +396,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
       data: { updatedAt: saved.updatedAt },
     });
     // Without pages nothing is compiled, whatever the intercept switch says.
-    const cleared = await owner.errorPages.update({
+    const cleared = await admin.errorPages.update({
       id: siteId,
       pages: [],
       interceptOriginErrors: true,
@@ -442,7 +416,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
       expect(
         (
           await rpcError(
-            owner.errorPages.update({
+            admin.errorPages.update({
               id: siteId,
               pages: pages as { status: 429; template: string }[],
             }),
@@ -454,7 +428,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
   it("limits templates to 64 KiB of UTF-8, not of characters", async () => {
     // 65536 bytes of ASCII fit exactly.
     const ascii = "a".repeat(ERROR_PAGE_MAX_BYTES);
-    const fits = await owner.errorPages.update({
+    const fits = await admin.errorPages.update({
       id: siteId,
       pages: [{ status: 502, template: ascii }],
     });
@@ -463,7 +437,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     const cjk = "错".repeat(30_000);
     expect(
       await rpcError(
-        owner.errorPages.update({ id: siteId, pages: [{ status: 504, template: cjk }] }),
+        admin.errorPages.update({ id: siteId, pages: [{ status: 504, template: cjk }] }),
       ),
     ).toMatchObject({
       code: "ERROR_PAGE_TOO_LARGE",
@@ -472,17 +446,17 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     });
     expect(
       await rpcError(
-        owner.errorPages.update({ id: siteId, pages: [{ status: 502, template: `${ascii}b` }] }),
+        admin.errorPages.update({ id: siteId, pages: [{ status: 502, template: `${ascii}b` }] }),
       ),
     ).toMatchObject({ code: "ERROR_PAGE_TOO_LARGE", data: { status: 502 } });
     // Nothing changed.
-    expect((await member.errorPages.get({ id: siteId })).pages).toEqual([
+    expect((await admin.errorPages.get({ id: siteId })).pages).toEqual([
       { status: 502, template: ascii },
     ]);
     expect(
-      await rpcError(admin.settings.setErrorPages({ siteSuspended: "停".repeat(22_000) })),
+      await rpcError(admin.settings.setErrorPages({ siteDisabled: "停".repeat(22_000) })),
     ).toMatchObject({ code: "ERROR_PAGE_TOO_LARGE", data: { status: 503 } });
-    await owner.errorPages.update({ id: siteId, pages: [] });
+    await admin.errorPages.update({ id: siteId, pages: [] });
   });
 
   it("publishes the platform's pages to every cluster and audits them", async () => {
@@ -490,11 +464,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
       main: (await config()).revision,
       other: (await config(otherClusterId)).revision,
     };
-    const pages = {
-      unknownHost: "<h1>{{host}} is not served here</h1>",
-      siteDisabled: "",
-      siteSuspended: "<h1>suspended</h1><p>{{request_id}}</p>",
-    };
+    const pages = { unknownHost: "<h1>{{host}} is not served here</h1>", siteDisabled: "" };
     expect(await admin.settings.setErrorPages(pages)).toEqual(pages);
     expect(await admin.settings.errorPages()).toEqual(pages);
     for (const [cluster, revision] of [
@@ -512,8 +482,8 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     }
     const audit = (await audits("system.error_pages_update")).at(-1);
     expect(audit?.metadata).toMatchObject({
-      changed: ["unknownHost", "siteSuspended"],
-      bytes: { unknownHost: 36, siteDisabled: 0, siteSuspended: 39 },
+      changed: ["unknownHost"],
+      bytes: { unknownHost: 36, siteDisabled: 0 },
     });
     // Saving the same pages publishes nothing new.
     const same = (await config()).revision;
@@ -521,21 +491,15 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     expect((await config()).revision).toBe(same);
   });
 
-  it("ships the domains of disabled and suspended sites as offline hosts with the reason", async () => {
-    await owner.sites.setEnabled({ id: siteId, enabled: false });
+  it("ships the domains of disabled sites as offline hosts, sorted by name, with the reason", async () => {
+    await admin.sites.setEnabled({ id: siteId, enabled: false });
     let current = await config();
     expect(current.sites.find((s) => s.id === siteId)).toBeUndefined();
     expect(current.offlineHosts.map((h) => [h.name, h.wildcard, h.reason])).toEqual([
       ["cdn.store.test", true, "disabled"],
       ["www.store.test", false, "disabled"],
     ]);
-    // Suspension wins over disabling.
-    await admin.admin.sites.suspend({ id: siteId, reason: "abuse" });
-    current = await config();
-    expect(current.offlineHosts.map((h) => h.reason)).toEqual(["suspended", "suspended"]);
-    await owner.sites.setEnabled({ id: siteId, enabled: true });
-    expect((await config()).offlineHosts.map((h) => h.reason)).toEqual(["suspended", "suspended"]);
-    await admin.admin.sites.resume({ id: siteId });
+    await admin.sites.setEnabled({ id: siteId, enabled: true });
     current = await config();
     expect(current.offlineHosts).toEqual([]);
     expect(current.sites.find((s) => s.id === siteId)).toBeDefined();
@@ -544,23 +508,23 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
   });
 
   it("rolls back with the current platform pages and offline hosts and recomputes the features", async () => {
-    await owner.errorPages.update({
+    await admin.errorPages.update({
       id: siteId,
       pages: [{ status: 429, template: "<p>slow</p>" }],
     });
-    await owner.sites.update({ id: siteId, originSettings: { activeHealthCheck: healthCheck } });
+    await admin.sites.update({ id: siteId, originSettings: { activeHealthCheck: healthCheck } });
     const target = await config();
     expect(target.requiredFeatures).toEqual(
       expect.arrayContaining(["active-health-v1", "error-pages-v1"]),
     );
-    await owner.errorPages.update({ id: siteId, pages: [] });
-    await owner.sites.update({
+    await admin.errorPages.update({ id: siteId, pages: [] });
+    await admin.sites.update({
       id: siteId,
       originSettings: { activeHealthCheck: { ...healthCheck, enabled: false } },
     });
-    const newer = { unknownHost: "<p>newer</p>", siteDisabled: "<p>off</p>", siteSuspended: "" };
+    const newer = { unknownHost: "<p>newer</p>", siteDisabled: "<p>off</p>" };
     await admin.settings.setErrorPages(newer);
-    await outsider.sites.setEnabled({ id: otherSiteId, enabled: false });
+    await admin.sites.setEnabled({ id: otherSiteId, enabled: false });
     await admin.clusters.rollback({ id: clusterId, revision: Number(target.revision) });
     let restored = await config();
     // Site content comes back with its features ...
@@ -578,7 +542,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
       ["www.rival.test", "disabled"],
     ]);
     // A site that is offline now leaves its features behind.
-    await owner.sites.setEnabled({ id: siteId, enabled: false });
+    await admin.sites.setEnabled({ id: siteId, enabled: false });
     await admin.clusters.rollback({ id: clusterId, revision: Number(target.revision) });
     restored = await config();
     expect(restored.sites.find((s) => s.id === siteId)).toBeUndefined();
@@ -589,14 +553,14 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
       "www.rival.test",
       "www.store.test",
     ]);
-    await owner.sites.setEnabled({ id: siteId, enabled: true });
-    await outsider.sites.setEnabled({ id: otherSiteId, enabled: true });
-    await admin.settings.setErrorPages({ unknownHost: "", siteDisabled: "", siteSuspended: "" });
+    await admin.sites.setEnabled({ id: siteId, enabled: true });
+    await admin.sites.setEnabled({ id: otherSiteId, enabled: true });
+    await admin.settings.setErrorPages({ unknownHost: "", siteDisabled: "" });
     expect((await config()).platformErrorPages).toBeUndefined();
   });
 
   it("reports passive and active origin health per node and counts a node down once", async () => {
-    const site = await member.sites.get({ id: siteId });
+    const site = await admin.sites.get({ id: siteId });
     const [primary, backup] = site.origins;
     if (!primary || !backup) throw new Error("origins missing");
     const node = { id: nodeId, clusterId };
@@ -633,7 +597,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
         entry(backup.id, "active", false, "probe timeout"),
       ]),
     ).toBe(4);
-    const health = await member.sites.originHealth({ id: siteId });
+    const health = await admin.sites.originHealth({ id: siteId });
     const of = (id: string) => health.find((h) => h.originId === id);
     expect(of(primary.id)?.downNodes).toBe(1);
     expect(of(primary.id)?.nodes.map((n) => [n.source, n.healthy])).toEqual([

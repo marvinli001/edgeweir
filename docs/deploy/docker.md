@@ -82,7 +82,7 @@ sed -i "s|^EDGEWEIR_PUBLIC_URL=.*|EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.
 
 全部变量见 [环境变量](../reference/environment.md)。
 
-初始化之后，SMTP、节点发布源、所有权校验 DNS、源站地址允许清单与 GeoIP 在 **后台 → 系统设置** 配置，保存即生效，无需重启。后台保存的值优先于 `.env` 中的 `EDGEWEIR_SMTP_CA_FILE`、`EDGEWEIR_NODE_RELEASE_BASE_URL`、`EDGEWEIR_DNS_RESOLVERS`。`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 约束后台保存的出站地址，后台不能放宽。
+初始化之后，SMTP、节点发布源、源站地址允许清单与 GeoIP 在 **系统设置** 配置，保存即生效，无需重启。系统设置中保存的值优先于 `.env` 中的 `EDGEWEIR_SMTP_CA_FILE`、`EDGEWEIR_NODE_RELEASE_BASE_URL`，两者都没有时使用默认值。`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 约束系统设置中保存的出站地址，网页控制台不能放宽。
 
 ## 5. 启动
 
@@ -113,7 +113,7 @@ docker compose logs -f console
 
    未初始化的控制台每次启动输出同一个 token，直到使用。token 经主密钥加密存于数据库；主密钥更换后重新生成。
 
-2. 打开 `<EDGEWEIR_PUBLIC_URL>/setup`，填入 setup token，创建平台管理员与第一个组织。控制台同时创建默认集群 `default`。初始化向导见 [快速上手](../guide/first-site.md)。
+2. 打开 `<EDGEWEIR_PUBLIC_URL>/setup`，填入 setup token 与姓名、邮箱、密码，创建控制台账户。控制台同时创建默认集群 `default`。初始化向导见 [快速上手](../guide/first-site.md)。
 
 无 token 或 token 错误的初始化请求被拒绝，并写入审计日志。token 在初始化成功后失效。
 

@@ -360,31 +360,31 @@ test("G4: the error pages tab edits a site's templates and refuses one over 64 K
   expect(pageErrors).toEqual([]);
 });
 
-test("G4: administrators set and clear the platform error pages", async ({ page }) => {
+test("G4: the operator sets and clears the platform error pages", async ({ page }) => {
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
-  await page.goto("/admin/settings");
+  await page.goto("/system");
+  const card = page.getByTestId("platform-error-pages-card");
   const pages = {
     "platform-page-unknown-host": "<h1>{{host}}</h1><p>G4 unknown host</p>",
-    "platform-page-disabled": "<h1>{{status}}</h1><p>G4 disabled</p>",
-    "platform-page-suspended": "<h1>{{status}}</h1><p>G4 suspended {{request_id}}</p>",
+    "platform-page-disabled": "<h1>{{status}}</h1><p>G4 disabled {{request_id}}</p>",
   };
-  const save = page.getByTestId("platform-pages-save");
-  for (const id of Object.keys(pages)) await expect(page.getByTestId(id)).toHaveValue("");
+  const save = card.getByTestId("platform-pages-save");
+  for (const id of Object.keys(pages)) await expect(card.getByTestId(id)).toHaveValue("");
   await expect(save).toBeDisabled();
-  for (const [id, template] of Object.entries(pages)) await page.getByTestId(id).fill(template);
+  for (const [id, template] of Object.entries(pages)) await card.getByTestId(id).fill(template);
   await save.click();
   await expect(save).toBeDisabled();
   await page.reload();
   for (const [id, template] of Object.entries(pages))
-    await expect(page.getByTestId(id)).toHaveValue(template);
+    await expect(card.getByTestId(id)).toHaveValue(template);
   await check(page, "platform-pages");
 
-  for (const id of Object.keys(pages)) await page.getByTestId(id).fill("");
+  for (const id of Object.keys(pages)) await card.getByTestId(id).fill("");
   await save.click();
   await expect(save).toBeDisabled();
   await page.reload();
-  for (const id of Object.keys(pages)) await expect(page.getByTestId(id)).toHaveValue("");
+  for (const id of Object.keys(pages)) await expect(card.getByTestId(id)).toHaveValue("");
   await logout(page);
   expect(pageErrors).toEqual([]);
 });

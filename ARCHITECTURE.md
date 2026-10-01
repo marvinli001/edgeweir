@@ -98,37 +98,30 @@
 
 | 区域 | 路径 | 访问者 |
 | --- | --- | --- |
-| 入口 | `/`（按状态跳转到 `/setup`、`/overview` 或 `/login`）、`/setup`、`/login`、`/invite/$id` | 所有人 |
-| 控制台 | `/overview`、`/sites`、`/certificates`、`/alerts`、`/ip-lists`、`/purge`、`/members`、`/security`、`/settings` | 登录用户；`/members` 仅组织所有者、管理员与平台管理员 |
-| 后台 | `/admin`、`/admin/clusters`、`/admin/alerts`、`/admin/dns`、`/admin/rules`、`/admin/ip-lists`、`/admin/regions`、`/admin/organizations`、`/admin/audit`、`/admin/settings` | 平台管理员，经页头的 **控制台** / **后台** 切换进入 |
+| 入口 | `/`（按状态跳转到 `/setup`、`/overview` 或 `/login`）、`/setup`、`/login` | 所有人 |
+| 控制台 | 网站：`/overview`、`/sites`、`/certificates`、`/purge`；访问控制：`/ip-lists`、`/bans`、`/rules`；基础设施：`/clusters`、`/regions`、`/dns`；系统：`/alerts`、`/service-accounts`、`/audit`、`/system`；账户（用户菜单）：`/security`、`/settings` | 登录的运营者 |
 
 ## 认证与授权
 
 | 入口 | 凭据 | 规则 |
 | --- | --- | --- |
-| `/api/auth/*` | 邮箱与密码、TOTP、备用码、passkey | 只放行 `lib/auth.ts` 中 `AUTH_HTTP_ROUTES` 列出的方法与路径（会话、登录、登出、改密码、两步验证、passkey、API key 创建 / 列表 / 删除），其余 404；请求中的 `x-api-key` 被丢弃；关闭公开注册，账号由初始化向导与管理员创建；密码至少 12 位 |
+| `/api/auth/*` | 邮箱与密码、TOTP、备用码、passkey | 只放行 `lib/auth.ts` 中 `AUTH_HTTP_ROUTES` 列出的方法与路径（会话、登录、登出、改密码、两步验证、passkey），其余 404；请求中的 `x-api-key` 被丢弃；关闭公开注册，唯一的账号由初始化向导创建；密码至少 12 位 |
 | `/rpc/*` | 会话 cookie + `x-csrf-token` | 请求中的 `x-api-key` 被丢弃 |
-| `/api/v1/*` | `x-api-key`（AccessKey） | cookie 被丢弃；AccessKey 以所有者身份执行，权限与会话相同；只读 AccessKey 只能调用 GET 过程与 `rules.validate` |
+| `/api/v1/*` | `x-api-key`（AccessKey 或服务账号 key） | cookie 被丢弃；AccessKey 以账号本人身份执行，权限与会话相同；只读 AccessKey 只能调用 GET 过程与 `rules.validate`；服务账号只能调用 `serviceAccountProcedures` 列出且 scope 允许的过程 |
 | `:8443` | 客户端证书 | 见 [节点通道](#节点通道) |
 
-端点、OpenAPI 文档与 AccessKey 的细节见 [API 与端点](docs/reference/api.md)。oRPC 过程按守卫分级（`rpc/base.ts`）：
-
-| 守卫 | 允许的调用者 |
-| --- | --- |
-| `authed` | 有效会话或启用中的 AccessKey |
-| `tenant` | `authed`，且组织要求两步验证时本人已启用 |
-| `orgManager` | `tenant`，且为组织所有者、管理员或平台管理员 |
-| `admin` | 平台管理员（`user.role` 含 `admin`） |
-| `maybeAuthed` | 任何人；登录时返回结果不同（邀请） |
+端点、OpenAPI 文档与 AccessKey 的细节见 [API 与端点](docs/reference/api.md)。控制台只有一个运营者账号，不分组织与角色：除 `system.status`、`system.setup` 外，所有过程都经 `rpc/base.ts` 的 `authed`（有效会话、启用中的 AccessKey 或服务账号 key）。
 
 客户端 IP（审计日志、登录限速）取 TCP 对端地址；`X-Forwarded-For` 与 `X-Real-IP` 只在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用（`resolveClientIp`）。认证接口的限速计数存在 `rate_limit` 表，多实例共享。经 better-auth 完成的登录与账号变更由 `lib/auth-audit.ts` 的钩子写审计。
+
+账号找回没有 HTTP 入口，只在服务器上进行：`dist/server/recover.js`（`services/recovery.ts`）读取控制台的环境变量，在一个事务中重置密码（better-auth 的 `password.hash`）、停用两步验证、删除账号的会话与进行中的两步验证登录，并写入审计 `account.recover`（[命令行](docs/reference/cli.md#找回账户)）。
 
 ## 配置发布
 
 改变节点配置的操作在一个事务内完成：
 
 1. 写业务表（网站、域名、源站、缓存规则、规则、IP 名单、证书、ACME HTTP-01 响应、源站允许清单、全站清除缓存的代际号）。
-2. `publishRevision()` 对集群加 advisory lock，读取该集群启用的网站、平台规则、相关 IP 名单、源站允许清单、证书引用与未过期的 HTTP-01 响应，`compileNodeConfig()` 生成规范化的 NodeConfig IR。
+2. `publishRevision()` 对集群加 advisory lock，读取该集群启用的网站、全局规则、全部 IP 名单、源站允许清单、证书引用与未过期的 HTTP-01 响应，`compileNodeConfig()` 生成规范化的 NodeConfig IR。
 3. 计算 `content_hash`：`revision` 与 `content_hash` 置空后二进制编码的 SHA-256。与上一版相同则不产生新 revision。
 4. 新 revision 号为「库中最新 revision」与「本集群节点经验证的最高已应用 revision」中较大者加一；数据库从备份恢复后 revision 不回退。
 5. 写入 `config_revision`，同一事务内 `pg_notify('edgeweir_config', …)`，再写审计。
@@ -139,7 +132,7 @@
 | 约束 | 值 |
 | --- | --- |
 | 每个集群的启用网站 | 最多 512 个（`MAX_SITES_PER_CLUSTER`），超出返回 `CLUSTER_SITE_LIMIT` |
-| 新增节点能力 | 发布需要活动节点尚不支持的能力时，平台管理员以外的操作返回 `NODE_CAPABILITY_REQUIRED`；`GetConfig` 对缺少所需能力的节点返回 `FailedPrecondition` |
+| 新增节点能力 | 发布需要活动节点尚不支持的能力时，服务账号与后台任务的发布返回 `NODE_CAPABILITY_REQUIRED`，运营者本人（会话或 AccessKey）可以发布；`GetConfig` 对缺少所需能力的节点返回 `FailedPrecondition` |
 | revision 保留 | 每个集群保留最新 200 个，每小时清理 |
 | 回滚 | 以旧 revision 的 IR 发布新 revision，源站允许清单取当前值，审计动作 `cluster.rollback` |
 
@@ -156,12 +149,7 @@ URL、目录、Host、Cache-Tag、整站刷新与 URL、站点地图预热不产
 
 Host 与 Cache-Tag 刷新需要节点能力 `purge-tag-v1`，移动端与站点地图预热需要 `prefetch-v2`；受影响集群有活动节点缺少能力时，控制台拒绝创建任务（`NODE_CAPABILITY_REQUIRED`）。节点用刷新标记的时间点与缓存对象的 `Cache-Tag` 索引计算缓存键，被刷新的对象（包括过期内容）不再被查找；站点地图由节点经本机边缘层取回。行为说明见 [源站与缓存](docs/guide/origins-and-cache.md#刷新与预热)。
 
-| 限制 | 值 |
-| --- | --- |
-| 每个组织每分钟任务数 | 10（平台管理员不受限） |
-| 每个组织每小时目标数 | 2000（平台管理员不受限） |
-
-节点升级同样经 `PullTasks` 下发：升级任务先在一个节点组试运行，健康观察通过后由平台管理员推进到其余节点。行为说明见 [节点升级](docs/guide/node-upgrades.md)。
+节点升级同样经 `PullTasks` 下发：升级任务先在一个节点组试运行，健康观察通过后推进到其余节点。行为说明见 [节点升级](docs/guide/node-upgrades.md)。
 
 ## 动态封禁
 
@@ -176,7 +164,7 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 | --- | --- |
 | 前缀下限 | IPv4 `/16`，IPv6 `/48` |
 | 有效期 | 1 分钟到 7 天；到期一小时后由 `maintenance.prune-bans` 删除 |
-| 数量 | 组织限额 `bans`（手动网站封禁）；平台手动封禁上限（系统设置，默认 10000）；每个集群最多 10000 条自动封禁 |
+| 数量 | 平台手动封禁上限（系统设置，默认 10000）；每个集群最多 10000 条自动封禁 |
 
 行为见 [封禁](docs/guide/bans.md)。
 
@@ -184,7 +172,7 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 
 挑战、Under Attack 与分级 CC 由节点在本地执行，控制台负责配置、密钥与事件：
 
-1. 网站的防护（`site_protection`）、平台 Under Attack（系统设置 `protection_settings`）与 CC 模板（`cc_template`）编译进 NodeConfig。只有集群用到挑战（平台 Under Attack、网站 Under Attack、启用的 CC 策略或 `challenge` 规则）时，IR 才带 `challenge_keys`、`platform_protection` 与每个网站的 `protection`，`required_features` 加 `challenge-v1`；只开 JA4 日志的网站单独带 `protection`。规则读取 `tls.ja4`（或按它限速）、网站记录 JA4 时加 `ja4-v1`。其余集群的内容哈希不变。
+1. 网站的防护（`site_protection`）、全局 Under Attack（系统设置 `protection_settings`）与 CC 模板（`cc_template`）编译进 NodeConfig。只有集群用到挑战（全局 Under Attack、网站 Under Attack、启用的 CC 策略或 `challenge` 规则）时，IR 才带 `challenge_keys`、`platform_protection` 与每个网站的 `protection`，`required_features` 加 `challenge-v1`；只开 JA4 日志的网站单独带 `protection`。规则读取 `tls.ja4`（或按它限速）、网站记录 JA4 时加 `ja4-v1`。其余集群的内容哈希不变。
 2. 通行凭证的 HMAC 密钥按集群，每个集群三把（`next`、`current`、`previous`），集群第一次用到挑战时创建。IR 只含密钥 id 与角色（按 id 排序）；节点以 `GetChallengeKeys` 取得 32 字节的密钥，只能取到本集群的。密钥在第一次被取用时生成，以信封加密保存（用途 `challenge_key.secret`，绑定行 id）。
 3. `maintenance.rotate-challenge-keys` 每小时检查一次，最新的密钥满一天就轮换：`previous` 删除、`current` 变 `previous`、`next` 变 `current`、新建 `next`；最新 revision 带密钥的集群发布新 revision（原因 `challenge_keys_rotated`），审计 `cluster.challenge_keys_rotate`。
 4. 节点以 `ReportSecurityEvents` 上报级别变化、路径升降级与自动封禁（每次最多 500 条），控制台按（节点、事件 id）幂等写入 `security_event`；网站从正常升级时触发告警 `cc_mitigation`，同一网站 15 分钟内最多一次。心跳的 `ReportStatus.security` 保存在 `node.security_state`。`maintenance.prune-security-events` 按保留天数（默认 30 天）删除事件。
@@ -192,7 +180,7 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 | 管理操作 | 审计 |
 | --- | --- |
 | 修改网站防护 | `site.protection_update`（发布该网站的集群） |
-| 平台 Under Attack、事件保留天数 | `system.protection_update`（Under Attack 变化时发布全部集群） |
+| 全局 Under Attack、事件保留天数 | `system.protection_update`（Under Attack 变化时发布全部集群） |
 | CC 模板 | `system.cc_template_update`（发布有网站跟随模板的集群） |
 
 行为见 [挑战与 CC 防护](docs/guide/challenges.md)。
@@ -202,15 +190,14 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 节点以为 Edgeweir 构建的 OpenResty（`edgeweir-openresty`，可选模块 `edgeweir-openresty-modsecurity`）执行压缩与 CRS，按实际构建上报 `brotli-v1`、`zstd-v1`、`modsecurity-v1`。控制台负责设置、能力门槛与命中统计：
 
 1. 网站的 Brotli、Zstandard 设置与 Gzip 一起保存在 `site.tls_settings`，编译进 `TlsOptions`；只有开启的算法带级别、最小长度与类型（类型排序去重），未开启时内容哈希不变。有启用网站开启时 `required_features` 加 `brotli-v1` / `zstd-v1`。
-2. 网站的 CRS 设置保存在 `site_waf`；模式不为关闭时编译为 `Site.waf`（排除的规则 id 升序去重），`required_features` 加 `modsecurity-v1`。系统设置 `waf_settings.tenantCrs` 关闭时，租户的修改只要模式不为关闭就返回 `WAF_CRS_FORBIDDEN`；已开启的网站不重新发布。
-3. 与其他能力相同，租户的改动引入集群活动节点缺少的能力时返回 `NODE_CAPABILITY_REQUIRED`，平台管理员可以发布。`sites.features` 按网站给出三项功能能否开启及原因（`nodes` / `platform`），界面据此禁用开关。回滚按保留的网站重新计算这三项能力。
+2. 网站的 CRS 设置保存在 `site_waf`；模式不为关闭时编译为 `Site.waf`（排除的规则 id 升序去重），`required_features` 加 `modsecurity-v1`。
+3. 与其他能力相同，引入集群活动节点缺少的能力时，服务账号与后台任务的发布返回 `NODE_CAPABILITY_REQUIRED`，运营者本人可以发布。`sites.features` 按网站给出三项功能能否开启（原因 `nodes`），界面据此禁用开关。回滚按保留的网站重新计算这三项能力。
 4. `ReportStats` 的 `waf_rules`（规则 id → 请求数）按节点、网站、分钟最多保留 50 条，与其他分钟统计一起汇总到小时和天，并写入 ClickHouse `minute_stats` 副本；`waf.topRules` 按时间范围汇总。访问日志保存命中的规则 id（最多 16 个，升序）与 `waf_blocked`（PostgreSQL、ClickHouse、CSV）。
 
 | 管理操作 | 审计 |
 | --- | --- |
 | 修改网站 HTTPS 与压缩 | `site.https_update`（发布该网站的集群） |
 | 修改网站 CRS | `site.waf_update`（发布该网站的集群，原因 `site_waf_updated`） |
-| 允许租户开启 CRS | `system.waf_update`（不发布） |
 
 行为见 [HTTPS 与证书](docs/guide/https.md#压缩) 与 [OWASP CRS 托管规则](docs/guide/waf.md)。
 
@@ -221,12 +208,12 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 1. 函数调用编码为 `RuleExpression` 的 `call`、`field`、`const` 节点。重定向目标与改写路径的值表达式写入 `RuleAction.target`；`set_query` 按名称排序，`remove_query` 排序去重；`preserve_query` 只在与动作默认值不同时写入。
 2. 缓存规则以表达式保存（`cache_rule.expression`，引用的名单记在 `list_ids`）。构建器形状的表达式编译为原来的 `path_prefixes`、`paths`、`extensions`，旧节点照常执行，内容哈希不变；其他表达式编译为 `CacheRuleMatch.condition`。`browser_ttl_seconds` 写入 `CacheRule`。
 3. 批量重定向编译为 `Site.bulk_redirects`（按来源排序），源站组写入 `Origin.group`。
-4. 配置用到上述任何一项（含 `compression` 阶段与 `config` 动作的新字段）时 `required_features` 加 `rules-v2`；没有用到的配置与之前编码相同。与其他能力相同，租户的改动引入集群活动节点缺少的 `rules-v2` 时返回 `NODE_CAPABILITY_REQUIRED`；`sites.features` 的 `rulesV2` 供界面锁定相关控件。
+4. 配置用到上述任何一项（含 `compression` 阶段与 `config` 动作的新字段）时 `required_features` 加 `rules-v2`；没有用到的配置与之前编码相同。与其他能力相同，服务账号与后台任务的发布引入集群活动节点缺少的 `rules-v2` 时返回 `NODE_CAPABILITY_REQUIRED`，运营者本人可以发布；`sites.features` 的 `rulesV2` 供界面锁定相关控件。
 
 | 管理操作 | 审计 |
 | --- | --- |
 | 修改网站规则 | `site.rules_update`（发布该网站的集群，原因 `rules_updated`） |
-| 修改平台规则 | `platform.rules_update`（发布全部集群） |
+| 修改全局规则 | `platform.rules_update`（发布全部集群） |
 | 修改批量重定向 | `site.bulk_redirects_update`（发布该网站的集群，原因 `rules_updated`） |
 
 行为见 [规则、IP 名单与 GeoIP](docs/guide/rules.md) 与 [源站与缓存](docs/guide/origins-and-cache.md)。
@@ -244,7 +231,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 
 注册顺序：
 
-1. 平台管理员生成安装命令：一次性 token（有效期 5 分钟至 7 天，默认 60 分钟，库中只存 SHA-256）与内部 CA 的 SHA-256 指纹（`--ca-sha256`）。token 经 `EDGEWEIR_TOKEN` 环境变量传递。
+1. 运营者生成安装命令：一次性 token（有效期 5 分钟至 7 天，默认 60 分钟，库中只存 SHA-256）与内部 CA 的 SHA-256 指纹（`--ca-sha256`）。token 经 `EDGEWEIR_TOKEN` 环境变量传递。
 2. 节点核对服务端证书链中的 CA 指纹，再发送 token 与本地生成的 CSR（`Enroll`）。
 3. 控制台验证 CSR 签名，签发节点证书，在同一事务内把 token 标记为已用并写审计。
 
@@ -285,10 +272,10 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 | 单次调用时长 | 5 分钟，超时 `SIGKILL` |
 | stdout 输出上限 | `dns.*` 命令 16 MiB，其他 2 MiB |
 | stderr | 丢弃（依赖库的诊断信息可能包含凭据） |
-| 命令 | `version`、`providers`、`obtain`、`renew`、`revoke`、`dns.list`、`dns.set`、`dns.present`、`dns.cleanup` |
-| DNS 服务商 | `cloudflare`、`alidns`、`huaweicloud`、`dnspod` |
+| 命令 | `version`、`providers`、`obtain`、`renew`、`revoke`、`dns.list`、`dns.set`、`dns.present`、`dns.cleanup`、`dns.zones`、`dns.test` |
+| DNS 服务商 | 服务商目录 `helpers/certd/catalog.json`，见 [服务商与凭据](docs/guide/dns-and-alerts.md#服务商与凭据) |
 
-平台 DNS（`dns.reconcile`，每分钟）按健康节点与域名路由权计算记录，生成 `dns_revision`，写入 `platform_dns_provider` 指定的区域；写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复。域名路由权需要 TXT 校验（`_edgeweir-verification.<域名>`），状态存在 `domain_ownership`。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 与告警](docs/guide/dns-and-alerts.md)。
+DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动）：`dns.reconcile` 每分钟按健康节点与网站域名计算每个自动模式集群的记录（每个集群一份地址记录，每个网站一条 CNAME），生成该集群的 `dns_revision`，写入绑定所选服务商账号（`platform_dns_provider`）的区域；各集群各自发布与对账，一个服务商不可用不影响其他集群；同一集群同一时间只有一个进程在写（`dns_lease`）。写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复。手动模式只生成需要手动创建的记录与 zone 文件，不写 DNS。DNS 调度的服务商账号与 DNS-01 凭据使用同一份服务商目录。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 调度与告警](docs/guide/dns-and-alerts.md)。
 
 ## 统计、日志与告警
 
@@ -308,17 +295,17 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 
 Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
-告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook 或邮件）发送；投递时重新检查成员资格、封禁状态、两步验证与渠道可见性。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
+告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook、邮件、钉钉、企业微信或 Telegram）发送；投递时重新检查渠道是否启用与订阅是否仍然有效，「接收所有告警」的渠道接收全部告警。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
 
 ## 后台任务
 
 | 队列 | 调度 | 内容 |
 | --- | --- | --- |
 | `alerts.sweep` | 每分钟 | 告警检测与投递 |
-| `dns.reconcile` | 每分钟 | 平台 DNS 发布与外部记录维护 |
+| `dns.reconcile` | 每分钟 | DNS 调度发布与外部记录维护 |
 | `traffic.rollup` | 每分钟 | 流量汇总与清理、访问日志分区维护、升级任务到期 |
 | `certificates.sweep` | 每分钟 | 证书签发与续期 |
-| `domains.enforce-ownership` | 启动时；完成后在 `system_setting` 记录 `domain_ownership_v1`，不再执行 | 为每个集群重新发布 revision，未校验的域名不再路由 |
+| `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
 | `maintenance.prune-revisions` | 每小时第 17 分 | 删除超出保留数量的 revision |
 | `maintenance.expire-cache-tasks` | 每小时第 43 分 | 把超期未完成的刷新预热交付记为失败 |
 | `maintenance.expire-enrollment-tokens` | 每 30 分钟 | 删除过期或使用超过 7 天的注册 token |
@@ -330,17 +317,14 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
 表定义在 `packages/db/src/schema`；迁移为 drizzle-kit 生成的纯 SQL，位于 `packages/db/migrations`，控制台启动时执行（见 [启动顺序](#启动顺序)）。
 
-### 身份与组织
+### 账号与身份
 
 | 表 | 内容 |
 | --- | --- |
-| `user` | 用户；`role` 含 `admin` 即平台管理员 |
+| `user` | 唯一的运营者账号，由初始化向导创建 |
 | `session` | 登录会话 |
 | `account` | 登录凭据（密码哈希） |
 | `verification` | better-auth 验证记录 |
-| `organization` | 组织，资源与权限边界 |
-| `member` | 组织成员与角色 |
-| `invitation` | 成员邀请（邀请人为用户或服务账号） |
 | `two_factor` | TOTP 密钥与备用码 |
 | `passkey` | passkey 公钥 |
 | `apikey` | AccessKey：哈希、权限、启用状态 |
@@ -348,8 +332,6 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `service_account_key` | 服务账号 key 的 SHA-256、前缀、最后使用与吊销时间 |
 | `idempotency_key` | `/api/v1` 写请求的幂等键：调用方、方法、路径、请求体哈希与最终响应，保留 24 小时 |
 | `rate_limit` | 认证接口限速计数 |
-| `organization_settings` | 组织默认集群、要求两步验证 |
-| `organization_limit` | 组织技术限额（站点、域名、证书、IP 名单条目、清缓存频率、成员、封禁），空值为不限 |
 
 ### 基础设施
 
@@ -363,23 +345,23 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `enrollment_token` | 注册 token 的 SHA-256 与使用状态 |
 | `node_certificate_revocation` | 删除节点时吊销的证书序列号 |
 | `pki_authority` | 内部 CA，私钥信封加密 |
-| `system_setting` | 平台键值设置：setup token、会话 secret 的 HMAC 校验值、源站允许清单、SMTP、节点发布源、DNS 解析器、告警策略、封禁、平台防护与 CC 模板、平台错误页、一次性迁移标记 |
+| `system_setting` | 平台键值设置：setup token、会话 secret 的 HMAC 校验值、源站允许清单、SMTP、节点发布源、告警策略、封禁、平台防护与 CC 模板、平台错误页、一次性迁移标记 |
 | `audit_log` | 管理操作审计 |
 
 ### 网站与配置
 
 | 表 | 内容 |
 | --- | --- |
-| `site` | 网站：所属组织与集群、启用状态、平台暂停（原因、备注）、缓存键、分片、Cache-Tag 转发、WebSocket、证书、TLS 设置、缓存代际号、日志采样率、错误页是否拦截源站错误与保存时间 |
-| `site_domain` | 网站域名与路由校验状态 |
+| `site` | 网站：所属集群、启用状态、缓存键、分片、Cache-Tag 转发、WebSocket、证书、TLS 设置、缓存代际号、日志采样率、错误页是否拦截源站错误与保存时间 |
+| `site_domain` | 网站域名（主机名或泛域名），全局唯一 |
 | `site_star` | 用户星标 |
 | `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验、主动健康检查与会话保持（关闭时保留设置） |
 | `origin` | 源站与所属的源站组（空为默认组） |
 | `origin_credential` | S3 源站密钥，信封加密 |
 | `cache_rule` | 缓存规则：条件表达式与名单引用、状态码与大小条件、动作、边缘与浏览器 TTL |
-| `edge_rule` | 网站或平台规则：阶段、表达式、动作、名单引用 |
+| `edge_rule` | 网站规则或全局规则：阶段、表达式、动作、名单引用 |
 | `bulk_redirect` | 网站的批量重定向：来源（路径或域名加路径，网站内唯一）、目标、状态码、是否保留查询串、顺序 |
-| `ip_list` | 组织或平台 IP 名单（规范化 CIDR） |
+| `ip_list` | IP 名单（规范化 CIDR，名称唯一）；`allow` / `block` 名单对所有网站生效 |
 | `ip_ban` | 动态封禁：范围（平台 / 网站）、规范化 CIDR、原因码、来源（手动 / 自动，自动带来源节点与触发条件）、到期与解封时间、序号 `seq`（序列 `ip_ban_seq`）、是否下发 |
 | `site_protection` | 网站防护：Under Attack 与挑战类型、通行凭证有效期、PoW 难度、CC 策略（跟随模板或自定义）、JA4 日志；没有行即默认值 |
 | `site_waf` | 网站的 OWASP CRS：模式（关闭 / 仅检测 / 拦截）、paranoia level、异常分数阈值、排除的规则 id、请求体检查上限；没有行即关闭 |
@@ -395,13 +377,13 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | --- | --- |
 | `certificate` | 证书链、指纹、到期与续期状态；私钥与 ACME 账户信封加密 |
 | `acme_challenge` | 短期公开的 HTTP-01 响应 |
-| `dns_credential` | 组织的 DNS 服务商凭据，信封加密 |
+| `dns_credential` | ACME DNS-01 使用的 DNS 服务商凭据与区域，信封加密 |
 | `dns_challenge_lease` | DNS-01 TXT 记录的清理责任 |
-| `domain_ownership` | 域名归属校验 |
-| `platform_dns_provider` | 平台 DNS 服务商与区域，凭据信封加密 |
-| `dns_state` | 平台 DNS 策略与期望 / 已应用的 DNS revision |
-| `dns_revision` | DNS revision：记录集、托管名称、状态 |
-| `dns_managed_name` | 已登记的托管 DNS 名称 |
+| `platform_dns_provider` | DNS 调度的服务商账号与区域，凭据信封加密 |
+| `dns_binding` | 集群的 DNS 绑定：模式、服务商账号、集群域名、TTL、线路、期望 / 已应用的 DNS revision |
+| `dns_revision` | 集群的 DNS revision：绑定设置、记录集、托管名称、状态 |
+| `dns_managed_name` | 已登记的托管 DNS 名称及所属集群 |
+| `dns_lease` | DNS 工作的租约（集群绑定、DNS-01 凭据），同一时间只有一个进程处理同一绑定或凭据 |
 
 ### 统计、日志、任务与告警
 
@@ -466,13 +448,18 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0030_g3_waf` | `site_waf`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `waf_rules`；`access_log.waf_rule_ids`、`waf_blocked` |
 | `0031_g4_cache_origins_error_pages` | `site_error_page`；`origin_pool.active_health_check`、`session_affinity`；`site.keep_cache_tag`、`intercept_origin_errors`、`error_pages_updated_at`；`origin_health.source`（进入主键，已有行为被动检查）；`access_log.request_id` |
 | `0032_g5_rules` | `bulk_redirect`；`origin.group_name`；`cache_rule.browser_ttl_seconds`、`list_ids`；已有缓存规则的结构化条件改写为等价表达式并清空结构化列 |
+| `0033_domains_without_ownership` | 删除 `domain_ownership` 与 `site_domain.verified`；重名的待验证域名只保留一条；`site_domain (name, wildcard)` 全局唯一 |
+| `0034_sites_without_suspension` | 删除 `site.suspended`、`suspend_reason`、`suspend_note`、`suspended_at`；已暂停的网站改为停用；服务账号去掉 `sites:suspend` |
+| `0035_without_organization_limits` | 删除 `organization_limit`；服务账号去掉 `limits:read`、`limits:write` |
+| `0036_single_operator` | 只保留最早且未停用的平台管理员账号（其余账号的告警订阅合并给它）；IP 名单名称全局唯一（重名的组织名单加后缀并改写其规则），原组织名单改为 collection；删除 `organization`、`member`、`invitation`、`organization_settings` 与各表的 `organization_id`、`session.active_organization_id`、`alert_channel.available_to_tenants`；服务账号去掉组织相关 scope |
+| `0037_dns_cluster_bindings` | `dns_binding`、`dns_lease`；`dns_revision.cluster_id`、`dns_managed_name.cluster_id`；DNS 调度策略转换为各集群的绑定，删除 `dns_state` |
 
 ## 构建产物
 
 | 步骤 | 输出 |
 | --- | --- |
 | `vite build` | `apps/console/dist/web`（SPA） |
-| `node scripts/build-server.mjs`（esbuild） | `apps/console/dist/server/main.js`：服务端与全部依赖打成单个 ESM 文件；复制 `install/` 到 `dist/server/install`，迁移到 `dist/migrations` |
+| `node scripts/build-server.mjs`（esbuild） | `apps/console/dist/server/main.js`：服务端与全部依赖打成单个 ESM 文件；`dist/server/recover.js`：找回账户命令，同样自带全部依赖，不带 source map；复制 `install/` 到 `dist/server/install`，迁移到 `dist/migrations` |
 | Dockerfile 阶段 `certd` | `golang:1.27.1-alpine` 构建 `edgeweir-certd` |
 | Dockerfile 阶段 `build` | `node:24.21.0-alpine`、pnpm 12.6.0 构建控制台 |
 | Dockerfile 阶段 `runtime` | `node:24.21.0-alpine` + tini；无 `node_modules`；以 `node` 用户运行；`EXPOSE 3000 8443`；健康检查 `edgeweir-healthcheck` |

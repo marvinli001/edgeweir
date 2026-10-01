@@ -1,28 +1,9 @@
-import type { Site, SiteSuspendReason } from "@edgeweir/contract";
+import type { Site } from "@edgeweir/contract";
 import { StatusDot } from "@/components/status-dot";
 import { m } from "@/lib/i18n";
 
-const REASONS: Record<SiteSuspendReason, () => string> = {
-  billing: () => m.site_suspend_reason_billing(),
-  abuse: () => m.site_suspend_reason_abuse(),
-  security: () => m.site_suspend_reason_security(),
-  other: () => m.site_suspend_reason_other(),
-};
-
-export const SUSPEND_REASONS = Object.keys(REASONS) as SiteSuspendReason[];
-
-export function suspendReasonLabel(reason: SiteSuspendReason | null): string {
-  return REASONS[reason ?? "other"]();
-}
-
-/** Running, disabled (by the organization) or suspended (by the platform). */
-export function SiteStatus({ site }: { site: Pick<Site, "enabled" | "suspended"> }) {
-  if (site.suspended)
-    return (
-      <StatusDot tone="bad" data-testid="site-status" data-state="suspended">
-        {m.site_state_suspended()}
-      </StatusDot>
-    );
+/** Running or disabled. */
+export function SiteStatus({ site }: { site: Pick<Site, "enabled"> }) {
   if (!site.enabled)
     return (
       <StatusDot tone="idle" data-testid="site-status" data-state="disabled">

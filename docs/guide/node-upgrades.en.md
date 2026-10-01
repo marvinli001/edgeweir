@@ -1,6 +1,6 @@
 # Node upgrades
 
-Staged node upgrades from the admin area: canary, promotion, signature checks and automatic rollback on the node, and node capabilities.
+Staged node upgrades: canary, promotion, signature checks and automatic rollback on the node, and node capabilities.
 
 ## Concepts
 
@@ -9,7 +9,7 @@ Staged node upgrades from the admin area: canary, promotion, signature checks an
 | Canary group | The node group upgraded first. Other nodes stay **Waiting for canary** until promotion. |
 | Release source | The base URL of node release artifacts, with one `v<version>/` directory per version. |
 | Supervisor | `edgeweir-node supervise --manage-nginx`, which downloads, verifies, switches, and rolls back. |
-| Node capability | A feature flag a node reports. When the cluster configuration needs a capability a node lacks, the admin area shows **Upgrade required**. |
+| Node capability | A feature flag a node reports. When the cluster configuration needs a capability a node lacks, **Clusters & nodes** shows **Upgrade required**. |
 
 ## Prerequisites
 
@@ -25,7 +25,7 @@ Nodes that do not meet the supervisor conditions do not report `self-upgrade-v1`
 
 ## Upgrade nodes
 
-1. Open **Admin → Clusters & nodes** and select the cluster.
+1. Open **Clusters & nodes** and select the cluster.
 2. In **Node upgrades**, click **New upgrade**.
 3. Enter **Target version** without the `v` prefix, for example `0.1.0`, and select **Canary node group**.
 4. Click **Start canary**.
@@ -99,7 +99,7 @@ After a package or image update changes the installed base program and Lua, the 
 
 | Item | Setting |
 | --- | --- |
-| Console release source | Where the console reads release manifests, set in **Admin → System → Node release source**, see [Platform administration](admin.en.md) |
+| Console release source | Where the console reads release manifests, set in **System → Node release source**, see [Node release source](system.en.md#node-release-source) |
 | Node release source | The node's `EDGEWEIR_UPGRADE_SOURCE`, pointing at the same base URL with `v<version>/` directories |
 | Mirror requirements | The mirror serves the files directly; nodes refuse cross-origin redirects |
 | Own signing key | Set `EDGEWEIR_UPGRADE_PUBLIC_KEY` on the node to a public key deployed by the operator; the node verifies against that key without the public transparency log; changing the console database cannot change the key a node trusts |
@@ -119,7 +119,7 @@ Signing and verification are covered in the [Sigstore documentation](https://doc
 | `tls-v1` | Sites whose **HTTPS** tab has been saved |
 | `http01-v1` | ACME HTTP-01 validation |
 | `http3-v1` | Sites with HTTP/3 on |
-| `rules-v1` | Rules, platform block or allow lists |
+| `rules-v1` | Site rules, global rules, **Allow** or **Block** IP lists |
 | `rules-v2` | Rule engine extensions: functions and the new fields, expression targets and query parameter edits, origin overrides, compression rules, the new override settings, cache rule expression conditions and browser TTLs, bulk redirects, origin groups, see [Rules](rules.en.md#node-capabilities-and-publishing) |
 | `access-logs-v1` | Access log sampling |
 | `geoip-city-v1` / `geoip-asn-v1` | Rules using GeoIP fields; reported only when the node has country / ASN data |
@@ -127,7 +127,21 @@ Signing and verification are covered in the [Sigstore documentation](https://doc
 | `stats-sequence-v1` | Sequenced analytics reports; without it the node always shows **Upgrade required** |
 | `self-upgrade-v1` | Signed upgrades; reported when the supervisor runs and finds `cosign` |
 
-When a node lacks a capability the cluster's current configuration needs, or lacks `stats-sequence-v1`, the admin node list shows **Upgrade required**; the node keeps its last-known-good configuration and rejects configurations with unknown capabilities or enum values.
+When a node lacks a capability the cluster's current configuration needs, or lacks `stats-sequence-v1`, the node list in **Clusters & nodes** shows **Upgrade required**; the node keeps its last-known-good configuration and rejects configurations with unknown capabilities or enum values.
+
+The console account (session or AccessKey) can publish a configuration that needs a new capability; nodes without it keep their configuration as above. Service accounts and background jobs that publish such a configuration get 409 `NODE_CAPABILITY_REQUIRED`.
+
+## API
+
+| Procedure | Endpoint | Purpose |
+| --- | --- | --- |
+| `upgrades.release` | `GET /node-releases/{version}` | Reads a release manifest: archive, SHA-256, and signature URLs per architecture |
+| `upgrades.list` | `GET /node-upgrades` | Upgrades with the state of every node; `clusterId` limits the list to one cluster |
+| `upgrades.create` | `POST /node-upgrades` | Starts an upgrade: `version` (without `v`), `nodeGroupId` (canary group) |
+| `upgrades.promote` | `POST /node-upgrades/{id}/promote` | Promotes the remaining nodes |
+| `upgrades.cancel` | `POST /node-upgrades/{id}/cancel` | Cancels queued work |
+
+The endpoints are under `/api/v1`. Read-only AccessKeys can call the GET endpoints only; service accounts cannot call these procedures.
 
 ## Limits
 
@@ -144,11 +158,11 @@ When a node lacks a capability the cluster's current configuration needs, or lac
 | "Invalid input" | **Target version** has a `v` prefix or is not in `major.minor.patch` form | Remove the `v` prefix |
 | "All target nodes must be online, in sync and support signed upgrades" | An enabled node of the cluster is offline, has not applied the current revision, has an unhealthy data plane, lacks `self-upgrade-v1`, or has an architecture missing from the release | Fix or disable those nodes and retry |
 | "This release manifest is unavailable" | The version does not exist, the release source is unreachable, or the manifest lists no Linux archive | Check the version and the console release source |
-| "The release source must use HTTPS and resolve to an allowed address" | The release source saved in the admin area fails the outbound policy | See [Platform administration](admin.en.md) |
+| "The release source must use HTTPS and resolve to an allowed address" | The release source saved in **System → Node release source** fails the outbound policy | See [Node release source](system.en.md#node-release-source) |
 | "A node already has an upgrade in progress" | A node has a task, or a node is **Upgrading** during cancellation | Wait for the current task to finish |
 | "Canary nodes have not passed the health window" | The canary group has been healthy for less than 30 seconds | Wait, then promote |
 | "Version … was rejected; the previous version is kept" | Download, signature, checksum, archive, or version check failed | Read **Diagnostics**; check the node release source and public key |
 | "Version … failed the health check and was rolled back" | The candidate did not apply the configuration and stay healthy within 90 seconds | Read the node logs |
 | "Upgrade task expired" | Not finished within 30 minutes | Check node connectivity and start again |
 | "The task for version … was superseded by a local package update" | The node's package or image was updated before the upgrade was acknowledged | The installed version applies; start again if needed |
-| "Queued node upgrades were cancelled" | An administrator cancelled queued work | Start again if needed |
+| "Queued node upgrades were cancelled" | **Cancel queued work** was clicked, or a node failed and the remaining queued tasks stopped | Fix the failed node, then start again if needed |

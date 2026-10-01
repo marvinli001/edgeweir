@@ -109,7 +109,7 @@ function RankedList({
                 </Link>
               ) : link === "node" && item.parentId ? (
                 <Link
-                  to="/admin/clusters"
+                  to="/clusters"
                   search={{ cluster: item.parentId }}
                   className={cn(nameClass, "hover:underline hover:underline-offset-4")}
                 >
@@ -493,7 +493,7 @@ export function MetricDetailDialog({
   onRangeChange: (range: AnalyticsRange) => void;
   siteId?: string;
   traffic: Traffic | undefined;
-  /** Show each site's organization (platform administrators). */
+  /** Show each site's cluster. */
   showParent: boolean;
 }) {
   // Keep the last target on screen while the dialog animates out.

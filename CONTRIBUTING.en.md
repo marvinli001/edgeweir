@@ -112,7 +112,8 @@ Tests enforce these conventions:
 | Message keys and placeholders match; error codes, reason codes, and node error codes have messages; no hard-coded text in components | `apps/console/test/web/i18n.test.ts` |
 | No skeletons, no `*Description` components, no color literals, no links to other sites, appica-ui import scope | `apps/console/test/web/ui-rules.test.ts` |
 | shadcn preset `b2D0wqNxT`; a single ThemeProvider | `apps/console/test/web/ui-preset.test.ts` |
-| Every contract procedure is in the console list or the admin 403 table | `apps/console/test/server/admin.test.ts` |
+| A read-only AccessKey is refused by every write procedure and changes nothing | `apps/console/test/server/infrastructure.test.ts` |
+| Every procedure except `system.status` and `system.setup` requires credentials | `apps/console/test/server/openapi.test.ts` |
 | `.env.example` lists every variable the console reads and compose interpolates | `apps/console/test/server/env-example.test.ts` |
 | Third-party images pinned by digest, Actions by commit SHA | `apps/console/test/server/supply-chain-pins.test.ts` |
 | The compose templates embedded in `deploy.sh` match the repository files byte for byte | `apps/console/test/server/deploy-script.test.ts` |
@@ -232,11 +233,11 @@ feat(console)!: drop the public landing page from the open core
 | Convention | Location |
 | --- | --- |
 | API changes start in the oRPC contract; the same procedure serves `/rpc` (UI) and `/api/v1` (OpenAPI) | `packages/contract` |
-| Admin-area procedures use the `admin` guard; tenant procedures use `tenant` (refused while a required two-factor setup is missing); member management uses `orgManager` | `apps/console/src/server/rpc/base.ts` |
-| A new procedure goes into the console list `CONSOLE_PROCEDURES` or the tenant-member 403 table | `apps/console/test/server/admin.test.ts` |
+| Every procedure except `system.status` and `system.setup` uses the `authed` guard (session, AccessKey, or service account key) | `apps/console/src/server/rpc/base.ts` |
+| Service accounts call only the procedures `serviceAccountProcedures` lists and their scopes allow; a new procedure is closed to them by default | `packages/contract/src/service-accounts.ts` |
 | Management actions call `recordAudit` inside the change's transaction to write `audit_log` | `apps/console/src/server/services/audit.ts` |
 | better-auth's own endpoints are audited by hooks | `apps/console/src/server/lib/auth-audit.ts` |
-| better-auth HTTP endpoints are allow-listed (`AUTH_HTTP_ROUTES`); every other path under `/api/auth` returns 404; the organization and admin plugins are called server side only (`auth.api.*`) | `apps/console/src/server/lib/auth.ts` |
+| better-auth HTTP endpoints are allow-listed (`AUTH_HTTP_ROUTES`); every other path under `/api/auth` returns 404; the admin plugin is called server side only (`auth.api.*`, by the setup wizard) | `apps/console/src/server/lib/auth.ts` |
 | Client IPs come only from `resolveClientIp`: the TCP peer; forwarding headers only when the peer is in `EDGEWEIR_TRUSTED_PROXIES` | `apps/console/src/server/lib/client-ip.ts` |
 | Envelopes are bound to their row: `masterKey.seal(value, { purpose: "<table>.<column>", recordId })` | `apps/console/src/server/lib/envelope.ts` |
 | Special-purpose address ranges for origins (the node keeps the same list) | `packages/contract/src/addresses.ts` |
@@ -303,7 +304,7 @@ The console runs database migrations at startup.
    pnpm test
    ```
 
-Operator configuration belongs in **Admin → System**; environment variables keep only values needed before setup or at the infrastructure level. When a setting exists both in system settings and as an environment variable, precedence is: value saved in Admin, environment variable, default.
+Operator configuration belongs in **System**; environment variables keep only values needed before setup or at the infrastructure level. When a setting exists both in system settings and as an environment variable, precedence is: value saved in System, environment variable, default.
 
 ## Updating pinned images and actions
 
@@ -387,4 +388,4 @@ Version pinning, upgrades, and rollback: [Versions, upgrades, and rollback](docs
 
 Edgeweir is released under [AGPL-3.0-only](LICENSE). Submitting a contribution licenses it under AGPL-3.0-only and confirms the right to do so.
 
-The open core permits compliant commercial use. Organizations, members, access control, and isolation stay in the open core; the customer-facing portal, plans and billing, finance, and reselling belong to a separate commercial operations product ([LICENSING.en.md](LICENSING.en.md)). Contributing to the core does not automatically grant the project a right to relicense under proprietary terms; a dual license or a plugin linking exception requires separate verification of code ownership and contributor authorization.
+The open core permits compliant commercial use. The open-source edition serves a single operator; multi-tenancy (organizations, members, roles, and isolation), the customer-facing portal, plans and billing, finance, and reselling belong to a separate commercial operations product ([LICENSING.en.md](LICENSING.en.md)). Contributing to the core does not automatically grant the project a right to relicense under proprietary terms; a dual license or a plugin linking exception requires separate verification of code ownership and contributor authorization.

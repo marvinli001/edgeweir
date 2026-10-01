@@ -7,6 +7,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import * as z from "zod";
 import { type Columns, DataTable } from "@/components/data-table";
+import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SearchBox } from "@/components/search-box";
@@ -53,7 +54,6 @@ export const Route = createFileRoute("/_app/sites/")({
 function SitesPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const { isAdmin } = Route.useRouteContext();
   const page = search.page ?? 1;
   const sites = useQuery({
     ...orpc.sites.list.queryOptions({
@@ -66,7 +66,7 @@ function SitesPage() {
     }),
     placeholderData: keepPreviousData,
   });
-  const clusters = useQuery({ ...orpc.clusters.list.queryOptions(), enabled: isAdmin });
+  const clusters = useQuery(orpc.clusters.list.queryOptions());
   const setCreateOpen = (open: boolean) =>
     navigate({ search: (prev) => ({ ...prev, create: open || undefined }), replace: true });
   const filtered = !!search.q || !!search.cluster;
@@ -135,26 +135,13 @@ function SitesPage() {
           </div>
         ),
       },
-      ...(isAdmin
-        ? ([
-            {
-              id: "organization",
-              header: () => m.sites_col_organization(),
-              cell: ({ row }) => (
-                <span className="text-sm text-muted-foreground">
-                  {row.original.organizationName}
-                </span>
-              ),
-            },
-            {
-              id: "cluster",
-              header: () => m.sites_col_cluster(),
-              cell: ({ row }) => <Badge variant="secondary">{row.original.clusterName}</Badge>,
-            },
-          ] satisfies Columns<Site>)
-        : []),
+      {
+        id: "cluster",
+        header: () => m.sites_col_cluster(),
+        cell: ({ row }) => <Badge variant="secondary">{row.original.clusterName}</Badge>,
+      },
     ],
-    [isAdmin, starredIds, pendingId, toggle],
+    [starredIds, pendingId, toggle],
   );
 
   return (
@@ -177,7 +164,7 @@ function SitesPage() {
             })
           }
         />
-        {isAdmin && clusters.data && clusters.data.length > 1 ? (
+        {clusters.data && clusters.data.length > 1 ? (
           <Select
             value={search.cluster ?? ALL}
             onValueChange={(value) =>
@@ -244,7 +231,12 @@ function SitesPage() {
           />
         </>
       )}
-      <CreateSiteDialog open={search.create === true} onOpenChange={setCreateOpen} />
+      <CreateSiteDialog
+        open={search.create === true}
+        onOpenChange={setCreateOpen}
+        clusters={clusters.data ?? []}
+        initialClusterId={search.cluster}
+      />
     </Page>
   );
 }
@@ -252,17 +244,24 @@ function SitesPage() {
 function CreateSiteDialog({
   open,
   onOpenChange,
+  clusters,
+  initialClusterId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Oldest first: a new site goes to the oldest cluster unless another is chosen. */
+  clusters: { id: string; name: string }[];
+  initialClusterId?: string;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const create = useMutation(orpc.sites.create.mutationOptions());
   const [scheme, setScheme] = React.useState<"http" | "https">("http");
   const [cacheEnabled, setCacheEnabled] = React.useState(true);
-  const [respectOrigin, setRespectOrigin] = React.useState(false);
+  const [respectOrigin, setRespectOrigin] = React.useState(true);
   const [navigating, setNavigating] = React.useState(false);
+  const [clusterId, setClusterId] = React.useState(initialClusterId);
+  const cluster = clusters.some((c) => c.id === clusterId) ? clusterId : clusters[0]?.id;
   const pending = create.isPending || navigating;
 
   return (
@@ -286,6 +285,7 @@ function CreateSiteDialog({
             try {
               const result = await create.mutateAsync({
                 name: text("siteName"),
+                clusterId: clusters.length > 1 ? cluster : undefined,
                 domains: text("domains")
                   .split(/[\s,]+/)
                   .filter(Boolean),
@@ -326,6 +326,16 @@ function CreateSiteDialog({
               <FieldLabel htmlFor="siteName">{m.site_form_name()}</FieldLabel>
               <Input id="siteName" name="siteName" required maxLength={100} placeholder="demo" />
             </Field>
+            {clusters.length > 1 && cluster ? (
+              <FormSelect
+                id="site-cluster"
+                label={m.site_form_cluster()}
+                value={cluster}
+                options={clusters.map((c) => ({ value: c.id, label: c.name }))}
+                onChange={setClusterId}
+                testId="site-cluster"
+              />
+            ) : null}
             <Field>
               <FieldLabel htmlFor="domains">{m.site_form_domains()}</FieldLabel>
               <Textarea

@@ -36,11 +36,11 @@ With `compose.yml` behind a reverse proxy on the host, set `EDGEWEIR_HTTP_PORT=1
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` | URL nodes use for the node channel; `--server` in the install command; "Node channel" in **Admin → System**. |
+| `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` | URL nodes use for the node channel; `--server` in the install command; "Node channel" in **System**. |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | Empty | Extra names for the node channel certificate: DNS names or IPs, comma separated. |
 
 - The internal CA issues the node channel server certificate at every start. Its names: `localhost`, `127.0.0.1`, `::1`, the container host name, the host of `EDGEWEIR_NODE_API_URL`, and every entry of `EDGEWEIR_NODE_API_HOSTNAMES`. Changes apply after a restart.
-- The CA fingerprint (SHA-256) appears as `caSha256` in the `node channel listening` startup log, as "CA fingerprint" in **Admin → System**, and as `--ca-sha256` in the install command.
+- The CA fingerprint (SHA-256) appears as `caSha256` in the `node channel listening` startup log, as "CA fingerprint" in **System**, and as `--ca-sha256` in the install command.
 
 | Case | Setting |
 | --- | --- |

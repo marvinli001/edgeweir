@@ -44,7 +44,6 @@ export const alertChannelConfig = z.discriminatedUnion("kind", [
 export const alertChannelInput = z.object({
   name: z.string().trim().min(1).max(100),
   enabled: z.boolean().default(true),
-  availableToTenants: z.boolean().default(false),
   platform: z.boolean().default(false),
   locale: z.enum(["zh-CN", "en"]).default("zh-CN"),
   config: alertChannelConfig,
@@ -54,7 +53,6 @@ const channel = z.object({
   name: z.string(),
   kind: z.string(),
   enabled: z.boolean(),
-  availableToTenants: z.boolean(),
   platform: z.boolean(),
   locale: z.enum(["zh-CN", "en"]),
   lastError: z.string(),
@@ -100,7 +98,6 @@ export const alertsContract = {
         id: uuid,
         name: z.string().trim().min(1).max(100).optional(),
         enabled: z.boolean().optional(),
-        availableToTenants: z.boolean().optional(),
         platform: z.boolean().optional(),
         locale: z.enum(["zh-CN", "en"]).optional(),
         config: alertChannelConfig.optional(),
@@ -130,9 +127,6 @@ export const alertsContract = {
     .route({ method: "PUT", path: "/alerts/smtp", tags: ["alerts"] })
     .input(smtpInput)
     .output(z.object({ ok: z.literal(true) })),
-  availableChannels: oc
-    .route({ method: "GET", path: "/alerts/available-channels", tags: ["alerts"] })
-    .output(z.array(channel.pick({ id: true, name: true, kind: true }))),
   subscriptions: oc
     .route({ method: "GET", path: "/alerts/subscriptions", tags: ["alerts"] })
     .output(z.array(subscription)),
@@ -158,7 +152,7 @@ export const alertsContract = {
       z.array(
         z.object({
           id: uuid,
-          /** Null for platform alerts (platform administrators only). */
+          /** Null for platform alerts (clusters, DNS). */
           siteId: uuid.nullable(),
           kind: alertEventKind,
           status: z.enum(["firing", "resolved"]),

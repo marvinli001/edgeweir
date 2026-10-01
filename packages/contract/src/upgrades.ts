@@ -38,23 +38,23 @@ export type UpgradeJob = z.infer<typeof upgradeJob>;
 export type UpgradeArtifact = z.infer<typeof artifact>;
 export const upgradesContract = {
   release: oc
-    .route({ method: "GET", path: "/admin/node-releases/{version}", tags: ["node-upgrades"] })
+    .route({ method: "GET", path: "/node-releases/{version}", tags: ["node-upgrades"] })
     .input(z.object({ version: releaseVersion }))
     .output(release),
   list: oc
-    .route({ method: "GET", path: "/admin/node-upgrades", tags: ["node-upgrades"] })
+    .route({ method: "GET", path: "/node-upgrades", tags: ["node-upgrades"] })
     .input(z.object({ clusterId: z.uuid().optional() }).default({}))
     .output(z.array(upgradeJob)),
   create: oc
-    .route({ method: "POST", path: "/admin/node-upgrades", tags: ["node-upgrades"] })
+    .route({ method: "POST", path: "/node-upgrades", tags: ["node-upgrades"] })
     .input(z.object({ version: releaseVersion, nodeGroupId: z.uuid() }))
     .output(upgradeJob),
   promote: oc
-    .route({ method: "POST", path: "/admin/node-upgrades/{id}/promote", tags: ["node-upgrades"] })
+    .route({ method: "POST", path: "/node-upgrades/{id}/promote", tags: ["node-upgrades"] })
     .input(z.object({ id: z.uuid() }))
     .output(upgradeJob),
   cancel: oc
-    .route({ method: "POST", path: "/admin/node-upgrades/{id}/cancel", tags: ["node-upgrades"] })
+    .route({ method: "POST", path: "/node-upgrades/{id}/cancel", tags: ["node-upgrades"] })
     .input(z.object({ id: z.uuid() }))
     .output(upgradeJob),
 };

@@ -11,7 +11,6 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { organization } from "./auth";
 import { cluster, node, site } from "./core";
 
 /**
@@ -47,10 +46,6 @@ export const ipBan = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     /** platform | site */
     scope: text("scope").notNull(),
-    /** Organization of the site; null for platform bans. */
-    organizationId: text("organization_id").references(() => organization.id, {
-      onDelete: "cascade",
-    }),
     siteId: uuid("site_id").references(() => site.id, { onDelete: "cascade" }),
     /** Cluster of the site; null for platform bans (every cluster). */
     clusterId: uuid("cluster_id").references(() => cluster.id, { onDelete: "cascade" }),
@@ -76,7 +71,7 @@ export const ipBan = pgTable(
   (t) => [
     uniqueIndex("ip_ban_seq_uq").on(t.seq),
     index("ip_ban_cluster_seq_idx").on(t.clusterId, t.seq),
-    index("ip_ban_org_idx").on(t.organizationId, t.createdAt),
+    index("ip_ban_created_idx").on(t.createdAt),
     index("ip_ban_site_idx").on(t.siteId),
     index("ip_ban_expires_idx").on(t.expiresAt),
     // One ban per (scope, site, CIDR) and source; lifted bans leave the index.

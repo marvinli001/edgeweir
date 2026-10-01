@@ -8,15 +8,7 @@ import {
   pruneIdempotencyKeys,
   withIdempotency,
 } from "../../src/server/lib/idempotency";
-import {
-  type ApiClient,
-  createTestContext,
-  PASSWORD,
-  rpcClient,
-  rpcError,
-  setupPlatform,
-  signIn,
-} from "./helpers";
+import { type ApiClient, createTestContext, rpcClient, setupPlatform, signIn } from "./helpers";
 
 function procedureNames(node: unknown, prefix = ""): string[] {
   if (node && typeof node === "object" && "~orpc" in node) return [prefix];
@@ -35,6 +27,7 @@ describe("service accounts, scopes and idempotency keys", async () => {
   let narrow: string;
   let accountId: string;
   let narrowId: string;
+  let siteId: string;
 
   const api = async (
     key: string,
@@ -56,8 +49,14 @@ describe("service accounts, scopes and idempotency keys", async () => {
       json: text ? (JSON.parse(text) as Record<string, unknown> & { data?: unknown }) : {},
     };
   };
-  const orgCount = async () =>
-    (await ctx.db.select({ n: count() }).from(schema.organization))[0]?.n ?? 0;
+  /** Each time a site is switched off, one audit entry is written. */
+  const switchesOff = async () =>
+    (
+      await ctx.db
+        .select({ n: count() })
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.action, "site.disable"))
+    )[0]?.n ?? 0;
 
   beforeAll(async () => {
     await setupPlatform(ctx);
@@ -72,6 +71,13 @@ describe("service accounts, scopes and idempotency keys", async () => {
     const limited = await admin.serviceAccounts.create({ name: "reader", scopes: ["sites:read"] });
     narrowId = limited.id;
     narrow = (await admin.serviceAccounts.createKey({ id: limited.id })).secret;
+    siteId = (
+      await admin.sites.create({
+        name: "shop",
+        domains: ["shop.sa.test"],
+        origins: [{ address: "o.test" }],
+      })
+    ).site.id;
   });
   afterAll(() => pglite.close());
 
@@ -80,17 +86,10 @@ describe("service accounts, scopes and idempotency keys", async () => {
     for (const name of Object.keys(serviceAccountProcedures))
       expect(names.has(name), name).toBe(true);
     expect(serviceAccountScope.options).toEqual([
-      "organizations:read",
-      "organizations:write",
-      "members:read",
-      "invitations:write",
       "clusters:read",
       "system:read",
       "sites:read",
       "sites:write",
-      "sites:suspend",
-      "limits:read",
-      "limits:write",
       "usage:read",
     ]);
   });
@@ -112,76 +111,85 @@ describe("service accounts, scopes and idempotency keys", async () => {
     const me = await api(full, "GET", "/me");
     expect(me.status).toBe(200);
     expect(me.json).toMatchObject({
-      user: { id: accountId, name: "billing", isAdmin: false },
-      organizations: [],
-      activeOrganization: null,
+      user: { id: accountId, name: "billing", email: "" },
       serviceAccount: { id: accountId, name: "billing" },
     });
-    expect((await api(full, "GET", "/clusters")).status).toBe(200);
-    expect((await api(full, "GET", "/organizations")).status).toBe(200);
-    const created = await api(full, "POST", "/organizations", { name: "Customer A" });
-    expect(created.status).toBe(200);
-    const orgId = created.json.id as string;
-    const patched = await api(full, "PATCH", `/organizations/${orgId}`, {
-      name: "Customer A1",
-      expectedUpdatedAt: created.json.updatedAt,
+    expect((await api(full, "GET", "/settings")).status).toBe(200);
+    const clusters = await api(full, "GET", "/clusters");
+    expect(clusters.status).toBe(200);
+    const [cluster] = clusters.json as unknown as { id: string }[];
+    expect((await api(full, "GET", `/clusters/${cluster?.id}`)).status).toBe(200);
+    expect((await api(full, "GET", "/sites")).status).toBe(200);
+    const site = await api(full, "GET", `/sites/${siteId}`);
+    expect(site.status).toBe(200);
+    const to = Math.floor(Date.now() / 300_000) * 300_000;
+    const range = new URLSearchParams({
+      from: new Date(to - 300_000).toISOString(),
+      to: new Date(to).toISOString(),
     });
-    expect(patched.status).toBe(200);
-    expect(patched.json.name).toBe("Customer A1");
-    expect((await api(full, "GET", `/organizations/${orgId}/members`)).status).toBe(200);
-    const invited = await api(full, "POST", `/organizations/${orgId}/invitations`, {
-      email: "owner@customer-a.test",
-      role: "owner",
+    expect((await api(full, "GET", `/usage?${range}`)).status).toBe(200);
+    expect((await api(full, "GET", "/usage/changes")).status).toBe(200);
+    const disabled = await api(full, "PUT", `/sites/${siteId}/enabled`, {
+      enabled: false,
+      expectedUpdatedAt: site.json.updatedAt,
     });
-    expect(invited.status).toBe(200);
-    expect(invited.json).toMatchObject({ invitation: { inviterName: "billing", role: "owner" } });
+    expect(disabled.status).toBe(200);
+    expect(disabled.json).toMatchObject({ site: { id: siteId, enabled: false } });
     // The audit log names the service account.
-    const [entry] = (await admin.auditLogs.list({ action: "invitation.create" })).items;
+    const [entry] = (await admin.auditLogs.list({ action: "site.disable" })).items;
     expect(entry).toMatchObject({
       actorType: "service_account",
       actorId: accountId,
       actorName: "billing",
     });
-    // Optimistic concurrency on organizations.
-    const stale = await api(full, "PATCH", `/organizations/${orgId}`, {
-      name: "Customer A2",
-      expectedUpdatedAt: created.json.updatedAt,
+    // Optimistic concurrency on sites.
+    const stale = await api(full, "PUT", `/sites/${siteId}/enabled`, {
+      enabled: true,
+      expectedUpdatedAt: site.json.updatedAt,
     });
     expect(stale.status).toBe(409);
     expect(stale.json).toMatchObject({
       code: "UPDATED_AT_MISMATCH",
-      data: { updatedAt: patched.json.updatedAt },
+      data: { updatedAt: (disabled.json.site as { updatedAt: string }).updatedAt },
     });
+    expect((await api(full, "PUT", `/sites/${siteId}/enabled`, { enabled: true })).status).toBe(
+      200,
+    );
   });
 
   it("refuses a missing scope with 403 SCOPE_REQUIRED naming the scope", async () => {
     const res = await api(narrow, "GET", "/clusters");
     expect(res.status).toBe(403);
     expect(res.json).toMatchObject({ code: "SCOPE_REQUIRED", data: { scope: "clusters:read" } });
-    const create = await api(narrow, "POST", "/organizations", { name: "Nope" });
-    expect(create.json).toMatchObject({
+    const disable = await api(narrow, "PUT", `/sites/${siteId}/enabled`, { enabled: false });
+    expect(disable.json).toMatchObject({
       code: "SCOPE_REQUIRED",
-      data: { scope: "organizations:write" },
+      data: { scope: "sites:write" },
     });
     expect((await api(narrow, "GET", "/sites")).status).toBe(200);
+    // DNS: the catalog needs no scope, a site's CNAME target needs sites:read.
+    expect((await api(narrow, "GET", "/dns/catalog")).status).toBe(200);
+    const missing = "00000000-0000-4000-8000-000000000000";
+    expect((await api(narrow, "GET", `/sites/${missing}/cname`)).json.code).toBe("SITE_NOT_FOUND");
+    const clusters = await admin.serviceAccounts.create({
+      name: "infra",
+      scopes: ["clusters:read"],
+    });
+    const infra = (await admin.serviceAccounts.createKey({ id: clusters.id })).secret;
+    expect((await api(infra, "GET", `/sites/${missing}/cname`)).json).toMatchObject({
+      code: "SCOPE_REQUIRED",
+      data: { scope: "sites:read" },
+    });
     const me = await api(narrow, "GET", "/me");
     expect(me.json.serviceAccount).toMatchObject({ scopes: ["sites:read"] });
   });
 
   it("refuses procedures outside the service account list", async () => {
     for (const [method, path, body] of [
-      ["GET", "/users", undefined],
       ["GET", "/service-accounts", undefined],
       ["POST", "/service-accounts", { name: "escalate", scopes: [] }],
       ["GET", "/audit-logs", undefined],
-      ["GET", "/members", undefined],
       ["GET", "/bans", undefined],
-      ["GET", "/admin/bans", undefined],
-      [
-        "POST",
-        "/admin/bans",
-        { scope: "platform", cidr: "203.0.113.0/24", reason: "attack", durationSeconds: 3600 },
-      ],
       ["GET", "/settings/bans", undefined],
       ["GET", "/settings/protection", undefined],
       [
@@ -193,8 +201,6 @@ describe("service accounts, scopes and idempotency keys", async () => {
       ["PATCH", "/sites/00000000-0000-4000-8000-000000000000/protection", { underAttack: true }],
       ["GET", "/sites/00000000-0000-4000-8000-000000000000/security", undefined],
       ["GET", "/sites/00000000-0000-4000-8000-000000000000/security/events", undefined],
-      ["GET", "/settings/waf", undefined],
-      ["PUT", "/settings/waf", { tenantCrs: false }],
       ["GET", "/sites/00000000-0000-4000-8000-000000000000/waf", undefined],
       ["PATCH", "/sites/00000000-0000-4000-8000-000000000000/waf", { mode: "block" }],
       ["GET", "/sites/00000000-0000-4000-8000-000000000000/waf/rules", undefined],
@@ -223,6 +229,12 @@ describe("service accounts, scopes and idempotency keys", async () => {
         "/cache-tasks",
         { type: "tag", siteIds: ["00000000-0000-4000-8000-000000000000"], tags: ["product"] },
       ],
+      ["GET", "/dns/providers", undefined],
+      ["GET", "/dns/bindings", undefined],
+      ["PUT", "/clusters/00000000-0000-4000-8000-000000000000/dns", { binding: { mode: "off" } }],
+      ["POST", "/dns/reconcile", {}],
+      ["POST", "/dns/zones", { id: "00000000-0000-4000-8000-000000000000" }],
+      ["GET", "/dns-credentials", undefined],
       ["POST", "/sites", { name: "x", domains: ["x.test"], origins: [{ address: "o.test" }] }],
     ] as const) {
       const res = await api(full, method, path, body);
@@ -260,160 +272,148 @@ describe("service accounts, scopes and idempotency keys", async () => {
     expect((await admin.auditLogs.list({ action: "service_account.update" })).total).toBe(2);
   });
 
-  it("keeps the 403 matrix: tenant members, missing scopes and read-only keys", async () => {
-    // A tenant member cannot manage service accounts or reach the admin procedures.
-    const [org] = await admin.organizations.list();
-    await admin.users.create({
-      name: "Member",
-      email: "member@sa.test",
-      password: PASSWORD,
-      organizationId: org?.id ?? "",
-    });
-    const member = rpcClient(app, origin, await signIn(app, origin, "member@sa.test"));
-    for (const call of [
-      () => member.serviceAccounts.list(),
-      () => member.serviceAccounts.create({ name: "x", scopes: [] }),
-      () => member.serviceAccounts.createKey({ id: accountId }),
-      () => member.serviceAccounts.revokeKey({ id: accountId, keyId: accountId }),
-      () => member.serviceAccounts.update({ id: accountId, enabled: false }),
-      () => member.serviceAccounts.delete({ id: accountId }),
-    ])
-      expect((await rpcError(call())).status).toBe(403);
-    // A read-only user AccessKey cannot write.
-    const readKey = await admin.accessKeys.create({ name: "ro", scope: "read" });
-    const write = await api(readKey.key, "POST", "/organizations", { name: "RO" });
-    expect(write.status).toBe(403);
-    expect(write.json.code).toBe("ACCESS_KEY_READ_ONLY");
-    // A service account without the scope cannot suspend.
+  it("keeps the 403 matrix: missing scopes and read-only keys", async () => {
     const site = await admin.sites.create({
       name: "s",
       domains: ["s.sa.test"],
       origins: [{ address: "o.test" }],
     });
-    const suspend = await api(narrow, "POST", `/admin/sites/${site.site.id}/suspend`, {
-      reason: "billing",
+    // A read-only user AccessKey cannot write.
+    const readKey = await admin.accessKeys.create({ name: "ro", scope: "read" });
+    const write = await api(readKey.key, "PUT", `/sites/${site.site.id}/enabled`, {
+      enabled: false,
     });
-    expect(suspend.status).toBe(403);
-    expect(suspend.json).toMatchObject({
+    expect(write.status).toBe(403);
+    expect(write.json.code).toBe("ACCESS_KEY_READ_ONLY");
+    // A service account without the scope cannot switch a site off.
+    const disable = await api(narrow, "PUT", `/sites/${site.site.id}/enabled`, {
+      enabled: false,
+    });
+    expect(disable.status).toBe(403);
+    expect(disable.json).toMatchObject({
       code: "SCOPE_REQUIRED",
-      data: { scope: "sites:suspend" },
+      data: { scope: "sites:write" },
     });
+    expect((await admin.sites.get({ id: site.site.id })).enabled).toBe(true);
   });
 
-  it("replays a repeated Idempotency-Key and creates the organization once", async () => {
-    const before = await orgCount();
+  it("replays a repeated Idempotency-Key and switches the site once", async () => {
+    const path = `/sites/${siteId}/enabled`;
+    const before = await switchesOff();
     const first = await api(
       full,
-      "POST",
-      "/organizations",
-      { name: "Idem" },
+      "PUT",
+      path,
+      { enabled: false },
       {
-        "idempotency-key": "org-create-1",
-      },
-    );
-    const second = await api(
-      full,
-      "POST",
-      "/organizations",
-      { name: "Idem" },
-      {
-        "idempotency-key": "org-create-1",
+        "idempotency-key": "site-off-1",
       },
     );
     expect(first.status).toBe(200);
     expect(first.headers.get("idempotent-replayed")).toBeNull();
+    // Switched back on in between: running the request again would switch it off again.
+    await admin.sites.setEnabled({ id: siteId, enabled: true });
+    const second = await api(
+      full,
+      "PUT",
+      path,
+      { enabled: false },
+      {
+        "idempotency-key": "site-off-1",
+      },
+    );
     expect(second.status).toBe(200);
     expect(second.headers.get("idempotent-replayed")).toBe("true");
     expect(second.text).toBe(first.text);
-    expect(await orgCount()).toBe(before + 1);
+    expect((await admin.sites.get({ id: siteId })).enabled).toBe(true);
+    expect(await switchesOff()).toBe(before + 1);
     // Same key, another body: 422.
     const other = await api(
       full,
-      "POST",
-      "/organizations",
-      { name: "Idem 2" },
+      "PUT",
+      path,
+      { enabled: true },
       {
-        "idempotency-key": "org-create-1",
+        "idempotency-key": "site-off-1",
       },
     );
     expect(other.status).toBe(422);
     expect(other.json.code).toBe("IDEMPOTENCY_KEY_MISMATCH");
     // Same key, another path: 422 too.
-    const path = await api(
+    const otherPath = await api(
       full,
-      "PATCH",
-      `/organizations/${first.json.id}`,
-      { name: "Idem" },
+      "PUT",
+      `/sites/${crypto.randomUUID()}/enabled`,
+      { enabled: false },
       {
-        "idempotency-key": "org-create-1",
+        "idempotency-key": "site-off-1",
       },
     );
-    expect(path.status).toBe(422);
+    expect(otherPath.status).toBe(422);
     // The structured-field form is the same key.
     const quoted = await api(
       full,
-      "POST",
-      "/organizations",
-      { name: "Idem" },
+      "PUT",
+      path,
+      { enabled: false },
       {
-        "idempotency-key": '"org-create-1"',
+        "idempotency-key": '"site-off-1"',
       },
     );
     expect(quoted.headers.get("idempotent-replayed")).toBe("true");
-    expect(await orgCount()).toBe(before + 1);
+    expect(await switchesOff()).toBe(before + 1);
+    expect((await admin.sites.get({ id: siteId })).enabled).toBe(true);
   });
 
   it("stores refusals (4xx) and keeps keys per caller", async () => {
-    const taken = await api(
-      full,
-      "POST",
-      "/organizations",
-      { name: "Dup", slug: "idem" },
-      {
-        "idempotency-key": "dup-slug",
-      },
-    );
-    expect(taken.status).toBe(409);
-    const replay = await api(
-      full,
-      "POST",
-      "/organizations",
-      { name: "Dup", slug: "idem" },
-      {
-        "idempotency-key": "dup-slug",
-      },
-    );
+    const stale = { enabled: false, expectedUpdatedAt: "2020-01-01T00:00:00.000Z" };
+    const refused = await api(full, "PUT", `/sites/${siteId}/enabled`, stale, {
+      "idempotency-key": "stale-switch",
+    });
+    expect(refused.status).toBe(409);
+    expect(refused.json.code).toBe("UPDATED_AT_MISMATCH");
+    const replay = await api(full, "PUT", `/sites/${siteId}/enabled`, stale, {
+      "idempotency-key": "stale-switch",
+    });
     expect(replay.status).toBe(409);
     expect(replay.headers.get("idempotent-replayed")).toBe("true");
     // Another caller's key with the same value is a different key.
     const adminKey = await admin.accessKeys.create({ name: "rw", scope: "write" });
     const byUser = await api(
       adminKey.key,
-      "POST",
-      "/organizations",
-      { name: "Dup", slug: "dup-user" },
+      "PUT",
+      `/sites/${siteId}/enabled`,
+      { enabled: false },
       {
-        "idempotency-key": "dup-slug",
+        "idempotency-key": "stale-switch",
       },
     );
     expect(byUser.status).toBe(200);
     expect(byUser.headers.get("idempotent-replayed")).toBeNull();
+    expect((await admin.sites.get({ id: siteId })).enabled).toBe(false);
+    await admin.sites.setEnabled({ id: siteId, enabled: true });
   });
 
   it("runs concurrent requests with one key exactly once (409 while in progress)", async () => {
-    const before = await orgCount();
+    const before = await switchesOff();
     const results = await Promise.all(
       Array.from({ length: 6 }, () =>
-        api(full, "POST", "/organizations", { name: "Concurrent" }, { "idempotency-key": "race" }),
+        api(
+          full,
+          "PUT",
+          `/sites/${siteId}/enabled`,
+          { enabled: false },
+          { "idempotency-key": "race" },
+        ),
       ),
     );
     const statuses = results.map((r) => r.status).sort();
-    expect(await orgCount()).toBe(before + 1);
+    expect(await switchesOff()).toBe(before + 1);
     expect(statuses.filter((s) => s === 200).length).toBeGreaterThanOrEqual(1);
     for (const r of results) {
       if (r.status === 409) expect(r.json.code).toBe("IDEMPOTENCY_IN_PROGRESS");
       else if (r.status === 200 && r.headers.get("idempotent-replayed") === null)
-        expect(r.json.name).toBe("Concurrent");
+        expect(r.json).toMatchObject({ site: { id: siteId, enabled: false } });
       else expect(r.headers.get("idempotent-replayed")).toBe("true");
     }
     expect(
@@ -425,9 +425,9 @@ describe("service accounts, scopes and idempotency keys", async () => {
     for (const bad of ["", "x".repeat(256), "é", '"unterminated']) {
       const res = await api(
         full,
-        "POST",
-        "/organizations",
-        { name: "Bad" },
+        "PUT",
+        `/sites/${siteId}/enabled`,
+        { enabled: true },
         {
           "idempotency-key": bad,
         },
@@ -435,9 +435,10 @@ describe("service accounts, scopes and idempotency keys", async () => {
       expect(res.status, JSON.stringify(bad)).toBe(400);
       expect(res.json.code).toBe("IDEMPOTENCY_KEY_INVALID");
     }
+    expect((await admin.sites.get({ id: siteId })).enabled).toBe(false);
     expect(parseIdempotencyKey('"a\\"b"')).toBe('a"b');
     expect(parseIdempotencyKey("  token  ")).toBe("token");
-    const read = await api(full, "GET", "/organizations", undefined, { "idempotency-key": "é" });
+    const read = await api(full, "GET", "/sites", undefined, { "idempotency-key": "é" });
     expect(read.status).toBe(200);
   });
 
@@ -445,8 +446,8 @@ describe("service accounts, scopes and idempotency keys", async () => {
     const principalKey = full;
     let calls = 0;
     const request = () =>
-      new Request(`${origin}/api/v1/organizations`, {
-        method: "POST",
+      new Request(`${origin}/api/v1/sites/${siteId}/enabled`, {
+        method: "PUT",
         headers: { "idempotency-key": "flaky", "x-api-key": principalKey },
         body: "{}",
       });

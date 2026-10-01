@@ -17,7 +17,6 @@ describe("first-run setup token", async () => {
     name: "Platform Admin",
     email: "Admin@Example.com",
     password: PASSWORD,
-    organizationName: "Acme Edge",
   };
 
   it("returns immediately and releases the connection when another instance owns setup", async () => {
@@ -59,11 +58,11 @@ describe("first-run setup token", async () => {
     expect(rejected).toBeDefined();
   });
 
-  it("creates the administrator, organization and default cluster with the token", async () => {
+  it("creates the operator's account and the default cluster with the token", async () => {
     const token = await ensureSetupToken(ctx);
     if (!token) throw new Error("no token");
     const result = await client.system.setup({ ...input, setupToken: token });
-    expect(result.organizationId).toBeTruthy();
+    expect(result.userId).toBeTruthy();
     expect((await client.system.status()).initialized).toBe(true);
 
     // The token is spent: no new token, and a second setup is refused.
@@ -74,8 +73,11 @@ describe("first-run setup token", async () => {
     const cookie = await signIn(app, origin, "admin@example.com");
     const admin = rpcClient(app, origin, cookie);
     const me = await admin.account.me();
-    expect(me.user).toMatchObject({ name: "Platform Admin", isAdmin: true });
-    expect(me.activeOrganization).toMatchObject({ name: "Acme Edge", slug: "acme-edge" });
+    expect(me.user).toMatchObject({
+      id: result.userId,
+      name: "Platform Admin",
+      email: "admin@example.com",
+    });
     const clusters = await admin.clusters.list();
     expect(clusters.map((c) => c.name)).toEqual(["default"]);
     expect(clusters[0]?.latestRevision).toMatchObject({

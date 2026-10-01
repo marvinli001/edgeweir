@@ -9,7 +9,7 @@ Make visitors pass a challenge before they reach a site: through rules, for the 
 | Challenge | A verification page the node returns instead of the origin; passing it returns to the original URL. |
 | Level | Strength of a challenge, from low to high: cookie redirect (1), JavaScript (2), proof of work (3), image captcha (4). A pass of level L satisfies every requirement up to L. |
 | Pass | Signed cookie issued after a challenge, bound to the site, the level, the client network and the User-Agent. |
-| Under Attack | Every GET/HEAD request without a valid pass is challenged first. Sites and the platform can turn it on. |
+| Under Attack | Every GET/HEAD request without a valid pass is challenged first. It can be turned on per site, or for every site (global Under Attack). |
 | CC mitigation | Per-site policy that escalates automatically: a trigger that holds raises the level by one step, and the level falls one step after a cool-down. |
 | JA4 | TLS client fingerprint, usable in rules and rate limits and recordable in access logs. |
 
@@ -55,7 +55,7 @@ Origins cannot serve content under this prefix.
 
 ## Turn on Under Attack
 
-1. Open **Console → Sites → (site) → Security**.
+1. Open **Sites → (site) → Security**.
 2. Pick the **Challenge type** (JavaScript by default).
 3. Turn on the **Under Attack** switch and confirm. Nodes apply it once the configuration is published.
 4. Verify:
@@ -68,17 +68,17 @@ Origins cannot serve content under this prefix.
 
 To turn it off, click the switch again and confirm.
 
-Platform administrators can turn on Under Attack for every site in **Admin → System settings → Protection**, see [Platform administration](admin.en.md#protection).
+For every site: in **System → Protection**, pick the **Challenge type**, turn on **Global Under Attack**, and confirm; every cluster gets a new configuration. The **Security** tab of each site then shows "Global Under Attack is on for every site". See [Protection](system.en.md#protection).
 
 These requests are never challenged by Under Attack or CC mitigation:
 
 | Request | Note |
 | --- | --- |
 | ACME HTTP-01 validation | Handled before the site is resolved |
-| Addresses on the platform allow list | See [IP lists](rules.en.md#ip-lists) |
+| Addresses on an **Allow** IP list | Applies to every site, see [IP lists](rules.en.md#ip-lists) |
 | Requests that match an `allow` rule | A `challenge` rule that matched before the `allow` still applies |
 
-The level required is the highest of: platform Under Attack, the site's Under Attack, matching `challenge` rules, the site's current CC level, and the path's CC level. Rules of the configuration phase can turn the site's Under Attack on or off, turn **CC mitigation** off, or set **CC highest level** per request; platform Under Attack is unaffected, see [Override settings](rules.en.md#override-settings).
+The level required is the highest of: global Under Attack, the site's Under Attack, matching `challenge` rules, the site's current CC level, and the path's CC level. Rules of the configuration phase can turn the site's Under Attack on or off, turn **CC mitigation** off, or set **CC highest level** per request; global Under Attack is unaffected, see [Override settings](rules.en.md#override-settings).
 
 ## Challenge settings
 
@@ -107,7 +107,7 @@ A request with a pass of a sufficient level continues with the following rules; 
 CC mitigation is set per site and off by default. **Security → CC mitigation**:
 
 1. Turn on **Enabled**.
-2. Keep **Follow the platform template** to use the platform's default thresholds (**Admin → System settings → CC template**), or turn it off to set your own.
+2. Keep **Follow the default template** to use the default thresholds (**System → CC template**), or turn it off to set your own.
 3. Click **Save**.
 
 | Field | Values | Template default |
@@ -154,7 +154,7 @@ Lower on the **Security** tab:
 | Top addresses and paths | Heaviest addresses and paths in the events of the last hour, 24 hours or 7 days (approximate) |
 | Events | Timeline of level changes, escalated paths and automatic bans: node and trigger (observed / threshold), filterable by type |
 
-Events are kept for 30 days by default; platform administrators can set 7–365 days. A site leaving the normal level raises the **CC mitigation raised** alert (`cc_mitigation`), at most once per site in 15 minutes, see [Alerts](dns-and-alerts.en.md#set-alert-rules).
+Events are kept for 30 days by default, adjustable to 7–365 days with **Security event retention (days)** in **System → Protection**. A site leaving the normal level raises the **CC mitigation raised** alert (`cc_mitigation`), at most once per site in 15 minutes, see [Alerts](dns-and-alerts.en.md#set-alert-rules).
 
 ## JA4
 
@@ -179,13 +179,7 @@ Only JA4 (the TLS client fingerprint) is implemented; JA4S, JA4H and the other m
 
 ## Permissions
 
-| Action | Organization owners, admins | Organization members | Platform administrators |
-| --- | --- | --- | --- |
-| View protection, node levels and events | ✓ | ✓ | ✓ |
-| Change Under Attack, challenge settings, CC mitigation | ✓ | — | ✓ |
-| Platform Under Attack, CC template, event retention | — | — | ✓ (Admin) |
-
-Read-only AccessKeys can only read. Every change is audited: `site.protection_update`, `system.protection_update`, `system.cc_template_update`.
+Changes need a console session or a read-write AccessKey; read-only AccessKeys can only read; service accounts cannot call these procedures (`SERVICE_ACCOUNT_FORBIDDEN`). Every change is audited: `site.protection_update`, `system.protection_update`, `system.cc_template_update`.
 
 ## Node capabilities
 
@@ -194,18 +188,18 @@ Read-only AccessKeys can only read. Every change is audited: `site.protection_up
 | Under Attack, CC mitigation, challenge rules | `challenge-v1` |
 | `tls.ja4` field, JA4 rate limit key, JA4 logging | `ja4-v1` |
 
-When an active node of the cluster lacks a capability, a tenant's change is refused ("Cluster nodes need these capabilities first: …") and the settings stay as they were; platform administrators can publish deliberately, and nodes without the capability keep their configuration, see [Node upgrades](node-upgrades.en.md). Clusters that use none of these features keep their configuration unchanged.
+When an active node of the cluster lacks a capability, the change is still saved and published; nodes without the capability keep their previous configuration and show **Upgrade required** in **Clusters & nodes**, see [Node upgrades](node-upgrades.en.md). Service accounts and background jobs that publish such a configuration get 409 `NODE_CAPABILITY_REQUIRED` ("Cluster nodes need these capabilities first: …") and the settings stay as they were. Clusters that use none of these features keep their configuration unchanged.
 
 ## API
 
-| Procedure | Endpoint | Caller |
-| --- | --- | --- |
-| `protection.get` | `GET /sites/{id}/protection` | Organization members |
-| `protection.update` | `PATCH /sites/{id}/protection` | Organization owners, admins |
-| `security.state` | `GET /sites/{id}/security?hours=24` | Organization members |
-| `security.events` | `GET /sites/{id}/security/events` | Organization members |
-| `settings.protection`, `settings.setProtection` | `GET`, `PUT /settings/protection` | Platform administrators |
-| `settings.ccTemplate`, `settings.setCcTemplate` | `GET`, `PUT /settings/cc-template` | Platform administrators |
+| Procedure | Endpoint |
+| --- | --- |
+| `protection.get` | `GET /sites/{id}/protection` |
+| `protection.update` | `PATCH /sites/{id}/protection` |
+| `security.state` | `GET /sites/{id}/security?hours=24` |
+| `security.events` | `GET /sites/{id}/security/events` |
+| `settings.protection`, `settings.setProtection` | `GET`, `PUT /settings/protection` (global Under Attack, event retention) |
+| `settings.ccTemplate`, `settings.setCcTemplate` | `GET`, `PUT /settings/cc-template` |
 
 Fields and examples: [API and endpoints](../reference/api.en.md#challenges-and-cc-mitigation).
 
@@ -214,7 +208,8 @@ Fields and examples: [API and endpoints](../reference/api.en.md#challenges-and-c
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | "The high proof-of-work difficulty must be at least N" | The high difficulty is below the proof-of-work difficulty | Raise the high difficulty or lower the normal one |
-| "Cluster nodes need these capabilities first: challenge-v1" | A node of the cluster is too old | Upgrade the node |
+| A node shows **Upgrade required** | The node is too old and lacks `challenge-v1` or `ja4-v1` | Upgrade the node |
+| "Cluster nodes need these capabilities first: challenge-v1" | A service account or background job published a configuration that needs a capability the cluster's nodes lack | Upgrade the node |
 | 503, `X-Edgeweir-Error: challenge-unavailable` | The node has not fetched the pass keys yet | Check the node's connection to the console |
 | Forms or API calls get 403 with `X-Edgeweir-Challenge: required` | Non-GET/HEAD requests without a valid pass | Pass the challenge in a browser first; let machine-to-machine endpoints through with an `allow` rule |
 | Challenged again after passing | The pass expired; the client changed network or User-Agent; the required level is above the pass level | Lengthen the lifetime; check whether a proxy's exit address keeps changing |

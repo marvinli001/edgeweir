@@ -5,7 +5,6 @@ import {
   type SiteErrorPages,
 } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import {
@@ -20,7 +19,6 @@ import { ErrorState, LoadingState } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
-import { unavailableReason } from "@/lib/protection";
 
 const statusName: Record<ErrorPageStatus, () => string> = {
   403: m.error_pages_name_403,
@@ -42,18 +40,9 @@ const toTemplates = (pages: SiteErrorPages["pages"]): Templates =>
 
 /**
  * Error pages tab: the site's pages for the 403, 429, 502, 503 and 504 responses its nodes
- * generate (empty: the built-in page) and whether they also replace the origin's. Members read
- * them; owners and admins change them.
+ * generate (empty: the built-in page) and whether they also replace the origin's.
  */
-export function ErrorPagesTab({
-  siteId,
-  organizationRole,
-}: {
-  siteId: string;
-  organizationRole?: string;
-}) {
-  const { isAdmin } = useRouteContext({ from: "/_app" });
-  const canEdit = isAdmin || organizationRole === "owner" || organizationRole === "admin";
+export function ErrorPagesTab({ siteId }: { siteId: string }) {
   const pages = useQuery(orpc.errorPages.get.queryOptions({ input: { id: siteId } }));
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
   return (
@@ -79,8 +68,6 @@ export function ErrorPagesTab({
           siteId={siteId}
           initial={pages.data}
           availability={features.data.errorPages}
-          canEdit={canEdit}
-          isAdmin={isAdmin}
         />
       )}
     </Card>
@@ -91,14 +78,10 @@ function ErrorPagesForm({
   siteId,
   initial,
   availability,
-  canEdit,
-  isAdmin,
 }: {
   siteId: string;
   initial: SiteErrorPages;
   availability: FeatureAvailability;
-  canEdit: boolean;
-  isAdmin: boolean;
 }) {
   const queryClient = useQueryClient();
   const mutation = useMutation(orpc.errorPages.update.mutationOptions());
@@ -106,8 +89,8 @@ function ErrorPagesForm({
   const [templates, setTemplates] = React.useState(saved);
   const [intercept, setIntercept] = React.useState(initial.interceptOriginErrors);
   const [error, setError] = React.useState<string | null>(null);
-  // Tenants cannot use pages before the cluster's nodes run them; administrators may require them.
-  const editable = canEdit && (isAdmin || availability.available);
+  // Pages wait until the cluster's nodes run them.
+  const editable = availability.available;
   const tooLarge = ERROR_PAGE_STATUSES.some((status) => templateTooLarge(templates[status]));
   const dirty =
     intercept !== initial.interceptOriginErrors ||
@@ -138,12 +121,8 @@ function ErrorPagesForm({
     >
       <CardContent className="flex flex-col gap-5">
         {availability.available ? null : (
-          <SafetyNote
-            className="animate-in fade-in"
-            data-testid="error-pages-unavailable"
-            data-reason={availability.reason ?? undefined}
-          >
-            {unavailableReason(availability)}
+          <SafetyNote className="animate-in fade-in" data-testid="error-pages-unavailable">
+            {m.feature_unavailable_nodes()}
           </SafetyNote>
         )}
         {ERROR_PAGE_STATUSES.map((status, index) => (
@@ -174,14 +153,12 @@ function ErrorPagesForm({
         />
         <TemplateVariables />
       </CardContent>
-      {canEdit ? (
-        <SaveBar
-          dirty={dirty && editable && !tooLarge}
-          pending={mutation.isPending}
-          error={error}
-          testId="error-pages-save"
-        />
-      ) : null}
+      <SaveBar
+        dirty={dirty && editable && !tooLarge}
+        pending={mutation.isPending}
+        error={error}
+        testId="error-pages-save"
+      />
     </form>
   );
 }

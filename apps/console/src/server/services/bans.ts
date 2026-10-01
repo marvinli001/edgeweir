@@ -1,6 +1,4 @@
 import {
-  type AdminBanCreateInput,
-  type AdminBanListInput,
   AUTO_BAN_REASONS,
   BAN_MAX_SECONDS,
   BAN_MIN_SECONDS,
@@ -8,7 +6,9 @@ import {
   BAN_PAGE_MAX,
   BAN_SETTINGS_DEFAULTS,
   type Ban,
+  type BanCreateInput,
   type BanList,
+  type BanListInput,
   type BanReason,
   type BanSettings,
   banSettings,
@@ -36,9 +36,8 @@ import { fail } from "../lib/errors";
 import { BANS_CHANNEL } from "../lib/events";
 import { ONLINE_WINDOW_SECONDS } from "../lib/node-online";
 import { type Actor, recordAudit } from "./audit";
-import { assertOrgLimit, lockOrganization } from "./organization-limits";
 import type { Executor } from "./revisions";
-import { findSite, type SiteScope } from "./sites";
+import { findSite } from "./sites";
 
 type BanRow = typeof schema.ipBan.$inferSelect;
 
@@ -50,7 +49,6 @@ export const BAN_RETENTION_MS = 3600_000;
 /**
  * Serializes every ban write for the rest of the transaction. Writers take it
  * before `nextval('ip_ban_seq')`, so changes commit in sequence order.
- * Callers that also limit an organization lock the organization first.
  */
 async function lockBans(tx: Executor) {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${LOCK_KEY}))`);
@@ -116,13 +114,13 @@ export async function setBanSettings(db: Database, input: BanSettings, actor: Ac
   });
 }
 
-/** Node addresses and the platform allow list: no ban may cover them. */
+/** Node addresses and the allow lists: no ban may cover them. */
 async function protectedAddresses(tx: Executor): Promise<string[]> {
   const ips = await tx.selectDistinct({ address: schema.nodeIp.address }).from(schema.nodeIp);
   const allow = await tx
     .select({ entries: schema.ipList.entries })
     .from(schema.ipList)
-    .where(and(isNull(schema.ipList.organizationId), eq(schema.ipList.kind, "allow")));
+    .where(eq(schema.ipList.kind, "allow"));
   return [...ips.map((row) => row.address), ...allow.flatMap((row) => row.entries)];
 }
 
@@ -150,12 +148,10 @@ async function toBans(db: Executor, where: ReturnType<typeof and>, page?: [numbe
     .select({
       ban: schema.ipBan,
       siteName: schema.site.name,
-      organizationName: schema.organization.name,
       nodeName: schema.node.name,
     })
     .from(schema.ipBan)
     .leftJoin(schema.site, eq(schema.site.id, schema.ipBan.siteId))
-    .leftJoin(schema.organization, eq(schema.organization.id, schema.ipBan.organizationId))
     .leftJoin(schema.node, eq(schema.node.id, schema.ipBan.nodeId))
     .where(where)
     .orderBy(desc(schema.ipBan.createdAt), desc(schema.ipBan.seq));
@@ -165,7 +161,7 @@ async function toBans(db: Executor, where: ReturnType<typeof and>, page?: [numbe
     rows.map((r) => r.ban.id),
   );
   return rows.map(
-    ({ ban, siteName, organizationName, nodeName }): Ban => ({
+    ({ ban, siteName, nodeName }): Ban => ({
       id: ban.id,
       scope: ban.scope as Ban["scope"],
       cidr: ban.cidr,
@@ -173,8 +169,6 @@ async function toBans(db: Executor, where: ReturnType<typeof and>, page?: [numbe
       source: ban.source as Ban["source"],
       siteId: ban.siteId,
       siteName: siteName ?? null,
-      organizationId: ban.organizationId,
-      organizationName: organizationName ?? null,
       node: ban.nodeId ? { id: ban.nodeId, name: nodeName ?? "" } : null,
       trigger: ban.trigger ?? null,
       createdBy: ban.createdBy ?? null,
@@ -193,30 +187,16 @@ async function banById(db: Executor, id: string): Promise<Ban> {
   return dto;
 }
 
-/**
- * Active bans, newest first. Tenant calls (`platform: false`) see site bans
- * only, of their organization unless `scope` is platform-wide.
- */
+/** Active bans, newest first. */
 export async function listBans(
   db: Database,
-  input: AdminBanListInput,
-  access: { platform: boolean; scope: SiteScope },
+  input: BanListInput,
   now = new Date(),
 ): Promise<BanList> {
   const filters = [active(now)];
-  if (input.siteId) {
-    if (!access.platform) await findSite(db, input.siteId, access.scope);
-    filters.push(eq(schema.ipBan.siteId, input.siteId));
-  }
+  if (input.siteId) filters.push(eq(schema.ipBan.siteId, input.siteId));
   if (input.source) filters.push(eq(schema.ipBan.source, input.source));
-  if (access.platform) {
-    if (input.scope) filters.push(eq(schema.ipBan.scope, input.scope));
-    if (input.organizationId) filters.push(eq(schema.ipBan.organizationId, input.organizationId));
-  } else {
-    filters.push(eq(schema.ipBan.scope, "site"));
-    if (!access.scope.all)
-      filters.push(eq(schema.ipBan.organizationId, access.scope.organizationId));
-  }
+  if (input.scope) filters.push(eq(schema.ipBan.scope, input.scope));
   const where = and(...filters);
   const [total] = await db.select({ n: count() }).from(schema.ipBan).where(where);
   return {
@@ -242,21 +222,18 @@ function banTarget(text: string) {
 
 /**
  * Creates a manual ban, or bans the same (scope, site, CIDR) again: that sets
- * the new reason and expiry and takes a new sequence number. Site bans count
- * against the organization's maxBans, and every manual ban against the
- * platform total.
+ * the new reason and expiry and takes a new sequence number. Every manual
+ * ban counts against the platform total.
  */
 export async function createBan(
   db: Database,
-  input: Omit<AdminBanCreateInput, "scope"> & { scope: AdminBanCreateInput["scope"] },
-  ctx: { scope: SiteScope; actor: Actor },
+  input: BanCreateInput,
+  ctx: { actor: Actor },
 ): Promise<Ban> {
   const target = banTarget(input.cidr);
   checkDuration(input.durationSeconds);
   const id = await db.transaction(async (tx) => {
-    const site =
-      input.scope === "site" ? await findSite(tx, input.siteId ?? "", ctx.scope) : undefined;
-    if (site) await lockOrganization(tx, site.organizationId);
+    const site = input.scope === "site" ? await findSite(tx, input.siteId ?? "") : undefined;
     await lockBans(tx);
     const covered = protectedBanOverlap(target.cidr, await protectedAddresses(tx));
     if (covered)
@@ -284,7 +261,6 @@ export async function createBan(
       .for("update");
     const renewal = !!existing && existing.expiresAt > now;
     if (!renewal) {
-      if (site) await assertOrgLimit(tx, site.organizationId, "bans", 1);
       const { maxTotal } = await getBanSettings(tx);
       const [total] = await tx
         .select({ n: count() })
@@ -315,7 +291,6 @@ export async function createBan(
         .insert(schema.ipBan)
         .values({
           scope: site ? "site" : "platform",
-          organizationId: site?.organizationId ?? null,
           siteId: site?.id ?? null,
           clusterId: site?.clusterId ?? null,
           cidr: target.text,
@@ -333,7 +308,6 @@ export async function createBan(
     await notifyBans(tx, site ? [site.clusterId] : null);
     await recordAudit(tx, ctx.actor, {
       action: renewal ? "ban.update" : "ban.create",
-      organizationId: site?.organizationId ?? null,
       targetType: "ban",
       targetId: row.id,
       targetName: row.cidr,
@@ -356,27 +330,17 @@ export async function createBan(
 }
 
 /**
- * Lifts an active ban before it expires. Tenant calls (`platform: false`)
- * reach site bans only, of their organization unless `scope` is
- * platform-wide; automatic bans of those sites included.
+ * Lifts an active ban (manual or automatic, of a site or every site) before
+ * it expires.
  */
-export async function deleteBan(
-  db: Database,
-  id: string,
-  ctx: { platform: boolean; scope: SiteScope; actor: Actor },
-) {
+export async function deleteBan(db: Database, id: string, ctx: { actor: Actor }) {
   await db.transaction(async (tx) => {
     await lockBans(tx);
     const now = new Date();
-    const filters = [eq(schema.ipBan.id, id), active(now)];
-    if (!ctx.platform) {
-      filters.push(eq(schema.ipBan.scope, "site"));
-      if (!ctx.scope.all) filters.push(eq(schema.ipBan.organizationId, ctx.scope.organizationId));
-    }
     const [row] = await tx
       .select()
       .from(schema.ipBan)
-      .where(and(...filters))
+      .where(and(eq(schema.ipBan.id, id), active(now)))
       .for("update");
     if (!row) fail("BAN_NOT_FOUND", "ban not found");
     const seq = await nextSeq(tx);
@@ -390,7 +354,6 @@ export async function deleteBan(
       : [];
     await recordAudit(tx, ctx.actor, {
       action: "ban.delete",
-      organizationId: row.organizationId,
       targetType: "ban",
       targetId: row.id,
       targetName: row.cidr,
@@ -551,7 +514,7 @@ export async function reportAutoBans(
     const sites = new Map(
       (
         await tx
-          .select({ id: schema.site.id, organizationId: schema.site.organizationId })
+          .select({ id: schema.site.id })
           .from(schema.site)
           .where(and(inArray(schema.site.id, siteIds), eq(schema.site.clusterId, node.clusterId)))
       ).map((site) => [site.id, site]),
@@ -613,7 +576,6 @@ export async function reportAutoBans(
       } else {
         inserts.push({
           scope: "site",
-          organizationId: sites.get(item.siteId)?.organizationId ?? null,
           siteId: item.siteId,
           clusterId: node.clusterId,
           cidr: item.cidr.text,

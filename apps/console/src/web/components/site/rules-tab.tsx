@@ -40,7 +40,6 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import { FormSelect } from "@/components/form-select";
@@ -157,10 +156,9 @@ const UNCHANGED = "unchanged";
 
 /**
  * Rules of a site (siteId) or of the platform. A site's rules can send requests to its origin
- * groups; the rule engine extensions stay locked for tenants while the cluster's nodes lack them.
+ * groups; the rule engine extensions stay locked while the cluster's nodes lack them.
  */
 export function RulesTab({ siteId, originGroups }: { siteId?: string; originGroups?: string[] }) {
-  const { isAdmin } = useRouteContext({ from: "/_app" });
   const query = useQuery(
     siteId
       ? orpc.rules.get.queryOptions({ input: { id: siteId } })
@@ -182,8 +180,7 @@ export function RulesTab({ siteId, originGroups }: { siteId?: string; originGrou
       siteId={siteId}
       originGroups={siteId ? (originGroups ?? []) : undefined}
       availability={availability}
-      // Administrators may require the extensions; tenants cannot publish them yet.
-      locked={!isAdmin && availability?.available === false}
+      locked={availability?.available === false}
     />
   );
 }

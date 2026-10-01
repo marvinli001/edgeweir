@@ -3,26 +3,20 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { signInResponse } from "./e2e-auth.mjs";
+import { signInWithAccessKey } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile),
   base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const compose = ["compose", "-f", "compose.e2e.yml"];
 const state = JSON.parse(await readFile(".e2e/m5-state.json", "utf8"));
 const run = async (args) => (await execute("docker", args, { maxBuffer: 64 * 1024 * 1024 })).stdout;
-const login = await signInResponse(base, "admin@e2e.test", "e2e-admin-password-123");
-assert.equal(login.status, 200);
-const cookie = login.headers
-  .getSetCookie()
-  .map((v) => v.split(";")[0])
-  .join("; ");
-const created = await fetch(`${base}/api/auth/api-key/create`, {
-  method: "POST",
-  headers: { "content-type": "application/json", origin: base, cookie },
-  body: JSON.stringify({ name: "restore-e2e" }),
-});
-assert.equal(created.status, 200);
-const { key } = await created.json();
+const session = await signInWithAccessKey(
+  base,
+  "admin@e2e.test",
+  "e2e-admin-password-123",
+  "restore-e2e",
+);
+const { key } = session;
 async function api(method, path, body) {
   const r = await fetch(`${base}/api/v1${path}`, {
     method,

@@ -9,7 +9,6 @@ import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -21,7 +20,6 @@ describe("M3 certificate lifecycle and isolation", async () => {
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let api: ApiClient;
-  let tenant: ApiClient;
   let siteId: string;
   let clusterId: string;
   let certificateId: string;
@@ -39,14 +37,6 @@ describe("M3 certificate lifecycle and isolation", async () => {
         origins: [{ address: "origin.example.com" }],
       })
     ).site.id;
-    const org = await api.organizations.create({ name: "Other", defaultClusterId: clusterId });
-    await api.users.create({
-      name: "Other",
-      email: "other@secure.test",
-      password: PASSWORD,
-      organizationId: org.id,
-    });
-    tenant = rpcClient(app, origin, await signIn(app, origin, "other@secure.test"));
   });
   afterAll(() => db.close());
   it("validates the private key and encrypts it before storage", async () => {
@@ -76,8 +66,7 @@ describe("M3 certificate lifecycle and isolation", async () => {
       .where(eq(schema.certificate.id, certificateId));
     expect(row?.privateKeyEnvelope).not.toContain("PRIVATE KEY");
     expect(row?.privateKeyEnvelope).not.toContain(material.privateKeyPem);
-    expect(await tenant.certificates.list()).toEqual([]);
-    expect((await rpcError(tenant.certificates.delete({ id: certificateId }))).code).toBe(
+    expect((await rpcError(api.certificates.delete({ id: crypto.randomUUID() }))).code).toBe(
       "CERTIFICATE_NOT_FOUND",
     );
   });
@@ -100,7 +89,9 @@ describe("M3 certificate lifecycle and isolation", async () => {
     );
     const foreign = await api.clusters.create({ name: "other-cluster" });
     expect(await nodeCertificates(ctx, foreign.id, [certificateId])).toEqual([]);
-    expect((await rpcError(tenant.https.get({ id: siteId }))).code).toBe("SITE_NOT_FOUND");
+    expect((await rpcError(api.https.get({ id: crypto.randomUUID() }))).code).toBe(
+      "SITE_NOT_FOUND",
+    );
     expect((await rpcError(api.certificates.delete({ id: certificateId }))).code).toBe(
       "CERTIFICATE_IN_USE",
     );
@@ -123,12 +114,12 @@ describe("M3 certificate lifecycle and isolation", async () => {
     expect(tlsSettings.safeParse({ zstd: true, zstdLevel: 0 }).success).toBe(false);
     expect(tlsSettings.safeParse({ forceHttps: true }).success).toBe(false);
   });
-  it("keeps DNS credentials write-only and bound to their organization", async () => {
+  it("keeps DNS credentials write-only", async () => {
     const credential = await api.dnsCredentials.create({
       name: "DNS",
       provider: "cloudflare",
       zone: "secure.test",
-      credentials: { api_token: "unit-test-token" },
+      credentials: { api_token: "unit-test-token-0123456789" },
     });
     expect(JSON.stringify(await api.dnsCredentials.list())).not.toContain("unit-test-token");
     const [row] = await ctx.db
@@ -136,7 +127,7 @@ describe("M3 certificate lifecycle and isolation", async () => {
       .from(schema.dnsCredential)
       .where(eq(schema.dnsCredential.id, credential.id));
     expect(row?.credentialEnvelope).not.toContain("unit-test-token");
-    expect((await rpcError(tenant.dnsCredentials.delete({ id: credential.id }))).code).toBe(
+    expect((await rpcError(api.dnsCredentials.delete({ id: crypto.randomUUID() }))).code).toBe(
       "DNS_CREDENTIAL_NOT_FOUND",
     );
   });

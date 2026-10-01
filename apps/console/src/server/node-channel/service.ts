@@ -502,8 +502,17 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           wake?.();
         }
       };
+      // Events arrive outside the stream: a read that fails there is repeated
+      // in the stream, where another error ends it and the node reconnects.
+      let stale = false;
+      const refreshLater = () =>
+        refresh().catch((error) => {
+          log.warn("watch refresh failed", { nodeId: node.id, error });
+          stale = true;
+          wake?.();
+        });
       const offConfig = app.events.on("config", (e) => {
-        if (e.clusterId === node.clusterId) void refresh();
+        if (e.clusterId === node.clusterId) void refreshLater();
       });
       const offTasks = app.events.on("tasks", (e) => {
         if (e.clusterIds.includes(node.clusterId)) {
@@ -522,7 +531,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       });
       const offReconnect = app.events.on("reconnected", () => {
         bansPending ||= bans;
-        void refresh();
+        void refreshLater();
       });
       const onAbort = () => wake?.();
       ctx.signal.addEventListener("abort", onAbort);
@@ -557,6 +566,10 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           }
           if (ctx.signal.aborted) break;
           await assertStillActive(node);
+          if (stale) {
+            stale = false;
+            await refresh();
+          }
           if (tasksPending) continue;
           const item = queue
             .splice(0)

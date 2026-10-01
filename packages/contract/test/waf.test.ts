@@ -5,7 +5,6 @@ import {
   tlsSettings,
   WAF_DEFAULTS,
   WAF_MAX_EXCLUSIONS,
-  wafSettings,
   wafTopRulesInput,
 } from "../src/index";
 
@@ -72,7 +71,6 @@ describe("OWASP CRS settings", () => {
       excludedRuleIds: [],
       requestBodyLimit: 131_072,
     });
-    expect(wafSettings.parse({ tenantCrs: true })).toEqual({ tenantCrs: true });
   });
 
   it("accepts the modes and every field at its bounds", () => {

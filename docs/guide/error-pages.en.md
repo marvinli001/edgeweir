@@ -7,14 +7,14 @@ The error pages nodes answer with: site templates, platform templates, built-in 
 | Term | Definition |
 | --- | --- |
 | Site error page | An HTML template a site sets for 403, 429, 502, 503 or 504, replacing the node's built-in page. |
-| Platform error page | An HTML template the platform administrator sets for unknown hosts, disabled sites and suspended sites. |
+| Platform error page | An HTML template for unknown hosts and disabled sites. |
 | Built-in page | The page nodes use without a template, in Chinese or English by `Accept-Language`. |
 | Request ID | The ID a node settles for each request; it appears in the `X-Request-Id` response header, in error pages and in sampled logs. |
-| Offline host | A verified domain of a disabled or suspended site; nodes answer it with the platform's disabled or suspended page instead of the unknown host page. |
+| Offline host | A domain of a disabled site; nodes answer it with the platform's disabled page instead of the unknown host page. |
 
 ## Set a site's error pages
 
-1. Open **Console → Sites**, select the site, and go to the **Error pages** tab.
+1. Open **Sites**, select the site, and go to the **Error pages** tab.
 2. Enter an HTML template in the field of a status; statuses left empty use the built-in page.
 3. To replace errors the origin returns itself, turn on **Replace origin error responses**.
 4. Click **Save**. The console publishes a revision ("Error pages of {site} updated"); nodes hot-update without a reload.
@@ -40,7 +40,7 @@ The error pages nodes answer with: site templates, platform templates, built-in 
 | Stale content first | When a rule sets **Stale if error (s)** and the node holds an expired copy, the stale copy wins over the error page |
 | Not cached | Error pages carry `Cache-Control: no-store`, and nodes never store them in the cache |
 | Other statuses | 404 (ACME challenge not found), 405, 421, 508 and others stay plain text; a non-GET/HEAD request without a pass refused by a challenge (`X-Edgeweir-Challenge: required`) is plain text too |
-| Permissions | Organization owners and admins change them; members read them; changes are audited as `site.error_pages_update` (the statuses that changed and their sizes, not the templates) |
+| Audit | Changes are audited as `site.error_pages_update` (the statuses that changed and their sizes, not the templates) |
 
 ## Templates
 
@@ -78,19 +78,17 @@ Without a template, nodes answer with a self-contained built-in page: no externa
 | Access denied / Too many requests / Origin unreachable / Service unavailable / Origin timed out | 403 / 429 / 502 / 503 / 504 | See above |
 | Site not found | 404 | `unknown-host` |
 | Site disabled | 503 | `site-disabled` |
-| Site suspended | 503 | `site-suspended` |
 
 ## Platform error pages
 
-The platform administrator sets them under **Admin → System settings → Platform error pages**, with the rules of site templates; empty fields use the built-in page. Saving publishes a revision for every cluster ("Platform error pages updated") and is audited as `system.error_pages_update`, see [Platform administration](admin.en.md#platform-error-pages).
+Set them under **System settings → Platform error pages**, with the rules of site templates; empty fields use the built-in page. Saving publishes a revision for every cluster ("Platform error pages updated") and is audited as `system.error_pages_update`, see [System settings](system.en.md#platform-error-pages).
 
 | Field | Requests it applies to | Status |
 | --- | --- | --- |
 | Unknown host | The Host belongs to no site of the cluster and is no offline host | 404 |
-| Site disabled | The Host is a verified domain of a disabled site | 503 |
-| Site suspended | The Host is a verified domain of a site the platform suspended (suspension wins when both apply) | 503 |
+| Site disabled | The Host is a domain of a disabled site | 503 |
 
-Nodes recognize the last two from the offline host list in their configuration (the verified domains of disabled or suspended sites with the reason); wildcards match as site domains do. Once the site is enabled or resumed, the host is served again.
+Nodes recognize disabled sites from the offline host list in their configuration (the domains of disabled sites); wildcards match as site domains do. Once the site is enabled again, the host is served again.
 
 ## Request IDs
 
@@ -105,7 +103,7 @@ Nodes recognize the last two from the offline host list in their configuration (
 
 | Feature | Requirement |
 | --- | --- |
-| Site error pages | Node feature `error-pages-v1`; while an active node of the cluster lacks it, tenants cannot save ("Some nodes of the site's cluster do not support it yet"); an administrator's save is published and nodes without the feature keep their previous configuration |
+| Site error pages | Node feature `error-pages-v1`; while an active node of the cluster lacks it, pages cannot be saved ("Some nodes of the site's cluster do not support it yet") |
 | Platform error pages, offline hosts | No feature needed; older nodes ignore them, keep their plain-text answers and answer offline hosts with 404 |
 | Template space | Templates travel with the site table into the node's shared memory; with many sites and large templates raise the node flag `--sites-dict-mb` (default 64) |
 

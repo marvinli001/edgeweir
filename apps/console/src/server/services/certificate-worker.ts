@@ -8,10 +8,12 @@ import { recordAudit, systemActor } from "./audit";
 import {
   certificateAccountBinding,
   certificateKeyBinding,
-  dnsCredentialBinding,
   findDnsCredential,
   inspectCertificate,
+  openDnsCredential,
 } from "./certificates";
+import { withLease } from "./dns-lease";
+import { certdDns, outboundAllowCidrs } from "./dns-providers";
 import { publishClusters, rolloutTargets, targetFor } from "./revisions";
 
 type HelperEvent = {
@@ -22,6 +24,16 @@ type HelperEvent = {
   keyAuthorization?: string;
   account?: Record<string, unknown>;
 };
+
+/** A failed helper command; `code` classifies DNS provider errors (dns_auth_failed, …). */
+export class CertdError extends Error {
+  constructor(
+    command: string,
+    readonly code: string,
+  ) {
+    super(`certificate helper ${command} failed`);
+  }
+}
 
 /** Secrets travel over stdin/stdout only, never shell arguments or logs. */
 export async function runCertd<T = Record<string, unknown>>(
@@ -53,7 +65,7 @@ export async function runCertd<T = Record<string, unknown>>(
   child.stderr.resume(); // dependency diagnostics may quote credentials
   child.stdin.on("error", () => {});
   child.stdin.write(`${JSON.stringify({ command, params })}\n`);
-  let result: { ok?: boolean; result?: T } | undefined;
+  let result: { ok?: boolean; result?: T; code?: string } | undefined;
   try {
     for await (const line of createInterface({ input: child.stdout })) {
       const message = JSON.parse(line);
@@ -65,7 +77,13 @@ export async function runCertd<T = Record<string, unknown>>(
     }
     const code = await exit;
     if (killed) throw new Error("certificate helper exceeded its time or output limit");
-    if (code !== 0 || !result?.ok) throw new Error(`certificate helper ${command} failed`);
+    if (code !== 0 || !result?.ok)
+      throw new CertdError(
+        command,
+        typeof result?.code === "string" && /^[a-z0-9_]{1,40}$/.test(result.code)
+          ? result.code
+          : "certd_failed",
+      );
     return result.result as T;
   } finally {
     clearTimeout(timer);
@@ -74,23 +92,28 @@ export async function runCertd<T = Record<string, unknown>>(
   }
 }
 
-async function assertIssuanceNames(
+/**
+ * The names to ask the CA for. A renewal by HTTP-01 drops names no site has
+ * any more (no cluster would serve their challenge), as long as one is left:
+ * sites that use the certificate only have names it still covers, so they
+ * stay covered and the remaining names keep renewing.
+ */
+async function issuanceNames(
   db: AppContext["db"],
   certificate: typeof schema.certificate.$inferSelect,
-) {
+): Promise<string[]> {
+  if (!certificate.chainPem || certificate.acme.challenge !== "http01") return certificate.names;
   const rows = await db
-    .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
+    .selectDistinct({ name: schema.siteDomain.name })
     .from(schema.siteDomain)
-    .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
     .where(
       and(
-        eq(schema.site.organizationId, certificate.organizationId),
-        eq(schema.siteDomain.verified, true),
+        inArray(schema.siteDomain.name, certificate.names),
+        eq(schema.siteDomain.wildcard, false),
       ),
     );
-  const names = new Set(rows.map((d) => `${d.wildcard ? "*." : ""}${d.name}`));
-  if (certificate.names.some((name) => !names.has(name)))
-    throw new Error("certificate domains are no longer assigned to this organization");
+  const served = certificate.names.filter((name) => rows.some((row) => row.name === name));
+  return served.length ? served : certificate.names;
 }
 function attempt(certificate: typeof schema.certificate.$inferSelect) {
   if (!certificate.operationStartedAt) throw new Error("missing issuance attempt");
@@ -139,7 +162,6 @@ async function challengeEvent(
         .where(attempt(certificate))
         .for("update");
       if (!active.length) throw new Error("stale issuance attempt");
-      await assertIssuanceNames(tx as AppContext["db"], certificate);
       await tx
         .insert(schema.dnsChallengeLease)
         .values({
@@ -194,7 +216,6 @@ async function challengeEvent(
         .where(attempt(certificate))
         .for("update");
       if (!active.length) throw new Error("stale issuance attempt");
-      await assertIssuanceNames(tx as AppContext["db"], certificate);
     }
     await tx
       .delete(schema.acmeChallenge)
@@ -218,14 +239,7 @@ async function challengeEvent(
       .selectDistinct({ clusterId: schema.site.clusterId })
       .from(schema.site)
       .innerJoin(schema.siteDomain, eq(schema.siteDomain.siteId, schema.site.id))
-      .where(
-        and(
-          eq(schema.site.organizationId, certificate.organizationId),
-          eq(schema.siteDomain.verified, true),
-          eq(schema.siteDomain.name, domain),
-          eq(schema.siteDomain.wildcard, false),
-        ),
-      );
+      .where(and(eq(schema.siteDomain.name, domain), eq(schema.siteDomain.wildcard, false)));
     const published = await publishClusters(
       tx,
       sites.map((s) => s.clusterId),
@@ -306,7 +320,22 @@ const due = () =>
     ),
   );
 
+/**
+ * Issues or renews a due ACME certificate. DNS-01 runs under the lease of its
+ * DNS credential, so two console processes never rewrite the same
+ * `_acme-challenge` record set at once (a busy credential waits for the next
+ * sweep).
+ */
 export async function issueCertificate(app: AppContext, id: string) {
+  const [row] = await app.db
+    .select({ acme: schema.certificate.acme })
+    .from(schema.certificate)
+    .where(eq(schema.certificate.id, id));
+  const credentialId = row?.acme.challenge === "dns01" ? row.acme.dnsCredentialId : undefined;
+  if (!credentialId) return issueNow(app, id);
+  await withLease(app.db, `credential:${credentialId}`, 10 * 60, () => issueNow(app, id));
+}
+async function issueNow(app: AppContext, id: string) {
   const [row] = await app.db
     .update(schema.certificate)
     .set({ status: "issuing", operationStartedAt: new Date() })
@@ -314,7 +343,7 @@ export async function issueCertificate(app: AppContext, id: string) {
     .returning();
   if (!row) return;
   try {
-    await assertIssuanceNames(app.db, row);
+    const names = await issuanceNames(app.db, row);
     const account = row.accountEnvelope
       ? JSON.parse(
           app.masterKey
@@ -324,18 +353,12 @@ export async function issueCertificate(app: AppContext, id: string) {
       : {};
     let dns: Record<string, unknown> | undefined;
     if (row.acme.dnsCredentialId) {
-      const credential = await findDnsCredential(app.db, row.acme.dnsCredentialId, {
-        all: false,
-        organizationId: row.organizationId,
-      });
+      const credential = await findDnsCredential(app.db, row.acme.dnsCredentialId);
       dns = {
         provider: credential.provider,
         zone: `${credential.zone}.`,
-        credentials: JSON.parse(
-          app.masterKey
-            .open(JSON.parse(credential.credentialEnvelope), dnsCredentialBinding(credential.id))
-            .toString("utf8"),
-        ),
+        credentials: openDnsCredential(app, credential),
+        outbound: { allowCidrs: outboundAllowCidrs(app) },
       };
     }
     const result = await runCertd(
@@ -343,7 +366,7 @@ export async function issueCertificate(app: AppContext, id: string) {
       row.chainPem ? "renew" : "obtain",
       {
         email: row.acme.email,
-        domains: row.names,
+        domains: names,
         challenge: row.acme.challenge,
         account,
         dns,
@@ -363,7 +386,7 @@ export async function issueCertificate(app: AppContext, id: string) {
       throw new Error("invalid certificate response");
     const inspected = inspectCertificate(result.chainPem, result.privateKeyPem);
     if (
-      row.names.some((name) =>
+      names.some((name) =>
         name.startsWith("*.") ? !inspected.names.includes(name) : !inspected.leaf.checkHost(name),
       )
     )
@@ -378,7 +401,6 @@ export async function issueCertificate(app: AppContext, id: string) {
         : fallback,
     );
     await app.db.transaction(async (tx) => {
-      await assertIssuanceNames(tx as AppContext["db"], row);
       const updated = await tx
         .update(schema.certificate)
         .set({
@@ -416,14 +438,13 @@ export async function issueCertificate(app: AppContext, id: string) {
       );
       await recordAudit(tx, systemActor, {
         action: "certificate.issued",
-        organizationId: row.organizationId,
         targetType: "certificate",
         targetId: id,
         targetName: row.name,
         metadata: { fingerprint: inspected.fingerprint, ari: result.ari === true },
       });
     });
-  } catch {
+  } catch (error) {
     await app.db
       .update(schema.certificate)
       .set({
@@ -433,7 +454,17 @@ export async function issueCertificate(app: AppContext, id: string) {
         renewAt: new Date(Date.now() + 3_600_000),
       })
       .where(attempt(row));
-    app.log.warn("certificate operation failed", { certificateId: id });
+    // Never the helper's output, which may quote credentials or keys (a
+    // JSON.parse error would quote the line it failed on).
+    app.log.warn("certificate operation failed", {
+      certificateId: id,
+      reason:
+        error instanceof SyntaxError
+          ? "invalid helper output"
+          : error instanceof Error
+            ? error.message
+            : "unknown",
+    });
   } finally {
     const leases = await app.db
       .select()
@@ -473,16 +504,15 @@ async function cleanupDnsLease(
     .where(eq(schema.dnsCredential.id, lease.credentialId));
   if (!credential) return;
   try {
-    await runCertd(app, "dns.cleanup", {
-      provider: credential.provider,
-      zone: credential.zone,
-      credentials: JSON.parse(
-        app.masterKey
-          .open(JSON.parse(credential.credentialEnvelope), dnsCredentialBinding(credential.id))
-          .toString("utf8"),
-      ),
-      records: [lease.record],
-    });
+    const cleaned = await withLease(app.db, `credential:${credential.id}`, 10 * 60, () =>
+      certdDns(app, "dns.cleanup", {
+        provider: credential.provider,
+        zone: credential.zone,
+        credentials: openDnsCredential(app, credential),
+        records: [lease.record],
+      }),
+    );
+    if (!cleaned.ran) return;
     await app.db.delete(schema.dnsChallengeLease).where(eq(schema.dnsChallengeLease.id, lease.id));
   } catch {
     app.log.warn("DNS challenge cleanup pending", { certificateId: lease.certificateId });

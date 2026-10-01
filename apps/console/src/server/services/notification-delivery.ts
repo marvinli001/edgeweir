@@ -68,10 +68,10 @@ export async function deliverNotification(
     event.siteId
       ? `/sites/${event.siteId}`
       : event.kind === "dns_mass_removal_blocked"
-        ? "/admin/dns"
+        ? "/dns"
         : event.kind === "test"
-          ? "/admin/alerts"
-          : "/admin/clusters",
+          ? "/alerts"
+          : "/clusters",
     app.env.EDGEWEIR_PUBLIC_URL,
   ).toString();
   const text = m.alert_notice_body(

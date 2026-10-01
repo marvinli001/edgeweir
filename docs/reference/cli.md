@@ -1,6 +1,6 @@
 # 命令行
 
-`deploy.sh`、节点安装脚本 `install.sh`、Docker Compose 运维命令、容器入口与开发命令。
+`deploy.sh`、节点安装脚本 `install.sh`、Docker Compose 运维命令、容器入口、找回账户与开发命令。
 
 ## deploy.sh
 
@@ -92,6 +92,7 @@ curl -fsSL https://<控制台>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN b
 | 查看 setup token 日志行 | `docker compose logs console \| grep setupToken` |
 | 健康检查（宿主机） | `curl -s http://127.0.0.1:3000/healthz` |
 | 健康检查（容器内） | `docker compose exec console edgeweir-healthcheck` |
+| 找回账户（重置密码、停用两步验证） | `docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor`，见 [找回账户](#找回账户) |
 | 拉取 `EDGEWEIR_VERSION` 指定的镜像并重建 | `docker compose pull && docker compose up -d` |
 | 启动 ClickHouse | `docker compose --profile analytics up -d` |
 | 启动 Valkey（控制台目前未使用） | `docker compose --profile cache up -d` |
@@ -128,6 +129,72 @@ docker compose logs --no-color --no-log-prefix console \
 ### ROLE
 
 取值 `all`（默认）、`app`、`worker`。各角色运行的组件、监听端口与扩展方式见[部署概览](../deploy/README.md#进程角色)。
+
+## 找回账户
+
+`dist/server/recover.js` 为控制台唯一的账户重置密码、停用两步验证，用于无法登录时。它读取与控制台相同的环境变量（`DATABASE_URL`、`EDGEWEIR_MASTER_KEY` 等），直接修改数据库，不经过 Web 界面与 HTTP。步骤见 [找回账户](../guide/account.md#找回账户)。
+
+```bash
+docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor
+```
+
+| 部署 | 命令 |
+| --- | --- |
+| Docker Compose | `docker compose exec console node dist/server/recover.js <选项>` |
+| Docker Compose，控制台容器未运行 | `docker compose run --rm console node dist/server/recover.js <选项>` |
+| 宝塔 / aaPanel（`deploy.sh`） | `docker exec -it edgeweir-console node dist/server/recover.js <选项>` |
+| 源码（`pnpm dev`） | `pnpm --filter @edgeweir/console recover <选项>`，见 [命令](#命令) |
+
+### 选项
+
+| 选项 | 作用 |
+| --- | --- |
+| `--reset-password` | 设置新密码，12–128 字符 |
+| `--disable-two-factor` | 停用两步验证，删除 TOTP 密钥与备用码 |
+| `-h`、`--help` | 输出用法 |
+
+至少指定 `--reset-password`、`--disable-two-factor` 之一。
+
+### 新密码
+
+| 标准输入 | 读取方式 |
+| --- | --- |
+| 终端（`docker compose exec` 与 `docker exec -it` 默认分配） | 提示 `New password:` 与 `Repeat new password:`，输入不回显；两次不一致时不做修改。Ctrl-C 取消 |
+| 管道或文件 | 第一行，去掉行尾的 `\n` 或 `\r\n` |
+
+```bash
+docker compose exec -T console node dist/server/recover.js --reset-password < new-password.txt
+```
+
+`-T` 不分配终端，只在从管道或文件输入时使用：在终端里直接输入时密码会显示在屏幕上。密码不接受命令行参数或环境变量：命令行参数在进程列表与 shell 历史中可见。
+
+### 执行结果
+
+以下变更与审计条目在同一事务中提交，任一步失败时全部回滚：
+
+| 变更 | 说明 |
+| --- | --- |
+| 密码 | 由 better-auth 哈希（scrypt）后写入账户的密码凭据 |
+| 两步验证 | 关闭；删除 TOTP 密钥与备用码 |
+| 会话 | 删除该账户的全部会话，以及尚未完成两步验证的登录与受信任设备记录 |
+| 审计日志 | `account.recover`，操作者为系统（名称 `recover`）；元数据 `passwordReset`、`twoFactorDisabled`、`sessionsRevoked` |
+
+姓名、邮箱、通行密钥与 AccessKey 不变。标准输出为账户的姓名与邮箱和完成的操作，不含密码、密码哈希或会话 token：
+
+```text
+Account: Ops <admin@example.com>
+Password reset.
+Two-factor authentication turned off.
+Signed out 2 sessions.
+```
+
+### 退出码
+
+| 退出码 | 含义 |
+| --- | --- |
+| `0` | 完成，或指定了 `-h`、`--help` |
+| `1` | 未做修改：没有账户（尚未初始化）、密码长度不符、两次输入不一致、已取消、配置无效、数据库连接或写入失败；stderr 输出 `error:` 与原因 |
+| `2` | 未知选项、多余参数或未指定操作；stderr 输出用法 |
 
 ## 开发
 
@@ -186,6 +253,7 @@ docker compose logs --no-color --no-log-prefix console \
 | `pnpm db:generate` | 由 `packages/db/src/schema` 生成 SQL 迁移到 `packages/db/migrations`（drizzle-kit） |
 | `pnpm e2e` | 运行 `scripts/e2e.sh` |
 | `pnpm --filter @edgeweir/console start` | 运行已构建的 `dist/server/main.js` |
+| `pnpm --filter @edgeweir/console recover <选项>` | 从源码运行 [找回账户](#找回账户) 命令；读取仓库根目录的 `.env`（存在时）。选项前不加 `--` |
 | `pnpm --filter @edgeweir/console test:e2e` | Playwright 测试 |
 
 ### 端到端测试

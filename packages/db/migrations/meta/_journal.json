@@ -232,6 +232,41 @@
       "when": 1790844729717,
       "tag": "0032_g5_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790844789717,
+      "tag": "0033_domains_without_ownership",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790844849717,
+      "tag": "0034_sites_without_suspension",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790844909717,
+      "tag": "0035_without_organization_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790844969717,
+      "tag": "0036_single_operator",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790845029717,
+      "tag": "0037_dns_cluster_bindings",
+      "breakpoints": true
     }
   ]
 }

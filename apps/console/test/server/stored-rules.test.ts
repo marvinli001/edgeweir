@@ -6,7 +6,6 @@ import { createApp } from "../../src/server/app";
 import { latestRevision, publishRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
   rpcClient,
   rpcError,
@@ -34,7 +33,6 @@ describe("stored rules the validator no longer accepts", async () => {
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
-    await approveSiteDomains(admin, id);
     return id;
   };
   const config = async () =>

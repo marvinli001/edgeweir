@@ -95,8 +95,6 @@ export const ban = z.object({
   /** Null for platform bans. */
   siteId: uuid.nullable(),
   siteName: z.string().nullable(),
-  organizationId: z.string().nullable(),
-  organizationName: z.string().nullable(),
   /** Node that created an automatic ban. */
   node: z.object({ id: uuid, name: z.string() }).nullable(),
   trigger: banTrigger.nullable(),
@@ -119,15 +117,11 @@ export const banList = z.object({
 
 /** Active bans only (neither expired nor lifted), newest first. */
 export const banListInput = z.object({
+  scope: banScope.optional(),
   siteId: uuid.optional(),
   source: banSource.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
-});
-
-export const adminBanListInput = banListInput.extend({
-  scope: banScope.optional(),
-  organizationId: z.string().trim().min(1).max(100).optional(),
 });
 
 const banFields = {
@@ -138,9 +132,7 @@ const banFields = {
   durationSeconds: z.number().int(),
 };
 
-export const banCreateInput = z.object({ siteId: uuid, ...banFields });
-
-export const adminBanCreateInput = z
+export const banCreateInput = z
   .object({
     scope: banScope,
     /** Required for site bans, absent for platform bans. */
@@ -164,7 +156,7 @@ export const BAN_SETTINGS_DEFAULTS: BanSettings = { maxTotal: 10000, shareAutoBa
 const idParam = z.object({ id: uuid });
 const ok = z.object({ ok: z.literal(true) });
 
-/** Site bans of the caller's organization (owners and admins create and lift them). */
+/** Site bans and platform bans (every site of every cluster). */
 export const bansContract = {
   list: oc
     .route({ method: "GET", path: "/bans", tags: ["bans"] })
@@ -174,25 +166,9 @@ export const bansContract = {
     .route({ method: "POST", path: "/bans", tags: ["bans"] })
     .input(banCreateInput)
     .output(ban),
-  /** Lifts a manual or automatic ban of one of the organization's sites. */
+  /** Lifts a manual or automatic ban. */
   delete: oc
     .route({ method: "DELETE", path: "/bans/{id}", tags: ["bans"] })
-    .input(idParam)
-    .output(ok),
-};
-
-/** Every ban, including platform bans (platform administrators). */
-export const adminBansContract = {
-  list: oc
-    .route({ method: "GET", path: "/admin/bans", tags: ["bans"] })
-    .input(adminBanListInput)
-    .output(banList),
-  create: oc
-    .route({ method: "POST", path: "/admin/bans", tags: ["bans"] })
-    .input(adminBanCreateInput)
-    .output(ban),
-  delete: oc
-    .route({ method: "DELETE", path: "/admin/bans/{id}", tags: ["bans"] })
     .input(idParam)
     .output(ok),
 };
@@ -204,5 +180,4 @@ export type BanSource = z.infer<typeof banSource>;
 export type BanReason = z.infer<typeof banReason>;
 export type BanSettings = z.infer<typeof banSettings>;
 export type BanListInput = z.infer<typeof banListInput>;
-export type AdminBanListInput = z.infer<typeof adminBanListInput>;
-export type AdminBanCreateInput = z.infer<typeof adminBanCreateInput>;
+export type BanCreateInput = z.infer<typeof banCreateInput>;

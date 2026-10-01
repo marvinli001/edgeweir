@@ -10,15 +10,14 @@ Traffic analytics, access log sampling, search, and export, analytics storage mo
 | Access logs | Individual requests recorded at a sample rate. Bounded diagnostic data, not a lossless audit record. |
 | Sample rate | The share of requests recorded; a percentage in the UI, an integer in 1/10,000 units (0–10000) in the API. |
 | Analytics mode | The value of `EDGEWEIR_ANALYTICS`: `lite` (PostgreSQL, default) or `clickhouse`. |
-| Access key | A key for calling `/api/v1`, owned by the user who created it. |
+| Access key | A key (prefix `ewk_`) that calls `/api/v1` as the console account; created and revoked in **Settings**. |
 
 ## View analytics
 
 | Location | Scope |
 | --- | --- |
-| **Console → Overview** | All sites of the current organization, including **Top sites** |
-| **Console → Sites** → **Analytics** tab | One site |
-| **Admin → Platform** | The whole platform, including **Top nodes**; platform administrators only |
+| **Overview** | All sites and nodes, including **Top sites** and **Top nodes** |
+| **Sites** → **Analytics** tab | One site |
 
 1. Open a page from the table and select a range: **Last hour**, **Last 6 hours**, **Last 24 hours**, **Last 7 days**, or **Last 30 days**.
 2. Read **Total requests**, **Data transferred**, **Cache hit ratio**, **Peak bandwidth**, **4xx rate**, **5xx rate**, **Status codes**, **Top URLs (approximate)**, and **Top IPs (approximate)**; click a metric for details.
@@ -45,11 +44,11 @@ Traffic analytics, access log sampling, search, and export, analytics storage mo
 | Offline queue | Up to 10,000 buckets and 32 MiB; overflow is dropped and logged |
 | In-memory counts | Counts not yet moved to disk expire after 2 hours; a crash before the first persist loses in-memory counts |
 | Semantics | Deduplication of retried batches, not billing-grade per-request exactly-once |
-| Old nodes | Reports without a sequence number are refused; such nodes show **Upgrade required** in the admin area |
+| Old nodes | Reports without a sequence number are refused; such nodes show **Upgrade required** in **Clusters & nodes** |
 
 ## Enable access logs
 
-1. Open **Console → Sites**, select the site, and open the **Logs** tab.
+1. Open **Sites**, select the site, and open the **Logs** tab.
 2. Select **1%**, **10%**, or **100%** in **Access log sample rate**. The choice is saved at once and publishes a new configuration revision; the console shows **Saved**.
 3. Verify: after some requests, click **Search** in the query form; records appear.
 
@@ -82,7 +81,7 @@ Access logs need the node capability `access-logs-v1`, and JA4 also `ja4-v1`. A 
 | Request ID | Each entry shows the request ID the node settled (the same as the `X-Request-Id` response header and the one on [error pages](error-pages.en.md#request-ids)), in the CSV as the `requestId` column; empty for logs of older nodes |
 | Rows | The UI shows at most 100 rows ("Showing the first 100 rows. Narrow your search."); CSV holds at most 1,000 rows ("Exported the first 1,000 rows. Narrow the time range for other records.") |
 | CSV | Every cell is quoted with quotes escaped; values starting with `=`, `+`, `-`, or `@` get a leading `'` so spreadsheets do not treat them as formulas |
-| Permissions | Follow site ownership; tenants cannot query other organizations' sites |
+| Callers | A console session or an access key, read-only keys included; service accounts cannot call it |
 
 ## Log collection and storage
 
@@ -110,7 +109,7 @@ Access logs need the node capability `access-logs-v1`, and JA4 also `ja4-v1`. A 
    docker compose --profile analytics up -d
    ```
 
-3. Verify: in **Admin → System**, the **System** card shows **Analytics** `clickhouse`.
+3. Verify: on the **System** page, **Analytics** shows `clickhouse`.
 
 Defaults of `EDGEWEIR_CLICKHOUSE_URL`, `EDGEWEIR_CLICKHOUSE_DATABASE`, and `EDGEWEIR_CLICKHOUSE_USER` and settings for an external ClickHouse are in [Environment variables](../reference/environment.en.md).
 
@@ -123,7 +122,7 @@ Defaults of `EDGEWEIR_CLICKHOUSE_URL`, `EDGEWEIR_CLICKHOUSE_DATABASE`, and `EDGE
 
 ## Create an access key
 
-1. Open **Console → Settings** and find the **Access keys** card.
+1. Open **Settings** from the user menu (bottom of the sidebar) and find the **Access keys** card.
 2. Enter **Name** (1–64 characters; `default` when empty) and select **Scope**.
 3. Click **Create**.
 4. Copy the key shown. It is shown once (**Shown once**).
@@ -138,19 +137,20 @@ Defaults of `EDGEWEIR_CLICKHOUSE_URL`, `EDGEWEIR_CLICKHOUSE_DATABASE`, and `EDGE
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
 | Name | 1–64 characters | `default` | Display name in the list |
-| Scope | Read only / Read and write | Read and write | Read-only keys get 403 (`ACCESS_KEY_READ_ONLY`) on write endpoints |
+| Scope | Read only / Read and write | Read and write | Read-only keys call only GET endpoints and `rules.validate`; other endpoints return 403 (`ACCESS_KEY_READ_ONLY`) |
 
 Request format and endpoints are in [API and endpoints](../reference/api.en.md).
 
 ## Revoke an access key
 
-1. In the **Access keys** card of **Console → Settings**, click **Revoke key** for the key and confirm.
+1. In the **Access keys** card of **Settings**, click **Revoke key** for the key and confirm.
 2. Verify: the key shows **Revoked**; requests with it return 401.
 
 | Item | Behavior |
 | --- | --- |
-| Ownership | A key belongs to its creator; the list shows only the signed-in user's keys, with scope and "Last used: …" |
-| Issuing | Keys can be created only in a signed-in console session; no access key, including read-write and legacy keys, can create new keys (`ACCESS_KEY_SESSION_REQUIRED`) |
+| List | The **Access keys** card lists every key, with scope and "Last used: …" |
+| Identity | A key calls the API as the console account; the audit log shows the actor type AccessKey |
+| Issuing | Keys can be created only in a signed-in console session (the **Settings** page, or `accessKeys.create` over `/rpc`); no access key, including read-write and legacy keys, can create new keys: `POST /api/v1/access-keys` returns 403 (`ACCESS_KEY_SESSION_REQUIRED`) |
 | Legacy keys | Legacy keys without a scope keep read-write access; revoke and recreate them by purpose |
 
 ## Limits

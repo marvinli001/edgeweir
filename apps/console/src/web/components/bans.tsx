@@ -9,7 +9,6 @@ import {
 import { Add01Icon, BlockedIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -182,9 +181,9 @@ function SiteSelect({
   );
 }
 
-function BanDialog({ platform, onClose }: { platform: boolean; onClose: () => void }) {
+function BanDialog({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [scope, setScope] = React.useState<BanScope>(platform ? "platform" : "site");
+  const [scope, setScope] = React.useState<BanScope>("site");
   const [site, setSite] = React.useState<{ id: string; name: string } | null>(null);
   const [reason, setReason] = React.useState<string>(MANUAL_BAN_REASONS[0]);
   const [duration, setDuration] = React.useState(String(24 * 3600));
@@ -203,29 +202,24 @@ function BanDialog({ platform, onClose }: { platform: boolean; onClose: () => vo
           durationSeconds: Number(duration),
         };
         if (scope === "site" && !site) throw new Error(m.bans_site_required());
-        if (platform)
-          await client.admin.bans.create(
-            scope === "site" ? { ...fields, scope, siteId: site?.id } : { ...fields, scope },
-          );
-        else await client.bans.create({ ...fields, siteId: site?.id ?? "" });
+        await client.bans.create(
+          scope === "site" ? { ...fields, scope, siteId: site?.id } : { ...fields, scope },
+        );
         await queryClient.invalidateQueries({ queryKey: orpc.bans.key() });
-        await queryClient.invalidateQueries({ queryKey: orpc.admin.bans.key() });
         toast.success(m.bans_created());
         onClose();
       }}
     >
-      {platform ? (
-        <FormSelect
-          id="ban-scope"
-          label={m.bans_scope()}
-          value={scope}
-          options={(["platform", "site"] as const).map((value) => ({
-            value,
-            label: SCOPES[value](),
-          }))}
-          onChange={(value) => setScope(value as BanScope)}
-        />
-      ) : null}
+      <FormSelect
+        id="ban-scope"
+        label={m.bans_scope()}
+        value={scope}
+        options={(["site", "platform"] as const).map((value) => ({
+          value,
+          label: SCOPES[value](),
+        }))}
+        onChange={(value) => setScope(value as BanScope)}
+      />
       {scope === "site" ? <SiteSelect value={site} onChange={setSite} /> : null}
       <Field>
         <FieldLabel htmlFor="ban-cidr">{m.bans_address()}</FieldLabel>
@@ -269,12 +263,9 @@ function BanDialog({ platform, onClose }: { platform: boolean; onClose: () => vo
  * renderers keep their identity: a new renderer per render would remount the
  * cell and close an open dialog whenever the page re-renders.
  */
-function UnbanAction({ ban, platform }: { ban: Ban; platform: boolean }) {
+function UnbanAction({ ban }: { ban: Ban }) {
   const queryClient = useQueryClient();
-  const unban = useMutation({
-    mutationFn: (id: string) =>
-      platform ? client.admin.bans.delete({ id }) : client.bans.delete({ id }),
-  });
+  const unban = useMutation({ mutationFn: (id: string) => client.bans.delete({ id }) });
   return (
     <ConfirmDialog
       trigger={
@@ -289,7 +280,6 @@ function UnbanAction({ ban, platform }: { ban: Ban; platform: boolean }) {
         try {
           await unban.mutateAsync(ban.id);
           await queryClient.invalidateQueries({ queryKey: orpc.bans.key() });
-          await queryClient.invalidateQueries({ queryKey: orpc.admin.bans.key() });
           toast.success(m.bans_unbanned());
         } catch (err) {
           toast.error(errorMessage(err));
@@ -299,26 +289,15 @@ function UnbanAction({ ban, platform }: { ban: Ban; platform: boolean }) {
   );
 }
 
-/**
- * Dynamic IP bans. The console page shows the site bans of the organization
- * (owners and admins ban and unban); the admin page (`platform`) shows every
- * ban and also creates platform bans.
- */
-export function BansPage({ platform = false }: { platform?: boolean }) {
-  const { isAdmin } = useRouteContext({ from: "/_app" });
-  const me = useQuery(orpc.account.me.queryOptions());
-  const role = me.data?.activeOrganization?.role;
-  const canManage = platform || isAdmin || role === "owner" || role === "admin";
+/** Dynamic IP bans of one site or of every site (platform bans). */
+export function BansPage() {
   const [page, setPage] = React.useState(1);
   const [siteId, setSiteId] = React.useState<string | undefined>();
   const [source, setSource] = React.useState<BanSource | undefined>();
   const [scope, setScope] = React.useState<BanScope | undefined>();
   const [creating, setCreating] = React.useState(false);
-  const input = { siteId, source, page, pageSize: PAGE_SIZE };
   const bans = useQuery({
-    ...(platform
-      ? orpc.admin.bans.list.queryOptions({ input: { ...input, scope } })
-      : orpc.bans.list.queryOptions({ input })),
+    ...orpc.bans.list.queryOptions({ input: { scope, siteId, source, page, pageSize: PAGE_SIZE } }),
     placeholderData: keepPreviousData,
     refetchInterval: 30_000,
     meta: { background: true },
@@ -357,14 +336,7 @@ export function BansPage({ platform = false }: { platform?: boolean }) {
           row.original.scope === "platform" ? (
             <Badge variant="outline">{m.bans_scope_platform()}</Badge>
           ) : (
-            <div className="flex flex-col">
-              <span className="font-medium">{row.original.siteName ?? "—"}</span>
-              {platform ? (
-                <span className="text-xs text-muted-foreground">
-                  {row.original.organizationName ?? ""}
-                </span>
-              ) : null}
-            </div>
+            <span className="font-medium">{row.original.siteName ?? "—"}</span>
           ),
       },
       {
@@ -389,46 +361,40 @@ export function BansPage({ platform = false }: { platform?: boolean }) {
           </span>
         ),
       },
-      ...(canManage
-        ? [
-            {
-              id: "actions",
-              header: () => <span className="sr-only">{m.common_actions()}</span>,
-              cell: ({ row }: { row: { original: Ban } }) => (
-                <div className="flex justify-end">
-                  <UnbanAction ban={row.original} platform={platform} />
-                </div>
-              ),
-            } satisfies Columns<Ban>[number],
-          ]
-        : []),
+      {
+        id: "actions",
+        header: () => <span className="sr-only">{m.common_actions()}</span>,
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <UnbanAction ban={row.original} />
+          </div>
+        ),
+      },
     ],
-    [canManage, platform],
+    [],
   );
 
-  const createButton = canManage ? (
+  const createButton = (
     <Button size="sm" onClick={() => setCreating(true)} data-testid="ban-create">
       <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
       {m.bans_create()}
     </Button>
-  ) : null;
+  );
 
   return (
     <Page title={m.bans_title()} actions={createButton}>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        {platform ? (
-          <FilterSelect
-            value={scope}
-            onChange={filter((value) => setScope(value as BanScope | undefined))}
-            allLabel={m.bans_all_scopes()}
-            options={(["platform", "site"] as const).map((value) => ({
-              value,
-              label: SCOPES[value](),
-            }))}
-            label={m.bans_filter_scope()}
-            testId="ban-filter-scope"
-          />
-        ) : null}
+        <FilterSelect
+          value={scope}
+          onChange={filter((value) => setScope(value as BanScope | undefined))}
+          allLabel={m.bans_all_scopes()}
+          options={(["platform", "site"] as const).map((value) => ({
+            value,
+            label: SCOPES[value](),
+          }))}
+          label={m.bans_filter_scope()}
+          testId="ban-filter-scope"
+        />
         <FilterSelect
           value={siteId}
           onChange={filter(setSiteId)}
@@ -468,7 +434,7 @@ export function BansPage({ platform = false }: { platform?: boolean }) {
           <Pager page={page} pageSize={PAGE_SIZE} total={bans.data.total} onPageChange={setPage} />
         </>
       )}
-      {creating ? <BanDialog platform={platform} onClose={() => setCreating(false)} /> : null}
+      {creating ? <BanDialog onClose={() => setCreating(false)} /> : null}
     </Page>
   );
 }

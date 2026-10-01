@@ -4,17 +4,10 @@ import { isoDateTime, uuid } from "./schemas";
 
 /** What a service account may do; each procedure it can call needs one of these (or none). */
 export const serviceAccountScope = z.enum([
-  "organizations:read",
-  "organizations:write",
-  "members:read",
-  "invitations:write",
   "clusters:read",
   "system:read",
   "sites:read",
   "sites:write",
-  "sites:suspend",
-  "limits:read",
-  "limits:write",
   "usage:read",
 ]);
 export type ServiceAccountScope = z.infer<typeof serviceAccountScope>;
@@ -30,18 +23,11 @@ export const serviceAccountProcedures = {
   "settings.get": "system:read",
   "clusters.list": "clusters:read",
   "clusters.get": "clusters:read",
-  "organizations.list": "organizations:read",
-  "organizations.create": "organizations:write",
-  "organizations.update": "organizations:write",
-  "organizations.members": "members:read",
-  "organizations.invite": "invitations:write",
   "sites.list": "sites:read",
   "sites.get": "sites:read",
   "sites.setEnabled": "sites:write",
-  "admin.sites.suspend": "sites:suspend",
-  "admin.sites.resume": "sites:suspend",
-  "admin.organizations.getLimits": "limits:read",
-  "admin.organizations.setLimits": "limits:write",
+  "dns.catalog": null,
+  "dns.siteTarget": "sites:read",
   "usage.list": "usage:read",
   "usage.changes": "usage:read",
 } as const satisfies Record<string, ServiceAccountScope | null>;

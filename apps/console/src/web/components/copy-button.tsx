@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { m } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 export function CopyButton({ value, iconOnly }: { value: string; iconOnly?: boolean }) {
   const [copied, setCopied] = React.useState(false);
@@ -36,12 +37,24 @@ export function CopyButton({ value, iconOnly }: { value: string; iconOnly?: bool
 }
 
 /** A monospace block with a copy button, for commands and fingerprints. */
-export function CodeBlock({ value, testId }: { value: string; testId?: string }) {
+/** `wrap={false}` keeps columns (zone files) and scrolls sideways instead. */
+export function CodeBlock({
+  value,
+  testId,
+  wrap = true,
+}: {
+  value: string;
+  testId?: string;
+  wrap?: boolean;
+}) {
   return (
     <div className="relative">
       <pre
         data-testid={testId}
-        className="max-h-48 overflow-auto rounded-2xl bg-muted p-3 pr-12 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap shadow-inner"
+        className={cn(
+          "max-h-48 overflow-auto rounded-2xl bg-muted p-3 pr-12 font-mono text-xs leading-relaxed shadow-inner",
+          wrap ? "break-all whitespace-pre-wrap" : "whitespace-pre",
+        )}
       >
         {value}
       </pre>

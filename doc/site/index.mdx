@@ -8,7 +8,7 @@ Edgeweir 是一套自托管的 CDN、WAF 与智能边缘调度平台。整个系
 - **控制台（Control Plane）**：负责 Web 交互、OpenAPI、证书申请、规则编译及向边缘节点分发配置。单一镜像交付，只依赖 PostgreSQL 18。
 - **边缘节点（Data Plane）**：部署在你的多台 Linux 边缘服务器上，由 Go Agent 负责 mTLS 双向保活与配置同步，OpenResty 负责高性能流量代理与回源。
 
-无论你是想在单台 VPS 上快速搭建自用加速网关，还是规划跨地域的多集群多租户边缘网络，都可以从下方的部署指南开始。
+无论是在单台 VPS 上搭建自用加速网关，还是规划跨地域的多集群边缘网络，都可以从下方的部署指南开始。
 
 ## 部署
 
@@ -25,8 +25,8 @@ Edgeweir 是一套自托管的 CDN、WAF 与智能边缘调度平台。整个系
 
 <Cards>
   <Card title="快速上手" href="/zh/guide/first-site" description="初始化、接入节点、第一个网站" />
-  <Card title="组织与成员" href="/zh/guide/organizations" description="角色、邀请、两步验证、Passkey" />
-  <Card title="平台管理" href="/zh/guide/admin" description="集群、区域、系统设置、审计日志" />
+  <Card title="账户与登录" href="/zh/guide/account" description="控制台导航、两步验证、Passkey、会话" />
+  <Card title="集群与系统" href="/zh/guide/system" description="集群、区域、系统设置、审计日志" />
   <Card title="源站与缓存" href="/zh/guide/origins-and-cache" description="源站池、缓存规则、刷新预热" />
 </Cards>
 

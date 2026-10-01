@@ -19,7 +19,6 @@ import {
   siteCreateInput,
   siteListInput,
   siteUpdateInput,
-  userCreateInput,
 } from "../src/index";
 
 describe("domainName", () => {
@@ -171,18 +170,9 @@ describe("list inputs", () => {
 });
 
 describe("identity inputs", () => {
-  it("normalise region codes and user e-mails", () => {
+  it("normalise region codes", () => {
     expect(regionCode.parse(" CN-East ")).toBe("cn-east");
     expect(regionCode.safeParse("east asia").success).toBe(false);
-    const user = userCreateInput.parse({
-      name: "Member",
-      email: " Member@Example.COM ",
-      password: "correct horse battery",
-    });
-    expect(user).toMatchObject({ email: "member@example.com", isAdmin: false, role: "member" });
-    expect(
-      userCreateInput.safeParse({ name: "x", email: "x@example.com", password: "short" }).success,
-    ).toBe(false);
   });
 });
 
@@ -255,6 +245,13 @@ describe("M2 origin and cache inputs", () => {
     expect(cacheRuleInput.safeParse({ minSizeBytes: 100, maxSizeBytes: 10 }).success).toBe(false);
     expect(cacheRuleInput.safeParse({ statusCodes: [99] }).success).toBe(false);
     expect(cacheRuleInput.safeParse({ paths: ["no-slash"] }).success).toBe(false);
+  });
+
+  it("respects origin Cache-Control unless a rule overrides it (audit 2026-10-01 P0-6)", () => {
+    expect(cacheRuleInput.parse({}).originCacheControl).toBe("respect");
+    expect(cacheRuleInput.parse({ originCacheControl: "override" }).originCacheControl).toBe(
+      "override",
+    );
   });
 
   it("does not cache requests with Authorization unless a rule allows it", () => {

@@ -6,9 +6,9 @@ import { login, logout, pick } from "./helpers";
 /**
  * Written by scripts/e2e-g3.mjs: the compression and CRS sites of the
  * default cluster (both turned off, CRS matches in the logs and the top
- * rules), the P0 tenant's site, and the cluster g3-legacy whose only node is
- * an old one (no brotli-v1, zstd-v1 or modsecurity-v1) with its site. Every
- * test leaves the sites and the platform setting as it found them.
+ * rules) and the cluster g3-legacy whose only node is an old one (no
+ * brotli-v1, zstd-v1 or modsecurity-v1) with its site. Every test leaves the
+ * sites as it found them.
  */
 const state = JSON.parse(readFileSync(resolve("../../.e2e/g3-state.json"), "utf8")) as {
   compressSiteId: string;
@@ -18,12 +18,9 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/g3-state.json"), "utf8
   /** A path whose request block mode refused (sampled with its rules). */
   crsLoggedPath: string;
   legacySiteId: string;
-  tenantSiteId: string;
 };
 const ADMIN = ["admin@e2e.test", "e2e-admin-password-123"] as const;
-const TENANT = ["owner@p0.test", "p0-owner-password-123"] as const;
 const BY_NODES = "所在集群有节点不支持，暂时无法开启";
-const BY_PLATFORM = "平台未允许租户开启";
 
 test.describe.configure({ mode: "serial" });
 
@@ -209,7 +206,7 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
   await expect(mode).toHaveText("关闭");
   await expect(paranoia).toHaveText("1 级");
   await expect(exclusions).toHaveCount(0);
-  await page.goto("/admin/audit?action=site.waf_update");
+  await page.goto("/audit?action=site.waf_update");
   await expect(page.getByTestId("audit-action").first()).toHaveText("site.waf_update");
   await logout(page);
   expect(pageErrors).toEqual([]);
@@ -236,47 +233,6 @@ test("G3: the logs tab shows the CRS rules of sampled requests and which were bl
   for (const rule of state.crsRuleIds.filter((id) => id !== 949110))
     await expect(rows.first().getByTestId("log-waf")).toContainText(String(rule));
   await check(page, "logs");
-  await logout(page);
-  expect(pageErrors).toEqual([]);
-});
-
-test("G3: administrators keep tenants from turning CRS on; the tenant sees why", async ({
-  page,
-}) => {
-  const pageErrors = errors(page);
-  await login(page, ...ADMIN);
-  await page.goto("/admin/settings");
-  const tenantCrs = page.getByTestId("waf-tenant-crs");
-  const save = page.getByTestId("waf-settings-save");
-  await expect(tenantCrs).toHaveAttribute("aria-checked", "true");
-  await expect(save).toBeDisabled();
-  await tenantCrs.click();
-  await save.click();
-  await expect(save).toBeDisabled();
-  await page.reload();
-  await expect(tenantCrs).toHaveAttribute("aria-checked", "false");
-  await check(page, "admin-waf");
-  await logout(page);
-
-  await login(page, ...TENANT);
-  await openTab(page, state.tenantSiteId, "security");
-  const unavailable = page.getByTestId("waf-unavailable");
-  await expect(unavailable).toHaveAttribute("data-reason", "platform");
-  await expect(unavailable).toHaveText(BY_PLATFORM);
-  await expect(page.getByTestId("waf-mode")).toHaveText("关闭");
-  await expect(page.getByTestId("waf-mode")).toBeDisabled();
-  await check(page, "waf-tenant-platform");
-  await logout(page);
-
-  await login(page, ...ADMIN);
-  await page.goto("/admin/settings");
-  await tenantCrs.click();
-  await save.click();
-  await expect(save).toBeDisabled();
-  await page.reload();
-  await expect(tenantCrs).toHaveAttribute("aria-checked", "true");
-  await page.goto("/admin/audit?action=system.waf_update");
-  await expect(page.getByTestId("audit-action").first()).toHaveText("system.waf_update");
   await logout(page);
   expect(pageErrors).toEqual([]);
 });

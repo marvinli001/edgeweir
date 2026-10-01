@@ -41,7 +41,7 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
-import { signInResponse } from "./e2e-auth.mjs";
+import { rpc, signInResponse } from "./e2e-auth.mjs";
 
 const { chromium } = createRequire(resolve("apps/console/package.json"))("@playwright/test");
 const execute = promisify(execFile);
@@ -111,17 +111,11 @@ async function call(key, method, path, body) {
 }
 
 async function createKey(cookie) {
-  const created = await fetch(`${base}/api/auth/api-key/create`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: base, cookie },
-    body: JSON.stringify({ name: "g2-e2e" }),
-  });
-  assert.equal(created.status, 200);
-  return (await created.json()).key;
+  return (await rpc(base, cookie, "accessKeys/create", { name: "g2-e2e" })).key;
 }
 
 /**
- * A signed-in user with an AccessKey. An AccessKey allows 600 requests until
+ * The signed-in operator with an AccessKey. An AccessKey allows 600 requests until
  * it has been idle for 60 seconds; the polling below runs longer than that,
  * so every 500 calls move to a fresh key.
  */
@@ -435,14 +429,14 @@ async function synced(label = "nodes on the latest revision") {
 const protect = (siteId, patch) => admin.ok("PATCH", `/sites/${siteId}/protection`, patch);
 const setRules = (siteId, rules) => admin.ok("PUT", `/sites/${siteId}/rules`, { rules });
 
-/** Lifts every active ban (the admin view covers all scopes and organizations). */
+/** Lifts every active ban. */
 async function clearBans() {
   let removed = 0;
   for (let round = 0; round < 20; round++) {
-    const page = await admin.ok("GET", "/admin/bans?pageSize=100");
+    const page = await admin.ok("GET", "/bans?pageSize=100");
     if (page.items.length === 0) return removed;
     for (const ban of page.items) {
-      const result = await admin.raw("DELETE", `/admin/bans/${ban.id}`);
+      const result = await admin.raw("DELETE", `/bans/${ban.id}`);
       assert.ok(result.status === 200 || result.status === 404, result.text);
       removed++;
     }
@@ -465,9 +459,6 @@ async function createSite(name, domain, origin, cacheRules = []) {
     origins: [{ address: origin }],
     cacheRules,
   });
-  for (const proof of await admin.ok("GET", `/sites/${site.id}/ownership`))
-    if (!proof.verified)
-      await admin.ok("POST", `/sites/${site.id}/ownership/approve`, { domain: proof.domain });
   return site;
 }
 
@@ -945,7 +936,7 @@ try {
   const autoBan = await waitFor(
     "the console lists the automatic ban",
     async () =>
-      (await admin.ok("GET", `/admin/bans?siteId=${siteBench.id}&source=auto`)).items.find(
+      (await admin.ok("GET", `/bans?siteId=${siteBench.id}&source=auto`)).items.find(
         (x) => x.cidr === `${clientA}/32`,
       ),
     60,
@@ -998,7 +989,7 @@ try {
     `a flood from client-a (${flood.sent} requests in ${flood.ms} ms, ${JSON.stringify(flood.counts)}) crossed ipQps ${CC.ipQps}: 403 ip-banned for client-a, 200 for client-b; the console lists an automatic ban ${autoBan.cidr} (source auto, reason cc_ip_rate, node ${autoBan.node.name}, ip_qps ${autoBan.trigger.observed.toFixed(1)} / ${autoBan.trigger.threshold} over ${autoBan.trigger.windowSeconds} s, ${Math.round(banSeconds)} s), shared with the peer (client-a 403 there too), an ip_banned event, and client-a / /g2-attacked among the top IPs and paths`,
   );
 
-  await admin.ok("DELETE", `/admin/bans/${autoBan.id}`);
+  await admin.ok("DELETE", `/bans/${autoBan.id}`);
   for (const target of [edgeIp, peerIp])
     await waitFor(
       `client-a served again by ${target}`,
@@ -1010,7 +1001,7 @@ try {
   assert.equal(off.effectiveCc, null);
   await synced("CC off");
   await waitFor("the node dropped the CC policy", async () => !(await benchCc()), 30);
-  assert.equal((await admin.ok("GET", "/admin/bans?source=auto")).total, 0);
+  assert.equal((await admin.ok("GET", "/bans?source=auto")).total, 0);
   pass(
     "the automatic ban lifted in the console: client-a is served by both nodes again; CC turned off",
   );
@@ -1195,7 +1186,7 @@ try {
   }
   assert.equal(cached[1], "HIT");
   assert.equal((await admin.ok("GET", "/settings/protection")).underAttack, false);
-  assert.equal((await admin.ok("GET", "/admin/bans")).total, 0);
+  assert.equal((await admin.ok("GET", "/bans")).total, 0);
   pass(
     `cleaned up: g2-ua and g2-files deleted, ${M3_HOST} rules, sampling and JA4 logging restored, platform Under Attack off, no bans; ${HOST_BENCH} stays for bench.sh (Under Attack js, cache rule, CC off): 403 js without a pass, 200 X-Cache ${cached.join(" then ")} with one`,
   );

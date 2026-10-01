@@ -22,7 +22,7 @@ Edge nodes use separate `vX.Y.Z` versions; see [node upgrades](../guide/node-upg
 
 | Target | Command or location |
 | --- | --- |
-| Running version | `version` from `curl -s http://127.0.0.1:3000/healthz`; "Version" under "System" in **Admin → System** |
+| Running version | `version` from `curl -s http://127.0.0.1:3000/healthz`; "Version" on the **System** page |
 | Tag behind `latest` | `docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' ghcr.io/marvinli001/edgeweir:latest` (after a pull) |
 | Digest of a tag | `Digest` in the output of `docker buildx imagetools inspect ghcr.io/marvinli001/edgeweir:<tag>` |
 
@@ -97,6 +97,40 @@ Other deployment methods:
 | `deploy.sh` | `./deploy.sh update` or `./deploy.sh update <tag>`, which backs up first; see [deploy.sh reference](deploy-script.en.md). |
 | `docker run` | `docker pull ghcr.io/marvinli001/edgeweir:<new tag>`, `docker rm -f edgeweir-console`, then recreate it with the same parameters and the new tag; data stays in the `edgeweir-postgres` volume. |
 | Source build | Check out the target commit and run `docker compose up -d --build`. |
+
+## Upgrading a multi-organization console
+
+The console has one account and no organizations, members, roles, or separate admin area. When a version with several organizations or accounts is upgraded, migrations `0033`–`0036` run automatically at startup.
+
+Before the upgrade:
+
+1. Back up the database: these migrations delete account and organization data, and only the pre-upgrade backup can roll them back; see [Rollback](#rollback).
+2. Make sure the earliest platform administrator who is not disabled can sign in: after the upgrade it is the only account.
+3. Review domains pending verification: after the upgrade they route at once; delete those that must not route.
+
+Result of the migrations:
+
+| Item | After the upgrade |
+| --- | --- |
+| Accounts | The earliest platform administrator who is not disabled becomes the only account and keeps its password, two-factor authentication, and passkeys; every other account is deleted with its sessions, passkeys, and AccessKeys |
+| Alert subscriptions | The other accounts' subscriptions merge into the remaining account: one per site and channel, with the alert kinds combined |
+| Data | Sites, certificates, DNS credentials, bans, IP lists, rules, alerts, analytics, and audit log entries of every organization stay |
+| IP lists | Organization lists become **Referenced by rules** lists (before, only the platform allow and block lists applied at the edge); a list whose name is taken gets the suffix `_<6 hex digits>`, and the rules of its organization's sites follow the new name |
+| Suspended sites | Become disabled |
+| Domains | Domains pending verification route at once; a name on several sites stays on one: the verified one, else the one added first |
+| Removed settings | Organization technical limits, organization two-factor requirements and default clusters, the switch that let tenants turn on OWASP CRS, the ownership check DNS setting, and service account scopes for organizations |
+| Environment | `EDGEWEIR_DNS_RESOLVERS` is no longer read and can be removed from `.env` |
+| Configuration | The worker republishes every cluster once (reason "Configuration recompiled after an upgrade"), so previously unverified domains and the merged IP lists reach the nodes; a cluster whose publication fails keeps its revision, the console logs `recompile after upgrade failed`, and the cluster's next configuration change updates it |
+
+The former `/admin/*` pages are part of the one console: a bookmark of `/admin/<page>` redirects to that page (`/admin/settings` to `/system`), and any other `/admin` address opens the overview.
+
+API changes; integrations that use these must change:
+
+| Change | Interface |
+| --- | --- |
+| Removed | `organizations.*`, `members.*`, `invitations.*`, `users.*`, `admin.*` (including suspend and resume under `/admin/sites`, `/admin/organizations/{id}/limits`, and `/admin/bans`), `platformIpLists.*` (`/platform-ip-lists`), `domainOwnership.*` and `/sites/{id}/ownership*`, `settings.waf`, `settings.dnsResolvers` |
+| Fields | Sites, bans, certificates, usage records, and audit entries no longer carry an organization field |
+| Paths | Node upgrades are at `/api/v1/node-upgrades` and `/api/v1/node-releases/{version}`, without the `/admin` prefix; bans use `/api/v1/bans` only, IP lists `/api/v1/ip-lists` only |
 
 ## Rollback
 

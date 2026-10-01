@@ -180,7 +180,7 @@ test("G5: the rule editor shows dynamic redirects, rewrites with query edits and
   expect(pageErrors).toEqual([]);
 });
 
-test("G5: compression and origin rules are added, saved and removed; platform rules pick no origin group", async ({
+test("G5: compression and origin rules are added, saved and removed; global rules pick no origin group", async ({
   page,
 }) => {
   const pageErrors = errors(page);
@@ -274,9 +274,9 @@ test("G5: compression and origin rules are added, saved and removed; platform ru
     await expect(phaseRules(page, "origin")).toHaveCount(1);
   });
 
-  await test.step("platform rules override Host, SNI and port but no group", async () => {
-    await page.goto("/admin/rules");
-    await expect(page.getByTestId("page-title")).toHaveText("平台规则");
+  await test.step("global rules override Host, SNI and port but no group", async () => {
+    await page.goto("/rules");
+    await expect(page.getByTestId("page-title")).toHaveText("全局规则");
     const rules = phaseRules(page, "origin");
     const before = await rules.count();
     await page.getByTestId("rule-add-origin").click();

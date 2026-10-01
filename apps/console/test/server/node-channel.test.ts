@@ -1,9 +1,11 @@
 import { updateHttps, uploadCertificate } from "../../src/server/services/certificates";
 import "reflect-metadata";
 import { webcrypto } from "node:crypto";
+import { once } from "node:events";
+import http2 from "node:http2";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-node";
+import { compressionGzip, createConnectTransport } from "@connectrpc/connect-node";
 import {
   type CacheTaskCreateInput,
   cacheTaskCreateInput,
@@ -33,7 +35,7 @@ import { siteOriginHealth } from "../../src/server/services/origin-health";
 import { latestRevision } from "../../src/server/services/revisions";
 import { saveRules } from "../../src/server/services/rules";
 import { createSite } from "../../src/server/services/sites";
-import { createTestContext, seedOrganization } from "./helpers";
+import { createTestContext, seedOperator } from "./helpers";
 
 const actor = { type: "user" as const, id: "user_admin" };
 
@@ -58,20 +60,22 @@ describe("node channel", async () => {
   let channel: NodeChannel;
   let baseUrl: string;
   let clusterId: string;
-  let organizationId: string;
 
-  const anonymous = () =>
+  /** Sends gzip-compressed requests, which the server inflates. */
+  const gzip = { sendCompression: compressionGzip, compressMinBytes: 1 };
+  const anonymous = (extra: Partial<typeof gzip> = {}) =>
     createClient(
       NodeService,
       createConnectTransport({
         baseUrl,
         httpVersion: "2",
         nodeOptions: { ca: ctx.nodeCa.certificatePem, servername: "localhost" },
+        ...extra,
       }),
     );
 
   /** Enrolls a node of the default cluster and returns its mTLS client. */
-  const enroll = async (nodeName: string) => {
+  const enroll = async (nodeName: string, extra: Partial<typeof gzip> = {}) => {
     const token = await createEnrollmentToken(
       ctx.db,
       { clusterId, nodeName, ttlMinutes: 10 },
@@ -95,19 +99,19 @@ describe("node channel", async () => {
           key: keyPem,
           servername: "localhost",
         },
+        ...extra,
       }),
     );
     return { nodeId: enrolled.nodeId, mtls };
   };
   const demoSite = (name: string, origins: { address: string }[] = [{ address: "whoami" }]) =>
     createSite(ctx.db, siteCreateInput.parse({ name, domains: [`${name}.test`], origins }), {
-      organizationId,
       actor,
       masterKey: ctx.masterKey,
     });
 
   beforeAll(async () => {
-    ({ organizationId } = await seedOrganization(ctx.db));
+    await seedOperator(ctx.db);
     const cluster = await ctx.db.transaction((tx) =>
       createClusterTx(tx, { name: "default", description: "" }, actor),
     );
@@ -219,7 +223,7 @@ describe("node channel", async () => {
           },
         ],
       }),
-      { organizationId, actor, masterKey: ctx.masterKey },
+      { actor, masterKey: ctx.masterKey },
     );
     expect(revision.revision).toBe(2);
     ctx.events.emitLocal({ clusterId, revision: 2, contentHash: revision.contentHash });
@@ -386,7 +390,7 @@ describe("node channel", async () => {
         domains: ["own.bucket.test"],
         origins: [s3Origin("AKIDOWN", "own-secret"), { address: "backup", backup: true }],
       }),
-      { organizationId, actor, masterKey: ctx.masterKey },
+      { actor, masterKey: ctx.masterKey },
     );
     const otherCluster = await ctx.db.transaction((tx) =>
       createClusterTx(tx, { name: "other", description: "" }, actor),
@@ -399,7 +403,7 @@ describe("node channel", async () => {
         domains: ["foreign.bucket.test"],
         origins: [s3Origin("AKIDFOREIGN", "foreign-secret")],
       }),
-      { organizationId, actor, masterKey: ctx.masterKey },
+      { actor, masterKey: ctx.masterKey },
     );
     const credentialOf = async (siteId: string) =>
       (
@@ -429,7 +433,7 @@ describe("node channel", async () => {
     const task = await createCacheTask(
       ctx.db,
       { type: "url", urls: ["http://own.bucket.test/a.png?x=1"], siteIds: [] },
-      { scope: { all: true }, actor },
+      { actor },
     );
     ctx.events.emitTasksLocal({ clusterIds: [clusterId] });
     expect((await iterator.next()).value?.event).toBe(WatchEvent.TASKS);
@@ -624,7 +628,7 @@ describe("node channel", async () => {
       lastErrorCode: "upstream_status",
       lastErrorParams: { status: "503" },
     });
-    const health = await siteOriginHealth(ctx.db, site.id, { all: true });
+    const health = await siteOriginHealth(ctx.db, site.id);
     const nodeOf = (originId: string | undefined) =>
       health.find((h) => h.originId === originId)?.nodes.find((n) => n.nodeId === nodeId);
     expect(health.find((h) => h.originId === primary)).toMatchObject({
@@ -648,17 +652,17 @@ describe("node channel", async () => {
     const purge = await createCacheTask(
       ctx.db,
       { type: "url", urls: ["http://codes.test/a"], siteIds: [] },
-      { scope: { all: true }, actor },
+      { actor },
     );
     const prefetch = await createCacheTask(
       ctx.db,
       { type: "prefetch", urls: ["http://codes.test/b", "http://codes.test/c"], siteIds: [] },
-      { scope: { all: true }, actor },
+      { actor },
     );
     const old = await createCacheTask(
       ctx.db,
       { type: "prefix", urls: ["http://codes.test/c/"], siteIds: [] },
-      { scope: { all: true }, actor },
+      { actor },
     );
     expect((await mtls.pullTasks({})).tasks.map((t) => t.id).sort()).toEqual(
       [purge.id, prefetch.id, old.id].sort(),
@@ -696,7 +700,7 @@ describe("node channel", async () => {
       finishedAt,
     });
     const nodeResult = async (taskId: string) =>
-      (await getCacheTask(ctx.db, taskId, { all: true })).nodes.find((n) => n.nodeId === nodeId);
+      (await getCacheTask(ctx.db, taskId)).nodes.find((n) => n.nodeId === nodeId);
     expect(await nodeResult(purge.id)).toMatchObject({
       state: "failed",
       errorCode: "purge_failed",
@@ -720,7 +724,7 @@ describe("node channel", async () => {
     const task = await createCacheTask(
       ctx.db,
       { type: "url", urls: ["http://away.test/a.js", "http://away.test/b.js"], siteIds: [] },
-      { scope: { all: true }, actor },
+      { actor },
     );
     await ctx.db
       .update(schema.cacheTask)
@@ -750,12 +754,63 @@ describe("node channel", async () => {
     expect(
       (await mtls.reportStatus({ appliedRevision: 1n, state: ApplyState.APPLIED })).tasksPending,
     ).toBe(false);
-    const original = await getCacheTask(ctx.db, task.id, { all: true });
+    const original = await getCacheTask(ctx.db, task.id);
     const mine = original.nodes.find((n) => n.nodeId === nodeId);
     expect(mine).toMatchObject({ state: "failed", errorCode: "task_expired" });
     expect(mine?.recoveredAt).not.toBeNull();
-    const made = await getCacheTask(ctx.db, recovery?.id ?? "", { all: true });
+    const made = await getCacheTask(ctx.db, recovery?.id ?? "");
     expect(made).toMatchObject({ source: "recovery", state: "succeeded", targets: ["away"] });
+  });
+
+  it("repeats a watch refresh that failed outside the stream (audit 2026-10-01 P0-1)", async () => {
+    const { mtls } = await enroll("refresh-test");
+    const abort = new AbortController();
+    const iterator = mtls
+      .watchConfig({ knownRevision: 0n }, { signal: abort.signal })
+      [Symbol.asyncIterator]();
+    expect((await iterator.next()).value?.event).toBe(WatchEvent.REVISION);
+    const { revision } = await demoSite("refresh");
+    // The read for the event fails, as while PostgreSQL restarts; it must not
+    // reject unhandled, and the stream still delivers the revision.
+    const select = ctx.db.select;
+    ctx.db.select = (() => {
+      ctx.db.select = select;
+      throw new Error("database unreachable");
+    }) as typeof select;
+    ctx.events.emitLocal({ clusterId, revision: revision.revision, contentHash: "" });
+    expect(ctx.db.select).toBe(select);
+    const notified = await iterator.next();
+    expect(notified.value?.latestRevision).toBe(BigInt(revision.revision));
+    expect(notified.value?.contentHash).toBe(revision.contentHash);
+    abort.abort();
+  });
+
+  it("bounds request bodies, unread without a client certificate (audit 2026-10-01 P0-2)", async () => {
+    // 20 MiB that gzip turns into a few KiB.
+    const bomb = "a".repeat(20 << 20);
+    await expect(
+      anonymous(gzip).reportLogs({ batchSequence: 1n, logs: [{ path: bomb }] }),
+    ).rejects.toMatchObject({ code: Code.Unauthenticated });
+    await expect(
+      anonymous(gzip).enroll({ token: "a".repeat(1 << 20), csrPem: "csr" }),
+    ).rejects.toMatchObject({ code: Code.ResourceExhausted });
+    const { mtls } = await enroll("limits-test", gzip);
+    await expect(
+      mtls.reportLogs({ batchSequence: 1n, logs: [{ path: bomb }] }),
+    ).rejects.toMatchObject({ code: Code.ResourceExhausted });
+    expect(
+      await mtls.reportLogs({ batchSequence: 1n, logs: [{ path: `/${"a".repeat(2047)}` }] }),
+    ).toBeDefined();
+  });
+
+  it("closes connections without traffic", async () => {
+    const idle = await startNodeChannel(ctx, { idleTimeoutMs: 200 });
+    const { port } = idle.server.address() as { port: number };
+    const session = http2.connect(`https://localhost:${port}`, { ca: ctx.nodeCa.certificatePem });
+    session.on("error", () => {});
+    await once(session, "connect");
+    await once(session, "close");
+    await idle.close();
   });
 
   it("rejects unknown tokens", async () => {
@@ -768,7 +823,7 @@ describe("node channel", async () => {
     const { mtls, nodeId } = await enroll("capability-test");
     const { site } = await demoSite("capability");
     const material = await ctx.nodeCa.issueServerCertificate(["capability.test"]);
-    const certificateContext = { scope: { all: true as const }, actor, organizationId };
+    const certificateContext = { actor };
     const certificate = await uploadCertificate(
       ctx,
       {
@@ -815,7 +870,7 @@ describe("node channel", async () => {
         origins: [{ address: "whoami" }],
         cacheSettings: { cacheKey: { deviceType: true } },
       }),
-      { organizationId, actor, masterKey: ctx.masterKey },
+      { actor, masterKey: ctx.masterKey },
     );
     const { site: plain } = await demoSite("plain");
     // Every active node of the cluster runs the new task types.
@@ -832,10 +887,7 @@ describe("node channel", async () => {
         })
         .where(eq(schema.node.id, node.id));
     const create = (input: CacheTaskCreateInput) =>
-      createCacheTask(ctx.db, cacheTaskCreateInput.parse(input), {
-        scope: { all: true },
-        actor,
-      });
+      createCacheTask(ctx.db, cacheTaskCreateInput.parse(input), { actor });
     const host = await create({ type: "host", hosts: ["devices.test"] });
     const tag = await create({
       type: "tag",
@@ -1007,7 +1059,7 @@ describe("node channel", async () => {
       ["active", false, 4],
       ["passive", false, 3],
     ]);
-    const [health] = await siteOriginHealth(ctx.db, site.id, { all: true });
+    const [health] = await siteOriginHealth(ctx.db, site.id);
     expect(health?.downNodes).toBe(1);
     expect(health?.nodes.map((n) => [n.nodeId === nodeId, n.source, n.lastErrorCode])).toEqual([
       [true, "active", "upstream_status"],
@@ -1054,13 +1106,13 @@ describe("node channel", async () => {
       path: "",
       limit: 10,
     };
-    const all = await queryLogs(ctx, { all: true }, query);
+    const all = await queryLogs(ctx, query);
     expect(all.entries.map((e) => [e.path, e.requestId]).sort()).toEqual([
       ["/a", id],
       ["/b", ""],
       ["/c", ""],
     ]);
-    const one = await queryLogs(ctx, { all: true }, { ...query, requestId: id });
+    const one = await queryLogs(ctx, { ...query, requestId: id });
     expect(one.entries.map((e) => e.path)).toEqual(["/a"]);
     const csv = logsCsv(one.entries).split("\r\n");
     expect(csv[0]).toContain(",nodeId,requestId,ja4,");
@@ -1081,7 +1133,7 @@ describe("node channel", async () => {
       mtls.reportStatus({ info: { agentVersion: "dev", supportedFeatures: [...agent, ...geo] } });
     const upgradeRequired = async () =>
       (await listNodes(ctx.db, clusterId)).find((n) => n.id === nodeId)?.upgradeRequired;
-    const platform = { scope: { all: true as const }, actor, organizationId: null };
+    const platform = { actor };
     await saveRules(
       ctx,
       null,

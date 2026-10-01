@@ -11,14 +11,7 @@ import {
 } from "../../src/server/services/certificates";
 import { latestRevision, nodeTarget, publishRevision } from "../../src/server/services/revisions";
 import { evaluateRollout } from "../../src/server/services/rollout";
-import {
-  type ApiClient,
-  approveSiteDomains,
-  createTestContext,
-  rpcClient,
-  setupPlatform,
-  signIn,
-} from "./helpers";
+import { type ApiClient, createTestContext, rpcClient, setupPlatform, signIn } from "./helpers";
 
 type TestNode = { id: string; clusterId: string; nodeGroupId: string | null };
 
@@ -100,7 +93,6 @@ describe("configuration canary and current state", async () => {
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
-    await approveSiteDomains(admin, siteId);
     const [a, b] = await ctx.db
       .insert(schema.node)
       .values(
@@ -219,7 +211,6 @@ describe("configuration canary and current state", async () => {
       const id = (
         await admin.sites.create({ name, domains, origins: [{ address: "origin.test" }] })
       ).site.id;
-      await approveSiteDomains(admin, id);
       return id;
     };
     const blog = await create("blog", ["blog.current.test", "www.blog.current.test"]);

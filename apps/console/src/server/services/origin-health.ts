@@ -4,7 +4,7 @@ import { and, eq, gt, inArray } from "drizzle-orm";
 import { cleanErrorCode, cleanErrorParams, originError } from "../lib/node-errors";
 import { ONLINE_WINDOW_SECONDS } from "./nodes";
 import type { Executor } from "./revisions";
-import { findSite, type SiteScope } from "./sites";
+import { findSite } from "./sites";
 
 export interface ReportedOriginHealth {
   siteId: string;
@@ -79,12 +79,8 @@ export async function replaceOriginHealth(
  * origin is down on a node while that node's latest report marks it down in
  * either check (passive or active): downNodes counts each such node once.
  */
-export async function siteOriginHealth(
-  db: Database,
-  siteId: string,
-  scope: SiteScope,
-): Promise<OriginHealth[]> {
-  const site = await findSite(db, siteId, scope);
+export async function siteOriginHealth(db: Database, siteId: string): Promise<OriginHealth[]> {
+  const site = await findSite(db, siteId);
   const since = new Date(Date.now() - ONLINE_WINDOW_SECONDS * 1000);
   const onlineNodes = await db
     .select({ id: schema.node.id, name: schema.node.name })

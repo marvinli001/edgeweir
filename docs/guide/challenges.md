@@ -9,7 +9,7 @@
 | 挑战 | 节点代替源站返回的验证页面；通过后回到原 URL。 |
 | 级别 | 挑战的强度，从低到高：Cookie 跳转（1）、JS 计算（2）、工作量证明（3）、图片验证码（4）。级别 L 的凭证满足不高于 L 的要求。 |
 | 通行凭证 | 通过挑战后下发的签名 cookie，绑定网站、级别、客户端网段与 User-Agent。 |
-| Under Attack | 没有有效凭证的 GET/HEAD 请求一律先挑战。网站或平台都可以开启。 |
+| Under Attack | 没有有效凭证的 GET/HEAD 请求一律先挑战。可以按网站开启，也可以为所有网站开启（全局 Under Attack）。 |
 | CC 防护 | 按网站配置的自动升级策略：条件持续一段时间后升一级，解除后冷却一段时间降一级。 |
 | JA4 | TLS 客户端指纹，可用于规则与限速，也可记入访问日志。 |
 
@@ -55,7 +55,7 @@
 
 ## 开启 Under Attack
 
-1. 打开 **控制台 → 网站 →（网站）→ 安全**。
+1. 打开 **网站 →（网站）→ 安全**。
 2. 在「挑战类型」中选择类型（默认 JS 计算）。
 3. 打开「Under Attack」开关并确认。节点在配置发布后生效。
 4. 验证：
@@ -68,17 +68,17 @@
 
 关闭：再点一次开关并确认。
 
-平台管理员可以在 **后台 → 系统设置 → 防护** 为所有网站开启 Under Attack，见[平台管理](admin.md#防护)。
+为所有网站开启：在 **系统设置 → 防护** 选择「挑战类型」，打开「全局 Under Attack」并确认，所有集群都会发布新配置。网站的「安全」页签随后显示「已为所有网站开启全局 Under Attack」。见[防护](system.md#防护)。
 
 以下请求不受 Under Attack 与 CC 挑战：
 
 | 请求 | 说明 |
 | --- | --- |
 | ACME HTTP-01 验证 | 在确定网站之前已处理 |
-| 平台放行名单中的地址 | 见 [IP 名单](rules.md#ip-名单) |
+| 「放行」类 IP 名单中的地址 | 对所有网站生效，见 [IP 名单](rules.md#ip-名单) |
 | 命中 `allow`（放行）规则的请求 | 在放行之前命中的 `challenge` 规则仍然生效 |
 
-需要的级别取以下各项的最大值：平台 Under Attack、网站 Under Attack、命中的 `challenge` 规则、网站当前的 CC 级别、该路径的 CC 级别。配置阶段的规则可按请求开关网站 Under Attack、关闭「CC 防护」或设置「CC 最高级别」，平台 Under Attack 不受影响，见[覆盖设置](rules.md#覆盖设置)。
+需要的级别取以下各项的最大值：全局 Under Attack、网站 Under Attack、命中的 `challenge` 规则、网站当前的 CC 级别、该路径的 CC 级别。配置阶段的规则可按请求开关网站 Under Attack、关闭「CC 防护」或设置「CC 最高级别」，全局 Under Attack 不受影响，见[覆盖设置](rules.md#覆盖设置)。
 
 ## 挑战设置
 
@@ -107,7 +107,7 @@ tls.ja4 in {"t13d1516h2_8daaf6152771_02713d6af862"}
 CC 防护按网站配置，默认关闭。**安全 → CC 防护**：
 
 1. 打开「启用」。
-2. 保持「跟随平台模板」使用平台的默认阈值（**后台 → 系统设置 → CC 模板**）；关闭它后可以自定义阈值。
+2. 保持「跟随默认模板」使用默认阈值（**系统设置 → CC 模板**）；关闭它后可以自定义阈值。
 3. 点击「保存」。
 
 | 字段 | 取值 | 模板默认值 |
@@ -154,7 +154,7 @@ CC 防护按网站配置，默认关闭。**安全 → CC 防护**：
 | 近期 Top IP 与路径 | 近 1 小时、24 小时或 7 天事件中请求最多的地址与路径（近似值） |
 | 事件 | 级别变化、路径升降级与自动封禁的时间线：节点、触发条件（观测值 / 阈值），可按类型筛选 |
 
-事件默认保留 30 天，平台管理员可调为 7–365 天。网站从正常升级时触发告警「CC 防护升级」（`cc_mitigation`），同一网站 15 分钟内最多一次，见[告警](dns-and-alerts.md#设置告警规则)。
+事件默认保留 30 天，可在 **系统设置 → 防护** 的「安全事件保留天数」调为 7–365 天。网站从正常升级时触发告警「CC 防护升级」（`cc_mitigation`），同一网站 15 分钟内最多一次，见[告警](dns-and-alerts.md#设置告警规则)。
 
 ## JA4
 
@@ -179,13 +179,7 @@ JA4 是 TLS 客户端指纹（格式 `a_b_c`，例如 `t13d1516h2_8daaf6152771_0
 
 ## 权限
 
-| 操作 | 组织所有者、管理员 | 组织成员 | 平台管理员 |
-| --- | --- | --- | --- |
-| 查看防护设置、节点级别与事件 | ✓ | ✓ | ✓ |
-| 修改 Under Attack、挑战设置、CC 防护 | ✓ | — | ✓ |
-| 平台 Under Attack、CC 模板、事件保留天数 | — | — | ✓（后台） |
-
-只读 AccessKey 只能读取。所有修改写审计：`site.protection_update`、`system.protection_update`、`system.cc_template_update`。
+修改需要控制台会话或读写 AccessKey；只读 AccessKey 只能读取；服务账号不能调用这些接口（`SERVICE_ACCOUNT_FORBIDDEN`）。所有修改写审计：`site.protection_update`、`system.protection_update`、`system.cc_template_update`。
 
 ## 节点能力
 
@@ -194,18 +188,18 @@ JA4 是 TLS 客户端指纹（格式 `a_b_c`，例如 `t13d1516h2_8daaf6152771_0
 | Under Attack、CC 防护、挑战规则 | `challenge-v1` |
 | `tls.ja4` 字段、JA4 限速键、JA4 日志 | `ja4-v1` |
 
-集群内有活动节点缺少所需能力时，租户的修改被拒绝（「请先由管理员为集群节点启用这些能力：…」），原设置不变；平台管理员可以明确发布，缺少能力的节点保留原配置，见[节点升级](node-upgrades.md)。不使用这些功能的集群配置不变。
+集群内有活动节点缺少所需能力时，修改照常保存并发布；缺少能力的节点保留原配置，在 **集群与节点** 中显示「需要升级」，见[节点升级](node-upgrades.md)。服务账号与后台任务发布这类配置时返回 409 `NODE_CAPABILITY_REQUIRED`（「集群节点尚不支持这些能力：…」），原设置不变。不使用这些功能的集群配置不变。
 
 ## API
 
-| 过程 | 端点 | 调用方 |
-| --- | --- | --- |
-| `protection.get` | `GET /sites/{id}/protection` | 组织成员 |
-| `protection.update` | `PATCH /sites/{id}/protection` | 组织所有者、管理员 |
-| `security.state` | `GET /sites/{id}/security?hours=24` | 组织成员 |
-| `security.events` | `GET /sites/{id}/security/events` | 组织成员 |
-| `settings.protection`、`settings.setProtection` | `GET`、`PUT /settings/protection` | 平台管理员 |
-| `settings.ccTemplate`、`settings.setCcTemplate` | `GET`、`PUT /settings/cc-template` | 平台管理员 |
+| 过程 | 端点 |
+| --- | --- |
+| `protection.get` | `GET /sites/{id}/protection` |
+| `protection.update` | `PATCH /sites/{id}/protection` |
+| `security.state` | `GET /sites/{id}/security?hours=24` |
+| `security.events` | `GET /sites/{id}/security/events` |
+| `settings.protection`、`settings.setProtection` | `GET`、`PUT /settings/protection`（全局 Under Attack、事件保留天数） |
+| `settings.ccTemplate`、`settings.setCcTemplate` | `GET`、`PUT /settings/cc-template` |
 
 字段与示例见 [API 与端点](../reference/api.md#挑战与-cc-防护)。
 
@@ -214,7 +208,8 @@ JA4 是 TLS 客户端指纹（格式 `a_b_c`，例如 `t13d1516h2_8daaf6152771_0
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
 | 「高难度计算验证的难度不能低于 N」 | 高难度计算验证低于计算验证难度 | 调高高难度计算验证，或调低计算验证难度 |
-| 「请先由管理员为集群节点启用这些能力：challenge-v1」 | 集群内有节点版本过旧 | 升级节点 |
+| 节点显示「需要升级」 | 节点版本过旧，缺少 `challenge-v1` 或 `ja4-v1` | 升级节点 |
+| 「集群节点尚不支持这些能力：challenge-v1」 | 服务账号或后台任务发布的配置需要集群节点缺少的能力 | 升级节点 |
 | 503，`X-Edgeweir-Error: challenge-unavailable` | 节点还没有取得凭证密钥 | 检查节点与控制台的连接 |
 | 表单提交或 API 调用返回 403 与 `X-Edgeweir-Challenge: required` | 非 GET/HEAD 请求没有有效凭证 | 先用浏览器通过挑战；机器调用的接口用 `allow` 规则放行 |
 | 通过挑战后又被挑战 | 凭证到期；客户端换了网段或 User-Agent；需要的级别高于凭证级别 | 调长有效期；检查代理出口是否在变化 |

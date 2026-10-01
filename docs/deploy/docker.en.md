@@ -82,7 +82,7 @@ Common optional variables (uncomment in `.env`):
 
 All variables: [environment variables](../reference/environment.en.md).
 
-After setup, SMTP, the node release source, ownership check DNS, the origin allow list, and GeoIP are configured in **Admin → System**; saving applies them without a restart. Values saved there take precedence over `EDGEWEIR_SMTP_CA_FILE`, `EDGEWEIR_NODE_RELEASE_BASE_URL`, and `EDGEWEIR_DNS_RESOLVERS` in `.env`. `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` bounds the outbound addresses saved there; the web console cannot widen it.
+After setup, SMTP, the node release source, the origin allow list, and GeoIP are configured in **System**; saving applies them without a restart. Values saved there take precedence over `EDGEWEIR_SMTP_CA_FILE` and `EDGEWEIR_NODE_RELEASE_BASE_URL` in `.env`, which take precedence over the defaults. `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` bounds the outbound addresses saved there; the web console cannot widen it.
 
 ## 5. Start
 
@@ -113,7 +113,7 @@ Startup sequence:
 
    An uninitialized console prints the same token at every start until it is used. The token is stored encrypted with the master key; a new master key yields a new token.
 
-2. Open `<EDGEWEIR_PUBLIC_URL>/setup`, enter the setup token, and create the platform administrator and the first organization. The console also creates the default cluster `default`. Setup wizard: [quick start](../guide/first-site.en.md).
+2. Open `<EDGEWEIR_PUBLIC_URL>/setup` and enter the setup token, name, email, and password to create the console account. The console also creates the default cluster `default`. Setup wizard: [quick start](../guide/first-site.en.md).
 
 Setup requests without a token or with a wrong token are rejected and written to the audit log. The token expires after a successful setup.
 

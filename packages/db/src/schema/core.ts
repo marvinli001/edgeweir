@@ -15,7 +15,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { organization, user } from "./auth";
+import { user } from "./auth";
 import { certificate } from "./certificates";
 
 const bytea = customType<{ data: Uint8Array; driverData: Buffer | Uint8Array }>({
@@ -164,21 +164,12 @@ export const site = pgTable(
   "site",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
     clusterId: uuid("cluster_id")
       .notNull()
       .references(() => cluster.id, { onDelete: "restrict" }),
     name: text("name").notNull(),
-    /** Set by the organization; a site is shipped only when enabled and not suspended. */
+    /** A disabled site is not shipped to nodes. */
     enabled: boolean("enabled").notNull().default(true),
-    /** Set by the platform; tenants cannot lift it. */
-    suspended: boolean("suspended").notNull().default(false),
-    /** billing | abuse | security | other; null unless suspended. */
-    suspendReason: text("suspend_reason"),
-    suspendNote: text("suspend_note").notNull().default(""),
-    suspendedAt: timestamp("suspended_at", { withTimezone: true }),
     /** Bumped to purge every cached object of the site. */
     logSampleRate: integer("log_sample_rate").notNull().default(0),
     cacheGeneration: bigint("cache_generation", { mode: "number" }).notNull().default(1),
@@ -201,7 +192,7 @@ export const site = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("site_org_idx").on(t.organizationId), index("site_cluster_idx").on(t.clusterId)],
+  (t) => [index("site_cluster_idx").on(t.clusterId)],
 );
 
 /** Sites a user starred; they lead the site list on the console home. */
@@ -229,11 +220,11 @@ export const siteDomain = pgTable(
     /** Lowercase host name; for wildcards the suffix without "*." */
     name: text("name").notNull(),
     wildcard: boolean("wildcard").notNull().default(false),
-    verified: boolean("verified").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [
-    uniqueIndex("site_domain_name_uq").on(t.name, t.wildcard).where(sql`${t.verified} = true`),
+    // A host name routes to exactly one site.
+    uniqueIndex("site_domain_name_uq").on(t.name, t.wildcard),
     uniqueIndex("site_domain_site_name_uq").on(t.siteId, t.name, t.wildcard),
     index("site_domain_site_idx").on(t.siteId),
   ],
@@ -493,7 +484,6 @@ export const auditLog = pgTable(
     actorId: text("actor_id").notNull().default(""),
     /** Display name of the actor at the time of the action. */
     actorName: text("actor_name").notNull().default(""),
-    organizationId: text("organization_id"),
     action: text("action").notNull(),
     targetType: text("target_type").notNull().default(""),
     targetId: text("target_id").notNull().default(""),
@@ -505,24 +495,9 @@ export const auditLog = pgTable(
   },
   (t) => [
     index("audit_log_occurred_idx").on(t.occurredAt),
-    index("audit_log_org_idx").on(t.organizationId, t.occurredAt),
     index("audit_log_action_idx").on(t.action, t.occurredAt),
   ],
 );
-
-/** Per-organization policy that better-auth's organization table does not model. */
-export const organizationSettings = pgTable("organization_settings", {
-  organizationId: text("organization_id")
-    .primaryKey()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  /** Cluster that sites created by the organization's members land on. */
-  defaultClusterId: uuid("default_cluster_id").references(() => cluster.id, {
-    onDelete: "set null",
-  }),
-  /** Members must enable two-factor authentication before using the console. */
-  requireTwoFactor: boolean("require_two_factor").notNull().default(false),
-  updatedAt: updatedAt(),
-});
 
 /**
  * Platform-level machine identity for integrations. It cannot sign in: it
@@ -594,29 +569,6 @@ export const idempotencyKey = pgTable(
 );
 
 /**
- * Technical limits the operator sets per organization (resource protection,
- * not a plan). Null means no organization-specific limit: only the global
- * hard limits apply (for purges: CACHE_TASK_LIMITS).
- */
-export const organizationLimit = pgTable("organization_limit", {
-  organizationId: text("organization_id")
-    .primaryKey()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  maxSites: integer("max_sites"),
-  /** Domains across all of the organization's sites. */
-  maxDomains: integer("max_domains"),
-  maxCertificates: integer("max_certificates"),
-  /** Entries across all of the organization's IP lists. */
-  maxIpListEntries: integer("max_ip_list_entries"),
-  maxPurgeTasksPerMinute: integer("max_purge_tasks_per_minute"),
-  maxPurgeUrlsPerHour: integer("max_purge_urls_per_hour"),
-  maxMembers: integer("max_members"),
-  /** Active manual site bans of the organization. */
-  maxBans: integer("max_bans"),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-/**
  * Node certificates revoked when a node is deleted. The node channel refuses
  * any client certificate whose serial is listed here.
  */
@@ -682,10 +634,6 @@ export const cacheTask = pgTable(
   "cache_task",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** Null when the targets span several organizations (platform administrators). */
-    organizationId: text("organization_id").references(() => organization.id, {
-      onDelete: "cascade",
-    }),
     /** url | prefix | site | prefetch | host | tag | sitemap */
     type: text("type").notNull(),
     /** What the user asked for: URLs, prefixes, site names, hosts, tags or the sitemap URL. */
@@ -706,7 +654,7 @@ export const cacheTask = pgTable(
     /** Set once every node reported a result (or the task expired). */
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
-  (t) => [index("cache_task_org_idx").on(t.organizationId, t.createdAt)],
+  (t) => [index("cache_task_created_idx").on(t.createdAt)],
 );
 
 /** Delivery and result of a cache task on one node. */

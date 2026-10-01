@@ -32,7 +32,9 @@ export function NavMain({
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <SidebarGroup>
+    // Labelled groups sit closer together so the whole sidebar fits a laptop screen.
+    <SidebarGroup className={label ? "py-0" : "pb-0"}>
+      {label ? <SidebarGroupLabel className="h-6">{label}</SidebarGroupLabel> : null}
       <SidebarGroupContent className="flex flex-col gap-2">
         {showNewSite ? (
           <SidebarMenu>
@@ -48,7 +50,6 @@ export function NavMain({
             </SidebarMenuItem>
           </SidebarMenu>
         ) : null}
-        {label ? <SidebarGroupLabel>{label}</SidebarGroupLabel> : null}
         <SidebarMenu>
           {items.map((item) => {
             const to = String(item.to);

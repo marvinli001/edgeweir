@@ -12,14 +12,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatNumber, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
-/** The plan the mass removal protection held back, with a confirmed force publish. */
+/** The plan the mass removal protection held back for a cluster, with a confirmed force publish. */
 export function DnsHeldBack({
+  clusterId,
   blocked,
 }: {
+  clusterId: string;
   blocked: { revision: number; removedRecords: number; previousRecords: number };
 }) {
   const queryClient = useQueryClient();
-  const force = useMutation(orpc.dns.forcePublish.mutationOptions());
+  const force = useMutation(orpc.dns.forcePublishBinding.mutationOptions());
   return (
     <Alert variant="destructive" className="animate-enter" data-testid="dns-held-back">
       <AlertTitle className="flex flex-wrap items-center gap-3">
@@ -44,7 +46,7 @@ export function DnsHeldBack({
           confirmLabel={m.dns_force_publish()}
           onConfirm={async () => {
             try {
-              await force.mutateAsync({ revision: blocked.revision });
+              await force.mutateAsync({ clusterId, revision: blocked.revision });
               await queryClient.invalidateQueries({ queryKey: orpc.dns.key() });
               toast.success(m.common_saved());
             } catch (err) {

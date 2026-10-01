@@ -117,7 +117,7 @@ export function TopListCard({
 }: {
   title: string;
   items: TrafficTopItem[];
-  /** Show each item's organization or cluster (pointless when there is only one). */
+  /** Show each item's cluster. */
   showParent?: boolean;
   /** Wraps a row in a link to the item. */
   renderLink: (

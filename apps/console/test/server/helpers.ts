@@ -1,4 +1,7 @@
 import { createHmac } from "node:crypto";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Contract } from "@edgeweir/contract";
 import { type Database, defaultMigrationsFolder, schema } from "@edgeweir/db";
 import { PGlite } from "@electric-sql/pglite";
@@ -24,10 +27,48 @@ import { ensureSetupToken, runSetup } from "../../src/server/services/setup";
 export const TEST_MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
 export const PASSWORD = "correct horse battery";
 
-/** An in-process PostgreSQL (PGlite) with the real migrations applied. */
-export async function createTestDatabase() {
+/**
+ * Migrations up to and including `tag`, in a temporary folder (the migrator
+ * reads the journal and the SQL files), to seed data of an older schema.
+ */
+function migrationsUpTo(tag: string) {
+  const journal = JSON.parse(
+    readFileSync(join(defaultMigrationsFolder, "meta", "_journal.json"), "utf8"),
+  ) as { entries: { tag: string }[] };
+  const index = journal.entries.findIndex((e) => e.tag === tag);
+  if (index < 0) throw new Error(`unknown migration ${tag}`);
+  const folder = mkdtempSync(join(tmpdir(), "edgeweir-migrations-"));
+  mkdirSync(join(folder, "meta"));
+  const entries = journal.entries.slice(0, index + 1);
+  writeFileSync(join(folder, "meta", "_journal.json"), JSON.stringify({ ...journal, entries }));
+  for (const entry of entries)
+    copyFileSync(
+      join(defaultMigrationsFolder, `${entry.tag}.sql`),
+      join(folder, `${entry.tag}.sql`),
+    );
+  return folder;
+}
+
+/**
+ * An in-process PostgreSQL (PGlite) with the real migrations applied. With
+ * `seed`, migrations up to `seed.upTo` run first, then the seed (raw SQL on
+ * the older schema), then the remaining migrations.
+ */
+export async function createTestDatabase(seed?: {
+  upTo: string;
+  run: (client: PGlite) => Promise<void>;
+}) {
   const client = new PGlite();
   const pgliteDb = drizzle({ client, schema, casing: "snake_case" });
+  if (seed) {
+    const folder = migrationsUpTo(seed.upTo);
+    try {
+      await migrate(pgliteDb, { migrationsFolder: folder, migrationsSchema: "drizzle" });
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
+    await seed.run(client);
+  }
   await migrate(pgliteDb, {
     migrationsFolder: defaultMigrationsFolder,
     migrationsSchema: "drizzle",
@@ -38,9 +79,12 @@ export async function createTestDatabase() {
 
 export async function createTestContext(
   overrides: Record<string, string> = {},
-  opts: { rateLimit?: boolean } = {},
+  opts: {
+    rateLimit?: boolean;
+    seed?: { upTo: string; run: (client: PGlite) => Promise<void> };
+  } = {},
 ) {
-  const { client, db } = await createTestDatabase();
+  const { client, db } = await createTestDatabase(opts.seed);
   const env = loadEnv({
     NODE_ENV: "test",
     DATABASE_URL: "postgres://unused",
@@ -80,24 +124,15 @@ export async function createTestContext(
   return { ctx, client };
 }
 
-export async function seedOrganization(db: Database, id = "org_test") {
+/** The operator's account, inserted directly (no password) for tests below the API. */
+export async function seedOperator(db: Database) {
   await db
     .insert(schema.user)
     .values({ id: "user_admin", name: "Admin", email: "admin@example.com", role: "admin" });
-  await db
-    .insert(schema.organization)
-    .values({ id, name: "Test", slug: "test", createdAt: new Date() });
-  await db.insert(schema.member).values({
-    id: "member_1",
-    organizationId: id,
-    userId: "user_admin",
-    role: "owner",
-    createdAt: new Date(),
-  });
-  return { organizationId: id, userId: "user_admin" };
+  return { userId: "user_admin" };
 }
 
-/** Runs the real first-run setup (platform admin, first organization, default cluster). */
+/** Runs the real first-run setup (the operator's account and the default cluster). */
 export async function setupPlatform(ctx: AppContext) {
   const setupToken = await ensureSetupToken(ctx);
   if (!setupToken) throw new Error("already initialized");
@@ -108,7 +143,6 @@ export async function setupPlatform(ctx: AppContext) {
       name: "Platform Admin",
       email: "admin@example.com",
       password: PASSWORD,
-      organizationName: "Default",
     },
     { ip: "127.0.0.1", userAgent: "vitest" },
   );
@@ -188,15 +222,4 @@ export class CookieJar {
   clear() {
     this.cookies.clear();
   }
-}
-
-/** Provision routing rights explicitly in tests whose subject is downstream of onboarding. */
-export async function approveSiteDomains(admin: ApiClient, siteId: string) {
-  const proofs = await admin.domainOwnership.get({ siteId });
-  for (const proof of proofs)
-    if (!proof.verified) await admin.domainOwnership.approve({ siteId, domain: proof.domain });
-  const site = await admin.sites.get({ id: siteId });
-  const cluster = await admin.clusters.get({ id: site.clusterId });
-  if (!cluster.latestRevision) throw new Error("approved site has no revision");
-  return cluster.latestRevision;
 }

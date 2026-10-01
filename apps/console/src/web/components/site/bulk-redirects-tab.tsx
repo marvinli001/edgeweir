@@ -7,7 +7,6 @@ import {
 import { Add01Icon, Cancel01Icon, FileImportIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import { FormDialog } from "@/components/form-dialog";
@@ -44,17 +43,9 @@ const toDraft = (redirect: BulkRedirect): Draft => ({ key: nextDraftKey(), ...re
 
 /**
  * Bulk redirects tab: a site's exact-match redirect table ("/path" on every domain or
- * "host/path"), at most 5000 entries. Members read it; owners and admins change it.
+ * "host/path"), at most 5000 entries.
  */
-export function BulkRedirectsTab({
-  siteId,
-  organizationRole,
-}: {
-  siteId: string;
-  organizationRole?: string;
-}) {
-  const { isAdmin } = useRouteContext({ from: "/_app" });
-  const canEdit = isAdmin || organizationRole === "owner" || organizationRole === "admin";
+export function BulkRedirectsTab({ siteId }: { siteId: string }) {
   const redirects = useQuery(orpc.bulkRedirects.get.queryOptions({ input: { id: siteId } }));
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
   return (
@@ -80,8 +71,6 @@ export function BulkRedirectsTab({
           siteId={siteId}
           initial={redirects.data}
           availability={features.data.rulesV2}
-          canEdit={canEdit}
-          isAdmin={isAdmin}
         />
       )}
     </Card>
@@ -124,14 +113,10 @@ function BulkRedirectsForm({
   siteId,
   initial,
   availability,
-  canEdit,
-  isAdmin,
 }: {
   siteId: string;
   initial: BulkRedirect[];
   availability: FeatureAvailability;
-  canEdit: boolean;
-  isAdmin: boolean;
 }) {
   const queryClient = useQueryClient();
   const mutation = useMutation(orpc.bulkRedirects.save.mutationOptions());
@@ -142,8 +127,8 @@ function BulkRedirectsForm({
   const [page, setPage] = React.useState(1);
   const [importing, setImporting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  // Tenants cannot publish the table before the cluster's nodes run it; administrators may.
-  const editable = canEdit && (isAdmin || availability.available);
+  // The table waits until the cluster's nodes run it.
+  const editable = availability.available;
   const dirty = serializeDrafts(rows) !== savedJson;
   const invalid = React.useMemo(() => invalidKeys(rows), [rows]);
   const needle = filter.trim().toLowerCase();
@@ -221,11 +206,7 @@ function BulkRedirectsForm({
       >
         <CardContent className="flex flex-col gap-4">
           {availability.available ? null : (
-            <SafetyNote
-              className="animate-in fade-in"
-              data-testid="bulk-redirects-unavailable"
-              data-reason={availability.reason ?? undefined}
-            >
+            <SafetyNote className="animate-in fade-in" data-testid="bulk-redirects-unavailable">
               {m.rules_v2_unavailable()}
             </SafetyNote>
           )}
@@ -301,14 +282,12 @@ function BulkRedirectsForm({
             </>
           )}
         </CardContent>
-        {canEdit ? (
-          <SaveBar
-            dirty={dirty && editable}
-            pending={mutation.isPending}
-            error={error}
-            testId="bulk-redirects-save"
-          />
-        ) : null}
+        <SaveBar
+          dirty={dirty && editable}
+          pending={mutation.isPending}
+          error={error}
+          testId="bulk-redirects-save"
+        />
       </form>
       {/* Outside the form: React bubbles the dialog's submit through the portal. */}
       <ImportDialog

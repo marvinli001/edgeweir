@@ -4,7 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import tls from "node:tls";
 import { promisify } from "node:util";
-import { signInResponse } from "./e2e-auth.mjs";
+import { signInWithAccessKey } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile);
 
@@ -22,19 +22,13 @@ async function run(command, args, options = {}) {
   return stdout;
 }
 
-const login = await signInResponse(base, "admin@e2e.test", "e2e-admin-password-123");
-assert.equal(login.status, 200);
-const cookie = login.headers
-  .getSetCookie()
-  .map((c) => c.split(";")[0])
-  .join("; ");
-const keyResponse = await fetch(`${base}/api/auth/api-key/create`, {
-  method: "POST",
-  headers: { "content-type": "application/json", origin: base, cookie },
-  body: JSON.stringify({ name: "m3-e2e" }),
-});
-assert.equal(keyResponse.status, 200);
-const { key } = await keyResponse.json();
+const session = await signInWithAccessKey(
+  base,
+  "admin@e2e.test",
+  "e2e-admin-password-123",
+  "m3-e2e",
+);
+const { key } = session;
 async function api(method, path, body) {
   const response = await fetch(`${base}/api/v1${path}`, {
     method,

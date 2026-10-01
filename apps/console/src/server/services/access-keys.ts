@@ -58,7 +58,8 @@ export async function createAccessKey(
       targetType: "api_key",
       targetId: row.id,
       targetName: input.name,
-      metadata: { scope: input.scope },
+      // Never the key itself: its public first characters identify it.
+      metadata: { scope: input.scope, prefix: row.start ?? "" },
     });
     return { ...dto(row), key: created.key };
   } catch (error) {

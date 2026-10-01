@@ -56,7 +56,7 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | --- | --- |
 | 无 phone-home | 控制台与节点不主动连接 Edgeweir 项目的任何服务器（edgeweir.com、edgeweir.dev 等），版本检查也不例外 |
 | 无授权校验 | 代码中没有许可证密钥、联网授权或功能锁 |
-| 遥测默认关闭 | 只有管理员显式开启后才发送，开启前列出将要发送的字段和目的地址；当前版本不发送任何遥测数据，`EDGEWEIR_TELEMETRY` 的状态显示在 **后台 → 系统设置**；better-auth 自带的遥测强制关闭 |
+| 遥测默认关闭 | 只有运营者显式开启后才发送，开启前列出将要发送的字段和目的地址；当前版本不发送任何遥测数据，`EDGEWEIR_TELEMETRY` 的状态显示在 **系统设置**；better-auth 自带的遥测强制关闭 |
 | 敏感数据信封加密 | 私钥与第三方凭据经主密钥 `EDGEWEIR_MASTER_KEY` 信封加密后入库；只需比对的秘密只存哈希（见 [敏感数据](#敏感数据)） |
 | 绝不保存 SSH 凭据 | 控制台没有保存 SSH 凭据的选项；节点只经控制台生成的一次性安装命令接入，由节点主动注册 |
 | 管理操作写审计 | 见 [审计日志](#审计日志) |
@@ -83,8 +83,8 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | 内部 CA 私钥 | 信封加密 | `pki_authority.private_key_envelope` |
 | 证书私钥 | 信封加密 | `certificate.private_key_envelope` |
 | ACME 账户 | 信封加密 | `certificate.account_envelope` |
-| 组织 DNS 服务商凭据 | 信封加密 | `dns_credential.credential_envelope` |
-| 平台 DNS 服务商凭据 | 信封加密 | `platform_dns_provider.credential_envelope` |
+| ACME DNS-01 凭据 | 信封加密 | `dns_credential.credential_envelope` |
+| DNS 调度服务商凭据 | 信封加密 | `platform_dns_provider.credential_envelope` |
 | S3 源站密钥 | 信封加密 | `origin_credential.secret_envelope` |
 | 告警渠道配置（webhook 地址与 Bearer token、邮件收件人） | 信封加密 | `alert_channel.config_envelope` |
 | SMTP 设置（含密码） | 信封加密 | `system_setting` 的 `notification_smtp` |
@@ -111,7 +111,7 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 
 | 项 | 行为 |
 | --- | --- |
-| 范围 | 经 `/rpc` 与 `/api/v1` 的写操作；初始化；安装命令生成；节点注册、证书轮换与删除；登录成功与失败、改密码、两步验证开关、passkey 增删、API key 创建与删除 |
+| 范围 | 经 `/rpc` 与 `/api/v1` 的写操作；初始化；安装命令生成；节点注册、证书轮换与删除；登录成功与失败、改密码、两步验证开关、passkey 增删、API key 创建与删除；在服务器上找回账户 |
 | 事务 | Edgeweir 自己的写操作与审计记录在同一事务内提交；经 better-auth 完成的登录与账号变更由 better-auth 先提交，审计紧接着写入 |
 | 内容 | 不记录密码、token 或密钥明文 |
 | 来源 IP | TCP 对端地址；`X-Forwarded-For` 与 `X-Real-IP` 只在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用 |
@@ -125,17 +125,19 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | 节点私钥在节点本地生成，不离开节点；控制台只签发证书 | 控制台数据库泄露后冒充节点 |
 | 安装命令固定 CA 指纹，节点先核对指纹再发送 token；token 一次性、有过期时间、只存 SHA-256 | 首次连接被中间人劫持；token 泄露或重放 |
 | 除 `Enroll` 外强制 mTLS，客户端证书序列号须等于库中记录的当前值；证书 30 天有效并自动轮换；停用或删除节点立即生效，删除时吊销证书序列号 | 已下线节点继续拉取配置 |
+| 节点通道在读取请求体之前检查客户端证书，未带证书只受理 `Enroll`，请求不超过 64 KiB；其余请求解压后不超过 16 MiB；连续 2 分钟没有流量的连接被关闭 | 未认证的客户端用压缩请求或空闲连接耗尽控制台内存 |
 | 证书私钥与 S3 源站密钥只经 mTLS 通道发给服务引用网站的集群节点，不写入 NodeConfig | 其他集群的节点或配置快照泄露密钥 |
 | revision 回执由主密钥封装并绑定节点；节点报告高于控制台最新 revision 的版本时必须附有效回执，只有经验证的版本参与 revision 序号计算 | 数据库从备份恢复后，未经认证的上报操纵 revision 序号 |
 | 敏感数据信封加密，主密钥不入库；附加认证数据绑定表、字段与记录 id | 数据库备份或只读 SQL 注入泄露私钥与凭据；有库写权限者在行之间互换密文 |
 | 管理操作写审计，与变更同事务提交 | 越权或误操作无法追溯 |
-| `/api/auth/*` 只放行控制台界面用到的 better-auth 端点，其余 404；组织、成员与用户管理只走 Edgeweir 自己的接口；`x-api-key` 在 `/api/auth/*` 与 `/rpc` 上被丢弃，只在 `/api/v1` 生效 | 借 better-auth 插件端点绕过权限检查、审计与配置版本（删除组织、冒充用户、改他人密码）；API key 变成会话后签发新 key |
+| `/api/auth/*` 只放行控制台界面用到的 better-auth 端点（不含注册、admin 与 api-key 端点），其余 404；AccessKey 只能由已登录的会话经 `accessKeys.*` 创建与吊销；`x-api-key` 在 `/api/auth/*` 与 `/rpc` 上被丢弃，只在 `/api/v1` 生效 | 借 better-auth 插件端点绕过审计与配置版本（创建账户、冒充用户、改密码）；API key 变成会话或签发新 key |
 | `/rpc` 要求 `x-csrf-token` 头；响应带 CSP `default-src 'self'`、`frame-ancestors 'none'` | 跨站请求伪造；页面被嵌入第三方站点 |
 | 客户端 IP 取 TCP 对端地址，转发头只信任 `EDGEWEIR_TRUSTED_PROXIES`；登录与两步验证的限速计数存 PostgreSQL，多实例共享，重启不清零 | 伪造 IP 绕过登录与两步验证限速；审计日志中的 IP 失真 |
 | `install.sh` 与 agent 自升级先校验 cosign 签名（证书身份精确匹配待安装版本的 release 工作流）与 SHA-256，再执行；控制台 `/downloads` 镜像（`EDGEWEIR_DOWNLOADS_DIR`）只是传输通道，未镜像的文件返回 404 | 下载链路或镜像被篡改 |
-| 源站不能是特殊用途地址（回环、链路本地、私网、CGNAT、组播等）或 `localhost`：控制台拒绝这类 IP 字面量，节点对配置和每个 DNS 解析结果执行同一清单（`packages/contract/src/addresses.ts`）；只有平台管理员能经审计的允许清单放行地址段；节点回源请求带 `CDN-Loop`（RFC 8586），收到带自身标识的请求返回 508 | 租户借回源访问云元数据（`169.254.169.254`）、探测内网，或造成回环 |
-| 控制台向 Web 界面保存的目标（告警 webhook、SMTP 服务器、节点发布源、DNS 解析器）发起的请求先解析一次、拒绝特殊用途地址，再连接该地址；`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 放行指定地址段 | 借控制台的出站请求访问内网 |
-| 每个组织的刷新预热频率上限为每分钟 10 个任务、每小时 2000 个目标，平台管理员不受限；节点端清缓存标记超过上限时合并为站点级标记 | 租户填满节点的清缓存存储，影响同节点其他网站 |
+| 源站不能是特殊用途地址（回环、链路本地、私网、CGNAT、组播等）或 `localhost`：控制台拒绝这类 IP 字面量，节点对配置和每个 DNS 解析结果执行同一清单（`packages/contract/src/addresses.ts`）；只有经审计的源站地址允许清单能放行地址段；节点回源请求带 `CDN-Loop`（RFC 8586），收到带自身标识的请求返回 508 | 借回源访问云元数据（`169.254.169.254`）、探测内网，或造成回环 |
+| 控制台向 Web 界面保存的目标（告警 webhook、SMTP 服务器、节点发布源）发起的请求先解析一次、拒绝特殊用途地址，再连接该地址；`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 放行指定地址段 | 借控制台的出站请求访问内网 |
+| 填写地址的 DNS 服务商（PowerDNS、RFC 2136、自定义 HTTP）由证书助手在连接建立时检查实际连接的地址，特殊用途地址只在 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 内放行；公网地址必须使用 HTTPS，不跟随重定向。自定义 HTTP 请求带时间戳与 HMAC-SHA256 签名；DNS 服务商的错误以分类码返回，不回传服务商原文 | 借 DNS 服务商配置访问内网（含 DNS 重绑定），或凭据经明文或错误信息泄露 |
+| 节点端清缓存标记超过上限时合并为站点级标记 | 大量刷新任务填满节点的清缓存存储，影响同节点其他网站 |
 | agent 只执行类型化操作，没有执行任意命令的接口 | 控制台失陷后在节点上执行任意代码 |
 | 发布物 keyless 签名、SBOM、SLSA provenance | 发布的程序与源码不一致，或被投毒 |
 
@@ -148,6 +150,7 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | 节点本地凭据 | 节点在状态目录（默认 `/var/lib/edgeweir-node`，权限 0700）以 0600 权限明文保存节点私钥、S3 源站密钥（`credentials.json`）与网站证书私钥（`certificates.json`），控制台不可达时节点重启后仍能服务；拿到节点 root 权限者可以读取 |
 | 主密钥与数据库同时泄露 | 信封加密失效；未设置 `BETTER_AUTH_SECRET` 时，泄露的主密钥还能伪造登录会话。通过 secret 文件或编排平台的 secret 机制注入 `EDGEWEIR_MASTER_KEY`，并与数据库备份分开保存 |
 | setup token 写入日志 | 首次初始化需要控制台启动时写入日志的一次性 setup token；能读控制台日志者即可完成初始化。按主密钥的级别控制日志访问 |
+| 在服务器上找回账户 | 能在控制台容器内执行命令者（本就能读取 `DATABASE_URL` 直接修改数据库）可以用 `recover.js` 重置账户密码、停用两步验证；找回让全部会话退出登录并写入审计日志（`account.recover`），Web 界面与 HTTP 没有找回入口（[命令行](docs/reference/cli.md#找回账户)）。按主密钥的级别控制服务器访问 |
 | 节点通道 `:8443` | 只能直接暴露或四层透传；反向代理终结 TLS 会使 mTLS 失效（[端口、反向代理与可信代理](docs/deploy/networking.md)） |
 
 ## 验证发布物
@@ -245,7 +248,7 @@ Full English policy: [SECURITY.en.md](SECURITY.en.md).
 
 **Supported versions.** Console: the latest rolling image (`<YYYYMMDD>-<commit>` of the newest `master` commit, `latest`). Node: the latest `master`. Security fixes land on `master` only.
 
-**Trust baseline.** No phone-home of any kind and no license-check code. Telemetry is off by default and requires explicit opt-in; the current version sends no telemetry, and better-auth's own telemetry is hard-disabled. The console never stores SSH credentials; nodes join only through the one-time install command. Private keys and third-party credentials (internal CA key, certificate keys, ACME accounts, DNS provider credentials, S3 origin keys, alert channel and SMTP settings, the setup token) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they reach the database: AES-256-GCM with a random data key per record, and additional authenticated data that binds table, column, and record id (envelope format v2; v1 envelopes written by older versions are re-encrypted at startup and rejected otherwise). Enrollment tokens, API keys, and passwords are stored as hashes only. Unless `BETTER_AUTH_SECRET` is set, better-auth's session secret (session cookie signatures, TOTP secrets and backup codes at rest) is derived from `EDGEWEIR_MASTER_KEY` with HKDF-SHA256 (salt `edgeweir/auth-secret/v1`, info `better-auth.secret`, 32 bytes, base64url), independent of the envelope KEK (salt `edgeweir/kek/v1`, info `envelope`); the database keeps only an HMAC check value, and the console refuses to start when the derived secret differs from the one the database was used with (for example `BETTER_AUTH_SECRET` removed from an existing deployment). With the derived secret, a leaked master key also allows forging sessions. Every management action is written to the audit log: Edgeweir's own changes commit their audit entry in the same transaction; sign-ins, password changes, two-factor changes, passkeys, and API keys are completed by better-auth and audited right after it commits. Releases are signed with cosign keyless and ship with an SBOM and SLSA provenance.
+**Trust baseline.** No phone-home of any kind and no license-check code. Telemetry is off by default and requires explicit opt-in; the current version sends no telemetry, and better-auth's own telemetry is hard-disabled. The console never stores SSH credentials; nodes join only through the one-time install command. Private keys and third-party credentials (internal CA key, certificate keys, ACME accounts, DNS provider credentials, S3 origin keys, alert channel and SMTP settings, the setup token) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they reach the database: AES-256-GCM with a random data key per record, and additional authenticated data that binds table, column, and record id (envelope format v2; v1 envelopes written by older versions are re-encrypted at startup and rejected otherwise). Enrollment tokens, API keys, and passwords are stored as hashes only. Unless `BETTER_AUTH_SECRET` is set, better-auth's session secret (session cookie signatures, TOTP secrets and backup codes at rest) is derived from `EDGEWEIR_MASTER_KEY` with HKDF-SHA256 (salt `edgeweir/auth-secret/v1`, info `better-auth.secret`, 32 bytes, base64url), independent of the envelope KEK (salt `edgeweir/kek/v1`, info `envelope`); the database keeps only an HMAC check value, and the console refuses to start when the derived secret differs from the one the database was used with (for example `BETTER_AUTH_SECRET` removed from an existing deployment). With the derived secret, a leaked master key also allows forging sessions. Every management action is written to the audit log: Edgeweir's own changes commit their audit entry in the same transaction; sign-ins, password changes, two-factor changes, passkeys, and API keys are completed by better-auth and audited right after it commits. Account recovery has no web or HTTP entry: `recover.js`, run on the server with the console's environment, resets the password or turns two-factor authentication off, signs out every session, and audits the change in the same transaction. Releases are signed with cosign keyless and ship with an SBOM and SLSA provenance.
 
 **Known limitations.** The node keeps its private key, the S3 origin keys (`credentials.json`), and site certificate keys (`certificates.json`) in plain text with mode 0600 in its state directory. A leaked master key together with the database defeats envelope encryption. The node channel on `:8443` must not sit behind a TLS-terminating proxy.
 

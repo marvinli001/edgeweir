@@ -50,7 +50,7 @@ export interface Metric {
 
 /**
  * A breakdown the metric dialog can show. `entities` becomes one view per available dimension
- * (sites unless the page is one site, nodes for platform administrators).
+ * (sites unless the page is one site, and nodes).
  */
 export type DetailSource =
   | { kind: "entities"; metric: "requests" | "bytesSent"; perSecond?: boolean }

@@ -1,16 +1,17 @@
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
-import type { RuleInput } from "@edgeweir/contract";
+import { bulkRedirectsInput, type RuleInput, ruleInput, siteUpdateInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { cacheConditionExpression } from "@edgeweir/rule-engine";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
+import { saveBulkRedirects } from "../../src/server/services/bulk-redirects";
 import { latestRevision } from "../../src/server/services/revisions";
+import { saveRules } from "../../src/server/services/rules";
+import { updateSite } from "../../src/server/services/sites";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -32,16 +33,17 @@ const G5_FEATURES = [
 
 type RuleSave = Parameters<ApiClient["rules"]["save"]>[0]["rules"];
 
+/** A change without the operator behind it (service accounts, background jobs). */
+const service = {
+  actor: { type: "service_account" as const, id: "service-account-g5", name: "integration" },
+};
+
 describe("rule engine extensions, cache conditions, origin groups and bulk redirects on the console side", async () => {
   const { ctx, client: pglite } = await createTestContext();
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
-  let owner: ApiClient;
-  let member: ApiClient;
-  let outsider: ApiClient;
   let clusterId: string;
-  let orgId: string;
   let siteId: string;
   let otherSiteId: string;
   let nodeId: string;
@@ -126,35 +128,20 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     await setupPlatform(ctx);
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
     clusterId = (await admin.clusters.list())[0]?.id ?? "";
-    orgId = (await admin.organizations.create({ name: "Shop", defaultClusterId: clusterId })).id;
-    const otherOrgId = (
-      await admin.organizations.create({ name: "Rival", defaultClusterId: clusterId })
-    ).id;
-    const users: [string, string, "owner" | "member"][] = [
-      ["owner@shop.test", orgId, "owner"],
-      ["member@shop.test", orgId, "member"],
-      ["owner@rival.test", otherOrgId, "owner"],
-    ];
-    for (const [email, organizationId, role] of users)
-      await admin.users.create({ name: email, email, password: PASSWORD, organizationId, role });
-    owner = rpcClient(app, origin, await signIn(app, origin, "owner@shop.test"));
-    member = rpcClient(app, origin, await signIn(app, origin, "member@shop.test"));
-    outsider = rpcClient(app, origin, await signIn(app, origin, "owner@rival.test"));
     siteId = (
-      await owner.sites.create({
+      await admin.sites.create({
         name: "shop",
         domains: ["www.shop.test", "*.cdn.shop.test"],
         origins,
       })
     ).site.id;
     otherSiteId = (
-      await outsider.sites.create({
+      await admin.sites.create({
         name: "rival",
         domains: ["www.rival.test"],
         origins: defaultOrigins,
       })
     ).site.id;
-    for (const id of [siteId, otherSiteId]) await approveSiteDomains(admin, id);
     const [node] = await ctx.db
       .insert(schema.node)
       .values({
@@ -171,7 +158,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
   afterAll(() => pglite.close());
 
   it("stores origin groups and compiles them with rules-v2", async () => {
-    const site = await member.sites.get({ id: siteId });
+    const site = await admin.sites.get({ id: siteId });
     expect(site.origins.map((o) => [o.address, o.group])).toEqual([
       ["origin-a.shop.test", ""],
       ["origin-eu.shop.test", "eu"],
@@ -179,7 +166,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     const compiled = await siteOf();
     expect(compiled?.originPool?.origins.map((o) => o.group).sort()).toEqual(["", "eu"]);
     expect((await config()).requiredFeatures).toContain("rules-v2");
-    expect((await member.sites.features({ id: siteId })).rulesV2).toEqual({
+    expect((await admin.sites.features({ id: siteId })).rulesV2).toEqual({
       available: true,
       reason: null,
     });
@@ -191,8 +178,8 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
   });
 
   it("saves every new action kind and compiles targets, query edits, origin, compression and config overrides", async () => {
-    const saved = await owner.rules.save({ id: siteId, rules: v2Rules });
-    expect(await member.rules.get({ id: siteId })).toEqual(saved);
+    const saved = await admin.rules.save({ id: siteId, rules: v2Rules });
+    expect(await admin.rules.get({ id: siteId })).toEqual(saved);
     expect(saved.find((r) => r.name === "old")?.action).toEqual({
       kind: "rewrite",
       value: "",
@@ -299,12 +286,12 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     ];
     for (const rule of invalid)
       expect(
-        (await rpcError(owner.rules.save({ id: siteId, rules: [rule] }))).status,
+        (await rpcError(admin.rules.save({ id: siteId, rules: [rule] }))).status,
         JSON.stringify(rule.action),
       ).toBe(400);
     expect(
       await rpcError(
-        owner.rules.save({
+        admin.rules.save({
           id: siteId,
           rules: [
             {
@@ -318,33 +305,33 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       ),
     ).toMatchObject({ code: "RULE_INVALID", status: 400 });
     expect((await config()).revision).toBe(before);
-    expect(await member.rules.get({ id: siteId })).toHaveLength(v2Rules.length);
+    expect(await admin.rules.get({ id: siteId })).toHaveLength(v2Rules.length);
   });
 
   it("keeps the origin groups rules use: a site update that removes one is refused", async () => {
-    const error = await rpcError(owner.sites.update({ id: siteId, origins: defaultOrigins }));
+    const error = await rpcError(admin.sites.update({ id: siteId, origins: defaultOrigins }));
     expect(error).toMatchObject({ code: "RULE_INVALID", status: 400 });
     expect(error.message).toContain("eu");
     // Every site keeps an origin in the default group.
     expect(
       (
         await rpcError(
-          owner.sites.update({ id: siteId, origins: [{ address: "eu.shop.test", group: "eu" }] }),
+          admin.sites.update({ id: siteId, origins: [{ address: "eu.shop.test", group: "eu" }] }),
         )
       ).status,
     ).toBe(400);
     // Other groups may come and go; the origin keeps its id when only its group changes.
-    const before = (await member.sites.get({ id: siteId })).origins;
-    const { site } = await owner.sites.update({
+    const before = (await admin.sites.get({ id: siteId })).origins;
+    const { site } = await admin.sites.update({
       id: siteId,
       origins: [...origins, { address: "origin-us.shop.test", group: "us" }],
     });
     expect(site.origins.map((o) => o.group)).toEqual(["", "eu", "us"]);
     expect(site.origins.slice(0, 2).map((o) => o.id)).toEqual(before.map((o) => o.id));
-    await owner.sites.update({ id: siteId, origins });
+    await admin.sites.update({ id: siteId, origins });
   });
 
-  it("refuses origin groups in platform rules, allows the other overrides and keeps tenants out", async () => {
+  it("refuses origin groups in platform rules and allows the other overrides", async () => {
     const group: RuleSave = [
       {
         name: "group",
@@ -371,9 +358,6 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
         action: { kind: "compression", algorithms: ["br"] },
       },
     ];
-    // Tenants never reach the platform rules, with or without the new actions.
-    for (const client of [member, owner])
-      expect((await rpcError(client.platformRules.save({ rules: overrides }))).status).toBe(403);
     await admin.platformRules.save({ rules: overrides });
     const compiled = (await config()).platformRules;
     expect(compiled.map((r) => r.action?.kind)).toEqual(["origin", "compression"]);
@@ -387,7 +371,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       paths: [],
       extensions: ["css", "js"],
     };
-    const { site } = await owner.sites.update({
+    const { site } = await admin.sites.update({
       id: siteId,
       cacheRules: [
         { priority: 10, pathPrefixes: ["/static/", "/assets/"], extensions: ["CSS", ".js"] },
@@ -435,7 +419,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     expect(rows.every((r) => !r.pathPrefixes.length && !r.paths.length && !r.extensions.length));
     expect(rows.map((r) => r.expression)).toEqual(site.cacheRules.map((r) => r.expression));
     // What sites.get returns saves back unchanged.
-    const again = await owner.sites.update({
+    const again = await admin.sites.update({
       id: siteId,
       cacheRules: site.cacheRules.map(({ id: _, ...rule }) => rule),
     });
@@ -467,40 +451,41 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       [{ expression: 'starts_with(http.request.uri.path, "/a/")', pathPrefixes: ["/b/"] }],
       [{ browserTtlSeconds: 31_536_001 }],
     ])
-      expect((await rpcError(owner.sites.update({ id: siteId, cacheRules }))).status).toBe(400);
+      expect((await rpcError(admin.sites.update({ id: siteId, cacheRules }))).status).toBe(400);
   });
 
   it("binds IP lists in cache conditions and keeps the lists they reference", async () => {
-    const list = await owner.ipLists.create({ name: "office", entries: ["198.51.100.0/24"] });
-    await owner.sites.update({
+    const list = await admin.ipLists.create({ name: "office", entries: ["198.51.100.0/24"] });
+    await admin.sites.update({
       id: siteId,
       cacheRules: [{ expression: "ip.src in $office", action: "bypass" }],
     });
     const condition = (await siteOf())?.cacheRules[0]?.match?.condition;
     expect(condition).toMatchObject({ op: "in_list", field: "ip.src", value: list.id });
     expect((await config()).ipLists.some((l) => l.id === list.id)).toBe(true);
-    expect(await rpcError(owner.ipLists.delete({ id: list.id }))).toMatchObject({
+    expect(await rpcError(admin.ipLists.delete({ id: list.id }))).toMatchObject({
       code: "IP_LIST_IN_USE",
     });
     expect(
       await rpcError(
-        owner.sites.update({
+        admin.sites.update({
           id: siteId,
           cacheRules: [{ expression: "ip.src in $nowhere", action: "bypass" }],
         }),
       ),
     ).toMatchObject({ code: "IP_LIST_NOT_FOUND" });
-    // Another organization's lists are not visible.
-    expect(
-      await rpcError(
-        outsider.sites.update({
-          id: otherSiteId,
-          cacheRules: [{ expression: "ip.src in $office", action: "bypass" }],
-        }),
-      ),
-    ).toMatchObject({ code: "IP_LIST_NOT_FOUND" });
-    await owner.sites.update({ id: siteId, cacheRules: [] });
-    await owner.ipLists.delete({ id: list.id });
+    // Every site's cache conditions may bind any list.
+    await admin.sites.update({
+      id: otherSiteId,
+      cacheRules: [{ expression: "ip.src in $office", action: "bypass" }],
+    });
+    expect((await siteOf(otherSiteId))?.cacheRules[0]?.match?.condition).toMatchObject({
+      op: "in_list",
+      value: list.id,
+    });
+    await admin.sites.update({ id: otherSiteId, cacheRules: [] });
+    await admin.sites.update({ id: siteId, cacheRules: [] });
+    await admin.ipLists.delete({ id: list.id });
   });
 
   it("replaces bulk redirects, publishes them sorted by source and audits the count", async () => {
@@ -510,7 +495,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       { source: "www.shop.test/sale", target: "/deals", statusCode: 302, preserveQuery: true },
       { source: "/a", target: "https://www.shop.test/b?x=1", statusCode: 308 },
     ] as const;
-    const saved = await owner.bulkRedirects.save({ id: siteId, redirects: [...redirects] });
+    const saved = await admin.bulkRedirects.save({ id: siteId, redirects: [...redirects] });
     expect(saved).toEqual([
       { source: "/old", target: "/new", statusCode: 301, preserveQuery: false },
       {
@@ -527,7 +512,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
         preserveQuery: false,
       },
     ]);
-    expect(await member.bulkRedirects.get({ id: siteId })).toEqual(saved);
+    expect(await admin.bulkRedirects.get({ id: siteId })).toEqual(saved);
     const compiled = (await siteOf())?.bulkRedirects ?? [];
     expect(compiled.map((r) => r.source)).toEqual([
       "/a",
@@ -539,14 +524,14 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     expect(await latestRevision(ctx.db, clusterId)).toMatchObject({ reasonCode: "rules_updated" });
     const audit = (await audits("site.bulk_redirects_update")).at(-1);
     expect(audit).toMatchObject({
-      organizationId: orgId,
+      actorType: "user",
       targetType: "site",
       targetId: siteId,
       targetName: "shop",
     });
     expect(audit?.metadata).toEqual({ count: 4 });
     // The other site's table stays empty.
-    expect(await outsider.bulkRedirects.get({ id: otherSiteId })).toEqual([]);
+    expect(await admin.bulkRedirects.get({ id: otherSiteId })).toEqual([]);
     expect((await siteOf(otherSiteId))?.bulkRedirects).toEqual([]);
   });
 
@@ -555,7 +540,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     for (const source of ["www.rival.test/x", "deep.img.cdn.shop.test/x", "shop.test/x"])
       expect(
         await rpcError(
-          owner.bulkRedirects.save({ id: siteId, redirects: [{ source, target: "/" }] }),
+          admin.bulkRedirects.save({ id: siteId, redirects: [{ source, target: "/" }] }),
         ),
       ).toMatchObject({
         code: "BULK_REDIRECT_HOST_UNKNOWN",
@@ -571,33 +556,30 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       [{ source: "/a", target: "javascript:alert(1)" }],
       [{ source: "/a?b", target: "/" }],
     ])
-      expect((await rpcError(owner.bulkRedirects.save({ id: siteId, redirects }))).status).toBe(
+      expect((await rpcError(admin.bulkRedirects.save({ id: siteId, redirects }))).status).toBe(
         400,
       );
     expect((await config()).revision).toBe(before);
-    expect(await member.bulkRedirects.get({ id: siteId })).toHaveLength(4);
+    expect(await admin.bulkRedirects.get({ id: siteId })).toHaveLength(4);
     // 5000 entries fit.
     const full = Array.from({ length: 5000 }, (_, i) => ({ source: `/p${i}`, target: `/q${i}` }));
-    expect(await owner.bulkRedirects.save({ id: siteId, redirects: full })).toHaveLength(5000);
+    expect(await admin.bulkRedirects.save({ id: siteId, redirects: full })).toHaveLength(5000);
     expect((await siteOf())?.bulkRedirects).toHaveLength(5000);
     expect((await audits("site.bulk_redirects_update")).at(-1)?.metadata).toEqual({
       count: 5000,
     });
   });
 
-  it("lets owners replace bulk redirects, members read them and nobody else reach them, service accounts included", async () => {
-    const redirects = [{ source: "/member", target: "/no" }];
-    expect(await rpcError(member.bulkRedirects.save({ id: siteId, redirects }))).toMatchObject({
-      code: "ORG_ADMIN_REQUIRED",
-      status: 403,
-    });
+  it("refuses unknown sites, lets AccessKeys read and replace bulk redirects as their scope allows and keeps service accounts out", async () => {
+    const redirects = [{ source: "/refused", target: "/no" }];
+    const unknown = crypto.randomUUID();
     for (const call of [
-      () => outsider.bulkRedirects.get({ id: siteId }),
-      () => outsider.bulkRedirects.save({ id: siteId, redirects }),
+      () => admin.bulkRedirects.get({ id: unknown }),
+      () => admin.bulkRedirects.save({ id: unknown, redirects }),
     ])
       expect(await rpcError(call())).toMatchObject({ code: "SITE_NOT_FOUND", status: 404 });
     // Read-only AccessKeys read but cannot write.
-    const reader = await owner.accessKeys.create({ name: "redirects-read", scope: "read" });
+    const reader = await admin.accessKeys.create({ name: "redirects-read", scope: "read" });
     const read = await api(reader.key, "GET", `/sites/${siteId}/bulk-redirects`);
     expect(read.status).toBe(200);
     expect(((await read.json()) as unknown[]).length).toBe(5000);
@@ -607,7 +589,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     expect(refused.status).toBe(403);
     expect(await refused.json()).toMatchObject({ code: "ACCESS_KEY_READ_ONLY" });
     // A write key replaces the table through /api/v1.
-    const writer = await owner.accessKeys.create({ name: "redirects-write", scope: "write" });
+    const writer = await admin.accessKeys.create({ name: "redirects-write", scope: "write" });
     const res = await api(writer.key, "PUT", `/sites/${siteId}/bulk-redirects`, {
       redirects: [{ source: "/api", target: "/v1", preserveQuery: true }],
     });
@@ -619,7 +601,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       actorType: "api_key",
       metadata: { count: 1 },
     });
-    // Platform administrators may change any site's table.
+    // The operator may change any site's table.
     expect(
       await admin.bulkRedirects.save({
         id: otherSiteId,
@@ -647,9 +629,9 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
   it("rolls back with the rules-v2 requirement of the restored content", async () => {
     const target = await config();
     expect(target.requiredFeatures).toContain("rules-v2");
-    await owner.bulkRedirects.save({ id: siteId, redirects: [] });
-    await owner.rules.save({ id: siteId, rules: [] });
-    await owner.sites.update({ id: siteId, origins: defaultOrigins });
+    await admin.bulkRedirects.save({ id: siteId, redirects: [] });
+    await admin.rules.save({ id: siteId, rules: [] });
+    await admin.sites.update({ id: siteId, origins: defaultOrigins });
     const plain = await config();
     expect(plain.requiredFeatures).not.toContain("rules-v2");
     expect(plain.sites.find((s) => s.id === siteId)?.bulkRedirects).toEqual([]);
@@ -658,49 +640,57 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     expect(restored.sites.find((s) => s.id === siteId)?.bulkRedirects).toHaveLength(1);
     expect(restored.requiredFeatures).toContain("rules-v2");
     // Publishing again ships the current state.
-    await owner.sites.update({ id: siteId, name: "shop" });
-    await owner.bulkRedirects.save({ id: siteId, redirects: [] });
+    await admin.sites.update({ id: siteId, name: "shop" });
+    await admin.bulkRedirects.save({ id: siteId, redirects: [] });
     expect((await config()).requiredFeatures).not.toContain("rules-v2");
   });
 
-  it("refuses rules-v2 to tenants while an active node lacks it; administrators may require it", async () => {
+  it("holds rules-v2 for changes without the operator while an active node lacks it; the operator may require it", async () => {
     await setNodeFeatures(G5_FEATURES.filter((feature) => feature !== "rules-v2"));
-    expect((await member.sites.features({ id: siteId })).rulesV2).toEqual({
+    expect((await admin.sites.features({ id: siteId })).rulesV2).toEqual({
       available: false,
       reason: "nodes",
     });
+    const serviceRules = (rules: unknown[]) =>
+      saveRules(
+        ctx,
+        siteId,
+        rules.map((rule) => ruleInput.parse(rule)),
+        service,
+      );
+    const serviceUpdate = (input: unknown) =>
+      updateSite(ctx.db, siteUpdateInput.parse(input), { ...service, masterKey: ctx.masterKey });
+    const serviceRedirects = (redirects: unknown[]) =>
+      saveBulkRedirects(ctx.db, bulkRedirectsInput.parse({ id: siteId, redirects }), service);
     const before = (await config()).revision;
     for (const call of [
-      () => owner.bulkRedirects.save({ id: siteId, redirects: [{ source: "/a", target: "/b" }] }),
-      () => owner.rules.save({ id: siteId, rules: v2Rules.slice(0, 1) }),
+      () => serviceRedirects([{ source: "/a", target: "/b" }]),
+      () => serviceRules(v2Rules.slice(0, 1)),
       () =>
-        owner.rules.save({
-          id: siteId,
-          rules: [
-            {
-              name: "fn",
-              phase: "waf-custom",
-              expression: "len(http.request.uri.query) gt 2048",
-              action: { kind: "block" },
-            },
-          ],
-        }),
-      () => owner.sites.update({ id: siteId, origins }),
+        serviceRules([
+          {
+            name: "fn",
+            phase: "waf-custom",
+            expression: "len(http.request.uri.query) gt 2048",
+            action: { kind: "block" },
+          },
+        ]),
+      () => serviceUpdate({ id: siteId, origins }),
       () =>
-        owner.sites.update({
+        serviceUpdate({
           id: siteId,
           cacheRules: [{ pathPrefixes: ["/a/"], browserTtlSeconds: 60 }],
         }),
     ])
-      expect(await rpcError(call())).toMatchObject({
+      await expect(call()).rejects.toMatchObject({
         code: "NODE_CAPABILITY_REQUIRED",
         status: 409,
         data: { features: "rules-v2" },
       });
     expect((await config()).revision).toBe(before);
-    expect(await member.bulkRedirects.get({ id: siteId })).toEqual([]);
-    expect(await member.rules.get({ id: siteId })).toEqual([]);
-    expect((await member.sites.get({ id: siteId })).origins).toHaveLength(1);
+    expect(await admin.bulkRedirects.get({ id: siteId })).toEqual([]);
+    expect(await admin.rules.get({ id: siteId })).toEqual([]);
+    expect((await admin.sites.get({ id: siteId })).origins).toHaveLength(1);
     // Rules, cache rules and redirects without the extensions still publish.
     const plain: RuleInput["action"] = {
       kind: "redirect",
@@ -711,32 +701,29 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       setQuery: [],
       removeQuery: [],
     };
-    await owner.rules.save({
-      id: siteId,
-      rules: [{ name: "plain", phase: "redirect", expression: "true", action: plain }],
-    });
-    await owner.sites.update({ id: siteId, cacheRules: [{ pathPrefixes: ["/a/"] }] });
+    await serviceRules([{ name: "plain", phase: "redirect", expression: "true", action: plain }]);
+    await serviceUpdate({ id: siteId, cacheRules: [{ pathPrefixes: ["/a/"] }] });
     expect((await config()).revision).toBeGreaterThan(before);
     expect((await config()).requiredFeatures).not.toContain("rules-v2");
-    // A disabled node does not count; an administrator may require the upgrade.
+    // A disabled node does not count; the operator may deliberately require the upgrade.
     await ctx.db.update(schema.node).set({ status: "disabled" }).where(eq(schema.node.id, nodeId));
-    expect((await member.sites.features({ id: siteId })).rulesV2.available).toBe(true);
+    expect((await admin.sites.features({ id: siteId })).rulesV2.available).toBe(true);
     await ctx.db.update(schema.node).set({ status: "active" }).where(eq(schema.node.id, nodeId));
     await admin.bulkRedirects.save({ id: siteId, redirects: [{ source: "/adm", target: "/in" }] });
     expect((await config()).requiredFeatures).toContain("rules-v2");
     await admin.bulkRedirects.save({ id: siteId, redirects: [] });
     expect((await config()).requiredFeatures).not.toContain("rules-v2");
-    // Once the node reports rules-v2, owners may use it.
+    // Once the node reports rules-v2, changes without the operator may use it.
     await setNodeFeatures(G5_FEATURES);
-    await owner.bulkRedirects.save({ id: siteId, redirects: [{ source: "/a", target: "/b" }] });
+    await serviceRedirects([{ source: "/a", target: "/b" }]);
     expect((await config()).requiredFeatures).toContain("rules-v2");
-    await owner.bulkRedirects.save({ id: siteId, redirects: [] });
+    await serviceRedirects([]);
   });
 
   it("treats a config rule that turns Under Attack on as using challenges", async () => {
     const before = await config();
     expect(before.platformProtection).toBeUndefined();
-    await owner.rules.save({
+    await admin.rules.save({
       id: siteId,
       rules: [
         {
@@ -758,7 +745,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     for (const site of current.sites)
       expect(site.protection, site.id).toMatchObject({ underAttack: false, passTtlSeconds: 1800 });
     expect(current.requiredFeatures).toEqual(expect.arrayContaining(["challenge-v1", "rules-v2"]));
-    await owner.rules.save({ id: siteId, rules: [] });
+    await admin.rules.save({ id: siteId, rules: [] });
     const after = await config();
     expect(after.platformProtection).toBeUndefined();
     expect(after.challengeKeys).toEqual([]);
@@ -766,26 +753,26 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
 
   it("validates value expressions and cache conditions through rules.validate", async () => {
     expect(
-      await member.rules.validate({
+      await admin.rules.validate({
         expression: 'concat("/", lower(http.host))',
         phase: "redirect",
         kind: "value",
       }),
     ).toEqual({ valid: true, position: 0, message: "" });
     expect(
-      await member.rules.validate({ expression: "http.host eq", phase: "redirect", kind: "value" }),
+      await admin.rules.validate({ expression: "http.host eq", phase: "redirect", kind: "value" }),
     ).toMatchObject({ valid: false });
     const long = `http.request.uri.path in {${Array.from({ length: 256 }, (_, i) => `"/${"p".repeat(40)}${i}"`).join(" ")}}`;
     expect(long.length).toBeGreaterThan(4096);
     expect(
-      await member.rules.validate({ expression: long, phase: "waf-custom", kind: "cacheRule" }),
+      await admin.rules.validate({ expression: long, phase: "waf-custom", kind: "cacheRule" }),
     ).toMatchObject({ valid: true });
-    expect(await member.rules.validate({ expression: long, phase: "cache" })).toMatchObject({
+    expect(await admin.rules.validate({ expression: long, phase: "cache" })).toMatchObject({
       valid: false,
     });
     // The default stays a condition of the phase.
     expect(
-      await member.rules.validate({ expression: "http.host", phase: "waf-custom" }),
+      await admin.rules.validate({ expression: "http.host", phase: "waf-custom" }),
     ).toMatchObject({
       valid: false,
       position: 9,

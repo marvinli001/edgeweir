@@ -195,7 +195,7 @@ export interface SiteErrorPagesModel {
 export interface PlatformErrorPagesModel {
   unknownHost: string;
   siteDisabled: string;
-  siteSuspended: string;
+  siteSuspended?: string;
 }
 
 /** A domain of a disabled or suspended site (config.proto OfflineHost). */

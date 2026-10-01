@@ -9,7 +9,7 @@ import {
   MAX_STATS_PER_REPORT,
   type ReportedMinuteStats,
 } from "../../src/server/services/stats";
-import { createTestContext, seedOrganization } from "./helpers";
+import { createTestContext, seedOperator } from "./helpers";
 
 const actor = { type: "user" as const, id: "user_admin" };
 const MINUTE = 60_000;
@@ -48,7 +48,7 @@ describe("node minute stats ingestion (ReportStats)", async () => {
       .orderBy(asc(schema.nodeMinuteStats.minute));
 
   beforeAll(async () => {
-    const { organizationId } = await seedOrganization(ctx.db);
+    await seedOperator(ctx.db);
     const [cluster, other] = await ctx.db.transaction(async (tx) => [
       await createClusterTx(tx, { name: "default", description: "" }, actor),
       await createClusterTx(tx, { name: "other", description: "" }, actor),
@@ -64,7 +64,7 @@ describe("node minute stats ingestion (ReportStats)", async () => {
             domains: [`${name}.test`],
             origins: [{ address: "origin.test" }],
           }),
-          { organizationId, actor, masterKey: ctx.masterKey },
+          { actor, masterKey: ctx.masterKey },
         )
       ).site.id;
     siteA = await site("a", cluster.id);

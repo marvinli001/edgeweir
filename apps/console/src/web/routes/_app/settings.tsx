@@ -4,7 +4,6 @@ import * as React from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { FormSelect } from "@/components/form-select";
-import { OrgLimitsCard } from "@/components/org-limits";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -92,7 +91,6 @@ function SettingsPage() {
         </CardContent>
       </Card>
 
-      <OrgLimitsCard />
       <ApiKeysCard />
     </Page>
   );

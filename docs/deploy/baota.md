@@ -90,7 +90,7 @@ bash deploy.sh install
    ./deploy.sh setup-token
    ```
 
-2. 打开 `https://cdn-admin.example.com/setup`，填入 setup token，创建平台管理员。初始化向导见 [快速上手](../guide/first-site.md)。
+2. 打开 `https://cdn-admin.example.com/setup`，填入 setup token 与姓名、邮箱、密码，创建控制台账户。初始化向导见 [快速上手](../guide/first-site.md)。
 
 3. 验证 Web 控制台：
 
@@ -109,7 +109,7 @@ bash deploy.sh install
 
    预期：签发者含 `Edgeweir Node Channel CA`。
 
-SMTP、节点发布源、所有权校验 DNS、源站地址允许清单与 GeoIP 数据库在 **后台 → 系统设置** 配置，见 [平台管理](../guide/admin.md#系统设置)。添加节点见 [接入节点](nodes.md)；安装命令中的 `--server` 即 `EDGEWEIR_NODE_API_URL`。
+SMTP、节点发布源、源站地址允许清单与 GeoIP 数据库在 **系统设置** 配置，见 [集群与系统](../guide/system.md#系统设置)。添加节点见 [接入节点](nodes.md)；安装命令中的 `--server` 即 `EDGEWEIR_NODE_API_URL`。
 
 ## 节点通道端口
 

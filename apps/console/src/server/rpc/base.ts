@@ -6,16 +6,12 @@ import { API_KEY_HEADER } from "../lib/auth";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { keyScope } from "../services/access-keys";
-import { type Caller, resolveCaller } from "../services/account";
 import type { Actor } from "../services/audit";
-import type { ManagerContext } from "../services/members";
 import {
   authenticateServiceAccountKey,
   isServiceAccountKey,
   type ServicePrincipal,
 } from "../services/service-accounts";
-import type { SiteScope } from "../services/sites";
-import { isAdminRole } from "../services/users";
 
 export interface RequestContext {
   app: AppContext;
@@ -73,8 +69,6 @@ export const os = implementation.use(async ({ context, next, procedure, path }) 
   }
   const session = await readSession(context);
   if (!session) throw new ORPCError("UNAUTHORIZED");
-  if ((session.user as { banned?: boolean }).banned)
-    fail("USER_DISABLED", "this account is disabled");
   const [key] = await context.app.db
     .select()
     .from(schema.apikey)
@@ -92,19 +86,11 @@ export const os = implementation.use(async ({ context, next, procedure, path }) 
   return next({ context: { apiSession: session } });
 });
 
-/** Resolves the session (cookie or x-api-key), the caller's organizations and data scope. */
+/** Resolves the caller: the operator's session (cookie or AccessKey) or a service account. */
 export const authed = os.use(async ({ context, next }) => {
   const account = context.serviceAccount;
   if (account) {
-    // A platform-level identity without organizations; `os` already enforced its scopes.
-    const caller: Caller = {
-      user: { id: account.id, name: account.name, email: "", twoFactorEnabled: false },
-      isAdmin: true,
-      memberships: [],
-      organization: null,
-      requireTwoFactor: false,
-      twoFactorRequired: false,
-    };
+    // `os` already enforced its scopes.
     const actor: Actor = {
       type: "service_account",
       id: account.id,
@@ -112,34 +98,16 @@ export const authed = os.use(async ({ context, next }) => {
       ip: context.ip,
       userAgent: context.userAgent,
     };
-    const scope: SiteScope = { all: true };
     return next({
       context: {
         user: { id: account.id, name: account.name, email: "" } as SessionResult["user"],
-        isAdmin: true,
-        caller,
-        organizationId: null as string | null,
         actor,
-        scope,
-        sessionId: null as string | null,
       },
     });
   }
   const result = await readSession(context);
   if (!result) throw new ORPCError("UNAUTHORIZED", { message: "authentication required" });
-  const { user, session } = result;
-  const u = user as typeof user & {
-    role?: string | null;
-    banned?: boolean | null;
-    twoFactorEnabled?: boolean | null;
-  };
-  // Covers API keys too: disabling an account must stop every credential at once.
-  if (u.banned) fail("USER_DISABLED", "this account is disabled");
-  const isAdmin = isAdminRole(u.role);
-  const activeOrganizationId = (session as { activeOrganizationId?: string | null })
-    .activeOrganizationId;
-  const caller = await resolveCaller(context.app.db, u, isAdmin, activeOrganizationId);
-  const organizationId = caller.organization?.id ?? null;
+  const { user } = result;
   const actor: Actor = {
     type: context.headers.has(API_KEY_HEADER) ? "api_key" : "user",
     id: user.id,
@@ -147,45 +115,5 @@ export const authed = os.use(async ({ context, next }) => {
     ip: context.ip,
     userAgent: context.userAgent,
   };
-  const scope: SiteScope = isAdmin
-    ? { all: true }
-    : { all: false, organizationId: organizationId ?? "__none__" };
-  const sessionId = (session as { id?: string }).id ?? null;
-  return next({ context: { user, isAdmin, caller, organizationId, actor, scope, sessionId } });
+  return next({ context: { user, actor } });
 });
-
-/** Console procedures on tenant data: blocked until a required 2FA is enabled. */
-export const tenant = authed.use(async ({ context, next }) => {
-  if (context.caller.twoFactorRequired) {
-    fail("TWO_FACTOR_REQUIRED", "your organization requires two-factor authentication");
-  }
-  return next();
-});
-
-/** Organization management (members, policy): organization owners/admins and platform admins. */
-export const orgManager = tenant.use(async ({ context, next }) => {
-  const org = context.caller.organization;
-  if (!org) fail("NOT_A_MEMBER", "caller is not a member of any organization");
-  const role = context.isAdmin ? "owner" : org.role;
-  if (role !== "owner" && role !== "admin") {
-    fail("ORG_ADMIN_REQUIRED", "organization owners and admins only");
-  }
-  const manager: ManagerContext = { actor: context.actor, role };
-  return next({ context: { organizationId: org.id, manager } });
-});
-
-/** Platform infrastructure and tenancy (the admin area) is administrator-only. */
-export const admin = authed.use(async ({ context, next }) => {
-  if (!context.isAdmin) throw new ORPCError("FORBIDDEN", { message: "administrator only" });
-  const manager: ManagerContext = { actor: context.actor, role: "owner" };
-  return next({ context: { manager } });
-});
-
-/** Public procedures that behave differently for a signed-in caller (invitations). */
-export const maybeAuthed = os.use(async ({ context, next }) => {
-  const result = await readSession(context).catch(() => null);
-  const session = result ? { userId: result.user.id, email: result.user.email } : null;
-  return next({ context: { session } });
-});
-
-export type { Caller };

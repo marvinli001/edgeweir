@@ -349,25 +349,23 @@ export const ipListDto = z.object({
   name: z.string(),
   entries: z.array(z.string()),
   kind: z.enum(["collection", "allow", "block"]),
-  platform: z.boolean(),
 });
-const listContract = (prefix: `/${string}`) => ({
-  list: oc.route({ method: "GET", path: prefix, tags: ["rules"] }).output(z.array(ipListDto)),
+/** IP lists: collections rules refer to, and allow and block lists that apply to every site. */
+export const ipListsContract = {
+  list: oc.route({ method: "GET", path: "/ip-lists", tags: ["rules"] }).output(z.array(ipListDto)),
   create: oc
-    .route({ method: "POST", path: prefix, tags: ["rules"] })
+    .route({ method: "POST", path: "/ip-lists", tags: ["rules"] })
     .input(ipListInput)
     .output(ipListDto),
   update: oc
-    .route({ method: "PUT", path: `${prefix}/{id}`, tags: ["rules"] })
+    .route({ method: "PUT", path: "/ip-lists/{id}", tags: ["rules"] })
     .input(z.object({ id: uuid, entries, kind: z.enum(["collection", "allow", "block"]) }))
     .output(ipListDto),
   delete: oc
-    .route({ method: "DELETE", path: `${prefix}/{id}`, tags: ["rules"] })
+    .route({ method: "DELETE", path: "/ip-lists/{id}", tags: ["rules"] })
     .input(z.object({ id: uuid }))
     .output(z.object({ ok: z.literal(true) })),
-});
-export const ipListsContract = listContract("/ip-lists");
-export const platformIpListsContract = listContract("/platform-ip-lists");
+};
 export type RuleInput = z.infer<typeof ruleInput>;
 export type RuleDto = z.infer<typeof ruleDto>;
 export type IpListInput = z.infer<typeof ipListInput>;

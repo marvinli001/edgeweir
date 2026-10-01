@@ -14,9 +14,7 @@ import { latestRevision } from "../../src/server/services/revisions";
 import { s3SecretBinding } from "../../src/server/services/sites";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -28,8 +26,6 @@ describe("M2 origins, cache settings and cache tasks", async () => {
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
-  let tenant: ApiClient;
-  let other: ApiClient;
   let clusterA: string;
   let clusterB: string;
 
@@ -47,34 +43,13 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
     clusterA = (await admin.clusters.list())[0]?.id ?? "";
     clusterB = (await admin.clusters.create({ name: "edge-b" })).id;
-    const tenantOrg = await admin.organizations.create({
-      name: "Tenant",
-      defaultClusterId: clusterB,
-    });
-    const otherOrg = await admin.organizations.create({
-      name: "Other",
-      defaultClusterId: clusterB,
-    });
-    await admin.users.create({
-      name: "Tina Tenant",
-      email: "tina@tenant.test",
-      password: PASSWORD,
-      organizationId: tenantOrg.id,
-    });
-    await admin.users.create({
-      name: "Otto Other",
-      email: "otto@other.test",
-      password: PASSWORD,
-      organizationId: otherOrg.id,
-    });
-    tenant = rpcClient(app, origin, await signIn(app, origin, "tina@tenant.test"));
-    other = rpcClient(app, origin, await signIn(app, origin, "otto@other.test"));
   });
   afterAll(() => pglite.close());
 
   it("stores origin settings, cache settings and new rule conditions and compiles them", async () => {
-    const { site, revision: pendingRevision } = await tenant.sites.create({
+    const { site, revision } = await admin.sites.create({
       name: "assets",
+      clusterId: clusterB,
       domains: ["assets.test", "*.cdn.test"],
       origins: [
         { address: "origin-a", port: 443, scheme: "https", sni: "origin-a.example.com" },
@@ -107,8 +82,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
         },
       ],
     });
-    const revision = await approveSiteDomains(admin, site.id);
-    expect(revision.revision).toBeGreaterThan(pendingRevision.revision);
+    expect(revision.siteCount).toBe(1);
     expect(site.originSettings).toMatchObject({
       policy: "consistent_hash",
       tlsVerify: false,
@@ -140,7 +114,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect(compiled?.cacheRules[0]?.staleIfErrorSeconds).toBe(600);
 
     // Saving only the cache settings keeps the rest.
-    const updated = await tenant.sites.update({
+    const updated = await admin.sites.update({
       id: site.id,
       cacheSettings: { cacheKey: { query: "ignore" }, rangeSlice: false },
     });
@@ -150,8 +124,9 @@ describe("M2 origins, cache settings and cache tasks", async () => {
   });
 
   it("stores cacheAuthorized per rule (off by default) and compiles it", async () => {
-    const { site } = await tenant.sites.create({
+    const { site } = await admin.sites.create({
       name: "api",
+      clusterId: clusterB,
       domains: ["api.test"],
       origins: [{ address: "origin-api" }],
       cacheRules: [
@@ -164,7 +139,6 @@ describe("M2 origins, cache settings and cache tasks", async () => {
         { priority: 20, pathPrefixes: ["/"] },
       ],
     });
-    await approveSiteDomains(admin, site.id);
     expect(site.cacheRules.map((r) => r.cacheAuthorized)).toEqual([true, false]);
     const compiled = async () =>
       decodeNodeConfig((await latestRevision(ctx.db, clusterB))?.ir ?? new Uint8Array()).sites.find(
@@ -177,7 +151,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
       ["/", false],
     ]);
 
-    const updated = await tenant.sites.update({
+    const updated = await admin.sites.update({
       id: site.id,
       cacheRules: [{ pathPrefixes: ["/public/"], originCacheControl: "respect" }],
     });
@@ -190,13 +164,13 @@ describe("M2 origins, cache settings and cache tasks", async () => {
       { pathPrefixes: ["/static/"], edgeTtlSeconds: 86400 },
       { pathPrefixes: ["/"], edgeTtlSeconds: 60 },
     ];
-    const { site } = await tenant.sites.create({
+    const { site } = await admin.sites.create({
       name: "ordered",
+      clusterId: clusterB,
       domains: ["ordered.test"],
       origins: [{ address: "origin-ordered" }],
       cacheRules: rules,
     });
-    await approveSiteDomains(admin, site.id);
     expect(site.cacheRules.map((r) => r.priority)).toEqual([10, 20]);
     const compiled = async () =>
       decodeNodeConfig((await latestRevision(ctx.db, clusterB))?.ir ?? new Uint8Array()).sites.find(
@@ -206,13 +180,13 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect(first?.cacheRules.map((r) => r.match?.pathPrefixes[0])).toEqual(["/static/", "/"]);
     // Saving the same rules again keeps their ids: no new revision.
     for (let i = 0; i < 6; i++) {
-      const saved = await tenant.sites.update({ id: site.id, cacheRules: rules });
+      const saved = await admin.sites.update({ id: site.id, cacheRules: rules });
       expect(saved.site.cacheRules.map((r) => r.id)).toEqual(site.cacheRules.map((r) => r.id));
     }
     expect((await compiled())?.cacheRules).toEqual(first?.cacheRules);
     // Equal priorities would leave the order to chance.
     const error = await rpcError(
-      tenant.sites.update({
+      admin.sites.update({
         id: site.id,
         cacheRules: rules.map((rule) => ({ ...rule, priority: 100 })),
       }),
@@ -222,8 +196,9 @@ describe("M2 origins, cache settings and cache tasks", async () => {
   });
 
   it("keeps S3 secrets encrypted, write-only and versioned", async () => {
-    const created = await tenant.sites.create({
+    const created = await admin.sites.create({
       name: "bucket",
+      clusterId: clusterB,
       domains: ["bucket.test"],
       origins: [
         {
@@ -238,7 +213,6 @@ describe("M2 origins, cache settings and cache tasks", async () => {
         },
       ],
     });
-    await approveSiteDomains(admin, created.site.id);
     expect(created.site.origins[0]?.s3).toEqual({
       region: "us-east-1",
       bucket: "assets",
@@ -256,7 +230,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect(JSON.stringify(audit)).not.toContain("s3cr3t-value");
 
     // Saving without the secret keeps the credential; a new secret rotates it.
-    const kept = await tenant.sites.update({
+    const kept = await admin.sites.update({
       id: created.site.id,
       origins: [
         {
@@ -267,7 +241,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
       ],
     });
     expect(kept.site.origins[0]?.s3?.accessKeyId).toBe("AKIDTENANT");
-    await tenant.sites.update({
+    await admin.sites.update({
       id: created.site.id,
       origins: [
         {
@@ -300,7 +274,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
 
     // A new access key needs its secret.
     const missing = await rpcError(
-      tenant.sites.update({
+      admin.sites.update({
         id: created.site.id,
         origins: [{ address: "minio", s3: { region: "us-east-1", accessKeyId: "AKIDNEW" } }],
       }),
@@ -309,7 +283,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect(missing.data).toMatchObject({ accessKeyId: "AKIDNEW" });
 
     // Removing the S3 origin deletes the credential.
-    await tenant.sites.update({ id: created.site.id, origins: [{ address: "origin.internal" }] });
+    await admin.sites.update({ id: created.site.id, origins: [{ address: "origin.internal" }] });
     const left = await ctx.db
       .select()
       .from(schema.originCredential)
@@ -319,8 +293,9 @@ describe("M2 origins, cache settings and cache tasks", async () => {
 
   it("aggregates the passive origin health reported by online nodes", async () => {
     const node = await addNode(clusterB, "edge-b-1");
-    const { site } = await tenant.sites.create({
+    const { site } = await admin.sites.create({
       name: "health",
+      clusterId: clusterB,
       domains: ["health.test"],
       origins: [{ address: "primary" }, { address: "backup", backup: true }],
     });
@@ -348,7 +323,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
       },
     ]);
     expect(stored).toBe(1);
-    const health = await tenant.sites.originHealth({ id: site.id });
+    const health = await admin.sites.originHealth({ id: site.id });
     const p = health.find((h) => h.originId === primary?.id);
     const b = health.find((h) => h.originId === backup?.id);
     expect(p).toMatchObject({ downNodes: 1, lastError: "connect timeout" });
@@ -361,7 +336,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect(p?.onlineNodes).toBeGreaterThanOrEqual(1);
 
     // Editing the pool keeps the ids (and the health) of unchanged origins.
-    const edited = await tenant.sites.update({
+    const edited = await admin.sites.update({
       id: site.id,
       origins: [
         { address: "added" },
@@ -373,10 +348,10 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect(edited.site.origins[1]).toMatchObject({ id: primary?.id, weight: 5 });
     expect(edited.site.origins[2]?.id).toBe(backup?.id);
     expect(edited.site.origins[0]?.id).not.toBe(primary?.id);
-    const kept = await tenant.sites.originHealth({ id: site.id });
+    const kept = await admin.sites.originHealth({ id: site.id });
     expect(kept.find((h) => h.originId === primary?.id)?.downNodes).toBe(1);
     // A changed port is another origin.
-    const moved = await tenant.sites.update({
+    const moved = await admin.sites.update({
       id: site.id,
       origins: [
         { address: "primary", port: 8080 },
@@ -388,23 +363,22 @@ describe("M2 origins, cache settings and cache tasks", async () => {
 
     // The next report without failures clears the state.
     await replaceOriginHealth(ctx.db, node, []);
-    expect((await tenant.sites.originHealth({ id: site.id })).every((h) => h.downNodes === 0)).toBe(
+    expect((await admin.sites.originHealth({ id: site.id })).every((h) => h.downNodes === 0)).toBe(
       true,
     );
-    // Another organization cannot read it.
-    expect((await rpcError(other.sites.originHealth({ id: site.id }))).code).toBe("SITE_NOT_FOUND");
   });
 
   it("fans cache tasks out to the nodes of the site's cluster and tracks their results", async () => {
     const nodeB2 = await addNode(clusterB, "edge-b-2");
     await addNode(clusterA, "edge-a-1");
-    await tenant.sites.create({
+    await admin.sites.create({
       name: "purge",
+      clusterId: clusterB,
       domains: ["purge.test", "*.wild.test"],
       origins: [{ address: "whoami" }],
     });
 
-    const task = await tenant.cacheTasks.create({
+    const task = await admin.cacheTasks.create({
       type: "url",
       urls: [
         "http://purge.test/a/b.js?v=2&x=1#frag",
@@ -435,7 +409,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     ]);
     // Handed out tasks are not handed out again right away.
     expect(await pullCacheTasks(ctx.db, nodeB2, 10)).toHaveLength(0);
-    expect((await tenant.cacheTasks.get({ id: task.id })).state).toBe("running");
+    expect((await admin.cacheTasks.get({ id: task.id })).state).toBe("running");
 
     await reportCacheTaskResult(ctx.db, nodeB2, {
       taskId: task.id,
@@ -457,7 +431,7 @@ describe("M2 origins, cache settings and cache tasks", async () => {
       failed: 2,
       finishedAt: new Date(),
     });
-    const done = await tenant.cacheTasks.get({ id: task.id });
+    const done = await admin.cacheTasks.get({ id: task.id });
     expect(done.state).toBe("failed");
     expect(done.finishedAt).not.toBeNull();
     expect(done.nodes.find((n) => n.nodeName === "edge-b-1")).toMatchObject({
@@ -467,17 +441,17 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     });
 
     // Prefixes, whole sites and prefetch.
-    const prefix = await tenant.cacheTasks.create({
+    const prefix = await admin.cacheTasks.create({
       type: "prefix",
       urls: ["http://purge.test/static/"],
     });
     expect(prefix.targets).toEqual(["http://purge.test/static/"]);
-    const whole = await tenant.cacheTasks.create({
+    const whole = await admin.cacheTasks.create({
       type: "site",
       siteIds: [task.sites[0]?.id ?? ""],
     });
     expect(whole.targets).toEqual(["purge"]);
-    const prefetch = await tenant.cacheTasks.create({
+    const prefetch = await admin.cacheTasks.create({
       type: "prefetch",
       urls: ["http://purge.test/big.bin"],
     });
@@ -486,53 +460,43 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect(pulledAll[2]?.items[0]).toMatchObject({ url: "http://purge.test/big.bin" });
     expect(prefetch.state).toBe("pending");
 
-    const list = await tenant.cacheTasks.list({});
+    const list = await admin.cacheTasks.list({});
     expect(list.total).toBe(4);
     expect(list.items[0]?.id).toBe(prefetch.id);
     const audit = await admin.auditLogs.list({ action: "cache.purge" });
-    expect(audit.items[0]).toMatchObject({ actorName: "Tina Tenant", targetType: "cache_task" });
+    expect(audit.items[0]).toMatchObject({ actorName: "Platform Admin", targetType: "cache_task" });
   });
 
-  it("refuses bad URLs, foreign hosts and other organizations' tasks", async () => {
+  it("refuses bad URLs, unknown hosts and unknown tasks", async () => {
     const invalid = await rpcError(
-      tenant.cacheTasks.create({ type: "url", urls: ["ftp://purge.test/x"] }),
+      admin.cacheTasks.create({ type: "url", urls: ["ftp://purge.test/x"] }),
     );
     expect(invalid.code).toBe("CACHE_TASK_URL_INVALID");
     const prefixQuery = await rpcError(
-      tenant.cacheTasks.create({ type: "prefix", urls: ["http://purge.test/a?x=1"] }),
+      admin.cacheTasks.create({ type: "prefix", urls: ["http://purge.test/a?x=1"] }),
     );
     expect(prefixQuery.code).toBe("CACHE_TASK_URL_INVALID");
     const unknown = await rpcError(
-      tenant.cacheTasks.create({ type: "url", urls: ["http://nope.test/"] }),
+      admin.cacheTasks.create({ type: "url", urls: ["http://nope.test/"] }),
     );
     expect(unknown.code).toBe("CACHE_TASK_HOST_UNKNOWN");
     expect(unknown.data).toMatchObject({ hosts: "nope.test" });
-    // purge.test belongs to Tenant: Other cannot purge it, list it or read its tasks.
-    const foreign = await rpcError(
-      other.cacheTasks.create({ type: "url", urls: ["http://purge.test/"] }),
-    );
-    expect(foreign.code).toBe("CACHE_TASK_HOST_UNKNOWN");
-    expect((await other.cacheTasks.list({})).total).toBe(0);
-    const [tenantTask] = (await tenant.cacheTasks.list({})).items;
-    expect((await rpcError(other.cacheTasks.get({ id: tenantTask?.id ?? "" }))).code).toBe(
+    expect((await rpcError(admin.cacheTasks.get({ id: crypto.randomUUID() }))).code).toBe(
       "CACHE_TASK_NOT_FOUND",
     );
-    // Platform administrators see every task; tenants still cannot reach the admin area.
-    const adminList = await admin.cacheTasks.list({});
-    expect(adminList.total).toBeGreaterThanOrEqual(4);
-    expect((await rpcError(tenant.clusters.list())).status).toBe(403);
-    expect((await rpcError(tenant.nodes.list({}))).status).toBe(403);
+    // Refused tasks are not stored.
+    expect((await admin.cacheTasks.list({})).total).toBe(4);
   });
 
   it("expires deliveries that no node picked up in time", async () => {
-    const { items } = await tenant.cacheTasks.list({});
+    const { items } = await admin.cacheTasks.list({});
     const pending = items.find((t) =>
       t.nodes.some((n) => n.state !== "succeeded" && n.state !== "failed"),
     );
     expect(pending).toBeDefined();
     const expired = await expireCacheTasks(ctx.db, new Date(Date.now() + 8 * 24 * 3600 * 1000));
     expect(expired).toBeGreaterThan(0);
-    const after = await tenant.cacheTasks.get({ id: pending?.id ?? "" });
+    const after = await admin.cacheTasks.get({ id: pending?.id ?? "" });
     expect(after.state).toBe("failed");
     expect(after.nodes.every((n) => n.state === "failed" || n.state === "succeeded")).toBe(true);
     expect(after.finishedAt).not.toBeNull();

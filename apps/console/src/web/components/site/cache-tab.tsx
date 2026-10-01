@@ -38,7 +38,6 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import * as React from "react";
 import { SafetyNote } from "@/components/safety-note";
 import { ExpressionEditor, expressionErrorPosition } from "@/components/site/expression-editor";
@@ -209,7 +208,7 @@ const newRule = (): RuleDraft => ({
   action: "cache",
   ttl: "3600",
   browserTtl: "",
-  respect: false,
+  respect: true,
   staleWhileRevalidate: "",
   staleIfError: "",
   cacheAuthorized: false,
@@ -219,11 +218,10 @@ const newRule = (): RuleDraft => ({
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 function CacheRulesCard({ site }: { site: Site }) {
-  const { isAdmin } = useRouteContext({ from: "/_app" });
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   const availability = features.data?.rulesV2;
-  // Expressions beyond the builder and browser TTLs need rules-v2; administrators may require it.
-  const locked = !isAdmin && availability?.available === false;
+  // Expressions beyond the builder and browser TTLs wait until the nodes run rules-v2.
+  const locked = availability?.available === false;
   const initial = React.useMemo(() => site.cacheRules.map(toDraft), [site.cacheRules]);
   const [rows, setRows] = React.useState(initial);
   const { save, error, pending } = useSaveSite(site.id);

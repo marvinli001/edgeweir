@@ -8,15 +8,14 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { ingestLogs, logsCsv, queryLogs } from "../../src/server/services/access-logs";
+import { updateHttps } from "../../src/server/services/certificates";
 import { latestRevision } from "../../src/server/services/revisions";
 import { ingestMinuteStats } from "../../src/server/services/stats";
 import { rollupTraffic } from "../../src/server/services/stats-rollup";
-import { topWafRules } from "../../src/server/services/waf";
+import { topWafRules, updateSiteWaf } from "../../src/server/services/waf";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -39,16 +38,17 @@ const ALL_FEATURES = [
   "rules-v2",
 ];
 
+/** A change without the operator behind it (service accounts, background jobs). */
+const service = {
+  actor: { type: "service_account" as const, id: "service-account-waf", name: "integration" },
+};
+
 describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
   const { ctx, client: pglite } = await createTestContext();
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
-  let owner: ApiClient;
-  let member: ApiClient;
-  let outsider: ApiClient;
   let clusterId: string;
-  let orgId: string;
   let siteId: string;
   let otherSiteId: string;
   let nodeId: string;
@@ -74,26 +74,11 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     await setupPlatform(ctx);
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
     clusterId = (await admin.clusters.list())[0]?.id ?? "";
-    orgId = (await admin.organizations.create({ name: "Guard", defaultClusterId: clusterId })).id;
-    const otherOrgId = (
-      await admin.organizations.create({ name: "Apart", defaultClusterId: clusterId })
-    ).id;
-    const users: [string, string, "owner" | "member"][] = [
-      ["owner@guard.test", orgId, "owner"],
-      ["member@guard.test", orgId, "member"],
-      ["owner@apart.test", otherOrgId, "owner"],
-    ];
-    for (const [email, organizationId, role] of users)
-      await admin.users.create({ name: email, email, password: PASSWORD, organizationId, role });
-    owner = rpcClient(app, origin, await signIn(app, origin, "owner@guard.test"));
-    member = rpcClient(app, origin, await signIn(app, origin, "member@guard.test"));
-    outsider = rpcClient(app, origin, await signIn(app, origin, "owner@apart.test"));
-    siteId = (await owner.sites.create({ name: "store", domains: ["store.guard.test"], origins }))
+    siteId = (await admin.sites.create({ name: "store", domains: ["store.guard.test"], origins }))
       .site.id;
     otherSiteId = (
-      await outsider.sites.create({ name: "apart", domains: ["www.apart.test"], origins })
+      await admin.sites.create({ name: "apart", domains: ["www.apart.test"], origins })
     ).site.id;
-    for (const id of [siteId, otherSiteId]) await approveSiteDomains(admin, id);
     // An active node with every G3 feature; tests take features away from it.
     const [node] = await ctx.db
       .insert(schema.node)
@@ -105,7 +90,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
   afterAll(() => pglite.close());
 
   it("reads CRS off with the defaults and every feature available", async () => {
-    expect(await member.waf.get({ id: siteId })).toEqual({
+    expect(await admin.waf.get({ id: siteId })).toEqual({
       siteId,
       mode: "off",
       paranoiaLevel: 1,
@@ -115,7 +100,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       updatedAt: null,
     });
     const available = { available: true, reason: null };
-    expect(await member.sites.features({ id: siteId })).toEqual({
+    expect(await admin.sites.features({ id: siteId })).toEqual({
       brotli: available,
       zstd: available,
       crs: available,
@@ -126,39 +111,15 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       prefetchVariants: available,
       rulesV2: available,
     });
-    expect(await admin.settings.waf()).toEqual({ tenantCrs: true });
-    const https = await member.https.get({ id: siteId });
+    const https = await admin.https.get({ id: siteId });
     expect(https).toMatchObject({ brotli: false, brotliLevel: 6, zstd: false, zstdLevel: 3 });
     const current = await config();
     expect(current.sites.every((site) => !site.waf)).toBe(true);
     expect(current.requiredFeatures).not.toContain("modsecurity-v1");
   });
 
-  it("lets owners change CRS, members read it and nobody else reach it", async () => {
-    expect(await rpcError(member.waf.update({ id: siteId, mode: "detect" }))).toMatchObject({
-      code: "ORG_ADMIN_REQUIRED",
-      status: 403,
-    });
-    expect(await rpcError(outsider.waf.update({ id: siteId, mode: "detect" }))).toMatchObject({
-      code: "SITE_NOT_FOUND",
-      status: 404,
-    });
-    for (const call of [
-      () => outsider.waf.get({ id: siteId }),
-      () => outsider.waf.topRules({ id: siteId }),
-      () => outsider.sites.features({ id: siteId }),
-      () => outsider.https.update({ id: siteId, settings: tlsSettings.parse({ brotli: true }) }),
-    ])
-      expect(await rpcError(call())).toMatchObject({ code: "SITE_NOT_FOUND" });
-    // Tenants never reach the platform setting.
-    for (const call of [
-      () => owner.settings.waf(),
-      () => owner.settings.setWaf({ tenantCrs: false }),
-    ])
-      expect((await rpcError(call())).status).toBe(403);
-    expect((await admin.settings.waf()).tenantCrs).toBe(true);
-    // Read-only AccessKeys read but cannot write.
-    const reader = await owner.accessKeys.create({ name: "waf-read", scope: "read" });
+  it("lets read-only AccessKeys read CRS but not change it", async () => {
+    const reader = await admin.accessKeys.create({ name: "waf-read", scope: "read" });
     for (const path of [
       `/sites/${siteId}/waf`,
       `/sites/${siteId}/waf/rules?range=1h`,
@@ -173,12 +134,12 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       expect(res.status, path).toBe(403);
       expect(await res.json()).toMatchObject({ code: "ACCESS_KEY_READ_ONLY" });
     }
-    expect((await member.waf.get({ id: siteId })).mode).toBe("off");
+    expect((await admin.waf.get({ id: siteId })).mode).toBe("off");
   });
 
   it("turns CRS on through /api/v1, publishes Site.waf with modsecurity-v1 and audits it", async () => {
     const before = (await config()).revision;
-    const writer = await owner.accessKeys.create({ name: "waf-write", scope: "write" });
+    const writer = await admin.accessKeys.create({ name: "waf-write", scope: "write" });
     const res = await api(writer.key, "PATCH", `/sites/${siteId}/waf`, {
       mode: "block",
       paranoiaLevel: 2,
@@ -211,13 +172,13 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     });
     expect((await siteOf(otherSiteId))?.waf).toBeUndefined();
     const [audit] = await audits("site.waf_update");
-    expect(audit).toMatchObject({ organizationId: orgId, targetId: siteId, actorType: "api_key" });
+    expect(audit).toMatchObject({ targetId: siteId, actorType: "api_key" });
     expect(audit?.metadata).toMatchObject({
       from: { mode: "off", paranoiaLevel: 1 },
       to: { mode: "block", paranoiaLevel: 2, excludedRuleIds: [920350, 942100] },
     });
     // Fields not given keep their values; duplicate or non-CRS ids are refused.
-    const detect = await owner.waf.update({ id: siteId, mode: "detect" });
+    const detect = await admin.waf.update({ id: siteId, mode: "detect" });
     expect(detect).toMatchObject({ mode: "detect", paranoiaLevel: 2, anomalyThreshold: 10 });
     expect((await siteOf())?.waf?.mode).toBe("detect");
     for (const input of [
@@ -227,14 +188,14 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       { anomalyThreshold: 0 },
       { requestBodyLimit: 134_217_729 },
     ])
-      expect((await rpcError(owner.waf.update({ id: siteId, ...input }))).status).toBe(400);
+      expect((await rpcError(admin.waf.update({ id: siteId, ...input }))).status).toBe(400);
     // Off: the site no longer carries CRS and the cluster no longer needs the module.
-    await owner.waf.update({ id: siteId, mode: "off" });
+    await admin.waf.update({ id: siteId, mode: "off" });
     expect((await siteOf())?.waf).toBeUndefined();
     expect((await config()).requiredFeatures).not.toContain("modsecurity-v1");
     // Changing settings while off publishes nothing new.
     const idle = (await config()).revision;
-    await owner.waf.update({ id: siteId, paranoiaLevel: 3 });
+    await admin.waf.update({ id: siteId, paranoiaLevel: 3 });
     expect((await config()).revision).toBe(idle);
   });
 
@@ -249,9 +210,9 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       zstdMinLength: 1024,
       zstdTypes: ["text/css"],
     });
-    const saved = await member.https.update({ id: siteId, settings });
+    const saved = await admin.https.update({ id: siteId, settings });
     expect(saved).toMatchObject({ brotli: true, brotliLevel: 9, zstd: true, zstdLevel: 5 });
-    expect(await member.https.get({ id: siteId })).toMatchObject({
+    expect(await admin.https.get({ id: siteId })).toMatchObject({
       brotli: true,
       brotliLevel: 9,
       brotliMinLength: 512,
@@ -273,16 +234,16 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     expect((await config()).requiredFeatures).toEqual(
       expect.arrayContaining(["brotli-v1", "zstd-v1", "tls-v1"]),
     );
-    await member.https.update({ id: siteId, settings: tlsSettings.parse({}) });
+    await admin.https.update({ id: siteId, settings: tlsSettings.parse({}) });
     expect((await siteOf())?.tls).toMatchObject({ brotli: false, brotliTypes: [], zstd: false });
     expect((await config()).requiredFeatures).not.toContain("brotli-v1");
     expect((await config()).requiredFeatures).not.toContain("zstd-v1");
   });
 
-  it("refuses tenants a module the cluster's active nodes lack; administrators may require it", async () => {
+  it("holds a module the cluster's active nodes lack for changes without the operator; the operator may require it", async () => {
     await setNodeFeatures(["rules-v1", "tls-v1"]);
     const unavailable = { available: false, reason: "nodes" };
-    expect(await member.sites.features({ id: siteId })).toEqual({
+    expect(await admin.sites.features({ id: siteId })).toEqual({
       brotli: unavailable,
       zstd: unavailable,
       crs: unavailable,
@@ -293,33 +254,25 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       prefetchVariants: unavailable,
       rulesV2: unavailable,
     });
-    // Administrators see the same reason; the API still lets them override.
-    expect((await admin.sites.features({ id: siteId })).crs).toEqual(unavailable);
     const before = (await config()).revision;
     for (const [call, feature] of [
-      [
-        () => owner.https.update({ id: siteId, settings: tlsSettings.parse({ brotli: true }) }),
-        "brotli-v1",
-      ],
-      [
-        () => owner.https.update({ id: siteId, settings: tlsSettings.parse({ zstd: true }) }),
-        "zstd-v1",
-      ],
-      [() => owner.waf.update({ id: siteId, mode: "detect" }), "modsecurity-v1"],
+      [() => updateHttps(ctx, siteId, tlsSettings.parse({ brotli: true }), service), "brotli-v1"],
+      [() => updateHttps(ctx, siteId, tlsSettings.parse({ zstd: true }), service), "zstd-v1"],
+      [() => updateSiteWaf(ctx.db, { id: siteId, mode: "detect" }, service), "modsecurity-v1"],
     ] as const)
-      expect(await rpcError(call())).toMatchObject({
+      await expect(call()).rejects.toMatchObject({
         code: "NODE_CAPABILITY_REQUIRED",
         status: 409,
         data: { features: feature },
       });
     expect((await config()).revision).toBe(before);
-    expect((await member.waf.get({ id: siteId })).mode).toBe("off");
-    expect((await member.https.get({ id: siteId })).brotli).toBe(false);
+    expect((await admin.waf.get({ id: siteId })).mode).toBe("off");
+    expect((await admin.https.get({ id: siteId })).brotli).toBe(false);
     // A disabled node does not count.
     await ctx.db.update(schema.node).set({ status: "disabled" }).where(eq(schema.node.id, nodeId));
-    expect((await member.sites.features({ id: siteId })).brotli.available).toBe(true);
+    expect((await admin.sites.features({ id: siteId })).brotli.available).toBe(true);
     await ctx.db.update(schema.node).set({ status: "active" }).where(eq(schema.node.id, nodeId));
-    // An administrator may deliberately require the upgrade.
+    // The operator may deliberately require the upgrade.
     await admin.waf.update({ id: siteId, mode: "detect" });
     await admin.https.update({ id: siteId, settings: tlsSettings.parse({ brotli: true }) });
     expect((await config()).requiredFeatures).toEqual(
@@ -328,52 +281,21 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     await admin.waf.update({ id: siteId, mode: "off" });
     await admin.https.update({ id: siteId, settings: tlsSettings.parse({}) });
     await setNodeFeatures(ALL_FEATURES);
-    expect((await member.sites.features({ id: siteId })).crs.available).toBe(true);
-  });
-
-  it("lets the platform forbid CRS for tenants while administrators keep it", async () => {
-    expect(await admin.settings.setWaf({ tenantCrs: false })).toEqual({ tenantCrs: false });
-    const [audit] = await audits("system.waf_update");
-    expect(audit?.metadata).toEqual({ from: { tenantCrs: true }, to: { tenantCrs: false } });
-    expect((await owner.sites.features({ id: siteId })).crs).toEqual({
-      available: false,
-      reason: "platform",
-    });
-    expect((await admin.sites.features({ id: siteId })).crs).toEqual({
-      available: true,
-      reason: null,
-    });
-    expect(await rpcError(owner.waf.update({ id: siteId, mode: "block" }))).toMatchObject({
-      code: "WAF_CRS_FORBIDDEN",
-      status: 403,
-    });
-    // Settings can still change while CRS is off.
-    expect((await owner.waf.update({ id: siteId, anomalyThreshold: 8 })).anomalyThreshold).toBe(8);
-    // Administrators turn it on; tenants can then only turn it off.
-    await admin.waf.update({ id: siteId, mode: "block" });
-    expect((await siteOf())?.waf?.mode).toBe("block");
-    expect(
-      await rpcError(owner.waf.update({ id: siteId, excludedRuleIds: [942100] })),
-    ).toMatchObject({ code: "WAF_CRS_FORBIDDEN" });
-    expect((await owner.waf.update({ id: siteId, mode: "off" })).mode).toBe("off");
-    expect((await siteOf())?.waf).toBeUndefined();
-    await admin.settings.setWaf({ tenantCrs: true });
-    expect((await owner.waf.update({ id: siteId, mode: "detect" })).mode).toBe("detect");
-    await owner.waf.update({ id: siteId, mode: "off" });
+    expect((await admin.sites.features({ id: siteId })).crs.available).toBe(true);
   });
 
   it("rolls CRS back with its site and drops the module when the site no longer ships", async () => {
-    await owner.waf.update({ id: siteId, mode: "block" });
+    await admin.waf.update({ id: siteId, mode: "block" });
     const withCrs = (await config()).revision;
-    await owner.waf.update({ id: siteId, mode: "off" });
+    await admin.waf.update({ id: siteId, mode: "off" });
     await admin.clusters.rollback({ id: clusterId, revision: Number(withCrs) });
     expect((await siteOf())?.waf?.mode).toBe("block");
     expect((await config()).requiredFeatures).toContain("modsecurity-v1");
-    await owner.sites.setEnabled({ id: siteId, enabled: false });
+    await admin.sites.setEnabled({ id: siteId, enabled: false });
     await admin.clusters.rollback({ id: clusterId, revision: Number(withCrs) });
     expect(await siteOf()).toBeUndefined();
     expect((await config()).requiredFeatures).not.toContain("modsecurity-v1");
-    await owner.sites.setEnabled({ id: siteId, enabled: true });
+    await admin.sites.setEnabled({ id: siteId, enabled: true });
     expect((await siteOf())?.waf).toBeUndefined();
   });
 
@@ -415,7 +337,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     expect(row?.wafRules).not.toHaveProperty("../x");
     expect(row?.wafRules).not.toHaveProperty("0");
 
-    const top = await owner.waf.topRules({ id: siteId, range: "1h", limit: 3 });
+    const top = await admin.waf.topRules({ id: siteId, range: "1h", limit: 3 });
     expect(top).toEqual({
       approximate: true,
       items: [
@@ -424,15 +346,15 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
         { ruleId: 913100, requests: 4 },
       ],
     });
-    // Another site's rules never show up; members read them too.
-    expect((await member.waf.topRules({ id: siteId })).items.map((i) => i.ruleId)).not.toContain(
+    // Another site's rules never show up.
+    expect((await admin.waf.topRules({ id: siteId })).items.map((i) => i.ruleId)).not.toContain(
       949110,
     );
-    expect((await outsider.waf.topRules({ id: otherSiteId })).items).toEqual([
+    expect((await admin.waf.topRules({ id: otherSiteId })).items).toEqual([
       { ruleId: 949110, requests: 7 },
     ]);
     // Long ranges read the hourly rollups, before and after they are built.
-    const week = await topWafRules(ctx.db, { all: true }, { id: siteId, range: "7d", limit: 2 });
+    const week = await topWafRules(ctx.db, { id: siteId, range: "7d", limit: 2 });
     expect(week.items).toEqual([
       { ruleId: 942100, requests: 6 },
       { ruleId: 920350, requests: 5 },
@@ -443,13 +365,13 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       .from(schema.nodeHourStats)
       .where(eq(schema.nodeHourStats.siteId, siteId));
     expect(hour?.wafRules).toMatchObject({ "942100": 6, "920350": 5 });
-    expect(
-      (await topWafRules(ctx.db, { all: true }, { id: siteId, range: "30d", limit: 1 })).items,
-    ).toEqual([{ ruleId: 942100, requests: 6 }]);
+    expect((await topWafRules(ctx.db, { id: siteId, range: "30d", limit: 1 })).items).toEqual([
+      { ruleId: 942100, requests: 6 },
+    ]);
   });
 
   it("keeps the rules a request matched and whether CRS blocked it in access logs and CSV", async () => {
-    await owner.logs.configure({ siteId, sampleRate: 10000 });
+    await admin.logs.configure({ siteId, sampleRate: 10000 });
     const now = Date.now();
     const entry = (wafRuleIds: number[], wafBlocked: boolean) =>
       create(AccessLogSchema, {
@@ -477,18 +399,14 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
         now,
       ),
     ).toBe(2);
-    const { entries } = await queryLogs(
-      ctx,
-      { all: false, organizationId: orgId },
-      {
-        siteId,
-        from: new Date(now - 60_000).toISOString(),
-        to: new Date(now + 60_000).toISOString(),
-        ip: "",
-        path: "",
-        limit: 10,
-      },
-    );
+    const { entries } = await queryLogs(ctx, {
+      siteId,
+      from: new Date(now - 60_000).toISOString(),
+      to: new Date(now + 60_000).toISOString(),
+      ip: "",
+      path: "",
+      limit: 10,
+    });
     const blocked = entries.find((e) => e.wafBlocked);
     expect(blocked?.wafRuleIds).toHaveLength(16);
     expect(blocked?.wafRuleIds.slice(0, 3)).toEqual([920000, 920001, 920002]);
@@ -499,7 +417,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     expect(
       csv.some((line) => line.includes('"920000 920001 920002') && line.endsWith('"true"')),
     ).toBe(true);
-    const res = await owner.logs.export({
+    const res = await admin.logs.export({
       siteId,
       from: new Date(now - 60_000).toISOString(),
       to: new Date(now + 60_000).toISOString(),
