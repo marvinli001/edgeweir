@@ -6,7 +6,7 @@ For **Global rules** and **IP lists**, see [Rules, IP lists, and GeoIP](rules.en
 
 ## Clusters and nodes
 
-Page: **Clusters & nodes** (`/clusters`). The top of the page holds **New cluster**, **Add node**, and a summary of the current cluster (**Nodes online**, **Sites**, **Latest revision**). With several clusters, **Select cluster** switches between them. The **Overview** tab holds node groups, nodes, configuration canary, node upgrades, and revisions; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster); the **Scheduling** tab holds the cluster's scheduling rules and their preview, see [Scheduling rules](scheduling.en.md#scheduling-rules).
+Page: **Clusters & nodes** (`/clusters`). The top of the page holds **New cluster**, **Add node**, and a summary of the current cluster (**Nodes online**, **Sites**, **Latest revision**). With several clusters, **Select cluster** switches between them. The **Overview** tab holds node groups, nodes, configuration canary, node upgrades, and revisions; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster); the **Scheduling** tab holds the cluster's scheduling rules and their preview, see [Scheduling rules](scheduling.en.md#scheduling-rules); the **Port pools** tab (`/clusters?tab=ports`) holds the port ranges the cluster's L4 apps may use, see [Set up port pools](l4.en.md#set-up-port-pools).
 
 ### Clusters
 
@@ -21,7 +21,7 @@ A cluster is a set of nodes plus the sites assigned to them; each cluster has it
 | Rule | Description |
 | --- | --- |
 | Cluster of a site | With several clusters, the new-site form has a **Cluster** field (default: the oldest cluster); through `/api/v1`, `clusterId`. A site cannot change clusters later |
-| Capacity | A cluster publishes at most 512 enabled sites |
+| Capacity | A cluster publishes at most 512 enabled sites and has at most 256 [L4 apps](l4.en.md) |
 
 ### Node groups
 
@@ -93,7 +93,7 @@ The **Configuration canary** card sets the cluster's policy and shows the curren
 | After a rollback | The cluster stays on the stable revision. The database keeps the change; the next publication goes through the canary again |
 | New publication during the window | The new candidate replaces the old one; the window keeps its start and its canary nodes |
 | No canary node online | The change goes to every node, `cluster.rollout_direct` is audited and an alert is sent; publishing is not blocked |
-| Changes that reach every node at once | ACME HTTP-01 challenges; disabling or deleting a site and removing a domain; a site's **Purge cache**; lowering the access log sampling rate; certificate renewals; challenge key rotation; **Under Attack** of sites and the global one. The stable revision takes these at once; other changes wait in the candidate for the window. **Roll back** in **Revisions** reaches every node at once too |
+| Changes that reach every node at once | ACME HTTP-01 challenges; disabling or deleting a site and removing a domain; disabling or deleting an L4 app; a site's **Purge cache**; lowering the access log sampling rate; certificate renewals; challenge key rotation; **Under Attack** of sites and the global one. The stable revision takes these at once; other changes wait in the candidate for the window. **Roll back** in **Revisions** reaches every node at once too |
 | Turning the policy off | A running candidate is promoted to every node |
 
 | State | Meaning |
@@ -116,6 +116,7 @@ Every change that affects node configuration publishes a new revision in the clu
 | Cluster {cluster} created | New cluster |
 | Site {site} created / updated / deleted | Site changes |
 | Site {site} enabled / disabled | [Site enabling](#site-enabling) |
+| L4 application {app} created / updated / deleted | [L4 app](l4.en.md) changes; disabling and enabling use "updated" |
 | Site {site} purged | **Purge cache** on a site |
 | Certificate policy for {site} updated | HTTPS settings changed; a certificate used by the site was issued or renewed |
 | ACME challenge updated | HTTP-01 challenge changes |
@@ -130,7 +131,7 @@ Every change that affects node configuration publishes a new revision in the clu
 | Canary of revision {revision} rolled back | [Configuration canary](#configuration-canary) rollback |
 | Configuration recompiled after an upgrade | A console upgrade changed what the stored configuration compiles to; every cluster publishes one revision |
 
-**Roll back** publishes the content of the chosen revision as a new revision; history is kept. Sites that are currently disabled do not return through a rollback; IP lists, global rules, global Under Attack, and the origin allow list keep their current values. A rollback is refused when a site, domain, certificate, or IP list the chosen revision references was deleted, or the certificate has expired.
+**Roll back** publishes the content of the chosen revision as a new revision; history is kept. Sites and L4 apps that are currently disabled do not return through a rollback; IP lists, global rules, global Under Attack, and the origin allow list keep their current values. A rollback is refused when a site, domain, certificate, IP list, or L4 app the chosen revision references was deleted, an L4 app's port is no longer inside a port pool, or the certificate has expired.
 
 When a change needs a capability that active nodes of the cluster lack:
 
@@ -215,9 +216,10 @@ The page shows **Time**, **Actor**, **Action**, and **Target**, 50 entries per p
 | `account.*` | Password change, two-factor enable / disable, passkey add / delete, account recovery on the server (`account.recover`, see [Account recovery](account.en.md#account-recovery)) |
 | `api_key.*` | AccessKey create, revoke |
 | `service_account.*` | Service accounts and their keys |
-| `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters (including the configuration canary, rollbacks, and challenge key rotation), node groups, regions, nodes (including enrollment, certificate renewal, upgrades, scheduling addresses `node.set_addresses`, probing `node.set_probe`), install commands |
+| `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters (including the configuration canary, rollbacks, challenge key rotation, and port pools `cluster.port_pools_update`), node groups, regions, nodes (including enrollment, certificate renewal, upgrades, scheduling addresses `node.set_addresses`, probing `node.set_probe`), install commands |
 | `probe.*` | Probe tokens (`probe.token_create`), enrollment (`probe.enroll`) and certificate renewal (`probe.certificate_renew`, actor **Probe**), renaming and enabling (`probe.update`), deletion (`probe.delete`) |
 | `scheduling.*` | Scheduling rule changes (`scheduling.rule_create`, `scheduling.rule_update`, `scheduling.rule_delete`); rule actions taking effect and recovering (`scheduling.activate`, `scheduling.recover`, actor **System**) |
+| `l4_app.*` | L4 apps: `l4_app.create`, `l4_app.update`, `l4_app.enable`, `l4_app.disable`, `l4_app.delete` |
 | `site.*`, `cache.*`, `certificate.*`, `dns_credential.*`, `ip_list.*`, `platform.*` | Sites (including enabling, HTTPS, logs, protection, OWASP CRS, and site rules), purge & prefetch, certificates, DNS credentials, IP lists, global rules |
 | `ban.*` | Manual bans: `ban.create`, `ban.update` (banned again), `ban.delete` (unbanned) |
 | `dns.*`, `alert.*` | DNS steering (including provider accounts, cluster bindings, rollbacks, mass removal protection, and forced publications), alert channels, alert rules, SMTP, alert subscriptions |

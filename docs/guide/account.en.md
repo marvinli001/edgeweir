@@ -95,7 +95,7 @@ For using and revoking AccessKeys, see [Access logs and access keys](access-logs
 | Group | Menu | Path | Content |
 | --- | --- | --- | --- |
 | — | **Overview** | `/overview` | See [Overview](#overview) |
-| — | **Sites** | `/sites` | Site list and details; for enabling and disabling, see [Site enabling](system.en.md#site-enabling) |
+| — | **Sites** | `/sites` | Site list and details; for enabling and disabling, see [Site enabling](system.en.md#site-enabling). The **Sites \| L4 apps** switch above the list leads to the L4 app list (`/l4`), see [Layer-4 forwarding](l4.en.md) |
 | — | **Certificates** | `/certificates` | Certificates and DNS credentials; see [HTTPS and certificates](https.en.md) |
 | — | **Purge & prefetch** | `/purge` | URL, directory, and site purges, URL prefetch, and tasks; see [Origins and cache](origins-and-cache.en.md) |
 | **Access control** | **IP lists** | `/ip-lists` | Lists referenced by rules, and allow and block lists; see [Rules, IP lists, and GeoIP](rules.en.md) |
