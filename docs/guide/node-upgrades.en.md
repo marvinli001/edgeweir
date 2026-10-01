@@ -120,6 +120,7 @@ Signing and verification are covered in the [Sigstore documentation](https://doc
 | `http01-v1` | ACME HTTP-01 validation |
 | `http3-v1` | Sites with HTTP/3 on |
 | `rules-v1` | Site rules, global rules, **Allow** or **Block** IP lists |
+| `rules-v2` | Rule engine extensions: functions and the new fields, expression targets and query parameter edits, origin overrides, compression rules, the new override settings, cache rule expression conditions and browser TTLs, bulk redirects, origin groups, see [Rules](rules.en.md#node-capabilities-and-publishing) |
 | `access-logs-v1` | Access log sampling |
 | `geoip-city-v1` / `geoip-asn-v1` | Rules using GeoIP fields; reported only when the node has country / ASN data |
 | `geoip-subdivision-v1` | Rules using `ip.geoip.subdivision`; reported when the node has a City MMDB, checked by the console only; older nodes that do not report `geoip-country-v1` count `geoip-city-v1` instead |

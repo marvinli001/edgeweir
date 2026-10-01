@@ -328,6 +328,62 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 Behavior: [Origins and cache](../guide/origins-and-cache.en.md) and [Error pages](../guide/error-pages.en.md).
 
+### Rules and bulk redirects
+
+| Procedure | Endpoint |
+| --- | --- |
+| `rules.get`, `rules.save` | `GET`, `PUT /sites/{id}/rules` |
+| `platformRules.get`, `platformRules.save` (global rules) | `GET`, `PUT /platform-rules` |
+| `rules.validate` | `POST /rules/validate` |
+| `bulkRedirects.get` | `GET /sites/{id}/bulk-redirects` |
+| `bulkRedirects.save` | `PUT /sites/{id}/bulk-redirects` |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys can call only `GET` and `POST /rules/validate`.
+
+| Request | Fields |
+| --- | --- |
+| `PUT /sites/{id}/rules`, `PUT /platform-rules` | `rules`: replaces everything, up to 64 per site and 32 for the platform; each with `id` (optional), `name` (1–100 characters), `phase`, `expression` (up to 4096 characters), `enabled`, `action`. `phase`: `request-transform`, `redirect`, `config`, `waf-custom`, `ratelimit`, `cache`, `origin`, `response-transform`, `compression` |
+| `action` (`kind: "redirect"`) | Exactly one of `value` (static target) and `target` (value expression); `statusCode` (301, 302, 307, 308, default 301); `preserveQuery` (default `false`); `setQuery` (`[{ name, value }]`, up to 16, unique names); `removeQuery` (parameter names, up to 16, none also in `setQuery`). Names `[A-Za-z0-9._~-]{1,64}`, values printable ASCII up to 256 characters |
+| `action` (`kind: "rewrite"`) | As `redirect` without `statusCode`; `preserveQuery` defaults to `true` |
+| `action` (`kind: "config"`) | At least one field. `cacheBypass`, `forceHttps`, `gzip` (booleans); in the `config` phase only: `brotli`, `zstd`, `websocket`, `underAttack`, `ccEnabled` (booleans), `ccMaxLevel` (`cookie302`, `js`, `pow`, `captcha`), `originConnectTimeoutMs` (100–120000), `originSendTimeoutMs`, `originReadTimeoutMs` (100–3600000), `logSampleRate` (0–10000, in 1/10,000). Omitted fields override nothing |
+| `action` (`kind: "origin"`) | `origin` phase. `originGroup` (an origin group of the site, empty for the default group; always empty in global rules), `hostHeader`, `sni` (host names, empty overrides nothing), `port` (0–65535, 0 overrides nothing); at least one change |
+| `action` (`kind: "compression"`) | `compression` phase. `algorithms`: unique entries of `zstd`, `br`, `gzip` in preference order; `[]` turns compression off |
+| `POST /sites`, `PATCH /sites/{id}` | `cacheRules[]` adds `expression` (a condition of the `cache` phase, up to 16384 characters; when empty, `pathPrefixes`, `paths`, and `extensions` build it; when set, those are empty or equal its builder form) and `browserTtlSeconds` (0–31536000, 0 keeps the origin's `Cache-Control`); `origins[]` adds `group` (`[a-z0-9_-]{0,32}`, empty for the default group, at least one origin in the default group) |
+| `PUT /sites/{id}/bulk-redirects` | `redirects`: replaces everything, up to 5000, unique `source`; each with `source` (`/path` or `host/path`, 2–512 bytes without whitespace, `?`, or control characters, lowercase host), `target` (static redirect target, up to 1024 bytes), `statusCode` (default 301), `preserveQuery` (default `false`) |
+| `POST /rules/validate` | `expression` (up to 16384 characters), `phase`, `kind`: `condition` (default, a rule condition), `value` (a redirect target or rewrite path of `phase`), `cacheRule` (a cache rule condition; `phase` is ignored) |
+
+Responses:
+
+| Procedure | Content |
+| --- | --- |
+| `rules.*`, `platformRules.*` | The rules in saved order, with `id` |
+| `bulkRedirects.*` | `[{ source, target, statusCode, preserveQuery }]` in saved order |
+| `sites.get`; `site` of `sites.create` and `sites.update` | `cacheRules[]` always carry `expression` (`"true"` matches every request); `pathPrefixes`, `paths`, and `extensions` hold its structured form when the condition has the builder's shape and are empty otherwise; `browserTtlSeconds` is added. `origins[]` carry `group` |
+| `rules.validate` | `{ valid, position, message }`; when invalid, `position` is the character where it fails and `message` is `invalid_expression` |
+| `sites.features` | Adds `rulesV2`; `reason` `nodes` means an active node of the cluster lacks `rules-v2` |
+
+- `rules.save` publishes the site's cluster (reason `rules_updated`) and is audited as `site.rules_update`; `platformRules.save` publishes every cluster and is audited as `platform.rules_update`; `bulkRedirects.save` publishes the site's cluster (`rules_updated`) and is audited as `site.bulk_redirects_update` (with the entry count).
+- Configurations that use functions, the new fields, value expressions, query parameter edits, `origin` or `compression` actions, the new `config` phase fields, `gzip: true`, cache rule conditions not in the builder's shape, `browserTtlSeconds`, bulk redirects, or origin groups other than the default need the node capability `rules-v2`.
+
+| Error code | Status | Case |
+| --- | --- | --- |
+| `RULE_INVALID` | 400 | An `origin` action picks an origin group the site does not have, or a global rule picks one; `sites.update` removes an origin group a rule still picks; a saved rule or cache rule condition no longer compiles |
+| `BULK_REDIRECT_HOST_UNKNOWN` | 400 | The host of a `host/path` source is not a domain of the site (one label under a wildcard domain of the site is fine); `data.hosts` (comma-separated, up to 5) |
+| `IP_LIST_NOT_FOUND` | 404 | A rule or cache rule condition references an IP list that does not exist or is not visible |
+| `NODE_CAPABILITY_REQUIRED` | 409 | An active node of the cluster lacks `rules-v2` (changes by service accounts and background jobs); `data.features` |
+| `SITE_NOT_FOUND` | 404 | The site does not exist or is outside the caller's scope |
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"redirects":[{"source":"/old","target":"/new","statusCode":301,"preserveQuery":true}]}' \
+  https://cdn-admin.example.com/api/v1/sites/<site ID>/bulk-redirects
+curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"expression":"regex_replace(http.request.uri.path, \"^/old/\", \"/new/\")","phase":"redirect","kind":"value"}' \
+  https://cdn-admin.example.com/api/v1/rules/validate
+```
+
+Behavior: [Rules, IP lists, and GeoIP](../guide/rules.en.md) and [Origins and cache](../guide/origins-and-cache.en.md#origin-groups).
+
 ### Usage
 
 One record per site and UTC 5-minute window `[windowStart, windowEnd)`, summing the minute statistics every node reported for the window.

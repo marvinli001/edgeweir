@@ -35,7 +35,7 @@
 | `packages/contract` | oRPC 契约与 zod schema、错误码（`errors.ts`）、节点错误码（`node-errors.ts`）、源站地址规则（`addresses.ts`）；UI、服务端与 OpenAPI 共用 |
 | `packages/db` | Drizzle schema（`src/schema/`）与纯 SQL 迁移（`migrations/`） |
 | `packages/config-compiler` | 把网站、规则、IP 名单、证书引用与平台策略编译为 NodeConfig IR；规范排序、内容哈希、diff |
-| `packages/rule-engine` | 规则表达式的字段、阶段、解析与名单引用绑定 |
+| `packages/rule-engine` | 规则表达式的字段、阶段、函数、解析（条件、值表达式、缓存规则条件）、名单引用绑定与参考求值 |
 | `packages/proto` | 由 `proto/` 生成的 TypeScript（protoc-gen-es），不手改 |
 | `proto/` | buf 模块 `edgeweir/node/v1/{node,config}.proto`；edgeweir-node 从 `proto/vX.Y.Z` tag 生成 Go 代码 |
 | `helpers/certd` | `edgeweir-certd` 源码 |
@@ -200,6 +200,23 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 | 修改网站 CRS | `site.waf_update`（发布该网站的集群，原因 `site_waf_updated`） |
 
 行为见 [HTTPS 与证书](docs/guide/https.md#压缩) 与 [OWASP CRS 托管规则](docs/guide/waf.md)。
+
+## 规则引擎扩展
+
+控制台是表达式语法的唯一权威：`packages/rule-engine` 解析条件与值表达式，`packages/config-compiler` 输出类型化 IR；节点逐项校验 IR 后执行，不接收表达式文本。函数、值表达式、批量重定向、源站组、缓存规则条件与新的规则动作由节点能力 `rules-v2` 标明：
+
+1. 函数调用编码为 `RuleExpression` 的 `call`、`field`、`const` 节点。重定向目标与改写路径的值表达式写入 `RuleAction.target`；`set_query` 按名称排序，`remove_query` 排序去重；`preserve_query` 只在与动作默认值不同时写入。
+2. 缓存规则以表达式保存（`cache_rule.expression`，引用的名单记在 `list_ids`）。构建器形状的表达式编译为原来的 `path_prefixes`、`paths`、`extensions`，旧节点照常执行，内容哈希不变；其他表达式编译为 `CacheRuleMatch.condition`。`browser_ttl_seconds` 写入 `CacheRule`。
+3. 批量重定向编译为 `Site.bulk_redirects`（按来源排序），源站组写入 `Origin.group`。
+4. 配置用到上述任何一项（含 `compression` 阶段与 `config` 动作的新字段）时 `required_features` 加 `rules-v2`；没有用到的配置与之前编码相同。与其他能力相同，服务账号与后台任务的发布引入集群活动节点缺少的 `rules-v2` 时返回 `NODE_CAPABILITY_REQUIRED`，运营者本人可以发布；`sites.features` 的 `rulesV2` 供界面锁定相关控件。
+
+| 管理操作 | 审计 |
+| --- | --- |
+| 修改网站规则 | `site.rules_update`（发布该网站的集群，原因 `rules_updated`） |
+| 修改全局规则 | `platform.rules_update`（发布全部集群） |
+| 修改批量重定向 | `site.bulk_redirects_update`（发布该网站的集群，原因 `rules_updated`） |
+
+行为见 [规则、IP 名单与 GeoIP](docs/guide/rules.md) 与 [源站与缓存](docs/guide/origins-and-cache.md)。
 
 ## 节点通道
 

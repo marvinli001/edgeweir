@@ -15,9 +15,9 @@
 | 领域 | 能力 |
 | --- | --- |
 | 集群与账户 | 节点组、区域、配置金丝雀、2FA / Passkey、服务账号、审计日志 |
-| 源站与缓存 | 源站池、主动与被动健康检查、会话保持、回源 TLS 校验、S3 签名回源、WebSocket、缓存键、切片、按 URL / 目录 / Host / Cache-Tag 刷新、按设备与站点地图预热、自定义错误页 |
+| 源站与缓存 | 源站池与源站组、主动与被动健康检查、会话保持、回源 TLS 校验、S3 签名回源、WebSocket、表达式缓存规则与浏览器 TTL、缓存键、切片、按 URL / 目录 / Host / Cache-Tag 刷新、按设备与站点地图预热、自定义错误页 |
 | 证书与协议 | 证书上传、ACME HTTP-01 / DNS-01 签发与续期、HTTPS、HSTS、HTTP/2、HTTP/3；Zstandard、Brotli、Gzip 压缩 |
-| 访问策略 | IP 名单（全局允许 / 拦截）、本地 GeoIP、分阶段规则、WAF、限速、重定向、改写、请求头与响应头变换；秒级下发的 IP 封禁，全局封禁可由 nftables 在内核丢包 |
+| 访问策略 | IP 名单（全局允许 / 拦截）、本地 GeoIP、分阶段规则与内置函数、WAF、限速、动态重定向与改写、批量重定向、请求头与响应头变换、源站覆盖与压缩规则、按请求覆盖网站设置；秒级下发的 IP 封禁，全局封禁可由 nftables 在内核丢包 |
 | 托管规则 | OWASP CRS：仅检测或拦截、paranoia level、异常分数阈值、按规则 ID 排除、请求体检查上限；命中规则的统计与访问日志 |
 | 挑战与 CC 防护 | Cookie 跳转、JS 计算、工作量证明、图片验证码四级挑战；网站或全局 Under Attack；节点本地分级 CC 自动升级（站点、单 URL、单 IP 自动封禁、源站错误率）；集群内通用的签名通行凭证；JA4 指纹用于规则、限速与访问日志 |
 | DNS 与观测 | 独立 DNS 版本、健康节点调度、流量统计去重与汇总、Top URL / IP、告警与订阅 |
@@ -202,7 +202,7 @@ pnpm e2e     # --up 启动环境；--down 结束后删除环境与卷；--skip-u
 - G3 步骤：G3 之前的节点镜像 `edgeweir-node:pre-g3`（`E2E_OLD_NODE_IMAGE`，缺少时由 `scripts/e2e-g3.mjs` 从 edgeweir-node 提交 `6da3403` 构建）
 - 网络访问：deb.debian.org、openresty.org；首次构建节点镜像或 edgeweir-openresty 包时另需 github.com、download.gnome.org、vault.almalinux.org
 
-覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 管理与 api-key 端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、动态封禁（下发延迟 p95 ≤ 5 秒、站点封禁、全局封禁由 nftables 丢包）、挑战与通行凭证（无头浏览器通过 js 与 pow 挑战，凭证在另一节点有效，换网段、换 UA 或伪造后失效）、分级 CC（只升级被攻击的路径、单 IP 自动封禁）、JA4 参与规则匹配、Brotli / Zstandard 按 q 值协商（缓存一份未压缩对象，`curl --compressed` 解码）、OWASP CRS 检测与拦截（含缓存命中）、旧节点所在集群无法开启这些功能、edgeweir-openresty 包内容、按 Cache-Tag 与 Host 刷新（含过期内容与分片）、按设备与站点地图预热、主动健康检查摘除与恢复、会话保持与故障切换、网站与平台错误页（转义、no-store、请求 ID）、Playwright 页面流程。
+覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 管理与 api-key 端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、动态封禁（下发延迟 p95 ≤ 5 秒、站点封禁、全局封禁由 nftables 丢包）、挑战与通行凭证（无头浏览器通过 js 与 pow 挑战，凭证在另一节点有效，换网段、换 UA 或伪造后失效）、分级 CC（只升级被攻击的路径、单 IP 自动封禁）、JA4 参与规则匹配、Brotli / Zstandard 按 q 值协商（缓存一份未压缩对象，`curl --compressed` 解码）、OWASP CRS 检测与拦截（含缓存命中）、旧节点所在集群无法开启这些功能、edgeweir-openresty 包内容、按 Cache-Tag 与 Host 刷新（含过期内容与分片）、按设备与站点地图预热、主动健康检查摘除与恢复、会话保持与故障切换、网站与平台错误页（转义、no-store、请求 ID）、动态重定向与改写及查询参数编辑（无效目标失败关闭）、批量重定向的热更新、源站覆盖规则与回源超时、表达式缓存规则与浏览器 TTL、压缩规则与不绕过缓存的 `gzip=false`、按规则开关 Under Attack、WebSocket 与日志采样、Playwright 页面流程。
 
 以下变量由 `compose.e2e.yml` 与 `scripts/e2e.sh` 共同读取，两侧取值须一致。更换项目名、端口、tag 与子网即可并行运行第二套环境。
 

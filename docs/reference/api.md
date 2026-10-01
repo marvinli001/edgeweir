@@ -328,6 +328,62 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 行为见 [源站与缓存](../guide/origins-and-cache.md) 与 [错误页](../guide/error-pages.md)。
 
+### 规则与批量重定向
+
+| 过程 | 端点 |
+| --- | --- |
+| `rules.get`、`rules.save` | `GET`、`PUT /sites/{id}/rules` |
+| `platformRules.get`、`platformRules.save`（全局规则） | `GET`、`PUT /platform-rules` |
+| `rules.validate` | `POST /rules/validate` |
+| `bulkRedirects.get` | `GET /sites/{id}/bulk-redirects` |
+| `bulkRedirects.save` | `PUT /sites/{id}/bulk-redirects` |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET` 与 `POST /rules/validate`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `PUT /sites/{id}/rules`、`PUT /platform-rules` | `rules`：整体替换，网站最多 64 条、平台最多 32 条；每条 `id`（可选）、`name`（1–100 字符）、`phase`、`expression`（最长 4096 字符）、`enabled`、`action`。`phase`：`request-transform`、`redirect`、`config`、`waf-custom`、`ratelimit`、`cache`、`origin`、`response-transform`、`compression` |
+| `action`（`kind: "redirect"`） | `value`（静态目标）与 `target`（值表达式）恰好填一个；`statusCode`（301、302、307、308，默认 301）；`preserveQuery`（默认 `false`）；`setQuery`（`[{ name, value }]`，最多 16 个，名称不重复）；`removeQuery`（参数名，最多 16 个，不能与 `setQuery` 重名）。参数名 `[A-Za-z0-9._~-]{1,64}`，值为可打印 ASCII，最长 256 字符 |
+| `action`（`kind: "rewrite"`） | 同 `redirect`，没有 `statusCode`；`preserveQuery` 默认 `true` |
+| `action`（`kind: "config"`） | 至少一项。`cacheBypass`、`forceHttps`、`gzip`（布尔）；只在 `config` 阶段：`brotli`、`zstd`、`websocket`、`underAttack`、`ccEnabled`（布尔），`ccMaxLevel`（`cookie302`、`js`、`pow`、`captcha`），`originConnectTimeoutMs`（100–120000），`originSendTimeoutMs`、`originReadTimeoutMs`（100–3600000），`logSampleRate`（0–10000，万分比）。省略的字段不覆盖 |
+| `action`（`kind: "origin"`） | `origin` 阶段。`originGroup`（网站的源站组，空为默认组；全局规则只能为空）、`hostHeader`、`sni`（主机名，空不覆盖）、`port`（0–65535，0 不覆盖），至少修改一项 |
+| `action`（`kind: "compression"`） | `compression` 阶段。`algorithms`：`zstd`、`br`、`gzip` 中不重复的若干个，按优先顺序；`[]` 不压缩 |
+| `POST /sites`、`PATCH /sites/{id}` | `cacheRules[]` 增加 `expression`（`cache` 阶段的条件，最长 16384 字符；为空时由 `pathPrefixes`、`paths`、`extensions` 生成；不为空时这三项为空或等于它的构建器形式）与 `browserTtlSeconds`（0–31536000，0 保留源站的 `Cache-Control`）；`origins[]` 增加 `group`（`[a-z0-9_-]{0,32}`，空为默认组，至少一个源站在默认组） |
+| `PUT /sites/{id}/bulk-redirects` | `redirects`：整体替换，最多 5000 条，`source` 不重复；每条 `source`（`/路径` 或 `域名/路径`，2–512 字节，不含空白、`?` 与控制字符，域名小写）、`target`（静态重定向目标，最长 1024 字节）、`statusCode`（默认 301）、`preserveQuery`（默认 `false`） |
+| `POST /rules/validate` | `expression`（最长 16384 字符）、`phase`、`kind`：`condition`（默认，规则条件）、`value`（`phase` 阶段的重定向目标或改写路径）、`cacheRule`（缓存规则条件，忽略 `phase`） |
+
+响应：
+
+| 过程 | 内容 |
+| --- | --- |
+| `rules.*`、`platformRules.*` | 规则数组，按保存顺序，带 `id` |
+| `bulkRedirects.*` | `[{ source, target, statusCode, preserveQuery }]`，按保存顺序 |
+| `sites.get`；`sites.create`、`sites.update` 的 `site` | `cacheRules[]` 总带 `expression`（`"true"` 匹配所有请求）；条件是构建器形状时 `pathPrefixes`、`paths`、`extensions` 为其结构化形式，否则为空；另有 `browserTtlSeconds`。`origins[]` 带 `group` |
+| `rules.validate` | `{ valid, position, message }`；无效时 `position` 为出错的字符位置，`message` 为 `invalid_expression` |
+| `sites.features` | 增加 `rulesV2`；`reason` 为 `nodes` 时集群有活动节点缺少 `rules-v2` |
+
+- `rules.save` 发布网站所在集群（原因 `rules_updated`），审计 `site.rules_update`；`platformRules.save` 发布所有集群，审计 `platform.rules_update`；`bulkRedirects.save` 发布网站所在集群（`rules_updated`），审计 `site.bulk_redirects_update`（条目数）。
+- 用到函数、新字段、值表达式、查询参数编辑、`origin` 或 `compression` 动作、`config` 阶段的新字段、`gzip: true`、非构建器形状的缓存规则条件、`browserTtlSeconds`、批量重定向或非默认源站组的配置要求节点能力 `rules-v2`。
+
+| 错误代码 | 状态 | 场景 |
+| --- | --- | --- |
+| `RULE_INVALID` | 400 | `origin` 动作选择了网站没有的源站组，或全局规则选择源站组；`sites.update` 移除仍被规则选择的源站组；已保存的规则或缓存规则条件无法编译 |
+| `BULK_REDIRECT_HOST_UNKNOWN` | 400 | `域名/路径` 来源的域名不是网站的域名（网站泛域名下一级的子域名可以）；`data.hosts`（逗号分隔，最多 5 个） |
+| `IP_LIST_NOT_FOUND` | 404 | 规则或缓存规则条件引用的 IP 名单不存在或不可见 |
+| `NODE_CAPABILITY_REQUIRED` | 409 | 集群内有活动节点缺少 `rules-v2`（服务账号与后台任务发布时）；`data.features` |
+| `SITE_NOT_FOUND` | 404 | 网站不存在或不在调用方范围内 |
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"redirects":[{"source":"/old","target":"/new","statusCode":301,"preserveQuery":true}]}' \
+  https://cdn-admin.example.com/api/v1/sites/<网站 ID>/bulk-redirects
+curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"expression":"regex_replace(http.request.uri.path, \"^/old/\", \"/new/\")","phase":"redirect","kind":"value"}' \
+  https://cdn-admin.example.com/api/v1/rules/validate
+```
+
+行为见 [规则、IP 名单与 GeoIP](../guide/rules.md) 与 [源站与缓存](../guide/origins-and-cache.md#源站组)。
+
 ### 用量
 
 每个网站、每个 UTC 5 分钟窗口 `[windowStart, windowEnd)` 一条记录，数值为该窗口内全部节点上报的分钟统计之和。
