@@ -1429,5 +1429,20 @@
   "cache_rule_browser_ttl": "Browser TTL (s)",
   "cache_rule_browser_ttl_origin": "Origin's",
   "site_origin_group": "Origin group",
-  "site_origin_group_required": "Keep at least one origin in the default group"
+  "site_origin_group_required": "Keep at least one origin in the default group",
+  "site_tab_redirects": "Bulk redirects",
+  "bulk_redirects_title": "Bulk redirects",
+  "bulk_redirects_empty": "No bulk redirects",
+  "bulk_redirects_source": "Source",
+  "bulk_redirects_add": "Add redirect",
+  "bulk_redirects_import": "Import",
+  "bulk_redirects_import_title": "Import redirects",
+  "bulk_redirects_import_lines": "One per line: source target [status]",
+  "bulk_redirects_import_replace": "Replace existing entries",
+  "bulk_redirects_import_invalid": "Line {line} is invalid",
+  "bulk_redirects_imported": "Imported {count}",
+  "bulk_redirects_limit": "At most {limit} redirects",
+  "bulk_redirects_filter": "Filter",
+  "bulk_redirects_no_match": "No matching redirects",
+  "bulk_redirects_invalid": "{count} invalid"
 }

@@ -9,6 +9,7 @@ import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Page } from "@/components/page";
+import { BulkRedirectsTab } from "@/components/site/bulk-redirects-tab";
 import { CacheTab } from "@/components/site/cache-tab";
 import { CnameTarget } from "@/components/site/cname-target";
 import { DomainOwnershipPanel } from "@/components/site/domain-ownership";
@@ -166,6 +167,12 @@ function SiteDetailPage() {
             </TabsContent>
             <TabsContent value="rules" className="animate-enter">
               <RulesTab siteId={site.data.id} originGroups={originGroups(site.data)} />
+            </TabsContent>
+            <TabsContent value="redirects" className="animate-enter">
+              <BulkRedirectsTab
+                siteId={site.data.id}
+                organizationRole={me.activeOrganization?.role}
+              />
             </TabsContent>
             <TabsContent value="security" className="animate-enter">
               <SecurityTab siteId={site.data.id} organizationRole={me.activeOrganization?.role} />

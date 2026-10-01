@@ -1268,5 +1268,20 @@
   "cache_rule_browser_ttl": "浏览器 TTL（秒）",
   "cache_rule_browser_ttl_origin": "跟随源站",
   "site_origin_group": "源站组",
-  "site_origin_group_required": "至少保留一个默认组源站"
+  "site_origin_group_required": "至少保留一个默认组源站",
+  "site_tab_redirects": "批量重定向",
+  "bulk_redirects_title": "批量重定向",
+  "bulk_redirects_empty": "暂无批量重定向",
+  "bulk_redirects_source": "来源",
+  "bulk_redirects_add": "添加重定向",
+  "bulk_redirects_import": "导入",
+  "bulk_redirects_import_title": "导入重定向",
+  "bulk_redirects_import_lines": "每行一条：来源 目标 [状态码]",
+  "bulk_redirects_import_replace": "替换现有条目",
+  "bulk_redirects_import_invalid": "第 {line} 行无效",
+  "bulk_redirects_imported": "已导入 {count} 条",
+  "bulk_redirects_limit": "最多 {limit} 条",
+  "bulk_redirects_filter": "筛选",
+  "bulk_redirects_no_match": "没有匹配的重定向",
+  "bulk_redirects_invalid": "{count} 条无效"
 }
