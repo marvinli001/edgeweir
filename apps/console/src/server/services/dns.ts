@@ -319,8 +319,8 @@ const appliesTo = (lines: Set<string> | undefined, line: string) =>
  * minHealthyIps healthy addresses (or under a backup_group action) answers
  * with its first backup group that has enough, else with every healthy
  * address of its groups. manual: every active node's primary addresses
- * (hand-made records do not follow health). `<line>.<domain>` and the site
- * CNAMEs are default-line records; `<all>.<domain>` has records per
+ * (hand-made records do not follow health). `<line>.<domain>` and the
+ * CNAMEs of sites and enabled layer-4 applications are default-line records; `<all>.<domain>` has records per
  * resolution line: the union of the binding lines mapped to it, and on the
  * default line the union of the lines mapped to default, or of every line
  * when none is (or they have no address). `failover`: what the mass
@@ -523,11 +523,16 @@ export async function compileBindingPlan(
       for (const address of backup) failover.push(`${set}|${address}`);
     }
   }
-  for (const site of sites) {
-    add(`${site.id}.${policy.domain}`, "CNAME", allName);
+  // Layer-4 applications use the sites' names: <id>.<domain> (and line aliases).
+  const apps = await db
+    .select({ id: schema.l4App.id })
+    .from(schema.l4App)
+    .where(and(eq(schema.l4App.clusterId, clusterId), eq(schema.l4App.enabled, true)))
+    .orderBy(schema.l4App.id);
+  for (const { id } of [...sites, ...apps]) {
+    add(`${id}.${policy.domain}`, "CNAME", allName);
     if (policy.lineAliases)
-      for (const line of lines)
-        add(`${line.name}.${site.id}.${policy.domain}`, "CNAME", line.target);
+      for (const line of lines) add(`${line.name}.${id}.${policy.domain}`, "CNAME", line.target);
   }
   if (names.size > MAX_RECORDS || records.length > MAX_RECORDS)
     fail("DNS_POLICY_INVALID", "DNS managed record limit exceeded");
@@ -1377,22 +1382,39 @@ export async function assertBindingReleased(db: Executor, clusterId: string) {
     fail("DNS_BINDING_IN_USE", "turn the cluster's DNS off and wait for its records to be removed");
 }
 
+/**
+ * The names a site or layer-4 application of the cluster is published
+ * under: its CNAME `<id>.<domain>` and, per line of the binding,
+ * `<line>.<id>.<domain>` with line aliases or else the line's own name.
+ * Null while the binding is off or has no domain.
+ */
+export async function cnameTargets(db: Executor, clusterId: string) {
+  const row = await loadBinding(db, clusterId);
+  if (row.mode === "off" || !row.domain) return null;
+  const groups = await db
+    .select()
+    .from(schema.nodeGroup)
+    .where(eq(schema.nodeGroup.clusterId, clusterId));
+  const lines = row.lines.filter((l) => groups.some((g) => g.id === l.nodeGroupId));
+  return (id: string) => {
+    const target = `${id}.${row.domain}`;
+    return {
+      target,
+      lines: lines.map((l) => ({
+        name: l.name,
+        target: row.lineAliases ? `${l.name}.${target}` : `${l.name}.${row.domain}`,
+      })),
+    };
+  };
+}
+
 export async function siteDnsTarget(app: AppContext, siteId: string) {
   const site = await findSite(app.db, siteId);
   const row = await loadBinding(app.db, site.clusterId);
-  if (row.mode === "off" || !row.domain)
+  const names = (await cnameTargets(app.db, site.clusterId))?.(site.id);
+  if (!names)
     return { target: null, mode: "off" as const, published: false, healthy: false, lines: [] };
-  const target = `${site.id}.${row.domain}`;
-  const groups = await app.db
-    .select()
-    .from(schema.nodeGroup)
-    .where(eq(schema.nodeGroup.clusterId, site.clusterId));
-  const lines = row.lines
-    .filter((l) => groups.some((g) => g.id === l.nodeGroupId))
-    .map((l) => ({
-      name: l.name,
-      target: row.lineAliases ? `${l.name}.${target}` : `${l.name}.${row.domain}`,
-    }));
+  const { target, lines } = names;
   if (row.mode === "manual")
     return { target, mode: "manual" as const, published: false, healthy: false, lines };
   const provider = row.providerId ? await findProvider(app.db, row.providerId) : null;
