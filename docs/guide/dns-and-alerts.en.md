@@ -9,7 +9,9 @@ DNS steering records (third-party DNS providers bound per cluster), and alert ch
 | Provider account | One set of DNS provider credentials and its zone, used by DNS steering. |
 | DNS binding | A cluster's DNS steering settings: mode, provider account, cluster domain, TTL, and lines. |
 | Cluster domain | The parent domain of a cluster's steering records; it must lie inside the provider account's zone. |
-| Line | The A/AAAA records of one node group in DNS steering. |
+| Line | The A/AAAA records of one node group in DNS steering; it maps to a resolution line and may have backup node groups. |
+| Resolution line | A provider line that answers differently by carrier or region: default, China Telecom, China Unicom, China Mobile, education network, overseas. |
+| Backup node group | A node group that answers, in order, while a line's own node group has too few healthy addresses. |
 | DNS revision | A snapshot of a cluster's DNS binding and its records, separate from node configuration revisions. |
 | Alert channel | A notification target: email, webhook, DingTalk, WeCom, or Telegram. |
 | Alert subscription | Sends some alert kinds of one site to one channel. |
@@ -33,7 +35,7 @@ An account is one set of credentials and one zone; for several zones under the s
 1. Open **Clusters & nodes**, select the cluster, and switch to the **DNS** tab.
 2. Select **Mode**: **Not managed**, **Manual**, or **Automatic**.
 3. Select **Provider account**; **Zone** shows the account's zone. Fill in **Cluster domain** and **TTL (seconds)**.
-4. Click **Add line**, fill in **Line name**, and select a **Node group** of this cluster. For a node behind NAT or on a private network, enter its public addresses in the node's **node name: target addresses** field; leave it empty to use the reported public IPs.
+4. Click **Add line**, fill in **Line name**, and select a **Node group** of this cluster; if needed, select a **Resolution line**, fill in **Minimum healthy IPs**, and use **Add backup group** under **Backup node groups**, ordering the groups. For a node behind NAT or on a private network, enter its public addresses in the node's **node name: target addresses** field, or configure the node's [scheduling addresses](scheduling.en.md#scheduling-addresses-and-backup-ips); leave it empty to use the node's scheduling addresses.
 5. Click **Save**. The console shows **DNS revision N created**.
 6. Verify: the **Current records** card shows **Published**, and the site's **Domains** tab shows the **CNAME target**.
 
@@ -59,22 +61,65 @@ Clusters may use different provider accounts and cluster domains. The **Cluster 
 | Keep per-site line targets | On / Off | Off | Keeps `<line>.<site UUID>.<cluster domain>` for every site, see [Upgrading from the global DNS configuration](#upgrading-from-the-global-dns-configuration) |
 | Line name | Lowercase letters, digits, `-`, 1–32 characters, not `all` | `line-N` | First label of the line's host name |
 | Node group | A node group of this cluster; at most one line per group | The first unused group | Nodes in the line |
-| Target addresses | Up to 8 IPs per node, comma-separated | Empty (reported public IPs) | Replaces the reported addresses; may be private, never loopback, link-local, multicast, or other special-purpose addresses |
+| Resolution line | Default / China Telecom / China Unicom / China Mobile / Education network / Overseas, only those the account's provider supports | Default | `all.<cluster domain>` answers with this line's addresses on that resolution line, see [Records per resolution line](#records-per-resolution-line) |
+| Minimum healthy IPs | 1–64 | 1 | Below this many healthy addresses in the line's node group, the backup node groups answer |
+| Backup node groups | Other node groups of this cluster, at most 4, ordered | None | See [Backup node groups](#backup-node-groups) |
+| Target addresses | Up to 8 IPs per node, comma-separated | Empty (the node's scheduling addresses) | Replace the node's scheduling addresses on this line, without level switching; may be private, never loopback, link-local, multicast, or other special-purpose addresses |
 
 A binding has at most 128 lines and 10,000 system-managed records. Two bindings with the same cluster domain in the same zone cannot share line names or the all-lines record name (`DNS_BINDING_CONFLICT`).
+
+With a provider that has the default line only, **Resolution line** is unavailable and shows **This provider has only the default line**; selecting an account whose provider lacks a resolution line moves those lines back to default in the form. Saving a resolution line the provider does not support returns `DNS_LINE_UNSUPPORTED` ("This DNS provider has no {line} resolution line"). Manual mode without a provider account can use every resolution line.
 
 ### Generated records
 
 | Name | Type | Content |
 | --- | --- | --- |
-| `all.<cluster domain>` | A / AAAA | Healthy node addresses of every line of the cluster |
-| `<line name>.<cluster domain>` | A / AAAA | Healthy node addresses of the line's node group |
-| `<site UUID>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per site with at least one domain, disabled sites included |
-| `<line name>.<site UUID>.<cluster domain>` | CNAME | `<line name>.<cluster domain>`; only with **Keep per-site line targets** |
+| `all.<cluster domain>` | A / AAAA | Healthy node addresses of the cluster's lines, written per resolution line, see [Records per resolution line](#records-per-resolution-line) |
+| `<line name>.<cluster domain>` | A / AAAA | Healthy node addresses of the line's node group (of the backup node groups while they answer); default line only |
+| `<site UUID>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per site with at least one domain, disabled sites included; default line only |
+| `<line name>.<site UUID>.<cluster domain>` | CNAME | `<line name>.<cluster domain>`; only with **Keep per-site line targets**; default line only |
 
-Address records are written once per cluster: the record count is "sites + cluster addresses", plus "sites × lines" with per-site line targets. With per-site line targets off, the line targets on a site's **Domains** tab are `<line name>.<cluster domain>`.
+Address records are written once per cluster (`all.<cluster domain>` once per resolution line in use): the record count is "sites + cluster addresses", plus "sites × lines" with per-site line targets. With per-site line targets off, the line targets on a site's **Domains** tab are `<line name>.<cluster domain>`.
 
-Lines are explicit node-group host names; provider-specific carrier or geographic resolution is not used.
+The **Resolution line** column of the **Current records** and **Records to create** tables shows each record's resolution line.
+
+### Records per resolution line
+
+`all.<cluster domain>` has one record set on every resolution line in use; every other record is on the default line only.
+
+| Resolution line | Addresses of `all.<cluster domain>` |
+| --- | --- |
+| China Telecom, China Unicom, China Mobile, Education network, Overseas | The union of every binding line mapped to that resolution line; not written when no line maps to it |
+| Default | The union of the binding lines mapped to **Default**; when there is none, or they have no address, the union of every line |
+
+- Resolvers no other resolution line matches get the default line's records; DNSPod requires a record on the default line.
+- Writing a name and type replaces its records on every resolution line; copies on resolution lines no longer in use are deleted. A binding that uses the default line only writes the same records as before.
+- Records on a resolution line the account's provider no longer supports are not written.
+
+Example:
+
+| Line name | Node group | Resolution line |
+| --- | --- | --- |
+| `ct` | telecom-nodes | China Telecom |
+| `cu` | unicom-nodes | China Unicom |
+| `intl` | overseas-nodes | Default |
+
+`all.<cluster domain>` answers China Telecom users with the addresses of telecom-nodes, China Unicom users with those of unicom-nodes, and everyone else with those of overseas-nodes. Without `intl`, the default line answers with every address of `ct` and `cu`.
+
+### Backup node groups
+
+| Item | Behavior |
+| --- | --- |
+| Switch | The line's node group has fewer healthy addresses than **Minimum healthy IPs**, or a [scheduling rule](scheduling.en.md#scheduling-rules) with **Switch to backup groups** acts on the line |
+| Choice | The backup node groups are checked in order; the first with at least **Minimum healthy IPs** healthy addresses answers |
+| None has enough | Every still-healthy address of the line's node group and all its backup node groups answers; if that is empty too, the [mass removal protection](#mass-removal-protection) keeps the previous records |
+| Scope | The line's `<line name>.<cluster domain>`, and `all.<cluster domain>` on the resolution line it maps to |
+| Health | Nodes of backup node groups are judged the same way: [health removal](#health-removal-and-repair), the reachability of scheduling addresses, and scheduling rules |
+| Recovery | The line moves back once its node group has the minimum again |
+| Publication | Switches and recoveries are published by the next reconciliation (reason **Node health changed**), without another audit entry |
+| Mode | Automatic only; Manual mode never switches |
+
+A node group may back up several lines, but not its own line.
 
 ### Manual mode
 
@@ -82,7 +127,8 @@ The console writes no DNS. The cluster's **DNS** tab lists the records to create
 
 | Item | Behavior |
 | --- | --- |
-| Addresses | Every enabled node's addresses, regardless of health: manual records do not follow node health |
+| Addresses | Every enabled node's primary addresses (the lowest level of its scheduling addresses), regardless of health or probe reachability: manual records do not follow node health; no backup node groups, no scheduling rules |
+| Resolution lines | Records list their resolution line; the BIND zone file holds the default line's records, and records of other resolution lines follow as comments (`; line telecom`) to be created on those lines at the provider |
 | Sites | One CNAME per site; a single `*.<cluster domain> CNAME all.<cluster domain>` can replace the per-site records |
 | CNAME target | Shown on the site's **Domains** tab as usual, with the state **Manual** |
 | Switching modes | From Automatic to Manual, written records stay and the console stops changing them; only **Not managed** removes them |
@@ -104,6 +150,8 @@ Earlier versions had one global DNS steering configuration. On upgrade it become
 | Item | Behavior |
 | --- | --- |
 | Address set | Nodes that are enabled, sent a heartbeat within 45 seconds, report a healthy data plane, and applied their cluster's current revision |
+| Node addresses | Each node answers with the lowest reachable level of its [scheduling addresses](scheduling.en.md#scheduling-addresses-and-backup-ips); with every level unreachable, with none |
+| Scheduling | Active [scheduling rules](scheduling.en.md#scheduling-rules) remove nodes, move them to backup IPs, or switch lines to backup node groups; reachability and rules are evaluated every 10 seconds and changes are published right away |
 | Publication grace | For 2 minutes after a revision is published, nodes that were up to date keep their place while they apply it, so routine changes do not take nodes out of DNS |
 | Check interval | A background job recomputes every automatic binding each minute, up to 4 clusters at a time; offline or disabled nodes, nodes whose apply failed, and nodes more than 2 minutes behind are removed and added back after recovery |
 | Failure isolation | Each binding publishes and reconciles on its own; an unavailable provider fails only the DNS revisions of the clusters that use it |
@@ -119,19 +167,30 @@ A failed DNS revision shows its reason: provider authentication failed, zone not
 
 ### Mass removal protection
 
-When a publication would empty a cluster's previously non-empty `all.` or line record set, or remove more address records than the threshold allows, the cluster's previous records stay and nothing is written to the provider. The same applies when the console loses its node channel and every node looks offline.
+When a publication would empty a cluster's previously non-empty `all.` or line record set (each resolution line counted separately), or remove more address records than the threshold allows, the cluster's previous records stay and nothing is written to the provider. The same applies when the console loses its node channel and every node looks offline.
 
 | Item | Behavior |
 | --- | --- |
 | Threshold | Share of the cluster's previous address records one publication may remove: 50% by default, adjustable in **DNS steering → Mass removal protection** (5%–100%) for all clusters |
-| Not counted | Names no longer managed (deleted sites, removed lines); a change of provider account, cluster domain, or all-lines record name; modes other than Automatic |
+| Not counted | Names no longer managed (deleted sites, removed lines); resolution lines no longer in use; a change of provider account, cluster domain, or all-lines record name; modes other than Automatic; address changes from backup node group switches do not count toward the share, though emptying a record set still does |
+| Scheduling | Removals by scheduling rules count as usual |
 | When held back | The top of the cluster's **DNS** tab shows the held-back change (address records it would remove); the DNS revision list shows it as **Held back**, and the **Cluster bindings** table shows the cluster as **Held back**; the alert "DNS mass removal blocked" fires for the cluster |
 | Recovery | The hold ends by itself once a publication passes; the alert resolves |
 | Force | Click **Publish anyway** on the cluster's **DNS** tab and confirm; the current state is published and `dns.force_publish` is audited |
 
 ### DNS revisions and rollback
 
-Each cluster has its own DNS revisions, which do not advance the node configuration revision. **Roll back DNS** restores the binding settings of the chosen revision (mode, account, cluster domain, TTL, lines); addresses are still computed from the current sites and node health, so offline nodes are not restored. Manual-mode revisions are **Published** as soon as they are saved. Each cluster keeps its latest 200 DNS revisions; the current, published, and **Blocked** revisions are never pruned.
+Each cluster has its own DNS revisions, which do not advance the node configuration revision. **Roll back DNS** restores the binding settings of the chosen revision (mode, account, cluster domain, TTL, lines with their resolution lines, backup node groups, and minimum healthy IPs); addresses are still computed from the current sites and node health, so offline nodes are not restored. Manual-mode revisions are **Published** as soon as they are saved. Each cluster keeps its latest 200 DNS revisions; the current, published, and **Blocked** revisions are never pruned.
+
+The **Reason** column of the **DNS revisions** table:
+
+| Reason | Trigger |
+| --- | --- |
+| Binding saved | Saving the DNS binding; changing a node's scheduling addresses |
+| Node health changed | A reconciliation found a different address set; a probe-driven address level change; a backup node group switch or recovery |
+| Rolled back | **Roll back DNS** |
+| Published despite the protection | **Publish anyway** |
+| Scheduling: {rule} on {node} | A scheduling rule took effect or recovered; followed by the action and **Activated** or **Recovered** |
 
 Before deleting a provider account, point the clusters that use it at another account or switch them to Not managed and wait for cleanup (the account no longer owns system-managed records); otherwise the console returns `DNS_PROVIDER_IN_USE`. Likewise, before deleting a cluster, switch its DNS to Not managed and wait for cleanup (`DNS_BINDING_IN_USE`).
 
@@ -317,6 +376,7 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | No canary node online; configuration published to every node | A publication in a cluster with the canary on found no canary node online | The next publication in that cluster with a canary node online |
 | Stored rule no longer valid; its last compiled form is kept | A publication found a stored rule the current validator refuses (see [Rules](rules.en.md)); the name is the rule's | The next publication after the rule is rewritten or deleted |
 | DNS mass removal blocked | The [mass removal protection](#mass-removal-protection) held a publication of a cluster back | The cluster's next publication that passes, or a forced one |
+| Scheduling rule acting on a node | A [scheduling rule](scheduling.en.md#scheduling-rules) took effect on a node; the name is "rule · node" | The action recovers; at once when the rule is disabled, deleted, or its line, conditions, or action change |
 
 ## Subscribe to alerts
 
@@ -350,11 +410,11 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 
 | Item | Description |
 | --- | --- |
-| Background jobs | DNS steering sync and alert checks and deliveries run every minute in background jobs and need at least one console process with `ROLE=worker` or `ROLE=all`, see [Deployment overview](../deploy/README.en.md) |
-| Smart resolution | No carrier or geographic resolution from the provider; a line is a node group |
+| Background jobs | DNS steering sync and alert checks and deliveries run every minute in background jobs, address reachability and scheduling rules every 10 seconds; they need at least one console process with `ROLE=worker` or `ROLE=all`, see [Deployment overview](../deploy/README.en.md) |
+| Resolution lines | Only six resolution lines (default, China Telecom, China Unicom, China Mobile, education network, overseas), and only with DNSPod, Tencent Cloud DNSPod, Alibaba Cloud, and Huawei Cloud; province lines and other providers' geographic resolution are not used |
 | Authoritative DNS | Edgeweir runs no authoritative DNS; it manages records through provider APIs |
 | One operation | Each provider call takes at most 2 minutes |
-| Active probing | No active reachability probes; origin state comes only from real traffic |
+| Active probing | Node reachability comes from [regional probes](scheduling.en.md#regional-probes); origin state from the nodes' passive and active health checks |
 | Local simulator | **Local simulator** appears only when `EDGEWEIR_DNS_TEST_ENDPOINT` is set and is for testing only |
 
 ## Troubleshooting
@@ -369,6 +429,8 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | "The DNS provider rejected the credentials" | Wrong, expired, or under-privileged credentials; some providers also require the console's egress IP to be allowed | Check the permissions in [Providers and credentials](#providers-and-credentials), then **Test connection** |
 | "The server address is private or special-purpose, or a public address without HTTPS" | The outbound policy refused a self-hosted endpoint | Use HTTPS, or allow the internal range in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | **CNAME target** shows **No healthy nodes** | No node in the lines meets the address set conditions | Check node heartbeats, data plane state, and applied revision |
+| "This DNS provider has no {line} resolution line" | A binding line uses a resolution line the account's provider does not support | Use **Default**, or an account whose provider supports the line |
+| Carrier users get the default line's addresses | The resolver is not on that carrier's network, or no binding line maps to that resolution line | Test with a resolver of that carrier; add a binding line for it |
 | Channel shows **Notification delivery failed** | The target refused or timed out, or the outbound policy refused the address | Reproduce with **Send test**; add internal targets to `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | "Notification channel limit reached" | 32 channels exist | Delete unused channels |
 | **Subscribe** is unavailable | No channel is enabled | Add or enable a channel |
