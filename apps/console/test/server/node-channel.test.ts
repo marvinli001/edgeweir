@@ -1,9 +1,11 @@
 import { updateHttps, uploadCertificate } from "../../src/server/services/certificates";
 import "reflect-metadata";
 import { webcrypto } from "node:crypto";
+import { once } from "node:events";
+import http2 from "node:http2";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-node";
+import { compressionGzip, createConnectTransport } from "@connectrpc/connect-node";
 import { siteCreateInput, tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { ApplyState, NodeService, PurgeType, TaskState, WatchEvent } from "@edgeweir/proto";
@@ -46,18 +48,21 @@ describe("node channel", async () => {
   let clusterId: string;
   let organizationId: string;
 
-  const anonymous = () =>
+  /** Sends gzip-compressed requests, which the server inflates. */
+  const gzip = { sendCompression: compressionGzip, compressMinBytes: 1 };
+  const anonymous = (extra: Partial<typeof gzip> = {}) =>
     createClient(
       NodeService,
       createConnectTransport({
         baseUrl,
         httpVersion: "2",
         nodeOptions: { ca: ctx.nodeCa.certificatePem, servername: "localhost" },
+        ...extra,
       }),
     );
 
   /** Enrolls a node of the default cluster and returns its mTLS client. */
-  const enroll = async (nodeName: string) => {
+  const enroll = async (nodeName: string, extra: Partial<typeof gzip> = {}) => {
     const token = await createEnrollmentToken(
       ctx.db,
       { clusterId, nodeName, ttlMinutes: 10 },
@@ -81,6 +86,7 @@ describe("node channel", async () => {
           key: keyPem,
           servername: "localhost",
         },
+        ...extra,
       }),
     );
     return { nodeId: enrolled.nodeId, mtls };
@@ -765,6 +771,34 @@ describe("node channel", async () => {
     expect(notified.value?.latestRevision).toBe(BigInt(revision.revision));
     expect(notified.value?.contentHash).toBe(revision.contentHash);
     abort.abort();
+  });
+
+  it("bounds request bodies, unread without a client certificate (audit 2026-10-01 P0-2)", async () => {
+    // 20 MiB that gzip turns into a few KiB.
+    const bomb = "a".repeat(20 << 20);
+    await expect(
+      anonymous(gzip).reportLogs({ batchSequence: 1n, logs: [{ path: bomb }] }),
+    ).rejects.toMatchObject({ code: Code.Unauthenticated });
+    await expect(
+      anonymous(gzip).enroll({ token: "a".repeat(1 << 20), csrPem: "csr" }),
+    ).rejects.toMatchObject({ code: Code.ResourceExhausted });
+    const { mtls } = await enroll("limits-test", gzip);
+    await expect(
+      mtls.reportLogs({ batchSequence: 1n, logs: [{ path: bomb }] }),
+    ).rejects.toMatchObject({ code: Code.ResourceExhausted });
+    expect(
+      await mtls.reportLogs({ batchSequence: 1n, logs: [{ path: `/${"a".repeat(2047)}` }] }),
+    ).toBeDefined();
+  });
+
+  it("closes connections without traffic", async () => {
+    const idle = await startNodeChannel(ctx, { idleTimeoutMs: 200 });
+    const { port } = idle.server.address() as { port: number };
+    const session = http2.connect(`https://localhost:${port}`, { ca: ctx.nodeCa.certificatePem });
+    session.on("error", () => {});
+    await once(session, "connect");
+    await once(session, "close");
+    await idle.close();
   });
 
   it("rejects unknown tokens", async () => {
