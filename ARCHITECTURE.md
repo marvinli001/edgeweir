@@ -394,6 +394,9 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `cache_rule` | 缓存规则：条件表达式与名单引用、状态码与大小条件、动作、边缘与浏览器 TTL |
 | `edge_rule` | 网站规则或全局规则：阶段、表达式、动作、名单引用 |
 | `bulk_redirect` | 网站的批量重定向：来源（路径或域名加路径，网站内唯一）、目标、状态码、是否保留查询串、顺序 |
+| `cluster_port_pool` | 集群的四层端口池：协议（TCP、UDP、两者）与端口区间（1024–65535，同协议不重叠） |
+| `l4_app` | 四层应用：所属集群、名称、协议、端口（集群、协议、端口唯一）、启用、PROXY protocol（接受、发往源站的版本）、被动健康检查、连接与空闲超时、放行与拦截名单引用、并发与新建速率上限 |
+| `l4_origin` | 四层应用的源站：地址、端口、权重、备用、顺序 |
 | `ip_list` | IP 名单（规范化 CIDR，名称唯一）；`allow` / `block` 名单对所有网站生效 |
 | `ip_ban` | 动态封禁：范围（平台 / 网站）、规范化 CIDR、原因码、来源（手动 / 自动，自动带来源节点与触发条件）、到期与解封时间、序号 `seq`（序列 `ip_ban_seq`）、是否下发 |
 | `site_protection` | 网站防护：Under Attack 与挑战类型、通行凭证有效期、PoW 难度、CC 策略（跟随模板或自定义）、JA4 日志；没有行即默认值 |
@@ -430,6 +433,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `node_day_stats` | 天汇总 |
 | `stats_rollup_dirty` | 待重新汇总的时间桶（小时、天、用量窗口） |
 | `node_stats_cursor` | 每个节点统计批次的序号高水位与统计水位（`complete_until`） |
+| `l4_minute_stats` | 按节点、四层应用、分钟的统计：新建与拒绝的连接、并发峰值、入 / 出字节，保留 7 天 |
 | `site_usage` | 按网站、UTC 5 分钟窗口的可复算用量（请求数、出站与入站字节，十进制精确值）、修订号与全局序号 `seq`（序列 `site_usage_seq`） |
 | `access_log` | 采样访问日志（请求 id；网站开启时含 JA4；命中的 CRS 规则与是否被拦截），按 UTC 日分区 |
 | `security_event` | 节点上报的 CC 防护事件：级别变化、路径升降级、自动封禁，带当时的 Top IP 与 Top 路径 |
@@ -493,6 +497,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0039_certificate_accounts` | `acme_account`；`certificate.renewal_info_at` |
 | `0040_node_lifecycle` | `node.previous_cert_serial`；`node_upgrade_delivery.deadline_at`（已下发的投递沿用创建后 30 分钟的期限） |
 | `0041_g6_probes_scheduling` | `probe`、`probe_token`、`probe_result`、`node_address_state`、`scheduling_rule`、`scheduling_state`；`node.metrics`、`node.probe_enabled`；`node_ip.source` 与 `level`（唯一键改为节点、来源、地址）；`dns_revision.reason_params` |
+| `0042_g7_layer4` | `cluster_port_pool`、`l4_app`、`l4_origin`、`l4_minute_stats` |
 
 ## 构建产物
 

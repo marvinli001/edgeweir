@@ -394,6 +394,9 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `cache_rule` | Cache rules: condition expression and list references, status and size conditions, action, edge and browser TTLs |
 | `edge_rule` | Site or global rules: phase, expression, action, list references |
 | `bulk_redirect` | A site's bulk redirects: source (path or domain plus path, unique per site), target, status code, whether the query string is kept, order |
+| `cluster_port_pool` | A cluster's layer-4 port pools: protocol (TCP, UDP, both) and port range (1024-65535, no overlap per protocol) |
+| `l4_app` | Layer-4 applications: cluster, name, protocol, port (unique per cluster, protocol and port), enabled, PROXY protocol (accepted, version sent to origins), passive health check, connect and idle timeouts, allow and block list references, concurrency and new-connection limits |
+| `l4_origin` | Origins of a layer-4 application: address, port, weight, backup, order |
 | `ip_list` | IP lists (normalized CIDRs, unique names); `allow` / `block` lists apply to every site |
 | `ip_ban` | Dynamic bans: scope (platform / site), normalized CIDR, reason code, source (manual / auto; auto bans keep the node and trigger), expiry and removal time, `seq` (sequence `ip_ban_seq`), whether it is delivered |
 | `site_protection` | Site protection: Under Attack and its challenge type, pass lifetime, proof-of-work difficulty, CC policy (template or custom), JA4 logging; no row means the defaults |
@@ -430,6 +433,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `node_day_stats` | Daily rollups |
 | `stats_rollup_dirty` | Time buckets waiting for a rollup (hours, days, usage windows) |
 | `node_stats_cursor` | Per-node high-water mark of statistics batch sequences and the statistics watermark (`complete_until`) |
+| `l4_minute_stats` | Per node, layer-4 application and minute: new and refused connections, peak concurrency, bytes in / out, kept 7 days |
 | `site_usage` | Recomputable usage per site and UTC 5-minute window (requests, bytes out and in, exact decimals), revision and global `seq` (sequence `site_usage_seq`) |
 | `access_log` | Sampled access logs (request id; JA4 when the site records it; matched CRS rules and whether CRS blocked the request), one partition per UTC day |
 | `security_event` | CC mitigation events reported by nodes: level changes, escalated paths, automatic bans, with the top addresses and paths of the moment |
@@ -493,6 +497,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0039_certificate_accounts` | `acme_account`; `certificate.renewal_info_at` |
 | `0040_node_lifecycle` | `node.previous_cert_serial`; `node_upgrade_delivery.deadline_at` (deliveries already released keep the deadline of 30 minutes after creation) |
 | `0041_g6_probes_scheduling` | `probe`, `probe_token`, `probe_result`, `node_address_state`, `scheduling_rule`, `scheduling_state`; `node.metrics`, `node.probe_enabled`; `node_ip.source` and `level` (unique by node, source, address); `dns_revision.reason_params` |
+| `0042_g7_layer4` | `cluster_port_pool`, `l4_app`, `l4_origin`, `l4_minute_stats` |
 
 ## Build output
 
