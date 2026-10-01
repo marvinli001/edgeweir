@@ -173,6 +173,25 @@ services:
       timeout: 2s
       retries: 20
 
+  # G4: test origins that name themselves, number and count their responses
+  # and can be broken (/health status, connection resets) and repaired from
+  # the e2e network (scripts/e2e-g4.mjs).
+  g4-origin-a:
+    image: node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
+    command: ["node", "/g4/server.mjs", "a"]
+    volumes:
+      - ./docker/e2e/g4-origin:/g4:ro
+    init: true
+    read_only: true
+
+  g4-origin-b:
+    image: node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
+    command: ["node", "/g4/server.mjs", "b"]
+    volumes:
+      - ./docker/e2e/g4-origin:/g4:ro
+    init: true
+    read_only: true
+
   # G1: clients on the default network that reach the node by its container
   # address; scripts/e2e-g1.mjs bans client-a and keeps client-b as the control.
   client-a:
