@@ -1,14 +1,16 @@
 # Rules, IP lists, and GeoIP
 
-Site rules, global rules, IP lists, and the node-local GeoIP databases.
+Site rules, global rules, bulk redirects, IP lists, and the node-local GeoIP databases.
 
 ## Concepts
 
 | Term | Definition |
 | --- | --- |
 | Rule | An expression plus an action in one phase. Site rules apply to one site; global rules apply to every site in every cluster. |
-| Phase | A fixed point in request processing where rules run; there are 8. |
+| Phase | A fixed point in request processing where rules run; there are 9. |
 | Expression | A typed, wirefilter-style condition, for example `ip.src in $blocked`. |
+| Value expression | An expression that computes a string per request, used as a redirect target or rewrite path, for example `concat("/new", http.request.uri.path)`. |
+| Bulk redirects | A site's table of exact-match redirects, up to 5000 per site. |
 | IP list | A named set of IP addresses and CIDRs that expressions reference as `$name`; allow and block lists also apply to every site directly. |
 
 The console parses expressions and checks their fields, types, and actions before publishing a syntax tree; nodes validate the whole configuration and compile the tree. The configuration contains no executable Lua text.
@@ -29,7 +31,7 @@ The console parses expressions and checks their fields, types, and actions befor
 
    The response is 403 with `X-Edgeweir-Error: policy-denied`.
 
-Global rules are edited on the **Global rules** page with the same editor, apply to every site, and are published to every cluster on save. API: `GET` and `PUT /api/v1/platform-rules`.
+Global rules are edited on the **Global rules** page with the same editor (**Origin override** has no **Origin group**), apply to every site, and are published to every cluster on save. API: `GET` and `PUT /api/v1/platform-rules`.
 
 Disabled rules are not sent to nodes.
 
@@ -39,14 +41,15 @@ Phases run in the order of this table.
 
 | Phase | Actions | Effect |
 | --- | --- | --- |
-| Request transform | Rewrite path, Request header | Rewrites the origin path; sets or removes request headers |
-| Redirect | Redirect | Returns 301, 302, 307, or 308 |
-| Configuration | Override settings | Overrides cache bypass and HTTPS redirect; turns off Gzip |
+| Request transform | Rewrite path, Request header | Rewrites the origin path and query parameters; sets or removes request headers |
+| Redirect | Redirect | Returns 301, 302, 307, or 308; [bulk redirects](#bulk-redirects) are looked up after the rules |
+| Configuration | Override settings | Overrides site settings per request, see [Override settings](#override-settings) |
 | Custom WAF | Block, Log, Allow, Challenge | Block returns 403 or 451; Log only writes a log line; Allow skips the remaining custom WAF rules of the same scope; Challenge makes visitors pass a challenge first |
 | Rate limit | Rate limit | Fixed-window counting; over the limit returns 429 or 403 |
-| Cache | Override settings | Overrides cache-related settings |
-| Origin | Request header | Sets or removes headers sent to the origin |
+| Cache | Override settings | Overrides only cache bypass, HTTPS redirect, and Gzip |
+| Origin | Request header, Origin override | Sets or removes headers sent to the origin; picks an origin group and overrides the origin Host, SNI, and port |
 | Response transform | Response header | Sets or removes response headers based on status and response headers |
+| Compression | Compression algorithms | Limits the compression algorithms of the response and their preference order |
 
 ### Action fields
 
@@ -54,15 +57,22 @@ Phases run in the order of this table.
 | --- | --- | --- | --- |
 | Block | Status code | 403 / 451 | 403 |
 | Challenge | Challenge type | Cookie redirect / JavaScript / Proof of work / Image captcha | JavaScript |
-| Redirect | Value | An absolute path on the site (starts with `/`, not `//`), or an `http(s)` URL without credentials or whitespace; up to 4096 characters | `/` |
+| Redirect | Target | **Static**: an absolute path on the site (starts with `/`, not `//`), or an `http(s)` URL without credentials or whitespace; no backslashes or control characters, up to 4096 characters. **Expression**: a value expression, see [Dynamic targets and query parameters](#dynamic-targets-and-query-parameters) | Static, `/` |
 | Redirect | Status code | 301 / 302 / 307 / 308 | 301 |
-| Rewrite path | Value | Starts with `/`, not `//`; no `?`, `#`, or `\` | `/` |
+| Redirect | Keep query string | On / off | Off |
+| Rewrite path | Target | **Static**: starts with `/`, not `//`; no `?`, `#`, or `\`. **Expression**: a value expression | Static, `/` |
+| Rewrite path | Keep query string | On / off | On |
+| Redirect / Rewrite path | Set query parameters | Up to 16 pairs of **Parameter name** and **Parameter value**, one more per **Add parameter**; names are 1–64 letters, digits, or `.` `_` `~` `-`, unique; values are printable ASCII, up to 256 characters | None |
+| Redirect / Rewrite path | Remove query parameters | Parameter names, comma-separated, up to 16; not also in **Set query parameters** | Empty |
 | Request header / Response header | Header name | 1–64 token characters, not a protected header | `x-custom` |
 | Request header / Response header | Value | Up to 4096 characters, no control characters | Empty |
 | Request header / Response header | Remove header | On / off | Off |
-| Override settings | Bypass cache | Unchanged / On / Off | On |
-| Override settings | Redirect HTTP to HTTPS | Unchanged / On / Off | Unchanged |
-| Override settings | Gzip | Unchanged / Off | Unchanged |
+| Override settings | Each setting | See [Override settings](#override-settings) | **Bypass cache** On, everything else Unchanged |
+| Origin override | Origin group | **Default group** or one of the site's origin groups, see [Origin groups](origins-and-cache.en.md#origin-groups) | The site's first origin group; **Default group** without one |
+| Origin override | Origin Host | Host name; empty leaves it unchanged | Empty |
+| Origin override | SNI | Host name; empty leaves it unchanged | Empty |
+| Origin override | Port | 1–65535; empty leaves it unchanged | Empty |
+| Compression algorithms | Preference order | Some of Zstandard, Brotli, and Gzip: **Add algorithm** appends one, the arrows reorder them; an empty list shows **No compression** | No compression |
 | Rate limit | Requests per window | 1–100000 | 100 |
 | Rate limit | Window (seconds) | 1–3600 | 60 |
 | Rate limit | Rate limit key | `ip.src`, `http.host`, `tls.ja4`, or `http.request.headers.<name>` (pick **Request header** and enter the name) | `ip.src` |
@@ -73,25 +83,84 @@ Protected headers cannot be set or removed by rules: `Host`, `Authorization`, `P
 > [!WARNING]
 > Static request and response header values are written into the configuration revision and sent to nodes. Do not put API keys or other secrets in them.
 
+**Origin override** changes at least one thing: an origin group other than **Default group**, or one of **Origin Host**, **SNI**, and **Port**.
+
+### Override settings
+
+Every setting of **Override settings** starts as **Unchanged**; numbers left empty stay unchanged.
+
+| Field | Values | Phases | Effect |
+| --- | --- | --- | --- |
+| Bypass cache | Unchanged / On / Off | Configuration, Cache | Bypasses or uses the cache for the request |
+| Redirect HTTP to HTTPS | Unchanged / On / Off | Configuration, Cache | Redirects HTTP requests to HTTPS |
+| Gzip | Unchanged / On / Off | Configuration, Cache | **Off**: the response does not use gzip; **On**: allows gzip again after an earlier rule turned it off |
+| Brotli, Zstandard | Unchanged / On / Off | Configuration | As Gzip |
+| WebSocket | Unchanged / On / Off | Configuration | Overrides the site's **WebSocket** |
+| Under Attack | Unchanged / On / Off | Configuration | Overrides the site's Under Attack; global Under Attack is unaffected |
+| CC mitigation | Unchanged / On / Off | Configuration | **Off**: the request is exempt from CC level challenges and automatic per-IP bans; it is still counted |
+| CC highest level | Unchanged / Cookie redirect / JavaScript / Proof of work / Image captcha | Configuration | The request's CC level does not exceed the chosen level |
+| Origin connect timeout (s) | 0.1–120 | Configuration | Overrides the pool's connect timeout |
+| Origin send timeout (s), Origin read timeout (s) | 0.1–3600 | Configuration | Override the pool's send and read timeouts |
+| Log sample rate (%) | 0–100 | Configuration | The access log sample rate of the request |
+
+A later matching rule overrides an earlier one setting by setting. Compression switches apply only among the algorithms the site has turned on; rules cannot turn on an algorithm the site has off.
+
+### Dynamic targets and query parameters
+
+1. Next to **Target** of a redirect or rewrite path rule, select **Expression**.
+2. Enter a value expression. When "Check character N" appears below the editor, fix it using [Functions](#functions) and [Fields](#fields).
+3. Switch **Keep query string** as needed, and fill in **Set query parameters** and **Remove query parameters**.
+4. Click **Save**.
+5. Verify: for example, a redirect rule with the expression `starts_with(http.request.uri.path, "/old/")`, the target `regex_replace(http.request.uri.path, "^/old/", "/new/")`, **Keep query string** on, and `utm_source` in **Remove query parameters**:
+
+   ```bash
+   curl -sI -H 'Host: www.example.com' 'http://<node IP>/old/a?utm_source=x&id=1'
+   ```
+
+   The response is 301 with `Location: /new/a?id=1`.
+
+A value expression is a string literal, a string field, or a function call that returns a string:
+
+```text
+concat("https://www.example.com", http.request.uri.path)
+regex_replace(http.request.uri.path, "^/old/(.*)$", "/new/${1}")
+wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://example.com/${1}/${2}")
+```
+
+| Item | Behavior |
+| --- | --- |
+| Redirect result | A path starting with a single `/`, or an `http(s)` URL with a host and without credentials; no whitespace, control characters, or backslashes |
+| Rewrite result | Starts with a single `/`; no `?`, `#`, `\`, or control characters |
+| Invalid result | The request gets 503 (`X-Edgeweir-Error: policy-unavailable`) |
+| Default query string | Redirects drop the request's query string; rewrites keep it |
+| Order | A redirect with **Keep query string** on first appends the request's query string to the target (with `&` when the target has one); a rewrite with **Keep query string** off first clears the query string. Then parameters named in **Remove query parameters** or **Set query parameters** are removed from the whole query string, and **Set query parameters** are appended in name order |
+| Parameter names | The part of each parameter before its first `=`, case-sensitive |
+| Parameter values | Every character other than letters, digits, and `-` `.` `_` `~` is percent-encoded |
+| Fragment and empty query | A fragment after `#` in the target stays last; without parameters no `?` is left |
+
 ### Execution order
 
 | Item | Behavior |
 | --- | --- |
 | Allow and block lists | Run first. An address in a block list gets 403; an address in an allow list is exempt from the block lists but not from rules; an address in both is allowed |
 | Scope | In each phase, global rules run before site rules; within a scope, in list order |
-| Terminating actions | Block, redirect, and exceeding a rate limit end the request |
+| Terminating actions | Block, redirect (bulk redirects included), and exceeding a rate limit end the request |
+| Bulk redirects | Looked up after the global and site rules of the redirect phase |
 | Allow | Skips only the remaining custom WAF rules of the same scope, not the other scope and not rate limits; a site allow rule cannot bypass a block in the global rules |
-| Stacking | Other actions accumulate; a later action overrides an earlier setting |
+| Stacking | Other actions accumulate; a later action overrides an earlier setting; override settings and origin overrides apply field by field, and a later compression rule replaces an earlier one |
 | Ordering | Dragging changes order only within a phase |
 
 ### Action behavior
 
 | Action | Behavior |
 | --- | --- |
-| Rewrite path | Changes the path sent to the origin; expressions in later phases see the rewritten path; cache rules, the cache key, and purges still use the normalized path before the rewrite |
+| Rewrite path | Changes the path and query string sent to the origin; expressions in later phases see the rewritten path, query string, and extension (`http.request.full_uri` stays the same); cache rules, the cache key, purges, and bulk redirects still use the request before the rewrite |
 | Response transform | Applies to cache hits and origin responses |
-| Override settings: Gzip off | Removes `Accept-Encoding` towards the origin and bypasses the cache so previously cached compressed responses are not served; rules cannot turn on compression modules that are not built |
+| Override settings: Gzip, Brotli, Zstandard | Affect only the response and never bypass the cache. On sites that compress at the edge (any algorithm on), the cache still holds the same uncompressed object; on sites that do not, **Gzip** off removes `Accept-Encoding` towards the origin and the cache tells variants apart by the origin's `Vary`, so an origin without `Vary: Accept-Encoding` may serve a previously cached compressed object |
 | Override settings: Redirect HTTP to HTTPS | Requests get 503 when the site has no certificate |
+| Override settings: Log sample rate | Records matching requests at that rate; their logs are kept even when the site's access log sample rate is **Off**, see [Access logs](access-logs.en.md) |
+| Origin override | Load balancing, retries, health checks, and session affinity work as usual among the origins of the chosen group; **Port** applies to every origin of the group; **Origin Host** does not affect S3 origins; the cache key does not include the origin group, see [Origin groups](origins-and-cache.en.md#origin-groups) |
+| Compression algorithms | Only algorithms on the list that the site has on and override settings did not turn off are negotiated by the q-values of the request's `Accept-Encoding`, with the list order breaking ties; **No compression** turns compression off; the cache is not bypassed |
 | Block, rate limit exceeded | Response header `X-Edgeweir-Error: policy-denied`; rate-limited responses also carry `Retry-After` (the window in seconds) |
 | Challenge | A request with a pass of a sufficient level continues with the following rules; otherwise it gets the challenge page (non-GET/HEAD requests get 403 with `X-Edgeweir-Challenge: required`). Allow rules skip Under Attack and CC challenges, but a challenge rule that matched before the allow still applies. See [Challenges and CC mitigation](challenges.en.md) |
 | Log | Does not change the response. Each rule writes at most one NOTICE-level nginx error log line per node per 60 seconds, containing the site ID and rule ID; nginx appends the client IP, request line, and Host to log lines written during a request |
@@ -116,6 +185,11 @@ http.request.method in {"POST" "PUT"}
 http.request.headers["x-region"] eq "nz"
 ip.geoip.country eq "NZ" and ip.geoip.asnum in {64512 64513}
 http.response.code ge 500
+lower(http.host) eq "www.example.com"
+len(http.request.uri.query) gt 1024
+url_decode(http.request.uri.query) contains "<script"
+not starts_with(http.request.uri.path, "/api/")
+http.request.uri.path.extension in {"jpg" "png" "webp"}
 ```
 
 ### Fields
@@ -125,11 +199,14 @@ http.response.code ge 500
 | `http.host` | String | The request Host |
 | `http.request.method` | String | The request method |
 | `http.request.uri.path` | String | The path after nginx normalization |
+| `http.request.uri.path.extension` | String | The text after the last `.` of the path's last segment, lowercase; empty string without one |
 | `http.request.uri.query` | String | The query string without `?` |
 | `http.request.uri` | String | The raw request URI (path plus query) |
+| `http.request.full_uri` | String | `scheme://`, the Host (lowercase, without port), and the raw request URI; rewrites do not change it |
 | `http.request.headers["name"]` | String | Case-insensitive name; multiple values joined with `, ` |
-| `http.response.code` | Integer | Response status; response transform phase only |
-| `http.response.headers["name"]` | String | Response header; response transform phase only |
+| `http.response.code` | Integer | Response status; response transform and compression phases only |
+| `http.response.headers["name"]` | String | Response header; response transform and compression phases only |
+| `http.response.content_type.media_type` | String | The response's `Content-Type` without parameters, lowercase; response transform and compression phases only |
 | `ip.src` | IP | The TCP client address; with the PROXY protocol on the listener, the address the load balancer passed |
 | `ssl` | Boolean | `true` for HTTPS requests |
 | `ip.geoip.country` | String | ISO country code; empty string without a record |
@@ -146,9 +223,33 @@ http.response.code ge 500
 | `contains` | String | Substring match |
 | `matches` | String | Regular expression match |
 | `in {…}` | All | Set, elements separated by whitespace |
-| `in $name` | IP | References an IP list |
+| `in $name` | IP | References an IP list; fields only, not function results |
 | `not`, `and`, `or`, `( )` | — | Precedence `not` → `and` → `or` |
 | Literals | — | Strings in double quotes (JSON escapes); integers; `true` / `false`; IPs and CIDRs unquoted; a bare `true` is a valid expression |
+| `function(argument, …)` | — | A function can be the left side of a comparison, with the operators of its return type; a function that returns a boolean can be a condition on its own |
+
+### Functions
+
+Every string is handled as UTF-8 bytes. Arguments are fields, string literals, or other function calls.
+
+| Function | Returns | Description |
+| --- | --- | --- |
+| `lower(s)`, `upper(s)` | String | Converts ASCII letters only |
+| `len(s)` | Integer | Number of bytes |
+| `starts_with(s, prefix)`, `ends_with(s, suffix)` | Boolean | Byte-wise prefix or suffix; an empty string always matches |
+| `url_decode(s)` | String | Decodes once: `%XX` (hexadecimal, case-insensitive) becomes a byte and `+` a space; incomplete or non-hexadecimal `%` sequences stay as they are |
+| `concat(s1, s2, …)` | String | Joins 2–8 arguments in order |
+| `regex_replace(s, "pattern", "replacement")` | String | Replaces the first match; patterns as in [Regular expressions](#regular-expressions); without a match the string is returned unchanged |
+| `wildcard_replace(s, "wildcard", "replacement"[, "s"])` | String | The wildcard pattern must match the whole string: `*` matches zero or more bytes (at most 8 of them), `\*` and `\\` are literals; ASCII case-insensitive by default, case-sensitive with a fourth argument `"s"`; earlier `*` take the shortest match; without a match the string is returned unchanged |
+
+| Item | Rule |
+| --- | --- |
+| Where | Conditions (cache rule conditions included) can use every function except `regex_replace` and `wildcard_replace`; value expressions can use all of them, `regex_replace` and `wildcard_replace` at most once each per expression |
+| Literal arguments | Patterns, wildcards, replacements, and `"s"` must be string literals; wildcards and replacements are at most 1024 bytes without control characters |
+| Replacements | `${1}`–`${8}` refer to the pattern's capture groups or the wildcard's `*`, up to their number; groups that did not take part in the match become empty; any other `$` is a literal; captures keep the case of the original string |
+| Nesting | At most 4 levels |
+| Result length | A function result longer than 8192 bytes fails evaluation |
+| Evaluation failure | A pattern over its execution budget, a result that is too long, or an invalid dynamic target gets the request a 503 (`X-Edgeweir-Error: policy-unavailable`) |
 
 ### IP semantics
 
@@ -161,7 +262,7 @@ http.response.code ge 500
 
 ### Regular expressions
 
-Console validation, node validation and node execution (PCRE) accept the same subset; constructs whose meaning differs between the engines are refused.
+`matches` and `regex_replace` use the same subset. Console validation, node validation and node execution (PCRE) accept the same subset; constructs whose meaning differs between the engines are refused.
 
 | Item | Rule |
 | --- | --- |
@@ -183,12 +284,49 @@ The language is a wirefilter-style subset, not a complete wirefilter implementat
 
 | Item | Limit |
 | --- | --- |
-| Expression length | 4096 characters |
+| Expression length | 4096 characters; 16384 for cache rule conditions |
 | Tokens | 512 |
 | Nesting | 16 levels |
-| Basic conditions | 128 |
+| Basic conditions, functions, and arguments | 128 in total |
 | Set elements | 256 |
+| Function nesting | 4 levels |
+| Function results | 8192 bytes |
 | Rules | 64 per site; 32 global rules |
+| Bulk redirects | 5000 per site |
+
+## Bulk redirects
+
+A site's table of exact-match redirects: each entry redirects one source to one static target. For prefix or wildcard redirects, use a redirect rule with `wildcard_replace`.
+
+1. Open **Sites**, select the site, and open the **Bulk redirects** tab.
+2. Click **Add redirect**, enter **Source** and **Target**, select **Status code**, and turn on **Keep query string** as needed.
+3. Or click **Import**, enter one entry per line in **Import redirects** ("One per line: source target [status]"), turn on **Replace existing entries** as needed, and click **Import**.
+4. Click **Save**. The console shows **Saved** and publishes a new configuration revision ("Rules and IP lists updated").
+5. Verify:
+
+   ```bash
+   curl -sI -H 'Host: www.example.com' http://<node IP>/old
+   ```
+
+   The response has the entry's status code and its target in `Location`.
+
+| Field | Values | Default |
+| --- | --- | --- |
+| Source | `/path` (every domain of the site) or `host/path` (that domain only); 2–512 bytes without whitespace, `?`, or control characters; the host is lowercase and one of the site's domains or one label under a wildcard domain of the site | `/` |
+| Target | As a static redirect target, up to 1024 bytes | `/` |
+| Status code | 301 / 302 / 307 / 308 | 301 |
+| Keep query string | On / off; on appends the request's query string to the target (with `&` when the target has one) | Off |
+
+| Item | Behavior |
+| --- | --- |
+| Matching | Exact match on the Host (lowercase, without port) and normalized path of the client's original request, before any rewrite; the query string takes no part; `host/path` entries are looked up before `/path` entries |
+| Order | After the global and site rules of the redirect phase; a request that matched a redirect rule never reaches the table |
+| Import | Fields separated by whitespace (by commas when a line has no whitespace), status 301 by default; empty lines and lines starting with `#` are skipped; an entry with the same source as an existing one replaces it; **Replace existing entries** replaces the whole table; an invalid line shows "Line N is invalid" and nothing is imported |
+| List | 50 entries per page; **Filter** searches sources and targets |
+| Updates | Nodes apply them without reloading nginx |
+| Audit | Changes are audited as `site.bulk_redirects_update` (with the entry count) |
+| Limit | 5000 entries per site, sources unique |
+| Node requirement | `rules-v2`, see [Node capabilities and publishing](#node-capabilities-and-publishing) |
 
 ## IP lists
 
@@ -197,7 +335,7 @@ The language is a wirefilter-style subset, not a complete wirefilter implementat
 3. Select **Action**: **Referenced by rules**, **Block**, or **Allow**.
 4. Enter entries in **IP addresses and CIDRs**, separated by newlines, spaces, or commas.
 5. Click **Save**.
-6. Verify: the list shows `$name` and "N entries", block and allow lists also a **Block** or **Allow** badge; reference it in rules with `ip.src in $name`.
+6. Verify: the list shows `$name` and "N entries", block and allow lists also a **Block** or **Allow** badge; reference it in rules or cache rule conditions with `ip.src in $name`.
 
 | Action | Effect |
 | --- | --- |
@@ -208,9 +346,9 @@ The language is a wirefilter-style subset, not a complete wirefilter implementat
 | Item | Behavior |
 | --- | --- |
 | Name | All lists share one namespace and names are unique; a name cannot change after creation; saving rules binds names to list IDs |
-| References | Any site rule or global rule can reference any list, block and allow lists included |
+| References | Any site rule, global rule, or cache rule condition can reference any list, block and allow lists included |
 | Changes | Entries and **Action** can change at any time; creating, changing, or deleting a list publishes a new revision to every cluster ("Rules and IP lists updated"); nodes apply it without reload |
-| Deletion | A list referenced by a rule cannot be deleted ("IP list is used by a rule") |
+| Deletion | A list referenced by a rule or a cache rule condition cannot be deleted ("IP list is used by a rule") |
 | Entries | IPv4 / IPv6 addresses or CIDRs; host bits cleared, deduplicated, sorted; leading zeros and zone IDs refused |
 | Quota | Up to 128 lists and 50,000 entries in total; up to 10,000 entries per list; a change that does not add entries always saves |
 | Rollback | Site configuration rollbacks keep the current lists and global rules; a rollback that references a deleted list is refused |
@@ -222,8 +360,11 @@ API: `GET` and `POST /api/v1/ip-lists`, `PUT` and `DELETE /api/v1/ip-lists/{id}`
 | Item | Behavior |
 | --- | --- |
 | Capabilities | Rules and block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; the challenge action needs `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
+| Rule engine extensions | Any of these needs `rules-v2`: functions and `http.request.full_uri`, `http.request.uri.path.extension`, `http.response.content_type.media_type`; expression targets, query parameter edits, and a redirect with **Keep query string** on or a rewrite with it off; origin overrides; the compression phase; the overrides available only in the configuration phase and **Gzip** On; cache rule conditions not in the [builder](origins-and-cache.en.md#request-conditions)'s shape and **Browser TTL (s)**; bulk redirects; origin groups other than the default group |
+| Existing configurations | Configurations that use none of the extensions stay as they were and do not need `rules-v2`; cache rules in the builder's shape are still sent as the former structured conditions |
 | Console and AccessKeys | A save is published even when an active node of the cluster lacks a required capability; such nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md) |
 | Service accounts and background jobs | When a configuration they publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the publish is refused (`NODE_CAPABILITY_REQUIRED`, "Cluster nodes need these capabilities first: …") and the configuration and revision stay unchanged |
+| UI | While an active node of the cluster lacks `rules-v2`, the **Rules**, **Cache**, and **Bulk redirects** tabs show "Some nodes of the site's cluster do not support the rule extensions yet"; the extensions cannot be picked there, and settings already in place can still be changed or cleared; **Bulk redirects** is read-only |
 | Unknown capabilities | Nodes reject configurations with unknown capabilities or enum values and keep last-known-good |
 
 ## Configure GeoIP databases
@@ -274,7 +415,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | Missing capability | A node rejects configurations that use GeoIP fields it lacks and keeps last-known-good |
 | Invalid file | The node agent does not start when a configured MMDB file is invalid or of the wrong database type; an invalid bundled IPinfo Lite database is logged and left unused |
 | Lookups | The agent reads the files and serves results to Lua workers over a local Unix socket with mode 0600; each worker caches up to 10,000 results for 5 minutes; a lookup times out after 200 milliseconds |
-| Lookup failure | When site rules or global rules use GeoIP fields, every request of that site needs a lookup; while the service is unavailable, those requests get 503 |
+| Lookup failure | When site rules, global rules (value expressions included), or cache rule conditions use GeoIP fields, every request of that site needs a lookup; while the service is unavailable, those requests get 503 |
 | Updates | Replace the file or image on one node, restart, and verify before updating the others; never overwrite an MMDB file in use |
 
 ## Limits
@@ -282,23 +423,32 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | Item | Description |
 | --- | --- |
 | Rate limiting | Per-node fixed windows only; no network-wide quota and no sliding window |
-| Expressions | A wirefilter-style subset; no custom functions, string transformations, or raw Lua |
+| Expressions | A wirefilter-style subset; built-in functions only, no custom functions or raw Lua |
+| String replacement | `regex_replace` and `wildcard_replace` only in redirect targets and rewrite paths, once each per expression; `regex_replace` replaces only the first match |
+| Bulk redirects | Exact matches only, static targets |
 | Protected headers | See [Action fields](#action-fields); rules cannot change them |
-| Compression | Override settings can only turn Gzip off; they cannot turn on modules that are not built |
+| Compression | Override settings and compression rules choose only among the algorithms the site has on |
+| Origin groups | The cache key does not include the origin group |
 | GeoIP data | The bundled IPinfo Lite database is a snapshot from the image build day; subdivisions need an operator-provided City MMDB; accuracy depends on the chosen database |
 
 ## Troubleshooting
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| "Check character N" below the editor | Unsupported syntax, field, type, or regular expression at that position | Fix it using the syntax tables above |
-| Saving shows "Invalid rule" | The action does not belong to the phase, a protected header, or an invalid redirect target or rewrite path | Fix it using the action field table |
+| "Check character N" below the editor | Unsupported syntax, field, type, function, or regular expression at that position | Fix it using the syntax tables above |
+| Saving shows "Check rule “name”" | A field of that rule is invalid, for example the target format, a repeated parameter name, or a parameter both set and removed | Fix it using the action field table |
+| Saving shows "Invalid rule" | The action does not belong to the phase, a protected header, or an invalid redirect target or rewrite path; an origin override picks an origin group the site does not have | Fix it using the action field table; add an origin of that group on the **Origins** tab first |
+| "The site does not serve …" | A bulk redirect source names a host that is not a domain of the site | Use a domain of the site, or write `/path` |
+| "Line N is invalid" | The field count, source, target, or status code of that imported line is invalid | Fix the line and import again |
+| "N invalid" | The bulk redirect table has invalid entries or repeated sources | Fix the marked entries |
+| "Some nodes of the site's cluster do not support the rule extensions yet" | An active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | "IP list not found" | The referenced list does not exist | Create the list in **IP lists** first, or fix the name |
 | "IP list name already exists" | A list with that name exists | Use another name |
 | "IP list is used by a rule" | Deleting a list still referenced by a rule | Remove the reference from the rules first |
 | "IP list limit reached (128 lists, 50,000 entries)" | Over quota | Merge or delete lists |
-| A node shows **Upgrade required** | The node lacks a capability the rules need (`rules-v1`, a GeoIP capability, and so on) and keeps its last-known-good configuration | Upgrade the node or configure the GeoIP databases |
-| 503 with `X-Edgeweir-Error: policy-unavailable` | A regular expression exceeded its budget, or a GeoIP lookup failed | Simplify the pattern; check the node's GeoIP service |
+| A node shows **Upgrade required** | The node lacks a capability the configuration needs (`rules-v1`, `rules-v2`, a GeoIP capability, and so on) and keeps its last-known-good configuration | Upgrade the node or configure the GeoIP databases |
+| "Cluster nodes need these capabilities first: …" | A configuration published by a service account or a background job needs `rules-v1`, `rules-v2`, or a GeoIP capability that an active node of the cluster lacks | Upgrade the nodes or configure the GeoIP databases |
+| 503 with `X-Edgeweir-Error: policy-unavailable` | A regular expression exceeded its budget, a function result exceeded 8192 bytes, a dynamic target or rewrite path was invalid, or a GeoIP lookup failed | Simplify the pattern or expression; check what the value expression computes; check the node's GeoIP service |
 | A rule that redirects HTTP to HTTPS makes requests return 503 | The site has no certificate | Select a certificate on the **HTTPS** tab |
 | Rate limits are not shared across nodes | Rate limits count per node | Scale the threshold by the number of nodes |
 | Some visitors are not rate limited and the node log shows `rate limit partition full` | The site's rate-limit partition is full and new clients are not counted | Raise the node flag `--rate-limit-dict-kb` |
