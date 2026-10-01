@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file edgeweir/node/v1/config.proto.
  */
 export const file_edgeweir_node_v1_config: GenFile = /*@__PURE__*/
-  fileDesc("Ch1lZGdld2Vpci9ub2RlL3YxL2NvbmZpZy5wcm90bxIQZWRnZXdlaXIubm9kZS52MSLTBQoKTm9kZUNvbmZpZxIQCghyZXZpc2lvbhgBIAEoBBIUCgxjb250ZW50X2hhc2gYAiABKAkSEgoKY2x1c3Rlcl9pZBgDIAEoCRItCglsaXN0ZW5lcnMYBCADKAsyGi5lZGdld2Vpci5ub2RlLnYxLkxpc3RlbmVyEjAKC2NhY2hlX3pvbmVzGAUgAygLMhsuZWRnZXdlaXIubm9kZS52MS5DYWNoZVpvbmUSJQoFc2l0ZXMYBiADKAsyFi5lZGdld2Vpci5ub2RlLnYxLlNpdGUSNgoMY2VydGlmaWNhdGVzGAcgAygLMiAuZWRnZXdlaXIubm9kZS52MS5DZXJ0aWZpY2F0ZVJlZhIcChRvcmlnaW5fYWxsb3dlZF9jaWRycxgIIAMoCRIZChFyZXF1aXJlZF9mZWF0dXJlcxgJIAMoCRI4Cg9odHRwX2NoYWxsZW5nZXMYCiADKAsyHy5lZGdld2Vpci5ub2RlLnYxLkh0dHBDaGFsbGVuZ2USKgoIaXBfbGlzdHMYCyADKAsyGC5lZGdld2Vpci5ub2RlLnYxLklwTGlzdBIyCg5wbGF0Zm9ybV9ydWxlcxgMIAMoCzIaLmVkZ2V3ZWlyLm5vZGUudjEuRWRnZVJ1bGUSQQoTcGxhdGZvcm1fcHJvdGVjdGlvbhgNIAEoCzIkLmVkZ2V3ZWlyLm5vZGUudjEuUGxhdGZvcm1Qcm90ZWN0aW9uEjkKDmNoYWxsZW5nZV9rZXlzGA4gAygLMiEuZWRnZXdlaXIubm9kZS52MS5DaGFsbGVuZ2VLZXlSZWYSQgoUcGxhdGZvcm1fZXJyb3JfcGFnZXMYDyABKAsyJC5lZGdld2Vpci5ub2RlLnYxLlBsYXRmb3JtRXJyb3JQYWdlcxI0Cg1vZmZsaW5lX2hvc3RzGBAgAygLMh0uZWRnZXdlaXIubm9kZS52MS5PZmZsaW5lSG9zdCKRBgoOTm9kZUNvbmZpZ0RpZmYSFQoNYmFzZV9yZXZpc2lvbhgBIAEoBBIQCghyZXZpc2lvbhgCIAEoBBIUCgxjb250ZW50X2hhc2gYAyABKAkSEgoKY2x1c3Rlcl9pZBgEIAEoCRItCglsaXN0ZW5lcnMYBSADKAsyGi5lZGdld2Vpci5ub2RlLnYxLkxpc3RlbmVyEjAKC2NhY2hlX3pvbmVzGAYgAygLMhsuZWRnZXdlaXIubm9kZS52MS5DYWNoZVpvbmUSLgoOdXBzZXJ0ZWRfc2l0ZXMYByADKAsyFi5lZGdld2Vpci5ub2RlLnYxLlNpdGUSGAoQcmVtb3ZlZF9zaXRlX2lkcxgIIAMoCRI2CgxjZXJ0aWZpY2F0ZXMYCSADKAsyIC5lZGdld2Vpci5ub2RlLnYxLkNlcnRpZmljYXRlUmVmEhwKFG9yaWdpbl9hbGxvd2VkX2NpZHJzGAogAygJEhkKEXJlcXVpcmVkX2ZlYXR1cmVzGAsgAygJEjgKD2h0dHBfY2hhbGxlbmdlcxgMIAMoCzIfLmVkZ2V3ZWlyLm5vZGUudjEuSHR0cENoYWxsZW5nZRIqCghpcF9saXN0cxgNIAMoCzIYLmVkZ2V3ZWlyLm5vZGUudjEuSXBMaXN0EjIKDnBsYXRmb3JtX3J1bGVzGA4gAygLMhouZWRnZXdlaXIubm9kZS52MS5FZGdlUnVsZRJBChNwbGF0Zm9ybV9wcm90ZWN0aW9uGA8gASgLMiQuZWRnZXdlaXIubm9kZS52MS5QbGF0Zm9ybVByb3RlY3Rpb24SOQoOY2hhbGxlbmdlX2tleXMYECADKAsyIS5lZGdld2Vpci5ub2RlLnYxLkNoYWxsZW5nZUtleVJlZhJCChRwbGF0Zm9ybV9lcnJvcl9wYWdlcxgRIAEoCzIkLmVkZ2V3ZWlyLm5vZGUudjEuUGxhdGZvcm1FcnJvclBhZ2VzEjQKDW9mZmxpbmVfaG9zdHMYEiADKAsyHS5lZGdld2Vpci5ub2RlLnYxLk9mZmxpbmVIb3N0IoQBCghMaXN0ZW5lchIMCgRwb3J0GAEgASgNEjQKCHByb3RvY29sGAIgASgOMiIuZWRnZXdlaXIubm9kZS52MS5MaXN0ZW5lclByb3RvY29sEg0KBWh0dHAyGAMgASgIEg0KBWh0dHAzGAQgASgIEhYKDnByb3h5X3Byb3RvY29sGAUgASgIIl4KCUNhY2hlWm9uZRIMCgRuYW1lGAEgASgJEhMKC21heF9zaXplX21iGAIgASgEEhQKDGtleXNfem9uZV9tYhgDIAEoDRIYChBpbmFjdGl2ZV9zZWNvbmRzGAQgASgNIsEFCgRTaXRlEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDwoHZW5hYmxlZBgDIAEoCBIpCgdkb21haW5zGAQgAygLMhguZWRnZXdlaXIubm9kZS52MS5Eb21haW4SMQoLb3JpZ2luX3Bvb2wYBSABKAsyHC5lZGdld2Vpci5ub2RlLnYxLk9yaWdpblBvb2wSMAoLY2FjaGVfcnVsZXMYBiADKAsyGy5lZGdld2Vpci5ub2RlLnYxLkNhY2hlUnVsZRISCgpjYWNoZV96b25lGAcgASgJEhgKEGNhY2hlX2dlbmVyYXRpb24YCCABKAQSFgoOY2VydGlmaWNhdGVfaWQYCSABKAkSMwoJY2FjaGVfa2V5GAogASgLMiAuZWRnZXdlaXIubm9kZS52MS5DYWNoZUtleVBvbGljeRITCgtyYW5nZV9zbGljZRgLIAEoCBIaChJ3ZWJzb2NrZXRfZGlzYWJsZWQYDCABKAgSKQoDdGxzGA0gASgLMhwuZWRnZXdlaXIubm9kZS52MS5UbHNPcHRpb25zEhcKD2xvZ19zYW1wbGVfcmF0ZRgPIAEoDRIpCgVydWxlcxgOIAMoCzIaLmVkZ2V3ZWlyLm5vZGUudjEuRWRnZVJ1bGUSNAoKcHJvdGVjdGlvbhgQIAEoCzIgLmVkZ2V3ZWlyLm5vZGUudjEuU2l0ZVByb3RlY3Rpb24SJgoDd2FmGBEgASgLMhkuZWRnZXdlaXIubm9kZS52MS5TaXRlV2FmEhYKDmtlZXBfY2FjaGVfdGFnGBIgASgIEjUKC2Vycm9yX3BhZ2VzGBMgASgLMiAuZWRnZXdlaXIubm9kZS52MS5TaXRlRXJyb3JQYWdlcxI2Cg5idWxrX3JlZGlyZWN0cxgUIAMoCzIeLmVkZ2V3ZWlyLm5vZGUudjEuQnVsa1JlZGlyZWN0IlsKDEJ1bGtSZWRpcmVjdBIOCgZzb3VyY2UYASABKAkSDgoGdGFyZ2V0GAIgASgJEhMKC3N0YXR1c19jb2RlGAMgASgNEhYKDnByZXNlcnZlX3F1ZXJ5GAQgASgIIl0KDlNpdGVFcnJvclBhZ2VzEioKBXBhZ2VzGAEgAygLMhsuZWRnZXdlaXIubm9kZS52MS5FcnJvclBhZ2USHwoXaW50ZXJjZXB0X29yaWdpbl9lcnJvcnMYAiABKAgiLQoJRXJyb3JQYWdlEg4KBnN0YXR1cxgBIAEoDRIQCgh0ZW1wbGF0ZRgCIAEoCSJZChJQbGF0Zm9ybUVycm9yUGFnZXMSFAoMdW5rbm93bl9ob3N0GAEgASgJEhUKDXNpdGVfZGlzYWJsZWQYAiABKAkSFgoOc2l0ZV9zdXNwZW5kZWQYAyABKAkiPQoLT2ZmbGluZUhvc3QSDAoEbmFtZRgBIAEoCRIQCgh3aWxkY2FyZBgCIAEoCBIOCgZyZWFzb24YAyABKAkigQEKB1NpdGVXYWYSDAoEbW9kZRgBIAEoCRIWCg5wYXJhbm9pYV9sZXZlbBgCIAEoDRIZChFhbm9tYWx5X3RocmVzaG9sZBgDIAEoDRIZChFleGNsdWRlZF9ydWxlX2lkcxgEIAMoDRIaChJyZXF1ZXN0X2JvZHlfbGltaXQYBSABKA0izgEKDlNpdGVQcm90ZWN0aW9uEhQKDHVuZGVyX2F0dGFjaxgBIAEoCBIeChZ1bmRlcl9hdHRhY2tfY2hhbGxlbmdlGAIgASgJEhgKEHBhc3NfdHRsX3NlY29uZHMYAyABKA0SFgoOcG93X2RpZmZpY3VsdHkYBCABKA0SGwoTcG93X2hpZ2hfZGlmZmljdWx0eRgFIAEoDRImCgJjYxgGIAEoCzIaLmVkZ2V3ZWlyLm5vZGUudjEuQ2NQb2xpY3kSDwoHbG9nX2phNBgHIAEoCCKxAgoIQ2NQb2xpY3kSDwoHZW5hYmxlZBgBIAEoCBIRCgltYXhfbGV2ZWwYAiABKAkSIwobaGlnaF9wb3dfaW5zdGVhZF9vZl9jYXB0Y2hhGAMgASgIEhYKDndpbmRvd19zZWNvbmRzGAQgASgNEhAKCHNpdGVfcXBzGAUgASgNEg8KB3VybF9xcHMYBiABKA0SDgoGaXBfcXBzGAcgASgNEhYKDmlwX2Jhbl9zZWNvbmRzGAggASgNEhwKFG9yaWdpbl9lcnJvcl9wZXJjZW50GAkgASgNEiEKGW9yaWdpbl9lcnJvcl9taW5fcmVxdWVzdHMYCiABKA0SHgoWZXNjYWxhdGVfYWZ0ZXJfc2Vjb25kcxgLIAEoDRIYChBjb29sZG93bl9zZWNvbmRzGAwgASgNIkoKElBsYXRmb3JtUHJvdGVjdGlvbhIUCgx1bmRlcl9hdHRhY2sYASABKAgSHgoWdW5kZXJfYXR0YWNrX2NoYWxsZW5nZRgCIAEoCSIrCg9DaGFsbGVuZ2VLZXlSZWYSCgoCaWQYASABKAkSDAoEcm9sZRgCIAEoCSKSAQoOUnVsZUV4cHJlc3Npb24SCgoCb3AYASABKAkSDQoFZmllbGQYAiABKAkSEgoKdmFsdWVfdHlwZRgDIAEoCRINCgV2YWx1ZRgEIAEoCRIOCgZ2YWx1ZXMYBSADKAkSMgoIY2hpbGRyZW4YBiADKAsyIC5lZGdld2Vpci5ub2RlLnYxLlJ1bGVFeHByZXNzaW9uIvwGCgpSdWxlQWN0aW9uEgwKBGtpbmQYASABKAkSDQoFdmFsdWUYAiABKAkSDgoGaGVhZGVyGAMgASgJEhMKC3N0YXR1c19jb2RlGAQgASgNEg0KBWxpbWl0GAUgASgNEhYKDndpbmRvd19zZWNvbmRzGAYgASgNEgsKA2tleRgHIAEoCRIZCgxjYWNoZV9ieXBhc3MYCCABKAhIAIgBARIYCgtmb3JjZV9odHRwcxgJIAEoCEgBiAEBEhEKBGd6aXAYCiABKAhIAogBARIOCgZyZW1vdmUYCyABKAgSEQoJY2hhbGxlbmdlGAwgASgJEhMKBmJyb3RsaRgNIAEoCEgDiAEBEhEKBHpzdGQYDiABKAhIBIgBARIWCgl3ZWJzb2NrZXQYDyABKAhIBYgBARIZCgx1bmRlcl9hdHRhY2sYECABKAhIBogBARIXCgpjY19lbmFibGVkGBEgASgISAeIAQESFAoMY2NfbWF4X2xldmVsGBIgASgJEiEKGW9yaWdpbl9jb25uZWN0X3RpbWVvdXRfbXMYEyABKA0SHgoWb3JpZ2luX3NlbmRfdGltZW91dF9tcxgUIAEoDRIeChZvcmlnaW5fcmVhZF90aW1lb3V0X21zGBUgASgNEhwKD2xvZ19zYW1wbGVfcmF0ZRgWIAEoDUgIiAEBEjAKBnRhcmdldBgXIAEoCzIgLmVkZ2V3ZWlyLm5vZGUudjEuUnVsZUV4cHJlc3Npb24SGwoOcHJlc2VydmVfcXVlcnkYGCABKAhICYgBARIvCglzZXRfcXVlcnkYGSADKAsyHC5lZGdld2Vpci5ub2RlLnYxLlF1ZXJ5UGFyYW0SFAoMcmVtb3ZlX3F1ZXJ5GBogAygJEhQKDG9yaWdpbl9ncm91cBgbIAEoCRITCgtob3N0X2hlYWRlchgcIAEoCRILCgNzbmkYHSABKAkSDAoEcG9ydBgeIAEoDRITCgtjb21wcmVzc2lvbhgfIAMoCUIPCg1fY2FjaGVfYnlwYXNzQg4KDF9mb3JjZV9odHRwc0IHCgVfZ3ppcEIJCgdfYnJvdGxpQgcKBV96c3RkQgwKCl93ZWJzb2NrZXRCDwoNX3VuZGVyX2F0dGFja0INCgtfY2NfZW5hYmxlZEISChBfbG9nX3NhbXBsZV9yYXRlQhEKD19wcmVzZXJ2ZV9xdWVyeSIpCgpRdWVyeVBhcmFtEgwKBG5hbWUYASABKAkSDQoFdmFsdWUYAiABKAkiiQEKCEVkZ2VSdWxlEgoKAmlkGAEgASgJEg0KBXBoYXNlGAIgASgJEjQKCmV4cHJlc3Npb24YAyABKAsyIC5lZGdld2Vpci5ub2RlLnYxLlJ1bGVFeHByZXNzaW9uEiwKBmFjdGlvbhgEIAEoCzIcLmVkZ2V3ZWlyLm5vZGUudjEuUnVsZUFjdGlvbiJTCgZJcExpc3QSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIPCgdlbnRyaWVzGAMgAygJEgwKBGtpbmQYBCABKAkSEAoIcGxhdGZvcm0YBSABKAgitQMKClRsc09wdGlvbnMSEwoLZm9yY2VfaHR0cHMYASABKAgSFAoMaHN0c19tYXhfYWdlGAIgASgNEh8KF2hzdHNfaW5jbHVkZV9zdWJkb21haW5zGAMgASgIEhQKDGhzdHNfcHJlbG9hZBgEIAEoCBIXCg9taW5pbXVtX3ZlcnNpb24YBSABKAkSDQoFaHR0cDIYBiABKAgSDAoEZ3ppcBgHIAEoCBIXCg9nemlwX21pbl9sZW5ndGgYCCABKA0SEgoKZ3ppcF90eXBlcxgJIAMoCRIVCg1vY3NwX3N0YXBsaW5nGAogASgIEhYKDmNpcGhlcl9wcm9maWxlGAsgASgJEg0KBWh0dHAzGAwgASgIEg4KBmJyb3RsaRgNIAEoCBIUCgxicm90bGlfbGV2ZWwYDiABKA0SGQoRYnJvdGxpX21pbl9sZW5ndGgYDyABKA0SFAoMYnJvdGxpX3R5cGVzGBAgAygJEgwKBHpzdGQYESABKAgSEgoKenN0ZF9sZXZlbBgSIAEoDRIXCg96c3RkX21pbl9sZW5ndGgYEyABKA0SEgoKenN0ZF90eXBlcxgUIAMoCSJ5Cg1IdHRwQ2hhbGxlbmdlEg4KBmRvbWFpbhgBIAEoCRINCgV0b2tlbhgCIAEoCRIZChFrZXlfYXV0aG9yaXphdGlvbhgDIAEoCRIuCgpleHBpcmVzX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCK3AQoOQ2FjaGVLZXlQb2xpY3kSLgoFcXVlcnkYASABKA4yHy5lZGdld2Vpci5ub2RlLnYxLkNhY2hlS2V5UXVlcnkSFAoMcXVlcnlfcGFyYW1zGAIgAygJEhIKCnNvcnRfcXVlcnkYAyABKAgSDwoHaGVhZGVycxgEIAMoCRIPCgdjb29raWVzGAUgAygJEhMKC2RldmljZV90eXBlGAYgASgIEhQKDGV4Y2x1ZGVfaG9zdBgHIAEoCCIoCgZEb21haW4SDAoEbmFtZRgBIAEoCRIQCgh3aWxkY2FyZBgCIAEoCCKEAwoKT3JpZ2luUG9vbBIKCgJpZBgBIAEoCRIzCgZwb2xpY3kYAiABKA4yIy5lZGdld2Vpci5ub2RlLnYxLkxvYWRCYWxhbmNlUG9saWN5EikKB29yaWdpbnMYAyADKAsyGC5lZGdld2Vpci5ub2RlLnYxLk9yaWdpbhIXCg9za2lwX3Rsc192ZXJpZnkYBCABKAgSOgoMaGVhbHRoX2NoZWNrGAUgASgLMiQuZWRnZXdlaXIubm9kZS52MS5QYXNzaXZlSGVhbHRoQ2hlY2sSNgoKY29ubmVjdGlvbhgGIAEoCzIiLmVkZ2V3ZWlyLm5vZGUudjEuT3JpZ2luQ29ubmVjdGlvbhJAChNhY3RpdmVfaGVhbHRoX2NoZWNrGAcgASgLMiMuZWRnZXdlaXIubm9kZS52MS5BY3RpdmVIZWFsdGhDaGVjaxI7ChBzZXNzaW9uX2FmZmluaXR5GAggASgLMiEuZWRnZXdlaXIubm9kZS52MS5TZXNzaW9uQWZmaW5pdHki5AEKEUFjdGl2ZUhlYWx0aENoZWNrEgwKBHBhdGgYASABKAkSDgoGbWV0aG9kGAIgASgJEhsKE2V4cGVjdGVkX3N0YXR1c19taW4YAyABKA0SGwoTZXhwZWN0ZWRfc3RhdHVzX21heBgEIAEoDRIMCgRob3N0GAUgASgJEhgKEGludGVydmFsX3NlY29uZHMYBiABKA0SFwoPdGltZW91dF9zZWNvbmRzGAcgASgNEhkKEWhlYWx0aHlfdGhyZXNob2xkGAggASgNEhsKE3VuaGVhbHRoeV90aHJlc2hvbGQYCSABKA0iJgoPU2Vzc2lvbkFmZmluaXR5EhMKC3R0bF9zZWNvbmRzGAEgASgNIkEKElBhc3NpdmVIZWFsdGhDaGVjaxIRCgltYXhfZmFpbHMYASABKA0SGAoQcmVjb3Zlcnlfc2Vjb25kcxgCIAEoDSK8AQoQT3JpZ2luQ29ubmVjdGlvbhIaChJjb25uZWN0X3RpbWVvdXRfbXMYASABKA0SFwoPc2VuZF90aW1lb3V0X21zGAIgASgNEhcKD3JlYWRfdGltZW91dF9tcxgDIAEoDRIaChJrZWVwYWxpdmVfZGlzYWJsZWQYBCABKAgSHgoWa2VlcGFsaXZlX2lkbGVfc2Vjb25kcxgFIAEoDRIeChZrZWVwYWxpdmVfbWF4X3JlcXVlc3RzGAYgASgNItoBCgZPcmlnaW4SCgoCaWQYASABKAkSDwoHYWRkcmVzcxgCIAEoCRIMCgRwb3J0GAMgASgNEi4KBnNjaGVtZRgEIAEoDjIeLmVkZ2V3ZWlyLm5vZGUudjEuT3JpZ2luU2NoZW1lEg4KBndlaWdodBgFIAEoDRIOCgZiYWNrdXAYBiABKAgSEwoLaG9zdF9oZWFkZXIYByABKAkSCwoDc25pGAggASgJEiQKAnMzGAkgASgLMhguZWRnZXdlaXIubm9kZS52MS5TM0F1dGgSDQoFZ3JvdXAYCiABKAkiWwoGUzNBdXRoEg4KBnJlZ2lvbhgBIAEoCRIOCgZidWNrZXQYAiABKAkSFQoNY3JlZGVudGlhbF9pZBgDIAEoCRIaChJjcmVkZW50aWFsX3ZlcnNpb24YBCABKAQi5gIKCUNhY2hlUnVsZRIKCgJpZBgBIAEoCRIQCghwcmlvcml0eRgCIAEoDRIvCgVtYXRjaBgDIAEoCzIgLmVkZ2V3ZWlyLm5vZGUudjEuQ2FjaGVSdWxlTWF0Y2gSLQoGYWN0aW9uGAQgASgOMh0uZWRnZXdlaXIubm9kZS52MS5DYWNoZUFjdGlvbhIYChBlZGdlX3R0bF9zZWNvbmRzGAUgASgNEkIKFG9yaWdpbl9jYWNoZV9jb250cm9sGAYgASgOMiQuZWRnZXdlaXIubm9kZS52MS5PcmlnaW5DYWNoZUNvbnRyb2wSJgoec3RhbGVfd2hpbGVfcmV2YWxpZGF0ZV9zZWNvbmRzGAcgASgNEh4KFnN0YWxlX2lmX2Vycm9yX3NlY29uZHMYCCABKA0SGAoQY2FjaGVfYXV0aG9yaXplZBgJIAEoCBIbChNicm93c2VyX3R0bF9zZWNvbmRzGAogASgNItkBCg5DYWNoZVJ1bGVNYXRjaBIVCg1wYXRoX3ByZWZpeGVzGAEgAygJEhIKCmV4dGVuc2lvbnMYAiADKAkSEgoKZXhwcmVzc2lvbhgDIAEoCRINCgVwYXRocxgEIAMoCRIUCgxzdGF0dXNfY29kZXMYBSADKA0SFgoObWluX3NpemVfYnl0ZXMYBiABKAQSFgoObWF4X3NpemVfYnl0ZXMYByABKAQSMwoJY29uZGl0aW9uGAggASgLMiAuZWRnZXdlaXIubm9kZS52MS5SdWxlRXhwcmVzc2lvbiJ2Cg5DZXJ0aWZpY2F0ZVJlZhIKCgJpZBgBIAEoCRINCgVuYW1lcxgCIAMoCRIaChJzaGEyNTZfZmluZ2VycHJpbnQYAyABKAkSLQoJbm90X2FmdGVyGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCpuChBMaXN0ZW5lclByb3RvY29sEiEKHUxJU1RFTkVSX1BST1RPQ09MX1VOU1BFQ0lGSUVEEAASGgoWTElTVEVORVJfUFJPVE9DT0xfSFRUUBABEhsKF0xJU1RFTkVSX1BST1RPQ09MX0hUVFBTEAIqggEKDUNhY2hlS2V5UXVlcnkSHwobQ0FDSEVfS0VZX1FVRVJZX1VOU1BFQ0lGSUVEEAASFwoTQ0FDSEVfS0VZX1FVRVJZX0FMTBABEhoKFkNBQ0hFX0tFWV9RVUVSWV9JR05PUkUQAhIbChdDQUNIRV9LRVlfUVVFUllfSU5DTFVERRADKq8BChFMb2FkQmFsYW5jZVBvbGljeRIjCh9MT0FEX0JBTEFOQ0VfUE9MSUNZX1VOU1BFQ0lGSUVEEAASJwojTE9BRF9CQUxBTkNFX1BPTElDWV9XRUlHSFRFRF9SQU5ET00QARIjCh9MT0FEX0JBTEFOQ0VfUE9MSUNZX1JPVU5EX1JPQklOEAISJwojTE9BRF9CQUxBTkNFX1BPTElDWV9DT05TSVNURU5UX0hBU0gQAypeCgxPcmlnaW5TY2hlbWUSHQoZT1JJR0lOX1NDSEVNRV9VTlNQRUNJRklFRBAAEhYKEk9SSUdJTl9TQ0hFTUVfSFRUUBABEhcKE09SSUdJTl9TQ0hFTUVfSFRUUFMQAipcCgtDYWNoZUFjdGlvbhIcChhDQUNIRV9BQ1RJT05fVU5TUEVDSUZJRUQQABIWChJDQUNIRV9BQ1RJT05fQ0FDSEUQARIXChNDQUNIRV9BQ1RJT05fQllQQVNTEAIqfwoST3JpZ2luQ2FjaGVDb250cm9sEiQKIE9SSUdJTl9DQUNIRV9DT05UUk9MX1VOU1BFQ0lGSUVEEAASIQodT1JJR0lOX0NBQ0hFX0NPTlRST0xfT1ZFUlJJREUQARIgChxPUklHSU5fQ0FDSEVfQ09OVFJPTF9SRVNQRUNUEAJiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("Ch1lZGdld2Vpci9ub2RlL3YxL2NvbmZpZy5wcm90bxIQZWRnZXdlaXIubm9kZS52MSL9BQoKTm9kZUNvbmZpZxIQCghyZXZpc2lvbhgBIAEoBBIUCgxjb250ZW50X2hhc2gYAiABKAkSEgoKY2x1c3Rlcl9pZBgDIAEoCRItCglsaXN0ZW5lcnMYBCADKAsyGi5lZGdld2Vpci5ub2RlLnYxLkxpc3RlbmVyEjAKC2NhY2hlX3pvbmVzGAUgAygLMhsuZWRnZXdlaXIubm9kZS52MS5DYWNoZVpvbmUSJQoFc2l0ZXMYBiADKAsyFi5lZGdld2Vpci5ub2RlLnYxLlNpdGUSNgoMY2VydGlmaWNhdGVzGAcgAygLMiAuZWRnZXdlaXIubm9kZS52MS5DZXJ0aWZpY2F0ZVJlZhIcChRvcmlnaW5fYWxsb3dlZF9jaWRycxgIIAMoCRIZChFyZXF1aXJlZF9mZWF0dXJlcxgJIAMoCRI4Cg9odHRwX2NoYWxsZW5nZXMYCiADKAsyHy5lZGdld2Vpci5ub2RlLnYxLkh0dHBDaGFsbGVuZ2USKgoIaXBfbGlzdHMYCyADKAsyGC5lZGdld2Vpci5ub2RlLnYxLklwTGlzdBIyCg5wbGF0Zm9ybV9ydWxlcxgMIAMoCzIaLmVkZ2V3ZWlyLm5vZGUudjEuRWRnZVJ1bGUSQQoTcGxhdGZvcm1fcHJvdGVjdGlvbhgNIAEoCzIkLmVkZ2V3ZWlyLm5vZGUudjEuUGxhdGZvcm1Qcm90ZWN0aW9uEjkKDmNoYWxsZW5nZV9rZXlzGA4gAygLMiEuZWRnZXdlaXIubm9kZS52MS5DaGFsbGVuZ2VLZXlSZWYSQgoUcGxhdGZvcm1fZXJyb3JfcGFnZXMYDyABKAsyJC5lZGdld2Vpci5ub2RlLnYxLlBsYXRmb3JtRXJyb3JQYWdlcxI0Cg1vZmZsaW5lX2hvc3RzGBAgAygLMh0uZWRnZXdlaXIubm9kZS52MS5PZmZsaW5lSG9zdBIoCgdsNF9hcHBzGBEgAygLMhcuZWRnZXdlaXIubm9kZS52MS5MNEFwcCK7BgoOTm9kZUNvbmZpZ0RpZmYSFQoNYmFzZV9yZXZpc2lvbhgBIAEoBBIQCghyZXZpc2lvbhgCIAEoBBIUCgxjb250ZW50X2hhc2gYAyABKAkSEgoKY2x1c3Rlcl9pZBgEIAEoCRItCglsaXN0ZW5lcnMYBSADKAsyGi5lZGdld2Vpci5ub2RlLnYxLkxpc3RlbmVyEjAKC2NhY2hlX3pvbmVzGAYgAygLMhsuZWRnZXdlaXIubm9kZS52MS5DYWNoZVpvbmUSLgoOdXBzZXJ0ZWRfc2l0ZXMYByADKAsyFi5lZGdld2Vpci5ub2RlLnYxLlNpdGUSGAoQcmVtb3ZlZF9zaXRlX2lkcxgIIAMoCRI2CgxjZXJ0aWZpY2F0ZXMYCSADKAsyIC5lZGdld2Vpci5ub2RlLnYxLkNlcnRpZmljYXRlUmVmEhwKFG9yaWdpbl9hbGxvd2VkX2NpZHJzGAogAygJEhkKEXJlcXVpcmVkX2ZlYXR1cmVzGAsgAygJEjgKD2h0dHBfY2hhbGxlbmdlcxgMIAMoCzIfLmVkZ2V3ZWlyLm5vZGUudjEuSHR0cENoYWxsZW5nZRIqCghpcF9saXN0cxgNIAMoCzIYLmVkZ2V3ZWlyLm5vZGUudjEuSXBMaXN0EjIKDnBsYXRmb3JtX3J1bGVzGA4gAygLMhouZWRnZXdlaXIubm9kZS52MS5FZGdlUnVsZRJBChNwbGF0Zm9ybV9wcm90ZWN0aW9uGA8gASgLMiQuZWRnZXdlaXIubm9kZS52MS5QbGF0Zm9ybVByb3RlY3Rpb24SOQoOY2hhbGxlbmdlX2tleXMYECADKAsyIS5lZGdld2Vpci5ub2RlLnYxLkNoYWxsZW5nZUtleVJlZhJCChRwbGF0Zm9ybV9lcnJvcl9wYWdlcxgRIAEoCzIkLmVkZ2V3ZWlyLm5vZGUudjEuUGxhdGZvcm1FcnJvclBhZ2VzEjQKDW9mZmxpbmVfaG9zdHMYEiADKAsyHS5lZGdld2Vpci5ub2RlLnYxLk9mZmxpbmVIb3N0EigKB2w0X2FwcHMYEyADKAsyFy5lZGdld2Vpci5ub2RlLnYxLkw0QXBwIpUDCgVMNEFwcBIKCgJpZBgBIAEoCRIuCghwcm90b2NvbBgCIAEoDjIcLmVkZ2V3ZWlyLm5vZGUudjEuTDRQcm90b2NvbBIMCgRwb3J0GAMgASgNEh0KFWFjY2VwdF9wcm94eV9wcm90b2NvbBgEIAEoCBIeChZwcm94eV9wcm90b2NvbF92ZXJzaW9uGAUgASgNEisKB29yaWdpbnMYBiADKAsyGi5lZGdld2Vpci5ub2RlLnYxLkw0T3JpZ2luEhEKCW1heF9mYWlscxgHIAEoDRIcChRmYWlsX3RpbWVvdXRfc2Vjb25kcxgIIAEoDRIaChJjb25uZWN0X3RpbWVvdXRfbXMYCSABKA0SHAoUaWRsZV90aW1lb3V0X3NlY29uZHMYCiABKA0SFgoOYWxsb3dfbGlzdF9pZHMYCyADKAkSFgoOYmxvY2tfbGlzdF9pZHMYDCADKAkSFwoPbWF4X2Nvbm5lY3Rpb25zGA0gASgNEiIKGm5ld19jb25uZWN0aW9uc19wZXJfc2Vjb25kGA4gASgNIlUKCEw0T3JpZ2luEgoKAmlkGAEgASgJEg8KB2FkZHJlc3MYAiABKAkSDAoEcG9ydBgDIAEoDRIOCgZ3ZWlnaHQYBCABKA0SDgoGYmFja3VwGAUgASgIIoQBCghMaXN0ZW5lchIMCgRwb3J0GAEgASgNEjQKCHByb3RvY29sGAIgASgOMiIuZWRnZXdlaXIubm9kZS52MS5MaXN0ZW5lclByb3RvY29sEg0KBWh0dHAyGAMgASgIEg0KBWh0dHAzGAQgASgIEhYKDnByb3h5X3Byb3RvY29sGAUgASgIIl4KCUNhY2hlWm9uZRIMCgRuYW1lGAEgASgJEhMKC21heF9zaXplX21iGAIgASgEEhQKDGtleXNfem9uZV9tYhgDIAEoDRIYChBpbmFjdGl2ZV9zZWNvbmRzGAQgASgNIsEFCgRTaXRlEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDwoHZW5hYmxlZBgDIAEoCBIpCgdkb21haW5zGAQgAygLMhguZWRnZXdlaXIubm9kZS52MS5Eb21haW4SMQoLb3JpZ2luX3Bvb2wYBSABKAsyHC5lZGdld2Vpci5ub2RlLnYxLk9yaWdpblBvb2wSMAoLY2FjaGVfcnVsZXMYBiADKAsyGy5lZGdld2Vpci5ub2RlLnYxLkNhY2hlUnVsZRISCgpjYWNoZV96b25lGAcgASgJEhgKEGNhY2hlX2dlbmVyYXRpb24YCCABKAQSFgoOY2VydGlmaWNhdGVfaWQYCSABKAkSMwoJY2FjaGVfa2V5GAogASgLMiAuZWRnZXdlaXIubm9kZS52MS5DYWNoZUtleVBvbGljeRITCgtyYW5nZV9zbGljZRgLIAEoCBIaChJ3ZWJzb2NrZXRfZGlzYWJsZWQYDCABKAgSKQoDdGxzGA0gASgLMhwuZWRnZXdlaXIubm9kZS52MS5UbHNPcHRpb25zEhcKD2xvZ19zYW1wbGVfcmF0ZRgPIAEoDRIpCgVydWxlcxgOIAMoCzIaLmVkZ2V3ZWlyLm5vZGUudjEuRWRnZVJ1bGUSNAoKcHJvdGVjdGlvbhgQIAEoCzIgLmVkZ2V3ZWlyLm5vZGUudjEuU2l0ZVByb3RlY3Rpb24SJgoDd2FmGBEgASgLMhkuZWRnZXdlaXIubm9kZS52MS5TaXRlV2FmEhYKDmtlZXBfY2FjaGVfdGFnGBIgASgIEjUKC2Vycm9yX3BhZ2VzGBMgASgLMiAuZWRnZXdlaXIubm9kZS52MS5TaXRlRXJyb3JQYWdlcxI2Cg5idWxrX3JlZGlyZWN0cxgUIAMoCzIeLmVkZ2V3ZWlyLm5vZGUudjEuQnVsa1JlZGlyZWN0IlsKDEJ1bGtSZWRpcmVjdBIOCgZzb3VyY2UYASABKAkSDgoGdGFyZ2V0GAIgASgJEhMKC3N0YXR1c19jb2RlGAMgASgNEhYKDnByZXNlcnZlX3F1ZXJ5GAQgASgIIl0KDlNpdGVFcnJvclBhZ2VzEioKBXBhZ2VzGAEgAygLMhsuZWRnZXdlaXIubm9kZS52MS5FcnJvclBhZ2USHwoXaW50ZXJjZXB0X29yaWdpbl9lcnJvcnMYAiABKAgiLQoJRXJyb3JQYWdlEg4KBnN0YXR1cxgBIAEoDRIQCgh0ZW1wbGF0ZRgCIAEoCSJZChJQbGF0Zm9ybUVycm9yUGFnZXMSFAoMdW5rbm93bl9ob3N0GAEgASgJEhUKDXNpdGVfZGlzYWJsZWQYAiABKAkSFgoOc2l0ZV9zdXNwZW5kZWQYAyABKAkiPQoLT2ZmbGluZUhvc3QSDAoEbmFtZRgBIAEoCRIQCgh3aWxkY2FyZBgCIAEoCBIOCgZyZWFzb24YAyABKAkigQEKB1NpdGVXYWYSDAoEbW9kZRgBIAEoCRIWCg5wYXJhbm9pYV9sZXZlbBgCIAEoDRIZChFhbm9tYWx5X3RocmVzaG9sZBgDIAEoDRIZChFleGNsdWRlZF9ydWxlX2lkcxgEIAMoDRIaChJyZXF1ZXN0X2JvZHlfbGltaXQYBSABKA0izgEKDlNpdGVQcm90ZWN0aW9uEhQKDHVuZGVyX2F0dGFjaxgBIAEoCBIeChZ1bmRlcl9hdHRhY2tfY2hhbGxlbmdlGAIgASgJEhgKEHBhc3NfdHRsX3NlY29uZHMYAyABKA0SFgoOcG93X2RpZmZpY3VsdHkYBCABKA0SGwoTcG93X2hpZ2hfZGlmZmljdWx0eRgFIAEoDRImCgJjYxgGIAEoCzIaLmVkZ2V3ZWlyLm5vZGUudjEuQ2NQb2xpY3kSDwoHbG9nX2phNBgHIAEoCCKxAgoIQ2NQb2xpY3kSDwoHZW5hYmxlZBgBIAEoCBIRCgltYXhfbGV2ZWwYAiABKAkSIwobaGlnaF9wb3dfaW5zdGVhZF9vZl9jYXB0Y2hhGAMgASgIEhYKDndpbmRvd19zZWNvbmRzGAQgASgNEhAKCHNpdGVfcXBzGAUgASgNEg8KB3VybF9xcHMYBiABKA0SDgoGaXBfcXBzGAcgASgNEhYKDmlwX2Jhbl9zZWNvbmRzGAggASgNEhwKFG9yaWdpbl9lcnJvcl9wZXJjZW50GAkgASgNEiEKGW9yaWdpbl9lcnJvcl9taW5fcmVxdWVzdHMYCiABKA0SHgoWZXNjYWxhdGVfYWZ0ZXJfc2Vjb25kcxgLIAEoDRIYChBjb29sZG93bl9zZWNvbmRzGAwgASgNIkoKElBsYXRmb3JtUHJvdGVjdGlvbhIUCgx1bmRlcl9hdHRhY2sYASABKAgSHgoWdW5kZXJfYXR0YWNrX2NoYWxsZW5nZRgCIAEoCSIrCg9DaGFsbGVuZ2VLZXlSZWYSCgoCaWQYASABKAkSDAoEcm9sZRgCIAEoCSKSAQoOUnVsZUV4cHJlc3Npb24SCgoCb3AYASABKAkSDQoFZmllbGQYAiABKAkSEgoKdmFsdWVfdHlwZRgDIAEoCRINCgV2YWx1ZRgEIAEoCRIOCgZ2YWx1ZXMYBSADKAkSMgoIY2hpbGRyZW4YBiADKAsyIC5lZGdld2Vpci5ub2RlLnYxLlJ1bGVFeHByZXNzaW9uIvwGCgpSdWxlQWN0aW9uEgwKBGtpbmQYASABKAkSDQoFdmFsdWUYAiABKAkSDgoGaGVhZGVyGAMgASgJEhMKC3N0YXR1c19jb2RlGAQgASgNEg0KBWxpbWl0GAUgASgNEhYKDndpbmRvd19zZWNvbmRzGAYgASgNEgsKA2tleRgHIAEoCRIZCgxjYWNoZV9ieXBhc3MYCCABKAhIAIgBARIYCgtmb3JjZV9odHRwcxgJIAEoCEgBiAEBEhEKBGd6aXAYCiABKAhIAogBARIOCgZyZW1vdmUYCyABKAgSEQoJY2hhbGxlbmdlGAwgASgJEhMKBmJyb3RsaRgNIAEoCEgDiAEBEhEKBHpzdGQYDiABKAhIBIgBARIWCgl3ZWJzb2NrZXQYDyABKAhIBYgBARIZCgx1bmRlcl9hdHRhY2sYECABKAhIBogBARIXCgpjY19lbmFibGVkGBEgASgISAeIAQESFAoMY2NfbWF4X2xldmVsGBIgASgJEiEKGW9yaWdpbl9jb25uZWN0X3RpbWVvdXRfbXMYEyABKA0SHgoWb3JpZ2luX3NlbmRfdGltZW91dF9tcxgUIAEoDRIeChZvcmlnaW5fcmVhZF90aW1lb3V0X21zGBUgASgNEhwKD2xvZ19zYW1wbGVfcmF0ZRgWIAEoDUgIiAEBEjAKBnRhcmdldBgXIAEoCzIgLmVkZ2V3ZWlyLm5vZGUudjEuUnVsZUV4cHJlc3Npb24SGwoOcHJlc2VydmVfcXVlcnkYGCABKAhICYgBARIvCglzZXRfcXVlcnkYGSADKAsyHC5lZGdld2Vpci5ub2RlLnYxLlF1ZXJ5UGFyYW0SFAoMcmVtb3ZlX3F1ZXJ5GBogAygJEhQKDG9yaWdpbl9ncm91cBgbIAEoCRITCgtob3N0X2hlYWRlchgcIAEoCRILCgNzbmkYHSABKAkSDAoEcG9ydBgeIAEoDRITCgtjb21wcmVzc2lvbhgfIAMoCUIPCg1fY2FjaGVfYnlwYXNzQg4KDF9mb3JjZV9odHRwc0IHCgVfZ3ppcEIJCgdfYnJvdGxpQgcKBV96c3RkQgwKCl93ZWJzb2NrZXRCDwoNX3VuZGVyX2F0dGFja0INCgtfY2NfZW5hYmxlZEISChBfbG9nX3NhbXBsZV9yYXRlQhEKD19wcmVzZXJ2ZV9xdWVyeSIpCgpRdWVyeVBhcmFtEgwKBG5hbWUYASABKAkSDQoFdmFsdWUYAiABKAkiiQEKCEVkZ2VSdWxlEgoKAmlkGAEgASgJEg0KBXBoYXNlGAIgASgJEjQKCmV4cHJlc3Npb24YAyABKAsyIC5lZGdld2Vpci5ub2RlLnYxLlJ1bGVFeHByZXNzaW9uEiwKBmFjdGlvbhgEIAEoCzIcLmVkZ2V3ZWlyLm5vZGUudjEuUnVsZUFjdGlvbiJTCgZJcExpc3QSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIPCgdlbnRyaWVzGAMgAygJEgwKBGtpbmQYBCABKAkSEAoIcGxhdGZvcm0YBSABKAgitQMKClRsc09wdGlvbnMSEwoLZm9yY2VfaHR0cHMYASABKAgSFAoMaHN0c19tYXhfYWdlGAIgASgNEh8KF2hzdHNfaW5jbHVkZV9zdWJkb21haW5zGAMgASgIEhQKDGhzdHNfcHJlbG9hZBgEIAEoCBIXCg9taW5pbXVtX3ZlcnNpb24YBSABKAkSDQoFaHR0cDIYBiABKAgSDAoEZ3ppcBgHIAEoCBIXCg9nemlwX21pbl9sZW5ndGgYCCABKA0SEgoKZ3ppcF90eXBlcxgJIAMoCRIVCg1vY3NwX3N0YXBsaW5nGAogASgIEhYKDmNpcGhlcl9wcm9maWxlGAsgASgJEg0KBWh0dHAzGAwgASgIEg4KBmJyb3RsaRgNIAEoCBIUCgxicm90bGlfbGV2ZWwYDiABKA0SGQoRYnJvdGxpX21pbl9sZW5ndGgYDyABKA0SFAoMYnJvdGxpX3R5cGVzGBAgAygJEgwKBHpzdGQYESABKAgSEgoKenN0ZF9sZXZlbBgSIAEoDRIXCg96c3RkX21pbl9sZW5ndGgYEyABKA0SEgoKenN0ZF90eXBlcxgUIAMoCSJ5Cg1IdHRwQ2hhbGxlbmdlEg4KBmRvbWFpbhgBIAEoCRINCgV0b2tlbhgCIAEoCRIZChFrZXlfYXV0aG9yaXphdGlvbhgDIAEoCRIuCgpleHBpcmVzX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCK3AQoOQ2FjaGVLZXlQb2xpY3kSLgoFcXVlcnkYASABKA4yHy5lZGdld2Vpci5ub2RlLnYxLkNhY2hlS2V5UXVlcnkSFAoMcXVlcnlfcGFyYW1zGAIgAygJEhIKCnNvcnRfcXVlcnkYAyABKAgSDwoHaGVhZGVycxgEIAMoCRIPCgdjb29raWVzGAUgAygJEhMKC2RldmljZV90eXBlGAYgASgIEhQKDGV4Y2x1ZGVfaG9zdBgHIAEoCCIoCgZEb21haW4SDAoEbmFtZRgBIAEoCRIQCgh3aWxkY2FyZBgCIAEoCCKEAwoKT3JpZ2luUG9vbBIKCgJpZBgBIAEoCRIzCgZwb2xpY3kYAiABKA4yIy5lZGdld2Vpci5ub2RlLnYxLkxvYWRCYWxhbmNlUG9saWN5EikKB29yaWdpbnMYAyADKAsyGC5lZGdld2Vpci5ub2RlLnYxLk9yaWdpbhIXCg9za2lwX3Rsc192ZXJpZnkYBCABKAgSOgoMaGVhbHRoX2NoZWNrGAUgASgLMiQuZWRnZXdlaXIubm9kZS52MS5QYXNzaXZlSGVhbHRoQ2hlY2sSNgoKY29ubmVjdGlvbhgGIAEoCzIiLmVkZ2V3ZWlyLm5vZGUudjEuT3JpZ2luQ29ubmVjdGlvbhJAChNhY3RpdmVfaGVhbHRoX2NoZWNrGAcgASgLMiMuZWRnZXdlaXIubm9kZS52MS5BY3RpdmVIZWFsdGhDaGVjaxI7ChBzZXNzaW9uX2FmZmluaXR5GAggASgLMiEuZWRnZXdlaXIubm9kZS52MS5TZXNzaW9uQWZmaW5pdHki5AEKEUFjdGl2ZUhlYWx0aENoZWNrEgwKBHBhdGgYASABKAkSDgoGbWV0aG9kGAIgASgJEhsKE2V4cGVjdGVkX3N0YXR1c19taW4YAyABKA0SGwoTZXhwZWN0ZWRfc3RhdHVzX21heBgEIAEoDRIMCgRob3N0GAUgASgJEhgKEGludGVydmFsX3NlY29uZHMYBiABKA0SFwoPdGltZW91dF9zZWNvbmRzGAcgASgNEhkKEWhlYWx0aHlfdGhyZXNob2xkGAggASgNEhsKE3VuaGVhbHRoeV90aHJlc2hvbGQYCSABKA0iJgoPU2Vzc2lvbkFmZmluaXR5EhMKC3R0bF9zZWNvbmRzGAEgASgNIkEKElBhc3NpdmVIZWFsdGhDaGVjaxIRCgltYXhfZmFpbHMYASABKA0SGAoQcmVjb3Zlcnlfc2Vjb25kcxgCIAEoDSK8AQoQT3JpZ2luQ29ubmVjdGlvbhIaChJjb25uZWN0X3RpbWVvdXRfbXMYASABKA0SFwoPc2VuZF90aW1lb3V0X21zGAIgASgNEhcKD3JlYWRfdGltZW91dF9tcxgDIAEoDRIaChJrZWVwYWxpdmVfZGlzYWJsZWQYBCABKAgSHgoWa2VlcGFsaXZlX2lkbGVfc2Vjb25kcxgFIAEoDRIeChZrZWVwYWxpdmVfbWF4X3JlcXVlc3RzGAYgASgNItoBCgZPcmlnaW4SCgoCaWQYASABKAkSDwoHYWRkcmVzcxgCIAEoCRIMCgRwb3J0GAMgASgNEi4KBnNjaGVtZRgEIAEoDjIeLmVkZ2V3ZWlyLm5vZGUudjEuT3JpZ2luU2NoZW1lEg4KBndlaWdodBgFIAEoDRIOCgZiYWNrdXAYBiABKAgSEwoLaG9zdF9oZWFkZXIYByABKAkSCwoDc25pGAggASgJEiQKAnMzGAkgASgLMhguZWRnZXdlaXIubm9kZS52MS5TM0F1dGgSDQoFZ3JvdXAYCiABKAkiWwoGUzNBdXRoEg4KBnJlZ2lvbhgBIAEoCRIOCgZidWNrZXQYAiABKAkSFQoNY3JlZGVudGlhbF9pZBgDIAEoCRIaChJjcmVkZW50aWFsX3ZlcnNpb24YBCABKAQi5gIKCUNhY2hlUnVsZRIKCgJpZBgBIAEoCRIQCghwcmlvcml0eRgCIAEoDRIvCgVtYXRjaBgDIAEoCzIgLmVkZ2V3ZWlyLm5vZGUudjEuQ2FjaGVSdWxlTWF0Y2gSLQoGYWN0aW9uGAQgASgOMh0uZWRnZXdlaXIubm9kZS52MS5DYWNoZUFjdGlvbhIYChBlZGdlX3R0bF9zZWNvbmRzGAUgASgNEkIKFG9yaWdpbl9jYWNoZV9jb250cm9sGAYgASgOMiQuZWRnZXdlaXIubm9kZS52MS5PcmlnaW5DYWNoZUNvbnRyb2wSJgoec3RhbGVfd2hpbGVfcmV2YWxpZGF0ZV9zZWNvbmRzGAcgASgNEh4KFnN0YWxlX2lmX2Vycm9yX3NlY29uZHMYCCABKA0SGAoQY2FjaGVfYXV0aG9yaXplZBgJIAEoCBIbChNicm93c2VyX3R0bF9zZWNvbmRzGAogASgNItkBCg5DYWNoZVJ1bGVNYXRjaBIVCg1wYXRoX3ByZWZpeGVzGAEgAygJEhIKCmV4dGVuc2lvbnMYAiADKAkSEgoKZXhwcmVzc2lvbhgDIAEoCRINCgVwYXRocxgEIAMoCRIUCgxzdGF0dXNfY29kZXMYBSADKA0SFgoObWluX3NpemVfYnl0ZXMYBiABKAQSFgoObWF4X3NpemVfYnl0ZXMYByABKAQSMwoJY29uZGl0aW9uGAggASgLMiAuZWRnZXdlaXIubm9kZS52MS5SdWxlRXhwcmVzc2lvbiJ2Cg5DZXJ0aWZpY2F0ZVJlZhIKCgJpZBgBIAEoCRINCgVuYW1lcxgCIAMoCRIaChJzaGEyNTZfZmluZ2VycHJpbnQYAyABKAkSLQoJbm90X2FmdGVyGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCpTCgpMNFByb3RvY29sEhsKF0w0X1BST1RPQ09MX1VOU1BFQ0lGSUVEEAASEwoPTDRfUFJPVE9DT0xfVENQEAESEwoPTDRfUFJPVE9DT0xfVURQEAIqbgoQTGlzdGVuZXJQcm90b2NvbBIhCh1MSVNURU5FUl9QUk9UT0NPTF9VTlNQRUNJRklFRBAAEhoKFkxJU1RFTkVSX1BST1RPQ09MX0hUVFAQARIbChdMSVNURU5FUl9QUk9UT0NPTF9IVFRQUxACKoIBCg1DYWNoZUtleVF1ZXJ5Eh8KG0NBQ0hFX0tFWV9RVUVSWV9VTlNQRUNJRklFRBAAEhcKE0NBQ0hFX0tFWV9RVUVSWV9BTEwQARIaChZDQUNIRV9LRVlfUVVFUllfSUdOT1JFEAISGwoXQ0FDSEVfS0VZX1FVRVJZX0lOQ0xVREUQAyqvAQoRTG9hZEJhbGFuY2VQb2xpY3kSIwofTE9BRF9CQUxBTkNFX1BPTElDWV9VTlNQRUNJRklFRBAAEicKI0xPQURfQkFMQU5DRV9QT0xJQ1lfV0VJR0hURURfUkFORE9NEAESIwofTE9BRF9CQUxBTkNFX1BPTElDWV9ST1VORF9ST0JJThACEicKI0xPQURfQkFMQU5DRV9QT0xJQ1lfQ09OU0lTVEVOVF9IQVNIEAMqXgoMT3JpZ2luU2NoZW1lEh0KGU9SSUdJTl9TQ0hFTUVfVU5TUEVDSUZJRUQQABIWChJPUklHSU5fU0NIRU1FX0hUVFAQARIXChNPUklHSU5fU0NIRU1FX0hUVFBTEAIqXAoLQ2FjaGVBY3Rpb24SHAoYQ0FDSEVfQUNUSU9OX1VOU1BFQ0lGSUVEEAASFgoSQ0FDSEVfQUNUSU9OX0NBQ0hFEAESFwoTQ0FDSEVfQUNUSU9OX0JZUEFTUxACKn8KEk9yaWdpbkNhY2hlQ29udHJvbBIkCiBPUklHSU5fQ0FDSEVfQ09OVFJPTF9VTlNQRUNJRklFRBAAEiEKHU9SSUdJTl9DQUNIRV9DT05UUk9MX09WRVJSSURFEAESIAocT1JJR0lOX0NBQ0hFX0NPTlRST0xfUkVTUEVDVBACYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * NodeConfig is the engine-agnostic intermediate representation (IR) that the
@@ -28,7 +28,9 @@ export const file_edgeweir_node_v1_config: GenFile = /*@__PURE__*/
  *   - offline_hosts by (name, wildcard), inside a site error_pages.pages by
  *     status (v0.12.0);
  *   - inside a site bulk_redirects by source; inside a rule action
- *     set_query by name and remove_query sorted (v0.13.0).
+ *     set_query by name and remove_query sorted (v0.13.0);
+ *   - l4_apps by id, inside an application origins by id and
+ *     allow_list_ids / block_list_ids sorted (v0.15.0).
  * content_hash is the lowercase hex SHA-256 of the deterministic binary
  * encoding of this message with `revision` and `content_hash` cleared.
  *
@@ -153,6 +155,17 @@ export type NodeConfig = Message<"edgeweir.node.v1.NodeConfig"> & {
    * @generated from field: repeated edgeweir.node.v1.OfflineHost offline_hosts = 16;
    */
   offlineHosts: OfflineHost[];
+
+  /**
+   * Layer-4 (TCP / UDP) applications of the cluster, sorted by id; inside an
+   * application origins by id and the list ids sorted. Ports, protocols and
+   * accept_proxy_protocol are structural (rendered into stream {}, applied
+   * with a reload); everything else is hot-updated. Added in v0.15.0
+   * (feature l4-v1).
+   *
+   * @generated from field: repeated edgeweir.node.v1.L4App l4_apps = 17;
+   */
+  l4Apps: L4App[];
 };
 
 /**
@@ -282,6 +295,13 @@ export type NodeConfigDiff = Message<"edgeweir.node.v1.NodeConfigDiff"> & {
    * @generated from field: repeated edgeweir.node.v1.OfflineHost offline_hosts = 18;
    */
   offlineHosts: OfflineHost[];
+
+  /**
+   * Always sent in full (NodeConfig field 17). Added in v0.15.0.
+   *
+   * @generated from field: repeated edgeweir.node.v1.L4App l4_apps = 19;
+   */
+  l4Apps: L4App[];
 };
 
 /**
@@ -290,6 +310,157 @@ export type NodeConfigDiff = Message<"edgeweir.node.v1.NodeConfigDiff"> & {
  */
 export const NodeConfigDiffSchema: GenMessage<NodeConfigDiff> = /*@__PURE__*/
   messageDesc(file_edgeweir_node_v1_config, 1);
+
+/**
+ * L4App forwards a TCP or UDP port of every node to its origins.
+ *
+ * @generated from message edgeweir.node.v1.L4App
+ */
+export type L4App = Message<"edgeweir.node.v1.L4App"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: edgeweir.node.v1.L4Protocol protocol = 2;
+   */
+  protocol: L4Protocol;
+
+  /**
+   * 1024-65535; never a port of NodeConfig.listeners. Unique per protocol.
+   *
+   * @generated from field: uint32 port = 3;
+   */
+  port: number;
+
+  /**
+   * TCP only: the listener expects a PROXY protocol header (v1 or v2).
+   *
+   * @generated from field: bool accept_proxy_protocol = 4;
+   */
+  acceptProxyProtocol: boolean;
+
+  /**
+   * TCP only: send a PROXY protocol header of this version to the origin
+   * (0 none, 1 or 2).
+   *
+   * @generated from field: uint32 proxy_protocol_version = 5;
+   */
+  proxyProtocolVersion: number;
+
+  /**
+   * 1-32 origins.
+   *
+   * @generated from field: repeated edgeweir.node.v1.L4Origin origins = 6;
+   */
+  origins: L4Origin[];
+
+  /**
+   * Passive health check: consecutive connection failures that take an
+   * origin out (1-100) and the seconds before it is tried again (1-3600).
+   *
+   * @generated from field: uint32 max_fails = 7;
+   */
+  maxFails: number;
+
+  /**
+   * @generated from field: uint32 fail_timeout_seconds = 8;
+   */
+  failTimeoutSeconds: number;
+
+  /**
+   * Connect timeout towards the origin (100-60000 ms) and idle timeout of a
+   * connection or UDP session (1-86400 s).
+   *
+   * @generated from field: uint32 connect_timeout_ms = 9;
+   */
+  connectTimeoutMs: number;
+
+  /**
+   * @generated from field: uint32 idle_timeout_seconds = 10;
+   */
+  idleTimeoutSeconds: number;
+
+  /**
+   * Ids of NodeConfig.ip_lists: when allow lists are set only their
+   * addresses are accepted; addresses of block lists are refused.
+   *
+   * @generated from field: repeated string allow_list_ids = 11;
+   */
+  allowListIds: string[];
+
+  /**
+   * @generated from field: repeated string block_list_ids = 12;
+   */
+  blockListIds: string[];
+
+  /**
+   * Per node: concurrent connections or sessions and new ones per second;
+   * 0 means no limit.
+   *
+   * @generated from field: uint32 max_connections = 13;
+   */
+  maxConnections: number;
+
+  /**
+   * @generated from field: uint32 new_connections_per_second = 14;
+   */
+  newConnectionsPerSecond: number;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.L4App.
+ * Use `create(L4AppSchema)` to create a new message.
+ */
+export const L4AppSchema: GenMessage<L4App> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_config, 2);
+
+/**
+ * L4Origin is one upstream of a layer-4 application.
+ *
+ * @generated from message edgeweir.node.v1.L4Origin
+ */
+export type L4Origin = Message<"edgeweir.node.v1.L4Origin"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * Host name or IP literal; the origin address policy applies like for
+   * sites (special-purpose addresses only inside origin_allowed_cidrs).
+   *
+   * @generated from field: string address = 2;
+   */
+  address: string;
+
+  /**
+   * @generated from field: uint32 port = 3;
+   */
+  port: number;
+
+  /**
+   * 1-100.
+   *
+   * @generated from field: uint32 weight = 4;
+   */
+  weight: number;
+
+  /**
+   * Used only when every primary origin is down.
+   *
+   * @generated from field: bool backup = 5;
+   */
+  backup: boolean;
+};
+
+/**
+ * Describes the message edgeweir.node.v1.L4Origin.
+ * Use `create(L4OriginSchema)` to create a new message.
+ */
+export const L4OriginSchema: GenMessage<L4Origin> = /*@__PURE__*/
+  messageDesc(file_edgeweir_node_v1_config, 3);
 
 /**
  * Listener is a port the data plane accepts traffic on.
@@ -328,7 +499,7 @@ export type Listener = Message<"edgeweir.node.v1.Listener"> & {
  * Use `create(ListenerSchema)` to create a new message.
  */
 export const ListenerSchema: GenMessage<Listener> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 2);
+  messageDesc(file_edgeweir_node_v1_config, 4);
 
 /**
  * CacheZone describes one on-disk cache with its in-memory key index.
@@ -362,7 +533,7 @@ export type CacheZone = Message<"edgeweir.node.v1.CacheZone"> & {
  * Use `create(CacheZoneSchema)` to create a new message.
  */
 export const CacheZoneSchema: GenMessage<CacheZone> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 3);
+  messageDesc(file_edgeweir_node_v1_config, 5);
 
 /**
  * Site is one customer property: a set of domains, an origin pool and rules.
@@ -511,7 +682,7 @@ export type Site = Message<"edgeweir.node.v1.Site"> & {
  * Use `create(SiteSchema)` to create a new message.
  */
 export const SiteSchema: GenMessage<Site> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 4);
+  messageDesc(file_edgeweir_node_v1_config, 6);
 
 /**
  * BulkRedirect is one entry of a site's exact-match redirect table.
@@ -555,7 +726,7 @@ export type BulkRedirect = Message<"edgeweir.node.v1.BulkRedirect"> & {
  * Use `create(BulkRedirectSchema)` to create a new message.
  */
 export const BulkRedirectSchema: GenMessage<BulkRedirect> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 5);
+  messageDesc(file_edgeweir_node_v1_config, 7);
 
 /**
  * SiteErrorPages replaces the node's built-in error pages of a site: 403
@@ -587,7 +758,7 @@ export type SiteErrorPages = Message<"edgeweir.node.v1.SiteErrorPages"> & {
  * Use `create(SiteErrorPagesSchema)` to create a new message.
  */
 export const SiteErrorPagesSchema: GenMessage<SiteErrorPages> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 6);
+  messageDesc(file_edgeweir_node_v1_config, 8);
 
 /**
  * ErrorPage is an HTML template of 1 to 65536 bytes. The placeholders
@@ -614,7 +785,7 @@ export type ErrorPage = Message<"edgeweir.node.v1.ErrorPage"> & {
  * Use `create(ErrorPageSchema)` to create a new message.
  */
 export const ErrorPageSchema: GenMessage<ErrorPage> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 7);
+  messageDesc(file_edgeweir_node_v1_config, 9);
 
 /**
  * PlatformErrorPages are the platform administrator's templates, with the
@@ -650,7 +821,7 @@ export type PlatformErrorPages = Message<"edgeweir.node.v1.PlatformErrorPages"> 
  * Use `create(PlatformErrorPagesSchema)` to create a new message.
  */
 export const PlatformErrorPagesSchema: GenMessage<PlatformErrorPages> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 8);
+  messageDesc(file_edgeweir_node_v1_config, 10);
 
 /**
  * OfflineHost is a domain of a site that is disabled or suspended.
@@ -684,7 +855,7 @@ export type OfflineHost = Message<"edgeweir.node.v1.OfflineHost"> & {
  * Use `create(OfflineHostSchema)` to create a new message.
  */
 export const OfflineHostSchema: GenMessage<OfflineHost> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 9);
+  messageDesc(file_edgeweir_node_v1_config, 11);
 
 /**
  * SiteWaf runs the OWASP Core Rule Set bundled with the node.
@@ -733,7 +904,7 @@ export type SiteWaf = Message<"edgeweir.node.v1.SiteWaf"> & {
  * Use `create(SiteWafSchema)` to create a new message.
  */
 export const SiteWafSchema: GenMessage<SiteWaf> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 10);
+  messageDesc(file_edgeweir_node_v1_config, 12);
 
 /**
  * SiteProtection holds a site's challenge and CC mitigation settings.
@@ -796,7 +967,7 @@ export type SiteProtection = Message<"edgeweir.node.v1.SiteProtection"> & {
  * Use `create(SiteProtectionSchema)` to create a new message.
  */
 export const SiteProtectionSchema: GenMessage<SiteProtection> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 11);
+  messageDesc(file_edgeweir_node_v1_config, 13);
 
 /**
  * CcPolicy raises the challenge level of a site or of attacked paths while
@@ -889,7 +1060,7 @@ export type CcPolicy = Message<"edgeweir.node.v1.CcPolicy"> & {
  * Use `create(CcPolicySchema)` to create a new message.
  */
 export const CcPolicySchema: GenMessage<CcPolicy> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 12);
+  messageDesc(file_edgeweir_node_v1_config, 14);
 
 /**
  * PlatformProtection is set by platform administrators for every site.
@@ -913,7 +1084,7 @@ export type PlatformProtection = Message<"edgeweir.node.v1.PlatformProtection"> 
  * Use `create(PlatformProtectionSchema)` to create a new message.
  */
 export const PlatformProtectionSchema: GenMessage<PlatformProtection> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 13);
+  messageDesc(file_edgeweir_node_v1_config, 15);
 
 /**
  * ChallengeKeyRef names one HMAC key for challenge passes.
@@ -939,7 +1110,7 @@ export type ChallengeKeyRef = Message<"edgeweir.node.v1.ChallengeKeyRef"> & {
  * Use `create(ChallengeKeyRefSchema)` to create a new message.
  */
 export const ChallengeKeyRefSchema: GenMessage<ChallengeKeyRef> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 14);
+  messageDesc(file_edgeweir_node_v1_config, 16);
 
 /**
  * RuleExpression is a bounded, typed AST, never source code to execute.
@@ -995,7 +1166,7 @@ export type RuleExpression = Message<"edgeweir.node.v1.RuleExpression"> & {
  * Use `create(RuleExpressionSchema)` to create a new message.
  */
 export const RuleExpressionSchema: GenMessage<RuleExpression> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 15);
+  messageDesc(file_edgeweir_node_v1_config, 17);
 
 /**
  * RuleAction contains only the arguments of the validated action kind.
@@ -1197,7 +1368,7 @@ export type RuleAction = Message<"edgeweir.node.v1.RuleAction"> & {
  * Use `create(RuleActionSchema)` to create a new message.
  */
 export const RuleActionSchema: GenMessage<RuleAction> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 16);
+  messageDesc(file_edgeweir_node_v1_config, 18);
 
 /**
  * QueryParam is one query parameter a redirect or rewrite sets. name:
@@ -1223,7 +1394,7 @@ export type QueryParam = Message<"edgeweir.node.v1.QueryParam"> & {
  * Use `create(QueryParamSchema)` to create a new message.
  */
 export const QueryParamSchema: GenMessage<QueryParam> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 17);
+  messageDesc(file_edgeweir_node_v1_config, 19);
 
 /**
  * EdgeRule is executed in list order inside its fixed phase. Phases, in
@@ -1260,7 +1431,7 @@ export type EdgeRule = Message<"edgeweir.node.v1.EdgeRule"> & {
  * Use `create(EdgeRuleSchema)` to create a new message.
  */
 export const EdgeRuleSchema: GenMessage<EdgeRule> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 18);
+  messageDesc(file_edgeweir_node_v1_config, 20);
 
 /**
  * IpList is a named collection or an automatically applied platform allow/block list.
@@ -1299,7 +1470,7 @@ export type IpList = Message<"edgeweir.node.v1.IpList"> & {
  * Use `create(IpListSchema)` to create a new message.
  */
 export const IpListSchema: GenMessage<IpList> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 19);
+  messageDesc(file_edgeweir_node_v1_config, 21);
 
 /**
  * HTTP and TLS policy. Cipher strings are never accepted from tenants.
@@ -1417,7 +1588,7 @@ export type TlsOptions = Message<"edgeweir.node.v1.TlsOptions"> & {
  * Use `create(TlsOptionsSchema)` to create a new message.
  */
 export const TlsOptionsSchema: GenMessage<TlsOptions> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 20);
+  messageDesc(file_edgeweir_node_v1_config, 22);
 
 /**
  * An HTTP-01 response is public; private account and certificate keys are not IR.
@@ -1451,7 +1622,7 @@ export type HttpChallenge = Message<"edgeweir.node.v1.HttpChallenge"> & {
  * Use `create(HttpChallengeSchema)` to create a new message.
  */
 export const HttpChallengeSchema: GenMessage<HttpChallenge> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 21);
+  messageDesc(file_edgeweir_node_v1_config, 23);
 
 /**
  * CacheKeyPolicy describes the cache key of a site. Every request of the
@@ -1513,7 +1684,7 @@ export type CacheKeyPolicy = Message<"edgeweir.node.v1.CacheKeyPolicy"> & {
  * Use `create(CacheKeyPolicySchema)` to create a new message.
  */
 export const CacheKeyPolicySchema: GenMessage<CacheKeyPolicy> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 22);
+  messageDesc(file_edgeweir_node_v1_config, 24);
 
 /**
  * Domain is a host name routed to a site.
@@ -1542,7 +1713,7 @@ export type Domain = Message<"edgeweir.node.v1.Domain"> & {
  * Use `create(DomainSchema)` to create a new message.
  */
 export const DomainSchema: GenMessage<Domain> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 23);
+  messageDesc(file_edgeweir_node_v1_config, 25);
 
 /**
  * OriginPool is the set of upstream servers of a site.
@@ -1609,7 +1780,7 @@ export type OriginPool = Message<"edgeweir.node.v1.OriginPool"> & {
  * Use `create(OriginPoolSchema)` to create a new message.
  */
 export const OriginPoolSchema: GenMessage<OriginPool> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 24);
+  messageDesc(file_edgeweir_node_v1_config, 26);
 
 /**
  * ActiveHealthCheck probes every origin of the pool from each node, honoring
@@ -1691,7 +1862,7 @@ export type ActiveHealthCheck = Message<"edgeweir.node.v1.ActiveHealthCheck"> & 
  * Use `create(ActiveHealthCheckSchema)` to create a new message.
  */
 export const ActiveHealthCheckSchema: GenMessage<ActiveHealthCheck> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 25);
+  messageDesc(file_edgeweir_node_v1_config, 27);
 
 /**
  * SessionAffinity pins a client to the origin that served it with the cookie
@@ -1717,7 +1888,7 @@ export type SessionAffinity = Message<"edgeweir.node.v1.SessionAffinity"> & {
  * Use `create(SessionAffinitySchema)` to create a new message.
  */
 export const SessionAffinitySchema: GenMessage<SessionAffinity> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 26);
+  messageDesc(file_edgeweir_node_v1_config, 28);
 
 /**
  * PassiveHealthCheck marks an origin down after consecutive failures seen by
@@ -1747,7 +1918,7 @@ export type PassiveHealthCheck = Message<"edgeweir.node.v1.PassiveHealthCheck"> 
  * Use `create(PassiveHealthCheckSchema)` to create a new message.
  */
 export const PassiveHealthCheckSchema: GenMessage<PassiveHealthCheck> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 27);
+  messageDesc(file_edgeweir_node_v1_config, 29);
 
 /**
  * OriginConnection configures upstream connections. Zero values use the
@@ -1799,7 +1970,7 @@ export type OriginConnection = Message<"edgeweir.node.v1.OriginConnection"> & {
  * Use `create(OriginConnectionSchema)` to create a new message.
  */
 export const OriginConnectionSchema: GenMessage<OriginConnection> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 28);
+  messageDesc(file_edgeweir_node_v1_config, 30);
 
 /**
  * Origin is one upstream server.
@@ -1880,7 +2051,7 @@ export type Origin = Message<"edgeweir.node.v1.Origin"> & {
  * Use `create(OriginSchema)` to create a new message.
  */
 export const OriginSchema: GenMessage<Origin> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 29);
+  messageDesc(file_edgeweir_node_v1_config, 31);
 
 /**
  * S3Auth references the credential used to sign requests to an S3-compatible
@@ -1925,7 +2096,7 @@ export type S3Auth = Message<"edgeweir.node.v1.S3Auth"> & {
  * Use `create(S3AuthSchema)` to create a new message.
  */
 export const S3AuthSchema: GenMessage<S3Auth> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 30);
+  messageDesc(file_edgeweir_node_v1_config, 32);
 
 /**
  * CacheRule decides whether and for how long a response is cached.
@@ -2005,7 +2176,7 @@ export type CacheRule = Message<"edgeweir.node.v1.CacheRule"> & {
  * Use `create(CacheRuleSchema)` to create a new message.
  */
 export const CacheRuleSchema: GenMessage<CacheRule> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 31);
+  messageDesc(file_edgeweir_node_v1_config, 33);
 
 /**
  * CacheRuleMatch is the condition of a cache rule. Empty lists match all
@@ -2084,7 +2255,7 @@ export type CacheRuleMatch = Message<"edgeweir.node.v1.CacheRuleMatch"> & {
  * Use `create(CacheRuleMatchSchema)` to create a new message.
  */
 export const CacheRuleMatchSchema: GenMessage<CacheRuleMatch> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 32);
+  messageDesc(file_edgeweir_node_v1_config, 34);
 
 /**
  * CertificateRef points at a certificate stored in the console.
@@ -2118,7 +2289,35 @@ export type CertificateRef = Message<"edgeweir.node.v1.CertificateRef"> & {
  * Use `create(CertificateRefSchema)` to create a new message.
  */
 export const CertificateRefSchema: GenMessage<CertificateRef> = /*@__PURE__*/
-  messageDesc(file_edgeweir_node_v1_config, 33);
+  messageDesc(file_edgeweir_node_v1_config, 35);
+
+/**
+ * L4Protocol is the transport of a layer-4 application.
+ *
+ * @generated from enum edgeweir.node.v1.L4Protocol
+ */
+export enum L4Protocol {
+  /**
+   * @generated from enum value: L4_PROTOCOL_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: L4_PROTOCOL_TCP = 1;
+   */
+  TCP = 1,
+
+  /**
+   * @generated from enum value: L4_PROTOCOL_UDP = 2;
+   */
+  UDP = 2,
+}
+
+/**
+ * Describes the enum edgeweir.node.v1.L4Protocol.
+ */
+export const L4ProtocolSchema: GenEnum<L4Protocol> = /*@__PURE__*/
+  enumDesc(file_edgeweir_node_v1_config, 0);
 
 /**
  * ListenerProtocol is the application protocol of a listener.
@@ -2146,7 +2345,7 @@ export enum ListenerProtocol {
  * Describes the enum edgeweir.node.v1.ListenerProtocol.
  */
 export const ListenerProtocolSchema: GenEnum<ListenerProtocol> = /*@__PURE__*/
-  enumDesc(file_edgeweir_node_v1_config, 0);
+  enumDesc(file_edgeweir_node_v1_config, 1);
 
 /**
  * CacheKeyQuery selects which part of the query string enters the cache key.
@@ -2187,7 +2386,7 @@ export enum CacheKeyQuery {
  * Describes the enum edgeweir.node.v1.CacheKeyQuery.
  */
 export const CacheKeyQuerySchema: GenEnum<CacheKeyQuery> = /*@__PURE__*/
-  enumDesc(file_edgeweir_node_v1_config, 1);
+  enumDesc(file_edgeweir_node_v1_config, 2);
 
 /**
  * LoadBalancePolicy selects how an origin is picked from a pool.
@@ -2220,7 +2419,7 @@ export enum LoadBalancePolicy {
  * Describes the enum edgeweir.node.v1.LoadBalancePolicy.
  */
 export const LoadBalancePolicySchema: GenEnum<LoadBalancePolicy> = /*@__PURE__*/
-  enumDesc(file_edgeweir_node_v1_config, 2);
+  enumDesc(file_edgeweir_node_v1_config, 3);
 
 /**
  * OriginScheme is the protocol used to talk to an origin.
@@ -2248,7 +2447,7 @@ export enum OriginScheme {
  * Describes the enum edgeweir.node.v1.OriginScheme.
  */
 export const OriginSchemeSchema: GenEnum<OriginScheme> = /*@__PURE__*/
-  enumDesc(file_edgeweir_node_v1_config, 3);
+  enumDesc(file_edgeweir_node_v1_config, 4);
 
 /**
  * CacheAction is what a matching cache rule does.
@@ -2276,7 +2475,7 @@ export enum CacheAction {
  * Describes the enum edgeweir.node.v1.CacheAction.
  */
 export const CacheActionSchema: GenEnum<CacheAction> = /*@__PURE__*/
-  enumDesc(file_edgeweir_node_v1_config, 4);
+  enumDesc(file_edgeweir_node_v1_config, 5);
 
 /**
  * OriginCacheControl decides whether origin caching headers win.
@@ -2309,5 +2508,5 @@ export enum OriginCacheControl {
  * Describes the enum edgeweir.node.v1.OriginCacheControl.
  */
 export const OriginCacheControlSchema: GenEnum<OriginCacheControl> = /*@__PURE__*/
-  enumDesc(file_edgeweir_node_v1_config, 5);
+  enumDesc(file_edgeweir_node_v1_config, 6);
 

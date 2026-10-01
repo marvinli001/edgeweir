@@ -366,6 +366,25 @@ message ReportStatsV2Request {
   // acknowledged; unset leaves the console's value unchanged. The console
   // keeps the highest value it received. Added in v0.8.0.
   google.protobuf.Timestamp complete_until = 3;
+  // Per-minute counters of layer-4 applications, in the same batch (and
+  // sequence) as the sites' (feature l4-v1). Added in v0.15.0.
+  repeated L4MinuteStats l4_stats = 4;
+}
+
+// L4MinuteStats counts one layer-4 application on this node in one minute.
+message L4MinuteStats {
+  google.protobuf.Timestamp minute = 1;
+  string app_id = 2;
+  // Connections (TCP) or sessions (UDP) accepted in the minute.
+  uint64 connections = 3;
+  // Connections or sessions refused by the IP lists or the limits.
+  uint64 refused = 4;
+  // Highest number of concurrent connections or sessions seen.
+  uint64 peak_concurrent = 5;
+  // Bytes received from clients and sent to them (counted when a
+  // connection or session ends, and at least once a minute for long ones).
+  uint64 bytes_received = 6;
+  uint64 bytes_sent = 7;
 }
 
 // ReportStatsV2Response acknowledges the sequence (or returns the durable cursor).

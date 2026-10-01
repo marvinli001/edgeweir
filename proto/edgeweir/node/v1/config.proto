@@ -17,7 +17,9 @@ import "google/protobuf/timestamp.proto";
 //   - offline_hosts by (name, wildcard), inside a site error_pages.pages by
 //     status (v0.12.0);
 //   - inside a site bulk_redirects by source; inside a rule action
-//     set_query by name and remove_query sorted (v0.13.0).
+//     set_query by name and remove_query sorted (v0.13.0);
+//   - l4_apps by id, inside an application origins by id and
+//     allow_list_ids / block_list_ids sorted (v0.15.0).
 // content_hash is the lowercase hex SHA-256 of the deterministic binary
 // encoding of this message with `revision` and `content_hash` cleared.
 message NodeConfig {
@@ -62,6 +64,12 @@ message NodeConfig {
   // hosts with the platform's page for the reason instead of the unknown
   // host page. Added in v0.12.0; older nodes ignore it (no feature required).
   repeated OfflineHost offline_hosts = 16;
+  // Layer-4 (TCP / UDP) applications of the cluster, sorted by id; inside an
+  // application origins by id and the list ids sorted. Ports, protocols and
+  // accept_proxy_protocol are structural (rendered into stream {}, applied
+  // with a reload); everything else is hot-updated. Added in v0.15.0
+  // (feature l4-v1).
+  repeated L4App l4_apps = 17;
 }
 
 // NodeConfigDiff transforms the config at base_revision into revision.
@@ -97,6 +105,59 @@ message NodeConfigDiff {
   // Always sent in full (NodeConfig fields 15 and 16). Added in v0.12.0.
   PlatformErrorPages platform_error_pages = 17;
   repeated OfflineHost offline_hosts = 18;
+  // Always sent in full (NodeConfig field 17). Added in v0.15.0.
+  repeated L4App l4_apps = 19;
+}
+
+// L4Protocol is the transport of a layer-4 application.
+enum L4Protocol {
+  L4_PROTOCOL_UNSPECIFIED = 0;
+  L4_PROTOCOL_TCP = 1;
+  L4_PROTOCOL_UDP = 2;
+}
+
+// L4App forwards a TCP or UDP port of every node to its origins.
+message L4App {
+  string id = 1;
+  L4Protocol protocol = 2;
+  // 1024-65535; never a port of NodeConfig.listeners. Unique per protocol.
+  uint32 port = 3;
+  // TCP only: the listener expects a PROXY protocol header (v1 or v2).
+  bool accept_proxy_protocol = 4;
+  // TCP only: send a PROXY protocol header of this version to the origin
+  // (0 none, 1 or 2).
+  uint32 proxy_protocol_version = 5;
+  // 1-32 origins.
+  repeated L4Origin origins = 6;
+  // Passive health check: consecutive connection failures that take an
+  // origin out (1-100) and the seconds before it is tried again (1-3600).
+  uint32 max_fails = 7;
+  uint32 fail_timeout_seconds = 8;
+  // Connect timeout towards the origin (100-60000 ms) and idle timeout of a
+  // connection or UDP session (1-86400 s).
+  uint32 connect_timeout_ms = 9;
+  uint32 idle_timeout_seconds = 10;
+  // Ids of NodeConfig.ip_lists: when allow lists are set only their
+  // addresses are accepted; addresses of block lists are refused.
+  repeated string allow_list_ids = 11;
+  repeated string block_list_ids = 12;
+  // Per node: concurrent connections or sessions and new ones per second;
+  // 0 means no limit.
+  uint32 max_connections = 13;
+  uint32 new_connections_per_second = 14;
+}
+
+// L4Origin is one upstream of a layer-4 application.
+message L4Origin {
+  string id = 1;
+  // Host name or IP literal; the origin address policy applies like for
+  // sites (special-purpose addresses only inside origin_allowed_cidrs).
+  string address = 2;
+  uint32 port = 3;
+  // 1-100.
+  uint32 weight = 4;
+  // Used only when every primary origin is down.
+  bool backup = 5;
 }
 
 // ListenerProtocol is the application protocol of a listener.
