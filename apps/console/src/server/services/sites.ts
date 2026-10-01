@@ -1,13 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { formatDomain, parseDomain } from "@edgeweir/config-compiler";
-import {
-  type Revision,
-  type Site,
-  type SiteSuspendReason,
-  type StarredSite,
-  type siteCreateInput,
-  siteSuspendReason,
-  type siteUpdateInput,
+import type {
+  Revision,
+  Site,
+  StarredSite,
+  siteCreateInput,
+  siteUpdateInput,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import {
@@ -29,7 +27,7 @@ import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
-import { assertServing, isServing } from "../lib/site-state";
+import { assertServing } from "../lib/site-state";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { assertCacheTaskQuota } from "./cache-tasks";
@@ -71,11 +69,7 @@ const userId = (actor: Actor) => (actor.type === "user" ? actor.id : null);
 
 type SiteRow = typeof schema.site.$inferSelect;
 
-async function toSiteDtos(
-  db: Executor,
-  rows: SiteRow[],
-  opts: { platform?: boolean } = {},
-): Promise<Site[]> {
+async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
   // Sequential on purpose: `db` may be a transaction, i.e. a single connection.
@@ -126,10 +120,6 @@ async function toSiteDtos(
       id: r.id,
       name: r.name,
       enabled: r.enabled,
-      suspended: r.suspended,
-      suspendReason: r.suspended ? readSuspendReason(r.suspendReason) : null,
-      suspendNote: r.suspended && opts.platform ? r.suspendNote : "",
-      suspendedAt: r.suspended ? (r.suspendedAt?.toISOString() ?? null) : null,
       organizationId: r.organizationId,
       organizationName: orgs.find((o) => o.id === r.organizationId)?.name ?? "",
       clusterId: r.clusterId,
@@ -193,11 +183,6 @@ async function toSiteDtos(
   });
 }
 
-function readSuspendReason(value: string | null): SiteSuspendReason {
-  const parsed = siteSuspendReason.safeParse(value);
-  return parsed.success ? parsed.data : "other";
-}
-
 /** One page of sites, filtered by name/domain search and (for admins) cluster. */
 export async function listSites(
   db: Database,
@@ -238,7 +223,7 @@ export async function listSites(
     .orderBy(asc(schema.site.createdAt), asc(schema.site.id))
     .limit(query.pageSize)
     .offset((query.page - 1) * query.pageSize);
-  return { items: await toSiteDtos(db, rows, { platform: scope.all }), total: total?.n ?? 0 };
+  return { items: await toSiteDtos(db, rows), total: total?.n ?? 0 };
 }
 
 export async function findSite(db: Executor, id: string, scope: SiteScope, lock = false) {
@@ -253,7 +238,7 @@ export async function findSite(db: Executor, id: string, scope: SiteScope, lock 
 
 export async function getSite(db: Database, id: string, scope: SiteScope): Promise<Site> {
   const row = await findSite(db, id, scope);
-  const [dto] = await toSiteDtos(db, [row], { platform: scope.all });
+  const [dto] = await toSiteDtos(db, [row]);
   if (!dto) fail("SITE_NOT_FOUND", "site not found");
   return dto;
 }
@@ -634,7 +619,7 @@ export async function updateSite(
         revision: revision.revision,
       },
     });
-    const [dto] = await toSiteDtos(tx, [updated], { platform: ctx.scope.all });
+    const [dto] = await toSiteDtos(tx, [updated]);
     if (!dto) throw new Error("site not readable after update");
     return { site: dto, revision: toRevisionDto(revision) };
   });
@@ -700,79 +685,45 @@ export async function purgeSite(
         quotaLimited: !ctx.scope.all,
       },
     });
-    const [dto] = await toSiteDtos(tx, [updated], { platform: ctx.scope.all });
+    const [dto] = await toSiteDtos(tx, [updated]);
     if (!dto) throw new Error("site not readable after update");
     return { site: dto, revision: toRevisionDto(revision) };
   });
 }
 
-const STATE_REASONS = {
-  enable: "site_enabled",
-  disable: "site_disabled",
-  suspend: "site_suspended",
-  resume: "site_resumed",
-} as const;
-
-type SiteStateChange =
-  | { kind: "enable"; enabled: boolean }
-  | { kind: "suspend"; reason: SiteSuspendReason; note: string }
-  | { kind: "resume" };
-
 /**
- * Applies an enable/disable or suspend/resume. Unchanged state returns the
- * current site and revision without a new revision or audit entry; a change
- * publishes the cluster and writes the audit entry in the same transaction.
+ * Turns a site on or off. Unchanged state returns the current site and
+ * revision without a new revision or audit entry; a change publishes the
+ * cluster and writes the audit entry in the same transaction.
  */
-async function changeSiteState(
+export async function setSiteEnabled(
   db: Database,
-  id: string,
-  change: SiteStateChange,
-  ctx: { scope: SiteScope; actor: Actor; expectedUpdatedAt?: string },
+  input: { id: string; enabled: boolean; expectedUpdatedAt?: string },
+  ctx: { scope: SiteScope; actor: Actor },
 ): Promise<{ site: Site; revision: Revision }> {
   return db.transaction(async (tx) => {
-    const row = await findSite(tx, id, ctx.scope, true);
-    const next =
-      change.kind === "enable"
-        ? { enabled: change.enabled }
-        : change.kind === "suspend"
-          ? {
-              suspended: true,
-              suspendReason: change.reason,
-              suspendNote: change.note,
-              suspendedAt: row.suspended ? row.suspendedAt : new Date(),
-            }
-          : { suspended: false, suspendReason: null, suspendNote: "", suspendedAt: null };
-    const unchanged =
-      change.kind === "enable"
-        ? row.enabled === change.enabled
-        : change.kind === "suspend"
-          ? row.suspended && row.suspendReason === change.reason && row.suspendNote === change.note
-          : !row.suspended;
-    if (unchanged) {
+    const row = await findSite(tx, input.id, ctx.scope, true);
+    if (row.enabled === input.enabled) {
       const latest = await latestRevision(tx, row.clusterId);
       if (!latest) throw new Error("cluster has no revision");
-      const [dto] = await toSiteDtos(tx, [row], { platform: ctx.scope.all });
+      const [dto] = await toSiteDtos(tx, [row]);
       if (!dto) throw new Error("site not readable");
       return { site: dto, revision: toRevisionDto(latest) };
     }
-    assertUpdatedAt(row.updatedAt, ctx.expectedUpdatedAt);
+    assertUpdatedAt(row.updatedAt, input.expectedUpdatedAt);
     const [updated] = await tx
       .update(schema.site)
-      .set({ ...next, updatedAt: new Date() })
+      .set({ enabled: input.enabled, updatedAt: new Date() })
       .where(eq(schema.site.id, row.id))
       .returning();
     if (!updated) throw new Error("site update failed");
-    const action =
-      change.kind === "enable"
-        ? change.enabled
-          ? "enable"
-          : "disable"
-        : change.kind === "suspend"
-          ? "suspend"
-          : "resume";
+    const action = input.enabled ? "enable" : "disable";
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,
-      reason: { code: STATE_REASONS[action], params: { site: row.name } },
+      reason: {
+        code: input.enabled ? "site_enabled" : "site_disabled",
+        params: { site: row.name },
+      },
       userId: userId(ctx.actor),
     });
     await recordAudit(tx, ctx.actor, {
@@ -781,64 +732,12 @@ async function changeSiteState(
       targetType: "site",
       targetId: row.id,
       targetName: row.name,
-      metadata: {
-        ...(change.kind === "suspend"
-          ? {
-              reason: change.reason,
-              note: change.note,
-              ...(row.suspended
-                ? { from: { reason: row.suspendReason, note: row.suspendNote } }
-                : {}),
-            }
-          : {}),
-        ...(change.kind === "resume" ? { reason: row.suspendReason } : {}),
-        serving: isServing(updated),
-        revision: revision.revision,
-      },
+      metadata: { revision: revision.revision },
     });
-    const [dto] = await toSiteDtos(tx, [updated], { platform: ctx.scope.all });
+    const [dto] = await toSiteDtos(tx, [updated]);
     if (!dto) throw new Error("site not readable after update");
     return { site: dto, revision: toRevisionDto(revision) };
   });
-}
-
-export function setSiteEnabled(
-  db: Database,
-  input: { id: string; enabled: boolean; expectedUpdatedAt?: string },
-  ctx: { scope: SiteScope; actor: Actor },
-) {
-  return changeSiteState(
-    db,
-    input.id,
-    { kind: "enable", enabled: input.enabled },
-    { ...ctx, expectedUpdatedAt: input.expectedUpdatedAt },
-  );
-}
-
-export function suspendSite(
-  db: Database,
-  input: { id: string; reason: SiteSuspendReason; note: string; expectedUpdatedAt?: string },
-  actor: Actor,
-) {
-  return changeSiteState(
-    db,
-    input.id,
-    { kind: "suspend", reason: input.reason, note: input.note },
-    { scope: { all: true }, actor, expectedUpdatedAt: input.expectedUpdatedAt },
-  );
-}
-
-export function resumeSite(
-  db: Database,
-  input: { id: string; expectedUpdatedAt?: string },
-  actor: Actor,
-) {
-  return changeSiteState(
-    db,
-    input.id,
-    { kind: "resume" },
-    { scope: { all: true }, actor, expectedUpdatedAt: input.expectedUpdatedAt },
-  );
 }
 
 export async function countSites(db: Database, scope: SiteScope): Promise<number> {

@@ -351,7 +351,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 
 | Table | Contents |
 | --- | --- |
-| `site` | Sites: organization and cluster, enabled state, platform suspension (reason, note), cache key, slicing, WebSocket, certificate, TLS settings, cache generation, log sample rate |
+| `site` | Sites: organization and cluster, enabled state, cache key, slicing, WebSocket, certificate, TLS settings, cache generation, log sample rate |
 | `site_domain` | Site domains and their routing verification state |
 | `site_star` | Per-user stars |
 | `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification |
@@ -443,6 +443,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0029_g2_challenges` | `site_protection`, `challenge_key`, `security_event`; `node.security_state`; `access_log.ja4` |
 | `0030_g3_waf` | `site_waf`; `waf_rules` in minute, hour and day statistics and the view `traffic_hour_stats`; `access_log.waf_rule_ids`, `waf_blocked` |
 | `0031_domains_without_ownership` | Drops `domain_ownership` and `site_domain.verified`; of duplicate pending domains one row stays; `site_domain (name, wildcard)` is unique |
+| `0032_sites_without_suspension` | Drops `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at`; suspended sites become disabled; service accounts lose `sites:suspend` |
 
 ## Build output
 

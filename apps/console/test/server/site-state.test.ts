@@ -13,7 +13,7 @@ import {
   signIn,
 } from "./helpers";
 
-describe("site enabling and platform suspension", async () => {
+describe("site enabling", async () => {
   const { ctx, client: pglite } = await createTestContext();
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
@@ -73,7 +73,7 @@ describe("site enabling and platform suspension", async () => {
   it("disables and enables a site with a revision and an audit entry per change", async () => {
     expect(await shippedSites()).toContain(siteId);
     const before = await owner.sites.get({ id: siteId });
-    expect(before).toMatchObject({ enabled: true, suspended: false, suspendReason: null });
+    expect(before).toMatchObject({ enabled: true });
     const revisions = await revisionCount();
 
     const disabled = await owner.sites.setEnabled({
@@ -130,81 +130,7 @@ describe("site enabling and platform suspension", async () => {
     await admin.sites.setEnabled({ id: siteId, enabled: true });
   });
 
-  it("suspends and resumes a site; tenants see the reason, cannot resume and stay dark", async () => {
-    const revisions = await revisionCount();
-    const suspended = await admin.admin.sites.suspend({
-      id: siteId,
-      reason: "billing",
-      note: "invoice 42 overdue",
-    });
-    expect(suspended.site).toMatchObject({
-      suspended: true,
-      suspendReason: "billing",
-      suspendNote: "invoice 42 overdue",
-    });
-    expect(suspended.revision.reasonCode).toBe("site_suspended");
-    expect(await revisionCount()).toBe(revisions + 1);
-    expect(await shippedSites()).not.toContain(siteId);
-
-    // Tenants see the localized reason, never the platform's note.
-    const seen = await owner.sites.get({ id: siteId });
-    expect(seen).toMatchObject({ suspended: true, suspendReason: "billing", suspendNote: "" });
-    expect(seen.suspendedAt).not.toBeNull();
-    const listed = (await owner.sites.list({})).items.find((s) => s.id === siteId);
-    expect(listed?.suspendNote).toBe("");
-
-    // Tenants cannot lift it: the admin procedure is 403 and enabling does not ship it.
-    expect((await rpcError(owner.admin.sites.resume({ id: siteId }))).status).toBe(403);
-    expect(
-      (await rpcError(owner.admin.sites.suspend({ id: siteId, reason: "other" }))).status,
-    ).toBe(403);
-    await owner.sites.setEnabled({ id: siteId, enabled: false });
-    await owner.sites.setEnabled({ id: siteId, enabled: true });
-    expect(await shippedSites()).not.toContain(siteId);
-
-    // Same suspension again: nothing changes; another reason is audited without a revision.
-    const count = await revisionCount();
-    await admin.admin.sites.suspend({ id: siteId, reason: "billing", note: "invoice 42 overdue" });
-    expect(await auditCount("site.suspend")).toBe(1);
-    const changed = await admin.admin.sites.suspend({ id: siteId, reason: "abuse" });
-    expect(changed.site.suspendReason).toBe("abuse");
-    expect(await auditCount("site.suspend")).toBe(2);
-    expect(await revisionCount()).toBe(count);
-
-    const resumed = await admin.admin.sites.resume({
-      id: siteId,
-      expectedUpdatedAt: changed.site.updatedAt,
-    });
-    expect(resumed.site).toMatchObject({ suspended: false, suspendReason: null, suspendNote: "" });
-    expect(resumed.revision.reasonCode).toBe("site_resumed");
-    expect(await shippedSites()).toContain(siteId);
-    expect(await auditCount("site.resume")).toBe(1);
-    const [entry] = (await admin.auditLogs.list({ action: "site.resume" })).items;
-    expect(entry).toMatchObject({
-      targetId: siteId,
-      organizationId,
-      metadata: { reason: "abuse" },
-    });
-  });
-
-  it("rejects notes over 256 characters and unknown reasons", async () => {
-    expect(
-      (
-        await rpcError(
-          admin.admin.sites.suspend({ id: siteId, reason: "other", note: "x".repeat(257) }),
-        )
-      ).status,
-    ).toBe(400);
-    expect(
-      (
-        await rpcError(
-          admin.admin.sites.suspend({ id: siteId, reason: "late" as unknown as "other" }),
-        )
-      ).status,
-    ).toBe(400);
-  });
-
-  it("refuses purges and prefetches of disabled or suspended sites with a clear code", async () => {
+  it("refuses purges and prefetches of disabled sites with a clear code", async () => {
     await owner.sites.setEnabled({ id: siteId, enabled: false });
     expect((await rpcError(owner.sites.purgeAll({ id: siteId }))).code).toBe("SITE_DISABLED");
     expect(
@@ -214,24 +140,21 @@ describe("site enabling and platform suspension", async () => {
     expect(
       (await rpcError(owner.cacheTasks.create({ type: "site", siteIds: [siteId] }))).code,
     ).toBe("SITE_DISABLED");
-    await owner.sites.setEnabled({ id: siteId, enabled: true });
-    await admin.admin.sites.suspend({ id: siteId, reason: "security" });
     expect(
       (
         await rpcError(
           owner.cacheTasks.create({ type: "prefetch", urls: ["http://www.shop.test/a"] }),
         )
       ).code,
-    ).toBe("SITE_SUSPENDED");
-    expect((await rpcError(admin.sites.purgeAll({ id: siteId }))).code).toBe("SITE_SUSPENDED");
-    await admin.admin.sites.resume({ id: siteId });
+    ).toBe("SITE_DISABLED");
+    await owner.sites.setEnabled({ id: siteId, enabled: true });
     expect(
       (await owner.cacheTasks.create({ type: "url", urls: ["http://www.shop.test/a"] })).type,
     ).toBe("url");
   });
 
-  it("keeps answering HTTP-01 challenges for a suspended site (renewals continue)", async () => {
-    await admin.admin.sites.suspend({ id: siteId, reason: "billing" });
+  it("keeps answering HTTP-01 challenges for a disabled site (renewals continue)", async () => {
+    await owner.sites.setEnabled({ id: siteId, enabled: false });
     const [certificate] = await ctx.db
       .insert(schema.certificate)
       .values({
@@ -261,6 +184,6 @@ describe("site enabling and platform suspension", async () => {
     expect(config.httpChallenges.map((c) => [c.domain, c.token])).toEqual([
       ["www.shop.test", "renewal-token"],
     ]);
-    await admin.admin.sites.resume({ id: siteId });
+    await owner.sites.setEnabled({ id: siteId, enabled: true });
   });
 });

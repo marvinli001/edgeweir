@@ -145,12 +145,6 @@ export function adminNav(): NavItem[] {
       testId: "nav-regions",
     },
     {
-      title: m.nav_admin_sites(),
-      to: "/admin/sites",
-      icon: icon(GlobeIcon),
-      testId: "nav-admin-sites",
-    },
-    {
       title: m.nav_organizations(),
       to: "/admin/organizations",
       icon: icon(Building03Icon),

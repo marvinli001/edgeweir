@@ -143,11 +143,9 @@ import {
   getSite,
   listSites,
   purgeSite,
-  resumeSite,
   setSiteEnabled,
   setSiteStarred,
   starredSites,
-  suspendSite,
   updateSite,
 } from "../services/sites";
 import {
@@ -777,14 +775,6 @@ export const router = os.router({
     ),
   },
   admin: {
-    sites: {
-      suspend: admin.admin.sites.suspend.handler(({ input, context }) =>
-        suspendSite(context.app.db, input, context.actor),
-      ),
-      resume: admin.admin.sites.resume.handler(({ input, context }) =>
-        resumeSite(context.app.db, input, context.actor),
-      ),
-    },
     organizations: {
       getLimits: admin.admin.organizations.getLimits.handler(({ input, context }) =>
         getOrganizationLimits(context.app.db, input.id),

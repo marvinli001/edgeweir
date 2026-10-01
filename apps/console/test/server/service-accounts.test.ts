@@ -88,7 +88,6 @@ describe("service accounts, scopes and idempotency keys", async () => {
       "system:read",
       "sites:read",
       "sites:write",
-      "sites:suspend",
       "limits:read",
       "limits:write",
       "usage:read",
@@ -265,19 +264,19 @@ describe("service accounts, scopes and idempotency keys", async () => {
     const write = await api(readKey.key, "POST", "/organizations", { name: "RO" });
     expect(write.status).toBe(403);
     expect(write.json.code).toBe("ACCESS_KEY_READ_ONLY");
-    // A service account without the scope cannot suspend.
+    // A service account without the scope cannot switch a site off.
     const site = await admin.sites.create({
       name: "s",
       domains: ["s.sa.test"],
       origins: [{ address: "o.test" }],
     });
-    const suspend = await api(narrow, "POST", `/admin/sites/${site.site.id}/suspend`, {
-      reason: "billing",
+    const disable = await api(narrow, "PUT", `/sites/${site.site.id}/enabled`, {
+      enabled: false,
     });
-    expect(suspend.status).toBe(403);
-    expect(suspend.json).toMatchObject({
+    expect(disable.status).toBe(403);
+    expect(disable.json).toMatchObject({
       code: "SCOPE_REQUIRED",
-      data: { scope: "sites:suspend" },
+      data: { scope: "sites:write" },
     });
   });
 

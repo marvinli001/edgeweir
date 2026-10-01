@@ -370,17 +370,6 @@ export const contract = {
   },
   /** Platform actions on tenant resources (platform administrators and scoped service accounts). */
   admin: {
-    sites: {
-      /** Stops shipping the site until the platform resumes it; tenants cannot lift it. */
-      suspend: oc
-        .route({ method: "POST", path: "/admin/sites/{id}/suspend", tags: ["sites"] })
-        .input(s.siteSuspendInput)
-        .output(s.siteMutationResult),
-      resume: oc
-        .route({ method: "POST", path: "/admin/sites/{id}/resume", tags: ["sites"] })
-        .input(s.siteResumeInput)
-        .output(s.siteMutationResult),
-    },
     organizations: {
       getLimits: oc
         .route({

@@ -247,20 +247,11 @@ export const cacheRule = z.object({
   cacheAuthorized: z.boolean(),
 });
 
-/** Why the platform suspended a site. */
-export const siteSuspendReason = z.enum(["billing", "abuse", "security", "other"]);
-
 export const site = z.object({
   id: uuid,
   name: z.string(),
-  /** Set by the organization. */
+  /** A disabled site is not shipped to nodes. */
   enabled: z.boolean(),
-  /** Set by the platform; the site is shipped to nodes only when enabled and not suspended. */
-  suspended: z.boolean(),
-  suspendReason: siteSuspendReason.nullable(),
-  /** Platform administrators only; empty for everyone else. */
-  suspendNote: z.string(),
-  suspendedAt: isoDateTime.nullable(),
   organizationId: z.string(),
   organizationName: z.string(),
   clusterId: uuid,
@@ -304,15 +295,6 @@ export const siteSetEnabledInput = z.object({
   enabled: z.boolean(),
   expectedUpdatedAt,
 });
-
-export const siteSuspendInput = z.object({
-  id: uuid,
-  reason: siteSuspendReason,
-  note: z.string().trim().max(256).default(""),
-  expectedUpdatedAt,
-});
-
-export const siteResumeInput = z.object({ id: uuid, expectedUpdatedAt });
 
 export const cluster = z.object({
   id: uuid,
@@ -1145,7 +1127,6 @@ export const userSetDisabledInput = z.object({ id: userId, disabled: z.boolean()
 export type OriginAllowList = z.infer<typeof originAllowList>;
 export type SiteCreateInput = z.input<typeof siteCreateInput>;
 export type Site = z.infer<typeof site>;
-export type SiteSuspendReason = z.infer<typeof siteSuspendReason>;
 export type OrgLimitResource = z.infer<typeof orgLimitResource>;
 export type OrganizationLimits = z.infer<typeof organizationLimits>;
 export type Cluster = z.infer<typeof cluster>;

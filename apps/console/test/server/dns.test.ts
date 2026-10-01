@@ -147,15 +147,11 @@ describe("M5 independent DNS publication and recovery", async () => {
       "DNS_PROVIDER_IN_USE",
     );
   });
-  it("keeps a disabled or suspended site's records (nodes answer 404 for it)", async () => {
+  it("keeps a disabled site's records (nodes answer 404 for it)", async () => {
     const before = structuredClone(fixture.records);
     await admin.sites.setEnabled({ id: siteId, enabled: false });
     await admin.dns.reconcile();
     expect(fixture.records).toEqual(before);
-    await admin.admin.sites.suspend({ id: siteId, reason: "billing" });
-    await admin.dns.reconcile();
-    expect(fixture.records).toEqual(before);
-    await admin.admin.sites.resume({ id: siteId });
     await admin.sites.setEnabled({ id: siteId, enabled: true });
     // The node applies the resulting revision again before the next reconciliation.
     const revision = await latestRevision(ctx.db, clusterId);

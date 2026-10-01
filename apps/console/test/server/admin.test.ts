@@ -280,8 +280,6 @@ describe("admin area procedures", async () => {
       ["auditLogs.list", () => member.auditLogs.list({})],
       ["auditLogs.facets", () => member.auditLogs.facets()],
       ["analytics.topNodes", () => member.analytics.topNodes({})],
-      ["admin.sites.suspend", () => member.admin.sites.suspend({ id: uuid, reason: "billing" })],
-      ["admin.sites.resume", () => member.admin.sites.resume({ id: uuid })],
       ["admin.organizations.getLimits", () => member.admin.organizations.getLimits({ id: "x" })],
       ["settings.usage", () => member.settings.usage()],
       [

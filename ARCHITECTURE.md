@@ -351,7 +351,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
 | 表 | 内容 |
 | --- | --- |
-| `site` | 网站：所属组织与集群、启用状态、平台暂停（原因、备注）、缓存键、分片、WebSocket、证书、TLS 设置、缓存代际号、日志采样率 |
+| `site` | 网站：所属组织与集群、启用状态、缓存键、分片、WebSocket、证书、TLS 设置、缓存代际号、日志采样率 |
 | `site_domain` | 网站域名与路由校验状态 |
 | `site_star` | 用户星标 |
 | `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验 |
@@ -443,6 +443,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0029_g2_challenges` | `site_protection`、`challenge_key`、`security_event`；`node.security_state`；`access_log.ja4` |
 | `0030_g3_waf` | `site_waf`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `waf_rules`；`access_log.waf_rule_ids`、`waf_blocked` |
 | `0031_domains_without_ownership` | 删除 `domain_ownership` 与 `site_domain.verified`；重名的待验证域名只保留一条；`site_domain (name, wildcard)` 全局唯一 |
+| `0032_sites_without_suspension` | 删除 `site.suspended`、`suspend_reason`、`suspend_note`、`suspended_at`；已暂停的网站改为停用；服务账号去掉 `sites:suspend` |
 
 ## 构建产物
 

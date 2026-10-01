@@ -82,7 +82,6 @@ export const errorDefs = {
   NODE_NOT_FOUND: { status: 404, params: [] },
   SITE_NOT_FOUND: { status: 404, params: [] },
   SITE_DISABLED: { status: 409, params: [] },
-  SITE_SUSPENDED: { status: 409, params: [] },
   UPDATED_AT_MISMATCH: { status: 409, params: [] },
   DOMAIN_IN_USE: { status: 409, params: ["domains"] },
   REVISION_NOT_FOUND: { status: 404, params: [] },
@@ -137,8 +136,6 @@ export const revisionReasonDefs = {
   site_purged: { params: ["site"], en: "site {site} purged" },
   site_enabled: { params: ["site"], en: "site {site} enabled" },
   site_disabled: { params: ["site"], en: "site {site} disabled" },
-  site_suspended: { params: ["site"], en: "site {site} suspended" },
-  site_resumed: { params: ["site"], en: "site {site} resumed" },
   rollback: { params: ["revision"], en: "rollback to revision {revision}" },
   rollout_rollback: {
     params: ["revision"],

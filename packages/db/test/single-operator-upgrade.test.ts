@@ -38,9 +38,11 @@ beforeAll(async () => {
     insert into organization (id, name, slug, created_at) values
       ('org_a', 'A', 'a', now()), ('org_b', 'B', 'b', now());
     insert into cluster (id, name) values ('00000000-0000-4000-8000-000000000001', 'default');
-    insert into site (id, organization_id, cluster_id, name) values
-      ('00000000-0000-4000-8000-00000000000a', 'org_a', '00000000-0000-4000-8000-000000000001', 'a'),
-      ('00000000-0000-4000-8000-00000000000b', 'org_b', '00000000-0000-4000-8000-000000000001', 'b');
+    insert into site (id, organization_id, cluster_id, name, suspended, suspend_reason) values
+      ('00000000-0000-4000-8000-00000000000a', 'org_a', '00000000-0000-4000-8000-000000000001', 'a', false, null),
+      ('00000000-0000-4000-8000-00000000000b', 'org_b', '00000000-0000-4000-8000-000000000001', 'b', true, 'billing');
+    insert into service_account (id, name, scopes) values
+      ('00000000-0000-4000-8000-0000000000c1', 'sync', '{sites:read,sites:suspend,usage:read}');
     insert into site_domain (site_id, name, verified, created_at) values
       ('00000000-0000-4000-8000-00000000000b', 'shop.test', false, now() - interval '1 day'),
       ('00000000-0000-4000-8000-00000000000a', 'shop.test', true, now()),
@@ -75,6 +77,20 @@ describe("upgrade to a single operator", () => {
         "insert into site_domain (site_id, name) values ('00000000-0000-4000-8000-00000000000b', 'shop.test')",
       ),
     ).rejects.toThrow();
+  });
+
+  it("keeps suspended sites dark as disabled sites", async () => {
+    expect(await q("select name, enabled from site order by name")).toEqual([
+      { name: "a", enabled: true },
+      { name: "b", enabled: false },
+    ]);
+    const columns = await q<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_name = 'site' and column_name like 'suspend%'",
+    );
+    expect(columns).toEqual([]);
+    expect(await q("select scopes from service_account")).toEqual([
+      { scopes: ["sites:read", "usage:read"] },
+    ]);
   });
 
   it("drops domain ownership with its settings", async () => {

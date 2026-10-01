@@ -29,7 +29,9 @@ describe("recompile after an upgrade", async () => {
     const before = await latestRevision(ctx.db, clusterId);
     // As if an upgrade had added a route the stored revision does not have yet.
     const [site] = await ctx.db.select().from(schema.site);
-    await ctx.db.insert(schema.siteDomain).values({ siteId: site?.id ?? "", name: "www.shop.test" });
+    await ctx.db
+      .insert(schema.siteDomain)
+      .values({ siteId: site?.id ?? "", name: "www.shop.test" });
 
     await recompileAfterUpgrade(ctx);
     const after = await latestRevision(ctx.db, clusterId);

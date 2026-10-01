@@ -103,7 +103,6 @@ async function resolveHosts(db: Executor, hosts: string[], scope: SiteScope) {
       clusterId: schema.site.clusterId,
       organizationId: schema.site.organizationId,
       enabled: schema.site.enabled,
-      suspended: schema.site.suspended,
     })
     .from(schema.siteDomain)
     .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))

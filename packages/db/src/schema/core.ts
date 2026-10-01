@@ -171,14 +171,8 @@ export const site = pgTable(
       .notNull()
       .references(() => cluster.id, { onDelete: "restrict" }),
     name: text("name").notNull(),
-    /** Set by the organization; a site is shipped only when enabled and not suspended. */
+    /** A disabled site is not shipped to nodes. */
     enabled: boolean("enabled").notNull().default(true),
-    /** Set by the platform; tenants cannot lift it. */
-    suspended: boolean("suspended").notNull().default(false),
-    /** billing | abuse | security | other; null unless suspended. */
-    suspendReason: text("suspend_reason"),
-    suspendNote: text("suspend_note").notNull().default(""),
-    suspendedAt: timestamp("suspended_at", { withTimezone: true }),
     /** Bumped to purge every cached object of the site. */
     logSampleRate: integer("log_sample_rate").notNull().default(0),
     cacheGeneration: bigint("cache_generation", { mode: "number" }).notNull().default(1),

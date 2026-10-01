@@ -225,6 +225,13 @@
       "when": 1790814576144,
       "tag": "0031_domains_without_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790814988125,
+      "tag": "0032_sites_without_suspension",
+      "breakpoints": true
     }
   ]
 }

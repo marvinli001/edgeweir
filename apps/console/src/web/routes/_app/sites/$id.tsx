@@ -18,9 +18,8 @@ import { RulesTab } from "@/components/site/rules-tab";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { SecurityTab } from "@/components/site/security-tab";
 import { StarButton, useSiteStars } from "@/components/site-star";
-import { SiteStatus, suspendReasonLabel } from "@/components/site-status";
+import { SiteStatus } from "@/components/site-status";
 import { ErrorState, LoadingState } from "@/components/states";
-import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,80 +101,67 @@ function SiteDetailPage() {
       ) : site.isError ? (
         <ErrorState error={site.error} onRetry={() => site.refetch()} />
       ) : (
-        <>
-          {site.data.suspended ? (
-            <Alert
-              variant="destructive"
-              className="animate-enter"
-              data-testid="site-suspended-notice"
-            >
-              <AlertTitle>
-                {m.site_suspended_notice({ reason: suspendReasonLabel(site.data.suspendReason) })}
-              </AlertTitle>
-            </Alert>
-          ) : null}
-          <Tabs
-            key={site.data.id}
-            value={tab}
-            onValueChange={(value) =>
-              navigate({
-                search: (prev) => ({
-                  ...prev,
-                  tab: value === "overview" ? undefined : (value as SiteTab),
-                }),
-                replace: true,
-              })
-            }
-          >
-            <TabsList ref={tabsList} className="max-w-full justify-start overflow-x-auto">
-              {SITE_TABS.map((value) => (
-                <TabsTrigger key={value} value={value} data-testid={`tab-${value}`}>
-                  {siteTabLabel(value)}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            <TabsContent value="overview" className="animate-enter">
-              <OverviewTab key={site.data.updatedAt} site={site.data} />
-            </TabsContent>
-            <TabsContent value="analytics" className="animate-enter">
-              <AnalyticsSection
-                siteId={site.data.id}
-                admin={isAdmin}
-                range={search.range ?? DEFAULT_RANGE}
-                onRangeChange={(range) =>
-                  navigate({
-                    search: (prev) => ({
-                      ...prev,
-                      range: range === DEFAULT_RANGE ? undefined : range,
-                    }),
-                    replace: true,
-                  })
-                }
-              />
-            </TabsContent>
-            <TabsContent value="domains" className="animate-enter">
-              <DomainsTab key={site.data.updatedAt} site={site.data} />
-            </TabsContent>
-            <TabsContent value="origins" className="animate-enter">
-              <OriginsTab site={site.data} />
-            </TabsContent>
-            <TabsContent value="https" className="animate-enter">
-              <HttpsTab site={site.data} />
-            </TabsContent>
-            <TabsContent value="rules" className="animate-enter">
-              <RulesTab siteId={site.data.id} />
-            </TabsContent>
-            <TabsContent value="security" className="animate-enter">
-              <SecurityTab siteId={site.data.id} organizationRole={me.activeOrganization?.role} />
-            </TabsContent>
-            <TabsContent value="logs" className="animate-enter">
-              <LogsTab siteId={site.data.id} />
-            </TabsContent>
-            <TabsContent value="cache" className="animate-enter">
-              <CacheTab site={site.data} />
-            </TabsContent>
-          </Tabs>
-        </>
+        <Tabs
+          key={site.data.id}
+          value={tab}
+          onValueChange={(value) =>
+            navigate({
+              search: (prev) => ({
+                ...prev,
+                tab: value === "overview" ? undefined : (value as SiteTab),
+              }),
+              replace: true,
+            })
+          }
+        >
+          <TabsList ref={tabsList} className="max-w-full justify-start overflow-x-auto">
+            {SITE_TABS.map((value) => (
+              <TabsTrigger key={value} value={value} data-testid={`tab-${value}`}>
+                {siteTabLabel(value)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <TabsContent value="overview" className="animate-enter">
+            <OverviewTab key={site.data.updatedAt} site={site.data} />
+          </TabsContent>
+          <TabsContent value="analytics" className="animate-enter">
+            <AnalyticsSection
+              siteId={site.data.id}
+              admin={isAdmin}
+              range={search.range ?? DEFAULT_RANGE}
+              onRangeChange={(range) =>
+                navigate({
+                  search: (prev) => ({
+                    ...prev,
+                    range: range === DEFAULT_RANGE ? undefined : range,
+                  }),
+                  replace: true,
+                })
+              }
+            />
+          </TabsContent>
+          <TabsContent value="domains" className="animate-enter">
+            <DomainsTab key={site.data.updatedAt} site={site.data} />
+          </TabsContent>
+          <TabsContent value="origins" className="animate-enter">
+            <OriginsTab site={site.data} />
+          </TabsContent>
+          <TabsContent value="https" className="animate-enter">
+            <HttpsTab site={site.data} />
+          </TabsContent>
+          <TabsContent value="rules" className="animate-enter">
+            <RulesTab siteId={site.data.id} />
+          </TabsContent>
+          <TabsContent value="security" className="animate-enter">
+            <SecurityTab siteId={site.data.id} organizationRole={me.activeOrganization?.role} />
+          </TabsContent>
+          <TabsContent value="logs" className="animate-enter">
+            <LogsTab siteId={site.data.id} />
+          </TabsContent>
+          <TabsContent value="cache" className="animate-enter">
+            <CacheTab site={site.data} />
+          </TabsContent>
+        </Tabs>
       )}
     </Page>
   );
