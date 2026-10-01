@@ -8,6 +8,10 @@
 // the apex), TTLs are durations, TXT data is unquoted, CNAME data is a
 // hostname. SetRecords replaces every (name, type) RRset in its input;
 // DeleteRecords deletes records matching name, type and (when not empty) data.
+// Adapters of providers with resolution lines (lines.go) read the line of
+// each record: SetRecords replaces an input (name, type) on every line,
+// DeleteRecords matches the input's line; the other adapters only receive
+// default-line records.
 package dnsx
 
 import (
