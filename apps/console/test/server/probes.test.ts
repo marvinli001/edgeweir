@@ -384,6 +384,23 @@ describe("probe, scheduling and node address procedures", async () => {
       "CLUSTER_NOT_FOUND",
     );
 
+    // The binding renames its line: the rule keeps working on what it names
+    // until line or action change, which must name an existing line again.
+    await admin.dns.saveBinding({
+      clusterId,
+      binding: {
+        mode: "manual",
+        domain: "edge.rules.test",
+        lines: [{ name: "primary", nodeGroupId: groupId, overrides: [] }],
+      },
+    });
+    expect((await admin.scheduling.update({ id: line.id, holdSeconds: 10 })).holdSeconds).toBe(10);
+    expect((await rpcError(admin.scheduling.update({ id: line.id, lineName: "main" }))).code).toBe(
+      "SCHEDULING_RULE_INVALID",
+    );
+    expect((await admin.scheduling.update({ id: line.id, lineName: "primary" })).lineName).toBe(
+      "primary",
+    );
     await admin.scheduling.delete({ id: line.id });
     expect((await rpcError(admin.scheduling.delete({ id: line.id }))).code).toBe(
       "SCHEDULING_RULE_NOT_FOUND",

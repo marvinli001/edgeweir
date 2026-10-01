@@ -654,15 +654,20 @@ async function assertCluster(db: Executor, clusterId: string) {
   return cluster;
 }
 
-/** A line the rule names must exist in the cluster's binding; backup_group needs one. */
+/**
+ * A line the rule names must exist in the cluster's binding; backup_group
+ * needs one. `changed` false skips the line lookup (an update that leaves
+ * line and action alone keeps working after the binding renamed the line).
+ */
 async function validateRule(
   db: Executor,
   clusterId: string,
   rule: Pick<RuleRow, "lineName" | "action" | "conditions">,
+  changed = { line: true, conditions: true },
 ) {
   if (rule.action === "backup_group" && !rule.lineName)
     fail("SCHEDULING_RULE_INVALID", "backup_group needs a line");
-  if (rule.lineName) {
+  if (rule.lineName && changed.line) {
     const [binding] = await db
       .select({ lines: schema.dnsBinding.lines })
       .from(schema.dnsBinding)
@@ -673,7 +678,7 @@ async function validateRule(
   const regionIds = [
     ...new Set(rule.conditions.map((c) => c.regionId).filter((r): r is string => !!r)),
   ];
-  if (regionIds.length) {
+  if (regionIds.length && changed.conditions) {
     const found = await db
       .select({ id: schema.region.id })
       .from(schema.region)
@@ -764,7 +769,10 @@ export async function updateSchedulingRule(
     action: input.action ?? before.action,
     conditions: input.conditions ?? before.conditions,
   };
-  await validateRule(app.db, before.clusterId, next);
+  await validateRule(app.db, before.clusterId, next, {
+    line: input.lineName !== undefined || input.action !== undefined,
+    conditions: input.conditions !== undefined,
+  });
   const { dto, published } = await app.db.transaction(async (tx) => {
     const current = await findRule(tx, input.id);
     // What the rule matches or does changes: its states and effects start over.
