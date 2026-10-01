@@ -15,7 +15,9 @@ import "google/protobuf/timestamp.proto";
 //   - inside a site: domains by name, origins by id, cache_rules by
 //     (priority, id);
 //   - offline_hosts by (name, wildcard), inside a site error_pages.pages by
-//     status (v0.12.0).
+//     status (v0.12.0);
+//   - inside a site bulk_redirects by source; inside a rule action
+//     set_query by name and remove_query sorted (v0.13.0).
 // content_hash is the lowercase hex SHA-256 of the deterministic binary
 // encoding of this message with `revision` and `content_hash` cleared.
 message NodeConfig {
@@ -161,6 +163,25 @@ message Site {
   // The site's error page templates; unset means the node's built-in pages.
   // Added in v0.12.0 (feature error-pages-v1).
   SiteErrorPages error_pages = 19;
+  // Exact-match redirect table, at most 5000 entries sorted by source,
+  // sources unique. Looked up after the redirect rules of the redirect
+  // phase with the client's original Host and normalized path ($uri):
+  // "host/path" first, then "/path". Added in v0.13.0 (feature rules-v2).
+  repeated BulkRedirect bulk_redirects = 20;
+}
+
+// BulkRedirect is one entry of a site's exact-match redirect table.
+message BulkRedirect {
+  // "/path" (every domain of the site) or "host/path" (that lowercase host
+  // only): 2-512 bytes without control characters, whitespace or "?".
+  string source = 1;
+  // Absolute http(s) URL or local path starting with a single "/", at most
+  // 1024 bytes, like a static redirect rule.
+  string target = 2;
+  // 301, 302, 307 or 308.
+  uint32 status_code = 3;
+  // Append the request's query string to the target.
+  bool preserve_query = 4;
 }
 
 // SiteErrorPages replaces the node's built-in error pages of a site: 403
@@ -280,6 +301,18 @@ message ChallengeKeyRef {
 }
 
 // RuleExpression is a bounded, typed AST, never source code to execute.
+//
+// Since v0.13.0 (feature rules-v2) three more shapes exist: op "call" is a
+// function call (field: the function name, value_type: its result type,
+// children: the arguments), op "field" an argument that reads a field
+// (field, value_type) and op "const" a string argument (value_type
+// "string", value). A comparison whose left side is a function has an empty
+// field and exactly one child, the value node. A boolean call may stand
+// alone as a condition. Functions: lower, upper, len, starts_with,
+// ends_with, url_decode and concat in conditions and value expressions;
+// regex_replace and wildcard_replace in value expressions only (at most once
+// each). Strings are byte strings; see the console's rule-engine package for
+// the exact semantics and the shared test vectors.
 message RuleExpression {
   string op = 1;
   string field = 2;
@@ -305,9 +338,61 @@ message RuleAction {
   // Challenge type of kind "challenge" (waf-custom): cookie302, js, pow or
   // captcha. Added in v0.10.0 (feature challenge-v1).
   string challenge = 12;
+  // Fields 13-31 were added in v0.13.0 (feature rules-v2).
+  //
+  // Kind "config" (phase config only, except the three fields above):
+  // compression switches among the codings the site enables (gzip = true
+  // is accepted since v0.13.0); WebSocket upgrades; the site's Under
+  // Attack; CC escalation and its highest level; origin timeouts in
+  // milliseconds (0 keeps the site's; connect 100-120000, send and read
+  // 100-3600000); the sampled access log rate in basis points (0-10000).
+  optional bool brotli = 13;
+  optional bool zstd = 14;
+  optional bool websocket = 15;
+  optional bool under_attack = 16;
+  optional bool cc_enabled = 17;
+  // cookie302, js, pow or captcha; empty keeps the site's.
+  string cc_max_level = 18;
+  uint32 origin_connect_timeout_ms = 19;
+  uint32 origin_send_timeout_ms = 20;
+  uint32 origin_read_timeout_ms = 21;
+  optional uint32 log_sample_rate = 22;
+  // Kinds "redirect" and "rewrite": a string value expression computed per
+  // request instead of the static value (exactly one of both is set).
+  RuleExpression target = 23;
+  // Append (redirect) or keep (rewrite) the request's query string. Unset:
+  // a redirect drops it, a rewrite keeps it.
+  optional bool preserve_query = 24;
+  // Query parameters set after removing those with the same name, sorted
+  // by name, at most 16.
+  repeated QueryParam set_query = 25;
+  // Query parameter names removed, sorted and unique, at most 16.
+  repeated string remove_query = 26;
+  // Kind "origin" (phase origin): the site's origin group to use (empty
+  // keeps the default group), the Host header and TLS SNI sent upstream and
+  // the port of every origin of the group (0 keeps theirs). At least one is
+  // set; later matching rules override field by field.
+  string origin_group = 27;
+  string host_header = 28;
+  string sni = 29;
+  uint32 port = 30;
+  // Kind "compression" (phase compression): codings in preference order,
+  // a subset of zstd, br and gzip; empty disables compression.
+  repeated string compression = 31;
 }
 
-// EdgeRule is executed in list order inside its fixed phase.
+// QueryParam is one query parameter a redirect or rewrite sets. name:
+// [A-Za-z0-9._~-]{1,64}; value: printable ASCII, at most 256 bytes,
+// percent-encoded by the node (everything but RFC 3986 unreserved).
+message QueryParam {
+  string name = 1;
+  string value = 2;
+}
+
+// EdgeRule is executed in list order inside its fixed phase. Phases, in
+// order: request-transform, redirect, config, waf-custom, ratelimit, cache,
+// origin, response-transform and, since v0.13.0 (feature rules-v2),
+// compression (response fields available, like response-transform).
 message EdgeRule {
   string id = 1;
   string phase = 2;
@@ -516,6 +601,10 @@ message Origin {
   // Sign requests with AWS Signature Version 4 (S3-compatible object
   // storage). Only GET and HEAD requests are forwarded to such origins.
   S3Auth s3 = 9;
+  // Origin group inside the site, [a-z0-9_-]{1,32}; empty is the default
+  // group. Only origin rules (RuleAction.origin_group) send traffic to the
+  // other groups. Added in v0.13.0 (feature rules-v2).
+  string group = 10;
 }
 
 // S3Auth references the credential used to sign requests to an S3-compatible
@@ -570,6 +659,10 @@ message CacheRule {
   // never stored (RFC 9111 section 3.5). Added in v0.2.1; older agents
   // ignore it and keep their previous behavior.
   bool cache_authorized = 9;
+  // Cache-Control: max-age=N towards clients for responses this rule
+  // caches; 0 keeps the origin's header. At most 31536000. Added in v0.13.0
+  // (feature rules-v2).
+  uint32 browser_ttl_seconds = 10;
 }
 
 // CacheRuleMatch is the condition of a cache rule. Empty lists match all
@@ -583,8 +676,8 @@ message CacheRuleMatch {
   repeated string path_prefixes = 1;
   // File extensions without the dot, lowercase, e.g. "png".
   repeated string extensions = 2;
-  // Reserved for the rule-engine expression language (wirefilter style).
-  // Nodes reject configs where this is non-empty.
+  // Reserved; nodes reject configs where this is non-empty. Expressions
+  // travel as the typed `condition` below.
   string expression = 3;
   // Exact URI paths, e.g. "/index.html".
   repeated string paths = 4;
@@ -594,6 +687,11 @@ message CacheRuleMatch {
   uint64 min_size_bytes = 6;
   // Maximum response size in bytes (Content-Length); 0 means no maximum.
   uint64 max_size_bytes = 7;
+  // Request condition as a typed expression (phase cache), evaluated on the
+  // client's original request before any rewrite, like the cache key. When
+  // set, path_prefixes, paths and extensions are empty. Added in v0.13.0
+  // (feature rules-v2).
+  RuleExpression condition = 8;
 }
 
 // CertificateRef points at a certificate stored in the console.
