@@ -1,6 +1,6 @@
 # Adding nodes
 
-Generate an install command for a cluster, then install and enroll an edge node on a Linux host; run regional probes.
+Generate an install command for a cluster, then install and enroll an edge node on a Linux host; node ports and firewall; run regional probes.
 
 ## Requirements
 
@@ -89,6 +89,38 @@ Installed files:
 | `edgeweir-node.service` | deb, rpm: `/usr/lib/systemd/system/`; tar.gz: `/etc/systemd/system/` |
 
 For deb and rpm, the package scripts create the `edgeweir` user and directories; for tar.gz, `install.sh` does.
+
+## Ports and firewall
+
+Nodes accept user traffic on these ports; open them in the host firewall and the cloud security group. Nodes only connect out to the console's node channel and need no inbound port for the console.
+
+| Port | Use | When |
+| --- | --- | --- |
+| 80/TCP | HTTP, ACME HTTP-01 | Always |
+| 443/TCP | HTTPS | A site of the cluster has a certificate selected |
+| 443/UDP | HTTP/3 | A site has HTTP/3 on, see [Listening ports](../guide/https.en.md#listening-ports) |
+| The cluster's port pools | [Layer-4 forwarding](../guide/l4.en.md) | TCP for TCP pools, UDP for UDP pools, both for TCP + UDP; opening only the ports L4 apps use is enough |
+
+| Item | Notes |
+| --- | --- |
+| Privileges | Port pools hold 1024–65535 only: the systemd unit and the image need no extra privileges |
+| Container nodes | Publish the ports of the pools, for example `-p 9000:9000 -p 9000:9000/udp`, a range as `-p 20000-20100:20000-20100`; use host networking (`--network host`) for large pools |
+| Port changes | Creating or deleting an L4 app or changing its port reloads the node; old workers keep serving open connections, see [Reloads and long connections](../guide/l4.en.md#reloads-and-long-connections) |
+
+### How long old workers stay
+
+After a reload, old workers serve their open connections (long layer-4 connections, HTTP keep-alive, WebSocket) until these end by default, so frequent structural changes leave several sets of old workers. The node option `--stream-shutdown-timeout` (environment variable `EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT`) bounds that time:
+
+| Value | Behavior |
+| --- | --- |
+| `0` (default) | No bound; an old worker exits after its last connection |
+| A duration such as `30m` or `2h` | After that long, old workers close every connection they still serve (nginx `worker_shutdown_timeout`): layer-4, HTTP, and WebSocket connections alike |
+
+```bash title="/etc/default/edgeweir-node"
+EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT=30m
+```
+
+Then run `sudo systemctl restart edgeweir-node`. Container nodes take `-e EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT=30m`.
 
 ## Regional probes
 
@@ -251,6 +283,7 @@ The release source for agent self-upgrades is set in **System → Node release s
 | `node is already enrolled (use --force to replace the identity)` | The host already has a node identity (`/var/lib/edgeweir-node/identity.json`) | Keep the existing enrollment; to replace the identity, run `edgeweir-node enroll --force` with a new token; flags in [edgeweir-node](https://github.com/marvinli001/edgeweir-node). |
 | `x509: certificate is valid for ..., not ...` | The name the node connects to is not in the node channel certificate | Add the name to `EDGEWEIR_NODE_API_HOSTNAMES` and restart the console; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
 | Enrollment times out, or the node stays offline | Firewall or security group blocks 8443; `EDGEWEIR_NODE_API_URL` resolves incorrectly | Open 8443; check DNS resolution. |
+| Connections to an L4 app's port time out | The node firewall or security group does not open the port pools; a container node does not publish the ports | Open or publish them as in [Ports and firewall](#ports-and-firewall). |
 | `probe is not enrolled: the first run needs --server, --ca-sha256 and a probe token` | A probe's first start lacks the enrollment settings (exit status 2) | Set `EDGEWEIR_SERVER`, `EDGEWEIR_CA_SHA256`, and `EDGEWEIR_TOKEN`, then start it again. |
 | `probe enrollment failed: console rejected the enrollment token (expired or already used)` | The probe token expired or was already used | **Add probe** again for a new token. |
 | A probe container shows `unhealthy` | The image's health check asks the data plane | Turn the container health check off, see [Container](#container). |

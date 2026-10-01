@@ -1,6 +1,6 @@
 # 接入节点
 
-为集群生成安装命令，在 Linux 主机上安装并注册边缘节点；运行区域探针。
+为集群生成安装命令，在 Linux 主机上安装并注册边缘节点；节点端口与防火墙；运行区域探针。
 
 ## 要求
 
@@ -89,6 +89,38 @@ journalctl -u edgeweir-node -f
 | `edgeweir-node.service` | deb、rpm：`/usr/lib/systemd/system/`；tar.gz：`/etc/systemd/system/` |
 
 deb、rpm 由包脚本创建 `edgeweir` 用户与目录；tar.gz 由 `install.sh` 创建。
+
+## 端口与防火墙
+
+节点在以下端口接受用户流量，主机防火墙与云安全组需要放行；节点只主动连接控制台的节点通道，不需要为控制台开放入站端口。
+
+| 端口 | 用途 | 条件 |
+| --- | --- | --- |
+| 80/TCP | HTTP、ACME HTTP-01 | 始终 |
+| 443/TCP | HTTPS | 集群中有网站选择了证书 |
+| 443/UDP | HTTP/3 | 有网站开启 HTTP/3，见 [监听端口](../guide/https.md#监听端口) |
+| 集群的端口池 | [四层转发](../guide/l4.md) | TCP 端口池放行 TCP，UDP 端口池放行 UDP，TCP + UDP 两者都放行；也可以只放行已有 L4 应用使用的端口 |
+
+| 项目 | 说明 |
+| --- | --- |
+| 权限 | 端口池只含 1024–65535，systemd 单元与镜像不需要额外权限 |
+| 容器节点 | 发布端口池中的端口，例如 `-p 9000:9000 -p 9000:9000/udp`，区间写成 `-p 20000-20100:20000-20100`；端口池较大时使用 host 网络（`--network host`） |
+| 端口变化 | 新建、删除 L4 应用或修改其端口时节点 reload，已有连接由旧 worker 继续服务，见 [reload 与长连接](../guide/l4.md#reload-与长连接) |
+
+### 旧 worker 的关闭时间
+
+reload 后，旧 worker 默认一直服务已有的连接（四层长连接、HTTP keep-alive、WebSocket），直到连接结束；频繁的结构性变更会留下多组旧 worker。节点参数 `--stream-shutdown-timeout`（环境变量 `EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT`）限制这段时间：
+
+| 值 | 行为 |
+| --- | --- |
+| `0`（默认） | 不限时，旧 worker 在最后一个连接结束后退出 |
+| 时长，如 `30m`、`2h` | 到时间后旧 worker 关闭仍在服务的全部连接（nginx `worker_shutdown_timeout`），四层、HTTP 与 WebSocket 连接都受影响 |
+
+```bash title="/etc/default/edgeweir-node"
+EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT=30m
+```
+
+修改后执行 `sudo systemctl restart edgeweir-node`。容器节点用 `-e EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT=30m`。
 
 ## 区域探针
 
@@ -251,6 +283,7 @@ downloads/
 | `node is already enrolled (use --force to replace the identity)` | 主机已有节点身份（`/var/lib/edgeweir-node/identity.json`） | 保留现有注册；替换身份时用新 token 执行 `edgeweir-node enroll --force`，参数见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。 |
 | `x509: certificate is valid for ..., not ...` | 节点连接的名称不在节点通道证书中 | 将该名称加入 `EDGEWEIR_NODE_API_HOSTNAMES`，重启控制台，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
 | 注册超时，或节点一直离线 | 防火墙或安全组未放行 8443；`EDGEWEIR_NODE_API_URL` 解析错误 | 放行 8443；核对域名解析。 |
+| L4 应用的端口连接超时 | 节点防火墙或安全组未放行端口池；容器节点未发布端口 | 按 [端口与防火墙](#端口与防火墙) 放行或发布端口。 |
 | `probe is not enrolled: the first run needs --server, --ca-sha256 and a probe token` | 探针首次启动缺少注册参数（退出码 2） | 设置 `EDGEWEIR_SERVER`、`EDGEWEIR_CA_SHA256` 与 `EDGEWEIR_TOKEN` 后重新启动。 |
 | `probe enrollment failed: console rejected the enrollment token (expired or already used)` | 探针令牌已过期或已使用 | 重新「添加探针」生成令牌。 |
 | 探针容器显示 `unhealthy` | 镜像健康检查查询数据面 | 关闭容器健康检查，见[容器](#容器)。 |
