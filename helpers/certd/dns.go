@@ -102,6 +102,35 @@ type dnsRecord struct {
 	Type string `json:"type"`
 	Data string `json:"data"`
 	TTL  int    `json:"ttl"`
+	// Line is the canonical resolution line; empty (or "default") is the
+	// default line. dns.list returns provider lines without a canonical id
+	// as "other:<provider line>".
+	Line string `json:"line,omitempty"`
+}
+
+// lineMaps are the adapters that write resolution lines; every other
+// adapter has the default line only. A test keeps them equal to the
+// catalog's lines.
+var lineMaps = map[string]dnsx.LineMap{
+	"alidns":       alidns.Lines,
+	"dnspod":       dnspod.Lines,
+	"huaweicloud":  huaweicloud.Lines,
+	"tencentcloud": tencentcloud.Lines,
+	"test":         fixture.Lines,
+}
+
+// supportsLine reports whether the provider's catalog entry lists the line
+// ("" is the default line, which every provider has).
+func supportsLine(provider, line string) bool {
+	if line == "" {
+		return true
+	}
+	for _, l := range catalog[provider].Capabilities.Lines {
+		if l == line {
+			return true
+		}
+	}
+	return false
 }
 
 func providerFor(p dnsParams) (dnsx.Provider, error) {
@@ -134,6 +163,9 @@ var recordTypes = map[string]bool{"TXT": true, "CNAME": true, "A": true, "AAAA":
 var (
 	recordName = regexp.MustCompile(`^(?i)(@|\*|(\*\.)?[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?)*)$`)
 	zoneName   = regexp.MustCompile(`^(?i)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.?$`)
+	// otherLine is a provider line without a canonical id as dns.list
+	// returns it (no control characters or spaces).
+	otherLine = regexp.MustCompile(`^other:[^\x00-\x20\x7f]+$`)
 )
 
 func dnsCommand(ctx context.Context, command string, raw json.RawMessage) (any, error) {
@@ -146,6 +178,7 @@ func dnsCommand(ctx context.Context, command string, raw json.RawMessage) (any, 
 	}
 	zone := strings.TrimSuffix(p.Zone, ".") + "."
 	var records []libdns.Record
+	_, known := catalog[p.Provider] // unknown providers fail in providerFor
 	for _, r := range p.Records {
 		if r.TTL < 30 || r.TTL > 86400 || len(r.Data) > 4096 || len(r.Name) > 253 || !recordName.MatchString(r.Name) {
 			return nil, fmt.Errorf("%w: invalid DNS record", dnsx.ErrInvalid)
@@ -153,7 +186,23 @@ func dnsCommand(ctx context.Context, command string, raw json.RawMessage) (any, 
 		if !recordTypes[r.Type] {
 			return nil, fmt.Errorf("%w: unsupported DNS record type", dnsx.ErrInvalid)
 		}
-		records = append(records, libdns.RR{Name: r.Name, Type: r.Type, Data: r.Data, TTL: time.Duration(r.TTL) * time.Second})
+		line := dnsx.NormalizeLine(r.Line)
+		switch {
+		case dnsx.IsOtherLine(line):
+			// A line dns.list returned without a canonical id: such records
+			// can be deleted, never written.
+			if command != "dns.cleanup" || len(line) > 64 || !otherLine.MatchString(line) {
+				return nil, fmt.Errorf("%w: invalid DNS resolution line", dnsx.ErrInvalid)
+			}
+			if known && len(catalog[p.Provider].Capabilities.Lines) < 2 {
+				return nil, fmt.Errorf("%w: this provider has no resolution lines", dnsx.ErrUnsupported)
+			}
+		case !dnsx.IsCanonicalLine(line):
+			return nil, fmt.Errorf("%w: invalid DNS resolution line", dnsx.ErrInvalid)
+		case known && !supportsLine(p.Provider, line):
+			return nil, fmt.Errorf("%w: this provider has no resolution line %s", dnsx.ErrUnsupported, line)
+		}
+		records = append(records, dnsx.OnLine(libdns.RR{Name: r.Name, Type: r.Type, Data: r.Data, TTL: time.Duration(r.TTL) * time.Second}, line))
 	}
 	provider, err := providerFor(p)
 	if err != nil {
@@ -198,7 +247,7 @@ func dnsCommand(ctx context.Context, command string, raw json.RawMessage) (any, 
 	out := make([]dnsRecord, 0, len(result))
 	for _, record := range result {
 		rr := record.RR()
-		out = append(out, dnsRecord{Name: rr.Name, Type: rr.Type, Data: rr.Data, TTL: int(rr.TTL / time.Second)})
+		out = append(out, dnsRecord{Name: rr.Name, Type: rr.Type, Data: rr.Data, TTL: int(rr.TTL / time.Second), Line: dnsx.LineOf(record)})
 	}
 	return out, nil
 }

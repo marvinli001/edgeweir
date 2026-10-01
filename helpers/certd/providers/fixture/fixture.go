@@ -40,11 +40,16 @@ func New(fields map[string]string, opts dnsx.Options) (dnsx.Provider, error) {
 	return &Provider{token: fields["api_token"], endpoint: strings.TrimRight(endpoint, "/"), client: client}, nil
 }
 
+// Lines are passed through as canonical ids: the mock provider stores each
+// record with its line.
+var Lines = dnsx.LineMap{"default": "default", "telecom": "telecom", "unicom": "unicom", "mobile": "mobile", "edu": "edu", "overseas": "overseas"}
+
 type record struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 	Data string `json:"data"`
 	TTL  int    `json:"ttl"`
+	Line string `json:"line,omitempty"` // canonical; empty or "default" is the default line
 }
 
 func (p *Provider) call(ctx context.Context, action, zone string, records []libdns.Record, out any) error {
@@ -52,8 +57,9 @@ func (p *Provider) call(ctx context.Context, action, zone string, records []libd
 		Zone    string   `json:"zone"`
 		Records []record `json:"records"`
 	}{Zone: dnsx.Zone(zone)}
-	for _, r := range dnsx.RRs(records) {
-		input.Records = append(input.Records, record{Name: r.Name, Type: r.Type, Data: r.Data, TTL: dnsx.Seconds(r.TTL)})
+	for _, lr := range records {
+		r := lr.RR()
+		input.Records = append(input.Records, record{Name: r.Name, Type: r.Type, Data: r.Data, TTL: dnsx.Seconds(r.TTL), Line: dnsx.LineOf(lr)})
 	}
 	raw, _ := json.Marshal(input)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint+"/dns/"+action, bytes.NewReader(raw))
@@ -82,7 +88,7 @@ func (p *Provider) records(ctx context.Context, action, zone string, records []l
 	}
 	out := make([]libdns.Record, 0, len(result))
 	for _, r := range result {
-		out = append(out, dnsx.RR(r.Name, r.Type, r.Data, r.TTL))
+		out = append(out, dnsx.OnLine(dnsx.RR(r.Name, r.Type, r.Data, r.TTL), r.Line))
 	}
 	return out, nil
 }
@@ -97,12 +103,12 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 	return p.records(ctx, "append", zone, records)
 }
 
-// SetRecords replaces the input RRsets.
+// SetRecords replaces the input RRsets on every line.
 func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	return p.records(ctx, "set", zone, records)
 }
 
-// DeleteRecords removes matching records.
+// DeleteRecords removes matching records on their line.
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	return p.records(ctx, "delete", zone, records)
 }

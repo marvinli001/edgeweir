@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -161,6 +163,94 @@ func TestRecordNamesAndZonesAreChecked(t *testing.T) {
 	for _, name := range []string{"@", "*", "*.img", "_acme-challenge", "_edgeweir-verification.shop", "a-b.c_d"} {
 		if !recordName.MatchString(name) {
 			t.Errorf("valid name %q refused", name)
+		}
+	}
+}
+
+func TestLineAdaptersMatchTheCatalog(t *testing.T) {
+	for id, entry := range catalog {
+		want := []string{dnsx.DefaultLine}
+		if m, ok := lineMaps[id]; ok {
+			want = m.Lines()
+		}
+		if strings.Join(entry.Capabilities.Lines, ",") != strings.Join(want, ",") {
+			t.Errorf("%s: catalog lines %v, adapter lines %v", id, entry.Capabilities.Lines, want)
+		}
+	}
+	for id := range lineMaps {
+		if _, ok := catalog[id]; !ok {
+			t.Errorf("%s has lines but no catalog entry", id)
+		}
+	}
+}
+
+func TestDNSRecordsCarryLines(t *testing.T) {
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, r.URL.Path+" "+string(raw))
+		switch r.URL.Path {
+		case "/dns/list":
+			_, _ = w.Write([]byte(`[{"name":"all","type":"A","data":"192.0.2.1","ttl":600,"line":"default"},{"name":"all","type":"A","data":"192.0.2.2","ttl":600,"line":"telecom"},{"name":"www","type":"A","data":"192.0.2.3","ttl":600}]`))
+		default:
+			_, _ = w.Write([]byte(`[]`))
+		}
+	}))
+	defer server.Close()
+	t.Setenv("EDGEWEIR_DNS_TEST_ENDPOINT", server.URL)
+	result, err := dnsCommand(context.Background(), "dns.list", json.RawMessage(`{"provider":"test","zone":"a.test","credentials":{"api_token":"e2e"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The wire form: the default line is omitted, other lines carry their canonical id.
+	raw, _ := json.Marshal(result)
+	if string(raw) != `[{"name":"all","type":"A","data":"192.0.2.1","ttl":600},{"name":"all","type":"A","data":"192.0.2.2","ttl":600,"line":"telecom"},{"name":"www","type":"A","data":"192.0.2.3","ttl":600}]` {
+		t.Fatalf("list %s", raw)
+	}
+	resp, _ := call(t, `{"command":"dns.set","params":{"provider":"test","zone":"a.test","credentials":{"api_token":"e2e"},"records":[{"name":"all","type":"A","data":"192.0.2.1","ttl":600,"line":"default"},{"name":"all","type":"A","data":"192.0.2.5","ttl":600,"line":"overseas"}]}}`)
+	if !resp.OK {
+		t.Fatalf("set: %+v", resp)
+	}
+	resp, _ = call(t, `{"command":"dns.cleanup","params":{"provider":"test","zone":"a.test","credentials":{"api_token":"e2e"},"records":[{"name":"all","type":"A","data":"192.0.2.9","ttl":600,"line":"other:10=4"}]}}`)
+	if !resp.OK {
+		t.Fatalf("cleanup of a provider line: %+v", resp)
+	}
+	want := []string{
+		`/dns/list {"zone":"a.test","records":null}`,
+		`/dns/set {"zone":"a.test","records":[{"name":"all","type":"A","data":"192.0.2.1","ttl":600},{"name":"all","type":"A","data":"192.0.2.5","ttl":600,"line":"overseas"}]}`,
+		`/dns/delete {"zone":"a.test","records":[{"name":"all","type":"A","data":"192.0.2.9","ttl":600,"line":"other:10=4"}]}`,
+	}
+	if strings.Join(bodies, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("requests\n%s\nwant\n%s", strings.Join(bodies, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestDNSLinesAreChecked(t *testing.T) {
+	record := func(provider, command, credentials, line string) string {
+		return `{"command":"` + command + `","params":{"provider":"` + provider + `","zone":"example.com","credentials":` + credentials +
+			`,"records":[{"name":"all","type":"A","data":"192.0.2.1","ttl":600,"line":"` + line + `"}]}}`
+	}
+	cloudflare := `{"api_token":"0123456789abcdefghij"}`
+	for _, c := range []struct {
+		provider, command, credentials, line, code string
+	}{
+		// Default-line providers refuse other lines before any request.
+		{"cloudflare", "dns.set", cloudflare, "telecom", "dns_unsupported"},
+		{"cloudflare", "dns.present", cloudflare, "overseas", "dns_unsupported"},
+		{"route53", "dns.set", `{"access_key_id":"AKIAIOSFODNN7EXAMPLE","secret_access_key":"secret"}`, "unicom", "dns_unsupported"},
+		{"cloudflare", "dns.cleanup", cloudflare, "other:10=4", "dns_unsupported"},
+		// Names that are not canonical lines are invalid everywhere.
+		{"dnspod", "dns.set", `{"auth_token":"12345,0123456789abcdef"}`, "satellite", "dns_invalid_request"},
+		{"dnspod", "dns.set", `{"auth_token":"12345,0123456789abcdef"}`, "10=0", "dns_invalid_request"},
+		{"alidns", "dns.set", `{"access_key_id":"id","access_key_secret":"s"}`, "oversea", "dns_invalid_request"},
+		// Provider lines without a canonical id can only be deleted.
+		{"dnspod", "dns.set", `{"auth_token":"12345,0123456789abcdef"}`, "other:10=4", "dns_invalid_request"},
+		{"dnspod", "dns.cleanup", `{"auth_token":"12345,0123456789abcdef"}`, "other:", "dns_invalid_request"},
+		{"dnspod", "dns.cleanup", `{"auth_token":"12345,0123456789abcdef"}`, "other:a b", "dns_invalid_request"},
+	} {
+		resp, _ := call(t, record(c.provider, c.command, c.credentials, c.line))
+		if resp.OK || resp.Code != c.code {
+			t.Errorf("%s %s line %q: %+v, want %s", c.provider, c.command, c.line, resp, c.code)
 		}
 	}
 }

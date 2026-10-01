@@ -56,3 +56,26 @@ func TestFixtureOperations(t *testing.T) {
 		t.Fatalf("401: %v", err)
 	}
 }
+
+func TestFixturePassesLines(t *testing.T) {
+	s := dnstest.Serve(t,
+		dnstest.Exchange{Method: "POST", Path: "/dns/list",
+			Response: `[{"name":"all","type":"A","data":"192.0.2.1","ttl":60,"line":"default"},{"name":"all","type":"A","data":"192.0.2.2","ttl":60,"line":"telecom"},{"name":"www","type":"A","data":"192.0.2.3","ttl":60}]`},
+		dnstest.Exchange{Method: "POST", Path: "/dns/set", Body: `{"zone":"example.test","records":[{"name":"all","type":"A","data":"192.0.2.1","ttl":60},{"name":"all","type":"A","data":"192.0.2.4","ttl":60,"line":"unicom"}]}`, Response: `[]`},
+	)
+	t.Setenv("EDGEWEIR_DNS_TEST_ENDPOINT", s.URL)
+	p, err := New(map[string]string{"api_token": "e2e"}, dnsx.Options{HTTPClient: s.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	records, err := p.GetRecords(ctx, "example.test.")
+	if err != nil || len(records) != 3 || dnsx.LineOf(records[0]) != "" || dnsx.LineOf(records[1]) != "telecom" || dnsx.LineOf(records[2]) != "" {
+		t.Fatalf("list: %v %v", records, err)
+	}
+	if _, err := p.SetRecords(ctx, "example.test.", []libdns.Record{
+		dnstest.A("all", "192.0.2.1", 60), dnsx.OnLine(dnstest.A("all", "192.0.2.4", 60).RR(), "unicom"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -32,8 +32,9 @@ type catalogEntry struct {
 	ID           string         `json:"id"`
 	Fields       []catalogField `json:"fields"`
 	Capabilities struct {
-		ListZones bool   `json:"listZones"`
-		Endpoint  string `json:"endpoint"`
+		ListZones bool     `json:"listZones"`
+		Lines     []string `json:"lines"`
+		Endpoint  string   `json:"endpoint"`
 	} `json:"capabilities"`
 }
 
