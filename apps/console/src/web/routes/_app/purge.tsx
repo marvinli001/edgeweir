@@ -49,7 +49,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
 import { errorMessage, orpc } from "@/lib/orpc";
-import { unavailableReason } from "@/lib/protection";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
@@ -403,7 +402,7 @@ function PurgeForm({
                   data-testid="purge-tag-unavailable"
                   data-reason={tagAvailability.reason ?? undefined}
                 >
-                  {unavailableReason(tagAvailability)}
+                  {m.purge_tag_unavailable()}
                 </SafetyNote>
               ) : null}
               <ListField

@@ -1392,5 +1392,6 @@
   "platform_pages_unknown_host": "Unknown host",
   "platform_pages_disabled": "Site disabled",
   "platform_pages_suspended": "Site suspended",
-  "logs_request_id": "Request ID"
+  "logs_request_id": "Request ID",
+  "purge_tag_unavailable": "Some nodes of the site's cluster cannot purge by tag yet"
 }
