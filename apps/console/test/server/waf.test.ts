@@ -36,6 +36,7 @@ const ALL_FEATURES = [
   "error-pages-v1",
   "purge-tag-v1",
   "prefetch-v2",
+  "rules-v2",
 ];
 
 describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
@@ -123,6 +124,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       errorPages: available,
       purgeByTag: available,
       prefetchVariants: available,
+      rulesV2: available,
     });
     expect(await admin.settings.waf()).toEqual({ tenantCrs: true });
     const https = await member.https.get({ id: siteId });
@@ -289,6 +291,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       errorPages: unavailable,
       purgeByTag: unavailable,
       prefetchVariants: unavailable,
+      rulesV2: unavailable,
     });
     // Administrators see the same reason; the API still lets them override.
     expect((await admin.sites.features({ id: siteId })).crs).toEqual(unavailable);

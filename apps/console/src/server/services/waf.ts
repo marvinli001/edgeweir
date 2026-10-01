@@ -3,6 +3,7 @@ import {
   BROTLI_FEATURE,
   ERROR_PAGES_FEATURE,
   MODSECURITY_FEATURE,
+  RULES_V2_FEATURE,
   SESSION_AFFINITY_FEATURE,
   type SiteWafModel,
   ZSTD_FEATURE,
@@ -213,6 +214,7 @@ export async function siteFeatures(
     errorPages: byNodes(ERROR_PAGES_FEATURE),
     purgeByTag: byNodes(PURGE_TAG_FEATURE),
     prefetchVariants: byNodes(PREFETCH_V2_FEATURE),
+    rulesV2: byNodes(RULES_V2_FEATURE),
   };
 }
 

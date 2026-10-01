@@ -9,6 +9,7 @@ import {
   compileOfflineHosts,
   compilePlatformErrorPages,
   compileRules,
+  configExpressions,
   contentHash,
   DEFAULT_SITE_PROTECTION,
   decodeNodeConfig,
@@ -22,7 +23,9 @@ import {
   type OfflineHostModel,
   poolAndPageFeatures,
   protectionFeatures,
+  RULES_V2_FEATURE,
   type RuleModel,
+  rulesFeatures,
   SESSION_AFFINITY_FEATURE,
   type SiteModel,
   usesChallengeKeys,
@@ -47,10 +50,19 @@ import {
   type NodeConfig,
   NodeConfigSchema,
   PlatformProtectionSchema,
+  type RuleExpression,
   SiteProtectionSchema,
 } from "@edgeweir/proto";
-import { bindLists, listReferences, type Phase, parseExpression } from "@edgeweir/rule-engine";
+import {
+  bindLists,
+  type Expression,
+  listReferences,
+  type Phase,
+  parseExpression,
+  parseValueExpression,
+} from "@edgeweir/rule-engine";
 import { and, asc, desc, eq, gt, inArray, lt, notInArray, or, sql } from "drizzle-orm";
+import { parseCacheCondition } from "../lib/cache-conditions";
 import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
@@ -183,6 +195,11 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
     .where(and(inArray(schema.edgeRule.siteId, siteIds), eq(schema.edgeRule.enabled, true)))
     .orderBy(asc(schema.edgeRule.priority));
   const lists = await db.select().from(schema.ipList);
+  const redirects = await db
+    .select()
+    .from(schema.bulkRedirect)
+    .where(inArray(schema.bulkRedirect.siteId, siteIds))
+    .orderBy(asc(schema.bulkRedirect.position));
   const protection = await loadSiteProtectionModels(db, siteIds);
   const waf = await loadSiteWafModels(db, siteIds);
   const errorPages = await loadSiteErrorPages(db, siteIds);
@@ -191,17 +208,15 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
       const pool = pools
         .filter((p) => p.siteId === s.id)
         .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
+      const bindings = listBindings(
+        lists.filter(
+          (list) => list.organizationId === null || list.organizationId === s.organizationId,
+        ),
+      );
       return {
         rules: edgeRules
           .filter((rule) => rule.siteId === s.id)
-          .map((rule) =>
-            compileRuleModel(
-              rule,
-              lists.filter(
-                (list) => list.organizationId === null || list.organizationId === s.organizationId,
-              ),
-            ),
-          ),
+          .map((rule) => compileRuleModel(rule, bindings)),
         id: s.id,
         name: s.name,
         // Disabled or suspended sites are not shipped (their DNS records stay).
@@ -227,6 +242,7 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
                 backup: o.backup,
                 hostHeader: o.hostHeader,
                 sni: o.sni,
+                group: o.groupName,
                 s3: credential
                   ? {
                       region: o.s3Region,
@@ -266,12 +282,22 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
             minSizeBytes: r.minSizeBytes,
             maxSizeBytes: r.maxSizeBytes,
             expression: r.expression,
+            condition: r.expression ? cacheRuleCondition(r.expression, bindings) : undefined,
+            browserTtlSeconds: r.browserTtlSeconds,
             action: r.action === "bypass" ? "bypass" : "cache",
             edgeTtlSeconds: r.edgeTtlSeconds,
             originCacheControl: r.originCacheControl === "respect" ? "respect" : "override",
             staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
             staleIfErrorSeconds: r.staleIfErrorSeconds,
             cacheAuthorized: r.cacheAuthorized,
+          })),
+        bulkRedirects: redirects
+          .filter((r) => r.siteId === s.id)
+          .map((r) => ({
+            source: r.source,
+            target: r.target,
+            statusCode: r.statusCode,
+            preserveQuery: r.preserveQuery,
           })),
         cacheKey: readCacheKey(s.cacheKey),
         protection: protection.get(s.id),
@@ -349,16 +375,27 @@ export async function getRevision(
   return row;
 }
 
-function compileRuleModel(
-  row: typeof schema.edgeRule.$inferSelect,
-  lists: (typeof schema.ipList.$inferSelect)[],
-): RuleModel {
+/** IP list names to ids: an organization's lists over the platform's lists of the same name. */
+export function listBindings(
+  lists: Pick<typeof schema.ipList.$inferSelect, "id" | "name" | "organizationId">[],
+): Record<string, string> {
   const bindings: Record<string, string> = Object.create(null);
   for (const list of lists.filter((l) => l.organizationId === null)) bindings[list.name] = list.id;
   for (const list of lists.filter((l) => l.organizationId !== null)) bindings[list.name] = list.id;
-  let expression: ReturnType<typeof parseExpression>;
+  return bindings;
+}
+
+function compileRuleModel(
+  row: typeof schema.edgeRule.$inferSelect,
+  bindings: Record<string, string>,
+): RuleModel {
+  let expression: Expression;
+  let action: RuleModel["action"];
   try {
     expression = parseExpression(row.expression, row.phase as Phase);
+    action = ruleAction.parse(row.action);
+    if ((action.kind === "redirect" || action.kind === "rewrite") && action.target)
+      parseValueExpression(action.target, row.phase as Phase);
   } catch (error) {
     // A stored rule the current validator refuses (e.g. regex syntax that is no
     // longer accepted) blocks publication until it is rewritten.
@@ -368,8 +405,17 @@ function compileRuleModel(
     id: row.id,
     phase: row.phase,
     expression: bindLists(expression, bindings),
-    action: ruleAction.parse(row.action),
+    action,
   };
+}
+
+/** A stored cache rule condition with its IP lists bound, or RULE_INVALID. */
+function cacheRuleCondition(source: string, bindings: Record<string, string>): Expression {
+  try {
+    return bindLists(parseCacheCondition(source), bindings);
+  } catch (error) {
+    fail("RULE_INVALID", `cache rule is no longer valid: ${(error as Error).message}`);
+  }
 }
 
 /** Why a revision is published; rendered per locale in the UI. */
@@ -509,12 +555,8 @@ export async function publishRevision(
     .from(schema.edgeRule)
     .where(and(sql`${schema.edgeRule.siteId} is null`, eq(schema.edgeRule.enabled, true)))
     .orderBy(asc(schema.edgeRule.priority));
-  const platformRules = globalRules.map((rule) =>
-    compileRuleModel(
-      rule,
-      lists.filter((list) => list.organizationId === null),
-    ),
-  );
+  const platformBindings = listBindings(lists.filter((list) => list.organizationId === null));
+  const platformRules = globalRules.map((rule) => compileRuleModel(rule, platformBindings));
   const originAllowedCidrs = await loadOriginAllowList(tx);
   const certIds = [
     ...new Set(
@@ -904,19 +946,20 @@ export async function rollbackToRevision(
   );
   for (const site of restored.sites) {
     const org = currentSites.find((s) => s.id === site.id)?.organizationId;
-    for (const rule of site.rules) {
-      if (
-        !rule.expression ||
-        listReferences(rule.expression).some(
-          (id) =>
-            !currentLists.some(
-              (list) =>
-                list.id === id && (list.organizationId === null || list.organizationId === org),
-            ),
-        )
-      )
+    const unavailable = (expression: RuleExpression) =>
+      listReferences(expression).some(
+        (id) =>
+          !currentLists.some(
+            (list) =>
+              list.id === id && (list.organizationId === null || list.organizationId === org),
+          ),
+      );
+    for (const rule of site.rules)
+      if (!rule.expression || unavailable(rule.expression))
         fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback IP list is unavailable");
-    }
+    for (const rule of site.cacheRules)
+      if (rule.match?.condition && unavailable(rule.match.condition))
+        fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback IP list is unavailable");
   }
   restored.requiredFeatures = restored.requiredFeatures.filter((f) => f !== "access-logs-v1");
   if (restored.sites.some((s) => s.logSampleRate > 0))
@@ -936,22 +979,22 @@ export async function rollbackToRevision(
     .from(schema.edgeRule)
     .where(and(sql`${schema.edgeRule.siteId} is null`, eq(schema.edgeRule.enabled, true)))
     .orderBy(asc(schema.edgeRule.priority));
+  const platformBindings = listBindings(
+    currentLists.filter((list) => list.organizationId === null),
+  );
   restored.platformRules = compileRules(
-    platformRules.map((rule) =>
-      compileRuleModel(
-        rule,
-        currentLists.filter((list) => list.organizationId === null),
-      ),
-    ),
+    platformRules.map((rule) => compileRuleModel(rule, platformBindings)),
   );
   restored.requiredFeatures = restored.requiredFeatures.filter(
-    (f) => f !== "rules-v1" && !f.startsWith("geoip-"),
+    (f) => f !== "rules-v1" && f !== RULES_V2_FEATURE && !f.startsWith("geoip-"),
   );
   const rules = [...restored.platformRules, ...restored.sites.flatMap((s) => s.rules)];
   if (rules.length || restored.ipLists.some((l) => l.platform && l.kind !== "collection"))
     restored.requiredFeatures.push("rules-v1");
+  // Platform rules are current; targets and cache conditions read GeoIP too.
   restored.requiredFeatures.push(
-    ...rules.flatMap((r) => (r.expression ? geoFeatures(r.expression) : [])),
+    ...configExpressions(restored).flatMap(geoFeatures),
+    ...rulesFeatures(restored),
   );
   // Sites dropped above no longer need the modules, health checks, affinity
   // or error pages they used.
@@ -1020,7 +1063,7 @@ async function restoreProtection(
   const rules = [...restored.platformRules, ...restored.sites.flatMap((site) => site.rules)];
   const challenges =
     platform.underAttack ||
-    rules.some((rule) => rule.action?.kind === "challenge") ||
+    rules.some((rule) => rule.action?.kind === "challenge" || rule.action?.underAttack === true) ||
     restored.sites.some((site) => site.protection?.underAttack || site.protection?.cc?.enabled);
   const affinity = restored.sites.some((site) => site.originPool?.sessionAffinity);
   const keys = challenges || affinity ? await ensureChallengeKeys(tx, clusterId) : [];

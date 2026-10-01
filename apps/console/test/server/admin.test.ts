@@ -35,6 +35,8 @@ const CONSOLE_PROCEDURES = [
   "rules.get",
   "rules.save",
   "rules.validate",
+  "bulkRedirects.get",
+  "bulkRedirects.save",
   "ipLists.list",
   "ipLists.create",
   "ipLists.update",

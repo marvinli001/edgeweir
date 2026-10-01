@@ -25,6 +25,11 @@ import {
   sql,
 } from "drizzle-orm";
 import type * as z from "zod";
+import {
+  cacheConditionLists,
+  storedCacheExpression,
+  structuredForm,
+} from "../lib/cache-conditions";
 import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
 import { domainRoot } from "../lib/domain-root";
@@ -47,10 +52,12 @@ import { assertOriginsAllowed } from "./origin-allow-list";
 import {
   type Executor,
   latestRevision,
+  listBindings,
   publishRevision,
   type Tx,
   toRevisionDto,
 } from "./revisions";
+import { actionOriginGroup, availableLists } from "./rules";
 
 type SiteCreate = z.output<typeof siteCreateInput>;
 type SiteUpdate = z.output<typeof siteUpdateInput>;
@@ -155,6 +162,7 @@ async function toSiteDtos(
           backup: o.backup,
           hostHeader: o.hostHeader,
           sni: o.sni,
+          group: o.groupName,
           s3: o.credentialId
             ? {
                 region: o.s3Region,
@@ -165,22 +173,29 @@ async function toSiteDtos(
         })),
       cacheRules: rules
         .filter((c) => c.siteId === r.id)
-        .map((c) => ({
-          id: c.id,
-          priority: c.priority,
-          pathPrefixes: c.pathPrefixes,
-          paths: c.paths,
-          extensions: c.extensions,
-          statusCodes: c.statusCodes,
-          minSizeBytes: c.minSizeBytes,
-          maxSizeBytes: c.maxSizeBytes,
-          action: c.action === "bypass" ? "bypass" : "cache",
-          edgeTtlSeconds: c.edgeTtlSeconds,
-          originCacheControl: c.originCacheControl === "respect" ? "respect" : "override",
-          staleWhileRevalidateSeconds: c.staleWhileRevalidateSeconds,
-          staleIfErrorSeconds: c.staleIfErrorSeconds,
-          cacheAuthorized: c.cacheAuthorized,
-        })),
+        .map((c) => {
+          const expression = storedCacheExpression(c);
+          const structured = structuredForm(expression);
+          return {
+            id: c.id,
+            priority: c.priority,
+            expression,
+            // The builder's form of the condition when it has one.
+            pathPrefixes: structured?.pathPrefixes ?? [],
+            paths: structured?.paths ?? [],
+            extensions: structured?.extensions ?? [],
+            statusCodes: c.statusCodes,
+            minSizeBytes: c.minSizeBytes,
+            maxSizeBytes: c.maxSizeBytes,
+            action: c.action === "bypass" ? "bypass" : "cache",
+            edgeTtlSeconds: c.edgeTtlSeconds,
+            originCacheControl: c.originCacheControl === "respect" ? "respect" : "override",
+            staleWhileRevalidateSeconds: c.staleWhileRevalidateSeconds,
+            staleIfErrorSeconds: c.staleIfErrorSeconds,
+            cacheAuthorized: c.cacheAuthorized,
+            browserTtlSeconds: c.browserTtlSeconds,
+          };
+        }),
       originSettings: {
         policy: (pool?.policy ?? "weighted_random") as Site["originSettings"]["policy"],
         tlsVerify: pool?.tlsVerify ?? true,
@@ -400,6 +415,7 @@ async function writeOrigins(
       backup: o.backup,
       hostHeader: o.hostHeader,
       sni: o.sni,
+      groupName: o.group,
       credentialId: o.s3 ? (credentials.get(o.s3.accessKeyId) ?? null) : null,
       s3Region: o.s3?.region ?? "",
       s3Bucket: o.s3?.bucket ?? "",
@@ -451,16 +467,45 @@ function cacheSettingsValues(
   };
 }
 
-async function insertCacheRules(tx: Tx, siteId: string, rules: CacheRuleInput[]) {
+/**
+ * Inserts cache rules with their condition as an expression (the builder's
+ * expression of the structured lists when they have none) and the IP lists
+ * it references; the structured columns stay empty.
+ */
+async function insertCacheRules(
+  tx: Tx,
+  site: { id: string; organizationId: string },
+  rules: CacheRuleInput[],
+) {
   if (rules.length === 0) return;
+  const expressions = rules.map(storedCacheExpression);
+  const references = expressions.map((expression) => {
+    try {
+      return cacheConditionLists(expression);
+    } catch (error) {
+      return fail("RULE_INVALID", `invalid cache rule condition: ${(error as Error).message}`);
+    }
+  });
+  const bindings = references.some((names) => names.length)
+    ? listBindings(await availableLists(tx, site.organizationId, true))
+    : {};
+  const listIds = references.map((names) =>
+    names.map((name) => {
+      const id = bindings[name];
+      if (!id) fail("IP_LIST_NOT_FOUND", "expression references an unavailable IP list");
+      return id;
+    }),
+  );
   await tx.insert(schema.cacheRule).values(
     rules.map((r, i) => ({
       createdAt: ordered(i),
-      siteId,
+      siteId: site.id,
       priority: r.priority,
-      pathPrefixes: r.pathPrefixes,
-      paths: r.paths,
-      extensions: r.extensions,
+      expression: expressions[i] ?? "true",
+      listIds: listIds[i] ?? [],
+      pathPrefixes: [],
+      paths: [],
+      extensions: [],
       statusCodes: r.statusCodes,
       minSizeBytes: r.minSizeBytes,
       maxSizeBytes: r.maxSizeBytes,
@@ -470,8 +515,23 @@ async function insertCacheRules(tx: Tx, siteId: string, rules: CacheRuleInput[])
       staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
       staleIfErrorSeconds: r.staleIfErrorSeconds,
       cacheAuthorized: r.cacheAuthorized,
+      browserTtlSeconds: r.browserTtlSeconds,
     })),
   );
+}
+
+/** Refuses origins without a group that a rule of the site still chooses. */
+async function assertRuleGroups(tx: Tx, siteId: string, origins: OriginInput[]) {
+  const groups = new Set(origins.map((origin) => origin.group));
+  const rules = await tx
+    .select({ name: schema.edgeRule.name, action: schema.edgeRule.action })
+    .from(schema.edgeRule)
+    .where(eq(schema.edgeRule.siteId, siteId));
+  for (const rule of rules) {
+    const group = actionOriginGroup(rule.action);
+    if (group && !groups.has(group))
+      fail("RULE_INVALID", `origin group ${group} is used by rule ${rule.name}`);
+  }
 }
 
 /** The site's origin pool (the oldest one; sites have exactly one). */
@@ -545,7 +605,7 @@ export async function createSite(
       .returning();
     if (!pool) throw new Error("origin pool insert failed");
     await writeOrigins(tx, pool, input.origins, ctx.masterKey);
-    await insertCacheRules(tx, siteRow.id, input.cacheRules);
+    await insertCacheRules(tx, siteRow, input.cacheRules);
     const revision = await publishSiteClusters(
       tx,
       clusterId,
@@ -633,6 +693,7 @@ export async function updateSite(
     }
     if (input.origins) {
       await assertOriginsAllowed(tx, input.origins);
+      await assertRuleGroups(tx, row.id, input.origins);
       const pool = await sitePool(tx, row.id);
       await writeOrigins(tx, pool, input.origins, ctx.masterKey);
       changed.push("origins");
@@ -658,7 +719,7 @@ export async function updateSite(
     }
     if (input.cacheRules) {
       await tx.delete(schema.cacheRule).where(eq(schema.cacheRule.siteId, row.id));
-      await insertCacheRules(tx, row.id, input.cacheRules);
+      await insertCacheRules(tx, row, input.cacheRules);
       changed.push("cacheRules");
     }
     // Touch updated_at even when only child rows changed.

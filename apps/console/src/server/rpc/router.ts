@@ -37,6 +37,7 @@ import {
 } from "../services/analytics";
 import { auditFacets, listAuditLogs } from "../services/audit";
 import { createBan, deleteBan, getBanSettings, listBans, setBanSettings } from "../services/bans";
+import { getBulkRedirects, saveBulkRedirects } from "../services/bulk-redirects";
 import { createCacheTask, getCacheTask, listCacheTasks } from "../services/cache-tasks";
 import {
   createDnsCredential,
@@ -232,7 +233,15 @@ export const router = os.router({
       saveRules(context.app, input.id, input.rules, context),
     ),
     validate: tenant.rules.validate.handler(({ input }) =>
-      validateExpression(input.expression, input.phase),
+      validateExpression(input.expression, input.phase, input.kind),
+    ),
+  },
+  bulkRedirects: {
+    get: tenant.bulkRedirects.get.handler(({ input, context }) =>
+      getBulkRedirects(context.app.db, input.id, context.scope),
+    ),
+    save: tenantManager.bulkRedirects.save.handler(({ input, context }) =>
+      saveBulkRedirects(context.app.db, input, { scope: context.scope, actor: context.actor }),
     ),
   },
   platformRules: {
