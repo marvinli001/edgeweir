@@ -30,6 +30,7 @@ import { NodeDetailDialog, NodeLoad } from "@/components/node-detail";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
+import { ClusterScheduling } from "@/components/scheduling";
 import { SwitchField } from "@/components/site/fields";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Dot, StatusDot } from "@/components/status-dot";
@@ -70,7 +71,7 @@ export const Route = createFileRoute("/_app/clusters")({
   validateSearch: z.object({
     cluster: z.string().optional(),
     enroll: z.boolean().optional(),
-    tab: z.enum(["overview", "dns"]).optional(),
+    tab: z.enum(["overview", "dns", "scheduling"]).optional(),
     node: z.string().optional(),
   }),
   component: ClustersPage,
@@ -137,7 +138,10 @@ function ClustersPage() {
             value={search.tab ?? "overview"}
             onValueChange={(value) =>
               navigate({
-                search: (prev) => ({ ...prev, tab: value === "dns" ? "dns" : undefined }),
+                search: (prev) => ({
+                  ...prev,
+                  tab: value === "dns" || value === "scheduling" ? value : undefined,
+                }),
                 replace: true,
               })
             }
@@ -149,6 +153,9 @@ function ClustersPage() {
               <TabsTrigger value="dns" data-testid="cluster-tab-dns">
                 {m.dns_tab_dns()}
               </TabsTrigger>
+              <TabsTrigger value="scheduling" data-testid="cluster-tab-scheduling">
+                {m.scheduling_tab()}
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="flex flex-col gap-4 animate-enter">
               <NodeGroupsSection cluster={selected} />
@@ -159,6 +166,9 @@ function ClustersPage() {
             </TabsContent>
             <TabsContent value="dns" className="animate-enter">
               <ClusterDns key={selected.id} clusterId={selected.id} />
+            </TabsContent>
+            <TabsContent value="scheduling" className="animate-enter">
+              <ClusterScheduling key={selected.id} clusterId={selected.id} />
             </TabsContent>
           </Tabs>
           <EnrollDialog
