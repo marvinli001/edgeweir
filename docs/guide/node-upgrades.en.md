@@ -128,6 +128,8 @@ Signing and verification are covered in the [Sigstore documentation](https://doc
 | `geoip-subdivision-v1` | Rules using `ip.geoip.subdivision`; reported when the node has a City MMDB, checked by the console only; older nodes that do not report `geoip-country-v1` count `geoip-city-v1` instead |
 | `stats-sequence-v1` | Sequenced analytics reports; without it the node always shows **Upgrade required** |
 | `self-upgrade-v1` | Signed upgrades; reported when the supervisor runs and finds `cosign` |
+| `probe-health-v1` | The health endpoint `/.edgeweir/health` on the edge listeners; when every active node of a cluster has it, [regional probes](scheduling.en.md#probe-methods) probe with HTTP / HTTPS, otherwise they only open TCP connections. Never shows **Upgrade required** |
+| `metrics-v1` | Host metrics in the heartbeat (CPU, load, memory, egress, active connections), reported by Linux nodes; without it node metrics and node-metric scheduling conditions show **No data**. Never shows **Upgrade required** |
 
 When a node lacks a capability the cluster's current configuration needs, or lacks `stats-sequence-v1`, the node list in **Clusters & nodes** shows **Upgrade required**; the node keeps its last-known-good configuration and rejects configurations with unknown capabilities or enum values.
 

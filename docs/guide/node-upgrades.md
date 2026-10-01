@@ -128,6 +128,8 @@ EDGEWEIR_UPGRADE_PUBLIC_KEY=/etc/edgeweir-node/release.pub
 | `geoip-subdivision-v1` | 规则使用 `ip.geoip.subdivision`；节点配置了 City MMDB 时上报，只由控制台检查；未上报 `geoip-country-v1` 的旧版节点以 `geoip-city-v1` 代替 |
 | `stats-sequence-v1` | 带序号的统计上报；缺少时节点始终显示「需要升级」 |
 | `self-upgrade-v1` | 签名升级；监督进程运行且找到 `cosign` 时上报 |
+| `probe-health-v1` | 边缘监听的健康端点 `/.edgeweir/health`；集群全部活动节点具备时，[区域探针](scheduling.md#探测方式) 以 HTTP / HTTPS 探测，否则只建立 TCP 连接。缺少时不显示「需要升级」 |
+| `metrics-v1` | 心跳中的主机指标（CPU、负载、内存、出口带宽、活动连接），Linux 节点上报；缺少时节点指标与调度规则的节点指标条件为「无数据」。缺少时不显示「需要升级」 |
 
 节点缺少集群当前配置要求的能力或 `stats-sequence-v1` 时，**集群与节点** 的节点列表显示「需要升级」；该节点继续使用 last-known-good 配置，并拒绝含未知能力或未知枚举的配置。
 

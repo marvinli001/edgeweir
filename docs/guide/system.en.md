@@ -1,12 +1,12 @@
 # Clusters and system
 
-Clusters, node groups, and nodes; revisions and the configuration canary; site enabling; regions; service accounts; the audit log; and system settings.
+Clusters, node groups, and nodes; revisions and the configuration canary; site enabling; regions and probes; service accounts; the audit log; and system settings.
 
-For **Global rules** and **IP lists**, see [Rules, IP lists, and GeoIP](rules.en.md); for **Bans**, [Bans](bans.en.md); for **DNS steering** and **Alerts**, [DNS steering and alerts](dns-and-alerts.en.md). Every page of the sidebar: [Console navigation](account.en.md#console-navigation).
+For **Global rules** and **IP lists**, see [Rules, IP lists, and GeoIP](rules.en.md); for **Bans**, [Bans](bans.en.md); for **DNS steering** and **Alerts**, [DNS steering and alerts](dns-and-alerts.en.md); for regional probes, scheduling addresses, and scheduling rules, [Regional probes and scheduling](scheduling.en.md). Every page of the sidebar: [Console navigation](account.en.md#console-navigation).
 
 ## Clusters and nodes
 
-Page: **Clusters & nodes** (`/clusters`). The top of the page holds **New cluster**, **Add node**, and a summary of the current cluster (**Nodes online**, **Sites**, **Latest revision**). With several clusters, **Select cluster** switches between them. The **Overview** tab holds node groups, nodes, configuration canary, node upgrades, and revisions; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster).
+Page: **Clusters & nodes** (`/clusters`). The top of the page holds **New cluster**, **Add node**, and a summary of the current cluster (**Nodes online**, **Sites**, **Latest revision**). With several clusters, **Select cluster** switches between them. The **Overview** tab holds node groups, nodes, configuration canary, node upgrades, and revisions; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster); the **Scheduling** tab holds the cluster's scheduling rules and their preview, see [Scheduling rules](scheduling.en.md#scheduling-rules).
 
 ### Clusters
 
@@ -31,7 +31,7 @@ A cluster is a set of nodes plus the sites assigned to them; each cluster has it
 | **Edit node group** | Change name, region, and **Canary group** |
 | Delete | The default node group (marked **Default**) cannot be deleted; deleting another group moves its nodes back to the default group |
 
-Node groups serve as the lines of **DNS steering**, as canary groups for node upgrades, and as canary groups for the configuration canary.
+Node groups serve as the lines and backup node groups of **DNS steering**, as canary groups for node upgrades, and as canary groups for the configuration canary. A node group's region is also the region its nodes probe from when they **Also probe**.
 
 ### Adding a node
 
@@ -52,13 +52,15 @@ Result: the **Install command** (shown once, with a countdown) and the **CA fing
 | **Node** | Name and host name |
 | **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled** |
 | **Node group** | Node group and region |
-| **IP** | Unicast addresses in the node's latest heartbeat (replaced on every heartbeat, at most 64) |
+| **IP** | Unicast addresses in the node's latest heartbeat (replaced on every heartbeat, at most 64); for the addresses DNS and probes use, see [Scheduling addresses and backup IPs](scheduling.en.md#scheduling-addresses-and-backup-ips) |
+| **Metrics** | CPU and memory usage reported by the node (`metrics-v1`); "—" without metrics |
 | **Applied** | The revision the node has applied; badge **In sync** (the node's target revision reached), **Behind**, **Apply failed** (hover for the reason), or **Upgrade required** |
 | **Agent / engine** | Agent version, engine, and engine version |
 | **Heartbeat** | Time of the last heartbeat |
 
 | Action | Description |
 | --- | --- |
+| **Details** | Also by clicking the node's name (`/clusters?node=<node ID>`): **Metrics**, **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md) |
 | **Rename** | At most 64 characters |
 | **Move to group** | Node groups of the same cluster only |
 | **Disable** / **Enable** | A disabled node is refused by the node channel (except for certificate renewal, so its certificate is still valid when enabled) and keeps serving its last successfully applied configuration; its unfinished purge & prefetch deliveries are marked **Skipped**. Once the node is enabled and pulls tasks again, it gets one whole-site purge for every site those purges touched |
@@ -154,13 +156,13 @@ When a change needs a capability that active nodes of the cluster lack:
 
 ## Regions
 
-Page: **Regions** (`/regions`). A region is a label for node groups (for example East China), shown in the node group and node tables.
+Page: **Regions & probes** (`/regions`), with the tabs **Regions** and **Probes** (`/regions?tab=probes`). A region is a label for node groups and regional probes (for example East China), shown in the node group and node tables; scheduling conditions on probe metrics can count the probers of one region alone. Probes: [Regional probes](scheduling.en.md#regional-probes).
 
 | Action | Description |
 | --- | --- |
 | **New region** | **Name**: at most 64 characters; **Code**: lowercase letters, digits, and `-`, starting with a letter or digit, at most 32 characters, unique |
 | **Edit region** | Change name and code |
-| Delete | Node groups that reference the region stay, without a region |
+| Delete | Refused while probes belong to the region (**N probes still belong to this region**); node groups that reference the region stay, without a region, and their nodes that also probe stop probing |
 
 ## Service accounts
 
@@ -198,7 +200,7 @@ Page: **Audit log** (`/audit`). Management actions are written to the audit log.
 | Field | Content |
 | --- | --- |
 | Time | When the action happened |
-| Actor | Type (**User**, **AccessKey**, **Service account**, **Node**, **System**), ID, name |
+| Actor | Type (**User**, **AccessKey**, **Service account**, **Node**, **Probe**, **System**), ID, name |
 | IP, User-Agent | Request origin; stored only in the `audit_log` table, not returned by the UI or the API. For how the IP is determined, see [Trusted proxies and client IP](../deploy/networking.en.md#trusted-proxies-and-client-ip) |
 | Action | For example `site.create` |
 | Target | Type, ID, name; the name is recorded at the time of the action and stays readable after the target is deleted |
@@ -208,12 +210,14 @@ The page shows **Time**, **Actor**, **Action**, and **Target**, 50 entries per p
 
 | Action prefix | Content |
 | --- | --- |
-| `system.*` | Setup (including `system.setup_rejected` for a wrong setup token), origin allow list, node release source, usage settings, ban settings, protection, CC template, recompilation after an upgrade |
+| `system.*` | Setup (including `system.setup_rejected` for a wrong setup token), origin allow list, node release source, usage settings, ban settings, protection, CC template, probe settings (`system.probes_update`), recompilation after an upgrade |
 | `auth.*` | Successful (`auth.sign_in`, with the sign-in method) and failed (`auth.sign_in_failed`) sign-ins |
 | `account.*` | Password change, two-factor enable / disable, passkey add / delete, account recovery on the server (`account.recover`, see [Account recovery](account.en.md#account-recovery)) |
 | `api_key.*` | AccessKey create, revoke |
 | `service_account.*` | Service accounts and their keys |
-| `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters (including the configuration canary, rollbacks, and challenge key rotation), node groups, regions, nodes (including enrollment, certificate renewal, upgrades), install commands |
+| `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters (including the configuration canary, rollbacks, and challenge key rotation), node groups, regions, nodes (including enrollment, certificate renewal, upgrades, scheduling addresses `node.set_addresses`, probing `node.set_probe`), install commands |
+| `probe.*` | Probe tokens (`probe.token_create`), enrollment (`probe.enroll`) and certificate renewal (`probe.certificate_renew`, actor **Probe**), renaming and enabling (`probe.update`), deletion (`probe.delete`) |
+| `scheduling.*` | Scheduling rule changes (`scheduling.rule_create`, `scheduling.rule_update`, `scheduling.rule_delete`); rule actions taking effect and recovering (`scheduling.activate`, `scheduling.recover`, actor **System**) |
 | `site.*`, `cache.*`, `certificate.*`, `dns_credential.*`, `ip_list.*`, `platform.*` | Sites (including enabling, HTTPS, logs, protection, OWASP CRS, and site rules), purge & prefetch, certificates, DNS credentials, IP lists, global rules |
 | `ban.*` | Manual bans: `ban.create`, `ban.update` (banned again), `ban.delete` (unbanned) |
 | `dns.*`, `alert.*` | DNS steering (including provider accounts, cluster bindings, rollbacks, mass removal protection, and forced publications), alert channels, alert rules, SMTP, alert subscriptions |
@@ -342,6 +346,7 @@ The badge of **Node release source** shows where the value in effect comes from:
 | **Turn the cluster's DNS off and wait for its records to be removed** | The cluster's DNS is still **Automatic** or still owns records | Switch to **Not managed** on the **DNS** tab, wait for cleanup, then retry |
 | **Cluster name already exists: …** / **Node group already exists: …** / **Region code already exists: …** / **A service account named … exists** | Duplicate name or code | Use another name or code |
 | **The default node group cannot be deleted** | Deleting the default node group | The default node group can only be renamed or given another region |
+| **N probes still belong to this region** | Deleting a region that still has probes | Delete those probes on the **Probes** tab first |
 | **The node group belongs to another cluster** | Moving a node across clusters | Nodes move only within their cluster; changing clusters means deleting and enrolling again |
 | **This cluster has reached its limit of 512 published sites** | The cluster's enabled sites reached the limit | Disable sites no longer in use, or create new sites in another cluster through `/api/v1` with `clusterId` |
 | **Cluster nodes need these capabilities first: …** | A change published by a service account or an automatic job needs a capability active nodes of the cluster lack | Upgrade the nodes; see [Node upgrades](node-upgrades.en.md) |
