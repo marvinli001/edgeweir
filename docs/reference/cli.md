@@ -268,7 +268,7 @@ pnpm e2e
 | 参数 | 作用 |
 | --- | --- |
 | `--up` | 先执行 `docker compose -f compose.e2e.yml up -d --build` |
-| `--down` | 结束时执行 `docker compose -f compose.e2e.yml --profile '*' down -v`，连同 profile 服务（ClickHouse、升级测试节点）及其卷一起删除 |
+| `--down` | 结束时执行 `docker compose -f compose.e2e.yml --profile '*' down -v`，连同 profile 服务（ClickHouse、升级测试节点、区域探针）及其卷一起删除 |
 | `--skip-ui` | 跳过 Playwright 浏览器测试 |
 
 参数写在脚本后：`bash scripts/e2e.sh --up --down`。
