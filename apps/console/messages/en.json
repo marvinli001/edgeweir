@@ -48,7 +48,7 @@
   "login_password": "Password",
   "login_submit": "Sign in",
   "login_failed": "Wrong email or password",
-  "setup_title": "Create administrator",
+  "setup_title": "Create your account",
   "setup_name": "Name",
   "setup_email": "Email",
   "setup_password": "Password",

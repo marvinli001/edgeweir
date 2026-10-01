@@ -36,7 +36,7 @@ export function AppSidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="gap-1">
         {navGroups().map((group, index) => (
           <NavMain
             key={group.label ?? "main"}

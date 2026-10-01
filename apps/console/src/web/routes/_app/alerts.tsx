@@ -332,7 +332,10 @@ function PolicyEditor({ initial }: { initial: AlertPolicy }) {
   const queries = useQueryClient(),
     mutation = useMutation(orpc.alerts.setPolicy.mutationOptions());
   return (
-    <Card>
+    <Card className="animate-enter" style={{ animationDelay: "180ms" }}>
+      <CardHeader>
+        <CardTitle>{m.alert_policy_title()}</CardTitle>
+      </CardHeader>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -351,9 +354,6 @@ function PolicyEditor({ initial }: { initial: AlertPolicy }) {
           }
         }}
       >
-        <CardHeader>
-          <CardTitle>{m.alert_policy_title()}</CardTitle>
-        </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           {(
             [
