@@ -255,10 +255,10 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
     return row;
   }
 
-  /** The node's target revision, with its current node group. */
+  /** The node's target revision, as of now. */
   async function currentTarget(nodeId: string) {
     const [row] = await app.db
-      .select({ clusterId: schema.node.clusterId, nodeGroupId: schema.node.nodeGroupId })
+      .select({ id: schema.node.id, clusterId: schema.node.clusterId })
       .from(schema.node)
       .where(eq(schema.node.id, nodeId));
     return row ? nodeTarget(app.db, row) : undefined;

@@ -6,7 +6,7 @@ import type {
   RolloutState,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockClusterPublish } from "../lib/locks";
@@ -142,19 +142,20 @@ async function windowTraffic(
   return out;
 }
 
-/** Canary nodes that decide the running window: online at its start and still in a canary group. */
+/**
+ * Canary nodes that decide the running window: online at its start and
+ * still active, the nodes that get its candidate (rolloutTargets).
+ */
 async function participants(db: Executor, row: RolloutRow) {
   if (!row.canaryNodeIds.length) return [];
   return db
     .select({ node: schema.node, status: schema.nodeConfigStatus })
     .from(schema.node)
-    .innerJoin(schema.nodeGroup, eq(schema.nodeGroup.id, schema.node.nodeGroupId))
     .leftJoin(schema.nodeConfigStatus, eq(schema.nodeConfigStatus.nodeId, schema.node.id))
     .where(
       and(
         inArray(schema.node.id, row.canaryNodeIds),
         eq(schema.node.status, "active"),
-        eq(schema.nodeGroup.isCanary, true),
         eq(schema.node.clusterId, row.clusterId),
       ),
     );
@@ -293,20 +294,23 @@ function policyOf(row: RolloutRow | undefined): RolloutPolicy {
 export async function getRollout(db: Executor, clusterId: string): Promise<ClusterRollout> {
   await clusterName(db, clusterId);
   const row = await loadRollout(db, clusterId);
+  const running = !!row?.enabled && ACTIVE.includes(row.state as RolloutState);
+  // Members of canary groups, and the window's canary nodes that left them.
   const nodes = await db
     .select({ node: schema.node, status: schema.nodeConfigStatus })
     .from(schema.node)
-    .innerJoin(schema.nodeGroup, eq(schema.nodeGroup.id, schema.node.nodeGroupId))
+    .leftJoin(schema.nodeGroup, eq(schema.nodeGroup.id, schema.node.nodeGroupId))
     .leftJoin(schema.nodeConfigStatus, eq(schema.nodeConfigStatus.nodeId, schema.node.id))
     .where(
       and(
         eq(schema.node.clusterId, clusterId),
         eq(schema.node.status, "active"),
-        eq(schema.nodeGroup.isCanary, true),
+        running && row.canaryNodeIds.length
+          ? or(eq(schema.nodeGroup.isCanary, true), inArray(schema.node.id, row.canaryNodeIds))
+          : eq(schema.nodeGroup.isCanary, true),
       ),
     )
     .orderBy(schema.node.name);
-  const running = !!row?.enabled && ACTIVE.includes(row.state as RolloutState);
   const latest = await latestRevision(db, clusterId);
   return {
     clusterId,

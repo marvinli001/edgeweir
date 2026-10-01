@@ -674,17 +674,21 @@ export async function updateRollout(
     .where(eq(schema.clusterRollout.clusterId, clusterId));
 }
 
-/** The revisions nodes of a cluster get: canary groups the candidate (if any), all others the stable one. */
+/**
+ * The revisions nodes of a cluster get: the candidate (if any) goes to the
+ * canary nodes of the running window that are still active, every other
+ * node gets the stable one.
+ */
 export interface RolloutTargets {
   stable: RevisionRow | undefined;
   candidate: RevisionRow | undefined;
-  canaryGroupIds: Set<string>;
+  canaryNodeIds: Set<string>;
 }
 
 export async function rolloutTargets(db: Executor, clusterId: string): Promise<RolloutTargets> {
   const rollout = await loadRollout(db, clusterId);
   const latest = await latestRevision(db, clusterId);
-  if (!rollout?.enabled) return { stable: latest, candidate: undefined, canaryGroupIds: new Set() };
+  if (!rollout?.enabled) return { stable: latest, candidate: undefined, canaryNodeIds: new Set() };
   const stable =
     rollout.stableRevision === null
       ? latest
@@ -693,26 +697,37 @@ export async function rolloutTargets(db: Executor, clusterId: string): Promise<R
     rollout.candidateRevision === null
       ? undefined
       : await getRevision(db, clusterId, rollout.candidateRevision);
-  const groups = await db
-    .select({ id: schema.nodeGroup.id })
-    .from(schema.nodeGroup)
-    .where(and(eq(schema.nodeGroup.clusterId, clusterId), eq(schema.nodeGroup.isCanary, true)));
-  return { stable, candidate, canaryGroupIds: new Set(groups.map((g) => g.id)) };
+  const nodes =
+    candidate && rollout.canaryNodeIds.length
+      ? await db
+          .select({ id: schema.node.id })
+          .from(schema.node)
+          .where(
+            and(
+              inArray(schema.node.id, rollout.canaryNodeIds),
+              eq(schema.node.clusterId, clusterId),
+              eq(schema.node.status, "active"),
+            ),
+          )
+      : [];
+  return { stable, candidate, canaryNodeIds: new Set(nodes.map((n) => n.id)) };
 }
 
-export function targetFor(
-  node: { nodeGroupId: string | null },
-  targets: RolloutTargets,
-): RevisionRow | undefined {
-  if (targets.candidate && node.nodeGroupId && targets.canaryGroupIds.has(node.nodeGroupId))
-    return targets.candidate;
+/**
+ * A node's target. Canary nodes are those of the window, not the current
+ * members of canary groups: a node that leaves the group keeps the
+ * candidate it may already run (nodes never apply a lower revision), and
+ * one that joins waits for the next window.
+ */
+export function targetFor(node: { id: string }, targets: RolloutTargets): RevisionRow | undefined {
+  if (targets.candidate && targets.canaryNodeIds.has(node.id)) return targets.candidate;
   return targets.stable;
 }
 
 /** The revision a node should run (its target), per the cluster's rollout. */
 export async function nodeTarget(
   db: Executor,
-  node: { clusterId: string; nodeGroupId: string | null },
+  node: { id: string; clusterId: string },
 ): Promise<RevisionRow | undefined> {
   return targetFor(node, await rolloutTargets(db, node.clusterId));
 }
@@ -801,8 +816,10 @@ async function publishThroughCanary(
       });
     return result;
   }
-  const canary = await onlineCanaryNodes(tx, clusterId, now.getTime());
-  if (canary.length === 0) {
+  // A running window keeps its canary nodes: they may already run its candidate.
+  const running = rollout.candidateRevision !== null;
+  const canary = running ? [] : await onlineCanaryNodes(tx, clusterId, now.getTime());
+  if (!running && canary.length === 0) {
     const result = await insertRevision(tx, clusterId, build, reason, userId);
     if (result.created) {
       await updateRollout(tx, clusterId, {
@@ -845,12 +862,12 @@ async function publishThroughCanary(
     await updateRollout(tx, clusterId, { stableRevision: restabled.row.revision });
   }
   const result = await insertRevision(tx, clusterId, build, reason, userId);
-  if (result.created || rollout.candidateRevision === null) {
+  if (result.created || !running) {
     await updateRollout(tx, clusterId, {
       candidateRevision: result.row.revision,
       state: "canary",
       windowStartedAt: now,
-      canaryNodeIds: canary.map((n) => n.id),
+      ...(running ? {} : { canaryNodeIds: canary.map((n) => n.id) }),
       outcome: "",
       finishedAt: null,
     });

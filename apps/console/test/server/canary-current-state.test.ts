@@ -10,6 +10,7 @@ import {
   nodeCertificates,
 } from "../../src/server/services/certificates";
 import { latestRevision, nodeTarget, publishRevision } from "../../src/server/services/revisions";
+import { evaluateRollout } from "../../src/server/services/rollout";
 import {
   type ApiClient,
   approveSiteDomains,
@@ -48,8 +49,14 @@ describe("configuration canary and current state", async () => {
     renames++;
     return (await admin.sites.update({ id, name: `site-${renames}` })).revision.revision;
   };
+  /** The node's target, from its row as the node channel reads it. */
+  const target = async (node: TestNode) => {
+    const [row] = await ctx.db.select().from(schema.node).where(eq(schema.node.id, node.id));
+    if (!row) throw new Error("node missing");
+    return nodeTarget(ctx.db, row);
+  };
   const config = async (node: TestNode) =>
-    decodeNodeConfig((await nodeTarget(ctx.db, node))?.ir ?? new Uint8Array());
+    decodeNodeConfig((await target(node))?.ir ?? new Uint8Array());
   /** Heartbeat: the node reports `revision` applied at `at`. */
   const report = async (node: TestNode, revision: number, at = new Date()) => {
     const [row] = await ctx.db
@@ -164,5 +171,45 @@ describe("configuration canary and current state", async () => {
     const served = await nodeCertificates(ctx, clusterId, [certificate.id]);
     expect(served.map((c) => c.sha256Fingerprint)).toEqual([inspected.fingerprint]);
     expect(served[0]?.privateKeyPem).toBe(renewed.privateKeyPem);
+  });
+
+  it("keeps the candidate with the window's canary nodes when node groups change", async () => {
+    await admin.clusters.abortRollout({ id: clusterId });
+    await settle();
+    const first = await change();
+    const group = (node: TestNode, nodeGroupId: string) =>
+      ctx.db.update(schema.node).set({ nodeGroupId }).where(eq(schema.node.id, node.id));
+    // The canary node leaves its group, the other node joins it during the window.
+    await group(canary, defaultGroup);
+    await group(stable, canaryGroup);
+    const stableRevision = (await rollout()).stableRevision;
+    expect((await target(canary))?.revision).toBe(first);
+    expect((await target(stable))?.revision).toBe(stableRevision);
+    // A replacement candidate goes to the same nodes.
+    const second = await change();
+    expect((await target(canary))?.revision).toBe(second);
+    expect((await target(stable))?.revision).toBe(stableRevision);
+    expect((await rollout()).canaryNodes).toEqual([
+      expect.objectContaining({ id: canary.id, participating: true }),
+      expect.objectContaining({ id: stable.id, participating: false }),
+    ]);
+    // Only the window's canary node decides it.
+    await report(stable, second);
+    await ctx.db
+      .update(schema.nodeConfigStatus)
+      .set({ state: "failed" })
+      .where(eq(schema.nodeConfigStatus.nodeId, stable.id));
+    expect(await evaluateRollout(ctx, clusterId)).toBe("canary");
+    await report(stable, stableRevision ?? 0);
+    await report(canary, second);
+    await ctx.db
+      .update(schema.nodeConfigStatus)
+      .set({ state: "failed" })
+      .where(eq(schema.nodeConfigStatus.nodeId, canary.id));
+    expect(await evaluateRollout(ctx, clusterId)).toBe("rolled_back");
+    const restored = (await rollout()).stableRevision;
+    expect((await target(canary))?.revision).toBe(restored);
+    await group(canary, canaryGroup);
+    await group(stable, defaultGroup);
   });
 });
