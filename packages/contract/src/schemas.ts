@@ -618,6 +618,33 @@ export const nodeBanStatus = z.object({
   reportedAt: isoDateTime,
 });
 
+/** Host metrics of a node's last heartbeat (nodes with metrics-v1). */
+export const nodeMetrics = z.object({
+  /** CPU used by the whole host, 0-100. */
+  cpuPercent: z.number(),
+  load1: z.number(),
+  load5: z.number(),
+  load15: z.number(),
+  memoryUsedBytes: z.number(),
+  memoryTotalBytes: z.number(),
+  /** Bits per second sent on non-loopback interfaces. */
+  egressBps: z.number(),
+  activeConnections: z.number(),
+  reportedAt: isoDateTime,
+});
+
+/**
+ * An address DNS and probes use for a node: configured by the operator (with
+ * a level) or, without configured ones, a public address the node reports
+ * (level 0). `reachable` is false while the probes count it as down.
+ */
+export const nodeSchedulingAddress = z.object({
+  address: z.string(),
+  level: z.number().int(),
+  source: z.enum(["reported", "configured"]),
+  reachable: z.boolean(),
+});
+
 export const node = z.object({
   id: uuid,
   name: z.string(),
@@ -650,6 +677,13 @@ export const node = z.object({
   dataPlaneHealthy: z.boolean(),
   /** Null for nodes without dynamic bans (bans-v1). */
   banStatus: nodeBanStatus.nullable(),
+  /** The node also probes the other nodes from its node group's region. */
+  probeEnabled: z.boolean(),
+  /** Null until a node with metrics-v1 reports. */
+  metrics: nodeMetrics.nullable(),
+  schedulingAddresses: z.array(nodeSchedulingAddress),
+  /** Address level DNS uses now (0 primary; higher while lower levels are unreachable). */
+  schedulingLevel: z.number().int(),
 });
 
 export const nodeUpdateInput = z.object({

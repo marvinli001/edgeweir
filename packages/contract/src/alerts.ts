@@ -14,6 +14,8 @@ export const platformAlertKind = z.enum([
   "config_rollout_no_canary",
   "config_rule_invalid",
   "dns_mass_removal_blocked",
+  /** A scheduling rule acts on a node (resolved when the action recovers). */
+  "scheduling_action",
 ]);
 export const alertEventKind = z.enum([...alertKind.options, ...platformAlertKind.options]);
 const endpoint = z

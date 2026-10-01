@@ -103,10 +103,18 @@ export async function updateRegion(
   return dto;
 }
 
-/** Deletes a region; node groups that referenced it keep existing without one. */
+/**
+ * Deletes a region; node groups that referenced it keep existing without
+ * one. Refused while probes belong to it (REGION_IN_USE).
+ */
 export async function deleteRegion(db: Database, id: string, actor: Actor): Promise<void> {
   await db.transaction(async (tx) => {
     const row = await findRegion(tx, id);
+    const [probes] = await tx
+      .select({ n: count() })
+      .from(schema.probe)
+      .where(eq(schema.probe.regionId, id));
+    if (probes?.n) fail("REGION_IN_USE", "probes belong to this region", { probes: probes.n });
     await tx.delete(schema.region).where(eq(schema.region.id, id));
     await recordAudit(tx, actor, {
       action: "region.delete",

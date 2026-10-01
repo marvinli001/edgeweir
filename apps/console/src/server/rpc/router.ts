@@ -91,11 +91,22 @@ import {
   getNode,
   listNodes,
   ONLINE_WINDOW_SECONDS,
+  setNodeAddresses,
+  setNodeProbe,
   setNodeStatus,
   updateNode,
 } from "../services/nodes";
 import { getOriginAllowList, setOriginAllowList } from "../services/origin-allow-list";
 import { siteOriginHealth } from "../services/origin-health";
+import {
+  createProbeToken,
+  deleteProbe,
+  getProbeSettings,
+  listProbeResults,
+  listProbes,
+  setProbeSettings,
+  updateProbe,
+} from "../services/probes";
 import {
   getCcTemplate,
   getProtectionSettings,
@@ -117,6 +128,13 @@ import {
   updateIpList,
   validateExpression,
 } from "../services/rules";
+import {
+  createSchedulingRule,
+  deleteSchedulingRule,
+  listSchedulingRules,
+  previewScheduling,
+  updateSchedulingRule,
+} from "../services/scheduling";
 import { listSecurityEvents, siteSecurityState } from "../services/security";
 import {
   createServiceAccount,
@@ -269,6 +287,42 @@ export const router = os.router({
     ),
     delete: authed.certificates.delete.handler(({ input, context }) =>
       deleteCertificate(context.app, input.id, context),
+    ),
+  },
+  probes: {
+    list: authed.probes.list.handler(({ context }) => listProbes(context.app.db)),
+    createToken: authed.probes.createToken.handler(({ input, context }) =>
+      createProbeToken(context.app.db, input, {
+        actor: context.actor,
+        serverUrl: context.app.env.nodeApiUrl,
+        caSha256: context.app.nodeCa.fingerprintSha256,
+      }),
+    ),
+    update: authed.probes.update.handler(({ input, context }) =>
+      updateProbe(context.app.db, input, context.actor),
+    ),
+    delete: authed.probes.delete.handler(({ input, context }) =>
+      deleteProbe(context.app.db, input.id, context.actor),
+    ),
+    results: authed.probes.results.handler(({ input, context }) =>
+      listProbeResults(context.app.db, input),
+    ),
+  },
+  scheduling: {
+    list: authed.scheduling.list.handler(({ input, context }) =>
+      listSchedulingRules(context.app.db, input.clusterId),
+    ),
+    create: authed.scheduling.create.handler(({ input, context }) =>
+      createSchedulingRule(context.app.db, input, context.actor),
+    ),
+    update: authed.scheduling.update.handler(({ input, context }) =>
+      updateSchedulingRule(context.app, input, context.actor),
+    ),
+    delete: authed.scheduling.delete.handler(({ input, context }) =>
+      deleteSchedulingRule(context.app, input.id, context.actor),
+    ),
+    preview: authed.scheduling.preview.handler(({ input, context }) =>
+      previewScheduling(context.app.db, input.clusterId),
     ),
   },
   https: {
@@ -569,6 +623,12 @@ export const router = os.router({
       await deleteNode(context.app.db, input.id, context.actor);
       return ok;
     }),
+    setProbe: authed.nodes.setProbe.handler(({ input, context }) =>
+      setNodeProbe(context.app.db, input, context.actor),
+    ),
+    setAddresses: authed.nodes.setAddresses.handler(({ input, context }) =>
+      setNodeAddresses(context.app.db, input, context.actor),
+    ),
   },
   sites: {
     list: authed.sites.list.handler(({ input, context }) => listSites(context.app.db, input)),
@@ -664,6 +724,10 @@ export const router = os.router({
     ),
     setErrorPages: authed.settings.setErrorPages.handler(({ input, context }) =>
       setPlatformErrorPages(context.app.db, input, context.actor),
+    ),
+    probes: authed.settings.probes.handler(({ context }) => getProbeSettings(context.app.db)),
+    setProbes: authed.settings.setProbes.handler(({ input, context }) =>
+      setProbeSettings(context.app.db, input, context.actor),
     ),
     usage: authed.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
     setUsage: authed.settings.setUsage.handler(({ input, context }) =>

@@ -1417,5 +1417,28 @@
   "bulk_redirects_limit": "At most {limit} redirects",
   "bulk_redirects_filter": "Filter",
   "bulk_redirects_no_match": "No matching redirects",
-  "bulk_redirects_invalid": "{count} invalid"
+  "bulk_redirects_invalid": "{count} invalid",
+  "error_dns_line_unsupported": "This DNS provider has no {line} resolution line",
+  "error_region_in_use": [
+    {
+      "declarations": ["input probes", "local probesPlural = probes: plural"],
+      "selectors": ["probesPlural"],
+      "match": {
+        "probesPlural=one": "{probes} probe still belongs to this region",
+        "probesPlural=other": "{probes} probes still belong to this region"
+      }
+    }
+  ],
+  "error_probe_not_found": "Probe not found",
+  "error_node_region_required": "Give the node's group a region before the node probes",
+  "error_node_address_invalid": "Not a single unicast IP address: {address}",
+  "error_scheduling_rule_not_found": "Scheduling rule not found",
+  "error_scheduling_rule_invalid": "The rule needs a line of the cluster's DNS binding",
+  "alert_kind_scheduling_action": "Scheduling rule acting on a node",
+  "audit_actor_probe": "Probe",
+  "dns_revision_reason_manual": "Binding saved",
+  "dns_revision_reason_health": "Node health changed",
+  "dns_revision_reason_rollback": "Rolled back",
+  "dns_revision_reason_force": "Published despite the protection",
+  "dns_revision_reason_scheduling": "Scheduling: {rule} on {node}"
 }

@@ -60,6 +60,7 @@ export async function deliverNotification(
     config_rollout_no_canary: m.alert_kind_config_rollout_no_canary,
     config_rule_invalid: m.alert_kind_config_rule_invalid,
     dns_mass_removal_blocked: m.alert_kind_dns_mass_removal_blocked,
+    scheduling_action: m.alert_kind_scheduling_action,
     test: m.alert_test_message,
   }[event.kind]({}, { locale });
   const status = event.status === "resolved" ? m.alert_recovered({}, { locale }) : kind;

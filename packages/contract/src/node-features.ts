@@ -19,3 +19,12 @@ export function nodeSupportsFeature(supported: readonly string[], feature: strin
 export const PURGE_TAG_FEATURE = "purge-tag-v1";
 /** prefetch-v2: prefetch device variants (PrefetchTarget.variant) and sitemap tasks. */
 export const PREFETCH_V2_FEATURE = "prefetch-v2";
+/**
+ * probe-health-v1: the edge listeners answer GET /.edgeweir/health before
+ * any site lookup (HTTPS with SNI health.edgeweir.invalid). Probes request
+ * it (HTTP/HTTPS probe targets) only when every active node of a cluster
+ * reports the feature; otherwise they open TCP connections.
+ */
+export const PROBE_HEALTH_FEATURE = "probe-health-v1";
+/** metrics-v1: ReportStatusRequest.metrics (CPU, load, memory, egress, connections). */
+export const METRICS_FEATURE = "metrics-v1";

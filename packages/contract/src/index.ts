@@ -15,6 +15,13 @@ import { bulkRedirectsContract } from "./bulk-redirects";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
 import { errorPagesContract, platformErrorPages } from "./error-pages";
+import {
+  nodeAddressesInput,
+  nodeProbeInput,
+  probeSettings,
+  probesContract,
+  schedulingContract,
+} from "./probes";
 import { ccTemplate, protectionContract, protectionSettings, securityContract } from "./protection";
 import { ipListsContract, platformRulesContract, rulesContract } from "./rules";
 import * as s from "./schemas";
@@ -78,6 +85,10 @@ export const contract = {
   /** A site's error pages for node-generated 403, 429, 502, 503 and 504 responses. */
   errorPages: errorPagesContract,
   certificates: certificatesContract,
+  /** Regional probes and their latest results. */
+  probes: probesContract,
+  /** Scheduling rules of a cluster: conditions on node and probe metrics, DNS actions. */
+  scheduling: schedulingContract,
   dnsCredentials: dnsCredentialsContract,
   https: httpsContract,
   system: {
@@ -244,6 +255,19 @@ export const contract = {
       .route({ method: "DELETE", path: "/nodes/{id}", tags: ["nodes"] })
       .input(idParam)
       .output(ok),
+    /** Lets the node probe the other nodes from its node group's region (the group needs one). */
+    setProbe: oc
+      .route({ method: "PUT", path: "/nodes/{id}/probe", tags: ["nodes"] })
+      .input(nodeProbeInput)
+      .output(s.node),
+    /**
+     * Scheduling addresses with levels (0 primary, 1-2 backups); DNS and probes
+     * use them instead of the addresses the node reports. Empty clears them.
+     */
+    setAddresses: oc
+      .route({ method: "PUT", path: "/nodes/{id}/addresses", tags: ["nodes"] })
+      .input(nodeAddressesInput)
+      .output(s.node),
   },
   sites: {
     list: oc
@@ -370,6 +394,14 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/cc-template", tags: ["settings"] })
       .input(ccTemplate)
       .output(ccTemplate),
+    /** Probe interval, timeout and attempts, and when addresses count as down or up again. */
+    probes: oc
+      .route({ method: "GET", path: "/settings/probes", tags: ["settings"] })
+      .output(probeSettings),
+    setProbes: oc
+      .route({ method: "PUT", path: "/settings/probes", tags: ["settings"] })
+      .input(probeSettings)
+      .output(probeSettings),
     /** The platform's pages for unknown hosts and disabled sites. */
     errorPages: oc
       .route({ method: "GET", path: "/settings/error-pages", tags: ["settings"] })
@@ -403,11 +435,13 @@ export const oneTimeSecretProcedures: ReadonlySet<string> = new Set([
   "accessKeys.create",
   "serviceAccounts.createKey",
   "clusters.createEnrollmentToken",
+  "probes.createToken",
 ]);
 
 export * from "./access-keys";
 export * from "./alerts";
 export * from "./dns";
 export * from "./dns-providers";
+export * from "./probes";
 export * from "./service-accounts";
 export * from "./usage";

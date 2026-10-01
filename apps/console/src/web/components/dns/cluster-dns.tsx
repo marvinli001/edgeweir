@@ -214,6 +214,9 @@ function BindingEditor({
                             groups.find((g) => !draft.lines.some((l) => l.nodeGroupId === g.id))
                               ?.id ?? "",
                           overrides: [],
+                          resolutionLine: "default",
+                          backupNodeGroupIds: [],
+                          minHealthyIps: 1,
                         },
                       ],
                     })

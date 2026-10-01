@@ -1,11 +1,24 @@
 import { decodeNodeConfig, nodeRequirements } from "@edgeweir/config-compiler";
-import { type Node, nodeSupportsFeature, unicastAddress } from "@edgeweir/contract";
+import {
+  type Node,
+  type NodeAddressesInput,
+  nodeSupportsFeature,
+  unicastAddress,
+} from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { isOnline, ONLINE_WINDOW_SECONDS } from "../lib/node-online";
 import { type Actor, recordAudit } from "./audit";
 import { skipNodeTasks } from "./cache-tasks";
+import { publishClusterDns } from "./dns";
+import {
+  downAddresses,
+  effectiveAddresses,
+  MAX_CONFIGURED_ADDRESSES,
+  nodeIpRows,
+  schedulingAddressesOf,
+} from "./node-addresses";
 import { findNodeGroup } from "./node-groups";
 import {
   type Executor,
@@ -29,7 +42,8 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
     .select()
     .from(schema.nodeConfigStatus)
     .where(inArray(schema.nodeConfigStatus.nodeId, ids));
-  const ips = await db.select().from(schema.nodeIp).where(inArray(schema.nodeIp.nodeId, ids));
+  const ips = await nodeIpRows(db, ids);
+  const down = await downAddresses(db, ids);
   const clusters = await db
     .select({ id: schema.cluster.id, name: schema.cluster.name })
     .from(schema.cluster);
@@ -55,6 +69,9 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
   return rows.map((r) => {
     const st = statuses.find((s) => s.nodeId === r.id);
     const group = groups.find((g) => g.id === r.nodeGroupId);
+    const own = ips.get(r.id) ?? [];
+    const scheduling = schedulingAddressesOf(own);
+    const unreachable = down.get(r.id) ?? new Set<string>();
     return {
       id: r.id,
       name: r.name,
@@ -77,10 +94,10 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
       engineVersion: r.engineVersion,
       os: r.os,
       arch: r.arch,
-      ipAddresses: ips
-        .filter((i) => i.nodeId === r.id)
-        .map((i) => i.address)
-        .sort(),
+      // The addresses the node reports (configured ones are schedulingAddresses).
+      ipAddresses: [
+        ...new Set(own.filter((i) => i.source !== "configured").map((i) => i.address)),
+      ].sort(),
       certFingerprint: r.certFingerprint,
       certNotAfter: r.certNotAfter?.toISOString() ?? null,
       appliedRevision: st?.appliedRevision ?? 0,
@@ -93,6 +110,13 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
       applyMessage: st?.message ?? "",
       dataPlaneHealthy: st?.dataPlaneHealthy ?? false,
       banStatus: r.banStatus ?? null,
+      probeEnabled: r.probeEnabled,
+      metrics: r.metrics ?? null,
+      schedulingAddresses: scheduling.map((a) => ({
+        ...a,
+        reachable: !unreachable.has(a.address),
+      })),
+      schedulingLevel: effectiveAddresses(scheduling, unreachable).level,
     };
   });
 }
@@ -224,6 +248,8 @@ export async function deleteNode(db: Database, id: string, actor: Actor): Promis
         .onConflictDoNothing();
     }
     await discardNodeUpgrades(tx, id);
+    // Results it measured as a probe (results about it go with the row).
+    await tx.delete(schema.probeResult).where(eq(schema.probeResult.proberId, id));
     await tx.delete(schema.node).where(eq(schema.node.id, id));
     await recordAudit(tx, actor, {
       action: "node.delete",
@@ -262,14 +288,104 @@ export async function replaceReportedAddresses(
     .where(
       and(
         eq(schema.nodeIp.nodeId, nodeId),
-        eq(schema.nodeIp.kind, "reported"),
+        eq(schema.nodeIp.source, "reported"),
         notInArray(schema.nodeIp.address, addresses),
       ),
     );
   await tx
     .insert(schema.nodeIp)
-    .values(addresses.map((address) => ({ nodeId, address })))
+    .values(addresses.map((address) => ({ nodeId, address, source: "reported" })))
     .onConflictDoNothing();
+}
+
+/**
+ * Replaces the node's configured scheduling addresses (empty: DNS and
+ * probes go back to the public addresses it reports) and publishes the
+ * cluster's DNS binding with them; the reconciliation writes it.
+ */
+export async function setNodeAddresses(
+  db: Database,
+  input: NodeAddressesInput,
+  actor: Actor,
+): Promise<Node> {
+  const addresses: { address: string; level: number }[] = [];
+  for (const entry of input.addresses.slice(0, MAX_CONFIGURED_ADDRESSES)) {
+    const address = unicastAddress(entry.address);
+    if (!address || entry.address.includes("/") || addresses.some((a) => a.address === address))
+      fail("NODE_ADDRESS_INVALID", "not a single unicast IP address", {
+        address: entry.address,
+      });
+    addresses.push({ address, level: entry.level });
+  }
+  return db.transaction(async (tx) => {
+    const row = await findNode(tx, input.id);
+    const before = (await nodeIpRows(tx, [row.id])).get(row.id) ?? [];
+    await tx
+      .delete(schema.nodeIp)
+      .where(and(eq(schema.nodeIp.nodeId, row.id), eq(schema.nodeIp.source, "configured")));
+    if (addresses.length)
+      await tx.insert(schema.nodeIp).values(
+        addresses.map((a) => ({
+          nodeId: row.id,
+          address: a.address,
+          level: a.level,
+          source: "configured",
+          kind: "configured",
+        })),
+      );
+    await recordAudit(tx, actor, {
+      action: "node.set_addresses",
+      targetType: "node",
+      targetId: row.id,
+      targetName: row.name,
+      metadata: {
+        from: before
+          .filter((a) => a.source === "configured")
+          .map((a) => ({ address: a.address, level: a.level })),
+        to: addresses,
+      },
+    });
+    await publishClusterDns(tx, row.clusterId, "manual");
+    return getNode(tx, row.id);
+  });
+}
+
+/**
+ * Lets the node probe the other nodes (ReportStatusResponse.probe) from its
+ * node group's region, which it needs; turning it off drops its results.
+ */
+export async function setNodeProbe(
+  db: Database,
+  input: { id: string; enabled: boolean },
+  actor: Actor,
+): Promise<Node> {
+  return db.transaction(async (tx) => {
+    const row = await findNode(tx, input.id);
+    if (input.enabled) {
+      const [group] = row.nodeGroupId
+        ? await tx
+            .select({ regionId: schema.nodeGroup.regionId })
+            .from(schema.nodeGroup)
+            .where(eq(schema.nodeGroup.id, row.nodeGroupId))
+        : [];
+      if (!group?.regionId)
+        fail("NODE_REGION_REQUIRED", "the node's group needs a region before the node can probe");
+    } else {
+      await tx.delete(schema.probeResult).where(eq(schema.probeResult.proberId, row.id));
+    }
+    await tx
+      .update(schema.node)
+      .set({ probeEnabled: input.enabled })
+      .where(eq(schema.node.id, row.id));
+    await recordAudit(tx, actor, {
+      action: "node.set_probe",
+      targetType: "node",
+      targetId: row.id,
+      targetName: row.name,
+      metadata: { from: row.probeEnabled, to: input.enabled },
+    });
+    return getNode(tx, row.id);
+  });
 }
 
 /** Canonical form of a certificate serial for comparisons (hex, no colons or leading zeros). */

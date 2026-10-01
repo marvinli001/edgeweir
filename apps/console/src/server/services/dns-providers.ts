@@ -14,7 +14,18 @@ import { CertdError, runCertd } from "./certificate-worker";
 import type { Executor } from "./revisions";
 
 type Provider = typeof schema.platformDnsProvider.$inferSelect;
-export type ProviderRecord = { name: string; type: string; data: string; ttl: number };
+/**
+ * A record as certd reads and writes it. `line`: canonical resolution line,
+ * absent (or "", "default") on the default line; dns.list reports provider
+ * lines without a canonical id as "other:<provider line>".
+ */
+export type ProviderRecord = {
+  name: string;
+  type: string;
+  data: string;
+  ttl: number;
+  line?: string;
+};
 
 export const providerBinding = (id: string) => ({
   purpose: "platform_dns_provider.credential_envelope",

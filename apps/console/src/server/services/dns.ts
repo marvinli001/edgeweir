@@ -2,19 +2,25 @@ import { createHash } from "node:crypto";
 import {
   type DnsBinding,
   type DnsBindingInput,
+  type DnsLine,
   type DnsProtection,
   type DnsRecord,
+  type DnsResolutionLine,
   type DnsRevision,
+  type DnsRevisionReason,
   dnsBindingInput,
   dnsProtection,
   forbiddenOriginRange,
   formatIp,
   parseIp,
+  providerLines,
+  withLineDefaults,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, desc, eq, gt, inArray, isNotNull, lte, ne, notInArray, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { isOnline } from "../lib/node-online";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { withLease } from "./dns-lease";
 import {
@@ -24,7 +30,12 @@ import {
   openProvider,
   type ProviderRecord,
 } from "./dns-providers";
-import { isOnline } from "./nodes";
+import {
+  downAddresses,
+  effectiveAddresses,
+  nodeIpRows,
+  schedulingAddressesOf,
+} from "./node-addresses";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import {
   type Executor,
@@ -48,8 +59,14 @@ type Provider = typeof schema.platformDnsProvider.$inferSelect;
 type Revision = typeof schema.dnsRevision.$inferSelect;
 type BindingRow = typeof schema.dnsBinding.$inferSelect;
 type ManagedName = { name: string; type: string };
-/** What a revision stores and a plan is compiled from. */
-export type BindingPolicy = DnsBindingInput & { allLabel: string };
+/**
+ * What a revision stores and a plan is compiled from. Lines may lack the
+ * fields added with resolution lines (stored before them).
+ */
+export type BindingPolicy = Omit<DnsBindingInput, "lines"> & {
+  allLabel: string;
+  lines: schema.DnsLineData[];
+};
 type Plan = { records: DnsRecord[]; managedNames: ManagedName[] };
 
 const privateNetworks = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"];
@@ -58,14 +75,18 @@ const revisionDto = (r: Revision): DnsRevision => ({
   revision: r.revision,
   status: r.status as DnsRevision["status"],
   reason: r.reason,
+  reasonParams: r.reasonParams ?? {},
   recordCount: r.records.length,
   createdAt: r.createdAt.toISOString(),
   appliedAt: r.appliedAt?.toISOString() ?? null,
   lastError: r.lastError,
 });
 const nameKey = (r: ManagedName) => `${r.name}|${r.type}`;
-const recordKey = (r: { name: string; type: string; data: string; ttl: number }) =>
-  `${nameKey(r)}|${r.data}|${r.ttl}`;
+/** The resolution line of a record ("" for the default line). */
+const lineOf = (r: { line?: string }) => (r.line && r.line !== "default" ? r.line : "");
+/** Plan order; default-line records sort exactly as before resolution lines. */
+const recordKey = (r: { name: string; type: string; data: string; ttl: number; line?: string }) =>
+  `${nameKey(r)}|${r.data}|${r.ttl}${lineOf(r) ? `|${lineOf(r)}` : ""}`;
 const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 /** A name relative to the zone ("@" for the apex); DNS_ZONE_MISMATCH outside it. */
 export function relative(name: string, zone: string) {
@@ -112,6 +133,11 @@ async function lockBinding(tx: Tx, clusterId: string): Promise<BindingRow> {
   if (!row) throw new Error("DNS binding missing");
   return row;
 }
+/**
+ * The binding as stored. Lines saved before resolution lines keep their
+ * stored form (without the newer fields), so their plan and content hash
+ * stay what they were; compileBindingPlan fills in the defaults.
+ */
 export function bindingPolicy(row: BindingRow): BindingPolicy {
   return {
     mode: row.mode as BindingPolicy["mode"],
@@ -138,7 +164,7 @@ async function bindingDto(db: Executor, row: BindingRow): Promise<DnsBinding> {
     zone: provider?.zone ?? "",
     domain: row.domain,
     ttl: row.ttl,
-    lines: row.lines,
+    lines: row.lines.map(withLineDefaults),
     lineAliases: row.lineAliases,
     allLabel: row.allLabel,
     updatedAt: row.updatedAt.toISOString(),
@@ -164,11 +190,19 @@ async function validateBinding(db: Executor, clusterId: string, policy: BindingP
     .from(schema.nodeGroup)
     .where(eq(schema.nodeGroup.clusterId, clusterId));
   const nodes = await db.select().from(schema.node).where(eq(schema.node.clusterId, clusterId));
-  for (const line of policy.lines) {
+  const supported = provider ? providerLines(provider.provider) : null;
+  for (const line of policy.lines.map(withLineDefaults)) {
     if (line.name === policy.allLabel)
       fail("DNS_POLICY_INVALID", "a line cannot use the all-lines record name");
     if (!groups.some((g) => g.id === line.nodeGroupId))
       fail("NODE_GROUP_NOT_FOUND", "DNS line references a node group outside this cluster");
+    if (line.backupNodeGroupIds.some((id) => !groups.some((g) => g.id === id)))
+      fail("NODE_GROUP_NOT_FOUND", "DNS line backup is a node group outside this cluster");
+    // Without an account (manual records) every line can be created by hand.
+    if (supported && !supported.includes(line.resolutionLine))
+      fail("DNS_LINE_UNSUPPORTED", "the DNS provider has no such resolution line", {
+        line: line.resolutionLine,
+      });
     if (new Set(line.overrides.map((o) => o.nodeId)).size !== line.overrides.length)
       fail("DNS_POLICY_INVALID", "duplicate node address override");
     for (const override of line.overrides) {
@@ -235,21 +269,75 @@ function servesTarget(
 }
 
 /**
+ * What active scheduling rules (state active or recovering) do to a
+ * cluster's plan: nodes removed from a line ("*": every line), nodes forced
+ * to their next address level, lines switched to their backup groups.
+ */
+export async function schedulingEffects(db: Executor, clusterId: string) {
+  const rows = await db
+    .select({
+      nodeId: schema.schedulingState.nodeId,
+      action: schema.schedulingRule.action,
+      lineName: schema.schedulingRule.lineName,
+    })
+    .from(schema.schedulingState)
+    .innerJoin(schema.schedulingRule, eq(schema.schedulingRule.id, schema.schedulingState.ruleId))
+    .where(
+      and(
+        eq(schema.schedulingRule.clusterId, clusterId),
+        eq(schema.schedulingRule.enabled, true),
+        inArray(schema.schedulingState.state, ["active", "recovering"]),
+      ),
+    );
+  const removed = new Map<string, Set<string>>();
+  const backupIp = new Map<string, Set<string>>();
+  const backupGroupLines = new Set<string>();
+  for (const row of rows) {
+    const line = row.lineName ?? "*";
+    if (row.action === "remove_node")
+      removed.set(row.nodeId, (removed.get(row.nodeId) ?? new Set()).add(line));
+    else if (row.action === "backup_ip")
+      backupIp.set(row.nodeId, (backupIp.get(row.nodeId) ?? new Set()).add(line));
+    else if (row.action === "backup_group" && row.lineName) backupGroupLines.add(row.lineName);
+  }
+  return { removed, backupIp, backupGroupLines };
+}
+/** Resolution lines the binding's lines map to ("default" always answers). */
+const resolutionLinesOf = (policy: Pick<BindingPolicy, "lines">) =>
+  new Set<string>(["default", ...policy.lines.map((l) => withLineDefaults(l).resolutionLine)]);
+const appliesTo = (lines: Set<string> | undefined, line: string) =>
+  !!lines && (lines.has("*") || lines.has(line));
+
+/**
  * The cluster's records. auto: addresses of nodes that are active, online,
  * healthy and run their target revision or are applying a new one
  * (servesTarget; current routing rights: DNS history never restores a dead
- * node). manual: every active node's addresses (hand-made records do not
- * follow health).
+ * node), minus nodes a scheduling rule removed; each node answers with its
+ * effective scheduling addresses (its lowest level the probes can reach, at
+ * least the next one under a backup_ip action, none when every address is
+ * down: see effectiveAddresses). A line whose group has fewer than
+ * minHealthyIps healthy addresses (or under a backup_group action) answers
+ * with its first backup group that has enough, else with every healthy
+ * address of its groups. manual: every active node's primary addresses
+ * (hand-made records do not follow health). `<line>.<domain>` and the site
+ * CNAMEs are default-line records; `<all>.<domain>` has records per
+ * resolution line: the union of the binding lines mapped to it, and on the
+ * default line the union of the lines mapped to default, or of every line
+ * when none is (or they have no address). `failover`: what the mass
+ * removal protection does not count by share (only emptying a set counts):
+ * record sets a backup group answers now ("name|line") and backup group
+ * addresses in the sets of their line ("name|line|address").
  */
 export async function compileBindingPlan(
   db: Executor,
   clusterId: string,
   policy: BindingPolicy,
   now = Date.now(),
-): Promise<Plan> {
-  if (policy.mode === "off" || !policy.domain) return { records: [], managedNames: [] };
+): Promise<Plan & { failover: string[] }> {
+  if (policy.mode === "off" || !policy.domain)
+    return { records: [], managedNames: [], failover: [] };
   const provider = policy.providerId ? await findProvider(db, policy.providerId) : null;
-  if (policy.mode === "auto" && !provider) return { records: [], managedNames: [] };
+  if (policy.mode === "auto" && !provider) return { records: [], managedNames: [], failover: [] };
   const zone = zoneOf(policy, provider);
   relative(policy.domain, zone);
   const manual = policy.mode === "manual";
@@ -268,9 +356,9 @@ export async function compileBindingPlan(
         .from(schema.nodeConfigStatus)
         .where(inArray(schema.nodeConfigStatus.nodeId, nodeIds))
     : [];
-  const addresses = nodeIds.length
-    ? await db.select().from(schema.nodeIp).where(inArray(schema.nodeIp.nodeId, nodeIds))
-    : [];
+  const addresses = await nodeIpRows(db, nodeIds);
+  const down = manual ? new Map<string, Set<string>>() : await downAddresses(db, nodeIds);
+  const effects = manual ? null : await schedulingEffects(db, clusterId);
   const groups = await db
     .select()
     .from(schema.nodeGroup)
@@ -298,6 +386,10 @@ export async function compileBindingPlan(
           )
           .orderBy(desc(schema.configRevision.revision))
           .limit(1);
+  // A provider whose catalog lost a line since the binding was saved gets none of its records.
+  const writable: readonly DnsResolutionLine[] = provider
+    ? providerLines(provider.provider)
+    : ["default", "telecom", "unicom", "mobile", "edu", "overseas"];
   const records: DnsRecord[] = [];
   const names = new Map<string, ManagedName>();
   const declare = (name: string, type: DnsRecord["type"]) => {
@@ -305,51 +397,132 @@ export async function compileBindingPlan(
     names.set(nameKey(row), row);
     return row.name;
   };
-  const add = (name: string, type: DnsRecord["type"], data: string) =>
-    records.push({ name: declare(name, type), type, data, ttl: policy.ttl });
+  const add = (
+    name: string,
+    type: DnsRecord["type"],
+    data: string,
+    line: DnsResolutionLine = "default",
+  ) =>
+    records.push({
+      name: declare(name, type),
+      type,
+      data,
+      ttl: policy.ttl,
+      ...(line === "default" ? {} : { line }),
+    });
+  const addAddresses = (name: string, ips: Iterable<string>, line?: DnsResolutionLine) => {
+    for (const ip of ips) add(name, ip.includes(":") ? "AAAA" : "A", ip, line);
+  };
+  const healthy = (node: (typeof nodes)[number]) => {
+    if (node.status !== "active") return false;
+    if (manual) return true;
+    const receipt = receipts.find((r) => r.nodeId === node.id),
+      target = targets ? targetFor(node, targets) : undefined;
+    return (
+      isOnline(node.lastSeenAt, now) &&
+      !!receipt?.dataPlaneHealthy &&
+      !!target &&
+      servesTarget(receipt, target, settled, now)
+    );
+  };
+  /** Healthy addresses of a group's nodes as `line` publishes them. */
+  const groupAddresses = (line: DnsLine, groupId: string) => {
+    const ips = new Set<string>();
+    for (const node of nodes.filter((n) => n.nodeGroupId === groupId)) {
+      if (!healthy(node) || appliesTo(effects?.removed.get(node.id), line.name)) continue;
+      const override = line.overrides.find((o) => o.nodeId === node.id);
+      let candidates: string[];
+      if (override) {
+        candidates = override.addresses.filter(
+          (address) => forbiddenOriginRange(address, privateNetworks) === null,
+        );
+      } else {
+        const own = schedulingAddressesOf(addresses.get(node.id) ?? []);
+        candidates = manual
+          ? own.filter((a) => a.level === own[0]?.level).map((a) => a.address)
+          : effectiveAddresses(
+              own,
+              down.get(node.id) ?? new Set(),
+              appliesTo(effects?.backupIp.get(node.id), line.name) ? 1 : 0,
+            ).addresses;
+      }
+      for (const address of candidates) {
+        const parsed = parseIp(address);
+        if (parsed) ips.add(formatIp(parsed));
+      }
+    }
+    return ips;
+  };
   const allName = `${policy.allLabel}.${policy.domain}`;
   declare(allName, "A");
   declare(allName, "AAAA");
+  const byResolution = new Map<DnsResolutionLine, Set<string>>();
   const all = new Set<string>();
   const lines: { name: string; target: string }[] = [];
-  for (const line of policy.lines) {
+  /**
+   * Backup groups change a line's addresses on purpose. Exempt from the share
+   * of the mass removal protection (not from emptying a set): sets a backup
+   * group answers now ("name|line"), and the addresses of backup group nodes
+   * in the sets their line feeds ("name|line|address", switching back).
+   */
+  const failover: string[] = [];
+  const fed: { line: DnsLine; target: string; switched: boolean; backup: Set<string> }[] = [];
+  const setKey = (name: string, line: DnsResolutionLine) =>
+    `${relative(name, zone)}|${line === "default" ? "" : line}`;
+  for (const line of policy.lines.map(withLineDefaults)) {
     if (!groups.some((g) => g.id === line.nodeGroupId)) continue;
     const lineTarget = `${line.name}.${policy.domain}`;
     lines.push({ name: line.name, target: lineTarget });
     declare(lineTarget, "A");
     declare(lineTarget, "AAAA");
-    const ips = new Set<string>();
-    for (const node of nodes.filter((n) => n.nodeGroupId === line.nodeGroupId)) {
-      if (node.status !== "active") continue;
-      if (!manual) {
-        const receipt = receipts.find((r) => r.nodeId === node.id),
-          target = targets ? targetFor(node, targets) : undefined;
-        if (
-          !isOnline(node.lastSeenAt, now) ||
-          !receipt?.dataPlaneHealthy ||
-          !target ||
-          !servesTarget(receipt, target, settled, now)
-        )
-          continue;
-      }
-      const override = line.overrides.find((o) => o.nodeId === node.id);
-      const candidates =
-        override?.addresses ??
-        addresses
-          .filter((a) => a.nodeId === node.id && forbiddenOriginRange(a.address, []) === null)
-          .map((a) => a.address);
-      for (const address of candidates) {
-        const parsed = parseIp(address);
-        if (!parsed || forbiddenOriginRange(address, override ? privateNetworks : []) !== null)
-          continue;
-        const ip = formatIp(parsed);
-        ips.add(ip);
-        all.add(ip);
-      }
+    let ips = groupAddresses(line, line.nodeGroupId);
+    let switched = false;
+    const backupGroups = line.backupNodeGroupIds.filter((id) => groups.some((g) => g.id === id));
+    if (!manual && (effects?.backupGroupLines.has(line.name) || ips.size < line.minHealthyIps)) {
+      const backups = backupGroups.map((id) => groupAddresses(line, id));
+      const enough = backups.find((b) => b.size >= line.minHealthyIps);
+      // None has enough: every still-healthy address of the line's groups.
+      const next = enough ?? new Set([...ips, ...backups.flatMap((b) => [...b])]);
+      switched = [...next].some((ip) => !ips.has(ip));
+      ips = next;
     }
-    for (const ip of ips) add(lineTarget, ip.includes(":") ? "AAAA" : "A", ip);
+    fed.push({
+      line,
+      target: lineTarget,
+      switched,
+      backup: new Set(
+        nodes
+          .filter((n) => n.nodeGroupId && backupGroups.includes(n.nodeGroupId))
+          .flatMap((n) => schedulingAddressesOf(addresses.get(n.id) ?? []).map((a) => a.address)),
+      ),
+    });
+    addAddresses(lineTarget, ips);
+    for (const ip of ips) all.add(ip);
+    const resolution = byResolution.get(line.resolutionLine) ?? new Set<string>();
+    for (const ip of ips) resolution.add(ip);
+    byResolution.set(line.resolutionLine, resolution);
   }
-  for (const ip of all) add(allName, ip.includes(":") ? "AAAA" : "A", ip);
+  // DNSPod needs a default-line record, and other providers answer unmatched
+  // resolvers with it: every line's addresses when the default lines have none.
+  const defaultIps = byResolution.get("default");
+  const defaultFeeds = (line: DnsLine) =>
+    defaultIps?.size ? line.resolutionLine === "default" : true;
+  addAddresses(allName, defaultIps?.size ? defaultIps : all);
+  for (const [line, ips] of byResolution)
+    if (line !== "default" && writable.includes(line)) addAddresses(allName, ips, line);
+  for (const { line, target, switched, backup } of fed) {
+    const sets = [
+      setKey(target, "default"),
+      setKey(allName, line.resolutionLine),
+      ...(defaultFeeds(line) && line.resolutionLine !== "default"
+        ? [setKey(allName, "default")]
+        : []),
+    ];
+    for (const set of sets) {
+      if (switched) failover.push(set);
+      for (const address of backup) failover.push(`${set}|${address}`);
+    }
+  }
   for (const site of sites) {
     add(`${site.id}.${policy.domain}`, "CNAME", allName);
     if (policy.lineAliases)
@@ -361,13 +534,15 @@ export async function compileBindingPlan(
   return {
     records: records.sort((a, b) => compare(recordKey(a), recordKey(b))),
     managedNames: [...names.values()].sort((a, b) => compare(nameKey(a), nameKey(b))),
+    failover,
   };
 }
 
 const PROTECTION_KEY = "dns_protection";
 const DEFAULT_PROTECTION: DnsProtection = { massRemovalRatio: 0.5 };
 const addressRecord = (r: { type: string }) => r.type === "A" || r.type === "AAAA";
-const addressKey = (r: DnsRecord) => `${r.name}|${r.type}|${r.data}`;
+/** An address record on its resolution line. */
+const addressKey = (r: DnsRecord) => `${r.name}|${r.type}|${lineOf(r)}|${r.data}`;
 
 export async function getDnsProtection(db: Executor): Promise<DnsProtection> {
   const [row] = await db
@@ -397,19 +572,39 @@ export async function setDnsProtection(app: AppContext, input: DnsProtection, ac
 
 /**
  * What a plan would remove from the previous address records: record sets
- * (names still managed) that would become empty, and how many address
- * records would go. Names the plan no longer manages (deleted sites,
- * removed lines) are not counted.
+ * (names still managed, per resolution line: "name" on the default line,
+ * "name@line" on another) that would become empty, and how many address
+ * records (name, type, line, address) would go. Names the plan no longer
+ * manages (deleted sites, removed lines) and resolution lines no binding
+ * line maps to any more (`lines`, when given) are not counted.
  */
-export function massRemoval(previous: DnsRecord[], next: Plan) {
+export function massRemoval(
+  previous: DnsRecord[],
+  next: Plan,
+  opts: { lines?: ReadonlySet<string>; failover?: readonly string[] } = {},
+) {
   const managed = new Set(next.managedNames.map(nameKey));
-  const before = previous.filter((r) => addressRecord(r) && managed.has(nameKey(r)));
+  const before = previous.filter(
+    (r) =>
+      addressRecord(r) &&
+      managed.has(nameKey(r)) &&
+      (!opts.lines || !lineOf(r) || opts.lines.has(lineOf(r))),
+  );
   const after = new Set(next.records.filter(addressRecord).map(addressKey));
-  const removed = before.filter((r) => !after.has(addressKey(r))).length;
-  const names = (records: DnsRecord[]) => new Set(records.filter(addressRecord).map((r) => r.name));
+  // Backup groups change sets on purpose: only emptying them counts.
+  const failover = new Set(opts.failover ?? []);
+  const counted = before.filter(
+    (r) =>
+      !failover.has(`${r.name}|${lineOf(r)}`) && !failover.has(`${r.name}|${lineOf(r)}|${r.data}`),
+  );
+  const removed = counted.filter((r) => !after.has(addressKey(r))).length;
+  const names = (records: DnsRecord[]) =>
+    new Set(
+      records.filter(addressRecord).map((r) => (lineOf(r) ? `${r.name}@${lineOf(r)}` : r.name)),
+    );
   const remaining = names(next.records);
   const cleared = [...names(before)].filter((name) => !remaining.has(name));
-  return { removed, previous: before.length, cleared };
+  return { removed, previous: counted.length, cleared };
 }
 
 /**
@@ -426,9 +621,10 @@ async function publishBinding(
   tx: Tx,
   clusterId: string,
   policy: BindingPolicy,
-  reason: string,
-  opts: { force?: boolean; save?: boolean } = {},
+  reason: DnsRevisionReason,
+  opts: { force?: boolean; save?: boolean; params?: Record<string, string | number> } = {},
 ) {
+  const reasonParams = opts.params ?? {};
   const row = await lockBinding(tx, clusterId);
   const cluster = await assertCluster(tx, clusterId);
   if (opts.save)
@@ -444,7 +640,7 @@ async function publishBinding(
         updatedAt: new Date(),
       })
       .where(eq(schema.dnsBinding.clusterId, clusterId));
-  const plan = await compileBindingPlan(tx, clusterId, policy);
+  const { failover, ...plan } = await compileBindingPlan(tx, clusterId, policy);
   const contentHash = createHash("sha256")
     .update(JSON.stringify({ policy, ...plan }))
     .digest("hex");
@@ -466,7 +662,10 @@ async function publishBinding(
     previousPolicy.allLabel === policy.allLabel &&
     previous.contentHash !== contentHash
   ) {
-    const check = massRemoval(previous.records, plan);
+    const check = massRemoval(previous.records, plan, {
+      lines: resolutionLinesOf(policy),
+      failover,
+    });
     const { massRemovalRatio } = await getDnsProtection(tx);
     hold =
       check.cleared.length > 0 ||
@@ -507,6 +706,7 @@ async function publishBinding(
           ...plan,
           contentHash,
           reason,
+          reasonParams,
           status: "blocked",
           lastError: "dns_mass_removal_blocked",
         })
@@ -532,6 +732,7 @@ async function publishBinding(
       ...plan,
       contentHash,
       reason,
+      reasonParams,
       ...(manual ? { status: "applied", appliedAt: new Date() } : {}),
     })
     .returning();
@@ -554,6 +755,30 @@ async function publishBinding(
     })
     .where(eq(schema.dnsBinding.clusterId, clusterId));
   return inserted;
+}
+/**
+ * Publishes an automatic binding's plan now, in the caller's transaction
+ * (scheduling actions and probe-driven address changes do not wait for the
+ * reconciliation every minute). Returns the new revision, or null when the
+ * binding is not automatic, the plan did not change or the mass removal
+ * protection held it back.
+ */
+export async function publishClusterDns(
+  tx: Tx,
+  clusterId: string,
+  reason: DnsRevisionReason,
+  params: Record<string, string | number> = {},
+) {
+  const [row] = await tx
+    .select()
+    .from(schema.dnsBinding)
+    .where(eq(schema.dnsBinding.clusterId, clusterId))
+    .for("update");
+  if (!row || row.mode !== "auto") return null;
+  const revision = await publishBinding(tx, clusterId, bindingPolicy(row), reason, { params });
+  return revision.revision === row.desiredRevision || revision.status === "blocked"
+    ? null
+    : revision;
 }
 async function supersede(tx: Tx, clusterId: string, status: "blocked" | "pending") {
   await tx
@@ -585,7 +810,9 @@ export async function getBinding(app: AppContext, clusterId: string) {
     .orderBy(desc(schema.dnsRevision.revision))
     .limit(1);
   const check = blocked
-    ? massRemoval(revision?.records ?? [], blocked)
+    ? massRemoval(revision?.records ?? [], blocked, {
+        lines: resolutionLinesOf(parsePolicy(blocked.policy, row.allLabel) ?? bindingPolicy(row)),
+      })
     : { removed: 0, previous: 0 };
   return {
     binding: await bindingDto(app.db, row),
@@ -635,7 +862,7 @@ export async function listBindings(app: AppContext) {
 export async function saveBinding(
   app: AppContext,
   clusterId: string,
-  input: DnsBindingInput,
+  input: Omit<BindingPolicy, "allLabel">,
   actor: Actor,
 ) {
   await assertCluster(app.db, clusterId);
@@ -777,14 +1004,20 @@ export async function exportBinding(app: AppContext, clusterId: string) {
     name: absolute(r.name, zone),
   }));
   const width = Math.max(1, ...records.map((r) => r.name.length));
+  const entry = (r: DnsRecord) =>
+    `${r.name.padEnd(width)} ${r.ttl} IN ${r.type.padEnd(5)} ${r.type === "CNAME" ? `${r.data}.` : r.data}`;
+  // BIND has no resolution lines: the zone file holds the default line; the
+  // records of other lines follow as comments, to be created on those lines.
+  const otherLines = [...new Set(records.map(lineOf).filter(Boolean))].sort();
   const zoneFile = zone
     ? [
         `$ORIGIN ${zone}.`,
         `$TTL ${policy.ttl}`,
-        ...records.map(
-          (r) =>
-            `${r.name.padEnd(width)} ${r.ttl} IN ${r.type.padEnd(5)} ${r.type === "CNAME" ? `${r.data}.` : r.data}`,
-        ),
+        ...records.filter((r) => !lineOf(r)).map(entry),
+        ...otherLines.flatMap((line) => [
+          `; line ${line}`,
+          ...records.filter((r) => lineOf(r) === line).map((r) => `; ${entry(r)}`),
+        ]),
         "",
       ].join("\n")
     : "";
@@ -798,8 +1031,9 @@ async function assertCurrent(app: AppContext, clusterId: string, revision: numbe
 function normalizeRecord(record: ProviderRecord): ProviderRecord {
   const type = record.type.toUpperCase(),
     ip = type === "A" || type === "AAAA" ? parseIp(record.data) : null;
+  const { line, ...rest } = record;
   return {
-    ...record,
+    ...rest,
     type,
     name: record.name.replace(/\.$/, "").toLowerCase(),
     data: ip
@@ -807,6 +1041,8 @@ function normalizeRecord(record: ProviderRecord): ProviderRecord {
       : type === "CNAME"
         ? record.data.replace(/\.$/, "").toLowerCase()
         : record.data,
+    // The default line comes back as "" or "default"; other provider lines as "other:<id>".
+    ...(lineOf({ line }) ? { line } : {}),
   };
 }
 const BATCH = 100;
@@ -824,13 +1060,16 @@ function batches<T>(sets: T[][]) {
   if (current.length) out.push(current);
   return out;
 }
-/** Data equality; TTL counts only when `ttl` (providers round or raise TTLs). */
-const sameAs = (ttl: boolean) => (r: { name: string; type: string; data: string; ttl: number }) =>
-  ttl ? recordKey(r) : `${nameKey(r)}|${r.data}`;
+/** Data equality on the record's line; TTL counts only when `ttl` (providers round or raise TTLs). */
+const sameAs =
+  (ttl: boolean) => (r: { name: string; type: string; data: string; ttl: number; line?: string }) =>
+    `${nameKey(r)}|${lineOf(r)}|${r.data}${ttl ? `|${r.ttl}` : ""}`;
 /**
  * Brings one provider zone in line with the binding's plan: claims the
  * planned names (and checks that the claim holds), replaces changed RRsets
- * in batches of 100 (address sets before CNAMEs), deletes managed records
+ * (a name and type on every resolution line: dns.set replaces the set on
+ * all lines with the records given, which carry their line) in batches of
+ * 100 (address sets before CNAMEs), deletes managed records
  * the plan no longer has, reads back, then releases retired names. New
  * records are written before the records they replace are deleted, so a
  * name does not resolve empty in between (an A set replaced by AAAA, a

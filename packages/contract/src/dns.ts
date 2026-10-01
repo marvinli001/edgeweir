@@ -23,18 +23,39 @@ const ipAddress = z
     }
     return formatIp(ip);
   });
-const lineName = z
+/** A canonical resolution line (DNS_LINES); "default" answers resolvers no other line matches. */
+export const resolutionLine = z.enum(DNS_LINES);
+/** Name of a binding line (`<line>.<domain>`), unique in the binding. */
+export const dnsLineName = z
   .string()
   .regex(/^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/)
   .refine((name) => name !== "all");
-export const dnsLine = z.object({
-  name: lineName,
-  nodeGroupId: uuid,
-  overrides: z
-    .array(z.object({ nodeId: uuid, addresses: z.array(ipAddress).min(1).max(8) }))
-    .max(1000)
-    .default([]),
-});
+export const dnsLine = z
+  .object({
+    name: dnsLineName,
+    nodeGroupId: uuid,
+    overrides: z
+      .array(z.object({ nodeId: uuid, addresses: z.array(ipAddress).min(1).max(8) }))
+      .max(1000)
+      .default([]),
+    /** The resolution line on which `<all>.<domain>` answers with this line's addresses. */
+    resolutionLine: resolutionLine.default("default"),
+    /**
+     * Node groups of the cluster that answer instead, the first one with at
+     * least minHealthyIps healthy addresses, while the line's own group has
+     * fewer.
+     */
+    backupNodeGroupIds: z.array(uuid).max(4).default([]),
+    /** Healthy addresses the line's group needs before a backup group takes over. */
+    minHealthyIps: z.number().int().min(1).max(64).default(1),
+  })
+  .superRefine((line, ctx) => {
+    if (
+      new Set(line.backupNodeGroupIds).size !== line.backupNodeGroupIds.length ||
+      line.backupNodeGroupIds.includes(line.nodeGroupId)
+    )
+      ctx.addIssue({ code: "custom", message: "duplicate backup node group" });
+  });
 /** off: the console does not manage DNS; manual: records to create by hand; auto: written through the provider. */
 export const dnsBindingMode = z.enum(["off", "manual", "auto"]);
 /** A cluster's DNS binding as the administrator edits it. */
@@ -62,6 +83,25 @@ export const dnsBindingInput = z
     )
       ctx.addIssue({ code: "custom", message: "duplicate line or group" });
   });
+/** Binding lines with the fields added later filled in (stored lines may predate them). */
+export function withLineDefaults(line: {
+  name: string;
+  nodeGroupId: string;
+  overrides?: DnsLine["overrides"];
+  resolutionLine?: string;
+  backupNodeGroupIds?: string[];
+  minHealthyIps?: number;
+}): DnsLine {
+  const parsed = resolutionLine.safeParse(line.resolutionLine ?? "default");
+  return {
+    name: line.name,
+    nodeGroupId: line.nodeGroupId,
+    overrides: line.overrides ?? [],
+    resolutionLine: parsed.success ? parsed.data : "default",
+    backupNodeGroupIds: line.backupNodeGroupIds ?? [],
+    minHealthyIps: line.minHealthyIps ?? 1,
+  };
+}
 export const dnsBinding = z.object({
   clusterId: uuid,
   mode: dnsBindingMode,
@@ -94,12 +134,30 @@ const record = z.object({
   type: z.enum(["A", "AAAA", "CNAME", "TXT"]),
   data: z.string(),
   ttl: z.number(),
+  /** Resolution line; absent on the default line. */
+  line: resolutionLine.optional(),
 });
+/**
+ * Why a DNS revision was published (`reason`, a code; unknown codes are
+ * shown as they are). `params` name the reasonParams the message
+ * interpolates; scheduling revisions also carry ruleId, nodeId, action
+ * (remove_node | backup_group | backup_ip) and event (activated | recovered).
+ */
+export const dnsRevisionReasonDefs = {
+  manual: { params: [] },
+  health: { params: [] },
+  rollback: { params: [] },
+  force: { params: [] },
+  scheduling: { params: ["rule", "node"] },
+} as const satisfies Record<string, { params: readonly string[] }>;
+export type DnsRevisionReason = keyof typeof dnsRevisionReasonDefs;
 const revision = z.object({
   revision: z.number(),
   /** blocked: the mass removal protection kept the previous records instead. */
   status: z.enum(["pending", "applied", "failed", "superseded", "blocked"]),
+  /** A code of dnsRevisionReasonDefs (manual, health, rollback, force, scheduling). */
   reason: z.string(),
+  reasonParams: z.record(z.string(), z.union([z.string(), z.number()])),
   recordCount: z.number(),
   createdAt: z.string(),
   appliedAt: z.string().nullable(),

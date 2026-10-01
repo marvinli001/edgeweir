@@ -1256,5 +1256,19 @@
   "bulk_redirects_limit": "最多 {limit} 条",
   "bulk_redirects_filter": "筛选",
   "bulk_redirects_no_match": "没有匹配的重定向",
-  "bulk_redirects_invalid": "{count} 条无效"
+  "bulk_redirects_invalid": "{count} 条无效",
+  "error_dns_line_unsupported": "该 DNS 服务商不支持 {line} 解析线路",
+  "error_region_in_use": "该区域下还有 {probes} 个探针",
+  "error_probe_not_found": "探针不存在",
+  "error_node_region_required": "先为节点所在的节点组设置区域，节点才能兼任探针",
+  "error_node_address_invalid": "不是单个单播 IP 地址：{address}",
+  "error_scheduling_rule_not_found": "调度规则不存在",
+  "error_scheduling_rule_invalid": "规则需要集群 DNS 绑定中的一条线路",
+  "alert_kind_scheduling_action": "智能调度规则已作用于节点",
+  "audit_actor_probe": "探针",
+  "dns_revision_reason_manual": "保存绑定",
+  "dns_revision_reason_health": "节点健康变化",
+  "dns_revision_reason_rollback": "回滚",
+  "dns_revision_reason_force": "强制发布",
+  "dns_revision_reason_scheduling": "智能调度：{rule}（{node}）"
 }

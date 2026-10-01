@@ -47,6 +47,8 @@ export const errorDefs = {
   DNS_PROVIDER_FAILED: { status: 502, params: [] },
   DNS_ADDRESS_REFUSED: { status: 400, params: [] },
   DNS_ZONES_UNSUPPORTED: { status: 400, params: [] },
+  /** A binding line's resolution line that the binding's provider does not implement. */
+  DNS_LINE_UNSUPPORTED: { status: 400, params: ["line"] },
   RULE_INVALID: { status: 400, params: [] },
   /** A "host/path" bulk redirect source whose host is none of the site's domains. */
   BULK_REDIRECT_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
@@ -85,6 +87,16 @@ export const errorDefs = {
   NODE_GROUP_CLUSTER_MISMATCH: { status: 400, params: [] },
   REGION_NOT_FOUND: { status: 404, params: [] },
   REGION_CODE_TAKEN: { status: 409, params: ["code"] },
+  /** Probes are bound to the region; delete or move them first. */
+  REGION_IN_USE: { status: 409, params: ["probes"] },
+  PROBE_NOT_FOUND: { status: 404, params: [] },
+  /** A node probes from its node group's region; the group has none. */
+  NODE_REGION_REQUIRED: { status: 409, params: [] },
+  /** A scheduling address that is not a single unicast IP literal. */
+  NODE_ADDRESS_INVALID: { status: 400, params: ["address"] },
+  SCHEDULING_RULE_NOT_FOUND: { status: 404, params: [] },
+  /** A rule the cluster cannot evaluate (e.g. backup_group without a line, an unknown line). */
+  SCHEDULING_RULE_INVALID: { status: 400, params: [] },
   NODE_NOT_FOUND: { status: 404, params: [] },
   SITE_NOT_FOUND: { status: 404, params: [] },
   CACHE_RULE_PRIORITY_DUPLICATE: { status: 400, params: ["priority"] },
