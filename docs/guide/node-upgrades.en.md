@@ -130,6 +130,7 @@ Signing and verification are covered in the [Sigstore documentation](https://doc
 | `self-upgrade-v1` | Signed upgrades; reported when the supervisor runs and finds `cosign` |
 | `probe-health-v1` | The health endpoint `/.edgeweir/health` on the edge listeners; when every active node of a cluster has it, [regional probes](scheduling.en.md#probe-methods) probe with HTTP / HTTPS, otherwise they only open TCP connections. Never shows **Upgrade required** |
 | `metrics-v1` | Host metrics in the heartbeat (CPU, load, memory, egress, active connections), reported by Linux nodes; without it node metrics and node-metric scheduling conditions show **No data**. Never shows **Upgrade required** |
+| `l4-v1` | The cluster has an enabled [L4 app](l4.en.md): layer-4 forwarding and L4 statistics. Without it the node refuses configurations with L4 apps, and the port pools tab, the L4 app list, and the dialog warn "Nodes {nodes} of {cluster} lack L4 forwarding and refuse configurations with L4 apps until upgraded" |
 
 When a node lacks a capability the cluster's current configuration needs, or lacks `stats-sequence-v1`, the node list in **Clusters & nodes** shows **Upgrade required**; the node keeps its last-known-good configuration and rejects configurations with unknown capabilities or enum values.
 

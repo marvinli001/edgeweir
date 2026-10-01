@@ -130,6 +130,7 @@ EDGEWEIR_UPGRADE_PUBLIC_KEY=/etc/edgeweir-node/release.pub
 | `self-upgrade-v1` | 签名升级；监督进程运行且找到 `cosign` 时上报 |
 | `probe-health-v1` | 边缘监听的健康端点 `/.edgeweir/health`；集群全部活动节点具备时，[区域探针](scheduling.md#探测方式) 以 HTTP / HTTPS 探测，否则只建立 TCP 连接。缺少时不显示「需要升级」 |
 | `metrics-v1` | 心跳中的主机指标（CPU、负载、内存、出口带宽、活动连接），Linux 节点上报；缺少时节点指标与调度规则的节点指标条件为「无数据」。缺少时不显示「需要升级」 |
+| `l4-v1` | 集群有启用的 [L4 应用](l4.md)：四层转发与 L4 统计。缺少时节点拒绝含 L4 应用的配置，端口池页签、L4 应用列表与对话框提示「集群 {集群} 的节点 {节点} 不支持四层转发，升级前不会应用含 L4 应用的配置」 |
 
 节点缺少集群当前配置要求的能力或 `stats-sequence-v1` 时，**集群与节点** 的节点列表显示「需要升级」；该节点继续使用 last-known-good 配置，并拒绝含未知能力或未知枚举的配置。
 
