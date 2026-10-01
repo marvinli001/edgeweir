@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import * as z from "zod";
 import { Countdown } from "@/components/appica/countdown";
 import { ClusterRolloutCard } from "@/components/cluster-rollout";
-import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ConfirmDialog, ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { ClusterDns } from "@/components/dns/cluster-dns";
@@ -60,7 +60,6 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAction } from "@/hooks/use-action";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { revisionReason } from "@/lib/revisions";
@@ -355,7 +354,7 @@ function ClusterSummary({
         open={editOpen}
         onOpenChange={setEditOpen}
       />
-      <ControlledConfirm
+      <ControlledConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title={m.clusters_delete_confirm({ name: selected.name })}
@@ -368,64 +367,6 @@ function ClusterSummary({
         }}
       />
     </Card>
-  );
-}
-
-/** A destructive confirmation opened from a menu item; errors stay in the dialog. */
-function ControlledConfirm({
-  open,
-  onOpenChange,
-  title,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  onConfirm: () => Promise<void>;
-}) {
-  const action = useAction();
-  const [error, setError] = React.useState<string | null>(null);
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) setError(null);
-        onOpenChange(next);
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        {error ? (
-          <FieldError data-testid="confirm-error" className="animate-in fade-in">
-            {error}
-          </FieldError>
-        ) : null}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {m.common_cancel()}
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={action.pending}
-            data-testid="confirm-action"
-            onClick={async () => {
-              setError(null);
-              try {
-                await action.run(onConfirm);
-                onOpenChange(false);
-              } catch (err) {
-                setError(errorMessage(err));
-              }
-            }}
-          >
-            {action.pending ? <Spinner /> : null}
-            {m.common_confirm()}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -961,7 +902,7 @@ function DeleteNodeDialog({ node, onClose }: { node: Node; onClose: () => void }
   const queryClient = useQueryClient();
   const remove = useMutation(orpc.nodes.delete.mutationOptions());
   return (
-    <ControlledConfirm
+    <ControlledConfirmDialog
       open
       onOpenChange={(open) => !open && onClose()}
       title={m.nodes_delete_confirm({ name: node.name })}

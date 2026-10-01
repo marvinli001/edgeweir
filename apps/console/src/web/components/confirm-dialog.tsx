@@ -9,9 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FieldError } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";
 import { m } from "@/lib/i18n";
+import { errorMessage } from "@/lib/orpc";
 
 /** Confirmation for irreversible or publishing actions. */
 export function ConfirmDialog({
@@ -62,5 +64,66 @@ export function ConfirmDialog({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/**
+ * A destructive confirmation opened from a menu item or a parent's state;
+ * a failure stays in the dialog with its message.
+ */
+export function ControlledConfirmDialog({
+  open,
+  onOpenChange,
+  title,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  onConfirm: () => Promise<void>;
+}) {
+  const action = useAction();
+  const [error, setError] = React.useState<string | null>(null);
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setError(null);
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        {error ? (
+          <FieldError data-testid="confirm-error" className="animate-in fade-in">
+            {error}
+          </FieldError>
+        ) : null}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {m.common_cancel()}
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={action.pending}
+            data-testid="confirm-action"
+            onClick={async () => {
+              setError(null);
+              try {
+                await action.run(onConfirm);
+                onOpenChange(false);
+              } catch (err) {
+                setError(errorMessage(err));
+              }
+            }}
+          >
+            {action.pending ? <Spinner /> : null}
+            {m.common_confirm()}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
