@@ -31,7 +31,7 @@ Development environment, checks, code conventions, and change procedures.
 | Go | 1.27.1 | `helpers/certd`, `pnpm e2e` |
 | buf | 1.73.0 | Installed with the dev dependencies (`@bufbuild/buf`); called by `pnpm lint` and `pnpm proto:*` |
 
-End-to-end tests also need curl, jq, goreleaser v2, syft, cosign v3.1.3, a checkout of [edgeweir-node](https://github.com/marvinli001/edgeweir-node) next to this repository (or `EDGEWEIR_NODE_CONTEXT`), and network access to deb.debian.org and openresty.org. The Playwright steps need Chromium:
+End-to-end tests also need curl, jq, goreleaser v2, syft, cosign v3.1.3, a checkout of [edgeweir-node](https://github.com/marvinli001/edgeweir-node) next to this repository (or `EDGEWEIR_NODE_CONTEXT`) whose `out/openresty` holds the edgeweir-openresty packages for the Docker architecture (`make openresty-packages`; `scripts/e2e.sh` builds them first when missing, which needs Docker Buildx), a node image from before G3, `edgeweir-node:pre-g3` (`scripts/e2e-g3.mjs` builds it from edgeweir-node commit `6da3403` when missing), and network access to deb.debian.org and openresty.org (building the node image or the edgeweir-openresty packages for the first time also needs github.com, download.gnome.org and vault.almalinux.org). The Playwright steps need Chromium:
 
 ```bash
 pnpm --filter @edgeweir/console exec playwright install chromium

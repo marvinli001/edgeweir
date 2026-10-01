@@ -31,7 +31,7 @@
 | Go | 1.27.1 | `helpers/certd`、`pnpm e2e` |
 | buf | 1.73.0 | 随开发依赖安装（`@bufbuild/buf`），由 `pnpm lint` 与 `pnpm proto:*` 调用 |
 
-端到端测试另需：curl、jq、goreleaser v2、syft、cosign v3.1.3，与本仓库同级的 [edgeweir-node](https://github.com/marvinli001/edgeweir-node) 检出（或 `EDGEWEIR_NODE_CONTEXT`），以及对 deb.debian.org、openresty.org 的网络访问。Playwright 步骤需要 Chromium：
+端到端测试另需：curl、jq、goreleaser v2、syft、cosign v3.1.3，与本仓库同级的 [edgeweir-node](https://github.com/marvinli001/edgeweir-node) 检出（或 `EDGEWEIR_NODE_CONTEXT`），其中 `out/openresty` 有 Docker 架构对应的 edgeweir-openresty 包（`make openresty-packages`；缺少时 `scripts/e2e.sh` 先构建，需要 Docker Buildx），G3 之前的节点镜像 `edgeweir-node:pre-g3`（缺少时 `scripts/e2e-g3.mjs` 从 edgeweir-node 提交 `6da3403` 构建），以及对 deb.debian.org、openresty.org 的网络访问（首次构建节点镜像或 edgeweir-openresty 包时另需 github.com、download.gnome.org、vault.almalinux.org）。Playwright 步骤需要 Chromium：
 
 ```bash
 pnpm --filter @edgeweir/console exec playwright install chromium

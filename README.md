@@ -198,9 +198,11 @@ pnpm e2e     # --up 启动环境；--down 结束后删除环境与卷；--skip-u
 
 - curl、jq、Docker（节点容器需要 `NET_ADMIN`）、Node.js
 - 与本仓库同级的 edgeweir-node 检出（或 `EDGEWEIR_NODE_CONTEXT`）
-- 安装步骤：goreleaser v2、syft、cosign、Go 1.27.1，以及对 deb.debian.org、openresty.org 的网络访问
+- 安装步骤：goreleaser v2、syft、cosign、Go 1.27.1；edgeweir-node 的 `out/openresty` 中有 Docker 架构对应的 edgeweir-openresty 包（`make openresty-packages`，缺少时由 `scripts/e2e.sh` 构建，需要 Docker Buildx）
+- G3 步骤：G3 之前的节点镜像 `edgeweir-node:pre-g3`（`E2E_OLD_NODE_IMAGE`，缺少时由 `scripts/e2e-g3.mjs` 从 edgeweir-node 提交 `6da3403` 构建）
+- 网络访问：deb.debian.org、openresty.org；首次构建节点镜像或 edgeweir-openresty 包时另需 github.com、download.gnome.org、vault.almalinux.org
 
-覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 组织与管理端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、动态封禁（下发延迟 p95 ≤ 5 秒、站点封禁、平台封禁由 nftables 丢包）、挑战与通行凭证（无头浏览器通过 js 与 pow 挑战，凭证在另一节点有效，换网段、换 UA 或伪造后失效）、分级 CC（只升级被攻击的路径、单 IP 自动封禁）、JA4 参与规则匹配、Playwright 页面流程。
+覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 组织与管理端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、动态封禁（下发延迟 p95 ≤ 5 秒、站点封禁、平台封禁由 nftables 丢包）、挑战与通行凭证（无头浏览器通过 js 与 pow 挑战，凭证在另一节点有效，换网段、换 UA 或伪造后失效）、分级 CC（只升级被攻击的路径、单 IP 自动封禁）、JA4 参与规则匹配、Brotli / Zstandard 按 q 值协商（缓存一份未压缩对象，`curl --compressed` 解码）、OWASP CRS 检测与拦截（含缓存命中）、旧节点所在集群无法开启这些功能、edgeweir-openresty 包内容、Playwright 页面流程。
 
 以下变量由 `compose.e2e.yml` 与 `scripts/e2e.sh` 共同读取，两侧取值须一致。更换项目名、端口、tag 与子网即可并行运行第二套环境。
 
