@@ -372,7 +372,11 @@ async function createSite(name, domain, origin, extra = {}) {
 const https = (user, siteId) => user.ok("GET", `/sites/${siteId}/https`);
 const putHttps = (user, siteId, settings) =>
   user.raw("PUT", `/sites/${siteId}/https`, { settings });
-const features = (user, siteId) => user.ok("GET", `/sites/${siteId}/features`);
+/** Availability of the G3 features (later milestones add their own to the response). */
+const features = async (user, siteId) => {
+  const { brotli, zstd, crs } = await user.ok("GET", `/sites/${siteId}/features`);
+  return { brotli, zstd, crs };
+};
 const AVAILABLE = { available: true, reason: null };
 const BY_NODES = { available: false, reason: "nodes" };
 

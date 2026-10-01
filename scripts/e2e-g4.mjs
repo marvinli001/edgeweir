@@ -940,7 +940,8 @@ try {
     );
     for (const r of results) assert.equal(json(r).origin, other, `${target} left the new pin`);
   }
-  await setOriginSettings(sites.pool.id, { sessionAffinity: { enabled: false, ttlSeconds: 600 } });
+  // Off again with the default lifetime (apps/console/e2e/g4.spec.ts starts from there).
+  await setOriginSettings(sites.pool.id, { sessionAffinity: { enabled: false, ttlSeconds: 3600 } });
   await synced("session affinity off");
   pass(
     `session affinity: the first response sets __ew_affinity (HttpOnly, SameSite=Lax, Max-Age=600) for ${pinned}; both nodes keep the client on ${pinned} without re-issuing it, replace a tampered cookie, move it to ${other} with a new cookie once ${pinned} fails its checks, and keep it there after ${pinned} recovers`,
@@ -1055,12 +1056,13 @@ try {
     r = await get(target, HOST_ERR, "/status/429");
     sitePage(r, 429, HOST_ERR);
     seenCodes["429 origin"] = r.headers["x-edgeweir-error"];
-    // Placeholders are HTML-escaped (a wildcard host with markup in its first label).
-    const odd = `a<i>&"'.${HOST_ERR}`;
+    // Placeholders are HTML-escaped: a wildcard host with & and ' in its first
+    // label (nginx answers 400 to <, > and " in a Host).
+    const odd = `a&b'c.${HOST_ERR}`;
     r = await get(target, odd, "/blocked");
     assert.equal(r.status, 403, summary(r));
-    assert.ok(!r.body.includes("<i>&"), r.body);
-    assert.ok(r.body.includes("host=a&lt;i&gt;&amp;&quot;"), r.body);
+    assert.ok(!r.body.includes("a&b'c"), r.body);
+    assert.ok(r.body.includes(`host=a&amp;b&#39;c.${HOST_ERR} `), r.body);
     // A valid client request id is kept, an invalid one replaced.
     r = await get(target, HOST_ERR, "/blocked", { "x-request-id": `g4-e2e-${rid}-0001` });
     assert.equal(sitePage(r, 403, HOST_ERR), `g4-e2e-${rid}-0001`);
@@ -1121,9 +1123,9 @@ try {
     let r = await get(target, unknownHost, "/");
     sitePage(r, 404, unknownHost, "platform-unknown");
     assert.equal(r.headers["x-edgeweir-error"], "unknown-host");
-    r = await get(target, `x<b>.${unknownHost}`, "/");
+    r = await get(target, `x&y'z.${unknownHost}`, "/");
     assert.equal(r.status, 404);
-    assert.ok(r.body.includes(`host=x&lt;b&gt;.${unknownHost}`), r.body);
+    assert.ok(r.body.includes(`host=x&amp;y&#39;z.${unknownHost} `), r.body);
     r = await get(target, HOST_OFF, "/");
     sitePage(r, 503, HOST_OFF, "platform-disabled");
     assert.equal(r.headers["x-edgeweir-error"], "site-disabled");
