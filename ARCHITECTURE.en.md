@@ -24,7 +24,7 @@ Console (ROLE=app|worker|all)
 └── child process stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA, DNS provider APIs
 ```
 
-The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.14.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
+The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.15.1`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
 
 ## Repository layout
 
@@ -101,7 +101,7 @@ Unmatched requests under `/api`, `/rpc`, and `/downloads`, and other methods on 
 | Area | Paths | Access |
 | --- | --- | --- |
 | Entry | `/` (redirects to `/setup`, `/overview`, or `/login` by state), `/setup`, `/login` | Everyone |
-| Console | Sites: `/overview`, `/sites`, `/certificates`, `/purge`; access control: `/ip-lists`, `/bans`, `/rules`; infrastructure: `/clusters`, `/regions`, `/dns`; system: `/alerts`, `/service-accounts`, `/audit`, `/system`; account (user menu): `/security`, `/settings` | The signed-in operator |
+| Console | Sites: `/overview`, `/sites` (with L4 apps at `/l4`), `/certificates`, `/purge`; access control: `/ip-lists`, `/bans`, `/rules`; infrastructure: `/clusters`, `/regions`, `/dns`; system: `/alerts`, `/service-accounts`, `/audit`, `/system`; account (user menu): `/security`, `/settings` | The signed-in operator |
 
 ## Authentication and authorization
 
@@ -122,8 +122,8 @@ Account recovery has no HTTP entry and happens on the server only: `dist/server/
 
 A change to node configuration runs in one transaction:
 
-1. Write the application tables (sites, domains, origins, cache rules, rules, IP lists, certificates, ACME HTTP-01 responses, the origin allow list, the full-site purge generation).
-2. `publishRevision()` takes an advisory lock on the cluster, reads the cluster's enabled sites, global rules, every IP list, the origin allow list, certificate references, and unexpired HTTP-01 responses, and `compileNodeConfig()` produces the canonical NodeConfig IR.
+1. Write the application tables (sites, domains, origins, cache rules, rules, IP lists, L4 apps, certificates, ACME HTTP-01 responses, the origin allow list, the full-site purge generation).
+2. `publishRevision()` takes an advisory lock on the cluster, reads the cluster's enabled sites and L4 apps, global rules, every IP list, the origin allow list, certificate references, and unexpired HTTP-01 responses, and `compileNodeConfig()` produces the canonical NodeConfig IR.
 3. Compute `content_hash`: SHA-256 of the binary encoding with `revision` and `content_hash` cleared. Identical content produces no new revision.
 4. The new revision number is one more than the larger of the latest stored revision and the highest verified applied revision reported by the cluster's nodes; restoring the database from a backup never moves revisions backwards.
 5. Insert into `config_revision`, run `pg_notify('edgeweir_config', …)` in the same transaction, and write the audit entry.
@@ -134,6 +134,7 @@ A change to node configuration runs in one transaction:
 | Constraint | Value |
 | --- | --- |
 | Enabled sites per cluster | At most 512 (`MAX_SITES_PER_CLUSTER`); more returns `CLUSTER_SITE_LIMIT` |
+| L4 apps per cluster | At most 256 (`MAX_L4_APPS_PER_CLUSTER`); more returns `L4_APP_LIMIT` |
 | New node capabilities | A change that needs a capability some active node lacks returns `NODE_CAPABILITY_REQUIRED` when a service account or a background job publishes it; the operator (session or AccessKey) may publish it; `GetConfig` returns `FailedPrecondition` to a node missing a required capability |
 | Revision retention | Newest 200 per cluster, pruned hourly |
 | Rollback | Publishes the IR of an older revision as a new revision with the current origin allow list; audit action `cluster.rollback` |
@@ -220,6 +221,31 @@ The console is the only authority on expression syntax: `packages/rule-engine` p
 
 Behavior: [Rules, IP lists, and GeoIP](docs/guide/rules.en.md) and [Origins and cache](docs/guide/origins-and-cache.en.md).
 
+## Layer-4 forwarding
+
+The nodes' stream subsystem forwards TCP / UDP L4 apps; the console handles ports, configuration, DNS, and statistics:
+
+1. Port pools (`cluster_port_pool`) exist in the console only: an L4 app's port must fall inside a pool of its cluster for its protocol (1024–65535, no overlap within a protocol, never a port of the cluster's HTTP / HTTPS listeners). Writes to pools and apps are checked one at a time under an advisory lock of the cluster; changing pools publishes no revision.
+2. L4 apps (`l4_app`, `l4_origin`) ship with the cluster's revision: enabled apps compile to `NodeConfig.l4_apps` (sorted by id, with the ids of the IP lists they reference) and add `l4-v1` to `required_features`; disabled apps are not shipped. Origins follow the same origin address policy as sites.
+3. Nodes render the port, protocol, whether PROXY protocol is accepted, and the version sent as a `server` in `stream {}` and reload, old workers serving open TCP connections until they end; origins, passive health check settings, timeouts, lists, and connection limits are hot-updated over the local control socket. Only apps that both accept and send PROXY protocol use a Lua relay; all others (v2 included) use native nginx forwarding.
+4. DNS: `compileBindingPlan` writes a `<app id>.<cluster domain>` CNAME for every enabled app (with line aliases also `<line>.<app id>.<cluster domain>`), sharing the all-lines record, resolution lines, and backup node groups with sites.
+5. Statistics: nodes report per app and minute `connections`, `refused`, `peak_concurrent`, `bytes_received`, and `bytes_sent` in `ReportStatsV2Request.l4_stats`, in the same batch as the sites' minute buckets and deduplicated by the same batch sequence; the console accepts only apps of the node's cluster and writes `l4_minute_stats` (no rollup, kept 7 days); `l4Apps.stats` buckets a range by 60, 300, or 3600 seconds.
+6. Rollbacks and the canary's stable revision treat L4 apps by their current state: apps disabled now are not shipped; an app deleted since, whose port is no longer inside a pool, or that references a deleted list fails the operator's rollback (`ROLLBACK_RESOURCE_UNAVAILABLE`) and is left out of the stable revision.
+
+| Limit | Value |
+| --- | --- |
+| L4 apps per cluster | At most 256 (`MAX_L4_APPS_PER_CLUSTER`); more returns `L4_APP_LIMIT` |
+| Port pools per cluster | At most 64 |
+| Origins per app | 1–32 |
+
+| Management action | Audit |
+| --- | --- |
+| Changing port pools | `cluster.port_pools_update` (publishes no revision) |
+| Creating, changing, deleting an L4 app | `l4_app.create`, `l4_app.update`, `l4_app.delete` (publishes the app's cluster, reasons `l4_app_created`, `l4_app_updated`, `l4_app_deleted`) |
+| Enabling, disabling an L4 app | `l4_app.enable`, `l4_app.disable` (reason `l4_app_updated`) |
+
+Behavior: [Layer-4 forwarding](docs/guide/l4.en.md).
+
 ## Node channel
 
 Connect-RPC over HTTPS; the console process terminates TLS itself.
@@ -251,7 +277,7 @@ Every RPC other than `Enroll` and `EnrollProbe` requires a client certificate ve
 | `WatchConfig` | Server stream: revision notifications, task notifications, ban notifications (`bans-v1`), keepalives |
 | `GetConfig` | Snapshot, or diff against `base_revision`, with a revision receipt |
 | `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state, host metrics (`metrics-v1`); `probe` in the response tells the node whether it also probes |
-| `ReportStats`, `ReportStatsV2` | Per-minute pre-aggregated traffic statistics; deduplicated by batch sequence |
+| `ReportStats`, `ReportStatsV2` | Per-minute pre-aggregated traffic statistics (`ReportStatsV2` also carries the L4 apps' minute statistics, `l4-v1`); deduplicated by batch sequence |
 | `ReportLogs` | Sampled access logs; deduplicated by batch sequence |
 | `GetOriginCredentials` | S3 origin keys referenced by the cluster's sites |
 | `GetCertificates` | Certificate chains and private keys referenced by the cluster's sites |
@@ -318,6 +344,7 @@ Access logs are sampled per site; the sample rate defaults to 0 (off). Per-minut
 | --- | --- |
 | Access logs (PostgreSQL and ClickHouse) | 7 days |
 | Per-minute statistics (PostgreSQL and ClickHouse) | 7 days |
+| Per-minute statistics of L4 apps | 7 days |
 | Hourly statistics | 90 days |
 | Daily statistics | 365 days |
 
@@ -331,7 +358,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | --- | --- | --- |
 | `alerts.sweep` | Every minute | Alert detection and delivery |
 | `dns.reconcile` | Every minute | DNS steering publishing and external record maintenance |
-| `traffic.rollup` | Every minute | Traffic rollup and cleanup, access log partition maintenance, upgrade expiry |
+| `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), access log partition maintenance, upgrade expiry |
 | `certificates.sweep` | Every minute | Certificate issuance and renewal |
 | `maintenance.recompile` | At start; skipped while `config_recompiled` in `system_setting` matches the current marker | Republishes every cluster once when an upgrade changes what stored data compiles to |
 | `maintenance.prune-revisions` | Minute 17 of every hour | Deletes revisions beyond the retention count |

@@ -24,7 +24,7 @@
 └── 子进程 stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA、DNS 服务商 API
 ```
 
-控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.14.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
+控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.15.1`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
 
 ## 仓库布局
 
@@ -101,7 +101,7 @@
 | 区域 | 路径 | 访问者 |
 | --- | --- | --- |
 | 入口 | `/`（按状态跳转到 `/setup`、`/overview` 或 `/login`）、`/setup`、`/login` | 所有人 |
-| 控制台 | 网站：`/overview`、`/sites`、`/certificates`、`/purge`；访问控制：`/ip-lists`、`/bans`、`/rules`；基础设施：`/clusters`、`/regions`、`/dns`；系统：`/alerts`、`/service-accounts`、`/audit`、`/system`；账户（用户菜单）：`/security`、`/settings` | 登录的运营者 |
+| 控制台 | 网站：`/overview`、`/sites`（含 L4 应用 `/l4`）、`/certificates`、`/purge`；访问控制：`/ip-lists`、`/bans`、`/rules`；基础设施：`/clusters`、`/regions`、`/dns`；系统：`/alerts`、`/service-accounts`、`/audit`、`/system`；账户（用户菜单）：`/security`、`/settings` | 登录的运营者 |
 
 ## 认证与授权
 
@@ -122,8 +122,8 @@
 
 改变节点配置的操作在一个事务内完成：
 
-1. 写业务表（网站、域名、源站、缓存规则、规则、IP 名单、证书、ACME HTTP-01 响应、源站允许清单、全站清除缓存的代际号）。
-2. `publishRevision()` 对集群加 advisory lock，读取该集群启用的网站、全局规则、全部 IP 名单、源站允许清单、证书引用与未过期的 HTTP-01 响应，`compileNodeConfig()` 生成规范化的 NodeConfig IR。
+1. 写业务表（网站、域名、源站、缓存规则、规则、IP 名单、L4 应用、证书、ACME HTTP-01 响应、源站允许清单、全站清除缓存的代际号）。
+2. `publishRevision()` 对集群加 advisory lock，读取该集群启用的网站与 L4 应用、全局规则、全部 IP 名单、源站允许清单、证书引用与未过期的 HTTP-01 响应，`compileNodeConfig()` 生成规范化的 NodeConfig IR。
 3. 计算 `content_hash`：`revision` 与 `content_hash` 置空后二进制编码的 SHA-256。与上一版相同则不产生新 revision。
 4. 新 revision 号为「库中最新 revision」与「本集群节点经验证的最高已应用 revision」中较大者加一；数据库从备份恢复后 revision 不回退。
 5. 写入 `config_revision`，同一事务内 `pg_notify('edgeweir_config', …)`，再写审计。
@@ -134,6 +134,7 @@
 | 约束 | 值 |
 | --- | --- |
 | 每个集群的启用网站 | 最多 512 个（`MAX_SITES_PER_CLUSTER`），超出返回 `CLUSTER_SITE_LIMIT` |
+| 每个集群的 L4 应用 | 最多 256 个（`MAX_L4_APPS_PER_CLUSTER`），超出返回 `L4_APP_LIMIT` |
 | 新增节点能力 | 发布需要活动节点尚不支持的能力时，服务账号与后台任务的发布返回 `NODE_CAPABILITY_REQUIRED`，运营者本人（会话或 AccessKey）可以发布；`GetConfig` 对缺少所需能力的节点返回 `FailedPrecondition` |
 | revision 保留 | 每个集群保留最新 200 个，每小时清理 |
 | 回滚 | 以旧 revision 的 IR 发布新 revision，源站允许清单取当前值，审计动作 `cluster.rollback` |
@@ -220,6 +221,31 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 
 行为见 [规则、IP 名单与 GeoIP](docs/guide/rules.md) 与 [源站与缓存](docs/guide/origins-and-cache.md)。
 
+## 四层转发
+
+TCP / UDP 的 L4 应用由节点的 stream 子系统转发，控制台负责端口、配置、DNS 与统计：
+
+1. 端口池（`cluster_port_pool`）只在控制台使用：L4 应用的端口必须落在其集群该协议的端口池内（1024–65535，同协议不重叠，不含集群 HTTP / HTTPS 监听的端口）。端口池与应用的写入在集群的 advisory lock 下串行校验；修改端口池不发布 revision。
+2. L4 应用（`l4_app`、`l4_origin`）随集群 revision 发布：启用的应用编译为 `NodeConfig.l4_apps`（按 id 排序，带所引用 IP 名单的 id），`required_features` 加 `l4-v1`；停用的应用不下发。源站遵守与网站相同的源站地址策略。
+3. 节点把端口、协议、是否接受 PROXY protocol 与发送版本渲染为 `stream {}` 中的 `server` 并 reload，旧 worker 继续服务已有的 TCP 连接直到结束；源站、被动健康检查参数、超时、名单与连接上限经本机控制 socket 热更新。只有既接受又发送 PROXY protocol 的应用使用 Lua 中继，其余（含 v2）由 nginx 原生转发。
+4. DNS：`compileBindingPlan` 为每个启用的应用写 `<应用 id>.<集群域名>` CNAME（开启线路别名时另有 `<线路>.<应用 id>.<集群域名>`），与网站共用汇总记录、解析线路与备用节点组。
+5. 统计：节点在 `ReportStatsV2Request.l4_stats` 中上报每个应用每分钟的 `connections`、`refused`、`peak_concurrent`、`bytes_received`、`bytes_sent`，与网站的分钟桶同批，共用批次序号去重；控制台只接受节点所在集群的应用，写入 `l4_minute_stats`（不汇总，保留 7 天），`l4Apps.stats` 按范围以 60、300 或 3600 秒分桶。
+6. 回滚与金丝雀的稳定版本按当前状态处理 L4 应用：当前停用的应用不下发；已删除、端口已不在端口池内或引用已删除名单的应用使运营者的回滚失败（`ROLLBACK_RESOURCE_UNAVAILABLE`），在稳定版本中被略去。
+
+| 限制 | 值 |
+| --- | --- |
+| 每个集群的 L4 应用 | 最多 256 个（`MAX_L4_APPS_PER_CLUSTER`），超出返回 `L4_APP_LIMIT` |
+| 每个集群的端口池 | 最多 64 个 |
+| 每个应用的源站 | 1–32 个 |
+
+| 管理操作 | 审计 |
+| --- | --- |
+| 修改端口池 | `cluster.port_pools_update`（不发布 revision） |
+| 新建、修改、删除 L4 应用 | `l4_app.create`、`l4_app.update`、`l4_app.delete`（发布应用的集群，原因 `l4_app_created`、`l4_app_updated`、`l4_app_deleted`） |
+| 启用、停用 L4 应用 | `l4_app.enable`、`l4_app.disable`（原因 `l4_app_updated`） |
+
+行为见 [四层转发](docs/guide/l4.md)。
+
 ## 节点通道
 
 Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
@@ -251,7 +277,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `WatchConfig` | 服务端流：revision 通知、任务通知、封禁通知（`bans-v1`）、keepalive |
 | `GetConfig` | 快照或相对 `base_revision` 的 diff，附 revision 回执 |
 | `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态、主机指标（`metrics-v1`）；响应的 `probe` 告诉节点是否兼任探针 |
-| `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计；按批次序号去重 |
+| `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计（`ReportStatsV2` 另含 L4 应用的分钟统计，`l4-v1`）；按批次序号去重 |
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
 | `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥 |
 | `GetCertificates` | 本集群网站引用的证书链与私钥 |
@@ -318,6 +344,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | --- | --- |
 | 访问日志（PostgreSQL 与 ClickHouse） | 7 天 |
 | 分钟统计（PostgreSQL 与 ClickHouse） | 7 天 |
+| L4 应用的分钟统计 | 7 天 |
 | 小时统计 | 90 天 |
 | 天统计 | 365 天 |
 
@@ -331,7 +358,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | --- | --- | --- |
 | `alerts.sweep` | 每分钟 | 告警检测与投递 |
 | `dns.reconcile` | 每分钟 | DNS 调度发布与外部记录维护 |
-| `traffic.rollup` | 每分钟 | 流量汇总与清理、访问日志分区维护、升级任务到期 |
+| `traffic.rollup` | 每分钟 | 流量汇总与清理（含 L4 应用的分钟统计）、访问日志分区维护、升级任务到期 |
 | `certificates.sweep` | 每分钟 | 证书签发与续期 |
 | `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
 | `maintenance.prune-revisions` | 每小时第 17 分 | 删除超出保留数量的 revision |
