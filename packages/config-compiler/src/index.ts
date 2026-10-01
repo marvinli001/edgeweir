@@ -36,6 +36,7 @@ import {
   OriginSchema,
   OriginScheme,
   PassiveHealthCheckSchema,
+  type PlatformErrorPages,
   PlatformErrorPagesSchema,
   PlatformProtectionSchema,
   type RuleExpression,
@@ -718,7 +719,36 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
   });
 }
 
+/** Offline hosts sort like domains: by name, the exact host before the wildcard. */
 const offlineHostKey = (host: OfflineHost) => `${host.name}\u0000${host.wildcard ? 1 : 0}`;
+
+/**
+ * NodeConfig.platform_error_pages: unset when every template is empty (the
+ * nodes' built-in pages). Platform state: a rollback ships the current pages.
+ */
+export function compilePlatformErrorPages(
+  pages: PlatformErrorPagesModel | undefined,
+): PlatformErrorPages | undefined {
+  return pages && (pages.unknownHost || pages.siteDisabled || pages.siteSuspended)
+    ? create(PlatformErrorPagesSchema, {
+        unknownHost: pages.unknownHost,
+        siteDisabled: pages.siteDisabled,
+        siteSuspended: pages.siteSuspended,
+      })
+    : undefined;
+}
+
+/**
+ * NodeConfig.offline_hosts, in canonical order. Current state: a rollback
+ * ships the hosts of the sites that are offline now.
+ */
+export function compileOfflineHosts(hosts: OfflineHostModel[] | undefined): OfflineHost[] {
+  return (hosts ?? [])
+    .map((host) =>
+      create(OfflineHostSchema, { name: host.name, wildcard: host.wildcard, reason: host.reason }),
+    )
+    .sort(byString(offlineHostKey));
+}
 
 /** Sorts every repeated field into the canonical order defined in config.proto. */
 export function canonicalize<T extends NodeConfig>(config: T): T {
@@ -800,7 +830,6 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
   const challenges = usesChallenges(input);
   // Disabled sites are not shipped to nodes; their domains are offline hosts.
   const sites = input.sites.filter((s) => s.enabled).map((s) => compileSite(s, challenges));
-  const pages = input.platformErrorPages;
   const compiled = create(NodeConfigSchema, {
     revision,
     clusterId: input.clusterId,
@@ -838,17 +867,8 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     challengeKeys: usesChallengeKeys(input)
       ? (input.challengeKeys ?? []).map((key) => create(ChallengeKeyRefSchema, key))
       : [],
-    platformErrorPages:
-      pages && (pages.unknownHost || pages.siteDisabled || pages.siteSuspended)
-        ? create(PlatformErrorPagesSchema, {
-            unknownHost: pages.unknownHost,
-            siteDisabled: pages.siteDisabled,
-            siteSuspended: pages.siteSuspended,
-          })
-        : undefined,
-    offlineHosts: (input.offlineHosts ?? []).map((host) =>
-      create(OfflineHostSchema, { name: host.name, wildcard: host.wildcard, reason: host.reason }),
-    ),
+    platformErrorPages: compilePlatformErrorPages(input.platformErrorPages),
+    offlineHosts: compileOfflineHosts(input.offlineHosts),
   });
   compiled.requiredFeatures.push(
     ...protectionFeatures(compiled),
