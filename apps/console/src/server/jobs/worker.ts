@@ -13,6 +13,7 @@ import { pruneDnsRevisions, reconcileDns } from "../services/dns";
 import { recompileAfterUpgrade } from "../services/recompile";
 import { pruneRevisions } from "../services/revisions";
 import { evaluateRollouts } from "../services/rollout";
+import { SCHEDULING_INTERVAL_MS, schedulingTick } from "../services/scheduling";
 import { pruneSecurityEvents } from "../services/security";
 import { maintainTraffic } from "../services/stats-rollup";
 import { expireUpgrades } from "../services/upgrades";
@@ -128,6 +129,22 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
     const removed = await pruneSecurityEvents(ctx.db);
     if (removed) log.info("deleted old security events", { removed });
   });
+
+  // Scheduling (probe reachability and rules) every 10 s: pg-boss cron runs
+  // at most once a minute, so an in-process timer, and a lease lets one
+  // console process evaluate at a time. A run that is still busy skips a tick.
+  let evaluating = false;
+  const scheduling = setInterval(() => {
+    if (evaluating) return;
+    evaluating = true;
+    schedulingTick(ctx)
+      .catch((error: unknown) => log.warn("scheduling evaluation failed", { error }))
+      .finally(() => {
+        evaluating = false;
+      });
+  }, SCHEDULING_INTERVAL_MS);
+  scheduling.unref();
+  boss.on("stopped", () => clearInterval(scheduling));
 
   await boss.schedule(QUEUES.pruneBans, "*/10 * * * *");
   await boss.schedule(QUEUES.rotateChallengeKeys, "11 * * * *");
