@@ -10,19 +10,26 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import * as z from "zod";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { Page } from "@/components/page";
+import { ProbesPanel } from "@/components/probes";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
 export const Route = createFileRoute("/_app/regions")({
+  validateSearch: z.object({
+    tab: z.enum(["regions", "probes"]).optional(),
+    addProbe: z.boolean().optional(),
+  }),
   component: RegionsPage,
 });
 
@@ -115,9 +122,62 @@ function DeleteRegionAction({ region }: { region: Region }) {
   );
 }
 
+/** Regions, and the probes that measure the nodes from them. */
 function RegionsPage() {
-  const regions = useQuery(orpc.regions.list.queryOptions());
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [createOpen, setCreateOpen] = React.useState(false);
+  const tab = search.tab ?? "regions";
+  const setAddProbe = (open: boolean) =>
+    navigate({ search: (prev) => ({ ...prev, addProbe: open || undefined }), replace: true });
+  return (
+    <Page
+      title={m.regions_title()}
+      actions={
+        tab === "probes" ? (
+          <Button size="sm" onClick={() => setAddProbe(true)} data-testid="add-probe">
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+            {m.probes_add()}
+          </Button>
+        ) : (
+          <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="create-region">
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+            {m.regions_create()}
+          </Button>
+        )
+      }
+    >
+      <Tabs
+        value={tab}
+        onValueChange={(value) =>
+          navigate({
+            search: (prev) => ({ ...prev, tab: value === "probes" ? "probes" : undefined }),
+            replace: true,
+          })
+        }
+      >
+        <TabsList>
+          <TabsTrigger value="regions" data-testid="regions-tab-regions">
+            {m.regions_tab_regions()}
+          </TabsTrigger>
+          <TabsTrigger value="probes" data-testid="regions-tab-probes">
+            {m.regions_tab_probes()}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="regions" className="flex flex-col gap-4 animate-enter">
+          <RegionsList onCreate={() => setCreateOpen(true)} />
+        </TabsContent>
+        <TabsContent value="probes" className="animate-enter">
+          <ProbesPanel addOpen={search.addProbe === true} onAddOpenChange={setAddProbe} />
+        </TabsContent>
+      </Tabs>
+      <RegionDialog open={createOpen} onOpenChange={setCreateOpen} />
+    </Page>
+  );
+}
+
+function RegionsList({ onCreate }: { onCreate: () => void }) {
+  const regions = useQuery(orpc.regions.list.queryOptions());
   const [editing, setEditing] = React.useState<Region | null>(null);
   const columns = React.useMemo<Columns<Region>>(
     () => [
@@ -173,22 +233,14 @@ function RegionsPage() {
   );
 
   return (
-    <Page
-      title={m.regions_title()}
-      actions={
-        <Button size="sm" onClick={() => setCreateOpen(true)} data-testid="create-region">
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-          {m.regions_create()}
-        </Button>
-      }
-    >
+    <>
       {regions.isPending ? (
         <LoadingState />
       ) : regions.isError ? (
         <ErrorState error={regions.error} onRetry={() => regions.refetch()} />
       ) : regions.data.length === 0 ? (
         <EmptyState icon={Location01Icon} title={m.regions_empty()}>
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={onCreate}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.regions_create()}
           </Button>
@@ -201,7 +253,6 @@ function RegionsPage() {
           testId="regions-table"
         />
       )}
-      <RegionDialog open={createOpen} onOpenChange={setCreateOpen} />
       {editing ? (
         <RegionDialog
           key={editing.id}
@@ -210,6 +261,6 @@ function RegionsPage() {
           onOpenChange={(open) => !open && setEditing(null)}
         />
       ) : null}
-    </Page>
+    </>
   );
 }
