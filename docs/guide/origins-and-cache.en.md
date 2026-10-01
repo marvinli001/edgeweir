@@ -1,6 +1,6 @@
 # Origins and cache
 
-A site's origin pool, origin connections, cache rules, cache key, and purge and prefetch.
+A site's origin pool, health checks and session affinity, origin connections, cache rules, cache key, and purge and prefetch.
 
 ## Concepts
 
@@ -11,6 +11,7 @@ A site's origin pool, origin connections, cache rules, cache key, and purge and 
 | Cache rule | A rule matched in list order that decides whether and for how long a response is cached. |
 | Cache key | The request attributes that tell cached objects apart; applies to all cache rules of the site. |
 | Cache generation | A per-site counter that is part of the cache key; **Purge cache** increments it and every cached object of the site becomes stale. |
+| Cache tag | A tag the origin names in the `Cache-Tag` response header; a purge by tag purges only the cached objects that carry it. |
 
 ## Configure origins
 
@@ -43,7 +44,7 @@ Each site has 1–32 origins.
 
 ### Pool settings
 
-The **Pool settings** card is saved separately.
+The **Pool settings** card is saved separately. It also holds the [active health check](#active-health-check) and [session affinity](#session-affinity).
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
@@ -77,7 +78,7 @@ The **Pool settings** card is saved separately.
 
 ### Passive health check
 
-No probe requests are sent; health is judged from real traffic only.
+No probe requests are sent; health is judged from real traffic only. With the active health check on, both are merged, see [Merge rule](#merge-rule).
 
 | Item | Behavior |
 | --- | --- |
@@ -87,18 +88,80 @@ No probe requests are sent; health is judged from real traffic only.
 | Recovery | After that period the origin receives traffic again; one success marks it healthy, one more failure marks it down again immediately |
 | Fail open | When every origin is down, the node still tries primaries, then backups |
 | Scope | Health state is shared by all workers of one node; each node decides on its own |
-| Reporting | Nodes report with their heartbeat (every 15 seconds by default); the **Origins** tab shows "Down on {down} of {total} nodes" and the last error |
+| Reporting | Nodes report with their heartbeat (every 15 seconds by default); the **Origins** tab shows "Down on {down} of {total} nodes" and the last error, and each node's result names its source, **Passive** or **Active** |
 
 | Error code | UI text |
 | --- | --- |
 | `connect_failed` | Cannot connect to the origin |
 | `timeout` | The origin timed out |
-| `upstream_status` | The origin answered HTTP {status} (only when the origin itself returned 502/503/504) |
+| `upstream_status` | The origin answered HTTP {status} (passive check: only when the origin itself returned 502/503/504; active check: a status outside the expected range) |
 | `dns_failed` | Cannot resolve {host} |
 | `address_forbidden` | {address} is a special-purpose address outside the origin allow list |
 | `tls_failed` | TLS handshake or certificate verification failed |
 
 Error codes need node proto v0.2.1 or later; other errors and older nodes show the node's own text.
+
+### Active health check
+
+1. On the **Origins** tab, in the **Pool settings** card, turn on **Enabled** under **Active health check**.
+2. Enter the **Path**, choose the **Method**, and change other fields as needed.
+3. Click **Save** at the bottom of the card.
+4. Verify: make one origin's check path answer a status outside the expected range; after about interval × unhealthy threshold seconds the origin shows "Down on {down} of {total} nodes", the node results say **Active**, and requests stop going to it.
+
+| Field | Values | Default | Effect |
+| --- | --- | --- | --- |
+| Enabled | On / off | Off | Values stay saved while off |
+| Path | Starts with `/`, may carry a query, 1–1024 printable ASCII characters without spaces | `/` | Path of the probe |
+| Method | GET / HEAD | GET | Method of the probe |
+| Lowest / Highest status | 100–599, lowest not above highest | 200 / 399 | A status in the range is a success |
+| Host | Host name | Empty (same as origin Host) | `Host` of the probe; empty uses the origin's **Origin Host**, then its address |
+| Interval (seconds) | 5–300 | 30 | Time between two probes of an origin |
+| Timeout (seconds) | 1–60, not above the interval | 5 | Time limit of one probe; a timeout is a failure |
+| Healthy threshold | 1–10 | 2 | Consecutive successes that make an origin healthy again |
+| Unhealthy threshold | 1–10 | 3 | Consecutive failures that mark an origin unhealthy |
+
+| Item | Behavior |
+| --- | --- |
+| Who probes | The agent of every node probes every origin of the site; probe traffic grows with the number of nodes, so keep the interval reasonable |
+| Address policy | As for origin requests: special-purpose addresses outside the allow list are dropped from DNS answers and only checked addresses are dialed; without a usable address the probe fails (`dns_failed`, `address_forbidden`) |
+| Request | Scheme and port of the origin; HTTPS sends SNI (the origin's SNI, Origin Host or address) and verifies the certificate while **Verify origin certificates** is on; redirects are not followed; at most 64 KiB of the body is read |
+| Failure | Connection failure, timeout, TLS failure, status outside the range; same error codes as the passive check |
+| Initial state | Healthy; the first probe after a node start or a configuration change starts at a random point within one interval |
+| Not probed | S3-compatible origins (an unsigned probe says nothing about signed requests) and origins whose address literal is forbidden |
+| Node stops probing | The data plane's "actively down" marks expire after 3 × the longest interval (at least 90 seconds), back to the passive check only |
+| Reporting | Origins that are unhealthy or have consecutive failures are reported with the heartbeat, source **Active**; the "Origin unavailable" alert uses both sources |
+| Node requirement | Node feature `active-health-v1`; while an active node of the cluster lacks it, tenants cannot turn it on ("Some nodes of the site's cluster do not support it yet") |
+
+#### Merge rule
+
+| Active check | Passive check | Result |
+| --- | --- | --- |
+| Off | Any | As without an active check |
+| Unhealthy | Any | Not selected |
+| Healthy | Marked down | Not selected until the passive check's recovery time ends |
+| Healthy | Up | Selected |
+
+When every origin is down, the node still tries primaries, then backups (fail open).
+
+### Session affinity
+
+1. In the **Pool settings** card, turn on **Enabled** under **Session affinity** and change **Cookie lifetime (seconds)** as needed.
+2. Click **Save**.
+3. Verify: the first response from the origin carries `Set-Cookie: __ew_affinity=…`; later requests with that cookie go to the same origin.
+
+| Field | Values | Default | Effect |
+| --- | --- | --- | --- |
+| Enabled | On / off | Off | Pins a visitor to one origin with a signed cookie |
+| Cookie lifetime (seconds) | 60–604800 | 3600 | The cookie's `Max-Age` and the expiry inside its signature |
+
+| Item | Behavior |
+| --- | --- |
+| Cookie | `__ew_affinity`, `Path=/; HttpOnly; SameSite=Lax`, plus `Secure` over HTTPS; the value holds the origin ID, the expiry and the signature |
+| Signature | HMAC-SHA256 with the cluster's challenge keys (the keys of [challenge](challenges.en.md) passes), so any node of the cluster verifies it; after a key rotation the previous key still verifies |
+| Issued | Only on responses from the origin (never on cache hits); not issued again while a valid cookie has more than half its lifetime left |
+| Reselection | When the pinned origin is down (active or passive check), deleted, or outside the tier taking traffic (a backup while primaries are healthy), the node picks another origin by the load balancing policy and issues a new cookie; tampered or expired cookies are handled the same way |
+| Retries | When the pinned origin fails during a request, the retry rules still move it to another origin, and the response pins the origin that answered |
+| Node requirement | Node features `session-affinity-v1` and `challenge-v1`; while an active node of the cluster lacks them, tenants cannot turn it on |
 
 ### Origin TLS
 
@@ -239,8 +302,8 @@ The **Cache key & slicing** card is saved separately and applies to all rules of
 ## Purge and prefetch
 
 1. Open **Console → Purge & prefetch**.
-2. Select **Purge URLs**, **Purge directories**, **Purge sites**, or **Prefetch URLs**.
-3. For URL tasks, enter one URL per line; for **Purge sites**, check the sites.
+2. Select **Purge URLs**, **Purge directories**, **Purge hosts**, **Purge cache tags**, **Purge sites**, **Prefetch URLs**, or **Prefetch a sitemap**.
+3. For URL tasks, enter one URL per line; for **Purge hosts**, one host per line; for **Purge cache tags**, choose the site and enter one tag per line (or comma separated); for **Purge sites**, check the sites; for **Prefetch a sitemap**, enter the **Sitemap URL** and the **URL limit**. For prefetches, check **Desktop** and/or **Mobile** under **Devices**.
 4. Click **Submit**.
 5. Verify: the task appears under **Tasks**; expanded, each node shows **Succeeded**; after a purge, the next request returns `X-Cache: MISS`.
 
@@ -252,10 +315,37 @@ Tasks go to every enabled node of the site's cluster, with a result per node.
 | --- | --- | --- |
 | Purge URLs | Full URLs, query allowed | Purges the device, header, cookie, and slice variants of the URL. Query and Host are compared by the site's cache key; only objects whose normalized query equals the target's are purged. Paths are compared in the node's normalized form (percent-decoding, merged slashes, resolved `.` and `..`), so `/%73tatic/a.js` equals `/static/a.js` |
 | Purge directories | URL prefixes without a query | Purges every object under that Host whose path starts with the prefix; the prefix is normalized the same way and compared as a string prefix; with **Include Host** off, the Host is not compared |
+| Purge hosts | Host names, without port or wildcard | Purges every object of the host, like a directory purge of `/` on that host; for sites with **Include Host** off it purges the objects all domains share |
+| Purge cache tags | One or more sites and up to 500 cache tags | Purges the objects of those sites whose response carried any of the tags, see [Cache-Tag](#cache-tag) |
 | Purge sites | Sites | Purges the whole cache of each site |
-| Prefetch URLs | Full `http://` URLs | The node requests the URL as a normal request and caches it; a status below 400 is success; redirects are not followed; with **Separate mobile and desktop** on, only the desktop variant is warmed |
+| Prefetch URLs | Full `http://` or `https://` URLs; devices | The node requests the URL through its own edge layer as a normal request and caches it; a status below 400 is success; redirects are not followed. With **Separate mobile and desktop** on, each checked device is requested once (mobile with a mobile User-Agent); otherwise one request |
+| Prefetch a sitemap | One sitemap URL, a URL limit (1–10000, default 1000); devices | The node fetches the sitemap through its own edge layer (so the origin address policy applies and the console makes no outbound request) and prefetches the site's URLs it lists, see [Sitemaps](#sitemaps) |
 
-URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be a domain of the organization's sites (including subdomains under a wildcard).
+URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be a domain of the organization's sites (including subdomains under a wildcard). `https://` URLs are prefetched through the node's first HTTPS listener without the PROXY protocol (the node's own certificate is not verified); without such a listener they fail ("the node has no HTTPS listener yet").
+
+### Cache-Tag
+
+The origin lists tags, comma separated, in the `Cache-Tag` response header, e.g. `Cache-Tag: product-42, category-7`.
+
+| Item | Behavior |
+| --- | --- |
+| Parsing | Compared in lowercase after trimming spaces and tabs; printable ASCII only (no comma); a tag is at most 128 bytes, the whole header at most 4096 bytes (several lines are joined); tags beyond that are dropped and the response is cached as usual |
+| Forwarding | Not forwarded to visitors by default (cache hits included); with **Forward Cache-Tag to clients** on in the **Cache-Tag** card of the site's **Cache** tab it is forwarded as is |
+| Purge result | Once the task succeeded, no node returns an object carrying a purged tag, also not as stale content after it expired; all slices of a sliced object are purged together |
+| Index | Nodes record the tags of every cached object of sites that use `Cache-Tag`, in shared memory (node flag `--tag-dict-mb`, default 64 MiB), evicting the least recently used |
+| Extra origin requests | Objects the index does not know (evicted, after an nginx restart, cached before the site's first `Cache-Tag` response) go to the origin once while the site has tag purges on record, then hit again |
+| Tag counts | Up to 500 tags per task; nodes keep up to 5000 tag purges per site (node flag `--purge-tags-per-site`) and merge beyond that into one whole-site purge |
+| Node requirement | Node feature `purge-tag-v1`; while an active node of the cluster lacks it, host and tag purges are refused (`NODE_CAPABILITY_REQUIRED`), for platform administrators too |
+
+### Sitemaps
+
+| Item | Behavior |
+| --- | --- |
+| Sitemap URL | Must belong to a site of the organization; the node requests it from its own edge layer without following redirects, 30 seconds and at most 50 MiB unpacked per document; gzip-compressed sitemaps are recognized by their content |
+| Format | `<loc>` of a `urlset`; a `sitemapindex` is followed one level, and its sitemaps must be on the site's domains too |
+| Selection | Only `http(s)` URLs on the site's domains (wildcards included), de-duplicated, the first ones in document order up to the URL limit |
+| Result | Each URL and device counts as one success or failure; a sitemap that cannot be fetched or parsed fails the task (`sitemap_failed`), one without URLs of the site too (`sitemap_empty`) |
+| Node requirement | Node feature `prefetch-v2` (also for mobile prefetches); while an active node of the cluster lacks it the task is refused (`NODE_CAPABILITY_REQUIRED`) |
 
 ### Purge a site's cache
 
@@ -265,10 +355,10 @@ On the site's **Overview** tab, click **Purge cache** and confirm. The console i
 
 | Item | Limit |
 | --- | --- |
-| Per task | Up to 500 URLs or 100 sites; each URL up to 2048 characters |
-| Organization rate | Up to 10 tasks per minute and 2000 entries per hour (each URL, directory, or site is one entry); beyond that 429 (`CACHE_TASK_RATE_LIMITED`, with the seconds to wait) |
+| Per task | Up to 500 URLs, 500 hosts or 500 tags, or 100 sites; each URL up to 2048 characters; one sitemap per sitemap prefetch |
+| Organization rate | Up to 10 tasks per minute and 2000 entries per hour (each URL, directory, host, or site is one entry; tags count per site and tag; a sitemap task is one entry; prefetch devices do not count extra); beyond that 429 (`CACHE_TASK_RATE_LIMITED`, with the seconds to wait) |
 | Platform administrators | Not rate-limited; tasks they submit for an organization's sites count toward that organization's usage; whole-site purges the console sends on its own do not count |
-| Node purge markers | Up to 1000 URL and directory markers per site (node flag `--purge-markers-per-site`); beyond that they merge into one whole-site purge |
+| Node purge markers | Up to 1000 URL, directory and host markers per site (node flag `--purge-markers-per-site`) and 5000 tag markers (`--purge-tags-per-site`); beyond that they merge into one whole-site purge |
 | Order | A node runs the purges of a batch before its prefetches |
 | Prefetch time | A batch (up to 10 tasks) shares a 4-minute budget (node flag `--prefetch-budget`) counted from the pull; 60 seconds per URL; concurrency 4; URLs unfinished at the deadline fail (`prefetch_timeout`) |
 | Files on disk | A purge does not delete files: the next request uses a new cache key and goes to the origin; old objects are evicted by the cache zone's inactive time and size limit |
@@ -293,9 +383,9 @@ On the site's **Overview** tab, click **Purge cache** and confirm. The console i
 | Item | Description |
 | --- | --- |
 | Counts | Per site: 1–50 domains, 1–32 origins, up to 64 cache rules |
-| Health checks | Passive only; no probe requests |
 | Cache zone | Size and inactive time cannot be changed in the console |
-| HTTPS prefetch | Not supported; `https://` URLs fail ("the node has no HTTPS listener yet"). The cache key includes the scheme, so `http://` prefetch warms only the HTTP cache |
+| HTTPS prefetch | Needs an HTTPS listener without the PROXY protocol on the node; the cache key includes the scheme, so `http://` prefetch warms only the HTTP cache |
+| Device variants | Desktop and mobile only (tablets count as mobile) |
 | Authorization switch | Needs node proto v0.2.1 or later; older nodes ignore **Cache requests with Authorization** |
 | WebSocket | Only `Upgrade: websocket` is recognized |
 
@@ -318,6 +408,12 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | "Too many purges: …" | The organization hit the rate limit | Retry after the stated seconds; merge URLs into a directory purge |
 | "No site serves …" | The URL's Host is not a domain of the organization's sites | Check the domain and its organization |
 | "Invalid URL: …" | Not an `http(s)` URL, carries credentials, or a directory purge has a query | Fix the URL |
-| Prefetch fails with "the node has no HTTPS listener yet" | Prefetch supports only `http://` | Use `http://` URLs |
+| "Invalid host: …" | Has a port, is a wildcard, or is not a valid host name | Enter one host name per line |
+| "Invalid cache tag: …" | The tag has a comma or non-ASCII characters, or is longer than 128 bytes | Fix the tag; the origin's `Cache-Tag` follows the same rules |
+| "Some nodes … do not support …" (`NODE_CAPABILITY_REQUIRED`) | An active node of the cluster lacks `purge-tag-v1` or `prefetch-v2` | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
+| Prefetch fails with "the node has no HTTPS listener yet" | The node has no HTTPS listener without the PROXY protocol | Use `http://` URLs, or add an HTTPS listener to the node |
+| "Could not fetch the sitemap … (…)" | The sitemap answered an error status or a redirect, timed out, is larger than 50 MiB, or is not a valid sitemap | Request the sitemap URL directly; enter the final address of a redirect |
+| "The sitemap … lists no URL of the site" | The sitemap lists URLs of other domains only | Check the domains in the sitemap |
+| Old content after a tag purge | The origin did not send that tag in the object's `Cache-Tag`, or the tag has characters that are not accepted | Turn on **Forward Cache-Tag to clients** and look at the response header |
 | "Ran out of time after … URLs" | The 4-minute budget ran out | Split into several tasks |
 | "The node does not support this task type (…); upgrade edgeweir-node" | The node is too old | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
