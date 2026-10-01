@@ -1215,5 +1215,16 @@
   "site_pool_health_healthy": "健康阈值",
   "site_pool_health_unhealthy": "不健康阈值",
   "site_origin_health_source_passive": "被动",
-  "site_origin_health_source_active": "主动"
+  "site_origin_health_source_active": "主动",
+  "site_tab_errors": "错误页",
+  "error_pages_title": "错误页",
+  "error_pages_name_403": "拒绝访问",
+  "error_pages_name_429": "请求过多",
+  "error_pages_name_502": "网关错误",
+  "error_pages_name_503": "服务不可用",
+  "error_pages_name_504": "网关超时",
+  "error_pages_placeholder": "留空使用内置页面",
+  "error_pages_bytes": "{bytes} / {limit} 字节",
+  "error_pages_intercept": "替换源站错误响应",
+  "error_pages_variables": "可用变量（值经 HTML 转义）："
 }

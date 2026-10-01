@@ -12,6 +12,7 @@ import { Page } from "@/components/page";
 import { CacheTab } from "@/components/site/cache-tab";
 import { CnameTarget } from "@/components/site/cname-target";
 import { DomainOwnershipPanel } from "@/components/site/domain-ownership";
+import { ErrorPagesTab } from "@/components/site/error-pages-tab";
 import { HttpsTab } from "@/components/site/https-tab";
 import { LogsTab } from "@/components/site/logs-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
@@ -168,6 +169,9 @@ function SiteDetailPage() {
             </TabsContent>
             <TabsContent value="security" className="animate-enter">
               <SecurityTab siteId={site.data.id} organizationRole={me.activeOrganization?.role} />
+            </TabsContent>
+            <TabsContent value="errors" className="animate-enter">
+              <ErrorPagesTab siteId={site.data.id} organizationRole={me.activeOrganization?.role} />
             </TabsContent>
             <TabsContent value="logs" className="animate-enter">
               <LogsTab siteId={site.data.id} />
