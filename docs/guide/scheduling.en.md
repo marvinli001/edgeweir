@@ -158,7 +158,7 @@ Nodes with `metrics-v1` (Linux) report host metrics in every heartbeat (15 secon
 | Load (1 / 5 / 15 min) | `/proc/loadavg` |
 | Memory | Used (`MemTotal − MemAvailable`) and total |
 | Egress | Send rate of the non-loopback interfaces between two heartbeats |
-| Connections | nginx active connections |
+| Connections | nginx active connections, [L4 app](l4.en.md) client connections, upstream connections, and UDP sessions included |
 
 The two rates are 0 in a node's first heartbeat. For a node in a container, CPU, load, and memory are the host's values and egress is the container interface's. Scheduling rules treat metrics older than 60 seconds as missing.
 
