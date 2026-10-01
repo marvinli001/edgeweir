@@ -120,7 +120,7 @@ docker compose logs --no-color --no-log-prefix console \
 | Ports | `3000` (web, API), `8443` (node channel) |
 | Health check | `edgeweir-healthcheck`; interval 10 s, timeout 3 s, start period 30 s, 5 retries |
 | Bundled files | `/usr/local/bin/edgeweir-certd`, `/usr/local/bin/edgeweir-healthcheck`, `/app/deploy.sh` |
-| Stop signals | `SIGTERM`, `SIGINT`: close the HTTP and node channel listeners, wait up to 5 seconds for pg-boss, exit with 0 |
+| Stop signals | `SIGTERM`, `SIGINT`: close the HTTP and node channel listeners and end the nodes' watch streams, give requests in flight up to 3 seconds and pg-boss up to 5 seconds at the same time, exit with 0; after 8 seconds exit with 1 |
 
 `edgeweir-healthcheck`: with `ROLE=worker` it returns 0; other roles request `http://127.0.0.1:${PORT}/healthz` with a 2-second timeout and return non-zero on failure.
 

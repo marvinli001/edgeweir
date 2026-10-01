@@ -9,7 +9,7 @@ import { loadEnv } from "./lib/env";
 import { MasterKey } from "./lib/envelope";
 import { ConfigEventBus } from "./lib/events";
 import { logger, setLogLevel } from "./lib/logger";
-import { type NodeChannel, startNodeChannel } from "./node-channel/server";
+import { CLOSE_GRACE_MS, type NodeChannel, startNodeChannel } from "./node-channel/server";
 import { loadOrCreateNodeCa } from "./pki/store";
 import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
 import { announceSetupToken, ensureSetupToken } from "./services/setup";
@@ -26,6 +26,25 @@ async function waitForDatabase(pool: import("pg").Pool, timeoutMs = 60_000) {
       await new Promise((r) => setTimeout(r, Math.min(500 * attempt, 3000)));
     }
   }
+}
+
+/** The whole shutdown, after which the process exits with 1. */
+export const SHUTDOWN_TIMEOUT_MS = 8000;
+
+/**
+ * Stops the HTTP listener and closes idle connections at once; requests in
+ * flight get `graceMs` before their connections are closed too.
+ */
+export function closeHttp(server: Server | undefined, graceMs = CLOSE_GRACE_MS): Promise<void> {
+  if (!server) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const deadline = setTimeout(() => server.closeAllConnections(), graceMs);
+    server.close(() => {
+      clearTimeout(deadline);
+      resolve();
+    });
+    server.closeIdleConnections();
+  });
 }
 
 export interface Running {
@@ -86,17 +105,26 @@ export async function bootstrap(): Promise<Running> {
     if (closing) return;
     closing = true;
     log.info("shutting down");
-    const closeServer = (s?: { close(cb: (err?: Error) => void): unknown }) =>
-      new Promise<void>((resolve) => (s ? s.close(() => resolve()) : resolve()));
-    (http as { closeAllConnections?: () => void } | undefined)?.closeAllConnections?.();
-    // Also stops rotating the node channel certificate.
-    await Promise.all([closeServer(http), nodeChannel?.close()]);
-    await boss?.stop({ graceful: true, timeout: 5000 }).catch(() => {});
+    // Requests in flight get CLOSE_GRACE_MS; the listeners, the watch streams
+    // of connected nodes and pg-boss stop at the same time.
+    await Promise.all([
+      closeHttp(http),
+      // Also stops rotating the node channel certificate.
+      nodeChannel?.close(CLOSE_GRACE_MS),
+      boss
+        ?.stop({ graceful: true, timeout: 5000 })
+        .catch((error: unknown) => log.warn("pg-boss did not stop cleanly", { error })),
+    ]);
     await events.stop();
     await pool.end();
   };
   for (const signal of ["SIGTERM", "SIGINT"] as const) {
     process.once(signal, () => {
+      // Exit before the container runtime's SIGKILL (10 s after SIGTERM by default).
+      setTimeout(() => {
+        log.error("shutdown timed out", { timeoutMs: SHUTDOWN_TIMEOUT_MS });
+        process.exit(1);
+      }, SHUTDOWN_TIMEOUT_MS).unref();
       void shutdown().finally(() => process.exit(0));
     });
   }

@@ -67,7 +67,7 @@ The only contract between the console and the nodes is `edgeweir.node.v1` in `pr
 8. `worker`, `all`: start pg-boss, create the queues, register the schedules.
 9. `app`, `all`: the HTTP server starts listening.
 
-On `SIGTERM` or `SIGINT` the process closes HTTP connections and the node channel, gives pg-boss up to 5 seconds to finish running jobs, then closes the database pool.
+On `SIGTERM` or `SIGINT` the process stops the HTTP and node channel listeners, ends the nodes' config watch streams and stops pg-boss at the same time: requests in flight get up to 3 more seconds, pg-boss up to 5 seconds to finish running jobs; then the database pool is closed. If all of this takes more than 8 seconds the process exits with 1.
 
 ## Ports and routes
 

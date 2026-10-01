@@ -1,5 +1,5 @@
 import http2 from "node:http2";
-import type { SecureContextOptions } from "node:tls";
+import type { SecureContextOptions, TLSSocket } from "node:tls";
 import { Code, ConnectError, type HandlerContext } from "@connectrpc/connect";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
 import { NodeService } from "@edgeweir/proto";
@@ -20,6 +20,8 @@ export const READ_MAX_BYTES = 16 << 20;
 export const ENROLL_READ_MAX_BYTES = 64 << 10;
 /** Sessions without traffic are closed; watch streams send a keepalive every 15 s. */
 const IDLE_TIMEOUT_MS = 120_000;
+/** How long requests in flight get to finish when the channel closes. */
+export const CLOSE_GRACE_MS = 3000;
 
 export interface NodeChannelOptions {
   /** Clock for issuing and rotating the server certificate. */
@@ -43,8 +45,11 @@ export interface NodeChannel {
   server: http2.Http2SecureServer;
   /** The server certificate that new handshakes receive. */
   readonly certificate: { serialNumber: string; notAfter: Date };
-  /** Stops certificate rotation and closes the listener. */
-  close(): Promise<void>;
+  /**
+   * Stops certificate rotation and the listener, ends the watch streams and
+   * closes every session; connections still open after `graceMs` are destroyed.
+   */
+  close(graceMs?: number): Promise<void>;
 }
 
 /** setSecureContext resets every option it is not given, so both paths use this. */
@@ -71,9 +76,10 @@ export async function startNodeChannel(
   const now = options.now ?? (() => new Date());
   const issue = () => app.nodeCa.issueServerCertificate(app.env.nodeApiHostnames, now());
   let current = await issue();
+  const closing = new AbortController();
   const handler = connectNodeAdapter({
     routes: (router) => {
-      const service = createNodeService(app);
+      const service = createNodeService(app, { closing: closing.signal });
       // The adapter serves the last handler registered for a path.
       router
         .service(NodeService, service)
@@ -99,6 +105,17 @@ export async function startNodeChannel(
   );
   server.on("sessionError", (error) => app.log.debug("node channel session error", { error }));
   server.setTimeout(options.idleTimeoutMs ?? IDLE_TIMEOUT_MS);
+  // server.close() waits for every connection, and nodes keep theirs open.
+  const sessions = new Set<http2.ServerHttp2Session>();
+  const sockets = new Set<TLSSocket>();
+  server.on("session", (session) => {
+    sessions.add(session);
+    session.once("close", () => sessions.delete(session));
+  });
+  server.on("secureConnection", (socket: TLSSocket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+  });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(app.env.NODE_API_PORT, app.env.nodeApiHost, () => {
@@ -143,9 +160,20 @@ export async function startNodeChannel(
     get certificate() {
       return { serialNumber: current.serialNumber, notAfter: current.notAfter };
     },
-    close: () => {
+    close: (graceMs = CLOSE_GRACE_MS) => {
       clearInterval(timer);
-      return new Promise<void>((resolve) => server.close(() => resolve()));
+      closing.abort();
+      return new Promise<void>((resolve) => {
+        const deadline = setTimeout(() => {
+          for (const socket of sockets) socket.destroy();
+        }, graceMs);
+        server.close(() => {
+          clearTimeout(deadline);
+          resolve();
+        });
+        // GOAWAY: no new streams; open ones (now ending) may finish.
+        for (const session of sessions) session.close();
+      });
     },
   };
 }

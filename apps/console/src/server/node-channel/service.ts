@@ -228,7 +228,11 @@ export function peerContextValues(req: NodeServerRequest): ContextValues {
   return createContextValues().set(peerKey, info);
 }
 
-export function createNodeService(app: AppContext): ServiceImpl<typeof NodeService> {
+/** `closing` ends every watch stream, so the channel can shut down while nodes are connected. */
+export function createNodeService(
+  app: AppContext,
+  { closing }: { closing?: AbortSignal } = {},
+): ServiceImpl<typeof NodeService> {
   const log = app.log.child({ component: "node-channel" });
 
   /** mTLS gate for every RPC except Enroll. */
@@ -529,6 +533,8 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       });
       const onAbort = () => wake?.();
       ctx.signal.addEventListener("abort", onAbort);
+      closing?.addEventListener("abort", onAbort);
+      const ended = () => ctx.signal.aborted || closing?.aborted === true;
       log.info("watch stream opened", { nodeId: node.id });
       try {
         await refresh();
@@ -539,7 +545,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           });
         }
         let lastSent = -1;
-        while (!ctx.signal.aborted) {
+        while (!ended()) {
           if (tasksPending) {
             tasksPending = false;
             yield create(WatchConfigResponseSchema, {
@@ -558,7 +564,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
             });
             wake = undefined;
           }
-          if (ctx.signal.aborted) break;
+          if (ended()) break;
           await assertStillActive(node);
           if (stale) {
             stale = false;
@@ -599,6 +605,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
         offBans();
         offReconnect();
         ctx.signal.removeEventListener("abort", onAbort);
+        closing?.removeEventListener("abort", onAbort);
         log.info("watch stream closed", { nodeId: node.id });
       }
     },
