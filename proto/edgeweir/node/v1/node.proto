@@ -201,7 +201,8 @@ message ReportStatusRequest {
   // Whether the data plane answered its local health probe.
   bool data_plane_healthy = 7;
   google.protobuf.Timestamp certificate_not_after = 8;
-  // Passive health state of the origins this node has seen failing; origins
+  // Health state of the origins this node has seen failing, from the passive
+  // check and (since v0.12.0) the active check, one entry per source; origins
   // without failures may be omitted and count as healthy.
   repeated OriginHealth origin_health = 9;
   // Persisted with the LKG; authenticates higher revisions after a DB restore.
@@ -263,6 +264,21 @@ message OriginHealth {
   // does not know. Added in v0.2.1.
   string last_error_code = 8;
   map<string, string> last_error_params = 9;
+  // Check that produced this entry; unspecified (nodes before v0.12.0)
+  // means passive. Active entries come from the agent's probes
+  // (OriginPool.active_health_check): down_until stays unset and
+  // last_error_code uses the same codes (upstream_status {status} for an
+  // unexpected status). Added in v0.12.0.
+  OriginHealthSource source = 10;
+}
+
+// OriginHealthSource tells which health check an OriginHealth comes from.
+enum OriginHealthSource {
+  ORIGIN_HEALTH_SOURCE_UNSPECIFIED = 0;
+  // Failures of real traffic (OriginPool.health_check).
+  ORIGIN_HEALTH_SOURCE_PASSIVE = 1;
+  // The agent's probes (OriginPool.active_health_check).
+  ORIGIN_HEALTH_SOURCE_ACTIVE = 2;
 }
 
 // ReportStatusResponse tells the node what the console expects next.
@@ -378,6 +394,9 @@ message NodeTask {
     PurgeTask purge = 3;
     PrefetchTask prefetch = 4;
     UpgradeTask upgrade = 5;
+    // Added in v0.12.0 (feature prefetch-v2); older nodes report
+    // task_unsupported.
+    SitemapPrefetchTask sitemap = 6;
   }
 }
 
@@ -390,18 +409,29 @@ enum PurgeType {
   PURGE_TYPE_PREFIX = 2;
   // Every object of the site.
   PURGE_TYPE_SITE = 3;
+  // Every URL of the host (every path), like a PREFIX target of "/". Added
+  // in v0.12.0 (feature purge-tag-v1).
+  PURGE_TYPE_HOST = 4;
+  // Every object of the site whose Cache-Tag response header carried the
+  // tag. Added in v0.12.0 (feature purge-tag-v1).
+  PURGE_TYPE_TAG = 5;
 }
 
 // PurgeTarget is one thing to purge.
 message PurgeTarget {
   string site_id = 1;
   PurgeType type = 2;
-  // Lowercase host without port; empty for PURGE_TYPE_SITE.
+  // Lowercase host without port; empty for PURGE_TYPE_SITE and
+  // PURGE_TYPE_TAG.
   string host = 3;
   // URI path (URL) or path prefix (PREFIX) as requested, percent-encoded.
   string path = 4;
   // Raw query string of a URL target, without the "?".
   string query = 5;
+  // Tag of a PURGE_TYPE_TAG target: lowercase, 1-128 bytes of printable
+  // ASCII (0x20-0x7e) without commas and without leading or trailing
+  // spaces. Added in v0.12.0.
+  string tag = 6;
 }
 
 // PurgeTask invalidates cached objects. Purged objects are never served
@@ -415,6 +445,36 @@ message PrefetchTarget {
   string site_id = 1;
   // Absolute http(s) URL whose host belongs to the site.
   string url = 2;
+  // Device class of the request's User-Agent. Sites whose cache key
+  // separates devices (CacheKeyPolicy.device_type) cache one object per
+  // class. Added in v0.12.0 (feature prefetch-v2).
+  DeviceVariant variant = 3;
+}
+
+// DeviceVariant is the device class of a cache key (CacheKeyPolicy
+// device_type): tablets count as mobile.
+enum DeviceVariant {
+  // Desktop, as before v0.12.0.
+  DEVICE_VARIANT_UNSPECIFIED = 0;
+  DEVICE_VARIANT_DESKTOP = 1;
+  // Requested with a mobile User-Agent.
+  DEVICE_VARIANT_MOBILE = 2;
+}
+
+// SitemapPrefetchTask makes the node fetch a sitemap through its own edge
+// layer (so the origin address policy applies and the console makes no
+// outbound request) and prefetch the URLs it lists. A sitemapindex is
+// followed one level; gzip-compressed sitemaps are accepted. Only URLs on
+// the site's domains are kept, in document order, up to max_urls. Added in
+// v0.12.0 (feature prefetch-v2).
+message SitemapPrefetchTask {
+  string site_id = 1;
+  // Absolute http(s) URL of the sitemap on a domain of the site.
+  string url = 2;
+  // Upper bound of URLs to prefetch, 1-10000.
+  uint32 max_urls = 3;
+  // Variants of every URL; empty means one desktop request each.
+  repeated DeviceVariant variants = 4;
 }
 
 // PrefetchTask requests URLs through the node's own data plane so that the
@@ -444,9 +504,13 @@ message ReportTaskResultRequest {
   // prefetch_failed {failed, total, url, reason, status} (url is the first
   // failed URL; reason is status, connect_failed, timeout, https_unsupported
   // or other; status only with reason=status), prefetch_timeout {done,
-  // total}, task_unsupported {type}, purge_failed. The console localizes the
-  // code and falls back to message for codes it does not know. Added in
-  // v0.2.1.
+  // total}, task_unsupported {type}, purge_failed, and since v0.12.0
+  // sitemap_failed {url, reason, status} (the sitemap or a sitemap of the
+  // index could not be fetched or parsed; reason as for prefetch_failed or
+  // invalid, too_large) and sitemap_empty {url} (no URL of the site).
+  // Sitemap tasks count each URL and variant as one target. The console
+  // localizes the code and falls back to message for codes it does not
+  // know. Added in v0.2.1.
   string error_code = 7;
   map<string, string> error_params = 8;
 }
@@ -474,6 +538,9 @@ message AccessLog {
   // blocked it. Added in v0.11.0.
   repeated uint32 waf_rule_ids = 13;
   bool waf_blocked = 14;
+  // Request id the node answered with (X-Request-Id; the client's when it
+  // was valid). Error pages show the same id. Added in v0.12.0.
+  string request_id = 15;
 }
 // ReportLogsRequest is an immutable, ordered batch from the private node spool.
 message ReportLogsRequest {

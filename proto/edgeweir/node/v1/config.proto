@@ -13,7 +13,9 @@ import "google/protobuf/timestamp.proto";
 //   - listeners sorted by port, cache_zones by name, sites by id,
 //     certificates by id;
 //   - inside a site: domains by name, origins by id, cache_rules by
-//     (priority, id).
+//     (priority, id);
+//   - offline_hosts by (name, wildcard), inside a site error_pages.pages by
+//     status (v0.12.0).
 // content_hash is the lowercase hex SHA-256 of the deterministic binary
 // encoding of this message with `revision` and `content_hash` cleared.
 message NodeConfig {
@@ -46,8 +48,18 @@ message NodeConfig {
   // Platform-wide Under Attack. Added in v0.10.0 (feature challenge-v1).
   PlatformProtection platform_protection = 13;
   // Challenge pass keys of the cluster, sorted by id. Secrets are fetched
-  // with GetChallengeKeys and never travel here. Added in v0.10.0.
+  // with GetChallengeKeys and never travel here. Added in v0.10.0. Since
+  // v0.12.0 they also sign session affinity cookies (OriginPool.session_affinity).
   repeated ChallengeKeyRef challenge_keys = 14;
+  // The platform's pages for hosts no site serves and for the offline hosts
+  // below; unset, or an empty template, uses the node's built-in page.
+  // Added in v0.12.0; older nodes ignore it (no feature required).
+  PlatformErrorPages platform_error_pages = 15;
+  // Domains of the cluster's sites that are disabled or suspended, sorted by
+  // (name, wildcard). Such sites are not in `sites`; nodes answer their
+  // hosts with the platform's page for the reason instead of the unknown
+  // host page. Added in v0.12.0; older nodes ignore it (no feature required).
+  repeated OfflineHost offline_hosts = 16;
 }
 
 // NodeConfigDiff transforms the config at base_revision into revision.
@@ -80,6 +92,9 @@ message NodeConfigDiff {
   // Always sent in full, like listeners. Added in v0.10.0.
   PlatformProtection platform_protection = 15;
   repeated ChallengeKeyRef challenge_keys = 16;
+  // Always sent in full (NodeConfig fields 15 and 16). Added in v0.12.0.
+  PlatformErrorPages platform_error_pages = 17;
+  repeated OfflineHost offline_hosts = 18;
 }
 
 // ListenerProtocol is the application protocol of a listener.
@@ -138,6 +153,56 @@ message Site {
   // OWASP CRS managed rules; unset means off. Added in v0.11.0 (feature
   // modsecurity-v1).
   SiteWaf waf = 17;
+  // Forward the origin's Cache-Tag response header to clients. Off (the
+  // default), the edge removes it; nodes index the tags of cached objects
+  // either way (PURGE_TYPE_TAG). Added in v0.12.0; older nodes forward the
+  // header (no feature required).
+  bool keep_cache_tag = 18;
+  // The site's error page templates; unset means the node's built-in pages.
+  // Added in v0.12.0 (feature error-pages-v1).
+  SiteErrorPages error_pages = 19;
+}
+
+// SiteErrorPages replaces the node's built-in error pages of a site: 403
+// (denied by a rule, an IP list, a ban, the CRS or a missing challenge pass),
+// 429 (rate limited), 502, 503 and 504 (origin unavailable or failing).
+message SiteErrorPages {
+  // At most one page per status, sorted by status. Statuses: 403, 429, 502,
+  // 503 and 504; anything else rejects the configuration.
+  repeated ErrorPage pages = 1;
+  // Also replace error responses of the origin whose status has a page
+  // (nginx's proxy_intercept_errors). Off, they reach the client unchanged.
+  bool intercept_origin_errors = 2;
+}
+
+// ErrorPage is an HTML template of 1 to 65536 bytes. The placeholders
+// {{status}}, {{request_id}}, {{client_ip}} and {{host}} are replaced with
+// HTML-escaped values; any other text, including other {{...}}, is sent as
+// it is. Pages are sent with Cache-Control: no-store.
+message ErrorPage {
+  uint32 status = 1;
+  string template = 2;
+}
+
+// PlatformErrorPages are the platform administrator's templates, with the
+// rules of ErrorPage. An empty template uses the node's built-in page.
+message PlatformErrorPages {
+  // Hosts no site of the cluster serves (status 404).
+  string unknown_host = 1;
+  // Offline hosts of disabled sites (status 503).
+  string site_disabled = 2;
+  // Offline hosts of suspended sites (status 503).
+  string site_suspended = 3;
+}
+
+// OfflineHost is a domain of a site that is disabled or suspended.
+message OfflineHost {
+  // Lowercase host name; a wildcard stores its suffix like Domain.
+  string name = 1;
+  bool wildcard = 2;
+  // disabled or suspended (suspended when both apply); anything else
+  // rejects the configuration.
+  string reason = 3;
 }
 
 // SiteWaf runs the OWASP Core Rule Set bundled with the node.
@@ -353,6 +418,52 @@ message OriginPool {
   PassiveHealthCheck health_check = 5;
   // Connection reuse and timeouts towards the origins.
   OriginConnection connection = 6;
+  // Active health checks, run by the agent of every node (feature
+  // active-health-v1); unset means passive checks only. Added in v0.12.0.
+  ActiveHealthCheck active_health_check = 7;
+  // Cookie-based session affinity (feature session-affinity-v1); unset
+  // means none. Added in v0.12.0.
+  SessionAffinity session_affinity = 8;
+}
+
+// ActiveHealthCheck probes every origin of the pool from each node, honoring
+// the origin address policy (special-purpose addresses outside
+// NodeConfig.origin_allowed_cidrs are refused, also as DNS answers). An
+// origin becomes unhealthy after unhealthy_threshold consecutive failed
+// probes and healthy again after healthy_threshold consecutive successful
+// ones. Merge with the passive check: an origin that either check marks
+// down takes no traffic (passive marks last until their recovery time).
+// S3-compatible origins are not probed.
+message ActiveHealthCheck {
+  // Absolute path with an optional query, e.g. "/healthz": 1-1024 bytes of
+  // printable ASCII without spaces, starting with "/".
+  string path = 1;
+  // GET or HEAD.
+  string method = 2;
+  // Expected response status range, inclusive: 100 <= min <= max <= 599.
+  uint32 expected_status_min = 3;
+  uint32 expected_status_max = 4;
+  // Host header of the probes; empty means the origin's host_header, else
+  // its address.
+  string host = 5;
+  // Seconds between probes of an origin, 5-300.
+  uint32 interval_seconds = 6;
+  // Seconds a probe may take, 1-60 and at most interval_seconds.
+  uint32 timeout_seconds = 7;
+  // Consecutive results that change the state, 1-10 each.
+  uint32 healthy_threshold = 8;
+  uint32 unhealthy_threshold = 9;
+}
+
+// SessionAffinity pins a client to the origin that served it with the cookie
+// "__ew_affinity": the origin id and an expiry signed with HMAC-SHA256 by the
+// cluster's current challenge key (NodeConfig.challenge_keys, so every node
+// of the cluster verifies it). A pinned origin that is down, no longer in the
+// pool or outside the tier taking traffic (primaries, else backups) is
+// replaced, and the cookie is issued again.
+message SessionAffinity {
+  // Lifetime of the cookie, 60-604800 seconds.
+  uint32 ttl_seconds = 1;
 }
 
 // PassiveHealthCheck marks an origin down after consecutive failures seen by
