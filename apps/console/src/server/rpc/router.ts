@@ -81,6 +81,17 @@ import {
   updateSiteErrorPages,
 } from "../services/error-pages";
 import {
+  createL4App,
+  deleteL4App,
+  getL4App,
+  getPortPools,
+  l4AppStats,
+  listL4Apps,
+  setL4AppEnabled,
+  setPortPools,
+  updateL4App,
+} from "../services/l4";
+import {
   createNodeGroup,
   deleteNodeGroup,
   listNodeGroups,
@@ -325,6 +336,25 @@ export const router = os.router({
       previewScheduling(context.app.db, input.clusterId),
     ),
   },
+  l4Apps: {
+    list: authed.l4Apps.list.handler(({ input, context }) =>
+      listL4Apps(context.app.db, input.clusterId),
+    ),
+    get: authed.l4Apps.get.handler(({ input, context }) => getL4App(context.app.db, input.id)),
+    create: authed.l4Apps.create.handler(({ input, context }) =>
+      createL4App(context.app.db, input, context.actor),
+    ),
+    update: authed.l4Apps.update.handler(({ input, context }) =>
+      updateL4App(context.app.db, input, context.actor),
+    ),
+    delete: authed.l4Apps.delete.handler(({ input, context }) =>
+      deleteL4App(context.app.db, input.id, context.actor),
+    ),
+    setEnabled: authed.l4Apps.setEnabled.handler(({ input, context }) =>
+      setL4AppEnabled(context.app.db, input, context.actor),
+    ),
+    stats: authed.l4Apps.stats.handler(({ input, context }) => l4AppStats(context.app.db, input)),
+  },
   https: {
     get: authed.https.get.handler(({ input, context }) => getHttps(context.app, input.id)),
     update: authed.https.update.handler(({ input, context }) =>
@@ -567,6 +597,12 @@ export const router = os.router({
     ),
     abortRollout: authed.clusters.abortRollout.handler(({ input, context }) =>
       abortRollout(context.app.db, input.id, context.actor),
+    ),
+    portPools: authed.clusters.portPools.handler(({ input, context }) =>
+      getPortPools(context.app.db, input.clusterId),
+    ),
+    setPortPools: authed.clusters.setPortPools.handler(({ input, context }) =>
+      setPortPools(context.app.db, input, context.actor),
     ),
     createEnrollmentToken: authed.clusters.createEnrollmentToken.handler(({ input, context }) =>
       createEnrollmentToken(context.app.db, input, {

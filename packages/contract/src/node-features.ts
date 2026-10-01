@@ -28,3 +28,9 @@ export const PREFETCH_V2_FEATURE = "prefetch-v2";
 export const PROBE_HEALTH_FEATURE = "probe-health-v1";
 /** metrics-v1: ReportStatusRequest.metrics (CPU, load, memory, egress, connections). */
 export const METRICS_FEATURE = "metrics-v1";
+/**
+ * l4-v1: layer-4 applications (NodeConfig.l4_apps, required by
+ * configurations with applications) and their statistics
+ * (ReportStatsV2Request.l4_stats).
+ */
+export const L4_FEATURE = "l4-v1";

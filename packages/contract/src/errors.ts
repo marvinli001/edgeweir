@@ -118,6 +118,23 @@ export const errorDefs = {
   /** An error page template over the byte limit; status names the page (404/503 for platform pages). */
   ERROR_PAGE_TOO_LARGE: { status: 400, params: ["status", "limit"] },
   API_KEY_RATE_LIMITED: { status: 429, params: ["retryAfterSeconds"] },
+  L4_APP_NOT_FOUND: { status: 404, params: [] },
+  /** A cluster has at most MAX_L4_APPS_PER_CLUSTER applications. */
+  L4_APP_LIMIT: { status: 409, params: ["limit"] },
+  /** An application port outside every port pool of its cluster for its protocol. */
+  L4_PORT_OUTSIDE_POOL: { status: 400, params: ["port"] },
+  /**
+   * Ports other applications of the cluster use: the protocol and port of a
+   * new or changed application, or ports a pool change would leave outside
+   * the pools. `apps` lists them as "name (port/protocol)".
+   */
+  L4_PORT_IN_USE: { status: 409, params: ["apps"] },
+  /** A port of the cluster's HTTP(S) listeners in a pool or an application. */
+  L4_PORT_RESERVED: { status: 400, params: ["port"] },
+  /** Port pools of a cluster sharing ports of a protocol ("from-to/protocol"). */
+  L4_PORT_POOL_OVERLAP: { status: 400, params: ["pools"] },
+  /** PROXY protocol (accepted or sent) on a UDP application. */
+  L4_PROXY_PROTOCOL_UNSUPPORTED: { status: 400, params: [] },
 } as const satisfies Record<string, { status: number; params: readonly string[] }>;
 
 export type ErrorCode = keyof typeof errorDefs;
@@ -157,6 +174,9 @@ export const revisionReasonDefs = {
   site_error_pages_updated: { params: ["site"], en: "error pages of {site} updated" },
   error_pages_updated: { params: [], en: "platform error pages updated" },
   recompiled: { params: [], en: "configuration recompiled after an upgrade" },
+  l4_app_created: { params: ["app"], en: "L4 application {app} created" },
+  l4_app_updated: { params: ["app"], en: "L4 application {app} updated" },
+  l4_app_deleted: { params: ["app"], en: "L4 application {app} deleted" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

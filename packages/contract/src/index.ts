@@ -15,6 +15,7 @@ import { bulkRedirectsContract } from "./bulk-redirects";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
 import { errorPagesContract, platformErrorPages } from "./error-pages";
+import { l4AppsContract, portPoolProcedures } from "./l4";
 import {
   nodeAddressesInput,
   nodeProbeInput,
@@ -89,6 +90,8 @@ export const contract = {
   probes: probesContract,
   /** Scheduling rules of a cluster: conditions on node and probe metrics, DNS actions. */
   scheduling: schedulingContract,
+  /** Layer-4 (TCP / UDP) applications: ports of a cluster forwarded to origins. */
+  l4Apps: l4AppsContract,
   dnsCredentials: dnsCredentialsContract,
   https: httpsContract,
   system: {
@@ -193,6 +196,10 @@ export const contract = {
       .route({ method: "POST", path: "/enrollment-tokens", tags: ["nodes"] })
       .input(s.enrollmentTokenInput)
       .output(s.enrollmentTokenResult),
+    /** Port ranges the cluster's layer-4 applications may listen on. */
+    portPools: portPoolProcedures.portPools,
+    /** Replaces the port pools (no configuration revision: nodes only see the applications). */
+    setPortPools: portPoolProcedures.setPortPools,
   },
   nodeGroups: {
     list: oc
@@ -442,6 +449,7 @@ export * from "./access-keys";
 export * from "./alerts";
 export * from "./dns";
 export * from "./dns-providers";
+export * from "./l4";
 export * from "./probes";
 export * from "./service-accounts";
 export * from "./usage";

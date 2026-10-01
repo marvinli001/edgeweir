@@ -529,7 +529,7 @@
   "error_bulk_redirect_host_unknown": "网站没有这些域名：{hosts}",
   "error_ip_list_not_found": "IP 名单不存在",
   "error_ip_list_name_taken": "IP 名单名称已存在",
-  "error_ip_list_in_use": "IP 名单正在被规则引用",
+  "error_ip_list_in_use": "IP 名单正在被规则或 L4 应用引用",
   "revision_reason_rules_updated": "已更新规则与 IP 名单",
   "rules_phase_request": "请求变换",
   "rules_phase_redirect": "重定向",
@@ -1415,5 +1415,15 @@
   "dns_backup_remove": "移除 {name}",
   "dns_backup_none": "无备用节点组",
   "dns_min_healthy": "最少健康 IP 数",
-  "scheduling_for_seconds": "持续 {seconds} 秒"
+  "scheduling_for_seconds": "持续 {seconds} 秒",
+  "error_l4_app_not_found": "L4 应用不存在",
+  "error_l4_app_limit": "每个集群最多 {limit} 个 L4 应用",
+  "error_l4_port_outside_pool": "端口 {port} 不在集群此协议的端口池内",
+  "error_l4_port_in_use": "端口已被占用：{apps}",
+  "error_l4_port_reserved": "端口 {port} 是集群的 HTTP 监听端口",
+  "error_l4_port_pool_overlap": "端口池重叠：{pools}",
+  "error_l4_proxy_protocol_unsupported": "PROXY protocol 只用于 TCP 应用",
+  "revision_reason_l4_app_created": "新建 L4 应用 {app}",
+  "revision_reason_l4_app_updated": "修改 L4 应用 {app}",
+  "revision_reason_l4_app_deleted": "删除 L4 应用 {app}"
 }

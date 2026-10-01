@@ -254,7 +254,15 @@ export async function deleteIpList(app: AppContext, id: string, actor: Actor) {
       .from(schema.cacheRule)
       .where(sql`${id}::uuid = any(${schema.cacheRule.listIds})`)
       .limit(1);
-    if (refs.length || cacheRefs.length) fail("IP_LIST_IN_USE", "IP list is referenced by a rule");
+    const appRefs = await tx
+      .select({ id: schema.l4App.id })
+      .from(schema.l4App)
+      .where(
+        sql`${id}::uuid = any(${schema.l4App.allowListIds}) or ${id}::uuid = any(${schema.l4App.blockListIds})`,
+      )
+      .limit(1);
+    if (refs.length || cacheRefs.length || appRefs.length)
+      fail("IP_LIST_IN_USE", "IP list is referenced by a rule or an L4 application");
     await tx.delete(schema.ipList).where(eq(schema.ipList.id, id));
     await publishListChange(tx, actor);
     await recordAudit(tx, actor, {

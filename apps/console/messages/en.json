@@ -614,7 +614,7 @@
   "error_bulk_redirect_host_unknown": "The site does not serve {hosts}",
   "error_ip_list_not_found": "IP list not found",
   "error_ip_list_name_taken": "IP list name already exists",
-  "error_ip_list_in_use": "IP list is used by a rule",
+  "error_ip_list_in_use": "IP list is used by a rule or an L4 application",
   "revision_reason_rules_updated": "Rules and IP lists updated",
   "rules_phase_request": "Request transform",
   "rules_phase_redirect": "Redirect",
@@ -1594,5 +1594,15 @@
   "dns_backup_remove": "Remove {name}",
   "dns_backup_none": "No backup groups",
   "dns_min_healthy": "Minimum healthy IPs",
-  "scheduling_for_seconds": "for {seconds}s"
+  "scheduling_for_seconds": "for {seconds}s",
+  "error_l4_app_not_found": "L4 application not found",
+  "error_l4_app_limit": "A cluster can have at most {limit} L4 applications",
+  "error_l4_port_outside_pool": "Port {port} is outside the cluster's port pools for this protocol",
+  "error_l4_port_in_use": "Ports in use by {apps}",
+  "error_l4_port_reserved": "Port {port} is used by the cluster's HTTP listeners",
+  "error_l4_port_pool_overlap": "Port pools overlap: {pools}",
+  "error_l4_proxy_protocol_unsupported": "PROXY protocol is for TCP applications only",
+  "revision_reason_l4_app_created": "L4 application {app} created",
+  "revision_reason_l4_app_updated": "L4 application {app} updated",
+  "revision_reason_l4_app_deleted": "L4 application {app} deleted"
 }

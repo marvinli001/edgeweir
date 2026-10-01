@@ -62,6 +62,7 @@ import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settin
 import { recordAudit, systemActor } from "./audit";
 import { ensureChallengeKeys } from "./challenge-keys";
 import { loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
+import { loadL4AppModels, restoreL4Apps } from "./l4-config";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
 import { loadSiteWafModels } from "./waf";
@@ -761,6 +762,7 @@ export async function publishRevision(
     platformProtection,
     platformErrorPages: await loadPlatformErrorPages(tx),
     offlineHosts: await loadOfflineHosts(tx, opts.clusterId),
+    l4Apps: await loadL4AppModels(tx, opts.clusterId),
   };
   // A cluster gets its challenge keys the first time its configuration uses
   // challenges or session affinity.
@@ -1036,7 +1038,8 @@ const hostKey = (host: { name: string; wildcard: boolean }) =>
  * current one. A site or domain removed since: `strict` (the operator's
  * rollback) refuses with ROLLBACK_RESOURCE_UNAVAILABLE, as it does for an
  * expired or unavailable certificate; otherwise (the canary's stable
- * revision) it is dropped. Offline hosts follow the current sites.
+ * revision) it is dropped. Offline hosts follow the current sites; layer-4
+ * applications follow the same rules (restoreL4Apps).
  * Derived fields are left to refreshDerived.
  */
 async function restoreSites(
@@ -1124,6 +1127,7 @@ async function restoreSites(
     for (const host of offline) hosts.set(hostKey(host), host);
     out.offlineHosts = [...hosts.values()].filter((h) => !served.has(hostKey(h)));
   }
+  out.l4Apps = await restoreL4Apps(tx, clusterId, out.l4Apps, opts);
   return { config: out, currentSites };
 }
 
