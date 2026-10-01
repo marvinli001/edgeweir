@@ -1,4 +1,11 @@
-export type FixtureRecord = { name: string; type: string; data: string; ttl: number };
+/** `line`: resolution line; absent, "" or "default" is the default line. */
+export type FixtureRecord = {
+  name: string;
+  type: string;
+  data: string;
+  ttl: number;
+  line?: string;
+};
 
 /**
  * In-memory DNS provider accounts for the fake certd: one zone map per API
@@ -29,8 +36,9 @@ export const dnsFixture = {
   },
 };
 
+const lineOf = (r: FixtureRecord) => (r.line && r.line !== "default" ? r.line : "");
 const same = (a: FixtureRecord, b: FixtureRecord) =>
-  a.name === b.name && a.type === b.type && a.data === b.data;
+  a.name === b.name && a.type === b.type && a.data === b.data && lineOf(a) === lineOf(b);
 
 type CertdErrorClass = new (command: string, code: string) => Error;
 
@@ -63,6 +71,7 @@ export const makeFakeCertd = (CertdError: CertdErrorClass) =>
     const given = (input.records ?? []).map((r) => ({ ...r, ttl: Math.max(r.ttl, floor) }));
     if (command === "dns.test") return { records: records.length };
     if (command === "dns.list") return records;
+    // dns.set replaces each (name, type) on every line with the records given.
     if (command === "dns.set")
       records = [
         ...records.filter((r) => !given.some((g) => g.name === r.name && g.type === r.type)),
@@ -79,14 +88,26 @@ export const makeFakeCertd = (CertdError: CertdErrorClass) =>
     return given.map((r) => ({ ...r }));
   };
 
-/** Follows CNAMEs inside one zone's records and returns the sorted addresses of a name. */
-export function resolve(records: FixtureRecord[], zone: string, fqdn: string, depth = 0): string[] {
+/**
+ * Follows CNAMEs inside one zone's records and returns the sorted addresses
+ * of a name, as a resolver on `line` sees them: the records of its line,
+ * else those of the default line.
+ */
+export function resolve(
+  records: FixtureRecord[],
+  zone: string,
+  fqdn: string,
+  depth = 0,
+  line = "",
+): string[] {
   if (depth > 8) return [];
   const name = fqdn === zone ? "@" : fqdn.slice(0, -zone.length - 1);
-  const cname = records.find((r) => r.name === name && r.type === "CNAME");
-  if (cname) return resolve(records, zone, cname.data.replace(/\.$/, ""), depth + 1);
-  return records
-    .filter((r) => r.name === name && (r.type === "A" || r.type === "AAAA"))
+  const onLine = (wanted: string) => records.filter((r) => r.name === name && lineOf(r) === wanted);
+  const own = line && onLine(line).length ? onLine(line) : onLine("");
+  const cname = own.find((r) => r.type === "CNAME");
+  if (cname) return resolve(records, zone, cname.data.replace(/\.$/, ""), depth + 1, line);
+  return own
+    .filter((r) => r.type === "A" || r.type === "AAAA")
     .map((r) => r.data)
     .sort();
 }
