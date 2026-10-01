@@ -48,7 +48,15 @@
 #   them, checks `goreleaser check`, the packages' contents (nginx, lualib,
 #   NOTICE, SBOMs, the ModSecurity module and the CRS), `nginx -V` of the
 #   installed OpenResty, the CRS loading in it and the installed node's
-#   brotli-v1, zstd-v1 and modsecurity-v1.
+#   brotli-v1, zstd-v1 and modsecurity-v1. scripts/e2e-g3.mjs: the nodes'
+#   custom build; Brotli, Zstandard and gzip negotiated by q-value from one
+#   cached identity object (curl --compressed decodes each), no second
+#   compression of an encoded origin response; OWASP CRS detect (logged,
+#   served) and block (403 waf-blocked, cache hits included), excluded rules,
+#   top rules, the platform's tenant switch; old nodes (pre-G3 image) and a
+#   node without ModSecurity make the features unavailable (409 for tenants)
+#   until they leave; Playwright e2e/g3.spec.ts with an old node in a cluster
+#   of its own.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -112,6 +120,8 @@ if $UP; then
 fi
 cleanup() {
   docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
+  # Containers scripts/e2e-g3.mjs starts next to the stack (old nodes, curl).
+  docker ps -aq --filter "label=dev.edgeweir.e2e-g3=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
   # Every profile: the upgrade peer and ClickHouse keep their state otherwise.
   if $DOWN; then "${COMPOSE[@]}" --profile '*' down -v >/dev/null 2>&1 || true; fi
 }
@@ -1029,6 +1039,14 @@ if ! $SKIP_UI; then
   E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g2.spec.ts || fail "G2 browser checks failed"
 fi
 pass "G2 checks passed"
+
+step "G3: custom OpenResty build, Brotli / Zstandard negotiation, OWASP CRS and capability gating"
+node scripts/e2e-g3.mjs || fail "G3 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g3.spec.ts || fail "G3 browser checks failed"
+fi
+node scripts/e2e-g3.mjs --cleanup || fail "G3 cleanup failed"
+pass "G3 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
