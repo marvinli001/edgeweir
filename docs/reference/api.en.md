@@ -100,7 +100,7 @@ For a service account, `GET /me` returns `serviceAccount: { id, name, scopes }`;
 | Same key, other method, path or body | 422 `IDEMPOTENCY_KEY_MISMATCH` |
 | The first request is still running | 409 `IDEMPOTENCY_IN_PROGRESS` |
 | Invalid key | 400 `IDEMPOTENCY_KEY_INVALID` |
-| The response carries a credential shown once: `POST /access-keys`, `POST /service-accounts/{id}/keys`, `POST /enrollment-tokens` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`, nothing runs; send it again without the header |
+| The response carries a credential shown once: `POST /access-keys`, `POST /service-accounts/{id}/keys`, `POST /enrollment-tokens`, `POST /probe-tokens` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`, nothing runs; send it again without the header |
 
 - Keys are per caller: all AccessKeys share one set, each service account has its own.
 - Records are kept 24 hours; expired ones are deleted hourly.
@@ -444,6 +444,74 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 
 Requirements, states, and node-side verification: [Node upgrades](../guide/node-upgrades.en.md).
 
+### Regional probes, scheduling addresses, and scheduling
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `probes.list` | `GET /probes` | Every probe |
+| `probes.createToken` | `POST /probe-tokens` | A one-time probe enrollment token |
+| `probes.update` | `PATCH /probes/{id}` | Renames, disables, or enables a probe |
+| `probes.delete` | `DELETE /probes/{id}` | Deletes a probe and revokes its certificate |
+| `probes.results` | `GET /probe-results` | Latest probe results |
+| `settings.probes`, `settings.setProbes` | `GET`, `PUT /settings/probes` | Probe settings |
+| `nodes.setAddresses` | `PUT /nodes/{id}/addresses` | A node's scheduling addresses and levels |
+| `nodes.setProbe` | `PUT /nodes/{id}/probe` | Lets a node also probe |
+| `scheduling.list` | `GET /scheduling/rules` | Scheduling rules; query parameter `clusterId` (optional) |
+| `scheduling.create` | `POST /scheduling/rules` | Creates a rule, returns 201 |
+| `scheduling.update` | `PATCH /scheduling/rules/{id}` | Changes only the given fields |
+| `scheduling.delete` | `DELETE /scheduling/rules/{id}` | Deletes a rule; its actions in effect end |
+| `scheduling.preview` | `GET /clusters/{clusterId}/scheduling/preview` | Every rule under the current metrics; writes nothing |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `GET` only. `POST /probe-tokens` refuses an `Idempotency-Key` (see [Idempotency keys](#idempotency-keys)).
+
+| Request | Fields |
+| --- | --- |
+| `POST /probe-tokens` | `name` (1–64 characters), `regionId`, `ttlMinutes` (5–10080, default 60) |
+| `PATCH /probes/{id}` | `name` (1–64 characters), `enabled`, both optional. Disabling deletes the probe's results |
+| `GET /probe-results` | Query parameters `probeId` (a probe ID, or the ID of a node that also probes) and `nodeId` (the measured node), both optional |
+| `PUT /settings/probes` | Replaces the settings: `intervalSeconds` (5–60), `timeoutMs` (500–10000, at most `intervalSeconds × 1000`), `attempts` (1–10), `lossPercent` (1–100), `ipDownSeconds`, `ipUpSeconds` (5–3600) |
+| `PUT /nodes/{id}/addresses` | `addresses`: replaces the list, at most 8 `{ address, level }`; `address` is a single unicast IP (private allowed), no duplicates; `level` is 0 (primary), 1 (backup 1), or 2 (backup 2), and a non-empty list needs a `level` 0; `[]` goes back to the reported addresses. Publishes the cluster's DNS revision (reason `manual`) |
+| `PUT /nodes/{id}/probe` | `enabled`; turning it off deletes the node's probe results |
+| `POST /scheduling/rules` | `clusterId`, `lineName` (a line name of the cluster's DNS binding, `null` for every line, default `null`; required by `backup_group`), `name` (1–100 characters), `enabled` (default `true`), `match` (`all` by default / `any`), `conditions`, `action` (`remove_node`, `backup_group`, `backup_ip`), `holdSeconds`, `recoverSeconds` (0–86400, default 300) |
+| `conditions[]` | 1–8 of: `metric` (`cpu_percent`, `load1`, `memory_percent`, `egress_mbps`, `connections`, `probe_loss_percent`, `probe_latency_ms`), `aggregate` (`avg` by default / `max` / `min`), `comparator` (`gt`, `ge`, `lt`, `le`), `threshold` (0–10¹²), `durationSeconds` (0–3600, default 0), `regionId` (only for `probe_loss_percent` and `probe_latency_ms`, default `null`) |
+| `PATCH /scheduling/rules/{id}` | The fields of `POST` except `clusterId`, all optional. `enabled: false`, or a different `lineName`, `match`, `action`, or `conditions`, ends the actions in effect first and the states start over; changing only `name`, `holdSeconds`, or `recoverSeconds` does not. `lineName` is checked only when `lineName` or `action` changes |
+
+| Procedure | Response |
+| --- | --- |
+| `probes.list`, `probes.update` | Probe: `id`, `name`, `regionId`, `regionName`, `regionCode`, `enabled`, `online`, `lastSeenAt`, `enrolledAt`, `hostname`, `agentVersion`, `os`, `arch`, `certNotAfter`, `targets`, `lastRound` (`{ checkedAt, results, failed, lossPercent, avgRttMs }`, `null` without results), `createdAt` |
+| `probes.createToken` | `tokenId`, `token` (`ewp_…`, returned once), `expiresAt`, `serverUrl` (node channel), `caSha256`, `command` (the `docker run` start command) |
+| `probes.delete`, `scheduling.delete` | `{ ok: true }` |
+| `probes.results` | Sorted by node, address, port, and prober, at most 5000: `proberKind` (`probe` / `node`), `proberId`, `proberName`, `regionId`, `regionName`, `nodeId`, `nodeName`, `address`, `port`, `method` (`tcp` / `http` / `https`), `sent`, `lost`, `lossPercent`, `rttMs` (median of successful attempts, 0 when all were lost), `error` (`timeout`, `refused`, `reset`, `tls`, `status`, `unreachable`), `checkedAt` |
+| `settings.probes`, `settings.setProbes` | The probe settings; the defaults 10, 3000, 3, 50, 30, 60 until saved |
+| Nodes returned by `nodes.*` | Add `probeEnabled`; `metrics` (`{ cpuPercent, load1, load5, load15, memoryUsedBytes, memoryTotalBytes, egressBps, activeConnections, reportedAt }`, `null` until the node reports them); `schedulingAddresses` (`[{ address, level, source, reachable }]`, `source` is `reported` or `configured`); `schedulingLevel` (the level DNS uses now) |
+| `scheduling.list`, `scheduling.create`, `scheduling.update` | Rule: `id`, `clusterId`, the request fields (conditions with defaults filled in), `activeNodes` (`[{ nodeId, nodeName, since }]`, nodes in `active` or `recovering`), `createdAt`, `updatedAt` |
+| `scheduling.preview` | `{ clusterId, evaluatedAt, rules }`. Per rule: `ruleId`, `ruleName`, `enabled`, `lineName`, `match`, `action`, `nodes`. Per node: `nodeId`, `nodeName`, `state` (`idle`, `pending`, `active`, `recovering`), `conditions` (the condition fields plus `value` (`null` without data), `holds`, `heldSeconds`, `satisfied`), `matches`, `inEffect`, `wouldActivate`, `wouldRecover`, `activeSince`, `recoveringSince`, `recoversAt` |
+
+New fields of DNS bindings and records:
+
+| Request or response | Fields |
+| --- | --- |
+| `binding.lines[]` of `PUT /clusters/{clusterId}/dns` | Add `resolutionLine` (`default` by default, `telecom`, `unicom`, `mobile`, `edu`, `overseas`), `backupNodeGroupIds` (node groups of this cluster, at most 4, no duplicates, not the line's own group, default `[]`), `minHealthyIps` (1–64, default 1). `GET` returns the defaults for lines saved before |
+| `records[]` of `GET /clusters/{clusterId}/dns` and `GET /clusters/{clusterId}/dns/export` | Add `line`: the record's resolution line; absent on default-line records |
+| DNS revisions (`revision`, `blocked`, `GET /clusters/{clusterId}/dns/revisions`, …) | `reason` is `manual`, `health`, `rollback`, `force`, or `scheduling`; add `reasonParams`: for `scheduling`, `ruleId`, `rule`, `nodeId`, `node`, `action`, and `event` (`activated` / `recovered`); `{}` for the other reasons |
+| `GET /dns/catalog` | `capabilities.lines` changes from a boolean to the array of resolution lines the provider supports |
+
+| Error code | Status | When |
+| --- | --- | --- |
+| `DNS_LINE_UNSUPPORTED` | 400 | A binding line's `resolutionLine` is not among the lines of the account's provider; `data.line` |
+| `REGION_IN_USE` | 409 | Deleting a region that still has probes (`regions.delete`); `data.probes` is the probe count |
+| `PROBE_NOT_FOUND` | 404 | The probe does not exist; `probeId` of `probes.results` is neither a probe nor a node |
+| `NODE_REGION_REQUIRED` | 409 | `nodes.setProbe` turns probing on while the node's node group has no region |
+| `NODE_ADDRESS_INVALID` | 400 | A scheduling address is not a single unicast IP (a CIDR, a host name, loopback, link-local, multicast, …) or is a duplicate; `data.address` |
+| `SCHEDULING_RULE_NOT_FOUND` | 404 | The rule does not exist |
+| `SCHEDULING_RULE_INVALID` | 400 | `backup_group` without `lineName`, or a `lineName` missing from the cluster's DNS binding |
+| `REGION_NOT_FOUND` | 404 | The `regionId` of `probes.createToken` or of a condition does not exist |
+| `NODE_NOT_FOUND` | 404 | The node does not exist, including `nodeId` of `probes.results` |
+| `CLUSTER_NOT_FOUND` | 404 | The cluster of a rule or preview does not exist |
+| `BAD_REQUEST` | 400 | Input validation, for example `timeoutMs` longer than the interval, scheduling addresses without a `level` 0, or `regionId` on a node metric |
+
+Behavior: [Regional probes and scheduling](../guide/scheduling.en.md) and [DNS steering and alerts](../guide/dns-and-alerts.en.md#records-per-resolution-line).
+
 ### Example
 
 List sites (procedure `sites.list`, `GET /api/v1/sites`):
@@ -550,9 +618,9 @@ The response comes from the listening HTTP server; the database is not checked. 
 | --- | --- |
 | Protocol | Connect-RPC over HTTPS (HTTP/2, HTTP/1.1 accepted), TLS 1.2 or later |
 | Listener | `NODE_API_HOST:NODE_API_PORT`, default `8443` |
-| Service | `edgeweir.node.v1.NodeService`, defined in [`proto/edgeweir/node/v1/node.proto`](https://github.com/marvinli001/edgeweir/blob/master/proto/edgeweir/node/v1/node.proto) |
+| Services | `edgeweir.node.v1.NodeService` (nodes) and `edgeweir.node.v1.ProbeService` (regional probes and nodes that also probe), defined in [`proto/edgeweir/node/v1/node.proto`](https://github.com/marvinli001/edgeweir/blob/master/proto/edgeweir/node/v1/node.proto) and [`probe.proto`](https://github.com/marvinli001/edgeweir/blob/master/proto/edgeweir/node/v1/probe.proto) |
 | Server certificate | Issued by the console's internal CA at every start; names: [Environment variables](environment.en.md#addresses-and-network) |
-| Authentication | `Enroll`: a one-time enrollment token; the node pins the internal CA's SHA-256 fingerprint beforehand. Every other RPC: a client certificate issued by the internal CA (mTLS), with the node ID as CN |
+| Authentication | `Enroll`, `EnrollProbe`: a one-time enrollment token (`ewt_`, `ewp_`); the node or probe pins the internal CA's SHA-256 fingerprint beforehand. Every other RPC: a client certificate issued by the internal CA (mTLS), with the node ID (`O=Edgeweir Node`) or probe ID (`O=Edgeweir Probe`) as CN; probe certificates call `ProbeService` only, node certificates call `GetProbeTargets` and `ReportProbeResults` only while the node also probes |
 | Other paths | 404 |
 
 > [!WARNING]

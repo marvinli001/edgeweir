@@ -100,7 +100,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | 同一 key、不同的方法、路径或请求体 | 422 `IDEMPOTENCY_KEY_MISMATCH` |
 | 第一次请求仍在执行 | 409 `IDEMPOTENCY_IN_PROGRESS` |
 | key 格式无效 | 400 `IDEMPOTENCY_KEY_INVALID` |
-| 响应里有只显示一次的凭据：`POST /access-keys`、`POST /service-accounts/{id}/keys`、`POST /enrollment-tokens` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`，不执行；不带该请求头重新发送 |
+| 响应里有只显示一次的凭据：`POST /access-keys`、`POST /service-accounts/{id}/keys`、`POST /enrollment-tokens`、`POST /probe-tokens` | 400 `IDEMPOTENCY_KEY_UNSUPPORTED`，不执行；不带该请求头重新发送 |
 
 - key 按调用方区分：全部 AccessKey 共用一份，每个服务账号单独一份。
 - 保存 24 小时，每小时清理过期记录。
@@ -444,6 +444,74 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 前提、状态与节点侧校验见[节点升级](../guide/node-upgrades.md)。
 
+### 区域探针、调度地址与智能调度
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `probes.list` | `GET /probes` | 全部探针 |
+| `probes.createToken` | `POST /probe-tokens` | 一次性探针注册令牌 |
+| `probes.update` | `PATCH /probes/{id}` | 改名、停用或启用 |
+| `probes.delete` | `DELETE /probes/{id}` | 删除探针并吊销其证书 |
+| `probes.results` | `GET /probe-results` | 最新探测结果 |
+| `settings.probes`、`settings.setProbes` | `GET`、`PUT /settings/probes` | 探测设置 |
+| `nodes.setAddresses` | `PUT /nodes/{id}/addresses` | 节点的调度地址与级别 |
+| `nodes.setProbe` | `PUT /nodes/{id}/probe` | 节点兼任探针 |
+| `scheduling.list` | `GET /scheduling/rules` | 调度规则；查询参数 `clusterId`（可选） |
+| `scheduling.create` | `POST /scheduling/rules` | 新建规则，返回 201 |
+| `scheduling.update` | `PATCH /scheduling/rules/{id}` | 只修改给出的字段 |
+| `scheduling.delete` | `DELETE /scheduling/rules/{id}` | 删除规则；生效中的动作恢复 |
+| `scheduling.preview` | `GET /clusters/{clusterId}/scheduling/preview` | 按当前指标预览全部规则，不写入 |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。`POST /probe-tokens` 不接受 `Idempotency-Key`（见[幂等键](#幂等键)）。
+
+| 请求 | 字段 |
+| --- | --- |
+| `POST /probe-tokens` | `name`（1–64 字符）、`regionId`、`ttlMinutes`（5–10080，默认 60） |
+| `PATCH /probes/{id}` | `name`（1–64 字符）、`enabled`，均可选。停用时删除该探针的结果 |
+| `GET /probe-results` | 查询参数 `probeId`（探针 ID，或兼任探针的节点 ID）、`nodeId`（被探测的节点），均可选 |
+| `PUT /settings/probes` | 整体替换：`intervalSeconds`（5–60）、`timeoutMs`（500–10000，不超过 `intervalSeconds × 1000`）、`attempts`（1–10）、`lossPercent`（1–100）、`ipDownSeconds`、`ipUpSeconds`（5–3600） |
+| `PUT /nodes/{id}/addresses` | `addresses`：整体替换，至多 8 个 `{ address, level }`；`address` 为单个单播 IP（可为私网地址），不重复；`level` 为 0（主）、1（备 1）、2（备 2），非空时须有 `level` 0；`[]` 恢复为上报地址。发布集群的 DNS 版本（原因 `manual`） |
+| `PUT /nodes/{id}/probe` | `enabled`；关闭时删除该节点的探测结果 |
+| `POST /scheduling/rules` | `clusterId`、`lineName`（集群 DNS 绑定中的线路名称，`null` 为全部线路，默认 `null`；`backup_group` 必须有）、`name`（1–100 字符）、`enabled`（默认 `true`）、`match`（`all` 默认 / `any`）、`conditions`、`action`（`remove_node`、`backup_group`、`backup_ip`）、`holdSeconds`、`recoverSeconds`（0–86400，默认 300） |
+| `conditions[]` | 1–8 个：`metric`（`cpu_percent`、`load1`、`memory_percent`、`egress_mbps`、`connections`、`probe_loss_percent`、`probe_latency_ms`）、`aggregate`（`avg` 默认 / `max` / `min`）、`comparator`（`gt`、`ge`、`lt`、`le`）、`threshold`（0–10¹²）、`durationSeconds`（0–3600，默认 0）、`regionId`（只用于 `probe_loss_percent`、`probe_latency_ms`，默认 `null`） |
+| `PATCH /scheduling/rules/{id}` | `POST` 中除 `clusterId` 外的字段，均可选。`enabled: false`，或 `lineName`、`match`、`action`、`conditions` 与当前不同时，生效中的动作先恢复，状态重新开始；只修改 `name`、`holdSeconds`、`recoverSeconds` 时不影响。`lineName` 只在修改 `lineName` 或 `action` 时检查 |
+
+| 过程 | 响应 |
+| --- | --- |
+| `probes.list`、`probes.update` | 探针：`id`、`name`、`regionId`、`regionName`、`regionCode`、`enabled`、`online`、`lastSeenAt`、`enrolledAt`、`hostname`、`agentVersion`、`os`、`arch`、`certNotAfter`、`targets`、`lastRound`（`{ checkedAt, results, failed, lossPercent, avgRttMs }`，没有结果时为 `null`）、`createdAt` |
+| `probes.createToken` | `tokenId`、`token`（`ewp_…`，只返回一次）、`expiresAt`、`serverUrl`（节点通道）、`caSha256`、`command`（`docker run` 启动命令） |
+| `probes.delete`、`scheduling.delete` | `{ ok: true }` |
+| `probes.results` | 按节点、地址、端口、探测方排序，至多 5000 条：`proberKind`（`probe` / `node`）、`proberId`、`proberName`、`regionId`、`regionName`、`nodeId`、`nodeName`、`address`、`port`、`method`（`tcp` / `http` / `https`）、`sent`、`lost`、`lossPercent`、`rttMs`（成功尝试的中位数，全部丢失时为 0）、`error`（`timeout`、`refused`、`reset`、`tls`、`status`、`unreachable`）、`checkedAt` |
+| `settings.probes`、`settings.setProbes` | 探测设置；从未保存时为默认值 10、3000、3、50、30、60 |
+| `nodes.*` 返回的节点 | 增加 `probeEnabled`；`metrics`（`{ cpuPercent, load1, load5, load15, memoryUsedBytes, memoryTotalBytes, egressBps, activeConnections, reportedAt }`，节点没有上报过时为 `null`）；`schedulingAddresses`（`[{ address, level, source, reachable }]`，`source` 为 `reported` 或 `configured`）；`schedulingLevel`（DNS 当前使用的级别） |
+| `scheduling.list`、`scheduling.create`、`scheduling.update` | 规则：`id`、`clusterId`、请求中的字段（条件补齐默认值）、`activeNodes`（`[{ nodeId, nodeName, since }]`，生效中与恢复中的节点）、`createdAt`、`updatedAt` |
+| `scheduling.preview` | `{ clusterId, evaluatedAt, rules }`。每条规则：`ruleId`、`ruleName`、`enabled`、`lineName`、`match`、`action`、`nodes`。每个节点：`nodeId`、`nodeName`、`state`（`idle`、`pending`、`active`、`recovering`）、`conditions`（条件字段与 `value`（没有数据为 `null`）、`holds`、`heldSeconds`、`satisfied`）、`matches`、`inEffect`、`wouldActivate`、`wouldRecover`、`activeSince`、`recoveringSince`、`recoversAt` |
+
+DNS 绑定与记录的新增字段：
+
+| 请求或响应 | 字段 |
+| --- | --- |
+| `PUT /clusters/{clusterId}/dns` 的 `binding.lines[]` | 增加 `resolutionLine`（`default` 默认、`telecom`、`unicom`、`mobile`、`edu`、`overseas`）、`backupNodeGroupIds`（本集群的节点组，至多 4 个，不重复，不含本线路的节点组，默认 `[]`）、`minHealthyIps`（1–64，默认 1）。`GET` 对此前保存的线路返回默认值 |
+| `GET /clusters/{clusterId}/dns` 与 `GET /clusters/{clusterId}/dns/export` 的 `records[]` | 增加 `line`：记录的解析线路；默认线路的记录没有此字段 |
+| DNS 版本（`revision`、`blocked`、`GET /clusters/{clusterId}/dns/revisions` 等） | `reason` 为 `manual`、`health`、`rollback`、`force` 或 `scheduling`；增加 `reasonParams`：`scheduling` 为 `ruleId`、`rule`、`nodeId`、`node`、`action`、`event`（`activated` / `recovered`），其他原因为 `{}` |
+| `GET /dns/catalog` | `capabilities.lines` 由布尔值改为服务商支持的解析线路数组 |
+
+| 错误代码 | 状态 | 场景 |
+| --- | --- | --- |
+| `DNS_LINE_UNSUPPORTED` | 400 | 绑定线路的 `resolutionLine` 不在服务商账号支持的线路中；`data.line` |
+| `REGION_IN_USE` | 409 | 删除仍有探针的区域（`regions.delete`）；`data.probes` 为探针数 |
+| `PROBE_NOT_FOUND` | 404 | 探针不存在；`probes.results` 的 `probeId` 既不是探针也不是节点 |
+| `NODE_REGION_REQUIRED` | 409 | `nodes.setProbe` 开启时，节点的节点组没有区域 |
+| `NODE_ADDRESS_INVALID` | 400 | 调度地址不是单个单播 IP（CIDR、主机名、回环、链路本地、组播等）或重复；`data.address` |
+| `SCHEDULING_RULE_NOT_FOUND` | 404 | 规则不存在 |
+| `SCHEDULING_RULE_INVALID` | 400 | `backup_group` 没有 `lineName`，或 `lineName` 不在集群的 DNS 绑定中 |
+| `REGION_NOT_FOUND` | 404 | `probes.createToken` 的 `regionId` 或条件的 `regionId` 不存在 |
+| `NODE_NOT_FOUND` | 404 | 节点不存在，含 `probes.results` 的 `nodeId` |
+| `CLUSTER_NOT_FOUND` | 404 | 规则或预览的集群不存在 |
+| `BAD_REQUEST` | 400 | 输入校验失败，例如 `timeoutMs` 超过探测间隔、调度地址没有 `level` 0、非探测指标带 `regionId` |
+
+行为见[区域探针与智能调度](../guide/scheduling.md)与[DNS 调度与告警](../guide/dns-and-alerts.md#按解析线路写入)。
+
 ### 示例
 
 列出网站（过程 `sites.list`，`GET /api/v1/sites`）：
@@ -550,9 +618,9 @@ HTTP 服务监听即返回，不检查数据库。容器健康检查见[命令�
 | --- | --- |
 | 协议 | Connect-RPC，HTTPS（HTTP/2，兼容 HTTP/1.1），TLS 1.2 及以上 |
 | 监听 | `NODE_API_HOST:NODE_API_PORT`，默认 `8443` |
-| 服务 | `edgeweir.node.v1.NodeService`，定义见 [`proto/edgeweir/node/v1/node.proto`](https://github.com/marvinli001/edgeweir/blob/master/proto/edgeweir/node/v1/node.proto) |
+| 服务 | `edgeweir.node.v1.NodeService`（节点）与 `edgeweir.node.v1.ProbeService`（区域探针与兼任探针的节点），定义见 [`proto/edgeweir/node/v1/node.proto`](https://github.com/marvinli001/edgeweir/blob/master/proto/edgeweir/node/v1/node.proto) 与 [`probe.proto`](https://github.com/marvinli001/edgeweir/blob/master/proto/edgeweir/node/v1/probe.proto) |
 | 服务器证书 | 控制台内部 CA 在每次启动时签发，名称见[环境变量](environment.md#访问地址与网络) |
-| 认证 | `Enroll`：一次性注册 token，节点预先固定内部 CA 的 SHA-256 指纹。其他 RPC：内部 CA 签发的客户端证书（mTLS），证书 CN 为节点 ID |
+| 认证 | `Enroll`、`EnrollProbe`：一次性注册 token（`ewt_`、`ewp_`），节点或探针预先固定内部 CA 的 SHA-256 指纹。其他 RPC：内部 CA 签发的客户端证书（mTLS），CN 为节点 ID（`O=Edgeweir Node`）或探针 ID（`O=Edgeweir Probe`）；探针证书只能调用 `ProbeService`，节点证书只在节点兼任探针时调用 `GetProbeTargets`、`ReportProbeResults` |
 | 其他路径 | 404 |
 
 > [!WARNING]
