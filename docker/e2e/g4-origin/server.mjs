@@ -114,7 +114,11 @@ const server = http.createServer(async (req, res) => {
   if (path === "/big") {
     // 3 MiB with Range support (sliced caching), tagged by ?tags=.
     const size = 3 * 1024 * 1024;
-    const headers = { "content-type": "application/octet-stream", "accept-ranges": "bytes", ...tagged };
+    const headers = {
+      "content-type": "application/octet-stream",
+      "accept-ranges": "bytes",
+      ...tagged,
+    };
     const m = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range ?? "");
     const start = m ? Number(m[1]) : 0;
     const end = m?.[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
