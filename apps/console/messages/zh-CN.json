@@ -1186,5 +1186,15 @@
   "task_error_reason_too_large": "解压后超过 50 MiB",
   "purge_type_host": "Host 刷新",
   "purge_type_tag": "标签刷新",
-  "purge_type_sitemap": "站点地图预热"
+  "purge_type_sitemap": "站点地图预热",
+  "purge_hosts": "Host",
+  "purge_tags": "缓存标签",
+  "purge_tag_site": "网站",
+  "purge_tag_site_placeholder": "选择网站",
+  "purge_sitemap_url": "站点地图 URL",
+  "purge_sitemap_max": "最多 URL 数",
+  "purge_sitemap_limit": "最多 {count} 个 URL",
+  "purge_variants": "设备",
+  "purge_variant_desktop": "桌面端",
+  "purge_variant_mobile": "移动端"
 }

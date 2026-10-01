@@ -1338,5 +1338,24 @@
   "task_error_reason_too_large": "larger than 50 MiB unpacked",
   "purge_type_host": "Purge hosts",
   "purge_type_tag": "Purge cache tags",
-  "purge_type_sitemap": "Prefetch a sitemap"
+  "purge_type_sitemap": "Prefetch a sitemap",
+  "purge_hosts": "Hosts",
+  "purge_tags": "Cache tags",
+  "purge_tag_site": "Site",
+  "purge_tag_site_placeholder": "Choose a site",
+  "purge_sitemap_url": "Sitemap URL",
+  "purge_sitemap_max": "URL limit",
+  "purge_sitemap_limit": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Up to {count} URL",
+        "countPlural=other": "Up to {count} URLs"
+      }
+    }
+  ],
+  "purge_variants": "Devices",
+  "purge_variant_desktop": "Desktop",
+  "purge_variant_mobile": "Mobile"
 }

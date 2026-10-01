@@ -1,8 +1,14 @@
 import {
   type CacheTask,
+  type CacheTaskCreateInput,
   type CacheTaskNodeState,
   type CacheTaskType,
+  MAX_CACHE_TASK_HOSTS,
+  MAX_CACHE_TASK_TAGS,
   MAX_CACHE_TASK_URLS,
+  type PrefetchVariant,
+  prefetchVariant,
+  SITEMAP_MAX_URLS,
   type Site,
 } from "@edgeweir/contract";
 import {
@@ -19,27 +25,44 @@ import { toast } from "sonner";
 import * as z from "zod";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
+import { SafetyNote } from "@/components/safety-note";
+import { NumberField } from "@/components/site/fields";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { unavailableReason } from "@/lib/protection";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
-const TYPES = ["url", "prefix", "site", "prefetch"] as const satisfies readonly CacheTaskType[];
-/** The task types this form creates; the list shows tasks of every type. */
-type FormType = (typeof TYPES)[number];
+/** The form's types: purges from one URL to whole sites, then prefetches. */
+const TYPES = [
+  "url",
+  "prefix",
+  "host",
+  "tag",
+  "site",
+  "prefetch",
+  "sitemap",
+] as const satisfies readonly CacheTaskType[];
 
 export const Route = createFileRoute("/_app/purge")({
   validateSearch: z.object({
@@ -59,11 +82,22 @@ const typeLabel: Record<CacheTaskType, () => string> = {
   sitemap: m.purge_type_sitemap,
 };
 
-const placeholders: Record<Exclude<FormType, "site">, string> = {
+const variantLabel: Record<PrefetchVariant, () => string> = {
+  desktop: m.purge_variant_desktop,
+  mobile: m.purge_variant_mobile,
+};
+
+/** URL-like types share one list of URLs. */
+type UrlType = "url" | "prefix" | "prefetch";
+
+const placeholders = {
   url: "https://www.example.com/index.html\nhttps://www.example.com/app.js?v=2",
   prefix: "https://www.example.com/static/\nhttps://www.example.com/images/",
   prefetch: "https://www.example.com/video.mp4\nhttps://www.example.com/app.js",
-};
+  host: "www.example.com\nimg.example.com",
+  tag: "product-42\ncategory-shoes",
+  sitemap: "https://www.example.com/sitemap.xml",
+} as const;
 
 const finished = (state: CacheTaskNodeState) => state === "succeeded" || state === "failed";
 
@@ -142,43 +176,141 @@ function PurgePage() {
   );
 }
 
+/** One entry per line (URLs may contain commas and spaces are trimmed). */
 const lines = (text: string) =>
   text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
+/** Host names: one per line, or separated by spaces or commas. */
+const hostEntries = (text: string) =>
+  text
+    .split(/[\s,]+/)
+    .map((host) => host.trim())
+    .filter(Boolean);
+
+/** Cache tags: one per line or comma separated (as in a Cache-Tag header); tags never hold commas. */
+const tagEntries = (text: string) =>
+  text
+    .split(/[\r\n,]+/)
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
+interface Draft {
+  /** URLs or prefixes (url, prefix, prefetch). */
+  urls: string;
+  hosts: string;
+  tags: string;
+  tagSite: { id: string; name: string } | null;
+  sitemapUrl: string;
+  maxUrls: string;
+  variants: PrefetchVariant[];
+  sites: ReadonlyMap<string, string>;
+}
+
+const emptyDraft: Draft = {
+  urls: "",
+  hosts: "",
+  tags: "",
+  tagSite: null,
+  sitemapUrl: "",
+  maxUrls: String(SITEMAP_MAX_URLS.default),
+  variants: ["desktop"],
+  sites: new Map(),
+};
+
 function PurgeForm({
   type,
   onTypeChange,
   onCreated,
 }: {
-  type: FormType;
-  onTypeChange: (type: FormType) => void;
+  type: CacheTaskType;
+  onTypeChange: (type: CacheTaskType) => void;
   onCreated: (task: CacheTask) => Promise<void>;
 }) {
   const queryClient = useQueryClient();
   const create = useMutation(orpc.cacheTasks.create.mutationOptions());
-  const [text, setText] = React.useState("");
-  const [selected, setSelected] = React.useState<ReadonlyMap<string, string>>(new Map());
+  const [draft, setDraft] = React.useState<Draft>(emptyDraft);
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const urls = lines(text);
-  const tooMany = urls.length > MAX_CACHE_TASK_URLS;
-  const isSite = type === "site";
+  const set = (change: Partial<Draft>) => setDraft((prev) => ({ ...prev, ...change }));
+  const urls = lines(draft.urls);
+  const hosts = hostEntries(draft.hosts);
+  const tags = tagEntries(draft.tags);
+  // Tag purges need the chosen site's nodes to index Cache-Tag (purge-tag-v1).
+  const tagFeatures = useQuery({
+    ...orpc.sites.features.queryOptions({ input: { id: draft.tagSite?.id ?? "" } }),
+    enabled: type === "tag" && draft.tagSite !== null,
+  });
+  const tagAvailability = draft.tagSite ? tagFeatures.data?.purgeByTag : undefined;
+
+  const blocked = (() => {
+    switch (type) {
+      case "site":
+        return draft.sites.size === 0;
+      case "host":
+        return hosts.length > MAX_CACHE_TASK_HOSTS;
+      case "tag":
+        return (
+          !draft.tagSite ||
+          tags.length > MAX_CACHE_TASK_TAGS ||
+          tagAvailability?.available === false
+        );
+      case "sitemap":
+        return draft.variants.length === 0;
+      case "prefetch":
+        return urls.length > MAX_CACHE_TASK_URLS || draft.variants.length === 0;
+      default:
+        return urls.length > MAX_CACHE_TASK_URLS;
+    }
+  })();
+
+  const input = (): CacheTaskCreateInput => {
+    switch (type) {
+      case "site":
+        return { type, siteIds: [...draft.sites.keys()] };
+      case "host":
+        return { type, hosts };
+      case "tag":
+        return { type, siteIds: draft.tagSite ? [draft.tagSite.id] : [], tags };
+      case "sitemap":
+        return {
+          type,
+          urls: [draft.sitemapUrl.trim()],
+          maxUrls: Number(draft.maxUrls),
+          variants: draft.variants,
+        };
+      case "prefetch":
+        return { type, urls, variants: draft.variants };
+      default:
+        return { type, urls };
+    }
+  };
+
+  // What a submitted task clears; the site of a tag purge, the variants and the URL limit stay.
+  const submitted = (): Partial<Draft> => {
+    switch (type) {
+      case "site":
+        return { sites: new Map() };
+      case "host":
+        return { hosts: "" };
+      case "tag":
+        return { tags: "" };
+      case "sitemap":
+        return { sitemapUrl: "" };
+      default:
+        return { urls: "" };
+    }
+  };
 
   const submit = async () => {
     setPending(true);
     setError(null);
     try {
-      const task = await create.mutateAsync({
-        type,
-        urls: isSite ? [] : urls,
-        siteIds: isSite ? [...selected.keys()] : [],
-      });
+      const task = await create.mutateAsync(input());
       toast.success(m.purge_submitted());
-      if (isSite) setSelected(new Map());
-      else setText("");
+      set(submitted());
       await onCreated(task);
       // Show it right away at the top, then load the list as the server has it.
       queryClient.setQueryData(
@@ -199,35 +331,20 @@ function PurgeForm({
     }
   };
 
-  const urlField = (label: string, t: Exclude<FormType, "site">) => (
-    <Field>
-      <div className="flex items-center justify-between gap-2">
-        <FieldLabel htmlFor={`purge-${t}`}>{label}</FieldLabel>
-        <span
-          className={cn(
-            "text-xs tabular-nums text-muted-foreground",
-            tooMany && "font-medium text-destructive",
-          )}
-          data-testid="purge-count"
-        >
-          {formatNumber(urls.length)} / {formatNumber(MAX_CACHE_TASK_URLS)}
-        </span>
-      </div>
-      <Textarea
-        id={`purge-${t}`}
-        value={text}
-        required
-        rows={6}
-        spellCheck={false}
-        autoCapitalize="off"
-        autoCorrect="off"
-        onChange={(event) => setText(event.target.value)}
-        placeholder={placeholders[t]}
-        aria-invalid={tooMany || undefined}
-        className="min-h-36 font-mono text-sm break-all"
-        data-testid="purge-urls"
-      />
-    </Field>
+  const urlField = (label: string, t: UrlType) => (
+    <ListField
+      id={`purge-${t}`}
+      label={label}
+      value={draft.urls}
+      count={urls.length}
+      max={MAX_CACHE_TASK_URLS}
+      placeholder={placeholders[t]}
+      testId="purge-urls"
+      onChange={(value) => set({ urls: value })}
+    />
+  );
+  const variantsField = (
+    <VariantsField value={draft.variants} onChange={(variants) => set({ variants })} />
   );
 
   return (
@@ -244,16 +361,16 @@ function PurgeForm({
             value={type}
             onValueChange={(value) => {
               setError(null);
-              onTypeChange(value as FormType);
+              onTypeChange(value as CacheTaskType);
             }}
           >
-            {/* Two by two on phones, one pill row from sm up. */}
-            <TabsList className="grid w-full grid-cols-2 gap-1 rounded-2xl group-data-horizontal/tabs:h-auto sm:inline-flex sm:w-fit sm:gap-0 sm:rounded-full sm:group-data-horizontal/tabs:h-9">
+            {/* Two per row on phones (the last one fills its row), wrapping pills from sm up. */}
+            <TabsList className="flex w-full max-w-full flex-wrap justify-start gap-1 rounded-2xl group-data-horizontal/tabs:h-auto sm:w-fit">
               {TYPES.map((t) => (
                 <TabsTrigger
                   key={t}
                   value={t}
-                  className="h-8 rounded-xl sm:h-[calc(100%-1px)] sm:rounded-full"
+                  className="h-8 grow basis-[calc(50%-0.125rem)] rounded-xl sm:grow-0 sm:basis-auto sm:rounded-full"
                   data-testid={`purge-type-${t}`}
                 >
                   {typeLabel[t]()}
@@ -266,11 +383,80 @@ function PurgeForm({
             <TabsContent value="prefix" className="pt-3">
               {urlField(m.purge_prefixes(), "prefix")}
             </TabsContent>
-            <TabsContent value="site" className="pt-3">
-              <SitePicker selected={selected} onChange={setSelected} />
+            <TabsContent value="host" className="pt-3">
+              <ListField
+                id="purge-host"
+                label={m.purge_hosts()}
+                value={draft.hosts}
+                count={hosts.length}
+                max={MAX_CACHE_TASK_HOSTS}
+                placeholder={placeholders.host}
+                testId="purge-hosts"
+                onChange={(value) => set({ hosts: value })}
+              />
             </TabsContent>
-            <TabsContent value="prefetch" className="pt-3">
+            <TabsContent value="tag" className="flex flex-col gap-4 pt-3">
+              <TagSiteSelect value={draft.tagSite} onChange={(tagSite) => set({ tagSite })} />
+              {tagAvailability && !tagAvailability.available ? (
+                <SafetyNote
+                  className="animate-in fade-in"
+                  data-testid="purge-tag-unavailable"
+                  data-reason={tagAvailability.reason ?? undefined}
+                >
+                  {unavailableReason(tagAvailability)}
+                </SafetyNote>
+              ) : null}
+              <ListField
+                id="purge-tag"
+                label={m.purge_tags()}
+                value={draft.tags}
+                count={tags.length}
+                max={MAX_CACHE_TASK_TAGS}
+                placeholder={placeholders.tag}
+                testId="purge-tags"
+                onChange={(value) => set({ tags: value })}
+              />
+            </TabsContent>
+            <TabsContent value="site" className="pt-3">
+              <SitePicker selected={draft.sites} onChange={(sites) => set({ sites })} />
+            </TabsContent>
+            <TabsContent value="prefetch" className="flex flex-col gap-4 pt-3">
               {urlField(m.purge_urls(), "prefetch")}
+              {variantsField}
+            </TabsContent>
+            <TabsContent value="sitemap" className="flex flex-col gap-4 pt-3">
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+                <Field>
+                  <FieldLabel htmlFor="purge-sitemap-url">{m.purge_sitemap_url()}</FieldLabel>
+                  <Input
+                    id="purge-sitemap-url"
+                    type="url"
+                    inputMode="url"
+                    value={draft.sitemapUrl}
+                    required
+                    maxLength={2048}
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    onChange={(event) => set({ sitemapUrl: event.target.value })}
+                    placeholder={placeholders.sitemap}
+                    className="font-mono"
+                    data-testid="purge-sitemap-url"
+                  />
+                </Field>
+                <NumberField
+                  id="purge-sitemap-max"
+                  label={m.purge_sitemap_max()}
+                  value={draft.maxUrls}
+                  min={SITEMAP_MAX_URLS.min}
+                  max={SITEMAP_MAX_URLS.max}
+                  step={1}
+                  required
+                  onChange={(maxUrls) => set({ maxUrls })}
+                  testId="purge-sitemap-max"
+                />
+              </div>
+              {variantsField}
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -280,17 +466,186 @@ function PurgeForm({
               {error}
             </FieldError>
           ) : null}
-          <Button
-            type="submit"
-            disabled={pending || (isSite ? selected.size === 0 : tooMany)}
-            data-testid="purge-submit"
-          >
+          <Button type="submit" disabled={pending || blocked} data-testid="purge-submit">
             {pending ? <Spinner /> : null}
             {m.purge_submit()}
           </Button>
         </CardFooter>
       </form>
     </Card>
+  );
+}
+
+/** A textarea of entries with their count against the per-task limit. */
+function ListField({
+  id,
+  label,
+  value,
+  count,
+  max,
+  placeholder,
+  testId,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  count: number;
+  max: number;
+  placeholder: string;
+  testId: string;
+  onChange: (value: string) => void;
+}) {
+  const over = count > max;
+  return (
+    <Field>
+      <div className="flex items-center justify-between gap-2">
+        <FieldLabel htmlFor={id}>{label}</FieldLabel>
+        <span
+          className={cn(
+            "text-xs tabular-nums text-muted-foreground",
+            over && "font-medium text-destructive",
+          )}
+          data-testid="purge-count"
+        >
+          {formatNumber(count)} / {formatNumber(max)}
+        </span>
+      </div>
+      <Textarea
+        id={id}
+        value={value}
+        required
+        rows={6}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-invalid={over || undefined}
+        className="max-h-96 min-h-36 font-mono text-sm break-all"
+        data-testid={testId}
+      />
+    </Field>
+  );
+}
+
+/** Device variants of a prefetch; at least one. */
+function VariantsField({
+  value,
+  onChange,
+}: {
+  value: PrefetchVariant[];
+  onChange: (value: PrefetchVariant[]) => void;
+}) {
+  const none = value.length === 0;
+  return (
+    <FieldSet className="gap-0" data-invalid={none || undefined}>
+      <FieldLegend variant="label">{m.purge_variants()}</FieldLegend>
+      <div className="flex flex-wrap gap-x-6 gap-y-3">
+        {prefetchVariant.options.map((variant) => (
+          <Field key={variant} orientation="horizontal" className="w-auto">
+            <Checkbox
+              id={`purge-variant-${variant}`}
+              checked={value.includes(variant)}
+              aria-invalid={none || undefined}
+              onCheckedChange={(checked) =>
+                onChange(
+                  prefetchVariant.options.filter((v) =>
+                    v === variant ? checked : value.includes(v),
+                  ),
+                )
+              }
+              data-testid={`purge-variant-${variant}`}
+            />
+            <FieldLabel htmlFor={`purge-variant-${variant}`} className="font-normal">
+              {variantLabel[variant]()}
+            </FieldLabel>
+          </Field>
+        ))}
+      </div>
+    </FieldSet>
+  );
+}
+
+/** The site of a tag purge: one of the caller's sites, searchable once there are many. */
+function TagSiteSelect({
+  value,
+  onChange,
+}: {
+  value: { id: string; name: string } | null;
+  onChange: (site: { id: string; name: string }) => void;
+}) {
+  const [search, setSearch] = React.useState("");
+  const [query, setQuery] = React.useState("");
+  React.useEffect(() => {
+    const timer = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const all = useQuery(orpc.sites.list.queryOptions({ input: { page: 1, pageSize: 100 } }));
+  const filtered = useQuery({
+    ...orpc.sites.list.queryOptions({ input: { search: query, page: 1, pageSize: 100 } }),
+    enabled: query !== "",
+    placeholderData: keepPreviousData,
+  });
+  const list = query ? filtered : all;
+  const searchable = (all.data?.total ?? 0) > 8;
+
+  if (all.isPending) return <LoadingState className="min-h-20" />;
+  if (all.isError) return <ErrorState error={all.error} onRetry={() => all.refetch()} />;
+  if (all.data.total === 0) {
+    return (
+      <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
+        <Button render={<Link to="/sites" search={{ create: true }} />}>
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+          {m.nav_new_site()}
+        </Button>
+      </EmptyState>
+    );
+  }
+  const choices = (list.data?.items ?? []).map((site) => ({ value: site.id, label: site.name }));
+  // The chosen site stays selectable while a search hides it.
+  if (value && !choices.some((choice) => choice.value === value.id))
+    choices.unshift({ value: value.id, label: value.name });
+  return (
+    <Field>
+      <FieldLabel htmlFor="purge-tag-site">{m.purge_tag_site()}</FieldLabel>
+      <div className={cn("grid gap-2", searchable && "sm:grid-cols-2")}>
+        {searchable ? (
+          <Input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={m.sites_search_placeholder()}
+            aria-label={m.sites_search_placeholder()}
+            data-testid="purge-tag-site-search"
+          />
+        ) : null}
+        <Select
+          value={value?.id ?? null}
+          onValueChange={(id) => {
+            const choice = choices.find((c) => c.value === id);
+            if (choice) onChange({ id: choice.value, name: choice.label });
+          }}
+          items={choices}
+        >
+          <SelectTrigger id="purge-tag-site" className="w-full" data-testid="purge-tag-site">
+            <SelectValue placeholder={m.purge_tag_site_placeholder()} />
+          </SelectTrigger>
+          <SelectContent>
+            {choices.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-muted-foreground">{m.sites_no_match()}</p>
+            ) : (
+              choices.map((choice) => (
+                <SelectItem key={choice.value} value={choice.value}>
+                  {choice.label}
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+      </div>
+      {list.isError ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> : null}
+    </Field>
   );
 }
 
@@ -461,9 +816,10 @@ function TaskRow({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  // Whole-site purges list their sites; every other type what was asked for (URLs, hosts, tags).
   const targets = task.type === "site" ? task.sites.map((s) => s.name) : task.targets;
   const more = targets.length - 1;
-  // URLs read best in monospace; site names do not.
+  // URLs, hosts and tags read best in monospace; site names do not.
   const mono = task.type !== "site";
   return (
     <li
@@ -525,6 +881,21 @@ function TaskRow({
               {task.source === "recovery" ? m.purge_source_recovery() : task.createdByName || "—"}
             </span>
             <span title={formatDateTime(task.createdAt)}>{timeAgo(task.createdAt)}</span>
+            {task.type === "tag" ? (
+              <span className="min-w-0 break-all" data-testid="cache-task-sites">
+                {task.sites.map((s) => s.name).join(", ")}
+              </span>
+            ) : null}
+            {task.variants.length ? (
+              <span data-testid="cache-task-variants">
+                {task.variants.map((variant) => variantLabel[variant]()).join(" / ")}
+              </span>
+            ) : null}
+            {task.maxUrls !== null ? (
+              <span className="tabular-nums" data-testid="cache-task-max-urls">
+                {m.purge_sitemap_limit({ count: formatNumber(task.maxUrls) })}
+              </span>
+            ) : null}
             <NodeProgress task={task} />
           </div>
         </div>
@@ -537,6 +908,7 @@ function TaskRow({
                   "flex max-h-48 flex-col gap-1 overflow-y-auto text-xs",
                   mono && "font-mono",
                 )}
+                data-testid="cache-task-targets"
               >
                 {targets.map((target) => (
                   <li key={target} className="break-all">
