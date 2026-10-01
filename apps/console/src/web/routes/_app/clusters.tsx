@@ -1105,18 +1105,17 @@ function EnrollDialog({
       : m.enroll_ttl_hours({ count: minutes / 60 });
   const groupItems = (groups.data ?? []).map((g) => ({ label: g.name, value: g.id }));
   const selectedGroup = groupId || groups.data?.find((g) => g.isDefault)?.id || "";
+  // Closing forgets the token: it is shown once.
+  const setOpen = (next: boolean) => {
+    if (!next) {
+      setResult(null);
+      create.reset();
+    }
+    onOpenChange(next);
+  };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) {
-          setResult(null);
-          create.reset();
-        }
-        onOpenChange(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{m.enroll_title()}</DialogTitle>
@@ -1127,12 +1126,13 @@ function EnrollDialog({
               <Field>
                 <FieldLabel>{m.enroll_command()}</FieldLabel>
                 <CodeBlock value={result.installCommand} testId="install-command" />
-                <SafetyNote className="flex items-center gap-1.5">
+                {/* The countdown renders a <div>, which a SafetyNote <p> cannot hold. */}
+                <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
                   <span title={formatDateTime(result.expiresAt)}>{m.enroll_expires_in()}</span>
                   <Countdown target={result.expiresAt} className="text-foreground" />
                   <span aria-hidden="true">·</span>
-                  {m.enroll_shown_once()}
-                </SafetyNote>
+                  <SafetyNote data-testid="enroll-token-once">{m.enroll_shown_once()}</SafetyNote>
+                </div>
               </Field>
               <Field>
                 <FieldLabel>{m.enroll_ca_fingerprint()}</FieldLabel>
@@ -1142,7 +1142,9 @@ function EnrollDialog({
               </Field>
             </FieldGroup>
             <DialogFooter>
-              <Button onClick={() => onOpenChange(false)}>{m.common_close()}</Button>
+              <Button onClick={() => setOpen(false)} data-testid="enroll-close">
+                {m.common_close()}
+              </Button>
             </DialogFooter>
           </div>
         ) : (

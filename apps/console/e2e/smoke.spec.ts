@@ -52,7 +52,16 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   );
   await expect(command).toContainText(/--ca-sha256 [0-9a-f]{64}/);
   await expect(command).not.toContainText("--token");
+  await expect(page.getByTestId("enroll-token-once")).toHaveText("仅显示一次");
+  const enroll = page.getByRole("dialog");
+  await page.getByTestId("enroll-close").click();
+  await expect(enroll).toBeHidden();
+  // Opened again, the dialog asks for a new node: the install command is gone.
+  await page.getByTestId("add-node").click();
+  await expect(page.getByLabel("节点名称", { exact: true })).toHaveValue("");
+  await expect(page.getByTestId("install-command")).toHaveCount(0);
   await page.keyboard.press("Escape");
+  await expect(enroll).toBeHidden();
 
   // Sites: demo.test created through the API is listed; create one through the UI.
   await page.getByTestId("nav-sites").click();
