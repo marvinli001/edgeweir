@@ -53,6 +53,7 @@ import {
   type Executor,
   latestRevision,
   listBindings,
+  publishClusters,
   publishRevision,
   type Tx,
   toRevisionDto,
@@ -1035,11 +1036,11 @@ async function publishSiteClusters(
   reason: Parameters<typeof publishRevision>[1]["reason"],
   actor: Actor,
 ) {
-  let selected: Awaited<ReturnType<typeof publishRevision>>["row"] | undefined;
-  for (const clusterId of [...new Set([primary, ...affected])].sort()) {
-    const result = await publishRevision(tx, { clusterId, reason, userId: userId(actor) });
-    if (clusterId === primary) selected = result.row;
-  }
+  const published = await publishClusters(tx, [primary, ...affected], {
+    reason,
+    userId: userId(actor),
+  });
+  const selected = published.get(primary)?.row;
   if (!selected) throw new Error("site revision missing");
   return selected;
 }

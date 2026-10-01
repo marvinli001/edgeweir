@@ -15,7 +15,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import { type Executor, publishRevision } from "./revisions";
+import { type Executor, publishClusters, publishRevision } from "./revisions";
 import { findSite, type SiteScope } from "./sites";
 
 /** system_setting keys. */
@@ -241,11 +241,6 @@ export async function updateSiteProtection(
   });
 }
 
-/** Every cluster, in id order (publishing order is the lock order). */
-async function allClusters(tx: Executor) {
-  return tx.select({ id: schema.cluster.id }).from(schema.cluster).orderBy(schema.cluster.id);
-}
-
 /**
  * Saves the platform protection. A change of Under Attack publishes every
  * cluster; administrators may require challenge-v1 across clusters (the
@@ -264,12 +259,11 @@ export async function setProtectionSettings(
       before.underAttack !== input.underAttack ||
       (input.underAttack && before.underAttackChallenge !== input.underAttackChallenge)
     )
-      for (const cluster of await allClusters(tx))
-        await publishRevision(tx, {
-          clusterId: cluster.id,
-          reason: { code: "platform_protection_updated", params: {} },
-          userId: publisher(actor),
-        });
+      await publishClusters(
+        tx,
+        (await tx.select({ id: schema.cluster.id }).from(schema.cluster)).map((c) => c.id),
+        { reason: { code: "platform_protection_updated", params: {} }, userId: publisher(actor) },
+      );
     await recordAudit(tx, actor, {
       action: "system.protection_update",
       targetType: "system_setting",
@@ -302,14 +296,12 @@ export async function setCcTemplate(
           sql`(${schema.siteProtection.cc} ->> 'enabled')::boolean`,
           sql`coalesce((${schema.siteProtection.cc} ->> 'followTemplate')::boolean, true)`,
         ),
-      )
-      .orderBy(schema.site.clusterId);
-    for (const cluster of clusters)
-      await publishRevision(tx, {
-        clusterId: cluster.id,
-        reason: { code: "cc_template_updated", params: {} },
-        userId: publisher(actor),
-      });
+      );
+    await publishClusters(
+      tx,
+      clusters.map((c) => c.id),
+      { reason: { code: "cc_template_updated", params: {} }, userId: publisher(actor) },
+    );
     await recordAudit(tx, actor, {
       action: "system.cc_template_update",
       targetType: "system_setting",

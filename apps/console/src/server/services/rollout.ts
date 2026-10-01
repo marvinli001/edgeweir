@@ -9,6 +9,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { lockClusterPublish } from "../lib/locks";
 import { isOnline } from "../lib/node-online";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit, systemActor } from "./audit";
@@ -28,9 +29,6 @@ import {
 type RolloutRow = typeof schema.clusterRollout.$inferSelect;
 
 const ACTIVE: RolloutState[] = ["canary", "awaiting_promotion"];
-
-const lockCluster = (tx: Executor, clusterId: string) =>
-  tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.publish.${clusterId}`}))`);
 
 async function clusterName(tx: Executor, clusterId: string) {
   const [row] = await tx
@@ -175,7 +173,7 @@ export async function evaluateRollout(
   now = new Date(),
 ): Promise<RolloutState | null> {
   return app.db.transaction(async (tx) => {
-    await lockCluster(tx, clusterId);
+    await lockClusterPublish(tx, clusterId);
     const row = await loadRollout(tx, clusterId);
     if (!row?.enabled || !ACTIVE.includes(row.state as RolloutState) || !row.windowStartedAt)
       return (row?.state as RolloutState | undefined) ?? null;
@@ -357,7 +355,7 @@ export async function setRolloutPolicy(
   const { id: clusterId, expectedUpdatedAt, ...policy } = input;
   await db.transaction(async (tx) => {
     const name = await clusterName(tx, clusterId);
-    await lockCluster(tx, clusterId);
+    await lockClusterPublish(tx, clusterId);
     const before = await loadRollout(tx, clusterId);
     if (expectedUpdatedAt !== undefined)
       assertUpdatedAt(before?.updatedAt ?? new Date(0), expectedUpdatedAt);
@@ -400,7 +398,7 @@ export async function setRolloutPolicy(
 export async function promoteRollout(db: Database, clusterId: string, actor: Actor) {
   await db.transaction(async (tx) => {
     await clusterName(tx, clusterId);
-    await lockCluster(tx, clusterId);
+    await lockClusterPublish(tx, clusterId);
     const row = await loadRollout(tx, clusterId);
     if (
       !row?.enabled ||
@@ -417,7 +415,7 @@ export async function promoteRollout(db: Database, clusterId: string, actor: Act
 export async function abortRollout(db: Database, clusterId: string, actor: Actor) {
   await db.transaction(async (tx) => {
     await clusterName(tx, clusterId);
-    await lockCluster(tx, clusterId);
+    await lockClusterPublish(tx, clusterId);
     const row = await loadRollout(tx, clusterId);
     if (
       !row?.enabled ||

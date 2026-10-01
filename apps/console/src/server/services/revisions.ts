@@ -67,6 +67,7 @@ import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { CONFIG_CHANNEL } from "../lib/events";
+import { lockClusterPublish } from "../lib/locks";
 import { isOnline } from "../lib/node-online";
 import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settings";
 import { isServing } from "../lib/site-state";
@@ -524,9 +525,7 @@ export async function publishRevision(
   tx: Tx,
   opts: { clusterId: string; reason: RevisionReason; userId?: string | null },
 ): Promise<{ row: RevisionRow; created: boolean }> {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.publish.${opts.clusterId}`}))`,
-  );
+  await lockClusterPublish(tx, opts.clusterId);
   const sites = await loadSiteModels(tx, opts.clusterId);
   const organizations = await tx
     .selectDistinct({ id: schema.site.organizationId })
@@ -634,6 +633,21 @@ export async function publishRevision(
   if (!rollout?.enabled)
     return insertRevision(tx, opts.clusterId, build, opts.reason, opts.userId ?? null);
   return publishThroughCanary(tx, rollout, build, opts.reason, opts.userId ?? null);
+}
+
+/**
+ * Publishes several clusters in one transaction: each once, in cluster id
+ * order, the order in which every transaction takes their publish locks.
+ */
+export async function publishClusters(
+  tx: Tx,
+  clusterIds: Iterable<string>,
+  opts: { reason: RevisionReason; userId?: string | null },
+): Promise<Map<string, Awaited<ReturnType<typeof publishRevision>>>> {
+  const results = new Map<string, Awaited<ReturnType<typeof publishRevision>>>();
+  for (const clusterId of [...new Set(clusterIds)].sort())
+    results.set(clusterId, await publishRevision(tx, { clusterId, ...opts }));
+  return results;
 }
 
 type RolloutRow = typeof schema.clusterRollout.$inferSelect;
@@ -870,9 +884,7 @@ export async function rollbackToRevision(
   tx: Tx,
   opts: { clusterId: string; revision: number; userId?: string | null },
 ): Promise<{ row: RevisionRow; created: boolean } | undefined> {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.publish.${opts.clusterId}`}))`,
-  );
+  await lockClusterPublish(tx, opts.clusterId);
   const target = await getRevision(tx, opts.clusterId, opts.revision);
   if (!target) return undefined;
   const originAllowedCidrs = await loadOriginAllowList(tx);

@@ -5,6 +5,7 @@ import { schema } from "@edgeweir/db";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import type { Envelope } from "../lib/envelope";
+import { lockClusterPublish } from "../lib/locks";
 import { recordAudit, systemActor } from "./audit";
 import { type Executor, latestRevision, publishRevision } from "./revisions";
 
@@ -73,9 +74,7 @@ export async function rotateChallengeKeys(app: AppContext, now = new Date()): Pr
   for (const { clusterId } of due) {
     try {
       const done = await app.db.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.publish.${clusterId}`}))`,
-        );
+        await lockClusterPublish(tx, clusterId);
         const keys = await tx
           .select()
           .from(schema.challengeKey)

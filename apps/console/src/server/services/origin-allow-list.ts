@@ -6,7 +6,7 @@ import {
   type Executor,
   loadOriginAllowList,
   ORIGIN_ALLOW_LIST_KEY,
-  publishRevision,
+  publishClusters,
 } from "./revisions";
 
 export async function getOriginAllowList(db: Executor): Promise<OriginAllowList> {
@@ -55,17 +55,18 @@ export async function setOriginAllowList(
       .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value } });
     const clusters = await tx
       .select({ id: schema.cluster.id, name: schema.cluster.name })
-      .from(schema.cluster)
-      .orderBy(schema.cluster.createdAt);
-    const revisions: Record<string, number> = {};
-    for (const cluster of clusters) {
-      const { row } = await publishRevision(tx, {
-        clusterId: cluster.id,
+      .from(schema.cluster);
+    const published = await publishClusters(
+      tx,
+      clusters.map((c) => c.id),
+      {
         reason: { code: "origin_allow_list_updated", params: {} },
         userId: actor.type === "user" || actor.type === "api_key" ? actor.id : null,
-      });
-      revisions[cluster.name] = row.revision;
-    }
+      },
+    );
+    const revisions: Record<string, number> = {};
+    for (const cluster of clusters)
+      revisions[cluster.name] = published.get(cluster.id)?.row.revision ?? 0;
     await recordAudit(tx, actor, {
       action: "system.origin_allow_list_update",
       targetType: "system_setting",

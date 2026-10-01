@@ -12,7 +12,7 @@ import {
   findDnsCredential,
   inspectCertificate,
 } from "./certificates";
-import { publishRevision, rolloutTargets, targetFor } from "./revisions";
+import { publishClusters, rolloutTargets, targetFor } from "./revisions";
 
 type HelperEvent = {
   event: string;
@@ -226,15 +226,12 @@ async function challengeEvent(
           eq(schema.siteDomain.wildcard, false),
         ),
       );
-    const out: { clusterId: string; revision: number }[] = [];
-    for (const { clusterId } of sites) {
-      const { row } = await publishRevision(tx, {
-        clusterId,
-        reason: { code: "acme_challenge_updated", params: {} },
-      });
-      out.push({ clusterId, revision: row.revision });
-    }
-    return out;
+    const published = await publishClusters(
+      tx,
+      sites.map((s) => s.clusterId),
+      { reason: { code: "acme_challenge_updated", params: {} } },
+    );
+    return [...published].map(([clusterId, { row }]) => ({ clusterId, revision: row.revision }));
   });
   if (event.event === "http01.cleanup") return;
   if (!revisions.length) throw new Error("no cluster serves this challenge domain");
@@ -412,11 +409,11 @@ export async function issueCertificate(app: AppContext, id: string) {
         .selectDistinct({ clusterId: schema.site.clusterId })
         .from(schema.site)
         .where(eq(schema.site.certificateId, id));
-      for (const site of sites)
-        await publishRevision(tx, {
-          clusterId: site.clusterId,
-          reason: { code: "certificate_updated", params: { site: row.name } },
-        });
+      await publishClusters(
+        tx,
+        sites.map((s) => s.clusterId),
+        { reason: { code: "certificate_updated", params: { site: row.name } } },
+      );
       await recordAudit(tx, systemActor, {
         action: "certificate.issued",
         organizationId: row.organizationId,

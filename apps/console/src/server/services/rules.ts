@@ -21,7 +21,7 @@ import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { assertOrgLimit } from "./organization-limits";
-import { type Executor, listBindings, publishRevision } from "./revisions";
+import { type Executor, listBindings, publishClusters } from "./revisions";
 import { findSite, type SiteScope } from "./sites";
 
 export interface RuleContext {
@@ -124,13 +124,12 @@ export async function saveRules(
     if (rows.length) await tx.insert(schema.edgeRule).values(rows);
     const clusters = site
       ? [{ id: site.clusterId }]
-      : await tx.select({ id: schema.cluster.id }).from(schema.cluster).orderBy(schema.cluster.id);
-    for (const cluster of clusters)
-      await publishRevision(tx, {
-        clusterId: cluster.id,
-        reason: { code: "rules_updated", params: {} },
-        userId: ctx.actor.id,
-      });
+      : await tx.select({ id: schema.cluster.id }).from(schema.cluster);
+    await publishClusters(
+      tx,
+      clusters.map((c) => c.id),
+      { reason: { code: "rules_updated", params: {} }, userId: ctx.actor.id },
+    );
     await recordAudit(tx, ctx.actor, {
       action: siteId ? "site.rules_update" : "platform.rules_update",
       organizationId: site?.organizationId,
@@ -197,14 +196,12 @@ async function publishListChange(tx: Executor, userId: string, organizationId: s
         .selectDistinct({ id: schema.site.clusterId })
         .from(schema.site)
         .where(eq(schema.site.organizationId, organizationId))
-        .orderBy(schema.site.clusterId)
-    : await tx.select({ id: schema.cluster.id }).from(schema.cluster).orderBy(schema.cluster.id);
-  for (const cluster of clusters)
-    await publishRevision(tx as Parameters<typeof publishRevision>[0], {
-      clusterId: cluster.id,
-      reason: { code: "rules_updated", params: {} },
-      userId,
-    });
+    : await tx.select({ id: schema.cluster.id }).from(schema.cluster);
+  await publishClusters(
+    tx as Parameters<typeof publishClusters>[0],
+    clusters.map((c) => c.id),
+    { reason: { code: "rules_updated", params: {} }, userId },
+  );
 }
 export async function createIpList(
   app: AppContext,

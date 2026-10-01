@@ -16,7 +16,7 @@ import { fail } from "../lib/errors";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { publisher, readSetting, writeSetting } from "./protection";
-import { type Executor, publishRevision } from "./revisions";
+import { type Executor, publishClusters, publishRevision } from "./revisions";
 import { findSite, type SiteScope } from "./sites";
 
 /** system_setting key of the platform's error pages (`PlatformErrorPages`). */
@@ -177,20 +177,17 @@ export async function setPlatformErrorPages(
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.error-pages'))`);
     const before = await getPlatformErrorPages(tx);
     await writeSetting(tx, ERROR_PAGES_KEY, input);
-    // Publishing order is the lock order.
     const clusters = await tx
       .select({ id: schema.cluster.id, name: schema.cluster.name })
-      .from(schema.cluster)
-      .orderBy(schema.cluster.id);
+      .from(schema.cluster);
+    const published = await publishClusters(
+      tx,
+      clusters.map((c) => c.id),
+      { reason: { code: "error_pages_updated", params: {} }, userId: publisher(actor) },
+    );
     const revisions: Record<string, number> = {};
-    for (const cluster of clusters) {
-      const { row } = await publishRevision(tx, {
-        clusterId: cluster.id,
-        reason: { code: "error_pages_updated", params: {} },
-        userId: publisher(actor),
-      });
-      revisions[cluster.name] = row.revision;
-    }
+    for (const cluster of clusters)
+      revisions[cluster.name] = published.get(cluster.id)?.row.revision ?? 0;
     await recordAudit(tx, actor, {
       action: "system.error_pages_update",
       targetType: "system_setting",
