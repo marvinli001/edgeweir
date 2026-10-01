@@ -1,9 +1,17 @@
-import type {
-  CacheTask,
-  CacheTaskNodeState,
-  CacheTaskState,
-  CacheTaskType,
-  cacheTaskCreateInput,
+import {
+  type CacheTask,
+  type CacheTaskNodeState,
+  type CacheTaskState,
+  type CacheTaskType,
+  type cacheTaskCreateInput,
+  hostName,
+  nodeSupportsFeature,
+  normalizeCacheTag,
+  PREFETCH_V2_FEATURE,
+  type PrefetchVariant,
+  PURGE_TAG_FEATURE,
+  prefetchVariant,
+  SITEMAP_MAX_URLS,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import {
@@ -20,6 +28,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type * as z from "zod";
+import { readCacheKey } from "../lib/cache-key";
 import { fail } from "../lib/errors";
 import { TASKS_CHANNEL } from "../lib/events";
 import { cleanErrorCode, cleanErrorParams, taskError } from "../lib/node-errors";
@@ -29,7 +38,10 @@ import { loadOrganizationLimits, orgLimitExceeded, recentPurges } from "./organi
 import type { Executor } from "./revisions";
 import type { SiteScope } from "./sites";
 
-type CacheTaskCreate = z.output<typeof cacheTaskCreateInput>;
+type CreateInput = z.output<typeof cacheTaskCreateInput>;
+/** The parsed input; the fields added with host, tag and sitemap tasks may be omitted. */
+type CacheTaskCreate = Omit<CreateInput, "hosts" | "tags" | "variants" | "maxUrls"> &
+  Partial<Pick<CreateInput, "hosts" | "tags" | "variants" | "maxUrls">>;
 type TaskRow = typeof schema.cacheTask.$inferSelect;
 type TaskNodeRow = typeof schema.cacheTaskNode.$inferSelect;
 
@@ -40,16 +52,23 @@ export const CACHE_TASK_REDISPATCH_MS = 5 * 60 * 1000;
 
 /**
  * One unit of work for the nodes of `clusterId`. Purge items carry the
- * normalized host, path and raw query; prefetch items the absolute URL.
+ * normalized host, path and raw query (host: the host only, tag: the tag);
+ * prefetch and sitemap items the absolute URL and the requested variants.
  */
 export interface CacheTaskItem {
   siteId: string;
   clusterId: string;
-  type: "url" | "prefix" | "site" | "prefetch";
+  type: CacheTaskType;
   host: string;
   path: string;
   query: string;
   url: string;
+  /** tag: the normalized Cache-Tag value. */
+  tag?: string;
+  /** prefetch and sitemap: the requested device variants (absent before G4: desktop). */
+  variants?: PrefetchVariant[];
+  /** sitemap: URLs to prefetch at most. */
+  maxUrls?: number;
 }
 
 interface ParsedTarget {
@@ -89,6 +108,62 @@ function parseTarget(input: string, type: CacheTaskType): ParsedTarget | null {
 
 function scopeFilter(scope: SiteScope) {
   return scope.all ? undefined : eq(schema.site.organizationId, scope.organizationId);
+}
+
+/** The variants in a stable order (desktop first), without duplicates. */
+const orderedVariants = (variants: readonly PrefetchVariant[]) =>
+  prefetchVariant.options.filter((variant) => variants.includes(variant));
+
+/** Normalizes the tags of a tag purge; invalid ones fail with CACHE_TASK_TAG_INVALID. */
+function normalizeTags(raw: string[]): string[] {
+  const tags: string[] = [];
+  const invalid: string[] = [];
+  for (const value of raw) {
+    const tag = normalizeCacheTag(value);
+    if (tag === null) invalid.push(value);
+    else if (!tags.includes(tag)) tags.push(tag);
+  }
+  if (invalid.length) {
+    const list = invalid.slice(0, 5).join(", ");
+    fail("CACHE_TASK_TAG_INVALID", `invalid cache tag: ${list}`, { tags: list });
+  }
+  return tags;
+}
+
+/** Normalizes the hosts of a host purge (lowercase, no trailing dot); invalid ones fail. */
+function normalizeHosts(raw: string[]): string[] {
+  const hosts: string[] = [];
+  const invalid: string[] = [];
+  for (const value of raw) {
+    const parsed = hostName.safeParse(value.trim().replace(/\.$/, ""));
+    if (!parsed.success) invalid.push(value);
+    else if (!hosts.includes(parsed.data)) hosts.push(parsed.data);
+  }
+  if (invalid.length) {
+    const list = invalid.slice(0, 5).join(", ");
+    fail("CACHE_TASK_HOST_INVALID", `invalid host: ${list}`, { hosts: list });
+  }
+  return hosts;
+}
+
+/**
+ * Refuses a task some active node of the affected clusters cannot run
+ * (NODE_CAPABILITY_REQUIRED). Administrators too: unlike configuration
+ * features, an old node cannot run such a task at all.
+ */
+async function assertTaskFeatures(tx: Executor, clusterIds: string[], features: string[]) {
+  if (!features.length || !clusterIds.length) return;
+  const nodes = await tx
+    .select({ features: schema.node.supportedFeatures })
+    .from(schema.node)
+    .where(and(inArray(schema.node.clusterId, clusterIds), eq(schema.node.status, "active")));
+  const missing = features.filter((feature) =>
+    nodes.some((node) => !nodeSupportsFeature(node.features, feature)),
+  );
+  if (missing.length)
+    fail("NODE_CAPABILITY_REQUIRED", "cluster nodes cannot run this task", {
+      features: missing.join(", "),
+    });
 }
 
 /** Maps host names to the sites (in scope) that serve them: exact domains win over wildcards. */
@@ -166,14 +241,21 @@ async function toTaskDtos(db: Executor, rows: TaskRow[]): Promise<CacheTask[]> {
     : [];
   return rows.map((r) => {
     const taskNodes = nodes.filter((n) => n.taskId === r.id);
+    const type = r.type as CacheTaskType;
+    const [first] = r.payload as unknown as CacheTaskItem[];
     return {
       id: r.id,
-      type: r.type as CacheTaskType,
+      type,
       targets: r.targets,
       sites: r.siteIds.flatMap((id) => {
         const site = sites.find((s) => s.id === id);
         return site ? [site] : [];
       }),
+      variants:
+        type === "prefetch" || type === "sitemap"
+          ? orderedVariants(first?.variants ?? ["desktop"])
+          : [],
+      maxUrls: type === "sitemap" ? (first?.maxUrls ?? SITEMAP_MAX_URLS.default) : null,
       state: taskState(taskNodes),
       nodes: taskNodes.map((n) => {
         const error = taskError(n.errorCode, n.errorParams, n.message);
@@ -211,9 +293,11 @@ const MINUTE_MS = 60_000;
 const HOUR_MS = 3_600_000;
 
 /**
- * Refuses a request of `count` targets (URLs, prefixes or sites) that would
- * take the organization over CACHE_TASK_LIMITS, with the seconds until it
- * would fit. Serialized per organization for the rest of the transaction.
+ * Refuses a request of `count` targets that would take the organization
+ * over CACHE_TASK_LIMITS, with the seconds until it would fit. A target is
+ * a URL, prefix, site or host, a (site, tag) pair, a prefetched URL (in
+ * every variant) or a whole sitemap task. Serialized per organization for
+ * the rest of the transaction.
  */
 export async function assertCacheTaskQuota(
   tx: Executor,
@@ -267,9 +351,11 @@ export async function assertCacheTaskQuota(
 }
 
 /**
- * Creates a purge or prefetch task: resolves URLs to sites (within the
- * caller's scope), fans the task out to every node of the affected clusters
- * and wakes their watch streams.
+ * Creates a purge or prefetch task: resolves URLs, hosts and site ids to
+ * sites (within the caller's scope), fans the task out to every node of the
+ * affected clusters and wakes their watch streams. Host and tag purges,
+ * sitemaps and mobile prefetches need every active node of those clusters
+ * to run them (purge-tag-v1, prefetch-v2).
  */
 export async function createCacheTask(
   db: Database,
@@ -280,28 +366,57 @@ export async function createCacheTask(
     const items: CacheTaskItem[] = [];
     const targets: string[] = [];
     const siteMeta = new Map<string, { name: string; organizationId: string }>();
+    const variants = orderedVariants(input.variants ?? ["desktop"]);
+    const maxUrls = input.maxUrls ?? SITEMAP_MAX_URLS.default;
+    // Quota units: one per target, one per (site, tag) pair, one per sitemap.
+    let units = 0;
+    const blank = { host: "", path: "", query: "", url: "" };
 
-    if (input.type === "site") {
+    if (input.type === "site" || input.type === "tag") {
       const ids = [...new Set(input.siteIds)];
+      const tags = input.type === "tag" ? normalizeTags(input.tags ?? []) : [];
       const sites = await tx
         .select()
         .from(schema.site)
-        .where(and(inArray(schema.site.id, ids), scopeFilter(ctx.scope)));
+        .where(and(inArray(schema.site.id, ids), scopeFilter(ctx.scope)))
+        .orderBy(schema.site.name, schema.site.id);
       if (sites.length !== ids.length) fail("SITE_NOT_FOUND", "site not found");
       for (const site of sites) assertServing(site);
       for (const site of sites) {
         siteMeta.set(site.id, { name: site.name, organizationId: site.organizationId });
-        targets.push(site.name);
+        if (input.type === "site") {
+          targets.push(site.name);
+          items.push({ siteId: site.id, clusterId: site.clusterId, type: "site", ...blank });
+        } else {
+          for (const tag of tags)
+            items.push({ siteId: site.id, clusterId: site.clusterId, type: "tag", ...blank, tag });
+        }
+      }
+      if (input.type === "tag") targets.push(...tags);
+      units = items.length;
+    } else if (input.type === "host") {
+      const hosts = normalizeHosts(input.hosts ?? []);
+      const resolved = await resolveHosts(tx, hosts, ctx.scope);
+      const unknown = hosts.filter((h) => !resolved.has(h));
+      if (unknown.length) {
+        const list = unknown.slice(0, 5).join(", ");
+        fail("CACHE_TASK_HOST_UNKNOWN", `no site serves: ${list}`, { hosts: list });
+      }
+      for (const site of resolved.values()) assertServing(site);
+      for (const host of hosts) {
+        const site = resolved.get(host);
+        if (!site) continue;
+        siteMeta.set(site.siteId, { name: site.siteName, organizationId: site.organizationId });
+        targets.push(host);
         items.push({
-          siteId: site.id,
+          siteId: site.siteId,
           clusterId: site.clusterId,
-          type: "site",
-          host: "",
-          path: "",
-          query: "",
-          url: "",
+          type: "host",
+          ...blank,
+          host,
         });
       }
+      units = items.length;
     } else {
       const parsed: ParsedTarget[] = [];
       const invalid: string[] = [];
@@ -328,24 +443,35 @@ export async function createCacheTask(
         seen.add(target.url);
         siteMeta.set(site.siteId, { name: site.siteName, organizationId: site.organizationId });
         targets.push(target.url);
+        const prefetch = input.type === "prefetch" || input.type === "sitemap";
         items.push({
           siteId: site.siteId,
           clusterId: site.clusterId,
           type: input.type,
           host: target.host,
           path: target.path,
-          query: input.type === "url" ? target.query : "",
-          url: input.type === "prefetch" ? target.url : "",
+          query: input.type === "url" || input.type === "sitemap" ? target.query : "",
+          url: prefetch ? target.url : "",
+          ...(prefetch ? { variants } : {}),
+          ...(input.type === "sitemap" ? { maxUrls } : {}),
         });
       }
+      // The node caps a sitemap's URLs: the task counts once, variants never count.
+      units = input.type === "sitemap" ? 1 : items.length;
     }
 
+    const clusterIds = [...new Set(items.map((i) => i.clusterId))];
+    await assertTaskFeatures(tx, clusterIds, [
+      ...(input.type === "host" || input.type === "tag" ? [PURGE_TAG_FEATURE] : []),
+      ...(input.type === "sitemap" || (input.type === "prefetch" && variants.includes("mobile"))
+        ? [PREFETCH_V2_FEATURE]
+        : []),
+    ]);
     // Platform administrators are exempt; tenants' scope is their organization.
     if (!ctx.scope.all) {
-      await assertCacheTaskQuota(tx, ctx.scope.organizationId, targets.length, new Date());
+      await assertCacheTaskQuota(tx, ctx.scope.organizationId, units, new Date());
     }
     const organizations = [...new Set([...siteMeta.values()].map((s) => s.organizationId))];
-    const clusterIds = [...new Set(items.map((i) => i.clusterId))];
     const nodes = await tx
       .select({
         id: schema.node.id,
@@ -394,8 +520,9 @@ export async function createCacheTask(
     if (active.length) {
       await tx.execute(sql`select pg_notify(${TASKS_CHANNEL}, ${JSON.stringify({ clusterIds })})`);
     }
+    const prefetch = input.type === "prefetch" || input.type === "sitemap";
     await recordAudit(tx, ctx.actor, {
-      action: `cache.${input.type === "prefetch" ? "prefetch" : "purge"}`,
+      action: `cache.${prefetch ? "prefetch" : "purge"}`,
       organizationId: task.organizationId,
       targetType: "cache_task",
       targetId: task.id,
@@ -404,6 +531,8 @@ export async function createCacheTask(
         type: input.type,
         targets: targets.slice(0, 20),
         count: targets.length,
+        ...(prefetch ? { variants } : {}),
+        ...(input.type === "sitemap" ? { maxUrls } : {}),
         sites: [...siteMeta.values()].map((s) => s.name),
         nodes: active.length,
         skippedNodes: nodes.length - active.length,
@@ -465,7 +594,7 @@ function deliverable(nodeId: string, now: Date) {
 }
 
 /** Purge types: a purge a node missed leaves stale objects in its cache. */
-const PURGE_TYPES = ["url", "prefix", "site"];
+const PURGE_TYPES = ["url", "prefix", "site", "host", "tag"];
 
 /**
  * Purges an enabled node missed: never executed within CACHE_TASK_TTL_MS
@@ -663,6 +792,20 @@ export async function pullCacheTasks(
       ),
     }));
   });
+}
+
+/**
+ * The sites among `siteIds` whose cache key separates mobile and desktop
+ * user agents now: only their prefetches go out in the mobile variant.
+ */
+export async function deviceTypeSites(db: Executor, siteIds: string[]): Promise<Set<string>> {
+  const ids = [...new Set(siteIds)];
+  if (ids.length === 0) return new Set();
+  const rows = await db
+    .select({ id: schema.site.id, cacheKey: schema.site.cacheKey })
+    .from(schema.site)
+    .where(inArray(schema.site.id, ids));
+  return new Set(rows.filter((row) => readCacheKey(row.cacheKey).deviceType).map((row) => row.id));
 }
 
 /** Records a node's result; the task finishes once every node reported. */

@@ -52,12 +52,17 @@ export async function lockOrganization(tx: Executor, organizationId: string) {
   );
 }
 
-/** User-requested purges and prefetches of the last hour (URLs) and minute (tasks). */
+/**
+ * User-requested purges and prefetches of the last hour (URLs) and minute
+ * (tasks). A task counts its targets, a tag purge one per (site, tag) pair.
+ */
 export async function recentPurges(tx: Executor, organizationId: string, now: Date) {
   const recent = await tx
     .select({
       createdAt: schema.cacheTask.createdAt,
-      targets: sql<number>`cardinality(${schema.cacheTask.targets})`.mapWith(Number),
+      targets: sql<number>`case when ${schema.cacheTask.type} = 'tag'
+        then cardinality(${schema.cacheTask.targets}) * cardinality(${schema.cacheTask.siteIds})
+        else cardinality(${schema.cacheTask.targets}) end`.mapWith(Number),
     })
     .from(schema.cacheTask)
     .where(
