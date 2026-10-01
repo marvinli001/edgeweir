@@ -96,7 +96,8 @@ export function buildProbeCommand(opts: { serverUrl: string; caSha256: string; t
   return [
     `export EDGEWEIR_TOKEN='${opts.token.replace(/'/g, `'"'"'`)}'`,
     [
-      "docker run -d --name edgeweir-probe --restart unless-stopped",
+      // Probes run no data plane: the image's health check would report them unhealthy.
+      "docker run -d --name edgeweir-probe --restart unless-stopped --no-healthcheck",
       "-e EDGEWEIR_TOKEN",
       `-e EDGEWEIR_SERVER=${sh(opts.serverUrl)}`,
       `-e EDGEWEIR_CA_SHA256=${sh(opts.caSha256)}`,

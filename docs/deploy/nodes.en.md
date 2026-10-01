@@ -127,7 +127,7 @@ volumes:
 
 | Item | Behavior |
 | --- | --- |
-| Health check | The image's own health check asks the data plane, which a probe does not run: turn it off in Compose (as above) or add `--no-healthcheck` to `docker run`; otherwise the container shows `unhealthy`, which does not affect probing |
+| Health check | The image's own health check asks the data plane, which a probe does not run: turn it off in Compose (as above) or add `--no-healthcheck` to `docker run` (the console's command has it); otherwise the container shows `unhealthy`, which does not affect probing |
 | User | The container runs as uid 10001 with its state directory in the volume |
 | Token | Ignored after enrollment; it can be removed from the configuration |
 

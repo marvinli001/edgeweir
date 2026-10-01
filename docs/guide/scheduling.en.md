@@ -34,7 +34,7 @@ Prerequisites: a region exists (**Regions & probes** → **Regions** → **New r
 
    ```bash title="Probe host"
    export EDGEWEIR_TOKEN='<enrollment token>'
-   docker run -d --name edgeweir-probe --restart unless-stopped -e EDGEWEIR_TOKEN \
+   docker run -d --name edgeweir-probe --restart unless-stopped --no-healthcheck -e EDGEWEIR_TOKEN \
      -e EDGEWEIR_SERVER=https://cdn-admin.example.com:8443 -e EDGEWEIR_CA_SHA256=<CA fingerprint> \
      -e EDGEWEIR_STATE_DIR=/var/lib/edgeweir-probe -v edgeweir-probe:/var/lib/edgeweir-probe \
      --entrypoint /usr/local/bin/edgeweir-node ghcr.io/marvinli001/edgeweir-node:latest probe
