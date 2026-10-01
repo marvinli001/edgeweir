@@ -157,6 +157,7 @@ better-auth's session secret signs session cookies and encrypts TOTP secrets and
 | Credentials on a probe | A probe keeps its private key in plain text with mode 0600 in its state directory (default `/var/lib/edgeweir-probe`, mode 0700); root on the probe host can report results as that probe until it is deleted in the console |
 | Health endpoint | Nodes answer `GET /.edgeweir/health` for any Host on every edge listener, and HTTPS handshakes with SNI `health.edgeweir.invalid` or without SNI get the node's self-signed certificate, so scanners can recognize Edgeweir nodes; probes do not verify that certificate, so a man in the middle on a probe's path can fake reachability, which affects scheduling but reaches no secret |
 | Node channel `:8443` | Expose directly or pass through at layer 4 only; a reverse proxy that terminates TLS breaks mTLS ([Ports, reverse proxy, and trusted proxies](docs/deploy/networking.en.md)) |
+| Layer-4 forwarding | L4 app traffic does not pass the HTTP layer: WAF, rules, challenges, CC mitigation, site bans, and the global **Block** and **Allow** lists do not apply; only the app's own IP lists, the per-node connection limits, and kernel bans (`kernel-ban-v1`) do. Ports come only from the cluster's port pools (1024–65535), so nodes need no extra privileges. With **Accept PROXY protocol** on, the client address comes from the header: open that port to the load balancer only, or any client can claim another address and pass the allow lists ([Layer-4 forwarding](docs/guide/l4.en.md)) |
 
 ## Verifying releases
 
