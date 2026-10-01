@@ -708,6 +708,7 @@
   "cert_http3": "HTTP/3",
   "error_rollback_resource_unavailable": "Rollback references resources that are no longer assigned or available",
   "error_rule_invalid": "Invalid rule",
+  "error_bulk_redirect_host_unknown": "The site does not serve {hosts}",
   "error_ip_list_not_found": "IP list not found",
   "error_ip_list_name_taken": "IP list name already exists",
   "error_ip_list_in_use": "IP list is used by a rule",

@@ -111,6 +111,13 @@ export const siteFeatures = z.object({
   purgeByTag: featureAvailability,
   /** Prefetching the mobile variant and sitemap tasks (prefetch-v2). */
   prefetchVariants: featureAvailability,
+  /**
+   * The rule engine extensions (rules-v2): functions and the new fields,
+   * dynamic redirects and rewrites, origin, compression and the new config
+   * actions, cache rule expressions that are not in the builder's shape and
+   * browser TTLs, bulk redirects and origin groups.
+   */
+  rulesV2: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });

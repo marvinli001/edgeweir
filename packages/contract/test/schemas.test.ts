@@ -58,6 +58,7 @@ describe("siteCreateInput", () => {
       hostHeader: "",
       sni: "",
       s3: null,
+      group: "",
     });
     expect(parsed.cacheRules).toEqual([]);
     expect(parsed.originSettings).toEqual({

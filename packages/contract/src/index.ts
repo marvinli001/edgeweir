@@ -11,6 +11,7 @@ export * from "./logs";
 import { accessKeysContract } from "./access-keys";
 import { alertsContract } from "./alerts";
 import { adminBansContract, banSettings, bansContract } from "./bans";
+import { bulkRedirectsContract } from "./bulk-redirects";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
 import { domainOwnershipContract } from "./domains";
@@ -29,6 +30,7 @@ import { siteFeatures, wafContract, wafSettings } from "./waf";
 
 export * from "./addresses";
 export * from "./bans";
+export * from "./bulk-redirects";
 export * from "./certificates";
 export * from "./error-pages";
 export * from "./errors";
@@ -69,6 +71,8 @@ export const contract = {
   dns: dnsContract,
   domainOwnership: domainOwnershipContract,
   rules: rulesContract,
+  /** A site's exact-match redirect table. */
+  bulkRedirects: bulkRedirectsContract,
   platformRules: platformRulesContract,
   ipLists: ipListsContract,
   platformIpLists: platformIpListsContract,
@@ -303,9 +307,9 @@ export const contract = {
       .output(z.array(s.originHealth)),
     /**
      * Whether Brotli, Zstandard, OWASP CRS, active health checks, session
-     * affinity and error pages can be turned on for the site now, and whether
-     * its cluster's nodes run purges by host or tag and variant and sitemap
-     * prefetches.
+     * affinity, error pages and the rule engine extensions can be turned on
+     * for the site now, and whether its cluster's nodes run purges by host or
+     * tag and variant and sitemap prefetches.
      */
     features: oc
       .route({ method: "GET", path: "/sites/{id}/features", tags: ["sites"] })

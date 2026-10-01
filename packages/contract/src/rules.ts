@@ -2,13 +2,17 @@ import {
   actionPhases,
   canonicalCidr,
   challengeTypes,
+  compressionCodings,
   isRateLimitKey,
+  ORIGIN_GROUP_RE,
   parseExpression,
+  parseValueExpression,
   phases,
+  QUERY_NAME_RE,
 } from "@edgeweir/rule-engine";
 import { oc } from "@orpc/contract";
 import * as z from "zod";
-import { uuid } from "./schemas";
+import { optionalHostname, uuid } from "./schemas";
 
 const text = z
   .string()
@@ -33,6 +37,98 @@ export const ruleHeaderName = z
   .toLowerCase()
   .regex(/^[!#$%&'*+.^_`|~0-9a-z-]{1,64}$/)
   .refine((s) => !protectedHeaders.has(s) && !s.startsWith("x-edgeweir-"));
+/**
+ * A static redirect target: a local path with a single leading "/" or an
+ * absolute http(s) URL without credentials, whitespace or backslashes.
+ */
+export function staticRedirectTarget(s: string): boolean {
+  return (
+    !s.includes("\\") &&
+    ![...s].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127) &&
+    ((s.startsWith("/") && !s.startsWith("//")) ||
+      (() => {
+        try {
+          const url = new URL(s);
+          return (
+            ["http:", "https:"].includes(url.protocol) &&
+            !!url.hostname &&
+            !url.username &&
+            !url.password &&
+            !/\s/.test(s)
+          );
+        } catch {
+          return false;
+        }
+      })())
+  );
+}
+/** A static rewrite path: a single leading "/", no query, fragment or backslash. */
+const staticRewritePath = (s: string) =>
+  s.startsWith("/") && !s.startsWith("//") && !/[?\\#]/.test(s);
+
+export const redirectStatusCode = z
+  .union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)])
+  .default(301);
+/** A query parameter a redirect or rewrite sets (the node percent-encodes the value). */
+export const queryParam = z.object({
+  name: z.string().regex(QUERY_NAME_RE),
+  /** Printable ASCII, at most 256 characters. */
+  value: z
+    .string()
+    .max(256)
+    .regex(/^[\x20-\x7e]*$/),
+});
+/** Query string edits of redirects and rewrites (rules-v2). */
+const queryEdits = {
+  /** Value expression computed per request instead of `value` (exactly one of both is set). */
+  target: z.string().max(4096).default(""),
+  /** Set after removing parameters of the same name, at most 16, names unique. */
+  setQuery: z.array(queryParam).max(16).default([]),
+  /** Parameter names removed, at most 16. */
+  removeQuery: z.array(z.string().regex(QUERY_NAME_RE)).max(16).default([]),
+};
+type QueryEdits = {
+  value: string;
+  target: string;
+  setQuery: { name: string }[];
+  removeQuery: string[];
+};
+/** One of value and target, set names unique and never also removed, a valid static value. */
+const checkQueryEdits =
+  (validValue: (value: string) => boolean) => (a: QueryEdits, ctx: z.RefinementCtx) => {
+    if ((a.value === "") === (a.target === ""))
+      ctx.addIssue({
+        code: "custom",
+        message: "set exactly one of value and target",
+        path: ["value"],
+      });
+    if (a.value !== "" && !validValue(a.value))
+      ctx.addIssue({ code: "custom", message: "invalid value", path: ["value"] });
+    const names = a.setQuery.map((param) => param.name);
+    if (new Set(names).size !== names.length)
+      ctx.addIssue({ code: "custom", message: "a parameter is set twice", path: ["setQuery"] });
+    if (names.some((name) => a.removeQuery.includes(name)))
+      ctx.addIssue({
+        code: "custom",
+        message: "a parameter is both set and removed",
+        path: ["removeQuery"],
+      });
+  };
+
+/** Config action fields that only the config phase accepts (rules-v2). */
+export const configPhaseFields = [
+  "brotli",
+  "zstd",
+  "websocket",
+  "underAttack",
+  "ccEnabled",
+  "ccMaxLevel",
+  "originConnectTimeoutMs",
+  "originSendTimeoutMs",
+  "originReadTimeoutMs",
+  "logSampleRate",
+] as const;
+
 export const ruleAction = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("block"),
@@ -42,35 +138,27 @@ export const ruleAction = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("allow") }),
   /** Challenges requests without a pass of this type's level or higher. */
   z.object({ kind: z.literal("challenge"), type: z.enum(challengeTypes).default("js") }),
-  z.object({
-    kind: z.literal("redirect"),
-    value: text.refine(
-      (s) =>
-        !s.includes("\\") &&
-        ((s.startsWith("/") && !s.startsWith("//")) ||
-          (() => {
-            try {
-              const url = new URL(s);
-              return (
-                ["http:", "https:"].includes(url.protocol) &&
-                !!url.hostname &&
-                !url.username &&
-                !url.password &&
-                !/\s/.test(s)
-              );
-            } catch {
-              return false;
-            }
-          })()),
-    ),
-    statusCode: z
-      .union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)])
-      .default(301),
-  }),
-  z.object({
-    kind: z.literal("rewrite"),
-    value: text.refine((s) => s.startsWith("/") && !s.startsWith("//") && !/[?\\#]/.test(s)),
-  }),
+  z
+    .object({
+      kind: z.literal("redirect"),
+      /** Static target; empty when `target` computes it. */
+      value: text.default(""),
+      ...queryEdits,
+      statusCode: redirectStatusCode,
+      /** Append the request's query string to the target. */
+      preserveQuery: z.boolean().default(false),
+    })
+    .superRefine(checkQueryEdits(staticRedirectTarget)),
+  z
+    .object({
+      kind: z.literal("rewrite"),
+      /** Static path; empty when `target` computes it. */
+      value: text.default(""),
+      ...queryEdits,
+      /** Keep the request's query string; false clears it before the edits. */
+      preserveQuery: z.boolean().default(true),
+    })
+    .superRefine(checkQueryEdits(staticRewritePath)),
   z.object({
     kind: z.literal("request_header"),
     header: ruleHeaderName,
@@ -83,16 +171,72 @@ export const ruleAction = z.discriminatedUnion("kind", [
     value: text.default(""),
     remove: z.boolean().default(false),
   }),
+  /**
+   * Overrides site settings for the requests it matches; later matching
+   * rules override field by field. The phase cache accepts only cacheBypass,
+   * forceHttps and gzip.
+   */
   z
     .object({
       kind: z.literal("config"),
       cacheBypass: z.boolean().optional(),
       forceHttps: z.boolean().optional(),
-      gzip: z.literal(false).optional(),
+      /** Compression switches among the codings the site enables. */
+      gzip: z.boolean().optional(),
+      brotli: z.boolean().optional(),
+      zstd: z.boolean().optional(),
+      websocket: z.boolean().optional(),
+      /** The site's Under Attack (platform Under Attack is unaffected). */
+      underAttack: z.boolean().optional(),
+      /** CC escalation and its highest level; requests are counted either way. */
+      ccEnabled: z.boolean().optional(),
+      ccMaxLevel: z.enum(challengeTypes).optional(),
+      /** Origin timeouts in milliseconds. */
+      originConnectTimeoutMs: z.number().int().min(100).max(120_000).optional(),
+      originSendTimeoutMs: z.number().int().min(100).max(3_600_000).optional(),
+      originReadTimeoutMs: z.number().int().min(100).max(3_600_000).optional(),
+      /** Sampled access log rate in basis points (0 stops sampling). */
+      logSampleRate: z.number().int().min(0).max(10_000).optional(),
     })
     .refine(
-      (a) => a.cacheBypass !== undefined || a.forceHttps !== undefined || a.gzip !== undefined,
+      (a) =>
+        a.cacheBypass !== undefined ||
+        a.forceHttps !== undefined ||
+        a.gzip !== undefined ||
+        configPhaseFields.some((field) => a[field] !== undefined),
+      { message: "set at least one setting" },
     ),
+  /**
+   * Origin rules (phase origin): the site's origin group to use (empty keeps
+   * the default group), the Host header and TLS SNI sent upstream and the
+   * port of every origin of the group (0 keeps theirs).
+   */
+  z
+    .object({
+      kind: z.literal("origin"),
+      originGroup: z
+        .string()
+        .refine((s) => s === "" || ORIGIN_GROUP_RE.test(s), "invalid origin group")
+        .default(""),
+      hostHeader: optionalHostname.default(""),
+      sni: optionalHostname.default(""),
+      port: z.number().int().min(0).max(65535).default(0),
+    })
+    .refine((a) => a.originGroup !== "" || a.hostHeader !== "" || a.sni !== "" || a.port !== 0, {
+      message: "set at least one override",
+    }),
+  /**
+   * Compression rules (phase compression): the codings this response may
+   * use in preference order, among those the site enables; empty disables
+   * compression.
+   */
+  z.object({
+    kind: z.literal("compression"),
+    algorithms: z
+      .array(z.enum(compressionCodings))
+      .max(compressionCodings.length)
+      .refine((list) => new Set(list).size === list.length, "codings must be unique"),
+  }),
   z.object({
     kind: z.literal("rate_limit"),
     statusCode: z.union([z.literal(403), z.literal(429)]).default(429),
@@ -112,10 +256,21 @@ export const ruleInput = z
     action: ruleAction,
   })
   .superRefine((rule, ctx) => {
-    if (!actionPhases[rule.action.kind]?.includes(rule.phase))
+    const action = rule.action;
+    if (!actionPhases[action.kind]?.includes(rule.phase))
       ctx.addIssue({
         code: "custom",
         message: "action is unavailable in this phase",
+        path: ["action"],
+      });
+    if (
+      action.kind === "config" &&
+      rule.phase !== "config" &&
+      configPhaseFields.some((field) => action[field] !== undefined)
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "this setting is only available in the config phase",
         path: ["action"],
       });
     try {
@@ -127,6 +282,16 @@ export const ruleInput = z
         path: ["expression"],
       });
     }
+    if ((action.kind === "redirect" || action.kind === "rewrite") && action.target !== "")
+      try {
+        parseValueExpression(action.target, rule.phase);
+      } catch (error) {
+        ctx.addIssue({
+          code: "custom",
+          message: error instanceof Error ? error.message : "invalid expression",
+          path: ["action", "target"],
+        });
+      }
   });
 export const ruleDto = ruleInput.safeExtend({ id: uuid });
 export const rulesContract = {
@@ -138,9 +303,20 @@ export const rulesContract = {
     .route({ method: "PUT", path: "/sites/{id}/rules", tags: ["rules"] })
     .input(z.object({ id: uuid, rules: z.array(ruleInput).max(64) }))
     .output(z.array(ruleDto)),
+  /**
+   * Checks an expression: a rule condition of `phase` (kind condition), a
+   * redirect target or rewrite path of `phase` (kind value) or a cache rule
+   * condition (kind cacheRule, at most 16384 characters, phase ignored).
+   */
   validate: oc
     .route({ method: "POST", path: "/rules/validate", tags: ["rules"] })
-    .input(z.object({ expression: z.string().max(4096), phase: z.enum(phases) }))
+    .input(
+      z.object({
+        expression: z.string().max(16384),
+        phase: z.enum(phases),
+        kind: z.enum(["condition", "value", "cacheRule"]).default("condition"),
+      }),
+    )
     .output(z.object({ valid: z.boolean(), position: z.number().int(), message: z.string() })),
 };
 export const platformRulesContract = {
