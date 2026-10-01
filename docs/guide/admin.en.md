@@ -135,7 +135,7 @@ The **Configuration canary** card sets the cluster's policy and shows the curren
 | After a rollback | The cluster stays on the stable revision. The database keeps the change; the next publication goes through the canary again |
 | New publication during the window | The new candidate replaces the old one; the window keeps its start and its canary nodes |
 | No canary node online | The change goes to every node, `cluster.rollout_direct` is audited and a platform alert fires; publishing is not blocked |
-| Changes that reach every node at once | ACME HTTP-01 challenges; disabling, suspending or deleting a site and removing a domain; a site's **Purge cache**; certificate renewals; challenge key rotation; **Under Attack** of sites and the platform. The stable revision takes these at once; other changes wait in the candidate for the window. **Roll back** in **Revisions** reaches every node at once too |
+| Changes that reach every node at once | ACME HTTP-01 challenges; disabling, suspending or deleting a site and removing a domain; a site's **Purge cache**; lowering the access log sampling rate; certificate renewals; challenge key rotation; **Under Attack** of sites and the platform. The stable revision takes these at once; other changes wait in the candidate for the window. **Roll back** in **Revisions** reaches every node at once too |
 | Turning the policy off | A running candidate is promoted to every node |
 
 | State | Meaning |
