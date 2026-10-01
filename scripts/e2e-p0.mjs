@@ -380,7 +380,8 @@ const suspended = await ok(sa, "POST", `/admin/sites/${site.id}/suspend`, {
 });
 assert.equal(suspended.site.suspended, true);
 await synced();
-assert.equal(await edge("p0.e2e.test", "/"), 404);
+// Since G4 nodes answer the hosts of suspended sites with the platform's page (503).
+assert.equal(await edge("p0.e2e.test", "/"), 503);
 assert.equal((await reconcileDns()).blocked, null);
 assert.deepEqual(await providerRecords(), dnsBefore);
 const tenantResume = await fetch(`${base}/rpc/admin/sites/resume`, {
@@ -408,7 +409,7 @@ await waitFor("the site is served again", async () => (await edge("p0.e2e.test",
 await reconcileDns();
 assert.deepEqual(await providerRecords(), dnsBefore);
 pass(
-  "suspended by a service account: node answers 404, tenant session resume 403, resumed: 200, DNS records unchanged",
+  "suspended by a service account: node answers 503 (the platform's suspended page), tenant session resume 403, resumed: 200, DNS records unchanged",
 );
 
 // ---------------------------------------------------------------- 5. canary (before 4, whose window completes meanwhile)
