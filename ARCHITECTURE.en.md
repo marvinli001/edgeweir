@@ -149,7 +149,7 @@ URL, prefix, host, Cache-Tag, and full-site purges and URL and sitemap prefetche
 
 Host and Cache-Tag purges need the node feature `purge-tag-v1`, mobile and sitemap prefetches `prefetch-v2`; while an active node of an affected cluster lacks it, the console refuses the task (`NODE_CAPABILITY_REQUIRED`). Nodes derive cache keys from the purge markers' points in time and an index of the cached objects' `Cache-Tag`, so purged objects (stale ones included) are never looked up again; nodes fetch sitemaps through their own edge layer. Behavior: [Origins and cache](docs/guide/origins-and-cache.en.md#purge-and-prefetch).
 
-Node upgrades are delivered through `PullTasks` as well: an upgrade first runs on one node group and is promoted to the remaining nodes after the health observation passes. Behavior: [Node upgrades](docs/guide/node-upgrades.en.md).
+Node upgrades are delivered through `PullTasks` as well: an upgrade first runs on one node group and is promoted after the health observation passes; the remaining nodes follow at most a quarter at a time, and each task must finish within 30 minutes after it is sent. A node pulling tasks first checks without a lock whether it has an upgrade task, and takes the cluster's upgrade lock only if it does. Behavior: [Node upgrades](docs/guide/node-upgrades.en.md).
 
 ## Dynamic bans
 

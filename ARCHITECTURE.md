@@ -149,7 +149,7 @@ URL、目录、Host、Cache-Tag、整站刷新与 URL、站点地图预热不产
 
 Host 与 Cache-Tag 刷新需要节点能力 `purge-tag-v1`，移动端与站点地图预热需要 `prefetch-v2`；受影响集群有活动节点缺少能力时，控制台拒绝创建任务（`NODE_CAPABILITY_REQUIRED`）。节点用刷新标记的时间点与缓存对象的 `Cache-Tag` 索引计算缓存键，被刷新的对象（包括过期内容）不再被查找；站点地图由节点经本机边缘层取回。行为说明见 [源站与缓存](docs/guide/origins-and-cache.md#刷新与预热)。
 
-节点升级同样经 `PullTasks` 下发：升级任务先在一个节点组试运行，健康观察通过后推进到其余节点。行为说明见 [节点升级](docs/guide/node-upgrades.md)。
+节点升级同样经 `PullTasks` 下发：升级任务先在一个节点组试运行，健康观察通过后推进，其余节点每批最多四分之一，每个任务下发后 30 分钟内须完成。节点拉取任务时先不加锁检查有没有自己的升级任务，有才取集群的升级锁。行为说明见 [节点升级](docs/guide/node-upgrades.md)。
 
 ## 动态封禁
 

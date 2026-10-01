@@ -27,6 +27,7 @@ export const taskErrorDefs = {
   upgrade_rolled_back: { params: ["version"] },
   upgrade_expired: { params: [] },
   upgrade_cancelled: { params: [] },
+  upgrade_node_removed: { params: [] },
   /** The first failed URL; {reason} is one of prefetchFailureReasonDefs. */
   prefetch_failed: { params: ["failed", "total", "url", "reason"] },
   prefetch_timeout: { params: ["done", "total"] },

@@ -15,6 +15,7 @@ import {
   rolloutTargets,
   targetFor,
 } from "./revisions";
+import { discardNodeUpgrades } from "./upgrades";
 
 export { isOnline, ONLINE_WINDOW_SECONDS };
 
@@ -180,6 +181,7 @@ export async function setNodeStatus(
     const row = await findNode(tx, id);
     await tx.update(schema.node).set({ status }).where(eq(schema.node.id, id));
     const skippedTasks = status === "disabled" ? await skipNodeTasks(tx, id) : 0;
+    if (status === "disabled") await discardNodeUpgrades(tx, id);
     await recordAudit(tx, actor, {
       action: status === "disabled" ? "node.disable" : "node.enable",
       targetType: "node",
@@ -221,6 +223,7 @@ export async function deleteNode(db: Database, id: string, actor: Actor): Promis
         )
         .onConflictDoNothing();
     }
+    await discardNodeUpgrades(tx, id);
     await tx.delete(schema.node).where(eq(schema.node.id, id));
     await recordAudit(tx, actor, {
       action: "node.delete",
