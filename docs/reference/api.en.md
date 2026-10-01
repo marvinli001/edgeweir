@@ -573,7 +573,7 @@ curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application
   -d '{"pools":[{"protocol":"both","from":20000,"to":20100}]}' \
   https://cdn-admin.example.com/api/v1/clusters/<cluster ID>/port-pools
 curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
-  -d '{"clusterId":"<cluster ID>","name":"game","protocol":"tcp","port":20000,"origins":[{"address":"203.0.113.10","port":7000}],"proxyProtocolVersion":2}' \
+  -d '{"clusterId":"<cluster ID>","name":"game","protocol":"tcp","port":20000,"origins":[{"address":"game-origin.example.com","port":7000}],"proxyProtocolVersion":2}' \
   https://cdn-admin.example.com/api/v1/l4-apps
 ```
 
