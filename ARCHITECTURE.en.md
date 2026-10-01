@@ -261,18 +261,18 @@ A revision receipt is sealed with the master key (purpose `node.revision_receipt
 
 `edgeweir-certd` performs ACME issuance, renewal, and revocation and DNS record operations.
 
-1. The pg-boss queue `certificates.sweep` selects, every minute, certificates waiting for issuance and certificates past `renew_at`.
+1. The pg-boss queue `certificates.sweep` selects, every minute, certificates waiting for issuance and certificates past `renew_at` (new requests and manual renewals first, then by `renew_at`, three at a time). A failure backs off by the remaining validity (a tenth, 10 minutes to 12 hours; one hour for a first issuance). Issued certificates read their ARI renewal window after the CA's Retry-After (1 to 24 hours, 6 by default) and renew earlier when the window ends before `renew_at`.
 2. The worker starts `EDGEWEIR_CERTD_BIN` (`/usr/local/bin/edgeweir-certd` in the image) with only `PATH` and `EDGEWEIR_DNS_TEST_ENDPOINT` in its environment.
 3. It writes one JSON request line to stdin (command and parameters, including the ACME account and DNS credentials). certd writes JSON event lines to stdout (`account`, `http01.present`, `http01.cleanup`, `dns01.prepare`, `dns01.cleanup`); the console handles each one and acknowledges it on stdin. The last line is the result.
-4. `http01.present` responses are written to `acme_challenge` and published in a new revision, and nodes answer them. `dns01.prepare` records the cleanup obligation in `dns_challenge_lease` before certd writes the TXT record; after completion, failure, or a restart, only the values written by that operation are removed. The ACME account from an `account` event is envelope-encrypted into `certificate`.
+4. One `http01.present` carries all HTTP-01 challenges of an order: they are written to `acme_challenge`, each cluster involved publishes one revision, and once nodes apply it certd has the CA validate them (four at a time); `http01.cleanup` only deletes the rows and publishes nothing (nodes and the next revision drop a challenge once it expires or its operation ends). Challenge revisions do not count toward the 200 kept revisions and are deleted after an hour. `dns01.prepare` records the cleanup obligation in `dns_challenge_lease` before certd writes the TXT record; after completion, failure, or a restart, only the values written by that operation are removed. The ACME account from an `account` event is envelope-encrypted into `acme_account`; certificates with the same directory, EAB key id, and email share one account.
 5. The result is written back to `certificate`: chain (certificates only), fingerprint, expiry, next renewal time, and the envelope-encrypted private key (PKCS #8); clusters that reference the certificate publish a new revision.
 
 | Limit | Value |
 | --- | --- |
-| Duration per call | 5 minutes, then `SIGKILL` |
+| Duration per call | 5 minutes for `dns.*`, 8 minutes otherwise, then `SIGKILL` |
 | stdout size | 16 MiB for `dns.*` commands, 2 MiB otherwise |
 | stderr | Discarded (dependency diagnostics may quote credentials) |
-| Commands | `version`, `providers`, `obtain`, `renew`, `revoke`, `dns.list`, `dns.set`, `dns.present`, `dns.cleanup`, `dns.zones`, `dns.test` |
+| Commands | `version`, `providers`, `obtain`, `renew`, `revoke`, `renewal-info`, `dns.list`, `dns.set`, `dns.present`, `dns.cleanup`, `dns.zones`, `dns.test` |
 | DNS providers | The provider catalog `helpers/certd/catalog.json`, see [Providers and credentials](docs/guide/dns-and-alerts.en.md#providers-and-credentials) |
 
 DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or Automatic): `dns.reconcile` computes, every minute, the records of each cluster in Automatic mode from healthy nodes and site domains (one set of address records per cluster, one CNAME per site), creates a `dns_revision` for that cluster, and writes it to the zone of the binding's provider account (`platform_dns_provider`); clusters publish and reconcile on their own, so an unavailable provider does not affect other clusters, and one process at a time writes a cluster (`dns_lease`). Nodes keep their records while they apply a revision published less than 2 minutes ago. Names are recorded in `dns_managed_name` before external records are written, so partial writes can be repaired; new records are written before the records they replace. Manual mode only produces the records to create and a zone file and writes no DNS. DNS steering provider accounts and DNS-01 credentials use the same provider catalog. A site's domains route as soon as they are saved; a domain belongs to one site. Behavior: [HTTPS and certificates](docs/guide/https.en.md), [DNS steering and alerts](docs/guide/dns-and-alerts.en.md).
@@ -375,7 +375,8 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 
 | Table | Contents |
 | --- | --- |
-| `certificate` | Chain, fingerprint, expiry, and renewal state; private key and ACME account envelope-encrypted |
+| `certificate` | Chain, fingerprint, expiry, and renewal state; private key and the request's EAB key envelope-encrypted |
+| `acme_account` | ACME accounts (shared per directory, EAB key id, and email), account key envelope-encrypted |
 | `acme_challenge` | Short-lived public HTTP-01 responses |
 | `dns_credential` | DNS provider credentials and zone for ACME DNS-01, envelope-encrypted |
 | `dns_challenge_lease` | Cleanup obligations of DNS-01 TXT records |
@@ -454,6 +455,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0036_single_operator` | Keeps only the earliest platform administrator who is not disabled (the other accounts' alert subscriptions move to it); IP list names become unique (organization lists with a taken name get a suffix and their rules follow), former organization lists become collections; drops `organization`, `member`, `invitation`, `organization_settings`, every `organization_id`, `session.active_organization_id` and `alert_channel.available_to_tenants`; service accounts lose the organization scopes |
 | `0037_dns_cluster_bindings` | `dns_binding`, `dns_lease`; `dns_revision.cluster_id`, `dns_managed_name.cluster_id`; the DNS steering policy becomes one binding per cluster; drops `dns_state` |
 | `0038_certificate_chains` | PEM blocks other than certificates (such as a private key) are removed from stored chains |
+| `0039_certificate_accounts` | `acme_account`; `certificate.renewal_info_at` |
 
 ## Build output
 

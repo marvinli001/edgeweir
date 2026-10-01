@@ -28,6 +28,10 @@ export const certificateAccountBinding = (id: string) => ({
   purpose: "certificate.account_envelope",
   recordId: id,
 });
+export const acmeAccountBinding = (id: string) => ({
+  purpose: "acme_account.account_envelope",
+  recordId: id,
+});
 export const dnsCredentialBinding = (id: string) => ({
   purpose: "dns_credential.credential_envelope",
   recordId: id,

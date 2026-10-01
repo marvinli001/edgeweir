@@ -28,12 +28,34 @@ export const certificate = pgTable("certificate", {
   renewAt: timestamp("renew_at", { withTimezone: true }),
   /** Public CA/challenge settings, with no credential values. */
   acme: jsonb("acme").$type<Record<string, string>>().notNull().default({}),
+  /** The request's EAB key (`{ eabKid, eabHmacKey }`); the account is in acme_account. */
   accountEnvelope: text("account_envelope").notNull().default(""),
   lastError: text("last_error").notNull().default(""),
   operationStartedAt: timestamp("operation_started_at", { withTimezone: true }),
+  /** When to ask the CA for its suggested renewal window again (ARI, RFC 9773). */
+  renewalInfoAt: timestamp("renewal_info_at", { withTimezone: true }),
   createdAt: now(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * ACME accounts, one per directory, EAB key id and contact email, shared by
+ * every certificate requested with them: CAs limit new accounts (Let's
+ * Encrypt: 10 per IP address in 3 hours).
+ */
+export const acmeAccount = pgTable(
+  "acme_account",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    directoryUrl: text("directory_url").notNull(),
+    eabKid: text("eab_kid").notNull().default(""),
+    email: text("email").notNull(),
+    /** The account key and registration, sealed. */
+    accountEnvelope: text("account_envelope").notNull(),
+    createdAt: now(),
+  },
+  (t) => [uniqueIndex("acme_account_uq").on(t.directoryUrl, t.eabKid, t.email)],
+);
 
 export const acmeChallenge = pgTable("acme_challenge", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -107,7 +107,7 @@ The **Configuration canary** card sets the cluster's policy and shows the curren
 
 ### Revisions
 
-Every change that affects node configuration publishes a new revision in the cluster. The **Revisions** table lists the latest 20: **Revision**, **Content hash**, **Sites**, **Reason**, **Time**. Each cluster keeps its latest 200 revisions; the stable and candidate revisions of the canary are never pruned.
+Every change that affects node configuration publishes a new revision in the cluster. The **Revisions** table lists the latest 20: **Revision**, **Content hash**, **Sites**, **Reason**, **Time**. Each cluster keeps its latest 200 revisions; the stable and candidate revisions of the canary are never pruned. Revisions published only for ACME HTTP-01 challenges do not count and are deleted after an hour.
 
 | Reason | Trigger |
 | --- | --- |
