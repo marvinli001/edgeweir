@@ -116,8 +116,9 @@ These writes accept an optional `expectedUpdatedAt` (ISO 8601, the `updatedAt` t
 | --- | --- |
 | `sites.setEnabled` | The site |
 | `clusters.setRolloutPolicy` | The cluster's canary policy |
+| `l4Apps.update`, `l4Apps.setEnabled` | The L4 app |
 
-When a site is already enabled or disabled as requested, `sites.setEnabled` returns the current state without comparing `expectedUpdatedAt`.
+When a site or L4 app is already enabled or disabled as requested, `sites.setEnabled` and `l4Apps.setEnabled` return the current state without comparing `expectedUpdatedAt`.
 
 ### Enabling and disabling sites
 
@@ -511,6 +512,72 @@ New fields of DNS bindings and records:
 | `BAD_REQUEST` | 400 | Input validation, for example `timeoutMs` longer than the interval, scheduling addresses without a `level` 0, or `regionId` on a node metric |
 
 Behavior: [Regional probes and scheduling](../guide/scheduling.en.md) and [DNS steering and alerts](../guide/dns-and-alerts.en.md#records-per-resolution-line).
+
+### Port pools and L4 apps
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `clusters.portPools` | `GET /clusters/{clusterId}/port-pools` | The cluster's port pools, reserved ports, and nodes without `l4-v1` |
+| `clusters.setPortPools` | `PUT /clusters/{clusterId}/port-pools` | Replaces the port pools; publishes no configuration revision |
+| `l4Apps.list` | `GET /l4-apps` | L4 apps sorted by port and protocol; query parameter `clusterId` (optional) |
+| `l4Apps.get` | `GET /l4-apps/{id}` | One app |
+| `l4Apps.create` | `POST /l4-apps` | Creates an app, returns 201 |
+| `l4Apps.update` | `PATCH /l4-apps/{id}` | Changes only the given fields |
+| `l4Apps.setEnabled` | `PUT /l4-apps/{id}/enabled` | Disables or enables an app |
+| `l4Apps.delete` | `DELETE /l4-apps/{id}` | Deletes an app with its origins and statistics |
+| `l4Apps.stats` | `GET /l4-apps/{id}/stats` | Per-minute statistics |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `GET` only.
+
+| Request | Fields |
+| --- | --- |
+| `PUT /clusters/{clusterId}/port-pools` | `pools`: replaces the list, at most 64 `{ protocol, from, to }`; `protocol` is `tcp`, `udp`, or `both`, `from` and `to` are 1024–65535, `from` not above `to` |
+| `POST /l4-apps` | `clusterId`, `name` (1–100 characters, trimmed), `protocol` (`tcp` / `udp`), `port` (1024–65535), `origins`; optional: `enabled` (default `true`), `acceptProxyProtocol` (default `false`), `proxyProtocolVersion` (0–2, 0 sends none, default 0), `maxFails` (1–100, default 3), `failTimeoutSeconds` (1–3600, default 30), `connectTimeoutMs` (100–60000, default 5000), `idleTimeoutSeconds` (1–86400; omitted: 600 for TCP, 30 for UDP), `allowListIds`, `blockListIds` (IP list IDs, at most 16 each, deduplicated, default `[]`), `maxConnections` (0–10000000), `newConnectionsPerSecond` (0–1000000); 0 means no limit for the last two, default 0 |
+| `origins[]` | 1–32 `{ address, port, weight, backup }`: `address` is a host name or IP under the rules for site origins; `port` 1–65535; `weight` 1–100, default 1; `backup` default `false`. At least one origin has `backup` `false` |
+| `PATCH /l4-apps/{id}` | The fields of `POST` except `clusterId` and `enabled`, all optional; `origins` replaces the list, and origins whose address and port stay keep their ID (and with it the nodes' passive health state); changing `protocol` leaves `idleTimeoutSeconds` as it is; optional `expectedUpdatedAt` |
+| `PUT /l4-apps/{id}/enabled` | `enabled`; optional `expectedUpdatedAt` |
+| `GET /l4-apps/{id}/stats` | Query parameters `from` and `to` (ISO 8601), `from` before `to`, at most 7 days |
+
+| Procedure | Response |
+| --- | --- |
+| `clusters.portPools`, `clusters.setPortPools` | `clusterId`; `pools` (sorted by first port, then protocol); `reservedPorts` (the ports of the cluster's HTTP / HTTPS listeners, never part of a pool); `nodesWithoutL4` (`[{ id, name }]`, active nodes of the cluster that do not report `l4-v1`) |
+| The app returned by `l4Apps.list`, `l4Apps.get`, and the other procedures | `id`, `clusterId`, `clusterName`, `name`, `protocol`, `port`, `enabled`, `acceptProxyProtocol`, `proxyProtocolVersion`, `origins` (`[{ id, address, port, weight, backup }]`, in the saved order), `maxFails`, `failTimeoutSeconds`, `connectTimeoutMs`, `idleTimeoutSeconds`, `allowListIds`, `blockListIds`, `maxConnections`, `newConnectionsPerSecond`, `dnsTarget`, `dnsLines`, `createdAt`, `updatedAt` |
+| `dnsTarget` | The CNAME clients connect to, `<app ID>.<cluster domain>`, published only while the app is enabled; `null` while the cluster's DNS is **Not managed** |
+| `dnsLines` | Per binding line `{ name, target }`: `target` is `<line>.<app ID>.<cluster domain>` with line aliases, else `<line>.<cluster domain>` |
+| `l4Apps.create`, `l4Apps.update`, `l4Apps.setEnabled` | `{ app, revision }` |
+| `l4Apps.delete` | `{ revision }` |
+| `l4Apps.stats` | `appId`, `from`, `to`; `bucketSeconds`: 60 for ranges up to a day, 300 up to five days, else 3600; `points`: one per bucket from the bucket of `from`, oldest first, empty buckets zero; `totals`; `nodes`: every reporting node `{ nodeId, nodeName, … }`, busiest first |
+| Statistics counters | `connections` (connections or UDP sessions accepted), `refused` (refused by the IP lists or limits), `peakConcurrent`, `bytesReceived` (from clients), `bytesSent` (to clients). In `points` and `totals`, `peakConcurrent` is the highest per-minute sum of the nodes' peaks in the bucket or range; in `nodes` it is the node's own highest value |
+
+- `create` and `update` publish the cluster's configuration revision (reasons `l4_app_created`, `l4_app_updated`) and audit `l4_app.create`, `l4_app.update`; `setEnabled` publishes when the state changes (`l4_app_updated`) and audits `l4_app.enable` or `l4_app.disable`, and returns the latest revision without publishing or auditing when it does not; `delete` publishes (`l4_app_deleted`) and audits `l4_app.delete`. `setPortPools` audits `cluster.port_pools_update`.
+- A configuration with an enabled app needs the node capability `l4-v1`, see [Node capabilities](#node-capabilities).
+
+| Error code | Status | When |
+| --- | --- | --- |
+| `L4_APP_NOT_FOUND` | 404 | The app does not exist |
+| `L4_APP_LIMIT` | 409 | The cluster has 256 apps (disabled ones included); `data.limit` |
+| `L4_PORT_OUTSIDE_POOL` | 400 | The port is outside the cluster's port pools for the protocol; `data.port` |
+| `L4_PORT_IN_USE` | 409 | Another app of the cluster (disabled ones included) uses the port and protocol, or the new pools would leave an app's port outside; `data.apps` (`name (port/protocol)`, comma-separated) |
+| `L4_PORT_RESERVED` | 400 | A pool or an app port is a port of the cluster's HTTP / HTTPS listeners; `data.port` |
+| `L4_PORT_POOL_OVERLAP` | 400 | Pools of one protocol overlap, and `both` overlaps `tcp` and `udp`; `data.pools` (`from-to/protocol`, comma-separated) |
+| `L4_PROXY_PROTOCOL_UNSUPPORTED` | 400 | A UDP app with `acceptProxyProtocol` or a non-zero `proxyProtocolVersion` |
+| `IP_LIST_NOT_FOUND` | 404 | A list of `allowListIds` or `blockListIds` does not exist |
+| `IP_LIST_IN_USE` | 409 | `DELETE /ip-lists/{id}` on a list a rule, a cache rule condition, or an L4 app still references |
+| `ORIGIN_ADDRESS_FORBIDDEN` | 400 | An origin is a special-purpose address outside the origin allow list; `data.address`, `data.range` |
+| `UPDATED_AT_MISMATCH` | 409 | `expectedUpdatedAt` is not the current value |
+| `CLUSTER_NOT_FOUND` | 404 | The cluster does not exist |
+| `BAD_REQUEST` | 400 | Input validation, for example a port below 1024, `from` above `to`, only backup origins, or a statistics range over 7 days |
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"pools":[{"protocol":"both","from":20000,"to":20100}]}' \
+  https://cdn-admin.example.com/api/v1/clusters/<cluster ID>/port-pools
+curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"clusterId":"<cluster ID>","name":"game","protocol":"tcp","port":20000,"origins":[{"address":"203.0.113.10","port":7000}],"proxyProtocolVersion":2}' \
+  https://cdn-admin.example.com/api/v1/l4-apps
+```
+
+Behavior: [Layer-4 forwarding](../guide/l4.en.md).
 
 ### Example
 

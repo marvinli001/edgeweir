@@ -116,8 +116,9 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | --- | --- |
 | `sites.setEnabled` | 网站 |
 | `clusters.setRolloutPolicy` | 集群的金丝雀策略 |
+| `l4Apps.update`、`l4Apps.setEnabled` | L4 应用 |
 
-网站已经是请求的启停状态时，`sites.setEnabled` 直接返回当前状态，不比较 `expectedUpdatedAt`。
+网站或 L4 应用已经是请求的启停状态时，`sites.setEnabled`、`l4Apps.setEnabled` 直接返回当前状态，不比较 `expectedUpdatedAt`。
 
 ### 站点启停
 
@@ -511,6 +512,72 @@ DNS 绑定与记录的新增字段：
 | `BAD_REQUEST` | 400 | 输入校验失败，例如 `timeoutMs` 超过探测间隔、调度地址没有 `level` 0、非探测指标带 `regionId` |
 
 行为见[区域探针与智能调度](../guide/scheduling.md)与[DNS 调度与告警](../guide/dns-and-alerts.md#按解析线路写入)。
+
+### 端口池与 L4 应用
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `clusters.portPools` | `GET /clusters/{clusterId}/port-pools` | 集群的端口池、保留端口与缺少 `l4-v1` 的节点 |
+| `clusters.setPortPools` | `PUT /clusters/{clusterId}/port-pools` | 整体替换端口池；不发布配置版本 |
+| `l4Apps.list` | `GET /l4-apps` | L4 应用，按端口、协议排序；查询参数 `clusterId`（可选） |
+| `l4Apps.get` | `GET /l4-apps/{id}` | 一个应用 |
+| `l4Apps.create` | `POST /l4-apps` | 新建应用，返回 201 |
+| `l4Apps.update` | `PATCH /l4-apps/{id}` | 只修改给出的字段 |
+| `l4Apps.setEnabled` | `PUT /l4-apps/{id}/enabled` | 停用或启用 |
+| `l4Apps.delete` | `DELETE /l4-apps/{id}` | 删除应用、源站与统计 |
+| `l4Apps.stats` | `GET /l4-apps/{id}/stats` | 按分钟的统计 |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `PUT /clusters/{clusterId}/port-pools` | `pools`：整体替换，最多 64 个 `{ protocol, from, to }`；`protocol` 为 `tcp`、`udp` 或 `both`，`from`、`to` 为 1024–65535，`from` 不大于 `to` |
+| `POST /l4-apps` | `clusterId`、`name`（1–100 字符，去掉首尾空格）、`protocol`（`tcp` / `udp`）、`port`（1024–65535）、`origins`；可选：`enabled`（默认 `true`）、`acceptProxyProtocol`（默认 `false`）、`proxyProtocolVersion`（0–2，0 不发送，默认 0）、`maxFails`（1–100，默认 3）、`failTimeoutSeconds`（1–3600，默认 30）、`connectTimeoutMs`（100–60000，默认 5000）、`idleTimeoutSeconds`（1–86400，省略时 TCP 为 600、UDP 为 30）、`allowListIds`、`blockListIds`（IP 名单 ID，各最多 16 个，去重，默认 `[]`）、`maxConnections`（0–10000000）、`newConnectionsPerSecond`（0–1000000），后两项 0 表示不限，默认 0 |
+| `origins[]` | 1–32 个 `{ address, port, weight, backup }`：`address` 为主机名或 IP，规则同网站源站；`port` 1–65535；`weight` 1–100，默认 1；`backup` 默认 `false`。至少一个源站的 `backup` 为 `false` |
+| `PATCH /l4-apps/{id}` | `POST` 中除 `clusterId`、`enabled` 外的字段，均可选；`origins` 整体替换，地址与端口不变的源站保留 ID（节点上的被动健康状态随之保留）；修改 `protocol` 不改变 `idleTimeoutSeconds`；可选 `expectedUpdatedAt` |
+| `PUT /l4-apps/{id}/enabled` | `enabled`；可选 `expectedUpdatedAt` |
+| `GET /l4-apps/{id}/stats` | 查询参数 `from`、`to`（ISO 8601），`from` 早于 `to`，范围最长 7 天 |
+
+| 过程 | 响应 |
+| --- | --- |
+| `clusters.portPools`、`clusters.setPortPools` | `clusterId`；`pools`（按起始端口、协议排序）；`reservedPorts`（集群 HTTP / HTTPS 监听的端口，不能进入端口池）；`nodesWithoutL4`（`[{ id, name }]`，集群中不上报 `l4-v1` 的活动节点） |
+| `l4Apps.list`、`l4Apps.get` 与其他过程返回的应用 | `id`、`clusterId`、`clusterName`、`name`、`protocol`、`port`、`enabled`、`acceptProxyProtocol`、`proxyProtocolVersion`、`origins`（`[{ id, address, port, weight, backup }]`，按保存顺序）、`maxFails`、`failTimeoutSeconds`、`connectTimeoutMs`、`idleTimeoutSeconds`、`allowListIds`、`blockListIds`、`maxConnections`、`newConnectionsPerSecond`、`dnsTarget`、`dnsLines`、`createdAt`、`updatedAt` |
+| `dnsTarget` | 客户端连接的 CNAME `<应用 ID>.<集群域名>`，只在应用启用时发布；集群 DNS 为「不管理」时为 `null` |
+| `dnsLines` | 每条绑定线路 `{ name, target }`：开启线路别名时 `target` 为 `<线路>.<应用 ID>.<集群域名>`，否则为 `<线路>.<集群域名>` |
+| `l4Apps.create`、`l4Apps.update`、`l4Apps.setEnabled` | `{ app, revision }` |
+| `l4Apps.delete` | `{ revision }` |
+| `l4Apps.stats` | `appId`、`from`、`to`；`bucketSeconds`：范围不超过 1 天为 60，不超过 5 天为 300，否则 3600；`points`：从 `from` 所在的桶起每桶一项，最早在前，空桶为 0；`totals`；`nodes`：每个上报节点 `{ nodeId, nodeName, … }`，连接数多的在前 |
+| 统计计数 | `connections`（接受的连接或 UDP 会话）、`refused`（被 IP 名单或上限拒绝）、`peakConcurrent`、`bytesReceived`（来自客户端）、`bytesSent`（发往客户端）。`peakConcurrent` 在 `points`、`totals` 中为每分钟各节点峰值之和在桶或范围内的最大值，在 `nodes` 中为该节点自己的最大值 |
+
+- `create`、`update` 发布集群的配置版本（原因 `l4_app_created`、`l4_app_updated`），审计 `l4_app.create`、`l4_app.update`；`setEnabled` 状态变化时发布（`l4_app_updated`），审计 `l4_app.enable`、`l4_app.disable`，状态不变时返回最新版本，不发布、不写审计；`delete` 发布（`l4_app_deleted`），审计 `l4_app.delete`。`setPortPools` 审计 `cluster.port_pools_update`。
+- 配置中有启用的应用时要求节点能力 `l4-v1`，见[节点能力](#节点能力)。
+
+| 错误代码 | 状态 | 场景 |
+| --- | --- | --- |
+| `L4_APP_NOT_FOUND` | 404 | 应用不存在 |
+| `L4_APP_LIMIT` | 409 | 集群已有 256 个应用（含停用的）；`data.limit` |
+| `L4_PORT_OUTSIDE_POOL` | 400 | 端口不在集群该协议的端口池内；`data.port` |
+| `L4_PORT_IN_USE` | 409 | 同一集群同一协议的端口已有应用（含停用的），或新的端口池会把应用的端口留在池外；`data.apps`（`名称 (端口/协议)`，逗号分隔） |
+| `L4_PORT_RESERVED` | 400 | 端口池或应用端口是集群 HTTP / HTTPS 监听的端口；`data.port` |
+| `L4_PORT_POOL_OVERLAP` | 400 | 同一协议的端口池重叠，`both` 与 `tcp`、`udp` 都重叠；`data.pools`（`起始-结束/协议`，逗号分隔） |
+| `L4_PROXY_PROTOCOL_UNSUPPORTED` | 400 | UDP 应用设置了 `acceptProxyProtocol` 或非 0 的 `proxyProtocolVersion` |
+| `IP_LIST_NOT_FOUND` | 404 | `allowListIds` 或 `blockListIds` 中的名单不存在 |
+| `IP_LIST_IN_USE` | 409 | `DELETE /ip-lists/{id}` 删除仍被规则、缓存规则条件或 L4 应用引用的名单 |
+| `ORIGIN_ADDRESS_FORBIDDEN` | 400 | 源站为特殊用途地址且不在源站地址允许清单内；`data.address`、`data.range` |
+| `UPDATED_AT_MISMATCH` | 409 | `expectedUpdatedAt` 不是当前值 |
+| `CLUSTER_NOT_FOUND` | 404 | 集群不存在 |
+| `BAD_REQUEST` | 400 | 输入校验失败，例如端口低于 1024、`from` 大于 `to`、源站全为备用、统计范围超过 7 天 |
+
+```bash
+curl -fsS -X PUT -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"pools":[{"protocol":"both","from":20000,"to":20100}]}' \
+  https://cdn-admin.example.com/api/v1/clusters/<集群 ID>/port-pools
+curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"clusterId":"<集群 ID>","name":"game","protocol":"tcp","port":20000,"origins":[{"address":"203.0.113.10","port":7000}],"proxyProtocolVersion":2}' \
+  https://cdn-admin.example.com/api/v1/l4-apps
+```
+
+行为见[四层转发](../guide/l4.md)。
 
 ### 示例
 
