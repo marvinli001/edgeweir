@@ -17,17 +17,13 @@ export const Route = createFileRoute("/_app")({
       ...orpc.account.me.queryOptions(),
       staleTime: 30_000,
     });
-    // An organization that requires 2FA holds its members on the security page until enabled.
-    if (me.twoFactorRequired && location.pathname !== "/security") {
-      throw redirect({ to: "/security" });
-    }
-    return { session: data, me, isAdmin: me.user.isAdmin };
+    return { session: data, me };
   },
   component: AppLayout,
 });
 
 function AppLayout() {
-  const { session, isAdmin } = Route.useRouteContext();
+  const { session } = Route.useRouteContext();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   // Site pages record themselves once their name is known.
   React.useEffect(() => {
@@ -46,7 +42,7 @@ function AppLayout() {
       <SidebarInset>
         <Outlet />
       </SidebarInset>
-      <CommandMenu isAdmin={isAdmin} />
+      <CommandMenu />
     </SidebarProvider>
   );
 }

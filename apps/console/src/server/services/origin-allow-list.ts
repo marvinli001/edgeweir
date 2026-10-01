@@ -6,6 +6,7 @@ import {
   type Executor,
   loadOriginAllowList,
   ORIGIN_ALLOW_LIST_KEY,
+  publisher,
   publishRevision,
 } from "./revisions";
 
@@ -62,7 +63,7 @@ export async function setOriginAllowList(
       const { row } = await publishRevision(tx, {
         clusterId: cluster.id,
         reason: { code: "origin_allow_list_updated", params: {} },
-        userId: actor.type === "user" || actor.type === "api_key" ? actor.id : null,
+        userId: publisher(actor),
       });
       revisions[cluster.name] = row.revision;
     }

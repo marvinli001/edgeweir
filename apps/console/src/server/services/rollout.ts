@@ -396,7 +396,7 @@ export async function setRolloutPolicy(
   return getRollout(db, clusterId);
 }
 
-/** An administrator gives the candidate to every node now. */
+/** Gives the candidate to every node now. */
 export async function promoteRollout(db: Database, clusterId: string, actor: Actor) {
   await db.transaction(async (tx) => {
     await clusterName(tx, clusterId);
@@ -413,7 +413,7 @@ export async function promoteRollout(db: Database, clusterId: string, actor: Act
   return getRollout(db, clusterId);
 }
 
-/** An administrator stops the canary and returns its nodes to the stable revision. */
+/** Stops the canary and returns its nodes to the stable revision. */
 export async function abortRollout(db: Database, clusterId: string, actor: Actor) {
   await db.transaction(async (tx) => {
     await clusterName(tx, clusterId);

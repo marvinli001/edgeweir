@@ -9,12 +9,10 @@ import { isSiteTab, type SiteTab } from "@/lib/site-tabs";
 /** Pages worth returning to, with the area and title they are listed under. */
 export const RECENT_PAGES = {
   "/sites": () => [m.area_console(), m.nav_sites()],
-  "/members": () => [m.area_console(), m.nav_members()],
   "/security": () => [m.area_console(), m.nav_security()],
   "/settings": () => [m.area_console(), m.nav_settings()],
   "/admin/clusters": () => [m.area_admin(), m.nav_clusters()],
   "/admin/regions": () => [m.area_admin(), m.nav_regions()],
-  "/admin/organizations": () => [m.area_admin(), m.nav_organizations()],
   "/admin/service-accounts": () => [m.area_admin(), m.nav_service_accounts()],
   "/admin/audit": () => [m.area_admin(), m.nav_audit()],
   "/admin/settings": () => [m.area_admin(), m.nav_system()],

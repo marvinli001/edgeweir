@@ -27,7 +27,7 @@ import {
   type Tx,
   targetFor,
 } from "./revisions";
-import { findSite, type SiteScope } from "./sites";
+import { findSite } from "./sites";
 
 type Provider = typeof schema.platformDnsProvider.$inferSelect;
 type Revision = typeof schema.dnsRevision.$inferSelect;
@@ -675,8 +675,8 @@ export async function reconcileDns(app: AppContext, actor: Actor = systemActor) 
     connection.release();
   }
 }
-export async function siteDnsTarget(app: AppContext, siteId: string, scope: SiteScope) {
-  const site = await findSite(app.db, siteId, scope),
+export async function siteDnsTarget(app: AppContext, siteId: string) {
+  const site = await findSite(app.db, siteId),
     s = await state(app.db),
     policy = dnsPolicy.parse(s.policy);
   if (!policy.enabled || !policy.providerId)

@@ -3,7 +3,7 @@ import { passkey } from "@better-auth/passkey";
 import { type Database, schema } from "@edgeweir/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { admin, organization, twoFactor } from "better-auth/plugins";
+import { admin, twoFactor } from "better-auth/plugins";
 import { authAuditDatabaseHooks, authAuditPlugin } from "./auth-audit";
 import { CLIENT_IP_HEADER } from "./client-ip";
 
@@ -17,9 +17,9 @@ export const AUTH_BASE_PATH = "/api/auth";
 /**
  * The better-auth HTTP endpoints the web console calls (apps/console/src/web,
  * `authClient`), by path under /api/auth and method. Everything else answers
- * 404: the organization and admin plugins are used server side only
- * (`auth.api.*`), and their HTTP endpoints would bypass Edgeweir's own
- * checks, audit log and revisions.
+ * 404: the admin and API key plugins are used server side only (`auth.api.*`:
+ * the account at setup, AccessKeys through the accessKeys procedures), and
+ * their HTTP endpoints would bypass Edgeweir's own checks and audit log.
  */
 export const AUTH_HTTP_ROUTES: Readonly<Record<string, readonly ("GET" | "POST")[]>> = {
   "/get-session": ["GET"],
@@ -36,9 +36,6 @@ export const AUTH_HTTP_ROUTES: Readonly<Record<string, readonly ("GET" | "POST")
   "/passkey/verify-authentication": ["POST"],
   "/passkey/list-user-passkeys": ["GET"],
   "/passkey/delete-passkey": ["POST"],
-  "/api-key/create": ["POST"],
-  "/api-key/list": ["GET"],
-  "/api-key/delete": ["POST"],
 };
 
 /** Whether an /api/auth request (path below the base path) is on the allow list. */
@@ -69,9 +66,6 @@ export function createAuth(opts: {
         session: schema.session,
         account: schema.account,
         verification: schema.verification,
-        organization: schema.organization,
-        member: schema.member,
-        invitation: schema.invitation,
         twoFactor: schema.twoFactor,
         passkey: schema.passkey,
         apikey: schema.apikey,
@@ -85,7 +79,7 @@ export function createAuth(opts: {
     databaseHooks: authAuditDatabaseHooks(opts.db),
     emailAndPassword: {
       enabled: true,
-      // Accounts are created by the setup wizard and by administrators only.
+      // The only account is created by the setup wizard.
       disableSignUp: true,
       minPasswordLength: 12,
     },
@@ -97,7 +91,7 @@ export function createAuth(opts: {
       ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
     },
     plugins: [
-      organization({ allowUserToCreateOrganization: false }),
+      // Server side only: creates the account at setup (`auth.api.createUser`).
       admin({ defaultRole: "user", adminRoles: ["admin"] }),
       twoFactor({ issuer: "Edgeweir" }),
       passkey({ rpID: url.hostname, rpName: "Edgeweir", origin: url.origin }),

@@ -106,7 +106,6 @@ function AdminOverviewPage() {
                 ),
               },
             ]}
-            admin
             delay={180}
           />
         </>

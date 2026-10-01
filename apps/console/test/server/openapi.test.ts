@@ -2,13 +2,8 @@ import { afterAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { createTestContext } from "./helpers";
 
-/** Procedures anyone may call: first-run setup and invitation links. */
-const PUBLIC_OPERATIONS = [
-  "system.status",
-  "system.setup",
-  "invitations.get",
-  "invitations.accept",
-];
+/** Procedures anyone may call: the first-run setup. */
+const PUBLIC_OPERATIONS = ["system.status", "system.setup"];
 
 type Operation = { operationId: string; security?: Record<string, string[]>[] };
 type Spec = {

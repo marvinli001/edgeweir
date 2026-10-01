@@ -1,19 +1,9 @@
 import { schema } from "@edgeweir/db";
-import { ORPCError } from "@orpc/server";
 import { count, desc, eq, gt, sql } from "drizzle-orm";
-import { fail } from "../lib/errors";
 import { createAccessKey, listAccessKeys, revokeAccessKey } from "../services/access-keys";
 import { configureLogs, logSettings, logsCsv, queryLogs } from "../services/access-logs";
+import { serviceAccountMe, toMe } from "../services/account";
 import {
-  acceptInvitation,
-  getInvitationInfo,
-  resolveCaller,
-  serviceAccountMe,
-  setActiveOrganization,
-  toMe,
-} from "../services/account";
-import {
-  availableAlertChannels,
   createAlertChannel,
   deleteAlertChannel,
   getAlertPolicy,
@@ -75,15 +65,6 @@ import {
 } from "../services/dns";
 import { createEnrollmentToken } from "../services/enrollment";
 import {
-  addMember,
-  cancelInvitation,
-  createInvitation,
-  invitationUrl,
-  listMembers,
-  removeMember,
-  updateMemberRole,
-} from "../services/members";
-import {
   createNodeGroup,
   deleteNodeGroup,
   listNodeGroups,
@@ -97,11 +78,6 @@ import {
   setNodeStatus,
   updateNode,
 } from "../services/nodes";
-import {
-  createOrganization,
-  listOrganizations,
-  updateOrganization,
-} from "../services/organizations";
 import { getOriginAllowList, setOriginAllowList } from "../services/origin-allow-list";
 import { siteOriginHealth } from "../services/origin-health";
 import {
@@ -155,192 +131,126 @@ import {
   promoteUpgrade,
 } from "../services/upgrades";
 import { getUsageSettings, listUsage, setUsageSettings, usageChanges } from "../services/usage";
-import { createUser, listUsers, setUserAdmin, setUserDisabled } from "../services/users";
-import {
-  getSiteWaf,
-  getWafSettings,
-  setWafSettings,
-  siteFeatures,
-  topWafRules,
-  updateSiteWaf,
-} from "../services/waf";
-import { admin, authed, maybeAuthed, orgManager, os, tenant } from "./base";
+import { getSiteWaf, siteFeatures, topWafRules, updateSiteWaf } from "../services/waf";
+import { authed, os } from "./base";
 
 export type { RequestContext } from "./base";
 
 const ok = { ok: true as const };
 
-const listTenant = tenant.use(({ context, next }) => {
-  if (!context.organizationId) fail("NOT_A_MEMBER", "select an organization first");
-  return next({ context: { organizationId: context.organizationId } });
-});
-
-/** Organization owners and admins (platform administrators act as owners). */
-const tenantManager = tenant.use(({ context, next }) => {
-  const role = context.isAdmin ? "owner" : context.caller.organization?.role;
-  if (role !== "owner" && role !== "admin")
-    fail("ORG_ADMIN_REQUIRED", "organization owners and admins only");
-  return next();
-});
-
 export const router = os.router({
   usage: {
-    list: tenant.usage.list.handler(({ input, context }) =>
-      listUsage(context.app.db, context.scope, input),
-    ),
-    changes: tenant.usage.changes.handler(({ input, context }) =>
-      usageChanges(context.app.db, context.scope, input),
+    list: authed.usage.list.handler(({ input, context }) => listUsage(context.app.db, input)),
+    changes: authed.usage.changes.handler(({ input, context }) =>
+      usageChanges(context.app.db, input),
     ),
   },
   serviceAccounts: {
-    list: admin.serviceAccounts.list.handler(({ context }) => listServiceAccounts(context.app.db)),
-    create: admin.serviceAccounts.create.handler(({ input, context }) =>
+    list: authed.serviceAccounts.list.handler(({ context }) => listServiceAccounts(context.app.db)),
+    create: authed.serviceAccounts.create.handler(({ input, context }) =>
       createServiceAccount(context.app.db, input, context.actor),
     ),
-    update: admin.serviceAccounts.update.handler(({ input, context }) =>
+    update: authed.serviceAccounts.update.handler(({ input, context }) =>
       updateServiceAccount(context.app.db, input, context.actor),
     ),
-    delete: admin.serviceAccounts.delete.handler(({ input, context }) =>
+    delete: authed.serviceAccounts.delete.handler(({ input, context }) =>
       deleteServiceAccount(context.app.db, input.id, context.actor),
     ),
-    createKey: admin.serviceAccounts.createKey.handler(({ input, context }) =>
+    createKey: authed.serviceAccounts.createKey.handler(({ input, context }) =>
       createServiceAccountKey(context.app.db, input, context.actor),
     ),
-    revokeKey: admin.serviceAccounts.revokeKey.handler(({ input, context }) =>
+    revokeKey: authed.serviceAccounts.revokeKey.handler(({ input, context }) =>
       revokeServiceAccountKey(context.app.db, input, context.actor),
     ),
   },
   rules: {
-    get: tenant.rules.get.handler(({ input, context }) => getRules(context.app, input.id, context)),
-    save: tenant.rules.save.handler(({ input, context }) =>
+    get: authed.rules.get.handler(({ input, context }) => getRules(context.app, input.id)),
+    save: authed.rules.save.handler(({ input, context }) =>
       saveRules(context.app, input.id, input.rules, context),
     ),
-    validate: tenant.rules.validate.handler(({ input }) =>
+    validate: authed.rules.validate.handler(({ input }) =>
       validateExpression(input.expression, input.phase),
     ),
   },
   platformRules: {
-    get: admin.platformRules.get.handler(({ context }) => getRules(context.app, null, context)),
-    save: admin.platformRules.save.handler(({ input, context }) =>
+    get: authed.platformRules.get.handler(({ context }) => getRules(context.app, null)),
+    save: authed.platformRules.save.handler(({ input, context }) =>
       saveRules(context.app, null, input.rules, context),
     ),
   },
   ipLists: {
-    list: listTenant.ipLists.list.handler(({ context }) =>
-      listIpLists(context.app, context.organizationId),
+    list: authed.ipLists.list.handler(({ context }) => listIpLists(context.app)),
+    create: authed.ipLists.create.handler(({ input, context }) =>
+      createIpList(context.app, input, context.actor),
     ),
-    create: listTenant.ipLists.create.handler(({ input, context }) =>
-      createIpList(context.app, input, context.organizationId, context.actor),
+    update: authed.ipLists.update.handler(({ input, context }) =>
+      updateIpList(context.app, input.id, input.entries, input.kind, context.actor),
     ),
-    update: listTenant.ipLists.update.handler(({ input, context }) =>
-      updateIpList(
-        context.app,
-        input.id,
-        input.entries,
-        input.kind,
-        context.organizationId,
-        context.actor,
-      ),
-    ),
-    delete: listTenant.ipLists.delete.handler(({ input, context }) =>
-      deleteIpList(context.app, input.id, context.organizationId, context.actor),
+    delete: authed.ipLists.delete.handler(({ input, context }) =>
+      deleteIpList(context.app, input.id, context.actor),
     ),
   },
   bans: {
-    list: tenant.bans.list.handler(({ input, context }) =>
-      listBans(context.app.db, input, { platform: false, scope: context.scope }),
+    list: authed.bans.list.handler(({ input, context }) => listBans(context.app.db, input)),
+    create: authed.bans.create.handler(({ input, context }) =>
+      createBan(context.app.db, input, { actor: context.actor }),
     ),
-    create: tenantManager.bans.create.handler(({ input, context }) =>
-      createBan(
-        context.app.db,
-        { ...input, scope: "site" },
-        { scope: context.scope, actor: context.actor },
-      ),
-    ),
-    delete: tenantManager.bans.delete.handler(({ input, context }) =>
-      deleteBan(context.app.db, input.id, {
-        platform: false,
-        scope: context.scope,
-        actor: context.actor,
-      }),
+    delete: authed.bans.delete.handler(({ input, context }) =>
+      deleteBan(context.app.db, input.id, { actor: context.actor }),
     ),
   },
   protection: {
-    get: tenant.protection.get.handler(({ input, context }) =>
-      getSiteProtection(context.app.db, input.id, context.scope),
+    get: authed.protection.get.handler(({ input, context }) =>
+      getSiteProtection(context.app.db, input.id),
     ),
-    update: tenantManager.protection.update.handler(({ input, context }) =>
-      updateSiteProtection(context.app.db, input, { scope: context.scope, actor: context.actor }),
+    update: authed.protection.update.handler(({ input, context }) =>
+      updateSiteProtection(context.app.db, input, { actor: context.actor }),
     ),
   },
   waf: {
-    get: tenant.waf.get.handler(({ input, context }) =>
-      getSiteWaf(context.app.db, input.id, context.scope),
+    get: authed.waf.get.handler(({ input, context }) => getSiteWaf(context.app.db, input.id)),
+    update: authed.waf.update.handler(({ input, context }) =>
+      updateSiteWaf(context.app.db, input, { actor: context.actor }),
     ),
-    update: tenantManager.waf.update.handler(({ input, context }) =>
-      updateSiteWaf(context.app.db, input, {
-        scope: context.scope,
-        actor: context.actor,
-        isAdmin: context.isAdmin,
-      }),
-    ),
-    topRules: tenant.waf.topRules.handler(({ input, context }) =>
-      topWafRules(context.app.db, context.scope, input),
+    topRules: authed.waf.topRules.handler(({ input, context }) =>
+      topWafRules(context.app.db, input),
     ),
   },
   security: {
-    state: tenant.security.state.handler(({ input, context }) =>
-      siteSecurityState(context.app.db, input.id, context.scope, input.hours),
+    state: authed.security.state.handler(({ input, context }) =>
+      siteSecurityState(context.app.db, input.id, input.hours),
     ),
-    events: tenant.security.events.handler(({ input, context }) =>
-      listSecurityEvents(context.app.db, input, context.scope),
-    ),
-  },
-  platformIpLists: {
-    list: admin.platformIpLists.list.handler(({ context }) => listIpLists(context.app, null)),
-    create: admin.platformIpLists.create.handler(({ input, context }) =>
-      createIpList(context.app, input, null, context.actor),
-    ),
-    update: admin.platformIpLists.update.handler(({ input, context }) =>
-      updateIpList(context.app, input.id, input.entries, input.kind, null, context.actor),
-    ),
-    delete: admin.platformIpLists.delete.handler(({ input, context }) =>
-      deleteIpList(context.app, input.id, null, context.actor),
+    events: authed.security.events.handler(({ input, context }) =>
+      listSecurityEvents(context.app.db, input),
     ),
   },
   certificates: {
-    list: tenant.certificates.list.handler(({ context }) =>
-      listCertificates(context.app, context.scope),
-    ),
-    upload: tenant.certificates.upload.handler(({ input, context }) =>
+    list: authed.certificates.list.handler(({ context }) => listCertificates(context.app)),
+    upload: authed.certificates.upload.handler(({ input, context }) =>
       uploadCertificate(context.app, input, context),
     ),
-    request: tenant.certificates.request.handler(({ input, context }) =>
+    request: authed.certificates.request.handler(({ input, context }) =>
       requestCertificate(context.app, input, context),
     ),
-    renew: tenant.certificates.renew.handler(({ input, context }) =>
+    renew: authed.certificates.renew.handler(({ input, context }) =>
       renewCertificate(context.app, input.id, context),
     ),
-    delete: tenant.certificates.delete.handler(({ input, context }) =>
+    delete: authed.certificates.delete.handler(({ input, context }) =>
       deleteCertificate(context.app, input.id, context),
     ),
   },
   https: {
-    get: tenant.https.get.handler(({ input, context }) =>
-      getHttps(context.app, input.id, context.scope),
-    ),
-    update: tenant.https.update.handler(({ input, context }) =>
+    get: authed.https.get.handler(({ input, context }) => getHttps(context.app, input.id)),
+    update: authed.https.update.handler(({ input, context }) =>
       updateHttps(context.app, input.id, input.settings, context),
     ),
   },
   dnsCredentials: {
-    list: tenant.dnsCredentials.list.handler(({ context }) =>
-      listDnsCredentials(context.app, context.scope),
-    ),
-    create: tenant.dnsCredentials.create.handler(({ input, context }) =>
+    list: authed.dnsCredentials.list.handler(({ context }) => listDnsCredentials(context.app)),
+    create: authed.dnsCredentials.create.handler(({ input, context }) =>
       createDnsCredential(context.app, input, context),
     ),
-    delete: tenant.dnsCredentials.delete.handler(({ input, context }) =>
+    delete: authed.dnsCredentials.delete.handler(({ input, context }) =>
       deleteDnsCredential(context.app, input.id, context),
     ),
   },
@@ -355,34 +265,18 @@ export const router = os.router({
   },
   account: {
     me: authed.account.me.handler(({ context }) =>
-      context.serviceAccount ? serviceAccountMe(context.serviceAccount) : toMe(context.caller),
-    ),
-    setActiveOrganization: authed.account.setActiveOrganization.handler(
-      async ({ input, context }) => {
-        await setActiveOrganization(context.app.db, {
-          sessionId: context.sessionId,
-          caller: context.caller,
-          organizationId: input.organizationId,
-        });
-        const caller = await resolveCaller(
-          context.app.db,
-          context.user,
-          context.isAdmin,
-          input.organizationId,
-        );
-        return toMe(caller);
-      },
+      context.serviceAccount ? serviceAccountMe(context.serviceAccount) : toMe(context.user),
     ),
   },
   overview: {
-    get: tenant.overview.get.handler(async ({ context }) => {
+    get: authed.overview.get.handler(async ({ context }) => {
       const db = context.app.db;
       const since = sql`now() - make_interval(secs => ${ONLINE_WINDOW_SECONDS})`;
       const [[clusters], [nodes], [online], sites, revisions] = await Promise.all([
         db.select({ n: count() }).from(schema.cluster),
         db.select({ n: count() }).from(schema.node),
         db.select({ n: count() }).from(schema.node).where(gt(schema.node.lastSeenAt, since)),
-        countSites(db, context.scope),
+        countSites(db),
         db
           .select()
           .from(schema.configRevision)
@@ -390,11 +284,11 @@ export const router = os.router({
           .limit(10),
       ]);
       return {
-        clusters: context.isAdmin ? (clusters?.n ?? 0) : 0,
-        nodes: context.isAdmin ? (nodes?.n ?? 0) : 0,
-        onlineNodes: context.isAdmin ? (online?.n ?? 0) : 0,
+        clusters: clusters?.n ?? 0,
+        nodes: nodes?.n ?? 0,
+        onlineNodes: online?.n ?? 0,
         sites,
-        revisions: context.isAdmin ? revisions.map(toRevisionDto) : [],
+        revisions: revisions.map(toRevisionDto),
       };
     }),
   },
@@ -402,7 +296,7 @@ export const router = os.router({
     list: authed.accessKeys.list.handler(({ context }) =>
       listAccessKeys(context.app, context.user.id),
     ),
-    create: tenant.accessKeys.create.handler(({ input, context }) =>
+    create: authed.accessKeys.create.handler(({ input, context }) =>
       createAccessKey(context.app, context.user.id, input, context.actor),
     ),
     revoke: authed.accessKeys.revoke.handler(({ input, context }) =>
@@ -410,147 +304,137 @@ export const router = os.router({
     ),
   },
   alerts: {
-    channels: admin.alerts.channels.handler(({ context }) => listAlertChannels(context.app)),
-    createChannel: admin.alerts.createChannel.handler(({ input, context }) =>
+    channels: authed.alerts.channels.handler(({ context }) => listAlertChannels(context.app)),
+    createChannel: authed.alerts.createChannel.handler(({ input, context }) =>
       createAlertChannel(context.app, input, context.actor),
     ),
-    updateChannel: admin.alerts.updateChannel.handler(({ input, context }) =>
+    updateChannel: authed.alerts.updateChannel.handler(({ input, context }) =>
       updateAlertChannel(context.app, input, context.actor),
     ),
-    deleteChannel: admin.alerts.deleteChannel.handler(({ input, context }) =>
+    deleteChannel: authed.alerts.deleteChannel.handler(({ input, context }) =>
       deleteAlertChannel(context.app, input.id, context.actor),
     ),
-    testChannel: admin.alerts.testChannel.handler(({ input, context }) =>
+    testChannel: authed.alerts.testChannel.handler(({ input, context }) =>
       testAlertChannel(context.app, input.id, context.actor),
     ),
-    policy: admin.alerts.policy.handler(({ context }) => getAlertPolicy(context.app)),
-    setPolicy: admin.alerts.setPolicy.handler(({ input, context }) =>
+    policy: authed.alerts.policy.handler(({ context }) => getAlertPolicy(context.app)),
+    setPolicy: authed.alerts.setPolicy.handler(({ input, context }) =>
       setAlertPolicy(context.app, input, context.actor),
     ),
-    smtp: admin.alerts.smtp.handler(({ context }) => getSmtpConfig(context.app)),
-    setSmtp: admin.alerts.setSmtp.handler(({ input, context }) =>
+    smtp: authed.alerts.smtp.handler(({ context }) => getSmtpConfig(context.app)),
+    setSmtp: authed.alerts.setSmtp.handler(({ input, context }) =>
       setSmtpConfig(context.app, input, context.actor),
     ),
-    availableChannels: tenant.alerts.availableChannels.handler(({ context }) =>
-      availableAlertChannels(context.app, context.scope),
+    subscriptions: authed.alerts.subscriptions.handler(({ context }) =>
+      listAlertSubscriptions(context.app, { actor: context.actor, userId: context.user.id }),
     ),
-    subscriptions: tenant.alerts.subscriptions.handler(({ context }) =>
-      listAlertSubscriptions(context.app, { ...context, userId: context.user.id }),
+    subscribe: authed.alerts.subscribe.handler(({ input, context }) =>
+      subscribeAlerts(context.app, input, { actor: context.actor, userId: context.user.id }),
     ),
-    subscribe: tenant.alerts.subscribe.handler(({ input, context }) =>
-      subscribeAlerts(context.app, input, { ...context, userId: context.user.id }),
+    unsubscribe: authed.alerts.unsubscribe.handler(({ input, context }) =>
+      unsubscribeAlerts(context.app, input.id, { actor: context.actor, userId: context.user.id }),
     ),
-    unsubscribe: tenant.alerts.unsubscribe.handler(({ input, context }) =>
-      unsubscribeAlerts(context.app, input.id, { ...context, userId: context.user.id }),
-    ),
-    events: tenant.alerts.events.handler(({ input, context }) =>
-      listAlertEvents(context.app, context.scope, input.siteId),
+    events: authed.alerts.events.handler(({ input, context }) =>
+      listAlertEvents(context.app, input.siteId),
     ),
   },
   dns: {
-    updateProvider: admin.dns.updateProvider.handler(({ input, context }) =>
+    updateProvider: authed.dns.updateProvider.handler(({ input, context }) =>
       updateDnsProvider(context.app, input, context.actor),
     ),
-    providers: admin.dns.providers.handler(({ context }) => listDnsProviders(context.app)),
-    createProvider: admin.dns.createProvider.handler(({ input, context }) =>
+    providers: authed.dns.providers.handler(({ context }) => listDnsProviders(context.app)),
+    createProvider: authed.dns.createProvider.handler(({ input, context }) =>
       createDnsProvider(context.app, input, context.actor),
     ),
-    deleteProvider: admin.dns.deleteProvider.handler(({ input, context }) =>
+    deleteProvider: authed.dns.deleteProvider.handler(({ input, context }) =>
       deleteDnsProvider(context.app, input.id, context.actor),
     ),
-    get: admin.dns.get.handler(({ context }) => getDnsConfig(context.app)),
-    save: admin.dns.save.handler(({ input, context }) =>
+    get: authed.dns.get.handler(({ context }) => getDnsConfig(context.app)),
+    save: authed.dns.save.handler(({ input, context }) =>
       saveDnsConfig(context.app, input, context.actor),
     ),
-    revisions: admin.dns.revisions.handler(({ context }) => listDnsRevisions(context.app)),
-    rollback: admin.dns.rollback.handler(({ input, context }) =>
+    revisions: authed.dns.revisions.handler(({ context }) => listDnsRevisions(context.app)),
+    rollback: authed.dns.rollback.handler(({ input, context }) =>
       rollbackDnsConfig(context.app, input.revision, context.actor),
     ),
-    protection: admin.dns.protection.handler(({ context }) => getDnsProtection(context.app.db)),
-    setProtection: admin.dns.setProtection.handler(({ input, context }) =>
+    protection: authed.dns.protection.handler(({ context }) => getDnsProtection(context.app.db)),
+    setProtection: authed.dns.setProtection.handler(({ input, context }) =>
       setDnsProtection(context.app, input, context.actor),
     ),
-    forcePublish: admin.dns.forcePublish.handler(({ input, context }) =>
+    forcePublish: authed.dns.forcePublish.handler(({ input, context }) =>
       forceDnsPublish(context.app, input.revision, context.actor),
     ),
-    reconcile: admin.dns.reconcile.handler(({ context }) =>
+    reconcile: authed.dns.reconcile.handler(({ context }) =>
       reconcileDns(context.app, context.actor),
     ),
-    siteTarget: tenant.dns.siteTarget.handler(({ input, context }) =>
-      siteDnsTarget(context.app, input.siteId, context.scope),
+    siteTarget: authed.dns.siteTarget.handler(({ input, context }) =>
+      siteDnsTarget(context.app, input.siteId),
     ),
   },
   upgrades: {
-    release: admin.upgrades.release.handler(({ input, context }) =>
+    release: authed.upgrades.release.handler(({ input, context }) =>
       nodeRelease(context.app, input.version),
     ),
-    list: admin.upgrades.list.handler(({ input, context }) =>
+    list: authed.upgrades.list.handler(({ input, context }) =>
       listUpgrades(context.app, input.clusterId),
     ),
-    create: admin.upgrades.create.handler(({ input, context }) =>
+    create: authed.upgrades.create.handler(({ input, context }) =>
       createUpgrade(context.app, input, context.actor),
     ),
-    promote: admin.upgrades.promote.handler(({ input, context }) =>
+    promote: authed.upgrades.promote.handler(({ input, context }) =>
       promoteUpgrade(context.app, input.id, context.actor),
     ),
-    cancel: admin.upgrades.cancel.handler(({ input, context }) =>
+    cancel: authed.upgrades.cancel.handler(({ input, context }) =>
       cancelUpgrade(context.app, input.id, context.actor),
     ),
   },
   logs: {
-    settings: tenant.logs.settings.handler(({ input, context }) =>
-      logSettings(context.app, context.scope, input.siteId),
+    settings: authed.logs.settings.handler(({ input, context }) =>
+      logSettings(context.app, input.siteId),
     ),
-    configure: tenant.logs.configure.handler(({ input, context }) =>
-      configureLogs(context.app, context.scope, context.actor, input),
+    configure: authed.logs.configure.handler(({ input, context }) =>
+      configureLogs(context.app, context.actor, input),
     ),
-    query: tenant.logs.query.handler(({ input, context }) =>
-      queryLogs(context.app, context.scope, input),
-    ),
-    export: tenant.logs.export.handler(async ({ input, context }) => {
-      const result = await queryLogs(context.app, context.scope, input);
+    query: authed.logs.query.handler(({ input, context }) => queryLogs(context.app, input)),
+    export: authed.logs.export.handler(async ({ input, context }) => {
+      const result = await queryLogs(context.app, input);
       return { csv: logsCsv(result.entries), truncated: result.truncated };
     }),
   },
   analytics: {
-    topRequests: tenant.analytics.topRequests.handler(async ({ input, context }) => {
-      if (input.siteId) await getSite(context.app.db, input.siteId, context.scope);
-      return topRequests(context.app.db, context.scope, input);
+    topRequests: authed.analytics.topRequests.handler(async ({ input, context }) => {
+      if (input.siteId) await getSite(context.app.db, input.siteId);
+      return topRequests(context.app.db, input);
     }),
-    traffic: tenant.analytics.traffic.handler(async ({ input, context }) => {
-      // Fails with SITE_NOT_FOUND for sites outside the caller's scope.
-      if (input.siteId) await getSite(context.app.db, input.siteId, context.scope);
-      return trafficSeries(context.app.db, context.scope, input);
+    traffic: authed.analytics.traffic.handler(async ({ input, context }) => {
+      if (input.siteId) await getSite(context.app.db, input.siteId);
+      return trafficSeries(context.app.db, input);
     }),
-    topSites: tenant.analytics.topSites.handler(({ input, context }) =>
-      topSites(context.app.db, context.scope, input),
+    topSites: authed.analytics.topSites.handler(({ input, context }) =>
+      topSites(context.app.db, input),
     ),
-    breakdown: tenant.analytics.breakdown.handler(async ({ input, context }) => {
-      // Nodes are platform infrastructure, like `topNodes`.
-      if (input.by === "node" && !context.isAdmin) {
-        throw new ORPCError("FORBIDDEN", { message: "administrator only" });
-      }
-      if (input.siteId) await getSite(context.app.db, input.siteId, context.scope);
-      return trafficBreakdown(context.app.db, context.scope, input);
+    breakdown: authed.analytics.breakdown.handler(async ({ input, context }) => {
+      if (input.siteId) await getSite(context.app.db, input.siteId);
+      return trafficBreakdown(context.app.db, input);
     }),
-    topNodes: admin.analytics.topNodes.handler(({ input, context }) =>
+    topNodes: authed.analytics.topNodes.handler(({ input, context }) =>
       topNodes(context.app.db, input),
     ),
   },
   clusters: {
-    list: admin.clusters.list.handler(({ context }) => listClusters(context.app.db)),
-    get: admin.clusters.get.handler(({ input, context }) => getCluster(context.app.db, input.id)),
-    create: admin.clusters.create.handler(({ input, context }) =>
+    list: authed.clusters.list.handler(({ context }) => listClusters(context.app.db)),
+    get: authed.clusters.get.handler(({ input, context }) => getCluster(context.app.db, input.id)),
+    create: authed.clusters.create.handler(({ input, context }) =>
       createCluster(context.app.db, input, context.actor),
     ),
-    update: admin.clusters.update.handler(({ input, context }) =>
+    update: authed.clusters.update.handler(({ input, context }) =>
       updateCluster(context.app.db, input, context.actor),
     ),
-    delete: admin.clusters.delete.handler(async ({ input, context }) => {
+    delete: authed.clusters.delete.handler(async ({ input, context }) => {
       await deleteCluster(context.app.db, input.id, context.actor);
       return ok;
     }),
-    revisions: admin.clusters.revisions.handler(async ({ input, context }) => {
+    revisions: authed.clusters.revisions.handler(async ({ input, context }) => {
       await getCluster(context.app.db, input.id);
       const rows = await context.app.db
         .select()
@@ -560,22 +444,22 @@ export const router = os.router({
         .limit(100);
       return rows.map(toRevisionDto);
     }),
-    rollback: admin.clusters.rollback.handler(({ input, context }) =>
+    rollback: authed.clusters.rollback.handler(({ input, context }) =>
       rollbackCluster(context.app.db, input, context.actor),
     ),
-    rollout: admin.clusters.rollout.handler(({ input, context }) =>
+    rollout: authed.clusters.rollout.handler(({ input, context }) =>
       getRollout(context.app.db, input.id),
     ),
-    setRolloutPolicy: admin.clusters.setRolloutPolicy.handler(({ input, context }) =>
+    setRolloutPolicy: authed.clusters.setRolloutPolicy.handler(({ input, context }) =>
       setRolloutPolicy(context.app.db, input, context.actor),
     ),
-    promoteRollout: admin.clusters.promoteRollout.handler(({ input, context }) =>
+    promoteRollout: authed.clusters.promoteRollout.handler(({ input, context }) =>
       promoteRollout(context.app.db, input.id, context.actor),
     ),
-    abortRollout: admin.clusters.abortRollout.handler(({ input, context }) =>
+    abortRollout: authed.clusters.abortRollout.handler(({ input, context }) =>
       abortRollout(context.app.db, input.id, context.actor),
     ),
-    createEnrollmentToken: admin.clusters.createEnrollmentToken.handler(({ input, context }) =>
+    createEnrollmentToken: authed.clusters.createEnrollmentToken.handler(({ input, context }) =>
       createEnrollmentToken(context.app.db, input, {
         actor: context.actor,
         consoleUrl: context.app.env.EDGEWEIR_PUBLIC_URL,
@@ -585,251 +469,107 @@ export const router = os.router({
     ),
   },
   nodeGroups: {
-    list: admin.nodeGroups.list.handler(({ input, context }) =>
+    list: authed.nodeGroups.list.handler(({ input, context }) =>
       listNodeGroups(context.app.db, input.clusterId),
     ),
-    create: admin.nodeGroups.create.handler(({ input, context }) =>
+    create: authed.nodeGroups.create.handler(({ input, context }) =>
       createNodeGroup(context.app.db, input, context.actor),
     ),
-    update: admin.nodeGroups.update.handler(({ input, context }) =>
+    update: authed.nodeGroups.update.handler(({ input, context }) =>
       updateNodeGroup(context.app.db, input, context.actor),
     ),
-    delete: admin.nodeGroups.delete.handler(async ({ input, context }) => {
+    delete: authed.nodeGroups.delete.handler(async ({ input, context }) => {
       await deleteNodeGroup(context.app.db, input.id, context.actor);
       return ok;
     }),
   },
   regions: {
-    list: admin.regions.list.handler(({ context }) => listRegions(context.app.db)),
-    create: admin.regions.create.handler(({ input, context }) =>
+    list: authed.regions.list.handler(({ context }) => listRegions(context.app.db)),
+    create: authed.regions.create.handler(({ input, context }) =>
       createRegion(context.app.db, input, context.actor),
     ),
-    update: admin.regions.update.handler(({ input, context }) =>
+    update: authed.regions.update.handler(({ input, context }) =>
       updateRegion(context.app.db, input, context.actor),
     ),
-    delete: admin.regions.delete.handler(async ({ input, context }) => {
+    delete: authed.regions.delete.handler(async ({ input, context }) => {
       await deleteRegion(context.app.db, input.id, context.actor);
       return ok;
     }),
   },
   nodes: {
-    list: admin.nodes.list.handler(({ input, context }) =>
+    list: authed.nodes.list.handler(({ input, context }) =>
       listNodes(context.app.db, input.clusterId),
     ),
-    get: admin.nodes.get.handler(({ input, context }) => getNode(context.app.db, input.id)),
-    update: admin.nodes.update.handler(({ input, context }) =>
+    get: authed.nodes.get.handler(({ input, context }) => getNode(context.app.db, input.id)),
+    update: authed.nodes.update.handler(({ input, context }) =>
       updateNode(context.app.db, input, context.actor),
     ),
-    disable: admin.nodes.disable.handler(({ input, context }) =>
+    disable: authed.nodes.disable.handler(({ input, context }) =>
       setNodeStatus(context.app.db, input.id, "disabled", context.actor),
     ),
-    enable: admin.nodes.enable.handler(({ input, context }) =>
+    enable: authed.nodes.enable.handler(({ input, context }) =>
       setNodeStatus(context.app.db, input.id, "active", context.actor),
     ),
-    delete: admin.nodes.delete.handler(async ({ input, context }) => {
+    delete: authed.nodes.delete.handler(async ({ input, context }) => {
       await deleteNode(context.app.db, input.id, context.actor);
       return ok;
     }),
   },
   sites: {
-    list: tenant.sites.list.handler(({ input, context }) =>
-      listSites(context.app.db, context.scope, {
-        ...input,
-        // Clusters are platform infrastructure: tenants cannot filter by them.
-        clusterId: context.isAdmin ? input.clusterId : undefined,
-      }),
-    ),
-    get: tenant.sites.get.handler(({ input, context }) =>
-      getSite(context.app.db, input.id, context.scope),
-    ),
-    create: tenant.sites.create.handler(({ input, context }) => {
-      if (!context.organizationId) {
-        fail("NOT_A_MEMBER", "caller is not a member of any organization");
-      }
-      if (input.clusterId && !context.isAdmin) {
-        fail("CLUSTER_SELECTION_FORBIDDEN", "only platform administrators choose the cluster");
-      }
-      return createSite(context.app.db, input, {
-        organizationId: context.organizationId,
+    list: authed.sites.list.handler(({ input, context }) => listSites(context.app.db, input)),
+    get: authed.sites.get.handler(({ input, context }) => getSite(context.app.db, input.id)),
+    create: authed.sites.create.handler(({ input, context }) =>
+      createSite(context.app.db, input, {
         actor: context.actor,
         masterKey: context.app.masterKey,
-      });
-    }),
-    update: tenant.sites.update.handler(({ input, context }) =>
+      }),
+    ),
+    update: authed.sites.update.handler(({ input, context }) =>
       updateSite(context.app.db, input, {
-        scope: context.scope,
         actor: context.actor,
         masterKey: context.app.masterKey,
       }),
     ),
-    delete: tenant.sites.delete.handler(({ input, context }) =>
-      deleteSite(context.app.db, input.id, { scope: context.scope, actor: context.actor }),
+    delete: authed.sites.delete.handler(({ input, context }) =>
+      deleteSite(context.app.db, input.id, { actor: context.actor }),
     ),
-    purgeAll: tenant.sites.purgeAll.handler(({ input, context }) =>
-      purgeSite(context.app.db, input.id, { scope: context.scope, actor: context.actor }),
+    purgeAll: authed.sites.purgeAll.handler(({ input, context }) =>
+      purgeSite(context.app.db, input.id, { actor: context.actor }),
     ),
-    starred: tenant.sites.starred.handler(({ context }) =>
-      starredSites(context.app.db, context.scope, context.user.id),
+    starred: authed.sites.starred.handler(({ context }) =>
+      starredSites(context.app.db, context.user.id),
     ),
-    setStarred: tenant.sites.setStarred.handler(async ({ input, context }) => {
-      await setSiteStarred(context.app.db, context.scope, {
+    setStarred: authed.sites.setStarred.handler(async ({ input, context }) => {
+      await setSiteStarred(context.app.db, {
         userId: context.user.id,
         siteId: input.id,
         starred: input.starred,
       });
       return ok;
     }),
-    setEnabled: tenant.sites.setEnabled.handler(({ input, context }) => {
-      // Organization owners and admins; platform administrators act as owners.
-      const role = context.isAdmin ? "owner" : context.caller.organization?.role;
-      if (role !== "owner" && role !== "admin")
-        fail("ORG_ADMIN_REQUIRED", "organization owners and admins only");
-      return setSiteEnabled(context.app.db, input, { scope: context.scope, actor: context.actor });
-    }),
-    originHealth: tenant.sites.originHealth.handler(({ input, context }) =>
-      siteOriginHealth(context.app.db, input.id, context.scope),
+    setEnabled: authed.sites.setEnabled.handler(({ input, context }) =>
+      setSiteEnabled(context.app.db, input, { actor: context.actor }),
     ),
-    features: tenant.sites.features.handler(({ input, context }) =>
-      siteFeatures(context.app.db, input.id, { scope: context.scope, isAdmin: context.isAdmin }),
+    originHealth: authed.sites.originHealth.handler(({ input, context }) =>
+      siteOriginHealth(context.app.db, input.id),
+    ),
+    features: authed.sites.features.handler(({ input, context }) =>
+      siteFeatures(context.app.db, input.id),
     ),
   },
   cacheTasks: {
-    list: tenant.cacheTasks.list.handler(({ input, context }) =>
-      listCacheTasks(context.app.db, context.scope, input),
+    list: authed.cacheTasks.list.handler(({ input, context }) =>
+      listCacheTasks(context.app.db, input),
     ),
-    get: tenant.cacheTasks.get.handler(({ input, context }) =>
-      getCacheTask(context.app.db, input.id, context.scope),
+    get: authed.cacheTasks.get.handler(({ input, context }) =>
+      getCacheTask(context.app.db, input.id),
     ),
-    create: tenant.cacheTasks.create.handler(({ input, context }) =>
-      createCacheTask(context.app.db, input, { scope: context.scope, actor: context.actor }),
-    ),
-  },
-  members: {
-    list: orgManager.members.list.handler(({ context }) =>
-      listMembers(context.app.db, context.organizationId, context.manager.role),
-    ),
-    invite: orgManager.members.invite.handler(async ({ input, context }) => {
-      const invitation = await createInvitation(
-        context.app.db,
-        { organizationId: context.organizationId, ...input },
-        context.manager,
-      );
-      return {
-        invitation,
-        url: invitationUrl(context.app.env.EDGEWEIR_PUBLIC_URL, invitation.id),
-      };
-    }),
-    cancelInvitation: orgManager.members.cancelInvitation.handler(async ({ input, context }) => {
-      await cancelInvitation(
-        context.app.db,
-        { organizationId: context.organizationId, id: input.id },
-        context.actor,
-      );
-      return ok;
-    }),
-    updateRole: orgManager.members.updateRole.handler(({ input, context }) =>
-      updateMemberRole(
-        context.app.db,
-        { organizationId: context.organizationId, memberId: input.id, role: input.role },
-        context.manager,
-      ),
-    ),
-    remove: orgManager.members.remove.handler(async ({ input, context }) => {
-      await removeMember(
-        context.app.db,
-        { organizationId: context.organizationId, memberId: input.id },
-        context.manager,
-      );
-      return ok;
-    }),
-  },
-  organization: {
-    update: orgManager.organization.update.handler(async ({ input, context }) => {
-      await updateOrganization(
-        context.app.db,
-        { id: context.organizationId, requireTwoFactor: input.requireTwoFactor },
-        context.actor,
-      );
-      const caller = await resolveCaller(
-        context.app.db,
-        context.user,
-        context.isAdmin,
-        context.organizationId,
-      );
-      return toMe(caller);
-    }),
-  },
-  invitations: {
-    get: os.invitations.get.handler(({ input, context }) =>
-      getInvitationInfo(context.app.db, input.id),
-    ),
-    accept: maybeAuthed.invitations.accept.handler(({ input, context }) =>
-      acceptInvitation(context.app, input, context.session, {
-        ip: context.ip,
-        userAgent: context.userAgent,
-      }),
-    ),
-  },
-  admin: {
-    bans: {
-      list: admin.admin.bans.list.handler(({ input, context }) =>
-        listBans(context.app.db, input, { platform: true, scope: { all: true } }),
-      ),
-      create: admin.admin.bans.create.handler(({ input, context }) =>
-        createBan(context.app.db, input, { scope: { all: true }, actor: context.actor }),
-      ),
-      delete: admin.admin.bans.delete.handler(({ input, context }) =>
-        deleteBan(context.app.db, input.id, {
-          platform: true,
-          scope: { all: true },
-          actor: context.actor,
-        }),
-      ),
-    },
-  },
-  organizations: {
-    list: admin.organizations.list.handler(({ context }) => listOrganizations(context.app.db)),
-    create: admin.organizations.create.handler(({ input, context }) =>
-      createOrganization(context.app.db, input, context.actor),
-    ),
-    update: admin.organizations.update.handler(({ input, context }) =>
-      updateOrganization(context.app.db, input, context.actor),
-    ),
-    members: admin.organizations.members.handler(({ input, context }) =>
-      listMembers(context.app.db, input.id, context.manager.role),
-    ),
-    addMember: admin.organizations.addMember.handler(({ input, context }) =>
-      addMember(context.app.db, input, context.manager),
-    ),
-    updateMember: admin.organizations.updateMember.handler(({ input, context }) =>
-      updateMemberRole(context.app.db, input, context.manager),
-    ),
-    removeMember: admin.organizations.removeMember.handler(async ({ input, context }) => {
-      await removeMember(context.app.db, input, context.manager);
-      return ok;
-    }),
-    invite: admin.organizations.invite.handler(async ({ input, context }) => {
-      const invitation = await createInvitation(context.app.db, input, context.manager);
-      return {
-        invitation,
-        url: invitationUrl(context.app.env.EDGEWEIR_PUBLIC_URL, invitation.id),
-      };
-    }),
-  },
-  users: {
-    list: admin.users.list.handler(({ input, context }) => listUsers(context.app.db, input.search)),
-    create: admin.users.create.handler(({ input, context }) =>
-      createUser(context.app, input, context.actor),
-    ),
-    setAdmin: admin.users.setAdmin.handler(({ input, context }) =>
-      setUserAdmin(context.app.db, input, context.actor),
-    ),
-    setDisabled: admin.users.setDisabled.handler(({ input, context }) =>
-      setUserDisabled(context.app.db, input, context.actor),
+    create: authed.cacheTasks.create.handler(({ input, context }) =>
+      createCacheTask(context.app.db, input, { actor: context.actor }),
     ),
   },
   settings: {
-    get: admin.settings.get.handler(async ({ context }) => ({
+    get: authed.settings.get.handler(async ({ context }) => ({
       version: context.app.env.version,
       consoleUrl: context.app.env.EDGEWEIR_PUBLIC_URL,
       nodeApiUrl: context.app.env.nodeApiUrl,
@@ -838,46 +578,42 @@ export const router = os.router({
       analyticsMode: context.app.env.EDGEWEIR_ANALYTICS,
       setupCompletedAt: await setupCompletedAt(context.app.db),
     })),
-    originAllowList: admin.settings.originAllowList.handler(({ context }) =>
+    originAllowList: authed.settings.originAllowList.handler(({ context }) =>
       getOriginAllowList(context.app.db),
     ),
-    setOriginAllowList: admin.settings.setOriginAllowList.handler(({ input, context }) =>
+    setOriginAllowList: authed.settings.setOriginAllowList.handler(({ input, context }) =>
       setOriginAllowList(context.app.db, input, context.actor),
     ),
-    releaseSource: admin.settings.releaseSource.handler(({ context }) =>
+    releaseSource: authed.settings.releaseSource.handler(({ context }) =>
       getReleaseSource(context.app),
     ),
-    setReleaseSource: admin.settings.setReleaseSource.handler(({ input, context }) =>
+    setReleaseSource: authed.settings.setReleaseSource.handler(({ input, context }) =>
       setReleaseSource(context.app, input, context.actor),
     ),
-    bans: admin.settings.bans.handler(({ context }) => getBanSettings(context.app.db)),
-    setBans: admin.settings.setBans.handler(({ input, context }) =>
+    bans: authed.settings.bans.handler(({ context }) => getBanSettings(context.app.db)),
+    setBans: authed.settings.setBans.handler(({ input, context }) =>
       setBanSettings(context.app.db, input, context.actor),
     ),
-    protection: admin.settings.protection.handler(({ context }) =>
+    protection: authed.settings.protection.handler(({ context }) =>
       getProtectionSettings(context.app.db),
     ),
-    setProtection: admin.settings.setProtection.handler(({ input, context }) =>
+    setProtection: authed.settings.setProtection.handler(({ input, context }) =>
       setProtectionSettings(context.app.db, input, context.actor),
     ),
-    ccTemplate: admin.settings.ccTemplate.handler(({ context }) => getCcTemplate(context.app.db)),
-    setCcTemplate: admin.settings.setCcTemplate.handler(({ input, context }) =>
+    ccTemplate: authed.settings.ccTemplate.handler(({ context }) => getCcTemplate(context.app.db)),
+    setCcTemplate: authed.settings.setCcTemplate.handler(({ input, context }) =>
       setCcTemplate(context.app.db, input, context.actor),
     ),
-    waf: admin.settings.waf.handler(({ context }) => getWafSettings(context.app.db)),
-    setWaf: admin.settings.setWaf.handler(({ input, context }) =>
-      setWafSettings(context.app.db, input, context.actor),
-    ),
-    usage: admin.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
-    setUsage: admin.settings.setUsage.handler(({ input, context }) =>
+    usage: authed.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
+    setUsage: authed.settings.setUsage.handler(({ input, context }) =>
       setUsageSettings(context.app.db, input, context.actor),
     ),
   },
   auditLogs: {
-    list: admin.auditLogs.list.handler(({ input, context }) =>
+    list: authed.auditLogs.list.handler(({ input, context }) =>
       listAuditLogs(context.app.db, input),
     ),
-    facets: admin.auditLogs.facets.handler(({ context }) => auditFacets(context.app.db)),
+    facets: authed.auditLogs.facets.handler(({ context }) => auditFacets(context.app.db)),
   },
 });
 

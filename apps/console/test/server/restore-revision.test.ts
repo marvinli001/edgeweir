@@ -2,12 +2,12 @@ import { schema } from "@edgeweir/db";
 import { afterAll, expect, it } from "vitest";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { publishRevision } from "../../src/server/services/revisions";
-import { createTestContext, seedOrganization } from "./helpers";
+import { createTestContext, seedOperator } from "./helpers";
 
 it("publishes unchanged content above a restored cluster's reported LKG, ignoring other clusters", async () => {
   const { ctx, client } = await createTestContext();
   afterAll(() => client.close());
-  await seedOrganization(ctx.db);
+  await seedOperator(ctx.db);
   const actor = { type: "user" as const, id: "user_admin" };
   const [cluster, other] = await ctx.db.transaction(async (tx) => [
     await createClusterTx(tx, { name: "restored", description: "" }, actor),

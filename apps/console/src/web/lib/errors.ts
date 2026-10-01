@@ -21,7 +21,6 @@ const authCodes: Record<string, MessageFn> = {
   PASSWORD_TOO_SHORT: () => m.error_password_too_short(),
   INVALID_CODE: () => m.error_invalid_code(),
   INVALID_TWO_FACTOR_COOKIE: () => m.error_two_factor_expired(),
-  BANNED_USER: () => m.error_user_disabled(),
 };
 
 function errorFields(error: unknown): {

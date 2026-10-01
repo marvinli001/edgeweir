@@ -9,7 +9,6 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { organization } from "./auth";
 import { site } from "./core";
 
 export const edgeRule = pgTable(
@@ -32,15 +31,9 @@ export const ipList = pgTable(
   "ip_list",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: text("organization_id").references(() => organization.id, {
-      onDelete: "cascade",
-    }),
     name: text("name").notNull(),
     kind: text("kind").notNull().default("collection"),
     entries: text("entries").array().notNull().default(sql`'{}'::text[]`),
   },
-  (t) => [
-    uniqueIndex("ip_list_org_name_uq").on(t.organizationId, t.name),
-    uniqueIndex("ip_list_platform_name_uq").on(t.name).where(sql`${t.organizationId} is null`),
-  ],
+  (t) => [uniqueIndex("ip_list_name_uq").on(t.name)],
 );

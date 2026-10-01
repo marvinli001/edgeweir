@@ -358,11 +358,9 @@ describe("configuration canary with automatic rollback", async () => {
 
   it("gives ACME challenges to every node at once, canary or not", async () => {
     const candidate = await change();
-    const org = (await admin.sites.get({ id: siteId })).organizationId;
     const [certificate] = await ctx.db
       .insert(schema.certificate)
       .values({
-        organizationId: org,
         name: "shop",
         names: ["shop.canary.test"],
         source: "acme",

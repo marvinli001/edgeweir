@@ -8,7 +8,6 @@ import { nodeRelease } from "../../src/server/services/upgrades";
 import {
   type ApiClient,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -25,7 +24,6 @@ describe("node release source in system settings", async () => {
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
-  let tenant: ApiClient;
   let mirror: Server;
   let mirrorUrl: string;
   const requests: string[] = [];
@@ -33,14 +31,6 @@ describe("node release source in system settings", async () => {
   beforeAll(async () => {
     await setupPlatform(ctx);
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
-    const org = await admin.organizations.create({ name: "Tenant" });
-    await admin.users.create({
-      name: "Tina",
-      email: "tina@tenant.test",
-      password: PASSWORD,
-      organizationId: org.id,
-    });
-    tenant = rpcClient(app, origin, await signIn(app, origin, "tina@tenant.test"));
     mirror = createServer((req, res) => {
       requests.push(req.url ?? "");
       const version = req.url?.match(/^\/releases\/v([^/]+)\/checksums\.txt$/)?.[1];
@@ -79,14 +69,6 @@ describe("node release source in system settings", async () => {
     } finally {
       ctx.env.EDGEWEIR_NODE_RELEASE_BASE_URL = undefined;
     }
-  });
-
-  it("is for platform administrators only", async () => {
-    expect((await rpcError(tenant.settings.releaseSource())).code).toBe("FORBIDDEN");
-    expect(
-      (await rpcError(tenant.settings.setReleaseSource({ url: "https://mirror.example.test" })))
-        .code,
-    ).toBe("FORBIDDEN");
   });
 
   it("refuses special-purpose addresses the operator did not allow", async () => {

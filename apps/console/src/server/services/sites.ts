@@ -30,12 +30,12 @@ import { fail } from "../lib/errors";
 import { assertServing } from "../lib/site-state";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
-import { assertCacheTaskQuota } from "./cache-tasks";
 import { defaultClusterId } from "./clusters";
 import { assertOriginsAllowed } from "./origin-allow-list";
 import {
   type Executor,
   latestRevision,
+  publisher,
   publishRevision,
   type Tx,
   toRevisionDto,
@@ -56,15 +56,6 @@ export const s3SecretBinding = (credentialId: string) => ({
 });
 /** The purpose version 1 envelopes were sealed with (no record id). */
 export const LEGACY_S3_SECRET_PURPOSE = "origin-credential/s3-secret";
-
-/** Which sites a caller may see: all (platform admin) or one organization. */
-export type SiteScope = { all: true } | { all: false; organizationId: string };
-
-function scopeFilter(scope: SiteScope) {
-  return scope.all ? undefined : eq(schema.site.organizationId, scope.organizationId);
-}
-
-const userId = (actor: Actor) => (actor.type === "user" ? actor.id : null);
 
 type SiteRow = typeof schema.site.$inferSelect;
 
@@ -89,10 +80,6 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
   const clusters = await db
     .select({ id: schema.cluster.id, name: schema.cluster.name })
     .from(schema.cluster);
-  const orgs = await db
-    .select({ id: schema.organization.id, name: schema.organization.name })
-    .from(schema.organization)
-    .where(inArray(schema.organization.id, [...new Set(rows.map((r) => r.organizationId))]));
   const origins = pools.length
     ? await db
         .select()
@@ -119,8 +106,6 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
       id: r.id,
       name: r.name,
       enabled: r.enabled,
-      organizationId: r.organizationId,
-      organizationName: orgs.find((o) => o.id === r.organizationId)?.name ?? "",
       clusterId: r.clusterId,
       clusterName: clusters.find((c) => c.id === r.clusterId)?.name ?? "",
       cacheGeneration: r.cacheGeneration,
@@ -182,13 +167,12 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
   });
 }
 
-/** One page of sites, filtered by name/domain search and (for admins) cluster. */
+/** One page of sites, filtered by name/domain search and cluster. */
 export async function listSites(
   db: Database,
-  scope: SiteScope,
   query: { search?: string; clusterId?: string; page: number; pageSize: number },
 ): Promise<{ items: Site[]; total: number }> {
-  const filters: (SQL | undefined)[] = [scopeFilter(scope)];
+  const filters: (SQL | undefined)[] = [];
   if (query.clusterId) filters.push(eq(schema.site.clusterId, query.clusterId));
   if (query.search) {
     const pattern = `%${query.search.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -225,18 +209,15 @@ export async function listSites(
   return { items: await toSiteDtos(db, rows), total: total?.n ?? 0 };
 }
 
-export async function findSite(db: Executor, id: string, scope: SiteScope, lock = false) {
-  const query = db
-    .select()
-    .from(schema.site)
-    .where(and(eq(schema.site.id, id), scopeFilter(scope)));
+export async function findSite(db: Executor, id: string, lock = false) {
+  const query = db.select().from(schema.site).where(eq(schema.site.id, id));
   const [row] = await (lock ? query.for("update") : query);
   if (!row) fail("SITE_NOT_FOUND", "site not found");
   return row;
 }
 
-export async function getSite(db: Database, id: string, scope: SiteScope): Promise<Site> {
-  const row = await findSite(db, id, scope);
+export async function getSite(db: Database, id: string): Promise<Site> {
+  const row = await findSite(db, id);
   const [dto] = await toSiteDtos(db, [row]);
   if (!dto) fail("SITE_NOT_FOUND", "site not found");
   return dto;
@@ -457,16 +438,16 @@ async function sitePool(tx: Tx, siteId: string) {
 /**
  * Creates a site with its domains, origin pool and cache rules, then publishes
  * a new revision for the site's cluster in the same transaction. Without an
- * explicit cluster the site lands on the organization's default cluster.
+ * explicit cluster the site lands on the default (oldest) cluster.
  */
 export async function createSite(
   db: Database,
   input: SiteCreate,
-  ctx: { organizationId: string; actor: Actor; masterKey: MasterKey },
+  ctx: { actor: Actor; masterKey: MasterKey },
 ): Promise<{ site: Site; revision: Revision }> {
   const domains = uniqueDomains(input.domains);
   return db.transaction(async (tx) => {
-    const clusterId = input.clusterId ?? (await defaultClusterId(tx, ctx.organizationId));
+    const clusterId = input.clusterId ?? (await defaultClusterId(tx));
     const [clusterRow] = await tx
       .select({ id: schema.cluster.id })
       .from(schema.cluster)
@@ -478,7 +459,6 @@ export async function createSite(
     const [siteRow] = await tx
       .insert(schema.site)
       .values({
-        organizationId: ctx.organizationId,
         clusterId,
         name: input.name,
         websocket: input.originSettings.websocket,
@@ -499,11 +479,10 @@ export async function createSite(
     const { row: revision } = await publishRevision(tx, {
       clusterId,
       reason: { code: "site_created", params: { site: input.name } },
-      userId: userId(ctx.actor),
+      userId: publisher(ctx.actor),
     });
     await recordAudit(tx, ctx.actor, {
       action: "site.create",
-      organizationId: ctx.organizationId,
       targetType: "site",
       targetId: siteRow.id,
       targetName: siteRow.name,
@@ -523,10 +502,10 @@ export async function createSite(
 export async function updateSite(
   db: Database,
   input: SiteUpdate,
-  ctx: { scope: SiteScope; actor: Actor; masterKey: MasterKey },
+  ctx: { actor: Actor; masterKey: MasterKey },
 ): Promise<{ site: Site; revision: Revision }> {
   return db.transaction(async (tx) => {
-    const row = await findSite(tx, input.id, ctx.scope, true);
+    const row = await findSite(tx, input.id, true);
     const changed: string[] = [];
     if (input.name !== undefined && input.name !== row.name) {
       await tx.update(schema.site).set({ name: input.name }).where(eq(schema.site.id, row.id));
@@ -589,11 +568,10 @@ export async function updateSite(
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,
       reason: { code: "site_updated", params: { site: updated.name } },
-      userId: userId(ctx.actor),
+      userId: publisher(ctx.actor),
     });
     await recordAudit(tx, ctx.actor, {
       action: "site.update",
-      organizationId: row.organizationId,
       targetType: "site",
       targetId: row.id,
       targetName: updated.name,
@@ -619,19 +597,18 @@ export async function updateSite(
 export async function deleteSite(
   db: Database,
   id: string,
-  ctx: { scope: SiteScope; actor: Actor },
+  ctx: { actor: Actor },
 ): Promise<{ revision: Revision }> {
   return db.transaction(async (tx) => {
-    const row = await findSite(tx, id, ctx.scope);
+    const row = await findSite(tx, id);
     await tx.delete(schema.site).where(eq(schema.site.id, row.id));
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,
       reason: { code: "site_deleted", params: { site: row.name } },
-      userId: userId(ctx.actor),
+      userId: publisher(ctx.actor),
     });
     await recordAudit(tx, ctx.actor, {
       action: "site.delete",
-      organizationId: row.organizationId,
       targetType: "site",
       targetId: row.id,
       targetName: row.name,
@@ -645,14 +622,11 @@ export async function deleteSite(
 export async function purgeSite(
   db: Database,
   id: string,
-  ctx: { scope: SiteScope; actor: Actor },
+  ctx: { actor: Actor },
 ): Promise<{ site: Site; revision: Revision }> {
   return db.transaction(async (tx) => {
-    const row = await findSite(tx, id, ctx.scope);
+    const row = await findSite(tx, id);
     assertServing(row);
-    if (!ctx.scope.all) {
-      await assertCacheTaskQuota(tx, ctx.scope.organizationId, 1, new Date());
-    }
     const [updated] = await tx
       .update(schema.site)
       .set({ cacheGeneration: sql`${schema.site.cacheGeneration} + 1` })
@@ -662,18 +636,16 @@ export async function purgeSite(
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,
       reason: { code: "site_purged", params: { site: row.name } },
-      userId: userId(ctx.actor),
+      userId: publisher(ctx.actor),
     });
     await recordAudit(tx, ctx.actor, {
       action: "site.purge_all",
-      organizationId: row.organizationId,
       targetType: "site",
       targetId: row.id,
       targetName: row.name,
       metadata: {
         cacheGeneration: updated.cacheGeneration,
         revision: revision.revision,
-        quotaLimited: !ctx.scope.all,
       },
     });
     const [dto] = await toSiteDtos(tx, [updated]);
@@ -690,10 +662,10 @@ export async function purgeSite(
 export async function setSiteEnabled(
   db: Database,
   input: { id: string; enabled: boolean; expectedUpdatedAt?: string },
-  ctx: { scope: SiteScope; actor: Actor },
+  ctx: { actor: Actor },
 ): Promise<{ site: Site; revision: Revision }> {
   return db.transaction(async (tx) => {
-    const row = await findSite(tx, input.id, ctx.scope, true);
+    const row = await findSite(tx, input.id, true);
     if (row.enabled === input.enabled) {
       const latest = await latestRevision(tx, row.clusterId);
       if (!latest) throw new Error("cluster has no revision");
@@ -715,11 +687,10 @@ export async function setSiteEnabled(
         code: input.enabled ? "site_enabled" : "site_disabled",
         params: { site: row.name },
       },
-      userId: userId(ctx.actor),
+      userId: publisher(ctx.actor),
     });
     await recordAudit(tx, ctx.actor, {
       action: `site.${action}`,
-      organizationId: row.organizationId,
       targetType: "site",
       targetId: row.id,
       targetName: row.name,
@@ -731,22 +702,18 @@ export async function setSiteEnabled(
   });
 }
 
-export async function countSites(db: Database, scope: SiteScope): Promise<number> {
-  const [row] = await db.select({ n: count() }).from(schema.site).where(scopeFilter(scope));
+export async function countSites(db: Database): Promise<number> {
+  const [row] = await db.select({ n: count() }).from(schema.site);
   return row?.n ?? 0;
 }
 
-/** The user's starred sites within the scope, most recently starred first. */
-export async function starredSites(
-  db: Database,
-  scope: SiteScope,
-  userId: string,
-): Promise<StarredSite[]> {
+/** The user's starred sites, most recently starred first. */
+export async function starredSites(db: Database, userId: string): Promise<StarredSite[]> {
   const rows = await db
     .select({ id: schema.site.id, name: schema.site.name })
     .from(schema.siteStar)
     .innerJoin(schema.site, eq(schema.site.id, schema.siteStar.siteId))
-    .where(and(eq(schema.siteStar.userId, userId), scopeFilter(scope)))
+    .where(eq(schema.siteStar.userId, userId))
     .orderBy(desc(schema.siteStar.createdAt), asc(schema.site.name));
   if (rows.length === 0) return [];
   const domains = await db
@@ -768,10 +735,9 @@ export async function starredSites(
 /** Stars or un-stars a visible site for the user (a personal preference, not audited). */
 export async function setSiteStarred(
   db: Database,
-  scope: SiteScope,
   input: { userId: string; siteId: string; starred: boolean },
 ): Promise<void> {
-  const row = await findSite(db, input.siteId, scope);
+  const row = await findSite(db, input.siteId);
   if (input.starred) {
     await db
       .insert(schema.siteStar)

@@ -1,9 +1,5 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
-/** Admin area: platform administrators only. */
 export const Route = createFileRoute("/_app/admin")({
-  beforeLoad: ({ context }) => {
-    if (!context.isAdmin) throw redirect({ to: "/overview" });
-  },
   component: Outlet,
 });

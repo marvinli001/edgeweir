@@ -37,10 +37,6 @@ const env = loadEnv({
 });
 const app = { db, env } as AppContext;
 try {
-  const org = crypto.randomUUID();
-  await db
-    .insert(schema.organization)
-    .values({ id: org, name: "ch-e2e", slug: org, createdAt: new Date() });
   const [cluster] = await db.insert(schema.cluster).values({ name: "ch-e2e" }).returning();
   assert.ok(cluster);
   const [node] = await db
@@ -50,7 +46,7 @@ try {
   assert.ok(node);
   const [site] = await db
     .insert(schema.site)
-    .values({ name: "ch-e2e", clusterId: cluster.id, organizationId: org, logSampleRate: 10000 })
+    .values({ name: "ch-e2e", clusterId: cluster.id, logSampleRate: 10000 })
     .returning();
   assert.ok(site);
   const at = new Date(Date.now() - 1000);
@@ -77,13 +73,13 @@ try {
     status: 403,
     limit: 100,
   };
-  let result = await queryLogs(app, { all: false, organizationId: org }, input);
+  let result = await queryLogs(app, input);
   assert.equal(result.entries.length, 1);
   assert.equal(result.entries[0]?.path, "/private");
   await insertClickHouseLogs(env, result.entries); // Simulate CH commit + lost PG acknowledgement.
-  result = await queryLogs(app, { all: true }, input);
+  result = await queryLogs(app, input);
   assert.equal(result.entries.length, 1);
-  assert.equal((await queryLogs(app, { all: true }, { ...input, status: 200 })).entries.length, 0);
+  assert.equal((await queryLogs(app, { ...input, status: 200 })).entries.length, 0);
   assert.equal((await db.select().from(schema.accessLog)).length, 0);
   const minute = new Date(Math.floor(at.getTime() / 60000) * 60000);
   const bucket = {

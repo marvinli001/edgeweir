@@ -98,28 +98,20 @@ Unmatched requests under `/api`, `/rpc`, and `/downloads`, and other methods on 
 
 | Area | Paths | Access |
 | --- | --- | --- |
-| Entry | `/` (redirects to `/setup`, `/overview`, or `/login` by state), `/setup`, `/login`, `/invite/$id` | Everyone |
-| Console | `/overview`, `/sites`, `/certificates`, `/alerts`, `/ip-lists`, `/purge`, `/members`, `/security`, `/settings` | Signed-in users; `/members` only for organization owners and admins and platform administrators |
-| Admin | `/admin`, `/admin/clusters`, `/admin/alerts`, `/admin/dns`, `/admin/rules`, `/admin/ip-lists`, `/admin/regions`, `/admin/organizations`, `/admin/audit`, `/admin/settings` | Platform administrators, through the **Console** / **Admin** switch in the header |
+| Entry | `/` (redirects to `/setup`, `/overview`, or `/login` by state), `/setup`, `/login` | Everyone |
+| Console | `/overview`, `/sites`, `/certificates`, `/alerts`, `/ip-lists`, `/bans`, `/purge`, `/security`, `/settings` | The signed-in operator |
+| Admin | `/admin`, `/admin/clusters`, `/admin/alerts`, `/admin/dns`, `/admin/rules`, `/admin/regions`, `/admin/service-accounts`, `/admin/audit`, `/admin/settings` | The signed-in operator, through the **Console** / **Admin** switch in the header |
 
 ## Authentication and authorization
 
 | Entry | Credentials | Rules |
 | --- | --- | --- |
-| `/api/auth/*` | Email and password, TOTP, backup codes, passkeys | Only the methods and paths in `AUTH_HTTP_ROUTES` (`lib/auth.ts`) are served (session, sign-in, sign-out, password change, two-factor, passkeys, API key create / list / delete); everything else returns 404; `x-api-key` is dropped; public sign-up is disabled, accounts are created by the setup wizard and by administrators; passwords have at least 12 characters |
+| `/api/auth/*` | Email and password, TOTP, backup codes, passkeys | Only the methods and paths in `AUTH_HTTP_ROUTES` (`lib/auth.ts`) are served (session, sign-in, sign-out, password change, two-factor, passkeys); everything else returns 404; `x-api-key` is dropped; public sign-up is disabled, the only account is created by the setup wizard; passwords have at least 12 characters |
 | `/rpc/*` | Session cookie + `x-csrf-token` | `x-api-key` is dropped |
-| `/api/v1/*` | `x-api-key` (AccessKey) | Cookies are dropped; an AccessKey acts as its owner with the same permissions as a session; a read-only AccessKey can call GET procedures and `rules.validate` only |
+| `/api/v1/*` | `x-api-key` (AccessKey or service account key) | Cookies are dropped; an AccessKey acts as the account with the same permissions as a session; a read-only AccessKey can call GET procedures and `rules.validate` only; a service account can call only the procedures listed in `serviceAccountProcedures` that its scopes allow |
 | `:8443` | Client certificate | See [Node channel](#node-channel) |
 
-Endpoints, the OpenAPI document, and AccessKey details: [API and endpoints](docs/reference/api.en.md). oRPC procedures are layered by guard (`rpc/base.ts`):
-
-| Guard | Allowed callers |
-| --- | --- |
-| `authed` | A valid session or an enabled AccessKey |
-| `tenant` | `authed`, with two-factor enabled when the organization requires it |
-| `orgManager` | `tenant`, and an organization owner or admin, or a platform administrator |
-| `admin` | Platform administrators (`user.role` contains `admin`) |
-| `maybeAuthed` | Anyone; the result differs for a signed-in caller (invitations) |
+Endpoints, the OpenAPI document, and AccessKey details: [API and endpoints](docs/reference/api.en.md). The console has one operator account, with no organizations or roles: every procedure except `system.status` and `system.setup` goes through `authed` in `rpc/base.ts` (a valid session, an enabled AccessKey or a service account key).
 
 The client IP (audit log, sign-in rate limiting) is the TCP peer; `X-Forwarded-For` and `X-Real-IP` are used only when the peer is in `EDGEWEIR_TRUSTED_PROXIES` (`resolveClientIp`). Rate-limit counters for the authentication endpoints live in the `rate_limit` table and are shared by all instances. Sign-ins and account changes completed by better-auth are audited by the hooks in `lib/auth-audit.ts`.
 
@@ -128,7 +120,7 @@ The client IP (audit log, sign-in rate limiting) is the TCP peer; `X-Forwarded-F
 A change to node configuration runs in one transaction:
 
 1. Write the application tables (sites, domains, origins, cache rules, rules, IP lists, certificates, ACME HTTP-01 responses, the origin allow list, the full-site purge generation).
-2. `publishRevision()` takes an advisory lock on the cluster, reads the cluster's enabled sites, platform rules, referenced IP lists, the origin allow list, certificate references, and unexpired HTTP-01 responses, and `compileNodeConfig()` produces the canonical NodeConfig IR.
+2. `publishRevision()` takes an advisory lock on the cluster, reads the cluster's enabled sites, global rules, every IP list, the origin allow list, certificate references, and unexpired HTTP-01 responses, and `compileNodeConfig()` produces the canonical NodeConfig IR.
 3. Compute `content_hash`: SHA-256 of the binary encoding with `revision` and `content_hash` cleared. Identical content produces no new revision.
 4. The new revision number is one more than the larger of the latest stored revision and the highest verified applied revision reported by the cluster's nodes; restoring the database from a backup never moves revisions backwards.
 5. Insert into `config_revision`, run `pg_notify('edgeweir_config', …)` in the same transaction, and write the audit entry.
@@ -139,7 +131,7 @@ A change to node configuration runs in one transaction:
 | Constraint | Value |
 | --- | --- |
 | Enabled sites per cluster | At most 512 (`MAX_SITES_PER_CLUSTER`); more returns `CLUSTER_SITE_LIMIT` |
-| New node capabilities | A change that needs a capability some active node lacks returns `NODE_CAPABILITY_REQUIRED` unless a platform administrator makes it; `GetConfig` returns `FailedPrecondition` to a node missing a required capability |
+| New node capabilities | A change that needs a capability some active node lacks returns `NODE_CAPABILITY_REQUIRED` when a service account or a background job publishes it; the operator (session or AccessKey) may publish it; `GetConfig` returns `FailedPrecondition` to a node missing a required capability |
 | Revision retention | Newest 200 per cluster, pruned hourly |
 | Rollback | Publishes the IR of an older revision as a new revision with the current origin allow list; audit action `cluster.rollback` |
 
@@ -154,12 +146,7 @@ URL, prefix, and full-site purges and URL prefetches produce no revision; they a
 3. The node pulls tasks with `PullTasks` and reports results with `ReportTaskResult`.
 4. A task without a result 5 minutes after hand-out is handed out again; a task not finished within 7 days fails. When a node reconnects, the console issues a full-site purge for each site whose purges the node missed.
 
-| Limit | Value |
-| --- | --- |
-| Tasks per organization per minute | 10 (platform administrators exempt) |
-| Targets per organization per hour | 2000 (platform administrators exempt) |
-
-Node upgrades are delivered through `PullTasks` as well: an upgrade first runs on one node group, and a platform administrator promotes it to the remaining nodes after the health observation passes. Behavior: [Node upgrades](docs/guide/node-upgrades.en.md).
+Node upgrades are delivered through `PullTasks` as well: an upgrade first runs on one node group and is promoted to the remaining nodes after the health observation passes. Behavior: [Node upgrades](docs/guide/node-upgrades.en.md).
 
 ## Dynamic bans
 
@@ -182,7 +169,7 @@ Behavior: [Bans](docs/guide/bans.en.md).
 
 Nodes enforce challenges, Under Attack and tiered CC mitigation locally; the console holds the settings, keys and events:
 
-1. A site's protection (`site_protection`), platform Under Attack (system setting `protection_settings`) and the CC template (`cc_template`) are compiled into NodeConfig. Only clusters that use challenges (platform Under Attack, a site's Under Attack, an enabled CC policy or a `challenge` rule) carry `challenge_keys`, `platform_protection` and every site's `protection`, with `challenge-v1` in `required_features`; a site that only records JA4 carries its `protection` alone. Rules that read `tls.ja4` (or rate limit by it) and sites that record JA4 add `ja4-v1`. Other clusters keep their content hash.
+1. A site's protection (`site_protection`), global Under Attack (system setting `protection_settings`) and the CC template (`cc_template`) are compiled into NodeConfig. Only clusters that use challenges (global Under Attack, a site's Under Attack, an enabled CC policy or a `challenge` rule) carry `challenge_keys`, `platform_protection` and every site's `protection`, with `challenge-v1` in `required_features`; a site that only records JA4 carries its `protection` alone. Rules that read `tls.ja4` (or rate limit by it) and sites that record JA4 add `ja4-v1`. Other clusters keep their content hash.
 2. Pass HMAC keys are per cluster, three of them (`next`, `current`, `previous`), created the first time a cluster uses challenges. The IR holds only key ids and roles (sorted by id); nodes fetch the 32-byte secrets with `GetChallengeKeys`, only those of their own cluster. A secret is generated the first time it is fetched and stored envelope-encrypted (purpose `challenge_key.secret`, bound to the row id).
 3. `maintenance.rotate-challenge-keys` checks every hour and rotates keys once the newest one is a day old: `previous` is deleted, `current` becomes `previous`, `next` becomes `current` and a new `next` is created; clusters whose latest revision carries keys get a new revision (reason `challenge_keys_rotated`), audited as `cluster.challenge_keys_rotate`.
 4. Nodes report level changes, escalated paths and automatic bans with `ReportSecurityEvents` (at most 500 per call); the console stores them in `security_event`, idempotent by (node, event id). A site leaving the normal level raises the `cc_mitigation` alert, at most once per site in 15 minutes. `ReportStatus.security` of the heartbeat is kept in `node.security_state`. `maintenance.prune-security-events` deletes events after the retention (default 30 days).
@@ -190,7 +177,7 @@ Nodes enforce challenges, Under Attack and tiered CC mitigation locally; the con
 | Management action | Audit |
 | --- | --- |
 | Site protection | `site.protection_update` (publishes the site's cluster) |
-| Platform Under Attack, event retention | `system.protection_update` (publishes every cluster when Under Attack changes) |
+| Global Under Attack, event retention | `system.protection_update` (publishes every cluster when Under Attack changes) |
 | CC template | `system.cc_template_update` (publishes clusters with sites that follow it) |
 
 Behavior: [Challenges and CC mitigation](docs/guide/challenges.en.md).
@@ -200,15 +187,14 @@ Behavior: [Challenges and CC mitigation](docs/guide/challenges.en.md).
 Nodes compress and run CRS with OpenResty built for Edgeweir (`edgeweir-openresty`, optional module package `edgeweir-openresty-modsecurity`) and report `brotli-v1`, `zstd-v1` and `modsecurity-v1` according to their build. The console holds the settings, the capability gate and the match statistics:
 
 1. A site's Brotli and Zstandard settings live with Gzip in `site.tls_settings` and are compiled into `TlsOptions`; only algorithms that are on carry their level, minimum length and types (types sorted and unique), so the content hash stays the same while they are off. Enabled sites with them on add `brotli-v1` / `zstd-v1` to `required_features`.
-2. A site's CRS settings live in `site_waf`; unless the mode is off they compile into `Site.waf` (excluded rule ids ascending and unique) and add `modsecurity-v1`. While the system setting `waf_settings.tenantCrs` is off, a tenant change that leaves the mode other than off gets `WAF_CRS_FORBIDDEN`; sites already running CRS are not republished.
-3. As with other capabilities, a tenant change that introduces a capability an active node of the cluster lacks gets `NODE_CAPABILITY_REQUIRED`; platform administrators may publish it. `sites.features` tells per site whether each feature can be turned on and why not (`nodes` / `platform`), and the UI disables the switches accordingly. Rollback recomputes the three capabilities from the sites it ships.
+2. A site's CRS settings live in `site_waf`; unless the mode is off they compile into `Site.waf` (excluded rule ids ascending and unique) and add `modsecurity-v1`.
+3. As with other capabilities, a service account or background publish that introduces a capability an active node of the cluster lacks gets `NODE_CAPABILITY_REQUIRED`; the operator may publish it. `sites.features` tells per site whether each feature can be turned on (reason `nodes` when not), and the UI disables the switches accordingly. Rollback recomputes the three capabilities from the sites it ships.
 4. `waf_rules` of `ReportStats` (rule id → requests) keeps at most 50 rules per node, site and minute, rolls up into hours and days with the other per-minute statistics and is copied to ClickHouse `minute_stats`; `waf.topRules` sums a range. Access logs keep the matched rule ids (at most 16, ascending) and `waf_blocked` (PostgreSQL, ClickHouse, CSV).
 
 | Management action | Audit |
 | --- | --- |
 | A site's HTTPS and compression | `site.https_update` (publishes the site's cluster) |
 | A site's CRS | `site.waf_update` (publishes the site's cluster, reason `site_waf_updated`) |
-| Tenants may turn on CRS | `system.waf_update` (publishes nothing) |
 
 Behavior: [HTTPS and certificates](docs/guide/https.en.md#compression) and [OWASP CRS managed rules](docs/guide/waf.en.md).
 
@@ -225,7 +211,7 @@ Connect-RPC over HTTPS; the console process terminates TLS itself.
 
 Enrollment:
 
-1. A platform administrator generates an install command: a single-use token (valid for 5 minutes to 7 days, default 60 minutes, stored as SHA-256 only) and the SHA-256 fingerprint of the internal CA (`--ca-sha256`). The token travels in the `EDGEWEIR_TOKEN` environment variable.
+1. The operator generates an install command: a single-use token (valid for 5 minutes to 7 days, default 60 minutes, stored as SHA-256 only) and the SHA-256 fingerprint of the internal CA (`--ca-sha256`). The token travels in the `EDGEWEIR_TOKEN` environment variable.
 2. The node checks the CA fingerprint in the server certificate chain, then sends the token and a locally generated CSR (`Enroll`).
 3. The console verifies the CSR signature, issues the node certificate, and marks the token used and writes the audit entry in the same transaction.
 
@@ -311,17 +297,14 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 
 Tables are defined in `packages/db/src/schema`; migrations are plain SQL generated by drizzle-kit in `packages/db/migrations` and run at console startup (see [Startup sequence](#startup-sequence)).
 
-### Identity and organizations
+### Account and identities
 
 | Table | Contents |
 | --- | --- |
-| `user` | Users; `role` containing `admin` marks a platform administrator |
+| `user` | The operator's account, the only one, created by the setup wizard |
 | `session` | Sign-in sessions |
 | `account` | Sign-in credentials (password hash) |
 | `verification` | better-auth verification records |
-| `organization` | Organizations, the resource and permission boundary |
-| `member` | Organization members and roles |
-| `invitation` | Member invitations (invited by a user or a service account) |
 | `two_factor` | TOTP secrets and backup codes |
 | `passkey` | Passkey public keys |
 | `apikey` | AccessKeys: hash, permissions, enabled state |
@@ -329,7 +312,6 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `service_account_key` | Service account keys: SHA-256, prefix, last use, revocation |
 | `idempotency_key` | Idempotency keys of `/api/v1` writes: caller, method, path, body hash and final response, kept 24 hours |
 | `rate_limit` | Rate-limit counters of the authentication endpoints |
-| `organization_settings` | Organization default cluster, required two-factor |
 
 ### Infrastructure
 
@@ -350,15 +332,15 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 
 | Table | Contents |
 | --- | --- |
-| `site` | Sites: organization and cluster, enabled state, cache key, slicing, WebSocket, certificate, TLS settings, cache generation, log sample rate |
+| `site` | Sites: cluster, enabled state, cache key, slicing, WebSocket, certificate, TLS settings, cache generation, log sample rate |
 | `site_domain` | Site domains and their routing verification state |
 | `site_star` | Per-user stars |
 | `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification |
 | `origin` | Origins |
 | `origin_credential` | S3 origin keys, envelope-encrypted |
 | `cache_rule` | Cache rules |
-| `edge_rule` | Site or platform rules: phase, expression, action, list references |
-| `ip_list` | Organization or platform IP lists (normalized CIDRs) |
+| `edge_rule` | Site or global rules: phase, expression, action, list references |
+| `ip_list` | IP lists (normalized CIDRs, unique names); `allow` / `block` lists apply to every site |
 | `ip_ban` | Dynamic bans: scope (platform / site), normalized CIDR, reason code, source (manual / auto; auto bans keep the node and trigger), expiry and removal time, `seq` (sequence `ip_ban_seq`), whether it is delivered |
 | `site_protection` | Site protection: Under Attack and its challenge type, pass lifetime, proof-of-work difficulty, CC policy (template or custom), JA4 logging; no row means the defaults |
 | `site_waf` | A site's OWASP CRS: mode (off, detect, block), paranoia level, anomaly threshold, excluded rule ids, request body limit; no row means off |
@@ -373,7 +355,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | --- | --- |
 | `certificate` | Chain, fingerprint, expiry, and renewal state; private key and ACME account envelope-encrypted |
 | `acme_challenge` | Short-lived public HTTP-01 responses |
-| `dns_credential` | Organization DNS provider credentials, envelope-encrypted |
+| `dns_credential` | DNS provider credentials for ACME DNS-01, envelope-encrypted |
 | `dns_challenge_lease` | Cleanup obligations of DNS-01 TXT records |
 | `platform_dns_provider` | Platform DNS provider and zone, credentials envelope-encrypted |
 | `dns_state` | Platform DNS policy and desired / applied DNS revision |
@@ -444,6 +426,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0031_domains_without_ownership` | Drops `domain_ownership` and `site_domain.verified`; of duplicate pending domains one row stays; `site_domain (name, wildcard)` is unique |
 | `0032_sites_without_suspension` | Drops `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at`; suspended sites become disabled; service accounts lose `sites:suspend` |
 | `0033_without_organization_limits` | Drops `organization_limit`; service accounts lose `limits:read`, `limits:write` |
+| `0034_single_operator` | Keeps only the earliest platform administrator who is not disabled (the other accounts' alert subscriptions move to it); IP list names become unique (organization lists with a taken name get a suffix and their rules follow), former organization lists become collections; drops `organization`, `member`, `invitation`, `organization_settings`, every `organization_id`, `session.active_organization_id` and `alert_channel.available_to_tenants`; service accounts lose the organization scopes |
 
 ## Build output
 

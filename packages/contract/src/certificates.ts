@@ -65,7 +65,6 @@ export const tlsSettings = z
 
 export const certificateDto = z.object({
   id: uuid,
-  organizationId: z.string(),
   name: z.string(),
   names: z.array(z.string()),
   source: z.enum(["upload", "acme"]),
@@ -85,7 +84,6 @@ const names = z
   .refine((xs) => new Set(xs).size === xs.length);
 export const certificateUpload = z.object({
   name: label,
-  organizationId: z.string().max(100).optional(),
   chainPem: z.string().min(32).max(131_072),
   privateKeyPem: z.string().min(32).max(32_768),
 });

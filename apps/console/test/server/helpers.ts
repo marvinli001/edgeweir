@@ -80,24 +80,15 @@ export async function createTestContext(
   return { ctx, client };
 }
 
-export async function seedOrganization(db: Database, id = "org_test") {
+/** The operator's account, inserted directly (no password) for tests below the API. */
+export async function seedOperator(db: Database) {
   await db
     .insert(schema.user)
     .values({ id: "user_admin", name: "Admin", email: "admin@example.com", role: "admin" });
-  await db
-    .insert(schema.organization)
-    .values({ id, name: "Test", slug: "test", createdAt: new Date() });
-  await db.insert(schema.member).values({
-    id: "member_1",
-    organizationId: id,
-    userId: "user_admin",
-    role: "owner",
-    createdAt: new Date(),
-  });
-  return { organizationId: id, userId: "user_admin" };
+  return { userId: "user_admin" };
 }
 
-/** Runs the real first-run setup (platform admin, first organization, default cluster). */
+/** Runs the real first-run setup (the operator's account and the default cluster). */
 export async function setupPlatform(ctx: AppContext) {
   const setupToken = await ensureSetupToken(ctx);
   if (!setupToken) throw new Error("already initialized");
@@ -108,7 +99,6 @@ export async function setupPlatform(ctx: AppContext) {
       name: "Platform Admin",
       email: "admin@example.com",
       password: PASSWORD,
-      organizationName: "Default",
     },
     { ip: "127.0.0.1", userAgent: "vitest" },
   );

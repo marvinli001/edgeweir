@@ -44,7 +44,7 @@ function SiteDetailPage() {
   const { id } = Route.useParams();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const { session, isAdmin, me } = Route.useRouteContext();
+  const { session } = Route.useRouteContext();
   const site = useQuery(orpc.sites.get.queryOptions({ input: { id } }));
   const stars = useSiteStars();
   const tab: SiteTab = search.tab ?? "overview";
@@ -127,7 +127,6 @@ function SiteDetailPage() {
           <TabsContent value="analytics" className="animate-enter">
             <AnalyticsSection
               siteId={site.data.id}
-              admin={isAdmin}
               range={search.range ?? DEFAULT_RANGE}
               onRangeChange={(range) =>
                 navigate({
@@ -153,7 +152,7 @@ function SiteDetailPage() {
             <RulesTab siteId={site.data.id} />
           </TabsContent>
           <TabsContent value="security" className="animate-enter">
-            <SecurityTab siteId={site.data.id} organizationRole={me.activeOrganization?.role} />
+            <SecurityTab siteId={site.data.id} />
           </TabsContent>
           <TabsContent value="logs" className="animate-enter">
             <LogsTab siteId={site.data.id} />
@@ -177,9 +176,6 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 }
 
 function OverviewTab({ site }: { site: Site }) {
-  const { isAdmin, me } = Route.useRouteContext();
-  const role = me.activeOrganization?.role;
-  const canSwitch = isAdmin || role === "owner" || role === "admin";
   const setEnabled = useMutation(orpc.sites.setEnabled.mutationOptions());
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
@@ -216,40 +212,38 @@ function OverviewTab({ site }: { site: Site }) {
             <dl className="divide-y">
               <InfoRow label={m.sites_col_status()}>
                 <SiteStatus site={site} />
-                {canSwitch ? (
-                  <ConfirmDialog
-                    trigger={
-                      <Button size="sm" variant="outline" data-testid="site-toggle-enabled">
-                        {site.enabled ? m.site_disable() : m.site_enable()}
-                      </Button>
+                <ConfirmDialog
+                  trigger={
+                    <Button size="sm" variant="outline" data-testid="site-toggle-enabled">
+                      {site.enabled ? m.site_disable() : m.site_enable()}
+                    </Button>
+                  }
+                  destructive={site.enabled}
+                  title={
+                    site.enabled
+                      ? m.site_disable_confirm({ name: site.name })
+                      : m.site_enable_confirm({ name: site.name })
+                  }
+                  note={site.enabled ? m.site_disable_note() : undefined}
+                  confirmLabel={site.enabled ? m.site_disable() : m.site_enable()}
+                  onConfirm={async () => {
+                    try {
+                      const result = await setEnabled.mutateAsync({
+                        id: site.id,
+                        enabled: !site.enabled,
+                        expectedUpdatedAt: site.updatedAt,
+                      });
+                      toast.success(
+                        result.site.enabled
+                          ? m.site_enabled_toast({ revision: result.revision.revision })
+                          : m.site_disabled_toast({ revision: result.revision.revision }),
+                      );
+                      await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
+                    } catch (err) {
+                      toast.error(errorMessage(err));
                     }
-                    destructive={site.enabled}
-                    title={
-                      site.enabled
-                        ? m.site_disable_confirm({ name: site.name })
-                        : m.site_enable_confirm({ name: site.name })
-                    }
-                    note={site.enabled ? m.site_disable_note() : undefined}
-                    confirmLabel={site.enabled ? m.site_disable() : m.site_enable()}
-                    onConfirm={async () => {
-                      try {
-                        const result = await setEnabled.mutateAsync({
-                          id: site.id,
-                          enabled: !site.enabled,
-                          expectedUpdatedAt: site.updatedAt,
-                        });
-                        toast.success(
-                          result.site.enabled
-                            ? m.site_enabled_toast({ revision: result.revision.revision })
-                            : m.site_disabled_toast({ revision: result.revision.revision }),
-                        );
-                        await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
-                      } catch (err) {
-                        toast.error(errorMessage(err));
-                      }
-                    }}
-                  />
-                ) : null}
+                  }}
+                />
               </InfoRow>
               <InfoRow label={m.sites_col_domains()}>
                 {site.domains.map((d) => (
@@ -258,14 +252,9 @@ function OverviewTab({ site }: { site: Site }) {
                   </Badge>
                 ))}
               </InfoRow>
-              {isAdmin ? (
-                <>
-                  <InfoRow label={m.sites_col_organization()}>{site.organizationName}</InfoRow>
-                  <InfoRow label={m.sites_col_cluster()}>
-                    <Badge variant="secondary">{site.clusterName}</Badge>
-                  </InfoRow>
-                </>
-              ) : null}
+              <InfoRow label={m.sites_col_cluster()}>
+                <Badge variant="secondary">{site.clusterName}</Badge>
+              </InfoRow>
               <InfoRow label={m.site_cache_generation()}>
                 <span className="font-mono">{formatNumber(site.cacheGeneration)}</span>
               </InfoRow>

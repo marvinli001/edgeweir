@@ -65,8 +65,6 @@ describe("migrations", () => {
     const tables = result.rows.map((r) => r.table_name);
     for (const name of [
       "user",
-      "organization",
-      "member",
       "apikey",
       "cluster",
       "node_group",
@@ -82,7 +80,6 @@ describe("migrations", () => {
       "node_config_status",
       "audit_log",
       "region",
-      "organization_settings",
       "node_certificate_revocation",
       "system_setting",
       "site_star",
@@ -102,12 +99,6 @@ describe("migrations", () => {
   });
 
   it("stores revisions as bytea and permits only one route per domain", async () => {
-    await db.insert(schema.organization).values({
-      id: "org_1",
-      name: "Default",
-      slug: "default",
-      createdAt: new Date(),
-    });
     const [cl] = await db.insert(schema.cluster).values({ name: "default" }).returning();
     if (!cl) throw new Error("cluster not inserted");
 
@@ -121,14 +112,8 @@ describe("migrations", () => {
       .where(eq(schema.configRevision.clusterId, cl.id));
     expect(Array.from(rev?.ir ?? [])).toEqual(Array.from(ir));
 
-    const [a] = await db
-      .insert(schema.site)
-      .values({ organizationId: "org_1", clusterId: cl.id, name: "a" })
-      .returning();
-    const [b] = await db
-      .insert(schema.site)
-      .values({ organizationId: "org_1", clusterId: cl.id, name: "b" })
-      .returning();
+    const [a] = await db.insert(schema.site).values({ clusterId: cl.id, name: "a" }).returning();
+    const [b] = await db.insert(schema.site).values({ clusterId: cl.id, name: "b" }).returning();
     if (!a || !b) throw new Error("sites not inserted");
     await db.insert(schema.siteDomain).values({ siteId: a.id, name: "demo.test" });
     await expect(
@@ -139,12 +124,6 @@ describe("migrations", () => {
   });
 
   it("keeps one challenge key per role and cluster and one security event per node event", async () => {
-    await db.insert(schema.organization).values({
-      id: "org_g2",
-      name: "G2",
-      slug: "g2",
-      createdAt: new Date(),
-    });
     const [cl] = await db.insert(schema.cluster).values({ name: "g2" }).returning();
     if (!cl) throw new Error("cluster not inserted");
     await db.insert(schema.challengeKey).values({ clusterId: cl.id, role: "current" });
@@ -153,7 +132,7 @@ describe("migrations", () => {
     ).rejects.toThrow();
     const [site] = await db
       .insert(schema.site)
-      .values({ organizationId: "org_g2", clusterId: cl.id, name: "g2" })
+      .values({ clusterId: cl.id, name: "g2" })
       .returning();
     const [node] = await db.insert(schema.node).values({ clusterId: cl.id, name: "n" }).returning();
     if (!site || !node) throw new Error("not inserted");
@@ -162,7 +141,6 @@ describe("migrations", () => {
       nodeId: node.id,
       nodeEventId: "e1",
       siteId: site.id,
-      organizationId: "org_g2",
       occurredAt: new Date(),
       kind: "site_level",
     };
@@ -185,17 +163,11 @@ describe("migrations", () => {
   });
 
   it("defaults a site's CRS to off and carries WAF rule hits through the traffic view", async () => {
-    await db.insert(schema.organization).values({
-      id: "org_g3",
-      name: "G3",
-      slug: "g3",
-      createdAt: new Date(),
-    });
     const [cl] = await db.insert(schema.cluster).values({ name: "g3" }).returning();
     if (!cl) throw new Error("cluster not inserted");
     const [site] = await db
       .insert(schema.site)
-      .values({ organizationId: "org_g3", clusterId: cl.id, name: "g3" })
+      .values({ clusterId: cl.id, name: "g3" })
       .returning();
     if (!site) throw new Error("site not inserted");
     await db.insert(schema.siteWaf).values({ siteId: site.id });
@@ -228,13 +200,7 @@ describe("migrations", () => {
     expect(await db.select().from(schema.siteWaf)).toEqual([]);
   });
 
-  it("detaches regions and default clusters instead of cascading deletes", async () => {
-    await db.insert(schema.organization).values({
-      id: "org_2",
-      name: "Tenant",
-      slug: "tenant",
-      createdAt: new Date(),
-    });
+  it("detaches regions instead of cascading deletes", async () => {
     const [cl] = await db.insert(schema.cluster).values({ name: "edge-b" }).returning();
     const [rg] = await db.insert(schema.region).values({ name: "East", code: "east" }).returning();
     if (!cl || !rg) throw new Error("not inserted");
@@ -242,9 +208,6 @@ describe("migrations", () => {
       .insert(schema.nodeGroup)
       .values({ clusterId: cl.id, name: "g", regionId: rg.id })
       .returning();
-    await db
-      .insert(schema.organizationSettings)
-      .values({ organizationId: "org_2", defaultClusterId: cl.id });
     await expect(db.insert(schema.region).values({ name: "Dup", code: "east" })).rejects.toThrow();
 
     await db.delete(schema.region).where(eq(schema.region.id, rg.id));
@@ -253,12 +216,5 @@ describe("migrations", () => {
       .from(schema.nodeGroup)
       .where(eq(schema.nodeGroup.id, group?.id ?? ""));
     expect(detached?.regionId).toBeNull();
-
-    await db.delete(schema.cluster).where(eq(schema.cluster.id, cl.id));
-    const [settings] = await db
-      .select()
-      .from(schema.organizationSettings)
-      .where(eq(schema.organizationSettings.organizationId, "org_2"));
-    expect(settings?.defaultClusterId).toBeNull();
   });
 });

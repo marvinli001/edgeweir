@@ -7,7 +7,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { adminNav, consoleNav, useManageMembers } from "@/components/app-sidebar";
+import { adminNav, consoleNav } from "@/components/app-sidebar";
 import { useTheme } from "@/components/theme-provider";
 import {
   CommandDialog,
@@ -21,11 +21,10 @@ import {
 import { getLocale, m, setLocale } from "@/lib/i18n";
 
 /** ⌘K / Ctrl+K command palette (shadcn command block). */
-export function CommandMenu({ isAdmin }: { isAdmin: boolean }) {
+export function CommandMenu() {
   const [open, setOpen] = React.useState(false);
   const navigate = useNavigate();
   const { resolvedTheme, setTheme } = useTheme();
-  const manageMembers = useManageMembers();
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -49,37 +48,33 @@ export function CommandMenu({ isAdmin }: { isAdmin: boolean }) {
       <CommandList>
         <CommandEmpty>{m.command_empty()}</CommandEmpty>
         <CommandGroup heading={m.command_group_navigation()}>
-          {consoleNav({ manageMembers }).map((item) => (
+          {consoleNav().map((item) => (
             <CommandItem key={String(item.to)} onSelect={run(() => navigate({ to: item.to }))}>
               {item.icon}
               {item.title}
             </CommandItem>
           ))}
         </CommandGroup>
-        {isAdmin ? (
-          <CommandGroup heading={m.area_admin()}>
-            {adminNav().map((item) => (
-              <CommandItem key={String(item.to)} onSelect={run(() => navigate({ to: item.to }))}>
-                {item.icon}
-                {item.title}
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        ) : null}
+        <CommandGroup heading={m.area_admin()}>
+          {adminNav().map((item) => (
+            <CommandItem key={String(item.to)} onSelect={run(() => navigate({ to: item.to }))}>
+              {item.icon}
+              {item.title}
+            </CommandItem>
+          ))}
+        </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading={m.command_group_actions()}>
           <CommandItem onSelect={run(() => navigate({ to: "/sites", search: { create: true } }))}>
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.nav_new_site()}
           </CommandItem>
-          {isAdmin ? (
-            <CommandItem
-              onSelect={run(() => navigate({ to: "/admin/clusters", search: { enroll: true } }))}
-            >
-              <HugeiconsIcon icon={ServerStack01Icon} strokeWidth={2} />
-              {m.nav_add_node()}
-            </CommandItem>
-          ) : null}
+          <CommandItem
+            onSelect={run(() => navigate({ to: "/admin/clusters", search: { enroll: true } }))}
+          >
+            <HugeiconsIcon icon={ServerStack01Icon} strokeWidth={2} />
+            {m.nav_add_node()}
+          </CommandItem>
           <CommandItem onSelect={run(() => setLocale(getLocale() === "zh-CN" ? "en" : "zh-CN"))}>
             <HugeiconsIcon icon={LanguageSkillIcon} strokeWidth={2} />
             {m.command_toggle_language()}

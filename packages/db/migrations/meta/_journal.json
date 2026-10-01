@@ -239,6 +239,13 @@
       "when": 1790815228002,
       "tag": "0033_without_organization_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790815571981,
+      "tag": "0034_single_operator",
+      "breakpoints": true
     }
   ]
 }

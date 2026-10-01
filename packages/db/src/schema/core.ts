@@ -15,7 +15,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { organization, user } from "./auth";
+import { user } from "./auth";
 import { certificate } from "./certificates";
 
 const bytea = customType<{ data: Uint8Array; driverData: Buffer | Uint8Array }>({
@@ -164,9 +164,6 @@ export const site = pgTable(
   "site",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
     clusterId: uuid("cluster_id")
       .notNull()
       .references(() => cluster.id, { onDelete: "restrict" }),
@@ -189,7 +186,7 @@ export const site = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("site_org_idx").on(t.organizationId), index("site_cluster_idx").on(t.clusterId)],
+  (t) => [index("site_cluster_idx").on(t.clusterId)],
 );
 
 /** Sites a user starred; they lead the site list on the console home. */
@@ -460,7 +457,6 @@ export const auditLog = pgTable(
     actorId: text("actor_id").notNull().default(""),
     /** Display name of the actor at the time of the action. */
     actorName: text("actor_name").notNull().default(""),
-    organizationId: text("organization_id"),
     action: text("action").notNull(),
     targetType: text("target_type").notNull().default(""),
     targetId: text("target_id").notNull().default(""),
@@ -472,24 +468,9 @@ export const auditLog = pgTable(
   },
   (t) => [
     index("audit_log_occurred_idx").on(t.occurredAt),
-    index("audit_log_org_idx").on(t.organizationId, t.occurredAt),
     index("audit_log_action_idx").on(t.action, t.occurredAt),
   ],
 );
-
-/** Per-organization policy that better-auth's organization table does not model. */
-export const organizationSettings = pgTable("organization_settings", {
-  organizationId: text("organization_id")
-    .primaryKey()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  /** Cluster that sites created by the organization's members land on. */
-  defaultClusterId: uuid("default_cluster_id").references(() => cluster.id, {
-    onDelete: "set null",
-  }),
-  /** Members must enable two-factor authentication before using the console. */
-  requireTwoFactor: boolean("require_two_factor").notNull().default(false),
-  updatedAt: updatedAt(),
-});
 
 /**
  * Platform-level machine identity for integrations. It cannot sign in: it
@@ -621,10 +602,6 @@ export const cacheTask = pgTable(
   "cache_task",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** Null when the targets span several organizations (platform administrators). */
-    organizationId: text("organization_id").references(() => organization.id, {
-      onDelete: "cascade",
-    }),
     /** url | prefix | site | prefetch */
     type: text("type").notNull(),
     /** What the user asked for: URLs, prefixes or site names, for display. */
@@ -642,7 +619,7 @@ export const cacheTask = pgTable(
     /** Set once every node reported a result (or the task expired). */
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
-  (t) => [index("cache_task_org_idx").on(t.organizationId, t.createdAt)],
+  (t) => [index("cache_task_created_idx").on(t.createdAt)],
 );
 
 /** Delivery and result of a cache task on one node. */

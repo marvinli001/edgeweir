@@ -13,7 +13,6 @@ import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UsageSettingsCard } from "@/components/usage-settings";
-import { WafSettingsCard } from "@/components/waf-settings";
 import { formatDateTime, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -96,7 +95,6 @@ function SystemSettingsPage() {
       <UsageSettingsCard />
       <BanSettingsCard />
       <ProtectionSettingsCards />
-      <WafSettingsCard />
       <GeoIpSettings />
       <SmtpSettings />
     </Page>

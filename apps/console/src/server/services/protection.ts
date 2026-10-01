@@ -15,18 +15,14 @@ import { type Database, schema } from "@edgeweir/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import { type Executor, publishRevision } from "./revisions";
-import { findSite, type SiteScope } from "./sites";
+import { type Executor, publisher, publishRevision } from "./revisions";
+import { findSite } from "./sites";
 
 /** system_setting keys. */
 export const PROTECTION_SETTINGS_KEY = "protection_settings";
 export const CC_TEMPLATE_KEY = "cc_template";
 
 type ProtectionRow = typeof schema.siteProtection.$inferSelect;
-
-/** The user whose role decides the capability gate of a publish (see insertRevision). */
-export const publisher = (actor: Actor) =>
-  actor.type === "user" || actor.type === "api_key" ? actor.id : null;
 
 export async function readSetting(db: Executor, key: string) {
   const [row] = await db
@@ -164,12 +160,8 @@ async function protectionRow(db: Executor, siteId: string, lock = false) {
   return row;
 }
 
-export async function getSiteProtection(
-  db: Database,
-  siteId: string,
-  scope: SiteScope,
-): Promise<SiteProtection> {
-  await findSite(db, siteId, scope);
+export async function getSiteProtection(db: Database, siteId: string): Promise<SiteProtection> {
+  await findSite(db, siteId);
   return toDto(
     siteId,
     await protectionRow(db, siteId),
@@ -179,17 +171,17 @@ export async function getSiteProtection(
 }
 
 /**
- * Changes the fields given (organization owners and admins), publishes the
- * site's cluster and audits the change. Turning on a feature the cluster's
+ * Changes the fields given, publishes the site's cluster and audits the
+ * change. Turning on a feature the cluster's
  * active nodes lack fails with NODE_CAPABILITY_REQUIRED, like GeoIP fields.
  */
 export async function updateSiteProtection(
   db: Database,
   input: SiteProtectionUpdateInput,
-  ctx: { scope: SiteScope; actor: Actor },
+  ctx: { actor: Actor },
 ): Promise<SiteProtection> {
   return db.transaction(async (tx) => {
-    const site = await findSite(tx, input.id, ctx.scope, true);
+    const site = await findSite(tx, input.id, true);
     const template = await getCcTemplate(tx);
     const row = await protectionRow(tx, site.id, true);
     const before = toDto(site.id, row, template, PROTECTION_SETTINGS_DEFAULTS);
@@ -231,7 +223,6 @@ export async function updateSiteProtection(
     }: SiteProtection) => rest;
     await recordAudit(tx, ctx.actor, {
       action: "site.protection_update",
-      organizationId: site.organizationId,
       targetType: "site",
       targetId: site.id,
       targetName: site.name,
@@ -248,8 +239,8 @@ async function allClusters(tx: Executor) {
 
 /**
  * Saves the platform protection. A change of Under Attack publishes every
- * cluster; administrators may require challenge-v1 across clusters (the
- * capability gate of platform rules).
+ * cluster and may require challenge-v1 across clusters (the capability gate
+ * of platform rules).
  */
 export async function setProtectionSettings(
   db: Database,

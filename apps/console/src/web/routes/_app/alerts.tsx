@@ -30,7 +30,7 @@ const label = (kind: AlertEventKind) =>
   })[kind]();
 function AlertsPage() {
   const subscriptions = useQuery(orpc.alerts.subscriptions.queryOptions()),
-    channels = useQuery(orpc.alerts.availableChannels.queryOptions()),
+    channels = useQuery(orpc.alerts.channels.queryOptions()),
     events = useQuery(
       orpc.alerts.events.queryOptions({
         input: {},
@@ -40,13 +40,14 @@ function AlertsPage() {
     );
   const [creating, setCreating] = React.useState(false);
   const queries = useQueryClient();
+  const usable = (channels.data ?? []).filter((c) => c.enabled);
   return (
     <Page
       title={m.alert_title()}
       actions={
         <Button
           onClick={() => setCreating(true)}
-          disabled={!channels.data?.length}
+          disabled={!usable.length}
           data-testid="alert-subscribe"
         >
           {m.alert_subscribe()}
@@ -59,9 +60,7 @@ function AlertsPage() {
         <ErrorState error={subscriptions.error} onRetry={() => void subscriptions.refetch()} />
       ) : !subscriptions.data.length ? (
         <EmptyState
-          title={
-            channels.data?.length ? m.alert_no_subscriptions() : m.alert_no_available_channels()
-          }
+          title={usable.length ? m.alert_no_subscriptions() : m.alert_no_available_channels()}
         />
       ) : (
         subscriptions.data.map((sub) => (
@@ -133,7 +132,7 @@ function AlertsPage() {
         </CardContent>
       </Card>
       {creating ? (
-        <SubscriptionDialog channels={channels.data ?? []} onClose={() => setCreating(false)} />
+        <SubscriptionDialog channels={usable} onClose={() => setCreating(false)} />
       ) : null}
     </Page>
   );

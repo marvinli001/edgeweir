@@ -26,7 +26,7 @@ export interface TopList {
 }
 
 /**
- * Traffic of the caller's scope (or one site) over a range: two large charts with value axes,
+ * Traffic of every site (or one site) over a range: two large charts with value axes,
  * four compact ones, the status-class split and optional top lists. Every card follows the one
  * range control; a refetch keeps the old numbers, dimmed, until the new ones arrive.
  */
@@ -35,21 +35,18 @@ export function AnalyticsSection({
   onRangeChange,
   siteId,
   topLists = [],
-  admin = false,
   delay = 0,
 }: {
   range: AnalyticsRange;
   onRangeChange: (range: AnalyticsRange) => void;
   siteId?: string;
   topLists?: TopList[];
-  /** Platform administrator: node breakdowns and each site's organization in the dialogs. */
-  admin?: boolean;
   /** Entrance delay of the first card, in ms. */
   delay?: number;
 }) {
   // The card whose breakdown dialog is open.
   const [detail, setDetail] = React.useState<string | null>(null);
-  const available = { site: !siteId, node: admin };
+  const available = { site: !siteId, node: true };
   const live = {
     placeholderData: keepPreviousData,
     refetchInterval: REFRESH_MS,
@@ -213,7 +210,7 @@ export function AnalyticsSection({
         onRangeChange={onRangeChange}
         siteId={siteId}
         traffic={traffic.data}
-        showParent={admin}
+        showParent
       />
     </section>
   );

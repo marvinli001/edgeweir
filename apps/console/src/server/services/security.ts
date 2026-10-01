@@ -11,7 +11,7 @@ import { and, count, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { isOnline } from "../lib/node-online";
 import { getProtectionSettings } from "./protection";
 import type { Executor } from "./revisions";
-import { findSite, type SiteScope } from "./sites";
+import { findSite } from "./sites";
 
 /** Events a node reports per ReportSecurityEvents call. */
 export const MAX_REPORTED_SECURITY_EVENTS = 500;
@@ -126,7 +126,7 @@ export async function reportSecurityEvents(
 ): Promise<number> {
   const { eventRetentionDays } = await getProtectionSettings(db);
   const oldest = now.getTime() - eventRetentionDays * 86400_000;
-  const items = new Map<string, Omit<typeof schema.securityEvent.$inferInsert, "organizationId">>();
+  const items = new Map<string, typeof schema.securityEvent.$inferInsert>();
   for (const event of reported) {
     if (!EVENT_ID_RE.test(event.id) || !UUID_RE.test(event.siteId) || !event.kind) continue;
     const at = event.occurredAt?.getTime() ?? now.getTime();
@@ -161,7 +161,6 @@ export async function reportSecurityEvents(
         .select({
           id: schema.site.id,
           name: schema.site.name,
-          organizationId: schema.site.organizationId,
         })
         .from(schema.site)
         .where(and(inArray(schema.site.id, siteIds), eq(schema.site.clusterId, node.clusterId)))
@@ -169,7 +168,7 @@ export async function reportSecurityEvents(
   );
   const accepted = [...items.values()].flatMap((item) => {
     const site = sites.get(item.siteId);
-    return site ? [{ ...item, organizationId: site.organizationId }] : [];
+    return site ? [item] : [];
   });
   if (accepted.length === 0) return 0;
   await db.transaction(async (tx) => {
@@ -253,11 +252,10 @@ export async function elevatedSites(db: Executor, now = Date.now()): Promise<Set
 export async function siteSecurityState(
   db: Database,
   siteId: string,
-  scope: SiteScope,
   hours: number,
   now = new Date(),
 ): Promise<SiteSecurityState> {
-  const site = await findSite(db, siteId, scope);
+  const site = await findSite(db, siteId);
   const nodes = await db
     .select({
       id: schema.node.id,
@@ -300,9 +298,8 @@ export async function siteSecurityState(
 export async function listSecurityEvents(
   db: Database,
   input: { id: string; kind?: SecurityEventKind; page: number; pageSize: number },
-  scope: SiteScope,
 ): Promise<{ items: SecurityEvent[]; total: number }> {
-  const site = await findSite(db, input.id, scope);
+  const site = await findSite(db, input.id);
   const where = and(
     eq(schema.securityEvent.siteId, site.id),
     input.kind ? eq(schema.securityEvent.kind, input.kind) : undefined,

@@ -30,7 +30,7 @@ import {
   siteSecurityState,
 } from "../../src/server/services/security";
 import { createSite } from "../../src/server/services/sites";
-import { createTestContext, seedOrganization } from "./helpers";
+import { createTestContext, seedOperator } from "./helpers";
 
 const actor = { type: "user" as const, id: "user_admin", name: "Admin" };
 const JA4 = "t13d1516h2_8daaf6152771_02713d6af862";
@@ -57,7 +57,6 @@ describe("challenge keys, security events and JA4 over the node channel", async 
   let baseUrl: string;
   let clusterId: string;
   let otherClusterId: string;
-  let organizationId: string;
   let siteId: string;
   let foreignSiteId: string;
 
@@ -111,7 +110,7 @@ describe("challenge keys, security events and JA4 over the node channel", async 
           domains: [`${name}.test`],
           origins: [{ address: "origin.test" }],
         }),
-        { organizationId, actor, masterKey: ctx.masterKey },
+        { actor, masterKey: ctx.masterKey },
       )
     ).site.id;
   const event = (id: string, patch: Record<string, unknown> = {}) =>
@@ -140,7 +139,7 @@ describe("challenge keys, security events and JA4 over the node channel", async 
       .orderBy(schema.alertEvent.ordinal);
 
   beforeAll(async () => {
-    ({ organizationId } = await seedOrganization(ctx.db));
+    await seedOperator(ctx.db);
     clusterId = (
       await ctx.db.transaction((tx) =>
         createClusterTx(tx, { name: "default", description: "" }, actor),
@@ -247,7 +246,6 @@ describe("challenge keys, security events and JA4 over the node channel", async 
       ["e3", "ip_banned"],
     ]);
     expect(stored[0]).toMatchObject({
-      organizationId,
       siteId,
       level: "js",
       previousLevel: "normal",
@@ -280,27 +278,17 @@ describe("challenge keys, security events and JA4 over the node channel", async 
     expect(tooMany).toBeInstanceOf(ConnectError);
     expect((tooMany as ConnectError).code).toBe(Code.InvalidArgument);
 
-    const page = await listSecurityEvents(
-      ctx.db,
-      { id: siteId, page: 1, pageSize: 2 },
-      { all: false, organizationId },
-    );
+    const page = await listSecurityEvents(ctx.db, { id: siteId, page: 1, pageSize: 2 });
     expect(page.total).toBe(5);
     expect(page.items).toHaveLength(2);
     expect(page.items[0]?.node).toEqual({ id: nodeId, name: "edge-events" });
-    const banned = await listSecurityEvents(
-      ctx.db,
-      { id: siteId, kind: "ip_banned", page: 1, pageSize: 50 },
-      { all: true },
-    );
+    const banned = await listSecurityEvents(ctx.db, {
+      id: siteId,
+      kind: "ip_banned",
+      page: 1,
+      pageSize: 50,
+    });
     expect(banned.items.map((e) => e.address)).toEqual(["203.0.113.9"]);
-    await expect(
-      listSecurityEvents(
-        ctx.db,
-        { id: siteId, page: 1, pageSize: 50 },
-        { all: false, organizationId: "someone-else" },
-      ),
-    ).rejects.toMatchObject({ code: "SITE_NOT_FOUND" });
   });
 
   it("keeps each node's current level from the heartbeat and resolves the alert once all are normal", async () => {
@@ -318,7 +306,7 @@ describe("challenge keys, security events and JA4 over the node channel", async 
     });
     const [row] = await ctx.db.select().from(schema.node).where(eq(schema.node.id, nodeId));
     expect(row?.securityState).toEqual([{ siteId, level: "pow", escalatedPaths: 3 }]);
-    const state = await siteSecurityState(ctx.db, siteId, { all: true }, 24);
+    const state = await siteSecurityState(ctx.db, siteId, 24);
     expect(state.nodes.find((n) => n.id === nodeId)).toMatchObject({
       name: "edge-state",
       online: true,
@@ -350,9 +338,7 @@ describe("challenge keys, security events and JA4 over the node channel", async 
     const [cleared] = await ctx.db.select().from(schema.node).where(eq(schema.node.id, nodeId));
     expect(cleared?.securityState).toEqual([{ siteId, level: "normal", escalatedPaths: 2 }]);
     expect(
-      (await siteSecurityState(ctx.db, siteId, { all: true }, 24)).nodes.find(
-        (n) => n.id === nodeId,
-      ),
+      (await siteSecurityState(ctx.db, siteId, 24)).nodes.find((n) => n.id === nodeId),
     ).toMatchObject({ level: "normal", escalatedPaths: 2 });
     await ctx.db
       .insert(schema.siteDomain)
@@ -414,27 +400,19 @@ describe("challenge keys, security events and JA4 over the node channel", async 
         ja4,
       });
     await mtls.reportLogs({ batchSequence: 1n, logs: [log(JA4, "/off")] });
-    await updateSiteProtection(
-      ctx.db,
-      { id: siteId, logJa4: true },
-      { scope: { all: true }, actor },
-    );
+    await updateSiteProtection(ctx.db, { id: siteId, logJa4: true }, { actor });
     await mtls.reportLogs({
       batchSequence: 2n,
       logs: [log(JA4, "/on"), log("t13d1516h2_<script>_02713d6af862", "/bad")],
     });
-    const found = await queryLogs(
-      ctx,
-      { all: true },
-      {
-        siteId,
-        from: new Date(now.getTime() - 60_000).toISOString(),
-        to: new Date(now.getTime() + 60_000).toISOString(),
-        ip: "",
-        path: "",
-        limit: 100,
-      },
-    );
+    const found = await queryLogs(ctx, {
+      siteId,
+      from: new Date(now.getTime() - 60_000).toISOString(),
+      to: new Date(now.getTime() + 60_000).toISOString(),
+      ip: "",
+      path: "",
+      limit: 100,
+    });
     const byPath = Object.fromEntries(found.entries.map((e) => [e.path, e.ja4]));
     expect(byPath).toEqual({ "/off": "", "/on": JA4, "/bad": "" });
     expect(found.entries.every((e) => e.nodeId === nodeId)).toBe(true);

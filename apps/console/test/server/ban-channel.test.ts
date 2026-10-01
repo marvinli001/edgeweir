@@ -20,10 +20,9 @@ import {
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
 import { createSite } from "../../src/server/services/sites";
-import { createTestContext, seedOrganization } from "./helpers";
+import { createTestContext, seedOperator } from "./helpers";
 
 const actor = { type: "user" as const, id: "user_admin", name: "Admin" };
-const admin = { scope: { all: true } as const, actor };
 const HOUR = 3600;
 
 async function nodeKeyAndCsr() {
@@ -48,7 +47,6 @@ describe("dynamic ban channel", async () => {
   let baseUrl: string;
   let clusterId: string;
   let otherClusterId: string;
-  let organizationId: string;
   let siteId: string;
   let secondSiteId: string;
   let foreignSiteId: string;
@@ -103,14 +101,14 @@ describe("dynamic ban channel", async () => {
           domains: [`${name}.test`],
           origins: [{ address: "origin.test" }],
         }),
-        { organizationId, actor, masterKey: ctx.masterKey },
+        { actor, masterKey: ctx.masterKey },
       )
     ).site.id;
   const siteBan = (cidr: string, target = siteId, durationSeconds = HOUR) =>
     createBan(
       ctx.db,
       { scope: "site", siteId: target, cidr, reason: "abuse", durationSeconds },
-      admin,
+      { actor },
     );
   const autoBan = (cidr: string, target: string, minutes = 10) => ({
     siteId: target,
@@ -130,7 +128,7 @@ describe("dynamic ban channel", async () => {
       .where(isNull(schema.ipBan.removedAt));
 
   beforeAll(async () => {
-    ({ organizationId } = await seedOrganization(ctx.db));
+    await seedOperator(ctx.db);
     clusterId = (
       await ctx.db.transaction((tx) =>
         createClusterTx(tx, { name: "default", description: "" }, actor),
@@ -165,12 +163,12 @@ describe("dynamic ban channel", async () => {
     const platform = await createBan(
       ctx.db,
       { scope: "platform", cidr: "203.0.113.0/24", reason: "attack", durationSeconds: HOUR },
-      admin,
+      { actor },
     );
     const b = await siteBan("2001:db8::7", secondSiteId);
     const foreign = await siteBan("192.0.2.3", foreignSiteId);
     const lifted = await siteBan("192.0.2.4");
-    await deleteBan(ctx.db, lifted.id, { platform: true, ...admin });
+    await deleteBan(ctx.db, lifted.id, { actor });
     const expired = await siteBan("192.0.2.5");
     await ctx.db
       .update(schema.ipBan)
@@ -213,9 +211,8 @@ describe("dynamic ban channel", async () => {
 
     // The console caps the page size.
     await ctx.db.execute(sql`
-      insert into ip_ban (scope, organization_id, site_id, cluster_id, cidr, reason, source,
-        expires_at, seq)
-      select 'site', ${organizationId}, ${siteId}::uuid, ${clusterId}::uuid,
+      insert into ip_ban (scope, site_id, cluster_id, cidr, reason, source, expires_at, seq)
+      select 'site', ${siteId}::uuid, ${clusterId}::uuid,
         '10.' || (i / 256) || '.' || (i % 256) || '.1/32', 'abuse', 'manual',
         now() + interval '1 hour', nextval('ip_ban_seq')
       from generate_series(0, 5000) as i`);
@@ -251,10 +248,10 @@ describe("dynamic ban channel", async () => {
         reason: "scanner",
         durationSeconds: 2 * HOUR,
       },
-      admin,
+      { actor },
     );
     expect(again.id).toBe(renewed.id);
-    await deleteBan(ctx.db, doomed.id, { platform: false, ...admin });
+    await deleteBan(ctx.db, doomed.id, { actor });
     // An entry that expires is left to the node's TTL.
     const bumped = await siteBan("198.51.100.4", siteId, 60);
     expect(bumped.id).toBe(fading.id);
@@ -314,7 +311,6 @@ describe("dynamic ban channel", async () => {
       scope: "site",
       siteId,
       clusterId,
-      organizationId,
       nodeId: reporter.nodeId,
       reason: "cc_ip_rate",
       distributed: true,
@@ -395,11 +391,7 @@ describe("dynamic ban channel", async () => {
     await reporter.mtls.reportBans({ bans: [autoBan("198.51.100.50", siteId)] });
     const hidden = await peer.mtls.getBans({ afterSequence: before });
     expect(hidden.bans).toEqual([]);
-    const listed = await listBans(
-      ctx.db,
-      { source: "auto", page: 1, pageSize: 50 },
-      { platform: true, scope: { all: true } },
-    );
+    const listed = await listBans(ctx.db, { source: "auto", page: 1, pageSize: 50 });
     const local = listed.items.find((ban) => ban.cidr === "198.51.100.50/32");
     expect(local).toMatchObject({
       distributed: false,
@@ -410,13 +402,9 @@ describe("dynamic ban channel", async () => {
     });
     await setBanSettings(ctx.db, { maxTotal: 10000, shareAutoBans: true }, actor);
 
-    // A tenant lifting an automatic ban tells the nodes.
+    // Lifting an automatic ban tells the nodes.
     const beforeLift = await currentBanSequence(ctx.db);
-    await deleteBan(ctx.db, row?.id ?? "", {
-      platform: false,
-      scope: { all: false, organizationId },
-      actor,
-    });
+    await deleteBan(ctx.db, row?.id ?? "", { actor });
     const lift = await peer.mtls.getBans({ afterSequence: beforeLift });
     expect(lift.removedIds).toEqual([row?.id]);
     await liftAll();
@@ -426,9 +414,9 @@ describe("dynamic ban channel", async () => {
     const { nodeId, mtls } = await enroll(clusterId, "edge-flood", ["bans-v1"]);
     const created = new Date(Date.now() - 3_600_000);
     await ctx.db.execute(sql`
-      insert into ip_ban (scope, organization_id, site_id, cluster_id, cidr, reason, source,
-        node_id, created_at, expires_at, seq, distributed)
-      select 'site', ${organizationId}, ${siteId}::uuid, ${clusterId}::uuid,
+      insert into ip_ban (scope, site_id, cluster_id, cidr, reason, source, node_id,
+        created_at, expires_at, seq, distributed)
+      select 'site', ${siteId}::uuid, ${clusterId}::uuid,
         '10.' || (i / 65536) || '.' || ((i / 256) % 256) || '.' || (i % 256) || '/32',
         'cc_ip_rate', 'auto', ${nodeId}::uuid,
         ${created.toISOString()}::timestamptz + make_interval(secs => i),
@@ -542,11 +530,7 @@ describe("dynamic ban channel", async () => {
       kernelEntries: 1,
       autoEvicted: "7",
     });
-    const listed = await listBans(
-      ctx.db,
-      { page: 1, pageSize: 50 },
-      { platform: true, scope: { all: true } },
-    );
+    const listed = await listBans(ctx.db, { page: 1, pageSize: 50 });
     expect(listed.items.find((item) => item.id === ban.id)?.unappliedNodes).toBe(1);
     // A heartbeat without BanStatus (no bans-v1) clears it.
     await mtls.reportStatus({ appliedRevision: 0n, state: ApplyState.APPLIED });

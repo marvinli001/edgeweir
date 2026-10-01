@@ -33,7 +33,6 @@ function OverviewPage() {
     meta: { background: true },
   });
   const { starred } = useSiteStars();
-  const { isAdmin } = Route.useRouteContext();
 
   return (
     <Page title={m.overview_title()}>
@@ -65,14 +64,11 @@ function OverviewPage() {
               {
                 id: "sites",
                 title: m.analytics_top_sites(),
-                // Tenants only ever see their own organization.
-                showParent: isAdmin,
                 renderLink: (item, props) => (
                   <Link to="/sites/$id" params={{ id: item.id }} {...props} />
                 ),
               },
             ]}
-            admin={isAdmin}
             delay={120}
           />
         </>

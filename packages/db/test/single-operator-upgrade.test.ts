@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -53,7 +54,33 @@ beforeAll(async () => {
     insert into domain_ownership (organization_id, domain, token, verified_at) values
       ('org_a', 'shop.test', 'token', now());
     insert into system_setting (key, value) values
-      ('domain_ownership_v1', '{"enabled":true}'), ('dns_resolvers', '{"servers":["1.1.1.1"]}');
+      ('domain_ownership_v1', '{"enabled":true}'), ('dns_resolvers', '{"servers":["1.1.1.1"]}'),
+      ('waf_settings', '{"tenantCrs":false}');
+    -- The first administrator is disabled: the second one keeps the console.
+    insert into "user" (id, name, email, role, banned, created_at) values
+      ('u_old', 'Old admin', 'old@example.test', 'admin', true, now() - interval '3 days'),
+      ('u_admin', 'Admin', 'admin@example.test', 'user,admin', false, now() - interval '2 days'),
+      ('u_member', 'Member', 'member@example.test', 'user', false, now() - interval '1 day');
+    insert into member (id, organization_id, user_id, role, created_at) values
+      ('m1', 'org_a', 'u_admin', 'owner', now()), ('m2', 'org_b', 'u_member', 'owner', now());
+    insert into apikey (id, reference_id, key, created_at, updated_at) values
+      ('k_admin', 'u_admin', 'hash-a', now(), now()), ('k_member', 'u_member', 'hash-m', now(), now());
+    insert into alert_channel (id, name, kind, config_envelope, available_to_tenants) values
+      ('00000000-0000-4000-8000-0000000000d1', 'ops', 'webhook', '{}', true);
+    insert into alert_subscription (user_id, organization_id, site_id, channel_id, kinds, enabled) values
+      ('u_admin', 'org_a', '00000000-0000-4000-8000-00000000000a', '00000000-0000-4000-8000-0000000000d1', '{node_offline}', false),
+      ('u_member', 'org_a', '00000000-0000-4000-8000-00000000000a', '00000000-0000-4000-8000-0000000000d1', '{certificate_expiry,node_offline}', true),
+      ('u_member', 'org_b', '00000000-0000-4000-8000-00000000000b', '00000000-0000-4000-8000-0000000000d1', '{origin_errors}', true);
+    insert into ip_list (id, organization_id, name, kind, entries) values
+      ('00000000-0000-4000-8000-0000000000e1', null, 'office', 'allow', '{192.0.2.0/24}'),
+      ('00000000-0000-4000-8000-0000000000e2', 'org_a', 'office', 'block', '{198.51.100.0/24}'),
+      ('00000000-0000-4000-8000-0000000000e3', 'org_b', 'lab', 'allow', '{203.0.113.0/24}');
+    insert into edge_rule (site_id, name, phase, expression, priority, action, list_ids) values
+      ('00000000-0000-4000-8000-00000000000a', 'own office', 'waf-custom',
+       'ip.src in $office or ip.src in $office_hq', 0, '{"kind":"block"}',
+       '{00000000-0000-4000-8000-0000000000e2}'),
+      (null, 'shared office', 'waf-custom', 'ip.src in $office', 0, '{"kind":"allow"}',
+       '{00000000-0000-4000-8000-0000000000e1}');
   `);
   await migrate(db, { migrationsFolder: defaultMigrationsFolder, migrationsSchema: "drizzle" });
 });
@@ -87,6 +114,68 @@ describe("upgrade to a single operator", () => {
     ]);
     const columns = await q<{ column_name: string }>(
       "select column_name from information_schema.columns where table_name = 'site' and column_name like 'suspend%'",
+    );
+    expect(columns).toEqual([]);
+    expect(await q("select scopes from service_account")).toEqual([
+      { scopes: ["sites:read", "usage:read"] },
+    ]);
+  });
+
+  it("keeps one account: the earliest administrator who is not disabled", async () => {
+    expect(await q('select id, role, banned from "user"')).toEqual([
+      { id: "u_admin", role: "admin", banned: false },
+    ]);
+    expect(await q("select id from apikey")).toEqual([{ id: "k_admin" }]);
+  });
+
+  it("moves the other accounts' alert subscriptions to the operator, merging kinds", async () => {
+    const rows = await q<{ user_id: string; site: string; kinds: string[]; enabled: boolean }>(
+      "select a.user_id, s.name as site, a.kinds, a.enabled from alert_subscription a join site s on s.id = a.site_id order by s.name",
+    );
+    expect(rows).toEqual([
+      {
+        user_id: "u_admin",
+        site: "a",
+        kinds: ["certificate_expiry", "node_offline"],
+        enabled: true,
+      },
+      { user_id: "u_admin", site: "b", kinds: ["origin_errors"], enabled: true },
+    ]);
+  });
+
+  it("puts IP lists in one namespace without changing what rules match", async () => {
+    const lists = await q<{ id: string; name: string; kind: string }>(
+      "select id, name, kind from ip_list order by id",
+    );
+    const suffix = (id: string) => createHash("md5").update(id).digest("hex").slice(0, 6);
+    expect(lists).toEqual([
+      { id: "00000000-0000-4000-8000-0000000000e1", name: "office", kind: "allow" },
+      {
+        id: "00000000-0000-4000-8000-0000000000e2",
+        name: `office_${suffix("00000000-0000-4000-8000-0000000000e2")}`,
+        kind: "collection",
+      },
+      { id: "00000000-0000-4000-8000-0000000000e3", name: "lab", kind: "collection" },
+    ]);
+    const rules = await q<{ name: string; expression: string }>(
+      "select name, expression from edge_rule order by name",
+    );
+    expect(rules).toEqual([
+      {
+        name: "own office",
+        expression: `ip.src in $office_${suffix("00000000-0000-4000-8000-0000000000e2")} or ip.src in $office_hq`,
+      },
+      { name: "shared office", expression: "ip.src in $office" },
+    ]);
+  });
+
+  it("drops organizations, members, invitations and every organization column", async () => {
+    const tables = await q<{ table_name: string }>(
+      "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('organization', 'member', 'invitation', 'organization_settings')",
+    );
+    expect(tables).toEqual([]);
+    const columns = await q<{ table_name: string }>(
+      "select table_name from information_schema.columns where table_schema = 'public' and column_name in ('organization_id', 'active_organization_id', 'available_to_tenants')",
     );
     expect(columns).toEqual([]);
     expect(await q("select scopes from service_account")).toEqual([

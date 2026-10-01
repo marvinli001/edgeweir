@@ -27,7 +27,6 @@ type EditableChannel = {
   id: string;
   name: string;
   kind: string;
-  availableToTenants: boolean;
   platform: boolean;
   locale: "zh-CN" | "en";
 };
@@ -219,7 +218,6 @@ function ChannelDialog({ onClose, initial }: { onClose: () => void; initial?: Ed
   const [kind, setKind] = React.useState<AlertChannelConfig["kind"]>(
       (initial?.kind as AlertChannelConfig["kind"]) ?? "webhook",
     ),
-    [available, setAvailable] = React.useState(initial?.availableToTenants ?? false),
     [platform, setPlatform] = React.useState(initial?.platform ?? false),
     [locale, setLocale] = React.useState<string>(initial?.locale ?? "zh-CN");
   const [replaceConfig, setReplaceConfig] = React.useState(!initial);
@@ -268,7 +266,6 @@ function ChannelDialog({ onClose, initial }: { onClose: () => void; initial?: Ed
         }
         const common = {
           name: String(data.get("channel-name")),
-          availableToTenants: available,
           platform,
           locale: locale as "zh-CN" | "en",
         };
@@ -335,12 +332,6 @@ function ChannelDialog({ onClose, initial }: { onClose: () => void; initial?: Ed
         label={m.alert_platform_scope()}
         checked={platform}
         onCheckedChange={setPlatform}
-      />
-      <SwitchField
-        id="channel-available"
-        label={m.alert_tenant_available()}
-        checked={available}
-        onCheckedChange={setAvailable}
       />
     </FormDialog>
   );

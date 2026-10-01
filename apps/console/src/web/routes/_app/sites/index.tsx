@@ -53,7 +53,6 @@ export const Route = createFileRoute("/_app/sites/")({
 function SitesPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const { isAdmin } = Route.useRouteContext();
   const page = search.page ?? 1;
   const sites = useQuery({
     ...orpc.sites.list.queryOptions({
@@ -66,7 +65,7 @@ function SitesPage() {
     }),
     placeholderData: keepPreviousData,
   });
-  const clusters = useQuery({ ...orpc.clusters.list.queryOptions(), enabled: isAdmin });
+  const clusters = useQuery(orpc.clusters.list.queryOptions());
   const setCreateOpen = (open: boolean) =>
     navigate({ search: (prev) => ({ ...prev, create: open || undefined }), replace: true });
   const filtered = !!search.q || !!search.cluster;
@@ -135,26 +134,13 @@ function SitesPage() {
           </div>
         ),
       },
-      ...(isAdmin
-        ? ([
-            {
-              id: "organization",
-              header: () => m.sites_col_organization(),
-              cell: ({ row }) => (
-                <span className="text-sm text-muted-foreground">
-                  {row.original.organizationName}
-                </span>
-              ),
-            },
-            {
-              id: "cluster",
-              header: () => m.sites_col_cluster(),
-              cell: ({ row }) => <Badge variant="secondary">{row.original.clusterName}</Badge>,
-            },
-          ] satisfies Columns<Site>)
-        : []),
+      {
+        id: "cluster",
+        header: () => m.sites_col_cluster(),
+        cell: ({ row }) => <Badge variant="secondary">{row.original.clusterName}</Badge>,
+      },
     ],
-    [isAdmin, starredIds, pendingId, toggle],
+    [starredIds, pendingId, toggle],
   );
 
   return (
@@ -177,7 +163,7 @@ function SitesPage() {
             })
           }
         />
-        {isAdmin && clusters.data && clusters.data.length > 1 ? (
+        {clusters.data && clusters.data.length > 1 ? (
           <Select
             value={search.cluster ?? ALL}
             onValueChange={(value) =>

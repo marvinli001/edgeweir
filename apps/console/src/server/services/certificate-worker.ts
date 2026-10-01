@@ -74,18 +74,28 @@ export async function runCertd<T = Record<string, unknown>>(
   }
 }
 
-async function assertIssuanceNames(
+/**
+ * The names to ask the CA for. A renewal by HTTP-01 drops names no site has
+ * any more (no cluster would serve their challenge), as long as one is left:
+ * sites that use the certificate only have names it still covers, so they
+ * stay covered and the remaining names keep renewing.
+ */
+async function issuanceNames(
   db: AppContext["db"],
   certificate: typeof schema.certificate.$inferSelect,
-) {
+): Promise<string[]> {
+  if (!certificate.chainPem || certificate.acme.challenge !== "http01") return certificate.names;
   const rows = await db
-    .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
+    .selectDistinct({ name: schema.siteDomain.name })
     .from(schema.siteDomain)
-    .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
-    .where(eq(schema.site.organizationId, certificate.organizationId));
-  const names = new Set(rows.map((d) => `${d.wildcard ? "*." : ""}${d.name}`));
-  if (certificate.names.some((name) => !names.has(name)))
-    throw new Error("certificate domains are no longer assigned to this organization");
+    .where(
+      and(
+        inArray(schema.siteDomain.name, certificate.names),
+        eq(schema.siteDomain.wildcard, false),
+      ),
+    );
+  const served = certificate.names.filter((name) => rows.some((row) => row.name === name));
+  return served.length ? served : certificate.names;
 }
 function attempt(certificate: typeof schema.certificate.$inferSelect) {
   if (!certificate.operationStartedAt) throw new Error("missing issuance attempt");
@@ -134,7 +144,6 @@ async function challengeEvent(
         .where(attempt(certificate))
         .for("update");
       if (!active.length) throw new Error("stale issuance attempt");
-      await assertIssuanceNames(tx as AppContext["db"], certificate);
       await tx
         .insert(schema.dnsChallengeLease)
         .values({
@@ -189,7 +198,6 @@ async function challengeEvent(
         .where(attempt(certificate))
         .for("update");
       if (!active.length) throw new Error("stale issuance attempt");
-      await assertIssuanceNames(tx as AppContext["db"], certificate);
     }
     await tx
       .delete(schema.acmeChallenge)
@@ -213,13 +221,7 @@ async function challengeEvent(
       .selectDistinct({ clusterId: schema.site.clusterId })
       .from(schema.site)
       .innerJoin(schema.siteDomain, eq(schema.siteDomain.siteId, schema.site.id))
-      .where(
-        and(
-          eq(schema.site.organizationId, certificate.organizationId),
-          eq(schema.siteDomain.name, domain),
-          eq(schema.siteDomain.wildcard, false),
-        ),
-      );
+      .where(and(eq(schema.siteDomain.name, domain), eq(schema.siteDomain.wildcard, false)));
     const out: { clusterId: string; revision: number }[] = [];
     for (const { clusterId } of sites) {
       const { row } = await publishRevision(tx, {
@@ -311,7 +313,7 @@ export async function issueCertificate(app: AppContext, id: string) {
     .returning();
   if (!row) return;
   try {
-    await assertIssuanceNames(app.db, row);
+    const names = await issuanceNames(app.db, row);
     const account = row.accountEnvelope
       ? JSON.parse(
           app.masterKey
@@ -321,10 +323,7 @@ export async function issueCertificate(app: AppContext, id: string) {
       : {};
     let dns: Record<string, unknown> | undefined;
     if (row.acme.dnsCredentialId) {
-      const credential = await findDnsCredential(app.db, row.acme.dnsCredentialId, {
-        all: false,
-        organizationId: row.organizationId,
-      });
+      const credential = await findDnsCredential(app.db, row.acme.dnsCredentialId);
       dns = {
         provider: credential.provider,
         zone: `${credential.zone}.`,
@@ -340,7 +339,7 @@ export async function issueCertificate(app: AppContext, id: string) {
       row.chainPem ? "renew" : "obtain",
       {
         email: row.acme.email,
-        domains: row.names,
+        domains: names,
         challenge: row.acme.challenge,
         account,
         dns,
@@ -360,7 +359,7 @@ export async function issueCertificate(app: AppContext, id: string) {
       throw new Error("invalid certificate response");
     const inspected = inspectCertificate(result.chainPem, result.privateKeyPem);
     if (
-      row.names.some((name) =>
+      names.some((name) =>
         name.startsWith("*.") ? !inspected.names.includes(name) : !inspected.leaf.checkHost(name),
       )
     )
@@ -375,7 +374,6 @@ export async function issueCertificate(app: AppContext, id: string) {
         : fallback,
     );
     await app.db.transaction(async (tx) => {
-      await assertIssuanceNames(tx as AppContext["db"], row);
       const updated = await tx
         .update(schema.certificate)
         .set({
@@ -413,14 +411,13 @@ export async function issueCertificate(app: AppContext, id: string) {
         });
       await recordAudit(tx, systemActor, {
         action: "certificate.issued",
-        organizationId: row.organizationId,
         targetType: "certificate",
         targetId: id,
         targetName: row.name,
         metadata: { fingerprint: inspected.fingerprint, ari: result.ari === true },
       });
     });
-  } catch {
+  } catch (error) {
     await app.db
       .update(schema.certificate)
       .set({
@@ -430,7 +427,17 @@ export async function issueCertificate(app: AppContext, id: string) {
         renewAt: new Date(Date.now() + 3_600_000),
       })
       .where(attempt(row));
-    app.log.warn("certificate operation failed", { certificateId: id });
+    // Never the helper's output, which may quote credentials or keys (a
+    // JSON.parse error would quote the line it failed on).
+    app.log.warn("certificate operation failed", {
+      certificateId: id,
+      reason:
+        error instanceof SyntaxError
+          ? "invalid helper output"
+          : error instanceof Error
+            ? error.message
+            : "unknown",
+    });
   } finally {
     const leases = await app.db
       .select()

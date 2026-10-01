@@ -4,16 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer as tlsServer } from "node:tls";
 import { schema } from "@edgeweir/db";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { postNotification } from "../../src/server/lib/outbound";
-import { sweepAlerts } from "../../src/server/services/alerts";
+import { sweepAlerts, unsubscribeAlerts } from "../../src/server/services/alerts";
 import { deliverNotification } from "../../src/server/services/notification-delivery";
 import {
   type ApiClient,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -38,55 +37,26 @@ describe("M5 notification delivery and subscription authorization", async () => 
   });
   const app = createApp(ctx),
     origin = ctx.env.EDGEWEIR_PUBLIC_URL;
-  let admin: ApiClient,
-    tenant: ApiClient,
-    other: ApiClient,
-    siteId: string,
-    otherSite: string,
-    channelId: string,
-    nodeId: string,
-    orgId: string,
-    tenantUser: string;
+  let admin: ApiClient, siteId: string, channelId: string, nodeId: string;
   const received = () => deliveries.filter((d) => d.kind !== "test");
   beforeAll(async () => {
     await setupPlatform(ctx);
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
     const cluster = (await admin.clusters.list())[0];
     if (!cluster) throw new Error("cluster missing");
-    const org = await admin.organizations.create({
-      name: "Alerts tenant",
-      defaultClusterId: cluster.id,
-    });
-    orgId = org.id;
-    const created = await admin.users.create({
-      name: "Tenant",
-      email: "tenant@alert.test",
-      password: PASSWORD,
-      organizationId: org.id,
-    });
-    tenantUser = created.id;
-    await admin.users.create({
-      name: "Other",
-      email: "other@alert.test",
-      password: PASSWORD,
-      organizationId: org.id,
-    });
-    tenant = rpcClient(app, origin, await signIn(app, origin, "tenant@alert.test"));
-    other = rpcClient(app, origin, await signIn(app, origin, "other@alert.test"));
     siteId = (
-      await tenant.sites.create({
-        name: "Alert tenant",
+      await admin.sites.create({
+        name: "Alerted site",
         domains: ["alert-customer.test"],
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
-    otherSite = (
-      await admin.sites.create({
-        name: "Private platform",
-        domains: ["private-alert.test"],
-        origins: [{ address: "origin.test" }],
-      })
-    ).site.id;
+    // A site of the same cluster that no channel is subscribed to.
+    await admin.sites.create({
+      name: "Unsubscribed site",
+      domains: ["private-alert.test"],
+      origins: [{ address: "origin.test" }],
+    });
     const [node] = await ctx.db
       .insert(schema.node)
       .values({
@@ -103,10 +73,9 @@ describe("M5 notification delivery and subscription authorization", async () => 
     await new Promise<void>((resolve) => sink.close(() => resolve()));
     await db.close();
   });
-  it("encrypts channel credentials and requires explicit tenant visibility", async () => {
+  it("encrypts channel credentials and never returns them", async () => {
     const channel = await admin.alerts.createChannel({
-      name: "Tenant webhook",
-      availableToTenants: true,
+      name: "Site webhook",
       config: { kind: "webhook", url: endpoint, bearer: "private-test-bearer" },
     });
     channelId = channel.id;
@@ -114,25 +83,22 @@ describe("M5 notification delivery and subscription authorization", async () => 
     const stored = (await ctx.db.select().from(schema.alertChannel))[0];
     expect(stored?.configEnvelope).not.toContain("private-test-bearer");
     expect(JSON.stringify(await admin.alerts.channels())).not.toContain(endpoint);
-    expect((await tenant.alerts.availableChannels()).map((c) => c.id)).toEqual([channelId]);
-    expect(
-      (
-        await rpcError(
-          tenant.alerts.subscribe({ siteId: otherSite, channelId, kinds: ["node_offline"] }),
-        )
-      ).code,
-    ).toBe("SITE_NOT_FOUND");
+    expect((await admin.alerts.channels()).map((c) => c.id)).toEqual([channelId]);
     await admin.alerts.testChannel({ id: channelId });
     expect(deliveries[0]?.kind).toBe("test");
     await admin.alerts.updateChannel({ id: channelId, name: "Updated webhook" });
     expect((await admin.alerts.channels())[0]?.name).toBe("Updated webhook");
   });
-  it("notifies once per transition and exposes only the tenant's events", async () => {
-    const sub = await tenant.alerts.subscribe({ siteId, channelId, kinds: ["node_offline"] });
-    expect(await tenant.alerts.subscriptions()).toHaveLength(1);
-    expect((await rpcError(other.alerts.unsubscribe({ id: sub.id }))).code).toBe(
-      "ALERT_SUBSCRIPTION_NOT_FOUND",
-    );
+  it("notifies a channel once per transition of the sites subscribed to it", async () => {
+    const sub = await admin.alerts.subscribe({ siteId, channelId, kinds: ["node_offline"] });
+    expect(await admin.alerts.subscriptions()).toHaveLength(1);
+    // Subscriptions belong to the account that made them.
+    await expect(
+      unsubscribeAlerts(ctx, sub.id, {
+        actor: { type: "user", id: "someone-else", name: "Someone else" },
+        userId: "someone-else",
+      }),
+    ).rejects.toMatchObject({ code: "ALERT_SUBSCRIPTION_NOT_FOUND" });
     await admin.alerts.setPolicy({ nodeOfflineSeconds: 45 });
     expect((await admin.alerts.policy()).nodeOfflineSeconds).toBe(45);
     await ctx.db
@@ -143,12 +109,7 @@ describe("M5 notification delivery and subscription authorization", async () => 
     await sweepAlerts(ctx);
     expect(received()).toHaveLength(1);
     expect(received()[0]).toMatchObject({ siteId, kind: "node_offline", status: "firing" });
-    expect(JSON.stringify(received())).not.toContain("Private platform");
-    const events = await tenant.alerts.events({});
-    expect(events.every((e) => e.siteId === siteId)).toBe(true);
-    expect((await rpcError(tenant.alerts.events({ siteId: otherSite }))).code).toBe(
-      "SITE_NOT_FOUND",
-    );
+    expect(JSON.stringify(received())).not.toContain("Unsubscribed site");
     await ctx.db
       .update(schema.node)
       .set({ lastSeenAt: new Date() })
@@ -157,27 +118,11 @@ describe("M5 notification delivery and subscription authorization", async () => 
     expect(received()).toHaveLength(2);
     expect(received()[1]?.status).toBe("resolved");
   });
-  it("stops delivery after membership is removed even if the subscription still exists", async () => {
-    await ctx.db
-      .delete(schema.member)
-      .where(and(eq(schema.member.userId, tenantUser), eq(schema.member.organizationId, orgId)));
-    await ctx.db
-      .update(schema.node)
-      .set({ lastSeenAt: new Date(0) })
-      .where(eq(schema.node.id, nodeId));
-    await sweepAlerts(ctx);
-    expect(received()).toHaveLength(2);
-    await admin.organizations.addMember({
-      organizationId: orgId,
-      userId: tenantUser,
-      role: "member",
-    });
-    await sweepAlerts(ctx);
-    expect(received()).toHaveLength(3);
-    const [sub] = await tenant.alerts.subscriptions();
+  it("removes a subscription", async () => {
+    const [sub] = await admin.alerts.subscriptions();
     if (!sub) throw new Error("subscription missing");
-    await tenant.alerts.unsubscribe({ id: sub.id });
-    expect(await tenant.alerts.subscriptions()).toEqual([]);
+    await admin.alerts.unsubscribe({ id: sub.id });
+    expect(await admin.alerts.subscriptions()).toEqual([]);
   });
   it("refuses private endpoints unless the operator explicitly allows them and never follows redirects", async () => {
     const allow = ctx.env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS;

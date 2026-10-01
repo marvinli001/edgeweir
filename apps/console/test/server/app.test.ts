@@ -1,9 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { schema } from "@edgeweir/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { createClusterTx } from "../../src/server/services/clusters";
-import { createTestContext } from "./helpers";
+import { createTestContext, rpcClient } from "./helpers";
 
 describe("HTTP API", async () => {
   const { ctx, client } = await createTestContext();
@@ -55,7 +54,7 @@ describe("HTTP API", async () => {
     expect(spec.paths["/sites"]).toHaveProperty("post");
   });
 
-  it("requires authentication for tenant and admin procedures", async () => {
+  it("requires authentication for every procedure but the public ones", async () => {
     expect((await call("/api/v1/system/status")).status).toBe(200);
     expect(await (await call("/api/v1/system/status")).json()).toMatchObject({
       initialized: false,
@@ -77,16 +76,13 @@ describe("HTTP API", async () => {
   });
 
   it("signs in, issues an API key and creates a site through /api/v1", async () => {
-    const created = await ctx.auth.api.createUser({
+    await ctx.auth.api.createUser({
       body: {
         email: "admin@example.com",
         password: "correct horse battery",
         name: "Admin",
         role: "admin",
       },
-    });
-    await ctx.auth.api.createOrganization({
-      body: { name: "Default", slug: "default", userId: created.user.id },
     });
 
     const signIn = await call("/api/auth/sign-in/email", {
@@ -97,13 +93,10 @@ describe("HTTP API", async () => {
     const cookie = (signIn.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
     expect(cookie).toContain("session_token");
 
-    const keyRes = await call("/api/auth/api-key/create", {
-      method: "POST",
-      headers: { cookie },
-      body: JSON.stringify({ name: "ci" }),
+    const { key } = await rpcClient(app, origin, cookie).accessKeys.create({
+      name: "ci",
+      scope: "write",
     });
-    expect(keyRes.status).toBe(200);
-    const { key } = (await keyRes.json()) as { key: string };
     expect(key.startsWith("ewk_")).toBe(true);
 
     const res = await call("/api/v1/sites", {
@@ -181,38 +174,7 @@ describe("HTTP API", async () => {
       targetName: "demo",
     });
 
-    // System settings belong to the admin area.
+    // The operator's key reaches the system settings as well.
     expect((await call("/api/v1/settings", { headers: { "x-api-key": key } })).status).toBe(200);
-  });
-
-  it("keeps platform procedures away from tenant members", async () => {
-    const [org] = await ctx.db.select().from(schema.organization).limit(1);
-    if (!org) throw new Error("organization missing");
-    const member = await ctx.auth.api.createUser({
-      body: { email: "member@example.com", password: "correct horse battery", name: "Member" },
-    });
-    await ctx.db.insert(schema.member).values({
-      id: "member_tenant",
-      organizationId: org.id,
-      userId: member.user.id,
-      role: "member",
-      createdAt: new Date(),
-    });
-    const signIn = await call("/api/auth/sign-in/email", {
-      method: "POST",
-      body: JSON.stringify({ email: "member@example.com", password: "correct horse battery" }),
-    });
-    const cookie = (signIn.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
-    const rpc = (path: string) =>
-      call(`/rpc/${path}`, {
-        method: "POST",
-        headers: { cookie, "x-csrf-token": "orpc" },
-        body: JSON.stringify({ json: {} }),
-      });
-
-    expect((await rpc("sites/list")).status).toBe(200);
-    for (const path of ["settings/get", "clusters/list", "auditLogs/list"]) {
-      expect((await rpc(path)).status, path).toBe(403);
-    }
   });
 });

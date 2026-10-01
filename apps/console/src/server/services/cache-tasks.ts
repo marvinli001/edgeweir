@@ -6,20 +6,7 @@ import type {
   cacheTaskCreateInput,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import {
-  and,
-  arrayContains,
-  count,
-  desc,
-  eq,
-  gt,
-  inArray,
-  isNull,
-  lt,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, arrayContains, count, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import type * as z from "zod";
 import { fail } from "../lib/errors";
 import { TASKS_CHANNEL } from "../lib/events";
@@ -27,7 +14,6 @@ import { cleanErrorCode, cleanErrorParams, taskError } from "../lib/node-errors"
 import { assertServing } from "../lib/site-state";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import type { Executor } from "./revisions";
-import type { SiteScope } from "./sites";
 
 type CacheTaskCreate = z.output<typeof cacheTaskCreateInput>;
 type TaskRow = typeof schema.cacheTask.$inferSelect;
@@ -87,12 +73,8 @@ function parseTarget(input: string, type: CacheTaskType): ParsedTarget | null {
   };
 }
 
-function scopeFilter(scope: SiteScope) {
-  return scope.all ? undefined : eq(schema.site.organizationId, scope.organizationId);
-}
-
-/** Maps host names to the sites (in scope) that serve them: exact domains win over wildcards. */
-async function resolveHosts(db: Executor, hosts: string[], scope: SiteScope) {
+/** Maps host names to the sites that serve them: exact domains win over wildcards. */
+async function resolveHosts(db: Executor, hosts: string[]) {
   const parents = hosts.map((h) => h.slice(h.indexOf(".") + 1)).filter((p, i) => p !== hosts[i]);
   const rows = await db
     .select({
@@ -101,20 +83,16 @@ async function resolveHosts(db: Executor, hosts: string[], scope: SiteScope) {
       siteId: schema.site.id,
       siteName: schema.site.name,
       clusterId: schema.site.clusterId,
-      organizationId: schema.site.organizationId,
       enabled: schema.site.enabled,
     })
     .from(schema.siteDomain)
     .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
     .where(
-      and(
-        or(
-          and(inArray(schema.siteDomain.name, hosts), eq(schema.siteDomain.wildcard, false)),
-          parents.length
-            ? and(inArray(schema.siteDomain.name, parents), eq(schema.siteDomain.wildcard, true))
-            : undefined,
-        ),
-        scopeFilter(scope),
+      or(
+        and(inArray(schema.siteDomain.name, hosts), eq(schema.siteDomain.wildcard, false)),
+        parents.length
+          ? and(inArray(schema.siteDomain.name, parents), eq(schema.siteDomain.wildcard, true))
+          : undefined,
       ),
     );
   const resolved = new Map<string, (typeof rows)[number]>();
@@ -198,124 +176,26 @@ async function toTaskDtos(db: Executor, rows: TaskRow[]): Promise<CacheTask[]> {
 }
 
 /**
- * How many purge and prefetch requests one organization may make (N-H3):
- * nodes keep a marker per purged URL for days, so an unbounded stream of
- * purges would fill their purge store. Platform administrators are exempt,
- * and whole-site purges the console sends on its own (source "recovery")
- * do not count.
- */
-export const CACHE_TASK_LIMITS = { tasksPerMinute: 10, urlsPerHour: 2000 } as const;
-
-const MINUTE_MS = 60_000;
-const HOUR_MS = 3_600_000;
-
-/** User-requested purges and prefetches of the last hour (URLs) and minute (tasks). */
-async function recentPurges(tx: Executor, organizationId: string, now: Date) {
-  const recent = await tx
-    .select({
-      createdAt: schema.cacheTask.createdAt,
-      targets: sql<number>`cardinality(${schema.cacheTask.targets})`.mapWith(Number),
-    })
-    .from(schema.cacheTask)
-    .where(
-      and(
-        eq(schema.cacheTask.organizationId, organizationId),
-        eq(schema.cacheTask.source, "user"),
-        gt(schema.cacheTask.createdAt, new Date(now.getTime() - HOUR_MS)),
-      ),
-    )
-    .orderBy(schema.cacheTask.createdAt);
-  // The legacy site purge endpoint publishes a cache generation instead of
-  // creating a typed task. Both entry points consume the same quota.
-  const legacy = await tx
-    .select({ createdAt: schema.auditLog.occurredAt })
-    .from(schema.auditLog)
-    .where(
-      and(
-        eq(schema.auditLog.organizationId, organizationId),
-        eq(schema.auditLog.action, "site.purge_all"),
-        sql`${schema.auditLog.metadata}->>'quotaLimited' = 'true'`,
-        gt(schema.auditLog.occurredAt, new Date(now.getTime() - HOUR_MS)),
-      ),
-    );
-  recent.push(...legacy.map((row) => ({ ...row, targets: 1 })));
-  recent.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  return recent;
-}
-
-/**
- * Refuses a request of `count` targets (URLs, prefixes or sites) that would
- * take the organization over CACHE_TASK_LIMITS, with the seconds until it
- * would fit. Serialized per organization for the rest of the transaction.
- */
-export async function assertCacheTaskQuota(
-  tx: Executor,
-  organizationId: string,
-  count: number,
-  now: Date,
-) {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.cache-task-quota.${organizationId}`}))`,
-  );
-  const recent = await recentPurges(tx, organizationId, now);
-  const { tasksPerMinute, urlsPerHour } = CACHE_TASK_LIMITS;
-  let waitMs = 0;
-  const lastMinute = recent.filter((r) => r.createdAt.getTime() > now.getTime() - MINUTE_MS);
-  if (lastMinute.length >= tasksPerMinute) {
-    // Until enough of them are older than a minute to make room for one more.
-    const oldest = lastMinute[lastMinute.length - tasksPerMinute];
-    waitMs = Math.max(
-      waitMs,
-      (oldest?.createdAt.getTime() ?? now.getTime()) + MINUTE_MS - now.getTime(),
-    );
-  }
-  let used = recent.reduce((sum, r) => sum + r.targets, 0);
-  if (used + count > urlsPerHour) {
-    let until = now.getTime() + HOUR_MS;
-    for (const r of recent) {
-      used -= r.targets;
-      if (used + count <= urlsPerHour) {
-        until = r.createdAt.getTime() + HOUR_MS;
-        break;
-      }
-    }
-    waitMs = Math.max(waitMs, until - now.getTime());
-  }
-  if (waitMs > 0) {
-    const retryAfterSeconds = Math.max(1, Math.ceil(waitMs / 1000));
-    fail(
-      "CACHE_TASK_RATE_LIMITED",
-      `too many cache tasks: at most ${tasksPerMinute} per minute and ${urlsPerHour} URLs per hour per organization; retry in ${retryAfterSeconds} s`,
-      { tasksPerMinute, urlsPerHour, retryAfterSeconds },
-    );
-  }
-}
-
-/**
- * Creates a purge or prefetch task: resolves URLs to sites (within the
- * caller's scope), fans the task out to every node of the affected clusters
- * and wakes their watch streams.
+ * Creates a purge or prefetch task: resolves URLs to sites, fans the task
+ * out to every node of the affected clusters and wakes their watch streams.
  */
 export async function createCacheTask(
   db: Database,
   input: CacheTaskCreate,
-  ctx: { scope: SiteScope; actor: Actor },
+  ctx: { actor: Actor },
 ): Promise<CacheTask> {
   return db.transaction(async (tx) => {
     const items: CacheTaskItem[] = [];
     const targets: string[] = [];
-    const siteMeta = new Map<string, { name: string; organizationId: string }>();
+    const siteNames = new Map<string, string>();
 
     if (input.type === "site") {
       const ids = [...new Set(input.siteIds)];
-      const sites = await tx
-        .select()
-        .from(schema.site)
-        .where(and(inArray(schema.site.id, ids), scopeFilter(ctx.scope)));
+      const sites = await tx.select().from(schema.site).where(inArray(schema.site.id, ids));
       if (sites.length !== ids.length) fail("SITE_NOT_FOUND", "site not found");
       for (const site of sites) assertServing(site);
       for (const site of sites) {
-        siteMeta.set(site.id, { name: site.name, organizationId: site.organizationId });
+        siteNames.set(site.id, site.name);
         targets.push(site.name);
         items.push({
           siteId: site.id,
@@ -339,7 +219,7 @@ export async function createCacheTask(
         const urls = invalid.slice(0, 5).join(", ");
         fail("CACHE_TASK_URL_INVALID", `invalid URL: ${urls}`, { urls });
       }
-      const resolved = await resolveHosts(tx, [...new Set(parsed.map((p) => p.host))], ctx.scope);
+      const resolved = await resolveHosts(tx, [...new Set(parsed.map((p) => p.host))]);
       const unknown = [...new Set(parsed.map((p) => p.host).filter((h) => !resolved.has(h)))];
       if (unknown.length) {
         const hosts = unknown.slice(0, 5).join(", ");
@@ -351,7 +231,7 @@ export async function createCacheTask(
         const site = resolved.get(target.host);
         if (!site || seen.has(target.url)) continue;
         seen.add(target.url);
-        siteMeta.set(site.siteId, { name: site.siteName, organizationId: site.organizationId });
+        siteNames.set(site.siteId, site.siteName);
         targets.push(target.url);
         items.push({
           siteId: site.siteId,
@@ -365,11 +245,6 @@ export async function createCacheTask(
       }
     }
 
-    // Platform administrators are exempt; tenants' scope is their organization.
-    if (!ctx.scope.all) {
-      await assertCacheTaskQuota(tx, ctx.scope.organizationId, targets.length, new Date());
-    }
-    const organizations = [...new Set([...siteMeta.values()].map((s) => s.organizationId))];
     const clusterIds = [...new Set(items.map((i) => i.clusterId))];
     const nodes = await tx
       .select({
@@ -386,10 +261,9 @@ export async function createCacheTask(
     const [task] = await tx
       .insert(schema.cacheTask)
       .values({
-        organizationId: organizations.length === 1 ? (organizations[0] ?? null) : null,
         type: input.type,
         targets,
-        siteIds: [...siteMeta.keys()],
+        siteIds: [...siteNames.keys()],
         payload: items as unknown as Record<string, string>[],
         createdByUserId:
           ctx.actor.type === "user" || ctx.actor.type === "api_key" ? ctx.actor.id : null,
@@ -421,7 +295,6 @@ export async function createCacheTask(
     }
     await recordAudit(tx, ctx.actor, {
       action: `cache.${input.type === "prefetch" ? "prefetch" : "purge"}`,
-      organizationId: task.organizationId,
       targetType: "cache_task",
       targetId: task.id,
       targetName: targets.length === 1 ? (targets[0] ?? "") : `${targets.length} × ${input.type}`,
@@ -429,7 +302,7 @@ export async function createCacheTask(
         type: input.type,
         targets: targets.slice(0, 20),
         count: targets.length,
-        sites: [...siteMeta.values()].map((s) => s.name),
+        sites: [...siteNames.values()],
         nodes: active.length,
         skippedNodes: nodes.length - active.length,
       },
@@ -440,19 +313,11 @@ export async function createCacheTask(
   });
 }
 
-function taskScope(scope: SiteScope): SQL | undefined {
-  return scope.all ? undefined : eq(schema.cacheTask.organizationId, scope.organizationId);
-}
-
 export async function listCacheTasks(
   db: Database,
-  scope: SiteScope,
   query: { siteId?: string; page: number; pageSize: number },
 ): Promise<{ items: CacheTask[]; total: number }> {
-  const where = and(
-    taskScope(scope),
-    query.siteId ? arrayContains(schema.cacheTask.siteIds, [query.siteId]) : undefined,
-  );
+  const where = query.siteId ? arrayContains(schema.cacheTask.siteIds, [query.siteId]) : undefined;
   const [total] = await db.select({ n: count() }).from(schema.cacheTask).where(where);
   const rows = await db
     .select()
@@ -464,11 +329,8 @@ export async function listCacheTasks(
   return { items: await toTaskDtos(db, rows), total: total?.n ?? 0 };
 }
 
-export async function getCacheTask(db: Database, id: string, scope: SiteScope): Promise<CacheTask> {
-  const [row] = await db
-    .select()
-    .from(schema.cacheTask)
-    .where(and(eq(schema.cacheTask.id, id), taskScope(scope)));
+export async function getCacheTask(db: Database, id: string): Promise<CacheTask> {
+  const [row] = await db.select().from(schema.cacheTask).where(eq(schema.cacheTask.id, id));
   if (!row) fail("CACHE_TASK_NOT_FOUND", "cache task not found");
   const [dto] = await toTaskDtos(db, [row]);
   if (!dto) fail("CACHE_TASK_NOT_FOUND", "cache task not found");
@@ -536,7 +398,7 @@ export async function hasDeliverableTasks(db: Executor, nodeId: string): Promise
  * N-M4: a node that comes back after purges expired unexecuted (or were
  * skipped while it was disabled) still holds the objects they should have
  * removed. For every site those purges touched, it gets one whole-site purge
- * (one task per organization, only for this node, source "recovery"), and
+ * (one task, only for this node, source "recovery"), and
  * the missed deliveries are flagged with recovered_at so this happens once.
  */
 async function recoverMissedPurges(
@@ -572,22 +434,14 @@ async function recoverMissedPurges(
         .select({
           id: schema.site.id,
           name: schema.site.name,
-          organizationId: schema.site.organizationId,
         })
         .from(schema.site)
         .where(and(inArray(schema.site.id, siteIds), eq(schema.site.clusterId, node.clusterId)))
         .orderBy(schema.site.name)
     : [];
-  const byOrganization = new Map<string, typeof sites>();
-  for (const site of sites) {
-    byOrganization.set(site.organizationId, [
-      ...(byOrganization.get(site.organizationId) ?? []),
-      site,
-    ]);
-  }
   const missedTasks = missed.map((m) => m.taskId);
-  for (const [organizationId, orgSites] of byOrganization) {
-    const items: CacheTaskItem[] = orgSites.map((site) => ({
+  if (sites.length) {
+    const items: CacheTaskItem[] = sites.map((site) => ({
       siteId: site.id,
       clusterId: node.clusterId,
       type: "site",
@@ -596,15 +450,14 @@ async function recoverMissedPurges(
       query: "",
       url: "",
     }));
-    const targets = orgSites.map((s) => s.name);
+    const targets = sites.map((s) => s.name);
     const [task] = await tx
       .insert(schema.cacheTask)
       .values({
-        organizationId,
         type: "site",
         source: "recovery",
         targets,
-        siteIds: orgSites.map((s) => s.id),
+        siteIds: sites.map((s) => s.id),
         payload: items as unknown as Record<string, string>[],
         createdAt: now,
       })
@@ -615,7 +468,6 @@ async function recoverMissedPurges(
       .values({ taskId: task.id, nodeId: node.id, clusterId: node.clusterId, nodeName });
     await recordAudit(tx, systemActor, {
       action: "cache.purge",
-      organizationId,
       targetType: "cache_task",
       targetId: task.id,
       targetName: targets.length === 1 ? (targets[0] ?? "") : `${targets.length} × site`,
@@ -639,7 +491,7 @@ async function recoverMissedPurges(
         inArray(schema.cacheTaskNode.taskId, missedTasks),
       ),
     );
-  return byOrganization.size;
+  return sites.length ? 1 : 0;
 }
 
 /**

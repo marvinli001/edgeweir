@@ -22,7 +22,6 @@ import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
 import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
-import { unavailableReason } from "@/lib/protection";
 
 export function HttpsTab({ site }: { site: Site }) {
   const policy = useQuery(orpc.https.get.queryOptions({ input: { id: site.id } }));
@@ -123,13 +122,7 @@ function HttpsEditor({
             options={[
               { value: "none", label: m.cert_none() },
               ...certificates
-                .filter(
-                  (c) =>
-                    c.organizationId === site.organizationId &&
-                    c.fingerprint &&
-                    c.notAfter &&
-                    Date.parse(c.notAfter) > Date.now(),
-                )
+                .filter((c) => c.fingerprint && c.notAfter && Date.parse(c.notAfter) > Date.now())
                 .map((c) => ({ value: c.id, label: c.name })),
             ]}
             onChange={(value) =>
@@ -291,7 +284,7 @@ function CompressionGroup({
       </div>
       {availability.available ? null : (
         <SafetyNote className="mt-2" data-testid={`https-${algorithm}-unavailable`}>
-          {unavailableReason(availability)}
+          {m.feature_unavailable_nodes()}
         </SafetyNote>
       )}
     </FieldSet>

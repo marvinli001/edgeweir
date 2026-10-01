@@ -23,8 +23,7 @@ import {
 } from "./notification-delivery";
 import type { Executor } from "./revisions";
 import { elevatedSites } from "./security";
-import { findSite, type SiteScope } from "./sites";
-import { isAdminRole } from "./users";
+import { findSite } from "./sites";
 
 const POLICY_KEY = "alert_policy";
 type Channel = typeof schema.alertChannel.$inferSelect;
@@ -34,13 +33,11 @@ const dto = (c: Channel) => ({
   name: c.name,
   kind: c.kind,
   enabled: c.enabled,
-  availableToTenants: c.availableToTenants,
   platform: c.platform,
   locale: c.locale === "en" ? ("en" as const) : ("zh-CN" as const),
   lastError: c.lastError,
 });
 export interface AlertContext {
-  scope: SiteScope;
   actor: Actor;
   userId: string;
 }
@@ -70,7 +67,6 @@ export async function createAlertChannel(app: AppContext, input: AlertChannelInp
         name: input.name,
         kind: input.config.kind,
         enabled: input.enabled,
-        availableToTenants: input.availableToTenants,
         platform: input.platform,
         locale: input.locale,
         configEnvelope,
@@ -82,11 +78,7 @@ export async function createAlertChannel(app: AppContext, input: AlertChannelInp
       targetType: "alert_channel",
       targetId: id,
       targetName: row.name,
-      metadata: {
-        kind: row.kind,
-        platform: row.platform,
-        availableToTenants: row.availableToTenants,
-      },
+      metadata: { kind: row.kind, platform: row.platform },
     });
     return dto(row);
   });
@@ -97,7 +89,6 @@ export async function updateAlertChannel(
     id: string;
     name?: string;
     enabled?: boolean;
-    availableToTenants?: boolean;
     platform?: boolean;
     locale?: "en" | "zh-CN";
     config?: AlertChannelConfig;
@@ -255,20 +246,6 @@ export async function setSmtpConfig(app: AppContext, input: SmtpInput, actor: Ac
     return { ok: true as const };
   });
 }
-export async function availableAlertChannels(app: AppContext, scope: SiteScope) {
-  return (
-    await app.db
-      .select()
-      .from(schema.alertChannel)
-      .where(
-        and(
-          eq(schema.alertChannel.enabled, true),
-          scope.all ? undefined : eq(schema.alertChannel.availableToTenants, true),
-        ),
-      )
-      .orderBy(schema.alertChannel.name)
-  ).map((c) => ({ id: c.id, name: c.name, kind: c.kind }));
-}
 export async function listAlertSubscriptions(app: AppContext, ctx: AlertContext) {
   const rows = await app.db
     .select({
@@ -279,12 +256,7 @@ export async function listAlertSubscriptions(app: AppContext, ctx: AlertContext)
     .from(schema.alertSubscription)
     .innerJoin(schema.site, eq(schema.site.id, schema.alertSubscription.siteId))
     .innerJoin(schema.alertChannel, eq(schema.alertChannel.id, schema.alertSubscription.channelId))
-    .where(
-      and(
-        eq(schema.alertSubscription.userId, ctx.userId),
-        ctx.scope.all ? undefined : eq(schema.site.organizationId, ctx.scope.organizationId),
-      ),
-    );
+    .where(eq(schema.alertSubscription.userId, ctx.userId));
   return rows.map(({ sub, siteName, channelName }) => ({
     id: sub.id,
     siteId: sub.siteId,
@@ -301,17 +273,15 @@ export async function subscribeAlerts(
   ctx: AlertContext,
 ) {
   return app.db.transaction(async (tx) => {
-    const site = await findSite(tx, input.siteId, ctx.scope);
+    const site = await findSite(tx, input.siteId);
     const c = await channel(tx, input.channelId);
-    if (!c.enabled || (!ctx.scope.all && !c.availableToTenants))
-      fail("ALERT_CHANNEL_NOT_FOUND", "channel is unavailable");
+    if (!c.enabled) fail("ALERT_CHANNEL_NOT_FOUND", "channel is unavailable");
     const [sub] = await tx
       .insert(schema.alertSubscription)
       .values({
         ...input,
         kinds: [...new Set(input.kinds)],
         userId: ctx.userId,
-        organizationId: site.organizationId,
       })
       .onConflictDoUpdate({
         target: [
@@ -325,7 +295,6 @@ export async function subscribeAlerts(
     if (!sub) throw new Error("subscription insert failed");
     await recordAudit(tx, ctx.actor, {
       action: "alert.subscribe",
-      organizationId: site.organizationId,
       targetType: "site",
       targetId: site.id,
       targetName: site.name,
@@ -351,33 +320,27 @@ export async function unsubscribeAlerts(app: AppContext, id: string, ctx: AlertC
         and(eq(schema.alertSubscription.id, id), eq(schema.alertSubscription.userId, ctx.userId)),
       );
     if (!sub) fail("ALERT_SUBSCRIPTION_NOT_FOUND", "subscription not found");
-    await findSite(tx, sub.siteId, ctx.scope);
+    await findSite(tx, sub.siteId);
     await tx.delete(schema.alertSubscription).where(eq(schema.alertSubscription.id, id));
     await recordAudit(tx, ctx.actor, {
       action: "alert.unsubscribe",
-      organizationId: sub.organizationId,
       targetType: "alert_subscription",
       targetId: id,
     });
     return { ok: true as const };
   });
 }
-export async function listAlertEvents(app: AppContext, scope: SiteScope, siteId?: string) {
-  if (siteId) await findSite(app.db, siteId, scope);
+export async function listAlertEvents(app: AppContext, siteId?: string) {
+  if (siteId) await findSite(app.db, siteId);
   const rows = await app.db
     .select({ event: schema.alertEvent, siteName: schema.site.name })
     .from(schema.alertEvent)
     .leftJoin(schema.site, eq(schema.site.id, schema.alertEvent.siteId))
     .where(
-      and(
-        // Platform alerts (no site) are for platform administrators only.
-        scope.all
-          ? siteId
-            ? undefined
-            : or(isNull(schema.alertEvent.siteId), isNotNull(schema.site.id))
-          : eq(schema.site.organizationId, scope.organizationId),
-        siteId ? eq(schema.site.id, siteId) : undefined,
-      ),
+      siteId
+        ? eq(schema.site.id, siteId)
+        : // Platform alerts have no site; alerts of deleted sites are gone with them.
+          or(isNull(schema.alertEvent.siteId), isNotNull(schema.site.id)),
     )
     .orderBy(desc(schema.alertEvent.occurredAt), desc(schema.alertEvent.ordinal))
     .limit(100);
@@ -485,50 +448,23 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
   }
   return { active, sites };
 }
-/** Recheck memberships, bans, MFA and channel visibility at delivery, not only at subscription. */
+/** A platform channel gets every alert; others the site alerts subscribed to them. */
 async function eligible(app: AppContext, c: Channel, event: Event) {
   if (!c.enabled) return false;
   if (c.platform) return true;
   // Platform alerts have no subscribers: platform channels only.
   if (event.siteId === null) return false;
-  const siteId = event.siteId;
   const rows = await app.db
-    .select({
-      sub: schema.alertSubscription,
-      user: schema.user,
-      memberId: schema.member.id,
-      requireTwoFactor: schema.organizationSettings.requireTwoFactor,
-    })
+    .select({ kinds: schema.alertSubscription.kinds })
     .from(schema.alertSubscription)
-    .innerJoin(schema.user, eq(schema.user.id, schema.alertSubscription.userId))
-    .leftJoin(
-      schema.member,
-      and(
-        eq(schema.member.userId, schema.user.id),
-        eq(schema.member.organizationId, schema.alertSubscription.organizationId),
-      ),
-    )
-    .leftJoin(
-      schema.organizationSettings,
-      eq(schema.organizationSettings.organizationId, schema.alertSubscription.organizationId),
-    )
     .where(
       and(
-        eq(schema.alertSubscription.siteId, siteId),
+        eq(schema.alertSubscription.siteId, event.siteId),
         eq(schema.alertSubscription.channelId, c.id),
         eq(schema.alertSubscription.enabled, true),
       ),
     );
-  return rows.some((r) => {
-    const admin = isAdminRole(r.user.role),
-      banned = r.user.banned && (!r.user.banExpires || r.user.banExpires.getTime() > Date.now());
-    return (
-      !banned &&
-      r.sub.kinds.includes(event.kind) &&
-      (admin ||
-        (!!r.memberId && c.availableToTenants && (!r.requireTwoFactor || r.user.twoFactorEnabled)))
-    );
-  });
+  return rows.some((r) => r.kinds.includes(event.kind));
 }
 export async function sweepAlerts(app: AppContext, now = Date.now()) {
   const connection = await app.pool.connect();
