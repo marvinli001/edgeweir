@@ -26,6 +26,7 @@ import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { ClusterDns } from "@/components/dns/cluster-dns";
 import { FormDialog } from "@/components/form-dialog";
+import { NodeDetailDialog, NodeLoad } from "@/components/node-detail";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
@@ -70,6 +71,7 @@ export const Route = createFileRoute("/_app/clusters")({
     cluster: z.string().optional(),
     enroll: z.boolean().optional(),
     tab: z.enum(["overview", "dns"]).optional(),
+    node: z.string().optional(),
   }),
   component: ClustersPage,
 });
@@ -634,7 +636,15 @@ function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
 
 type NodeAction = { kind: "rename" | "move" | "delete"; node: Node };
 
-function NodeActions({ node, onAction }: { node: Node; onAction: (action: NodeAction) => void }) {
+function NodeActions({
+  node,
+  onAction,
+  onDetail,
+}: {
+  node: Node;
+  onAction: (action: NodeAction) => void;
+  onDetail: (id: string) => void;
+}) {
   const queryClient = useQueryClient();
   const disable = useMutation(orpc.nodes.disable.mutationOptions());
   const enable = useMutation(orpc.nodes.enable.mutationOptions());
@@ -662,6 +672,9 @@ function NodeActions({ node, onAction }: { node: Node; onAction: (action: NodeAc
         <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onDetail(node.id)} data-testid="node-details">
+          {m.nodes_details()}
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onAction({ kind: "rename", node })}>
           {m.nodes_rename()}
         </DropdownMenuItem>
@@ -688,6 +701,15 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
   });
   const [action, setAction] = React.useState<NodeAction | null>(null);
   const latest = cluster.latestRevision?.revision ?? 0;
+  // The node whose details are open (?node=), from the polling list so they stay current.
+  const detailId = Route.useSearch({ select: (search) => search.node });
+  const navigate = Route.useNavigate();
+  const showDetail = React.useCallback(
+    (id: string | null) =>
+      navigate({ search: (prev) => ({ ...prev, node: id ?? undefined }), replace: true }),
+    [navigate],
+  );
+  const detail = detailId ? nodes.data?.find((n) => n.id === detailId) : undefined;
   const columns = React.useMemo<Columns<Node>>(
     () => [
       {
@@ -695,9 +717,19 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
         header: () => m.nodes_col_name(),
         cell: ({ row }) => (
           <div className="flex flex-col">
-            <span className="font-medium" data-testid="node-name">
-              {row.original.name}
-            </span>
+            <button
+              type="button"
+              className="flex w-fit items-center gap-1.5 text-left font-medium underline-offset-4 hover:underline"
+              onClick={() => showDetail(row.original.id)}
+              data-testid="node-open"
+            >
+              <span data-testid="node-name">{row.original.name}</span>
+              {row.original.probeEnabled ? (
+                <Badge variant="outline" data-testid="node-probe-badge">
+                  {m.node_probe_switch()}
+                </Badge>
+              ) : null}
+            </button>
             <span className="text-xs text-muted-foreground">{row.original.hostname}</span>
           </div>
         ),
@@ -744,6 +776,11 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
         ),
       },
       {
+        id: "metrics",
+        header: () => m.node_metrics_title(),
+        cell: ({ row }) => <NodeLoad node={row.original} />,
+      },
+      {
         id: "revision",
         header: () => m.nodes_col_revision(),
         cell: ({ row }) => (
@@ -779,12 +816,12 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <NodeActions node={row.original} onAction={setAction} />
+            <NodeActions node={row.original} onAction={setAction} onDetail={showDetail} />
           </div>
         ),
       },
     ],
-    [latest],
+    [latest, showDetail],
   );
 
   return (
@@ -818,6 +855,7 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
       {action?.kind === "delete" ? (
         <DeleteNodeDialog node={action.node} onClose={() => setAction(null)} />
       ) : null}
+      {detail ? <NodeDetailDialog node={detail} onClose={() => showDetail(null)} /> : null}
     </section>
   );
 }
