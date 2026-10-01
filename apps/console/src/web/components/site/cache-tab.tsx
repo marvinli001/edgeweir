@@ -17,7 +17,19 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { CacheRule, CacheSettings, Site } from "@edgeweir/contract";
+import {
+  type CacheRule,
+  type CacheSettings,
+  extension,
+  type FeatureAvailability,
+  type Site,
+} from "@edgeweir/contract";
+import {
+  cacheConditionExpression,
+  parseExpression,
+  type StructuredCacheCondition,
+  structuredCacheCondition,
+} from "@edgeweir/rule-engine";
 import {
   Add01Icon,
   ArrowDown01Icon,
@@ -25,7 +37,10 @@ import {
   DragDropVerticalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { SafetyNote } from "@/components/safety-note";
+import { ExpressionEditor, expressionErrorPosition } from "@/components/site/expression-editor";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import {
   nextDraftKey,
@@ -47,8 +62,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { m } from "@/lib/i18n";
+import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
 /**
@@ -68,9 +85,14 @@ export function CacheTab({ site }: { site: Site }) {
 }
 
 type Action = CacheRule["action"];
+/** The builder (path prefixes, exact paths, extensions) or an expression of any shape. */
+type ConditionMode = "builder" | "advanced";
 
 interface RuleDraft {
   key: number;
+  mode: ConditionMode;
+  /** The advanced condition; in builder mode the condition as loaded (the lists win on save). */
+  expression: string;
   prefixes: string;
   paths: string;
   extensions: string;
@@ -80,6 +102,8 @@ interface RuleDraft {
   maxSizeKb: string;
   action: Action;
   ttl: string;
+  /** Cache-Control max-age for clients in seconds; empty keeps the origin's. */
+  browserTtl: string;
   respect: boolean;
   staleWhileRevalidate: string;
   staleIfError: string;
@@ -99,28 +123,82 @@ const toSeconds = (value: string) => {
 
 /** How many of the conditions behind "more" are set, shown on its toggle. */
 const moreCount = (r: RuleDraft) =>
-  [r.paths, r.statusCodes, r.minSizeKb, r.maxSizeKb, r.staleWhileRevalidate, r.staleIfError].filter(
-    (v) => v.trim() !== "",
-  ).length + (r.cacheAuthorized ? 1 : 0);
+  [
+    r.mode === "builder" ? r.paths : "",
+    r.statusCodes,
+    r.minSizeKb,
+    r.maxSizeKb,
+    r.staleWhileRevalidate,
+    r.staleIfError,
+  ].filter((v) => v.trim() !== "").length + (r.cacheAuthorized ? 1 : 0);
 
-const toDraft = (r: CacheRule): RuleDraft => ({
-  key: nextDraftKey(),
-  prefixes: r.pathPrefixes.join(", "),
-  paths: r.paths.join(", "),
-  extensions: r.extensions.join(", "),
-  statusCodes: r.statusCodes.join(", "),
-  minSizeKb: bytesToKb(r.minSizeBytes),
-  maxSizeKb: bytesToKb(r.maxSizeBytes),
-  action: r.action,
-  ttl: String(r.edgeTtlSeconds),
-  respect: r.originCacheControl === "respect",
-  staleWhileRevalidate: secondsOrEmpty(r.staleWhileRevalidateSeconds),
-  staleIfError: secondsOrEmpty(r.staleIfErrorSeconds),
-  cacheAuthorized: r.cacheAuthorized,
+/** The builder's lists of a condition, or null when the builder cannot show it. */
+function builderForm(expression: string): StructuredCacheCondition | null {
+  try {
+    // Stored conditions may be longer than typed ones (lists converted by the server).
+    return structuredCacheCondition(parseExpression(expression, "cache", { maxLength: 1 << 20 }));
+  } catch {
+    return null;
+  }
+}
+/** The builder's lists as typed, normalized like the server does. */
+const builderLists = (r: RuleDraft): StructuredCacheCondition => ({
+  pathPrefixes: splitList(r.prefixes),
+  paths: splitList(r.paths),
+  extensions: splitList(r.extensions).map((e) => extension.safeParse(e).data ?? e),
 });
+const sameLists = (a: StructuredCacheCondition, b: StructuredCacheCondition) =>
+  JSON.stringify(a) === JSON.stringify(b);
+
+const toDraft = (r: CacheRule): RuleDraft => {
+  const form = builderForm(r.expression);
+  return {
+    key: nextDraftKey(),
+    mode: form ? "builder" : "advanced",
+    expression: r.expression,
+    prefixes: (form?.pathPrefixes ?? []).join(", "),
+    paths: (form?.paths ?? []).join(", "),
+    extensions: (form?.extensions ?? []).join(", "),
+    statusCodes: r.statusCodes.join(", "),
+    minSizeKb: bytesToKb(r.minSizeBytes),
+    maxSizeKb: bytesToKb(r.maxSizeBytes),
+    action: r.action,
+    ttl: String(r.edgeTtlSeconds),
+    browserTtl: secondsOrEmpty(r.browserTtlSeconds),
+    respect: r.originCacheControl === "respect",
+    staleWhileRevalidate: secondsOrEmpty(r.staleWhileRevalidateSeconds),
+    staleIfError: secondsOrEmpty(r.staleIfErrorSeconds),
+    cacheAuthorized: r.cacheAuthorized,
+  };
+};
+
+/**
+ * The draft in the other mode. To the builder: the lists of the expression (callers only allow
+ * it when it has them). To an expression: the loaded one while the lists still mean it, else the
+ * builder's expression of the lists.
+ */
+function switchMode(r: RuleDraft, mode: ConditionMode): Partial<RuleDraft> {
+  if (mode === "builder") {
+    const form = builderForm(r.expression) ?? { pathPrefixes: [], paths: [], extensions: [] };
+    return {
+      mode,
+      prefixes: form.pathPrefixes.join(", "),
+      paths: form.paths.join(", "),
+      extensions: form.extensions.join(", "),
+    };
+  }
+  const lists = builderLists(r);
+  const loaded = builderForm(r.expression);
+  return {
+    mode,
+    expression: loaded && sameLists(loaded, lists) ? r.expression : cacheConditionExpression(lists),
+  };
+}
 
 const newRule = (): RuleDraft => ({
   key: nextDraftKey(),
+  mode: "builder",
+  expression: "true",
   prefixes: "/",
   paths: "",
   extensions: "",
@@ -129,6 +207,7 @@ const newRule = (): RuleDraft => ({
   maxSizeKb: "",
   action: "cache",
   ttl: "3600",
+  browserTtl: "",
   respect: true,
   staleWhileRevalidate: "",
   staleIfError: "",
@@ -139,10 +218,18 @@ const newRule = (): RuleDraft => ({
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({ ...transform, x: 0 });
 
 function CacheRulesCard({ site }: { site: Site }) {
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
+  const availability = features.data?.rulesV2;
+  // Expressions beyond the builder and browser TTLs wait until the nodes run rules-v2.
+  const locked = availability?.available === false;
   const initial = React.useMemo(() => site.cacheRules.map(toDraft), [site.cacheRules]);
   const [rows, setRows] = React.useState(initial);
   const { save, error, pending } = useSaveSite(site.id);
   const dirty = serializeDrafts(rows) !== serializeDrafts(initial);
+  const invalid = rows.some(
+    (r) =>
+      r.mode === "advanced" && expressionErrorPosition(r.expression, "cache", "cacheRule") !== null,
+  );
   const patch = (key: number, change: Partial<RuleDraft>) =>
     setRows(rows.map((r) => (r.key === key ? { ...r, ...change } : r)));
 
@@ -175,14 +262,20 @@ function CacheRulesCard({ site }: { site: Site }) {
             cacheRules: rows.map((r, index) => ({
               // Rules match in list order.
               priority: (index + 1) * 10,
-              pathPrefixes: splitList(r.prefixes),
-              paths: splitList(r.paths),
-              extensions: splitList(r.extensions),
+              // The server stores the builder's lists as their expression.
+              ...(r.mode === "builder"
+                ? {
+                    pathPrefixes: splitList(r.prefixes),
+                    paths: splitList(r.paths),
+                    extensions: splitList(r.extensions),
+                  }
+                : { expression: r.expression }),
               statusCodes: splitList(r.statusCodes).map(Number),
               minSizeBytes: kbToBytes(r.minSizeKb),
               maxSizeBytes: kbToBytes(r.maxSizeKb),
               action: r.action,
               edgeTtlSeconds: Number(r.ttl) || 0,
+              browserTtlSeconds: toSeconds(r.browserTtl),
               originCacheControl: r.respect ? "respect" : "override",
               staleWhileRevalidateSeconds: toSeconds(r.staleWhileRevalidate),
               staleIfErrorSeconds: toSeconds(r.staleIfError),
@@ -195,6 +288,7 @@ function CacheRulesCard({ site }: { site: Site }) {
           <CardTitle>{m.site_rules_title()}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
+          <RulesV2Note availability={availability} />
           {rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">{m.sites_no_cache_rules()}</p>
           ) : null}
@@ -233,6 +327,7 @@ function CacheRulesCard({ site }: { site: Site }) {
                     key={row.key}
                     row={row}
                     index={index}
+                    locked={locked}
                     onChange={(change) => patch(row.key, change)}
                     onRemove={() => setRows(rows.filter((r) => r.key !== row.key))}
                   />
@@ -251,20 +346,36 @@ function CacheRulesCard({ site }: { site: Site }) {
             {m.site_rule_add()}
           </Button>
         </CardContent>
-        <SaveBar dirty={dirty} pending={pending} error={error} testId="cache-save" />
+        <SaveBar dirty={dirty && !invalid} pending={pending} error={error} testId="cache-save" />
       </form>
     </Card>
+  );
+}
+
+/** One line on why expressions and browser TTLs are locked. */
+function RulesV2Note({ availability }: { availability: FeatureAvailability | undefined }) {
+  if (!availability || availability.available) return null;
+  return (
+    <SafetyNote
+      className="animate-in fade-in"
+      data-testid="cache-rules-v2-unavailable"
+      data-reason={availability.reason ?? undefined}
+    >
+      {m.rules_v2_unavailable()}
+    </SafetyNote>
   );
 }
 
 function SortableRule({
   row,
   index,
+  locked,
   onChange,
   onRemove,
 }: {
   row: RuleDraft;
   index: number;
+  locked: boolean;
   onChange: (change: Partial<RuleDraft>) => void;
   onRemove: () => void;
 }) {
@@ -285,6 +396,9 @@ function SortableRule({
   const [open, setOpen] = React.useState(() => moreCount(row) > 0);
   const hidden = moreCount(row);
   const bypass = row.action === "bypass";
+  const builder = row.mode === "builder";
+  // The builder takes an expression only when it has the builder's shape (or is empty).
+  const builderAllowed = builder || !row.expression.trim() || builderForm(row.expression) !== null;
   const id = (name: string) => `rule-${name}-${row.key}`;
   const actions = [
     { label: m.site_rule_cache(), value: "cache" },
@@ -360,26 +474,66 @@ function SortableRule({
               <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
             </Button>
           </div>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1fr_8rem_7rem_auto]">
-            <Field>
-              <FieldLabel htmlFor={id("prefix")}>{m.site_form_cache_prefix()}</FieldLabel>
-              <Input
-                id={id("prefix")}
-                value={row.prefixes}
-                onChange={(event) => onChange({ prefixes: event.target.value })}
-                placeholder="/static/, /img/"
-                data-testid="cache-rule-prefixes"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor={id("ext")}>{m.site_rule_extensions()}</FieldLabel>
-              <Input
-                id={id("ext")}
-                value={row.extensions}
-                onChange={(event) => onChange({ extensions: event.target.value })}
-                placeholder="css, js, png"
-              />
-            </Field>
+          <Tabs
+            value={row.mode}
+            onValueChange={(mode) => {
+              if (mode !== row.mode) onChange(switchMode(row, mode as ConditionMode));
+            }}
+          >
+            <TabsList aria-label={m.cache_rule_condition_mode()}>
+              <TabsTrigger
+                value="builder"
+                className="h-7 px-2.5 text-xs"
+                disabled={!builderAllowed}
+                data-testid="cache-rule-builder"
+              >
+                {m.cache_rule_builder()}
+              </TabsTrigger>
+              <TabsTrigger
+                value="advanced"
+                className="h-7 px-2.5 text-xs"
+                disabled={locked && builder}
+                data-testid="cache-rule-advanced"
+              >
+                {m.cache_rule_advanced()}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {builder ? (
+            <div className="grid grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel htmlFor={id("prefix")}>{m.site_form_cache_prefix()}</FieldLabel>
+                <Input
+                  id={id("prefix")}
+                  value={row.prefixes}
+                  onChange={(event) => onChange({ prefixes: event.target.value })}
+                  placeholder="/static/, /img/"
+                  data-testid="cache-rule-prefixes"
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={id("ext")}>{m.site_rule_extensions()}</FieldLabel>
+                <Input
+                  id={id("ext")}
+                  value={row.extensions}
+                  onChange={(event) => onChange({ extensions: event.target.value })}
+                  placeholder="css, js, png"
+                  data-testid="cache-rule-extensions"
+                />
+              </Field>
+            </div>
+          ) : (
+            <ExpressionEditor
+              id={id("expression")}
+              label={m.rules_expression()}
+              value={row.expression}
+              phase="cache"
+              kind="cacheRule"
+              onChange={(expression) => onChange({ expression })}
+              testId="cache-rule-expression"
+            />
+          )}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_8rem_8rem_auto]">
             <Field>
               <FieldLabel>{m.site_rule_action()}</FieldLabel>
               <Select
@@ -408,8 +562,19 @@ function SortableRule({
               disabled={bypass}
               onChange={(ttl) => onChange({ ttl })}
             />
+            <NumberField
+              id={id("browser-ttl")}
+              label={m.cache_rule_browser_ttl()}
+              value={row.browserTtl}
+              min={0}
+              max={31536000}
+              placeholder={m.cache_rule_browser_ttl_origin()}
+              disabled={bypass || (locked && !row.browserTtl)}
+              onChange={(browserTtl) => onChange({ browserTtl })}
+              testId="cache-rule-browser-ttl"
+            />
             <SwitchField
-              className="col-span-2 lg:col-span-1"
+              className="lg:col-span-1"
               id={id("respect")}
               label={m.site_rule_respect()}
               checked={row.respect}
@@ -419,16 +584,18 @@ function SortableRule({
           </div>
           <CollapsibleContent className="animate-in fade-in duration-300 motion-reduce:animate-none">
             <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Field>
-                <FieldLabel htmlFor={id("paths")}>{m.site_rule_paths()}</FieldLabel>
-                <Input
-                  id={id("paths")}
-                  value={row.paths}
-                  onChange={(event) => onChange({ paths: event.target.value })}
-                  placeholder="/index.html, /robots.txt"
-                  data-testid="cache-rule-paths"
-                />
-              </Field>
+              {builder ? (
+                <Field>
+                  <FieldLabel htmlFor={id("paths")}>{m.site_rule_paths()}</FieldLabel>
+                  <Input
+                    id={id("paths")}
+                    value={row.paths}
+                    onChange={(event) => onChange({ paths: event.target.value })}
+                    placeholder="/index.html, /robots.txt"
+                    data-testid="cache-rule-paths"
+                  />
+                </Field>
+              ) : null}
               <Field>
                 <FieldLabel htmlFor={id("status")}>{m.site_rule_status_codes()}</FieldLabel>
                 <Input

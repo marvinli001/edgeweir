@@ -9,6 +9,7 @@ import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Page } from "@/components/page";
+import { BulkRedirectsTab } from "@/components/site/bulk-redirects-tab";
 import { CacheTab } from "@/components/site/cache-tab";
 import { CnameTarget } from "@/components/site/cname-target";
 import { ErrorPagesTab } from "@/components/site/error-pages-tab";
@@ -150,7 +151,10 @@ function SiteDetailPage() {
             <HttpsTab site={site.data} />
           </TabsContent>
           <TabsContent value="rules" className="animate-enter">
-            <RulesTab siteId={site.data.id} />
+            <RulesTab siteId={site.data.id} originGroups={originGroups(site.data)} />
+          </TabsContent>
+          <TabsContent value="redirects" className="animate-enter">
+            <BulkRedirectsTab siteId={site.data.id} />
           </TabsContent>
           <TabsContent value="security" className="animate-enter">
             <SecurityTab siteId={site.data.id} />
@@ -169,6 +173,10 @@ function SiteDetailPage() {
     </Page>
   );
 }
+
+/** The site's origin groups besides the default one, for origin rules. */
+const originGroups = (site: Site) =>
+  [...new Set(site.origins.flatMap((origin) => (origin.group ? [origin.group] : [])))].sort();
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
