@@ -23,7 +23,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": "cname",
       "endpoint": "fixed"
     }
@@ -67,7 +67,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default", "telecom", "unicom", "mobile", "edu", "overseas"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -104,7 +104,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default", "telecom", "unicom", "mobile", "edu", "overseas"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -126,7 +126,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default", "telecom", "unicom", "mobile", "edu", "overseas"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -163,7 +163,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default", "telecom", "unicom", "mobile", "edu", "overseas"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -192,7 +192,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -221,7 +221,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -248,7 +248,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -276,7 +276,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -330,7 +330,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -369,7 +369,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default"],
       "apex": "alias",
       "endpoint": "fixed"
     }
@@ -425,7 +425,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -447,7 +447,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -468,7 +468,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -488,7 +488,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -508,7 +508,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -554,7 +554,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -575,7 +575,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": "alias",
       "endpoint": "fixed"
     }
@@ -597,7 +597,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -628,7 +628,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": "alias",
       "endpoint": "fixed"
     }
@@ -649,7 +649,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -671,7 +671,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default"],
       "apex": "cname",
       "endpoint": "fixed"
     }
@@ -692,7 +692,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": true,
+      "lines": ["default"],
       "apex": "cname",
       "endpoint": "fixed"
     }
@@ -713,7 +713,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "fixed"
     }
@@ -752,7 +752,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "custom"
     }
@@ -800,7 +800,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": false,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "custom"
     }
@@ -830,7 +830,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default"],
       "apex": null,
       "endpoint": "custom"
     }
@@ -850,7 +850,7 @@
     "capabilities": {
       "recordTypes": ["A", "AAAA", "CNAME", "TXT"],
       "listZones": true,
-      "lines": false,
+      "lines": ["default", "telecom", "unicom", "mobile", "edu", "overseas"],
       "apex": null,
       "endpoint": "fixed"
     },

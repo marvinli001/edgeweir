@@ -14,6 +14,15 @@
 export type DnsFieldType = "text" | "secret" | "select" | "textarea" | "url";
 export type DnsRecordKind = "A" | "AAAA" | "CNAME" | "TXT";
 
+/**
+ * Canonical resolution lines (carrier / region views of one name). The
+ * adapters in edgeweir-certd map them to each provider's own line ids;
+ * "default" answers every resolver no other line matches.
+ */
+export const DNS_LINES = ["default", "telecom", "unicom", "mobile", "edu", "overseas"] as const;
+export type DnsResolutionLine = (typeof DNS_LINES)[number];
+const DEFAULT_LINE_ONLY: readonly DnsResolutionLine[] = ["default"];
+
 export interface DnsProviderField {
   /** Credential key (snake_case), stored in the sealed credential JSON. */
   readonly key: string;
@@ -33,8 +42,11 @@ export interface DnsProviderCapabilities {
   readonly recordTypes: readonly DnsRecordKind[];
   /** The API can list the account's zones. */
   readonly listZones: boolean;
-  /** The provider resolves by carrier or region (lines); informational. */
-  readonly lines: boolean;
+  /**
+   * The resolution lines the adapter writes ("default" first); providers
+   * with only "default" get the same records for every resolver.
+   */
+  readonly lines: readonly DnsResolutionLine[];
   /** How the apex can point at a host name: CNAME flattening, an ALIAS record, or not at all. */
   readonly apex: "cname" | "alias" | null;
   /** "custom": the user enters the server address; the outbound address policy applies. */
@@ -78,12 +90,19 @@ const select = (key: string, options: readonly string[], extra: Extra = {}): Dns
   ...extra,
 });
 const optional = (field: DnsProviderField): DnsProviderField => ({ ...field, required: false });
+/** lines: true when the adapter implements every canonical line, otherwise "default" only. */
 const caps = (
   listZones: boolean,
   lines: boolean,
   apex: DnsProviderCapabilities["apex"] = null,
   endpoint: DnsProviderCapabilities["endpoint"] = "fixed",
-): DnsProviderCapabilities => ({ recordTypes: ALL, listZones, lines, apex, endpoint });
+): DnsProviderCapabilities => ({
+  recordTypes: ALL,
+  listZones,
+  lines: lines ? DNS_LINES : DEFAULT_LINE_ONLY,
+  apex,
+  endpoint,
+});
 const GUID = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 const guid = { placeholder: "00000000-0000-0000-0000-000000000000", pattern: GUID };
 const region = (placeholder: string) =>
@@ -157,7 +176,7 @@ export const dnsProviderCatalog = [
       }),
       secret("secret_access_key", 256),
     ],
-    capabilities: caps(true, true),
+    capabilities: caps(true, false),
   },
   {
     id: "baiducloud",
@@ -169,13 +188,13 @@ export const dnsProviderCatalog = [
       }),
       secret("secret_access_key", 256),
     ],
-    capabilities: caps(true, true),
+    capabilities: caps(true, false),
   },
   {
     id: "westcn",
     name: "West.cn",
     fields: [text("username", 64), secret("api_password", 256)],
-    capabilities: caps(true, true),
+    capabilities: caps(true, false),
   },
   {
     id: "dnsla",
@@ -184,7 +203,7 @@ export const dnsProviderCatalog = [
       text("api_id", 128, { pattern: "^[\\x21-\\x39\\x3B-\\x7E]{1,128}$" }),
       secret("api_secret", 256),
     ],
-    capabilities: caps(true, true),
+    capabilities: caps(true, false),
   },
   {
     id: "route53",
@@ -201,7 +220,7 @@ export const dnsProviderCatalog = [
       ),
       optional(select("partition", ["aws", "aws-cn", "aws-us-gov"], { default: "aws" })),
     ],
-    capabilities: caps(true, true),
+    capabilities: caps(true, false),
   },
   {
     id: "googleclouddns",
@@ -224,7 +243,7 @@ export const dnsProviderCatalog = [
         }),
       ),
     ],
-    capabilities: caps(true, true, "alias"),
+    capabilities: caps(true, false, "alias"),
   },
   {
     id: "azure",
@@ -323,13 +342,13 @@ export const dnsProviderCatalog = [
         pattern: "^[0-9]+\\$[A-Za-z0-9._~+/=-]+$",
       }),
     ],
-    capabilities: caps(true, true, "cname"),
+    capabilities: caps(true, false, "cname"),
   },
   {
     id: "bunny",
     name: "Bunny DNS",
     fields: [secret("access_key", 128, { pattern: "^[A-Za-z0-9-]{16,128}$" })],
-    capabilities: caps(true, true, "cname"),
+    capabilities: caps(true, false, "cname"),
   },
   {
     id: "desec",
@@ -405,7 +424,7 @@ export const dnsProviderCatalog = [
     id: "test",
     name: "Local test fixture",
     fields: [secret("api_token", 1024)],
-    capabilities: caps(true, false),
+    capabilities: caps(true, true),
     hidden: true,
   },
 ] as const satisfies readonly DnsProviderEntry[];
@@ -418,6 +437,11 @@ export const dnsProviderIds = dnsProviderCatalog.map((p) => p.id) as [
 
 export function dnsProviderEntry(id: string): DnsProviderEntry | undefined {
   return (dnsProviderCatalog as readonly DnsProviderEntry[]).find((p) => p.id === id);
+}
+
+/** The resolution lines a provider's adapter writes ("default" only for unknown providers). */
+export function providerLines(id: string): readonly DnsResolutionLine[] {
+  return dnsProviderEntry(id)?.capabilities.lines ?? DEFAULT_LINE_ONLY;
 }
 
 export type DnsCredentialProblem =

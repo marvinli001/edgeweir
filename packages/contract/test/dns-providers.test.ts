@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { checkDnsCredentials, dnsProviderCatalog, dnsProviderEntry } from "../src/dns-providers";
+import {
+  checkDnsCredentials,
+  DNS_LINES,
+  dnsProviderCatalog,
+  dnsProviderEntry,
+  providerLines,
+} from "../src/dns-providers";
 
 describe("DNS provider catalog", () => {
   it("is what edgeweir-certd embeds (pnpm --filter @edgeweir/contract dns:catalog)", () => {
@@ -11,6 +17,26 @@ describe("DNS provider catalog", () => {
       "../../../helpers/certd/catalog.json",
     );
     expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(dnsProviderCatalog);
+  });
+
+  it("lists resolution lines only for the adapters that write them", () => {
+    expect(DNS_LINES).toEqual(["default", "telecom", "unicom", "mobile", "edu", "overseas"]);
+    const withLines = dnsProviderCatalog
+      .filter((p) => p.capabilities.lines.length > 1)
+      .map((p) => p.id)
+      .sort();
+    // "test" is the local fixture, which passes lines through to the mock provider.
+    expect(withLines).toEqual(["alidns", "dnspod", "huaweicloud", "tencentcloud", "test"]);
+    for (const provider of dnsProviderCatalog) {
+      const lines: readonly string[] = provider.capabilities.lines;
+      expect(lines[0], provider.id).toBe("default");
+      expect(new Set(lines).size, provider.id).toBe(lines.length);
+      for (const line of lines) expect(DNS_LINES, provider.id).toContain(line);
+    }
+    expect(providerLines("dnspod")).toEqual(DNS_LINES);
+    expect(providerLines("cloudflare")).toEqual(["default"]);
+    expect(providerLines("route53")).toEqual(["default"]);
+    expect(providerLines("nope")).toEqual(["default"]);
   });
 
   it("has unique ids, snake_case keys and patterns that compile", () => {

@@ -46,7 +46,7 @@ export function CapabilityBadges({ provider }: { provider?: DnsProviderDto }) {
   const { lines, apex, endpoint } = provider.capabilities;
   return (
     <span className="flex flex-wrap gap-1">
-      {lines ? <Badge variant="secondary">{m.dns_capability_lines()}</Badge> : null}
+      {lines.length > 1 ? <Badge variant="secondary">{m.dns_capability_lines()}</Badge> : null}
       {apex ? <Badge variant="secondary">{m.dns_capability_apex()}</Badge> : null}
       {endpoint === "custom" ? (
         <Badge variant="secondary">{m.dns_capability_custom()}</Badge>

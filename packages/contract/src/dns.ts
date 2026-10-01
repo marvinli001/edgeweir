@@ -2,6 +2,7 @@ import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { formatIp, parseIp } from "./addresses";
 import {
+  DNS_LINES,
   type DnsProviderEntry,
   type DnsProviderId,
   dnsProviderCatalog,
@@ -132,7 +133,7 @@ export const dnsProviderDto = z.object({
   capabilities: z.object({
     recordTypes: z.array(z.enum(["A", "AAAA", "CNAME", "TXT"])),
     listZones: z.boolean(),
-    lines: z.boolean(),
+    lines: z.array(z.enum(DNS_LINES)),
     apex: z.enum(["cname", "alias"]).nullable(),
     endpoint: z.enum(["fixed", "custom"]),
   }),
@@ -275,7 +276,11 @@ export const dnsCatalogDto = (dnsProviderCatalog as readonly DnsProviderEntry[])
   fields: p.fields.map(({ options, ...field }) =>
     options ? { ...field, options: [...options] } : field,
   ),
-  capabilities: { ...p.capabilities, recordTypes: [...p.capabilities.recordTypes] },
+  capabilities: {
+    ...p.capabilities,
+    recordTypes: [...p.capabilities.recordTypes],
+    lines: [...p.capabilities.lines],
+  },
 }));
 export type DnsBindingInput = z.infer<typeof dnsBindingInput>;
 export type DnsBinding = z.infer<typeof dnsBinding>;
