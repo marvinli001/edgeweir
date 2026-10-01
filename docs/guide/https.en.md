@@ -22,11 +22,11 @@ Certificate upload, ACME requests and renewal, and a site's HTTPS, TLS, HTTP/2, 
 
 | Requirement | Value |
 | --- | --- |
-| Chain | 1–10 certificates, up to 128 KiB; each signed by the next |
+| Chain | 1–10 certificates, up to 128 KiB; each signed by the next; certificates only: PEM with a private key in it is refused ("The chain may contain only certificates; put the private key in its own field") |
 | Leaf | Not a CA certificate, has DNS SANs, currently valid |
 | Private key | Matches the leaf, up to 32 KiB |
 
-Uploaded certificates do not renew automatically (**Automatic renewal disabled**); before expiry, upload a new certificate and select it on the sites.
+Only the re-encoded certificates and the PKCS #8 private key are stored; any other text in the pasted content is not. Uploaded certificates do not renew automatically (**Automatic renewal disabled**); before expiry, upload a new certificate and select it on the sites.
 
 ## Add a DNS credential
 
@@ -64,13 +64,15 @@ Prerequisites:
 | Certificate authority | Let's Encrypt / ZeroSSL | Let's Encrypt | ACME directory |
 | Validation method | HTTP-01 / DNS-01 | HTTP-01 | Domain control validation; wildcards require DNS-01 |
 | DNS credentials | A DNS credential that has been added | The first credential | Account DNS-01 writes TXT records with; one zone per certificate |
-| EAB key ID / EAB HMAC key | EAB credentials from ZeroSSL | None | Required for ZeroSSL; stored encrypted with the ACME account |
+| EAB key ID / EAB HMAC key | EAB credentials from ZeroSSL | None | Required for ZeroSSL; stored encrypted |
+
+Certificates with the same certificate authority, EAB key ID, and account email share one ACME account: CAs limit the accounts an IP address may register (Let's Encrypt: 10 in 3 hours).
 
 ### Validation methods
 
 | Method | Behavior |
 | --- | --- |
-| HTTP-01 | Each name must be a non-wildcard domain of a site, or the request is refused ("Certificate domains do not match the site or DNS zone"): only the clusters serving a name answer its challenge. The console publishes the challenge to those clusters (also when the site is disabled); every online node there must support `http01-v1` and apply it within 40 seconds before the CA is asked to validate. The challenge is answered on port 80 without redirect or caching and expires after 10 minutes |
+| HTTP-01 | Each name must be a non-wildcard domain of a site, or the request is refused ("Certificate domains do not match the site or DNS zone"): only the clusters serving a name answer its challenge. The console publishes all challenges of a certificate to those clusters at once (one revision per cluster, also when the site is disabled); every online node there must support `http01-v1` and apply it within 40 seconds before the CA is asked to validate, four names at a time. Challenges are answered on port 80 without redirect or caching and expire after 10 minutes or when the issuance ends; challenge revisions do not count toward the kept configuration revisions |
 | DNS-01 | Each name must be inside the DNS credential's zone (the zone itself or a name below it), or the request is refused. Writes TXT records at `_acme-challenge.<domain>` and waits up to 3 minutes for propagation. When issuance ends, times out, or the process is interrupted, the TXT values it wrote are deleted; a certificate with records still to clean up cannot be deleted |
 
 ### Renewal
@@ -79,12 +81,13 @@ Prerequisites:
 | --- | --- |
 | Automatic renewal | On for certificates requested in the console |
 | Renewal time | The CA's ARI (ACME Renewal Information) window when offered; otherwise when two thirds of the certificate lifetime have passed; at the latest 1 minute before expiry. The card shows "Next renewal: …" |
-| Check interval | A background job checks due certificates every minute and needs a console process with `ROLE=worker` or `ROLE=all` |
+| Window changes | After issuance, the ARI window is read again at the CA's suggested interval (1–24 hours, 6 by default); when the window moves before the next renewal (for example, the CA is going to revoke certificates early), the renewal moves into the new window and the audit log records `certificate.renewal_rescheduled` |
+| Check interval | A background job checks due certificates every minute, up to 10 at a time: new requests and **Renew now** first, then by renewal time, three issuances at once; it needs a console process with `ROLE=worker` or `ROLE=all` |
 | Renewed names | An HTTP-01 renewal drops the names no site uses any more, as long as at least one name is left; every domain of a site that uses the certificate is kept, so the site stays covered. After a successful renewal the certificate's name list is updated |
 | Effect | After issuance or renewal, a new revision is published for the clusters of the sites that use the certificate |
-| Failure | Status changes to **Issuance failed**, the current certificate is kept, and the next attempt is 1 hour later; the console logs the reason, see [Troubleshooting](#troubleshooting) |
+| Failure | Status changes to **Issuance failed** and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance; the console logs the reason, see [Troubleshooting](#troubleshooting) |
 | Manual | ACME certificates have **Renew now**, which runs at the next check; unavailable while **Issuing** |
-| Interruption | **Issuing** for more than 10 minutes counts as interrupted and runs again at the next check; one issuance run is limited to 5 minutes |
+| Interruption | **Issuing** for more than 10 minutes counts as interrupted and runs again at the next check; one issuance run is limited to 8 minutes |
 
 ### Deletion
 
@@ -223,7 +226,7 @@ A change saved in the console or with an AccessKey is published even when it nee
 | --- | --- | --- |
 | "Invalid or expired certificate, chain or private key" | Wrong chain order, mismatched key, no DNS SAN, not yet valid, or expired | Order the PEM as leaf then intermediates; check the key |
 | "Certificate domains do not match the site or DNS zone" | An HTTP-01 name is not a domain of any site; the DNS credential zone does not cover every name; the selected certificate does not cover every site domain, or a domain added to the site is not in its certificate | Add the domain to a site first, or use DNS-01; use a matching DNS credential or certificate |
-| Certificate shows **Issuance failed** | HTTP-01: the domain does not resolve to the nodes, port 80 is blocked, the cluster has no online node, a node did not apply the challenge within 40 seconds or lacks `http01-v1`, no certificate name is a site domain any more; DNS-01: insufficient credential permissions or propagation over 3 minutes; CA rate limits | Find `certificate operation failed` in the log of the console process that runs background jobs, fix the cause given in `reason`, and click **Renew now**; otherwise it retries after 1 hour |
+| Certificate shows **Issuance failed** | HTTP-01: the domain does not resolve to the nodes, port 80 is blocked, the cluster has no online node, a node did not apply the challenge within 40 seconds or lacks `http01-v1`, no certificate name is a site domain any more; DNS-01: insufficient credential permissions or propagation over 3 minutes; CA rate limits | Find `certificate operation failed` in the log of the console process that runs background jobs, fix the cause given in `reason`, and click **Renew now**; otherwise it retries after the [retry interval](#renewal) |
 | Certificate stays **Pending** | No console process runs background jobs | Make sure a process with `ROLE=worker` or `ROLE=all` runs |
 | "Certificate operation is already in progress" | The certificate is **Issuing** | Wait for issuance to finish |
 | "Certificate or credential is still in use" | The certificate is used by a site, issuing, or has DNS records to clean up; the DNS credential is referenced by a certificate | Select another certificate on the sites, or delete the certificates that reference the credential |

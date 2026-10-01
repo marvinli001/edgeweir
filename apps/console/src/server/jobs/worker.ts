@@ -9,7 +9,7 @@ import { pruneBans } from "../services/bans";
 import { expireCacheTasks } from "../services/cache-tasks";
 import { sweepCertificates } from "../services/certificate-worker";
 import { rotateChallengeKeys } from "../services/challenge-keys";
-import { reconcileDns } from "../services/dns";
+import { pruneDnsRevisions, reconcileDns } from "../services/dns";
 import { recompileAfterUpgrade } from "../services/recompile";
 import { pruneRevisions } from "../services/revisions";
 import { evaluateRollouts } from "../services/rollout";
@@ -86,6 +86,8 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   await boss.work(QUEUES.pruneRevisions, async () => {
     const removed = await pruneRevisions(ctx.db);
     if (removed) log.info("pruned revisions", { removed });
+    const dns = await pruneDnsRevisions(ctx.db);
+    if (dns) log.info("pruned DNS revisions", { removed: dns });
   });
   await boss.work(QUEUES.expireEnrollmentTokens, async () => {
     const cutoff = new Date(Date.now() - 7 * 24 * 3600 * 1000);

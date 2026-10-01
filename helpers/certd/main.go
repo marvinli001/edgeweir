@@ -3,7 +3,8 @@
 // The console (a pg-boss job) runs it as a short-lived process and talks to
 // it with one JSON request on stdin and one JSON response on stdout, so no
 // secrets ever appear on the command line or in the environment of other
-// processes. Certificates are obtained with lego (ACME, ARI, DNS-01); DNS
+// processes. Certificates are obtained with lego (ACME, ARI, DNS-01; HTTP-01
+// through the console, all names of an order at once); DNS
 // records are managed through the provider adapters in providers/, one per
 // entry of the console's provider catalog (catalog.json).
 package main
@@ -44,8 +45,9 @@ func handle(req Request, session *protocolSession) Response {
 		return Response{OK: true, Result: map[string]string{"version": Version}}
 	case "providers":
 		return Response{OK: true, Result: providerIDs()}
-	case "obtain", "renew", "revoke", "dns.list", "dns.set", "dns.present", "dns.cleanup", "dns.zones", "dns.test":
-		timeout := 5 * time.Minute
+	case "obtain", "renew", "revoke", "renewal-info", "dns.list", "dns.set", "dns.present", "dns.cleanup", "dns.zones", "dns.test":
+		// The console stops an issuance after 8 minutes (it retakes one after 10).
+		timeout := 8 * time.Minute
 		if strings.HasPrefix(req.Command, "dns.") {
 			// Some APIs page slowly (one request per record) or apply changes asynchronously.
 			timeout = 2 * time.Minute
@@ -54,9 +56,12 @@ func handle(req Request, session *protocolSession) Response {
 		defer cancel()
 		var result any
 		var err error
-		if strings.HasPrefix(req.Command, "dns.") {
+		switch {
+		case strings.HasPrefix(req.Command, "dns."):
 			result, err = dnsCommand(ctx, req.Command, req.Params)
-		} else {
+		case req.Command == "renewal-info":
+			result, err = renewalInfoCommand(req.Params)
+		default:
 			result, err = acmeCommand(ctx, req.Command, req.Params, session)
 		}
 		if err != nil {

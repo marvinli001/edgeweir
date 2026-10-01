@@ -12,7 +12,7 @@ import {
   parseIp,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, lte, ne, notInArray, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit, systemActor } from "./audit";
@@ -203,11 +203,43 @@ async function validateBinding(db: Executor, clusterId: string, policy: BindingP
       fail("DNS_BINDING_CONFLICT", "another cluster uses the same record names");
 }
 
+/** How long a node may lag a new target (applying it, or not told yet) and keep its records. */
+export const DNS_APPLY_GRACE_MS = 2 * 60_000;
+type Receipt = typeof schema.nodeConfigStatus.$inferSelect;
+type TargetRevision = { revision: number; contentHash: string; createdAt: Date };
+/**
+ * Whether a node serves its target, by content (a rollback copy has a higher
+ * number but the same hash). A node that served before keeps its records
+ * while it applies a target published less than DNS_APPLY_GRACE_MS ago, if
+ * it had reached `settled` (the newest revision older than that, when nodes
+ * of the cluster share one line): otherwise every publication would take
+ * nodes out of DNS until they report it, and all of them at once trips the
+ * mass removal protection. A failed apply, a longer one, or a node already
+ * behind loses them.
+ */
+function servesTarget(
+  receipt: Receipt,
+  target: TargetRevision,
+  settled: Omit<TargetRevision, "createdAt"> | undefined,
+  now: number,
+) {
+  if (receipt.state === "applied" && receipt.appliedContentHash === target.contentHash) return true;
+  return (
+    receipt.state !== "failed" &&
+    receipt.appliedContentHash !== "" &&
+    now - target.createdAt.getTime() < DNS_APPLY_GRACE_MS &&
+    (!settled ||
+      receipt.appliedRevision >= settled.revision ||
+      receipt.appliedContentHash === settled.contentHash)
+  );
+}
+
 /**
  * The cluster's records. auto: addresses of nodes that are active, online,
- * healthy and run their target revision (current routing rights; DNS history
- * never restores a dead node). manual: every active node's addresses (hand-made
- * records do not follow health).
+ * healthy and run their target revision or are applying a new one
+ * (servesTarget; current routing rights: DNS history never restores a dead
+ * node). manual: every active node's addresses (hand-made records do not
+ * follow health).
  */
 export async function compileBindingPlan(
   db: Executor,
@@ -248,6 +280,24 @@ export async function compileBindingPlan(
   const targets: RolloutTargets | undefined = manual
     ? undefined
     : await rolloutTargets(db, clusterId);
+  // During a canary window nodes follow two lines; only their target's age counts.
+  const [settled] =
+    manual || targets?.candidate
+      ? []
+      : await db
+          .select({
+            revision: schema.configRevision.revision,
+            contentHash: schema.configRevision.contentHash,
+          })
+          .from(schema.configRevision)
+          .where(
+            and(
+              eq(schema.configRevision.clusterId, clusterId),
+              lte(schema.configRevision.createdAt, new Date(now - DNS_APPLY_GRACE_MS)),
+            ),
+          )
+          .orderBy(desc(schema.configRevision.revision))
+          .limit(1);
   const records: DnsRecord[] = [];
   const names = new Map<string, ManagedName>();
   const declare = (name: string, type: DnsRecord["type"]) => {
@@ -274,13 +324,11 @@ export async function compileBindingPlan(
       if (!manual) {
         const receipt = receipts.find((r) => r.nodeId === node.id),
           target = targets ? targetFor(node, targets) : undefined;
-        // Same content as the target (a rollback copy has a higher number but the same hash).
         if (
           !isOnline(node.lastSeenAt, now) ||
           !receipt?.dataPlaneHealthy ||
-          receipt.state !== "applied" ||
           !target ||
-          receipt.appliedContentHash !== target.contentHash
+          !servesTarget(receipt, target, settled, now)
         )
           continue;
       }
@@ -612,6 +660,42 @@ export async function saveBinding(
     return revision ? revisionDto(revision) : null;
   });
 }
+/** DNS revisions kept per binding (as many as its history lists). */
+export const DNS_REVISION_RETENTION = 200;
+/**
+ * Deletes DNS revisions beyond the newest `keep` of each binding. The
+ * desired and applied revisions and a held-back one stay.
+ */
+export async function pruneDnsRevisions(db: Executor, keep = DNS_REVISION_RETENTION) {
+  const ranked = db
+    .select({
+      revision: schema.dnsRevision.revision,
+      rank: sql<number>`row_number() over (partition by ${schema.dnsRevision.clusterId} order by ${schema.dnsRevision.revision} desc)`.as(
+        "rank",
+      ),
+    })
+    .from(schema.dnsRevision)
+    .as("ranked");
+  const inUse = (
+    column: typeof schema.dnsBinding.desiredRevision | typeof schema.dnsBinding.appliedRevision,
+  ) => db.select({ revision: column }).from(schema.dnsBinding).where(isNotNull(column));
+  const deleted = await db
+    .delete(schema.dnsRevision)
+    .where(
+      and(
+        inArray(
+          schema.dnsRevision.revision,
+          db.select({ revision: ranked.revision }).from(ranked).where(gt(ranked.rank, keep)),
+        ),
+        ne(schema.dnsRevision.status, "blocked"),
+        notInArray(schema.dnsRevision.revision, inUse(schema.dnsBinding.desiredRevision)),
+        notInArray(schema.dnsRevision.revision, inUse(schema.dnsBinding.appliedRevision)),
+      ),
+    )
+    .returning({ revision: schema.dnsRevision.revision });
+  return deleted.length;
+}
+
 export async function listBindingRevisions(app: AppContext, clusterId: string) {
   await assertCluster(app.db, clusterId);
   return (
@@ -620,7 +704,7 @@ export async function listBindingRevisions(app: AppContext, clusterId: string) {
       .from(schema.dnsRevision)
       .where(eq(schema.dnsRevision.clusterId, clusterId))
       .orderBy(desc(schema.dnsRevision.revision))
-      .limit(200)
+      .limit(DNS_REVISION_RETENTION)
   ).map(revisionDto);
 }
 /** Restores the binding settings of a revision; addresses follow current health. */
@@ -746,12 +830,15 @@ const sameAs = (ttl: boolean) => (r: { name: string; type: string; data: string;
 /**
  * Brings one provider zone in line with the binding's plan: claims the
  * planned names (and checks that the claim holds), replaces changed RRsets
- * in batches of 100 (address sets before CNAMEs; within a batch, a name that
- * changes type first loses its old records, so a name is never empty for
- * longer than one batch), deletes managed records the plan no longer has,
- * reads back, then releases retired names. Only names this cluster claimed
- * are ever changed. TTLs count only when the binding's TTL changed since
- * the applied revision.
+ * in batches of 100 (address sets before CNAMEs), deletes managed records
+ * the plan no longer has, reads back, then releases retired names. New
+ * records are written before the records they replace are deleted, so a
+ * name does not resolve empty in between (an A set replaced by AAAA, a
+ * run stopped by a newer revision or a provider error), except where DNS
+ * requires otherwise: a name changing to or from a CNAME loses its old
+ * records first, for one call. Only names this cluster claimed are ever
+ * changed. TTLs count only when the binding's TTL changed since the
+ * applied revision.
  */
 async function reconcileProvider(
   app: AppContext,
@@ -828,9 +915,12 @@ async function reconcileProvider(
   ])
     for (const batch of batches(group)) {
       const names = new Set(batch.map((r) => r.name));
-      const typeChanges = stale.filter((r) => names.has(r.name) && !deleted.has(r));
-      for (const r of typeChanges) deleted.add(r);
-      await send("dns.cleanup", typeChanges);
+      const cnames = new Set(batch.filter((r) => r.type === "CNAME").map((r) => r.name));
+      const conflicts = stale.filter(
+        (r) => names.has(r.name) && !deleted.has(r) && (r.type === "CNAME" || cnames.has(r.name)),
+      );
+      for (const r of conflicts) deleted.add(r);
+      await send("dns.cleanup", conflicts);
       await assertCurrent(app, clusterId, revision.revision);
       await call("dns.set", batch);
     }

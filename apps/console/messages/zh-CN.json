@@ -465,6 +465,7 @@
   "error_setup_in_progress": "初始化正在进行，请稍后重试",
   "error_certificate_not_found": "证书不存在",
   "error_certificate_invalid": "证书、证书链或私钥无效，或证书已过期",
+  "error_certificate_chain_foreign_block": "证书链只能包含证书，私钥请填到私钥栏",
   "error_certificate_domain_mismatch": "证书域名与网站或 DNS 区域不匹配",
   "error_certificate_busy": "证书正在处理中",
   "error_certificate_in_use": "证书或凭据仍在使用中",

@@ -267,6 +267,20 @@
       "when": 1790845029717,
       "tag": "0037_dns_cluster_bindings",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790855437490,
+      "tag": "0038_certificate_chains",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790855543352,
+      "tag": "0039_certificate_accounts",
+      "breakpoints": true
     }
   ]
 }

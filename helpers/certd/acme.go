@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/go-acme/lego/v4/acme"
+	"github.com/go-acme/lego/v4/acme/api"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/lego"
@@ -76,13 +77,16 @@ func (s *protocolSession) event(value any) error {
 	return nil
 }
 
-type httpChallenge struct{ session *protocolSession }
-
-func (p *httpChallenge) Present(domain, token, authorization string) error {
-	return p.session.event(map[string]any{"event": "http01.present", "domain": domain, "token": token, "keyAuthorization": authorization})
-}
-func (p *httpChallenge) CleanUp(domain, token, _ string) error {
-	return p.session.event(map[string]any{"event": "http01.cleanup", "domain": domain, "token": token})
+// acmeHTTPClient trusts the system roots plus the operator's ACME CA, if any.
+func acmeHTTPClient(rootCA string) (*http.Client, error) {
+	roots, err := x509.SystemCertPool()
+	if err != nil {
+		roots = x509.NewCertPool()
+	}
+	if rootCA != "" && !roots.AppendCertsFromPEM([]byte(rootCA)) {
+		return nil, fmt.Errorf("invalid ACME trust certificate")
+	}
+	return &http.Client{Timeout: 45 * time.Second, Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}}}, nil
 }
 
 func acmeCommand(ctx context.Context, command string, raw json.RawMessage, session *protocolSession) (any, error) {
@@ -124,14 +128,9 @@ func acmeCommand(ctx context.Context, command string, raw json.RawMessage, sessi
 	config.UserAgent = "edgeweir-certd/" + Version
 	config.Certificate.KeyType = certcrypto.EC256
 	config.Certificate.Timeout = 2 * time.Minute
-	roots, err := x509.SystemCertPool()
-	if err != nil {
-		roots = x509.NewCertPool()
+	if config.HTTPClient, err = acmeHTTPClient(p.RootCA); err != nil {
+		return nil, err
 	}
-	if p.RootCA != "" && !roots.AppendCertsFromPEM([]byte(p.RootCA)) {
-		return nil, fmt.Errorf("invalid ACME trust certificate")
-	}
-	config.HTTPClient = &http.Client{Timeout: 45 * time.Second, Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}}}
 	client, err := lego.NewClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("ACME directory request failed: %w", err)
@@ -152,7 +151,16 @@ func acmeCommand(ctx context.Context, command string, raw json.RawMessage, sessi
 	}
 	switch p.Challenge {
 	case "http01":
-		err = client.Challenge.SetHTTP01Provider(&httpChallenge{session: session})
+		// All names of the order at once (httpResolver), not lego's solver.
+		var core *api.Core
+		if core, err = api.New(config.HTTPClient, config.UserAgent, config.CADirURL, user.registration.URI, key); err == nil {
+			client.Certificate = certificate.NewCertifier(core, &httpResolver{core: core, session: session}, certificate.CertifierOptions{
+				KeyType:             config.Certificate.KeyType,
+				Timeout:             config.Certificate.Timeout,
+				OverallRequestLimit: config.Certificate.OverallRequestLimit,
+				DisableCommonName:   config.Certificate.DisableCommonName,
+			})
+		}
 	case "dns01":
 		if p.DNS == nil {
 			return nil, fmt.Errorf("DNS-01 credentials are required")
@@ -202,13 +210,88 @@ func acmeCommand(ctx context.Context, command string, raw json.RawMessage, sessi
 	}
 	renewAt := leaf.NotBefore.Add(leaf.NotAfter.Sub(leaf.NotBefore) * 2 / 3)
 	ari := false
-	if info, e := client.Certificate.GetRenewalInfo(certificate.RenewalInfoRequest{Cert: leaf}); e == nil {
+	if info, _, e := renewalWindow(client.Certificate, leaf); e == nil {
 		if when := info.ShouldRenewAt(time.Now(), leaf.NotAfter.Sub(time.Now())); when != nil {
 			renewAt = *when
 			ari = true
 		}
 	}
 	return map[string]any{"chainPem": string(resource.Certificate), "privateKeyPem": string(resource.PrivateKey), "account": p.Account, "renewAt": renewAt.UTC().Format(time.RFC3339), "ari": ari}, nil
+}
+
+// renewalWindow reads the CA's suggested renewal window of a certificate
+// (RFC 9773) and its Retry-After. A window must be a real answer: lego
+// decodes any response body, and the zero window of an error document would
+// read as "renew now".
+func renewalWindow(certifier *certificate.Certifier, leaf *x509.Certificate) (*certificate.RenewalInfoResponse, time.Duration, error) {
+	info, err := certifier.GetRenewalInfo(certificate.RenewalInfoRequest{Cert: leaf})
+	if err != nil {
+		return nil, 0, err
+	}
+	if w := info.SuggestedWindow; w.Start.IsZero() || w.End.Before(w.Start) {
+		return nil, 0, errors.New("no renewal window")
+	}
+	return info, info.RetryAfter, nil
+}
+
+type renewalInfoParams struct {
+	DirectoryURL string   `json:"directoryUrl"`
+	RootCA       string   `json:"rootCa,omitempty"`
+	Certificates []string `json:"certificates"`
+}
+
+// renewalInfoCommand reads the suggested renewal window of each certificate
+// (all from one CA); an entry is null where the CA gives none. renewalInfo
+// is a plain GET, so no account is needed.
+func renewalInfoCommand(raw json.RawMessage) (any, error) {
+	var p renewalInfoParams
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, fmt.Errorf("invalid renewal info request")
+	}
+	if len(p.Certificates) == 0 || len(p.Certificates) > 100 {
+		return nil, fmt.Errorf("1-100 certificates are required")
+	}
+	u, err := url.Parse(p.DirectoryURL)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
+		return nil, fmt.Errorf("ACME directory must be HTTPS")
+	}
+	httpClient, err := acmeHTTPClient(p.RootCA)
+	if err != nil {
+		return nil, err
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	core, err := api.New(httpClient, "edgeweir-certd/"+Version, p.DirectoryURL, "", key)
+	if err != nil {
+		return nil, fmt.Errorf("ACME directory request failed: %w", err)
+	}
+	certifier := certificate.NewCertifier(core, nil, certificate.CertifierOptions{})
+	out := make([]any, len(p.Certificates))
+	for i, text := range p.Certificates {
+		block, _ := pem.Decode([]byte(text))
+		if block == nil {
+			continue
+		}
+		leaf, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			continue
+		}
+		info, retryAfter, err := renewalWindow(certifier, leaf)
+		if errors.Is(err, api.ErrNoARI) {
+			break
+		}
+		if err != nil {
+			continue
+		}
+		out[i] = map[string]any{
+			"start":      info.SuggestedWindow.Start.UTC().Format(time.RFC3339),
+			"end":        info.SuggestedWindow.End.UTC().Format(time.RFC3339),
+			"retryAfter": int(retryAfter / time.Second),
+		}
+	}
+	return out, nil
 }
 
 // newOrderRejected reports whether err is the CA's answer to the new-order

@@ -1,10 +1,11 @@
+import { X509Certificate } from "node:crypto";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import { tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
-import { nodeCertificates } from "../../src/server/services/certificates";
+import { certificateKeyBinding, nodeCertificates } from "../../src/server/services/certificates";
 import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
@@ -69,6 +70,38 @@ describe("M3 certificate lifecycle and isolation", async () => {
     expect((await rpcError(api.certificates.delete({ id: crypto.randomUUID() }))).code).toBe(
       "CERTIFICATE_NOT_FOUND",
     );
+  });
+  it("stores only the certificates and the key of an upload, never a key pasted into the chain", async () => {
+    // A combined fullchain-and-key file pasted as the chain (audit 2026-10-01 P1-24).
+    expect(
+      (
+        await rpcError(
+          api.certificates.upload({
+            name: "combined",
+            chainPem: `${material.certificatePem}${material.privateKeyPem}`,
+            privateKeyPem: material.privateKeyPem,
+          }),
+        )
+      ).code,
+    ).toBe("CERTIFICATE_CHAIN_FOREIGN_BLOCK");
+    // Text around the blocks, and a key field that also holds the certificate.
+    const cert = await api.certificates.upload({
+      name: "annotated",
+      chainPem: `subject=CN=secure.test\n${material.certificatePem}\n\n`,
+      privateKeyPem: `${material.certificatePem}${material.privateKeyPem}`,
+    });
+    const [row] = await ctx.db
+      .select()
+      .from(schema.certificate)
+      .where(eq(schema.certificate.id, cert.id));
+    expect(row?.chainPem).toBe(new X509Certificate(material.certificatePem).toString());
+    const key = ctx.masterKey
+      .open(JSON.parse(row?.privateKeyEnvelope ?? ""), certificateKeyBinding(cert.id))
+      .toString("utf8");
+    expect(key).toMatch(
+      /^-----BEGIN PRIVATE KEY-----\n[A-Za-z0-9+/=\n]+-----END PRIVATE KEY-----\n$/,
+    );
+    await api.certificates.delete({ id: cert.id });
   });
   it("publishes HTTPS references and required capabilities without embedding secrets", async () => {
     await api.https.update({

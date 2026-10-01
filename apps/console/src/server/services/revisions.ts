@@ -50,7 +50,7 @@ import {
   parseExpression,
   parseValueExpression,
 } from "@edgeweir/rule-engine";
-import { and, asc, desc, eq, gt, inArray, lt, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { parseCacheCondition } from "../lib/cache-conditions";
 import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
@@ -1288,25 +1288,58 @@ async function restoreProtection(
   }
 }
 
-/** Deletes revisions beyond the retention window, keeping the newest ones. */
-export async function pruneRevisions(db: Executor, keep = REVISION_RETENTION): Promise<number> {
+/** Revisions published only to carry ACME HTTP-01 challenges. */
+const CHALLENGE_REASON: RevisionReasonCode = "acme_challenge_updated";
+/** How long a challenge revision that is no longer current is kept. */
+export const CHALLENGE_REVISION_TTL = 3_600_000;
+
+/**
+ * Deletes revisions beyond the retention window, keeping the newest `keep`.
+ * Challenge revisions do not count (each issuance publishes one; a batch
+ * of issuances would push the rollback history out) and go when an hour
+ * old, unless current: their challenges expire within minutes and a
+ * rollback never restores them.
+ */
+export async function pruneRevisions(
+  db: Executor,
+  keep = REVISION_RETENTION,
+  now = Date.now(),
+): Promise<number> {
   const clusters = await db.select({ id: schema.cluster.id }).from(schema.cluster);
   let removed = 0;
   for (const { id } of clusters) {
     const latest = await latestRevision(db, id);
-    if (!latest || latest.revision <= keep) continue;
+    if (!latest) continue;
     // The stable and candidate revisions of a rollout are kept however old they are.
     const rollout = await loadRollout(db, id);
-    const pinned = [rollout?.stableRevision, rollout?.candidateRevision].filter(
+    const pinned = [latest.revision, rollout?.stableRevision, rollout?.candidateRevision].filter(
       (r): r is number => typeof r === "number",
     );
+    const [oldestKept] = await db
+      .select({ revision: schema.configRevision.revision })
+      .from(schema.configRevision)
+      .where(
+        and(
+          eq(schema.configRevision.clusterId, id),
+          ne(schema.configRevision.reasonCode, CHALLENGE_REASON),
+        ),
+      )
+      .orderBy(desc(schema.configRevision.revision))
+      .offset(keep - 1)
+      .limit(1);
     const deleted = await db
       .delete(schema.configRevision)
       .where(
         and(
           eq(schema.configRevision.clusterId, id),
-          lt(schema.configRevision.revision, latest.revision - keep + 1),
-          pinned.length ? notInArray(schema.configRevision.revision, pinned) : undefined,
+          notInArray(schema.configRevision.revision, pinned),
+          or(
+            oldestKept ? lt(schema.configRevision.revision, oldestKept.revision) : undefined,
+            and(
+              eq(schema.configRevision.reasonCode, CHALLENGE_REASON),
+              lt(schema.configRevision.createdAt, new Date(now - CHALLENGE_REVISION_TTL)),
+            ),
+          ),
         ),
       )
       .returning({ id: schema.configRevision.id });

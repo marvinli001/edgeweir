@@ -261,21 +261,21 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 
 `edgeweir-certd` 负责 ACME 签发、续期、吊销与 DNS 记录操作。
 
-1. pg-boss 队列 `certificates.sweep` 每分钟选出待签发与到达 `renew_at` 的证书。
+1. pg-boss 队列 `certificates.sweep` 每分钟选出待签发与到达 `renew_at` 的证书（新申请与手动续期在前，其余按 `renew_at`，同时处理 3 张）。失败后按剩余有效期退避（十分之一，10 分钟到 12 小时；首次签发 1 小时）。已签发的证书按 CA 的 Retry-After（1 到 24 小时，默认 6 小时）查询 ARI 续期窗口，窗口早于 `renew_at` 时提前续期。
 2. worker 启动 `EDGEWEIR_CERTD_BIN`（镜像内为 `/usr/local/bin/edgeweir-certd`），环境变量只保留 `PATH` 与 `EDGEWEIR_DNS_TEST_ENDPOINT`。
 3. 向 stdin 写一行 JSON 请求（命令与参数，含 ACME 账户与 DNS 凭据）。certd 在 stdout 上逐行输出 JSON 事件（`account`、`http01.present`、`http01.cleanup`、`dns01.prepare`、`dns01.cleanup`），控制台处理后在 stdin 回复确认；最后一行为结果。
-4. `http01.present` 的响应写入 `acme_challenge` 并发布新 revision，由节点应答。`dns01.prepare` 在 certd 写入 TXT 记录之前把清理责任登记到 `dns_challenge_lease`；完成、失败或重启后只清理本次操作写入的值。`account` 事件的 ACME 账户信封加密后写入 `certificate`。
-5. 结果写回 `certificate`：证书链、指纹、到期时间、下次续期时间与信封加密的私钥；引用该证书的集群发布新 revision。
+4. `http01.present` 一次带上订单的全部 HTTP-01 挑战：写入 `acme_challenge`，每个相关集群只发布一个 revision，等节点应用后 certd 再请 CA 验证（同时 4 个）；`http01.cleanup` 只删行，不发布（挑战到期或本次操作结束后，节点与下一个 revision 都不再带它）。挑战 revision 不计入 200 个保留数，一小时后删除。`dns01.prepare` 在 certd 写入 TXT 记录之前把清理责任登记到 `dns_challenge_lease`；完成、失败或重启后只清理本次操作写入的值。`account` 事件的 ACME 账户信封加密后写入 `acme_account`，同一目录、EAB key id 与邮箱的证书共用一个账户。
+5. 结果写回 `certificate`：证书链（只存证书）、指纹、到期时间、下次续期时间与信封加密的私钥（PKCS #8）；引用该证书的集群发布新 revision。
 
 | 限制 | 值 |
 | --- | --- |
-| 单次调用时长 | 5 分钟，超时 `SIGKILL` |
+| 单次调用时长 | `dns.*` 5 分钟，其他 8 分钟，超时 `SIGKILL` |
 | stdout 输出上限 | `dns.*` 命令 16 MiB，其他 2 MiB |
 | stderr | 丢弃（依赖库的诊断信息可能包含凭据） |
-| 命令 | `version`、`providers`、`obtain`、`renew`、`revoke`、`dns.list`、`dns.set`、`dns.present`、`dns.cleanup`、`dns.zones`、`dns.test` |
+| 命令 | `version`、`providers`、`obtain`、`renew`、`revoke`、`renewal-info`、`dns.list`、`dns.set`、`dns.present`、`dns.cleanup`、`dns.zones`、`dns.test` |
 | DNS 服务商 | 服务商目录 `helpers/certd/catalog.json`，见 [服务商与凭据](docs/guide/dns-and-alerts.md#服务商与凭据) |
 
-DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动）：`dns.reconcile` 每分钟按健康节点与网站域名计算每个自动模式集群的记录（每个集群一份地址记录，每个网站一条 CNAME），生成该集群的 `dns_revision`，写入绑定所选服务商账号（`platform_dns_provider`）的区域；各集群各自发布与对账，一个服务商不可用不影响其他集群；同一集群同一时间只有一个进程在写（`dns_lease`）。写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复。手动模式只生成需要手动创建的记录与 zone 文件，不写 DNS。DNS 调度的服务商账号与 DNS-01 凭据使用同一份服务商目录。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 调度与告警](docs/guide/dns-and-alerts.md)。
+DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动）：`dns.reconcile` 每分钟按健康节点与网站域名计算每个自动模式集群的记录（每个集群一份地址记录，每个网站一条 CNAME），生成该集群的 `dns_revision`，写入绑定所选服务商账号（`platform_dns_provider`）的区域；各集群各自发布与对账，一个服务商不可用不影响其他集群；同一集群同一时间只有一个进程在写（`dns_lease`）。节点在新版本发布后 2 分钟内应用期间保留在记录中。写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复；新记录先于被替换的记录写入。手动模式只生成需要手动创建的记录与 zone 文件，不写 DNS。DNS 调度的服务商账号与 DNS-01 凭据使用同一份服务商目录。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 调度与告警](docs/guide/dns-and-alerts.md)。
 
 ## 统计、日志与告警
 
@@ -375,7 +375,8 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
 | 表 | 内容 |
 | --- | --- |
-| `certificate` | 证书链、指纹、到期与续期状态；私钥与 ACME 账户信封加密 |
+| `certificate` | 证书链、指纹、到期与续期状态；私钥与申请时的 EAB 密钥信封加密 |
+| `acme_account` | ACME 账户（按目录、EAB key id、邮箱共用），账户密钥信封加密 |
 | `acme_challenge` | 短期公开的 HTTP-01 响应 |
 | `dns_credential` | ACME DNS-01 使用的 DNS 服务商凭据与区域，信封加密 |
 | `dns_challenge_lease` | DNS-01 TXT 记录的清理责任 |
@@ -453,6 +454,8 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0035_without_organization_limits` | 删除 `organization_limit`；服务账号去掉 `limits:read`、`limits:write` |
 | `0036_single_operator` | 只保留最早且未停用的平台管理员账号（其余账号的告警订阅合并给它）；IP 名单名称全局唯一（重名的组织名单加后缀并改写其规则），原组织名单改为 collection；删除 `organization`、`member`、`invitation`、`organization_settings` 与各表的 `organization_id`、`session.active_organization_id`、`alert_channel.available_to_tenants`；服务账号去掉组织相关 scope |
 | `0037_dns_cluster_bindings` | `dns_binding`、`dns_lease`；`dns_revision.cluster_id`、`dns_managed_name.cluster_id`；DNS 调度策略转换为各集群的绑定，删除 `dns_state` |
+| `0038_certificate_chains` | 证书链里混入的非证书 PEM 块（例如私钥）删除 |
+| `0039_certificate_accounts` | `acme_account`；`certificate.renewal_info_at` |
 
 ## 构建产物
 
