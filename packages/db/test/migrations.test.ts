@@ -105,6 +105,12 @@ describe("migrations", () => {
       "site_waf",
       "site_error_page",
       "bulk_redirect",
+      "probe",
+      "probe_token",
+      "probe_result",
+      "node_address_state",
+      "scheduling_rule",
+      "scheduling_state",
     ]) {
       expect(tables).toContain(name);
     }

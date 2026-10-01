@@ -1,6 +1,7 @@
 import { globSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  dnsRevisionReasonDefs,
   errorCodes,
   errorDefs,
   nodeErrorCodes,
@@ -220,7 +221,7 @@ describe("i18n messages", () => {
     );
   });
 
-  it("localizes every API error code and revision reason with the same parameters", () => {
+  it("localizes every API error code and revision reason (config and DNS) with the same parameters", () => {
     for (const code of errorCodes) {
       const key = `error_${code.toLowerCase()}`;
       expect(zh[key], key).toBeTruthy();
@@ -233,6 +234,13 @@ describe("i18n messages", () => {
       expect(zh[key], key).toBeTruthy();
       for (const text of patterns(zh[key])) {
         expect(placeholders(text), key).toEqual([...revisionReasonDefs[code].params].sort());
+      }
+    }
+    for (const [code, def] of Object.entries(dnsRevisionReasonDefs)) {
+      const key = `dns_revision_reason_${code}`;
+      expect(zh[key], key).toBeTruthy();
+      for (const text of patterns(zh[key])) {
+        expect(placeholders(text), key).toEqual([...def.params].sort());
       }
     }
   });

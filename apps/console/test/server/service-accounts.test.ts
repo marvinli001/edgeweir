@@ -236,6 +236,40 @@ describe("service accounts, scopes and idempotency keys", async () => {
       ["POST", "/dns/zones", { id: "00000000-0000-4000-8000-000000000000" }],
       ["GET", "/dns-credentials", undefined],
       ["POST", "/sites", { name: "x", domains: ["x.test"], origins: [{ address: "o.test" }] }],
+      ["GET", "/probes", undefined],
+      ["POST", "/probe-tokens", { name: "p", regionId: "00000000-0000-4000-8000-000000000000" }],
+      ["PATCH", "/probes/00000000-0000-4000-8000-000000000000", { enabled: false }],
+      ["DELETE", "/probes/00000000-0000-4000-8000-000000000000", undefined],
+      ["GET", "/probe-results", undefined],
+      ["GET", "/settings/probes", undefined],
+      [
+        "PUT",
+        "/settings/probes",
+        {
+          intervalSeconds: 10,
+          timeoutMs: 3000,
+          attempts: 3,
+          lossPercent: 50,
+          ipDownSeconds: 30,
+          ipUpSeconds: 60,
+        },
+      ],
+      ["PUT", "/nodes/00000000-0000-4000-8000-000000000000/probe", { enabled: true }],
+      ["PUT", "/nodes/00000000-0000-4000-8000-000000000000/addresses", { addresses: [] }],
+      ["GET", "/scheduling/rules", undefined],
+      [
+        "POST",
+        "/scheduling/rules",
+        {
+          clusterId: "00000000-0000-4000-8000-000000000000",
+          name: "r",
+          conditions: [{ metric: "cpu_percent", comparator: "gt", threshold: 90 }],
+          action: "remove_node",
+        },
+      ],
+      ["PATCH", "/scheduling/rules/00000000-0000-4000-8000-000000000000", { name: "r" }],
+      ["DELETE", "/scheduling/rules/00000000-0000-4000-8000-000000000000", undefined],
+      ["GET", "/clusters/00000000-0000-4000-8000-000000000000/scheduling/preview", undefined],
     ] as const) {
       const res = await api(full, method, path, body);
       expect(res.status, `${method} ${path}`).toBe(403);
