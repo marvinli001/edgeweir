@@ -51,11 +51,12 @@ export async function ensureClickHouse(env: Env) {
         time DateTime64(3, 'UTC'), id String, node_id UUID, site_id UUID,
         client_ip String, method LowCardinality(String), host String, path String,
         status UInt16, bytes_sent UInt64, duration_ms UInt32, cache_status LowCardinality(String), sample_rate UInt16,
-        ja4 String DEFAULT '', waf_rule_ids Array(UInt32) DEFAULT [], waf_blocked Bool DEFAULT false
+        ja4 String DEFAULT '', waf_rule_ids Array(UInt32) DEFAULT [], waf_blocked Bool DEFAULT false,
+        request_id String DEFAULT ''
       ) ENGINE = ReplacingMergeTree ORDER BY (site_id, time, id)
         PARTITION BY toDate(time) TTL toDateTime(time) + INTERVAL 7 DAY`,
       );
-      // Tables created before JA4 logging and CRS.
+      // Tables created before JA4 logging, CRS and request ids.
       await clickhouse(
         env,
         "ALTER TABLE access_log ADD COLUMN IF NOT EXISTS ja4 String DEFAULT ''",
@@ -67,6 +68,10 @@ export async function ensureClickHouse(env: Env) {
       await clickhouse(
         env,
         "ALTER TABLE access_log ADD COLUMN IF NOT EXISTS waf_blocked Bool DEFAULT false",
+      );
+      await clickhouse(
+        env,
+        "ALTER TABLE access_log ADD COLUMN IF NOT EXISTS request_id String DEFAULT ''",
       );
       await clickhouse(
         env,
@@ -110,6 +115,7 @@ export async function insertClickHouseLogs(env: Env, rows: LogEntry[]) {
         ja4: r.ja4,
         waf_rule_ids: r.wafRuleIds,
         waf_blocked: r.wafBlocked,
+        request_id: r.requestId,
       }),
     )
     .join("\n");
@@ -122,10 +128,11 @@ export async function queryClickHouseLogs(env: Env, input: LogQuery): Promise<Lo
     `SELECT id, formatDateTime(time, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS timeIso,
     toString(node_id) AS nodeId, toString(site_id) AS siteId, client_ip AS clientIp, method, host, path, status,
     toFloat64(bytes_sent) AS bytesSent, duration_ms AS durationMs, cache_status AS cacheStatus, sample_rate AS sampleRate, ja4,
-    waf_rule_ids AS wafRuleIds, waf_blocked AS wafBlocked
+    waf_rule_ids AS wafRuleIds, waf_blocked AS wafBlocked, request_id AS requestId
     FROM access_log FINAL WHERE site_id = {site:UUID}
       AND time >= fromUnixTimestamp64Milli({from:Int64}) AND time < fromUnixTimestamp64Milli({to:Int64})
       AND ({status:UInt16} = 0 OR status = {status:UInt16}) AND ({ip:String} = '' OR client_ip = {ip:String})
+      AND ({requestId:String} = '' OR request_id = {requestId:String})
       AND startsWith(path, {path:String}) ORDER BY time DESC, id DESC LIMIT {limit:UInt32} FORMAT JSONEachRow`,
     {
       site: input.siteId,
@@ -134,6 +141,7 @@ export async function queryClickHouseLogs(env: Env, input: LogQuery): Promise<Lo
       status: String(input.status ?? 0),
       ip: input.ip,
       path: input.path,
+      requestId: input.requestId ?? "",
       limit: String(input.limit + 1),
     },
   );

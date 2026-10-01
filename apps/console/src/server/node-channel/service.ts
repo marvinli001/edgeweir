@@ -26,9 +26,11 @@ import {
   BanScope,
   BanSource,
   type BanStatus,
+  DeviceVariant,
   GetConfigResponseSchema,
   type NodeService,
   NodeTaskSchema,
+  OriginHealthSource,
   PurgeType,
   type ReportStatsRequest,
   type ReportStatsV2Request,
@@ -45,6 +47,7 @@ import { recordAudit } from "../services/audit";
 import { banChanges, currentBanSequence, reportAutoBans } from "../services/bans";
 import {
   type CacheTaskItem,
+  deviceTypeSites,
   hasDeliverableTasks,
   pullCacheTasks,
   reportCacheTaskResult,
@@ -105,9 +108,33 @@ const purgeTypes = {
   url: PurgeType.URL,
   prefix: PurgeType.PREFIX,
   site: PurgeType.SITE,
+  host: PurgeType.HOST,
+  tag: PurgeType.TAG,
 } as const;
 
-function toNodeTask(task: { id: string; type: string; createdAt: Date; items: CacheTaskItem[] }) {
+/**
+ * The device variants nodes request for an item: one desktop request unless
+ * the site's cache key separates devices, then every variant asked for.
+ * Desktop stays UNSPECIFIED there, as nodes before prefetch-v2 send it.
+ */
+function itemVariants(item: CacheTaskItem, deviceType: ReadonlySet<string>): DeviceVariant[] {
+  if (!deviceType.has(item.siteId)) return [DeviceVariant.UNSPECIFIED];
+  const asked = item.variants ?? ["desktop"];
+  return [
+    ...(asked.includes("desktop") ? [DeviceVariant.DESKTOP] : []),
+    ...(asked.includes("mobile") ? [DeviceVariant.MOBILE] : []),
+  ];
+}
+
+/**
+ * A pulled cache task as the node runs it. `deviceType` holds the sites
+ * whose cache key separates mobile and desktop user agents now: only they
+ * get mobile prefetch targets.
+ */
+export function toNodeTask(
+  task: { id: string; type: string; createdAt: Date; items: CacheTaskItem[] },
+  deviceType: ReadonlySet<string>,
+) {
   const createdAt = timestampFromDate(task.createdAt);
   if (task.type === "prefetch") {
     return create(NodeTaskSchema, {
@@ -115,7 +142,34 @@ function toNodeTask(task: { id: string; type: string; createdAt: Date; items: Ca
       createdAt,
       kind: {
         case: "prefetch",
-        value: { targets: task.items.map((i) => ({ siteId: i.siteId, url: i.url })) },
+        value: {
+          targets: task.items.flatMap((i) =>
+            itemVariants(i, deviceType).map((variant) => ({
+              siteId: i.siteId,
+              url: i.url,
+              variant,
+            })),
+          ),
+        },
+      },
+    });
+  }
+  const sitemap = task.type === "sitemap" ? task.items[0] : undefined;
+  if (sitemap) {
+    return create(NodeTaskSchema, {
+      id: task.id,
+      createdAt,
+      kind: {
+        case: "sitemap",
+        value: {
+          siteId: sitemap.siteId,
+          url: sitemap.url,
+          maxUrls: sitemap.maxUrls ?? 1000,
+          // Named explicitly: a sitemap task needs prefetch-v2 anyway.
+          variants: itemVariants(sitemap, deviceType).map((variant) =>
+            variant === DeviceVariant.UNSPECIFIED ? DeviceVariant.DESKTOP : variant,
+          ),
+        },
       },
     });
   }
@@ -131,6 +185,7 @@ function toNodeTask(task: { id: string; type: string; createdAt: Date; items: Ca
           host: i.host,
           path: i.path,
           query: i.query,
+          tag: i.tag ?? "",
         })),
       },
     },
@@ -669,6 +724,9 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           req.originHealth.slice(0, 2000).map((h) => ({
             siteId: h.siteId,
             originId: h.originId,
+            // Nodes before v0.12.0 report the passive check only, without a source.
+            source:
+              h.source === OriginHealthSource.ACTIVE ? ("active" as const) : ("passive" as const),
             healthy: h.healthy,
             consecutiveFailures: h.consecutiveFailures,
             lastError: h.lastError,
@@ -765,7 +823,21 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
       const upgrade = await pullUpgrade(app, node);
       const limit = max - (upgrade ? 1 : 0);
       const tasks = limit > 0 ? await pullCacheTasks(app.db, node, limit) : [];
-      return { tasks: [...tasks.map(toNodeTask), ...(upgrade ? [upgrade] : [])] };
+      // Only prefetches depend on the cache key's device type.
+      const deviceType = await deviceTypeSites(
+        app.db,
+        tasks.flatMap((task) =>
+          task.type === "prefetch" || task.type === "sitemap"
+            ? task.items.map((item) => item.siteId)
+            : [],
+        ),
+      );
+      return {
+        tasks: [
+          ...tasks.map((task) => toNodeTask(task, deviceType)),
+          ...(upgrade ? [upgrade] : []),
+        ],
+      };
     },
 
     async reportTaskResult(req, ctx) {

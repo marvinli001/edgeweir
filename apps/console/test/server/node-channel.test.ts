@@ -4,13 +4,27 @@ import { webcrypto } from "node:crypto";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
-import { siteCreateInput, tlsSettings } from "@edgeweir/contract";
+import {
+  type CacheTaskCreateInput,
+  cacheTaskCreateInput,
+  siteCreateInput,
+  tlsSettings,
+} from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { ApplyState, NodeService, PurgeType, TaskState, WatchEvent } from "@edgeweir/proto";
+import {
+  ApplyState,
+  DeviceVariant,
+  NodeService,
+  OriginHealthSource,
+  PurgeType,
+  TaskState,
+  WatchEvent,
+} from "@edgeweir/proto";
 import * as x509 from "@peculiar/x509";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
+import { logsCsv, queryLogs } from "../../src/server/services/access-logs";
 import { createCacheTask, getCacheTask } from "../../src/server/services/cache-tasks";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { createEnrollmentToken } from "../../src/server/services/enrollment";
@@ -791,6 +805,268 @@ describe("node channel", async () => {
       (await mtls.getCertificates({ ids: [certificate.id] })).certificates[0]?.privateKeyPem,
     ).toBe(material.privateKeyPem);
   });
+  it("hands out host and tag purges, mobile prefetches only for device-type keys, and sitemap tasks", async () => {
+    const { mtls } = await enroll("edge-g4-tasks");
+    const devices = await createSite(
+      ctx.db,
+      siteCreateInput.parse({
+        name: "devices",
+        domains: ["devices.test"],
+        origins: [{ address: "whoami" }],
+        cacheSettings: { cacheKey: { deviceType: true } },
+      }),
+      { organizationId, actor, masterKey: ctx.masterKey },
+    );
+    const { site: plain } = await demoSite("plain");
+    // Every active node of the cluster runs the new task types.
+    for (const node of await ctx.db
+      .select()
+      .from(schema.node)
+      .where(eq(schema.node.clusterId, clusterId)))
+      await ctx.db
+        .update(schema.node)
+        .set({
+          supportedFeatures: [
+            ...new Set([...node.supportedFeatures, "purge-tag-v1", "prefetch-v2"]),
+          ],
+        })
+        .where(eq(schema.node.id, node.id));
+    const create = (input: CacheTaskCreateInput) =>
+      createCacheTask(ctx.db, cacheTaskCreateInput.parse(input), {
+        scope: { all: true },
+        actor,
+      });
+    const host = await create({ type: "host", hosts: ["devices.test"] });
+    const tag = await create({
+      type: "tag",
+      siteIds: [plain.id, devices.site.id],
+      tags: ["Product-1"],
+    });
+    const prefetch = await create({
+      type: "prefetch",
+      urls: ["http://devices.test/app.js", "http://plain.test/app.js"],
+      variants: ["desktop", "mobile"],
+    });
+    const mobileSitemap = await create({
+      type: "sitemap",
+      urls: ["https://devices.test/sitemap.xml"],
+      variants: ["mobile"],
+      maxUrls: 20,
+    });
+    const plainSitemap = await create({
+      type: "sitemap",
+      urls: ["http://plain.test/sitemap.xml.gz"],
+      variants: ["desktop", "mobile"],
+    });
+    const { tasks } = await mtls.pullTasks({ maxTasks: 10 });
+    const kind = (id: string) => tasks.find((task) => task.id === id)?.kind;
+    expect(kind(host.id)).toEqual({
+      case: "purge",
+      value: expect.objectContaining({
+        targets: [
+          expect.objectContaining({
+            siteId: devices.site.id,
+            type: PurgeType.HOST,
+            host: "devices.test",
+            path: "",
+            tag: "",
+          }),
+        ],
+      }),
+    });
+    expect(kind(tag.id)).toEqual({
+      case: "purge",
+      value: expect.objectContaining({
+        targets: [
+          expect.objectContaining({
+            siteId: devices.site.id,
+            type: PurgeType.TAG,
+            tag: "product-1",
+            host: "",
+          }),
+          expect.objectContaining({ siteId: plain.id, type: PurgeType.TAG, tag: "product-1" }),
+        ],
+      }),
+    });
+    // Mobile only where the cache key separates devices; one request elsewhere.
+    expect(kind(prefetch.id)).toEqual({
+      case: "prefetch",
+      value: expect.objectContaining({
+        targets: [
+          expect.objectContaining({
+            siteId: devices.site.id,
+            url: "http://devices.test/app.js",
+            variant: DeviceVariant.DESKTOP,
+          }),
+          expect.objectContaining({
+            siteId: devices.site.id,
+            url: "http://devices.test/app.js",
+            variant: DeviceVariant.MOBILE,
+          }),
+          expect.objectContaining({
+            siteId: plain.id,
+            url: "http://plain.test/app.js",
+            variant: DeviceVariant.UNSPECIFIED,
+          }),
+        ],
+      }),
+    });
+    expect(kind(mobileSitemap.id)).toEqual({
+      case: "sitemap",
+      value: expect.objectContaining({
+        siteId: devices.site.id,
+        url: "https://devices.test/sitemap.xml",
+        maxUrls: 20,
+        variants: [DeviceVariant.MOBILE],
+      }),
+    });
+    expect(kind(plainSitemap.id)).toEqual({
+      case: "sitemap",
+      value: expect.objectContaining({
+        siteId: plain.id,
+        url: "http://plain.test/sitemap.xml.gz",
+        maxUrls: 1000,
+        variants: [DeviceVariant.DESKTOP],
+      }),
+    });
+    // The device type is read when the node pulls the task.
+    const late = await create({
+      type: "prefetch",
+      urls: ["http://plain.test/late.js"],
+      variants: ["mobile"],
+    });
+    await ctx.db
+      .update(schema.site)
+      .set({ cacheKey: { deviceType: true } })
+      .where(eq(schema.site.id, plain.id));
+    const [pulled] = (await mtls.pullTasks({})).tasks;
+    expect(pulled?.id).toBe(late.id);
+    expect(pulled?.kind).toEqual({
+      case: "prefetch",
+      value: expect.objectContaining({
+        targets: [
+          expect.objectContaining({
+            siteId: plain.id,
+            url: "http://plain.test/late.js",
+            variant: DeviceVariant.MOBILE,
+          }),
+        ],
+      }),
+    });
+    await ctx.db.update(schema.site).set({ cacheKey: {} }).where(eq(schema.site.id, plain.id));
+  });
+
+  it("stores passive and active origin health from heartbeats, one entry per check", async () => {
+    const { nodeId, mtls } = await enroll("edge-g4-health");
+    const { site } = await demoSite("checked", [{ address: "checked-origin.test" }]);
+    const originId = site.origins[0]?.id ?? "";
+    const failedAt = timestampFromDate(new Date());
+    await mtls.reportStatus({
+      appliedRevision: 1n,
+      state: ApplyState.APPLIED,
+      originHealth: [
+        // A node before v0.12.0 leaves the source out: passive.
+        {
+          siteId: site.id,
+          originId,
+          healthy: false,
+          consecutiveFailures: 3,
+          lastError: "connect timeout",
+          lastErrorCode: "timeout",
+          lastFailureAt: failedAt,
+          downUntil: timestampFromDate(new Date(Date.now() + 30_000)),
+        },
+        {
+          siteId: site.id,
+          originId,
+          source: OriginHealthSource.ACTIVE,
+          healthy: false,
+          consecutiveFailures: 4,
+          lastError: "HTTP 500",
+          lastErrorCode: "upstream_status",
+          lastErrorParams: { status: "500" },
+          lastFailureAt: failedAt,
+        },
+        // A second passive entry for the same origin is dropped.
+        {
+          siteId: site.id,
+          originId,
+          source: OriginHealthSource.PASSIVE,
+          healthy: true,
+          consecutiveFailures: 0,
+        },
+      ],
+    });
+    const rows = () =>
+      ctx.db
+        .select()
+        .from(schema.originHealth)
+        .where(eq(schema.originHealth.nodeId, nodeId))
+        .orderBy(schema.originHealth.source);
+    expect((await rows()).map((r) => [r.source, r.healthy, r.consecutiveFailures])).toEqual([
+      ["active", false, 4],
+      ["passive", false, 3],
+    ]);
+    const [health] = await siteOriginHealth(ctx.db, site.id, { all: true });
+    expect(health?.downNodes).toBe(1);
+    expect(health?.nodes.map((n) => [n.nodeId === nodeId, n.source, n.lastErrorCode])).toEqual([
+      [true, "active", "upstream_status"],
+      [true, "passive", "timeout"],
+    ]);
+    // Every heartbeat replaces the node's entries of both checks.
+    await mtls.reportStatus({ appliedRevision: 1n, state: ApplyState.APPLIED, originHealth: [] });
+    expect(await rows()).toEqual([]);
+  });
+
+  it("keeps the request ids nodes log, drops malformed ones and filters by them", async () => {
+    const { mtls } = await enroll("edge-g4-logs");
+    const { site } = await demoSite("requests");
+    await ctx.db
+      .update(schema.site)
+      .set({ logSampleRate: 10000 })
+      .where(eq(schema.site.id, site.id));
+    const now = Date.now();
+    const log = (requestId: string, path: string) => ({
+      time: timestampFromDate(new Date(now)),
+      siteId: site.id,
+      clientIp: "192.0.2.10",
+      method: "GET",
+      host: "requests.test",
+      path,
+      status: 503,
+      bytesSent: 10n,
+      durationMs: 1,
+      cacheStatus: "MISS",
+      sampleRate: 10000,
+      requestId,
+    });
+    const id = "0f9e8d7c6b5a4f3e:edge-1";
+    const res = await mtls.reportLogs({
+      batchSequence: 1n,
+      logs: [log(id, "/a"), log("bad id <script>", "/b"), log("x".repeat(129), "/c")],
+    });
+    expect(res.accepted).toBe(3);
+    const query = {
+      siteId: site.id,
+      from: new Date(now - 60_000).toISOString(),
+      to: new Date(now + 60_000).toISOString(),
+      ip: "",
+      path: "",
+      limit: 10,
+    };
+    const all = await queryLogs(ctx, { all: true }, query);
+    expect(all.entries.map((e) => [e.path, e.requestId]).sort()).toEqual([
+      ["/a", id],
+      ["/b", ""],
+      ["/c", ""],
+    ]);
+    const one = await queryLogs(ctx, { all: true }, { ...query, requestId: id });
+    expect(one.entries.map((e) => e.path)).toEqual(["/a"]);
+    const csv = logsCsv(one.entries).split("\r\n");
+    expect(csv[0]).toContain(",nodeId,requestId,ja4,");
+    expect(csv[1]).toContain(`"${id}"`);
+  });
+
   it("withholds subdivision rules from nodes without a City MMDB", async () => {
     const { mtls, nodeId } = await enroll("subdivision-test");
     const agent = [

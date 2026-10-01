@@ -18,6 +18,8 @@ const JA4_RE = /^[a-z][a-z0-9]{2}[di][0-9]{4}[a-zA-Z0-9]{2}_[0-9a-f]{12}_[0-9a-f
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** CRS rule ids kept per log entry (nodes send at most 16). */
 const MAX_WAF_RULE_IDS = 16;
+/** Request ids as nodes answer them (X-Request-Id); anything else is stored empty. */
+const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 export const logCutoff = (now = Date.now()) => Math.floor(now / DAY) * DAY - 6 * DAY;
 async function partition(tx: Executor, day: number) {
   const from = new Date(day).toISOString(),
@@ -121,6 +123,7 @@ export async function ingestLogs(
           .sort((a, b) => a - b)
           .slice(0, MAX_WAF_RULE_IDS),
         wafBlocked: l.wafBlocked,
+        requestId: REQUEST_ID_RE.test(l.requestId) ? l.requestId : "",
       },
     ];
   });
@@ -209,6 +212,7 @@ export async function queryLogs(app: AppContext, scope: SiteScope, input: LogQue
                 input.status ? eq(schema.accessLog.status, input.status) : undefined,
                 input.ip ? eq(schema.accessLog.clientIp, input.ip) : undefined,
                 input.path ? sql`starts_with(${schema.accessLog.path}, ${input.path})` : undefined,
+                input.requestId ? eq(schema.accessLog.requestId, input.requestId) : undefined,
               ),
             )
             .orderBy(desc(schema.accessLog.time), desc(schema.accessLog.id))
@@ -229,6 +233,7 @@ export function logsCsv(entries: LogEntry[]) {
     "cacheStatus",
     "sampleRate",
     "nodeId",
+    "requestId",
     "ja4",
     "wafRuleIds",
     "wafBlocked",
