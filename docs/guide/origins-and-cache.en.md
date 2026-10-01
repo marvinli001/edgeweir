@@ -276,6 +276,7 @@ Each site has at most 64 rules. Without rules the card shows **No caching** and 
 | Item | Behavior |
 | --- | --- |
 | Order | Rules match in list order; the first applicable rule decides caching, TTL, and browser TTL; without an applicable rule nothing is cached |
+| `priority` in the API | Rules match in ascending priority, which must be unique within a site (`CACHE_RULE_PRIORITY_DUPLICATE`); omitted, it is 10, 20, 30 … by list position |
 | Request condition | One expression, evaluated on the client's original request: the normalized path before rule rewrites, as for the cache key and purges |
 | Response conditions | Status code, response size. When request conditions match but response conditions do not, later rules are evaluated |
 | Response size | From `Content-Length`; for 206 responses the full size in `Content-Range`; an unknown size fails size conditions |

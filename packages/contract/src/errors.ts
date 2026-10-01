@@ -89,6 +89,7 @@ export const errorDefs = {
   REGION_CODE_TAKEN: { status: 409, params: ["code"] },
   NODE_NOT_FOUND: { status: 404, params: [] },
   SITE_NOT_FOUND: { status: 404, params: [] },
+  CACHE_RULE_PRIORITY_DUPLICATE: { status: 400, params: ["priority"] },
   SITE_DISABLED: { status: 409, params: [] },
   SITE_SUSPENDED: { status: 409, params: [] },
   UPDATED_AT_MISMATCH: { status: 409, params: [] },

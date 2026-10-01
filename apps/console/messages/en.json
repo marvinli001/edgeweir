@@ -912,6 +912,7 @@
   "error_access_key_read_only": "This access key is read only",
   "error_access_key_session_required": "Sign in to create an access key",
   "error_cluster_site_limit": "This cluster has reached its limit of {limit} published sites",
+  "error_cache_rule_priority_duplicate": "Two cache rules have priority {priority}",
   "error_node_capability_required": "Cluster nodes need these capabilities first: {features}",
   "site_tab_logs": "Logs",
   "logs_sampling": "Access log sample rate",

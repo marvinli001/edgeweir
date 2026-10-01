@@ -185,6 +185,42 @@ describe("M2 origins, cache settings and cache tasks", async () => {
     expect((await compiled())?.cacheRules[0]?.cacheAuthorized).toBe(false);
   });
 
+  it("orders cache rules by position without priorities and keeps unchanged rules", async () => {
+    const rules = [
+      { pathPrefixes: ["/static/"], edgeTtlSeconds: 86400 },
+      { pathPrefixes: ["/"], edgeTtlSeconds: 60 },
+    ];
+    const { site } = await tenant.sites.create({
+      name: "ordered",
+      domains: ["ordered.test"],
+      origins: [{ address: "origin-ordered" }],
+      cacheRules: rules,
+    });
+    await approveSiteDomains(admin, site.id);
+    expect(site.cacheRules.map((r) => r.priority)).toEqual([10, 20]);
+    const compiled = async () =>
+      decodeNodeConfig((await latestRevision(ctx.db, clusterB))?.ir ?? new Uint8Array()).sites.find(
+        (s) => s.id === site.id,
+      );
+    const first = await compiled();
+    expect(first?.cacheRules.map((r) => r.match?.pathPrefixes[0])).toEqual(["/static/", "/"]);
+    // Saving the same rules again keeps their ids: no new revision.
+    for (let i = 0; i < 6; i++) {
+      const saved = await tenant.sites.update({ id: site.id, cacheRules: rules });
+      expect(saved.site.cacheRules.map((r) => r.id)).toEqual(site.cacheRules.map((r) => r.id));
+    }
+    expect((await compiled())?.cacheRules).toEqual(first?.cacheRules);
+    // Equal priorities would leave the order to chance.
+    const error = await rpcError(
+      tenant.sites.update({
+        id: site.id,
+        cacheRules: rules.map((rule) => ({ ...rule, priority: 100 })),
+      }),
+    );
+    expect(error).toMatchObject({ code: "CACHE_RULE_PRIORITY_DUPLICATE", data: { priority: 100 } });
+    expect(error.status).toBe(400);
+  });
+
   it("keeps S3 secrets encrypted, write-only and versioned", async () => {
     const created = await tenant.sites.create({
       name: "bucket",

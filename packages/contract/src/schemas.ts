@@ -197,7 +197,11 @@ export function cacheRuleExpression(rule: {
 
 export const cacheRuleInput = z
   .object({
-    priority: z.number().int().min(0).max(10000).default(100),
+    /**
+     * Rules apply in ascending priority, unique within a site. Omitted: the
+     * rule's position in the list, (index + 1) × 10.
+     */
+    priority: z.number().int().min(0).max(10000).optional(),
     /**
      * The request condition (phase cache, at most 16384 characters), evaluated
      * on the client's original request. Empty: the structured lists below are

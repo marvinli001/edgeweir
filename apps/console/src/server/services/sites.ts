@@ -468,16 +468,50 @@ function cacheSettingsValues(
   };
 }
 
+/** Cache rule columns that make up a rule's content. */
+const CACHE_RULE_FIELDS = [
+  "priority",
+  "expression",
+  "listIds",
+  "pathPrefixes",
+  "paths",
+  "extensions",
+  "statusCodes",
+  "minSizeBytes",
+  "maxSizeBytes",
+  "action",
+  "edgeTtlSeconds",
+  "originCacheControl",
+  "staleWhileRevalidateSeconds",
+  "staleIfErrorSeconds",
+  "cacheAuthorized",
+  "browserTtlSeconds",
+] as const;
+
 /**
- * Inserts cache rules with their condition as an expression (the builder's
- * expression of the structured lists when they have none) and the IP lists
- * it references; the structured columns stay empty.
+ * Replaces a site's cache rules, with their condition as an expression (the
+ * builder's expression of the structured lists when they have none) and
+ * the IP lists it references; the structured columns stay empty.
+ * Priorities are unique (an omitted one is the rule's position,
+ * (index + 1) × 10), so rules apply in a fixed order; a rule saved
+ * unchanged keeps its id, so saving the same rules again publishes nothing.
  */
-async function insertCacheRules(
+async function replaceCacheRules(
   tx: Tx,
   site: { id: string; organizationId: string },
   rules: CacheRuleInput[],
 ) {
+  const priorities = new Set<number>();
+  for (const [i, rule] of rules.entries()) {
+    const priority = rule.priority ?? (i + 1) * 10;
+    if (priorities.has(priority))
+      fail("CACHE_RULE_PRIORITY_DUPLICATE", "cache rule priorities must be unique", { priority });
+    priorities.add(priority);
+  }
+  const previous = await tx
+    .delete(schema.cacheRule)
+    .where(eq(schema.cacheRule.siteId, site.id))
+    .returning();
   if (rules.length === 0) return;
   const expressions = rules.map(storedCacheExpression);
   const references = expressions.map((expression) => {
@@ -497,27 +531,33 @@ async function insertCacheRules(
       return id;
     }),
   );
+  const values = rules.map((r, i) => ({
+    priority: r.priority ?? (i + 1) * 10,
+    expression: expressions[i] ?? "true",
+    listIds: listIds[i] ?? [],
+    pathPrefixes: [],
+    paths: [],
+    extensions: [],
+    statusCodes: r.statusCodes,
+    minSizeBytes: r.minSizeBytes,
+    maxSizeBytes: r.maxSizeBytes,
+    action: r.action,
+    edgeTtlSeconds: r.edgeTtlSeconds,
+    originCacheControl: r.originCacheControl,
+    staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
+    staleIfErrorSeconds: r.staleIfErrorSeconds,
+    cacheAuthorized: r.cacheAuthorized,
+    browserTtlSeconds: r.browserTtlSeconds,
+  }));
+  const content = (rule: Partial<Record<(typeof CACHE_RULE_FIELDS)[number], unknown>>) =>
+    JSON.stringify(CACHE_RULE_FIELDS.map((field) => rule[field]));
+  const ids = new Map<string, string[]>();
+  for (const row of previous) ids.set(content(row), [...(ids.get(content(row)) ?? []), row.id]);
   await tx.insert(schema.cacheRule).values(
-    rules.map((r, i) => ({
-      createdAt: ordered(i),
-      siteId: site.id,
-      priority: r.priority,
-      expression: expressions[i] ?? "true",
-      listIds: listIds[i] ?? [],
-      pathPrefixes: [],
-      paths: [],
-      extensions: [],
-      statusCodes: r.statusCodes,
-      minSizeBytes: r.minSizeBytes,
-      maxSizeBytes: r.maxSizeBytes,
-      action: r.action,
-      edgeTtlSeconds: r.edgeTtlSeconds,
-      originCacheControl: r.originCacheControl,
-      staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
-      staleIfErrorSeconds: r.staleIfErrorSeconds,
-      cacheAuthorized: r.cacheAuthorized,
-      browserTtlSeconds: r.browserTtlSeconds,
-    })),
+    values.map((rule, i) => {
+      const id = ids.get(content(rule))?.shift();
+      return { ...(id ? { id } : {}), createdAt: ordered(i), siteId: site.id, ...rule };
+    }),
   );
 }
 
@@ -606,7 +646,7 @@ export async function createSite(
       .returning();
     if (!pool) throw new Error("origin pool insert failed");
     await writeOrigins(tx, pool, input.origins, ctx.masterKey);
-    await insertCacheRules(tx, siteRow, input.cacheRules);
+    await replaceCacheRules(tx, siteRow, input.cacheRules);
     const revision = await publishSiteClusters(
       tx,
       siteRow,
@@ -719,8 +759,7 @@ export async function updateSite(
       changed.push("cacheSettings");
     }
     if (input.cacheRules) {
-      await tx.delete(schema.cacheRule).where(eq(schema.cacheRule.siteId, row.id));
-      await insertCacheRules(tx, row, input.cacheRules);
+      await replaceCacheRules(tx, row, input.cacheRules);
       changed.push("cacheRules");
     }
     // Touch updated_at even when only child rows changed.

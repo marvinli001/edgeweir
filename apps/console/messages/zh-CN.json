@@ -818,6 +818,7 @@
   "error_access_key_read_only": "此密钥只有只读权限",
   "error_access_key_session_required": "请登录控制台后创建密钥",
   "error_cluster_site_limit": "此集群最多发布 {limit} 个网站",
+  "error_cache_rule_priority_duplicate": "两条缓存规则的优先级都是 {priority}",
   "error_node_capability_required": "请先由管理员为集群节点启用这些能力：{features}",
   "site_tab_logs": "日志",
   "logs_sampling": "访问日志采样率",
