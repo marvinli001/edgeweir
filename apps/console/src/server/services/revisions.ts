@@ -70,10 +70,10 @@ export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export type Executor = Database | Tx;
 
 /**
- * The account behind a change, recorded as a revision's publisher: the
- * operator, signed in or with an AccessKey. Service accounts and background
- * jobs publish as nobody, which keeps them behind the capability gate of
- * insertRevision.
+ * The account behind a change, recorded as a revision's publisher and in
+ * every `created_by_user_id`: the operator, signed in or with an AccessKey.
+ * Service accounts and background jobs are nobody (their ids are not users),
+ * which also keeps them behind the capability gate of insertRevision.
  */
 export const publisher = (actor: { type: string; id: string }) =>
   actor.type === "user" || actor.type === "api_key" ? actor.id : null;

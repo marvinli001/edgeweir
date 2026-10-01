@@ -1,6 +1,6 @@
 import { contract, serviceAccountProcedures, serviceAccountScope } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { count, eq } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import {
@@ -517,5 +517,55 @@ describe("service accounts, scopes and idempotency keys", async () => {
       expect(stored).not.toContain(secret);
       expect(stored).not.toContain(Buffer.from(secret).toString("base64").slice(0, 24));
     }
+  });
+
+  it("records the operator behind AccessKey changes and nobody behind service accounts", async () => {
+    const operator = await admin.accessKeys.create({ name: "recorder", scope: "write" });
+    const operatorId = (await admin.account.me()).user.id;
+    const [cluster] = await admin.clusters.list();
+    await admin.sites.setEnabled({ id: siteId, enabled: true });
+    const created = await api(operator.key, "POST", "/service-accounts", {
+      name: "made-with-key",
+      scopes: [],
+    });
+    expect(created.status).toBe(201);
+    const token = await api(operator.key, "POST", "/enrollment-tokens", { clusterId: cluster?.id });
+    expect(token.status).toBe(200);
+    const task = await api(operator.key, "POST", "/cache-tasks", {
+      type: "site",
+      siteIds: [siteId],
+    });
+    expect(task.status).toBe(201);
+    const off = await api(operator.key, "PUT", `/sites/${siteId}/enabled`, { enabled: false });
+    expect(off.status).toBe(200);
+    const latestRevision = async () =>
+      (
+        await ctx.db
+          .select()
+          .from(schema.configRevision)
+          .where(eq(schema.configRevision.clusterId, cluster?.id ?? ""))
+          .orderBy(desc(schema.configRevision.revision))
+          .limit(1)
+      )[0];
+    expect((await latestRevision())?.createdByUserId).toBe(operatorId);
+    const [account] = await ctx.db
+      .select()
+      .from(schema.serviceAccount)
+      .where(eq(schema.serviceAccount.id, created.json.id as string));
+    expect(account?.createdByUserId).toBe(operatorId);
+    const [enrollment] = await ctx.db
+      .select()
+      .from(schema.enrollmentToken)
+      .where(eq(schema.enrollmentToken.id, token.json.tokenId as string));
+    expect(enrollment?.createdByUserId).toBe(operatorId);
+    const [cacheTask] = await ctx.db
+      .select()
+      .from(schema.cacheTask)
+      .where(eq(schema.cacheTask.id, task.json.id as string));
+    expect(cacheTask?.createdByUserId).toBe(operatorId);
+    // A service account's id is not a user: its publishes record nobody.
+    const on = await api(full, "PUT", `/sites/${siteId}/enabled`, { enabled: true });
+    expect(on.status).toBe(200);
+    expect((await latestRevision())?.createdByUserId).toBeNull();
   });
 });

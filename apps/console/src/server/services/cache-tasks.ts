@@ -22,7 +22,7 @@ import { TASKS_CHANNEL } from "../lib/events";
 import { cleanErrorCode, cleanErrorParams, taskError } from "../lib/node-errors";
 import { assertServing } from "../lib/site-state";
 import { type Actor, recordAudit, systemActor } from "./audit";
-import type { Executor } from "./revisions";
+import { type Executor, publisher } from "./revisions";
 
 type CreateInput = z.output<typeof cacheTaskCreateInput>;
 /** The parsed input; the fields added with host, tag and sitemap tasks may be omitted. */
@@ -387,8 +387,7 @@ export async function createCacheTask(
         targets,
         siteIds: [...siteNames.keys()],
         payload: items as unknown as Record<string, string>[],
-        createdByUserId:
-          ctx.actor.type === "user" || ctx.actor.type === "api_key" ? ctx.actor.id : null,
+        createdByUserId: publisher(ctx.actor),
         createdByName: ctx.actor.name ?? "",
         finishedAt: active.length === 0 ? now : null,
       })

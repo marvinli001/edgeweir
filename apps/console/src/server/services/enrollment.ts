@@ -5,7 +5,7 @@ import { and, eq, gt, isNull } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { findNodeGroup } from "./node-groups";
-import type { Tx } from "./revisions";
+import { publisher, type Tx } from "./revisions";
 
 export const TOKEN_PREFIX = "ewt_";
 
@@ -84,7 +84,7 @@ export async function createEnrollmentToken(
         tokenPrefix: token.slice(0, TOKEN_PREFIX.length + 6),
         nodeName: input.nodeName,
         expiresAt,
-        createdByUserId: ctx.actor.type === "user" ? ctx.actor.id : null,
+        createdByUserId: publisher(ctx.actor),
       })
       .returning();
     if (!inserted) throw new Error("token insert failed");

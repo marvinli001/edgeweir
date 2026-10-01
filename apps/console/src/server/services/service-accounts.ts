@@ -10,7 +10,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { and, asc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import type { Executor } from "./revisions";
+import { type Executor, publisher } from "./revisions";
 
 type AccountRow = typeof schema.serviceAccount.$inferSelect;
 type KeyRow = typeof schema.serviceAccountKey.$inferSelect;
@@ -115,7 +115,7 @@ export async function createServiceAccount(
         name: input.name,
         scopes: input.scopes,
         enabled: input.enabled,
-        createdByUserId: actor.type === "user" ? actor.id : null,
+        createdByUserId: publisher(actor),
       })
       .returning();
     if (!row) throw new Error("service account insert failed");
