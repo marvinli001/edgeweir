@@ -147,6 +147,7 @@
   "sites_deleted": "Deleted, revision #{revision}",
   "site_form_title": "New site",
   "site_form_name": "Name",
+  "site_form_cluster": "Cluster",
   "site_form_domains": "Domains",
   "site_form_origin": "Origin",
   "site_form_port": "Port",

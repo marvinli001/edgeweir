@@ -147,6 +147,7 @@
   "sites_deleted": "已删除，版本 #{revision}",
   "site_form_title": "新建网站",
   "site_form_name": "名称",
+  "site_form_cluster": "集群",
   "site_form_domains": "域名",
   "site_form_origin": "源站地址",
   "site_form_port": "端口",

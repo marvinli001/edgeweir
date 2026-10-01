@@ -7,6 +7,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import * as z from "zod";
 import { type Columns, DataTable } from "@/components/data-table";
+import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SearchBox } from "@/components/search-box";
@@ -230,7 +231,12 @@ function SitesPage() {
           />
         </>
       )}
-      <CreateSiteDialog open={search.create === true} onOpenChange={setCreateOpen} />
+      <CreateSiteDialog
+        open={search.create === true}
+        onOpenChange={setCreateOpen}
+        clusters={clusters.data ?? []}
+        initialClusterId={search.cluster}
+      />
     </Page>
   );
 }
@@ -238,9 +244,14 @@ function SitesPage() {
 function CreateSiteDialog({
   open,
   onOpenChange,
+  clusters,
+  initialClusterId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Oldest first: a new site goes to the oldest cluster unless another is chosen. */
+  clusters: { id: string; name: string }[];
+  initialClusterId?: string;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -249,6 +260,8 @@ function CreateSiteDialog({
   const [cacheEnabled, setCacheEnabled] = React.useState(true);
   const [respectOrigin, setRespectOrigin] = React.useState(false);
   const [navigating, setNavigating] = React.useState(false);
+  const [clusterId, setClusterId] = React.useState(initialClusterId);
+  const cluster = clusters.some((c) => c.id === clusterId) ? clusterId : clusters[0]?.id;
   const pending = create.isPending || navigating;
 
   return (
@@ -272,6 +285,7 @@ function CreateSiteDialog({
             try {
               const result = await create.mutateAsync({
                 name: text("siteName"),
+                clusterId: clusters.length > 1 ? cluster : undefined,
                 domains: text("domains")
                   .split(/[\s,]+/)
                   .filter(Boolean),
@@ -312,6 +326,16 @@ function CreateSiteDialog({
               <FieldLabel htmlFor="siteName">{m.site_form_name()}</FieldLabel>
               <Input id="siteName" name="siteName" required maxLength={100} placeholder="demo" />
             </Field>
+            {clusters.length > 1 && cluster ? (
+              <FormSelect
+                id="site-cluster"
+                label={m.site_form_cluster()}
+                value={cluster}
+                options={clusters.map((c) => ({ value: c.id, label: c.name }))}
+                onChange={setClusterId}
+                testId="site-cluster"
+              />
+            ) : null}
             <Field>
               <FieldLabel htmlFor="domains">{m.site_form_domains()}</FieldLabel>
               <Textarea
