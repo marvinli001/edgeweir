@@ -1,6 +1,6 @@
 # Origins and cache
 
-A site's origin pool, health checks and session affinity, origin connections, cache rules, cache key, and purge and prefetch.
+A site's origin pool and origin groups, health checks and session affinity, origin connections, cache rules, cache key, and purge and prefetch.
 
 ## Concepts
 
@@ -8,6 +8,7 @@ A site's origin pool, health checks and session affinity, origin connections, ca
 | --- | --- |
 | Origin pool | All origins of a site plus load balancing, health check, timeout, and keep-alive settings. One pool per site. |
 | Primary / backup origin | Origins without **Backup** are primaries and receive traffic by the load balancing policy; backups receive traffic only when every primary is down. |
+| Origin group | A group label on an origin; empty is the default group. Requests go to the default group unless an **Origin override** rule sends them to another group. |
 | Cache rule | A rule matched in list order that decides whether and for how long a response is cached. |
 | Cache key | The request attributes that tell cached objects apart; applies to all cache rules of the site. |
 | Cache generation | A per-site counter that is part of the cache key; **Purge cache** increments it and every cached object of the site becomes stale. |
@@ -17,7 +18,7 @@ A site's origin pool, health checks and session affinity, origin connections, ca
 
 1. Open **Console → Sites**, select the site, and open the **Origins** tab.
 2. In the **Origins** card, edit an existing origin or click **Add origin**.
-3. Enter **Origin**, **Port**, **Protocol**, and **Weight**; set **Origin Host** and **SNI** as needed; turn on **Backup** or **S3 signing** as needed.
+3. Enter **Origin**, **Port**, **Protocol**, and **Weight**; set **Origin Host**, **SNI**, and **Origin group** as needed; turn on **Backup** or **S3 signing** as needed.
 4. Click **Save** at the bottom of the card. The console shows **Saved, revision #N**.
 5. Verify: after the node applies the revision, request the site through the node:
 
@@ -37,10 +38,11 @@ A site's origin pool, health checks and session affinity, origin connections, ca
 | Weight | 1–100 | 1 | Weight used by all three load balancing policies |
 | Origin Host | Host name, up to 253 characters | Empty (same as request) | `Host` sent to the origin. Empty: the visitor's Host (lowercase, port removed); for S3 origins the origin address, with the port unless it is 80 (HTTP) or 443 (HTTPS) |
 | SNI | Host name | Empty (same as origin Host) | HTTPS only. Empty: the origin Host without port, then the origin address; no SNI is sent for an IP literal |
+| Origin group | 1–32 lowercase letters, digits, `_`, or `-` | Empty (default group) | See [Origin groups](#origin-groups) |
 | Backup | On / off | Off | Makes the origin a backup |
 | S3 signing | On / off | Off | Signs origin requests with AWS Signature V4, see [S3-compatible object storage](#s3-compatible-object-storage) |
 
-Each site has 1–32 origins.
+Each site has 1–32 origins, at least one of them in the default group.
 
 ### Pool settings
 
@@ -59,6 +61,8 @@ The **Pool settings** card is saved separately. It also holds the [active health
 | Keep-alive: Enabled | On / off | On | Reuses origin connections |
 | Keep-alive: Idle timeout (seconds) | 1–3600 | 60 | How long idle connections stay open |
 | Keep-alive: Max requests | 1–100000 | 1000 | Requests per connection |
+
+Rules of the configuration phase can override the three timeouts and **WebSocket** per request, see [Override settings](rules.en.md#override-settings).
 
 ### Load balancing and retries
 
@@ -177,6 +181,23 @@ When every origin is down, the node still tries primaries, then backups (fail op
 
 WebSocket upgrades (`Upgrade: websocket`) are proxied by default and never cached. With **WebSocket** off, upgrade requests get 403 with `X-Edgeweir-Error: websocket-disabled`.
 
+### Origin groups
+
+**Origin group** splits a site's origins into groups; empty is the default group. Requests that match no **Origin override** rule go to the default group only.
+
+1. In the **Origins** card, enter an **Origin group** for an origin, for example `api`, and click **Save**. Keep at least one origin in the default group; otherwise the card shows "Keep at least one origin in the default group" and cannot be saved.
+2. On the **Rules** tab, click **Add rule** in the **Origin** phase and enter an expression such as `starts_with(http.request.uri.path, "/api/")`; select the **Origin override** action, pick `api` as **Origin group**, set **Origin Host**, **SNI**, and **Port** as needed, and click **Save**. Fields: [Action fields](rules.en.md#action-fields).
+3. Verify: requests below `/api/` reach the origins of the `api` group in their logs; other paths still reach the default group.
+
+| Item | Behavior |
+| --- | --- |
+| Selection within the group | Load balancing, primaries and backups, retries, health checks, and session affinity all stay within the chosen group; round robin state and the consistent hash are kept per group |
+| Overrides | The rule's **Port** applies to every origin of the group; **Origin Host** and **SNI** replace the origin's own settings, and **Origin Host** does not affect S3 origins; an empty SNI still follows the origin Host |
+| Cache key | The origin group is not part of it. When a group is chosen by something outside the cache key (a request header, for example), responses of different groups share cached objects |
+| References | Rules can pick only groups the site has; removing a group a rule still picks fails with "Invalid rule" |
+| Platform rules | A platform **Origin override** cannot pick an origin group; it overrides only the origin Host, SNI, and port |
+| Node requirement | `rules-v2`; while an active node of the cluster lacks it, tenants cannot move origins out of the default group ("Some nodes of the site's cluster do not support it yet") |
+
 ## Origin address restrictions
 
 Origins cannot point at special-purpose addresses.
@@ -216,11 +237,12 @@ Turn on **S3 signing** on an origin and fill in these fields.
 
 1. Open **Console → Sites**, select the site, and open the **Cache** tab.
 2. In the **Cache rules** card, click **Add rule**.
-3. Enter **Path prefix** and **Extensions**, select **Action**, enter **TTL (seconds)**, and turn on **Respect origin** as needed.
-4. For more conditions, click **More** and fill in **Exact paths**, **Status codes**, **Min size (KB)**, **Max size (KB)**, **Stale while revalidate (s)**, **Stale if error (s)**, or turn on **Cache requests with Authorization**.
-5. Drag the handle on the left of a rule to reorder.
-6. Click **Save**.
-7. Verify: request the same URL twice; the second response is a cache hit:
+3. In **Builder**, enter **Path prefix** and **Extensions**; or switch to **Advanced** and enter the condition in **Expression**, see [Request conditions](#request-conditions).
+4. Select **Action**, enter **TTL (seconds)**, and set **Browser TTL (s)** and turn on **Respect origin** as needed.
+5. For more conditions, click **More** and fill in **Exact paths** (builder only), **Status codes**, **Min size (KB)**, **Max size (KB)**, **Stale while revalidate (s)**, **Stale if error (s)**, or turn on **Cache requests with Authorization**.
+6. Drag the handle on the left of a rule to reorder.
+7. Click **Save**.
+8. Verify: request the same URL twice; the second response is a cache hit:
 
    ```bash
    curl -sI -H 'Host: www.example.com' http://<node IP>/static/app.js | grep -i x-cache
@@ -232,12 +254,15 @@ Turn on **S3 signing** on an origin and fill in these fields.
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
-| Path prefix | Starts with `/`, comma-separated, up to 32 | `/` | The request path starts with one of them |
-| Extensions | 1–16 lowercase letters or digits, comma-separated, up to 64 | Empty | The request path ends with one of them, for example `css, js, png` |
+| Condition type | Builder / Advanced | Builder | See [Request conditions](#request-conditions) |
+| Path prefix | Starts with `/`, comma-separated, up to 32 | `/` | Builder: the request path starts with one of them |
+| Extensions | 1–16 lowercase letters or digits, comma-separated, up to 64 | Empty | Builder: the request path's extension is one of them, for example `css, js, png` |
+| Expression | A condition of the `cache` phase, up to 16384 characters | None | Advanced: the request condition |
 | Action | Cache / Bypass | Cache | Cache or bypass on match |
 | TTL (seconds) | 0–31536000 | 3600 | The rule's cache lifetime |
+| Browser TTL (s) | 0–31536000 | Empty (origin's) | See [Browser TTL](#browser-ttl); unavailable for **Bypass** rules |
 | Respect origin | On / off | Off | Off: override origin cache headers; on: follow origin `Cache-Control` / `Expires` |
-| Exact paths | Start with `/`, up to 32 | Empty | The request path equals one of them |
+| Exact paths | Start with `/`, up to 32 | Empty | Builder: the request path equals one of them |
 | Status codes | 100–599, up to 16 | Empty | Empty: only the default cacheable status codes |
 | Min size (KB) / Max size (KB) | 0 or more; max not below min | Empty (no limit) | Response size range |
 | Stale while revalidate (s) | 0–2592000 | Empty (off) | stale-while-revalidate |
@@ -250,11 +275,34 @@ Each site has at most 64 rules. Without rules the card shows **No caching** and 
 
 | Item | Behavior |
 | --- | --- |
-| Order | Rules match in list order; the first applicable rule decides caching and TTL; without an applicable rule nothing is cached |
-| Combination | Any entry within one condition type may match; all condition types must match; empty conditions do not restrict |
-| Request conditions | Path prefix, exact path, extension; the path is normalized and taken before rule rewrites |
+| Order | Rules match in list order; the first applicable rule decides caching, TTL, and browser TTL; without an applicable rule nothing is cached |
+| Request condition | One expression, evaluated on the client's original request: the normalized path before rule rewrites, as for the cache key and purges |
 | Response conditions | Status code, response size. When request conditions match but response conditions do not, later rules are evaluated |
 | Response size | From `Content-Length`; for 206 responses the full size in `Content-Range`; an unknown size fails size conditions |
+
+### Request conditions
+
+The request condition is an expression of the `cache` phase, with the fields, functions, and IP list references of [rule expressions](rules.en.md#expressions); response fields, `regex_replace`, and `wildcard_replace` are not available. `true` matches every request.
+
+| Condition type | Behavior |
+| --- | --- |
+| Builder | **Path prefix**, **Extensions**, and **Exact paths** build the expression: any entry within one condition type may match, all condition types must match, and empty conditions do not restrict. For example, the prefixes `/static/, /img/` and extensions `css, js` build `(starts_with(http.request.uri.path, "/static/") or starts_with(http.request.uri.path, "/img/")) and http.request.uri.path.extension in {"css" "js"}` |
+| Advanced | Write the condition in **Expression**, for example `starts_with(http.request.uri.path, "/static/") and not ends_with(http.request.uri.path, ".html")` |
+| Switching | Expressions in the builder's shape switch between both types; other expressions can be edited only in **Advanced** |
+| Nodes | Conditions in the builder's shape (also when written in **Advanced**) are sent as the former structured conditions, so older nodes run them as before; other expressions need the node capability `rules-v2` |
+| Upgrade | Cache rules saved before the upgrade were rewritten as equivalent builder expressions; they match exactly as before |
+
+### Browser TTL
+
+With **Browser TTL (s)** above 0, responses the rule caches reach visitors with `Cache-Control: max-age=N`.
+
+| Item | Behavior |
+| --- | --- |
+| When | The rule that decides the response (as for the TTL) caches it: override mode with a TTL above 0, or respect mode with an origin `Cache-Control` without `no-store`, `no-cache`, or `private` |
+| Effect | The `Cache-Control` visitors receive becomes `max-age=N`, on cache hits too; the edge cache keeps using the TTL |
+| Otherwise | Visitors receive the origin's `Cache-Control` |
+| Response transform | Response transform rules can still change `Cache-Control` |
+| Node requirement | `rules-v2`; while an active node of the cluster lacks it, tenants cannot set it ("Some nodes of the site's cluster do not support the rule extensions yet") |
 
 ### TTL
 
@@ -275,7 +323,7 @@ Requests with `Authorization` bypass the cache by default, and their responses a
 | Stale while revalidate (s) | For this long after expiry, the stale object is served while it is refreshed in the background |
 | Stale if error (s) | For this long after expiry, the stale object is served when the origin fails to connect, times out, or returns 5xx |
 
-Both have no effect when the TTL is 0. Visitors receive the origin's original `Cache-Control`; when the origin sent none, none is added.
+Both have no effect when the TTL is 0. Visitors receive the origin's original `Cache-Control`, and none when the origin sent none, unless a [browser TTL](#browser-ttl) is set.
 
 ## Cache key and slicing
 
@@ -383,6 +431,8 @@ On the site's **Overview** tab, click **Purge cache** and confirm. The console i
 | Item | Description |
 | --- | --- |
 | Counts | Per site: 1–50 domains, 1–32 origins, up to 64 cache rules |
+| Cache rule conditions | Up to 16384 characters; no response fields |
+| Origin groups | The cache key does not include the origin group |
 | Cache zone | Size and inactive time cannot be changed in the console |
 | HTTPS prefetch | Needs an HTTPS listener without the PROXY protocol on the node; the cache key includes the scheme, so `http://` prefetch warms only the HTTP cache |
 | Device variants | Desktop and mobile only (tablets count as mobile) |
@@ -405,6 +455,10 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | 405 with `X-Edgeweir-Error: method-not-allowed` | S3 origins accept only `GET` and `HEAD` | Add a non-S3 origin for write requests |
 | Requests with `Authorization` always show `X-Cache: BYPASS` | Bypassed by default | Turn on **Cache requests with Authorization** on the rule |
 | Responses always show `X-Cache: MISS` | No applicable rule; in respect mode the origin sent no lifetime; the response has `Set-Cookie`; the TTL is 0 | Check rule order, conditions, and origin headers |
+| The **Origins** card shows "Keep at least one origin in the default group" | Every origin has an **Origin group** | Clear **Origin group** on at least one origin |
+| Saving origins or cache rules shows "Invalid rule" | An origin group that an **Origin override** rule still picks was removed; a cache rule condition is invalid | Change the rule first, or keep an origin in that group; fix the condition |
+| "Cluster nodes need these capabilities first: rules-v2" | An active node of the cluster lacks `rules-v2` and the save uses origin groups, advanced conditions, or a browser TTL | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
+| Requests sent to different origin groups get the same cached object | The cache key does not include the origin group | Pick origin groups by path, or add what decides the group to the cache key |
 | "Too many purges: …" | The organization hit the rate limit | Retry after the stated seconds; merge URLs into a directory purge |
 | "No site serves …" | The URL's Host is not a domain of the organization's sites | Check the domain and its organization |
 | "Invalid URL: …" | Not an `http(s)` URL, carries credentials, or a directory purge has a query | Fix the URL |
