@@ -60,7 +60,7 @@ journalctl -u edgeweir-node -f
 
 | 步骤 | 行为 | 失败时 |
 | --- | --- | --- |
-| 1 | 读取 token（`EDGEWEIR_TOKEN` 或 `--token-file`），校验 `ewt_` 格式，从环境中移除，子进程不继承 | 退出 |
+| 1 | 读取 token（`EDGEWEIR_TOKEN` 或 `--token-file`），校验 `ewt_` 格式，从环境中移除，子进程不继承。状态目录已有 `identity.json`（已注册）时不需要 token，给出也不使用 | 退出 |
 | 2 | 检查 Linux、root、`curl`、`sha256sum`、`tar`、systemd、架构；`--format auto` 时有 `dpkg` 与 `apt-get` 选 deb，有 `rpm` 与 `dnf`/`yum` 选 rpm，否则 tar.gz | 退出 |
 | 3 | 解析版本：`--version`，或下载镜像的 `latest` 文件，再回退到 GitHub 最新发布 | 退出，提示传入 `--version` |
 | 4 | 下载 `checksums.txt` 与 `checksums.txt.sigstore.json`：先下载镜像，后 GitHub | 退出 |
@@ -68,11 +68,12 @@ journalctl -u edgeweir-node -f
 | 6 | 从已签名的 `checksums.txt` 选出本机的安装包，以及同一发布的 `edgeweir-openresty`、`edgeweir-openresty-modsecurity`（每个软件包、格式、架构恰好一个文件）；glibc 低于 2.34 时退出；下载（先镜像，后 GitHub）并校验 SHA-256 | 退出 |
 | 7 | 先安装 `edgeweir-openresty` 与 `edgeweir-openresty-modsecurity`。tar.gz 安装时按主机的 `dpkg` 或 `rpm` 选择格式；两者都没有时要求已安装 `edgeweir-openresty` | 退出 |
 | 8 | 安装 deb、rpm 或 tar.gz | 退出 |
-| 9 | `edgeweir-node enroll`：核对 CA 指纹后提交 token，本机生成私钥，以 CSR 换取节点证书；此后仅经 mTLS 通信 | 退出 |
-| 10 | 停用 `openresty.service`，启用并启动 `edgeweir-node.service`（`--no-start` 时跳过） | — |
+| 9 | `edgeweir-node enroll`：核对 CA 指纹后提交 token，本机生成私钥，以 CSR 换取节点证书；此后仅经 mTLS 通信。已注册时跳过（重新注册用 `edgeweir-node enroll --force`） | 退出 |
+| 10 | 停用 `openresty.service`，启用并启动 `edgeweir-node.service`（`--no-start` 时跳过）；tar.gz 安装时先重启运行中的服务（deb、rpm 由包脚本重启） | — |
 
 - 第 5、6 步通过前不执行任何下载的程序。`--allow-unsigned` 跳过第 5 步，仅用于开发，仍校验 SHA-256。
 - 脚本全部由函数组成，最后一行才调用 `main`：下载中断时不执行任何内容。
+- 已注册的主机可以重新运行同一命令：某一步失败后重试，或更新软件包。
 - 控制台不保存 SSH 凭据；节点私钥不离开节点。
 
 安装结果：
