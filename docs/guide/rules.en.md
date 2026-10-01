@@ -102,9 +102,9 @@ Protected headers cannot be set or removed by rules: `Host`, `Authorization`, `P
 | Item | Behavior |
 | --- | --- |
 | Scope | A fixed window per node, not a network-wide quota; each site counts separately, and platform rate-limit rules are also counted per site |
-| Key | Request header key values are counted by their MD5 digest |
-| Memory | A fixed 256 KiB shared memory partition per published site, never borrowed across sites; at most 512 published sites per cluster (128 MiB in total); log deduplication uses another 1 MiB |
-| Out of memory | When a site's partition cannot create a counter, that site's rate-limited requests get 503; the limit is not relaxed |
+| Key | Counted by an MD5 digest of the scope, rule ID, and key value |
+| Memory | A fixed 256 KiB shared memory partition per published site (node flag `--rate-limit-dict-kb`), holding about 1980 counters, never borrowed across sites; at most 512 published sites per cluster (128 MiB in total by default); log deduplication uses another 1 MiB |
+| Out of memory | When a site's partition is full, requests of new clients pass uncounted while clients that already have a counter stay limited; the node writes at most one WARN-level nginx error log line per site per minute with the running total. A node without the site's partition returns 503 (`X-Edgeweir-Error: rate-limit-unavailable`) |
 | Reload and restart | Counters survive an nginx reload; they reset when the node restarts or when a site is removed and added back |
 | Hot updates | Rule and list changes for the same set of sites do not reload; adding or removing sites reloads, and existing partitions keep their names and sizes |
 
@@ -302,3 +302,4 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | 503 with `X-Edgeweir-Error: policy-unavailable` | A regular expression exceeded its budget, or a GeoIP lookup failed | Simplify the pattern; check the node's GeoIP service |
 | A rule that redirects HTTP to HTTPS makes requests return 503 | The site has no certificate | Select a certificate on the **HTTPS** tab |
 | Rate limits are not shared across nodes | Rate limits count per node | Scale the threshold by the number of nodes |
+| Some visitors are not rate limited and the node log shows `rate limit partition full` | The site's rate-limit partition is full and new clients are not counted | Raise the node flag `--rate-limit-dict-kb` |
