@@ -119,9 +119,18 @@ test("G4: purges by host and Cache-Tag, device variant prefetches and a sitemap 
     await purgeType(page, "tag");
     const site = page.getByTestId("purge-tag-site");
     await expect(site).toHaveText("选择网站");
-    // Searchable once there are many sites; g4-tag may be beyond the first page.
+    // Searchable once there are many sites; g4-tag may be beyond the first page. The options
+    // follow the search once its (debounced) query answered.
     const search = page.getByTestId("purge-tag-site-search");
-    if (await search.isVisible()) await search.fill("g4-tag");
+    if (await search.isVisible()) {
+      const searched = page.waitForResponse(
+        (response) =>
+          response.url().includes("/rpc/sites/list") &&
+          `${response.url()} ${response.request().postData() ?? ""}`.includes("g4-tag"),
+      );
+      await search.fill("g4-tag");
+      await searched;
+    }
     await pick(page, site, "g4-tag");
     await expect(site).toHaveText("g4-tag");
     await expect(page.getByTestId("purge-tag-unavailable")).toHaveCount(0);
