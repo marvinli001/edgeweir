@@ -12,6 +12,10 @@ const EC_ALG = { name: "ECDSA", namedCurve: "P-256", hash: "SHA-256" } as const;
 const SIGNING_ALG = { name: "ECDSA", hash: "SHA-256" } as const;
 
 export const NODE_CERT_LIFETIME_DAYS = 30;
+/** Subject organization of node client certificates. */
+export const NODE_ORGANIZATION = "Edgeweir Node";
+/** Subject organization of probe client certificates (same lifetime as nodes'). */
+export const PROBE_ORGANIZATION = "Edgeweir Probe";
 /** Node channel server certificate; the listener reissues it in-process before expiry. */
 export const SERVER_CERT_LIFETIME_DAYS = 90;
 const DAY = 24 * 3600 * 1000;
@@ -105,7 +109,23 @@ export class CertificateAuthority {
    * Signs a node CSR. The CSR signature is verified; the subject is replaced
    * by CN=<nodeId> and the certificate is limited to TLS client auth.
    */
-  async signNodeCsr(csrPem: string, nodeId: string): Promise<IssuedCertificate> {
+  signNodeCsr(csrPem: string, nodeId: string): Promise<IssuedCertificate> {
+    return this.signClientCsr(csrPem, nodeId, NODE_ORGANIZATION);
+  }
+
+  /**
+   * Signs a probe CSR: CN=<probeId>, O=Edgeweir Probe, TLS client auth only.
+   * The node channel tells probes from nodes by the organization.
+   */
+  signProbeCsr(csrPem: string, probeId: string): Promise<IssuedCertificate> {
+    return this.signClientCsr(csrPem, probeId, PROBE_ORGANIZATION);
+  }
+
+  private async signClientCsr(
+    csrPem: string,
+    commonName: string,
+    organization: string,
+  ): Promise<IssuedCertificate> {
     let csr: x509.Pkcs10CertificateRequest;
     try {
       csr = new x509.Pkcs10CertificateRequest(csrPem);
@@ -124,7 +144,7 @@ export class CertificateAuthority {
     const notAfter = new Date(now + NODE_CERT_LIFETIME_DAYS * DAY);
     const cert = await x509.X509CertificateGenerator.create({
       serialNumber: randomSerial(),
-      subject: `CN=${nodeId}, O=Edgeweir Node`,
+      subject: `CN=${commonName}, O=${organization}`,
       issuer: this.certificate.subject,
       notBefore: new Date(now - CLOCK_SKEW_MS),
       notAfter,
