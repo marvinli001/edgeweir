@@ -340,8 +340,12 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `region` | 区域字典 |
 | `cluster` | 集群：共享一条 revision 序列的节点集合 |
 | `node_group` | 节点组，可关联区域 |
-| `node` | 节点：状态、能力清单、证书序列号与指纹（续期后还有被替换证书的序列号）、最近心跳、最近上报的封禁状态与各网站的 CC 级别 |
-| `node_ip` | 节点上报的 IP 地址 |
+| `node` | 节点：状态、能力清单、证书序列号与指纹（续期后还有被替换证书的序列号）、最近心跳、最近上报的封禁状态、各网站的 CC 级别与主机指标、是否兼任探针 |
+| `node_ip` | 节点的 IP 地址：节点上报的（`reported`）与运营者配置的调度地址（`configured`，级别 0 主、1 备 1、2 备 2） |
+| `node_address_state` | 调度地址的探针可达性：失败起点、不可达标记、恢复起点 |
+| `probe` | 区域探针：名称、区域、启用、证书序列号与到期、最后在线、版本 |
+| `probe_token` | 探针注册 token 的 SHA-256、前缀、名称、区域、到期与使用状态 |
+| `probe_result` | 每个探测者（探针或兼任探针的节点）对每个节点地址与端口的最新结果：发送、丢失、延迟、错误码 |
 | `enrollment_token` | 注册 token 的 SHA-256 与使用状态 |
 | `node_certificate_revocation` | 删除节点时吊销的证书序列号 |
 | `pki_authority` | 内部 CA，私钥信封加密 |
@@ -381,8 +385,10 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `dns_credential` | ACME DNS-01 使用的 DNS 服务商凭据与区域，信封加密 |
 | `dns_challenge_lease` | DNS-01 TXT 记录的清理责任 |
 | `platform_dns_provider` | DNS 调度的服务商账号与区域，凭据信封加密 |
-| `dns_binding` | 集群的 DNS 绑定：模式、服务商账号、集群域名、TTL、线路、期望 / 已应用的 DNS revision |
-| `dns_revision` | 集群的 DNS revision：绑定设置、记录集、托管名称、状态 |
+| `dns_binding` | 集群的 DNS 绑定：模式、服务商账号、集群域名、TTL、线路（节点组、解析线路、有序备用节点组、最少健康 IP 数）、期望 / 已应用的 DNS revision |
+| `dns_revision` | 集群的 DNS revision：绑定设置、记录集（含解析线路）、托管名称、状态、原因码与参数 |
+| `scheduling_rule` | 集群的智能调度规则：可选线路、条件（指标、聚合、比较、阈值、持续时间、区域）、and / or、动作、保持与恢复时间 |
+| `scheduling_state` | 每条规则对每个节点的状态：各条件成立起点、动作起点、解除起点 |
 | `dns_managed_name` | 已登记的托管 DNS 名称及所属集群 |
 | `dns_lease` | DNS 工作的租约（集群绑定、DNS-01 凭据），同一时间只有一个进程处理同一绑定或凭据 |
 
@@ -457,6 +463,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0038_certificate_chains` | 证书链里混入的非证书 PEM 块（例如私钥）删除 |
 | `0039_certificate_accounts` | `acme_account`；`certificate.renewal_info_at` |
 | `0040_node_lifecycle` | `node.previous_cert_serial`；`node_upgrade_delivery.deadline_at`（已下发的投递沿用创建后 30 分钟的期限） |
+| `0041_g6_probes_scheduling` | `probe`、`probe_token`、`probe_result`、`node_address_state`、`scheduling_rule`、`scheduling_state`；`node.metrics`、`node.probe_enabled`；`node_ip.source` 与 `level`（唯一键改为节点、来源、地址）；`dns_revision.reason_params` |
 
 ## 构建产物
 

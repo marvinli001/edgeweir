@@ -79,6 +79,19 @@ export interface NodeBanStatus {
   reportedAt: string;
 }
 
+/** Host metrics of a node's last heartbeat (ReportStatusRequest.metrics, metrics-v1). */
+export interface NodeMetricsData {
+  cpuPercent: number;
+  load1: number;
+  load5: number;
+  load15: number;
+  memoryUsedBytes: number;
+  memoryTotalBytes: number;
+  egressBps: number;
+  activeConnections: number;
+  reportedAt: string;
+}
+
 /**
  * CC mitigation level of one site on a node (ReportStatus.security): sites
  * above normal, or at normal with escalated paths.
@@ -124,6 +137,10 @@ export const node = pgTable(
     banStatus: jsonb("ban_status").$type<NodeBanStatus>(),
     /** Sites above the normal CC level in the last heartbeat. */
     securityState: jsonb("security_state").$type<NodeSiteSecurity[]>().notNull().default([]),
+    /** Host metrics of the last heartbeat; null until a node with metrics-v1 reports. */
+    metrics: jsonb("metrics").$type<NodeMetricsData>(),
+    /** The node also probes the others from its node group's region (ReportStatusResponse.probe). */
+    probeEnabled: boolean("probe_enabled").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -138,11 +155,19 @@ export const nodeIp = pgTable(
       .notNull()
       .references(() => node.id, { onDelete: "cascade" }),
     address: text("address").notNull(),
-    /** reported (by the agent) | public | private */
+    /** reported (by the agent) | configured (by the operator) | public | private */
     kind: text("kind").notNull().default("reported"),
+    /**
+     * reported: the agent's interface addresses (replaced every heartbeat);
+     * configured: scheduling addresses the operator set, which DNS and probes
+     * use instead of the reported ones.
+     */
+    source: text("source").notNull().default("reported"),
+    /** Scheduling level of a configured address: 0 primary, 1 backup 1, 2 backup 2. */
+    level: integer("level").notNull().default(0),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("node_ip_node_address_uq").on(t.nodeId, t.address)],
+  (t) => [uniqueIndex("node_ip_node_source_address_uq").on(t.nodeId, t.source, t.address)],
 );
 
 /** Single-use node enrollment tokens. Only the SHA-256 of the token is stored. */
@@ -485,7 +510,7 @@ export const auditLog = pgTable(
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
-    /** user | api_key | node | system */
+    /** user | api_key | service_account | node | probe | system */
     actorType: text("actor_type").notNull(),
     actorId: text("actor_id").notNull().default(""),
     /** Display name of the actor at the time of the action. */

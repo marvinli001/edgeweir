@@ -288,6 +288,13 @@
       "when": 1790856304223,
       "tag": "0040_node_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790858277314,
+      "tag": "0041_g6_probes_scheduling",
+      "breakpoints": true
     }
   ]
 }

@@ -340,8 +340,12 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `region` | Region dictionary |
 | `cluster` | Clusters: sets of nodes that share one revision stream |
 | `node_group` | Node groups, optionally tied to a region |
-| `node` | Nodes: status, capabilities, certificate serial and fingerprint (after a renewal also the replaced certificate's serial), last heartbeat, last reported ban state and CC level per site |
-| `node_ip` | IP addresses reported by nodes |
+| `node` | Nodes: status, capabilities, certificate serial and fingerprint (after a renewal also the replaced certificate's serial), last heartbeat, last reported ban state, CC level per site and host metrics, whether the node also probes |
+| `node_ip` | Node IP addresses: reported by the node (`reported`) and scheduling addresses the operator configured (`configured`, level 0 primary, 1 backup 1, 2 backup 2) |
+| `node_address_state` | Probe reachability of scheduling addresses: failing since, down flag, answering since |
+| `probe` | Regional probes: name, region, enabled, certificate serial and expiry, last seen, version |
+| `probe_token` | SHA-256, prefix, name, region, expiry and usage of probe enrollment tokens |
+| `probe_result` | Latest result of each prober (probe or node that also probes) per node address and port: sent, lost, latency, error code |
 | `enrollment_token` | SHA-256 and usage of enrollment tokens |
 | `node_certificate_revocation` | Certificate serials revoked when a node is deleted |
 | `pki_authority` | Internal CA, private key envelope-encrypted |
@@ -381,8 +385,10 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `dns_credential` | DNS provider credentials and zone for ACME DNS-01, envelope-encrypted |
 | `dns_challenge_lease` | Cleanup obligations of DNS-01 TXT records |
 | `platform_dns_provider` | DNS steering provider accounts and their zones, credentials envelope-encrypted |
-| `dns_binding` | A cluster's DNS binding: mode, provider account, cluster domain, TTL, lines, desired / applied DNS revision |
-| `dns_revision` | A cluster's DNS revisions: binding settings, record set, managed names, status |
+| `dns_binding` | A cluster's DNS binding: mode, provider account, cluster domain, TTL, lines (node group, resolution line, ordered backup node groups, minimum healthy IPs), desired / applied DNS revision |
+| `dns_revision` | A cluster's DNS revisions: binding settings, record set (with resolution lines), managed names, status, reason code and parameters |
+| `scheduling_rule` | A cluster's scheduling rules: optional line, conditions (metric, aggregate, comparator, threshold, duration, region), and / or, action, hold and recovery times |
+| `scheduling_state` | Each rule's state per node: since when each condition holds, when the action started, since when it is clear |
 | `dns_managed_name` | Registered managed DNS names and the cluster they belong to |
 | `dns_lease` | Leases for DNS work (cluster bindings, DNS-01 credentials): one process at a time handles a binding or credential |
 
@@ -457,6 +463,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0038_certificate_chains` | PEM blocks other than certificates (such as a private key) are removed from stored chains |
 | `0039_certificate_accounts` | `acme_account`; `certificate.renewal_info_at` |
 | `0040_node_lifecycle` | `node.previous_cert_serial`; `node_upgrade_delivery.deadline_at` (deliveries already released keep the deadline of 30 minutes after creation) |
+| `0041_g6_probes_scheduling` | `probe`, `probe_token`, `probe_result`, `node_address_state`, `scheduling_rule`, `scheduling_state`; `node.metrics`, `node.probe_enabled`; `node_ip.source` and `level` (unique by node, source, address); `dns_revision.reason_params` |
 
 ## Build output
 

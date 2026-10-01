@@ -7,6 +7,7 @@ export * from "./core";
 export * from "./dns";
 export * from "./error-pages";
 export * from "./logs";
+export * from "./probes";
 export * from "./protection";
 export * from "./rules";
 export * from "./upgrades";

@@ -18,11 +18,17 @@ export interface DnsRecordData {
   type: "A" | "AAAA" | "CNAME" | "TXT";
   data: string;
   ttl: number;
+  /** Canonical resolution line; absent on the default line. */
+  line?: "default" | "telecom" | "unicom" | "mobile" | "edu" | "overseas";
 }
+/** A binding line; lines saved before resolution lines lack the last three fields. */
 export interface DnsLineData {
   name: string;
   nodeGroupId: string;
   overrides: { nodeId: string; addresses: string[] }[];
+  resolutionLine?: "default" | "telecom" | "unicom" | "mobile" | "edu" | "overseas";
+  backupNodeGroupIds?: string[];
+  minHealthyIps?: number;
 }
 export const platformDnsProvider = pgTable("platform_dns_provider", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -70,7 +76,13 @@ export const dnsRevision = pgTable(
       .notNull()
       .default([]),
     contentHash: text("content_hash").notNull(),
+    /** manual | health | rollback | force | scheduling */
     reason: text("reason").notNull(),
+    /** Parameters of the reason (scheduling: rule, ruleId, node, nodeId, action, event). */
+    reasonParams: jsonb("reason_params")
+      .$type<Record<string, string | number>>()
+      .notNull()
+      .default({}),
     status: text("status").notNull().default("pending"),
     lastError: text("last_error").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
