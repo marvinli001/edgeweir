@@ -267,6 +267,13 @@
       "when": 1790845029717,
       "tag": "0037_dns_cluster_bindings",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790849486756,
+      "tag": "0038_node_lifecycle",
+      "breakpoints": true
     }
   ]
 }

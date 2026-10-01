@@ -112,6 +112,12 @@ export const node = pgTable(
     certSerial: text("cert_serial"),
     certFingerprint: text("cert_fingerprint"),
     certNotAfter: timestamp("cert_not_after", { withTimezone: true }),
+    /**
+     * The certificate a renewal replaced, still accepted until the node first
+     * authenticates with the new one (a node that fails to install it keeps
+     * working with the old one).
+     */
+    previousCertSerial: text("previous_cert_serial"),
     enrolledAt: timestamp("enrolled_at", { withTimezone: true }),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
     /** Last BanStatus the node reported; null for nodes without dynamic bans. */
