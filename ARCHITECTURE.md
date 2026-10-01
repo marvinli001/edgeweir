@@ -357,10 +357,11 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `site_domain` | 网站域名与路由校验状态 |
 | `site_star` | 用户星标 |
 | `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验、主动健康检查与会话保持（关闭时保留设置） |
-| `origin` | 源站 |
+| `origin` | 源站与所属的源站组（空为默认组） |
 | `origin_credential` | S3 源站密钥，信封加密 |
-| `cache_rule` | 缓存规则 |
+| `cache_rule` | 缓存规则：条件表达式与名单引用、状态码与大小条件、动作、边缘与浏览器 TTL |
 | `edge_rule` | 网站或平台规则：阶段、表达式、动作、名单引用 |
+| `bulk_redirect` | 网站的批量重定向：来源（路径或域名加路径，网站内唯一）、目标、状态码、是否保留查询串、顺序 |
 | `ip_list` | 组织或平台 IP 名单（规范化 CIDR） |
 | `ip_ban` | 动态封禁：范围（平台 / 网站）、规范化 CIDR、原因码、来源（手动 / 自动，自动带来源节点与触发条件）、到期与解封时间、序号 `seq`（序列 `ip_ban_seq`）、是否下发 |
 | `site_protection` | 网站防护：Under Attack 与挑战类型、通行凭证有效期、PoW 难度、CC 策略（跟随模板或自定义）、JA4 日志；没有行即默认值 |
@@ -447,6 +448,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0029_g2_challenges` | `site_protection`、`challenge_key`、`security_event`；`node.security_state`；`access_log.ja4` |
 | `0030_g3_waf` | `site_waf`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `waf_rules`；`access_log.waf_rule_ids`、`waf_blocked` |
 | `0031_g4_cache_origins_error_pages` | `site_error_page`；`origin_pool.active_health_check`、`session_affinity`；`site.keep_cache_tag`、`intercept_origin_errors`、`error_pages_updated_at`；`origin_health.source`（进入主键，已有行为被动检查）；`access_log.request_id` |
+| `0032_g5_rules` | `bulk_redirect`；`origin.group_name`；`cache_rule.browser_ttl_seconds`、`list_ids`；已有缓存规则的结构化条件改写为等价表达式并清空结构化列 |
 
 ## 构建产物
 
