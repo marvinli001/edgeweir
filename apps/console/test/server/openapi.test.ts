@@ -107,6 +107,39 @@ describe("OpenAPI security requirements", async () => {
     });
   });
 
+  it("documents the port pool and layer-4 application routes", () => {
+    const routes = operations
+      .filter(({ op }) => /^(l4Apps\.|clusters\.(set)?[pP]ortPools$)/.test(op.operationId))
+      .map(({ path, method, op }) => `${method} ${path} ${op.operationId}`)
+      .sort();
+    expect(routes).toEqual([
+      "delete /l4-apps/{id} l4Apps.delete",
+      "get /clusters/{clusterId}/port-pools clusters.portPools",
+      "get /l4-apps l4Apps.list",
+      "get /l4-apps/{id} l4Apps.get",
+      "get /l4-apps/{id}/stats l4Apps.stats",
+      "patch /l4-apps/{id} l4Apps.update",
+      "post /l4-apps l4Apps.create",
+      "put /clusters/{clusterId}/port-pools clusters.setPortPools",
+      "put /l4-apps/{id}/enabled l4Apps.setEnabled",
+    ]);
+    const body = (path: string, method: string) =>
+      spec.paths[path]?.[method]?.requestBody?.content["application/json"]?.schema;
+    const create = body("/l4-apps", "post")?.properties ?? {};
+    expect(create.protocol?.enum).toEqual(["tcp", "udp"]);
+    expect(create.port).toMatchObject({ maximum: 65535 });
+    expect(create.maxFails).toMatchObject({ default: 3 });
+    expect(create.connectTimeoutMs).toMatchObject({ default: 5000 });
+    expect(create.origins?.maxItems).toBe(32);
+    expect(
+      body("/clusters/{clusterId}/port-pools", "put")?.properties?.pools?.items?.properties
+        ?.protocol?.enum,
+    ).toEqual(["tcp", "udp", "both"]);
+    expect(
+      spec.paths["/l4-apps/{id}/stats"]?.get?.parameters?.map((parameter) => parameter.name),
+    ).toEqual(expect.arrayContaining(["id", "from", "to"]));
+  });
+
   it("matches what the API enforces without credentials", async () => {
     const uuid = "00000000-0000-4000-8000-000000000000";
     for (const { path, method, op } of operations) {

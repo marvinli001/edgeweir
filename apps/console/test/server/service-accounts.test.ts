@@ -270,6 +270,33 @@ describe("service accounts, scopes and idempotency keys", async () => {
       ["PATCH", "/scheduling/rules/00000000-0000-4000-8000-000000000000", { name: "r" }],
       ["DELETE", "/scheduling/rules/00000000-0000-4000-8000-000000000000", undefined],
       ["GET", "/clusters/00000000-0000-4000-8000-000000000000/scheduling/preview", undefined],
+      ["GET", "/clusters/00000000-0000-4000-8000-000000000000/port-pools", undefined],
+      [
+        "PUT",
+        "/clusters/00000000-0000-4000-8000-000000000000/port-pools",
+        { pools: [{ protocol: "tcp", from: 20000, to: 20100 }] },
+      ],
+      ["GET", "/l4-apps", undefined],
+      [
+        "POST",
+        "/l4-apps",
+        {
+          clusterId: "00000000-0000-4000-8000-000000000000",
+          name: "x",
+          protocol: "tcp",
+          port: 20000,
+          origins: [{ address: "o.test", port: 22 }],
+        },
+      ],
+      ["GET", "/l4-apps/00000000-0000-4000-8000-000000000000", undefined],
+      ["PATCH", "/l4-apps/00000000-0000-4000-8000-000000000000", { name: "x" }],
+      ["DELETE", "/l4-apps/00000000-0000-4000-8000-000000000000", undefined],
+      ["PUT", "/l4-apps/00000000-0000-4000-8000-000000000000/enabled", { enabled: false }],
+      [
+        "GET",
+        "/l4-apps/00000000-0000-4000-8000-000000000000/stats?from=2026-10-01T00:00:00Z&to=2026-10-01T01:00:00Z",
+        undefined,
+      ],
     ] as const) {
       const res = await api(full, method, path, body);
       expect(res.status, `${method} ${path}`).toBe(403);
