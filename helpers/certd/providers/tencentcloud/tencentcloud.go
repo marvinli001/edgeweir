@@ -7,8 +7,10 @@
 //
 // China-site accounts use dnspod.tencentcloudapi.com, international
 // (tencentcloud.com) accounts dnspod.intl.tencentcloudapi.com, chosen by the
-// site field. The default line is "默认" on the China site and "Default" on
-// the international site; requests also send its line ID "0".
+// site field. Records are written on resolution lines by line ID
+// (RecordLineId, which takes priority over the RecordLine name); the
+// default line is named "默认" on the China site and "Default" on the
+// international site.
 package tencentcloud
 
 import (
@@ -48,6 +50,22 @@ var (
 	defaultLines = map[string]string{"cn": "默认", "intl": "Default"}
 	idPattern    = regexp.MustCompile(`^[A-Za-z0-9]{1,128}$`)
 )
+
+// Lines maps canonical lines to DNSPod line ids (RecordLineId; the token
+// API uses the same ids, https://docs.dnspod.cn/dns/dns-record-line/).
+var Lines = dnsx.LineMap{"default": "0", "telecom": "10=0", "unicom": "10=1", "mobile": "10=3", "edu": "10=2", "overseas": "3=0"}
+
+// lineNames are the RecordLine names sent with the ids (RecordLine is
+// required, RecordLineId wins: CreateRecord and ModifyRecord reference).
+// Only "Default" is documented for the international site, so the China
+// site names travel with the other lines' ids there too.
+var lineNames = map[string]string{"telecom": "电信", "unicom": "联通", "mobile": "移动", "edu": "教育网", "overseas": "境外"}
+
+// namedLines reads list items without a LineId.
+var namedLines = map[string]string{
+	"": "", "默认": "", "Default": "",
+	"电信": "telecom", "联通": "unicom", "移动": "mobile", "教育网": "edu", "境外": "overseas",
+}
 
 // Provider talks to one Tencent Cloud account.
 type Provider struct {
@@ -231,9 +249,18 @@ func (r record) rr() libdns.RR {
 	return dnsx.RR(name, r.Type, data, r.TTL)
 }
 
-func (r record) main() bool {
-	return r.LineID == "0" || (r.LineID == "" && (r.Line == "默认" || r.Line == "Default"))
+// line returns the canonical line of a record: by LineId, else by name.
+func (r record) line() string {
+	if r.LineID != "" {
+		return Lines.Canonical(r.LineID)
+	}
+	if line, ok := namedLines[r.Line]; ok {
+		return line
+	}
+	return Lines.Canonical(r.Line)
 }
+
+func (r record) withLine() libdns.Record { return dnsx.OnLine(r.rr(), r.line()) }
 
 func (p *Provider) list(ctx context.Context, zone string) ([]record, error) {
 	var all []record
@@ -269,22 +296,31 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 	}
 	out := make([]libdns.Record, 0, len(all))
 	for _, r := range all {
-		out = append(out, r.rr())
+		out = append(out, r.withLine())
 	}
 	return out, nil
 }
 
-// write runs CreateRecord or ModifyRecord on the default line; a TTL below
+// write runs CreateRecord or ModifyRecord on the record's line; a TTL below
 // the plan's minimum is retried with 600 s. It returns the record as stored.
-func (p *Provider) write(ctx context.Context, action, zone string, id uint64, r libdns.RR) (libdns.RR, error) {
+func (p *Provider) write(ctx context.Context, action, zone string, id uint64, lr dnsx.LineRecord) (libdns.RR, error) {
+	r := lr.Record
+	lineID, err := Lines.Provider(lr.Line)
+	if err != nil {
+		return r, err
+	}
+	name := p.line
+	if lr.Line != "" {
+		name = lineNames[lr.Line]
+	}
 	in := map[string]any{
 		"Domain": dnsx.Zone(zone), "SubDomain": r.Name, "RecordType": strings.ToUpper(r.Type),
-		"RecordLine": p.line, "RecordLineId": "0", "Value": r.Data, "TTL": dnsx.Seconds(r.TTL),
+		"RecordLine": name, "RecordLineId": lineID, "Value": r.Data, "TTL": dnsx.Seconds(r.TTL),
 	}
 	if id != 0 {
 		in["RecordId"] = id
 	}
-	err := p.call(ctx, action, in, nil)
+	err = p.call(ctx, action, in, nil)
 	if code(err) == "LimitExceeded.RecordTtlLimit" && dnsx.Seconds(r.TTL) < minTTL {
 		r.TTL = minTTL * time.Second
 		in["TTL"] = minTTL
@@ -304,27 +340,34 @@ func (p *Provider) remove(ctx context.Context, zone string, id uint64) error {
 	return err
 }
 
-// AppendRecords creates the records; an identical existing record counts as
-// created.
+// AppendRecords creates the records on their lines; an identical existing
+// record counts as created.
 func (p *Provider) AppendRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	if err := Lines.Check(records); err != nil {
+		return nil, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	var done []libdns.Record
-	for _, r := range dnsx.RRs(records) {
-		stored, err := p.write(ctx, "CreateRecord", zone, 0, r)
+	for _, r := range records {
+		line := dnsx.LineOf(r)
+		stored, err := p.write(ctx, "CreateRecord", zone, 0, dnsx.LineRecord{Record: r.RR(), Line: line})
 		if err != nil {
 			return done, err
 		}
-		done = append(done, stored)
+		done = append(done, dnsx.OnLine(stored, line))
 	}
 	return done, nil
 }
 
-// SetRecords makes each input RRset exactly the input records on the
-// default line: matching members are kept (TTL updated), surplus default-line
-// members are rewritten to missing values, the rest are created or deleted.
-// Members on other lines are deleted.
+// SetRecords makes each input (name, type) exactly the input records on
+// every line: matching members are kept (TTL updated), surplus members are
+// rewritten to missing values on their line, the rest are created or
+// deleted. Copies on lines the input does not use are deleted.
 func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	if err := Lines.Check(records); err != nil {
+		return nil, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	existing, err := p.list(ctx, zone)
@@ -332,40 +375,41 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 		return nil, err
 	}
 	ids := map[string]uint64{}
-	members := make([]member, 0, len(existing))
+	members := make([]dnsx.Member, 0, len(existing))
 	for _, r := range existing {
 		id := strconv.FormatUint(r.RecordID, 10)
 		ids[id] = r.RecordID
-		members = append(members, member{id: id, rr: r.rr(), main: r.main()})
+		members = append(members, dnsx.Member{ID: id, RR: r.rr(), Line: r.line()})
 	}
-	pl := plan(members, dnsx.RRs(records))
+	pl := dnsx.PlanSet(members, records)
 	stored := map[string]libdns.RR{}
-	for _, k := range pl.kept {
-		stored[dnsx.Key(k.want)] = k.have
+	for _, k := range pl.Kept {
+		stored[dnsx.PlanKey(k.Want)] = k.Have.Record
 	}
-	for _, u := range pl.updates {
-		r, err := p.write(ctx, "ModifyRecord", zone, ids[u.id], u.rr)
+	for _, u := range pl.Updates {
+		r, err := p.write(ctx, "ModifyRecord", zone, ids[u.ID], u.Record)
 		if err != nil {
 			return nil, err
 		}
-		stored[dnsx.Key(u.rr)] = r
+		stored[dnsx.PlanKey(u.Record)] = r
 	}
-	for _, c := range pl.creates {
+	for _, c := range pl.Creates {
 		r, err := p.write(ctx, "CreateRecord", zone, 0, c)
 		if err != nil {
 			return nil, err
 		}
-		stored[dnsx.Key(c)] = r
+		stored[dnsx.PlanKey(c)] = r
 	}
-	for _, d := range pl.deletes {
-		if err := p.remove(ctx, zone, ids[d.id]); err != nil {
+	for _, d := range pl.Deletes {
+		if err := p.remove(ctx, zone, ids[d.ID]); err != nil {
 			return nil, err
 		}
 	}
-	return pl.result(stored), nil
+	return pl.Result(stored), nil
 }
 
-// DeleteRecords removes the matching records (data empty: the whole RRset).
+// DeleteRecords removes the matching records on the input's line (data
+// empty: the whole RRset on that line).
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -373,16 +417,15 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 	if err != nil {
 		return nil, err
 	}
-	input := dnsx.RRs(records)
 	var deleted []libdns.Record
 	for _, old := range existing {
-		rr := old.rr()
-		for _, in := range input {
-			if dnsx.Matches(rr, in) {
+		have := old.withLine()
+		for _, in := range records {
+			if dnsx.MatchesOnLine(have, in) {
 				if err := p.remove(ctx, zone, old.RecordID); err != nil {
 					return deleted, err
 				}
-				deleted = append(deleted, rr)
+				deleted = append(deleted, have)
 				break
 			}
 		}

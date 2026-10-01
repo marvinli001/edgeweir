@@ -242,3 +242,97 @@ func TestErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestLineMapping(t *testing.T) {
+	for canonical, id := range map[string]string{"": "0", "default": "0", "telecom": "10=0", "unicom": "10=1", "mobile": "10=3", "edu": "10=2", "overseas": "3=0"} {
+		if got, err := Lines.Provider(canonical); err != nil || got != id {
+			t.Errorf("%q -> %q %v, want %q", canonical, got, err, id)
+		}
+		if got := Lines.Canonical(id); got != dnsx.NormalizeLine(canonical) {
+			t.Errorf("%q -> %q, want %q", id, got, canonical)
+		}
+	}
+	for r, want := range map[record]string{
+		{Line: "默认"}: "", {Line: "Default"}: "", {Line: "教育网"}: "edu", {Line: "Default", LineID: "10=1"}: "unicom",
+		{Line: "北京电信", LineID: "10=0=0"}: "other:10=0=0",
+	} {
+		if got := r.line(); got != want {
+			t.Errorf("%+v -> %q, want %q", r, got, want)
+		}
+	}
+}
+
+func TestAppendRecordsOnTwoLines(t *testing.T) {
+	s := dnstest.Serve(t,
+		call("CreateRecord", map[string]any{"SubDomain": "all", "RecordType": "A", "RecordLine": "默认", "RecordLineId": "0", "Value": "192.0.2.1"}, `{"RequestId":"a","RecordId":30}`),
+		call("CreateRecord", map[string]any{"SubDomain": "all", "RecordType": "A", "RecordLine": "电信", "RecordLineId": "10=0", "Value": "192.0.2.2"}, `{"RequestId":"b","RecordId":31}`),
+	)
+	done, err := provider(t, s, "cn").AppendRecords(context.Background(), "example.com.", []libdns.Record{
+		dnstest.A("all", "192.0.2.1", 600), dnsx.OnLine(dnstest.A("all", "192.0.2.2", 600).RR(), "telecom"),
+	})
+	if err != nil || len(done) != 2 || dnsx.LineOf(done[1]) != "telecom" {
+		t.Fatalf("done %v err %v", done, err)
+	}
+}
+
+func TestInternationalSiteLines(t *testing.T) {
+	// The id decides; only "Default" is a documented international name.
+	s := dnstest.Serve(t,
+		call("CreateRecord", map[string]any{"SubDomain": "all", "RecordLine": "Default", "RecordLineId": "0"}, `{"RequestId":"a","RecordId":30}`),
+		call("CreateRecord", map[string]any{"SubDomain": "all", "RecordLineId": "3=0"}, `{"RequestId":"b","RecordId":31}`),
+	)
+	if _, err := provider(t, s, "intl").AppendRecords(context.Background(), "example.com.", []libdns.Record{
+		dnstest.A("all", "192.0.2.1", 600), dnsx.OnLine(dnstest.A("all", "198.51.100.1", 600).RR(), "overseas"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGetRecordsReturnsLines(t *testing.T) {
+	s := dnstest.Serve(t, listCall(0, 4, ns,
+		rec(1, "all", "A", "192.0.2.1", 600, "默认", "0"),
+		rec(2, "all", "A", "192.0.2.2", 600, "联通", "10=1"),
+		rec(3, "all", "A", "198.51.100.1", 600, "境外", "3=0"),
+	))
+	got, err := provider(t, s, "").GetRecords(context.Background(), "example.com.")
+	if err != nil || len(got) != 4 || dnsx.LineOf(got[1]) != "" || dnsx.LineOf(got[2]) != "unicom" || dnsx.LineOf(got[3]) != "overseas" {
+		t.Fatalf("records %v err %v", got, err)
+	}
+}
+
+func TestSetRecordsAcrossLines(t *testing.T) {
+	s := dnstest.Serve(t,
+		listCall(0, 5, ns,
+			rec(1, "all", "A", "192.0.2.1", 600, "默认", "0"),
+			rec(2, "all", "A", "192.0.2.2", 600, "电信", "10=0"),
+			rec(3, "all", "A", "192.0.2.3", 600, "移动", "10=3"),
+			rec(4, "all", "A", "192.0.2.4", 600, "默认", "0"),
+		),
+		// default: .1 kept, .4 goes; telecom rewritten on its line; edu created; the stale mobile copy goes first.
+		call("ModifyRecord", map[string]any{"RecordId": 2, "SubDomain": "all", "RecordLine": "电信", "RecordLineId": "10=0", "Value": "192.0.2.5"}, `{"RequestId":"a","RecordId":2}`),
+		call("CreateRecord", map[string]any{"SubDomain": "all", "RecordLine": "教育网", "RecordLineId": "10=2", "Value": "192.0.2.6"}, `{"RequestId":"b","RecordId":5}`),
+		call("DeleteRecord", map[string]any{"Domain": "example.com", "RecordId": 3}, `{"RequestId":"c"}`),
+		call("DeleteRecord", map[string]any{"Domain": "example.com", "RecordId": 4}, `{"RequestId":"d"}`),
+	)
+	got, err := provider(t, s, "").SetRecords(context.Background(), "example.com.", []libdns.Record{
+		dnstest.A("all", "192.0.2.1", 600),
+		dnsx.OnLine(dnstest.A("all", "192.0.2.5", 600).RR(), "telecom"),
+		dnsx.OnLine(dnstest.A("all", "192.0.2.6", 600).RR(), "edu"),
+	})
+	if err != nil || len(got) != 3 || dnsx.LineOf(got[2]) != "edu" {
+		t.Fatalf("got %v err %v", got, err)
+	}
+}
+
+func TestDeleteRecordsByLine(t *testing.T) {
+	s := dnstest.Serve(t,
+		listCall(0, 3, ns, rec(1, "all", "A", "192.0.2.1", 600, "默认", "0"), rec(2, "all", "A", "192.0.2.1", 600, "电信", "10=0")),
+		call("DeleteRecord", map[string]any{"Domain": "example.com", "RecordId": 2}, `{"RequestId":"a"}`),
+	)
+	deleted, err := provider(t, s, "").DeleteRecords(context.Background(), "example.com.", []libdns.Record{
+		dnsx.OnLine(dnstest.A("all", "192.0.2.1", 600).RR(), "telecom"),
+	})
+	if err != nil || len(deleted) != 1 || dnsx.LineOf(deleted[0]) != "telecom" {
+		t.Fatalf("deleted %v err %v", deleted, err)
+	}
+}

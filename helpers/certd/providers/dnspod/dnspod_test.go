@@ -3,6 +3,8 @@ package dnspod
 import (
 	"context"
 	"errors"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/libdns/libdns"
@@ -75,10 +77,9 @@ func TestAppendRecords(t *testing.T) {
 func TestSetRecordsReplacesTheRRset(t *testing.T) {
 	s := dnstest.Serve(t,
 		listCall(existing),
-		// 192.0.2.1 stays with a new TTL, 192.0.2.2 goes, 192.0.2.3 is created; the TXT is untouched.
+		// 192.0.2.1 stays with a new TTL, 192.0.2.2 is rewritten in place to 192.0.2.3; the TXT is untouched.
 		dnstest.Exchange{Method: "POST", Path: "/Record.Modify", Form: map[string]string{"record_id": "10", "sub_domain": "www", "record_type": "A", "value": "192.0.2.1", "ttl": "60", "record_line_id": "0"}, Response: `{"status":{"code":"1"}}`},
-		dnstest.Exchange{Method: "POST", Path: "/Record.Remove", Form: map[string]string{"record_id": "11", "domain": "example.com"}, Response: `{"status":{"code":"1"}}`},
-		dnstest.Exchange{Method: "POST", Path: "/Record.Create", Form: map[string]string{"sub_domain": "www", "value": "192.0.2.3", "ttl": "60"}, Response: `{"status":{"code":"1"}}`},
+		dnstest.Exchange{Method: "POST", Path: "/Record.Modify", Form: map[string]string{"record_id": "11", "domain": "example.com", "sub_domain": "www", "record_type": "A", "value": "192.0.2.3", "ttl": "60", "record_line_id": "0"}, Response: `{"status":{"code":"1"}}`},
 	)
 	_, err := provider(t, s).SetRecords(context.Background(), "example.com.", []libdns.Record{
 		dnstest.A("www", "192.0.2.1", 60), dnstest.A("www", "192.0.2.3", 60),
@@ -168,8 +169,9 @@ func TestSetRecordsKeepsOnlyTheDefaultLine(t *testing.T) {
 func TestSetRecordsCreatesTheDefaultLine(t *testing.T) {
 	s := dnstest.Serve(t,
 		listCall(`{"id":"20","name":"www","line":"联通","line_id":"10=1","type":"A","ttl":"600","value":"192.0.2.1","enabled":"1"}`),
-		dnstest.Exchange{Method: "POST", Path: "/Record.Remove", Form: map[string]string{"record_id": "20"}, Response: `{"status":{"code":"1"}}`},
+		// The default-line record is written before the unicom copy goes.
 		dnstest.Exchange{Method: "POST", Path: "/Record.Create", Form: map[string]string{"sub_domain": "www", "record_line_id": "0", "value": "192.0.2.1"}, Response: `{"status":{"code":"1"}}`},
+		dnstest.Exchange{Method: "POST", Path: "/Record.Remove", Form: map[string]string{"record_id": "20"}, Response: `{"status":{"code":"1"}}`},
 	)
 	if _, err := provider(t, s).SetRecords(context.Background(), "example.com.", []libdns.Record{dnstest.A("www", "192.0.2.1", 600)}); err != nil {
 		t.Fatal(err)
@@ -223,5 +225,98 @@ func TestStatusCodes(t *testing.T) {
 		if _, err := New(map[string]string{"auth_token": bad}, dnsx.Options{}); !errors.Is(err, dnsx.ErrInvalid) {
 			t.Fatalf("malformed token %q accepted: %v", bad, err)
 		}
+	}
+}
+
+func TestLineMapping(t *testing.T) {
+	for canonical, id := range map[string]string{"": "0", "default": "0", "telecom": "10=0", "unicom": "10=1", "mobile": "10=3", "edu": "10=2", "overseas": "3=0"} {
+		if got, err := Lines.Provider(canonical); err != nil || got != id {
+			t.Errorf("%q -> %q %v, want %q", canonical, got, err, id)
+		}
+		if got := Lines.Canonical(id); got != dnsx.NormalizeLine(canonical) {
+			t.Errorf("%q -> %q, want %q", id, got, canonical)
+		}
+	}
+	// Without line_id the name decides; unknown lines keep their provider id.
+	for r, want := range map[record]string{
+		{Line: "默认"}: "", {Line: "Default"}: "", {Line: "电信"}: "telecom", {Line: "境外"}: "overseas",
+		{Line: "北京", LineID: "10=4"}: "other:10=4", {Line: "搜索引擎"}: "other:搜索引擎",
+	} {
+		if got := r.line(); got != want {
+			t.Errorf("%+v -> %q, want %q", r, got, want)
+		}
+	}
+	if _, err := Lines.Provider("satellite"); !errors.Is(err, dnsx.ErrUnsupported) {
+		t.Errorf("unknown line: %v", err)
+	}
+}
+
+func TestAppendRecordsOnTwoLines(t *testing.T) {
+	s := dnstest.Serve(t,
+		dnstest.Exchange{Method: "POST", Path: "/Record.Create", Form: map[string]string{"sub_domain": "all", "record_type": "A", "record_line_id": "0", "value": "192.0.2.1"}, Response: `{"status":{"code":"1"},"record":{"id":"30"}}`},
+		// "=" travels as %3D in the form body.
+		dnstest.Exchange{Method: "POST", Path: "/Record.Create", Form: map[string]string{"sub_domain": "all", "record_type": "A", "record_line_id": "10=0", "value": "192.0.2.2"},
+			Check: func(t *testing.T, _ *http.Request, body []byte) {
+				if !strings.Contains(string(body), "record_line_id=10%3D0") {
+					t.Errorf("body %s", body)
+				}
+			},
+			Response: `{"status":{"code":"1"},"record":{"id":"31"}}`},
+	)
+	done, err := provider(t, s).AppendRecords(context.Background(), "example.com.", []libdns.Record{
+		dnstest.A("all", "192.0.2.1", 600), dnsx.OnLine(dnstest.A("all", "192.0.2.2", 600).RR(), "telecom"),
+	})
+	if err != nil || len(done) != 2 || dnsx.LineOf(done[1]) != "telecom" {
+		t.Fatalf("done %v err %v", done, err)
+	}
+}
+
+func TestGetRecordsReturnsLines(t *testing.T) {
+	s := dnstest.Serve(t, listCall(`{"id":"1","name":"all","line":"默认","line_id":"0","type":"A","ttl":"600","value":"192.0.2.1","enabled":"1"},
+{"id":"2","name":"all","line":"移动","line_id":"10=3","type":"A","ttl":"600","value":"192.0.2.2","enabled":"1"},
+{"id":"3","name":"all","line":"境外","line_id":"3=0","type":"A","ttl":"600","value":"198.51.100.1","enabled":"1"}`))
+	got, err := provider(t, s).GetRecords(context.Background(), "example.com.")
+	if err != nil || len(got) != 3 || dnsx.LineOf(got[0]) != "" || dnsx.LineOf(got[1]) != "mobile" || dnsx.LineOf(got[2]) != "overseas" {
+		t.Fatalf("records %v err %v", got, err)
+	}
+}
+
+func TestSetRecordsAcrossLines(t *testing.T) {
+	s := dnstest.Serve(t,
+		listCall(`{"id":"1","name":"all","line":"默认","line_id":"0","type":"A","ttl":"600","value":"192.0.2.1","enabled":"1"},
+{"id":"2","name":"all","line":"电信","line_id":"10=0","type":"A","ttl":"600","value":"192.0.2.2","enabled":"1"},
+{"id":"3","name":"all","line":"联通","line_id":"10=1","type":"A","ttl":"600","value":"192.0.2.3","enabled":"1"},
+{"id":"4","name":"all","line":"北京","line_id":"10=4","type":"A","ttl":"600","value":"192.0.2.4","enabled":"1"}`),
+		// default kept; telecom rewritten on its line; edu created; the unicom and province copies go.
+		dnstest.Exchange{Method: "POST", Path: "/Record.Modify", Form: map[string]string{"record_id": "2", "record_line_id": "10=0", "value": "192.0.2.5"}, Response: `{"status":{"code":"1"}}`},
+		dnstest.Exchange{Method: "POST", Path: "/Record.Create", Form: map[string]string{"sub_domain": "all", "record_line_id": "10=2", "value": "192.0.2.6"}, Response: `{"status":{"code":"1"}}`},
+		dnstest.Exchange{Method: "POST", Path: "/Record.Remove", Form: map[string]string{"record_id": "3"}, Response: `{"status":{"code":"1"}}`},
+		dnstest.Exchange{Method: "POST", Path: "/Record.Remove", Form: map[string]string{"record_id": "4"}, Response: `{"status":{"code":"1"}}`},
+	)
+	_, err := provider(t, s).SetRecords(context.Background(), "example.com.", []libdns.Record{
+		dnstest.A("all", "192.0.2.1", 600),
+		dnsx.OnLine(dnstest.A("all", "192.0.2.5", 600).RR(), "telecom"),
+		dnsx.OnLine(dnstest.A("all", "192.0.2.6", 600).RR(), "edu"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDeleteRecordsByLine(t *testing.T) {
+	s := dnstest.Serve(t,
+		listCall(`{"id":"1","name":"all","line":"默认","line_id":"0","type":"A","ttl":"600","value":"192.0.2.1","enabled":"1"},
+{"id":"2","name":"all","line":"电信","line_id":"10=0","type":"A","ttl":"600","value":"192.0.2.1","enabled":"1"},
+{"id":"3","name":"all","line":"北京","line_id":"10=4","type":"A","ttl":"600","value":"192.0.2.1","enabled":"1"}`),
+		dnstest.Exchange{Method: "POST", Path: "/Record.Remove", Form: map[string]string{"record_id": "2"}, Response: `{"status":{"code":"1"}}`},
+		// A line without a canonical id is deleted by the name dns.list gave it.
+		dnstest.Exchange{Method: "POST", Path: "/Record.Remove", Form: map[string]string{"record_id": "3"}, Response: `{"status":{"code":"1"}}`},
+	)
+	deleted, err := provider(t, s).DeleteRecords(context.Background(), "example.com.", []libdns.Record{
+		dnsx.OnLine(dnstest.A("all", "192.0.2.1", 600).RR(), "telecom"),
+		dnsx.OnLine(dnstest.A("all", "192.0.2.1", 600).RR(), "other:10=4"),
+	})
+	if err != nil || len(deleted) != 2 {
+		t.Fatalf("deleted %v err %v", deleted, err)
 	}
 }
