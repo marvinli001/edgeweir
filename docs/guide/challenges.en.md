@@ -78,7 +78,7 @@ These requests are never challenged by Under Attack or CC mitigation:
 | Addresses on the platform allow list | See [IP lists](rules.en.md#ip-lists) |
 | Requests that match an `allow` rule | A `challenge` rule that matched before the `allow` still applies |
 
-The level required is the highest of: platform Under Attack, the site's Under Attack, matching `challenge` rules, the site's current CC level, and the path's CC level.
+The level required is the highest of: platform Under Attack, the site's Under Attack, matching `challenge` rules, the site's current CC level, and the path's CC level. Rules of the configuration phase can turn the site's Under Attack on or off, turn **CC mitigation** off, or set **CC highest level** per request; platform Under Attack is unaffected, see [Override settings](rules.en.md#override-settings).
 
 ## Challenge settings
 

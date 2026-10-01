@@ -78,7 +78,7 @@
 | 平台放行名单中的地址 | 见 [IP 名单](rules.md#ip-名单) |
 | 命中 `allow`（放行）规则的请求 | 在放行之前命中的 `challenge` 规则仍然生效 |
 
-需要的级别取以下各项的最大值：平台 Under Attack、网站 Under Attack、命中的 `challenge` 规则、网站当前的 CC 级别、该路径的 CC 级别。
+需要的级别取以下各项的最大值：平台 Under Attack、网站 Under Attack、命中的 `challenge` 规则、网站当前的 CC 级别、该路径的 CC 级别。配置阶段的规则可按请求开关网站 Under Attack、关闭「CC 防护」或设置「CC 最高级别」，平台 Under Attack 不受影响，见[覆盖设置](rules.md#覆盖设置)。
 
 ## 挑战设置
 

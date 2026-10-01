@@ -65,6 +65,8 @@ With **Record JA4 in access logs** on (**Security → Challenges** of the site),
 
 With [OWASP CRS](waf.en.md) on, requests that matched rules also record the rule IDs (at most 16 per request, ascending) and whether CRS blocked them: the table gets a **CRS** column (rule IDs and a **Blocked** badge) and the CSV `wafRuleIds` (space-separated) and `wafBlocked` columns.
 
+Rules of the configuration phase can set a sample rate for the requests they match with **Log sample rate (%)**; those logs are kept even while the site's sample rate is **Off**, see [Override settings](rules.en.md#override-settings).
+
 Access logs need the node capability `access-logs-v1`, and JA4 also `ja4-v1`. A configuration rollback keeps the current sample rate and JA4 setting and never re-enables logging that was turned off.
 
 ## Search and export logs

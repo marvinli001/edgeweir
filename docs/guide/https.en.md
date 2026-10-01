@@ -152,6 +152,7 @@ TLS session tickets are off.
 | `Vary` | Compressed responses carry `Vary: Accept-Encoding` |
 | No double compression | Responses that already have a `Content-Encoding` (for example compressed by the origin) are passed through |
 | Cache | The cache keeps uncompressed or origin-encoded content and each response is compressed for its request; cache hits negotiate the encoding the same way |
+| Rules | Override settings turn an algorithm off or back on per request, and compression rules limit the algorithms of a response and their order at equal q-values; both choose only among the algorithms that are on and never bypass the cache, see [Rules](rules.en.md#override-settings) |
 | Capabilities | Brotli needs `brotli-v1` on every active node of the cluster, Zstandard needs `zstd-v1`. While a node lacks it, the switch is unavailable with "Some nodes of the site's cluster do not support it yet"; an algorithm already on can still be turned off |
 
 Verify after the node applies the revision:
