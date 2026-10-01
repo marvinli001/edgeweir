@@ -127,15 +127,15 @@ The **Configuration canary** card sets the cluster's policy and shows the curren
 
 | Item | Behavior |
 | --- | --- |
-| Canary nodes | Enabled nodes of the cluster's **Canary group** node groups; those online when the window starts decide the outcome |
+| Canary nodes | Enabled nodes of **Canary group** node groups that are online when the window starts. They stay the same until the window ends: a node that leaves the group meanwhile remains a canary node, one that joins waits for the next window |
 | Target revisions | Canary nodes get the candidate, the other nodes the stable revision; a node never gets a revision newer than its target |
 | DNS | Each node is compared with its own target; non-canary nodes are not removed during the window |
 | Rollback when (any, within the window) | A canary node fails to apply; its data plane is unhealthy or it goes offline; the canary 5xx ratio exceeds max(the non-canary nodes' 5xx ratio × multiple, floor) with at least the minimum requests; a canary node has not applied the candidate one window after the window ended |
-| Rollback | The stable content is published as a new revision and every node returns to it; audited as the system and the platform alert "Configuration canary rolled back" fires |
+| Rollback | The stable content is published as a new revision and every node returns to it, without sites disabled, suspended or deleted and domains removed during the window, and with the current cache generations and certificates; audited as the system and the platform alert "Configuration canary rolled back" fires |
 | After a rollback | The cluster stays on the stable revision. The database keeps the change; the next publication goes through the canary again |
-| New publication during the window | The new candidate replaces the old one and the window restarts |
+| New publication during the window | The new candidate replaces the old one; the window keeps its start and its canary nodes |
 | No canary node online | The change goes to every node, `cluster.rollout_direct` is audited and a platform alert fires; publishing is not blocked |
-| Changes that reach every node at once | ACME HTTP-01 challenges (the stable revision takes them too); **Roll back** in **Revisions** |
+| Changes that reach every node at once | ACME HTTP-01 challenges; disabling, suspending or deleting a site and removing a domain; a site's **Purge cache**; certificate renewals; challenge key rotation; **Under Attack** of sites and the platform. The stable revision takes these at once; other changes wait in the candidate for the window. **Roll back** in **Revisions** reaches every node at once too |
 | Turning the policy off | A running candidate is promoted to every node |
 
 | State | Meaning |
