@@ -1,6 +1,7 @@
 import { clone, create, type JsonObject, toJson } from "@bufbuild/protobuf";
 import {
   CertificateRefSchema,
+  L4Protocol,
   NodeConfigSchema,
   type RuleAction,
   RuleActionSchema,
@@ -28,6 +29,8 @@ import {
   diffNodeConfig,
   encodeNodeConfig,
   geoFeatures,
+  L4_FEATURE,
+  type L4AppModel,
   MAX_SITES_PER_CLUSTER,
   moduleFeatures,
   nodeRequirements,
@@ -1680,5 +1683,197 @@ describe("ruleModelOf", () => {
     );
     expect(again).toEqual(config);
     expect(config.requiredFeatures).toEqual(expect.arrayContaining(["challenge-v1", "rules-v2"]));
+  });
+});
+
+describe("layer-4 applications (l4-v1)", () => {
+  const app = (id: string, overrides: Partial<L4AppModel> = {}): L4AppModel => ({
+    id,
+    enabled: true,
+    protocol: "tcp",
+    port: 20000,
+    acceptProxyProtocol: false,
+    proxyProtocolVersion: 0,
+    origins: [
+      { id: `${id}-o2`, address: "198.51.100.2", port: 7000, weight: 1, backup: true },
+      { id: `${id}-o1`, address: "origin.example.com", port: 7000, weight: 3, backup: false },
+    ],
+    maxFails: 3,
+    failTimeoutSeconds: 30,
+    connectTimeoutMs: 5000,
+    idleTimeoutSeconds: 600,
+    allowListIds: [],
+    blockListIds: [],
+    maxConnections: 0,
+    newConnectionsPerSecond: 0,
+    ...overrides,
+  });
+  const plain = compileNodeConfig({ clusterId: "c", sites: [site("a")] }, 1n);
+
+  it("encodes a configuration without applications exactly as before", () => {
+    for (const l4Apps of [undefined, [], [app("x", { enabled: false })]]) {
+      const config = compileNodeConfig({ clusterId: "c", sites: [site("a")], l4Apps }, 1n);
+      expect(config.l4Apps).toEqual([]);
+      expect(config.requiredFeatures).toEqual([]);
+      expect(Buffer.from(encodeNodeConfig(config))).toEqual(Buffer.from(encodeNodeConfig(plain)));
+    }
+  });
+
+  it("compiles TCP applications with PROXY protocol and requires l4-v1", () => {
+    const config = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [site("a")],
+        l4Apps: [
+          app("v2", {
+            port: 20002,
+            acceptProxyProtocol: true,
+            proxyProtocolVersion: 2,
+            maxFails: 5,
+            failTimeoutSeconds: 60,
+            connectTimeoutMs: 1500,
+            idleTimeoutSeconds: 900,
+            allowListIds: ["l2", "l1", "l2"],
+            blockListIds: ["l3"],
+            maxConnections: 100,
+            newConnectionsPerSecond: 10,
+          }),
+          app("v1", { port: 20001, proxyProtocolVersion: 1 }),
+          app("v0", { port: 20000 }),
+        ],
+      },
+      1n,
+    );
+    expect(config.requiredFeatures).toEqual([L4_FEATURE]);
+    expect(nodeRequirements(config)).toEqual(["l4-v1"]);
+    expect(config.l4Apps.map((a) => [a.id, a.port, a.proxyProtocolVersion])).toEqual([
+      ["v0", 20000, 0],
+      ["v1", 20001, 1],
+      ["v2", 20002, 2],
+    ]);
+    expect((toJson(NodeConfigSchema, config) as JsonObject).l4Apps).toEqual([
+      expect.objectContaining({ id: "v0", protocol: "L4_PROTOCOL_TCP" }),
+      expect.objectContaining({ id: "v1" }),
+      {
+        id: "v2",
+        protocol: "L4_PROTOCOL_TCP",
+        port: 20002,
+        acceptProxyProtocol: true,
+        proxyProtocolVersion: 2,
+        origins: [
+          { id: "v2-o1", address: "origin.example.com", port: 7000, weight: 3 },
+          { id: "v2-o2", address: "198.51.100.2", port: 7000, weight: 1, backup: true },
+        ],
+        maxFails: 5,
+        failTimeoutSeconds: 60,
+        connectTimeoutMs: 1500,
+        idleTimeoutSeconds: 900,
+        allowListIds: ["l1", "l2"],
+        blockListIds: ["l3"],
+        maxConnections: 100,
+        newConnectionsPerSecond: 10,
+      },
+    ]);
+    // The sites are untouched.
+    expect(config.sites).toEqual(plain.sites);
+  });
+
+  it("compiles UDP applications without PROXY protocol", () => {
+    const config = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [],
+        l4Apps: [
+          app("dns", {
+            protocol: "udp",
+            port: 5353,
+            acceptProxyProtocol: true,
+            proxyProtocolVersion: 2,
+            idleTimeoutSeconds: 30,
+          }),
+          app("tcp", { port: 5353 }),
+        ],
+      },
+      1n,
+    );
+    expect(config.l4Apps.map((a) => [a.id, a.protocol, a.port])).toEqual([
+      ["dns", L4Protocol.UDP, 5353],
+      ["tcp", L4Protocol.TCP, 5353],
+    ]);
+    expect(config.l4Apps[0]).toMatchObject({
+      acceptProxyProtocol: false,
+      proxyProtocolVersion: 0,
+      idleTimeoutSeconds: 30,
+    });
+    expect(config.requiredFeatures).toEqual(["l4-v1"]);
+  });
+
+  it("sorts applications and origins by the UTF-8 bytes of their ids, independently of input order", () => {
+    const apps = [
+      app("\u{1F600}", {
+        port: 20001,
+        origins: [
+          { id: "\u{1F600}", address: "a.example", port: 1, weight: 1, backup: false },
+          { id: "\uFF01", address: "b.example", port: 2, weight: 1, backup: false },
+          { id: "z", address: "c.example", port: 3, weight: 1, backup: false },
+        ],
+      }),
+      app("\uFF01", { port: 20002 }),
+      app("b", { port: 20003, allowListIds: ["y", "x"], blockListIds: ["x", "x"] }),
+    ];
+    const forward = compileNodeConfig({ clusterId: "c", sites: [], l4Apps: apps }, 1n);
+    const backward = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [],
+        l4Apps: [...apps].reverse().map((a) => ({
+          ...a,
+          origins: [...a.origins].reverse(),
+          allowListIds: [...a.allowListIds].reverse(),
+        })),
+      },
+      2n,
+    );
+    expect(forward.l4Apps.map((a) => a.id)).toEqual(["b", "\uFF01", "\u{1F600}"]);
+    expect(forward.l4Apps[2]?.origins.map((o) => o.id)).toEqual(["z", "\uFF01", "\u{1F600}"]);
+    expect(forward.l4Apps[0]?.allowListIds).toEqual(["x", "y"]);
+    expect(forward.l4Apps[0]?.blockListIds).toEqual(["x"]);
+    expect(backward.contentHash).toBe(forward.contentHash);
+    // canonicalize brings a shuffled configuration into the same order.
+    const shuffled = clone(NodeConfigSchema, forward);
+    shuffled.l4Apps.reverse();
+    for (const a of shuffled.l4Apps) a.origins.reverse();
+    expect(contentHash(canonicalize(shuffled))).toBe(forward.contentHash);
+  });
+
+  it("carries applications in full in diffs and applies them", () => {
+    const base = compileNodeConfig({ clusterId: "c", sites: [site("a")] }, 1n);
+    const target = compileNodeConfig(
+      { clusterId: "c", sites: [site("a")], l4Apps: [app("x"), app("y", { port: 20001 })] },
+      2n,
+    );
+    const diff = diffNodeConfig(base, target);
+    expect(diff.upsertedSites).toEqual([]);
+    expect(diff.l4Apps.map((a) => a.id)).toEqual(["x", "y"]);
+    expect(applyNodeConfigDiff(base, diff)).toEqual(target);
+    const removed = compileNodeConfig({ clusterId: "c", sites: [site("a")] }, 3n);
+    const back = diffNodeConfig(target, removed);
+    expect(back.l4Apps).toEqual([]);
+    expect(applyNodeConfigDiff(target, back)).toEqual(removed);
+  });
+
+  it("follows the applications when the features are recomputed (rollback)", () => {
+    const config = compileNodeConfig(
+      { clusterId: "c", sites: [site("a")], l4Apps: [app("x")] },
+      4n,
+    );
+    expect(refreshDerived(config)).toEqual(config);
+    const dropped = clone(NodeConfigSchema, config);
+    dropped.l4Apps = [];
+    const refreshed = refreshDerived(dropped);
+    expect(refreshed.requiredFeatures).toEqual([]);
+    expect(refreshed.contentHash).toBe(
+      compileNodeConfig({ clusterId: "c", sites: [site("a")] }, 4n).contentHash,
+    );
   });
 });

@@ -21,6 +21,10 @@ import {
   type HttpChallenge,
   type IpList,
   IpListSchema,
+  type L4App,
+  L4AppSchema,
+  L4OriginSchema,
+  L4Protocol,
   type Listener,
   ListenerProtocol,
   ListenerSchema,
@@ -165,6 +169,10 @@ export const ERROR_PAGES_FEATURE = "error-pages-v1";
  * rule conditions and browser TTLs, bulk redirects and origin groups.
  */
 export const RULES_V2_FEATURE = "rules-v2";
+/** Feature of layer-4 (TCP / UDP) applications (proto v0.15.0, NodeConfig.l4_apps). */
+export const L4_FEATURE = "l4-v1";
+/** Layer-4 applications a cluster may have (enabled or not). */
+export const MAX_L4_APPS_PER_CLUSTER = 256;
 
 /** An origin pool's active health check while it is on (config.proto ActiveHealthCheck). */
 export interface ActiveHealthCheckModel {
@@ -580,6 +588,75 @@ export function nodeRequirements(config: NodeConfig): string[] {
     : [...config.requiredFeatures];
 }
 
+/** An origin of a layer-4 application (config.proto L4Origin). */
+export interface L4OriginModel {
+  id: string;
+  address: string;
+  port: number;
+  weight: number;
+  backup: boolean;
+}
+
+/** A layer-4 application (config.proto L4App); only enabled ones are compiled. */
+export interface L4AppModel {
+  id: string;
+  enabled: boolean;
+  protocol: "tcp" | "udp";
+  port: number;
+  /** TCP only; compiled false for UDP. */
+  acceptProxyProtocol: boolean;
+  /** TCP only (0 none, 1, 2); compiled 0 for UDP. */
+  proxyProtocolVersion: number;
+  /** Any order; compiled sorted by id. */
+  origins: L4OriginModel[];
+  maxFails: number;
+  failTimeoutSeconds: number;
+  connectTimeoutMs: number;
+  idleTimeoutSeconds: number;
+  /** Ids of IP lists; any order, compiled sorted without duplicates. */
+  allowListIds: string[];
+  blockListIds: string[];
+  maxConnections: number;
+  newConnectionsPerSecond: number;
+}
+
+/**
+ * NodeConfig.l4_apps of the enabled applications: PROXY protocol only for
+ * TCP, origins by id and list ids as sorted sets (canonicalize sorts the
+ * applications).
+ */
+export function compileL4Apps(apps: readonly L4AppModel[] | undefined): L4App[] {
+  return (apps ?? [])
+    .filter((app) => app.enabled)
+    .map((app) => {
+      const tcp = app.protocol === "tcp";
+      return create(L4AppSchema, {
+        id: app.id,
+        protocol: tcp ? L4Protocol.TCP : L4Protocol.UDP,
+        port: app.port,
+        acceptProxyProtocol: tcp && app.acceptProxyProtocol,
+        proxyProtocolVersion: tcp ? app.proxyProtocolVersion : 0,
+        origins: [...app.origins].sort(byBytes((origin) => origin.id)).map((origin) =>
+          create(L4OriginSchema, {
+            id: origin.id,
+            address: origin.address,
+            port: origin.port,
+            weight: Math.max(1, origin.weight),
+            backup: origin.backup,
+          }),
+        ),
+        maxFails: app.maxFails,
+        failTimeoutSeconds: app.failTimeoutSeconds,
+        connectTimeoutMs: app.connectTimeoutMs,
+        idleTimeoutSeconds: app.idleTimeoutSeconds,
+        allowListIds: sortedByteSet(app.allowListIds),
+        blockListIds: sortedByteSet(app.blockListIds),
+        maxConnections: app.maxConnections,
+        newConnectionsPerSecond: app.newConnectionsPerSecond,
+      });
+    });
+}
+
 export interface ListenerModel {
   port: number;
   protocol: "http" | "https";
@@ -620,6 +697,8 @@ export interface CompileInput {
   platformErrorPages?: PlatformErrorPagesModel;
   /** Domains of the cluster's disabled and suspended sites; any order. */
   offlineHosts?: OfflineHostModel[];
+  /** The cluster's layer-4 applications; disabled ones are left out. */
+  l4Apps?: L4AppModel[];
 }
 
 /**
@@ -783,6 +862,10 @@ const byBytes =
   <T>(key: (item: T) => string) =>
   (a: T, b: T) =>
     Buffer.compare(Buffer.from(key(a), "utf8"), Buffer.from(key(b), "utf8"));
+
+/** Sorted (UTF-8 byte order), de-duplicated copy of a set of strings. */
+const sortedByteSet = (values: readonly string[] | undefined): string[] =>
+  [...new Set(values ?? [])].sort(byBytes((value) => value));
 
 /**
  * TLS options of a site. Brotli and Zstandard carry their level, minimum
@@ -1046,6 +1129,14 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   out.ipLists.sort(byString((list: IpList) => list.id));
   out.challengeKeys.sort(byString((key: ChallengeKeyRef) => key.id));
   out.offlineHosts.sort(byString(offlineHostKey));
+  // v0.15.0: layer-4 applications by id (UTF-8 bytes), their origins by id
+  // and the list ids as sets.
+  out.l4Apps.sort(byBytes((app: L4App) => app.id));
+  for (const app of out.l4Apps) {
+    app.origins.sort(byBytes((origin) => origin.id));
+    app.allowListIds = sortedByteSet(app.allowListIds);
+    app.blockListIds = sortedByteSet(app.blockListIds);
+  }
   for (const list of out.ipLists) list.entries = sortedSet(list.entries);
   for (const rule of out.platformRules) canonicalizeAction(rule.action);
   for (const site of out.sites) {
@@ -1122,6 +1213,8 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...protectionFeatures(config),
     ...moduleFeatures(config),
     ...poolAndPageFeatures(config),
+    // Without applications the configuration encodes exactly as before.
+    ...(config.l4Apps.length ? [L4_FEATURE] : []),
   ];
 }
 
@@ -1184,6 +1277,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       : [],
     platformErrorPages: compilePlatformErrorPages(input.platformErrorPages),
     offlineHosts: compileOfflineHosts(input.offlineHosts),
+    l4Apps: compileL4Apps(input.l4Apps),
   });
   compiled.requiredFeatures = derivedFeatures(compiled);
   const config = canonicalize(compiled);
@@ -1204,7 +1298,8 @@ const siteBytes = (site: Site) => Buffer.from(toBinary(SiteSchema, site)).toStri
 /**
  * Computes the diff that turns `base` into `target`: sites are upserted or
  * removed by id, everything else (listeners, cache zones, certificates, the
- * origin allow list, platform error pages, offline hosts) is sent in full.
+ * origin allow list, platform error pages, offline hosts, layer-4
+ * applications) is sent in full.
  */
 export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfigDiff {
   const baseSites = new Map(base.sites.map((s) => [s.id, siteBytes(s)]));
@@ -1226,6 +1321,7 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     challengeKeys: target.challengeKeys,
     platformErrorPages: target.platformErrorPages,
     offlineHosts: target.offlineHosts,
+    l4Apps: target.l4Apps,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -1260,6 +1356,7 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       challengeKeys: diff.challengeKeys,
       platformErrorPages: diff.platformErrorPages,
       offlineHosts: diff.offlineHosts,
+      l4Apps: diff.l4Apps,
       sites,
     }),
   );

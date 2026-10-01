@@ -4,7 +4,13 @@ import { clone, fromJson, type JsonValue, toBinary } from "@bufbuild/protobuf";
 import { NodeConfigSchema } from "@edgeweir/proto";
 import { parseExpression } from "@edgeweir/rule-engine";
 import { describe, expect, it } from "vitest";
-import { type CompileInput, canonicalize, compileNodeConfig, contentHash } from "../src/index";
+import {
+  type CompileInput,
+  canonicalize,
+  compileNodeConfig,
+  contentHash,
+  type L4AppModel,
+} from "../src/index";
 
 // Same vectors as edgeweir-node/internal/configir/testdata/content_hash_vector*.json,
 // which the Go agent checks with proto.MarshalOptions{Deterministic: true}.
@@ -17,6 +23,7 @@ const vectorV021 = load("content_hash_vector_v021.json");
 const vectorV0110 = load("content_hash_vector_v0110.json");
 const vectorV0120 = load("content_hash_vector_v0120.json");
 const vectorV0130 = load("content_hash_vector_v0130.json");
+const vectorV0150 = load("content_hash_vector_v0150.json");
 
 /** The console models behind the M2 vector (pools, S3, cache keys, rule conditions). */
 const m2Models = (): CompileInput => ({
@@ -329,6 +336,91 @@ const v0130Models = (): CompileInput => {
   return input;
 };
 
+/**
+ * The layer-4 applications behind the v0.15.0 vector, in unsorted order:
+ * a TCP application that accepts PROXY protocol and sends v2 with every
+ * limit, list and passive health field set, a TCP application that sends
+ * v1 and a UDP application with a backup origin. Application and origin ids
+ * beyond ASCII sort differently by UTF-8 bytes than by UTF-16 code units.
+ */
+const v0150Apps = (): L4AppModel[] => [
+  {
+    id: "\u{1F600}-voice",
+    enabled: true,
+    protocol: "udp",
+    port: 3478,
+    acceptProxyProtocol: false,
+    proxyProtocolVersion: 0,
+    origins: [
+      { id: "v2", address: "voice-b.example.com", port: 3478, weight: 1, backup: true },
+      { id: "v1", address: "198.51.100.7", port: 3479, weight: 5, backup: false },
+    ],
+    maxFails: 3,
+    failTimeoutSeconds: 30,
+    connectTimeoutMs: 5000,
+    idleTimeoutSeconds: 30,
+    allowListIds: [],
+    blockListIds: ["l-c"],
+    maxConnections: 0,
+    newConnectionsPerSecond: 0,
+  },
+  {
+    id: "\uFF01-game",
+    enabled: true,
+    protocol: "tcp",
+    port: 25565,
+    acceptProxyProtocol: true,
+    proxyProtocolVersion: 2,
+    origins: [
+      { id: "o\u{1F600}", address: "2001:db8::10", port: 25565, weight: 2, backup: false },
+      { id: "o1", address: "game-1.example.com", port: 25566, weight: 100, backup: false },
+      { id: "o\uFF01", address: "203.0.113.20", port: 25565, weight: 1, backup: true },
+    ],
+    maxFails: 5,
+    failTimeoutSeconds: 60,
+    connectTimeoutMs: 3000,
+    idleTimeoutSeconds: 900,
+    allowListIds: ["l-b", "l-a"],
+    blockListIds: ["l-c"],
+    maxConnections: 1000,
+    newConnectionsPerSecond: 50,
+  },
+  {
+    id: "db",
+    enabled: true,
+    protocol: "tcp",
+    port: 15432,
+    acceptProxyProtocol: false,
+    proxyProtocolVersion: 1,
+    origins: [{ id: "d1", address: "db.internal.example", port: 5432, weight: 1, backup: false }],
+    maxFails: 1,
+    failTimeoutSeconds: 3600,
+    connectTimeoutMs: 100,
+    idleTimeoutSeconds: 86400,
+    allowListIds: [],
+    blockListIds: [],
+    maxConnections: 4294967295,
+    newConnectionsPerSecond: 1,
+  },
+];
+
+/** The M2 models plus three collection lists and the v0.15.0 applications. */
+const v0150Models = (): CompileInput => ({
+  ...m2Models(),
+  ipLists: [
+    { id: "l-c", name: "blocked", entries: ["192.0.2.0/24"], kind: "collection", platform: true },
+    { id: "l-a", name: "office", entries: ["198.51.100.0/24"], kind: "collection", platform: true },
+    {
+      id: "l-b",
+      name: "vpn",
+      entries: ["2001:db8::/32", "10.8.0.0/16"],
+      kind: "collection",
+      platform: true,
+    },
+  ],
+  l4Apps: v0150Apps(),
+});
+
 describe("content hash matches the Go agent", () => {
   it.each([
     ["phase 0", vector],
@@ -337,6 +429,7 @@ describe("content hash matches the Go agent", () => {
     ["v0.11.0", vectorV0110],
     ["v0.12.0", vectorV0120],
     ["v0.13.0", vectorV0130],
+    ["v0.15.0", vectorV0150],
   ])("encodes the %s vector to the same canonical bytes and hash", (_, v) => {
     const config = canonicalize(fromJson(NodeConfigSchema, v.config));
     const bare = clone(NodeConfigSchema, config);
@@ -474,6 +567,35 @@ describe("content hash matches the Go agent", () => {
     ]);
     expect(config.requiredFeatures).toEqual(["rules-v1", "rules-v2"]);
     expect(contentHash(config)).toBe(vectorV0130.content_hash);
+  });
+
+  it("compiles the v0.15.0 fields (layer-4 applications) into the same hash", () => {
+    const config = compileNodeConfig(v0150Models(), 12n);
+    expect(config.requiredFeatures).toEqual(["l4-v1"]);
+    expect(config.contentHash).toBe(vectorV0150.content_hash);
+    // A disabled application is left out; without applications nothing changes.
+    const disabled = v0150Models();
+    disabled.l4Apps = v0150Apps().map((app) => ({ ...app, enabled: false }));
+    const withoutApps = compileNodeConfig({ ...v0150Models(), l4Apps: [] }, 12n);
+    expect(compileNodeConfig(disabled, 12n).contentHash).toBe(withoutApps.contentHash);
+    expect(withoutApps.requiredFeatures).toEqual([]);
+    expect(compileNodeConfig({ ...m2Models(), l4Apps: [] }, 12n).contentHash).toBe(
+      vectorM2.content_hash,
+    );
+  });
+
+  it("canonicalizes the v0.15.0 lists (applications and origins by the UTF-8 bytes of their ids, list ids as sets) as the Go agent does", () => {
+    const parsed = fromJson(NodeConfigSchema, vectorV0150.config);
+    // The vector feeds unsorted lists into canonicalization.
+    expect(parsed.l4Apps.map((app) => app.id)).toEqual(["\u{1F600}-voice", "\uFF01-game", "db"]);
+    const config = canonicalize(parsed);
+    expect(config.l4Apps.map((app) => app.id)).toEqual(["db", "\uFF01-game", "\u{1F600}-voice"]);
+    const game = config.l4Apps[1];
+    expect(game?.origins.map((origin) => origin.id)).toEqual(["o1", "o\uFF01", "o\u{1F600}"]);
+    expect(game?.allowListIds).toEqual(["l-a", "l-b"]);
+    expect(config.l4Apps[2]?.origins.map((origin) => origin.id)).toEqual(["v1", "v2"]);
+    expect(config.requiredFeatures).toEqual(["l4-v1"]);
+    expect(contentHash(config)).toBe(vectorV0150.content_hash);
   });
 
   it("compiles console models into the same hash", () => {
