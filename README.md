@@ -6,7 +6,7 @@
 [![Docs](https://github.com/marvinli001/edgeweir/actions/workflows/docs.yml/badge.svg?branch=master)](https://marvinli001.github.io/edgeweir/zh/)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSE)
 
-自托管的 CDN / WAF / 边缘调度控制平面，面向个人自用：一个运营者账户统一管理边缘节点、源站池、缓存、HTTPS、访问策略与 DNS 调度。边缘节点见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。
+自托管的 CDN / WAF / 边缘调度控制平面，面向个人自用：一个运营者账户统一管理边缘节点、源站池、缓存、HTTPS、四层转发、访问策略与 DNS 调度。边缘节点见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。
 
 文档：<https://marvinli001.github.io/edgeweir/zh/>
 
@@ -16,6 +16,7 @@
 | --- | --- |
 | 集群与账户 | 节点组、区域、配置金丝雀、2FA / Passkey、服务账号、审计日志 |
 | 源站与缓存 | 源站池与源站组、主动与被动健康检查、会话保持、回源 TLS 校验、S3 签名回源、WebSocket、表达式缓存规则与浏览器 TTL、缓存键、切片、按 URL / 目录 / Host / Cache-Tag 刷新、按设备与站点地图预热、自定义错误页 |
+| 四层转发 | 按集群的 TCP / UDP 端口池；L4 应用：权重与备用源站、被动健康检查、连接与空闲超时、向源站发送 PROXY protocol v1 / v2 与接受 PROXY protocol、放行 / 拦截名单、每节点并发与新建连接上限；与网站共用 DNS 调度（CNAME、解析线路、备用节点组）；按分钟统计连接、拒绝、并发峰值与流量；增删端口时已有连接不断开 |
 | 证书与协议 | 证书上传、ACME HTTP-01 / DNS-01 签发与续期、HTTPS、HSTS、HTTP/2、HTTP/3；Zstandard、Brotli、Gzip 压缩 |
 | 访问策略 | IP 名单（全局允许 / 拦截）、本地 GeoIP、分阶段规则与内置函数、WAF、限速、动态重定向与改写、批量重定向、请求头与响应头变换、源站覆盖与压缩规则、按请求覆盖网站设置；秒级下发的 IP 封禁，全局封禁可由 nftables 在内核丢包 |
 | 托管规则 | OWASP CRS：仅检测或拦截、paranoia level、异常分数阈值、按规则 ID 排除、请求体检查上限；命中规则的统计与访问日志 |
@@ -203,7 +204,7 @@ pnpm e2e     # --up 启动环境；--down 结束后删除环境与卷；--skip-u
 - G3 步骤：G3 之前的节点镜像 `edgeweir-node:pre-g3`（`E2E_OLD_NODE_IMAGE`，缺少时由 `scripts/e2e-g3.mjs` 从 edgeweir-node 提交 `6da3403` 构建）
 - 网络访问：deb.debian.org、openresty.org；首次构建节点镜像或 edgeweir-openresty 包时另需 github.com、download.gnome.org、vault.almalinux.org
 
-覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 管理与 api-key 端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、动态封禁（下发延迟 p95 ≤ 5 秒、站点封禁、全局封禁由 nftables 丢包）、挑战与通行凭证（无头浏览器通过 js 与 pow 挑战，凭证在另一节点有效，换网段、换 UA 或伪造后失效）、分级 CC（只升级被攻击的路径、单 IP 自动封禁）、JA4 参与规则匹配、Brotli / Zstandard 按 q 值协商（缓存一份未压缩对象，`curl --compressed` 解码）、OWASP CRS 检测与拦截（含缓存命中）、旧节点所在集群无法开启这些功能、edgeweir-openresty 包内容、按 Cache-Tag 与 Host 刷新（含过期内容与分片）、按设备与站点地图预热、主动健康检查摘除与恢复、会话保持与故障切换、网站与平台错误页（转义、no-store、请求 ID）、动态重定向与改写及查询参数编辑（无效目标失败关闭）、批量重定向的热更新、源站覆盖规则与回源超时、表达式缓存规则与浏览器 TTL、压缩规则与不绕过缓存的 `gzip=false`、按规则开关 Under Attack、WebSocket 与日志采样、区域探针（两个探针容器以一次性令牌注册，节点以自身证书兼任探针）、多数探针到不了主地址时切换到备用地址、限定区域的调度规则摘除节点与线路切换到备用节点组、按解析线路写入的记录、Playwright 页面流程。
+覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 管理与 api-key 端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、动态封禁（下发延迟 p95 ≤ 5 秒、站点封禁、全局封禁由 nftables 丢包）、挑战与通行凭证（无头浏览器通过 js 与 pow 挑战，凭证在另一节点有效，换网段、换 UA 或伪造后失效）、分级 CC（只升级被攻击的路径、单 IP 自动封禁）、JA4 参与规则匹配、Brotli / Zstandard 按 q 值协商（缓存一份未压缩对象，`curl --compressed` 解码）、OWASP CRS 检测与拦截（含缓存命中）、旧节点所在集群无法开启这些功能、edgeweir-openresty 包内容、按 Cache-Tag 与 Host 刷新（含过期内容与分片）、按设备与站点地图预热、主动健康检查摘除与恢复、会话保持与故障切换、网站与平台错误页（转义、no-store、请求 ID）、动态重定向与改写及查询参数编辑（无效目标失败关闭）、批量重定向的热更新、源站覆盖规则与回源超时、表达式缓存规则与浏览器 TTL、压缩规则与不绕过缓存的 `gzip=false`、按规则开关 Under Attack、WebSocket 与日志采样、区域探针（两个探针容器以一次性令牌注册，节点以自身证书兼任探针）、多数探针到不了主地址时切换到备用地址、限定区域的调度规则摘除节点与线路切换到备用节点组、按解析线路写入的记录、四层转发（端口池重叠、端口池外与 UDP PROXY protocol 被拒绝，TCP 与 UDP 经两个节点转发，长连接跨越新增端口引起的 reload，向源站发送 PROXY protocol v1 / v2 与接受 PROXY protocol 的监听，不 reload 更换源站，IP 拦截名单与连接上限，统计与 CNAME）、Playwright 页面流程。
 
 以下变量由 `compose.e2e.yml` 与 `scripts/e2e.sh` 共同读取，两侧取值须一致。更换项目名、端口、tag 与子网即可并行运行第二套环境。
 
@@ -244,7 +245,7 @@ doc/                       文档站（Fumadocs），发布至 GitHub Pages
 | 分类 | 文档 |
 | --- | --- |
 | 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
-| 使用 | [快速上手](docs/guide/first-site.md) · [账户与登录](docs/guide/account.md) · [集群与系统](docs/guide/system.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 调度与告警](docs/guide/dns-and-alerts.md) · [区域探针与智能调度](docs/guide/scheduling.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
+| 使用 | [快速上手](docs/guide/first-site.md) · [账户与登录](docs/guide/account.md) · [集群与系统](docs/guide/system.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 调度与告警](docs/guide/dns-and-alerts.md) · [区域探针与智能调度](docs/guide/scheduling.md) · [四层转发](docs/guide/l4.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
 | 参考 | [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [API 与端点](docs/reference/api.md) |
 | 项目 | [架构](ARCHITECTURE.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |
 
