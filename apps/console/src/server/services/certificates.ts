@@ -457,13 +457,14 @@ export async function deleteDnsCredential(app: AppContext, id: string, ctx: Cert
 export async function nodeCertificates(app: AppContext, clusterId: string, ids: string[]) {
   const valid = [...new Set(ids)].filter((id) => /^[0-9a-f-]{36}$/i.test(id)).slice(0, 100);
   if (!valid.length) return [];
-  // Certificates of every revision the cluster's nodes may run (stable, candidate, latest).
-  const authorized = new Map<string, string>();
+  // Certificates of every revision the cluster's nodes may run (stable, candidate, latest):
+  // a certificate renewed in place has a different fingerprint in each of them.
+  const authorized = new Set<string>();
   for (const revision of await publishedRevisions(app.db, clusterId)) {
     const row = await getRevision(app.db, clusterId, revision);
     if (!row) continue;
     for (const cert of decodeNodeConfig(row.ir).certificates)
-      authorized.set(cert.id, cert.sha256Fingerprint);
+      authorized.add(`${cert.id}/${cert.sha256Fingerprint}`);
   }
   if (!authorized.size) return [];
   const rows = await app.db
@@ -471,7 +472,7 @@ export async function nodeCertificates(app: AppContext, clusterId: string, ids: 
     .from(schema.certificate)
     .where(inArray(schema.certificate.id, valid));
   return rows
-    .filter(({ certificate: cert }) => authorized.get(cert.id) === cert.fingerprint)
+    .filter(({ certificate: cert }) => authorized.has(`${cert.id}/${cert.fingerprint}`))
     .map(({ certificate: cert }) => ({
       id: cert.id,
       chainPem: cert.chainPem,
