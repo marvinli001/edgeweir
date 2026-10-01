@@ -1359,5 +1359,22 @@
   "purge_variant_desktop": "Desktop",
   "purge_variant_mobile": "Mobile",
   "site_cache_tag_title": "Cache-Tag",
-  "site_cache_keep_cache_tag": "Forward Cache-Tag to clients"
+  "site_cache_keep_cache_tag": "Forward Cache-Tag to clients",
+  "site_pool_affinity": "Session affinity",
+  "site_pool_affinity_enabled": "Enabled",
+  "site_pool_affinity_ttl": "Cookie lifetime (seconds)",
+  "site_pool_active_health": "Active health check",
+  "site_pool_active_health_enabled": "Enabled",
+  "site_pool_health_method": "Method",
+  "site_pool_health_path": "Path",
+  "site_pool_health_host": "Host",
+  "site_pool_health_host_placeholder": "Same as origin Host",
+  "site_pool_health_status_min": "Lowest status",
+  "site_pool_health_status_max": "Highest status",
+  "site_pool_health_interval": "Interval (seconds)",
+  "site_pool_health_timeout": "Timeout (seconds)",
+  "site_pool_health_healthy": "Healthy threshold",
+  "site_pool_health_unhealthy": "Unhealthy threshold",
+  "site_origin_health_source_passive": "Passive",
+  "site_origin_health_source_active": "Active"
 }

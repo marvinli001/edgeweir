@@ -1,9 +1,17 @@
-import type { OriginHealth, OriginSettings, Site } from "@edgeweir/contract";
+import type {
+  ActiveHealthCheck,
+  FeatureAvailability,
+  OriginHealth,
+  OriginSettings,
+  Site,
+} from "@edgeweir/contract";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
 import * as React from "react";
 import { BorderBeam } from "@/components/appica/effects";
+import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
 import { OriginHealthBadge, OriginHealthError } from "@/components/site/origin-health";
 import { nextDraftKey, SaveBar, serializeDrafts, useSaveSite } from "@/components/site/save-site";
@@ -20,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { unavailableReason } from "@/lib/protection";
 import { cn } from "@/lib/utils";
 
 /** Origins tab: the origin pool and its behaviour, each saved on its own. */
@@ -215,6 +224,7 @@ function OriginRow({
       className="flex min-w-0 flex-col gap-3 rounded-2xl border p-3"
       aria-label={m.site_origin_number({ index: index + 1 })}
       data-testid="origin-row"
+      data-origin-id={row.originId ?? undefined}
     >
       <div className="flex min-h-8 flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-muted-foreground">
@@ -391,6 +401,7 @@ function OriginRow({
 }
 
 type PolicyValue = OriginSettings["policy"];
+type HealthMethod = ActiveHealthCheck["method"];
 
 interface PoolDraft {
   policy: PolicyValue;
@@ -404,6 +415,19 @@ interface PoolDraft {
   keepaliveIdleSeconds: string;
   keepaliveMaxRequests: string;
   websocket: boolean;
+  /** Active health check; its values are kept (and editable) while it is off. */
+  healthEnabled: boolean;
+  healthPath: string;
+  healthMethod: HealthMethod;
+  healthStatusMin: string;
+  healthStatusMax: string;
+  healthHost: string;
+  healthInterval: string;
+  healthTimeout: string;
+  healthHealthy: string;
+  healthUnhealthy: string;
+  affinityEnabled: boolean;
+  affinityTtl: string;
 }
 
 /** Timeouts are stored in milliseconds and edited in seconds, like every other duration here. */
@@ -417,8 +441,26 @@ const toInt = (value: string, fallback: number) => {
   return value.trim() && Number.isFinite(n) ? Math.round(n) : fallback;
 };
 
+const HEALTH_METHODS = [
+  { label: "GET", value: "GET" },
+  { label: "HEAD", value: "HEAD" },
+] satisfies { label: string; value: HealthMethod }[];
+
+/**
+ * Whether a tenant may turn a pool feature on: not while the cluster's nodes lack it (the
+ * server refuses). Administrators may require it anyway, and a feature that is on can go off.
+ */
+const lockedFor = (
+  availability: FeatureAvailability | undefined,
+  admin: boolean,
+  savedOn: boolean,
+) => !admin && !savedOn && availability?.available === false;
+
 function PoolSettingsCard({ site }: { site: Site }) {
+  const { isAdmin } = useRouteContext({ from: "/_app" });
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   const s = site.originSettings;
+  const health = s.activeHealthCheck;
   const initial = React.useMemo<PoolDraft>(
     () => ({
       policy: s.policy,
@@ -432,6 +474,18 @@ function PoolSettingsCard({ site }: { site: Site }) {
       keepaliveIdleSeconds: String(s.keepaliveIdleSeconds),
       keepaliveMaxRequests: String(s.keepaliveMaxRequests),
       websocket: s.websocket,
+      healthEnabled: s.activeHealthCheck.enabled,
+      healthPath: s.activeHealthCheck.path,
+      healthMethod: s.activeHealthCheck.method,
+      healthStatusMin: String(s.activeHealthCheck.expectedStatusMin),
+      healthStatusMax: String(s.activeHealthCheck.expectedStatusMax),
+      healthHost: s.activeHealthCheck.host,
+      healthInterval: String(s.activeHealthCheck.intervalSeconds),
+      healthTimeout: String(s.activeHealthCheck.timeoutSeconds),
+      healthHealthy: String(s.activeHealthCheck.healthyThreshold),
+      healthUnhealthy: String(s.activeHealthCheck.unhealthyThreshold),
+      affinityEnabled: s.sessionAffinity.enabled,
+      affinityTtl: String(s.sessionAffinity.ttlSeconds),
     }),
     [s],
   );
@@ -444,6 +498,9 @@ function PoolSettingsCard({ site }: { site: Site }) {
     { label: m.site_pool_policy_round_robin(), value: "round_robin" },
     { label: m.site_pool_policy_consistent_hash(), value: "consistent_hash" },
   ];
+  const healthAvailability = features.data?.activeHealthCheck;
+  const affinityAvailability = features.data?.sessionAffinity;
+  const interval = toInt(draft.healthInterval, health.intervalSeconds);
 
   return (
     <Card className="animate-enter" style={{ animationDelay: "80ms" }} data-testid="pool-settings">
@@ -452,7 +509,9 @@ function PoolSettingsCard({ site }: { site: Site }) {
         onSubmit={(event) => {
           event.preventDefault();
           void save({
+            // Every pool setting is sent: the update replaces them.
             originSettings: {
+              ...s,
               policy: draft.policy,
               tlsVerify: draft.tlsVerify,
               maxFails: toInt(draft.maxFails, s.maxFails),
@@ -464,6 +523,22 @@ function PoolSettingsCard({ site }: { site: Site }) {
               keepaliveIdleSeconds: toInt(draft.keepaliveIdleSeconds, s.keepaliveIdleSeconds),
               keepaliveMaxRequests: toInt(draft.keepaliveMaxRequests, s.keepaliveMaxRequests),
               websocket: draft.websocket,
+              activeHealthCheck: {
+                enabled: draft.healthEnabled,
+                path: draft.healthPath.trim(),
+                method: draft.healthMethod,
+                expectedStatusMin: toInt(draft.healthStatusMin, health.expectedStatusMin),
+                expectedStatusMax: toInt(draft.healthStatusMax, health.expectedStatusMax),
+                host: draft.healthHost.trim(),
+                intervalSeconds: interval,
+                timeoutSeconds: toInt(draft.healthTimeout, health.timeoutSeconds),
+                healthyThreshold: toInt(draft.healthHealthy, health.healthyThreshold),
+                unhealthyThreshold: toInt(draft.healthUnhealthy, health.unhealthyThreshold),
+              },
+              sessionAffinity: {
+                enabled: draft.affinityEnabled,
+                ttlSeconds: toInt(draft.affinityTtl, s.sessionAffinity.ttlSeconds),
+              },
             },
           });
         }}
@@ -507,6 +582,33 @@ function PoolSettingsCard({ site }: { site: Site }) {
               testId="pool-websocket"
             />
           </div>
+          <div className="flex flex-col gap-2" data-testid="origins-affinity-group">
+            <SettingsGroup legend={m.site_pool_affinity()}>
+              <SwitchField
+                id="origins-affinity"
+                label={m.site_pool_affinity_enabled()}
+                checked={draft.affinityEnabled}
+                disabled={lockedFor(affinityAvailability, isAdmin, s.sessionAffinity.enabled)}
+                onCheckedChange={(affinityEnabled) => set({ affinityEnabled })}
+                testId="origins-affinity"
+              />
+              <NumberField
+                id="origins-affinity-ttl"
+                label={m.site_pool_affinity_ttl()}
+                value={draft.affinityTtl}
+                min={60}
+                max={604800}
+                step={1}
+                required
+                onChange={(affinityTtl) => set({ affinityTtl })}
+                testId="origins-affinity-ttl"
+              />
+            </SettingsGroup>
+            <Unavailable
+              availability={affinityAvailability}
+              testId="origins-affinity-unavailable"
+            />
+          </div>
           <SettingsGroup legend={m.site_pool_health()}>
             <NumberField
               id="pool-max-fails"
@@ -528,6 +630,146 @@ function PoolSettingsCard({ site }: { site: Site }) {
               onChange={(recoverySeconds) => set({ recoverySeconds })}
             />
           </SettingsGroup>
+          <div className="flex flex-col gap-2" data-testid="origins-active-health-group">
+            {/* Two columns on phones, four from lg: path and Host take two each. */}
+            <SettingsGroup legend={m.site_pool_active_health()} className="lg:grid-cols-4">
+              <SwitchField
+                id="origins-active-health"
+                label={m.site_pool_active_health_enabled()}
+                checked={draft.healthEnabled}
+                disabled={lockedFor(healthAvailability, isAdmin, health.enabled)}
+                onCheckedChange={(healthEnabled) => set({ healthEnabled })}
+                testId="origins-active-health"
+              />
+              <Field>
+                <FieldLabel htmlFor="origins-health-method">
+                  {m.site_pool_health_method()}
+                </FieldLabel>
+                <Select
+                  value={draft.healthMethod}
+                  onValueChange={(v) => v && set({ healthMethod: v as HealthMethod })}
+                  items={HEALTH_METHODS}
+                >
+                  <SelectTrigger
+                    id="origins-health-method"
+                    className="w-full"
+                    data-testid="origins-health-method"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HEALTH_METHODS.map((method) => (
+                      <SelectItem key={method.value} value={method.value}>
+                        {method.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field className="col-span-2">
+                <FieldLabel htmlFor="origins-health-path">{m.site_pool_health_path()}</FieldLabel>
+                <Input
+                  id="origins-health-path"
+                  value={draft.healthPath}
+                  required
+                  maxLength={1024}
+                  // An absolute path with an optional query: printable ASCII without spaces.
+                  pattern="/[!-~]*"
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  onChange={(event) => set({ healthPath: event.target.value })}
+                  placeholder="/healthz"
+                  className="font-mono"
+                  data-testid="origins-health-path"
+                />
+              </Field>
+              <Field className="col-span-2">
+                <FieldLabel htmlFor="origins-health-host">{m.site_pool_health_host()}</FieldLabel>
+                <Input
+                  id="origins-health-host"
+                  value={draft.healthHost}
+                  maxLength={253}
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  onChange={(event) => set({ healthHost: event.target.value })}
+                  placeholder={m.site_pool_health_host_placeholder()}
+                  data-testid="origins-health-host"
+                />
+              </Field>
+              <NumberField
+                id="origins-health-status-min"
+                label={m.site_pool_health_status_min()}
+                value={draft.healthStatusMin}
+                min={100}
+                max={599}
+                step={1}
+                required
+                onChange={(healthStatusMin) => set({ healthStatusMin })}
+                testId="origins-health-status-min"
+              />
+              <NumberField
+                id="origins-health-status-max"
+                label={m.site_pool_health_status_max()}
+                value={draft.healthStatusMax}
+                min={toInt(draft.healthStatusMin, 100)}
+                max={599}
+                step={1}
+                required
+                onChange={(healthStatusMax) => set({ healthStatusMax })}
+                testId="origins-health-status-max"
+              />
+              <NumberField
+                id="origins-health-interval"
+                label={m.site_pool_health_interval()}
+                value={draft.healthInterval}
+                min={5}
+                max={300}
+                step={1}
+                required
+                onChange={(healthInterval) => set({ healthInterval })}
+                testId="origins-health-interval"
+              />
+              <NumberField
+                id="origins-health-timeout"
+                label={m.site_pool_health_timeout()}
+                value={draft.healthTimeout}
+                min={1}
+                max={Math.max(1, Math.min(60, interval))}
+                step={1}
+                required
+                onChange={(healthTimeout) => set({ healthTimeout })}
+                testId="origins-health-timeout"
+              />
+              <NumberField
+                id="origins-health-healthy"
+                label={m.site_pool_health_healthy()}
+                value={draft.healthHealthy}
+                min={1}
+                max={10}
+                step={1}
+                required
+                onChange={(healthHealthy) => set({ healthHealthy })}
+                testId="origins-health-healthy"
+              />
+              <NumberField
+                id="origins-health-unhealthy"
+                label={m.site_pool_health_unhealthy()}
+                value={draft.healthUnhealthy}
+                min={1}
+                max={10}
+                step={1}
+                required
+                onChange={(healthUnhealthy) => set({ healthUnhealthy })}
+                testId="origins-health-unhealthy"
+              />
+            </SettingsGroup>
+            <Unavailable
+              availability={healthAvailability}
+              testId="origins-active-health-unavailable"
+            />
+          </div>
           <SettingsGroup legend={m.site_pool_timeouts()}>
             <NumberField
               id="pool-connect-timeout"
@@ -594,5 +836,25 @@ function PoolSettingsCard({ site }: { site: Site }) {
         <SaveBar dirty={dirty} pending={pending} error={error} testId="pool-save" />
       </form>
     </Card>
+  );
+}
+
+/** One line on why the cluster cannot use a pool feature yet. */
+function Unavailable({
+  availability,
+  testId,
+}: {
+  availability: FeatureAvailability | undefined;
+  testId: string;
+}) {
+  if (!availability || availability.available) return null;
+  return (
+    <SafetyNote
+      className="animate-in fade-in"
+      data-testid={testId}
+      data-reason={availability.reason ?? undefined}
+    >
+      {unavailableReason(availability)}
+    </SafetyNote>
   );
 }

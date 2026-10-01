@@ -1,8 +1,14 @@
-import type { OriginHealth } from "@edgeweir/contract";
+import type { OriginHealth, OriginHealthSource } from "@edgeweir/contract";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { m, timeAgo } from "@/lib/i18n";
 import { originErrorText } from "@/lib/node-errors";
+
+/** Which check reported a node's state: real traffic (passive) or the agent's probes (active). */
+const sourceLabel: Record<OriginHealthSource, () => string> = {
+  passive: m.site_origin_health_source_passive,
+  active: m.site_origin_health_source_active,
+};
 
 /** Health of one origin across the online nodes of the site's cluster (passive and active checks). */
 export function OriginHealthBadge({ health }: { health: OriginHealth | undefined }) {
@@ -43,6 +49,7 @@ export function OriginHealthBadge({ health }: { health: OriginHealth | undefined
         {m.site_origin_health_down({ down: health.downNodes, total: health.onlineNodes })}
       </TooltipTrigger>
       <TooltipContent className="flex-col items-start gap-1">
+        {/* One row per node and check that marks the origin down. */}
         {down.map((node) => {
           const error = originErrorText(node.lastErrorCode, node.lastErrorParams, node.lastError);
           return (
@@ -50,8 +57,15 @@ export function OriginHealthBadge({ health }: { health: OriginHealth | undefined
               key={`${node.nodeId}/${node.source}`}
               className="break-all"
               data-testid="origin-health-node"
+              data-source={node.source}
             >
-              <span className="font-medium">{node.nodeName}</span>
+              <span className="font-medium">{node.nodeName}</span>{" "}
+              <span
+                className="inline-flex h-4 items-center rounded-full bg-background/15 px-1.5 align-[1px] text-[10px] font-medium"
+                data-testid={`origin-health-source-${node.source}`}
+              >
+                {sourceLabel[node.source]()}
+              </span>
               {error ? ` · ${error}` : null}
             </span>
           );

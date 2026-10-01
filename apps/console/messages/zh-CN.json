@@ -1198,5 +1198,22 @@
   "purge_variant_desktop": "桌面端",
   "purge_variant_mobile": "移动端",
   "site_cache_tag_title": "Cache-Tag",
-  "site_cache_keep_cache_tag": "向客户端转发 Cache-Tag"
+  "site_cache_keep_cache_tag": "向客户端转发 Cache-Tag",
+  "site_pool_affinity": "会话保持",
+  "site_pool_affinity_enabled": "启用",
+  "site_pool_affinity_ttl": "Cookie 有效期（秒）",
+  "site_pool_active_health": "主动健康检查",
+  "site_pool_active_health_enabled": "启用",
+  "site_pool_health_method": "方法",
+  "site_pool_health_path": "路径",
+  "site_pool_health_host": "Host",
+  "site_pool_health_host_placeholder": "跟随回源 Host",
+  "site_pool_health_status_min": "状态码下限",
+  "site_pool_health_status_max": "状态码上限",
+  "site_pool_health_interval": "间隔（秒）",
+  "site_pool_health_timeout": "超时（秒）",
+  "site_pool_health_healthy": "健康阈值",
+  "site_pool_health_unhealthy": "不健康阈值",
+  "site_origin_health_source_passive": "被动",
+  "site_origin_health_source_active": "主动"
 }
