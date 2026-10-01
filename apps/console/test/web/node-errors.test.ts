@@ -59,6 +59,20 @@ describe("node error texts", () => {
     expect(taskErrorText("task_expired", {}, "expired: …")).toBe(
       "Not executed by the node within 7 days",
     );
+    // Sitemap outcomes localize their reason the same way.
+    expect(
+      taskErrorText(
+        "sitemap_failed",
+        { url: "https://a.test/sitemap.xml", reason: "status", status: "404" },
+        "",
+      ),
+    ).toBe("Could not fetch the sitemap https://a.test/sitemap.xml (HTTP 404)");
+    expect(
+      taskErrorText("sitemap_failed", { url: "https://a.test/s.xml", reason: "too_large" }, ""),
+    ).toBe("Could not fetch the sitemap https://a.test/s.xml (larger than 50 MiB unpacked)");
+    expect(taskErrorText("sitemap_empty", { url: "https://a.test/s.xml" }, "")).toBe(
+      "The sitemap https://a.test/s.xml lists no URL of the site",
+    );
     // Missing parameters render empty, never "undefined".
     expect(taskErrorText("task_unsupported", {}, "")).not.toContain("undefined");
   });

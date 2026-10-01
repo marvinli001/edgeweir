@@ -47,7 +47,7 @@ export function originErrorText(
 export function taskErrorText(code: string, params: Record<string, string>, text: string): string {
   if (!isTaskErrorCode(code)) return text;
   const values = { ...params };
-  if (code === "prefetch_failed") {
+  if (code === "prefetch_failed" || code === "sitemap_failed") {
     const reason = isPrefetchFailureReason(params.reason) ? params.reason : "other";
     values.reason =
       render(`task_error_reason_${reason}`, prefetchFailureReasonDefs[reason].params, params) ??

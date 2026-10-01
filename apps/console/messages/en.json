@@ -1335,5 +1335,8 @@
   "task_error_sitemap_failed": "Could not fetch the sitemap {url} ({reason})",
   "task_error_sitemap_empty": "The sitemap {url} lists no URL of the site",
   "task_error_reason_invalid": "not a valid sitemap",
-  "task_error_reason_too_large": "larger than 50 MiB unpacked"
+  "task_error_reason_too_large": "larger than 50 MiB unpacked",
+  "purge_type_host": "Purge hosts",
+  "purge_type_tag": "Purge cache tags",
+  "purge_type_sitemap": "Prefetch a sitemap"
 }

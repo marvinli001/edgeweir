@@ -1183,5 +1183,8 @@
   "task_error_sitemap_failed": "站点地图 {url} 获取失败（{reason}）",
   "task_error_sitemap_empty": "站点地图 {url} 中没有本网站的 URL",
   "task_error_reason_invalid": "不是有效的站点地图",
-  "task_error_reason_too_large": "解压后超过 50 MiB"
+  "task_error_reason_too_large": "解压后超过 50 MiB",
+  "purge_type_host": "Host 刷新",
+  "purge_type_tag": "标签刷新",
+  "purge_type_sitemap": "站点地图预热"
 }

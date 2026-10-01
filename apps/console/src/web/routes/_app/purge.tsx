@@ -38,6 +38,8 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
 const TYPES = ["url", "prefix", "site", "prefetch"] as const satisfies readonly CacheTaskType[];
+/** The task types this form creates; the list shows tasks of every type. */
+type FormType = (typeof TYPES)[number];
 
 export const Route = createFileRoute("/_app/purge")({
   validateSearch: z.object({
@@ -52,9 +54,12 @@ const typeLabel: Record<CacheTaskType, () => string> = {
   prefix: m.purge_type_prefix,
   site: m.purge_type_site,
   prefetch: m.purge_type_prefetch,
+  host: m.purge_type_host,
+  tag: m.purge_type_tag,
+  sitemap: m.purge_type_sitemap,
 };
 
-const placeholders: Record<Exclude<CacheTaskType, "site">, string> = {
+const placeholders: Record<Exclude<FormType, "site">, string> = {
   url: "https://www.example.com/index.html\nhttps://www.example.com/app.js?v=2",
   prefix: "https://www.example.com/static/\nhttps://www.example.com/images/",
   prefetch: "https://www.example.com/video.mp4\nhttps://www.example.com/app.js",
@@ -148,8 +153,8 @@ function PurgeForm({
   onTypeChange,
   onCreated,
 }: {
-  type: CacheTaskType;
-  onTypeChange: (type: CacheTaskType) => void;
+  type: FormType;
+  onTypeChange: (type: FormType) => void;
   onCreated: (task: CacheTask) => Promise<void>;
 }) {
   const queryClient = useQueryClient();
@@ -194,7 +199,7 @@ function PurgeForm({
     }
   };
 
-  const urlField = (label: string, t: Exclude<CacheTaskType, "site">) => (
+  const urlField = (label: string, t: Exclude<FormType, "site">) => (
     <Field>
       <div className="flex items-center justify-between gap-2">
         <FieldLabel htmlFor={`purge-${t}`}>{label}</FieldLabel>
@@ -239,7 +244,7 @@ function PurgeForm({
             value={type}
             onValueChange={(value) => {
               setError(null);
-              onTypeChange(value as CacheTaskType);
+              onTypeChange(value as FormType);
             }}
           >
             {/* Two by two on phones, one pill row from sm up. */}
