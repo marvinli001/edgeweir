@@ -30,7 +30,8 @@ export const file_edgeweir_node_v1_config: GenFile = /*@__PURE__*/
  *   - inside a site bulk_redirects by source; inside a rule action
  *     set_query by name and remove_query sorted (v0.13.0);
  *   - l4_apps by id, inside an application origins by id and
- *     allow_list_ids / block_list_ids sorted (v0.15.0).
+ *     allow_list_ids / block_list_ids sorted and unique (v0.15.0); ids
+ *     compare by their UTF-8 bytes.
  * content_hash is the lowercase hex SHA-256 of the deterministic binary
  * encoding of this message with `revision` and `content_hash` cleared.
  *
@@ -158,10 +159,10 @@ export type NodeConfig = Message<"edgeweir.node.v1.NodeConfig"> & {
 
   /**
    * Layer-4 (TCP / UDP) applications of the cluster, sorted by id; inside an
-   * application origins by id and the list ids sorted. Ports, protocols and
-   * accept_proxy_protocol are structural (rendered into stream {}, applied
-   * with a reload); everything else is hot-updated. Added in v0.15.0
-   * (feature l4-v1).
+   * application origins by id and the list ids sorted and unique. Ports,
+   * protocols, accept_proxy_protocol and proxy_protocol_version are
+   * structural (rendered into stream {}, applied with a reload); everything
+   * else is hot-updated. Added in v0.15.0 (feature l4-v1).
    *
    * @generated from field: repeated edgeweir.node.v1.L4App l4_apps = 17;
    */
