@@ -339,10 +339,11 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `site_domain` | Site domains (host names or wildcards), unique across the console |
 | `site_star` | Per-user stars |
 | `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification, active health check and session affinity (kept while off) |
-| `origin` | Origins |
+| `origin` | Origins and their origin group (empty for the default group) |
 | `origin_credential` | S3 origin keys, envelope-encrypted |
-| `cache_rule` | Cache rules |
+| `cache_rule` | Cache rules: condition expression and list references, status and size conditions, action, edge and browser TTLs |
 | `edge_rule` | Site or global rules: phase, expression, action, list references |
+| `bulk_redirect` | A site's bulk redirects: source (path or domain plus path, unique per site), target, status code, whether the query string is kept, order |
 | `ip_list` | IP lists (normalized CIDRs, unique names); `allow` / `block` lists apply to every site |
 | `ip_ban` | Dynamic bans: scope (platform / site), normalized CIDR, reason code, source (manual / auto; auto bans keep the node and trigger), expiry and removal time, `seq` (sequence `ip_ban_seq`), whether it is delivered |
 | `site_protection` | Site protection: Under Attack and its challenge type, pass lifetime, proof-of-work difficulty, CC policy (template or custom), JA4 logging; no row means the defaults |
@@ -429,11 +430,12 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0029_g2_challenges` | `site_protection`, `challenge_key`, `security_event`; `node.security_state`; `access_log.ja4` |
 | `0030_g3_waf` | `site_waf`; `waf_rules` in minute, hour and day statistics and the view `traffic_hour_stats`; `access_log.waf_rule_ids`, `waf_blocked` |
 | `0031_g4_cache_origins_error_pages` | `site_error_page`; `origin_pool.active_health_check`, `session_affinity`; `site.keep_cache_tag`, `intercept_origin_errors`, `error_pages_updated_at`; `origin_health.source` (joins the primary key, existing rows are passive); `access_log.request_id` |
-| `0032_domains_without_ownership` | Drops `domain_ownership` and `site_domain.verified`; of duplicate pending domains one row stays; `site_domain (name, wildcard)` is unique |
-| `0033_sites_without_suspension` | Drops `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at`; suspended sites become disabled; service accounts lose `sites:suspend` |
-| `0034_without_organization_limits` | Drops `organization_limit`; service accounts lose `limits:read`, `limits:write` |
-| `0035_single_operator` | Keeps only the earliest platform administrator who is not disabled (the other accounts' alert subscriptions move to it); IP list names become unique (organization lists with a taken name get a suffix and their rules follow), former organization lists become collections; drops `organization`, `member`, `invitation`, `organization_settings`, every `organization_id`, `session.active_organization_id` and `alert_channel.available_to_tenants`; service accounts lose the organization scopes |
-| `0036_dns_cluster_bindings` | `dns_binding`, `dns_lease`; `dns_revision.cluster_id`, `dns_managed_name.cluster_id`; the DNS steering policy becomes one binding per cluster; drops `dns_state` |
+| `0032_g5_rules` | `bulk_redirect`; `origin.group_name`; `cache_rule.browser_ttl_seconds`, `list_ids`; the structured conditions of existing cache rules are rewritten as equivalent expressions and the structured columns cleared |
+| `0033_domains_without_ownership` | Drops `domain_ownership` and `site_domain.verified`; of duplicate pending domains one row stays; `site_domain (name, wildcard)` is unique |
+| `0034_sites_without_suspension` | Drops `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at`; suspended sites become disabled; service accounts lose `sites:suspend` |
+| `0035_without_organization_limits` | Drops `organization_limit`; service accounts lose `limits:read`, `limits:write` |
+| `0036_single_operator` | Keeps only the earliest platform administrator who is not disabled (the other accounts' alert subscriptions move to it); IP list names become unique (organization lists with a taken name get a suffix and their rules follow), former organization lists become collections; drops `organization`, `member`, `invitation`, `organization_settings`, every `organization_id`, `session.active_organization_id` and `alert_channel.available_to_tenants`; service accounts lose the organization scopes |
+| `0037_dns_cluster_bindings` | `dns_binding`, `dns_lease`; `dns_revision.cluster_id`, `dns_managed_name.cluster_id`; the DNS steering policy becomes one binding per cluster; drops `dns_state` |
 
 ## Build output
 

@@ -1,6 +1,6 @@
 {
-  "id": "a6b57080-5cd7-4b43-99ab-7b516e68894e",
-  "prevId": "bb895a1c-ba28-4046-bae0-1b358fbf3d71",
+  "id": "bb895a1c-ba28-4046-bae0-1b358fbf3d71",
+  "prevId": "91b1358b-15c9-4372-82bd-7695fa6e3996",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2721,6 +2721,20 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "list_ids": {
+          "name": "list_ids",
+          "type": "uuid[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::uuid[]"
+        },
+        "browser_ttl_seconds": {
+          "name": "browser_ttl_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         }
       },
       "indexes": {
@@ -4367,6 +4381,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "group_name": {
+          "name": "group_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
         }
       },
       "indexes": {
@@ -5538,31 +5559,9 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
-        },
-        "cluster_id": {
-          "name": "cluster_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
         }
       },
-      "indexes": {
-        "dns_managed_name_cluster_idx": {
-          "name": "dns_managed_name_cluster_idx",
-          "columns": [
-            {
-              "expression": "cluster_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
         "dns_managed_name_provider_id_platform_dns_provider_id_fk": {
           "name": "dns_managed_name_provider_id_platform_dns_provider_id_fk",
@@ -5570,19 +5569,6 @@
           "tableTo": "platform_dns_provider",
           "columnsFrom": [
             "provider_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "dns_managed_name_cluster_id_cluster_id_fk": {
-          "name": "dns_managed_name_cluster_id_cluster_id_fk",
-          "tableFrom": "dns_managed_name",
-          "tableTo": "cluster",
-          "columnsFrom": [
-            "cluster_id"
           ],
           "columnsTo": [
             "id"
@@ -5680,12 +5666,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "cluster_id": {
-          "name": "cluster_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -5703,44 +5683,48 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.dns_state": {
+      "name": "dns_state",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "default": 1
         },
-        "dns_revision_cluster_idx": {
-          "name": "dns_revision_cluster_idx",
-          "columns": [
-            {
-              "expression": "cluster_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "revision",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
+        "policy": {
+          "name": "policy",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "desired_revision": {
+          "name": "desired_revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "applied_revision": {
+          "name": "applied_revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
         }
       },
-      "foreignKeys": {
-        "dns_revision_cluster_id_cluster_id_fk": {
-          "name": "dns_revision_cluster_id_cluster_id_fk",
-          "tableFrom": "dns_revision",
-          "tableTo": "cluster",
-          "columnsFrom": [
-            "cluster_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -6894,144 +6878,101 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.dns_binding": {
-      "name": "dns_binding",
+    "public.bulk_redirect": {
+      "name": "bulk_redirect",
       "schema": "",
       "columns": {
-        "cluster_id": {
-          "name": "cluster_id",
+        "id": {
+          "name": "id",
           "type": "uuid",
           "primaryKey": true,
-          "notNull": true
-        },
-        "mode": {
-          "name": "mode",
-          "type": "text",
-          "primaryKey": false,
           "notNull": true,
-          "default": "'off'"
+          "default": "gen_random_uuid()"
         },
-        "provider_id": {
-          "name": "provider_id",
+        "site_id": {
+          "name": "site_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "domain": {
-          "name": "domain",
+        "source": {
+          "name": "source",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "''"
+          "notNull": true
         },
-        "ttl": {
-          "name": "ttl",
+        "target": {
+          "name": "target",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status_code": {
+          "name": "status_code",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": 600
+          "default": 301
         },
-        "lines": {
-          "name": "lines",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "all_label": {
-          "name": "all_label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'all'"
-        },
-        "line_aliases": {
-          "name": "line_aliases",
+        "preserve_query": {
+          "name": "preserve_query",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
           "default": false
         },
-        "desired_revision": {
-          "name": "desired_revision",
-          "type": "bigint",
+        "position": {
+          "name": "position",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "applied_revision": {
-          "name": "applied_revision",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
+        "created_at": {
+          "name": "created_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "bulk_redirect_site_source_uq": {
+          "name": "bulk_redirect_site_source_uq",
+          "columns": [
+            {
+              "expression": "site_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "dns_binding_cluster_id_cluster_id_fk": {
-          "name": "dns_binding_cluster_id_cluster_id_fk",
-          "tableFrom": "dns_binding",
-          "tableTo": "cluster",
+        "bulk_redirect_site_id_site_id_fk": {
+          "name": "bulk_redirect_site_id_site_id_fk",
+          "tableFrom": "bulk_redirect",
+          "tableTo": "site",
           "columnsFrom": [
-            "cluster_id"
+            "site_id"
           ],
           "columnsTo": [
             "id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "dns_binding_provider_id_platform_dns_provider_id_fk": {
-          "name": "dns_binding_provider_id_platform_dns_provider_id_fk",
-          "tableFrom": "dns_binding",
-          "tableTo": "platform_dns_provider",
-          "columnsFrom": [
-            "provider_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.dns_lease": {
-      "name": "dns_lease",
-      "schema": "",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "holder": {
-          "name": "holder",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "until": {
-          "name": "until",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

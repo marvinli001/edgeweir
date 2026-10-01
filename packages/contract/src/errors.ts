@@ -47,6 +47,8 @@ export const errorDefs = {
   DNS_ADDRESS_REFUSED: { status: 400, params: [] },
   DNS_ZONES_UNSUPPORTED: { status: 400, params: [] },
   RULE_INVALID: { status: 400, params: [] },
+  /** A "host/path" bulk redirect source whose host is none of the site's domains. */
+  BULK_REDIRECT_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
   IP_LIST_NOT_FOUND: { status: 404, params: [] },
   IP_LIST_NAME_TAKEN: { status: 409, params: [] },
   IP_LIST_LIMIT: { status: 409, params: [] },

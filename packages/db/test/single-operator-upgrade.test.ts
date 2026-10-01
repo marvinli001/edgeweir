@@ -8,10 +8,10 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { defaultMigrationsFolder } from "../src/migrate";
 
-// Upgrades a database that still has organizations (the schema up to 0031)
+// Upgrades a database that still has organizations (the schema up to 0032)
 // to the single-operator schema and checks what happens to existing data.
 
-const LAST_MULTI_TENANT = "0031_g4_cache_origins_error_pages";
+const LAST_MULTI_TENANT = "0032_g5_rules";
 
 /** A copy of the migrations folder that ends at `tag`. */
 function migrationsUntil(tag: string): string {

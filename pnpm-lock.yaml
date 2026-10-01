@@ -428,6 +428,9 @@ importers:
         specifier: 8.23.0
         version: 8.23.0
     devDependencies:
+      '@edgeweir/rule-engine':
+        specifier: workspace:*
+        version: link:../rule-engine
       '@electric-sql/pglite':
         specifier: 0.5.8
         version: 0.5.8

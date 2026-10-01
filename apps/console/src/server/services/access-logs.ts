@@ -66,7 +66,14 @@ export async function ingestLogs(
           and(
             inArray(schema.site.id, ids),
             eq(schema.site.clusterId, node.clusterId),
-            sql`${schema.site.logSampleRate} > 0`,
+            // The site samples, or an enabled site or platform rule samples some
+            // of its requests (config action logSampleRate, rules-v2).
+            sql`(${schema.site.logSampleRate} > 0 or exists (
+              select 1 from ${schema.edgeRule}
+              where (${schema.edgeRule.siteId} = ${schema.site.id} or ${schema.edgeRule.siteId} is null)
+                and ${schema.edgeRule.enabled}
+                and ${schema.edgeRule.action}->>'kind' = 'config'
+                and (${schema.edgeRule.action}->>'logSampleRate')::int > 0))`,
           ),
         )
     : [];

@@ -1,3 +1,9 @@
+import {
+  cacheConditionExpression,
+  parseExpression,
+  type StructuredCacheCondition,
+  structuredCacheCondition,
+} from "@edgeweir/rule-engine";
 import * as z from "zod";
 import { normalizeCidr, parseIp } from "./addresses";
 
@@ -75,7 +81,7 @@ export const extension = z
 export const exactPath = pathPrefix;
 
 /** Host name used as TLS SNI or Host override; empty means derived. */
-const optionalHostname = z
+export const optionalHostname = z
   .string()
   .trim()
   .toLowerCase()
@@ -144,14 +150,62 @@ export const originInput = z.object({
   /** TLS server name for HTTPS origins; empty derives it from the Host or address. */
   sni: optionalHostname.default(""),
   s3: s3Input.nullable().default(null),
+  /**
+   * Origin group inside the site, [a-z0-9_-]{1,32}; empty is the default
+   * group. Only origin rules send traffic to the other groups.
+   */
+  group: z
+    .string()
+    .regex(/^[a-z0-9_-]{0,32}$/, "invalid origin group")
+    .default(""),
 });
+
+/** A site's origins: 1 to 32, at least one of them in the default group. */
+export const siteOrigins = z
+  .array(originInput)
+  .min(1)
+  .max(32)
+  .refine((origins) => origins.some((origin) => origin.group === ""), {
+    message: "at least one origin must be in the default group",
+  });
 
 const MAX_TTL = 365 * 24 * 3600;
 const MAX_STALE = 30 * 24 * 3600;
+/** Longest cache rule condition (characters). */
+export const CACHE_EXPRESSION_MAX_LENGTH = 16384;
+
+const sameSet = (a: string[], b: string[]) =>
+  [...new Set(a)].sort().join("\u0000") === [...new Set(b)].sort().join("\u0000");
+const sameStructured = (a: StructuredCacheCondition, b: StructuredCacheCondition) =>
+  a.pathPrefixes.length === b.pathPrefixes.length &&
+  a.pathPrefixes.every((prefix, i) => prefix === b.pathPrefixes[i]) &&
+  sameSet(a.paths, b.paths) &&
+  sameSet(a.extensions, b.extensions);
+
+/**
+ * The request condition a cache rule is stored with: its expression, or the
+ * expression of its structured lists when it has none.
+ */
+export function cacheRuleExpression(rule: {
+  expression: string;
+  pathPrefixes: string[];
+  paths: string[];
+  extensions: string[];
+}): string {
+  return rule.expression || cacheConditionExpression(rule);
+}
 
 export const cacheRuleInput = z
   .object({
     priority: z.number().int().min(0).max(10000).default(100),
+    /**
+     * The request condition (phase cache, at most 16384 characters), evaluated
+     * on the client's original request. Empty: the structured lists below are
+     * the condition (stored as cacheConditionExpression of them, which may be
+     * longer). With an expression the lists are empty or equal to the
+     * expression's structured form (as sites.get returns them).
+     */
+    expression: z.string().max(CACHE_EXPRESSION_MAX_LENGTH).default(""),
     pathPrefixes: z.array(pathPrefix).max(32).default([]),
     paths: z.array(exactPath).max(32).default([]),
     extensions: z.array(extension).max(64).default([]),
@@ -171,10 +225,36 @@ export const cacheRuleInput = z
      * requests bypass the cache (RFC 9111 section 3.5).
      */
     cacheAuthorized: z.boolean().default(false),
+    /** Cache-Control max-age towards clients for responses this rule caches; 0 keeps the origin's. */
+    browserTtlSeconds: z.number().int().min(0).max(MAX_TTL).default(0),
   })
   .refine((r) => r.maxSizeBytes === 0 || r.maxSizeBytes >= r.minSizeBytes, {
     message: "maximum size must not be below the minimum size",
     path: ["maxSizeBytes"],
+  })
+  .superRefine((r, ctx) => {
+    // The lists' own limits bound the expression built from them.
+    if (r.expression === "") return;
+    let structured: StructuredCacheCondition | null;
+    try {
+      structured = structuredCacheCondition(
+        parseExpression(r.expression, "cache", { maxLength: CACHE_EXPRESSION_MAX_LENGTH }),
+      );
+    } catch (error) {
+      ctx.addIssue({
+        code: "custom",
+        message: error instanceof Error ? error.message : "invalid expression",
+        path: ["expression"],
+      });
+      return;
+    }
+    const lists = r.pathPrefixes.length + r.paths.length + r.extensions.length > 0;
+    if (lists && !(structured && sameStructured(structured, r)))
+      ctx.addIssue({
+        code: "custom",
+        message: "the structured condition does not match the expression",
+        path: ["pathPrefixes"],
+      });
   });
 
 /** Absolute path with an optional query: 1-1024 printable ASCII bytes without spaces. */
@@ -278,7 +358,7 @@ export const siteCreateInput = z.object({
   name: z.string().trim().min(1).max(100),
   clusterId: uuid.optional(),
   domains: z.array(domainName).min(1).max(50),
-  origins: z.array(originInput).min(1).max(32),
+  origins: siteOrigins,
   cacheRules: z.array(cacheRuleInput).max(64).default([]),
   originSettings: originSettings.prefault({}),
   cacheSettings: cacheSettings.prefault({}),
@@ -292,6 +372,9 @@ export const origin = originInput.omit({ s3: true }).extend({
 export const cacheRule = z.object({
   id: uuid,
   priority: z.number().int(),
+  /** The request condition; "true" matches every request. */
+  expression: z.string(),
+  /** The expression's structured form when it has one (the builder), else empty. */
   pathPrefixes: z.array(z.string()),
   paths: z.array(z.string()),
   extensions: z.array(z.string()),
@@ -304,6 +387,7 @@ export const cacheRule = z.object({
   staleWhileRevalidateSeconds: z.number().int(),
   staleIfErrorSeconds: z.number().int(),
   cacheAuthorized: z.boolean(),
+  browserTtlSeconds: z.number().int(),
 });
 
 export const site = z.object({
@@ -815,7 +899,7 @@ export const siteUpdateInput = z.object({
   id: uuid,
   name: z.string().trim().min(1).max(100).optional(),
   domains: z.array(domainName).min(1).max(50).optional(),
-  origins: z.array(originInput).min(1).max(32).optional(),
+  origins: siteOrigins.optional(),
   cacheRules: z.array(cacheRuleInput).max(64).optional(),
   /**
    * Replaces the pool settings; omitted fields take their defaults, except

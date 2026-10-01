@@ -35,6 +35,7 @@ const ALL_FEATURES = [
   "error-pages-v1",
   "purge-tag-v1",
   "prefetch-v2",
+  "rules-v2",
 ];
 
 /** A change without the operator behind it (service accounts, background jobs). */
@@ -108,6 +109,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       errorPages: available,
       purgeByTag: available,
       prefetchVariants: available,
+      rulesV2: available,
     });
     const https = await admin.https.get({ id: siteId });
     expect(https).toMatchObject({ brotli: false, brotliLevel: 6, zstd: false, zstdLevel: 3 });
@@ -250,6 +252,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       errorPages: unavailable,
       purgeByTag: unavailable,
       prefetchVariants: unavailable,
+      rulesV2: unavailable,
     });
     const before = (await config()).revision;
     for (const [call, feature] of [

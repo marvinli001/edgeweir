@@ -23,7 +23,7 @@ vi.mock("../../src/server/services/certificate-worker", async (importOriginal) =
 });
 
 /**
- * Migration 0036 turns the platform-wide DNS policy into one binding per
+ * Migration 0037 turns the platform-wide DNS policy into one binding per
  * cluster. Seeded on the 0028 schema (organizations included): two clusters with sites (A: three
  * sites, line "east"; B: one site, line "west"), a cluster without sites, the
  * records the former per-site layout wrote, a managed name of a deleted site,
@@ -163,7 +163,7 @@ async function seed(client: PGlite) {
   );
 }
 
-describe("migration 0036: platform-wide DNS policy to cluster bindings", async () => {
+describe("migration 0037: platform-wide DNS policy to cluster bindings", async () => {
   const { ctx, client } = await createTestContext(
     { EDGEWEIR_DNS_TEST_ENDPOINT: "http://fixture.invalid" },
     { seed: { upTo: "0028_g1_dynamic_bans", run: seed } },

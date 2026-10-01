@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { clone, fromJson, type JsonValue, toBinary } from "@bufbuild/protobuf";
 import { NodeConfigSchema } from "@edgeweir/proto";
+import { parseExpression } from "@edgeweir/rule-engine";
 import { describe, expect, it } from "vitest";
 import { type CompileInput, canonicalize, compileNodeConfig, contentHash } from "../src/index";
 
@@ -15,6 +16,7 @@ const vectorM2 = load("content_hash_vector_m2.json");
 const vectorV021 = load("content_hash_vector_v021.json");
 const vectorV0110 = load("content_hash_vector_v0110.json");
 const vectorV0120 = load("content_hash_vector_v0120.json");
+const vectorV0130 = load("content_hash_vector_v0130.json");
 
 /** The console models behind the M2 vector (pools, S3, cache keys, rule conditions). */
 const m2Models = (): CompileInput => ({
@@ -150,6 +152,183 @@ const m2Models = (): CompileInput => ({
   ],
 });
 
+/**
+ * The console models behind the v0.13.0 vector: the M2 models plus, on site
+ * s2, rules with functions, value expression targets, query edits,
+ * non-default preserve_query, origin, compression and extended config
+ * actions; cache rules whose expressions compile to the structured lists
+ * (with a browser TTL) and to a typed condition; bulk redirects whose UTF-8
+ * byte order differs from UTF-16; an origin group; and a platform rule with
+ * query edits.
+ */
+const v0130Models = (): CompileInput => {
+  const input = m2Models();
+  const bucket = input.sites.find((site) => site.id === "s2");
+  const backup = bucket?.originPool.origins.find((o) => o.id === "o2");
+  if (!bucket || !backup) throw new Error("site s2 missing");
+  backup.group = "backup-pool";
+  bucket.rules = [
+    {
+      id: "e1",
+      phase: "request-transform",
+      expression: parseExpression(
+        'starts_with(http.request.uri.path, "/old/")',
+        "request-transform",
+      ),
+      action: {
+        kind: "rewrite",
+        value: "",
+        target: 'regex_replace(http.request.uri.path, "^/old/(.*)$", "/new/${1}")',
+        preserveQuery: false,
+        setQuery: [
+          { name: "v", value: "2" },
+          { name: "lang", value: "en us" },
+        ],
+        removeQuery: ["utm_source", "utm_medium"],
+      },
+    },
+    {
+      id: "e2",
+      phase: "redirect",
+      expression: parseExpression(
+        'starts_with(http.request.uri.path, "/go/") and len(http.request.uri.query) lt 100',
+        "redirect",
+      ),
+      action: {
+        kind: "redirect",
+        value: "",
+        target: 'concat("https://", lower(http.host), http.request.uri.path)',
+        statusCode: 308,
+        preserveQuery: true,
+        setQuery: [],
+        removeQuery: ["b", "a"],
+      },
+    },
+    {
+      id: "e3",
+      phase: "redirect",
+      expression: parseExpression('http.request.full_uri contains "/legacy"', "redirect"),
+      action: {
+        kind: "redirect",
+        value: "/elsewhere",
+        target: "",
+        statusCode: 302,
+        preserveQuery: false,
+        setQuery: [
+          { name: "z", value: "1" },
+          { name: "a", value: "%" },
+        ],
+        removeQuery: [],
+      },
+    },
+    {
+      id: "e4",
+      phase: "config",
+      expression: parseExpression('ends_with(lower(http.host), ".test")', "config"),
+      action: {
+        kind: "config",
+        gzip: true,
+        brotli: false,
+        zstd: true,
+        websocket: false,
+        underAttack: false,
+        ccEnabled: true,
+        ccMaxLevel: "pow",
+        originConnectTimeoutMs: 2000,
+        originSendTimeoutMs: 30000,
+        originReadTimeoutMs: 120000,
+        logSampleRate: 0,
+      },
+    },
+    {
+      id: "e5",
+      phase: "origin",
+      expression: parseExpression('http.request.uri.path.extension in {"mp4" "webm"}', "origin"),
+      action: {
+        kind: "origin",
+        originGroup: "backup-pool",
+        hostHeader: "media.example.com",
+        sni: "sni.example.com",
+        port: 8443,
+      },
+    },
+    {
+      id: "e6",
+      phase: "compression",
+      expression: parseExpression(
+        'http.response.content_type.media_type eq "text/html"',
+        "compression",
+      ),
+      action: { kind: "compression", algorithms: ["zstd", "gzip"] },
+    },
+    {
+      id: "e7",
+      phase: "compression",
+      expression: parseExpression(
+        'url_decode(http.request.uri.query) contains "raw=1"',
+        "compression",
+      ),
+      action: { kind: "compression", algorithms: [] },
+    },
+  ];
+  bucket.cacheRules.push(
+    {
+      id: "r4",
+      priority: 30,
+      pathPrefixes: [],
+      extensions: [],
+      expression:
+        'starts_with(http.request.uri.path, "/media/") and http.request.uri.path.extension in {"png" "jpg"}',
+      browserTtlSeconds: 600,
+      action: "cache",
+      edgeTtlSeconds: 86400,
+      originCacheControl: "override",
+    },
+    {
+      id: "r5",
+      priority: 40,
+      pathPrefixes: [],
+      extensions: [],
+      expression: 'lower(http.host) eq "cdn.test" or http.request.headers["x-cache"] eq "1"',
+      action: "bypass",
+      edgeTtlSeconds: 0,
+      originCacheControl: "override",
+    },
+  );
+  bucket.bulkRedirects = [
+    {
+      source: "bucket.test/a",
+      target: "https://example.com/a",
+      statusCode: 302,
+      preserveQuery: true,
+    },
+    { source: "/\u{1F600}", target: "/emoji", statusCode: 308, preserveQuery: true },
+    { source: "/\uFF01", target: "/fullwidth", statusCode: 307, preserveQuery: false },
+    { source: "/old", target: "/new", statusCode: 301, preserveQuery: false },
+    { source: "/a", target: "/b?x=1", statusCode: 301, preserveQuery: false },
+  ];
+  input.platformRules = [
+    {
+      id: "p1",
+      phase: "redirect",
+      expression: parseExpression('http.request.uri.path eq "/maintenance"', "redirect"),
+      action: {
+        kind: "redirect",
+        value: "https://status.example.com/",
+        target: "",
+        statusCode: 302,
+        preserveQuery: false,
+        setQuery: [
+          { name: "to", value: "status" },
+          { name: "from", value: "edge" },
+        ],
+        removeQuery: [],
+      },
+    },
+  ];
+  return input;
+};
+
 describe("content hash matches the Go agent", () => {
   it.each([
     ["phase 0", vector],
@@ -157,6 +336,7 @@ describe("content hash matches the Go agent", () => {
     ["v0.2.1", vectorV021],
     ["v0.11.0", vectorV0110],
     ["v0.12.0", vectorV0120],
+    ["v0.13.0", vectorV0130],
   ])("encodes the %s vector to the same canonical bytes and hash", (_, v) => {
     const config = canonicalize(fromJson(NodeConfigSchema, v.config));
     const bare = clone(NodeConfigSchema, config);
@@ -257,6 +437,43 @@ describe("content hash matches the Go agent", () => {
     ]);
     expect(config.platformProtection).toBeUndefined();
     expect(config.contentHash).toBe(vectorV0120.content_hash);
+  });
+
+  it("compiles the v0.13.0 fields (rule engine extensions, cache conditions, bulk redirects, origin groups) into the same hash", () => {
+    const config = compileNodeConfig(v0130Models(), 12n);
+    expect(config.requiredFeatures).toEqual(["rules-v1", "rules-v2"]);
+    expect(config.contentHash).toBe(vectorV0130.content_hash);
+    const bucket = config.sites.find((site) => site.id === "s2");
+    // r4 has the builder's shape: lists for every node; r5 travels as a condition.
+    const r4 = bucket?.cacheRules.find((rule) => rule.id === "r4");
+    const r5 = bucket?.cacheRules.find((rule) => rule.id === "r5");
+    expect(r4?.match).toMatchObject({ pathPrefixes: ["/media/"], extensions: ["jpg", "png"] });
+    expect(r4?.match?.condition).toBeUndefined();
+    expect(r4?.browserTtlSeconds).toBe(600);
+    expect(r5?.match?.condition?.op).toBe("or");
+    // Without the v0.13.0 fields the models compile to the M2 hash again.
+    expect(compileNodeConfig(m2Models(), 12n).contentHash).toBe(vectorM2.content_hash);
+  });
+
+  it("canonicalizes the v0.13.0 lists (bulk redirects by source bytes, set_query by name, remove_query as a set) as the Go agent does", () => {
+    const config = canonicalize(fromJson(NodeConfigSchema, vectorV0130.config));
+    const bucket = config.sites.find((site) => site.id === "s2");
+    expect(bucket?.bulkRedirects.map((r) => r.source)).toEqual([
+      "/a",
+      "/old",
+      "/\uFF01",
+      "/\u{1F600}",
+      "bucket.test/a",
+    ]);
+    const rewrite = bucket?.rules.find((rule) => rule.id === "e1")?.action;
+    expect(rewrite?.setQuery.map((param) => param.name)).toEqual(["lang", "v"]);
+    expect(rewrite?.removeQuery).toEqual(["utm_medium", "utm_source"]);
+    expect(config.platformRules[0]?.action?.setQuery.map((param) => param.name)).toEqual([
+      "from",
+      "to",
+    ]);
+    expect(config.requiredFeatures).toEqual(["rules-v1", "rules-v2"]);
+    expect(contentHash(config)).toBe(vectorV0130.content_hash);
   });
 
   it("compiles console models into the same hash", () => {

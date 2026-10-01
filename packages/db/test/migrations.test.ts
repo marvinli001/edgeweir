@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { cacheConditionExpression, parseExpression } from "@edgeweir/rule-engine";
 import { PGlite } from "@electric-sql/pglite";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -103,6 +104,7 @@ describe("migrations", () => {
       "security_event",
       "site_waf",
       "site_error_page",
+      "bulk_redirect",
     ]) {
       expect(tables).toContain(name);
     }
@@ -248,6 +250,31 @@ describe("migrations", () => {
     expect(await db.select().from(schema.originHealth)).toEqual([]);
   });
 
+  it("keeps one bulk redirect per site and source and defaults origin groups and browser TTLs", async () => {
+    const [cl] = await db.insert(schema.cluster).values({ name: "g5" }).returning();
+    if (!cl) throw new Error("cluster not inserted");
+    const [site] = await db
+      .insert(schema.site)
+      .values({ clusterId: cl.id, name: "g5" })
+      .returning();
+    if (!site) throw new Error("site not inserted");
+    const [pool] = await db.insert(schema.originPool).values({ siteId: site.id }).returning();
+    if (!pool) throw new Error("pool not inserted");
+    const [origin] = await db
+      .insert(schema.origin)
+      .values({ poolId: pool.id, address: "origin.test", port: 80 })
+      .returning();
+    expect(origin?.groupName).toBe("");
+    const [rule] = await db.insert(schema.cacheRule).values({ siteId: site.id }).returning();
+    expect(rule).toMatchObject({ browserTtlSeconds: 0, listIds: [] });
+    const redirect = { siteId: site.id, source: "/old", target: "/new", position: 0 };
+    const [row] = await db.insert(schema.bulkRedirect).values(redirect).returning();
+    expect(row).toMatchObject({ statusCode: 301, preserveQuery: false });
+    await expect(db.insert(schema.bulkRedirect).values(redirect)).rejects.toThrow();
+    await db.delete(schema.site).where(eq(schema.site.id, site.id));
+    expect(await db.select().from(schema.bulkRedirect)).toEqual([]);
+  });
+
   it("detaches regions instead of cascading deletes", async () => {
     const [cl] = await db.insert(schema.cluster).values({ name: "edge-b" }).returning();
     const [rg] = await db.insert(schema.region).values({ name: "East", code: "east" }).returning();
@@ -312,6 +339,98 @@ describe("migration 0031 on existing data", () => {
         )
       ).rows;
       expect(pool).toEqual({ active_health_check: {}, session_affinity: {} });
+    } finally {
+      await old.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("migration 0032 on existing data", () => {
+  it("rewrites structured cache rule conditions as the builder's expressions and clears the lists", async () => {
+    const journal = JSON.parse(
+      readFileSync(join(defaultMigrationsFolder, "meta", "_journal.json"), "utf8"),
+    ) as { entries: { idx: number; tag: string }[] };
+    // The migrations up to 0031, then cache rules written by a G4 console, then 0032.
+    const folder = mkdtempSync(join(tmpdir(), "edgeweir-g4-"));
+    const old = new PGlite();
+    const rules: { id: string; pathPrefixes: string[]; paths: string[]; extensions: string[] }[] = [
+      { id: "a1", pathPrefixes: ["/static/"], paths: [], extensions: [] },
+      {
+        id: "a2",
+        pathPrefixes: ["/b/", "/a/", '/q"uote/', "/back\\slash/", "/中文/", "/tab\tline/"],
+        paths: [],
+        extensions: [],
+      },
+      { id: "a3", pathPrefixes: [], paths: ["/z.html", "/index.html", "/ü"], extensions: [] },
+      { id: "a4", pathPrefixes: [], paths: [], extensions: ["png", "css", "png"] },
+      {
+        id: "a5",
+        pathPrefixes: ["/img/", "/media/"],
+        paths: ['/"x"'],
+        extensions: ["webp", "avif"],
+      },
+      { id: "a6", pathPrefixes: [], paths: [], extensions: [] },
+    ];
+    const uuid = (id: string) => `00000000-0000-4000-8000-0000000000${id}`;
+    try {
+      mkdirSync(join(folder, "meta"));
+      const entries = journal.entries.filter((entry) => entry.idx <= 31);
+      writeFileSync(join(folder, "meta", "_journal.json"), JSON.stringify({ ...journal, entries }));
+      for (const { tag } of entries)
+        copyFileSync(join(defaultMigrationsFolder, `${tag}.sql`), join(folder, `${tag}.sql`));
+      const oldDb = drizzle({ client: old, schema, casing: "snake_case" });
+      await migrate(oldDb, { migrationsFolder: folder, migrationsSchema: "drizzle" });
+      await old.exec(`
+        insert into organization (id, name, slug, created_at) values ('org_old', 'Old', 'old', now());
+        insert into cluster (id, name) values ('00000000-0000-4000-8000-0000000000d1', 'old');
+        insert into site (id, organization_id, cluster_id, name)
+          values ('00000000-0000-4000-8000-0000000000d2', 'org_old', '00000000-0000-4000-8000-0000000000d1', 'old');
+      `);
+      for (const rule of rules)
+        await old.query(
+          `insert into cache_rule (id, site_id, path_prefixes, paths, extensions)
+             values ($1, '00000000-0000-4000-8000-0000000000d2', $2, $3, $4)`,
+          [uuid(rule.id), rule.pathPrefixes, rule.paths, rule.extensions],
+        );
+      // A rule that already has an expression is left alone.
+      await old.query(
+        `insert into cache_rule (id, site_id, path_prefixes, expression)
+           values ($1, '00000000-0000-4000-8000-0000000000d2', '{/kept/}', 'ssl eq true')`,
+        [uuid("a7")],
+      );
+      await migrate(oldDb, {
+        migrationsFolder: defaultMigrationsFolder,
+        migrationsSchema: "drizzle",
+      });
+      const migrated = await old.query<{
+        id: string;
+        expression: string;
+        path_prefixes: string[];
+        paths: string[];
+        extensions: string[];
+        browser_ttl_seconds: number;
+      }>(
+        "select id, expression, path_prefixes, paths, extensions, browser_ttl_seconds from cache_rule order by id",
+      );
+      expect(migrated.rows).toHaveLength(rules.length + 1);
+      for (const rule of rules) {
+        const row = migrated.rows.find((r) => r.id === uuid(rule.id));
+        expect(row?.expression, rule.id).toBe(cacheConditionExpression(rule));
+        // The expression parses as a cache condition (the vectors prove it matches like the lists).
+        expect(() => parseExpression(row?.expression ?? "", "cache")).not.toThrow();
+        expect(row).toMatchObject({
+          path_prefixes: [],
+          paths: [],
+          extensions: [],
+          browser_ttl_seconds: 0,
+        });
+      }
+      expect(migrated.rows.find((r) => r.id === uuid("a6"))?.expression).toBe("true");
+      expect(migrated.rows.find((r) => r.id === uuid("a7"))).toMatchObject({
+        expression: "ssl eq true",
+        path_prefixes: ["/kept/"],
+      });
     } finally {
       await old.close();
       rmSync(folder, { recursive: true, force: true });

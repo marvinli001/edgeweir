@@ -87,6 +87,35 @@ describe("sampled logs: bounded retention, safe export and durable acknowledgeme
     expect(csv).toContain('"\'=HYPERLINK(""evil"")"');
     expect(csv).toContain('"/a,""b\n"');
   });
+  it("stores logs of a site that samples nothing only while a rule samples it", async () => {
+    const [quiet] = await ctx.db
+      .insert(schema.site)
+      .values({ name: "quiet", clusterId: node.clusterId, logSampleRate: 0 })
+      .returning();
+    if (!quiet) throw new Error("fixture missing");
+    const sampled = () => create(AccessLogSchema, { ...entry(), siteId: quiet.id });
+    expect(await ingestLogs(ctx, node, 50n, [sampled()], now)).toBe(0);
+    const rule = {
+      siteId: quiet.id,
+      name: "sample /logged",
+      phase: "config",
+      expression: 'http.request.uri.path eq "/logged"',
+      priority: 0,
+      action: { kind: "config", logSampleRate: 10000 },
+    };
+    const [row] = await ctx.db.insert(schema.edgeRule).values(rule).returning();
+    expect(await ingestLogs(ctx, node, 51n, [sampled()], now)).toBe(1);
+    await ctx.db
+      .update(schema.edgeRule)
+      .set({ enabled: false })
+      .where(eq(schema.edgeRule.id, row?.id ?? ""));
+    expect(await ingestLogs(ctx, node, 52n, [sampled()], now)).toBe(0);
+    await ctx.db
+      .update(schema.edgeRule)
+      .set({ action: { kind: "config", logSampleRate: 0 }, enabled: true })
+      .where(eq(schema.edgeRule.id, row?.id ?? ""));
+    expect(await ingestLogs(ctx, node, 53n, [sampled()], now)).toBe(0);
+  });
   it("keeps logs when a node is removed and drops expired partitions", async () => {
     const old = create(AccessLogSchema, {
       ...entry(),

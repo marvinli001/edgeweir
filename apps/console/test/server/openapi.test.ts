@@ -90,6 +90,23 @@ describe("OpenAPI security requirements", async () => {
     ).toContain("requestId");
   });
 
+  it("documents the bulk redirect routes and the rules.validate kinds", () => {
+    const routes = operations.map(({ path, method, op }) => `${method} ${path} ${op.operationId}`);
+    expect(routes).toEqual(
+      expect.arrayContaining([
+        "get /sites/{id}/bulk-redirects bulkRedirects.get",
+        "put /sites/{id}/bulk-redirects bulkRedirects.save",
+      ]),
+    );
+    const body = (path: string, method: string) =>
+      spec.paths[path]?.[method]?.requestBody?.content["application/json"]?.schema;
+    expect(body("/sites/{id}/bulk-redirects", "put")?.properties?.redirects?.maxItems).toBe(5000);
+    expect(body("/rules/validate", "post")?.properties?.kind).toMatchObject({
+      default: "condition",
+      enum: ["condition", "value", "cacheRule"],
+    });
+  });
+
   it("matches what the API enforces without credentials", async () => {
     const uuid = "00000000-0000-4000-8000-000000000000";
     for (const { path, method, op } of operations) {

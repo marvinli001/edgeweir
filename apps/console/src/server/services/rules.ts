@@ -13,12 +13,14 @@ import {
   listReferences,
   type Phase,
   parseExpression,
+  parseValueExpression,
 } from "@edgeweir/rule-engine";
 import { asc, eq, isNull, sql } from "drizzle-orm";
+import { parseCacheCondition } from "../lib/cache-conditions";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import { type Executor, publisher, publishRevision } from "./revisions";
+import { type Executor, listBindings, publisher, publishRevision } from "./revisions";
 import { findSite } from "./sites";
 
 const ruleScope = (siteId: string | null) =>
@@ -30,6 +32,27 @@ const dto = (row: typeof schema.ipList.$inferSelect): IpListDto => ({
   kind: row.kind as IpListDto["kind"],
 });
 
+/** Every IP list (rules of any site may use them), share-locked on request. */
+export async function availableLists(db: Executor, lock = false) {
+  const query = db.select().from(schema.ipList);
+  return lock ? query.for("share") : query;
+}
+
+/** The origin groups of a site ("" is the default group). */
+export async function siteOriginGroups(db: Executor, siteId: string): Promise<Set<string>> {
+  const rows = await db
+    .selectDistinct({ group: schema.origin.groupName })
+    .from(schema.origin)
+    .innerJoin(schema.originPool, eq(schema.originPool.id, schema.origin.poolId))
+    .where(eq(schema.originPool.siteId, siteId));
+  return new Set(rows.map((row) => row.group));
+}
+
+/** The origin group an origin action names, or "" (the default group, or another kind). */
+export const actionOriginGroup = (action: unknown): string => {
+  const a = action as { kind?: unknown; originGroup?: unknown };
+  return a.kind === "origin" && typeof a.originGroup === "string" ? a.originGroup : "";
+};
 export async function getRules(app: AppContext, siteId: string | null): Promise<RuleDto[]> {
   if (siteId) await findSite(app.db, siteId);
   const rows = await app.db
@@ -49,9 +72,16 @@ export async function saveRules(
     if (!siteId)
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.platform-rules'))`);
     const site = siteId ? await findSite(tx, siteId, true) : null;
-    const lists = await tx.select().from(schema.ipList).for("share");
-    const bindings: Record<string, string> = Object.create(null);
-    for (const list of lists) bindings[list.name] = list.id;
+    const bindings = listBindings(await availableLists(tx, true));
+    // Origin rules choose among the site's origin groups; the platform has no origins.
+    const groups = siteId ? await siteOriginGroups(tx, siteId) : new Set<string>();
+    for (const rule of rules) {
+      const group = actionOriginGroup(rule.action);
+      if (group && !siteId)
+        fail("RULE_INVALID", `rule ${rule.name}: platform rules cannot choose an origin group`);
+      if (group && !groups.has(group))
+        fail("RULE_INVALID", `rule ${rule.name}: the site has no origin group ${group}`);
+    }
     const rows = rules.map((rule, priority) => {
       const expression = parseExpression(rule.expression, rule.phase);
       const names = listReferences(expression);
@@ -92,9 +122,19 @@ export async function saveRules(
     return rows.map((row) => ruleDto.parse(row));
   });
 }
-export function validateExpression(expression: string, phase: Phase) {
+/**
+ * Checks a rule condition (kind condition), a redirect target or rewrite path
+ * (kind value) of `phase`, or a cache rule condition (kind cacheRule).
+ */
+export function validateExpression(
+  expression: string,
+  phase: Phase,
+  kind: "condition" | "value" | "cacheRule" = "condition",
+) {
   try {
-    parseExpression(expression, phase);
+    if (kind === "value") parseValueExpression(expression, phase);
+    else if (kind === "cacheRule") parseCacheCondition(expression);
+    else parseExpression(expression, phase);
     return { valid: true, position: 0, message: "" };
   } catch (error) {
     return {
@@ -210,7 +250,12 @@ export async function deleteIpList(app: AppContext, id: string, actor: Actor) {
       .from(schema.edgeRule)
       .where(sql`${id}::uuid = any(${schema.edgeRule.listIds})`)
       .limit(1);
-    if (refs.length) fail("IP_LIST_IN_USE", "IP list is referenced by a rule");
+    const cacheRefs = await tx
+      .select({ id: schema.cacheRule.id })
+      .from(schema.cacheRule)
+      .where(sql`${id}::uuid = any(${schema.cacheRule.listIds})`)
+      .limit(1);
+    if (refs.length || cacheRefs.length) fail("IP_LIST_IN_USE", "IP list is referenced by a rule");
     await tx.delete(schema.ipList).where(eq(schema.ipList.id, id));
     await publishListChange(tx, actor);
     await recordAudit(tx, actor, {

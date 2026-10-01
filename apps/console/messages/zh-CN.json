@@ -525,6 +525,7 @@
   "cert_http3": "HTTP/3",
   "error_rollback_resource_unavailable": "回滚引用的资源已移除、转移或不可用",
   "error_rule_invalid": "规则无效",
+  "error_bulk_redirect_host_unknown": "网站没有这些域名：{hosts}",
   "error_ip_list_not_found": "IP 名单不存在",
   "error_ip_list_name_taken": "IP 名单名称已存在",
   "error_ip_list_in_use": "IP 名单正在被规则引用",

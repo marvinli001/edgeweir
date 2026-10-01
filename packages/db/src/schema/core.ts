@@ -312,6 +312,8 @@ export const origin = pgTable(
     s3Region: text("s3_region").notNull().default(""),
     /** Path-style bucket; empty for virtual-hosted endpoints. */
     s3Bucket: text("s3_bucket").notNull().default(""),
+    /** Origin group inside the site (contract `group`); empty is the default group. */
+    groupName: text("group_name").notNull().default(""),
     createdAt: createdAt(),
   },
   (t) => [index("origin_pool_idx").on(t.poolId)],
@@ -325,6 +327,10 @@ export const cacheRule = pgTable(
       .notNull()
       .references(() => site.id, { onDelete: "cascade" }),
     priority: integer("priority").notNull().default(100),
+    /**
+     * The structured condition of rules saved before G5; empty since the
+     * migration (the condition is `expression`).
+     */
     pathPrefixes: text("path_prefixes").array().notNull().default(sql`'{}'::text[]`),
     extensions: text("extensions").array().notNull().default(sql`'{}'::text[]`),
     /** Exact URI paths. */
@@ -333,7 +339,10 @@ export const cacheRule = pgTable(
     statusCodes: integer("status_codes").array().notNull().default(sql`'{}'::integer[]`),
     minSizeBytes: bigint("min_size_bytes", { mode: "number" }).notNull().default(0),
     maxSizeBytes: bigint("max_size_bytes", { mode: "number" }).notNull().default(0),
+    /** The request condition (rule-engine expression, phase cache); "true" matches every request. */
     expression: text("expression").notNull().default(""),
+    /** IP lists the expression references (`$name`), bound when it was saved. */
+    listIds: uuid("list_ids").array().notNull().default(sql`'{}'::uuid[]`),
     /** cache | bypass */
     action: text("action").notNull().default("cache"),
     edgeTtlSeconds: integer("edge_ttl_seconds").notNull().default(3600),
@@ -343,6 +352,8 @@ export const cacheRule = pgTable(
     staleIfErrorSeconds: integer("stale_if_error_seconds").notNull().default(0),
     /** Cache responses to requests with an Authorization header (RFC 9111 section 3.5). */
     cacheAuthorized: boolean("cache_authorized").notNull().default(false),
+    /** Cache-Control max-age towards clients; 0 keeps the origin's header. */
+    browserTtlSeconds: integer("browser_ttl_seconds").notNull().default(0),
     createdAt: createdAt(),
   },
   (t) => [index("cache_rule_site_idx").on(t.siteId)],

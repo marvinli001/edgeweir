@@ -229,36 +229,43 @@
     {
       "idx": 32,
       "version": "7",
-      "when": 1790827973378,
-      "tag": "0032_domains_without_ownership",
+      "when": 1790844729717,
+      "tag": "0032_g5_rules",
       "breakpoints": true
     },
     {
       "idx": 33,
       "version": "7",
-      "when": 1790828033378,
-      "tag": "0033_sites_without_suspension",
+      "when": 1790844789717,
+      "tag": "0033_domains_without_ownership",
       "breakpoints": true
     },
     {
       "idx": 34,
       "version": "7",
-      "when": 1790828093378,
-      "tag": "0034_without_organization_limits",
+      "when": 1790844849717,
+      "tag": "0034_sites_without_suspension",
       "breakpoints": true
     },
     {
       "idx": 35,
       "version": "7",
-      "when": 1790828153378,
-      "tag": "0035_single_operator",
+      "when": 1790844909717,
+      "tag": "0035_without_organization_limits",
       "breakpoints": true
     },
     {
       "idx": 36,
       "version": "7",
-      "when": 1790828213378,
-      "tag": "0036_dns_cluster_bindings",
+      "when": 1790844969717,
+      "tag": "0036_single_operator",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790845029717,
+      "tag": "0037_dns_cluster_bindings",
       "breakpoints": true
     }
   ]
