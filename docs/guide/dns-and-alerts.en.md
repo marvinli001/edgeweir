@@ -18,7 +18,7 @@ DNS steering records (third-party DNS providers bound per cluster), and alert ch
 
 ## Configure DNS steering
 
-DNS steering writes steering records for each cluster; a site's CNAME target points at the healthy nodes of its cluster. Edgeweir does not run an authoritative DNS server; it manages records through each provider's API.
+DNS steering writes steering records for each cluster; the CNAME targets of sites and [L4 apps](l4.en.md#dns) point at the healthy nodes of their cluster. Edgeweir does not run an authoritative DNS server; it manages records through each provider's API.
 
 ### Add a provider account
 
@@ -56,9 +56,9 @@ Clusters may use different provider accounts and cluster domains. The **Cluster 
 | Mode | Not managed / Manual / Automatic | Not managed | Automatic: the console writes the provider; Manual: lists the records to create, the console writes no DNS; Not managed: sites have no CNAME target and written records are removed |
 | Provider account | An added account | None | Required for Automatic; optional for Manual, in which case the zone is the cluster domain |
 | Zone | The account's zone | — | Read-only |
-| Cluster domain | A name inside the zone, up to 180 characters | None | Parent of all of the cluster's records; a site's CNAME target is `<site UUID>.<cluster domain>` |
+| Cluster domain | A name inside the zone, up to 180 characters | None | Parent of all of the cluster's records; a site's CNAME target is `<site UUID>.<cluster domain>`, an L4 app's `<app UUID>.<cluster domain>` |
 | TTL (seconds) | 30–3600 | 600 | TTL of every record; some providers or plans require a higher minimum, see the provider table |
-| Keep per-site line targets | On / Off | Off | Keeps `<line>.<site UUID>.<cluster domain>` for every site, see [Upgrading from the global DNS configuration](#upgrading-from-the-global-dns-configuration) |
+| Keep per-site line targets | On / Off | Off | Keeps `<line>.<UUID>.<cluster domain>` for every site and enabled L4 app, see [Upgrading from the global DNS configuration](#upgrading-from-the-global-dns-configuration) |
 | Line name | Lowercase letters, digits, `-`, 1–32 characters, not `all` | `line-N` | First label of the line's host name |
 | Node group | A node group of this cluster; at most one line per group | The first unused group | Nodes in the line |
 | Resolution line | Default / China Telecom / China Unicom / China Mobile / Education network / Overseas, only those the account's provider supports | Default | `all.<cluster domain>` answers with this line's addresses on that resolution line, see [Records per resolution line](#records-per-resolution-line) |
@@ -77,9 +77,10 @@ With a provider that has the default line only, **Resolution line** is unavailab
 | `all.<cluster domain>` | A / AAAA | Healthy node addresses of the cluster's lines, written per resolution line, see [Records per resolution line](#records-per-resolution-line) |
 | `<line name>.<cluster domain>` | A / AAAA | Healthy node addresses of the line's node group (of the backup node groups while they answer); default line only |
 | `<site UUID>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per site with at least one domain, disabled sites included; default line only |
-| `<line name>.<site UUID>.<cluster domain>` | CNAME | `<line name>.<cluster domain>`; only with **Keep per-site line targets**; default line only |
+| `<app UUID>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per enabled [L4 app](l4.en.md), none for disabled apps; default line only |
+| `<line name>.<UUID>.<cluster domain>` | CNAME | `<line name>.<cluster domain>`; one set per site and per enabled L4 app, only with **Keep per-site line targets**; default line only |
 
-Address records are written once per cluster (`all.<cluster domain>` once per resolution line in use): the record count is "sites + cluster addresses", plus "sites × lines" with per-site line targets. With per-site line targets off, the line targets on a site's **Domains** tab are `<line name>.<cluster domain>`.
+Address records are written once per cluster (`all.<cluster domain>` once per resolution line in use): the record count is "sites + enabled L4 apps + cluster addresses", plus "(sites + enabled L4 apps) × lines" with per-site line targets. With per-site line targets off, the line targets on a site's **Domains** tab and on an L4 app's page are `<line name>.<cluster domain>`.
 
 The **Resolution line** column of the **Current records** and **Records to create** tables shows each record's resolution line.
 
@@ -130,6 +131,7 @@ The console writes no DNS. The cluster's **DNS** tab lists the records to create
 | Addresses | Every enabled node's primary addresses (the lowest level of its scheduling addresses), regardless of health or probe reachability: manual records do not follow node health; no backup node groups, no scheduling rules |
 | Resolution lines | Records list their resolution line; the BIND zone file holds the default line's records, and records of other resolution lines follow as comments (`; line telecom`) to be created on those lines at the provider |
 | Sites | One CNAME per site; a single `*.<cluster domain> CNAME all.<cluster domain>` can replace the per-site records |
+| L4 apps | One CNAME per enabled app; a disabled app drops out of the list, delete its record by hand |
 | CNAME target | Shown on the site's **Domains** tab as usual, with the state **Manual** |
 | Switching modes | From Automatic to Manual, written records stay and the console stops changing them; only **Not managed** removes them |
 
@@ -172,7 +174,7 @@ When a publication would empty a cluster's previously non-empty `all.` or line r
 | Item | Behavior |
 | --- | --- |
 | Threshold | Share of the cluster's previous address records one publication may remove: 50% by default, adjustable in **DNS steering → Mass removal protection** (5%–100%) for all clusters |
-| Not counted | Names no longer managed (deleted sites, removed lines); resolution lines no longer in use; a change of provider account, cluster domain, or all-lines record name; modes other than Automatic; address changes from backup node group switches do not count toward the share, though emptying a record set still does |
+| Not counted | Names no longer managed (deleted sites, disabled or deleted L4 apps, removed lines); resolution lines no longer in use; a change of provider account, cluster domain, or all-lines record name; modes other than Automatic; address changes from backup node group switches do not count toward the share, though emptying a record set still does |
 | Scheduling | Removals by scheduling rules count as usual |
 | When held back | The top of the cluster's **DNS** tab shows the held-back change (address records it would remove); the DNS revision list shows it as **Held back**, and the **Cluster bindings** table shows the cluster as **Held back**; the alert "DNS mass removal blocked" fires for the cluster |
 | Recovery | The hold ends by itself once a publication passes; the alert resolves |
