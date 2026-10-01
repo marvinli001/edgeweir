@@ -37,8 +37,11 @@ const (
 	defaultRegion = "cn-north-4"
 	pageSize      = 500 // ShowRecordSetByZone / ListPublicZones maximum
 	maxRecords    = 100000
-	defaultLine   = "default_view"
 )
+
+// Lines maps canonical lines to Huawei Cloud DNS line ids (line,
+// https://support.huaweicloud.com/api-dns/zh-cn_topic_0085546214.html).
+var Lines = dnsx.LineMap{"default": "default_view", "telecom": "Dianxin", "unicom": "Liantong", "mobile": "Yidong", "edu": "Jiaoyuwang", "overseas": "Abroad"}
 
 var (
 	keyIDPattern  = regexp.MustCompile(`^[A-Za-z0-9]{1,128}$`)
@@ -295,11 +298,26 @@ func (rs recordset) rrs(zone string) []libdns.RR {
 	return out
 }
 
+// records returns the values with the set's line.
+func (rs recordset) records(zone string) []libdns.Record {
+	var out []libdns.Record
+	for _, r := range rs.rrs(zone) {
+		out = append(out, dnsx.OnLine(r, rs.line()))
+	}
+	return out
+}
+
 func (rs recordset) setKey(zone string) string {
 	return dnsx.SetKey(libdns.RR{Name: dnsx.Relative(rs.Name, zone), Type: rs.Type})
 }
 
-func (rs recordset) main() bool { return rs.Line == "" || rs.Line == defaultLine }
+// line returns the canonical line of the set ("" for the default line).
+func (rs recordset) line() string {
+	if rs.Line == "" {
+		return ""
+	}
+	return Lines.Canonical(rs.Line)
+}
 
 func (p *Provider) list(ctx context.Context, zone string) (string, []recordset, error) {
 	id, err := p.zoneID(ctx, zone)
@@ -342,9 +360,7 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 	}
 	var out []libdns.Record
 	for _, rs := range sets {
-		for _, r := range rs.rrs(zone) {
-			out = append(out, r)
-		}
+		out = append(out, rs.records(zone)...)
 	}
 	return out, nil
 }
@@ -377,54 +393,53 @@ type body struct {
 	Type    string   `json:"type"`
 	TTL     int      `json:"ttl"`
 	Records []string `json:"records"`
+	// Line is only sent on creation (CreateRecordSetWithLine); a record
+	// set keeps its line.
+	Line string `json:"line,omitempty"`
 }
 
-// rrset is one input RRset.
+// rrset is one input RRset on one line.
 type rrset struct {
-	key     string
+	setKey  string // name and type
 	name    string
 	typ     string
+	line    string // canonical, "" for the default line
 	ttl     int
 	members []libdns.RR
 }
 
-// group splits the input into RRsets (input order, duplicates dropped).
-func group(input []libdns.RR) []*rrset {
+// group splits the input into RRsets per line (input order, duplicates
+// dropped).
+func group(input []libdns.Record) []*rrset {
 	var sets []*rrset
 	index := map[string]*rrset{}
 	seen := map[string]bool{}
-	for _, r := range input {
-		k := dnsx.SetKey(r)
+	for _, record := range input {
+		r, line := record.RR(), dnsx.LineOf(record)
+		k := dnsx.SetKey(r) + "\x00" + line
 		s := index[k]
 		if s == nil {
-			s = &rrset{key: k, name: strings.ToLower(r.Name), typ: strings.ToUpper(r.Type), ttl: dnsx.Seconds(r.TTL)}
+			s = &rrset{setKey: dnsx.SetKey(r), name: strings.ToLower(r.Name), typ: strings.ToUpper(r.Type), line: line, ttl: dnsx.Seconds(r.TTL)}
 			index[k] = s
 			sets = append(sets, s)
 		}
-		if !seen[dnsx.Key(r)] {
-			seen[dnsx.Key(r)] = true
+		if !seen[dnsx.LineKey(record)] {
+			seen[dnsx.LineKey(record)] = true
 			s.members = append(s.members, r)
 		}
 	}
 	return sets
 }
 
-// find returns the default-line record set of an RRset and every other
-// record set with the same name and type.
-func find(sets []recordset, zone, key string) (*recordset, []recordset) {
-	var primary *recordset
-	var others []recordset
+// find returns the record set of an RRset on its line; several record sets
+// may share a name, type and line (weighted), the first one is used.
+func find(sets []recordset, zone string, s *rrset) *recordset {
 	for i := range sets {
-		if sets[i].Default || sets[i].setKey(zone) != key {
-			continue
-		}
-		if primary == nil && sets[i].main() {
-			primary = &sets[i]
-		} else {
-			others = append(others, sets[i])
+		if !sets[i].Default && sets[i].setKey(zone) == s.setKey && sets[i].line() == s.line {
+			return &sets[i]
 		}
 	}
-	return primary, others
+	return nil
 }
 
 func contains(values []libdns.RR, r libdns.RR) bool {
@@ -437,7 +452,11 @@ func contains(values []libdns.RR, r libdns.RR) bool {
 }
 
 func (p *Provider) create(ctx context.Context, zoneID, zone string, s *rrset, members []libdns.RR, ttl int) error {
-	b := body{Name: dnsx.FQDN(s.name, zone) + ".", Type: s.typ, TTL: ttl}
+	line, err := Lines.Provider(s.line)
+	if err != nil {
+		return err
+	}
+	b := body{Name: dnsx.FQDN(s.name, zone) + ".", Type: s.typ, TTL: ttl, Line: line}
 	for _, m := range members {
 		b.Records = append(b.Records, value(m))
 	}
@@ -453,9 +472,13 @@ func (p *Provider) remove(ctx context.Context, zoneID string, rs recordset) erro
 	return p.do(ctx, http.MethodDelete, "/v2.1/zones/"+url.PathEscape(zoneID)+"/recordsets/"+url.PathEscape(rs.ID), nil, nil, nil)
 }
 
-// AppendRecords adds the records to their RRsets (a new default-line record
-// set, or the existing one rewritten with the extra values; its TTL is kept).
+// AppendRecords adds the records to their RRsets on their lines (a new
+// record set, or the existing one rewritten with the extra values; its TTL
+// is kept).
 func (p *Provider) AppendRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	if err := Lines.Check(records); err != nil {
+		return nil, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	zoneID, sets, err := p.list(ctx, zone)
@@ -463,63 +486,92 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 		return nil, err
 	}
 	var done []libdns.Record
-	for _, s := range group(dnsx.RRs(records)) {
-		primary, _ := find(sets, zone, s.key)
+	for _, s := range group(records) {
+		primary := find(sets, zone, s)
 		if primary == nil {
 			if err := p.create(ctx, zoneID, zone, s, s.members, s.ttl); err != nil {
 				return done, err
 			}
-			done = append(done, dnsx.Records(s.members)...)
+			for _, m := range s.members {
+				done = append(done, dnsx.OnLine(m, s.line))
+			}
 			continue
 		}
 		have := primary.rrs(zone)
 		values := append([]string(nil), primary.Records...)
-		var added []libdns.RR
+		added := false
 		for _, m := range s.members {
 			if !contains(have, m) {
 				values = append(values, value(m))
-				added = append(added, dnsx.RR(s.name, s.typ, m.Data, primary.TTL))
+				added = true
 			}
 		}
-		if len(added) > 0 {
+		if added {
 			if err := p.update(ctx, zoneID, primary, values, primary.TTL); err != nil {
 				return done, err
 			}
 		}
 		for _, m := range s.members {
-			done = append(done, dnsx.RR(s.name, s.typ, m.Data, primary.TTL))
+			done = append(done, dnsx.OnLine(dnsx.RR(s.name, s.typ, m.Data, primary.TTL), s.line))
 		}
 	}
 	return done, nil
 }
 
-// SetRecords writes each input RRset as one default-line record set (PUT of
-// the whole set, or POST when missing) and deletes record sets with the same
-// name and type on other lines.
+// SetRecords writes each input (name, type) as one record set per input
+// line (PUT of the whole set, or POST when missing; default line first),
+// then deletes the other record sets with the same name and type: further
+// (weighted) sets on an input line and sets on lines the input does not
+// use, the default line last.
 func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	if err := Lines.Check(records); err != nil {
+		return nil, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	zoneID, sets, err := p.list(ctx, zone)
 	if err != nil {
 		return nil, err
 	}
-	for _, s := range group(dnsx.RRs(records)) {
-		primary, others := find(sets, zone, s.key)
-		if primary == nil {
-			err = p.create(ctx, zoneID, zone, s, s.members, s.ttl)
-		} else if !same(primary.rrs(zone), s.members) || primary.TTL != s.ttl {
-			values := make([]string, 0, len(s.members))
-			for _, m := range s.members {
-				values = append(values, value(m))
+	groups := group(records)
+	var order []string
+	byKey := map[string][]*rrset{}
+	for _, s := range groups {
+		if byKey[s.setKey] == nil {
+			order = append(order, s.setKey)
+		}
+		byKey[s.setKey] = append(byKey[s.setKey], s)
+	}
+	for _, key := range order {
+		lines := byKey[key]
+		sort.SliceStable(lines, func(i, j int) bool { return lines[i].line == "" && lines[j].line != "" })
+		used := map[string]bool{}
+		for _, s := range lines {
+			primary := find(sets, zone, s)
+			if primary == nil {
+				err = p.create(ctx, zoneID, zone, s, s.members, s.ttl)
+			} else {
+				used[primary.ID] = true
+				if !same(primary.rrs(zone), s.members) || primary.TTL != s.ttl {
+					values := make([]string, 0, len(s.members))
+					for _, m := range s.members {
+						values = append(values, value(m))
+					}
+					err = p.update(ctx, zoneID, primary, values, s.ttl)
+				}
 			}
-			err = p.update(ctx, zoneID, primary, values, s.ttl)
-		}
-		if err != nil {
-			return nil, err
-		}
-		for _, o := range others {
-			if err := p.remove(ctx, zoneID, o); err != nil {
+			if err != nil {
 				return nil, err
+			}
+		}
+		for _, defaultLine := range []bool{false, true} {
+			for _, o := range sets {
+				if o.Default || o.setKey(zone) != key || used[o.ID] || (o.line() == "") != defaultLine {
+					continue
+				}
+				if err := p.remove(ctx, zoneID, o); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -539,8 +591,9 @@ func same(a, b []libdns.RR) bool {
 	return true
 }
 
-// DeleteRecords removes the matching values (data empty: the whole RRset);
-// a record set left empty is deleted, otherwise rewritten.
+// DeleteRecords removes the matching values on the input's line (data
+// empty: the whole RRset on that line); a record set left empty is
+// deleted, otherwise rewritten.
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -548,7 +601,6 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 	if err != nil {
 		return nil, err
 	}
-	input := dnsx.RRs(records)
 	var deleted []libdns.Record
 	for i := range sets {
 		rs := &sets[i]
@@ -557,10 +609,10 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 		}
 		var keep []string
 		var removed []libdns.Record
-		for j, rr := range rs.rrs(zone) {
+		for j, rr := range rs.records(zone) {
 			matched := false
-			for _, in := range input {
-				if dnsx.Matches(rr, in) {
+			for _, in := range records {
+				if dnsx.MatchesOnLine(rr, in) {
 					matched = true
 					break
 				}

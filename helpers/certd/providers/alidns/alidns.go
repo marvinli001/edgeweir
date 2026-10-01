@@ -49,6 +49,10 @@ var (
 	regionPattern = regexp.MustCompile(`^[a-z]{2,}(-[a-z0-9]+){1,4}$`)
 )
 
+// Lines maps canonical lines to Alibaba Cloud DNS line codes (Line,
+// https://help.aliyun.com/zh/dns/pubz-resolve-line-enumeration).
+var Lines = dnsx.LineMap{"default": "default", "telecom": "telecom", "unicom": "unicom", "mobile": "mobile", "edu": "edu", "overseas": "oversea"}
+
 // Provider talks to one Alibaba Cloud account.
 type Provider struct {
 	BaseURL string
@@ -277,34 +281,61 @@ func (r record) rr() libdns.RR {
 	return dnsx.RR(name, r.Type, data, r.TTL)
 }
 
-// main reports whether the record is on the default line.
-func (r record) main() bool { return r.Line == "" || r.Line == "default" }
-
-func (p *Provider) list(ctx context.Context, zone string) ([]record, error) {
-	var all []record
-	for page := 1; ; page++ {
-		var res struct {
-			TotalCount    int `json:"TotalCount"`
-			DomainRecords struct {
-				Record []record `json:"Record"`
-			} `json:"DomainRecords"`
-		}
-		if err := p.call(ctx, "DescribeDomainRecords", map[string]string{
-			"DomainName": dnsx.Zone(zone), "PageNumber": strconv.Itoa(page), "PageSize": strconv.Itoa(pageSize),
-		}, &res); err != nil {
-			return nil, err
-		}
-		all = append(all, res.DomainRecords.Record...)
-		if len(all) > maxRecords {
-			return nil, fmt.Errorf("%w: Alibaba Cloud DNS zone exceeds %d records", dnsx.ErrProvider, maxRecords)
-		}
-		if len(res.DomainRecords.Record) < pageSize || len(all) >= res.TotalCount {
-			return all, nil
-		}
+// line returns the canonical line of a record ("" for the default line).
+func (r record) line() string {
+	if r.Line == "" {
+		return ""
 	}
+	return Lines.Canonical(r.Line)
 }
 
-// GetRecords lists every record of the zone (all lines).
+func (r record) withLine() libdns.Record { return dnsx.OnLine(r.rr(), r.line()) }
+
+// list reads the zone. DescribeDomainRecords documents its Line filter as
+// defaulting to "default", so the unfiltered pages may hold the default
+// line only: the other canonical lines are read with their own filter and
+// merged by record id. Records on lines without a canonical id are listed
+// only when the unfiltered pages return them.
+func (p *Provider) list(ctx context.Context, zone string) ([]record, error) {
+	var all []record
+	seen := map[string]bool{}
+	for _, line := range Lines.Lines() {
+		filter := ""
+		if line != dnsx.DefaultLine {
+			filter = Lines[line]
+		}
+		for page := 1; ; page++ {
+			var res struct {
+				TotalCount    int `json:"TotalCount"`
+				DomainRecords struct {
+					Record []record `json:"Record"`
+				} `json:"DomainRecords"`
+			}
+			params := map[string]string{"DomainName": dnsx.Zone(zone), "PageNumber": strconv.Itoa(page), "PageSize": strconv.Itoa(pageSize)}
+			if filter != "" {
+				params["Line"] = filter
+			}
+			if err := p.call(ctx, "DescribeDomainRecords", params, &res); err != nil {
+				return nil, err
+			}
+			for _, r := range res.DomainRecords.Record {
+				if r.RecordID == "" || !seen[r.RecordID] {
+					seen[r.RecordID] = true
+					all = append(all, r)
+				}
+			}
+			if len(all) > maxRecords || page*pageSize > maxRecords {
+				return nil, fmt.Errorf("%w: Alibaba Cloud DNS zone exceeds %d records", dnsx.ErrProvider, maxRecords)
+			}
+			if len(res.DomainRecords.Record) < pageSize || page*pageSize >= res.TotalCount {
+				break
+			}
+		}
+	}
+	return all, nil
+}
+
+// GetRecords lists every record of the zone with its line.
 func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record, error) {
 	all, err := p.list(ctx, zone)
 	if err != nil {
@@ -312,7 +343,7 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 	}
 	out := make([]libdns.Record, 0, len(all))
 	for _, r := range all {
-		out = append(out, r.rr())
+		out = append(out, r.withLine())
 	}
 	return out, nil
 }
@@ -325,12 +356,19 @@ func value(r libdns.RR) string {
 	return r.Data
 }
 
-// write runs AddDomainRecord or UpdateDomainRecord; a TTL below the zone
-// edition's minimum is retried with 600 s. It returns the record as stored.
-func (p *Provider) write(ctx context.Context, action string, params map[string]string, r libdns.RR) (libdns.RR, error) {
-	params["RR"], params["Type"], params["Value"] = r.Name, strings.ToUpper(r.Type), value(r)
+// write runs AddDomainRecord or UpdateDomainRecord on the record's line
+// (always sent: an omitted Line means "default", also on updates); a TTL
+// below the zone edition's minimum is retried with 600 s. It returns the
+// record as stored.
+func (p *Provider) write(ctx context.Context, action string, params map[string]string, lr dnsx.LineRecord) (libdns.RR, error) {
+	r := lr.Record
+	line, err := Lines.Provider(lr.Line)
+	if err != nil {
+		return r, err
+	}
+	params["RR"], params["Type"], params["Value"], params["Line"] = r.Name, strings.ToUpper(r.Type), value(r), line
 	params["TTL"] = strconv.Itoa(dnsx.Seconds(r.TTL))
-	err := p.call(ctx, action, params, nil)
+	err = p.call(ctx, action, params, nil)
 	if c := code(err); (c == "QuotaExceeded.TTL" || c == "SubDomainInvalid.TTL") && dnsx.Seconds(r.TTL) < minTTL {
 		r.TTL = minTTL * time.Second
 		params["TTL"] = strconv.Itoa(minTTL)
@@ -342,11 +380,11 @@ func (p *Provider) write(ctx context.Context, action string, params map[string]s
 	return r, err
 }
 
-func (p *Provider) create(ctx context.Context, zone string, r libdns.RR) (libdns.RR, error) {
+func (p *Provider) create(ctx context.Context, zone string, r dnsx.LineRecord) (libdns.RR, error) {
 	return p.write(ctx, "AddDomainRecord", map[string]string{"DomainName": dnsx.Zone(zone)}, r)
 }
 
-func (p *Provider) update(ctx context.Context, id string, r libdns.RR) (libdns.RR, error) {
+func (p *Provider) update(ctx context.Context, id string, r dnsx.LineRecord) (libdns.RR, error) {
 	return p.write(ctx, "UpdateDomainRecord", map[string]string{"RecordId": id}, r)
 }
 
@@ -358,65 +396,73 @@ func (p *Provider) remove(ctx context.Context, id string) error {
 	return err
 }
 
-// AppendRecords creates the records; an identical existing record counts as
-// created.
+// AppendRecords creates the records on their lines; an identical existing
+// record counts as created.
 func (p *Provider) AppendRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	if err := Lines.Check(records); err != nil {
+		return nil, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	var done []libdns.Record
-	for _, r := range dnsx.RRs(records) {
-		stored, err := p.create(ctx, zone, r)
+	for _, r := range records {
+		line := dnsx.LineOf(r)
+		stored, err := p.create(ctx, zone, dnsx.LineRecord{Record: r.RR(), Line: line})
 		if err != nil {
 			return done, err
 		}
-		done = append(done, stored)
+		done = append(done, dnsx.OnLine(stored, line))
 	}
 	return done, nil
 }
 
-// SetRecords makes each input RRset exactly the input records on the
-// default line: matching members are kept (TTL updated), surplus default-line
-// members are rewritten to missing values, the rest are created or deleted.
-// Members on other lines are deleted.
+// SetRecords makes each input (name, type) exactly the input records on
+// every line: matching members are kept (TTL updated), surplus members are
+// rewritten to missing values on their line, the rest are created or
+// deleted. Copies on lines the input does not use are deleted.
 func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	if err := Lines.Check(records); err != nil {
+		return nil, err
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	existing, err := p.list(ctx, zone)
 	if err != nil {
 		return nil, err
 	}
-	members := make([]member, 0, len(existing))
+	members := make([]dnsx.Member, 0, len(existing))
 	for _, r := range existing {
-		members = append(members, member{id: r.RecordID, rr: r.rr(), main: r.main()})
+		members = append(members, dnsx.Member{ID: r.RecordID, RR: r.rr(), Line: r.line()})
 	}
-	pl := plan(members, dnsx.RRs(records))
+	pl := dnsx.PlanSet(members, records)
 	stored := map[string]libdns.RR{}
-	for _, k := range pl.kept {
-		stored[dnsx.Key(k.want)] = k.have
+	for _, k := range pl.Kept {
+		stored[dnsx.PlanKey(k.Want)] = k.Have.Record
 	}
-	for _, u := range pl.updates {
-		r, err := p.update(ctx, u.id, u.rr)
+	for _, u := range pl.Updates {
+		r, err := p.update(ctx, u.ID, u.Record)
 		if err != nil {
 			return nil, err
 		}
-		stored[dnsx.Key(u.rr)] = r
+		stored[dnsx.PlanKey(u.Record)] = r
 	}
-	for _, c := range pl.creates {
+	for _, c := range pl.Creates {
 		r, err := p.create(ctx, zone, c)
 		if err != nil {
 			return nil, err
 		}
-		stored[dnsx.Key(c)] = r
+		stored[dnsx.PlanKey(c)] = r
 	}
-	for _, d := range pl.deletes {
-		if err := p.remove(ctx, d.id); err != nil {
+	for _, d := range pl.Deletes {
+		if err := p.remove(ctx, d.ID); err != nil {
 			return nil, err
 		}
 	}
-	return pl.result(stored), nil
+	return pl.Result(stored), nil
 }
 
-// DeleteRecords removes the matching records (data empty: the whole RRset).
+// DeleteRecords removes the matching records on the input's line (data
+// empty: the whole RRset on that line).
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -424,16 +470,15 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 	if err != nil {
 		return nil, err
 	}
-	input := dnsx.RRs(records)
 	var deleted []libdns.Record
 	for _, old := range existing {
-		rr := old.rr()
-		for _, in := range input {
-			if dnsx.Matches(rr, in) {
+		have := old.withLine()
+		for _, in := range records {
+			if dnsx.MatchesOnLine(have, in) {
 				if err := p.remove(ctx, old.RecordID); err != nil {
 					return deleted, err
 				}
-				deleted = append(deleted, rr)
+				deleted = append(deleted, have)
 				break
 			}
 		}

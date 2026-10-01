@@ -97,8 +97,38 @@ func rec(id, rr, typ, value string, ttl int, line string) string {
 	return fmt.Sprintf(`{"Status":"Enable","Type":%q,"TTL":%d,"RecordId":%q,"RR":%q,"DomainName":"example.com","Weight":1,"Value":%q,"Line":%q,"Locked":false}`, typ, ttl, id, rr, value, line)
 }
 
+// listCall is a page of the unfiltered list (no Line parameter).
 func listCall(page, response string) dnstest.Exchange {
-	return call("DescribeDomainRecords", map[string]string{"DomainName": "example.com", "PageNumber": page, "PageSize": "500"}, response)
+	return call("DescribeDomainRecords", map[string]string{"DomainName": "example.com", "PageNumber": page, "PageSize": "500", "Line": ""}, response)
+}
+
+// lineLists are the reads per non-default line that follow the unfiltered
+// pages (the documented Line filter defaults to "default"); lines missing
+// from byLine answer an empty list.
+func lineLists(byLine map[string]string) []dnstest.Exchange {
+	var out []dnstest.Exchange
+	for _, line := range []string{"telecom", "unicom", "mobile", "edu", "oversea"} {
+		response := byLine[line]
+		if response == "" {
+			response = records(0)
+		}
+		out = append(out, call("DescribeDomainRecords", map[string]string{"DomainName": "example.com", "PageNumber": "1", "PageSize": "500", "Line": line}, response))
+	}
+	return out
+}
+
+// seq flattens exchanges and exchange lists into one cassette.
+func seq(parts ...any) []dnstest.Exchange {
+	var out []dnstest.Exchange
+	for _, part := range parts {
+		switch v := part.(type) {
+		case dnstest.Exchange:
+			out = append(out, v)
+		case []dnstest.Exchange:
+			out = append(out, v...)
+		}
+	}
+	return out
 }
 
 func TestAuthorizationMatchesTheDocumentedVector(t *testing.T) {
@@ -123,10 +153,12 @@ func TestGetRecordsFollowsPages(t *testing.T) {
 	for i := range 500 {
 		first = append(first, rec(fmt.Sprint(1000+i), fmt.Sprintf("h%d", i), "A", "192.0.2.1", 600, "default"))
 	}
-	s := dnstest.Serve(t,
+	s := dnstest.Serve(t, seq(
 		listCall("1", records(502, first...)),
 		listCall("2", records(502, rec("9", "@", "TXT", `"quoted text"`, 600, "default"), rec("10", "WWW", "CNAME", "edge.example.net", 60, "telecom"))),
-	)
+		// The telecom read returns record 10 again: it is listed once.
+		lineLists(map[string]string{"telecom": records(1, rec("10", "WWW", "CNAME", "edge.example.net", 60, "telecom"))}),
+	)...)
 	got, err := provider(t, s, nil).GetRecords(context.Background(), "example.com.")
 	if err != nil {
 		t.Fatal(err)
@@ -134,13 +166,16 @@ func TestGetRecordsFollowsPages(t *testing.T) {
 	if len(got) != 502 || !dnstest.Has(got, "h499", "A", "192.0.2.1") || !dnstest.Has(got, "www", "CNAME", "edge.example.net") {
 		t.Fatalf("records: %d", len(got))
 	}
+	if dnsx.LineOf(got[501]) != "telecom" || dnsx.LineOf(got[0]) != "" {
+		t.Fatalf("lines: %q %q", dnsx.LineOf(got[501]), dnsx.LineOf(got[0]))
+	}
 	if txt := got[500].RR(); txt.Name != "@" || txt.Data != "quoted text" || txt.TTL != 600*time.Second {
 		t.Fatalf("txt: %+v", txt)
 	}
 }
 
 func TestAppendRecordsWithSecurityToken(t *testing.T) {
-	add := call("AddDomainRecord", map[string]string{"DomainName": "example.com", "RR": "_acme-challenge", "Type": "TXT", "Value": "token-value", "TTL": "60"},
+	add := call("AddDomainRecord", map[string]string{"DomainName": "example.com", "RR": "_acme-challenge", "Type": "TXT", "Value": "token-value", "TTL": "60", "Line": "default"},
 		`{"RequestId":"536E9CAD-DB30-4647-AC87-AA5CC38C5382","RecordId":"999"}`)
 	add.Check = signed("AddDomainRecord", sts)
 	s := dnstest.Serve(t, add)
@@ -171,26 +206,26 @@ func TestAppendRecordsRetriesWithTheEditionMinimumTTL(t *testing.T) {
 const zone = `{"Status":"Enable","Type":"TXT","TTL":600,"RecordId":"4","RR":"@","DomainName":"example.com","Value":"keep","Line":"default","Locked":false}`
 
 func TestSetRecordsReplacesTheRRsets(t *testing.T) {
-	s := dnstest.Serve(t,
-		listCall("1", records(8,
+	s := dnstest.Serve(t, seq(
+		listCall("1", records(6,
 			rec("1", "www", "A", "192.0.2.1", 600, "default"),
 			rec("2", "www", "A", "192.0.2.2", 600, "default"),
-			rec("3", "www", "A", "192.0.2.9", 600, "telecom"),
 			zone,
 			rec("5", "cdn", "CNAME", "old.example.net", 300, "default"),
 			rec("6", "api", "AAAA", "2001:db8::1", 600, "default"),
 			rec("7", "api", "AAAA", "2001:db8::2", 600, "default"),
 		)),
+		lineLists(map[string]string{"telecom": records(1, rec("3", "www", "A", "192.0.2.9", 600, "telecom"))}),
 		// www: .1 stays with a new TTL, .2 is rewritten to .3, .4 is created, the telecom-line member goes.
-		call("UpdateDomainRecord", map[string]string{"RecordId": "1", "RR": "www", "Type": "A", "Value": "192.0.2.1", "TTL": "60"}, `{"RequestId":"a","RecordId":"1"}`),
-		call("UpdateDomainRecord", map[string]string{"RecordId": "2", "RR": "www", "Type": "A", "Value": "192.0.2.3", "TTL": "60"}, `{"RequestId":"b","RecordId":"2"}`),
+		call("UpdateDomainRecord", map[string]string{"RecordId": "1", "RR": "www", "Type": "A", "Value": "192.0.2.1", "TTL": "60", "Line": "default"}, `{"RequestId":"a","RecordId":"1"}`),
+		call("UpdateDomainRecord", map[string]string{"RecordId": "2", "RR": "www", "Type": "A", "Value": "192.0.2.3", "TTL": "60", "Line": "default"}, `{"RequestId":"b","RecordId":"2"}`),
 		// cdn: the single CNAME is rewritten in place.
-		call("UpdateDomainRecord", map[string]string{"RecordId": "5", "RR": "cdn", "Type": "CNAME", "Value": "new.example.net", "TTL": "300"}, `{"RequestId":"c","RecordId":"5"}`),
-		call("AddDomainRecord", map[string]string{"DomainName": "example.com", "RR": "www", "Type": "A", "Value": "192.0.2.4", "TTL": "60"}, `{"RequestId":"d","RecordId":"8"}`),
+		call("UpdateDomainRecord", map[string]string{"RecordId": "5", "RR": "cdn", "Type": "CNAME", "Value": "new.example.net", "TTL": "300", "Line": "default"}, `{"RequestId":"c","RecordId":"5"}`),
+		call("AddDomainRecord", map[string]string{"DomainName": "example.com", "RR": "www", "Type": "A", "Value": "192.0.2.4", "TTL": "60", "Line": "default"}, `{"RequestId":"d","RecordId":"8"}`),
 		call("DeleteDomainRecord", map[string]string{"RecordId": "3"}, `{"RequestId":"e","RecordId":"3"}`),
 		// api: ::1 is kept unchanged, ::2 is deleted.
 		call("DeleteDomainRecord", map[string]string{"RecordId": "7"}, `{"RequestId":"f","RecordId":"7"}`),
-	)
+	)...)
 	got, err := provider(t, s, nil).SetRecords(context.Background(), "example.com.", []libdns.Record{
 		dnstest.A("www", "192.0.2.1", 60), dnstest.A("www", "192.0.2.3", 60), dnstest.A("www", "192.0.2.4", 60),
 		dnstest.CNAME("cdn", "new.example.net.", 300), dnstest.AAAA("api", "2001:db8::1", 600),
@@ -202,11 +237,12 @@ func TestSetRecordsReplacesTheRRsets(t *testing.T) {
 
 func TestDeleteRecords(t *testing.T) {
 	existing := records(4, rec("1", "www", "A", "192.0.2.1", 600, "default"), rec("2", "www", "A", "192.0.2.2", 600, "default"), zone, rec("5", "_acme-challenge", "TXT", "t1", 60, "default"))
-	s := dnstest.Serve(t,
+	s := dnstest.Serve(t, seq(
 		listCall("1", existing),
+		lineLists(nil),
 		call("DeleteDomainRecord", map[string]string{"RecordId": "2"}, `{"RequestId":"a","RecordId":"2"}`),
 		call("DeleteDomainRecord", map[string]string{"RecordId": "5"}, `{"RequestId":"b","RecordId":"5"}`),
-	)
+	)...)
 	deleted, err := provider(t, s, nil).DeleteRecords(context.Background(), "example.com.", []libdns.Record{
 		dnstest.A("www", "192.0.2.2", 60), libdns.RR{Name: "_acme-challenge", Type: "TXT"}, dnstest.A("www", "192.0.2.99", 60),
 	})
@@ -277,5 +313,109 @@ func TestRegionDoesNotChangeTheEndpoint(t *testing.T) {
 		if err != nil || p.(*Provider).BaseURL != "https://alidns.aliyuncs.com" {
 			t.Fatalf("region %q: %v", region, err)
 		}
+	}
+}
+
+func TestLineMapping(t *testing.T) {
+	for canonical, code := range map[string]string{"": "default", "default": "default", "telecom": "telecom", "unicom": "unicom", "mobile": "mobile", "edu": "edu", "overseas": "oversea"} {
+		if got, err := Lines.Provider(canonical); err != nil || got != code {
+			t.Errorf("%q -> %q %v, want %q", canonical, got, err, code)
+		}
+		if got := Lines.Canonical(code); got != dnsx.NormalizeLine(canonical) {
+			t.Errorf("%q -> %q, want %q", code, got, canonical)
+		}
+	}
+	if got := Lines.Canonical("cn_telecom_beijing"); got != "other:cn_telecom_beijing" {
+		t.Errorf("province line: %q", got)
+	}
+	if _, err := Lines.Provider("satellite"); !errors.Is(err, dnsx.ErrUnsupported) {
+		t.Errorf("unknown line: %v", err)
+	}
+	if strings.Join(Lines.Lines(), ",") != strings.Join(dnsx.Lines, ",") {
+		t.Errorf("lines %v", Lines.Lines())
+	}
+}
+
+func TestAppendRecordsOnTwoLines(t *testing.T) {
+	s := dnstest.Serve(t,
+		call("AddDomainRecord", map[string]string{"DomainName": "example.com", "RR": "all", "Type": "A", "Value": "192.0.2.1", "TTL": "600", "Line": "default"}, `{"RequestId":"a","RecordId":"1"}`),
+		call("AddDomainRecord", map[string]string{"DomainName": "example.com", "RR": "all", "Type": "A", "Value": "192.0.2.2", "TTL": "600", "Line": "telecom"}, `{"RequestId":"b","RecordId":"2"}`),
+	)
+	done, err := provider(t, s, nil).AppendRecords(context.Background(), "example.com.", []libdns.Record{
+		dnstest.A("all", "192.0.2.1", 600), dnsx.OnLine(dnstest.A("all", "192.0.2.2", 600).RR(), "telecom"),
+	})
+	if err != nil || len(done) != 2 || dnsx.LineOf(done[0]) != "" || dnsx.LineOf(done[1]) != "telecom" {
+		t.Fatalf("done %v err %v", done, err)
+	}
+}
+
+func TestGetRecordsReturnsLines(t *testing.T) {
+	s := dnstest.Serve(t, seq(
+		listCall("1", records(2, rec("1", "all", "A", "192.0.2.1", 600, "default"), rec("2", "all", "A", "192.0.2.3", 600, "cn_telecom_beijing"))),
+		lineLists(map[string]string{
+			"telecom": records(1, rec("3", "all", "A", "192.0.2.2", 600, "telecom")),
+			"oversea": records(1, rec("4", "all", "A", "198.51.100.1", 600, "oversea")),
+		}),
+	)...)
+	got, err := provider(t, s, nil).GetRecords(context.Background(), "example.com.")
+	if err != nil || len(got) != 4 {
+		t.Fatalf("records %v err %v", got, err)
+	}
+	lines := map[string]string{}
+	for _, r := range got {
+		lines[r.RR().Data] = dnsx.LineOf(r)
+	}
+	want := map[string]string{"192.0.2.1": "", "192.0.2.2": "telecom", "192.0.2.3": "other:cn_telecom_beijing", "198.51.100.1": "overseas"}
+	if fmt.Sprint(lines) != fmt.Sprint(want) {
+		t.Fatalf("lines %v, want %v", lines, want)
+	}
+}
+
+func TestSetRecordsAcrossLines(t *testing.T) {
+	s := dnstest.Serve(t, seq(
+		listCall("1", records(1, rec("1", "all", "A", "192.0.2.1", 600, "default"))),
+		lineLists(map[string]string{
+			"telecom": records(1, rec("2", "all", "A", "192.0.2.2", 600, "telecom")),
+			"unicom":  records(1, rec("3", "all", "A", "192.0.2.3", 600, "unicom")),
+		}),
+		// default: kept; telecom: rewritten in place on its line; edu: created; the stale unicom copy goes.
+		call("UpdateDomainRecord", map[string]string{"RecordId": "2", "RR": "all", "Type": "A", "Value": "192.0.2.5", "TTL": "600", "Line": "telecom"}, `{"RequestId":"a","RecordId":"2"}`),
+		call("AddDomainRecord", map[string]string{"DomainName": "example.com", "RR": "all", "Type": "A", "Value": "192.0.2.6", "TTL": "600", "Line": "edu"}, `{"RequestId":"b","RecordId":"5"}`),
+		call("DeleteDomainRecord", map[string]string{"RecordId": "3"}, `{"RequestId":"c","RecordId":"3"}`),
+	)...)
+	got, err := provider(t, s, nil).SetRecords(context.Background(), "example.com.", []libdns.Record{
+		dnstest.A("all", "192.0.2.1", 600),
+		dnsx.OnLine(dnstest.A("all", "192.0.2.5", 600).RR(), "telecom"),
+		dnsx.OnLine(dnstest.A("all", "192.0.2.6", 600).RR(), "edu"),
+	})
+	if err != nil || len(got) != 3 || dnsx.LineOf(got[1]) != "telecom" || dnsx.LineOf(got[2]) != "edu" {
+		t.Fatalf("got %v err %v", got, err)
+	}
+}
+
+func TestDeleteRecordsByLine(t *testing.T) {
+	s := dnstest.Serve(t, seq(
+		listCall("1", records(1, rec("1", "all", "A", "192.0.2.1", 600, "default"))),
+		lineLists(map[string]string{"telecom": records(1, rec("2", "all", "A", "192.0.2.1", 600, "telecom"))}),
+		// Only the telecom copy matches; the default-line record with the same value stays.
+		call("DeleteDomainRecord", map[string]string{"RecordId": "2"}, `{"RequestId":"a","RecordId":"2"}`),
+	)...)
+	deleted, err := provider(t, s, nil).DeleteRecords(context.Background(), "example.com.", []libdns.Record{
+		dnsx.OnLine(dnstest.A("all", "192.0.2.1", 600).RR(), "telecom"),
+	})
+	if err != nil || len(deleted) != 1 || dnsx.LineOf(deleted[0]) != "telecom" {
+		t.Fatalf("deleted %v err %v", deleted, err)
+	}
+}
+
+func TestUnknownLineIsUnsupported(t *testing.T) {
+	s := dnstest.Serve(t)
+	p := provider(t, s, nil)
+	record := dnsx.LineRecord{Record: dnstest.A("all", "192.0.2.1", 600).RR(), Line: "satellite"}
+	if _, err := p.SetRecords(context.Background(), "example.com.", []libdns.Record{record}); dnsx.Code(err) != "dns_unsupported" {
+		t.Fatalf("set: %v", err)
+	}
+	if _, err := p.AppendRecords(context.Background(), "example.com.", []libdns.Record{record}); dnsx.Code(err) != "dns_unsupported" {
+		t.Fatalf("append: %v", err)
 	}
 }

@@ -278,3 +278,130 @@ func TestProviderRegionCannotChangeDestination(t *testing.T) {
 		}
 	}
 }
+
+func TestLineMapping(t *testing.T) {
+	for canonical, id := range map[string]string{"": "default_view", "default": "default_view", "telecom": "Dianxin", "unicom": "Liantong", "mobile": "Yidong", "edu": "Jiaoyuwang", "overseas": "Abroad"} {
+		if got, err := Lines.Provider(canonical); err != nil || got != id {
+			t.Errorf("%q -> %q %v, want %q", canonical, got, err, id)
+		}
+		if got := (recordset{Line: id}).line(); got != dnsx.NormalizeLine(canonical) {
+			t.Errorf("%q -> %q, want %q", id, got, canonical)
+		}
+	}
+	if got := (recordset{}).line(); got != "" {
+		t.Errorf("no line: %q", got)
+	}
+	if got := (recordset{Line: "Dianxin_Beijing"}).line(); got != "other:Dianxin_Beijing" {
+		t.Errorf("region line: %q", got)
+	}
+}
+
+func TestAppendRecordsOnTwoLines(t *testing.T) {
+	s := dnstest.Serve(t,
+		zoneLookup(),
+		listCall("0", 2, system),
+		dnstest.Exchange{Method: "POST", Path: "/v2.1/zones/" + zoneID + "/recordsets", Check: signed, Status: 202,
+			JSON: map[string]any{"name": "all.example.com.", "type": "A", "ttl": 600, "records": []string{"192.0.2.1"}, "line": "default_view"}, Response: `{"id":"d","status":"PENDING_CREATE"}`},
+		dnstest.Exchange{Method: "POST", Path: "/v2.1/zones/" + zoneID + "/recordsets", Check: signed, Status: 202,
+			JSON: map[string]any{"name": "all.example.com.", "type": "A", "ttl": 600, "records": []string{"192.0.2.2"}, "line": "Dianxin"}, Response: `{"id":"t","status":"PENDING_CREATE"}`},
+	)
+	done, err := provider(t, s).AppendRecords(context.Background(), "example.com.", []libdns.Record{
+		dnstest.A("all", "192.0.2.1", 600), dnsx.OnLine(dnstest.A("all", "192.0.2.2", 600).RR(), "telecom"),
+	})
+	if err != nil || len(done) != 2 || dnsx.LineOf(done[0]) != "" || dnsx.LineOf(done[1]) != "telecom" {
+		t.Fatalf("done %v err %v", done, err)
+	}
+}
+
+func TestGetRecordsReturnsLines(t *testing.T) {
+	s := dnstest.Serve(t,
+		zoneLookup(),
+		listCall("0", 5, system,
+			set("d", "all.example.com.", "A", 600, "default_view", "192.0.2.1"),
+			set("u", "all.example.com.", "A", 600, "Liantong", "192.0.2.2", "192.0.2.3"),
+			set("r", "all.example.com.", "A", 600, "Dianxin_Beijing", "192.0.2.4"),
+		),
+	)
+	got, err := provider(t, s).GetRecords(context.Background(), "example.com.")
+	if err != nil || len(got) != 3+4 {
+		t.Fatalf("records %v err %v", got, err)
+	}
+	lines := map[string]string{}
+	for _, r := range got[3:] {
+		lines[r.RR().Data] = dnsx.LineOf(r)
+	}
+	want := map[string]string{"192.0.2.1": "", "192.0.2.2": "unicom", "192.0.2.3": "unicom", "192.0.2.4": "other:Dianxin_Beijing"}
+	if fmt.Sprint(lines) != fmt.Sprint(want) {
+		t.Fatalf("lines %v, want %v", lines, want)
+	}
+}
+
+func TestSetRecordsAcrossLines(t *testing.T) {
+	s := dnstest.Serve(t,
+		zoneLookup(),
+		listCall("0", 7, system,
+			set("d", "all.example.com.", "A", 600, "default_view", "192.0.2.1"),
+			set("t1", "all.example.com.", "A", 600, "Dianxin", "192.0.2.2"),
+			set("t2", "all.example.com.", "A", 600, "Dianxin", "192.0.2.9"), // a second (weighted) telecom set
+			set("m", "all.example.com.", "A", 600, "Yidong", "192.0.2.3"),
+			set("x", "all.example.com.", "TXT", 600, "Yidong", `"other type"`),
+		),
+		// default unchanged; telecom: the first set is rewritten; edu is created; then the weighted
+		// telecom duplicate and the stale mobile set go. The TXT set has another type and stays.
+		dnstest.Exchange{Method: "PUT", Path: "/v2.1/zones/" + zoneID + "/recordsets/t1", Check: signed, Status: 202,
+			JSON: map[string]any{"name": "all.example.com.", "type": "A", "ttl": 600, "records": []string{"192.0.2.5"}}, Response: `{"id":"t1","status":"PENDING_UPDATE"}`},
+		dnstest.Exchange{Method: "POST", Path: "/v2.1/zones/" + zoneID + "/recordsets", Check: signed, Status: 202,
+			JSON: map[string]any{"name": "all.example.com.", "type": "A", "ttl": 600, "records": []string{"192.0.2.6"}, "line": "Jiaoyuwang"}, Response: `{"id":"e","status":"PENDING_CREATE"}`},
+		dnstest.Exchange{Method: "DELETE", Path: "/v2.1/zones/" + zoneID + "/recordsets/t2", Check: signed, Status: 202, Response: `{"id":"t2","status":"PENDING_DELETE"}`},
+		dnstest.Exchange{Method: "DELETE", Path: "/v2.1/zones/" + zoneID + "/recordsets/m", Check: signed, Status: 202, Response: `{"id":"m","status":"PENDING_DELETE"}`},
+	)
+	_, err := provider(t, s).SetRecords(context.Background(), "example.com.", []libdns.Record{
+		dnsx.OnLine(dnstest.A("all", "192.0.2.5", 600).RR(), "telecom"),
+		dnstest.A("all", "192.0.2.1", 600),
+		dnsx.OnLine(dnstest.A("all", "192.0.2.6", 600).RR(), "edu"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body := string(s.Requests[2].Body); strings.Contains(body, `"line"`) {
+		t.Fatalf("an update must not send the line: %s", body)
+	}
+}
+
+func TestSetRecordsDeletesOtherLinesBeforeTheDefaultLine(t *testing.T) {
+	s := dnstest.Serve(t,
+		zoneLookup(),
+		listCall("0", 4, system,
+			set("d", "www.example.com.", "A", 600, "default_view", "192.0.2.1"),
+			set("t", "www.example.com.", "A", 600, "Dianxin", "192.0.2.2"),
+		),
+		// Only the telecom line remains: it is written first, the other lines go, the default line last.
+		dnstest.Exchange{Method: "PUT", Path: "/v2.1/zones/" + zoneID + "/recordsets/t", Check: signed, Status: 202,
+			JSON: map[string]any{"records": []string{"192.0.2.3"}}, Response: `{"id":"t","status":"PENDING_UPDATE"}`},
+		dnstest.Exchange{Method: "DELETE", Path: "/v2.1/zones/" + zoneID + "/recordsets/d", Check: signed, Status: 202, Response: `{"id":"d","status":"PENDING_DELETE"}`},
+	)
+	if _, err := provider(t, s).SetRecords(context.Background(), "example.com.", []libdns.Record{
+		dnsx.OnLine(dnstest.A("www", "192.0.2.3", 600).RR(), "telecom"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDeleteRecordsByLine(t *testing.T) {
+	s := dnstest.Serve(t,
+		zoneLookup(),
+		listCall("0", 4, system,
+			set("d", "all.example.com.", "A", 600, "default_view", "192.0.2.1"),
+			set("t", "all.example.com.", "A", 600, "Dianxin", "192.0.2.1", "192.0.2.2"),
+		),
+		// Only the telecom value goes; the default-line record with the same value stays.
+		dnstest.Exchange{Method: "PUT", Path: "/v2.1/zones/" + zoneID + "/recordsets/t", Check: signed, Status: 202,
+			JSON: map[string]any{"records": []string{"192.0.2.2"}}, Response: `{"id":"t","status":"PENDING_UPDATE"}`},
+	)
+	deleted, err := provider(t, s).DeleteRecords(context.Background(), "example.com.", []libdns.Record{
+		dnsx.OnLine(dnstest.A("all", "192.0.2.1", 600).RR(), "telecom"),
+	})
+	if err != nil || len(deleted) != 1 || dnsx.LineOf(deleted[0]) != "telecom" {
+		t.Fatalf("deleted %v err %v", deleted, err)
+	}
+}
