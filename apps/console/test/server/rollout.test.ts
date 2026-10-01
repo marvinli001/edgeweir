@@ -179,8 +179,17 @@ describe("configuration canary with automatic rollback", async () => {
     ]);
     expect(await target(canary)).toBe(candidate);
     expect(await target(stable)).toBe(before);
-    // The non-canary node runs its target and stays in DNS; the canary node applies first.
-    expect(await planned()).toEqual(["10.42.0.2"]);
+    // The non-canary node runs its target and stays in DNS; the canary node
+    // keeps its records while it applies the candidate, for 2 minutes.
+    expect(await planned()).toEqual(["10.42.0.1", "10.42.0.2"]);
+    const seen = (at: Date) =>
+      ctx.db
+        .update(schema.node)
+        .set({ lastSeenAt: at })
+        .where(eq(schema.node.clusterId, clusterId));
+    await seen(later(121));
+    expect(await planned(later(121).getTime())).toEqual(["10.42.0.2"]);
+    await seen(new Date());
     await report(canary, candidate);
     expect(await planned()).toEqual(["10.42.0.1", "10.42.0.2"]);
     // Before the window ends nothing is decided.

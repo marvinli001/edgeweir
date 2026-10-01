@@ -104,12 +104,13 @@ Earlier versions had one global DNS steering configuration. On upgrade it become
 | Item | Behavior |
 | --- | --- |
 | Address set | Nodes that are enabled, sent a heartbeat within 45 seconds, report a healthy data plane, and applied their cluster's current revision |
-| Check interval | A background job recomputes every automatic binding each minute, up to 4 clusters at a time; offline, disabled, or lagging nodes are removed and added back after recovery |
+| Publication grace | For 2 minutes after a revision is published, nodes that were up to date keep their place while they apply it, so routine changes do not take nodes out of DNS |
+| Check interval | A background job recomputes every automatic binding each minute, up to 4 clusters at a time; offline or disabled nodes, nodes whose apply failed, and nodes more than 2 minutes behind are removed and added back after recovery |
 | Failure isolation | Each binding publishes and reconciles on its own; an unavailable provider fails only the DNS revisions of the clusters that use it |
 | Propagation | Bound by TTL and resolver caches; not an instant switch |
 | Drift repair | System-managed names deleted or changed outside the console are restored at the next check; **Repair records** runs one for the cluster immediately |
 | Takeover scope | Only names this cluster registered are changed; a new name that already has unmanaged records is refused (`DNS_RECORD_CONFLICT`), as is a name managed by another cluster (`DNS_BINDING_CONFLICT`) |
-| Write order | Names are registered first; a name that changes record type loses its old records first; changed address RRsets are replaced as a whole, then CNAMEs, in batches of at most 100 records; records no longer needed are deleted; the result is read back; on failure the registration stays and the next cycle retries |
+| Write order | Names are registered first; changed address RRsets are replaced as a whole, then CNAMEs, in batches of at most 100 records; records no longer needed are deleted; the result is read back. New records are written before the records they replace (for example, addresses moving from A to AAAA), so a name never resolves empty in between; only a name changing to or from a CNAME loses its old records first. On failure the registration stays and the next cycle retries |
 | TTL | A provider raising the TTL to its own minimum is not drift; after the binding's TTL changes, the next reconciliation rewrites the records with the new TTL |
 | Concurrency | One console process at a time reconciles a cluster (a 15-minute lease that expires if the process exits) |
 | Configuration canary | Each node is compared with its own target revision: during a canary window the non-canary nodes run the stable revision and stay, see [Configuration canary](system.en.md#configuration-canary) |
@@ -130,7 +131,7 @@ When a publication would empty a cluster's previously non-empty `all.` or line r
 
 ### DNS revisions and rollback
 
-Each cluster has its own DNS revisions, which do not advance the node configuration revision. **Roll back DNS** restores the binding settings of the chosen revision (mode, account, cluster domain, TTL, lines); addresses are still computed from the current sites and node health, so offline nodes are not restored. Manual-mode revisions are **Published** as soon as they are saved.
+Each cluster has its own DNS revisions, which do not advance the node configuration revision. **Roll back DNS** restores the binding settings of the chosen revision (mode, account, cluster domain, TTL, lines); addresses are still computed from the current sites and node health, so offline nodes are not restored. Manual-mode revisions are **Published** as soon as they are saved. Each cluster keeps its latest 200 DNS revisions; the current, published, and **Blocked** revisions are never pruned.
 
 Before deleting a provider account, point the clusters that use it at another account or switch them to Not managed and wait for cleanup (the account no longer owns system-managed records); otherwise the console returns `DNS_PROVIDER_IN_USE`. Likewise, before deleting a cluster, switch its DNS to Not managed and wait for cleanup (`DNS_BINDING_IN_USE`).
 
