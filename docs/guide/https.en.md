@@ -22,11 +22,11 @@ Certificate upload, ACME requests and renewal, and a site's HTTPS, TLS, HTTP/2, 
 
 | Requirement | Value |
 | --- | --- |
-| Chain | 1–10 certificates, up to 128 KiB; each signed by the next |
+| Chain | 1–10 certificates, up to 128 KiB; each signed by the next; certificates only: PEM with a private key in it is refused ("The chain may contain only certificates; put the private key in its own field") |
 | Leaf | Not a CA certificate, has DNS SANs, currently valid |
 | Private key | Matches the leaf, up to 32 KiB |
 
-Uploaded certificates do not renew automatically (**Automatic renewal disabled**); before expiry, upload a new certificate and select it on the sites.
+Only the re-encoded certificates and the PKCS #8 private key are stored; any other text in the pasted content is not. Uploaded certificates do not renew automatically (**Automatic renewal disabled**); before expiry, upload a new certificate and select it on the sites.
 
 ## Add a DNS credential
 

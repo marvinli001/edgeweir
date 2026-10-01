@@ -265,7 +265,7 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 2. worker 启动 `EDGEWEIR_CERTD_BIN`（镜像内为 `/usr/local/bin/edgeweir-certd`），环境变量只保留 `PATH` 与 `EDGEWEIR_DNS_TEST_ENDPOINT`。
 3. 向 stdin 写一行 JSON 请求（命令与参数，含 ACME 账户与 DNS 凭据）。certd 在 stdout 上逐行输出 JSON 事件（`account`、`http01.present`、`http01.cleanup`、`dns01.prepare`、`dns01.cleanup`），控制台处理后在 stdin 回复确认；最后一行为结果。
 4. `http01.present` 的响应写入 `acme_challenge` 并发布新 revision，由节点应答。`dns01.prepare` 在 certd 写入 TXT 记录之前把清理责任登记到 `dns_challenge_lease`；完成、失败或重启后只清理本次操作写入的值。`account` 事件的 ACME 账户信封加密后写入 `certificate`。
-5. 结果写回 `certificate`：证书链、指纹、到期时间、下次续期时间与信封加密的私钥；引用该证书的集群发布新 revision。
+5. 结果写回 `certificate`：证书链（只存证书）、指纹、到期时间、下次续期时间与信封加密的私钥（PKCS #8）；引用该证书的集群发布新 revision。
 
 | 限制 | 值 |
 | --- | --- |
@@ -453,6 +453,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0035_without_organization_limits` | 删除 `organization_limit`；服务账号去掉 `limits:read`、`limits:write` |
 | `0036_single_operator` | 只保留最早且未停用的平台管理员账号（其余账号的告警订阅合并给它）；IP 名单名称全局唯一（重名的组织名单加后缀并改写其规则），原组织名单改为 collection；删除 `organization`、`member`、`invitation`、`organization_settings` 与各表的 `organization_id`、`session.active_organization_id`、`alert_channel.available_to_tenants`；服务账号去掉组织相关 scope |
 | `0037_dns_cluster_bindings` | `dns_binding`、`dns_lease`；`dns_revision.cluster_id`、`dns_managed_name.cluster_id`；DNS 调度策略转换为各集群的绑定，删除 `dns_state` |
+| `0038_certificate_chains` | 证书链里混入的非证书 PEM 块（例如私钥）删除 |
 
 ## 构建产物
 

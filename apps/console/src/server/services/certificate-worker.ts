@@ -404,9 +404,9 @@ async function issueNow(app: AppContext, id: string) {
       const updated = await tx
         .update(schema.certificate)
         .set({
-          chainPem: result.chainPem as string,
+          chainPem: inspected.chainPem,
           privateKeyEnvelope: JSON.stringify(
-            app.masterKey.seal(result.privateKeyPem as string, certificateKeyBinding(id)),
+            app.masterKey.seal(inspected.privateKeyPem, certificateKeyBinding(id)),
           ),
           accountEnvelope: JSON.stringify(
             app.masterKey.seal(

@@ -59,14 +59,24 @@ export async function findCertificate(db: Executor, id: string) {
   return row;
 }
 
+/**
+ * Checks a chain and its key and returns them re-encoded: only the
+ * certificates and the key in PKCS #8 are ever stored, whatever else the
+ * pasted text held. Any other PEM block in the chain (a combined
+ * fullchain-and-key file) is refused, so a key never lands in `chain_pem`.
+ */
 export function inspectCertificate(chainPem: string, privateKeyPem: string) {
+  const labels = [...chainPem.matchAll(/-----BEGIN ([^\r\n]*?)-----/g)].map((m) => m[1]);
+  if (labels.some((label) => label !== "CERTIFICATE"))
+    fail("CERTIFICATE_CHAIN_FOREIGN_BLOCK", "the chain may contain only certificates");
   try {
     const blocks = chainPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
-    if (!blocks?.length || blocks.length > 10) throw new Error("invalid chain");
+    if (!blocks?.length || blocks.length > 10 || blocks.length !== labels.length)
+      throw new Error("invalid chain");
     const chain = blocks.map((block) => new X509Certificate(block));
     const leaf = chain[0];
-    if (!leaf || leaf.ca || !leaf.checkPrivateKey(createPrivateKey(privateKeyPem)))
-      throw new Error("invalid leaf or key");
+    const key = createPrivateKey(privateKeyPem);
+    if (!leaf || leaf.ca || !leaf.checkPrivateKey(key)) throw new Error("invalid leaf or key");
     for (let i = 0; i + 1 < chain.length; i++) {
       const cert = chain[i];
       const issuer = chain[i + 1];
@@ -93,6 +103,8 @@ export function inspectCertificate(chainPem: string, privateKeyPem: string) {
       notBefore,
       notAfter,
       fingerprint: leaf.fingerprint256.replaceAll(":", "").toLowerCase(),
+      chainPem: chain.map((cert) => cert.toString()).join(""),
+      privateKeyPem: key.export({ type: "pkcs8", format: "pem" }).toString(),
     };
   } catch {
     fail("CERTIFICATE_INVALID", "invalid certificate chain, validity or matching private key");
@@ -119,9 +131,9 @@ export async function uploadCertificate(
         names: inspected.names,
         source: "upload",
         status: "ready",
-        chainPem: input.chainPem,
+        chainPem: inspected.chainPem,
         privateKeyEnvelope: JSON.stringify(
-          app.masterKey.seal(input.privateKeyPem, certificateKeyBinding(id)),
+          app.masterKey.seal(inspected.privateKeyPem, certificateKeyBinding(id)),
         ),
         fingerprint: inspected.fingerprint,
         notBefore: inspected.notBefore,

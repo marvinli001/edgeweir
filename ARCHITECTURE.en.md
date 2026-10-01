@@ -265,7 +265,7 @@ A revision receipt is sealed with the master key (purpose `node.revision_receipt
 2. The worker starts `EDGEWEIR_CERTD_BIN` (`/usr/local/bin/edgeweir-certd` in the image) with only `PATH` and `EDGEWEIR_DNS_TEST_ENDPOINT` in its environment.
 3. It writes one JSON request line to stdin (command and parameters, including the ACME account and DNS credentials). certd writes JSON event lines to stdout (`account`, `http01.present`, `http01.cleanup`, `dns01.prepare`, `dns01.cleanup`); the console handles each one and acknowledges it on stdin. The last line is the result.
 4. `http01.present` responses are written to `acme_challenge` and published in a new revision, and nodes answer them. `dns01.prepare` records the cleanup obligation in `dns_challenge_lease` before certd writes the TXT record; after completion, failure, or a restart, only the values written by that operation are removed. The ACME account from an `account` event is envelope-encrypted into `certificate`.
-5. The result is written back to `certificate`: chain, fingerprint, expiry, next renewal time, and the envelope-encrypted private key; clusters that reference the certificate publish a new revision.
+5. The result is written back to `certificate`: chain (certificates only), fingerprint, expiry, next renewal time, and the envelope-encrypted private key (PKCS #8); clusters that reference the certificate publish a new revision.
 
 | Limit | Value |
 | --- | --- |
@@ -453,6 +453,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0035_without_organization_limits` | Drops `organization_limit`; service accounts lose `limits:read`, `limits:write` |
 | `0036_single_operator` | Keeps only the earliest platform administrator who is not disabled (the other accounts' alert subscriptions move to it); IP list names become unique (organization lists with a taken name get a suffix and their rules follow), former organization lists become collections; drops `organization`, `member`, `invitation`, `organization_settings`, every `organization_id`, `session.active_organization_id` and `alert_channel.available_to_tenants`; service accounts lose the organization scopes |
 | `0037_dns_cluster_bindings` | `dns_binding`, `dns_lease`; `dns_revision.cluster_id`, `dns_managed_name.cluster_id`; the DNS steering policy becomes one binding per cluster; drops `dns_state` |
+| `0038_certificate_chains` | PEM blocks other than certificates (such as a private key) are removed from stored chains |
 
 ## Build output
 

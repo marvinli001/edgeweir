@@ -63,6 +63,7 @@ export const errorDefs = {
   PROTECTION_POW_DIFFICULTY: { status: 400, params: ["min"] },
   CERTIFICATE_NOT_FOUND: { status: 404, params: [] },
   CERTIFICATE_INVALID: { status: 400, params: [] },
+  CERTIFICATE_CHAIN_FOREIGN_BLOCK: { status: 400, params: [] },
   CERTIFICATE_DOMAIN_MISMATCH: { status: 400, params: [] },
   CERTIFICATE_BUSY: { status: 409, params: [] },
   CERTIFICATE_IN_USE: { status: 409, params: [] },

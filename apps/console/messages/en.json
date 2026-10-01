@@ -541,6 +541,7 @@
   "error_setup_in_progress": "Setup is already in progress. Retry shortly.",
   "error_certificate_not_found": "Certificate not found",
   "error_certificate_invalid": "Invalid or expired certificate, chain or private key",
+  "error_certificate_chain_foreign_block": "The chain may contain only certificates; put the private key in its own field",
   "error_certificate_domain_mismatch": "Certificate domains do not match the site or DNS zone",
   "error_certificate_busy": "Certificate operation is already in progress",
   "error_certificate_in_use": "Certificate or credential is still in use",
