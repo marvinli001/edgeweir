@@ -576,12 +576,19 @@ export async function setDnsProtection(app: AppContext, input: DnsProtection, ac
  * "name@line" on another) that would become empty, and how many address
  * records (name, type, line, address) would go. Names the plan no longer
  * manages (deleted sites, removed lines) and resolution lines no binding
- * line maps to any more (`lines`, when given) are not counted.
+ * line maps to any more (`lines`, when given) are not counted. An address
+ * whose node (`owners`: address → node) still answers in the same set with
+ * another address (a node moving between its own address levels, either
+ * way) is replaced, not removed: it does not count as removed.
  */
 export function massRemoval(
   previous: DnsRecord[],
   next: Plan,
-  opts: { lines?: ReadonlySet<string>; failover?: readonly string[] } = {},
+  opts: {
+    lines?: ReadonlySet<string>;
+    failover?: readonly string[];
+    owners?: ReadonlyMap<string, string>;
+  } = {},
 ) {
   const managed = new Set(next.managedNames.map(nameKey));
   const before = previous.filter(
@@ -591,13 +598,24 @@ export function massRemoval(
       (!opts.lines || !lineOf(r) || opts.lines.has(lineOf(r))),
   );
   const after = new Set(next.records.filter(addressRecord).map(addressKey));
+  const setOf = (r: DnsRecord) => `${r.name}|${lineOf(r)}`;
+  // Nodes that still answer in each record set of the plan.
+  const answering = new Set(
+    next.records.filter(addressRecord).flatMap((r) => {
+      const node = opts.owners?.get(r.data);
+      return node ? [`${setOf(r)}|${node}`] : [];
+    }),
+  );
+  const replaced = (r: DnsRecord) => {
+    const node = opts.owners?.get(r.data);
+    return !!node && answering.has(`${setOf(r)}|${node}`);
+  };
   // Backup groups change sets on purpose: only emptying them counts.
   const failover = new Set(opts.failover ?? []);
   const counted = before.filter(
-    (r) =>
-      !failover.has(`${r.name}|${lineOf(r)}`) && !failover.has(`${r.name}|${lineOf(r)}|${r.data}`),
+    (r) => !failover.has(setOf(r)) && !failover.has(`${setOf(r)}|${r.data}`),
   );
-  const removed = counted.filter((r) => !after.has(addressKey(r))).length;
+  const removed = counted.filter((r) => !after.has(addressKey(r)) && !replaced(r)).length;
   const names = (records: DnsRecord[]) =>
     new Set(
       records.filter(addressRecord).map((r) => (lineOf(r) ? `${r.name}@${lineOf(r)}` : r.name)),
@@ -605,6 +623,32 @@ export function massRemoval(
   const remaining = names(next.records);
   const cleared = [...names(before)].filter((name) => !remaining.has(name));
   return { removed, previous: counted.length, cleared };
+}
+
+/**
+ * Which node each address of the cluster belongs to: the addresses the
+ * nodes report or have configured, and the binding lines' overrides.
+ */
+async function addressOwners(
+  db: Executor,
+  clusterId: string,
+  policy: Pick<BindingPolicy, "lines">,
+) {
+  const rows = await db
+    .select({ nodeId: schema.nodeIp.nodeId, address: schema.nodeIp.address })
+    .from(schema.nodeIp)
+    .innerJoin(schema.node, eq(schema.node.id, schema.nodeIp.nodeId))
+    .where(eq(schema.node.clusterId, clusterId));
+  const owners = new Map<string, string>();
+  const own = (address: string, nodeId: string) => {
+    const ip = parseIp(address);
+    if (ip) owners.set(formatIp(ip), nodeId);
+  };
+  for (const row of rows) own(row.address, row.nodeId);
+  for (const line of policy.lines)
+    for (const override of line.overrides)
+      for (const address of override.addresses) own(address, override.nodeId);
+  return owners;
 }
 
 /**
@@ -665,6 +709,7 @@ async function publishBinding(
     const check = massRemoval(previous.records, plan, {
       lines: resolutionLinesOf(policy),
       failover,
+      owners: await addressOwners(tx, clusterId, policy),
     });
     const { massRemovalRatio } = await getDnsProtection(tx);
     hold =
@@ -812,6 +857,7 @@ export async function getBinding(app: AppContext, clusterId: string) {
   const check = blocked
     ? massRemoval(revision?.records ?? [], blocked, {
         lines: resolutionLinesOf(parsePolicy(blocked.policy, row.allLabel) ?? bindingPolicy(row)),
+        owners: await addressOwners(app.db, clusterId, bindingPolicy(row)),
       })
     : { removed: 0, previous: 0 };
   return {

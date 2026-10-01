@@ -312,6 +312,95 @@ describe("DNS resolution lines and backup groups", async () => {
     expect((await admin.dns.binding({ clusterId: solo })).blocked).toBeNull();
   });
 
+  it("lets a node move to its backup address and back; removing nodes is still held back", async () => {
+    dnsFixture.accounts.set("token-v", { zones: ["levels.test"] });
+    const levels = (await admin.clusters.create({ name: "levels" })).id;
+    const group = (await admin.nodeGroups.list({ clusterId: levels }))[0]?.id ?? "";
+    await addNode(group, "v1", "9.8.0.1", levels);
+    await admin.nodes.setAddresses({
+      id: nodes.v1 ?? "",
+      addresses: [
+        { address: "9.8.1.1", level: 0 },
+        { address: "9.8.1.2", level: 1 },
+      ],
+    });
+    const account = await admin.dns.createProvider({
+      name: "Levels",
+      provider: "test",
+      zone: "levels.test",
+      credentials: { api_token: "token-v" },
+    });
+    await admin.dns.saveBinding({
+      clusterId: levels,
+      binding: {
+        mode: "auto",
+        providerId: account.id,
+        domain: "edge.levels.test",
+        ttl: 60,
+        lines: [line("tel", group, { resolutionLine: "telecom" })],
+      },
+    });
+    const set = (line = "") =>
+      dnsFixture
+        .records("token-v", "levels.test")
+        .filter((r) => r.name === "all.edge" && (r.line ?? "") === line)
+        .map((r) => r.data)
+        .sort();
+    const primaryDown = (down: boolean) =>
+      ctx.db
+        .insert(schema.nodeAddressState)
+        .values({ nodeId: nodes.v1 ?? "", address: "9.8.1.1", down })
+        .onConflictDoUpdate({
+          target: [schema.nodeAddressState.nodeId, schema.nodeAddressState.address],
+          set: { down },
+        });
+    const state = () => admin.dns.binding({ clusterId: levels });
+    await reconcileDns(ctx);
+    expect(set("telecom")).toEqual(["9.8.1.1"]);
+    // The line's only address is replaced by the same node's backup address: not a removal.
+    await primaryDown(true);
+    await reconcileDns(ctx);
+    expect((await state()).blocked).toBeNull();
+    expect((await state()).revision).toMatchObject({ reason: "health", status: "applied" });
+    expect(set("telecom")).toEqual(["9.8.1.2"]);
+    expect(set()).toEqual(["9.8.1.2"]);
+    expect(
+      resolve(dnsFixture.records("token-v", "levels.test"), "levels.test", "tel.edge.levels.test"),
+    ).toEqual(["9.8.1.2"]);
+    // And back.
+    await primaryDown(false);
+    await reconcileDns(ctx);
+    expect((await state()).blocked).toBeNull();
+    expect(set("telecom")).toEqual(["9.8.1.1"]);
+    // The node itself leaving empties the line: held back.
+    await online(["v1"], false);
+    await reconcileDns(ctx);
+    expect((await state()).blocked).toMatchObject({ status: "blocked" });
+    expect(set("telecom")).toEqual(["9.8.1.1"]);
+    await online(["v1"], true);
+    await reconcileDns(ctx);
+    expect((await state()).blocked).toBeNull();
+    // Two of three nodes leaving is over the share, also while the third changes its level.
+    await addNode(group, "v2", "9.8.2.1", levels);
+    await addNode(group, "v3", "9.8.3.1", levels);
+    await reconcileDns(ctx);
+    expect(set("telecom")).toEqual(["9.8.1.1", "9.8.2.1", "9.8.3.1"]);
+    await primaryDown(true);
+    await online(["v2", "v3"], false);
+    await reconcileDns(ctx);
+    expect((await state()).blocked).toMatchObject({
+      status: "blocked",
+      removedRecords: 6,
+      previousRecords: 9,
+    });
+    expect(set("telecom")).toEqual(["9.8.1.1", "9.8.2.1", "9.8.3.1"]);
+    // One of three leaving (with the level change) passes.
+    await online(["v3"], true);
+    await reconcileDns(ctx);
+    expect((await state()).blocked).toBeNull();
+    expect(set("telecom")).toEqual(["9.8.1.2", "9.8.3.1"]);
+  });
+
   it("refuses lines the provider does not implement and backups outside the cluster", async () => {
     const cloudflare = await admin.dns.createProvider({
       name: "CF",
