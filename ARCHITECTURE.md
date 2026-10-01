@@ -147,12 +147,14 @@ revision 原因是代码（`revision_reason_<code>`），定义在 `packages/con
 
 ## 节点任务
 
-URL、目录、整站刷新与 URL 预热不产生 revision，以类型化任务下发：
+URL、目录、Host、Cache-Tag、整站刷新与 URL、站点地图预热不产生 revision，以类型化任务下发：
 
 1. `cacheTasks.create` 写入 `cache_task`，为每个启用节点写入 `cache_task_node`（停用节点记为跳过），`pg_notify('edgeweir_tasks', …)`。
 2. `WatchConfig` 流发出 `WATCH_EVENT_TASKS`。
 3. 节点以 `PullTasks` 拉取，以 `ReportTaskResult` 回报结果。
 4. 交出 5 分钟后没有结果的任务再次交出；7 天未完成记为失败。节点重新连接时，控制台为其错过的清缓存按网站补发整站刷新。
+
+Host 与 Cache-Tag 刷新需要节点能力 `purge-tag-v1`，移动端与站点地图预热需要 `prefetch-v2`；受影响集群有活动节点缺少能力时，控制台拒绝创建任务（`NODE_CAPABILITY_REQUIRED`）。节点用刷新标记的时间点与缓存对象的 `Cache-Tag` 索引计算缓存键，被刷新的对象（包括过期内容）不再被查找；站点地图由节点经本机边缘层取回。行为说明见 [源站与缓存](docs/guide/origins-and-cache.md#刷新与预热)。
 
 | 限制 | 值 |
 | --- | --- |
@@ -241,7 +243,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `RenewCertificate` | 轮换节点证书 |
 | `WatchConfig` | 服务端流：revision 通知、任务通知、封禁通知（`bans-v1`）、keepalive |
 | `GetConfig` | 快照或相对 `base_revision` 的 diff，附 revision 回执 |
-| `ReportStatus` | 心跳、应用回执、源站被动健康状态与错误码、封禁状态 |
+| `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态 |
 | `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计；按批次序号去重 |
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
 | `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥 |

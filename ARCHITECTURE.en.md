@@ -147,12 +147,14 @@ Revision reasons are codes (`revision_reason_<code>`) defined in `packages/contr
 
 ## Node tasks
 
-URL, prefix, and full-site purges and URL prefetches produce no revision; they are delivered as typed tasks:
+URL, prefix, host, Cache-Tag, and full-site purges and URL and sitemap prefetches produce no revision; they are delivered as typed tasks:
 
 1. `cacheTasks.create` inserts a `cache_task` and a `cache_task_node` for every enabled node (disabled nodes are marked skipped), then runs `pg_notify('edgeweir_tasks', …)`.
 2. The `WatchConfig` stream emits `WATCH_EVENT_TASKS`.
 3. The node pulls tasks with `PullTasks` and reports results with `ReportTaskResult`.
 4. A task without a result 5 minutes after hand-out is handed out again; a task not finished within 7 days fails. When a node reconnects, the console issues a full-site purge for each site whose purges the node missed.
+
+Host and Cache-Tag purges need the node feature `purge-tag-v1`, mobile and sitemap prefetches `prefetch-v2`; while an active node of an affected cluster lacks it, the console refuses the task (`NODE_CAPABILITY_REQUIRED`). Nodes derive cache keys from the purge markers' points in time and an index of the cached objects' `Cache-Tag`, so purged objects (stale ones included) are never looked up again; nodes fetch sitemaps through their own edge layer. Behavior: [Origins and cache](docs/guide/origins-and-cache.en.md#purge-and-prefetch).
 
 | Limit | Value |
 | --- | --- |
@@ -241,7 +243,7 @@ Every RPC other than `Enroll` requires a client certificate verified by the inte
 | `RenewCertificate` | Rotate the node certificate |
 | `WatchConfig` | Server stream: revision notifications, task notifications, ban notifications (`bans-v1`), keepalives |
 | `GetConfig` | Snapshot, or diff against `base_revision`, with a revision receipt |
-| `ReportStatus` | Heartbeat, apply receipt, passive origin health and error codes, ban state |
+| `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state |
 | `ReportStats`, `ReportStatsV2` | Per-minute pre-aggregated traffic statistics; deduplicated by batch sequence |
 | `ReportLogs` | Sampled access logs; deduplicated by batch sequence |
 | `GetOriginCredentials` | S3 origin keys referenced by the cluster's sites |

@@ -299,6 +299,58 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 
 行为见 [HTTPS 与证书](../guide/https.md#压缩) 与 [OWASP CRS 托管规则](../guide/waf.md)。
 
+### 清缓存、预热、源站与错误页
+
+| 过程 | 端点 | 调用方 |
+| --- | --- | --- |
+| `cacheTasks.create`、`cacheTasks.get`、`cacheTasks.list` | `POST /cache-tasks`、`GET /cache-tasks/{id}`、`GET /cache-tasks` | 组织成员、平台管理员 |
+| `sites.update` | `PATCH /sites/{id}`（`originSettings`、`cacheSettings`） | 组织成员、平台管理员 |
+| `sites.originHealth` | `GET /sites/{id}/origin-health` | 组织成员、平台管理员 |
+| `errorPages.get` | `GET /sites/{id}/error-pages` | 组织成员、平台管理员 |
+| `errorPages.update` | `PUT /sites/{id}/error-pages` | 组织 owner / admin、平台管理员 |
+| `settings.errorPages`、`settings.setErrorPages` | `GET`、`PUT /settings/error-pages` | 平台管理员 |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `POST /cache-tasks` | `type`：`url`、`prefix`、`site`、`prefetch`、`host`、`tag`、`sitemap`。`host`：`hosts`（最多 500 个主机名，不带端口或通配符）；`tag`：`siteIds`（1–100）与 `tags`（1–500，去首尾空格后按小写保存，每个 1–128 字节可打印 ASCII，不含逗号）；`sitemap`：`urls` 恰好一个站点地图 URL、`maxUrls`（1–10000，默认 1000）；`prefetch` 与 `sitemap`：`variants`（`desktop` / `mobile`，默认 `["desktop"]`） |
+| `PATCH /sites/{id}` | `originSettings.activeHealthCheck`：`enabled`、`path`、`method`（`GET` / `HEAD`）、`expectedStatusMin`、`expectedStatusMax`、`host`、`intervalSeconds`（5–300）、`timeoutSeconds`（1–60，不超过间隔）、`healthyThreshold`、`unhealthyThreshold`（1–10）；`originSettings.sessionAffinity`：`enabled`、`ttlSeconds`（60–604800）；`cacheSettings.keepCacheTag`。省略这三项时保持原值；`originSettings`、`cacheSettings` 的其他字段仍整体替换，先 `GET` 再修改 |
+| `PUT /sites/{id}/error-pages` | `pages`：`[{ status, template }]`，`status` 为 403、429、502、503、504，各至多一个，`template` 1–65536 字节（UTF-8）；`interceptOriginErrors`；可选 `expectedUpdatedAt`。整体替换 |
+| `PUT /settings/error-pages` | `unknownHost`、`siteDisabled`、`siteSuspended`：模板，空字符串表示内置页面，每个最多 65536 字节 |
+
+响应：
+
+| 过程 | 内容 |
+| --- | --- |
+| `cacheTasks.*` | 任务对象增加 `variants`（清缓存任务为 `[]`）与 `maxUrls`（站点地图任务以外为 `null`）；`targets` 为 Host、规范化后的标签或站点地图 URL；节点结果的错误码增加 `sitemap_failed`、`sitemap_empty` |
+| `sites.originHealth` | 每个源站的 `nodes` 按节点和来源各一项，增加 `source`（`passive` / `active`）；`downNodes` 统计有任一来源不健康的在线节点，每个节点计一次 |
+| `sites.features` | 增加 `activeHealthCheck`、`sessionAffinity`、`errorPages`、`purgeByTag`、`prefetchVariants` |
+| `errorPages.get`、`errorPages.update` | `siteId`、`pages`（按状态码排序）、`interceptOriginErrors`、`updatedAt`（从未保存时为 `null`） |
+| `logs.query`、`logs.export` | 查询参数 `requestId`（精确匹配，最长 128）；日志条目增加 `requestId`，CSV 增加 `requestId` 列 |
+
+- `errorPages.update` 发布网站所在集群（原因 `site_error_pages_updated`），审计 `site.error_pages_update`；`settings.setErrorPages` 发布所有集群（`error_pages_updated`），审计 `system.error_pages_update`。
+
+| 错误代码 | 状态 | 场景 |
+| --- | --- | --- |
+| `CACHE_TASK_HOST_INVALID` | 400 | Host 带端口、通配符或不是合法主机名；`data.hosts` |
+| `CACHE_TASK_TAG_INVALID` | 400 | 标签不符合规则；`data.tags` |
+| `CACHE_TASK_HOST_UNKNOWN` | 400 | Host 或站点地图的 Host 不属于调用方范围内的网站；`data.hosts` |
+| `NODE_CAPABILITY_REQUIRED` | 409 | 任务：集群内有活动节点缺少 `purge-tag-v1`（Host、标签）或 `prefetch-v2`（移动端、站点地图），所有调用方；设置：缺少 `active-health-v1`、`session-affinity-v1`（及 `challenge-v1`）或 `error-pages-v1`（租户调用）；`data.features` |
+| `ERROR_PAGE_TOO_LARGE` | 400 | 模板超过 65536 字节；`data.status`、`data.limit`（平台模板的 `status` 为 404 或 503） |
+| `ORG_ADMIN_REQUIRED` | 403 | 组织成员调用 `errorPages.update` |
+
+```bash
+curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"type":"tag","siteIds":["<网站 ID>"],"tags":["product-42"]}' \
+  https://cdn-admin.example.com/api/v1/cache-tasks
+curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"type":"sitemap","urls":["https://www.example.com/sitemap.xml"],"maxUrls":2000,"variants":["desktop","mobile"]}' \
+  https://cdn-admin.example.com/api/v1/cache-tasks
+```
+
+行为见 [源站与缓存](../guide/origins-and-cache.md) 与 [错误页](../guide/error-pages.md)。
+
 ### 用量
 
 每个网站、每个 UTC 5 分钟窗口 `[windowStart, windowEnd)` 一条记录，数值为该窗口内全部节点上报的分钟统计之和。

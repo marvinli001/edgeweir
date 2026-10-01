@@ -299,6 +299,58 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 
 Behavior: [HTTPS and certificates](../guide/https.en.md#compression) and [OWASP CRS managed rules](../guide/waf.en.md).
 
+### Purge, prefetch, origins and error pages
+
+| Procedure | Endpoint | Callers |
+| --- | --- | --- |
+| `cacheTasks.create`, `cacheTasks.get`, `cacheTasks.list` | `POST /cache-tasks`, `GET /cache-tasks/{id}`, `GET /cache-tasks` | Organization members, platform administrators |
+| `sites.update` | `PATCH /sites/{id}` (`originSettings`, `cacheSettings`) | Organization members, platform administrators |
+| `sites.originHealth` | `GET /sites/{id}/origin-health` | Organization members, platform administrators |
+| `errorPages.get` | `GET /sites/{id}/error-pages` | Organization members, platform administrators |
+| `errorPages.update` | `PUT /sites/{id}/error-pages` | Organization owners / admins, platform administrators |
+| `settings.errorPages`, `settings.setErrorPages` | `GET`, `PUT /settings/error-pages` | Platform administrators |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys can call only `GET`.
+
+| Request | Fields |
+| --- | --- |
+| `POST /cache-tasks` | `type`: `url`, `prefix`, `site`, `prefetch`, `host`, `tag`, `sitemap`. `host`: `hosts` (up to 500 host names, without port or wildcard); `tag`: `siteIds` (1–100) and `tags` (1–500, trimmed and stored in lowercase, each 1–128 bytes of printable ASCII without commas); `sitemap`: `urls` with exactly one sitemap URL, `maxUrls` (1–10000, default 1000); `prefetch` and `sitemap`: `variants` (`desktop` / `mobile`, default `["desktop"]`) |
+| `PATCH /sites/{id}` | `originSettings.activeHealthCheck`: `enabled`, `path`, `method` (`GET` / `HEAD`), `expectedStatusMin`, `expectedStatusMax`, `host`, `intervalSeconds` (5–300), `timeoutSeconds` (1–60, not above the interval), `healthyThreshold`, `unhealthyThreshold` (1–10); `originSettings.sessionAffinity`: `enabled`, `ttlSeconds` (60–604800); `cacheSettings.keepCacheTag`. Omitted, these three keep their values; the other fields of `originSettings` and `cacheSettings` are still replaced as a whole, so `GET` first |
+| `PUT /sites/{id}/error-pages` | `pages`: `[{ status, template }]`, `status` one of 403, 429, 502, 503, 504, at most once each, `template` 1–65536 bytes (UTF-8); `interceptOriginErrors`; optional `expectedUpdatedAt`. Replaces everything |
+| `PUT /settings/error-pages` | `unknownHost`, `siteDisabled`, `siteSuspended`: templates, an empty string meaning the built-in page, at most 65536 bytes each |
+
+Responses:
+
+| Procedure | Content |
+| --- | --- |
+| `cacheTasks.*` | Tasks add `variants` (`[]` for purges) and `maxUrls` (`null` except for sitemap tasks); `targets` holds the hosts, the normalized tags, or the sitemap URL; node results add the error codes `sitemap_failed` and `sitemap_empty` |
+| `sites.originHealth` | Each origin's `nodes` has one entry per node and source, with `source` (`passive` / `active`); `downNodes` counts online nodes with an unhealthy entry of either source, each node once |
+| `sites.features` | Adds `activeHealthCheck`, `sessionAffinity`, `errorPages`, `purgeByTag`, `prefetchVariants` |
+| `errorPages.get`, `errorPages.update` | `siteId`, `pages` (sorted by status), `interceptOriginErrors`, `updatedAt` (`null` until first saved) |
+| `logs.query`, `logs.export` | Query parameter `requestId` (exact, up to 128 characters); entries add `requestId`, the CSV a `requestId` column |
+
+- `errorPages.update` publishes the site's cluster (reason `site_error_pages_updated`) and is audited as `site.error_pages_update`; `settings.setErrorPages` publishes every cluster (`error_pages_updated`) and is audited as `system.error_pages_update`.
+
+| Error code | Status | Case |
+| --- | --- | --- |
+| `CACHE_TASK_HOST_INVALID` | 400 | A host has a port or wildcard or is not a valid host name; `data.hosts` |
+| `CACHE_TASK_TAG_INVALID` | 400 | A tag breaks the rules; `data.tags` |
+| `CACHE_TASK_HOST_UNKNOWN` | 400 | A host, or the sitemap's host, belongs to no site in the caller's scope; `data.hosts` |
+| `NODE_CAPABILITY_REQUIRED` | 409 | Tasks: an active node of the cluster lacks `purge-tag-v1` (hosts, tags) or `prefetch-v2` (mobile, sitemaps), for every caller; settings: it lacks `active-health-v1`, `session-affinity-v1` (and `challenge-v1`) or `error-pages-v1` (tenant calls); `data.features` |
+| `ERROR_PAGE_TOO_LARGE` | 400 | A template exceeds 65536 bytes; `data.status`, `data.limit` (`status` 404 or 503 for platform templates) |
+| `ORG_ADMIN_REQUIRED` | 403 | An organization member calls `errorPages.update` |
+
+```bash
+curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"type":"tag","siteIds":["<site ID>"],"tags":["product-42"]}' \
+  https://cdn-admin.example.com/api/v1/cache-tasks
+curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
+  -d '{"type":"sitemap","urls":["https://www.example.com/sitemap.xml"],"maxUrls":2000,"variants":["desktop","mobile"]}' \
+  https://cdn-admin.example.com/api/v1/cache-tasks
+```
+
+Behavior: [Origins and cache](../guide/origins-and-cache.en.md) and [Error pages](../guide/error-pages.en.md).
+
 ### Usage
 
 One record per site and UTC 5-minute window `[windowStart, windowEnd)`, summing the minute statistics every node reported for the window.
