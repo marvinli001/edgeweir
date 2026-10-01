@@ -1,6 +1,6 @@
 # Command line
 
-`deploy.sh`, the node installer `install.sh`, Docker Compose operations, the container entrypoint, and development commands.
+`deploy.sh`, the node installer `install.sh`, Docker Compose operations, the container entrypoint, account recovery, and development commands.
 
 ## deploy.sh
 
@@ -92,6 +92,7 @@ Run in the directory of `compose.yml`; add `-f <file>` for other Compose files.
 | Show the setup token log line | `docker compose logs console \| grep setupToken` |
 | Health check (host) | `curl -s http://127.0.0.1:3000/healthz` |
 | Health check (in the container) | `docker compose exec console edgeweir-healthcheck` |
+| Recover the account (reset the password, turn two-factor off) | `docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor`, see [Account recovery](#account-recovery) |
 | Pull the image set by `EDGEWEIR_VERSION` and recreate | `docker compose pull && docker compose up -d` |
 | Start ClickHouse | `docker compose --profile analytics up -d` |
 | Start Valkey (not used by the console yet) | `docker compose --profile cache up -d` |
@@ -128,6 +129,72 @@ Environment defaults of the image: [Environment variables](environment.en.md#run
 ### ROLE
 
 Values: `all` (default), `app`, and `worker`. Components, listeners, and scaling per role: [Deployment overview](../deploy/README.en.md#process-roles).
+
+## Account recovery
+
+`dist/server/recover.js` resets the password of the console's only account and turns two-factor authentication off, for when nobody can sign in. It reads the same environment variables as the console (`DATABASE_URL`, `EDGEWEIR_MASTER_KEY`, and so on) and changes the database directly, without the web UI or HTTP. Steps: [Account recovery](../guide/account.en.md#account-recovery).
+
+```bash
+docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor
+```
+
+| Deployment | Command |
+| --- | --- |
+| Docker Compose | `docker compose exec console node dist/server/recover.js <options>` |
+| Docker Compose, console container not running | `docker compose run --rm console node dist/server/recover.js <options>` |
+| 宝塔 / aaPanel (`deploy.sh`) | `docker exec -it edgeweir-console node dist/server/recover.js <options>` |
+| Source (`pnpm dev`) | `pnpm --filter @edgeweir/console recover <options>`, see [Commands](#commands) |
+
+### Options
+
+| Option | Effect |
+| --- | --- |
+| `--reset-password` | Set a new password, 12–128 characters |
+| `--disable-two-factor` | Turn two-factor authentication off; delete the TOTP secret and backup codes |
+| `-h`, `--help` | Print usage |
+
+At least one of `--reset-password` and `--disable-two-factor` is required.
+
+### New password
+
+| Standard input | How it is read |
+| --- | --- |
+| Terminal (allocated by default by `docker compose exec` and `docker exec -it`) | Prompts `New password:` and `Repeat new password:` without echo; nothing changes when the two entries differ. Ctrl-C cancels |
+| Pipe or file | The first line, without its `\n` or `\r\n` ending |
+
+```bash
+docker compose exec -T console node dist/server/recover.js --reset-password < new-password.txt
+```
+
+`-T` allocates no terminal; use it only with a pipe or file, because a password typed at the terminal is then shown on screen. The password is never taken from a command-line argument or an environment variable: arguments are visible in the process list and the shell history.
+
+### Result
+
+These changes commit in one transaction with the audit entry; if any step fails, nothing changes:
+
+| Change | Description |
+| --- | --- |
+| Password | Hashed by better-auth (scrypt) and stored on the account's password credential |
+| Two-factor authentication | Off; the TOTP secret and backup codes are deleted |
+| Sessions | All sessions of the account are deleted, as are sign-ins waiting for their two-factor code and trusted-device records |
+| Audit log | `account.recover`, actor System (name `recover`); metadata `passwordReset`, `twoFactorDisabled`, `sessionsRevoked` |
+
+Name, email, passkeys, and AccessKeys do not change. Standard output shows the account's name and email and what changed, never the password, its hash, or a session token:
+
+```text
+Account: Ops <admin@example.com>
+Password reset.
+Two-factor authentication turned off.
+Signed out 2 sessions.
+```
+
+### Exit codes
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Done, or `-h` / `--help` |
+| `1` | Nothing changed: no account (setup not completed), password length out of range, entries differ, cancelled, invalid configuration, or the database connection or write failed; stderr shows `error:` and the reason |
+| `2` | Unknown option, extra argument, or no action given; stderr shows the usage |
 
 ## Development
 
@@ -186,6 +253,7 @@ Run from the repository root.
 | `pnpm db:generate` | Generate an SQL migration in `packages/db/migrations` from `packages/db/src/schema` (drizzle-kit) |
 | `pnpm e2e` | Run `scripts/e2e.sh` |
 | `pnpm --filter @edgeweir/console start` | Run the built `dist/server/main.js` |
+| `pnpm --filter @edgeweir/console recover <options>` | Run the [account recovery](#account-recovery) command from source; reads `.env` in the repository root when present. No `--` before the options |
 | `pnpm --filter @edgeweir/console test:e2e` | Playwright tests |
 
 ### End-to-end tests

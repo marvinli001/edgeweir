@@ -210,7 +210,7 @@ The page shows **Time**, **Actor**, **Action**, and **Target**, 50 entries per p
 | --- | --- |
 | `system.*` | Setup (including `system.setup_rejected` for a wrong setup token), origin allow list, node release source, usage settings, ban settings, protection, CC template, recompilation after an upgrade |
 | `auth.*` | Successful (`auth.sign_in`, with the sign-in method) and failed (`auth.sign_in_failed`) sign-ins |
-| `account.*` | Password change, two-factor enable / disable, passkey add / delete |
+| `account.*` | Password change, two-factor enable / disable, passkey add / delete, account recovery on the server (`account.recover`, see [Account recovery](account.en.md#account-recovery)) |
 | `api_key.*` | AccessKey create, revoke |
 | `service_account.*` | Service accounts and their keys |
 | `cluster.*`, `node_group.*`, `region.*`, `node.*`, `enrollment_token.*` | Clusters (including the configuration canary, rollbacks, and challenge key rotation), node groups, regions, nodes (including enrollment, certificate renewal, upgrades), install commands |

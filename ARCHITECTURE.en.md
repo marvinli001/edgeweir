@@ -114,6 +114,8 @@ Endpoints, the OpenAPI document, and AccessKey details: [API and endpoints](docs
 
 The client IP (audit log, sign-in rate limiting) is the TCP peer; `X-Forwarded-For` and `X-Real-IP` are used only when the peer is in `EDGEWEIR_TRUSTED_PROXIES` (`resolveClientIp`). Rate-limit counters for the authentication endpoints live in the `rate_limit` table and are shared by all instances. Sign-ins and account changes completed by better-auth are audited by the hooks in `lib/auth-audit.ts`.
 
+Account recovery has no HTTP entry and happens on the server only: `dist/server/recover.js` (`services/recovery.ts`) reads the console's environment and, in one transaction, resets the password (better-auth's `password.hash`), turns two-factor authentication off, deletes the account's sessions and pending two-factor sign-ins, and writes the audit entry `account.recover` ([Command line](docs/reference/cli.en.md#account-recovery)).
+
 ## Configuration publishing
 
 A change to node configuration runs in one transaction:
@@ -432,7 +434,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | Step | Output |
 | --- | --- |
 | `vite build` | `apps/console/dist/web` (SPA) |
-| `node scripts/build-server.mjs` (esbuild) | `apps/console/dist/server/main.js`: the server and all dependencies in one ESM file; `install/` copied to `dist/server/install`, migrations to `dist/migrations` |
+| `node scripts/build-server.mjs` (esbuild) | `apps/console/dist/server/main.js`: the server and all dependencies in one ESM file; `dist/server/recover.js`: the account recovery command, also with all dependencies, without a source map; `install/` copied to `dist/server/install`, migrations to `dist/migrations` |
 | Dockerfile stage `certd` | `golang:1.27.1-alpine` builds `edgeweir-certd` |
 | Dockerfile stage `build` | `node:24.21.0-alpine` with pnpm 12.6.0 builds the console |
 | Dockerfile stage `runtime` | `node:24.21.0-alpine` + tini; no `node_modules`; runs as user `node`; `EXPOSE 3000 8443`; health check `edgeweir-healthcheck` |

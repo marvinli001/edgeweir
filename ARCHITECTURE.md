@@ -114,6 +114,8 @@
 
 客户端 IP（审计日志、登录限速）取 TCP 对端地址；`X-Forwarded-For` 与 `X-Real-IP` 只在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用（`resolveClientIp`）。认证接口的限速计数存在 `rate_limit` 表，多实例共享。经 better-auth 完成的登录与账号变更由 `lib/auth-audit.ts` 的钩子写审计。
 
+账号找回没有 HTTP 入口，只在服务器上进行：`dist/server/recover.js`（`services/recovery.ts`）读取控制台的环境变量，在一个事务中重置密码（better-auth 的 `password.hash`）、停用两步验证、删除账号的会话与进行中的两步验证登录，并写入审计 `account.recover`（[命令行](docs/reference/cli.md#找回账户)）。
+
 ## 配置发布
 
 改变节点配置的操作在一个事务内完成：
@@ -432,7 +434,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | 步骤 | 输出 |
 | --- | --- |
 | `vite build` | `apps/console/dist/web`（SPA） |
-| `node scripts/build-server.mjs`（esbuild） | `apps/console/dist/server/main.js`：服务端与全部依赖打成单个 ESM 文件；复制 `install/` 到 `dist/server/install`，迁移到 `dist/migrations` |
+| `node scripts/build-server.mjs`（esbuild） | `apps/console/dist/server/main.js`：服务端与全部依赖打成单个 ESM 文件；`dist/server/recover.js`：找回账户命令，同样自带全部依赖，不带 source map；复制 `install/` 到 `dist/server/install`，迁移到 `dist/migrations` |
 | Dockerfile 阶段 `certd` | `golang:1.27.1-alpine` 构建 `edgeweir-certd` |
 | Dockerfile 阶段 `build` | `node:24.21.0-alpine`、pnpm 12.6.0 构建控制台 |
 | Dockerfile 阶段 `runtime` | `node:24.21.0-alpine` + tini；无 `node_modules`；以 `node` 用户运行；`EXPOSE 3000 8443`；健康检查 `edgeweir-healthcheck` |

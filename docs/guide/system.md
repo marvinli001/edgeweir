@@ -210,7 +210,7 @@
 | --- | --- |
 | `system.*` | 初始化（含 setup token 错误的 `system.setup_rejected`）、源站地址允许清单、节点发布源、用量设置、封禁设置、防护、CC 模板、升级后重新编译 |
 | `auth.*` | 登录成功（`auth.sign_in`，含登录方式）与失败（`auth.sign_in_failed`） |
-| `account.*` | 修改密码、启用 / 停用两步验证、添加 / 删除通行密钥 |
+| `account.*` | 修改密码、启用 / 停用两步验证、添加 / 删除通行密钥、在服务器上找回账户（`account.recover`，见 [找回账户](account.md#找回账户)） |
 | `api_key.*` | AccessKey 创建、吊销 |
 | `service_account.*` | 服务账号与其 key |
 | `cluster.*`、`node_group.*`、`region.*`、`node.*`、`enrollment_token.*` | 集群（含配置金丝雀、回滚、挑战密钥轮换）、节点组、区域、节点（含注册、证书续期、升级）、安装命令 |

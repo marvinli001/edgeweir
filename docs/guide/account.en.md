@@ -11,7 +11,7 @@ The console has one account, created by the setup wizard (`/setup`, **Create you
 | Setup fields | **Setup token** (the one-time token printed in the console log), **Name** (1–100 characters), **Email** (the sign-in email), **Password** (12–128 characters). For the steps, see [Quick start](first-site.en.md) |
 | Other accounts | Sign-up is closed; the console has no user management and no way to add a second account |
 | Name and email | The console offers no way to change them |
-| Password | Changed in [Account security](#account-security); the console has no password recovery or reset |
+| Password | Changed in [Account security](#account-security); the web UI has no password recovery or reset. A forgotten password is reset on the server, see [Account recovery](#account-recovery) |
 | API | AccessKeys (prefix `ewk_`) call `/api/v1` as this account; create them in [Settings](#settings) |
 
 ## Sign-in
@@ -36,7 +36,7 @@ Page: `/login`.
 | --- | --- |
 | Lifetime | 7 days; extended at most once every 24 hours while in use (better-auth defaults) |
 | Sign out | User menu at the bottom of the sidebar → **Log out** |
-| Other devices | The console does not list sessions; changing the password signs out the sessions on other devices |
+| Other devices | The console does not list sessions; changing the password signs out the sessions on other devices, and [account recovery](#account-recovery) signs out all sessions |
 
 ## Account security
 
@@ -152,3 +152,34 @@ Nodes and recent revisions refresh every 10 seconds, analytics every minute.
 | **Too many requests, try again later** | Sign-in rate limit reached | Retry after 10 seconds |
 | **Incorrect password** | **Current password** is wrong when changing the password or enabling or disabling two-factor authentication | Enter the current password again |
 | A passkey no longer signs in | The console host name changed | Sign in with the password, delete the old passkey, and add it again |
+| Forgotten password | The web UI has no password recovery | Reset the password on the server, see [Account recovery](#account-recovery) |
+| Authenticator device and backup codes both lost | Two-factor authentication cannot be completed | Turn two-factor authentication off on the server, see [Account recovery](#account-recovery); enable it again after signing in |
+| Two-factor authentication always fails after `BETTER_AUTH_SECRET` changed | TOTP secrets and backup codes are encrypted with the previous secret, which the new one cannot decrypt | Restore the previous `BETTER_AUTH_SECRET`; if it is lost, turn two-factor authentication off on the server (see [Account recovery](#account-recovery)) and enable it again after signing in |
+
+### Account recovery
+
+When nobody can sign in, run `recover.js` on the server that runs the console: it resets the password of the only account, turns two-factor authentication off, or both. The command does not go through the web UI; it reads the console container's environment and changes the database directly.
+
+1. Run the command; drop the option you do not need:
+
+   ```bash
+   docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor
+   ```
+
+   On 宝塔 / aaPanel deployments the container is named `edgeweir-console`:
+
+   ```bash
+   docker exec -it edgeweir-console node dist/server/recover.js --reset-password --disable-two-factor
+   ```
+
+2. The command prints the account's name and email. With `--reset-password`, enter the new password twice when prompted (12–128 characters); it is not shown while typing.
+3. Once the command prints what it changed, sign in with the account email, using the new password if you reset it.
+4. If two-factor authentication was turned off, enable it again in [Account security](#account-security) and keep the new backup codes.
+
+| Item | Description |
+| --- | --- |
+| Sessions | All sessions of the account are signed out; sign-ins waiting for their two-factor code expire |
+| Unchanged | Name, email, passkeys, and AccessKeys. If someone else may have used the account, review them after signing in and delete passkeys and AccessKeys you do not recognize |
+| Audit | Written to the [audit log](system.en.md#audit-log): `account.recover`, actor **System** (`recover`) |
+
+For the options, reading the password from a file, the output, and exit codes, see [Command line](../reference/cli.en.md#account-recovery).
