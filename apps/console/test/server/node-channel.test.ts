@@ -744,6 +744,29 @@ describe("node channel", async () => {
     expect(made).toMatchObject({ source: "recovery", state: "succeeded", targets: ["away"] });
   });
 
+  it("repeats a watch refresh that failed outside the stream (audit 2026-10-01 P0-1)", async () => {
+    const { mtls } = await enroll("refresh-test");
+    const abort = new AbortController();
+    const iterator = mtls
+      .watchConfig({ knownRevision: 0n }, { signal: abort.signal })
+      [Symbol.asyncIterator]();
+    expect((await iterator.next()).value?.event).toBe(WatchEvent.REVISION);
+    const { revision } = await demoSite("refresh");
+    // The read for the event fails, as while PostgreSQL restarts; it must not
+    // reject unhandled, and the stream still delivers the revision.
+    const select = ctx.db.select;
+    ctx.db.select = (() => {
+      ctx.db.select = select;
+      throw new Error("database unreachable");
+    }) as typeof select;
+    ctx.events.emitLocal({ clusterId, revision: revision.revision, contentHash: "" });
+    expect(ctx.db.select).toBe(select);
+    const notified = await iterator.next();
+    expect(notified.value?.latestRevision).toBe(BigInt(revision.revision));
+    expect(notified.value?.contentHash).toBe(revision.contentHash);
+    abort.abort();
+  });
+
   it("rejects unknown tokens", async () => {
     const { csrPem } = await nodeKeyAndCsr();
     await expect(anonymous().enroll({ token: "ewt_nope", csrPem })).rejects.toMatchObject({

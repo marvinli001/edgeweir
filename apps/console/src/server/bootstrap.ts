@@ -41,8 +41,13 @@ export async function bootstrap(): Promise<Running> {
   setLogLevel(env.LOG_LEVEL);
   const log = logger;
   log.info("starting edgeweir console", { version: env.version, role: env.ROLE });
+  // A promise nobody awaits must not take down the UI, API, node channel and
+  // worker with it (Node.js exits on an unhandled rejection by default).
+  process.on("unhandledRejection", (reason) => log.error("unhandled rejection", { error: reason }));
 
-  const { db, pool } = createDatabase(env.DATABASE_URL);
+  const { db, pool } = createDatabase(env.DATABASE_URL, (error) =>
+    log.warn("database connection lost", { error }),
+  );
   await waitForDatabase(pool);
   await runMigrations(pool);
   log.info("database migrated");
