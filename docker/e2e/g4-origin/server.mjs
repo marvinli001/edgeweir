@@ -6,7 +6,8 @@
 //   POST /control/down {down}     while down, every other request is reset
 //   GET  /control/hits            requests served: "<host> <path> <d|m>" -> count
 //   POST /control/reset           forgets the counters
-//   /tag/<name>?tags=<value>      Cache-Tag: <value> (as given)
+//   ?tags=<value> on any path     Cache-Tag: <value> (as given)
+//   /tag/<name>                   a tagged page (the tags also in the body)
 //   /page/<name>                  a page (prefetch and sitemaps)
 //   /sitemap.xml                  urlset: /page/1../page/7 of the request host
 //                                 and two pages of another host
@@ -46,8 +47,10 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://origin");
   const path = url.pathname;
   const host = (req.headers.host ?? "").replace(/:\d+$/, "").toLowerCase();
+  const tags = url.searchParams.get("tags");
+  const tagged = tags === null ? {} : { "cache-tag": tags };
   const json = (status, data, headers = {}) => {
-    res.writeHead(status, { "content-type": "application/json", ...headers });
+    res.writeHead(status, { "content-type": "application/json", ...tagged, ...headers });
     res.end(`${JSON.stringify(data)}\n`);
   };
   if (path.startsWith("/control/")) {
@@ -78,10 +81,7 @@ const server = http.createServer(async (req, res) => {
     device,
     requestId: req.headers["x-request-id"] ?? "",
   };
-  if (path.startsWith("/tag/")) {
-    const tags = url.searchParams.get("tags");
-    return json(200, { ...page, tags }, tags === null ? {} : { "cache-tag": tags });
-  }
+  if (path.startsWith("/tag/")) return json(200, { ...page, tags });
   if (path.startsWith("/page/")) return json(200, page);
   if (path === "/sitemap.xml") {
     const urls = [1, 2, 3, 4, 5, 6, 7].map((n) => `http://${host}/page/${n}`);
@@ -114,9 +114,7 @@ const server = http.createServer(async (req, res) => {
   if (path === "/big") {
     // 3 MiB with Range support (sliced caching), tagged by ?tags=.
     const size = 3 * 1024 * 1024;
-    const tags = url.searchParams.get("tags");
-    const headers = { "content-type": "application/octet-stream", "accept-ranges": "bytes" };
-    if (tags !== null) headers["cache-tag"] = tags;
+    const headers = { "content-type": "application/octet-stream", "accept-ranges": "bytes", ...tagged };
     const m = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range ?? "");
     const start = m ? Number(m[1]) : 0;
     const end = m?.[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
