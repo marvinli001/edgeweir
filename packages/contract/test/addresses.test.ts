@@ -9,6 +9,7 @@ import {
   parseIp,
   SPECIAL_PURPOSE_IPV4,
   SPECIAL_PURPOSE_IPV6,
+  unicastAddress,
 } from "../src/index";
 
 describe("IP literals", () => {
@@ -153,6 +154,37 @@ describe("special-purpose origin addresses", () => {
     expect(forbiddenOriginRange("::1", ["127.0.0.0/8"])).toBe("::1/128");
     // Unparsable entries never widen the list.
     expect(forbiddenOriginRange("10.1.2.3", ["garbage", "10.0.0.0/99"])).toBe("10.0.0.0/8");
+  });
+});
+
+describe("unicastAddress", () => {
+  it("keeps single unicast addresses in canonical form, private ones included", () => {
+    expect(unicastAddress("203.0.113.7")).toBe("203.0.113.7");
+    expect(unicastAddress(" 10.0.0.5 ")).toBe("10.0.0.5");
+    expect(unicastAddress("2001:DB8:0:0::10")).toBe("2001:db8::10");
+    expect(unicastAddress("fd00::5")).toBe("fd00::5");
+  });
+
+  it("refuses ranges, names and addresses that are not one host", () => {
+    for (const text of [
+      "0.0.0.0/0",
+      "::/0",
+      "203.0.113.0/24",
+      "203.0.113.7/32",
+      "edge.example.com",
+      "",
+      "0.0.0.0",
+      "::",
+      "127.0.0.1",
+      "::1",
+      "::ffff:127.0.0.1",
+      "169.254.1.1",
+      "fe80::1",
+      "224.0.0.1",
+      "ff02::1",
+      "255.255.255.255",
+    ])
+      expect(unicastAddress(text), text).toBeNull();
   });
 });
 

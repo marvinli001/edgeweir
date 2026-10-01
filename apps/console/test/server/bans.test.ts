@@ -3,7 +3,7 @@ import { schema } from "@edgeweir/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
-import { pruneBans } from "../../src/server/services/bans";
+import { pruneBans, reportAutoBans } from "../../src/server/services/bans";
 import {
   type ApiClient,
   createTestContext,
@@ -306,6 +306,61 @@ describe("dynamic bans", async () => {
       durationSeconds: 60,
     });
     await liftAll();
+  });
+
+  it("protects node addresses only within the node's cluster and never a reported range", async () => {
+    const elsewhere = (await admin.clusters.create({ name: "bans-elsewhere" })).id;
+    const [far, near] = await ctx.db
+      .insert(schema.node)
+      .values([
+        { clusterId: elsewhere, name: "edge-elsewhere" },
+        { clusterId, name: "edge-range" },
+      ])
+      .returning();
+    // A node of another cluster, and rows stored before addresses were checked.
+    await ctx.db.insert(schema.nodeIp).values([
+      { nodeId: far?.id ?? "", address: "192.0.2.77" },
+      { nodeId: near?.id ?? "", address: "0.0.0.0/0" },
+      { nodeId: near?.id ?? "", address: "::/0" },
+    ]);
+    const siteBan = (cidr: string) =>
+      admin.bans.create({ scope: "site", siteId, cidr, reason: "other", durationSeconds: 60 });
+    expect((await siteBan("192.0.2.77")).cidr).toBe("192.0.2.77/32");
+    await siteBan("203.0.113.99");
+    await siteBan("2001:db8:9::/48");
+    // A platform ban applies on every node, so every node's address holds it back.
+    expect(
+      (
+        await rpcError(
+          admin.bans.create({
+            scope: "platform",
+            cidr: "192.0.2.77",
+            reason: "attack",
+            durationSeconds: 60,
+          }),
+        )
+      ).data,
+    ).toEqual({ address: "192.0.2.77" });
+    await liftAll();
+    expect(
+      await reportAutoBans(ctx.db, { id: near?.id ?? "", clusterId }, [
+        {
+          siteId,
+          cidr: "192.0.2.77/32",
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + 600_000),
+          reason: "cc_ip_rate",
+          metric: "ip_qps",
+          observed: 250,
+          threshold: 100,
+          windowSeconds: 10,
+        },
+      ]),
+    ).toBe(1);
+    await liftAll();
+    await ctx.db
+      .delete(schema.node)
+      .where(inArray(schema.node.id, [far?.id ?? "", near?.id ?? ""]));
   });
 
   it("limits active manual bans across the platform (system setting)", async () => {

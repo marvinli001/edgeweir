@@ -56,7 +56,7 @@ import { nodeCertificates } from "../services/certificates";
 import { challengeKeySecrets } from "../services/challenge-keys";
 import { mirrorMinuteStats } from "../services/clickhouse";
 import { claimEnrollmentToken } from "../services/enrollment";
-import { isSerialRevoked, normalizeSerial } from "../services/nodes";
+import { isSerialRevoked, normalizeSerial, replaceReportedAddresses } from "../services/nodes";
 import { replaceOriginHealth } from "../services/origin-health";
 import { mintRevisionReceipt, verifyRevisionReceipt } from "../services/revision-receipts";
 import { getRevision, latestRevision, nodeTarget } from "../services/revisions";
@@ -408,13 +408,7 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
             enrolledAt: new Date(),
           })
           .where(eq(schema.node.id, nodeRow.id));
-        const ips = [...new Set(info?.ipAddresses ?? [])].slice(0, 64);
-        if (ips.length) {
-          await tx
-            .insert(schema.nodeIp)
-            .values(ips.map((address) => ({ nodeId: nodeRow.id, address })))
-            .onConflictDoNothing();
-        }
+        await replaceReportedAddresses(tx, nodeRow.id, info?.ipAddresses ?? []);
         await tx
           .update(schema.enrollmentToken)
           .set({ usedAt: new Date(), usedByNodeId: nodeRow.id })
@@ -724,13 +718,8 @@ export function createNodeService(app: AppContext): ServiceImpl<typeof NodeServi
           values,
           now,
         );
-        const ips = [...new Set(info?.ipAddresses ?? [])].slice(0, 64);
-        if (ips.length) {
-          await tx
-            .insert(schema.nodeIp)
-            .values(ips.map((address) => ({ nodeId: node.id, address })))
-            .onConflictDoNothing();
-        }
+        // Every heartbeat carries the host's current addresses.
+        if (info) await replaceReportedAddresses(tx, node.id, info.ipAddresses);
         await replaceOriginHealth(
           tx,
           node,

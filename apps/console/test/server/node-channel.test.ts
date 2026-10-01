@@ -274,6 +274,23 @@ describe("node channel", async () => {
     });
     expect(node?.ipAddresses).toContain("192.0.2.10");
 
+    // Each heartbeat replaces the addresses; only single unicast addresses count.
+    const heartbeat = (ipAddresses: string[]) =>
+      mtls.reportStatus({
+        appliedRevision: 2n,
+        appliedContentHash: revision.contentHash,
+        state: ApplyState.APPLIED,
+        dataPlaneHealthy: true,
+        info: { hostname: "edge-host", engine: "openresty", ipAddresses },
+      });
+    const addressesNow = async () =>
+      (await listNodes(ctx.db, clusterId)).find((n) => n.id === enrolled.nodeId)?.ipAddresses;
+    await heartbeat(["192.0.2.11", "0.0.0.0/0", "fe80::1", "2001:DB8::5", "192.0.2.11", "edge"]);
+    expect(await addressesNow()).toEqual(["192.0.2.11", "2001:db8::5"]);
+    // A report without a usable address keeps the last ones.
+    await heartbeat(["::/0", "127.0.0.1"]);
+    expect(await addressesNow()).toEqual(["192.0.2.11", "2001:db8::5"]);
+
     // Certificate rotation supersedes the old certificate.
     const rotated = await nodeKeyAndCsr();
     const renewed = await mtls.renewCertificate({ csrPem: rotated.csrPem });

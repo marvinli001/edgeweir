@@ -1,7 +1,7 @@
 import { decodeNodeConfig, nodeRequirements } from "@edgeweir/config-compiler";
-import { type Node, nodeSupportsFeature } from "@edgeweir/contract";
+import { type Node, nodeSupportsFeature, unicastAddress } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { isOnline, ONLINE_WINDOW_SECONDS } from "../lib/node-online";
 import { type Actor, recordAudit } from "./audit";
@@ -222,6 +222,39 @@ export async function deleteNode(db: Database, id: string, actor: Actor): Promis
       },
     });
   });
+}
+
+/** Addresses kept per node. */
+export const MAX_NODE_ADDRESSES = 64;
+
+/**
+ * Replaces the addresses a node reported before with the ones it reports
+ * now, so a changed address or a rotated IPv6 temporary address leaves DNS
+ * and ban protection. Only single unicast addresses are kept; a report
+ * without any (the host could not read its interfaces) keeps the last ones.
+ */
+export async function replaceReportedAddresses(
+  tx: Executor,
+  nodeId: string,
+  reported: readonly string[],
+): Promise<void> {
+  const addresses = [
+    ...new Set(reported.map(unicastAddress).filter((a): a is string => a !== null)),
+  ].slice(0, MAX_NODE_ADDRESSES);
+  if (addresses.length === 0) return;
+  await tx
+    .delete(schema.nodeIp)
+    .where(
+      and(
+        eq(schema.nodeIp.nodeId, nodeId),
+        eq(schema.nodeIp.kind, "reported"),
+        notInArray(schema.nodeIp.address, addresses),
+      ),
+    );
+  await tx
+    .insert(schema.nodeIp)
+    .values(addresses.map((address) => ({ nodeId, address })))
+    .onConflictDoNothing();
 }
 
 /** Canonical form of a certificate serial for comparisons (hex, no colons or leading zeros). */

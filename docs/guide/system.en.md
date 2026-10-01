@@ -52,7 +52,7 @@ Result: the **Install command** (shown once, with a countdown) and the **CA fing
 | **Node** | Name and host name |
 | **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled** |
 | **Node group** | Node group and region |
-| **IP** | Addresses reported by the node |
+| **IP** | Unicast addresses in the node's latest heartbeat (replaced on every heartbeat, at most 64) |
 | **Applied** | The revision the node has applied; badge **In sync** (the node's target revision reached), **Behind**, **Apply failed** (hover for the reason), or **Upgrade required** |
 | **Agent / engine** | Agent version, engine, and engine version |
 | **Heartbeat** | Time of the last heartbeat |
