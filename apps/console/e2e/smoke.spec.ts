@@ -22,6 +22,11 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   // The overview lists the enrolled node.
   await expect(page.getByTestId("home-nodes").getByTestId("home-node")).toContainText("edge-e2e-1");
 
+  // Ctrl+K (⌘K) opens the command menu with every page.
+  await page.keyboard.press("Control+k");
+  await page.getByRole("dialog").getByRole("option", { name: "审计日志" }).click();
+  await expect(page.getByTestId("page-title")).toHaveText("审计日志");
+
   // Clusters & nodes: the enrolled node is online with its applied revision.
   await page.getByTestId("nav-clusters").click();
   await expect(page.getByTestId("page-title")).toHaveText("集群与节点");
