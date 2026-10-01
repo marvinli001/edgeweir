@@ -70,7 +70,14 @@
 #   origin errors with escaped placeholders, no-store and request ids (also in
 #   the sampled logs); platform pages for unknown hosts and disabled sites;
 #   Playwright e2e/g4.spec.ts.
-#   DNS (scripts/e2e-dns.mjs, after G4): two clusters bound to two provider
+#   Core gaps G5 (scripts/e2e-g5.mjs): both nodes report rules-v2; dynamic
+#   redirects (regex_replace, wildcard_replace over full_uri, query edits, an
+#   invalid target failing closed) and rewrites; bulk redirects updated
+#   without an nginx reload; origin rules (group, Host, port) and a config
+#   read timeout; expression cache rules with a browser TTL; compression
+#   rules and config gzip=false without cache bypass; Under Attack, WebSocket
+#   and log sampling per rule; Playwright e2e/g5.spec.ts.
+#   DNS (scripts/e2e-dns.mjs, after G5): two clusters bound to two provider
 #   accounts and domains publish cluster-level records; an offline node
 #   leaves only its cluster's records and returns; one account down does not
 #   stop the other cluster; manual mode writes nothing and exports a BIND
@@ -1071,6 +1078,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g4.mjs --cleanup || fail "G4 cleanup failed"
 pass "G4 checks passed"
+
+step "G5: rule engine extensions: functions, dynamic and bulk redirects, origin, cache and compression rules, config overrides"
+node scripts/e2e-g5.mjs || fail "G5 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g5.spec.ts || fail "G5 browser checks failed"
+fi
+node scripts/e2e-g5.mjs --cleanup || fail "G5 cleanup failed"
+pass "G5 checks passed"
 
 step "DNS: cluster bindings on two accounts, offline removal, provider outage, manual zone file, Custom HTTP credentials"
 "${COMPOSE[@]}" --profile dns up -d node-dns

@@ -17,8 +17,12 @@
 //   /status/<code>                that status with the origin's own body
 //   /slow?ms=<n>                  answers after n ms
 //   /big?tags=<value>             3 MiB with Range support (counted per Range)
+//   /text?type=<mime>&size=<n>    n bytes (default 4096) of compressible text
+//                                 with that Content-Type (G5 compression rules)
 // Every body is JSON with the origin name and a per-origin version number,
-// so a response from the cache is told apart from a new one.
+// so a response from the cache is told apart from a new one; it also echoes
+// the query string, the Accept-Encoding the origin got and the local port
+// (8080, or 8081 for G5 origin rules that override the port).
 import http from "node:http";
 import { gzipSync } from "node:zlib";
 
@@ -80,6 +84,9 @@ const server = http.createServer(async (req, res) => {
     version,
     device,
     requestId: req.headers["x-request-id"] ?? "",
+    query: url.search,
+    acceptEncoding: req.headers["accept-encoding"] ?? "",
+    port: req.socket.localPort,
   };
   if (path.startsWith("/tag/")) return json(200, { ...page, tags });
   if (path.startsWith("/page/")) return json(200, page);
@@ -134,6 +141,12 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(Number(status[1]), { "content-type": "text/plain" });
     return res.end(`origin ${status[1]} page from ${NAME}\n`);
   }
+  if (path === "/text") {
+    const size = Math.min(Number(url.searchParams.get("size") ?? 4096), 1 << 20);
+    const line = `${NAME} ${version} compressible text for edgeweir e2e\n`;
+    res.writeHead(200, { "content-type": url.searchParams.get("type") ?? "text/plain" });
+    return res.end(line.repeat(Math.ceil(size / line.length)).slice(0, size));
+  }
   if (path === "/slow") {
     await new Promise((r) => setTimeout(r, Number(url.searchParams.get("ms") ?? 1000)));
     return json(200, page);
@@ -142,3 +155,7 @@ const server = http.createServer(async (req, res) => {
 });
 server.keepAliveTimeout = 65_000;
 server.listen(8080, "0.0.0.0");
+// G5 origin rules override the port of every origin of a group.
+const second = http.createServer((req, res) => server.emit("request", req, res));
+second.keepAliveTimeout = 65_000;
+second.listen(8081, "0.0.0.0");
