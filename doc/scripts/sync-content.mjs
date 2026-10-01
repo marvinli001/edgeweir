@@ -51,8 +51,8 @@ const SECTIONS = [
     title: { zh: "使用指南", en: "Guides" },
     pages: [
       ["first-site", "docs/guide/first-site.md"],
-      ["organizations", "docs/guide/organizations.md"],
-      ["admin", "docs/guide/admin.md"],
+      ["account", "docs/guide/account.md"],
+      ["system", "docs/guide/system.md"],
       ["origins-and-cache", "docs/guide/origins-and-cache.md"],
       ["https", "docs/guide/https.md"],
       ["rules", "docs/guide/rules.md"],

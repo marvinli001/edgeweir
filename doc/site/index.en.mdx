@@ -8,7 +8,7 @@ Edgeweir is a self-hosted CDN, WAF and intelligent edge scheduling platform. The
 - **Console (control plane)**: handles the web UI, the OpenAPI, certificate issuance, rule compilation and configuration delivery to edge nodes. Ships as a single image and depends only on PostgreSQL 18.
 - **Edge nodes (data plane)**: run on your Linux edge servers. The Go agent keeps the mTLS connection to the console alive and syncs configuration; OpenResty proxies traffic and fetches from origins at high throughput.
 
-Whether you want a quick acceleration gateway for your own sites on a single VPS or are planning a multi-region, multi-cluster, multi-tenant edge network, start with the deployment guides below.
+Whether you want an acceleration gateway for your own sites on a single VPS or a multi-region, multi-cluster edge network, start with the deployment guides below.
 
 ## Deployment
 
@@ -25,8 +25,8 @@ Whether you want a quick acceleration gateway for your own sites on a single VPS
 
 <Cards>
   <Card title="Quick start" href="/en/guide/first-site" description="Setup, first node, first site" />
-  <Card title="Organizations and members" href="/en/guide/organizations" description="Roles, invitations, 2FA, passkeys" />
-  <Card title="Platform administration" href="/en/guide/admin" description="Clusters, regions, system settings, audit log" />
+  <Card title="Account and sign-in" href="/en/guide/account" description="Console navigation, 2FA, passkeys, sessions" />
+  <Card title="Clusters and system" href="/en/guide/system" description="Clusters, regions, system settings, audit log" />
   <Card title="Origins and cache" href="/en/guide/origins-and-cache" description="Origin pools, cache rules, purge and prefetch" />
 </Cards>
 

@@ -14,7 +14,7 @@ A site's origin pool, origin connections, cache rules, cache key, and purge and 
 
 ## Configure origins
 
-1. Open **Console → Sites**, select the site, and open the **Origins** tab.
+1. Open **Sites**, select the site, and open the **Origins** tab.
 2. In the **Origins** card, edit an existing origin or click **Add origin**.
 3. Enter **Origin**, **Port**, **Protocol**, and **Weight**; set **Origin Host** and **SNI** as needed; turn on **Backup** or **S3 signing** as needed.
 4. Click **Save** at the bottom of the card. The console shows **Saved, revision #N**.
@@ -128,7 +128,7 @@ Origins cannot point at special-purpose addresses.
 | --- | --- |
 | Console save | IP literals in these ranges are refused (`ORIGIN_ADDRESS_FORBIDDEN`) |
 | Node | Applies the same list to configured addresses and to every DNS answer; special-purpose addresses in an answer are dropped, and when all are dropped the attempt fails with `address_forbidden` |
-| Allow list | Platform administrators allow ranges in **Admin → System → Origin allow list** for every organization, see [Platform administration](admin.en.md); `localhost` cannot be allowed |
+| Allow list | Ranges are allowed in **System → Origin allow list**; saving publishes to every cluster, see [Origin allow list](system.en.md#origin-allow-list); `localhost` cannot be allowed |
 | Loop detection | Nodes send `CDN-Loop` (RFC 8586) to origins; a request that already carries the node's identifier gets 508 (`X-Edgeweir-Error: loop-detected`) |
 
 ## S3-compatible object storage
@@ -151,7 +151,7 @@ Turn on **S3 signing** on an origin and fill in these fields.
 
 ## Configure cache rules
 
-1. Open **Console → Sites**, select the site, and open the **Cache** tab.
+1. Open **Sites**, select the site, and open the **Cache** tab.
 2. In the **Cache rules** card, click **Add rule**.
 3. Enter **Path prefix** and **Extensions**, select **Action**, enter **TTL (seconds)**, and turn on **Respect origin** as needed.
 4. For more conditions, click **More** and fill in **Exact paths**, **Status codes**, **Min size (KB)**, **Max size (KB)**, **Stale while revalidate (s)**, **Stale if error (s)**, or turn on **Cache requests with Authorization**.
@@ -238,13 +238,13 @@ The **Cache key & slicing** card is saved separately and applies to all rules of
 
 ## Purge and prefetch
 
-1. Open **Console → Purge & prefetch**.
+1. Open **Purge & prefetch**.
 2. Select **Purge URLs**, **Purge directories**, **Purge sites**, or **Prefetch URLs**.
 3. For URL tasks, enter one URL per line; for **Purge sites**, check the sites.
 4. Click **Submit**.
 5. Verify: the task appears under **Tasks**; expanded, each node shows **Succeeded**; after a purge, the next request returns `X-Cache: MISS`.
 
-Tasks go to every enabled node of the site's cluster, with a result per node.
+Tasks go to every enabled node of the site's cluster, with a result per node. Disabled sites cannot be purged or prefetched ("The site is disabled").
 
 ### Task types
 
@@ -255,19 +255,17 @@ Tasks go to every enabled node of the site's cluster, with a result per node.
 | Purge sites | Sites | Purges the whole cache of each site |
 | Prefetch URLs | Full `http://` URLs | The node requests the URL as a normal request and caches it; a status below 400 is success; redirects are not followed; with **Separate mobile and desktop** on, only the desktop variant is warmed |
 
-URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be a domain of the organization's sites (including subdomains under a wildcard).
+URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be a domain of a site (including subdomains under a wildcard).
 
 ### Purge a site's cache
 
-On the site's **Overview** tab, click **Purge cache** and confirm. The console increments the site's cache generation and publishes a revision ("Site {site} purged"); every cached object of the site becomes stale. It shares the organization rate limit with tasks and counts as one entry.
+On the site's **Overview** tab, click **Purge cache** and confirm. The console increments the site's cache generation and publishes a revision ("Site {site} purged"); every cached object of the site becomes stale. A disabled site cannot be purged.
 
 ### Task limits
 
 | Item | Limit |
 | --- | --- |
 | Per task | Up to 500 URLs or 100 sites; each URL up to 2048 characters |
-| Organization rate | Up to 10 tasks per minute and 2000 entries per hour (each URL, directory, or site is one entry); beyond that 429 (`CACHE_TASK_RATE_LIMITED`, with the seconds to wait) |
-| Platform administrators | Not rate-limited; tasks they submit for an organization's sites count toward that organization's usage; whole-site purges the console sends on its own do not count |
 | Node purge markers | Up to 1000 URL and directory markers per site (node flag `--purge-markers-per-site`); beyond that they merge into one whole-site purge |
 | Order | A node runs the purges of a batch before its prefetches |
 | Prefetch time | A batch (up to 10 tasks) shares a 4-minute budget (node flag `--prefetch-budget`) counted from the pull; 60 seconds per URL; concurrency 4; URLs unfinished at the deadline fail (`prefetch_timeout`) |
@@ -285,7 +283,7 @@ On the site's **Overview** tab, click **Purge cache** and confirm. The console i
 | Case | Behavior |
 | --- | --- |
 | Not run within 7 days | Failed ("Not executed by the node within 7 days", `task_expired`) |
-| Make-up whole-site purge | A node that reconnects after more than 7 days offline, or is re-enabled, does not run expired purges; it gets one whole-site purge for each affected site instead: one task per organization, source "System (make-up whole-site purge)", sent only to that node; the original task shows "Made up with a whole-site purge when the node came back" for that node |
+| Make-up whole-site purge | A node that reconnects after more than 7 days offline, or is re-enabled, does not run the purges it missed; it gets one whole-site purge for each affected site instead: all in one task, source "System (make-up whole-site purge)", sent only to that node; deleted sites are left out. The original task shows "Made up with a whole-site purge when the node came back" for that node |
 | Prefetch | Missed prefetches are not made up |
 
 ## Limits
@@ -305,18 +303,18 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| Saving shows "Origin address … is in the special-purpose range …, which the platform does not allow" | The origin IP literal is in a special-purpose range | Use a public address, or have a platform administrator add the range to the origin allow list |
+| Saving shows "Origin address … is in the special-purpose range …, which the origin allow list does not include" | The origin IP literal is in a special-purpose range | Use a public address, or add the range to the origin allow list |
 | The origin shows "… is a special-purpose address outside the origin allow list" | Every DNS answer for the origin name is a special-purpose address | Same as above |
 | An HTTPS origin returns 502 and shows "TLS handshake or certificate verification failed" | Self-signed certificate, certificate not covering the SNI, or incomplete chain; missing CA file on the node | Use a trusted certificate or the correct **SNI**; for self-signed origins turn off **Verify origin certificates**; point the node at a CA file with `--trusted-ca` |
 | 502 with `X-Edgeweir-Error: no-origin` | Every origin was dropped before the attempt (resolution failure, forbidden address, missing S3 credentials) | Read the error on the **Origins** tab |
-| 404 with `X-Edgeweir-Error: unknown-host` | The Host belongs to no site the node applied: unverified domain, deleted site, or the node has not applied the latest revision | Complete [domain ownership](dns-and-alerts.en.md#verify-domain-ownership); check the node's **Applied** revision |
+| 404 with `X-Edgeweir-Error: unknown-host` | The Host belongs to no site the node applied: the site is disabled or deleted, or the node has not applied the latest revision | Check the **Status** on the site's **Overview** tab and the node's **Applied** revision |
 | 508 with `X-Edgeweir-Error: loop-detected` | The origin points back at this node or at a CDN in front of it | Change the origin address |
 | 403 with `X-Edgeweir-Error: websocket-disabled` | WebSocket is off for the site | Turn on **WebSocket** |
 | 405 with `X-Edgeweir-Error: method-not-allowed` | S3 origins accept only `GET` and `HEAD` | Add a non-S3 origin for write requests |
 | Requests with `Authorization` always show `X-Cache: BYPASS` | Bypassed by default | Turn on **Cache requests with Authorization** on the rule |
 | Responses always show `X-Cache: MISS` | No applicable rule; in respect mode the origin sent no lifetime; the response has `Set-Cookie`; the TTL is 0 | Check rule order, conditions, and origin headers |
-| "Too many purges: …" | The organization hit the rate limit | Retry after the stated seconds; merge URLs into a directory purge |
-| "No site serves …" | The URL's Host is not a domain of the organization's sites | Check the domain and its organization |
+| "No site serves …" | The URL's Host is not a domain of any site | Check the spelling of the domain |
+| "The site is disabled" | A task or **Purge cache** concerns a disabled site | Enable the site on its **Overview** tab, then submit again |
 | "Invalid URL: …" | Not an `http(s)` URL, carries credentials, or a directory purge has a query | Fix the URL |
 | Prefetch fails with "the node has no HTTPS listener yet" | Prefetch supports only `http://` | Use `http://` URLs |
 | "Ran out of time after … URLs" | The 4-minute budget ran out | Split into several tasks |

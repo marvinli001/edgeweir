@@ -254,7 +254,7 @@ A revision receipt is sealed with the master key (purpose `node.revision_receipt
 | Commands | `version`, `providers`, `obtain`, `renew`, `revoke`, `dns.list`, `dns.set`, `dns.present`, `dns.cleanup` |
 | DNS providers | `cloudflare`, `alidns`, `huaweicloud`, `dnspod` |
 
-Platform DNS (`dns.reconcile`, every minute) computes records from healthy nodes and site domains, creates a `dns_revision`, and writes it to the zone of a `platform_dns_provider`; names are recorded in `dns_managed_name` before external records are written, so partial writes can be repaired. A site's domains route as soon as they are saved; a domain belongs to one site. Behavior: [HTTPS and certificates](docs/guide/https.en.md), [DNS and alerts](docs/guide/dns-and-alerts.en.md).
+DNS steering (`dns.reconcile`, every minute) computes records from healthy nodes and site domains, creates a `dns_revision`, and writes it to the zone of a `platform_dns_provider`; names are recorded in `dns_managed_name` before external records are written, so partial writes can be repaired. A site's domains route as soon as they are saved; a domain belongs to one site. Behavior: [HTTPS and certificates](docs/guide/https.en.md), [DNS steering and alerts](docs/guide/dns-and-alerts.en.md).
 
 ## Statistics, logs, and alerts
 
@@ -274,14 +274,14 @@ Access logs are sampled per site; the sample rate defaults to 0 (off). Per-minut
 
 The Compose profile `cache` starts Valkey; the console does not use Valkey yet.
 
-Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificates, unavailable origins, and high 5xx rates (the `cc_mitigation` alert fires on a node's event and resolves once no node reports the site above normal), create `alert_event` rows, fan them out to `alert_delivery` by `alert_subscription`, and send them through an `alert_channel` (webhook or email); membership, bans, two-factor, and channel visibility are checked again at delivery. Access logs and AccessKeys: [Access logs and AccessKeys](docs/guide/access-logs.en.md).
+Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificates, unavailable origins, and high 5xx rates (the `cc_mitigation` alert fires on a node's event and resolves once no node reports the site above normal), create `alert_event` rows, fan them out to `alert_delivery` by `alert_subscription`, and send them through an `alert_channel` (webhook, email, DingTalk, WeCom, or Telegram); at delivery the channel must still be enabled and the subscription still valid, and "receive every alert" channels get every alert. Access logs and AccessKeys: [Access logs and AccessKeys](docs/guide/access-logs.en.md).
 
 ## Background jobs
 
 | Queue | Schedule | Work |
 | --- | --- | --- |
 | `alerts.sweep` | Every minute | Alert detection and delivery |
-| `dns.reconcile` | Every minute | Platform DNS publishing and external record maintenance |
+| `dns.reconcile` | Every minute | DNS steering publishing and external record maintenance |
 | `traffic.rollup` | Every minute | Traffic rollup and cleanup, access log partition maintenance, upgrade expiry |
 | `certificates.sweep` | Every minute | Certificate issuance and renewal |
 | `maintenance.recompile` | At start; skipped while `config_recompiled` in `system_setting` matches the current marker | Republishes every cluster once when an upgrade changes what stored data compiles to |
@@ -356,8 +356,8 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `acme_challenge` | Short-lived public HTTP-01 responses |
 | `dns_credential` | DNS provider credentials for ACME DNS-01, envelope-encrypted |
 | `dns_challenge_lease` | Cleanup obligations of DNS-01 TXT records |
-| `platform_dns_provider` | Platform DNS provider and zone, credentials envelope-encrypted |
-| `dns_state` | Platform DNS policy and desired / applied DNS revision |
+| `platform_dns_provider` | DNS steering provider and zone, credentials envelope-encrypted |
+| `dns_state` | DNS steering policy and desired / applied DNS revision |
 | `dns_revision` | DNS revisions: record set, managed names, status |
 | `dns_managed_name` | Registered managed DNS names |
 

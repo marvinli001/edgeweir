@@ -6,7 +6,7 @@
 [![Docs](https://github.com/marvinli001/edgeweir/actions/workflows/docs.yml/badge.svg?branch=master)](https://marvinli001.github.io/edgeweir/zh/)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSE)
 
-自托管的 CDN / WAF / 边缘调度控制平面。统一管理边缘节点、源站池、缓存、HTTPS、访问策略、DNS 调度与组织权限。边缘节点见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。
+自托管的 CDN / WAF / 边缘调度控制平面，面向个人自用：一个运营者账户统一管理边缘节点、源站池、缓存、HTTPS、访问策略与 DNS 调度。边缘节点见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。
 
 文档：<https://marvinli001.github.io/edgeweir/zh/>
 
@@ -14,13 +14,13 @@
 
 | 领域 | 能力 |
 | --- | --- |
-| 集群与权限 | 节点组、区域、组织、成员邀请、2FA / Passkey、管理审计 |
+| 集群与账户 | 节点组、区域、配置金丝雀、2FA / Passkey、服务账号、审计日志 |
 | 源站与缓存 | 源站池、回源 TLS 校验、S3 签名回源、WebSocket、缓存键、切片、刷新与预热 |
 | 证书与协议 | 证书上传、ACME HTTP-01 / DNS-01 签发与续期、HTTPS、HSTS、HTTP/2、HTTP/3；Zstandard、Brotli、Gzip 压缩 |
-| 访问策略 | 组织 / 平台 IP 名单、本地 GeoIP、分阶段规则、WAF、限速、重定向、改写、请求头与响应头变换；秒级下发的 IP 封禁，平台封禁可由 nftables 在内核丢包 |
-| 托管规则 | OWASP CRS：仅检测或拦截、paranoia level、异常分数阈值、按规则 ID 排除、请求体检查上限；命中规则的统计与访问日志；平台可禁止租户开启 |
-| 挑战与 CC 防护 | Cookie 跳转、JS 计算、工作量证明、图片验证码四级挑战；网站或平台 Under Attack；节点本地分级 CC 自动升级（站点、单 URL、单 IP 自动封禁、源站错误率）；集群内通用的签名通行凭证；JA4 指纹用于规则、限速与访问日志 |
-| DNS 与观测 | 域名归属验证、独立 DNS 版本、健康节点调度、流量统计去重与汇总、Top URL / IP、告警与订阅 |
+| 访问策略 | IP 名单（全局允许 / 拦截）、本地 GeoIP、分阶段规则、WAF、限速、重定向、改写、请求头与响应头变换；秒级下发的 IP 封禁，全局封禁可由 nftables 在内核丢包 |
+| 托管规则 | OWASP CRS：仅检测或拦截、paranoia level、异常分数阈值、按规则 ID 排除、请求体检查上限；命中规则的统计与访问日志 |
+| 挑战与 CC 防护 | Cookie 跳转、JS 计算、工作量证明、图片验证码四级挑战；网站或全局 Under Attack；节点本地分级 CC 自动升级（站点、单 URL、单 IP 自动封禁、源站错误率）；集群内通用的签名通行凭证；JA4 指纹用于规则、限速与访问日志 |
+| DNS 与观测 | 独立 DNS 版本、健康节点调度、流量统计去重与汇总、Top URL / IP、告警与订阅 |
 | 运维 | 采样访问日志与 CSV 导出、可选 ClickHouse、只读及可吊销 AccessKey、签名灰度升级与回滚、性能基线、备份恢复 |
 
 ## 架构
@@ -85,7 +85,7 @@ docker compose up -d
 docker compose logs console | grep setupToken
 ```
 
-访问 <http://localhost:3000>，使用日志中的一次性 setup token 完成初始化向导，创建平台管理员与默认组织。setup token 在首次初始化成功后失效；无 token 的初始化请求一律拒绝。
+访问 <http://localhost:3000>，使用日志中的一次性 setup token 完成初始化向导，创建唯一的运营者账户与默认集群。setup token 在首次初始化成功后失效；无 token 的初始化请求一律拒绝。
 
 ### 环境变量
 
@@ -95,7 +95,7 @@ docker compose logs console | grep setupToken
 | `POSTGRES_PASSWORD` | 是 | 内置 PostgreSQL 密码。 |
 | `BETTER_AUTH_SECRET` | 否 | 未设置时由主密钥派生。已设置的部署不得移除，否则控制台拒绝启动。 |
 
-其余变量均有默认值，完整列表见 [.env.example](.env.example)。SMTP、节点发布源、域名归属校验 DNS、源站地址允许清单与 GeoIP 在初始化后于 **后台 → 系统设置** 配置。
+其余变量均有默认值，完整列表见 [.env.example](.env.example)。SMTP、节点发布源、源站地址允许清单与 GeoIP 在初始化后于 **系统设置** 配置。
 
 ### 可选组件
 
@@ -133,7 +133,7 @@ sudo bash deploy.sh install
 
 节点要求：Linux（systemd），amd64 / arm64，glibc 2.34 及以上（RHEL / Rocky / AlmaLinux 9+、Debian 12+、Ubuntu 22.04+），可访问控制台 8443 端口。
 
-1. 以平台管理员登录，切换至 **后台 → 集群与节点**，选择集群并生成安装命令。命令包含单次有效 token 与控制台内部 CA 的 SHA-256 指纹。
+1. 登录控制台，打开 **集群与节点**，选择集群并生成安装命令。命令包含单次有效 token 与控制台内部 CA 的 SHA-256 指纹。
 2. 在节点上以具备 sudo 权限的账户执行：
 
    ```sh
@@ -200,7 +200,7 @@ pnpm e2e     # --up 启动环境；--down 结束后删除环境与卷；--skip-u
 - 与本仓库同级的 edgeweir-node 检出（或 `EDGEWEIR_NODE_CONTEXT`）
 - 安装步骤：goreleaser v2、syft、cosign、Go 1.27.1，以及对 deb.debian.org、openresty.org 的网络访问
 
-覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 组织与管理端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、动态封禁（下发延迟 p95 ≤ 5 秒、站点封禁、平台封禁由 nftables 丢包）、挑战与通行凭证（无头浏览器通过 js 与 pow 挑战，凭证在另一节点有效，换网段、换 UA 或伪造后失效）、分级 CC（只升级被攻击的路径、单 IP 自动封禁）、JA4 参与规则匹配、Playwright 页面流程。
+覆盖范围：节点注册、配置下发、缓存、刷新与预热、源站与 S3、故障切换、认证路由白名单（better-auth 管理与 api-key 端点关闭，API Key 不转换为会话）、源站地址策略与 CDN-Loop、HTTPS 源站名称校验、1 MiB 切片 Range 请求、`install.sh` 在干净容器中从控制台镜像安装、动态封禁（下发延迟 p95 ≤ 5 秒、站点封禁、全局封禁由 nftables 丢包）、挑战与通行凭证（无头浏览器通过 js 与 pow 挑战，凭证在另一节点有效，换网段、换 UA 或伪造后失效）、分级 CC（只升级被攻击的路径、单 IP 自动封禁）、JA4 参与规则匹配、Playwright 页面流程。
 
 以下变量由 `compose.e2e.yml` 与 `scripts/e2e.sh` 共同读取，两侧取值须一致。更换项目名、端口、tag 与子网即可并行运行第二套环境。
 
@@ -241,7 +241,7 @@ doc/                       文档站（Fumadocs），发布至 GitHub Pages
 | 分类 | 文档 |
 | --- | --- |
 | 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
-| 使用 | [快速上手](docs/guide/first-site.md) · [组织与成员](docs/guide/organizations.md) · [平台管理](docs/guide/admin.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 与告警](docs/guide/dns-and-alerts.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
+| 使用 | [快速上手](docs/guide/first-site.md) · [账户与登录](docs/guide/account.md) · [集群与系统](docs/guide/system.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 调度与告警](docs/guide/dns-and-alerts.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
 | 参考 | [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [API 与端点](docs/reference/api.md) |
 | 项目 | [架构](ARCHITECTURE.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |
 
@@ -249,4 +249,4 @@ doc/                       文档站（Fumadocs），发布至 GitHub Pages
 
 [AGPL-3.0-only](LICENSE)，[edgeweir-node](https://github.com/marvinli001/edgeweir-node) 相同。允许在遵守许可证的前提下商用。
 
-组织、成员、权限、组织隔离及控制台与后台属于开源核心；客户门户、套餐计费、财务与分销由独立商业产品提供，不对开源核心附加使用限制。详见 [LICENSING.md](LICENSING.md)。
+开源版是单一运营者的 CDN，不支持多租户；组织与成员等多租户能力、客户门户、套餐计费、财务与分销由独立商业产品提供，不对开源核心附加使用限制。详见 [LICENSING.md](LICENSING.md)。

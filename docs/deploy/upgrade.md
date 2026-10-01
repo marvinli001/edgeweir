@@ -22,7 +22,7 @@
 
 | 对象 | 命令或位置 |
 | --- | --- |
-| 运行中的版本 | `curl -s http://127.0.0.1:3000/healthz` 的 `version`；**后台 → 系统设置** 「系统信息」中的「版本」 |
+| 运行中的版本 | `curl -s http://127.0.0.1:3000/healthz` 的 `version`；**系统设置** 的「系统信息」中的「版本」 |
 | `latest` 对应的 tag | `docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' ghcr.io/marvinli001/edgeweir:latest`（拉取后执行） |
 | tag 的 digest | `docker buildx imagetools inspect ghcr.io/marvinli001/edgeweir:<tag>` 输出的 `Digest` |
 
@@ -97,6 +97,40 @@ Docker Compose：
 | `deploy.sh` | `./deploy.sh update` 或 `./deploy.sh update <tag>`，先自动备份，见 [deploy.sh 参考](deploy-script.md)。 |
 | `docker run` | `docker pull ghcr.io/marvinli001/edgeweir:<新 tag>`，`docker rm -f edgeweir-console`，用相同参数与新 tag 重新创建；数据在 `edgeweir-postgres` 卷中。 |
 | 源码构建 | 检出目标提交，执行 `docker compose up -d --build`。 |
+
+## 从多组织控制台升级
+
+控制台只有一个账户，没有组织、成员、角色与单独的管理后台。从有多个组织或账户的版本升级时，迁移 `0031`–`0034` 在启动时自动执行。
+
+升级前：
+
+1. 备份数据库：这些迁移删除账户与组织数据，回滚只能用升级前的备份恢复，见[回滚](#回滚)。
+2. 确认最早创建、未被停用的平台管理员可以登录：升级后只有这个账户。
+3. 检查待验证的域名：升级后它们直接参与路由，删除不应路由的域名。
+
+迁移结果：
+
+| 对象 | 升级后 |
+| --- | --- |
+| 账户 | 最早创建、未被停用的平台管理员成为唯一的账户，沿用原密码、两步验证与通行密钥；其他账户连同会话、通行密钥与 AccessKey 被删除 |
+| 告警订阅 | 其他账户的订阅并入保留的账户：每个网站与渠道一条，告警种类合并 |
+| 数据 | 所有组织的网站、证书、DNS 凭据、封禁、IP 名单、规则、告警、统计与审计日志都保留 |
+| IP 名单 | 组织的名单变为「供规则引用」（此前只有平台的放行与拦截名单在边缘生效）；名称与已有名单重复时加后缀 `_<6 位十六进制>`，该组织网站规则中的引用随之改名 |
+| 暂停的网站 | 变为停用 |
+| 域名 | 待验证的域名直接参与路由；同一域名在多个网站上时只保留一个：已验证的优先，否则保留最早添加的 |
+| 删除的设置 | 组织技术限额、组织两步验证要求与默认集群、「允许租户开启 OWASP CRS」开关、「所有权校验 DNS」设置、服务账号中与组织有关的 scope |
+| 环境变量 | 不再读取 `EDGEWEIR_DNS_RESOLVERS`，可从 `.env` 删除 |
+| 配置 | worker 为每个集群重新发布一次配置（原因「升级后重新编译配置」），使原先未验证的域名与合并后的 IP 名单下发到节点；发布失败的集群保留原版本，控制台日志记录 `recompile after upgrade failed`，下一次修改该集群的配置时更新 |
+
+原 `/admin/*` 页面并入同一个控制台：书签 `/admin/<页面>` 跳转到对应页面（`/admin/settings` 跳转到 `/system`），其他 `/admin` 地址打开概览。
+
+API 变化，使用这些接口的集成需要修改：
+
+| 变化 | 接口 |
+| --- | --- |
+| 移除 | `organizations.*`、`members.*`、`invitations.*`、`users.*`、`admin.*`（含 `/admin/sites` 的暂停与恢复、`/admin/organizations/{id}/limits`、`/admin/bans`）、`platformIpLists.*`（`/platform-ip-lists`）、`domainOwnership.*` 与 `/sites/{id}/ownership*`、`settings.waf`、`settings.dnsResolvers` |
+| 字段 | 网站、封禁、证书、用量与审计记录不再包含组织字段 |
+| 路径 | 节点升级为 `/api/v1/node-upgrades`、`/api/v1/node-releases/{version}`，不带 `/admin` 前缀；封禁只用 `/api/v1/bans`，IP 名单只用 `/api/v1/ip-lists` |
 
 ## 回滚
 

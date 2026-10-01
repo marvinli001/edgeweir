@@ -6,10 +6,10 @@ Your first site running in 5 minutes: from console setup and the first edge node
 
 A complete edge acceleration service usually takes these 6 steps:
 
-1. **Complete the setup wizard**: create the platform administrator account and the default organization.
+1. **Complete the setup wizard**: create the only account and the default cluster.
 2. **Enroll the first edge node**: run the one-line enrollment script on the node server to establish a trusted mTLS connection.
 3. **Add a site and its origin**: configure the accelerated domains, the origin fetch policy, and basic cache rules.
-4. **Configure DNS**: point the domain's authoritative DNS at the edge nodes' public IPs or the CNAME scheduling domain.
+4. **Configure DNS**: point the domain's authoritative DNS at the edge nodes' public IPs or the CNAME steering domain.
 5. **Request and bind a certificate**: issue a free ACME certificate in one click and serve the whole site over HTTPS.
 6. **Verify origin fetch and caching**: check with curl that requests hit the edge node cache.
 
@@ -21,7 +21,7 @@ A complete edge acceleration service usually takes these 6 steps:
 | Node host | Linux (systemd), amd64 / arm64; reaches `EDGEWEIR_PUBLIC_URL` and the node channel (TCP 8443 by default); an account with sudo |
 | Node inbound ports | TCP 80; TCP 443 once HTTPS is enabled |
 | Domain | Its authoritative DNS records can be edited |
-| Origin | Reachable from the node; its address is outside special-purpose ranges (private, loopback, and so on) or covered by the [origin allow list](admin.en.md#origin-allow-list) |
+| Origin | Reachable from the node; its address is outside special-purpose ranges (private, loopback, and so on) or covered by the [origin allow list](system.en.md#origin-allow-list) |
 
 ## 1. Complete the setup wizard
 
@@ -33,32 +33,30 @@ A complete edge acceleration service usually takes these 6 steps:
 
    The log line is JSON: the `setupToken` field holds the token (prefix `ews_`) and the `url` field the setup page. An uninitialized console prints the same token at every start. For log locations of other deployment methods, see [Docker Compose](../deploy/docker.en.md) and [BaoTa Panel and aaPanel](../deploy/baota.en.md).
 
-2. Open `EDGEWEIR_PUBLIC_URL` in a browser. An uninitialized console redirects to `/setup` (**Create administrator**).
+2. Open `EDGEWEIR_PUBLIC_URL` in a browser. An uninitialized console redirects to `/setup` (**Create your account**).
 
 3. Fill in the form and click **Finish**.
 
    | Field | Description |
    | --- | --- |
    | **Setup token** | The token from step 1 |
-   | **Name** | Name of the platform administrator, at most 100 characters |
+   | **Name** | 1–100 characters |
    | **Email** | Sign-in email |
    | **Password** | 12–128 characters |
-   | **Organization** | Name of the first organization, default `Default` |
 
-4. Verify: the console signs in and opens **Overview**; the **System** card of **Admin → System** shows **Setup token** as **Used {time}**.
+4. Verify: the console signs in and opens **Overview**; on **System**, the **System** card shows **Setup token** as **Used {time}**.
 
 Objects created by setup:
 
 | Object | Value |
 | --- | --- |
-| Platform administrator | The account from the form; also owner of the first organization |
-| Organization | The organization name from the form; slug derived from the name |
+| Account | The account from the form, and the console's only account; for sign-in methods see [Account and sign-in](account.en.md) |
 | Cluster | `default` with the default node group `default`; revision #1 published |
 | Setup token | Spent; `/setup` redirects to the sign-in page from then on |
 
 ## 2. Enroll a node
 
-1. Open **Admin → Clusters & nodes**, select the cluster `default`, and click **Add node**.
+1. Open **Clusters & nodes**, select the cluster `default`, and click **Add node**.
 
 2. Fill in the form and click **Generate command**.
 
@@ -66,7 +64,7 @@ Objects created by setup:
    | --- | --- |
    | **Node name** | Optional, at most 64 characters |
    | **Node group** | Defaults to the cluster's default node group |
-   | **Valid for** | 15 min, 1 h (default), or 24 h |
+   | **Valid for** | 15 minutes, 1 hour (default), or 24 hours |
 
 3. Copy the **Install command** (shown once) and run it on the node host. Command format:
 
@@ -75,7 +73,7 @@ Objects created by setup:
    curl -fsSL https://console.example.com/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server https://console.example.com:8443 --ca-sha256 <CA fingerprint>
    ```
 
-4. Verify: the node appears in the node table of **Admin → Clusters & nodes**, **Status** is **Online**, and **Applied** shows **In sync**.
+4. Verify: the node appears in the node table of **Clusters & nodes**, **Status** is **Online**, and **Applied** shows **In sync**.
 
 The token is single-use. For the installer's checks, the download mirror, and failure handling, see [Adding nodes](../deploy/nodes.en.md).
 
@@ -99,9 +97,10 @@ The token is single-use. For the installer's checks, the download mirror, and fa
 
 | Rule | Description |
 | --- | --- |
-| Cluster | The organization's default cluster; the oldest cluster when none is set |
-| Domain ownership | Domains of a site created by a platform administrator show **Administrator approved**. A site created by an organization member needs the TXT check on its **Domains** tab; unverified domains are not published to nodes. See [Verify domain ownership](dns-and-alerts.en.md#verify-domain-ownership) |
-| Origin address | Origins in special-purpose ranges are refused unless the platform allows the range |
+| Cluster | With several clusters, **Cluster** in the form (default: the oldest); through the API, `clusterId`. A site cannot change clusters later |
+| Domains | Domains are published to the nodes as soon as the site is saved. A domain (name and wildcard flag) belongs to at most one site |
+| Origin address | Origins in special-purpose ranges are refused unless the origin allow list covers the range |
+| Disabling | **Disable** on the site's **Overview** tab: the site is no longer sent to the nodes, which answer 404 for its domains; DNS records stay. **Enable** restores it, see [Site enabling](system.en.md#site-enabling) |
 
 For origin pools, cache rules, and cache keys, see [Origins and cache](origins-and-cache.en.md).
 
@@ -109,24 +108,24 @@ For origin pools, cache rules, and cache keys, see [Origins and cache](origins-a
 
 Add a record for every site domain in the domain's authoritative DNS.
 
-| Platform DNS | Record |
+| DNS steering | Record |
 | --- | --- |
-| Not configured | `A` / `AAAA` records to the node's public address. The **IP** column of the node table in **Admin → Clusters & nodes** lists the addresses the node reports. One record per node |
-| Configured (**Admin → Platform DNS**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** tab (`<site ID>.<CNAME domain>`). The card shows **Published** once the records are written to the provider |
+| Not configured | `A` / `AAAA` records to the node's public address. The **IP** column of the node table in **Clusters & nodes** lists the addresses the node reports. One record per node |
+| Configured (**DNS steering**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** tab (`<site ID>.<CNAME domain>`). The card shows **Published** once the records are written to the provider |
 
-For lines, health-based removal, and TTL of platform DNS, see [Configure platform DNS](dns-and-alerts.en.md#configure-platform-dns).
+For lines, health-based removal, and TTL of DNS steering, see [Configure DNS steering](dns-and-alerts.en.md#configure-dns-steering).
 
 ## 5. Enable HTTPS
 
-1. Open **Certificates** and click **Request certificate** (ACME) or **Upload certificate**. HTTP-01 validation requires the records from step 4 to be live.
+1. Open **Certificates** and click **Request certificate** (ACME) or **Upload certificate**. HTTP-01 validation requires every certificate name to be a domain of a site and the records from step 4 to be live.
 2. On the site's **HTTPS** tab, select the certificate under **Certificates**, turn on **Redirect HTTP to HTTPS** if needed, and click **Save**.
-3. The cluster publishes a new revision. Once a site in the cluster references a certificate, nodes listen on TCP 443.
+3. The cluster publishes a new revision. Once an enabled site in the cluster references a certificate, nodes listen on TCP 443.
 
 For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](https.en.md).
 
 ## 6. Verify
 
-1. Confirm the configuration is applied: in **Admin → Clusters & nodes**, the node's **Applied** revision equals the cluster's **Latest revision** and shows **In sync**.
+1. Confirm the configuration is applied: in **Clusters & nodes**, the node's **Applied** revision equals the cluster's **Latest revision** and shows **In sync**.
 
 2. Send an HTTP request straight to the node, bypassing DNS (replace `203.0.113.10` with the node address):
 
@@ -153,7 +152,7 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
    curl -sI http://www.example.com/
    ```
 
-   Expected: `dig` returns the node address (preceded by the CNAME target with platform DNS); `curl` matches step 2.
+   Expected: `dig` returns the node address (preceded by the CNAME target with DNS steering); `curl` matches step 2.
 
 ## Troubleshooting
 
@@ -164,9 +163,9 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
 | Node missing or **Offline** | Enrollment failed, or the node cannot reach the node channel | See [Adding nodes](../deploy/nodes.en.md) and [Ports, reverse proxy, and trusted proxies](../deploy/networking.en.md) |
 | **Applied** shows **Apply failed** | The node failed to validate or apply the configuration | Hover the badge for the reason |
 | **Applied** shows **Upgrade required** | The node lacks a capability the configuration needs | Upgrade the node; see [Node upgrades](node-upgrades.en.md) |
-| 404 with `X-Edgeweir-Error: unknown-host` | The domain is not in the node's configuration: revision not applied, or domain not verified | Check **Applied** and the ownership state on the **Domains** tab |
+| 404 with `X-Edgeweir-Error: unknown-host` | The domain is not in the node's configuration: revision not applied, or the site is disabled | Check **Applied** and the **Status** on the site's **Overview** tab |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | SNI and `Host` of an HTTPS request differ | Use `--resolve` |
 | 502 with `X-Edgeweir-Error: no-origin` | No usable origin | Check origin address, port, protocol, and health; see [Origins and cache](origins-and-cache.en.md) |
 | 508 with `X-Edgeweir-Error: loop-detected` | The origin points back to a node | Point the origin at the real origin server |
-| New site shows **Origin address … is in the special-purpose range …, which the platform does not allow** | The origin is a private, loopback, or similar address | A platform administrator adds the range to the [origin allow list](admin.en.md#origin-allow-list) |
-| New site shows **Domain already in use: …** | The domain belongs to another site or organization | Use another domain, or remove it from the other site first |
+| New site shows **Origin address … is in the special-purpose range …, which the origin allow list does not include** | The origin is a private, loopback, or similar address | Use a public address, or add the range to the [origin allow list](system.en.md#origin-allow-list) |
+| New site shows **Domain already in use: …** | The domain belongs to another site | Use another domain, or remove it from the other site first |

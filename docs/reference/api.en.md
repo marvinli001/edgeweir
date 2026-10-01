@@ -21,7 +21,7 @@ Unmatched requests under `/api/*`, `/rpc/*`, `/downloads/*`, `/install.sh`, and 
 
 ## Public API
 
-`/api/v1` and `/rpc` are generated from the same oRPC contract in `packages/contract`. The OpenAPI document is at `/api/v1/openapi.json`, with `servers` set to `<EDGEWEIR_PUBLIC_URL>/api/v1`; "OpenAPI" in **Admin → System** links to it.
+`/api/v1` and `/rpc` are generated from the same oRPC contract in `packages/contract`. The OpenAPI document is at `/api/v1/openapi.json`, with `servers` set to `<EDGEWEIR_PUBLIC_URL>/api/v1`; "OpenAPI" in **System** links to it.
 
 ```bash
 curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
@@ -29,33 +29,33 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 
 ### Authentication
 
-- Header `x-api-key: <AccessKey>`; AccessKeys start with `ewk_`.
-- An AccessKey acts as its creator, with the creator's role and organization scope. A platform administrator's key can call Admin procedures.
-- When the creator's organization requires two-factor authentication and the creator has not enabled it, tenant procedures return 403 `TWO_FACTOR_REQUIRED`.
-- Invalid, revoked, or missing key: 401. Once the creator's account is disabled, requests with the creator's AccessKeys are refused.
+- Header `x-api-key: <key>`: an AccessKey (starts with `ewk_`) or a service account key (starts with `ews_`).
+- An AccessKey acts as the operator (the only account, created by the setup wizard); its scope decides which procedures it can call, see [AccessKey](#accesskey). A service account key can call only the procedures listed under [Service accounts](#service-accounts).
+- Invalid, revoked, or missing key: 401.
 - Each AccessKey allows up to 600 requests in a row; the count restarts when more than 60 seconds pass since the previous request. Beyond that the answer is 429 `API_KEY_RATE_LIMITED` with `data.retryAfterSeconds`. Use a service account key for continuous polling; service account keys are not counted.
-- Procedures that need no key (`security: []` in OpenAPI): `GET /system/status`, `POST /system/setup`, `GET /invitations/{id}`, and `POST /invitations/{id}/accept`.
+- Procedures that need no key (`security: []` in OpenAPI): `GET /system/status` and `POST /system/setup`.
+- `GET /me` returns the caller: `{ user: { id, name, email, twoFactorEnabled }, serviceAccount }`; with an AccessKey, `serviceAccount` is `null`.
 
 ### AccessKey
 
-Managed in **Settings → Access keys**. Each user sees and revokes only their own keys.
+Managed in **Settings → Access keys** (user menu), or through `accessKeys.*` on `/rpc` with a signed-in session.
 
 | Action | Where | Notes |
 | --- | --- | --- |
-| Create | Enter "Name" (up to 64 characters), choose "Scope", click "Create" | Default "Read and write". The key is shown once. Keys are created only from a signed-in console session; creating one through `/api/v1` returns 403 `ACCESS_KEY_SESSION_REQUIRED`. |
+| Create | Enter "Name" (up to 64 characters), choose "Scope", click "Create" | Default "Read and write". The key is shown once. Keys are created only from a signed-in console session; `POST /access-keys` on `/api/v1` with a key returns 403 `ACCESS_KEY_SESSION_REQUIRED`. |
 | View | Key list; `GET /api/v1/access-keys` | Prefix, scope, state, last use |
 | Revoke | "Revoke key"; `DELETE /api/v1/access-keys/{id}` | Requests with the key return 401 afterwards; the key stays in the list marked "Revoked" |
 
 | Scope | Callable procedures |
 | --- | --- |
 | Read only | `GET` procedures and `POST /rules/validate`; other methods return 403 `ACCESS_KEY_READ_ONLY` |
-| Read and write | Every procedure the creator may call |
+| Read and write | Every procedure except creating AccessKeys |
 
-Keys from before scopes existed count as read and write. Creation and revocation are written to the audit log (`api_key.create`, `api_key.revoke`); actions performed with an AccessKey appear in the audit log with actor type `api_key`.
+Keys without a scope count as read and write. Creation and revocation are written to the audit log (`api_key.create`, `api_key.revoke`); actions performed with an AccessKey appear in the audit log with actor type `api_key`. better-auth's `/api/auth/api-key/*` endpoints are closed and return 404.
 
 ### Service accounts
 
-A service account is a platform-level machine identity for integrations calling `/api/v1`. It cannot sign in: it has no password, passkey or session, only keys. Platform administrators manage service accounts in **Admin → Service accounts**.
+A service account is a machine identity for integrations calling `/api/v1`. It cannot sign in: it has no password, passkey or session, only keys. Service accounts are managed on the **Service accounts** page.
 
 | Action | Notes |
 | --- | --- |
@@ -74,15 +74,8 @@ A service account can call only the procedures below, each with its scope:
 | `account.me` | `GET /me` | — |
 | `settings.get` | `GET /settings` | `system:read` |
 | `clusters.list`, `clusters.get` | `GET /clusters`, `GET /clusters/{id}` | `clusters:read` |
-| `organizations.list` | `GET /organizations` | `organizations:read` |
-| `organizations.create`, `organizations.update` | `POST /organizations`, `PATCH /organizations/{id}` | `organizations:write` |
-| `organizations.members` | `GET /organizations/{id}/members` | `members:read` |
-| `organizations.invite` | `POST /organizations/{organizationId}/invitations` | `invitations:write` |
 | `sites.list`, `sites.get` | `GET /sites`, `GET /sites/{id}` | `sites:read` |
 | `sites.setEnabled` | `PUT /sites/{id}/enabled` | `sites:write` |
-| `admin.sites.suspend`, `admin.sites.resume` | `POST /admin/sites/{id}/suspend`, `POST /admin/sites/{id}/resume` | `sites:suspend` |
-| `admin.organizations.getLimits` | `GET /admin/organizations/{id}/limits` | `limits:read` |
-| `admin.organizations.setLimits` | `PUT /admin/organizations/{id}/limits` | `limits:write` |
 | `usage.list`, `usage.changes` | `GET /usage`, `GET /usage/changes` | `usage:read` |
 
 | Case | Response |
@@ -90,8 +83,9 @@ A service account can call only the procedures below, each with its scope:
 | Missing scope | 403 `SCOPE_REQUIRED`; `data.scope` names the scope |
 | Procedure not in the table | 403 `SERVICE_ACCOUNT_FORBIDDEN` |
 | Invalid or revoked key, disabled account | 401 |
+| The change needs a capability an active node of the cluster lacks | 409 `NODE_CAPABILITY_REQUIRED`, see [Node capabilities](#node-capabilities) |
 
-For a service account, `GET /me` returns `serviceAccount: { id, name, scopes }`; `user` carries the service account's id and name (empty `email`, `isAdmin` `false`) and `organizations` is empty. User AccessKeys keep their read-only / read-and-write scopes.
+For a service account, `GET /me` returns `serviceAccount: { id, name, scopes }`; `user` carries the service account's id and name (empty `email`, `twoFactorEnabled` `false`). Scopes apply to service accounts only; AccessKeys use the read-only / read-and-write scopes.
 
 ### Idempotency keys
 
@@ -105,7 +99,7 @@ For a service account, `GET /me` returns `serviceAccount: { id, name, scopes }`;
 | The first request is still running | 409 `IDEMPOTENCY_IN_PROGRESS` |
 | Invalid key | 400 `IDEMPOTENCY_KEY_INVALID` |
 
-- Keys are per caller: all AccessKeys of a user share them, each service account has its own.
+- Keys are per caller: all AccessKeys share one set, each service account has its own.
 - Records are kept 24 hours; expired ones are deleted hourly.
 - 5xx responses are not kept, so the caller can retry with the same key; neither are 401 and 429 (the procedure did not run). 4xx responses are kept and replayed.
 - A record still running after 10 minutes counts as interrupted (a crashed console instance); the next request takes it over and runs again.
@@ -117,56 +111,46 @@ These writes accept an optional `expectedUpdatedAt` (ISO 8601, the `updatedAt` t
 
 | Procedure | `updatedAt` of |
 | --- | --- |
-| `sites.setEnabled`, `admin.sites.suspend`, `admin.sites.resume` | The site |
-| `organizations.update` | The organization |
-| `admin.organizations.setLimits` | The organization's limits (`null` until first saved; then any value differs) |
+| `sites.setEnabled` | The site |
 | `clusters.setRolloutPolicy` | The cluster's canary policy |
 
-When a site already has the requested state, enabling and suspension return the current state without comparing `expectedUpdatedAt`.
+When a site is already enabled or disabled as requested, `sites.setEnabled` returns the current state without comparing `expectedUpdatedAt`.
 
-### Site enabling and suspension
+### Enabling and disabling sites
 
-| State | Changed by | Endpoint |
-| --- | --- | --- |
-| `enabled` | Organization owners / admins, platform administrators, `sites:write` service accounts | `PUT /sites/{id}/enabled`, `{"enabled":false}` |
-| `suspended` | Platform administrators, `sites:suspend` service accounts | `POST /admin/sites/{id}/suspend`, `{"reason":"billing","note":"…"}`; `POST /admin/sites/{id}/resume` |
+`PUT /sites/{id}/enabled` (procedure `sites.setEnabled`) with the body `{"enabled":false}`. The operator (session or read-and-write AccessKey) and `sites:write` service accounts can call it.
 
-- `reason`: `billing`, `abuse`, `security`, `other`; `note` up to 256 characters, readable by platform administrators and service accounts only.
-- A site is shipped to nodes only when both states allow it. A disabled or suspended site is not shipped and nodes answer 404 for its domains; its DNS records stay; certificate renewal continues and HTTP-01 challenges are answered.
-- A change publishes a configuration revision (reason codes `site_enabled`, `site_disabled`, `site_suspended`, `site_resumed`) and writes an audit entry (`site.enable`, `site.disable`, `site.suspend`, `site.resume`); an unchanged state returns the current state without a revision or audit entry.
-- Purging or prefetching a disabled or suspended site: 409 `SITE_DISABLED` / `SITE_SUSPENDED`.
-- The response is `{ site, revision }`; `site` carries `enabled`, `suspended`, `suspendReason`, `suspendNote`, `suspendedAt`.
+- A disabled site is not shipped to nodes and nodes answer 404 for its domains; its DNS records stay; certificate renewal continues and HTTP-01 challenges are answered.
+- A change publishes a configuration revision (reason codes `site_enabled`, `site_disabled`) and writes an audit entry (`site.enable`, `site.disable`); an unchanged state returns the current state without a revision or audit entry.
+- Purging or prefetching a disabled site: 409 `SITE_DISABLED`.
+- The response is `{ site, revision }`; `site.enabled` holds the current state.
 
-### Organization limits
+### Node capabilities
 
-| Procedure | Endpoint | Caller |
-| --- | --- | --- |
-| `admin.organizations.getLimits` | `GET /admin/organizations/{id}/limits` | Platform administrators, `limits:read` service accounts |
-| `admin.organizations.setLimits` | `PUT /admin/organizations/{id}/limits` | Platform administrators, `limits:write` service accounts |
-| `organization.limits` | `GET /organization/limits` | Members of the active organization |
+When a change makes the configuration need a capability that an active node of the cluster lacks (nodes report theirs in `supportedFeatures`, e.g. `challenge-v1`, `modsecurity-v1`):
 
-The response is `{ organizationId, limits, usage, updatedAt }`. Fields of `limits` and `usage`: `sites`, `domains`, `certificates`, `ipListEntries`, `purgeTasksPerMinute`, `purgeUrlsPerHour`, `members`, `bans` (active manual site bans); `null` in `limits` means no limit. `setLimits` replaces every limit (omitted fields become `null`) and writes the audit entry `organization.limits_update` with the values before and after. Exceeding a limit returns 409 `ORG_LIMIT_EXCEEDED` with `data` `{ resource, limit, current }`. Behavior: [Organizations and members](../guide/organizations.en.md#technical-limits).
+| Caller | Result |
+| --- | --- |
+| The operator (session or AccessKey) | Saved and published; nodes lacking the capability keep their configuration and show "Upgrade required" in **Clusters & nodes** |
+| Service account | 409 `NODE_CAPABILITY_REQUIRED`; `data.features` lists the missing capabilities (comma separated); nothing is saved |
+
+Automatic console jobs that publish configurations are held to the same rule as service accounts. Upgrading nodes: [Node upgrades](../guide/node-upgrades.en.md).
 
 ### Bans
 
-| Procedure | Endpoint | Caller |
-| --- | --- | --- |
-| `bans.list` | `GET /bans` | Organization members (the organization's site bans); platform administrators (every site ban) |
-| `bans.create` | `POST /bans` | Organization owners and admins, platform administrators |
-| `bans.delete` | `DELETE /bans/{id}` | Organization owners and admins, platform administrators; site bans only, automatic ones included |
-| `admin.bans.list` | `GET /admin/bans` | Platform administrators |
-| `admin.bans.create` | `POST /admin/bans` | Platform administrators |
-| `admin.bans.delete` | `DELETE /admin/bans/{id}` | Platform administrators |
-| `settings.bans`, `settings.setBans` | `GET`, `PUT /settings/bans` | Platform administrators |
+| Procedure | Endpoint |
+| --- | --- |
+| `bans.list` | `GET /bans` |
+| `bans.create` | `POST /bans` |
+| `bans.delete` | `DELETE /bans/{id}` |
+| `settings.bans`, `settings.setBans` | `GET`, `PUT /settings/bans` |
 
-Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `GET` only.
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `GET` only. `scope`: `site` covers one site, `platform` covers every site (shown as "Global" in the UI).
 
 | Request | Fields |
 | --- | --- |
-| `POST /bans` | `siteId`, `cidr` (IP address or CIDR), `reason` (`abuse`, `attack`, `scanner`, `spam`, `other`), `durationSeconds` (60–604800) |
-| `POST /admin/bans` | Also `scope` (`platform` / `site`): `site` requires `siteId`, `platform` does not allow it |
-| `GET /bans` | Query parameters `siteId`, `source` (`manual` / `auto`), `page`, `pageSize` (1–100, default 50) |
-| `GET /admin/bans` | Also `scope`, `organizationId` |
+| `POST /bans` | `scope` (`site` / `platform`), `siteId` (required with `site`, not allowed with `platform`), `cidr` (IP address or CIDR), `reason` (`abuse`, `attack`, `scanner`, `spam`, `other`), `durationSeconds` (60–604800) |
+| `GET /bans` | Query parameters `scope`, `siteId`, `source` (`manual` / `auto`), `page`, `pageSize` (1–100, default 50) |
 | `PUT /settings/bans` | `maxTotal` (100–100000, default 10000), `shareAutoBans` (default `true`) |
 
 Lists answer `{ items, total }` with active bans only (neither expired nor lifted), newest first. Ban fields:
@@ -175,7 +159,7 @@ Lists answer `{ items, total }` with active bans only (neither expired nor lifte
 | --- | --- |
 | `id`, `scope`, `cidr` | `cidr` is canonical, e.g. `203.0.113.7/32` |
 | `reason`, `source` | `source` is `manual` or `auto`; automatic bans have the `reason` `cc_ip_rate` |
-| `siteId`, `siteName`, `organizationId`, `organizationName` | `null` for platform bans |
+| `siteId`, `siteName` | `null` for `platform` bans |
 | `node`, `trigger` | The node `{ id, name }` and trigger `{ metric, observed, threshold, windowSeconds }` of an automatic ban; `null` for manual bans |
 | `createdBy` | Who created a manual ban `{ type, id, name }` |
 | `createdAt`, `expiresAt` | ISO 8601 |
@@ -183,7 +167,8 @@ Lists answer `{ items, total }` with active bans only (neither expired nor lifte
 | `distributed` | Whether nodes receive it; `false` for automatic bans that are not shared |
 | `unappliedNodes` | Online nodes that report they could not hold the ban |
 
-- When an active manual ban of the same scope, site and address exists, `create` sets the new `reason` and expiry and returns the same `id` (audit `ban.update`); otherwise the audit entry is `ban.create`. `delete` writes `ban.delete`.
+- When an active manual ban of the same scope, site and address exists, `create` sets the new `reason` and expiry and returns the same `id` (audit `ban.update`); otherwise the audit entry is `ban.create`. `delete` lifts any active ban, manual or automatic, and writes `ban.delete`.
+- `maxTotal` caps the active manual bans, site and global bans together; a renewal does not count as a new ban. `shareAutoBans` decides whether automatic bans reach the other nodes of the cluster. `setBans` is audited as `system.bans_update`.
 - A node's ban state: `banStatus` of `GET /nodes/{id}` (`appliedSequence`, `entries`, `capacity`, `unappliedIds`, `unapplied`, `kernelEntries`, `autoEvicted`, `reportedAt`), `null` when the node reports none; capabilities are in `supportedFeatures` (`bans-v1`, `kernel-ban-v1`).
 
 | Error code | Status | When |
@@ -191,30 +176,29 @@ Lists answer `{ items, total }` with active bans only (neither expired nor lifte
 | `BAN_INVALID_CIDR` | 400 | Not an IP address or CIDR |
 | `BAN_PREFIX_TOO_SHORT` | 400 | Prefix shorter than `/16` (IPv4) or `/48` (IPv6); `data.min` is the minimum |
 | `BAN_EXPIRY_OUT_OF_RANGE` | 400 | `durationSeconds` outside 60–604800 |
-| `BAN_PROTECTED_ADDRESS` | 400 | Covers a node address, loopback or an unspecified address, or overlaps a platform allow list; `data.address` is the conflicting address |
-| `BAN_PLATFORM_LIMIT` | 409 | Platform limit of manual bans reached; `data.limit` |
-| `BAN_NOT_FOUND` | 404 | The ban does not exist, expired, was lifted, or is outside the caller's scope |
-| `ORG_LIMIT_EXCEEDED` | 409 | Organization limit reached, `data.resource` is `bans` |
-| `ORG_ADMIN_REQUIRED` | 403 | A member called `create` or `delete` |
+| `BAN_PROTECTED_ADDRESS` | 400 | Covers a node address, loopback or an unspecified address, or overlaps an "Allow" IP list; `data.address` is the conflicting address |
+| `BAN_PLATFORM_LIMIT` | 409 | Active manual bans reached `maxTotal`; `data.limit` |
+| `BAN_NOT_FOUND` | 404 | The ban does not exist, expired, or was lifted |
+| `SITE_NOT_FOUND` | 404 | No site has the given `siteId` |
 
 ```bash
 curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
   -d '{"scope":"platform","cidr":"203.0.113.0/24","reason":"attack","durationSeconds":86400}' \
-  https://cdn-admin.example.com/api/v1/admin/bans
+  https://cdn-admin.example.com/api/v1/bans
 ```
 
 Behavior: [Bans](../guide/bans.en.md).
 
 ### Challenges and CC mitigation
 
-| Procedure | Endpoint | Caller |
-| --- | --- | --- |
-| `protection.get` | `GET /sites/{id}/protection` | Organization members, platform administrators |
-| `protection.update` | `PATCH /sites/{id}/protection` | Organization owners and admins, platform administrators |
-| `security.state` | `GET /sites/{id}/security` | Organization members, platform administrators |
-| `security.events` | `GET /sites/{id}/security/events` | Organization members, platform administrators |
-| `settings.protection`, `settings.setProtection` | `GET`, `PUT /settings/protection` | Platform administrators |
-| `settings.ccTemplate`, `settings.setCcTemplate` | `GET`, `PUT /settings/cc-template` | Platform administrators |
+| Procedure | Endpoint |
+| --- | --- |
+| `protection.get` | `GET /sites/{id}/protection` |
+| `protection.update` | `PATCH /sites/{id}/protection` |
+| `security.state` | `GET /sites/{id}/security` |
+| `security.events` | `GET /sites/{id}/security/events` |
+| `settings.protection`, `settings.setProtection` | `GET`, `PUT /settings/protection` |
+| `settings.ccTemplate`, `settings.setCcTemplate` | `GET`, `PUT /settings/cc-template` |
 
 Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `GET` only. Challenge types and CC levels: `cookie302`, `js`, `pow`, `captcha` (levels also `normal`).
 
@@ -224,25 +208,24 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `cc` | `enabled`, `followTemplate`, `maxLevel`, `highPowInsteadOfCaptcha`, `windowSeconds` (5–60), `siteQps`, `urlQps`, `ipQps` (0–1000000, 0 turns the trigger off), `ipBanSeconds` (60–86400), `originErrorPercent` (0–100), `originErrorMinRequests`, `escalateAfterSeconds` (1–3600), `cooldownSeconds` (1–86400) |
 | `GET /sites/{id}/security` | Query parameter `hours` (1–168, default 24) |
 | `GET /sites/{id}/security/events` | Query parameters `kind` (`site_level` / `path_level` / `ip_banned`), `page`, `pageSize` (1–100, default 50) |
-| `PUT /settings/protection` | `underAttack`, `underAttackChallenge`, `eventRetentionDays` (7–365, default 30) |
+| `PUT /settings/protection` | `underAttack` (global Under Attack), `underAttackChallenge`, `eventRetentionDays` (7–365, default 30) |
 | `PUT /settings/cc-template` | Every field of `cc` except `enabled` and `followTemplate` |
 
 Responses:
 
 | Procedure | Content |
 | --- | --- |
-| `protection.get`, `protection.update` | The fields above plus `siteId`, `cc` (template thresholds while it follows the template), `ccTemplate` (the platform's current template), `effectiveCc` (thresholds the nodes use, `null` while the policy is off), `platformUnderAttack`, `updatedAt` |
+| `protection.get`, `protection.update` | The fields above plus `siteId`, `cc` (template thresholds while it follows the template), `ccTemplate` (the current CC template), `effectiveCc` (thresholds the nodes use, `null` while the policy is off), `platformUnderAttack` (whether global Under Attack is on), `updatedAt` |
 | `security.state` | `nodes`: `{ id, name, online, level, escalatedPaths, reportedAt }` for every active node of the cluster; `topIps`, `topPaths`: `{ value, count }` from the events of the last `hours` hours (up to 10 each, approximate); `hours` |
 | `security.events` | `{ items, total }`, newest first; event fields `id`, `node` (`{ id, name }`, `null` once the node is deleted), `occurredAt`, `kind`, `level`, `previousLevel`, `path`, `address`, `metric`, `observed`, `threshold`, `topIps`, `topPaths` |
 
-- A change publishes the site's cluster (reason `site_protection_updated`) and is audited as `site.protection_update`; a change of platform Under Attack publishes every cluster (`platform_protection_updated`), audited as `system.protection_update`; a template change publishes clusters with sites that follow it (`cc_template_updated`), audited as `system.cc_template_update`. The daily key rotation publishes `challenge_keys_rotated`.
+- A change publishes the site's cluster (reason `site_protection_updated`) and is audited as `site.protection_update`; a change of global Under Attack publishes every cluster (`platform_protection_updated`), audited as `system.protection_update`; a template change publishes clusters with sites that follow it (`cc_template_updated`), audited as `system.cc_template_update`. The daily key rotation publishes `challenge_keys_rotated`.
+- Challenges, Under Attack, and CC need the node capability `challenge-v1`; `logJa4` also needs `ja4-v1`. When an active node of the cluster lacks one, see [Node capabilities](#node-capabilities).
 
 | Error code | Status | When |
 | --- | --- | --- |
 | `PROTECTION_POW_DIFFICULTY` | 400 | `powHighDifficulty` is below `powDifficulty`; `data.min` is the lowest allowed value |
-| `NODE_CAPABILITY_REQUIRED` | 409 | An active node of the cluster lacks `challenge-v1` or `ja4-v1` (tenant calls); `data.features` |
-| `ORG_ADMIN_REQUIRED` | 403 | An organization member calls `protection.update` |
-| `SITE_NOT_FOUND` | 404 | The site does not exist or is outside the caller's scope |
+| `SITE_NOT_FOUND` | 404 | The site does not exist |
 
 ```bash
 curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
@@ -254,14 +237,13 @@ Behavior: [Challenges and CC mitigation](../guide/challenges.en.md).
 
 ### Compression and OWASP CRS
 
-| Procedure | Endpoint | Caller |
-| --- | --- | --- |
-| `https.get`, `https.update` | `GET`, `PUT /sites/{id}/https` | Organization members, platform administrators |
-| `sites.features` | `GET /sites/{id}/features` | Organization members, platform administrators |
-| `waf.get` | `GET /sites/{id}/waf` | Organization members, platform administrators |
-| `waf.update` | `PATCH /sites/{id}/waf` | Organization owners / admins, platform administrators |
-| `waf.topRules` | `GET /sites/{id}/waf/rules` | Organization members, platform administrators |
-| `settings.waf`, `settings.setWaf` | `GET`, `PUT /settings/waf` | Platform administrators |
+| Procedure | Endpoint |
+| --- | --- |
+| `https.get`, `https.update` | `GET`, `PUT /sites/{id}/https` |
+| `sites.features` | `GET /sites/{id}/features` |
+| `waf.get` | `GET /sites/{id}/waf` |
+| `waf.update` | `PATCH /sites/{id}/waf` |
+| `waf.topRules` | `GET /sites/{id}/waf/rules` |
 
 Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys can call `GET` only.
 
@@ -270,24 +252,18 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `PUT /sites/{id}/https` | `settings` replaces all HTTPS settings of the site; missing fields take their defaults, so `GET` first and change what you need. Compression fields: `brotli`, `brotliLevel` (1–11, default 6), `brotliMinLength`, `brotliTypes`; `zstd`, `zstdLevel` (1–19, default 3), `zstdMinLength`, `zstdTypes`; `gzip`, `gzipMinLength`, `gzipTypes`; minimum lengths 1–1048576 (default 256), types are arrays of MIME types (up to 32) |
 | `PATCH /sites/{id}/waf` | Changes only the fields given: `mode` (`off` / `detect` / `block`), `paranoiaLevel` (1–4), `anomalyThreshold` (1–1000), `excludedRuleIds` (900000–999999, unique, up to 200), `requestBodyLimit` (0–134217728 bytes) |
 | `GET /sites/{id}/waf/rules` | Query parameters `range` (`1h` / `6h` / `24h` / `7d` / `30d`, default `24h`), `limit` (1–50, default 10) |
-| `PUT /settings/waf` | `tenantCrs`: whether tenants may turn CRS on |
 
 Responses:
 
 | Procedure | Content |
 | --- | --- |
-| `sites.features` | `brotli`, `zstd`, `crs`, each `{ available, reason }`; `reason` is `nodes` (an active node of the cluster lacks `brotli-v1` / `zstd-v1` / `modsecurity-v1`), `platform` (the platform does not let tenants turn CRS on; tenants only), or `null` |
+| `sites.features` | `brotli`, `zstd`, `crs`, each `{ available, reason }`; when an active node of the cluster lacks `brotli-v1` / `zstd-v1` / `modsecurity-v1`, `available` is `false` and `reason` is `nodes`; otherwise `reason` is `null` |
 | `waf.get`, `waf.update` | `siteId`, the fields above (`excludedRuleIds` ascending), `updatedAt` (`null` until first saved, with the defaults `off`, 1, 5, `[]`, 131072) |
 | `waf.topRules` | `{ approximate: true, items: [{ ruleId, requests }] }`, most matched first |
 
-- `https.update` publishes the site's cluster (reason `certificate_updated`), audited as `site.https_update`; `waf.update` publishes (`site_waf_updated`), audited as `site.waf_update`; `settings.setWaf` publishes nothing and is audited as `system.waf_update`.
-
-| Error code | Status | When |
-| --- | --- | --- |
-| `NODE_CAPABILITY_REQUIRED` | 409 | An active node of the cluster lacks `brotli-v1`, `zstd-v1`, or `modsecurity-v1` (tenant calls); `data.features` |
-| `WAF_CRS_FORBIDDEN` | 403 | While the platform does not let tenants turn CRS on, a tenant change leaves `mode` other than `off` |
-| `ORG_ADMIN_REQUIRED` | 403 | An organization member calls `waf.update` |
-| `SITE_NOT_FOUND` | 404 | The site does not exist or is outside the caller's scope |
+- `https.update` publishes the site's cluster (reason `certificate_updated`), audited as `site.https_update`; `waf.update` publishes (`site_waf_updated`), audited as `site.waf_update`.
+- A feature with `available` `false` can still be turned on through the API; see [Node capabilities](#node-capabilities).
+- Unknown site: 404 `SITE_NOT_FOUND`.
 
 ```bash
 curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: application/json' \
@@ -305,15 +281,15 @@ One record per site and UTC 5-minute window `[windowStart, windowEnd)`, summing 
 
 | Procedure | Endpoint | Query parameters |
 | --- | --- | --- |
-| `usage.list` | `GET /usage` | `from`, `to` (5-minute aligned, UTC, half-open), `siteId`, `organizationId`, `cursor`, `limit` (1–5000, default 1000) |
-| `usage.changes` | `GET /usage/changes` | `afterSeq` (default `"0"`), `limit` (1–5000, default 1000), `organizationId` |
+| `usage.list` | `GET /usage` | `from`, `to` (5-minute aligned, UTC, half-open), `siteId`, `cursor`, `limit` (1–5000, default 1000) |
+| `usage.changes` | `GET /usage/changes` | `afterSeq` (default `"0"`), `limit` (1–5000, default 1000) |
 
 Record fields:
 
 | Field | Notes |
 | --- | --- |
 | `id` | `<siteId>.<Unix seconds of windowStart>`; always the same for a site and window |
-| `siteId`, `organizationId` | Records remain after the site is deleted |
+| `siteId` | Records remain after the site is deleted |
 | `windowStart`, `windowEnd` | ISO 8601 |
 | `requests`, `bytesSent`, `bytesReceived` | Decimal integer strings (bytes out and in), exact beyond 2^53 |
 | `revision` | Starts at 1; +1 when a recomputation changes a value |
@@ -324,18 +300,39 @@ Record fields:
 - `usage.changes` returns records created or revised after `afterSeq`, in `seq` order, as `{ items, lastSeq, completeUntil }`; pass `lastSeq` as the next `afterSeq`. Revised records appear again.
 - Windows without traffic have no record.
 - Closed windows are recomputed every minute; late data that changes a value increments `revision` and assigns a new `seq`; otherwise neither changes. A statistics batch reported twice does not change the result.
-- Members read their own organization's records only (`organizationId` is ignored); platform administrators and `usage:read` service accounts may filter by organization.
-- Kept 100 days by default, adjustable in **Admin → System settings → Usage** (35–400 days).
+- Kept 100 days by default, adjustable in **System → Usage** (35–400 days).
 
 `completeUntil` (ISO 8601 or `null`): windows that end at or before it contain the data of every node that was active then.
 
 | Rule | Notes |
 | --- | --- |
 | Node watermark | Once every statistics batch is acknowledged, a node reports `complete_until`: the start of the minute of its last successful statistics drain; every earlier minute has been uploaded |
-| Nodes taken into account | Enabled nodes with a heartbeat within the offline threshold: 60 minutes by default, adjustable in **Admin → System settings → Usage** (5–1440 minutes) |
+| Nodes taken into account | Enabled nodes with a heartbeat within the offline threshold: 60 minutes by default, adjustable in **System → Usage** (5–1440 minutes) |
 | Computation | The lowest watermark of those nodes; a node that never reported one (older node versions) counts from its enrollment; windows still waiting to be recomputed hold it back; rounded down to 5 minutes |
 | Monotonic | It only moves forward. Data a node sends after being offline longer than the threshold is a revision (`revision` + 1) |
 | Disabled or deleted nodes | Not taken into account |
+
+### Node upgrades
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `upgrades.release` | `GET /node-releases/{version}` | The version's release files per architecture in the release source |
+| `upgrades.list` | `GET /node-upgrades` | Upgrades; query parameter `clusterId` |
+| `upgrades.create` | `POST /node-upgrades` | `{ version, nodeGroupId }`: `version` without the `v` prefix, `nodeGroupId` is the canary node group |
+| `upgrades.promote` | `POST /node-upgrades/{id}/promote` | Promotes the remaining nodes |
+| `upgrades.cancel` | `POST /node-upgrades/{id}/cancel` | Cancels node tasks that are "Waiting for canary" or "Pending" |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `GET` only.
+
+| Error code | Status | When |
+| --- | --- | --- |
+| `UPGRADE_RELEASE_UNAVAILABLE` | 502 | The release source has no readable manifest for the version, or the manifest lists no supported archive |
+| `UPGRADE_NODES_UNAVAILABLE` | 409 | The chosen node group has no enabled node, or an enabled node of the cluster does not meet the upgrade requirements |
+| `UPGRADE_BUSY` | 409 | A node already has an active upgrade; on cancel, a node is upgrading or the upgrade has finished |
+| `UPGRADE_NOT_READY` | 409 | The canary group does not meet the promotion condition yet |
+| `UPGRADE_NOT_FOUND` | 404 | The upgrade does not exist |
+
+Requirements, states, and node-side verification: [Node upgrades](../guide/node-upgrades.en.md).
 
 ### Example
 
@@ -349,7 +346,7 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 | Query parameter | Description |
 | --- | --- |
 | `search` | Matches the site name or any of its domains; up to 100 characters |
-| `clusterId` | Cluster UUID; platform administrators only |
+| `clusterId` | Cluster UUID |
 | `page` | Page number, default `1` |
 | `pageSize` | Items per page, 1–100, default `20` |
 
@@ -374,7 +371,7 @@ Response: `{"items":[…],"total":<count>}`.
 | `message` | English text for clients that do not know the code |
 | `data` | Message parameters |
 
-Authentication and input validation failures use the generic oRPC codes `UNAUTHORIZED` (401), `FORBIDDEN` (403), and `BAD_REQUEST` (400).
+Authentication and input validation failures use the generic oRPC codes `UNAUTHORIZED` (401) and `BAD_REQUEST` (400).
 
 ## Web UI RPC
 
@@ -390,7 +387,7 @@ Third-party integrations use `/api/v1`.
 
 ## Authentication endpoints
 
-better-auth handles `/api/auth/*`, limited to the paths and methods below. Matching is exact (no prefixes, encoded variants, or trailing slashes); every other request returns 404. `x-api-key` is stripped from requests; the client IP is resolved according to `EDGEWEIR_TRUSTED_PROXIES` before it reaches better-auth. There is no public sign-up; accounts are created by the setup wizard, by platform administrators, or when an invitation is accepted. With `NODE_ENV=production`, rate limiting is on, with counters in PostgreSQL.
+better-auth handles `/api/auth/*`, limited to the paths and methods below. Matching is exact (no prefixes, encoded variants, or trailing slashes); every other request returns 404. `x-api-key` is stripped from requests; the client IP is resolved according to `EDGEWEIR_TRUSTED_PROXIES` before it reaches better-auth. There is no public sign-up: the setup wizard creates the only account. AccessKeys are managed through `accessKeys.*`. With `NODE_ENV=production`, rate limiting is on, with counters in PostgreSQL.
 
 | Path | Method |
 | --- | --- |
@@ -408,9 +405,6 @@ better-auth handles `/api/auth/*`, limited to the paths and methods below. Match
 | `/api/auth/passkey/verify-authentication` | `POST` |
 | `/api/auth/passkey/list-user-passkeys` | `GET` |
 | `/api/auth/passkey/delete-passkey` | `POST` |
-| `/api/auth/api-key/create` | `POST` |
-| `/api/auth/api-key/list` | `GET` |
-| `/api/auth/api-key/delete` | `POST` |
 
 ## Health check
 
@@ -453,4 +447,3 @@ The response comes from the listening HTTP server; the database is not checked. 
 
 > [!WARNING]
 > The node channel must be reached directly or through TCP passthrough; a proxy that terminates TLS breaks node mTLS. See [Ports, reverse proxy, and trusted proxies](../deploy/networking.en.md).
-

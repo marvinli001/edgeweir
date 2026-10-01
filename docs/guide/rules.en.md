@@ -1,22 +1,21 @@
 # Rules, IP lists, and GeoIP
 
-Expression rules for sites and the platform, IP lists, and the node-local GeoIP databases.
+Site rules, global rules, IP lists, and the node-local GeoIP databases.
 
 ## Concepts
 
 | Term | Definition |
 | --- | --- |
-| Rule | An expression plus an action in one phase. Site rules apply to one site; platform rules apply to every site in every cluster. |
+| Rule | An expression plus an action in one phase. Site rules apply to one site; global rules apply to every site in every cluster. |
 | Phase | A fixed point in request processing where rules run; there are 8. |
 | Expression | A typed, wirefilter-style condition, for example `ip.src in $blocked`. |
-| IP list | A named set of IP addresses and CIDRs that expressions reference as `$name`. |
-| Platform IP list | A list maintained by platform administrators, used as a set for rules, a block list, or an allow list. |
+| IP list | A named set of IP addresses and CIDRs that expressions reference as `$name`; allow and block lists also apply to every site directly. |
 
-The console parses expressions and checks their fields, types, and actions before publishing a syntax tree; nodes validate the whole configuration and compile the tree. Nodes never run Lua text supplied by tenants.
+The console parses expressions and checks their fields, types, and actions before publishing a syntax tree; nodes validate the whole configuration and compile the tree. The configuration contains no executable Lua text.
 
 ## Edit site rules
 
-1. Open **Console → Sites**, select the site, and open the **Rules** tab.
+1. Open **Sites**, select the site, and open the **Rules** tab.
 2. Click **Add rule** next to the target phase.
 3. Enter the rule name and **Expression**. When the expression is invalid, "Check character N" appears below the editor.
 4. Select **Action** and fill in its fields; turn off **Enabled** as needed.
@@ -30,7 +29,7 @@ The console parses expressions and checks their fields, types, and actions befor
 
    The response is 403 with `X-Edgeweir-Error: policy-denied`.
 
-Platform rules are edited in **Admin → Platform rules** with the same editor and are published to every cluster on save. Platform administrators only.
+Global rules are edited on the **Global rules** page with the same editor, apply to every site, and are published to every cluster on save. API: `GET` and `PUT /api/v1/platform-rules`.
 
 Disabled rules are not sent to nodes.
 
@@ -78,10 +77,10 @@ Protected headers cannot be set or removed by rules: `Host`, `Authorization`, `P
 
 | Item | Behavior |
 | --- | --- |
-| Platform IP lists | Run first. An address in a platform block list gets 403; an address in a platform allow list is exempt from the platform block lists but not from rules; an address in both is allowed |
-| Scope | In each phase, platform rules run before site rules; within a scope, in list order |
+| Allow and block lists | Run first. An address in a block list gets 403; an address in an allow list is exempt from the block lists but not from rules; an address in both is allowed |
+| Scope | In each phase, global rules run before site rules; within a scope, in list order |
 | Terminating actions | Block, redirect, and exceeding a rate limit end the request |
-| Allow | Skips only the remaining custom WAF rules of the same scope, not the other scope and not rate limits; a site allow rule cannot bypass a platform block rule |
+| Allow | Skips only the remaining custom WAF rules of the same scope, not the other scope and not rate limits; a site allow rule cannot bypass a block in the global rules |
 | Stacking | Other actions accumulate; a later action overrides an earlier setting |
 | Ordering | Dragging changes order only within a phase |
 
@@ -101,7 +100,7 @@ Protected headers cannot be set or removed by rules: `Host`, `Authorization`, `P
 
 | Item | Behavior |
 | --- | --- |
-| Scope | A fixed window per node, not a network-wide quota; each site counts separately, and platform rate-limit rules are also counted per site |
+| Scope | A fixed window per node, not a network-wide quota; each site counts separately, and rate limits in the global rules are also counted per site |
 | Key | Request header key values are counted by their MD5 digest |
 | Memory | A fixed 256 KiB shared memory partition per published site, never borrowed across sites; at most 512 published sites per cluster (128 MiB in total); log deduplication uses another 1 MiB |
 | Out of memory | When a site's partition cannot create a counter, that site's rate-limited requests get 503; the limit is not relaxed |
@@ -189,42 +188,42 @@ The language is a wirefilter-style subset, not a complete wirefilter implementat
 | Nesting | 16 levels |
 | Basic conditions | 128 |
 | Set elements | 256 |
-| Rules | 64 per site; 32 for the platform |
+| Rules | 64 per site; 32 global rules |
 
 ## IP lists
 
-1. Open **Console → IP lists** and click **Create list**.
+1. Open **IP lists** and click **Create list**.
 2. Enter **Name**: starts with a letter or underscore, contains only letters, digits, and underscores, 1–64 characters.
-3. Enter entries in **IP addresses and CIDRs**, separated by newlines, spaces, or commas.
-4. Click **Save**.
-5. Verify: the list shows `$name` and "N entries"; reference it in rules with `ip.src in $name`.
-
-Platform IP lists are maintained in **Admin → Platform IP lists**, platform administrators only. The **Action** of a platform list:
+3. Select **Action**: **Referenced by rules**, **Block**, or **Allow**.
+4. Enter entries in **IP addresses and CIDRs**, separated by newlines, spaces, or commas.
+5. Click **Save**.
+6. Verify: the list shows `$name` and "N entries", block and allow lists also a **Block** or **Allow** badge; reference it in rules with `ip.src in $name`.
 
 | Action | Effect |
 | --- | --- |
-| Referenced by rules | Only a set for platform rules |
-| Block | Matching addresses get 403 before any rule runs |
-| Allow | Matching addresses are exempt from platform block lists |
+| Referenced by rules | Only a set for rules to reference |
+| Block | A block list: applies to every site of every cluster without a rule; matching addresses get 403 before any rule runs |
+| Allow | An allow list: applies to every site of every cluster; matching addresses are exempt from block lists and bans, but not from rules |
 
 | Item | Behavior |
 | --- | --- |
-| Name | Cannot change after creation; saving rules binds names to list IDs |
-| Same name | An organization list shadows a platform list of the same name |
-| Visibility | Organization lists can be referenced only by rules of that organization's sites; platform rules can reference only platform lists |
-| Changes | Changing entries publishes a new revision; nodes apply it without reload |
+| Name | All lists share one namespace and names are unique; a name cannot change after creation; saving rules binds names to list IDs |
+| References | Any site rule or global rule can reference any list, block and allow lists included |
+| Changes | Entries and **Action** can change at any time; creating, changing, or deleting a list publishes a new revision to every cluster ("Rules and IP lists updated"); nodes apply it without reload |
 | Deletion | A list referenced by a rule cannot be deleted ("IP list is used by a rule") |
 | Entries | IPv4 / IPv6 addresses or CIDRs; host bits cleared, deduplicated, sorted; leading zeros and zone IDs refused |
-| Quota | Each organization and the platform: up to 128 lists and 50,000 entries in total; up to 10,000 entries per list |
-| Rollback | Site configuration rollbacks keep the current lists and platform rules; a rollback that references a deleted list is refused |
+| Quota | Up to 128 lists and 50,000 entries in total; up to 10,000 entries per list; a change that does not add entries always saves |
+| Rollback | Site configuration rollbacks keep the current lists and global rules; a rollback that references a deleted list is refused |
+
+API: `GET` and `POST /api/v1/ip-lists`, `PUT` and `DELETE /api/v1/ip-lists/{id}`.
 
 ## Node capabilities and publishing
 
 | Item | Behavior |
 | --- | --- |
-| Capabilities | Rules and platform block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; the challenge action needs `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
-| Tenant publishing | When a tenant save or an automatic background publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the save is refused ("Cluster nodes need these capabilities first: …") and the rules and revision stay unchanged |
-| Platform administrators | Can deliberately publish a configuration that needs an upgrade; nodes lacking the capability keep their last-known-good configuration and the admin area shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md) |
+| Capabilities | Rules and block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; the challenge action needs `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
+| Console and AccessKeys | A save is published even when an active node of the cluster lacks a required capability; such nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md) |
+| Service accounts and background jobs | When a configuration they publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the publish is refused (`NODE_CAPABILITY_REQUIRED`, "Cluster nodes need these capabilities first: …") and the configuration and revision stay unchanged |
 | Unknown capabilities | Nodes reject configurations with unknown capabilities or enum values and keep last-known-good |
 
 ## Configure GeoIP databases
@@ -242,7 +241,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | Precedence | Country and ASN come from IPinfo Lite first, then from the City / ASN MMDB when IPinfo has no record |
 | Subdivision | Comes only from the City MMDB, and only when the City MMDB's country matches the final country |
 | Bundled data | `/usr/share/edgeweir-node/geoip/ipinfo_lite.mmdb`, checked at build time against the sha256 IPinfo publishes; `NOTICE` in the same directory records the download time and sha256 |
-| Admin attribution | **Admin → System → GeoIP databases** carries the IPinfo attribution link |
+| Console attribution | **System → GeoIP databases** carries the IPinfo attribution link |
 
 1. Container nodes running a release image need no configuration for country and ASN; for newer data, pull a newer image, or mount a separately downloaded copy and set `EDGEWEIR_GEOIP_IPINFO`.
 2. Package or archive nodes: download `ipinfo_lite.mmdb` from IPinfo. To match on subdivisions, also download a City MMDB. Check source, license, and integrity, and record the download date.
@@ -260,7 +259,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
    sudo systemctl restart edgeweir-node
    ```
 
-5. Verify: **Admin → System → GeoIP databases** shows "Country: Ready" and "ASN: Ready" for the node, plus "Subdivision: Ready" when a City MMDB is configured.
+5. Verify: **System → GeoIP databases** shows "Country: Ready" and "ASN: Ready" for the node, plus "Subdivision: Ready" when a City MMDB is configured.
 
 | Variable | Flag | Default | Description |
 | --- | --- | --- | --- |
@@ -275,7 +274,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | Missing capability | A node rejects configurations that use GeoIP fields it lacks and keeps last-known-good |
 | Invalid file | The node agent does not start when a configured MMDB file is invalid or of the wrong database type; an invalid bundled IPinfo Lite database is logged and left unused |
 | Lookups | The agent reads the files and serves results to Lua workers over a local Unix socket with mode 0600; each worker caches up to 10,000 results for 5 minutes; a lookup times out after 200 milliseconds |
-| Lookup failure | When site or platform rules use GeoIP fields, every request of that site needs a lookup; while the service is unavailable, those requests get 503 |
+| Lookup failure | When site rules or global rules use GeoIP fields, every request of that site needs a lookup; while the service is unavailable, those requests get 503 |
 | Updates | Replace the file or image on one node, restart, and verify before updating the others; never overwrite an MMDB file in use |
 
 ## Limits
@@ -294,11 +293,11 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | --- | --- | --- |
 | "Check character N" below the editor | Unsupported syntax, field, type, or regular expression at that position | Fix it using the syntax tables above |
 | Saving shows "Invalid rule" | The action does not belong to the phase, a protected header, or an invalid redirect target or rewrite path | Fix it using the action field table |
-| "IP list not found" | The referenced list does not exist or is not visible to the site | Create the list or check its organization |
-| "IP list name already exists" | The organization or platform already has a list with that name | Use another name |
+| "IP list not found" | The referenced list does not exist | Create the list in **IP lists** first, or fix the name |
+| "IP list name already exists" | A list with that name exists | Use another name |
 | "IP list is used by a rule" | Deleting a list still referenced by a rule | Remove the reference from the rules first |
 | "IP list limit reached (128 lists, 50,000 entries)" | Over quota | Merge or delete lists |
-| "Cluster nodes need these capabilities first: …" | An active node of the cluster lacks `rules-v1` or a GeoIP capability | Upgrade the nodes or configure the GeoIP databases |
+| A node shows **Upgrade required** | The node lacks a capability the rules need (`rules-v1`, a GeoIP capability, and so on) and keeps its last-known-good configuration | Upgrade the node or configure the GeoIP databases |
 | 503 with `X-Edgeweir-Error: policy-unavailable` | A regular expression exceeded its budget, or a GeoIP lookup failed | Simplify the pattern; check the node's GeoIP service |
 | A rule that redirects HTTP to HTTPS makes requests return 503 | The site has no certificate | Select a certificate on the **HTTPS** tab |
 | Rate limits are not shared across nodes | Rate limits count per node | Scale the threshold by the number of nodes |

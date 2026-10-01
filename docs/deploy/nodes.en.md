@@ -23,7 +23,7 @@ Both packages come as deb and rpm only (amd64, arm64). The openresty.org reposit
 
 ## 1. Generate the install command
 
-1. Sign in as a platform administrator, open **Admin → Clusters & nodes**, select a cluster, and click **Add node**.
+1. Open **Clusters & nodes**, select a cluster, and click **Add node**.
 2. Fill in **Node name**, choose a **Node group** (default: the cluster's default node group) and **Valid for** (15 minutes, 1 hour, or 24 hours; default 1 hour).
 3. Click **Generate command**. The dialog shows the **Install command** and the **CA fingerprint**, once.
 
@@ -54,7 +54,7 @@ systemctl status edgeweir-node
 journalctl -u edgeweir-node -f
 ```
 
-Expected: `edgeweir-node.service` is `active (running)`; in **Admin → Clusters & nodes** the node is "Online" and **Applied** shows a revision number.
+Expected: `edgeweir-node.service` is `active (running)`; in **Clusters & nodes** the node is "Online" and **Applied** shows a revision number.
 
 ## install.sh flow
 
@@ -138,7 +138,7 @@ Enable it with `compose.yml`:
 
    Expected: the version number.
 
-The release source for agent self-upgrades is set in **Admin → System → Node release source** and is independent of this mirror; see [node upgrades](../guide/node-upgrades.en.md).
+The release source for agent self-upgrades is set in **System → Node release source** and is independent of this mirror; see [node upgrades](../guide/node-upgrades.en.md).
 
 ## Troubleshooting
 

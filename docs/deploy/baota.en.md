@@ -90,7 +90,7 @@ Generic nginx configuration and headers: [networking.en.md](networking.en.md#rev
    ./deploy.sh setup-token
    ```
 
-2. Open `https://cdn-admin.example.com/setup`, enter the setup token, and create the platform administrator. Setup wizard: [Quick start](../guide/first-site.en.md).
+2. Open `https://cdn-admin.example.com/setup` and enter the setup token, name, email, and password to create the console account. Setup wizard: [Quick start](../guide/first-site.en.md).
 
 3. Verify the web console:
 
@@ -109,7 +109,7 @@ Generic nginx configuration and headers: [networking.en.md](networking.en.md#rev
 
    Expected: the issuer contains `Edgeweir Node Channel CA`.
 
-SMTP, node release source, ownership check DNS, origin allow list, and GeoIP databases are configured in **Admin → System**, see [Platform administration](../guide/admin.en.md#system-settings). Adding nodes: [Adding nodes](nodes.en.md); `--server` in the install command is `EDGEWEIR_NODE_API_URL`.
+SMTP, node release source, origin allow list, and GeoIP databases are configured in **System**, see [Clusters and system](../guide/system.en.md#system-settings). Adding nodes: [Adding nodes](nodes.en.md); `--server` in the install command is `EDGEWEIR_NODE_API_URL`.
 
 ## Node channel port
 

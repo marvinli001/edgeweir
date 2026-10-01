@@ -161,8 +161,8 @@ Equivalent to steps 1–8. The step 7 deployment settings and **Seal** are avail
 | Deployment | **Deployments** of the `edgeweir` service | Current deployment `Active` |
 | Web and API | `curl -fsS https://<name>.up.railway.app/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
 | Node channel TLS | `openssl` command below | Issuer `Edgeweir Node Channel CA`; SAN includes the TCP proxy domain |
-| Node channel URL | **Admin → System**, "Node channel" | `https://<name>.proxy.rlwy.net:<port>` |
-| Node enrollment | **Admin → Clusters & nodes** → **Add node** → **Generate command** | `--server` is the TCP proxy address; running it on a node: [Adding nodes](nodes.en.md) |
+| Node channel URL | **System**, "Node channel" | `https://<name>.proxy.rlwy.net:<port>` |
+| Node enrollment | **Clusters & nodes** → **Add node** → **Generate command** | `--server` is the TCP proxy address; running it on a node: [Adding nodes](nodes.en.md) |
 
 ```bash
 openssl s_client -connect <name>.proxy.rlwy.net:<port> -servername <name>.proxy.rlwy.net </dev/null 2>/dev/null \

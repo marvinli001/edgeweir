@@ -254,7 +254,7 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 | 命令 | `version`、`providers`、`obtain`、`renew`、`revoke`、`dns.list`、`dns.set`、`dns.present`、`dns.cleanup` |
 | DNS 服务商 | `cloudflare`、`alidns`、`huaweicloud`、`dnspod` |
 
-平台 DNS（`dns.reconcile`，每分钟）按健康节点与网站域名计算记录，生成 `dns_revision`，写入 `platform_dns_provider` 指定的区域；写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 与告警](docs/guide/dns-and-alerts.md)。
+DNS 调度（`dns.reconcile`，每分钟）按健康节点与网站域名计算记录，生成 `dns_revision`，写入 `platform_dns_provider` 指定的区域；写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 调度与告警](docs/guide/dns-and-alerts.md)。
 
 ## 统计、日志与告警
 
@@ -274,14 +274,14 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 
 Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
-告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook 或邮件）发送；投递时重新检查成员资格、封禁状态、两步验证与渠道可见性。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
+告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook、邮件、钉钉、企业微信或 Telegram）发送；投递时重新检查渠道是否启用与订阅是否仍然有效，「接收所有告警」的渠道接收全部告警。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
 
 ## 后台任务
 
 | 队列 | 调度 | 内容 |
 | --- | --- | --- |
 | `alerts.sweep` | 每分钟 | 告警检测与投递 |
-| `dns.reconcile` | 每分钟 | 平台 DNS 发布与外部记录维护 |
+| `dns.reconcile` | 每分钟 | DNS 调度发布与外部记录维护 |
 | `traffic.rollup` | 每分钟 | 流量汇总与清理、访问日志分区维护、升级任务到期 |
 | `certificates.sweep` | 每分钟 | 证书签发与续期 |
 | `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
@@ -356,8 +356,8 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `acme_challenge` | 短期公开的 HTTP-01 响应 |
 | `dns_credential` | ACME DNS-01 使用的 DNS 服务商凭据，信封加密 |
 | `dns_challenge_lease` | DNS-01 TXT 记录的清理责任 |
-| `platform_dns_provider` | 平台 DNS 服务商与区域，凭据信封加密 |
-| `dns_state` | 平台 DNS 策略与期望 / 已应用的 DNS revision |
+| `platform_dns_provider` | DNS 调度的服务商与区域，凭据信封加密 |
+| `dns_state` | DNS 调度策略与期望 / 已应用的 DNS revision |
 | `dns_revision` | DNS revision：记录集、托管名称、状态 |
 | `dns_managed_name` | 已登记的托管 DNS 名称 |
 

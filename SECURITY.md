@@ -56,7 +56,7 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | --- | --- |
 | 无 phone-home | 控制台与节点不主动连接 Edgeweir 项目的任何服务器（edgeweir.com、edgeweir.dev 等），版本检查也不例外 |
 | 无授权校验 | 代码中没有许可证密钥、联网授权或功能锁 |
-| 遥测默认关闭 | 只有管理员显式开启后才发送，开启前列出将要发送的字段和目的地址；当前版本不发送任何遥测数据，`EDGEWEIR_TELEMETRY` 的状态显示在 **后台 → 系统设置**；better-auth 自带的遥测强制关闭 |
+| 遥测默认关闭 | 只有运营者显式开启后才发送，开启前列出将要发送的字段和目的地址；当前版本不发送任何遥测数据，`EDGEWEIR_TELEMETRY` 的状态显示在 **系统设置**；better-auth 自带的遥测强制关闭 |
 | 敏感数据信封加密 | 私钥与第三方凭据经主密钥 `EDGEWEIR_MASTER_KEY` 信封加密后入库；只需比对的秘密只存哈希（见 [敏感数据](#敏感数据)） |
 | 绝不保存 SSH 凭据 | 控制台没有保存 SSH 凭据的选项；节点只经控制台生成的一次性安装命令接入，由节点主动注册 |
 | 管理操作写审计 | 见 [审计日志](#审计日志) |
@@ -83,8 +83,8 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | 内部 CA 私钥 | 信封加密 | `pki_authority.private_key_envelope` |
 | 证书私钥 | 信封加密 | `certificate.private_key_envelope` |
 | ACME 账户 | 信封加密 | `certificate.account_envelope` |
-| 组织 DNS 服务商凭据 | 信封加密 | `dns_credential.credential_envelope` |
-| 平台 DNS 服务商凭据 | 信封加密 | `platform_dns_provider.credential_envelope` |
+| ACME DNS-01 凭据 | 信封加密 | `dns_credential.credential_envelope` |
+| DNS 调度服务商凭据 | 信封加密 | `platform_dns_provider.credential_envelope` |
 | S3 源站密钥 | 信封加密 | `origin_credential.secret_envelope` |
 | 告警渠道配置（webhook 地址与 Bearer token、邮件收件人） | 信封加密 | `alert_channel.config_envelope` |
 | SMTP 设置（含密码） | 信封加密 | `system_setting` 的 `notification_smtp` |
@@ -129,13 +129,13 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | revision 回执由主密钥封装并绑定节点；节点报告高于控制台最新 revision 的版本时必须附有效回执，只有经验证的版本参与 revision 序号计算 | 数据库从备份恢复后，未经认证的上报操纵 revision 序号 |
 | 敏感数据信封加密，主密钥不入库；附加认证数据绑定表、字段与记录 id | 数据库备份或只读 SQL 注入泄露私钥与凭据；有库写权限者在行之间互换密文 |
 | 管理操作写审计，与变更同事务提交 | 越权或误操作无法追溯 |
-| `/api/auth/*` 只放行控制台界面用到的 better-auth 端点，其余 404；组织、成员与用户管理只走 Edgeweir 自己的接口；`x-api-key` 在 `/api/auth/*` 与 `/rpc` 上被丢弃，只在 `/api/v1` 生效 | 借 better-auth 插件端点绕过权限检查、审计与配置版本（删除组织、冒充用户、改他人密码）；API key 变成会话后签发新 key |
+| `/api/auth/*` 只放行控制台界面用到的 better-auth 端点（不含注册、admin 与 api-key 端点），其余 404；AccessKey 只能由已登录的会话经 `accessKeys.*` 创建与吊销；`x-api-key` 在 `/api/auth/*` 与 `/rpc` 上被丢弃，只在 `/api/v1` 生效 | 借 better-auth 插件端点绕过审计与配置版本（创建账户、冒充用户、改密码）；API key 变成会话或签发新 key |
 | `/rpc` 要求 `x-csrf-token` 头；响应带 CSP `default-src 'self'`、`frame-ancestors 'none'` | 跨站请求伪造；页面被嵌入第三方站点 |
 | 客户端 IP 取 TCP 对端地址，转发头只信任 `EDGEWEIR_TRUSTED_PROXIES`；登录与两步验证的限速计数存 PostgreSQL，多实例共享，重启不清零 | 伪造 IP 绕过登录与两步验证限速；审计日志中的 IP 失真 |
 | `install.sh` 与 agent 自升级先校验 cosign 签名（证书身份精确匹配待安装版本的 release 工作流）与 SHA-256，再执行；控制台 `/downloads` 镜像（`EDGEWEIR_DOWNLOADS_DIR`）只是传输通道，未镜像的文件返回 404 | 下载链路或镜像被篡改 |
-| 源站不能是特殊用途地址（回环、链路本地、私网、CGNAT、组播等）或 `localhost`：控制台拒绝这类 IP 字面量，节点对配置和每个 DNS 解析结果执行同一清单（`packages/contract/src/addresses.ts`）；只有平台管理员能经审计的允许清单放行地址段；节点回源请求带 `CDN-Loop`（RFC 8586），收到带自身标识的请求返回 508 | 租户借回源访问云元数据（`169.254.169.254`）、探测内网，或造成回环 |
-| 控制台向 Web 界面保存的目标（告警 webhook、SMTP 服务器、节点发布源、DNS 解析器）发起的请求先解析一次、拒绝特殊用途地址，再连接该地址；`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 放行指定地址段 | 借控制台的出站请求访问内网 |
-| 每个组织的刷新预热频率上限为每分钟 10 个任务、每小时 2000 个目标，平台管理员不受限；节点端清缓存标记超过上限时合并为站点级标记 | 租户填满节点的清缓存存储，影响同节点其他网站 |
+| 源站不能是特殊用途地址（回环、链路本地、私网、CGNAT、组播等）或 `localhost`：控制台拒绝这类 IP 字面量，节点对配置和每个 DNS 解析结果执行同一清单（`packages/contract/src/addresses.ts`）；只有经审计的源站地址允许清单能放行地址段；节点回源请求带 `CDN-Loop`（RFC 8586），收到带自身标识的请求返回 508 | 借回源访问云元数据（`169.254.169.254`）、探测内网，或造成回环 |
+| 控制台向 Web 界面保存的目标（告警 webhook、SMTP 服务器、节点发布源）发起的请求先解析一次、拒绝特殊用途地址，再连接该地址；`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 放行指定地址段 | 借控制台的出站请求访问内网 |
+| 节点端清缓存标记超过上限时合并为站点级标记 | 大量刷新任务填满节点的清缓存存储，影响同节点其他网站 |
 | agent 只执行类型化操作，没有执行任意命令的接口 | 控制台失陷后在节点上执行任意代码 |
 | 发布物 keyless 签名、SBOM、SLSA provenance | 发布的程序与源码不一致，或被投毒 |
 

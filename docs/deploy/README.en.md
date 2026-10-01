@@ -66,6 +66,7 @@ Worker schedules:
 | Every minute | Alert checks; DNS sync; traffic and access-log rollups, node upgrade timeouts; certificate issuance and renewal |
 | Hourly | Pruning old revisions; expiring undelivered purge and prefetch tasks |
 | Every 30 minutes | Deleting enrollment tokens expired or used more than 7 days ago |
+| At startup | When an upgrade changes what the stored configuration compiles to, republishing every cluster once (reason "Configuration recompiled after an upgrade") |
 
 ### Scaling
 
