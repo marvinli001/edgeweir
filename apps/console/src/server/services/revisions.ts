@@ -864,7 +864,7 @@ export async function rollbackToRevision(
     { code: "rollback", params: { revision: opts.revision } },
     opts.userId ?? null,
   );
-  // An administrator's rollback restores known content: it goes to every node, no canary.
+  // The operator's rollback restores known content: it goes to every node, no canary.
   const rollout = await loadRollout(tx, opts.clusterId);
   if (rollout?.enabled)
     await updateRollout(tx, opts.clusterId, {

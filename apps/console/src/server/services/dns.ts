@@ -351,7 +351,7 @@ export function massRemoval(
  * a plan that would empty a non-empty record set (`all.` or a line) or
  * remove more than the configured share of address records keeps the
  * previous revision, is stored as a blocked revision and raises the
- * dns_mass_removal_blocked alert, until a plan passes or an administrator
+ * dns_mass_removal_blocked alert, until a plan passes or the operator
  * forces it. Covers the console losing its nodes (all of them look offline).
  */
 async function publish(tx: Tx, policy: DnsPolicy, reason: string, opts: { force?: boolean } = {}) {

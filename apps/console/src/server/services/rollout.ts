@@ -166,7 +166,7 @@ async function participants(db: Executor, row: RolloutRow) {
  * Decides a running rollout: roll back when a canary node failed to apply
  * the candidate, reported an unhealthy data plane or went offline during
  * the window, or when the canary 5xx ratio passes the threshold; promote
- * (or wait for an administrator) once the window has passed and every
+ * (or wait for the operator) once the window has passed and every
  * canary node runs the candidate healthily. Returns the resulting state.
  */
 export async function evaluateRollout(

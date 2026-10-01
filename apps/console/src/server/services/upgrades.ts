@@ -362,7 +362,7 @@ export async function cancelUpgrade(app: AppContext, id: string, actor: Actor) {
       .set({
         state: "cancelled",
         errorCode: "upgrade_cancelled",
-        message: "cancelled by administrator",
+        message: "cancelled by the operator",
         finishedAt: new Date(),
       })
       .where(and(eq(delivery.upgradeId, id), inArray(delivery.state, ["held", "pending"])));
