@@ -162,7 +162,8 @@ export const cacheRuleInput = z
     maxSizeBytes: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
     action: cacheAction.default("cache"),
     edgeTtlSeconds: z.number().int().min(0).max(MAX_TTL).default(3600),
-    originCacheControl: originCacheControl.default("override"),
+    /** Respect by default: override also caches private and no-store responses. */
+    originCacheControl: originCacheControl.default("respect"),
     staleWhileRevalidateSeconds: z.number().int().min(0).max(MAX_STALE).default(0),
     staleIfErrorSeconds: z.number().int().min(0).max(MAX_STALE).default(0),
     /**

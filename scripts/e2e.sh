@@ -470,7 +470,7 @@ wait_node_latest() {
 m2_site() { # m2_site NAME JQ-OBJECT -> site id (the object overrides the defaults)
   local body
   body="$(jq -nc --arg c "$CLUSTER_ID" --arg n "$1" \
-    "{name: \$n, clusterId: \$c, cacheRules: [{pathPrefixes: [\"/\"], edgeTtlSeconds: 300}]} + $2")" ||
+    "{name: \$n, clusterId: \$c, cacheRules: [{pathPrefixes: [\"/\"], edgeTtlSeconds: 300, originCacheControl: \"override\"}]} + $2")" ||
     fail "bad site definition for $1"
   api POST /sites "$body" | jq -r .site.id
 }
@@ -501,7 +501,7 @@ m2_site m2-s3-echo '{domains: ["s3-echo.m2.test"], origins: [{address: "whoami",
   s3: {region: "us-east-1", bucket: "media", accessKeyId: "e2e-access-key", secretAccessKey: "e2e-only-s3-secret-key"}}], cacheRules: []}' >/dev/null
 m2_site m2-ws-off '{domains: ["wsoff.m2.test"], origins: [{address: "whoami"}], originSettings: {websocket: false}}' >/dev/null
 m2_site m2-stale '{domains: ["stale.m2.test"], origins: [{address: "origin-primary"}],
-  cacheRules: [{pathPrefixes: ["/"], edgeTtlSeconds: 1, staleIfErrorSeconds: 300}]}' >/dev/null
+  cacheRules: [{pathPrefixes: ["/"], edgeTtlSeconds: 1, staleIfErrorSeconds: 300, originCacheControl: "override"}]}' >/dev/null
 # N-H2: "hidden" resolves into the isolated network (outside the allow list);
 # "node" is the edge node itself (inside it).
 HIDDEN_SITE="$(m2_site m2-hidden '{domains: ["hidden.m2.test"], origins: [{address: "hidden"}], cacheRules: []}')"
