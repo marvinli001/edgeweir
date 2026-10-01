@@ -41,7 +41,7 @@ describe("node error texts", () => {
         { failed: "1", total: "1", url: "https://a.test/", reason: "https_unsupported" },
         "",
       ),
-    ).toBe("1 of 1 URLs failed, first https://a.test/ (the node has no HTTPS listener yet)");
+    ).toBe("1 of 1 URL failed, first https://a.test/ (the node has no HTTPS listener yet)");
     // An unknown reason reads as "other".
     expect(
       taskErrorText(
@@ -49,9 +49,12 @@ describe("node error texts", () => {
         { failed: "1", total: "1", url: "u", reason: "gremlins" },
         "",
       ),
-    ).toBe("1 of 1 URLs failed, first u (other error)");
+    ).toBe("1 of 1 URL failed, first u (other error)");
     expect(taskErrorText("prefetch_timeout", { done: "4", total: "9" }, "")).toBe(
       "Ran out of time after 4 of 9 URLs",
+    );
+    expect(taskErrorText("prefetch_timeout", { done: "0", total: "1" }, "")).toBe(
+      "Ran out of time after 0 of 1 URL",
     );
     expect(taskErrorText("task_expired", {}, "expired: …")).toBe(
       "Not executed by the node within 7 days",

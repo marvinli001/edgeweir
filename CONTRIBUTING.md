@@ -209,6 +209,7 @@ feat(console)!: drop the public landing page from the open core
 - 所有 UI 字符串经 Paraglide 消息函数输出。消息文件为 `apps/console/messages/zh-CN.json`（默认语言）与 `apps/console/messages/en.json`。
 - key 用 snake_case，以页面或功能开头，如 `nav_sites`、`cert_brotli_unavailable`。
 - 两种语言同时增改：key 集合一致，占位符一致，值不为空。
+- 英文中的数量用 [inlang message format](https://inlang.com/m/reootnfj/plugin-inlang-messageFormat) 的复数变体（`local countPlural = count: plural`，每个复数类别一条 `match`，各变体占位符一致）；zh-CN 保持普通字符串。
 - `src/web/routes` 与 `src/web/components` 中不写中文字面量，也不写英文 UI 文案，包括 `aria-*`、`title`、`alt`、`placeholder`。
 - 服务端不拼接面向用户的句子：API 返回错误码，UI 按当前语言翻译；未知错误码回退到服务端的英文 `message`。
 

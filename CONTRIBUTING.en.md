@@ -209,6 +209,7 @@ feat(console)!: drop the public landing page from the open core
 - Every UI string goes through a Paraglide message function. Message files: `apps/console/messages/zh-CN.json` (default locale) and `apps/console/messages/en.json`.
 - Keys are snake_case and start with the page or feature, e.g., `nav_sites`, `cert_brotli_unavailable`.
 - Both locales change together: same key set, same placeholders, no empty values.
+- English counts use plural variants of the [inlang message format](https://inlang.com/m/reootnfj/plugin-inlang-messageFormat) (`local countPlural = count: plural`, one `match` entry per plural category, every variant with the same placeholders); zh-CN keeps a plain string.
 - `src/web/routes` and `src/web/components` contain no Chinese literals and no English UI text, including `aria-*`, `title`, `alt`, and `placeholder`.
 - The server does not build user-facing sentences: the API returns error codes and the UI translates them; unknown codes fall back to the server's English `message`.
 

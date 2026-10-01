@@ -14,16 +14,33 @@ import {
 } from "@edgeweir/contract";
 import { type ESTree, parseSync, Visitor } from "vite";
 import { describe, expect, it } from "vitest";
+import { m } from "../../src/web/paraglide/messages.js";
+
+/**
+ * A message in the inlang message format: a pattern, or variants chosen by selectors (English
+ * plurals: `local countPlural = count: plural`, one `match` entry per plural category).
+ */
+type Message =
+  | string
+  | [{ declarations?: string[]; selectors?: string[]; match: Record<string, string> }];
 
 const load = (locale: string) =>
   JSON.parse(
     readFileSync(resolve(import.meta.dirname, `../../messages/${locale}.json`), "utf8"),
-  ) as Record<string, string>;
+  ) as Record<string, Message>;
 const settings = JSON.parse(
   readFileSync(resolve(import.meta.dirname, "../../project.inlang/settings.json"), "utf8"),
 ) as { baseLocale: string; locales: string[] };
 
-const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+const placeholders = (text: string) =>
+  [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
+/** Every pattern a message can render: the message itself or each of its variants. */
+const patterns = (message: Message | undefined): string[] =>
+  message === undefined
+    ? []
+    : typeof message === "string"
+      ? [message]
+      : Object.values(message[0].match);
 
 const root = resolve(import.meta.dirname, "../..");
 const components = globSync("src/web/{routes,components}/**/*.tsx", { cwd: root });
@@ -115,6 +132,10 @@ function englishLiterals(file: string): string[] {
 describe("i18n messages", () => {
   const zh = load("zh-CN");
   const en = load("en");
+  const catalogs = [
+    ["zh-CN", zh],
+    ["en", en],
+  ] as const;
 
   it("defaults to zh-CN and also ships en", () => {
     expect(settings.baseLocale).toBe("zh-CN");
@@ -125,25 +146,94 @@ describe("i18n messages", () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort());
   });
 
-  it("uses the same placeholders in every locale and never leaves a message empty", () => {
+  it("uses the same placeholders in every locale and variant and never leaves a message empty", () => {
     for (const key of Object.keys(zh)) {
       if (key === "$schema") continue;
-      expect(zh[key]?.trim(), key).toBeTruthy();
-      expect(en[key]?.trim(), key).toBeTruthy();
-      expect(placeholders(en[key] ?? ""), key).toEqual(placeholders(zh[key] ?? ""));
+      const expected = placeholders(patterns(zh[key])[0] ?? "");
+      for (const [locale, messages] of catalogs) {
+        expect(patterns(messages[key]), `${locale} ${key}`).not.toEqual([]);
+        for (const text of patterns(messages[key])) {
+          expect(text.trim(), `${locale} ${key}`).toBeTruthy();
+          expect(placeholders(text), `${locale} ${key}`).toEqual(expected);
+        }
+      }
     }
+  });
+
+  it("declares the inputs of variant messages and gives every plural category a variant", () => {
+    for (const [locale, messages] of catalogs) {
+      const categories = new Intl.PluralRules(locale).resolvedOptions().pluralCategories;
+      for (const [key, message] of Object.entries(messages)) {
+        if (typeof message === "string") continue;
+        const [{ declarations = [], selectors = [], match }] = message;
+        const at = `${locale} ${key}`;
+        const inputs = declarations.flatMap((d) => /^input (\w+)$/.exec(d)?.[1] ?? []).sort();
+        expect(inputs, at).toEqual(placeholders(patterns(message)[0] ?? ""));
+        // Each selector is the plural category of an input.
+        const plurals = new Map(
+          declarations.flatMap((d) => {
+            const local = /^local (\w+) = (\w+): plural$/.exec(d);
+            return local ? [[local[1], local[2]] as const] : [];
+          }),
+        );
+        expect(selectors, at).not.toEqual([]);
+        for (const selector of selectors)
+          expect(inputs, `${at} ${selector}`).toContain(plurals.get(selector));
+        // Without a variant for a combination of categories, the message renders its key.
+        const variants = Object.keys(match).map(
+          (keys) =>
+            new Map(
+              keys
+                .split(",")
+                .map((pair) => pair.split("=").map((s) => s.trim()) as [string, string]),
+            ),
+        );
+        for (const variant of variants) expect(selectors, at).toEqual([...variant.keys()]);
+        const combinations = selectors.reduce<string[][]>(
+          (partial) => partial.flatMap((head) => categories.map((category) => [...head, category])),
+          [[]],
+        );
+        for (const combination of combinations) {
+          const covered = variants.some((variant) =>
+            selectors.every((selector, i) => [combination[i], "*"].includes(variant.get(selector))),
+          );
+          expect(covered, `${at} ${combination.join(", ")}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("pluralizes English counts and keeps zh-CN counts as they are", () => {
+    expect(m.enroll_ttl_hours({ count: 1 }, { locale: "en" })).toBe("1 hour");
+    expect(m.enroll_ttl_hours({ count: 24 }, { locale: "en" })).toBe("24 hours");
+    expect(m.enroll_ttl_hours({ count: 1 }, { locale: "zh-CN" })).toBe("1 小时");
+    expect(m.error_cluster_not_empty({ nodes: 1, sites: 2 }, { locale: "en" })).toBe(
+      "The cluster still has 1 node and 2 sites",
+    );
+    expect(m.error_cluster_not_empty({ nodes: 0, sites: 1 }, { locale: "en" })).toBe(
+      "The cluster still has 0 nodes and 1 site",
+    );
+    // Callers pass formatted numbers too.
+    expect(m.purge_nodes_progress({ done: 0, total: "1" }, { locale: "en" })).toBe("0/1 node");
+    expect(m.rollout_traffic_value({ requests: "1,000", errors: "1" }, { locale: "en" })).toBe(
+      "1,000 requests, 1 5xx",
+    );
   });
 
   it("localizes every API error code and revision reason with the same parameters", () => {
     for (const code of errorCodes) {
       const key = `error_${code.toLowerCase()}`;
       expect(zh[key], key).toBeTruthy();
-      expect(placeholders(zh[key] ?? ""), key).toEqual([...errorDefs[code].params].sort());
+      for (const text of patterns(zh[key])) {
+        expect(placeholders(text), key).toEqual([...errorDefs[code].params].sort());
+      }
     }
     for (const code of revisionReasonCodes) {
       const key = `revision_reason_${code}`;
       expect(zh[key], key).toBeTruthy();
-      expect(placeholders(zh[key] ?? ""), key).toEqual([...revisionReasonDefs[code].params].sort());
+      for (const text of patterns(zh[key])) {
+        expect(placeholders(text), key).toEqual([...revisionReasonDefs[code].params].sort());
+      }
     }
   });
 
@@ -159,14 +249,11 @@ describe("i18n messages", () => {
     for (const [prefix, table, defs] of tables) {
       for (const [code, def] of Object.entries(defs)) {
         const key = `${prefix}${code}`;
-        for (const [locale, messages] of [
-          ["zh-CN", zh],
-          ["en", en],
-        ] as const) {
+        for (const [locale, messages] of catalogs) {
           expect(messages[key], `${table}.${code} → ${locale} ${key}`).toBeTruthy();
-          expect(placeholders(messages[key] ?? ""), `${locale} ${key}`).toEqual(
-            [...def.params].sort(),
-          );
+          for (const text of patterns(messages[key])) {
+            expect(placeholders(text), `${locale} ${key}`).toEqual([...def.params].sort());
+          }
         }
       }
     }

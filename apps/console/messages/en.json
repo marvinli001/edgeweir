@@ -122,8 +122,26 @@
   "enroll_title": "Add node",
   "enroll_node_name": "Node name",
   "enroll_ttl": "Valid for",
-  "enroll_ttl_minutes": "{count} minutes",
-  "enroll_ttl_hours": "{count} hours",
+  "enroll_ttl_minutes": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} minute",
+        "countPlural=other": "{count} minutes"
+      }
+    }
+  ],
+  "enroll_ttl_hours": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} hour",
+        "countPlural=other": "{count} hours"
+      }
+    }
+  ],
   "enroll_generate": "Generate command",
   "enroll_command": "Install command",
   "enroll_expires_in": "Expires in",
@@ -197,7 +215,23 @@
   "error_cluster_selection_forbidden": "Only platform administrators choose the cluster",
   "error_cluster_not_found": "Cluster not found",
   "error_cluster_name_taken": "Cluster name already exists: {name}",
-  "error_cluster_not_empty": "The cluster still has {nodes} node(s) and {sites} site(s)",
+  "error_cluster_not_empty": [
+    {
+      "declarations": [
+        "input nodes",
+        "input sites",
+        "local nodesPlural = nodes: plural",
+        "local sitesPlural = sites: plural"
+      ],
+      "selectors": ["nodesPlural", "sitesPlural"],
+      "match": {
+        "nodesPlural=one, sitesPlural=one": "The cluster still has {nodes} node and {sites} site",
+        "nodesPlural=one, sitesPlural=other": "The cluster still has {nodes} node and {sites} sites",
+        "nodesPlural=other, sitesPlural=one": "The cluster still has {nodes} nodes and {sites} site",
+        "nodesPlural=other, sitesPlural=other": "The cluster still has {nodes} nodes and {sites} sites"
+      }
+    }
+  ],
   "error_no_cluster": "No cluster exists yet",
   "error_node_group_not_found": "Node group not found",
   "error_node_group_name_taken": "Node group already exists: {name}",
@@ -451,7 +485,16 @@
   "site_origin_s3_secret": "Secret key",
   "site_origin_s3_secret_stored": "Stored, leave empty to keep",
   "site_origin_health_ok": "Healthy",
-  "site_origin_health_down": "Down on {down} of {total} nodes",
+  "site_origin_health_down": [
+    {
+      "declarations": ["input down", "input total", "local totalPlural = total: plural"],
+      "selectors": ["totalPlural"],
+      "match": {
+        "totalPlural=one": "Down on {down} of {total} node",
+        "totalPlural=other": "Down on {down} of {total} nodes"
+      }
+    }
+  ],
   "site_origin_health_no_nodes": "No online nodes",
   "site_pool_title": "Pool settings",
   "site_pool_policy": "Load balancing",
@@ -523,7 +566,16 @@
   "purge_source_recovery": "System (make-up whole-site purge)",
   "purge_node_recovered": "Made up with a whole-site purge when the node came back",
   "purge_nodes": "Nodes",
-  "purge_nodes_progress": "{done}/{total} nodes",
+  "purge_nodes_progress": [
+    {
+      "declarations": ["input done", "input total", "local totalPlural = total: plural"],
+      "selectors": ["totalPlural"],
+      "match": {
+        "totalPlural=one": "{done}/{total} node",
+        "totalPlural=other": "{done}/{total} nodes"
+      }
+    }
+  ],
   "purge_no_nodes": "No nodes",
   "purge_node_counts": "{succeeded} ok · {failed} failed",
   "purge_details": "Details",
@@ -540,13 +592,37 @@
   "node_error_dns_failed": "Cannot resolve {host}",
   "node_error_address_forbidden": "{address} is a special-purpose address outside the origin allow list",
   "node_error_tls_failed": "TLS handshake or certificate verification failed",
-  "task_error_prefetch_failed": "{failed} of {total} URLs failed, first {url} ({reason})",
+  "task_error_prefetch_failed": [
+    {
+      "declarations": [
+        "input failed",
+        "input reason",
+        "input total",
+        "input url",
+        "local totalPlural = total: plural"
+      ],
+      "selectors": ["totalPlural"],
+      "match": {
+        "totalPlural=one": "{failed} of {total} URL failed, first {url} ({reason})",
+        "totalPlural=other": "{failed} of {total} URLs failed, first {url} ({reason})"
+      }
+    }
+  ],
   "task_error_reason_status": "HTTP {status}",
   "task_error_reason_connect_failed": "connection failed",
   "task_error_reason_timeout": "timed out",
   "task_error_reason_https_unsupported": "the node has no HTTPS listener yet",
   "task_error_reason_other": "other error",
-  "task_error_prefetch_timeout": "Ran out of time after {done} of {total} URLs",
+  "task_error_prefetch_timeout": [
+    {
+      "declarations": ["input done", "input total", "local totalPlural = total: plural"],
+      "selectors": ["totalPlural"],
+      "match": {
+        "totalPlural=one": "Ran out of time after {done} of {total} URL",
+        "totalPlural=other": "Ran out of time after {done} of {total} URLs"
+      }
+    }
+  ],
   "task_error_task_unsupported": "The node does not support this task type ({type}); upgrade edgeweir-node",
   "task_error_purge_failed": "The purge did not fully apply",
   "task_error_task_expired": "Not executed by the node within 7 days",
@@ -570,7 +646,16 @@
   "cert_status_issuing": "Issuing",
   "cert_status_ready": "Ready",
   "cert_status_error": "Issuance failed",
-  "cert_expires": "Expires {date} · {days} days remaining",
+  "cert_expires": [
+    {
+      "declarations": ["input date", "input days", "local daysPlural = days: plural"],
+      "selectors": ["daysPlural"],
+      "match": {
+        "daysPlural=one": "Expires {date} · {days} day remaining",
+        "daysPlural=other": "Expires {date} · {days} days remaining"
+      }
+    }
+  ],
   "cert_auto_on": "Automatic renewal enabled",
   "cert_auto_off": "Automatic renewal disabled",
   "cert_renew_at": "Next renewal: {date}",
@@ -669,7 +754,16 @@
   "ip_lists_title": "IP lists",
   "ip_lists_create": "Create list",
   "ip_lists_empty": "No IP lists",
-  "ip_lists_count": "{count} entries",
+  "ip_lists_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} entry",
+        "countPlural=other": "{count} entries"
+      }
+    }
+  ],
   "ip_lists_collection": "Referenced by rules",
   "ip_lists_entries": "IP addresses and CIDRs",
   "site_tab_rules": "Rules",
@@ -866,7 +960,16 @@
   "upgrade_version": "Target version",
   "upgrade_version_placeholder": "0.1.0",
   "upgrade_group": "Canary node group",
-  "upgrade_group_nodes": "{name} ({count} nodes)",
+  "upgrade_group_nodes": [
+    {
+      "declarations": ["input count", "input name", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{name} ({count} node)",
+        "countPlural=other": "{name} ({count} nodes)"
+      }
+    }
+  ],
   "upgrade_start_note": "Nodes verify signatures before restarting and roll back if health checks fail.",
   "upgrade_details": "Diagnostics",
   "task_error_upgrade_rejected": "Version {version} was rejected; the previous version is kept",
@@ -990,7 +1093,16 @@
   "rollout_no_canary_nodes": "No canary nodes",
   "rollout_traffic_canary": "Canary traffic",
   "rollout_traffic_baseline": "Baseline traffic",
-  "rollout_traffic_value": "{requests} requests, {errors} 5xx",
+  "rollout_traffic_value": [
+    {
+      "declarations": ["input errors", "input requests", "local requestsPlural = requests: plural"],
+      "selectors": ["requestsPlural"],
+      "match": {
+        "requestsPlural=one": "{requests} request, {errors} 5xx",
+        "requestsPlural=other": "{requests} requests, {errors} 5xx"
+      }
+    }
+  ],
   "rollout_promote": "Promote to all now",
   "rollout_promote_confirm": "Promote revision #{revision} to every node?",
   "rollout_abort": "Abort and roll back",
@@ -1007,7 +1119,20 @@
   "node_groups_canary": "Canary",
   "node_groups_canary_label": "Canary group",
   "dns_blocked": "Held back",
-  "dns_held_back": "DNS mass removal held back: {removed} of {previous} address records would go; the current records stay",
+  "dns_held_back": [
+    {
+      "declarations": [
+        "input previous",
+        "input removed",
+        "local previousPlural = previous: plural"
+      ],
+      "selectors": ["previousPlural"],
+      "match": {
+        "previousPlural=one": "DNS mass removal held back: {removed} of {previous} address record would go; the current records stay",
+        "previousPlural=other": "DNS mass removal held back: {removed} of {previous} address records would go; the current records stay"
+      }
+    }
+  ],
   "dns_force_publish": "Publish anyway",
   "dns_force_publish_confirm": "Publish this DNS change anyway?",
   "dns_protection_title": "Mass removal protection",
@@ -1055,7 +1180,16 @@
   "bans_left_minutes": "{count} min left",
   "bans_left_hours": "{count} h left",
   "bans_left_days": "{count} d left",
-  "bans_unapplied": "Not applied on {count} nodes",
+  "bans_unapplied": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Not applied on {count} node",
+        "countPlural=other": "Not applied on {count} nodes"
+      }
+    }
+  ],
   "bans_trigger": "{observed} / {threshold} in {window} s",
   "bans_unban": "Unban",
   "bans_unban_confirm": "Unban {address}?",
@@ -1118,13 +1252,31 @@
   "security_online": "Online",
   "security_offline": "Offline",
   "security_no_nodes": "No nodes",
-  "security_escalated_paths": "{count} escalated paths",
+  "security_escalated_paths": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} escalated path",
+        "countPlural=other": "{count} escalated paths"
+      }
+    }
+  ],
   "security_top_title": "Top addresses and paths",
   "security_top_ips": "Addresses",
   "security_top_paths": "Paths",
   "security_top_empty": "No data",
   "security_hours": "Range",
-  "security_hours_value": "Last {hours} hours",
+  "security_hours_value": [
+    {
+      "declarations": ["input hours", "local hoursPlural = hours: plural"],
+      "selectors": ["hoursPlural"],
+      "match": {
+        "hoursPlural=one": "Last {hours} hour",
+        "hoursPlural=other": "Last {hours} hours"
+      }
+    }
+  ],
   "security_events_title": "Events",
   "security_events_empty": "No events",
   "security_event_kind": "Event type",
