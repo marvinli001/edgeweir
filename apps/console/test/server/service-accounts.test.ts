@@ -212,6 +212,12 @@ describe("service accounts, scopes and idempotency keys", async () => {
       ],
       ["GET", "/settings/error-pages", undefined],
       ["PUT", "/settings/error-pages", { unknownHost: "<p>nobody</p>" }],
+      ["GET", "/sites/00000000-0000-4000-8000-000000000000/bulk-redirects", undefined],
+      [
+        "PUT",
+        "/sites/00000000-0000-4000-8000-000000000000/bulk-redirects",
+        { redirects: [{ source: "/old", target: "/new" }] },
+      ],
       [
         "POST",
         "/cache-tasks",
