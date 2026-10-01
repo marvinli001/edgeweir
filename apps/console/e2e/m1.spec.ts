@@ -210,7 +210,7 @@ test("M1: tenants, members, site editing, clusters, node groups, audit and i18n"
     await page.getByTestId("cluster-delete").click();
     await page.getByTestId("confirm-action").click();
     await expect(page.getByTestId("confirm-error")).toHaveText(
-      /^The cluster still has \d+ node\(s\) and \d+ site\(s\)$/,
+      /^The cluster still has \d+ nodes? and \d+ sites?$/,
     );
     await page.keyboard.press("Escape");
   });
