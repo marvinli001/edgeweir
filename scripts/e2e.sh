@@ -57,6 +57,19 @@
 #   node without ModSecurity make the features unavailable (409 for tenants)
 #   until they leave; Playwright e2e/g3.spec.ts with an old node in a cluster
 #   of its own.
+#   Core gaps G4 (scripts/e2e-g4.mjs, test origins g4-origin-a/b): both nodes
+#   report the G4 features; Cache-Tag hidden unless kept, purges by tag
+#   (case-insensitive, only tagged objects MISS on every node, every Range
+#   slice included) and by Host; an expired object served STALE while the
+#   origin is down is never served after a purge of its tag; desktop and
+#   mobile prefetch, sitemap urlset and gzip sitemapindex prefetch (same-site,
+#   capped); active health checks take a failing origin out of rotation on
+#   both nodes and back (and keep an origin outside the address policy down),
+#   session affinity pins, replaces tampered cookies and fails over; site
+#   error pages for 403 (rule, IP list), 429, 502, 503, 504 and intercepted
+#   origin errors with escaped placeholders, no-store and request ids (also in
+#   the sampled logs); platform pages for unknown, disabled and suspended
+#   hosts; Playwright e2e/g4.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1047,6 +1060,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g3.mjs --cleanup || fail "G3 cleanup failed"
 pass "G3 checks passed"
+
+step "G4: purge by Host and Cache-Tag, variant and sitemap prefetch, active health checks, session affinity, error pages"
+node scripts/e2e-g4.mjs || fail "G4 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g4.spec.ts || fail "G4 browser checks failed"
+fi
+node scripts/e2e-g4.mjs --cleanup || fail "G4 cleanup failed"
+pass "G4 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
