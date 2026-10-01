@@ -1043,31 +1043,76 @@ export function contentHash(config: NodeConfig): string {
   return createHash("sha256").update(toBinary(NodeConfigSchema, bare)).digest("hex");
 }
 
-/** Compiles console models into a canonical, hashed NodeConfig for `revision`. */
-export function compileNodeConfig(input: CompileInput, revision: bigint): NodeConfig {
-  if (input.sites.filter((site) => site.enabled).length > MAX_SITES_PER_CLUSTER)
-    throw new ConfigCapacityError();
-  const tlsSites = input.sites.filter((s) => s.enabled && s.certificateId);
-  const defaults: ListenerModel[] = tlsSites.length
+/** Port 80, plus 443 when a site has a certificate (HTTP/2 and HTTP/3 if one of them enables it). */
+function listenersFor(
+  sites: { certificateId?: string; tls?: { http2?: boolean; http3?: boolean } }[],
+) {
+  const tlsSites = sites.filter((s) => s.certificateId);
+  return tlsSites.length
     ? [
         ...defaultListeners,
         {
           port: 443,
-          protocol: "https",
+          protocol: "https" as const,
           http2: tlsSites.some((s) => s.tls?.http2),
           http3: tlsSites.some((s) => s.tls?.http3),
         },
       ]
     : defaultListeners;
-  const listeners = (input.listeners ?? defaults).map(
-    (l): Listener =>
-      create(ListenerSchema, {
-        port: l.port,
-        protocol: l.protocol === "https" ? ListenerProtocol.HTTPS : ListenerProtocol.HTTP,
-        http2: l.http2 ?? false,
-        http3: l.http3 ?? false,
-        proxyProtocol: l.proxyProtocol ?? false,
-      }),
+}
+
+const compileListener = (l: ListenerModel): Listener =>
+  create(ListenerSchema, {
+    port: l.port,
+    protocol: l.protocol === "https" ? ListenerProtocol.HTTPS : ListenerProtocol.HTTP,
+    http2: l.http2 ?? false,
+    http3: l.http3 ?? false,
+    proxyProtocol: l.proxyProtocol ?? false,
+  });
+
+/** requiredFeatures of a compiled configuration, derived from its content. */
+export function derivedFeatures(config: NodeConfig): string[] {
+  return [
+    ...(config.sites.some((s) => s.logSampleRate) ? ["access-logs-v1"] : []),
+    ...(config.sites.some((s) => s.tls) ? ["tls-v1"] : []),
+    ...(config.httpChallenges.length ? ["http01-v1"] : []),
+    ...(config.sites.some((s) => s.tls?.http3) ? ["http3-v1"] : []),
+    ...(config.sites.some((s) => s.rules.length) ||
+    config.platformRules.length ||
+    config.ipLists.some((l) => l.platform && l.kind !== "collection")
+      ? ["rules-v1"]
+      : []),
+    ...configExpressions(config).flatMap(geoFeatures),
+    ...rulesFeatures(config),
+    ...protectionFeatures(config),
+    ...moduleFeatures(config),
+    ...poolAndPageFeatures(config),
+  ];
+}
+
+/**
+ * Recomputes what a compiled configuration derives from its sites after
+ * they were changed in place (a rollback, or changes that skip the
+ * configuration canary): the default listeners, the certificate references
+ * the sites still use and requiredFeatures. Canonical, with a new content hash.
+ */
+export function refreshDerived(config: NodeConfig): NodeConfig {
+  const out = clone(NodeConfigSchema, config);
+  out.listeners = listenersFor(out.sites).map(compileListener);
+  const used = new Set(out.sites.map((s) => s.certificateId).filter(Boolean));
+  out.certificates = out.certificates.filter((c) => used.has(c.id));
+  out.requiredFeatures = derivedFeatures(out);
+  const canonical = canonicalize(out);
+  canonical.contentHash = contentHash(canonical);
+  return canonical;
+}
+
+/** Compiles console models into a canonical, hashed NodeConfig for `revision`. */
+export function compileNodeConfig(input: CompileInput, revision: bigint): NodeConfig {
+  if (input.sites.filter((site) => site.enabled).length > MAX_SITES_PER_CLUSTER)
+    throw new ConfigCapacityError();
+  const listeners = (input.listeners ?? listenersFor(input.sites.filter((s) => s.enabled))).map(
+    compileListener,
   );
   const cacheZones = (input.cacheZones ?? defaultCacheZones).map((z) =>
     create(CacheZoneSchema, {
@@ -1092,17 +1137,6 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       create(IpListSchema, { ...list, entries: sortedSet(list.entries) }),
     ),
     platformRules: compileRules(input.platformRules),
-    requiredFeatures: [
-      ...(input.sites.some((s) => s.enabled && s.logSampleRate) ? ["access-logs-v1"] : []),
-      ...(input.sites.some((s) => s.enabled && s.tls) ? ["tls-v1"] : []),
-      ...(input.httpChallenges?.length ? ["http01-v1"] : []),
-      ...(input.sites.some((s) => s.enabled && s.tls?.http3) ? ["http3-v1"] : []),
-      ...(input.sites.some((s) => s.enabled && s.rules?.length) ||
-      input.platformRules?.length ||
-      input.ipLists?.some((l) => l.platform && l.kind !== "collection")
-        ? ["rules-v1"]
-        : []),
-    ],
     originAllowedCidrs: [...(input.originAllowedCidrs ?? [])],
     platformProtection: challenges
       ? create(PlatformProtectionSchema, {
@@ -1116,13 +1150,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     platformErrorPages: compilePlatformErrorPages(input.platformErrorPages),
     offlineHosts: compileOfflineHosts(input.offlineHosts),
   });
-  compiled.requiredFeatures.push(
-    ...configExpressions(compiled).flatMap(geoFeatures),
-    ...rulesFeatures(compiled),
-    ...protectionFeatures(compiled),
-    ...moduleFeatures(compiled),
-    ...poolAndPageFeatures(compiled),
-  );
+  compiled.requiredFeatures = derivedFeatures(compiled);
   const config = canonicalize(compiled);
   config.contentHash = contentHash(config);
   return config;

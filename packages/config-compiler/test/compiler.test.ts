@@ -1,5 +1,10 @@
-import { create, type JsonObject, toJson } from "@bufbuild/protobuf";
-import { NodeConfigSchema, type RuleAction, RuleActionSchema } from "@edgeweir/proto";
+import { clone, create, type JsonObject, toJson } from "@bufbuild/protobuf";
+import {
+  CertificateRefSchema,
+  NodeConfigSchema,
+  type RuleAction,
+  RuleActionSchema,
+} from "@edgeweir/proto";
 import {
   type ActionIr,
   cacheConditionExpression,
@@ -30,6 +35,7 @@ import {
   poolAndPageFeatures,
   protectionFeatures,
   type RuleModel,
+  refreshDerived,
   rulesFeatures,
   type SiteModel,
   type TlsModel,
@@ -1565,5 +1571,66 @@ describe("rule engine extensions (rules-v2)", () => {
         sites: [site("a", { enabled: false, rules: [underAttack] })],
       }),
     ).toBe(false);
+  });
+});
+
+describe("refreshDerived", () => {
+  const tls: TlsModel = {
+    forceHttps: false,
+    hstsMaxAge: 0,
+    hstsIncludeSubdomains: false,
+    hstsPreload: false,
+    minimumVersion: "1.2",
+    cipherProfile: "modern",
+    http2: true,
+    http3: true,
+    gzip: true,
+    gzipMinLength: 256,
+    gzipTypes: ["text/html"],
+    ocspStapling: false,
+    brotli: true,
+    brotliLevel: 5,
+    brotliMinLength: 256,
+    brotliTypes: ["text/html"],
+  };
+  const certificates = [
+    create(CertificateRefSchema, { id: "cert-a", names: ["a.test"], sha256Fingerprint: "aa" }),
+    create(CertificateRefSchema, { id: "cert-b", names: ["b.test"], sha256Fingerprint: "bb" }),
+  ];
+  const rule: RuleModel = {
+    id: "geo",
+    phase: "waf-custom",
+    expression: parseExpression('ip.geoip.country eq "NZ"', "waf-custom"),
+    action: { kind: "block", statusCode: 403 },
+  };
+  const sites = [
+    site("a", { certificateId: "cert-a", tls, rules: [rule], logSampleRate: 500 }),
+    site("b", { certificateId: "cert-b", tls: { ...tls, http3: false, brotli: false } }),
+    site("c"),
+  ];
+
+  it("matches a compilation of the remaining sites after sites are dropped", () => {
+    const config = compileNodeConfig({ clusterId: "c", sites, certificates }, 7n);
+    expect(config.requiredFeatures).toEqual(
+      expect.arrayContaining(["access-logs-v1", "brotli-v1", "geoip-city-v1", "http3-v1"]),
+    );
+    for (const keep of [["b", "c"], ["c"], []]) {
+      const dropped = clone(NodeConfigSchema, config);
+      dropped.sites = dropped.sites.filter((s) => keep.includes(s.id));
+      const expected = compileNodeConfig(
+        {
+          clusterId: "c",
+          sites: sites.filter((s) => keep.includes(s.id)),
+          certificates: certificates.filter((c) => keep.includes(c.id.slice(-1))),
+        },
+        7n,
+      );
+      expect(refreshDerived(dropped), keep.join()).toEqual(expected);
+    }
+  });
+
+  it("keeps a compiled configuration as it is", () => {
+    const config = compileNodeConfig({ clusterId: "c", sites, certificates }, 7n);
+    expect(refreshDerived(config)).toEqual(config);
   });
 });
