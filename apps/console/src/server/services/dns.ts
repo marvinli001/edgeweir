@@ -819,7 +819,7 @@ export async function publishClusterDns(
     .from(schema.dnsBinding)
     .where(eq(schema.dnsBinding.clusterId, clusterId))
     .for("update");
-  if (!row || row.mode !== "auto") return null;
+  if (row?.mode !== "auto") return null;
   const revision = await publishBinding(tx, clusterId, bindingPolicy(row), reason, { params });
   return revision.revision === row.desiredRevision || revision.status === "blocked"
     ? null
