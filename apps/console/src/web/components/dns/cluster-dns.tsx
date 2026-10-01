@@ -1,5 +1,14 @@
-import type { DnsBindingInput, DnsLine, Node, NodeGroup } from "@edgeweir/contract";
-import { dnsBindingInput } from "@edgeweir/contract";
+import { arrayMove } from "@dnd-kit/sortable";
+import type {
+  DnsBindingInput,
+  DnsLine,
+  DnsResolutionLine,
+  Node,
+  NodeGroup,
+} from "@edgeweir/contract";
+import { DNS_LINES, dnsBindingInput, providerLines } from "@edgeweir/contract";
+import { ArrowDown01Icon, ArrowUp01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
@@ -14,8 +23,15 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -27,7 +43,13 @@ import {
 } from "@/components/ui/table";
 import { formatDateTime, m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
-import { modeLabel, revisionError, statusLabel } from "./labels";
+import {
+  dnsRevisionReason,
+  modeLabel,
+  resolutionLineLabel,
+  revisionError,
+  statusLabel,
+} from "./labels";
 
 /** The DNS tab of a cluster: binding, records (or the manual list and zone file), revisions. */
 export function ClusterDns({ clusterId }: { clusterId: string }) {
@@ -93,7 +115,7 @@ function BindingEditor({
 }: {
   clusterId: string;
   initial: DnsBindingInput;
-  providers: { id: string; name: string; zone: string }[];
+  providers: { id: string; name: string; zone: string; provider: string }[];
   groups: NodeGroup[];
   nodes: Node[];
 }) {
@@ -102,6 +124,11 @@ function BindingEditor({
   const queries = useQueryClient();
   const save = useMutation(orpc.dns.saveBinding.mutationOptions());
   const account = providers.find((p) => p.id === draft.providerId);
+  // Without an account (manual records) every line can be created by hand.
+  const supported: readonly DnsResolutionLine[] = account
+    ? providerLines(account.provider)
+    : DNS_LINES;
+  const defaultOnly = supported.length === 1;
   const patchLine = (index: number, change: Partial<DnsLine>) =>
     setDraft({
       ...draft,
@@ -152,9 +179,21 @@ function BindingEditor({
                   ...(draft.mode === "manual" ? [{ value: "none", label: m.cert_none() }] : []),
                   ...providers.map((p) => ({ value: p.id, label: p.name })),
                 ]}
-                onChange={(value) =>
-                  setDraft({ ...draft, providerId: value === "none" ? null : value })
-                }
+                onChange={(value) => {
+                  const providerId = value === "none" ? null : value;
+                  const next = providers.find((p) => p.id === providerId);
+                  const lines = next ? providerLines(next.provider) : DNS_LINES;
+                  // Lines the new provider lacks fall back to the default line.
+                  setDraft({
+                    ...draft,
+                    providerId,
+                    lines: draft.lines.map((line) =>
+                      lines.includes(line.resolutionLine)
+                        ? line
+                        : { ...line, resolutionLine: "default" },
+                    ),
+                  });
+                }}
               />
             ) : null}
             {draft.mode !== "off" ? (
@@ -226,6 +265,11 @@ function BindingEditor({
                   {m.dns_add_line()}
                 </Button>
               </div>
+              {defaultOnly && draft.lines.length ? (
+                <SafetyNote data-testid="dns-resolution-default-only">
+                  {m.dns_resolution_default_only()}
+                </SafetyNote>
+              ) : null}
               {draft.lines.map((line, index) => (
                 <div
                   key={line.nodeGroupId || index}
@@ -253,9 +297,46 @@ function BindingEditor({
                             !draft.lines.some((other) => other.nodeGroupId === g.id),
                         )
                         .map((g) => ({ value: g.id, label: g.name }))}
-                      onChange={(nodeGroupId) => patchLine(index, { nodeGroupId, overrides: [] })}
+                      onChange={(nodeGroupId) =>
+                        patchLine(index, {
+                          nodeGroupId,
+                          overrides: [],
+                          backupNodeGroupIds: line.backupNodeGroupIds.filter(
+                            (id) => id !== nodeGroupId,
+                          ),
+                        })
+                      }
+                    />
+                    <FormSelect
+                      id={`line-resolution-${index}`}
+                      label={m.dns_resolution_line()}
+                      value={line.resolutionLine}
+                      options={DNS_LINES.filter(
+                        (value) => supported.includes(value) || value === line.resolutionLine,
+                      ).map((value) => ({ value, label: resolutionLineLabel(value) }))}
+                      onChange={(value) =>
+                        patchLine(index, { resolutionLine: value as DnsResolutionLine })
+                      }
+                      disabled={defaultOnly && line.resolutionLine === "default"}
+                      testId="dns-line-resolution"
+                    />
+                    <NumberField
+                      id={`line-min-healthy-${index}`}
+                      label={m.dns_min_healthy()}
+                      value={String(line.minHealthyIps)}
+                      min={1}
+                      max={64}
+                      step={1}
+                      required
+                      onChange={(value) => patchLine(index, { minHealthyIps: Number(value) })}
+                      testId="dns-line-min-healthy"
                     />
                   </div>
+                  <BackupGroups
+                    groups={groups.filter((g) => g.id !== line.nodeGroupId)}
+                    value={line.backupNodeGroupIds}
+                    onChange={(backupNodeGroupIds) => patchLine(index, { backupNodeGroupIds })}
+                  />
                   {nodes
                     .filter((n) => n.nodeGroupId === line.nodeGroupId)
                     .map((n) => (
@@ -304,6 +385,104 @@ function BindingEditor({
   );
 }
 
+const MAX_BACKUP_GROUPS = 4;
+
+/** A line's backup node groups in the order they take over. */
+function BackupGroups({
+  groups,
+  value,
+  onChange,
+}: {
+  groups: NodeGroup[];
+  value: string[];
+  onChange: (value: string[]) => void;
+}) {
+  const remaining = groups.filter((g) => !value.includes(g.id));
+  const nameOf = (id: string) => groups.find((g) => g.id === id)?.name ?? id;
+  return (
+    <FieldSet className="gap-2" data-testid="dns-line-backups">
+      <FieldLegend variant="label" className="mb-1">
+        {m.dns_backup_groups()}
+      </FieldLegend>
+      {value.length === 0 ? (
+        <p className="text-sm text-muted-foreground" data-testid="dns-line-backup-none">
+          {m.dns_backup_none()}
+        </p>
+      ) : (
+        <ol className="flex flex-col gap-2">
+          {value.map((id, index) => {
+            const name = nameOf(id);
+            return (
+              <li
+                key={id}
+                className="flex min-h-10 items-center gap-1 rounded-xl border py-1 pr-1 pl-3 animate-enter"
+                data-testid="dns-line-backup"
+                data-group={name}
+              >
+                <span className="w-5 text-xs text-muted-foreground tabular-nums">{index + 1}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={m.dns_backup_up({ name })}
+                  disabled={index === 0}
+                  onClick={() => onChange(arrayMove(value, index, index - 1))}
+                >
+                  <HugeiconsIcon icon={ArrowUp01Icon} strokeWidth={2} />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={m.dns_backup_down({ name })}
+                  disabled={index === value.length - 1}
+                  onClick={() => onChange(arrayMove(value, index, index + 1))}
+                >
+                  <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={m.dns_backup_remove({ name })}
+                  onClick={() => onChange(value.filter((other) => other !== id))}
+                >
+                  <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+                </Button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      {remaining.length && value.length < MAX_BACKUP_GROUPS ? (
+        <Select
+          value={null}
+          onValueChange={(id) => {
+            if (id) onChange([...value, String(id)]);
+          }}
+        >
+          <SelectTrigger
+            size="sm"
+            className="self-start"
+            aria-label={m.dns_backup_group_add()}
+            data-testid="dns-line-backup-add"
+          >
+            <SelectValue placeholder={m.dns_backup_group_add()} />
+          </SelectTrigger>
+          <SelectContent>
+            {remaining.map((g) => (
+              <SelectItem key={g.id} value={g.id}>
+                {g.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
+    </FieldSet>
+  );
+}
+
 function AddressInput({
   id,
   initial,
@@ -331,7 +510,7 @@ function RecordTable({
   records,
   testId,
 }: {
-  records: { name: string; type: string; data: string; ttl: number }[];
+  records: { name: string; type: string; data: string; ttl: number; line?: DnsResolutionLine }[];
   testId: string;
 }) {
   if (!records.length) return <EmptyState title={m.dns_no_records()} />;
@@ -341,15 +520,23 @@ function RecordTable({
         <TableRow>
           <TableHead>{m.dns_record_name()}</TableHead>
           <TableHead>{m.dns_record_type()}</TableHead>
+          <TableHead>{m.dns_resolution_line()}</TableHead>
           <TableHead>{m.dns_record_data()}</TableHead>
           <TableHead>{m.dns_ttl()}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {records.map((r) => (
-          <TableRow key={`${r.name}|${r.type}|${r.data}`}>
+          <TableRow
+            key={`${r.name}|${r.type}|${r.line ?? "default"}|${r.data}`}
+            data-testid="dns-record"
+            data-line={r.line ?? "default"}
+          >
             <TableCell className="font-mono text-xs">{r.name}</TableCell>
             <TableCell>{r.type}</TableCell>
+            <TableCell className="whitespace-nowrap" data-testid="dns-record-line">
+              {resolutionLineLabel(r.line ?? "default")}
+            </TableCell>
             <TableCell className="font-mono text-xs">{r.data}</TableCell>
             <TableCell className="tabular-nums">{r.ttl}</TableCell>
           </TableRow>
@@ -480,6 +667,7 @@ function Revisions({ clusterId }: { clusterId: string }) {
               <TableRow>
                 <TableHead>{m.dns_version()}</TableHead>
                 <TableHead>{m.dns_status()}</TableHead>
+                <TableHead>{m.dns_reason()}</TableHead>
                 <TableHead>{m.dns_records()}</TableHead>
                 <TableHead>{m.dns_time()}</TableHead>
                 <TableHead>{m.common_actions()}</TableHead>
@@ -498,6 +686,9 @@ function Revisions({ clusterId }: { clusterId: string }) {
                         </span>
                       ) : null}
                     </span>
+                  </TableCell>
+                  <TableCell className="text-sm" data-testid="dns-revision-reason">
+                    {dnsRevisionReason(r)}
                   </TableCell>
                   <TableCell className="tabular-nums">{r.recordCount}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">
