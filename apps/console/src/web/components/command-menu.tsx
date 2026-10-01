@@ -7,7 +7,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { accountNav, navGroups } from "@/components/nav-items";
+import { accountNav, moreNav, navGroups } from "@/components/nav-items";
 import { useTheme } from "@/components/theme-provider";
 import {
   Command,
@@ -51,12 +51,14 @@ export function CommandMenu() {
         <CommandList>
           <CommandEmpty>{m.command_empty()}</CommandEmpty>
           <CommandGroup heading={m.command_group_navigation()}>
-            {[...navGroups().flatMap((group) => group.items), ...accountNav()].map((item) => (
-              <CommandItem key={String(item.to)} onSelect={run(() => navigate({ to: item.to }))}>
-                {item.icon}
-                {item.title}
-              </CommandItem>
-            ))}
+            {[...navGroups().flatMap((group) => group.items), ...moreNav(), ...accountNav()].map(
+              (item) => (
+                <CommandItem key={String(item.to)} onSelect={run(() => navigate({ to: item.to }))}>
+                  {item.icon}
+                  {item.title}
+                </CommandItem>
+              ),
+            )}
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading={m.command_group_actions()}>

@@ -1,4 +1,5 @@
 import {
+  ArrowDataTransferHorizontalIcon,
   Audit01Icon,
   BlockedIcon,
   Certificate01Icon,
@@ -39,7 +40,14 @@ export function navGroups(): NavGroup[] {
           testId: "nav-overview",
           exact: true,
         },
-        { title: m.nav_sites(), to: "/sites", icon: icon(GlobeIcon), testId: "nav-sites" },
+        {
+          title: m.nav_sites(),
+          to: "/sites",
+          icon: icon(GlobeIcon),
+          testId: "nav-sites",
+          // Layer-4 applications are a tab of the sites section.
+          also: ["/l4"],
+        },
         {
           title: m.cert_title(),
           to: "/certificates",
@@ -113,6 +121,18 @@ export function navGroups(): NavGroup[] {
           testId: "nav-system",
         },
       ],
+    },
+  ];
+}
+
+/** Pages without a sidebar entry of their own, for the command menu. */
+export function moreNav(): NavItem[] {
+  return [
+    {
+      title: m.l4_title(),
+      to: "/l4",
+      icon: icon(ArrowDataTransferHorizontalIcon),
+      testId: "nav-l4",
     },
   ];
 }

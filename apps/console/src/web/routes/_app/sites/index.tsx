@@ -13,6 +13,7 @@ import { Pager } from "@/components/pager";
 import { SearchBox } from "@/components/search-box";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { SiteStatus } from "@/components/site-status";
+import { SitesTabs } from "@/components/sites-tabs";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -155,6 +156,7 @@ function SitesPage() {
       }
     >
       <div className="flex flex-wrap items-center gap-2">
+        <SitesTabs value="sites" />
         <SearchBox
           value={search.q ?? ""}
           onChange={(q) =>

@@ -9,6 +9,7 @@ import { isSiteTab, type SiteTab } from "@/lib/site-tabs";
 /** Pages worth returning to, with the title they are listed under. */
 export const RECENT_PAGES = {
   "/sites": () => m.nav_sites(),
+  "/l4": () => m.l4_title(),
   "/clusters": () => m.nav_clusters(),
   "/regions": () => m.nav_regions(),
   "/service-accounts": () => m.nav_service_accounts(),

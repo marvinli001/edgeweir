@@ -19,6 +19,8 @@ export interface NavItem {
   testId: string;
   /** Match the path exactly instead of as a prefix (for area roots). */
   exact?: boolean;
+  /** Other sections the entry also stands for (prefix match), reached from its page. */
+  also?: string[];
 }
 
 export function NavMain({
@@ -55,7 +57,9 @@ export function NavMain({
             const to = String(item.to);
             const active = item.exact
               ? pathname === to
-              : pathname === to || pathname.startsWith(`${to}/`);
+              : [to, ...(item.also ?? [])].some(
+                  (path) => pathname === path || pathname.startsWith(`${path}/`),
+                );
             return (
               <SidebarMenuItem key={to}>
                 <SidebarMenuButton

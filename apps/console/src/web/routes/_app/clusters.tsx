@@ -26,6 +26,7 @@ import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { ClusterDns } from "@/components/dns/cluster-dns";
 import { FormDialog } from "@/components/form-dialog";
+import { PortPoolsSection } from "@/components/l4/port-pools";
 import { NodeDetailDialog, NodeLoad } from "@/components/node-detail";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
@@ -71,7 +72,7 @@ export const Route = createFileRoute("/_app/clusters")({
   validateSearch: z.object({
     cluster: z.string().optional(),
     enroll: z.boolean().optional(),
-    tab: z.enum(["overview", "dns", "scheduling"]).optional(),
+    tab: z.enum(["overview", "dns", "scheduling", "ports"]).optional(),
     node: z.string().optional(),
   }),
   component: ClustersPage,
@@ -140,13 +141,16 @@ function ClustersPage() {
               navigate({
                 search: (prev) => ({
                   ...prev,
-                  tab: value === "dns" || value === "scheduling" ? value : undefined,
+                  tab:
+                    value === "dns" || value === "scheduling" || value === "ports"
+                      ? value
+                      : undefined,
                 }),
                 replace: true,
               })
             }
           >
-            <TabsList>
+            <TabsList className="max-w-full justify-start overflow-x-auto">
               <TabsTrigger value="overview" data-testid="cluster-tab-overview">
                 {m.dns_tab_overview()}
               </TabsTrigger>
@@ -155,6 +159,9 @@ function ClustersPage() {
               </TabsTrigger>
               <TabsTrigger value="scheduling" data-testid="cluster-tab-scheduling">
                 {m.scheduling_tab()}
+              </TabsTrigger>
+              <TabsTrigger value="ports" data-testid="cluster-tab-ports">
+                {m.l4_pools_title()}
               </TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="flex flex-col gap-4 animate-enter">
@@ -169,6 +176,13 @@ function ClustersPage() {
             </TabsContent>
             <TabsContent value="scheduling" className="animate-enter">
               <ClusterScheduling key={selected.id} clusterId={selected.id} />
+            </TabsContent>
+            <TabsContent value="ports" className="animate-enter">
+              <PortPoolsSection
+                key={selected.id}
+                clusterId={selected.id}
+                clusterName={selected.name}
+              />
             </TabsContent>
           </Tabs>
           <EnrollDialog
