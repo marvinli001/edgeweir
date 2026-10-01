@@ -547,8 +547,8 @@ function PoolSettingsCard({ site }: { site: Site }) {
           <CardTitle>{m.site_pool_title()}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-            <Field className="col-span-2 sm:col-span-1">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Field>
               <FieldLabel>{m.site_pool_policy()}</FieldLabel>
               <Select
                 value={draft.policy}
@@ -567,20 +567,23 @@ function PoolSettingsCard({ site }: { site: Site }) {
                 </SelectContent>
               </Select>
             </Field>
-            <SwitchField
-              id="pool-tls-verify"
-              label={m.site_pool_tls_verify()}
-              checked={draft.tlsVerify}
-              onCheckedChange={(tlsVerify) => set({ tlsVerify })}
-              testId="pool-tls-verify"
-            />
-            <SwitchField
-              id="pool-websocket"
-              label={m.site_pool_websocket()}
-              checked={draft.websocket}
-              onCheckedChange={(websocket) => set({ websocket })}
-              testId="pool-websocket"
-            />
+            {/* The switches wrap onto two lines where their labels do not fit side by side. */}
+            <div className="flex flex-wrap items-end gap-x-8 gap-y-3 lg:col-span-2">
+              <SwitchField
+                id="pool-tls-verify"
+                label={m.site_pool_tls_verify()}
+                checked={draft.tlsVerify}
+                onCheckedChange={(tlsVerify) => set({ tlsVerify })}
+                testId="pool-tls-verify"
+              />
+              <SwitchField
+                id="pool-websocket"
+                label={m.site_pool_websocket()}
+                checked={draft.websocket}
+                onCheckedChange={(websocket) => set({ websocket })}
+                testId="pool-websocket"
+              />
+            </div>
           </div>
           <div className="flex flex-col gap-2" data-testid="origins-affinity-group">
             <SettingsGroup legend={m.site_pool_affinity()}>
