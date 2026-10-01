@@ -101,6 +101,10 @@ export async function pruneTraffic(db: Database, now = new Date()) {
    and exists(select 1 from node_day_stats d where d.minute=date_trunc('day',h.minute,'UTC') and d.node_id=h.node_id and d.site_id=h.site_id)
    and not exists(select 1 from stats_rollup_dirty d where d.granularity='day' and d.bucket=date_trunc('day',h.minute,'UTC') and d.node_id=h.node_id and d.site_id=h.site_id)`);
     await tx.delete(schema.nodeDayStats).where(lt(schema.nodeDayStats.minute, dayCutoff));
+    // Layer-4 minute statistics are not rolled up: kept as long as minute data.
+    await tx
+      .delete(schema.l4MinuteStats)
+      .where(lt(schema.l4MinuteStats.minute, new Date(minuteCutoff)));
   });
 }
 export async function maintainTraffic(db: Database, now = new Date()) {

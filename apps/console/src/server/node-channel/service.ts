@@ -340,11 +340,13 @@ export function createNodeService(
   const statsHandler = async (
     req: Pick<ReportStatsRequest, "stats" | "batchSequence"> & {
       completeUntil?: ReportStatsV2Request["completeUntil"];
+      l4Stats?: ReportStatsV2Request["l4Stats"];
     },
     ctx: HandlerContext,
   ) => {
     const node = await requireNode(ctx);
-    if (req.batchSequence === 0n && req.stats.length === 0) {
+    const l4Stats = req.l4Stats ?? [];
+    if (req.batchSequence === 0n && req.stats.length === 0 && l4Stats.length === 0) {
       // The node's statistics watermark comes with a cursor query once nothing is pending.
       if (req.completeUntil)
         await recordStatsWatermark(app.db, node.id, timestampDate(req.completeUntil));
@@ -401,6 +403,21 @@ export function createNodeService(
                 ),
             )
         : undefined,
+      l4Stats.slice(0, MAX_STATS_PER_REPORT).flatMap((s) =>
+        s.minute && s.appId
+          ? [
+              {
+                minute: timestampDate(s.minute),
+                appId: s.appId,
+                connections: Number(s.connections),
+                refused: Number(s.refused),
+                peakConcurrent: Number(s.peakConcurrent),
+                bytesReceived: Number(s.bytesReceived),
+                bytesSent: Number(s.bytesSent),
+              },
+            ]
+          : [],
+      ),
     );
     if (req.completeUntil)
       await recordStatsWatermark(app.db, node.id, timestampDate(req.completeUntil));

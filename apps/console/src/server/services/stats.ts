@@ -193,7 +193,88 @@ function mergeTop(left: Record<string, number>, right: Record<string, number>) {
       .slice(0, MAX_TOP),
   );
 }
-/** Only the authenticated node can advance its cursor; counter and cursor writes are atomic. */
+/** One per-minute bucket of a layer-4 application as a node reports it (l4-v1). */
+export interface ReportedL4MinuteStats {
+  minute: Date;
+  appId: string;
+  connections: number;
+  refused: number;
+  peakConcurrent: number;
+  bytesReceived: number;
+  bytesSent: number;
+}
+
+/**
+ * Adds a node's per-minute layer-4 counters to l4_minute_stats in one
+ * statement, like ingestMinuteStats: buckets of a minute and application
+ * are combined first, applications outside the node's cluster (or unknown)
+ * are dropped by the join, counters are summed and the concurrency peak is
+ * the higher one. Returns how many of the reported buckets were accepted.
+ */
+export async function ingestL4MinuteStats(
+  db: Executor,
+  node: { id: string; clusterId: string },
+  reported: ReportedL4MinuteStats[],
+): Promise<number> {
+  const buckets = new Map<string, Omit<ReportedL4MinuteStats, "minute"> & { minute: string }>();
+  const perApp = new Map<string, number>();
+  for (const s of reported.slice(0, MAX_STATS_PER_REPORT)) {
+    if (!UUID_RE.test(s.appId) || Number.isNaN(s.minute.getTime())) continue;
+    const counters = [s.connections, s.refused, s.peakConcurrent, s.bytesReceived, s.bytesSent];
+    if (!counters.every((n) => Number.isSafeInteger(n) && n >= 0)) continue;
+    const appId = s.appId.toLowerCase();
+    const minute = new Date(s.minute);
+    minute.setUTCSeconds(0, 0);
+    perApp.set(appId, (perApp.get(appId) ?? 0) + 1);
+    const key = `${minute.getTime()}|${appId}`;
+    const b = buckets.get(key);
+    if (!b) {
+      buckets.set(key, { ...s, appId, minute: minute.toISOString() });
+      continue;
+    }
+    b.connections = addTrafficCounter(b.connections, s.connections);
+    b.refused = addTrafficCounter(b.refused, s.refused);
+    b.peakConcurrent = Math.max(b.peakConcurrent, s.peakConcurrent);
+    b.bytesReceived = addTrafficCounter(b.bytesReceived, s.bytesReceived);
+    b.bytesSent = addTrafficCounter(b.bytesSent, s.bytesSent);
+  }
+  if (buckets.size === 0) return 0;
+  const t = schema.l4MinuteStats;
+  const rows = [...buckets.values()].map((b) => ({
+    minute: b.minute,
+    app_id: b.appId,
+    connections: b.connections,
+    refused: b.refused,
+    peak_concurrent: b.peakConcurrent,
+    bytes_received: b.bytesReceived,
+    bytes_sent: b.bytesSent,
+  }));
+  const result = await db.execute<{ app_id: string }>(sql`
+    insert into ${t} (minute, node_id, app_id, connections, refused, peak_concurrent, bytes_received, bytes_sent)
+    select b.minute, ${node.id}::uuid, b.app_id, b.connections, b.refused, b.peak_concurrent, b.bytes_received, b.bytes_sent
+    from jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as b(
+      minute timestamptz, app_id uuid, connections bigint, refused bigint, peak_concurrent bigint,
+      bytes_received bigint, bytes_sent bigint)
+    join ${schema.l4App} on ${schema.l4App.id} = b.app_id and ${schema.l4App.clusterId} = ${node.clusterId}::uuid
+    on conflict (minute, node_id, app_id) do update set
+      connections = least(9007199254740991::numeric, ${t}.connections::numeric + excluded.connections),
+      refused = least(9007199254740991::numeric, ${t}.refused::numeric + excluded.refused),
+      peak_concurrent = greatest(${t}.peak_concurrent, excluded.peak_concurrent),
+      bytes_received = least(9007199254740991::numeric, ${t}.bytes_received::numeric + excluded.bytes_received),
+      bytes_sent = least(9007199254740991::numeric, ${t}.bytes_sent::numeric + excluded.bytes_sent)
+    returning app_id
+  `);
+  const stored = new Set(result.rows.map((r) => r.app_id));
+  let accepted = 0;
+  for (const [appId, n] of perApp) if (stored.has(appId)) accepted += n;
+  return accepted;
+}
+
+/**
+ * Only the authenticated node can advance its cursor; counter and cursor
+ * writes are atomic. Site and layer-4 buckets of a batch share its
+ * sequence: a retried batch adds neither again.
+ */
 export async function ingestStatsBatch(
   db: Database,
   node: { id: string; clusterId: string },
@@ -201,6 +282,7 @@ export async function ingestStatsBatch(
   reported: ReportedMinuteStats[],
   now?: number,
   mirror?: (tx: Executor) => Promise<void>,
+  l4: ReportedL4MinuteStats[] = [],
 ) {
   if (sequence < 1n || sequence > 9223372036854775807n)
     throw new Error("invalid statistics sequence");
@@ -220,11 +302,11 @@ export async function ingestStatsBatch(
     if (sequence <= current.sequence) return 0;
     // Older buckets cannot resurrect data already removed by the retention worker.
     const cutoff = Math.floor(clock / 3600000) * 3600000 - 7 * 86400000;
-    const accepted = await ingestMinuteStats(
-      tx,
-      node,
-      reported.filter((s) => s.minute.getTime() >= cutoff && s.minute.getTime() <= clock + 300000),
-    );
+    const inWindow = (s: { minute: Date }) =>
+      s.minute.getTime() >= cutoff && s.minute.getTime() <= clock + 300000;
+    const accepted =
+      (await ingestMinuteStats(tx, node, reported.filter(inWindow))) +
+      (await ingestL4MinuteStats(tx, node, l4.filter(inWindow)));
     await mirror?.(tx);
     await tx.update(cursor).set({ sequence }).where(eq(cursor.nodeId, node.id));
     return accepted;
