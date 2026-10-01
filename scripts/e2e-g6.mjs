@@ -223,6 +223,18 @@ try {
   await a("PATCH", `/nodes/${edgeId}`, { nodeGroupId: telGroup.id });
   await a("PATCH", `/nodes/${peerId}`, { nodeGroupId: uniGroup.id });
 
+  // Scheduling addresses: the edge's primary on the default network, backup on the isolated one.
+  // Container addresses are private, so nothing is probed until they are configured.
+  const edgeIp = await containerIp("node", "default");
+  const edgeBackupIp = await containerIp("node", "isolated");
+  const peerIp = await containerIp("node-upgrade-peer", "default");
+  await a("PUT", `/nodes/${edgeId}/addresses`, {
+    addresses: [
+      { address: edgeIp, level: 0 },
+      { address: edgeBackupIp, level: 1 },
+    ],
+  });
+  await a("PUT", `/nodes/${peerId}/addresses`, { addresses: [{ address: peerIp, level: 0 }] });
   const tokens = {};
   for (const [key, r] of [
     ["A", east],
@@ -250,17 +262,6 @@ try {
   const probeEast = probes.find((p) => p.regionId === east.id);
   const probeNorth = probes.find((p) => p.regionId === north.id);
   assert.ok(probeEast && probeNorth);
-  // Scheduling addresses: the edge's primary on the default network, backup on the isolated one.
-  const edgeIp = await containerIp("node", "default");
-  const edgeBackupIp = await containerIp("node", "isolated");
-  const peerIp = await containerIp("node-upgrade-peer", "default");
-  await a("PUT", `/nodes/${edgeId}/addresses`, {
-    addresses: [
-      { address: edgeIp, level: 0 },
-      { address: edgeBackupIp, level: 1 },
-    ],
-  });
-  await a("PUT", `/nodes/${peerId}/addresses`, { addresses: [{ address: peerIp, level: 0 }] });
   const results = await waitFor(
     "both probes report every scheduling address of both nodes without loss",
     async () => {
