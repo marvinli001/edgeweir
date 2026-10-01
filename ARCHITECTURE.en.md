@@ -269,7 +269,7 @@ A revision receipt is sealed with the master key (purpose `node.revision_receipt
 | Commands | `version`, `providers`, `obtain`, `renew`, `revoke`, `dns.list`, `dns.set`, `dns.present`, `dns.cleanup` |
 | DNS providers | `cloudflare`, `alidns`, `huaweicloud`, `dnspod` |
 
-Platform DNS (`dns.reconcile`, every minute) computes records from healthy nodes and domain routing rights, creates a `dns_revision`, and writes it to the zone of a `platform_dns_provider`; names are recorded in `dns_managed_name` before external records are written, so partial writes can be repaired. Domain routing rights require a TXT check (`_edgeweir-verification.<domain>`), tracked in `domain_ownership`. Behavior: [HTTPS and certificates](docs/guide/https.en.md), [DNS and alerts](docs/guide/dns-and-alerts.en.md).
+Platform DNS (`dns.reconcile`, every minute) computes records from healthy nodes and site domains, creates a `dns_revision`, and writes it to the zone of a `platform_dns_provider`; names are recorded in `dns_managed_name` before external records are written, so partial writes can be repaired. A site's domains route as soon as they are saved; a domain belongs to one site. Behavior: [HTTPS and certificates](docs/guide/https.en.md), [DNS and alerts](docs/guide/dns-and-alerts.en.md).
 
 ## Statistics, logs, and alerts
 
@@ -299,7 +299,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | `dns.reconcile` | Every minute | Platform DNS publishing and external record maintenance |
 | `traffic.rollup` | Every minute | Traffic rollup and cleanup, access log partition maintenance, upgrade expiry |
 | `certificates.sweep` | Every minute | Certificate issuance and renewal |
-| `domains.enforce-ownership` | At start; skipped once `domain_ownership_v1` is recorded in `system_setting` | Republishes every cluster so unverified domains stop routing |
+| `maintenance.recompile` | At start; skipped while `config_recompiled` in `system_setting` matches the current marker | Republishes every cluster once when an upgrade changes what stored data compiles to |
 | `maintenance.prune-revisions` | Minute 17 of every hour | Deletes revisions beyond the retention count |
 | `maintenance.expire-cache-tasks` | Minute 43 of every hour | Fails purge and prefetch deliveries past their deadline |
 | `maintenance.expire-enrollment-tokens` | Every 30 minutes | Deletes enrollment tokens expired or used more than 7 days ago |
@@ -376,7 +376,6 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `acme_challenge` | Short-lived public HTTP-01 responses |
 | `dns_credential` | Organization DNS provider credentials, envelope-encrypted |
 | `dns_challenge_lease` | Cleanup obligations of DNS-01 TXT records |
-| `domain_ownership` | Domain ownership verification |
 | `platform_dns_provider` | Platform DNS provider and zone, credentials envelope-encrypted |
 | `dns_state` | Platform DNS policy and desired / applied DNS revision |
 | `dns_revision` | DNS revisions: record set, managed names, status |
@@ -443,6 +442,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0028_g1_dynamic_bans` | `ip_ban`, sequence `ip_ban_seq`; `node.ban_status`; `organization_limit.max_bans` |
 | `0029_g2_challenges` | `site_protection`, `challenge_key`, `security_event`; `node.security_state`; `access_log.ja4` |
 | `0030_g3_waf` | `site_waf`; `waf_rules` in minute, hour and day statistics and the view `traffic_hour_stats`; `access_log.waf_rule_ids`, `waf_blocked` |
+| `0031_domains_without_ownership` | Drops `domain_ownership` and `site_domain.verified`; of duplicate pending domains one row stays; `site_domain (name, wildcard)` is unique |
 
 ## Build output
 

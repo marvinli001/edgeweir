@@ -82,12 +82,7 @@ async function assertIssuanceNames(
     .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
     .from(schema.siteDomain)
     .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
-    .where(
-      and(
-        eq(schema.site.organizationId, certificate.organizationId),
-        eq(schema.siteDomain.verified, true),
-      ),
-    );
+    .where(eq(schema.site.organizationId, certificate.organizationId));
   const names = new Set(rows.map((d) => `${d.wildcard ? "*." : ""}${d.name}`));
   if (certificate.names.some((name) => !names.has(name)))
     throw new Error("certificate domains are no longer assigned to this organization");
@@ -221,7 +216,6 @@ async function challengeEvent(
       .where(
         and(
           eq(schema.site.organizationId, certificate.organizationId),
-          eq(schema.siteDomain.verified, true),
           eq(schema.siteDomain.name, domain),
           eq(schema.siteDomain.wildcard, false),
         ),

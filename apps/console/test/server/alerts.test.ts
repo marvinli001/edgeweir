@@ -12,7 +12,6 @@ import { sweepAlerts } from "../../src/server/services/alerts";
 import { deliverNotification } from "../../src/server/services/notification-delivery";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
   PASSWORD,
   rpcClient,
@@ -81,7 +80,6 @@ describe("M5 notification delivery and subscription authorization", async () => 
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
-    await approveSiteDomains(admin, siteId);
     otherSite = (
       await admin.sites.create({
         name: "Private platform",

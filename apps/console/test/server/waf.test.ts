@@ -14,7 +14,6 @@ import { rollupTraffic } from "../../src/server/services/stats-rollup";
 import { topWafRules } from "../../src/server/services/waf";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
   PASSWORD,
   rpcClient,
@@ -86,7 +85,6 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     otherSiteId = (
       await outsider.sites.create({ name: "apart", domains: ["www.apart.test"], origins })
     ).site.id;
-    for (const id of [siteId, otherSiteId]) await approveSiteDomains(admin, id);
     // An active node with every G3 feature; tests take features away from it.
     const [node] = await ctx.db
       .insert(schema.node)

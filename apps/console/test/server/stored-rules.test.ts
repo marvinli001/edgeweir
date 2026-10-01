@@ -3,7 +3,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
   rpcClient,
   rpcError,
@@ -28,7 +27,6 @@ describe("stored rules the validator no longer accepts", async () => {
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
-    await approveSiteDomains(admin, siteId);
   });
   afterAll(() => pglite.close());
 

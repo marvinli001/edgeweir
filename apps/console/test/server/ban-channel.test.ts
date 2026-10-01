@@ -103,7 +103,7 @@ describe("dynamic ban channel", async () => {
           domains: [`${name}.test`],
           origins: [{ address: "origin.test" }],
         }),
-        { organizationId, actor, masterKey: ctx.masterKey, isAdmin: true },
+        { organizationId, actor, masterKey: ctx.masterKey },
       )
     ).site.id;
   const siteBan = (cidr: string, target = siteId, durationSeconds = HOUR) =>

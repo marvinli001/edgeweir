@@ -223,11 +223,11 @@ export const siteDomain = pgTable(
     /** Lowercase host name; for wildcards the suffix without "*." */
     name: text("name").notNull(),
     wildcard: boolean("wildcard").notNull().default(false),
-    verified: boolean("verified").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [
-    uniqueIndex("site_domain_name_uq").on(t.name, t.wildcard).where(sql`${t.verified} = true`),
+    // A host name routes to exactly one site.
+    uniqueIndex("site_domain_name_uq").on(t.name, t.wildcard),
     uniqueIndex("site_domain_site_name_uq").on(t.siteId, t.name, t.wildcard),
     index("site_domain_site_idx").on(t.siteId),
   ],

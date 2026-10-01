@@ -11,7 +11,6 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Page } from "@/components/page";
 import { CacheTab } from "@/components/site/cache-tab";
 import { CnameTarget } from "@/components/site/cname-target";
-import { DomainOwnershipPanel } from "@/components/site/domain-ownership";
 import { HttpsTab } from "@/components/site/https-tab";
 import { LogsTab } from "@/components/site/logs-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
@@ -155,7 +154,7 @@ function SiteDetailPage() {
               />
             </TabsContent>
             <TabsContent value="domains" className="animate-enter">
-              <DomainsTab key={site.data.updatedAt} site={site.data} isAdmin={isAdmin} />
+              <DomainsTab key={site.data.updatedAt} site={site.data} />
             </TabsContent>
             <TabsContent value="origins" className="animate-enter">
               <OriginsTab site={site.data} />
@@ -340,7 +339,7 @@ function OverviewTab({ site }: { site: Site }) {
   );
 }
 
-function DomainsTab({ site, isAdmin }: { site: Site; isAdmin: boolean }) {
+function DomainsTab({ site }: { site: Site }) {
   const [domains, setDomains] = React.useState(site.domains);
   const [draft, setDraft] = React.useState("");
   const { save, error, pending } = useSaveSite(site.id);
@@ -357,7 +356,6 @@ function DomainsTab({ site, isAdmin }: { site: Site; isAdmin: boolean }) {
   return (
     <div className="flex flex-col gap-4">
       <CnameTarget siteId={site.id} />
-      <DomainOwnershipPanel siteId={site.id} isAdmin={isAdmin} />
       <Card>
         <form
           className="flex flex-col gap-(--card-spacing)"

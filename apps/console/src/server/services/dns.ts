@@ -217,9 +217,8 @@ export async function compileDnsPlan(
   const sites = await db
     .selectDistinct({ id: schema.site.id, clusterId: schema.site.clusterId })
     .from(schema.site)
-    .innerJoin(schema.siteDomain, eq(schema.siteDomain.siteId, schema.site.id))
     // Disabled and suspended sites keep their records; nodes answer 404 for them.
-    .where(eq(schema.siteDomain.verified, true));
+    .innerJoin(schema.siteDomain, eq(schema.siteDomain.siteId, schema.site.id));
   const nodes = await db.select().from(schema.node);
   const receipts = await db.select().from(schema.nodeConfigStatus);
   const addresses = await db.select().from(schema.nodeIp);

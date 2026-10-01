@@ -5,7 +5,6 @@ import { createApp } from "../../src/server/app";
 import { latestRevision, publishRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
   PASSWORD,
   rpcClient,
@@ -68,7 +67,6 @@ describe("site enabling and platform suspension", async () => {
     other = rpcClient(app, origin, await signIn(app, origin, "other@other.test"));
     siteId = (await owner.sites.create({ name: "shop", domains: ["www.shop.test"], origins })).site
       .id;
-    await approveSiteDomains(admin, siteId);
   });
   afterAll(() => pglite.close());
 

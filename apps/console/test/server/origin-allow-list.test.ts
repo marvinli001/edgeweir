@@ -6,7 +6,6 @@ import { createApp } from "../../src/server/app";
 import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
   PASSWORD,
   rpcClient,
@@ -49,7 +48,6 @@ describe("special-purpose origin addresses and the platform allow list", async (
         origins: [{ address: "origin.example.com" }],
       })
     ).site.id;
-    await approveSiteDomains(admin, siteId);
   });
   afterAll(() => client.close());
 

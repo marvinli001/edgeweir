@@ -171,11 +171,7 @@ export async function requestCertificate(
   const id = randomUUID();
   // Issuance is tied to sites in this organization, even for a platform caller.
   const domains = await app.db
-    .select({
-      name: schema.siteDomain.name,
-      wildcard: schema.siteDomain.wildcard,
-      verified: schema.siteDomain.verified,
-    })
+    .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
     .from(schema.siteDomain)
     .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
     .where(eq(schema.site.organizationId, organizationId));
@@ -185,12 +181,6 @@ export async function requestCertificate(
       "CERTIFICATE_DOMAIN_MISMATCH",
       "add the certificate domains to this organization's sites first",
     );
-  if (
-    input.names.some(
-      (name) => !domains.some((d) => d.verified && `${d.wildcard ? "*." : ""}${d.name}` === name),
-    )
-  )
-    fail("DOMAIN_VERIFY_REQUIRED", "verify domain ownership before issuing a certificate");
   if (input.dnsCredentialId) {
     const credential = await findDnsCredential(app.db, input.dnsCredentialId, {
       all: false,

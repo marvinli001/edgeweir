@@ -3,7 +3,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import type * as React from "react";
 import { BanSettingsCard } from "@/components/ban-settings";
 import { CopyButton } from "@/components/copy-button";
-import { DnsResolversCard } from "@/components/dns-resolvers";
 import { GeoIpSettings } from "@/components/geoip-settings";
 import { OriginAllowListCard } from "@/components/origin-allow-list";
 import { Page } from "@/components/page";
@@ -94,7 +93,6 @@ function SystemSettingsPage() {
       </Card>
       <OriginAllowListCard />
       <ReleaseSourceCard />
-      <DnsResolversCard />
       <UsageSettingsCard />
       <BanSettingsCard />
       <ProtectionSettingsCards />

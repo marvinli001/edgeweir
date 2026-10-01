@@ -111,7 +111,7 @@ describe("challenge keys, security events and JA4 over the node channel", async 
           domains: [`${name}.test`],
           origins: [{ address: "origin.test" }],
         }),
-        { organizationId, actor, masterKey: ctx.masterKey, isAdmin: true },
+        { organizationId, actor, masterKey: ctx.masterKey },
       )
     ).site.id;
   const event = (id: string, patch: Record<string, unknown> = {}) =>
@@ -356,7 +356,7 @@ describe("challenge keys, security events and JA4 over the node channel", async 
     ).toMatchObject({ level: "normal", escalatedPaths: 2 });
     await ctx.db
       .insert(schema.siteDomain)
-      .values({ siteId, name: "alerts.guarded.test", verified: true })
+      .values({ siteId, name: "alerts.guarded.test" })
       .onConflictDoNothing();
     await sweepAlerts(ctx);
     expect((await alertEvents()).map((e) => e.status)).toEqual(["firing", "resolved"]);

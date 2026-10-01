@@ -13,7 +13,6 @@ import { alertsContract } from "./alerts";
 import { adminBansContract, banSettings, bansContract } from "./bans";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
-import { domainOwnershipContract } from "./domains";
 import { ccTemplate, protectionContract, protectionSettings, securityContract } from "./protection";
 import {
   ipListsContract,
@@ -65,7 +64,6 @@ export const contract = {
   upgrades: upgradesContract,
   alerts: alertsContract,
   dns: dnsContract,
-  domainOwnership: domainOwnershipContract,
   rules: rulesContract,
   platformRules: platformRulesContract,
   ipLists: ipListsContract,
@@ -532,14 +530,6 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/waf", tags: ["settings"] })
       .input(wafSettings)
       .output(wafSettings),
-    /** Recursive DNS servers for domain ownership TXT checks. */
-    dnsResolvers: oc
-      .route({ method: "GET", path: "/settings/dns-resolvers", tags: ["settings"] })
-      .output(s.dnsResolvers),
-    setDnsResolvers: oc
-      .route({ method: "PUT", path: "/settings/dns-resolvers", tags: ["settings"] })
-      .input(s.dnsResolversInput)
-      .output(s.dnsResolvers),
   },
   auditLogs: {
     list: oc
@@ -557,6 +547,5 @@ export type Contract = typeof contract;
 export * from "./access-keys";
 export * from "./alerts";
 export * from "./dns";
-export * from "./domains";
 export * from "./service-accounts";
 export * from "./usage";

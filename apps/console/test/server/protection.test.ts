@@ -10,7 +10,6 @@ import {
 import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
   PASSWORD,
   rpcClient,
@@ -46,7 +45,6 @@ describe("site protection, platform protection and challenge keys", async () => 
   let orgId: string;
   let siteId: string;
   let otherSiteId: string;
-  let quietSiteId: string;
   const origins = [{ address: "origin.test" }];
   const api = (key: string, method: string, path: string, body?: unknown) =>
     app.request(`${origin}/api/v1${path}`, {
@@ -89,15 +87,12 @@ describe("site protection, platform protection and challenge keys", async () => 
     otherSiteId = (
       await outsider.sites.create({ name: "else", domains: ["else.elsewhere.test"], origins })
     ).site.id;
-    quietSiteId = (
-      await admin.sites.create({
-        name: "quiet",
-        clusterId: otherClusterId,
-        domains: ["quiet.quietplace.test"],
-        origins,
-      })
-    ).site.id;
-    for (const id of [siteId, otherSiteId, quietSiteId]) await approveSiteDomains(admin, id);
+    await admin.sites.create({
+      name: "quiet",
+      clusterId: otherClusterId,
+      domains: ["quiet.quietplace.test"],
+      origins,
+    });
   });
   afterAll(() => pglite.close());
 
@@ -314,7 +309,6 @@ describe("site protection, platform protection and challenge keys", async () => 
     const oldSite = (
       await owner.sites.create({ name: "old", domains: ["old.shield.test"], origins })
     ).site.id;
-    await approveSiteDomains(admin, oldSite);
     const before = (await config(otherClusterId)).revision;
     expect(
       await rpcError(owner.protection.update({ id: oldSite, underAttack: true })),

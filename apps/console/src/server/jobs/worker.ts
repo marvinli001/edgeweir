@@ -10,7 +10,7 @@ import { expireCacheTasks } from "../services/cache-tasks";
 import { sweepCertificates } from "../services/certificate-worker";
 import { rotateChallengeKeys } from "../services/challenge-keys";
 import { reconcileDns } from "../services/dns";
-import { enforceDomainOwnershipOnce } from "../services/domain-ownership";
+import { recompileAfterUpgrade } from "../services/recompile";
 import { pruneRevisions } from "../services/revisions";
 import { evaluateRollouts } from "../services/rollout";
 import { pruneSecurityEvents } from "../services/security";
@@ -22,7 +22,7 @@ export const QUEUES = {
   alerts: "alerts.sweep",
   rollouts: "rollouts.evaluate",
   dns: "dns.reconcile",
-  domainMigration: "domains.enforce-ownership",
+  recompile: "maintenance.recompile",
   traffic: "traffic.rollup",
   certificates: "certificates.sweep",
   pruneRevisions: "maintenance.prune-revisions",
@@ -59,10 +59,10 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   });
   await boss.schedule(QUEUES.dns, "* * * * *");
   await boss.send(QUEUES.dns, {}, { singletonKey: "dns-reconcile" });
-  await boss.work(QUEUES.domainMigration, async () => {
-    await enforceDomainOwnershipOnce(ctx);
+  await boss.work(QUEUES.recompile, async () => {
+    await recompileAfterUpgrade(ctx);
   });
-  await boss.send(QUEUES.domainMigration, {}, { singletonKey: "domain-ownership-v1" });
+  await boss.send(QUEUES.recompile, {}, { singletonKey: "recompile" });
   await boss.work(QUEUES.traffic, async () => {
     // Each maintenance family must run even when another one needs a retry.
     const results = await Promise.allSettled([

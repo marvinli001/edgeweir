@@ -111,7 +111,7 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
   const domains = await db
     .select()
     .from(schema.siteDomain)
-    .where(and(inArray(schema.siteDomain.siteId, siteIds), eq(schema.siteDomain.verified, true)));
+    .where(inArray(schema.siteDomain.siteId, siteIds));
   const pools = await db
     .select()
     .from(schema.originPool)
@@ -499,7 +499,6 @@ export async function publishRevision(
       schema.siteDomain,
       and(
         eq(schema.siteDomain.siteId, schema.site.id),
-        eq(schema.siteDomain.verified, true),
         eq(schema.siteDomain.name, schema.acmeChallenge.domain),
         eq(schema.siteDomain.wildcard, false),
       ),
@@ -810,11 +809,7 @@ export async function rollbackToRevision(
       site.domains.some(
         (domain) =>
           !currentDomains.some(
-            (d) =>
-              d.verified &&
-              d.siteId === site.id &&
-              d.name === domain.name &&
-              d.wildcard === domain.wildcard,
+            (d) => d.siteId === site.id && d.name === domain.name && d.wildcard === domain.wildcard,
           ),
       )
     ) {

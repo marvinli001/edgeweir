@@ -45,7 +45,6 @@ services:
       # 旧部署的后备值：「后台 → 系统设置」里保存的值优先
       EDGEWEIR_NODE_RELEASE_BASE_URL: ${EDGEWEIR_NODE_RELEASE_BASE_URL:-}
       EDGEWEIR_SMTP_CA_FILE: ${EDGEWEIR_SMTP_CA_FILE:-}
-      EDGEWEIR_DNS_RESOLVERS: ${EDGEWEIR_DNS_RESOLVERS:-}
       # 宝塔 nginx 的来源地址（Docker 网桥网关），只信任它转发的 X-Forwarded-For
       EDGEWEIR_TRUSTED_PROXIES: ${EDGEWEIR_TRUSTED_PROXIES:-}
     ports:

@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
   PASSWORD,
   rpcClient,
@@ -81,13 +80,12 @@ describe("console procedures", async () => {
       organizationName: "Tenant",
       domains: ["shop.test", "*.shop.test"],
     });
+    // The domains route at once: the site's revision already ships it.
     expect(created.revision).toMatchObject({
       clusterId: clusterB,
-      reasonCode: "cluster_created",
-      siteCount: 0,
+      reasonCode: "site_created",
+      siteCount: 1,
     });
-    expect((await owner.domainOwnership.get({ siteId: created.site.id }))[0]?.verified).toBe(false);
-    await approveSiteDomains(admin, created.site.id);
     const forbidden = await rpcError(
       owner.sites.create({ name: "x", clusterId: clusterB, domains: ["x.test"], origins }),
     );

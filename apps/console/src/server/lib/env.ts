@@ -86,7 +86,6 @@ const schema = z.object({
   /** Fallback PEM bundle for SMTP TLS when the SMTP settings carry no CA. */
   EDGEWEIR_SMTP_CA_FILE: z.string().default(""),
   EDGEWEIR_DNS_TEST_ENDPOINT: z.string().default(""),
-  EDGEWEIR_DNS_RESOLVERS: z.string().default(""),
   EDGEWEIR_ACME_CA_FILE: z.string().default(""),
 });
 

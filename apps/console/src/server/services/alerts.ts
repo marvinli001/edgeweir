@@ -411,13 +411,7 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
     })
     .from(schema.site)
     .innerJoin(schema.siteDomain, eq(schema.siteDomain.siteId, schema.site.id))
-    .where(
-      and(
-        eq(schema.site.enabled, true),
-        eq(schema.site.suspended, false),
-        eq(schema.siteDomain.verified, true),
-      ),
-    );
+    .where(and(eq(schema.site.enabled, true), eq(schema.site.suspended, false)));
   const nodes = await app.db.select().from(schema.node),
     receipts = await app.db.select().from(schema.nodeConfigStatus),
     certificates = await app.db.select().from(schema.certificate),
@@ -440,7 +434,7 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
     const base = {
       siteId: site.id,
       siteName: site.name,
-      domain: domains.find((d) => d.siteId === site.id && d.verified)?.name ?? "",
+      domain: domains.find((d) => d.siteId === site.id)?.name ?? "",
     };
     const add = (kind: AlertKind, resourceId: string) =>
       active.set(keyOf(kind, site.id, resourceId), { ...base, kind, resourceId });

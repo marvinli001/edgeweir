@@ -269,7 +269,7 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 | 命令 | `version`、`providers`、`obtain`、`renew`、`revoke`、`dns.list`、`dns.set`、`dns.present`、`dns.cleanup` |
 | DNS 服务商 | `cloudflare`、`alidns`、`huaweicloud`、`dnspod` |
 
-平台 DNS（`dns.reconcile`，每分钟）按健康节点与域名路由权计算记录，生成 `dns_revision`，写入 `platform_dns_provider` 指定的区域；写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复。域名路由权需要 TXT 校验（`_edgeweir-verification.<域名>`），状态存在 `domain_ownership`。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 与告警](docs/guide/dns-and-alerts.md)。
+平台 DNS（`dns.reconcile`，每分钟）按健康节点与网站域名计算记录，生成 `dns_revision`，写入 `platform_dns_provider` 指定的区域；写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 与告警](docs/guide/dns-and-alerts.md)。
 
 ## 统计、日志与告警
 
@@ -299,7 +299,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `dns.reconcile` | 每分钟 | 平台 DNS 发布与外部记录维护 |
 | `traffic.rollup` | 每分钟 | 流量汇总与清理、访问日志分区维护、升级任务到期 |
 | `certificates.sweep` | 每分钟 | 证书签发与续期 |
-| `domains.enforce-ownership` | 启动时；完成后在 `system_setting` 记录 `domain_ownership_v1`，不再执行 | 为每个集群重新发布 revision，未校验的域名不再路由 |
+| `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
 | `maintenance.prune-revisions` | 每小时第 17 分 | 删除超出保留数量的 revision |
 | `maintenance.expire-cache-tasks` | 每小时第 43 分 | 把超期未完成的刷新预热交付记为失败 |
 | `maintenance.expire-enrollment-tokens` | 每 30 分钟 | 删除过期或使用超过 7 天的注册 token |
@@ -376,7 +376,6 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `acme_challenge` | 短期公开的 HTTP-01 响应 |
 | `dns_credential` | 组织的 DNS 服务商凭据，信封加密 |
 | `dns_challenge_lease` | DNS-01 TXT 记录的清理责任 |
-| `domain_ownership` | 域名归属校验 |
 | `platform_dns_provider` | 平台 DNS 服务商与区域，凭据信封加密 |
 | `dns_state` | 平台 DNS 策略与期望 / 已应用的 DNS revision |
 | `dns_revision` | DNS revision：记录集、托管名称、状态 |
@@ -443,6 +442,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0028_g1_dynamic_bans` | `ip_ban`、序列 `ip_ban_seq`；`node.ban_status`；`organization_limit.max_bans` |
 | `0029_g2_challenges` | `site_protection`、`challenge_key`、`security_event`；`node.security_state`；`access_log.ja4` |
 | `0030_g3_waf` | `site_waf`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `waf_rules`；`access_log.waf_rule_ids`、`waf_blocked` |
+| `0031_domains_without_ownership` | 删除 `domain_ownership` 与 `site_domain.verified`；重名的待验证域名只保留一条；`site_domain (name, wildcard)` 全局唯一 |
 
 ## 构建产物
 

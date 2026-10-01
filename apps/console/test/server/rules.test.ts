@@ -6,7 +6,6 @@ import { createApp } from "../../src/server/app";
 import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
   PASSWORD,
   rpcClient,
@@ -51,7 +50,6 @@ describe("M4 rules and IP list boundaries", async () => {
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
-    await approveSiteDomains(admin, otherSiteId);
   });
   afterAll(() => db.close());
   const config = async () =>

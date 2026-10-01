@@ -218,6 +218,13 @@
       "when": 1790771419307,
       "tag": "0030_g3_waf",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790814576144,
+      "tag": "0031_domains_without_ownership",
+      "breakpoints": true
     }
   ]
 }

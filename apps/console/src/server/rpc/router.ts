@@ -73,13 +73,6 @@ import {
   siteDnsTarget,
   updateDnsProvider,
 } from "../services/dns";
-import { getDnsResolvers, setDnsResolvers } from "../services/dns-resolvers";
-import {
-  getDomainOwnership,
-  prepareDomainOwnership,
-  revokeDomainOwnership,
-  verifyDomainOwnership,
-} from "../services/domain-ownership";
 import { createEnrollmentToken } from "../services/enrollment";
 import {
   addMember,
@@ -490,23 +483,6 @@ export const router = os.router({
       siteDnsTarget(context.app, input.siteId, context.scope),
     ),
   },
-  domainOwnership: {
-    approve: admin.domainOwnership.approve.handler(({ input, context }) =>
-      prepareDomainOwnership(context.app, input.siteId, { all: true }, context.actor, input.domain),
-    ),
-    get: tenant.domainOwnership.get.handler(({ input, context }) =>
-      getDomainOwnership(context.app, input.siteId, context.scope),
-    ),
-    prepare: tenant.domainOwnership.prepare.handler(({ input, context }) =>
-      prepareDomainOwnership(context.app, input.siteId, context.scope, context.actor),
-    ),
-    verify: tenant.domainOwnership.verify.handler(({ input, context }) =>
-      verifyDomainOwnership(context.app, input.siteId, input.domain, context.scope, context.actor),
-    ),
-    revoke: tenant.domainOwnership.revoke.handler(({ input, context }) =>
-      revokeDomainOwnership(context.app, input.siteId, input.domain, context.scope, context.actor),
-    ),
-  },
   upgrades: {
     release: admin.upgrades.release.handler(({ input, context }) =>
       nodeRelease(context.app, input.version),
@@ -678,7 +654,6 @@ export const router = os.router({
       }
       return createSite(context.app.db, input, {
         organizationId: context.organizationId,
-        isAdmin: context.isAdmin,
         actor: context.actor,
         masterKey: context.app.masterKey,
       });
@@ -918,12 +893,6 @@ export const router = os.router({
     usage: admin.settings.usage.handler(({ context }) => getUsageSettings(context.app.db)),
     setUsage: admin.settings.setUsage.handler(({ input, context }) =>
       setUsageSettings(context.app.db, input, context.actor),
-    ),
-    dnsResolvers: admin.settings.dnsResolvers.handler(({ context }) =>
-      getDnsResolvers(context.app),
-    ),
-    setDnsResolvers: admin.settings.setDnsResolvers.handler(({ input, context }) =>
-      setDnsResolvers(context.app, input, context.actor),
     ),
   },
   auditLogs: {

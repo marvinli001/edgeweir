@@ -87,7 +87,7 @@ async function raiseCcAlert(
   const [domain] = await tx
     .select({ name: schema.siteDomain.name })
     .from(schema.siteDomain)
-    .where(and(eq(schema.siteDomain.siteId, site.id), eq(schema.siteDomain.verified, true)))
+    .where(eq(schema.siteDomain.siteId, site.id))
     .limit(1);
   await tx
     .insert(schema.alertState)

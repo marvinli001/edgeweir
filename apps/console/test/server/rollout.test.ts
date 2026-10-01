@@ -13,7 +13,6 @@ import {
 import { evaluateRollout } from "../../src/server/services/rollout";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
   rpcClient,
   rpcError,
@@ -119,7 +118,6 @@ describe("configuration canary with automatic rollback", async () => {
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
-    await approveSiteDomains(admin, siteId);
     const [a, b] = await ctx.db
       .insert(schema.node)
       .values(
