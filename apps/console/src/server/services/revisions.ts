@@ -1,35 +1,23 @@
 import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
-  ACTIVE_HEALTH_FEATURE,
-  BROTLI_FEATURE,
   ConfigCapacityError,
   canonicalize,
   compileNodeConfig,
   compileOfflineHosts,
   compilePlatformErrorPages,
   compileRules,
-  configExpressions,
   contentHash,
   DEFAULT_SITE_PROTECTION,
   decodeNodeConfig,
-  ERROR_PAGES_FEATURE,
   encodeNodeConfig,
-  geoFeatures,
   MAX_SITES_PER_CLUSTER,
-  MODSECURITY_FEATURE,
-  moduleFeatures,
   nodeRequirements,
   type OfflineHostModel,
-  poolAndPageFeatures,
-  protectionFeatures,
-  RULES_V2_FEATURE,
   type RuleModel,
-  rulesFeatures,
-  SESSION_AFFINITY_FEATURE,
+  refreshDerived,
   type SiteModel,
   usesChallengeKeys,
-  ZSTD_FEATURE,
 } from "@edgeweir/config-compiler";
 import {
   nodeSupportsFeature,
@@ -891,6 +879,125 @@ function previewConfig(build: (revision: bigint) => NodeConfig): NodeConfig {
   }
 }
 
+/** Offline host identity: name and wildcard. */
+const hostKey = (host: { name: string; wildcard: boolean }) =>
+  `${host.name}\u0000${host.wildcard ? 1 : 0}`;
+
+/**
+ * The sites of an earlier configuration as they may be published now.
+ * Sites that are not served now (disabled, suspended) are dropped; cache
+ * generations are the current ones (a purge is never undone), certificate
+ * references carry the current certificate (one renewed in place exists in
+ * its current version only) and the log sampling rate never exceeds the
+ * current one. A site or domain removed since: `strict` (an administrator's
+ * rollback) refuses with ROLLBACK_RESOURCE_UNAVAILABLE, as it does for an
+ * expired or unavailable certificate; otherwise (the canary's stable
+ * revision) it is dropped. Offline hosts follow the current sites.
+ * Derived fields are left to refreshDerived.
+ */
+async function restoreSites(
+  tx: Tx,
+  clusterId: string,
+  config: NodeConfig,
+  opts: { strict: boolean },
+) {
+  const out = clone(NodeConfigSchema, config);
+  const currentSites = await tx
+    .select()
+    .from(schema.site)
+    .where(eq(schema.site.clusterId, clusterId));
+  const currentDomains = currentSites.length
+    ? await tx
+        .select()
+        .from(schema.siteDomain)
+        .where(
+          and(
+            inArray(
+              schema.siteDomain.siteId,
+              currentSites.map((site) => site.id),
+            ),
+            eq(schema.siteDomain.verified, true),
+          ),
+        )
+    : [];
+  const certificateIds = [...new Set(out.sites.map((s) => s.certificateId).filter(Boolean))];
+  const certificates = certificateIds.length
+    ? await tx
+        .select()
+        .from(schema.certificate)
+        .where(inArray(schema.certificate.id, certificateIds))
+    : [];
+  const sites: typeof out.sites = [];
+  for (const site of out.sites) {
+    const current = currentSites.find((s) => s.id === site.id);
+    // Rollback is configuration history, never authorization to resurrect a
+    // deleted/transferred resource or reclaim a released tenant hostname.
+    if (!current && opts.strict)
+      fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback references a removed site or domain");
+    // Enabling and suspension are current policy: no site that is offline now is shipped.
+    if (!current || !isServing(current)) continue;
+    const live = (domain: { name: string; wildcard: boolean }) =>
+      currentDomains.some(
+        (d) => d.siteId === site.id && d.name === domain.name && d.wildcard === domain.wildcard,
+      );
+    if (site.domains.some((domain) => !live(domain))) {
+      if (opts.strict)
+        fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback references a removed site or domain");
+      site.domains = site.domains.filter(live);
+      if (!site.domains.length) continue;
+    }
+    site.cacheGeneration = BigInt(current.cacheGeneration);
+    // Sampling is current privacy policy; rollback must not revive disabled collection.
+    site.logSampleRate = opts.strict
+      ? current.logSampleRate
+      : Math.min(site.logSampleRate, current.logSampleRate);
+    if (site.certificateId) {
+      const cert = certificates.find(
+        (c) => c.id === site.certificateId && c.organizationId === current.organizationId,
+      );
+      const ref = out.certificates.find((c) => c.id === site.certificateId);
+      if (opts.strict) {
+        if (!cert?.notAfter || cert.notAfter.getTime() <= Date.now())
+          fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate is unavailable or expired");
+        assertCertificateNames(cert.chainPem, cert.names, site.domains);
+        if (!ref)
+          fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate reference is missing");
+      }
+      if (cert && ref) {
+        ref.names = cert.names;
+        ref.sha256Fingerprint = cert.fingerprint;
+        ref.notAfter = cert.notAfter ? timestampFromDate(cert.notAfter) : undefined;
+      }
+    }
+    sites.push(site);
+  }
+  out.sites = sites;
+  const offline = compileOfflineHosts(await loadOfflineHosts(tx, clusterId));
+  if (opts.strict) out.offlineHosts = offline;
+  else {
+    // Hosts that were offline stay offline while their site is not served
+    // here (a site enabled since waits for the canary); the current ones win.
+    const served = new Set(sites.flatMap((s) => s.domains.map(hostKey)));
+    const known = new Set(currentDomains.map(hostKey));
+    const hosts = new Map(
+      out.offlineHosts.filter((h) => known.has(hostKey(h))).map((h) => [hostKey(h), h]),
+    );
+    for (const host of offline) hosts.set(hostKey(host), host);
+    out.offlineHosts = [...hosts.values()].filter((h) => !served.has(hostKey(h)));
+  }
+  return { config: out, currentSites };
+}
+
+/**
+ * The canary's stable content as it may be published now: what the
+ * current state requires of an earlier configuration (restoreSites), with
+ * derived fields recomputed. The automatic rollback publishes it.
+ */
+export async function currentStable(tx: Tx, clusterId: string, stable: NodeConfig) {
+  const { config } = await restoreSites(tx, clusterId, stable, { strict: false });
+  return refreshDerived(config);
+}
+
 /**
  * Publishes the content of an older revision as a new revision. The origin
  * allow list, the platform's error pages and the offline hosts are platform
@@ -904,70 +1011,12 @@ export async function rollbackToRevision(
   await lockClusterPublish(tx, opts.clusterId);
   const target = await getRevision(tx, opts.clusterId, opts.revision);
   if (!target) return undefined;
-  const originAllowedCidrs = await loadOriginAllowList(tx);
-  const restored = decodeNodeConfig(target.ir);
-  const currentSites = await tx
-    .select()
-    .from(schema.site)
-    .where(eq(schema.site.clusterId, opts.clusterId));
-  // Enabling and suspension are current policy: rollback never ships a site
-  // that is disabled or suspended now.
-  restored.sites = restored.sites.filter((site) => {
-    const current = currentSites.find((s) => s.id === site.id);
-    return !current || isServing(current);
-  });
-  const currentDomains = currentSites.length
-    ? await tx
-        .select()
-        .from(schema.siteDomain)
-        .where(
-          inArray(
-            schema.siteDomain.siteId,
-            currentSites.map((site) => site.id),
-          ),
-        )
-    : [];
-  for (const site of restored.sites) {
-    const current = currentSites.find((s) => s.id === site.id);
-    // Rollback is configuration history, never authorization to resurrect a
-    // deleted/transferred resource or reclaim a released tenant hostname.
-    if (
-      !current ||
-      site.domains.some(
-        (domain) =>
-          !currentDomains.some(
-            (d) =>
-              d.verified &&
-              d.siteId === site.id &&
-              d.name === domain.name &&
-              d.wildcard === domain.wildcard,
-          ),
-      )
-    ) {
-      fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback references a removed site or domain");
-    }
-    // Sampling is current privacy policy; rollback must not revive disabled collection.
-    site.logSampleRate = current.logSampleRate;
-    if (site.certificateId) {
-      const [cert] = await tx
-        .select()
-        .from(schema.certificate)
-        .where(
-          and(
-            eq(schema.certificate.id, site.certificateId),
-            eq(schema.certificate.organizationId, current.organizationId),
-          ),
-        );
-      if (!cert?.notAfter || cert.notAfter.getTime() <= Date.now())
-        fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate is unavailable or expired");
-      assertCertificateNames(cert.chainPem, cert.names, site.domains);
-      const ref = restored.certificates.find((c) => c.id === cert.id);
-      if (!ref) fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate reference is missing");
-      ref.names = cert.names;
-      ref.sha256Fingerprint = cert.fingerprint;
-      ref.notAfter = timestampFromDate(cert.notAfter);
-    }
-  }
+  const { config: restored, currentSites } = await restoreSites(
+    tx,
+    opts.clusterId,
+    decodeNodeConfig(target.ir),
+    { strict: true },
+  );
   const currentLists = (await tx.select().from(schema.ipList)).filter(
     (list) =>
       list.organizationId === null ||
@@ -990,9 +1039,6 @@ export async function rollbackToRevision(
       if (rule.match?.condition && unavailable(rule.match.condition))
         fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback IP list is unavailable");
   }
-  restored.requiredFeatures = restored.requiredFeatures.filter((f) => f !== "access-logs-v1");
-  if (restored.sites.some((s) => s.logSampleRate > 0))
-    restored.requiredFeatures.push("access-logs-v1");
   // Access lists and platform enforcement are current security policy.
   restored.ipLists = currentLists.map((list) =>
     create(IpListSchema, {
@@ -1014,44 +1060,18 @@ export async function rollbackToRevision(
   restored.platformRules = compileRules(
     platformRules.map((rule) => compileRuleModel(rule, platformBindings)),
   );
-  restored.requiredFeatures = restored.requiredFeatures.filter(
-    (f) => f !== "rules-v1" && f !== RULES_V2_FEATURE && !f.startsWith("geoip-"),
-  );
-  const rules = [...restored.platformRules, ...restored.sites.flatMap((s) => s.rules)];
-  if (rules.length || restored.ipLists.some((l) => l.platform && l.kind !== "collection"))
-    restored.requiredFeatures.push("rules-v1");
-  // Platform rules are current; targets and cache conditions read GeoIP too.
-  restored.requiredFeatures.push(
-    ...configExpressions(restored).flatMap(geoFeatures),
-    ...rulesFeatures(restored),
-  );
-  // Sites dropped above no longer need the modules, health checks, affinity
-  // or error pages they used.
-  const siteFeatures = [
-    BROTLI_FEATURE,
-    ZSTD_FEATURE,
-    MODSECURITY_FEATURE,
-    ACTIVE_HEALTH_FEATURE,
-    SESSION_AFFINITY_FEATURE,
-    ERROR_PAGES_FEATURE,
-  ];
-  restored.requiredFeatures = restored.requiredFeatures.filter((f) => !siteFeatures.includes(f));
-  restored.requiredFeatures.push(...moduleFeatures(restored), ...poolAndPageFeatures(restored));
   restored.platformErrorPages = compilePlatformErrorPages(await loadPlatformErrorPages(tx));
-  restored.offlineHosts = compileOfflineHosts(await loadOfflineHosts(tx, opts.clusterId));
+  restored.originAllowedCidrs = await loadOriginAllowList(tx);
   // Challenge tokens are short-lived issuance state, never rollback content.
   restored.httpChallenges = [];
-  restored.requiredFeatures = restored.requiredFeatures.filter((f) => f !== "http01-v1");
   await restoreProtection(tx, opts.clusterId, restored, currentSites);
+  const content = refreshDerived(restored);
   const result = await insertRevision(
     tx,
     opts.clusterId,
     (revision) => {
-      const old = restored;
-      old.revision = revision;
-      old.originAllowedCidrs = originAllowedCidrs;
-      const config = canonicalize(old);
-      config.contentHash = contentHash(config);
+      const config = clone(NodeConfigSchema, content);
+      config.revision = revision;
       return config;
     },
     { code: "rollback", params: { revision: opts.revision } },
@@ -1119,10 +1139,6 @@ async function restoreProtection(
       site.protection.cc = undefined;
     }
   }
-  restored.requiredFeatures = restored.requiredFeatures.filter(
-    (f) => f !== "challenge-v1" && f !== "ja4-v1",
-  );
-  restored.requiredFeatures.push(...protectionFeatures(restored));
 }
 
 /** Deletes revisions beyond the retention window, keeping the newest ones. */

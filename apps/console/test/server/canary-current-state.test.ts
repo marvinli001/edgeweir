@@ -212,4 +212,56 @@ describe("configuration canary and current state", async () => {
     await group(canary, canaryGroup);
     await group(stable, defaultGroup);
   });
+
+  it("rolls back to the stable content without what was taken offline, removed or purged since", async () => {
+    await settle();
+    const create = async (name: string, domains: string[]) => {
+      const id = (
+        await admin.sites.create({ name, domains, origins: [{ address: "origin.test" }] })
+      ).site.id;
+      await approveSiteDomains(admin, id);
+      return id;
+    };
+    const blog = await create("blog", ["blog.current.test", "www.blog.current.test"]);
+    const old = await create("old", ["old.current.test"]);
+    await admin.clusters.promoteRollout({ id: clusterId });
+    await settle();
+    const before = await config(stable);
+    expect(before.sites.map((s) => s.name).sort()).toEqual(["blog", "old", expect.any(String)]);
+    const generation = before.sites.find((s) => s.id === siteId)?.cacheGeneration ?? 0n;
+    // During the window: a domain is removed, a site disabled, the cache purged.
+    await change();
+    await admin.sites.update({ id: blog, domains: ["blog.current.test"] });
+    const withoutDomain = (await latestRevision(ctx.db, clusterId))?.revision ?? 0;
+    await admin.sites.setEnabled({ id: old, enabled: false });
+    await admin.sites.purgeAll({ id: siteId });
+    const candidate = (await rollout()).candidateRevision ?? 0;
+    await report(canary, candidate);
+    await ctx.db
+      .update(schema.nodeConfigStatus)
+      .set({ state: "failed" })
+      .where(eq(schema.nodeConfigStatus.nodeId, canary.id));
+    expect(await evaluateRollout(ctx, clusterId)).toBe("rolled_back");
+    const restored = await config(stable);
+    expect(restored.revision).toBeGreaterThan(candidate);
+    expect(restored.sites.find((s) => s.id === old)).toBeUndefined();
+    expect(restored.offlineHosts.map((h) => h.name)).toEqual(["old.current.test"]);
+    expect(restored.sites.find((s) => s.id === blog)?.domains.map((d) => d.name)).toEqual([
+      "blog.current.test",
+    ]);
+    expect(restored.sites.find((s) => s.id === siteId)?.cacheGeneration).toBe(generation + 1n);
+    // The rest is the stable content: the rename stays with the rolled back candidate.
+    expect(restored.sites.find((s) => s.id === siteId)?.name).toBe(
+      before.sites.find((s) => s.id === siteId)?.name,
+    );
+    // An administrator's rollback keeps the current cache generation as well.
+    await settle();
+    await admin.clusters.rollback({ id: clusterId, revision: withoutDomain });
+    const manual = await config(stable);
+    expect(manual.sites.find((s) => s.id === siteId)?.cacheGeneration).toBe(generation + 1n);
+    expect(manual.sites.find((s) => s.id === old)).toBeUndefined();
+    await admin.sites.delete({ id: blog });
+    await admin.sites.delete({ id: old });
+    await admin.clusters.promoteRollout({ id: clusterId });
+  });
 });

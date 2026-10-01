@@ -1,3 +1,4 @@
+import { clone } from "@bufbuild/protobuf";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import type {
   ClusterRollout,
@@ -6,6 +7,7 @@ import type {
   RolloutState,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
+import { NodeConfigSchema } from "@edgeweir/proto";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
@@ -15,6 +17,7 @@ import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import {
+  currentStable,
   type Executor,
   getRevision,
   insertRevision,
@@ -65,7 +68,9 @@ async function promote(tx: Tx, row: RolloutRow, outcome: RolloutOutcome, actor: 
  * The canary nodes go back to the stable content: as a new revision (nodes
  * never apply an older revision number), which becomes the stable revision
  * of every node. The database keeps the change; the next publication goes
- * through the canary again.
+ * through the canary again. Like an administrator's rollback, it ships
+ * nothing the current state no longer has (sites taken offline, removed
+ * domains, purged cache, renewed certificates; see currentStable).
  */
 async function rollBack(tx: Tx, row: RolloutRow, outcome: RolloutOutcome, actor: Actor) {
   const name = await clusterName(tx, row.clusterId);
@@ -74,11 +79,12 @@ async function rollBack(tx: Tx, row: RolloutRow, outcome: RolloutOutcome, actor:
       ? await getRevision(tx, row.clusterId, row.stableRevision)
       : undefined) ?? (await latestRevision(tx, row.clusterId));
   if (!stable) throw new Error("rollout without a stable revision");
+  const content = await currentStable(tx, row.clusterId, decodeNodeConfig(stable.ir));
   const { row: restored } = await insertRevision(
     tx,
     row.clusterId,
     (revision) => {
-      const config = decodeNodeConfig(stable.ir);
+      const config = clone(NodeConfigSchema, content);
       config.revision = revision;
       return config;
     },
