@@ -7,7 +7,7 @@
 | 端口 | 协议 | 内容 | 暴露方式 | 约束 |
 | --- | --- | --- | --- | --- |
 | 3000/TCP | HTTP | Web UI、`/rpc`、`/api/v1`、`/healthz`、`/install.sh`、`/downloads/*` | 反向代理（可终结 TLS），或直接暴露 | 节点安装时从 `EDGEWEIR_PUBLIC_URL` 下载 `/install.sh` 与 `/downloads/*`，节点主机须能访问该地址。 |
-| 8443/TCP | TLS 1.2 及以上，HTTP/2 或 HTTP/1.1，Connect-RPC | 节点通道 | 直接暴露，或四层透传 | 8443 必须四层透传；代理终结 TLS 会使节点 CA 校验与 mTLS 失败。 |
+| 8443/TCP | TLS 1.2 及以上，HTTP/2 或 HTTP/1.1，Connect-RPC | 节点通道（节点与区域探针） | 直接暴露，或四层透传 | 8443 必须四层透传；代理终结 TLS 会使节点与探针的 CA 校验与 mTLS 失败。 |
 | 5432/TCP | PostgreSQL | 内置数据库 | 不发布 | 仅 Compose 网络内可达。 |
 | 8123/TCP | HTTP | ClickHouse（`analytics` profile） | 不发布 | 仅 Compose 网络内可达。 |
 

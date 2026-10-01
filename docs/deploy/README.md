@@ -19,7 +19,7 @@
 | 进程 | 常驻运行 | 缩容到零或按请求冻结会停止 worker 与节点长连接，见 [进程角色](#进程角色)。 |
 | PostgreSQL | 18；控制台所用账号拥有目标库的 `CREATE` 权限（schema `drizzle`、`pgboss`）与 schema `public` 的 `CREATE` 权限 | 更低版本未经验证。迁移在启动时执行。 |
 | 3000/TCP | HTTP：Web UI、`/rpc`、`/api/v1`、`/healthz`、`/install.sh`、`/downloads/*` | 可由反向代理终结 TLS，见 [端口与反向代理](networking.md)。 |
-| 8443/TCP | 节点通道：TLS 由控制台终结，注册后强制 mTLS | 公网可达；只能直连或四层透传。 |
+| 8443/TCP | 节点通道（节点与区域探针）：TLS 由控制台终结，注册后强制 mTLS | 公网可达；只能直连或四层透传。 |
 | 主密钥 | `EDGEWEIR_MASTER_KEY`：base64，解码后不少于 32 字节；`openssl rand -base64 32` 生成 | 与数据库备份分开保存；丢失或更换后已加密数据不可解密。 |
 | 会话密钥 | `BETTER_AUTH_SECRET`：未设置时由主密钥派生 | 已设置的部署须保留原值，移除后控制台拒绝启动。 |
 | 架构 | linux/amd64、linux/arm64 | — |
@@ -63,6 +63,7 @@ worker 定时任务：
 
 | 周期 | 任务 |
 | --- | --- |
+| 每 10 秒 | 探针判定的地址可达性与智能调度规则求值（同一时间只有一个进程） |
 | 每分钟 | 告警检查；DNS 同步；流量统计与访问日志汇总、节点升级超时处理；证书签发与续期 |
 | 每小时 | 清理旧配置版本；过期未送达的刷新预热任务 |
 | 每 30 分钟 | 删除过期或使用超过 7 天的注册 token |
@@ -86,7 +87,7 @@ worker 定时任务：
 | [Railway](railway.md) | 网页控制台部署与命令行等效操作 |
 | [Fly.io](fly.md) | flyctl 部署与 Dashboard 操作 |
 | [端口、反向代理与可信代理](networking.md) | 3000 与 8443、nginx 示例、`EDGEWEIR_TRUSTED_PROXIES` |
-| [接入节点](nodes.md) | 安装命令、`install.sh` 校验、下载镜像 |
+| [接入节点](nodes.md) | 安装命令、`install.sh` 校验、区域探针、下载镜像 |
 | [版本、升级与回滚](upgrade.md) | 镜像 tag、固定版本、升级、回滚、签名校验 |
 | [备份与恢复](backup.md) | 数据库与主密钥备份、恢复验收 |
 | [环境变量](../reference/environment.md) | 全部变量与默认值 |

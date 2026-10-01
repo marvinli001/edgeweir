@@ -1,6 +1,6 @@
 # 接入节点
 
-为集群生成安装命令，在 Linux 主机上安装并注册边缘节点。
+为集群生成安装命令，在 Linux 主机上安装并注册边缘节点；运行区域探针。
 
 ## 要求
 
@@ -90,6 +90,99 @@ journalctl -u edgeweir-node -f
 
 deb、rpm 由包脚本创建 `edgeweir` 用户与目录；tar.gz 由 `install.sh` 创建。
 
+## 区域探针
+
+区域探针从所在区域探测各节点的调度地址，结果驱动备用 IP 与智能调度，见[区域探针与智能调度](../guide/scheduling.md)。探针是 `edgeweir-node` 的 `probe` 模式：不运行 OpenResty，不监听端口，身份与节点分开。注册令牌在 **区域与探针** →「探针」→「添加探针」生成，只显示一次。
+
+| 项目 | 要求 |
+| --- | --- |
+| 运行方式 | 节点镜像（Docker，amd64 / arm64），或 Linux amd64 / arm64 上的 systemd 单元与二进制 |
+| 出站 | 节点通道（`EDGEWEIR_NODE_API_URL`，默认 8443），以及各节点调度地址上的监听端口 |
+| 入站 | 不需要 |
+| 位置 | 放在要代表的运营商或地区网络中 |
+| 数量 | 地址按全部探测方的严格多数判定可达性：只有一个探测方时，它自己的网络故障也会让地址被判为不可达；至少两个时需要超过一半同时失败 |
+
+### 容器
+
+控制台给出的「启动命令」是 `docker run`，见[添加探针](../guide/scheduling.md#添加探针)。Compose 写法：
+
+```yaml title="compose.yml（探针主机）"
+services:
+  probe:
+    image: ghcr.io/marvinli001/edgeweir-node:latest
+    entrypoint: ["/usr/local/bin/edgeweir-node", "probe"]
+    environment:
+      EDGEWEIR_STATE_DIR: /var/lib/edgeweir-probe
+      EDGEWEIR_SERVER: https://cdn-admin.example.com:8443
+      EDGEWEIR_CA_SHA256: <CA 指纹>
+      EDGEWEIR_TOKEN: <注册令牌>   # 只在首次启动时使用
+    volumes:
+      - probe-state:/var/lib/edgeweir-probe
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+volumes:
+  probe-state:
+```
+
+| 项目 | 行为 |
+| --- | --- |
+| 健康检查 | 镜像自带的健康检查查询数据面，探针不运行数据面：Compose 中关闭（如上），`docker run` 可加 `--no-healthcheck`；不关闭时容器显示 `unhealthy`，不影响探测 |
+| 用户 | 容器以 uid 10001 运行，状态目录在卷中 |
+| 令牌 | 注册完成后忽略，可以从配置中删除 |
+
+### systemd
+
+edgeweir-node 的 deb、rpm 软件包含 `edgeweir-probe.service`（默认不启用），tar.gz 在 `systemd/` 目录中提供同一单元。软件包依赖 `edgeweir-openresty`，探针模式不启动它；安装前按 [SECURITY.md](../../SECURITY.md#验证发布物) 校验发布物，探针主机不启用 `edgeweir-node.service`。
+
+```bash title="探针主机"
+sudo tee /etc/default/edgeweir-probe >/dev/null <<'CONF'
+EDGEWEIR_SERVER=https://cdn-admin.example.com:8443
+EDGEWEIR_CA_SHA256=<CA 指纹>
+EDGEWEIR_TOKEN=<注册令牌>
+CONF
+sudo chmod 600 /etc/default/edgeweir-probe
+sudo systemctl enable --now edgeweir-probe
+journalctl -u edgeweir-probe -f
+```
+
+| 项目 | 行为 |
+| --- | --- |
+| 用户与权限 | `edgeweir` 用户，不授予任何 capability，文件系统除状态目录外只读，只允许 IP 与 unix 套接字 |
+| 配置 | `/etc/default/edgeweir-probe`（0600）只由 systemd 读取；注册完成后令牌一行可以删除 |
+| 缺少注册参数 | 退出码 2，不自动重启 |
+
+### 命令行
+
+```text
+EDGEWEIR_TOKEN=<注册令牌> edgeweir-node probe --server URL --ca-sha256 HEX [--server-name NAME] [--state-dir DIR]
+edgeweir-node probe [--state-dir DIR]     # 已注册
+```
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `--server` | 无（首次运行必填） | 节点通道地址 |
+| `--ca-sha256` | 无（首次运行必填） | 节点通道内部 CA 证书（DER）的 SHA-256，十六进制 |
+| `--token-file` | 无 | 注册令牌文件（首次运行） |
+| `--token` | 无 | 注册令牌（首次运行）；出现在进程列表中，优先用 `EDGEWEIR_TOKEN` 或 `--token-file` |
+| `--server-name` | `--server` 的主机名 | 校验的 TLS 服务器名 |
+| `--state-dir` | `/var/lib/edgeweir-probe` | 探针身份目录，与节点的分开 |
+| `--timeout` | `30s` | 每个控制台 RPC 的超时 |
+| `--log-level` | `info` | `debug`、`info`、`warn`、`error` |
+| `--log-format` | `text` | `text`、`json` |
+
+参数也可由环境变量 `EDGEWEIR_<参数名>` 设置（如 `--state-dir` → `EDGEWEIR_STATE_DIR`），命令行优先。
+
+### 注册与身份
+
+| 项目 | 行为 |
+| --- | --- |
+| 首次启动 | 本机生成 ECDSA P-256 私钥与 CSR，核对 CA 指纹后提交令牌，换取探针证书；控制台不可达或繁忙时以同一令牌退避重试（1–30 秒），令牌被拒或指纹不符时退出 |
+| 之后 | 忽略令牌，全程 mTLS；证书剩余不足三分之一时自动续期 |
+| 状态目录 | `/var/lib/edgeweir-probe`（0700）：`probe.key`（0600）、`probe.crt`、`ca.crt`、`probe.json` |
+| 重新注册 | 在控制台删除原探针（吊销证书），删除 `probe.json`（或整个状态目录），用新令牌启动 |
+| 与节点同机 | 可以；状态目录分开。节点本身兼任探针时不需要单独的探针进程，见[节点兼任探针](../guide/scheduling.md#节点兼任探针) |
+
 ## 下载镜像
 
 节点访问 GitHub 受限时，控制台可在 `/downloads/*` 提供发布文件。镜像只是传输通道：签名与 SHA-256 仍在节点上校验。
@@ -158,4 +251,7 @@ downloads/
 | `node is already enrolled (use --force to replace the identity)` | 主机已有节点身份（`/var/lib/edgeweir-node/identity.json`） | 保留现有注册；替换身份时用新 token 执行 `edgeweir-node enroll --force`，参数见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。 |
 | `x509: certificate is valid for ..., not ...` | 节点连接的名称不在节点通道证书中 | 将该名称加入 `EDGEWEIR_NODE_API_HOSTNAMES`，重启控制台，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
 | 注册超时，或节点一直离线 | 防火墙或安全组未放行 8443；`EDGEWEIR_NODE_API_URL` 解析错误 | 放行 8443；核对域名解析。 |
+| `probe is not enrolled: the first run needs --server, --ca-sha256 and a probe token` | 探针首次启动缺少注册参数（退出码 2） | 设置 `EDGEWEIR_SERVER`、`EDGEWEIR_CA_SHA256` 与 `EDGEWEIR_TOKEN` 后重新启动。 |
+| `probe enrollment failed: console rejected the enrollment token (expired or already used)` | 探针令牌已过期或已使用 | 重新「添加探针」生成令牌。 |
+| 探针容器显示 `unhealthy` | 镜像健康检查查询数据面 | 关闭容器健康检查，见[容器](#容器)。 |
 

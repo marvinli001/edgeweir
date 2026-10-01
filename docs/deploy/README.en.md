@@ -19,7 +19,7 @@ Console components, runtime requirements, supported platforms, and process roles
 | Process | Always on | Scale-to-zero or per-request freezing stops the worker and the node streams; see [process roles](#process-roles). |
 | PostgreSQL | 18; the console's database user has `CREATE` on the target database (schemas `drizzle`, `pgboss`) and `CREATE` on schema `public` | Earlier versions are untested. Migrations run at startup. |
 | 3000/TCP | HTTP: web UI, `/rpc`, `/api/v1`, `/healthz`, `/install.sh`, `/downloads/*` | A reverse proxy may terminate TLS; see [ports and reverse proxy](networking.en.md). |
-| 8443/TCP | Node channel: the console terminates TLS and enforces mTLS after enrollment | Publicly reachable; direct or layer-4 passthrough only. |
+| 8443/TCP | Node channel (nodes and regional probes): the console terminates TLS and enforces mTLS after enrollment | Publicly reachable; direct or layer-4 passthrough only. |
 | Master key | `EDGEWEIR_MASTER_KEY`: base64, at least 32 bytes decoded; generate with `openssl rand -base64 32` | Keep apart from database backups; a lost or changed key leaves encrypted data unreadable. |
 | Session secret | `BETTER_AUTH_SECRET`: derived from the master key when unset | Deployments that set it keep it; the console refuses to start once it is removed. |
 | Architecture | linux/amd64, linux/arm64 | — |
@@ -63,6 +63,7 @@ Worker schedules:
 
 | Interval | Jobs |
 | --- | --- |
+| Every 10 seconds | Probe-driven address reachability and scheduling rule evaluation (one process at a time) |
 | Every minute | Alert checks; DNS sync; traffic and access-log rollups, node upgrade timeouts; certificate issuance and renewal |
 | Hourly | Pruning old revisions; expiring undelivered purge and prefetch tasks |
 | Every 30 minutes | Deleting enrollment tokens expired or used more than 7 days ago |
@@ -86,7 +87,7 @@ Worker schedules:
 | [Railway](railway.en.md) | Web console deployment with CLI equivalents |
 | [Fly.io](fly.en.md) | flyctl deployment and Dashboard steps |
 | [Ports, reverse proxy, and trusted proxies](networking.en.md) | 3000 and 8443, nginx examples, `EDGEWEIR_TRUSTED_PROXIES` |
-| [Adding nodes](nodes.en.md) | Install command, `install.sh` checks, downloads mirror |
+| [Adding nodes](nodes.en.md) | Install command, `install.sh` checks, regional probes, downloads mirror |
 | [Versions, upgrades, and rollback](upgrade.en.md) | Image tags, pinning, upgrade, rollback, signature verification |
 | [Backup and recovery](backup.en.md) | Database and master key backup, restore acceptance |
 | [Environment variables](../reference/environment.en.md) | Every variable and its default |

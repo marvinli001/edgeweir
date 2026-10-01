@@ -7,7 +7,7 @@ Configure console ports, reverse proxies, node channel passthrough, and client I
 | Port | Protocol | Serves | Exposure | Constraint |
 | --- | --- | --- | --- | --- |
 | 3000/TCP | HTTP | Web UI, `/rpc`, `/api/v1`, `/healthz`, `/install.sh`, `/downloads/*` | Reverse proxy (may terminate TLS), or direct | Nodes download `/install.sh` and `/downloads/*` from `EDGEWEIR_PUBLIC_URL` during installation; node hosts must reach that URL. |
-| 8443/TCP | TLS 1.2 or later, HTTP/2 or HTTP/1.1, Connect-RPC | Node channel | Direct, or layer-4 passthrough | 8443 needs layer-4 passthrough; a proxy that terminates TLS breaks the node CA check and mTLS. |
+| 8443/TCP | TLS 1.2 or later, HTTP/2 or HTTP/1.1, Connect-RPC | Node channel (nodes and regional probes) | Direct, or layer-4 passthrough | 8443 needs layer-4 passthrough; a proxy that terminates TLS breaks the CA check and mTLS of nodes and probes. |
 | 5432/TCP | PostgreSQL | Bundled database | Not published | Reachable only inside the Compose network. |
 | 8123/TCP | HTTP | ClickHouse (`analytics` profile) | Not published | Reachable only inside the Compose network. |
 

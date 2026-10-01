@@ -1,6 +1,6 @@
 # Adding nodes
 
-Generate an install command for a cluster, then install and enroll an edge node on a Linux host.
+Generate an install command for a cluster, then install and enroll an edge node on a Linux host; run regional probes.
 
 ## Requirements
 
@@ -90,6 +90,99 @@ Installed files:
 
 For deb and rpm, the package scripts create the `edgeweir` user and directories; for tar.gz, `install.sh` does.
 
+## Regional probes
+
+A regional probe measures every node's scheduling addresses from its region; the results drive backup IPs and scheduling, see [Regional probes and scheduling](../guide/scheduling.en.md). A probe is the `probe` mode of `edgeweir-node`: it runs no OpenResty, listens on no port, and has an identity separate from nodes. Its enrollment token comes from **Regions & probes** → **Probes** → **Add probe** and is shown once.
+
+| Item | Requirement |
+| --- | --- |
+| Runs as | The node image (Docker, amd64 / arm64), or the systemd unit and binary on Linux amd64 / arm64 |
+| Outbound | The node channel (`EDGEWEIR_NODE_API_URL`, 8443 by default) and the listener ports on the nodes' scheduling addresses |
+| Inbound | None |
+| Placement | Inside the carrier or regional network it stands for |
+| Count | Reachability is decided by a strict majority of all probers: with a single prober its own network failure marks addresses unreachable; with two or more, more than half must fail at once |
+
+### Container
+
+The console's **Start command** is a `docker run`, see [Add a probe](../guide/scheduling.en.md#add-a-probe). With Compose:
+
+```yaml title="compose.yml (probe host)"
+services:
+  probe:
+    image: ghcr.io/marvinli001/edgeweir-node:latest
+    entrypoint: ["/usr/local/bin/edgeweir-node", "probe"]
+    environment:
+      EDGEWEIR_STATE_DIR: /var/lib/edgeweir-probe
+      EDGEWEIR_SERVER: https://cdn-admin.example.com:8443
+      EDGEWEIR_CA_SHA256: <CA fingerprint>
+      EDGEWEIR_TOKEN: <enrollment token>   # used on the first start only
+    volumes:
+      - probe-state:/var/lib/edgeweir-probe
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+volumes:
+  probe-state:
+```
+
+| Item | Behavior |
+| --- | --- |
+| Health check | The image's own health check asks the data plane, which a probe does not run: turn it off in Compose (as above) or add `--no-healthcheck` to `docker run`; otherwise the container shows `unhealthy`, which does not affect probing |
+| User | The container runs as uid 10001 with its state directory in the volume |
+| Token | Ignored after enrollment; it can be removed from the configuration |
+
+### systemd
+
+The edgeweir-node deb and rpm packages include `edgeweir-probe.service` (not enabled), and the tar.gz has the same unit under `systemd/`. The packages depend on `edgeweir-openresty`, which probe mode does not start; verify the release files first as described in [SECURITY.md](../../SECURITY.en.md#verifying-releases), and do not enable `edgeweir-node.service` on a probe host.
+
+```bash title="Probe host"
+sudo tee /etc/default/edgeweir-probe >/dev/null <<'CONF'
+EDGEWEIR_SERVER=https://cdn-admin.example.com:8443
+EDGEWEIR_CA_SHA256=<CA fingerprint>
+EDGEWEIR_TOKEN=<enrollment token>
+CONF
+sudo chmod 600 /etc/default/edgeweir-probe
+sudo systemctl enable --now edgeweir-probe
+journalctl -u edgeweir-probe -f
+```
+
+| Item | Behavior |
+| --- | --- |
+| User and privileges | User `edgeweir`, no capabilities, a read-only file system except the state directory, IP and unix sockets only |
+| Configuration | `/etc/default/edgeweir-probe` (0600) is read by systemd only; the token line can be removed after enrollment |
+| Missing enrollment settings | Exit status 2, no automatic restart |
+
+### Command line
+
+```text
+EDGEWEIR_TOKEN=<enrollment token> edgeweir-node probe --server URL --ca-sha256 HEX [--server-name NAME] [--state-dir DIR]
+edgeweir-node probe [--state-dir DIR]     # enrolled
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--server` | None (required on the first run) | Node channel URL |
+| `--ca-sha256` | None (required on the first run) | SHA-256 of the node channel's internal CA certificate (DER), hex |
+| `--token-file` | None | File with the enrollment token (first run) |
+| `--token` | None | Enrollment token (first run); visible in the process list, prefer `EDGEWEIR_TOKEN` or `--token-file` |
+| `--server-name` | Host name of `--server` | TLS server name to verify |
+| `--state-dir` | `/var/lib/edgeweir-probe` | Probe identity directory, separate from the node's |
+| `--timeout` | `30s` | Timeout of each console RPC |
+| `--log-level` | `info` | `debug`, `info`, `warn`, `error` |
+| `--log-format` | `text` | `text`, `json` |
+
+Every flag can also be set with the environment variable `EDGEWEIR_<flag name>` (for example `--state-dir` → `EDGEWEIR_STATE_DIR`); the command line wins.
+
+### Enrollment and identity
+
+| Item | Behavior |
+| --- | --- |
+| First start | Generates an ECDSA P-256 key and CSR locally, checks the CA fingerprint, then sends the token for a probe certificate; while the console is unreachable or busy it retries the same token with backoff (1–30 seconds), and a refused token or a pin mismatch ends it |
+| Later starts | The token is ignored and every call uses mTLS; the certificate renews itself once less than a third of its lifetime remains |
+| State directory | `/var/lib/edgeweir-probe` (0700): `probe.key` (0600), `probe.crt`, `ca.crt`, `probe.json` |
+| Enroll again | Delete the probe in the console (which revokes its certificate), delete `probe.json` (or the whole state directory), and start with a new token |
+| Same host as a node | Possible; the state directories are separate. A node that also probes needs no separate probe process, see [Nodes that also probe](../guide/scheduling.en.md#nodes-that-also-probe) |
+
 ## Downloads mirror
 
 When nodes reach GitHub poorly, the console can serve release files at `/downloads/*`. The mirror is only a transport: nodes still verify signatures and SHA-256.
@@ -158,4 +251,7 @@ The release source for agent self-upgrades is set in **System → Node release s
 | `node is already enrolled (use --force to replace the identity)` | The host already has a node identity (`/var/lib/edgeweir-node/identity.json`) | Keep the existing enrollment; to replace the identity, run `edgeweir-node enroll --force` with a new token; flags in [edgeweir-node](https://github.com/marvinli001/edgeweir-node). |
 | `x509: certificate is valid for ..., not ...` | The name the node connects to is not in the node channel certificate | Add the name to `EDGEWEIR_NODE_API_HOSTNAMES` and restart the console; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
 | Enrollment times out, or the node stays offline | Firewall or security group blocks 8443; `EDGEWEIR_NODE_API_URL` resolves incorrectly | Open 8443; check DNS resolution. |
+| `probe is not enrolled: the first run needs --server, --ca-sha256 and a probe token` | A probe's first start lacks the enrollment settings (exit status 2) | Set `EDGEWEIR_SERVER`, `EDGEWEIR_CA_SHA256`, and `EDGEWEIR_TOKEN`, then start it again. |
+| `probe enrollment failed: console rejected the enrollment token (expired or already used)` | The probe token expired or was already used | **Add probe** again for a new token. |
+| A probe container shows `unhealthy` | The image's health check asks the data plane | Turn the container health check off, see [Container](#container). |
 
