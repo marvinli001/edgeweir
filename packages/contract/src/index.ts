@@ -14,6 +14,7 @@ import { adminBansContract, banSettings, bansContract } from "./bans";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
 import { domainOwnershipContract } from "./domains";
+import { errorPagesContract, platformErrorPages } from "./error-pages";
 import { ccTemplate, protectionContract, protectionSettings, securityContract } from "./protection";
 import {
   ipListsContract,
@@ -29,6 +30,7 @@ import { siteFeatures, wafContract, wafSettings } from "./waf";
 export * from "./addresses";
 export * from "./bans";
 export * from "./certificates";
+export * from "./error-pages";
 export * from "./errors";
 export * from "./node-errors";
 export * from "./node-features";
@@ -78,6 +80,8 @@ export const contract = {
   security: securityContract,
   /** OWASP CRS managed rules of a site and the rules it matched. */
   waf: wafContract,
+  /** A site's error pages for node-generated 403, 429, 502, 503 and 504 responses. */
+  errorPages: errorPagesContract,
   certificates: certificatesContract,
   dnsCredentials: dnsCredentialsContract,
   https: httpsContract,
@@ -292,18 +296,26 @@ export const contract = {
       .route({ method: "PUT", path: "/sites/{id}/enabled", tags: ["sites"] })
       .input(s.siteSetEnabledInput)
       .output(s.siteMutationResult),
-    /** Passive health of the site's origins, as reported by the nodes. */
+    /** Health of the site's origins (passive and active checks), as reported by the nodes. */
     originHealth: oc
       .route({ method: "GET", path: "/sites/{id}/origin-health", tags: ["sites"] })
       .input(idParam)
       .output(z.array(s.originHealth)),
-    /** Whether Brotli, Zstandard and OWASP CRS can be turned on for the site now. */
+    /**
+     * Whether Brotli, Zstandard, OWASP CRS, active health checks, session
+     * affinity and error pages can be turned on for the site now, and whether
+     * its cluster's nodes run purges by host or tag and variant and sitemap
+     * prefetches.
+     */
     features: oc
       .route({ method: "GET", path: "/sites/{id}/features", tags: ["sites"] })
       .input(idParam)
       .output(siteFeatures),
   },
-  /** Cache purge (URL, prefix, whole site) and prefetch tasks with per-node results. */
+  /**
+   * Cache purge (URL, prefix, whole site, host, Cache-Tag) and prefetch (URLs
+   * in device variants, sitemaps) tasks with per-node results.
+   */
   cacheTasks: {
     list: oc
       .route({ method: "GET", path: "/cache-tasks", tags: ["cache"] })
@@ -532,6 +544,15 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/waf", tags: ["settings"] })
       .input(wafSettings)
       .output(wafSettings),
+    /** The platform's pages for unknown hosts and for disabled and suspended sites. */
+    errorPages: oc
+      .route({ method: "GET", path: "/settings/error-pages", tags: ["settings"] })
+      .output(platformErrorPages),
+    /** Replaces the pages and publishes a new revision for every cluster. */
+    setErrorPages: oc
+      .route({ method: "PUT", path: "/settings/error-pages", tags: ["settings"] })
+      .input(platformErrorPages)
+      .output(platformErrorPages),
     /** Recursive DNS servers for domain ownership TXT checks. */
     dnsResolvers: oc
       .route({ method: "GET", path: "/settings/dns-resolvers", tags: ["settings"] })

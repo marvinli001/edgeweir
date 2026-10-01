@@ -113,6 +113,10 @@ export const errorDefs = {
   USAGE_CURSOR_INVALID: { status: 400, params: [] },
   CACHE_TASK_URL_INVALID: { status: 400, params: ["urls"] },
   CACHE_TASK_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
+  CACHE_TASK_HOST_INVALID: { status: 400, params: ["hosts"] },
+  CACHE_TASK_TAG_INVALID: { status: 400, params: ["tags"] },
+  /** An error page template over the byte limit; status names the page (404/503 for platform pages). */
+  ERROR_PAGE_TOO_LARGE: { status: 400, params: ["status", "limit"] },
   CACHE_TASK_RATE_LIMITED: {
     status: 429,
     params: ["tasksPerMinute", "urlsPerHour", "retryAfterSeconds"],
@@ -158,6 +162,8 @@ export const revisionReasonDefs = {
   cc_template_updated: { params: [], en: "CC template updated" },
   challenge_keys_rotated: { params: [], en: "challenge keys rotated" },
   site_waf_updated: { params: ["site"], en: "OWASP CRS of {site} updated" },
+  site_error_pages_updated: { params: ["site"], en: "error pages of {site} updated" },
+  error_pages_updated: { params: [], en: "platform error pages updated" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

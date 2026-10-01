@@ -7,6 +7,8 @@ export const logQuery = z.object({
   status: z.coerce.number().int().min(100).max(599).optional(),
   ip: z.string().max(64).default(""),
   path: z.string().max(2048).default(""),
+  /** Exact request id (X-Request-Id); omitted or empty matches every request. */
+  requestId: z.string().max(128).optional(),
   limit: z.coerce.number().int().min(1).max(1000).default(100),
 });
 export type LogQuery = z.infer<typeof logQuery>;
@@ -30,6 +32,8 @@ export const logEntry = z.object({
   wafRuleIds: z.array(z.number().int()).default([]),
   /** CRS blocked the request (block mode, anomaly score at or above the threshold). */
   wafBlocked: z.boolean().default(false),
+  /** The id the node answered with (X-Request-Id), also shown on error pages; empty for older nodes. */
+  requestId: z.string().default(""),
 });
 export type LogEntry = z.infer<typeof logEntry>;
 export const logsContract = {

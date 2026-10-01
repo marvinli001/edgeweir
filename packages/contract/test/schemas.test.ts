@@ -72,6 +72,19 @@ describe("siteCreateInput", () => {
       keepaliveIdleSeconds: 60,
       keepaliveMaxRequests: 1000,
       websocket: true,
+      activeHealthCheck: {
+        enabled: false,
+        path: "/",
+        method: "GET",
+        expectedStatusMin: 200,
+        expectedStatusMax: 399,
+        host: "",
+        intervalSeconds: 30,
+        timeoutSeconds: 5,
+        healthyThreshold: 2,
+        unhealthyThreshold: 3,
+      },
+      sessionAffinity: { enabled: false, ttlSeconds: 3600 },
     });
     expect(parsed.cacheSettings).toEqual({
       cacheKey: {
@@ -84,6 +97,7 @@ describe("siteCreateInput", () => {
         includeHost: true,
       },
       rangeSlice: false,
+      keepCacheTag: false,
     });
   });
 

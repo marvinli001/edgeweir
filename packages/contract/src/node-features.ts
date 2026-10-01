@@ -9,3 +9,13 @@ export function nodeSupportsFeature(supported: readonly string[], feature: strin
     return supported.includes("geoip-city-v1");
   return supported.includes(feature);
 }
+
+/**
+ * Task features: a node without them cannot run the task at all, so the
+ * console refuses such tasks while an active node of an affected cluster
+ * lacks the feature (they never enter a configuration's requiredFeatures).
+ * purge-tag-v1: PurgeType HOST and TAG, and the Cache-Tag index.
+ */
+export const PURGE_TAG_FEATURE = "purge-tag-v1";
+/** prefetch-v2: prefetch device variants (PrefetchTarget.variant) and sitemap tasks. */
+export const PREFETCH_V2_FEATURE = "prefetch-v2";

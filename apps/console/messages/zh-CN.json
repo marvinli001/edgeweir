@@ -1174,5 +1174,14 @@
   "logs_waf": "CRS",
   "logs_waf_blocked": "已拦截",
   "system_waf_title": "OWASP CRS",
-  "system_waf_tenant_crs": "允许租户开启 OWASP CRS"
+  "system_waf_tenant_crs": "允许租户开启 OWASP CRS",
+  "error_cache_task_host_invalid": "Host 无效：{hosts}",
+  "error_cache_task_tag_invalid": "缓存标签无效：{tags}",
+  "error_error_page_too_large": "{status} 错误页超过 {limit} 字节",
+  "revision_reason_site_error_pages_updated": "修改网站 {site} 的错误页",
+  "revision_reason_error_pages_updated": "修改平台错误页",
+  "task_error_sitemap_failed": "站点地图 {url} 获取失败（{reason}）",
+  "task_error_sitemap_empty": "站点地图 {url} 中没有本网站的 URL",
+  "task_error_reason_invalid": "不是有效的站点地图",
+  "task_error_reason_too_large": "解压后超过 50 MiB"
 }

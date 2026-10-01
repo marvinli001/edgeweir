@@ -101,6 +101,16 @@ export const siteFeatures = z.object({
   brotli: featureAvailability,
   zstd: featureAvailability,
   crs: featureAvailability,
+  /** originSettings.activeHealthCheck (active-health-v1). */
+  activeHealthCheck: featureAvailability,
+  /** originSettings.sessionAffinity (session-affinity-v1 and challenge-v1). */
+  sessionAffinity: featureAvailability,
+  /** The site's error pages (error-pages-v1). */
+  errorPages: featureAvailability,
+  /** Cache tasks of type host and tag (purge-tag-v1). */
+  purgeByTag: featureAvailability,
+  /** Prefetching the mobile variant and sitemap tasks (prefetch-v2). */
+  prefetchVariants: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });

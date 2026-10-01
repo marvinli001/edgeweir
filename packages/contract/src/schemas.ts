@@ -82,6 +82,12 @@ const optionalHostname = z
   .max(253)
   .refine((value) => value === "" || HOSTNAME_RE.test(value), "invalid host name");
 
+/** A host name without wildcard or port (purge by host). Normalised to lowercase. */
+export const hostName = domainName.refine(
+  (value) => !value.startsWith("*."),
+  "wildcards are not allowed",
+);
+
 /** RFC 7230 token, used for header and cookie names in cache keys. */
 const TOKEN_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;
 
@@ -170,6 +176,51 @@ export const cacheRuleInput = z
     path: ["maxSizeBytes"],
   });
 
+/** Absolute path with an optional query: 1-1024 printable ASCII bytes without spaces. */
+export const HEALTH_CHECK_PATH_RE = /^\/[\x21-\x7e]{0,1023}$/;
+
+/**
+ * Active health checks of an origin pool, run by the agent of every node
+ * (feature active-health-v1). An origin goes down after unhealthyThreshold
+ * failed probes in a row and comes back after healthyThreshold successful
+ * ones; either check marking an origin down takes it out of rotation. The
+ * settings are kept while the check is off.
+ */
+export const activeHealthCheck = z
+  .object({
+    enabled: z.boolean().default(false),
+    path: z.string().regex(HEALTH_CHECK_PATH_RE, "invalid health check path").default("/"),
+    method: z.enum(["GET", "HEAD"]).default("GET"),
+    /** Expected response status range, inclusive. */
+    expectedStatusMin: z.number().int().min(100).max(599).default(200),
+    expectedStatusMax: z.number().int().min(100).max(599).default(399),
+    /** Host header of the probes; empty: the origin's Host header, else its address. */
+    host: optionalHostname.default(""),
+    intervalSeconds: z.number().int().min(5).max(300).default(30),
+    /** At most intervalSeconds. */
+    timeoutSeconds: z.number().int().min(1).max(60).default(5),
+    healthyThreshold: z.number().int().min(1).max(10).default(2),
+    unhealthyThreshold: z.number().int().min(1).max(10).default(3),
+  })
+  .refine((check) => check.expectedStatusMin <= check.expectedStatusMax, {
+    message: "the minimum status must not be above the maximum",
+    path: ["expectedStatusMax"],
+  })
+  .refine((check) => check.timeoutSeconds <= check.intervalSeconds, {
+    message: "the timeout must not be longer than the interval",
+    path: ["timeoutSeconds"],
+  });
+
+/**
+ * Cookie-based session affinity of an origin pool (feature
+ * session-affinity-v1): the signed cookie pins a client to the origin that
+ * served it for ttlSeconds. Kept while off.
+ */
+export const sessionAffinity = z.object({
+  enabled: z.boolean().default(false),
+  ttlSeconds: z.number().int().min(60).max(604_800).default(3600),
+});
+
 /** Origin pool behaviour: load balancing, health, TLS, connections, WebSocket. */
 export const originSettings = z.object({
   policy: loadBalancePolicy.default("weighted_random"),
@@ -188,6 +239,8 @@ export const originSettings = z.object({
   keepaliveMaxRequests: z.number().int().min(1).max(100_000).default(1000),
   /** Proxy WebSocket upgrades to the origin. */
   websocket: z.boolean().default(true),
+  activeHealthCheck: activeHealthCheck.prefault({}),
+  sessionAffinity: sessionAffinity.prefault({}),
 });
 
 export const cacheKeyQuery = z.enum(["all", "ignore", "include"]);
@@ -213,6 +266,11 @@ export const cacheSettings = z.object({
   cacheKey: cacheKeyPolicy.prefault({}),
   /** Fetch and cache large files in 1 MiB slices (Range requests). */
   rangeSlice: z.boolean().default(false),
+  /**
+   * Forward the origin's Cache-Tag response header to clients. Off, the edge
+   * removes it; nodes index the tags of cached objects either way.
+   */
+  keepCacheTag: z.boolean().default(false),
 });
 
 export const siteCreateInput = z.object({
@@ -272,6 +330,7 @@ export const site = z.object({
   cacheSettings: z.object({
     cacheKey: cacheKeyPolicy.required(),
     rangeSlice: z.boolean(),
+    keepCacheTag: z.boolean(),
   }),
   cacheGeneration: z.number().int(),
   createdAt: isoDateTime,
@@ -822,17 +881,30 @@ export const siteUpdateInput = z.object({
   domains: z.array(domainName).min(1).max(50).optional(),
   origins: z.array(originInput).min(1).max(32).optional(),
   cacheRules: z.array(cacheRuleInput).max(64).optional(),
-  originSettings: originSettings.optional(),
-  cacheSettings: cacheSettings.optional(),
+  /**
+   * Replaces the pool settings; omitted fields take their defaults, except
+   * activeHealthCheck and sessionAffinity, which stay as they are when omitted.
+   */
+  originSettings: originSettings
+    .extend({
+      activeHealthCheck: activeHealthCheck.optional(),
+      sessionAffinity: sessionAffinity.optional(),
+    })
+    .optional(),
+  /** Replaces the cache settings; keepCacheTag stays as it is when omitted. */
+  cacheSettings: cacheSettings.extend({ keepCacheTag: z.boolean().optional() }).optional(),
 });
 
 /** Parameters of a node error code (see node-errors.ts). */
 const errorParams = z.record(z.string(), z.string());
 
-/** Passive health of one origin as reported by the nodes. */
+/** Which check reported an origin's state: real traffic (passive) or the agent's probes (active). */
+export const originHealthSource = z.enum(["passive", "active"]);
+
+/** Health of one origin as reported by the nodes (passive and active checks). */
 export const originHealth = z.object({
   originId: uuid,
-  /** Online nodes that currently mark the origin down. */
+  /** Online nodes where either check currently marks the origin down. */
   downNodes: z.number().int(),
   /** Online nodes of the site's cluster. */
   onlineNodes: z.number().int(),
@@ -842,40 +914,110 @@ export const originHealth = z.object({
   lastErrorCode: z.string(),
   lastErrorParams: errorParams,
   lastFailureAt: isoDateTime.nullable(),
+  /** One entry per node and check; a node's active entry only exists while active checks run. */
   nodes: z.array(
     z.object({
       nodeId: uuid,
       nodeName: z.string(),
+      source: originHealthSource,
       healthy: z.boolean(),
       consecutiveFailures: z.number().int(),
       lastError: z.string(),
       lastErrorCode: z.string(),
       lastErrorParams: errorParams,
       lastFailureAt: isoDateTime.nullable(),
+      /** End of a passive down period; always null for active entries. */
       downUntil: isoDateTime.nullable(),
       reportedAt: isoDateTime,
     }),
   ),
 });
 
-export const cacheTaskType = z.enum(["url", "prefix", "site", "prefetch"]);
+/**
+ * url, prefix, site, host and tag purge cached objects; prefetch and sitemap
+ * load URLs into the cache. host and tag need nodes with purge-tag-v1;
+ * sitemap, and prefetching the mobile variant, need prefetch-v2.
+ */
+export const cacheTaskType = z.enum([
+  "url",
+  "prefix",
+  "site",
+  "prefetch",
+  "host",
+  "tag",
+  "sitemap",
+]);
 export const cacheTaskState = z.enum(["pending", "running", "succeeded", "failed"]);
 /** A node's delivery: also "skipped" when the node was disabled before it ran the task. */
 export const cacheTaskNodeState = z.enum(["pending", "running", "succeeded", "failed", "skipped"]);
+/** Device class of a prefetch request; mobile only differs for cache keys with deviceType. */
+export const prefetchVariant = z.enum(["desktop", "mobile"]);
 
 export const MAX_CACHE_TASK_URLS = 500;
+export const MAX_CACHE_TASK_HOSTS = 500;
+export const MAX_CACHE_TASK_TAGS = 500;
+/** Sites one task purges entirely (site) or by tag (tag). */
+export const MAX_CACHE_TASK_SITES = 100;
+/** URLs a sitemap task prefetches at most (each in every variant). */
+export const SITEMAP_MAX_URLS = { min: 1, max: 10_000, default: 1000 } as const;
+/** A Cache-Tag value: 1-128 bytes of printable ASCII without commas. */
+export const CACHE_TAG_MAX_BYTES = 128;
+
+/**
+ * A Cache-Tag value as nodes compare it: trimmed and lowercased (ASCII
+ * letters only). Null unless it is 1-128 bytes of printable ASCII
+ * (0x20-0x7e) without commas.
+ */
+export function normalizeCacheTag(raw: string): string | null {
+  const tag = raw.trim().replace(/[A-Z]+/g, (letters) => letters.toLowerCase());
+  return /^[\x20-\x7e]{1,128}$/.test(tag) && !tag.includes(",") ? tag : null;
+}
 
 export const cacheTaskCreateInput = z
   .object({
     type: cacheTaskType,
-    /** Absolute URLs (url, prefetch) or URL prefixes (prefix), one per entry. */
+    /**
+     * Absolute URLs (url, prefetch), URL prefixes (prefix) or exactly one
+     * sitemap URL (sitemap), one per entry.
+     */
     urls: z.array(z.string().trim().min(1).max(2048)).max(MAX_CACHE_TASK_URLS).default([]),
-    /** Sites to purge entirely (site). */
-    siteIds: z.array(uuid).max(100).default([]),
+    /** Sites to purge entirely (site) or by tag (tag). */
+    siteIds: z.array(uuid).max(MAX_CACHE_TASK_SITES).default([]),
+    /** Host names whose every URL is purged (host): no wildcard, no port. */
+    hosts: z.array(z.string().trim().min(1).max(253)).max(MAX_CACHE_TASK_HOSTS).default([]),
+    /** Cache-Tag values to purge on every site of siteIds (tag); compared in lowercase. */
+    tags: z.array(z.string().max(1024)).max(MAX_CACHE_TASK_TAGS).default([]),
+    /** Device variants to prefetch (prefetch, sitemap). */
+    variants: z.array(prefetchVariant).min(1).max(2).default(["desktop"]),
+    /** URLs a sitemap task prefetches at most (sitemap). */
+    maxUrls: z
+      .number()
+      .int()
+      .min(SITEMAP_MAX_URLS.min)
+      .max(SITEMAP_MAX_URLS.max)
+      .default(SITEMAP_MAX_URLS.default),
   })
-  .refine((t) => (t.type === "site" ? t.siteIds.length > 0 : t.urls.length > 0), {
-    message: "nothing to do",
-    path: ["urls"],
+  .superRefine((task, ctx) => {
+    const missing = (path: "urls" | "siteIds" | "hosts" | "tags") =>
+      ctx.addIssue({ code: "custom", message: "nothing to do", path: [path] });
+    switch (task.type) {
+      case "site":
+        if (!task.siteIds.length) missing("siteIds");
+        break;
+      case "host":
+        if (!task.hosts.length) missing("hosts");
+        break;
+      case "tag":
+        if (!task.siteIds.length) missing("siteIds");
+        if (!task.tags.length) missing("tags");
+        break;
+      case "sitemap":
+        if (task.urls.length !== 1)
+          ctx.addIssue({ code: "custom", message: "exactly one sitemap URL", path: ["urls"] });
+        break;
+      default:
+        if (!task.urls.length) missing("urls");
+    }
   });
 
 export const cacheTaskNode = z.object({
@@ -899,8 +1041,13 @@ export const cacheTaskSource = z.enum(["user", "recovery"]);
 export const cacheTask = z.object({
   id: uuid,
   type: cacheTaskType,
+  /** What was asked for: URLs, prefixes, site names, hosts, tags or the sitemap URL. */
   targets: z.array(z.string()),
   sites: z.array(z.object({ id: z.string(), name: z.string() })),
+  /** Device variants of a prefetch or sitemap task; empty for purges. */
+  variants: z.array(prefetchVariant),
+  /** URL limit of a sitemap task; null for every other type. */
+  maxUrls: z.number().int().nullable(),
   /**
    * pending: no node finished; running: some finished; then succeeded or
    * failed. Skipped (disabled) nodes do not count.
@@ -1231,11 +1378,15 @@ export type CacheRule = z.infer<typeof cacheRule>;
 export type OriginInput = z.input<typeof originInput>;
 export type CacheRuleInput = z.input<typeof cacheRuleInput>;
 export type OriginSettings = z.infer<typeof site>["originSettings"];
+export type ActiveHealthCheck = OriginSettings["activeHealthCheck"];
+export type SessionAffinity = OriginSettings["sessionAffinity"];
 export type CacheSettings = z.infer<typeof site>["cacheSettings"];
 export type CacheKeyPolicy = CacheSettings["cacheKey"];
 export type OriginHealth = z.infer<typeof originHealth>;
+export type OriginHealthSource = z.infer<typeof originHealthSource>;
 export type CacheTask = z.infer<typeof cacheTask>;
 export type CacheTaskType = z.infer<typeof cacheTaskType>;
+export type PrefetchVariant = z.infer<typeof prefetchVariant>;
 export type CacheTaskState = z.infer<typeof cacheTaskState>;
 export type CacheTaskNodeState = z.infer<typeof cacheTaskNodeState>;
 export type CacheTaskCreateInput = z.input<typeof cacheTaskCreateInput>;

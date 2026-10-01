@@ -32,18 +32,31 @@ export const taskErrorDefs = {
   prefetch_timeout: { params: ["done", "total"] },
   task_unsupported: { params: ["type"] },
   purge_failed: { params: [] },
+  /**
+   * The sitemap, or a sitemap of its index, could not be fetched or parsed;
+   * {reason} is one of prefetchFailureReasonDefs.
+   */
+  sitemap_failed: { params: ["url", "reason"] },
+  /** The sitemap lists no URL of the site. */
+  sitemap_empty: { params: ["url"] },
   /** Never executed within the delivery window (CACHE_TASK_TTL, 7 days). */
   task_expired: { params: [] },
   /** Not delivered: the node was disabled. */
   node_disabled: { params: [] },
 } as const satisfies Record<string, { params: readonly string[] }>;
 
-/** prefetch_failed's {reason}; "status" also carries {status}. */
+/**
+ * The {reason} of prefetch_failed and sitemap_failed; "status" also carries
+ * {status}. invalid and too_large (a sitemap that is not XML, or over 50 MiB
+ * unpacked) only occur with sitemap_failed.
+ */
 export const prefetchFailureReasonDefs = {
   status: { params: ["status"] },
   connect_failed: { params: [] },
   timeout: { params: [] },
   https_unsupported: { params: [] },
+  invalid: { params: [] },
+  too_large: { params: [] },
   other: { params: [] },
 } as const satisfies Record<string, { params: readonly string[] }>;
 
