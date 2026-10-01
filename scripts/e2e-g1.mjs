@@ -670,7 +670,7 @@ try {
     assert.equal(renewed.reason, "abuse");
     assert.ok(BigInt(renewed.seq) > BigInt(first.seq));
     assert.ok(Date.parse(renewed.expiresAt) > Date.parse(first.expiresAt));
-    assert.equal((await admin.ok("GET", "/bans?pageSize=200")).total, 100);
+    assert.equal((await admin.ok("GET", "/bans?pageSize=1")).total, 100);
     await admin.ok("DELETE", `/bans/${platform.id}`);
     await admin.ok("POST", "/bans", input(101));
   } finally {

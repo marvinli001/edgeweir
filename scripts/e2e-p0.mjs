@@ -220,8 +220,8 @@ const first = await call(admin.key, "POST", "/sites", siteBody, { "idempotency-k
 const second = await call(admin.key, "POST", "/sites", siteBody, {
   "idempotency-key": "p0-site-1",
 });
-assert.equal(first.status, 200, first.text);
-assert.equal(second.status, 200);
+assert.equal(first.status, 201, first.text);
+assert.equal(second.status, 201);
 assert.equal(second.headers.get("idempotent-replayed"), "true");
 assert.equal(second.text, first.text);
 const site = first.json.site;
@@ -251,11 +251,11 @@ const race = await Promise.all(
 assert.equal(await named("p0-race"), 1);
 assert.ok(
   race.every(
-    (r) => r.status === 200 || (r.status === 409 && r.json.code === "IDEMPOTENCY_IN_PROGRESS"),
+    (r) => r.status === 201 || (r.status === 409 && r.json.code === "IDEMPOTENCY_IN_PROGRESS"),
   ),
   JSON.stringify(race.map((r) => [r.status, r.json?.code])),
 );
-await a("DELETE", `/sites/${race.find((r) => r.status === 200).json.site.id}`);
+await a("DELETE", `/sites/${race.find((r) => r.status === 201).json.site.id}`);
 
 const created = await a("POST", "/service-accounts", {
   name: "p0-business",
