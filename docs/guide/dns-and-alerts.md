@@ -345,7 +345,7 @@ X-Edgeweir-Signature: v1=<hex>
 
 ### Webhook 载荷
 
-请求体为 JSON，包含 `id`（事件 ID）、`siteId`、`siteName`、`kind`、`status`（`firing` / `resolved`）、`occurredAt`、`resourceId`（告警对象，例如节点或证书的 ID）、`text` 和 `url`（控制台链接）。集群与 DNS 告警的 `siteId` 为 `null`，`siteName` 为集群名称，`url` 指向 **集群与节点** 或 **DNS 调度**。配置了 Bearer 令牌时附带 `Authorization: Bearer <令牌>`。接收方返回 2xx 视为成功。
+请求体为 JSON，包含 `id`（事件 ID）、`siteId`、`siteName`、`kind`、`status`（`firing` / `resolved`）、`occurredAt`、`resourceId`（告警对象，例如节点或证书的 ID）、`text` 和 `url`（控制台链接）。集群与 DNS 告警的 `siteId` 为 `null`，`siteName` 为集群名称，`url` 指向 **集群与节点** 或 **DNS 调度**；`scheduling_action` 的 `siteName` 为「规则 · 节点」，`resourceId` 为 `<规则 ID>:<节点 ID>`。配置了 Bearer 令牌时附带 `Authorization: Bearer <令牌>`。接收方返回 2xx 视为成功。
 
 ## 设置告警规则
 

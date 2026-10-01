@@ -483,7 +483,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `probes.delete`、`scheduling.delete` | `{ ok: true }` |
 | `probes.results` | 按节点、地址、端口、探测方排序，至多 5000 条：`proberKind`（`probe` / `node`）、`proberId`、`proberName`、`regionId`、`regionName`、`nodeId`、`nodeName`、`address`、`port`、`method`（`tcp` / `http` / `https`）、`sent`、`lost`、`lossPercent`、`rttMs`（成功尝试的中位数，全部丢失时为 0）、`error`（`timeout`、`refused`、`reset`、`tls`、`status`、`unreachable`）、`checkedAt` |
 | `settings.probes`、`settings.setProbes` | 探测设置；从未保存时为默认值 10、3000、3、50、30、60 |
-| `nodes.*` 返回的节点 | 增加 `probeEnabled`；`metrics`（`{ cpuPercent, load1, load5, load15, memoryUsedBytes, memoryTotalBytes, egressBps, activeConnections, reportedAt }`，节点没有上报过时为 `null`）；`schedulingAddresses`（`[{ address, level, source, reachable }]`，`source` 为 `reported` 或 `configured`）；`schedulingLevel`（DNS 当前使用的级别） |
+| `nodes.*` 返回的节点 | 增加 `probeEnabled`；`metrics`（`{ cpuPercent, load1, load5, load15, memoryUsedBytes, memoryTotalBytes, egressBps, activeConnections, reportedAt }`，最近一次心跳没有指标（节点缺少 `metrics-v1`）时为 `null`）；`schedulingAddresses`（`[{ address, level, source, reachable }]`，`source` 为 `reported` 或 `configured`）；`schedulingLevel`（DNS 当前使用的级别） |
 | `scheduling.list`、`scheduling.create`、`scheduling.update` | 规则：`id`、`clusterId`、请求中的字段（条件补齐默认值）、`activeNodes`（`[{ nodeId, nodeName, since }]`，生效中与恢复中的节点）、`createdAt`、`updatedAt` |
 | `scheduling.preview` | `{ clusterId, evaluatedAt, rules }`。每条规则：`ruleId`、`ruleName`、`enabled`、`lineName`、`match`、`action`、`nodes`。每个节点：`nodeId`、`nodeName`、`state`（`idle`、`pending`、`active`、`recovering`）、`conditions`（条件字段与 `value`（没有数据为 `null`）、`holds`、`heldSeconds`、`satisfied`）、`matches`、`inEffect`、`wouldActivate`、`wouldRecover`、`activeSince`、`recoveringSince`、`recoversAt` |
 

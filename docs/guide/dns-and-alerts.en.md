@@ -345,7 +345,7 @@ At most 32 channels. When editing a channel, turn on **Replace channel credentia
 
 ### Webhook payload
 
-The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `status` (`firing` / `resolved`), `occurredAt`, `resourceId` (the object of the alert, such as a node or certificate ID), `text`, and `url` (a console link). For cluster and DNS alerts, `siteId` is `null`, `siteName` is the cluster name, and `url` points to **Clusters & nodes** or **DNS steering**. With a bearer token, the request carries `Authorization: Bearer <token>`. A 2xx response counts as delivered.
+The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `status` (`firing` / `resolved`), `occurredAt`, `resourceId` (the object of the alert, such as a node or certificate ID), `text`, and `url` (a console link). For cluster and DNS alerts, `siteId` is `null`, `siteName` is the cluster name, and `url` points to **Clusters & nodes** or **DNS steering**; for `scheduling_action`, `siteName` is "rule · node" and `resourceId` is `<rule ID>:<node ID>`. With a bearer token, the request carries `Authorization: Bearer <token>`. A 2xx response counts as delivered.
 
 ## Set alert rules
 
