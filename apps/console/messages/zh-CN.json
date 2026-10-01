@@ -1226,5 +1226,9 @@
   "error_pages_placeholder": "留空使用内置页面",
   "error_pages_bytes": "{bytes} / {limit} 字节",
   "error_pages_intercept": "替换源站错误响应",
-  "error_pages_variables": "可用变量（值经 HTML 转义）："
+  "error_pages_variables": "可用变量（值经 HTML 转义）：",
+  "platform_pages_title": "平台错误页",
+  "platform_pages_unknown_host": "未知域名",
+  "platform_pages_disabled": "网站已停用",
+  "platform_pages_suspended": "网站已暂停"
 }

@@ -1387,5 +1387,9 @@
   "error_pages_placeholder": "Empty: the built-in page",
   "error_pages_bytes": "{bytes} / {limit} bytes",
   "error_pages_intercept": "Replace origin error responses",
-  "error_pages_variables": "Variables (values are HTML-escaped):"
+  "error_pages_variables": "Variables (values are HTML-escaped):",
+  "platform_pages_title": "Platform error pages",
+  "platform_pages_unknown_host": "Unknown host",
+  "platform_pages_disabled": "Site disabled",
+  "platform_pages_suspended": "Site suspended"
 }
