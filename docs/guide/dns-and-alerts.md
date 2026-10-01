@@ -171,7 +171,7 @@ DNS 调度的服务商账号与证书 DNS-01 使用的 DNS 凭据（见 [HTTPS �
 | RFC 2136（TSIG） | 服务器（主机或 `主机:端口`）、TSIG 密钥名、TSIG 算法、TSIG 密钥（Base64） | 例如 BIND：`update-policy { grant <密钥名> zonesub A AAAA CNAME TXT; };` 与 `allow-transfer { key <密钥名>; };` | 不支持 | — | 自建端点；只使用 TCP；读取记录用 AXFR |
 | 自定义 HTTP | 地址、签名密钥（至少 16 字符） | 由接收方实现 | 由接收方决定 | — | 自建端点；协议见[自定义 HTTP 协议](#自定义-http-协议) |
 
-「根域」：CNAME 展平或 ALIAS 记录能让区域根（`@`）指向主机名（例如网站的 CNAME 目标）；其余服务商的区域根只能用 A / AAAA 记录。服务商的运营商或地区线路（阿里云、华为云、DNSPod、腾讯云、火山引擎、百度智能云、西部数码、DNS.LA、Route 53、Google Cloud DNS、Gcore、Bunny DNS 提供）不使用。
+「根域」：CNAME 展平或 ALIAS 记录能让区域根（`@`）指向主机名（例如网站的 CNAME 目标）；其余服务商的区域根只能用 A / AAAA 记录。解析线路见[解析线路](#解析线路)；其他服务商的运营商或地区线路（火山引擎、百度智能云、西部数码、DNS.LA、Route 53、Google Cloud DNS、Gcore、Bunny DNS 提供）不使用，记录只写在默认线路。
 
 未接入的服务商：
 
@@ -180,6 +180,23 @@ DNS 调度的服务商账号与证书 DNS-01 使用的 DNS 凭据（见 [HTTPS �
 | Namecheap | API 只能用 `setHosts` 整体覆盖主机记录，未包含在请求中的记录会被删除，可能误删控制台之外写入的记录 |
 | Hurricane Electric（dns.he.net） | 没有记录管理 API，只能动态更新已经存在的记录 |
 | DNSPod 国际站（dnspod.com 的 Token API） | 协议与中国站不同，官方不再保证旧版 API 的服务；国际站账号使用腾讯云 DNSPod（API 3.0）的国际站 |
+
+#### 解析线路
+
+解析线路让同一名称按运营商或地区返回不同的记录。服务商适配器使用下列线路名，并换成各服务商自己的线路：
+
+| 线路 | 含义 | DNSPod（Token）与腾讯云 DNSPod | 阿里云 | 华为云 |
+| --- | --- | --- | --- | --- |
+| `default` | 默认（未匹配其他线路的解析） | `0` | `default` | `default_view` |
+| `telecom` | 电信 | `10=0` | `telecom` | `Dianxin` |
+| `unicom` | 联通 | `10=1` | `unicom` | `Liantong` |
+| `mobile` | 移动 | `10=3` | `mobile` | `Yidong` |
+| `edu` | 教育网 | `10=2` | `edu` | `Jiaoyuwang` |
+| `overseas` | 境外 | `3=0` | `oversea` | `Abroad` |
+
+- 只有上表四家（腾讯云 DNSPod 含中国站与国际站）支持全部线路，其他服务商只有 `default`，其他线路的记录被拒绝。`GET /dns/catalog` 的 `capabilities.lines` 列出每个服务商支持的线路。
+- 写入一个名称与类型时，替换它在全部线路上的记录：写入中没有的线路上的副本被删除。
+- 读取时，不在上表中的服务商线路（例如省份线路）显示为 `other:<服务商线路>`，这类记录只能删除。阿里云按上表的线路逐一读取，其他线路上的记录可能读不到。
 
 ### 自建端点与出站策略
 

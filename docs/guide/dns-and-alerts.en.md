@@ -171,7 +171,7 @@ Each provider adapter is tested only with recorded API exchanges (requests and a
 | RFC 2136 (TSIG) | Server (host or `host:port`), TSIG key name, TSIG algorithm, TSIG secret (Base64) | For example in BIND: `update-policy { grant <key name> zonesub A AAAA CNAME TXT; };` and `allow-transfer { key <key name>; };` | No | — | Self-hosted endpoint; TCP only; records are read with AXFR |
 | Custom HTTP | URL, signing secret (at least 16 characters) | Implemented by the receiver | Up to the receiver | — | Self-hosted endpoint; see [Custom HTTP protocol](#custom-http-protocol) |
 
-**Apex**: CNAME flattening or an ALIAS record lets the zone apex (`@`) point at a host name (such as a site's CNAME target); with other providers the apex can only use A / AAAA records. Provider carrier or regional resolution (offered by Alibaba Cloud, Huawei Cloud, DNSPod, Tencent Cloud, Volcengine, Baidu AI Cloud, West.cn, DNS.LA, Route 53, Google Cloud DNS, Gcore, and Bunny DNS) is not used.
+**Apex**: CNAME flattening or an ALIAS record lets the zone apex (`@`) point at a host name (such as a site's CNAME target); with other providers the apex can only use A / AAAA records. For resolution lines see [Resolution lines](#resolution-lines); the carrier or regional lines of other providers (offered by Volcengine, Baidu AI Cloud, West.cn, DNS.LA, Route 53, Google Cloud DNS, Gcore, and Bunny DNS) are not used, and records go to the default line.
 
 Providers not supported:
 
@@ -180,6 +180,23 @@ Providers not supported:
 | Namecheap | The API can only replace all host records with `setHosts`; records missing from the request are deleted, which can remove records written outside the console |
 | Hurricane Electric (dns.he.net) | No record management API, only dynamic updates of records that already exist |
 | DNSPod international (the dnspod.com token API) | A different protocol from the China site, with no service guarantee for the legacy API; international accounts use the international site of Tencent Cloud DNSPod (API 3.0) |
+
+#### Resolution lines
+
+Resolution lines let one name answer differently by carrier or region. The provider adapters use the line names below and translate them to each provider's own lines:
+
+| Line | Meaning | DNSPod (token) and Tencent Cloud DNSPod | Alibaba Cloud | Huawei Cloud |
+| --- | --- | --- | --- | --- |
+| `default` | Default (resolvers no other line matches) | `0` | `default` | `default_view` |
+| `telecom` | China Telecom | `10=0` | `telecom` | `Dianxin` |
+| `unicom` | China Unicom | `10=1` | `unicom` | `Liantong` |
+| `mobile` | China Mobile | `10=3` | `mobile` | `Yidong` |
+| `edu` | China Education Network | `10=2` | `edu` | `Jiaoyuwang` |
+| `overseas` | Outside mainland China | `3=0` | `oversea` | `Abroad` |
+
+- Only these four providers (Tencent Cloud DNSPod on both the China and the international site) support every line; other providers have `default` only and refuse records on other lines. `capabilities.lines` in `GET /dns/catalog` lists each provider's lines.
+- Writing a name and type replaces its records on every line: copies on lines missing from the write are deleted.
+- When reading, provider lines outside the table (such as province lines) show as `other:<provider line>`; such records can only be deleted. Alibaba Cloud is read line by line for the lines in the table, so records on other lines may not be read.
 
 ### Self-hosted endpoints and the outbound policy
 
