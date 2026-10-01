@@ -480,10 +480,9 @@ services:
       EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${EDGEWEIR_OUTBOUND_ALLOW_CIDRS:-}
       EDGEWEIR_ACME_DIRECTORY: ${EDGEWEIR_ACME_DIRECTORY:-}
       EDGEWEIR_ACME_CA_FILE: ${EDGEWEIR_ACME_CA_FILE:-}
-      # 旧部署的后备值：「后台 → 系统设置」里保存的值优先
+      # 旧部署的后备值：「系统设置」里保存的值优先
       EDGEWEIR_NODE_RELEASE_BASE_URL: ${EDGEWEIR_NODE_RELEASE_BASE_URL:-}
       EDGEWEIR_SMTP_CA_FILE: ${EDGEWEIR_SMTP_CA_FILE:-}
-      EDGEWEIR_DNS_RESOLVERS: ${EDGEWEIR_DNS_RESOLVERS:-}
       # 宝塔 nginx 从本机回环地址转发，只信任它的 X-Forwarded-For
       EDGEWEIR_TRUSTED_PROXIES: ${EDGEWEIR_TRUSTED_PROXIES:-127.0.0.1,::1}
     read_only: true
@@ -505,7 +504,7 @@ template_bundled() {
 #      并在编排的 .env 里填写 EDGEWEIR_MASTER_KEY、POSTGRES_PASSWORD、EDGEWEIR_PUBLIC_URL
 #      （主密钥用 openssl rand -base64 32 生成并原样使用，POSTGRES_PASSWORD 会拼进
 #      DATABASE_URL，用 openssl rand -hex 24 生成）。会话密钥由主密钥派生；已经设置过
-#      BETTER_AUTH_SECRET 的部署继续保留它。其余配置在控制台「后台 → 系统设置」填写。
+#      BETTER_AUTH_SECRET 的部署继续保留它。其余配置在控制台「系统设置」填写。
 #      镜像是公开的 ghcr.io/marvinli001/edgeweir，滚动发布，tag 为「日期-提交」（例如
 #      20260929-a1b2c3d）；生产在 .env 里用 EDGEWEIR_VERSION 固定一个 tag，升级时改 tag 后
 #      「更新镜像」。
@@ -540,10 +539,9 @@ services:
       EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${EDGEWEIR_OUTBOUND_ALLOW_CIDRS:-}
       EDGEWEIR_ACME_DIRECTORY: ${EDGEWEIR_ACME_DIRECTORY:-}
       EDGEWEIR_ACME_CA_FILE: ${EDGEWEIR_ACME_CA_FILE:-}
-      # 旧部署的后备值：「后台 → 系统设置」里保存的值优先
+      # 旧部署的后备值：「系统设置」里保存的值优先
       EDGEWEIR_NODE_RELEASE_BASE_URL: ${EDGEWEIR_NODE_RELEASE_BASE_URL:-}
       EDGEWEIR_SMTP_CA_FILE: ${EDGEWEIR_SMTP_CA_FILE:-}
-      EDGEWEIR_DNS_RESOLVERS: ${EDGEWEIR_DNS_RESOLVERS:-}
       # 宝塔 nginx 的来源地址（Docker 网桥网关），只信任它转发的 X-Forwarded-For
       EDGEWEIR_TRUSTED_PROXIES: ${EDGEWEIR_TRUSTED_PROXIES:-}
     ports:
@@ -739,7 +737,7 @@ cmd_install() {
       printf 'EDGEWEIR_NODE_API_URL=%s\n' "$node_url"
       printf '# 镜像 tag（滚动发布的「日期-提交」）；./deploy.sh update 会更新它\n'
       printf 'EDGEWEIR_VERSION=%s\n' "$version"
-      printf '# 其余配置在控制台「后台 → 系统设置」填写；可选变量见 .env.example\n'
+      printf '# 其余配置在控制台「系统设置」填写；可选变量见 .env.example\n'
     } >"$DIR/.env"
   )
   COMPOSE_FILE=compose.yml

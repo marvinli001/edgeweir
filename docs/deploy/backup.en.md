@@ -115,7 +115,7 @@ Upgrade older nodes and let them complete one configuration sync before the back
 | Check | Passes when |
 | --- | --- |
 | Console | `/healthz` returns `"status":"ok"`. |
-| Nodes | "Online" in **Admin → Clusters & nodes**. |
+| Nodes | "Online" in **Clusters & nodes**. |
 | Configuration | Nodes are "In sync": the applied revision equals the latest revision and the content hashes match. |
 | Data plane | The node data plane is healthy; HTTP and HTTPS requests through the nodes succeed. |
 

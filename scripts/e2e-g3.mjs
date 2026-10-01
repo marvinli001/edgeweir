@@ -20,14 +20,14 @@
 //      body, also on a cached URL, while clean requests and their cache hits
 //      get 200; a request body limit of 0 skips the body; excluded rules stop
 //      matching; demo.test (no CRS) serves the payload; nginx.conf loads
-//      ModSecurity only while a site runs CRS; with tenantCrs off a tenant
-//      gets 403 WAF_CRS_FORBIDDEN (turning off still works), then restored
+//      ModSecurity only while a site runs CRS
 //   d. an old node (pre-G3 image) in the cluster: features report "nodes"
-//      for all three, tenants get 409 NODE_CAPABILITY_REQUIRED and nothing
-//      is published, an administrator's change is published but the old
-//      node keeps its revision until the change is undone; a node with only
-//      EDGEWEIR_MODSECURITY_MODULE=off makes only CRS unavailable; once they
-//      are removed every feature is available again
+//      for all three and the old node applies the cluster's revision; the
+//      operator's change that requires a feature anyway is published but the
+//      old node keeps its revision until the change is undone; a node with
+//      only EDGEWEIR_MODSECURITY_MODULE=off makes only CRS unavailable and
+//      applies a Zstandard change; once they are removed every feature is
+//      available again
 // The compression and CRS sites stay (turned off) for apps/console/e2e/g3.spec.ts,
 // which also gets the cluster g3-legacy with an old node and the site
 // legacy.g3.test (.e2e/g3-state.json). `node scripts/e2e-g3.mjs --cleanup`
@@ -39,7 +39,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { promisify } from "node:util";
 import zlib from "node:zlib";
-import { signInResponse } from "./e2e-auth.mjs";
+import { rpc, signInResponse } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile);
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
@@ -93,17 +93,11 @@ async function call(key, method, path, body) {
 }
 
 async function createKey(cookie) {
-  const created = await fetch(`${base}/api/auth/api-key/create`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: base, cookie },
-    body: JSON.stringify({ name: "g3-e2e" }),
-  });
-  assert.equal(created.status, 200);
-  return (await created.json()).key;
+  return (await rpc(base, cookie, "accessKeys/create", { name: "g3-e2e" })).key;
 }
 
 /**
- * A signed-in user with an AccessKey. An AccessKey allows 600 requests until
+ * The signed-in operator with an AccessKey. An AccessKey allows 600 requests until
  * it has been idle for 60 seconds; the polling below runs longer than that,
  * so every 500 calls move to a fresh key.
  */
@@ -132,14 +126,6 @@ async function actor(email, password) {
     return result.json;
   };
   return user;
-}
-
-/** Asserts an error response: status, code and (optionally) its data. */
-function refused(result, status, code, data) {
-  assert.equal(result.status, status, result.text);
-  assert.equal(result.json?.code, code, result.text);
-  if (data !== undefined) assert.deepEqual(result.json.data, data, result.text);
-  return result.json;
 }
 
 /** A request from the host to the edge node's HTTP port: { status, headers, body (Buffer) }. */
@@ -289,7 +275,7 @@ const findSite = async (domain) =>
 
 /**
  * Deletes the legacy cluster, its site and node and the helper containers; turns
- * Brotli, Zstandard, CRS and logging off on the G3 sites; lets tenants use CRS.
+ * Brotli, Zstandard, CRS and logging off on the G3 sites.
  */
 async function cleanup() {
   const removed = await removeContainers();
@@ -315,8 +301,6 @@ async function cleanup() {
     await admin.ok("PATCH", `/sites/${crs.id}/waf`, { mode: "off" });
     await admin.ok("PUT", `/sites/${crs.id}/logs/settings`, { sampleRate: 0 });
   }
-  const settings = await admin.ok("GET", "/settings/waf");
-  if (!settings.tenantCrs) await admin.ok("PUT", "/settings/waf", { tenantCrs: true });
   return { removed, legacySite: !!legacySite, legacyCluster: !!legacyCluster };
 }
 
@@ -325,20 +309,13 @@ if (process.argv.includes("--cleanup")) {
   await synced("cleanup published");
   const conf = await nginxConf();
   assert.ok(!loadsModSecurity(conf), "a node still loads ModSecurity after the cleanup");
-  assert.deepEqual(await admin.ok("GET", "/settings/waf"), { tenantCrs: true });
   pass(
-    `G3 cleanup: ${done.removed} helper container(s) removed, legacy site ${done.legacySite ? "and" : "or"} cluster ${done.legacyCluster ? "deleted" : "absent"}, CRS off and logging off on ${HOST_CRS}, tenants may use CRS`,
+    `G3 cleanup: ${done.removed} helper container(s) removed, legacy site ${done.legacySite ? "and" : "or"} cluster ${done.legacyCluster ? "deleted" : "absent"}, CRS off and logging off on ${HOST_CRS}`,
   );
   process.exit(0);
 }
 
 const leftovers = await cleanup();
-const p0 = JSON.parse(await readFile(".e2e/p0-state.json", "utf8"));
-const tenant = await actor("owner@p0.test", "p0-owner-password-123");
-const tenantSite = await tenant.ok("GET", `/sites/${p0.siteId}`);
-assert.equal(tenantSite.clusterId, clusterId, "the P0 site must be in the default cluster");
-assert.ok(tenantSite.enabled && !tenantSite.suspended, "the P0 site must be served");
-
 await everyNode(
   "both nodes online on their revision",
   (n) => n.online && n.dataPlaneHealthy && n.applyState === "applied",
@@ -364,17 +341,13 @@ async function createSite(name, domain, origin, extra = {}) {
     cacheRules: [{ pathPrefixes: ["/"], edgeTtlSeconds: 300, originCacheControl: "override" }],
     ...extra,
   });
-  for (const proof of await admin.ok("GET", `/sites/${site.id}/ownership`))
-    if (!proof.verified)
-      await admin.ok("POST", `/sites/${site.id}/ownership/approve`, { domain: proof.domain });
   return site;
 }
-const https = (user, siteId) => user.ok("GET", `/sites/${siteId}/https`);
-const putHttps = (user, siteId, settings) =>
-  user.raw("PUT", `/sites/${siteId}/https`, { settings });
+const https = (siteId) => admin.ok("GET", `/sites/${siteId}/https`);
+const putHttps = (siteId, settings) => admin.raw("PUT", `/sites/${siteId}/https`, { settings });
 /** Availability of the G3 features (later milestones add their own to the response). */
-const features = async (user, siteId) => {
-  const { brotli, zstd, crs } = await user.ok("GET", `/sites/${siteId}/features`);
+const features = async (siteId) => {
+  const { brotli, zstd, crs } = await admin.ok("GET", `/sites/${siteId}/features`);
   return { brotli, zstd, crs };
 };
 const AVAILABLE = { available: true, reason: null };
@@ -461,16 +434,16 @@ try {
 
   // -------------------------------------------------------------- b. compression
   sites.compress = await createSite("g3-compress", HOST_COMPRESS, "files");
-  const compressDefaults = await https(admin, sites.compress.id);
+  const compressDefaults = await https(sites.compress.id);
   assert.equal(compressDefaults.gzip, true);
   assert.equal(compressDefaults.brotli, false);
   assert.equal(compressDefaults.zstd, false);
-  assert.deepEqual(await features(admin, sites.compress.id), {
+  assert.deepEqual(await features(sites.compress.id), {
     brotli: AVAILABLE,
     zstd: AVAILABLE,
     crs: AVAILABLE,
   });
-  const put = await putHttps(admin, sites.compress.id, {
+  const put = await putHttps(sites.compress.id, {
     ...compressDefaults,
     brotli: true,
     brotliLevel: 5,
@@ -606,7 +579,7 @@ try {
   pass(
     `an origin response with Content-Encoding: gzip passes unchanged (${encodedSeen.join("; ")}; one gunzip gives the text; curl --compressed decodes it); ${tiny.length} bytes (under the 256-byte minimum) stay identity (${tinySeen.join(" then ")})`,
   );
-  const off = await putHttps(admin, sites.compress.id, compressDefaults);
+  const off = await putHttps(sites.compress.id, compressDefaults);
   assert.equal(off.status, 200, off.text);
   await synced("Brotli and Zstandard off");
 
@@ -816,44 +789,6 @@ try {
     `request body limit 0: the POST payload passes (200), the query payload is still 403; excluding 941100: still 403, logged [${excl1Log.wafRuleIds}] without 941100; excluding [${allXss}]: 200, logged [] and not blocked; demo.test without CRS: payload -> ${summary(demo)}`,
   );
 
-  // Platform switch: tenants may not turn CRS on, only off.
-  await admin.ok("PUT", "/settings/waf", { tenantCrs: false });
-  assert.deepEqual(await features(tenant, tenantSite.id), {
-    brotli: AVAILABLE,
-    zstd: AVAILABLE,
-    crs: { available: false, reason: "platform" },
-  });
-  assert.deepEqual((await features(admin, tenantSite.id)).crs, AVAILABLE);
-  const revisionBefore = await latestRevision();
-  refused(
-    await tenant.raw("PATCH", `/sites/${tenantSite.id}/waf`, { mode: "detect" }),
-    403,
-    "WAF_CRS_FORBIDDEN",
-  );
-  refused(
-    await tenant.raw("PATCH", `/sites/${tenantSite.id}/waf`, { mode: "block", paranoiaLevel: 2 }),
-    403,
-    "WAF_CRS_FORBIDDEN",
-  );
-  assert.equal(
-    (await tenant.ok("PATCH", `/sites/${tenantSite.id}/waf`, { mode: "off" })).mode,
-    "off",
-  );
-  assert.equal(await latestRevision(), revisionBefore, "a refused change published a revision");
-  await admin.ok("PUT", "/settings/waf", { tenantCrs: true });
-  assert.deepEqual((await features(tenant, tenantSite.id)).crs, AVAILABLE);
-  assert.equal(
-    (await tenant.ok("PATCH", `/sites/${tenantSite.id}/waf`, { mode: "detect" })).mode,
-    "detect",
-  );
-  assert.equal(
-    (await tenant.ok("PATCH", `/sites/${tenantSite.id}/waf`, { mode: "off" })).mode,
-    "off",
-  );
-  pass(
-    "tenantCrs off: the tenant sees crs unavailable (platform), PATCH detect / block -> 403 WAF_CRS_FORBIDDEN, off -> 200, nothing published; administrators keep CRS; tenantCrs on again: the tenant turns detect on and off",
-  );
-
   await admin.ok("PATCH", `/sites/${sites.crs.id}/waf`, { mode: "off" });
   await synced("CRS off everywhere");
   const plain = await nginxConf();
@@ -955,18 +890,17 @@ try {
     await run(["rm", "-f", name]);
   }
   const unchanged = async (siteId, what) => {
-    const settings = await https(tenant, siteId);
+    const settings = await https(siteId);
     assert.equal(settings.brotli, false, `${what}: brotli changed`);
     assert.equal(settings.zstd, false, `${what}: zstd changed`);
     assert.equal(
-      (await tenant.ok("GET", `/sites/${siteId}/waf`)).mode,
+      (await admin.ok("GET", `/sites/${siteId}/waf`)).mode,
       "off",
       `${what}: CRS changed`,
     );
   };
 
-  const tenantHttps = await https(tenant, tenantSite.id);
-  assert.equal(tenantHttps.brotli, false);
+  await unchanged(sites.compress.id, "before the old nodes");
   const old = await startNode(CONTAINERS.old, "edge-g3-old", OLD_NODE_IMAGE, clusterId);
   for (const feature of G3_FEATURES)
     assert.ok(!old.supportedFeatures.includes(feature), `the old node reports ${feature}`);
@@ -978,27 +912,9 @@ try {
     `the old node's nginx is not the stock OpenResty: ${oldBuild}`,
   );
   const expectAllNodes = { brotli: BY_NODES, zstd: BY_NODES, crs: BY_NODES };
-  assert.deepEqual(await features(tenant, tenantSite.id), expectAllNodes);
-  assert.deepEqual(await features(admin, sites.compress.id), expectAllNodes);
+  assert.deepEqual(await features(sites.compress.id), expectAllNodes);
+  assert.deepEqual(await features(sites.crs.id), expectAllNodes);
   const revisionWithOld = await latestRevision();
-  for (const [field, feature] of [
-    ["brotli", "brotli-v1"],
-    ["zstd", "zstd-v1"],
-  ])
-    refused(
-      await putHttps(tenant, tenantSite.id, { ...tenantHttps, [field]: true }),
-      409,
-      "NODE_CAPABILITY_REQUIRED",
-      { features: feature },
-    );
-  refused(
-    await tenant.raw("PATCH", `/sites/${tenantSite.id}/waf`, { mode: "detect" }),
-    409,
-    "NODE_CAPABILITY_REQUIRED",
-    { features: "modsecurity-v1" },
-  );
-  await unchanged(tenantSite.id, "refused with an old node");
-  assert.equal(await latestRevision(), revisionWithOld, "a refused change published a revision");
   // The old node runs the cluster's configuration (nothing needs G3 yet).
   await waitFor(
     "the old node applies the cluster's revision",
@@ -1009,17 +925,17 @@ try {
     90,
   );
   pass(
-    `old node edge-g3-old (${OLD_NODE_IMAGE}, stock ${oldVersion}, features without ${G3_FEATURES.join(", ")}) joined the default cluster and applied #${revisionWithOld}: features brotli, zstd and crs report "nodes" (tenant and admin); the tenant's Brotli, Zstandard and CRS -> 409 NODE_CAPABILITY_REQUIRED (brotli-v1, zstd-v1, modsecurity-v1), settings unchanged, still revision #${revisionWithOld}`,
+    `old node edge-g3-old (${OLD_NODE_IMAGE}, stock ${oldVersion}, features without ${G3_FEATURES.join(", ")}) joined the default cluster and applied #${revisionWithOld}: features brotli, zstd and crs report "nodes" on ${HOST_COMPRESS} and ${HOST_CRS}`,
   );
 
-  // Administrators may still require the feature: the old node cannot take that revision.
-  const forced = await putHttps(admin, tenantSite.id, { ...tenantHttps, brotli: true });
+  // The operator may still require the feature: the old node cannot take that revision.
+  const forced = await putHttps(sites.compress.id, { ...compressDefaults, brotli: true });
   assert.equal(forced.status, 200, forced.text);
-  const forcedRevision = await synced("an administrator's Brotli published");
+  const forcedRevision = await synced("the operator's Brotli published");
   await sleep(5000);
   const held = await nodeById(old.id);
   assert.ok(held.appliedRevision < forcedRevision, `the old node applied #${held.appliedRevision}`);
-  const undo = await putHttps(admin, tenantSite.id, tenantHttps);
+  const undo = await putHttps(sites.compress.id, compressDefaults);
   assert.equal(undo.status, 200, undo.text);
   const undoRevision = await synced("Brotli off again");
   await waitFor(
@@ -1028,11 +944,11 @@ try {
     90,
   );
   pass(
-    `an administrator turns Brotli on anyway (#${forcedRevision}): node and peer apply it, the old node stays on #${held.appliedRevision}; with Brotli off again (#${undoRevision}) the old node applies the new revision`,
+    `the operator turns Brotli on anyway (#${forcedRevision}): node and peer apply it, the old node stays on #${held.appliedRevision}; with Brotli off again (#${undoRevision}) the old node applies the new revision`,
   );
 
   await removeNode(old, CONTAINERS.old);
-  assert.deepEqual(await features(tenant, tenantSite.id), {
+  assert.deepEqual(await features(sites.compress.id), {
     brotli: AVAILABLE,
     zstd: AVAILABLE,
     crs: AVAILABLE,
@@ -1047,31 +963,32 @@ try {
     `${noModsec.supportedFeatures}`,
   );
   const onlyCrs = { brotli: AVAILABLE, zstd: AVAILABLE, crs: BY_NODES };
-  assert.deepEqual(await features(tenant, tenantSite.id), onlyCrs);
-  assert.deepEqual(await features(admin, sites.crs.id), onlyCrs);
-  refused(
-    await tenant.raw("PATCH", `/sites/${tenantSite.id}/waf`, { mode: "block" }),
-    409,
-    "NODE_CAPABILITY_REQUIRED",
-    { features: "modsecurity-v1" },
+  assert.deepEqual(await features(sites.compress.id), onlyCrs);
+  assert.deepEqual(await features(sites.crs.id), onlyCrs);
+  // Zstandard needs nothing this node lacks: it takes the revision.
+  const zstdOn = await putHttps(sites.compress.id, { ...compressDefaults, zstd: true });
+  assert.equal(zstdOn.status, 200, zstdOn.text);
+  const zstdRevision = await synced("Zstandard published");
+  await waitFor(
+    "the node without ModSecurity applies the Zstandard revision",
+    async () => {
+      const n = await nodeById(noModsec.id);
+      return n.applyState === "applied" && n.appliedRevision >= zstdRevision;
+    },
+    90,
   );
-  const tenantZstd = await putHttps(tenant, tenantSite.id, { ...tenantHttps, zstd: true });
-  assert.equal(tenantZstd.status, 200, tenantZstd.text);
-  assert.equal((await putHttps(tenant, tenantSite.id, tenantHttps)).status, 200);
+  assert.equal((await putHttps(sites.compress.id, compressDefaults)).status, 200);
   await removeNode(noModsec, CONTAINERS.noModsec);
-  for (const [user, siteId] of [
-    [tenant, tenantSite.id],
-    [admin, sites.compress.id],
-  ])
-    assert.deepEqual(await features(user, siteId), {
+  for (const siteId of [sites.compress.id, sites.crs.id])
+    assert.deepEqual(await features(siteId), {
       brotli: AVAILABLE,
       zstd: AVAILABLE,
       crs: AVAILABLE,
     });
-  await unchanged(tenantSite.id, "after the old nodes");
+  await unchanged(sites.compress.id, "after the old nodes");
   await synced("old nodes removed");
   pass(
-    `edge-g3-nomodsec (${nodeImage}, EDGEWEIR_MODSECURITY_MODULE=off) reports brotli-v1 and zstd-v1 but not modsecurity-v1: only crs reports "nodes", the tenant's CRS -> 409 (modsecurity-v1) while its Zstandard is accepted; both nodes removed: brotli, zstd and crs available again`,
+    `edge-g3-nomodsec (${nodeImage}, EDGEWEIR_MODSECURITY_MODULE=off) reports brotli-v1 and zstd-v1 but not modsecurity-v1: only crs reports "nodes"; it applies the operator's Zstandard (#${zstdRevision}); both nodes removed: brotli, zstd and crs available again`,
   );
 
   // -------------------------------------------------------------- g3.spec.ts: a cluster with an old node
@@ -1088,7 +1005,7 @@ try {
     domains: [HOST_LEGACY],
     origins: [{ address: "whoami" }],
   });
-  assert.deepEqual(await features(admin, legacySite.id), expectAllNodes);
+  assert.deepEqual(await features(legacySite.id), expectAllNodes);
   await waitFor(
     "the legacy node applies its cluster's revision",
     async () => {
@@ -1112,7 +1029,6 @@ try {
         legacySiteId: legacySite.id,
         legacyClusterId: legacyCluster.id,
         legacyNodeName: legacyNode.name,
-        tenantSiteId: tenantSite.id,
       },
       null,
       2,
@@ -1125,9 +1041,6 @@ try {
 } finally {
   if (!finished) {
     await removeContainers().catch((e) => console.error(`cleanup: ${e.message}`));
-    await admin
-      .ok("PUT", "/settings/waf", { tenantCrs: true })
-      .catch((e) => console.error(`cleanup: ${e.message}`));
   } else {
     await run(["rm", "-f", CONTAINERS.curl]).catch(() => {});
   }

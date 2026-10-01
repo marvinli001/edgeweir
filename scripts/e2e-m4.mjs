@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import http from "node:http";
 import { promisify } from "node:util";
-import { signInResponse } from "./e2e-auth.mjs";
+import { revokeAccessKey, signInWithAccessKey } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile);
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
@@ -12,19 +12,13 @@ const compose = ["compose", "-f", "compose.e2e.yml"];
 async function run(args) {
   return (await execute("docker", args, { maxBuffer: 4 * 1024 * 1024 })).stdout;
 }
-const login = await signInResponse(base, "admin@e2e.test", "e2e-admin-password-123");
-assert.equal(login.status, 200);
-const cookie = login.headers
-  .getSetCookie()
-  .map((v) => v.split(";")[0])
-  .join("; ");
-const keyResponse = await fetch(`${base}/api/auth/api-key/create`, {
-  method: "POST",
-  headers: { "content-type": "application/json", origin: base, cookie },
-  body: JSON.stringify({ name: "m4-e2e" }),
-});
-assert.equal(keyResponse.status, 200);
-const { key, id: keyId } = await keyResponse.json();
+const session = await signInWithAccessKey(
+  base,
+  "admin@e2e.test",
+  "e2e-admin-password-123",
+  "m4-e2e",
+);
+const { key } = session;
 async function api(method, path, body) {
   const res = await fetch(`${base}/api/v1${path}`, {
     method,
@@ -109,8 +103,8 @@ async function save(rules) {
 const rule = (name, phase, expression, action) => ({ name, phase, expression, action });
 await save([]);
 await api("PUT", "/platform-rules", { rules: [] });
-let global = (await api("GET", "/platform-ip-lists")).find((l) => l.name === "m4_global");
-if (global) await api("PUT", `/platform-ip-lists/${global.id}`, { entries: [], kind: "block" });
+let global = (await api("GET", "/ip-lists")).find((l) => l.name === "m4_global");
+if (global) await api("PUT", `/ip-lists/${global.id}`, { entries: [], kind: "block" });
 const before = await run([...compose, "logs", "--no-color", "node"]);
 const reloads = (logs) => (logs.match(/reconfiguring/g) ?? []).length;
 let list = (await api("GET", "/ip-lists")).find((l) => l.name === "m4_blocked");
@@ -124,21 +118,21 @@ assert.equal((await request("/ip-block")).status, 200);
 assert.equal(reloads(await run([...compose, "logs", "--no-color", "node"])), reloads(before));
 console.log("PASS IP list blocks and hot update restores requests without nginx reload");
 if (!global)
-  global = await api("POST", "/platform-ip-lists", {
+  global = await api("POST", "/ip-lists", {
     name: "m4_global",
     entries: [],
     kind: "block",
   });
-await api("PUT", `/platform-ip-lists/${global.id}`, {
+await api("PUT", `/ip-lists/${global.id}`, {
   entries: ["0.0.0.0/0", "::/0"],
   kind: "block",
 });
 await synced();
 assert.equal((await request("/platform")).status, 403);
 assert.equal((await request("/platform", "second.m4.test")).status, 403);
-await api("PUT", `/platform-ip-lists/${global.id}`, { entries: [], kind: "collection" });
+await api("PUT", `/ip-lists/${global.id}`, { entries: [], kind: "collection" });
 await synced();
-console.log("PASS platform IP list applies to both sites");
+console.log("PASS a block list applies to every site without a rule");
 await save([
   rule("Log only", "waf-custom", 'http.request.uri.path eq "/log-only"', { kind: "log" }),
 ]);
@@ -230,13 +224,6 @@ console.log(
 );
 await save([]);
 await api("DELETE", `/ip-lists/${list.id}`);
-await api("DELETE", `/platform-ip-lists/${global.id}`);
-if (keyId) {
-  const revoke = await fetch(`${base}/api/auth/api-key/delete`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: base, cookie },
-    body: JSON.stringify({ keyId }),
-  });
-  assert.equal(revoke.status, 200);
-}
+await api("DELETE", `/ip-lists/${global.id}`);
+await revokeAccessKey(base, session);
 console.log("M4 E2E OK");

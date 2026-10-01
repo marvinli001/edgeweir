@@ -13,7 +13,7 @@ test("M6: start signed canary upgrade and explicitly promote healthy nodes", asy
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await login(page, "admin@e2e.test", "e2e-admin-password-123");
-  await page.goto(`/admin/clusters?cluster=${fixture.clusterId}`);
+  await page.goto(`/clusters?cluster=${fixture.clusterId}`);
   await page.getByTestId("upgrade-create").click();
   await page.getByLabel("目标版本", { exact: true }).fill(fixture.version);
   await pick(page, page.getByLabel("先升级的节点组"), `${fixture.groupName}（1 个节点）`);

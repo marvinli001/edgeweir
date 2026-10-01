@@ -19,7 +19,6 @@ import {
   siteCreateInput,
   siteListInput,
   siteUpdateInput,
-  userCreateInput,
 } from "../src/index";
 
 describe("domainName", () => {
@@ -170,18 +169,9 @@ describe("list inputs", () => {
 });
 
 describe("identity inputs", () => {
-  it("normalise region codes and user e-mails", () => {
+  it("normalise region codes", () => {
     expect(regionCode.parse(" CN-East ")).toBe("cn-east");
     expect(regionCode.safeParse("east asia").success).toBe(false);
-    const user = userCreateInput.parse({
-      name: "Member",
-      email: " Member@Example.COM ",
-      password: "correct horse battery",
-    });
-    expect(user).toMatchObject({ email: "member@example.com", isAdmin: false, role: "member" });
-    expect(
-      userCreateInput.safeParse({ name: "x", email: "x@example.com", password: "short" }).success,
-    ).toBe(false);
   });
 });
 

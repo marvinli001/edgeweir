@@ -1,66 +1,22 @@
-# Domains, DNS, and alerts
+# DNS steering and alerts
 
-Domain ownership checks, platform DNS steering records, and alert channels, rules, and subscriptions.
+DNS steering records, and alert channels, subscriptions, and rules.
 
 ## Concepts
 
 | Term | Definition |
 | --- | --- |
-| Registrable domain | The first label below a public suffix (including the private section), for example `example.com`, `example.co.uk`, `alice.github.io`. Ownership is checked per registrable domain. |
-| Domain ownership | An organization's right to route a registrable domain. Unverified domains stay in the console and are not published to nodes. |
-| CNAME domain | The parent domain of the steering records platform DNS creates; it must lie inside the selected DNS provider's zone. |
-| Line | The A/AAAA records of one node group in platform DNS. |
-| DNS revision | A snapshot of the platform DNS policy and its records, separate from node configuration revisions. |
-| Alert channel | A notification target configured by a platform administrator: email, webhook, DingTalk, WeCom, or Telegram. |
+| CNAME domain | The parent domain of the records DNS steering creates; it must lie inside the selected DNS provider's zone. |
+| Line | The A/AAAA records of one node group in DNS steering. |
+| DNS revision | A snapshot of the DNS steering policy and its records, separate from node configuration revisions. |
+| Alert channel | A notification target: email, webhook, DingTalk, WeCom, or Telegram. |
+| Alert subscription | Sends some alert kinds of one site to one channel. |
 
-## Verify domain ownership
+## Configure DNS steering
 
-1. Open **Console → Sites**, select the site, and open the **Domains** tab.
-2. In the **Domain ownership** card, click **Create verification record** for a domain marked **Verification required**.
-3. Copy the **TXT name** and **TXT value** and add the TXT record at the registrable domain's authoritative DNS:
+DNS steering creates a CNAME target for every site and steers traffic to healthy nodes.
 
-   ```text
-   _edgeweir-verification.example.com.  TXT  "edgeweir=<token>"
-   ```
-
-4. Confirm the record resolves:
-
-   ```bash
-   dig +short TXT _edgeweir-verification.example.com
-   ```
-
-   The output contains `"edgeweir=<token>"`.
-5. Click **Verify TXT record**.
-6. Verify: the status changes to **Verified**, the console publishes a new configuration revision, and the domains under that registrable domain enter the node configuration.
-
-### Ownership rules
-
-| Item | Behavior |
-| --- | --- |
-| Scope | One TXT record verifies the whole registrable domain; every host name and wildcard under it across the organization's sites takes effect |
-| Uniqueness | On one platform a registrable domain belongs to one organization. Several organizations may hold pending claims; once one verifies, the others can no longer use the root, its subdomains, or wildcards (`DOMAIN_IN_USE`) |
-| Platform administrators | When a platform administrator creates a site or saves its domains, unverified registrable domains are marked **Administrator approved**. A platform administrator can also click **Approve without TXT** on an existing pending domain. Both write the audit action `domain.bypass` |
-| Revocation | **Revoke verification** stops routing for that registrable domain on all of the organization's sites. A configuration rollback does not restore unverified domains |
-| Release | Removing the last site reference to a registrable domain deletes its ownership record |
-| Transfer | To move a domain to another organization, a platform administrator revokes the old organization's verification and the new organization completes the TXT check |
-| Certificates | An uploaded certificate does not replace domain ownership. ACME requests require every certificate name to be verified, see [HTTPS and certificates](https.en.md) |
-| Existing deployments | When the console first enables domain ownership, it withdraws existing routes without proof; complete the TXT check for each domain or have a platform administrator approve it |
-
-### TXT lookups
-
-| Item | Value |
-| --- | --- |
-| Recursive servers | The servers saved in **Admin → System → Ownership check DNS**; otherwise `EDGEWEIR_DNS_RESOLVERS`, then the system resolver, see [Platform administration](admin.en.md) |
-| Single lookup | 2.5-second timeout, at most 2 tries |
-| Concurrency | At most 16 verification lookups at a time per console process |
-| Rate | At least 5 seconds between two checks of the same registrable domain (`DOMAIN_VERIFY_BUSY`) |
-| Resolver choice | Tenants and verification requests cannot choose a resolver |
-
-## Configure platform DNS
-
-Platform DNS creates a CNAME target for every site and steers traffic to healthy nodes. Platform administrators only.
-
-1. Open **Admin → Platform DNS** and click **Add DNS provider**.
+1. Open **DNS steering** and click **Add DNS provider**.
 2. Enter **Name** and **DNS zone**, select **DNS provider**, fill in the credential fields (see below), and click **Create**.
 3. In the **DNS configuration** card, turn on **Enabled**, select **DNS provider**, and enter **CNAME domain** and **TTL (seconds)**.
 4. Click **Add line**, enter **Line name**, and select **Node group**. For nodes behind NAT or on a private network, enter the public addresses in the node's **node name: target addresses** field; leave it empty to use the reported public IPs.
@@ -76,7 +32,7 @@ Platform DNS creates a CNAME target for every site and steers traffic to healthy
 
 ### Provider credentials
 
-Credentials are envelope-encrypted with the master key and are write-only. Grant the API credential the minimum DNS edit permission on the target zone.
+Credentials are envelope-encrypted with the master key and are write-only. Grant the API credential the minimum DNS edit permission on the target zone. DNS steering providers are separate from the DNS credentials used for ACME DNS-01, see [HTTPS and certificates](https.en.md).
 
 | Provider | Fields |
 | --- | --- |
@@ -103,7 +59,7 @@ One configuration holds at most 128 lines and 10,000 system-managed records.
 
 ### Generated records
 
-Every site with at least one verified domain gets these records (disabled and suspended sites keep them):
+Every site with at least one domain gets these records (disabled sites keep them):
 
 | Name | Type | Content |
 | --- | --- | --- |
@@ -123,7 +79,7 @@ Lines are explicit node group host names; provider-specific carrier or geographi
 | Drift repair | System-managed names deleted or changed outside the console are restored at the next check; **Repair records** runs a check immediately |
 | Ownership | Only names registered as system-managed are changed; a new name that already has an unmanaged record is refused (`DNS_RECORD_CONFLICT`) |
 | Write order | Registers managed names first, then removes extra records, adds missing ones, and reads back; on failure the registration stays and the next cycle retries |
-| Configuration canary | Each node is compared with its own target revision: during a canary window the non-canary nodes run the stable revision and stay, see [Configuration canary](admin.en.md#configuration-canary) |
+| Configuration canary | Each node is compared with its own target revision: during a canary window the non-canary nodes run the stable revision and stay, see [Configuration canary](system.en.md#configuration-canary) |
 
 ### Mass removal protection
 
@@ -131,30 +87,39 @@ A publication that would empty a non-empty `all.` or line record set, or remove 
 
 | Item | Behavior |
 | --- | --- |
-| Threshold | Share of the previous address records one publication may remove: 50% by default, adjustable in **Admin → Platform DNS → Mass removal protection** (5%–100%) |
+| Threshold | Share of the previous address records one publication may remove: 50% by default, adjustable in **DNS steering → Mass removal protection** (5%–100%) |
 | Not counted | Names no longer managed (deleted sites, removed lines); a changed provider or CNAME domain; turning DNS off |
-| When held back | The DNS page shows the held-back change (address records it would remove), the DNS revision list shows it as **Held back**, and the platform alert "DNS mass removal blocked" fires |
+| When held back | The DNS steering page shows the held-back change (address records it would remove), the DNS revision list shows it as **Held back**, and the alert "DNS mass removal blocked" fires |
 | Recovery | The hold ends by itself once a publication passes; the alert resolves |
-| Force | An administrator clicks **Publish anyway** on the DNS page and confirms; the current state is published and `dns.force_publish` is audited |
+| Force | Click **Publish anyway** on the DNS steering page and confirm; the current state is published and `dns.force_publish` is audited |
 
 ### DNS revisions and rollback
 
-DNS revisions do not advance the node configuration revision. **Roll back DNS** restores the selected revision's DNS policy; addresses are still computed from current site authorization and node health, so offline nodes are not restored.
+DNS revisions do not advance the node configuration revision. **Roll back DNS** restores the selected revision's DNS policy; addresses are still computed from the current sites and node health, so offline nodes are not restored.
 
 Before deleting a provider, deselect it or turn off **Enabled** in **DNS configuration**, save, and wait until the provider holds no system-managed records; otherwise the console returns `DNS_PROVIDER_IN_USE`.
 
+## Alerts page
+
+Alerts are configured on the **Alerts** page, which has four cards:
+
+| Card | Contents |
+| --- | --- |
+| Alert channels | Notification targets, which can be added, edited, tested, enabled or disabled, and deleted |
+| Subscriptions | The alert kinds of a site and the channels that receive them |
+| Recent events | The latest 100 alert events, including cluster and DNS alerts |
+| Alert rules | The thresholds that raise alerts |
+
 ## Configure alert channels
 
-Platform administrators only.
-
-1. Open **Admin → Alert channels** and click **Add channel**.
+1. Open **Alerts** and click **Add channel** in the **Alert channels** card.
 2. Enter **Name**, select **Channel type**, and fill in the fields for that type (see below).
 3. Select **Notification language**.
-4. Turn on **Receive alerts for all sites** and **Allow tenant subscriptions** as needed.
+4. Turn on **Receive every alert** as needed.
 5. Click **Create**.
 6. Verify: click **Send test**; the target receives a test notification and the channel row does not show **Notification delivery failed**.
 
-Email channels use the server configured in **Admin → System → SMTP**, see [Platform administration](admin.en.md).
+Email channels use the server configured in **System → SMTP**, see [SMTP](system.en.md#smtp).
 
 ### Channel fields
 
@@ -168,18 +133,19 @@ Email channels use the server configured in **Admin → System → SMTP**, see [
 
 | Switch | Default | Effect |
 | --- | --- | --- |
-| Receive alerts for all sites | Off | The channel receives alerts for every site on the platform without subscriptions |
-| Allow tenant subscriptions | Off | Tenants can subscribe to the channel on the **Alerts** page |
+| Receive every alert | Off | The channel receives every alert without subscriptions: the alerts of all sites, and cluster and DNS alerts |
 
-The platform holds at most 32 channels. When editing a channel, turn on **Replace channel credentials** to re-enter the type and fields; otherwise the stored credentials are kept.
+Channels without this switch receive only the site alerts subscribed to them, see [Subscribe to alerts](#subscribe-to-alerts).
+
+At most 32 channels. When editing a channel, turn on **Replace channel credentials** to re-enter the type and fields; otherwise the stored credentials are kept. A disabled channel sends no notifications and cannot be chosen for new subscriptions.
 
 ### Webhook payload
 
-The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `status` (`firing` / `resolved`), `occurredAt`, `text`, and `url` (the site's console link). With a bearer token, the request carries `Authorization: Bearer <token>`. A 2xx response counts as delivered.
+The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `status` (`firing` / `resolved`), `occurredAt`, `resourceId` (the object of the alert, such as a node or certificate ID), `text`, and `url` (a console link). For cluster and DNS alerts, `siteId` is `null`, `siteName` is the cluster name or `DNS`, and `url` points to **Clusters & nodes** or **DNS steering**. With a bearer token, the request carries `Authorization: Bearer <token>`. A 2xx response counts as delivered.
 
 ## Set alert rules
 
-1. Open **Admin → Alert channels** and change the thresholds in the **Alert rules** card.
+1. Open **Alerts** and change the thresholds in the **Alert rules** card.
 2. Click **Save**.
 
 | Field | Values | Default | Alert kind | Condition |
@@ -194,35 +160,41 @@ The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `st
 
 **CC mitigation raised** (`cc_mitigation`) has no threshold of its own: it fires when a node reports that the site left the normal level, at most once per site in 15 minutes, and resolves once no online node reports the site above normal. See [Challenges and CC mitigation](challenges.en.md#cc-mitigation).
 
-Site alerts cover only enabled, unsuspended sites with at least one verified domain.
+Site alerts cover only enabled sites with at least one domain.
 
-### Platform alerts
+### Cluster and DNS alerts
 
-These alerts belong to the platform, not to a site. They go only to channels with "Receive alerts of all sites", cannot be subscribed to, and **Console → Alerts** shows them to platform administrators only.
+These alerts belong to a cluster or to DNS steering, not to a site. They go only to channels with **Receive every alert** and cannot be subscribed to; **Recent events** lists them too.
 
 | Alert | Fires | Resolves |
 | --- | --- | --- |
-| Configuration canary rolled back | A canary rolled back automatically or an administrator aborted it | The next promotion in that cluster |
+| Configuration canary rolled back | A canary rolled back automatically or was aborted | The next promotion in that cluster |
 | No canary node online; configuration published to every node | A publication in a cluster with the canary on found no canary node online | The next publication in that cluster with a canary node online |
 | DNS mass removal blocked | The [mass removal protection](#mass-removal-protection) held a publication back | The next publication that passes, or a forced one |
 
 ## Subscribe to alerts
 
-1. Open **Console → Alerts** and click **Subscribe**.
-2. Find and select the site in **Search sites**, select **Notification channel**, and check the alert kinds.
+1. Open **Alerts** and click **Subscribe** in the **Subscriptions** card.
+2. Find the site with **Search sites** and select it under **Sites**, select **Notification channel**, and turn on the alert kinds to send.
 3. Click **Save**.
-4. Verify: the subscription appears in the list; **Recent events** shows the site's events.
+4. Verify: the subscription appears under **Subscriptions**; **Recent events** shows the site's events.
 
-Tenants can subscribe only to sites they can see and to channels with **Allow tenant subscriptions**.
+| Item | Behavior |
+| --- | --- |
+| Channels | Only enabled channels can be chosen; without one, **Subscribe** is unavailable |
+| Alert kinds | Node offline, Certificate expiring, Origin unavailable, High server error ratio, CC mitigation raised |
+| Repeated subscriptions | A site and a channel have one subscription; saving again replaces its alert kinds |
+| Removal | Click **Unsubscribe** on the subscription row and confirm |
 
 ## Delivery behavior
 
 | Item | Behavior |
 | --- | --- |
 | Events | A condition creates one event when it starts and one when it recovers; event IDs are stable |
+| Receiving channels | Channels with **Receive every alert** receive every alert; other channels receive only the site alerts subscribed to them |
 | Retries | After a failure, retries back off 2, 4, 8, and 16 minutes; each channel gets 5 attempts |
 | Duplicates | A lost receipt can cause duplicate notifications; webhook receivers deduplicate by event ID |
-| Checks before delivery | Every delivery rechecks the subscriber's organization membership, account status, the organization's two-factor requirement, and channel visibility |
+| Checks before delivery | Every delivery rechecks that the channel is enabled, that the event is still the condition's current state, and that a subscription still includes the alert kind (except for channels with **Receive every alert**) |
 | Outbound policy | Resolves and pins the target IP; refuses special-purpose addresses; webhook-style targets do not follow redirects; internal webhooks or SMTP need their network in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | Timeouts and sizes | 10 seconds per delivery; request body up to 32 KiB, response body up to 64 KiB |
 | Retention | Alert events are kept for 90 days |
@@ -232,7 +204,7 @@ Tenants can subscribe only to sites they can see and to channels with **Allow te
 
 | Item | Description |
 | --- | --- |
-| Background jobs | Platform DNS sync and alert checks and deliveries run every minute in background jobs and need at least one console process with `ROLE=worker` or `ROLE=all`, see [Deployment overview](../deploy/README.en.md) |
+| Background jobs | DNS steering sync and alert checks and deliveries run every minute in background jobs and need at least one console process with `ROLE=worker` or `ROLE=all`, see [Deployment overview](../deploy/README.en.md) |
 | Smart resolution | No carrier or geographic resolution from the provider; a line is a node group |
 | Active probing | No active reachability probes; origin state comes only from real traffic |
 | Local simulator | **Local simulator** appears only when `EDGEWEIR_DNS_TEST_ENDPOINT` is set and is for testing only |
@@ -241,13 +213,10 @@ Tenants can subscribe only to sites they can see and to channels with **Allow te
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| "TXT record not found" | The record has not propagated, or the recursive server cached an old answer | Check with `dig`; check **Admin → System → Ownership check DNS** |
-| "Try verification again shortly" | A repeat check within 5 seconds, or all lookup slots are busy | Retry after a moment |
-| "Use a registrable domain" | The name is not below a public suffix, for example a bare public suffix | Use a registrable domain or a subdomain of it |
-| "Domain already in use" | Another organization verified the registrable domain | A platform administrator revokes the other organization's verification |
 | "CNAME domain is outside the DNS zone" | The CNAME domain is not inside the provider zone | Use the zone itself or a subdomain of it |
 | "DNS name has an unmanaged record" | The target name already has a manual record | Delete the manual record, then **Repair records** |
 | "DNS provider is still in use" | The provider is still selected or still owns records | Turn off or change the provider, wait for cleanup, then delete |
 | **CNAME target** shows **No healthy nodes** | No node in the lines meets the address set conditions | Check node heartbeats, data plane state, and applied revision |
 | Channel shows **Notification delivery failed** | The target refused or timed out, or the outbound policy refused the address | Reproduce with **Send test**; add internal targets to `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | "Notification channel limit reached" | 32 channels exist | Delete unused channels |
+| **Subscribe** is unavailable | No channel is enabled | Add or enable a channel |

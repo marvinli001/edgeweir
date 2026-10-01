@@ -10,7 +10,7 @@ import { upgradeLegacyEnvelopes } from "../../src/server/services/envelope-upgra
 import { SETUP_TOKEN_BINDING, SETUP_TOKEN_KEY } from "../../src/server/services/setup";
 import { s3SecretBinding } from "../../src/server/services/sites";
 import { LEGACY_V1_FIXTURE } from "./fixtures";
-import { createTestContext, seedOrganization, TEST_MASTER_KEY } from "./helpers";
+import { createTestContext, seedOperator, TEST_MASTER_KEY } from "./helpers";
 
 /** The version 1 sealing code as it shipped (purpose-only AAD), to create legacy rows. */
 function sealV1(masterKey: string, plaintext: Uint8Array | string, purpose: string): Envelope {
@@ -59,11 +59,11 @@ describe("legacy envelope upgrade", async () => {
     JSON.parse((await credential(id))?.secretEnvelope ?? "{}") as Envelope;
 
   beforeAll(async () => {
-    const { organizationId } = await seedOrganization(ctx.db);
+    await seedOperator(ctx.db);
     const [cluster] = await ctx.db.insert(schema.cluster).values({ name: "default" }).returning();
     const [site] = await ctx.db
       .insert(schema.site)
-      .values({ organizationId, clusterId: cluster?.id ?? "", name: "assets" })
+      .values({ clusterId: cluster?.id ?? "", name: "assets" })
       .returning();
     const siteId = site?.id ?? "";
     const legacy = (secret: string) =>

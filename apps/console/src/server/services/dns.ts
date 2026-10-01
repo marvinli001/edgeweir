@@ -27,7 +27,7 @@ import {
   type Tx,
   targetFor,
 } from "./revisions";
-import { findSite, type SiteScope } from "./sites";
+import { findSite } from "./sites";
 
 type Provider = typeof schema.platformDnsProvider.$inferSelect;
 type Revision = typeof schema.dnsRevision.$inferSelect;
@@ -217,9 +217,8 @@ export async function compileDnsPlan(
   const sites = await db
     .selectDistinct({ id: schema.site.id, clusterId: schema.site.clusterId })
     .from(schema.site)
-    .innerJoin(schema.siteDomain, eq(schema.siteDomain.siteId, schema.site.id))
-    // Disabled and suspended sites keep their records; nodes answer 404 for them.
-    .where(eq(schema.siteDomain.verified, true));
+    // Disabled sites keep their records; nodes answer 404 for them.
+    .innerJoin(schema.siteDomain, eq(schema.siteDomain.siteId, schema.site.id));
   const nodes = await db.select().from(schema.node);
   const receipts = await db.select().from(schema.nodeConfigStatus);
   const addresses = await db.select().from(schema.nodeIp);
@@ -352,7 +351,7 @@ export function massRemoval(
  * a plan that would empty a non-empty record set (`all.` or a line) or
  * remove more than the configured share of address records keeps the
  * previous revision, is stored as a blocked revision and raises the
- * dns_mass_removal_blocked alert, until a plan passes or an administrator
+ * dns_mass_removal_blocked alert, until a plan passes or the operator
  * forces it. Covers the console losing its nodes (all of them look offline).
  */
 async function publish(tx: Tx, policy: DnsPolicy, reason: string, opts: { force?: boolean } = {}) {
@@ -676,8 +675,8 @@ export async function reconcileDns(app: AppContext, actor: Actor = systemActor) 
     connection.release();
   }
 }
-export async function siteDnsTarget(app: AppContext, siteId: string, scope: SiteScope) {
-  const site = await findSite(app.db, siteId, scope),
+export async function siteDnsTarget(app: AppContext, siteId: string) {
+  const site = await findSite(app.db, siteId),
     s = await state(app.db),
     policy = dnsPolicy.parse(s.policy);
   if (!policy.enabled || !policy.providerId)

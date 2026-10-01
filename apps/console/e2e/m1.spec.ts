@@ -1,88 +1,45 @@
 import { expect, test } from "@playwright/test";
-import { login, logout, pick } from "./helpers";
+import { login, pick } from "./helpers";
 
 /**
- * MVP M1 acceptance (dev-docs/specs/mvp.md §1): second organization and member → member sees only
- * the console → member creates and edits a site → admin creates a cluster, a region and a node
- * group and moves the e2e node into it (still online, revision in sync) → audit log shows names
- * and filters by action → English shows revision reasons and errors in English.
+ * MVP M1 acceptance (dev-docs/specs/mvp.md §1): the operator creates and edits a site → creates a
+ * cluster, a region and a node group and moves the e2e node into it (still online, revision in
+ * sync) → audit log shows names and filters by action → English shows revision reasons and errors
+ * in English.
  */
 const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test";
 const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123";
-const memberEmail = process.env.E2E_MEMBER_EMAIL ?? "member@e2e.test";
-const memberPassword = process.env.E2E_MEMBER_PASSWORD ?? "e2e-member-password-123";
 const nodeName = process.env.E2E_NODE_NAME ?? "edge-e2e-1";
 
-test("M1: tenants, members, site editing, clusters, node groups, audit and i18n", async ({
-  page,
-}) => {
+test("M1: site editing, clusters, node groups, audit and i18n", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
-  await test.step("admin creates a second organization with a member", async () => {
+  await test.step("the operator creates a site, then edits its domains and origin", async () => {
     await login(page, adminEmail, adminPassword);
-    await page.getByTestId("area-admin").click();
-    await page.getByTestId("nav-organizations").click();
-    await expect(page.getByTestId("page-title")).toHaveText("组织与用户");
-
-    await page.getByTestId("create-org").click();
-    await page.getByLabel("组织名称", { exact: true }).fill("Tenant Org");
-    await pick(page, page.getByTestId("default-cluster-select"), "default");
-    await page.getByTestId("org-submit").click();
-    const orgs = page.getByTestId("orgs-table");
-    await expect(orgs.getByText("Tenant Org")).toBeVisible();
-    await expect(orgs.getByText("tenant-org")).toBeVisible();
-
-    await page.getByTestId("tab-users").click();
-    await page.getByTestId("create-user").click();
-    await page.getByLabel("姓名", { exact: true }).fill("E2E Member");
-    await page.getByLabel("邮箱", { exact: true }).fill(memberEmail);
-    await page.getByLabel("密码", { exact: true }).fill(memberPassword);
-    await pick(page, page.getByTestId("org-select"), "Tenant Org");
-    await page.getByTestId("user-submit").click();
-    const users = page.getByTestId("users-table");
-    await expect(users.getByText("E2E Member")).toBeVisible();
-    await expect(users.getByText("Tenant Org · 成员")).toBeVisible();
-    await logout(page);
-  });
-
-  await test.step("the member only sees the console; /admin redirects", async () => {
-    await login(page, memberEmail, memberPassword);
-    await expect(page.getByTestId("area-admin")).toHaveCount(0);
-    await expect(page.getByTestId("area-console")).toHaveCount(0);
-    await expect(page.getByTestId("nav-clusters")).toHaveCount(0);
-    await expect(page.getByTestId("nav-members")).toHaveCount(0);
-    for (const path of ["/admin", "/admin/clusters", "/admin/organizations"]) {
-      await page.goto(path);
-      await expect(page.getByTestId("page-title")).toHaveText("概览");
-      await expect(page).not.toHaveURL(/\/admin/);
-    }
-  });
-
-  await test.step("the member creates a site, then edits its domains and origin", async () => {
     await page.getByTestId("nav-sites").click();
     await expect(page.getByTestId("page-title")).toHaveText("网站");
     await page.getByTestId("new-site").click();
-    await page.getByLabel("名称", { exact: true }).fill("tenant-site");
-    await page.getByLabel("域名", { exact: true }).fill("tenant.test");
-    // Private and other special-purpose origin addresses are refused unless the platform allows
-    // them (the e2e allow list is only the Docker network), with the range named in the error.
+    await page.getByLabel("名称", { exact: true }).fill("edited-site");
+    await page.getByLabel("域名", { exact: true }).fill("edited.test");
+    // Private and other special-purpose origin addresses are refused unless the origin allow list
+    // has them (the e2e allow list is only the Docker network), with the range named in the error.
     await page.getByLabel("源站地址", { exact: true }).fill("10.0.0.10");
     await page.getByTestId("create-site-submit").click();
     await expect(page.getByTestId("site-form-error")).toHaveText(
-      "源站地址 10.0.0.10 属于特殊用途地址段 10.0.0.0/8，平台未放行",
+      "源站地址 10.0.0.10 属于特殊用途地址段 10.0.0.0/8，不在源站地址允许清单中",
     );
-    await page.getByLabel("源站地址", { exact: true }).fill("origin.tenant.test");
+    await page.getByLabel("源站地址", { exact: true }).fill("origin.edited.test");
     await page.getByTestId("create-site-submit").click();
     // Creating a site opens its detail page.
-    await expect(page.getByTestId("page-title")).toHaveText("tenant-site");
+    await expect(page.getByTestId("page-title")).toHaveText("edited-site");
 
     await page.getByTestId("tab-domains").click();
-    await page.getByTestId("domain-input").fill("www.tenant.test");
+    await page.getByTestId("domain-input").fill("www.edited.test");
     await page.getByTestId("domain-add").click();
     await page.getByTestId("domains-save").click();
     await expect(page.getByText(/已保存，版本 #\d+/)).toBeVisible();
-    await expect(page.getByTestId("domain-list")).toContainText("www.tenant.test");
+    await expect(page.getByTestId("domain-list")).toContainText("www.edited.test");
 
     await page.getByTestId("tab-origins").click();
     await page.getByTestId("origin-address").fill("whoami");
@@ -94,33 +51,17 @@ test("M1: tenants, members, site editing, clusters, node groups, audit and i18n"
     await page.reload();
     await expect(page.getByTestId("origin-address")).toHaveValue("whoami");
     await page.getByTestId("tab-domains").click();
-    await expect(page.getByTestId("domain-list")).toContainText("tenant.test");
-    await expect(page.getByTestId("domain-list")).toContainText("www.tenant.test");
+    await expect(page.getByTestId("domain-list")).toContainText("edited.test");
+    await expect(page.getByTestId("domain-list")).toContainText("www.edited.test");
 
-    // Tenants see only their organization's sites.
+    // Every site is listed, whichever surface created it.
     await page.getByTestId("nav-sites").click();
     const sites = page.getByTestId("sites-table");
-    await expect(sites.getByText("tenant-site")).toBeVisible();
-    await expect(sites.getByText("demo.test")).toHaveCount(0);
-    await logout(page);
+    await expect(sites.getByText("edited-site")).toBeVisible();
+    await expect(sites.getByText("demo.test")).toBeVisible();
   });
 
-  await test.step("admin adds a region, a cluster and a node group, and moves the node", async () => {
-    await login(page, adminEmail, adminPassword);
-    // M5 requires an explicit domain proof/approval before the tenant route can be published.
-    await page.getByTestId("nav-sites").click();
-    await page.getByTestId("sites-table").getByText("tenant-site", { exact: true }).click();
-    await page.getByTestId("tab-domains").click();
-    await page
-      .getByTestId("domain-ownership")
-      .getByRole("button", { name: "免验证并发布", exact: true })
-      .click();
-    await page.getByTestId("confirm-action").click();
-    await expect(
-      page.getByTestId("domain-ownership").getByText("管理员已确认", { exact: true }),
-    ).toBeVisible();
-    await page.getByTestId("area-admin").click();
-
+  await test.step("the operator adds a region, a cluster and a node group, and moves the node", async () => {
     await page.getByTestId("nav-regions").click();
     await page.getByTestId("create-region").click();
     await page.getByLabel("名称", { exact: true }).fill("华东");
@@ -176,9 +117,6 @@ test("M1: tenants, members, site editing, clusters, node groups, audit and i18n"
     await expect(page.getByTestId("page-title")).toHaveText("审计日志");
     const audit = page.getByTestId("audit-table");
     await expect(
-      audit.getByTestId("audit-actor").filter({ hasText: "E2E Member" }).first(),
-    ).toBeVisible();
-    await expect(
       audit.getByTestId("audit-actor").filter({ hasText: "E2E Admin" }).first(),
     ).toBeVisible();
 
@@ -189,7 +127,7 @@ test("M1: tenants, members, site editing, clusters, node groups, audit and i18n"
 
     await pick(page, page.getByTestId("audit-filter-action"), "site.update");
     await expect(audit.getByTestId("audit-action")).toHaveText(["site.update", "site.update"]);
-    await expect(audit.getByTestId("audit-actor")).toHaveText(["E2E Member", "E2E Member"]);
+    await expect(audit.getByTestId("audit-actor")).toHaveText(["E2E Admin", "E2E Admin"]);
   });
 
   await test.step("in English, revision reasons and errors are English", async () => {
@@ -202,7 +140,7 @@ test("M1: tenants, members, site editing, clusters, node groups, audit and i18n"
     await expect(page.getByTestId("page-title")).toHaveText("Clusters & nodes");
     await expect(page.getByTestId("cluster-name")).toHaveText("default");
     const reasons = page.getByTestId("revisions-table").getByTestId("revision-reason");
-    await expect(reasons.filter({ hasText: "Domain verified" }).first()).toBeVisible();
+    await expect(reasons.filter({ hasText: "Site edited-site updated" }).first()).toBeVisible();
     await expect(reasons.filter({ hasText: "Cluster default created" })).toHaveCount(1);
 
     // A refused action explains itself in English (stable error code, localized in the UI).

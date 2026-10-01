@@ -112,7 +112,8 @@ pnpm exec vitest run test/server/docs.test.ts
 | 消息 key 与占位符一致；错误码、原因码、节点错误码均有消息；组件内无硬编码文案 | `apps/console/test/web/i18n.test.ts` |
 | 无骨架屏、无 `*Description` 组件、无颜色字面量、无外部站点链接、appica-ui 导入范围 | `apps/console/test/web/ui-rules.test.ts` |
 | shadcn preset `b2D0wqNxT`、全局只有一个 ThemeProvider | `apps/console/test/web/ui-preset.test.ts` |
-| 每个契约过程归入控制台清单或后台 403 表 | `apps/console/test/server/admin.test.ts` |
+| 只读 AccessKey 调用任何写过程都被拒绝且不改变数据 | `apps/console/test/server/infrastructure.test.ts` |
+| 除 `system.status`、`system.setup` 外，每个过程都要求凭据 | `apps/console/test/server/openapi.test.ts` |
 | `.env.example` 列出控制台读取与 compose 插值的全部变量 | `apps/console/test/server/env-example.test.ts` |
 | 第三方镜像按 digest、Actions 按 commit SHA 固定 | `apps/console/test/server/supply-chain-pins.test.ts` |
 | `deploy.sh` 内嵌的 compose 模板与仓库文件逐字一致 | `apps/console/test/server/deploy-script.test.ts` |
@@ -232,11 +233,11 @@ feat(console)!: drop the public landing page from the open core
 | 约定 | 位置 |
 | --- | --- |
 | API 改动从 oRPC 契约开始；同一过程同时服务 `/rpc`（UI）与 `/api/v1`（OpenAPI） | `packages/contract` |
-| 后台过程用 `admin` 守卫；租户过程用 `tenant`（组织要求两步验证时，未启用者被拒绝）；成员管理用 `orgManager` | `apps/console/src/server/rpc/base.ts` |
-| 新过程加入控制台清单 `CONSOLE_PROCEDURES` 或租户成员 403 表 | `apps/console/test/server/admin.test.ts` |
+| 除 `system.status`、`system.setup` 外，过程都用 `authed` 守卫（会话、AccessKey 或服务账号 key） | `apps/console/src/server/rpc/base.ts` |
+| 服务账号只能调用 `serviceAccountProcedures` 列出且 scope 允许的过程；新过程默认不对服务账号开放 | `packages/contract/src/service-accounts.ts` |
 | 管理操作在同一事务内调用 `recordAudit` 写 `audit_log` | `apps/console/src/server/services/audit.ts` |
 | better-auth 自身端点的审计由 hooks 写入 | `apps/console/src/server/lib/auth-audit.ts` |
-| better-auth HTTP 端点按白名单放行（`AUTH_HTTP_ROUTES`），`/api/auth` 下其余路径返回 404；organization 与 admin 插件只在服务端经 `auth.api.*` 调用 | `apps/console/src/server/lib/auth.ts` |
+| better-auth HTTP 端点按白名单放行（`AUTH_HTTP_ROUTES`），`/api/auth` 下其余路径返回 404；admin 插件只在服务端经 `auth.api.*` 调用（初始化向导创建账户） | `apps/console/src/server/lib/auth.ts` |
 | 客户端 IP 只取自 `resolveClientIp`：TCP 对端地址；转发头仅在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用 | `apps/console/src/server/lib/client-ip.ts` |
 | 信封密文与所属记录绑定：`masterKey.seal(value, { purpose: "<table>.<column>", recordId })` | `apps/console/src/server/lib/envelope.ts` |
 | 源站地址的特殊用途地址段列表（节点保持同一列表） | `packages/contract/src/addresses.ts` |
@@ -303,7 +304,7 @@ feat(console)!: drop the public landing page from the open core
    pnpm test
    ```
 
-运营配置优先放在 **后台 → 系统设置**，环境变量只保留初始化之前或基础设施层面需要的值。同一配置同时存在系统设置与环境变量时，生效顺序为：后台保存值、环境变量、默认值。
+运营配置优先放在 **系统设置**，环境变量只保留初始化之前或基础设施层面需要的值。同一配置同时存在系统设置与环境变量时，生效顺序为：系统设置中保存的值、环境变量、默认值。
 
 ## 更新固定的镜像与 Actions
 
@@ -387,4 +388,4 @@ feat(console)!: drop the public landing page from the open core
 
 Edgeweir 以 [AGPL-3.0-only](LICENSE) 发布。提交贡献即表示同意以 AGPL-3.0-only 授权该贡献，并确认有权这样授权。
 
-开源核心允许合规商用；组织、成员、权限与隔离保留在开源核心，对外客户门户、套餐计费、财务与分销属于独立商业运营产品（[LICENSING.md](LICENSING.md)）。向核心贡献不自动授予项目方闭源再许可的权利；双许可或插件链接例外须另行核实代码权利与贡献授权。
+开源核心允许合规商用；开源版面向单一运营者，多租户（组织、成员、角色与隔离）、对外客户门户、套餐计费、财务与分销属于独立商业运营产品（[LICENSING.md](LICENSING.md)）。向核心贡献不自动授予项目方闭源再许可的权利；双许可或插件链接例外须另行核实代码权利与贡献授权。

@@ -40,7 +40,6 @@ export const siteUsage = pgTable(
   {
     windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
     siteId: uuid("site_id").notNull(),
-    organizationId: text("organization_id").notNull(),
     requests: numeric("requests", { precision: 38, scale: 0 }).notNull().default("0"),
     bytesSent: numeric("bytes_sent", { precision: 38, scale: 0 }).notNull().default("0"),
     bytesReceived: numeric("bytes_received", { precision: 38, scale: 0 }).notNull().default("0"),
@@ -51,7 +50,6 @@ export const siteUsage = pgTable(
   (t) => [
     primaryKey({ columns: [t.windowStart, t.siteId] }),
     uniqueIndex("site_usage_seq_uq").on(t.seq),
-    index("site_usage_org_idx").on(t.organizationId, t.windowStart),
   ],
 );
 const trafficColumns = () => ({

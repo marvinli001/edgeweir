@@ -10,14 +10,13 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { organization, user } from "./auth";
+import { user } from "./auth";
 import { site } from "./core";
 export const alertChannel = pgTable("alert_channel", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   kind: text("kind").notNull(),
   enabled: boolean("enabled").notNull().default(true),
-  availableToTenants: boolean("available_to_tenants").notNull().default(false),
   platform: boolean("platform").notNull().default(false),
   locale: text("locale").notNull().default("zh-CN"),
   configEnvelope: text("config_envelope").notNull(),
@@ -31,9 +30,6 @@ export const alertSubscription = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
     siteId: uuid("site_id")
       .notNull()
       .references(() => site.id, { onDelete: "cascade" }),

@@ -305,22 +305,11 @@ export const cacheRule = z.object({
   cacheAuthorized: z.boolean(),
 });
 
-/** Why the platform suspended a site. */
-export const siteSuspendReason = z.enum(["billing", "abuse", "security", "other"]);
-
 export const site = z.object({
   id: uuid,
   name: z.string(),
-  /** Set by the organization. */
+  /** A disabled site is not shipped to nodes. */
   enabled: z.boolean(),
-  /** Set by the platform; the site is shipped to nodes only when enabled and not suspended. */
-  suspended: z.boolean(),
-  suspendReason: siteSuspendReason.nullable(),
-  /** Platform administrators only; empty for everyone else. */
-  suspendNote: z.string(),
-  suspendedAt: isoDateTime.nullable(),
-  organizationId: z.string(),
-  organizationName: z.string(),
   clusterId: uuid,
   clusterName: z.string(),
   domains: z.array(z.string()),
@@ -363,15 +352,6 @@ export const siteSetEnabledInput = z.object({
   enabled: z.boolean(),
   expectedUpdatedAt,
 });
-
-export const siteSuspendInput = z.object({
-  id: uuid,
-  reason: siteSuspendReason,
-  note: z.string().trim().max(256).default(""),
-  expectedUpdatedAt,
-});
-
-export const siteResumeInput = z.object({ id: uuid, expectedUpdatedAt });
 
 export const cluster = z.object({
   id: uuid,
@@ -672,7 +652,7 @@ export const trafficTopInput = z.object({
 export const trafficTopItem = z.object({
   id: uuid,
   name: z.string(),
-  /** The site's organization or the node's cluster. */
+  /** The cluster of the site or node. */
   parentId: z.string(),
   parentName: z.string(),
   requests: z.number().int(),
@@ -685,7 +665,7 @@ export const trafficBreakdownInput = z.object({
   range: analyticsRange.default("24h"),
   /** Only this site; it must be visible to the caller. */
   siteId: uuid.optional(),
-  /** Sites of the scope, edge nodes (platform administrators only) or HTTP status codes. */
+  /** Sites, edge nodes or HTTP status codes. */
   by: z.enum(["site", "node", "status"]),
   /** What the items are ranked and plotted by; status codes always count requests. */
   metric: z.enum(["requests", "bytesSent"]).default("requests"),
@@ -699,7 +679,7 @@ export const trafficBreakdownItem = z.object({
   /** Site or node id, or the status code ("404"). */
   id: z.string(),
   name: z.string(),
-  /** The site's organization or the node's cluster; null for status codes. */
+  /** The cluster of the site or node; null for status codes. */
   parentId: z.string().nullable(),
   parentName: z.string().nullable(),
   total: z.number().int(),
@@ -741,7 +721,6 @@ export const setupInput = z.object({
   name: z.string().trim().min(1).max(100),
   email: z.email().trim().toLowerCase(),
   password: z.string().min(12).max(128),
-  organizationName: z.string().trim().min(1).max(100),
 });
 
 /** Special-purpose origin addresses the platform allows (compiled into every cluster). */
@@ -799,56 +778,12 @@ export const releaseSourceInput = z.object({
   url: z.union([z.literal(""), releaseBaseUrl]),
 });
 
-export const MAX_DNS_RESOLVERS = 8;
-
-/**
- * A recursive DNS server for ownership TXT checks, as EDGEWEIR_DNS_RESOLVERS
- * takes it: an IP, `IPv4:port`, `[IPv6]:port`, or a host name with an
- * optional port. Returns the host (IPv6 without brackets) and port, or null.
- */
-export function parseDnsResolver(text: string): { host: string; port: number } | null {
-  const value = text.trim().toLowerCase();
-  if (parseIp(value)) return { host: value, port: 53 };
-  const match = /^(?:\[([0-9a-f:.]+)\]|([^\s:/[\]]+))(?::([0-9]{1,5}))?$/.exec(value);
-  if (!match) return null;
-  const port = match[3] === undefined ? 53 : Number(match[3]);
-  if (port < 1 || port > 65535) return null;
-  if (match[1] !== undefined)
-    return parseIp(match[1])?.version === 6 ? { host: match[1], port } : null;
-  const host = match[2] ?? "";
-  if (parseIp(host)?.version === 4) return { host, port };
-  return host.length <= 253 && HOSTNAME_RE.test(host) && !NUMERIC_LABEL_RE.test(host)
-    ? { host, port }
-    : null;
-}
-
-export const dnsResolver = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .max(260)
-  .refine((value) => parseDnsResolver(value) !== null, "invalid DNS server");
-
-export const dnsResolvers = z.object({
-  /** Saved in system settings, in query order; empty when none is saved. */
-  servers: z.array(z.string()),
-  /** The servers ownership checks use now; empty means the system resolver. */
-  effectiveServers: z.array(z.string()),
-  source: z.enum(["setting", "environment", "default"]),
-});
-
-/** An empty list clears the saved value (the environment or the system resolver applies). */
-export const dnsResolversInput = z.object({
-  servers: z.array(dnsResolver).max(MAX_DNS_RESOLVERS),
-});
-
 export const auditLogEntry = z.object({
   id: z.number().int(),
   occurredAt: isoDateTime,
   actorType: z.string(),
   actorId: z.string(),
   actorName: z.string(),
-  organizationId: z.string().nullable(),
   action: z.string(),
   targetType: z.string(),
   targetId: z.string(),
@@ -1079,7 +1014,6 @@ export const cacheTaskList = z.object({
 export const siteListInput = z.object({
   /** Matches the site name or any of its domains. */
   search: z.string().trim().max(100).optional(),
-  /** Platform administrators only. */
   clusterId: uuid.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
@@ -1090,254 +1024,25 @@ export const siteList = z.object({
   total: z.number().int(),
 });
 
-export const orgRole = z.enum(["owner", "admin", "member"]);
-const orgId = z.string().trim().min(1).max(100);
-const userId = z.string().trim().min(1).max(100);
-const email = z.string().trim().toLowerCase().pipe(z.email());
-const password = z.string().min(12).max(128);
-const personName = z.string().trim().min(1).max(100);
-
 export const me = z.object({
   user: z.object({
     id: z.string(),
     name: z.string(),
     email: z.string(),
-    isAdmin: z.boolean(),
     twoFactorEnabled: z.boolean(),
   }),
-  organizations: z.array(
-    z.object({ id: z.string(), name: z.string(), slug: z.string(), role: orgRole }),
-  ),
-  activeOrganization: z
-    .object({
-      id: z.string(),
-      name: z.string(),
-      slug: z.string(),
-      /** The caller's role; platform administrators who are not members get "owner" rights. */
-      role: orgRole,
-      requireTwoFactor: z.boolean(),
-    })
-    .nullable(),
-  /** The active organization requires 2FA and the caller has not enabled it yet. */
-  twoFactorRequired: z.boolean(),
   /**
    * Set when the caller is a service account (then `user` carries its id and
-   * name, with no e-mail, and there are no organizations).
+   * name, with no e-mail).
    */
   serviceAccount: z
     .object({ id: z.string(), name: z.string(), scopes: z.array(z.string()) })
     .nullable(),
 });
 
-export const member = z.object({
-  id: z.string(),
-  userId: z.string(),
-  name: z.string(),
-  email: z.string(),
-  role: orgRole,
-  twoFactorEnabled: z.boolean(),
-  disabled: z.boolean(),
-  createdAt: isoDateTime,
-});
-
-export const invitation = z.object({
-  id: z.string(),
-  email: z.string(),
-  role: orgRole,
-  inviterName: z.string(),
-  expiresAt: isoDateTime,
-  createdAt: isoDateTime,
-});
-
-export const memberList = z.object({
-  members: z.array(member),
-  invitations: z.array(invitation),
-});
-
-export const memberInviteInput = z.object({ email, role: orgRole.default("member") });
-
-export const invitationResult = z.object({
-  invitation,
-  /** Link the invitee opens to join; valid until the invitation expires. */
-  url: z.string(),
-});
-
-export const memberRoleInput = z.object({ id: z.string().min(1).max(100), role: orgRole });
-
-export const organizationPolicyInput = z.object({ requireTwoFactor: z.boolean() });
-
-export const invitationInfo = z.object({
-  id: z.string(),
-  organizationName: z.string(),
-  email: z.string(),
-  role: orgRole,
-  inviterName: z.string(),
-  expiresAt: isoDateTime,
-  /** An account with the invited email exists: sign in to accept. */
-  userExists: z.boolean(),
-});
-
-export const invitationAcceptInput = z.object({
-  id: z.string().min(1).max(100),
-  /** Required when no account exists for the invited email. */
-  name: personName.optional(),
-  password: password.optional(),
-});
-
-export const organization = z.object({
-  id: z.string(),
-  name: z.string(),
-  slug: z.string(),
-  memberCount: z.number().int(),
-  siteCount: z.number().int(),
-  defaultClusterId: uuid.nullable(),
-  defaultClusterName: z.string().nullable(),
-  requireTwoFactor: z.boolean(),
-  createdAt: isoDateTime,
-  /** Changes with every update; pass it back as expectedUpdatedAt. */
-  updatedAt: isoDateTime,
-});
-
-export const organizationSlug = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .regex(/^[a-z0-9][a-z0-9-]{0,47}$/, "lowercase letters, digits and dashes only");
-
-export const organizationCreateInput = z.object({
-  name: z.string().trim().min(1).max(100),
-  /** Derived from the name when omitted. */
-  slug: organizationSlug.optional(),
-  defaultClusterId: uuid.nullable().default(null),
-});
-
-export const organizationUpdateInput = z.object({
-  id: orgId,
-  name: z.string().trim().min(1).max(100).optional(),
-  defaultClusterId: uuid.nullable().optional(),
-  requireTwoFactor: z.boolean().optional(),
-  expectedUpdatedAt,
-});
-
-/** Resources an organization's technical limits cover. */
-export const orgLimitResource = z.enum([
-  "sites",
-  "domains",
-  "certificates",
-  "ipListEntries",
-  "purgeTasksPerMinute",
-  "purgeUrlsPerHour",
-  "members",
-  "bans",
-]);
-
-const limitValue = z.number().int().min(0).max(1_000_000_000).nullable();
-const usageValue = z.number().int().min(0);
-
-/** Null: no organization-specific limit (only the global hard limits apply). */
-export const organizationLimitValues = z.object({
-  sites: limitValue,
-  domains: limitValue,
-  certificates: limitValue,
-  ipListEntries: limitValue,
-  purgeTasksPerMinute: limitValue,
-  purgeUrlsPerHour: limitValue,
-  members: limitValue,
-  /** Active manual site bans. */
-  bans: limitValue,
-});
-
-export const organizationLimits = z.object({
-  organizationId: z.string(),
-  limits: organizationLimitValues,
-  /** Current use; purges count the last minute (tasks) and hour (URLs). */
-  usage: z.object({
-    sites: usageValue,
-    domains: usageValue,
-    certificates: usageValue,
-    ipListEntries: usageValue,
-    purgeTasksPerMinute: usageValue,
-    purgeUrlsPerHour: usageValue,
-    members: usageValue,
-    bans: usageValue,
-  }),
-  /** Null until limits were first saved. */
-  updatedAt: isoDateTime.nullable(),
-});
-
-/** Replaces every limit; an omitted limit is null (no limit). */
-export const organizationLimitsInput = z.object({
-  id: orgId,
-  limits: z.object({
-    sites: limitValue.default(null),
-    domains: limitValue.default(null),
-    certificates: limitValue.default(null),
-    ipListEntries: limitValue.default(null),
-    purgeTasksPerMinute: limitValue.default(null),
-    purgeUrlsPerHour: limitValue.default(null),
-    members: limitValue.default(null),
-    bans: limitValue.default(null),
-  }),
-  expectedUpdatedAt,
-});
-
-export const orgMemberAddInput = z.object({
-  organizationId: orgId,
-  userId,
-  role: orgRole.default("member"),
-});
-
-export const orgMemberUpdateInput = z.object({
-  organizationId: orgId,
-  memberId: z.string().min(1).max(100),
-  role: orgRole,
-});
-
-export const orgMemberRemoveInput = z.object({
-  organizationId: orgId,
-  memberId: z.string().min(1).max(100),
-});
-
-export const orgInviteInput = z.object({
-  organizationId: orgId,
-  email,
-  role: orgRole.default("member"),
-});
-
-export const user = z.object({
-  id: z.string(),
-  name: z.string(),
-  email: z.string(),
-  isAdmin: z.boolean(),
-  disabled: z.boolean(),
-  twoFactorEnabled: z.boolean(),
-  createdAt: isoDateTime,
-  memberships: z.array(
-    z.object({ organizationId: z.string(), organizationName: z.string(), role: orgRole }),
-  ),
-});
-
-export const userListInput = z.object({ search: z.string().trim().max(100).optional() });
-
-export const userCreateInput = z.object({
-  name: personName,
-  email,
-  password,
-  isAdmin: z.boolean().default(false),
-  /** Optionally add the new user to an organization right away. */
-  organizationId: orgId.optional(),
-  role: orgRole.default("member"),
-});
-
-export const userSetAdminInput = z.object({ id: userId, isAdmin: z.boolean() });
-export const userSetDisabledInput = z.object({ id: userId, disabled: z.boolean() });
-
 export type OriginAllowList = z.infer<typeof originAllowList>;
 export type SiteCreateInput = z.input<typeof siteCreateInput>;
 export type Site = z.infer<typeof site>;
-export type SiteSuspendReason = z.infer<typeof siteSuspendReason>;
-export type OrgLimitResource = z.infer<typeof orgLimitResource>;
-export type OrganizationLimits = z.infer<typeof organizationLimits>;
 export type Cluster = z.infer<typeof cluster>;
 export type Node = z.infer<typeof node>;
 export type Revision = z.infer<typeof revision>;
@@ -1355,8 +1060,6 @@ export type EnrollmentTokenResult = z.infer<typeof enrollmentTokenResult>;
 export type Settings = z.infer<typeof settings>;
 export type ReleaseSource = z.infer<typeof releaseSource>;
 export type ReleaseSourceInput = z.infer<typeof releaseSourceInput>;
-export type DnsResolvers = z.infer<typeof dnsResolvers>;
-export type DnsResolversInput = z.infer<typeof dnsResolversInput>;
 export type AuditLogEntry = z.infer<typeof auditLogEntry>;
 export type NodeGroup = z.infer<typeof nodeGroup>;
 export type RolloutPolicy = z.infer<typeof rolloutPolicy>;
@@ -1365,13 +1068,6 @@ export type RolloutState = z.infer<typeof rolloutState>;
 export type RolloutOutcome = z.infer<typeof rolloutOutcome>;
 export type Region = z.infer<typeof region>;
 export type Me = z.infer<typeof me>;
-export type Member = z.infer<typeof member>;
-export type Invitation = z.infer<typeof invitation>;
-export type InvitationResult = z.infer<typeof invitationResult>;
-export type InvitationInfo = z.infer<typeof invitationInfo>;
-export type Organization = z.infer<typeof organization>;
-export type OrgRole = z.infer<typeof orgRole>;
-export type User = z.infer<typeof user>;
 export type SiteUpdateInput = z.input<typeof siteUpdateInput>;
 export type Origin = z.infer<typeof origin>;
 export type CacheRule = z.infer<typeof cacheRule>;

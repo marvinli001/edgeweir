@@ -10,22 +10,16 @@ export * from "./logs";
 
 import { accessKeysContract } from "./access-keys";
 import { alertsContract } from "./alerts";
-import { adminBansContract, banSettings, bansContract } from "./bans";
+import { banSettings, bansContract } from "./bans";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
-import { domainOwnershipContract } from "./domains";
 import { errorPagesContract, platformErrorPages } from "./error-pages";
 import { ccTemplate, protectionContract, protectionSettings, securityContract } from "./protection";
-import {
-  ipListsContract,
-  platformIpListsContract,
-  platformRulesContract,
-  rulesContract,
-} from "./rules";
+import { ipListsContract, platformRulesContract, rulesContract } from "./rules";
 import * as s from "./schemas";
 import { serviceAccountsContract } from "./service-accounts";
 import { usageContract, usageSettings } from "./usage";
-import { siteFeatures, wafContract, wafSettings } from "./waf";
+import { siteFeatures, wafContract } from "./waf";
 
 export * from "./addresses";
 export * from "./bans";
@@ -40,8 +34,6 @@ export * from "./schemas";
 export * from "./waf";
 
 const idParam = z.object({ id: s.uuid });
-/** better-auth ids (users, organizations, members, invitations) are opaque strings. */
-const textIdParam = z.object({ id: z.string().min(1).max(100) });
 const ok = z.object({ ok: z.literal(true) });
 
 /**
@@ -59,20 +51,19 @@ const publicOperation = <T extends object>(operation: T) => ({ ...operation, sec
  */
 export const contract = {
   accessKeys: accessKeysContract,
-  /** Platform administrators only. */
+  /** Machine identities for integrations, with scoped keys for /api/v1. */
   serviceAccounts: serviceAccountsContract,
-  /** Recomputable 5-minute usage per site (members: their organization). */
+  /** Recomputable 5-minute usage per site. */
   usage: usageContract,
   logs: logsContract,
   upgrades: upgradesContract,
   alerts: alertsContract,
   dns: dnsContract,
-  domainOwnership: domainOwnershipContract,
   rules: rulesContract,
+  /** Rules that apply to every site. */
   platformRules: platformRulesContract,
   ipLists: ipListsContract,
-  platformIpLists: platformIpListsContract,
-  /** Dynamic IP bans of the caller's sites. */
+  /** Dynamic IP bans of a site or of every site. */
   bans: bansContract,
   /** Under Attack, CC policy, pass lifetime, proof of work and JA4 logging of a site. */
   protection: protectionContract,
@@ -92,19 +83,15 @@ export const contract = {
     setup: oc
       .route({ method: "POST", path: "/system/setup", tags: ["system"], spec: publicOperation })
       .input(s.setupInput)
-      .output(z.object({ userId: z.string(), organizationId: z.string() })),
+      .output(z.object({ userId: z.string() })),
   },
   account: {
     me: oc.route({ method: "GET", path: "/me", tags: ["account"] }).output(s.me),
-    setActiveOrganization: oc
-      .route({ method: "POST", path: "/me/active-organization", tags: ["account"] })
-      .input(z.object({ organizationId: z.string().min(1).max(100) }))
-      .output(s.me),
   },
   overview: {
     get: oc.route({ method: "GET", path: "/overview", tags: ["overview"] }).output(s.overview),
   },
-  /** Lite analytics (per-minute node statistics), scoped like sites. */
+  /** Lite analytics (per-minute node statistics). */
   analytics: {
     topRequests: oc
       .route({ method: "GET", path: "/analytics/top-requests", tags: ["analytics"] })
@@ -130,12 +117,11 @@ export const contract = {
       .route({ method: "GET", path: "/analytics/top-sites", tags: ["analytics"] })
       .input(s.trafficTopInput)
       .output(z.array(s.trafficTopItem)),
-    /** Leading sites, nodes (platform administrators only) or status codes over time. */
+    /** Leading sites, nodes or status codes over time. */
     breakdown: oc
       .route({ method: "GET", path: "/analytics/breakdown", tags: ["analytics"] })
       .input(s.trafficBreakdownInput)
       .output(s.trafficBreakdown),
-    /** Platform administrators only. */
     topNodes: oc
       .route({ method: "GET", path: "/analytics/top-nodes", tags: ["analytics"] })
       .input(s.trafficTopInput)
@@ -288,10 +274,7 @@ export const contract = {
       .route({ method: "PUT", path: "/sites/{id}/starred", tags: ["sites"] })
       .input(s.siteStarInput)
       .output(ok),
-    /**
-     * Turns the site on or off (organization owners and admins). A disabled
-     * site is not shipped to nodes; its DNS records stay.
-     */
+    /** Turns the site on or off. A disabled site is not shipped to nodes; its DNS records stay. */
     setEnabled: oc
       .route({ method: "PUT", path: "/sites/{id}/enabled", tags: ["sites"] })
       .input(s.siteSetEnabledInput)
@@ -329,160 +312,6 @@ export const contract = {
       .route({ method: "POST", path: "/cache-tasks", tags: ["cache"], successStatus: 201 })
       .input(s.cacheTaskCreateInput)
       .output(s.cacheTask),
-  },
-  /** Members of the caller's active organization (organization owners and admins). */
-  members: {
-    list: oc.route({ method: "GET", path: "/members", tags: ["members"] }).output(s.memberList),
-    invite: oc
-      .route({ method: "POST", path: "/members/invitations", tags: ["members"] })
-      .input(s.memberInviteInput)
-      .output(s.invitationResult),
-    cancelInvitation: oc
-      .route({ method: "DELETE", path: "/members/invitations/{id}", tags: ["members"] })
-      .input(textIdParam)
-      .output(ok),
-    updateRole: oc
-      .route({ method: "PATCH", path: "/members/{id}", tags: ["members"] })
-      .input(s.memberRoleInput)
-      .output(s.member),
-    remove: oc
-      .route({ method: "DELETE", path: "/members/{id}", tags: ["members"] })
-      .input(textIdParam)
-      .output(ok),
-  },
-  /** Policy of the caller's active organization (organization owners and admins). */
-  organization: {
-    /** The active organization's technical limits and usage (any member). */
-    limits: oc
-      .route({ method: "GET", path: "/organization/limits", tags: ["members"] })
-      .output(s.organizationLimits),
-    update: oc
-      .route({ method: "PATCH", path: "/organization", tags: ["members"] })
-      .input(s.organizationPolicyInput)
-      .output(s.me),
-  },
-  /** Public: opened from an invitation link. */
-  invitations: {
-    get: oc
-      .route({
-        method: "GET",
-        path: "/invitations/{id}",
-        tags: ["members"],
-        spec: publicOperation,
-      })
-      .input(textIdParam)
-      .output(s.invitationInfo),
-    accept: oc
-      .route({
-        method: "POST",
-        path: "/invitations/{id}/accept",
-        tags: ["members"],
-        spec: publicOperation,
-      })
-      .input(s.invitationAcceptInput)
-      .output(z.object({ userId: z.string(), organizationId: z.string() })),
-  },
-  /** Platform actions on tenant resources (platform administrators and scoped service accounts). */
-  admin: {
-    sites: {
-      /** Stops shipping the site until the platform resumes it; tenants cannot lift it. */
-      suspend: oc
-        .route({ method: "POST", path: "/admin/sites/{id}/suspend", tags: ["sites"] })
-        .input(s.siteSuspendInput)
-        .output(s.siteMutationResult),
-      resume: oc
-        .route({ method: "POST", path: "/admin/sites/{id}/resume", tags: ["sites"] })
-        .input(s.siteResumeInput)
-        .output(s.siteMutationResult),
-    },
-    organizations: {
-      getLimits: oc
-        .route({
-          method: "GET",
-          path: "/admin/organizations/{id}/limits",
-          tags: ["organizations"],
-        })
-        .input(textIdParam)
-        .output(s.organizationLimits),
-      /** Lower limits keep existing resources and only refuse new ones. */
-      setLimits: oc
-        .route({
-          method: "PUT",
-          path: "/admin/organizations/{id}/limits",
-          tags: ["organizations"],
-        })
-        .input(s.organizationLimitsInput)
-        .output(s.organizationLimits),
-    },
-    /** Every ban, including platform bans. */
-    bans: adminBansContract,
-  },
-  organizations: {
-    list: oc
-      .route({ method: "GET", path: "/organizations", tags: ["organizations"] })
-      .output(z.array(s.organization)),
-    create: oc
-      .route({ method: "POST", path: "/organizations", tags: ["organizations"] })
-      .input(s.organizationCreateInput)
-      .output(s.organization),
-    update: oc
-      .route({ method: "PATCH", path: "/organizations/{id}", tags: ["organizations"] })
-      .input(s.organizationUpdateInput)
-      .output(s.organization),
-    members: oc
-      .route({ method: "GET", path: "/organizations/{id}/members", tags: ["organizations"] })
-      .input(textIdParam)
-      .output(s.memberList),
-    addMember: oc
-      .route({
-        method: "POST",
-        path: "/organizations/{organizationId}/members",
-        tags: ["organizations"],
-      })
-      .input(s.orgMemberAddInput)
-      .output(s.member),
-    updateMember: oc
-      .route({
-        method: "PATCH",
-        path: "/organizations/{organizationId}/members/{memberId}",
-        tags: ["organizations"],
-      })
-      .input(s.orgMemberUpdateInput)
-      .output(s.member),
-    removeMember: oc
-      .route({
-        method: "DELETE",
-        path: "/organizations/{organizationId}/members/{memberId}",
-        tags: ["organizations"],
-      })
-      .input(s.orgMemberRemoveInput)
-      .output(ok),
-    invite: oc
-      .route({
-        method: "POST",
-        path: "/organizations/{organizationId}/invitations",
-        tags: ["organizations"],
-      })
-      .input(s.orgInviteInput)
-      .output(s.invitationResult),
-  },
-  users: {
-    list: oc
-      .route({ method: "GET", path: "/users", tags: ["users"] })
-      .input(s.userListInput)
-      .output(z.array(s.user)),
-    create: oc
-      .route({ method: "POST", path: "/users", tags: ["users"], successStatus: 201 })
-      .input(s.userCreateInput)
-      .output(s.user),
-    setAdmin: oc
-      .route({ method: "POST", path: "/users/{id}/admin", tags: ["users"] })
-      .input(s.userSetAdminInput)
-      .output(s.user),
-    setDisabled: oc
-      .route({ method: "POST", path: "/users/{id}/disabled", tags: ["users"] })
-      .input(s.userSetDisabledInput)
-      .output(s.user),
   },
   settings: {
     get: oc.route({ method: "GET", path: "/settings", tags: ["settings"] }).output(s.settings),
@@ -537,14 +366,7 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/cc-template", tags: ["settings"] })
       .input(ccTemplate)
       .output(ccTemplate),
-    /** Whether tenants may turn on OWASP CRS for their sites. */
-    waf: oc.route({ method: "GET", path: "/settings/waf", tags: ["settings"] }).output(wafSettings),
-    /** Sites that already run CRS keep it; tenants can then only turn it off. */
-    setWaf: oc
-      .route({ method: "PUT", path: "/settings/waf", tags: ["settings"] })
-      .input(wafSettings)
-      .output(wafSettings),
-    /** The platform's pages for unknown hosts and for disabled and suspended sites. */
+    /** The platform's pages for unknown hosts and disabled sites. */
     errorPages: oc
       .route({ method: "GET", path: "/settings/error-pages", tags: ["settings"] })
       .output(platformErrorPages),
@@ -553,14 +375,6 @@ export const contract = {
       .route({ method: "PUT", path: "/settings/error-pages", tags: ["settings"] })
       .input(platformErrorPages)
       .output(platformErrorPages),
-    /** Recursive DNS servers for domain ownership TXT checks. */
-    dnsResolvers: oc
-      .route({ method: "GET", path: "/settings/dns-resolvers", tags: ["settings"] })
-      .output(s.dnsResolvers),
-    setDnsResolvers: oc
-      .route({ method: "PUT", path: "/settings/dns-resolvers", tags: ["settings"] })
-      .input(s.dnsResolversInput)
-      .output(s.dnsResolvers),
   },
   auditLogs: {
     list: oc
@@ -578,6 +392,5 @@ export type Contract = typeof contract;
 export * from "./access-keys";
 export * from "./alerts";
 export * from "./dns";
-export * from "./domains";
 export * from "./service-accounts";
 export * from "./usage";

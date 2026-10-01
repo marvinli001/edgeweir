@@ -8,7 +8,7 @@ import { logger } from "./logger";
 
 /**
  * Audit entries for what users do through better-auth's own endpoints
- * (sign-in, password, two-factor, passkeys, API keys). Everything else in the
+ * (sign-in, password, two-factor, passkeys). Everything else in the
  * console writes its audit rows itself; these requests never reach our code.
  *
  * better-auth commits its change before these hooks run, so the entry cannot
@@ -133,40 +133,13 @@ async function afterAuthEndpoint(db: Database, ctx: HookContext): Promise<void> 
         },
       });
       break;
-    case "/api-key/create":
-      // Never the key itself: only its id, name and the public prefix.
-      await write(db, actor, {
-        action: "api_key.create",
-        targetType: "api_key",
-        targetId: String(result.id ?? ""),
-        targetName: String(result.name ?? ""),
-        metadata: {
-          start: String(result.start ?? ""),
-          expiresAt: result.expiresAt ? new Date(String(result.expiresAt)).toISOString() : null,
-        },
-      });
-      break;
-    case "/api-key/delete":
-      await write(db, actor, {
-        action: "api_key.delete",
-        targetType: "api_key",
-        targetId: String(ctx.body?.keyId ?? ""),
-        targetName: (ctx.request && pendingNames.get(ctx.request)) ?? "",
-      });
-      break;
   }
 }
 
 async function beforeAuthEndpoint(db: Database, ctx: HookContext): Promise<void> {
   if (!ctx.request) return;
   try {
-    if (ctx.path === "/api-key/delete" && typeof ctx.body?.keyId === "string") {
-      const [row] = await db
-        .select({ name: schema.apikey.name })
-        .from(schema.apikey)
-        .where(eq(schema.apikey.id, ctx.body.keyId));
-      if (row?.name) pendingNames.set(ctx.request, row.name);
-    } else if (ctx.path === "/passkey/delete-passkey" && typeof ctx.body?.id === "string") {
+    if (ctx.path === "/passkey/delete-passkey" && typeof ctx.body?.id === "string") {
       const [row] = await db
         .select({ name: schema.passkey.name })
         .from(schema.passkey)

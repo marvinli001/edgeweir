@@ -80,21 +80,14 @@ export const wafTopRules = z.object({
   items: z.array(z.object({ ruleId: z.number().int(), requests: z.number() })),
 });
 
-/** Platform CRS policy (system setting `waf_settings`). */
-export const wafSettings = z.object({
-  /** Tenants may turn CRS on; administrators always can. */
-  tenantCrs: z.boolean(),
-});
-export const WAF_SETTINGS_DEFAULTS: WafSettings = { tenantCrs: true };
-
 /**
  * Whether a feature can be turned on for a site now: `nodes` when an active
- * node of the site's cluster lacks it (administrators may still require it
- * through the API), `platform` when the platform does not let tenants use it.
+ * node of the site's cluster lacks it (it may still be required through the
+ * API, which holds the cluster until its nodes are upgraded).
  */
 export const featureAvailability = z.object({
   available: z.boolean(),
-  reason: z.enum(["nodes", "platform"]).nullable(),
+  reason: z.enum(["nodes"]).nullable(),
 });
 
 export const siteFeatures = z.object({
@@ -115,7 +108,7 @@ export const siteFeatures = z.object({
 
 const idParam = z.object({ id: uuid });
 
-/** CRS of a site (members read; owners and admins change it). */
+/** OWASP CRS of a site. */
 export const wafContract = {
   get: oc
     .route({ method: "GET", path: "/sites/{id}/waf", tags: ["protection"] })
@@ -135,6 +128,5 @@ export type WafMode = z.infer<typeof wafMode>;
 export type SiteWaf = z.infer<typeof siteWaf>;
 export type SiteWafUpdateInput = z.infer<typeof siteWafUpdateInput>;
 export type WafTopRules = z.infer<typeof wafTopRules>;
-export type WafSettings = z.infer<typeof wafSettings>;
 export type FeatureAvailability = z.infer<typeof featureAvailability>;
 export type SiteFeatures = z.infer<typeof siteFeatures>;

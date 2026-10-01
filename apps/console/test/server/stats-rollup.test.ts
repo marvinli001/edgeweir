@@ -11,7 +11,7 @@ import {
 } from "../../src/server/services/stats";
 import { pruneTraffic, rollupTraffic } from "../../src/server/services/stats-rollup";
 import { rollupUsage } from "../../src/server/services/usage";
-import { createTestContext, seedOrganization } from "./helpers";
+import { createTestContext, seedOperator } from "./helpers";
 
 describe("M5 statistics identity, rollups and retention", async () => {
   const { ctx, client } = await createTestContext();
@@ -19,7 +19,7 @@ describe("M5 statistics identity, rollups and retention", async () => {
   const now = new Date("2026-09-27T12:30:00Z");
   const actor = { type: "user" as const, id: "user_admin" };
   beforeAll(async () => {
-    const { organizationId } = await seedOrganization(ctx.db);
+    await seedOperator(ctx.db);
     const cluster = await ctx.db.transaction((tx) =>
       createClusterTx(tx, { name: "stats", description: "" }, actor),
     );
@@ -32,7 +32,7 @@ describe("M5 statistics identity, rollups and retention", async () => {
           domains: ["stats.test"],
           origins: [{ address: "origin.test" }],
         }),
-        { organizationId, actor, masterKey: ctx.masterKey },
+        { actor, masterKey: ctx.masterKey },
       )
     ).site.id;
     const [row] = await ctx.db
@@ -76,9 +76,9 @@ describe("M5 statistics identity, rollups and retention", async () => {
   });
   it("preserves traffic, status, Top counters and rankings before and after rollups", async () => {
     const query = { range: "30d" as const, siteId };
-    const before = await trafficSeries(ctx.db, { all: true }, query, now.getTime());
+    const before = await trafficSeries(ctx.db, query, now.getTime());
     expect(await rollupTraffic(ctx.db, now)).toBeGreaterThan(0);
-    expect(await trafficSeries(ctx.db, { all: true }, query, now.getTime())).toEqual(before);
+    expect(await trafficSeries(ctx.db, query, now.getTime())).toEqual(before);
     const [hour] = await ctx.db.select().from(schema.nodeHourStats),
       [day] = await ctx.db.select().from(schema.nodeDayStats);
     expect(hour).toMatchObject({
@@ -91,14 +91,15 @@ describe("M5 statistics identity, rollups and retention", async () => {
       statusCodes: { "200": 18, "502": 2 },
       topIps: { "192.0.2.1": 20 },
     });
-    expect(
-      (await topSites(ctx.db, { all: true }, { range: "30d", limit: 10 }, now.getTime()))[0],
-    ).toMatchObject({ requests: 20, cacheHits: 18, cacheMisses: 2 });
+    expect((await topSites(ctx.db, { range: "30d", limit: 10 }, now.getTime()))[0]).toMatchObject({
+      requests: 20,
+      cacheHits: 18,
+      cacheMisses: 2,
+    });
     expect(
       (
         await trafficBreakdown(
           ctx.db,
-          { all: true },
           { range: "30d", by: "status", metric: "requests", limit: 10, siteId },
           now.getTime(),
         )
@@ -108,17 +109,10 @@ describe("M5 statistics identity, rollups and retention", async () => {
   });
   it("serves late arrivals from minute detail until the dirty hour/day is rebuilt", async () => {
     await ingestStatsBatch(ctx.db, edge, 6n, [bucket("2026-09-26T10:02:00Z", 5)], now.getTime());
-    const before = await trafficSeries(
-      ctx.db,
-      { all: true },
-      { range: "30d", siteId },
-      now.getTime(),
-    );
+    const before = await trafficSeries(ctx.db, { range: "30d", siteId }, now.getTime());
     expect(before.totals.requests).toBe(25);
     await rollupTraffic(ctx.db, now);
-    expect(
-      await trafficSeries(ctx.db, { all: true }, { range: "30d", siteId }, now.getTime()),
-    ).toEqual(before);
+    expect(await trafficSeries(ctx.db, { range: "30d", siteId }, now.getTime())).toEqual(before);
     expect((await ctx.db.select().from(schema.nodeDayStats))[0]?.requests).toBe(25);
   });
   it("retains unrolled data, prunes completed details and rejects expired uploads", async () => {
@@ -130,12 +124,7 @@ describe("M5 statistics identity, rollups and retention", async () => {
       ),
     ).toBe(true);
     await rollupTraffic(ctx.db, now);
-    const before = await trafficSeries(
-      ctx.db,
-      { all: true },
-      { range: "30d", siteId },
-      now.getTime(),
-    );
+    const before = await trafficSeries(ctx.db, { range: "30d", siteId }, now.getTime());
     // The usage window of the minute is not computed yet: the minute stays.
     await pruneTraffic(ctx.db, now);
     expect(
@@ -150,9 +139,7 @@ describe("M5 statistics identity, rollups and retention", async () => {
         (r) => r.minute.getUTCDate() === 10,
       ),
     ).toBe(false);
-    expect(
-      await trafficSeries(ctx.db, { all: true }, { range: "30d", siteId }, now.getTime()),
-    ).toEqual(before);
+    expect(await trafficSeries(ctx.db, { range: "30d", siteId }, now.getTime())).toEqual(before);
     expect(
       await ingestStatsBatch(ctx.db, edge, 7n, [bucket("2026-09-10T10:01:00Z")], now.getTime()),
     ).toBe(0);

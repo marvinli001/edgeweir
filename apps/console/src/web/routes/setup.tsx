@@ -46,7 +46,6 @@ function SetupPage() {
                   name: String(data.get("adminName") ?? ""),
                   email: String(data.get("email") ?? ""),
                   password: String(data.get("password") ?? ""),
-                  organizationName: String(data.get("organizationName") ?? ""),
                 };
                 try {
                   await setup.mutateAsync(input);
@@ -93,15 +92,6 @@ function SetupPage() {
                     required
                     autoComplete="new-password"
                     placeholder={m.setup_password_placeholder()}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="organizationName">{m.setup_organization()}</FieldLabel>
-                  <Input
-                    id="organizationName"
-                    name="organizationName"
-                    required
-                    defaultValue="Default"
                   />
                 </Field>
                 {setup.isError ? (

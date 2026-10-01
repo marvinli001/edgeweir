@@ -9,7 +9,6 @@ import { and, asc, eq, gt, gte, lt, lte, or, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import type { Executor } from "./revisions";
-import type { SiteScope } from "./sites";
 import { findSite } from "./sites";
 
 const WINDOW_MS = USAGE_WINDOW_SECONDS * 1000;
@@ -28,7 +27,6 @@ function toRecord(row: UsageRow): UsageRecord {
   return {
     id: `${row.siteId}.${start / 1000}`,
     siteId: row.siteId,
-    organizationId: row.organizationId,
     windowStart: row.windowStart.toISOString(),
     windowEnd: new Date(start + WINDOW_MS).toISOString(),
     requests: row.requests,
@@ -124,14 +122,14 @@ export async function rollupUsage(db: Database, now = new Date(), limit = 500): 
       const start = key.bucket.toISOString();
       const end = new Date(key.bucket.getTime() + WINDOW_MS).toISOString();
       const result = await tx.execute<{ seq: string }>(sql`
-        insert into site_usage (window_start, site_id, organization_id, requests, bytes_sent, bytes_received, revision, seq, updated_at)
-        select ${start}::timestamptz, s.id, s.organization_id,
+        insert into site_usage (window_start, site_id, requests, bytes_sent, bytes_received, revision, seq, updated_at)
+        select ${start}::timestamptz, s.id,
           coalesce(sum(m.requests), 0), coalesce(sum(m.bytes_sent), 0), coalesce(sum(m.bytes_received), 0),
           1, nextval('site_usage_seq'), now()
         from site s left join node_minute_stats m
           on m.site_id = s.id and m.minute >= ${start}::timestamptz and m.minute < ${end}::timestamptz
         where s.id = ${key.siteId}::uuid
-        group by s.id, s.organization_id
+        group by s.id
         on conflict (window_start, site_id) do update set
           requests = excluded.requests,
           bytes_sent = excluded.bytes_sent,
@@ -236,11 +234,6 @@ export async function maintainUsage(db: Database, now = new Date()) {
   return changed;
 }
 
-function scopeFilter(scope: SiteScope, organizationId?: string) {
-  if (!scope.all) return eq(schema.siteUsage.organizationId, scope.organizationId);
-  return organizationId ? eq(schema.siteUsage.organizationId, organizationId) : undefined;
-}
-
 function parseAligned(value: string): Date {
   const date = new Date(value);
   if (Number.isNaN(date.getTime()) || date.getTime() % WINDOW_MS !== 0)
@@ -266,12 +259,10 @@ function decodeCursor(cursor: string): { windowStart: Date; siteId: string } {
 /** Usage in [from, to), ordered by window then site, one page at a time. */
 export async function listUsage(
   db: Database,
-  scope: SiteScope,
   input: {
     from: string;
     to: string;
     siteId?: string;
-    organizationId?: string;
     cursor?: string;
     limit: number;
   },
@@ -280,9 +271,9 @@ export async function listUsage(
   const to = parseAligned(input.to);
   if (to.getTime() <= from.getTime()) fail("USAGE_RANGE_INVALID", "to must be after from");
   if (input.siteId)
-    await findSite(db, input.siteId, scope).catch((error) => {
+    await findSite(db, input.siteId).catch((error) => {
       // Usage outlives deleted sites: a site id without a row still filters.
-      if ((error as { code?: string }).code !== "SITE_NOT_FOUND" || !scope.all) throw error;
+      if ((error as { code?: string }).code !== "SITE_NOT_FOUND") throw error;
     });
   const u = schema.siteUsage;
   const after = input.cursor ? decodeCursor(input.cursor) : null;
@@ -293,7 +284,6 @@ export async function listUsage(
       and(
         gte(u.windowStart, from),
         lt(u.windowStart, to),
-        scopeFilter(scope, input.organizationId),
         input.siteId ? eq(u.siteId, input.siteId) : undefined,
         after
           ? or(
@@ -316,18 +306,14 @@ export async function listUsage(
 }
 
 /** Records created or revised after `afterSeq`, in seq order. */
-export async function usageChanges(
-  db: Database,
-  scope: SiteScope,
-  input: { afterSeq: string; limit: number; organizationId?: string },
-) {
+export async function usageChanges(db: Database, input: { afterSeq: string; limit: number }) {
   const afterSeq = BigInt(input.afterSeq);
   if (afterSeq > 9223372036854775807n) fail("USAGE_CURSOR_INVALID", "afterSeq is out of range");
   const u = schema.siteUsage;
   const rows = await db
     .select()
     .from(u)
-    .where(and(gt(u.seq, afterSeq), scopeFilter(scope, input.organizationId)))
+    .where(gt(u.seq, afterSeq))
     .orderBy(asc(u.seq))
     .limit(input.limit);
   const completeUntil = await usageCompleteUntil(db);

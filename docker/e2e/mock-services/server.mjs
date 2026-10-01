@@ -1,10 +1,8 @@
-// Local-only DNS provider/TXT authority and webhook sink for compose acceptance.
+// Local-only DNS provider and webhook sink for compose acceptance.
 
-import { createSocket } from "node:dgram";
 import http from "node:http";
 
 const zones = new Map(),
-  txt = new Map(),
   events = [];
 const same = (a, b) => a.name === b.name && a.type === b.type && a.data === b.data;
 const httpServer = http.createServer(async (req, res) => {
@@ -28,16 +26,6 @@ const httpServer = http.createServer(async (req, res) => {
     body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
   } catch {
     return respond(400, { error: "invalid JSON" });
-  }
-  if (req.method === "POST" && req.url === "/txt") {
-    if (
-      typeof body.name !== "string" ||
-      !Array.isArray(body.values) ||
-      body.values.some((v) => typeof v !== "string" || Buffer.byteLength(v) > 255)
-    )
-      return respond(400, { error: "invalid TXT" });
-    txt.set(body.name, body.values);
-    return respond(200, { ok: true });
   }
   if (req.method === "POST" && req.url === "/webhook") {
     events.push(body);
@@ -72,42 +60,3 @@ const httpServer = http.createServer(async (req, res) => {
   return respond(404, { error: "not found" });
 });
 httpServer.listen(8080, "0.0.0.0");
-const dns = createSocket("udp4");
-dns.on("message", (query, remote) => {
-  if (query.length < 17) return;
-  let offset = 12;
-  const labels = [];
-  while (offset < query.length && query[offset]) {
-    const size = query[offset];
-    if (size > 63 || offset + size >= query.length) return;
-    labels.push(query.subarray(offset + 1, offset + 1 + size).toString());
-    offset += size + 1;
-  }
-  if (offset + 5 > query.length) return;
-  const type = query.readUInt16BE(offset + 1),
-    name = labels.join(".").toLowerCase();
-  offset += 5;
-  const values = type === 16 ? (txt.get(name) ?? []) : [];
-  const header = Buffer.alloc(12);
-  header.writeUInt16BE(query.readUInt16BE(0));
-  header.writeUInt16BE(values.length ? 0x8180 : 0x8183, 2);
-  header.writeUInt16BE(1, 4);
-  header.writeUInt16BE(values.length, 6);
-  const answers = values.map((value) => {
-    const data = Buffer.from(value),
-      rr = Buffer.alloc(13);
-    rr.writeUInt16BE(0xc00c);
-    rr.writeUInt16BE(16, 2);
-    rr.writeUInt16BE(1, 4);
-    rr.writeUInt32BE(1, 6);
-    rr.writeUInt16BE(data.length + 1, 10);
-    rr[12] = data.length;
-    return Buffer.concat([rr, data]);
-  });
-  dns.send(
-    Buffer.concat([header, query.subarray(12, offset), ...answers]),
-    remote.port,
-    remote.address,
-  );
-});
-dns.bind(5353, "0.0.0.0");

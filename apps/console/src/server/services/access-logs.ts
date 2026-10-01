@@ -9,8 +9,8 @@ import type { AppContext } from "../lib/context";
 import type { Actor } from "./audit";
 import { recordAudit } from "./audit";
 import { insertClickHouseLogs, queryClickHouseLogs } from "./clickhouse";
-import { type Executor, publishRevision } from "./revisions";
-import { findSite, type SiteScope } from "./sites";
+import { type Executor, publisher, publishRevision } from "./revisions";
+import { findSite } from "./sites";
 
 const DAY = 86400000;
 /** a_b_c: protocol, version, SNI, counts and ALPN, then two truncated SHA-256 hashes. */
@@ -159,18 +159,17 @@ export async function ingestLogs(
     return entries.length;
   });
 }
-export async function logSettings(app: AppContext, scope: SiteScope, siteId: string) {
-  const site = await findSite(app.db, siteId, scope);
+export async function logSettings(app: AppContext, siteId: string) {
+  const site = await findSite(app.db, siteId);
   return { sampleRate: site.logSampleRate, storage: app.env.EDGEWEIR_ANALYTICS };
 }
 export async function configureLogs(
   app: AppContext,
-  scope: SiteScope,
   actor: Actor,
   input: { siteId: string; sampleRate: number },
 ) {
   return app.db.transaction(async (tx) => {
-    const site = await findSite(tx, input.siteId, scope, true);
+    const site = await findSite(tx, input.siteId, true);
     await tx
       .update(schema.site)
       .set({ logSampleRate: input.sampleRate, updatedAt: new Date() })
@@ -178,21 +177,20 @@ export async function configureLogs(
     await publishRevision(tx, {
       clusterId: site.clusterId,
       reason: { code: "site_updated", params: { site: site.name } },
-      userId: actor.id,
+      userId: publisher(actor),
     });
     await recordAudit(tx, actor, {
       action: "site.logs_configure",
       targetType: "site",
       targetId: site.id,
       targetName: site.name,
-      organizationId: site.organizationId,
       metadata: { sampleRate: input.sampleRate },
     });
     return { ok: true as const };
   });
 }
-export async function queryLogs(app: AppContext, scope: SiteScope, input: LogQuery) {
-  await findSite(app.db, input.siteId, scope);
+export async function queryLogs(app: AppContext, input: LogQuery) {
+  await findSite(app.db, input.siteId);
   const from = Math.max(Date.parse(input.from), logCutoff()),
     to = Math.min(Date.parse(input.to), Date.now() + 300000);
   if (from >= to) return { entries: [], truncated: false };

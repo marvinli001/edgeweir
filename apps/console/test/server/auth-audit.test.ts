@@ -2,15 +2,7 @@ import { schema } from "@edgeweir/db";
 import { and, desc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
-import {
-  CookieJar,
-  createTestContext,
-  PASSWORD,
-  rpcClient,
-  setupPlatform,
-  signIn,
-  totp,
-} from "./helpers";
+import { CookieJar, createTestContext, PASSWORD, setupPlatform, totp } from "./helpers";
 import { SoftAuthenticator } from "./webauthn";
 
 describe("audit entries for better-auth account events", async () => {
@@ -40,6 +32,26 @@ describe("audit entries for better-auth account events", async () => {
         { incoming: { socket: { remoteAddress: "203.0.113.9" } } },
       ),
     );
+  /** The same, as an oRPC call of the web console (/rpc). */
+  const rpc = async <T>(path: string, input: unknown): Promise<T> => {
+    const res = await app.request(
+      `${origin}/rpc/${path}`,
+      {
+        method: "POST",
+        headers: {
+          origin,
+          cookie: jar.header,
+          "content-type": "application/json",
+          "user-agent": "audit-test",
+          "x-csrf-token": "orpc",
+        },
+        body: JSON.stringify({ json: input }),
+      },
+      { incoming: { socket: { remoteAddress: "203.0.113.9" } } },
+    );
+    expect(res.status, path).toBe(200);
+    return ((await res.json()) as { json: T }).json;
+  };
 
   const entries = (action: string) =>
     ctx.db
@@ -50,40 +62,36 @@ describe("audit entries for better-auth account events", async () => {
   const latest = async (action: string) => (await entries(action))[0];
 
   beforeAll(async () => {
-    const { organizationId } = await setupPlatform(ctx);
-    const admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
-    userId = (
-      await admin.users.create({
-        name: "Ada Lovelace",
-        email: "ada@example.com",
-        password: PASSWORD,
-        organizationId,
-        role: "member",
-      })
-    ).id;
+    ({ userId } = await setupPlatform(ctx));
   });
   afterAll(() => pglite.close());
 
   it("records successful and failed password sign-ins with the client address", async () => {
     const bad = await auth("/sign-in/email", {
-      email: "ada@example.com",
+      email: "admin@example.com",
       password: "wrong one here",
     });
     expect(bad.status).toBe(401);
     expect(await latest("auth.sign_in_failed")).toMatchObject({
       actorId: "",
       ip: "203.0.113.9",
-      targetName: "ada@example.com",
-      metadata: { method: "password", code: "INVALID_EMAIL_OR_PASSWORD", email: "ada@example.com" },
+      targetName: "admin@example.com",
+      metadata: {
+        method: "password",
+        code: "INVALID_EMAIL_OR_PASSWORD",
+        email: "admin@example.com",
+      },
     });
     // The password never appears in the entry.
     expect(JSON.stringify(await latest("auth.sign_in_failed"))).not.toContain("wrong one here");
 
-    expect((await auth("/sign-in/email", { email: "ada@example.com", password })).status).toBe(200);
+    expect((await auth("/sign-in/email", { email: "admin@example.com", password })).status).toBe(
+      200,
+    );
     expect(await latest("auth.sign_in")).toMatchObject({
       actorType: "user",
       actorId: userId,
-      actorName: "Ada Lovelace",
+      actorName: "Platform Admin",
       ip: "203.0.113.9",
       userAgent: "audit-test",
       targetId: userId,
@@ -125,12 +133,12 @@ describe("audit entries for better-auth account events", async () => {
       ip: "203.0.113.9",
     });
     // Enrollment is not a sign-in.
-    expect(await entries("auth.sign_in")).toHaveLength(2); // admin + Ada's password sign-in
+    expect(await entries("auth.sign_in")).toHaveLength(1); // the password sign-in above
 
     jar.clear();
-    const first = await auth("/sign-in/email", { email: "ada@example.com", password });
+    const first = await auth("/sign-in/email", { email: "admin@example.com", password });
     expect(await first.json()).toMatchObject({ twoFactorRedirect: true });
-    expect(await entries("auth.sign_in")).toHaveLength(2);
+    expect(await entries("auth.sign_in")).toHaveLength(1);
     expect((await auth("/two-factor/verify-totp", { code: "000000" })).status).not.toBe(200);
     expect(await latest("auth.sign_in_failed")).toMatchObject({
       metadata: { method: "totp", code: "INVALID_CODE" },
@@ -149,10 +157,12 @@ describe("audit entries for better-auth account events", async () => {
     expect(await entries("account.two_factor_enable")).toHaveLength(1);
   });
 
-  it("records API key creation and deletion without the key", async () => {
-    const created = await auth("/api-key/create", { name: "terraform" });
-    expect(created.status).toBe(200);
-    const { id, key } = (await created.json()) as { id: string; key: string };
+  it("records API key creation and revocation without the key", async () => {
+    const { id, key } = await rpc<{ id: string; key: string }>("accessKeys/create", {
+      name: "terraform",
+      scope: "write",
+    });
+    expect(key).toMatch(/^ewk_/);
     const entry = await latest("api_key.create");
     expect(entry).toMatchObject({
       actorId: userId,
@@ -160,12 +170,13 @@ describe("audit entries for better-auth account events", async () => {
       targetId: id,
       targetName: "terraform",
       ip: "203.0.113.9",
+      metadata: { scope: "write", prefix: expect.stringMatching(/^ewk_/) },
     });
+    expect(key.startsWith(String(entry?.metadata.prefix))).toBe(true);
     expect(JSON.stringify(entry)).not.toContain(key);
-    expect((entry?.metadata as { start?: string } | undefined)?.start).toMatch(/^ewk_/);
 
-    expect((await auth("/api-key/delete", { keyId: id })).status).toBe(200);
-    expect(await latest("api_key.delete")).toMatchObject({
+    await rpc("accessKeys/revoke", { id });
+    expect(await latest("api_key.revoke")).toMatchObject({
       actorId: userId,
       targetType: "api_key",
       targetId: id,
@@ -179,7 +190,7 @@ describe("audit entries for better-auth account events", async () => {
     expect(options.status).toBe(200);
     const registered = await auth("/passkey/verify-registration", {
       response: authenticator.register((await options.json()) as { challenge: string }),
-      name: "Ada's laptop",
+      name: "Admin's laptop",
     });
     expect(registered.status).toBe(200);
     const [row] = await ctx.db
@@ -191,7 +202,7 @@ describe("audit entries for better-auth account events", async () => {
       actorId: userId,
       targetId: userId,
       ip: "203.0.113.9",
-      metadata: { passkeyId: row?.id, name: "Ada's laptop" },
+      metadata: { passkeyId: row?.id, name: "Admin's laptop" },
     });
 
     jar.clear();
@@ -210,7 +221,7 @@ describe("audit entries for better-auth account events", async () => {
     expect(await latest("account.passkey_delete")).toMatchObject({
       actorId: userId,
       targetId: userId,
-      metadata: { passkeyId: row?.id, name: "Ada's laptop" },
+      metadata: { passkeyId: row?.id, name: "Admin's laptop" },
     });
     const left = await ctx.db
       .select()

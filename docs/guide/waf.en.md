@@ -14,9 +14,9 @@ Turn on the OWASP Core Rule Set (CRS) per site: ModSecurity on the nodes inspect
 
 ## Turn on CRS
 
-Prerequisites: every active node of the site's cluster supports `modsecurity-v1` (has `edgeweir-openresty-modsecurity` installed, see [Adding nodes](../deploy/nodes.en.md)), and the platform lets tenants turn CRS on (administrators are not limited by this).
+Prerequisites: every active node of the site's cluster supports `modsecurity-v1` (has `edgeweir-openresty-modsecurity` installed, see [Adding nodes](../deploy/nodes.en.md)).
 
-1. Open **Console → Sites**, select the site, and open the **Security** tab.
+1. Open **Sites**, select the site, and open the **Security** tab.
 2. In the **OWASP CRS managed rules** card, set **Mode** to **Detect only**.
 3. Set **Paranoia level**, **Anomaly score threshold**, **Request body inspected (bytes)**, and **Excluded rule IDs** as needed.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision for the site's cluster.
@@ -29,8 +29,6 @@ Prerequisites: every active node of the site's cluster supports `modsecurity-v1`
 
    In **Detect only** mode the origin's usual status comes back; within a minute, **Most-matched CRS rules** lists the rules the request matched (such as 941100).
 6. Once you have reviewed matches and false positives, set **Mode** to **Block** and save. The same request returns `403`.
-
-Only owners and admins of the organization can change the settings; members can view them and the matches.
 
 ## Fields
 
@@ -53,6 +51,7 @@ To exclude rules, type one or more IDs (separated by commas or spaces) into **Ex
 | Blocking | In block mode, requests at the threshold get 403 and never reach the origin |
 | Changes | The node renders the site's CRS settings into a rule file, tests it, and reloads; a failed test keeps the previous configuration |
 | Rollback | A configuration rollback restores the site's CRS settings of that revision |
+| Audit | Every change is audited as `site.waf_update` |
 
 ## View matches
 
@@ -62,17 +61,6 @@ To exclude rules, type one or more IDs (separated by commas or spaces) into **Ex
 | The site's **Logs** tab | With access log sampling on, requests that matched rules show a **CRS** column: the rule IDs (at most 16 per request) and a **Blocked** badge. The CSV gets `wafRuleIds` (space-separated) and `wafBlocked` columns |
 
 Matches are recorded in both detect and block mode. Access logs: [Access logs](access-logs.en.md).
-
-## Platform setting
-
-Platform administrators set **Tenants may turn on OWASP CRS** in **Admin → System settings → OWASP CRS** (on by default).
-
-| State | Behavior |
-| --- | --- |
-| On | Owners and admins of an organization can turn CRS on |
-| Off | Tenants turning CRS on, or changing it while it runs, get "The platform does not allow tenants to turn on OWASP CRS"; they can still set the mode to **Off** and change the other fields while it is off. Sites already running CRS keep it. Platform administrators are not limited |
-
-Changes are audited as `system.waf_update`; changes to a site's settings as `site.waf_update`.
 
 ## Performance
 
@@ -86,7 +74,7 @@ While any site on a node runs CRS, the node loads ModSecurity and the bundled ru
 | --- | --- |
 | `modsecurity-v1` | Any site with CRS on (detect or block) |
 
-While an active node of the cluster lacks `modsecurity-v1`, **Mode** cannot be changed and shows "Some nodes of the site's cluster do not support it yet"; CRS already on can still be turned off. Tenants turning it on through the API get "Cluster nodes need these capabilities first: modsecurity-v1". Platform administrators can publish deliberately; nodes without the capability keep their last-known-good configuration.
+While an active node of the cluster lacks `modsecurity-v1`, **Mode** of a site without CRS cannot be changed and shows "Some nodes of the site's cluster do not support it yet" (`crs.reason` is `nodes` in `GET /sites/{id}/features`); CRS already on can still be changed or turned off. The API can still turn it on: the configuration is published, and nodes without the capability keep their last-known-good configuration and show **Upgrade required** until `edgeweir-openresty-modsecurity` is installed or the node is upgraded.
 
 ## Limits
 
@@ -102,8 +90,7 @@ While an active node of the cluster lacks `modsecurity-v1`, **Mode** cannot be c
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | **Mode** is unavailable with "Some nodes of the site's cluster do not support it yet" | An active node of the cluster lacks `edgeweir-openresty-modsecurity` or is too old | Install the package on the node or upgrade it |
-| **Mode** is unavailable with "The platform does not allow tenants to turn it on" | The platform turned off **Tenants may turn on OWASP CRS** | Contact the platform administrators |
-| "The platform does not allow tenants to turn on OWASP CRS" | As above; or a tenant changed running CRS after the platform turned it off | Only setting the mode to **Off** is possible, or ask a platform administrator |
+| A node shows **Upgrade required** | CRS was turned on through the API and the node lacks `modsecurity-v1` | Install the package on the node or upgrade it |
 | Legitimate requests get 403 | False positive | Find the rule ID in **Most-matched CRS rules** or the access logs and add it to **Excluded rule IDs**; or lower the paranoia level or raise the threshold |
 | The test payload is not blocked | Mode is **Detect only**; the anomaly score stays below the threshold; the rules are excluded; the node has not applied the configuration yet | Check the settings and the node's applied revision |
 | "Rule IDs are integers from 900000 to 999999, without duplicates, at most 200" | An ID outside the CRS range, a duplicate, or too many IDs | Correct the input |

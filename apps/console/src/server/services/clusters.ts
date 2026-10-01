@@ -7,6 +7,7 @@ import { ONLINE_WINDOW_SECONDS } from "./nodes";
 import {
   type Executor,
   latestRevision,
+  publisher,
   publishRevision,
   rollbackToRevision,
   type Tx,
@@ -82,7 +83,7 @@ export async function createClusterTx(
   await publishRevision(tx, {
     clusterId: row.id,
     reason: { code: "cluster_created", params: { cluster: row.name } },
-    userId: actor.type === "user" ? actor.id : null,
+    userId: publisher(actor),
   });
   await recordAudit(tx, actor, {
     action: "cluster.create",
@@ -178,7 +179,7 @@ export async function rollbackCluster(
     const result = await rollbackToRevision(tx, {
       clusterId: cluster.id,
       revision: input.revision,
-      userId: actor.type === "user" || actor.type === "api_key" ? actor.id : null,
+      userId: publisher(actor),
     });
     if (!result) fail("REVISION_NOT_FOUND", "revision not found");
     await recordAudit(tx, actor, {
@@ -198,18 +199,8 @@ export async function rollbackCluster(
   });
 }
 
-/**
- * The cluster a new site lands on when none is specified: the organization's
- * default cluster if set, otherwise the oldest cluster.
- */
-export async function defaultClusterId(db: Executor, organizationId?: string): Promise<string> {
-  if (organizationId) {
-    const [settings] = await db
-      .select({ clusterId: schema.organizationSettings.defaultClusterId })
-      .from(schema.organizationSettings)
-      .where(eq(schema.organizationSettings.organizationId, organizationId));
-    if (settings?.clusterId) return settings.clusterId;
-  }
+/** The cluster a new site lands on when none is specified: the oldest cluster. */
+export async function defaultClusterId(db: Executor): Promise<string> {
   const [row] = await db
     .select({ id: schema.cluster.id })
     .from(schema.cluster)

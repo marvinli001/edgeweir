@@ -6,7 +6,7 @@
 [![Docs](https://github.com/marvinli001/edgeweir/actions/workflows/docs.yml/badge.svg?branch=master)](https://marvinli001.github.io/edgeweir/en/)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](LICENSE)
 
-Self-hosted CDN / WAF / edge scheduling control plane. Manages edge nodes, origin pools, caching, HTTPS, access policy, DNS steering and organization access control from one console. Edge nodes: [edgeweir-node](https://github.com/marvinli001/edgeweir-node).
+Self-hosted CDN / WAF / edge scheduling control plane for personal use: one operator account manages edge nodes, origin pools, caching, HTTPS, access policy and DNS steering from one console. Edge nodes: [edgeweir-node](https://github.com/marvinli001/edgeweir-node).
 
 Documentation: <https://marvinli001.github.io/edgeweir/en/>
 
@@ -14,13 +14,13 @@ Documentation: <https://marvinli001.github.io/edgeweir/en/>
 
 | Area | Capabilities |
 | --- | --- |
-| Clusters and access | Node groups, regions, organizations, member invitations, 2FA / passkeys, management audit log |
+| Clusters and account | Node groups, regions, configuration canary, 2FA / passkeys, service accounts, audit log |
 | Origins and cache | Origin pools, active and passive health checks, session affinity, origin TLS verification, S3-signed origins, WebSocket, cache keys, slicing, purge by URL / directory / host / Cache-Tag, prefetch per device and from sitemaps, custom error pages |
 | Certificates and protocols | Certificate upload, ACME HTTP-01 / DNS-01 issuance and renewal, HTTPS, HSTS, HTTP/2, HTTP/3; Zstandard, Brotli and Gzip compression |
-| Access policy | Organization / platform IP lists, local GeoIP, phased rules, WAF, rate limits, redirects, rewrites, request and response header transforms; IP bans delivered within seconds, platform bans optionally dropped in the kernel by nftables |
-| Managed rules | OWASP CRS: detect or block, paranoia level, anomaly threshold, exclusions by rule ID, request body limit; matched-rule statistics and access logs; the platform can forbid it for tenants |
-| Challenges and CC mitigation | Four challenge levels (cookie redirect, JavaScript, proof of work, image captcha); site or platform Under Attack; tiered CC escalation decided locally on each node (site, per-URL, per-IP automatic bans, origin error rate); signed passes valid across the cluster; JA4 fingerprints in rules, rate limits and access logs |
-| DNS and observability | Domain ownership verification, independent DNS revisions, healthy-node steering, deduplicated traffic statistics and rollups, Top URL / IP, alerts and subscriptions |
+| Access policy | IP lists (global allow / block), local GeoIP, phased rules, WAF, rate limits, redirects, rewrites, request and response header transforms; IP bans delivered within seconds, global bans optionally dropped in the kernel by nftables |
+| Managed rules | OWASP CRS: detect or block, paranoia level, anomaly threshold, exclusions by rule ID, request body limit; matched-rule statistics and access logs |
+| Challenges and CC mitigation | Four challenge levels (cookie redirect, JavaScript, proof of work, image captcha); site or global Under Attack; tiered CC escalation decided locally on each node (site, per-URL, per-IP automatic bans, origin error rate); signed passes valid across the cluster; JA4 fingerprints in rules, rate limits and access logs |
+| DNS and observability | Independent DNS revisions, healthy-node steering, deduplicated traffic statistics and rollups, Top URL / IP, alerts and subscriptions |
 | Operations | Sampled access logs with CSV export, optional ClickHouse, read-only and revocable AccessKeys, signed canary upgrades with rollback, performance baseline, backup and recovery |
 
 ## Architecture
@@ -85,7 +85,7 @@ docker compose up -d
 docker compose logs console | grep setupToken
 ```
 
-Open <http://localhost:3000> and complete the setup wizard with the one-time setup token from the log. The wizard creates the platform administrator and a default organization. The token expires after the first successful setup; setup requests without it are rejected.
+Open <http://localhost:3000> and complete the setup wizard with the one-time setup token from the log. The wizard creates the only operator account and a default cluster. The token expires after the first successful setup; setup requests without it are rejected.
 
 ### Environment variables
 
@@ -95,7 +95,7 @@ Open <http://localhost:3000> and complete the setup wizard with the one-time set
 | `POSTGRES_PASSWORD` | Yes | Password of the bundled PostgreSQL. |
 | `BETTER_AUTH_SECRET` | No | Derived from the master key when unset. Deployments that set it must keep it; the console refuses to start once it is removed. |
 
-All other variables have defaults; see [.env.example](.env.example). SMTP, the node release source, DNS servers for ownership checks, the origin allow list and GeoIP are configured after setup in **Admin → System**.
+All other variables have defaults; see [.env.example](.env.example). SMTP, the node release source, the origin allow list and GeoIP are configured after setup in **System**.
 
 ### Optional components
 
@@ -133,7 +133,7 @@ sudo bash deploy.sh install
 
 Node requirements: Linux with systemd, amd64 / arm64, glibc 2.34 or later (RHEL / Rocky / AlmaLinux 9+, Debian 12+, Ubuntu 22.04+), access to port 8443 of the console.
 
-1. Sign in as a platform administrator, switch to **Admin → Clusters & nodes**, pick a cluster and generate an install command. The command carries a single-use token and the SHA-256 fingerprint of the console's internal CA.
+1. Sign in, open **Clusters & nodes**, pick a cluster and generate an install command. The command carries a single-use token and the SHA-256 fingerprint of the console's internal CA.
 2. Run it on the node with an account that may use sudo:
 
    ```sh
@@ -202,7 +202,7 @@ Dependencies:
 - for the G3 step: a node image from before G3, `edgeweir-node:pre-g3` (`E2E_OLD_NODE_IMAGE`; `scripts/e2e-g3.mjs` builds it from edgeweir-node commit `6da3403` when missing)
 - network access to deb.debian.org and openresty.org; building the node image or the edgeweir-openresty packages for the first time also needs github.com, download.gnome.org and vault.almalinux.org
 
-Coverage: enrollment, config rollout, caching, purge and prefetch, origins and S3, failover, the auth route allow list (better-auth organization and admin endpoints closed; API keys never become sessions), the origin address policy and CDN-Loop, HTTPS origin name verification, Range requests over 1 MiB slices, `install.sh` in a clean container installing from the console's mirror, dynamic bans (delivery p95 ≤ 5 s, site bans, platform bans dropped by nftables), challenges and passes (a headless browser passes the js and pow challenges; the pass works on another node and fails from another prefix, with another User-Agent or when forged), tiered CC (only the attacked path escalates, per-IP automatic bans), JA4 in rule matching, Brotli and Zstandard negotiated by q-value (one cached identity object, decoded by `curl --compressed`), OWASP CRS detection and blocking (cache hits included), clusters with old nodes unable to turn these on, the contents of the edgeweir-openresty packages, purges by Cache-Tag and host (stale content and slices included), prefetch per device and from sitemaps, active health checks taking origins out and back, session affinity and its failover, site and platform error pages (escaping, no-store, request IDs), and Playwright UI flows.
+Coverage: enrollment, config rollout, caching, purge and prefetch, origins and S3, failover, the auth route allow list (better-auth admin and api-key endpoints closed; API keys never become sessions), the origin address policy and CDN-Loop, HTTPS origin name verification, Range requests over 1 MiB slices, `install.sh` in a clean container installing from the console's mirror, dynamic bans (delivery p95 ≤ 5 s, site bans, global bans dropped by nftables), challenges and passes (a headless browser passes the js and pow challenges; the pass works on another node and fails from another prefix, with another User-Agent or when forged), tiered CC (only the attacked path escalates, per-IP automatic bans), JA4 in rule matching, Brotli and Zstandard negotiated by q-value (one cached identity object, decoded by `curl --compressed`), OWASP CRS detection and blocking (cache hits included), clusters with old nodes unable to turn these on, the contents of the edgeweir-openresty packages, purges by Cache-Tag and host (stale content and slices included), prefetch per device and from sitemaps, active health checks taking origins out and back, session affinity and its failover, site and platform error pages (escaping, no-store, request IDs), and Playwright UI flows.
 
 `compose.e2e.yml` and `scripts/e2e.sh` both read the variables below; give both the same values. A different project name, ports, tag and subnets run a second stack side by side.
 
@@ -243,7 +243,7 @@ The documentation site <https://marvinli001.github.io/edgeweir/en/> is generated
 | Area | Documents |
 | --- | --- |
 | Deployment | [Overview](docs/deploy/README.en.md) · [Docker Compose](docs/deploy/docker.en.md) · [BT Panel / aaPanel](docs/deploy/baota.en.md) · [deploy.sh](docs/deploy/deploy-script.en.md) · [Railway](docs/deploy/railway.en.md) · [Fly.io](docs/deploy/fly.en.md) · [Ports and reverse proxy](docs/deploy/networking.en.md) · [Adding nodes](docs/deploy/nodes.en.md) · [Versions and upgrades](docs/deploy/upgrade.en.md) · [Backup and recovery](docs/deploy/backup.en.md) |
-| Usage | [Quick start](docs/guide/first-site.en.md) · [Organizations and members](docs/guide/organizations.en.md) · [Platform administration](docs/guide/admin.en.md) · [Origins and cache](docs/guide/origins-and-cache.en.md) · [HTTPS and certificates](docs/guide/https.en.md) · [Rules](docs/guide/rules.en.md) · [Bans](docs/guide/bans.en.md) · [Challenges and CC mitigation](docs/guide/challenges.en.md) · [OWASP CRS managed rules](docs/guide/waf.en.md) · [DNS and alerts](docs/guide/dns-and-alerts.en.md) · [Access logs and AccessKeys](docs/guide/access-logs.en.md) · [Node upgrades](docs/guide/node-upgrades.en.md) |
+| Usage | [Quick start](docs/guide/first-site.en.md) · [Account and sign-in](docs/guide/account.en.md) · [Clusters and system](docs/guide/system.en.md) · [Origins and cache](docs/guide/origins-and-cache.en.md) · [HTTPS and certificates](docs/guide/https.en.md) · [Rules](docs/guide/rules.en.md) · [Bans](docs/guide/bans.en.md) · [Challenges and CC mitigation](docs/guide/challenges.en.md) · [OWASP CRS managed rules](docs/guide/waf.en.md) · [DNS steering and alerts](docs/guide/dns-and-alerts.en.md) · [Access logs and AccessKeys](docs/guide/access-logs.en.md) · [Node upgrades](docs/guide/node-upgrades.en.md) |
 | Reference | [Environment variables](docs/reference/environment.en.md) · [Command line](docs/reference/cli.en.md) · [API and endpoints](docs/reference/api.en.md) |
 | Project | [Architecture](ARCHITECTURE.en.md) · [Security](SECURITY.en.md) · [Contributing](CONTRIBUTING.en.md) · [Licensing](LICENSING.en.md) |
 
@@ -251,4 +251,4 @@ The documentation site <https://marvinli001.github.io/edgeweir/en/> is generated
 
 [AGPL-3.0-only](LICENSE); [edgeweir-node](https://github.com/marvinli001/edgeweir-node) uses the same license. Commercial use is permitted subject to the license.
 
-Organizations, members, access control, organization isolation and the console and admin area are part of the open-source core. Customer portals, plans and billing, finance and reselling belong to a separate commercial product and add no restrictions to the core. See [LICENSING.en.md](LICENSING.en.md).
+The open-source edition is a single-operator CDN without multi-tenancy. Multi-tenancy (organizations, members and the like), customer portals, plans and billing, finance and reselling belong to separate commercial products and add no restrictions to the core. See [LICENSING.en.md](LICENSING.en.md).

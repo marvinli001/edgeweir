@@ -4,35 +4,35 @@
 #   via the public API -> node applies the new revision -> X-Cache MISS then HIT
 #   -> console API shows the node online with its revision -> Playwright smoke.
 #   MVP M1: setup needs the setup token from the console log (Playwright) ->
-#   second organization and member, member-only console, site editing, clusters,
-#   node groups, audit log and English (Playwright) -> the node keeps serving the
-#   edited site -> disabled nodes are refused, deleted nodes stay revoked.
-#   Analytics: the node's per-minute stats reach the console API, and the home,
-#   site and platform analytics show them (Playwright).
+#   site editing, clusters, node groups, audit log and English (Playwright) ->
+#   the node keeps serving the edited site -> disabled nodes are refused,
+#   deleted nodes stay revoked.
+#   Analytics: the node's per-minute stats reach the console API, and the
+#   overview and site analytics show them (Playwright).
 #   MVP M2: URL / prefix / whole-site purge and prefetch as node tasks, query
 #   ignoring and sorting in cache keys, Range requests from slice cache,
 #   WebSocket through the node, origin certificate verification, S3 SigV4
 #   origins, failover to the backup origin and back, origin health in the
 #   console; Playwright submits purges and reads the per-node results.
-#   Wrap-up (dev-docs/audits/2026-09-25-wrapup.md): better-auth's organization and
-#   admin endpoints are closed and API keys never become sessions (CP-C1);
+#   Wrap-up (dev-docs/audits/2026-09-25-wrapup.md): better-auth's admin and
+#   api-key endpoints are closed and API keys never become sessions (CP-C1);
 #   origins on special-purpose addresses are refused by the console and, for
 #   DNS answers, by the node, and CDN-Loop stops loops (N-H2); HTTPS origins
 #   are verified against their name with the trusted CA (N-H4); the origin
 #   sees 1 MiB slices (CP-M2); S3 origins never receive the client's x-amz-*
 #   headers (N-L); install.sh installs goreleaser snapshot packages in a clean
 #   Debian container and enrolls the node (N-H1, --no-start: no systemd).
-#   Core gaps P0 (scripts/e2e-p0.mjs): service accounts with scopes and
-#   Idempotency-Key, organization limits, platform suspension, usage and its
-#   completeness watermark, configuration canary with automatic promotion and
-#   rollback, DNS mass removal protection; Playwright e2e/p0.spec.ts.
+#   Core gaps P0 (scripts/e2e-p0.mjs): Idempotency-Key, service accounts with
+#   scopes disabling a site, usage and its completeness watermark,
+#   configuration canary with automatic promotion and rollback, DNS mass
+#   removal protection; Playwright e2e/p0.spec.ts.
 #   Core gaps G1 (scripts/e2e-g1.mjs): the nodes report bans-v1 and
 #   kernel-ban-v1; bans and unbans reach a client container within 5 s (p95);
 #   a site ban answers 403 ip-banned to one client on one site only; a
 #   platform ban drops the client in nftables (TCP connect times out) while
 #   the control client is served, and the unban lets it back; short
-#   prefixes, protected addresses, tenants on /admin/bans, other
-#   organizations' sites and maxBans are refused; Playwright e2e/g1.spec.ts.
+#   prefixes, protected addresses and bans over the platform limit are
+#   refused; Playwright e2e/g1.spec.ts.
 #   Core gaps G2 (scripts/e2e-g2.mjs): headless Chromium passes the js and
 #   pow challenges of an Under Attack site; its pass works on the other node
 #   from the same /24 and User-Agent only (client-c on the isolated network
@@ -53,10 +53,10 @@
 #   cached identity object (curl --compressed decodes each), no second
 #   compression of an encoded origin response; OWASP CRS detect (logged,
 #   served) and block (403 waf-blocked, cache hits included), excluded rules,
-#   top rules, the platform's tenant switch; old nodes (pre-G3 image) and a
-#   node without ModSecurity make the features unavailable (409 for tenants)
-#   until they leave; Playwright e2e/g3.spec.ts with an old node in a cluster
-#   of its own.
+#   top rules; old nodes (pre-G3 image) and a node without ModSecurity make
+#   the features unavailable until they leave (a change that requires them
+#   anyway waits for the old node); Playwright e2e/g3.spec.ts with an old
+#   node in a cluster of its own.
 #   Core gaps G4 (scripts/e2e-g4.mjs, test origins g4-origin-a/b): both nodes
 #   report the G4 features; Cache-Tag hidden unless kept, purges by tag
 #   (case-insensitive, only tagged objects MISS on every node, every Range
@@ -68,8 +68,8 @@
 #   session affinity pins, replaces tampered cookies and fails over; site
 #   error pages for 403 (rule, IP list), 429, 502, 503, 504 and intercepted
 #   origin errors with escaped placeholders, no-store and request ids (also in
-#   the sampled logs); platform pages for unknown, disabled and suspended
-#   hosts; Playwright e2e/g4.spec.ts.
+#   the sampled logs); platform pages for unknown hosts and disabled sites;
+#   Playwright e2e/g4.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -211,18 +211,18 @@ SETUP_TOKEN="$(setup_token)"
 pass "console log shows setup token ${SETUP_TOKEN:0:8}… ($("${COMPOSE[@]}" logs console 2>/dev/null | grep -c '"setupToken"') log line(s))"
 REFUSED="$(curl -sS -w ' %{http_code}' -X POST "$CONSOLE/api/v1/system/setup" -H 'content-type: application/json' \
   --data "$(jq -nc --arg e "$ADMIN_EMAIL" --arg p "$ADMIN_PASSWORD" \
-    '{setupToken:"ews_wrong", name:"Intruder", email:$e, password:$p, organizationName:"X"}')")"
+    '{setupToken:"ews_wrong", name:"Intruder", email:$e, password:$p}')")"
 [[ "$REFUSED" == *'"code":"SETUP_TOKEN_INVALID"'*' 403' ]] || fail "setup without the token must be refused, got: $REFUSED"
 pass "setup with a wrong token refused: $REFUSED"
 
 if ! $SKIP_UI; then
-  step "Playwright: setup wizard with the setup token (platform admin + default organization + default cluster)"
+  step "Playwright: setup wizard with the setup token (the operator account + default cluster)"
   E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     E2E_SETUP_TOKEN="$SETUP_TOKEN" pnpm --filter @edgeweir/console run test:e2e e2e/setup.spec.ts \
     || fail "Playwright setup failed"
 else
   api POST /system/setup "$(jq -nc --arg t "$SETUP_TOKEN" --arg e "$ADMIN_EMAIL" --arg p "$ADMIN_PASSWORD" \
-    '{setupToken:$t, name:"E2E Admin", email:$e, password:$p, organizationName:"E2E Org"}')" >/dev/null
+    '{setupToken:$t, name:"E2E Admin", email:$e, password:$p}')" >/dev/null
 fi
 [[ "$(api GET /system/status | jq -r .initialized)" == "true" ]] || fail "setup did not complete"
 pass "setup completed with the setup token"
@@ -232,8 +232,12 @@ curl -fsS -c "$COOKIES" -o /dev/null "$CONSOLE/api/auth/sign-in/email" \
   -H 'content-type: application/json' -H "origin: $CONSOLE" \
   --data "$(jq -nc --arg e "$ADMIN_EMAIL" --arg p "$ADMIN_PASSWORD" '{email:$e,password:$p}')" \
   || fail "sign-in failed"
-API_KEY="$(curl -fsS -b "$COOKIES" "$CONSOLE/api/auth/api-key/create" \
-  -H 'content-type: application/json' -H "origin: $CONSOLE" --data '{"name":"e2e"}' | jq -r .key)"
+# rpc PATH JSON -> the procedure's output, as the web UI calls it (session cookie + CSRF header).
+rpc() {
+  curl -fsS -b "$COOKIES" -X POST "$CONSOLE/rpc/$1" -H 'content-type: application/json' \
+    -H 'x-csrf-token: orpc' --data "$(jq -nc --argjson input "$2" '{json: $input}')" | jq -c .json
+}
+API_KEY="$(rpc accessKeys/create '{"name":"e2e"}' | jq -r .key)"
 [[ "$API_KEY" == ewk_* ]] || fail "no API key returned"
 export API_KEY
 pass "API key ${API_KEY:0:10}… (the public API /api/v1 only accepts x-api-key)"
@@ -243,46 +247,38 @@ CLUSTER_ID="$(jq -r .id <<<"$CLUSTER")"
 [[ -n "$CLUSTER_ID" && "$CLUSTER_ID" != null ]] || fail "no cluster"
 pass "cluster $(jq -r .name <<<"$CLUSTER") ($CLUSTER_ID), latest revision #$(jq -r .latestRevision.revision <<<"$CLUSTER")"
 
-step "CP-C1: better-auth's organization and admin endpoints are closed, even for an owner and platform admin"
+step "CP-C1: better-auth's admin and api-key endpoints are closed, even for the signed-in operator"
 ME="$(api GET /me)"
 ADMIN_ID="$(jq -r .user.id <<<"$ME")"
-ORG_ID="$(jq -r '.organizations[] | select(.name == "E2E Org") | .id' <<<"$ME")"
-[[ "$(jq -r .user.isAdmin <<<"$ME")" == "true" &&
-  "$(jq -r '.organizations[] | select(.name == "E2E Org") | .role' <<<"$ME")" == "owner" ]] ||
-  fail "the e2e admin should be a platform admin and owner of E2E Org: $ME"
+[[ "$(jq -r .user.email <<<"$ME")" == "$ADMIN_EMAIL" && "$(jq -r .serviceAccount <<<"$ME")" == null ]] ||
+  fail "the AccessKey should act as the operator: $ME"
 SESSION_USER="$(curl -fsS -b "$COOKIES" "$CONSOLE/api/auth/get-session" | jq -r .user.id)"
-[[ "$SESSION_USER" == "$ADMIN_ID" ]] || fail "the admin session cookie must be valid for these checks (got user '$SESSION_USER')"
+[[ "$SESSION_USER" == "$ADMIN_ID" ]] || fail "the operator's session cookie must be valid for these checks (got user '$SESSION_USER')"
 NOT_FOUND='404 {"error":"not found"}'
-closed() { # closed PATH JSON: POST with the admin's session must be refused by the route allow list
+closed() { # closed PATH JSON: POST with the operator's session must be refused by the route allow list
   local got
   got="$(auth_post "$1" "$2" -b "$COOKIES")"
-  echo "POST /api/auth$1 (owner + platform admin session) -> $got"
+  echo "POST /api/auth$1 (operator session) -> $got"
   [[ "$got" == "$NOT_FOUND" ]] || fail "POST /api/auth$1 must be refused, got: $got"
 }
-ORG_BODY="$(jq -nc --arg o "$ORG_ID" '{organizationId: $o}')"
-closed /organization/delete "$ORG_BODY"
-closed /organization/update "$(jq -nc --arg o "$ORG_ID" '{organizationId: $o, data: {name: "Renamed"}}')"
-closed /organization/invite-member "$(jq -nc --arg o "$ORG_ID" '{organizationId: $o, email: "x@e2e.test", role: "owner"}')"
-closed /organization/update-member-role "$(jq -nc --arg o "$ORG_ID" --arg u "$ADMIN_ID" '{organizationId: $o, memberId: $u, role: "member"}')"
-closed /organization/remove-member "$(jq -nc --arg o "$ORG_ID" --arg u "$ADMIN_ID" '{organizationId: $o, memberIdOrEmail: $u}')"
 closed /admin/impersonate-user "$(jq -nc --arg u "$ADMIN_ID" '{userId: $u}')"
 closed /admin/set-user-password "$(jq -nc --arg u "$ADMIN_ID" '{userId: $u, newPassword: "e2e-hijacked-password-1"}')"
 closed /admin/set-role "$(jq -nc --arg u "$ADMIN_ID" '{userId: $u, role: "user"}')"
 closed /admin/create-user '{"email":"intruder@e2e.test","password":"e2e-intruder-password-1","name":"Intruder","role":"admin"}'
 closed /admin/ban-user "$(jq -nc --arg u "$ADMIN_ID" '{userId: $u}')"
 closed /admin/remove-user "$(jq -nc --arg u "$ADMIN_ID" '{userId: $u}')"
-ORGS="$(api GET /organizations)"
-jq -e --arg o "$ORG_ID" 'any(.[]; .id == $o and .name == "E2E Org")' <<<"$ORGS" >/dev/null ||
-  fail "E2E Org must still exist: $ORGS"
-ME_AFTER="$(api GET /me)"
-[[ "$(jq -r .user.isAdmin <<<"$ME_AFTER")" == "true" &&
-  "$(jq -r '.organizations[] | select(.id == "'"$ORG_ID"'") | .role' <<<"$ME_AFTER")" == "owner" ]] ||
-  fail "the admin's role or membership changed: $ME_AFTER"
-[[ "$(api GET "/users?search=intruder" | jq length)" == "0" ]] || fail "admin/create-user created a user"
+closed /sign-up/email '{"email":"intruder@e2e.test","password":"e2e-intruder-password-1","name":"Intruder"}'
+closed /api-key/create '{"name":"minted-with-a-session"}'
+closed /api-key/delete '{"keyId":"x"}'
+KEY_LIST="$(curl -sS -w ' %{http_code}' -b "$COOKIES" "$CONSOLE/api/auth/api-key/list")"
+[[ "$KEY_LIST" == '{"error":"not found"} 404' ]] || fail "GET /api/auth/api-key/list must be refused, got: $KEY_LIST"
+ACCOUNTS="$("${COMPOSE[@]}" exec -T postgres psql -U edgeweir -d edgeweir -At -c 'select count(*) from "user"')"
+[[ "$ACCOUNTS" == 1 ]] || fail "admin/create-user or sign-up created an account: $ACCOUNTS accounts"
+[[ "$(api GET /me | jq -r .user.id)" == "$ADMIN_ID" ]] || fail "the operator changed"
 curl -fsS -o /dev/null "$CONSOLE/api/auth/sign-in/email" -H 'content-type: application/json' -H "origin: $CONSOLE" \
   --data "$(jq -nc --arg e "$ADMIN_EMAIL" --arg p "$ADMIN_PASSWORD" '{email:$e,password:$p}')" ||
-  fail "the admin can no longer sign in with the original password (set-user-password / ban-user went through?)"
-pass "organization/* and admin/* answer 404 to the owner and platform admin; E2E Org exists, the admin's role, membership and password are unchanged, no user was created"
+  fail "the operator can no longer sign in with the original password (set-user-password / ban-user went through?)"
+pass "admin/*, sign-up and api-key/* answer 404 to the operator's session; no account was created, the operator's password is unchanged"
 
 step "CP-C1: an x-api-key alone never becomes a better-auth session"
 KEY_SESSION="$(curl -sS -H "x-api-key: $API_KEY" "$CONSOLE/api/auth/get-session")"
@@ -290,16 +286,17 @@ echo "GET /api/auth/get-session (x-api-key only) -> $KEY_SESSION"
 [[ "$KEY_SESSION" == "null" ]] || fail "an API key must not yield a session on /api/auth, got: $KEY_SESSION"
 KEY_CREATE="$(auth_post /api-key/create '{"name":"minted-with-a-key"}' -H "x-api-key: $API_KEY")"
 echo "POST /api/auth/api-key/create (x-api-key only) -> $KEY_CREATE"
-[[ "$KEY_CREATE" == 401* && "$KEY_CREATE" != *ewk_* ]] || fail "creating an API key with only an API key must be refused, got: $KEY_CREATE"
-KEY_LIST="$(curl -sS -H "x-api-key: $API_KEY" "$CONSOLE/api/auth/api-key/list")"
-[[ "$KEY_LIST" != *'"name":"e2e"'* ]] || fail "api-key/list answered to an API key: $KEY_LIST"
-KEYS="$(curl -fsS -b "$COOKIES" "$CONSOLE/api/auth/api-key/list")"
-[[ "$(jq -c '[(if type == "array" then . else .apiKeys end)[] | .name]' <<<"$KEYS")" == '["e2e"]' ]] ||
-  fail "the admin should still have exactly the e2e key: $KEYS"
+[[ "$KEY_CREATE" == "$NOT_FOUND" ]] || fail "creating an API key with only an API key must be refused, got: $KEY_CREATE"
+KEY_MINT="$(api_status POST /access-keys '{"name":"minted-with-a-key"}')"
+echo "POST /api/v1/access-keys (x-api-key) -> $KEY_MINT"
+[[ "${KEY_MINT%% *}" == 403 && "$(jq -r .code <<<"${KEY_MINT#* }")" == ACCESS_KEY_SESSION_REQUIRED ]] ||
+  fail "an AccessKey must not mint AccessKeys, got: $KEY_MINT"
+[[ "$(rpc accessKeys/list '{}' | jq -c '[.[] | .name]')" == '["e2e"]' ]] ||
+  fail "the operator should still have exactly the e2e key: $(rpc accessKeys/list '{}')"
 KEY_RPC="$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$CONSOLE/rpc/account/me" -H "x-api-key: $API_KEY" \
   -H 'x-csrf-token: orpc' -H 'content-type: application/json' --data '{}')"
 [[ "$KEY_RPC" == 401 ]] || fail "/rpc must not accept an API key, got HTTP $KEY_RPC"
-pass "get-session with only x-api-key -> null; api-key/create -> 401 (no key minted); /rpc with only x-api-key -> 401"
+pass "get-session with only x-api-key -> null; api-key/create -> 404, /api/v1/access-keys -> 403 (no key minted); /rpc with only x-api-key -> 401"
 
 step "N-H2: origin allow list = the e2e Docker network only (the special-purpose defaults stay)"
 NETWORK="$(e2e_network)"
@@ -407,19 +404,19 @@ CLUSTER="$(api GET "/clusters/$CLUSTER_ID")"
 pass "cluster latest revision #$REVISION, $(jq -r .onlineNodeCount <<<"$CLUSTER")/$(jq -r .nodeCount <<<"$CLUSTER") nodes online"
 
 if ! $SKIP_UI; then
-  step "Playwright smoke: login -> admin clusters & nodes -> console sites"
+  step "Playwright smoke: login -> clusters & nodes -> sites"
   E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     E2E_EXPECT_REVISION="$REVISION" pnpm --filter @edgeweir/console run test:e2e e2e/smoke.spec.ts \
     || fail "Playwright smoke test failed"
   pass "Playwright smoke passed"
 
-  step "Playwright M1: organizations, members, site editing, clusters, node groups, audit, English"
+  step "Playwright M1: site editing, clusters, node groups, audit, English"
   E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     E2E_NODE_NAME="edge-e2e-1" pnpm --filter @edgeweir/console run test:e2e e2e/m1.spec.ts \
     || fail "Playwright M1 test failed"
   pass "Playwright M1 passed"
 
-  step "the node serves the site the tenant member edited in the UI"
+  step "the node serves the site edited in the UI"
   NODE="$(node_json)"
   CLUSTER="$(api GET "/clusters/$CLUSTER_ID")"
   [[ "$(jq -r .nodeGroupName <<<"$NODE")" == "group-a" && "$(jq -r .regionName <<<"$NODE")" == "华东" ]] ||
@@ -428,16 +425,15 @@ if ! $SKIP_UI; then
   node_synced() { [[ "$(node_json | jq -r '.online and .applyState == "applied"')" == "true" && "$(node_json | jq -r .appliedRevision)" == "$LATEST" ]]; }
   wait_for 60 "node online on revision #$LATEST after the move" node_synced
   pass "node $(jq -r .name <<<"$NODE") in group-a (华东), online, applied #$LATEST = cluster latest #$LATEST"
-  TENANT_SITE="$(api GET "/sites?search=tenant-site" | jq -c '.items[0]')"
-  [[ "$(jq -r '.domains | join(",")' <<<"$TENANT_SITE")" == "tenant.test,www.tenant.test" &&
-    "$(jq -r '.origins[0].address' <<<"$TENANT_SITE")" == "whoami" &&
-    "$(jq -r .organizationName <<<"$TENANT_SITE")" == "Tenant Org" ]] ||
-    fail "tenant site not as edited in the UI: $TENANT_SITE"
-  wait_for 30 "www.tenant.test routed to the edited origin" \
-    curl -fsS -o /dev/null -H 'Host: www.tenant.test' "$NODE_HTTP/e2e-tenant-probe"
-  BODY="$(curl -fsS -H 'Host: www.tenant.test' "$NODE_HTTP/e2e-tenant")"
-  grep -q "^GET /e2e-tenant " <<<"$BODY" || fail "www.tenant.test did not reach whoami: $BODY"
-  pass "curl -H 'Host: www.tenant.test' -> whoami (domain and origin edited by the tenant member)"
+  EDITED_SITE="$(api GET "/sites?search=edited-site" | jq -c '.items[0]')"
+  [[ "$(jq -r '.domains | join(",")' <<<"$EDITED_SITE")" == "edited.test,www.edited.test" &&
+    "$(jq -r '.origins[0].address' <<<"$EDITED_SITE")" == "whoami" ]] ||
+    fail "site not as edited in the UI: $EDITED_SITE"
+  wait_for 30 "www.edited.test routed to the edited origin" \
+    curl -fsS -o /dev/null -H 'Host: www.edited.test' "$NODE_HTTP/e2e-edited-probe"
+  BODY="$(curl -fsS -H 'Host: www.edited.test' "$NODE_HTTP/e2e-edited")"
+  grep -q "^GET /e2e-edited " <<<"$BODY" || fail "www.edited.test did not reach whoami: $BODY"
+  pass "curl -H 'Host: www.edited.test' -> whoami (domain and origin edited in the UI)"
 fi
 
 step "analytics: the node's per-minute stats reach the console"
@@ -451,7 +447,7 @@ pass "demo.test in the last hour: $(site_traffic | jq -c '.totals | {requests, c
 pass "top nodes: $(api GET "/analytics/top-nodes?range=1h" | jq -c '[.[] | {name, parentName, requests}]')"
 
 if ! $SKIP_UI; then
-  step "Playwright analytics: home lists and charts, stars, site and platform analytics"
+  step "Playwright analytics: overview lists and charts, stars, site analytics"
   E2E_BASE_URL="$CONSOLE" E2E_ADMIN_EMAIL="$ADMIN_EMAIL" E2E_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
     E2E_NODE_NAME="edge-e2e-1" pnpm --filter @edgeweir/console run test:e2e e2e/analytics.spec.ts \
     || fail "Playwright analytics test failed"
@@ -1006,7 +1002,7 @@ if ! $SKIP_UI; then
 fi
 pass "M4 policy checks passed"
 
-step "M5: domain proof, DNS health reconciliation, statistics and notifications"
+step "M5: DNS health reconciliation, statistics and notifications"
 node scripts/e2e-m5.mjs || fail "M5 end-to-end checks failed"
 if ! $SKIP_UI; then
   E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/m5.spec.ts || fail "M5 browser test failed"
@@ -1032,14 +1028,14 @@ if ! $SKIP_UI; then
 fi
 pass "M6 signed upgrades and rollback passed"
 
-step "P0: service accounts, idempotency, limits, suspension, usage, configuration canary, DNS protection"
+step "P0: idempotency, service accounts, usage, configuration canary, DNS protection"
 node scripts/e2e-p0.mjs || fail "P0 end-to-end checks failed"
 if ! $SKIP_UI; then
   E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/p0.spec.ts || fail "P0 browser checks failed"
 fi
 pass "P0 checks passed"
 
-step "G1: dynamic bans: delivery latency, site bans at the edge, platform bans in nftables, limits and permissions"
+step "G1: dynamic bans: delivery latency, site bans at the edge, platform bans in nftables and limits"
 node scripts/e2e-g1.mjs || fail "G1 end-to-end checks failed"
 if ! $SKIP_UI; then
   E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g1.spec.ts || fail "G1 browser checks failed"

@@ -5,9 +5,7 @@ const email = process.env.E2E_ADMIN_EMAIL ?? "admin@e2e.test";
 const password = process.env.E2E_ADMIN_PASSWORD ?? "e2e-admin-password-123";
 const expectedRevision = process.env.E2E_EXPECT_REVISION;
 
-test("login -> admin clusters & nodes -> console sites, then switch to English", async ({
-  page,
-}) => {
+test("login -> clusters & nodes -> sites, then switch to English", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
@@ -21,10 +19,13 @@ test("login -> admin clusters & nodes -> console sites, then switch to English",
   await expect(page).toHaveURL(/\/overview$/);
   await expect(page.getByTestId("page-title")).toHaveText("概览");
 
-  // Admins switch to the admin area for clusters & nodes.
-  await page.getByTestId("area-admin").click();
-  await expect(page.getByTestId("page-title")).toHaveText("平台概览");
-  await expect(page.getByTestId("nav-sites")).toHaveCount(0);
+  // The overview lists the enrolled node.
+  await expect(page.getByTestId("home-nodes").getByTestId("home-node")).toContainText("edge-e2e-1");
+
+  // Ctrl+K (⌘K) opens the command menu with every page.
+  await page.keyboard.press("Control+k");
+  await page.getByRole("dialog").getByRole("option", { name: "审计日志" }).click();
+  await expect(page.getByTestId("page-title")).toHaveText("审计日志");
 
   // Clusters & nodes: the enrolled node is online with its applied revision.
   await page.getByTestId("nav-clusters").click();
@@ -53,9 +54,7 @@ test("login -> admin clusters & nodes -> console sites, then switch to English",
   await expect(command).not.toContainText("--token");
   await page.keyboard.press("Escape");
 
-  // Back to the console. Sites: demo.test created through the API is listed; create one through the UI.
-  await page.getByTestId("area-console").click();
-  await expect(page.getByTestId("nav-clusters")).toHaveCount(0);
+  // Sites: demo.test created through the API is listed; create one through the UI.
   await page.getByTestId("nav-sites").click();
   await expect(page.getByTestId("page-title")).toHaveText("网站");
   const sites = page.getByTestId("sites-table");
@@ -75,7 +74,6 @@ test("login -> admin clusters & nodes -> console sites, then switch to English",
   await page.getByTestId("language-menu").hover();
   await page.getByTestId("locale-en").click();
   await expect(page.getByTestId("page-title")).toHaveText("Sites");
-  await page.getByTestId("area-admin").click();
   await page.getByTestId("nav-clusters").click();
   await expect(page.getByTestId("page-title")).toHaveText("Clusters & nodes");
 

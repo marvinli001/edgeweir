@@ -6,9 +6,7 @@ import { createApp } from "../../src/server/app";
 import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -20,7 +18,6 @@ describe("special-purpose origin addresses and the platform allow list", async (
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
-  let tenant: ApiClient;
   let clusterIds: string[];
   let siteId: string;
 
@@ -34,22 +31,14 @@ describe("special-purpose origin addresses and the platform allow list", async (
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
     const edge = await admin.clusters.create({ name: "edge-b" });
     clusterIds = (await admin.clusters.list()).map((c) => c.id);
-    const org = await admin.organizations.create({ name: "Tenant", defaultClusterId: edge.id });
-    await admin.users.create({
-      name: "Tina",
-      email: "tina@tenant.test",
-      password: PASSWORD,
-      organizationId: org.id,
-    });
-    tenant = rpcClient(app, origin, await signIn(app, origin, "tina@tenant.test"));
     siteId = (
-      await tenant.sites.create({
+      await admin.sites.create({
         name: "shop",
+        clusterId: edge.id,
         domains: ["shop.test"],
         origins: [{ address: "origin.example.com" }],
       })
     ).site.id;
-    await approveSiteDomains(admin, siteId);
   });
   afterAll(() => client.close());
 
@@ -67,7 +56,7 @@ describe("special-purpose origin addresses and the platform allow list", async (
       ["api.LOCALHOST", "localhost"],
     ] as const) {
       const error = await rpcError(
-        tenant.sites.create({
+        admin.sites.create({
           name: "evil",
           domains: ["evil.test"],
           origins: [{ address: "origin.example.com" }, { address, backup: true }],
@@ -82,15 +71,13 @@ describe("special-purpose origin addresses and the platform allow list", async (
     expect(await siteCount()).toBe(before);
 
     // Editing the pool is refused too, and leaves the site as it was.
-    const site = await tenant.sites.get({ id: siteId });
+    const site = await admin.sites.get({ id: siteId });
     const edit = await rpcError(
-      tenant.sites.update({ id: siteId, origins: [{ address: "169.254.169.254", port: 80 }] }),
+      admin.sites.update({ id: siteId, origins: [{ address: "169.254.169.254", port: 80 }] }),
     );
     expect(edit.code).toBe("ORIGIN_ADDRESS_FORBIDDEN");
-    expect(await tenant.sites.get({ id: siteId })).toEqual(site);
+    expect(await admin.sites.get({ id: siteId })).toEqual(site);
 
-    // Platform administrators are held to the same list; names that resolvers read as
-    // numbers are not addresses at all.
     expect(
       (
         await rpcError(
@@ -102,15 +89,16 @@ describe("special-purpose origin addresses and the platform allow list", async (
         )
       ).code,
     ).toBe("ORIGIN_ADDRESS_FORBIDDEN");
+    // Names that resolvers read as numbers are not addresses at all.
     expect(
       (
         await rpcError(
-          tenant.sites.create({ name: "x", domains: ["x.test"], origins: [{ address: "127.1" }] }),
+          admin.sites.create({ name: "x", domains: ["x.test"], origins: [{ address: "127.1" }] }),
         )
       ).code,
     ).toBe("BAD_REQUEST");
     // Public literals and host names are fine (nodes check what names resolve to).
-    await tenant.sites.update({
+    await admin.sites.update({
       id: siteId,
       origins: [{ address: "203.0.114.1" }, { address: "2606:4700::1111", backup: true }],
     });
@@ -140,8 +128,8 @@ describe("special-purpose origin addresses and the platform allow list", async (
       metadata: { cidrs: saved.cidrs, added: saved.cidrs, removed: [] },
     });
 
-    // Allowed now, for tenants too; IPv4-mapped addresses follow their IPv4 range.
-    const allowed = await tenant.sites.update({
+    // Allowed now; IPv4-mapped addresses follow their IPv4 range.
+    const allowed = await admin.sites.update({
       id: siteId,
       origins: [
         { address: "10.1.2.3", port: 8080 },
@@ -160,7 +148,7 @@ describe("special-purpose origin addresses and the platform allow list", async (
     expect(await compiledAllowList(clusterIds[1] ?? "")).toEqual(saved.cidrs);
     // Ranges outside the list and localhost names stay refused.
     for (const address of ["127.0.0.1", "192.168.0.1", "localhost"]) {
-      const error = await rpcError(tenant.sites.update({ id: siteId, origins: [{ address }] }));
+      const error = await rpcError(admin.sites.update({ id: siteId, origins: [{ address }] }));
       expect(error.code, address).toBe("ORIGIN_ADDRESS_FORBIDDEN");
     }
     // Invalid entries are refused before anything is stored.
@@ -183,25 +171,19 @@ describe("special-purpose origin addresses and the platform allow list", async (
       removed: ["10.0.0.0/8", "fd00::/8"],
     });
     const error = await rpcError(
-      tenant.sites.update({ id: siteId, origins: [{ address: "10.1.2.3" }] }),
+      admin.sites.update({ id: siteId, origins: [{ address: "10.1.2.3" }] }),
     );
     expect(error.code).toBe("ORIGIN_ADDRESS_FORBIDDEN");
-    await tenant.sites.update({ id: siteId, origins: [{ address: "172.18.0.5" }] });
+    await admin.sites.update({ id: siteId, origins: [{ address: "172.18.0.5" }] });
   });
 
   it("is managed over /api/v1 with an administrator's API key", async () => {
-    const cookie = await signIn(app, origin, "admin@example.com");
     const call = (path: string, init: RequestInit = {}) =>
       app.request(`${origin}${path}`, {
         ...init,
         headers: { origin, "content-type": "application/json", ...(init.headers ?? {}) },
       });
-    const keyRes = await call("/api/auth/api-key/create", {
-      method: "POST",
-      headers: { cookie },
-      body: JSON.stringify({ name: "e2e" }),
-    });
-    const { key } = (await keyRes.json()) as { key: string };
+    const { key } = await admin.accessKeys.create({ name: "e2e" });
     const put = await call("/api/v1/settings/origin-allow-list", {
       method: "PUT",
       headers: { "x-api-key": key },

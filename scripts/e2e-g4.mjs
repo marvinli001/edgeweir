@@ -14,15 +14,15 @@
 //      stay HIT, also on the other host); a Host purge MISSes that host only;
 //      an expired object with stale-if-error is served STALE while the origin
 //      is down, and after a purge of its tag no node serves it (502 page, not
-//      the object); tag validation, the 500-tag limit and tenants' scope
+//      the object); tag validation, the 500-tag limit, unknown sites and hosts
 //   c. pre.g4.test (cache key separates devices): a prefetch of desktop and
 //      mobile caches both variants on both nodes (the origin saw both
 //      User-Agents once per node); a site without device keys gets one request
 //   d. sitemap prefetch: urlset (foreign and non-http entries skipped, capped
 //      at maxUrls in document order) and a sitemapindex with a gzip child and
 //      a foreign child; the listed pages are HITs for both variants, the rest
-//      MISS, the foreign host is never requested; sitemaps on hosts no site of
-//      the caller serves are refused
+//      MISS, the foreign host is never requested; sitemaps on hosts no site
+//      serves are refused
 //   e. pool.g4.test (a, b, backup "hidden" on the isolated network): active
 //      checks keep "hidden" down (address_forbidden, source active) by the
 //      origin address policy; breaking a's /health takes it out of rotation
@@ -36,9 +36,8 @@
 //      template content, escaped placeholders, other {{...}} untouched,
 //      no-store, X-Request-Id (reused when valid) equal to the page's and the
 //      sampled log's; built-in pages in Chinese or English without templates
-//   h. platform pages: unknown host (404, escaped host), disabled site (503),
-//      suspended site (503) with the administrator's templates, built-in pages
-//      without them
+//   h. platform pages: unknown host (404, escaped host) and disabled site
+//      (503) with the operator's templates, built-in pages without them
 // The G4 sites stay for apps/console/e2e/g4.spec.ts (.e2e/g4-state.json);
 // `node scripts/e2e-g4.mjs --cleanup` deletes them, the IP list and the
 // platform templates.
@@ -47,7 +46,7 @@ import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { signInResponse } from "./e2e-auth.mjs";
+import { rpc, signInResponse } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile);
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
@@ -65,7 +64,6 @@ const HOST_POOL = "pool.g4.test";
 const HOST_ERR = "err.g4.test";
 const HOST_ERR502 = "err502.g4.test";
 const HOST_OFF = "off.g4.test";
-const HOST_SUS = "sus.g4.test";
 const HOST_PLAIN = "plain.g4.test";
 const HOST_SLICE = "slice.g4.test";
 const DEFAULT_KEY = {
@@ -116,17 +114,11 @@ async function call(key, method, path, body) {
 }
 
 async function createKey(cookie) {
-  const created = await fetch(`${base}/api/auth/api-key/create`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: base, cookie },
-    body: JSON.stringify({ name: "g4-e2e" }),
-  });
-  assert.equal(created.status, 200);
-  return (await created.json()).key;
+  return (await rpc(base, cookie, "accessKeys/create", { name: "g4-e2e" })).key;
 }
 
 /**
- * A signed-in user with an AccessKey. An AccessKey allows 600 requests until
+ * The signed-in operator with an AccessKey. An AccessKey allows 600 requests until
  * it has been idle for 60 seconds; the polling below runs longer than that,
  * so every 500 calls move to a fresh key.
  */
@@ -314,7 +306,6 @@ async function cleanup() {
     HOST_ERR,
     HOST_ERR502,
     HOST_OFF,
-    HOST_SUS,
     HOST_PLAIN,
   ]) {
     const site = await findSite(host);
@@ -325,11 +316,7 @@ async function cleanup() {
   }
   const list = (await admin.ok("GET", "/ip-lists")).find((l) => l.name === LIST);
   if (list) await admin.ok("DELETE", `/ip-lists/${list.id}`);
-  await admin.ok("PUT", "/settings/error-pages", {
-    unknownHost: "",
-    siteDisabled: "",
-    siteSuspended: "",
-  });
+  await admin.ok("PUT", "/settings/error-pages", { unknownHost: "", siteDisabled: "" });
   for (const name of ["a", "b"]) {
     await origin(name, "health", { status: 200 });
     await origin(name, "down", { down: false });
@@ -345,10 +332,6 @@ if (process.argv.includes("--cleanup")) {
 }
 
 const leftovers = await cleanup();
-const p0 = JSON.parse(await readFile(".e2e/p0-state.json", "utf8"));
-const tenant = await actor("owner@p0.test", "p0-owner-password-123");
-const tenantSite = await tenant.ok("GET", `/sites/${p0.siteId}`);
-assert.equal(tenantSite.clusterId, clusterId, "the P0 site must be in the default cluster");
 await everyNode(
   "both nodes online on their revision",
   (n) => n.online && n.dataPlaneHealthy && n.applyState === "applied",
@@ -356,7 +339,7 @@ await everyNode(
 );
 await synced();
 
-/** Creates a site in the default cluster with verified domains. */
+/** Creates a site in the default cluster. */
 async function createSite(name, domains, origins, extra = {}) {
   for (const domain of domains) {
     const old = await findSite(domain);
@@ -369,9 +352,6 @@ async function createSite(name, domains, origins, extra = {}) {
     origins,
     ...extra,
   });
-  for (const proof of await admin.ok("GET", `/sites/${site.id}/ownership`))
-    if (!proof.verified)
-      await admin.ok("POST", `/sites/${site.id}/ownership/approve`, { domain: proof.domain });
   return admin.ok("GET", `/sites/${site.id}`);
 }
 const originA = { address: "g4-origin-a", port: 8080 };
@@ -412,6 +392,8 @@ async function runTask(user, body, expect = "succeeded") {
 }
 
 const rid = randomUUID().slice(0, 8);
+/** A host no site serves. */
+const nowhere = `nowhere-${rid}.g4.test`;
 const sites = {};
 const clientIp = await containerIp("client-a");
 let finished = false;
@@ -610,7 +592,7 @@ try {
     "stale-if-error: with the origin down both nodes serve the expired object STALE; after a purge of its tag both answer 502 (MISS, never the object), and the origin's next response is a new one",
   );
 
-  // Validation, the 500-tag limit and the tenant's scope.
+  // Validation, the 500-tag limit, unknown sites and hosts.
   refused(
     await admin.raw("POST", "/cache-tasks", {
       type: "tag",
@@ -643,24 +625,23 @@ try {
     tags: Array.from({ length: 500 }, (_, i) => `bulk-${i}`),
   });
   assert.equal(five.targets.length, 500);
+  // One unknown site or host refuses the whole task, also next to a known one.
   refused(
-    await tenant.raw("POST", "/cache-tasks", { type: "tag", siteIds: [sites.tag.id], tags: ["x"] }),
+    await admin.raw("POST", "/cache-tasks", {
+      type: "tag",
+      siteIds: [sites.tag.id, randomUUID()],
+      tags: ["x"],
+    }),
     404,
     "SITE_NOT_FOUND",
   );
   refused(
-    await tenant.raw("POST", "/cache-tasks", { type: "host", hosts: [HOST_TAG] }),
+    await admin.raw("POST", "/cache-tasks", { type: "host", hosts: [HOST_TAG, nowhere] }),
     400,
     "CACHE_TASK_HOST_UNKNOWN",
   );
-  const own = await tenant.ok("POST", "/cache-tasks", {
-    type: "tag",
-    siteIds: [p0.siteId],
-    tags: ["p0-tag"],
-  });
-  assert.deepEqual(own.targets, ["p0-tag"]);
   pass(
-    "tags with commas or over 128 bytes are refused (CACHE_TASK_TAG_INVALID), 501 tags 400, 500 accepted; a tenant purges tags of its own site only (another organization's site 404 SITE_NOT_FOUND, its host 400 CACHE_TASK_HOST_UNKNOWN)",
+    "tags with commas or over 128 bytes are refused (CACHE_TASK_TAG_INVALID), 501 tags 400, 500 accepted; a tag purge naming an unknown site is refused (404 SITE_NOT_FOUND), a host purge naming a host no site serves too (400 CACHE_TASK_HOST_UNKNOWN), also next to a known site or host",
   );
 
   // -------------------------------------------------------------- c. device variants
@@ -761,21 +742,13 @@ try {
   refused(
     await admin.raw("POST", "/cache-tasks", {
       type: "sitemap",
-      urls: [`http://nowhere-${rid}.g4.test/sitemap.xml`],
-    }),
-    400,
-    "CACHE_TASK_HOST_UNKNOWN",
-  );
-  refused(
-    await tenant.raw("POST", "/cache-tasks", {
-      type: "sitemap",
-      urls: [`http://${HOST_PRE}/sitemap.xml`],
+      urls: [`http://${nowhere}/sitemap.xml`],
     }),
     400,
     "CACHE_TASK_HOST_UNKNOWN",
   );
   pass(
-    "sitemapindex: both children of the site (one gzip-compressed) prefetched on both nodes (5 pages each), the foreign child skipped; sitemaps on hosts no site of the caller serves are refused (CACHE_TASK_HOST_UNKNOWN)",
+    "sitemapindex: both children of the site (one gzip-compressed) prefetched on both nodes (5 pages each), the foreign child skipped; sitemaps on hosts no site serves are refused (CACHE_TASK_HOST_UNKNOWN)",
   );
 
   // -------------------------------------------------------------- e. active health checks
@@ -1109,14 +1082,11 @@ try {
 
   // -------------------------------------------------------------- h. platform pages
   sites.off = await createSite("g4-disabled", [HOST_OFF], [originA]);
-  sites.sus = await createSite("g4-suspended", [HOST_SUS], [originA]);
   await admin.ok("PUT", "/settings/error-pages", {
     unknownHost: template("platform-unknown", 404),
     siteDisabled: template("platform-disabled", 503),
-    siteSuspended: template("platform-suspended", 503),
   });
   await admin.ok("PUT", `/sites/${sites.off.id}/enabled`, { enabled: false });
-  await admin.ok("POST", `/admin/sites/${sites.sus.id}/suspend`, { reason: "abuse", note: "g4" });
   await synced("platform pages and offline hosts published");
   const unknownHost = `unknown-${rid}.g4.test`;
   for (const target of NODES) {
@@ -1129,30 +1099,20 @@ try {
     r = await get(target, HOST_OFF, "/");
     sitePage(r, 503, HOST_OFF, "platform-disabled");
     assert.equal(r.headers["x-edgeweir-error"], "site-disabled");
-    r = await get(target, HOST_SUS, "/");
-    sitePage(r, 503, HOST_SUS, "platform-suspended");
-    assert.equal(r.headers["x-edgeweir-error"], "site-suspended");
   }
-  await admin.ok("PUT", "/settings/error-pages", {
-    unknownHost: "",
-    siteDisabled: "",
-    siteSuspended: "",
-  });
+  await admin.ok("PUT", "/settings/error-pages", { unknownHost: "", siteDisabled: "" });
   await admin.ok("PUT", `/sites/${sites.off.id}/enabled`, { enabled: true });
-  await admin.ok("POST", `/admin/sites/${sites.sus.id}/resume`, {});
-  await synced("platform pages reset, sites back");
+  await synced("platform pages reset, site enabled again");
   for (const target of NODES) {
     let r = await get(target, unknownHost, "/", { "accept-language": "zh-CN" });
     assert.equal(r.status, 404);
     assert.match(r.body, /lang="zh/);
     assert.equal(r.headers["cache-control"], "no-store");
-    for (const host of [HOST_OFF, HOST_SUS]) {
-      r = await get(target, host, "/");
-      assert.equal(r.status, 200, `${target} ${host}: ${summary(r)}`);
-    }
+    r = await get(target, HOST_OFF, "/");
+    assert.equal(r.status, 200, `${target} ${HOST_OFF}: ${summary(r)}`);
   }
   pass(
-    "platform pages on both nodes: unknown host 404 (host escaped), disabled site 503 site-disabled and suspended site 503 site-suspended with the administrator's templates; built-in pages once they are reset; enabled and resumed sites are served again",
+    "platform pages on both nodes: unknown host 404 (host escaped) and disabled site 503 site-disabled with the operator's templates; built-in pages once they are reset; the re-enabled site is served again",
   );
 
   await writeFile(

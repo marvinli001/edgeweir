@@ -159,18 +159,18 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   await page.reload();
   await expect(enabled).toHaveAttribute("aria-checked", "false");
   await expect(underAttack).toHaveAttribute("aria-checked", "true");
-  await page.goto("/admin/audit?action=site.protection_update");
+  await page.goto("/audit?action=site.protection_update");
   await expect(page.getByTestId("audit-action").first()).toHaveText("site.protection_update");
   await logout(page);
   expect(pageErrors).toEqual([]);
 });
 
-test("G2: administrators turn platform Under Attack on and off and edit the CC template", async ({
+test("G2: the operator turns global Under Attack on and off and edits the CC template", async ({
   page,
 }) => {
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
-  await page.goto("/admin/settings");
+  await page.goto("/system");
   const platform = page.getByTestId("platform-under-attack");
   const badge = page.getByTestId("platform-under-attack-on");
   await expect(platform).toHaveAttribute("aria-checked", "false");
@@ -188,10 +188,10 @@ test("G2: administrators turn platform Under Attack on and off and edit the CC t
   // Every site shows it.
   await openSecurityTab(page);
   await expect(page.getByTestId("protection-platform-on")).toHaveText(
-    "平台已为所有网站开启 Under Attack",
+    "已为所有网站开启全局 Under Attack",
   );
-  await page.goto("/admin/settings");
-  await confirmSwitch(page, "platform-under-attack", "关闭平台 Under Attack？");
+  await page.goto("/system");
+  await confirmSwitch(page, "platform-under-attack", "关闭全局 Under Attack？");
   await expect(platform).toHaveAttribute("aria-checked", "false");
   await expect(badge).toHaveCount(0);
   await page.reload();
@@ -200,7 +200,7 @@ test("G2: administrators turn platform Under Attack on and off and edit the CC t
   await expect(page.getByTestId("protection-platform-on")).toHaveCount(0);
 
   // CC template.
-  await page.goto("/admin/settings");
+  await page.goto("/system");
   const urlQps = page.getByTestId("cc-template-url-qps");
   const save = page.getByTestId("cc-template-save");
   await expect(urlQps).toHaveValue("200");
@@ -212,7 +212,7 @@ test("G2: administrators turn platform Under Attack on and off and edit the CC t
   await page.reload();
   await expect(urlQps).toHaveValue("250");
   await expect(page.getByTestId("cc-template-max-level")).toHaveText("JS 计算");
-  await check(page, "admin-protection");
+  await check(page, "system-protection");
   await urlQps.fill("200");
   await pick(page, page.getByTestId("cc-template-max-level"), "图片验证码");
   await save.click();
@@ -220,9 +220,9 @@ test("G2: administrators turn platform Under Attack on and off and edit the CC t
   await page.reload();
   await expect(urlQps).toHaveValue("200");
   await expect(page.getByTestId("cc-template-max-level")).toHaveText("图片验证码");
-  await page.goto("/admin/audit?action=system.cc_template_update");
+  await page.goto("/audit?action=system.cc_template_update");
   await expect(page.getByTestId("audit-action").first()).toHaveText("system.cc_template_update");
-  await page.goto("/admin/audit?action=system.protection_update");
+  await page.goto("/audit?action=system.protection_update");
   await expect(page.getByTestId("audit-action").first()).toHaveText("system.protection_update");
   await logout(page);
   expect(pageErrors).toEqual([]);

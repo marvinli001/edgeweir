@@ -18,9 +18,7 @@ describe("/api/auth allow list", async () => {
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
   let adminCookie: string;
-  let ownerCookie: string;
-  let tenantOrgId: string;
-  let victimId: string;
+  let operatorId: string;
 
   const auth = (
     path: string,
@@ -38,93 +36,51 @@ describe("/api/auth allow list", async () => {
     });
 
   beforeAll(async () => {
-    await setupPlatform(ctx);
+    ({ userId: operatorId } = await setupPlatform(ctx));
     adminCookie = await signIn(app, origin, "admin@example.com");
     admin = rpcClient(app, origin, adminCookie);
-    tenantOrgId = (await admin.organizations.create({ name: "Tenant" })).id;
-    await admin.users.create({
-      name: "Olivia Owner",
-      email: "owner@tenant.test",
-      password: PASSWORD,
-      organizationId: tenantOrgId,
-      role: "owner",
-    });
-    victimId = (
-      await admin.users.create({
-        name: "Victor Victim",
-        email: "victim@tenant.test",
-        password: PASSWORD,
-        organizationId: tenantOrgId,
-        role: "member",
-      })
-    ).id;
-    ownerCookie = await signIn(app, origin, "owner@tenant.test");
   });
   afterAll(() => pglite.close());
 
-  it("does not let an organization owner delete the organization through better-auth", async () => {
-    for (const path of [
-      "/organization/delete",
-      "/organization/update",
-      "/organization/remove-member",
-      "/organization/update-member-role",
-      "/organization/invite-member",
-      "/organization/set-active",
-    ]) {
-      const res = await auth(path, {
-        cookie: ownerCookie,
-        body: { organizationId: tenantOrgId, memberIdOrEmail: "victim@tenant.test" },
-      });
-      expect(res.status, path).toBe(404);
-    }
-    const [org] = await ctx.db
-      .select()
-      .from(schema.organization)
-      .where(eq(schema.organization.id, tenantOrgId));
-    expect(org?.name).toBe("Tenant");
-    expect(await admin.organizations.members({ id: tenantOrgId })).toMatchObject({
-      members: expect.arrayContaining([expect.objectContaining({ email: "victim@tenant.test" })]),
-    });
-  });
-
-  it("refuses the admin plugin endpoints, even to a platform administrator", async () => {
+  it("refuses the admin plugin endpoints, even to the operator", async () => {
     const calls: [string, unknown][] = [
-      ["/admin/impersonate-user", { userId: victimId }],
-      ["/admin/set-user-password", { userId: victimId, newPassword: "hijacked password 1" }],
-      ["/admin/remove-user", { userId: victimId }],
-      ["/admin/set-role", { userId: victimId, role: "admin" }],
-      ["/admin/ban-user", { userId: victimId }],
+      ["/admin/impersonate-user", { userId: operatorId }],
+      ["/admin/set-user-password", { userId: operatorId, newPassword: "hijacked password 1" }],
+      ["/admin/remove-user", { userId: operatorId }],
+      ["/admin/set-role", { userId: operatorId, role: "user" }],
+      ["/admin/ban-user", { userId: operatorId }],
       [
         "/admin/create-user",
         { email: "ghost@example.com", password: "ghost password 1", name: "Ghost", role: "admin" },
       ],
-      ["/admin/revoke-user-sessions", { userId: victimId }],
+      ["/admin/revoke-user-sessions", { userId: operatorId }],
     ];
     for (const [path, body] of calls) {
       expect((await auth(path, { cookie: adminCookie, body })).status, path).toBe(404);
     }
     expect((await auth("/admin/list-users", { cookie: adminCookie })).status).toBe(404);
-    const [victim] = await ctx.db.select().from(schema.user).where(eq(schema.user.id, victimId));
-    expect(victim).toMatchObject({ role: "user", banned: false });
+    const [operator] = await ctx.db
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.id, operatorId));
+    expect(operator).toMatchObject({ role: "admin", banned: false });
     const [ghost] = await ctx.db
       .select()
       .from(schema.user)
       .where(eq(schema.user.email, "ghost@example.com"));
     expect(ghost).toBeUndefined();
     // The password was not changed.
-    await signIn(app, origin, "victim@tenant.test");
+    await signIn(app, origin, "admin@example.com");
   });
 
   it("never turns an x-api-key into a session on /api/auth", async () => {
-    const created = await auth("/api-key/create", { cookie: adminCookie, body: { name: "ci" } });
-    expect(created.status).toBe(200);
-    const { key } = (await created.json()) as { key: string };
+    const { key } = await admin.accessKeys.create({ name: "ci", scope: "write" });
     const keysBefore = await ctx.db.select().from(schema.apikey);
 
     const minted = await auth("/api-key/create", { apiKey: key, body: { name: "escalated" } });
-    expect(minted.status).toBe(401);
+    expect(minted.status).toBe(404);
     expect(await ctx.db.select().from(schema.apikey)).toHaveLength(keysBefore.length);
-    expect((await auth("/api-key/list", { apiKey: key })).status).toBe(401);
+    expect((await auth("/api-key/list", { apiKey: key })).status).toBe(404);
     const session = await auth("/get-session", { apiKey: key });
     expect(await session.json()).toBeNull();
     const change = { currentPassword: PASSWORD, newPassword: "taken over password 1" };
@@ -146,7 +102,11 @@ describe("/api/auth allow list", async () => {
       ["POST", "/request-password-reset"],
       ["POST", "/two-factor/get-totp-uri"],
       ["POST", "/passkey/update-passkey"],
+      // AccessKeys are created and revoked with the accessKeys procedures only.
+      ["POST", "/api-key/create"],
+      ["GET", "/api-key/list"],
       ["POST", "/api-key/update"],
+      ["POST", "/api-key/delete"],
       ["GET", "/sign-in/email"],
       ["GET", "/get-session/"],
       ["POST", "/admin%2Fremove-user"],
@@ -162,24 +122,29 @@ describe("/api/auth allow list", async () => {
     }
   });
 
+  it("leaves server-side auth.api calls working", async () => {
+    // setup -> auth.api.createUser (admin plugin), accessKeys.create -> auth.api.createApiKey.
+    const users = await ctx.db.select().from(schema.user);
+    expect(users).toMatchObject([{ id: operatorId, email: "admin@example.com", role: "admin" }]);
+    await signIn(app, origin, "admin@example.com");
+    const created = await admin.accessKeys.create({ name: "server side", scope: "read" });
+    expect(created.key).toMatch(/^ewk_/);
+    const [row] = await ctx.db.select().from(schema.apikey).where(eq(schema.apikey.id, created.id));
+    expect(row).toMatchObject({ name: "server side", referenceId: operatorId });
+  });
+
   it("keeps the flows the web console uses working", async () => {
-    const cookie = await signIn(app, origin, "owner@tenant.test");
+    const cookie = await signIn(app, origin, "admin@example.com");
     const session = (await (await auth("/get-session", { cookie })).json()) as {
       user: { email: string };
     };
-    expect(session.user.email).toBe("owner@tenant.test");
+    expect(session.user.email).toBe("admin@example.com");
     expect((await auth("/passkey/list-user-passkeys", { cookie })).status).toBe(200);
     expect(
       (await auth("/passkey/generate-register-options", { cookie })).status,
       "passkey registration options",
     ).toBe(200);
     expect((await auth("/passkey/generate-authenticate-options")).status).toBe(200);
-
-    const key = await auth("/api-key/create", { cookie, body: { name: "terraform" } });
-    expect(key.status).toBe(200);
-    const { id } = (await key.json()) as { id: string };
-    expect((await auth("/api-key/list", { cookie })).status).toBe(200);
-    expect((await auth("/api-key/delete", { cookie, body: { keyId: id } })).status).toBe(200);
 
     const enabled = await auth("/two-factor/enable", { cookie, body: { password: PASSWORD } });
     expect(enabled.status).toBe(200);
@@ -206,20 +171,5 @@ describe("/api/auth allow list", async () => {
     for (const [path, methods] of Object.entries(AUTH_HTTP_ROUTES)) {
       for (const method of methods) expect(known.get(path), path).toContain(method);
     }
-  });
-
-  it("leaves server-side auth.api calls working", async () => {
-    // users.create -> auth.api.createUser (admin plugin), setup -> createOrganization.
-    const created = await admin.users.create({
-      name: "Server Side",
-      email: "server@tenant.test",
-      password: PASSWORD,
-      organizationId: tenantOrgId,
-      role: "member",
-    });
-    expect(created.email).toBe("server@tenant.test");
-    await signIn(app, origin, "server@tenant.test");
-    const orgs = await ctx.db.select().from(schema.organization);
-    expect(orgs.map((o) => o.name)).toEqual(expect.arrayContaining(["Default", "Tenant"]));
   });
 });

@@ -17,56 +17,18 @@ import {
   type SiteWaf,
   type SiteWafUpdateInput,
   WAF_DEFAULTS,
-  WAF_SETTINGS_DEFAULTS,
   type WafMode,
-  type WafSettings,
   type WafTopRules,
   wafMode,
-  wafSettings,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
-import { fail } from "../lib/errors";
 import { rangeWindow, sourceFor } from "./analytics";
 import { type Actor, recordAudit } from "./audit";
-import { publisher, readSetting, writeSetting } from "./protection";
-import { type Executor, publishRevision } from "./revisions";
-import { findSite, type SiteScope } from "./sites";
-
-/** system_setting key of the platform CRS policy (`WafSettings`). */
-export const WAF_SETTINGS_KEY = "waf_settings";
+import { type Executor, publisher, publishRevision } from "./revisions";
+import { findSite } from "./sites";
 
 type WafRow = typeof schema.siteWaf.$inferSelect;
-
-export async function getWafSettings(db: Executor): Promise<WafSettings> {
-  const parsed = wafSettings.safeParse({
-    ...WAF_SETTINGS_DEFAULTS,
-    ...((await readSetting(db, WAF_SETTINGS_KEY)) ?? {}),
-  });
-  return parsed.success ? parsed.data : WAF_SETTINGS_DEFAULTS;
-}
-
-/**
- * Saves the platform CRS policy. Nothing is published: sites that already
- * run CRS keep it, and tenants can then only turn it off.
- */
-export async function setWafSettings(
-  db: Database,
-  input: WafSettings,
-  actor: Actor,
-): Promise<WafSettings> {
-  return db.transaction(async (tx) => {
-    const before = await getWafSettings(tx);
-    await writeSetting(tx, WAF_SETTINGS_KEY, input);
-    await recordAudit(tx, actor, {
-      action: "system.waf_update",
-      targetType: "system_setting",
-      targetId: WAF_SETTINGS_KEY,
-      metadata: { from: before, to: input },
-    });
-    return input;
-  });
-}
 
 function toDto(siteId: string, row: WafRow | undefined): SiteWaf {
   const mode = wafMode.safeParse(row?.mode);
@@ -118,25 +80,23 @@ async function wafRow(db: Executor, siteId: string, lock = false) {
   return row;
 }
 
-export async function getSiteWaf(db: Database, siteId: string, scope: SiteScope): Promise<SiteWaf> {
-  await findSite(db, siteId, scope);
+export async function getSiteWaf(db: Database, siteId: string): Promise<SiteWaf> {
+  await findSite(db, siteId);
   return toDto(siteId, await wafRow(db, siteId));
 }
 
 /**
- * Changes the fields given (organization owners and admins), publishes the
- * site's cluster and audits the change. While the platform does not let
- * tenants use CRS, tenants can only turn it off (WAF_CRS_FORBIDDEN).
- * Turning it on where active nodes lack modsecurity-v1 fails with
- * NODE_CAPABILITY_REQUIRED unless an administrator does it.
+ * Changes the fields given, publishes the site's cluster and audits the
+ * change. Turning it on where active nodes lack modsecurity-v1 holds the
+ * cluster's configuration until they are upgraded (see siteFeatures).
  */
 export async function updateSiteWaf(
   db: Database,
   input: SiteWafUpdateInput,
-  ctx: { scope: SiteScope; actor: Actor; isAdmin: boolean },
+  ctx: { actor: Actor },
 ): Promise<SiteWaf> {
   return db.transaction(async (tx) => {
-    const site = await findSite(tx, input.id, ctx.scope, true);
+    const site = await findSite(tx, input.id, true);
     const row = await wafRow(tx, site.id, true);
     const before = toDto(site.id, row);
     const next: { mode: WafMode } & Omit<SiteWaf, "siteId" | "updatedAt" | "mode"> = {
@@ -146,8 +106,6 @@ export async function updateSiteWaf(
       excludedRuleIds: [...(input.excludedRuleIds ?? before.excludedRuleIds)].sort((a, b) => a - b),
       requestBodyLimit: input.requestBodyLimit ?? before.requestBodyLimit,
     };
-    if (next.mode !== "off" && !ctx.isAdmin && !(await getWafSettings(tx)).tenantCrs)
-      fail("WAF_CRS_FORBIDDEN", "the platform does not allow tenants to turn on OWASP CRS");
     const [saved] = await tx
       .insert(schema.siteWaf)
       .values({ siteId: site.id, ...next })
@@ -165,7 +123,6 @@ export async function updateSiteWaf(
     const strip = ({ siteId: _s, updatedAt: _u, ...rest }: SiteWaf) => rest;
     await recordAudit(tx, ctx.actor, {
       action: "site.waf_update",
-      organizationId: site.organizationId,
       targetType: "site",
       targetId: site.id,
       targetName: site.name,
@@ -181,18 +138,13 @@ const AVAILABLE: FeatureAvailability = { available: true, reason: null };
  * Whether Brotli, Zstandard, CRS, active health checks, session affinity
  * (which also needs challenge-v1 for its keys) and error pages can be turned
  * on for a site now: every active node of its cluster must report the
- * feature (administrators may still require it through the API, as with
- * other features), and CRS must be allowed for tenants unless the caller is
- * an administrator. purgeByTag and prefetchVariants tell whether the
- * cluster's nodes run host and tag purges, and mobile and sitemap
- * prefetches; nobody can create those tasks otherwise.
+ * feature (it may still be required through the API, as with other
+ * features). purgeByTag and prefetchVariants tell whether the cluster's
+ * nodes run host and tag purges, and mobile and sitemap prefetches; nobody
+ * can create those tasks otherwise.
  */
-export async function siteFeatures(
-  db: Database,
-  siteId: string,
-  ctx: { scope: SiteScope; isAdmin: boolean },
-): Promise<SiteFeatures> {
-  const site = await findSite(db, siteId, ctx.scope);
+export async function siteFeatures(db: Database, siteId: string): Promise<SiteFeatures> {
+  const site = await findSite(db, siteId);
   const nodes = await db
     .select({ features: schema.node.supportedFeatures })
     .from(schema.node)
@@ -204,10 +156,7 @@ export async function siteFeatures(
   return {
     brotli: byNodes(BROTLI_FEATURE),
     zstd: byNodes(ZSTD_FEATURE),
-    crs:
-      !ctx.isAdmin && !(await getWafSettings(db)).tenantCrs
-        ? { available: false, reason: "platform" }
-        : byNodes(MODSECURITY_FEATURE),
+    crs: byNodes(MODSECURITY_FEATURE),
     activeHealthCheck: byNodes(ACTIVE_HEALTH_FEATURE),
     sessionAffinity: byNodes(SESSION_AFFINITY_FEATURE, "challenge-v1"),
     errorPages: byNodes(ERROR_PAGES_FEATURE),
@@ -219,11 +168,10 @@ export async function siteFeatures(
 /** Most-matched CRS rules of a site over a range, from the nodes' bounded per-minute counters. */
 export async function topWafRules(
   db: Database,
-  scope: SiteScope,
   query: { id: string; range: AnalyticsRange; limit: number },
   now = Date.now(),
 ): Promise<WafTopRules> {
-  await findSite(db, query.id, scope);
+  await findSite(db, query.id);
   const stats = sourceFor(query.range);
   const window = rangeWindow(query.range, now);
   const result = await db.execute<{ rule: string; requests: string | number }>(sql`

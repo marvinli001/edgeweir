@@ -15,9 +15,9 @@ import { asc, eq, inArray, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
-import { publisher, readSetting, writeSetting } from "./protection";
-import { type Executor, publishRevision } from "./revisions";
-import { findSite, type SiteScope } from "./sites";
+import { readSetting, writeSetting } from "./protection";
+import { type Executor, publisher, publishRevision } from "./revisions";
+import { findSite } from "./sites";
 
 /** system_setting key of the platform's error pages (`PlatformErrorPages`). */
 export const ERROR_PAGES_KEY = "error_pages";
@@ -66,30 +66,26 @@ function toDto(site: SiteRow, pages: ErrorPage[]): SiteErrorPages {
   };
 }
 
-export async function getSiteErrorPages(
-  db: Database,
-  siteId: string,
-  scope: SiteScope,
-): Promise<SiteErrorPages> {
-  const site = await findSite(db, siteId, scope);
+export async function getSiteErrorPages(db: Database, siteId: string): Promise<SiteErrorPages> {
+  const site = await findSite(db, siteId);
   return toDto(site, (await loadSiteErrorPages(db, [site.id])).get(site.id) ?? []);
 }
 
 /**
- * Replaces a site's error pages (organization owners and admins), publishes
- * its cluster and audits the change. Pages on a cluster whose active nodes
- * lack error-pages-v1 fail with NODE_CAPABILITY_REQUIRED unless an
- * administrator saves them (insertRevision). Templates over 64 KiB of UTF-8
- * fail with ERROR_PAGE_TOO_LARGE.
+ * Replaces a site's error pages, publishes its cluster and audits the
+ * change. Pages on a cluster whose active nodes lack error-pages-v1 fail
+ * with NODE_CAPABILITY_REQUIRED unless the operator saves them
+ * (insertRevision). Templates over 64 KiB of UTF-8 fail with
+ * ERROR_PAGE_TOO_LARGE.
  */
 export async function updateSiteErrorPages(
   db: Database,
   input: SiteErrorPagesInput,
-  ctx: { scope: SiteScope; actor: Actor },
+  ctx: { actor: Actor },
 ): Promise<SiteErrorPages> {
   for (const page of input.pages) assertTemplateSize(page.status, page.template);
   return db.transaction(async (tx) => {
-    const site = await findSite(tx, input.id, ctx.scope, true);
+    const site = await findSite(tx, input.id, true);
     if (input.expectedUpdatedAt !== undefined) {
       if (!site.errorPagesUpdatedAt)
         fail("UPDATED_AT_MISMATCH", "the error pages changed since they were read", {
@@ -125,7 +121,6 @@ export async function updateSiteErrorPages(
     );
     await recordAudit(tx, ctx.actor, {
       action: "site.error_pages_update",
-      organizationId: site.organizationId,
       targetType: "site",
       targetId: site.id,
       targetName: site.name,
@@ -159,7 +154,7 @@ export async function loadPlatformErrorPages(db: Executor): Promise<PlatformErro
   return getPlatformErrorPages(db);
 }
 
-const PLATFORM_PAGES = ["unknownHost", "siteDisabled", "siteSuspended"] as const;
+const PLATFORM_PAGES = ["unknownHost", "siteDisabled"] as const;
 
 /**
  * Replaces the platform's pages, publishes every cluster (reason

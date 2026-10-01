@@ -36,11 +36,11 @@
 
 | 变量 | 默认值 | 作用 |
 | --- | --- | --- |
-| `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` | 节点连接节点通道的地址；安装命令中的 `--server`；**后台 → 系统设置** 中的「节点通道」。 |
+| `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` | 节点连接节点通道的地址；安装命令中的 `--server`；**系统设置** 中的「节点通道」。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | 空 | 节点通道证书的额外名称，逗号分隔的 DNS 名或 IP。 |
 
 - 节点通道的服务端证书由内部 CA 在每次启动时签发，名称包括：`localhost`、`127.0.0.1`、`::1`、容器主机名、`EDGEWEIR_NODE_API_URL` 的主机名、`EDGEWEIR_NODE_API_HOSTNAMES` 的全部条目。修改后重启生效。
-- CA 指纹（SHA-256）出现在启动日志 `node channel listening` 的 `caSha256`、**后台 → 系统设置** 的「CA 指纹」、安装命令的 `--ca-sha256`。
+- CA 指纹（SHA-256）出现在启动日志 `node channel listening` 的 `caSha256`、**系统设置** 的「CA 指纹」、安装命令的 `--ca-sha256`。
 
 | 场景 | 设置 |
 | --- | --- |

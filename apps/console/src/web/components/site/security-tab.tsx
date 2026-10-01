@@ -22,7 +22,6 @@ import {
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import {
@@ -53,7 +52,6 @@ import {
   eventKindLabel,
   levelLabel,
   metricLabel,
-  unavailableReason,
   wafModeLabel,
 } from "@/lib/protection";
 
@@ -83,15 +81,7 @@ function useUpdateProtection(siteId: string) {
 }
 
 /** The site's security tab: Under Attack, challenges, CC policy and what the nodes report. */
-export function SecurityTab({
-  siteId,
-  organizationRole,
-}: {
-  siteId: string;
-  organizationRole?: string;
-}) {
-  const { isAdmin } = useRouteContext({ from: "/_app" });
-  const canEdit = isAdmin || organizationRole === "owner" || organizationRole === "admin";
+export function SecurityTab({ siteId }: { siteId: string }) {
   const protection = useQuery(orpc.protection.get.queryOptions({ input: { id: siteId } }));
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -101,22 +91,20 @@ export function SecurityTab({
         <ErrorState error={protection.error} onRetry={() => void protection.refetch()} />
       ) : (
         <>
-          <UnderAttackCard siteId={siteId} protection={protection.data} canEdit={canEdit} />
+          <UnderAttackCard siteId={siteId} protection={protection.data} />
           <ChallengeSettingsCard
             key={`challenge-${protection.data.updatedAt}`}
             siteId={siteId}
             protection={protection.data}
-            canEdit={canEdit}
           />
           <CcPolicyCard
             key={`cc-${protection.data.updatedAt}`}
             siteId={siteId}
             protection={protection.data}
-            canEdit={canEdit}
           />
         </>
       )}
-      <WafCard siteId={siteId} canEdit={canEdit} />
+      <WafCard siteId={siteId} />
       <NodeLevelsCard siteId={siteId} />
       <TopCard siteId={siteId} />
       <WafRulesCard siteId={siteId} />
@@ -125,22 +113,14 @@ export function SecurityTab({
   );
 }
 
-function UnderAttackCard({
-  siteId,
-  protection,
-  canEdit,
-}: {
-  siteId: string;
-  protection: SiteProtection;
-  canEdit: boolean;
-}) {
+function UnderAttackCard({ siteId, protection }: { siteId: string; protection: SiteProtection }) {
   const { save, pending } = useUpdateProtection(siteId);
   const turningOn = !protection.underAttack;
   const toggle = (
     <Switch
       id="protection-under-attack"
       checked={protection.underAttack}
-      disabled={!canEdit || pending}
+      disabled={pending}
       data-testid="protection-under-attack"
     />
   );
@@ -151,18 +131,14 @@ function UnderAttackCard({
       </CardHeader>
       <CardContent className="grid gap-4 sm:grid-cols-2">
         <Field orientation="horizontal" className="min-h-9 w-auto self-end">
-          {canEdit ? (
-            <ConfirmDialog
-              trigger={toggle}
-              destructive={turningOn}
-              title={turningOn ? m.protection_under_attack_on() : m.protection_under_attack_off()}
-              note={turningOn ? m.protection_under_attack_on_note() : undefined}
-              confirmLabel={turningOn ? m.protection_turn_on() : m.protection_turn_off()}
-              onConfirm={() => save({ underAttack: turningOn })}
-            />
-          ) : (
-            toggle
-          )}
+          <ConfirmDialog
+            trigger={toggle}
+            destructive={turningOn}
+            title={turningOn ? m.protection_under_attack_on() : m.protection_under_attack_off()}
+            note={turningOn ? m.protection_under_attack_on_note() : undefined}
+            confirmLabel={turningOn ? m.protection_turn_on() : m.protection_turn_off()}
+            onConfirm={() => save({ underAttack: turningOn })}
+          />
           <FieldLabel htmlFor="protection-under-attack">{m.protection_under_attack()}</FieldLabel>
           {protection.underAttack ? (
             <Badge variant="destructive" data-testid="protection-under-attack-on">
@@ -174,7 +150,7 @@ function UnderAttackCard({
           id="protection-under-attack-type"
           label={m.rules_challenge_type()}
           value={protection.underAttackChallenge}
-          disabled={!canEdit || pending}
+          disabled={pending}
           testId="protection-under-attack-type"
           options={CHALLENGE_TYPES.map((type) => ({ value: type, label: challengeLabel(type) }))}
           onChange={(type) => void save({ underAttackChallenge: type as ChallengeType })}
@@ -192,11 +168,9 @@ function UnderAttackCard({
 function ChallengeSettingsCard({
   siteId,
   protection,
-  canEdit,
 }: {
   siteId: string;
   protection: SiteProtection;
-  canEdit: boolean;
 }) {
   const { save, error, pending } = useUpdateProtection(siteId);
   const initial = {
@@ -232,7 +206,6 @@ function ChallengeSettingsCard({
             max={PASS_TTL_RANGE.max}
             step={1}
             required
-            disabled={!canEdit}
             testId="protection-pass-ttl"
             onChange={(passTtlSeconds) => setDraft({ ...draft, passTtlSeconds })}
           />
@@ -244,7 +217,6 @@ function ChallengeSettingsCard({
             max={POW_DIFFICULTY_RANGE.max}
             step={1}
             required
-            disabled={!canEdit}
             testId="protection-pow"
             onChange={(powDifficulty) => setDraft({ ...draft, powDifficulty })}
           />
@@ -256,7 +228,6 @@ function ChallengeSettingsCard({
             max={POW_HIGH_DIFFICULTY_RANGE.max}
             step={1}
             required
-            disabled={!canEdit}
             testId="protection-pow-high"
             onChange={(powHighDifficulty) => setDraft({ ...draft, powHighDifficulty })}
           />
@@ -264,33 +235,22 @@ function ChallengeSettingsCard({
             id="protection-log-ja4"
             label={m.protection_log_ja4()}
             checked={draft.logJa4}
-            disabled={!canEdit}
             testId="protection-log-ja4"
             onCheckedChange={(logJa4) => setDraft({ ...draft, logJa4 })}
           />
         </CardContent>
-        {canEdit ? (
-          <SaveBar
-            dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
-            pending={pending}
-            error={error}
-            testId="protection-save"
-          />
-        ) : null}
+        <SaveBar
+          dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
+          pending={pending}
+          error={error}
+          testId="protection-save"
+        />
       </form>
     </Card>
   );
 }
 
-function CcPolicyCard({
-  siteId,
-  protection,
-  canEdit,
-}: {
-  siteId: string;
-  protection: SiteProtection;
-  canEdit: boolean;
-}) {
+function CcPolicyCard({ siteId, protection }: { siteId: string; protection: SiteProtection }) {
   const { save, error, pending } = useUpdateProtection(siteId);
   const initial = {
     enabled: protection.cc.enabled,
@@ -324,7 +284,6 @@ function CcPolicyCard({
               id="cc-enabled"
               label={m.cc_enabled()}
               checked={draft.enabled}
-              disabled={!canEdit}
               testId="cc-enabled"
               onCheckedChange={(enabled) => setDraft({ ...draft, enabled })}
             />
@@ -332,7 +291,6 @@ function CcPolicyCard({
               id="cc-follow-template"
               label={m.cc_follow_template()}
               checked={draft.followTemplate}
-              disabled={!canEdit}
               testId="cc-follow-template"
               onCheckedChange={(followTemplate) =>
                 setDraft({
@@ -347,26 +305,24 @@ function CcPolicyCard({
           <CcThresholdFields
             prefix="cc"
             value={shown}
-            disabled={!canEdit || draft.followTemplate}
+            disabled={draft.followTemplate}
             onChange={(thresholds) => setDraft({ ...draft, thresholds })}
           />
           <SafetyNote>{m.cc_per_node_note()}</SafetyNote>
         </CardContent>
-        {canEdit ? (
-          <SaveBar
-            dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
-            pending={pending}
-            error={error}
-            testId="cc-save"
-          />
-        ) : null}
+        <SaveBar
+          dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
+          pending={pending}
+          error={error}
+          testId="cc-save"
+        />
       </form>
     </Card>
   );
 }
 
 /** The site's OWASP CRS: mode, paranoia level, threshold, exclusions and body limit. */
-function WafCard({ siteId, canEdit }: { siteId: string; canEdit: boolean }) {
+function WafCard({ siteId }: { siteId: string }) {
   const waf = useQuery(orpc.waf.get.queryOptions({ input: { id: siteId } }));
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
   return (
@@ -400,7 +356,6 @@ function WafCard({ siteId, canEdit }: { siteId: string; canEdit: boolean }) {
           siteId={siteId}
           waf={waf.data}
           availability={features.data.crs}
-          canEdit={canEdit}
         />
       )}
     </Card>
@@ -418,12 +373,10 @@ function WafForm({
   siteId,
   waf,
   availability,
-  canEdit,
 }: {
   siteId: string;
   waf: SiteWaf;
   availability: FeatureAvailability;
-  canEdit: boolean;
 }) {
   const queryClient = useQueryClient();
   const mutation = useMutation(orpc.waf.update.mutationOptions());
@@ -439,7 +392,7 @@ function WafForm({
   const [ruleError, setRuleError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   // Turning CRS on needs the feature; a site that runs it can still be turned off.
-  const locked = !canEdit || (!availability.available && waf.mode === "off");
+  const locked = !availability.available && waf.mode === "off";
   const invalidRules = () => m.waf_exclusions_invalid({ max: WAF_MAX_EXCLUSIONS });
   const addRules = () => {
     const ids = parseRuleIds(ruleInput);
@@ -491,7 +444,6 @@ function WafForm({
             id="waf-paranoia"
             label={m.waf_paranoia()}
             value={draft.paranoiaLevel}
-            disabled={!canEdit}
             testId="waf-paranoia"
             options={Array.from(
               { length: WAF_PARANOIA_RANGE.max - WAF_PARANOIA_RANGE.min + 1 },
@@ -507,7 +459,6 @@ function WafForm({
             max={WAF_ANOMALY_THRESHOLD_RANGE.max}
             step={1}
             required
-            disabled={!canEdit}
             testId="waf-threshold"
             onChange={(anomalyThreshold) => setDraft({ ...draft, anomalyThreshold })}
           />
@@ -519,44 +470,41 @@ function WafForm({
             max={WAF_BODY_LIMIT_RANGE.max}
             step={1}
             required
-            disabled={!canEdit}
             testId="waf-body-limit"
             onChange={(requestBodyLimit) => setDraft({ ...draft, requestBodyLimit })}
           />
         </div>
         <Field data-invalid={ruleError ? true : undefined}>
           <FieldLabel htmlFor="waf-exclusion-input">{m.waf_exclusions()}</FieldLabel>
-          {canEdit ? (
-            <div className="flex min-w-0 gap-2">
-              <Input
-                id="waf-exclusion-input"
-                className="min-w-0 flex-1 font-mono"
-                inputMode="numeric"
-                value={ruleInput}
-                aria-invalid={ruleError ? true : undefined}
-                data-testid="waf-exclusion-input"
-                onChange={(event) => {
-                  setRuleInput(event.target.value);
-                  setRuleError(null);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addRules();
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                disabled={!ruleInput.trim()}
-                data-testid="waf-exclusion-add"
-                onClick={addRules}
-              >
-                {m.waf_exclusions_add()}
-              </Button>
-            </div>
-          ) : null}
+          <div className="flex min-w-0 gap-2">
+            <Input
+              id="waf-exclusion-input"
+              className="min-w-0 flex-1 font-mono"
+              inputMode="numeric"
+              value={ruleInput}
+              aria-invalid={ruleError ? true : undefined}
+              data-testid="waf-exclusion-input"
+              onChange={(event) => {
+                setRuleInput(event.target.value);
+                setRuleError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addRules();
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!ruleInput.trim()}
+              data-testid="waf-exclusion-add"
+              onClick={addRules}
+            >
+              {m.waf_exclusions_add()}
+            </Button>
+          </div>
           {ruleError ? (
             <FieldError data-testid="waf-exclusion-error">{ruleError}</FieldError>
           ) : null}
@@ -571,22 +519,20 @@ function WafForm({
                     data-rule-id={id}
                   >
                     {id}
-                    {canEdit ? (
-                      <button
-                        type="button"
-                        className="-mr-1 rounded-full p-0.5 text-muted-foreground hover:text-foreground"
-                        aria-label={m.waf_exclusions_remove({ id: String(id) })}
-                        data-testid="waf-exclusion-remove"
-                        onClick={() =>
-                          setDraft({
-                            ...draft,
-                            excludedRuleIds: draft.excludedRuleIds.filter((rule) => rule !== id),
-                          })
-                        }
-                      >
-                        <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} className="size-3" />
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      className="-mr-1 rounded-full p-0.5 text-muted-foreground hover:text-foreground"
+                      aria-label={m.waf_exclusions_remove({ id: String(id) })}
+                      data-testid="waf-exclusion-remove"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          excludedRuleIds: draft.excludedRuleIds.filter((rule) => rule !== id),
+                        })
+                      }
+                    >
+                      <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} className="size-3" />
+                    </button>
                   </Badge>
                 </li>
               ))}
@@ -595,18 +541,16 @@ function WafForm({
         </Field>
         {availability.available ? null : (
           <SafetyNote data-testid="waf-unavailable" data-reason={availability.reason ?? undefined}>
-            {unavailableReason(availability)}
+            {m.feature_unavailable_nodes()}
           </SafetyNote>
         )}
       </CardContent>
-      {canEdit ? (
-        <SaveBar
-          dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
-          pending={mutation.isPending}
-          error={error}
-          testId="waf-save"
-        />
-      ) : null}
+      <SaveBar
+        dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
+        pending={mutation.isPending}
+        error={error}
+        testId="waf-save"
+      />
     </form>
   );
 }

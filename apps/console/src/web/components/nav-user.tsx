@@ -9,6 +9,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { accountNav } from "@/components/nav-items";
 import { useTheme } from "@/components/theme-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -91,6 +92,19 @@ export function NavUser({ user }: { user: { name: string; email: string } }) {
                   <span className="truncate text-xs text-muted-foreground">{user.email}</span>
                 </div>
               </DropdownMenuLabel>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              {accountNav().map((item) => (
+                <DropdownMenuItem
+                  key={String(item.to)}
+                  data-testid={item.testId}
+                  onClick={() => void navigate({ to: item.to })}
+                >
+                  {item.icon}
+                  {item.title}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuSub>

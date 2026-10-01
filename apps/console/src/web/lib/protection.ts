@@ -1,10 +1,4 @@
-import type {
-  CcLevel,
-  ChallengeType,
-  FeatureAvailability,
-  SecurityEventKind,
-  WafMode,
-} from "@edgeweir/contract";
+import type { CcLevel, ChallengeType, SecurityEventKind, WafMode } from "@edgeweir/contract";
 import { m } from "@/lib/i18n";
 
 /** Challenge types, which are also the CC levels above normal. */
@@ -44,9 +38,3 @@ export const metricLabel = (metric: string) =>
 
 export const wafModeLabel = (mode: WafMode) =>
   ({ off: m.waf_mode_off, detect: m.waf_mode_detect, block: m.waf_mode_block })[mode]();
-
-/** One line on why a feature cannot be turned on for a site now. */
-export const unavailableReason = (availability: FeatureAvailability) =>
-  availability.reason === "platform"
-    ? m.feature_unavailable_platform()
-    : m.feature_unavailable_nodes();

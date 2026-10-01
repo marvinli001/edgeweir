@@ -1,8 +1,7 @@
 // Core gaps G1 end to end (dynamic bans and kernel bans), after the P0 step.
-// Both nodes of the upgrade cluster serve the P0 site (X, organization
-// "P0 Org") and the M5 site (Y, another organization). client-a and
-// client-b sit on the default network and reach `node` by its container
-// address, so the node sees their own addresses:
+// Both nodes of the upgrade cluster serve the P0 site (X) and the M5 site
+// (Y). client-a and client-b sit on the default network and reach `node` by
+// its container address, so the node sees their own addresses:
 //   a. both nodes report bans-v1 and kernel-ban-v1
 //   c. a site ban answers 403 ip-banned to client-a on X only: client-a
 //      still gets 200 from Y, client-b from X
@@ -10,11 +9,11 @@
 //      (unapplied 0)
 //   b. delivery latency: bans and unbans, from the API response until
 //      client-a sees the effect; p95 <= 5 s
-//   d. a platform ban drops client-a in nftables (TCP connect times out,
-//      no refusal, no 403) while client-b is served; kernelEntries >= 1; the
-//      unban lets client-a back in
-//   e. short prefixes, protected addresses, tenants on /admin/bans, sites
-//      of other organizations and maxBans are refused
+//   d. a platform ban (every site) drops client-a in nftables (TCP connect
+//      times out, no refusal, no 403) while client-b is served;
+//      kernelEntries >= 1; the unban lets client-a back in
+//   e. short prefixes, protected addresses and bans over the platform limit
+//      (maxTotal) are refused
 // Every ban is lifted at the end.
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
@@ -22,7 +21,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
-import { signInResponse } from "./e2e-auth.mjs";
+import { rpc, signInResponse } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile);
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
@@ -65,17 +64,11 @@ async function call(key, method, path, body, headers = {}) {
 }
 
 async function createKey(cookie) {
-  const created = await fetch(`${base}/api/auth/api-key/create`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: base, cookie },
-    body: JSON.stringify({ name: "g1-e2e" }),
-  });
-  assert.equal(created.status, 200);
-  return (await created.json()).key;
+  return (await rpc(base, cookie, "accessKeys/create", { name: "g1-e2e" })).key;
 }
 
 /**
- * A signed-in user with an AccessKey. An AccessKey allows 600 requests until
+ * The signed-in operator with an AccessKey. An AccessKey allows 600 requests until
  * it has been idle for 60 seconds; the polling below runs longer than that,
  * so every 500 calls move to a fresh key.
  */
@@ -290,7 +283,6 @@ const p0 = JSON.parse(await readFile(".e2e/p0-state.json", "utf8"));
 const m5 = JSON.parse(await readFile(".e2e/m5-state.json", "utf8"));
 const upgrade = JSON.parse(await readFile(".e2e/m6-upgrade-state.json", "utf8"));
 const admin = await actor("admin@e2e.test", "e2e-admin-password-123");
-const owner = await actor("owner@p0.test", "p0-owner-password-123");
 const edgeId = upgrade.nodeId;
 const peerId = upgrade.peerId;
 const nodeById = (id) => admin.ok("GET", `/nodes/${id}`);
@@ -330,14 +322,14 @@ await everyNode(
   180,
 );
 
-/** Lifts every active ban (admin view covers all scopes and organizations). */
+/** Lifts every active ban. */
 async function clearBans() {
   let removed = 0;
   for (let round = 0; round < 20; round++) {
-    const page = await admin.ok("GET", "/admin/bans?pageSize=100");
+    const page = await admin.ok("GET", "/bans?pageSize=100");
     if (page.items.length === 0) return removed;
     for (const ban of page.items) {
-      const result = await admin.raw("DELETE", `/admin/bans/${ban.id}`);
+      const result = await admin.raw("DELETE", `/bans/${ban.id}`);
       assert.ok(result.status === 200 || result.status === 404, result.text);
       removed++;
     }
@@ -346,13 +338,11 @@ async function clearBans() {
 }
 const leftovers = await clearBans();
 
-// Site X (P0 Org, the tenant owner's) and site Y (M5's organization), same cluster.
-const siteX = await owner.ok("GET", `/sites/${p0.siteId}`);
+// Site X (P0's) and site Y (M5's), same cluster.
+const siteX = await admin.ok("GET", `/sites/${p0.siteId}`);
 const siteY = await admin.ok("GET", `/sites/${m5.siteId}`);
-assert.equal(siteX.organizationId, p0.organizationId);
-assert.notEqual(siteY.organizationId, siteX.organizationId);
 assert.equal(siteY.clusterId, siteX.clusterId, "X and Y must be served by the same nodes");
-for (const site of [siteX, siteY]) assert.ok(site.enabled && !site.suspended, site.name);
+for (const site of [siteX, siteY]) assert.ok(site.enabled, site.name);
 const hostX = siteX.domains[0];
 const hostY = siteY.domains[0];
 assert.ok(hostX && hostY);
@@ -406,7 +396,8 @@ try {
   );
 
   // -------------------------------------------------------------- c. site ban
-  const siteBan = await owner.ok("POST", "/bans", {
+  const siteBan = await admin.ok("POST", "/bans", {
+    scope: "site",
     siteId: siteX.id,
     cidr: clientA,
     reason: "abuse",
@@ -416,7 +407,6 @@ try {
   assert.equal(siteBan.scope, "site");
   assert.equal(siteBan.source, "manual");
   assert.equal(siteBan.siteId, siteX.id);
-  assert.equal(siteBan.organizationId, siteX.organizationId);
   assert.equal(siteBan.distributed, true);
   assert.equal(
     Math.round((Date.parse(siteBan.expiresAt) - Date.parse(siteBan.createdAt)) / 1000),
@@ -444,12 +434,14 @@ try {
       n.banStatus.unappliedIds.length === 0 &&
       n.banStatus.entries >= 1,
   );
-  const listed = (await admin.ok("GET", `/admin/bans?siteId=${siteX.id}`)).items.find(
+  const listed = (await admin.ok("GET", `/bans?siteId=${siteX.id}`)).items.find(
     (x) => x.id === siteBan.id,
   );
   assert.equal(listed?.unappliedNodes, 0, JSON.stringify(listed));
-  assert.ok((await owner.ok("GET", "/bans")).items.some((x) => x.id === siteBan.id));
-  await owner.ok("DELETE", `/bans/${siteBan.id}`);
+  assert.ok(
+    !(await admin.ok("GET", `/bans?siteId=${siteY.id}`)).items.some((x) => x.id === siteBan.id),
+  );
+  await admin.ok("DELETE", `/bans/${siteBan.id}`);
   await servedSoon(a, hostX);
   await servedSoon(a, hostX, peerIp);
   const removedSeq = await psql(
@@ -467,7 +459,8 @@ try {
   // -------------------------------------------------------------- b. delivery latency
   const samples = { ban: [], unban: [] };
   for (let round = 1; round <= ROUNDS; round++) {
-    const ban = await owner.ok("POST", "/bans", {
+    const ban = await admin.ok("POST", "/bans", {
+      scope: "site",
       siteId: siteX.id,
       cidr: clientA,
       reason: "attack",
@@ -477,7 +470,7 @@ try {
     const on = await a.until(hostX, { status: 403, error: "ip-banned" });
     samples.ban.push(performance.now() - started);
     assert.ok(on.ok, `round ${round}: the ban never reached client-a: ${JSON.stringify(on)}`);
-    await owner.ok("DELETE", `/bans/${ban.id}`);
+    await admin.ok("DELETE", `/bans/${ban.id}`);
     started = performance.now();
     const off = await a.until(hostX, { status: 200 });
     samples.unban.push(performance.now() - started);
@@ -505,7 +498,7 @@ try {
 
   // -------------------------------------------------------------- d. platform ban in the kernel
   await served(a, hostX);
-  const platformBan = await admin.ok("POST", "/admin/bans", {
+  const platformBan = await admin.ok("POST", "/bans", {
     scope: "platform",
     cidr: clientA,
     reason: "attack",
@@ -515,7 +508,6 @@ try {
   assert.equal(platformBan.scope, "platform");
   assert.equal(platformBan.cidr, `${clientA}/32`);
   assert.equal(platformBan.siteId, null);
-  assert.equal(platformBan.organizationId, null);
   let droppedAfter = 0;
   const attempts = [];
   await waitFor(
@@ -553,15 +545,13 @@ try {
     await served(b, host, peerIp);
   }
   assert.equal(await edge(hostX, "/g1-host"), 200);
-  // Tenants neither see nor lift platform bans.
-  assert.ok(!(await owner.ok("GET", "/bans")).items.some((x) => x.id === platformBan.id));
-  refused(await owner.raw("DELETE", `/bans/${platformBan.id}`), 404, "BAN_NOT_FOUND");
   assert.ok(
-    (await admin.ok("GET", "/admin/bans?scope=platform")).items.some(
-      (x) => x.id === platformBan.id,
-    ),
+    (await admin.ok("GET", "/bans?scope=platform")).items.some((x) => x.id === platformBan.id),
   );
-  await admin.ok("DELETE", `/admin/bans/${platformBan.id}`);
+  assert.ok(
+    !(await admin.ok("GET", "/bans?scope=site")).items.some((x) => x.id === platformBan.id),
+  );
+  await admin.ok("DELETE", `/bans/${platformBan.id}`);
   const liftedAt = performance.now();
   const back = await a.until(hostX, { status: 200 });
   assert.ok(back.ok, `client-a still dropped after the unban: ${JSON.stringify(back)}`);
@@ -576,7 +566,7 @@ try {
 
   // -------------------------------------------------------------- e. refusals
   refused(
-    await admin.raw("POST", "/admin/bans", {
+    await admin.raw("POST", "/bans", {
       scope: "platform",
       cidr: "10.0.0.0/8",
       reason: "attack",
@@ -587,7 +577,8 @@ try {
     { min: 16 },
   );
   refused(
-    await owner.raw("POST", "/bans", {
+    await admin.raw("POST", "/bans", {
+      scope: "site",
       siteId: siteX.id,
       cidr: "2001:db8::/32",
       reason: "attack",
@@ -598,7 +589,7 @@ try {
     { min: 48 },
   );
   refused(
-    await admin.raw("POST", "/admin/bans", {
+    await admin.raw("POST", "/bans", {
       scope: "platform",
       cidr: edgeIp,
       reason: "attack",
@@ -611,7 +602,8 @@ try {
   const net24 = edgeIp.split(".").slice(0, 3).join(".");
   const subnet = `${net24}.0/24`;
   const covered = refused(
-    await owner.raw("POST", "/bans", {
+    await admin.raw("POST", "/bans", {
+      scope: "site",
       siteId: siteX.id,
       cidr: subnet,
       reason: "attack",
@@ -622,7 +614,7 @@ try {
   );
   assert.ok(covered.data.address.startsWith(`${net24}.`), covered.data.address);
   refused(
-    await admin.raw("POST", "/admin/bans", {
+    await admin.raw("POST", "/bans", {
       scope: "platform",
       cidr: "127.0.0.1",
       reason: "attack",
@@ -633,7 +625,8 @@ try {
     { address: "127.0.0.0/8" },
   );
   refused(
-    await owner.raw("POST", "/bans", {
+    await admin.raw("POST", "/bans", {
+      scope: "site",
       siteId: siteX.id,
       cidr: "198.51.100.1",
       reason: "attack",
@@ -646,72 +639,30 @@ try {
     `refused: /8 and IPv6 /32 (BAN_PREFIX_TOO_SHORT /16, /48), the node ${edgeIp}, ${subnet} (covers ${covered.data.address}) and 127.0.0.1 (BAN_PROTECTED_ADDRESS), 30 s (BAN_EXPIRY_OUT_OF_RANGE)`,
   );
 
-  const platformInput = {
-    scope: "platform",
-    cidr: "198.51.100.30",
-    reason: "other",
-    durationSeconds: 3600,
-  };
-  assert.equal((await owner.raw("POST", "/admin/bans", platformInput)).status, 403);
-  assert.equal((await owner.raw("GET", "/admin/bans")).status, 403);
-  const tenantRpc = await fetch(`${base}/rpc/admin/bans/create`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-csrf-token": "orpc",
-      origin: base,
-      cookie: owner.cookie,
-    },
-    body: JSON.stringify({ json: platformInput }),
-  });
-  assert.equal(tenantRpc.status, 403, await tenantRpc.text());
-  refused(
-    await owner.raw("POST", "/bans", {
-      siteId: siteY.id,
-      cidr: "198.51.100.31",
-      reason: "abuse",
-      durationSeconds: 3600,
-    }),
-    404,
-    "SITE_NOT_FOUND",
-  );
-  // A ban on another organization's site stays out of the tenant's reach.
-  const foreign = await admin.ok("POST", "/admin/bans", {
-    scope: "site",
-    siteId: siteY.id,
-    cidr: "198.51.100.32",
-    reason: "scanner",
-    durationSeconds: 3600,
-  });
-  assert.equal(foreign.organizationId, siteY.organizationId);
-  assert.ok(!(await owner.ok("GET", "/bans")).items.some((x) => x.id === foreign.id));
-  refused(await owner.raw("DELETE", `/bans/${foreign.id}`), 404, "BAN_NOT_FOUND");
-  await admin.ok("DELETE", `/admin/bans/${foreign.id}`);
-  assert.equal((await admin.ok("GET", "/admin/bans")).total, 0, "a refused request left a ban");
-  pass(
-    `tenant AccessKey and session on /admin/bans: 403; a ban on another organization's site: SITE_NOT_FOUND; another organization's ban: invisible, BAN_NOT_FOUND`,
-  );
-
-  const limitsPath = `/admin/organizations/${siteX.organizationId}/limits`;
-  const before = await admin.ok("GET", limitsPath);
+  // The platform limit counts active manual bans; banning an address again renews it.
+  const banSettings = await admin.ok("GET", "/settings/bans");
   try {
-    await admin.ok("PUT", limitsPath, { limits: { ...before.limits, bans: 1 } });
-    const input = {
+    await admin.ok("PUT", "/settings/bans", { ...banSettings, maxTotal: 100 });
+    const input = (i) => ({
+      scope: "site",
       siteId: siteX.id,
-      cidr: "198.51.100.10",
+      cidr: `198.51.100.${i}`,
       reason: "spam",
       durationSeconds: 3600,
-    };
-    const first = await owner.ok("POST", "/bans", input);
-    refused(
-      await owner.raw("POST", "/bans", { ...input, cidr: "198.51.100.11" }),
-      409,
-      "ORG_LIMIT_EXCEEDED",
-      { resource: "bans", limit: 1, current: 1 },
-    );
-    // Banning the same address again renews it and does not count twice.
-    const renewed = await owner.ok("POST", "/bans", {
-      ...input,
+    });
+    const first = await admin.ok("POST", "/bans", input(1));
+    for (let i = 2; i <= 99; i++) await admin.ok("POST", "/bans", input(i));
+    const platform = await admin.ok("POST", "/bans", {
+      scope: "platform",
+      cidr: "198.51.100.200",
+      reason: "other",
+      durationSeconds: 3600,
+    });
+    refused(await admin.raw("POST", "/bans", input(101)), 409, "BAN_PLATFORM_LIMIT", {
+      limit: 100,
+    });
+    const renewed = await admin.ok("POST", "/bans", {
+      ...input(1),
       reason: "abuse",
       durationSeconds: 7200,
     });
@@ -719,23 +670,20 @@ try {
     assert.equal(renewed.reason, "abuse");
     assert.ok(BigInt(renewed.seq) > BigInt(first.seq));
     assert.ok(Date.parse(renewed.expiresAt) > Date.parse(first.expiresAt));
-    assert.equal((await admin.ok("GET", limitsPath)).usage.bans, 1);
-    // Platform bans do not count against organizations.
-    const platform = await admin.ok("POST", "/admin/bans", platformInput);
-    await admin.ok("DELETE", `/admin/bans/${platform.id}`);
-    await owner.ok("DELETE", `/bans/${first.id}`);
-    assert.equal((await admin.ok("GET", limitsPath)).usage.bans, 0);
+    assert.equal((await admin.ok("GET", "/bans?pageSize=1")).total, 100);
+    await admin.ok("DELETE", `/bans/${platform.id}`);
+    await admin.ok("POST", "/bans", input(101));
   } finally {
-    await admin.ok("PUT", limitsPath, { limits: before.limits });
+    await admin.ok("PUT", "/settings/bans", banSettings);
   }
-  assert.deepEqual((await admin.ok("GET", limitsPath)).limits, before.limits);
+  assert.deepEqual(await admin.ok("GET", "/settings/bans"), banSettings);
   pass(
-    `maxBans=1: the second ban is refused (409 ORG_LIMIT_EXCEEDED bans 1/1), banning the same address again renews it; limits restored`,
+    "maxTotal=100: site and platform bans count together, the 101st is refused (409 BAN_PLATFORM_LIMIT), banning the same address again renews it, an unban frees a place; settings restored",
   );
 
   // -------------------------------------------------------------- cleanup
   const lastLifted = await clearBans();
-  assert.equal((await admin.ok("GET", "/admin/bans")).total, 0);
+  assert.equal((await admin.ok("GET", "/bans")).total, 0);
   for (const host of [hostX, hostY]) {
     await servedSoon(a, host);
     await servedSoon(b, host);
@@ -754,8 +702,6 @@ await writeFile(
     {
       siteId: siteX.id,
       siteName: siteX.name,
-      organizationId: siteX.organizationId,
-      organizationName: siteX.organizationName,
     },
     null,
     2,

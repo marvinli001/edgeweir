@@ -53,7 +53,6 @@ services:
       LOG_LEVEL: debug
       EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${E2E_SUBNET:-172.28.213.0/24}
       EDGEWEIR_DNS_TEST_ENDPOINT: http://mock-services:8080
-      EDGEWEIR_DNS_RESOLVERS: mock-services:5353
       EDGEWEIR_ACME_DIRECTORY: https://pebble:14000/dir
       EDGEWEIR_ACME_CA_FILE: /e2e/pebble/test-only.crt
     ports:

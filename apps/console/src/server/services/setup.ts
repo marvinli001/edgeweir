@@ -14,16 +14,6 @@ export async function isInitialized(db: Executor): Promise<boolean> {
   return (row?.n ?? 0) > 0;
 }
 
-export function slugify(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-  return slug || "org";
-}
-
 export const SETUP_TOKEN_KEY = "setup_token";
 /** Envelope binding of the setup token: the setting and its key (AAD). */
 export const SETUP_TOKEN_BINDING = {
@@ -56,7 +46,7 @@ async function readSetupToken(db: Executor): Promise<SetupTokenState> {
 /**
  * Makes sure an uninitialized console has a one-time setup token and returns
  * it (null once setup is done). The first run wizard refuses to create the
- * administrator without it, which closes the window in which anyone who can
+ * account without it, which closes the window in which anyone who can
  * reach the console could claim it.
  */
 export async function ensureSetupToken(ctx: {
@@ -118,9 +108,9 @@ function tokenMatches(state: SetupTokenState, candidate: string): boolean {
 }
 
 /**
- * First-run setup: creates the platform administrator, the first tenant
- * organization and the default cluster. Only allowed while no user exists,
- * and only with the setup token printed at startup.
+ * First-run setup: creates the operator's account (the only one) and the
+ * default cluster. Only allowed while no user exists, and only with the
+ * setup token printed at startup.
  */
 export async function runSetup(
   ctx: AppContext,
@@ -129,10 +119,9 @@ export async function runSetup(
     name: string;
     email: string;
     password: string;
-    organizationName: string;
   },
   meta: { ip: string; userAgent: string },
-): Promise<{ userId: string; organizationId: string }> {
+): Promise<{ userId: string }> {
   const client = await ctx.pool.connect();
   let locked = false;
   try {
@@ -156,27 +145,17 @@ export async function runSetup(
       body: { email: input.email, password: input.password, name: input.name, role: "admin" },
     });
     const userId = created.user.id;
-    let organizationId: string | undefined;
     try {
-      // better-auth writes the administrator and the organization in its own
-      // statements; everything else (cluster, spent token, audit entry)
-      // commits in one transaction. If any step fails, both are deleted again
-      // so the console stays uninitialized and the token stays usable.
-      const org = await ctx.auth.api.createOrganization({
-        body: { name: input.organizationName, slug: slugify(input.organizationName), userId },
-      });
-      if (!org) throw new Error("organization creation failed");
-      organizationId = org.id;
+      // better-auth writes the account in its own statements; everything else
+      // (cluster, spent token, audit entry) commits in one transaction. If any
+      // step fails, the account is deleted again so the console stays
+      // uninitialized and the token stays usable.
       const actor = { type: "user" as const, id: userId, name: input.name, ...meta };
       await ctx.db.transaction(async (tx) => {
         const [clusters] = await tx.select({ n: count() }).from(schema.cluster);
         if ((clusters?.n ?? 0) === 0) {
           await createClusterTx(tx, { name: "default", description: "Default cluster" }, actor);
         }
-        await tx
-          .insert(schema.organizationSettings)
-          .values({ organizationId: org.id })
-          .onConflictDoNothing();
         const used: SetupTokenState = { usedAt: new Date().toISOString(), usedBy: userId };
         await tx
           .update(schema.systemSetting)
@@ -184,18 +163,14 @@ export async function runSetup(
           .where(eq(schema.systemSetting.key, SETUP_TOKEN_KEY));
         await recordAudit(tx, actor, {
           action: "system.setup",
-          organizationId: org.id,
           targetType: "user",
           targetId: userId,
           targetName: input.name,
-          metadata: { email: input.email, organization: org.name },
+          metadata: { email: input.email },
         });
       });
-      return { userId, organizationId: org.id };
+      return { userId };
     } catch (error) {
-      if (organizationId) {
-        await ctx.db.delete(schema.organization).where(eq(schema.organization.id, organizationId));
-      }
       await ctx.db.delete(schema.user).where(eq(schema.user.id, userId));
       throw error;
     }

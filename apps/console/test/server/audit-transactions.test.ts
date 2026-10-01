@@ -21,7 +21,6 @@ describe("audit entries share the business transaction", async () => {
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
-  let organizationId: string;
   let clusterId: string;
 
   const failAuditFor = (action: string) =>
@@ -55,77 +54,24 @@ describe("audit entries share the business transaction", async () => {
       name: "Platform Admin",
       email: "admin@example.com",
       password: PASSWORD,
-      organizationName: "Default",
     };
     const meta = { ip: "127.0.0.1", userAgent: "vitest" };
     await failAuditFor("system.setup");
     await expect(runSetup(ctx, input, meta)).rejects.toThrow(/insert into "audit_log"/);
     expect(await count("user")).toBe(0);
-    expect(await count("organization")).toBe(0);
     expect(await count("cluster")).toBe(0);
     expect(await ensureSetupToken(ctx)).toBe(setupToken);
 
     await client.query("delete from test_fail_audit");
-    ({ organizationId } = await runSetup(ctx, input, meta));
+    await runSetup(ctx, input, meta);
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
     clusterId = (await admin.clusters.list())[0]?.id ?? "";
-  });
-
-  it("creates no account when its audit entry or membership cannot be written", async () => {
-    const user = {
-      name: "Nobody",
-      email: "nobody@example.com",
-      password: PASSWORD,
-      organizationId,
-      role: "member" as const,
-    };
-    await failAuditFor("user.create");
-    await rpcError(admin.users.create(user));
-    expect(await count("user", "email = 'nobody@example.com'")).toBe(0);
-
-    await client.query("delete from test_fail_audit");
-    await failAuditFor("member.add");
-    await rpcError(admin.users.create(user));
-    expect(await count("user", "email = 'nobody@example.com'")).toBe(0);
-    // The user.create entry was rolled back with the membership.
-    expect(await count("audit_log", "action = 'user.create'")).toBe(0);
-    expect(await count("account")).toBe(1); // the administrator's only
   });
 
   it("stores no enrollment token without its audit entry", async () => {
     await failAuditFor("enrollment_token.create");
     await rpcError(admin.clusters.createEnrollmentToken({ clusterId }));
     expect(await count("enrollment_token")).toBe(0);
-  });
-
-  it("keeps an invitation pending when its cancellation cannot be audited", async () => {
-    const { invitation } = await admin.members.invite({
-      email: "guest@example.com",
-      role: "member",
-    });
-    await failAuditFor("invitation.cancel");
-    await rpcError(admin.members.cancelInvitation({ id: invitation.id }));
-    const [row] = await ctx.db
-      .select()
-      .from(schema.invitation)
-      .where(eq(schema.invitation.id, invitation.id));
-    expect(row?.status).toBe("pending");
-  });
-
-  it("creates no account from an invitation when the acceptance cannot be audited", async () => {
-    const { invitation } = await admin.members.invite({ email: "new@example.com", role: "member" });
-    const anonymous = rpcClient(app, origin);
-    await failAuditFor("invitation.accept");
-    await rpcError(
-      anonymous.invitations.accept({ id: invitation.id, name: "New", password: PASSWORD }),
-    );
-    expect(await count("user", "email = 'new@example.com'")).toBe(0);
-    const info = await anonymous.invitations.get({ id: invitation.id });
-    expect(info.userExists).toBe(false);
-
-    await client.query("delete from test_fail_audit");
-    await anonymous.invitations.accept({ id: invitation.id, name: "New", password: PASSWORD });
-    await signIn(app, origin, "new@example.com");
   });
 
   it("stores no origin allow list and publishes nothing when the update cannot be audited", async () => {

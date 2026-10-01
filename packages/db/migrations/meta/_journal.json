@@ -225,6 +225,34 @@
       "when": 1790827913378,
       "tag": "0031_g4_cache_origins_error_pages",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790827973378,
+      "tag": "0032_domains_without_ownership",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790828033378,
+      "tag": "0033_sites_without_suspension",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790828093378,
+      "tag": "0034_without_organization_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790828153378,
+      "tag": "0035_single_operator",
+      "breakpoints": true
     }
   ]
 }

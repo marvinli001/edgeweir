@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  adminBanCreateInput,
+  banCreateInput,
   cidrsOverlap,
   isSingleAddress,
   parseBanCidr,
@@ -69,11 +69,9 @@ describe("ban CIDRs", () => {
   it("requires a site for site bans and none for platform bans", () => {
     const base = { cidr: "192.0.2.1", reason: "abuse", durationSeconds: 60 };
     const siteId = "00000000-0000-4000-8000-000000000000";
-    expect(adminBanCreateInput.safeParse({ ...base, scope: "site", siteId }).success).toBe(true);
-    expect(adminBanCreateInput.safeParse({ ...base, scope: "platform" }).success).toBe(true);
-    expect(adminBanCreateInput.safeParse({ ...base, scope: "site" }).success).toBe(false);
-    expect(adminBanCreateInput.safeParse({ ...base, scope: "platform", siteId }).success).toBe(
-      false,
-    );
+    expect(banCreateInput.safeParse({ ...base, scope: "site", siteId }).success).toBe(true);
+    expect(banCreateInput.safeParse({ ...base, scope: "platform" }).success).toBe(true);
+    expect(banCreateInput.safeParse({ ...base, scope: "site" }).success).toBe(false);
+    expect(banCreateInput.safeParse({ ...base, scope: "platform", siteId }).success).toBe(false);
   });
 });

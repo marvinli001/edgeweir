@@ -1,5 +1,4 @@
 import { errorDefs, isErrorCode } from "@edgeweir/contract";
-import { orgLimitLabel } from "@/lib/org-limits";
 import { m } from "@/paraglide/messages.js";
 
 type MessageFn = (params?: Record<string, string | number>) => string;
@@ -22,7 +21,6 @@ const authCodes: Record<string, MessageFn> = {
   PASSWORD_TOO_SHORT: () => m.error_password_too_short(),
   INVALID_CODE: () => m.error_invalid_code(),
   INVALID_TWO_FACTOR_COOKIE: () => m.error_two_factor_expired(),
-  BANNED_USER: () => m.error_user_disabled(),
 };
 
 function errorFields(error: unknown): {
@@ -54,7 +52,6 @@ export function localizeError(error: unknown, fallback: string = m.common_unknow
       const value = values[name];
       params[name] = typeof value === "number" ? value : String(value ?? "");
     }
-    if (code === "ORG_LIMIT_EXCEEDED") params.resource = orgLimitLabel(String(params.resource));
     const fn = messages[`error_${code.toLowerCase()}`];
     if (fn) return fn(params);
   }

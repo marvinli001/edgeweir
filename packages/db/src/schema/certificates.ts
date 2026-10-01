@@ -1,24 +1,11 @@
 import { sql } from "drizzle-orm";
-import {
-  boolean,
-  index,
-  jsonb,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from "drizzle-orm/pg-core";
-import { organization } from "./auth";
+import { boolean, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 const now = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
 /** Credentials are write-only API values, encrypted with a row-bound envelope. */
 export const dnsCredential = pgTable("dns_credential", {
   id: uuid("id").primaryKey().defaultRandom(),
-  organizationId: text("organization_id")
-    .notNull()
-    .references(() => organization.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   provider: text("provider").notNull(),
   zone: text("zone").notNull(),
@@ -26,34 +13,27 @@ export const dnsCredential = pgTable("dns_credential", {
   createdAt: now(),
 });
 
-export const certificate = pgTable(
-  "certificate",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    names: text("names").array().notNull().default(sql`'{}'::text[]`),
-    source: text("source").notNull(),
-    status: text("status").notNull().default("pending"),
-    chainPem: text("chain_pem").notNull().default(""),
-    privateKeyEnvelope: text("private_key_envelope").notNull().default(""),
-    fingerprint: text("fingerprint").notNull().default(""),
-    notBefore: timestamp("not_before", { withTimezone: true }),
-    notAfter: timestamp("not_after", { withTimezone: true }),
-    autoRenew: boolean("auto_renew").notNull().default(false),
-    renewAt: timestamp("renew_at", { withTimezone: true }),
-    /** Public CA/challenge settings, with no credential values. */
-    acme: jsonb("acme").$type<Record<string, string>>().notNull().default({}),
-    accountEnvelope: text("account_envelope").notNull().default(""),
-    lastError: text("last_error").notNull().default(""),
-    operationStartedAt: timestamp("operation_started_at", { withTimezone: true }),
-    createdAt: now(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("certificate_org_idx").on(t.organizationId)],
-);
+export const certificate = pgTable("certificate", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  names: text("names").array().notNull().default(sql`'{}'::text[]`),
+  source: text("source").notNull(),
+  status: text("status").notNull().default("pending"),
+  chainPem: text("chain_pem").notNull().default(""),
+  privateKeyEnvelope: text("private_key_envelope").notNull().default(""),
+  fingerprint: text("fingerprint").notNull().default(""),
+  notBefore: timestamp("not_before", { withTimezone: true }),
+  notAfter: timestamp("not_after", { withTimezone: true }),
+  autoRenew: boolean("auto_renew").notNull().default(false),
+  renewAt: timestamp("renew_at", { withTimezone: true }),
+  /** Public CA/challenge settings, with no credential values. */
+  acme: jsonb("acme").$type<Record<string, string>>().notNull().default({}),
+  accountEnvelope: text("account_envelope").notNull().default(""),
+  lastError: text("last_error").notNull().default(""),
+  operationStartedAt: timestamp("operation_started_at", { withTimezone: true }),
+  createdAt: now(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const acmeChallenge = pgTable("acme_challenge", {
   id: uuid("id").primaryKey().defaultRandom(),

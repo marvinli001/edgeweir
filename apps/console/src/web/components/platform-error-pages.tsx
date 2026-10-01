@@ -19,12 +19,11 @@ type PageKey = keyof PlatformErrorPages;
 const PAGES: { key: PageKey; id: string; name: () => string }[] = [
   { key: "unknownHost", id: "platform-page-unknown-host", name: m.platform_pages_unknown_host },
   { key: "siteDisabled", id: "platform-page-disabled", name: m.platform_pages_disabled },
-  { key: "siteSuspended", id: "platform-page-suspended", name: m.platform_pages_suspended },
 ];
 
 /**
- * Admin card: the pages nodes answer with for hosts no site serves (404) and for disabled or
- * suspended sites (503); empty means the built-in page. Saving publishes every cluster.
+ * System settings card: the pages nodes answer with for hosts no site serves (404) and for
+ * disabled sites (503); empty means the built-in page. Saving publishes every cluster.
  */
 export function PlatformErrorPagesCard() {
   const query = useQuery(orpc.settings.errorPages.queryOptions());
@@ -70,7 +69,6 @@ function PlatformErrorPagesForm({ initial }: { initial: PlatformErrorPages }) {
           const saved = await save.mutateAsync({
             unknownHost: pages.unknownHost.trim() ? pages.unknownHost : "",
             siteDisabled: pages.siteDisabled.trim() ? pages.siteDisabled : "",
-            siteSuspended: pages.siteSuspended.trim() ? pages.siteSuspended : "",
           });
           queryClient.setQueryData(orpc.settings.errorPages.queryKey(), saved);
           toast.success(m.common_saved());

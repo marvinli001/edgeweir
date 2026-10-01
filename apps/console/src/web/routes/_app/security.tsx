@@ -1,4 +1,4 @@
-import { Alert02Icon, Delete02Icon, FingerPrintIcon } from "@hugeicons/core-free-icons";
+import { Delete02Icon, FingerPrintIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -11,7 +11,6 @@ import { Page } from "@/components/page";
 import { QrCode } from "@/components/qr-code";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
-import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,12 +40,6 @@ function SecurityPage() {
   const me = useQuery(orpc.account.me.queryOptions());
   return (
     <Page title={m.security_title()}>
-      {me.data?.twoFactorRequired ? (
-        <Alert variant="destructive" className="animate-enter" data-testid="two-factor-required">
-          <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
-          <AlertTitle>{m.security_2fa_required()}</AlertTitle>
-        </Alert>
-      ) : null}
       <PasswordCard />
       {me.isPending ? (
         <LoadingState />

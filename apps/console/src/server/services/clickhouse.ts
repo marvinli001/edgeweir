@@ -1,7 +1,7 @@
 import type { LogEntry, LogQuery } from "@edgeweir/contract";
 import type { Env } from "../lib/env";
 
-/** Operator-controlled endpoint, never a tenant URL. Credentials stay in headers. */
+/** Operator-controlled endpoint from the environment. Credentials stay in headers. */
 export async function clickhouse(
   env: Env,
   query: string,

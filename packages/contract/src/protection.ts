@@ -88,7 +88,7 @@ export const siteProtection = z.object({
   effectiveCc: ccThresholds.nullable(),
   /** Record the JA4 fingerprint in sampled access logs. */
   logJa4: z.boolean(),
-  /** Platform administrators turned on Under Attack for every site. */
+  /** Under Attack is on for every site (system settings). */
   platformUnderAttack: z.boolean(),
   updatedAt: isoDateTime.nullable(),
 });
@@ -190,7 +190,7 @@ export const siteSecurityState = z.object({
 
 const idParam = z.object({ id: uuid });
 
-/** Site protection (members read; owners and admins change it). */
+/** Under Attack, CC policy, passes and JA4 logging of a site. */
 export const protectionContract = {
   get: oc
     .route({ method: "GET", path: "/sites/{id}/protection", tags: ["protection"] })
@@ -202,7 +202,7 @@ export const protectionContract = {
     .output(siteProtection),
 };
 
-/** CC mitigation state and events of a site (any member). */
+/** CC mitigation state and events of a site. */
 export const securityContract = {
   state: oc
     .route({ method: "GET", path: "/sites/{id}/security", tags: ["protection"] })

@@ -14,12 +14,10 @@ import { assertCertificateNames } from "../lib/certificate-names";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import { assertOrgLimit } from "./organization-limits";
-import { type Executor, getRevision, publishRevision } from "./revisions";
+import { type Executor, getRevision, publisher, publishRevision } from "./revisions";
 import { publishedRevisions } from "./rollout";
-import type { SiteScope } from "./sites";
 
-export type CertificateContext = { scope: SiteScope; actor: Actor; organizationId: string | null };
+export type CertificateContext = { actor: Actor };
 export const certificateKeyBinding = (id: string) => ({
   purpose: "certificate.private_key_envelope",
   recordId: id,
@@ -36,7 +34,6 @@ export const dnsCredentialBinding = (id: string) => ({
 export function certificateDto(row: typeof schema.certificate.$inferSelect): CertificateDto {
   return {
     id: row.id,
-    organizationId: row.organizationId,
     name: row.name,
     names: row.names,
     source: row.source === "acme" ? "acme" : "upload",
@@ -50,16 +47,11 @@ export function certificateDto(row: typeof schema.certificate.$inferSelect): Cer
   };
 }
 
-export async function findCertificate(db: Executor, id: string, scope: SiteScope) {
+export async function findCertificate(db: Executor, id: string) {
   const [row] = await db
     .select()
     .from(schema.certificate)
-    .where(
-      and(
-        eq(schema.certificate.id, id),
-        scope.all ? undefined : eq(schema.certificate.organizationId, scope.organizationId),
-      ),
-    )
+    .where(eq(schema.certificate.id, id))
     .for("update");
   if (!row) fail("CERTIFICATE_NOT_FOUND", "certificate not found");
   return row;
@@ -105,21 +97,8 @@ export function inspectCertificate(chainPem: string, privateKeyPem: string) {
   }
 }
 
-function orgFor(ctx: CertificateContext, requested?: string) {
-  if (requested && !ctx.scope.all && requested !== ctx.organizationId)
-    fail("NOT_A_MEMBER", "organization is outside caller scope");
-  const id = requested ?? ctx.organizationId;
-  if (!id) fail("NOT_A_MEMBER", "select an organization first");
-  return id;
-}
-
-export async function listCertificates(app: AppContext, scope: SiteScope) {
-  return (
-    await app.db
-      .select()
-      .from(schema.certificate)
-      .where(scope.all ? undefined : eq(schema.certificate.organizationId, scope.organizationId))
-  ).map(certificateDto);
+export async function listCertificates(app: AppContext) {
+  return (await app.db.select().from(schema.certificate)).map(certificateDto);
 }
 
 export async function uploadCertificate(
@@ -129,14 +108,11 @@ export async function uploadCertificate(
 ) {
   const inspected = inspectCertificate(input.chainPem, input.privateKeyPem);
   const id = randomUUID();
-  const organizationId = orgFor(ctx, input.organizationId);
   return app.db.transaction(async (tx) => {
-    await assertOrgLimit(tx, organizationId, "certificates", 1);
     const [row] = await tx
       .insert(schema.certificate)
       .values({
         id,
-        organizationId,
         name: input.name,
         names: inspected.names,
         source: "upload",
@@ -153,7 +129,6 @@ export async function uploadCertificate(
     if (!row) throw new Error("certificate insert failed");
     await recordAudit(tx, ctx.actor, {
       action: "certificate.upload",
-      organizationId,
       targetType: "certificate",
       targetId: id,
       targetName: input.name,
@@ -167,35 +142,20 @@ export async function requestCertificate(
   input: CertificateRequest,
   ctx: CertificateContext,
 ) {
-  const organizationId = orgFor(ctx);
   const id = randomUUID();
-  // Issuance is tied to sites in this organization, even for a platform caller.
-  const domains = await app.db
-    .select({
-      name: schema.siteDomain.name,
-      wildcard: schema.siteDomain.wildcard,
-      verified: schema.siteDomain.verified,
-    })
-    .from(schema.siteDomain)
-    .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
-    .where(eq(schema.site.organizationId, organizationId));
-  const owned = new Set(domains.map((d) => `${d.wildcard ? "*." : ""}${d.name}`));
-  if (input.names.some((name) => !owned.has(name)))
-    fail(
-      "CERTIFICATE_DOMAIN_MISMATCH",
-      "add the certificate domains to this organization's sites first",
-    );
-  if (
-    input.names.some(
-      (name) => !domains.some((d) => d.verified && `${d.wildcard ? "*." : ""}${d.name}` === name),
-    )
-  )
-    fail("DOMAIN_VERIFY_REQUIRED", "verify domain ownership before issuing a certificate");
+  if (input.challenge === "http01") {
+    // An HTTP-01 challenge is answered by the nodes of the clusters that serve the name.
+    const served = await app.db
+      .selectDistinct({ name: schema.siteDomain.name })
+      .from(schema.siteDomain)
+      .where(
+        and(inArray(schema.siteDomain.name, input.names), eq(schema.siteDomain.wildcard, false)),
+      );
+    if (input.names.some((name) => !served.some((d) => d.name === name)))
+      fail("CERTIFICATE_DOMAIN_MISMATCH", "add the HTTP-01 names to a site first");
+  }
   if (input.dnsCredentialId) {
-    const credential = await findDnsCredential(app.db, input.dnsCredentialId, {
-      all: false,
-      organizationId,
-    });
+    const credential = await findDnsCredential(app.db, input.dnsCredentialId);
     if (
       input.names.some(
         (name) =>
@@ -209,12 +169,10 @@ export async function requestCertificate(
     }
   }
   return app.db.transaction(async (tx) => {
-    await assertOrgLimit(tx, organizationId, "certificates", 1);
     const [row] = await tx
       .insert(schema.certificate)
       .values({
         id,
-        organizationId,
         name: input.name,
         names: input.names,
         source: "acme",
@@ -236,7 +194,6 @@ export async function requestCertificate(
     if (!row) throw new Error("certificate insert failed");
     await recordAudit(tx, ctx.actor, {
       action: "certificate.request",
-      organizationId,
       targetType: "certificate",
       targetId: id,
       targetName: input.name,
@@ -247,7 +204,7 @@ export async function requestCertificate(
 
 export async function renewCertificate(app: AppContext, id: string, ctx: CertificateContext) {
   return app.db.transaction(async (tx) => {
-    const cert = await findCertificate(tx, id, ctx.scope);
+    const cert = await findCertificate(tx, id);
     if (cert.source !== "acme" || cert.status === "issuing")
       fail("CERTIFICATE_BUSY", "certificate cannot be renewed now");
     const [updated] = await tx
@@ -258,7 +215,6 @@ export async function renewCertificate(app: AppContext, id: string, ctx: Certifi
     if (!updated) throw new Error("certificate disappeared");
     await recordAudit(tx, ctx.actor, {
       action: "certificate.renew",
-      organizationId: cert.organizationId,
       targetType: "certificate",
       targetId: id,
       targetName: cert.name,
@@ -269,7 +225,7 @@ export async function renewCertificate(app: AppContext, id: string, ctx: Certifi
 
 export async function deleteCertificate(app: AppContext, id: string, ctx: CertificateContext) {
   return app.db.transaction(async (tx) => {
-    const cert = await findCertificate(tx, id, ctx.scope);
+    const cert = await findCertificate(tx, id);
     const refs = await tx
       .select({ id: schema.site.id })
       .from(schema.site)
@@ -285,7 +241,6 @@ export async function deleteCertificate(app: AppContext, id: string, ctx: Certif
     await tx.delete(schema.certificate).where(eq(schema.certificate.id, id));
     await recordAudit(tx, ctx.actor, {
       action: "certificate.delete",
-      organizationId: cert.organizationId,
       targetType: "certificate",
       targetId: id,
       targetName: cert.name,
@@ -294,22 +249,14 @@ export async function deleteCertificate(app: AppContext, id: string, ctx: Certif
   });
 }
 
-async function tlsSite(db: Executor, id: string, scope: SiteScope, lock = false) {
-  const query = db
-    .select()
-    .from(schema.site)
-    .where(
-      and(
-        eq(schema.site.id, id),
-        scope.all ? undefined : eq(schema.site.organizationId, scope.organizationId),
-      ),
-    );
+async function tlsSite(db: Executor, id: string, lock = false) {
+  const query = db.select().from(schema.site).where(eq(schema.site.id, id));
   const [row] = await (lock ? query.for("update") : query);
   if (!row) fail("SITE_NOT_FOUND", "site not found");
   return row;
 }
-export async function getHttps(app: AppContext, id: string, scope: SiteScope) {
-  const site = await tlsSite(app.db, id, scope);
+export async function getHttps(app: AppContext, id: string) {
+  const site = await tlsSite(app.db, id);
   return tlsSettings.parse({ ...site.tlsSettings, certificateId: site.certificateId });
 }
 export async function updateHttps(
@@ -319,12 +266,9 @@ export async function updateHttps(
   ctx: CertificateContext,
 ) {
   return app.db.transaction(async (tx) => {
-    const site = await tlsSite(tx, id, ctx.scope, true);
+    const site = await tlsSite(tx, id, true);
     if (settings.certificateId) {
-      const cert = await findCertificate(tx, settings.certificateId, {
-        all: false,
-        organizationId: site.organizationId,
-      });
+      const cert = await findCertificate(tx, settings.certificateId);
       if (!cert.chainPem || !cert.notAfter || cert.notAfter.getTime() <= Date.now())
         fail("CERTIFICATE_INVALID", "certificate is unavailable or expired");
       const domains = await tx
@@ -341,11 +285,10 @@ export async function updateHttps(
     await publishRevision(tx, {
       clusterId: site.clusterId,
       reason: { code: "certificate_updated", params: { site: site.name } },
-      userId: ctx.actor.id,
+      userId: publisher(ctx.actor),
     });
     await recordAudit(tx, ctx.actor, {
       action: "site.https_update",
-      organizationId: site.organizationId,
       targetType: "site",
       targetId: id,
       targetName: site.name,
@@ -354,20 +297,12 @@ export async function updateHttps(
   });
 }
 
-export async function findDnsCredential(db: Executor, id: string, scope: SiteScope) {
-  const [row] = await db
-    .select()
-    .from(schema.dnsCredential)
-    .where(
-      and(
-        eq(schema.dnsCredential.id, id),
-        scope.all ? undefined : eq(schema.dnsCredential.organizationId, scope.organizationId),
-      ),
-    );
+export async function findDnsCredential(db: Executor, id: string) {
+  const [row] = await db.select().from(schema.dnsCredential).where(eq(schema.dnsCredential.id, id));
   if (!row) fail("DNS_CREDENTIAL_NOT_FOUND", "DNS credential not found");
   return row;
 }
-export async function listDnsCredentials(app: AppContext, scope: SiteScope) {
+export async function listDnsCredentials(app: AppContext) {
   return app.db
     .select({
       id: schema.dnsCredential.id,
@@ -375,8 +310,7 @@ export async function listDnsCredentials(app: AppContext, scope: SiteScope) {
       provider: schema.dnsCredential.provider,
       zone: schema.dnsCredential.zone,
     })
-    .from(schema.dnsCredential)
-    .where(scope.all ? undefined : eq(schema.dnsCredential.organizationId, scope.organizationId));
+    .from(schema.dnsCredential);
 }
 export async function createDnsCredential(
   app: AppContext,
@@ -384,7 +318,6 @@ export async function createDnsCredential(
   ctx: CertificateContext,
 ) {
   const id = randomUUID();
-  const organizationId = orgFor(ctx);
   const allowed: Record<string, string[]> = {
     cloudflare: ["api_token", "zone_token"],
     alidns: ["access_key_id", "access_key_secret", "region_id", "security_token"],
@@ -415,7 +348,6 @@ export async function createDnsCredential(
   return app.db.transaction(async (tx) => {
     await tx.insert(schema.dnsCredential).values({
       id,
-      organizationId,
       name: input.name,
       provider: input.provider,
       zone: input.zone,
@@ -425,7 +357,6 @@ export async function createDnsCredential(
     });
     await recordAudit(tx, ctx.actor, {
       action: "dns_credential.create",
-      organizationId,
       targetType: "dns_credential",
       targetId: id,
       targetName: input.name,
@@ -435,7 +366,7 @@ export async function createDnsCredential(
 }
 export async function deleteDnsCredential(app: AppContext, id: string, ctx: CertificateContext) {
   return app.db.transaction(async (tx) => {
-    const row = await findDnsCredential(tx, id, ctx.scope);
+    const row = await findDnsCredential(tx, id);
     const refs = await tx
       .select({ id: schema.certificate.id })
       .from(schema.certificate)
@@ -445,7 +376,6 @@ export async function deleteDnsCredential(app: AppContext, id: string, ctx: Cert
     await tx.delete(schema.dnsCredential).where(eq(schema.dnsCredential.id, id));
     await recordAudit(tx, ctx.actor, {
       action: "dns_credential.delete",
-      organizationId: row.organizationId,
       targetType: "dns_credential",
       targetId: id,
       targetName: row.name,

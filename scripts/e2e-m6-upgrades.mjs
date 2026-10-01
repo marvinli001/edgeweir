@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { signInResponse } from "./e2e-auth.mjs";
+import { signInWithAccessKey } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile),
   base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
@@ -11,19 +11,13 @@ const run = async (args, env) =>
 const compose = ["compose", "-f", "compose.e2e.yml", "--profile", "upgrades"];
 const fixtures = JSON.parse(await readFile(".e2e/upgrade-fixtures.json", "utf8"));
 const m5 = JSON.parse(await readFile(".e2e/m5-state.json", "utf8"));
-const login = await signInResponse(base, "admin@e2e.test", "e2e-admin-password-123");
-assert.equal(login.status, 200);
-const cookie = login.headers
-  .getSetCookie()
-  .map((v) => v.split(";")[0])
-  .join("; ");
-const created = await fetch(`${base}/api/auth/api-key/create`, {
-  method: "POST",
-  headers: { "content-type": "application/json", origin: base, cookie },
-  body: JSON.stringify({ name: "upgrade-e2e" }),
-});
-assert.equal(created.status, 200);
-const { key } = await created.json();
+const session = await signInWithAccessKey(
+  base,
+  "admin@e2e.test",
+  "e2e-admin-password-123",
+  "upgrade-e2e",
+);
+const { key } = session;
 async function api(method, path, body) {
   const response = await fetch(`${base}/api/v1${path}`, {
     method,
@@ -110,9 +104,9 @@ const before = {
   edge: (await node(edge.id)).agentVersion,
   peer: (await node(peer.id)).agentVersion,
 };
-const jobs = () => api("GET", `/admin/node-upgrades?clusterId=${edge.clusterId}`);
+const jobs = () => api("GET", `/node-upgrades?clusterId=${edge.clusterId}`);
 const job = async (id) => (await jobs()).find((j) => j.id === id);
-const good = await api("POST", "/admin/node-upgrades", {
+const good = await api("POST", "/node-upgrades", {
   version: fixtures.versions.good,
   nodeGroupId: canaryGroup.id,
 });
@@ -136,7 +130,7 @@ assert.match(
   /upgrades\/releases\/[0-9a-f-]+\/lua/,
   "Lua did not switch with the executable",
 );
-await api("POST", `/admin/node-upgrades/${good.id}/promote`, {});
+await api("POST", `/node-upgrades/${good.id}/promote`, {});
 await wait("rollout complete", async () => {
   const j = await job(good.id);
   assert.notEqual(j.state, "failed", JSON.stringify(j));
@@ -150,7 +144,7 @@ for (const [kind, code] of [
   ["signature", "upgrade_rejected"],
   ["broken", "upgrade_rolled_back"],
 ]) {
-  const attempt = await api("POST", "/admin/node-upgrades", {
+  const attempt = await api("POST", "/node-upgrades", {
     version: fixtures.versions[kind],
     nodeGroupId: canaryGroup.id,
   });

@@ -20,7 +20,6 @@ export async function recordAudit(
   actor: Actor,
   entry: {
     action: string;
-    organizationId?: string | null;
     targetType?: string;
     targetId?: string;
     /** Display name of the target, kept so the entry stays readable after deletion. */
@@ -34,7 +33,6 @@ export async function recordAudit(
     actorName: (actor.name ?? "").slice(0, 200),
     ip: actor.ip ?? "",
     userAgent: (actor.userAgent ?? "").slice(0, 512),
-    organizationId: entry.organizationId ?? null,
     action: entry.action,
     targetType: entry.targetType ?? "",
     targetId: entry.targetId ?? "",
@@ -77,7 +75,6 @@ async function resolveNames(
   const nodeIds = [...ids(["node"], "actor"), ...ids(["node"], "target")].filter(isUuid);
   const siteIds = ids(["site"], "target").filter(isUuid);
   const clusterIds = ids(["cluster"], "target").filter(isUuid);
-  const orgIds = ids(["organization"], "target");
   if (userIds.length) {
     for (const u of await db
       .select({ id: schema.user.id, name: schema.user.name })
@@ -105,13 +102,6 @@ async function resolveNames(
       .from(schema.cluster)
       .where(inArray(schema.cluster.id, clusterIds)))
       names.set(`cluster:${c.id}`, c.name);
-  }
-  if (orgIds.length) {
-    for (const o of await db
-      .select({ id: schema.organization.id, name: schema.organization.name })
-      .from(schema.organization)
-      .where(inArray(schema.organization.id, orgIds)))
-      names.set(`organization:${o.id}`, o.name);
   }
   return names;
 }
@@ -145,7 +135,6 @@ export async function listAuditLogs(
       actorType: r.actorType,
       actorId: r.actorId,
       actorName: r.actorName || nameOf(r.actorType, r.actorId),
-      organizationId: r.organizationId,
       action: r.action,
       targetType: r.targetType,
       targetId: r.targetId,

@@ -13,7 +13,6 @@ import {
 import { evaluateRollout } from "../../src/server/services/rollout";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
   rpcClient,
   rpcError,
@@ -119,7 +118,6 @@ describe("configuration canary with automatic rollback", async () => {
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
-    await approveSiteDomains(admin, siteId);
     const [a, b] = await ctx.db
       .insert(schema.node)
       .values(
@@ -360,11 +358,9 @@ describe("configuration canary with automatic rollback", async () => {
 
   it("gives ACME challenges to every node at once, canary or not", async () => {
     const candidate = await change();
-    const org = (await admin.sites.get({ id: siteId })).organizationId;
     const [certificate] = await ctx.db
       .insert(schema.certificate)
       .values({
-        organizationId: org,
         name: "shop",
         names: ["shop.canary.test"],
         source: "acme",

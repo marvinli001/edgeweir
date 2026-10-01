@@ -8,7 +8,6 @@ import type {
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import * as React from "react";
 import { BorderBeam } from "@/components/appica/effects";
 import { SafetyNote } from "@/components/safety-note";
@@ -28,7 +27,6 @@ import {
 } from "@/components/ui/select";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
-import { unavailableReason } from "@/lib/protection";
 import { cn } from "@/lib/utils";
 
 /** Origins tab: the origin pool and its behaviour, each saved on its own. */
@@ -446,18 +444,11 @@ const HEALTH_METHODS = [
   { label: "HEAD", value: "HEAD" },
 ] satisfies { label: string; value: HealthMethod }[];
 
-/**
- * Whether a tenant may turn a pool feature on: not while the cluster's nodes lack it (the
- * server refuses). Administrators may require it anyway, and a feature that is on can go off.
- */
-const lockedFor = (
-  availability: FeatureAvailability | undefined,
-  admin: boolean,
-  savedOn: boolean,
-) => !admin && !savedOn && availability?.available === false;
+/** A pool feature cannot be turned on while the cluster's nodes lack it; one that is on can go off. */
+const lockedFor = (availability: FeatureAvailability | undefined, savedOn: boolean) =>
+  !savedOn && availability?.available === false;
 
 function PoolSettingsCard({ site }: { site: Site }) {
-  const { isAdmin } = useRouteContext({ from: "/_app" });
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   const s = site.originSettings;
   const health = s.activeHealthCheck;
@@ -591,7 +582,7 @@ function PoolSettingsCard({ site }: { site: Site }) {
                 id="origins-affinity"
                 label={m.site_pool_affinity_enabled()}
                 checked={draft.affinityEnabled}
-                disabled={lockedFor(affinityAvailability, isAdmin, s.sessionAffinity.enabled)}
+                disabled={lockedFor(affinityAvailability, s.sessionAffinity.enabled)}
                 onCheckedChange={(affinityEnabled) => set({ affinityEnabled })}
                 testId="origins-affinity"
               />
@@ -640,7 +631,7 @@ function PoolSettingsCard({ site }: { site: Site }) {
                 id="origins-active-health"
                 label={m.site_pool_active_health_enabled()}
                 checked={draft.healthEnabled}
-                disabled={lockedFor(healthAvailability, isAdmin, health.enabled)}
+                disabled={lockedFor(healthAvailability, health.enabled)}
                 onCheckedChange={(healthEnabled) => set({ healthEnabled })}
                 testId="origins-active-health"
               />
@@ -852,12 +843,8 @@ function Unavailable({
 }) {
   if (!availability || availability.available) return null;
   return (
-    <SafetyNote
-      className="animate-in fade-in"
-      data-testid={testId}
-      data-reason={availability.reason ?? undefined}
-    >
-      {unavailableReason(availability)}
+    <SafetyNote className="animate-in fade-in" data-testid={testId}>
+      {m.feature_unavailable_nodes()}
     </SafetyNote>
   );
 }

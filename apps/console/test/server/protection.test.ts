@@ -1,4 +1,5 @@
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
+import { ruleInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -7,12 +8,12 @@ import {
   CHALLENGE_KEY_ROTATION_MS,
   rotateChallengeKeys,
 } from "../../src/server/services/challenge-keys";
+import { updateSiteProtection } from "../../src/server/services/protection";
 import { latestRevision } from "../../src/server/services/revisions";
+import { saveRules } from "../../src/server/services/rules";
 import {
   type ApiClient,
-  approveSiteDomains,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -33,20 +34,24 @@ const template = {
   cooldownSeconds: 120,
 };
 
+/** A change without the operator behind it (service accounts, background jobs). */
+const service = {
+  actor: {
+    type: "service_account" as const,
+    id: "service-account-protection",
+    name: "integration",
+  },
+};
+
 describe("site protection, platform protection and challenge keys", async () => {
   const { ctx, client: pglite } = await createTestContext();
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
-  let owner: ApiClient;
-  let member: ApiClient;
-  let outsider: ApiClient;
   let clusterId: string;
   let otherClusterId: string;
-  let orgId: string;
   let siteId: string;
   let otherSiteId: string;
-  let quietSiteId: string;
   const origins = [{ address: "origin.test" }];
   const api = (key: string, method: string, path: string, body?: unknown) =>
     app.request(`${origin}/api/v1${path}`, {
@@ -70,39 +75,22 @@ describe("site protection, platform protection and challenge keys", async () => 
     admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
     clusterId = (await admin.clusters.list())[0]?.id ?? "";
     otherClusterId = (await admin.clusters.create({ name: "quiet", description: "" })).id;
-    orgId = (await admin.organizations.create({ name: "Shield", defaultClusterId: clusterId })).id;
-    const otherOrgId = (
-      await admin.organizations.create({ name: "Elsewhere", defaultClusterId: clusterId })
-    ).id;
-    const users: [string, string, "owner" | "member"][] = [
-      ["owner@shield.test", orgId, "owner"],
-      ["member@shield.test", orgId, "member"],
-      ["owner@elsewhere.test", otherOrgId, "owner"],
-    ];
-    for (const [email, organizationId, role] of users)
-      await admin.users.create({ name: email, email, password: PASSWORD, organizationId, role });
-    owner = rpcClient(app, origin, await signIn(app, origin, "owner@shield.test"));
-    member = rpcClient(app, origin, await signIn(app, origin, "member@shield.test"));
-    outsider = rpcClient(app, origin, await signIn(app, origin, "owner@elsewhere.test"));
-    siteId = (await owner.sites.create({ name: "shop", domains: ["shop.shield.test"], origins }))
+    siteId = (await admin.sites.create({ name: "shop", domains: ["shop.shield.test"], origins }))
       .site.id;
     otherSiteId = (
-      await outsider.sites.create({ name: "else", domains: ["else.elsewhere.test"], origins })
+      await admin.sites.create({ name: "else", domains: ["else.elsewhere.test"], origins })
     ).site.id;
-    quietSiteId = (
-      await admin.sites.create({
-        name: "quiet",
-        clusterId: otherClusterId,
-        domains: ["quiet.quietplace.test"],
-        origins,
-      })
-    ).site.id;
-    for (const id of [siteId, otherSiteId, quietSiteId]) await approveSiteDomains(admin, id);
+    await admin.sites.create({
+      name: "quiet",
+      clusterId: otherClusterId,
+      domains: ["quiet.quietplace.test"],
+      origins,
+    });
   });
   afterAll(() => pglite.close());
 
   it("reads the defaults and leaves unused clusters without protection or keys", async () => {
-    const protection = await member.protection.get({ id: siteId });
+    const protection = await admin.protection.get({ id: siteId });
     expect(protection).toMatchObject({
       siteId,
       underAttack: false,
@@ -138,37 +126,8 @@ describe("site protection, platform protection and challenge keys", async () => 
     expect(await keysOf(clusterId)).toEqual([]);
   });
 
-  it("allows owners to change protection, members to read it and nobody else to reach it", async () => {
-    expect(
-      await rpcError(member.protection.update({ id: siteId, underAttack: true })),
-    ).toMatchObject({ code: "ORG_ADMIN_REQUIRED", status: 403 });
-    expect(
-      await rpcError(outsider.protection.update({ id: siteId, underAttack: true })),
-    ).toMatchObject({ code: "SITE_NOT_FOUND", status: 404 });
-    expect(await rpcError(outsider.protection.get({ id: siteId }))).toMatchObject({
-      code: "SITE_NOT_FOUND",
-    });
-    expect(await rpcError(outsider.security.state({ id: siteId }))).toMatchObject({
-      code: "SITE_NOT_FOUND",
-    });
-    expect(await rpcError(outsider.security.events({ id: siteId }))).toMatchObject({
-      code: "SITE_NOT_FOUND",
-    });
-    // Tenants never reach the platform settings.
-    for (const call of [
-      () => owner.settings.protection(),
-      () => owner.settings.ccTemplate(),
-      () => owner.settings.setCcTemplate(template),
-      () =>
-        owner.settings.setProtection({
-          underAttack: true,
-          underAttackChallenge: "js",
-          eventRetentionDays: 30,
-        }),
-    ])
-      expect((await rpcError(call())).status).toBe(403);
-    // Read-only AccessKeys read but cannot write.
-    const reader = await owner.accessKeys.create({ name: "protection-read", scope: "read" });
+  it("lets read-only AccessKeys read protection and security but not change them", async () => {
+    const reader = await admin.accessKeys.create({ name: "protection-read", scope: "read" });
     const read = await api(reader.key, "GET", `/sites/${siteId}/protection`);
     expect(read.status).toBe(200);
     expect(await read.json()).toMatchObject({ siteId, underAttack: false });
@@ -184,7 +143,7 @@ describe("site protection, platform protection and challenge keys", async () => 
 
   it("turns on Under Attack through /api/v1, creating the cluster's keys and publishing", async () => {
     const before = (await config()).revision;
-    const writer = await owner.accessKeys.create({ name: "protection-write", scope: "write" });
+    const writer = await admin.accessKeys.create({ name: "protection-write", scope: "write" });
     const res = await api(writer.key, "PATCH", `/sites/${siteId}/protection`, {
       underAttack: true,
       underAttackChallenge: "pow",
@@ -235,7 +194,7 @@ describe("site protection, platform protection and challenge keys", async () => 
     expect((await config(otherClusterId)).challengeKeys).toEqual([]);
     expect(await keysOf(otherClusterId)).toEqual([]);
     const [audit] = await audits("site.protection_update");
-    expect(audit).toMatchObject({ organizationId: orgId, targetId: siteId, actorType: "api_key" });
+    expect(audit).toMatchObject({ targetId: siteId, actorType: "api_key" });
     expect(audit?.metadata).toMatchObject({
       from: { underAttack: false },
       to: { underAttack: true, underAttackChallenge: "pow" },
@@ -244,7 +203,7 @@ describe("site protection, platform protection and challenge keys", async () => 
 
   it("validates the proof-of-work difficulties and ranges", async () => {
     expect(
-      await rpcError(owner.protection.update({ id: siteId, powHighDifficulty: 17 })),
+      await rpcError(admin.protection.update({ id: siteId, powHighDifficulty: 17 })),
     ).toMatchObject({ code: "PROTECTION_POW_DIFFICULTY", status: 400, data: { min: 18 } });
     for (const input of [
       { passTtlSeconds: 299 },
@@ -255,7 +214,7 @@ describe("site protection, platform protection and challenge keys", async () => 
       { cc: { windowSeconds: 4 } },
       { cc: { ipBanSeconds: 59 } },
     ])
-      expect((await rpcError(owner.protection.update({ id: siteId, ...input }))).status).toBe(400);
+      expect((await rpcError(admin.protection.update({ id: siteId, ...input }))).status).toBe(400);
   });
 
   it("follows the platform CC template until the site uses its own thresholds", async () => {
@@ -263,7 +222,7 @@ describe("site protection, platform protection and challenge keys", async () => 
     // Following sites with CC off do not publish.
     const idle = (await latestRevision(ctx.db, clusterId))?.reasonCode;
     expect(idle).not.toBe("cc_template_updated");
-    const following = await owner.protection.update({ id: siteId, cc: { enabled: true } });
+    const following = await admin.protection.update({ id: siteId, cc: { enabled: true } });
     expect(following.cc).toMatchObject({ enabled: true, followTemplate: true, ...template });
     expect(following.effectiveCc).toEqual(template);
     expect(following.ccTemplate).toEqual(template);
@@ -286,7 +245,7 @@ describe("site protection, platform protection and challenge keys", async () => 
     const [audit] = await audits("system.cc_template_update");
     expect(audit?.metadata).toMatchObject({ to: template });
 
-    const own = await owner.protection.update({
+    const own = await admin.protection.update({
       id: siteId,
       cc: { followTemplate: false, siteQps: 42, maxLevel: "js" },
     });
@@ -297,62 +256,68 @@ describe("site protection, platform protection and challenge keys", async () => 
       maxLevel: "js",
     });
     // A custom policy keeps its thresholds; the template is still shown beside them.
-    expect((await member.protection.get({ id: siteId })).ccTemplate.siteQps).toBe(700);
-    const off = await owner.protection.update({ id: siteId, cc: { enabled: false } });
+    expect((await admin.protection.get({ id: siteId })).ccTemplate.siteQps).toBe(700);
+    const off = await admin.protection.update({ id: siteId, cc: { enabled: false } });
     expect(off.effectiveCc).toBeNull();
     expect(off.cc).toMatchObject({ enabled: false, followTemplate: false, siteQps: 42 });
     expect((await config()).sites.find((s) => s.id === siteId)?.protection?.cc).toBeUndefined();
   });
 
-  it("refuses tenants a feature that active nodes lack; administrators may require it", async () => {
+  it("holds a feature active nodes lack for changes without the operator; the operator may require it", async () => {
     const [node] = await ctx.db
       .insert(schema.node)
       .values({ clusterId: otherClusterId, name: "old-edge", supportedFeatures: ["rules-v1"] })
       .returning();
     if (!node) throw new Error("node missing");
-    await admin.organizations.update({ id: orgId, defaultClusterId: otherClusterId });
     const oldSite = (
-      await owner.sites.create({ name: "old", domains: ["old.shield.test"], origins })
+      await admin.sites.create({
+        name: "old",
+        clusterId: otherClusterId,
+        domains: ["old.shield.test"],
+        origins,
+      })
     ).site.id;
-    await approveSiteDomains(admin, oldSite);
     const before = (await config(otherClusterId)).revision;
-    expect(
-      await rpcError(owner.protection.update({ id: oldSite, underAttack: true })),
-    ).toMatchObject({ code: "NODE_CAPABILITY_REQUIRED", data: { features: "challenge-v1" } });
-    expect(await rpcError(owner.protection.update({ id: oldSite, logJa4: true }))).toMatchObject({
+    await expect(
+      updateSiteProtection(ctx.db, { id: oldSite, underAttack: true }, service),
+    ).rejects.toMatchObject({
       code: "NODE_CAPABILITY_REQUIRED",
+      data: { features: "challenge-v1" },
     });
-    expect(
-      await rpcError(
-        owner.rules.save({
-          id: oldSite,
-          rules: [
-            {
-              name: "ja4",
-              phase: "waf-custom",
-              expression: 'tls.ja4 eq "t13d1516h2_8daaf6152771_02713d6af862"',
-              action: { kind: "challenge", type: "js" },
-            },
-          ],
-        }),
+    await expect(
+      updateSiteProtection(ctx.db, { id: oldSite, logJa4: true }, service),
+    ).rejects.toMatchObject({ code: "NODE_CAPABILITY_REQUIRED" });
+    await expect(
+      saveRules(
+        ctx,
+        oldSite,
+        [
+          ruleInput.parse({
+            name: "ja4",
+            phase: "waf-custom",
+            expression: 'tls.ja4 eq "t13d1516h2_8daaf6152771_02713d6af862"',
+            action: { kind: "challenge", type: "js" },
+          }),
+        ],
+        service,
       ),
-    ).toMatchObject({ code: "NODE_CAPABILITY_REQUIRED" });
+    ).rejects.toMatchObject({ code: "NODE_CAPABILITY_REQUIRED" });
     expect((await config(otherClusterId)).revision).toBe(before);
-    expect((await owner.protection.get({ id: oldSite })).underAttack).toBe(false);
+    expect((await admin.protection.get({ id: oldSite })).underAttack).toBe(false);
     expect(await keysOf(otherClusterId)).toEqual([]);
     // Nodes with the capabilities admit the change.
     await ctx.db
       .update(schema.node)
       .set({ supportedFeatures: ["rules-v1", "challenge-v1", "ja4-v1"] })
       .where(eq(schema.node.id, node.id));
-    await owner.protection.update({ id: oldSite, logJa4: true });
+    await updateSiteProtection(ctx.db, { id: oldSite, logJa4: true }, service);
     const logging = await config(otherClusterId);
     expect(logging.requiredFeatures).toEqual(expect.arrayContaining(["challenge-v1", "ja4-v1"]));
     expect(logging.challengeKeys).toEqual([]);
     expect(logging.sites.find((s) => s.id === oldSite)?.protection?.logJa4).toBe(true);
-    await owner.protection.update({ id: oldSite, logJa4: false });
+    await updateSiteProtection(ctx.db, { id: oldSite, logJa4: false }, service);
     expect((await config(otherClusterId)).requiredFeatures).not.toContain("challenge-v1");
-    // An administrator may deliberately require the upgrade.
+    // The operator may deliberately require the upgrade.
     await ctx.db
       .update(schema.node)
       .set({ supportedFeatures: ["rules-v1"] })
@@ -361,7 +326,6 @@ describe("site protection, platform protection and challenge keys", async () => 
     expect((await config(otherClusterId)).requiredFeatures).toContain("challenge-v1");
     await admin.protection.update({ id: oldSite, underAttack: false });
     await ctx.db.delete(schema.node).where(eq(schema.node.id, node.id));
-    await admin.organizations.update({ id: orgId, defaultClusterId: clusterId });
   });
 
   it("applies platform Under Attack to every cluster and audits it", async () => {
@@ -388,7 +352,7 @@ describe("site protection, platform protection and challenge keys", async () => 
         reasonCode: "platform_protection_updated",
       });
     }
-    expect((await member.protection.get({ id: siteId })).platformUnderAttack).toBe(true);
+    expect((await admin.protection.get({ id: siteId })).platformUnderAttack).toBe(true);
     // Retention alone publishes nothing.
     const revision = (await config()).revision;
     await admin.settings.setProtection({
@@ -411,7 +375,7 @@ describe("site protection, platform protection and challenge keys", async () => 
   });
 
   it("compiles the challenge rule action and tls.ja4 rate limit keys", async () => {
-    await owner.rules.save({
+    await admin.rules.save({
       id: siteId,
       rules: [
         {
@@ -435,7 +399,7 @@ describe("site protection, platform protection and challenge keys", async () => 
       expect.arrayContaining(["challenge-v1", "ja4-v1"]),
     );
     const error = await rpcError(
-      owner.rules.save({
+      admin.rules.save({
         id: siteId,
         rules: [
           {
@@ -448,7 +412,7 @@ describe("site protection, platform protection and challenge keys", async () => 
       }),
     );
     expect(error.status).toBe(400);
-    await owner.rules.save({ id: siteId, rules: [] });
+    await admin.rules.save({ id: siteId, rules: [] });
   });
 
   it("rotates keys daily and publishes only clusters whose configuration carries them", async () => {
@@ -496,7 +460,7 @@ describe("site protection, platform protection and challenge keys", async () => 
 
   it("rolls back with the current keys and the current platform protection", async () => {
     const target = (await latestRevision(ctx.db, clusterId))?.revision ?? 0;
-    await owner.protection.update({ id: siteId, underAttack: false });
+    await admin.protection.update({ id: siteId, underAttack: false });
     expect((await config()).challengeKeys).toEqual([]);
     // Rotate so that the target's previous key no longer exists.
     await rotateChallengeKeys(ctx, new Date(Date.now() + 3 * CHALLENGE_KEY_ROTATION_MS));
@@ -509,6 +473,6 @@ describe("site protection, platform protection and challenge keys", async () => 
     );
     expect(restored.platformProtection).toMatchObject({ underAttack: false });
     expect(restored.requiredFeatures).toContain("challenge-v1");
-    await owner.protection.update({ id: siteId, underAttack: false });
+    await admin.protection.update({ id: siteId, underAttack: false });
   });
 });

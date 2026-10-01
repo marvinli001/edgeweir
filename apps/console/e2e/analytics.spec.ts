@@ -11,9 +11,7 @@ async function openCard(page: Page, label: string) {
 }
 
 /** Runs after scripts/e2e.sh has seen the node's stats for demo.test arrive. */
-test("home lists and charts, stars, site and platform analytics with breakdowns", async ({
-  page,
-}) => {
+test("overview lists and charts, stars, site analytics with breakdowns", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await login(page, email, password);
@@ -64,7 +62,7 @@ test("home lists and charts, stars, site and platform analytics with breakdowns"
     await openCard(page, "请求总数详情");
     const dialog = page.getByTestId("metric-detail");
     await expect(dialog.getByRole("heading", { name: "请求总数", exact: true })).toBeVisible();
-    // One site: no per-site view; administrators get nodes first.
+    // One site: no per-site view; nodes come first.
     await expect(dialog.getByTestId("detail-view-site")).toHaveCount(0);
     await expect(dialog.getByTestId("detail-chart").locator(".recharts-line")).toBeVisible();
     await expect(dialog.getByTestId("detail-list")).toContainText(nodeName);
@@ -86,11 +84,10 @@ test("home lists and charts, stars, site and platform analytics with breakdowns"
     await expect(page.getByTestId("home-recents")).toContainText("demo");
   });
 
-  await test.step("the platform overview ranks nodes and sites", async () => {
-    await page.getByTestId("area-admin").click();
-    await expect(page.getByTestId("page-title")).toHaveText("平台概览");
-    await expect(page.getByTestId("stat-nodes")).toContainText(nodeName);
-    await expect(page.getByTestId("admin-revisions").getByRole("link").first()).toBeVisible();
+  await test.step("the overview lists nodes and revisions and ranks nodes and sites", async () => {
+    await expect(page.getByTestId("page-title")).toHaveText("概览");
+    await expect(page.getByTestId("home-nodes")).toContainText(nodeName);
+    await expect(page.getByTestId("home-revisions").getByRole("link").first()).toBeVisible();
     await expect(page.getByTestId("top-nodes")).toContainText(nodeName);
     await expect(page.getByTestId("top-sites")).toContainText("demo");
     await openCard(page, "数据传输详情");

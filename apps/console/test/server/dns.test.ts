@@ -7,7 +7,6 @@ import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
   createTestContext,
-  PASSWORD,
   rpcClient,
   rpcError,
   setupPlatform,
@@ -51,7 +50,6 @@ describe("M5 independent DNS publication and recovery", async () => {
   const app = createApp(ctx),
     origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient,
-    tenant: ApiClient,
     providerId: string,
     nodeId: string,
     groupId: string,
@@ -86,17 +84,9 @@ describe("M5 independent DNS publication and recovery", async () => {
       state: "applied",
       dataPlaneHealthy: true,
     });
-    const org = await admin.organizations.create({ name: "Other", defaultClusterId: clusterId });
-    await admin.users.create({
-      name: "Other",
-      email: "other@dns.test",
-      password: PASSWORD,
-      organizationId: org.id,
-    });
-    tenant = rpcClient(app, origin, await signIn(app, origin, "other@dns.test"));
   });
   afterAll(() => db.close());
-  it("stores provider secrets as bound envelopes and isolates administration", async () => {
+  it("stores provider secrets as bound envelopes", async () => {
     const p = await admin.dns.createProvider({
       name: "Test DNS",
       provider: "test",
@@ -112,8 +102,9 @@ describe("M5 independent DNS publication and recovery", async () => {
       name: "Rotated test DNS",
       credentials: { api_token: "test-dns-secret" },
     });
-    expect((await rpcError(tenant.dns.get())).status).toBe(403);
-    expect((await rpcError(tenant.dns.siteTarget({ siteId }))).code).toBe("SITE_NOT_FOUND");
+    expect((await rpcError(admin.dns.siteTarget({ siteId: crypto.randomUUID() }))).code).toBe(
+      "SITE_NOT_FOUND",
+    );
   });
   it("publishes CNAME and line addresses without creating a node revision", async () => {
     fixture.records.push({ name: "unrelated", type: "TXT", data: "preserve", ttl: 600 });
@@ -147,15 +138,11 @@ describe("M5 independent DNS publication and recovery", async () => {
       "DNS_PROVIDER_IN_USE",
     );
   });
-  it("keeps a disabled or suspended site's records (nodes answer 404 for it)", async () => {
+  it("keeps a disabled site's records (nodes answer 404 for it)", async () => {
     const before = structuredClone(fixture.records);
     await admin.sites.setEnabled({ id: siteId, enabled: false });
     await admin.dns.reconcile();
     expect(fixture.records).toEqual(before);
-    await admin.admin.sites.suspend({ id: siteId, reason: "billing" });
-    await admin.dns.reconcile();
-    expect(fixture.records).toEqual(before);
-    await admin.admin.sites.resume({ id: siteId });
     await admin.sites.setEnabled({ id: siteId, enabled: true });
     // The node applies the resulting revision again before the next reconciliation.
     const revision = await latestRevision(ctx.db, clusterId);
@@ -247,7 +234,6 @@ describe("M5 independent DNS publication and recovery", async () => {
     await admin.dns.setProtection({ massRemovalRatio: 0.3 });
     expect(await admin.dns.protection()).toEqual({ massRemovalRatio: 0.3 });
     expect((await rpcError(admin.dns.setProtection({ massRemovalRatio: 0.01 }))).status).toBe(400);
-    expect((await rpcError(tenant.dns.protection())).status).toBe(403);
     expect((await admin.auditLogs.list({ action: "dns.protection_update" })).total).toBe(1);
     await admin.dns.setProtection({ massRemovalRatio: 0.5 });
   });
