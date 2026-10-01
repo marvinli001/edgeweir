@@ -543,7 +543,9 @@ function CacheKeyCard({ site }: { site: Site }) {
         onSubmit={(event) => {
           event.preventDefault();
           void save({
+            // Every cache setting is sent (the update replaces them), Cache-Tag as saved.
             cacheSettings: {
+              ...site.cacheSettings,
               cacheKey: {
                 query: draft.query,
                 queryParams: splitList(draft.queryParams),
@@ -660,7 +662,7 @@ function CacheKeyCard({ site }: { site: Site }) {
  * tags for purges either way. The cache key settings go along unchanged.
  */
 function CacheTagCard({ site }: { site: Site }) {
-  const { cacheKey, rangeSlice, keepCacheTag } = site.cacheSettings;
+  const { keepCacheTag } = site.cacheSettings;
   const [keep, setKeep] = React.useState(keepCacheTag);
   const { save, error, pending } = useSaveSite(site.id);
   return (
@@ -673,7 +675,7 @@ function CacheTagCard({ site }: { site: Site }) {
         className="flex flex-col gap-(--card-spacing)"
         onSubmit={(event) => {
           event.preventDefault();
-          void save({ cacheSettings: { cacheKey, rangeSlice, keepCacheTag: keep } });
+          void save({ cacheSettings: { ...site.cacheSettings, keepCacheTag: keep } });
         }}
       >
         <CardHeader>
