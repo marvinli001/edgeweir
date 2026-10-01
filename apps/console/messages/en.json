@@ -1391,5 +1391,6 @@
   "platform_pages_title": "Platform error pages",
   "platform_pages_unknown_host": "Unknown host",
   "platform_pages_disabled": "Site disabled",
-  "platform_pages_suspended": "Site suspended"
+  "platform_pages_suspended": "Site suspended",
+  "logs_request_id": "Request ID"
 }

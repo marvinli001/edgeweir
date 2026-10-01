@@ -1230,5 +1230,6 @@
   "platform_pages_title": "平台错误页",
   "platform_pages_unknown_host": "未知域名",
   "platform_pages_disabled": "网站已停用",
-  "platform_pages_suspended": "网站已暂停"
+  "platform_pages_suspended": "网站已暂停",
+  "logs_request_id": "请求 ID"
 }

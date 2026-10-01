@@ -34,6 +34,7 @@ export function LogsTab({ siteId }: { siteId: string }) {
     status: "",
     ip: "",
     path: "",
+    requestId: "",
   }));
   const [query, setQuery] = React.useState<LogQuery>(() => ({
     siteId,
@@ -99,35 +100,41 @@ export function LogsTab({ siteId }: { siteId: string }) {
                 status: filters.status ? Number(filters.status) : undefined,
                 ip: filters.ip,
                 path: filters.path,
+                // Exact match; empty matches every request.
+                requestId: filters.requestId.trim() || undefined,
                 limit: 100,
               });
             }}
           >
             {(
               [
-                ["from", m.logs_from(), "datetime-local"],
-                ["to", m.logs_to(), "datetime-local"],
-                ["status", m.logs_status(), "number"],
-                ["ip", m.logs_ip(), "text"],
-                ["path", m.logs_path(), "text"],
+                ["from", "log-from", m.logs_from(), "datetime-local", 64],
+                ["to", "log-to", m.logs_to(), "datetime-local", 64],
+                ["status", "log-status", m.logs_status(), "number", 64],
+                ["ip", "log-ip", m.logs_ip(), "text", 64],
+                ["path", "log-path", m.logs_path(), "text", 2048],
+                ["requestId", "log-request-id", m.logs_request_id(), "text", 128],
               ] as const
-            ).map(([key, label, type]) => (
+            ).map(([key, id, label, type, maxLength]) => (
               <Field key={key}>
-                <FieldLabel htmlFor={`log-${key}`}>{label}</FieldLabel>
+                <FieldLabel htmlFor={id}>{label}</FieldLabel>
                 <Input
-                  id={`log-${key}`}
+                  id={id}
                   type={type}
                   value={filters[key]}
                   min={key === "status" ? 100 : undefined}
                   max={key === "status" ? 599 : undefined}
-                  maxLength={key === "path" ? 2048 : 64}
+                  maxLength={maxLength}
                   required={key === "from" || key === "to"}
+                  spellCheck={key === "requestId" ? false : undefined}
+                  className={key === "requestId" ? "font-mono" : undefined}
                   onChange={(event) => setFilters({ ...filters, [key]: event.target.value })}
+                  data-testid={key === "requestId" ? "logs-request-id" : undefined}
                 />
               </Field>
             ))}
             <div className="flex items-end gap-2">
-              <Button type="submit" disabled={logs.isFetching}>
+              <Button type="submit" disabled={logs.isFetching} data-testid="logs-search">
                 {logs.isFetching && <Spinner />}
                 {m.logs_search()}
               </Button>
@@ -201,6 +208,15 @@ export function LogsTab({ siteId }: { siteId: string }) {
                             {row.method} {row.host}
                             {row.path}
                           </div>
+                          {/* The id the node answered with (X-Request-Id, also on error pages). */}
+                          {row.requestId ? (
+                            <div className="mt-1 text-xs break-all text-muted-foreground">
+                              {m.logs_request_id()}{" "}
+                              <span className="font-mono" data-testid="log-request-id">
+                                {row.requestId}
+                              </span>
+                            </div>
+                          ) : null}
                         </td>
                         <td className="p-3 tabular-nums">{row.status}</td>
                         <td className="p-3 tabular-nums">{row.bytesSent}</td>
