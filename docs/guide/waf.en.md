@@ -78,6 +78,8 @@ Changes are audited as `system.waf_update`; changes to a site's settings as `sit
 
 On a site with CRS on, every request goes through ModSecurity rule matching; node CPU and request latency grow with the paranoia level, the request body limit, and request size. Sites without CRS never go through ModSecurity. Run in **Detect only** first and watch matches, false positives, and node load before switching to **Block**; turn CRS on only for the sites that need it, and keep the paranoia level and body limit as low as practical.
 
+While any site on a node runs CRS, the node loads ModSecurity and the bundled rules, and nginx uses about 40 MiB more memory, more under sustained load. After the last site turns CRS off, that memory is only released the next time the node restarts nginx (for example on a node upgrade or a service restart).
+
 ## Node capabilities
 
 | Capability | Needed for |
