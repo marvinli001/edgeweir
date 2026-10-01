@@ -2,12 +2,10 @@ import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
   ConfigCapacityError,
-  canonicalize,
   compileNodeConfig,
   compileOfflineHosts,
   compilePlatformErrorPages,
   compileRules,
-  contentHash,
   DEFAULT_SITE_PROTECTION,
   decodeNodeConfig,
   encodeNodeConfig,
@@ -504,6 +502,47 @@ export async function insertRevision(
   return { row, created: true };
 }
 
+/** The cluster's ACME HTTP-01 challenges of running certificate operations. */
+async function loadHttpChallenges(tx: Executor, clusterId: string) {
+  const challenges = await tx
+    .selectDistinct({ challenge: schema.acmeChallenge })
+    .from(schema.acmeChallenge)
+    .innerJoin(schema.certificate, eq(schema.certificate.id, schema.acmeChallenge.certificateId))
+    .innerJoin(
+      schema.site,
+      // Disabled and suspended sites keep answering HTTP-01: renewals continue.
+      and(
+        eq(schema.site.organizationId, schema.certificate.organizationId),
+        eq(schema.site.clusterId, clusterId),
+      ),
+    )
+    .innerJoin(
+      schema.siteDomain,
+      and(
+        eq(schema.siteDomain.siteId, schema.site.id),
+        eq(schema.siteDomain.verified, true),
+        eq(schema.siteDomain.name, schema.acmeChallenge.domain),
+        eq(schema.siteDomain.wildcard, false),
+      ),
+    )
+    .where(
+      and(
+        gt(schema.acmeChallenge.expiresAt, new Date()),
+        eq(schema.acmeChallenge.operationStartedAt, schema.certificate.operationStartedAt),
+      ),
+    );
+  return challenges
+    .map(({ challenge }) => challenge)
+    .map((c) =>
+      create(HttpChallengeSchema, {
+        domain: c.domain,
+        token: c.token,
+        keyAuthorization: c.keyAuthorization,
+        expiresAt: timestampFromDate(c.expiresAt),
+      }),
+    );
+}
+
 /**
  * Compiles the cluster's current sites into a NodeConfig and stores it as the
  * next revision. Identical content does not produce a new revision.
@@ -561,43 +600,7 @@ export async function publishRevision(
       notAfter: c.notAfter ? timestampFromDate(c.notAfter) : undefined,
     }),
   );
-  const challenges = await tx
-    .selectDistinct({ challenge: schema.acmeChallenge })
-    .from(schema.acmeChallenge)
-    .innerJoin(schema.certificate, eq(schema.certificate.id, schema.acmeChallenge.certificateId))
-    .innerJoin(
-      schema.site,
-      // Disabled and suspended sites keep answering HTTP-01: renewals continue.
-      and(
-        eq(schema.site.organizationId, schema.certificate.organizationId),
-        eq(schema.site.clusterId, opts.clusterId),
-      ),
-    )
-    .innerJoin(
-      schema.siteDomain,
-      and(
-        eq(schema.siteDomain.siteId, schema.site.id),
-        eq(schema.siteDomain.verified, true),
-        eq(schema.siteDomain.name, schema.acmeChallenge.domain),
-        eq(schema.siteDomain.wildcard, false),
-      ),
-    )
-    .where(
-      and(
-        gt(schema.acmeChallenge.expiresAt, new Date()),
-        eq(schema.acmeChallenge.operationStartedAt, schema.certificate.operationStartedAt),
-      ),
-    );
-  const httpChallenges = challenges
-    .map(({ challenge }) => challenge)
-    .map((c) =>
-      create(HttpChallengeSchema, {
-        domain: c.domain,
-        token: c.token,
-        keyAuthorization: c.keyAuthorization,
-        expiresAt: timestampFromDate(c.expiresAt),
-      }),
-    );
+  const httpChallenges = await loadHttpChallenges(tx, opts.clusterId);
   const platformProtection = await loadPlatformProtection(tx);
   const input = {
     clusterId: opts.clusterId,
@@ -750,26 +753,15 @@ export async function onlineCanaryNodes(tx: Executor, clusterId: string, now = D
 }
 
 /**
- * `config` with the ACME HTTP-01 challenges of `challenges`: issuance
- * state that every node needs at once, so it never waits for a canary.
- */
-export function withChallenges(config: NodeConfig, challenges: NodeConfig["httpChallenges"]) {
-  const out = clone(NodeConfigSchema, config);
-  out.httpChallenges = challenges.map((c) => clone(HttpChallengeSchema, c));
-  out.requiredFeatures = out.requiredFeatures.filter((f) => f !== "http01-v1");
-  if (out.httpChallenges.length) out.requiredFeatures.push("http01-v1");
-  const canonical = canonicalize(out);
-  canonical.contentHash = contentHash(canonical);
-  return canonical;
-}
-
-/**
- * Publishing with the configuration canary on. A change that only differs
- * from the stable revision in ACME challenges goes to every node. Without
- * an online canary node the change goes to every node too (audited and
- * alerted). Otherwise the stable revision first takes the current
- * challenges, then the change becomes the candidate for the canary nodes
- * and the observation window (re)starts.
+ * Publishing with the configuration canary on. What does not wait for a
+ * canary (currentStable: ACME challenges, sites taken offline, removed
+ * domains, purges, renewed certificates, challenge keys, Under Attack)
+ * goes into the stable revision of every node at once; when that is the
+ * whole change, the change is the new stable revision. Without an online
+ * canary node the change goes to every node too (audited and alerted).
+ * Otherwise the change becomes the candidate for the canary nodes. A
+ * candidate replaced during its window keeps the window's start and nodes,
+ * so frequent publications cannot hold back the other nodes forever.
  */
 async function publishThroughCanary(
   tx: Tx,
@@ -785,7 +777,12 @@ async function publishThroughCanary(
       ? await getRevision(tx, clusterId, rollout.stableRevision)
       : undefined) ?? (await latestRevision(tx, clusterId));
   if (!stable) return insertRevision(tx, clusterId, build, reason, userId);
-  const patched = withChallenges(decodeNodeConfig(stable.ir), preview.httpChallenges);
+  const patched = await currentStable(
+    tx,
+    clusterId,
+    decodeNodeConfig(stable.ir),
+    preview.httpChallenges,
+  );
   const now = new Date();
   if (preview.contentHash === patched.contentHash) {
     const result = await insertRevision(tx, clusterId, build, reason, userId);
@@ -844,8 +841,8 @@ async function publishThroughCanary(
         config.revision = revision;
         return config;
       },
-      { code: "acme_challenge_updated", params: {} },
-      null,
+      reason,
+      userId,
     );
     await updateRollout(tx, clusterId, { stableRevision: restabled.row.revision });
   }
@@ -854,8 +851,7 @@ async function publishThroughCanary(
     await updateRollout(tx, clusterId, {
       candidateRevision: result.row.revision,
       state: "canary",
-      windowStartedAt: now,
-      ...(running ? {} : { canaryNodeIds: canary.map((n) => n.id) }),
+      ...(running ? {} : { windowStartedAt: now, canaryNodeIds: canary.map((n) => n.id) }),
       outcome: "",
       finishedAt: null,
     });
@@ -989,12 +985,24 @@ async function restoreSites(
 }
 
 /**
- * The canary's stable content as it may be published now: what the
- * current state requires of an earlier configuration (restoreSites), with
- * derived fields recomputed. The automatic rollback publishes it.
+ * The canary's stable content with what never waits for a canary: the
+ * current state of sites (restoreSites: sites taken offline and removed
+ * domains are gone, purges and renewed certificates apply), the current
+ * ACME challenges (`challenges`, else loaded), challenge keys and Under
+ * Attack of sites and the platform. Every publication refreshes the stable
+ * revision with it and the automatic rollback publishes it.
  */
-export async function currentStable(tx: Tx, clusterId: string, stable: NodeConfig) {
-  const { config } = await restoreSites(tx, clusterId, stable, { strict: false });
+export async function currentStable(
+  tx: Tx,
+  clusterId: string,
+  stable: NodeConfig,
+  challenges?: NodeConfig["httpChallenges"],
+) {
+  const { config, currentSites } = await restoreSites(tx, clusterId, stable, { strict: false });
+  config.httpChallenges = (challenges ?? (await loadHttpChallenges(tx, clusterId))).map((c) =>
+    clone(HttpChallengeSchema, c),
+  );
+  await restoreProtection(tx, clusterId, config, currentSites, { underAttack: "current" });
   return refreshDerived(config);
 }
 
@@ -1064,7 +1072,7 @@ export async function rollbackToRevision(
   restored.originAllowedCidrs = await loadOriginAllowList(tx);
   // Challenge tokens are short-lived issuance state, never rollback content.
   restored.httpChallenges = [];
-  await restoreProtection(tx, opts.clusterId, restored, currentSites);
+  await restoreProtection(tx, opts.clusterId, restored, currentSites, { underAttack: "restored" });
   const content = refreshDerived(restored);
   const result = await insertRevision(
     tx,
@@ -1096,19 +1104,34 @@ export async function rollbackToRevision(
  * policy: platform Under Attack and JA4 logging are current settings, and
  * challenge keys are always the cluster's current keys (older ones are gone),
  * carried whenever challenges or a restored site's session affinity use them.
- * Sites keep their restored Under Attack and CC policy.
+ * Sites keep their restored CC policy and, after an administrator's rollback
+ * (`underAttack: "restored"`), their restored Under Attack; the canary's
+ * stable revision takes the current one.
  */
 async function restoreProtection(
   tx: Tx,
   clusterId: string,
   restored: NodeConfig,
   currentSites: { id: string }[],
+  opts: { underAttack: "restored" | "current" },
 ) {
   const platform = await loadPlatformProtection(tx);
   const current = await loadSiteProtectionModels(
     tx,
     currentSites.map((site) => site.id),
   );
+  if (opts.underAttack === "current")
+    for (const site of restored.sites) {
+      const now = current.get(site.id);
+      if (!now || (!now.underAttack && !site.protection?.underAttack)) continue;
+      site.protection ??= create(SiteProtectionSchema, {
+        passTtlSeconds: now.passTtlSeconds,
+        powDifficulty: now.powDifficulty,
+        powHighDifficulty: now.powHighDifficulty,
+      });
+      site.protection.underAttack = now.underAttack;
+      site.protection.underAttackChallenge = now.underAttackChallenge;
+    }
   const rules = [...restored.platformRules, ...restored.sites.flatMap((site) => site.rules)];
   const challenges =
     platform.underAttack ||

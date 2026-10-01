@@ -1,7 +1,7 @@
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import { tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import {
@@ -260,8 +260,81 @@ describe("configuration canary and current state", async () => {
     const manual = await config(stable);
     expect(manual.sites.find((s) => s.id === siteId)?.cacheGeneration).toBe(generation + 1n);
     expect(manual.sites.find((s) => s.id === old)).toBeUndefined();
+    // Deleting sites stops serving them on every node at once.
     await admin.sites.delete({ id: blog });
     await admin.sites.delete({ id: old });
-    await admin.clusters.promoteRollout({ id: clusterId });
+    expect((await rollout()).candidateRevision).toBeNull();
+    expect((await config(stable)).sites.map((s) => s.id)).toEqual([siteId]);
+  });
+
+  it("gives a purge and Under Attack to every node at once while a candidate waits", async () => {
+    await settle();
+    await change();
+    const renamed = `site-${renames}`;
+    const started = (await rollout()).windowStartedAt;
+    const site = async (node: TestNode) => (await config(node)).sites.find((s) => s.id === siteId);
+    const generation = (await site(stable))?.cacheGeneration ?? 0n;
+    const platform = await admin.settings.protection();
+    await admin.sites.purgeAll({ id: siteId });
+    await admin.protection.update({ id: siteId, underAttack: true });
+    await admin.settings.setProtection({
+      ...platform,
+      underAttack: true,
+      underAttackChallenge: "pow",
+    });
+    const other = await config(stable);
+    expect(other.sites[0]?.cacheGeneration).toBe(generation + 1n);
+    expect(other.sites[0]?.protection?.underAttack).toBe(true);
+    expect(other.platformProtection).toMatchObject({
+      underAttack: true,
+      underAttackChallenge: "pow",
+    });
+    expect(other.challengeKeys.length).toBeGreaterThan(0);
+    expect(other.requiredFeatures).toContain("challenge-v1");
+    // The rename still waits for the canary, whose window kept its start.
+    expect(other.sites[0]?.name).not.toBe(renamed);
+    expect(await rollout()).toMatchObject({ state: "canary", windowStartedAt: started });
+    expect(await site(canary)).toMatchObject({
+      name: renamed,
+      cacheGeneration: generation + 1n,
+      protection: expect.objectContaining({ underAttack: true }),
+    });
+    // Turning them off is just as immediate.
+    await admin.settings.setProtection({ ...platform, underAttack: false });
+    await admin.protection.update({ id: siteId, underAttack: false });
+    const after = await config(stable);
+    expect(after.sites[0]?.protection?.underAttack ?? false).toBe(false);
+    expect(after.platformProtection?.underAttack ?? false).toBe(false);
+    expect(after.sites[0]?.name).not.toBe(renamed);
+  });
+
+  it("decides a window replaced by later changes when the first candidate's window ends", async () => {
+    const { windowStartedAt } = await rollout();
+    if (!windowStartedAt) throw new Error("no window");
+    await change();
+    const latest = await change();
+    expect(await rollout()).toMatchObject({ candidateRevision: latest, windowStartedAt });
+    const end = new Date(new Date(windowStartedAt).getTime() + 301_000);
+    await report(canary, latest, end);
+    await report(stable, (await rollout()).stableRevision ?? 0, end);
+    expect(await evaluateRollout(ctx, clusterId, end)).toBe("promoted");
+    expect((await target(stable))?.revision).toBe(latest);
+  });
+
+  it("publishes a purge without a running window as the stable revision of every node", async () => {
+    await settle();
+    const { row } = await ctx.db.transaction(async (tx) => {
+      await tx
+        .update(schema.site)
+        .set({ cacheGeneration: sql`${schema.site.cacheGeneration} + 1` })
+        .where(eq(schema.site.id, siteId));
+      return publishRevision(tx, {
+        clusterId,
+        reason: { code: "site_purged", params: { site: "shop" } },
+      });
+    });
+    expect(await rollout()).toMatchObject({ state: "promoted", candidateRevision: null });
+    expect((await target(stable))?.revision).toBe(row.revision);
+    expect((await target(canary))?.revision).toBe(row.revision);
   });
 });

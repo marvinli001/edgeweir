@@ -256,15 +256,13 @@ describe("configuration canary with automatic rollback", async () => {
     expect((await rollout()).candidateRevision).toBe(next);
   });
 
-  it("replaces the candidate when another change arrives during the window", async () => {
+  it("replaces the candidate when another change arrives during the window, keeping its start", async () => {
     const first = await rollout();
     const replacement = await change();
     const second = await rollout();
     expect(second.candidateRevision).toBe(replacement);
     expect(second.candidateRevision).not.toBe(first.candidateRevision);
-    expect(new Date(second.windowStartedAt ?? 0).getTime()).toBeGreaterThanOrEqual(
-      new Date(first.windowStartedAt ?? 0).getTime(),
-    );
+    expect(second.windowStartedAt).toBe(first.windowStartedAt);
     expect(second.stableRevision).toBe(first.stableRevision);
   });
 
