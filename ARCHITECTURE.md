@@ -11,18 +11,20 @@
 | PostgreSQL 18 | 外部服务 | 唯一必需的依赖：业务数据、迁移记录（schema `drizzle`）、pg-boss 队列（schema `pgboss`）、LISTEN/NOTIFY |
 | ClickHouse | Compose profile `analytics` | 可选；`EDGEWEIR_ANALYTICS=clickhouse` 时保存访问日志与分钟统计副本 |
 | Valkey | Compose profile `cache` | 控制台目前未使用 |
-| 节点 | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | Go agent 与 OpenResty 数据面；经节点通道拉取配置与任务，上报状态、统计与日志 |
+| 节点 | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | Go agent 与 OpenResty 数据面；经节点通道拉取配置与任务，上报状态、主机指标、统计与日志 |
+| 区域探针 | [edgeweir-node](https://github.com/marvinli001/edgeweir-node)（`probe` 模式） | 不运行 OpenResty；从所在区域探测节点的调度地址，经节点通道的 `ProbeService` 上报 |
 
 ```text
 控制台（ROLE=app|worker|all）
 ├── :3000  HTTP ◀── 浏览器、API 调用方
 ├── :8443  Connect-RPC（TLS + mTLS）◀── edgeweir-node agent ── OpenResty ──▶ 源站
+│                                    ◀── edgeweir-node probe（区域探针）──▶ 节点的监听端口
 ├── SQL、LISTEN/NOTIFY ──▶ PostgreSQL 18
 ├── HTTP（可选）──▶ ClickHouse
 └── 子进程 stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA、DNS 服务商 API
 ```
 
-控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.7.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
+控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.14.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
 
 ## 仓库布局
 
@@ -37,7 +39,7 @@
 | `packages/config-compiler` | 把网站、规则、IP 名单、证书引用与平台策略编译为 NodeConfig IR；规范排序、内容哈希、diff |
 | `packages/rule-engine` | 规则表达式的字段、阶段、函数、解析（条件、值表达式、缓存规则条件）、名单引用绑定与参考求值 |
 | `packages/proto` | 由 `proto/` 生成的 TypeScript（protoc-gen-es），不手改 |
-| `proto/` | buf 模块 `edgeweir/node/v1/{node,config}.proto`；edgeweir-node 从 `proto/vX.Y.Z` tag 生成 Go 代码 |
+| `proto/` | buf 模块 `edgeweir/node/v1/{node,config,probe}.proto`；edgeweir-node 从 `proto/vX.Y.Z` tag 生成 Go 代码 |
 | `helpers/certd` | `edgeweir-certd` 源码 |
 | `helpers/http3probe` | CI 使用的 HTTP/3 探测程序 |
 | `Dockerfile`、`docker/` | 镜像构建、容器健康检查脚本、端到端测试夹具 |
@@ -227,6 +229,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | 内部 CA | ECDSA P-256，有效期 10 年，首次启动生成；私钥信封加密后存入 `pki_authority` |
 | 服务端证书 | 每次启动由内部 CA 签发，有效期 90 天；进程每小时检查一次，剩余不足三分之一时重新签发，新握手使用新证书，已建立的连接不受影响；SAN 包含 `EDGEWEIR_NODE_API_URL` 的主机名（未设置时为 `EDGEWEIR_PUBLIC_URL` 的主机名）、`EDGEWEIR_NODE_API_HOSTNAMES`、`localhost`、`127.0.0.1`、`::1` 与容器主机名 |
 | 节点证书 | CN 为节点 ID，仅客户端认证，有效期 30 天（服务端证书与节点证书都从签发前 1 小时起生效，容忍节点时钟偏慢）；剩余不足三分之一时 `ReportStatus` 提示调用 `RenewCertificate`。续期后旧证书（`node.previous_cert_serial`）继续有效，直到节点第一次用新证书认证；未装上新证书的节点用旧证书再次续期。已停用的节点也可以续期，其他调用仍被拒绝 |
+| 探针证书 | CN 为探针 ID，`O=Edgeweir Probe`（节点证书为 `O=Edgeweir Node`），仅客户端认证，有效期 30 天；剩余不足三分之一时 `GetProbeTargets` 提示调用 `RenewProbeCertificate`，续期后旧证书的处理与节点相同。节点通道按组织区分：探针证书只能调用 `ProbeService`，`NodeService` 拒绝一切非节点证书；节点证书只在节点兼任探针时调用 `GetProbeTargets`、`ReportProbeResults`，不能注册或续期探针 |
 | 心跳 | 间隔 15 秒；`WatchConfig` 每 15 秒发送 keepalive |
 
 注册顺序：
@@ -239,7 +242,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 
 控制台绝不保存 SSH 凭据；节点只经控制台生成的一次性安装命令接入，由节点主动注册。
 
-除 `Enroll` 外的 RPC 都要求经内部 CA 校验的客户端证书，且序列号等于库中记录的当前序列号：证书轮换后旧证书立即失效，删除节点时序列号写入 `node_certificate_revocation`。停用或删除的节点每次 RPC 都被拒绝，打开的 `WatchConfig` 流随之关闭。
+除 `Enroll`、`EnrollProbe` 外的 RPC 都要求经内部 CA 校验的客户端证书，且序列号等于库中记录的当前序列号：证书轮换后旧证书立即失效，删除节点或探针时序列号写入 `node_certificate_revocation`。停用或删除的节点每次 RPC 都被拒绝，打开的 `WatchConfig` 流随之关闭；停用的探针只能续期证书。
 
 | RPC | 用途 |
 | --- | --- |
@@ -247,13 +250,17 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `RenewCertificate` | 轮换节点证书 |
 | `WatchConfig` | 服务端流：revision 通知、任务通知、封禁通知（`bans-v1`）、keepalive |
 | `GetConfig` | 快照或相对 `base_revision` 的 diff，附 revision 回执 |
-| `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态 |
+| `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态、主机指标（`metrics-v1`）；响应的 `probe` 告诉节点是否兼任探针 |
 | `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计；按批次序号去重 |
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
 | `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥 |
 | `GetCertificates` | 本集群网站引用的证书链与私钥 |
 | `PullTasks`、`ReportTaskResult` | 刷新预热与升级任务 |
 | `GetBans`、`ReportBans` | 按序号增量拉取本集群的封禁；上报节点的自动封禁 |
+| `EnrollProbe`（`ProbeService`） | 用一次性探针 token（`ewp_`）和 CSR 换取探针证书；与 `Enroll` 相同的请求大小限制，token 只在注册成功时消耗 |
+| `RenewProbeCertificate` | 轮换探针证书（节点经 `RenewCertificate`） |
+| `GetProbeTargets` | 探测目标（节点、地址、端口、方式、PROXY protocol）、间隔、超时与尝试次数 |
+| `ReportProbeResults` | 一轮探测结果，每次至多 10000 条；之后立即对涉及的集群求值 |
 
 revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节点 ID），内容为集群、revision 与内容哈希。节点把回执保存在本地并在 `ReportStatus` 中带回；节点报告的已应用 revision 高于控制台最新 revision 且回执无效时，请求被拒绝。
 
@@ -275,7 +282,28 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 | 命令 | `version`、`providers`、`obtain`、`renew`、`revoke`、`renewal-info`、`dns.list`、`dns.set`、`dns.present`、`dns.cleanup`、`dns.zones`、`dns.test` |
 | DNS 服务商 | 服务商目录 `helpers/certd/catalog.json`，见 [服务商与凭据](docs/guide/dns-and-alerts.md#服务商与凭据) |
 
-DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动）：`dns.reconcile` 每分钟按健康节点与网站域名计算每个自动模式集群的记录（每个集群一份地址记录，每个网站一条 CNAME），生成该集群的 `dns_revision`，写入绑定所选服务商账号（`platform_dns_provider`）的区域；各集群各自发布与对账，一个服务商不可用不影响其他集群；同一集群同一时间只有一个进程在写（`dns_lease`）。节点在新版本发布后 2 分钟内应用期间保留在记录中。写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复；新记录先于被替换的记录写入。手动模式只生成需要手动创建的记录与 zone 文件，不写 DNS。DNS 调度的服务商账号与 DNS-01 凭据使用同一份服务商目录。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 调度与告警](docs/guide/dns-and-alerts.md)。
+DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动）：`dns.reconcile` 每分钟按健康节点与网站域名计算每个自动模式集群的记录（每个集群一份地址记录，`all.<域名>` 按解析线路各一组，每个网站一条 CNAME；节点地址与备用节点组见[区域探针与智能调度](#区域探针与智能调度)），生成该集群的 `dns_revision`，写入绑定所选服务商账号（`platform_dns_provider`）的区域；各集群各自发布与对账，一个服务商不可用不影响其他集群；同一集群同一时间只有一个进程在写（`dns_lease`）。节点在新版本发布后 2 分钟内应用期间保留在记录中。写入外部记录之前先在 `dns_managed_name` 登记名称，部分写入可修复；新记录先于被替换的记录写入。手动模式只生成需要手动创建的记录与 zone 文件，不写 DNS。DNS 调度的服务商账号与 DNS-01 凭据使用同一份服务商目录。网站的域名保存后即参与路由，一个域名只属于一个网站。行为说明见 [HTTPS 与证书](docs/guide/https.md) 与 [DNS 调度与告警](docs/guide/dns-and-alerts.md)。
+
+## 区域探针与智能调度
+
+1. 探测方：区域探针（`probe`，`edgeweir-node probe` 以一次性 `probe_token` 经 `EnrollProbe` 注册），或 `node.probe_enabled` 且节点组有区域的节点（`ReportStatus` 响应 `probe=true`）。
+2. `GetProbeTargets` 返回每个启用节点的调度地址（`node_ip`：有 `configured` 行时只用它们及其级别，否则 `reported` 的公网地址）× 集群最新 revision 的监听端口，附探测间隔、超时与尝试次数；集群全部活动节点具备 `probe-health-v1` 时 HTTP / HTTPS 监听以健康端点探测，否则只做 TCP。兼任探针的节点不探测自己。
+3. `ReportProbeResults` 只接受当前目标，写入 `probe_result`（每个探测方、节点、地址、端口一行，最新值），1 小时未更新的行删除。
+4. 每 10 秒（worker 进程内定时器，租约保证同一时间一个进程）与每次探针上报后（每集群每进程至多每 2 秒），每个集群在事务内（advisory lock）求值：先按窗口（3 个探测间隔，至少 15 秒）内的结果更新 `node_address_state`（严格多数的探测方失败持续 `ipDownSeconds` 记为不可达，持续 `ipUpSeconds` 不失败恢复），再对每条 `scheduling_rule` 与节点推进 `scheduling_state`（条件成立起点、动作起点、解除起点）。
+5. 地址级别变化发布集群的 DNS revision（原因 `health`）。规则的生效与恢复各发布一个（原因 `scheduling`，`reason_params` 为规则、节点、动作与事件），以系统身份写审计 `scheduling.activate` / `scheduling.recover`，并触发或解除平台告警 `scheduling_action`。发布了 revision 的集群随即写入 DNS。
+6. `compileBindingPlan` 以节点的有效级别（最低的可达级别，`backup_ip` 动作至少备 1）、规则的摘除与线路的备用节点组（健康地址少于 `minHealthyIps` 或 `backup_group` 动作）计算每条绑定线路的地址，`all.<域名>` 按解析线路写入。大面积摘除保护按名称、类型与解析线路比较，备用节点组的切换只在清空记录集时计入。
+
+节点指标（`ReportStatusRequest.metrics`，`metrics-v1`）保存在 `node.metrics`，只有最新值；调度把 60 秒前的指标视为缺失。
+
+| 管理操作 | 审计 |
+| --- | --- |
+| 探针令牌、改名与启停、删除（吊销证书） | `probe.token_create`、`probe.update`、`probe.delete` |
+| 探针注册与证书续期 | `probe.enroll`、`probe.certificate_renew`（操作者为探针） |
+| 探测设置 | `system.probes_update` |
+| 调度地址、兼任探针 | `node.set_addresses`（发布集群 DNS，原因 `manual`）、`node.set_probe` |
+| 调度规则 | `scheduling.rule_create`、`scheduling.rule_update`、`scheduling.rule_delete`（停用、删除或改变线路、条件、动作时先结束生效中的动作） |
+
+行为见 [区域探针与智能调度](docs/guide/scheduling.md)。
 
 ## 统计、日志与告警
 
@@ -295,7 +323,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 
 Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
-告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook、邮件、钉钉、企业微信或 Telegram）发送；投递时重新检查渠道是否启用与订阅是否仍然有效，「接收所有告警」的渠道接收全部告警。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
+告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook、邮件、钉钉、企业微信或 Telegram）发送；投递时重新检查渠道是否启用与订阅是否仍然有效，「接收所有告警」的渠道接收全部告警。集群告警（配置金丝雀回滚、DNS 大面积摘除被阻止、调度规则作用于节点 `scheduling_action` 等）由各自的流程触发与解除，只投递到「接收所有告警」的渠道。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
 
 ## 后台任务
 
@@ -312,6 +340,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `maintenance.prune-bans` | 每 10 分钟 | 删除到期超过一小时的封禁 |
 | `maintenance.rotate-challenge-keys` | 每小时第 11 分 | 轮换满一天的挑战密钥 |
 | `maintenance.prune-security-events` | 每小时第 37 分 | 删除超过保留天数的安全事件 |
+| 调度求值（进程内定时器，不是 pg-boss 队列） | 每 10 秒；同一时间一个进程（租约），上一次未完成时跳过 | 探针判定的地址可达性与智能调度规则，见 [区域探针与智能调度](#区域探针与智能调度) |
 
 ## 数据模型
 

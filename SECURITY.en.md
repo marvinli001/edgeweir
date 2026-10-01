@@ -90,6 +90,7 @@ Separate commercial products (see [LICENSING.en.md](LICENSING.en.md)) may use li
 | SMTP settings (including the password) | Envelope-encrypted | `notification_smtp` in `system_setting` |
 | Setup token | Envelope-encrypted; SHA-256 kept for comparison | `setup_token` in `system_setting` |
 | Node enrollment tokens | SHA-256 | `enrollment_token` |
+| Probe enrollment tokens | SHA-256 | `probe_token` |
 | AccessKeys | Hash (better-auth) | `apikey` |
 | User passwords | scrypt hash (better-auth) | `account` |
 | TOTP secrets and backup codes | Encrypted with the session secret (better-auth) | `two_factor` |
@@ -111,7 +112,7 @@ better-auth's session secret signs session cookies and encrypts TOTP secrets and
 
 | Item | Behavior |
 | --- | --- |
-| Coverage | Writes through `/rpc` and `/api/v1`; setup; install command generation; node enrollment, certificate rotation, and deletion; successful and failed sign-ins, password changes, two-factor on and off, passkey add and delete, API key create and delete; account recovery on the server |
+| Coverage | Writes through `/rpc` and `/api/v1`; setup; install command generation; node enrollment, certificate rotation, and deletion; probe token generation, enrollment, certificate renewal, and deletion; scheduling actions taking effect and recovering (system identity); successful and failed sign-ins, password changes, two-factor on and off, passkey add and delete, API key create and delete; account recovery on the server |
 | Transactions | Edgeweir's own writes commit their audit entry in the same transaction; sign-ins and account changes completed by better-auth are committed by better-auth first and audited right after |
 | Contents | No plain-text passwords, tokens, or keys |
 | Source IP | The TCP peer; `X-Forwarded-For` and `X-Real-IP` are used only when the peer is in `EDGEWEIR_TRUSTED_PROXIES` |
@@ -125,7 +126,9 @@ better-auth's session secret signs session cookies and encrypts TOTP secrets and
 | Node private keys are generated on the node and never leave it; the console only issues certificates | A leaked console database is used to impersonate nodes |
 | The install command pins the CA fingerprint, and the node checks it before sending the token; tokens are single-use, expire, and are stored as SHA-256 only | Man-in-the-middle on first contact; leaked or replayed tokens |
 | mTLS on every RPC except `Enroll`, with the client certificate serial equal to the stored current value (after a renewal also the replaced one, until the node first uses the new one); 30-day certificates with automatic rotation; disabling or deleting a node takes effect at once (a disabled node may only renew its certificate), and deletion revokes both serials | A retired node keeps pulling configuration |
-| The node channel checks the client certificate before it reads a request body: without one only `Enroll` is served, up to 64 KiB; other requests are limited to 16 MiB after decompression; connections without traffic for 2 minutes are closed | Unauthenticated clients exhaust console memory with compressed requests or idle connections |
+| Regional probe certificates come from the same internal CA (`O=Edgeweir Probe`) and the node channel tells them apart by organization: probe certificates can only call `ProbeService`, node certificates cannot enroll or renew probes, and only enabled nodes that also probe can report results; probe tokens are single-use, expire, and are stored as SHA-256 only; a disabled probe may only renew its certificate, and deleting a probe revokes it | Leaked probe credentials are used to impersonate a node and pull configuration and keys |
+| Probe results are accepted only for the prober's current targets (node, address, port) and within valid ranges; an address counts as unreachable only by a strict majority of all probers; removals by scheduling rules stay under the mass removal protection | One faulty or compromised probe takes nodes out of DNS |
+| The node channel checks the client certificate before it reads a request body: without one only `Enroll` and `EnrollProbe` are served, up to 64 KiB; other requests are limited to 16 MiB after decompression; connections without traffic for 2 minutes are closed | Unauthenticated clients exhaust console memory with compressed requests or idle connections |
 | Certificate private keys and S3 origin keys travel only over the mTLS channel to nodes of the cluster serving the referencing site, never inside NodeConfig | Nodes of other clusters or configuration snapshots leak keys |
 | Revision receipts are sealed with the master key and bound to the node; a node reporting a revision above the console's latest must present a valid receipt, and only verified revisions count toward revision numbering | Unauthenticated reports manipulate revision numbering after a database restore |
 | Envelope encryption of secrets with the master key kept out of the database; additional authenticated data binds table, column, and record id | Database backups or read-only SQL injection leak private keys and credentials; someone with database write access swaps ciphertexts between rows |
@@ -151,6 +154,8 @@ better-auth's session secret signs session cookies and encrypts TOTP secrets and
 | Master key and database leaked together | Envelope encryption no longer protects the data; without `BETTER_AUTH_SECRET`, the leaked master key also allows forging sessions. Inject `EDGEWEIR_MASTER_KEY` through a secret file or the orchestrator's secret mechanism, and keep it apart from database backups |
 | Setup token in the log | First-run setup needs the one-time setup token the console writes to its log at startup; anyone who can read the console log can complete setup. Restrict log access at the same level as the master key |
 | Account recovery on the server | Anyone who can run commands in the console container (and so could read `DATABASE_URL` and change the database directly) can reset the account's password and turn two-factor authentication off with `recover.js`; a recovery signs out every session and is written to the audit log (`account.recover`), and neither the web UI nor HTTP offers recovery ([Command line](docs/reference/cli.en.md#account-recovery)). Restrict server access at the same level as the master key |
+| Credentials on a probe | A probe keeps its private key in plain text with mode 0600 in its state directory (default `/var/lib/edgeweir-probe`, mode 0700); root on the probe host can report results as that probe until it is deleted in the console |
+| Health endpoint | Nodes answer `GET /.edgeweir/health` for any Host on every edge listener, and HTTPS handshakes with SNI `health.edgeweir.invalid` or without SNI get the node's self-signed certificate, so scanners can recognize Edgeweir nodes; probes do not verify that certificate, so a man in the middle on a probe's path can fake reachability, which affects scheduling but reaches no secret |
 | Node channel `:8443` | Expose directly or pass through at layer 4 only; a reverse proxy that terminates TLS breaks mTLS ([Ports, reverse proxy, and trusted proxies](docs/deploy/networking.en.md)) |
 
 ## Verifying releases

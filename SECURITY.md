@@ -90,6 +90,7 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | SMTP 设置（含密码） | 信封加密 | `system_setting` 的 `notification_smtp` |
 | setup token | 信封加密；另存 SHA-256 用于比对 | `system_setting` 的 `setup_token` |
 | 节点注册 token | SHA-256 | `enrollment_token` |
+| 探针注册 token | SHA-256 | `probe_token` |
 | AccessKey | 哈希（better-auth） | `apikey` |
 | 用户密码 | scrypt 哈希（better-auth） | `account` |
 | TOTP 密钥与备用码 | 以会话 secret 加密（better-auth） | `two_factor` |
@@ -111,7 +112,7 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 
 | 项 | 行为 |
 | --- | --- |
-| 范围 | 经 `/rpc` 与 `/api/v1` 的写操作；初始化；安装命令生成；节点注册、证书轮换与删除；登录成功与失败、改密码、两步验证开关、passkey 增删、API key 创建与删除；在服务器上找回账户 |
+| 范围 | 经 `/rpc` 与 `/api/v1` 的写操作；初始化；安装命令生成；节点注册、证书轮换与删除；探针令牌生成、注册、证书续期与删除；智能调度动作的生效与恢复（系统身份）；登录成功与失败、改密码、两步验证开关、passkey 增删、API key 创建与删除；在服务器上找回账户 |
 | 事务 | Edgeweir 自己的写操作与审计记录在同一事务内提交；经 better-auth 完成的登录与账号变更由 better-auth 先提交，审计紧接着写入 |
 | 内容 | 不记录密码、token 或密钥明文 |
 | 来源 IP | TCP 对端地址；`X-Forwarded-For` 与 `X-Real-IP` 只在对端属于 `EDGEWEIR_TRUSTED_PROXIES` 时采用 |
@@ -125,7 +126,9 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | 节点私钥在节点本地生成，不离开节点；控制台只签发证书 | 控制台数据库泄露后冒充节点 |
 | 安装命令固定 CA 指纹，节点先核对指纹再发送 token；token 一次性、有过期时间、只存 SHA-256 | 首次连接被中间人劫持；token 泄露或重放 |
 | 除 `Enroll` 外强制 mTLS，客户端证书序列号须等于库中记录的当前值（续期后、节点首次使用新证书前也接受被替换的那一张）；证书 30 天有效并自动轮换；停用或删除节点立即生效（停用的节点只能续期证书），删除时吊销两张证书的序列号 | 已下线节点继续拉取配置 |
-| 节点通道在读取请求体之前检查客户端证书，未带证书只受理 `Enroll`，请求不超过 64 KiB；其余请求解压后不超过 16 MiB；连续 2 分钟没有流量的连接被关闭 | 未认证的客户端用压缩请求或空闲连接耗尽控制台内存 |
+| 区域探针的证书由同一内部 CA 签发（`O=Edgeweir Probe`），节点通道按证书的组织区分：探针证书只能调用 `ProbeService`，节点证书不能注册或续期探针，只有兼任探针的启用节点能上报结果；探针令牌一次性、有过期时间、只存 SHA-256；停用的探针只能续期证书，删除探针时吊销其证书 | 探针凭据泄露后冒充节点拉取配置与密钥 |
+| 探针结果只接受探测方当前的目标（节点、地址、端口）与有效范围内的数值；地址按全部探测方的严格多数判为不可达；调度规则的摘除受大面积摘除保护约束 | 单个故障或失陷的探针让节点离开 DNS |
+| 节点通道在读取请求体之前检查客户端证书，未带证书只受理 `Enroll`、`EnrollProbe`，请求不超过 64 KiB；其余请求解压后不超过 16 MiB；连续 2 分钟没有流量的连接被关闭 | 未认证的客户端用压缩请求或空闲连接耗尽控制台内存 |
 | 证书私钥与 S3 源站密钥只经 mTLS 通道发给服务引用网站的集群节点，不写入 NodeConfig | 其他集群的节点或配置快照泄露密钥 |
 | revision 回执由主密钥封装并绑定节点；节点报告高于控制台最新 revision 的版本时必须附有效回执，只有经验证的版本参与 revision 序号计算 | 数据库从备份恢复后，未经认证的上报操纵 revision 序号 |
 | 敏感数据信封加密，主密钥不入库；附加认证数据绑定表、字段与记录 id | 数据库备份或只读 SQL 注入泄露私钥与凭据；有库写权限者在行之间互换密文 |
@@ -151,6 +154,8 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | 主密钥与数据库同时泄露 | 信封加密失效；未设置 `BETTER_AUTH_SECRET` 时，泄露的主密钥还能伪造登录会话。通过 secret 文件或编排平台的 secret 机制注入 `EDGEWEIR_MASTER_KEY`，并与数据库备份分开保存 |
 | setup token 写入日志 | 首次初始化需要控制台启动时写入日志的一次性 setup token；能读控制台日志者即可完成初始化。按主密钥的级别控制日志访问 |
 | 在服务器上找回账户 | 能在控制台容器内执行命令者（本就能读取 `DATABASE_URL` 直接修改数据库）可以用 `recover.js` 重置账户密码、停用两步验证；找回让全部会话退出登录并写入审计日志（`account.recover`），Web 界面与 HTTP 没有找回入口（[命令行](docs/reference/cli.md#找回账户)）。按主密钥的级别控制服务器访问 |
+| 探针本地凭据 | 探针在状态目录（默认 `/var/lib/edgeweir-probe`，权限 0700）以 0600 权限明文保存探针私钥；拿到探针主机 root 权限者可以冒充该探针上报结果，直到探针在控制台被删除 |
+| 健康端点 | 节点在每个边缘监听上对任意 Host 应答 `GET /.edgeweir/health`，HTTPS 对 SNI `health.edgeweir.invalid` 或无 SNI 的握手出示节点自生成的自签名证书，扫描者能据此识别 Edgeweir 节点；探针不校验该证书，探测路径上的中间人可以伪造可达结果，影响调度但接触不到机密 |
 | 节点通道 `:8443` | 只能直接暴露或四层透传；反向代理终结 TLS 会使 mTLS 失效（[端口、反向代理与可信代理](docs/deploy/networking.md)） |
 
 ## 验证发布物
@@ -250,6 +255,6 @@ Full English policy: [SECURITY.en.md](SECURITY.en.md).
 
 **Trust baseline.** No phone-home of any kind and no license-check code. Telemetry is off by default and requires explicit opt-in; the current version sends no telemetry, and better-auth's own telemetry is hard-disabled. The console never stores SSH credentials; nodes join only through the one-time install command. Private keys and third-party credentials (internal CA key, certificate keys, ACME accounts, DNS provider credentials, S3 origin keys, alert channel and SMTP settings, the setup token) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they reach the database: AES-256-GCM with a random data key per record, and additional authenticated data that binds table, column, and record id (envelope format v2; v1 envelopes written by older versions are re-encrypted at startup and rejected otherwise). Enrollment tokens, API keys, and passwords are stored as hashes only. Unless `BETTER_AUTH_SECRET` is set, better-auth's session secret (session cookie signatures, TOTP secrets and backup codes at rest) is derived from `EDGEWEIR_MASTER_KEY` with HKDF-SHA256 (salt `edgeweir/auth-secret/v1`, info `better-auth.secret`, 32 bytes, base64url), independent of the envelope KEK (salt `edgeweir/kek/v1`, info `envelope`); the database keeps only an HMAC check value, and the console refuses to start when the derived secret differs from the one the database was used with (for example `BETTER_AUTH_SECRET` removed from an existing deployment). With the derived secret, a leaked master key also allows forging sessions. Every management action is written to the audit log: Edgeweir's own changes commit their audit entry in the same transaction; sign-ins, password changes, two-factor changes, passkeys, and API keys are completed by better-auth and audited right after it commits. Account recovery has no web or HTTP entry: `recover.js`, run on the server with the console's environment, resets the password or turns two-factor authentication off, signs out every session, and audits the change in the same transaction. Releases are signed with cosign keyless and ship with an SBOM and SLSA provenance.
 
-**Known limitations.** The node keeps its private key, the S3 origin keys (`credentials.json`), and site certificate keys (`certificates.json`) in plain text with mode 0600 in its state directory. A leaked master key together with the database defeats envelope encryption. The node channel on `:8443` must not sit behind a TLS-terminating proxy.
+**Known limitations.** The node keeps its private key, the S3 origin keys (`credentials.json`), and site certificate keys (`certificates.json`) in plain text with mode 0600 in its state directory; a regional probe keeps its private key the same way. Nodes answer `/.edgeweir/health` on every edge listener with a self-signed health certificate that probes do not verify, so a man in the middle on a probe's path can fake reachability. A leaked master key together with the database defeats envelope encryption. The node channel on `:8443` must not sit behind a TLS-terminating proxy.
 
 **Verifying releases.** Console image: `cosign verify ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit> --certificate-identity https://github.com/marvinli001/edgeweir/.github/workflows/release.yml@refs/heads/master --certificate-oidc-issuer https://token.actions.githubusercontent.com`, then `gh attestation verify` for provenance. Node packages: verify `checksums.txt` with `cosign verify-blob`, the certificate identity pinned to the `marvinli001/edgeweir-node` release workflow on a `v*` tag and the issuer to `https://token.actions.githubusercontent.com`, then run `sha256sum -c checksums.txt --ignore-missing`. Full commands: [SECURITY.en.md](SECURITY.en.md#verifying-releases).

@@ -11,18 +11,20 @@ Components, processes, ports, data flows, data model, and trust boundaries of th
 | PostgreSQL 18 | External service | The only required dependency: application data, migration history (schema `drizzle`), pg-boss queues (schema `pgboss`), LISTEN/NOTIFY |
 | ClickHouse | Compose profile `analytics` | Optional; with `EDGEWEIR_ANALYTICS=clickhouse` it stores access logs and a copy of per-minute statistics |
 | Valkey | Compose profile `cache` | Not used by the console yet |
-| Node | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | Go agent and OpenResty data plane; pulls configuration and tasks over the node channel and reports status, statistics, and logs |
+| Node | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | Go agent and OpenResty data plane; pulls configuration and tasks over the node channel and reports status, host metrics, statistics, and logs |
+| Regional probe | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) (`probe` mode) | Runs no OpenResty; probes the nodes' scheduling addresses from its region and reports through the node channel's `ProbeService` |
 
 ```text
 Console (ROLE=app|worker|all)
 ├── :3000  HTTP ◀── browsers, API clients
 ├── :8443  Connect-RPC (TLS + mTLS) ◀── edgeweir-node agent ── OpenResty ──▶ origins
+│                                    ◀── edgeweir-node probe (regional probe) ──▶ node listeners
 ├── SQL, LISTEN/NOTIFY ──▶ PostgreSQL 18
 ├── HTTP (optional) ──▶ ClickHouse
 └── child process stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA, DNS provider APIs
 ```
 
-The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.7.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
+The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.14.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
 
 ## Repository layout
 
@@ -37,7 +39,7 @@ The only contract between the console and the nodes is `edgeweir.node.v1` in `pr
 | `packages/config-compiler` | Compiles sites, rules, IP lists, certificate references, and platform policy into the NodeConfig IR; canonical ordering, content hash, diff |
 | `packages/rule-engine` | Rule expression fields, phases, functions, parser (conditions, value expressions, cache rule conditions), list reference binding, and reference evaluation |
 | `packages/proto` | TypeScript generated from `proto/` (protoc-gen-es); not edited by hand |
-| `proto/` | buf module `edgeweir/node/v1/{node,config}.proto`; edgeweir-node generates its Go code from a `proto/vX.Y.Z` tag |
+| `proto/` | buf module `edgeweir/node/v1/{node,config,probe}.proto`; edgeweir-node generates its Go code from a `proto/vX.Y.Z` tag |
 | `helpers/certd` | `edgeweir-certd` source |
 | `helpers/http3probe` | HTTP/3 probe used in CI |
 | `Dockerfile`, `docker/` | Image build, container health check script, end-to-end fixtures |
@@ -227,6 +229,7 @@ Connect-RPC over HTTPS; the console process terminates TLS itself.
 | Internal CA | ECDSA P-256, valid for 10 years, generated on first start; private key envelope-encrypted in `pki_authority` |
 | Server certificate | Issued by the internal CA at every start, valid for 90 days; checked hourly and reissued in-process when less than a third of the lifetime remains, so new handshakes get the new certificate and established connections keep theirs; SANs are the host name of `EDGEWEIR_NODE_API_URL` (the host name of `EDGEWEIR_PUBLIC_URL` when unset), `EDGEWEIR_NODE_API_HOSTNAMES`, `localhost`, `127.0.0.1`, `::1`, and the container host name |
 | Node certificate | CN is the node ID, client authentication only, valid for 30 days (server and node certificates are valid from 1 hour before issue, for nodes whose clocks run behind); with less than a third of the lifetime left, `ReportStatus` asks the node to call `RenewCertificate`. After a renewal the old certificate (`node.previous_cert_serial`) stays valid until the node first authenticates with the new one; a node that could not install the new one renews again with the old one. A disabled node may still renew; its other calls are refused |
+| Probe certificate | CN is the probe ID, `O=Edgeweir Probe` (node certificates carry `O=Edgeweir Node`), client authentication only, valid for 30 days; with less than a third left, `GetProbeTargets` asks the probe to call `RenewProbeCertificate`, and the replaced certificate is handled as for nodes. The node channel tells them apart by organization: probe certificates can only call `ProbeService`, `NodeService` refuses every certificate that is not a node's, and node certificates call `GetProbeTargets` and `ReportProbeResults` only while the node also probes, never enrolling or renewing probes |
 | Heartbeat | Every 15 seconds; `WatchConfig` sends a keepalive every 15 seconds |
 
 Enrollment:
@@ -239,7 +242,7 @@ Install command and `install.sh` checks: [Adding nodes](docs/deploy/nodes.en.md)
 
 The console never stores SSH credentials; nodes join only through the one-time install command generated by the console and enroll themselves.
 
-Every RPC other than `Enroll` requires a client certificate verified by the internal CA whose serial number equals the current serial stored for the node: a rotated certificate stops working at once, and deleting a node writes its serial to `node_certificate_revocation`. Disabled or deleted nodes are refused on every RPC, and their open `WatchConfig` streams close.
+Every RPC other than `Enroll` and `EnrollProbe` requires a client certificate verified by the internal CA whose serial number equals the current serial stored for the node or probe: a rotated certificate stops working at once, and deleting a node or probe writes its serial to `node_certificate_revocation`. Disabled or deleted nodes are refused on every RPC, and their open `WatchConfig` streams close; a disabled probe may only renew its certificate.
 
 | RPC | Purpose |
 | --- | --- |
@@ -247,13 +250,17 @@ Every RPC other than `Enroll` requires a client certificate verified by the inte
 | `RenewCertificate` | Rotate the node certificate |
 | `WatchConfig` | Server stream: revision notifications, task notifications, ban notifications (`bans-v1`), keepalives |
 | `GetConfig` | Snapshot, or diff against `base_revision`, with a revision receipt |
-| `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state |
+| `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state, host metrics (`metrics-v1`); `probe` in the response tells the node whether it also probes |
 | `ReportStats`, `ReportStatsV2` | Per-minute pre-aggregated traffic statistics; deduplicated by batch sequence |
 | `ReportLogs` | Sampled access logs; deduplicated by batch sequence |
 | `GetOriginCredentials` | S3 origin keys referenced by the cluster's sites |
 | `GetCertificates` | Certificate chains and private keys referenced by the cluster's sites |
 | `PullTasks`, `ReportTaskResult` | Purge, prefetch, and upgrade tasks |
 | `GetBans`, `ReportBans` | Incremental ban changes of the node's cluster by sequence; upload of the node's automatic bans |
+| `EnrollProbe` (`ProbeService`) | Exchange a single-use probe token (`ewp_`) and a CSR for a probe certificate; the same request size limit as `Enroll`, and the token is used up only by a successful enrollment |
+| `RenewProbeCertificate` | Rotate the probe certificate (nodes use `RenewCertificate`) |
+| `GetProbeTargets` | Probe targets (node, address, port, method, PROXY protocol), interval, timeout, and attempts |
+| `ReportProbeResults` | One round of probe results, at most 10,000 per call; the clusters concerned are evaluated right after |
 
 A revision receipt is sealed with the master key (purpose `node.revision_receipt`, bound to the node ID) and carries the cluster, the revision, and the content hash. The node stores the receipt locally and returns it in `ReportStatus`; a report of an applied revision above the console's latest revision without a valid receipt is refused.
 
@@ -275,7 +282,28 @@ A revision receipt is sealed with the master key (purpose `node.revision_receipt
 | Commands | `version`, `providers`, `obtain`, `renew`, `revoke`, `renewal-info`, `dns.list`, `dns.set`, `dns.present`, `dns.cleanup`, `dns.zones`, `dns.test` |
 | DNS providers | The provider catalog `helpers/certd/catalog.json`, see [Providers and credentials](docs/guide/dns-and-alerts.en.md#providers-and-credentials) |
 
-DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or Automatic): `dns.reconcile` computes, every minute, the records of each cluster in Automatic mode from healthy nodes and site domains (one set of address records per cluster, one CNAME per site), creates a `dns_revision` for that cluster, and writes it to the zone of the binding's provider account (`platform_dns_provider`); clusters publish and reconcile on their own, so an unavailable provider does not affect other clusters, and one process at a time writes a cluster (`dns_lease`). Nodes keep their records while they apply a revision published less than 2 minutes ago. Names are recorded in `dns_managed_name` before external records are written, so partial writes can be repaired; new records are written before the records they replace. Manual mode only produces the records to create and a zone file and writes no DNS. DNS steering provider accounts and DNS-01 credentials use the same provider catalog. A site's domains route as soon as they are saved; a domain belongs to one site. Behavior: [HTTPS and certificates](docs/guide/https.en.md), [DNS steering and alerts](docs/guide/dns-and-alerts.en.md).
+DNS steering is bound per cluster (`dns_binding`, mode Not managed, Manual, or Automatic): `dns.reconcile` computes, every minute, the records of each cluster in Automatic mode from healthy nodes and site domains (one set of address records per cluster, `all.<domain>` once per resolution line, one CNAME per site; node addresses and backup node groups as in [Regional probes and scheduling](#regional-probes-and-scheduling)), creates a `dns_revision` for that cluster, and writes it to the zone of the binding's provider account (`platform_dns_provider`); clusters publish and reconcile on their own, so an unavailable provider does not affect other clusters, and one process at a time writes a cluster (`dns_lease`). Nodes keep their records while they apply a revision published less than 2 minutes ago. Names are recorded in `dns_managed_name` before external records are written, so partial writes can be repaired; new records are written before the records they replace. Manual mode only produces the records to create and a zone file and writes no DNS. DNS steering provider accounts and DNS-01 credentials use the same provider catalog. A site's domains route as soon as they are saved; a domain belongs to one site. Behavior: [HTTPS and certificates](docs/guide/https.en.md), [DNS steering and alerts](docs/guide/dns-and-alerts.en.md).
+
+## Regional probes and scheduling
+
+1. Probers: regional probes (`probe`; `edgeweir-node probe` enrolls through `EnrollProbe` with a one-time `probe_token`), or nodes with `node.probe_enabled` whose node group has a region (`probe=true` in the `ReportStatus` response).
+2. `GetProbeTargets` returns every enabled node's scheduling addresses (`node_ip`: only the `configured` rows and their levels when there are any, otherwise the public `reported` addresses) × the listener ports of the cluster's latest revision, with interval, timeout, and attempts; HTTP / HTTPS listeners are probed through the health endpoint when every active node of the cluster has `probe-health-v1`, otherwise with TCP only. A node that also probes skips itself.
+3. `ReportProbeResults` accepts current targets only and writes `probe_result` (one row per prober, node, address, and port, latest value); rows not updated for 1 hour are deleted.
+4. Every 10 seconds (an in-process timer of the worker; a lease lets one process run at a time) and after every probe report (at most every 2 seconds per cluster and process), each cluster is evaluated in a transaction (advisory lock): first `node_address_state` from the results in the window (3 intervals, at least 15 seconds; a strict majority of probers failing for `ipDownSeconds` makes an address unreachable, `ipUpSeconds` without failing makes it reachable), then `scheduling_state` for every `scheduling_rule` and node (since when each condition holds, the action started, the conditions cleared).
+5. An address level change publishes the cluster's DNS revision (reason `health`). Every activation and recovery of a rule publishes one (reason `scheduling`, `reason_params` with rule, node, action, and event), is audited with the system identity as `scheduling.activate` / `scheduling.recover`, and raises or resolves the platform alert `scheduling_action`. Clusters with a new revision are written to DNS right away.
+6. `compileBindingPlan` computes each binding line's addresses from the nodes' effective levels (the lowest reachable level, at least backup 1 under a `backup_ip` action), rule removals, and the line's backup node groups (fewer healthy addresses than `minHealthyIps`, or a `backup_group` action); `all.<domain>` is written per resolution line. The mass removal protection compares per name, type, and resolution line, and counts backup group switches only when they empty a record set.
+
+Node metrics (`ReportStatusRequest.metrics`, `metrics-v1`) are kept in `node.metrics`, latest value only; scheduling treats metrics older than 60 seconds as missing.
+
+| Management action | Audit |
+| --- | --- |
+| Probe tokens, renaming and enabling, deletion (revokes the certificate) | `probe.token_create`, `probe.update`, `probe.delete` |
+| Probe enrollment and certificate renewal | `probe.enroll`, `probe.certificate_renew` (actor: the probe) |
+| Probe settings | `system.probes_update` |
+| Scheduling addresses, probing nodes | `node.set_addresses` (publishes the cluster's DNS, reason `manual`), `node.set_probe` |
+| Scheduling rules | `scheduling.rule_create`, `scheduling.rule_update`, `scheduling.rule_delete` (disabling, deleting, or changing line, conditions, or action first ends the actions in effect) |
+
+Behavior: [Regional probes and scheduling](docs/guide/scheduling.en.md).
 
 ## Statistics, logs, and alerts
 
@@ -295,7 +323,7 @@ Access logs are sampled per site; the sample rate defaults to 0 (off). Per-minut
 
 The Compose profile `cache` starts Valkey; the console does not use Valkey yet.
 
-Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificates, unavailable origins, and high 5xx rates (the `cc_mitigation` alert fires on a node's event and resolves once no node reports the site above normal), create `alert_event` rows, fan them out to `alert_delivery` by `alert_subscription`, and send them through an `alert_channel` (webhook, email, DingTalk, WeCom, or Telegram); at delivery the channel must still be enabled and the subscription still valid, and "receive every alert" channels get every alert. Access logs and AccessKeys: [Access logs and AccessKeys](docs/guide/access-logs.en.md).
+Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificates, unavailable origins, and high 5xx rates (the `cc_mitigation` alert fires on a node's event and resolves once no node reports the site above normal), create `alert_event` rows, fan them out to `alert_delivery` by `alert_subscription`, and send them through an `alert_channel` (webhook, email, DingTalk, WeCom, or Telegram); at delivery the channel must still be enabled and the subscription still valid, and "receive every alert" channels get every alert. Cluster alerts (configuration canary rolled back, DNS mass removal blocked, a scheduling rule acting on a node `scheduling_action`, and others) are raised and resolved by their own flows and go only to "receive every alert" channels. Access logs and AccessKeys: [Access logs and AccessKeys](docs/guide/access-logs.en.md).
 
 ## Background jobs
 
@@ -312,6 +340,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | `maintenance.prune-bans` | Every 10 minutes | Deletes bans that expired more than an hour ago |
 | `maintenance.rotate-challenge-keys` | Hourly at minute 11 | Rotates challenge keys that are a day old |
 | `maintenance.prune-security-events` | Hourly at minute 37 | Deletes security events past the retention |
+| Scheduling evaluation (an in-process timer, not a pg-boss queue) | Every 10 seconds; one process at a time (lease), a tick is skipped while the previous run is busy | Probe-driven address reachability and scheduling rules, see [Regional probes and scheduling](#regional-probes-and-scheduling) |
 
 ## Data model
 
