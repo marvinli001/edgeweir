@@ -1,22 +1,17 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
-import { signInResponse } from "./e2e-auth.mjs";
+import { signInWithAccessKey } from "./e2e-auth.mjs";
 
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
 const state = JSON.parse(await readFile(".e2e/m5-state.json", "utf8"));
-const login = await signInResponse(base, "admin@e2e.test", "e2e-admin-password-123");
-assert.equal(login.status, 200);
-const cookie = login.headers
-  .getSetCookie()
-  .map((v) => v.split(";")[0])
-  .join("; ");
-const created = await fetch(`${base}/api/auth/api-key/create`, {
-  method: "POST",
-  headers: { "content-type": "application/json", origin: base, cookie },
-  body: JSON.stringify({ name: "m6-e2e-control" }),
-});
-assert.equal(created.status, 200);
-const { key } = await created.json();
+const session = await signInWithAccessKey(
+  base,
+  "admin@e2e.test",
+  "e2e-admin-password-123",
+  "m6-e2e-control",
+);
+const { key } = session;
+const { cookie } = session;
 async function call(method, path, body, credential = key) {
   const response = await fetch(`${base}/api/v1${path}`, {
     method,

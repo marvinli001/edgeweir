@@ -893,7 +893,7 @@
   "bans_reason": "原因",
   "bans_duration": "时长",
   "bans_scope": "范围",
-  "bans_scope_platform": "全部网站",
+  "bans_scope_platform": "全局",
   "bans_scope_site": "网站",
   "bans_source_manual": "手动",
   "bans_source_auto": "自动",

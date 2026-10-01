@@ -15,7 +15,6 @@ test("first-run setup needs the setup token printed in the console log", async (
   await page.getByLabel("姓名").fill("E2E Admin");
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill(password);
-  await page.getByLabel("组织名称").fill("E2E Org");
   await page.getByTestId("setup-submit").click();
   // Server errors are localized by their stable code.
   await expect(page.getByTestId("setup-error")).toHaveText("Setup token 无效");
@@ -23,7 +22,8 @@ test("first-run setup needs the setup token printed in the console log", async (
   await page.getByLabel("Setup token").fill(setupToken);
   await page.getByTestId("setup-submit").click();
   await expect(page.getByTestId("page-title")).toHaveText("概览");
-  await expect(page.getByTestId("area-admin")).toBeVisible();
+  // The only account runs the whole console: every page is in the sidebar.
+  await expect(page.getByTestId("nav-clusters")).toBeVisible();
 
   expect(pageErrors).toEqual([]);
 });

@@ -1,21 +1,20 @@
 // Core gaps P0 end to end, after the M6 upgrade step (two real nodes: `node` in
 // the "upgrade-canary" group and `node-upgrade-peer` in the default group):
-//   1. service accounts, Idempotency-Key and scopes
-//   2. organization limits (maxSites), also under concurrent creation
-//   3. a service account suspends a site: nodes stop serving it, a tenant
-//      cannot resume it, DNS records stay the same throughout
-//   4. usage matches what the node reported, a replayed batch changes
+//   1. Idempotency-Key, service accounts and scopes
+//   2. a service account disables a site: nodes stop serving it, a stale
+//      write is refused, DNS records stay the same throughout
+//   3. usage matches what the node reported, a replayed batch changes
 //      nothing, completeUntil advances
-//   5. configuration canary: automatic promotion, automatic rollback of a
+//   4. configuration canary: automatic promotion, automatic rollback of a
 //      change that makes the origin fail; non-canary node never gets it and
 //      stays in DNS
-//   6. every node offline: DNS records stay, an alert fires
+//   5. every node offline: DNS records stay, an alert fires
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { promisify } from "node:util";
-import { signInResponse } from "./e2e-auth.mjs";
+import { rpc, signInResponse } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile);
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`;
@@ -76,13 +75,7 @@ async function session(email, password) {
 }
 
 async function createKey(cookie) {
-  const created = await fetch(`${base}/api/auth/api-key/create`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: base, cookie },
-    body: JSON.stringify({ name: "p0-e2e" }),
-  });
-  assert.equal(created.status, 200);
-  return (await created.json()).key;
+  return (await rpc(base, cookie, "accessKeys/create", { name: "p0-e2e" })).key;
 }
 
 /** GET through the real edge node (host port), returns the status. */
@@ -221,23 +214,52 @@ const usageBefore = await a(
 );
 pass(`usage traffic sent for the window starting ${new Date(usageWindow).toISOString()}`);
 
-// ---------------------------------------------------------------- 1. service accounts
+// ---------------------------------------------------------------- 1. Idempotency-Key, service accounts
+const siteBody = { name: "p0-site", domains: ["p0.e2e.test"], origins: [{ address: "whoami" }] };
+const first = await call(admin.key, "POST", "/sites", siteBody, { "idempotency-key": "p0-site-1" });
+const second = await call(admin.key, "POST", "/sites", siteBody, {
+  "idempotency-key": "p0-site-1",
+});
+assert.equal(first.status, 200, first.text);
+assert.equal(second.status, 200);
+assert.equal(second.headers.get("idempotent-replayed"), "true");
+assert.equal(second.text, first.text);
+const site = first.json.site;
+const named = async (name) =>
+  (await a("GET", `/sites?search=${name}`)).items.filter((s) => s.name === name).length;
+assert.equal(await named("p0-site"), 1);
+const mismatch = await call(
+  admin.key,
+  "POST",
+  "/sites",
+  { ...siteBody, name: "p0-other" },
+  { "idempotency-key": "p0-site-1" },
+);
+assert.equal(mismatch.status, 422);
+assert.equal(mismatch.json.code, "IDEMPOTENCY_KEY_MISMATCH");
+const race = await Promise.all(
+  Array.from({ length: 6 }, () =>
+    call(
+      admin.key,
+      "POST",
+      "/sites",
+      { name: "p0-race", domains: ["p0-race.e2e.test"], origins: [{ address: "whoami" }] },
+      { "idempotency-key": "p0-race" },
+    ),
+  ),
+);
+assert.equal(await named("p0-race"), 1);
+assert.ok(
+  race.every(
+    (r) => r.status === 200 || (r.status === 409 && r.json.code === "IDEMPOTENCY_IN_PROGRESS"),
+  ),
+  JSON.stringify(race.map((r) => [r.status, r.json?.code])),
+);
+await a("DELETE", `/sites/${race.find((r) => r.status === 200).json.site.id}`);
+
 const created = await a("POST", "/service-accounts", {
   name: "p0-business",
-  scopes: [
-    "organizations:read",
-    "organizations:write",
-    "members:read",
-    "invitations:write",
-    "clusters:read",
-    "system:read",
-    "sites:read",
-    "sites:write",
-    "sites:suspend",
-    "limits:read",
-    "limits:write",
-    "usage:read",
-  ],
+  scopes: ["clusters:read", "system:read", "sites:read", "sites:write", "usage:read"],
 });
 const sa = (await a("POST", `/service-accounts/${created.id}/keys`, { name: "e2e" })).secret;
 assert.match(sa, /^ews_/);
@@ -251,121 +273,21 @@ assert.equal(me.serviceAccount.id, created.id);
 for (const [method, path] of [
   ["GET", "/system/status"],
   ["GET", "/clusters"],
-  ["GET", "/organizations"],
+  ["GET", `/sites/${site.id}`],
 ])
   await ok(sa, method, path);
-const first = await call(
-  sa,
-  "POST",
-  "/organizations",
-  { name: "P0 Org" },
-  { "idempotency-key": "p0-org-1" },
-);
-const second = await call(
-  sa,
-  "POST",
-  "/organizations",
-  { name: "P0 Org" },
-  { "idempotency-key": "p0-org-1" },
-);
-assert.equal(first.status, 200, first.text);
-assert.equal(second.status, 200);
-assert.equal(second.headers.get("idempotent-replayed"), "true");
-assert.equal(second.text, first.text);
-const org = first.json;
-assert.equal((await ok(sa, "GET", "/organizations")).filter((o) => o.name === "P0 Org").length, 1);
-const mismatch = await call(
-  sa,
-  "POST",
-  "/organizations",
-  { name: "P0 Other" },
-  { "idempotency-key": "p0-org-1" },
-);
-assert.equal(mismatch.status, 422);
-assert.equal(mismatch.json.code, "IDEMPOTENCY_KEY_MISMATCH");
+const notListed = await call(sa, "POST", "/sites", { ...siteBody, name: "p0-sa" });
+assert.equal(notListed.status, 403);
+assert.equal(notListed.json.code, "SERVICE_ACCOUNT_FORBIDDEN");
 const denied = await call(narrow, "GET", "/clusters");
 assert.equal(denied.status, 403);
 assert.equal(denied.json.code, "SCOPE_REQUIRED");
 assert.equal(denied.json.data.scope, "clusters:read");
-const race = await Promise.all(
-  Array.from({ length: 6 }, () =>
-    call(sa, "POST", "/organizations", { name: "P0 Race" }, { "idempotency-key": "p0-race" }),
-  ),
-);
-assert.equal((await ok(sa, "GET", "/organizations")).filter((o) => o.name === "P0 Race").length, 1);
-assert.ok(
-  race.every(
-    (r) => r.status === 200 || (r.status === 409 && r.json.code === "IDEMPOTENCY_IN_PROGRESS"),
-  ),
-);
-const patched = await ok(sa, "PATCH", `/organizations/${org.id}`, {
-  defaultClusterId: clusterId,
-  expectedUpdatedAt: org.updatedAt,
-});
-const stale = await call(sa, "PATCH", `/organizations/${org.id}`, {
-  name: "x",
-  expectedUpdatedAt: org.updatedAt,
-});
-assert.equal(stale.status, 409);
-assert.equal(stale.json.data.updatedAt, patched.updatedAt);
-await ok(sa, "GET", `/organizations/${org.id}/members`);
 pass(
-  `service account ${created.name}: Idempotency-Key created one organization (replay ${second.headers.get("idempotent-replayed")}, other body 422, ${race.length} concurrent requests -> 1), missing scope 403 SCOPE_REQUIRED ${denied.json.data.scope}`,
+  `Idempotency-Key created one site (replay ${second.headers.get("idempotent-replayed")}, other body 422, ${race.length} concurrent requests -> 1); service account ${created.name}: unlisted procedure 403 SERVICE_ACCOUNT_FORBIDDEN, missing scope 403 SCOPE_REQUIRED ${denied.json.data.scope}`,
 );
 
-// ---------------------------------------------------------------- 2. organization limits
-await ok(sa, "PUT", `/admin/organizations/${org.id}/limits`, { limits: { sites: 1 } });
-await a("POST", "/users", {
-  name: "P0 Owner",
-  email: "owner@p0.test",
-  password: "p0-owner-password-123",
-  organizationId: org.id,
-  role: "owner",
-});
-const tenant = await session("owner@p0.test", "p0-owner-password-123");
-const t = (method, path, body) => ok(tenant.key, method, path, body);
-const site = (
-  await t("POST", "/sites", {
-    name: "p0-site",
-    domains: ["p0.e2e.test"],
-    origins: [{ address: "whoami" }],
-  })
-).site;
-const second2 = await call(tenant.key, "POST", "/sites", {
-  name: "p0-second",
-  domains: ["p0-second.e2e.test"],
-  origins: [{ address: "whoami" }],
-});
-assert.equal(second2.status, 409);
-assert.equal(second2.json.code, "ORG_LIMIT_EXCEEDED");
-assert.deepEqual(second2.json.data, { resource: "sites", limit: 1, current: 1 });
-await ok(sa, "PUT", `/admin/organizations/${org.id}/limits`, { limits: { sites: 3 } });
-const burst = await Promise.all(
-  Array.from({ length: 5 }, (_, i) =>
-    call(tenant.key, "POST", "/sites", {
-      name: `p0-burst-${i}`,
-      domains: [`p0-burst-${i}.e2e.test`],
-      origins: [{ address: "whoami" }],
-    }),
-  ),
-);
-assert.equal(
-  burst.filter((r) => r.status < 300).length,
-  2,
-  JSON.stringify(burst.map((r) => r.status)),
-);
-assert.ok(burst.filter((r) => r.status >= 300).every((r) => r.json.code === "ORG_LIMIT_EXCEEDED"));
-const limits = await ok(sa, "GET", `/admin/organizations/${org.id}/limits`);
-assert.equal(limits.usage.sites, 3);
-for (const r of burst.filter((r) => r.status < 300)) await t("DELETE", `/sites/${r.json.site.id}`);
-pass(
-  "maxSites=1 refuses the second site (409 ORG_LIMIT_EXCEEDED); 5 concurrent creations against 3 keep exactly 3 sites",
-);
-
-// ---------------------------------------------------------------- 3. suspension
-for (const proof of await a("GET", `/sites/${site.id}/ownership`))
-  if (!proof.verified)
-    await a("POST", `/sites/${site.id}/ownership/approve`, { domain: proof.domain });
+// ---------------------------------------------------------------- 2. a service account disables a site
 await synced();
 await waitFor("the site is served", async () => (await edge("p0.e2e.test", "/")) === 200, 60);
 await reconcileDns();
@@ -374,44 +296,38 @@ assert.ok(
   dnsBefore.some((r) => r.startsWith(`${site.id}.edge CNAME`)),
   JSON.stringify(dnsBefore),
 );
-const suspended = await ok(sa, "POST", `/admin/sites/${site.id}/suspend`, {
-  reason: "billing",
-  note: "p0",
+const readOnly = await call(narrow, "PUT", `/sites/${site.id}/enabled`, { enabled: false });
+assert.equal(readOnly.status, 403);
+assert.equal(readOnly.json.data.scope, "sites:write");
+const disabled = await ok(sa, "PUT", `/sites/${site.id}/enabled`, {
+  enabled: false,
+  expectedUpdatedAt: site.updatedAt,
 });
-assert.equal(suspended.site.suspended, true);
+assert.equal(disabled.site.enabled, false);
 await synced();
 assert.equal(await edge("p0.e2e.test", "/"), 404);
 assert.equal((await reconcileDns()).blocked, null);
 assert.deepEqual(await providerRecords(), dnsBefore);
-const tenantResume = await fetch(`${base}/rpc/admin/sites/resume`, {
-  method: "POST",
-  headers: {
-    "content-type": "application/json",
-    "x-csrf-token": "orpc",
-    origin: base,
-    cookie: tenant.cookie,
-  },
-  body: JSON.stringify({ json: { id: site.id } }),
+const stale = await call(sa, "PUT", `/sites/${site.id}/enabled`, {
+  enabled: true,
+  expectedUpdatedAt: site.updatedAt,
 });
-assert.equal(tenantResume.status, 403);
-const tenantView = await t("GET", `/sites/${site.id}`);
-assert.equal(tenantView.suspendReason, "billing");
-assert.equal(tenantView.suspendNote, "");
-const purge = await call(tenant.key, "POST", "/cache-tasks", {
-  type: "url",
-  urls: ["http://p0.e2e.test/a"],
+assert.equal(stale.status, 409);
+assert.equal(stale.json.code, "UPDATED_AT_MISMATCH");
+assert.equal(stale.json.data.updatedAt, disabled.site.updatedAt);
+await ok(sa, "PUT", `/sites/${site.id}/enabled`, {
+  enabled: true,
+  expectedUpdatedAt: disabled.site.updatedAt,
 });
-assert.equal(purge.json.code, "SITE_SUSPENDED");
-await ok(sa, "POST", `/admin/sites/${site.id}/resume`, {});
 await synced();
 await waitFor("the site is served again", async () => (await edge("p0.e2e.test", "/")) === 200, 60);
 await reconcileDns();
 assert.deepEqual(await providerRecords(), dnsBefore);
 pass(
-  "suspended by a service account: node answers 404, tenant session resume 403, resumed: 200, DNS records unchanged",
+  "disabled by a service account: node answers 404, a stale write 409 UPDATED_AT_MISMATCH, enabled again: 200, DNS records unchanged",
 );
 
-// ---------------------------------------------------------------- 5. canary (before 4, whose window completes meanwhile)
+// ---------------------------------------------------------------- 4. canary (before 3, whose window completes meanwhile)
 await a("PATCH", `/node-groups/${canaryGroupId}`, { isCanary: true });
 const canaryPolicy = {
   enabled: true,
@@ -503,7 +419,7 @@ await a("PATCH", `/node-groups/${canaryGroupId}`, { isCanary: false });
 await synced();
 pass("fixed origin promoted by an administrator; canary turned off");
 
-// ---------------------------------------------------------------- 4. usage
+// ---------------------------------------------------------------- 3. usage
 const windowEnd = new Date(usageWindow + 300_000).toISOString();
 const usageAfter = await waitFor(
   "completeUntil passes the traffic window",
@@ -585,7 +501,7 @@ pass(
   `usage ${record.id}: requests ${record.requests}, bytes ${record.bytesSent}/${record.bytesReceived} equal the node's minute statistics; replayed batch #${replay.sequence} accepted 0 and changed nothing; completeUntil ${usageBefore.completeUntil} -> ${afterReplay.completeUntil}`,
 );
 
-// ---------------------------------------------------------------- 6. every node offline
+// ---------------------------------------------------------------- 5. every node offline
 await synced();
 await reconcileDns();
 const beforeOutage = await providerRecords();
@@ -626,7 +542,6 @@ await writeFile(
     {
       clusterId,
       siteId: site.id,
-      organizationId: org.id,
       serviceAccountId: created.id,
       canaryGroupName,
     },

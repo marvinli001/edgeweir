@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import http from "node:http";
 import { promisify } from "node:util";
-import { signInResponse } from "./e2e-auth.mjs";
+import { revokeAccessKey, signInWithAccessKey } from "./e2e-auth.mjs";
 
 const execute = promisify(execFile);
 const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`,
@@ -12,21 +12,6 @@ const base = `http://localhost:${process.env.E2E_CONSOLE_PORT ?? 13000}`,
 const compose = ["compose", "-f", "compose.e2e.yml"];
 async function run(args) {
   return (await execute("docker", args, { maxBuffer: 2 * 1024 * 1024 })).stdout;
-}
-async function login(email, password) {
-  const response = await signInResponse(base, email, password);
-  assert.equal(response.status, 200);
-  const cookie = response.headers
-    .getSetCookie()
-    .map((v) => v.split(";")[0])
-    .join("; ");
-  const created = await fetch(`${base}/api/auth/api-key/create`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: base, cookie },
-    body: JSON.stringify({ name: "m5-e2e" }),
-  });
-  assert.equal(created.status, 200);
-  return { ...(await created.json()), cookie };
 }
 async function api(key, method, path, body) {
   const response = await fetch(`${base}/api/v1${path}`, {
@@ -76,7 +61,7 @@ await waitFor("console ready", async () => {
     return false;
   }
 });
-const admin = await login("admin@e2e.test", "e2e-admin-password-123"),
+const admin = await signInWithAccessKey(base, "admin@e2e.test", "e2e-admin-password-123", "m5-e2e"),
   a = (method, path, body) => api(admin.key, method, path, body);
 const cluster = (await a("GET", "/clusters")).find((c) => c.name === "default");
 assert.ok(cluster);
@@ -86,42 +71,16 @@ const edge = await waitFor("M5 capable node", async () =>
       n.online && n.clusterId === cluster.id && n.supportedFeatures.includes("stats-sequence-v1"),
   ),
 );
-// Upgrade this isolated fixture's pre-M5 administrative sites explicitly.
-for (const site of (await a("GET", "/sites?pageSize=100")).items) {
-  for (const proof of await a("GET", `/sites/${site.id}/ownership`)) {
-    if (!proof.verified)
-      await a("POST", `/sites/${site.id}/ownership/approve`, { domain: proof.domain });
-  }
-}
-const organizations = await a("GET", "/organizations");
-let org = organizations.find((o) => o.name === "M5 tenant");
-if (!org)
-  org = await a("POST", "/organizations", { name: "M5 tenant", defaultClusterId: cluster.id });
-const users = await a("GET", "/users?search=tenant%40m5.test");
-if (!users.length)
-  await a("POST", "/users", {
-    name: "M5 tenant",
-    email: "tenant@m5.test",
-    password: "m5-tenant-password-123",
-    organizationId: org.id,
-    role: "owner",
-  });
-const tenant = await login("tenant@m5.test", "m5-tenant-password-123"),
-  t = (method, path, body) => api(tenant.key, method, path, body);
-const domain = "tenant.m5-proof.test";
-let site = (await t("GET", "/sites")).items.find((s) => s.domains.includes(domain));
+const domain = "site.m5.test";
+let site = (await a("GET", "/sites")).items.find((s) => s.domains.includes(domain));
 if (!site)
   site = (
-    await t("POST", "/sites", {
-      name: "M5 proof",
+    await a("POST", "/sites", {
+      name: "M5 site",
       domains: [domain],
       origins: [{ address: "whoami" }],
     })
   ).site;
-const proofs = await t("GET", `/sites/${site.id}/ownership`);
-if (proofs[0]?.verified) await t("DELETE", `/sites/${site.id}/ownership/${proofs[0].domain}`);
-let proof = (await t("POST", `/sites/${site.id}/ownership`))[0];
-assert.ok(proof?.txtValue);
 async function synced() {
   await waitFor("node revision applied", async () => {
     const c = await a("GET", `/clusters/${cluster.id}`);
@@ -132,15 +91,8 @@ async function synced() {
   });
 }
 await synced();
-assert.equal(await request(domain), 404);
-await fixture("/txt", { name: proof.txtName, values: [proof.txtValue] });
-proof = await t("POST", `/sites/${site.id}/ownership/verify`, { domain: proof.domain });
-assert.equal(proof.verified, true);
-await synced();
-assert.equal(await request(domain, "/m5-proof"), 200);
-console.log(
-  "PASS unverified tenant domain is absent from node routing; real TXT lookup enables it",
-);
+assert.equal(await request(domain, "/m5-route"), 200);
+console.log("PASS a site's domain is routed by the node as soon as the site is saved");
 let provider = (await a("GET", "/dns/providers")).items.find((p) => p.name === "E2E DNS");
 if (!provider)
   provider = await a("POST", "/dns/providers", {
@@ -180,7 +132,7 @@ await waitFor(
   async () => (await a("GET", "/dns/config")).revision?.status === "applied",
 );
 assert.equal((await a("GET", `/clusters/${cluster.id}`)).latestRevision.revision, before);
-let target = await t("GET", `/sites/${site.id}/cname`);
+let target = await a("GET", `/sites/${site.id}/cname`);
 assert.equal(target.published, true);
 assert.equal(target.healthy, true);
 const records = async () => (await (await fetch(mock + "/records")).json())[provider.zone] ?? [];
@@ -198,11 +150,10 @@ let channel = (await a("GET", "/alerts/channels")).find((c) => c.name === "E2E w
 if (!channel)
   channel = await a("POST", "/alerts/channels", {
     name: "E2E webhook",
-    availableToTenants: true,
     platform: false,
     config: { kind: "webhook", url: "http://mock-services:8080/webhook" },
   });
-await t("POST", "/alerts/subscriptions", {
+await a("POST", "/alerts/subscriptions", {
   siteId: site.id,
   channelId: channel.id,
   kinds: ["node_offline"],
@@ -240,14 +191,14 @@ try {
     },
     120,
   );
-  console.log("PASS subscribed tenant received its node-offline alert at the local webhook sink");
+  console.log("PASS the subscribed site's node-offline alert reached the local webhook sink");
 } finally {
   await run([...compose, "start", "node"]);
 }
 await synced();
 await a("POST", "/dns/reconcile");
 assert.equal((await a("GET", "/dns/config")).blocked, null);
-target = await t("GET", `/sites/${site.id}/cname`);
+target = await a("GET", `/sites/${site.id}/cname`);
 assert.equal(target.healthy, true);
 assert.ok((await records()).some((r) => r.name === "unrelated" && r.data === "preserve"));
 console.log("PASS recovered node addresses restored");
@@ -255,12 +206,12 @@ for (let i = 0; i < 10; i++) assert.equal(await request(domain, "/m5-popular"), 
 await waitFor(
   "statistics including bounded Top URL",
   async () =>
-    (await t("GET", `/analytics/top-requests?siteId=${site.id}&range=1h&by=url`)).items.some(
+    (await a("GET", `/analytics/top-requests?siteId=${site.id}&range=1h&by=url`)).items.some(
       (item) => item.value === "/m5-popular",
     ),
   150,
 );
-assert.ok((await t("GET", `/analytics/traffic?siteId=${site.id}&range=1h`)).totals.requests >= 10);
+assert.ok((await a("GET", `/analytics/traffic?siteId=${site.id}&range=1h`)).totals.requests >= 10);
 console.log("PASS real node sequenced statistics and approximate Top URL reach the console");
 await mkdir(".e2e", { recursive: true });
 await writeFile(
@@ -269,17 +220,8 @@ await writeFile(
     siteId: site.id,
     nodeId: edge.id,
     providerId: provider.id,
-    organizationId: org.id,
     domain,
   }),
 );
-for (const session of [tenant, admin]) {
-  if (!session.id) continue;
-  const response = await fetch(`${base}/api/auth/api-key/delete`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: base, cookie: session.cookie },
-    body: JSON.stringify({ keyId: session.id }),
-  });
-  assert.equal(response.status, 200);
-}
+await revokeAccessKey(base, admin);
 console.log("M5 E2E OK");

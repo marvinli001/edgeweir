@@ -1,11 +1,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import { login, logout, pick } from "./helpers";
+import { login, pick } from "./helpers";
 
-test("M5: DNS provider controls, tenant ownership, statistics and alert subscriptions", async ({
-  page,
-}) => {
+test("M5: DNS provider controls, statistics and alert subscriptions", async ({ page }) => {
   const state = JSON.parse(readFileSync(resolve("../../.e2e/m5-state.json"), "utf8")) as {
     siteId: string;
     domain: string;
@@ -13,8 +11,8 @@ test("M5: DNS provider controls, tenant ownership, statistics and alert subscrip
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await login(page, "admin@e2e.test", "e2e-admin-password-123");
-  await page.goto("/admin/dns");
-  await expect(page.getByTestId("page-title")).toHaveText("平台 DNS");
+  await page.getByTestId("nav-dns").click();
+  await expect(page.getByTestId("page-title")).toHaveText("DNS 调度");
   await page.getByTestId("dns-provider-create").click();
   const name = `Browser DNS ${Date.now()}`;
   const dialog = page.getByRole("dialog");
@@ -36,36 +34,34 @@ test("M5: DNS provider controls, tenant ownership, statistics and alert subscrip
     fullPage: true,
     animations: "disabled",
   });
-  await page.goto("/admin/alerts");
-  await expect(page.getByTestId("page-title")).toHaveText("告警渠道");
+  await page.getByTestId("nav-alerts").click();
+  await expect(page.getByTestId("page-title")).toHaveText("告警");
   await page.getByTestId("alert-channel-create").click();
   const channelName = `Browser webhook ${Date.now()}`;
   await dialog.getByLabel("名称", { exact: true }).fill(channelName);
   await dialog
     .getByLabel("Webhook 地址", { exact: true })
     .fill("http://mock-services:8080/webhook");
-  await dialog.getByRole("switch", { name: "允许租户订阅" }).click();
   await page.getByTestId("alert-channel-submit").click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText(channelName, { exact: true })).toBeVisible();
-  await page.goto("/admin/settings");
+  await expect(page.getByTestId("alert-channel").filter({ hasText: channelName })).toBeVisible();
+  await page.getByTestId("nav-system").click();
   await expect(page.getByLabel("SMTP 主机", { exact: true })).toBeVisible();
-  await logout(page);
-  await login(page, "tenant@m5.test", "m5-tenant-password-123");
   await page.goto(`/sites/${state.siteId}?tab=domains`);
-  await expect(page.getByTestId("domain-ownership")).toContainText("已验证");
   await expect(page.getByTestId("cname-target")).toContainText("edge.cdn.m5.test");
   await page.getByTestId("tab-analytics").click();
   await expect(page.getByTestId("top-url")).toContainText("/m5-popular");
   await expect(page.getByTestId("analytics")).toBeVisible();
   await page.getByTestId("nav-alerts").click();
   await page.getByTestId("alert-subscribe").click();
-  await dialog.getByLabel("搜索网站", { exact: true }).fill("M5 proof");
-  await pick(page, dialog.getByLabel("网站", { exact: true }), "M5 proof");
+  await dialog.getByLabel("搜索网站", { exact: true }).fill("M5 site");
+  await pick(page, dialog.getByLabel("网站", { exact: true }), "M5 site");
   await pick(page, dialog.getByLabel("通知渠道", { exact: true }), channelName);
   await page.getByTestId("alert-subscription-submit").click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText(channelName, { exact: true })).toBeVisible();
+  await expect(
+    page.getByTestId("alert-subscription").filter({ hasText: channelName }),
+  ).toBeVisible();
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ colorScheme: "dark" });
   await page.screenshot({
