@@ -35,7 +35,7 @@ type EditableProvider = {
   zone: string;
   provider: DnsProviderInput["provider"];
 };
-export const Route = createFileRoute("/_app/admin/dns")({ component: DnsPage });
+export const Route = createFileRoute("/_app/dns")({ component: DnsPage });
 const providerLabel = (value: DnsProviderInput["provider"]) =>
   ({
     cloudflare: m.cert_dns_cloudflare,

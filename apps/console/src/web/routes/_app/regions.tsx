@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
-export const Route = createFileRoute("/_app/admin/regions")({
+export const Route = createFileRoute("/_app/regions")({
   component: RegionsPage,
 });
 

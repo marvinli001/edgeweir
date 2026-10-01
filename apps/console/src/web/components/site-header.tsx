@@ -1,12 +1,11 @@
 import type * as React from "react";
-import { AreaSwitch } from "@/components/area-switch";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 
 /**
  * Page header. Below the `sm` breakpoint the page actions wrap onto a second row so the title
- * and the [Console | Admin] switch keep their room on phones.
+ * keeps its room on phones.
  */
 export function SiteHeader({ title, actions }: { title: string; actions?: React.ReactNode }) {
   return (
@@ -23,9 +22,6 @@ export function SiteHeader({ title, actions }: { title: string; actions?: React.
           </div>
         ) : null}
         <ThemeToggle className="shrink-0" />
-        <div className="shrink-0">
-          <AreaSwitch />
-        </div>
       </div>
     </header>
   );

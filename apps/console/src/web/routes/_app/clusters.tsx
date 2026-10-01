@@ -64,7 +64,7 @@ import { errorMessage, orpc } from "@/lib/orpc";
 import { revisionReason } from "@/lib/revisions";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/admin/clusters")({
+export const Route = createFileRoute("/_app/clusters")({
   validateSearch: z.object({
     cluster: z.string().optional(),
     enroll: z.boolean().optional(),
@@ -296,7 +296,7 @@ function ClusterSummary({
       </CardHeader>
       <CardContent>
         <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border">
-          <SummaryStat label={m.admin_nodes_online()}>
+          <SummaryStat label={m.clusters_nodes_online()}>
             <Dot
               tone={
                 selected.nodeCount === 0
@@ -310,8 +310,8 @@ function ClusterSummary({
               {selected.onlineNodeCount}/{selected.nodeCount}
             </span>
           </SummaryStat>
-          <SummaryStat label={m.admin_sites()}>{formatNumber(selected.siteCount)}</SummaryStat>
-          <SummaryStat label={m.admin_latest_revision()}>
+          <SummaryStat label={m.clusters_sites()}>{formatNumber(selected.siteCount)}</SummaryStat>
+          <SummaryStat label={m.clusters_latest_revision()}>
             <span
               className={cn(selected.latestRevision && "font-mono")}
               data-testid="cluster-latest-revision"
@@ -1038,7 +1038,7 @@ function RevisionsSection({ cluster }: { cluster: Cluster }) {
       ) : revisions.isError ? (
         <ErrorState error={revisions.error} onRetry={() => revisions.refetch()} />
       ) : revisions.data.length === 0 ? (
-        <EmptyState title={m.admin_revisions_empty()} />
+        <EmptyState title={m.revisions_empty()} />
       ) : (
         <DataTable
           data={revisions.data.slice(0, 20)}

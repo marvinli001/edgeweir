@@ -24,7 +24,7 @@ const ALL = "__all__";
 const RANGES = { "1h": 3600, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400 } as const;
 type Range = keyof typeof RANGES;
 
-export const Route = createFileRoute("/_app/admin/audit")({
+export const Route = createFileRoute("/_app/audit")({
   validateSearch: z.object({
     action: z.string().optional(),
     target: z.string().optional(),

@@ -7,7 +7,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { adminNav, consoleNav } from "@/components/app-sidebar";
+import { accountNav, navGroups } from "@/components/nav-items";
 import { useTheme } from "@/components/theme-provider";
 import {
   CommandDialog,
@@ -48,15 +48,7 @@ export function CommandMenu() {
       <CommandList>
         <CommandEmpty>{m.command_empty()}</CommandEmpty>
         <CommandGroup heading={m.command_group_navigation()}>
-          {consoleNav().map((item) => (
-            <CommandItem key={String(item.to)} onSelect={run(() => navigate({ to: item.to }))}>
-              {item.icon}
-              {item.title}
-            </CommandItem>
-          ))}
-        </CommandGroup>
-        <CommandGroup heading={m.area_admin()}>
-          {adminNav().map((item) => (
+          {[...navGroups().flatMap((group) => group.items), ...accountNav()].map((item) => (
             <CommandItem key={String(item.to)} onSelect={run(() => navigate({ to: item.to }))}>
               {item.icon}
               {item.title}
@@ -70,7 +62,7 @@ export function CommandMenu() {
             {m.nav_new_site()}
           </CommandItem>
           <CommandItem
-            onSelect={run(() => navigate({ to: "/admin/clusters", search: { enroll: true } }))}
+            onSelect={run(() => navigate({ to: "/clusters", search: { enroll: true } }))}
           >
             <HugeiconsIcon icon={ServerStack01Icon} strokeWidth={2} />
             {m.nav_add_node()}

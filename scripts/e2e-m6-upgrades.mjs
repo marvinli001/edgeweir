@@ -110,9 +110,9 @@ const before = {
   edge: (await node(edge.id)).agentVersion,
   peer: (await node(peer.id)).agentVersion,
 };
-const jobs = () => api("GET", `/admin/node-upgrades?clusterId=${edge.clusterId}`);
+const jobs = () => api("GET", `/node-upgrades?clusterId=${edge.clusterId}`);
 const job = async (id) => (await jobs()).find((j) => j.id === id);
-const good = await api("POST", "/admin/node-upgrades", {
+const good = await api("POST", "/node-upgrades", {
   version: fixtures.versions.good,
   nodeGroupId: canaryGroup.id,
 });
@@ -136,7 +136,7 @@ assert.match(
   /upgrades\/releases\/[0-9a-f-]+\/lua/,
   "Lua did not switch with the executable",
 );
-await api("POST", `/admin/node-upgrades/${good.id}/promote`, {});
+await api("POST", `/node-upgrades/${good.id}/promote`, {});
 await wait("rollout complete", async () => {
   const j = await job(good.id);
   assert.notEqual(j.state, "failed", JSON.stringify(j));
@@ -150,7 +150,7 @@ for (const [kind, code] of [
   ["signature", "upgrade_rejected"],
   ["broken", "upgrade_rolled_back"],
 ]) {
-  const attempt = await api("POST", "/admin/node-upgrades", {
+  const attempt = await api("POST", "/node-upgrades", {
     version: fixtures.versions[kind],
     nodeGroupId: canaryGroup.id,
   });

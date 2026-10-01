@@ -109,7 +109,7 @@ function RankedList({
                 </Link>
               ) : link === "node" && item.parentId ? (
                 <Link
-                  to="/admin/clusters"
+                  to="/clusters"
                   search={{ cluster: item.parentId }}
                   className={cn(nameClass, "hover:underline hover:underline-offset-4")}
                 >

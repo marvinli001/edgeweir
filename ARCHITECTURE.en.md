@@ -99,8 +99,7 @@ Unmatched requests under `/api`, `/rpc`, and `/downloads`, and other methods on 
 | Area | Paths | Access |
 | --- | --- | --- |
 | Entry | `/` (redirects to `/setup`, `/overview`, or `/login` by state), `/setup`, `/login` | Everyone |
-| Console | `/overview`, `/sites`, `/certificates`, `/alerts`, `/ip-lists`, `/bans`, `/purge`, `/security`, `/settings` | The signed-in operator |
-| Admin | `/admin`, `/admin/clusters`, `/admin/alerts`, `/admin/dns`, `/admin/rules`, `/admin/regions`, `/admin/service-accounts`, `/admin/audit`, `/admin/settings` | The signed-in operator, through the **Console** / **Admin** switch in the header |
+| Console | Sites: `/overview`, `/sites`, `/certificates`, `/purge`; access control: `/ip-lists`, `/bans`, `/rules`; infrastructure: `/clusters`, `/regions`, `/dns`; system: `/alerts`, `/service-accounts`, `/audit`, `/system`; account (user menu): `/security`, `/settings` | The signed-in operator |
 
 ## Authentication and authorization
 

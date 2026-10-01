@@ -16,7 +16,7 @@ import { UsageSettingsCard } from "@/components/usage-settings";
 import { formatDateTime, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
-export const Route = createFileRoute("/_app/admin/settings")({
+export const Route = createFileRoute("/_app/system")({
   component: SystemSettingsPage,
 });
 

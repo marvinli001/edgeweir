@@ -34,7 +34,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
-export const Route = createFileRoute("/_app/admin/service-accounts")({
+export const Route = createFileRoute("/_app/service-accounts")({
   component: ServiceAccountsPage,
 });
 
