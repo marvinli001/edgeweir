@@ -21,6 +21,7 @@ import {
   ConfigCapacityError,
   canonicalize,
   compileNodeConfig,
+  compileRules,
   contentHash,
   DEFAULT_SITE_PROTECTION,
   decodeNodeConfig,
@@ -36,6 +37,7 @@ import {
   protectionFeatures,
   type RuleModel,
   refreshDerived,
+  ruleModelOf,
   rulesFeatures,
   type SiteModel,
   type TlsModel,
@@ -1632,5 +1634,51 @@ describe("refreshDerived", () => {
   it("keeps a compiled configuration as it is", () => {
     const config = compileNodeConfig({ clusterId: "c", sites, certificates }, 7n);
     expect(refreshDerived(config)).toEqual(config);
+  });
+});
+
+describe("ruleModelOf", () => {
+  const rules: RuleModel[] = [
+    {
+      id: "challenge",
+      phase: "waf-custom",
+      expression: parseExpression('http.request.uri.path contains "/admin/"', "waf-custom"),
+      action: { kind: "challenge", type: "pow" },
+    },
+    {
+      id: "redirect",
+      phase: "redirect",
+      expression: parseExpression('http.request.uri.path eq "/old"', "redirect"),
+      action: {
+        kind: "redirect",
+        target: 'concat("https://", lower(http.host), "/new")',
+        statusCode: 308,
+        preserveQuery: true,
+      },
+    },
+    {
+      id: "attack",
+      phase: "config",
+      expression: parseExpression('ip.geoip.country eq "NZ"', "config"),
+      action: { kind: "config", underAttack: true },
+    },
+  ];
+
+  it("keeps compiled rules as they are, targets included", () => {
+    const compiled = compileRules(rules);
+    expect(compileRules(compiled.map(ruleModelOf))).toEqual(compiled);
+  });
+
+  it("compiles the same configuration, challenges included", () => {
+    const config = compileNodeConfig({ clusterId: "c", sites: [site("a", { rules })] }, 3n);
+    const again = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [site("a", { rules: config.sites[0]?.rules.map(ruleModelOf) ?? [] })],
+      },
+      3n,
+    );
+    expect(again).toEqual(config);
+    expect(config.requiredFeatures).toEqual(expect.arrayContaining(["challenge-v1", "rules-v2"]));
   });
 });

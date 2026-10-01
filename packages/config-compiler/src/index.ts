@@ -369,6 +369,8 @@ export interface RuleModel {
     // rules-v2: compression codings in preference order (RuleAction.compression)
     algorithms?: string[];
   };
+  /** A rule compiled earlier: compileRules keeps it as it is (see ruleModelOf). */
+  compiled?: EdgeRule;
 }
 export interface IpListModel {
   id: string;
@@ -438,13 +440,42 @@ export function compileRules(rules: RuleModel[] = []): EdgeRule[] {
         phases.indexOf(b.phase as (typeof phases)[number]),
     )
     .map((rule) =>
-      create(EdgeRuleSchema, {
-        id: rule.id,
-        phase: rule.phase,
-        expression: rule.expression,
-        action: compileAction(rule.phase, rule.action),
-      }),
+      rule.compiled
+        ? clone(EdgeRuleSchema, rule.compiled)
+        : create(EdgeRuleSchema, {
+            id: rule.id,
+            phase: rule.phase,
+            expression: rule.expression,
+            action: compileAction(rule.phase, rule.action),
+          }),
     );
+}
+
+/**
+ * The model of a compiled rule, which compileRules keeps as it is: a stored
+ * rule the current validator refuses keeps its last compiled form. The
+ * action carries what usesChallenges reads.
+ */
+export function ruleModelOf(rule: EdgeRule): RuleModel {
+  const expression = (e: RuleExpression | undefined): Expression => ({
+    op: e?.op ?? "",
+    field: e?.field ?? "",
+    valueType: e?.valueType ?? "",
+    value: e?.value ?? "",
+    values: [...(e?.values ?? [])],
+    children: (e?.children ?? []).map(expression),
+  });
+  return {
+    id: rule.id,
+    phase: rule.phase,
+    expression: expression(rule.expression),
+    action: {
+      kind: rule.action?.kind ?? "",
+      type: rule.action?.challenge,
+      underAttack: rule.action?.underAttack,
+    },
+    compiled: rule,
+  };
 }
 
 /**
