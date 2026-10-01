@@ -1261,5 +1261,10 @@
   "rules_log_sample_rate": "日志采样率（%）",
   "rules_check_rule": "检查规则「{name}」",
   "rules_v2_unavailable": "所在集群有节点不支持规则扩展，暂时无法使用",
-  "site_origin_group_default": "默认组"
+  "site_origin_group_default": "默认组",
+  "cache_rule_condition_mode": "条件类型",
+  "cache_rule_builder": "构建器",
+  "cache_rule_advanced": "高级",
+  "cache_rule_browser_ttl": "浏览器 TTL（秒）",
+  "cache_rule_browser_ttl_origin": "跟随源站"
 }

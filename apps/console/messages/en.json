@@ -1422,5 +1422,10 @@
   "rules_log_sample_rate": "Log sample rate (%)",
   "rules_check_rule": "Check rule “{name}”",
   "rules_v2_unavailable": "Some nodes of the site's cluster do not support the rule extensions yet",
-  "site_origin_group_default": "Default group"
+  "site_origin_group_default": "Default group",
+  "cache_rule_condition_mode": "Condition type",
+  "cache_rule_builder": "Builder",
+  "cache_rule_advanced": "Advanced",
+  "cache_rule_browser_ttl": "Browser TTL (s)",
+  "cache_rule_browser_ttl_origin": "Origin's"
 }
