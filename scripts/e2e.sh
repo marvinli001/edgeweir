@@ -93,6 +93,13 @@
 #   probe-a loses it (the backup line group takes over; DNS revision reason
 #   scheduling, system audit, alert) and recovers; a node probes with its own
 #   certificate; Playwright e2e/g6.spec.ts.
+#   Core gaps G7 (scripts/e2e-g7.mjs, test origins l4-origin-a/b): both nodes
+#   report l4-v1; TCP and UDP port pools (overlap, outside-pool and UDP PROXY
+#   refusals); TCP and UDP echo through both nodes; a long TCP connection keeps
+#   echoing across the reload that a new port causes; PROXY protocol v1/v2 to
+#   the origin and an accepting listener; an origin change without a reload;
+#   an IP block list and a connection limit; statistics and the app's CNAME;
+#   Playwright e2e/g7.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1111,6 +1118,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g6.mjs --cleanup || fail "G6 cleanup failed"
 pass "G6 checks passed"
+
+step "G7: layer-4 forwarding: port pools, TCP and UDP echo, a long connection across a reload, PROXY protocol, hot upstreams, limits, statistics"
+node scripts/e2e-g7.mjs || fail "G7 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g7.spec.ts || fail "G7 browser checks failed"
+fi
+node scripts/e2e-g7.mjs --cleanup || fail "G7 cleanup failed"
+pass "G7 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
