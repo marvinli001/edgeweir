@@ -84,6 +84,15 @@
 #   zone file; DNS-01 credentials of the Custom HTTP provider (signed
 #   webhook) list their zone and test the connection; Playwright
 #   e2e/dns.spec.ts.
+#   Core gaps G6 (scripts/e2e-g6.mjs, after DNS): two probe containers
+#   (profile probes, regions east and north) enroll with one-time tokens and
+#   probe every scheduling address x listener port; both nodes send host
+#   metrics; all.<domain> answers per resolution line on the test provider;
+#   the edge moves to its backup address when most probers lose the primary
+#   and back; a rule scoped to region east removes the edge when only
+#   probe-a loses it (the backup line group takes over; DNS revision reason
+#   scheduling, system audit, alert) and recovers; a node probes with its own
+#   certificate; Playwright e2e/g6.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1094,6 +1103,14 @@ if ! $SKIP_UI; then
   E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/dns.spec.ts || fail "DNS browser checks failed"
 fi
 pass "DNS checks passed"
+
+step "G6: regional probes, node metrics, resolution lines, backup IPs, backup line groups and scheduling rules"
+node scripts/e2e-g6.mjs || fail "G6 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g6.spec.ts || fail "G6 browser checks failed"
+fi
+node scripts/e2e-g6.mjs --cleanup || fail "G6 cleanup failed"
+pass "G6 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"

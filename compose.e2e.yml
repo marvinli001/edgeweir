@@ -326,6 +326,52 @@ services:
     networks:
       default: {}
 
+  # G6: two regional probes (`edgeweir-node probe`, no OpenResty) on both e2e
+  # networks, so they reach the nodes' primary (default network) and backup
+  # (isolated network) scheduling addresses. scripts/e2e-g6.mjs creates the
+  # one-time probe tokens and starts them with EDGEWEIR_SERVER,
+  # EDGEWEIR_CA_SHA256 and EDGEWEIR_TOKEN; afterwards the identity in the
+  # state volume is enough.
+  probe-a:
+    image: edgeweir-node:${E2E_TAG:-e2e}
+    profiles: ["probes"]
+    hostname: probe-east
+    entrypoint: ["/usr/local/bin/edgeweir-node", "probe"]
+    # The image's healthcheck asks the data plane, which probes do not run.
+    healthcheck:
+      disable: true
+    environment:
+      EDGEWEIR_SERVER: ${E2E_PROBE_SERVER:-}
+      EDGEWEIR_CA_SHA256: ${E2E_PROBE_CA_SHA256:-}
+      EDGEWEIR_TOKEN: ${E2E_PROBE_A_TOKEN:-}
+      EDGEWEIR_STATE_DIR: /var/lib/edgeweir-probe
+    volumes:
+      - probe-a-state:/var/lib/edgeweir-probe
+    restart: on-failure
+    networks:
+      default: {}
+      isolated: {}
+
+  probe-b:
+    image: edgeweir-node:${E2E_TAG:-e2e}
+    profiles: ["probes"]
+    hostname: probe-north
+    entrypoint: ["/usr/local/bin/edgeweir-node", "probe"]
+    # The image's healthcheck asks the data plane, which probes do not run.
+    healthcheck:
+      disable: true
+    environment:
+      EDGEWEIR_SERVER: ${E2E_PROBE_SERVER:-}
+      EDGEWEIR_CA_SHA256: ${E2E_PROBE_CA_SHA256:-}
+      EDGEWEIR_TOKEN: ${E2E_PROBE_B_TOKEN:-}
+      EDGEWEIR_STATE_DIR: /var/lib/edgeweir-probe
+    volumes:
+      - probe-b-state:/var/lib/edgeweir-probe
+    restart: on-failure
+    networks:
+      default: {}
+      isolated: {}
+
 networks:
   default:
     ipam:
@@ -343,5 +389,7 @@ volumes:
   node-dns-state:
   geoip-test-data:
   node-state:
+  probe-a-state:
+  probe-b-state:
   origin-ca:
   downloads:
