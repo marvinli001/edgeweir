@@ -129,7 +129,7 @@ const newRule = (): RuleDraft => ({
   maxSizeKb: "",
   action: "cache",
   ttl: "3600",
-  respect: false,
+  respect: true,
   staleWhileRevalidate: "",
   staleIfError: "",
   cacheAuthorized: false,

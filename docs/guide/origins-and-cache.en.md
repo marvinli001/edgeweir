@@ -216,7 +216,7 @@ Turn on **S3 signing** on an origin and fill in these fields.
 
 1. Open **Sites**, select the site, and open the **Cache** tab.
 2. In the **Cache rules** card, click **Add rule**.
-3. Enter **Path prefix** and **Extensions**, select **Action**, enter **TTL (seconds)**, and turn on **Respect origin** as needed.
+3. Enter **Path prefix** and **Extensions**, select **Action**, and enter **TTL (seconds)**; turn off **Respect origin** only for static assets.
 4. For more conditions, click **More** and fill in **Exact paths**, **Status codes**, **Min size (KB)**, **Max size (KB)**, **Stale while revalidate (s)**, **Stale if error (s)**, or turn on **Cache requests with Authorization**.
 5. Drag the handle on the left of a rule to reorder.
 6. Click **Save**.
@@ -236,7 +236,7 @@ Turn on **S3 signing** on an origin and fill in these fields.
 | Extensions | 1–16 lowercase letters or digits, comma-separated, up to 64 | Empty | The request path ends with one of them, for example `css, js, png` |
 | Action | Cache / Bypass | Cache | Cache or bypass on match |
 | TTL (seconds) | 0–31536000 | 3600 | The rule's cache lifetime |
-| Respect origin | On / off | Off | Off: override origin cache headers; on: follow origin `Cache-Control` / `Expires` |
+| Respect origin | On / off | On | On: follow origin `Cache-Control` / `Expires`; off: override origin cache headers |
 | Exact paths | Start with `/`, up to 32 | Empty | The request path equals one of them |
 | Status codes | 100–599, up to 16 | Empty | Empty: only the default cacheable status codes |
 | Min size (KB) / Max size (KB) | 0 or more; max not below min | Empty (no limit) | Response size range |
@@ -260,7 +260,7 @@ Each site has at most 64 rules. Without rules the card shows **No caching** and 
 
 | Mode | Behavior |
 | --- | --- |
-| Override (**Respect origin** off) | Uses the rule TTL and ignores origin `Cache-Control` and `Expires` (including `no-store` and `private`); without status codes only 200, 203, 206, 300, 301, and 308 are cached |
+| Override (**Respect origin** off) | Uses the rule TTL and ignores origin `Cache-Control` and `Expires` (including `no-store` and `private`); without status codes only 200, 203, 206, 300, 301, and 308 are cached. Use it only for static assets without user data, or pages of signed-in users reach other visitors |
 | Respect (**Respect origin** on) | Follows origin `Cache-Control` or `Expires` when present; the rule TTL applies only when neither is sent; a `Cache-Control` without a lifetime (for example only `public`) is not cached; `no-store` and `private` apply |
 | Always | Responses with `Set-Cookie` are not cached |
 

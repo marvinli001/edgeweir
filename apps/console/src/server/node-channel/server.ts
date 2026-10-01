@@ -1,20 +1,42 @@
 import http2 from "node:http2";
 import type { SecureContextOptions } from "node:tls";
+import { Code, ConnectError, type HandlerContext } from "@connectrpc/connect";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
 import { NodeService } from "@edgeweir/proto";
 import type { AppContext } from "../lib/context";
 import { type IssuedServerCertificate, SERVER_CERT_LIFETIME_DAYS } from "../pki/ca";
-import { createNodeService, peerContextValues } from "./service";
+import { createNodeService, peerContextValues, peerKey } from "./service";
 
 /** Reissue the server certificate once less than a third of its lifetime remains. */
 const RENEW_BEFORE_MS = (SERVER_CERT_LIFETIME_DAYS * 24 * 3600 * 1000) / 3;
 const ROTATION_CHECK_MS = 3600 * 1000;
+/**
+ * Largest request message after decompression (Connect allows 4 GiB). The
+ * largest messages nodes send, 1000 access logs with paths of up to 2 KiB,
+ * stay below a quarter of it.
+ */
+export const READ_MAX_BYTES = 16 << 20;
+/** Enroll, the one RPC without a client certificate, carries a token, a CSR and host facts. */
+export const ENROLL_READ_MAX_BYTES = 64 << 10;
+/** Sessions without traffic are closed; watch streams send a keepalive every 15 s. */
+const IDLE_TIMEOUT_MS = 120_000;
 
 export interface NodeChannelOptions {
   /** Clock for issuing and rotating the server certificate. */
   now?: () => Date;
   /** How often the remaining lifetime of the server certificate is checked. */
   rotationCheckMs?: number;
+  /** How long a connection may stay without traffic. */
+  idleTimeoutMs?: number;
+}
+
+/** Runs before the body is read: without a client certificate only Enroll is served. */
+function requireClientCertificate(ctx: HandlerContext) {
+  if (ctx.method !== NodeService.method.enroll && !ctx.values.get(peerKey).authorized)
+    throw new ConnectError(
+      "client certificate required (mutual TLS); enroll first",
+      Code.Unauthenticated,
+    );
 }
 
 export interface NodeChannel {
@@ -40,7 +62,7 @@ function secureContext(app: AppContext, cert: IssuedServerCertificate): SecureCo
  * terminated here with a server certificate issued by the internal CA and
  * reissued in-process before it expires. Client certificates are requested
  * but not required at the TLS layer, so that Enroll can run with a token;
- * every other RPC checks the verified peer.
+ * every other RPC checks the verified peer, before reading the request.
  */
 export async function startNodeChannel(
   app: AppContext,
@@ -50,8 +72,16 @@ export async function startNodeChannel(
   const issue = () => app.nodeCa.issueServerCertificate(app.env.nodeApiHostnames, now());
   let current = await issue();
   const handler = connectNodeAdapter({
-    routes: (router) => router.service(NodeService, createNodeService(app)),
+    routes: (router) => {
+      const service = createNodeService(app);
+      // The adapter serves the last handler registered for a path.
+      router
+        .service(NodeService, service)
+        .rpc(NodeService.method.enroll, service.enroll, { readMaxBytes: ENROLL_READ_MAX_BYTES });
+    },
     contextValues: peerContextValues,
+    readMaxBytes: READ_MAX_BYTES,
+    requestGate: requireClientCertificate,
     // The node channel serves nothing but NodeService.
     fallback: (_req, res) => {
       res.writeHead(404, { "content-type": "text/plain" });
@@ -68,6 +98,7 @@ export async function startNodeChannel(
     handler,
   );
   server.on("sessionError", (error) => app.log.debug("node channel session error", { error }));
+  server.setTimeout(options.idleTimeoutMs ?? IDLE_TIMEOUT_MS);
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(app.env.NODE_API_PORT, app.env.nodeApiHost, () => {

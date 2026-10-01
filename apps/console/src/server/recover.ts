@@ -8,7 +8,11 @@ import { runRecover } from "./recover-cli";
 
 process.exitCode = await runRecover(process.argv.slice(2), process, () => {
   const env = loadEnv();
-  const { db, pool } = createDatabase(env.DATABASE_URL, 2);
+  const { db, pool } = createDatabase(
+    env.DATABASE_URL,
+    (error) => process.stderr.write(`database connection lost: ${error.message}\n`),
+    2,
+  );
   const auth = createAuth({
     db,
     secret: resolveAuthSecret(env).value,

@@ -246,6 +246,13 @@ describe("M2 origin and cache inputs", () => {
     expect(cacheRuleInput.safeParse({ paths: ["no-slash"] }).success).toBe(false);
   });
 
+  it("respects origin Cache-Control unless a rule overrides it (audit 2026-10-01 P0-6)", () => {
+    expect(cacheRuleInput.parse({}).originCacheControl).toBe("respect");
+    expect(cacheRuleInput.parse({ originCacheControl: "override" }).originCacheControl).toBe(
+      "override",
+    );
+  });
+
   it("does not cache requests with Authorization unless a rule allows it", () => {
     expect(cacheRuleInput.parse({}).cacheAuthorized).toBe(false);
     expect(cacheRuleInput.parse({ cacheAuthorized: true }).cacheAuthorized).toBe(true);

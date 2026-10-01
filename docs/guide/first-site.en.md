@@ -91,7 +91,7 @@ The token is single-use. For the installer's checks, the download mirror, and fa
    | **Port** | 80 (HTTP) / 443 (HTTPS) | Origin port |
    | **Protocol** | HTTP | HTTP or HTTPS |
    | **Origin Host** | Same as request | `Host` sent to the origin |
-   | **Caching** | On | When on, creates one cache rule: **Path prefix** `/`, **TTL (seconds)** 3600, **Respect origin Cache-Control** off |
+   | **Caching** | On | When on, creates one cache rule: **Path prefix** `/`, **TTL (seconds)** 3600, **Respect origin Cache-Control** on (3600 seconds when the origin sends neither `Cache-Control` nor `Expires`) |
 
 3. Click **Create**. The console shows **Created, revision #N**, the site's cluster publishes a new revision, and the site page opens.
 

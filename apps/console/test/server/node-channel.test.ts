@@ -1,9 +1,11 @@
 import { updateHttps, uploadCertificate } from "../../src/server/services/certificates";
 import "reflect-metadata";
 import { webcrypto } from "node:crypto";
+import { once } from "node:events";
+import http2 from "node:http2";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-node";
+import { compressionGzip, createConnectTransport } from "@connectrpc/connect-node";
 import {
   type CacheTaskCreateInput,
   cacheTaskCreateInput,
@@ -59,18 +61,21 @@ describe("node channel", async () => {
   let baseUrl: string;
   let clusterId: string;
 
-  const anonymous = () =>
+  /** Sends gzip-compressed requests, which the server inflates. */
+  const gzip = { sendCompression: compressionGzip, compressMinBytes: 1 };
+  const anonymous = (extra: Partial<typeof gzip> = {}) =>
     createClient(
       NodeService,
       createConnectTransport({
         baseUrl,
         httpVersion: "2",
         nodeOptions: { ca: ctx.nodeCa.certificatePem, servername: "localhost" },
+        ...extra,
       }),
     );
 
   /** Enrolls a node of the default cluster and returns its mTLS client. */
-  const enroll = async (nodeName: string) => {
+  const enroll = async (nodeName: string, extra: Partial<typeof gzip> = {}) => {
     const token = await createEnrollmentToken(
       ctx.db,
       { clusterId, nodeName, ttlMinutes: 10 },
@@ -94,6 +99,7 @@ describe("node channel", async () => {
           key: keyPem,
           servername: "localhost",
         },
+        ...extra,
       }),
     );
     return { nodeId: enrolled.nodeId, mtls };
@@ -754,6 +760,57 @@ describe("node channel", async () => {
     expect(mine?.recoveredAt).not.toBeNull();
     const made = await getCacheTask(ctx.db, recovery?.id ?? "");
     expect(made).toMatchObject({ source: "recovery", state: "succeeded", targets: ["away"] });
+  });
+
+  it("repeats a watch refresh that failed outside the stream (audit 2026-10-01 P0-1)", async () => {
+    const { mtls } = await enroll("refresh-test");
+    const abort = new AbortController();
+    const iterator = mtls
+      .watchConfig({ knownRevision: 0n }, { signal: abort.signal })
+      [Symbol.asyncIterator]();
+    expect((await iterator.next()).value?.event).toBe(WatchEvent.REVISION);
+    const { revision } = await demoSite("refresh");
+    // The read for the event fails, as while PostgreSQL restarts; it must not
+    // reject unhandled, and the stream still delivers the revision.
+    const select = ctx.db.select;
+    ctx.db.select = (() => {
+      ctx.db.select = select;
+      throw new Error("database unreachable");
+    }) as typeof select;
+    ctx.events.emitLocal({ clusterId, revision: revision.revision, contentHash: "" });
+    expect(ctx.db.select).toBe(select);
+    const notified = await iterator.next();
+    expect(notified.value?.latestRevision).toBe(BigInt(revision.revision));
+    expect(notified.value?.contentHash).toBe(revision.contentHash);
+    abort.abort();
+  });
+
+  it("bounds request bodies, unread without a client certificate (audit 2026-10-01 P0-2)", async () => {
+    // 20 MiB that gzip turns into a few KiB.
+    const bomb = "a".repeat(20 << 20);
+    await expect(
+      anonymous(gzip).reportLogs({ batchSequence: 1n, logs: [{ path: bomb }] }),
+    ).rejects.toMatchObject({ code: Code.Unauthenticated });
+    await expect(
+      anonymous(gzip).enroll({ token: "a".repeat(1 << 20), csrPem: "csr" }),
+    ).rejects.toMatchObject({ code: Code.ResourceExhausted });
+    const { mtls } = await enroll("limits-test", gzip);
+    await expect(
+      mtls.reportLogs({ batchSequence: 1n, logs: [{ path: bomb }] }),
+    ).rejects.toMatchObject({ code: Code.ResourceExhausted });
+    expect(
+      await mtls.reportLogs({ batchSequence: 1n, logs: [{ path: `/${"a".repeat(2047)}` }] }),
+    ).toBeDefined();
+  });
+
+  it("closes connections without traffic", async () => {
+    const idle = await startNodeChannel(ctx, { idleTimeoutMs: 200 });
+    const { port } = idle.server.address() as { port: number };
+    const session = http2.connect(`https://localhost:${port}`, { ca: ctx.nodeCa.certificatePem });
+    session.on("error", () => {});
+    await once(session, "connect");
+    await once(session, "close");
+    await idle.close();
   });
 
   it("rejects unknown tokens", async () => {

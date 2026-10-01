@@ -258,7 +258,7 @@ function CreateSiteDialog({
   const create = useMutation(orpc.sites.create.mutationOptions());
   const [scheme, setScheme] = React.useState<"http" | "https">("http");
   const [cacheEnabled, setCacheEnabled] = React.useState(true);
-  const [respectOrigin, setRespectOrigin] = React.useState(false);
+  const [respectOrigin, setRespectOrigin] = React.useState(true);
   const [navigating, setNavigating] = React.useState(false);
   const [clusterId, setClusterId] = React.useState(initialClusterId);
   const cluster = clusters.some((c) => c.id === clusterId) ? clusterId : clusters[0]?.id;
