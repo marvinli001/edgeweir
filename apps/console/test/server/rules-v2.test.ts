@@ -585,7 +585,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     });
   });
 
-  it("lets owners replace bulk redirects, members read them and nobody else reach them", async () => {
+  it("lets owners replace bulk redirects, members read them and nobody else reach them, service accounts included", async () => {
     const redirects = [{ source: "/member", target: "/no" }];
     expect(await rpcError(member.bulkRedirects.save({ id: siteId, redirects }))).toMatchObject({
       code: "ORG_ADMIN_REQUIRED",
@@ -628,6 +628,20 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     ).toHaveLength(1);
     await admin.bulkRedirects.save({ id: otherSiteId, redirects: [] });
     expect((await siteOf(otherSiteId))?.bulkRedirects).toEqual([]);
+    // Service accounts reach neither procedure, whatever their scopes.
+    const account = await admin.serviceAccounts.create({
+      name: "integration",
+      scopes: ["sites:read", "sites:write"],
+    });
+    const { secret } = await admin.serviceAccounts.createKey({ id: account.id });
+    for (const [method, body] of [
+      ["GET", undefined],
+      ["PUT", { redirects }],
+    ] as const) {
+      const res = await api(secret, method, `/sites/${siteId}/bulk-redirects`, body);
+      expect(res.status, method).toBe(403);
+      expect(await res.json()).toMatchObject({ code: "SERVICE_ACCOUNT_FORBIDDEN" });
+    }
   });
 
   it("rolls back with the rules-v2 requirement of the restored content", async () => {
