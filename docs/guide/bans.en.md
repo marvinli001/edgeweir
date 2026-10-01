@@ -47,7 +47,7 @@ The list shows active bans only (neither expired nor lifted), newest first, and 
 | Expiry | 1 minute to 7 days (the UI offers 1 hour to 7 days); nodes drop a ban when it expires, the console deletes it an hour later |
 | Reason | Manual: abuse, attack, scanning, spam, other. Automatic: per-IP request rate |
 | Banning again | One active manual ban per address for global bans, and per site and address for site bans; banning it again sets the new reason and expiry and does not add a ban |
-| Protected addresses | A ban may not cover any node address, loopback (`127.0.0.0/8`, `::1`) or unspecified addresses (`0.0.0.0/8`, `::`), nor overlap an allow list |
+| Protected addresses | A site ban may not cover an address of a node in the site's cluster, a global ban no node address at all; neither may cover loopback (`127.0.0.0/8`, `::1`) or unspecified addresses (`0.0.0.0/8`, `::`), nor overlap an allow list |
 | Where it applies | At the edge layer once the site is known, before rules: global bans first, then site bans; addresses on an allow list are never banned |
 | Delivery | No configuration revision, no configuration canary, no reload on the nodes |
 | Audit | `ban.create`, `ban.update` (banned again), `ban.delete`; automatic bans are not audited |

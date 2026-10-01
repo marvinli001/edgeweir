@@ -67,7 +67,7 @@ The only contract between the console and the nodes is `edgeweir.node.v1` in `pr
 8. `worker`, `all`: start pg-boss, create the queues, register the schedules.
 9. `app`, `all`: the HTTP server starts listening.
 
-On `SIGTERM` or `SIGINT` the process closes HTTP connections and the node channel, gives pg-boss up to 5 seconds to finish running jobs, then closes the database pool.
+On `SIGTERM` or `SIGINT` the process stops the HTTP and node channel listeners, ends the nodes' config watch streams and stops pg-boss at the same time: requests in flight get up to 3 more seconds, pg-boss up to 5 seconds to finish running jobs; then the database pool is closed. If all of this takes more than 8 seconds the process exits with 1.
 
 ## Ports and routes
 
@@ -149,7 +149,7 @@ URL, prefix, host, Cache-Tag, and full-site purges and URL and sitemap prefetche
 
 Host and Cache-Tag purges need the node feature `purge-tag-v1`, mobile and sitemap prefetches `prefetch-v2`; while an active node of an affected cluster lacks it, the console refuses the task (`NODE_CAPABILITY_REQUIRED`). Nodes derive cache keys from the purge markers' points in time and an index of the cached objects' `Cache-Tag`, so purged objects (stale ones included) are never looked up again; nodes fetch sitemaps through their own edge layer. Behavior: [Origins and cache](docs/guide/origins-and-cache.en.md#purge-and-prefetch).
 
-Node upgrades are delivered through `PullTasks` as well: an upgrade first runs on one node group and is promoted to the remaining nodes after the health observation passes. Behavior: [Node upgrades](docs/guide/node-upgrades.en.md).
+Node upgrades are delivered through `PullTasks` as well: an upgrade first runs on one node group and is promoted after the health observation passes; the remaining nodes follow at most a quarter at a time, and each task must finish within 30 minutes after it is sent. A node pulling tasks first checks without a lock whether it has an upgrade task, and takes the cluster's upgrade lock only if it does. Behavior: [Node upgrades](docs/guide/node-upgrades.en.md).
 
 ## Dynamic bans
 
@@ -226,7 +226,7 @@ Connect-RPC over HTTPS; the console process terminates TLS itself.
 | --- | --- |
 | Internal CA | ECDSA P-256, valid for 10 years, generated on first start; private key envelope-encrypted in `pki_authority` |
 | Server certificate | Issued by the internal CA at every start, valid for 90 days; checked hourly and reissued in-process when less than a third of the lifetime remains, so new handshakes get the new certificate and established connections keep theirs; SANs are the host name of `EDGEWEIR_NODE_API_URL` (the host name of `EDGEWEIR_PUBLIC_URL` when unset), `EDGEWEIR_NODE_API_HOSTNAMES`, `localhost`, `127.0.0.1`, `::1`, and the container host name |
-| Node certificate | CN is the node ID, client authentication only, valid for 30 days; with less than a third of the lifetime left, `ReportStatus` asks the node to call `RenewCertificate` |
+| Node certificate | CN is the node ID, client authentication only, valid for 30 days (server and node certificates are valid from 1 hour before issue, for nodes whose clocks run behind); with less than a third of the lifetime left, `ReportStatus` asks the node to call `RenewCertificate`. After a renewal the old certificate (`node.previous_cert_serial`) stays valid until the node first authenticates with the new one; a node that could not install the new one renews again with the old one. A disabled node may still renew; its other calls are refused |
 | Heartbeat | Every 15 seconds; `WatchConfig` sends a keepalive every 15 seconds |
 
 Enrollment:
@@ -340,7 +340,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `region` | Region dictionary |
 | `cluster` | Clusters: sets of nodes that share one revision stream |
 | `node_group` | Node groups, optionally tied to a region |
-| `node` | Nodes: status, capabilities, certificate serial and fingerprint, last heartbeat, last reported ban state and CC level per site |
+| `node` | Nodes: status, capabilities, certificate serial and fingerprint (after a renewal also the replaced certificate's serial), last heartbeat, last reported ban state and CC level per site |
 | `node_ip` | IP addresses reported by nodes |
 | `enrollment_token` | SHA-256 and usage of enrollment tokens |
 | `node_certificate_revocation` | Certificate serials revoked when a node is deleted |
@@ -403,7 +403,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `cache_task` | Purge and prefetch tasks |
 | `cache_task_node` | Delivery and result of a task on each node |
 | `node_upgrade` | Node upgrade jobs |
-| `node_upgrade_delivery` | Phase, state, and health observation of an upgrade on each node |
+| `node_upgrade_delivery` | Phase, state, deadline, and health observation of an upgrade on each node |
 | `alert_channel` | Alert channels, configuration envelope-encrypted |
 | `alert_subscription` | User subscriptions per site and channel |
 | `alert_state` | Current alert state (site and platform alerts) |
@@ -456,6 +456,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0037_dns_cluster_bindings` | `dns_binding`, `dns_lease`; `dns_revision.cluster_id`, `dns_managed_name.cluster_id`; the DNS steering policy becomes one binding per cluster; drops `dns_state` |
 | `0038_certificate_chains` | PEM blocks other than certificates (such as a private key) are removed from stored chains |
 | `0039_certificate_accounts` | `acme_account`; `certificate.renewal_info_at` |
+| `0040_node_lifecycle` | `node.previous_cert_serial`; `node_upgrade_delivery.deadline_at` (deliveries already released keep the deadline of 30 minutes after creation) |
 
 ## Build output
 

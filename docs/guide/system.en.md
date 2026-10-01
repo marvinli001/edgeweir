@@ -52,7 +52,7 @@ Result: the **Install command** (shown once, with a countdown) and the **CA fing
 | **Node** | Name and host name |
 | **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled** |
 | **Node group** | Node group and region |
-| **IP** | Addresses reported by the node |
+| **IP** | Unicast addresses in the node's latest heartbeat (replaced on every heartbeat, at most 64) |
 | **Applied** | The revision the node has applied; badge **In sync** (the node's target revision reached), **Behind**, **Apply failed** (hover for the reason), or **Upgrade required** |
 | **Agent / engine** | Agent version, engine, and engine version |
 | **Heartbeat** | Time of the last heartbeat |
@@ -61,7 +61,7 @@ Result: the **Install command** (shown once, with a countdown) and the **CA fing
 | --- | --- |
 | **Rename** | At most 64 characters |
 | **Move to group** | Node groups of the same cluster only |
-| **Disable** / **Enable** | A disabled node is refused by the node channel and keeps serving its last successfully applied configuration; its unfinished purge & prefetch deliveries are marked **Skipped**. Once the node is enabled and pulls tasks again, it gets one whole-site purge for every site those purges touched |
+| **Disable** / **Enable** | A disabled node is refused by the node channel (except for certificate renewal, so its certificate is still valid when enabled) and keeps serving its last successfully applied configuration; its unfinished purge & prefetch deliveries are marked **Skipped**. Once the node is enabled and pulls tasks again, it gets one whole-site purge for every site those purges touched |
 | **Delete** | Revokes the node certificate; the node must enroll again with a new install command |
 
 ### Node upgrades

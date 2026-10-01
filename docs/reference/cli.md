@@ -120,7 +120,7 @@ docker compose logs --no-color --no-log-prefix console \
 | 端口 | `3000`（Web、API）、`8443`（节点通道） |
 | 健康检查 | `edgeweir-healthcheck`；间隔 10 秒，超时 3 秒，启动期 30 秒，重试 5 次 |
 | 附带文件 | `/usr/local/bin/edgeweir-certd`、`/usr/local/bin/edgeweir-healthcheck`、`/app/deploy.sh` |
-| 停止信号 | `SIGTERM`、`SIGINT`：关闭 HTTP 与节点通道监听，等待 pg-boss 最多 5 秒，进程以 0 退出 |
+| 停止信号 | `SIGTERM`、`SIGINT`：关闭 HTTP 与节点通道监听并结束节点的监视流，进行中的请求最多 3 秒，同时等待 pg-boss 最多 5 秒，进程以 0 退出；超过 8 秒以 1 退出 |
 
 `edgeweir-healthcheck`：`ROLE=worker` 时直接返回 0；其他角色请求 `http://127.0.0.1:${PORT}/healthz`，超时 2 秒，失败返回非 0。
 

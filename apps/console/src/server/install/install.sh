@@ -25,7 +25,9 @@
 #      the package (deb/rpm create the `edgeweir` user and the state
 #      directories; for the tar.gz this script does it);
 #   5. enrolls the node with the one-time token (the private key is generated
-#      locally and never leaves this machine) and starts the service.
+#      locally and never leaves this machine) and starts the service. On a
+#      host that is already enrolled (identity.json in the state directory)
+#      no token is needed: the packages are updated and the service started.
 # It never stores SSH credentials and never phones home.
 #
 # The whole script is a set of functions; `main` runs on the last line, so a
@@ -125,10 +127,21 @@ parse_args() {
 }
 
 # The token is read once and removed from the environment, so no other
-# child process (curl, apt, ...) inherits it.
+# child process (curl, apt, ...) inherits it. An enrolled host keeps its
+# identity: rerunning the script (after a failed step, or to update the
+# packages) needs no token.
 read_token() {
   TOKEN="${EDGEWEIR_TOKEN:-}"
   unset EDGEWEIR_TOKEN
+  ENROLLED="false"
+  if [ -f "${STATE_DIR}/identity.json" ]; then
+    ENROLLED="true"
+    if [ -n "$TOKEN" ] || [ -n "$TOKEN_FILE" ]; then
+      log "already enrolled (${STATE_DIR}/identity.json); the token is not used"
+    fi
+    TOKEN=""
+    return 0
+  fi
   if [ -n "$TOKEN_FILE" ]; then
     [ -r "$TOKEN_FILE" ] || die "cannot read --token-file $TOKEN_FILE"
     TOKEN="$(tr -d '[:space:]' <"$TOKEN_FILE")"
@@ -431,6 +444,10 @@ install_package() {
 }
 
 enroll() {
+  if [ "$ENROLLED" = "true" ]; then
+    log "already enrolled; to enroll again run: edgeweir-node enroll --force"
+    return 0
+  fi
   log "enrolling with ${SERVER}"
   # The token goes through the environment only (edgeweir-node reads EDGEWEIR_TOKEN).
   EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --server "$SERVER" --ca-sha256 "$CA_SHA256" \
@@ -446,6 +463,10 @@ start_service() {
   systemctl daemon-reload
   # The agent runs OpenResty itself; the distribution unit would bind the same ports.
   systemctl disable --now openresty.service >/dev/null 2>&1 || true
+  # The deb and rpm packages restart a running service themselves.
+  if [ "$FORMAT" = "tar" ]; then
+    systemctl try-restart edgeweir-node.service
+  fi
   systemctl enable --now edgeweir-node.service
   log "done: edgeweir-node is running (journalctl -u edgeweir-node -f)"
 }

@@ -30,7 +30,7 @@ Nodes that do not meet the supervisor conditions do not report `self-upgrade-v1`
 3. Enter **Target version** without the `v` prefix, for example `0.1.0`, and select **Canary node group**.
 4. Click **Start canary**.
 5. Wait until the canary nodes show **Succeeded** and stay healthy for 30 seconds.
-6. Click **Promote remaining nodes**.
+6. Click **Promote remaining nodes**. The rest are upgraded in batches: at most a quarter of them at a time (at least one, by node name); when a node succeeds the next one is released.
 7. Verify: the upgrade shows **Succeeded**; the **Agent / engine** column of the **Nodes** list shows the target version.
 
 An upgrade restarts the node's agent and OpenResty and is not guaranteed to be hitless. Choose a canary group whose traffic other nodes can absorb.
@@ -48,22 +48,24 @@ An upgrade restarts the node's agent and OpenResty and is not guaranteed to be h
 | Upgrade state | Meaning |
 | --- | --- |
 | Canary | The canary group is upgrading or under observation |
-| Rollout | The remaining nodes have their tasks |
+| Rollout | The remaining nodes are upgraded in batches |
 | Succeeded / Failed / Cancelled | Final result |
 
 | Node state | Meaning |
 | --- | --- |
 | Waiting for canary | Not in the canary group; waits for promotion |
-| Pending | Sent; the node has not started |
-| Upgrading | The node is downloading, verifying, or in its trial |
+| Queued | Promoted; waits for the previous batch |
+| Pending | Sent; the node has not started; shows the deadline |
+| Upgrading | The node is downloading, verifying, or in its trial; shows the deadline |
 | Succeeded / Failed / Cancelled | The node's result; **Diagnostics** shows the details the node reported |
 
 ### Cancellation and expiry
 
 | Action | Behavior |
 | --- | --- |
-| **Cancel queued work** | Cancels node tasks that are **Waiting for canary** or **Pending**; completed nodes keep their current version; not possible while a node is **Upgrading** |
-| Expiry | Node tasks not finished 30 minutes after the upgrade was created show "Upgrade task expired" |
+| **Cancel queued work** | Cancels node tasks that are **Waiting for canary**, **Queued** or **Pending**; completed nodes keep their current version; not possible while a node is **Upgrading** |
+| Expiry | A node task not finished 30 minutes after it was sent shows "Upgrade task expired" and fails the upgrade; the canary group's tasks are sent when the upgrade is created, the others when their batch is released. Observing the canary before promotion has no time limit |
+| Disabled or deleted node | Its task shows "Node disabled or deleted; not upgraded" and the other nodes go on; with every canary node disabled or deleted the upgrade cannot be promoted: cancel it and start again |
 
 ## Checks on the node
 
@@ -163,6 +165,6 @@ The endpoints are under `/api/v1`. Read-only AccessKeys can call the GET endpoin
 | "Canary nodes have not passed the health window" | The canary group has been healthy for less than 30 seconds | Wait, then promote |
 | "Version … was rejected; the previous version is kept" | Download, signature, checksum, archive, or version check failed | Read **Diagnostics**; check the node release source and public key |
 | "Version … failed the health check and was rolled back" | The candidate did not apply the configuration and stay healthy within 90 seconds | Read the node logs |
-| "Upgrade task expired" | Not finished within 30 minutes | Check node connectivity and start again |
+| "Upgrade task expired" | Not finished within 30 minutes after it was sent | Check node connectivity and start again |
 | "The task for version … was superseded by a local package update" | The node's package or image was updated before the upgrade was acknowledged | The installed version applies; start again if needed |
 | "Queued node upgrades were cancelled" | **Cancel queued work** was clicked, or a node failed and the remaining queued tasks stopped | Fix the failed node, then start again if needed |

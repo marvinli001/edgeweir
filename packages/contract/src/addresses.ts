@@ -207,6 +207,31 @@ export function embeddedIPv4(ip: IpAddress): IpAddress | null {
   return { version: 4, bytes: ip.bytes.slice(12) };
 }
 
+/** Ranges without unicast host addresses: unspecified, loopback, link-local, multicast, reserved and broadcast. */
+const NOT_UNICAST = [
+  "0.0.0.0/8",
+  "127.0.0.0/8",
+  "169.254.0.0/16",
+  "224.0.0.0/4",
+  "240.0.0.0/4",
+  "::/128",
+  "::1/128",
+  "fe80::/10",
+  "ff00::/8",
+].map((text) => parseCidr(text) as Cidr);
+
+/**
+ * The canonical text of a single unicast host address, as nodes report
+ * theirs, or null for anything else (a CIDR, a host name, loopback,
+ * link-local, multicast...). Private and documentation addresses count.
+ */
+export function unicastAddress(text: string): string | null {
+  const ip = parseIp(text.trim());
+  if (!ip) return null;
+  const judged = embeddedIPv4(ip) ?? ip;
+  return NOT_UNICAST.some((range) => cidrContains(range, judged)) ? null : formatIp(ip);
+}
+
 /** Host names that always mean the node itself (RFC 6761 section 6.3). */
 export function isLocalhostName(host: string): boolean {
   const name = host.toLowerCase().replace(/\.$/, "");

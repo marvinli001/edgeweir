@@ -16,6 +16,7 @@ import {
   MAX_AUTO_BANS_PER_CLUSTER,
   parseBanCidr,
   protectedBanOverlap,
+  unicastAddress,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import {
@@ -114,14 +115,26 @@ export async function setBanSettings(db: Database, input: BanSettings, actor: Ac
   });
 }
 
-/** Node addresses and the allow lists: no ban may cover them. */
-async function protectedAddresses(tx: Executor): Promise<string[]> {
-  const ips = await tx.selectDistinct({ address: schema.nodeIp.address }).from(schema.nodeIp);
+/**
+ * Node addresses and the allow lists: no ban may cover them. A site
+ * ban is held back only by the addresses of nodes in the site's cluster, a
+ * platform ban by those of every node. A node reports single addresses; rows
+ * stored before that was checked are skipped unless they are one.
+ */
+async function protectedAddresses(tx: Executor, clusterId: string | null): Promise<string[]> {
+  const ips = await tx
+    .selectDistinct({ address: schema.nodeIp.address })
+    .from(schema.nodeIp)
+    .innerJoin(schema.node, eq(schema.node.id, schema.nodeIp.nodeId))
+    .where(clusterId ? eq(schema.node.clusterId, clusterId) : undefined);
   const allow = await tx
     .select({ entries: schema.ipList.entries })
     .from(schema.ipList)
     .where(eq(schema.ipList.kind, "allow"));
-  return [...ips.map((row) => row.address), ...allow.flatMap((row) => row.entries)];
+  return [
+    ...ips.flatMap((row) => unicastAddress(row.address) ?? []),
+    ...allow.flatMap((row) => row.entries),
+  ];
 }
 
 const active = (now: Date) =>
@@ -235,7 +248,10 @@ export async function createBan(
   const id = await db.transaction(async (tx) => {
     const site = input.scope === "site" ? await findSite(tx, input.siteId ?? "") : undefined;
     await lockBans(tx);
-    const covered = protectedBanOverlap(target.cidr, await protectedAddresses(tx));
+    const covered = protectedBanOverlap(
+      target.cidr,
+      await protectedAddresses(tx, site?.clusterId ?? null),
+    );
     if (covered)
       fail("BAN_PROTECTED_ADDRESS", `the ban covers the protected address ${covered}`, {
         address: covered,
@@ -519,7 +535,7 @@ export async function reportAutoBans(
           .where(and(inArray(schema.site.id, siteIds), eq(schema.site.clusterId, node.clusterId)))
       ).map((site) => [site.id, site]),
     );
-    const protectedList = await protectedAddresses(tx);
+    const protectedList = await protectedAddresses(tx, node.clusterId);
     const accepted = [...items.values()].filter(
       (item) => sites.has(item.siteId) && !protectedBanOverlap(item.cidr.cidr, protectedList),
     );

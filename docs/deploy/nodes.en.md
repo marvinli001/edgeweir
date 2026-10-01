@@ -60,7 +60,7 @@ Expected: `edgeweir-node.service` is `active (running)`; in **Clusters & nodes**
 
 | Step | Behavior | On failure |
 | --- | --- | --- |
-| 1 | Reads the token (`EDGEWEIR_TOKEN` or `--token-file`), checks the `ewt_` format, and removes it from the environment so child processes do not inherit it | Exit |
+| 1 | Reads the token (`EDGEWEIR_TOKEN` or `--token-file`), checks the `ewt_` format, and removes it from the environment so child processes do not inherit it. On an enrolled host (`identity.json` in the state directory) no token is needed, and one given is not used | Exit |
 | 2 | Checks Linux, root, `curl`, `sha256sum`, `tar`, systemd, and architecture; with `--format auto`, picks deb when `dpkg` and `apt-get` exist, rpm when `rpm` and `dnf`/`yum` exist, else tar.gz | Exit |
 | 3 | Resolves the version: `--version`, or the `latest` file of the downloads mirror, falling back to the latest GitHub release | Exit, asking for `--version` |
 | 4 | Downloads `checksums.txt` and `checksums.txt.sigstore.json`: mirror first, then GitHub | Exit |
@@ -68,11 +68,12 @@ Expected: `edgeweir-node.service` is `active (running)`; in **Clusters & nodes**
 | 6 | Picks the package for this host from the signed `checksums.txt`, and `edgeweir-openresty` and `edgeweir-openresty-modsecurity` of the same release (exactly one file per package, format, and architecture); exits on glibc older than 2.34; downloads them (mirror first, then GitHub) and verifies their SHA-256 | Exit |
 | 7 | Installs `edgeweir-openresty` and `edgeweir-openresty-modsecurity` first. A tar.gz install uses the host's `dpkg` or `rpm` for them; without either, `edgeweir-openresty` must already be installed | Exit |
 | 8 | Installs the deb, rpm, or tar.gz | Exit |
-| 9 | `edgeweir-node enroll`: checks the CA fingerprint before sending the token, generates the private key locally, and exchanges a CSR for the node certificate; from then on, mTLS only | Exit |
-| 10 | Disables `openresty.service`, enables and starts `edgeweir-node.service` (skipped with `--no-start`) | — |
+| 9 | `edgeweir-node enroll`: checks the CA fingerprint before sending the token, generates the private key locally, and exchanges a CSR for the node certificate; from then on, mTLS only. Skipped on an enrolled host (enroll again with `edgeweir-node enroll --force`) | Exit |
+| 10 | Disables `openresty.service`, enables and starts `edgeweir-node.service` (skipped with `--no-start`); a tar.gz install first restarts a running service (deb and rpm package scripts do that themselves) | — |
 
 - Nothing downloaded runs before steps 5 and 6 pass. `--allow-unsigned` skips step 5 for development only; the SHA-256 is still verified.
 - The script consists of functions and calls `main` on its last line: a truncated download executes nothing.
+- An enrolled host can run the same command again: to retry after a failed step, or to update the packages.
 - The console never stores SSH credentials; the node private key never leaves the node.
 
 Installed files:

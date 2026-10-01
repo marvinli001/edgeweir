@@ -1,7 +1,7 @@
 import { decodeNodeConfig, nodeRequirements } from "@edgeweir/config-compiler";
-import { type Node, nodeSupportsFeature } from "@edgeweir/contract";
+import { type Node, nodeSupportsFeature, unicastAddress } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { isOnline, ONLINE_WINDOW_SECONDS } from "../lib/node-online";
 import { type Actor, recordAudit } from "./audit";
@@ -15,6 +15,7 @@ import {
   rolloutTargets,
   targetFor,
 } from "./revisions";
+import { discardNodeUpgrades } from "./upgrades";
 
 export { isOnline, ONLINE_WINDOW_SECONDS };
 
@@ -165,7 +166,8 @@ export async function updateNode(
 
 /**
  * Disables or re-enables a node. A disabled node is refused by the node
- * channel (it keeps serving its last-known-good configuration) until enabled;
+ * channel (it keeps serving its last-known-good configuration) until enabled,
+ * except for certificate renewal, so it still has a valid one by then;
  * its unfinished cache task deliveries are marked skipped, and the purges it
  * missed are made up with whole-site purges once it pulls tasks again.
  */
@@ -179,6 +181,7 @@ export async function setNodeStatus(
     const row = await findNode(tx, id);
     await tx.update(schema.node).set({ status }).where(eq(schema.node.id, id));
     const skippedTasks = status === "disabled" ? await skipNodeTasks(tx, id) : 0;
+    if (status === "disabled") await discardNodeUpgrades(tx, id);
     await recordAudit(tx, actor, {
       action: status === "disabled" ? "node.disable" : "node.enable",
       targetType: "node",
@@ -198,17 +201,29 @@ export async function setNodeStatus(
 export async function deleteNode(db: Database, id: string, actor: Actor): Promise<void> {
   await db.transaction(async (tx) => {
     const row = await findNode(tx, id);
-    if (row.certSerial) {
+    // Also the certificate a renewal replaced, still accepted until the node used the new one.
+    const serials = [
+      ...(row.certSerial
+        ? [{ serial: row.certSerial, fingerprintSha256: row.certFingerprint }]
+        : []),
+      ...(row.previousCertSerial
+        ? [{ serial: row.previousCertSerial, fingerprintSha256: "" }]
+        : []),
+    ];
+    if (serials.length) {
       await tx
         .insert(schema.nodeCertificateRevocation)
-        .values({
-          serial: normalizeSerial(row.certSerial),
-          nodeId: row.id,
-          fingerprintSha256: row.certFingerprint ?? "",
-          reason: "node deleted",
-        })
+        .values(
+          serials.map((s) => ({
+            serial: normalizeSerial(s.serial),
+            nodeId: row.id,
+            fingerprintSha256: s.fingerprintSha256 ?? "",
+            reason: "node deleted",
+          })),
+        )
         .onConflictDoNothing();
     }
+    await discardNodeUpgrades(tx, id);
     await tx.delete(schema.node).where(eq(schema.node.id, id));
     await recordAudit(tx, actor, {
       action: "node.delete",
@@ -224,9 +239,56 @@ export async function deleteNode(db: Database, id: string, actor: Actor): Promis
   });
 }
 
+/** Addresses kept per node. */
+export const MAX_NODE_ADDRESSES = 64;
+
+/**
+ * Replaces the addresses a node reported before with the ones it reports
+ * now, so a changed address or a rotated IPv6 temporary address leaves DNS
+ * and ban protection. Only single unicast addresses are kept; a report
+ * without any (the host could not read its interfaces) keeps the last ones.
+ */
+export async function replaceReportedAddresses(
+  tx: Executor,
+  nodeId: string,
+  reported: readonly string[],
+): Promise<void> {
+  const addresses = [
+    ...new Set(reported.map(unicastAddress).filter((a): a is string => a !== null)),
+  ].slice(0, MAX_NODE_ADDRESSES);
+  if (addresses.length === 0) return;
+  await tx
+    .delete(schema.nodeIp)
+    .where(
+      and(
+        eq(schema.nodeIp.nodeId, nodeId),
+        eq(schema.nodeIp.kind, "reported"),
+        notInArray(schema.nodeIp.address, addresses),
+      ),
+    );
+  await tx
+    .insert(schema.nodeIp)
+    .values(addresses.map((address) => ({ nodeId, address })))
+    .onConflictDoNothing();
+}
+
 /** Canonical form of a certificate serial for comparisons (hex, no colons or leading zeros). */
 export function normalizeSerial(serial: string | null | undefined): string {
   return (serial ?? "").toLowerCase().replace(/:/g, "").replace(/^0+/, "");
+}
+
+/**
+ * Which of a node's certificates a client certificate serial is: the current
+ * one, the one a renewal replaced (until the node uses the new one), or null.
+ */
+export function acceptedCertificate(
+  node: { certSerial: string | null; previousCertSerial: string | null },
+  serial: string | undefined,
+): "current" | "previous" | null {
+  const key = normalizeSerial(serial);
+  if (!key) return null;
+  if (key === normalizeSerial(node.certSerial)) return "current";
+  return key === normalizeSerial(node.previousCertSerial) ? "previous" : null;
 }
 
 export async function isSerialRevoked(db: Executor, serial: string | undefined): Promise<boolean> {

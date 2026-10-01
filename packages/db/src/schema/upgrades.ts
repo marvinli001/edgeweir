@@ -44,6 +44,8 @@ export const nodeUpgradeDelivery = pgTable(
     errorCode: text("error_code").notNull().default(""),
     healthySince: timestamp("healthy_since", { withTimezone: true }),
     leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    /** Set when the delivery is released to its node (pending); it fails once past. */
+    deadlineAt: timestamp("deadline_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [

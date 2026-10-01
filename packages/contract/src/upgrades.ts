@@ -21,6 +21,8 @@ const delivery = z.object({
   state: z.enum(["held", "pending", "running", "succeeded", "failed", "cancelled"]),
   message: z.string(),
   errorCode: z.string(),
+  /** Pending and running deliveries fail when their node has not finished by then. */
+  deadlineAt: z.string().nullable(),
   finishedAt: z.string().nullable(),
 });
 export const upgradeJob = z.object({

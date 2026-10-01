@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { m, timeAgo } from "@/lib/i18n";
+import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
 import { orpc } from "@/lib/orpc";
 
@@ -92,7 +92,7 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
               </div>
               <div className="divide-y rounded-xl border">
                 {job.deliveries.map((d) => (
-                  <Delivery key={d.id} delivery={d} version={job.version} />
+                  <Delivery key={d.id} delivery={d} version={job.version} jobState={job.state} />
                 ))}
               </div>
               {job.state === "canary" && job.deliveries.some((d) => d.state === "held") ? (
@@ -187,9 +187,11 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
 function Delivery({
   delivery: d,
   version,
+  jobState,
 }: {
   delivery: UpgradeJob["deliveries"][number];
   version: string;
+  jobState: UpgradeJob["state"];
 }) {
   return (
     <div className="space-y-2 p-3 text-sm">
@@ -198,8 +200,16 @@ function Delivery({
         <span className="text-xs text-muted-foreground">
           {d.phase === "canary" ? m.upgrade_canary() : m.upgrade_rollout()}
         </span>
-        <Badge variant="outline">{stateLabel(d.state)}</Badge>
+        <Badge variant="outline">
+          {/* After promotion the rest follows in batches. */}
+          {d.state === "held" && jobState === "rollout" ? m.upgrade_queued() : stateLabel(d.state)}
+        </Badge>
       </div>
+      {d.deadlineAt ? (
+        <p className="text-xs text-muted-foreground">
+          {m.upgrade_deadline({ time: formatDateTime(d.deadlineAt) })}
+        </p>
+      ) : null}
       {d.errorCode ? (
         <p className="break-words text-xs text-muted-foreground">
           {taskErrorText(d.errorCode, { version }, d.message)}

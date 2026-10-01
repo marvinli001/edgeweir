@@ -27,9 +27,21 @@ const job = schema.nodeUpgrade,
   delivery = schema.nodeUpgradeDelivery;
 const ACTIVE = ["held", "pending", "running"];
 const FRESH = 45_000,
-  OBSERVE = 30_000,
-  EXPIRE = 30 * 60_000;
+  OBSERVE = 30_000;
+/** A released delivery fails when its node has not finished within this time. */
+export const UPGRADE_DEADLINE_MS = 30 * 60_000;
+/** Share of the rollout nodes upgrading at the same time after promotion (at least one). */
+export const MAX_UNAVAILABLE = 0.25;
+/** Deliveries of nodes disabled or deleted during the upgrade; the upgrade goes on without them. */
+const NODE_REMOVED = "upgrade_node_removed";
 type JobRow = typeof job.$inferSelect;
+type DeliveryRow = typeof delivery.$inferSelect;
+const removed = (d: Pick<DeliveryRow, "state" | "errorCode">) =>
+  d.state === "cancelled" && d.errorCode === NODE_REMOVED;
+const deadline = (now: Date) => new Date(now.getTime() + UPGRADE_DEADLINE_MS);
+async function lockCluster(tx: Executor, clusterId: string) {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`upgrade/${clusterId}`}))`);
+}
 export async function nodeRelease(
   app: AppContext,
   version: string,
@@ -114,9 +126,9 @@ async function dtos(db: Executor, rows: JobRow[], now = Date.now()): Promise<Upg
     targets.set(clusterId, await rolloutTargets(db, clusterId));
   return rows.map((r) => {
     const items = deliveries.filter((d) => d.upgradeId === r.id),
-      canary = items.filter((d) => d.phase === "canary"),
+      canary = items.filter((d) => d.phase === "canary" && !removed(d)),
       clusterTargets = targets.get(r.clusterId);
-    const healthy = (d: typeof delivery.$inferSelect) => {
+    const healthy = (d: DeliveryRow) => {
       const current = nodeMap.get(d.nodeId);
       const target =
         current && clusterTargets ? targetFor(current.node, clusterTargets) : undefined;
@@ -156,6 +168,10 @@ async function dtos(db: Executor, rows: JobRow[], now = Date.now()): Promise<Upg
         state: d.state as UpgradeJob["deliveries"][number]["state"],
         message: d.message,
         errorCode: d.errorCode,
+        deadlineAt:
+          d.state === "pending" || d.state === "running"
+            ? (d.deadlineAt?.toISOString() ?? null)
+            : null,
         finishedAt: d.finishedAt?.toISOString() ?? null,
       })),
     };
@@ -166,14 +182,46 @@ async function getJob(db: Executor, id: string) {
   if (!row) fail("UPGRADE_NOT_FOUND", "upgrade not found");
   return row;
 }
-async function refresh(db: Executor, id: string) {
+/**
+ * Releases the next rollout deliveries (by node name) while fewer than
+ * MAX_UNAVAILABLE of the rollout nodes are upgrading.
+ */
+async function releaseBatch(db: Executor, id: string, now: Date) {
   const rows = await db
-    .select({ state: delivery.state })
+    .select({ id: delivery.id, state: delivery.state })
     .from(delivery)
-    .where(eq(delivery.upgradeId, id));
+    .where(and(eq(delivery.upgradeId, id), eq(delivery.phase, "rollout")))
+    .orderBy(asc(delivery.nodeName), asc(delivery.id));
+  const limit = Math.max(1, Math.ceil(rows.length * MAX_UNAVAILABLE));
+  const busy = rows.filter((d) => d.state === "pending" || d.state === "running").length;
+  const next = rows.filter((d) => d.state === "held").slice(0, Math.max(0, limit - busy));
+  if (next.length)
+    await db
+      .update(delivery)
+      .set({ state: "pending", deadlineAt: deadline(now) })
+      .where(
+        and(
+          inArray(
+            delivery.id,
+            next.map((d) => d.id),
+          ),
+          eq(delivery.state, "held"),
+        ),
+      );
+}
+async function refresh(db: Executor, id: string, now = new Date()) {
+  const rows = (
+    await db
+      .select({ state: delivery.state, errorCode: delivery.errorCode })
+      .from(delivery)
+      .where(eq(delivery.upgradeId, id))
+  ).filter((d) => !removed(d));
   const [current] = await db.select().from(job).where(eq(job.id, id));
   if (!current || current.state === "cancelled") return;
-  if (rows.some((d) => d.state === "failed")) {
+  if (rows.length === 0) {
+    // Every node left the upgrade.
+    await db.update(job).set({ state: "cancelled" }).where(eq(job.id, id));
+  } else if (rows.some((d) => d.state === "failed")) {
     await db.update(job).set({ state: "failed" }).where(eq(job.id, id));
     await db
       .update(delivery)
@@ -184,20 +232,24 @@ async function refresh(db: Executor, id: string) {
         finishedAt: new Date(),
       })
       .where(and(eq(delivery.upgradeId, id), inArray(delivery.state, ["held", "pending"])));
-  } else if (rows.length && rows.every((d) => d.state === "succeeded"))
+  } else if (rows.every((d) => d.state === "succeeded"))
     await db.update(job).set({ state: "succeeded" }).where(eq(job.id, id));
+  else if (current.state === "rollout") await releaseBatch(db, id, now);
 }
+/**
+ * Fails released deliveries past their deadline, which fails their upgrade.
+ * Held deliveries have none: a canary is observed as long as the operator
+ * wants, and rollout batches get their own time when released.
+ */
 export async function expireUpgrades(db: Database, now = new Date()) {
   const expired = await db
     .selectDistinct({ id: job.id, clusterId: job.clusterId })
     .from(job)
     .innerJoin(delivery, eq(delivery.upgradeId, job.id))
-    .where(
-      and(lt(job.createdAt, new Date(now.getTime() - EXPIRE)), inArray(delivery.state, ACTIVE)),
-    );
+    .where(and(inArray(delivery.state, ["pending", "running"]), lt(delivery.deadlineAt, now)));
   for (const row of expired)
     await db.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`upgrade/${row.clusterId}`}))`);
+      await lockCluster(tx, row.clusterId);
       await tx
         .update(delivery)
         .set({
@@ -206,9 +258,47 @@ export async function expireUpgrades(db: Database, now = new Date()) {
           errorCode: "upgrade_expired",
           finishedAt: now,
         })
-        .where(and(eq(delivery.upgradeId, row.id), inArray(delivery.state, ACTIVE)));
-      await refresh(tx, row.id);
+        .where(
+          and(
+            eq(delivery.upgradeId, row.id),
+            inArray(delivery.state, ["pending", "running"]),
+            lt(delivery.deadlineAt, now),
+          ),
+        );
+      await refresh(tx, row.id, now);
     });
+}
+/**
+ * Takes a disabled or deleted node out of its unfinished upgrades: they go
+ * on with the other nodes instead of waiting for it until they expire.
+ */
+export async function discardNodeUpgrades(tx: Executor, nodeId: string, now = new Date()) {
+  const rows = await tx
+    .selectDistinct({ id: job.id, clusterId: job.clusterId })
+    .from(delivery)
+    .innerJoin(job, eq(job.id, delivery.upgradeId))
+    .where(and(eq(delivery.nodeId, nodeId), inArray(delivery.state, ACTIVE)));
+  for (const row of rows) {
+    await lockCluster(tx, row.clusterId);
+    await tx
+      .update(delivery)
+      .set({
+        state: "cancelled",
+        message: "node disabled or deleted",
+        errorCode: NODE_REMOVED,
+        leaseUntil: null,
+        finishedAt: now,
+      })
+      .where(
+        and(
+          eq(delivery.upgradeId, row.id),
+          eq(delivery.nodeId, nodeId),
+          inArray(delivery.state, ACTIVE),
+        ),
+      );
+    await refresh(tx, row.id, now);
+  }
+  return rows.length;
 }
 export async function listUpgrades(app: AppContext, clusterId?: string) {
   return dtos(
@@ -235,7 +325,7 @@ export async function createUpgrade(
       .where(eq(schema.nodeGroup.id, input.nodeGroupId))
       .for("update");
     if (!group) fail("NODE_GROUP_NOT_FOUND", "node group not found");
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`upgrade/${group.clusterId}`}))`);
+    await lockCluster(tx, group.clusterId);
     const [cluster] = await tx
       .select()
       .from(schema.cluster)
@@ -302,6 +392,7 @@ export async function createUpgrade(
         arch: n.arch,
         phase: n.nodeGroupId === group.id ? "canary" : "rollout",
         state: n.nodeGroupId === group.id ? "pending" : "held",
+        deadlineAt: n.nodeGroupId === group.id ? deadline(new Date(now)) : null,
       })),
     );
     await recordAudit(tx, actor, {
@@ -319,21 +410,15 @@ export async function createUpgrade(
 export async function promoteUpgrade(app: AppContext, id: string, actor: Actor) {
   return app.db.transaction(async (tx) => {
     const row = await getJob(tx, id);
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`upgrade/${row.clusterId}`}))`);
+    await lockCluster(tx, row.clusterId);
     const current = await getJob(tx, id);
     const [dto] = await dtos(tx, [current]);
     if (!dto?.canPromote)
       fail("UPGRADE_NOT_READY", "canary nodes must remain healthy before promotion");
-    await tx
-      .update(delivery)
-      .set({ state: "pending" })
-      .where(and(eq(delivery.upgradeId, id), eq(delivery.state, "held")));
-    const [updated] = await tx
-      .update(job)
-      .set({ state: "rollout" })
-      .where(eq(job.id, id))
-      .returning();
-    if (!updated) throw new Error("upgrade disappeared");
+    await tx.update(job).set({ state: "rollout" }).where(eq(job.id, id));
+    // The rest follows in batches, each with its own deadline.
+    await releaseBatch(tx, id, new Date());
+    const updated = await getJob(tx, id);
     await recordAudit(tx, actor, {
       action: "node.upgrade_promote",
       targetType: "node_upgrade",
@@ -348,7 +433,7 @@ export async function promoteUpgrade(app: AppContext, id: string, actor: Actor) 
 export async function cancelUpgrade(app: AppContext, id: string, actor: Actor) {
   return app.db.transaction(async (tx) => {
     const row = await getJob(tx, id);
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`upgrade/${row.clusterId}`}))`);
+    await lockCluster(tx, row.clusterId);
     const running = await tx
       .select()
       .from(delivery)
@@ -406,8 +491,10 @@ export async function pullUpgrade(
   node: { id: string; clusterId: string; status: string; supportedFeatures: string[] },
 ) {
   if (node.status !== "active" || !node.supportedFeatures.includes("self-upgrade-v1")) return null;
+  // Most pulls find no upgrade: only those that do take the cluster lock.
+  if (!(await hasUpgradeTasks(app.db, node.id))) return null;
   return app.db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`upgrade/${node.clusterId}`}))`);
+    await lockCluster(tx, node.clusterId);
     const [row] = await tx
       .select({ delivery, job })
       .from(delivery)
@@ -426,7 +513,7 @@ export async function pullUpgrade(
       .limit(1)
       .for("update");
     if (!row) return null;
-    if (Date.now() - row.job.createdAt.getTime() > EXPIRE) {
+    if (row.delivery.deadlineAt && row.delivery.deadlineAt.getTime() < Date.now()) {
       await tx
         .update(delivery)
         .set({
@@ -470,9 +557,7 @@ export async function reportUpgrade(
     if (!found) return false;
     if (found.delivery.nodeId !== nodeId)
       throw new ConnectError("upgrade belongs to another node", Code.PermissionDenied);
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext(${`upgrade/${found.job.clusterId}`}))`,
-    );
+    await lockCluster(tx, found.job.clusterId);
     const [current] = await tx.select().from(delivery).where(eq(delivery.id, result.taskId));
     if (!current) return false;
     if (current.state !== "running") return true;
