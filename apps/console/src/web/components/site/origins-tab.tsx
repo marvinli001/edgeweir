@@ -17,7 +17,7 @@ import { OriginHealthBadge, OriginHealthError } from "@/components/site/origin-h
 import { nextDraftKey, SaveBar, serializeDrafts, useSaveSite } from "@/components/site/save-site";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -54,6 +54,8 @@ interface OriginDraft {
   backup: boolean;
   hostHeader: string;
   sni: string;
+  /** Origin group; empty is the default group. */
+  group: string;
   s3: boolean;
   region: string;
   bucket: string;
@@ -72,6 +74,7 @@ const newOrigin = (): OriginDraft => ({
   backup: false,
   hostHeader: "",
   sni: "",
+  group: "",
   s3: false,
   region: "",
   bucket: "",
@@ -97,6 +100,7 @@ function OriginsCard({ site }: { site: Site }) {
         backup: o.backup,
         hostHeader: o.hostHeader,
         sni: o.sni,
+        group: o.group,
         s3: o.s3 !== null,
         region: o.s3?.region ?? "",
         bucket: o.s3?.bucket ?? "",
@@ -112,6 +116,13 @@ function OriginsCard({ site }: { site: Site }) {
   );
   const [rows, setRows] = React.useState(initial);
   const { save, error, pending } = useSaveSite(site.id);
+  const { isAdmin } = useRouteContext({ from: "/_app" });
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
+  const groupsAvailability = features.data?.rulesV2;
+  // Groups other than the default need rules-v2; administrators may require it.
+  const groupsLocked = !isAdmin && groupsAvailability?.available === false;
+  // Requests without an origin rule go to the default group.
+  const noDefaultGroup = !rows.some((r) => r.group.trim() === "");
   const health = useQuery({
     ...orpc.sites.originHealth.queryOptions({ input: { id: site.id } }),
     refetchInterval: 10_000,
@@ -138,6 +149,7 @@ function OriginsCard({ site }: { site: Site }) {
               backup: r.backup,
               hostHeader: r.hostHeader.trim(),
               sni: r.sni.trim(),
+              group: r.group.trim(),
               s3: r.s3
                 ? {
                     region: r.region.trim(),
@@ -154,6 +166,7 @@ function OriginsCard({ site }: { site: Site }) {
           <CardTitle>{m.site_tab_origins()}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
+          <Unavailable availability={groupsAvailability} testId="origins-groups-unavailable" />
           {rows.map((row, index) => {
             const rowHealth = healthOf(row.originId);
             const fields = (
@@ -163,6 +176,7 @@ function OriginsCard({ site }: { site: Site }) {
                 health={rowHealth}
                 secretStored={storedKeys.has(row.accessKeyId.trim())}
                 removable={rows.length > 1}
+                groupLocked={groupsLocked && row.group === ""}
                 onChange={(change) => patch(row.key, change)}
                 onRemove={() => setRows(rows.filter((r) => r.key !== row.key))}
               />
@@ -193,8 +207,18 @@ function OriginsCard({ site }: { site: Site }) {
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.site_origin_add()}
           </Button>
+          {noDefaultGroup ? (
+            <FieldError className="animate-in fade-in" data-testid="origins-default-group-required">
+              {m.site_origin_group_required()}
+            </FieldError>
+          ) : null}
         </CardContent>
-        <SaveBar dirty={dirty} pending={pending} error={error} testId="origins-save" />
+        <SaveBar
+          dirty={dirty && !noDefaultGroup}
+          pending={pending}
+          error={error}
+          testId="origins-save"
+        />
       </form>
     </Card>
   );
@@ -206,6 +230,7 @@ function OriginRow({
   health,
   secretStored,
   removable,
+  groupLocked,
   onChange,
   onRemove,
 }: {
@@ -214,6 +239,8 @@ function OriginRow({
   health: OriginHealth | undefined;
   secretStored: boolean;
   removable: boolean;
+  /** The origin is in the default group and may not leave it yet. */
+  groupLocked: boolean;
   onChange: (change: Partial<OriginDraft>) => void;
   onRemove: () => void;
 }) {
@@ -297,7 +324,7 @@ function OriginRow({
       <div
         className={cn(
           "grid grid-cols-2 gap-3",
-          https ? "lg:grid-cols-[1fr_1fr_auto_auto]" : "lg:grid-cols-[1fr_auto_auto]",
+          https ? "lg:grid-cols-[1fr_1fr_9rem_auto_auto]" : "lg:grid-cols-[1fr_9rem_auto_auto]",
         )}
       >
         <Field className={cn("col-span-2", https ? "sm:col-span-1" : "lg:col-span-1")}>
@@ -323,6 +350,20 @@ function OriginRow({
             />
           </Field>
         ) : null}
+        <Field className="col-span-2 sm:col-span-1" data-disabled={groupLocked || undefined}>
+          <FieldLabel htmlFor={id("group")}>{m.site_origin_group()}</FieldLabel>
+          <Input
+            id={id("group")}
+            value={row.group}
+            maxLength={32}
+            pattern="[a-z0-9_\-]*"
+            disabled={groupLocked}
+            onChange={(event) => onChange({ group: event.target.value })}
+            placeholder={m.site_origin_group_default()}
+            className="font-mono"
+            data-testid="origin-group"
+          />
+        </Field>
         <SwitchField
           id={id("backup")}
           label={m.site_origin_backup()}

@@ -1266,5 +1266,7 @@
   "cache_rule_builder": "构建器",
   "cache_rule_advanced": "高级",
   "cache_rule_browser_ttl": "浏览器 TTL（秒）",
-  "cache_rule_browser_ttl_origin": "跟随源站"
+  "cache_rule_browser_ttl_origin": "跟随源站",
+  "site_origin_group": "源站组",
+  "site_origin_group_required": "至少保留一个默认组源站"
 }

@@ -1427,5 +1427,7 @@
   "cache_rule_builder": "Builder",
   "cache_rule_advanced": "Advanced",
   "cache_rule_browser_ttl": "Browser TTL (s)",
-  "cache_rule_browser_ttl_origin": "Origin's"
+  "cache_rule_browser_ttl_origin": "Origin's",
+  "site_origin_group": "Origin group",
+  "site_origin_group_required": "Keep at least one origin in the default group"
 }
