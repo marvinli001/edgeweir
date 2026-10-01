@@ -14,6 +14,7 @@ const vector = load("content_hash_vector.json");
 const vectorM2 = load("content_hash_vector_m2.json");
 const vectorV021 = load("content_hash_vector_v021.json");
 const vectorV0110 = load("content_hash_vector_v0110.json");
+const vectorV0120 = load("content_hash_vector_v0120.json");
 
 /** The console models behind the M2 vector (pools, S3, cache keys, rule conditions). */
 const m2Models = (): CompileInput => ({
@@ -155,6 +156,7 @@ describe("content hash matches the Go agent", () => {
     ["M2", vectorM2],
     ["v0.2.1", vectorV021],
     ["v0.11.0", vectorV0110],
+    ["v0.12.0", vectorV0120],
   ])("encodes the %s vector to the same canonical bytes and hash", (_, v) => {
     const config = canonicalize(fromJson(NodeConfigSchema, v.config));
     const bare = clone(NodeConfigSchema, config);
@@ -200,6 +202,61 @@ describe("content hash matches the Go agent", () => {
     }
     config.requiredFeatures = [];
     expect(contentHash(config)).toBe(vectorM2.content_hash);
+  });
+
+  it("compiles the v0.12.0 fields (Cache-Tag, health check, affinity, error pages, offline hosts) into the same hash", () => {
+    const input = m2Models();
+    const bucket = input.sites.find((site) => site.id === "s2");
+    if (!bucket) throw new Error("site s2 missing");
+    bucket.keepCacheTag = true;
+    bucket.errorPages = {
+      pages: [
+        {
+          status: 503,
+          template: "<h1>{{status}}</h1><p>{{request_id}} {{client_ip}} {{host}}</p>",
+        },
+        { status: 403, template: "<p>denied {{unknown}} 错误</p>" },
+      ],
+      interceptOriginErrors: true,
+    };
+    bucket.originPool.activeHealthCheck = {
+      path: "/healthz?full=1",
+      method: "HEAD",
+      expectedStatusMin: 200,
+      expectedStatusMax: 299,
+      host: "health.example.com",
+      intervalSeconds: 10,
+      timeoutSeconds: 3,
+      healthyThreshold: 2,
+      unhealthyThreshold: 3,
+    };
+    bucket.originPool.sessionAffinity = { ttlSeconds: 3600 };
+    input.challengeKeys = [
+      { id: "k3", role: "next" },
+      { id: "k1", role: "previous" },
+      { id: "k2", role: "current" },
+    ];
+    input.platformErrorPages = {
+      unknownHost: "<h1>{{host}} is not served here</h1>",
+      siteDisabled: "",
+      siteSuspended: "<h1>suspended</h1><p>{{request_id}}</p>",
+    };
+    input.offlineHosts = [
+      { name: "away.test.example", wildcard: false, reason: "disabled" },
+      { name: "away.test", wildcard: false, reason: "suspended" },
+      { name: "old.test", wildcard: false, reason: "disabled" },
+      { name: "away.test", wildcard: true, reason: "suspended" },
+    ];
+    const config = compileNodeConfig(input, 12n);
+    // Session affinity alone brings the cluster's keys (and challenge-v1), not the protection.
+    expect(config.requiredFeatures).toEqual([
+      "active-health-v1",
+      "challenge-v1",
+      "error-pages-v1",
+      "session-affinity-v1",
+    ]);
+    expect(config.platformProtection).toBeUndefined();
+    expect(config.contentHash).toBe(vectorV0120.content_hash);
   });
 
   it("compiles console models into the same hash", () => {

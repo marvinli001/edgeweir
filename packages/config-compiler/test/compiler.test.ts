@@ -1,9 +1,13 @@
+import { create } from "@bufbuild/protobuf";
+import { NodeConfigSchema } from "@edgeweir/proto";
 import { parseExpression } from "@edgeweir/rule-engine";
 import { describe, expect, it } from "vitest";
 import {
+  type ActiveHealthCheckModel,
   applyNodeConfigDiff,
   type CcPolicyModel,
   ConfigCapacityError,
+  canonicalize,
   compileNodeConfig,
   contentHash,
   DEFAULT_SITE_PROTECTION,
@@ -14,10 +18,13 @@ import {
   MAX_SITES_PER_CLUSTER,
   moduleFeatures,
   nodeRequirements,
+  type OfflineHostModel,
   parseDomain,
+  poolAndPageFeatures,
   type RuleModel,
   type SiteModel,
   type TlsModel,
+  usesChallengeKeys,
   usesChallenges,
 } from "../src/index";
 
@@ -634,5 +641,255 @@ describe("Brotli, Zstandard and OWASP CRS", () => {
     const decoded = decodeNodeConfig(encodeNodeConfig(changed));
     expect(decoded.sites.find((s) => s.id === "b")?.waf?.excludedRuleIds).toEqual([920350, 942100]);
     expect(contentHash(decoded)).toBe(changed.contentHash);
+  });
+});
+
+describe("Cache-Tag, active health checks, session affinity, error pages and offline hosts", () => {
+  const keys = [
+    { id: "k2", role: "current" },
+    { id: "k1", role: "previous" },
+    { id: "k3", role: "next" },
+  ];
+  const health: ActiveHealthCheckModel = {
+    path: "/healthz",
+    method: "GET",
+    expectedStatusMin: 200,
+    expectedStatusMax: 399,
+    host: "",
+    intervalSeconds: 30,
+    timeoutSeconds: 5,
+    healthyThreshold: 2,
+    unhealthyThreshold: 3,
+  };
+  const withPool = (
+    id: string,
+    pool: Partial<SiteModel["originPool"]>,
+    overrides: Partial<SiteModel> = {},
+  ) => {
+    const model = site(id, overrides);
+    return { ...model, originPool: { ...model.originPool, ...pool } };
+  };
+  const pages = [
+    { status: 503, template: "<h1>{{status}}</h1>" },
+    { status: 403, template: "denied {{request_id}}" },
+  ];
+  const offline: OfflineHostModel[] = [
+    { name: "old.test", wildcard: false, reason: "disabled" },
+    { name: "away.test", wildcard: true, reason: "suspended" },
+    { name: "away.test", wildcard: false, reason: "suspended" },
+  ];
+  const plain = compileNodeConfig({ clusterId: "c", sites: [site("a"), site("b")] }, 1n);
+
+  it("leaves every new field out by default, keeping the content hash", () => {
+    const config = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [
+          withPool(
+            "a",
+            { activeHealthCheck: null, sessionAffinity: null },
+            { keepCacheTag: false, errorPages: { pages: [], interceptOriginErrors: true } },
+          ),
+          site("b", { errorPages: null }),
+        ],
+        platformErrorPages: { unknownHost: "", siteDisabled: "", siteSuspended: "" },
+        offlineHosts: [],
+        challengeKeys: keys,
+      },
+      1n,
+    );
+    expect(config.contentHash).toBe(plain.contentHash);
+    expect(config.sites[0]?.errorPages).toBeUndefined();
+    expect(config.platformErrorPages).toBeUndefined();
+    expect(config.challengeKeys).toEqual([]);
+    expect(poolAndPageFeatures(config)).toEqual([]);
+  });
+
+  it("compiles keepCacheTag, platform pages and offline hosts without requiring a feature", () => {
+    const config = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [site("a", { keepCacheTag: true }), site("b")],
+        platformErrorPages: { unknownHost: "", siteDisabled: "", siteSuspended: "<p>later</p>" },
+        offlineHosts: offline,
+      },
+      1n,
+    );
+    expect(config.sites.map((s) => s.keepCacheTag)).toEqual([true, false]);
+    expect(config.platformErrorPages).toMatchObject({
+      unknownHost: "",
+      siteDisabled: "",
+      siteSuspended: "<p>later</p>",
+    });
+    expect(config.offlineHosts.map((h) => [h.name, h.wildcard, h.reason])).toEqual([
+      ["away.test", false, "suspended"],
+      ["away.test", true, "suspended"],
+      ["old.test", false, "disabled"],
+    ]);
+    expect(config.requiredFeatures).toEqual([]);
+    expect(nodeRequirements(config)).toEqual([]);
+    expect(config.contentHash).not.toBe(plain.contentHash);
+  });
+
+  it("compiles enabled active health checks with active-health-v1, served sites only", () => {
+    const config = compileNodeConfig(
+      { clusterId: "c", sites: [withPool("a", { activeHealthCheck: health }), site("b")] },
+      1n,
+    );
+    expect(config.sites[0]?.originPool?.activeHealthCheck).toMatchObject({
+      path: "/healthz",
+      method: "GET",
+      expectedStatusMin: 200,
+      expectedStatusMax: 399,
+      host: "",
+      intervalSeconds: 30,
+      timeoutSeconds: 5,
+      healthyThreshold: 2,
+      unhealthyThreshold: 3,
+    });
+    expect(config.sites[1]?.originPool?.activeHealthCheck).toBeUndefined();
+    expect(config.requiredFeatures).toEqual(["active-health-v1"]);
+    const disabled = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [withPool("a", { activeHealthCheck: health }, { enabled: false }), site("b")],
+      },
+      1n,
+    );
+    expect(disabled.requiredFeatures).not.toContain("active-health-v1");
+  });
+
+  it("carries the cluster's keys for session affinity and requires challenge-v1 with session-affinity-v1", () => {
+    const input = {
+      clusterId: "c",
+      sites: [withPool("a", { sessionAffinity: { ttlSeconds: 600 } }), site("b")],
+      challengeKeys: keys,
+    };
+    expect(usesChallenges(input)).toBe(false);
+    expect(usesChallengeKeys(input)).toBe(true);
+    const config = compileNodeConfig(input, 1n);
+    expect(config.sites[0]?.originPool?.sessionAffinity?.ttlSeconds).toBe(600);
+    expect(config.challengeKeys.map((k) => [k.id, k.role])).toEqual([
+      ["k1", "previous"],
+      ["k2", "current"],
+      ["k3", "next"],
+    ]);
+    // Keys without challenges: no platform or site protection.
+    expect(config.platformProtection).toBeUndefined();
+    expect(config.sites.every((s) => s.protection === undefined)).toBe(true);
+    expect(config.requiredFeatures).toEqual(["challenge-v1", "session-affinity-v1"]);
+    // A disabled site's affinity does not count.
+    const disabled = {
+      ...input,
+      sites: [withPool("a", { sessionAffinity: { ttlSeconds: 600 } }, { enabled: false })],
+    };
+    expect(usesChallengeKeys(disabled)).toBe(false);
+    expect(compileNodeConfig(disabled, 1n).challengeKeys).toEqual([]);
+  });
+
+  it("compiles a site's error pages sorted by status, only with pages, and requires error-pages-v1", () => {
+    const config = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [site("a", { errorPages: { pages, interceptOriginErrors: true } }), site("b")],
+      },
+      1n,
+    );
+    expect(config.sites[0]?.errorPages?.pages.map((p) => [p.status, p.template])).toEqual([
+      [403, "denied {{request_id}}"],
+      [503, "<h1>{{status}}</h1>"],
+    ]);
+    expect(config.sites[0]?.errorPages?.interceptOriginErrors).toBe(true);
+    expect(config.sites[1]?.errorPages).toBeUndefined();
+    expect(config.requiredFeatures).toEqual(["error-pages-v1"]);
+    // The input order of the pages does not change the hash.
+    const reversed = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [
+          site("a", { errorPages: { pages: [...pages].reverse(), interceptOriginErrors: true } }),
+          site("b"),
+        ],
+      },
+      1n,
+    );
+    expect(reversed.contentHash).toBe(config.contentHash);
+  });
+
+  it("sorts offline hosts by name and wildcard and error pages by status when canonicalizing", () => {
+    const config = create(NodeConfigSchema, {
+      clusterId: "c",
+      offlineHosts: [
+        { name: "b.test", wildcard: false, reason: "disabled" },
+        { name: "a.test.example", wildcard: false, reason: "disabled" },
+        { name: "a.test", wildcard: true, reason: "suspended" },
+        { name: "a.test", wildcard: false, reason: "suspended" },
+      ],
+      sites: [
+        {
+          id: "s",
+          errorPages: {
+            pages: [
+              { status: 504, template: "c" },
+              { status: 429, template: "b" },
+              { status: 403, template: "a" },
+            ],
+          },
+        },
+      ],
+    });
+    const canonical = canonicalize(config);
+    expect(canonical.offlineHosts.map((h) => `${h.name}/${h.wildcard}`)).toEqual([
+      "a.test/false",
+      "a.test/true",
+      "a.test.example/false",
+      "b.test/false",
+    ]);
+    expect(canonical.sites[0]?.errorPages?.pages.map((p) => p.status)).toEqual([403, 429, 504]);
+    // The input is left as it was.
+    expect(config.offlineHosts[0]?.name).toBe("b.test");
+  });
+
+  it("carries platform pages and offline hosts in full in diffs and recomputes nothing for them", () => {
+    const target = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [site("a"), site("b")],
+        platformErrorPages: { unknownHost: "<p>nobody</p>", siteDisabled: "", siteSuspended: "" },
+        offlineHosts: offline,
+      },
+      2n,
+    );
+    const diff = diffNodeConfig(plain, target);
+    expect(diff.upsertedSites).toEqual([]);
+    expect(diff.platformErrorPages?.unknownHost).toBe("<p>nobody</p>");
+    expect(diff.offlineHosts).toHaveLength(3);
+    expect(applyNodeConfigDiff(plain, diff).contentHash).toBe(target.contentHash);
+    // And back: empty values in the diff clear them.
+    const back = applyNodeConfigDiff(target, diffNodeConfig(target, { ...plain, revision: 3n }));
+    expect(back.platformErrorPages).toBeUndefined();
+    expect(back.offlineHosts).toEqual([]);
+    expect(back.contentHash).toBe(plain.contentHash);
+  });
+
+  it("follows the compiled sites when the features are recomputed (rollback)", () => {
+    const config = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [
+          withPool("a", { activeHealthCheck: health, sessionAffinity: { ttlSeconds: 60 } }),
+          site("b", { errorPages: { pages, interceptOriginErrors: false } }),
+        ],
+        challengeKeys: keys,
+      },
+      1n,
+    );
+    expect(poolAndPageFeatures(config)).toEqual([
+      "active-health-v1",
+      "session-affinity-v1",
+      "error-pages-v1",
+    ]);
+    config.sites = config.sites.filter((s) => s.id !== "a");
+    expect(poolAndPageFeatures(config)).toEqual(["error-pages-v1"]);
   });
 });

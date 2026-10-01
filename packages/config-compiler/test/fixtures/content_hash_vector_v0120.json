@@ -1,0 +1,222 @@
+{
+  "description": "proto v0.12.0 NodeConfig content_hash test vector: the M2 vector plus, on site s2, keep_cache_tag, error_pages (pages unsorted, intercept_origin_errors) and an origin pool with active_health_check and session_affinity, challenge_keys unsorted, platform_error_pages without site_disabled, offline_hosts unsorted (one name as exact and wildcard host, one name that extends another) and required_features unsorted with a duplicate; the canonical form sorts error_pages.pages by status, offline_hosts by (name, wildcard), challenge_keys by id and required_features as a set: sha256(deterministic binary encoding with revision=0 and content_hash=\"\") after canonical sorting",
+  "config": {
+    "revision": "12",
+    "contentHash": "ignored",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "1024",
+        "keysZoneMb": 10,
+        "inactiveSeconds": 600
+      }
+    ],
+    "sites": [
+      {
+        "id": "s2",
+        "name": "bucket",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "bucket.test"
+          },
+          {
+            "name": "cdn.test",
+            "wildcard": true
+          }
+        ],
+        "originPool": {
+          "id": "p2",
+          "policy": "LOAD_BALANCE_POLICY_CONSISTENT_HASH",
+          "origins": [
+            {
+              "id": "o3",
+              "address": "minio",
+              "port": 9000,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1,
+              "s3": {
+                "region": "us-east-1",
+                "bucket": "media",
+                "credentialId": "cred-1",
+                "credentialVersion": "2"
+              }
+            },
+            {
+              "id": "o2",
+              "address": "backup.example.com",
+              "port": 443,
+              "scheme": "ORIGIN_SCHEME_HTTPS",
+              "weight": 3,
+              "backup": true,
+              "hostHeader": "www.example.com",
+              "sni": "origin.example.com"
+            }
+          ],
+          "skipTlsVerify": true,
+          "healthCheck": {
+            "maxFails": 2,
+            "recoverySeconds": 15
+          },
+          "connection": {
+            "connectTimeoutMs": 1500,
+            "sendTimeoutMs": 60000,
+            "readTimeoutMs": 90000,
+            "keepaliveDisabled": true,
+            "keepaliveIdleSeconds": 30,
+            "keepaliveMaxRequests": 500
+          },
+          "activeHealthCheck": {
+            "path": "/healthz?full=1",
+            "method": "HEAD",
+            "expectedStatusMin": 200,
+            "expectedStatusMax": 299,
+            "host": "health.example.com",
+            "intervalSeconds": 10,
+            "timeoutSeconds": 3,
+            "healthyThreshold": 2,
+            "unhealthyThreshold": 3
+          },
+          "sessionAffinity": {
+            "ttlSeconds": 3600
+          }
+        },
+        "cacheRules": [
+          {
+            "id": "r3",
+            "priority": 20,
+            "match": {
+              "extensions": ["png"],
+              "statusCodes": [200, 404],
+              "minSizeBytes": "1",
+              "maxSizeBytes": "10485760"
+            },
+            "action": "CACHE_ACTION_CACHE",
+            "edgeTtlSeconds": 3600,
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_RESPECT",
+            "staleWhileRevalidateSeconds": 30,
+            "staleIfErrorSeconds": 86400
+          },
+          {
+            "id": "r2",
+            "priority": 10,
+            "match": {
+              "paths": ["/index.html"],
+              "pathPrefixes": ["/static/"]
+            },
+            "action": "CACHE_ACTION_BYPASS",
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_OVERRIDE"
+          }
+        ],
+        "cacheZone": "default",
+        "cacheGeneration": "3",
+        "cacheKey": {
+          "query": "CACHE_KEY_QUERY_INCLUDE",
+          "queryParams": ["lang", "v"],
+          "sortQuery": true,
+          "headers": ["accept-language"],
+          "cookies": ["ab"],
+          "deviceType": true,
+          "excludeHost": true
+        },
+        "rangeSlice": true,
+        "websocketDisabled": true,
+        "keepCacheTag": true,
+        "errorPages": {
+          "pages": [
+            {
+              "status": 503,
+              "template": "<h1>{{status}}</h1><p>{{request_id}} {{client_ip}} {{host}}</p>"
+            },
+            {
+              "status": 403,
+              "template": "<p>denied {{unknown}} 错误</p>"
+            }
+          ],
+          "interceptOriginErrors": true
+        }
+      },
+      {
+        "id": "s1",
+        "name": "demo",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "demo.test"
+          }
+        ],
+        "originPool": {
+          "id": "p1",
+          "policy": "LOAD_BALANCE_POLICY_ROUND_ROBIN",
+          "origins": [
+            {
+              "id": "o1",
+              "address": "whoami",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "cacheKey": {
+          "query": "CACHE_KEY_QUERY_IGNORE"
+        }
+      }
+    ],
+    "challengeKeys": [
+      {
+        "id": "k2",
+        "role": "current"
+      },
+      {
+        "id": "k3",
+        "role": "next"
+      },
+      {
+        "id": "k1",
+        "role": "previous"
+      }
+    ],
+    "platformErrorPages": {
+      "unknownHost": "<h1>{{host}} is not served here</h1>",
+      "siteSuspended": "<h1>suspended</h1><p>{{request_id}}</p>"
+    },
+    "offlineHosts": [
+      {
+        "name": "old.test",
+        "reason": "disabled"
+      },
+      {
+        "name": "away.test",
+        "wildcard": true,
+        "reason": "suspended"
+      },
+      {
+        "name": "away.test",
+        "reason": "suspended"
+      },
+      {
+        "name": "away.test.example",
+        "reason": "disabled"
+      }
+    ],
+    "requiredFeatures": [
+      "session-affinity-v1",
+      "error-pages-v1",
+      "challenge-v1",
+      "active-health-v1",
+      "error-pages-v1"
+    ]
+  },
+  "canonical_hex": "1a0263312204085010012a110a0764656661756c74108008180a20d80432440a027331120464656d6f1801220b0a0964656d6f2e746573742a1a0a02703110021a120a026f31120677686f616d691850200128013a0764656661756c744001520208023284040a02733212066275636b65741801220d0a0b6275636b65742e74657374220c0a0863646e2e7465737410012adc010a02703210031a460a026f3212126261636b75702e6578616d706c652e636f6d18bb032002280330013a0f7777772e6578616d706c652e636f6d42126f726967696e2e6578616d706c652e636f6d1a300a026f3312056d696e696f18a846200128014a1c0a0975732d656173742d3112056d656469611a06637265642d31200220012a040802100f321208dc0b10e0d4031890bf052001281e30f4033a390a0f2f6865616c74687a3f66756c6c3d3112044845414418c80120ab022a126865616c74682e6578616d706c652e636f6d300a380340024803420308901c32230a027232100a1a170a082f7374617469632f220b2f696e6465782e68746d6c2002300132270a02723310141a121203706e672a04c801940330013880808005200128901c3002381e4080a3053a0764656661756c7440035226080312046c616e671201761801220f6163636570742d6c616e67756167652a02616230013801580160019001019a016f0a2508930312203c703e64656e696564207b7b756e6b6e6f776e7d7d20e99499e8afaf3c2f703e0a4408f703123f3c68313e7b7b7374617475737d7d3c2f68313e3c703e7b7b726571756573745f69647d7d207b7b636c69656e745f69707d7d207b7b686f73747d7d3c2f703e10014a106163746976652d6865616c74682d76314a0c6368616c6c656e67652d76314a0e6572726f722d70616765732d76314a1373657373696f6e2d616666696e6974792d7631720e0a026b31120870726576696f7573720d0a026b32120763757272656e74720a0a026b3312046e6578747a4f0a243c68313e7b7b686f73747d7d206973206e6f742073657276656420686572653c2f68313e1a273c68313e73757370656e6465643c2f68313e3c703e7b7b726571756573745f69647d7d3c2f703e8201160a09617761792e746573741a0973757370656e6465648201180a09617761792e7465737410011a0973757370656e64656482011d0a11617761792e746573742e6578616d706c651a0864697361626c65648201140a086f6c642e746573741a0864697361626c6564",
+  "content_hash": "0bbfcd1f6d3e88e24c28966f32f05048ac970b64e59a9cf3d8bc13a5eedaacf6"
+}

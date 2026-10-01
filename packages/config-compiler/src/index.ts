@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { clone, create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
+  ActiveHealthCheckSchema,
   CacheAction,
   CacheKeyPolicySchema,
   CacheKeyQuery,
@@ -15,6 +16,7 @@ import {
   DomainSchema,
   type EdgeRule,
   EdgeRuleSchema,
+  ErrorPageSchema,
   type HttpChallenge,
   type IpList,
   IpListSchema,
@@ -26,16 +28,21 @@ import {
   type NodeConfigDiff,
   NodeConfigDiffSchema,
   NodeConfigSchema,
+  type OfflineHost,
+  OfflineHostSchema,
   OriginCacheControl,
   OriginConnectionSchema,
   OriginPoolSchema,
   OriginSchema,
   OriginScheme,
   PassiveHealthCheckSchema,
+  PlatformErrorPagesSchema,
   PlatformProtectionSchema,
   type RuleExpression,
   S3AuthSchema,
+  SessionAffinitySchema,
   type Site,
+  SiteErrorPagesSchema,
   SiteProtectionSchema,
   SiteSchema,
   SiteWafSchema,
@@ -112,6 +119,53 @@ export interface CacheKeyModel {
 export const BROTLI_FEATURE = "brotli-v1";
 export const ZSTD_FEATURE = "zstd-v1";
 export const MODSECURITY_FEATURE = "modsecurity-v1";
+/**
+ * Features of an origin pool's active health check and session affinity and
+ * of a site's error pages (proto v0.12.0). Cache-Tag forwarding, the
+ * platform's error pages and offline hosts need none: older nodes ignore them.
+ */
+export const ACTIVE_HEALTH_FEATURE = "active-health-v1";
+export const SESSION_AFFINITY_FEATURE = "session-affinity-v1";
+export const ERROR_PAGES_FEATURE = "error-pages-v1";
+
+/** An origin pool's active health check while it is on (config.proto ActiveHealthCheck). */
+export interface ActiveHealthCheckModel {
+  path: string;
+  method: "GET" | "HEAD";
+  expectedStatusMin: number;
+  expectedStatusMax: number;
+  host: string;
+  intervalSeconds: number;
+  timeoutSeconds: number;
+  healthyThreshold: number;
+  unhealthyThreshold: number;
+}
+
+/** An origin pool's session affinity while it is on (config.proto SessionAffinity). */
+export interface SessionAffinityModel {
+  ttlSeconds: number;
+}
+
+/** A site's error pages (config.proto SiteErrorPages). */
+export interface SiteErrorPagesModel {
+  /** Any order; compiled sorted by status. Without pages nothing is compiled. */
+  pages: { status: number; template: string }[];
+  interceptOriginErrors: boolean;
+}
+
+/** The platform's pages; an empty template means the node's built-in page. */
+export interface PlatformErrorPagesModel {
+  unknownHost: string;
+  siteDisabled: string;
+  siteSuspended: string;
+}
+
+/** A domain of a disabled or suspended site (config.proto OfflineHost). */
+export interface OfflineHostModel {
+  name: string;
+  wildcard: boolean;
+  reason: "disabled" | "suspended";
+}
 
 type TlsFields = Omit<TlsOptions, "$typeName" | "$unknown">;
 type CompressionField =
@@ -150,6 +204,10 @@ export interface SiteModel {
     origins: OriginModel[];
     /** Omitted: node defaults (verify TLS, 3 failures / 30 s, default timeouts, keep-alive). */
     settings?: OriginPoolSettingsModel;
+    /** Omitted or null: passive checks only. */
+    activeHealthCheck?: ActiveHealthCheckModel | null;
+    /** Omitted or null: no session affinity. */
+    sessionAffinity?: SessionAffinityModel | null;
   };
   cacheRules: CacheRuleModel[];
   /** Omitted: the default cache key. */
@@ -164,6 +222,10 @@ export interface SiteModel {
   waf?: SiteWafModel | null;
   /** Omitted: the defaults (DEFAULT_SITE_PROTECTION, everything off). */
   protection?: SiteProtectionModel;
+  /** Forward the origin's Cache-Tag header to clients; defaults to false. */
+  keepCacheTag?: boolean;
+  /** Omitted, null or without pages: the node's built-in pages. */
+  errorPages?: SiteErrorPagesModel | null;
 }
 
 /** Thresholds of an enabled CC policy (config.proto CcPolicy). */
@@ -322,10 +384,14 @@ export interface CompileInput {
   /** Platform-wide Under Attack; omitted: off. */
   platformProtection?: PlatformProtectionModel;
   /**
-   * The cluster's challenge pass keys. Required when usesChallenges(input);
+   * The cluster's challenge pass keys. Required when usesChallengeKeys(input);
    * compiled only then, sorted by id.
    */
   challengeKeys?: ChallengeKeyModel[];
+  /** Omitted, or every template empty: the nodes' built-in pages. */
+  platformErrorPages?: PlatformErrorPagesModel;
+  /** Domains of the cluster's disabled and suspended sites; any order. */
+  offlineHosts?: OfflineHostModel[];
 }
 
 /**
@@ -346,6 +412,18 @@ export function usesChallenges(input: CompileInput): boolean {
         site.enabled &&
         (!!site.protection?.underAttack || !!site.protection?.cc || challengeRule(site.rules)),
     )
+  );
+}
+
+/**
+ * Whether the cluster's configuration carries challenge keys: it uses
+ * challenges, or a served site's pool has session affinity (the keys sign
+ * its cookies). Keys bring challenge-v1 with them (protectionFeatures).
+ */
+export function usesChallengeKeys(input: CompileInput): boolean {
+  return (
+    usesChallenges(input) ||
+    input.sites.some((site) => site.enabled && !!site.originPool.sessionAffinity)
   );
 }
 
@@ -394,6 +472,23 @@ export function moduleFeatures(config: NodeConfig): string[] {
     ...(config.sites.some((site) => site.tls?.brotli) ? [BROTLI_FEATURE] : []),
     ...(config.sites.some((site) => site.tls?.zstd) ? [ZSTD_FEATURE] : []),
     ...(config.sites.some((site) => site.waf) ? [MODSECURITY_FEATURE] : []),
+  ];
+}
+
+/**
+ * Features of the active health checks, session affinity and error pages
+ * that the sites of a compiled configuration use: active-health-v1,
+ * session-affinity-v1 and error-pages-v1.
+ */
+export function poolAndPageFeatures(config: NodeConfig): string[] {
+  return [
+    ...(config.sites.some((site) => site.originPool?.activeHealthCheck)
+      ? [ACTIVE_HEALTH_FEATURE]
+      : []),
+    ...(config.sites.some((site) => site.originPool?.sessionAffinity)
+      ? [SESSION_AFFINITY_FEATURE]
+      : []),
+    ...(config.sites.some((site) => site.errorPages) ? [ERROR_PAGES_FEATURE] : []),
   ];
 }
 
@@ -486,6 +581,8 @@ function compileTls(model: TlsModel) {
 
 function compileSite(model: SiteModel, challenges: boolean): Site {
   const settings = model.originPool.settings;
+  const health = model.originPool.activeHealthCheck;
+  const affinity = model.originPool.sessionAffinity;
   const key = model.cacheKey;
   return create(SiteSchema, {
     id: model.id,
@@ -535,6 +632,22 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
             }),
           }
         : {}),
+      activeHealthCheck: health
+        ? create(ActiveHealthCheckSchema, {
+            path: health.path,
+            method: health.method,
+            expectedStatusMin: health.expectedStatusMin,
+            expectedStatusMax: health.expectedStatusMax,
+            host: health.host,
+            intervalSeconds: health.intervalSeconds,
+            timeoutSeconds: health.timeoutSeconds,
+            healthyThreshold: health.healthyThreshold,
+            unhealthyThreshold: health.unhealthyThreshold,
+          })
+        : undefined,
+      sessionAffinity: affinity
+        ? create(SessionAffinitySchema, { ttlSeconds: affinity.ttlSeconds })
+        : undefined,
     }),
     cacheRules: model.cacheRules.map(
       (r): CacheRule =>
@@ -592,8 +705,20 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
       challenges || model.protection?.logJa4
         ? compileSiteProtection(model.protection ?? DEFAULT_SITE_PROTECTION)
         : undefined,
+    keepCacheTag: model.keepCacheTag ?? false,
+    // Intercepting origin errors means nothing without pages.
+    errorPages: model.errorPages?.pages.length
+      ? create(SiteErrorPagesSchema, {
+          pages: model.errorPages.pages.map((page) =>
+            create(ErrorPageSchema, { status: page.status, template: page.template }),
+          ),
+          interceptOriginErrors: model.errorPages.interceptOriginErrors,
+        })
+      : undefined,
   });
 }
+
+const offlineHostKey = (host: OfflineHost) => `${host.name}\u0000${host.wildcard ? 1 : 0}`;
 
 /** Sorts every repeated field into the canonical order defined in config.proto. */
 export function canonicalize<T extends NodeConfig>(config: T): T {
@@ -608,6 +733,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   out.httpChallenges.sort(byString((c) => `${c.domain}/${c.token}`));
   out.ipLists.sort(byString((list: IpList) => list.id));
   out.challengeKeys.sort(byString((key: ChallengeKeyRef) => key.id));
+  out.offlineHosts.sort(byString(offlineHostKey));
   for (const list of out.ipLists) list.entries = sortedSet(list.entries);
   for (const site of out.sites) {
     if (site.tls) {
@@ -616,6 +742,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
       site.tls.zstdTypes = sortedSet(site.tls.zstdTypes);
     }
     if (site.waf) site.waf.excludedRuleIds = sortedSet(site.waf.excludedRuleIds);
+    site.errorPages?.pages.sort((a, b) => a.status - b.status);
     site.domains.sort(byString((d) => `${d.name}\u0000${d.wildcard ? 1 : 0}`));
     site.originPool?.origins.sort(byString((o) => o.id));
     site.cacheRules.sort((a, b) =>
@@ -671,8 +798,9 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     }),
   );
   const challenges = usesChallenges(input);
-  // Disabled sites are not shipped to nodes; unknown hosts get a 404 there.
+  // Disabled sites are not shipped to nodes; their domains are offline hosts.
   const sites = input.sites.filter((s) => s.enabled).map((s) => compileSite(s, challenges));
+  const pages = input.platformErrorPages;
   const compiled = create(NodeConfigSchema, {
     revision,
     clusterId: input.clusterId,
@@ -707,11 +835,26 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
           underAttackChallenge: input.platformProtection?.underAttackChallenge ?? "js",
         })
       : undefined,
-    challengeKeys: challenges
+    challengeKeys: usesChallengeKeys(input)
       ? (input.challengeKeys ?? []).map((key) => create(ChallengeKeyRefSchema, key))
       : [],
+    platformErrorPages:
+      pages && (pages.unknownHost || pages.siteDisabled || pages.siteSuspended)
+        ? create(PlatformErrorPagesSchema, {
+            unknownHost: pages.unknownHost,
+            siteDisabled: pages.siteDisabled,
+            siteSuspended: pages.siteSuspended,
+          })
+        : undefined,
+    offlineHosts: (input.offlineHosts ?? []).map((host) =>
+      create(OfflineHostSchema, { name: host.name, wildcard: host.wildcard, reason: host.reason }),
+    ),
   });
-  compiled.requiredFeatures.push(...protectionFeatures(compiled), ...moduleFeatures(compiled));
+  compiled.requiredFeatures.push(
+    ...protectionFeatures(compiled),
+    ...moduleFeatures(compiled),
+    ...poolAndPageFeatures(compiled),
+  );
   const config = canonicalize(compiled);
   config.contentHash = contentHash(config);
   return config;
@@ -730,7 +873,7 @@ const siteBytes = (site: Site) => Buffer.from(toBinary(SiteSchema, site)).toStri
 /**
  * Computes the diff that turns `base` into `target`: sites are upserted or
  * removed by id, everything else (listeners, cache zones, certificates, the
- * origin allow list) is sent in full.
+ * origin allow list, platform error pages, offline hosts) is sent in full.
  */
 export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfigDiff {
   const baseSites = new Map(base.sites.map((s) => [s.id, siteBytes(s)]));
@@ -750,6 +893,8 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     platformRules: target.platformRules,
     platformProtection: target.platformProtection,
     challengeKeys: target.challengeKeys,
+    platformErrorPages: target.platformErrorPages,
+    offlineHosts: target.offlineHosts,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -782,6 +927,8 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       platformRules: diff.platformRules,
       platformProtection: diff.platformProtection,
       challengeKeys: diff.challengeKeys,
+      platformErrorPages: diff.platformErrorPages,
+      offlineHosts: diff.offlineHosts,
       sites,
     }),
   );
