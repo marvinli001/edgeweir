@@ -22,10 +22,10 @@ test("M2: purge tasks, origin health, origin and cache settings", async ({ page 
     await expect(page.getByTestId("purge-type-url")).toHaveAttribute("aria-selected", "true");
 
     const url = `http://demo.test/e2e-m2/${Date.now()}.txt`;
-    await page.getByTestId("purge-urls").fill(url);
+    await page.getByTestId("purge-urls-url").fill(url);
     await page.getByTestId("purge-submit").click();
     await expect(page.getByText("已提交")).toBeVisible();
-    await expect(page.getByTestId("purge-urls")).toHaveValue("");
+    await expect(page.getByTestId("purge-urls-url")).toHaveValue("");
 
     // The new task is at the top of the list and follows the node until it reports.
     const task = page.getByTestId("cache-task").first();
@@ -53,7 +53,7 @@ test("M2: purge tasks, origin health, origin and cache settings", async ({ page 
     // its label.
     await expect(page.getByTestId("purge-type-prefix")).toHaveAttribute("aria-selected", "true");
     await expect(page.getByLabel("目录", { exact: true })).toBeVisible();
-    await page.getByLabel("目录", { exact: true }).fill("http://demo.test/static/");
+    await page.getByTestId("purge-urls-prefix").fill("http://demo.test/static/");
     await expect(page.getByLabel("目录", { exact: true })).toHaveValue("http://demo.test/static/");
     await page.getByTestId("purge-submit").click();
     const task = page.getByTestId("cache-task").first();

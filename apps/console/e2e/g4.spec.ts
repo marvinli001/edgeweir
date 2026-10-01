@@ -158,13 +158,13 @@ test("G4: purges by host and Cache-Tag, device variant prefetches and a sitemap 
     // At least one variant.
     await desktop.click();
     await expect(desktop).toHaveAttribute("aria-checked", "false");
-    await page.getByTestId("purge-urls").fill("http://pre.g4.test/page/ui");
+    await page.getByTestId("purge-urls-prefetch").fill("http://pre.g4.test/page/ui");
     await expect(page.getByTestId("purge-submit")).toBeDisabled();
     await desktop.click();
     await mobile.click();
     await expect(mobile).toHaveAttribute("aria-checked", "true");
     await expect(page.getByTestId("purge-submit")).toBeEnabled();
-    const task = await submitTask(page, "prefetch", page.getByTestId("purge-urls"));
+    const task = await submitTask(page, "prefetch", page.getByTestId("purge-urls-prefetch"));
     await expect(task.getByTestId("cache-task-type")).toHaveText("URL 预热");
     await expect(task.getByTestId("cache-task-target")).toHaveText("http://pre.g4.test/page/ui");
     await expect(task.getByTestId("cache-task-variants")).toHaveText(BOTH_VARIANTS);
