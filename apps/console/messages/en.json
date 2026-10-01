@@ -1357,5 +1357,7 @@
   ],
   "purge_variants": "Devices",
   "purge_variant_desktop": "Desktop",
-  "purge_variant_mobile": "Mobile"
+  "purge_variant_mobile": "Mobile",
+  "site_cache_tag_title": "Cache-Tag",
+  "site_cache_keep_cache_tag": "Forward Cache-Tag to clients"
 }

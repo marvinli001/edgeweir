@@ -51,13 +51,18 @@ import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-/** Cache tab: ordered cache rules, and how cache keys are built. Each card saves on its own. */
+/**
+ * Cache tab: ordered cache rules, how cache keys are built and whether the
+ * origin's Cache-Tag reaches clients. Each card saves on its own.
+ */
 export function CacheTab({ site }: { site: Site }) {
+  const { cacheKey, rangeSlice, keepCacheTag } = site.cacheSettings;
   return (
     <div className="flex flex-col gap-4">
-      {/* Keyed by their own data, so saving one card keeps unsaved edits in the other. */}
+      {/* Keyed by their own data, so saving one card keeps unsaved edits in the others. */}
       <CacheRulesCard key={JSON.stringify(site.cacheRules)} site={site} />
-      <CacheKeyCard key={JSON.stringify(site.cacheSettings)} site={site} />
+      <CacheKeyCard key={JSON.stringify({ cacheKey, rangeSlice })} site={site} />
+      <CacheTagCard key={String(keepCacheTag)} site={site} />
     </div>
   );
 }
@@ -645,6 +650,50 @@ function CacheKeyCard({ site }: { site: Site }) {
           </div>
         </CardContent>
         <SaveBar dirty={dirty} pending={pending} error={error} testId="cache-key-save" />
+      </form>
+    </Card>
+  );
+}
+
+/**
+ * Whether clients get the origin's Cache-Tag response header; nodes index the
+ * tags for purges either way. The cache key settings go along unchanged.
+ */
+function CacheTagCard({ site }: { site: Site }) {
+  const { cacheKey, rangeSlice, keepCacheTag } = site.cacheSettings;
+  const [keep, setKeep] = React.useState(keepCacheTag);
+  const { save, error, pending } = useSaveSite(site.id);
+  return (
+    <Card
+      className="animate-enter"
+      style={{ animationDelay: "160ms" }}
+      data-testid="cache-tag-card"
+    >
+      <form
+        className="flex flex-col gap-(--card-spacing)"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save({ cacheSettings: { cacheKey, rangeSlice, keepCacheTag: keep } });
+        }}
+      >
+        <CardHeader>
+          <CardTitle>{m.site_cache_tag_title()}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SwitchField
+            id="cache-keep-cache-tag"
+            label={m.site_cache_keep_cache_tag()}
+            checked={keep}
+            onCheckedChange={setKeep}
+            testId="cache-keep-cache-tag"
+          />
+        </CardContent>
+        <SaveBar
+          dirty={keep !== keepCacheTag}
+          pending={pending}
+          error={error}
+          testId="cache-tag-save"
+        />
       </form>
     </Card>
   );

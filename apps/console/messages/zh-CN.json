@@ -1196,5 +1196,7 @@
   "purge_sitemap_limit": "最多 {count} 个 URL",
   "purge_variants": "设备",
   "purge_variant_desktop": "桌面端",
-  "purge_variant_mobile": "移动端"
+  "purge_variant_mobile": "移动端",
+  "site_cache_tag_title": "Cache-Tag",
+  "site_cache_keep_cache_tag": "向客户端转发 Cache-Tag"
 }
