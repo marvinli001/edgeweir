@@ -42,6 +42,8 @@ export const accessLog = pgTable(
     wafRuleIds: bigint("waf_rule_ids", { mode: "number" }).array().notNull().default(sql`'{}'`),
     /** CRS blocked the request. */
     wafBlocked: boolean("waf_blocked").notNull().default(false),
+    /** The request id the node answered with (X-Request-Id); empty for older nodes. */
+    requestId: text("request_id").notNull().default(""),
   },
   (t) => [
     primaryKey({ columns: [t.time, t.id] }),

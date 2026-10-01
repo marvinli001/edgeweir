@@ -6,6 +6,7 @@ export * from "./certificates";
 export * from "./core";
 export * from "./dns";
 export * from "./domains";
+export * from "./error-pages";
 export * from "./logs";
 export * from "./protection";
 export * from "./rules";

@@ -1,4 +1,13 @@
-import { readdirSync, readFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { eq } from "drizzle-orm";
@@ -96,6 +105,7 @@ describe("migrations", () => {
       "challenge_key",
       "security_event",
       "site_waf",
+      "site_error_page",
     ]) {
       expect(tables).toContain(name);
     }
@@ -230,6 +240,50 @@ describe("migrations", () => {
     expect(await db.select().from(schema.siteWaf)).toEqual([]);
   });
 
+  it("keeps one origin health row per node, origin and check, and one error page per site and status", async () => {
+    await db.insert(schema.organization).values({
+      id: "org_g4",
+      name: "G4",
+      slug: "g4",
+      createdAt: new Date(),
+    });
+    const [cl] = await db.insert(schema.cluster).values({ name: "g4" }).returning();
+    if (!cl) throw new Error("cluster not inserted");
+    const [site] = await db
+      .insert(schema.site)
+      .values({ organizationId: "org_g4", clusterId: cl.id, name: "g4" })
+      .returning();
+    if (!site) throw new Error("site not inserted");
+    expect(site).toMatchObject({
+      keepCacheTag: false,
+      interceptOriginErrors: false,
+      errorPagesUpdatedAt: null,
+    });
+    const [pool] = await db.insert(schema.originPool).values({ siteId: site.id }).returning();
+    if (!pool) throw new Error("pool not inserted");
+    expect(pool).toMatchObject({ activeHealthCheck: {}, sessionAffinity: {} });
+    const [origin] = await db
+      .insert(schema.origin)
+      .values({ poolId: pool.id, address: "origin.test", port: 80 })
+      .returning();
+    const [node] = await db.insert(schema.node).values({ clusterId: cl.id, name: "n" }).returning();
+    if (!origin || !node) throw new Error("not inserted");
+    const health = { nodeId: node.id, originId: origin.id, siteId: site.id, healthy: false };
+    const [passive] = await db.insert(schema.originHealth).values(health).returning();
+    expect(passive?.source).toBe("passive");
+    await db.insert(schema.originHealth).values({ ...health, source: "active" });
+    await expect(
+      db.insert(schema.originHealth).values({ ...health, source: "active" }),
+    ).rejects.toThrow();
+    await db.insert(schema.siteErrorPage).values({ siteId: site.id, status: 503, template: "x" });
+    await expect(
+      db.insert(schema.siteErrorPage).values({ siteId: site.id, status: 503, template: "y" }),
+    ).rejects.toThrow();
+    await db.delete(schema.site).where(eq(schema.site.id, site.id));
+    expect(await db.select().from(schema.siteErrorPage)).toEqual([]);
+    expect(await db.select().from(schema.originHealth)).toEqual([]);
+  });
+
   it("detaches regions and default clusters instead of cascading deletes", async () => {
     await db.insert(schema.organization).values({
       id: "org_2",
@@ -262,5 +316,57 @@ describe("migrations", () => {
       .from(schema.organizationSettings)
       .where(eq(schema.organizationSettings.organizationId, "org_2"));
     expect(settings?.defaultClusterId).toBeNull();
+  });
+});
+
+describe("migration 0031 on existing data", () => {
+  it("keeps the origin health nodes reported before G4 as passive entries", async () => {
+    const journal = JSON.parse(
+      readFileSync(join(defaultMigrationsFolder, "meta", "_journal.json"), "utf8"),
+    ) as { entries: { idx: number; tag: string }[] };
+    // The migrations up to 0030, then data written by a G3 console, then 0031.
+    const folder = mkdtempSync(join(tmpdir(), "edgeweir-g3-"));
+    const old = new PGlite();
+    try {
+      mkdirSync(join(folder, "meta"));
+      const entries = journal.entries.filter((entry) => entry.idx <= 30);
+      writeFileSync(join(folder, "meta", "_journal.json"), JSON.stringify({ ...journal, entries }));
+      for (const { tag } of entries)
+        copyFileSync(join(defaultMigrationsFolder, `${tag}.sql`), join(folder, `${tag}.sql`));
+      const oldDb = drizzle({ client: old, schema, casing: "snake_case" });
+      await migrate(oldDb, { migrationsFolder: folder, migrationsSchema: "drizzle" });
+      await old.exec(`
+        insert into organization (id, name, slug, created_at) values ('org_old', 'Old', 'old', now());
+        insert into cluster (id, name) values ('00000000-0000-4000-8000-0000000000c1', 'old');
+        insert into site (id, organization_id, cluster_id, name)
+          values ('00000000-0000-4000-8000-0000000000c2', 'org_old', '00000000-0000-4000-8000-0000000000c1', 'old');
+        insert into origin_pool (id, site_id)
+          values ('00000000-0000-4000-8000-0000000000c3', '00000000-0000-4000-8000-0000000000c2');
+        insert into origin (id, pool_id, address, port)
+          values ('00000000-0000-4000-8000-0000000000c4', '00000000-0000-4000-8000-0000000000c3', 'origin.test', 80);
+        insert into node (id, cluster_id, name)
+          values ('00000000-0000-4000-8000-0000000000c5', '00000000-0000-4000-8000-0000000000c1', 'old');
+        insert into origin_health (node_id, origin_id, site_id, healthy, consecutive_failures)
+          values ('00000000-0000-4000-8000-0000000000c5', '00000000-0000-4000-8000-0000000000c4',
+                  '00000000-0000-4000-8000-0000000000c2', false, 3);
+      `);
+      await migrate(oldDb, {
+        migrationsFolder: defaultMigrationsFolder,
+        migrationsSchema: "drizzle",
+      });
+      const rows = await old.query<{ source: string; consecutive_failures: number }>(
+        "select source, consecutive_failures from origin_health",
+      );
+      expect(rows.rows).toEqual([{ source: "passive", consecutive_failures: 3 }]);
+      const [pool] = (
+        await old.query<{ active_health_check: unknown; session_affinity: unknown }>(
+          "select active_health_check, session_affinity from origin_pool",
+        )
+      ).rows;
+      expect(pool).toEqual({ active_health_check: {}, session_affinity: {} });
+    } finally {
+      await old.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
   });
 });

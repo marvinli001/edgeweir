@@ -186,8 +186,14 @@ export const site = pgTable(
     cacheKey: jsonb("cache_key").$type<Record<string, unknown>>().notNull().default({}),
     /** Fetch and cache cacheable responses in slices (Range requests). */
     rangeSlice: boolean("range_slice").notNull().default(false),
+    /** Forward the origin's Cache-Tag response header to clients. */
+    keepCacheTag: boolean("keep_cache_tag").notNull().default(false),
     /** Proxy WebSocket upgrades to the origin. */
     websocket: boolean("websocket").notNull().default(true),
+    /** Error pages (site_error_page) also replace origin responses with their status. */
+    interceptOriginErrors: boolean("intercept_origin_errors").notNull().default(false),
+    /** When the error pages were last saved; null until then. */
+    errorPagesUpdatedAt: timestamp("error_pages_updated_at", { withTimezone: true }),
     certificateId: uuid("certificate_id").references(() => certificate.id, {
       onDelete: "restrict",
     }),
@@ -256,6 +262,16 @@ export const originPool = pgTable(
     keepalive: boolean("keepalive").notNull().default(true),
     keepaliveIdleSeconds: integer("keepalive_idle_seconds").notNull().default(60),
     keepaliveMaxRequests: integer("keepalive_max_requests").notNull().default(1000),
+    /** Active health check (contract `activeHealthCheck`), kept while off; `{}` means the defaults. */
+    activeHealthCheck: jsonb("active_health_check")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    /** Session affinity (contract `sessionAffinity`), kept while off; `{}` means the defaults. */
+    sessionAffinity: jsonb("session_affinity")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     createdAt: createdAt(),
   },
   (t) => [index("origin_pool_site_idx").on(t.siteId)],
@@ -609,7 +625,10 @@ export const systemSetting = pgTable("system_setting", {
   updatedAt: updatedAt(),
 });
 
-/** Latest passive health state reported by each node for origins it saw failing. */
+/**
+ * Latest health state each node reported for origins it saw failing, one row
+ * per check (passive: real traffic, active: the agent's probes).
+ */
 export const originHealth = pgTable(
   "origin_health",
   {
@@ -635,9 +654,11 @@ export const originHealth = pgTable(
     lastFailureAt: timestamp("last_failure_at", { withTimezone: true }),
     downUntil: timestamp("down_until", { withTimezone: true }),
     reportedAt: timestamp("reported_at", { withTimezone: true }).defaultNow().notNull(),
+    /** passive | active */
+    source: text("source").notNull().default("passive"),
   },
   (t) => [
-    primaryKey({ columns: [t.nodeId, t.originId] }),
+    primaryKey({ columns: [t.nodeId, t.originId, t.source] }),
     index("origin_health_site_idx").on(t.siteId),
   ],
 );
@@ -654,12 +675,15 @@ export const cacheTask = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "cascade",
     }),
-    /** url | prefix | site | prefetch */
+    /** url | prefix | site | prefetch | host | tag | sitemap */
     type: text("type").notNull(),
-    /** What the user asked for: URLs, prefixes or site names, for display. */
+    /** What the user asked for: URLs, prefixes, site names, hosts, tags or the sitemap URL. */
     targets: text("targets").array().notNull().default(sql`'{}'::text[]`),
     siteIds: uuid("site_ids").array().notNull().default(sql`'{}'::uuid[]`),
-    /** Resolved node payload: [{ siteId, clusterId, type, host, path, query, url }]. */
+    /**
+     * Resolved node payload: [{ siteId, clusterId, type, host, path, query,
+     * url }], plus tag (tag), variants (prefetch, sitemap) and maxUrls (sitemap).
+     */
     payload: jsonb("payload").$type<Record<string, string>[]>().notNull().default([]),
     createdByUserId: text("created_by_user_id").references(() => user.id, {
       onDelete: "set null",
