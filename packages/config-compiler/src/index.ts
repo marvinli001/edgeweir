@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { clone, create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
   ActiveHealthCheckSchema,
+  BulkRedirectSchema,
   CacheAction,
   CacheKeyPolicySchema,
   CacheKeyQuery,
@@ -39,6 +40,9 @@ import {
   type PlatformErrorPages,
   PlatformErrorPagesSchema,
   PlatformProtectionSchema,
+  QueryParamSchema,
+  type RuleAction,
+  RuleActionSchema,
   type RuleExpression,
   S3AuthSchema,
   SessionAffinitySchema,
@@ -50,7 +54,15 @@ import {
   type TlsOptions,
   TlsOptionsSchema,
 } from "@edgeweir/proto";
-import { type Expression, phases } from "@edgeweir/rule-engine";
+import {
+  type Expression,
+  needsRulesV2,
+  type Phase,
+  parseExpression,
+  parseValueExpression,
+  phases,
+  structuredCacheCondition,
+} from "@edgeweir/rule-engine";
 
 /** Matches the node's fixed 256 KiB site partitions (128 MiB at full capacity). */
 export const MAX_SITES_PER_CLUSTER = 512;
@@ -73,18 +85,36 @@ export interface OriginModel {
   sni: string;
   /** Set for S3-compatible origins (requests signed with AWS Signature V4). */
   s3?: { region: string; bucket: string; credentialId: string; credentialVersion: number } | null;
+  /** Origin group inside the site; omitted or "" is the default group (rules-v2 otherwise). */
+  group?: string;
 }
+
+/** Longest cache rule condition (source characters). */
+export const CACHE_EXPRESSION_MAX_LENGTH = 16384;
 
 export interface CacheRuleModel {
   id: string;
   priority: number;
+  /**
+   * The structured condition, used only while `expression` is empty (and no
+   * `condition` is given): rules saved before conditions became expressions.
+   */
   pathPrefixes: string[];
   paths?: string[];
   extensions: string[];
   statusCodes?: number[];
   minSizeBytes?: number;
   maxSizeBytes?: number;
+  /**
+   * The request condition (phase cache). An expression in the structured
+   * shape compiles to path_prefixes, paths and extensions as before; any
+   * other to CacheRuleMatch.condition (rules-v2).
+   */
   expression: string;
+  /** `expression` parsed, with IP lists bound to their ids; parsed from `expression` when omitted. */
+  condition?: Expression;
+  /** Cache-Control max-age towards clients; 0 or omitted keeps the origin's (rules-v2 otherwise). */
+  browserTtlSeconds?: number;
   action: "cache" | "bypass";
   edgeTtlSeconds: number;
   originCacheControl: "override" | "respect";
@@ -128,6 +158,13 @@ export const MODSECURITY_FEATURE = "modsecurity-v1";
 export const ACTIVE_HEALTH_FEATURE = "active-health-v1";
 export const SESSION_AFFINITY_FEATURE = "session-affinity-v1";
 export const ERROR_PAGES_FEATURE = "error-pages-v1";
+/**
+ * Feature of the rule engine extensions (proto v0.13.0): functions and the
+ * new fields, dynamic redirects and rewrites with query edits, origin,
+ * compression and extended config actions, the compression phase, cache
+ * rule conditions and browser TTLs, bulk redirects and origin groups.
+ */
+export const RULES_V2_FEATURE = "rules-v2";
 
 /** An origin pool's active health check while it is on (config.proto ActiveHealthCheck). */
 export interface ActiveHealthCheckModel {
@@ -227,6 +264,16 @@ export interface SiteModel {
   keepCacheTag?: boolean;
   /** Omitted, null or without pages: the node's built-in pages. */
   errorPages?: SiteErrorPagesModel | null;
+  /** Exact-match redirect table; any order, compiled sorted by source (rules-v2). */
+  bulkRedirects?: BulkRedirectModel[];
+}
+
+/** One entry of a site's bulk redirect table (config.proto BulkRedirect). */
+export interface BulkRedirectModel {
+  source: string;
+  target: string;
+  statusCode: number;
+  preserveQuery: boolean;
 }
 
 /** Thresholds of an enabled CC policy (config.proto CcPolicy). */
@@ -281,6 +328,7 @@ export interface RuleModel {
   id: string;
   phase: string;
   expression: Expression;
+  /** A rule action as the contract's ruleAction parses it. */
   action: {
     kind: string;
     value?: string;
@@ -295,6 +343,31 @@ export interface RuleModel {
     remove?: boolean;
     /** Challenge type of a challenge action (RuleAction.challenge). */
     type?: string;
+    // rules-v2: config (phase config only)
+    brotli?: boolean;
+    zstd?: boolean;
+    websocket?: boolean;
+    underAttack?: boolean;
+    ccEnabled?: boolean;
+    ccMaxLevel?: string;
+    originConnectTimeoutMs?: number;
+    originSendTimeoutMs?: number;
+    originReadTimeoutMs?: number;
+    logSampleRate?: number;
+    // rules-v2: redirect and rewrite
+    /** Value expression source computed per request instead of the static value; "" for none. */
+    target?: string;
+    /** Redirects drop the query by default, rewrites keep it. */
+    preserveQuery?: boolean;
+    setQuery?: { name: string; value: string }[];
+    removeQuery?: string[];
+    // rules-v2: origin
+    originGroup?: string;
+    hostHeader?: string;
+    sni?: string;
+    port?: number;
+    // rules-v2: compression codings in preference order (RuleAction.compression)
+    algorithms?: string[];
   };
 }
 export interface IpListModel {
@@ -304,6 +377,59 @@ export interface IpListModel {
   kind: string;
   platform: boolean;
 }
+/** Whether a kind keeps the request's query string by default (rewrites do, redirects not). */
+const queryDefault = (kind: string) => kind === "rewrite";
+
+/**
+ * A rule action as nodes receive it: only the fields its kind carries.
+ * preserve_query is set only where it differs from the kind's default
+ * (redirects drop the query, rewrites keep it), set_query is sorted by name
+ * and remove_query sorted without duplicates, so that rules without the
+ * rules-v2 fields encode as before.
+ */
+function compileAction(phase: string, a: RuleModel["action"]): RuleAction {
+  const redirectOrRewrite = a.kind === "redirect" || a.kind === "rewrite";
+  return create(RuleActionSchema, {
+    kind: a.kind,
+    value: a.value,
+    header: a.header,
+    statusCode: a.statusCode,
+    limit: a.limit,
+    windowSeconds: a.windowSeconds,
+    key: a.key,
+    cacheBypass: a.cacheBypass,
+    forceHttps: a.forceHttps,
+    gzip: a.gzip,
+    remove: a.remove,
+    challenge: a.kind === "challenge" ? (a.type ?? "") : "",
+    brotli: a.brotli,
+    zstd: a.zstd,
+    websocket: a.websocket,
+    underAttack: a.underAttack,
+    ccEnabled: a.ccEnabled,
+    ccMaxLevel: a.ccMaxLevel ?? "",
+    originConnectTimeoutMs: a.originConnectTimeoutMs ?? 0,
+    originSendTimeoutMs: a.originSendTimeoutMs ?? 0,
+    originReadTimeoutMs: a.originReadTimeoutMs ?? 0,
+    logSampleRate: a.logSampleRate,
+    target:
+      redirectOrRewrite && a.target ? parseValueExpression(a.target, phase as Phase) : undefined,
+    preserveQuery:
+      redirectOrRewrite && a.preserveQuery !== undefined && a.preserveQuery !== queryDefault(a.kind)
+        ? a.preserveQuery
+        : undefined,
+    setQuery: [...(a.setQuery ?? [])]
+      .sort(byString((param) => param.name))
+      .map((param) => create(QueryParamSchema, { name: param.name, value: param.value })),
+    removeQuery: sortedSet(a.removeQuery),
+    originGroup: a.originGroup ?? "",
+    hostHeader: a.hostHeader ?? "",
+    sni: a.sni ?? "",
+    port: a.port ?? 0,
+    compression: a.kind === "compression" ? [...(a.algorithms ?? [])] : [],
+  });
+}
+
 export function compileRules(rules: RuleModel[] = []): EdgeRule[] {
   return [...rules]
     .sort(
@@ -311,13 +437,78 @@ export function compileRules(rules: RuleModel[] = []): EdgeRule[] {
         phases.indexOf(a.phase as (typeof phases)[number]) -
         phases.indexOf(b.phase as (typeof phases)[number]),
     )
-    .map((rule) => {
-      const { type, ...action } = rule.action;
-      return create(EdgeRuleSchema, {
-        ...rule,
-        action: rule.action.kind === "challenge" ? { ...action, challenge: type ?? "" } : action,
-      });
-    });
+    .map((rule) =>
+      create(EdgeRuleSchema, {
+        id: rule.id,
+        phase: rule.phase,
+        expression: rule.expression,
+        action: compileAction(rule.phase, rule.action),
+      }),
+    );
+}
+
+/**
+ * Every expression of a compiled configuration: rule conditions, redirect
+ * and rewrite targets and cache rule conditions, platform rules first.
+ */
+export function configExpressions(
+  config: Pick<NodeConfig, "platformRules" | "sites">,
+): RuleExpression[] {
+  const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
+  return [
+    ...rules.flatMap((rule) => [rule.expression, rule.action?.target]),
+    ...config.sites.flatMap((site) => site.cacheRules.map((rule) => rule.match?.condition)),
+  ].filter((expression): expression is RuleExpression => !!expression);
+}
+
+/** Whether a compiled action uses fields or kinds only rules-v2 nodes know. */
+function actionNeedsRulesV2(action: RuleAction | undefined): boolean {
+  if (!action) return false;
+  return (
+    action.kind === "origin" ||
+    action.kind === "compression" ||
+    action.gzip === true ||
+    action.brotli !== undefined ||
+    action.zstd !== undefined ||
+    action.websocket !== undefined ||
+    action.underAttack !== undefined ||
+    action.ccEnabled !== undefined ||
+    action.ccMaxLevel !== "" ||
+    action.originConnectTimeoutMs !== 0 ||
+    action.originSendTimeoutMs !== 0 ||
+    action.originReadTimeoutMs !== 0 ||
+    action.logSampleRate !== undefined ||
+    !!action.target ||
+    action.preserveQuery !== undefined ||
+    action.setQuery.length > 0 ||
+    action.removeQuery.length > 0 ||
+    action.originGroup !== "" ||
+    action.hostHeader !== "" ||
+    action.sni !== "" ||
+    action.port !== 0 ||
+    action.compression.length > 0
+  );
+}
+
+/**
+ * rules-v2 when the compiled configuration uses any of the rule engine
+ * extensions (proto v0.13.0): functions or the new fields in a condition or
+ * target, the new action kinds and fields, the compression phase, a cache
+ * rule condition or browser TTL, bulk redirects or an origin group. Others
+ * encode exactly as before and need nothing new.
+ */
+export function rulesFeatures(config: NodeConfig): string[] {
+  const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
+  const uses =
+    configExpressions(config).some((expression) => needsRulesV2(expression)) ||
+    rules.some((rule) => rule.phase === "compression" || actionNeedsRulesV2(rule.action)) ||
+    config.sites.some(
+      (site) =>
+        site.bulkRedirects.length > 0 ||
+        !!site.originPool?.origins.some((origin) => origin.group !== "") ||
+        site.cacheRules.some((rule) => !!rule.match?.condition || rule.browserTtlSeconds > 0),
+    );
+  return uses ? [RULES_V2_FEATURE] : [];
 }
 /**
  * requiredFeatures for GeoIP fields. geoip-city-v1 keeps its original name so
@@ -326,10 +517,12 @@ export function compileRules(rules: RuleModel[] = []): EdgeRule[] {
  * console only, see nodeRequirements.
  */
 export function geoFeatures(expression: Expression): string[] {
+  // A call's field is the function's name.
+  const field = expression.op === "call" ? "" : expression.field;
   return [
-    ...(expression.field === "ip.geoip.asnum"
+    ...(field === "ip.geoip.asnum"
       ? ["geoip-asn-v1"]
-      : expression.field.startsWith("ip.geoip.")
+      : field.startsWith("ip.geoip.")
         ? ["geoip-city-v1"]
         : []),
     ...expression.children.flatMap(geoFeatures),
@@ -344,11 +537,10 @@ export function geoFeatures(expression: Expression): string[] {
  * nodeSupportsFeature from @edgeweir/contract.
  */
 export function nodeRequirements(config: NodeConfig): string[] {
-  const readsSubdivision = (expression: RuleExpression | undefined): boolean =>
-    !!expression &&
-    (expression.field === "ip.geoip.subdivision" || expression.children.some(readsSubdivision));
-  const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
-  return rules.some((rule) => readsSubdivision(rule.expression))
+  const readsSubdivision = (expression: RuleExpression): boolean =>
+    (expression.op !== "call" && expression.field === "ip.geoip.subdivision") ||
+    expression.children.some(readsSubdivision);
+  return configExpressions(config).some(readsSubdivision)
     ? [...config.requiredFeatures, "geoip-subdivision-v1"]
     : [...config.requiredFeatures];
 }
@@ -397,14 +589,20 @@ export interface CompileInput {
 
 /**
  * Whether the cluster's configuration uses challenges: platform Under
- * Attack, a platform or site rule with the challenge action, or a served site
- * with Under Attack or an enabled CC policy. Only then does the configuration
+ * Attack, a platform or site rule with the challenge action or a config
+ * action that turns Under Attack on, or a served site with Under Attack or
+ * an enabled CC policy. Only then does the configuration
  * carry challenge keys, the platform protection and every site's protection
  * (feature challenge-v1); other clusters keep their content hash.
  */
 export function usesChallenges(input: CompileInput): boolean {
+  // A config rule that turns Under Attack on challenges the requests it matches.
   const challengeRule = (rules: RuleModel[] | undefined) =>
-    (rules ?? []).some((rule) => rule.action.kind === "challenge");
+    (rules ?? []).some(
+      (rule) =>
+        rule.action.kind === "challenge" ||
+        (rule.action.kind === "config" && rule.action.underAttack === true),
+    );
   return (
     !!input.platformProtection?.underAttack ||
     challengeRule(input.platformRules) ||
@@ -442,23 +640,26 @@ function compileSiteProtection(model: SiteProtectionModel) {
 
 /**
  * Features that the protection of a compiled configuration needs:
- * challenge-v1 when it carries site or platform protection, challenge keys
- * or a challenge rule; ja4-v1 when a rule reads tls.ja4 (or counts by it) or
- * a site records JA4 in its access logs.
+ * challenge-v1 when it carries site or platform protection, challenge keys,
+ * a challenge rule or a rule that turns Under Attack on; ja4-v1 when an
+ * expression reads tls.ja4 (a condition, target or cache rule condition), a
+ * rule counts by it or a site records JA4 in its access logs.
  */
 export function protectionFeatures(config: NodeConfig): string[] {
   const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
-  const readsJa4 = (expression: RuleExpression | undefined): boolean =>
-    !!expression && (expression.field === "tls.ja4" || expression.children.some(readsJa4));
+  const readsJa4 = (expression: RuleExpression): boolean =>
+    (expression.op !== "call" && expression.field === "tls.ja4") ||
+    expression.children.some(readsJa4);
   return [
     ...(config.platformProtection ||
     config.challengeKeys.length ||
     config.sites.some((site) => site.protection) ||
-    rules.some((rule) => rule.action?.kind === "challenge")
+    rules.some((rule) => rule.action?.kind === "challenge" || rule.action?.underAttack === true)
       ? ["challenge-v1"]
       : []),
     ...(config.sites.some((site) => site.protection?.logJa4) ||
-    rules.some((rule) => readsJa4(rule.expression) || rule.action?.key === "tls.ja4")
+    configExpressions(config).some(readsJa4) ||
+    rules.some((rule) => rule.action?.key === "tls.ja4")
       ? ["ja4-v1"]
       : []),
   ];
@@ -542,6 +743,12 @@ const byString =
     return ka < kb ? -1 : ka > kb ? 1 : 0;
   };
 
+/** Byte order of the UTF-8 encoding, as Go compares strings (unlike UTF-16 beyond U+FFFF). */
+const byBytes =
+  <T>(key: (item: T) => string) =>
+  (a: T, b: T) =>
+    Buffer.compare(Buffer.from(key(a), "utf8"), Buffer.from(key(b), "utf8"));
+
 /**
  * TLS options of a site. Brotli and Zstandard carry their level, minimum
  * length and types only while on, so sites without them keep the encoding
@@ -606,6 +813,7 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
           backup: o.backup,
           hostHeader: o.hostHeader,
           sni: o.sni,
+          group: o.group ?? "",
           s3: o.s3
             ? create(S3AuthSchema, {
                 region: o.s3.region,
@@ -656,10 +864,7 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
           id: r.id,
           priority: r.priority,
           match: {
-            pathPrefixes: [...r.pathPrefixes],
-            extensions: r.extensions.map((e) => e.toLowerCase()),
-            expression: r.expression,
-            paths: sortedSet(r.paths),
+            ...cacheCondition(r),
             statusCodes: sortedSet(r.statusCodes),
             minSizeBytes: BigInt(r.minSizeBytes ?? 0),
             maxSizeBytes: BigInt(r.maxSizeBytes ?? 0),
@@ -673,6 +878,7 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
           staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds ?? 0,
           staleIfErrorSeconds: r.staleIfErrorSeconds ?? 0,
           cacheAuthorized: r.cacheAuthorized ?? false,
+          browserTtlSeconds: r.browserTtlSeconds ?? 0,
         }),
     ),
     cacheKey: key
@@ -716,7 +922,41 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
           interceptOriginErrors: model.errorPages.interceptOriginErrors,
         })
       : undefined,
+    bulkRedirects: [...(model.bulkRedirects ?? [])]
+      .sort(byBytes((redirect) => redirect.source))
+      .map((redirect) =>
+        create(BulkRedirectSchema, {
+          source: redirect.source,
+          target: redirect.target,
+          statusCode: redirect.statusCode,
+          preserveQuery: redirect.preserveQuery,
+        }),
+      ),
   });
+}
+
+/**
+ * The request condition of a cache rule: the structured lists (paths sorted,
+ * extensions lowercase in the rule's order) when the expression has the
+ * builder's shape, which nodes of every version understand, else the typed
+ * condition (rules-v2). Rules without an expression keep their lists.
+ */
+function cacheCondition(r: CacheRuleModel) {
+  const lists = (structured: {
+    pathPrefixes: string[];
+    paths?: string[];
+    extensions: string[];
+  }) => ({
+    pathPrefixes: [...structured.pathPrefixes],
+    extensions: structured.extensions.map((e) => e.toLowerCase()),
+    paths: sortedSet(structured.paths),
+  });
+  if (!r.expression && !r.condition) return lists(r);
+  const condition =
+    r.condition ??
+    parseExpression(r.expression, "cache", { maxLength: CACHE_EXPRESSION_MAX_LENGTH });
+  const structured = structuredCacheCondition(condition);
+  return structured ? lists(structured) : { condition };
 }
 
 /** Offline hosts sort like domains: by name, the exact host before the wildcard. */
@@ -750,6 +990,13 @@ export function compileOfflineHosts(hosts: OfflineHostModel[] | undefined): Offl
     .sort(byString(offlineHostKey));
 }
 
+/** set_query by name, remove_query sorted without duplicates (v0.13.0). */
+function canonicalizeAction(action: RuleAction | undefined) {
+  if (!action) return;
+  action.setQuery.sort(byString((param) => param.name));
+  action.removeQuery = sortedSet(action.removeQuery);
+}
+
 /** Sorts every repeated field into the canonical order defined in config.proto. */
 export function canonicalize<T extends NodeConfig>(config: T): T {
   const out = clone(NodeConfigSchema, config) as T;
@@ -765,6 +1012,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   out.challengeKeys.sort(byString((key: ChallengeKeyRef) => key.id));
   out.offlineHosts.sort(byString(offlineHostKey));
   for (const list of out.ipLists) list.entries = sortedSet(list.entries);
+  for (const rule of out.platformRules) canonicalizeAction(rule.action);
   for (const site of out.sites) {
     if (site.tls) {
       site.tls.gzipTypes = sortedSet(site.tls.gzipTypes);
@@ -773,6 +1021,8 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
     }
     if (site.waf) site.waf.excludedRuleIds = sortedSet(site.waf.excludedRuleIds);
     site.errorPages?.pages.sort((a, b) => a.status - b.status);
+    site.bulkRedirects.sort(byBytes((redirect) => redirect.source));
+    for (const rule of site.rules) canonicalizeAction(rule.action);
     site.domains.sort(byString((d) => `${d.name}\u0000${d.wildcard ? 1 : 0}`));
     site.originPool?.origins.sort(byString((o) => o.id));
     site.cacheRules.sort((a, b) =>
@@ -852,10 +1102,6 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       input.ipLists?.some((l) => l.platform && l.kind !== "collection")
         ? ["rules-v1"]
         : []),
-      ...[
-        ...(input.platformRules ?? []),
-        ...input.sites.filter((s) => s.enabled).flatMap((s) => s.rules ?? []),
-      ].flatMap((r) => geoFeatures(r.expression)),
     ],
     originAllowedCidrs: [...(input.originAllowedCidrs ?? [])],
     platformProtection: challenges
@@ -871,6 +1117,8 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     offlineHosts: compileOfflineHosts(input.offlineHosts),
   });
   compiled.requiredFeatures.push(
+    ...configExpressions(compiled).flatMap(geoFeatures),
+    ...rulesFeatures(compiled),
     ...protectionFeatures(compiled),
     ...moduleFeatures(compiled),
     ...poolAndPageFeatures(compiled),

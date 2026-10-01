@@ -1,6 +1,13 @@
-import { create } from "@bufbuild/protobuf";
-import { NodeConfigSchema } from "@edgeweir/proto";
-import { parseExpression } from "@edgeweir/rule-engine";
+import { create, type JsonObject, toJson } from "@bufbuild/protobuf";
+import { NodeConfigSchema, type RuleAction, RuleActionSchema } from "@edgeweir/proto";
+import {
+  type ActionIr,
+  cacheConditionExpression,
+  type Expression,
+  parseExpression,
+  validActionIr,
+  validExpressionIr,
+} from "@edgeweir/rule-engine";
 import { describe, expect, it } from "vitest";
 import {
   type ActiveHealthCheckModel,
@@ -21,7 +28,9 @@ import {
   type OfflineHostModel,
   parseDomain,
   poolAndPageFeatures,
+  protectionFeatures,
   type RuleModel,
+  rulesFeatures,
   type SiteModel,
   type TlsModel,
   usesChallengeKeys,
@@ -891,5 +900,670 @@ describe("Cache-Tag, active health checks, session affinity, error pages and off
     ]);
     config.sites = config.sites.filter((s) => s.id !== "a");
     expect(poolAndPageFeatures(config)).toEqual(["error-pages-v1"]);
+  });
+});
+
+describe("rule engine extensions (rules-v2)", () => {
+  const keys = [
+    { id: "k2", role: "current" },
+    { id: "k1", role: "previous" },
+    { id: "k3", role: "next" },
+  ];
+  const rule = (
+    phase: string,
+    action: RuleModel["action"],
+    expression = "true",
+    id = `r-${phase}`,
+  ): RuleModel => ({
+    id,
+    phase,
+    expression: parseExpression(expression, phase as Parameters<typeof parseExpression>[1]),
+    action,
+  });
+  const compile = (overrides: Partial<SiteModel> = {}, platformRules: RuleModel[] = []) =>
+    compileNodeConfig(
+      { clusterId: "c", sites: [site("a", overrides), site("b")], platformRules },
+      1n,
+    );
+  const compiledRules = (config: ReturnType<typeof compile>) =>
+    config.sites.find((s) => s.id === "a")?.rules ?? [];
+  /** A compiled action as the node's validator reads it (JSON names, set fields only). */
+  const toIr = (action: RuleAction | undefined): ActionIr => {
+    const json = toJson(RuleActionSchema, action ?? create(RuleActionSchema)) as JsonObject;
+    const expression = (e: JsonObject): Expression => ({
+      op: String(e.op ?? ""),
+      field: String(e.field ?? ""),
+      valueType: String(e.valueType ?? ""),
+      value: String(e.value ?? ""),
+      values: (e.values as string[] | undefined) ?? [],
+      children: ((e.children as JsonObject[] | undefined) ?? []).map(expression),
+    });
+    return {
+      ...(json as unknown as ActionIr),
+      target: json.target ? expression(json.target as JsonObject) : undefined,
+      setQuery: ((json.setQuery as JsonObject[] | undefined) ?? []).map((p) => ({
+        name: String(p.name ?? ""),
+        value: String(p.value ?? ""),
+      })),
+    };
+  };
+  const plain = compileNodeConfig({ clusterId: "c", sites: [site("a"), site("b")] }, 1n);
+
+  it("keeps the encoding of rules, cache rules and origins that use none of the extensions", () => {
+    const legacy = [
+      rule("redirect", { kind: "redirect", value: "/new", statusCode: 301 }),
+      rule("request-transform", { kind: "rewrite", value: "/index.html" }),
+      rule("config", { kind: "config", cacheBypass: true, gzip: false }),
+      rule("waf-custom", { kind: "challenge", type: "js" }),
+    ];
+    // The same rules as the contract parses them now: defaults of the new fields filled in.
+    const parsed = [
+      rule("redirect", {
+        kind: "redirect",
+        value: "/new",
+        target: "",
+        statusCode: 301,
+        preserveQuery: false,
+        setQuery: [],
+        removeQuery: [],
+      }),
+      rule("request-transform", {
+        kind: "rewrite",
+        value: "/index.html",
+        target: "",
+        preserveQuery: true,
+        setQuery: [],
+        removeQuery: [],
+      }),
+      rule("config", { kind: "config", cacheBypass: true, gzip: false }),
+      rule("waf-custom", { kind: "challenge", type: "js" }),
+    ];
+    const before = compile({ rules: legacy }, []);
+    const after = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [
+          site("a", {
+            rules: parsed,
+            bulkRedirects: [],
+            originPool: {
+              ...site("a").originPool,
+              origins: site("a").originPool.origins.map((o) => ({ ...o, group: "" })),
+            },
+            cacheRules: site("a").cacheRules.map((r) => ({ ...r, browserTtlSeconds: 0 })),
+          }),
+          site("b"),
+        ],
+      },
+      1n,
+    );
+    expect(after.contentHash).toBe(before.contentHash);
+    expect(rulesFeatures(after)).toEqual([]);
+    expect(after.requiredFeatures).not.toContain("rules-v2");
+    expect(rulesFeatures(plain)).toEqual([]);
+  });
+
+  it("compiles redirect and rewrite targets, query edits and preserve_query only where it differs from the kind's default", () => {
+    const config = compile({
+      rules: [
+        rule(
+          "redirect",
+          {
+            kind: "redirect",
+            value: "",
+            target: 'concat("https://", lower(http.host), http.request.uri.path)',
+            statusCode: 308,
+            preserveQuery: true,
+            setQuery: [
+              { name: "z", value: "last" },
+              { name: "a", value: "first one" },
+            ],
+            removeQuery: ["utm_source", "fbclid", "utm_source"],
+          },
+          'starts_with(http.request.uri.path, "/go/")',
+        ),
+        rule("request-transform", {
+          kind: "rewrite",
+          value: "",
+          target: 'regex_replace(http.request.uri.path, "^/old/(.*)$", "/new/${1}")',
+          preserveQuery: false,
+          setQuery: [],
+          removeQuery: [],
+        }),
+        rule("request-transform", {
+          kind: "rewrite",
+          value: "/static",
+          target: "",
+          preserveQuery: true,
+          setQuery: [{ name: "v", value: "2" }],
+          removeQuery: [],
+        }),
+      ],
+    });
+    const [rewrite, staticRewrite, redirect] = compiledRules(config);
+    expect(redirect?.action).toMatchObject({
+      kind: "redirect",
+      value: "",
+      statusCode: 308,
+      preserveQuery: true,
+      setQuery: [
+        { name: "a", value: "first one" },
+        { name: "z", value: "last" },
+      ],
+      removeQuery: ["fbclid", "utm_source"],
+    });
+    expect(redirect?.action?.target).toMatchObject({
+      op: "call",
+      field: "concat",
+      valueType: "string",
+      children: [
+        { op: "const", value: "https://" },
+        { op: "call", field: "lower", children: [{ op: "field", field: "http.host" }] },
+        { op: "field", field: "http.request.uri.path" },
+      ],
+    });
+    expect(rewrite?.action?.preserveQuery).toBe(false);
+    expect(rewrite?.action?.target?.field).toBe("regex_replace");
+    // A rewrite keeps the query by default: true is not encoded.
+    expect(staticRewrite?.action?.preserveQuery).toBeUndefined();
+    expect(staticRewrite?.action?.target).toBeUndefined();
+    for (const compiled of compiledRules(config))
+      expect(validActionIr(compiled.phase, toIr(compiled.action)), compiled.id).toBe(true);
+    expect(config.requiredFeatures).toEqual(["rules-v1", "rules-v2"]);
+  });
+
+  it("compiles origin, compression and extended config actions in their phases", () => {
+    const config = compile({
+      rules: [
+        rule(
+          "origin",
+          {
+            kind: "origin",
+            originGroup: "media",
+            hostHeader: "media.example.com",
+            sni: "sni.example.com",
+            port: 8443,
+          },
+          'http.request.uri.path.extension in {"mp4" "webm"}',
+        ),
+        rule(
+          "compression",
+          { kind: "compression", algorithms: ["zstd", "gzip"] },
+          'http.response.content_type.media_type eq "text/html"',
+        ),
+        rule("compression", { kind: "compression", algorithms: [] }, "true", "r-off"),
+        rule("config", {
+          kind: "config",
+          gzip: true,
+          brotli: false,
+          zstd: true,
+          websocket: false,
+          underAttack: false,
+          ccEnabled: true,
+          ccMaxLevel: "pow",
+          originConnectTimeoutMs: 2000,
+          originSendTimeoutMs: 30000,
+          originReadTimeoutMs: 120000,
+          logSampleRate: 0,
+        }),
+      ],
+    });
+    const compiled = compiledRules(config);
+    expect(compiled.map((r) => r.phase)).toEqual([
+      "config",
+      "origin",
+      "compression",
+      "compression",
+    ]);
+    expect(compiled[0]?.action).toMatchObject({
+      gzip: true,
+      brotli: false,
+      zstd: true,
+      websocket: false,
+      underAttack: false,
+      ccEnabled: true,
+      ccMaxLevel: "pow",
+      originConnectTimeoutMs: 2000,
+      originSendTimeoutMs: 30000,
+      originReadTimeoutMs: 120000,
+      // Present although 0: the rule stops sampling.
+      logSampleRate: 0,
+    });
+    expect(compiled[0]?.action?.cacheBypass).toBeUndefined();
+    expect(compiled[1]?.action).toMatchObject({
+      kind: "origin",
+      originGroup: "media",
+      hostHeader: "media.example.com",
+      sni: "sni.example.com",
+      port: 8443,
+    });
+    expect(compiled[2]?.action?.compression).toEqual(["zstd", "gzip"]);
+    expect(compiled[3]?.action?.compression).toEqual([]);
+    for (const r of compiled) expect(validActionIr(r.phase, toIr(r.action)), r.id).toBe(true);
+    // Under Attack turned off by a rule challenges nothing.
+    expect(config.platformProtection).toBeUndefined();
+    expect(config.requiredFeatures).toContain("rules-v2");
+  });
+
+  it("requires rules-v2 for every extension, one at a time", () => {
+    const cases: [string, Partial<SiteModel>, RuleModel[]][] = [
+      [
+        "a function",
+        { rules: [rule("waf-custom", { kind: "log" }, 'lower(http.host) eq "a"')] },
+        [],
+      ],
+      [
+        "a new field",
+        { rules: [rule("waf-custom", { kind: "log" }, 'http.request.full_uri contains "x"')] },
+        [],
+      ],
+      ["gzip on", { rules: [rule("config", { kind: "config", gzip: true })] }, []],
+      ["a config field", {}, [rule("config", { kind: "config", websocket: true })]],
+      ["a timeout", { rules: [rule("config", { kind: "config", originReadTimeoutMs: 500 })] }, []],
+      ["the CC level", { rules: [rule("config", { kind: "config", ccMaxLevel: "js" })] }, []],
+      [
+        "a target",
+        {
+          rules: [rule("redirect", { kind: "redirect", target: "http.host", statusCode: 302 })],
+        },
+        [],
+      ],
+      [
+        "a removed query parameter",
+        {
+          rules: [
+            rule("redirect", {
+              kind: "redirect",
+              value: "/x",
+              statusCode: 301,
+              removeQuery: ["a"],
+            }),
+          ],
+        },
+        [],
+      ],
+      [
+        "a kept redirect query",
+        {},
+        [rule("redirect", { kind: "redirect", value: "/x", statusCode: 301, preserveQuery: true })],
+      ],
+      [
+        "a dropped rewrite query",
+        {
+          rules: [rule("request-transform", { kind: "rewrite", value: "/", preserveQuery: false })],
+        },
+        [],
+      ],
+      ["an origin action", { rules: [rule("origin", { kind: "origin", port: 8080 })] }, []],
+      [
+        "the compression phase",
+        { rules: [rule("compression", { kind: "compression", algorithms: ["br"] })] },
+        [],
+      ],
+      [
+        "a browser TTL",
+        {
+          cacheRules: [
+            {
+              ...site("a").cacheRules[0],
+              browserTtlSeconds: 60,
+            } as SiteModel["cacheRules"][number],
+          ],
+        },
+        [],
+      ],
+      [
+        "a cache condition",
+        {
+          cacheRules: [
+            {
+              id: "c1",
+              priority: 1,
+              pathPrefixes: [],
+              extensions: [],
+              expression: 'http.host eq "a.test"',
+              action: "cache",
+              edgeTtlSeconds: 60,
+              originCacheControl: "override",
+            },
+          ],
+        },
+        [],
+      ],
+      [
+        "a bulk redirect",
+        { bulkRedirects: [{ source: "/a", target: "/b", statusCode: 301, preserveQuery: false }] },
+        [],
+      ],
+      [
+        "an origin group",
+        {
+          originPool: {
+            ...site("a").originPool,
+            origins: [
+              ...site("a").originPool.origins,
+              {
+                ...site("a").originPool.origins[0],
+                id: "o3",
+                group: "eu",
+              } as SiteModel["originPool"]["origins"][number],
+            ],
+          },
+        },
+        [],
+      ],
+    ];
+    for (const [name, overrides, platform] of cases) {
+      const config = compile(overrides, platform);
+      expect(rulesFeatures(config), name).toEqual(["rules-v2"]);
+      expect(config.requiredFeatures, name).toContain("rules-v2");
+    }
+    // A disabled site's extensions are not shipped and require nothing.
+    const disabled = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [
+          site("a", {
+            enabled: false,
+            bulkRedirects: [{ source: "/a", target: "/b", statusCode: 301, preserveQuery: false }],
+          }),
+          site("b"),
+        ],
+      },
+      1n,
+    );
+    expect(disabled.requiredFeatures).not.toContain("rules-v2");
+  });
+
+  it("compiles cache rule expressions of the builder's shape to the structured lists, others to a condition", () => {
+    const structured = {
+      pathPrefixes: ["/b/", "/a/"],
+      paths: ["/z", "/index.html"],
+      extensions: ["png", "css"],
+    };
+    const legacy = compile({
+      cacheRules: [
+        {
+          id: "c1",
+          priority: 1,
+          ...structured,
+          expression: "",
+          action: "cache",
+          edgeTtlSeconds: 60,
+          originCacheControl: "override",
+        },
+      ],
+    });
+    const expression = cacheConditionExpression(structured);
+    const migrated = compile({
+      cacheRules: [
+        {
+          id: "c1",
+          priority: 1,
+          pathPrefixes: [],
+          extensions: [],
+          expression,
+          action: "cache",
+          edgeTtlSeconds: 60,
+          originCacheControl: "override",
+        },
+      ],
+    });
+    const match = migrated.sites[0]?.cacheRules[0]?.match;
+    expect(match?.pathPrefixes).toEqual(["/b/", "/a/"]);
+    expect(match?.paths).toEqual(["/index.html", "/z"]);
+    // Sets in expressions are sorted: the extensions' order may change once.
+    expect(match?.extensions).toEqual(["css", "png"]);
+    expect(match?.condition).toBeUndefined();
+    expect(match?.expression).toBe("");
+    expect(rulesFeatures(migrated)).toEqual([]);
+    // With the extensions already in order the migrated rule hashes as before.
+    const sorted = { ...structured, extensions: ["css", "png"] };
+    const before = compile({
+      cacheRules: [
+        {
+          id: "c1",
+          priority: 1,
+          ...sorted,
+          expression: "",
+          action: "cache",
+          edgeTtlSeconds: 60,
+          originCacheControl: "override",
+        },
+      ],
+    });
+    const after = compile({
+      cacheRules: [
+        {
+          id: "c1",
+          priority: 1,
+          pathPrefixes: [],
+          extensions: [],
+          expression: cacheConditionExpression(sorted),
+          action: "cache",
+          edgeTtlSeconds: 60,
+          originCacheControl: "override",
+        },
+      ],
+    });
+    expect(after.contentHash).toBe(before.contentHash);
+    expect(legacy.sites[0]?.cacheRules[0]?.match?.extensions).toEqual(["png", "css"]);
+    // "true" matches everything: no lists, no condition.
+    const all = compile({
+      cacheRules: [
+        {
+          id: "c1",
+          priority: 1,
+          pathPrefixes: [],
+          extensions: [],
+          expression: "true",
+          action: "bypass",
+          edgeTtlSeconds: 0,
+          originCacheControl: "override",
+        },
+      ],
+    });
+    expect(all.sites[0]?.cacheRules[0]?.match).toMatchObject({
+      pathPrefixes: [],
+      paths: [],
+      extensions: [],
+    });
+    expect(all.sites[0]?.cacheRules[0]?.match?.condition).toBeUndefined();
+    // Anything else travels as the typed condition, lists bound by the caller.
+    const conditionSource = 'lower(http.host) eq "cdn.a.test" or ip.src in $office';
+    const condition = parseExpression(conditionSource, "cache");
+    condition.children[1] = { ...(condition.children[1] as Expression), value: "list-1" };
+    const typed = compile({
+      cacheRules: [
+        {
+          id: "c1",
+          priority: 1,
+          pathPrefixes: [],
+          extensions: [],
+          expression: conditionSource,
+          condition,
+          browserTtlSeconds: 300,
+          action: "cache",
+          edgeTtlSeconds: 60,
+          originCacheControl: "override",
+        },
+      ],
+    });
+    const rule = typed.sites[0]?.cacheRules[0];
+    expect(rule?.browserTtlSeconds).toBe(300);
+    expect(rule?.match).toMatchObject({
+      pathPrefixes: [],
+      paths: [],
+      extensions: [],
+      expression: "",
+    });
+    expect(rule?.match?.condition).toMatchObject({ op: "or" });
+    expect(rule?.match?.condition?.children[1]).toMatchObject({ op: "in_list", value: "list-1" });
+    expect(validExpressionIr(rule?.match?.condition as Expression, "cache")).toBe(true);
+    expect(rulesFeatures(typed)).toEqual(["rules-v2"]);
+  });
+
+  it("compiles bulk redirects sorted by their UTF-8 bytes and origin groups", () => {
+    const redirects = [
+      { source: "a.test/x", target: "https://example.com/x", statusCode: 302, preserveQuery: true },
+      { source: "/\u{1F600}", target: "/emoji", statusCode: 308, preserveQuery: false },
+      { source: "/\uFF01", target: "/fullwidth", statusCode: 307, preserveQuery: false },
+      { source: "/old", target: "/new", statusCode: 301, preserveQuery: false },
+    ];
+    const origins = site("a").originPool.origins;
+    const config = compile({
+      bulkRedirects: redirects,
+      originPool: {
+        ...site("a").originPool,
+        origins: [origins[0], { ...origins[1], group: "eu" }] as SiteModel["originPool"]["origins"],
+      },
+    });
+    const compiled = config.sites[0];
+    // Byte order puts U+FF01 (EF BC 81) before U+1F600 (F0 9F 98 80); UTF-16 would not.
+    expect(compiled?.bulkRedirects.map((r) => r.source)).toEqual([
+      "/old",
+      "/\uFF01",
+      "/\u{1F600}",
+      "a.test/x",
+    ]);
+    expect(compiled?.bulkRedirects[3]).toMatchObject({
+      target: "https://example.com/x",
+      statusCode: 302,
+      preserveQuery: true,
+    });
+    expect(compiled?.originPool?.origins.map((o) => [o.id, o.group])).toEqual([
+      ["o1-a", "eu"],
+      ["o2-a", ""],
+    ]);
+    expect(config.requiredFeatures).toEqual(["rules-v2"]);
+  });
+
+  it("canonicalizes bulk redirects, set_query and remove_query of site and platform rules", () => {
+    const config = compile(
+      {
+        rules: [
+          rule("redirect", {
+            kind: "redirect",
+            value: "/x",
+            statusCode: 301,
+            setQuery: [
+              { name: "b", value: "2" },
+              { name: "a", value: "1" },
+            ],
+            removeQuery: ["d", "c", "d"],
+          }),
+        ],
+        bulkRedirects: [
+          { source: "/b", target: "/1", statusCode: 301, preserveQuery: false },
+          { source: "/a", target: "/2", statusCode: 301, preserveQuery: false },
+        ],
+      },
+      [
+        rule("redirect", {
+          kind: "redirect",
+          value: "/y",
+          statusCode: 302,
+          setQuery: [
+            { name: "y", value: "" },
+            { name: "x", value: "" },
+          ],
+        }),
+      ],
+    );
+    const shuffled = create(NodeConfigSchema, config);
+    const site0 = shuffled.sites[0];
+    const action = site0?.rules[0]?.action;
+    if (!site0 || !action || !shuffled.platformRules[0]?.action) throw new Error("missing");
+    site0.bulkRedirects.reverse();
+    action.setQuery.reverse();
+    action.removeQuery = ["d", "c", "d"];
+    shuffled.platformRules[0].action.setQuery.reverse();
+    const canonical = canonicalize(shuffled);
+    expect(canonical.sites[0]?.bulkRedirects.map((r) => r.source)).toEqual(["/a", "/b"]);
+    expect(canonical.sites[0]?.rules[0]?.action?.setQuery.map((p) => p.name)).toEqual(["a", "b"]);
+    expect(canonical.sites[0]?.rules[0]?.action?.removeQuery).toEqual(["c", "d"]);
+    expect(canonical.platformRules[0]?.action?.setQuery.map((p) => p.name)).toEqual(["x", "y"]);
+    expect(contentHash(canonical)).toBe(config.contentHash);
+    expect(applyNodeConfigDiff(plain, diffNodeConfig(plain, config)).contentHash).toBe(
+      config.contentHash,
+    );
+  });
+
+  it("reads GeoIP and JA4 in targets and cache conditions", () => {
+    const geoTarget = compile({
+      rules: [
+        rule("redirect", {
+          kind: "redirect",
+          target: 'concat("/", lower(ip.geoip.country))',
+          statusCode: 302,
+        }),
+      ],
+    });
+    expect(geoTarget.requiredFeatures).toContain("geoip-city-v1");
+    const cache = (expression: string) =>
+      compile({
+        cacheRules: [
+          {
+            id: "c1",
+            priority: 1,
+            pathPrefixes: [],
+            extensions: [],
+            expression,
+            action: "bypass",
+            edgeTtlSeconds: 0,
+            originCacheControl: "override",
+          },
+        ],
+      });
+    expect(cache("ip.geoip.asnum eq 64512").requiredFeatures).toContain("geoip-asn-v1");
+    expect(nodeRequirements(cache('ip.geoip.subdivision eq "AUK"'))).toContain(
+      "geoip-subdivision-v1",
+    );
+    const ja4 = cache('starts_with(tls.ja4, "t13d")');
+    expect(ja4.requiredFeatures).toContain("ja4-v1");
+    expect(protectionFeatures(ja4)).toEqual(["ja4-v1"]);
+    // A function's name is never read as a field.
+    expect(geoFeatures(parseExpression('starts_with(http.host, "ip.geoip.")'))).toEqual([]);
+  });
+
+  it("treats a config rule that turns Under Attack on as using challenges", () => {
+    const underAttack = rule(
+      "config",
+      { kind: "config", underAttack: true },
+      'starts_with(http.request.uri.path, "/login")',
+    );
+    for (const [sites, platformRules] of [
+      [[site("a", { rules: [underAttack] }), site("b")], []],
+      [[site("a"), site("b")], [underAttack]],
+    ] as [SiteModel[], RuleModel[]][]) {
+      const input = { clusterId: "c", sites, platformRules, challengeKeys: keys };
+      expect(usesChallenges(input)).toBe(true);
+      const config = compileNodeConfig(input, 1n);
+      expect(config.platformProtection).toMatchObject({
+        underAttack: false,
+        underAttackChallenge: "js",
+      });
+      expect(config.challengeKeys.map((key) => key.id)).toEqual(["k1", "k2", "k3"]);
+      // Every site carries its protection (defaults here) so that nodes can challenge.
+      for (const compiled of config.sites)
+        expect(compiled.protection).toMatchObject({
+          underAttack: false,
+          underAttackChallenge: DEFAULT_SITE_PROTECTION.underAttackChallenge,
+          passTtlSeconds: DEFAULT_SITE_PROTECTION.passTtlSeconds,
+          powDifficulty: DEFAULT_SITE_PROTECTION.powDifficulty,
+          powHighDifficulty: DEFAULT_SITE_PROTECTION.powHighDifficulty,
+        });
+      expect(config.requiredFeatures).toEqual(expect.arrayContaining(["challenge-v1", "rules-v2"]));
+      expect(protectionFeatures(config)).toContain("challenge-v1");
+    }
+    // Turning it off, or a disabled site's rule, challenges nothing.
+    const off = rule("config", { kind: "config", underAttack: false });
+    expect(usesChallenges({ clusterId: "c", sites: [site("a", { rules: [off] })] })).toBe(false);
+    expect(
+      usesChallenges({
+        clusterId: "c",
+        sites: [site("a", { enabled: false, rules: [underAttack] })],
+      }),
+    ).toBe(false);
   });
 });

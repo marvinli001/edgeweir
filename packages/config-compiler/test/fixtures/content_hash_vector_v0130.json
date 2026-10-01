@@ -1,0 +1,522 @@
+{
+  "description": "proto v0.13.0 NodeConfig content_hash test vector: the M2 vector plus, on site s2, an origin group, site rules with functions and the rules-v2 fields (http.request.full_uri, http.request.uri.path.extension, http.response.content_type.media_type), a rewrite and a redirect with value expression targets (regex_replace, concat, lower), query edits (set_query unsorted, remove_query unsorted with a duplicate) and preserve_query set where it differs from the kind's default, a static redirect with set_query, a config action with every v0.13.0 field (gzip = true, optional booleans false, log_sample_rate 0), an origin action, two compression rules (one with an empty list), a cache rule in the structured shape with browser_ttl_seconds and one with a typed condition, bulk_redirects unsorted (two sources whose UTF-8 byte order differs from UTF-16 order), and a platform rule with set_query unsorted; required_features unsorted with a duplicate. The canonical form sorts bulk_redirects by source (bytes), set_query by name, remove_query as a set and required_features as a set: sha256(deterministic binary encoding with revision=0 and content_hash=\"\") after canonical sorting",
+  "config": {
+    "revision": "12",
+    "contentHash": "ignored",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "1024",
+        "keysZoneMb": 10,
+        "inactiveSeconds": 600
+      }
+    ],
+    "sites": [
+      {
+        "id": "s2",
+        "name": "bucket",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "bucket.test"
+          },
+          {
+            "name": "cdn.test",
+            "wildcard": true
+          }
+        ],
+        "originPool": {
+          "id": "p2",
+          "policy": "LOAD_BALANCE_POLICY_CONSISTENT_HASH",
+          "origins": [
+            {
+              "id": "o2",
+              "address": "backup.example.com",
+              "port": 443,
+              "scheme": "ORIGIN_SCHEME_HTTPS",
+              "weight": 3,
+              "backup": true,
+              "hostHeader": "www.example.com",
+              "sni": "origin.example.com",
+              "group": "backup-pool"
+            },
+            {
+              "id": "o3",
+              "address": "minio",
+              "port": 9000,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1,
+              "s3": {
+                "region": "us-east-1",
+                "bucket": "media",
+                "credentialId": "cred-1",
+                "credentialVersion": "2"
+              }
+            }
+          ],
+          "skipTlsVerify": true,
+          "healthCheck": {
+            "maxFails": 2,
+            "recoverySeconds": 15
+          },
+          "connection": {
+            "connectTimeoutMs": 1500,
+            "sendTimeoutMs": 60000,
+            "readTimeoutMs": 90000,
+            "keepaliveDisabled": true,
+            "keepaliveIdleSeconds": 30,
+            "keepaliveMaxRequests": 500
+          }
+        },
+        "cacheRules": [
+          {
+            "id": "r2",
+            "priority": 10,
+            "match": {
+              "pathPrefixes": ["/static/"],
+              "paths": ["/index.html"]
+            },
+            "action": "CACHE_ACTION_BYPASS",
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_OVERRIDE"
+          },
+          {
+            "id": "r3",
+            "priority": 20,
+            "match": {
+              "extensions": ["png"],
+              "statusCodes": [200, 404],
+              "minSizeBytes": "1",
+              "maxSizeBytes": "10485760"
+            },
+            "action": "CACHE_ACTION_CACHE",
+            "edgeTtlSeconds": 3600,
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_RESPECT",
+            "staleWhileRevalidateSeconds": 30,
+            "staleIfErrorSeconds": 86400
+          },
+          {
+            "id": "r4",
+            "priority": 30,
+            "match": {
+              "pathPrefixes": ["/media/"],
+              "extensions": ["jpg", "png"]
+            },
+            "action": "CACHE_ACTION_CACHE",
+            "edgeTtlSeconds": 86400,
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_OVERRIDE",
+            "browserTtlSeconds": 600
+          },
+          {
+            "id": "r5",
+            "priority": 40,
+            "match": {
+              "condition": {
+                "op": "or",
+                "children": [
+                  {
+                    "op": "eq",
+                    "valueType": "string",
+                    "value": "cdn.test",
+                    "children": [
+                      {
+                        "op": "call",
+                        "field": "lower",
+                        "valueType": "string",
+                        "children": [
+                          {
+                            "op": "field",
+                            "field": "http.host",
+                            "valueType": "string"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "op": "eq",
+                    "field": "http.request.headers.x-cache",
+                    "valueType": "string",
+                    "value": "1"
+                  }
+                ]
+              }
+            },
+            "action": "CACHE_ACTION_BYPASS",
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_OVERRIDE"
+          }
+        ],
+        "cacheZone": "default",
+        "cacheGeneration": "3",
+        "cacheKey": {
+          "query": "CACHE_KEY_QUERY_INCLUDE",
+          "queryParams": ["lang", "v"],
+          "sortQuery": true,
+          "headers": ["accept-language"],
+          "cookies": ["ab"],
+          "deviceType": true,
+          "excludeHost": true
+        },
+        "rangeSlice": true,
+        "websocketDisabled": true,
+        "rules": [
+          {
+            "id": "e1",
+            "phase": "request-transform",
+            "expression": {
+              "op": "call",
+              "field": "starts_with",
+              "valueType": "boolean",
+              "children": [
+                {
+                  "op": "field",
+                  "field": "http.request.uri.path",
+                  "valueType": "string"
+                },
+                {
+                  "op": "const",
+                  "valueType": "string",
+                  "value": "/old/"
+                }
+              ]
+            },
+            "action": {
+              "kind": "rewrite",
+              "target": {
+                "op": "call",
+                "field": "regex_replace",
+                "valueType": "string",
+                "children": [
+                  {
+                    "op": "field",
+                    "field": "http.request.uri.path",
+                    "valueType": "string"
+                  },
+                  {
+                    "op": "const",
+                    "valueType": "string",
+                    "value": "^/old/(.*)$"
+                  },
+                  {
+                    "op": "const",
+                    "valueType": "string",
+                    "value": "/new/${1}"
+                  }
+                ]
+              },
+              "preserveQuery": false,
+              "setQuery": [
+                {
+                  "name": "v",
+                  "value": "2"
+                },
+                {
+                  "name": "lang",
+                  "value": "en us"
+                }
+              ],
+              "removeQuery": ["utm_source", "utm_medium", "utm_source"]
+            }
+          },
+          {
+            "id": "e2",
+            "phase": "redirect",
+            "expression": {
+              "op": "and",
+              "children": [
+                {
+                  "op": "call",
+                  "field": "starts_with",
+                  "valueType": "boolean",
+                  "children": [
+                    {
+                      "op": "field",
+                      "field": "http.request.uri.path",
+                      "valueType": "string"
+                    },
+                    {
+                      "op": "const",
+                      "valueType": "string",
+                      "value": "/go/"
+                    }
+                  ]
+                },
+                {
+                  "op": "lt",
+                  "valueType": "number",
+                  "value": "100",
+                  "children": [
+                    {
+                      "op": "call",
+                      "field": "len",
+                      "valueType": "number",
+                      "children": [
+                        {
+                          "op": "field",
+                          "field": "http.request.uri.query",
+                          "valueType": "string"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "action": {
+              "kind": "redirect",
+              "statusCode": 308,
+              "target": {
+                "op": "call",
+                "field": "concat",
+                "valueType": "string",
+                "children": [
+                  {
+                    "op": "const",
+                    "valueType": "string",
+                    "value": "https://"
+                  },
+                  {
+                    "op": "call",
+                    "field": "lower",
+                    "valueType": "string",
+                    "children": [
+                      {
+                        "op": "field",
+                        "field": "http.host",
+                        "valueType": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "op": "field",
+                    "field": "http.request.uri.path",
+                    "valueType": "string"
+                  }
+                ]
+              },
+              "preserveQuery": true,
+              "removeQuery": ["b", "a"]
+            }
+          },
+          {
+            "id": "e3",
+            "phase": "redirect",
+            "expression": {
+              "op": "contains",
+              "field": "http.request.full_uri",
+              "valueType": "string",
+              "value": "/legacy"
+            },
+            "action": {
+              "kind": "redirect",
+              "value": "/elsewhere",
+              "statusCode": 302,
+              "setQuery": [
+                {
+                  "name": "z",
+                  "value": "1"
+                },
+                {
+                  "name": "a",
+                  "value": "%"
+                }
+              ]
+            }
+          },
+          {
+            "id": "e4",
+            "phase": "config",
+            "expression": {
+              "op": "call",
+              "field": "ends_with",
+              "valueType": "boolean",
+              "children": [
+                {
+                  "op": "call",
+                  "field": "lower",
+                  "valueType": "string",
+                  "children": [
+                    {
+                      "op": "field",
+                      "field": "http.host",
+                      "valueType": "string"
+                    }
+                  ]
+                },
+                {
+                  "op": "const",
+                  "valueType": "string",
+                  "value": ".test"
+                }
+              ]
+            },
+            "action": {
+              "kind": "config",
+              "gzip": true,
+              "brotli": false,
+              "zstd": true,
+              "websocket": false,
+              "underAttack": false,
+              "ccEnabled": true,
+              "ccMaxLevel": "pow",
+              "originConnectTimeoutMs": 2000,
+              "originSendTimeoutMs": 30000,
+              "originReadTimeoutMs": 120000,
+              "logSampleRate": 0
+            }
+          },
+          {
+            "id": "e5",
+            "phase": "origin",
+            "expression": {
+              "op": "in",
+              "field": "http.request.uri.path.extension",
+              "valueType": "string",
+              "values": ["mp4", "webm"]
+            },
+            "action": {
+              "kind": "origin",
+              "originGroup": "backup-pool",
+              "hostHeader": "media.example.com",
+              "sni": "sni.example.com",
+              "port": 8443
+            }
+          },
+          {
+            "id": "e6",
+            "phase": "compression",
+            "expression": {
+              "op": "eq",
+              "field": "http.response.content_type.media_type",
+              "valueType": "string",
+              "value": "text/html"
+            },
+            "action": {
+              "kind": "compression",
+              "compression": ["zstd", "gzip"]
+            }
+          },
+          {
+            "id": "e7",
+            "phase": "compression",
+            "expression": {
+              "op": "contains",
+              "valueType": "string",
+              "value": "raw=1",
+              "children": [
+                {
+                  "op": "call",
+                  "field": "url_decode",
+                  "valueType": "string",
+                  "children": [
+                    {
+                      "op": "field",
+                      "field": "http.request.uri.query",
+                      "valueType": "string"
+                    }
+                  ]
+                }
+              ]
+            },
+            "action": {
+              "kind": "compression"
+            }
+          }
+        ],
+        "bulkRedirects": [
+          {
+            "source": "/！",
+            "target": "/fullwidth",
+            "statusCode": 307
+          },
+          {
+            "source": "/😀",
+            "target": "/emoji",
+            "statusCode": 308,
+            "preserveQuery": true
+          },
+          {
+            "source": "bucket.test/a",
+            "target": "https://example.com/a",
+            "statusCode": 302,
+            "preserveQuery": true
+          },
+          {
+            "source": "/old",
+            "target": "/new",
+            "statusCode": 301
+          },
+          {
+            "source": "/a",
+            "target": "/b?x=1",
+            "statusCode": 301
+          }
+        ]
+      },
+      {
+        "id": "s1",
+        "name": "demo",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "demo.test"
+          }
+        ],
+        "originPool": {
+          "id": "p1",
+          "policy": "LOAD_BALANCE_POLICY_ROUND_ROBIN",
+          "origins": [
+            {
+              "id": "o1",
+              "address": "whoami",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "cacheKey": {
+          "query": "CACHE_KEY_QUERY_IGNORE"
+        }
+      }
+    ],
+    "requiredFeatures": ["rules-v2", "rules-v1", "rules-v2"],
+    "platformRules": [
+      {
+        "id": "p1",
+        "phase": "redirect",
+        "expression": {
+          "op": "eq",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "/maintenance"
+        },
+        "action": {
+          "kind": "redirect",
+          "value": "https://status.example.com/",
+          "statusCode": 302,
+          "setQuery": [
+            {
+              "name": "to",
+              "value": "status"
+            },
+            {
+              "name": "from",
+              "value": "edge"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "canonical_hex": "1a0263312204085010012a110a0764656661756c74108008180a20d80432440a027331120464656d6f1801220b0a0964656d6f2e746573742a1a0a02703110021a120a026f31120677686f616d691850200128013a0764656661756c7440015202080232d70f0a02733212066275636b65741801220d0a0b6275636b65742e74657374220c0a0863646e2e7465737410012aa9010a02703210031a530a026f3212126261636b75702e6578616d706c652e636f6d18bb032002280330013a0f7777772e6578616d706c652e636f6d42126f726967696e2e6578616d706c652e636f6d520b6261636b75702d706f6f6c1a300a026f3312056d696e696f18a846200128014a1c0a0975732d656173742d3112056d656469611a06637265642d31200220012a040802100f321208dc0b10e0d4031890bf052001281e30f40332230a027232100a1a170a082f7374617469632f220b2f696e6465782e68746d6c2002300132270a02723310141a121203706e672a04c801940330013880808005200128901c3002381e4080a30532260a027234101e1a130a072f6d656469612f12036a70671203706e6720012880a305300150d804328d010a02723510281a8001427e0a026f7232490a0265711a06737472696e67220863646e2e7465737432310a0463616c6c12056c6f7765721a06737472696e67321a0a056669656c641209687474702e686f73741a06737472696e67322d0a026571121c687474702e726571756573742e686561646572732e782d63616368651a06737472696e67220131200230013a0764656661756c7440035226080312046c616e671201761801220f6163636570742d6c616e67756167652a026162300138015801600172b9020a0265311211726571756573742d7472616e73666f726d1a5c0a0463616c6c120b7374617274735f776974681a07626f6f6c65616e32260a056669656c641215687474702e726571756573742e7572692e706174681a06737472696e6732160a05636f6e73741a06737472696e6722052f6f6c642f22c1010a0772657772697465ba017f0a0463616c6c120d72656765785f7265706c6163651a06737472696e6732260a056669656c641215687474702e726571756573742e7572692e706174681a06737472696e67321c0a05636f6e73741a06737472696e67220b5e2f6f6c642f282e2a2924321a0a05636f6e73741a06737472696e6722092f6e65772f247b317dc00100ca010d0a046c616e671205656e207573ca01060a0176120132d2010a75746d5f6d656469756dd2010a75746d5f736f7572636572ef020a026532120872656469726563741ab3010a03616e64325b0a0463616c6c120b7374617274735f776974681a07626f6f6c65616e32260a056669656c641215687474702e726571756573742e7572692e706174681a06737472696e6732150a05636f6e73741a06737472696e6722042f676f2f324f0a026c741a066e756d6265722203313030323c0a0463616c6c12036c656e1a066e756d62657232270a056669656c641216687474702e726571756573742e7572692e71756572791a06737472696e6722a8010a08726564697265637420b402ba018c010a0463616c6c1206636f6e6361741a06737472696e6732190a05636f6e73741a06737472696e67220868747470733a2f2f32310a0463616c6c12056c6f7765721a06737472696e67321a0a056669656c641209687474702e686f73741a06737472696e6732260a056669656c641215687474702e726571756573742e7572692e706174681a06737472696e67c00101d2010161d2010162726f0a026533120872656469726563741a320a08636f6e7461696e731215687474702e726571756573742e66756c6c5f7572691a06737472696e6722072f6c6567616379222b0a087265646972656374120a2f656c7365776865726520ae02ca01060a0161120125ca01060a017a12013172a2010a0265341206636f6e6669671a650a0463616c6c1209656e64735f776974681a07626f6f6c65616e32310a0463616c6c12056c6f7765721a06737472696e67321a0a056669656c641209687474702e686f73741a06737472696e6732160a05636f6e73741a06737472696e6722052e74657374222d0a06636f6e6669675001680070017800800100880101920103706f779801d00fa001b0ea01a801c0a907b001007288010a02653512066f726967696e1a380a02696e121f687474702e726571756573742e7572692e706174682e657874656e73696f6e1a06737472696e672a036d70342a047765626d22400a066f726967696eda010b6261636b75702d706f6f6ce201116d656469612e6578616d706c652e636f6dea010f736e692e6578616d706c652e636f6df001fb41726e0a026536120b636f6d7072657373696f6e1a3e0a0265711225687474702e726573706f6e73652e636f6e74656e745f747970652e6d656469615f747970651a06737472696e672209746578742f68746d6c221b0a0b636f6d7072657373696f6efa01047a737464fa0104677a69707280010a026537120b636f6d7072657373696f6e1a5e0a08636f6e7461696e731a06737472696e6722057261773d3132430a0463616c6c120a75726c5f6465636f64651a06737472696e6732270a056669656c641216687474702e726571756573742e7572692e71756572791a06737472696e67220d0a0b636f6d7072657373696f6ea2010f0a022f6112062f623f783d3118ad02a2010f0a042f6f6c6412042f6e657718ad02a201150a042fefbc81120a2f66756c6c776964746818b302a201140a052ff09f988012062f656d6f6a6918b4022001a2012b0a0d6275636b65742e746573742f61121568747470733a2f2f6578616d706c652e636f6d2f6118ae0220014a0872756c65732d76314a0872756c65732d7632628b010a027031120872656469726563741a310a0265711215687474702e726571756573742e7572692e706174681a06737472696e67220c2f6d61696e74656e616e636522480a087265646972656374121b68747470733a2f2f7374617475732e6578616d706c652e636f6d2f20ae02ca010c0a0466726f6d120465646765ca010c0a02746f1206737461747573",
+  "content_hash": "58322fb665373d6d8f65a6009fdb24f0c4ab2e5f72489da7c9c1def303de3a77"
+}

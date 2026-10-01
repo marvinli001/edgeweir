@@ -86,6 +86,7 @@
     {
       "includes": [
         "packages/rule-engine/**",
+        "packages/config-compiler/test/**",
         "apps/console/test/**",
         "apps/console/e2e/**",
         "scripts/e2e-*.mjs"
