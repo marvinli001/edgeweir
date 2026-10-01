@@ -2,9 +2,10 @@ import http2 from "node:http2";
 import type { SecureContextOptions, TLSSocket } from "node:tls";
 import { Code, ConnectError, type HandlerContext } from "@connectrpc/connect";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
-import { NodeService } from "@edgeweir/proto";
+import { NodeService, ProbeService } from "@edgeweir/proto";
 import type { AppContext } from "../lib/context";
 import { type IssuedServerCertificate, SERVER_CERT_LIFETIME_DAYS } from "../pki/ca";
+import { createProbeService, type ProbeServiceOptions } from "./probe-service";
 import { createNodeService, peerContextValues, peerKey } from "./service";
 
 /** Reissue the server certificate once less than a third of its lifetime remains. */
@@ -16,7 +17,7 @@ const ROTATION_CHECK_MS = 3600 * 1000;
  * stay below a quarter of it.
  */
 export const READ_MAX_BYTES = 16 << 20;
-/** Enroll, the one RPC without a client certificate, carries a token, a CSR and host facts. */
+/** Enroll and EnrollProbe, the RPCs without a client certificate, carry a token, a CSR and host facts. */
 export const ENROLL_READ_MAX_BYTES = 64 << 10;
 /** Sessions without traffic are closed; watch streams send a keepalive every 15 s. */
 const IDLE_TIMEOUT_MS = 120_000;
@@ -30,11 +31,17 @@ export interface NodeChannelOptions {
   rotationCheckMs?: number;
   /** How long a connection may stay without traffic. */
   idleTimeoutMs?: number;
+  /** ProbeService hooks (tests). */
+  probes?: ProbeServiceOptions;
 }
 
-/** Runs before the body is read: without a client certificate only Enroll is served. */
+/** Runs before the body is read: without a client certificate only the enrollments are served. */
 function requireClientCertificate(ctx: HandlerContext) {
-  if (ctx.method !== NodeService.method.enroll && !ctx.values.get(peerKey).authorized)
+  if (
+    ctx.method !== NodeService.method.enroll &&
+    ctx.method !== ProbeService.method.enrollProbe &&
+    !ctx.values.get(peerKey).authorized
+  )
     throw new ConnectError(
       "client certificate required (mutual TLS); enroll first",
       Code.Unauthenticated,
@@ -80,15 +87,20 @@ export async function startNodeChannel(
   const handler = connectNodeAdapter({
     routes: (router) => {
       const service = createNodeService(app, { closing: closing.signal });
+      const probes = createProbeService(app, options.probes);
       // The adapter serves the last handler registered for a path.
       router
         .service(NodeService, service)
-        .rpc(NodeService.method.enroll, service.enroll, { readMaxBytes: ENROLL_READ_MAX_BYTES });
+        .rpc(NodeService.method.enroll, service.enroll, { readMaxBytes: ENROLL_READ_MAX_BYTES })
+        .service(ProbeService, probes)
+        .rpc(ProbeService.method.enrollProbe, probes.enrollProbe, {
+          readMaxBytes: ENROLL_READ_MAX_BYTES,
+        });
     },
     contextValues: peerContextValues,
     readMaxBytes: READ_MAX_BYTES,
     requestGate: requireClientCertificate,
-    // The node channel serves nothing but NodeService.
+    // The node channel serves nothing but NodeService and ProbeService.
     fallback: (_req, res) => {
       res.writeHead(404, { "content-type": "text/plain" });
       res.end("not found\n");

@@ -28,6 +28,7 @@ import {
   type BanStatus,
   DeviceVariant,
   GetConfigResponseSchema,
+  type NodeMetrics,
   type NodeService,
   NodeTaskSchema,
   OriginHealthSource,
@@ -41,7 +42,7 @@ import {
 } from "@edgeweir/proto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
-import { NODE_CERT_LIFETIME_DAYS } from "../pki/ca";
+import { NODE_CERT_LIFETIME_DAYS, NODE_ORGANIZATION } from "../pki/ca";
 import { ingestLogs } from "../services/access-logs";
 import { recordAudit } from "../services/audit";
 import { banChanges, currentBanSequence, reportAutoBans } from "../services/bans";
@@ -102,6 +103,38 @@ function toNodeBanStatus(status: BanStatus, now: Date): schema.NodeBanStatus {
     autoEvicted: status.autoEvicted.toString(),
     reportedAt: now.toISOString(),
   };
+}
+
+/** ReportStatusRequest.metrics as stored on the node row: finite, non-negative, CPU 0-100. */
+export function toNodeMetrics(m: NodeMetrics, now: Date): schema.NodeMetricsData {
+  const real = (value: number, max = Number.MAX_SAFE_INTEGER) =>
+    Number.isFinite(value) ? Math.min(Math.max(value, 0), max) : 0;
+  const count = (value: bigint) =>
+    Number(value < 0n ? 0n : value > 9007199254740991n ? 9007199254740991n : value);
+  return {
+    cpuPercent: real(m.cpuPercent, 100),
+    load1: real(m.load1, 1e6),
+    load5: real(m.load5, 1e6),
+    load15: real(m.load15, 1e6),
+    memoryUsedBytes: count(m.memoryUsedBytes),
+    memoryTotalBytes: count(m.memoryTotalBytes),
+    egressBps: count(m.egressBps),
+    activeConnections: count(m.activeConnections),
+    reportedAt: now.toISOString(),
+  };
+}
+
+/** The region of the node's group (where a node that also probes probes from), or null. */
+export async function nodeProbeRegion(
+  db: AppContext["db"],
+  node: { nodeGroupId: string | null },
+): Promise<string | null> {
+  if (!node.nodeGroupId) return null;
+  const [group] = await db
+    .select({ regionId: schema.nodeGroup.regionId })
+    .from(schema.nodeGroup)
+    .where(eq(schema.nodeGroup.id, node.nodeGroupId));
+  return group?.regionId ?? null;
 }
 
 const purgeTypes = {
@@ -196,6 +229,8 @@ export interface PeerInfo {
   authorized: boolean;
   authorizationError?: string;
   commonName?: string;
+  /** Subject organization: "Edgeweir Node" for nodes, "Edgeweir Probe" for probes. */
+  organization?: string;
   serialNumber?: string;
   fingerprintSha256?: string;
   remoteAddress?: string;
@@ -221,6 +256,8 @@ export function peerContextValues(req: NodeServerRequest): ContextValues {
     if (cert && Object.keys(cert).length > 0 && cert.raw) {
       const cn = cert.subject?.CN;
       info.commonName = Array.isArray(cn) ? cn[0] : cn;
+      const org = cert.subject?.O;
+      info.organization = Array.isArray(org) ? org[0] : org;
       info.serialNumber = cert.serialNumber?.toLowerCase();
       info.fingerprintSha256 = createHash("sha256").update(cert.raw).digest("hex");
     }
@@ -247,6 +284,9 @@ export function createNodeService(
         Code.Unauthenticated,
       );
     }
+    // Probe certificates (O=Edgeweir Probe) come from the same CA and never reach NodeService.
+    if (peer.organization !== NODE_ORGANIZATION || !UUID_RE.test(peer.commonName))
+      throw new ConnectError("not a node certificate", Code.Unauthenticated);
     if (await isSerialRevoked(app.db, peer.serialNumber)) {
       throw new ConnectError("certificate has been revoked", Code.Unauthenticated);
     }
@@ -718,6 +758,8 @@ export function createNodeService(
           .update(schema.node)
           .set({
             lastSeenAt: now,
+            // Nodes without metrics-v1 send none (nor do others before their second sample).
+            metrics: req.metrics ? toNodeMetrics(req.metrics, now) : null,
             // Nodes without bans-v1 send no BanStatus.
             banStatus: req.bans ? toNodeBanStatus(req.bans, now) : null,
             // Sites above the normal CC level; nodes without challenge-v1 send none.
@@ -796,6 +838,8 @@ export function createNodeService(
         renewCertificate: expiresIn < RENEW_BEFORE_MS,
         reportIntervalSeconds: HEARTBEAT_SECONDS,
         tasksPending,
+        // The node probes only while its node group has a region to probe from.
+        probe: node.probeEnabled && !!(await nodeProbeRegion(app.db, node)),
       };
     },
 
