@@ -79,8 +79,11 @@ services:
       CLICKHOUSE_PASSWORD: e2e-clickhouse-password
     ports:
       - "127.0.0.1:${E2E_CLICKHOUSE_PORT:-19123}:8123"
+    # The image's entrypoint first runs a temporary server on 127.0.0.1 only
+    # (to create the user and database) and then restarts it: asking the
+    # container's own address is healthy only once the real server listens.
     healthcheck:
-      test: ["CMD", "clickhouse-client", "--user", "edgeweir", "--password", "e2e-clickhouse-password", "--query", "SELECT 1"]
+      test: ["CMD-SHELL", "clickhouse-client --host \"$$(hostname -i | cut -d' ' -f1)\" --user edgeweir --password e2e-clickhouse-password --query 'SELECT 1'"]
       interval: 2s
       timeout: 3s
       retries: 30
