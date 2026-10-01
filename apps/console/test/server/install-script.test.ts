@@ -357,6 +357,68 @@ describe("install.sh", () => {
     expect(atLeast("2.36; rm", "2.34")).not.toBe(0);
   });
 
+  it("needs no token and skips enrollment on a host that is already enrolled", () => {
+    const state = mkdtempSync(join(tmpdir(), "edgeweir-state-"));
+    writeFileSync(join(state, "identity.json"), "{}\n");
+    const enrolled = script.replace('STATE_DIR="/var/lib/edgeweir-node"', `STATE_DIR="${state}"`);
+    try {
+      // Past the token, the root check stops the (stubbed) unprivileged run.
+      const res = run(valid, {}, enrolled);
+      expect(res.status).toBe(1);
+      expect(res.stderr).not.toContain("no enrollment token");
+      expect(res.stderr).toContain("run as root");
+      const given = run(valid, { EDGEWEIR_TOKEN: TOKEN }, enrolled);
+      expect(given.stderr).toContain("the token is not used");
+      // enroll() returns without running edgeweir-node; the service is still started.
+      const steps = run(
+        valid,
+        {},
+        enrolled.replace(
+          /main "\$@"\s*$/,
+          'constants\nparse_args "$@"\nread_token\nenroll\necho enroll-skipped\n',
+        ),
+      );
+      expect(steps.status).toBe(0);
+      expect(steps.stdout).toContain("enroll-skipped");
+      expect(steps.stderr).toContain("edgeweir-node enroll --force");
+      // Without identity.json the token is required as before.
+      rmSync(join(state, "identity.json"));
+      expect(run(valid, {}, enrolled).stderr).toContain("no enrollment token");
+    } finally {
+      rmSync(state, { recursive: true, force: true });
+    }
+  });
+
+  it("restarts a running tar install, which no package script does", () => {
+    const ok = mkdtempSync(join(tmpdir(), "edgeweir-systemctl-"));
+    writeFileSync(join(ok, "systemctl"), `#!/bin/sh\necho "systemctl $*" >> "${calls}"\nexit 0\n`);
+    chmodSync(join(ok, "systemctl"), 0o755);
+    try {
+      const start = (format: string) =>
+        run(
+          [],
+          { PATH: `${ok}${delimiter}${stubs}${delimiter}/usr/bin${delimiter}/bin` },
+          script.replace(
+            /main "\$@"\s*$/,
+            `constants\nNO_START=false\nFORMAT=${format}\nstart_service\n`,
+          ),
+        );
+      const tar = start("tar");
+      expect(tar.status).toBe(0);
+      const lines = tar.calls.trim().split("\n");
+      expect(lines.indexOf("systemctl try-restart edgeweir-node.service")).toBeGreaterThan(-1);
+      expect(lines.indexOf("systemctl try-restart edgeweir-node.service")).toBeLessThan(
+        lines.indexOf("systemctl enable --now edgeweir-node.service"),
+      );
+      const deb = start("deb");
+      expect(deb.status).toBe(0);
+      expect(deb.calls).not.toContain("try-restart");
+      expect(deb.calls).toContain("systemctl enable --now edgeweir-node.service");
+    } finally {
+      rmSync(ok, { recursive: true, force: true });
+    }
+  });
+
   it("executes nothing when the download is cut short", () => {
     const last = script.lastIndexOf('main "$@"');
     for (const cut of [last, last + 3, Math.floor(script.length / 2), 200]) {
