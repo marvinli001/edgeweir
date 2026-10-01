@@ -168,11 +168,7 @@ describe("error pages", () => {
   });
 
   it("defaults the platform pages to the nodes' built-in ones", () => {
-    expect(platformErrorPages.parse({})).toEqual({
-      unknownHost: "",
-      siteDisabled: "",
-      siteSuspended: "",
-    });
+    expect(platformErrorPages.parse({})).toEqual({ unknownHost: "", siteDisabled: "" });
   });
 });
 
