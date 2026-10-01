@@ -128,7 +128,7 @@ export async function saveRules(
     await publishClusters(
       tx,
       clusters.map((c) => c.id),
-      { reason: { code: "rules_updated", params: {} }, userId: ctx.actor.id },
+      { reason: { code: "rules_updated", params: {} }, userId: ctx.actor.id, site: site?.id },
     );
     await recordAudit(tx, ctx.actor, {
       action: siteId ? "site.rules_update" : "platform.rules_update",

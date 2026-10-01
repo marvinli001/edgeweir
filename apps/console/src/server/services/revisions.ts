@@ -1,6 +1,7 @@
 import { clone, create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
+  type CacheRuleModel,
   ConfigCapacityError,
   compileNodeConfig,
   compileOfflineHosts,
@@ -9,11 +10,13 @@ import {
   DEFAULT_SITE_PROTECTION,
   decodeNodeConfig,
   encodeNodeConfig,
+  expressionOf,
   MAX_SITES_PER_CLUSTER,
   nodeRequirements,
   type OfflineHostModel,
   type RuleModel,
   refreshDerived,
+  ruleModelOf,
   type SiteModel,
   usesChallengeKeys,
 } from "@edgeweir/config-compiler";
@@ -138,8 +141,21 @@ export async function loadOfflineHosts(
   }));
 }
 
-/** Loads every site of a cluster with its domains, origins and rules. */
-export async function loadSiteModels(db: Executor, clusterId: string): Promise<SiteModel[]> {
+/**
+ * Loads every site of a cluster with its domains, origins and rules. Rules
+ * and cache rule conditions are compiled for served sites only
+ * (compileStoredRules); a served site with a refused one that has no
+ * compiled form is left out (not enabled).
+ */
+export async function loadSiteModels(
+  db: Executor,
+  clusterId: string,
+  opts: {
+    strictSiteId?: string;
+    previous?: () => Promise<NodeConfig | undefined>;
+    invalid?: InvalidRule[];
+  } = {},
+): Promise<SiteModel[]> {
   const sites = await db
     .select()
     .from(schema.site)
@@ -187,6 +203,30 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
     .from(schema.bulkRedirect)
     .where(inArray(schema.bulkRedirect.siteId, siteIds))
     .orderBy(asc(schema.bulkRedirect.position));
+  const previous = opts.previous ?? previousConfig(db, clusterId);
+  const compiled = new Map<string, Awaited<ReturnType<typeof compileStoredRules>>>();
+  for (const site of sites.filter(isServing)) {
+    const bindings = listBindings(
+      lists.filter(
+        (list) => list.organizationId === null || list.organizationId === site.organizationId,
+      ),
+    );
+    const last = async () => (await previous())?.sites.find((s) => s.id === site.id);
+    compiled.set(
+      site.id,
+      await compileStoredRules(
+        site.name,
+        edgeRules.filter((rule) => rule.siteId === site.id),
+        rules.filter((rule) => rule.siteId === site.id),
+        bindings,
+        {
+          strict: site.id === opts.strictSiteId,
+          previous: last,
+          invalid: opts.invalid ?? [],
+        },
+      ),
+    );
+  }
   const protection = await loadSiteProtectionModels(db, siteIds);
   const waf = await loadSiteWafModels(db, siteIds);
   const errorPages = await loadSiteErrorPages(db, siteIds);
@@ -195,19 +235,13 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
       const pool = pools
         .filter((p) => p.siteId === s.id)
         .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
-      const bindings = listBindings(
-        lists.filter(
-          (list) => list.organizationId === null || list.organizationId === s.organizationId,
-        ),
-      );
+      const site = compiled.get(s.id);
       return {
-        rules: edgeRules
-          .filter((rule) => rule.siteId === s.id)
-          .map((rule) => compileRuleModel(rule, bindings)),
+        rules: site?.rules ?? [],
         id: s.id,
         name: s.name,
         // Disabled or suspended sites are not shipped (their DNS records stay).
-        enabled: isServing(s),
+        enabled: isServing(s) && !site?.missing,
         cacheGeneration: s.cacheGeneration,
         logSampleRate: s.logSampleRate,
         domains: domains
@@ -257,27 +291,7 @@ export async function loadSiteModels(db: Executor, clusterId: string): Promise<S
           activeHealthCheck: pool ? activeHealthCheckModel(pool.activeHealthCheck) : null,
           sessionAffinity: pool ? sessionAffinityModel(pool.sessionAffinity) : null,
         },
-        cacheRules: rules
-          .filter((r) => r.siteId === s.id)
-          .map((r) => ({
-            id: r.id,
-            priority: r.priority,
-            pathPrefixes: r.pathPrefixes,
-            paths: r.paths,
-            extensions: r.extensions,
-            statusCodes: r.statusCodes,
-            minSizeBytes: r.minSizeBytes,
-            maxSizeBytes: r.maxSizeBytes,
-            expression: r.expression,
-            condition: r.expression ? cacheRuleCondition(r.expression, bindings) : undefined,
-            browserTtlSeconds: r.browserTtlSeconds,
-            action: r.action === "bypass" ? "bypass" : "cache",
-            edgeTtlSeconds: r.edgeTtlSeconds,
-            originCacheControl: r.originCacheControl === "respect" ? "respect" : "override",
-            staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
-            staleIfErrorSeconds: r.staleIfErrorSeconds,
-            cacheAuthorized: r.cacheAuthorized,
-          })),
+        cacheRules: site?.cacheRules ?? [],
         bulkRedirects: redirects
           .filter((r) => r.siteId === s.id)
           .map((r) => ({
@@ -372,10 +386,11 @@ export function listBindings(
   return bindings;
 }
 
-function compileRuleModel(
+/** A rule model, or why the current validator refuses the stored rule. */
+function tryCompileRuleModel(
   row: typeof schema.edgeRule.$inferSelect,
   bindings: Record<string, string>,
-): RuleModel {
+): RuleModel | { invalid: string } {
   let expression: Expression;
   let action: RuleModel["action"];
   try {
@@ -384,9 +399,7 @@ function compileRuleModel(
     if ((action.kind === "redirect" || action.kind === "rewrite") && action.target)
       parseValueExpression(action.target, row.phase as Phase);
   } catch (error) {
-    // A stored rule the current validator refuses (e.g. regex syntax that is no
-    // longer accepted) blocks publication until it is rewritten.
-    fail("RULE_INVALID", `rule ${row.name} is no longer valid: ${(error as Error).message}`);
+    return { invalid: (error as Error).message };
   }
   return {
     id: row.id,
@@ -396,12 +409,178 @@ function compileRuleModel(
   };
 }
 
-/** A stored cache rule condition with its IP lists bound, or RULE_INVALID. */
-function cacheRuleCondition(source: string, bindings: Record<string, string>): Expression {
+/** A cache rule's model, or why the current validator refuses its stored condition. */
+function tryCacheRuleModel(
+  r: typeof schema.cacheRule.$inferSelect,
+  bindings: Record<string, string>,
+): CacheRuleModel | { invalid: string } {
+  let condition: Expression | undefined;
   try {
-    return bindLists(parseCacheCondition(source), bindings);
+    condition = r.expression ? bindLists(parseCacheCondition(r.expression), bindings) : undefined;
   } catch (error) {
-    fail("RULE_INVALID", `cache rule is no longer valid: ${(error as Error).message}`);
+    return { invalid: (error as Error).message };
+  }
+  return {
+    id: r.id,
+    priority: r.priority,
+    pathPrefixes: r.pathPrefixes,
+    paths: r.paths,
+    extensions: r.extensions,
+    statusCodes: r.statusCodes,
+    minSizeBytes: r.minSizeBytes,
+    maxSizeBytes: r.maxSizeBytes,
+    expression: r.expression,
+    condition,
+    browserTtlSeconds: r.browserTtlSeconds,
+    action: r.action === "bypass" ? "bypass" : "cache",
+    edgeTtlSeconds: r.edgeTtlSeconds,
+    originCacheControl: r.originCacheControl === "respect" ? "respect" : "override",
+    staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
+    staleIfErrorSeconds: r.staleIfErrorSeconds,
+    cacheAuthorized: r.cacheAuthorized,
+  };
+}
+
+/**
+ * A stored rule or cache rule the current validator refuses (stored by an
+ * earlier, more lenient version); a cache rule is named after its site.
+ */
+interface InvalidRule {
+  id: string;
+  name: string;
+  message: string;
+}
+
+const ruleInvalid = (rule: { name: string; message: string }): never =>
+  fail("RULE_INVALID", `rule ${rule.name} is no longer valid: ${rule.message}`);
+
+/**
+ * Compiles a site's stored rules and cache rule conditions (or, without
+ * `cacheRows`, the platform's rules). One the current validator refuses
+ * keeps its last compiled form (`previous`: the site in the latest
+ * revision) and is added to `invalid`; `strict` (the change is about this
+ * site) refuses it with RULE_INVALID instead. `missing` is a refused one
+ * without a compiled form.
+ */
+async function compileStoredRules(
+  siteName: string,
+  rows: (typeof schema.edgeRule.$inferSelect)[],
+  cacheRows: (typeof schema.cacheRule.$inferSelect)[],
+  bindings: Record<string, string>,
+  opts: {
+    strict: boolean;
+    previous: () => Promise<Pick<NodeConfig["sites"][number], "rules" | "cacheRules"> | undefined>;
+    invalid: InvalidRule[];
+  },
+): Promise<{ rules: RuleModel[]; cacheRules: CacheRuleModel[]; missing?: InvalidRule }> {
+  const out: Awaited<ReturnType<typeof compileStoredRules>> = { rules: [], cacheRules: [] };
+  const refused = (rule: InvalidRule) => {
+    if (opts.strict) ruleInvalid(rule);
+    opts.invalid.push(rule);
+  };
+  for (const row of rows) {
+    const model = tryCompileRuleModel(row, bindings);
+    if (!("invalid" in model)) {
+      out.rules.push(model);
+      continue;
+    }
+    const rule = { id: row.id, name: row.name, message: model.invalid };
+    refused(rule);
+    const last = (await opts.previous())?.rules.find((r) => r.id === row.id);
+    if (last) out.rules.push(ruleModelOf(last));
+    else out.missing ??= rule;
+  }
+  for (const row of cacheRows) {
+    const model = tryCacheRuleModel(row, bindings);
+    if (!("invalid" in model)) {
+      out.cacheRules.push(model);
+      continue;
+    }
+    const rule = { id: row.id, name: siteName, message: model.invalid };
+    if (opts.strict) fail("RULE_INVALID", `cache rule is no longer valid: ${model.invalid}`);
+    refused(rule);
+    const last = (await opts.previous())?.cacheRules.find((r) => r.id === row.id);
+    const base = tryCacheRuleModel({ ...row, expression: "" }, bindings) as CacheRuleModel;
+    if (last?.match?.condition)
+      out.cacheRules.push({ ...base, condition: expressionOf(last.match.condition) });
+    else if (last)
+      out.cacheRules.push({
+        ...base,
+        pathPrefixes: [...(last.match?.pathPrefixes ?? [])],
+        paths: [...(last.match?.paths ?? [])],
+        extensions: [...(last.match?.extensions ?? [])],
+      });
+    else out.missing ??= rule;
+  }
+  return out;
+}
+
+/** The decoded latest revision of a cluster, read once and only when asked for. */
+function previousConfig(db: Executor, clusterId: string) {
+  let config: Promise<NodeConfig | undefined> | undefined;
+  return () => {
+    config ??= latestRevision(db, clusterId).then((row) =>
+      row ? decodeNodeConfig(row.ir) : undefined,
+    );
+    return config;
+  };
+}
+
+/** The platform's stored rules, refused ones in their last compiled form (else RULE_INVALID). */
+async function platformRuleModels(
+  tx: Executor,
+  lists: (typeof schema.ipList.$inferSelect)[],
+  previous: () => Promise<NodeConfig | undefined>,
+  invalid: InvalidRule[],
+) {
+  const rows = await tx
+    .select()
+    .from(schema.edgeRule)
+    .where(and(sql`${schema.edgeRule.siteId} is null`, eq(schema.edgeRule.enabled, true)))
+    .orderBy(asc(schema.edgeRule.priority));
+  const platform = await compileStoredRules(
+    "",
+    rows,
+    [],
+    listBindings(lists.filter((list) => list.organizationId === null)),
+    {
+      strict: false,
+      previous: async () => ({ rules: (await previous())?.platformRules ?? [], cacheRules: [] }),
+      invalid,
+    },
+  );
+  if (platform.missing) ruleInvalid(platform.missing);
+  return platform.rules;
+}
+
+/**
+ * Raises a platform alert for each stored rule that kept its last compiled
+ * form, and resolves those of rules that compile again or are gone.
+ */
+async function syncRuleAlerts(tx: Tx, invalid: InvalidRule[]) {
+  for (const rule of invalid)
+    await raisePlatformAlert(tx, "config_rule_invalid", rule.id, rule.name);
+  const firing = await tx
+    .select({ resourceId: schema.alertState.resourceId })
+    .from(schema.alertState)
+    .where(
+      and(eq(schema.alertState.kind, "config_rule_invalid"), eq(schema.alertState.active, true)),
+    );
+  const stale = firing.filter((state) => !invalid.some((rule) => rule.id === state.resourceId));
+  if (!stale.length) return;
+  const bindings = listBindings(await tx.select().from(schema.ipList));
+  for (const { resourceId } of stale) {
+    const [rule] = await tx
+      .select()
+      .from(schema.edgeRule)
+      .where(eq(schema.edgeRule.id, resourceId));
+    const [cache] = rule
+      ? []
+      : await tx.select().from(schema.cacheRule).where(eq(schema.cacheRule.id, resourceId));
+    const still =
+      (rule?.enabled && "invalid" in tryCompileRuleModel(rule, bindings)) ||
+      (cache && "invalid" in tryCacheRuleModel(cache, bindings));
+    if (!still) await resolvePlatformAlert(tx, "config_rule_invalid", resourceId, rule?.name ?? "");
   }
 }
 
@@ -543,6 +722,17 @@ async function loadHttpChallenges(tx: Executor, clusterId: string) {
     );
 }
 
+export interface PublishOptions {
+  reason: RevisionReason;
+  userId?: string | null;
+  /**
+   * The site the change is about: its stored rules must compile
+   * (RULE_INVALID). Elsewhere a rule the current validator refuses keeps
+   * its last compiled form and raises the platform alert config_rule_invalid.
+   */
+  site?: string;
+}
+
 /**
  * Compiles the cluster's current sites into a NodeConfig and stores it as the
  * next revision. Identical content does not produce a new revision.
@@ -550,10 +740,16 @@ async function loadHttpChallenges(tx: Executor, clusterId: string) {
  */
 export async function publishRevision(
   tx: Tx,
-  opts: { clusterId: string; reason: RevisionReason; userId?: string | null },
+  opts: PublishOptions & { clusterId: string },
 ): Promise<{ row: RevisionRow; created: boolean }> {
   await lockClusterPublish(tx, opts.clusterId);
-  const sites = await loadSiteModels(tx, opts.clusterId);
+  const previous = previousConfig(tx, opts.clusterId);
+  const invalid: InvalidRule[] = [];
+  const sites = await loadSiteModels(tx, opts.clusterId, {
+    strictSiteId: opts.site,
+    previous,
+    invalid,
+  });
   const organizations = await tx
     .selectDistinct({ id: schema.site.organizationId })
     .from(schema.site)
@@ -576,13 +772,8 @@ export async function publishRevision(
     kind: list.kind,
     platform: list.organizationId === null,
   }));
-  const globalRules = await tx
-    .select()
-    .from(schema.edgeRule)
-    .where(and(sql`${schema.edgeRule.siteId} is null`, eq(schema.edgeRule.enabled, true)))
-    .orderBy(asc(schema.edgeRule.priority));
-  const platformBindings = listBindings(lists.filter((list) => list.organizationId === null));
-  const platformRules = globalRules.map((rule) => compileRuleModel(rule, platformBindings));
+  const platformRules = await platformRuleModels(tx, lists, previous, invalid);
+  await syncRuleAlerts(tx, invalid);
   const originAllowedCidrs = await loadOriginAllowList(tx);
   const certIds = [
     ...new Set(
@@ -633,7 +824,7 @@ export async function publishRevision(
 export async function publishClusters(
   tx: Tx,
   clusterIds: Iterable<string>,
-  opts: { reason: RevisionReason; userId?: string | null },
+  opts: PublishOptions,
 ): Promise<Map<string, Awaited<ReturnType<typeof publishRevision>>>> {
   const results = new Map<string, Awaited<ReturnType<typeof publishRevision>>>();
   for (const clusterId of [...new Set(clusterIds)].sort())
@@ -1057,16 +1248,8 @@ export async function rollbackToRevision(
       platform: list.organizationId === null,
     }),
   );
-  const platformRules = await tx
-    .select()
-    .from(schema.edgeRule)
-    .where(and(sql`${schema.edgeRule.siteId} is null`, eq(schema.edgeRule.enabled, true)))
-    .orderBy(asc(schema.edgeRule.priority));
-  const platformBindings = listBindings(
-    currentLists.filter((list) => list.organizationId === null),
-  );
   restored.platformRules = compileRules(
-    platformRules.map((rule) => compileRuleModel(rule, platformBindings)),
+    await platformRuleModels(tx, currentLists, previousConfig(tx, opts.clusterId), []),
   );
   restored.platformErrorPages = compilePlatformErrorPages(await loadPlatformErrorPages(tx));
   restored.originAllowedCidrs = await loadOriginAllowList(tx);

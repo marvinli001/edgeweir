@@ -451,24 +451,28 @@ export function compileRules(rules: RuleModel[] = []): EdgeRule[] {
     );
 }
 
+/** A compiled expression as the rule engine's Expression (empty when unset). */
+export function expressionOf(e: RuleExpression | undefined): Expression {
+  return {
+    op: e?.op ?? "",
+    field: e?.field ?? "",
+    valueType: e?.valueType ?? "",
+    value: e?.value ?? "",
+    values: [...(e?.values ?? [])],
+    children: (e?.children ?? []).map(expressionOf),
+  };
+}
+
 /**
  * The model of a compiled rule, which compileRules keeps as it is: a stored
  * rule the current validator refuses keeps its last compiled form. The
  * action carries what usesChallenges reads.
  */
 export function ruleModelOf(rule: EdgeRule): RuleModel {
-  const expression = (e: RuleExpression | undefined): Expression => ({
-    op: e?.op ?? "",
-    field: e?.field ?? "",
-    valueType: e?.valueType ?? "",
-    value: e?.value ?? "",
-    values: [...(e?.values ?? [])],
-    children: (e?.children ?? []).map(expression),
-  });
   return {
     id: rule.id,
     phase: rule.phase,
-    expression: expression(rule.expression),
+    expression: expressionOf(rule.expression),
     action: {
       kind: rule.action?.kind ?? "",
       type: rule.action?.challenge,

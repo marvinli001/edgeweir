@@ -204,6 +204,7 @@ These alerts belong to the platform, not to a site. They go only to channels wit
 | --- | --- | --- |
 | Configuration canary rolled back | A canary rolled back automatically or an administrator aborted it | The next promotion in that cluster |
 | No canary node online; configuration published to every node | A publication in a cluster with the canary on found no canary node online | The next publication in that cluster with a canary node online |
+| Stored rule no longer valid; its last compiled form is kept | A publication found a stored rule the current validator refuses (see [Rules](rules.en.md)); the name is the rule's | The next publication after the rule is rewritten or deleted |
 | DNS mass removal blocked | The [mass removal protection](#mass-removal-protection) held a publication back | The next publication that passes, or a forced one |
 
 ## Subscribe to alerts

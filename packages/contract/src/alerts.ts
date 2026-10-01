@@ -12,6 +12,7 @@ export const alertKind = z.enum([
 export const platformAlertKind = z.enum([
   "config_rollout_failed",
   "config_rollout_no_canary",
+  "config_rule_invalid",
   "dns_mass_removal_blocked",
 ]);
 export const alertEventKind = z.enum([...alertKind.options, ...platformAlertKind.options]);

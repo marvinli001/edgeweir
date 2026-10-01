@@ -609,7 +609,7 @@ export async function createSite(
     await insertCacheRules(tx, siteRow, input.cacheRules);
     const revision = await publishSiteClusters(
       tx,
-      clusterId,
+      siteRow,
       claims.changedClusters,
       { code: "site_created", params: { site: input.name } },
       ctx.actor,
@@ -732,7 +732,7 @@ export async function updateSite(
     if (!updated) throw new Error("site update failed");
     const revision = await publishSiteClusters(
       tx,
-      row.clusterId,
+      row,
       changedClusters,
       { code: "site_updated", params: { site: updated.name } },
       ctx.actor,
@@ -909,6 +909,7 @@ async function changeSiteState(
       clusterId: row.clusterId,
       reason: { code: STATE_REASONS[action], params: { site: row.name } },
       userId: userId(ctx.actor),
+      site: row.id,
     });
     await recordAudit(tx, ctx.actor, {
       action: `site.${action}`,
@@ -1031,14 +1032,16 @@ export async function setSiteStarred(
 
 async function publishSiteClusters(
   tx: Tx,
-  primary: string,
+  site: { id: string; clusterId: string },
   affected: string[],
   reason: Parameters<typeof publishRevision>[1]["reason"],
   actor: Actor,
 ) {
+  const primary = site.clusterId;
   const published = await publishClusters(tx, [primary, ...affected], {
     reason,
     userId: userId(actor),
+    site: site.id,
   });
   const selected = published.get(primary)?.row;
   if (!selected) throw new Error("site revision missing");

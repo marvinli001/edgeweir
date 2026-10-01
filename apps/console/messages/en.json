@@ -1065,6 +1065,7 @@
   "system_usage_offline_threshold": "Offline nodes stop holding completeness (minutes)",
   "alert_kind_config_rollout_failed": "Configuration canary rolled back",
   "alert_kind_config_rollout_no_canary": "No canary node online; configuration published to every node",
+  "alert_kind_config_rule_invalid": "Stored rule no longer valid; its last compiled form is kept",
   "alert_kind_dns_mass_removal_blocked": "DNS mass removal blocked",
   "error_rollout_not_active": "No canary rollout is running",
   "revision_reason_rollout_rollback": "Canary of revision {revision} rolled back",

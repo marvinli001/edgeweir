@@ -277,7 +277,7 @@ Every string is handled as UTF-8 bytes. Arguments are fields, string literals, o
 | Unsupported | `\s` `\S` `\v` (write an explicit class such as `[ \t\r\n\f]`), `\xHH` above `\x7f`, `\z` `\A` `\Q` `\p{…}` `\K` and other escapes, backreferences and octal, groups starting with `(?`, possessive and stacked quantifiers, `{,n}`, `[[:alpha:]]`, empty classes and `[]…]` |
 | Execution budget | Nodes use PCRE with a match limit of 10000 and a depth limit of 100; an execution error returns 503 (`X-Edgeweir-Error: policy-unavailable`) |
 
-A saved rule that uses a construct no longer supported (such as `\s`) fails to save or publish with `RULE_INVALID`; rewrite it and save again.
+A saved rule or cache rule condition that uses a construct no longer supported (such as `\s`) makes saving its site or its rules fail with `RULE_INVALID`; rewrite it and save again. Other publications (other sites, ACME challenges, platform settings) go on: the rule keeps its last compiled form and the platform alert "Stored rule no longer valid; its last compiled form is kept" fires; such a rule that was never compiled holds its site back from the nodes. Rules of disabled and suspended sites are not compiled.
 
 The language is a wirefilter-style subset, not a complete wirefilter implementation.
 
