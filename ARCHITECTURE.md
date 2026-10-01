@@ -174,7 +174,7 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 | --- | --- |
 | 前缀下限 | IPv4 `/16`，IPv6 `/48` |
 | 有效期 | 1 分钟到 7 天；到期一小时后由 `maintenance.prune-bans` 删除 |
-| 数量 | 组织限额 `bans`（手动网站封禁）；平台手动封禁上限（系统设置，默认 10000）；每个集群最多 10000 条自动封禁 |
+| 数量 | 平台手动封禁上限（系统设置，默认 10000）；每个集群最多 10000 条自动封禁 |
 
 行为见 [封禁](docs/guide/bans.md)。
 
@@ -330,7 +330,6 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `idempotency_key` | `/api/v1` 写请求的幂等键：调用方、方法、路径、请求体哈希与最终响应，保留 24 小时 |
 | `rate_limit` | 认证接口限速计数 |
 | `organization_settings` | 组织默认集群、要求两步验证 |
-| `organization_limit` | 组织技术限额（站点、域名、证书、IP 名单条目、清缓存频率、成员、封禁），空值为不限 |
 
 ### 基础设施
 
@@ -444,6 +443,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0030_g3_waf` | `site_waf`；分钟、小时、天统计与视图 `traffic_hour_stats` 的 `waf_rules`；`access_log.waf_rule_ids`、`waf_blocked` |
 | `0031_domains_without_ownership` | 删除 `domain_ownership` 与 `site_domain.verified`；重名的待验证域名只保留一条；`site_domain (name, wildcard)` 全局唯一 |
 | `0032_sites_without_suspension` | 删除 `site.suspended`、`suspend_reason`、`suspend_note`、`suspended_at`；已暂停的网站改为停用；服务账号去掉 `sites:suspend` |
+| `0033_without_organization_limits` | 删除 `organization_limit`；服务账号去掉 `limits:read`、`limits:write` |
 
 ## 构建产物
 

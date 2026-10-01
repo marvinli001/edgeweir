@@ -174,7 +174,7 @@ IP bans (`ip_ban`) create no revision and skip the configuration canary; they ha
 | --- | --- |
 | Shortest prefix | IPv4 `/16`, IPv6 `/48` |
 | Lifetime | 1 minute to 7 days; deleted by `maintenance.prune-bans` an hour after expiry |
-| Count | Organization limit `bans` (manual site bans); platform limit of manual bans (system settings, 10000 by default); at most 10000 automatic bans per cluster |
+| Count | Platform limit of manual bans (system settings, 10000 by default); at most 10000 automatic bans per cluster |
 
 Behavior: [Bans](docs/guide/bans.en.md).
 
@@ -330,7 +330,6 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `idempotency_key` | Idempotency keys of `/api/v1` writes: caller, method, path, body hash and final response, kept 24 hours |
 | `rate_limit` | Rate-limit counters of the authentication endpoints |
 | `organization_settings` | Organization default cluster, required two-factor |
-| `organization_limit` | Technical limits per organization (sites, domains, certificates, IP list entries, purge rates, members, bans); null means no limit |
 
 ### Infrastructure
 
@@ -444,6 +443,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0030_g3_waf` | `site_waf`; `waf_rules` in minute, hour and day statistics and the view `traffic_hour_stats`; `access_log.waf_rule_ids`, `waf_blocked` |
 | `0031_domains_without_ownership` | Drops `domain_ownership` and `site_domain.verified`; of duplicate pending domains one row stays; `site_domain (name, wildcard)` is unique |
 | `0032_sites_without_suspension` | Drops `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at`; suspended sites become disabled; service accounts lose `sites:suspend` |
+| `0033_without_organization_limits` | Drops `organization_limit`; service accounts lose `limits:read`, `limits:write` |
 
 ## Build output
 

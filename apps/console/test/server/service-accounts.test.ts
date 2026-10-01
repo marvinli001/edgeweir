@@ -88,8 +88,6 @@ describe("service accounts, scopes and idempotency keys", async () => {
       "system:read",
       "sites:read",
       "sites:write",
-      "limits:read",
-      "limits:write",
       "usage:read",
     ]);
   });

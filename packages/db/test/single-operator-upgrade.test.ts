@@ -42,7 +42,8 @@ beforeAll(async () => {
       ('00000000-0000-4000-8000-00000000000a', 'org_a', '00000000-0000-4000-8000-000000000001', 'a', false, null),
       ('00000000-0000-4000-8000-00000000000b', 'org_b', '00000000-0000-4000-8000-000000000001', 'b', true, 'billing');
     insert into service_account (id, name, scopes) values
-      ('00000000-0000-4000-8000-0000000000c1', 'sync', '{sites:read,sites:suspend,usage:read}');
+      ('00000000-0000-4000-8000-0000000000c1', 'sync', '{limits:read,limits:write,sites:read,sites:suspend,usage:read}');
+    insert into organization_limit (organization_id, max_sites) values ('org_a', 5);
     insert into site_domain (site_id, name, verified, created_at) values
       ('00000000-0000-4000-8000-00000000000b', 'shop.test', false, now() - interval '1 day'),
       ('00000000-0000-4000-8000-00000000000a', 'shop.test', true, now()),
@@ -91,6 +92,13 @@ describe("upgrade to a single operator", () => {
     expect(await q("select scopes from service_account")).toEqual([
       { scopes: ["sites:read", "usage:read"] },
     ]);
+  });
+
+  it("drops organization limits", async () => {
+    const tables = await q<{ n: number }>(
+      "select count(*)::int as n from information_schema.tables where table_name = 'organization_limit'",
+    );
+    expect(tables[0]?.n).toBe(0);
   });
 
   it("drops domain ownership with its settings", async () => {

@@ -12,8 +12,6 @@ export const serviceAccountScope = z.enum([
   "system:read",
   "sites:read",
   "sites:write",
-  "limits:read",
-  "limits:write",
   "usage:read",
 ]);
 export type ServiceAccountScope = z.infer<typeof serviceAccountScope>;
@@ -37,8 +35,6 @@ export const serviceAccountProcedures = {
   "sites.list": "sites:read",
   "sites.get": "sites:read",
   "sites.setEnabled": "sites:write",
-  "admin.organizations.getLimits": "limits:read",
-  "admin.organizations.setLimits": "limits:write",
   "usage.list": "usage:read",
   "usage.changes": "usage:read",
 } as const satisfies Record<string, ServiceAccountScope | null>;

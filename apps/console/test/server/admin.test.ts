@@ -85,7 +85,6 @@ const CONSOLE_PROCEDURES = [
   "members.updateRole",
   "members.remove",
   "organization.update",
-  "organization.limits",
   "invitations.get",
   "invitations.accept",
   "usage.list",
@@ -280,7 +279,6 @@ describe("admin area procedures", async () => {
       ["auditLogs.list", () => member.auditLogs.list({})],
       ["auditLogs.facets", () => member.auditLogs.facets()],
       ["analytics.topNodes", () => member.analytics.topNodes({})],
-      ["admin.organizations.getLimits", () => member.admin.organizations.getLimits({ id: "x" })],
       ["settings.usage", () => member.settings.usage()],
       [
         "settings.setUsage",
@@ -294,10 +292,6 @@ describe("admin area procedures", async () => {
       [
         "serviceAccounts.revokeKey",
         () => member.serviceAccounts.revokeKey({ id: uuid, keyId: uuid }),
-      ],
-      [
-        "admin.organizations.setLimits",
-        () => member.admin.organizations.setLimits({ id: "x", limits: {} }),
       ],
       ["admin.bans.list", () => member.admin.bans.list({})],
       [

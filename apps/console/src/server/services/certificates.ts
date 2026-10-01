@@ -14,7 +14,6 @@ import { assertCertificateNames } from "../lib/certificate-names";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import { assertOrgLimit } from "./organization-limits";
 import { type Executor, getRevision, publishRevision } from "./revisions";
 import { publishedRevisions } from "./rollout";
 import type { SiteScope } from "./sites";
@@ -131,7 +130,6 @@ export async function uploadCertificate(
   const id = randomUUID();
   const organizationId = orgFor(ctx, input.organizationId);
   return app.db.transaction(async (tx) => {
-    await assertOrgLimit(tx, organizationId, "certificates", 1);
     const [row] = await tx
       .insert(schema.certificate)
       .values({
@@ -199,7 +197,6 @@ export async function requestCertificate(
     }
   }
   return app.db.transaction(async (tx) => {
-    await assertOrgLimit(tx, organizationId, "certificates", 1);
     const [row] = await tx
       .insert(schema.certificate)
       .values({

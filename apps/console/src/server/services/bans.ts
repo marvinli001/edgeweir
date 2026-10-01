@@ -36,7 +36,6 @@ import { fail } from "../lib/errors";
 import { BANS_CHANNEL } from "../lib/events";
 import { ONLINE_WINDOW_SECONDS } from "../lib/node-online";
 import { type Actor, recordAudit } from "./audit";
-import { assertOrgLimit, lockOrganization } from "./organization-limits";
 import type { Executor } from "./revisions";
 import { findSite, type SiteScope } from "./sites";
 
@@ -242,9 +241,8 @@ function banTarget(text: string) {
 
 /**
  * Creates a manual ban, or bans the same (scope, site, CIDR) again: that sets
- * the new reason and expiry and takes a new sequence number. Site bans count
- * against the organization's maxBans, and every manual ban against the
- * platform total.
+ * the new reason and expiry and takes a new sequence number. Every manual
+ * ban counts against the platform total.
  */
 export async function createBan(
   db: Database,
@@ -256,7 +254,6 @@ export async function createBan(
   const id = await db.transaction(async (tx) => {
     const site =
       input.scope === "site" ? await findSite(tx, input.siteId ?? "", ctx.scope) : undefined;
-    if (site) await lockOrganization(tx, site.organizationId);
     await lockBans(tx);
     const covered = protectedBanOverlap(target.cidr, await protectedAddresses(tx));
     if (covered)
@@ -284,7 +281,6 @@ export async function createBan(
       .for("update");
     const renewal = !!existing && existing.expiresAt > now;
     if (!renewal) {
-      if (site) await assertOrgLimit(tx, site.organizationId, "bans", 1);
       const { maxTotal } = await getBanSettings(tx);
       const [total] = await tx
         .select({ n: count() })

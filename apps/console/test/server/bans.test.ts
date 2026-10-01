@@ -2,7 +2,7 @@ import { schema } from "@edgeweir/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
-import { pruneBans, reportAutoBans } from "../../src/server/services/bans";
+import { pruneBans } from "../../src/server/services/bans";
 import {
   type ApiClient,
   createTestContext,
@@ -287,75 +287,6 @@ describe("dynamic bans", async () => {
     // Collections that are not allow lists do not protect anything.
     await admin.platformIpLists.create({ name: "watch", entries: ["198.51.100.0/24"] });
     await owner.bans.create({ siteId, cidr: "198.51.100.1", reason: "other", durationSeconds: 60 });
-    await liftAll();
-  });
-
-  it("limits active manual site bans per organization, also under concurrent creation", async () => {
-    await admin.admin.organizations.setLimits({ id: orgId, limits: { bans: 3 } });
-    const results = await Promise.allSettled(
-      Array.from({ length: 6 }, (_, i) =>
-        owner.bans.create({
-          siteId,
-          cidr: `203.0.113.${10 + i}`,
-          reason: "abuse",
-          durationSeconds: HOUR,
-        }),
-      ),
-    );
-    const refused = results.filter((r) => r.status === "rejected");
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(3);
-    for (const r of refused)
-      expect((r as PromiseRejectedResult).reason).toMatchObject({
-        code: "ORG_LIMIT_EXCEEDED",
-        status: 409,
-        data: { resource: "bans", limit: 3, current: 3 },
-      });
-    expect((await owner.bans.list({})).total).toBe(3);
-    expect((await owner.organization.limits()).usage.bans).toBe(3);
-    // Banning an active entry again does not add a ban.
-    const [first] = (await owner.bans.list({})).items;
-    await owner.bans.create({
-      siteId,
-      cidr: first?.cidr ?? "",
-      reason: "attack",
-      durationSeconds: HOUR,
-    });
-    // Automatic bans do not count.
-    const [edge] = await ctx.db
-      .insert(schema.node)
-      .values({ clusterId, name: "edge-auto" })
-      .returning();
-    const accepted = await reportAutoBans(ctx.db, { id: edge?.id ?? "", clusterId }, [
-      {
-        siteId,
-        cidr: "198.51.100.200/32",
-        createdAt: new Date(),
-        expiresAt: new Date(Date.now() + 600_000),
-        reason: "cc_ip_rate",
-        metric: "ip_qps",
-        observed: 250,
-        threshold: 100,
-        windowSeconds: 10,
-      },
-    ]);
-    expect(accepted).toBe(1);
-    expect((await owner.organization.limits()).usage.bans).toBe(3);
-    expect((await owner.bans.list({ source: "auto" })).total).toBe(1);
-    // Lifting one makes room again; other organizations are not limited.
-    await owner.bans.delete({ id: first?.id ?? "" });
-    await owner.bans.create({
-      siteId,
-      cidr: "203.0.113.99",
-      reason: "abuse",
-      durationSeconds: HOUR,
-    });
-    await outsider.bans.create({
-      siteId: otherSiteId,
-      cidr: "203.0.113.10",
-      reason: "abuse",
-      durationSeconds: HOUR,
-    });
-    await admin.admin.organizations.setLimits({ id: orgId, limits: {} });
     await liftAll();
   });
 

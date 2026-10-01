@@ -338,10 +338,6 @@ export const contract = {
   },
   /** Policy of the caller's active organization (organization owners and admins). */
   organization: {
-    /** The active organization's technical limits and usage (any member). */
-    limits: oc
-      .route({ method: "GET", path: "/organization/limits", tags: ["members"] })
-      .output(s.organizationLimits),
     update: oc
       .route({ method: "PATCH", path: "/organization", tags: ["members"] })
       .input(s.organizationPolicyInput)
@@ -370,25 +366,6 @@ export const contract = {
   },
   /** Platform actions on tenant resources (platform administrators and scoped service accounts). */
   admin: {
-    organizations: {
-      getLimits: oc
-        .route({
-          method: "GET",
-          path: "/admin/organizations/{id}/limits",
-          tags: ["organizations"],
-        })
-        .input(textIdParam)
-        .output(s.organizationLimits),
-      /** Lower limits keep existing resources and only refuse new ones. */
-      setLimits: oc
-        .route({
-          method: "PUT",
-          path: "/admin/organizations/{id}/limits",
-          tags: ["organizations"],
-        })
-        .input(s.organizationLimitsInput)
-        .output(s.organizationLimits),
-    },
     /** Every ban, including platform bans. */
     bans: adminBansContract,
   },

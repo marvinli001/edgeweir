@@ -18,7 +18,6 @@ import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import { assertOrgLimit } from "./organization-limits";
 import { type Executor, publishRevision } from "./revisions";
 import { findSite, type SiteScope } from "./sites";
 
@@ -183,8 +182,6 @@ export async function createIpList(
       sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.ip-lists.${organizationId ?? "platform"}`}))`,
     );
     await checkListQuota(tx, organizationId, input.entries.length);
-    if (organizationId)
-      await assertOrgLimit(tx, organizationId, "ipListEntries", input.entries.length);
     const existing = await tx
       .select({ id: schema.ipList.id })
       .from(schema.ipList)
@@ -227,13 +224,6 @@ export async function updateIpList(
       .for("update");
     if (!row) fail("IP_LIST_NOT_FOUND", "IP list not found");
     await checkListQuota(tx, organizationId, entries.length, id);
-    if (organizationId)
-      await assertOrgLimit(
-        tx,
-        organizationId,
-        "ipListEntries",
-        entries.length - row.entries.length,
-      );
     const [updated] = await tx
       .update(schema.ipList)
       .set({ entries, kind })

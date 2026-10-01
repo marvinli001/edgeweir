@@ -16,7 +16,6 @@ import * as z from "zod";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { InviteDialog, RoleSelect, roleLabel } from "@/components/members";
-import { OrgLimitsDialog } from "@/components/org-limits";
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -234,7 +233,6 @@ function OrganizationsTab({ onCreate }: { onCreate: () => void }) {
   const orgs = useQuery(orpc.organizations.list.queryOptions());
   const [editing, setEditing] = React.useState<Organization | null>(null);
   const [membersOf, setMembersOf] = React.useState<Organization | null>(null);
-  const [limitsOf, setLimitsOf] = React.useState<Organization | null>(null);
   const columns = React.useMemo<Columns<Organization>>(
     () => [
       {
@@ -290,14 +288,6 @@ function OrganizationsTab({ onCreate }: { onCreate: () => void }) {
             >
               {m.orgs_members()}
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setLimitsOf(row.original)}
-              data-testid="org-limits"
-            >
-              {m.org_limits_edit()}
-            </Button>
             <Button size="sm" variant="ghost" onClick={() => setEditing(row.original)}>
               {m.orgs_edit()}
             </Button>
@@ -330,13 +320,6 @@ function OrganizationsTab({ onCreate }: { onCreate: () => void }) {
       ) : null}
       {membersOf ? (
         <OrgMembersDialog organization={membersOf} onClose={() => setMembersOf(null)} />
-      ) : null}
-      {limitsOf ? (
-        <OrgLimitsDialog
-          key={limitsOf.id}
-          organization={limitsOf}
-          onClose={() => setLimitsOf(null)}
-        />
       ) : null}
     </>
   );

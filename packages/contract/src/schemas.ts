@@ -1011,68 +1011,6 @@ export const organizationUpdateInput = z.object({
   expectedUpdatedAt,
 });
 
-/** Resources an organization's technical limits cover. */
-export const orgLimitResource = z.enum([
-  "sites",
-  "domains",
-  "certificates",
-  "ipListEntries",
-  "purgeTasksPerMinute",
-  "purgeUrlsPerHour",
-  "members",
-  "bans",
-]);
-
-const limitValue = z.number().int().min(0).max(1_000_000_000).nullable();
-const usageValue = z.number().int().min(0);
-
-/** Null: no organization-specific limit (only the global hard limits apply). */
-export const organizationLimitValues = z.object({
-  sites: limitValue,
-  domains: limitValue,
-  certificates: limitValue,
-  ipListEntries: limitValue,
-  purgeTasksPerMinute: limitValue,
-  purgeUrlsPerHour: limitValue,
-  members: limitValue,
-  /** Active manual site bans. */
-  bans: limitValue,
-});
-
-export const organizationLimits = z.object({
-  organizationId: z.string(),
-  limits: organizationLimitValues,
-  /** Current use; purges count the last minute (tasks) and hour (URLs). */
-  usage: z.object({
-    sites: usageValue,
-    domains: usageValue,
-    certificates: usageValue,
-    ipListEntries: usageValue,
-    purgeTasksPerMinute: usageValue,
-    purgeUrlsPerHour: usageValue,
-    members: usageValue,
-    bans: usageValue,
-  }),
-  /** Null until limits were first saved. */
-  updatedAt: isoDateTime.nullable(),
-});
-
-/** Replaces every limit; an omitted limit is null (no limit). */
-export const organizationLimitsInput = z.object({
-  id: orgId,
-  limits: z.object({
-    sites: limitValue.default(null),
-    domains: limitValue.default(null),
-    certificates: limitValue.default(null),
-    ipListEntries: limitValue.default(null),
-    purgeTasksPerMinute: limitValue.default(null),
-    purgeUrlsPerHour: limitValue.default(null),
-    members: limitValue.default(null),
-    bans: limitValue.default(null),
-  }),
-  expectedUpdatedAt,
-});
-
 export const orgMemberAddInput = z.object({
   organizationId: orgId,
   userId,
@@ -1127,8 +1065,6 @@ export const userSetDisabledInput = z.object({ id: userId, disabled: z.boolean()
 export type OriginAllowList = z.infer<typeof originAllowList>;
 export type SiteCreateInput = z.input<typeof siteCreateInput>;
 export type Site = z.infer<typeof site>;
-export type OrgLimitResource = z.infer<typeof orgLimitResource>;
-export type OrganizationLimits = z.infer<typeof organizationLimits>;
 export type Cluster = z.infer<typeof cluster>;
 export type Node = z.infer<typeof node>;
 export type Revision = z.infer<typeof revision>;
