@@ -43,13 +43,21 @@
 #   in block, challenge and rate limit rules; leaves ua-bench.test for
 #   BENCH_SCENARIO=pass|challenge in scripts/bench.sh; Playwright
 #   e2e/g2.spec.ts.
+#   Core gaps G3: the install step builds the edgeweir-openresty packages
+#   for the Docker architecture when ../edgeweir-node/out/openresty lacks
+#   them, checks `goreleaser check`, the packages' contents (nginx, lualib,
+#   NOTICE, SBOMs, the ModSecurity module and the CRS), `nginx -V` of the
+#   installed OpenResty, the CRS loading in it and the installed node's
+#   brotli-v1, zstd-v1 and modsecurity-v1.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
 #   bash scripts/e2e.sh [--up] [--down] [--skip-ui]
 # Needs curl, jq, docker, node, and for the install step goreleaser, syft and
 # Go (it builds snapshot packages in $EDGEWEIR_NODE_CONTEXT, ../edgeweir-node
-# by default). E2E_SUBNET / E2E_ISOLATED_SUBNET must match compose.e2e.yml.
+# by default, with the edgeweir-openresty packages of `make
+# openresty-packages`, built here for the Docker architecture when missing).
+# E2E_SUBNET / E2E_ISOLATED_SUBNET must match compose.e2e.yml.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -715,12 +723,41 @@ need goreleaser
 need go
 need syft
 [[ -f "$NODE_CONTEXT/.goreleaser.yaml" ]] || fail "no edgeweir-node checkout at $NODE_CONTEXT (EDGEWEIR_NODE_CONTEXT)"
+(cd "$NODE_CONTEXT" && goreleaser check) >"$STATE_DIR/goreleaser-check.log" 2>&1 ||
+  { cat "$STATE_DIR/goreleaser-check.log" >&2; fail "goreleaser check failed in $NODE_CONTEXT"; }
+pass "goreleaser check: $(tr -d '\033' <"$STATE_DIR/goreleaser-check.log" | sed -E 's/\[[0-9;]*m//g' | grep -iE 'valid|checked' | tail -n1 | sed -E 's/^[[:space:]•]*//')"
+# The snapshot copies the edgeweir-openresty packages of `make
+# openresty-packages` (out/openresty) into dist/; build them for the
+# architecture of the install container when they are missing.
+DOCKER_ARCH="$(docker version --format '{{.Server.Arch}}')"
+OPENRESTY_VERSION="$(awk '$1 == "openresty" { print $2 }' "$NODE_CONTEXT/packaging/openresty/sources.lock")"
+OPENRESTY_RELEASE="$(awk '$1 == "release:" { print $2 }' "$NODE_CONTEXT/packaging/openresty/nfpm/edgeweir-openresty.yaml")"
+OPENRESTY_PKG="$OPENRESTY_VERSION-$OPENRESTY_RELEASE"
+OPENRESTY_FILES=("edgeweir-openresty_${OPENRESTY_PKG}_$DOCKER_ARCH.deb" "edgeweir-openresty-modsecurity_${OPENRESTY_PKG}_$DOCKER_ARCH.deb"
+  "edgeweir-openresty_${OPENRESTY_PKG}_$DOCKER_ARCH.sbom.json")
+openresty_packages_built() { for f in "${OPENRESTY_FILES[@]}"; do [[ -f "$NODE_CONTEXT/out/openresty/$f" ]] || return 1; done; }
+if ! openresty_packages_built; then
+  echo "make openresty-packages ARCH=$DOCKER_ARCH (in $NODE_CONTEXT, log in $STATE_DIR/openresty-packages.log)"
+  make -C "$NODE_CONTEXT" openresty-packages ARCH="$DOCKER_ARCH" >"$STATE_DIR/openresty-packages.log" 2>&1 ||
+    { tail -n 40 "$STATE_DIR/openresty-packages.log" >&2; fail "building the edgeweir-openresty packages failed"; }
+  openresty_packages_built || fail "make openresty-packages did not produce ${OPENRESTY_FILES[*]}"
+fi
+pass "edgeweir-openresty $OPENRESTY_PKG packages for $DOCKER_ARCH in $NODE_CONTEXT/out/openresty"
 echo "goreleaser release --snapshot --clean (in $NODE_CONTEXT, log in $STATE_DIR/goreleaser.log)"
 (cd "$NODE_CONTEXT" && goreleaser release --snapshot --clean) >"$STATE_DIR/goreleaser.log" 2>&1 ||
   { tail -n 40 "$STATE_DIR/goreleaser.log" >&2; fail "goreleaser snapshot build failed"; }
 DIST="$(cd "$NODE_CONTEXT" && pwd)/dist"
 NODE_VERSION="$(jq -r .version "$DIST/metadata.json")"
 echo "snapshot $NODE_VERSION: $(awk '{ print $2 }' "$DIST/checksums.txt" | grep -v '\.sbom\.json$' | tr '\n' ' ')"
+for f in "${OPENRESTY_FILES[@]}"; do
+  grep -qE "^[0-9a-f]{64}  $f\$" "$DIST/checksums.txt" || fail "the snapshot's checksums.txt does not list $f"
+  cmp -s "$DIST/$f" "$NODE_CONTEXT/out/openresty/$f" || fail "dist/$f differs from out/openresty/$f"
+done
+SPDX="$(jq -r '[.spdxVersion, ([.packages[].name] | unique | join(" "))] | join(" ")' "$DIST/edgeweir-openresty_${OPENRESTY_PKG}_$DOCKER_ARCH.sbom.json")"
+for component in openresty nginx LuaJIT openssl pcre2 zlib brotli ngx_brotli zstd zstd-nginx-module modsecurity modsecurity-nginx yajl libxml2 coreruleset; do
+  [[ " $SPDX " == *" $component "* ]] || fail "the SPDX SBOM does not list $component: $SPDX"
+done
+pass "dist/ and checksums.txt carry ${OPENRESTY_FILES[*]}; the SBOM (${SPDX%% *}) lists OpenResty, nginx, LuaJIT, OpenSSL, PCRE2, zlib, Brotli, ngx_brotli, Zstandard, zstd-nginx-module, ModSecurity, ModSecurity-nginx, YAJL, libxml2 and the OWASP CRS"
 MIRROR_VOLUME="$(docker inspect "$("${COMPOSE[@]}" ps -q console)" \
   --format '{{range .Mounts}}{{if eq .Destination "/srv/downloads"}}{{.Name}}{{end}}{{end}}')"
 [[ -n "$MIRROR_VOLUME" ]] || fail "the console has no /srv/downloads volume (compose.e2e.yml)"
@@ -814,6 +851,83 @@ echo "console: $(jq -c '{id, name, clusterName, status, online, enrolledAt, cert
   fail "the console does not show the installed node with the identity on disk: $INSTALLED_NODE / $IDENTITY"
 pass "install.sh: .deb $NODE_VERSION + edgeweir-openresty and its ModSecurity module installed, edgeweir system user, files and modes as packaged, enrolled as $(jq -r .id <<<"$INSTALLED_NODE") (certificate $CERT_SHA matches the console)"
 
+step "G3: contents of the installed edgeweir-openresty packages and their nginx"
+PACKAGES="$(in_install 'dpkg-query -W -f "\${Package} \${Version} \${Architecture} | \${Depends} | \${Recommends}\n" edgeweir-node edgeweir-openresty edgeweir-openresty-modsecurity')"
+echo "$PACKAGES"
+grep -qE "^edgeweir-node .* \| .*edgeweir-openresty \(>= [0-9.]+-[0-9]+\).* \| .*edgeweir-openresty-modsecurity" <<<"$PACKAGES" &&
+  grep -qE "^edgeweir-openresty $OPENRESTY_PKG $DOCKER_ARCH \| libc6 \(>= 2\.34\)" <<<"$PACKAGES" &&
+  grep -qE "^edgeweir-openresty-modsecurity $OPENRESTY_PKG $DOCKER_ARCH \| edgeweir-openresty \(= $OPENRESTY_PKG\)" <<<"$PACKAGES" ||
+  fail "unexpected package versions or dependencies"
+# The packages as shipped (dpkg -c): the slim image drops /usr/share/doc on install.
+OPENRESTY_DEB="edgeweir-openresty_${OPENRESTY_PKG}_$DOCKER_ARCH.deb"
+MODSECURITY_DEB="edgeweir-openresty-modsecurity_${OPENRESTY_PKG}_$DOCKER_ARCH.deb"
+in_install 'mkdir -p /tmp/g3-debs && cd /tmp/g3-debs && for f in "$@"; do curl -fsSO "http://console:3000/downloads/edgeweir-node/v$0/$f"; done' \
+  "$NODE_VERSION" "$OPENRESTY_DEB" "$MODSECURITY_DEB" || fail "could not download the edgeweir-openresty packages from the mirror"
+deb_list() { in_install 'dpkg -c "/tmp/g3-debs/$0" | awk "{ print \$6 }" | sed "s|^\./|/|"' "$1"; }
+deb_file() { in_install 'dpkg-deb --fsys-tarfile "/tmp/g3-debs/$0" | tar -xO ".$1"' "$1" "$2"; }
+OPENRESTY_LIST="$(deb_list "$OPENRESTY_DEB")"
+MODSECURITY_LIST="$(deb_list "$MODSECURITY_DEB")"
+listed() { # listed LIST PACKAGE PATH...
+  local list="$1" package="$2" path
+  shift 2
+  for path in "$@"; do grep -qxF "$path" <<<"$list" || fail "$package does not contain $path"; done
+}
+listed "$OPENRESTY_LIST" edgeweir-openresty /usr/lib/edgeweir-openresty/nginx/sbin/nginx /usr/lib/edgeweir-openresty/bin/openresty \
+  /usr/lib/edgeweir-openresty/bin/resty /usr/lib/edgeweir-openresty/luajit/bin/luajit /usr/lib/edgeweir-openresty/luajit/lib/libluajit-5.1.so.2 \
+  /usr/lib/edgeweir-openresty/lualib/resty/core.lua /usr/lib/edgeweir-openresty/lualib/ngx/ssl.lua /usr/lib/edgeweir-openresty/lualib/cjson.so \
+  /usr/share/doc/edgeweir-openresty/NOTICE /usr/share/doc/edgeweir-openresty/edgeweir-openresty.cdx.json /usr/share/doc/edgeweir-openresty/nginx-V.txt
+listed "$MODSECURITY_LIST" edgeweir-openresty-modsecurity /usr/lib/edgeweir-openresty/modules/ngx_http_modsecurity_module.so \
+  /usr/lib/edgeweir-openresty/lib/libmodsecurity.so.3 /usr/share/doc/edgeweir-openresty-modsecurity/NOTICE \
+  /usr/share/edgeweir-openresty/crs/crs-setup.conf /usr/share/edgeweir-openresty/crs/LICENSE \
+  /usr/share/edgeweir-openresty/crs/rules/REQUEST-941-APPLICATION-ATTACK-XSS.conf \
+  /usr/share/edgeweir-openresty/crs/rules/REQUEST-949-BLOCKING-EVALUATION.conf /usr/share/edgeweir-openresty/modsecurity/unicode.mapping
+if grep -q '^/usr/lib/edgeweir-openresty/modules/.' <<<"$OPENRESTY_LIST" || grep -q '^/usr/share/edgeweir-openresty/' <<<"$OPENRESTY_LIST"; then
+  fail "edgeweir-openresty itself must not carry the ModSecurity module or the CRS"
+fi
+# Installed as listed (everything outside /usr/share/doc).
+INSTALLED_LIST="$(in_install 'dpkg -L edgeweir-openresty edgeweir-openresty-modsecurity')"
+MISSING="$(grep -v '^/usr/share/doc/' <<<"$OPENRESTY_LIST"$'\n'"$MODSECURITY_LIST" | sed 's|/$||' | grep -v '^$' |
+  grep -vxF -f <(grep -v '^$' <<<"$INSTALLED_LIST") || true)"
+[[ -z "$MISSING" ]] || fail "not installed: $MISSING"
+CRS_RULES="$(grep -cE '^/usr/share/edgeweir-openresty/crs/rules/.+\.conf$' <<<"$MODSECURITY_LIST")"
+((CRS_RULES >= 20)) || fail "only $CRS_RULES CRS rule files in the package"
+NOTICE_HEADS="$(deb_file "$OPENRESTY_DEB" /usr/share/doc/edgeweir-openresty/NOTICE | grep -E '^[A-Za-z].* \((BSD|MIT|Apache|Zlib|ISC)[^)]*\): ')"
+for component in "OpenResty" "nginx" "LuaJIT" "OpenSSL" "PCRE2" "zlib" "Brotli" "ngx_brotli" "Zstandard" "zstd-nginx-module" \
+  "ModSecurity (libmodsecurity)" "ModSecurity-nginx" "YAJL" "libxml2" "OWASP CRS"; do
+  grep -qF -- "$component " <<<"$NOTICE_HEADS" || fail "NOTICE lacks $component: $NOTICE_HEADS"
+done
+CDX="$(deb_file "$OPENRESTY_DEB" /usr/share/doc/edgeweir-openresty/edgeweir-openresty.cdx.json | jq -r '[.bomFormat, ([.components[].name] | unique | join(" "))] | join(" ")')"
+for component in openresty nginx ngx_brotli zstd-nginx-module modsecurity modsecurity-nginx coreruleset; do
+  [[ " $CDX " == *" $component "* ]] || fail "the CycloneDX SBOM lacks $component: $CDX"
+done
+NGINX_V="$(in_install '/usr/lib/edgeweir-openresty/nginx/sbin/nginx -V 2>&1')"
+echo "$NGINX_V" | head -n 3
+for want in "nginx version: openresty/$OPENRESTY_VERSION" "--prefix=/usr/lib/edgeweir-openresty/nginx" "/ngx_brotli" "/zstd-nginx-module-" \
+  "--with-http_v3_module" "--with-http_v2_module" "--with-http_slice_module" "--with-compat" "--with-stream_ssl_preread_module"; do
+  grep -qF -- "$want" <<<"$NGINX_V" || fail "nginx -V of the installed OpenResty lacks $want"
+done
+[[ "$NGINX_V" == "$(deb_file "$OPENRESTY_DEB" /usr/share/doc/edgeweir-openresty/nginx-V.txt)" ]] ||
+  fail "nginx -V differs from /usr/share/doc/edgeweir-openresty/nginx-V.txt"
+# The module loads into the installed nginx and the packaged CRS parses (nginx -t);
+# a rule reusing the id of CRS rule 941100 is refused, so the CRS rules were read.
+CRS_TEST="$(in_install '
+  d="$(mktemp -d)"
+  mkdir -p "$d/logs"
+  crs() {
+    printf "%s\n" "SecRuleEngine On" "Include /usr/share/edgeweir-openresty/crs/crs-setup.conf" \
+      "Include /usr/share/edgeweir-openresty/crs/rules/*.conf" "$@" >"$d/crs.conf"
+    /usr/lib/edgeweir-openresty/nginx/sbin/nginx -p "$d" -c "$d/nginx.conf" -t 2>&1 || true
+  }
+  printf "%s\n" "load_module /usr/lib/edgeweir-openresty/modules/ngx_http_modsecurity_module.so;" "error_log stderr notice;" \
+    "pid $d/nginx.pid;" "events {}" "http { modsecurity on; modsecurity_rules_file $d/crs.conf; server { listen 127.0.0.1:8999; } }" >"$d/nginx.conf"
+  crs
+  echo ---
+  crs "SecRule ARGS \"@rx edgeweir\" \"id:941100,phase:2,pass,nolog\""')"
+echo "$CRS_TEST"
+[[ "${CRS_TEST%%---*}" == *"test is successful"* && "${CRS_TEST#*---}" == *"Rule id: 941100 is duplicated"*"test failed"* ]] ||
+  fail "the CRS does not load in the installed OpenResty"
+pass "edgeweir-openresty $OPENRESTY_PKG (dpkg -c, all installed outside /usr/share/doc): nginx, LuaJIT, lualib, NOTICE (all 15 components), CycloneDX ($(cut -d' ' -f1 <<<"$CDX")) and nginx -V as built; -modsecurity: the module, libmodsecurity, $CRS_RULES CRS rule files, unicode.mapping; nginx -V shows /usr/lib/edgeweir-openresty, ngx_brotli, zstd-nginx-module and http_v3; the CRS loads in the installed nginx"
+
 step "N-H1: the installed node runs as in its systemd unit (User=, Environment=, ExecStart=) and comes online"
 # systemd is not available in the container: start ExecStart= as User= with the
 # unit's Environment= and the RuntimeDirectory= systemd would create.
@@ -847,8 +961,12 @@ grep -q '^edgeweir /usr/bin/edgeweir-node supervise --manage-nginx' <<<"$PROCS" 
   grep -q '^edgeweir nginx: worker process' <<<"$PROCS" && ! grep -qv '^edgeweir ' <<<"$PROCS" ||
   fail "the agent and OpenResty must run as the edgeweir user: $PROCS"
 api GET "/nodes?clusterId=$INSTALL_CLUSTER" | jq -c '.[] | {name, online, agentVersion, engine, engineVersion, os, arch, appliedRevision, applyState}'
+INSTALLED_FEATURES="$(api GET "/nodes?clusterId=$INSTALL_CLUSTER" | jq -r '.[] | select(.name == "edge-install-1") | .supportedFeatures | join(" ")')"
+for feature in brotli-v1 zstd-v1 modsecurity-v1; do
+  [[ " $INSTALLED_FEATURES " == *" $feature "* ]] || fail "the installed node does not report $feature: $INSTALLED_FEATURES"
+done
 docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
-pass "the installed agent ($NODE_VERSION) runs as the edgeweir user and is online over mTLS"
+pass "the installed agent ($NODE_VERSION) runs as the edgeweir user, is online over mTLS and reports brotli-v1, zstd-v1 and modsecurity-v1 with the installed packages"
 
 step "M3: ACME issuance, HTTPS, HTTP/2, HTTP/3, renewal and TLS policy"
 node scripts/e2e-m3.mjs || fail "M3 protocol test failed"
