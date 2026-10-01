@@ -35,7 +35,7 @@ The only contract between the console and the nodes is `edgeweir.node.v1` in `pr
 | `packages/contract` | oRPC contract and zod schemas, error codes (`errors.ts`), node error codes (`node-errors.ts`), origin address rules (`addresses.ts`); shared by the UI, the server, and OpenAPI |
 | `packages/db` | Drizzle schema (`src/schema/`) and plain SQL migrations (`migrations/`) |
 | `packages/config-compiler` | Compiles sites, rules, IP lists, certificate references, and platform policy into the NodeConfig IR; canonical ordering, content hash, diff |
-| `packages/rule-engine` | Rule expression fields, phases, parser, and list reference binding |
+| `packages/rule-engine` | Rule expression fields, phases, functions, parser (conditions, value expressions, cache rule conditions), list reference binding, and reference evaluation |
 | `packages/proto` | TypeScript generated from `proto/` (protoc-gen-es); not edited by hand |
 | `proto/` | buf module `edgeweir/node/v1/{node,config}.proto`; edgeweir-node generates its Go code from a `proto/vX.Y.Z` tag |
 | `helpers/certd` | `edgeweir-certd` source |
@@ -213,6 +213,23 @@ Nodes compress and run CRS with OpenResty built for Edgeweir (`edgeweir-openrest
 | Tenants may turn on CRS | `system.waf_update` (publishes nothing) |
 
 Behavior: [HTTPS and certificates](docs/guide/https.en.md#compression) and [OWASP CRS managed rules](docs/guide/waf.en.md).
+
+## Rule engine extensions
+
+The console is the only authority on expression syntax: `packages/rule-engine` parses conditions and value expressions and `packages/config-compiler` emits typed IR; nodes validate the IR field by field and run it, and never receive expression text. Functions, value expressions, bulk redirects, origin groups, cache rule conditions and the new rule actions are marked by the node capability `rules-v2`:
+
+1. Function calls are encoded as `call`, `field` and `const` nodes of `RuleExpression`. Value expressions of redirect targets and rewrite paths go into `RuleAction.target`; `set_query` is sorted by name and `remove_query` sorted and unique; `preserve_query` is written only when it differs from the action's default.
+2. Cache rules are stored as expressions (`cache_rule.expression`, with the lists they reference in `list_ids`). Expressions in the builder's shape compile into the former `path_prefixes`, `paths` and `extensions`, so older nodes run them as before and the content hash stays the same; other expressions compile into `CacheRuleMatch.condition`. `browser_ttl_seconds` goes into `CacheRule`.
+3. Bulk redirects compile into `Site.bulk_redirects` (sorted by source) and origin groups into `Origin.group`.
+4. A configuration that uses any of these (the `compression` phase and the new fields of `config` actions included) adds `rules-v2` to `required_features`; others encode exactly as before. As with other capabilities, a tenant change that introduces `rules-v2` while an active node of the cluster lacks it gets `NODE_CAPABILITY_REQUIRED`; `rulesV2` of `sites.features` lets the UI lock the controls.
+
+| Management action | Audit |
+| --- | --- |
+| A site's rules | `site.rules_update` (publishes the site's cluster, reason `rules_updated`) |
+| Platform rules | `platform.rules_update` (publishes every cluster) |
+| A site's bulk redirects | `site.bulk_redirects_update` (publishes the site's cluster, reason `rules_updated`) |
+
+Behavior: [Rules, IP lists, and GeoIP](docs/guide/rules.en.md) and [Origins and cache](docs/guide/origins-and-cache.en.md).
 
 ## Node channel
 
