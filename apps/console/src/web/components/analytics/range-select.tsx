@@ -14,9 +14,12 @@ import { ANALYTICS_RANGES, rangeLabel } from "@/lib/analytics";
 export function RangeSelect({
   value,
   onChange,
+  ranges = ANALYTICS_RANGES,
 }: {
   value: AnalyticsRange;
   onChange: (range: AnalyticsRange) => void;
+  /** The ranges offered; every analytics range unless a view keeps less history. */
+  ranges?: readonly AnalyticsRange[];
 }) {
   return (
     <DropdownMenu>
@@ -31,7 +34,7 @@ export function RangeSelect({
           value={value}
           onValueChange={(next) => onChange(next as AnalyticsRange)}
         >
-          {ANALYTICS_RANGES.map((range) => (
+          {ranges.map((range) => (
             <DropdownMenuRadioItem
               key={range}
               value={range}

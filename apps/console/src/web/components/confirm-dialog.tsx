@@ -68,22 +68,30 @@ export function ConfirmDialog({
 }
 
 /**
- * A destructive confirmation opened from a menu item or a parent's state;
- * a failure stays in the dialog with its message.
+ * A confirmation opened from a menu item, a switch or a parent's state (destructive unless
+ * `destructive` is false); a failure stays in the dialog with its message.
  */
 export function ControlledConfirmDialog({
   open,
   onOpenChange,
   title,
+  note,
+  confirmLabel,
+  destructive = true,
   onConfirm,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  /** One line on what exactly the action touches (a safety note, not an explanation). */
+  note?: string;
+  confirmLabel?: string;
+  destructive?: boolean;
   onConfirm: () => Promise<void>;
 }) {
   const action = useAction();
   const [error, setError] = React.useState<string | null>(null);
+  const noteId = React.useId();
   return (
     <Dialog
       open={open}
@@ -92,9 +100,10 @@ export function ControlledConfirmDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent>
+      <DialogContent aria-describedby={note ? noteId : undefined}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          {note ? <SafetyNote id={noteId}>{note}</SafetyNote> : null}
         </DialogHeader>
         {error ? (
           <FieldError data-testid="confirm-error" className="animate-in fade-in">
@@ -106,7 +115,7 @@ export function ControlledConfirmDialog({
             {m.common_cancel()}
           </Button>
           <Button
-            variant="destructive"
+            variant={destructive ? "destructive" : "default"}
             disabled={action.pending}
             data-testid="confirm-action"
             onClick={async () => {
@@ -120,7 +129,7 @@ export function ControlledConfirmDialog({
             }}
           >
             {action.pending ? <Spinner /> : null}
-            {m.common_confirm()}
+            {confirmLabel ?? m.common_confirm()}
           </Button>
         </DialogFooter>
       </DialogContent>
