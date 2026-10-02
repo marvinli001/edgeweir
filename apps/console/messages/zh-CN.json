@@ -561,6 +561,7 @@
   "cert_http01": "HTTP-01",
   "cert_dns01": "DNS-01",
   "cert_skip_dns_check": "跳过解析检查",
+  "cert_wildcard_needs_dns01": "泛域名需要 DNS-01 验证",
   "cert_eab_kid": "EAB 密钥 ID",
   "cert_eab_key": "EAB HMAC 密钥",
   "cert_dns_provider": "DNS 服务商",

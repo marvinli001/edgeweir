@@ -62,7 +62,7 @@ Prerequisites:
 | Domains | 1–100 names, separated by commas or spaces, no duplicates; `*.` wildcards allowed | None | Certificate SANs |
 | Account email | Email address | None | ACME account contact |
 | Certificate authority | Let's Encrypt / ZeroSSL | Let's Encrypt | ACME directory |
-| Validation method | HTTP-01 / DNS-01 | HTTP-01 | Domain control validation; wildcards require DNS-01 |
+| Validation method | HTTP-01 / DNS-01 | HTTP-01 | Domain control validation; wildcards require DNS-01, and with HTTP-01 the form shows "Wildcards need DNS-01" under **Domains** |
 | DNS credentials | A DNS credential that has been added | The first credential | Account DNS-01 writes TXT records with; one zone per certificate |
 | Skip the DNS check | On / off | Off | HTTP-01 only: do not check that the names resolve to the nodes (at the request and before each issuance), for example with a load balancer in front of the nodes |
 | EAB key ID / EAB HMAC key | EAB credentials from ZeroSSL | None | Required for ZeroSSL; stored encrypted |

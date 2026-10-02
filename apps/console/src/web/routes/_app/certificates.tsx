@@ -14,7 +14,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { certificateErrorText } from "@/lib/certificate-errors";
@@ -295,6 +295,10 @@ function RequestDialog({
   const [challenge, setChallenge] = React.useState("http01");
   const [credential, setCredential] = React.useState(credentials[0]?.id ?? "");
   const [skipDnsCheck, setSkipDnsCheck] = React.useState(false);
+  const [names, setNames] = React.useState("");
+  const parsedNames = names.split(/[\s,]+/).filter(Boolean);
+  // HTTP-01 cannot validate wildcards (the API refuses them too).
+  const wildcard = challenge === "http01" && parsedNames.some((n) => n.startsWith("*."));
   return (
     <FormDialog
       open
@@ -305,11 +309,10 @@ function RequestDialog({
       submitLabel={m.cert_request()}
       submitTestId="cert-request-submit"
       onSubmit={async (data) => {
+        if (wildcard) return;
         await request.mutateAsync({
           name: String(data.get("certName")),
-          names: String(data.get("names"))
-            .split(/[\s,]+/)
-            .filter(Boolean),
+          names: parsedNames,
           email: String(data.get("email")),
           ca: ca as "letsencrypt" | "zerossl",
           challenge: challenge as "http01" | "dns01",
@@ -323,7 +326,23 @@ function RequestDialog({
       }}
     >
       <TextField id="certName" label={m.cert_name()} />
-      <TextField id="names" label={m.cert_domains()} />
+      <Field data-invalid={wildcard || undefined}>
+        <FieldLabel htmlFor="names">{m.cert_domains()}</FieldLabel>
+        <Input
+          id="names"
+          name="names"
+          required
+          autoComplete="off"
+          value={names}
+          onChange={(event) => setNames(event.target.value)}
+          aria-invalid={wildcard || undefined}
+        />
+        {wildcard ? (
+          <FieldError className="animate-in fade-in" data-testid="cert-names-error">
+            {m.cert_wildcard_needs_dns01()}
+          </FieldError>
+        ) : null}
+      </Field>
       <TextField id="email" label={m.cert_email()} type="email" />
       <FormSelect
         id="certCa"

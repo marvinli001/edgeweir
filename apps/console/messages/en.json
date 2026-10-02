@@ -646,6 +646,7 @@
   "cert_http01": "HTTP-01",
   "cert_dns01": "DNS-01",
   "cert_skip_dns_check": "Skip the DNS check",
+  "cert_wildcard_needs_dns01": "Wildcards need DNS-01",
   "cert_eab_kid": "EAB key ID",
   "cert_eab_key": "EAB HMAC key",
   "cert_dns_provider": "DNS provider",

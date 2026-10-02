@@ -64,6 +64,7 @@ export const tlsSettings = z
   })
   .refine((s) => (!s.forceHttps && s.hstsMaxAge === 0) || s.certificateId !== null, {
     message: "HTTPS redirect and HSTS require a certificate",
+    path: ["certificateId"],
   });
 
 /**
@@ -170,12 +171,15 @@ export const certificateRequest = z
   })
   .refine((s) => s.challenge !== "dns01" || !!s.dnsCredentialId, {
     message: "DNS-01 requires a DNS credential",
+    path: ["dnsCredentialId"],
   })
   .refine((s) => s.challenge !== "http01" || !s.names.some((n) => n.startsWith("*.")), {
     message: "wildcards require DNS-01",
+    path: ["names"],
   })
   .refine((s) => s.ca !== "zerossl" || (!!s.eabKid && !!s.eabHmacKey), {
     message: "ZeroSSL requires EAB credentials",
+    path: ["eabKid"],
   });
 
 const id = z.object({ id: uuid });
