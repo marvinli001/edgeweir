@@ -6,6 +6,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { ClusterDialog } from "@/components/clusters/cluster-dialog";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
+import { OptionSelect } from "@/components/form-select";
 import { Dot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,13 +17,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { formatNumber, m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -61,26 +55,14 @@ export function ClusterSummary({
         </CardTitle>
         <div className="flex items-center gap-2">
           {clusters.length > 1 ? (
-            <Select
+            <OptionSelect
               value={selected.id}
-              onValueChange={(value) => value && onSelect(String(value))}
-              items={clusters.map((c) => ({ label: c.name, value: c.id }))}
-            >
-              <SelectTrigger
-                className="w-48"
-                aria-label={m.clusters_select()}
-                data-testid="cluster-select"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {clusters.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={clusters.map((c) => ({ label: c.name, value: c.id }))}
+              onChange={onSelect}
+              label={m.clusters_select()}
+              className="w-48"
+              testId="cluster-select"
+            />
           ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger

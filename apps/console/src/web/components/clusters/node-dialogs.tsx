@@ -4,25 +4,35 @@ import * as React from "react";
 import { toast } from "sonner";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
+import { OptionSelect } from "@/components/form-select";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import type { DialogProps } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
-export function RenameNodeDialog({ node, onClose }: { node: Node; onClose: () => void }) {
+/** What the node menu opens a dialog for. */
+export type NodeAction = { kind: "rename" | "move" | "delete"; node: Node };
+
+/** The dialog of a node menu action. */
+export function NodeActionDialog({ action, ...dialog }: { action: NodeAction } & DialogProps) {
+  switch (action.kind) {
+    case "rename":
+      return <RenameNodeDialog node={action.node} {...dialog} />;
+    case "move":
+      return <MoveNodeDialog node={action.node} {...dialog} />;
+    case "delete":
+      return <DeleteNodeDialog node={action.node} {...dialog} />;
+  }
+}
+
+function RenameNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogProps) {
   const queryClient = useQueryClient();
   const update = useMutation(orpc.nodes.update.mutationOptions());
   return (
     <FormDialog
-      open
-      onOpenChange={(open) => !open && onClose()}
+      open={open}
+      onOpenChange={onOpenChange}
       title={m.nodes_rename()}
       submitLabel={m.common_save()}
       onSubmit={async (data) => {
@@ -31,7 +41,7 @@ export function RenameNodeDialog({ node, onClose }: { node: Node; onClose: () =>
           name: String(data.get("nodeNewName") ?? "").trim(),
         });
         await queryClient.invalidateQueries();
-        onClose();
+        onOpenChange(false);
       }}
     >
       <Field>
@@ -48,21 +58,17 @@ export function RenameNodeDialog({ node, onClose }: { node: Node; onClose: () =>
   );
 }
 
-export function MoveNodeDialog({ node, onClose }: { node: Node; onClose: () => void }) {
+function MoveNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogProps) {
   const queryClient = useQueryClient();
   const groups = useQuery(
     orpc.nodeGroups.list.queryOptions({ input: { clusterId: node.clusterId } }),
   );
   const update = useMutation(orpc.nodes.update.mutationOptions());
   const [groupId, setGroupId] = React.useState(node.nodeGroupId ?? "");
-  const items = (groups.data ?? []).map((g) => ({
-    label: g.regionName ? `${g.name} · ${g.regionName}` : g.name,
-    value: g.id,
-  }));
   return (
     <FormDialog
-      open
-      onOpenChange={(open) => !open && onClose()}
+      open={open}
+      onOpenChange={onOpenChange}
       title={m.nodes_move_title({ name: node.name })}
       submitLabel={m.nodes_move()}
       submitTestId="move-submit"
@@ -70,35 +76,32 @@ export function MoveNodeDialog({ node, onClose }: { node: Node; onClose: () => v
         await update.mutateAsync({ id: node.id, nodeGroupId: groupId });
         await queryClient.invalidateQueries();
         toast.success(m.nodes_moved({ name: node.name }));
-        onClose();
+        onOpenChange(false);
       }}
     >
       <Field>
         <FieldLabel>{m.nodes_col_group()}</FieldLabel>
-        <Select value={groupId} onValueChange={(v) => v && setGroupId(String(v))} items={items}>
-          <SelectTrigger className="w-full" data-testid="move-group-select">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {items.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <OptionSelect
+          value={groupId}
+          options={(groups.data ?? []).map((g) => ({
+            label: g.regionName ? `${g.name} · ${g.regionName}` : g.name,
+            value: g.id,
+          }))}
+          onChange={setGroupId}
+          testId="move-group-select"
+        />
       </Field>
     </FormDialog>
   );
 }
 
-export function DeleteNodeDialog({ node, onClose }: { node: Node; onClose: () => void }) {
+function DeleteNodeDialog({ node, open, onOpenChange }: { node: Node } & DialogProps) {
   const queryClient = useQueryClient();
   const remove = useMutation(orpc.nodes.delete.mutationOptions());
   return (
     <ControlledConfirmDialog
-      open
-      onOpenChange={(open) => !open && onClose()}
+      open={open}
+      onOpenChange={onOpenChange}
       title={m.nodes_delete_confirm({ name: node.name })}
       onConfirm={async () => {
         await remove.mutateAsync({ id: node.id });

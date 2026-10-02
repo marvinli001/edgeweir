@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Countdown } from "@/components/appica/countdown";
 import { CodeBlock } from "@/components/copy-button";
+import { OptionSelect } from "@/components/form-select";
 import {
   ConsoleUrlWarnings,
   EnrollProgress,
@@ -22,13 +23,6 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, m } from "@/lib/i18n";
@@ -99,7 +93,7 @@ function EnrollDialog({
     minutes < 60
       ? m.enroll_ttl_minutes({ count: minutes })
       : m.enroll_ttl_hours({ count: minutes / 60 });
-  const groupItems = (groups.data ?? []).map((g) => ({ label: g.name, value: g.id }));
+  const groupOptions = (groups.data ?? []).map((g) => ({ label: g.name, value: g.id }));
   const selectedGroup = groupId || groups.data?.find((g) => g.isDefault)?.id || "";
   // Closing forgets the token: it is shown once.
   const setOpen = (next: boolean) => {
@@ -182,45 +176,24 @@ function EnrollDialog({
                       onChange={(event) => setNodeName(event.target.value)}
                     />
                   </Field>
-                  {groupItems.length > 1 ? (
+                  {groupOptions.length > 1 ? (
                     <Field>
                       <FieldLabel>{m.nodes_col_group()}</FieldLabel>
-                      <Select
+                      <OptionSelect
                         value={selectedGroup}
-                        onValueChange={(value) => value && setGroupId(String(value))}
-                        items={groupItems}
-                      >
-                        <SelectTrigger className="w-full" data-testid="enroll-group">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {groupItems.map((g) => (
-                            <SelectItem key={g.value} value={g.value}>
-                              {g.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        options={groupOptions}
+                        onChange={setGroupId}
+                        testId="enroll-group"
+                      />
                     </Field>
                   ) : null}
                   <Field>
                     <FieldLabel>{m.enroll_ttl()}</FieldLabel>
-                    <Select
+                    <OptionSelect
                       value={String(ttl)}
-                      onValueChange={(value) => value && setTtl(Number(value))}
-                      items={TTL_OPTIONS.map((v) => ({ label: ttlLabel(v), value: String(v) }))}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TTL_OPTIONS.map((v) => (
-                          <SelectItem key={v} value={String(v)}>
-                            {ttlLabel(v)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      options={TTL_OPTIONS.map((v) => ({ label: ttlLabel(v), value: String(v) }))}
+                      onChange={(value) => setTtl(Number(value))}
+                    />
                   </Field>
                 </div>
                 {create.isError ? <FieldError>{errorMessage(create.error)}</FieldError> : null}

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, LoadingState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
@@ -123,20 +123,16 @@ export function RevisionsSection({ cluster }: { cluster: Cluster }) {
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-medium">{m.revisions_title()}</h2>
-      {revisions.isPending ? (
-        <LoadingState />
-      ) : revisions.isLoadingError ? (
-        <ErrorState error={revisions.error} onRetry={() => revisions.refetch()} />
-      ) : revisions.data.length === 0 ? (
-        <EmptyState title={m.revisions_empty()} />
-      ) : (
-        <DataTable
-          data={revisions.data.slice(0, 20)}
-          columns={columns}
-          getRowId={(r) => String(r.revision)}
-          testId="revisions-table"
-        />
-      )}
+      <QueryView query={revisions} empty={<EmptyState title={m.revisions_empty()} />}>
+        {(list) => (
+          <DataTable
+            data={list.slice(0, 20)}
+            columns={columns}
+            getRowId={(r) => String(r.revision)}
+            testId="revisions-table"
+          />
+        )}
+      </QueryView>
     </section>
   );
 }

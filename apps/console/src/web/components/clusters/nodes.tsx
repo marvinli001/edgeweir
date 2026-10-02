@@ -4,14 +4,10 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
-import {
-  DeleteNodeDialog,
-  MoveNodeDialog,
-  RenameNodeDialog,
-} from "@/components/clusters/node-dialogs";
+import { type NodeAction, NodeActionDialog } from "@/components/clusters/node-dialogs";
 import { type Columns, DataTable } from "@/components/data-table";
 import { AuthErrorBadge, NodeDetailDialog, NodeLoad } from "@/components/node-detail";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useDialogState } from "@/hooks/use-dialog-state";
 import { m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -61,8 +58,6 @@ function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
  * serves nothing ("awaiting configuration" shows beside its revision).
  */
 const servesOrStarts = (node: Node) => node.dataPlaneHealthy || node.appliedRevision === 0;
-
-type NodeAction = { kind: "rename" | "move" | "delete"; node: Node };
 
 function NodeActions({
   node,
@@ -141,7 +136,7 @@ export function NodesSection({
     refetchInterval: 5_000,
     meta: { background: true },
   });
-  const [action, setAction] = React.useState<NodeAction | null>(null);
+  const action = useDialogState<NodeAction>();
   const latest = cluster.latestRevision?.revision ?? 0;
   const detail = detailId ? nodes.data?.find((n) => n.id === detailId) : undefined;
   const columns = React.useMemo<Columns<Node>>(
@@ -274,44 +269,39 @@ export function NodesSection({
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <NodeActions node={row.original} onAction={setAction} onDetail={showDetail} />
+            <NodeActions node={row.original} onAction={action.show} onDetail={showDetail} />
           </div>
         ),
       },
     ],
-    [latest, showDetail],
+    [latest, showDetail, action.show],
   );
 
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-medium">{m.nodes_title()}</h2>
-      {nodes.isPending ? (
-        <LoadingState />
-      ) : nodes.isLoadingError ? (
-        <ErrorState error={nodes.error} onRetry={() => nodes.refetch()} />
-      ) : nodes.data.length === 0 ? (
-        <EmptyState icon={ServerStack01Icon} title={m.nodes_empty_title()}>
-          <Button onClick={onEnroll}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            {m.nav_add_node()}
-          </Button>
-        </EmptyState>
-      ) : (
-        <DataTable
-          data={nodes.data}
-          columns={columns}
-          getRowId={(n) => n.id}
-          testId="nodes-table"
+      <QueryView
+        query={nodes}
+        empty={
+          <EmptyState icon={ServerStack01Icon} title={m.nodes_empty_title()}>
+            <Button onClick={onEnroll}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              {m.nav_add_node()}
+            </Button>
+          </EmptyState>
+        }
+      >
+        {(list) => (
+          <DataTable data={list} columns={columns} getRowId={(n) => n.id} testId="nodes-table" />
+        )}
+      </QueryView>
+      {action.value ? (
+        <NodeActionDialog
+          key={action.key}
+          action={action.value}
+          open={action.open}
+          onOpenChange={action.onOpenChange}
         />
-      )}
-      {action?.kind === "rename" ? (
-        <RenameNodeDialog node={action.node} onClose={() => setAction(null)} />
-      ) : null}
-      {action?.kind === "move" ? (
-        <MoveNodeDialog node={action.node} onClose={() => setAction(null)} />
-      ) : null}
-      {action?.kind === "delete" ? (
-        <DeleteNodeDialog node={action.node} onClose={() => setAction(null)} />
       ) : null}
       {detail ? <NodeDetailDialog node={detail} onClose={() => showDetail(null)} /> : null}
     </section>

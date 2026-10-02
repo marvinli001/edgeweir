@@ -18,7 +18,7 @@ import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
 import { RegionsPanel } from "@/components/regions";
 import { ClusterScheduling } from "@/components/scheduling";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { m } from "@/lib/i18n";
@@ -105,23 +105,28 @@ function ClustersPage() {
         <div className="flex flex-col gap-4 animate-enter">
           <RegionsPanel createOpen={createRegion} onCreateOpenChange={setCreateRegion} />
         </div>
-      ) : clusters.isPending ? (
-        <LoadingState />
-      ) : clusters.isLoadingError ? (
-        <ErrorState error={clusters.error} onRetry={() => clusters.refetch()} />
-      ) : !selected ? (
-        <EmptyState icon={ServerStack01Icon} title={m.clusters_empty_title()}>
-          <Button onClick={() => setCreateOpen(true)}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            {m.clusters_create()}
-          </Button>
-        </EmptyState>
       ) : (
-        <ClusterView
-          clusters={clusters.data}
-          selected={selected}
-          onEnroll={() => setEnrollOpen(true)}
-        />
+        <QueryView
+          query={clusters}
+          empty={
+            <EmptyState icon={ServerStack01Icon} title={m.clusters_empty_title()}>
+              <Button onClick={() => setCreateOpen(true)}>
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                {m.clusters_create()}
+              </Button>
+            </EmptyState>
+          }
+        >
+          {(list) =>
+            selected ? (
+              <ClusterView
+                clusters={list}
+                selected={selected}
+                onEnroll={() => setEnrollOpen(true)}
+              />
+            ) : null
+          }
+        </QueryView>
       )}
       {selected ? (
         <EnrollDialogHost
