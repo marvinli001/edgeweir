@@ -227,6 +227,7 @@ edgeweir-node probe [--state-dir DIR]     # 已注册
 | 项目 | 仅 `edgeweir-node` 与 `cosign` |
 | 路径规则 | `<项目>/latest`，或 `<项目>/v<语义化版本>/<文件名>`；其他路径、目录与指向目录外的符号链接返回 404 |
 | 缓存头 | `latest`：`no-cache`；其他文件：`public, max-age=86400, immutable` |
+| 权限 | 目录与文件须对容器用户 `node`（uid 1000）可读。启动时目录不存在或不可读，控制台日志写 `EDGEWEIR_DOWNLOADS_DIR cannot be served`；文件存在但不可读时返回 404，并写 `cannot read the download mirror`（同一错误每分钟一条） |
 
 目录结构：
 

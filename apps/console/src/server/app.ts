@@ -156,7 +156,7 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
   });
 
   app.on(["GET", "HEAD"], "/downloads/*", (c) =>
-    serveDownload(ctx.env.EDGEWEIR_DOWNLOADS_DIR, c.req.raw),
+    serveDownload(ctx.env.EDGEWEIR_DOWNLOADS_DIR, c.req.raw, ctx.log),
   );
 
   // Server paths never fall through to the SPA shell: an unknown API route or

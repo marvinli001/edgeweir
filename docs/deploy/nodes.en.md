@@ -227,6 +227,7 @@ When nodes reach GitHub poorly, the console can serve release files at `/downloa
 | Projects | `edgeweir-node` and `cosign` only |
 | Path rules | `<project>/latest` or `<project>/v<semver>/<file>`; other paths, directories, and symlinks leading out of the directory return 404 |
 | Cache headers | `latest`: `no-cache`; other files: `public, max-age=86400, immutable` |
+| Permissions | The directory and files must be readable by the container user `node` (uid 1000). When the directory is missing or unreadable at startup, the console logs `EDGEWEIR_DOWNLOADS_DIR cannot be served`; a file that exists but cannot be read answers 404 and logs `cannot read the download mirror` (at most once a minute per error) |
 
 Layout:
 

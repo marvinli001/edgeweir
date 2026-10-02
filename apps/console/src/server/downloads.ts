@@ -1,7 +1,8 @@
-import { createReadStream } from "node:fs";
-import { realpath, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, type FileHandle, open, realpath, stat } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
+import type { Logger } from "./lib/logger";
 
 /**
  * The release mirror behind `/downloads/*` (EDGEWEIR_DOWNLOADS_DIR): nodes
@@ -44,8 +45,52 @@ function contentType(file: string): string {
   return "application/octet-stream";
 }
 
+/** Not on disk: the usual 404, nothing to log. */
+const MISSING = new Set(["ENOENT", "ENOTDIR"]);
+const WARN_EVERY_MS = 60_000;
+const lastWarned = new Map<string, number>();
+
+/** Anything but a missing file (wrong owner or mode, mostly), at most once a minute per code. */
+function warnUnreadable(log: Pick<Logger, "warn">, dir: string, file: string, error: unknown) {
+  const code = (error as NodeJS.ErrnoException).code ?? "unknown";
+  if (MISSING.has(code)) return;
+  const now = Date.now();
+  if (now - (lastWarned.get(code) ?? 0) < WARN_EVERY_MS) return;
+  lastWarned.set(code, now);
+  log.warn("cannot read the download mirror: answered 404", {
+    dir,
+    file,
+    code,
+    error: (error as Error).message,
+  });
+}
+
+/** Warns at startup when EDGEWEIR_DOWNLOADS_DIR is set but cannot be served. */
+export async function checkDownloadsDir(
+  dir: string | undefined,
+  log: Pick<Logger, "warn">,
+): Promise<void> {
+  if (!dir) return;
+  try {
+    if (!(await stat(dir)).isDirectory()) {
+      throw Object.assign(new Error(`not a directory: ${dir}`), { code: "ENOTDIR" });
+    }
+    await access(dir, constants.R_OK | constants.X_OK);
+  } catch (error) {
+    log.warn("EDGEWEIR_DOWNLOADS_DIR cannot be served: /downloads answers 404", {
+      dir,
+      code: (error as NodeJS.ErrnoException).code,
+      error: (error as Error).message,
+    });
+  }
+}
+
 /** Serves a mirrored release file, or answers 404. */
-export async function serveDownload(dir: string | undefined, request: Request): Promise<Response> {
+export async function serveDownload(
+  dir: string | undefined,
+  request: Request,
+  log: Pick<Logger, "warn">,
+): Promise<Response> {
   const notFound = () =>
     new Response(JSON.stringify({ error: "not found" }), {
       status: 404,
@@ -54,17 +99,24 @@ export async function serveDownload(dir: string | undefined, request: Request): 
   if (!dir) return notFound();
   const segments = mirrorPath(new URL(request.url).pathname);
   if (!segments) return notFound();
-  let path: string;
+  let handle: FileHandle | undefined;
   let size: number;
   try {
     const root = await realpath(resolve(dir));
     // Symlinks may not lead out of the mirror.
-    path = await realpath(join(root, ...segments));
+    const path = await realpath(join(root, ...segments));
     if (!path.startsWith(root + sep)) return notFound();
-    const info = await stat(path);
-    if (!info.isFile()) return notFound();
+    // Opened before answering: stat succeeds on a file the console may not read.
+    handle = await open(path, "r");
+    const info = await handle.stat();
+    if (!info.isFile()) {
+      await handle.close();
+      return notFound();
+    }
     size = info.size;
-  } catch {
+  } catch (error) {
+    await handle?.close();
+    warnUnreadable(log, dir, segments.join("/"), error);
     return notFound();
   }
   const file = segments.at(-1) ?? "";
@@ -74,7 +126,10 @@ export async function serveDownload(dir: string | undefined, request: Request): 
     // `latest` moves; released files never change.
     "cache-control": file === "latest" ? "no-cache" : "public, max-age=86400, immutable",
   };
-  if (request.method === "HEAD") return new Response(null, { status: 200, headers });
-  const body = Readable.toWeb(createReadStream(path)) as ReadableStream<Uint8Array>;
+  if (request.method === "HEAD") {
+    await handle.close();
+    return new Response(null, { status: 200, headers });
+  }
+  const body = Readable.toWeb(handle.createReadStream()) as ReadableStream<Uint8Array>;
   return new Response(body, { status: 200, headers });
 }

@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
-import { mirrorPath } from "../../src/server/downloads";
+import { checkDownloadsDir, mirrorPath } from "../../src/server/downloads";
 import { createTestContext } from "./helpers";
 
 const SHELL = "<!doctype html><title>spa shell</title>";
@@ -84,6 +84,49 @@ describe("/downloads release mirror", async () => {
       "outside the mirror",
     );
     expect((await get(`/downloads/edgeweir-node/latest`, "POST")).status).toBe(404);
+  });
+
+  // root reads any file regardless of its mode.
+  it.skipIf(process.getuid?.() === 0)(
+    "logs a mirrored file it cannot read, answers 404, and leaves missing files quiet",
+    async () => {
+      const name = "unreadable.deb";
+      const unreadable = join(mirror, "edgeweir-node", `v${version}`, name);
+      writeFileSync(unreadable, "package");
+      chmodSync(unreadable, 0);
+      const warn = vi.spyOn(ctx.log, "warn").mockImplementation(() => {});
+      try {
+        for (const method of ["GET", "HEAD"]) {
+          const res = await get(`/downloads/edgeweir-node/v${version}/${name}`, method);
+          expect(res.status, method).toBe(404);
+        }
+        expect(warn).toHaveBeenCalledOnce(); // once a minute
+        expect(warn).toHaveBeenCalledWith(
+          "cannot read the download mirror: answered 404",
+          expect.objectContaining({ code: "EACCES", file: `edgeweir-node/v${version}/${name}` }),
+        );
+        warn.mockClear();
+        expect((await get(`/downloads/edgeweir-node/v${version}/missing.deb`)).status).toBe(404);
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+        chmodSync(unreadable, 0o600);
+      }
+    },
+  );
+
+  it("warns at startup when the mirror directory cannot be served", async () => {
+    const log = { warn: vi.fn() };
+    await checkDownloadsDir(mirror, log);
+    await checkDownloadsDir(undefined, log);
+    expect(log.warn).not.toHaveBeenCalled();
+    for (const dir of [join(base, "absent"), join(base, "secret.txt")]) {
+      await checkDownloadsDir(dir, log);
+      expect(log.warn, dir).toHaveBeenLastCalledWith(
+        "EDGEWEIR_DOWNLOADS_DIR cannot be served: /downloads answers 404",
+        expect.objectContaining({ dir }),
+      );
+    }
   });
 
   it("parses only the documented layout", () => {

@@ -1,6 +1,7 @@
 import type { Server } from "node:http";
 import { createDatabase, runMigrations } from "@edgeweir/db";
 import type { PgBoss } from "pg-boss";
+import { checkDownloadsDir } from "./downloads";
 import { startWorker } from "./jobs/worker";
 import { createAuth } from "./lib/auth";
 import { assertAuthSecret, resolveAuthSecret } from "./lib/auth-secret";
@@ -97,6 +98,7 @@ export async function bootstrap(): Promise<Running> {
     const setupToken = await ensureSetupToken(ctx);
     if (setupToken) announceSetupToken(log, setupToken, env.EDGEWEIR_PUBLIC_URL);
     await events.start();
+    await checkDownloadsDir(env.EDGEWEIR_DOWNLOADS_DIR, log);
     nodeChannel = await startNodeChannel(ctx);
   }
   if (env.ROLE === "worker" || env.ROLE === "all") {
