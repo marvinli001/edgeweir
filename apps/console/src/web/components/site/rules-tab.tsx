@@ -17,6 +17,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   expressionIssue,
   type FeatureAvailability,
+  RATE_LIMIT_PRESETS,
   type RuleDto,
   type RuleInput,
   ruleInput,
@@ -45,6 +46,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import type * as z from "zod";
 import { FormSelect } from "@/components/form-select";
+import { PresetSelect, usePreset } from "@/components/preset-select";
 import { SafetyNote } from "@/components/safety-note";
 import { ExpressionEditor } from "@/components/site/expression-editor";
 import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
@@ -139,7 +141,7 @@ function defaultAction(kind: Kind): RuleInput["action"] {
     case "config":
       return { kind, cacheBypass: true };
     case "rate_limit":
-      return { kind, limit: 100, windowSeconds: 60, key: "ip.src", statusCode: 429 };
+      return { kind, ...RATE_LIMIT_PRESETS.standard, key: "ip.src", statusCode: 429 };
     case "challenge":
       return { kind, type: "js" };
     case "origin":
@@ -559,56 +561,7 @@ function ActionFields({
         />
       );
     case "rate_limit":
-      return (
-        <>
-          <StatusSelect
-            id={id}
-            value={a.statusCode}
-            codes={[403, 429]}
-            onChange={(statusCode) => onChange({ ...a, statusCode: statusCode as 403 | 429 })}
-          />
-          <NumberField
-            id={`limit-${id}`}
-            label={m.rules_limit()}
-            value={String(a.limit)}
-            min={1}
-            max={100000}
-            onChange={(value) => onChange({ ...a, limit: Number(value) })}
-          />
-          <NumberField
-            id={`window-${id}`}
-            label={m.rules_window()}
-            value={String(a.windowSeconds)}
-            min={1}
-            max={3600}
-            onChange={(value) => onChange({ ...a, windowSeconds: Number(value) })}
-          />
-          <FormSelect
-            id={`key-${id}`}
-            label={m.rules_key()}
-            value={keyChoice(a.key)}
-            options={[
-              ...rateLimitKeys.map((key) => ({ value: key, label: key })),
-              { value: "header", label: m.rules_key_header() },
-            ]}
-            onChange={(choice) =>
-              onChange({ ...a, key: choice === "header" ? `${HEADER_KEY}x-client-id` : choice })
-            }
-          />
-          {keyChoice(a.key) === "header" ? (
-            <Field>
-              <FieldLabel htmlFor={`key-header-${id}`}>{m.rules_header()}</FieldLabel>
-              <Input
-                id={`key-header-${id}`}
-                value={a.key.slice(HEADER_KEY.length)}
-                onChange={(e) =>
-                  onChange({ ...a, key: `${HEADER_KEY}${e.target.value.toLowerCase()}` })
-                }
-              />
-            </Field>
-          ) : null}
-        </>
-      );
+      return <RateLimitFields id={id} action={a} onChange={onChange} />;
     case "challenge":
       return (
         <FormSelect
@@ -628,6 +581,78 @@ function ActionFields({
     default:
       return null;
   }
+}
+
+/** A rate limit's status, preset (or limit and window), and key. */
+function RateLimitFields({
+  id,
+  action: a,
+  onChange,
+}: {
+  id: string;
+  action: ActionOf<"rate_limit">;
+  onChange: (action: Action) => void;
+}) {
+  const preset = usePreset(
+    RATE_LIMIT_PRESETS,
+    { limit: a.limit, windowSeconds: a.windowSeconds },
+    (rate) => onChange({ ...a, ...rate }),
+  );
+  return (
+    <>
+      <StatusSelect
+        id={id}
+        value={a.statusCode}
+        codes={[403, 429]}
+        onChange={(statusCode) => onChange({ ...a, statusCode: statusCode as 403 | 429 })}
+      />
+      <PresetSelect id={`rate-preset-${id}`} value={preset.choice} onChange={preset.choose} />
+      {preset.choice === "custom" ? (
+        <>
+          <NumberField
+            id={`limit-${id}`}
+            label={m.rules_limit()}
+            value={String(a.limit)}
+            min={1}
+            max={100000}
+            onChange={(value) => onChange({ ...a, limit: Number(value) })}
+          />
+          <NumberField
+            id={`window-${id}`}
+            label={m.rules_window()}
+            value={String(a.windowSeconds)}
+            min={1}
+            max={3600}
+            onChange={(value) => onChange({ ...a, windowSeconds: Number(value) })}
+          />
+        </>
+      ) : null}
+      <FormSelect
+        id={`key-${id}`}
+        label={m.rules_key()}
+        value={keyChoice(a.key)}
+        options={[
+          ...rateLimitKeys.map((key) => ({ value: key, label: key })),
+          { value: "header", label: m.rules_key_header() },
+        ]}
+        onChange={(choice) =>
+          onChange({ ...a, key: choice === "header" ? `${HEADER_KEY}x-client-id` : choice })
+        }
+      />
+      {keyChoice(a.key) === "header" ? (
+        <Field>
+          <FieldLabel htmlFor={`key-header-${id}`}>{m.rules_header()}</FieldLabel>
+          <Input
+            id={`key-header-${id}`}
+            value={a.key.slice(HEADER_KEY.length)}
+            onChange={(e) =>
+              onChange({ ...a, key: `${HEADER_KEY}${e.target.value.toLowerCase()}` })
+            }
+          />
+        </Field>
+      ) : null}
+    </>
+  );
 }
 
 function StatusSelect({
