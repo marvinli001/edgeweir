@@ -145,5 +145,10 @@ export const securityEvent = pgTable(
     uniqueIndex("security_event_node_event_uq").on(t.nodeId, t.nodeEventId),
     index("security_event_site_time_idx").on(t.siteId, t.occurredAt),
     index("security_event_time_idx").on(t.occurredAt),
+    // Raises reported moments ago (elevatedSites, every minute): a node may
+    // report an event long after it occurred.
+    index("security_event_raise_idx")
+      .on(t.receivedAt)
+      .where(sql`${t.kind} = 'site_level' and ${t.level} <> 'normal'`),
   ],
 );

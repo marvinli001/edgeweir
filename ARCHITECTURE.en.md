@@ -536,6 +536,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0049_dns_lease_attempts` | `dns_challenge_lease.attempts` (failed cleanups of a TXT record, for the retry backoff) |
 | `0050_node_remote_address` | `node.remote_address` (source address of the node's enrollment and latest heartbeat connection) |
 | `0051_node_last_auth_error` | `node.last_auth_error`, `last_auth_error_at` (why the node channel last refused the node's own certificate, e.g. `CERT_HAS_EXPIRED`) |
+| `0052_retention_indexes` | Indexes: `alert_event (occurred_at, ordinal)`; `security_event (received_at)`, site level events above normal only; `cache_task_node (node_id)`, failed and skipped deliveries not made up only |
 
 ## Build output
 

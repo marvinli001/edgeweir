@@ -80,7 +80,11 @@ export const alertEvent = pgTable(
     payload: jsonb("payload").$type<{ siteName: string; domain: string }>().notNull(),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("alert_event_site_time_idx").on(t.siteId, t.occurredAt)],
+  (t) => [
+    index("alert_event_site_time_idx").on(t.siteId, t.occurredAt),
+    // The sweep's latest events of the last day, the event list and the retention.
+    index("alert_event_time_idx").on(t.occurredAt, t.ordinal),
+  ],
 );
 export const alertDelivery = pgTable(
   "alert_delivery",

@@ -735,5 +735,9 @@ export const cacheTaskNode = pgTable(
   (t) => [
     primaryKey({ columns: [t.taskId, t.nodeId] }),
     index("cache_task_node_node_idx").on(t.nodeId, t.state),
+    // Purges a node missed and has yet to make up (missedPurges, every pull).
+    index("cache_task_node_missed_idx")
+      .on(t.nodeId)
+      .where(sql`${t.recoveredAt} is null and ${t.state} in ('failed', 'skipped')`),
   ],
 );

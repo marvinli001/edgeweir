@@ -536,6 +536,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0049_dns_lease_attempts` | `dns_challenge_lease.attempts`（TXT 记录清理失败的次数，用于退避重试） |
 | `0050_node_remote_address` | `node.remote_address`（节点注册与最近一次心跳连接的源地址） |
 | `0051_node_last_auth_error` | `node.last_auth_error`、`last_auth_error_at`（节点通道最近一次拒绝该节点自己的证书的原因，如 `CERT_HAS_EXPIRED`） |
+| `0052_retention_indexes` | 索引：`alert_event (occurred_at, ordinal)`；`security_event (received_at)`，只含高于正常的网站级别事件；`cache_task_node (node_id)`，只含未补发的失败与跳过交付 |
 
 ## 构建产物
 
