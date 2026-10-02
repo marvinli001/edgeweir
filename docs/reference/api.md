@@ -244,6 +244,7 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 | 过程 | 端点 |
 | --- | --- |
 | `https.get`、`https.update` | `GET`、`PUT /sites/{id}/https` |
+| `https.check` | `GET /sites/{id}/https/check` |
 | `sites.features` | `GET /sites/{id}/features` |
 | `waf.get` | `GET /sites/{id}/waf` |
 | `waf.update` | `PATCH /sites/{id}/waf` |
@@ -256,6 +257,7 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 | `PUT /sites/{id}/https` | `settings` 替换网站的全部 HTTPS 设置，缺省字段取默认值；先 `GET` 再修改。压缩字段：`brotli`、`brotliLevel`（1–11，默认 6）、`brotliMinLength`、`brotliTypes`，`zstd`、`zstdLevel`（1–19，默认 3）、`zstdMinLength`、`zstdTypes`，`gzip`、`gzipMinLength`、`gzipTypes`；最小长度 1–1048576（默认 256），类型为 MIME 类型数组（最多 32 个） |
 | `PATCH /sites/{id}/waf` | 只修改给出的字段：`mode`（`off` / `detect` / `block`）、`paranoiaLevel`（1–4）、`anomalyThreshold`（1–1000）、`excludedRuleIds`（900000–999999，不重复，最多 200 个）、`requestBodyLimit`（0–134217728 字节） |
 | `GET /sites/{id}/waf/rules` | 查询参数 `range`（`1h` / `6h` / `24h` / `7d` / `30d`，默认 `24h`）、`limit`（1–50，默认 10） |
+| `GET /sites/{id}/https/check` | 查询参数 `ca`（`letsencrypt` / `zerossl`，默认 `letsencrypt`）：检查其 CAA 许可的 CA |
 
 响应：
 
@@ -264,8 +266,10 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 | `sites.features` | `brotli`、`zstd`、`crs`，各为 `{ available, reason }`；集群有活动节点缺少 `brotli-v1` / `zstd-v1` / `modsecurity-v1` 时 `available` 为 `false`、`reason` 为 `nodes`，否则 `reason` 为 `null` |
 | `waf.get`、`waf.update` | `siteId`、上述字段（`excludedRuleIds` 升序）、`updatedAt`（从未保存时为 `null`，此时为默认值：`off`、1、5、`[]`、131072） |
 | `waf.topRules` | `{ approximate: true, items: [{ ruleId, requests }] }`，按命中次数倒序 |
+| `https.check` | `request`：一键启用 HTTPS 发送的申请（`name`、`names`、`email`、`challenge`、`dnsCredentialId`）；`blockers`：全部阻碍，每项为 `code` 与参数：`nodes_offline`（`cluster`）、`nodes_lack_http01`（`nodes`）、`dns_not_pointing`（`name`、`pointing`：`unresolved` / `elsewhere`）、`dns_credential_missing`（`names`）、`dns_credential_failed`（`credential`、`error`：API 错误代码）、`caa_forbidden`（`name`）；`certificates`：已签发、未过期且覆盖网站全部域名的证书 `{ id, name }` |
 
 - `https.update` 发布网站所在集群（原因 `certificate_updated`），审计 `site.https_update`；`waf.update` 发布（`site_waf_updated`），审计 `site.waf_update`。
+- `POST /certificates/request` 的 `bindSiteId`：证书签发后绑定到该网站并开启 `forceHttps`，发布网站所在集群，审计 `site.https_update`（操作者 system）；`names` 须覆盖网站全部域名（400 `CERTIFICATE_DOMAIN_MISMATCH`），每个网站同时只有一个这样的申请（409 `CERTIFICATE_BUSY`）。证书的 `bindSiteId` 在签发前为该网站 ID，签发后为 `null`。
 - `available` 为 `false` 时仍可经 API 开启，见[节点能力](#节点能力)。
 - 网站不存在：404 `SITE_NOT_FOUND`。
 

@@ -86,7 +86,7 @@ Certificates with the same certificate authority, EAB key ID, and account email 
 | Check interval | A background job checks due certificates every minute, up to 10 at a time: new requests and **Renew now** first, then by renewal time, three issuances at once; it needs a console process with `ROLE=worker` or `ROLE=all` |
 | Renewed names | An HTTP-01 renewal drops the names no site uses any more, as long as at least one name is left; every domain of a site that uses the certificate is kept, so the site stays covered. After a successful renewal the certificate's name list is updated. For a site's new domains see [Adding domains](#adding-domains-to-an-https-site) |
 | Effect | After issuance or renewal, a new revision is published for the clusters of the sites that use the certificate |
-| Failure | Status changes to **Issuance failed**, the card shows the reason, and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance, see [Troubleshooting](#troubleshooting) |
+| Failure | Status changes to **Issuance failed**, the card shows the reason, and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance, see [Troubleshooting](#troubleshooting). An HTTP-01 certificate that failed because names did not resolve to the nodes ("A domain does not resolve to the nodes") has its names looked up again every 5 minutes and is retried as soon as they all point to the nodes |
 | Manual | ACME certificates have **Renew now**, which runs at the next check; unavailable while **Issuing** |
 | Interruption | **Issuing** for more than 10 minutes counts as interrupted and runs again at the next check; one issuance run is limited to 8 minutes |
 
@@ -94,9 +94,37 @@ Certificates with the same certificate authority, EAB key ID, and account email 
 
 Deleting a certificate used by sites returns "The certificate is used by sites: …" (up to 5 sites); while it is **Issuing**, "Certificate operation is already in progress". A certificate with DNS-01 TXT records still to clean up is deleted, and those records are no longer cleaned up: `leftDnsRecords` of the `certificate.delete` audit entry lists them for removal at the DNS provider. A DNS credential referenced by any certificate cannot be deleted ("The DNS credential is used by certificates: …").
 
-## Configure a site's HTTPS
+## Enable HTTPS with one click
+
+While a site has no usable certificate, its **HTTPS** tab shows only **Enable HTTPS**.
 
 1. Open **Sites**, select the site, and open the **HTTPS** tab.
+2. The console first checks whether a certificate can be issued; anything in the way is listed line by line and the button is unavailable. After fixing it, click **Check again**.
+3. Click **Enable HTTPS**.
+4. Verify: the tab shows **Requesting a certificate**; once issued it switches to the HTTPS settings, with the new certificate under **Certificates** and **Redirect HTTP to HTTPS** on.
+
+| Item | Value |
+| --- | --- |
+| Certificate name, names | The site's name and all of its domains |
+| Validation | HTTP-01; DNS-01 with the first DNS credential whose zone covers every name when the site has a wildcard domain |
+| Account email | The email of the last ACME account or request, else the console account's email; editable under **Customize** |
+| Certificate authority | Let's Encrypt; ZeroSSL under **Customize** (needs EAB credentials) |
+| Once issued | The certificate is bound to the site and **Redirect HTTP to HTTPS** turned on, the site's cluster is published, and the audit log records `site.https_update` (actor system); domains added to the site since the request are reissued right away. A site that has another usable certificate by then is left unchanged |
+
+| Check | Cause |
+| --- | --- |
+| "Cluster … has no online node" | HTTP-01: the site's cluster has no online active node |
+| "These nodes need an upgrade to answer HTTP-01: …" | HTTP-01: online nodes lack `http01-v1` |
+| "… has no DNS record yet", "… does not point to the nodes" | HTTP-01: the name has no A/AAAA record, or resolves to addresses that are not the cluster's nodes; nothing is reported when lookups time out or no node address is known |
+| "Wildcards need a DNS credential whose zone covers …" | DNS-01: there is no such DNS credential; click **Add DNS credential** |
+| "DNS credential …: …" | DNS-01: the credential's connection test failed |
+| "CAA records of … do not allow …" | CAA records of the name or a parent domain do not allow the chosen CA (Let's Encrypt: `letsencrypt.org`; ZeroSSL: `sectigo.com`, `trust-provider.com`, `usertrust.com`), `issuewild` and `validationmethods` included; not checked when `EDGEWEIR_ACME_DIRECTORY` is set |
+
+While the certificate is issued, the tab refreshes its status every 3 seconds. A failure shows the classified reason (as on the certificate card) with **Retry** and **Cancel** (which deletes this certificate). When usable certificates already cover every domain of the site, the tab lists them under **Existing certificate**; **Use** selects one and turns on **Redirect HTTP to HTTPS**. When the site's ACME certificate is reissued or fails, the same status shows above the HTTPS settings.
+
+## Configure a site's HTTPS
+
+1. Open **Sites**, select the site, and open the **HTTPS** tab (for a site without a certificate see [Enable HTTPS with one click](#enable-https-with-one-click)).
 2. Select a certificate in **Certificates**. The list contains every issued, unexpired certificate; **HTTP only** disables HTTPS.
 3. Set **Minimum TLS version**, **Cipher profile**, **HSTS lifetime (seconds)**, and the switches.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision.
@@ -117,7 +145,7 @@ When new domains are saved on the site's **Domains** tab:
 | The site's certificate | Behavior |
 | --- | --- |
 | Covers the new domains (including a wildcard `*.example.com` one label up) | Saved |
-| Requested in the console with automatic renewal on | Saved; the certificate's names grow by the new domains and it is reissued right away ("Certificate … is being reissued for the new domains", audit `certificate.names_extended`). Until then nodes keep the current certificate, and the new domains take effect once the new certificate is issued; HTTP-01 challenges are answered meanwhile. When the certificate is issuing, it is issued once more right after that attempt |
+| Requested in the console with automatic renewal on | Saved; the certificate's names grow by the new domains and it is reissued right away ("Certificate … is being reissued for the new domains", audit `certificate.names_extended`). Until then the new domains are served over HTTP only: no TLS handshake, no HTTPS redirect, no HSTS, while the other domains keep the current certificate; once the new certificate is issued they get HTTPS too. While an active node of the cluster lacks `tls-pending-domains-v1`, the new domains take effect only once the new certificate is issued. HTTP-01 challenges are answered meanwhile. When the certificate is issuing, it is issued once more right after that attempt |
 | Uploaded, or automatic renewal off | Refused with "Certificate domains do not match the site or DNS zone: …", naming the uncovered domains |
 
 An HTTP-01 certificate cannot grow by wildcards, and a DNS-01 certificate only by names inside its DNS credential's zone; a certificate has at most 100 names.
@@ -199,7 +227,7 @@ The ports cannot be changed. The SNI of an HTTPS request must equal its `Host`; 
 | Item | Behavior |
 | --- | --- |
 | Delivery | Nodes fetch certificate material separately over mTLS; only certificate IDs and fingerprints referenced by the cluster's current target configuration are released |
-| Checks | Nodes verify the fingerprint, the key match, and name coverage |
+| Checks | Nodes verify the fingerprint, the key match, and name coverage (except for domains served over HTTP until a new certificate covers them) |
 | Storage | `certificates.json` (0600) in the node state directory; private keys on the node are not encrypted, and the host administrator can read them |
 | Hot updates | Certificate content and minimum TLS version changes do not reload nginx |
 | Reloads | Changes to HTTP/2, HTTP/3, compression, cipher profile, certificate presence, domain lists, or the set of sites are tested first and then reloaded; on failure the previous configuration is restored |
@@ -219,6 +247,7 @@ ACME account keys, certificate private keys, and DNS credentials are each envelo
 | `http3-v1` | Any site with HTTP/3 on |
 | `brotli-v1` | Any site with Brotli on |
 | `zstd-v1` | Any site with Zstandard on |
+| `tls-pending-domains-v1` | New domains of an HTTPS site are served over HTTP until the certificate covers them; without it they take effect once the new certificate is issued, and nothing is refused |
 
 A change saved in the console or with an AccessKey is published even when it needs a capability some active nodes of the cluster lack; those nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md). A configuration published by a service account or a background job that introduces a capability an active node lacks is refused (`NODE_CAPABILITY_REQUIRED`) and the configuration stays unchanged.
 
@@ -258,10 +287,10 @@ A change saved in the console or with an AccessKey is published even when it nee
 | "Provider authentication failed" and other DNS provider reasons | The DNS provider refused the DNS-01 TXT record | Edit the DNS credential; certificates retry right after new credentials are saved |
 | "No online node can answer HTTP-01 (http01-v1)", "Nodes did not apply the challenge within 40 seconds" | The cluster serving the domain has no online node, a node lacks `http01-v1`, or nodes apply configurations slowly | Check the cluster's nodes and upgrade them if needed |
 | "A domain belongs to no site" | No certificate name is a site domain any more | Add the domain to a site, or use DNS-01 |
-| "A domain does not resolve to the nodes" | The check before the issuance found a name that does not resolve to the cluster's nodes; the CA was not contacted | Fix the DNS records and click **Renew now** |
+| "A domain does not resolve to the nodes" | The check before the issuance found a name that does not resolve to the cluster's nodes; the CA was not contacted | Fix the DNS records; it is retried within 5 minutes, or click **Renew now** |
 | "Issuance failed; see the console log" | An unclassified error | Find `certificate operation failed` in the log of the console process that runs background jobs and follow its `reason` |
 | Certificate stays **Pending** | No console process runs background jobs | Make sure a process with `ROLE=worker` or `ROLE=all` runs |
-| "Certificate operation is already in progress" | The certificate is **Issuing** | Wait for issuance to finish |
+| "Certificate operation is already in progress" | The certificate is **Issuing**; or a request for the site is already waiting to be bound | Wait for issuance to finish; retry or cancel that request on the site's **HTTPS** tab |
 | "The certificate is used by sites: …" | The listed sites selected the certificate | Select another certificate on their **HTTPS** tab first |
 | "The DNS credential is used by certificates: …" | The listed certificates use the credential for DNS-01 | Delete those certificates first |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (such as `http3-v1`) and keeps its last-known-good configuration | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |

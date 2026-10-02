@@ -293,11 +293,13 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 
 `edgeweir-certd` 负责 ACME 签发、续期、吊销与 DNS 记录操作。
 
-1. pg-boss 队列 `certificates.sweep` 每分钟选出待签发与到达 `renew_at` 的证书（新申请与手动续期在前，其余按 `renew_at`，同时处理 3 张）。失败后按剩余有效期退避（十分之一，10 分钟到 12 小时；首次签发 1 小时）。已签发的证书按 CA 的 Retry-After（1 到 24 小时，默认 6 小时）查询 ARI 续期窗口，窗口早于 `renew_at` 时提前续期。
+1. pg-boss 队列 `certificates.sweep` 每分钟选出待签发与到达 `renew_at` 的证书（新申请与手动续期在前，其余按 `renew_at`，同时处理 3 张）。失败后按剩余有效期退避（十分之一，10 分钟到 12 小时；首次签发 1 小时）；因名称未解析到节点（`http01_dns_not_pointing`）失败的 HTTP-01 证书，每 5 分钟重新解析一次，解析正确后立即重试。已签发的证书按 CA 的 Retry-After（1 到 24 小时，默认 6 小时）查询 ARI 续期窗口，窗口早于 `renew_at` 时提前续期。
 2. worker 启动 `EDGEWEIR_CERTD_BIN`（镜像内为 `/usr/local/bin/edgeweir-certd`），环境变量只保留 `PATH` 与 `EDGEWEIR_DNS_TEST_ENDPOINT`。
 3. 向 stdin 写一行 JSON 请求（命令与参数，含 ACME 账户与 DNS 凭据）。certd 在 stdout 上逐行输出 JSON 事件（`account`、`http01.present`、`http01.cleanup`、`dns01.prepare`、`dns01.cleanup`），控制台处理后在 stdin 回复确认；最后一行为结果。
 4. `http01.present` 一次带上订单的全部 HTTP-01 挑战：写入 `acme_challenge`，每个相关集群只发布一个 revision，等节点应用后 certd 再请 CA 验证（同时 4 个）；`http01.cleanup` 只删行，不发布（挑战到期或本次操作结束后，节点与下一个 revision 都不再带它）。挑战 revision 不计入 200 个保留数，一小时后删除。`dns01.prepare` 在 certd 写入 TXT 记录之前把清理责任登记到 `dns_challenge_lease`；完成、失败或重启后只清理本次操作写入的值。`account` 事件的 ACME 账户信封加密后写入 `acme_account`，同一目录、EAB key id 与邮箱的证书共用一个账户。
-5. 结果写回 `certificate`：证书链（只存证书）、指纹、到期时间、下次续期时间与信封加密的私钥（PKCS #8）；引用该证书的集群发布新 revision。
+5. 结果写回 `certificate`：证书链（只存证书）、指纹、到期时间、下次续期时间与信封加密的私钥（PKCS #8）；带 `bindSiteId` 的申请（网站 HTTPS 页签的一键启用，之前由 `https.check` 一次列出节点、解析、DNS 凭据与 CAA 的全部阻碍）在同一事务内绑定到网站并开启强制 HTTPS；引用该证书的集群发布新 revision。
+
+网站证书尚未覆盖的域名（证书正为新域名重签）在集群全部活动节点具备 `tls-pending-domains-v1` 时带 `Domain.tls_pending` 下发（proto v0.19.0），节点只以 HTTP 服务它们；否则这些域名在新证书签发前不下发。
 
 | 限制 | 值 |
 | --- | --- |
