@@ -68,7 +68,7 @@ journalctl -u edgeweir-node -f
 | 6 | 从已签名的 `checksums.txt` 选出本机的安装包，以及同一发布的 `edgeweir-openresty`、`edgeweir-openresty-modsecurity`（每个软件包、格式、架构恰好一个文件）；glibc 低于 2.34 时退出；下载（先镜像，后 GitHub）并校验 SHA-256 | 退出 |
 | 7 | 先安装 `edgeweir-openresty` 与 `edgeweir-openresty-modsecurity`。tar.gz 安装时按主机的 `dpkg` 或 `rpm` 选择格式；两者都没有时要求已安装 `edgeweir-openresty` | 退出 |
 | 8 | 安装 deb、rpm 或 tar.gz | 退出 |
-| 9 | `edgeweir-node enroll`：核对 CA 指纹后提交 token，本机生成私钥，以 CSR 换取节点证书；此后仅经 mTLS 通信。已注册时跳过（重新注册用 `edgeweir-node enroll --force`） | 退出 |
+| 9 | `edgeweir-node enroll`：核对 CA 指纹后提交 token，本机生成私钥，以 CSR 换取节点证书；此后仅经 mTLS 通信。已注册时跳过（重新注册：先 `systemctl stop edgeweir-node`，再 `edgeweir-node enroll --force`，然后启动） | 退出 |
 | 10 | 停用 `openresty.service`，启用并启动 `edgeweir-node.service`（`--no-start` 时跳过）；tar.gz 安装时先重启运行中的服务（deb、rpm 由包脚本重启） | — |
 
 - 第 5、6 步通过前不执行任何下载的程序。`--allow-unsigned` 跳过第 5 步，仅用于开发，仍校验 SHA-256。
@@ -281,7 +281,7 @@ downloads/
 | `cosign signature verification FAILED`、`SHA-256 verification FAILED` | 下载内容与签名或校验和不符 | 检查下载源与镜像目录内容；不跳过校验。 |
 | `CA pin mismatch` | 8443 被代理或 CDN 终结 TLS，或 `--server` 指向其他服务 | 直连或 [四层透传](networking.md#节点通道四层透传)。 |
 | `console rejected the enrollment token (expired or already used)` | token 已过期或已使用 | 重新生成安装命令。 |
-| `node is already enrolled (use --force to replace the identity)` | 主机已有节点身份（`/var/lib/edgeweir-node/identity.json`） | 保留现有注册；替换身份时用新 token 执行 `edgeweir-node enroll --force`，参数见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。 |
+| `node is already enrolled (use --force to replace the identity)` | 主机已有节点身份（`/var/lib/edgeweir-node/identity.json`） | 保留现有注册；替换身份时先停止节点（`systemctl stop edgeweir-node`，运行中的节点会拒绝），用新 token 执行 `edgeweir-node enroll --force` 后再启动，参数见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。 |
 | `x509: certificate is valid for ..., not ...` | 节点连接的名称不在节点通道证书中 | 将该名称加入 `EDGEWEIR_NODE_API_HOSTNAMES`，重启控制台，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
 | 注册超时，或节点一直离线 | 防火墙或安全组未放行 8443；`EDGEWEIR_NODE_API_URL` 解析错误 | 放行 8443；核对域名解析。 |
 | L4 应用的端口连接超时 | 节点防火墙或安全组未放行端口池；容器节点未发布端口 | 按 [端口与防火墙](#端口与防火墙) 放行或发布端口。 |

@@ -130,7 +130,7 @@ A threshold of 0 turns its trigger off. Sites that follow the template use its n
 | --- | --- |
 | Site QPS | The site's request rate is over the threshold: the whole site escalates |
 | Per-URL QPS | A path's rate is over the threshold: only that path escalates (exact path match); other paths are unaffected |
-| Per-IP QPS | An address's rate is over the threshold: the address is banned automatically for the ban duration, see [Automatic bans](bans.en.md#automatic-bans) |
+| Per-IP QPS | A client's rate is over the threshold (IPv4 per address, IPv6 per `/64`): it is banned automatically for the ban duration, see [Automatic bans](bans.en.md#automatic-bans) |
 | Origin error rate | With at least the minimum number of origin requests in the window, the share of errors (5xx and failed connections) is over the threshold: the whole site escalates |
 | Escalation | A trigger that holds for **Escalate after** raises the level by one step, up to **Highest level** |
 | Stepping down | Without triggers (below 80% of the thresholds) for **Step down after**, the level falls by one step |

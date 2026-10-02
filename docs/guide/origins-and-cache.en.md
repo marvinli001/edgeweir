@@ -336,7 +336,7 @@ The **Cache key & slicing** card is saved separately and applies to all rules of
 | Parameters | Parameter names, comma-separated, up to 32 | Empty | Parameters kept by **Only listed** |
 | Sort parameters | On / off | Off | Makes `?a=1&b=2` and `?b=2&a=1` hit the same object; unavailable with **Ignore** |
 | Headers | Header names, comma-separated, up to 8, not `Cookie` or `Host` | Empty | Different values are cached separately |
-| Cookies | Cookie names, comma-separated, up to 8 | Empty | Different values are cached separately |
+| Cookies | Cookie names, comma-separated, up to 8 | Empty | Different values are cached separately. Names are case-sensitive; a request where such a cookie appears twice, in another case, percent-encoded, or after a comma is not cached (the origin may read another value) |
 | Separate mobile and desktop | On / off | Off | Splits mobile (including tablets) and desktop user agents |
 | Include Host | On / off | On | Off: all domains of the site share cached objects |
 | Range slicing | On / off | Off | Cacheable `GET`/`HEAD` requests are fetched and cached in 1 MiB slices, so Range requests need only the slices they cover; the origin must support Range (206). Off: a Range request fetches the whole object first |
@@ -362,15 +362,15 @@ Tasks go to every enabled node of the site's cluster, with a result per node. Di
 
 | Type | Input | Behavior |
 | --- | --- | --- |
-| Purge URLs | Full URLs, query allowed | Purges the device, header, cookie, and slice variants of the URL. Query and Host are compared by the site's cache key; only objects whose normalized query equals the target's are purged. Paths are compared in the node's normalized form (percent-decoding, merged slashes, resolved `.` and `..`), so `/%73tatic/a.js` equals `/static/a.js` |
+| Purge URLs | Full URLs, query allowed | Purges the device, header, cookie, and slice variants of the URL. Query and Host are compared by the site's cache key; only objects whose normalized query equals the target's are purged; queries are compared percent-decoded (`?q=%3Cb%3E` equals `?q=<b>`). Paths are compared in the node's normalized form (percent-decoding, merged slashes, resolved `.` and `..`), so `/%73tatic/a.js` equals `/static/a.js` |
 | Purge directories | URL prefixes without a query | Purges every object under that Host whose path starts with the prefix; the prefix is normalized the same way and compared as a string prefix; with **Include Host** off, the Host is not compared |
 | Purge hosts | Host names, without port or wildcard | Purges every object of the host, like a directory purge of `/` on that host; for sites with **Include Host** off it purges the objects all domains share |
 | Purge cache tags | One or more sites and up to 500 cache tags | Purges the objects of those sites whose response carried any of the tags, see [Cache-Tag](#cache-tag) |
 | Purge sites | Sites | Purges the whole cache of each site |
-| Prefetch URLs | Full `http://` or `https://` URLs; devices | The node requests the URL through its own edge layer as a normal request and caches it; a status below 400 is success; redirects are not followed. With **Separate mobile and desktop** on, each checked device is requested once (mobile with a mobile User-Agent); otherwise one request |
+| Prefetch URLs | Full `http://` or `https://` URLs; devices | The node requests the URL through a local edge listener of its own like a normal request, with a browser's `Accept-Encoding`, and caches it; bans, CC, challenges and denying rules do not apply to prefetches, and they are not counted in the statistics. A status below 400 is success; the origin's redirects are cached as they are, not followed. The cache key holds the scheme: for sites with a certificate an `http://` URL is prefetched as `https://` too; the node's own redirect for **Force HTTPS** is followed to the `https://` URL, any other redirect the node makes fails. With **Separate mobile and desktop** on, each checked device is requested once (mobile with a mobile User-Agent); otherwise one request |
 | Prefetch a sitemap | One sitemap URL, a URL limit (1–10000, default 1000); devices | The node fetches the sitemap through its own edge layer (so the origin address policy applies and the console makes no outbound request) and prefetches the site's URLs it lists, see [Sitemaps](#sitemaps) |
 
-URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be a domain of a site (including subdomains under a wildcard). `https://` URLs are prefetched through the node's first HTTPS listener without the PROXY protocol (the node's own certificate is not verified); without such a listener they fail ("the node has no HTTPS listener yet").
+URLs must start with `http://` or `https://`, must not carry credentials, and their Host must be a domain of a site (including subdomains under a wildcard), not a pattern such as `*.example.com`. `https://` URLs are prefetched through the node's local TLS listener while it has an HTTPS listener (the node's own certificate is not verified); without one they fail ("the node has no HTTPS listener yet"). Nodes pull purges on a lane of their own: a purge does not wait for prefetches or upgrades already under way.
 
 ### Cache-Tag
 

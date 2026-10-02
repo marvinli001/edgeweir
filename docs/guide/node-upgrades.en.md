@@ -33,7 +33,7 @@ Nodes that do not meet the supervisor conditions do not report `self-upgrade-v1`
 6. Click **Promote remaining nodes**. The rest are upgraded in batches: at most a quarter of them at a time (at least one, by node name); when a node succeeds the next one is released.
 7. Verify: the upgrade shows **Succeeded**; the **Agent / engine** column of the **Nodes** list shows the target version.
 
-An upgrade restarts the node's agent and OpenResty and is not guaranteed to be hitless. Choose a canary group whose traffic other nodes can absorb.
+An upgrade restarts the node's agent. OpenResty runs under the supervisor (node images and packages of this version and later): it keeps serving during an upgrade and reloads the configuration, and bans, CC state and rate-limit counters survive; a rollback to an older version restarts it. An upgrade is not guaranteed to be hitless; choose a canary group whose traffic other nodes can absorb.
 
 ### Health window
 
@@ -84,8 +84,9 @@ The console cannot send shell commands, replace the key the node trusts, or skip
 | Item | Behavior |
 | --- | --- |
 | Exclusion | The supervisor holds an exclusive lock in the state directory, so a second process never mistakes a running trial for an interrupted one; its private Unix socket has mode 0600 |
-| Success | The candidate completes mTLS, applies the desired configuration (applied, healthy data plane, revision equal to the console's latest), and stays healthy for at least 10 seconds within a 90-second trial |
+| Success | The candidate completes mTLS, applies the desired configuration (applied, healthy data plane, revision equal to the console's latest), and stays healthy for at least 10 seconds within a 90-second trial; the agent tells the supervisor every 5 seconds, whatever the heartbeat interval |
 | Rollback | Failing within 90 seconds, exiting during the trial, or a supervisor restart restores the previous program, Lua, and configuration snapshot |
+| Downgrade | A version older than the node's current one is refused ("Version … was rejected; the previous version is kept") unless the node runs with `--upgrade-allow-downgrade` |
 | Result | Kept on disk until the console acknowledges it; a failed acknowledgment write does not lose it; download, verification, or persistence failures are never reported as success |
 | No regression | Identity keys, certificates, credentials, and analytics cursors do not roll back with the program |
 | Disk | Only the current, previous, and staging version directories are kept |
@@ -152,7 +153,7 @@ The endpoints are under `/api/v1`. Read-only AccessKeys can call the GET endpoin
 
 | Item | Description |
 | --- | --- |
-| Interruption | An upgrade restarts the agent and OpenResty; it is not hitless |
+| Interruption | An upgrade restarts the agent; OpenResty restarts only for a rollback to an older version or an update of the node image or package. It is not hitless |
 | Platforms | Linux amd64 and arm64 only |
 | Scope | Self-upgrade updates only the agent program and Lua |
 

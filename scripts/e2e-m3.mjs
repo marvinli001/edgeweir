@@ -57,16 +57,22 @@ if (process.env.E2E_FORCE_ENROLL === "1") {
     nodeName: "edge-e2e-1",
     ttlMinutes: 15,
   });
+  // A running node refuses `enroll --force`: enroll in a one-off container
+  // on the node's volumes while it is stopped.
+  await run("docker", [...compose, "stop", "node"]);
   await run(
     "docker",
     [
       ...compose,
-      "exec",
+      "run",
+      "--rm",
+      "--no-deps",
       "-T",
       "-e",
       "EDGEWEIR_TOKEN",
-      "node",
+      "--entrypoint",
       "edgeweir-node",
+      "node",
       "enroll",
       "--server",
       token.serverUrl,
@@ -76,7 +82,7 @@ if (process.env.E2E_FORCE_ENROLL === "1") {
     ],
     { env: { ...process.env, EDGEWEIR_TOKEN: token.token } },
   );
-  await run("docker", [...compose, "restart", "node"]);
+  await run("docker", [...compose, "start", "node"]);
 }
 await waitFor("capable online node", async () =>
   (await api("GET", "/nodes")).find(

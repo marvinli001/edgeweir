@@ -445,7 +445,7 @@ install_package() {
 
 enroll() {
   if [ "$ENROLLED" = "true" ]; then
-    log "already enrolled; to enroll again run: edgeweir-node enroll --force"
+    log "already enrolled; to enroll again: systemctl stop edgeweir-node, edgeweir-node enroll --force, systemctl start edgeweir-node"
     return 0
   fi
   log "enrolling with ${SERVER}"

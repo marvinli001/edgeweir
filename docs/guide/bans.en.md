@@ -63,7 +63,7 @@ Automatic bans do not count toward the limit of manual bans. Once the limit is r
 
 ## Automatic bans
 
-A node bans a single address on a trigger (the per-IP QPS of CC mitigation, see [Challenges and CC mitigation](challenges.en.md#cc-mitigation)). The ban applies on that node at once and is reported to the console in batches every 5 seconds.
+A node bans on its own on a trigger (the per-IP QPS of CC mitigation, see [Challenges and CC mitigation](challenges.en.md#cc-mitigation)): a single IPv4 address, or the IPv6 `/64` (one client usually holds a whole `/64`); loopback addresses are never banned. The ban applies on that node at once and is reported to the console in batches every 5 seconds.
 
 | Item | Behavior |
 | --- | --- |
