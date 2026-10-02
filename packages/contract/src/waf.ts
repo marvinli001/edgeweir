@@ -20,6 +20,19 @@ export const WAF_MAX_EXCLUSIONS = 200;
 
 export const wafRuleId = z.number().int().min(WAF_RULE_ID_RANGE.min).max(WAF_RULE_ID_RANGE.max);
 
+/**
+ * CRS rule files whose rules set up or evaluate the detection rules instead
+ * of detecting anything: 901 initialization, 949 and 959 blocking evaluation
+ * (949110 is the rule that blocks once the anomaly score is reached), 980
+ * correlation. Removing one breaks the CRS or turns blocking off for the
+ * site, so they cannot be excluded, and match counts leave them out.
+ */
+export const CRS_EVALUATION_FILES = [901, 949, 959, 980] as const;
+
+/** Whether a CRS rule detects something: only those can be excluded for a site. */
+export const crsDetectionRule = (id: number) =>
+  !(CRS_EVALUATION_FILES as readonly number[]).includes(Math.floor(id / 1000));
+
 /** Rule ids that never run for the site; unique, stored in ascending order. */
 export const wafExcludedRuleIds = z
   .array(wafRuleId)

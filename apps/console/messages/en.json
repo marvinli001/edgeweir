@@ -922,6 +922,7 @@
   "cert_http3": "HTTP/3",
   "error_rollback_resource_unavailable": "Rollback references resources that are no longer assigned or available",
   "error_rule_invalid": "Invalid rule",
+  "error_waf_rule_not_excludable": "{ids} set up or evaluate the CRS and cannot be excluded; to stop blocking, set the mode to Detect only",
   "error_bulk_redirect_host_unknown": "The site does not serve {hosts}",
   "error_ip_list_not_found": "IP list not found",
   "error_ip_list_reference_unknown": "No such IP list: {lists}",

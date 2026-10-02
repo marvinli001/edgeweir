@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  crsDetectionRule,
   logEntry,
   siteWafUpdateInput,
   tlsSettings,
@@ -137,5 +138,14 @@ describe("OWASP CRS settings", () => {
       sampleRate: 10000,
     });
     expect(entry).toMatchObject({ ja4: "", wafRuleIds: [], wafBlocked: false });
+  });
+});
+
+describe("CRS rules that can be excluded", () => {
+  it("are the detection rules, not setup, blocking evaluation or correlation", () => {
+    for (const id of [913100, 920350, 941100, 942100, 951100, 954100])
+      expect(crsDetectionRule(id), String(id)).toBe(true);
+    for (const id of [901001, 901100, 949110, 949152, 959100, 980170])
+      expect(crsDetectionRule(id), String(id)).toBe(false);
   });
 });

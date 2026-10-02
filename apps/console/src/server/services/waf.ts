@@ -10,6 +10,8 @@ import {
 } from "@edgeweir/config-compiler";
 import {
   type AnalyticsRange,
+  CRS_EVALUATION_FILES,
+  crsDetectionRule,
   type FeatureAvailability,
   nodeSupportsFeature,
   PREFETCH_V2_FEATURE,
@@ -24,6 +26,7 @@ import {
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { fail } from "../lib/errors";
 import { rangeWindow, sourceFor } from "./analytics";
 import { type Actor, recordAudit } from "./audit";
 import { type Executor, publisher, publishRevision } from "./revisions";
@@ -97,6 +100,11 @@ export async function updateSiteWaf(
   ctx: { actor: Actor },
 ): Promise<SiteWaf> {
   return db.transaction(async (tx) => {
+    const refused = (input.excludedRuleIds ?? []).filter((id) => !crsDetectionRule(id));
+    if (refused.length)
+      fail("WAF_RULE_NOT_EXCLUDABLE", "CRS setup and evaluation rules cannot be excluded", {
+        ids: refused.slice(0, 5).join(", "),
+      });
     const site = await findSite(tx, input.id, true);
     const row = await wafRow(tx, site.id, true);
     const before = toDto(site.id, row);
@@ -167,7 +175,11 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
   };
 }
 
-/** Most-matched CRS rules of a site over a range, from the nodes' bounded per-minute counters. */
+/**
+ * Most-matched CRS detection rules of a site over a range, from the nodes'
+ * bounded per-minute counters; setup and evaluation rules (949110 matches
+ * every blocked request) are left out.
+ */
 export async function topWafRules(
   db: Database,
   query: { id: string; range: AnalyticsRange; limit: number },
@@ -183,6 +195,7 @@ export async function topWafRules(
       and ${stats.minute} >= ${window.from.toISOString()}::timestamptz
       and ${stats.minute} < ${window.end.toISOString()}::timestamptz
       and entry.key ~ '^[1-9][0-9]{0,9}$'
+      and entry.key::bigint / 1000 not in (${sql.raw(CRS_EVALUATION_FILES.join(", "))})
     group by entry.key order by requests desc, entry.key::bigint limit ${query.limit}`);
   return {
     approximate: true,

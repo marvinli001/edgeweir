@@ -280,7 +280,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | Request | Fields |
 | --- | --- |
 | `PUT /sites/{id}/https` | `settings` replaces all HTTPS settings of the site; missing fields take their defaults, so `GET` first and change what you need. Compression fields: `brotli`, `brotliLevel` (1–11, default 6), `brotliMinLength`, `brotliTypes`; `zstd`, `zstdLevel` (1–19, default 3), `zstdMinLength`, `zstdTypes`; `gzip`, `gzipMinLength`, `gzipTypes`; minimum lengths 1–1048576 (default 256), types are arrays of MIME types (up to 32) |
-| `PATCH /sites/{id}/waf` | Changes only the fields given: `mode` (`off` / `detect` / `block`), `paranoiaLevel` (1–4), `anomalyThreshold` (1–1000), `excludedRuleIds` (900000–999999, unique, up to 200), `requestBodyLimit` (0–134217728 bytes) |
+| `PATCH /sites/{id}/waf` | Changes only the fields given: `mode` (`off` / `detect` / `block`), `paranoiaLevel` (1–4), `anomalyThreshold` (1–1000), `excludedRuleIds` (900000–999999, unique, up to 200; initialization and evaluation rules 901xxx, 949xxx, 959xxx, 980xxx return 400 `WAF_RULE_NOT_EXCLUDABLE` with them in `data.ids`), `requestBodyLimit` (0–134217728 bytes) |
 | `GET /sites/{id}/waf/rules` | Query parameters `range` (`1h` / `6h` / `24h` / `7d` / `30d`, default `24h`), `limit` (1–50, default 10) |
 | `GET /sites/{id}/https/check` | Query parameter `ca` (`letsencrypt` / `zerossl`, default `letsencrypt`): the CA whose CAA permission is checked |
 
@@ -290,7 +290,7 @@ Responses:
 | --- | --- |
 | `sites.features` | `brotli`, `zstd`, `crs`, each `{ available, reason }`; when an active node of the cluster lacks `brotli-v1` / `zstd-v1` / `modsecurity-v1`, `available` is `false` and `reason` is `nodes`; otherwise `reason` is `null` |
 | `waf.get`, `waf.update` | `siteId`, the fields above (`excludedRuleIds` ascending), `updatedAt` (`null` until first saved, with the defaults `off`, 1, 5, `[]`, 131072) |
-| `waf.topRules` | `{ approximate: true, items: [{ ruleId, requests }] }`, most matched first |
+| `waf.topRules` | `{ approximate: true, items: [{ ruleId, requests }] }`, most matched first; detection rules only, without 901xxx, 949xxx, 959xxx, 980xxx |
 | `https.check` | `request`: the request one-click HTTPS sends (`name`, `names`, `email`, `challenge`, `dnsCredentialId`); `blockers`: everything in the way, each a `code` with parameters: `nodes_offline` (`cluster`), `nodes_lack_http01` (`nodes`), `dns_not_pointing` (`name`, `pointing`: `unresolved` / `elsewhere`), `dns_credential_missing` (`names`), `dns_credential_failed` (`credential`, `error`: an API error code), `caa_forbidden` (`name`); `certificates`: issued, unexpired certificates covering every domain of the site, `{ id, name }` |
 
 - `https.update` publishes the site's cluster (reason `certificate_updated`), audited as `site.https_update`; `waf.update` publishes (`site_waf_updated`), audited as `site.waf_update`.

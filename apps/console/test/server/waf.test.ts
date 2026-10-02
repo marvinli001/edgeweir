@@ -208,6 +208,16 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       { requestBodyLimit: 134_217_729 },
     ])
       expect((await rpcError(admin.waf.update({ id: siteId, ...input }))).status).toBe(400);
+    // Setup and evaluation rules (901, 949, 959, 980) would break CRS or turn blocking off.
+    const evaluation = await rpcError(
+      admin.waf.update({ id: siteId, excludedRuleIds: [942100, 949110, 901100, 980170] }),
+    );
+    expect(evaluation).toMatchObject({
+      status: 400,
+      code: "WAF_RULE_NOT_EXCLUDABLE",
+      data: { ids: "949110, 901100, 980170" },
+    });
+    expect((await admin.waf.get({ id: siteId })).excludedRuleIds).toEqual([920350, 942100]);
     // Off: the site no longer carries CRS and the cluster no longer needs the module.
     await admin.waf.update({ id: siteId, mode: "off" });
     expect((await siteOf())?.waf).toBeUndefined();
@@ -344,7 +354,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
         "941100": -1,
       }),
       bucket(siteId, { "942100": 1, "913100": 4 }),
-      bucket(otherSiteId, { "949110": 7 }),
+      bucket(otherSiteId, { "949110": 7, "980170": 7, "941100": 2 }),
     ]);
     await ingestMinuteStats(ctx.db, node, [bucket(siteId, { "920350": 3, ...many })]);
     const [row] = await ctx.db
@@ -367,10 +377,11 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     });
     // Another site's rules never show up.
     expect((await admin.waf.topRules({ id: siteId })).items.map((i) => i.ruleId)).not.toContain(
-      949110,
+      941100,
     );
+    // Only detection rules rank: 949110 and 980170 match every blocked request.
     expect((await admin.waf.topRules({ id: otherSiteId })).items).toEqual([
-      { ruleId: 949110, requests: 7 },
+      { ruleId: 941100, requests: 2 },
     ]);
     // Long ranges read the hourly rollups, before and after they are built.
     const week = await topWafRules(ctx.db, { id: siteId, range: "7d", limit: 2 });
