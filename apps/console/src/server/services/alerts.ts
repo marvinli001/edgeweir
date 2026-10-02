@@ -487,20 +487,32 @@ export async function alertConditions(app: AppContext, policy: AlertPolicy, now:
     sql`select site_id,sum(requests) as requests,sum((select coalesce(sum(value::bigint),0) from jsonb_each_text(status_codes) where key like '5%')) as errors from node_minute_stats where minute>=${new Date(now - policy.windowMinutes * 60000).toISOString()}::timestamptz and minute<=${new Date(now).toISOString()}::timestamptz group by site_id`,
   );
   const elevated = await elevatedSites(app.db, now);
+  const offlineSince = now - policy.nodeOfflineSeconds * 1000;
+  // Lookup tables first: the checks below run for every site, node and origin.
+  const receiptOf = new Map(receipts.map((r) => [r.nodeId, r]));
+  const certificateOf = new Map(certificates.map((c) => [c.id, c]));
+  const metricOf = new Map(traffic.rows.map((r) => [r.site_id, r]));
+  const domainOf = new Map<string, string>();
+  for (const d of domains) if (!domainOf.has(d.siteId)) domainOf.set(d.siteId, d.name);
+  const originsOf = Map.groupBy(origins, (o) => o.siteId);
+  // Unavailable on a node: a recent entry of either check (passive or active)
+  // marks the origin down ("node|origin").
+  const down = new Set(
+    health
+      .filter((h) => !h.healthy && h.reportedAt.getTime() > offlineSince)
+      .map((h) => `${h.nodeId}|${h.originId}`),
+  );
   const active = new Map<string, Condition>();
   // A node counts once its enrollment is older than the threshold.
   const watched = nodes.filter(
-    (n) =>
-      n.status === "active" &&
-      n.enrolledAt &&
-      n.enrolledAt.getTime() <= now - policy.nodeOfflineSeconds * 1000,
+    (n) => n.status === "active" && n.enrolledAt && n.enrolledAt.getTime() <= offlineSince,
   );
+  const membersOf = Map.groupBy(watched, (n) => n.clusterId);
   for (const node of watched) {
-    const receipt = receipts.find((r) => r.nodeId === node.id);
     if (
       !node.lastSeenAt ||
-      node.lastSeenAt.getTime() < now - policy.nodeOfflineSeconds * 1000 ||
-      receipt?.dataPlaneHealthy === false
+      node.lastSeenAt.getTime() < offlineSince ||
+      receiptOf.get(node.id)?.dataPlaneHealthy === false
     )
       active.set(keyOf("node_offline", null, node.id), {
         siteId: null,
@@ -511,37 +523,18 @@ export async function alertConditions(app: AppContext, policy: AlertPolicy, now:
       });
   }
   for (const site of sites) {
-    const base = {
-      siteId: site.id,
-      siteName: site.name,
-      domain: domains.find((d) => d.siteId === site.id)?.name ?? "",
-    };
+    const base = { siteId: site.id, siteName: site.name, domain: domainOf.get(site.id) ?? "" };
     const add = (kind: AlertKind, resourceId: string) =>
       active.set(keyOf(kind, site.id, resourceId), { ...base, kind, resourceId });
-    const members = watched.filter((n) => n.clusterId === site.clusterId);
-    const cert = certificates.find((c) => c.id === site.certificateId);
+    const members = membersOf.get(site.clusterId) ?? [];
+    const cert = site.certificateId ? certificateOf.get(site.certificateId) : undefined;
     if (cert?.notAfter && cert.notAfter.getTime() <= now + policy.certificateHours * 3600000)
       add("certificate_expiring", cert.id);
-    const originIds = origins.filter((o) => o.siteId === site.id).map((o) => o.id);
-    // Unavailable on a node: a recent entry of either check (passive or active)
-    // marks the origin down. The alert holds while some member node has every
-    // origin of the site unavailable.
-    if (
-      originIds.length &&
-      members.some((n) =>
-        originIds.every((id) =>
-          health.some(
-            (h) =>
-              h.nodeId === n.id &&
-              h.originId === id &&
-              !h.healthy &&
-              h.reportedAt.getTime() > now - policy.nodeOfflineSeconds * 1000,
-          ),
-        ),
-      )
-    )
+    const originIds = (originsOf.get(site.id) ?? []).map((o) => o.id);
+    // The alert holds while some member node has every origin of the site unavailable.
+    if (originIds.length && members.some((n) => originIds.every((id) => down.has(`${n.id}|${id}`))))
       add("origin_unavailable", site.id);
-    const metric = traffic.rows.find((r) => r.site_id === site.id);
+    const metric = metricOf.get(site.id);
     if (
       metric &&
       Number(metric.requests) >= policy.minimumRequests &&
@@ -593,8 +586,9 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
       snapshot = await alertConditions(app, policy, now);
     await app.db.transaction(async (tx) => {
       const previous = await tx.select().from(schema.alertState);
+      const firing = new Set(previous.filter((s) => s.active).map((s) => s.key));
       for (const [key, c] of snapshot.active) {
-        if (previous.find((s) => s.key === key)?.active) continue;
+        if (firing.has(key)) continue;
         // At most once per site in 15 minutes: a raise held back fires here once they are over.
         if (c.kind === "cc_mitigation" && c.siteId) {
           await raiseCcAlert(tx, { id: c.siteId, name: c.siteName }, new Date(now));
@@ -623,6 +617,8 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
           occurredAt: new Date(now),
         });
       }
+      const nodeNames = new Map(snapshot.nodes.map((n) => [n.id, n.name]));
+      const siteNames = new Map(snapshot.sites.map((s) => [s.id, s.name]));
       // Platform alerts (no site) are raised and resolved where they happen,
       // not here; node_offline is the exception.
       for (const old of previous.filter(
@@ -637,9 +633,7 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
           .where(eq(schema.alertState.key, old.key));
         // Nothing is announced for a deleted site or node.
         const name =
-          old.siteId === null
-            ? snapshot.nodes.find((n) => n.id === old.resourceId)?.name
-            : snapshot.sites.find((s) => s.id === old.siteId)?.name;
+          old.siteId === null ? nodeNames.get(old.resourceId) : siteNames.get(old.siteId);
         if (name !== undefined)
           await tx.insert(schema.alertEvent).values({
             siteId: old.siteId,
@@ -664,13 +658,13 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
         schema.alertEvent.resourceId,
         desc(schema.alertEvent.ordinal),
       );
-    const currentStates = await app.db.select().from(schema.alertState);
+    const currentStates = new Map(
+      (await app.db.select().from(schema.alertState)).map((s) => [s.key, s.active]),
+    );
     const currentEvent = (event: Event) =>
-      currentStates.some(
-        (s) =>
-          s.key === keyOf(event.kind, event.siteId, event.resourceId) &&
-          s.active === (event.status === "firing"),
-      );
+      currentStates.get(keyOf(event.kind, event.siteId, event.resourceId)) ===
+      (event.status === "firing");
+    const latestById = new Map(latest.map((e) => [e.id, e]));
     const channels = await app.db
       .select()
       .from(schema.alertChannel)
@@ -707,7 +701,7 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
         .select()
         .from(schema.alertChannel)
         .where(eq(schema.alertChannel.id, delivery.channelId));
-      const event = latest.find((e) => e.id === delivery.eventId);
+      const event = latestById.get(delivery.eventId);
       if (!c || !event || !currentEvent(event) || !(await eligible(app, c, event))) {
         await app.db
           .update(schema.alertDelivery)
