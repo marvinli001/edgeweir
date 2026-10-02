@@ -293,6 +293,7 @@ try {
     {
       name: "g5 old to new",
       phase: "redirect",
+      enabled: true,
       expression: 'starts_with(http.request.uri.path, "/old/")',
       action: {
         kind: "redirect",
@@ -306,6 +307,7 @@ try {
     {
       name: "g5 shop",
       phase: "redirect",
+      enabled: true,
       expression: 'starts_with(http.request.uri.path, "/shop/")',
       action: {
         kind: "redirect",
@@ -316,12 +318,14 @@ try {
     {
       name: "g5 header target",
       phase: "redirect",
+      enabled: true,
       expression: 'http.request.uri.path eq "/go"',
       action: { kind: "redirect", target: 'http.request.headers["x-to"]', statusCode: 302 },
     },
     {
       name: "g5 v1 to v2",
       phase: "request-transform",
+      enabled: true,
       expression: 'starts_with(http.request.uri.path, "/v1/")',
       action: {
         kind: "rewrite",
@@ -333,6 +337,7 @@ try {
     {
       name: "g5 legacy",
       phase: "request-transform",
+      enabled: true,
       expression: 'http.request.uri.path eq "/legacy"',
       action: { kind: "rewrite", value: "/modern", removeQuery: ["debug"] },
     },
@@ -426,12 +431,14 @@ try {
     {
       name: "g5 api origin",
       phase: "origin",
+      enabled: true,
       expression: 'starts_with(http.request.uri.path, "/api/")',
       action: { kind: "origin", originGroup: "api", hostHeader: "backend.g5.internal", port: 8081 },
     },
     {
       name: "g5 impatient",
       phase: "config",
+      enabled: true,
       expression:
         'http.request.uri.path eq "/slow" and not http.request.headers["x-patient"] eq "1"',
       action: { kind: "config", originReadTimeoutMs: 1000 },
@@ -518,18 +525,21 @@ try {
     {
       name: "g5 no gzip",
       phase: "config",
+      enabled: true,
       expression: 'http.request.headers["x-no-gzip"] eq "1"',
       action: { kind: "config", gzip: false },
     },
     {
       name: "g5 json gzip",
       phase: "compression",
+      enabled: true,
       expression: 'http.response.content_type.media_type eq "application/json"',
       action: { kind: "compression", algorithms: ["gzip"] },
     },
     {
       name: "g5 raw",
       phase: "compression",
+      enabled: true,
       expression: 'http.request.uri.query contains "raw=1"',
       action: { kind: "compression", algorithms: [] },
     },
@@ -569,18 +579,21 @@ try {
     {
       name: "g5 guarded",
       phase: "config",
+      enabled: true,
       expression: 'starts_with(http.request.uri.path, "/guarded/")',
       action: { kind: "config", underAttack: true },
     },
     {
       name: "g5 no websocket",
       phase: "config",
+      enabled: true,
       expression: 'http.request.uri.path eq "/ws-off"',
       action: { kind: "config", websocket: false },
     },
     {
       name: "g5 logged",
       phase: "config",
+      enabled: true,
       expression: 'starts_with(http.request.uri.path, "/logged")',
       action: { kind: "config", logSampleRate: 10000 },
     },

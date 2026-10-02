@@ -100,7 +100,14 @@ async function save(rules) {
   await api("PUT", `/sites/${site.id}/rules`, { rules });
   await synced();
 }
-const rule = (name, phase, expression, action) => ({ name, phase, expression, action });
+// Rules saved through the API without `enabled` stay disabled.
+const rule = (name, phase, expression, action) => ({
+  name,
+  phase,
+  expression,
+  enabled: true,
+  action,
+});
 await save([]);
 await api("PUT", "/platform-rules", { rules: [] });
 let global = (await api("GET", "/ip-lists")).find((l) => l.name === "m4_global");

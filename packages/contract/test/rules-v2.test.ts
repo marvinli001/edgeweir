@@ -20,6 +20,19 @@ const rule = (phase: string, action: unknown, expression = "true") =>
 const issuePaths = (result: ReturnType<typeof rule>) =>
   result.success ? [] : result.error.issues.map((issue) => issue.path.join("."));
 
+describe("rule inputs", () => {
+  it("leave a rule disabled unless it says otherwise", () => {
+    const action = { kind: "block" };
+    expect(
+      ruleInput.parse({ name: "r", phase: "waf-custom", expression: "true", action }).enabled,
+    ).toBe(false);
+    expect(
+      ruleInput.parse({ name: "r", phase: "waf-custom", expression: "true", enabled: true, action })
+        .enabled,
+    ).toBe(true);
+  });
+});
+
 describe("rule actions", () => {
   it("accepts redirects and rewrites with a static value or a value expression target and their query edits", () => {
     expect(ruleAction.parse({ kind: "redirect", value: "/new" })).toEqual({

@@ -20,7 +20,7 @@ The console parses expressions and checks their fields, types, and actions befor
 1. Open **Sites**, select the site, and open the **Rules** tab.
 2. Click **Add rule** next to the target phase.
 3. Enter the rule name and **Expression**. **Insert condition** appends a common condition (path prefix, IP range, IP list, country, User-Agent contains, request method) and **Insert field** appends a field, both joined with `and`. When the expression is invalid, "Character N: reason" appears below the editor, for example "Character 11: Ordered comparisons need a number field".
-4. Select **Action**, fill in its fields, and turn on **Enabled**. A new rule starts disabled with the expression `true` (every request); check the condition and the action before you save.
+4. Select **Action**, fill in its fields, and turn on **Enabled**. A new rule starts disabled with the expression `true` (every request), as does a rule saved through the API without `enabled`; check the condition and the action before you save.
 5. Drag the handle on the left of a rule to reorder rules within a phase.
 6. Click **Save**. The console shows **Saved** and publishes a new configuration revision ("Rules and IP lists updated").
 7. Verify: for example, the expression `http.request.uri.path eq "/blocked"` with the **Block** action:

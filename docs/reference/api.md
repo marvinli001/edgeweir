@@ -346,7 +346,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 | 请求 | 字段 |
 | --- | --- |
-| `PUT /sites/{id}/rules`、`PUT /platform-rules` | `rules`：整体替换，网站最多 64 条、平台最多 32 条；每条 `id`（可选；不是该网站或平台已有规则的 `id` 时重新生成，可直接保存从别处读取的规则）、`name`（1–100 字符）、`phase`、`expression`（最长 4096 字符）、`enabled`、`action`。`phase`：`request-transform`、`redirect`、`config`、`waf-custom`、`ratelimit`、`cache`、`origin`、`response-transform`、`compression` |
+| `PUT /sites/{id}/rules`、`PUT /platform-rules` | `rules`：整体替换，网站最多 64 条、平台最多 32 条；每条 `id`（可选；不是该网站或平台已有规则的 `id` 时重新生成，可直接保存从别处读取的规则）、`name`（1–100 字符）、`phase`、`expression`（最长 4096 字符）、`enabled`（默认 `false`：省略时规则保存为停用）、`action`。`phase`：`request-transform`、`redirect`、`config`、`waf-custom`、`ratelimit`、`cache`、`origin`、`response-transform`、`compression` |
 | `action`（`kind: "redirect"`） | `value`（静态目标）与 `target`（值表达式）恰好填一个；`statusCode`（301、302、307、308，默认 301）；`preserveQuery`（默认 `false`）；`setQuery`（`[{ name, value }]`，最多 16 个，名称不重复）；`removeQuery`（参数名，最多 16 个，不能与 `setQuery` 重名）。参数名 `[A-Za-z0-9._~-]{1,64}`，值为可打印 ASCII，最长 256 字符 |
 | `action`（`kind: "rewrite"`） | 同 `redirect`，没有 `statusCode`；`preserveQuery` 默认 `true` |
 | `action`（`kind: "config"`） | 至少一项。`cacheBypass`、`forceHttps`、`gzip`（布尔）；只在 `config` 阶段：`brotli`、`zstd`、`websocket`、`underAttack`、`ccEnabled`（布尔），`ccMaxLevel`（`cookie302`、`js`、`pow`、`captcha`），`originConnectTimeoutMs`（100–120000），`originSendTimeoutMs`、`originReadTimeoutMs`（100–3600000），`logSampleRate`（0–10000，万分比）。省略的字段不覆盖 |

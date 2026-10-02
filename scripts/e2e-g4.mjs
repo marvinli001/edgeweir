@@ -935,18 +935,21 @@ try {
       {
         name: "g4 blocked",
         phase: "waf-custom",
+        enabled: true,
         expression: 'http.request.uri.path eq "/blocked"',
         action: { kind: "block" },
       },
       {
         name: "g4 listed",
         phase: "waf-custom",
+        enabled: true,
         expression: `http.request.uri.path eq "/listed" and ip.src in $${LIST}`,
         action: { kind: "block" },
       },
       {
         name: "g4 limited",
         phase: "ratelimit",
+        enabled: true,
         expression: 'http.request.uri.path eq "/limited"',
         action: { kind: "rate_limit", limit: 1, windowSeconds: 60, statusCode: 429 },
       },

@@ -726,6 +726,7 @@ try {
     {
       name: "g2 public",
       phase: "waf-custom",
+      enabled: true,
       expression: 'http.request.uri.path eq "/public"',
       action: { kind: "allow" },
     },
@@ -743,6 +744,7 @@ try {
     {
       name: "g2 login",
       phase: "waf-custom",
+      enabled: true,
       expression: 'http.request.uri.path eq "/login"',
       action: { kind: "challenge", type: "pow" },
     },
@@ -1108,6 +1110,7 @@ try {
     {
       name: "g2 ja4 block",
       phase: "waf-custom",
+      enabled: true,
       expression: `tls.ja4 eq "${ja4.curl}"`,
       action: { kind: "block", statusCode: 403 },
     },
@@ -1123,6 +1126,7 @@ try {
     {
       name: "g2 ja4 challenge",
       phase: "waf-custom",
+      enabled: true,
       expression: `tls.ja4 eq "${ja4.node}" and http.request.uri.path contains "/g2-ja4"`,
       action: { kind: "challenge", type: "js" },
     },
@@ -1135,6 +1139,7 @@ try {
     {
       name: "g2 ja4 rate",
       phase: "ratelimit",
+      enabled: true,
       expression: 'http.request.uri.path contains "/g2-ja4-rate"',
       action: { kind: "rate_limit", limit: 3, windowSeconds: 60, key: "tls.ja4", statusCode: 429 },
     },
