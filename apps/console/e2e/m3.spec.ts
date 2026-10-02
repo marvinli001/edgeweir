@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { login, pick } from "./helpers";
+import { login, pick, saved } from "./helpers";
 
 test("M3: request a certificate and configure HTTPS in both themes and mobile", async ({
   page,
@@ -33,7 +33,7 @@ test("M3: request a certificate and configure HTTPS in both themes and mobile", 
   await pick(page, page.getByLabel("证书", { exact: true }), name);
   const force = page.getByRole("switch", { name: "强制 HTTPS", exact: true });
   if ((await force.getAttribute("aria-checked")) !== "true") await force.click();
-  await page.getByTestId("https-save").click();
+  await saved(page, page.getByTestId("https-save"), "https/update");
   await expect(page.getByTestId("https-save")).toBeDisabled();
   await page.reload();
   await expect(page.getByLabel("证书", { exact: true })).toContainText(name);

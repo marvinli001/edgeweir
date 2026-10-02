@@ -126,7 +126,7 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   await urlQps.fill("30");
   await ipQps.fill("80");
   await pick(page, page.getByTestId("cc-max-level"), "工作量证明");
-  await save.click();
+  await saved(page, save, "protection/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(enabled).toHaveAttribute("aria-checked", "true");
@@ -163,7 +163,7 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
 
   // Back to CC off for bench.sh.
   await enabled.click();
-  await save.click();
+  await saved(page, save, "protection/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(enabled).toHaveAttribute("aria-checked", "false");
@@ -222,7 +222,7 @@ test("G2: the operator turns global Under Attack on and off and edits the CC tem
   await expect(urlQps).toHaveValue("60");
   await urlQps.fill("250");
   await pick(page, page.getByTestId("cc-template-max-level"), "JS 计算");
-  await save.click();
+  await saved(page, save, "settings/setCcTemplate");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(preset).toHaveText("自定义");
@@ -232,7 +232,7 @@ test("G2: the operator turns global Under Attack on and off and edits the CC tem
   // Back to the defaults: the standard preset.
   await pick(page, preset, "标准");
   await expect(urlQps).toHaveCount(0);
-  await save.click();
+  await saved(page, save, "settings/setCcTemplate");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(preset).toHaveText("标准");

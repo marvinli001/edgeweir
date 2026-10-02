@@ -67,6 +67,9 @@ const XSS = "<script>alert(1)</script>";
 const XSS_QUERY = `q=${encodeURIComponent(XSS)}`;
 /** Rules the payload matches at paranoia level 1 (XSS libinjection, script tag, tag handler, blocking evaluation). */
 const XSS_RULES = [941100, 941110, 941160, 949110];
+/** CRS files that set up or evaluate the others (the contract's CRS_EVALUATION_FILES): never ranked or excluded. */
+const CRS_EVALUATION_FILES = [901, 949, 959, 980];
+const detectionRule = (id) => !CRS_EVALUATION_FILES.includes(Math.floor(id / 1000));
 const G3_FEATURES = ["brotli-v1", "zstd-v1", "modsecurity-v1"];
 
 async function waitFor(label, fn, seconds = 180, interval = 1000, detail = () => "") {
@@ -658,13 +661,18 @@ try {
       const result = await admin.ok("GET", `/sites/${sites.crs.id}/waf/rules?range=1h`);
       assert.equal(result.approximate, true);
       top = result.items;
-      return XSS_RULES.every((rule) =>
+      return XSS_RULES.filter(detectionRule).every((rule) =>
         top.some((item) => item.ruleId === rule && item.requests >= 2),
       );
     },
     240,
     5000,
     () => JSON.stringify(top),
+  );
+  // 949110 matched every request above, but only detection rules rank.
+  assert.ok(
+    top.every((item) => detectionRule(item.ruleId)),
+    `evaluation rules ranked: ${JSON.stringify(top)}`,
   );
   pass(`waf/rules?range=1h: ${top.map((t) => `${t.ruleId}×${t.requests}`).join(", ")}`);
 
@@ -763,7 +771,7 @@ try {
   const excl1Log = (await logged(excl1Path))[0];
   assert.ok(!excl1Log.wafRuleIds.includes(941100), `941100 still matched: ${excl1Log.wafRuleIds}`);
   assert.ok(excl1Log.wafRuleIds.includes(941110), `${excl1Log.wafRuleIds}`);
-  const allXss = detectIds.filter((id) => id !== 949110);
+  const allXss = detectIds.filter(detectionRule);
   const excluded2 = await admin.ok("PATCH", `/sites/${sites.crs.id}/waf`, {
     excludedRuleIds: [...allXss].reverse(),
   });

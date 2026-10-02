@@ -283,7 +283,7 @@ test("G4: the origins tab edits active health checks and session affinity and sh
   await affinity.click();
   await ttl.fill("600");
   await expect(save).toBeEnabled();
-  await save.click();
+  await saved(page, save, "sites/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(interval).toHaveValue("10");
@@ -298,7 +298,7 @@ test("G4: the origins tab edits active health checks and session affinity and sh
   await interval.fill("5");
   await affinity.click();
   await ttl.fill("3600");
-  await save.click();
+  await saved(page, save, "sites/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(interval).toHaveValue("5");
@@ -328,7 +328,7 @@ test("G4: the error pages tab edits a site's templates and refuses one over 64 K
   await field(503).fill(edited);
   await intercept.click();
   await expect(save).toBeEnabled();
-  await save.click();
+  await saved(page, save, "errorPages/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(field(503)).toHaveValue(edited);
@@ -337,7 +337,7 @@ test("G4: the error pages tab edits a site's templates and refuses one over 64 K
 
   await field(503).fill(original);
   await intercept.click();
-  await save.click();
+  await saved(page, save, "errorPages/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(field(503)).toHaveValue(original);
