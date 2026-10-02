@@ -355,32 +355,11 @@ export async function loadSiteModels(
         // with it, and a site without a certificate or saved HTTPS settings is compressed with
         // the defaults the HTTPS tab shows.
         tls: (() => {
-          const settings = tlsSettings.parse({
+          const { certificateId: _certificateId, ...tls } = tlsSettings.parse({
             ...s.tlsSettings,
             certificateId: s.certificateId,
           });
-          return {
-            forceHttps: settings.forceHttps,
-            hstsMaxAge: settings.hstsMaxAge,
-            hstsIncludeSubdomains: settings.hstsIncludeSubdomains,
-            hstsPreload: settings.hstsPreload,
-            minimumVersion: settings.minimumVersion,
-            cipherProfile: settings.cipherProfile,
-            http2: settings.http2,
-            http3: settings.http3,
-            brotli: settings.brotli,
-            brotliLevel: settings.brotliLevel,
-            brotliMinLength: settings.brotliMinLength,
-            brotliTypes: settings.brotliTypes,
-            zstd: settings.zstd,
-            zstdLevel: settings.zstdLevel,
-            zstdMinLength: settings.zstdMinLength,
-            zstdTypes: settings.zstdTypes,
-            gzip: settings.gzip,
-            gzipMinLength: settings.gzipMinLength,
-            gzipTypes: settings.gzipTypes,
-            ocspStapling: settings.ocspStapling,
-          };
+          return tls;
         })(),
       };
     })
