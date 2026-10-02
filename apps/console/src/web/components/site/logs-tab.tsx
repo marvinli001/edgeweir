@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import { FormSelect } from "@/components/form-select";
+import { excludableCrsRule, RowMenu } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
+import { requestUrl } from "@/lib/purge";
 
 const localTime = (date: Date) =>
   new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -204,6 +206,9 @@ export function LogsTab({ siteId }: { siteId: string }) {
                           {label}
                         </th>
                       ))}
+                      <th className="relative w-0 p-3">
+                        <span className="sr-only">{m.common_actions()}</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -260,6 +265,35 @@ export function LogsTab({ siteId }: { siteId: string }) {
                             </div>
                           </td>
                         ) : null}
+                        <td className="p-3 text-right">
+                          <RowMenu
+                            items={[
+                              {
+                                label: m.quick_ban_ip(),
+                                action: { kind: "ban", address: row.clientIp, siteId },
+                                testId: "log-ban",
+                              },
+                              ...(row.host
+                                ? [
+                                    {
+                                      label: m.quick_purge_url(),
+                                      action: {
+                                        kind: "purge" as const,
+                                        targets: [requestUrl(row.host, row.path)],
+                                        siteId,
+                                      },
+                                      testId: "log-purge",
+                                    },
+                                  ]
+                                : []),
+                              ...row.wafRuleIds.filter(excludableCrsRule).map((ruleId) => ({
+                                label: m.quick_exclude_rule({ id: String(ruleId) }),
+                                action: { kind: "exclude-rule" as const, siteId, ruleId },
+                                testId: "log-exclude-rule",
+                              })),
+                            ]}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>

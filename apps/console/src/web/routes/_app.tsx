@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/rea
 import * as React from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandMenu } from "@/components/command-menu";
+import { QuickActionsProvider } from "@/components/quick-actions";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes";
 import { authClient } from "@/lib/auth-client";
@@ -39,11 +40,13 @@ function AppLayout() {
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant="inset" user={{ name: session.user.name, email: session.user.email }} />
-      <SidebarInset>
-        <Outlet />
-      </SidebarInset>
-      <CommandMenu />
+      <QuickActionsProvider>
+        <AppSidebar variant="inset" user={{ name: session.user.name, email: session.user.email }} />
+        <SidebarInset>
+          <Outlet />
+        </SidebarInset>
+        <CommandMenu />
+      </QuickActionsProvider>
       <UnsavedChangesGuard />
     </SidebarProvider>
   );

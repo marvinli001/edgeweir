@@ -37,6 +37,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Pager } from "@/components/pager";
 import { PresetSelect, usePreset } from "@/components/preset-select";
+import { excludableCrsRule, RowMenu, type RowMenuItem } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
@@ -639,6 +640,16 @@ function WafRulesCard({ siteId }: { siteId: string }) {
             }))}
             testId="waf-top-rules"
             mono
+            actions={(value) =>
+              excludableCrsRule(Number(value))
+                ? [
+                    {
+                      label: m.quick_exclude_rule({ id: value }),
+                      action: { kind: "exclude-rule", siteId, ruleId: Number(value) },
+                    },
+                  ]
+                : []
+            }
           />
         )}
       </CardContent>
@@ -759,12 +770,15 @@ function TopList({
   items,
   testId,
   mono,
+  actions,
 }: {
   title: string;
   /** `id` keys an entry whose value may repeat (e.g. rule names). */
   items: { id?: string; value: string; count: number }[];
   testId: string;
   mono?: boolean;
+  /** The row menu of an entry. */
+  actions?: (value: string) => RowMenuItem[];
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-2" data-testid={testId}>
@@ -779,12 +793,18 @@ function TopList({
                 {item.value}
               </span>
               <span className="tabular-nums text-muted-foreground">{formatNumber(item.count)}</span>
+              {actions ? <TopListActions items={actions(item.value)} /> : null}
             </li>
           ))}
         </ol>
       )}
     </div>
   );
+}
+
+/** An entry's menu, or the menu's room so the counts of a list stay aligned. */
+function TopListActions({ items }: { items: RowMenuItem[] }) {
+  return items.length ? <RowMenu items={items} /> : <span aria-hidden className="w-6 shrink-0" />;
 }
 
 function TopCard({ siteId }: { siteId: string }) {
@@ -823,12 +843,18 @@ function TopCard({ siteId }: { siteId: string }) {
               items={state.data.topIps}
               testId="security-top-ips"
               mono
+              actions={(address) => [
+                { label: m.quick_ban_ip(), action: { kind: "ban", address, siteId } },
+              ]}
             />
             <TopList
               title={m.security_top_paths()}
               items={state.data.topPaths}
               testId="security-top-paths"
               mono
+              actions={(path) => [
+                { label: m.quick_purge_url(), action: { kind: "purge", targets: [path], siteId } },
+              ]}
             />
           </div>
         )}
@@ -913,6 +939,22 @@ function EventsCard({ siteId }: { siteId: string }) {
                     >
                       {timeAgo(event.occurredAt)}
                     </span>
+                    {event.kind === "ip_banned" && event.address ? (
+                      <RowMenu
+                        items={[
+                          {
+                            label: m.quick_ban_everywhere(),
+                            action: { kind: "ban", address: event.address, scope: "platform" },
+                            testId: "event-ban-everywhere",
+                          },
+                          {
+                            label: m.bans_unban(),
+                            action: { kind: "unban", address: event.address, siteId },
+                            testId: "event-unban",
+                          },
+                        ]}
+                      />
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                     <span>{event.node?.name || m.security_node_deleted()}</span>
