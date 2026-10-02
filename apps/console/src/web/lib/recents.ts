@@ -6,13 +6,22 @@ import { isSiteTab, type SiteTab } from "@/lib/site-tabs";
  * convenience, like a history list). Storage may be unavailable; then the list is just empty.
  */
 
-/** Pages worth returning to, with the title they are listed under. */
+/**
+ * Pages worth returning to, with the title they are listed under: the
+ * sidebar's pages (the overview is where the list shows) and the user menu's.
+ */
 export const RECENT_PAGES = {
   "/sites": () => m.nav_sites(),
   "/l4": () => m.l4_title(),
+  "/certificates": () => m.cert_title(),
+  "/purge": () => m.nav_purge(),
+  "/rules": () => m.rules_platform(),
+  "/ip-lists": () => m.ip_lists_title(),
+  "/bans": () => m.bans_title(),
+  "/protection": () => m.protection_page_title(),
   "/clusters": () => m.nav_clusters(),
-  "/regions": () => m.nav_regions(),
-  "/service-accounts": () => m.nav_service_accounts(),
+  "/dns": () => m.dns_title(),
+  "/alerts": () => m.alert_title(),
   "/audit": () => m.nav_audit(),
   "/system": () => m.nav_system(),
   "/security": () => m.nav_security(),

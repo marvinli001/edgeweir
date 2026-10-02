@@ -80,10 +80,13 @@ test("G6: the probes tab lists the regional probes online and shows a new probe'
 }) => {
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
-  await expect(page.getByTestId("nav-regions")).toHaveText("区域与探针");
+  // Probes are the monitoring tab of the system settings; the old address leads there.
+  await page.getByTestId("nav-system").click();
+  await expect(page.getByTestId("system-tab-probes")).toHaveText("监控");
   await page.goto("/regions?tab=probes");
-  await expect(page.getByTestId("page-title")).toHaveText("区域与探针");
-  await expect(page.getByTestId("regions-tab-probes")).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(/\/system\?tab=probes/);
+  await expect(page.getByTestId("page-title")).toHaveText("系统设置");
+  await expect(page.getByTestId("system-tab-probes")).toHaveAttribute("aria-selected", "true");
   const table = page.getByTestId("probes-table");
 
   await test.step("both probes are online in their regions with targets and a last round", async () => {

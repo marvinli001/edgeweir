@@ -8,13 +8,14 @@ import {
   Key01Icon,
   ListViewIcon,
   Location01Icon,
+  LockPasswordIcon,
   Notification03Icon,
   Route01Icon,
   SecurityLockIcon,
   ServerStack01Icon,
-  Settings05Icon,
   Shield01Icon,
   SlidersHorizontalIcon,
+  UserSettings01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { NavItem } from "@/components/nav-main";
@@ -95,12 +96,8 @@ export function navGroups(): NavGroup[] {
           to: "/clusters",
           icon: icon(ServerStack01Icon),
           testId: "nav-clusters",
-        },
-        {
-          title: m.nav_regions(),
-          to: "/regions",
-          icon: icon(Location01Icon),
-          testId: "nav-regions",
+          // Regions are a view of the same page (/regions redirects there).
+          also: ["/regions"],
         },
         { title: m.dns_title(), to: "/dns", icon: icon(Route01Icon), testId: "nav-dns" },
       ],
@@ -114,25 +111,24 @@ export function navGroups(): NavGroup[] {
           icon: icon(Notification03Icon),
           testId: "nav-alerts",
         },
-        {
-          title: m.nav_service_accounts(),
-          to: "/service-accounts",
-          icon: icon(Key01Icon),
-          testId: "nav-service-accounts",
-        },
         { title: m.nav_audit(), to: "/audit", icon: icon(Audit01Icon), testId: "nav-audit" },
         {
           title: m.nav_system(),
           to: "/system",
           icon: icon(SlidersHorizontalIcon),
           testId: "nav-system",
+          // Monitoring (probes) and service accounts are tabs of the system settings.
+          also: ["/service-accounts"],
         },
       ],
     },
   ];
 }
 
-/** Pages without a sidebar entry of their own, for the command menu. */
+/**
+ * Pages without a sidebar entry of their own, for the command menu. Regions
+ * and service accounts live in other pages; their old paths lead there.
+ */
 export function moreNav(): NavItem[] {
   return [
     {
@@ -140,6 +136,18 @@ export function moreNav(): NavItem[] {
       to: "/l4",
       icon: icon(ArrowDataTransferHorizontalIcon),
       testId: "nav-l4",
+    },
+    {
+      title: m.nav_regions(),
+      to: "/regions",
+      icon: icon(Location01Icon),
+      testId: "nav-regions",
+    },
+    {
+      title: m.nav_service_accounts(),
+      to: "/service-accounts",
+      icon: icon(Key01Icon),
+      testId: "nav-service-accounts",
     },
   ];
 }
@@ -150,13 +158,13 @@ export function accountNav(): NavItem[] {
     {
       title: m.nav_security(),
       to: "/security",
-      icon: icon(SecurityLockIcon),
+      icon: icon(LockPasswordIcon),
       testId: "nav-security",
     },
     {
       title: m.nav_settings(),
       to: "/settings",
-      icon: icon(Settings05Icon),
+      icon: icon(UserSettings01Icon),
       testId: "nav-settings",
     },
   ];

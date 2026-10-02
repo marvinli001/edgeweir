@@ -78,7 +78,13 @@ test("P0: the operator creates a service account, creates a key and revokes it",
 }) => {
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
+  // Service accounts are a tab of the system settings; the old address leads there.
   await page.goto("/service-accounts");
+  await expect(page).toHaveURL(/\/system\?tab=service-accounts/);
+  await expect(page.getByTestId("system-tab-service-accounts")).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await expect(page.getByTestId("service-accounts-table")).toContainText("p0-business");
   await page.getByTestId("service-account-new").click();
   await page.getByTestId("service-account-name").fill("p0-ui");

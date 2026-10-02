@@ -37,6 +37,7 @@ import {
 } from "@/components/node-enrollment";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
+import { RegionsPanel } from "@/components/regions";
 import { SafetyNote } from "@/components/safety-note";
 import { ClusterScheduling } from "@/components/scheduling";
 import { SwitchField } from "@/components/site/fields";
@@ -78,6 +79,8 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/clusters")({
   validateSearch: z.object({
+    /** The regions view of the page (regions are shared by every cluster). */
+    view: z.enum(["regions"]).optional(),
     cluster: z.string().optional(),
     enroll: z.boolean().optional(),
     tab: z.enum(["overview", "dns", "scheduling", "ports"]).optional(),
@@ -88,17 +91,19 @@ export const Route = createFileRoute("/_app/clusters")({
 
 const NO_REGION = "__none__";
 
+/** Clusters and their nodes, and the regions view. */
 function ClustersPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [createRegion, setCreateRegion] = React.useState(false);
   const clusters = useQuery({
     ...orpc.clusters.list.queryOptions(),
     refetchInterval: 5_000,
     meta: { background: true },
   });
   const selected = clusters.data?.find((c) => c.id === search.cluster) ?? clusters.data?.[0];
-  const enrollKey = useOpenKey(search.enroll === true);
+  const regions = search.view === "regions";
 
   const setEnrollOpen = (open: boolean) =>
     navigate({ search: (prev) => ({ ...prev, enroll: open || undefined }), replace: true });
@@ -107,26 +112,55 @@ function ClustersPage() {
     <Page
       title={m.clusters_title()}
       actions={
-        <>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setCreateOpen(true)}
-            data-testid="create-cluster"
-          >
+        regions ? (
+          <Button size="sm" onClick={() => setCreateRegion(true)} data-testid="create-region">
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            {m.clusters_create()}
+            {m.regions_create()}
           </Button>
-          {selected ? (
-            <Button size="sm" onClick={() => setEnrollOpen(true)} data-testid="add-node">
+        ) : (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCreateOpen(true)}
+              data-testid="create-cluster"
+            >
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-              {m.nav_add_node()}
+              {m.clusters_create()}
             </Button>
-          ) : null}
-        </>
+            {selected ? (
+              <Button size="sm" onClick={() => setEnrollOpen(true)} data-testid="add-node">
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                {m.nav_add_node()}
+              </Button>
+            ) : null}
+          </>
+        )
       }
     >
-      {clusters.isPending ? (
+      <Tabs
+        value={regions ? "regions" : "clusters"}
+        onValueChange={(value) =>
+          navigate({
+            search: (prev) => ({ ...prev, view: value === "regions" ? "regions" : undefined }),
+            replace: true,
+          })
+        }
+      >
+        <TabsList>
+          <TabsTrigger value="clusters" data-testid="clusters-view-clusters">
+            {m.clusters_view_clusters()}
+          </TabsTrigger>
+          <TabsTrigger value="regions" data-testid="clusters-view-regions">
+            {m.regions_tab_regions()}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {regions ? (
+        <div className="flex flex-col gap-4 animate-enter">
+          <RegionsPanel createOpen={createRegion} onCreateOpenChange={setCreateRegion} />
+        </div>
+      ) : clusters.isPending ? (
         <LoadingState />
       ) : clusters.isLoadingError ? (
         <ErrorState error={clusters.error} onRetry={() => clusters.refetch()} />
@@ -138,76 +172,130 @@ function ClustersPage() {
           </Button>
         </EmptyState>
       ) : (
-        <>
-          <ClusterSummary
-            clusters={clusters.data}
-            selected={selected}
-            onSelect={(id) => navigate({ search: (prev) => ({ ...prev, cluster: id }) })}
-          />
-          <Tabs
-            value={search.tab ?? "overview"}
-            onValueChange={(value) =>
-              navigate({
-                search: (prev) => ({
-                  ...prev,
-                  tab:
-                    value === "dns" || value === "scheduling" || value === "ports"
-                      ? value
-                      : undefined,
-                }),
-                replace: true,
-              })
-            }
-          >
-            <TabsList className="max-w-full justify-start overflow-x-auto">
-              <TabsTrigger value="overview" data-testid="cluster-tab-overview">
-                {m.dns_tab_overview()}
-              </TabsTrigger>
-              <TabsTrigger value="dns" data-testid="cluster-tab-dns">
-                {m.dns_tab_dns()}
-              </TabsTrigger>
-              <TabsTrigger value="scheduling" data-testid="cluster-tab-scheduling">
-                {m.scheduling_tab()}
-              </TabsTrigger>
-              <TabsTrigger value="ports" data-testid="cluster-tab-ports">
-                {m.l4_pools_title()}
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="overview" className="flex flex-col gap-4 animate-enter">
-              <NodeGroupsSection cluster={selected} />
-              <NodesSection cluster={selected} onEnroll={() => setEnrollOpen(true)} />
-              <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
-              <NodeUpgrades key={selected.id} clusterId={selected.id} />
-              <RevisionsSection cluster={selected} />
-            </TabsContent>
-            <TabsContent value="dns" className="animate-enter">
-              <ClusterDns key={selected.id} clusterId={selected.id} />
-            </TabsContent>
-            <TabsContent value="scheduling" className="animate-enter">
-              <ClusterScheduling key={selected.id} clusterId={selected.id} />
-            </TabsContent>
-            <TabsContent value="ports" className="animate-enter">
-              <PortPoolsSection
-                key={selected.id}
-                clusterId={selected.id}
-                clusterName={selected.name}
-              />
-            </TabsContent>
-          </Tabs>
-          <EnrollDialog
-            key={`${selected.id}-${enrollKey}`}
-            cluster={selected}
-            open={search.enroll === true}
-            onOpenChange={setEnrollOpen}
-          />
-        </>
+        <ClusterView
+          clusters={clusters.data}
+          selected={selected}
+          onEnroll={() => setEnrollOpen(true)}
+        />
       )}
+      {selected ? (
+        <EnrollDialogHost
+          cluster={selected}
+          open={search.enroll === true}
+          onOpenChange={setEnrollOpen}
+        />
+      ) : null}
       <ClusterDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onSaved={(cluster) => navigate({ search: (prev) => ({ ...prev, cluster: cluster.id }) })}
+        onSaved={(cluster) =>
+          navigate({ search: (prev) => ({ ...prev, view: undefined, cluster: cluster.id }) })
+        }
       />
     </Page>
+  );
+}
+
+/** The add-node dialog, fresh on every opening. */
+function EnrollDialogHost({
+  cluster,
+  open,
+  onOpenChange,
+}: {
+  cluster: Cluster;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const key = useOpenKey(open);
+  return (
+    <EnrollDialog
+      key={`${cluster.id}-${key}`}
+      cluster={cluster}
+      open={open}
+      onOpenChange={onOpenChange}
+    />
+  );
+}
+
+/**
+ * One cluster: its summary, then its tabs. A cluster without nodes shows
+ * only the node section, whose first step is adding one.
+ */
+function ClusterView({
+  clusters,
+  selected,
+  onEnroll,
+}: {
+  clusters: Cluster[];
+  selected: Cluster;
+  onEnroll: () => void;
+}) {
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  return (
+    <>
+      <ClusterSummary
+        clusters={clusters}
+        selected={selected}
+        onSelect={(id) => navigate({ search: (prev) => ({ ...prev, cluster: id }) })}
+      />
+      {selected.nodeCount === 0 ? (
+        <div className="animate-enter">
+          <NodesSection cluster={selected} onEnroll={onEnroll} />
+        </div>
+      ) : (
+        <Tabs
+          value={search.tab ?? "overview"}
+          onValueChange={(value) =>
+            navigate({
+              search: (prev) => ({
+                ...prev,
+                tab:
+                  value === "dns" || value === "scheduling" || value === "ports"
+                    ? value
+                    : undefined,
+              }),
+              replace: true,
+            })
+          }
+        >
+          <TabsList className="max-w-full justify-start overflow-x-auto">
+            <TabsTrigger value="overview" data-testid="cluster-tab-overview">
+              {m.dns_tab_overview()}
+            </TabsTrigger>
+            <TabsTrigger value="dns" data-testid="cluster-tab-dns">
+              {m.dns_tab_dns()}
+            </TabsTrigger>
+            <TabsTrigger value="scheduling" data-testid="cluster-tab-scheduling">
+              {m.scheduling_tab()}
+            </TabsTrigger>
+            <TabsTrigger value="ports" data-testid="cluster-tab-ports">
+              {m.l4_pools_title()}
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="overview" className="flex flex-col gap-4 animate-enter">
+            <NodeGroupsSection cluster={selected} />
+            <NodesSection cluster={selected} onEnroll={onEnroll} />
+            <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
+            <NodeUpgrades key={selected.id} clusterId={selected.id} />
+            <RevisionsSection cluster={selected} />
+          </TabsContent>
+          <TabsContent value="dns" className="animate-enter">
+            <ClusterDns key={selected.id} clusterId={selected.id} />
+          </TabsContent>
+          <TabsContent value="scheduling" className="animate-enter">
+            <ClusterScheduling key={selected.id} clusterId={selected.id} />
+          </TabsContent>
+          <TabsContent value="ports" className="animate-enter">
+            <PortPoolsSection
+              key={selected.id}
+              clusterId={selected.id}
+              clusterName={selected.name}
+            />
+          </TabsContent>
+        </Tabs>
+      )}
+    </>
   );
 }
 
@@ -357,51 +445,53 @@ function ClusterSummary({
           </DropdownMenu>
         </div>
       </CardHeader>
-      <CardContent>
-        <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border">
-          <SummaryStat label={m.clusters_nodes_online()}>
-            <Dot
-              tone={
-                selected.nodeCount === 0
-                  ? "idle"
-                  : selected.onlineNodeCount < selected.nodeCount
-                    ? "bad"
-                    : "good"
-              }
-            />
-            <span data-testid="cluster-nodes-online">
-              {selected.onlineNodeCount}/{selected.nodeCount}
-            </span>
-          </SummaryStat>
-          <SummaryStat label={m.clusters_sites()}>{formatNumber(selected.siteCount)}</SummaryStat>
-          <SummaryStat label={m.clusters_latest_revision()}>
-            <span
-              className={cn(selected.latestRevision && "font-mono")}
-              data-testid="cluster-latest-revision"
-            >
-              {selected.latestRevision
-                ? `#${selected.latestRevision.revision}`
-                : m.clusters_no_revision()}
-            </span>
-            {selected.latestRevision && selected.liveNodeCount > 0 ? (
-              <span
-                className="flex min-w-0 items-center gap-1.5 text-sm font-normal tracking-normal text-muted-foreground"
-                data-testid="cluster-applied"
-              >
-                <span aria-hidden="true">·</span>
-                <Dot
-                  tone={selected.appliedNodeCount < selected.liveNodeCount ? "warn" : "good"}
-                  small
-                />
-                {m.clusters_applied({
-                  applied: selected.appliedNodeCount,
-                  total: selected.liveNodeCount,
-                })}
+      {selected.nodeCount === 0 ? null : (
+        <CardContent>
+          <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border">
+            <SummaryStat label={m.clusters_nodes_online()}>
+              <Dot
+                tone={
+                  selected.nodeCount === 0
+                    ? "idle"
+                    : selected.onlineNodeCount < selected.nodeCount
+                      ? "bad"
+                      : "good"
+                }
+              />
+              <span data-testid="cluster-nodes-online">
+                {selected.onlineNodeCount}/{selected.nodeCount}
               </span>
-            ) : null}
-          </SummaryStat>
-        </dl>
-      </CardContent>
+            </SummaryStat>
+            <SummaryStat label={m.clusters_sites()}>{formatNumber(selected.siteCount)}</SummaryStat>
+            <SummaryStat label={m.clusters_latest_revision()}>
+              <span
+                className={cn(selected.latestRevision && "font-mono")}
+                data-testid="cluster-latest-revision"
+              >
+                {selected.latestRevision
+                  ? `#${selected.latestRevision.revision}`
+                  : m.clusters_no_revision()}
+              </span>
+              {selected.latestRevision && selected.liveNodeCount > 0 ? (
+                <span
+                  className="flex min-w-0 items-center gap-1.5 text-sm font-normal tracking-normal text-muted-foreground"
+                  data-testid="cluster-applied"
+                >
+                  <span aria-hidden="true">·</span>
+                  <Dot
+                    tone={selected.appliedNodeCount < selected.liveNodeCount ? "warn" : "good"}
+                    small
+                  />
+                  {m.clusters_applied({
+                    applied: selected.appliedNodeCount,
+                    total: selected.liveNodeCount,
+                  })}
+                </span>
+              ) : null}
+            </SummaryStat>
+          </dl>
+        </CardContent>
+      )}
       <ClusterDialog
         key={selected.id}
         cluster={selected}
