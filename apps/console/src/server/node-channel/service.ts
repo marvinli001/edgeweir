@@ -379,6 +379,9 @@ export function createNodeService(
                 topUrls: Object.fromEntries(s.topUrls.map((v) => [v.value, Number(v.count)])),
                 topIps: Object.fromEntries(s.topIps.map((v) => [v.value, Number(v.count)])),
                 wafRules: Object.fromEntries(s.wafRules.map((v) => [v.value, Number(v.count)])),
+                loggedRules: Object.fromEntries(
+                  s.loggedRules.map((v) => [v.value, Number(v.count)]),
+                ),
                 statusCodes: Object.fromEntries(
                   Object.entries(s.statusCodes).map(([code, n]) => [code, Number(n)]),
                 ),
