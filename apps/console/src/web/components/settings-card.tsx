@@ -3,7 +3,7 @@ import { type QueryKey, useMutation, useQuery, useQueryClient } from "@tanstack/
 import * as React from "react";
 import { toast } from "sonner";
 import { SaveBar } from "@/components/site/save-site";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDraft } from "@/hooks/use-draft";
 import { m } from "@/lib/i18n";
@@ -72,23 +72,17 @@ export function SettingsCard<T, D, I, O, E, C, QE>({
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
-      {result.isPending ? (
-        <CardContent>
-          <LoadingState />
-        </CardContent>
-      ) : result.isLoadingError ? (
-        <CardContent>
-          <ErrorState error={result.error} onRetry={() => void result.refetch()} />
-        </CardContent>
-      ) : (
-        <SettingsForm
-          key={saves}
-          {...form}
-          value={result.data}
-          refresh={form.refresh ?? query.queryKey}
-          onSaved={() => setSaves((n) => n + 1)}
-        />
-      )}
+      <QueryView query={result} frame={CardContent}>
+        {(value) => (
+          <SettingsForm
+            key={saves}
+            {...form}
+            value={value}
+            refresh={form.refresh ?? query.queryKey}
+            onSaved={() => setSaves((n) => n + 1)}
+          />
+        )}
+      </QueryView>
     </Card>
   );
 }

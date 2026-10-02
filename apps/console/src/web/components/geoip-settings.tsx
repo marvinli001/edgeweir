@@ -1,6 +1,6 @@
 import { nodeSupportsFeature } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
@@ -36,31 +36,27 @@ export function GeoIpSettings() {
         </a>
       </CardHeader>
       <CardContent>
-        {nodes.isPending ? (
-          <LoadingState />
-        ) : nodes.isLoadingError ? (
-          <ErrorState error={nodes.error} onRetry={() => void nodes.refetch()} />
-        ) : !nodes.data.length ? (
-          <EmptyState title={m.geo_empty()} />
-        ) : (
-          <ul className="divide-y">
-            {nodes.data.map((node) => (
-              <li key={node.id} className="flex flex-wrap items-center gap-2 py-3">
-                <span className="min-w-0 flex-1 break-all text-sm">{node.name}</span>
-                {features.map(([feature, label]) => (
-                  <Badge key={feature} variant="outline">
-                    {label()}
-                    {m.geo_state({
-                      state: nodeSupportsFeature(node.supportedFeatures, feature)
-                        ? m.geo_available()
-                        : m.geo_unavailable(),
-                    })}
-                  </Badge>
-                ))}
-              </li>
-            ))}
-          </ul>
-        )}
+        <QueryView query={nodes} empty={<EmptyState title={m.geo_empty()} />}>
+          {(list) => (
+            <ul className="divide-y">
+              {list.map((node) => (
+                <li key={node.id} className="flex flex-wrap items-center gap-2 py-3">
+                  <span className="min-w-0 flex-1 break-all text-sm">{node.name}</span>
+                  {features.map(([feature, label]) => (
+                    <Badge key={feature} variant="outline">
+                      {label()}
+                      {m.geo_state({
+                        state: nodeSupportsFeature(node.supportedFeatures, feature)
+                          ? m.geo_available()
+                          : m.geo_unavailable(),
+                      })}
+                    </Badge>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          )}
+        </QueryView>
         <a
           className="mt-3 inline-block text-xs text-muted-foreground hover:underline"
           href="https://ipinfo.io"

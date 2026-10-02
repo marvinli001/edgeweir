@@ -185,18 +185,6 @@ describe("UI behaviour", () => {
   it("renders a query's loading and error states through QueryView", () => {
     // QueryView (components/states.tsx) shows LoadingState on the first load, ErrorState only when
     // that load fails and the empty state; hand-written branches each had to get that right.
-    // Settings cards awaiting the shared SettingsCard (C-5) keep theirs until it moves to QueryView.
-    const awaitingSettingsCard = [
-      "src/web/components/ban-settings.tsx: query",
-      "src/web/components/geoip-settings.tsx: nodes",
-      "src/web/components/origin-allow-list.tsx: list",
-      "src/web/components/probes.tsx: query",
-      "src/web/components/protection-settings.tsx: settings",
-      "src/web/components/protection-settings.tsx: template",
-      "src/web/components/release-source.tsx: query",
-      "src/web/components/smtp-settings.tsx: query",
-      "src/web/components/usage-settings.tsx: query",
-    ];
     const handWritten = (name: string) =>
       new RegExp(
         `\\b${name}\\.isPending\\b(?:\\s*\\|\\|[^?;]*)?\\s*(?:\\?|&&)\\s*\\(?\\s*(?:<CardContent>\\s*)?<LoadingState\\b` +
@@ -209,7 +197,7 @@ describe("UI behaviour", () => {
         .filter((name) => handWritten(name).test(source))
         .map((name) => `${file}: ${name}`);
     });
-    expect(found.filter((entry) => !awaitingSettingsCard.includes(entry))).toEqual([]);
+    expect(found).toEqual([]);
   });
 
   it("avoids secure-context-only browser APIs (plain HTTP on a LAN address)", () => {
