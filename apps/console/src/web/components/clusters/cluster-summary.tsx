@@ -1,0 +1,182 @@
+import type { Cluster } from "@edgeweir/contract";
+import { Delete02Icon, MoreHorizontalIcon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import * as React from "react";
+import { toast } from "sonner";
+import { ClusterDialog } from "@/components/clusters/cluster-dialog";
+import { ControlledConfirmDialog } from "@/components/confirm-dialog";
+import { Dot } from "@/components/status-dot";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { formatNumber, m } from "@/lib/i18n";
+import { orpc } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
+
+/** One labeled figure of the cluster summary strip. */
+function SummaryStat({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 px-4 py-3">
+      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+      <dd className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl font-semibold tracking-tight">
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+/** The selected cluster: its name and actions, the cluster picker and its figures. */
+export function ClusterSummary({
+  clusters,
+  selected,
+  onSelect,
+}: {
+  clusters: Cluster[];
+  selected: Cluster;
+  onSelect: (id: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const remove = useMutation(orpc.clusters.delete.mutationOptions());
+  return (
+    <Card>
+      <CardHeader className="flex flex-row flex-wrap items-center gap-3">
+        <CardTitle className="flex-1" data-testid="cluster-name">
+          {selected.name}
+        </CardTitle>
+        <div className="flex items-center gap-2">
+          {clusters.length > 1 ? (
+            <Select
+              value={selected.id}
+              onValueChange={(value) => value && onSelect(String(value))}
+              items={clusters.map((c) => ({ label: c.name, value: c.id }))}
+            >
+              <SelectTrigger
+                className="w-48"
+                aria-label={m.clusters_select()}
+                data-testid="cluster-select"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {clusters.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={m.common_actions()}
+                  data-testid="cluster-actions"
+                />
+              }
+            >
+              <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
+                {m.clusters_edit()}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => setDeleteOpen(true)}
+                data-testid="cluster-delete"
+              >
+                <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                {m.common_delete()}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardHeader>
+      {selected.nodeCount === 0 ? null : (
+        <CardContent>
+          <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border">
+            <SummaryStat label={m.clusters_nodes_online()}>
+              <Dot
+                tone={
+                  selected.nodeCount === 0
+                    ? "idle"
+                    : selected.onlineNodeCount < selected.nodeCount
+                      ? "bad"
+                      : "good"
+                }
+              />
+              <span data-testid="cluster-nodes-online">
+                {selected.onlineNodeCount}/{selected.nodeCount}
+              </span>
+            </SummaryStat>
+            <SummaryStat label={m.clusters_sites()}>{formatNumber(selected.siteCount)}</SummaryStat>
+            <SummaryStat label={m.clusters_latest_revision()}>
+              <span
+                className={cn(selected.latestRevision && "font-mono")}
+                data-testid="cluster-latest-revision"
+              >
+                {selected.latestRevision
+                  ? `#${selected.latestRevision.revision}`
+                  : m.clusters_no_revision()}
+              </span>
+              {selected.latestRevision && selected.liveNodeCount > 0 ? (
+                <span
+                  className="flex items-center gap-1.5 text-sm font-normal tracking-normal whitespace-nowrap text-muted-foreground"
+                  data-testid="cluster-applied"
+                >
+                  <Dot
+                    tone={selected.appliedNodeCount < selected.liveNodeCount ? "warn" : "good"}
+                    small
+                  />
+                  {m.clusters_applied({
+                    applied: selected.appliedNodeCount,
+                    total: selected.liveNodeCount,
+                  })}
+                </span>
+              ) : null}
+            </SummaryStat>
+          </dl>
+        </CardContent>
+      )}
+      <ClusterDialog
+        key={selected.id}
+        cluster={selected}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+      <ControlledConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={m.clusters_delete_confirm({ name: selected.name })}
+        onConfirm={async () => {
+          await remove.mutateAsync({ id: selected.id });
+          toast.success(m.common_deleted());
+          await queryClient.invalidateQueries();
+          const next = clusters.find((c) => c.id !== selected.id);
+          if (next) onSelect(next.id);
+        }}
+      />
+    </Card>
+  );
+}
