@@ -2,24 +2,18 @@ import type { DnsProviderDto } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { FormDialog } from "@/components/form-dialog";
-import { FormSelect } from "@/components/form-select";
+import { FormSelect, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { useAction } from "@/hooks/use-action";
+import type { DialogProps } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -36,8 +30,12 @@ export type EditableCredential = {
 type CatalogField = DnsProviderDto["fields"][number];
 
 /** The provider catalog (static; fetched once). */
-export function useDnsCatalog() {
-  return useQuery({ ...orpc.dns.catalog.queryOptions(), staleTime: Number.POSITIVE_INFINITY });
+export function useDnsCatalog(enabled = true) {
+  return useQuery({
+    ...orpc.dns.catalog.queryOptions(),
+    staleTime: Number.POSITIVE_INFINITY,
+    enabled,
+  });
 }
 
 /** Capability badges of a provider: lines, apex CNAME, self-hosted endpoint. */
@@ -66,16 +64,16 @@ export function DnsCredentialDialog({
   scope,
   initial,
   testEnabled = false,
-  onClose,
+  open,
+  onOpenChange,
   onSaved,
 }: {
   scope: DnsCredentialScope;
   initial?: EditableCredential;
   testEnabled?: boolean;
-  onClose: () => void;
   onSaved: () => Promise<void>;
-}) {
-  const catalog = useDnsCatalog();
+} & DialogProps) {
+  const catalog = useDnsCatalog(open);
   const providers = (catalog.data ?? []).filter(
     (p) => p.id !== "test" || (scope === "account" && testEnabled),
   );
@@ -137,15 +135,13 @@ export function DnsCredentialDialog({
   };
   return (
     <FormDialog
-      open
+      open={open}
       title={
         initial ? m.common_edit() : scope === "account" ? m.dns_add_account() : m.cert_dns_add()
       }
       submitLabel={saveAnyway ? m.dns_save_anyway() : initial ? m.common_save() : m.common_create()}
       submitTestId="dns-credential-submit"
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+      onOpenChange={onOpenChange}
       onSubmit={async (data) => {
         // New credentials are tested before they are saved; a rename alone is not.
         if ((!initial || rotate) && !saveAnyway) {
@@ -186,135 +182,120 @@ export function DnsCredentialDialog({
             credentials: credentials ?? {},
           });
         await onSaved();
-        onClose();
+        onOpenChange(false);
       }}
     >
-      {catalog.isPending ? (
-        <LoadingState />
-      ) : catalog.isLoadingError ? (
-        <ErrorState error={catalog.error} onRetry={() => void catalog.refetch()} />
-      ) : (
-        // Any edit asks for a new test before saving.
-        <div className="contents" onChange={() => setSaveAnyway(false)}>
-          <Field>
-            <FieldLabel htmlFor="dns-credential-name">{m.cert_name()}</FieldLabel>
-            <Input
-              id="dns-credential-name"
-              name="dns-credential-name"
-              required
-              maxLength={100}
-              defaultValue={initial?.name}
+      <QueryView query={catalog}>
+        {() => (
+          // Any edit asks for a new test before saving.
+          <div className="contents" onChange={() => setSaveAnyway(false)}>
+            <Field>
+              <FieldLabel htmlFor="dns-credential-name">{m.cert_name()}</FieldLabel>
+              <Input
+                id="dns-credential-name"
+                name="dns-credential-name"
+                required
+                maxLength={100}
+                defaultValue={initial?.name}
+              />
+            </Field>
+            <FormSelect
+              id="dns-provider-kind"
+              label={m.cert_dns_provider()}
+              value={provider}
+              disabled={!!initial}
+              onChange={(value) => {
+                setProvider(value);
+                setZones(null);
+                setSelects({});
+                setProbe(null);
+                setSaveAnyway(false);
+              }}
+              options={providers.map((p) => ({ value: p.id, label: providerLabel(p.id) }))}
             />
-          </Field>
-          <FormSelect
-            id="dns-provider-kind"
-            label={m.cert_dns_provider()}
-            value={provider}
-            disabled={!!initial}
-            onChange={(value) => {
-              setProvider(value);
-              setZones(null);
-              setSelects({});
-              setProbe(null);
-              setSaveAnyway(false);
-            }}
-            options={providers.map((p) => ({ value: p.id, label: providerLabel(p.id) }))}
-          />
-          <CapabilityBadges provider={entry} />
-          {initial ? (
-            <SwitchField
-              id="dns-rotate"
-              label={m.dns_rotate_credentials()}
-              checked={rotate}
-              onCheckedChange={setRotate}
-              className="self-start"
-            />
-          ) : null}
-          {rotate
-            ? (entry?.fields ?? []).map((field) => (
-                <CredentialField
-                  key={`${provider}-${field.key}`}
-                  field={field}
-                  value={selects[field.key] ?? field.default ?? field.options?.[0] ?? ""}
-                  onSelect={(value) => setSelects({ ...selects, [field.key]: value })}
-                />
-              ))
-            : null}
-          <Field>
-            <FieldLabel htmlFor="dns-zone">{m.dns_zone()}</FieldLabel>
-            <div className="flex flex-wrap gap-2">
-              {zones?.length && !initial ? (
-                // Listed zones replace the text field: one zone field either way.
-                <Select
-                  value={zone}
-                  onValueChange={(next) => {
-                    if (next !== null) setZone(String(next));
-                  }}
-                >
-                  <SelectTrigger
+            <CapabilityBadges provider={entry} />
+            {initial ? (
+              <SwitchField
+                id="dns-rotate"
+                label={m.dns_rotate_credentials()}
+                checked={rotate}
+                onCheckedChange={setRotate}
+                className="self-start"
+              />
+            ) : null}
+            {rotate
+              ? (entry?.fields ?? []).map((field) => (
+                  <CredentialField
+                    key={`${provider}-${field.key}`}
+                    field={field}
+                    value={selects[field.key] ?? field.default ?? field.options?.[0] ?? ""}
+                    onSelect={(value) => setSelects({ ...selects, [field.key]: value })}
+                  />
+                ))
+              : null}
+            <Field>
+              <FieldLabel htmlFor="dns-zone">{m.dns_zone()}</FieldLabel>
+              <div className="flex flex-wrap gap-2">
+                {zones?.length && !initial ? (
+                  // Listed zones replace the text field: one zone field either way.
+                  <OptionSelect
                     id="dns-zone"
+                    value={zone}
+                    options={zones.map((z) => ({ value: z, label: z }))}
+                    onChange={setZone}
                     className="min-w-0 flex-1"
-                    data-testid="dns-zone-select"
+                    testId="dns-zone-select"
+                  />
+                ) : (
+                  <Input
+                    id="dns-zone"
+                    name="dns-zone"
+                    className="min-w-0 flex-1"
+                    required
+                    disabled={!!initial}
+                    value={zone}
+                    onChange={(e) => setZone(e.target.value.trim().toLowerCase())}
+                    data-testid="dns-zone-input"
+                  />
+                )}
+                {!initial && entry?.capabilities.listZones ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={listing.pending}
+                    onClick={(e) => void listZones(e.currentTarget.form)}
+                    data-testid="dns-list-zones"
                   >
-                    <SelectValue>{zone}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {zones.map((z) => (
-                      <SelectItem key={z} value={z}>
-                        {z}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  id="dns-zone"
-                  name="dns-zone"
-                  className="min-w-0 flex-1"
-                  required
-                  disabled={!!initial}
-                  value={zone}
-                  onChange={(e) => setZone(e.target.value.trim().toLowerCase())}
-                  data-testid="dns-zone-input"
-                />
-              )}
-              {!initial && entry?.capabilities.listZones ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={listing.pending}
-                  onClick={(e) => void listZones(e.currentTarget.form)}
-                  data-testid="dns-list-zones"
+                    {listing.pending ? <Spinner /> : null}
+                    {m.dns_list_zones()}
+                  </Button>
+                ) : null}
+              </div>
+            </Field>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={testing.pending || !zone}
+                onClick={(e) => void test(e.currentTarget.form)}
+                data-testid="dns-test-connection"
+              >
+                {testing.pending ? <Spinner /> : null}
+                {m.dns_test_connection()}
+              </Button>
+              {probe ? (
+                <SafetyNote
+                  role="status"
+                  data-testid="dns-probe-result"
+                  className={cn("min-w-0 flex-1 animate-enter", !probe.ok && "text-destructive")}
                 >
-                  {listing.pending ? <Spinner /> : null}
-                  {m.dns_list_zones()}
-                </Button>
+                  {probe.text}
+                </SafetyNote>
               ) : null}
             </div>
-          </Field>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={testing.pending || !zone}
-              onClick={(e) => void test(e.currentTarget.form)}
-              data-testid="dns-test-connection"
-            >
-              {testing.pending ? <Spinner /> : null}
-              {m.dns_test_connection()}
-            </Button>
-            {probe ? (
-              <SafetyNote
-                role="status"
-                data-testid="dns-probe-result"
-                className={cn("min-w-0 flex-1 animate-enter", !probe.ok && "text-destructive")}
-              >
-                {probe.text}
-              </SafetyNote>
-            ) : null}
           </div>
-        </div>
-      )}
+        )}
+      </QueryView>
     </FormDialog>
   );
 }

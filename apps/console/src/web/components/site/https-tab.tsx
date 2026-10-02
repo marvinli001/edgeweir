@@ -23,6 +23,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
 import { httpsBlockerText } from "@/lib/https-blockers";
 import { m } from "@/lib/i18n";
@@ -199,7 +200,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
   const [email, setEmail] = React.useState<string | null>(null);
   const [eab, setEab] = React.useState({ kid: "", key: "" });
   const [existing, setExisting] = React.useState<string | null>(null);
-  const [addCredential, setAddCredential] = React.useState(false);
+  const addCredential = useDialogState();
   const [customize, setCustomize] = React.useState(false);
   const [skipDns, setSkipDns] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -270,7 +271,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
                     {httpsBlockerText(blocker, caLabel(ca))}
                   </span>
                   {blocker.code === "dns_credential_missing" ? (
-                    <Button size="xs" variant="outline" onClick={() => setAddCredential(true)}>
+                    <Button size="xs" variant="outline" onClick={() => addCredential.show()}>
                       {m.cert_dns_add()}
                     </Button>
                   ) : null}
@@ -412,15 +413,15 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
           </Button>
         </CardFooter>
       </Collapsible>
-      {addCredential ? (
-        <DnsCredentialDialog
-          scope="credential"
-          onClose={() => setAddCredential(false)}
-          onSaved={async () => {
-            await client.invalidateQueries();
-          }}
-        />
-      ) : null}
+      <DnsCredentialDialog
+        key={addCredential.key}
+        scope="credential"
+        open={addCredential.open}
+        onOpenChange={addCredential.onOpenChange}
+        onSaved={async () => {
+          await client.invalidateQueries();
+        }}
+      />
     </Card>
   );
 }
