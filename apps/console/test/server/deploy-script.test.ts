@@ -1,8 +1,17 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, symlinkSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { MasterKey } from "../../src/server/lib/envelope";
 
 // deploy.sh installs and upgrades the 宝塔 / aaPanel compose deployments
@@ -19,6 +28,46 @@ function sourced(code: string, env: Record<string, string> = {}): string {
     env: { PATH: process.env.PATH ?? "", EDGEWEIR_YES: "1", ...env },
   });
 }
+
+/** Like sourced, with errexit as when run, and the exit status and stderr too. */
+function run(code: string, env: Record<string, string> = {}) {
+  const result = spawnSync(
+    "/bin/bash",
+    ["-c", `source "$1"; set -Eeuo pipefail; ${code}`, "bash", script],
+    {
+      encoding: "utf8",
+      env: { PATH: process.env.PATH ?? "", EDGEWEIR_YES: "1", ...env },
+    },
+  );
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
+const scratch = mkdtempSync(resolve(tmpdir(), "deploy-sh-"));
+afterAll(() => rmSync(scratch, { recursive: true, force: true }));
+let dirs = 0;
+/** A fresh directory with the given files. */
+function directory(files: Record<string, string> = {}): string {
+  const dir = resolve(scratch, `d${dirs++}`);
+  mkdirSync(dir);
+  for (const [name, content] of Object.entries(files)) {
+    mkdirSync(resolve(dir, name, ".."), { recursive: true });
+    writeFileSync(resolve(dir, name), content);
+  }
+  return dir;
+}
+
+/**
+ * A docker stand-in for the install checks: the daemon answers, there is no
+ * edgeweir-console container, and `docker volume inspect` succeeds when
+ * VOLUME is set.
+ */
+const DOCKER = `docker() {
+  case "$1 \${2:-}" in
+    "volume inspect") [[ -n \${VOLUME:-} ]] ;;
+    "inspect "*) return 1 ;;
+    *) return 0 ;;
+  esac
+}`;
 
 describe("deploy.sh", () => {
   it("parses as bash", () => {
@@ -93,5 +142,115 @@ describe("deploy.sh", () => {
     ]) {
       expect(() => sourced('db_parse "$URL"', { URL: url }), url).toThrow();
     }
+  });
+
+  it.each([
+    ["https://cdn-admin.example.com", true],
+    ["http://[2001:db8::1]:3000", true],
+    ["https://cdn-admin.example.com:65535", true],
+    ["https://cdn-admin.example.com:65536", false],
+    ["https://cdn-admin.example.com/console", false],
+    ["cdn-admin.example.com:8080", false],
+  ])("valid_url %s: %s", (url, valid) => {
+    expect(run('valid_url "$URL"', { URL: url }).status === 0).toBe(valid);
+  });
+
+  describe("install refuses to start over earlier data (P1-52)", () => {
+    const unattended = {
+      EDGEWEIR_PUBLIC_URL: "https://cdn-admin.example.com",
+      EDGEWEIR_NO_PULL: "1",
+    };
+
+    it("stops on the bundled database volume an earlier install left", () => {
+      const dir = resolve(scratch, "fresh-bundled");
+      const result = run(`${DOCKER}; cmd_install`, {
+        ...unattended,
+        EDGEWEIR_DB: "bundled",
+        EDGEWEIR_DIR: dir,
+        VOLUME: "1",
+      });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("Docker 卷 edgeweir_postgres-data 已存在");
+      expect(result.stderr).toContain("docker volume rm edgeweir_postgres-data");
+      expect(existsSync(dir)).toBe(false);
+    });
+
+    it("stops on a host database a console has already migrated", () => {
+      const dir = resolve(scratch, "fresh-host");
+      // server version, CREATE on the database and on public, migrations table
+      const psql = (used: string) => `pg_client() { echo "18 t t ${used}"; }`;
+      const env = {
+        ...unattended,
+        EDGEWEIR_DB: "host",
+        EDGEWEIR_DIR: dir,
+        DATABASE_URL: "postgres://edgeweir:secret@127.0.0.1:5432/edgeweir",
+      };
+      const used = run(`${DOCKER}; ${psql("t")}; cmd_install`, env);
+      expect(used.status).toBe(1);
+      expect(used.stderr).toContain("数据库 edgeweir 里已经有 Edgeweir 的数据");
+      expect(existsSync(dir)).toBe(false);
+      // An empty database gets past the check (to the image, missing here).
+      const empty = run(`${DOCKER}; ${psql("f")}; resolve_version() { exit 7; }; cmd_install`, env);
+      expect(empty.status, empty.stderr).toBe(7);
+    });
+
+    it("never writes into a directory that holds other files", () => {
+      const dir = directory({ "compose.yml": "services: {}\n", "deploy.sh": "" });
+      const result = run(`${DOCKER}; cmd_install`, {
+        ...unattended,
+        EDGEWEIR_DB: "bundled",
+        EDGEWEIR_DIR: dir,
+      });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("不是空目录（有 compose.yml）");
+      expect(readFileSync(resolve(dir, "compose.yml"), "utf8")).toBe("services: {}\n");
+      // The script itself, downloaded into the directory, is not in the way.
+      expect(sourced('other_entries "$D"', { D: directory({ "deploy.sh": "" }) })).toBe("");
+      expect(sourced('other_entries "$D"', { D: directory({ ".env.old": "" }) })).toBe(
+        ".env.old\n",
+      );
+    });
+  });
+
+  describe("backups (P1-54)", () => {
+    it("leave the master key and the session secret out of the .env copy", () => {
+      const dir = directory({
+        ".env": [
+          "# comment",
+          "EDGEWEIR_MASTER_KEY=bWFzdGVyLWtleS1tYXN0ZXIta2V5LW1hc3Rlci1rZXkhIQ==",
+          "BETTER_AUTH_SECRET=session-secret-session-secret-session",
+          "POSTGRES_PASSWORD=0123abcd",
+          "EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com",
+          "",
+        ].join("\n"),
+      });
+      const copy = sourced("DIR=$D; env_for_backup", { D: dir });
+      expect(copy).not.toContain("bWFzdGVy");
+      expect(copy).not.toContain("session-secret");
+      expect(copy).toMatch(/^# EDGEWEIR_MASTER_KEY= /m);
+      expect(copy).toMatch(/^# BETTER_AUTH_SECRET= /m);
+      expect(copy).toContain("POSTGRES_PASSWORD=0123abcd\n");
+      expect(copy).toContain("EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com\n");
+    });
+
+    it("keep the newest EDGEWEIR_BACKUP_KEEP and nothing they did not create", () => {
+      const names = [
+        "20260901-090000",
+        "20260915-120000-before-20260915-a1b2c3d",
+        "20260929-153000",
+        "20261001-080000-before-20261001-b2c3d4e",
+      ];
+      const dir = directory({
+        ...Object.fromEntries(names.map((n) => [`backups/${n}/edgeweir.dump`, "x"])),
+        "backups/manual/edgeweir.dump": "x",
+      });
+      sourced("DIR=$D; prune_backups 2", { D: dir });
+      expect(readdirSync(resolve(dir, "backups")).sort()).toEqual([...names.slice(2), "manual"]);
+      sourced("DIR=$D; prune_backups 0", { D: dir });
+      expect(readdirSync(resolve(dir, "backups"))).toHaveLength(3);
+      expect(sourced("backup_keep")).toBe("5");
+      expect(sourced("backup_keep", { EDGEWEIR_BACKUP_KEEP: "08" })).toBe("8");
+      expect(run("backup_keep", { EDGEWEIR_BACKUP_KEEP: "all" }).status).toBe(1);
+    });
   });
 });

@@ -43,7 +43,7 @@ grep -c 'TABLE DATA' edgeweir.dump.list
 
 预期：大于 0。
 
-`deploy.sh` 部署执行 `./deploy.sh backup`（`update` 前自动执行），写出同格式的 `edgeweir.dump` 以及 `.env` 与编排文件，见 [deploy.sh 参考](deploy-script.md)。
+`deploy.sh` 部署执行 `./deploy.sh backup`（`update` 前自动执行），写出同格式的 `edgeweir.dump` 以及 `.env`（不含主密钥与 `BETTER_AUTH_SECRET`）与编排文件，保留最近 5 份，见 [deploy.sh 参考](deploy-script.md#备份)。主密钥另行离线保存。
 
 ## 2. 恢复
 

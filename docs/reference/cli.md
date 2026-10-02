@@ -10,7 +10,7 @@
 | --- | --- |
 | `install` | 对话式安装：选择数据库方式、生成 `.env`、启动 |
 | `update [tag]` | 备份后升级到最新版本或指定 tag；`--no-backup` 跳过备份。别名 `upgrade` |
-| `backup` | 备份数据库、`.env` 和编排文件到 `backups/` |
+| `backup` | 备份数据库、`.env`（不含主密钥）和编排文件到 `backups/`，保留最近 5 份 |
 | `config` | 修改控制台地址和节点通道地址 |
 | `start`、`stop`、`restart` | 启动、停止、重启 |
 | `status` | 容器状态和运行中的版本 |

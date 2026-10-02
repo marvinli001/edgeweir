@@ -10,7 +10,7 @@ Installer and operations script for 宝塔 / aaPanel Compose deployments. Usage:
 | --- | --- |
 | `install` | Interactive install: choose the database mode, write `.env`, start |
 | `update [tag]` | Back up, then upgrade to the latest version or the given tag; `--no-backup` skips the backup. Alias `upgrade` |
-| `backup` | Back up the database, `.env`, and the Compose file to `backups/` |
+| `backup` | Back up the database, `.env` (without the master key), and the Compose file to `backups/`, keeping the newest 5 |
 | `config` | Change the console URL and the node channel URL |
 | `start`, `stop`, `restart` | Start, stop, restart |
 | `status` | Container status and the running version |

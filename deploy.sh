@@ -17,6 +17,8 @@ set -Eeuo pipefail
 readonly IMAGE=ghcr.io/marvinli001/edgeweir
 readonly PG_IMAGE=postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
 readonly CONTAINER=edgeweir-console
+# The bundled database's volume: project "edgeweir" (the templates' name:), volume postgres-data.
+readonly PG_VOLUME=edgeweir_postgres-data
 readonly SCRIPT_URL=${EDGEWEIR_SCRIPT_URL:-https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh}
 readonly PG_TESTED_MAJOR=18
 
@@ -162,6 +164,17 @@ env_set() {
   mv "$tmp" "$DIR/.env"
 }
 
+# other_entries <dir>: names in <dir> other than deploy.sh (the script may have
+# been downloaded there), one per line; nothing when it is missing or empty.
+other_entries() {
+  local f
+  [[ -d $1 ]] || return 0
+  for f in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+    [[ -e $f || -L $f ]] || continue
+    [[ ${f##*/} == deploy.sh ]] || printf '%s\n' "${f##*/}"
+  done
+}
+
 # Values go into .env unquoted; Compose would expand "$" and cut at " #".
 env_safe() { [[ $1 != *[[:space:]\"\'\`\\\$#]* ]]; }
 
@@ -180,7 +193,9 @@ listen_addresses() {
   if command -v ss >/dev/null 2>&1; then ss -Hltn "( sport = :$1 )" 2>/dev/null | awk '{print $4}'; fi
 }
 
-valid_url() { [[ $1 =~ ^https?://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(:[0-9]{1,5})?$ ]]; }
+valid_url() {
+  [[ $1 =~ ^https?://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(:([0-9]{1,5}))?$ ]] && ((10#${BASH_REMATCH[3]:-1} <= 65535))
+}
 url_host() {
   local rest=${1#*://}
   rest=${rest%%/*}
@@ -257,11 +272,13 @@ pg_client() {
 }
 
 # db_check: connects with DB_*, reports the version and whether this user can
-# create tables (migrations) and schemas (the job queue).
+# create tables (migrations) and schemas (the job queue). Sets DB_USED to t when
+# a console has already migrated this database.
+DB_USED=''
 db_check() {
   local out major create_db create_public
   info "正在连接 ${DB_HOST}:${DB_PORT}/${DB_NAME}（用户 ${DB_USER}）…"
-  if ! out=$(pg_client psql -XAtq -F ' ' -c "select current_setting('server_version_num')::int / 10000, has_database_privilege(current_database(), 'CREATE'), has_schema_privilege('public', 'CREATE')" 2>&1); then
+  if ! out=$(pg_client psql -XAtq -F ' ' -c "select current_setting('server_version_num')::int / 10000, has_database_privilege(current_database(), 'CREATE'), has_schema_privilege('public', 'CREATE'), to_regclass('drizzle.__drizzle_migrations') is not null" 2>&1); then
     warn "连接失败："
     printf '      %s\n' "$out" >&2
     case $out in
@@ -274,7 +291,7 @@ db_check() {
     esac
     return 1
   fi
-  read -r major create_db create_public <<<"$out"
+  read -r major create_db create_public DB_USED <<<"$out"
   ok "已连接，PostgreSQL ${major}"
   if [[ $create_db != t || $create_public != t ]]; then
     warn "用户 ${DB_USER} 不能在 ${DB_NAME} 里建表或建 schema（迁移和后台任务需要）。"
@@ -610,6 +627,11 @@ cmd_install() {
     die "${DIR} 已经有 Edgeweir 部署。升级请运行 ${DIR}/deploy.sh update。"
   fi
   if [[ -e $DIR/.env ]]; then die "${DIR}/.env 已存在，请换一个目录或先移走它。"; fi
+  [[ ! -e $DIR || -d $DIR ]] || die "${DIR} 不是目录。"
+  local other
+  other=$(other_entries "$DIR")
+  # install writes compose.yml and .env there and makes it 700.
+  [[ -z $other ]] || die "${DIR} 不是空目录（有 ${other//$'\n'/、}）。换一个新目录或空目录。"
   if docker inspect "$CONTAINER" >/dev/null 2>&1; then
     die "已经有名为 ${CONTAINER} 的容器（可能是面板里创建的编排）。在它的目录里用 deploy.sh 管理，或先删除它。"
   fi
@@ -663,13 +685,28 @@ cmd_install() {
           DB_SSLMODE=$db_ssl
         fi
       fi
-      if db_check; then break; fi
-      [[ -n $INTERACTIVE ]] || die "数据库检查没有通过。"
+      if db_check; then
+        [[ $DB_USED == t ]] || break
+        # A new master key could not open what the earlier one encrypted.
+        warn "数据库 ${DB_NAME} 里已经有 Edgeweir 的数据，只有当初的主密钥能用它。"
+        info "继续使用它：把当初的 .env（含主密钥的离线副本；backups/ 里的 env 不含主密钥）放进部署目录，运行 ./deploy.sh start。"
+        info "全新安装：换一个空数据库。"
+        [[ -n $INTERACTIVE ]] || die "数据库不是空的，已停止安装，没有改动。"
+      else
+        [[ -n $INTERACTIVE ]] || die "数据库检查没有通过。"
+      fi
       DATABASE_URL=''
       confirm "重新填写数据库信息？" y || die "已取消。"
     done
   else
-    info "数据库密码自动生成；数据保存在 Docker 卷 edgeweir_postgres-data。"
+    if docker volume inspect "$PG_VOLUME" >/dev/null 2>&1; then
+      # PostgreSQL keeps the password of the first start; a new one cannot connect.
+      warn "Docker 卷 ${PG_VOLUME} 已存在：之前安装留下的数据库，用的是当时生成的数据库密码和主密钥。"
+      info "保留这些数据：把当初的 .env 和 compose.yml（离线副本）放进部署目录，运行 ./deploy.sh start。"
+      info "确定不再需要：docker volume rm ${PG_VOLUME}，然后重新安装。"
+      die "已停止安装，没有改动。"
+    fi
+    info "数据库密码自动生成；数据保存在 Docker 卷 ${PG_VOLUME}。"
   fi
 
   step "访问地址"
@@ -772,9 +809,49 @@ print_next_steps() {
   info "4. 离线备份 ${DIR}/.env（含主密钥）。以后在 ${DIR} 里运行 ./deploy.sh update 升级。"
 }
 
-# backup [label]: database dump plus .env and compose file, into backups/<time>.
+# Variables in .env that open the encrypted data; backups leave them out.
+readonly UNBACKED_KEYS=(EDGEWEIR_MASTER_KEY BETTER_AUTH_SECRET)
+
+# env_for_backup: .env with the master key and session secret commented out.
+env_for_backup() {
+  KEYS="${UNBACKED_KEYS[*]}" awk '
+    BEGIN { n = split(ENVIRON["KEYS"], keys, " ") }
+    {
+      for (i = 1; i <= n; i++) if (index($0, keys[i] "=") == 1) {
+        print "# " keys[i] "= 不在备份里：恢复时填入离线保存的原值"
+        next
+      }
+      print
+    }
+  ' "$DIR/.env"
+}
+
+# backup_keep: how many backups to keep, EDGEWEIR_BACKUP_KEEP (0: all).
+backup_keep() {
+  local keep=${EDGEWEIR_BACKUP_KEEP:-5}
+  [[ $keep =~ ^[0-9]+$ ]] || die "EDGEWEIR_BACKUP_KEEP 需要是数字（0 表示全部保留）。"
+  printf '%s' "$((10#$keep))"
+}
+
+# prune_backups <keep>: removes all but the newest <keep> backups/<time>* directories.
+prune_backups() {
+  local LC_ALL=C keep=$1 all=() d i
+  ((keep > 0)) || return 0
+  for d in "$DIR"/backups/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]*/; do
+    if [[ -d $d ]]; then all+=("${d%/}"); fi
+  done
+  # The glob is sorted, and the names start with the time.
+  for ((i = 0; i + keep < ${#all[@]}; i++)); do
+    rm -rf -- "${all[i]}"
+    info "删除旧备份 backups/${all[i]##*/}"
+  done
+}
+
+# backup [label]: database dump plus .env (without the master key) and the
+# compose file, into backups/<time>; keeps the newest EDGEWEIR_BACKUP_KEEP.
 cmd_backup() {
-  local dest
+  local dest keep
+  keep=$(backup_keep)
   dest=$DIR/backups/$(date +%Y%m%d-%H%M%S)${1:+-$1}
   mkdir -p "$DIR/backups"
   chmod 700 "$DIR/backups"
@@ -787,11 +864,15 @@ cmd_backup() {
     compose exec -T postgres pg_dump -U edgeweir -d edgeweir --format=custom >"$dest/edgeweir.dump" ||
       die "pg_dump 失败（数据库容器在运行吗？），已中止。"
   fi
-  install -m 600 "$DIR/.env" "$dest/env"
-  install -m 600 "$DIR/$COMPOSE_FILE" "$dest/$COMPOSE_FILE"
   chmod 600 "$dest/edgeweir.dump"
+  (
+    umask 077
+    env_for_backup >"$dest/env"
+  )
+  install -m 600 "$DIR/$COMPOSE_FILE" "$dest/$COMPOSE_FILE"
   ok "edgeweir.dump（$(du -h "$dest/edgeweir.dump" | awk '{print $1}')）、env、${COMPOSE_FILE}"
-  info "备份含主密钥和全部数据，请复制到别的机器并妥善保管；恢复步骤见 docs/deploy/backup.md。"
+  info "备份不含主密钥（EDGEWEIR_MASTER_KEY）：它只在 ${DIR}/.env 里，另行离线保存；恢复步骤见 docs/deploy/backup.md。"
+  prune_backups "$keep"
 }
 
 cmd_update() {
@@ -937,7 +1018,7 @@ usage() {
 
   install            对话式安装（选择数据库方式、生成 .env、启动）
   update [tag]       备份后升级到最新版本或指定 tag（--no-backup 跳过备份）
-  backup             备份数据库、.env 和编排文件到 backups/
+  backup             备份数据库、.env（不含主密钥）和编排文件到 backups/，保留最近 5 份
   config             修改控制台地址和节点通道地址
   start | stop | restart
   status             容器状态和运行中的版本
@@ -949,6 +1030,7 @@ usage() {
 无人值守安装：EDGEWEIR_YES=1 EDGEWEIR_DB=host|bundled EDGEWEIR_PUBLIC_URL=https://…
   [DATABASE_URL=…] [EDGEWEIR_NODE_API_URL=…] [EDGEWEIR_VERSION=…] [EDGEWEIR_DIR=…]
 只用本机已有镜像（docker load 导入）：EDGEWEIR_NO_PULL=1
+备份保留份数：EDGEWEIR_BACKUP_KEEP=5（0 为全部保留）
 EOF
 }
 

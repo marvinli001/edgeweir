@@ -43,7 +43,7 @@ grep -c 'TABLE DATA' edgeweir.dump.list
 
 Expected: greater than 0.
 
-With `deploy.sh`, `./deploy.sh backup` (also run before `update`) writes an `edgeweir.dump` of the same format together with `.env` and the Compose file; see [deploy.sh reference](deploy-script.en.md).
+With `deploy.sh`, `./deploy.sh backup` (also run before `update`) writes an `edgeweir.dump` of the same format together with `.env` (without the master key and `BETTER_AUTH_SECRET`) and the Compose file, keeping the newest 5; see [deploy.sh reference](deploy-script.en.md#backups). Keep the master key offline separately.
 
 ## 2. Restore
 

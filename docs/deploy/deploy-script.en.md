@@ -25,7 +25,7 @@ Save the script to a file before running it: through a pipe (`curl … | bash`) 
 | --- | --- | --- |
 | `install` | — | Interactive install: choose the database mode, check the database, write `.env`, `compose.yml`, and the script copy, start and wait for health checks, print the setup token |
 | `update` (alias `upgrade`) | `[tag]` `[--no-backup]` | Back up, then upgrade to the given tag; without a tag, the dated tag behind `latest`. See [update](#update) |
-| `backup` | — | Back up the database, `.env`, and compose file to `backups/<time>/`. See [Backups](#backups) |
+| `backup` | — | Back up the database, `.env` (without the master key), and compose file to `backups/<time>/`, keeping the newest 5. See [Backups](#backups) |
 | `config` | — | Change the console URL and node channel URL, then recreate the containers; interactive only |
 | `start` | — | Start the project and wait for health checks |
 | `stop` | — | `docker compose stop`; containers are kept |
@@ -76,8 +76,9 @@ Variables supply the defaults; in unattended mode they are the answers. A set `E
 
 | Input | Rule |
 | --- | --- |
-| Install directory | Absolute path; no existing deployment and no `.env` in it; no container named `edgeweir-console` on the host |
-| Console URL | `http(s)://host[:port]` without a path; a trailing `/` is removed; a warning when it is not `https://` |
+| Install directory | Absolute path; missing, empty, or holding only `deploy.sh`; no container named `edgeweir-console` on the host |
+| Existing data | bundled: aborts when the Docker volume `edgeweir_postgres-data` (the database of an earlier install) exists; host: see [Database check](#database-check) |
+| Console URL | `http(s)://host[:port]` with a port of 1–65535, without a path; a trailing `/` is removed; a warning when it is not `https://` |
 | Node channel URL | `https://host[:port]` without a path; its port is the public node channel port, 443 when omitted |
 | Connection string | `postgres://` or `postgresql://`; with user name and database name; a single host; no whitespace, quotes, backticks, `\`, `$`, or `#` (URL-encode special characters in the password, e.g. `$` as `%24`) |
 | Ports | The web and node channel ports are numbers and differ; the install aborts when the node channel port is in use |
@@ -105,12 +106,13 @@ When `EDGEWEIR_YES` is non-empty, or `/dev/tty` cannot be opened, the script rea
 | `EDGEWEIR_VERSION` | Tag | `latest` | Image version to pin |
 | `EDGEWEIR_DIR` | Absolute path | See [Prompts](#prompts) | Install directory; other commands look here first |
 | `EDGEWEIR_NO_PULL` | Any non-empty value | Empty | `install` and `update` pull no images and use local ones only |
+| `EDGEWEIR_BACKUP_KEEP` | Non-negative integer | `5` | Backups `backup` and `update` keep; `0` keeps all |
 | `EDGEWEIR_SCRIPT_URL` | URL | `https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh` | Fallback source of `self-update` |
 
 | Confirmation | Unattended answer |
 | --- | --- |
 | PostgreSQL major version below 18, continue | No: abort |
-| Database check failed, enter again | Not asked: abort |
+| Database check failed or the database is not empty, enter again | Not asked: abort |
 | Start the install | Yes |
 | `update` rollback confirmation | No: abort |
 | `update` replaces the compose file | No: the existing file is kept |
@@ -134,6 +136,7 @@ In host mode the database is checked before any file is written. The check runs 
 | Connection | Prints the error and the hint below; interactive mode offers to enter the details again |
 | The user has `CREATE` on the database and on schema `public` (migrations and the job queue) | Suggests `ALTER DATABASE <db> OWNER TO <user>;` and `ALTER SCHEMA public OWNER TO <user>;` |
 | Server major version 18 or later | Warns and asks whether to continue, default no |
+| No `drizzle.__drizzle_migrations` in the database (no console has run on it) | Note: the encrypted data in it opens only with the original master key; to keep using it, put the original `.env` back into the deployment directory and run `./deploy.sh start`, otherwise use an empty database. Interactively asks whether to enter the database again |
 
 | Error contains | Hint |
 | --- | --- |
@@ -252,7 +255,7 @@ Values are unquoted. Changing a key keeps the other lines and mode 600. Other va
 | File | Content |
 | --- | --- |
 | `edgeweir.dump` | `pg_dump --format=custom`. host: dumped per `DATABASE_URL` with `postgres:18.6-alpine` on the host network; bundled: dumped inside the `postgres` container |
-| `env` | Copy of `.env`, including `EDGEWEIR_MASTER_KEY` |
+| `env` | Copy of `.env` with the `EDGEWEIR_MASTER_KEY` and `BETTER_AUTH_SECRET` lines turned into comments, without their values |
 | `compose.yml` | Copy of the compose file under its original name |
 
 | Item | Rule |
@@ -261,7 +264,8 @@ Values are unquoted. Changing a key keeps the other lines and mode 600. Other va
 | Modes | Directory 700, files 600 |
 | Precondition | In bundled mode the `postgres` container is running |
 | Failure | Aborts when `pg_dump` fails |
-| Retention | Never pruned |
+| Retention | After a successful backup only the newest `EDGEWEIR_BACKUP_KEEP` are kept (default 5, `0` keeps all), older ones removed by directory name; other directories in `backups/` are left alone |
+| Master key | Not in the backup: it is only in `.env` (or the file named by `EDGEWEIR_MASTER_KEY_FILE`); keep it offline separately, restoring the database needs it |
 | Scope | No ClickHouse data |
 
 Restore procedure: [backup.en.md](backup.en.md).

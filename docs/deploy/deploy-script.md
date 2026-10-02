@@ -25,7 +25,7 @@ sudo bash deploy.sh install
 | --- | --- | --- |
 | `install` | — | 对话式安装：选择数据库模式，检查数据库，写入 `.env`、`compose.yml` 与脚本副本，启动并等待健康检查，打印 setup token |
 | `update`（别名 `upgrade`） | `[tag]` `[--no-backup]` | 备份后升级到指定 tag；省略时为 `latest` 对应的日期 tag，见 [update](#update) |
-| `backup` | — | 备份数据库、`.env` 与编排文件到 `backups/<时间>/`，见 [备份](#备份) |
+| `backup` | — | 备份数据库、`.env`（不含主密钥）与编排文件到 `backups/<时间>/`，保留最近 5 份，见 [备份](#备份) |
 | `config` | — | 修改控制台地址与节点通道地址并重建容器；只能交互运行 |
 | `start` | — | 启动编排并等待健康检查 |
 | `stop` | — | `docker compose stop`；保留容器 |
@@ -76,8 +76,9 @@ sudo bash deploy.sh install
 
 | 输入 | 规则 |
 | --- | --- |
-| 安装目录 | 绝对路径；目录中没有已有部署且没有 `.env`；主机上没有名为 `edgeweir-console` 的容器 |
-| 控制台地址 | `http(s)://主机[:端口]`，不含路径，末尾 `/` 被去除；不是 `https://` 时警告 |
+| 安装目录 | 绝对路径；不存在、为空或只有 `deploy.sh`；主机上没有名为 `edgeweir-console` 的容器 |
+| 已有数据 | bundled：Docker 卷 `edgeweir_postgres-data`（之前的安装留下的数据库）已存在时中止；host：见 [数据库检查](#数据库检查) |
+| 控制台地址 | `http(s)://主机[:端口]`，端口 1–65535，不含路径，末尾 `/` 被去除；不是 `https://` 时警告 |
 | 节点通道地址 | `https://主机[:端口]`，不含路径；其中的端口即对外的节点通道端口，省略时为 443 |
 | 连接串 | `postgres://` 或 `postgresql://`；含用户名与库名；单一主机；不含空白、引号、反引号、`\`、`$`、`#`，密码中的特殊字符做 URL 编码（`$` 写成 `%24`） |
 | 端口 | Web 端口与节点通道端口为数字且不同；节点通道端口已被占用时中止 |
@@ -105,12 +106,13 @@ sudo bash deploy.sh install
 | `EDGEWEIR_VERSION` | tag | `latest` | 要固定的镜像版本 |
 | `EDGEWEIR_DIR` | 绝对路径 | 见 [提示](#提示) | 安装目录；其他命令优先在此查找部署 |
 | `EDGEWEIR_NO_PULL` | 任意非空值 | 空 | `install` 与 `update` 不拉取镜像，只用本机已有镜像 |
+| `EDGEWEIR_BACKUP_KEEP` | 非负整数 | `5` | `backup` 与 `update` 保留的备份份数；`0` 为全部保留 |
 | `EDGEWEIR_SCRIPT_URL` | URL | `https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh` | `self-update` 的回退来源 |
 
 | 确认项 | 无人值守的答案 |
 | --- | --- |
 | PostgreSQL 主版本低于 18，是否继续 | 否：中止 |
-| 数据库检查未通过，是否重填 | 不询问：中止 |
+| 数据库检查未通过或数据库不是空的，是否重填 | 不询问：中止 |
 | 「开始安装？」 | 是 |
 | `update` 回退确认 | 否：中止 |
 | `update` 替换编排文件 | 否：保留现有文件 |
@@ -134,6 +136,7 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 | 连接 | 打印错误与下表提示；交互模式询问是否重填 |
 | 当前用户对该库和 `public` schema 有 `CREATE` 权限（迁移与后台任务队列需要） | 提示 `ALTER DATABASE <库> OWNER TO <用户>;` 与 `ALTER SCHEMA public OWNER TO <用户>;` |
 | 服务器主版本不低于 18 | 警告并询问是否继续，默认否 |
+| 库中没有 `drizzle.__drizzle_migrations`（没有控制台在这个库上运行过） | 提示：库中的加密数据只能用当初的主密钥打开，继续使用它就把当初的 `.env` 放回部署目录后 `./deploy.sh start`，否则换空数据库；交互模式询问是否重填 |
 
 | 错误含 | 提示 |
 | --- | --- |
@@ -252,7 +255,7 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 | 文件 | 内容 |
 | --- | --- |
 | `edgeweir.dump` | `pg_dump --format=custom`。host：按 `DATABASE_URL` 用 `postgres:18.6-alpine` 在 host 网络转储；bundled：在 `postgres` 容器内转储 |
-| `env` | `.env` 副本，含 `EDGEWEIR_MASTER_KEY` |
+| `env` | `.env` 副本；`EDGEWEIR_MASTER_KEY` 与 `BETTER_AUTH_SECRET` 两行改为注释，不含其值 |
 | `compose.yml` | 编排文件副本，保留原文件名 |
 
 | 项目 | 规则 |
@@ -261,7 +264,8 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 | 权限 | 目录 700，文件 600 |
 | 前提 | bundled 模式的 `postgres` 容器在运行 |
 | 失败 | `pg_dump` 失败时中止 |
-| 保留 | 不自动清理 |
+| 保留 | 成功备份后只留最近 `EDGEWEIR_BACKUP_KEEP` 份（默认 5，`0` 为全部保留），按目录名删除更早的；`backups/` 中其他名称的目录不动 |
+| 主密钥 | 不在备份中：只在 `.env`（或 `EDGEWEIR_MASTER_KEY_FILE` 指定的文件）里，另行离线保存；恢复数据库需要它 |
 | 范围 | 不含 ClickHouse 数据 |
 
 恢复步骤见 [backup.md](backup.md)。
