@@ -295,6 +295,18 @@ export const CONSOLE_URL_WARNINGS = [
 ] as const;
 export type ConsoleUrlWarning = (typeof CONSOLE_URL_WARNINGS)[number];
 
+/**
+ * The parsed URL, or undefined when `value` is not one. Refinements run
+ * even after z.url() rejected the value, so they parse with this.
+ */
+export function parseUrl(value: string): URL | undefined {
+  try {
+    return new URL(value);
+  } catch {
+    return undefined;
+  }
+}
+
 /** Whether a URL is plain http:// (unparsable URLs are not). */
 export function isPlainHttp(url: string): boolean {
   try {

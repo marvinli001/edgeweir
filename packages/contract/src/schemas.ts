@@ -5,7 +5,7 @@ import {
   structuredCacheCondition,
 } from "@edgeweir/rule-engine";
 import * as z from "zod";
-import { CONSOLE_URL_WARNINGS, normalizeCidr, parseIp } from "./addresses";
+import { CONSOLE_URL_WARNINGS, normalizeCidr, parseIp, parseUrl } from "./addresses";
 import { addExpressionIssue } from "./expressions";
 
 const LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
@@ -1064,8 +1064,9 @@ export const releaseBaseUrl = z
   .url()
   .max(2048)
   .refine((value) => {
-    const url = new URL(value);
+    const url = parseUrl(value);
     return (
+      !!url &&
       ["https:", "http:"].includes(url.protocol) &&
       !url.username &&
       !url.password &&

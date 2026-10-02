@@ -1,5 +1,6 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
+import { parseUrl } from "./addresses";
 import { uuid } from "./schemas";
 export const alertKind = z.enum([
   "node_offline",
@@ -22,20 +23,20 @@ const endpoint = z
   .url()
   .max(4096)
   .refine((s) => {
-    const u = new URL(s);
-    return ["http:", "https:"].includes(u.protocol) && !u.username && !u.password && !u.hash;
+    const u = parseUrl(s);
+    return !!u && ["http:", "https:"].includes(u.protocol) && !u.username && !u.password && !u.hash;
   });
 export const alertChannelConfig = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("webhook"), url: endpoint, bearer: z.string().max(4096).optional() }),
   z.object({ kind: z.literal("email"), to: z.array(z.email()).min(1).max(20) }),
   z.object({
     kind: z.literal("dingtalk"),
-    url: endpoint.refine((s) => new URL(s).hostname === "oapi.dingtalk.com"),
+    url: endpoint.refine((s) => parseUrl(s)?.hostname === "oapi.dingtalk.com"),
     secret: z.string().max(4096).optional(),
   }),
   z.object({
     kind: z.literal("wecom"),
-    url: endpoint.refine((s) => new URL(s).hostname === "qyapi.weixin.qq.com"),
+    url: endpoint.refine((s) => parseUrl(s)?.hostname === "qyapi.weixin.qq.com"),
   }),
   z.object({
     kind: z.literal("telegram"),
