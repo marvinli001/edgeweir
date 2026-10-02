@@ -2,6 +2,7 @@ import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import { schema } from "@edgeweir/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
+import { systemActor } from "../../src/server/services/audit";
 import { latestRevision, publishRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
@@ -130,7 +131,11 @@ describe("site enabling", async () => {
       operationStartedAt: certificate.operationStartedAt,
     });
     await ctx.db.transaction((tx) =>
-      publishRevision(tx, { clusterId, reason: { code: "acme_challenge_updated", params: {} } }),
+      publishRevision(tx, {
+        clusterId,
+        reason: { code: "acme_challenge_updated", params: {} },
+        actor: systemActor,
+      }),
     );
     const latest = await latestRevision(ctx.db, clusterId);
     const config = decodeNodeConfig(latest?.ir ?? new Uint8Array());

@@ -17,7 +17,7 @@ import { lockPlatformErrorPages } from "../lib/locks";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { readSetting, writeSetting } from "./protection";
-import { type Executor, publishClusters, publisher, publishRevision } from "./revisions";
+import { type Executor, publishClusters, publishRevision } from "./revisions";
 import { findSite } from "./sites";
 
 /** system_setting key of the platform's error pages (`PlatformErrorPages`). */
@@ -113,7 +113,7 @@ export async function updateSiteErrorPages(
     const { row: revision } = await publishRevision(tx, {
       clusterId: site.clusterId,
       reason: { code: "site_error_pages_updated", params: { site: site.name } },
-      userId: publisher(ctx.actor),
+      actor: ctx.actor,
     });
     const template = (list: ErrorPage[], status: number) =>
       list.find((page) => page.status === status)?.template;
@@ -179,7 +179,7 @@ export async function setPlatformErrorPages(
     const published = await publishClusters(
       tx,
       clusters.map((c) => c.id),
-      { reason: { code: "error_pages_updated", params: {} }, userId: publisher(actor) },
+      { reason: { code: "error_pages_updated", params: {} }, actor },
     );
     const revisions: Record<string, number> = {};
     for (const cluster of clusters)

@@ -26,7 +26,6 @@ import { assertOriginsAllowed } from "./origin-allow-list";
 import {
   type Executor,
   latestRevision,
-  publisher,
   publishRevision,
   type Tx,
   toRevisionDto,
@@ -403,7 +402,7 @@ export async function createL4App(
     const { row: revision } = await publishRevision(tx, {
       clusterId: cluster.id,
       reason: { code: "l4_app_created", params: { app: row.name } },
-      userId: publisher(actor),
+      actor,
     });
     await recordAudit(tx, actor, {
       action: "l4_app.create",
@@ -494,7 +493,7 @@ export async function updateL4App(
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,
       reason: { code: "l4_app_updated", params: { app: updated.name } },
-      userId: publisher(actor),
+      actor,
     });
     await recordAudit(tx, actor, {
       action: "l4_app.update",
@@ -536,7 +535,7 @@ export async function setL4AppEnabled(
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,
       reason: { code: "l4_app_updated", params: { app: row.name } },
-      userId: publisher(actor),
+      actor,
     });
     await recordAudit(tx, actor, {
       action: input.enabled ? "l4_app.enable" : "l4_app.disable",
@@ -563,7 +562,7 @@ export async function deleteL4App(
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,
       reason: { code: "l4_app_deleted", params: { app: row.name } },
-      userId: publisher(actor),
+      actor,
     });
     await recordAudit(tx, actor, {
       action: "l4_app.delete",

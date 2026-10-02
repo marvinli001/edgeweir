@@ -10,7 +10,7 @@ import { lockLogPartition, lockLogPartitions, tryLockNodeLogs } from "../lib/loc
 import type { Actor } from "./audit";
 import { recordAudit } from "./audit";
 import { insertClickHouseLogs, queryClickHouseLogs } from "./clickhouse";
-import { type Executor, publisher, publishRevision } from "./revisions";
+import { type Executor, publishRevision } from "./revisions";
 import { findSite } from "./sites";
 
 const DAY = 86400000;
@@ -182,7 +182,7 @@ export async function configureLogs(
     await publishRevision(tx, {
       clusterId: site.clusterId,
       reason: { code: "site_updated", params: { site: site.name } },
-      userId: publisher(actor),
+      actor,
     });
     await recordAudit(tx, actor, {
       action: "site.logs_configure",

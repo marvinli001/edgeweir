@@ -10,7 +10,6 @@ import { isOnline, ONLINE_WINDOW_SECONDS } from "./nodes";
 import {
   type Executor,
   latestRevision,
-  publisher,
   publishRevision,
   rollbackContent,
   rollbackToRevision,
@@ -117,7 +116,7 @@ export async function createClusterTx(
   await publishRevision(tx, {
     clusterId: row.id,
     reason: { code: "cluster_created", params: { cluster: row.name } },
-    userId: publisher(actor),
+    actor,
   });
   await recordAudit(tx, actor, {
     action: "cluster.create",
@@ -250,7 +249,7 @@ export async function rollbackCluster(
     const result = await rollbackToRevision(tx, {
       clusterId: cluster.id,
       revision: input.revision,
-      userId: publisher(actor),
+      actor,
     });
     if (!result) fail("REVISION_NOT_FOUND", "revision not found");
     await recordAudit(tx, actor, {

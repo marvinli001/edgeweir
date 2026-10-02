@@ -21,7 +21,7 @@ import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockIpLists, lockPlatformRules } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
-import { type Executor, listBindings, publishClusters, publisher } from "./revisions";
+import { type Executor, listBindings, publishClusters } from "./revisions";
 import { findSite } from "./sites";
 
 const ruleScope = (siteId: string | null) =>
@@ -117,7 +117,7 @@ export async function saveRules(
       clusters.map((c) => c.id),
       {
         reason: { code: "rules_updated", params: {} },
-        userId: publisher(ctx.actor),
+        actor: ctx.actor,
         site: site?.id,
       },
     );
@@ -184,7 +184,7 @@ async function publishListChange(tx: Executor, actor: Actor) {
   await publishClusters(
     tx as Parameters<typeof publishClusters>[0],
     clusters.map((c) => c.id),
-    { reason: { code: "rules_updated", params: {} }, userId: publisher(actor) },
+    { reason: { code: "rules_updated", params: {} }, actor },
   );
 }
 /** Refuses expressions that reference lists no one created (IP_LIST_REFERENCE_UNKNOWN). */

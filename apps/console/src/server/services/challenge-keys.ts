@@ -112,7 +112,7 @@ export async function rotateChallengeKeys(app: AppContext, now = new Date()): Pr
             ? await publishRevision(tx, {
                 clusterId,
                 reason: { code: "challenge_keys_rotated", params: {} },
-                userId: null,
+                actor: systemActor,
               })
             : undefined;
         const [cluster] = await tx

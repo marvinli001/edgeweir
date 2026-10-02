@@ -24,7 +24,7 @@ import { fail } from "../lib/errors";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { certdDns, probe, validCredentials } from "./dns-providers";
 import { assertHttp01Ready } from "./http01-check";
-import { type Executor, getRevision, publisher, publishRevision } from "./revisions";
+import { type Executor, getRevision, publishRevision } from "./revisions";
 import { publishedRevisions } from "./rollout";
 
 export type CertificateContext = { actor: Actor };
@@ -525,7 +525,7 @@ export async function updateHttps(
     await publishRevision(tx, {
       clusterId: site.clusterId,
       reason: { code: "certificate_updated", params: { site: site.name } },
-      userId: publisher(ctx.actor),
+      actor: ctx.actor,
     });
     await recordAudit(tx, ctx.actor, {
       action: "site.https_update",

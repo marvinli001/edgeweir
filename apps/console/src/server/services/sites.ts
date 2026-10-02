@@ -43,7 +43,6 @@ import {
   type Executor,
   latestRevision,
   listBindings,
-  publisher,
   publishRevision,
   type Tx,
   toRevisionDto,
@@ -594,7 +593,7 @@ export async function createSite(
     const { row: revision } = await publishRevision(tx, {
       clusterId,
       reason: { code: "site_created", params: { site: name } },
-      userId: publisher(ctx.actor),
+      actor: ctx.actor,
       site: siteRow.id,
     });
     await recordAudit(tx, ctx.actor, {
@@ -684,7 +683,7 @@ export async function updateSite(
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,
       reason: { code: "site_updated", params: { site: updated.name } },
-      userId: publisher(ctx.actor),
+      actor: ctx.actor,
       site: row.id,
     });
     await recordAudit(tx, ctx.actor, {
@@ -745,7 +744,7 @@ export async function deleteSite(
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,
       reason: { code: "site_deleted", params: { site: row.name } },
-      userId: publisher(ctx.actor),
+      actor: ctx.actor,
     });
     await recordAudit(tx, ctx.actor, {
       action: "site.delete",
@@ -791,7 +790,7 @@ export async function setSiteEnabled(
         code: input.enabled ? "site_enabled" : "site_disabled",
         params: { site: row.name },
       },
-      userId: publisher(ctx.actor),
+      actor: ctx.actor,
       site: row.id,
     });
     await recordAudit(tx, ctx.actor, {

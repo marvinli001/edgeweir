@@ -3,6 +3,7 @@ import { schema } from "@edgeweir/db";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
+import { systemActor } from "../../src/server/services/audit";
 import { compileBindingPlan } from "../../src/server/services/dns";
 import {
   latestRevision,
@@ -387,7 +388,11 @@ describe("configuration canary with automatic rollback", async () => {
       operationStartedAt: certificate.operationStartedAt,
     });
     await ctx.db.transaction((tx) =>
-      publishRevision(tx, { clusterId, reason: { code: "acme_challenge_updated", params: {} } }),
+      publishRevision(tx, {
+        clusterId,
+        reason: { code: "acme_challenge_updated", params: {} },
+        actor: systemActor,
+      }),
     );
     for (const node of [canary, stable]) {
       const revision = await nodeTarget(ctx.db, node);

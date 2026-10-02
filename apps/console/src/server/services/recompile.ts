@@ -33,6 +33,7 @@ export async function recompileAfterUpgrade(app: AppContext) {
           publishRevision(inner, {
             clusterId: cluster.id,
             reason: { code: "recompiled", params: {} },
+            actor: systemActor,
           }),
         );
       } catch (error) {

@@ -61,7 +61,7 @@ import { lockClusterPublish } from "../lib/locks";
 import { assertNodeFeatures } from "../lib/node-features";
 import { isOnline } from "../lib/node-online";
 import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settings";
-import { recordAudit, systemActor } from "./audit";
+import { type Actor, recordAudit, systemActor } from "./audit";
 import { ensureChallengeKeys } from "./challenge-keys";
 import { loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
 import { loadL4AppModels, restoreL4Apps } from "./l4-config";
@@ -73,10 +73,11 @@ export type Tx = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export type Executor = Database | Tx;
 
 /**
- * The account behind a change, recorded as a revision's publisher and in
- * every `created_by_user_id`: the operator, signed in or with an AccessKey.
- * Service accounts and background jobs are nobody (their ids are not users),
- * which also keeps them behind the capability gate of insertRevision.
+ * The account behind a change, recorded as a revision's publisher (the
+ * actor a change is published with) and in every `created_by_user_id`: the
+ * operator, signed in or with an AccessKey. Service accounts and background
+ * jobs are nobody (their ids are not users), which also keeps them behind
+ * the capability gate of insertRevision.
  */
 export const publisher = (actor: { type: string; id: string }) =>
   actor.type === "user" || actor.type === "api_key" ? actor.id : null;
@@ -740,7 +741,8 @@ async function loadHttpChallenges(tx: Executor, clusterId: string) {
 
 export interface PublishOptions {
   reason: RevisionReason;
-  userId?: string | null;
+  /** Who publishes (systemActor for background jobs); the revision records publisher(actor). */
+  actor: Actor;
   /**
    * The site the change is about: its stored rules must compile
    * (RULE_INVALID). Elsewhere a rule the current validator refuses keeps
@@ -816,10 +818,10 @@ export async function publishRevision(
     ? await ensureChallengeKeys(tx, opts.clusterId)
     : [];
   const build = (revision: bigint) => compileNodeConfig({ ...input, challengeKeys }, revision);
+  const userId = publisher(opts.actor);
   const rollout = await loadRollout(tx, opts.clusterId);
-  if (!rollout?.enabled)
-    return insertRevision(tx, opts.clusterId, build, opts.reason, opts.userId ?? null);
-  return publishThroughCanary(tx, rollout, build, opts.reason, opts.userId ?? null);
+  if (!rollout?.enabled) return insertRevision(tx, opts.clusterId, build, opts.reason, userId);
+  return publishThroughCanary(tx, rollout, build, opts.reason, userId);
 }
 
 /**
@@ -1211,7 +1213,7 @@ export async function currentStable(
  */
 export async function rollbackToRevision(
   tx: Tx,
-  opts: { clusterId: string; revision: number; userId?: string | null },
+  opts: { clusterId: string; revision: number; actor: Actor },
 ): Promise<{ row: RevisionRow; created: boolean } | undefined> {
   await lockClusterPublish(tx, opts.clusterId);
   const content = await rollbackContent(tx, opts.clusterId, opts.revision);
@@ -1225,7 +1227,7 @@ export async function rollbackToRevision(
       return config;
     },
     { code: "rollback", params: { revision: opts.revision } },
-    opts.userId ?? null,
+    publisher(opts.actor),
   );
   // The operator's rollback restores known content: it goes to every node, no canary.
   const rollout = await loadRollout(tx, opts.clusterId);

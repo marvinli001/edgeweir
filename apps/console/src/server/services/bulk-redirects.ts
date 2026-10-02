@@ -7,7 +7,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { asc, eq } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import { type Executor, publisher, publishRevision } from "./revisions";
+import { type Executor, publishRevision } from "./revisions";
 import { findSite } from "./sites";
 
 type RedirectRow = typeof schema.bulkRedirect.$inferSelect;
@@ -88,7 +88,7 @@ export async function saveBulkRedirects(
     await publishRevision(tx, {
       clusterId: site.clusterId,
       reason: { code: "rules_updated", params: {} },
-      userId: publisher(ctx.actor),
+      actor: ctx.actor,
     });
     await recordAudit(tx, ctx.actor, {
       action: "site.bulk_redirects_update",

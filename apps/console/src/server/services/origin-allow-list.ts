@@ -7,7 +7,6 @@ import {
   loadOriginAllowList,
   ORIGIN_ALLOW_LIST_KEY,
   publishClusters,
-  publisher,
 } from "./revisions";
 
 export async function getOriginAllowList(db: Executor): Promise<OriginAllowList> {
@@ -62,7 +61,7 @@ export async function setOriginAllowList(
       clusters.map((c) => c.id),
       {
         reason: { code: "origin_allow_list_updated", params: {} },
-        userId: publisher(actor),
+        actor,
       },
     );
     const revisions: Record<string, number> = {};

@@ -4,6 +4,7 @@ import { schema } from "@edgeweir/db";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
+import { systemActor } from "../../src/server/services/audit";
 import {
   certificateKeyBinding,
   inspectCertificate,
@@ -156,6 +157,7 @@ describe("configuration canary and current state", async () => {
       await publishRevision(tx, {
         clusterId,
         reason: { code: "certificate_updated", params: { site: "shop" } },
+        actor: systemActor,
       });
     });
     const candidate = await config(canary);
@@ -330,6 +332,7 @@ describe("configuration canary and current state", async () => {
       return publishRevision(tx, {
         clusterId,
         reason: { code: "site_purged", params: { site: "shop" } },
+        actor: systemActor,
       });
     });
     expect(await rollout()).toMatchObject({ state: "promoted", candidateRevision: null });

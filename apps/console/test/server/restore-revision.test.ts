@@ -1,5 +1,6 @@
 import { schema } from "@edgeweir/db";
 import { afterAll, expect, it } from "vitest";
+import { systemActor } from "../../src/server/services/audit";
 import { createClusterTx } from "../../src/server/services/clusters";
 import { publishRevision } from "../../src/server/services/revisions";
 import { createTestContext, seedOperator } from "./helpers";
@@ -43,6 +44,7 @@ it("publishes unchanged content above a restored cluster's reported LKG, ignorin
       publishRevision(tx, {
         clusterId: cluster.id,
         reason: { code: "cluster_created", params: {} },
+        actor: systemActor,
       }),
     );
   const first = await publish();

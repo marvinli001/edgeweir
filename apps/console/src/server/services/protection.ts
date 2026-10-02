@@ -16,7 +16,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { lockCcTemplate, lockProtectionSettings } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
-import { type Executor, publishClusters, publisher, publishRevision } from "./revisions";
+import { type Executor, publishClusters, publishRevision } from "./revisions";
 import { findSite } from "./sites";
 
 /** system_setting keys. */
@@ -212,7 +212,7 @@ export async function updateSiteProtection(
     await publishRevision(tx, {
       clusterId: site.clusterId,
       reason: { code: "site_protection_updated", params: { site: site.name } },
-      userId: publisher(ctx.actor),
+      actor: ctx.actor,
     });
     const after = toDto(site.id, saved, template, PROTECTION_SETTINGS_DEFAULTS);
     const strip = ({
@@ -254,7 +254,7 @@ export async function setProtectionSettings(
       await publishClusters(
         tx,
         (await tx.select({ id: schema.cluster.id }).from(schema.cluster)).map((c) => c.id),
-        { reason: { code: "platform_protection_updated", params: {} }, userId: publisher(actor) },
+        { reason: { code: "platform_protection_updated", params: {} }, actor },
       );
     await recordAudit(tx, actor, {
       action: "system.protection_update",
@@ -292,7 +292,7 @@ export async function setCcTemplate(
     await publishClusters(
       tx,
       clusters.map((c) => c.id),
-      { reason: { code: "cc_template_updated", params: {} }, userId: publisher(actor) },
+      { reason: { code: "cc_template_updated", params: {} }, actor },
     );
     await recordAudit(tx, actor, {
       action: "system.cc_template_update",

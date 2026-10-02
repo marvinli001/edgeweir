@@ -29,7 +29,7 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { rangeWindow, sourceFor } from "./analytics";
 import { type Actor, recordAudit } from "./audit";
-import { type Executor, publisher, publishRevision } from "./revisions";
+import { type Executor, publishRevision } from "./revisions";
 import { findSite } from "./sites";
 
 type WafRow = typeof schema.siteWaf.$inferSelect;
@@ -126,7 +126,7 @@ export async function updateSiteWaf(
     await publishRevision(tx, {
       clusterId: site.clusterId,
       reason: { code: "site_waf_updated", params: { site: site.name } },
-      userId: publisher(ctx.actor),
+      actor: ctx.actor,
     });
     const after = toDto(site.id, saved);
     const strip = ({ siteId: _s, updatedAt: _u, ...rest }: SiteWaf) => rest;

@@ -343,7 +343,7 @@ async function presentHttpChallenges(
     const published = await publishClusters(
       tx,
       served.map((s) => s.clusterId),
-      { reason: { code: "acme_challenge_updated", params: {} } },
+      { reason: { code: "acme_challenge_updated", params: {} }, actor: systemActor },
     );
     return [...published.keys()];
   });
@@ -655,7 +655,7 @@ async function issueNow(app: AppContext, id: string) {
       await publishClusters(
         tx,
         sites.map((s) => s.clusterId),
-        { reason: { code: "certificate_updated", params: { site: row.name } } },
+        { reason: { code: "certificate_updated", params: { site: row.name } }, actor: systemActor },
       );
       await recordAudit(tx, systemActor, {
         action: "certificate.issued",

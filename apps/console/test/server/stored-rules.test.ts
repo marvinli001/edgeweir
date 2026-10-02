@@ -3,6 +3,7 @@ import { schema } from "@edgeweir/db";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
+import { systemActor } from "../../src/server/services/audit";
 import { latestRevision, publishRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
@@ -100,7 +101,11 @@ describe("stored rules the validator no longer accepts", async () => {
     expect(published.sites.find((s) => s.id === otherId)?.name).toBe("other-2");
     expect(published.sites.find((s) => s.id === siteId)?.rules).toEqual(compiled);
     await ctx.db.transaction((tx) =>
-      publishRevision(tx, { clusterId, reason: { code: "acme_challenge_updated", params: {} } }),
+      publishRevision(tx, {
+        clusterId,
+        reason: { code: "acme_challenge_updated", params: {} },
+        actor: systemActor,
+      }),
     );
     await admin.platformRules.save({ rules: [] });
     expect(await ruleAlert(rule.id)).toBe(true);
