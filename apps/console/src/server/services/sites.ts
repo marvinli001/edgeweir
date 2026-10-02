@@ -38,11 +38,11 @@ import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { coverSiteDomains } from "./certificates";
 import { defaultClusterId } from "./clusters";
+import { listBindings } from "./config-input";
 import { assertOriginsAllowed } from "./origin-allow-list";
 import {
   type Executor,
   latestRevision,
-  listBindings,
   publishRevision,
   type Tx,
   toRevisionDto,

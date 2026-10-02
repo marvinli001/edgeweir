@@ -21,7 +21,8 @@ import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockIpLists, lockPlatformRules } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
-import { type Executor, listBindings, publishClusters } from "./revisions";
+import { listBindings } from "./config-input";
+import { type Executor, publishClusters } from "./revisions";
 import { findSite } from "./sites";
 
 const ruleScope = (siteId: string | null) =>

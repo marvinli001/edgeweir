@@ -11,13 +11,12 @@ import {
   type Executor,
   latestRevision,
   publishRevision,
-  rollbackContent,
-  rollbackToRevision,
   rolloutTargets,
   type Tx,
   targetFor,
   toRevisionDto,
 } from "./revisions";
+import { rollbackContent, rollbackToRevision } from "./rollback";
 
 /**
  * Online active nodes of a cluster, and how many of them run their target

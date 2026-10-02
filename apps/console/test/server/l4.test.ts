@@ -14,7 +14,8 @@ import {
   setPortPools,
   updateL4App,
 } from "../../src/server/services/l4";
-import { currentStable, latestRevision } from "../../src/server/services/revisions";
+import { latestRevision } from "../../src/server/services/revisions";
+import { currentStable } from "../../src/server/services/rollback";
 import {
   type ApiClient,
   createTestContext,

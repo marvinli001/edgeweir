@@ -2,12 +2,8 @@ import { forbiddenOriginRange, type OriginAllowList } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
-import {
-  type Executor,
-  loadOriginAllowList,
-  ORIGIN_ALLOW_LIST_KEY,
-  publishClusters,
-} from "./revisions";
+import { loadOriginAllowList, ORIGIN_ALLOW_LIST_KEY } from "./config-input";
+import { type Executor, publishClusters } from "./revisions";
 
 export async function getOriginAllowList(db: Executor): Promise<OriginAllowList> {
   return { cidrs: await loadOriginAllowList(db) };

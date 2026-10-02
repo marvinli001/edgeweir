@@ -18,7 +18,6 @@ import { type Actor, recordAudit, systemActor } from "./audit";
 import { distinctReasons, siteChanges } from "./config-changes";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import {
-  currentStable,
   type Executor,
   getRevision,
   insertRevision,
@@ -30,6 +29,7 @@ import {
   toRevisionDto,
   updateRollout,
 } from "./revisions";
+import { currentStable } from "./rollback";
 
 type RolloutRow = typeof schema.clusterRollout.$inferSelect;
 
