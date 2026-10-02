@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { login, logout, pick } from "./helpers";
+import { login, logout, pick, saved } from "./helpers";
 
 /**
  * Written by scripts/e2e-g4.mjs on the default cluster (two G4 nodes): the
@@ -95,20 +95,6 @@ async function submitTask(page: Page, type: string, field: Locator): Promise<Loc
     await expect(node.getByTestId("cache-task-node-counts")).toContainText("失败 0");
   }
   return task;
-}
-
-/**
- * Clicks a save button and waits for its RPC to answer: the button turns
- * disabled while the mutation is still pending, so a reload right after the
- * click could read the old value.
- */
-async function saved(page: Page, save: Locator, procedure: string) {
-  const answered = page.waitForResponse(
-    (response) =>
-      response.url().includes(`/rpc/${procedure}`) && response.request().method() === "POST",
-  );
-  await save.click();
-  expect((await answered).ok()).toBe(true);
 }
 
 test("G4: purges by host and Cache-Tag, device variant prefetches and a sitemap reach every node", async ({
