@@ -97,7 +97,7 @@ curl -fsSL https://<控制台>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN b
 | 健康检查（容器内） | `docker compose exec console edgeweir-healthcheck` |
 | 找回账户（重置密码、停用两步验证） | `docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor`，见 [找回账户](#找回账户) |
 | 拉取 `EDGEWEIR_VERSION` 指定的镜像并重建 | `docker compose pull && docker compose up -d` |
-| 启动 ClickHouse | `docker compose --profile analytics up -d` |
+| 启动 ClickHouse | `.env` 中设置 `COMPOSE_PROFILES=analytics` 后 `docker compose up -d`（此后的命令都包含它） |
 
 > [!WARNING]
 > `docker compose down -v` 删除 `postgres-data` 等命名卷，即全部数据。

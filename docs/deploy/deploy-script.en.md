@@ -54,7 +54,7 @@ Commands other than `install`, `template`, and `help` look for the deployment di
 | Mode | host when the compose file contains `network_mode: host`, otherwise bundled |
 | Override file | `compose.override.yml` next to the compose file (`docker-compose.override.yml` for `docker-compose.yml`, and so on) is passed to Compose as well when it exists; local changes go there and survive template replacements by `update` |
 | Compose project name | Taken from the `com.docker.compose.project` label of the `edgeweir-console` container, so projects a panel created under another name work too |
-| Environment | Shell variables named in `.env` or the compose file are removed before Compose runs; `.env` decides |
+| Environment | Shell variables named in `.env` or the compose file are removed before Compose runs; `.env` decides. `.env` goes to Compose with `--env-file`, so its `COMPOSE_PROFILES` (for example for an `analytics` service added in the override file) applies to every command |
 
 ## install
 

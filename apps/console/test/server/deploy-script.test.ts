@@ -575,6 +575,27 @@ describe("deploy.sh", () => {
       ).not.toContain("override");
     });
 
+    it("leaves COMPOSE_PROFILES to .env, which Compose reads through --env-file", () => {
+      const dir = directory({
+        ".env": "POSTGRES_PASSWORD=x\nCOMPOSE_PROFILES=analytics\n",
+        "compose.yml": "services: {}\n",
+      });
+      // A docker on PATH that prints its arguments and the profiles it was given.
+      const bin = directory({
+        docker: '#!/bin/sh\nprintf "%s\\n" "$@" "profiles=${COMPOSE_PROFILES-unset}"\n',
+      });
+      execFileSync("chmod", ["+x", resolve(bin, "docker")]);
+      const args = sourced("DIR=$D; COMPOSE_FILE=compose.yml; compose up -d", {
+        D: dir,
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+        // A value in the calling shell would win over .env; compose() drops it.
+        COMPOSE_PROFILES: "upgrades",
+      });
+      expect(args).toContain(`--env-file\n${dir}/.env\n`);
+      expect(args).toContain("profiles=unset\n");
+      expect(args).not.toContain("--profile");
+    });
+
     it.each([
       ["https://a.example.com:8443", "8443", "8443", "same"],
       ["https://a.example.com:8443", "8443", "9443", "follow"],

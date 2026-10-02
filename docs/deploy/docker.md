@@ -12,7 +12,7 @@
 | --- | --- | --- | --- |
 | `console` | `ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}` | 默认 | `ROLE=all`；发布 `${EDGEWEIR_HTTP_PORT:-127.0.0.1:3000}:3000` 与 `${EDGEWEIR_NODE_API_PORT:-8443}:8443`；只读根文件系统、`/tmp` 为 tmpfs、`no-new-privileges` |
 | `postgres` | `postgres:18.6-alpine`（按 digest 固定） | 默认 | 卷 `postgres-data` 挂载到 `/var/lib/postgresql`；端口不发布；`pg_isready` 健康检查通过后 `console` 才启动 |
-| `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine`（按 digest 固定） | `--profile analytics` | 卷 `clickhouse-data` |
+| `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine`（按 digest 固定） | `.env` 中 `COMPOSE_PROFILES=analytics` | 卷 `clickhouse-data` |
 
 镜像公开，拉取无需登录。tag 规则见 [版本、升级与回滚](upgrade.md)。
 
@@ -189,11 +189,19 @@ docker compose ps
 
 | Profile | 组件 | 启用 |
 | --- | --- | --- |
-| `analytics` | ClickHouse：原始访问日志与分钟级统计 | `.env` 设置 `EDGEWEIR_ANALYTICS=clickhouse` 与 `CLICKHOUSE_PASSWORD` |
+| `analytics` | ClickHouse：原始访问日志与分钟级统计 | `.env` 设置 `COMPOSE_PROFILES=analytics`、`EDGEWEIR_ANALYTICS=clickhouse` 与 `CLICKHOUSE_PASSWORD` |
+
+```bash title=".env"
+COMPOSE_PROFILES=analytics
+EDGEWEIR_ANALYTICS=clickhouse
+CLICKHOUSE_PASSWORD=<密码>
+```
 
 ```bash
-docker compose --profile analytics up -d
+docker compose up -d
 ```
+
+Compose 从 `.env` 读取 `COMPOSE_PROFILES`，此后每条 `docker compose` 命令（`up`、`pull`、`logs`、`down`）都包含 ClickHouse，无需加 `--profile analytics`。
 
 控制台图表与告警使用 PostgreSQL 汇总数据。访问日志采样默认关闭，在网站的日志页面开启；原始日志保留 7 天。切换存储模式不迁移历史数据。详见 [访问日志与 AccessKey](../guide/access-logs.md)。
 

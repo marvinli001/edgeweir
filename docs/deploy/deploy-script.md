@@ -54,7 +54,7 @@ sudo bash deploy.sh install
 | 模式 | 编排文件含 `network_mode: host` 时为 host，否则为 bundled |
 | 覆盖文件 | 编排文件旁的 `compose.override.yml`（`docker-compose.yml` 对应 `docker-compose.override.yml`，以此类推）存在时一并传给 Compose；自己的改动写在这里，`update` 替换模板时不受影响 |
 | Compose 项目名 | 取自容器 `edgeweir-console` 的 `com.docker.compose.project` 标签；面板以其他名称创建的编排同样适用 |
-| 环境变量 | 调用 Compose 前移除 shell 中与 `.env` 或编排文件同名的变量，以 `.env` 为准 |
+| 环境变量 | 调用 Compose 前移除 shell 中与 `.env` 或编排文件同名的变量，以 `.env` 为准；`.env` 经 `--env-file` 传给 Compose，其中的 `COMPOSE_PROFILES`（例如覆盖文件中加了 `analytics` profile 的服务）对每条命令生效 |
 
 ## install
 

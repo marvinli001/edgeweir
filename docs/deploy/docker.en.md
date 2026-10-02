@@ -12,7 +12,7 @@ The `compose.yml` project name is `edgeweir`: the volume is `edgeweir_postgres-d
 | --- | --- | --- | --- |
 | `console` | `ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}` | Default | `ROLE=all`; publishes `${EDGEWEIR_HTTP_PORT:-127.0.0.1:3000}:3000` and `${EDGEWEIR_NODE_API_PORT:-8443}:8443`; read-only root file system, `/tmp` on tmpfs, `no-new-privileges` |
 | `postgres` | `postgres:18.6-alpine` (pinned by digest) | Default | Volume `postgres-data` mounted at `/var/lib/postgresql`; no published port; `console` starts after the `pg_isready` health check passes |
-| `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine` (pinned by digest) | `--profile analytics` | Volume `clickhouse-data` |
+| `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine` (pinned by digest) | `COMPOSE_PROFILES=analytics` in `.env` | Volume `clickhouse-data` |
 
 The image is public; pulling needs no login. Tag rules: [versions, upgrades, and rollback](upgrade.en.md).
 
@@ -189,11 +189,19 @@ Expected: `{"status":"ok","version":"<image tag>"}`; `console` is `healthy`.
 
 | Profile | Component | Enable |
 | --- | --- | --- |
-| `analytics` | ClickHouse: raw access logs and per-minute statistics | Set `EDGEWEIR_ANALYTICS=clickhouse` and `CLICKHOUSE_PASSWORD` in `.env` |
+| `analytics` | ClickHouse: raw access logs and per-minute statistics | Set `COMPOSE_PROFILES=analytics`, `EDGEWEIR_ANALYTICS=clickhouse`, and `CLICKHOUSE_PASSWORD` in `.env` |
+
+```bash title=".env"
+COMPOSE_PROFILES=analytics
+EDGEWEIR_ANALYTICS=clickhouse
+CLICKHOUSE_PASSWORD=<password>
+```
 
 ```bash
-docker compose --profile analytics up -d
+docker compose up -d
 ```
+
+Compose reads `COMPOSE_PROFILES` from `.env`, so every later `docker compose` command (`up`, `pull`, `logs`, `down`) includes ClickHouse without `--profile analytics`.
 
 Console charts and alerts use PostgreSQL rollups. Access-log sampling is off by default and is enabled on a site's logs page; raw logs are retained for 7 days. Switching the storage mode does not migrate history. Details: [access logs and AccessKeys](../guide/access-logs.en.md).
 

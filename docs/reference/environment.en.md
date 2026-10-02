@@ -108,6 +108,7 @@ Compose reads these variables on the host (`.env` or the shell environment) to i
 | `EDGEWEIR_HTTP_PORT` | `3000` | Host port of the web console. `compose.yml`: a port publishing spec, may include a bind address, default `127.0.0.1:3000` (ports Docker publishes bypass ufw and firewalld); `3000` publishes it on every interface. `compose.baota.yml`: number only, bound to `127.0.0.1`. `compose.baota-host.yml`: number only, used as `PORT`. |
 | `EDGEWEIR_NODE_API_PORT` | `8443` | Host port of the node channel. `compose.yml` and `compose.baota.yml`: a port publishing spec, may include a bind address. `compose.baota-host.yml`: number only, used as `NODE_API_PORT`. |
 | `POSTGRES_PASSWORD` | None | Password of the bundled PostgreSQL; `compose.yml` and `compose.baota.yml` build `DATABASE_URL` from it, and refuse to start without it (deployments created without it used `edgeweir`). Must be URL-safe: `openssl rand -hex 24`. The PostgreSQL image applies it only to an empty data directory; changing it later does not change the existing password. |
+| `COMPOSE_PROFILES` | Empty | Profiles Compose enables, comma separated. `analytics`: the ClickHouse service of `compose.yml`; set in `.env`, every `docker compose` and `deploy.sh` command includes it without `--profile`. |
 | `CLICKHOUSE_PASSWORD` | `edgeweir` | ClickHouse password when `EDGEWEIR_CLICKHOUSE_PASSWORD` is unset, shared by the console and the ClickHouse container of the `analytics` profile. |
 | `DEV_POSTGRES_PORT` | `5432` | `compose.dev.yml`: port of the development database on `127.0.0.1`. |
 
