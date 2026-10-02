@@ -418,6 +418,11 @@ message GetOriginCredentialsResponse {
 message PullTasksRequest {
   // Upper bound of tasks to return; 0 means the console's default.
   uint32 max_tasks = 1;
+  // Only purge tasks, oldest first (no upgrade): the node pulls them on a
+  // lane of their own, so that a purge never waits behind the prefetches
+  // and upgrades it already pulled. Added in v0.17.0; older consoles
+  // ignore it.
+  bool purge_only = 2;
 }
 
 // PullTasksResponse carries pending tasks, oldest first.
@@ -674,7 +679,8 @@ message GetBansResponse {
 // AutoBan is a ban a node created by itself.
 message AutoBan {
   string site_id = 1;
-  // A single address: "/32" or "/128".
+  // What the node banned: an IPv4 address ("/32") or an IPv6 /64 (since
+  // v0.17.0; earlier nodes banned single IPv6 addresses, "/128").
   string cidr = 2;
   google.protobuf.Timestamp created_at = 3;
   google.protobuf.Timestamp expires_at = 4;
@@ -739,14 +745,16 @@ message SecurityEvent {
   string previous_level = 6;
   // Path of a PATH_LEVEL event (no query string).
   string path = 7;
-  // Address of an IP_BANNED event.
+  // Address of an IP_BANNED event: an IPv4 address or, since v0.17.0, an
+  // IPv6 /64 ("2001:db8:1:2::/64"; CC counts IPv6 clients by their /64).
   string address = 8;
   // Trigger: site_qps, url_qps, ip_qps, origin_error_rate or cooldown, with
   // the observed value and the threshold.
   string metric = 9;
   double observed = 10;
   double threshold = 11;
-  // Heaviest addresses and paths of the window (bounded, approximate).
+  // Heaviest addresses (IPv4 addresses and IPv6 /64, as in address) and
+  // paths of the window (bounded, approximate).
   repeated TopCounter top_ips = 12;
   repeated TopCounter top_paths = 13;
 }
