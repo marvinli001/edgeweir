@@ -1222,6 +1222,8 @@
   "bans_filter_site": "按网站筛选",
   "bans_filter_source": "按来源筛选",
   "bans_filter_scope": "按范围筛选",
+  "bans_address_filter_clear": "清除地址筛选",
+  "bans_view": "查看封禁",
   "system_bans_title": "封禁",
   "system_bans_max_total": "手动封禁上限",
   "system_bans_share_auto": "集群内共享自动封禁",

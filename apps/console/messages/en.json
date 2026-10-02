@@ -1356,6 +1356,8 @@
   "bans_filter_site": "Filter by site",
   "bans_filter_source": "Filter by source",
   "bans_filter_scope": "Filter by scope",
+  "bans_address_filter_clear": "Clear address filter",
+  "bans_view": "View bans",
   "system_bans_title": "Bans",
   "system_bans_max_total": "Limit of manual bans",
   "system_bans_share_auto": "Share automatic bans in the cluster",
