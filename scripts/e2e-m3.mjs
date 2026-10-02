@@ -99,11 +99,20 @@ if (!site)
       origins: [{ address: "whoami" }],
     })
   ).site;
+// One-click HTTPS: the check finds nothing in the way and the certificate
+// is bound to the site once issued (a site bound by an earlier run keeps
+// its certificate).
+const unbound = !(await api("GET", `/sites/${site.id}/https`)).certificateId;
+const check = await api("GET", `/sites/${site.id}/https/check`);
+assert.deepEqual(check.blockers, [], `HTTPS blockers: ${JSON.stringify(check.blockers)}`);
+assert.deepEqual(check.request.names, [domain]);
+assert.equal(check.request.challenge, "http01");
 const requested = await api("POST", "/certificates/request", {
   name: "Pebble M3",
-  names: [domain],
+  names: check.request.names,
   email: "acme@e2e.test",
-  challenge: "http01",
+  challenge: check.request.challenge,
+  ...(unbound ? { bindSiteId: site.id } : {}),
 });
 let certificate = await waitFor("real Pebble HTTP-01 issuance", async () => {
   const cert = (await api("GET", "/certificates")).find((c) => c.id === requested.id);
@@ -111,6 +120,13 @@ let certificate = await waitFor("real Pebble HTTP-01 issuance", async () => {
   return cert?.status === "ready" ? cert : false;
 });
 console.log("PASS real HTTP-01 issuance through the edge node");
+if (unbound) {
+  const bound = await api("GET", `/sites/${site.id}/https`);
+  assert.equal(bound.certificateId, certificate.id);
+  assert.equal(bound.forceHttps, true);
+  assert.equal(certificate.bindSiteId, null);
+  console.log("PASS one-click HTTPS binds the issued certificate with an HTTPS redirect");
+}
 const settings = await api("PUT", `/sites/${site.id}/https`, {
   settings: {
     certificateId: certificate.id,
