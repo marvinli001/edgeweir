@@ -107,7 +107,6 @@ docker compose logs console | grep setupToken
 | Compose profile | 组件 | 说明 |
 | --- | --- | --- |
 | `analytics` | ClickHouse | 配合 `EDGEWEIR_ANALYTICS=clickhouse` 启用原始访问日志与分钟级统计。访问日志采样默认关闭，保留 7 天。控制台图表与告警使用 PostgreSQL 汇总数据。 |
-| `cache` | Valkey | 控制台目前未使用。 |
 
 详见 [访问日志与 AccessKey](docs/guide/access-logs.md)、[备份与恢复](docs/deploy/backup.md)。
 

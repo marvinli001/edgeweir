@@ -13,7 +13,6 @@
 | `console` | `ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}` | 默认 | `ROLE=all`；发布 `${EDGEWEIR_HTTP_PORT:-127.0.0.1:3000}:3000` 与 `${EDGEWEIR_NODE_API_PORT:-8443}:8443`；只读根文件系统、`/tmp` 为 tmpfs、`no-new-privileges` |
 | `postgres` | `postgres:18.6-alpine`（按 digest 固定） | 默认 | 卷 `postgres-data` 挂载到 `/var/lib/postgresql`；端口不发布；`pg_isready` 健康检查通过后 `console` 才启动 |
 | `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine`（按 digest 固定） | `--profile analytics` | 卷 `clickhouse-data` |
-| `valkey` | `valkey/valkey:9.2-alpine`（按 digest 固定） | `--profile cache` | 控制台目前未使用 |
 
 镜像公开，拉取无需登录。tag 规则见 [版本、升级与回滚](upgrade.md)。
 
@@ -158,7 +157,6 @@ docker compose ps
 | Profile | 组件 | 启用 |
 | --- | --- | --- |
 | `analytics` | ClickHouse：原始访问日志与分钟级统计 | `.env` 设置 `EDGEWEIR_ANALYTICS=clickhouse` 与 `CLICKHOUSE_PASSWORD` |
-| `cache` | Valkey | 控制台目前未使用 |
 
 ```bash
 docker compose --profile analytics up -d

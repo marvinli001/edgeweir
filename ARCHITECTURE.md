@@ -10,7 +10,6 @@
 | `edgeweir-certd` | `helpers/certd` | Go 编写的 ACME 与 DNS helper，随控制台镜像发布；worker 以子进程调用，经 stdin/stdout 交换 JSON，凭据不进入进程参数 |
 | PostgreSQL 18 | 外部服务 | 唯一必需的依赖：业务数据、迁移记录（schema `drizzle`）、pg-boss 队列（schema `pgboss`）、LISTEN/NOTIFY |
 | ClickHouse | Compose profile `analytics` | 可选；`EDGEWEIR_ANALYTICS=clickhouse` 时保存访问日志与分钟统计副本 |
-| Valkey | Compose profile `cache` | 控制台目前未使用 |
 | 节点 | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | Go agent 与 OpenResty 数据面；经节点通道拉取配置与任务，上报状态、主机指标、统计与日志 |
 | 区域探针 | [edgeweir-node](https://github.com/marvinli001/edgeweir-node)（`probe` 模式） | 不运行 OpenResty；从所在区域探测节点的调度地址，经节点通道的 `ProbeService` 上报 |
 
@@ -347,8 +346,6 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | L4 应用的分钟统计 | 7 天 |
 | 小时统计 | 90 天 |
 | 天统计 | 365 天 |
-
-Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
 告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook、邮件、钉钉、企业微信或 Telegram）发送；投递时重新检查渠道是否启用与订阅是否仍然有效，「接收所有告警」的渠道接收全部告警。集群告警（配置金丝雀回滚、DNS 大面积摘除被阻止、调度规则作用于节点 `scheduling_action` 等）由各自的流程触发与解除，只投递到「接收所有告警」的渠道。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
 

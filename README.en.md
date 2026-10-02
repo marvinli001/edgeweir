@@ -107,7 +107,6 @@ All other variables have defaults; see [.env.example](.env.example). `BETTER_AUT
 | Compose profile | Component | Description |
 | --- | --- | --- |
 | `analytics` | ClickHouse | With `EDGEWEIR_ANALYTICS=clickhouse`, stores raw access logs and per-minute statistics. Access-log sampling is off by default; logs are retained for 7 days. Console charts and alerts use PostgreSQL rollups. |
-| `cache` | Valkey | Not used by the console yet. |
 
 See [access logs and AccessKeys](docs/guide/access-logs.en.md) and [backup and recovery](docs/deploy/backup.en.md).
 

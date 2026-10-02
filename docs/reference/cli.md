@@ -95,7 +95,6 @@ curl -fsSL https://<控制台>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN b
 | 找回账户（重置密码、停用两步验证） | `docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor`，见 [找回账户](#找回账户) |
 | 拉取 `EDGEWEIR_VERSION` 指定的镜像并重建 | `docker compose pull && docker compose up -d` |
 | 启动 ClickHouse | `docker compose --profile analytics up -d` |
-| 启动 Valkey（控制台目前未使用） | `docker compose --profile cache up -d` |
 
 > [!WARNING]
 > `docker compose down -v` 删除 `postgres-data` 等命名卷，即全部数据。

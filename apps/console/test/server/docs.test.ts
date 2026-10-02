@@ -29,13 +29,6 @@ function sentences(text: string): string[] {
     .filter(Boolean);
 }
 
-function paragraphs(text: string): string[] {
-  return text
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-}
-
 /** The text of the `## ...` section whose heading matches. */
 function section(text: string, heading: RegExp): string {
   const start = text.search(heading);
@@ -144,10 +137,7 @@ describe("CP-H8: SSH credentials are never stored", () => {
 
 const STATUS_DOCS = ["README.md", "README.en.md", "ARCHITECTURE.md"];
 
-describe("CP-M11: README.md, README.en.md and ARCHITECTURE.md describe what is not built yet", () => {
-  const NOT_USED = /does not use|doesn't use|not used|不使用|未使用|没有使用/i;
-  const LATER = /\byet\b|目前|尚未|later|后续|将来|以后/i;
-
+describe("CP-M11: README.md, README.en.md and ARCHITECTURE.md describe what is built", () => {
   it.each(STATUS_DOCS)("%s documents the active ACME helper and its process boundary", (file) => {
     const text = read(file);
     expect(text).toMatch(/certd/);
@@ -160,19 +150,32 @@ describe("CP-M11: README.md, README.en.md and ARCHITECTURE.md describe what is n
     ).toEqual([]);
   });
 
-  it.each(STATUS_DOCS)(
-    "%s describes optional ClickHouse logs while Valkey remains unused",
-    (file) => {
-      const text = read(file);
-      expect(text).toContain("EDGEWEIR_ANALYTICS=clickhouse");
-      expect(text).toMatch(/sampl|采样/i);
-      expect(text).toMatch(/7 days|7 天/);
-      const valkey = paragraphs(text).filter((p) => /Valkey/.test(p));
-      expect(valkey.length).toBeGreaterThan(0);
-      expect(valkey.every((p) => NOT_USED.test(p) && LATER.test(p))).toBe(true);
-      expect(text).not.toMatch(/console does not use either yet|控制台目前都不使用/);
-    },
-  );
+  it.each(STATUS_DOCS)("%s describes the optional ClickHouse logs", (file) => {
+    const text = read(file);
+    expect(text).toContain("EDGEWEIR_ANALYTICS=clickhouse");
+    expect(text).toMatch(/sampl|采样/i);
+    expect(text).toMatch(/7 days|7 天/);
+    expect(text).not.toMatch(/console does not use either yet|控制台目前都不使用/);
+  });
+});
+
+// --- U-14 --------------------------------------------------------------------
+
+describe("U-14: no Valkey, which the console never used", () => {
+  it("compose.yml has no valkey service and no cache profile", () => {
+    const compose = read("compose.yml");
+    // The indented lines under the top-level "services:" key.
+    const services = /^services:\n((?: .*\n|\n)*)/m.exec(compose)?.[1] ?? "";
+    expect(services).toMatch(/^ {2}console:$/m);
+    expect(services).not.toMatch(/^ {2}valkey:$/m);
+    expect(compose).not.toMatch(/valkey|\bprofiles: \["cache"\]|--profile cache/i);
+  });
+
+  it("no published document offers it", () => {
+    const files = globSync(["README*.md", "ARCHITECTURE*.md", "docs/**/*.md"], { cwd: repo });
+    expect(files).toContain("docs/deploy/docker.md");
+    for (const file of files) expect(read(file), file).not.toMatch(/valkey/i);
+  });
 });
 
 describe("CP-M11: ARCHITECTURE.md data model matches packages/db", () => {

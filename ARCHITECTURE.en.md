@@ -10,7 +10,6 @@ Components, processes, ports, data flows, data model, and trust boundaries of th
 | `edgeweir-certd` | `helpers/certd` | ACME and DNS helper written in Go, shipped in the console image; the worker runs it as a child process and exchanges JSON over stdin/stdout, so credentials never appear in process arguments |
 | PostgreSQL 18 | External service | The only required dependency: application data, migration history (schema `drizzle`), pg-boss queues (schema `pgboss`), LISTEN/NOTIFY |
 | ClickHouse | Compose profile `analytics` | Optional; with `EDGEWEIR_ANALYTICS=clickhouse` it stores access logs and a copy of per-minute statistics |
-| Valkey | Compose profile `cache` | Not used by the console yet |
 | Node | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | Go agent and OpenResty data plane; pulls configuration and tasks over the node channel and reports status, host metrics, statistics, and logs |
 | Regional probe | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) (`probe` mode) | Runs no OpenResty; probes the nodes' scheduling addresses from its region and reports through the node channel's `ProbeService` |
 
@@ -347,8 +346,6 @@ Access logs are sampled per site; the sample rate defaults to 0 (off). Per-minut
 | Per-minute statistics of L4 apps | 7 days |
 | Hourly statistics | 90 days |
 | Daily statistics | 365 days |
-
-The Compose profile `cache` starts Valkey; the console does not use Valkey yet.
 
 Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificates, unavailable origins, and high 5xx rates (the `cc_mitigation` alert fires on a node's event and resolves once no node reports the site above normal), create `alert_event` rows, fan them out to `alert_delivery` by `alert_subscription`, and send them through an `alert_channel` (webhook, email, DingTalk, WeCom, or Telegram); at delivery the channel must still be enabled and the subscription still valid, and "receive every alert" channels get every alert. Cluster alerts (configuration canary rolled back, DNS mass removal blocked, a scheduling rule acting on a node `scheduling_action`, and others) are raised and resolved by their own flows and go only to "receive every alert" channels. Access logs and AccessKeys: [Access logs and AccessKeys](docs/guide/access-logs.en.md).
 

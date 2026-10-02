@@ -1,7 +1,6 @@
 # Edgeweir console + PostgreSQL 18.
 #   docker compose up -d                        # console + postgres
 #   docker compose --profile analytics up -d    # + ClickHouse
-#   docker compose --profile cache up -d        # + Valkey
 # Secrets come from .env (see .env.example): compose refuses to start without
 # POSTGRES_PASSWORD, the console without EDGEWEIR_MASTER_KEY; the session secret
 # is derived from it unless BETTER_AUTH_SECRET is set (deployments that set it
@@ -95,12 +94,6 @@ services:
       nofile:
         soft: 262144
         hard: 262144
-
-  valkey:
-    image: valkey/valkey:9.2-alpine@sha256:cdcb7b1c7b6f1c9cb9442c71ac6275e78184657448407b2c1fdde7ee8024f4fb
-    profiles: ["cache"]
-    restart: unless-stopped
-    command: ["valkey-server", "--save", "", "--appendonly", "no"]
 
 volumes:
   postgres-data:
