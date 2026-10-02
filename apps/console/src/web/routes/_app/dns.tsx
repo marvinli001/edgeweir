@@ -150,6 +150,7 @@ function DnsPage() {
                           <Button
                             size="sm"
                             variant="outline"
+                            nativeButton={false}
                             render={
                               <Link to="/clusters" search={{ cluster: b.clusterId, tab: "dns" }} />
                             }
