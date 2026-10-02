@@ -436,6 +436,7 @@ On the site's **Overview** tab, click **Purge cache** and confirm (or search the
 | Not run within 7 days | Failed ("Not executed by the node within 7 days", `task_expired`) |
 | Make-up whole-site purge | A node that reconnects after more than 7 days offline, or is re-enabled, does not run the purges it missed; it gets one whole-site purge for each affected site instead: all in one task, source "System (make-up whole-site purge)", sent only to that node; deleted sites are left out. The original task shows "Made up with a whole-site purge when the node came back" for that node |
 | Prefetch | Missed prefetches are not made up |
+| Retention | Tasks are kept for 90 days; a purge a node has yet to make up with a whole-site purge is kept until it has |
 
 ## Limits
 

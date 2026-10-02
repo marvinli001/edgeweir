@@ -21,6 +21,7 @@ import { and, desc, eq, gt, inArray, isNotNull, lte, ne, notInArray, sql } from 
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { isOnline } from "../lib/node-online";
+import { deleteInBatches } from "../lib/retention";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { withLease } from "./dns-lease";
 import {
@@ -417,23 +418,30 @@ export async function compileBindingPlan(
   const addAddresses = (name: string, ips: Iterable<string>, line?: DnsResolutionLine) => {
     for (const ip of ips) add(name, ip.includes(":") ? "AAAA" : "A", ip, line);
   };
-  const healthy = (node: (typeof nodes)[number]) => {
-    if (node.status !== "active") return false;
-    if (manual) return true;
-    const receipt = receipts.find((r) => r.nodeId === node.id),
-      target = targets ? targetFor(node, targets) : undefined;
-    return (
-      isOnline(node.lastSeenAt, now) &&
-      !!receipt?.dataPlaneHealthy &&
-      !!target &&
-      servesTarget(receipt, target, settled, now)
-    );
-  };
+  const receiptOf = new Map(receipts.map((r) => [r.nodeId, r]));
+  // Once per node: every line and backup group of the binding asks again.
+  const healthy = new Set(
+    nodes
+      .filter((node) => {
+        if (node.status !== "active") return false;
+        if (manual) return true;
+        const receipt = receiptOf.get(node.id),
+          target = targets ? targetFor(node, targets) : undefined;
+        return (
+          isOnline(node.lastSeenAt, now) &&
+          !!receipt?.dataPlaneHealthy &&
+          !!target &&
+          servesTarget(receipt, target, settled, now)
+        );
+      })
+      .map((node) => node.id),
+  );
+  const members = Map.groupBy(nodes, (n) => n.nodeGroupId);
   /** Healthy addresses of a group's nodes as `line` publishes them. */
   const groupAddresses = (line: DnsLine, groupId: string) => {
     const ips = new Set<string>();
-    for (const node of nodes.filter((n) => n.nodeGroupId === groupId)) {
-      if (!healthy(node) || appliesTo(effects?.removed.get(node.id), line.name)) continue;
+    for (const node of members.get(groupId) ?? []) {
+      if (!healthy.has(node.id) || appliesTo(effects?.removed.get(node.id), line.name)) continue;
       const override = line.overrides.find((o) => o.nodeId === node.id);
       let candidates: string[];
       if (override) {
@@ -962,21 +970,19 @@ export async function pruneDnsRevisions(db: Executor, keep = DNS_REVISION_RETENT
   const inUse = (
     column: typeof schema.dnsBinding.desiredRevision | typeof schema.dnsBinding.appliedRevision,
   ) => db.select({ revision: column }).from(schema.dnsBinding).where(isNotNull(column));
-  const deleted = await db
-    .delete(schema.dnsRevision)
-    .where(
-      and(
-        inArray(
-          schema.dnsRevision.revision,
-          db.select({ revision: ranked.revision }).from(ranked).where(gt(ranked.rank, keep)),
-        ),
-        ne(schema.dnsRevision.status, "blocked"),
-        notInArray(schema.dnsRevision.revision, inUse(schema.dnsBinding.desiredRevision)),
-        notInArray(schema.dnsRevision.revision, inUse(schema.dnsBinding.appliedRevision)),
+  return deleteInBatches(
+    db,
+    schema.dnsRevision,
+    and(
+      inArray(
+        schema.dnsRevision.revision,
+        db.select({ revision: ranked.revision }).from(ranked).where(gt(ranked.rank, keep)),
       ),
-    )
-    .returning({ revision: schema.dnsRevision.revision });
-  return deleted.length;
+      ne(schema.dnsRevision.status, "blocked"),
+      notInArray(schema.dnsRevision.revision, inUse(schema.dnsBinding.desiredRevision)),
+      notInArray(schema.dnsRevision.revision, inUse(schema.dnsBinding.appliedRevision)),
+    ),
+  );
 }
 
 export async function listBindingRevisions(app: AppContext, clusterId: string) {
@@ -1160,12 +1166,13 @@ async function reconcileProvider(
   const own = stored.filter((r) => r.clusterId === clusterId);
   const ownNames = new Set(own.map((r) => r.name));
   const otherNames = new Set(stored.filter((r) => r.clusterId !== clusterId).map((r) => r.name));
+  const actualNames = new Set(actual.map((r) => r.name));
   for (const name of desiredNames) {
     if (otherNames.has(name.name))
       fail("DNS_BINDING_CONFLICT", "another cluster manages this DNS name", {
         name: absolute(name.name, p.zone),
       });
-    if (!ownNames.has(name.name) && actual.some((r) => r.name === name.name))
+    if (!ownNames.has(name.name) && actualNames.has(name.name))
       fail("DNS_RECORD_CONFLICT", "DNS name contains an unmanaged record", {
         name: absolute(name.name, p.zone),
       });

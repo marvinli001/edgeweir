@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { schema } from "@edgeweir/db";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { ingestMinuteStats, ingestStatsBatch } from "../../src/server/services/stats";
@@ -256,6 +257,38 @@ describe("recomputable 5-minute usage", async () => {
     expect(pages.map((p) => p.id)).toEqual(all.items.map((i) => i.id));
     const keys = all.items.map((i) => `${i.windowStart}|${i.siteId}`);
     expect(keys).toEqual([...keys].sort());
+  });
+
+  it("pages through sites that share a window, with or without a site filter", async () => {
+    const base = window - 1000 * WINDOW;
+    const sites = Array.from({ length: 5 }, () => randomUUID()).sort();
+    const starts = [0, 1, 2].map((w) => new Date(base + w * WINDOW));
+    await ctx.db
+      .insert(schema.siteUsage)
+      .values(
+        starts.flatMap((windowStart) =>
+          sites.map((id) => ({ windowStart, siteId: id, seq: sql`nextval('site_usage_seq')` })),
+        ),
+      );
+    const range = {
+      from: starts[0]?.toISOString() ?? "",
+      to: new Date(base + 3 * WINDOW).toISOString(),
+    };
+    const pages = async (limit: number, filter?: string) => {
+      const items = [];
+      let cursor: string | undefined;
+      do {
+        const page = await admin.usage.list({ ...range, limit, cursor, siteId: filter });
+        items.push(...page.items.map((i) => `${i.windowStart}|${i.siteId}`));
+        cursor = page.nextCursor ?? undefined;
+      } while (cursor);
+      return items;
+    };
+    const all = starts.flatMap((start) => sites.map((id) => `${start.toISOString()}|${id}`));
+    for (const limit of [1, 2, 4, 15]) expect(await pages(limit)).toEqual(all);
+    const one = sites[2] ?? "";
+    expect(await pages(1, one)).toEqual(all.filter((key) => key.endsWith(one)));
+    await ctx.db.delete(schema.siteUsage).where(inArray(schema.siteUsage.siteId, sites));
   });
 
   it("filters by site", async () => {

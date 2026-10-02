@@ -3,10 +3,11 @@ import { and, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { PgBoss } from "pg-boss";
 import type { AppContext } from "../lib/context";
 import { pruneIdempotencyKeys } from "../lib/idempotency";
+import { deleteInBatches } from "../lib/retention";
 import { maintainLogs } from "../services/access-logs";
 import { sweepAlerts } from "../services/alerts";
 import { pruneBans } from "../services/bans";
-import { expireCacheTasks } from "../services/cache-tasks";
+import { expireCacheTasks, pruneCacheTasks } from "../services/cache-tasks";
 import { sweepCertificates } from "../services/certificate-worker";
 import { rotateChallengeKeys } from "../services/challenge-keys";
 import { pruneDnsRevisions, reconcileDns } from "../services/dns";
@@ -92,21 +93,22 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   });
   await boss.work(QUEUES.expireEnrollmentTokens, async () => {
     const cutoff = new Date(Date.now() - 7 * 24 * 3600 * 1000);
-    const deleted = await ctx.db
-      .delete(schema.enrollmentToken)
-      .where(
-        or(
-          and(isNull(schema.enrollmentToken.usedAt), lt(schema.enrollmentToken.expiresAt, cutoff)),
-          and(isNotNull(schema.enrollmentToken.usedAt), lt(schema.enrollmentToken.usedAt, cutoff)),
-        ),
-      )
-      .returning({ id: schema.enrollmentToken.id });
-    if (deleted.length) log.info("deleted stale enrollment tokens", { count: deleted.length });
+    const deleted = await deleteInBatches(
+      ctx.db,
+      schema.enrollmentToken,
+      or(
+        and(isNull(schema.enrollmentToken.usedAt), lt(schema.enrollmentToken.expiresAt, cutoff)),
+        and(isNotNull(schema.enrollmentToken.usedAt), lt(schema.enrollmentToken.usedAt, cutoff)),
+      ),
+    );
+    if (deleted) log.info("deleted stale enrollment tokens", { count: deleted });
   });
 
   await boss.work(QUEUES.expireCacheTasks, async () => {
     const expired = await expireCacheTasks(ctx.db);
     if (expired) log.info("expired undelivered cache tasks", { deliveries: expired });
+    const pruned = await pruneCacheTasks(ctx.db);
+    if (pruned) log.info("deleted old cache tasks", { removed: pruned });
   });
 
   await boss.work(QUEUES.pruneIdempotencyKeys, async () => {

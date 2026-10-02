@@ -365,6 +365,13 @@
       "when": 1790926907134,
       "tag": "0051_node_last_auth_error",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1790938226934,
+      "tag": "0052_retention_indexes",
+      "breakpoints": true
     }
   ]
 }

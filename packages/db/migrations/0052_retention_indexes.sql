@@ -1,0 +1,3 @@
+CREATE INDEX "alert_event_time_idx" ON "alert_event" USING btree ("occurred_at","ordinal");--> statement-breakpoint
+CREATE INDEX "cache_task_node_missed_idx" ON "cache_task_node" USING btree ("node_id") WHERE "cache_task_node"."recovered_at" is null and "cache_task_node"."state" in ('failed', 'skipped');--> statement-breakpoint
+CREATE INDEX "security_event_raise_idx" ON "security_event" USING btree ("received_at") WHERE "security_event"."kind" = 'site_level' and "security_event"."level" <> 'normal';

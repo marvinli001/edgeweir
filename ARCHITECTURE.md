@@ -363,7 +363,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
 | `maintenance.prune-revisions` | 每小时第 17 分 | 删除超出保留数量的 revision 与 DNS 版本 |
 | `maintenance.prune-idempotency-keys` | 每小时第 29 分 | 删除过期（超过 24 小时）的幂等键 |
-| `maintenance.expire-cache-tasks` | 每小时第 43 分 | 把超期未完成的刷新预热交付记为失败 |
+| `maintenance.expire-cache-tasks` | 每小时第 43 分 | 把超期未完成的刷新预热交付记为失败；删除 90 天前的任务（节点仍需补发的刷新保留） |
 | `maintenance.expire-enrollment-tokens` | 每 30 分钟 | 删除过期或使用超过 7 天的注册 token |
 | `maintenance.prune-bans` | 每 10 分钟 | 删除到期超过一小时的封禁 |
 | `maintenance.rotate-challenge-keys` | 每小时第 11 分 | 轮换满一天的挑战密钥 |
@@ -536,6 +536,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0049_dns_lease_attempts` | `dns_challenge_lease.attempts`（TXT 记录清理失败的次数，用于退避重试） |
 | `0050_node_remote_address` | `node.remote_address`（节点注册与最近一次心跳连接的源地址） |
 | `0051_node_last_auth_error` | `node.last_auth_error`、`last_auth_error_at`（节点通道最近一次拒绝该节点自己的证书的原因，如 `CERT_HAS_EXPIRED`） |
+| `0052_retention_indexes` | 索引：`alert_event (occurred_at, ordinal)`；`security_event (received_at)`，只含高于正常的网站级别事件；`cache_task_node (node_id)`，只含未补发的失败与跳过交付 |
 
 ## 构建产物
 
