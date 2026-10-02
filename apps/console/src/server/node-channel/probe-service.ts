@@ -1,5 +1,4 @@
 import { create } from "@bufbuild/protobuf";
-import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, type HandlerContext, type ServiceImpl } from "@connectrpc/connect";
 import { schema } from "@edgeweir/db";
 import {
@@ -22,6 +21,7 @@ import {
   recordProbeResults,
 } from "../services/probes";
 import { evaluateAfterProbeReport } from "../services/scheduling";
+import { certificateColumns, issuedCertificateResponse, keptSerial, signCsr } from "./identity";
 import { clientCertificateError, nodeProbeRegion, peerKey } from "./service";
 
 /** Ask probes to renew once less than a third of the lifetime remains (as nodes). */
@@ -140,20 +140,10 @@ export function createProbeService(
           })
           .returning();
         if (!row) throw new Error("probe insert failed");
-        let issued: Awaited<ReturnType<typeof app.nodeCa.signProbeCsr>>;
-        try {
-          issued = await app.nodeCa.signProbeCsr(req.csrPem, row.id);
-        } catch (error) {
-          throw new ConnectError(`rejected CSR: ${(error as Error).message}`, Code.InvalidArgument);
-        }
+        const issued = await signCsr(() => app.nodeCa.signProbeCsr(req.csrPem, row.id));
         await tx
           .update(schema.probe)
-          .set({
-            certSerial: issued.serialNumber,
-            certFingerprint: issued.fingerprintSha256,
-            certNotAfter: issued.notAfter,
-            enrolledAt: new Date(),
-          })
+          .set({ ...certificateColumns(issued), enrolledAt: new Date() })
           .where(eq(schema.probe.id, row.id));
         await tx
           .update(schema.probeToken)
@@ -182,9 +172,7 @@ export function createProbeService(
         probeId: result.row.id,
         probeName: result.row.name,
         regionId: result.row.regionId,
-        certificatePem: result.issued.certificatePem,
-        caCertificatePem: app.nodeCa.certificatePem,
-        notAfter: timestampFromDate(result.issued.notAfter),
+        ...issuedCertificateResponse(app, result.issued),
       };
     },
 
@@ -197,12 +185,7 @@ export function createProbeService(
           Code.FailedPrecondition,
         );
       const peerSerial = ctx.values.get(peerKey).serialNumber;
-      let issued: Awaited<ReturnType<typeof app.nodeCa.signProbeCsr>>;
-      try {
-        issued = await app.nodeCa.signProbeCsr(req.csrPem, prober.id);
-      } catch (error) {
-        throw new ConnectError(`rejected CSR: ${(error as Error).message}`, Code.InvalidArgument);
-      }
+      const issued = await signCsr(() => app.nodeCa.signProbeCsr(req.csrPem, prober.id));
       await app.db.transaction(async (tx) => {
         const [row] = await tx
           .select({
@@ -212,18 +195,10 @@ export function createProbeService(
           .from(schema.probe)
           .where(eq(schema.probe.id, prober.id))
           .for("update");
-        const certificate = row && acceptedCertificate(row, peerSerial);
-        if (!certificate)
-          throw new ConnectError("certificate has been superseded", Code.Unauthenticated);
-        const kept = certificate === "current" ? row.certSerial : row.previousCertSerial;
+        const kept = keptSerial(row, peerSerial);
         await tx
           .update(schema.probe)
-          .set({
-            certSerial: issued.serialNumber,
-            certFingerprint: issued.fingerprintSha256,
-            certNotAfter: issued.notAfter,
-            previousCertSerial: kept,
-          })
+          .set({ ...certificateColumns(issued), previousCertSerial: kept })
           .where(eq(schema.probe.id, prober.id));
         await recordAudit(
           tx,
@@ -237,11 +212,7 @@ export function createProbeService(
           },
         );
       });
-      return {
-        certificatePem: issued.certificatePem,
-        caCertificatePem: app.nodeCa.certificatePem,
-        notAfter: timestampFromDate(issued.notAfter),
-      };
+      return issuedCertificateResponse(app, issued);
     },
 
     async getProbeTargets(req, ctx) {
