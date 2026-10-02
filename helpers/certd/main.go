@@ -34,7 +34,9 @@ type Request struct {
 type Response struct {
 	OK    bool   `json:"ok"`
 	Error string `json:"error,omitempty"`
-	// Code classifies DNS failures (dns_auth_failed, dns_zone_not_found, ...).
+	// Code classifies failures: DNS commands by provider error kind
+	// (dns_auth_failed, dns_zone_not_found, ...), ACME commands by
+	// failureCode (acme_unauthorized, dns_propagation_timeout, ...).
 	Code   string `json:"code,omitempty"`
 	Result any    `json:"result,omitempty"`
 }
@@ -66,8 +68,11 @@ func handle(req Request, session *protocolSession) Response {
 		}
 		if err != nil {
 			resp := Response{Error: err.Error()}
-			if strings.HasPrefix(req.Command, "dns.") {
+			switch {
+			case strings.HasPrefix(req.Command, "dns."):
 				resp.Code = dnsx.Code(err)
+			case req.Command != "renewal-info":
+				resp.Code = failureCode(err)
 			}
 			return resp
 		}

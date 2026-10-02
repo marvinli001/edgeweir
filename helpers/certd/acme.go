@@ -84,7 +84,7 @@ func acmeHTTPClient(rootCA string) (*http.Client, error) {
 		roots = x509.NewCertPool()
 	}
 	if rootCA != "" && !roots.AppendCertsFromPEM([]byte(rootCA)) {
-		return nil, fmt.Errorf("invalid ACME trust certificate")
+		return nil, coded("acme_ca_file_invalid", errors.New("invalid ACME trust certificate"))
 	}
 	return &http.Client{Timeout: 45 * time.Second, Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}}}, nil
 }
@@ -99,7 +99,7 @@ func acmeCommand(ctx context.Context, command string, raw json.RawMessage, sessi
 	}
 	u, err := url.Parse(p.DirectoryURL)
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
-		return nil, fmt.Errorf("ACME directory must be HTTPS")
+		return nil, coded("acme_directory_invalid", errors.New("ACME directory must be HTTPS"))
 	}
 	var key crypto.PrivateKey
 	if p.Account.PrivateKeyPEM == "" {
@@ -133,7 +133,7 @@ func acmeCommand(ctx context.Context, command string, raw json.RawMessage, sessi
 	}
 	client, err := lego.NewClient(config)
 	if err != nil {
-		return nil, fmt.Errorf("ACME directory request failed: %w", err)
+		return nil, coded("acme_directory_unreachable", fmt.Errorf("ACME directory request failed: %w", err))
 	}
 	if user.registration == nil {
 		if p.Account.EABKid != "" {
@@ -167,7 +167,7 @@ func acmeCommand(ctx context.Context, command string, raw json.RawMessage, sessi
 		}
 		provider, e := providerFor(*p.DNS)
 		if e != nil {
-			return nil, e
+			return nil, &dnsProviderError{e}
 		}
 		err = client.Challenge.SetDNS01Provider(&dnsChallenge{ctx: ctx, session: session, provider: provider, zone: p.DNS.Zone, installed: map[string][]libdns.Record{}})
 	default:

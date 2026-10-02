@@ -88,20 +88,30 @@ var kinds = []error{ErrAuth, ErrZoneNotFound, ErrRefused, ErrUnreachable, ErrRat
 
 // Code classifies an adapter error for the console.
 func Code(err error) string {
-	for _, kind := range kinds {
-		if errors.Is(err, kind) {
-			return kind.Error()
-		}
-	}
-	var status *StatusError
-	if errors.As(err, &status) {
-		return status.Kind().Error()
+	if code, ok := Kind(err); ok {
+		return code
 	}
 	var timeout interface{ Timeout() bool }
 	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &timeout) && timeout.Timeout()) {
 		return ErrUnreachable.Error()
 	}
 	return ErrProvider.Error()
+}
+
+// Kind returns the kind an adapter attached to err (an error kind or a
+// StatusError), without Code's fallbacks: an error that carries none is not
+// known to be a DNS failure.
+func Kind(err error) (string, bool) {
+	for _, kind := range kinds {
+		if errors.Is(err, kind) {
+			return kind.Error(), true
+		}
+	}
+	var status *StatusError
+	if errors.As(err, &status) {
+		return status.Kind().Error(), true
+	}
+	return "", false
 }
 
 // StatusError is a non-success HTTP answer. Message is the provider's own

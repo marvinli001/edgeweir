@@ -139,6 +139,13 @@ func TestErrorCodes(t *testing.T) {
 			t.Errorf("%v: %s, want %s", err, got, want)
 		}
 	}
+	// Kind has no fallback: an error without a kind is not a DNS failure.
+	if code, ok := dnsx.Kind(errors.New("anything else")); ok || code != "" {
+		t.Errorf("Kind of a plain error: %q", code)
+	}
+	if code, ok := dnsx.Kind(&dnsx.StatusError{Status: 401}); !ok || code != "dns_auth_failed" {
+		t.Errorf("Kind of a status error: %q", code)
+	}
 }
 
 func TestRecordNamesAndZonesAreChecked(t *testing.T) {

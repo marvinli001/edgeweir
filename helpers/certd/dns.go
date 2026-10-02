@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
 	"regexp"
@@ -264,7 +265,7 @@ type dnsChallenge struct {
 func (p *dnsChallenge) Present(domain, token, authorization string) error {
 	info := dns01.GetChallengeInfo(domain, authorization)
 	if !strings.HasSuffix(info.EffectiveFQDN, "."+strings.TrimSuffix(p.zone, ".")+".") {
-		return fmt.Errorf("challenge is outside credential zone")
+		return coded("dns_zone_mismatch", errors.New("challenge is outside credential zone"))
 	}
 	name := libdns.RelativeName(info.EffectiveFQDN, p.zone)
 	intent := []libdns.Record{libdns.TXT{Name: name, Text: info.Value, TTL: time.Minute}}
@@ -277,8 +278,10 @@ func (p *dnsChallenge) Present(domain, token, authorization string) error {
 	p.mu.Lock()
 	p.installed[token] = intent
 	p.mu.Unlock()
-	_, err := p.provider.AppendRecords(p.ctx, p.zone, intent)
-	return err
+	if _, err := p.provider.AppendRecords(p.ctx, p.zone, intent); err != nil {
+		return &dnsProviderError{err}
+	}
+	return nil
 }
 func (p *dnsChallenge) CleanUp(domain string, token, _ string) error {
 	p.mu.Lock()
@@ -289,9 +292,8 @@ func (p *dnsChallenge) CleanUp(domain string, token, _ string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(p.ctx), 30*time.Second)
 	defer cancel()
-	_, err := p.provider.DeleteRecords(ctx, p.zone, records)
-	if err != nil {
-		return err
+	if _, err := p.provider.DeleteRecords(ctx, p.zone, records); err != nil {
+		return &dnsProviderError{err}
 	}
 	return p.session.event(map[string]any{"event": "dns01.cleanup", "domain": domain, "token": token})
 }
