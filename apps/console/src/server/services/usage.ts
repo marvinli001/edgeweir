@@ -5,7 +5,7 @@ import {
   usageSettings,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { and, asc, eq, gt, gte, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, lt, lte, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import type { Executor } from "./revisions";
@@ -335,11 +335,9 @@ export async function listUsage(
         gte(u.windowStart, from),
         lt(u.windowStart, to),
         input.siteId ? eq(u.siteId, input.siteId) : undefined,
+        // A row comparison: one range of the primary key (window_start, site_id).
         after
-          ? or(
-              gt(u.windowStart, after.windowStart),
-              and(eq(u.windowStart, after.windowStart), gt(u.siteId, after.siteId)),
-            )
+          ? sql`(${u.windowStart}, ${u.siteId}) > (${after.windowStart.toISOString()}::timestamptz, ${after.siteId}::uuid)`
           : undefined,
       ),
     )
