@@ -38,6 +38,8 @@
   "common_copy_failed": "复制失败，请手动选择复制",
   "common_check_field": "检查「{field}」",
   "common_check_field_item": "检查「{field}」第 {item} 项",
+  "common_check_field_expression": "「{field}」第 {position} 个字符：{reason}",
+  "common_check_field_item_expression": "「{field}」第 {item} 项第 {position} 个字符：{reason}",
   "unsaved_leave_title": "放弃未保存的更改？",
   "unsaved_discard": "放弃",
   "common_delete": "删除",
