@@ -30,7 +30,7 @@ sudo bash deploy.sh install
 | `config` | — | 修改控制台地址与节点通道地址并重建容器；只能交互运行 |
 | `start` | — | 启动编排并等待健康检查 |
 | `stop` | — | `docker compose stop`；保留容器 |
-| `restart` | — | 重启编排；bundled 模式网关变化时改为重建 |
+| `restart` | — | 按 `start` 的流程启动，并强制重建 `console` 容器：`.env` 的修改生效 |
 | `status` | — | `docker compose ps`，以及部署目录、模式与运行版本 |
 | `logs` | `[服务…]` | 跟随日志，先输出最近 200 行；服务为 `console`、`postgres`（bundled），省略时为全部 |
 | `setup-token` | — | 从控制台日志读取最近一次输出的 setup token |
@@ -203,7 +203,7 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 | 命令 | 行为 |
 | --- | --- |
 | `start` | bundled：先启动 `postgres` 并同步 `EDGEWEIR_TRUSTED_PROXIES`；再执行 `docker compose up -d --wait --remove-orphans`；未进入健康状态时打印控制台最近 40 行日志并中止 |
-| `restart` | bundled 且同步改写了 `EDGEWEIR_TRUSTED_PROXIES`：按 `start` 重建；否则 `docker compose restart` |
+| `restart` | 同 `start`，最后一步为 `docker compose up -d --wait --remove-orphans --force-recreate console`：控制台容器总是重建（`docker compose restart` 不应用 `.env` 的修改），依赖的 `postgres` 配置变化时随之重建 |
 | `stop` | `docker compose stop` |
 
 `install`、`update` 与 `config` 使用 `start` 的流程。

@@ -507,7 +507,9 @@ sync_trusted_proxy() {
   fi
 }
 
-# up_and_wait: starts the project and waits for the health checks.
+# up_and_wait [up option or service...]: starts the project, applying .env and
+# compose file changes, and waits for the health checks. The arguments go to
+# the final `compose up`, e.g. --force-recreate console.
 up_and_wait() {
   local rc=0
   if [[ $(deploy_mode) == bundled ]]; then
@@ -515,7 +517,7 @@ up_and_wait() {
     sync_trusted_proxy || rc=$?
     ((rc == 0 || rc == 10)) || return "$rc"
   fi
-  if ! compose up -d --wait --remove-orphans; then
+  if ! compose up -d --wait --remove-orphans "$@"; then
     warn "服务没有进入健康状态，最近的日志："
     compose logs --no-color --tail=40 console >&2 || true
     die "启动失败。修正 .env 后运行 ./deploy.sh start 重试。"
@@ -1302,7 +1304,8 @@ usage() {
   backup             备份数据库、.env（不含主密钥）和编排文件到 backups/，保留最近 5 份
   restore <备份>     先备份当前数据库，再用备份目录里的 edgeweir.dump 替换数据库（.env 不变；--no-backup 跳过备份）
   config             修改控制台地址和节点通道地址
-  start | stop | restart
+  start | stop       启动（应用 .env 的修改）、停止
+  restart            重建控制台容器并启动（应用 .env 的修改）
   status             容器状态和运行中的版本
   logs [服务]        跟随日志（console / postgres）
   setup-token        显示首次初始化令牌
@@ -1347,9 +1350,9 @@ main() {
     restart)
       preflight
       find_dir
-      local rc=0
-      sync_trusted_proxy || rc=$?
-      if ((rc == 10)); then up_and_wait; else compose restart; fi
+      # A new container, unlike `compose restart`, gets the .env changes.
+      up_and_wait --force-recreate console
+      ok "已重启，版本 $(running_version)"
       ;;
     status)
       preflight

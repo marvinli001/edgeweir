@@ -433,6 +433,48 @@ describe("deploy.sh", () => {
     });
   });
 
+  describe("restart applies .env (S-13)", () => {
+    /** Stand-ins: each compose call goes to $D/log; the console reports its version. */
+    const STUBS = `
+      compose() { printf 'compose %s\\n' "$*" >>"$D/log"; }
+      docker() { printf '{"status":"ok","version":"20261001-abc1234"}'; }
+      preflight() { :; }
+      find_dir() { DIR=$D; COMPOSE_FILE=compose.yml; }`;
+    const restart = (mode: "host" | "bundled") => {
+      const dir = directory({
+        ".env": "EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com\n",
+        "compose.yml": read(mode === "host" ? "compose.baota-host.yml" : "compose.baota.yml"),
+      });
+      const result = run(`${STUBS}; main restart`, { D: dir });
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stderr).toContain("已重启，版本 20261001-abc1234");
+      return readFileSync(resolve(dir, "log"), "utf8").trim().split("\n");
+    };
+
+    it("recreates the console instead of restarting the old container", () => {
+      expect(restart("host")).toEqual([
+        "compose up -d --wait --remove-orphans --force-recreate console",
+      ]);
+      // Bundled: the database first, and the panel nginx's gateway kept in .env.
+      expect(restart("bundled")).toEqual([
+        "compose up -d postgres",
+        "compose ps -q postgres",
+        "compose up -d --wait --remove-orphans --force-recreate console",
+      ]);
+    });
+
+    it("starts without forcing anything", () => {
+      const dir = directory({
+        ".env": "EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com\n",
+        "compose.yml": read("compose.baota-host.yml"),
+      });
+      expect(run(`${STUBS}; main start`, { D: dir }).status).toBe(0);
+      expect(readFileSync(resolve(dir, "log"), "utf8")).toBe(
+        "compose up -d --wait --remove-orphans\n",
+      );
+    });
+  });
+
   describe("update versions (P1-56)", () => {
     // Two images of the same day; the smaller commit hash is the newer one.
     const labels = `docker() {

@@ -30,7 +30,7 @@ Save the script to a file before running it: through a pipe (`curl … | bash`) 
 | `config` | — | Change the console URL and node channel URL, then recreate the containers; interactive only |
 | `start` | — | Start the project and wait for health checks |
 | `stop` | — | `docker compose stop`; containers are kept |
-| `restart` | — | Restart the project; in bundled mode, recreate instead when the gateway changed |
+| `restart` | — | Start as `start` does, recreating the `console` container in any case: `.env` changes take effect |
 | `status` | — | `docker compose ps`, plus the deployment directory, mode, and running version |
 | `logs` | `[service…]` | Follow logs, starting with the last 200 lines; services are `console` and `postgres` (bundled), all when omitted |
 | `setup-token` | — | Read the most recent setup token from the console logs |
@@ -203,7 +203,7 @@ Interactive only; in unattended mode or without a terminal it aborts; edit `.env
 | Command | Behavior |
 | --- | --- |
 | `start` | bundled: start `postgres` first and sync `EDGEWEIR_TRUSTED_PROXIES`. Then `docker compose up -d --wait --remove-orphans`; when the services do not become healthy, print the last 40 console log lines and abort |
-| `restart` | bundled and the sync rewrote `EDGEWEIR_TRUSTED_PROXIES`: recreate as in `start`; otherwise `docker compose restart` |
+| `restart` | As `start`, with `docker compose up -d --wait --remove-orphans --force-recreate console` as the last step: the console container is always recreated (`docker compose restart` would not apply `.env` changes), and `postgres`, which it depends on, is recreated when its configuration changed |
 | `stop` | `docker compose stop` |
 
 `install`, `update`, and `config` use the `start` flow.
