@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 import { loadEnv, parseOutboundAllowCidrs } from "../../src/server/lib/env";
 
 const base = {
@@ -101,5 +104,36 @@ describe("outbound allow list", () => {
       "192.168.1.5/32",
       "fd00::/8",
     ]);
+  });
+});
+
+describe("master key from a file", () => {
+  const dir = mkdtempSync(join(tmpdir(), "edgeweir-env-"));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  const key = Buffer.alloc(32, 5).toString("base64");
+  const fromFile = (content: string, extra: Record<string, string> = {}) => {
+    const file = join(dir, `key-${Math.random()}`);
+    writeFileSync(file, content, { mode: 0o600 });
+    return loadEnv({ ...base, EDGEWEIR_MASTER_KEY: "", EDGEWEIR_MASTER_KEY_FILE: file, ...extra });
+  };
+
+  it("reads EDGEWEIR_MASTER_KEY_FILE, without the file's last newline", () => {
+    expect(fromFile(`${key}\n`).EDGEWEIR_MASTER_KEY).toBe(key);
+    expect(fromFile(key).EDGEWEIR_MASTER_KEY).toBe(key);
+  });
+
+  it("checks the key it reads like the variable", () => {
+    expect(() => fromFile(`"${key}"\n`)).toThrow(
+      /^invalid configuration:\n {2}EDGEWEIR_MASTER_KEY: is not valid base64/,
+    );
+  });
+
+  it("refuses both sources at once and a file it cannot read", () => {
+    expect(() => fromFile(key, { EDGEWEIR_MASTER_KEY: key })).toThrow(
+      /^invalid configuration:\n {2}EDGEWEIR_MASTER_KEY_FILE: set either/,
+    );
+    expect(() =>
+      loadEnv({ ...base, EDGEWEIR_MASTER_KEY_FILE: join(dir, "missing"), EDGEWEIR_MASTER_KEY: "" }),
+    ).toThrow(/^invalid configuration:\n {2}EDGEWEIR_MASTER_KEY_FILE: cannot read .*ENOENT/);
   });
 });

@@ -53,6 +53,33 @@ sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
 > [!WARNING]
 > The master key encrypts the internal CA key, certificate keys, S3 origin keys, DNS API credentials, and the setup token at rest, and derives the session secret. Back it up offline, apart from database backups; without it that data is unrecoverable.
 
+### Master key file
+
+The master key can stay out of `.env`: put it in a file mounted as a Compose secret and leave `EDGEWEIR_MASTER_KEY` in `.env` empty.
+
+```bash
+umask 077
+openssl rand -base64 32 > master.key
+chown 1000 master.key   # the image runs as the node user (uid 1000)
+sed -i "s|^EDGEWEIR_MASTER_KEY=.*|EDGEWEIR_MASTER_KEY=|" .env
+```
+
+`compose.override.yml` next to `compose.yml` (Compose merges it automatically):
+
+```yaml
+services:
+  console:
+    environment:
+      EDGEWEIR_MASTER_KEY_FILE: /run/secrets/edgeweir_master_key
+    secrets:
+      - edgeweir_master_key
+secrets:
+  edgeweir_master_key:
+    file: ./master.key
+```
+
+The file's trailing newline is ignored; the console refuses to start when `EDGEWEIR_MASTER_KEY` is also set to a non-empty value or the file cannot be read.
+
 ## 4. Configure `.env`
 
 Set the console URL:

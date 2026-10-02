@@ -97,7 +97,7 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | 用户密码 | scrypt 哈希（better-auth） | `account` |
 | TOTP 密钥与备用码 | 以会话 secret 加密（better-auth） | `two_factor` |
 | 会话 secret | 不入库；只存 HMAC-SHA256 校验值 | `system_setting` 的 `auth_secret_check` |
-| 主密钥 | 不入库 | 环境变量 |
+| 主密钥 | 不入库 | 环境变量 `EDGEWEIR_MASTER_KEY`，或 `EDGEWEIR_MASTER_KEY_FILE` 指定的文件 |
 
 ### 会话 secret
 
@@ -153,7 +153,7 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | `install.sh` 由控制台提供 | 信任控制台（运营者自己的服务器）是前提；需要更强保证时，先下载脚本审阅，或与 GitHub 上同版本的脚本比对 |
 | 控制台被攻破 | 攻击者可以下发恶意配置（例如把网站指向恶意源站），但不能让节点运行未签名的程序，也拿不到节点私钥 |
 | 节点本地凭据 | 节点在状态目录（默认 `/var/lib/edgeweir-node`，权限 0700）以 0600 权限明文保存节点私钥、S3 源站密钥（`credentials.json`）与网站证书私钥（`certificates.json`），控制台不可达时节点重启后仍能服务；拿到节点 root 权限者可以读取 |
-| 主密钥与数据库同时泄露 | 信封加密失效；未设置 `BETTER_AUTH_SECRET` 时，泄露的主密钥还能伪造登录会话。通过 secret 文件或编排平台的 secret 机制注入 `EDGEWEIR_MASTER_KEY`，并与数据库备份分开保存 |
+| 主密钥与数据库同时泄露 | 信封加密失效；未设置 `BETTER_AUTH_SECRET` 时，泄露的主密钥还能伪造登录会话。经 `EDGEWEIR_MASTER_KEY_FILE` 从 secret 文件读取（[主密钥文件](docs/deploy/docker.md#主密钥文件)）或由编排平台的 secret 机制注入，不与数据库备份放在一起 |
 | setup token 写入日志 | 首次初始化需要控制台启动时写入日志的一次性 setup token；能读控制台日志者即可完成初始化。按主密钥的级别控制日志访问 |
 | 在服务器上找回账户 | 能在控制台容器内执行命令者（本就能读取 `DATABASE_URL` 直接修改数据库）可以用 `recover.js` 重置账户密码、停用两步验证；找回让全部会话退出登录并写入审计日志（`account.recover`），Web 界面与 HTTP 没有找回入口（[命令行](docs/reference/cli.md#找回账户)）。按主密钥的级别控制服务器访问 |
 | 探针本地凭据 | 探针在状态目录（默认 `/var/lib/edgeweir-probe`，权限 0700）以 0600 权限明文保存探针私钥；拿到探针主机 root 权限者可以冒充该探针上报结果，直到探针在控制台被删除 |

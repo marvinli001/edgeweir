@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { normalizeCidr, releaseBaseUrl } from "@edgeweir/contract";
 import * as z from "zod";
@@ -42,7 +43,10 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   ROLE: z.enum(["app", "worker", "all"]).default("all"),
   DATABASE_URL: z.string().min(1),
-  /** Base64-encoded 32+ byte key used to envelope-encrypt secrets at rest. */
+  /**
+   * Base64-encoded 32+ byte key used to envelope-encrypt secrets at rest.
+   * loadEnv fills it from EDGEWEIR_MASTER_KEY_FILE when that is set.
+   */
   EDGEWEIR_MASTER_KEY: z
     .string()
     .min(1)
@@ -50,6 +54,8 @@ const schema = z.object({
       const problem = masterKeyProblem(ctx.value);
       if (problem) ctx.issues.push({ code: "custom", message: problem, input: ctx.value });
     }),
+  /** File holding the master key (a Docker or orchestrator secret), instead of EDGEWEIR_MASTER_KEY. */
+  EDGEWEIR_MASTER_KEY_FILE: z.string().optional(),
   /**
    * better-auth's secret (session signatures, two-factor secrets at rest).
    * Empty or unset: derived from EDGEWEIR_MASTER_KEY (lib/auth-secret.ts).
@@ -155,8 +161,29 @@ export function parseOutboundAllowCidrs(text: string): string[] {
 /** Rolling image version `<YYYYMMDD>-<commit>` baked in by the Dockerfile; `dev` from source. */
 export const VERSION = process.env.EDGEWEIR_VERSION ?? "dev";
 
+/**
+ * The environment with EDGEWEIR_MASTER_KEY read from EDGEWEIR_MASTER_KEY_FILE
+ * when that is set; trailing whitespace (the file's last newline) is dropped.
+ */
+function withMasterKeyFile(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const file = source.EDGEWEIR_MASTER_KEY_FILE;
+  if (!file) return source;
+  const invalid = (message: string) =>
+    new Error(`invalid configuration:\n  EDGEWEIR_MASTER_KEY_FILE: ${message}`);
+  if (source.EDGEWEIR_MASTER_KEY) {
+    throw invalid("set either EDGEWEIR_MASTER_KEY or EDGEWEIR_MASTER_KEY_FILE, not both");
+  }
+  let key: string;
+  try {
+    key = readFileSync(file, "utf8").replace(/\s+$/, "");
+  } catch (error) {
+    throw invalid(`cannot read ${file}: ${(error as NodeJS.ErrnoException).code ?? error}`);
+  }
+  return { ...source, EDGEWEIR_MASTER_KEY: key };
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  const parsed = schema.safeParse(source);
+  const parsed = schema.safeParse(withMasterKeyFile(source));
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`invalid configuration:\n${issues}`);

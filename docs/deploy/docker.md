@@ -53,6 +53,33 @@ sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
 > [!WARNING]
 > 主密钥加密入库的内部 CA 私钥、证书私钥、S3 源站密钥、DNS API 凭据与 setup token，并派生会话密钥。离线备份，与数据库备份分开保存；丢失后上述数据不可恢复。
 
+### 主密钥文件
+
+主密钥也可以不写进 `.env`：放进文件，经 Compose secret 挂载，`.env` 中的 `EDGEWEIR_MASTER_KEY` 留空。
+
+```bash
+umask 077
+openssl rand -base64 32 > master.key
+chown 1000 master.key   # 镜像以 node 用户（uid 1000）运行
+sed -i "s|^EDGEWEIR_MASTER_KEY=.*|EDGEWEIR_MASTER_KEY=|" .env
+```
+
+与 `compose.yml` 同目录的 `compose.override.yml`（Compose 自动合并）：
+
+```yaml
+services:
+  console:
+    environment:
+      EDGEWEIR_MASTER_KEY_FILE: /run/secrets/edgeweir_master_key
+    secrets:
+      - edgeweir_master_key
+secrets:
+  edgeweir_master_key:
+    file: ./master.key
+```
+
+文件末尾的换行被忽略；同时设置非空的 `EDGEWEIR_MASTER_KEY`，或文件不可读时，控制台拒绝启动。
+
 ## 4. 配置 `.env`
 
 设置控制台地址：

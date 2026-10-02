@@ -97,7 +97,7 @@ Separate commercial products (see [LICENSING.en.md](LICENSING.en.md)) may use li
 | User passwords | scrypt hash (better-auth) | `account` |
 | TOTP secrets and backup codes | Encrypted with the session secret (better-auth) | `two_factor` |
 | Session secret | Not stored; only an HMAC-SHA256 check value | `auth_secret_check` in `system_setting` |
-| Master key | Not stored | Environment variable |
+| Master key | Not stored | Environment variable `EDGEWEIR_MASTER_KEY`, or the file named by `EDGEWEIR_MASTER_KEY_FILE` |
 
 ### Session secret
 
@@ -153,7 +153,7 @@ better-auth's session secret signs session cookies and encrypts TOTP secrets and
 | `install.sh` is served by the console | Trust in the console (the operator's own server) is a precondition; for stronger assurance, download and review the script first, or compare it with the same version on GitHub |
 | Compromised console | An attacker can push malicious configuration (for example, point sites to a malicious origin) but cannot make nodes run unsigned programs or obtain node private keys |
 | Credentials on the node | The node keeps its private key, the S3 origin keys (`credentials.json`), and site certificate private keys (`certificates.json`) in plain text with mode 0600 in its state directory (default `/var/lib/edgeweir-node`, mode 0700), so it keeps serving after a restart while the console is unreachable; root on the node can read them |
-| Master key and database leaked together | Envelope encryption no longer protects the data; without `BETTER_AUTH_SECRET`, the leaked master key also allows forging sessions. Inject `EDGEWEIR_MASTER_KEY` through a secret file or the orchestrator's secret mechanism, and keep it apart from database backups |
+| Master key and database leaked together | Envelope encryption no longer protects the data; without `BETTER_AUTH_SECRET`, the leaked master key also allows forging sessions. Read it from a secret file with `EDGEWEIR_MASTER_KEY_FILE` ([Master key file](docs/deploy/docker.en.md#master-key-file)) or inject it through the orchestrator's secret mechanism, and keep it apart from database backups |
 | Setup token in the log | First-run setup needs the one-time setup token the console writes to its log at startup; anyone who can read the console log can complete setup. Restrict log access at the same level as the master key |
 | Account recovery on the server | Anyone who can run commands in the console container (and so could read `DATABASE_URL` and change the database directly) can reset the account's password and turn two-factor authentication off with `recover.js`; a recovery signs out every session and is written to the audit log (`account.recover`), and neither the web UI nor HTTP offers recovery ([Command line](docs/reference/cli.en.md#account-recovery)). Restrict server access at the same level as the master key |
 | Credentials on a probe | A probe keeps its private key in plain text with mode 0600 in its state directory (default `/var/lib/edgeweir-probe`, mode 0700); root on the probe host can report results as that probe until it is deleted in the console |
