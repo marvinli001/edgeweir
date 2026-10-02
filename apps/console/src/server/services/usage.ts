@@ -99,16 +99,57 @@ export async function recordStatsWatermark(
     });
 }
 
+/** Serializes usage computations, so that seq order is commit order for usage.changes readers. */
+const lockUsage = (tx: Executor) =>
+  tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.usage'))`);
+
+/**
+ * Computes one window of a site from node_minute_stats of every node. A
+ * window whose values change gets revision + 1 and a new seq; an unchanged
+ * recomputation touches nothing. Returns whether the row changed. Call with
+ * the usage lock held.
+ */
+async function computeUsageWindow(tx: Executor, siteId: string, bucket: Date): Promise<boolean> {
+  const start = bucket.toISOString();
+  const end = new Date(bucket.getTime() + WINDOW_MS).toISOString();
+  const result = await tx.execute<{ seq: string }>(sql`
+    insert into site_usage (window_start, site_id, requests, bytes_sent, bytes_received, revision, seq, updated_at)
+    select ${start}::timestamptz, s.id,
+      coalesce(sum(m.requests), 0), coalesce(sum(m.bytes_sent), 0), coalesce(sum(m.bytes_received), 0),
+      1, nextval('site_usage_seq'), now()
+    from site s left join node_minute_stats m
+      on m.site_id = s.id and m.minute >= ${start}::timestamptz and m.minute < ${end}::timestamptz
+    where s.id = ${siteId}::uuid
+    group by s.id
+    on conflict (window_start, site_id) do update set
+      requests = excluded.requests,
+      bytes_sent = excluded.bytes_sent,
+      bytes_received = excluded.bytes_received,
+      revision = site_usage.revision + 1,
+      seq = excluded.seq,
+      updated_at = excluded.updated_at
+    where (site_usage.requests, site_usage.bytes_sent, site_usage.bytes_received)
+      is distinct from (excluded.requests, excluded.bytes_sent, excluded.bytes_received)
+    returning seq
+  `);
+  return result.rows.length > 0;
+}
+
 /**
  * Recomputes the usage windows marked dirty by ingestion (closed windows
- * only) from node_minute_stats of every node. A window whose values change
- * gets revision + 1 and a new seq; an unchanged recomputation touches
- * nothing. Serialized with an advisory lock so that seq order is commit
- * order for usage.changes readers.
+ * only). A window's markers (one per node) are read before it is computed
+ * and cleared only if no ingestion wrote them since: data that arrives while
+ * the window is computed leaves its marker for the next run. `onComputed`
+ * runs between computing and clearing (for tests).
  */
-export async function rollupUsage(db: Database, now = new Date(), limit = 500): Promise<number> {
+export async function rollupUsage(
+  db: Database,
+  now = new Date(),
+  limit = 500,
+  onComputed?: (tx: Executor) => Promise<void>,
+): Promise<number> {
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.usage'))`);
+    await lockUsage(tx);
     const dirty = schema.statsRollupDirty;
     const closedBefore = new Date(floorWindow(now.getTime()));
     const keys = await tx
@@ -119,38 +160,21 @@ export async function rollupUsage(db: Database, now = new Date(), limit = 500): 
       .limit(limit);
     let changed = 0;
     for (const key of keys) {
-      const start = key.bucket.toISOString();
-      const end = new Date(key.bucket.getTime() + WINDOW_MS).toISOString();
-      const result = await tx.execute<{ seq: string }>(sql`
-        insert into site_usage (window_start, site_id, requests, bytes_sent, bytes_received, revision, seq, updated_at)
-        select ${start}::timestamptz, s.id,
-          coalesce(sum(m.requests), 0), coalesce(sum(m.bytes_sent), 0), coalesce(sum(m.bytes_received), 0),
-          1, nextval('site_usage_seq'), now()
-        from site s left join node_minute_stats m
-          on m.site_id = s.id and m.minute >= ${start}::timestamptz and m.minute < ${end}::timestamptz
-        where s.id = ${key.siteId}::uuid
-        group by s.id
-        on conflict (window_start, site_id) do update set
-          requests = excluded.requests,
-          bytes_sent = excluded.bytes_sent,
-          bytes_received = excluded.bytes_received,
-          revision = site_usage.revision + 1,
-          seq = excluded.seq,
-          updated_at = excluded.updated_at
-        where (site_usage.requests, site_usage.bytes_sent, site_usage.bytes_received)
-          is distinct from (excluded.requests, excluded.bytes_sent, excluded.bytes_received)
-        returning seq
-      `);
-      changed += result.rows.length;
-      await tx
-        .delete(dirty)
-        .where(
-          and(
-            eq(dirty.granularity, "usage"),
-            eq(dirty.bucket, key.bucket),
-            eq(dirty.siteId, key.siteId),
-          ),
-        );
+      const marker = and(
+        eq(dirty.granularity, "usage"),
+        eq(dirty.bucket, key.bucket),
+        eq(dirty.siteId, key.siteId),
+      );
+      const markers = await tx
+        .select({ nodeId: dirty.nodeId, generation: dirty.generation })
+        .from(dirty)
+        .where(marker);
+      if (await computeUsageWindow(tx, key.siteId, key.bucket)) changed++;
+      await onComputed?.(tx);
+      for (const read of markers)
+        await tx
+          .delete(dirty)
+          .where(and(marker, eq(dirty.nodeId, read.nodeId), eq(dirty.generation, read.generation)));
     }
     return changed;
   });

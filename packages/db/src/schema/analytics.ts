@@ -75,7 +75,12 @@ const rollup = <T extends string>(name: T) =>
   ]);
 export const nodeHourStats = rollup("node_hour_stats");
 export const nodeDayStats = rollup("node_day_stats");
-/** Durable invalidation queue; ingestion and marker writes commit together. */
+/**
+ * Durable invalidation queue; ingestion and marker writes commit together.
+ * Every write to a marker takes a new generation, and a rollup clears only
+ * the generation it read: data written while it aggregates leaves the
+ * marker in place.
+ */
 export const statsRollupDirty = pgTable(
   "stats_rollup_dirty",
   {
@@ -85,6 +90,7 @@ export const statsRollupDirty = pgTable(
     siteId: uuid("site_id")
       .notNull()
       .references(() => site.id, { onDelete: "cascade" }),
+    generation: integer("generation").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.granularity, t.bucket, t.nodeId, t.siteId] })],
 );

@@ -2,7 +2,7 @@ import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
-import { ingestStatsBatch } from "../../src/server/services/stats";
+import { ingestMinuteStats, ingestStatsBatch } from "../../src/server/services/stats";
 import {
   advanceUsageWatermark,
   maintainUsage,
@@ -150,6 +150,29 @@ describe("recomputable 5-minute usage", async () => {
     expect(BigInt(next.lastSeq)).toBeGreaterThan(BigInt(changes.lastSeq));
     const idle = await admin.usage.changes({ afterSeq: next.lastSeq });
     expect(idle).toMatchObject({ items: [], lastSeq: next.lastSeq });
+  });
+
+  it("keeps a window dirty when nodes report into it while it is computed", async () => {
+    // Reports that commit after the window was computed, before its markers are cleared.
+    const race = async (offset: number, node: { id: string; clusterId: string }, seq: bigint) => {
+      const start = window - offset * WINDOW;
+      await ingestStatsBatch(ctx.db, nodeA, seq, [minuteStats(siteId, new Date(start), 1, 10)]);
+      let injected = false;
+      await rollupUsage(ctx.db, new Date(), 500, async (tx) => {
+        if (injected) return;
+        injected = true;
+        await ingestMinuteStats(tx, node, [minuteStats(siteId, new Date(start + 60_000), 2, 20)]);
+      });
+      const [first] = await usageRows(ctx.db, siteId, new Date(start), new Date(start));
+      expect(first).toMatchObject({ requests: "1" });
+      expect(await rollupUsage(ctx.db)).toBe(1);
+      const [second] = await usageRows(ctx.db, siteId, new Date(start), new Date(start));
+      expect(second).toMatchObject({ requests: "3", bytesSent: "30", revision: 2 });
+    };
+    // A's marker was read: the report gives it a new generation.
+    await race(12, nodeA, 3n);
+    // B had no marker: the report adds one that was never read.
+    await race(13, nodeB, 4n);
   });
 
   it("keeps values above 2^53 exact", async () => {

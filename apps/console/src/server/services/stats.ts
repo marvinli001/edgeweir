@@ -1,6 +1,7 @@
 import { isIP } from "node:net";
 import { type Database, schema } from "@edgeweir/db";
 import { eq, sql } from "drizzle-orm";
+import { lockStats } from "../lib/locks";
 import type { Executor } from "./revisions";
 import { addTrafficCounter } from "./stats-counter";
 
@@ -140,11 +141,12 @@ export async function ingestMinuteStats(
       )
     returning site_id, minute
     ), dirty as (
+      -- A new generation, so that a rollup reading the marker meanwhile leaves it in place.
       insert into stats_rollup_dirty (granularity,bucket,node_id,site_id)
       select distinct 'hour',date_trunc('hour',minute,'UTC'),${node.id}::uuid,site_id from stored
       union
       select distinct 'usage',to_timestamp(floor(extract(epoch from minute)/300)*300),${node.id}::uuid,site_id from stored
-      on conflict do nothing
+      on conflict (granularity,bucket,node_id,site_id) do update set generation = stats_rollup_dirty.generation + 1
     ) select site_id from stored
   `);
   const stored = new Set(result.rows.map((r) => r.site_id));
@@ -287,9 +289,7 @@ export async function ingestStatsBatch(
   if (sequence < 1n || sequence > 9223372036854775807n)
     throw new Error("invalid statistics sequence");
   return db.transaction(async (tx) => {
-    await tx.execute(
-      sql`select pg_advisory_xact_lock_shared(hashtext('edgeweir.stats.retention'))`,
-    );
+    await lockStats(tx, "shared");
     const clock = now ?? Date.now();
     const cursor = schema.nodeStatsCursor;
     await tx.insert(cursor).values({ nodeId: node.id }).onConflictDoNothing();

@@ -1,0 +1,1 @@
+ALTER TABLE "stats_rollup_dirty" ADD COLUMN "generation" integer DEFAULT 0 NOT NULL;

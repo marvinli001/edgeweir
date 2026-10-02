@@ -10,3 +10,15 @@ import type { Executor } from "../services/revisions";
  */
 export const lockClusterPublish = (tx: Executor, clusterId: string) =>
   tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.publish.${clusterId}`}))`);
+
+/**
+ * Statistics writers (ingestion, rollups) hold this lock shared; whatever
+ * deletes statistics rows (retention, site deletion) holds it exclusively,
+ * so it never removes data a writer is about to aggregate or reference.
+ */
+export const lockStats = (tx: Executor, mode: "shared" | "exclusive") =>
+  tx.execute(
+    mode === "shared"
+      ? sql`select pg_advisory_xact_lock_shared(hashtext('edgeweir.stats.retention'))`
+      : sql`select pg_advisory_xact_lock(hashtext('edgeweir.stats.retention'))`,
+  );

@@ -1,5 +1,6 @@
 import { siteCreateInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
+import { ne } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { topSites, trafficBreakdown, trafficSeries } from "../../src/server/services/analytics";
 import { createClusterTx } from "../../src/server/services/clusters";
@@ -181,5 +182,61 @@ describe("M5 statistics identity, rollups and retention", async () => {
       topUrls: { "/counter-range": maximum },
     });
     expect(await rollupTraffic(ctx.db, now)).toBe(0);
+  });
+  it("keeps an hour dirty when a report lands while it is rolled up", async () => {
+    await ingestMinuteStats(ctx.db, edge, [bucket("2026-09-24T08:10:00Z", 3)]);
+    let injected = false;
+    // The report commits between the hour's aggregate and the clearing of its marker.
+    await rollupTraffic(ctx.db, now, 200, 30_000, async (tx) => {
+      if (injected) return;
+      injected = true;
+      await ingestMinuteStats(tx, edge, [bucket("2026-09-24T08:59:00Z", 4)]);
+    });
+    const requestsAt = (rows: { minute: Date; requests: number }[], minute: string) =>
+      rows.find((row) => row.minute.toISOString() === minute)?.requests;
+    const hours = () => ctx.db.select().from(schema.nodeHourStats);
+    expect(requestsAt(await hours(), "2026-09-24T08:00:00.000Z")).toBe(3);
+    await rollupTraffic(ctx.db, now);
+    expect(requestsAt(await hours(), "2026-09-24T08:00:00.000Z")).toBe(7);
+    const days = await ctx.db.select().from(schema.nodeDayStats);
+    expect(requestsAt(days, "2026-09-24T00:00:00.000Z")).toBe(7);
+    expect(await rollupTraffic(ctx.db, now)).toBe(0);
+  });
+  it("drains a backlog in batches and passes over days whose hours are still dirty", async () => {
+    await ingestMinuteStats(ctx.db, edge, [
+      bucket("2026-09-20T01:00:00Z", 1),
+      bucket("2026-09-20T02:00:00Z", 2),
+      bucket("2026-09-20T03:00:00Z", 4),
+    ]);
+    // A later day that only waits for its own rollup.
+    await ctx.db.insert(schema.nodeHourStats).values({
+      minute: new Date("2026-09-21T05:00:00Z"),
+      nodeId: edge.id,
+      siteId,
+      requests: 8,
+    });
+    await ctx.db.insert(schema.statsRollupDirty).values({
+      granularity: "day",
+      bucket: new Date("2026-09-21T00:00:00Z"),
+      nodeId: edge.id,
+      siteId,
+    });
+    const day = async (minute: string) =>
+      (await ctx.db.select().from(schema.nodeDayStats)).find(
+        (row) => row.minute.toISOString() === minute,
+      )?.requests;
+    // No time left: one batch of one key per granularity.
+    expect(await rollupTraffic(ctx.db, now, 1, 0)).toBe(2);
+    expect(await day("2026-09-21T00:00:00.000Z")).toBe(8);
+    expect(await day("2026-09-20T00:00:00.000Z")).toBeUndefined();
+    // With time, batches continue until nothing is left.
+    expect(await rollupTraffic(ctx.db, now, 1)).toBe(3);
+    expect(await day("2026-09-20T00:00:00.000Z")).toBe(7);
+    expect(
+      await ctx.db
+        .select()
+        .from(schema.statsRollupDirty)
+        .where(ne(schema.statsRollupDirty.granularity, "usage")),
+    ).toEqual([]);
   });
 });
