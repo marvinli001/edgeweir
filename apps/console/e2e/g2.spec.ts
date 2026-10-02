@@ -110,12 +110,14 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   await expect(enabled).toHaveAttribute("aria-checked", "false");
   await expect(follow).toHaveAttribute("aria-checked", "false");
   await expect(save).toBeDisabled();
-  await expect(preset).toHaveText("标准");
-  await expect(urlQps).toHaveCount(0);
+  // The script's thresholds (urlQps 20) match no preset.
+  await expect(preset).toHaveText("自定义");
+  await expect(urlQps).toHaveValue("20");
   await enabled.click();
   await follow.click();
   // Following, the policy shows the template's preset.
   await expect(preset).toHaveText("标准");
+  await expect(urlQps).toHaveCount(0);
   await follow.click();
   await expect(preset).toHaveText("标准");
   await pick(page, preset, "自定义");
