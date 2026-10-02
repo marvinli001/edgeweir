@@ -364,6 +364,56 @@ preflight() {
 # image_version <ref>: the rolling version baked into the image.
 image_version() { docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$1" 2>/dev/null || true; }
 
+# iso_epoch <time>: seconds since 1970 of an ISO 8601 time with Z or an offset
+# (git's %cI), in bash arithmetic: BusyBox and BSD date have no -d for it.
+iso_epoch() {
+  local re='^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\.[0-9]+)?(Z|([+-])([0-9]{2}):?([0-9]{2}))$'
+  [[ $1 =~ $re ]] || return 1
+  local -i y=10#${BASH_REMATCH[1]} m=10#${BASH_REMATCH[2]} d=10#${BASH_REMATCH[3]} days offset=0
+  local -i seconds=$((10#${BASH_REMATCH[4]} * 3600 + 10#${BASH_REMATCH[5]} * 60 + 10#${BASH_REMATCH[6]}))
+  if [[ ${BASH_REMATCH[8]} != Z ]]; then
+    offset=$((${BASH_REMATCH[9]}1 * (10#${BASH_REMATCH[10]} * 3600 + 10#${BASH_REMATCH[11]} * 60)))
+  fi
+  # Days from the civil date (H. Hinnant's algorithm: 400-year eras from 0000-03-01).
+  local -i era year
+  ((y -= m <= 2, era = y / 400, year = y % 400))
+  days=$((era * 146097 + year * 365 + year / 4 - year / 100 + (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1 - 719468))
+  printf '%s' "$((days * 86400 + seconds - offset))"
+}
+
+# image_created <ref>: the commit time of a local image (release label), as epoch
+# seconds; empty when unknown.
+image_created() {
+  local created
+  created=$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.created"}}' "$1" 2>/dev/null) || return 0
+  iso_epoch "$created" || true
+}
+
+# version_order <from> <to>: "older" when <to> is an older rolling version than
+# <from>, "newer", "same", or "unknown". Tags are <YYYYMMDD>-<commit>: the day
+# orders them; two of the same day go by the images' commit times.
+version_order() {
+  local from=${1%%@*} to=${2%%@*} re='^([0-9]{8})-[0-9a-f]+$' from_day to_day a b
+  [[ $from != "$to" ]] || { echo same; return; }
+  [[ $from =~ $re ]] || { echo unknown; return; }
+  from_day=${BASH_REMATCH[1]}
+  [[ $to =~ $re ]] || { echo unknown; return; }
+  to_day=${BASH_REMATCH[1]}
+  if [[ $from_day != "$to_day" ]]; then
+    if [[ $to_day < $from_day ]]; then echo older; else echo newer; fi
+    return
+  fi
+  a=$(image_created "$IMAGE:$1")
+  b=$(image_created "$IMAGE:$2")
+  if [[ -z $a || -z $b ]]; then
+    echo unknown
+  elif ((b < a)); then
+    echo older
+  else
+    echo newer
+  fi
+}
+
 # EDGEWEIR_NO_PULL=1: use images already loaded on this host (docker load), never pull.
 pull() { [[ -n ${EDGEWEIR_NO_PULL:-} ]] || compose pull -q; }
 
@@ -894,9 +944,14 @@ cmd_update() {
     return 0
   fi
   info "${current:-latest} → ${version}"
-  if [[ -n $current && $current > $version && $target != latest ]]; then
-    warn "这是回退：数据库迁移只向前执行，只有两个版本之间没有新增迁移时才能直接换回旧镜像。"
-    confirm "继续？" n || die "已取消。"
+  if [[ -n $current && $target != latest ]]; then
+    case $(version_order "$current" "$version") in
+      older)
+        warn "这是回退：数据库迁移只向前执行，只有两个版本之间没有新增迁移时才能直接换回旧镜像。"
+        confirm "继续？" n || die "已取消。"
+        ;;
+      unknown) info "无法判断 ${version} 是否早于 ${current}：数据库迁移只向前执行，不要换回更早的版本。" ;;
+    esac
   fi
   if [[ -z $skip_backup ]]; then
     cmd_backup "before-$version"

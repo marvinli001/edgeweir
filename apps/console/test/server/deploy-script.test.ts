@@ -253,4 +253,44 @@ describe("deploy.sh", () => {
       expect(run("backup_keep", { EDGEWEIR_BACKUP_KEEP: "all" }).status).toBe(1);
     });
   });
+
+  describe("update versions (P1-56)", () => {
+    // Two images of the same day; the smaller commit hash is the newer one.
+    const labels = `docker() {
+      case "$*" in
+        *20260930-f00baa1*) echo 2026-09-30T10:00:00+08:00 ;;
+        *20260930-0123456*) echo 2026-09-30T12:00:00+02:00 ;;
+      esac
+    }`;
+
+    it.each([
+      ["20260929-fffffff", "20260930-0000000", "newer"],
+      ["20260930-0000000", "20260929-fffffff", "older"],
+      ["20260930-f00baa1", "20260930-0123456", "newer"],
+      ["20260930-0123456", "20260930-f00baa1", "older"],
+      ["20260930-f00baa1", "20260930-abcdef0", "unknown"],
+      ["20260930-abcdef0", "20260930-abcdef0@sha256:00", "same"],
+      ["latest", "20260930-0123456", "unknown"],
+      ["20260929-a1b2c3d@sha256:00", "20260930-0123456", "newer"],
+    ])("orders %s → %s as %s", (from, to, order) => {
+      expect(sourced(`${labels}; version_order "$FROM" "$TO"`, { FROM: from, TO: to })).toBe(
+        `${order}\n`,
+      );
+    });
+
+    it("reads release timestamps without date -d", () => {
+      for (const time of [
+        "1970-01-01T00:00:00Z",
+        "2026-09-30T10:00:00+08:00",
+        "2026-09-30T12:00:00.123-02:30",
+        "2000-02-29T23:59:59Z",
+        "2100-03-01T00:00:00+0100",
+      ]) {
+        expect(sourced('iso_epoch "$T"', { T: time }), time).toBe(
+          String(Math.floor(Date.parse(time.replace(/([+-]\d{2})(\d{2})$/, "$1:$2")) / 1000)),
+        );
+      }
+      expect(run('iso_epoch "$T"', { T: "yesterday" }).status).toBe(1);
+    });
+  });
 });

@@ -160,7 +160,7 @@ The check and backups connect according to `sslmode` in `DATABASE_URL`:
 `./deploy.sh update [tag] [--no-backup]` runs these steps:
 
 1. Resolve the target version, see [Version resolution](#version-resolution). When the target equals `EDGEWEIR_VERSION` in `.env` and the container already runs it, print `已经是 <version>。` (already at) and exit 0.
-2. A target other than `latest` that sorts below the current version as a string is a rollback: warn and ask whether to continue, default no.
+2. A target other than `latest` that is older than the current version is a rollback: warn and ask whether to continue, default no. The dates in the tags are compared first; two tags of the same day compare the commit times of the two images (label `org.opencontainers.image.created`). When the order cannot be told (a tag is not `<YYYYMMDD>-<commit>`, or one image of the same day is not local), only a note is printed.
 3. Back up to `backups/<time>-before-<target version>/`; `--no-backup` skips this. A failed backup aborts with the deployment unchanged.
 4. When the compose file differs from the built-in template, ask whether to replace it: default yes interactively, kept in unattended mode. The old file is in the step 3 backup; `./deploy.sh template <mode>` prints the template.
 5. Write `EDGEWEIR_VERSION` and recreate the containers with the `start` flow. Database migrations run when the console starts.
