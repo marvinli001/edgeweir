@@ -70,6 +70,8 @@ To turn it off, click the switch again and confirm.
 
 For every site: in **Protection settings → Protection**, pick the **Challenge type**, turn on **Global Under Attack**, and confirm; every cluster gets a new configuration. The **Security** tab of each site then shows "Global Under Attack is on for every site". See [Protection](system.en.md#protection).
 
+Without leaving the page: press ⌘K / Ctrl+K, type a site's name or domain, pick **Under Attack: (site)** and confirm; the switch turns the other way. **Global Under Attack** turns the global switch the same way.
+
 These requests are never challenged by Under Attack or CC mitigation:
 
 | Request | Note |
@@ -162,13 +164,15 @@ Every preset uses a 10-second window and keeps the captcha level as a captcha.
 
 ### State and events
 
+The top of the **Security** tab shows in one line what is in effect: Under Attack (the site's or global), CC (the preset, **Custom**, **Template** or **Off**), the CRS mode and preset, the challenge preset and, when an online node is above normal, **Nodes: (highest level)**. Click a part to jump to its card.
+
 Lower on the **Security** tab:
 
 | Section | Content |
 | --- | --- |
 | Current level per node | The site's level, online state and escalated paths on every active node of the cluster (refreshed every 15 seconds) |
-| Top addresses and paths | Heaviest addresses and paths in the events of the last hour, 24 hours or 7 days (approximate) |
-| Events | Timeline of level changes, escalated paths and automatic bans: node and trigger (observed / threshold), filterable by type |
+| Top addresses and paths | Heaviest addresses and paths in the events of the last hour, 24 hours or 7 days (approximate); **⋯** at the end of a row offers **Ban IP** (the dialog has the site and address filled in) or **Purge URL** (the path expands to each of the site's domains that is not a wildcard; submitted after a confirmation) |
+| Events | Timeline of level changes, escalated paths and automatic bans: node and trigger (observed / threshold), filterable by type; on an automatic ban, **⋯** offers **Ban on all sites** (the ban dialog with the global scope) or **Unban** (lifts the site's bans of exactly that address; a range that covers it stays) |
 
 Events are kept for 30 days by default, adjustable to 7–365 days with **Security event retention (days)** in **Protection settings → Protection**. A site leaving the normal level raises the **CC mitigation raised** alert (`cc_mitigation`), at most once per site in 15 minutes (a raise held back fires once they are over if the site has not recovered), see [Alerts](dns-and-alerts.en.md#set-alert-rules).
 

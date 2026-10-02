@@ -88,7 +88,14 @@ For using and revoking AccessKeys, see [Access logs and access keys](access-logs
 
 ## Console navigation
 
-**New site** at the top of the sidebar opens the new site form; while there is no node it is **Add node** and opens the add-node dialog. ⌘K / Ctrl+K opens the command menu: search for and open any page (**Security** and **Settings** included), or run **New site**, **Add node**, **Switch language**, or **Toggle dark mode**.
+**New site** at the top of the sidebar opens the new site form; while there is no node it is **Add node** and opens the add-node dialog. ⌘K / Ctrl+K opens the command menu; the arrow keys pick an entry and Enter runs it:
+
+| Entry | Behavior |
+| --- | --- |
+| Sites | Type a site's name or domain to search; Enter opens the site. Before typing, starred and recently visited sites are listed |
+| Site actions | The first 3 sites found each have **Under Attack: (site)** (turns the site's Under Attack the other way after a confirmation) and **Purge cache: (site)** (creates a whole-site purge after a confirmation) |
+| Navigation | Opens any page (**Security** and **Settings** included) |
+| Actions | **New site**, **Add node**, **Ban an IP…** (opens the ban dialog, with the site filled in on a site's pages), **Purge URLs…** (opens **Purge & prefetch**), **Global Under Attack** (turns it the other way after a confirmation), **Switch language**, **Toggle dark mode** |
 
 ### Sidebar
 

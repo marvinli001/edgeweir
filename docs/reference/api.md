@@ -179,7 +179,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | 请求 | 字段 |
 | --- | --- |
 | `POST /bans` | `scope`（`site` / `platform`）、`siteId`（`site` 必须带，`platform` 不能带）、`cidr`（IP 地址或 CIDR）、`reason`（`abuse`、`attack`、`scanner`、`spam`、`other`）、`durationSeconds`（60–604800） |
-| `GET /bans` | 查询参数 `scope`、`siteId`、`source`（`manual` / `auto`）、`page`、`pageSize`（1–100，默认 50） |
+| `GET /bans` | 查询参数 `scope`、`siteId`、`source`（`manual` / `auto`）、`address`（IP 或 CIDR，列出覆盖它或在它之内的封禁；无效时 400 `BAN_INVALID_CIDR`）、`page`、`pageSize`（1–100，默认 50） |
 | `PUT /settings/bans` | `maxTotal`（100–100000，默认 10000）、`shareAutoBans`（默认 `true`） |
 
 列表响应 `{ items, total }`，只含有效的封禁（未到期、未解封），按创建时间倒序。封禁字段：

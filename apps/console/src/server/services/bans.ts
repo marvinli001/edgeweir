@@ -11,6 +11,7 @@ import {
   type BanListInput,
   type BanReason,
   type BanSettings,
+  banLookupCidr,
   banSettings,
   isAutoBanPrefix,
   MAX_AUTO_BANS_PER_CLUSTER,
@@ -211,6 +212,13 @@ export async function listBans(
   if (input.siteId) filters.push(eq(schema.ipBan.siteId, input.siteId));
   if (input.source) filters.push(eq(schema.ipBan.source, input.source));
   if (input.scope) filters.push(eq(schema.ipBan.scope, input.scope));
+  if (input.address !== undefined) {
+    const address = banLookupCidr(input.address);
+    if (!address) fail("BAN_INVALID_CIDR", "invalid IP address or CIDR");
+    // Stored CIDRs are canonical (parseBanCidr, reported bans): inet's && is "contains or is
+    // contained by".
+    filters.push(sql`${schema.ipBan.cidr}::inet && ${address}::inet`);
+  }
   const where = and(...filters);
   const [total] = await db.select({ n: count() }).from(schema.ipBan).where(where);
   return {

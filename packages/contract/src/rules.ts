@@ -14,6 +14,7 @@ import {
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { addExpressionIssue, expressionKinds } from "./expressions";
+import type { PresetLevel } from "./protection";
 import { analyticsRange, optionalHostname, uuid } from "./schemas";
 
 const text = z
@@ -248,6 +249,22 @@ export const ruleAction = z.discriminatedUnion("kind", [
     key: z.string().refine(isRateLimitKey).default("ip.src"),
   }),
 ]);
+/** The rate of a rate_limit rule a preset sets; the key and status stay the rule's own. */
+export interface RateLimitPreset {
+  limit: number;
+  windowSeconds: number;
+}
+/**
+ * Rate limit presets, requests per key (usually an address) per minute. Standard is what a new
+ * rule starts with; loose allows bursts of pages with many assets or many users behind one NAT
+ * (5 per second); strict suits logins, sign-ups and APIs (one request every 3 seconds).
+ */
+export const RATE_LIMIT_PRESETS: Record<PresetLevel, RateLimitPreset> = {
+  loose: { limit: 300, windowSeconds: 60 },
+  standard: { limit: 100, windowSeconds: 60 },
+  strict: { limit: 20, windowSeconds: 60 },
+};
+
 export const ruleInput = z
   .object({
     id: uuid.optional(),

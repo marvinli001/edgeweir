@@ -58,6 +58,7 @@ export function ControlledConfirmDialog({
   confirmLabel,
   destructive = true,
   onConfirm,
+  children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -67,6 +68,8 @@ export function ControlledConfirmDialog({
   confirmLabel?: string;
   destructive?: boolean;
   onConfirm: () => Promise<unknown>;
+  /** What the action touches when one line is not enough (e.g. the URLs of a purge). */
+  children?: React.ReactNode;
 }) {
   const action = useAction();
   const [error, setError] = React.useState<string | null>(null);
@@ -84,6 +87,7 @@ export function ControlledConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           {note ? <SafetyNote id={noteId}>{note}</SafetyNote> : null}
         </DialogHeader>
+        {children}
         {error ? (
           <FieldError data-testid="confirm-error" className="animate-in fade-in">
             {error}

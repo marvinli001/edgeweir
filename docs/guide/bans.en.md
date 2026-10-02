@@ -28,6 +28,8 @@ Block clients by IP address or CIDR for a limited time. Bans travel over the nod
 
 Unban: click "Unban" in the row and confirm. The nodes drop the ban within seconds. Manual and automatic bans can both be lifted.
 
+Without typing it again: the access logs, the top IPs of the analytics, and the top addresses and automatic bans on a site's **Security** tab offer "Ban IP" under **⋯** at the end of the row, with the site and address filled in (the "Scope" can change to "Global"); ⌘K / Ctrl+K → "Ban an IP…" opens the same dialog (with the site filled in on a site's pages). The toast after a ban links to the list ("View bans"). The link `/bans?site=<site ID>&ip=<address>` opens the dialog filled in the same way, and the list shows only the bans that overlap that address (× beside the address clears it).
+
 The list shows active bans only (neither expired nor lifted), newest first, and filters by scope, site and source:
 
 | Column | Content |
@@ -152,7 +154,7 @@ Paths are under `/api/v1`.
 
 | Procedure | Endpoint | Notes |
 | --- | --- | --- |
-| `bans.list` | `GET /bans` | Active bans; query parameters `scope` (`site` / `platform`), `siteId`, `source` (`manual` / `auto`), `page`, `pageSize` |
+| `bans.list` | `GET /bans` | Active bans; query parameters `scope` (`site` / `platform`), `siteId`, `source` (`manual` / `auto`), `address` (an IP or CIDR: the bans that cover it or lie inside it), `page`, `pageSize` |
 | `bans.create` | `POST /bans` | `siteId` is required when `scope` is `site` and not allowed when it is `platform`; also `cidr`, `reason`, `durationSeconds` |
 | `bans.delete` | `DELETE /bans/{id}` | Lifts a manual or automatic ban |
 

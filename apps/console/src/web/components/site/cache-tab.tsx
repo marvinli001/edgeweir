@@ -42,6 +42,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { SafetyNote } from "@/components/safety-note";
+import { CachePurgeCard } from "@/components/site/cache-purge-card";
 import { CompressionCard } from "@/components/site/compression-card";
 import { ExpressionEditor, expressionFailure } from "@/components/site/expression-editor";
 import { NumberField, SwitchField } from "@/components/site/fields";
@@ -73,13 +74,14 @@ import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
 /**
- * Cache tab: ordered cache rules, how cache keys are built and whether the
+ * Cache tab: purges, ordered cache rules, how cache keys are built and whether the
  * origin's Cache-Tag reaches clients. Each card saves on its own.
  */
 export function CacheTab({ site }: { site: Site }) {
   const { cacheKey, rangeSlice, keepCacheTag } = site.cacheSettings;
   return (
     <div className="flex flex-col gap-4">
+      <CachePurgeCard site={site} />
       {/* Keyed by their own data, so saving one card keeps unsaved edits in the others. */}
       <CacheRulesCard key={JSON.stringify(site.cacheRules)} site={site} />
       <CacheKeyCard key={JSON.stringify({ cacheKey, rangeSlice })} site={site} />

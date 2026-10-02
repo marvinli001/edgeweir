@@ -538,6 +538,39 @@ describe("dynamic bans", async () => {
     ]);
   });
 
+  it("filters bans by an address they cover or that covers them", async () => {
+    const ban = (scope: "site" | "platform", cidr: string, site = siteId) =>
+      admin.bans.create({
+        scope,
+        ...(scope === "site" ? { siteId: site } : {}),
+        cidr,
+        reason: "abuse",
+        durationSeconds: HOUR,
+      });
+    const single = await ban("site", "203.0.113.7");
+    const range = await ban("platform", "203.0.113.0/24");
+    const other = await ban("site", "198.51.100.7", otherSiteId);
+    const v6 = await ban("site", "2001:db8:1:2::/64");
+    const ids = async (input: { address: string; siteId?: string }) =>
+      (await admin.bans.list(input)).items.map((b) => b.id).sort();
+    // The address itself and the ranges that cover it.
+    expect(await ids({ address: "203.0.113.7" })).toEqual([single.id, range.id].sort());
+    expect(await ids({ address: "203.0.113.7/32", siteId })).toEqual([single.id]);
+    // A range lists the bans inside it.
+    expect(await ids({ address: "203.0.113.0/16" })).toEqual([single.id, range.id].sort());
+    expect(await ids({ address: "203.0.113.8" })).toEqual([range.id]);
+    expect(await ids({ address: "198.51.100.7" })).toEqual([other.id]);
+    // IPv6 clients are banned by their /64; IPv4-mapped addresses are IPv4.
+    expect(await ids({ address: "2001:DB8:1:2::abcd" })).toEqual([v6.id]);
+    expect(await ids({ address: "::ffff:203.0.113.7" })).toEqual([single.id, range.id].sort());
+    expect(await ids({ address: "192.0.2.1" })).toEqual([]);
+    expect(await rpcError(admin.bans.list({ address: "not-an-ip" }))).toMatchObject({
+      code: "BAN_INVALID_CIDR",
+      status: 400,
+    });
+    await liftAll();
+  });
+
   it("counts online nodes that report a ban as not applied", async () => {
     const ban = await admin.bans.create({
       scope: "site",

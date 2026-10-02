@@ -356,7 +356,19 @@ The **Cache key & slicing** card is saved separately and applies to all rules of
 4. Click **Submit**.
 5. Verify: the task appears under **Tasks**; expanded, each node shows **Succeeded**; after a purge, the next request returns `X-Cache: MISS`.
 
-Tasks go to every enabled node of the site's cluster, with a result per node. Disabled sites cannot be purged or prefetched ("The site is disabled"). `/purge?site=<site ID>` lists only that site's tasks (the site's name shows next to **Tasks**; × clears it) and preselects the site for site and tag purges. **Submit** stays disabled while the list is empty or blank.
+Tasks go to every enabled node of the site's cluster, with a result per node. Disabled sites cannot be purged or prefetched ("The site is disabled"). `/purge?site=<site ID>` lists only that site's tasks (the site's name shows next to **Tasks**; × clears it) and preselects the site for site and tag purges; `/purge?type=<type>&urls=<URL>` opens that type with the URL filled in (several URLs as a JSON array, e.g. `urls=["https://www.example.com/a","https://www.example.com/b"]`). **Submit** stays disabled while the list is empty or blank. **Purge URLs…** in ⌘K / Ctrl+K opens this page (listing only the site's tasks on a site's pages).
+
+The access logs, the top URLs on a site's **Analytics** tab and the top paths on its **Security** tab offer **Purge URL** under **⋯** at the end of the row: paths expand to each of the site's domains that is not a wildcard, and after you confirm the listed URLs a URL purge is created; **View tasks** in the toast opens the site's tasks.
+
+### Purge from the site
+
+The **Purge cache** card at the top of the site's **Cache** tab:
+
+1. Select **Purge URLs**, **Purge directories**, or **Purge sites**.
+2. For URLs and directories, enter one path starting with `/` or one full URL per line. Paths expand to each of the site's domains that is not a wildcard (`/app.js` gives one URL for `www.example.com` and one for `example.com`); the count of expanded URLs shows at the top right. Over 500 URLs, or a line that is neither a path nor a URL, shows a message below and keeps **Submit** disabled. On a site with wildcard domains only, enter full URLs. **Purge sites** shows the domains it purges.
+3. Click **Submit**.
+
+Below the card are the site's latest 5 tasks, refreshed every 2 seconds while nodes work on them; **View tasks** opens `/purge?site=<site ID>`.
 
 ### Task types
 
@@ -398,7 +410,7 @@ The origin lists tags, comma separated, in the `Cache-Tag` response header, e.g.
 
 ### Purge a site's cache
 
-On the site's **Overview** tab, click **Purge cache** and confirm. This is the same as **Purge sites** under **Purge & prefetch**: the console creates a whole-site purge task for every enabled node of the site's cluster and publishes no revision. **View tasks** in the notification opens `/purge?site=<site ID>`, which lists only that site's tasks and preselects the site in the form. A disabled site cannot be purged.
+On the site's **Overview** tab, click **Purge cache** and confirm (or search the site in ⌘K / Ctrl+K and pick **Purge cache: (site)**). This is the same as **Purge sites** under **Purge & prefetch**: the console creates a whole-site purge task for every enabled node of the site's cluster and publishes no revision. **View tasks** in the notification opens `/purge?site=<site ID>`, which lists only that site's tasks and preselects the site in the form. A disabled site cannot be purged.
 
 ### Task limits
 

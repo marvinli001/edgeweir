@@ -22,6 +22,7 @@ Traffic analytics, access log sampling, search, and export, analytics storage mo
 1. Open a page from the table and select a range: **Last hour**, **Last 6 hours**, **Last 24 hours**, **Last 7 days**, or **Last 30 days**.
 2. Read **Total requests**, **Data transferred**, **Cache hit ratio**, **Peak bandwidth**, **4xx rate**, **5xx rate**, **Status codes**, **Top URLs (approximate)**, and **Top IPs (approximate)**; click a metric for details.
 3. Click **Refresh** to reload.
+4. To act on an entry, click **⋯** at the end of its row: a top IP offers **Ban IP** (with the site filled in on a site's **Analytics** tab, with the **Global** scope on the overview); a top URL on a site's **Analytics** tab offers **Purge URL**, which expands the path to each of the site's domains that is not a wildcard and lists the URLs before it submits the purge.
 
 ### Analytics data
 
@@ -73,6 +74,15 @@ Access logs need the node capability `access-logs-v1`, and JA4 also `ja4-v1`. A 
 1. On the **Logs** tab, enter **From** and **To**, and optionally **Status**, **Client IP**, **Path prefix**, and **Request ID**.
 2. Click **Search**.
 3. For a file, click **Export CSV**.
+4. To act on a request, click **⋯** at the end of its row; the action runs on the same page:
+
+   | Action | Behavior |
+   | --- | --- |
+   | Ban IP | Opens the ban dialog with the site and the client IP filled in; the **Scope** can change to **Global**, see [Bans](bans.en.md) |
+   | Purge URL | After a confirmation, creates a URL purge of the request's host and path, see [Purge and prefetch](origins-and-cache.en.md#purge-and-prefetch) |
+   | Exclude CRS rule N | Only on rows that matched CRS rules, one item per matched rule; after a confirmation, the rule ID is added to the site's exclusions, see [OWASP CRS](waf.en.md#fields). Initialization, blocking evaluation and correlation rules (901xxx, 949xxx, 959xxx, 980xxx) are not offered: excluding them turns blocking off |
+
+   The toast that follows links to the bans, the purge tasks or the CRS settings.
 
 | Item | Behavior |
 | --- | --- |

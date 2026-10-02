@@ -1,7 +1,9 @@
-import { errorDefs, isErrorCode } from "@edgeweir/contract";
+import { errorDefs, expressionIssue, isErrorCode } from "@edgeweir/contract";
+import type * as z from "zod";
 // Relative on purpose: the module is unit-tested outside Vite's "@" alias.
 import { m } from "../paraglide/messages.js";
 import { getLocale } from "../paraglide/runtime.js";
+import { expressionErrorText, expressionReason } from "./expressions";
 
 type MessageFn = (params?: Record<string, string | number>) => string;
 const messages = m as unknown as Record<string, MessageFn | undefined>;
@@ -100,7 +102,7 @@ function featureList(features: string): string {
   return [...new Set(labels)].join(getLocale() === "zh-CN" ? "、" : ", ");
 }
 
-type Issue = { path?: readonly PropertyKey[] };
+type Issue = { path?: readonly PropertyKey[]; code?: string; params?: unknown };
 
 /** The first validation issue of a server (oRPC `data.issues`) or browser (zod) error. */
 function firstIssue(error: unknown, data: unknown): Issue | undefined {
@@ -111,19 +113,30 @@ function firstIssue(error: unknown, data: unknown): Issue | undefined {
   return Array.isArray(issues) ? (issues[0] as Issue | undefined) : undefined;
 }
 
-/** "Check “Domains” (item 3)" for the deepest labelled field of the issue's path. */
+/**
+ * "Check “Domains” (item 3)" for the deepest labelled field of the issue's path; an expression the
+ * parser refused adds where and why (`params.expressionError`, as the editor shows it).
+ */
 function issueMessage(issue: Issue | undefined): string {
   const path = issue?.path ?? [];
+  const failure = issue ? expressionIssue(issue as z.core.$ZodIssue) : null;
   for (let i = path.length - 1; i >= 0; i--) {
     const segment = path[i];
     const label = typeof segment === "string" ? fieldLabels[segment] : undefined;
     if (!label) continue;
     const index = path[i + 1];
+    if (failure) {
+      const where = { field: label(), position: failure.position + 1 };
+      const reason = expressionReason(failure);
+      return typeof index === "number"
+        ? m.common_check_field_item_expression({ ...where, item: index + 1, reason })
+        : m.common_check_field_expression({ ...where, reason });
+    }
     return typeof index === "number"
       ? m.common_check_field_item({ field: label(), item: index + 1 })
       : m.common_check_field({ field: label() });
   }
-  return m.error_bad_request();
+  return failure ? expressionErrorText(failure) : m.error_bad_request();
 }
 
 function errorFields(error: unknown): {

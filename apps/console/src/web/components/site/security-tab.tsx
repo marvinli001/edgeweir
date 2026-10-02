@@ -1,9 +1,12 @@
 import {
   type AnalyticsRange,
+  CC_LEVELS,
+  CC_PRESETS,
   CHALLENGE_PRESETS,
   CHALLENGE_TYPES,
   type ChallengeType,
   type FeatureAvailability,
+  matchPreset,
   PASS_TTL_RANGE,
   POW_DIFFICULTY_RANGE,
   POW_HIGH_DIFFICULTY_RANGE,
@@ -36,7 +39,8 @@ import {
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Pager } from "@/components/pager";
-import { PresetSelect, usePreset } from "@/components/preset-select";
+import { PresetSelect, presetLabel, usePreset } from "@/components/preset-select";
+import { excludableCrsRule, RowMenu, type RowMenuItem } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
@@ -49,6 +53,7 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useDraft } from "@/hooks/use-draft";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { ANALYTICS_RANGES, rangeLabel } from "@/lib/analytics";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -94,22 +99,30 @@ export function SecurityTab({ siteId }: { siteId: string }) {
   const protection = useQuery(orpc.protection.get.queryOptions({ input: { id: siteId } }));
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      {/* Access control outside this tab: the site's bans, global rules, platform defaults. */}
-      <div className="flex flex-wrap justify-end gap-2" data-testid="security-links">
-        <Button
-          size="sm"
-          variant="outline"
-          nativeButton={false}
-          render={<Link to="/bans" search={{ site: siteId }} data-testid="security-site-bans" />}
-        >
-          {m.security_site_bans()}
-        </Button>
-        <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/rules" />}>
-          {m.rules_platform()}
-        </Button>
-        <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/protection" />}>
-          {m.protection_page_title()}
-        </Button>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {protection.data ? <SecuritySummary siteId={siteId} protection={protection.data} /> : null}
+        {/* Access control outside this tab: the site's bans, global rules, platform defaults. */}
+        <div className="flex flex-wrap justify-end gap-2" data-testid="security-links">
+          <Button
+            size="sm"
+            variant="outline"
+            nativeButton={false}
+            render={<Link to="/bans" search={{ site: siteId }} data-testid="security-site-bans" />}
+          >
+            {m.security_site_bans()}
+          </Button>
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/rules" />}>
+            {m.rules_platform()}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            nativeButton={false}
+            render={<Link to="/protection" />}
+          >
+            {m.protection_page_title()}
+          </Button>
+        </div>
       </div>
       {protection.isPending ? (
         <LoadingState />
@@ -132,6 +145,115 @@ export function SecurityTab({ siteId }: { siteId: string }) {
   );
 }
 
+/** Where each part of the summary scrolls to. */
+const CARD_IDS = {
+  underAttack: "security-under-attack",
+  challenges: "security-challenges",
+  cc: "security-cc",
+  waf: "security-waf",
+  nodes: "security-nodes",
+} as const;
+
+/**
+ * One line of what is in effect: Under Attack, the CC policy, CRS, challenges and, when raised,
+ * the nodes' level. Each part scrolls to its card.
+ */
+function SecuritySummary({ siteId, protection }: { siteId: string; protection: SiteProtection }) {
+  const reducedMotion = useReducedMotion();
+  const waf = useQuery(orpc.waf.get.queryOptions({ input: { id: siteId } }));
+  const state = useQuery(
+    orpc.security.state.queryOptions({
+      input: { id: siteId, hours: 24 },
+      refetchInterval: 15_000,
+      meta: { background: true },
+    }),
+  );
+  const cc = protection.cc;
+  const levels = (state.data?.nodes ?? [])
+    .filter((node) => node.online && node.level !== "normal")
+    .map((node) => CC_LEVELS.indexOf(node.level));
+  const top = levels.length ? CC_LEVELS[Math.max(...levels)] : undefined;
+  const parts: { key: keyof typeof CARD_IDS; label: string; alert?: boolean }[] = [
+    protection.underAttack || protection.platformUnderAttack
+      ? {
+          key: "underAttack",
+          label: protection.underAttack
+            ? m.security_summary_under_attack_on()
+            : m.security_summary_under_attack_platform(),
+          alert: true,
+        }
+      : { key: "underAttack", label: m.security_summary_under_attack_off() },
+    {
+      key: "cc",
+      label: m.security_summary_cc({
+        state: !cc.enabled
+          ? m.security_summary_off()
+          : cc.followTemplate
+            ? m.security_summary_template()
+            : presetLabel(matchPreset(CC_PRESETS, protection.effectiveCc ?? cc) ?? "custom"),
+      }),
+    },
+    ...(waf.data
+      ? [
+          {
+            key: "waf" as const,
+            label:
+              waf.data.mode === "off"
+                ? m.security_summary_crs({ mode: wafModeLabel("off") })
+                : m.security_summary_crs_preset({
+                    mode: wafModeLabel(waf.data.mode),
+                    preset: presetLabel(matchPreset(WAF_PRESETS, waf.data) ?? "custom"),
+                  }),
+          },
+        ]
+      : []),
+    {
+      key: "challenges",
+      label: m.security_summary_challenge({
+        preset: presetLabel(matchPreset(CHALLENGE_PRESETS, protection) ?? "custom"),
+      }),
+    },
+    ...(top
+      ? [
+          {
+            key: "nodes" as const,
+            label: m.security_summary_level({ level: levelLabel(top) }),
+            alert: true,
+          },
+        ]
+      : []),
+  ];
+  return (
+    <nav
+      aria-label={m.security_summary_label()}
+      className="mr-auto flex min-w-0 flex-wrap items-center gap-1.5 animate-enter"
+      data-testid="security-summary"
+    >
+      {parts.map((part) => (
+        <Badge
+          key={part.key}
+          variant={part.alert ? "destructive" : "outline"}
+          className="h-6 cursor-pointer px-2.5 hover:bg-muted"
+          render={
+            <button
+              type="button"
+              onClick={() =>
+                document.getElementById(CARD_IDS[part.key])?.scrollIntoView({
+                  behavior: reducedMotion ? "auto" : "smooth",
+                  block: "start",
+                })
+              }
+            />
+          }
+          data-testid={`security-summary-${part.key}`}
+        >
+          {part.label}
+        </Badge>
+      ))}
+    </nav>
+  );
+}
+
 function UnderAttackCard({ siteId, protection }: { siteId: string; protection: SiteProtection }) {
   const { apply, save, pending } = useUpdateProtection(siteId);
   const turningOn = !protection.underAttack;
@@ -144,7 +266,7 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
     />
   );
   return (
-    <Card className="animate-enter">
+    <Card id={CARD_IDS.underAttack} className="scroll-mt-4 animate-enter">
       <CardHeader>
         <CardTitle>{m.protection_under_attack()}</CardTitle>
       </CardHeader>
@@ -215,7 +337,11 @@ function ChallengeSettingsCard({
       }),
   );
   return (
-    <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
+    <Card
+      id={CARD_IDS.challenges}
+      className="scroll-mt-4 animate-enter"
+      style={{ animationDelay: "60ms" }}
+    >
       <form
         className="flex flex-col gap-(--card-spacing)"
         onSubmit={(event) => {
@@ -294,7 +420,11 @@ function CcPolicyCard({ siteId, protection }: { siteId: string; protection: Site
   // While following, the fields show the platform template.
   const shown: CcDraft = draft.followTemplate ? toCcDraft(protection.ccTemplate) : draft.thresholds;
   return (
-    <Card className="animate-enter" style={{ animationDelay: "120ms" }}>
+    <Card
+      id={CARD_IDS.cc}
+      className="scroll-mt-4 animate-enter"
+      style={{ animationDelay: "120ms" }}
+    >
       <form
         className="flex flex-col gap-(--card-spacing)"
         onSubmit={(event) => {
@@ -354,7 +484,12 @@ function WafCard({ siteId }: { siteId: string }) {
   const waf = useQuery(orpc.waf.get.queryOptions({ input: { id: siteId } }));
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: siteId } }));
   return (
-    <Card className="animate-enter" style={{ animationDelay: "150ms" }} data-testid="waf-card">
+    <Card
+      id={CARD_IDS.waf}
+      className="scroll-mt-4 animate-enter"
+      style={{ animationDelay: "150ms" }}
+      data-testid="waf-card"
+    >
       <CardHeader className="flex flex-wrap items-center gap-2">
         <CardTitle>{m.waf_title()}</CardTitle>
         {waf.data && waf.data.mode !== "off" ? (
@@ -639,6 +774,16 @@ function WafRulesCard({ siteId }: { siteId: string }) {
             }))}
             testId="waf-top-rules"
             mono
+            actions={(value) =>
+              excludableCrsRule(Number(value))
+                ? [
+                    {
+                      label: m.quick_exclude_rule({ id: value }),
+                      action: { kind: "exclude-rule", siteId, ruleId: Number(value) },
+                    },
+                  ]
+                : []
+            }
           />
         )}
       </CardContent>
@@ -708,7 +853,11 @@ function NodeLevelsCard({ siteId }: { siteId: string }) {
     }),
   );
   return (
-    <Card className="animate-enter" style={{ animationDelay: "180ms" }}>
+    <Card
+      id={CARD_IDS.nodes}
+      className="scroll-mt-4 animate-enter"
+      style={{ animationDelay: "180ms" }}
+    >
       <CardHeader>
         <CardTitle>{m.security_nodes_title()}</CardTitle>
       </CardHeader>
@@ -759,12 +908,15 @@ function TopList({
   items,
   testId,
   mono,
+  actions,
 }: {
   title: string;
   /** `id` keys an entry whose value may repeat (e.g. rule names). */
   items: { id?: string; value: string; count: number }[];
   testId: string;
   mono?: boolean;
+  /** The row menu of an entry. */
+  actions?: (value: string) => RowMenuItem[];
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-2" data-testid={testId}>
@@ -779,12 +931,18 @@ function TopList({
                 {item.value}
               </span>
               <span className="tabular-nums text-muted-foreground">{formatNumber(item.count)}</span>
+              {actions ? <TopListActions items={actions(item.value)} /> : null}
             </li>
           ))}
         </ol>
       )}
     </div>
   );
+}
+
+/** An entry's menu, or the menu's room so the counts of a list stay aligned. */
+function TopListActions({ items }: { items: RowMenuItem[] }) {
+  return items.length ? <RowMenu items={items} /> : <span aria-hidden className="w-6 shrink-0" />;
 }
 
 function TopCard({ siteId }: { siteId: string }) {
@@ -823,12 +981,18 @@ function TopCard({ siteId }: { siteId: string }) {
               items={state.data.topIps}
               testId="security-top-ips"
               mono
+              actions={(address) => [
+                { label: m.quick_ban_ip(), action: { kind: "ban", address, siteId } },
+              ]}
             />
             <TopList
               title={m.security_top_paths()}
               items={state.data.topPaths}
               testId="security-top-paths"
               mono
+              actions={(path) => [
+                { label: m.quick_purge_url(), action: { kind: "purge", targets: [path], siteId } },
+              ]}
             />
           </div>
         )}
@@ -913,6 +1077,22 @@ function EventsCard({ siteId }: { siteId: string }) {
                     >
                       {timeAgo(event.occurredAt)}
                     </span>
+                    {event.kind === "ip_banned" && event.address ? (
+                      <RowMenu
+                        items={[
+                          {
+                            label: m.quick_ban_everywhere(),
+                            action: { kind: "ban", address: event.address, scope: "platform" },
+                            testId: "event-ban-everywhere",
+                          },
+                          {
+                            label: m.bans_unban(),
+                            action: { kind: "unban", address: event.address, siteId },
+                            testId: "event-unban",
+                          },
+                        ]}
+                      />
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                     <span>{event.node?.name || m.security_node_deleted()}</span>

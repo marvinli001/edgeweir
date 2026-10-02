@@ -37,6 +37,23 @@ export const BAN_PROTECTED_RANGES = ["0.0.0.0/8", "127.0.0.0/8", "::/128", "::1/
 
 const MAPPED_V4 = parseCidr("::ffff:0:0/96") as Cidr;
 
+/** An address or CIDR with host bits cleared; an IPv4-mapped IPv6 prefix becomes IPv4. */
+function canonicalCidr(input: string): Cidr | null {
+  const cidr = parseCidr(input.trim());
+  if (cidr && cidr.version === 6 && cidr.prefix >= 96 && cidrContains(MAPPED_V4, cidr))
+    return { version: 4, bytes: cidr.bytes.slice(12), prefix: cidr.prefix - 96 };
+  return cidr;
+}
+
+/**
+ * The canonical text of an address or CIDR to look bans up by (any prefix length, as
+ * parseBanCidr writes it), or null.
+ */
+export function banLookupCidr(input: string): string | null {
+  const cidr = canonicalCidr(input);
+  return cidr ? formatCidr(cidr) : null;
+}
+
 export type BanCidr =
   | { ok: true; cidr: Cidr; text: string }
   | { ok: false; code: "BAN_INVALID_CIDR" }
@@ -48,10 +65,8 @@ export type BanCidr =
  * prefix must be at least /16 (IPv4) or /48 (IPv6).
  */
 export function parseBanCidr(input: string): BanCidr {
-  let cidr = parseCidr(input.trim());
+  const cidr = canonicalCidr(input);
   if (!cidr) return { ok: false, code: "BAN_INVALID_CIDR" };
-  if (cidr.version === 6 && cidr.prefix >= 96 && cidrContains(MAPPED_V4, cidr))
-    cidr = { version: 4, bytes: cidr.bytes.slice(12), prefix: cidr.prefix - 96 };
   const min = BAN_MIN_PREFIX[cidr.version];
   if (cidr.prefix < min) return { ok: false, code: "BAN_PREFIX_TOO_SHORT", min };
   return { ok: true, cidr, text: formatCidr(cidr) };
@@ -185,6 +200,8 @@ export const banListInput = z.object({
   scope: banScope.optional(),
   siteId: uuid.optional(),
   source: banSource.optional(),
+  /** An address or CIDR: bans that cover it or lie inside it. */
+  address: z.string().trim().min(1).max(64).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
 });

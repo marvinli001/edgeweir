@@ -29,18 +29,36 @@ export function expressionErrorText(failure: ExpressionFailure): string {
 /** Common conditions the editor's template menu appends (request fields: every phase has them). */
 export const CONDITION_TEMPLATES = {
   path_prefix: 'http.request.uri.path matches "^/admin/"',
+  host: 'http.host eq "www.example.com"',
+  extension: 'http.request.uri.path.extension in {"php"}',
   ip_range: "ip.src in {192.0.2.0/24}",
   country: 'ip.geoip.country in {"CN"}',
+  asn: "ip.geoip.asnum in {64496}",
   user_agent: 'http.request.headers["user-agent"] contains "bot"',
   method: 'http.request.method in {"POST" "PUT" "DELETE"}',
 } as const;
 export type ConditionTemplate = keyof typeof CONDITION_TEMPLATES;
 
+/** The example value of each template: selected once inserted, so typing replaces it. */
+export const TEMPLATE_VALUES: Record<ConditionTemplate, string> = {
+  path_prefix: "^/admin/",
+  host: "www.example.com",
+  extension: "php",
+  ip_range: "192.0.2.0/24",
+  country: "CN",
+  asn: "64496",
+  user_agent: "bot",
+  method: 'POST" "PUT" "DELETE',
+};
+
 export const conditionTemplateLabel = (template: ConditionTemplate) =>
   ({
     path_prefix: m.rules_template_path_prefix,
+    host: m.rules_template_host,
+    extension: m.rules_template_extension,
     ip_range: m.rules_template_ip_range,
     country: m.rules_template_country,
+    asn: m.rules_template_asn,
     user_agent: m.rules_template_user_agent,
     method: m.rules_template_method,
   })[template]();
@@ -60,4 +78,22 @@ export function appendCondition(source: string, condition: string, phase: Phase)
     // An expression being edited is appended to as it is.
   }
   return `${grouped} and ${condition}`;
+}
+
+/**
+ * `source` with `condition` appended (appendCondition) and the range to select afterwards: the
+ * condition's `value`, or the end when it has none.
+ */
+export function insertCondition(
+  source: string,
+  condition: string,
+  phase: Phase,
+  value?: string,
+): { source: string; selection: [number, number] } {
+  const next = appendCondition(source, condition, phase);
+  // appendCondition always ends with the condition.
+  const at = value ? condition.indexOf(value) : -1;
+  if (!value || at < 0) return { source: next, selection: [next.length, next.length] };
+  const start = next.length - condition.length + at;
+  return { source: next, selection: [start, start + value.length] };
 }

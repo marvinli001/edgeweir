@@ -68,7 +68,7 @@ To exclude rules, type one or more IDs (separated by commas or spaces) into **Ex
 | **Security** tab → **Most-matched CRS rules** | The rule IDs matched most often in the selected range (last hour to 30 days). The counts are approximate: each node keeps at most 50 rules per site and minute |
 | The site's **Logs** tab | With access log sampling on, requests that matched rules show a **CRS** column: the rule IDs (at most 16 per request) and a **Blocked** badge. The CSV gets `wafRuleIds` (space-separated) and `wafBlocked` columns |
 
-Matches are recorded in both detect and block mode. Access logs: [Access logs](access-logs.en.md).
+Matches are recorded in both detect and block mode. A rule that raises false positives can be excluded where it shows: click **⋯** in its row of **Most-matched CRS rules** or of the logs → **Exclude CRS rule N** and confirm; the rule ID is added to **Excluded rule IDs** and saved at once, and the CRS card updates. Initialization, blocking evaluation and correlation rules (901xxx, 949xxx, 959xxx, 980xxx) do not offer it: excluding them turns blocking off. The status line at the top of the **Security** tab shows the CRS mode and preset; click it to jump to the CRS card. Access logs: [Access logs](access-logs.en.md).
 
 ## Performance
 

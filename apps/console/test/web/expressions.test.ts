@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   appendCondition,
   CONDITION_TEMPLATES,
+  type ConditionTemplate,
   expressionErrorText,
   expressionReason,
+  insertCondition,
+  TEMPLATE_VALUES,
 } from "../../src/web/lib/expressions";
 import { overwriteGetLocale } from "../../src/web/paraglide/runtime.js";
 
@@ -50,5 +53,27 @@ describe("condition templates", () => {
       `http.host eq and ${method}`,
     );
     expect(parseExpression(appendCondition("ip.src in $office", method, "cache")).op).toBe("and");
+  });
+
+  it("select their example value once inserted, so typing replaces it", () => {
+    for (const template of Object.keys(CONDITION_TEMPLATES) as ConditionTemplate[]) {
+      const value = TEMPLATE_VALUES[template];
+      for (const source of ["true", 'http.host eq "a" or ssl eq true']) {
+        const inserted = insertCondition(
+          source,
+          CONDITION_TEMPLATES[template],
+          "waf-custom",
+          value,
+        );
+        expect(inserted.source.slice(...inserted.selection), template).toBe(value);
+      }
+    }
+    const asn = insertCondition("ssl", CONDITION_TEMPLATES.asn, "waf-custom", TEMPLATE_VALUES.asn);
+    expect(asn).toEqual({ source: "ssl and ip.geoip.asnum in {64496}", selection: [27, 32] });
+    // Without a value (an IP list), the caret goes to the end.
+    expect(insertCondition("", "ip.src in $office", "waf-custom")).toEqual({
+      source: "ip.src in $office",
+      selection: [17, 17],
+    });
   });
 });

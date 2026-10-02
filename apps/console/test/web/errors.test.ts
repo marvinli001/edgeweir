@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { ipListInput, tlsSettings } from "@edgeweir/contract";
+import { ipListInput, ruleInput, tlsSettings } from "@edgeweir/contract";
 import { describe, expect, it } from "vitest";
 import { localizeError, nodeFeatureLabel } from "../../src/web/lib/errors";
 import { overwriteGetLocale } from "../../src/web/paraglide/runtime.js";
@@ -30,6 +30,35 @@ describe("localizeError", () => {
     expect(localizeError(invalid(["unknownField"]))).toBe("Invalid input");
     expect(localizeError(invalid([]))).toBe("Invalid input");
     expect(localizeError({ code: "BAD_REQUEST", status: 400, message: "x" })).toBe("Invalid input");
+  });
+
+  it("adds where and why the server's parser refused an expression", () => {
+    const rule = (expression: string) =>
+      ruleInput.safeParse({ name: "r", phase: "waf-custom", expression, action: { kind: "log" } });
+    // As the server sends them: the issues as JSON.
+    const refused = (issues: unknown, path?: PropertyKey[]) => {
+      const [first] = JSON.parse(JSON.stringify(issues)) as Record<string, unknown>[];
+      return {
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Input validation failed",
+        data: { issues: [{ ...first, path: path ?? first?.path }] },
+      };
+    };
+    const unknown = rule('unknown.field eq "x"').error?.issues;
+    expect(localizeError(refused(unknown, ["rules", 2, "expression"]))).toBe(
+      "“Expression”, character 1: Unknown field",
+    );
+    expect(localizeError(refused(rule("http.host gt 4").error?.issues))).toBe(
+      "“Expression”, character 11: Ordered comparisons need a number field",
+    );
+    expect(localizeError(refused(unknown, ["paths", 1]))).toBe(
+      "“Exact paths”, item 2, character 1: Unknown field",
+    );
+    // Without a labelled field, the reason alone.
+    expect(localizeError(refused(unknown, ["rules", 0, "action", "value"]))).toBe(
+      "Character 1: Unknown field",
+    );
   });
 
   it("localizes better-auth and WebAuthn codes the UI meets", () => {
