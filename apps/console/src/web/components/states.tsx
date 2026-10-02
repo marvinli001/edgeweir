@@ -66,3 +66,64 @@ export function EmptyState({
     </Empty>
   );
 }
+
+/** What QueryView reads of a TanStack query (or of `combineQueries`). */
+export interface QueryResult<T> {
+  isPending: boolean;
+  isLoadingError: boolean;
+  error: unknown;
+  data: T | undefined;
+  refetch: () => unknown;
+}
+
+const noItems = (data: unknown) => Array.isArray(data) && data.length === 0;
+
+/**
+ * A query's first load (LoadingState), its first load failing (ErrorState with a retry), then its
+ * data; `empty` instead when `isEmpty` says the data holds nothing (by default an array without
+ * items). A failed background refetch keeps showing the data: that is `isError`, not
+ * `isLoadingError`. `frame` wraps the loading and error states, e.g. CardContent in a card whose
+ * loaded content brings its own. `children` gets the data; it must not call hooks.
+ */
+export function QueryView<T>({
+  query,
+  children,
+  empty,
+  isEmpty = noItems,
+  loadingClassName,
+  frame: Frame,
+}: {
+  query: QueryResult<T>;
+  children: (data: T) => React.ReactNode;
+  empty?: React.ReactNode;
+  isEmpty?: (data: T) => boolean;
+  loadingClassName?: string;
+  frame?: React.ComponentType<{ children?: React.ReactNode }>;
+}) {
+  const framed = (node: React.ReactNode) => (Frame ? <Frame>{node}</Frame> : node);
+  if (query.isPending) return framed(<LoadingState className={loadingClassName} />);
+  if (query.isLoadingError)
+    return framed(<ErrorState error={query.error} onRetry={() => void query.refetch()} />);
+  const data = query.data as T;
+  return empty !== undefined && isEmpty(data) ? empty : children(data);
+}
+
+/**
+ * Several queries as one for QueryView: failed when one of them failed to load (retrying refetches
+ * those), loading while one still loads, then their data as a tuple.
+ */
+export function combineQueries<const T extends readonly unknown[]>(
+  ...queries: { [K in keyof T]: QueryResult<T[K]> }
+): QueryResult<T> {
+  const all: readonly QueryResult<unknown>[] = queries;
+  const failed = all.filter((query) => query.isLoadingError);
+  return {
+    isPending: failed.length === 0 && all.some((query) => query.isPending),
+    isLoadingError: failed.length > 0,
+    error: failed[0]?.error,
+    data: all.every((query) => query.data !== undefined)
+      ? (all.map((query) => query.data) as unknown as T)
+      : undefined,
+    refetch: () => Promise.all(failed.map((query) => query.refetch())),
+  };
+}
