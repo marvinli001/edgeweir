@@ -9,6 +9,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -55,6 +56,7 @@ function AllowListForm({ initial }: { initial: string[] }) {
   const [error, setError] = React.useState<string | null>(null);
   const entries = lines(text);
   const dirty = entries.join("\n") !== initial.join("\n");
+  useUnsavedChanges(dirty);
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

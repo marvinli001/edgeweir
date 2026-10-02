@@ -65,6 +65,7 @@ const fieldLabels: Record<string, () => string> = {
   edgeTtlSeconds: () => m.site_form_cache_ttl(),
   headers: () => m.site_cache_key_headers(),
   queryParams: () => m.site_cache_key_query(),
+  cookies: () => m.site_cache_key_cookies(),
   statusCodes: () => m.site_rule_status_codes(),
   names: () => m.cert_domains(),
   challenge: () => m.cert_challenge(),

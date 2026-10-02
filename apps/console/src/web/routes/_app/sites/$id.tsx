@@ -1,4 +1,4 @@
-import { analyticsRange, type Site } from "@edgeweir/contract";
+import { analyticsRange, domainName, type Site } from "@edgeweir/contract";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,6 +28,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useDraft } from "@/hooks/use-draft";
+import { domainList } from "@/lib/address-input";
 import { DEFAULT_RANGE } from "@/lib/analytics";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -124,7 +126,7 @@ function SiteDetailPage() {
             ))}
           </TabsList>
           <TabsContent value="overview" className="animate-enter">
-            <OverviewTab key={site.data.updatedAt} site={site.data} />
+            <OverviewTab site={site.data} />
           </TabsContent>
           <TabsContent value="analytics" className="animate-enter">
             <AnalyticsSection
@@ -142,7 +144,7 @@ function SiteDetailPage() {
             />
           </TabsContent>
           <TabsContent value="domains" className="animate-enter">
-            <DomainsTab key={site.data.updatedAt} site={site.data} />
+            <DomainsTab site={site.data} />
           </TabsContent>
           <TabsContent value="origins" className="animate-enter">
             <OriginsTab site={site.data} />
@@ -191,7 +193,8 @@ function OverviewTab({ site }: { site: Site }) {
   const setEnabled = useMutation(orpc.sites.setEnabled.mutationOptions());
   const navigate = Route.useNavigate();
   const queryClient = useQueryClient();
-  const [name, setName] = React.useState(site.name);
+  // A draft: enabling the site or a refetch keeps a name being edited.
+  const { draft: name, setDraft: setName } = useDraft(site.name);
   const { save, error, pending } = useSaveSite(site.id);
   const purge = useMutation(orpc.sites.purgeAll.mutationOptions());
   const remove = useMutation(orpc.sites.delete.mutationOptions());
@@ -320,17 +323,24 @@ function OverviewTab({ site }: { site: Site }) {
 }
 
 function DomainsTab({ site }: { site: Site }) {
-  const [domains, setDomains] = React.useState(site.domains);
-  const [draft, setDraft] = React.useState("");
+  const { draft: domains, setDraft: setDomains, dirty: listChanged } = useDraft(site.domains);
+  const [input, setInput] = React.useState("");
+  const [invalid, setInvalid] = React.useState<string | null>(null);
   const { save, error, pending } = useSaveSite(site.id);
-  const dirty = domains.join("\n") !== site.domains.join("\n");
+  // Domains typed but not added yet count as changes and are saved with the list.
+  const typed = domainList(input).filter((d) => !domains.includes(d));
+  const dirty = listChanged || typed.length > 0;
+  /** The typed domains, or null (and the first invalid one shown) when one is invalid. */
+  const take = () => {
+    const bad = typed.find((d) => !domainName.safeParse(d).success);
+    setInvalid(bad ? m.site_domain_invalid({ domain: bad }) : null);
+    return bad ? null : typed;
+  };
   const add = () => {
-    const values = draft
-      .split(/[\s,]+/)
-      .map((d) => d.trim().toLowerCase())
-      .filter((d) => d && !domains.includes(d));
+    const values = take();
+    if (!values) return;
     if (values.length) setDomains([...domains, ...values]);
-    setDraft("");
+    setInput("");
   };
 
   return (
@@ -341,7 +351,12 @@ function DomainsTab({ site }: { site: Site }) {
           className="flex flex-col gap-(--card-spacing)"
           onSubmit={(event) => {
             event.preventDefault();
-            void save({ domains });
+            const values = take();
+            if (!values) return;
+            const next = [...domains, ...values];
+            setDomains(next);
+            setInput("");
+            void save({ domains: next });
           }}
         >
           <CardHeader>
@@ -374,8 +389,11 @@ function DomainsTab({ site }: { site: Site }) {
             </ul>
             <div className="flex gap-2">
               <Input
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
+                value={input}
+                onChange={(event) => {
+                  setInput(event.target.value);
+                  setInvalid(null);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -392,7 +410,7 @@ function DomainsTab({ site }: { site: Site }) {
               </Button>
             </div>
           </CardContent>
-          <SaveBar dirty={dirty} pending={pending} error={error} testId="domains-save" />
+          <SaveBar dirty={dirty} pending={pending} error={invalid ?? error} testId="domains-save" />
         </form>
       </Card>
     </div>

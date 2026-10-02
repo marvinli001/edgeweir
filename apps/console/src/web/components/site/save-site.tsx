@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { CardFooter } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -15,7 +16,8 @@ export function useSaveSite(siteId: string) {
   const update = useMutation(orpc.sites.update.mutationOptions());
   const [error, setError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState(false);
-  const save = async (patch: Omit<SiteUpdateInput, "id">) => {
+  /** Resolves true once saved; a failure is shown in `error`. */
+  const save = async (patch: Omit<SiteUpdateInput, "id">): Promise<boolean> => {
     setPending(true);
     setError(null);
     try {
@@ -25,8 +27,10 @@ export function useSaveSite(siteId: string) {
       toast.success(m.site_saved({ revision: result.revision.revision }), {
         id: "site-saved",
       });
+      return true;
     } catch (err) {
       setError(errorMessage(err));
+      return false;
     } finally {
       setPending(false);
     }
@@ -45,6 +49,7 @@ export function SaveBar({
   error: string | null;
   testId: string;
 }) {
+  useUnsavedChanges(dirty);
   return (
     <CardFooter className="flex-wrap justify-end gap-3 border-t">
       {error ? (

@@ -3,6 +3,7 @@ import * as React from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandMenu } from "@/components/command-menu";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { UnsavedChangesGuard } from "@/components/unsaved-changes";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/lib/orpc";
 import { isRecentPath, recordRecent } from "@/lib/recents";
@@ -43,6 +44,7 @@ function AppLayout() {
         <Outlet />
       </SidebarInset>
       <CommandMenu />
+      <UnsavedChangesGuard />
     </SidebarProvider>
   );
 }

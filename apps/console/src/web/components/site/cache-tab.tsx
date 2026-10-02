@@ -20,6 +20,8 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   type CacheRule,
   type CacheSettings,
+  cacheRuleInput,
+  cacheSettings as cacheSettingsInput,
   extension,
   type FeatureAvailability,
   type Site,
@@ -64,6 +66,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -226,10 +229,11 @@ function CacheRulesCard({ site }: { site: Site }) {
   const [rows, setRows] = React.useState(initial);
   const { save, error, pending } = useSaveSite(site.id);
   const dirty = serializeDrafts(rows) !== serializeDrafts(initial);
-  const invalid = rows.some(
+  const badExpression = rows.some(
     (r) =>
       r.mode === "advanced" && expressionErrorPosition(r.expression, "cache", "cacheRule") !== null,
   );
+  const [invalid, setInvalid] = React.useState<string | null>(null);
   const patch = (key: number, change: Partial<RuleDraft>) =>
     setRows(rows.map((r) => (r.key === key ? { ...r, ...change } : r)));
 
@@ -258,30 +262,31 @@ function CacheRulesCard({ site }: { site: Site }) {
         className="flex flex-col gap-(--card-spacing)"
         onSubmit={(event) => {
           event.preventDefault();
-          void save({
-            cacheRules: rows.map((r, index) => ({
-              // Rules match in list order.
-              priority: (index + 1) * 10,
-              // The server stores the builder's lists as their expression.
-              ...(r.mode === "builder"
-                ? {
-                    pathPrefixes: splitList(r.prefixes),
-                    paths: splitList(r.paths),
-                    extensions: splitList(r.extensions),
-                  }
-                : { expression: r.expression }),
-              statusCodes: splitList(r.statusCodes).map(Number),
-              minSizeBytes: kbToBytes(r.minSizeKb),
-              maxSizeBytes: kbToBytes(r.maxSizeKb),
-              action: r.action,
-              edgeTtlSeconds: Number(r.ttl) || 0,
-              browserTtlSeconds: toSeconds(r.browserTtl),
-              originCacheControl: r.respect ? "respect" : "override",
-              staleWhileRevalidateSeconds: toSeconds(r.staleWhileRevalidate),
-              staleIfErrorSeconds: toSeconds(r.staleIfError),
-              cacheAuthorized: r.cacheAuthorized,
-            })),
-          });
+          const cacheRules = rows.map((r, index) => ({
+            // Rules match in list order.
+            priority: (index + 1) * 10,
+            // The server stores the builder's lists as their expression.
+            ...(r.mode === "builder"
+              ? {
+                  pathPrefixes: splitList(r.prefixes),
+                  paths: splitList(r.paths),
+                  extensions: splitList(r.extensions),
+                }
+              : { expression: r.expression }),
+            statusCodes: splitList(r.statusCodes).map(Number),
+            minSizeBytes: kbToBytes(r.minSizeKb),
+            maxSizeBytes: kbToBytes(r.maxSizeKb),
+            action: r.action,
+            edgeTtlSeconds: Number(r.ttl) || 0,
+            browserTtlSeconds: toSeconds(r.browserTtl),
+            originCacheControl: r.respect ? ("respect" as const) : ("override" as const),
+            staleWhileRevalidateSeconds: toSeconds(r.staleWhileRevalidate),
+            staleIfErrorSeconds: toSeconds(r.staleIfError),
+            cacheAuthorized: r.cacheAuthorized,
+          }));
+          const problem = rulesProblem(cacheRules);
+          setInvalid(problem);
+          if (!problem) void save({ cacheRules });
         }}
       >
         <CardHeader>
@@ -346,10 +351,26 @@ function CacheRulesCard({ site }: { site: Site }) {
             {m.site_rule_add()}
           </Button>
         </CardContent>
-        <SaveBar dirty={dirty && !invalid} pending={pending} error={error} testId="cache-save" />
+        <SaveBar
+          dirty={dirty && !badExpression}
+          pending={pending}
+          error={invalid ?? error}
+          testId="cache-save"
+        />
       </form>
     </Card>
   );
+}
+
+/** "Rule 2: Check “Path prefix”, item 1" for the first rule the contract refuses, else null. */
+function rulesProblem(rules: unknown[]): string | null {
+  const checked = cacheRuleInput.array().safeParse(rules);
+  const issue = checked.error?.issues[0];
+  if (!issue) return null;
+  return m.site_rule_invalid({
+    index: Number(issue.path[0]) + 1,
+    problem: localizeError({ issues: [{ ...issue, path: issue.path.slice(1) }] }),
+  });
 }
 
 /** One line on why expressions and browser TTLs are locked. */
@@ -694,6 +715,7 @@ function CacheKeyCard({ site }: { site: Site }) {
     [cacheKey, rangeSlice],
   );
   const [draft, setDraft] = React.useState(initial);
+  const [invalid, setInvalid] = React.useState<string | null>(null);
   const { save, error, pending } = useSaveSite(site.id);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   const set = (change: Partial<KeyDraft>) => setDraft({ ...draft, ...change });
@@ -709,22 +731,23 @@ function CacheKeyCard({ site }: { site: Site }) {
         className="flex flex-col gap-(--card-spacing)"
         onSubmit={(event) => {
           event.preventDefault();
-          void save({
-            // Every cache setting is sent (the update replaces them), Cache-Tag as saved.
-            cacheSettings: {
-              ...site.cacheSettings,
-              cacheKey: {
-                query: draft.query,
-                queryParams: splitList(draft.queryParams),
-                sortQuery: draft.sortQuery,
-                headers: splitList(draft.headers),
-                cookies: splitList(draft.cookies),
-                deviceType: draft.deviceType,
-                includeHost: draft.includeHost,
-              },
-              rangeSlice: draft.rangeSlice,
+          // Every cache setting is sent (the update replaces them), Cache-Tag as saved.
+          const settings = {
+            ...site.cacheSettings,
+            cacheKey: {
+              query: draft.query,
+              queryParams: splitList(draft.queryParams),
+              sortQuery: draft.sortQuery,
+              headers: splitList(draft.headers),
+              cookies: splitList(draft.cookies),
+              deviceType: draft.deviceType,
+              includeHost: draft.includeHost,
             },
-          });
+            rangeSlice: draft.rangeSlice,
+          };
+          const checked = cacheSettingsInput.safeParse(settings);
+          setInvalid(checked.success ? null : localizeError(checked.error));
+          if (checked.success) void save({ cacheSettings: settings });
         }}
       >
         <CardHeader>
@@ -818,7 +841,7 @@ function CacheKeyCard({ site }: { site: Site }) {
             />
           </div>
         </CardContent>
-        <SaveBar dirty={dirty} pending={pending} error={error} testId="cache-key-save" />
+        <SaveBar dirty={dirty} pending={pending} error={invalid ?? error} testId="cache-key-save" />
       </form>
     </Card>
   );

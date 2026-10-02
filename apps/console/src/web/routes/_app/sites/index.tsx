@@ -1,4 +1,4 @@
-import type { Site } from "@edgeweir/contract";
+import { type Site, type SiteCreateInput, siteCreateInput } from "@edgeweir/contract";
 import { Add01Icon, GlobeIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -37,6 +37,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useOpenKey } from "@/hooks/use-open-key";
+import { domainList, originInput } from "@/lib/address-input";
 import { m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -266,6 +267,7 @@ function CreateSiteDialog({
   const [respectOrigin, setRespectOrigin] = React.useState(true);
   const [navigating, setNavigating] = React.useState(false);
   const [clusterId, setClusterId] = React.useState(initialClusterId);
+  const [invalid, setInvalid] = React.useState<string | null>(null);
   const cluster = clusters.some((c) => c.id === clusterId) ? clusterId : clusters[0]?.id;
   const pending = create.isPending || navigating;
 
@@ -273,7 +275,10 @@ function CreateSiteDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) create.reset();
+        if (!next) {
+          create.reset();
+          setInvalid(null);
+        }
         onOpenChange(next);
       }}
     >
@@ -286,32 +291,39 @@ function CreateSiteDialog({
             event.preventDefault();
             const data = new FormData(event.currentTarget);
             const text = (key: string) => String(data.get(key) ?? "").trim();
+            // A pasted URL or "host:port" fills the address, port and protocol.
+            const origin = originInput(text("origin"));
+            const originScheme = origin.scheme ?? scheme;
+            const input: SiteCreateInput = {
+              name: text("siteName"),
+              clusterId: clusters.length > 1 ? cluster : undefined,
+              domains: domainList(text("domains")),
+              origins: [
+                {
+                  address: origin.address,
+                  port: Number(
+                    text("port") || origin.port || (originScheme === "https" ? 443 : 80),
+                  ),
+                  scheme: originScheme,
+                  hostHeader: text("hostHeader"),
+                },
+              ],
+              cacheRules: cacheEnabled
+                ? [
+                    {
+                      pathPrefixes: [text("cachePrefix") || "/"],
+                      edgeTtlSeconds: Number(text("cacheTtl") || 3600),
+                      originCacheControl: respectOrigin ? "respect" : "override",
+                    },
+                  ]
+                : [],
+            };
+            const checked = siteCreateInput.safeParse(input);
+            setInvalid(checked.success ? null : errorMessage(checked.error));
+            if (!checked.success) return;
             let siteId: string;
             try {
-              const result = await create.mutateAsync({
-                name: text("siteName"),
-                clusterId: clusters.length > 1 ? cluster : undefined,
-                domains: text("domains")
-                  .split(/[\s,]+/)
-                  .filter(Boolean),
-                origins: [
-                  {
-                    address: text("origin"),
-                    port: Number(text("port") || (scheme === "https" ? 443 : 80)),
-                    scheme,
-                    hostHeader: text("hostHeader"),
-                  },
-                ],
-                cacheRules: cacheEnabled
-                  ? [
-                      {
-                        pathPrefixes: [text("cachePrefix") || "/"],
-                        edgeTtlSeconds: Number(text("cacheTtl") || 3600),
-                        originCacheControl: respectOrigin ? "respect" : "override",
-                      },
-                    ]
-                  : [],
-              });
+              const result = await create.mutateAsync(input);
               siteId = result.site.id;
               toast.success(m.site_form_created({ revision: result.revision.revision }));
             } catch {
@@ -429,8 +441,10 @@ function CreateSiteDialog({
                 </Field>
               </>
             ) : null}
-            {create.isError ? (
-              <FieldError data-testid="site-form-error">{errorMessage(create.error)}</FieldError>
+            {invalid || create.isError ? (
+              <FieldError data-testid="site-form-error">
+                {invalid ?? errorMessage(create.error)}
+              </FieldError>
             ) : null}
             <DialogFooter>
               <Button type="submit" disabled={pending} data-testid="create-site-submit">

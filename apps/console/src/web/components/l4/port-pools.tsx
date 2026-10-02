@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { m } from "@/lib/i18n";
 import { apiError, POOL_PROTOCOLS } from "@/lib/l4";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -102,6 +103,7 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
   const [refusal, setRefusal] = React.useState<{ message: string; keys: Set<number> } | null>(null);
   const save = useMutation(orpc.clusters.setPortPools.mutationOptions());
   const dirty = serializeDrafts(rows) !== serializeDrafts(initial);
+  useUnsavedChanges(dirty);
   const reversed = rows.filter((r) => r.from && r.to && Number(r.from) > Number(r.to));
   const edit = (next: PoolDraft[]) => {
     setRows(next);
