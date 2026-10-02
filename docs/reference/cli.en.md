@@ -41,12 +41,12 @@ curl -fsSL https://<console>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bas
 | `--server` | URL | Required | Node channel URL; must be `https://`. |
 | `--ca-sha256` | HEX | Required | SHA-256 fingerprint of the console's node CA, 64 lowercase hex characters; pinned during enrollment. |
 | `--token-file` | PATH | None | Read the enrollment token from a file (whitespace removed); takes precedence over `EDGEWEIR_TOKEN`. |
-| `--version` | VER | `latest` | edgeweir-node version to install; a semantic version, optional `v` prefix. `latest` is resolved from the mirror's `latest` file, then the latest GitHub release. |
+| `--version` | VER | `latest` | edgeweir-node version to install; a semantic version, optional `v` prefix. `latest` is resolved from the mirror's `latest` file, then the latest GitHub release. Without it (and without `--force`), an enrolled host downloads and installs nothing; the service is only started and checked. |
 | `--format` | `auto`\|`deb`\|`rpm`\|`tar` | `auto` | Package format. `auto`: deb with `dpkg` and `apt-get`; rpm with `rpm` and `dnf` or `yum`; otherwise tar. |
 | `--mirror` | URL | `<console>/downloads/edgeweir-node` | edgeweir-node release mirror, with files at `URL/latest` and `URL/v<version>/<file>`; cosign comes from the sibling `cosign/v<version>/`. Each file is tried from the mirror first, then from GitHub. |
 | `--mirror-only` | None | Off | Never fall back to GitHub. |
 | `--no-modsecurity` | None | Off | Do not install `edgeweir-openresty-modsecurity`: the node does not support OWASP CRS. |
-| `--no-start` | None | Off | Install and enroll only: do not require systemd, do not enable or start the service. |
+| `--no-start` | None | Off | Install and enroll only: do not require systemd, do not enable or start the service, no health check. |
 | `--force` | None | Off | Enroll an enrolled host again (needs a new token): stops `edgeweir-node`, replaces its identity, and starts it again. |
 | `--allow-unsigned` | None | Off | Skip the cosign signature check; development only. SHA-256 is still verified. |
 | `-h`, `--help` | None | None | Print usage. |
@@ -71,8 +71,8 @@ Nothing downloaded runs before these checks pass. System requirements, the full 
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Installed and enrolled |
-| `1` | A check or step failed; stderr shows `[edgeweir] error:` and the reason |
+| `0` | Installed and enrolled, and `edgeweir-node healthcheck` passed (not checked with `--no-start`) |
+| `1` | A check or step failed, including a health check that did not pass within 90 seconds; stderr shows `[edgeweir] error:` and the reason |
 | `2` | `--server` or `--ca-sha256` missing, or `-h`/`--help` given |
 
 The script neither upgrades nor uninstalls. Node upgrades: [Node upgrades](../guide/node-upgrades.en.md).

@@ -27,10 +27,15 @@
 #   5. enrolls the node with the one-time token (the private key is generated
 #      locally and never leaves this machine) and starts the service. On a
 #      host that is already enrolled (identity.json in the state directory)
-#      no token is needed: the packages are updated and the service started.
-#      With --force such a host enrolls again with a new token (e.g. after
-#      its certificate expired): the service is stopped, the identity
-#      replaced and the service started again.
+#      no token is needed and nothing is downloaded: the service is started,
+#      or restarted when it runs; with --version VER steps 1-4 install that
+#      version first. With --force such a host enrolls again with a new token
+#      (e.g. after its certificate expired): the packages are installed as
+#      on a new host, the service is stopped, the identity replaced and the
+#      service started again;
+#   6. waits up to 90 seconds for `edgeweir-node healthcheck` to pass (the
+#      node has applied its configuration) and exits non-zero when it does
+#      not. --no-start skips the service and this check.
 # It never stores SSH credentials and never phones home.
 #
 # The whole script is a set of functions; `main` runs on the last line, so a
@@ -73,13 +78,15 @@ Usage:
   --server URL         node channel URL of the console, e.g. https://console.example.com:8443
   --ca-sha256 HEX      SHA-256 fingerprint of the console's node CA (pinned during enrollment)
   --token-file PATH    read the enrollment token from PATH instead of $EDGEWEIR_TOKEN
-  --version VER        edgeweir-node version to install, e.g. 0.2.0 (default: latest)
+  --version VER        edgeweir-node version to install, e.g. 0.2.0 (default: latest;
+                       an enrolled host keeps its installed version without it)
   --format FMT         package to install: auto (default), deb, rpm or tar
   --mirror URL         edgeweir-node mirror (URL/latest, URL/v<version>/<file>);
                        default: the console's /downloads/edgeweir-node
   --mirror-only        never fall back to GitHub
   --no-modsecurity     do not install edgeweir-openresty-modsecurity (no OWASP CRS on this node)
   --no-start           install and enroll only: do not require, enable or start systemd
+                       (no health check)
   --force              enroll again on an enrolled host (needs a new token): stops
                        edgeweir-node, replaces its identity and starts it again
   --allow-unsigned     skip the cosign signature check (development only; SHA-256 is still verified)
@@ -135,8 +142,8 @@ parse_args() {
 
 # The token is read once and removed from the environment, so no other
 # child process (curl, apt, ...) inherits it. An enrolled host keeps its
-# identity: rerunning the script (after a failed step, or to update the
-# packages) needs no token, unless --force enrolls it again.
+# identity: rerunning the script (after a failed step, or with --version to
+# install another version) needs no token, unless --force enrolls it again.
 read_token() {
   TOKEN="${EDGEWEIR_TOKEN:-}"
   unset EDGEWEIR_TOKEN
@@ -519,6 +526,13 @@ enrolling() {
   [ "$ENROLLED" != "true" ] || [ "$FORCE" = "true" ]
 }
 
+# Whether this run downloads and installs packages: on a new host, with
+# --force, with --version, or when edgeweir-node is missing. Otherwise an
+# enrolled host keeps what is installed and the service is (re)started.
+installing() {
+  enrolling || [ "$VERSION" != "latest" ] || [ ! -x /usr/bin/edgeweir-node ]
+}
+
 enroll() {
   if ! enrolling; then
     log "already enrolled; to enroll again with a new token, run this command with --force"
@@ -547,12 +561,38 @@ start_service() {
   systemctl daemon-reload
   # The agent runs OpenResty itself; the distribution unit would bind the same ports.
   systemctl disable --now openresty.service >/dev/null 2>&1 || true
-  # The deb and rpm packages restart a running service themselves.
-  if [ "$FORMAT" = "tar" ]; then
+  # The deb and rpm packages restart a running service themselves; nothing
+  # does after a tar.gz install, or when this run installed nothing.
+  if [ "$FORMAT" = "tar" ] || [ "${RESTART:-false}" = "true" ]; then
     systemctl try-restart edgeweir-node.service
   fi
   systemctl enable --now edgeweir-node.service
-  log "done: edgeweir-node is running (journalctl -u edgeweir-node -f)"
+  log "edgeweir-node.service started"
+}
+
+# Waits for the started node: `edgeweir-node healthcheck` passes once the
+# data plane runs with a configuration from the console (or the last one
+# kept in the state directory). EDGEWEIR_HEALTHCHECK_TIMEOUT (seconds,
+# default 90) exists for tests.
+check_health() {
+  [ "$NO_START" != "true" ] || return 0
+  local timeout="${EDGEWEIR_HEALTHCHECK_TIMEOUT:-90}" interval=3 attempt=1 attempts output=""
+  [[ "$timeout" =~ ^[0-9]{1,4}$ ]] || timeout=90
+  attempts=$(((timeout + interval - 1) / interval))
+  [ "$attempts" -ge 1 ] || attempts=1
+  log "waiting up to ${timeout}s for edgeweir-node to apply its configuration"
+  while true; do
+    if output="$(/usr/bin/edgeweir-node healthcheck 2>&1)"; then
+      output="${output##*$'\n'}"
+      log "done: edgeweir-node is healthy (${output#healthy: }); logs: journalctl -u edgeweir-node -f"
+      return 0
+    fi
+    output="${output##*$'\n'}"
+    [ "$attempt" -lt "$attempts" ] || break
+    attempt=$((attempt + 1))
+    sleep "$interval"
+  done
+  die "edgeweir-node is installed but not healthy after ${timeout}s (${output:-no output}); see journalctl -u edgeweir-node -n 50"
 }
 
 main() {
@@ -565,6 +605,13 @@ main() {
   trap 'rm -rf "$WORK"' EXIT
   if enrolling; then
     check_server
+  fi
+  if ! installing; then
+    log "already enrolled: nothing is downloaded or reinstalled (--version VER installs that version)"
+    RESTART="true"
+    start_service
+    check_health
+    return 0
   fi
   resolve_version
   log "installing edgeweir-node ${VERSION} (${FORMAT}, ${ARCH})"
@@ -579,6 +626,7 @@ main() {
   install_package
   enroll
   start_service
+  check_health
 }
 
 main "$@"

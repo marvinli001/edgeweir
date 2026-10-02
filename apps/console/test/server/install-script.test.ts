@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   mkdirSync,
@@ -477,6 +478,249 @@ describe("install.sh", () => {
       rmSync(ok, { recursive: true, force: true });
     }
   });
+
+  /** sha256sum with its check mode (coreutils; /sbin/sha256sum on macOS). */
+  const sha256sum = spawnSync("sh", ["-c", "command -v sha256sum"], {
+    encoding: "utf8",
+  }).stdout.trim();
+
+  /**
+   * A root shell on a Linux host with systemd and apt, faked in a temporary
+   * directory: systemctl, apt-get, cosign and sleep log their calls, curl
+   * serves release v0.3.0 from the console's mirror, and `edgeweir-node
+   * healthcheck` fails $HEALTH_FAILURES times (-1: always) before it passes.
+   * An enrolled host has identity.json in its state directory.
+   */
+  function fakeHost(enrolled: boolean) {
+    const root = mkdtempSync(join(tmpdir(), "edgeweir-host-"));
+    const [bin, state, release, systemd] = ["bin", "state", "release", "systemd"].map((dir) =>
+      join(root, dir),
+    ) as [string, string, string, string];
+    for (const dir of [bin, state, release, systemd]) mkdirSync(dir);
+    if (enrolled) writeFileSync(join(state, "identity.json"), "{}\n");
+    const stub = (name: string, lines: string[]) => {
+      writeFileSync(join(bin, name), `#!/bin/sh\n${lines.join("\n")}\n`);
+      chmodSync(join(bin, name), 0o755);
+    };
+    const logged = (name: string) => `echo "${name} $*" >> "${calls}"`;
+    stub("id", ['[ "$1" = "-u" ] && echo 0']);
+    stub("uname", ['case "$1" in -s) echo Linux ;; -m) echo x86_64 ;; esac']);
+    stub("getconf", ['echo "glibc 2.36"']);
+    stub("getent", ["exit 0"]);
+    for (const name of ["dpkg", "apt-get", "systemctl", "cosign", "sleep"])
+      stub(name, [logged(name)]);
+    // curl ... -o DEST URL
+    stub("curl", [
+      logged("curl"),
+      'dest=""',
+      'while [ $# -gt 1 ]; do [ "$1" = "-o" ] && dest="$2"; shift; done',
+      `case "$1" in */v0.3.0/*) [ -n "$dest" ] && cp "${release}/\${1##*/}" "$dest" && exit 0 ;; esac`,
+      "exit 22",
+    ]);
+    const healthchecks = join(root, "healthchecks");
+    stub("edgeweir-node", [
+      logged("edgeweir-node"),
+      '[ "$1" = healthcheck ] || exit 0',
+      `n=$(($(cat "${healthchecks}" 2>/dev/null || echo 0) + 1))`,
+      `echo "$n" > "${healthchecks}"`,
+      'if [ "$HEALTH_FAILURES" -lt 0 ] || [ "$n" -le "$HEALTH_FAILURES" ]; then',
+      '  echo "unhealthy: data plane has no site table yet" >&2',
+      "  exit 1",
+      "fi",
+      'echo "healthy: revision 7, 2 sites" >&2',
+    ]);
+    if (sha256sum) symlinkSync(sha256sum, join(bin, "sha256sum"));
+    else stub("sha256sum", ["exit 1"]);
+    const nginx = join(root, "nginx");
+    writeFileSync(nginx, "");
+    chmodSync(nginx, 0o755);
+    const packages = [
+      "edgeweir-node_0.3.0_amd64.deb",
+      "edgeweir-openresty_1.31.1.1-1_amd64.deb",
+      "edgeweir-openresty-modsecurity_1.31.1.1-1_amd64.deb",
+    ];
+    for (const name of packages) writeFileSync(join(release, name), `${name}\n`);
+    writeFileSync(
+      join(release, "checksums.txt"),
+      packages
+        .map((name) => `${createHash("sha256").update(`${name}\n`).digest("hex")}  ${name}\n`)
+        .join(""),
+    );
+    writeFileSync(join(release, "checksums.txt.sigstore.json"), "{}\n");
+    const input = script
+      .replace('STATE_DIR="/var/lib/edgeweir-node"', `STATE_DIR="${state}"`)
+      .replace('NGINX_BIN="/usr/lib/edgeweir-openresty/nginx/sbin/nginx"', `NGINX_BIN="${nginx}"`)
+      .replace("/run/systemd/system", systemd)
+      .replaceAll("/usr/bin/edgeweir-node", join(bin, "edgeweir-node"));
+    return {
+      input,
+      node: join(bin, "edgeweir-node"),
+      install(args: string[], env: Record<string, string> = {}, text = input) {
+        rmSync(healthchecks, { force: true });
+        const res = run(
+          args,
+          {
+            PATH: `${bin}${delimiter}${stubs}${delimiter}/usr/bin${delimiter}/bin`,
+            HEALTH_FAILURES: "0",
+            ...env,
+          },
+          text,
+        );
+        // The script's temporary directory, as $WORK.
+        const work = /-o (\S+)\/checksums\.txt /.exec(res.calls)?.[1];
+        const log = work ? res.calls.replaceAll(work, "$WORK") : res.calls;
+        return { ...res, lines: log.split("\n").filter(Boolean) };
+      },
+      remove: () => rmSync(root, { recursive: true, force: true }),
+    };
+  }
+
+  const started = [
+    "systemctl daemon-reload",
+    "systemctl disable --now openresty.service",
+    "systemctl try-restart edgeweir-node.service",
+    "systemctl enable --now edgeweir-node.service",
+  ];
+
+  it("reports the healthcheck once the started node passes it", () => {
+    const main = script.slice(script.indexOf("main() {"));
+    expect(main).toMatch(/\n {2}enroll\n {2}start_service\n {2}check_health\n\}/);
+    const host = fakeHost(true);
+    try {
+      const res = host.install(valid, { HEALTH_FAILURES: "2" });
+      expect(res.status, res.stderr).toBe(0);
+      // Every 3 seconds until it passes.
+      const check = "edgeweir-node healthcheck";
+      expect(res.lines).toEqual([...started, check, "sleep 3", check, "sleep 3", check]);
+      expect(res.stderr).toContain(
+        "waiting up to 90s for edgeweir-node to apply its configuration",
+      );
+      expect(res.stderr).toContain("done: edgeweir-node is healthy (revision 7, 2 sites)");
+    } finally {
+      host.remove();
+    }
+  });
+
+  it("exits non-zero with the journal hint when the node stays unhealthy", () => {
+    const host = fakeHost(true);
+    try {
+      const short = host.install(valid, {
+        HEALTH_FAILURES: "-1",
+        EDGEWEIR_HEALTHCHECK_TIMEOUT: "9",
+      });
+      expect(short.status).toBe(1);
+      expect(short.lines.filter((l) => l === "edgeweir-node healthcheck")).toHaveLength(3);
+      expect(short.lines.filter((l) => l === "sleep 3")).toHaveLength(2);
+      expect(short.stderr).toContain(
+        "error:\u001b[0m edgeweir-node is installed but not healthy after 9s (unhealthy: data plane has no site table yet); see journalctl -u edgeweir-node -n 50",
+      );
+      expect(short.stderr).not.toContain("done:");
+      // 90 seconds by default.
+      const full = host.install(valid, { HEALTH_FAILURES: "-1" });
+      expect(full.status).toBe(1);
+      expect(full.lines.filter((l) => l === "edgeweir-node healthcheck")).toHaveLength(30);
+      expect(full.lines.filter((l) => l === "sleep 3")).toHaveLength(29);
+      expect(full.stderr).toContain("not healthy after 90s");
+    } finally {
+      host.remove();
+    }
+  });
+
+  it("neither starts nor checks the node with --no-start", () => {
+    const host = fakeHost(true);
+    try {
+      const res = host.install([...valid, "--no-start"], { HEALTH_FAILURES: "-1" });
+      expect(res.status, res.stderr).toBe(0);
+      expect(res.lines).toEqual([]);
+      expect(res.stderr).toContain("--no-start given, the service was not started");
+      expect(res.stderr).not.toContain("waiting up to");
+    } finally {
+      host.remove();
+    }
+  });
+
+  it("only starts and checks an enrolled host unless --version is given", () => {
+    const host = fakeHost(true);
+    const fresh = fakeHost(false);
+    try {
+      const res = host.install(valid, { EDGEWEIR_TOKEN: TOKEN });
+      expect(res.status, res.stderr).toBe(0);
+      // No download (not even of the latest version), no package, no enrollment.
+      expect(res.lines).toEqual([...started, "edgeweir-node healthcheck"]);
+      expect(res.stderr).toContain("the token is not used");
+      expect(res.stderr).toContain("already enrolled: nothing is downloaded or reinstalled");
+      expect(res.stderr).toContain("done: edgeweir-node is healthy");
+
+      // Which runs install packages.
+      const installs = (args: string[], env: Record<string, string> = {}, text = host.input) =>
+        host
+          .install(
+            args,
+            env,
+            text.replace(
+              /main "\$@"\s*$/,
+              'constants\nparse_args "$@"\nread_token\ninstalling && echo install || echo keep\n',
+            ),
+          )
+          .stdout.trim();
+      expect(installs(valid)).toBe("keep");
+      expect(installs([...valid, "--version", "0.3.0"])).toBe("install");
+      expect(installs([...valid, "--force"], { EDGEWEIR_TOKEN: TOKEN })).toBe("install");
+      // An enrolled host without edgeweir-node installs the latest version.
+      expect(installs(valid, {}, host.input.replaceAll(host.node, `${host.node}-missing`))).toBe(
+        "install",
+      );
+      expect(installs(valid, { EDGEWEIR_TOKEN: TOKEN }, fresh.input)).toBe("install");
+    } finally {
+      host.remove();
+      fresh.remove();
+    }
+  });
+
+  it.runIf(sha256sum)(
+    "installs the --version given on an enrolled host before starting and checking it",
+    () => {
+      const host = fakeHost(true);
+      try {
+        const res = host.install([...valid, "--version", "0.3.0"]);
+        expect(res.status, res.stderr).toBe(0);
+        const mirror = "http://console.test:3000/downloads/edgeweir-node/v0.3.0";
+        const fetched = (name: string) =>
+          `curl -fsSL --retry 3 --connect-timeout 15 -o $WORK/${name} ${mirror}/${name}`;
+        const [node, openresty, modsecurity] = [
+          "edgeweir-node_0.3.0_amd64.deb",
+          "edgeweir-openresty_1.31.1.1-1_amd64.deb",
+          "edgeweir-openresty-modsecurity_1.31.1.1-1_amd64.deb",
+        ];
+        const installed = [
+          fetched("checksums.txt"),
+          fetched("checksums.txt.sigstore.json"),
+          "cosign verify-blob --bundle $WORK/checksums.txt.sigstore.json --certificate-identity https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v0.3.0 --certificate-oidc-issuer https://token.actions.githubusercontent.com $WORK/checksums.txt",
+          fetched(node),
+          fetched(openresty),
+          fetched(modsecurity),
+          `apt-get install -y --no-install-recommends $WORK/${openresty} $WORK/${modsecurity}`,
+          `apt-get install -y --no-install-recommends $WORK/${node}`,
+        ];
+        // The package restarts a running service itself; the identity is kept.
+        expect(res.lines).toEqual([
+          ...installed,
+          ...started.filter((l) => !l.includes("try-restart")),
+          "edgeweir-node healthcheck",
+        ]);
+        expect(res.stderr).toContain("installing edgeweir-node 0.3.0 (deb, amd64)");
+        expect(res.stderr).toContain("already enrolled; to enroll again");
+        expect(res.stderr).toContain("done: edgeweir-node is healthy");
+
+        // With --no-start the packages are installed, nothing else.
+        const quiet = host.install([...valid, "--version", "0.3.0", "--no-start"]);
+        expect(quiet.status, quiet.stderr).toBe(0);
+        expect(quiet.lines).toEqual(installed);
+      } finally {
+        host.remove();
+      }
+    },
+  );
 
   it("checks the node channel before downloading anything, unless already enrolled", () => {
     const main = script.slice(script.indexOf("main() {"));

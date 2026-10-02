@@ -41,12 +41,12 @@ curl -fsSL https://<控制台>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN b
 | `--server` | URL | 必需 | 节点通道 URL，须为 `https://`。 |
 | `--ca-sha256` | HEX | 必需 | 控制台节点 CA 的 SHA-256 指纹，64 位小写十六进制；注册时固定。 |
 | `--token-file` | PATH | 无 | 从文件读取注册 token（去除空白），优先于 `EDGEWEIR_TOKEN`。 |
-| `--version` | VER | `latest` | 安装的 edgeweir-node 版本，语义化版本，可带 `v` 前缀。`latest` 依次从镜像的 `latest` 文件、GitHub 最新发布解析。 |
+| `--version` | VER | `latest` | 安装的 edgeweir-node 版本，语义化版本，可带 `v` 前缀。`latest` 依次从镜像的 `latest` 文件、GitHub 最新发布解析。已注册的主机不给此选项（也不给 `--force`）时不下载、不安装，只启动服务并检查。 |
 | `--format` | `auto`\|`deb`\|`rpm`\|`tar` | `auto` | 安装包格式。`auto`：有 `dpkg` 与 `apt-get` 时用 deb；有 `rpm` 与 `dnf` 或 `yum` 时用 rpm；否则用 tar。 |
 | `--mirror` | URL | `<控制台>/downloads/edgeweir-node` | edgeweir-node 发布镜像，文件位于 `URL/latest`、`URL/v<版本>/<文件>`；cosign 取自同级的 `cosign/v<版本>/`。每个文件先从镜像下载，失败后从 GitHub 下载。 |
 | `--mirror-only` | 无 | 关 | 不回退到 GitHub。 |
 | `--no-modsecurity` | 无 | 关 | 不安装 `edgeweir-openresty-modsecurity`：该节点不支持 OWASP CRS。 |
-| `--no-start` | 无 | 关 | 只安装和注册：不要求 systemd，不启用、不启动服务。 |
+| `--no-start` | 无 | 关 | 只安装和注册：不要求 systemd，不启用、不启动服务，不做健康检查。 |
 | `--force` | 无 | 关 | 已注册的主机重新注册（需要新的 token）：停止 `edgeweir-node`，替换身份后再启动。 |
 | `--allow-unsigned` | 无 | 关 | 跳过 cosign 签名校验，仅限开发；仍校验 SHA-256。 |
 | `-h`、`--help` | 无 | 无 | 输出用法。 |
@@ -71,8 +71,8 @@ curl -fsSL https://<控制台>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN b
 
 | 退出码 | 含义 |
 | --- | --- |
-| `0` | 安装与注册完成 |
-| `1` | 任一检查或步骤失败；stderr 输出 `[edgeweir] error:` 与原因 |
+| `0` | 安装与注册完成，`edgeweir-node healthcheck` 已通过（`--no-start` 时不检查） |
+| `1` | 任一检查或步骤失败，包括 90 秒内健康检查未通过；stderr 输出 `[edgeweir] error:` 与原因 |
 | `2` | 缺少 `--server` 或 `--ca-sha256`，或指定了 `-h`、`--help` |
 
 脚本不提供升级与卸载。节点升级见[节点升级](../guide/node-upgrades.md)。
