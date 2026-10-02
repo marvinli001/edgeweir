@@ -41,26 +41,37 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   }
   await expect(page.getByTestId("revisions-table")).toBeVisible();
 
-  // The "add node" dialog produces a one-time install command with the CA pin. The token
-  // travels in EDGEWEIR_TOKEN, never as an argument (the process list would show it).
+  // The "add node" dialog shows a one-time install command with the CA pin at once. The
+  // token travels in EDGEWEIR_TOKEN, never as an argument (the process list would show it).
   await page.getByTestId("add-node").click();
-  await page.getByLabel("节点名称", { exact: true }).fill("edge-ui");
-  await page.getByTestId("generate-install-command").click();
   const command = page.getByTestId("install-command");
-  await expect(command).toContainText(/export EDGEWEIR_TOKEN='ewt_[A-Za-z0-9_-]+'/);
+  const token = /export EDGEWEIR_TOKEN='(ewt_[A-Za-z0-9_-]+)'/;
+  await expect(command).toContainText(token);
   await expect(command).toContainText(
     "/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server https://",
   );
   await expect(command).toContainText(/--ca-sha256 [0-9a-f]{64}/);
   await expect(command).not.toContainText("--token");
   await expect(page.getByTestId("enroll-token-once")).toHaveText("仅显示一次");
+  const first = (await command.textContent())?.match(token)?.[1];
+  expect(first).toBeTruthy();
+  // A node name is an option: it mints another token.
+  await page.getByTestId("enroll-options").click();
+  await page.getByLabel("节点名称", { exact: true }).fill("edge-ui");
+  await page.getByTestId("generate-install-command").click();
+  await expect(command).toContainText(token);
+  await expect(command).not.toContainText(first ?? "");
+  await expect(page.getByLabel("节点名称", { exact: true })).toHaveCount(0);
+  const second = (await command.textContent())?.match(token)?.[1];
   const enroll = page.getByRole("dialog");
   await page.getByTestId("enroll-close").click();
   await expect(enroll).toBeHidden();
-  // Opened again, the dialog asks for a new node: the install command is gone.
+  // Opened again, the dialog shows a new node's command, the options closed and empty.
   await page.getByTestId("add-node").click();
+  await expect(command).toContainText(token);
+  await expect(command).not.toContainText(second ?? "");
+  await page.getByTestId("enroll-options").click();
   await expect(page.getByLabel("节点名称", { exact: true })).toHaveValue("");
-  await expect(page.getByTestId("install-command")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(enroll).toBeHidden();
 

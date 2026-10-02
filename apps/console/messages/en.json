@@ -121,7 +121,8 @@
   "nodes_up_to_date": "In sync",
   "nodes_behind": "Behind",
   "nodes_apply_failed": "Apply failed",
-  "nodes_pending": "Pending",
+  "nodes_pending": "Awaiting configuration",
+  "nodes_awaiting_heartbeat": "Awaiting heartbeat",
   "nodes_unhealthy": "Data plane unhealthy",
   "enroll_title": "Add node",
   "enroll_node_name": "Node name",
@@ -146,7 +147,8 @@
       }
     }
   ],
-  "enroll_generate": "Generate command",
+  "enroll_generate": "Regenerate",
+  "enroll_options": "Options",
   "enroll_command": "Install command",
   "enroll_expires_in": "Expires in",
   "enroll_ca_fingerprint": "CA fingerprint",

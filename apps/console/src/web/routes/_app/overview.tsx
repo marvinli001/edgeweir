@@ -27,10 +27,20 @@ export const Route = createFileRoute("/_app/overview")({
   component: OverviewPage,
 });
 
-type NodeState = "disabled" | "offline" | "failed" | "unhealthy" | "behind" | "synced" | "pending";
+type NodeState =
+  | "disabled"
+  | "waiting"
+  | "offline"
+  | "failed"
+  | "unhealthy"
+  | "behind"
+  | "synced"
+  | "pending";
 
 function nodeState(node: Node, latest: number): NodeState {
   if (node.status === "disabled") return "disabled";
+  // Enrolled and never connected since.
+  if (!node.lastSeenAt) return "waiting";
   if (!node.online) return "offline";
   if (node.applyState === "failed") return "failed";
   if (node.appliedRevision === 0) return "pending";
@@ -47,6 +57,7 @@ const STATE_ORDER: NodeState[] = [
   "unhealthy",
   "behind",
   "pending",
+  "waiting",
   "disabled",
   "synced",
 ];
@@ -57,6 +68,7 @@ const STATE_TONE: Record<NodeState, StatusTone> = {
   unhealthy: "bad",
   behind: "warn",
   pending: "idle",
+  waiting: "idle",
   disabled: "idle",
   synced: "good",
 };
@@ -68,6 +80,7 @@ function stateLabel(state: NodeState): string {
     unhealthy: m.nodes_unhealthy,
     behind: m.nodes_behind,
     pending: m.nodes_pending,
+    waiting: m.nodes_awaiting_heartbeat,
     disabled: m.nodes_disabled,
     synced: m.nodes_up_to_date,
   }[state]();

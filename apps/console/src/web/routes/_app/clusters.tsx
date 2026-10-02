@@ -8,6 +8,7 @@ import type {
 } from "@edgeweir/contract";
 import {
   Add01Icon,
+  ArrowDown01Icon,
   Delete02Icon,
   MoreHorizontalIcon,
   PencilEdit01Icon,
@@ -28,7 +29,11 @@ import { ClusterDns } from "@/components/dns/cluster-dns";
 import { FormDialog } from "@/components/form-dialog";
 import { PortPoolsSection } from "@/components/l4/port-pools";
 import { AuthErrorBadge, NodeDetailDialog, NodeLoad } from "@/components/node-detail";
-import { ConsoleUrlWarnings, EnrollProgress } from "@/components/node-enrollment";
+import {
+  ConsoleUrlWarnings,
+  EnrollProgress,
+  NodeChannelCheckStatus,
+} from "@/components/node-enrollment";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
@@ -646,7 +651,12 @@ function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
       </Badge>
     );
   }
-  if (node.appliedRevision === 0) return null;
+  if (node.appliedRevision === 0)
+    return node.online && node.status === "active" ? (
+      <Badge variant="outline" data-testid="node-awaiting-config">
+        {m.nodes_pending()}
+      </Badge>
+    ) : null;
   // A canary rollout gives each node its own target revision.
   return node.appliedRevision >= (node.targetRevision ?? latest) ? (
     <Badge variant="secondary" data-testid="node-up-to-date">
@@ -764,6 +774,11 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
           row.original.status === "disabled" ? (
             <StatusDot tone="idle" data-testid="node-disabled">
               {m.nodes_disabled()}
+            </StatusDot>
+          ) : !row.original.lastSeenAt ? (
+            // Enrolled, never connected since: the agent is still starting.
+            <StatusDot tone="idle" pulse data-testid="node-awaiting-heartbeat">
+              {m.nodes_awaiting_heartbeat()}
             </StatusDot>
           ) : row.original.online ? (
             <span className="flex flex-wrap items-center gap-1.5">
@@ -1096,6 +1111,11 @@ function RevisionsSection({ cluster }: { cluster: Cluster }) {
 
 const TTL_OPTIONS = [15, 60, 24 * 60];
 
+/**
+ * Adding a node: the install command of a token minted with the defaults as
+ * soon as the dialog opens, then the node's progress. Name, node group (with
+ * more than one) and lifetime are options that mint another token.
+ */
 function EnrollDialog({
   cluster,
   open,
@@ -1107,12 +1127,25 @@ function EnrollDialog({
 }) {
   const [ttl, setTtl] = React.useState(60);
   const [groupId, setGroupId] = React.useState<string>("");
+  const [nodeName, setNodeName] = React.useState("");
+  const [optionsOpen, setOptionsOpen] = React.useState(false);
   const [result, setResult] = React.useState<EnrollmentTokenResult | null>(null);
   const groups = useQuery({
     ...orpc.nodeGroups.list.queryOptions({ input: { clusterId: cluster.id } }),
     enabled: open,
   });
   const create = useMutation(orpc.clusters.createEnrollmentToken.mutationOptions());
+  const { mutateAsync } = create;
+  // One token per opening (the dialog is keyed per opening). StrictMode runs
+  // effects twice; the ref keeps that to one token.
+  const minted = React.useRef(false);
+  React.useEffect(() => {
+    if (!open || minted.current) return;
+    minted.current = true;
+    mutateAsync({ clusterId: cluster.id }).then(setResult, () => {
+      // rendered below via create.error
+    });
+  }, [open, cluster.id, mutateAsync]);
   const ttlLabel = (minutes: number) =>
     minutes < 60
       ? m.enroll_ttl_minutes({ count: minutes })
@@ -1134,9 +1167,9 @@ function EnrollDialog({
         <DialogHeader>
           <DialogTitle>{m.enroll_title()}</DialogTitle>
         </DialogHeader>
-        {result ? (
-          <div className="flex flex-col gap-4">
-            <FieldGroup>
+        <div className="flex flex-col gap-4">
+          {result ? (
+            <FieldGroup className="animate-enter">
               <Field>
                 <FieldLabel>{m.enroll_command()}</FieldLabel>
                 <CodeBlock value={result.installCommand} testId="install-command" />
@@ -1148,108 +1181,128 @@ function EnrollDialog({
                   <SafetyNote data-testid="enroll-token-once">{m.enroll_shown_once()}</SafetyNote>
                 </div>
                 <ConsoleUrlWarnings warnings={result.warnings} />
-              </Field>
-              <Field>
-                <FieldLabel>{m.enroll_ca_fingerprint()}</FieldLabel>
-                <code className="rounded-xl bg-muted p-2 font-mono text-xs break-all">
-                  {result.caSha256}
-                </code>
+                <NodeChannelCheckStatus line />
               </Field>
               <Field>
                 <FieldLabel>{m.enroll_progress()}</FieldLabel>
-                <EnrollProgress result={result} />
+                <EnrollProgress key={result.tokenId} result={result} />
               </Field>
             </FieldGroup>
-            <DialogFooter>
-              <Button onClick={() => setOpen(false)} data-testid="enroll-close">
-                {m.common_close()}
-              </Button>
-            </DialogFooter>
-          </div>
-        ) : (
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              try {
-                setResult(
-                  await create.mutateAsync({
-                    clusterId: cluster.id,
-                    nodeGroupId: selectedGroup || undefined,
-                    nodeName: String(data.get("enrollNodeName") ?? ""),
-                    ttlMinutes: ttl,
-                  }),
-                );
-              } catch {
-                // rendered below via create.error
-              }
-            }}
+          ) : create.isPending ? (
+            <LoadingState />
+          ) : null}
+          {create.isError && !optionsOpen ? (
+            <FieldError>{errorMessage(create.error)}</FieldError>
+          ) : null}
+          {optionsOpen ? (
+            <form
+              className="animate-enter rounded-xl border p-3"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                try {
+                  setResult(
+                    await create.mutateAsync({
+                      clusterId: cluster.id,
+                      nodeGroupId: selectedGroup || undefined,
+                      nodeName: nodeName.trim(),
+                      ttlMinutes: ttl,
+                    }),
+                  );
+                  setOptionsOpen(false);
+                } catch {
+                  // rendered below via create.error
+                }
+              }}
+            >
+              <FieldGroup>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field className="sm:col-span-2">
+                    <FieldLabel htmlFor="enrollNodeName">{m.enroll_node_name()}</FieldLabel>
+                    {/* Not "nodeName": that would clobber HTMLFormElement.nodeName and break React events. */}
+                    <Input
+                      id="enrollNodeName"
+                      name="enrollNodeName"
+                      maxLength={64}
+                      placeholder="edge-sh-01"
+                      value={nodeName}
+                      onChange={(event) => setNodeName(event.target.value)}
+                    />
+                  </Field>
+                  {groupItems.length > 1 ? (
+                    <Field>
+                      <FieldLabel>{m.nodes_col_group()}</FieldLabel>
+                      <Select
+                        value={selectedGroup}
+                        onValueChange={(value) => value && setGroupId(String(value))}
+                        items={groupItems}
+                      >
+                        <SelectTrigger className="w-full" data-testid="enroll-group">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {groupItems.map((g) => (
+                            <SelectItem key={g.value} value={g.value}>
+                              {g.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  ) : null}
+                  <Field>
+                    <FieldLabel>{m.enroll_ttl()}</FieldLabel>
+                    <Select
+                      value={String(ttl)}
+                      onValueChange={(value) => value && setTtl(Number(value))}
+                      items={TTL_OPTIONS.map((v) => ({ label: ttlLabel(v), value: String(v) }))}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TTL_OPTIONS.map((v) => (
+                          <SelectItem key={v} value={String(v)}>
+                            {ttlLabel(v)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+                {create.isError ? <FieldError>{errorMessage(create.error)}</FieldError> : null}
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={create.isPending}
+                    data-testid="generate-install-command"
+                  >
+                    {create.isPending ? <Spinner /> : null}
+                    {m.enroll_generate()}
+                  </Button>
+                </div>
+              </FieldGroup>
+            </form>
+          ) : null}
+        </div>
+        <DialogFooter className="sm:justify-between">
+          <Button
+            variant="ghost"
+            aria-expanded={optionsOpen}
+            onClick={() => setOptionsOpen((value) => !value)}
+            data-testid="enroll-options"
           >
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="enrollNodeName">{m.enroll_node_name()}</FieldLabel>
-                {/* Not "nodeName": that would clobber HTMLFormElement.nodeName and break React events. */}
-                <Input
-                  id="enrollNodeName"
-                  name="enrollNodeName"
-                  maxLength={64}
-                  placeholder="edge-sh-01"
-                />
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel>{m.nodes_col_group()}</FieldLabel>
-                  <Select
-                    value={selectedGroup}
-                    onValueChange={(value) => value && setGroupId(String(value))}
-                    items={groupItems}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {groupItems.map((g) => (
-                        <SelectItem key={g.value} value={g.value}>
-                          {g.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel>{m.enroll_ttl()}</FieldLabel>
-                  <Select
-                    value={String(ttl)}
-                    onValueChange={(value) => value && setTtl(Number(value))}
-                    items={TTL_OPTIONS.map((v) => ({ label: ttlLabel(v), value: String(v) }))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TTL_OPTIONS.map((v) => (
-                        <SelectItem key={v} value={String(v)}>
-                          {ttlLabel(v)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </div>
-              {create.isError ? <FieldError>{errorMessage(create.error)}</FieldError> : null}
-              <DialogFooter>
-                <Button
-                  type="submit"
-                  disabled={create.isPending}
-                  data-testid="generate-install-command"
-                >
-                  {create.isPending ? <Spinner /> : null}
-                  {m.enroll_generate()}
-                </Button>
-              </DialogFooter>
-            </FieldGroup>
-          </form>
-        )}
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              strokeWidth={2}
+              className={cn("transition-transform", optionsOpen && "rotate-180")}
+            />
+            {m.enroll_options()}
+          </Button>
+          <Button onClick={() => setOpen(false)} data-testid="enroll-close">
+            {m.common_close()}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
