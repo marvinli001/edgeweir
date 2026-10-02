@@ -37,7 +37,7 @@ ClickHouse 变量仅在 `EDGEWEIR_ANALYTICS=clickhouse` 时使用。`compose.yml
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `EDGEWEIR_ANALYTICS` | `lite` | 访问日志与分钟统计的存储：`lite`（PostgreSQL）或 `clickhouse`。切换不迁移历史数据。显示在 **系统设置** 的「统计模式」。行为见[访问日志与 AccessKey](../guide/access-logs.md)。 |
-| `EDGEWEIR_CLICKHOUSE_URL` | `http://clickhouse:8123` | ClickHouse HTTP 接口。仅限 `http`、`https`，不得包含用户名、密码、查询串或片段。`compose.baota.yml`、`compose.baota-host.yml` 默认 `http://localhost:8123`。 |
+| `EDGEWEIR_CLICKHOUSE_URL` | `http://clickhouse:8123` | ClickHouse HTTP 接口。仅限 `http`、`https`，不得包含用户名、密码、查询串或片段。`compose.baota.yml` 默认 `http://host.docker.internal:8123`（宿主机，ClickHouse 需监听 Docker 网桥地址），`compose.baota-host.yml` 默认 `http://localhost:8123`。 |
 | `EDGEWEIR_CLICKHOUSE_DATABASE` | `edgeweir` | 数据库名，须匹配 `^[A-Za-z_][A-Za-z0-9_]{0,63}$`。 |
 | `EDGEWEIR_CLICKHOUSE_USER` | `edgeweir` | 用户名，经 `X-ClickHouse-User` 请求头发送。 |
 | `EDGEWEIR_CLICKHOUSE_PASSWORD` | 空 | 密码，经 `X-ClickHouse-Key` 请求头发送。Compose 模板中未设置时依次取 `CLICKHOUSE_PASSWORD`、`edgeweir`。 |
@@ -81,9 +81,9 @@ Compose 在宿主机读取以下变量（`.env` 或 shell 环境），用于插�
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `EDGEWEIR_VERSION` | `latest` | 拉取的镜像 tag：`ghcr.io/marvinli001/edgeweir:<EDGEWEIR_VERSION>`。滚动 tag 格式 `<YYYYMMDD>-<commit>`，可附加 `@sha256:<digest>`。见[版本、升级与回滚](../deploy/upgrade.md)。 |
-| `EDGEWEIR_HTTP_PORT` | `3000` | Web 控制台的宿主机端口。`compose.yml`：端口发布规格，可带绑定地址，例如 `127.0.0.1:3000`。`compose.baota.yml`：仅数字，绑定 `127.0.0.1`。`compose.baota-host.yml`：仅数字，作为 `PORT`。 |
+| `EDGEWEIR_HTTP_PORT` | `3000` | Web 控制台的宿主机端口。`compose.yml`：端口发布规格，可带绑定地址，默认 `127.0.0.1:3000`（Docker 发布的端口绕过 ufw、firewalld），`3000` 发布到所有接口。`compose.baota.yml`：仅数字，绑定 `127.0.0.1`。`compose.baota-host.yml`：仅数字，作为 `PORT`。 |
 | `EDGEWEIR_NODE_API_PORT` | `8443` | 节点通道的宿主机端口。`compose.yml`、`compose.baota.yml`：端口发布规格，可带绑定地址。`compose.baota-host.yml`：仅数字，作为 `NODE_API_PORT`。 |
-| `POSTGRES_PASSWORD` | `edgeweir` | 内置 PostgreSQL 的密码，`compose.yml`、`compose.baota.yml` 用它拼出 `DATABASE_URL`。须 URL 安全：`openssl rand -hex 24`。PostgreSQL 镜像只在数据目录为空时应用此值，之后修改不改变已有密码。 |
+| `POSTGRES_PASSWORD` | 无 | 内置 PostgreSQL 的密码，`compose.yml`、`compose.baota.yml` 用它拼出 `DATABASE_URL`；未设置时这两个编排拒绝启动（早先未设置的部署用的是 `edgeweir`）。须 URL 安全：`openssl rand -hex 24`。PostgreSQL 镜像只在数据目录为空时应用此值，之后修改不改变已有密码。 |
 | `CLICKHOUSE_PASSWORD` | `edgeweir` | `EDGEWEIR_CLICKHOUSE_PASSWORD` 未设置时的 ClickHouse 密码，控制台与 `analytics` profile 的 ClickHouse 容器共用。 |
 | `DEV_POSTGRES_PORT` | `5432` | `compose.dev.yml`：开发数据库在 `127.0.0.1` 上的端口。 |
 

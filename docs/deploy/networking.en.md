@@ -19,18 +19,18 @@ Configure console ports, reverse proxies, node channel passthrough, and client I
 | `PORT` | `3000` | Web listen port of the process. |
 | `NODE_API_HOST` | Empty, uses `HOST` | Node channel listen address of the process. |
 | `NODE_API_PORT` | `8443` | Node channel listen port of the process. |
-| `EDGEWEIR_HTTP_PORT` | `3000` | Web port published by Compose, optionally with a bind address such as `127.0.0.1:3000`. |
+| `EDGEWEIR_HTTP_PORT` | `127.0.0.1:3000` (`compose.yml`) | Web port published by Compose, optionally with a bind address. |
 | `EDGEWEIR_NODE_API_PORT` | `8443` | Node channel port published by Compose, optionally with a bind address. |
 
 Values per Compose file:
 
 | Compose file | Process listens on | Host ports |
 | --- | --- | --- |
-| `compose.yml` | Image defaults `0.0.0.0:3000`, `0.0.0.0:8443` | Port mappings `${EDGEWEIR_HTTP_PORT}:3000`, `${EDGEWEIR_NODE_API_PORT}:8443`, on all interfaces by default |
+| `compose.yml` | Image defaults `0.0.0.0:3000`, `0.0.0.0:8443` | Port mappings `${EDGEWEIR_HTTP_PORT}:3000` (default `127.0.0.1:3000`) and `${EDGEWEIR_NODE_API_PORT}:8443` (all interfaces by default) |
 | `compose.baota.yml` | Image defaults | Port mappings `127.0.0.1:${EDGEWEIR_HTTP_PORT}:3000` (`EDGEWEIR_HTTP_PORT` is a number only), `${EDGEWEIR_NODE_API_PORT}:8443` |
 | `compose.baota-host.yml` (host network) | `HOST=127.0.0.1`, `PORT=${EDGEWEIR_HTTP_PORT}`, `NODE_API_HOST=0.0.0.0`, `NODE_API_PORT=${EDGEWEIR_NODE_API_PORT}` | No port mappings; both port variables are numbers only |
 
-With `compose.yml` behind a reverse proxy on the host, set `EDGEWEIR_HTTP_PORT=127.0.0.1:3000` so that 3000 is reachable only locally.
+The web port of `compose.yml` is reachable only locally by default, served by a reverse proxy on the host: ports Docker publishes bypass host firewalls such as ufw and firewalld. To reach it directly without a proxy, set `EDGEWEIR_HTTP_PORT=3000`.
 
 ## Node channel URL and certificate
 
@@ -162,5 +162,5 @@ Expected: `ip` is the browser's public address, not the gateway.
 | --- | --- | --- |
 | Every audit `ip` is the gateway address (e.g. `172.18.0.1`) | `EDGEWEIR_TRUSTED_PROXIES` unset, or different from the actual gateway (recreating the Compose network may change it) | Look up the gateway, update `EDGEWEIR_TRUSTED_PROXIES`, run `docker compose up -d`. |
 | Startup fails: `EDGEWEIR_TRUSTED_PROXIES: not an IP address or CIDR range` | An entry is neither an IP nor a CIDR range | Fix the entry. |
-| 3000 is reachable from the internet | `compose.yml` publishes 3000 on all interfaces by default | Set `EDGEWEIR_HTTP_PORT=127.0.0.1:3000`. |
+| 3000 is reachable from the internet | `EDGEWEIR_HTTP_PORT` without a bind address (e.g. `3000`), or an older `compose.yml` that published it on all interfaces | Set `EDGEWEIR_HTTP_PORT=127.0.0.1:3000`, or update `compose.yml`. |
 | Node enrollment or connection fails | — | See [adding nodes: troubleshooting](nodes.en.md#troubleshooting). |

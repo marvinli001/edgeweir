@@ -19,18 +19,18 @@
 | `PORT` | `3000` | 进程的 Web 监听端口。 |
 | `NODE_API_HOST` | 空，取 `HOST` | 进程的节点通道监听地址。 |
 | `NODE_API_PORT` | `8443` | 进程的节点通道监听端口。 |
-| `EDGEWEIR_HTTP_PORT` | `3000` | Compose 发布的 Web 端口，可带绑定地址，例如 `127.0.0.1:3000`。 |
+| `EDGEWEIR_HTTP_PORT` | `127.0.0.1:3000`（`compose.yml`） | Compose 发布的 Web 端口，可带绑定地址。 |
 | `EDGEWEIR_NODE_API_PORT` | `8443` | Compose 发布的节点通道端口，可带绑定地址。 |
 
 各编排文件的取值：
 
 | 编排 | 进程监听 | 宿主机端口 |
 | --- | --- | --- |
-| `compose.yml` | 镜像默认值 `0.0.0.0:3000`、`0.0.0.0:8443` | 端口映射 `${EDGEWEIR_HTTP_PORT}:3000`、`${EDGEWEIR_NODE_API_PORT}:8443`，默认绑定所有接口 |
+| `compose.yml` | 镜像默认值 `0.0.0.0:3000`、`0.0.0.0:8443` | 端口映射 `${EDGEWEIR_HTTP_PORT}:3000`（默认 `127.0.0.1:3000`）、`${EDGEWEIR_NODE_API_PORT}:8443`（默认所有接口） |
 | `compose.baota.yml` | 镜像默认值 | 端口映射 `127.0.0.1:${EDGEWEIR_HTTP_PORT}:3000`（`EDGEWEIR_HTTP_PORT` 只能是数字）、`${EDGEWEIR_NODE_API_PORT}:8443` |
 | `compose.baota-host.yml`（host 网络） | `HOST=127.0.0.1`、`PORT=${EDGEWEIR_HTTP_PORT}`、`NODE_API_HOST=0.0.0.0`、`NODE_API_PORT=${EDGEWEIR_NODE_API_PORT}` | 无端口映射；两个端口变量只能是数字 |
 
-`compose.yml` 置于宿主机反向代理之后时，设置 `EDGEWEIR_HTTP_PORT=127.0.0.1:3000`，使 3000 只在本机可达。
+`compose.yml` 的 Web 端口默认只在本机可达，由宿主机反向代理对外：Docker 发布的端口绕过 ufw、firewalld 等主机防火墙。不经代理直接访问时设置 `EDGEWEIR_HTTP_PORT=3000`。
 
 ## 节点通道地址与证书
 
@@ -162,5 +162,5 @@ docker compose exec -T postgres psql -U edgeweir -d edgeweir \
 | --- | --- | --- |
 | 审计记录的 `ip` 均为网关地址（如 `172.18.0.1`） | `EDGEWEIR_TRUSTED_PROXIES` 未设置，或与实际网关不一致（重建 Compose 网络后网关可能变化） | 查询网关，更新 `EDGEWEIR_TRUSTED_PROXIES`，执行 `docker compose up -d`。 |
 | 启动失败：`EDGEWEIR_TRUSTED_PROXIES: not an IP address or CIDR range` | 条目不是 IP 或 CIDR | 修正条目。 |
-| 3000 可从公网直接访问 | `compose.yml` 默认在所有接口发布 3000 | 设置 `EDGEWEIR_HTTP_PORT=127.0.0.1:3000`。 |
+| 3000 可从公网直接访问 | `EDGEWEIR_HTTP_PORT` 不带绑定地址（例如 `3000`），或使用的是旧版 `compose.yml`（在所有接口发布） | 设置 `EDGEWEIR_HTTP_PORT=127.0.0.1:3000`，或更新 `compose.yml`。 |
 | 节点注册或连接失败 | — | 见 [接入节点排障](nodes.md#排障)。 |

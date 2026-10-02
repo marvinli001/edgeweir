@@ -507,7 +507,7 @@ template_bundled() {
 #      BETTER_AUTH_SECRET 的部署继续保留它。其余配置在控制台「系统设置」填写。
 #      镜像是公开的 ghcr.io/marvinli001/edgeweir，滚动发布，tag 为「日期-提交」（例如
 #      20260929-a1b2c3d）；生产在 .env 里用 EDGEWEIR_VERSION 固定一个 tag，升级时改 tag 后
-#      「更新镜像」。
+#      「更新镜像」。没有 POSTGRES_PASSWORD 时编排拒绝启动（早先不填的部署用的是 edgeweir）。
 #   2. Web 控制台只监听 127.0.0.1:3000，由宝塔站点「反向代理」到 http://127.0.0.1:3000，
 #      HTTPS 证书在宝塔上配置即可。
 #   3. 节点通道 8443 端口必须直接暴露（或用 nginx stream 四层透传），
@@ -522,7 +522,7 @@ services:
     restart: unless-stopped
     environment:
       ROLE: all
-      DATABASE_URL: postgres://edgeweir:${POSTGRES_PASSWORD:-edgeweir}@postgres:5432/edgeweir
+      DATABASE_URL: postgres://edgeweir:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env; deployments created without it used edgeweir}@postgres:5432/edgeweir
       EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       # 浏览器访问控制台的地址，即宝塔站点的域名，例如 https://cdn-admin.example.com
@@ -531,8 +531,9 @@ services:
       EDGEWEIR_NODE_API_URL: ${EDGEWEIR_NODE_API_URL:-}
       EDGEWEIR_NODE_API_HOSTNAMES: ${EDGEWEIR_NODE_API_HOSTNAMES:-}
       EDGEWEIR_ANALYTICS: ${EDGEWEIR_ANALYTICS:-lite}
-      # 可选外部 ClickHouse；此模板不额外创建分析服务。
-      EDGEWEIR_CLICKHOUSE_URL: ${EDGEWEIR_CLICKHOUSE_URL:-http://localhost:8123}
+      # 可选外部 ClickHouse，默认在宿主机上（Docker 网桥里 localhost 是容器自己，
+      # ClickHouse 要监听网桥地址）；此模板不额外创建分析服务。
+      EDGEWEIR_CLICKHOUSE_URL: ${EDGEWEIR_CLICKHOUSE_URL:-http://host.docker.internal:8123}
       EDGEWEIR_CLICKHOUSE_DATABASE: ${EDGEWEIR_CLICKHOUSE_DATABASE:-edgeweir}
       EDGEWEIR_CLICKHOUSE_USER: ${EDGEWEIR_CLICKHOUSE_USER:-edgeweir}
       EDGEWEIR_CLICKHOUSE_PASSWORD: ${EDGEWEIR_CLICKHOUSE_PASSWORD:-${CLICKHOUSE_PASSWORD:-edgeweir}}
@@ -544,6 +545,8 @@ services:
       EDGEWEIR_SMTP_CA_FILE: ${EDGEWEIR_SMTP_CA_FILE:-}
       # 宝塔 nginx 的来源地址（Docker 网桥网关），只信任它转发的 X-Forwarded-For
       EDGEWEIR_TRUSTED_PROXIES: ${EDGEWEIR_TRUSTED_PROXIES:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       # 仅本机可访问，交给宝塔 nginx 反向代理
       - "127.0.0.1:${EDGEWEIR_HTTP_PORT:-3000}:3000"
@@ -564,7 +567,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: edgeweir
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-edgeweir}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env; deployments created without it used edgeweir}
       POSTGRES_DB: edgeweir
     volumes:
       - postgres-data:/var/lib/postgresql

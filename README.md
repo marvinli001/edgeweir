@@ -87,7 +87,7 @@ docker compose up -d
 docker compose logs console | grep setupToken
 ```
 
-访问 <http://localhost:3000>，使用日志中的一次性 setup token 完成初始化向导，创建唯一的运营者账户与默认集群。setup token 在首次初始化成功后失效；无 token 的初始化请求一律拒绝。
+访问 <http://localhost:3000>（3000 默认只监听本机，其他机器经[反向代理](docs/deploy/networking.md)访问），使用日志中的一次性 setup token 完成初始化向导，创建唯一的运营者账户与默认集群。setup token 在首次初始化成功后失效；无 token 的初始化请求一律拒绝。
 
 ### 环境变量
 

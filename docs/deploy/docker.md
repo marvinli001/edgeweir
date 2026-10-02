@@ -10,7 +10,7 @@
 
 | 服务 | 镜像 | 启用 | 说明 |
 | --- | --- | --- | --- |
-| `console` | `ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}` | 默认 | `ROLE=all`；发布 `${EDGEWEIR_HTTP_PORT:-3000}:3000` 与 `${EDGEWEIR_NODE_API_PORT:-8443}:8443`；只读根文件系统、`/tmp` 为 tmpfs、`no-new-privileges` |
+| `console` | `ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}` | 默认 | `ROLE=all`；发布 `${EDGEWEIR_HTTP_PORT:-127.0.0.1:3000}:3000` 与 `${EDGEWEIR_NODE_API_PORT:-8443}:8443`；只读根文件系统、`/tmp` 为 tmpfs、`no-new-privileges` |
 | `postgres` | `postgres:18.6-alpine`（按 digest 固定） | 默认 | 卷 `postgres-data` 挂载到 `/var/lib/postgresql`；端口不发布；`pg_isready` 健康检查通过后 `console` 才启动 |
 | `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine`（按 digest 固定） | `--profile analytics` | 卷 `clickhouse-data` |
 | `valkey` | `valkey/valkey:9.2-alpine`（按 digest 固定） | `--profile cache` | 控制台目前未使用 |
@@ -93,7 +93,7 @@ sed -i "s|^EDGEWEIR_PUBLIC_URL=.*|EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.
 | 变量 | 说明 |
 | --- | --- |
 | `EDGEWEIR_MASTER_KEY` | 主密钥，见上一步。缺失时控制台拒绝启动。 |
-| `POSTGRES_PASSWORD` | 内置 PostgreSQL 的密码。`compose.yml` 由它拼出 `DATABASE_URL`，忽略 `.env` 中的 `DATABASE_URL` 行。 |
+| `POSTGRES_PASSWORD` | 内置 PostgreSQL 的密码。`compose.yml` 由它拼出 `DATABASE_URL`，忽略 `.env` 中的 `DATABASE_URL` 行。未设置时 Compose 拒绝启动；早先未设置的部署用的是 `edgeweir`，填入它即可。 |
 | `EDGEWEIR_PUBLIC_URL` | 浏览器访问控制台的地址，含协议与端口。须与浏览器地址栏一致，否则登录因来源校验失败。 |
 
 常用可选变量（在 `.env` 中取消注释后填写）：
@@ -103,7 +103,7 @@ sed -i "s|^EDGEWEIR_PUBLIC_URL=.*|EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.
 | `EDGEWEIR_VERSION` | `latest` | 拉取的镜像 tag。生产环境固定日期 tag，见 [固定版本](upgrade.md#固定版本)。 |
 | `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:8443` | 节点连接节点通道的地址，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | 空 | 反向代理地址，见 [可信代理](networking.md#可信代理与客户端-ip)。 |
-| `EDGEWEIR_HTTP_PORT`、`EDGEWEIR_NODE_API_PORT` | `3000`、`8443` | 宿主机发布端口，可带绑定地址，例如 `127.0.0.1:3000`。 |
+| `EDGEWEIR_HTTP_PORT`、`EDGEWEIR_NODE_API_PORT` | `127.0.0.1:3000`、`8443` | 宿主机发布端口，可带绑定地址。Web 端口默认只在本机：Docker 发布的端口绕过 ufw、firewalld，由反向代理对外；`EDGEWEIR_HTTP_PORT=3000` 发布到所有接口。 |
 | `BETTER_AUTH_SECRET` | 空，由主密钥派生 | 已设置的部署保留原值；移除后控制台拒绝启动。 |
 | `EDGEWEIR_DOWNLOADS_DIR` | 空 | 节点安装包下载镜像目录，见 [下载镜像](nodes.md#下载镜像)。 |
 

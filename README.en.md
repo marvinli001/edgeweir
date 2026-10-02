@@ -87,7 +87,7 @@ docker compose up -d
 docker compose logs console | grep setupToken
 ```
 
-Open <http://localhost:3000> and complete the setup wizard with the one-time setup token from the log. The wizard creates the only operator account and a default cluster. The token expires after the first successful setup; setup requests without it are rejected.
+Open <http://localhost:3000> (port 3000 listens on localhost only by default; other machines go through a [reverse proxy](docs/deploy/networking.en.md)) and complete the setup wizard with the one-time setup token from the log. The wizard creates the only operator account and a default cluster. The token expires after the first successful setup; setup requests without it are rejected.
 
 ### Environment variables
 

@@ -10,7 +10,7 @@ The `compose.yml` project name is `edgeweir`: the volume is `edgeweir_postgres-d
 
 | Service | Image | Enabled | Notes |
 | --- | --- | --- | --- |
-| `console` | `ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}` | Default | `ROLE=all`; publishes `${EDGEWEIR_HTTP_PORT:-3000}:3000` and `${EDGEWEIR_NODE_API_PORT:-8443}:8443`; read-only root file system, `/tmp` on tmpfs, `no-new-privileges` |
+| `console` | `ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}` | Default | `ROLE=all`; publishes `${EDGEWEIR_HTTP_PORT:-127.0.0.1:3000}:3000` and `${EDGEWEIR_NODE_API_PORT:-8443}:8443`; read-only root file system, `/tmp` on tmpfs, `no-new-privileges` |
 | `postgres` | `postgres:18.6-alpine` (pinned by digest) | Default | Volume `postgres-data` mounted at `/var/lib/postgresql`; no published port; `console` starts after the `pg_isready` health check passes |
 | `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine` (pinned by digest) | `--profile analytics` | Volume `clickhouse-data` |
 | `valkey` | `valkey/valkey:9.2-alpine` (pinned by digest) | `--profile cache` | Not used by the console yet |
@@ -93,7 +93,7 @@ Required variables:
 | Variable | Description |
 | --- | --- |
 | `EDGEWEIR_MASTER_KEY` | Master key, from the previous step. The console refuses to start without it. |
-| `POSTGRES_PASSWORD` | Password of the bundled PostgreSQL. `compose.yml` builds `DATABASE_URL` from it and ignores the `DATABASE_URL` line in `.env`. |
+| `POSTGRES_PASSWORD` | Password of the bundled PostgreSQL. `compose.yml` builds `DATABASE_URL` from it and ignores the `DATABASE_URL` line in `.env`. Compose refuses to start without it; deployments created without it used `edgeweir`, so set that. |
 | `EDGEWEIR_PUBLIC_URL` | URL browsers use for the console, including scheme and port. Must match the browser address bar; otherwise sign-in fails the origin check. |
 
 Common optional variables (uncomment in `.env`):
@@ -103,7 +103,7 @@ Common optional variables (uncomment in `.env`):
 | `EDGEWEIR_VERSION` | `latest` | Image tag to pull. Pin a dated tag in production; see [pinning a version](upgrade.en.md#pinning-a-version). |
 | `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:8443` | URL nodes use for the node channel; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
 | `EDGEWEIR_TRUSTED_PROXIES` | Empty | Reverse proxy addresses; see [trusted proxies](networking.en.md#trusted-proxies-and-client-ip). |
-| `EDGEWEIR_HTTP_PORT`, `EDGEWEIR_NODE_API_PORT` | `3000`, `8443` | Published host ports, optionally with a bind address such as `127.0.0.1:3000`. |
+| `EDGEWEIR_HTTP_PORT`, `EDGEWEIR_NODE_API_PORT` | `127.0.0.1:3000`, `8443` | Published host ports, optionally with a bind address. The web port is local only by default: ports Docker publishes bypass ufw and firewalld, so a reverse proxy serves it; `EDGEWEIR_HTTP_PORT=3000` publishes it on every interface. |
 | `BETTER_AUTH_SECRET` | Empty, derived from the master key | Deployments that set it keep it; the console refuses to start once it is removed. |
 | `EDGEWEIR_DOWNLOADS_DIR` | Empty | Directory of the node package mirror; see [downloads mirror](nodes.en.md#downloads-mirror). |
 

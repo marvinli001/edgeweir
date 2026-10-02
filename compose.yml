@@ -2,16 +2,17 @@
 #   docker compose up -d                        # console + postgres
 #   docker compose --profile analytics up -d    # + ClickHouse
 #   docker compose --profile cache up -d        # + Valkey
-# Secrets come from .env (see .env.example). The console refuses to start
-# without EDGEWEIR_MASTER_KEY; the session secret is derived from it unless
-# BETTER_AUTH_SECRET is set (deployments that set it keep it).
+# Secrets come from .env (see .env.example): compose refuses to start without
+# POSTGRES_PASSWORD, the console without EDGEWEIR_MASTER_KEY; the session secret
+# is derived from it unless BETTER_AUTH_SECRET is set (deployments that set it
+# keep it). Local changes go into compose.override.yml, which compose merges.
 # The console image is pulled from ghcr.io (rolling <YYYYMMDD>-<commit> tags,
 # pinned with EDGEWEIR_VERSION); `docker compose up -d --build` builds it from
 # this checkout instead.
 name: edgeweir
 
 x-console-env: &console-env
-  DATABASE_URL: postgres://edgeweir:${POSTGRES_PASSWORD:-edgeweir}@postgres:5432/edgeweir
+  DATABASE_URL: postgres://edgeweir:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env; deployments created without it used edgeweir}@postgres:5432/edgeweir
   EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
   BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
   EDGEWEIR_PUBLIC_URL: ${EDGEWEIR_PUBLIC_URL:-http://localhost:3000}
@@ -45,8 +46,10 @@ services:
       <<: *console-env
       ROLE: all
     ports:
-      # Web console + API. May sit behind a reverse proxy (TLS there is fine).
-      - "${EDGEWEIR_HTTP_PORT:-3000}:3000"
+      # Web console + API, on loopback for a reverse proxy (TLS there is fine):
+      # published ports bypass ufw and firewalld. EDGEWEIR_HTTP_PORT=3000
+      # publishes it on every interface.
+      - "${EDGEWEIR_HTTP_PORT:-127.0.0.1:3000}:3000"
       # Node channel. Must reach the console directly or via TCP passthrough:
       # the console terminates TLS itself (mutual TLS with node certificates).
       - "${EDGEWEIR_NODE_API_PORT:-8443}:8443"
@@ -67,7 +70,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: edgeweir
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-edgeweir}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env; deployments created without it used edgeweir}
       POSTGRES_DB: edgeweir
     volumes:
       # PostgreSQL 18 images keep data under /var/lib/postgresql/<major>/docker.
