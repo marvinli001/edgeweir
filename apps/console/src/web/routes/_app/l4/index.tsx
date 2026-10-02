@@ -6,26 +6,19 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { type Columns, DataTable } from "@/components/data-table";
+import { FilterSelect } from "@/components/form-select";
 import { L4AppActions, L4EnabledSwitch } from "@/components/l4/app-actions";
 import { L4AppDialog } from "@/components/l4/app-dialog";
 import { DnsTarget, L4NodesWarning, ProtocolBadge } from "@/components/l4/common";
 import { Page } from "@/components/page";
 import { SitesTabs } from "@/components/sites-tabs";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { originLabel } from "@/lib/l4";
 import { orpc } from "@/lib/orpc";
-
-const ALL = "__all__";
 
 export const Route = createFileRoute("/_app/l4/")({
   validateSearch: z.object({
@@ -43,7 +36,7 @@ function L4AppsPage() {
     placeholderData: keepPreviousData,
   });
   const clusters = useQuery(orpc.clusters.list.queryOptions());
-  const [editing, setEditing] = React.useState<L4App | null>(null);
+  const edit = useDialogState<L4App>();
   const setCreateOpen = (open: boolean) =>
     navigate({ search: (prev) => ({ ...prev, create: open || undefined }), replace: true });
 
@@ -145,12 +138,12 @@ function L4AppsPage() {
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <L4AppActions app={row.original} onEdit={setEditing} />
+            <L4AppActions app={row.original} onEdit={edit.show} />
           </div>
         ),
       },
     ],
-    [],
+    [edit.show],
   );
 
   const create = (
@@ -170,38 +163,17 @@ function L4AppsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <SitesTabs value="l4" />
         {clusters.data && clusters.data.length > 1 ? (
-          <Select
-            value={search.cluster ?? ALL}
-            onValueChange={(value) =>
-              navigate({
-                search: (prev) => ({
-                  ...prev,
-                  cluster: !value || value === ALL ? undefined : String(value),
-                }),
-                replace: true,
-              })
+          <FilterSelect
+            value={search.cluster}
+            onChange={(cluster) =>
+              navigate({ search: (prev) => ({ ...prev, cluster }), replace: true })
             }
-            items={[
-              { label: m.sites_all_clusters(), value: ALL },
-              ...clusters.data.map((c) => ({ label: c.name, value: c.id })),
-            ]}
-          >
-            <SelectTrigger
-              className="w-44 sm:ml-auto"
-              aria-label={m.sites_col_cluster()}
-              data-testid="l4-cluster-filter"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{m.sites_all_clusters()}</SelectItem>
-              {clusters.data.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            allLabel={m.sites_all_clusters()}
+            options={clusters.data.map((c) => ({ label: c.name, value: c.id }))}
+            label={m.sites_col_cluster()}
+            testId="l4-cluster-filter"
+            className="w-44 sm:ml-auto"
+          />
         ) : null}
       </div>
       {pools.map((query, index) =>
@@ -213,36 +185,38 @@ function L4AppsPage() {
           />
         ) : null,
       )}
-      {apps.isPending ? (
-        <LoadingState />
-      ) : apps.isLoadingError ? (
-        <ErrorState error={apps.error} onRetry={() => apps.refetch()} />
-      ) : apps.data.length === 0 ? (
-        <EmptyState icon={ArrowDataTransferHorizontalIcon} title={m.l4_empty_title()}>
-          <Button onClick={() => setCreateOpen(true)} disabled={!clusters.data?.length}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            {m.l4_create()}
-          </Button>
-        </EmptyState>
-      ) : (
-        <DataTable
-          data={apps.data}
-          columns={columns}
-          getRowId={(app) => app.id}
-          testId="l4-apps-table"
-        />
-      )}
+      <QueryView
+        query={apps}
+        empty={
+          <EmptyState icon={ArrowDataTransferHorizontalIcon} title={m.l4_empty_title()}>
+            <Button onClick={() => setCreateOpen(true)} disabled={!clusters.data?.length}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              {m.l4_create()}
+            </Button>
+          </EmptyState>
+        }
+      >
+        {(list) => (
+          <DataTable
+            data={list}
+            columns={columns}
+            getRowId={(app) => app.id}
+            testId="l4-apps-table"
+          />
+        )}
+      </QueryView>
       <L4AppDialog
         open={search.create === true}
         onOpenChange={setCreateOpen}
         clusters={clusters.data ?? []}
         clusterId={search.cluster}
       />
-      {editing ? (
+      {edit.value ? (
         <L4AppDialog
-          open
-          onOpenChange={(open) => !open && setEditing(null)}
-          app={editing}
+          key={edit.key}
+          open={edit.open}
+          onOpenChange={edit.onOpenChange}
+          app={edit.value}
           clusters={clusters.data ?? []}
         />
       ) : null}
