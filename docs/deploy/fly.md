@@ -184,7 +184,7 @@ fly logs --no-tail | grep setupToken
 | --- | --- | --- | --- |
 | `DATABASE_URL` | secret | PostgreSQL 18 连接串 | 必填。 |
 | `EDGEWEIR_MASTER_KEY` | secret | `openssl rand -base64 32` 的输出 | 必填。 |
-| `EDGEWEIR_PUBLIC_URL` | `[env]` | `https://edgeweir-console.fly.dev` | 使用自定义域名时改为该域名。 |
+| `EDGEWEIR_PUBLIC_URL` | `[env]` | `https://edgeweir-console.fly.dev` | 必填。使用自定义域名时改为该域名。 |
 | `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | 主机名须解析到独享 IPv4 与 IPv6；自动写入节点通道证书。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | `[env]` | 空 | 节点通道证书的额外名称，逗号分隔。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | — | 空 | 见 [限制](#限制)。 |

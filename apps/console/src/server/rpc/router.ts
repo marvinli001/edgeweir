@@ -735,7 +735,6 @@ export const router = os.router({
       consoleUrl: context.app.env.EDGEWEIR_PUBLIC_URL,
       nodeApiUrl: context.app.env.nodeApiUrl,
       nodeCaSha256: context.app.nodeCa.fingerprintSha256,
-      telemetryEnabled: context.app.env.EDGEWEIR_TELEMETRY,
       analyticsMode: context.app.env.EDGEWEIR_ANALYTICS,
       setupCompletedAt: await setupCompletedAt(context.app.db),
     })),

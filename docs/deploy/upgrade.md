@@ -145,6 +145,6 @@ API 变化，使用这些接口的集成需要修改：
    | 结果 | 回滚方式 |
    | --- | --- |
    | 无输出：未新增迁移 | 将 `EDGEWEIR_VERSION` 改回旧 tag，执行 `docker compose up -d`。`deploy.sh` 部署执行 `./deploy.sh update <旧 tag>`。 |
-   | 列出迁移文件 | 用升级前的备份恢复，以旧 tag 启动，见 [备份与恢复](backup.md)。 |
+   | 列出迁移文件 | 用升级前的备份恢复，以旧 tag 启动，见 [备份与恢复](backup.md)。`deploy.sh` 部署先把 `.env` 的 `EDGEWEIR_VERSION` 改回旧 tag，再执行 `./deploy.sh restore backups/<时间>-before-<新 tag>`。 |
 
 3. 验证：`curl -s http://127.0.0.1:3000/healthz` 的 `version` 为旧 tag。

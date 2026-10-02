@@ -1,6 +1,6 @@
 # deploy.sh reference
 
-Reference for the repository-root `deploy.sh`: commands, unattended variables, generated files, backup layout, and exit behavior.
+Reference for the repository-root `deploy.sh`: commands, unattended variables, generated files, backup layout, restore, and exit behavior.
 
 ## Requirements
 
@@ -26,6 +26,7 @@ Save the script to a file before running it: through a pipe (`curl … | bash`) 
 | `install` | — | Interactive install: choose the database mode, check the database, write `.env`, `compose.yml`, and the script copy, start and wait for health checks, print the setup token |
 | `update` (alias `upgrade`) | `[tag]` `[--no-backup]` | Back up, then upgrade to the given tag; without a tag, the dated tag behind `latest`. See [update](#update) |
 | `backup` | — | Back up the database, `.env` (without the master key), and compose file to `backups/<time>/`, keeping the newest 5. See [Backups](#backups) |
+| `restore` | `<backup>` `[--no-backup]` | Back up the current database, then replace it with the backup's `edgeweir.dump`; `.env` is left alone. See [restore](#restore) |
 | `config` | — | Change the console URL and node channel URL, then recreate the containers; interactive only |
 | `start` | — | Start the project and wait for health checks |
 | `stop` | — | `docker compose stop`; containers are kept |
@@ -97,7 +98,7 @@ When `EDGEWEIR_YES` is non-empty, or `/dev/tty` cannot be opened, the script rea
 
 | Variable | Values | Default | Effect |
 | --- | --- | --- | --- |
-| `EDGEWEIR_YES` | Any non-empty value | Empty | Enables unattended mode |
+| `EDGEWEIR_YES` | Any non-empty value | Empty | Enables unattended mode; an unattended `restore` requires it |
 | `EDGEWEIR_DB` | `host` \| `bundled` | `bundled` | Database mode; any other value aborts |
 | `DATABASE_URL` | `postgres://user:password@host:port/dbname[?sslmode=verify-full]` | — | Required in host mode |
 | `EDGEWEIR_PUBLIC_URL` | `https://host[:port]` | — | Required |
@@ -118,6 +119,7 @@ When `EDGEWEIR_YES` is non-empty, or `/dev/tty` cannot be opened, the script rea
 | `update` rollback confirmation | No: abort |
 | `update` replaces an edited compose file | No: the existing file is kept (an unedited one is replaced without asking) |
 | `update` replaces this script with the image's copy | Yes |
+| `restore` confirmation | Yes when `EDGEWEIR_YES` is set; without a terminal and without it: abort |
 | `config` | Not supported: abort |
 
 ```bash
@@ -277,7 +279,27 @@ Values are unquoted. Changing a key keeps the other lines and mode 600. Other va
 | Master key | Not in the backup: it is only in `.env` (or the file named by `EDGEWEIR_MASTER_KEY_FILE`); keep it offline separately, restoring the database needs it |
 | Scope | No ClickHouse data |
 
-Restore procedure: [backup.en.md](backup.en.md).
+Restore with [restore](#restore); manual restores and restore acceptance: [backup.en.md](backup.en.md).
+
+## restore
+
+`./deploy.sh restore <backup> [--no-backup]` replaces the deployment's database with a backup. `<backup>` is a backup directory (its `edgeweir.dump` is used) or a dump file, looked up as given, then relative to the deployment directory, then relative to `backups/`, e.g. `./deploy.sh restore 20261001-080000`.
+
+1. Check the backup: bundled starts `postgres` first; `pg_restore --list` must read it, and it must hold table data and `drizzle.__drizzle_migrations` (a console database), or the command aborts.
+2. host: the `DATABASE_URL` user must own the database (or be a superuser) and have `CREATEDB`, or the command aborts; [restore into a new database by hand](backup.en.md#external-postgresql) instead.
+3. Confirm, default no; unattended: see [confirmations](#unattended-install).
+4. Back up the current database to `backups/<time>-before-restore/` without removing older backups; `--no-backup` skips this. A failed backup aborts with the deployment unchanged.
+5. Stop `console`.
+6. Drop and recreate the database: `DROP DATABASE … WITH (FORCE)` and `CREATE DATABASE`. bundled runs them in the `postgres` container as `edgeweir`; host runs them with `postgres:18.6-alpine` against the `postgres` maintenance database, and the new database belongs to the `DATABASE_URL` user.
+7. Import with `pg_restore --exit-on-error --single-transaction --no-owner --no-privileges`.
+8. Start and wait for the health checks as `start` does.
+
+| Item | Rule |
+| --- | --- |
+| `.env` | Not changed; the backup's `env` is not used. The master key must be the one in use when the backup was made, or the console refuses to start |
+| Console version | Not older than at backup time: migrations only move forward |
+| Failed import | The database is empty and the console stays stopped; the `restore` command for the pre-restore backup is printed |
+| Nodes | Reconnect after the restore; publish one configuration change so they resync, see [Resynchronize nodes](backup.en.md#3-resynchronize-nodes) |
 
 ## Exit and abort behavior
 
@@ -292,6 +314,7 @@ Restore procedure: [backup.en.md](backup.en.md).
 | `install` before confirmation | Nothing is written to the install directory |
 | `install` fails to start | Files are kept and 「启动失败。修正 .env 后运行 ./deploy.sh start 重试。」 (startup failed; fix .env and run start) is printed; the directory now counts as a deployment and a second `install` is refused |
 | `update` fails to start | `.env` already points at the target version; recover with the printed rollback command or the backup |
+| `restore` import fails | The database is empty and the console stays stopped; restore the pre-restore backup with the printed command |
 | `setup-token` finds no token | Aborts: setup is complete, or the container has not started |
 
 `template` and `setup-token` write their result to standard output; progress, prompts, and errors go to standard error, in color when standard error is a terminal.

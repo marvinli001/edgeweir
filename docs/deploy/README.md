@@ -9,7 +9,6 @@
 | 控制台镜像 `ghcr.io/marvinli001/edgeweir` | linux/amd64、linux/arm64。一个 Node.js 进程：Web UI 与 API（`:3000`）、节点通道（`:8443`）、pg-boss worker；内含 `edgeweir-certd`（ACME 与 DNS 记录）。 | 是 |
 | PostgreSQL 18 | 唯一外部依赖。保存全部状态、pg-boss 队列、认证限速计数；LISTEN/NOTIFY 在实例间广播配置变更。 | 是 |
 | ClickHouse | 原始访问日志与分钟级统计，`EDGEWEIR_ANALYTICS=clickhouse` 时启用，见 [访问日志与 AccessKey](../guide/access-logs.md)。 | 否 |
-| Valkey | Compose profile `cache`，控制台目前未使用。 | 否 |
 | 边缘节点 | [edgeweir-node](https://github.com/marvinli001/edgeweir-node)，部署在独立主机，见 [接入节点](nodes.md)。 | — |
 
 ## 运行要求

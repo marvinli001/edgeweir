@@ -55,7 +55,7 @@ The only contract between console and node is the protobuf in `proto/`, managed 
 - Internal CA keys, certificate keys, S3 origin keys and DNS API credentials are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they reach the database; each ciphertext is bound to its row.
 - Enrollment tokens are single-use and stored as SHA-256 only; after enrollment every node RPC requires mTLS.
 - `/api/v1` accepts only `x-api-key`; `/rpc` accepts only the session cookie plus the CSRF header.
-- No vendor phone-home and no license checks. Telemetry is off by default; third-party telemetry is hard-disabled.
+- No vendor phone-home, no license checks and no telemetry; third-party telemetry is hard-disabled.
 
 Trust baseline, vulnerability reporting and release verification: [SECURITY.en.md](SECURITY.en.md).
 
@@ -80,6 +80,7 @@ umask 077
 cat > .env <<EOF
 EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
+EDGEWEIR_PUBLIC_URL=http://localhost:3000
 EOF
 
 docker compose pull        # build from source: docker compose up -d --build
@@ -91,20 +92,21 @@ Open <http://localhost:3000> (port 3000 listens on localhost only by default; ot
 
 ### Environment variables
 
-| Variable | Required | Description |
-| --- | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | Yes | Master key. Envelope-encrypts secrets at rest (internal CA key, certificate keys, S3 origin keys, DNS API credentials, setup token) and derives the session secret. **Back it up separately from the database; without it that data is unrecoverable.** |
-| `POSTGRES_PASSWORD` | Yes | Password of the bundled PostgreSQL. |
-| `BETTER_AUTH_SECRET` | No | Derived from the master key when unset. Deployments that set it must keep it; the console refuses to start once it is removed. |
+Required variables:
 
-All other variables have defaults; see [.env.example](.env.example). The node release source and the origin allow list are configured after setup in **System**; bans, platform protection and GeoIP in **Protection settings**; SMTP on the **Alerts** page.
+| Variable | Description |
+| --- | --- |
+| `EDGEWEIR_MASTER_KEY` or `EDGEWEIR_MASTER_KEY_FILE` | Master key, or a file holding it ([master key file](docs/deploy/docker.en.md#master-key-file)). Envelope-encrypts secrets at rest (internal CA key, certificate keys, S3 origin keys, DNS API credentials, setup token) and derives the session secret. **Back it up separately from the database; without it that data is unrecoverable.** |
+| `POSTGRES_PASSWORD` or `DATABASE_URL` | With Compose: password of the bundled PostgreSQL, from which `DATABASE_URL` is built. Without Compose: the PostgreSQL 18 connection string `DATABASE_URL`. |
+| `EDGEWEIR_PUBLIC_URL` | URL browsers use for the console; behind a reverse proxy, the proxy URL, e.g. `https://cdn-admin.example.com`. It must match the browser address bar or sign-in fails; with `http://localhost:3000` the generated node install commands point to localhost as well. |
+
+All other variables have defaults; see [.env.example](.env.example). `BETTER_AUTH_SECRET` is derived from the master key when unset; deployments that set it must keep it, or the console refuses to start. The node release source and the origin allow list are configured after setup in **System**; bans, platform protection and GeoIP in **Protection settings**; SMTP on the **Alerts** page.
 
 ### Optional components
 
 | Compose profile | Component | Description |
 | --- | --- | --- |
 | `analytics` | ClickHouse | With `EDGEWEIR_ANALYTICS=clickhouse`, stores raw access logs and per-minute statistics. Access-log sampling is off by default; logs are retained for 7 days. Console charts and alerts use PostgreSQL rollups. |
-| `cache` | Valkey | Not used by the console yet. |
 
 See [access logs and AccessKeys](docs/guide/access-logs.en.md) and [backup and recovery](docs/deploy/backup.en.md).
 

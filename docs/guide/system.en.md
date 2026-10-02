@@ -202,12 +202,12 @@ Page: **Audit log** (`/audit`). Management actions are written to the audit log.
 | --- | --- |
 | Time | When the action happened |
 | Actor | Type (**User**, **AccessKey**, **Service account**, **Node**, **Probe**, **System**), ID, name |
-| IP, User-Agent | Request origin; stored only in the `audit_log` table, not returned by the UI or the API. For how the IP is determined, see [Trusted proxies and client IP](../deploy/networking.en.md#trusted-proxies-and-client-ip) |
-| Action | For example `site.create` |
+| IP, User-Agent | Request origin; empty for actions no request carried (nodes, probes, the system). For how the IP is determined, see [Trusted proxies and client IP](../deploy/networking.en.md#trusted-proxies-and-client-ip) |
+| Action | A code such as `site.create`; the UI shows its name (e.g. **Site created**) |
 | Target | Type, ID, name; the name is recorded at the time of the action and stays readable after the target is deleted |
 | Metadata | JSON with the action's parameters and before/after values |
 
-The page shows **Time**, **Actor**, **Action**, and **Target**, 50 entries per page; filters for **Action**, **Target** type, and time range (**Any time**, **Last hour**, **Last 24 hours**, **Last 7 days**, **Last 30 days**). For reading it through `/api/v1`, see [API and endpoints](../reference/api.en.md).
+The page shows **Time**, **Actor**, **Action** (name and code), and **Target**, 50 entries per page; filters for **Action**, **Target** type, and time range (**Any time**, **Last hour**, **Last 24 hours**, **Last 7 days**, **Last 30 days**). **Details** at the end of a row shows every field: the full time, the actor and target IDs, IP, User-Agent, and the metadata as formatted JSON. Older codes without a name are shown as they are. `/api/v1` returns every field; see [API and endpoints](../reference/api.en.md).
 
 | Action prefix | Content |
 | --- | --- |
@@ -239,7 +239,6 @@ Read-only (card **System**).
 | **Node channel** | `EDGEWEIR_NODE_API_URL`; when unset, `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` |
 | **CA fingerprint** | SHA-256 of the node channel's internal CA; install commands carry the same value in `--ca-sha256` |
 | **Analytics** | `EDGEWEIR_ANALYTICS` (`lite` / `clickhouse`) |
-| **Telemetry** | `EDGEWEIR_TELEMETRY`; **Off** by default |
 | **Setup token** | **Not used** or **Used {time}** |
 | **OpenAPI** | `/api/v1/openapi.json` |
 

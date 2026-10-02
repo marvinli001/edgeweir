@@ -13,7 +13,6 @@ The `compose.yml` project name is `edgeweir`: the volume is `edgeweir_postgres-d
 | `console` | `ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}` | Default | `ROLE=all`; publishes `${EDGEWEIR_HTTP_PORT:-127.0.0.1:3000}:3000` and `${EDGEWEIR_NODE_API_PORT:-8443}:8443`; read-only root file system, `/tmp` on tmpfs, `no-new-privileges` |
 | `postgres` | `postgres:18.6-alpine` (pinned by digest) | Default | Volume `postgres-data` mounted at `/var/lib/postgresql`; no published port; `console` starts after the `pg_isready` health check passes |
 | `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine` (pinned by digest) | `--profile analytics` | Volume `clickhouse-data` |
-| `valkey` | `valkey/valkey:9.2-alpine` (pinned by digest) | `--profile cache` | Not used by the console yet |
 
 The image is public; pulling needs no login. Tag rules: [versions, upgrades, and rollback](upgrade.en.md).
 
@@ -92,9 +91,9 @@ Required variables:
 
 | Variable | Description |
 | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | Master key, from the previous step. The console refuses to start without it. |
-| `POSTGRES_PASSWORD` | Password of the bundled PostgreSQL. `compose.yml` builds `DATABASE_URL` from it and ignores the `DATABASE_URL` line in `.env`. Compose refuses to start without it; deployments created without it used `edgeweir`, so set that. |
-| `EDGEWEIR_PUBLIC_URL` | URL browsers use for the console, including scheme and port. Must match the browser address bar; otherwise sign-in fails the origin check. |
+| `EDGEWEIR_MASTER_KEY` or `EDGEWEIR_MASTER_KEY_FILE` | Master key, or a file holding it, from the previous step. The console refuses to start without it. |
+| `POSTGRES_PASSWORD` or `DATABASE_URL` | Password of the bundled PostgreSQL. `compose.yml` builds `DATABASE_URL` from it and ignores the `DATABASE_URL` line in `.env`. Compose refuses to start without it; deployments created without it used `edgeweir`, so set that. [Without Compose](#without-compose-standalone-containers), set `DATABASE_URL` instead. |
+| `EDGEWEIR_PUBLIC_URL` | URL browsers use for the console, including scheme and port. Must match the browser address bar; otherwise sign-in fails the origin check. Defaults to `http://localhost:3000`, which also points the generated node install commands to localhost. |
 
 Common optional variables (uncomment in `.env`):
 
@@ -158,7 +157,6 @@ Expected: `{"status":"ok","version":"<image tag>"}`; `console` is `healthy`.
 | Profile | Component | Enable |
 | --- | --- | --- |
 | `analytics` | ClickHouse: raw access logs and per-minute statistics | Set `EDGEWEIR_ANALYTICS=clickhouse` and `CLICKHOUSE_PASSWORD` in `.env` |
-| `cache` | Valkey | Not used by the console yet |
 
 ```bash
 docker compose --profile analytics up -d

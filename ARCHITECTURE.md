@@ -10,7 +10,6 @@
 | `edgeweir-certd` | `helpers/certd` | Go 编写的 ACME 与 DNS helper，随控制台镜像发布；worker 以子进程调用，经 stdin/stdout 交换 JSON，凭据不进入进程参数 |
 | PostgreSQL 18 | 外部服务 | 唯一必需的依赖：业务数据、迁移记录（schema `drizzle`）、pg-boss 队列（schema `pgboss`）、LISTEN/NOTIFY |
 | ClickHouse | Compose profile `analytics` | 可选；`EDGEWEIR_ANALYTICS=clickhouse` 时保存访问日志与分钟统计副本 |
-| Valkey | Compose profile `cache` | 控制台目前未使用 |
 | 节点 | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) | Go agent 与 OpenResty 数据面；经节点通道拉取配置与任务，上报状态、主机指标、统计与日志 |
 | 区域探针 | [edgeweir-node](https://github.com/marvinli001/edgeweir-node)（`probe` 模式） | 不运行 OpenResty；从所在区域探测节点的调度地址，经节点通道的 `ProbeService` 上报 |
 
@@ -348,8 +347,6 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | 小时统计 | 90 天 |
 | 天统计 | 365 天 |
 
-Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
-
 告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook、邮件、钉钉、企业微信或 Telegram）发送；订阅按渠道，覆盖一组网站（`alert_subscription_site`）或全部网站（`all_sites`）；投递时重新检查渠道是否启用与订阅是否仍然有效，「接收所有告警」的渠道接收全部告警。集群告警（配置金丝雀回滚、DNS 大面积摘除被阻止、调度规则作用于节点 `scheduling_action` 等）由各自的流程触发与解除，只投递到「接收所有告警」的渠道。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
 
 ## 后台任务
@@ -357,11 +354,13 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | 队列 | 调度 | 内容 |
 | --- | --- | --- |
 | `alerts.sweep` | 每分钟 | 告警检测与投递 |
+| `rollouts.evaluate` | 每分钟 | 求值进行中的配置金丝雀：推进、等待推进或回滚（金丝雀节点的心跳也触发求值） |
 | `dns.reconcile` | 每分钟 | DNS 调度发布与外部记录维护 |
-| `traffic.rollup` | 每分钟 | 流量汇总与清理（含 L4 应用的分钟统计）、访问日志分区维护、升级任务到期 |
+| `traffic.rollup` | 每分钟 | 流量汇总与清理（含 L4 应用的分钟统计）、用量汇总与保留期清理、访问日志分区维护、升级任务到期；一项失败不影响其他各项 |
 | `certificates.sweep` | 每分钟 | 证书签发与续期 |
 | `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
-| `maintenance.prune-revisions` | 每小时第 17 分 | 删除超出保留数量的 revision |
+| `maintenance.prune-revisions` | 每小时第 17 分 | 删除超出保留数量的 revision 与 DNS 版本 |
+| `maintenance.prune-idempotency-keys` | 每小时第 29 分 | 删除过期（超过 24 小时）的幂等键 |
 | `maintenance.expire-cache-tasks` | 每小时第 43 分 | 把超期未完成的刷新预热交付记为失败 |
 | `maintenance.expire-enrollment-tokens` | 每 30 分钟 | 删除过期或使用超过 7 天的注册 token |
 | `maintenance.prune-bans` | 每 10 分钟 | 删除到期超过一小时的封禁 |

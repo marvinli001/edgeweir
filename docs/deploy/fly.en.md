@@ -184,7 +184,7 @@ fly logs --no-tail | grep setupToken
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Secret | PostgreSQL 18 connection string | Required. |
 | `EDGEWEIR_MASTER_KEY` | Secret | Output of `openssl rand -base64 32` | Required. |
-| `EDGEWEIR_PUBLIC_URL` | `[env]` | `https://edgeweir-console.fly.dev` | With a custom domain, use that domain. |
+| `EDGEWEIR_PUBLIC_URL` | `[env]` | `https://edgeweir-console.fly.dev` | Required. With a custom domain, use that domain. |
 | `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | The host name must resolve to the dedicated IPv4 and IPv6; it is added to the node channel certificate automatically. |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | `[env]` | Empty | Extra names for the node channel certificate, comma separated. |
 | `EDGEWEIR_TRUSTED_PROXIES` | — | Empty | See [Limits](#limits). |

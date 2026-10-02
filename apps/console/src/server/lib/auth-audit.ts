@@ -103,7 +103,11 @@ async function afterAuthEndpoint(db: Database, ctx: HookContext): Promise<void> 
 
   if (failed || !sessionUser) return;
   const actor = actorFrom(ctx, sessionUser);
-  const self = { targetType: "user", targetId: sessionUser.id, targetName: sessionUser.name ?? "" };
+  const self = {
+    targetType: "user" as const,
+    targetId: sessionUser.id,
+    targetName: sessionUser.name ?? "",
+  };
   const result = (returned ?? {}) as Record<string, unknown>;
   switch (path) {
     case "/change-password":

@@ -1,11 +1,10 @@
 # Edgeweir console + PostgreSQL 18.
 #   docker compose up -d                        # console + postgres
 #   docker compose --profile analytics up -d    # + ClickHouse
-#   docker compose --profile cache up -d        # + Valkey
 # Secrets come from .env (see .env.example): compose refuses to start without
 # POSTGRES_PASSWORD, the console without EDGEWEIR_MASTER_KEY; the session secret
 # is derived from it unless BETTER_AUTH_SECRET is set (deployments that set it
-# keep it). Local changes go into compose.override.yml, which compose merges.
+# keep it). EDGEWEIR_PUBLIC_URL is the URL browsers use. Local changes go into compose.override.yml, which compose merges.
 # The console image is pulled from ghcr.io (rolling <YYYYMMDD>-<commit> tags,
 # pinned with EDGEWEIR_VERSION); `docker compose up -d --build` builds it from
 # this checkout instead.
@@ -29,7 +28,6 @@ x-console-env: &console-env
   # Fallbacks for existing deployments: a value saved in 系统设置 wins.
   EDGEWEIR_NODE_RELEASE_BASE_URL: ${EDGEWEIR_NODE_RELEASE_BASE_URL:-}
   EDGEWEIR_SMTP_CA_FILE: ${EDGEWEIR_SMTP_CA_FILE:-}
-  EDGEWEIR_TELEMETRY: ${EDGEWEIR_TELEMETRY:-false}
   LOG_LEVEL: ${LOG_LEVEL:-info}
   # Release mirror for install.sh; mount it below (see docs/deploy/nodes.md).
   EDGEWEIR_DOWNLOADS_DIR: ${EDGEWEIR_DOWNLOADS_DIR:-}
@@ -96,12 +94,6 @@ services:
       nofile:
         soft: 262144
         hard: 262144
-
-  valkey:
-    image: valkey/valkey:9.2-alpine@sha256:cdcb7b1c7b6f1c9cb9442c71ac6275e78184657448407b2c1fdde7ee8024f4fb
-    profiles: ["cache"]
-    restart: unless-stopped
-    command: ["valkey-server", "--save", "", "--appendonly", "no"]
 
 volumes:
   postgres-data:

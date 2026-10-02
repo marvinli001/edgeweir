@@ -891,7 +891,6 @@ export const settings = z.object({
   consoleUrl: z.string(),
   nodeApiUrl: z.string(),
   nodeCaSha256: z.string(),
-  telemetryEnabled: z.boolean(),
   analyticsMode: z.enum(["lite", "clickhouse"]),
   /** When the setup wizard consumed the one-time setup token. */
   setupCompletedAt: isoDateTime.nullable(),
@@ -935,6 +934,9 @@ export const auditLogEntry = z.object({
   actorType: z.string(),
   actorId: z.string(),
   actorName: z.string(),
+  /** Client address and user agent of the request; empty when no request carried the action. */
+  ip: z.string(),
+  userAgent: z.string(),
   action: z.string(),
   targetType: z.string(),
   targetId: z.string(),

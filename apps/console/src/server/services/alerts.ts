@@ -322,7 +322,7 @@ async function setSubscriptionSites(tx: Executor, sub: Subscription, input: Subs
     await tx.insert(member).values(ids.map((siteId) => ({ subscriptionId: sub.id, siteId })));
 }
 const subscriptionAudit = (sub: Subscription, input: SubscriptionFields, channelName: string) => ({
-  targetType: "alert_subscription",
+  targetType: "alert_subscription" as const,
   targetId: sub.id,
   targetName: channelName,
   metadata: {

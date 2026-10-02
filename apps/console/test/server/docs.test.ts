@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { schema } from "@edgeweir/db";
 import { getTableName, is, Table } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { QUEUES } from "../../src/server/jobs/worker";
 
 // Documentation-consistency checks for the wrap-up audit items that only
 // touched documents (dev-docs/audits/2026-09-25-wrapup.md CP-H8 and CP-M11).
@@ -26,13 +27,6 @@ function sentences(text: string): string[] {
   return text
     .split(/[。！？!?|\n]|\.(?=\s|$)/)
     .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function paragraphs(text: string): string[] {
-  return text
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
     .filter(Boolean);
 }
 
@@ -144,10 +138,7 @@ describe("CP-H8: SSH credentials are never stored", () => {
 
 const STATUS_DOCS = ["README.md", "README.en.md", "ARCHITECTURE.md"];
 
-describe("CP-M11: README.md, README.en.md and ARCHITECTURE.md describe what is not built yet", () => {
-  const NOT_USED = /does not use|doesn't use|not used|不使用|未使用|没有使用/i;
-  const LATER = /\byet\b|目前|尚未|later|后续|将来|以后/i;
-
+describe("CP-M11: README.md, README.en.md and ARCHITECTURE.md describe what is built", () => {
   it.each(STATUS_DOCS)("%s documents the active ACME helper and its process boundary", (file) => {
     const text = read(file);
     expect(text).toMatch(/certd/);
@@ -160,19 +151,32 @@ describe("CP-M11: README.md, README.en.md and ARCHITECTURE.md describe what is n
     ).toEqual([]);
   });
 
-  it.each(STATUS_DOCS)(
-    "%s describes optional ClickHouse logs while Valkey remains unused",
-    (file) => {
-      const text = read(file);
-      expect(text).toContain("EDGEWEIR_ANALYTICS=clickhouse");
-      expect(text).toMatch(/sampl|采样/i);
-      expect(text).toMatch(/7 days|7 天/);
-      const valkey = paragraphs(text).filter((p) => /Valkey/.test(p));
-      expect(valkey.length).toBeGreaterThan(0);
-      expect(valkey.every((p) => NOT_USED.test(p) && LATER.test(p))).toBe(true);
-      expect(text).not.toMatch(/console does not use either yet|控制台目前都不使用/);
-    },
-  );
+  it.each(STATUS_DOCS)("%s describes the optional ClickHouse logs", (file) => {
+    const text = read(file);
+    expect(text).toContain("EDGEWEIR_ANALYTICS=clickhouse");
+    expect(text).toMatch(/sampl|采样/i);
+    expect(text).toMatch(/7 days|7 天/);
+    expect(text).not.toMatch(/console does not use either yet|控制台目前都不使用/);
+  });
+});
+
+// --- U-14 --------------------------------------------------------------------
+
+describe("U-14: no Valkey, which the console never used", () => {
+  it("compose.yml has no valkey service and no cache profile", () => {
+    const compose = read("compose.yml");
+    // The indented lines under the top-level "services:" key.
+    const services = /^services:\n((?: .*\n|\n)*)/m.exec(compose)?.[1] ?? "";
+    expect(services).toMatch(/^ {2}console:$/m);
+    expect(services).not.toMatch(/^ {2}valkey:$/m);
+    expect(compose).not.toMatch(/valkey|\bprofiles: \["cache"\]|--profile cache/i);
+  });
+
+  it("no published document offers it", () => {
+    const files = globSync(["README*.md", "ARCHITECTURE*.md", "docs/**/*.md"], { cwd: repo });
+    expect(files).toContain("docs/deploy/docker.md");
+    for (const file of files) expect(read(file), file).not.toMatch(/valkey/i);
+  });
 });
 
 describe("CP-M11: ARCHITECTURE.md data model matches packages/db", () => {
@@ -289,5 +293,84 @@ describe.runIf(hasDevDocs)("CP-M11: dev-docs/adr/README.md index", () => {
       });
       expect(heading?.[1], file).toBe(file.slice(0, 4));
     }
+  });
+});
+
+// --- U-14 --------------------------------------------------------------------
+
+/** The required variables, each with the alternative that replaces it. */
+const REQUIRED_VARIABLES = [
+  ["EDGEWEIR_MASTER_KEY", "EDGEWEIR_MASTER_KEY_FILE"],
+  ["POSTGRES_PASSWORD", "DATABASE_URL"],
+  ["EDGEWEIR_PUBLIC_URL"],
+];
+const VARIABLE = /`([A-Z][A-Z0-9_]*)`/g;
+
+/** The rows of the Markdown table that follows the line matching `label`. */
+function tableAfter(text: string, label: RegExp): string[] {
+  const lines = text.split("\n");
+  const start = lines.findIndex((l) => label.test(l));
+  if (start < 0) return [];
+  let i = start + 1;
+  while (i < lines.length && !lines[i]?.startsWith("|")) i++;
+  const rows: string[] = [];
+  while (i < lines.length && lines[i]?.startsWith("|")) rows.push(lines[i++] ?? "");
+  return rows.slice(2);
+}
+
+/** The variables named in the first cell of each row. */
+function firstCellVariables(rows: string[]): string[][] {
+  return rows.map((row) =>
+    [...(row.split("|")[1] ?? "").matchAll(VARIABLE)].map((m) => m[1] ?? ""),
+  );
+}
+
+describe("U-14: the deployment documents agree on the required variables", () => {
+  it.each([
+    ["README.md", /^必填变量：$/],
+    ["README.en.md", /^Required variables:$/],
+    ["docs/deploy/docker.md", /^必填变量：$/],
+    ["docs/deploy/docker.en.md", /^Required variables:$/],
+  ])("%s lists them", (file, label) => {
+    expect(firstCellVariables(tableAfter(read(file), label))).toEqual(REQUIRED_VARIABLES);
+  });
+
+  it.each([
+    ["docs/reference/environment.md", /^## 必需$/],
+    ["docs/reference/environment.en.md", /^## Required$/],
+  ])("%s lists the console's own and names POSTGRES_PASSWORD", (file, heading) => {
+    const required = section(read(file), new RegExp(heading.source, "m"));
+    expect(firstCellVariables(tableAfter(required, heading)).flat().sort()).toEqual(
+      REQUIRED_VARIABLES.flat()
+        .filter((name) => name !== "POSTGRES_PASSWORD")
+        .sort(),
+    );
+    expect(required).toContain("`POSTGRES_PASSWORD`");
+  });
+
+  it(".env.example's required block holds them and nothing else", () => {
+    const text = read(".env.example");
+    const block = text.slice(text.indexOf("# --- Required"), text.indexOf("# --- Optional"));
+    const assigned = [...block.matchAll(/^#?\s*([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]);
+    expect(assigned.sort()).toEqual(REQUIRED_VARIABLES.flat().sort());
+  });
+
+  it.each(["README.md", "README.en.md"])("the quick start of %s writes them to .env", (file) => {
+    const heredoc = /cat > \.env <<EOF\n([\s\S]*?)\nEOF/.exec(read(file))?.[1] ?? "";
+    const written = [...heredoc.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]);
+    expect(written).toEqual(REQUIRED_VARIABLES.map(([name]) => name));
+  });
+});
+
+// --- U-16 --------------------------------------------------------------------
+
+describe("U-16: ARCHITECTURE lists every background queue", () => {
+  it.each([
+    ["ARCHITECTURE.md", /^## 后台任务$/m],
+    ["ARCHITECTURE.en.md", /^## Background jobs$/m],
+  ])("%s has a row for each queue the worker creates", (file, heading) => {
+    const jobs = section(read(file), heading);
+    expect(jobs).not.toBe("");
+    for (const queue of Object.values(QUEUES)) expect(jobs, queue).toContain(`| \`${queue}\` |`);
   });
 });

@@ -13,7 +13,6 @@
 | `console` | `ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}` | 默认 | `ROLE=all`；发布 `${EDGEWEIR_HTTP_PORT:-127.0.0.1:3000}:3000` 与 `${EDGEWEIR_NODE_API_PORT:-8443}:8443`；只读根文件系统、`/tmp` 为 tmpfs、`no-new-privileges` |
 | `postgres` | `postgres:18.6-alpine`（按 digest 固定） | 默认 | 卷 `postgres-data` 挂载到 `/var/lib/postgresql`；端口不发布；`pg_isready` 健康检查通过后 `console` 才启动 |
 | `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine`（按 digest 固定） | `--profile analytics` | 卷 `clickhouse-data` |
-| `valkey` | `valkey/valkey:9.2-alpine`（按 digest 固定） | `--profile cache` | 控制台目前未使用 |
 
 镜像公开，拉取无需登录。tag 规则见 [版本、升级与回滚](upgrade.md)。
 
@@ -92,9 +91,9 @@ sed -i "s|^EDGEWEIR_PUBLIC_URL=.*|EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.
 
 | 变量 | 说明 |
 | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | 主密钥，见上一步。缺失时控制台拒绝启动。 |
-| `POSTGRES_PASSWORD` | 内置 PostgreSQL 的密码。`compose.yml` 由它拼出 `DATABASE_URL`，忽略 `.env` 中的 `DATABASE_URL` 行。未设置时 Compose 拒绝启动；早先未设置的部署用的是 `edgeweir`，填入它即可。 |
-| `EDGEWEIR_PUBLIC_URL` | 浏览器访问控制台的地址，含协议与端口。须与浏览器地址栏一致，否则登录因来源校验失败。 |
+| `EDGEWEIR_MASTER_KEY` 或 `EDGEWEIR_MASTER_KEY_FILE` | 主密钥，或存放主密钥的文件，见上一步。缺失时控制台拒绝启动。 |
+| `POSTGRES_PASSWORD` 或 `DATABASE_URL` | 内置 PostgreSQL 的密码。`compose.yml` 由它拼出 `DATABASE_URL`，忽略 `.env` 中的 `DATABASE_URL` 行。未设置时 Compose 拒绝启动；早先未设置的部署用的是 `edgeweir`，填入它即可。[不用 Compose](#不用-compose单独的容器) 时改设 `DATABASE_URL`。 |
+| `EDGEWEIR_PUBLIC_URL` | 浏览器访问控制台的地址，含协议与端口。须与浏览器地址栏一致，否则登录因来源校验失败。默认 `http://localhost:3000`，此时生成的节点安装命令也指向本机。 |
 
 常用可选变量（在 `.env` 中取消注释后填写）：
 
@@ -158,7 +157,6 @@ docker compose ps
 | Profile | 组件 | 启用 |
 | --- | --- | --- |
 | `analytics` | ClickHouse：原始访问日志与分钟级统计 | `.env` 设置 `EDGEWEIR_ANALYTICS=clickhouse` 与 `CLICKHOUSE_PASSWORD` |
-| `cache` | Valkey | 控制台目前未使用 |
 
 ```bash
 docker compose --profile analytics up -d

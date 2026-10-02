@@ -55,7 +55,7 @@
 - 内部 CA 私钥、证书私钥、S3 源站密钥、DNS API 凭据经 `EDGEWEIR_MASTER_KEY` 信封加密后入库，密文与所属记录绑定。
 - 节点注册 token 单次有效，仅存储 SHA-256；注册完成后节点 RPC 一律使用 mTLS。
 - `/api/v1` 仅接受 `x-api-key`；`/rpc` 仅接受会话 Cookie 与 CSRF 请求头。
-- 无厂商回连，无许可证校验；遥测默认关闭，第三方依赖的遥测强制关闭。
+- 无厂商回连，无许可证校验，不发送遥测；第三方依赖的遥测强制关闭。
 
 信任基线、漏洞报告与发布物校验见 [SECURITY.md](SECURITY.md)。
 
@@ -80,6 +80,7 @@ umask 077
 cat > .env <<EOF
 EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
+EDGEWEIR_PUBLIC_URL=http://localhost:3000
 EOF
 
 docker compose pull        # 从源码构建：docker compose up -d --build
@@ -91,20 +92,21 @@ docker compose logs console | grep setupToken
 
 ### 环境变量
 
-| 变量 | 必填 | 说明 |
-| --- | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | 是 | 主密钥，用于信封加密入库的敏感数据（内部 CA 私钥、证书私钥、S3 源站密钥、DNS API 凭据、setup token）并派生会话密钥。**须与数据库备份分开保存，丢失后上述数据不可恢复。** |
-| `POSTGRES_PASSWORD` | 是 | 内置 PostgreSQL 密码。 |
-| `BETTER_AUTH_SECRET` | 否 | 未设置时由主密钥派生。已设置的部署不得移除，否则控制台拒绝启动。 |
+必填变量：
 
-其余变量均有默认值，完整列表见 [.env.example](.env.example)。节点发布源与源站地址允许清单在初始化后于 **系统设置** 配置，封禁、全局防护与 GeoIP 在 **防护设置**，SMTP 在 **告警** 页。
+| 变量 | 说明 |
+| --- | --- |
+| `EDGEWEIR_MASTER_KEY` 或 `EDGEWEIR_MASTER_KEY_FILE` | 主密钥，或存放主密钥的文件（[主密钥文件](docs/deploy/docker.md#主密钥文件)）。用于信封加密入库的敏感数据（内部 CA 私钥、证书私钥、S3 源站密钥、DNS API 凭据、setup token）并派生会话密钥。**须与数据库备份分开保存，丢失后上述数据不可恢复。** |
+| `POSTGRES_PASSWORD` 或 `DATABASE_URL` | 使用 Compose：内置 PostgreSQL 的密码，`DATABASE_URL` 由它拼出。不用 Compose：PostgreSQL 18 连接串 `DATABASE_URL`。 |
+| `EDGEWEIR_PUBLIC_URL` | 浏览器访问控制台的地址，在反向代理后为代理地址，如 `https://cdn-admin.example.com`。须与浏览器地址栏一致，否则登录失败；保留 `http://localhost:3000` 时生成的节点安装命令也指向本机。 |
+
+其余变量均有默认值，完整列表见 [.env.example](.env.example)。`BETTER_AUTH_SECRET` 未设置时由主密钥派生；已设置的部署不得移除，否则控制台拒绝启动。节点发布源与源站地址允许清单在初始化后于 **系统设置** 配置，封禁、全局防护与 GeoIP 在 **防护设置**，SMTP 在 **告警** 页。
 
 ### 可选组件
 
 | Compose profile | 组件 | 说明 |
 | --- | --- | --- |
 | `analytics` | ClickHouse | 配合 `EDGEWEIR_ANALYTICS=clickhouse` 启用原始访问日志与分钟级统计。访问日志采样默认关闭，保留 7 天。控制台图表与告警使用 PostgreSQL 汇总数据。 |
-| `cache` | Valkey | 控制台目前未使用。 |
 
 详见 [访问日志与 AccessKey](docs/guide/access-logs.md)、[备份与恢复](docs/deploy/backup.md)。
 

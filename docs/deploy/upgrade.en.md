@@ -145,6 +145,6 @@ API changes; integrations that use these must change:
    | Result | Rollback |
    | --- | --- |
    | No output: no new migrations | Set `EDGEWEIR_VERSION` back to the old tag and run `docker compose up -d`. With `deploy.sh`, run `./deploy.sh update <old tag>`. |
-   | Migration files listed | Restore the pre-upgrade backup and start the old tag; see [backup and recovery](backup.en.md). |
+   | Migration files listed | Restore the pre-upgrade backup and start the old tag; see [backup and recovery](backup.en.md). With `deploy.sh`, set `EDGEWEIR_VERSION` in `.env` back to the old tag, then run `./deploy.sh restore backups/<time>-before-<new tag>`. |
 
 3. Verify: `version` from `curl -s http://127.0.0.1:3000/healthz` is the old tag.

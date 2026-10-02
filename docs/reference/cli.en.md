@@ -95,7 +95,6 @@ Run in the directory of `compose.yml`; add `-f <file>` for other Compose files.
 | Recover the account (reset the password, turn two-factor off) | `docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor`, see [Account recovery](#account-recovery) |
 | Pull the image set by `EDGEWEIR_VERSION` and recreate | `docker compose pull && docker compose up -d` |
 | Start ClickHouse | `docker compose --profile analytics up -d` |
-| Start Valkey (not used by the console yet) | `docker compose --profile cache up -d` |
 
 > [!WARNING]
 > `docker compose down -v` removes named volumes such as `postgres-data`, that is, all data.

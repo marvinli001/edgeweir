@@ -9,7 +9,6 @@ Console components, runtime requirements, supported platforms, and process roles
 | Console image `ghcr.io/marvinli001/edgeweir` | linux/amd64, linux/arm64. One Node.js process: web UI and API (`:3000`), node channel (`:8443`), pg-boss worker; ships `edgeweir-certd` (ACME and DNS records). | Yes |
 | PostgreSQL 18 | Only external dependency. Holds all state, the pg-boss queues, and the sign-in rate-limit counters; LISTEN/NOTIFY broadcasts configuration changes between instances. | Yes |
 | ClickHouse | Raw access logs and per-minute statistics, enabled with `EDGEWEIR_ANALYTICS=clickhouse`; see [access logs and AccessKeys](../guide/access-logs.en.md). | No |
-| Valkey | Compose profile `cache`; not used by the console yet. | No |
 | Edge nodes | [edgeweir-node](https://github.com/marvinli001/edgeweir-node) on separate hosts; see [adding nodes](nodes.en.md). | — |
 
 ## Runtime requirements

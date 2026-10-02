@@ -57,6 +57,16 @@ grep -c 'TABLE DATA' edgeweir.dump.list
 | 控制台版本 | 与备份相同或更新：迁移只向前执行。 |
 | 后台任务 | 同一时间只允许一个恢复环境对真实 DNS 服务商与通知渠道执行后台任务；演练使用本地模拟服务。 |
 
+### deploy.sh
+
+`deploy.sh` 部署在部署目录执行：
+
+```bash
+./deploy.sh restore backups/20261001-080000
+```
+
+先备份当前数据库，停止控制台，删除并重建数据库，导入备份中的 `edgeweir.dump`，再启动并等待健康检查。`.env` 不变，其中须为上表的主密钥。前提与失败时的行为见 [deploy.sh 参考](deploy-script.md#restore)。
+
 ### Docker Compose
 
 在新主机或新的 Compose 项目中执行：

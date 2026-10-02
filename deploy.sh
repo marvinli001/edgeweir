@@ -246,11 +246,16 @@ db_url() {
 
 is_loopback() { [[ $1 == 127.* || $1 == localhost || $1 == ::1 ]]; }
 
-# pg_client <command>...: runs a PostgreSQL client on the host network with the
-# DB_* connection. The password travels in the environment, never in argv.
+# pg_client [--stdin] <command>...: runs a PostgreSQL client on the host network
+# with the DB_* connection; --stdin hands it this script's standard input. The
+# password travels in the environment, never in argv.
 pg_client() {
   local args=(--rm --network host -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE -e PGCONNECT_TIMEOUT=8)
   local sslmode ca=''
+  if [[ ${1:-} == --stdin ]]; then
+    args+=(-i)
+    shift
+  fi
   # The console uses node-postgres: no sslmode means no TLS, no-verify encrypts
   # without checking, and every other mode verifies the certificate and name.
   case $DB_SSLMODE in
@@ -921,11 +926,14 @@ prune_backups() {
 }
 
 # backup [label]: database dump plus .env (without the master key) and the
-# compose files, into backups/<time>; keeps the newest EDGEWEIR_BACKUP_KEEP.
+# compose files, into backups/<time> (LAST_BACKUP); keeps the newest
+# EDGEWEIR_BACKUP_KEEP.
+LAST_BACKUP=''
 cmd_backup() {
   local dest keep f
   keep=$(backup_keep)
   dest=$DIR/backups/$(date +%Y%m%d-%H%M%S)${1:+-$1}
+  LAST_BACKUP=$dest
   mkdir -p "$DIR/backups"
   chmod 700 "$DIR/backups"
   mkdir -m 700 "$dest"
@@ -946,8 +954,127 @@ cmd_backup() {
     if [[ -f $DIR/$f ]]; then install -m 600 "$DIR/$f" "$dest/$f"; fi
   done
   ok "edgeweir.dump（$(du -h "$dest/edgeweir.dump" | awk '{print $1}')）、env、${COMPOSE_FILE}"
-  info "备份不含主密钥（EDGEWEIR_MASTER_KEY）：它只在 ${DIR}/.env 里，另行离线保存；恢复步骤见 docs/deploy/backup.md。"
+  info "备份不含主密钥（EDGEWEIR_MASTER_KEY）：它只在 ${DIR}/.env 里，另行离线保存；恢复用 ./deploy.sh restore（docs/deploy/backup.md）。"
   prune_backups "$keep"
+}
+
+# restore_dump <path>: the edgeweir.dump a restore argument names: a backup
+# directory or a dump file, as given, in the deployment directory, or in backups/.
+restore_dump() {
+  local base candidate
+  for base in "" "$DIR/" "$DIR/backups/"; do
+    [[ -n $base && $1 == /* ]] && continue
+    candidate=$base$1
+    [[ -d $candidate ]] && candidate=${candidate%/}/edgeweir.dump
+    if [[ -f $candidate ]]; then
+      printf '%s/%s' "$(cd "$(dirname "$candidate")" && pwd)" "$(basename "$candidate")"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# restore_list <dump>: pg_restore --list of the dump, read by the deployment's
+# PostgreSQL client (the bundled container, or the image host mode uses).
+restore_list() {
+  if [[ $(deploy_mode) == host ]]; then
+    pg_client --stdin pg_restore --list <"$1"
+  else
+    compose exec -T postgres pg_restore --list <"$1"
+  fi
+}
+
+# restore_privileges: host mode only; "t t" when the DATABASE_URL user may drop
+# the database (owner or superuser) and create it again (CREATEDB or superuser).
+restore_privileges() {
+  pg_client psql -XAtq -F ' ' -c "select pg_has_role(d.datdba, 'MEMBER') or r.rolsuper, r.rolcreatedb or r.rolsuper from pg_database d, pg_roles r where d.datname = current_database() and r.rolname = current_user"
+}
+
+# recreate_database: drops the console's database and creates it empty, owned
+# by the user the console connects as.
+recreate_database() {
+  local sql='DROP DATABASE IF EXISTS :"db" WITH (FORCE);
+CREATE DATABASE :"db";'
+  if [[ $(deploy_mode) == host ]]; then
+    pg_client --stdin psql -X -q -v ON_ERROR_STOP=1 -v db="$DB_NAME" -d postgres <<<"$sql"
+  else
+    compose exec -T postgres psql -X -q -v ON_ERROR_STOP=1 -v db=edgeweir -U edgeweir -d postgres <<<"$sql"
+  fi
+}
+
+# load_dump <dump>: pg_restore into the empty database, in one transaction.
+load_dump() {
+  local flags=(--exit-on-error --single-transaction --no-owner --no-privileges)
+  if [[ $(deploy_mode) == host ]]; then
+    pg_client --stdin pg_restore "${flags[@]}" --dbname="$DB_NAME" <"$1"
+  else
+    compose exec -T postgres pg_restore "${flags[@]}" -U edgeweir --dbname=edgeweir <"$1"
+  fi
+}
+
+# restore <backup> [--no-backup]: replaces the database with a backup's dump.
+# .env stays as it is: the backup's copy has no master key, and the master key
+# in .env must be the one the dump's secrets were encrypted with.
+cmd_restore() {
+  local source='' skip_backup='' arg dump list tables privileges
+  for arg in "$@"; do
+    case $arg in
+      --no-backup) skip_backup=1 ;;
+      -*) die "未知参数：${arg}" ;;
+      *)
+        [[ -z $source ]] || die "只能指定一个备份。"
+        source=$arg
+        ;;
+    esac
+  done
+  [[ -n $source ]] || die "用法：./deploy.sh restore <备份目录>，例如 ./deploy.sh restore backups/20261001-080000"
+  dump=$(restore_dump "$source") || die "找不到备份 ${source}（备份目录里的 edgeweir.dump，或 dump 文件本身）。"
+
+  step "检查备份 ${dump}"
+  if [[ $(deploy_mode) == host ]]; then
+    db_parse "$(env_get DATABASE_URL)" || die ".env 里的 DATABASE_URL 无法解析，不能恢复。"
+  else
+    compose up -d --wait postgres || die "数据库容器没有启动。"
+  fi
+  list=$(restore_list "$dump") || die "${dump} 不是 pg_dump --format=custom 的备份（pg_restore --list 失败）。"
+  tables=$(grep -c ' TABLE DATA ' <<<"$list" || true)
+  if ((tables == 0)) || ! grep -q '__drizzle_migrations' <<<"$list"; then
+    die "${dump} 不是 Edgeweir 控制台数据库的备份。"
+  fi
+  ok "pg_dump 备份，${tables} 张表的数据"
+  if [[ $(deploy_mode) == host ]]; then
+    privileges=$(restore_privileges) || die "无法连接 ${DB_HOST}:${DB_PORT}/${DB_NAME}。"
+    if [[ $privileges != "t t" ]]; then
+      warn "用户 ${DB_USER} 不能删除并重建数据库 ${DB_NAME}（需要是数据库所有者，并有 CREATEDB 权限）。"
+      die "改为手动恢复到新数据库并修改 DATABASE_URL，见 docs/deploy/backup.md。"
+    fi
+  fi
+
+  warn "数据库 ${DB_NAME:-edgeweir} 的全部内容将被备份中的数据替换，控制台在恢复期间停止。"
+  info ".env 保持不变：其中的主密钥必须是备份时使用的主密钥，控制台版本不得早于备份时的版本。"
+  if [[ -n $INTERACTIVE ]]; then
+    confirm "恢复这个备份？" n || die "已取消。"
+  elif [[ -z ${EDGEWEIR_YES:-} ]]; then
+    die "恢复需要确认：在终端里运行，或设置 EDGEWEIR_YES=1。"
+  fi
+
+  if [[ -z $skip_backup ]]; then
+    # Keep every backup: pruning could remove the one being restored.
+    EDGEWEIR_BACKUP_KEEP=0 cmd_backup before-restore
+  else
+    warn "跳过恢复前的备份。"
+  fi
+  step "恢复"
+  compose stop console
+  recreate_database || die "重建数据库失败，控制台保持停止。${LAST_BACKUP:+恢复前的数据在 ${LAST_BACKUP}。}"
+  if ! load_dump "$dump"; then
+    warn "导入失败，数据库为空，控制台保持停止。"
+    die "修正问题后重新运行 ./deploy.sh restore ${source}${LAST_BACKUP:+；恢复前的数据：./deploy.sh restore ${LAST_BACKUP} --no-backup}。"
+  fi
+  ok "已导入 ${dump}"
+  up_and_wait
+  ok "已恢复，版本 $(running_version)"
+  info "节点会重新连接；之后发布一次配置让节点同步，见 docs/deploy/backup.md。"
 }
 
 # update_template [no-backup]: replaces the compose file with this script's
@@ -1152,6 +1279,7 @@ usage() {
   install            对话式安装（选择数据库方式、生成 .env、启动）
   update [tag]       备份后升级到最新版本或指定 tag（--no-backup 跳过备份）
   backup             备份数据库、.env（不含主密钥）和编排文件到 backups/，保留最近 5 份
+  restore <备份>     先备份当前数据库，再用备份目录里的 edgeweir.dump 替换数据库（.env 不变；--no-backup 跳过备份）
   config             修改控制台地址和节点通道地址
   start | stop | restart
   status             容器状态和运行中的版本
@@ -1178,6 +1306,11 @@ main() {
       preflight
       find_dir
       cmd_backup
+      ;;
+    restore)
+      preflight
+      find_dir
+      cmd_restore "$@"
       ;;
     start)
       preflight

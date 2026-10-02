@@ -59,13 +59,6 @@ function SystemSettingsPage() {
               <Row label={m.system_analytics()}>
                 <Badge variant="outline">{settings.data.analyticsMode}</Badge>
               </Row>
-              <Row label={m.system_telemetry()}>
-                <Badge variant="secondary">
-                  {settings.data.telemetryEnabled
-                    ? m.system_telemetry_on()
-                    : m.system_telemetry_off()}
-                </Badge>
-              </Row>
               <Row label={m.system_setup_token()}>
                 <Badge variant="secondary" data-testid="setup-token-state">
                   {settings.data.setupCompletedAt

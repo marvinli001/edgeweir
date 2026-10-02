@@ -255,6 +255,147 @@ describe("deploy.sh", () => {
     });
   });
 
+  describe("restore (U-14)", () => {
+    const LIST = [
+      ";     Format: CUSTOM",
+      "3401; 0 16390 TABLE DATA public site edgeweir",
+      "3402; 0 16385 TABLE DATA drizzle __drizzle_migrations edgeweir",
+    ].join("\n");
+    const ENV = [
+      "EDGEWEIR_MASTER_KEY=bWFzdGVyLWtleS1tYXN0ZXIta2V5LW1hc3Rlci1rZXkhIQ==",
+      "POSTGRES_PASSWORD=0123abcd",
+      "DATABASE_URL=postgres://app:secret@127.0.0.1:5432/edgeweir",
+      "EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com",
+      "",
+    ].join("\n");
+    /**
+     * Stand-ins for Compose, the host-mode PostgreSQL client and docker: each call
+     * goes to $D/log with the SQL it was fed, dumps and lists come from the
+     * environment, and an import fails with FAIL_RESTORE.
+     */
+    const STUBS = `
+      client() {
+        case "$*" in
+          *"pg_restore --list"*) cat >/dev/null; printf '%s\\n' "$LIST" ;;
+          *pg_has_role*) printf '%s\\n' "\${PRIVILEGES:-t t}" ;;
+          *pg_dump*) printf current ;;
+          *psql*) cat >>"$D/log" ;;
+          *pg_restore*) printf 'stdin %s\\n' "$(cat)" >>"$D/log"; [[ -z \${FAIL_RESTORE:-} ]] ;;
+        esac
+      }
+      compose() { printf 'compose %s\\n' "$*" >>"$D/log"; client "$@"; }
+      pg_client() { printf 'pg_client %s\\n' "$*" >>"$D/log"; client "$@"; }
+      docker() { printf '{"status":"ok","version":"20261001-abc1234"}'; }
+      # Never ask on the terminal that runs the tests.
+      INTERACTIVE=
+      DIR=$D; COMPOSE_FILE=compose.yml`;
+    const deployment = (mode: "host" | "bundled", backups = ["20261001-080000"]) =>
+      directory({
+        ".env": ENV,
+        "compose.yml": read(mode === "host" ? "compose.baota-host.yml" : "compose.baota.yml"),
+        ...Object.fromEntries(backups.map((b) => [`backups/${b}/edgeweir.dump`, `dump of ${b}`])),
+      });
+    const restore = (dir: string, args: string, env: Record<string, string> = {}) =>
+      run(`${STUBS}; cmd_restore ${args}`, { D: dir, LIST, ...env });
+    const log = (dir: string) => readFileSync(resolve(dir, "log"), "utf8");
+    /** The log lines that start with one of the prefixes, in order. */
+    const calls = (dir: string, ...prefixes: string[]) =>
+      log(dir)
+        .split("\n")
+        .filter((line) => prefixes.some((p) => line.startsWith(p)));
+
+    it("backs up, stops the console, recreates the bundled database and imports the dump", () => {
+      const backups = [
+        "20260927-080000",
+        "20260928-080000",
+        "20260929-080000",
+        "20260930-080000",
+        "20261001-080000",
+      ];
+      const dir = deployment("bundled", backups);
+      const result = restore(dir, "20260927-080000");
+      expect(result.status, result.stderr).toBe(0);
+      expect(calls(dir, "compose ")).toEqual([
+        "compose up -d --wait postgres",
+        "compose exec -T postgres pg_restore --list",
+        "compose exec -T postgres pg_dump -U edgeweir -d edgeweir --format=custom",
+        "compose stop console",
+        "compose exec -T postgres psql -X -q -v ON_ERROR_STOP=1 -v db=edgeweir -U edgeweir -d postgres",
+        "compose exec -T postgres pg_restore --exit-on-error --single-transaction --no-owner --no-privileges -U edgeweir --dbname=edgeweir",
+        "compose up -d postgres",
+        "compose ps -q postgres",
+        "compose up -d --wait --remove-orphans",
+      ]);
+      expect(log(dir)).toContain(
+        'DROP DATABASE IF EXISTS :"db" WITH (FORCE);\nCREATE DATABASE :"db";\n',
+      );
+      expect(log(dir)).toContain("stdin dump of 20260927-080000\n");
+      // .env is left alone; the current data is kept, and no backup is pruned.
+      expect(readFileSync(resolve(dir, ".env"), "utf8")).toBe(ENV);
+      const kept = readdirSync(resolve(dir, "backups")).sort();
+      expect(kept.slice(0, 5)).toEqual(backups);
+      expect(kept[5]).toMatch(/^\d{8}-\d{6}-before-restore$/);
+      expect(readFileSync(resolve(dir, "backups", kept[5] ?? "", "edgeweir.dump"), "utf8")).toBe(
+        "current",
+      );
+      expect(result.stderr).toContain("已恢复，版本 20261001-abc1234");
+    });
+
+    it("drops and recreates a host database through the PostgreSQL client image", () => {
+      const dir = deployment("host");
+      const result = restore(dir, `${dir}/backups/20261001-080000/edgeweir.dump --no-backup`);
+      expect(result.status, result.stderr).toBe(0);
+      expect(calls(dir, "pg_client ", "compose ")).toEqual([
+        "pg_client --stdin pg_restore --list",
+        // May this user drop and create the database?
+        expect.stringMatching(/^pg_client psql -XAtq .* -c select pg_has_role\(.*rolcreatedb/),
+        "compose stop console",
+        "pg_client --stdin psql -X -q -v ON_ERROR_STOP=1 -v db=edgeweir -d postgres",
+        "pg_client --stdin pg_restore --exit-on-error --single-transaction --no-owner --no-privileges --dbname=edgeweir",
+        "compose up -d --wait --remove-orphans",
+      ]);
+      expect(log(dir)).toContain("stdin dump of 20261001-080000\n");
+      expect(readdirSync(resolve(dir, "backups"))).toEqual(["20261001-080000"]);
+    });
+
+    it.each([
+      ["no backup is named", "", {}, "用法：./deploy.sh restore"],
+      ["the backup is missing", "20260101-000000", {}, "找不到备份 20260101-000000"],
+      [
+        "the dump is not an Edgeweir database",
+        "20261001-080000",
+        { LIST: "3401; 0 1 TABLE DATA public t x" },
+        "不是 Edgeweir 控制台数据库的备份",
+      ],
+      ["nobody confirmed it", "20261001-080000", { EDGEWEIR_YES: "" }, "设置 EDGEWEIR_YES=1"],
+    ])("stops before touching anything when %s", (_, args, env, message) => {
+      const dir = deployment("bundled");
+      writeFileSync(resolve(dir, "log"), "");
+      const result = restore(dir, args, env);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(message);
+      expect(log(dir)).not.toMatch(/pg_dump|stop console|psql|--dbname/);
+    });
+
+    it("refuses a host database the user cannot drop and create", () => {
+      const dir = deployment("host");
+      const result = restore(dir, "20261001-080000", { PRIVILEGES: "t f" });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("CREATEDB");
+      expect(log(dir)).not.toMatch(/pg_dump|stop console|-d postgres/);
+    });
+
+    it("leaves the console stopped and names the earlier data when the import fails", () => {
+      const dir = deployment("bundled");
+      const result = restore(dir, "20261001-080000", { FAIL_RESTORE: "1" });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(
+        /\.\/deploy\.sh restore \S+\/backups\/\d{8}-\d{6}-before-restore --no-backup/,
+      );
+      expect(log(dir)).not.toContain("up -d --wait --remove-orphans");
+    });
+  });
+
   describe("update versions (P1-56)", () => {
     // Two images of the same day; the smaller commit hash is the newer one.
     const labels = `docker() {
