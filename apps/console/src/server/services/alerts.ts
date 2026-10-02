@@ -10,7 +10,7 @@ import {
   type SmtpInput,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { and, desc, eq, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
@@ -19,6 +19,7 @@ import {
   deliverNotification,
   loadSmtp,
   SMTP_KEY,
+  SmtpNotConfiguredError,
   smtpBinding,
 } from "./notification-delivery";
 import type { Executor } from "./revisions";
@@ -165,7 +166,9 @@ export async function testAlertChannel(app: AppContext, id: string, actor: Actor
       status: "firing",
       occurredAt: new Date().toISOString(),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof SmtpNotConfiguredError)
+      fail("ALERT_SMTP_NOT_CONFIGURED", "email channels need the SMTP settings");
     fail("ALERT_SEND_FAILED", "notification test failed");
   }
   await recordAudit(app.db, actor, {
@@ -249,86 +252,165 @@ export async function setSmtpConfig(app: AppContext, input: SmtpInput, actor: Ac
     return { ok: true as const };
   });
 }
-export async function listAlertSubscriptions(app: AppContext, ctx: AlertContext) {
-  const rows = await app.db
-    .select({
-      sub: schema.alertSubscription,
-      siteName: schema.site.name,
-      channelName: schema.alertChannel.name,
-    })
-    .from(schema.alertSubscription)
-    .innerJoin(schema.site, eq(schema.site.id, schema.alertSubscription.siteId))
-    .innerJoin(schema.alertChannel, eq(schema.alertChannel.id, schema.alertSubscription.channelId))
-    .where(eq(schema.alertSubscription.userId, ctx.userId));
-  return rows.map(({ sub, siteName, channelName }) => ({
+type Subscription = typeof schema.alertSubscription.$inferSelect;
+const knownKinds = (kinds: string[]) =>
+  kinds.filter((k): k is AlertKind => alertKind.safeParse(k).success);
+async function subscriptionDtos(db: Executor, subs: Subscription[]) {
+  if (!subs.length) return [];
+  const member = schema.alertSubscriptionSite;
+  const sites = await db
+    .select({ subscriptionId: member.subscriptionId, id: schema.site.id, name: schema.site.name })
+    .from(member)
+    .innerJoin(schema.site, eq(schema.site.id, member.siteId))
+    .where(
+      inArray(
+        member.subscriptionId,
+        subs.map((s) => s.id),
+      ),
+    )
+    .orderBy(schema.site.name, schema.site.id);
+  const channels = await db
+    .select({ id: schema.alertChannel.id, name: schema.alertChannel.name })
+    .from(schema.alertChannel)
+    .where(
+      inArray(
+        schema.alertChannel.id,
+        subs.map((s) => s.channelId),
+      ),
+    );
+  return subs.map((sub) => ({
     id: sub.id,
-    siteId: sub.siteId,
     channelId: sub.channelId,
-    kinds: sub.kinds.map((k) => alertKind.parse(k)),
+    channelName: channels.find((c) => c.id === sub.channelId)?.name ?? "",
+    kinds: knownKinds(sub.kinds),
     enabled: sub.enabled,
-    siteName,
-    channelName,
+    allSites: sub.allSites,
+    sites: sites.filter((s) => s.subscriptionId === sub.id).map(({ id, name }) => ({ id, name })),
   }));
 }
+export async function listAlertSubscriptions(app: AppContext, ctx: AlertContext) {
+  const rows = await app.db
+    .select({ sub: schema.alertSubscription })
+    .from(schema.alertSubscription)
+    .innerJoin(schema.alertChannel, eq(schema.alertChannel.id, schema.alertSubscription.channelId))
+    .where(eq(schema.alertSubscription.userId, ctx.userId))
+    .orderBy(schema.alertChannel.name, schema.alertChannel.id);
+  return subscriptionDtos(
+    app.db,
+    rows.map((r) => r.sub),
+  );
+}
+interface SubscriptionFields {
+  kinds: AlertKind[];
+  allSites: boolean;
+  siteIds: string[];
+  enabled: boolean;
+}
+/** Points a subscription at its sites; every site listed must exist. */
+async function setSubscriptionSites(tx: Executor, sub: Subscription, input: SubscriptionFields) {
+  const ids = input.allSites ? [] : [...new Set(input.siteIds)];
+  if (ids.length) {
+    const found = await tx
+      .select({ id: schema.site.id })
+      .from(schema.site)
+      .where(inArray(schema.site.id, ids));
+    if (found.length !== ids.length) fail("SITE_NOT_FOUND", "site not found");
+  }
+  const member = schema.alertSubscriptionSite;
+  await tx.delete(member).where(eq(member.subscriptionId, sub.id));
+  if (ids.length)
+    await tx.insert(member).values(ids.map((siteId) => ({ subscriptionId: sub.id, siteId })));
+}
+const subscriptionAudit = (sub: Subscription, input: SubscriptionFields, channelName: string) => ({
+  targetType: "alert_subscription",
+  targetId: sub.id,
+  targetName: channelName,
+  metadata: {
+    channelId: sub.channelId,
+    kinds: sub.kinds,
+    allSites: sub.allSites,
+    siteIds: sub.allSites ? [] : [...new Set(input.siteIds)],
+    enabled: sub.enabled,
+  },
+});
+/** Creates the subscription of a channel, or replaces the one it has. */
 export async function subscribeAlerts(
   app: AppContext,
-  input: { siteId: string; channelId: string; kinds: AlertKind[]; enabled: boolean },
+  input: SubscriptionFields & { channelId: string },
   ctx: AlertContext,
 ) {
   return app.db.transaction(async (tx) => {
-    const site = await findSite(tx, input.siteId);
     const c = await channel(tx, input.channelId);
     if (!c.enabled) fail("ALERT_CHANNEL_NOT_FOUND", "channel is unavailable");
+    const fields = {
+      kinds: [...new Set(input.kinds)],
+      allSites: input.allSites,
+      enabled: input.enabled,
+    };
     const [sub] = await tx
       .insert(schema.alertSubscription)
-      .values({
-        ...input,
-        kinds: [...new Set(input.kinds)],
-        userId: ctx.userId,
-      })
+      .values({ ...fields, userId: ctx.userId, channelId: c.id })
       .onConflictDoUpdate({
-        target: [
-          schema.alertSubscription.userId,
-          schema.alertSubscription.siteId,
-          schema.alertSubscription.channelId,
-        ],
-        set: { kinds: [...new Set(input.kinds)], enabled: input.enabled },
+        target: [schema.alertSubscription.userId, schema.alertSubscription.channelId],
+        set: fields,
       })
       .returning();
     if (!sub) throw new Error("subscription insert failed");
+    await setSubscriptionSites(tx, sub, input);
     await recordAudit(tx, ctx.actor, {
       action: "alert.subscribe",
-      targetType: "site",
-      targetId: site.id,
-      targetName: site.name,
-      metadata: { channelId: c.id, kinds: input.kinds },
+      ...subscriptionAudit(sub, input, c.name),
     });
-    return {
-      id: sub.id,
-      siteId: site.id,
-      siteName: site.name,
-      channelId: c.id,
-      channelName: c.name,
-      kinds: input.kinds,
-      enabled: sub.enabled,
-    };
+    const [dto] = await subscriptionDtos(tx, [sub]);
+    if (!dto) throw new Error("subscription not readable");
+    return dto;
+  });
+}
+async function ownSubscription(tx: Executor, id: string, ctx: AlertContext) {
+  const [sub] = await tx
+    .select()
+    .from(schema.alertSubscription)
+    .where(
+      and(eq(schema.alertSubscription.id, id), eq(schema.alertSubscription.userId, ctx.userId)),
+    )
+    .for("update");
+  if (!sub) fail("ALERT_SUBSCRIPTION_NOT_FOUND", "subscription not found");
+  return sub;
+}
+export async function updateAlertSubscription(
+  app: AppContext,
+  input: SubscriptionFields & { id: string },
+  ctx: AlertContext,
+) {
+  return app.db.transaction(async (tx) => {
+    await ownSubscription(tx, input.id, ctx);
+    const [sub] = await tx
+      .update(schema.alertSubscription)
+      .set({ kinds: [...new Set(input.kinds)], allSites: input.allSites, enabled: input.enabled })
+      .where(eq(schema.alertSubscription.id, input.id))
+      .returning();
+    if (!sub) throw new Error("subscription update failed");
+    await setSubscriptionSites(tx, sub, input);
+    const c = await channel(tx, sub.channelId);
+    await recordAudit(tx, ctx.actor, {
+      action: "alert.subscription_update",
+      ...subscriptionAudit(sub, input, c.name),
+    });
+    const [dto] = await subscriptionDtos(tx, [sub]);
+    if (!dto) throw new Error("subscription not readable");
+    return dto;
   });
 }
 export async function unsubscribeAlerts(app: AppContext, id: string, ctx: AlertContext) {
   return app.db.transaction(async (tx) => {
-    const [sub] = await tx
-      .select()
-      .from(schema.alertSubscription)
-      .where(
-        and(eq(schema.alertSubscription.id, id), eq(schema.alertSubscription.userId, ctx.userId)),
-      );
-    if (!sub) fail("ALERT_SUBSCRIPTION_NOT_FOUND", "subscription not found");
-    await findSite(tx, sub.siteId);
+    const sub = await ownSubscription(tx, id, ctx);
+    const c = await channel(tx, sub.channelId);
     await tx.delete(schema.alertSubscription).where(eq(schema.alertSubscription.id, id));
     await recordAudit(tx, ctx.actor, {
       action: "alert.unsubscribe",
       targetType: "alert_subscription",
       targetId: id,
+      targetName: c.name,
     });
     return { ok: true as const };
   });
@@ -471,30 +553,32 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
   return { active, sites, nodes };
 }
 /**
- * A platform channel gets every alert; others the site alerts subscribed to
- * them, and node_offline of a node in the cluster of a site whose
- * subscription has it.
+ * A platform channel gets every alert; others the site alerts of the sites
+ * their subscription covers (all sites, or its set), and node_offline of a
+ * node in the cluster of such a site.
  */
 async function eligible(app: AppContext, c: Channel, event: Event) {
   if (!c.enabled) return false;
   if (c.platform) return true;
-  const sub = schema.alertSubscription;
-  const subscribed = and(eq(sub.channelId, c.id), eq(sub.enabled, true));
-  if (event.siteId === null && event.kind === "node_offline") {
-    const rows = await app.db
-      .select({ kinds: sub.kinds })
-      .from(sub)
-      .innerJoin(schema.site, eq(schema.site.id, sub.siteId))
-      .innerJoin(schema.node, eq(schema.node.clusterId, schema.site.clusterId))
-      .where(and(subscribed, sql`${schema.node.id}::text = ${event.resourceId}`));
-    return rows.some((r) => r.kinds.includes(event.kind));
-  }
   // Platform alerts have no subscribers: platform channels only.
-  if (event.siteId === null) return false;
+  if (event.siteId === null && event.kind !== "node_offline") return false;
+  const sub = schema.alertSubscription,
+    member = schema.alertSubscriptionSite;
+  // The sites the alert concerns: its own, or those the offline node serves.
+  const concerned =
+    event.siteId !== null
+      ? sql`select ${event.siteId}::uuid`
+      : sql`select s.id from site s join node n on n.cluster_id = s.cluster_id where n.id::text = ${event.resourceId}`;
   const rows = await app.db
     .select({ kinds: sub.kinds })
     .from(sub)
-    .where(and(eq(sub.siteId, event.siteId), subscribed));
+    .where(
+      and(
+        eq(sub.channelId, c.id),
+        eq(sub.enabled, true),
+        sql`((${sub.allSites} and exists (${concerned})) or exists (select 1 from ${member} m where m.subscription_id = ${sub.id} and m.site_id in (${concerned})))`,
+      ),
+    );
   return rows.some((r) => r.kinds.includes(event.kind));
 }
 export async function sweepAlerts(app: AppContext, now = Date.now()) {
@@ -653,20 +737,25 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
           .update(schema.alertChannel)
           .set({ lastError: "" })
           .where(eq(schema.alertChannel.id, c.id));
-      } catch {
+      } catch (error) {
         const attempts = delivery.attempts + 1;
+        // Lower-case error codes the alerts page shows on the channel.
+        const lastError =
+          error instanceof SmtpNotConfiguredError
+            ? "alert_smtp_not_configured"
+            : "alert_send_failed";
         await app.db
           .update(schema.alertDelivery)
           .set({
             status: attempts >= 5 ? "failed" : "pending",
             attempts,
             nextAttemptAt: new Date(now + Math.min(3600000, 60000 * 2 ** attempts)),
-            lastError: "alert_send_failed",
+            lastError,
           })
           .where(eq(schema.alertDelivery.id, delivery.id));
         await app.db
           .update(schema.alertChannel)
-          .set({ lastError: "alert_send_failed" })
+          .set({ lastError })
           .where(eq(schema.alertChannel.id, c.id));
         app.log.warn("notification delivery failed", { channelId: c.id, eventId: event.id });
       }

@@ -109,7 +109,7 @@ sed -i "s|^EDGEWEIR_PUBLIC_URL=.*|EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.
 
 全部变量见 [环境变量](../reference/environment.md)。
 
-初始化之后，SMTP、节点发布源、源站地址允许清单与 GeoIP 在 **系统设置** 配置，保存即生效，无需重启。系统设置中保存的值优先于 `.env` 中的 `EDGEWEIR_SMTP_CA_FILE`、`EDGEWEIR_NODE_RELEASE_BASE_URL`，两者都没有时使用默认值。`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 约束系统设置中保存的出站地址，网页控制台不能放宽。
+初始化之后，节点发布源、源站地址允许清单与 GeoIP 在 **系统设置** 配置，SMTP 在 **告警** 页配置，保存即生效，无需重启。控制台中保存的值优先于 `.env` 中的 `EDGEWEIR_SMTP_CA_FILE`、`EDGEWEIR_NODE_RELEASE_BASE_URL`，两者都没有时使用默认值。`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 约束控制台中保存的出站地址，网页控制台不能放宽。
 
 ## 5. 启动
 

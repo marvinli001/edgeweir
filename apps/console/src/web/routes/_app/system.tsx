@@ -9,7 +9,6 @@ import { Page } from "@/components/page";
 import { PlatformErrorPagesCard } from "@/components/platform-error-pages";
 import { ProtectionSettingsCards } from "@/components/protection-settings";
 import { ReleaseSourceCard } from "@/components/release-source";
-import { SmtpSettings } from "@/components/smtp-settings";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,7 +97,6 @@ function SystemSettingsPage() {
       <ProtectionSettingsCards />
       <PlatformErrorPagesCard />
       <GeoIpSettings />
-      <SmtpSettings />
     </Page>
   );
 }

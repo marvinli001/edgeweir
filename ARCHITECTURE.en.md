@@ -350,7 +350,7 @@ Access logs are sampled per site; the sample rate defaults to 0 (off). Per-minut
 
 The Compose profile `cache` starts Valkey; the console does not use Valkey yet.
 
-Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificates, unavailable origins, and high 5xx rates (the `cc_mitigation` alert fires on a node's event and resolves once no node reports the site above normal), create `alert_event` rows, fan them out to `alert_delivery` by `alert_subscription`, and send them through an `alert_channel` (webhook, email, DingTalk, WeCom, or Telegram); at delivery the channel must still be enabled and the subscription still valid, and "receive every alert" channels get every alert. Cluster alerts (configuration canary rolled back, DNS mass removal blocked, a scheduling rule acting on a node `scheduling_action`, and others) are raised and resolved by their own flows and go only to "receive every alert" channels. Access logs and AccessKeys: [Access logs and AccessKeys](docs/guide/access-logs.en.md).
+Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificates, unavailable origins, and high 5xx rates (the `cc_mitigation` alert fires on a node's event and resolves once no node reports the site above normal), create `alert_event` rows, fan them out to `alert_delivery` by `alert_subscription` (one per channel, covering a set of sites in `alert_subscription_site` or all sites with `all_sites`), and send them through an `alert_channel` (webhook, email, DingTalk, WeCom, or Telegram); at delivery the channel must still be enabled and the subscription still valid, and "receive every alert" channels get every alert. Cluster alerts (configuration canary rolled back, DNS mass removal blocked, a scheduling rule acting on a node `scheduling_action`, and others) are raised and resolved by their own flows and go only to "receive every alert" channels. Access logs and AccessKeys: [Access logs and AccessKeys](docs/guide/access-logs.en.md).
 
 ## Background jobs
 
@@ -471,7 +471,8 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `node_upgrade` | Node upgrade jobs |
 | `node_upgrade_delivery` | Phase, state, deadline, and health observation of an upgrade on each node |
 | `alert_channel` | Alert channels, configuration envelope-encrypted |
-| `alert_subscription` | User subscriptions per site and channel |
+| `alert_subscription` | One subscription per channel: alert kinds, all sites or a set of sites |
+| `alert_subscription_site` | The sites a subscription covers (removed with the site) |
 | `alert_state` | Current alert state (site and platform alerts) |
 | `alert_event` | Alert events with an ordinal |
 | `alert_delivery` | Delivery and retries of an event on a channel |
@@ -529,6 +530,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0044_node_offline_per_node` | Drops the per-site node offline alert states (one per node now) |
 | `0045_rollout_policy_updated_at` | `cluster_rollout.policy_updated_at` (the canary policy's own version; existing rows take `updated_at`) |
 | `0046_dns_error_params` | `dns_revision.last_error_params` (the failure code's parameters, such as the conflicting DNS name) |
+| `0047_alert_subscription_sites` | `alert_subscription_site`, `alert_subscription.all_sites`; drops `alert_subscription.site_id`, the unique key becomes account and channel; a channel's subscriptions merge into one (the sites and alert kinds of the enabled ones when any is enabled, otherwise of all) |
 
 ## Build output
 

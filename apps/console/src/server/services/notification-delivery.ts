@@ -15,6 +15,12 @@ export const channelBinding = (id: string) => ({
   purpose: "alert_channel.config_envelope",
   recordId: id,
 });
+/** An email channel delivers nothing until the SMTP settings are saved. */
+export class SmtpNotConfiguredError extends Error {
+  constructor() {
+    super("SMTP not configured");
+  }
+}
 export type Notification = {
   id: string;
   siteId: string | null;
@@ -81,7 +87,7 @@ export async function deliverNotification(
   );
   if (config.kind === "email") {
     const smtp = await loadSmtp(app);
-    if (!smtp?.password) throw new Error("SMTP not configured");
+    if (!smtp?.password) throw new SmtpNotConfiguredError();
     const signal = AbortSignal.timeout(10000);
     const address = await withinDeadline(outboundAddress(app, smtp.host), signal);
     const ca = smtp.ca

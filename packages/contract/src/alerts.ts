@@ -76,15 +76,34 @@ export const smtpInput = z.object({
   /** PEM certificates that replace the system trust store for this server's TLS. */
   ca: z.string().trim().max(65536).default(""),
 });
+/** Sites a subscription lists at most. */
+export const MAX_SUBSCRIPTION_SITES = 1000;
 const subscription = z.object({
   id: uuid,
-  siteId: uuid,
-  siteName: z.string(),
   channelId: uuid,
   channelName: z.string(),
   kinds: z.array(alertKind),
   enabled: z.boolean(),
+  /** Every site, present and future; `sites` is then empty. */
+  allSites: z.boolean(),
+  /** The sites covered, by name; a deleted site drops out. */
+  sites: z.array(z.object({ id: uuid, name: z.string() })),
 });
+const subscriptionFields = {
+  kinds: z.array(alertKind).min(1).max(alertKind.options.length),
+  /** Every site, present and future; siteIds must then be empty. */
+  allSites: z.boolean().default(false),
+  /** The sites covered when allSites is false: at least one. */
+  siteIds: z.array(uuid).max(MAX_SUBSCRIPTION_SITES).default([]),
+  enabled: z.boolean().default(true),
+};
+/** All sites, or a set of them: exactly one. */
+const coversSites = (input: { allSites: boolean; siteIds: string[] }) =>
+  input.allSites !== input.siteIds.length > 0;
+const coversSitesIssue = { message: "set allSites or list siteIds, not both", path: ["siteIds"] };
+export const alertSubscriptionInput = z
+  .object({ channelId: uuid, ...subscriptionFields })
+  .refine(coversSites, coversSitesIssue);
 export const alertsContract = {
   channels: oc
     .route({ method: "GET", path: "/alerts/channels", tags: ["alerts"] })
@@ -132,16 +151,14 @@ export const alertsContract = {
   subscriptions: oc
     .route({ method: "GET", path: "/alerts/subscriptions", tags: ["alerts"] })
     .output(z.array(subscription)),
+  /** Creates the subscription of a channel, or replaces the one it has. */
   subscribe: oc
     .route({ method: "POST", path: "/alerts/subscriptions", tags: ["alerts"] })
-    .input(
-      z.object({
-        siteId: uuid,
-        channelId: uuid,
-        kinds: z.array(alertKind).min(1).max(alertKind.options.length),
-        enabled: z.boolean().default(true),
-      }),
-    )
+    .input(alertSubscriptionInput)
+    .output(subscription),
+  updateSubscription: oc
+    .route({ method: "PUT", path: "/alerts/subscriptions/{id}", tags: ["alerts"] })
+    .input(z.object({ id: uuid, ...subscriptionFields }).refine(coversSites, coversSitesIssue))
     .output(subscription),
   unsubscribe: oc
     .route({ method: "DELETE", path: "/alerts/subscriptions/{id}", tags: ["alerts"] })
@@ -172,3 +189,4 @@ export type AlertPolicy = z.infer<typeof alertPolicy>;
 export type AlertChannelInput = z.infer<typeof alertChannelInput>;
 export type AlertChannelConfig = z.infer<typeof alertChannelConfig>;
 export type SmtpInput = z.infer<typeof smtpInput>;
+export type AlertSubscriptionInput = z.infer<typeof alertSubscriptionInput>;

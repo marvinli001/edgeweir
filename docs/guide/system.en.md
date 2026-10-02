@@ -305,34 +305,15 @@ Thresholds for sites whose CC mitigation is on and set to **Follow the default t
 
 Read-only. Shows, per node, the state of the **Country**, **Subdivision**, and **ASN** data (**Ready** / **Unavailable**), with the IPinfo attribution link. Country and ASN data ship in node release images; other databases are configured locally on each node; **Configure databases** links to [Rules, IP lists, and GeoIP](rules.en.md).
 
-### SMTP
-
-Outgoing mail server for email alert channels. Alert channels are managed in the **Alert channels** card of the **Alerts** page; see [Configure alert channels](dns-and-alerts.en.md#configure-alert-channels).
-
-| Field | Default | Description |
-| --- | --- | --- |
-| **SMTP host** | None | At most 253 characters |
-| **SMTP port** | 465 | 1–65535 |
-| **Implicit TLS (off uses required STARTTLS)** | On | Off requires STARTTLS; certificate verification is always on |
-| **From address** | None | Email address |
-| **SMTP username** | None | Required |
-| **SMTP password** | None | Envelope-encrypted with the master key before storage; leave blank to keep the current password |
-| **CA certificates (PEM)** | Empty | PEM certificates only; when set, replaces the system trust store for this server |
-
-| Constraint | Description |
-| --- | --- |
-| Changing the destination | Changing host, port, TLS mode, username, or CA certificates requires the password again |
-| Outbound policy | The address is resolved and pinned for each delivery; private addresses must be allowed by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
-
 ### Precedence
 
-A value saved in system settings wins over the environment variable, which wins over the default. The environment variables remain only as a fallback for existing deployments.
+A value saved in the console wins over the environment variable, which wins over the default. The environment variables remain only as a fallback for existing deployments.
 
 | Setting | Location | Environment variable | Default |
 | --- | --- | --- | --- |
 | Node release source | **System → Node release source** | `EDGEWEIR_NODE_RELEASE_BASE_URL` | `https://github.com/marvinli001/edgeweir-node/releases/download` |
-| SMTP CA certificates | **System → SMTP → CA certificates (PEM)** | `EDGEWEIR_SMTP_CA_FILE` (path to a PEM file) | System trust store |
-| SMTP server and account | **System → SMTP** | None | Not configured |
+| SMTP CA certificates | **Alerts → SMTP → CA certificates (PEM)** | `EDGEWEIR_SMTP_CA_FILE` (path to a PEM file) | System trust store |
+| SMTP server and account | **Alerts → SMTP** | None | Not configured |
 | Origin allow list | **System → Origin allow list** | None | Empty |
 | Usage | **System → Usage** | None | 100 days retention, 60-minute offline threshold |
 | Bans | **System → Bans** | None | Limit 10000, automatic bans shared |
@@ -356,5 +337,3 @@ The badge of **Node release source** shows where the value in effect comes from:
 | **Service accounts cannot call this** | A service account called a procedure outside the [Service accounts](#service-accounts) table | Use an AccessKey |
 | **Missing scope: …** | The service account lacks the scope the procedure needs | Edit its scopes in **Service accounts** |
 | **The release source must use HTTPS and resolve to an allowed address** | Public HTTP URL, or a private address that is not allowed | Use HTTPS, or allow the range in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
-| **Enter a new password when changing the SMTP server or account** | The SMTP destination changed without a password | Enter the password and save |
-| **The CA bundle must contain PEM certificates only** | The CA field contains something other than certificates | Paste PEM certificates only |

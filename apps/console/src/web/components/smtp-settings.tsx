@@ -11,10 +11,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
-export function SmtpSettings() {
+/** The mail server of email alert channels. */
+export function SmtpSettings({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   const query = useQuery(orpc.alerts.smtp.queryOptions());
   return (
-    <Card>
+    <Card className={className} style={style}>
       <CardHeader>
         <CardTitle>{m.alert_smtp_title()}</CardTitle>
       </CardHeader>

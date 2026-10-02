@@ -104,7 +104,7 @@ For using and revoking AccessKeys, see [Access logs and access keys](access-logs
 | **Infrastructure** | **Clusters & nodes** | `/clusters` | Clusters, node groups, nodes, configuration canary, node upgrades, revisions, and the cluster's DNS binding and scheduling; see [Clusters and nodes](system.en.md#clusters-and-nodes) |
 | **Infrastructure** | **Regions & probes** | `/regions` | Regions, regional probes, and probe settings; see [Regions](system.en.md#regions) and [Regional probes](scheduling.en.md#regional-probes) |
 | **Infrastructure** | **DNS steering** | `/dns` | DNS provider accounts, each cluster's DNS binding, and mass removal protection; see [Configure DNS steering](dns-and-alerts.en.md#configure-dns-steering) |
-| **System** | **Alerts** | `/alerts` | Alert channels, subscriptions, recent events, and alert rules; see [Alerts page](dns-and-alerts.en.md#alerts-page) |
+| **System** | **Alerts** | `/alerts` | Alert channels, SMTP, subscriptions, recent events, and alert rules; see [Alerts page](dns-and-alerts.en.md#alerts-page) |
 | **System** | **Service accounts** | `/service-accounts` | Service accounts integrations use on `/api/v1`; see [Service accounts](system.en.md#service-accounts) |
 | **System** | **Audit log** | `/audit` | See [Audit log](system.en.md#audit-log) |
 | **System** | **System** | `/system` | See [System settings](system.en.md#system-settings) |

@@ -113,7 +113,7 @@ Result of the migrations:
 | Item | After the upgrade |
 | --- | --- |
 | Accounts | The earliest platform administrator who is not disabled becomes the only account and keeps its password, two-factor authentication, and passkeys; every other account is deleted with its sessions, passkeys, and AccessKeys |
-| Alert subscriptions | The other accounts' subscriptions merge into the remaining account: one per site and channel, with the alert kinds combined |
+| Alert subscriptions | The other accounts' subscriptions merge into the remaining account: one per channel, covering their sites, with the alert kinds combined |
 | Data | Sites, certificates, DNS credentials, bans, IP lists, rules, alerts, analytics, and audit log entries of every organization stay |
 | IP lists | Organization lists become **Referenced by rules** lists (before, only the platform allow and block lists applied at the edge); a list whose name is taken gets the suffix `_<6 hex digits>`, and the rules of its organization's sites follow the new name |
 | Suspended sites | Become disabled |

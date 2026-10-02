@@ -48,7 +48,7 @@ test("M5: DNS provider controls, statistics and alert subscriptions", async ({ p
   await page.getByTestId("alert-channel-submit").click();
   await expect(dialog).toBeHidden();
   await expect(page.getByTestId("alert-channel").filter({ hasText: channelName })).toBeVisible();
-  await page.getByTestId("nav-system").click();
+  // The mail server of email channels is on the alerts page, not under system settings.
   await expect(page.getByLabel("SMTP 主机", { exact: true })).toBeVisible();
   await page.goto(`/sites/${state.siteId}?tab=domains`);
   await expect(page.getByTestId("cname-target")).toContainText("edge.cdn.m5.test");
@@ -57,14 +57,14 @@ test("M5: DNS provider controls, statistics and alert subscriptions", async ({ p
   await expect(page.getByTestId("analytics")).toBeVisible();
   await page.getByTestId("nav-alerts").click();
   await page.getByTestId("alert-subscribe").click();
-  await dialog.getByLabel("搜索网站", { exact: true }).fill("M5 site");
-  await pick(page, dialog.getByLabel("网站", { exact: true }), "M5 site");
   await pick(page, dialog.getByLabel("通知渠道", { exact: true }), channelName);
+  await dialog.getByLabel("搜索网站", { exact: true }).fill("M5 site");
+  await dialog.getByTestId("site-option").filter({ hasText: "M5 site" }).click();
+  await expect(dialog.getByTestId("alert-sites-selected")).toHaveText("已选 1 个");
   await page.getByTestId("alert-subscription-submit").click();
   await expect(dialog).toBeHidden();
-  await expect(
-    page.getByTestId("alert-subscription").filter({ hasText: channelName }),
-  ).toBeVisible();
+  const subscription = page.getByTestId("alert-subscription").filter({ hasText: channelName });
+  await expect(subscription.getByTestId("alert-subscription-sites")).toHaveText("M5 site");
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ colorScheme: "dark" });
   await page.screenshot({

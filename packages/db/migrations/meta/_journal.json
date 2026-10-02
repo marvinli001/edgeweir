@@ -330,6 +330,13 @@
       "when": 1790924057307,
       "tag": "0046_dns_error_params",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790925223426,
+      "tag": "0047_alert_subscription_sites",
+      "breakpoints": true
     }
   ]
 }

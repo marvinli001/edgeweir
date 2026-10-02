@@ -350,7 +350,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 
 Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 
-告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook、邮件、钉钉、企业微信或 Telegram）发送；投递时重新检查渠道是否启用与订阅是否仍然有效，「接收所有告警」的渠道接收全部告警。集群告警（配置金丝雀回滚、DNS 大面积摘除被阻止、调度规则作用于节点 `scheduling_action` 等）由各自的流程触发与解除，只投递到「接收所有告警」的渠道。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
+告警（`alerts.sweep`，每分钟）检测节点离线、证书即将到期、源站不可用与 5xx 过高（CC 防护升级 `cc_mitigation` 由节点事件触发，节点不再报告升级后恢复），生成 `alert_event`，按 `alert_subscription` 生成 `alert_delivery`，经 `alert_channel`（webhook、邮件、钉钉、企业微信或 Telegram）发送；订阅按渠道，覆盖一组网站（`alert_subscription_site`）或全部网站（`all_sites`）；投递时重新检查渠道是否启用与订阅是否仍然有效，「接收所有告警」的渠道接收全部告警。集群告警（配置金丝雀回滚、DNS 大面积摘除被阻止、调度规则作用于节点 `scheduling_action` 等）由各自的流程触发与解除，只投递到「接收所有告警」的渠道。访问日志与 AccessKey 的使用见 [访问日志与 AccessKey](docs/guide/access-logs.md)。
 
 ## 后台任务
 
@@ -471,7 +471,8 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `node_upgrade` | 节点升级任务 |
 | `node_upgrade_delivery` | 升级在每个节点上的阶段、状态、期限与健康观察 |
 | `alert_channel` | 告警渠道，配置信封加密 |
-| `alert_subscription` | 用户按网站与渠道的订阅 |
+| `alert_subscription` | 每个渠道一条订阅：告警种类，全部网站或一组网站 |
+| `alert_subscription_site` | 订阅覆盖的网站（网站删除时移除） |
 | `alert_state` | 告警当前状态（网站告警与平台告警） |
 | `alert_event` | 告警事件，带顺序号 |
 | `alert_delivery` | 事件在渠道上的投递与重试 |
@@ -529,6 +530,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0044_node_offline_per_node` | 删除按网站记录的「节点离线」告警状态（改为每个节点一条） |
 | `0045_rollout_policy_updated_at` | `cluster_rollout.policy_updated_at`（金丝雀策略自身的版本，已有行取 `updated_at`） |
 | `0046_dns_error_params` | `dns_revision.last_error_params`（失败代码的参数，如冲突的 DNS 名称） |
+| `0047_alert_subscription_sites` | `alert_subscription_site`、`alert_subscription.all_sites`；删除 `alert_subscription.site_id`，唯一键改为账户与渠道；同一渠道的订阅合并为一条（有启用的订阅时取启用订阅的网站与告警种类，否则取全部） |
 
 ## 构建产物
 

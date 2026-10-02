@@ -14,7 +14,7 @@ DNS steering records (third-party DNS providers bound per cluster), and alert ch
 | Backup node group | A node group that answers, in order, while a line's own node group has too few healthy addresses. |
 | DNS revision | A snapshot of a cluster's DNS binding and its records, separate from node configuration revisions. |
 | Alert channel | A notification target: email, webhook, DingTalk, WeCom, or Telegram. |
-| Alert subscription | Sends some alert kinds of one site to one channel. |
+| Alert subscription | Sends some alert kinds of a set of sites (or all sites) to one channel; one per channel. |
 
 ## Configure DNS steering
 
@@ -307,12 +307,13 @@ A success is a 2xx JSON answer (up to 16 MiB): `{"records":[...]}` for `list`, `
 
 ## Alerts page
 
-Alerts are configured on the **Alerts** page, which has four cards:
+Alerts are configured on the **Alerts** page, which has five cards:
 
 | Card | Contents |
 | --- | --- |
 | Alert channels | Notification targets, which can be added, edited, tested, enabled or disabled, and deleted |
-| Subscriptions | The alert kinds of a site and the channels that receive them |
+| SMTP | The mail server of email channels, see [SMTP](#smtp) |
+| Subscriptions | The sites and alert kinds each channel receives |
 | Recent events | The latest 100 alert events, including cluster and DNS alerts |
 | Alert rules | The thresholds that raise alerts |
 
@@ -325,7 +326,7 @@ Alerts are configured on the **Alerts** page, which has four cards:
 5. Click **Create**.
 6. Verify: click **Send test**; the target receives a test notification and the channel row does not show **Notification delivery failed**.
 
-Email channels use the server configured in **System → SMTP**, see [SMTP](system.en.md#smtp).
+Email channels use the server in the **SMTP** card, see [SMTP](#smtp).
 
 ### Channel fields
 
@@ -348,6 +349,25 @@ At most 32 channels. When editing a channel, turn on **Replace channel credentia
 ### Webhook payload
 
 The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `status` (`firing` / `resolved`), `occurredAt`, `resourceId` (the object of the alert, such as a node or certificate ID), `text`, and `url` (a console link). For cluster and DNS alerts, `siteId` is `null` and `siteName` is the cluster name; for **Node offline**, `siteId` is `null`, `siteName` is the node name and `resourceId` the node ID; and `url` points to **Clusters & nodes** or **DNS steering**; for `scheduling_action`, `siteName` is "rule · node" and `resourceId` is `<rule ID>:<node ID>`. With a bearer token, the request carries `Authorization: Bearer <token>`. A 2xx response counts as delivered.
+
+### SMTP
+
+The outgoing mail server of email channels, set in the **SMTP** card of the **Alerts** page and saved with **Save**. Until it is set, **Send test** on an email channel answers "SMTP is not configured", and a channel whose deliveries fail for that reason shows the same message.
+
+| Field | Default | Description |
+| --- | --- | --- |
+| **SMTP host** | None | At most 253 characters |
+| **SMTP port** | 465 | 1–65535 |
+| **Implicit TLS (off uses required STARTTLS)** | On | Off requires STARTTLS; certificate verification is always on |
+| **From address** | None | Email address |
+| **SMTP username** | None | Required |
+| **SMTP password** | None | Envelope-encrypted with the master key before storage; leave blank to keep the current password |
+| **CA certificates (PEM)** | Empty | PEM certificates only; when set, replaces the system trust store for this server |
+
+| Constraint | Description |
+| --- | --- |
+| Changing the destination | Changing host, port, TLS mode, username, or CA certificates requires the password again |
+| Outbound policy | The address is resolved and pinned for each delivery; private addresses must be allowed by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 
 ## Set alert rules
 
@@ -383,27 +403,32 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 ## Subscribe to alerts
 
 1. Open **Alerts** and click **Subscribe** in the **Subscriptions** card.
-2. Find the site with **Search sites** and select it under **Sites**, select **Notification channel**, and turn on the alert kinds to send.
-3. Click **Save**.
-4. Verify: the subscription appears under **Subscriptions**; **Recent events** shows the site's events.
+2. Select **Notification channel**.
+3. Turn on **All sites**, or tick sites in the **Sites** list (**Search sites** finds them; ticked sites stay ticked across searches).
+4. Turn on the alert kinds to send and click **Save**.
+5. Verify: the subscription row shows the channel, the sites (or **All sites**), and the alert kinds; **Recent events** shows these sites' events.
 
 | Item | Behavior |
 | --- | --- |
-| Channels | Only enabled channels can be chosen; without one, **Subscribe** is unavailable |
+| Channels | One subscription per channel; **Subscribe** lists only enabled channels without a subscription and is unavailable when there is none |
+| Sites | **All sites** includes sites created later; otherwise tick at least one site |
 | Alert kinds | Node offline, Certificate expiring, Origin unavailable, High server error ratio, CC mitigation raised |
-| Repeated subscriptions | A site and a channel have one subscription; saving again replaces its alert kinds |
+| Changes | Click **Edit** on the subscription row to change its sites, alert kinds, or **Enable**; a subscription with **Enable** off sends nothing and its row shows **Off** |
+| Deleted sites | The site leaves the subscription; a subscription left without sites is deleted with it |
 | Removal | Click **Unsubscribe** on the subscription row and confirm |
+| API | `POST /api/v1/alerts/subscriptions` (`channelId`, `kinds`, `allSites` or `siteIds`) creates the channel's subscription, replacing the one it has; `PUT /api/v1/alerts/subscriptions/{id}` changes it; both return `allSites` and `sites` (`id`, `name`). The former `siteId` field is gone |
+| Upgrades | A subscription used to cover one site; on upgrade, the subscriptions of a channel merge into one. If any of them is enabled, the result is enabled with the sites and alert kinds of the enabled ones; if all are paused, it stays paused with all their sites and alert kinds |
 
 ## Delivery behavior
 
 | Item | Behavior |
 | --- | --- |
 | Events | A condition creates one event when it starts and one when it recovers; event IDs are stable |
-| Receiving channels | Channels with **Receive every alert** receive every alert; other channels receive only the site alerts subscribed to them, and **Node offline** when the channel subscribes to that kind for any site in the node's cluster |
+| Receiving channels | Channels with **Receive every alert** receive every alert; other channels receive only the alerts of the sites their subscription covers, and **Node offline** when the subscription covers any site in the node's cluster (or **All sites**) and includes that kind |
 | Retries | After a failure, retries back off 2, 4, 8, and 16 minutes; each channel gets 5 attempts |
 | Batches | Checked every minute; at most 200 notifications per check, and deliveries that would start after 40 seconds wait for the next minute |
 | Duplicates | A lost receipt can cause duplicate notifications; webhook receivers deduplicate by event ID |
-| Checks before delivery | Every delivery rechecks that the channel is enabled, that the event is still the condition's current state, and that a subscription still includes the alert kind (except for channels with **Receive every alert**) |
+| Checks before delivery | Every delivery rechecks that the channel is enabled, that the event is still the condition's current state, and that the subscription is enabled and still covers the site and the alert kind (except for channels with **Receive every alert**) |
 | Outbound policy | Resolves and pins the target IP; refuses special-purpose addresses; webhook-style targets do not follow redirects; internal webhooks or SMTP need their network in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | Timeouts and sizes | 10 seconds per delivery; request body up to 32 KiB, response body up to 64 KiB |
 | Retention | Alert events are kept for 90 days |
@@ -436,4 +461,7 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | Carrier users get the default line's addresses | The resolver is not on that carrier's network, or no binding line maps to that resolution line | Test with a resolver of that carrier; add a binding line for it |
 | Channel shows **Notification delivery failed** | The target refused or timed out, or the outbound policy refused the address | Reproduce with **Send test**; add internal targets to `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | "Notification channel limit reached" | 32 channels exist | Delete unused channels |
-| **Subscribe** is unavailable | No channel is enabled | Add or enable a channel |
+| "SMTP is not configured" | An email channel was tested or delivered before the SMTP settings were saved | Fill in and save the **SMTP** card, then **Send test** |
+| "Enter a new password when changing the SMTP server or account" | The SMTP destination changed without a password | Enter the password and save |
+| "The CA bundle must contain PEM certificates only" | The CA field contains something other than certificates | Paste PEM certificates only |
+| **Subscribe** is unavailable | No channel is enabled, or every enabled channel has a subscription | Add or enable a channel; click **Edit** to change an existing subscription |
