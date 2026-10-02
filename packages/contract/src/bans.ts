@@ -57,9 +57,13 @@ export function parseBanCidr(input: string): BanCidr {
   return { ok: true, cidr, text: formatCidr(cidr) };
 }
 
-/** A single address ("/32" or "/128"), as automatic bans must be. */
-export function isSingleAddress(cidr: Cidr): boolean {
-  return cidr.prefix === (cidr.version === 4 ? 32 : 128);
+/**
+ * What a node bans on its own: an IPv4 address ("/32") or an IPv6 /64 (nodes
+ * count IPv6 clients by their /64; nodes before proto v0.17.0 banned single
+ * IPv6 addresses, "/128").
+ */
+export function isAutoBanPrefix(cidr: Cidr): boolean {
+  return cidr.version === 4 ? cidr.prefix === 32 : cidr.prefix === 64 || cidr.prefix === 128;
 }
 
 /**

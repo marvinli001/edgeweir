@@ -4,7 +4,7 @@ import {
   banCreateInput,
   type Cidr,
   cidrsOverlap,
-  isSingleAddress,
+  isAutoBanPrefix,
   parseBanCidr,
   parseCidr,
   protectedBanOverlap,
@@ -39,11 +39,17 @@ describe("ban CIDRs", () => {
       expect(text(input), input).toEqual({ ok: false, code: "BAN_INVALID_CIDR" });
   });
 
-  it("tells single addresses apart", () => {
-    const one = parseBanCidr("192.0.2.1");
-    const net = parseBanCidr("192.0.2.0/24");
-    expect(one.ok && isSingleAddress(one.cidr)).toBe(true);
-    expect(net.ok && isSingleAddress(net.cidr)).toBe(false);
+  it("tells what nodes ban on their own apart", () => {
+    const own = (input: string) => {
+      const parsed = parseBanCidr(input);
+      return parsed.ok && isAutoBanPrefix(parsed.cidr);
+    };
+    expect(own("192.0.2.1")).toBe(true);
+    expect(own("2001:db8:1:2::/64")).toBe(true);
+    expect(own("2001:db8::7")).toBe(true);
+    expect(own("192.0.2.0/24")).toBe(false);
+    expect(own("2001:db8::/48")).toBe(false);
+    expect(own("2001:db8:1:2::/80")).toBe(false);
   });
 
   it("finds overlaps with protected addresses", () => {

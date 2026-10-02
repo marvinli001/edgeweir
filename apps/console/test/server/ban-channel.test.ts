@@ -368,6 +368,8 @@ describe("dynamic ban channel", async () => {
       bans: [
         autoBan("198.51.100.40", foreignSiteId),
         autoBan("198.51.100.0/24", siteId),
+        autoBan("2001:db8::/48", siteId),
+        autoBan("2001:db8:1:2::/80", siteId),
         { ...autoBan("198.51.100.41", siteId), reason: "because" },
         autoBan("198.51.100.42", siteId, -1),
         { ...autoBan("198.51.100.43", siteId), expiresAt: undefined },
@@ -384,6 +386,15 @@ describe("dynamic ban channel", async () => {
         ),
       }),
     ).rejects.toMatchObject({ code: Code.InvalidArgument });
+
+    // IPv6 clients are banned by their /64 (nodes since proto v0.17.0).
+    const beforeV6 = await currentBanSequence(ctx.db);
+    expect(
+      (await reporter.mtls.reportBans({ bans: [autoBan("2001:DB8:5:6::/64", siteId)] })).accepted,
+    ).toBe(1);
+    expect(
+      (await peer.mtls.getBans({ afterSequence: beforeV6 })).bans.map((ban) => ban.cidr),
+    ).toEqual(["2001:db8:5:6::/64"]);
 
     // Without sharing, automatic bans are kept for viewing only.
     await setBanSettings(ctx.db, { maxTotal: 10000, shareAutoBans: false }, actor);

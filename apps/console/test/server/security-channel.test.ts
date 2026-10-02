@@ -291,6 +291,37 @@ describe("challenge keys, security events and JA4 over the node channel", async 
     expect(banned.items.map((e) => e.address)).toEqual(["203.0.113.9"]);
   });
 
+  it("takes IPv6 clients as their /64", async () => {
+    const { nodeId, mtls } = await enroll(clusterId, "edge-v6", ["challenge-v1"]);
+    const reported = await mtls.reportSecurityEvents({
+      events: [
+        event("v6-1", {
+          kind: SecurityEventKind.IP_BANNED,
+          level: "",
+          previousLevel: "",
+          address: "2001:DB8:1:2::/64",
+          metric: "ip_qps",
+          topIps: [
+            { value: "2001:db8:1:2::/64", count: 50n },
+            { value: "2001:db8::/48", count: 9n },
+            { value: "192.0.2.0/24", count: 8n },
+          ],
+        }),
+        // Only a /64 stands for a client.
+        event("v6-2", { kind: SecurityEventKind.IP_BANNED, address: "2001:db8::/48" }),
+      ],
+    });
+    expect(reported.accepted).toBe(1);
+    const [stored] = await ctx.db
+      .select()
+      .from(schema.securityEvent)
+      .where(eq(schema.securityEvent.nodeId, nodeId));
+    expect(stored).toMatchObject({
+      address: "2001:db8:1:2::/64",
+      topIps: [{ value: "2001:db8:1:2::/64", count: 50 }],
+    });
+  });
+
   it("keeps each node's current level from the heartbeat and resolves the alert once all are normal", async () => {
     const { nodeId, mtls } = await enroll(clusterId, "edge-state", ["challenge-v1"]);
     await mtls.reportStatus({

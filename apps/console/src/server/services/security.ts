@@ -2,6 +2,8 @@ import { isIP } from "node:net";
 import {
   CC_LEVELS,
   type CcLevel,
+  formatCidr,
+  parseCidr,
   type SecurityEvent,
   type SecurityEventKind,
   type SiteSecurityState,
@@ -45,11 +47,22 @@ const cleanPath = (value: string) => clean(value.split(/[?#]/, 1)[0] ?? "", 2048
 const isLevel = (value: string): value is CcLevel =>
   (CC_LEVELS as readonly string[]).includes(value);
 
+/**
+ * A client of a CC event: an IP address, or an IPv6 /64 (nodes since proto
+ * v0.17.0 count and ban IPv6 clients by their /64), in canonical form; null
+ * for anything else.
+ */
+function clientNetwork(value: string): string | null {
+  if (isIP(value)) return value;
+  const cidr = value.includes("/") ? parseCidr(value) : null;
+  return cidr?.version === 6 && cidr.prefix === 64 ? formatCidr(cidr) : null;
+}
+
 function tops(values: { value: string; count: number }[], ip: boolean) {
   return values
     .flatMap((item) => {
-      const value = ip ? item.value.trim() : cleanPath(item.value);
-      if (!value || (ip && !isIP(value))) return [];
+      const value = ip ? clientNetwork(item.value.trim()) : cleanPath(item.value);
+      if (!value) return [];
       return [{ value, count: Math.max(0, finite(item.count)) }];
     })
     .slice(0, MAX_TOP);
@@ -135,8 +148,8 @@ export async function reportSecurityEvents(
     if (!Number.isFinite(at) || at < oldest) continue;
     const levels = event.kind !== "ip_banned";
     if (levels && (!isLevel(event.level) || !isLevel(event.previousLevel))) continue;
-    const address = event.kind === "ip_banned" ? event.address.trim() : "";
-    if (event.kind === "ip_banned" && !isIP(address)) continue;
+    const address = event.kind === "ip_banned" ? clientNetwork(event.address.trim()) : "";
+    if (address === null) continue;
     items.set(event.id, {
       nodeId: node.id,
       nodeEventId: event.id,

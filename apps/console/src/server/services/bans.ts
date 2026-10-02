@@ -12,7 +12,7 @@ import {
   type BanReason,
   type BanSettings,
   banSettings,
-  isSingleAddress,
+  isAutoBanPrefix,
   MAX_AUTO_BANS_PER_CLUSTER,
   parseBanCidr,
   protectedBanOverlap,
@@ -487,7 +487,8 @@ const finite = (value: number) => (Number.isFinite(value) ? value : 0);
 /**
  * Stores automatic bans a node reported, keyed by (node, site, CIDR): an
  * active entry keeps the later expiry. Bans of sites outside the node's
- * cluster, non-single addresses, unknown reasons, protected addresses and
+ * cluster, prefixes other than an IPv4 address or an IPv6 /64 (or /128 of
+ * older nodes), unknown reasons, protected addresses and
  * expired bans are skipped; expiry is capped at 7 days after creation.
  * Returns how many bans were accepted.
  */
@@ -513,7 +514,7 @@ export async function reportAutoBans(
     if (!UUID_RE.test(ban.siteId)) continue;
     if (!(AUTO_BAN_REASONS as readonly string[]).includes(ban.reason)) continue;
     const cidr = parseBanCidr(ban.cidr);
-    if (!cidr.ok || !isSingleAddress(cidr.cidr)) continue;
+    if (!cidr.ok || !isAutoBanPrefix(cidr.cidr)) continue;
     const created =
       ban.createdAt &&
       ban.createdAt.getTime() <= now.getTime() &&
