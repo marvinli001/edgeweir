@@ -1,19 +1,49 @@
-import type { Cluster, Revision } from "@edgeweir/contract";
+import { decodeNodeConfig } from "@edgeweir/config-compiler";
+import type { Cluster, Revision, RollbackPreview } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, eq, gt, ne, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
+import { siteChanges } from "./config-changes";
 import { assertBindingReleased } from "./dns";
-import { ONLINE_WINDOW_SECONDS } from "./nodes";
+import { isOnline, ONLINE_WINDOW_SECONDS } from "./nodes";
 import {
   type Executor,
   latestRevision,
   publisher,
   publishRevision,
+  rollbackContent,
   rollbackToRevision,
+  rolloutTargets,
   type Tx,
+  targetFor,
   toRevisionDto,
 } from "./revisions";
+
+/**
+ * Online active nodes of a cluster, and how many of them run their target
+ * revision: the stable one, or the candidate on the canary nodes of a
+ * running window (nodes never apply a lower revision, so a higher one counts).
+ */
+export async function clusterDelivery(db: Executor, clusterId: string, now = Date.now()) {
+  const rows = await db
+    .select({
+      id: schema.node.id,
+      lastSeenAt: schema.node.lastSeenAt,
+      appliedRevision: schema.nodeConfigStatus.appliedRevision,
+    })
+    .from(schema.node)
+    .leftJoin(schema.nodeConfigStatus, eq(schema.nodeConfigStatus.nodeId, schema.node.id))
+    .where(and(eq(schema.node.clusterId, clusterId), eq(schema.node.status, "active")));
+  const live = rows.filter((n) => isOnline(n.lastSeenAt, now));
+  if (!live.length) return { live: 0, applied: 0 };
+  const targets = await rolloutTargets(db, clusterId);
+  const applied = live.filter((n) => {
+    const target = targetFor(n, targets);
+    return !!target && (n.appliedRevision ?? 0) >= target.revision;
+  }).length;
+  return { live: live.length, applied };
+}
 
 async function toClusterDto(
   db: Executor,
@@ -34,12 +64,15 @@ async function toClusterDto(
     .from(schema.site)
     .where(eq(schema.site.clusterId, row.id));
   const latest = await latestRevision(db, row.id);
+  const delivery = await clusterDelivery(db, row.id);
   return {
     id: row.id,
     name: row.name,
     description: row.description,
     nodeCount: nodes?.n ?? 0,
     onlineNodeCount: online?.n ?? 0,
+    liveNodeCount: delivery.live,
+    appliedNodeCount: delivery.applied,
     siteCount: sites?.n ?? 0,
     latestRevision: latest ? toRevisionDto(latest) : null,
     createdAt: row.createdAt.toISOString(),
@@ -171,6 +204,42 @@ export async function deleteCluster(db: Database, id: string, actor: Actor): Pro
  * and audits it in the same transaction (nothing is written when the
  * revision does not exist).
  */
+/** Thrown to roll the preview's transaction back once it holds the result. */
+class PreviewDone extends Error {
+  constructor(readonly preview: RollbackPreview) {
+    super("rollback preview");
+  }
+}
+
+/**
+ * What rolling back to `revision` would publish, against the latest
+ * revision. The content is built as the rollback builds it, in a
+ * transaction that is rolled back: nothing it writes persists.
+ */
+export async function previewRollback(
+  db: Database,
+  input: { id: string; revision: number },
+): Promise<RollbackPreview> {
+  try {
+    await db.transaction(async (tx) => {
+      const cluster = await findCluster(tx, input.id);
+      const content = await rollbackContent(tx, cluster.id, input.revision);
+      if (!content) fail("REVISION_NOT_FOUND", "revision not found");
+      const latest = await latestRevision(tx, cluster.id);
+      throw new PreviewDone({
+        revision: input.revision,
+        currentRevision: latest?.revision ?? null,
+        unchanged: latest?.contentHash === content.contentHash,
+        sites: siteChanges(latest ? decodeNodeConfig(latest.ir) : undefined, content),
+      });
+    });
+  } catch (error) {
+    if (error instanceof PreviewDone) return error.preview;
+    throw error;
+  }
+  throw new Error("rollback preview ended without a result");
+}
+
 export async function rollbackCluster(
   db: Database,
   input: { id: string; revision: number },

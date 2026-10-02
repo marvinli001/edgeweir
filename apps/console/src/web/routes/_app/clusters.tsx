@@ -8,6 +8,7 @@ import type {
 } from "@edgeweir/contract";
 import {
   Add01Icon,
+  ArrowDown01Icon,
   Delete02Icon,
   MoreHorizontalIcon,
   PencilEdit01Icon,
@@ -21,6 +22,7 @@ import { toast } from "sonner";
 import * as z from "zod";
 import { Countdown } from "@/components/appica/countdown";
 import { ClusterRolloutCard } from "@/components/cluster-rollout";
+import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog, ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
@@ -28,9 +30,14 @@ import { ClusterDns } from "@/components/dns/cluster-dns";
 import { FormDialog } from "@/components/form-dialog";
 import { PortPoolsSection } from "@/components/l4/port-pools";
 import { AuthErrorBadge, NodeDetailDialog, NodeLoad } from "@/components/node-detail";
-import { ConsoleUrlWarnings, EnrollProgress } from "@/components/node-enrollment";
+import {
+  ConsoleUrlWarnings,
+  EnrollProgress,
+  NodeChannelCheckStatus,
+} from "@/components/node-enrollment";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
+import { RegionsPanel } from "@/components/regions";
 import { SafetyNote } from "@/components/safety-note";
 import { ClusterScheduling } from "@/components/scheduling";
 import { SwitchField } from "@/components/site/fields";
@@ -72,6 +79,8 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/clusters")({
   validateSearch: z.object({
+    /** The regions view of the page (regions are shared by every cluster). */
+    view: z.enum(["regions"]).optional(),
     cluster: z.string().optional(),
     enroll: z.boolean().optional(),
     tab: z.enum(["overview", "dns", "scheduling", "ports"]).optional(),
@@ -82,17 +91,19 @@ export const Route = createFileRoute("/_app/clusters")({
 
 const NO_REGION = "__none__";
 
+/** Clusters and their nodes, and the regions view. */
 function ClustersPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [createRegion, setCreateRegion] = React.useState(false);
   const clusters = useQuery({
     ...orpc.clusters.list.queryOptions(),
     refetchInterval: 5_000,
     meta: { background: true },
   });
   const selected = clusters.data?.find((c) => c.id === search.cluster) ?? clusters.data?.[0];
-  const enrollKey = useOpenKey(search.enroll === true);
+  const regions = search.view === "regions";
 
   const setEnrollOpen = (open: boolean) =>
     navigate({ search: (prev) => ({ ...prev, enroll: open || undefined }), replace: true });
@@ -101,26 +112,55 @@ function ClustersPage() {
     <Page
       title={m.clusters_title()}
       actions={
-        <>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setCreateOpen(true)}
-            data-testid="create-cluster"
-          >
+        regions ? (
+          <Button size="sm" onClick={() => setCreateRegion(true)} data-testid="create-region">
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            {m.clusters_create()}
+            {m.regions_create()}
           </Button>
-          {selected ? (
-            <Button size="sm" onClick={() => setEnrollOpen(true)} data-testid="add-node">
+        ) : (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCreateOpen(true)}
+              data-testid="create-cluster"
+            >
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-              {m.nav_add_node()}
+              {m.clusters_create()}
             </Button>
-          ) : null}
-        </>
+            {selected ? (
+              <Button size="sm" onClick={() => setEnrollOpen(true)} data-testid="add-node">
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                {m.nav_add_node()}
+              </Button>
+            ) : null}
+          </>
+        )
       }
     >
-      {clusters.isPending ? (
+      <Tabs
+        value={regions ? "regions" : "clusters"}
+        onValueChange={(value) =>
+          navigate({
+            search: (prev) => ({ ...prev, view: value === "regions" ? "regions" : undefined }),
+            replace: true,
+          })
+        }
+      >
+        <TabsList>
+          <TabsTrigger value="clusters" data-testid="clusters-view-clusters">
+            {m.clusters_view_clusters()}
+          </TabsTrigger>
+          <TabsTrigger value="regions" data-testid="clusters-view-regions">
+            {m.regions_tab_regions()}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {regions ? (
+        <div className="flex flex-col gap-4 animate-enter">
+          <RegionsPanel createOpen={createRegion} onCreateOpenChange={setCreateRegion} />
+        </div>
+      ) : clusters.isPending ? (
         <LoadingState />
       ) : clusters.isLoadingError ? (
         <ErrorState error={clusters.error} onRetry={() => clusters.refetch()} />
@@ -132,76 +172,130 @@ function ClustersPage() {
           </Button>
         </EmptyState>
       ) : (
-        <>
-          <ClusterSummary
-            clusters={clusters.data}
-            selected={selected}
-            onSelect={(id) => navigate({ search: (prev) => ({ ...prev, cluster: id }) })}
-          />
-          <Tabs
-            value={search.tab ?? "overview"}
-            onValueChange={(value) =>
-              navigate({
-                search: (prev) => ({
-                  ...prev,
-                  tab:
-                    value === "dns" || value === "scheduling" || value === "ports"
-                      ? value
-                      : undefined,
-                }),
-                replace: true,
-              })
-            }
-          >
-            <TabsList className="max-w-full justify-start overflow-x-auto">
-              <TabsTrigger value="overview" data-testid="cluster-tab-overview">
-                {m.dns_tab_overview()}
-              </TabsTrigger>
-              <TabsTrigger value="dns" data-testid="cluster-tab-dns">
-                {m.dns_tab_dns()}
-              </TabsTrigger>
-              <TabsTrigger value="scheduling" data-testid="cluster-tab-scheduling">
-                {m.scheduling_tab()}
-              </TabsTrigger>
-              <TabsTrigger value="ports" data-testid="cluster-tab-ports">
-                {m.l4_pools_title()}
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="overview" className="flex flex-col gap-4 animate-enter">
-              <NodeGroupsSection cluster={selected} />
-              <NodesSection cluster={selected} onEnroll={() => setEnrollOpen(true)} />
-              <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
-              <NodeUpgrades key={selected.id} clusterId={selected.id} />
-              <RevisionsSection cluster={selected} />
-            </TabsContent>
-            <TabsContent value="dns" className="animate-enter">
-              <ClusterDns key={selected.id} clusterId={selected.id} />
-            </TabsContent>
-            <TabsContent value="scheduling" className="animate-enter">
-              <ClusterScheduling key={selected.id} clusterId={selected.id} />
-            </TabsContent>
-            <TabsContent value="ports" className="animate-enter">
-              <PortPoolsSection
-                key={selected.id}
-                clusterId={selected.id}
-                clusterName={selected.name}
-              />
-            </TabsContent>
-          </Tabs>
-          <EnrollDialog
-            key={`${selected.id}-${enrollKey}`}
-            cluster={selected}
-            open={search.enroll === true}
-            onOpenChange={setEnrollOpen}
-          />
-        </>
+        <ClusterView
+          clusters={clusters.data}
+          selected={selected}
+          onEnroll={() => setEnrollOpen(true)}
+        />
       )}
+      {selected ? (
+        <EnrollDialogHost
+          cluster={selected}
+          open={search.enroll === true}
+          onOpenChange={setEnrollOpen}
+        />
+      ) : null}
       <ClusterDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onSaved={(cluster) => navigate({ search: (prev) => ({ ...prev, cluster: cluster.id }) })}
+        onSaved={(cluster) =>
+          navigate({ search: (prev) => ({ ...prev, view: undefined, cluster: cluster.id }) })
+        }
       />
     </Page>
+  );
+}
+
+/** The add-node dialog, fresh on every opening. */
+function EnrollDialogHost({
+  cluster,
+  open,
+  onOpenChange,
+}: {
+  cluster: Cluster;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const key = useOpenKey(open);
+  return (
+    <EnrollDialog
+      key={`${cluster.id}-${key}`}
+      cluster={cluster}
+      open={open}
+      onOpenChange={onOpenChange}
+    />
+  );
+}
+
+/**
+ * One cluster: its summary, then its tabs. A cluster without nodes shows
+ * only the node section, whose first step is adding one.
+ */
+function ClusterView({
+  clusters,
+  selected,
+  onEnroll,
+}: {
+  clusters: Cluster[];
+  selected: Cluster;
+  onEnroll: () => void;
+}) {
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  return (
+    <>
+      <ClusterSummary
+        clusters={clusters}
+        selected={selected}
+        onSelect={(id) => navigate({ search: (prev) => ({ ...prev, cluster: id }) })}
+      />
+      {selected.nodeCount === 0 ? (
+        <div className="animate-enter">
+          <NodesSection cluster={selected} onEnroll={onEnroll} />
+        </div>
+      ) : (
+        <Tabs
+          value={search.tab ?? "overview"}
+          onValueChange={(value) =>
+            navigate({
+              search: (prev) => ({
+                ...prev,
+                tab:
+                  value === "dns" || value === "scheduling" || value === "ports"
+                    ? value
+                    : undefined,
+              }),
+              replace: true,
+            })
+          }
+        >
+          <TabsList className="max-w-full justify-start overflow-x-auto">
+            <TabsTrigger value="overview" data-testid="cluster-tab-overview">
+              {m.dns_tab_overview()}
+            </TabsTrigger>
+            <TabsTrigger value="dns" data-testid="cluster-tab-dns">
+              {m.dns_tab_dns()}
+            </TabsTrigger>
+            <TabsTrigger value="scheduling" data-testid="cluster-tab-scheduling">
+              {m.scheduling_tab()}
+            </TabsTrigger>
+            <TabsTrigger value="ports" data-testid="cluster-tab-ports">
+              {m.l4_pools_title()}
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="overview" className="flex flex-col gap-4 animate-enter">
+            <NodeGroupsSection cluster={selected} />
+            <NodesSection cluster={selected} onEnroll={onEnroll} />
+            <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
+            <NodeUpgrades key={selected.id} clusterId={selected.id} />
+            <RevisionsSection cluster={selected} />
+          </TabsContent>
+          <TabsContent value="dns" className="animate-enter">
+            <ClusterDns key={selected.id} clusterId={selected.id} />
+          </TabsContent>
+          <TabsContent value="scheduling" className="animate-enter">
+            <ClusterScheduling key={selected.id} clusterId={selected.id} />
+          </TabsContent>
+          <TabsContent value="ports" className="animate-enter">
+            <PortPoolsSection
+              key={selected.id}
+              clusterId={selected.id}
+              clusterName={selected.name}
+            />
+          </TabsContent>
+        </Tabs>
+      )}
+    </>
   );
 }
 
@@ -271,7 +365,9 @@ function SummaryStat({ label, children }: { label: string; children: React.React
   return (
     <div className="flex min-w-0 flex-col gap-1 px-4 py-3">
       <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd className="flex items-center gap-2 text-xl font-semibold tracking-tight">{children}</dd>
+      <dd className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl font-semibold tracking-tight">
+        {children}
+      </dd>
     </div>
   );
 }
@@ -349,35 +445,52 @@ function ClusterSummary({
           </DropdownMenu>
         </div>
       </CardHeader>
-      <CardContent>
-        <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border">
-          <SummaryStat label={m.clusters_nodes_online()}>
-            <Dot
-              tone={
-                selected.nodeCount === 0
-                  ? "idle"
-                  : selected.onlineNodeCount < selected.nodeCount
-                    ? "bad"
-                    : "good"
-              }
-            />
-            <span data-testid="cluster-nodes-online">
-              {selected.onlineNodeCount}/{selected.nodeCount}
-            </span>
-          </SummaryStat>
-          <SummaryStat label={m.clusters_sites()}>{formatNumber(selected.siteCount)}</SummaryStat>
-          <SummaryStat label={m.clusters_latest_revision()}>
-            <span
-              className={cn(selected.latestRevision && "font-mono")}
-              data-testid="cluster-latest-revision"
-            >
-              {selected.latestRevision
-                ? `#${selected.latestRevision.revision}`
-                : m.clusters_no_revision()}
-            </span>
-          </SummaryStat>
-        </dl>
-      </CardContent>
+      {selected.nodeCount === 0 ? null : (
+        <CardContent>
+          <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border">
+            <SummaryStat label={m.clusters_nodes_online()}>
+              <Dot
+                tone={
+                  selected.nodeCount === 0
+                    ? "idle"
+                    : selected.onlineNodeCount < selected.nodeCount
+                      ? "bad"
+                      : "good"
+                }
+              />
+              <span data-testid="cluster-nodes-online">
+                {selected.onlineNodeCount}/{selected.nodeCount}
+              </span>
+            </SummaryStat>
+            <SummaryStat label={m.clusters_sites()}>{formatNumber(selected.siteCount)}</SummaryStat>
+            <SummaryStat label={m.clusters_latest_revision()}>
+              <span
+                className={cn(selected.latestRevision && "font-mono")}
+                data-testid="cluster-latest-revision"
+              >
+                {selected.latestRevision
+                  ? `#${selected.latestRevision.revision}`
+                  : m.clusters_no_revision()}
+              </span>
+              {selected.latestRevision && selected.liveNodeCount > 0 ? (
+                <span
+                  className="flex items-center gap-1.5 text-sm font-normal tracking-normal whitespace-nowrap text-muted-foreground"
+                  data-testid="cluster-applied"
+                >
+                  <Dot
+                    tone={selected.appliedNodeCount < selected.liveNodeCount ? "warn" : "good"}
+                    small
+                  />
+                  {m.clusters_applied({
+                    applied: selected.appliedNodeCount,
+                    total: selected.liveNodeCount,
+                  })}
+                </span>
+              ) : null}
+            </SummaryStat>
+          </dl>
+        </CardContent>
+      )}
       <ClusterDialog
         key={selected.id}
         cluster={selected}
@@ -646,7 +759,12 @@ function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
       </Badge>
     );
   }
-  if (node.appliedRevision === 0) return null;
+  if (node.appliedRevision === 0)
+    return node.online && node.status === "active" ? (
+      <Badge variant="outline" data-testid="node-awaiting-config">
+        {m.nodes_pending()}
+      </Badge>
+    ) : null;
   // A canary rollout gives each node its own target revision.
   return node.appliedRevision >= (node.targetRevision ?? latest) ? (
     <Badge variant="secondary" data-testid="node-up-to-date">
@@ -656,6 +774,12 @@ function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
     <Badge variant="outline">{m.nodes_behind()}</Badge>
   );
 }
+
+/**
+ * A healthy data plane, or none yet: before its first configuration a node
+ * serves nothing ("awaiting configuration" shows beside its revision).
+ */
+const servesOrStarts = (node: Node) => node.dataPlaneHealthy || node.appliedRevision === 0;
 
 type NodeAction = { kind: "rename" | "move" | "delete"; node: Node };
 
@@ -765,16 +889,21 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
             <StatusDot tone="idle" data-testid="node-disabled">
               {m.nodes_disabled()}
             </StatusDot>
+          ) : !row.original.lastSeenAt ? (
+            // Enrolled, never connected since: the agent is still starting.
+            <StatusDot tone="idle" pulse data-testid="node-awaiting-heartbeat">
+              {m.nodes_awaiting_heartbeat()}
+            </StatusDot>
           ) : row.original.online ? (
             <span className="flex flex-wrap items-center gap-1.5">
               <StatusDot
-                tone={row.original.dataPlaneHealthy ? "good" : "warn"}
-                pulse={row.original.dataPlaneHealthy}
+                tone={servesOrStarts(row.original) ? "good" : "warn"}
+                pulse={servesOrStarts(row.original)}
                 data-testid="node-online"
               >
                 {m.nodes_online()}
               </StatusDot>
-              {row.original.dataPlaneHealthy ? null : (
+              {servesOrStarts(row.original) ? null : (
                 <Badge variant="destructive" data-testid="node-unhealthy">
                   {m.nodes_unhealthy()}
                 </Badge>
@@ -995,24 +1124,53 @@ function DeleteNodeDialog({ node, onClose }: { node: Node; onClose: () => void }
   );
 }
 
+/**
+ * Rollback with what it changes: the sites it adds, changes and removes
+ * against the latest revision, or why it cannot be done, before confirming.
+ */
 function RollbackAction({ clusterId, revision }: { clusterId: string; revision: number }) {
   const queryClient = useQueryClient();
   const rollback = useMutation(orpc.clusters.rollback.mutationOptions());
+  const [open, setOpen] = React.useState(false);
+  const preview = useQuery({
+    ...orpc.clusters.rollbackPreview.queryOptions({ input: { id: clusterId, revision } }),
+    enabled: open,
+    // Always against the latest revision; a refusal is an answer, not a hiccup.
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
   return (
     <ConfirmDialog
       trigger={
-        <Button size="sm" variant="ghost">
+        <Button size="sm" variant="ghost" data-testid="revision-rollback">
           {m.revisions_rollback()}
         </Button>
       }
       title={m.revisions_rollback()}
       note={m.revisions_rollback_confirm({ revision })}
+      onOpenChange={setOpen}
+      confirmDisabled={!preview.data}
       onConfirm={async () => {
         const result = await rollback.mutateAsync({ id: clusterId, revision });
         toast.success(m.revisions_rolled_back({ revision: result.revision }));
         await queryClient.invalidateQueries();
       }}
-    />
+    >
+      {preview.isPending ? (
+        <LoadingState />
+      ) : preview.isLoadingError ? (
+        <FieldError data-testid="rollback-preview-error">{errorMessage(preview.error)}</FieldError>
+      ) : (
+        <div className="animate-enter rounded-xl border p-3">
+          <SiteChangeList
+            changes={preview.data.sites}
+            unchanged={preview.data.unchanged}
+            testId="rollback-preview"
+          />
+        </div>
+      )}
+    </ConfirmDialog>
   );
 }
 
@@ -1096,6 +1254,11 @@ function RevisionsSection({ cluster }: { cluster: Cluster }) {
 
 const TTL_OPTIONS = [15, 60, 24 * 60];
 
+/**
+ * Adding a node: the install command of a token minted with the defaults as
+ * soon as the dialog opens, then the node's progress. Name, node group (with
+ * more than one) and lifetime are options that mint another token.
+ */
 function EnrollDialog({
   cluster,
   open,
@@ -1107,12 +1270,27 @@ function EnrollDialog({
 }) {
   const [ttl, setTtl] = React.useState(60);
   const [groupId, setGroupId] = React.useState<string>("");
+  const [nodeName, setNodeName] = React.useState("");
+  const [optionsOpen, setOptionsOpen] = React.useState(false);
   const [result, setResult] = React.useState<EnrollmentTokenResult | null>(null);
   const groups = useQuery({
     ...orpc.nodeGroups.list.queryOptions({ input: { clusterId: cluster.id } }),
     enabled: open,
   });
   const create = useMutation(orpc.clusters.createEnrollmentToken.mutationOptions());
+  const { mutateAsync } = create;
+  // One token per opening (the dialog is keyed per opening). StrictMode runs
+  // effects twice; the ref keeps that to one token.
+  const minted = React.useRef(false);
+  // The command is the dialog's content: focus rests on closing, not on the options.
+  const closeRef = React.useRef<HTMLButtonElement>(null);
+  React.useEffect(() => {
+    if (!open || minted.current) return;
+    minted.current = true;
+    mutateAsync({ clusterId: cluster.id }).then(setResult, () => {
+      // rendered below via create.error
+    });
+  }, [open, cluster.id, mutateAsync]);
   const ttlLabel = (minutes: number) =>
     minutes < 60
       ? m.enroll_ttl_minutes({ count: minutes })
@@ -1130,13 +1308,16 @@ function EnrollDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl"
+        initialFocus={closeRef}
+      >
         <DialogHeader>
           <DialogTitle>{m.enroll_title()}</DialogTitle>
         </DialogHeader>
-        {result ? (
-          <div className="flex flex-col gap-4">
-            <FieldGroup>
+        <div className="flex flex-col gap-4">
+          {result ? (
+            <FieldGroup className="animate-enter">
               <Field>
                 <FieldLabel>{m.enroll_command()}</FieldLabel>
                 <CodeBlock value={result.installCommand} testId="install-command" />
@@ -1147,109 +1328,131 @@ function EnrollDialog({
                   <span aria-hidden="true">·</span>
                   <SafetyNote data-testid="enroll-token-once">{m.enroll_shown_once()}</SafetyNote>
                 </div>
-                <ConsoleUrlWarnings warnings={result.warnings} />
-              </Field>
-              <Field>
-                <FieldLabel>{m.enroll_ca_fingerprint()}</FieldLabel>
-                <code className="rounded-xl bg-muted p-2 font-mono text-xs break-all">
-                  {result.caSha256}
-                </code>
+                <div className="flex flex-col gap-1">
+                  <ConsoleUrlWarnings warnings={result.warnings} />
+                  <NodeChannelCheckStatus line />
+                </div>
               </Field>
               <Field>
                 <FieldLabel>{m.enroll_progress()}</FieldLabel>
-                <EnrollProgress result={result} />
+                <EnrollProgress key={result.tokenId} result={result} />
               </Field>
             </FieldGroup>
-            <DialogFooter>
-              <Button onClick={() => setOpen(false)} data-testid="enroll-close">
-                {m.common_close()}
-              </Button>
-            </DialogFooter>
-          </div>
-        ) : (
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              try {
-                setResult(
-                  await create.mutateAsync({
-                    clusterId: cluster.id,
-                    nodeGroupId: selectedGroup || undefined,
-                    nodeName: String(data.get("enrollNodeName") ?? ""),
-                    ttlMinutes: ttl,
-                  }),
-                );
-              } catch {
-                // rendered below via create.error
-              }
-            }}
+          ) : create.isPending ? (
+            <LoadingState />
+          ) : null}
+          {create.isError && !optionsOpen ? (
+            <FieldError>{errorMessage(create.error)}</FieldError>
+          ) : null}
+          {optionsOpen ? (
+            <form
+              className="animate-enter rounded-xl border p-3"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                try {
+                  setResult(
+                    await create.mutateAsync({
+                      clusterId: cluster.id,
+                      nodeGroupId: selectedGroup || undefined,
+                      nodeName: nodeName.trim(),
+                      ttlMinutes: ttl,
+                    }),
+                  );
+                  setOptionsOpen(false);
+                } catch {
+                  // rendered below via create.error
+                }
+              }}
+            >
+              <FieldGroup>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field className="sm:col-span-2">
+                    <FieldLabel htmlFor="enrollNodeName">{m.enroll_node_name()}</FieldLabel>
+                    {/* Not "nodeName": that would clobber HTMLFormElement.nodeName and break React events. */}
+                    <Input
+                      id="enrollNodeName"
+                      name="enrollNodeName"
+                      maxLength={64}
+                      placeholder="edge-sh-01"
+                      value={nodeName}
+                      onChange={(event) => setNodeName(event.target.value)}
+                    />
+                  </Field>
+                  {groupItems.length > 1 ? (
+                    <Field>
+                      <FieldLabel>{m.nodes_col_group()}</FieldLabel>
+                      <Select
+                        value={selectedGroup}
+                        onValueChange={(value) => value && setGroupId(String(value))}
+                        items={groupItems}
+                      >
+                        <SelectTrigger className="w-full" data-testid="enroll-group">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {groupItems.map((g) => (
+                            <SelectItem key={g.value} value={g.value}>
+                              {g.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  ) : null}
+                  <Field>
+                    <FieldLabel>{m.enroll_ttl()}</FieldLabel>
+                    <Select
+                      value={String(ttl)}
+                      onValueChange={(value) => value && setTtl(Number(value))}
+                      items={TTL_OPTIONS.map((v) => ({ label: ttlLabel(v), value: String(v) }))}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TTL_OPTIONS.map((v) => (
+                          <SelectItem key={v} value={String(v)}>
+                            {ttlLabel(v)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+                {create.isError ? <FieldError>{errorMessage(create.error)}</FieldError> : null}
+                <div className="flex justify-end">
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={create.isPending}
+                    data-testid="generate-install-command"
+                  >
+                    {create.isPending ? <Spinner /> : null}
+                    {m.enroll_generate()}
+                  </Button>
+                </div>
+              </FieldGroup>
+            </form>
+          ) : null}
+        </div>
+        <DialogFooter className="sm:justify-between">
+          <Button
+            variant="ghost"
+            aria-expanded={optionsOpen}
+            onClick={() => setOptionsOpen((value) => !value)}
+            data-testid="enroll-options"
           >
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="enrollNodeName">{m.enroll_node_name()}</FieldLabel>
-                {/* Not "nodeName": that would clobber HTMLFormElement.nodeName and break React events. */}
-                <Input
-                  id="enrollNodeName"
-                  name="enrollNodeName"
-                  maxLength={64}
-                  placeholder="edge-sh-01"
-                />
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field>
-                  <FieldLabel>{m.nodes_col_group()}</FieldLabel>
-                  <Select
-                    value={selectedGroup}
-                    onValueChange={(value) => value && setGroupId(String(value))}
-                    items={groupItems}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {groupItems.map((g) => (
-                        <SelectItem key={g.value} value={g.value}>
-                          {g.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel>{m.enroll_ttl()}</FieldLabel>
-                  <Select
-                    value={String(ttl)}
-                    onValueChange={(value) => value && setTtl(Number(value))}
-                    items={TTL_OPTIONS.map((v) => ({ label: ttlLabel(v), value: String(v) }))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TTL_OPTIONS.map((v) => (
-                        <SelectItem key={v} value={String(v)}>
-                          {ttlLabel(v)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </div>
-              {create.isError ? <FieldError>{errorMessage(create.error)}</FieldError> : null}
-              <DialogFooter>
-                <Button
-                  type="submit"
-                  disabled={create.isPending}
-                  data-testid="generate-install-command"
-                >
-                  {create.isPending ? <Spinner /> : null}
-                  {m.enroll_generate()}
-                </Button>
-              </DialogFooter>
-            </FieldGroup>
-          </form>
-        )}
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              strokeWidth={2}
+              className={cn("transition-transform", optionsOpen && "rotate-180")}
+            />
+            {m.enroll_options()}
+          </Button>
+          <Button ref={closeRef} onClick={() => setOpen(false)} data-testid="enroll-close">
+            {m.common_close()}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

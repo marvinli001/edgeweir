@@ -12,7 +12,7 @@ The console has one account, created by the setup wizard (`/setup`, **Create you
 | Other accounts | Sign-up is closed; the console has no user management and no way to add a second account |
 | Name and email | The console offers no way to change them |
 | Password | Changed in [Account security](#account-security); the web UI has no password recovery or reset. A forgotten password is reset on the server, see [Account recovery](#account-recovery) |
-| API | AccessKeys (prefix `ewk_`) call `/api/v1` as this account; create them in [Settings](#settings) |
+| API | AccessKeys (prefix `ewk_`) call `/api/v1` as this account; create them in [Personal settings](#personal-settings) |
 
 ## Sign-in
 
@@ -75,9 +75,9 @@ Page: user menu → **Security** (`/security`, titled **Account security**).
 
 Password changes, two-factor enable and disable, and passkey add and delete are written to the [audit log](system.en.md#audit-log) (`account.*`).
 
-## Settings
+## Personal settings
 
-Page: user menu → **Settings** (`/settings`).
+Page: user menu → **Personal settings** (`/settings`).
 
 | Card | Content |
 | --- | --- |
@@ -94,27 +94,25 @@ For using and revoking AccessKeys, see [Access logs and access keys](access-logs
 | --- | --- |
 | Sites | Type a site's name or domain to search; Enter opens the site. Before typing, starred and recently visited sites are listed |
 | Site actions | The first 3 sites found each have **Under Attack: (site)** (turns the site's Under Attack the other way after a confirmation) and **Purge cache: (site)** (creates a whole-site purge after a confirmation) |
-| Navigation | Opens any page (**Security** and **Settings** included) |
+| Navigation | Opens any page (**Security** and **Personal settings** included, and **Regions** and **Service accounts**, which open the page they live on) |
 | Actions | **New site**, **Add node**, **Ban an IP…** (opens the ban dialog, with the site filled in on a site's pages), **Purge URLs…** (opens **Purge & prefetch**), **Global Under Attack** (turns it the other way after a confirmation), **Switch language**, **Toggle dark mode** |
 
 ### Sidebar
 
 | Group | Menu | Path | Content |
 | --- | --- | --- | --- |
-| — | **Overview** | `/overview` | See [Overview](#overview) |
+| — | **Overview** | `/overview` | See [Overview](#overview); shows how many items [need attention](system.en.md#needs-attention), if any |
 | — | **Sites** | `/sites` | Site list and details; for enabling and disabling, see [Site enabling](system.en.md#site-enabling). The **Sites \| L4 apps** switch above the list leads to the L4 app list (`/l4`), see [Layer-4 forwarding](l4.en.md) |
 | — | **Certificates** | `/certificates` | Certificates and DNS credentials; see [HTTPS and certificates](https.en.md) |
 | — | **Purge & prefetch** | `/purge` | URL, directory, and site purges, URL prefetch, and tasks; see [Origins and cache](origins-and-cache.en.md) |
 | **Access control** | **Global rules** | `/rules` | Rules applied to every site; see [Rules, IP lists, and GeoIP](rules.en.md) |
 | **Access control** | **IP lists & bans** | `/ip-lists`, `/bans` | The **IP lists \| Bans** switch at the top moves between the two lists: lists referenced by rules, and allow and block lists, see [Rules, IP lists, and GeoIP](rules.en.md); site bans and global bans, see [Bans](bans.en.md). `/bans?site=<site ID>` shows one site's bans; **This site's bans** on a site's **Security** tab links there |
 | **Access control** | **Protection settings** | `/protection` | Global Under Attack, the CC template, ban settings, and GeoIP databases; see [Protection settings](system.en.md#protection-settings) |
-| **Infrastructure** | **Clusters & nodes** | `/clusters` | Clusters, node groups, nodes, configuration canary, node upgrades, revisions, and the cluster's DNS binding and scheduling; see [Clusters and nodes](system.en.md#clusters-and-nodes) |
-| **Infrastructure** | **Regions & probes** | `/regions` | Regions, regional probes, and probe settings; see [Regions](system.en.md#regions) and [Regional probes](scheduling.en.md#regional-probes) |
+| **Infrastructure** | **Clusters & nodes** | `/clusters` | Clusters, node groups, nodes, configuration canary, node upgrades, revisions, and the cluster's DNS binding and scheduling; see [Clusters and nodes](system.en.md#clusters-and-nodes). The **Clusters \| Regions** switch at the top leads to the regions view (`/clusters?view=regions`), see [Regions](system.en.md#regions) |
 | **Infrastructure** | **DNS steering** | `/dns` | DNS provider accounts, each cluster's DNS binding, and mass removal protection; see [Configure DNS steering](dns-and-alerts.en.md#configure-dns-steering) |
 | **System** | **Alerts** | `/alerts` | Alert channels, SMTP, subscriptions, recent events, and alert rules; see [Alerts page](dns-and-alerts.en.md#alerts-page) |
-| **System** | **Service accounts** | `/service-accounts` | Service accounts integrations use on `/api/v1`; see [Service accounts](system.en.md#service-accounts) |
 | **System** | **Audit log** | `/audit` | See [Audit log](system.en.md#audit-log) |
-| **System** | **System** | `/system` | See [System settings](system.en.md#system-settings) |
+| **System** | **System settings** | `/system` | Tabs **General**, **Monitoring** (`/system?tab=probes`: regional probes and probe settings, see [Regional probes](scheduling.en.md#regional-probes)), and **Service accounts** (`/system?tab=service-accounts`, see [Service accounts](system.en.md#service-accounts)); see [System settings](system.en.md#system-settings) |
 
 ### User menu
 
@@ -123,7 +121,7 @@ The bottom of the sidebar shows the account's name and email; click it to open t
 | Item | Description |
 | --- | --- |
 | **Security** | `/security`; see [Account security](#account-security) |
-| **Settings** | `/settings`; see [Settings](#settings) |
+| **Personal settings** | `/settings`; see [Personal settings](#personal-settings) |
 | **Language** | 简体中文 / English |
 | **Theme** | Light / Dark / System |
 | **Log out** | Ends the current session and returns to the sign-in page |
@@ -134,13 +132,14 @@ The bottom of the sidebar shows the account's name and email; click it to open t
 
 | Block | Content |
 | --- | --- |
+| **Needs attention** | What needs the operator, each row with its cluster's name and a link to it; hidden when nothing does, see [Needs attention](system.en.md#needs-attention) |
 | **Sites** | Number of sites; starred sites first, then the other sites by creation time, at most 5. Sites are starred in the **Sites** list or on the site page |
-| **Nodes** | Online and total nodes; nodes that need attention first: **Offline**, **Apply failed**, **Data plane unhealthy**, **Behind**, **Pending**, **Disabled**, **In sync**. Shows **Add node** when there are no nodes |
+| **Nodes** | Online and total nodes; nodes that need attention first: **Offline**, **Apply failed**, **Data plane unhealthy**, **Behind**, **Awaiting configuration**, **Awaiting heartbeat**, **Disabled**, **In sync**. Shows **Add node** when there are no nodes |
 | **Recent revisions** | The latest revisions across all clusters, with their reasons |
 | **Recents** | Pages and sites recently opened in the current browser, at most 5 |
 | **Analytics** | Traffic, ranges from 1 hour to 30 days (24 hours by default); the metric cards open breakdowns by site, node, and status code. **Top sites** and **Top nodes** show each item's cluster |
 
-Nodes and recent revisions refresh every 10 seconds, analytics every minute.
+Needs attention, nodes, and recent revisions refresh every 10 seconds, analytics every minute.
 
 ### Other paths
 
@@ -149,6 +148,8 @@ Nodes and recent revisions refresh every 10 seconds, analytics every minute.
 | `/` | No page: redirects to `/setup` before setup, to `/overview` when signed in, otherwise to `/login` |
 | `/login` | Sign-in |
 | `/setup` | Setup wizard; redirects to `/login` once setup is done |
+| `/regions` | Redirects to `/clusters?view=regions`; `/regions?tab=probes` to `/system?tab=probes` |
+| `/service-accounts` | Redirects to `/system?tab=service-accounts` |
 
 ## Troubleshooting
 

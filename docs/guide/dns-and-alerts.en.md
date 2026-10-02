@@ -26,13 +26,13 @@ DNS steering writes steering records for each cluster; the CNAME targets of site
 2. Fill in **Name**, select **DNS provider**, and fill in the credential fields the form shows (fields and required permissions: [Providers and credentials](#providers-and-credentials)).
 3. For providers that can list zones, click **List zones** and pick the **Zone**; otherwise type the **Zone**.
 4. Click **Test connection**. Verify: **Connected: N records in the zone** appears.
-5. Click **Create**.
+5. Click **Create**. Saving first runs the same test as **Test connection**; when it fails, the dialog shows the error and the button becomes **Save anyway**.
 
-An account is one set of credentials and one zone; for several zones under the same credentials, add one account per zone. **Test connection** in the account list reads the zone with the saved credentials. **Edit** renames the account; turn on **Replace credentials** and fill in every field again to rotate secrets. The provider and zone cannot change after creation. Credentials are envelope-encrypted with the master key and are write-only.
+An account is one set of credentials and one zone; for several zones under the same credentials, add one account per zone. **Test connection** in the account list reads the zone with the saved credentials. **Edit** renames the account; turn on **Replace credentials** and fill in every field again to rotate secrets, which are tested before saving too. A rename alone is not tested. After a failed test, changing any field makes the next save test again. The provider and zone cannot change after creation. Credentials are envelope-encrypted with the master key and are write-only.
 
 ### Bind a cluster
 
-1. Open **Clusters & nodes**, select the cluster, and switch to the **DNS** tab.
+1. Open **Clusters & nodes**, select the cluster, and switch to the **DNS** tab (shown once the cluster has a node).
 2. Select **Mode**: **Not managed**, **Manual**, or **Automatic**.
 3. Select **Provider account**; **Zone** shows the account's zone. Fill in **Cluster domain** and **TTL (seconds)**.
 4. Click **Add line**, fill in **Line name**, and select a **Node group** of this cluster; if needed, select a **Resolution line**, fill in **Minimum healthy IPs**, and use **Add backup group** under **Backup node groups**, ordering the groups. For a node behind NAT or on a private network, enter its public addresses in the node's **node name: target addresses** field, or configure the node's [scheduling addresses](scheduling.en.md#scheduling-addresses-and-backup-ips); leave it empty to use the node's scheduling addresses.

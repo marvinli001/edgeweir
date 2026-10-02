@@ -65,7 +65,9 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
   });
 
   await test.step("the operator adds a region, a cluster and a node group, and moves the node", async () => {
-    await page.getByTestId("nav-regions").click();
+    // Regions are a view of the clusters page.
+    await page.getByTestId("nav-clusters").click();
+    await page.getByTestId("clusters-view-regions").click();
     await page.getByTestId("create-region").click();
     await page.getByLabel("名称", { exact: true }).fill("华东");
     await page.getByLabel("代码", { exact: true }).fill("cn-east");

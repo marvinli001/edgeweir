@@ -23,12 +23,12 @@ test("first-run setup needs the setup token printed in the console log", async (
   await page.getByTestId("setup-submit").click();
   // Without a node the console starts with adding one: the add-node dialog of the default cluster.
   await expect(page.getByTestId("page-title")).toHaveText("集群与节点");
-  await expect(page.getByTestId("generate-install-command")).toBeVisible();
+  await expect(page.getByTestId("install-command")).toContainText("EDGEWEIR_TOKEN");
   const primary = page.getByTestId("nav-primary-action");
   await expect(primary).toHaveText("添加节点");
   await expect(primary).toHaveAttribute("data-action", "add-node");
   await page.keyboard.press("Escape");
-  await expect(page.getByTestId("generate-install-command")).toBeHidden();
+  await expect(page.getByTestId("install-command")).toBeHidden();
   // The only account runs the whole console: every page is in the sidebar.
   await expect(page.getByTestId("nav-clusters")).toBeVisible();
 

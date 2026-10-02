@@ -93,9 +93,10 @@ describe("following an enrollment from the add-node dialog", async () => {
   });
 
   it("warns about URLs other networks cannot reach, without refusing", async () => {
-    // The tests' node channel URL is https://localhost:8443; the console URL is a public name.
+    // The tests' node channel URL is https://localhost:8443; the console URL is a public
+    // name over plain HTTP.
     const token = await admin.clusters.createEnrollmentToken({ clusterId, nodeName: "edge-w" });
-    expect(token.warnings).toEqual(["node_api_url_local"]);
+    expect(token.warnings).toEqual(["console_url_http", "node_api_url_local"]);
     expect(token.installCommand).toContain("--server https://localhost:8443");
 
     const logged: string[] = [];
@@ -115,6 +116,13 @@ describe("following an enrollment from the add-node dialog", async () => {
       nodeApiUrl: "https://cdn-admin.example.com:8443",
     });
     expect(logged).toEqual([]);
+    expect(
+      warnConsoleUrls(log, {
+        EDGEWEIR_PUBLIC_URL: "http://cdn-admin.example.com",
+        nodeApiUrl: "https://cdn-admin.example.com:8443",
+      }),
+    ).toEqual(["console_url_http"]);
+    expect(logged[0]).toContain("plain HTTP");
   });
 
   it("reports whether the token enrolled a node, and that node", async () => {

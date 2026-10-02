@@ -8,6 +8,7 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
@@ -23,10 +24,32 @@ export interface NavItem {
   exact?: boolean;
   /** Other sections the entry also stands for (prefix match), reached from its page. */
   also?: string[];
+  /** Shows how many things need the operator (the overview lists them). */
+  attention?: boolean;
 }
 
 const PRIMARY =
   "min-w-8 bg-primary text-primary-foreground shadow-md shadow-primary/20 duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground";
+
+/** How many things need the operator, beside the entry that lists them; nothing at zero. */
+function AttentionBadge() {
+  const overview = useQuery({
+    ...orpc.overview.get.queryOptions(),
+    refetchInterval: 30_000,
+    meta: { background: true },
+  });
+  const count = overview.data?.attention.length ?? 0;
+  if (count === 0) return null;
+  return (
+    <SidebarMenuBadge
+      className="bg-state-warn/15"
+      title={m.attention_count({ count })}
+      data-testid="nav-attention"
+    >
+      {count}
+    </SidebarMenuBadge>
+  );
+}
 
 /** The sidebar's primary action: a new site, or adding a node while there is none. */
 function PrimaryAction() {
@@ -103,6 +126,7 @@ export function NavMain({
                   {item.icon}
                   <span>{item.title}</span>
                 </SidebarMenuButton>
+                {item.attention ? <AttentionBadge /> : null}
               </SidebarMenuItem>
             );
           })}

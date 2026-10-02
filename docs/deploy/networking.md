@@ -115,7 +115,7 @@ server {
      | openssl x509 -noout -issuer
    ```
 
-   预期：签发者含 `Edgeweir Node Channel CA`。出现其他签发者表示 TLS 被中间设备终结。
+   预期：签发者含 `Edgeweir Node Channel CA`。出现其他签发者表示 TLS 被中间设备终结。**系统设置** 中「节点通道」旁的自检做同样的检查，从控制台所在网络连接 `EDGEWEIR_NODE_API_URL`，见 [节点通道自检](nodes.md#节点通道自检)。
 
 ## 可信代理与客户端 IP
 

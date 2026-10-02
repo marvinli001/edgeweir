@@ -283,15 +283,26 @@ export function urlHostScope(url: string): "local" | "private" | null {
 /**
  * Why nodes on other networks may fail to reach the console: install.sh is
  * downloaded from the console URL, enrollment and every later RPC use the
- * node channel URL.
+ * node channel URL. console_url_http: a public console URL without TLS, so
+ * the install.sh that hosts pipe to `sudo bash` travels unprotected.
  */
 export const CONSOLE_URL_WARNINGS = [
   "console_url_local",
   "console_url_private",
+  "console_url_http",
   "node_api_url_local",
   "node_api_url_private",
 ] as const;
 export type ConsoleUrlWarning = (typeof CONSOLE_URL_WARNINGS)[number];
+
+/** Whether a URL is plain http:// (unparsable URLs are not). */
+export function isPlainHttp(url: string): boolean {
+  try {
+    return new URL(url).protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 
 /** The warnings of the console URL (EDGEWEIR_PUBLIC_URL) and the node channel URL. */
 export function consoleUrlWarnings(urls: {
@@ -301,6 +312,7 @@ export function consoleUrlWarnings(urls: {
   const warnings: ConsoleUrlWarning[] = [];
   const consoleScope = urlHostScope(urls.consoleUrl);
   if (consoleScope) warnings.push(`console_url_${consoleScope}`);
+  else if (isPlainHttp(urls.consoleUrl)) warnings.push("console_url_http");
   const channelScope = urlHostScope(urls.nodeApiUrl);
   if (channelScope) warnings.push(`node_api_url_${channelScope}`);
   return warnings;

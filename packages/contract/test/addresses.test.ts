@@ -253,6 +253,31 @@ describe("console URLs nodes use", () => {
       }),
     ).toEqual([]);
   });
+
+  it("warns when a public console URL is plain HTTP", () => {
+    expect(
+      consoleUrlWarnings({
+        consoleUrl: "http://cdn-admin.example.com",
+        nodeApiUrl: "https://cdn-admin.example.com:8443",
+      }),
+    ).toEqual(["console_url_http"]);
+    expect(
+      consoleUrlWarnings({
+        consoleUrl: "http://203.0.114.1:3000",
+        nodeApiUrl: "https://203.0.114.1:8443",
+      }),
+    ).toEqual(["console_url_http"]);
+    // Local and private URLs keep their own warning only.
+    expect(
+      consoleUrlWarnings({
+        consoleUrl: "http://10.0.0.5:3000",
+        nodeApiUrl: "https://cdn-admin.example.com:8443",
+      }),
+    ).toEqual(["console_url_private"]);
+    expect(
+      consoleUrlWarnings({ consoleUrl: "not a url", nodeApiUrl: "https://edge.example.com:8443" }),
+    ).toEqual([]);
+  });
 });
 
 describe("originAddress", () => {

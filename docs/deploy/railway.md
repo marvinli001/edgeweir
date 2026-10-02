@@ -162,7 +162,7 @@ openssl rand -base64 32 > edgeweir-master-key
 | Web 与 API | `curl -fsS https://<名称>.up.railway.app/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
 | 节点通道 TLS | 下方 `openssl` 命令 | 签发者为 `Edgeweir Node Channel CA`，SAN 含 TCP 代理域名 |
 | 节点通道地址 | **系统设置** 的「节点通道」 | `https://<名称>.proxy.rlwy.net:<端口>` |
-| 节点注册 | **集群与节点** → **添加节点** → **生成安装命令** | `--server` 为 TCP 代理地址；在节点上执行见 [接入节点](nodes.md) |
+| 节点注册 | **集群与节点** → **添加节点**（对话框打开即显示安装命令） | `--server` 为 TCP 代理地址；在节点上执行见 [接入节点](nodes.md) |
 
 ```bash
 openssl s_client -connect <名称>.proxy.rlwy.net:<端口> -servername <名称>.proxy.rlwy.net </dev/null 2>/dev/null \

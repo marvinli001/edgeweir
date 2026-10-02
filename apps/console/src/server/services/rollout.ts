@@ -8,13 +8,14 @@ import type {
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { NodeConfigSchema } from "@edgeweir/proto";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockClusterPublish } from "../lib/locks";
 import { isOnline } from "../lib/node-online";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit, systemActor } from "./audit";
+import { distinctReasons, siteChanges } from "./config-changes";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import {
   currentStable,
@@ -26,6 +27,7 @@ import {
   notifyClusterTargets,
   onlineCanaryNodes,
   type Tx,
+  toRevisionDto,
   updateRollout,
 } from "./revisions";
 
@@ -297,6 +299,44 @@ function policyOf(row: RolloutRow | undefined): RolloutPolicy {
   };
 }
 
+/** At most this many revisions explain a candidate. */
+const MAX_CANDIDATE_REASONS = 50;
+
+/**
+ * What a running window's candidate changes against the stable revision:
+ * sites by name, and the reasons of the revisions in (stable, candidate].
+ */
+async function candidateChanges(
+  db: Executor,
+  clusterId: string,
+  stableRevision: number | null,
+  candidateRevision: number,
+): Promise<ClusterRollout["candidateChanges"]> {
+  const candidate = await getRevision(db, clusterId, candidateRevision);
+  if (!candidate) return null;
+  const stable =
+    stableRevision === null ? undefined : await getRevision(db, clusterId, stableRevision);
+  const revisions = await db
+    .select()
+    .from(schema.configRevision)
+    .where(
+      and(
+        eq(schema.configRevision.clusterId, clusterId),
+        gt(schema.configRevision.revision, stableRevision ?? 0),
+        lte(schema.configRevision.revision, candidateRevision),
+      ),
+    )
+    .orderBy(asc(schema.configRevision.revision))
+    .limit(MAX_CANDIDATE_REASONS);
+  return {
+    sites: siteChanges(
+      stable ? decodeNodeConfig(stable.ir) : undefined,
+      decodeNodeConfig(candidate.ir),
+    ),
+    reasons: distinctReasons(revisions.map(toRevisionDto)),
+  };
+}
+
 export async function getRollout(db: Executor, clusterId: string): Promise<ClusterRollout> {
   await clusterName(db, clusterId);
   const row = await loadRollout(db, clusterId);
@@ -348,6 +388,10 @@ export async function getRollout(db: Executor, clusterId: string): Promise<Clust
             row,
             row.canaryNodeIds.filter((id) => nodes.some((n) => n.node.id === id)),
           )
+        : null,
+    candidateChanges:
+      running && row.candidateRevision !== null
+        ? await candidateChanges(db, clusterId, row.stableRevision, row.candidateRevision)
         : null,
     policyUpdatedAt: (row?.policyUpdatedAt ?? new Date(0)).toISOString(),
     updatedAt: (row?.updatedAt ?? new Date(0)).toISOString(),

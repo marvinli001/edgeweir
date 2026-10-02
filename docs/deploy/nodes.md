@@ -23,19 +23,31 @@
 
 ## 1. 生成安装命令
 
-1. 打开 **集群与节点**，选择集群，点击 **添加节点**。
-2. 填写 **节点名称**，选择 **节点组**（默认为集群的默认节点组）与 **有效期**（15 分钟、1 小时、24 小时，默认 1 小时）。
-3. 点击 **生成安装命令**。对话框显示 **安装命令** 与 **CA 指纹**，仅显示一次。
+1. 打开 **集群与节点**，选择集群，点击 **添加节点**。对话框立即显示 **安装命令**：集群的默认节点组，有效期 1 小时，不带节点名称。
+2. 需要节点名称、其他节点组或有效期时，打开 **选项**：填写 **节点名称**，选择 **节点组**（集群有多个节点组时显示）与 **有效期**（15 分钟、1 小时、24 小时），点击 **重新生成**。
+3. 复制 **安装命令**。命令下方显示剩余时间、「仅显示一次」、地址提醒与 [节点通道自检](#节点通道自检)；关闭对话框后不再显示，再次打开生成新的 token。
 4. 在节点上执行命令后，对话框的 **注册进度** 每 3 秒刷新：等待节点注册（或令牌已过期）、已注册（节点名称链接到节点详情）、在线、配置已应用、数据面正常、有可供 DNS 使用的地址。
 
 | 项目 | 行为 |
 | --- | --- |
 | 注册 token | `ewt_` 前缀，单次有效，数据库只存 SHA-256；生成操作写入审计日志。 |
 | `--server` | `EDGEWEIR_NODE_API_URL`。 |
-| `--ca-sha256` | 节点通道内部 CA 的 SHA-256 指纹。 |
+| `--ca-sha256` | 节点通道内部 CA 的 SHA-256 指纹，与 **系统设置** 中的「CA 指纹」相同。 |
 | API | `POST /api/v1/enrollment-tokens`，`ttlMinutes` 取值 5–10080，默认 60；`GET /api/v1/enrollment-tokens/{id}` 返回 `usedAt` 与注册的节点。见 [API 与端点](../reference/api.md)。 |
-| 地址提醒 | 控制台地址（`install.sh` 从此下载）或节点通道地址是 localhost、回环或内网地址时，对话框逐条提醒，**系统设置** 中的地址旁显示「仅本机可达」或「内网地址」，控制台启动时写一条警告日志；不阻止生成。 |
+| 地址提醒 | 控制台地址（`install.sh` 从此下载）或节点通道地址是 localhost、回环或内网地址时，对话框逐条提醒，**系统设置** 中的地址旁显示「仅本机可达」或「内网地址」；控制台地址是公网 HTTP 地址时提醒「控制台地址是 HTTP，install.sh 以明文传给要用 root 运行它的主机」，**系统设置** 中标「未加密」。控制台启动时为每条提醒写一条警告日志；不阻止生成。 |
 | 清理 | 过期或使用超过 7 天的 token 每 30 分钟删除一次。 |
+
+### 节点通道自检
+
+控制台用 `EDGEWEIR_NODE_API_URL` 与自己的节点通道做一次 TLS 握手（不带客户端证书，不发送请求），比较对方出示的证书链与节点通道内部 CA。结果在添加节点对话框中显示为一行「节点通道自检：…」，在 **系统设置** 中显示在「节点通道」旁。
+
+| 结果 | 含义 |
+| --- | --- |
+| 可达，CA 一致 | 握手成功，证书链含节点通道内部 CA |
+| 控制台连不上该地址 | 3 秒内没有完成握手：地址或解析错误，端口未放行，或控制台所在网络到不了该地址 |
+| CA 不一致，前面有代理终止了 TLS | 出示了其他证书链，或地址不是 `https`：代理或 CDN 终结了 TLS，节点 mTLS 会失败，见 [节点通道四层透传](networking.md#节点通道四层透传) |
+
+自检只作提示，不阻止任何操作：控制台能连上自己的地址，不代表其他网络的节点也能连上。结果缓存 30 秒。API：`GET /api/v1/settings/node-channel-check`，返回 `{ url, result, checkedAt }`，`result` 为 `ok`、`unreachable` 或 `mismatch`。
 
 ## 2. 执行安装命令
 
@@ -51,12 +63,14 @@ token 只经 `EDGEWEIR_TOKEN` 环境变量或 `--token-file PATH` 传递，不�
 
 ## 3. 验证
 
+`install.sh` 最后等待 `edgeweir-node healthcheck` 通过（[install.sh 流程](#installsh-流程) 第 11 步），输出 `done: edgeweir-node is healthy (revision N, M sites)`。之后：
+
 ```bash title="节点"
 systemctl status edgeweir-node
 journalctl -u edgeweir-node -f
 ```
 
-预期：`edgeweir-node.service` 为 `active (running)`；**集群与节点** 中该节点状态为「在线」，**已应用版本** 显示配置版本号。
+预期：`edgeweir-node.service` 为 `active (running)`；**集群与节点** 中该节点状态为「在线」，**已应用版本** 显示配置版本号。节点注册后、首次连接节点通道前状态为「等待心跳」；在线但尚未应用配置时 **已应用版本** 标「待应用配置」。
 
 ## install.sh 流程
 
@@ -64,18 +78,19 @@ journalctl -u edgeweir-node -f
 | --- | --- | --- |
 | 1 | 读取 token（`EDGEWEIR_TOKEN` 或 `--token-file`），校验 `ewt_` 格式，从环境中移除，子进程不继承。状态目录已有 `identity.json`（已注册）时不需要 token，给出也不使用；加 `--force` 时仍需要 token | 退出 |
 | 2 | 检查 Linux、root、`curl`、`sha256sum`、`tar`、systemd、架构；`--format auto` 时有 `dpkg` 与 `apt-get` 选 deb，有 `rpm` 与 `dnf`/`yum` 选 rpm，否则 tar.gz。未注册时再检查节点通道：`--server` 须有 HTTP 响应（任意状态码，不发送 token）；主机有 `openssl` 时，服务器出示的最后一张证书须为 `--ca-sha256` 固定的 CA | 退出，指出无法连接或前面有终结 TLS 的代理 |
-| 3 | 解析版本：`--version`，或下载镜像的 `latest` 文件，再回退到 GitHub 最新发布 | 退出，提示传入 `--version` |
+| 3 | 解析版本：`--version`，或下载镜像的 `latest` 文件，再回退到 GitHub 最新发布。已注册的主机未给 `--version` 与 `--force` 时跳过第 3–9 步，不下载、不安装 | 退出，提示传入 `--version` |
 | 4 | 下载 `checksums.txt` 与 `checksums.txt.sigstore.json`：先下载镜像，后 GitHub | 退出 |
 | 5 | `cosign verify-blob` 校验签名：证书身份必须为 `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<版本>`，签发者 `https://token.actions.githubusercontent.com`。主机无 cosign 时下载 cosign v3.1.3，核对脚本内固定的 SHA-256 后安装到 `/usr/local/bin/cosign` | 退出 |
 | 6 | 从已签名的 `checksums.txt` 选出本机的安装包，以及同一发布的 `edgeweir-openresty`、`edgeweir-openresty-modsecurity`（每个软件包、格式、架构恰好一个文件）；glibc 低于 2.34 时退出；下载（先镜像，后 GitHub）并校验 SHA-256 | 退出 |
 | 7 | 先安装 `edgeweir-openresty` 与 `edgeweir-openresty-modsecurity`。tar.gz 安装时按主机的 `dpkg` 或 `rpm` 选择格式；两者都没有时要求已安装 `edgeweir-openresty` | 退出 |
 | 8 | 安装 deb、rpm 或 tar.gz | 退出 |
 | 9 | `edgeweir-node enroll`：核对 CA 指纹后提交 token，本机生成私钥，以 CSR 换取节点证书；此后仅经 mTLS 通信。已注册时跳过；加 `--force` 时先停止 `edgeweir-node.service`，以新 token 执行 `edgeweir-node enroll --force` 替换身份，第 10 步再启动 | 退出 |
-| 10 | 停用 `openresty.service`，启用并启动 `edgeweir-node.service`（`--no-start` 时跳过）；tar.gz 安装时先重启运行中的服务（deb、rpm 由包脚本重启） | — |
+| 10 | 停用 `openresty.service`，启用并启动 `edgeweir-node.service`（`--no-start` 时跳过第 10、11 步）；tar.gz 安装与跳过安装的重新运行先重启运行中的服务（deb、rpm 由包脚本重启） | 退出 |
+| 11 | 每 3 秒执行一次 `edgeweir-node healthcheck`，最多 90 秒，直到数据面已应用配置；通过时输出 `done: edgeweir-node is healthy (revision N, M sites)` | 退出码 1，提示 `journalctl -u edgeweir-node -n 50` |
 
 - 第 5、6 步通过前不执行任何下载的程序。`--allow-unsigned` 跳过第 5 步，仅用于开发，仍校验 SHA-256。
 - 脚本全部由函数组成，最后一行才调用 `main`：下载中断时不执行任何内容。
-- 已注册的主机可以重新运行同一命令：某一步失败后重试，或更新软件包。
+- 已注册的主机可以重新运行同一命令：不下载、不重装，启动服务（运行中则重启）并做健康检查；加 `--version <版本>` 时先安装该版本。主机上没有 `/usr/bin/edgeweir-node` 时安装最新版本。
 - 重新注册（例如证书已过期）：在控制台生成新的安装命令，在命令末尾加 `--force` 执行；之后删除控制台中原来的节点。
 - 控制台不保存 SSH 凭据；节点私钥不离开节点。
 
@@ -127,7 +142,7 @@ EDGEWEIR_STREAM_SHUTDOWN_TIMEOUT=30m
 
 ## 区域探针
 
-区域探针从所在区域探测各节点的调度地址，结果驱动备用 IP 与智能调度，见[区域探针与智能调度](../guide/scheduling.md)。探针是 `edgeweir-node` 的 `probe` 模式：不运行 OpenResty，不监听端口，身份与节点分开。注册令牌在 **区域与探针** →「探针」→「添加探针」生成，只显示一次。
+区域探针从所在区域探测各节点的调度地址，结果驱动备用 IP 与智能调度，见[区域探针与智能调度](../guide/scheduling.md)。探针是 `edgeweir-node` 的 `probe` 模式：不运行 OpenResty，不监听端口，身份与节点分开。注册令牌在 **系统设置** →「监控」→「添加探针」生成，只显示一次。
 
 | 项目 | 要求 |
 | --- | --- |
@@ -285,10 +300,13 @@ downloads/
 | `CA pin mismatch`、`does not present the console's node CA` | 8443 被代理或 CDN 终结 TLS，或 `--server` 指向其他服务 | 直连或 [四层透传](networking.md#节点通道四层透传)。 |
 | `cannot reach the node channel` | `--server` 的地址或域名解析错误，防火墙或安全组未放行该端口，或控制台的 `EDGEWEIR_NODE_API_URL` 是本机或内网地址 | 核对地址与解析，放行端口；在节点上执行 `curl -k https://<地址>:8443/` 应返回 404。 |
 | `console rejected the enrollment token (expired or already used)` | token 已过期或已使用 | 重新生成安装命令。 |
+| `edgeweir-node is installed but not healthy after 90s` | 节点 90 秒内未应用配置：连不上节点通道、证书被拒绝，或 OpenResty 未能启动 | 查看 `journalctl -u edgeweir-node -n 50`；处理后重新运行同一命令（只重启服务并检查）。 |
 | `node is already enrolled (use --force to replace the identity)` | 主机已有节点身份（`/var/lib/edgeweir-node/identity.json`） | 保留现有注册；替换身份时用新的安装命令加 `--force` 执行 `install.sh`，或先停止节点（`systemctl stop edgeweir-node`，运行中的节点会拒绝），用新 token 执行 `edgeweir-node enroll --force` 后再启动，参数见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。 |
 | 节点日志 `client certificate expired at ...`，控制台节点标 **证书已过期** | 节点离线超过证书剩余有效期，未能续期；节点通道拒绝并说明 `client certificate has expired (CERT_HAS_EXPIRED)` | 生成新的安装命令，在节点上以 `--force` 执行新的安装命令（或 `systemctl stop edgeweir-node`，用新 token 执行 `edgeweir-node enroll --force` 后启动）；删除控制台中原来的节点。 |
 | `x509: certificate is valid for ..., not ...` | 节点连接的名称不在节点通道证书中 | 将该名称加入 `EDGEWEIR_NODE_API_HOSTNAMES`，重启控制台，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
 | 注册超时，或节点一直离线 | 防火墙或安全组未放行 8443；`EDGEWEIR_NODE_API_URL` 解析错误 | 放行 8443；核对域名解析。 |
+| 节点一直显示「等待心跳」 | 已注册，但 agent 还没有经 mTLS 连上节点通道：服务未启动（如 `--no-start`），或连接失败 | 在节点上执行 `systemctl status edgeweir-node` 与 `journalctl -u edgeweir-node -n 50`。 |
+| 节点通道自检显示「CA 不一致，前面有代理终止了 TLS」 | `EDGEWEIR_NODE_API_URL` 指向终结 TLS 的代理、CDN 或其他服务 | 直连或 [四层透传](networking.md#节点通道四层透传)。 |
 | L4 应用的端口连接超时 | 节点防火墙或安全组未放行端口池；容器节点未发布端口 | 按 [端口与防火墙](#端口与防火墙) 放行或发布端口。 |
 | `probe is not enrolled: the first run needs --server, --ca-sha256 and a probe token` | 探针首次启动缺少注册参数（退出码 2） | 设置 `EDGEWEIR_SERVER`、`EDGEWEIR_CA_SHA256` 与 `EDGEWEIR_TOKEN` 后重新启动。 |
 | `probe enrollment failed: console rejected the enrollment token (expired or already used)` | 探针令牌已过期或已使用 | 重新「添加探针」生成令牌。 |

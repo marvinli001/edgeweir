@@ -2,6 +2,8 @@ import {
   type ConsoleUrlWarning,
   type EnrollmentTokenResult,
   type EnrollmentTokenStatus,
+  isPlainHttp,
+  type NodeChannelCheck,
   urlHostScope,
 } from "@edgeweir/contract";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,6 +19,7 @@ export const urlWarningText = (warning: ConsoleUrlWarning) =>
   ({
     console_url_local: m.url_warning_console_url_local,
     console_url_private: m.url_warning_console_url_private,
+    console_url_http: m.url_warning_console_url_http,
     node_api_url_local: m.url_warning_node_api_url_local,
     node_api_url_private: m.url_warning_node_api_url_private,
   })[warning]();
@@ -41,15 +44,57 @@ export function ConsoleUrlWarnings({ warnings }: { warnings: readonly ConsoleUrl
   );
 }
 
-/** A badge beside a URL that only this machine, or only its private network, reaches. */
+/**
+ * A badge beside a URL that only this machine, or only its private network,
+ * reaches, or a public one without TLS.
+ */
 export function UrlScopeBadge({ url, testId }: { url: string; testId: string }) {
-  const scope = urlHostScope(url);
+  const scope = urlHostScope(url) ?? (isPlainHttp(url) ? "http" : null);
   if (!scope) return null;
   return (
     <Badge variant="outline" data-testid={testId} data-scope={scope}>
       <Dot tone="warn" small />
-      {scope === "local" ? m.url_scope_local() : m.url_scope_private()}
+      {{ local: m.url_scope_local, private: m.url_scope_private, http: m.url_scope_http }[scope]()}
     </Badge>
+  );
+}
+
+const CHECK_TONE: Record<NodeChannelCheck["result"], StatusTone> = {
+  ok: "good",
+  unreachable: "warn",
+  mismatch: "warn",
+};
+
+const checkText = (result: NodeChannelCheck["result"]) =>
+  ({
+    ok: m.node_channel_check_ok,
+    unreachable: m.node_channel_check_unreachable,
+    mismatch: m.node_channel_check_mismatch,
+  })[result]();
+
+/**
+ * The console's own TLS handshake with the node channel URL, as one line:
+ * a pulsing dot while it runs, nothing when it cannot be asked. `line`
+ * prefixes the result with what was checked (the add-node dialog).
+ */
+export function NodeChannelCheckStatus({ line = false }: { line?: boolean }) {
+  const check = useQuery({
+    ...orpc.settings.nodeChannelCheck.queryOptions(),
+    meta: { background: true },
+  });
+  if (check.isPending) return <Dot tone="idle" pulse small />;
+  if (!check.data) return null;
+  const text = checkText(check.data.result);
+  return (
+    <span
+      className="flex items-center gap-1.5 text-sm text-muted-foreground"
+      title={line ? undefined : m.node_channel_check_title()}
+      data-testid="node-channel-check"
+      data-result={check.data.result}
+    >
+      <Dot tone={CHECK_TONE[check.data.result]} small />
+      {line ? m.node_channel_check_line({ result: text }) : text}
+    </span>
   );
 }
 

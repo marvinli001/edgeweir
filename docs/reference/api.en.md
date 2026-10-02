@@ -21,7 +21,7 @@ Unmatched requests under `/api/*`, `/rpc/*`, `/downloads/*`, `/install.sh`, and 
 
 ## Public API
 
-`/api/v1` and `/rpc` are generated from the same oRPC contract in `packages/contract`. The OpenAPI document is at `/api/v1/openapi.json`, with `servers` set to `<EDGEWEIR_PUBLIC_URL>/api/v1`; "OpenAPI" in **System** links to it.
+`/api/v1` and `/rpc` are generated from the same oRPC contract in `packages/contract`. The OpenAPI document is at `/api/v1/openapi.json`, with `servers` set to `<EDGEWEIR_PUBLIC_URL>/api/v1`; "OpenAPI" in **System settings** links to it.
 
 ```bash
 curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
@@ -38,7 +38,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 
 ### AccessKey
 
-Managed in **Settings → Access keys** (user menu), or through `accessKeys.*` on `/rpc` with a signed-in session.
+Managed in **Personal settings → Access keys** (user menu), or through `accessKeys.*` on `/rpc` with a signed-in session.
 
 | Action | Where | Notes |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ Keys without a scope count as read and write. Creation and revocation are writte
 
 ### Service accounts
 
-A service account is a machine identity for integrations calling `/api/v1`. It cannot sign in: it has no password, passkey or session, only keys. Service accounts are managed on the **Service accounts** page.
+A service account is a machine identity for integrations calling `/api/v1`. It cannot sign in: it has no password, passkey or session, only keys. Service accounts are managed in **System settings → Service accounts**.
 
 | Action | Notes |
 | --- | --- |
@@ -444,17 +444,45 @@ Record fields:
 - `usage.changes` returns records created or revised after `afterSeq`, in `seq` order, as `{ items, lastSeq, completeUntil }`; pass `lastSeq` as the next `afterSeq`. Revised records appear again.
 - Windows without traffic have no record.
 - Closed windows are recomputed every minute; late data that changes a value increments `revision` and assigns a new `seq`; otherwise neither changes. A statistics batch reported twice does not change the result.
-- Kept 100 days by default, adjustable in **System → Usage** (35–400 days).
+- Kept 100 days by default, adjustable in **System settings → Usage** (35–400 days).
 
 `completeUntil` (ISO 8601 or `null`): windows that end at or before it contain the data of every node that was active then.
 
 | Rule | Notes |
 | --- | --- |
 | Node watermark | Once every statistics batch is acknowledged, a node reports `complete_until`: the start of the minute of its last successful statistics drain; every earlier minute has been uploaded. While the console is unreachable the node keeps draining statistics into its local spool, and before it stops it saves them, the current minute included; after the spool limit made it drop statistics, the watermark stays at the first dropped minute for 24 hours |
-| Nodes taken into account | Enabled nodes with a heartbeat within the offline threshold: 60 minutes by default, adjustable in **System → Usage** (5–1440 minutes) |
+| Nodes taken into account | Enabled nodes with a heartbeat within the offline threshold: 60 minutes by default, adjustable in **System settings → Usage** (5–1440 minutes) |
 | Computation | The lowest watermark of those nodes; a node that never reported one (older node versions) counts from its enrollment; a node more than the offline threshold behind counts as now minus the threshold (like an offline node, what it sends later is a revision); windows still waiting to be recomputed hold it back; rounded down to 5 minutes |
 | Monotonic | It only moves forward. Data a node sends after being offline longer than the threshold is a revision (`revision` + 1) |
 | Disabled or deleted nodes | Not taken into account |
+
+### Clusters and overview
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `clusters.list`, `clusters.get` | `GET /clusters`, `GET /clusters/{id}` | Clusters and their summary |
+| `clusters.rollout` | `GET /clusters/{id}/rollout` | Configuration canary: policy, current rollout, and canary nodes |
+| `clusters.rollbackPreview` | `GET /clusters/{id}/rollback-preview` | What a rollback to the query parameter `revision` would publish; refuses like the rollback, writes nothing |
+| `overview.get` | `GET /overview` | Overview: cluster, node, and site counts, recent revisions, what needs attention |
+| `settings.nodeChannelCheck` | `GET /settings/node-channel-check` | The console's TLS handshake with its own node channel URL |
+
+Service accounts with `clusters:read` call `clusters.list` and `clusters.get`; they cannot call the others (403 `SERVICE_ACCOUNT_FORBIDDEN`). All are `GET`, so read-only AccessKeys call them.
+
+| Procedure | Response fields |
+| --- | --- |
+| `clusters.list`, `clusters.get` | `liveNodeCount`: online enabled nodes; `appliedNodeCount`: those of them that run their target revision (while a canary runs, the canary nodes' target is the candidate and the other nodes' the stable revision) |
+| `clusters.rollout` | `candidateChanges`: while a rollout runs, `{ sites: { added, changed, removed }, reasons }`; `sites` holds the sites the candidate adds, changes, and removes against the stable revision (`[{ id, name }]`), `reasons` the revisions published after the stable one (elements as in `GET /clusters/{id}/revisions`, without repeated reasons); `null` without a running rollout |
+| `clusters.rollbackPreview` | `{ revision, currentRevision, unchanged, sites: { added, changed, removed } }`: `currentRevision` is the cluster's latest revision (`null` without one); `unchanged` is `true` when the content equals the latest revision; `sites` are the changes against it |
+| `overview.get` | `attention`: `[{ kind, clusterId, clusterName, revision, at, count, version }]` in the order of the `kind` list below, `[]` when nothing needs attention. `kind`: `nodes_unhealthy`, `dns_failed`, `dns_blocked`, `upgrade_failed`, `canary_rolled_back`, `canary_awaiting_promotion`, `canary_running`, `nodes_lagging`, `nodes_no_address`. `revision`: the DNS revision or the candidate; `at`: the window end of `canary_running`, the rollback time of `canary_rolled_back`; `count`: the number of nodes; `version`: the target version of `upgrade_failed`. Fields that do not apply are `null`, `0`, or empty |
+| `settings.nodeChannelCheck` | `{ url, result, checkedAt }`: `url` is `EDGEWEIR_NODE_API_URL`; `result` is `ok` (the chain includes the node channel CA), `unreachable` (no handshake within 3 seconds), or `mismatch` (another chain answered, or the URL is not `https`). A result is reused for 30 seconds; advisory only |
+
+| Error code | Status | When |
+| --- | --- | --- |
+| `ROLLBACK_RESOURCE_UNAVAILABLE` | 409 | `rollbackPreview` and `rollback`: a site, domain, certificate, or IP list the chosen revision references was deleted or is unavailable, or the certificate has expired |
+| `REVISION_NOT_FOUND` | 404 | The cluster has no such revision |
+| `CLUSTER_NOT_FOUND` | 404 | The cluster does not exist |
+
+Behavior: [Clusters and system](../guide/system.en.md) and [Adding nodes](../deploy/nodes.en.md#node-channel-check).
 
 ### Node upgrades
 

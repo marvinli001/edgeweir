@@ -44,7 +44,7 @@ Node installation, DNS propagation, and certificate issuance each take time that
    | **Email** | Sign-in email |
    | **Password** | 12–128 characters |
 
-4. Verify: the console signs in and opens **Clusters & nodes** with the **Add node** dialog of the cluster `default` (the next step); on **System**, the **System** card shows **Setup token** as **Used {time}**.
+4. Verify: the console signs in and opens **Clusters & nodes** with the **Add node** dialog of the cluster `default` (the next step); on **System settings**, the **System** card shows **Setup token** as **Used {time}**.
 
 Objects created by setup:
 
@@ -56,24 +56,24 @@ Objects created by setup:
 
 ## 2. Enroll a node
 
-1. Open **Clusters & nodes**, select the cluster `default`, and click **Add node** (open already after setup; while there is no node, the button at the top of the sidebar is **Add node** too).
+1. Open **Clusters & nodes**, select the cluster `default`, and click **Add node** (open already after setup; while there is no node, the button at the top of the sidebar is **Add node** too). The dialog shows the **Install command** at once: default node group `default`, valid for 1 hour.
 
-2. Fill in the form and click **Generate command**.
+2. Optional: open **Options**, change the fields below, and click **Regenerate**.
 
    | Field | Description |
    | --- | --- |
    | **Node name** | Optional, at most 64 characters |
-   | **Node group** | Defaults to the cluster's default node group |
+   | **Node group** | Defaults to the cluster's default node group; shown when the cluster has several |
    | **Valid for** | 15 minutes, 1 hour (default), or 24 hours |
 
-3. Copy the **Install command** (shown once) and run it on the node host. Command format:
+3. Copy the **Install command** (shown once) and run it on the node host. The warnings and the "Node channel check" below the command point out addresses nodes may not reach; see [Adding nodes](../deploy/nodes.en.md#1-generate-the-install-command). Command format:
 
    ```bash title="Node host"
    export EDGEWEIR_TOKEN='ewt_…'
    curl -fsSL https://console.example.com/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server https://console.example.com:8443 --ca-sha256 <CA fingerprint>
    ```
 
-4. Verify: the node appears in the node table of **Clusters & nodes**, **Status** is **Online**, and **Applied** shows **In sync**.
+4. Verify: every step of the dialog's **Progress** completes; the node appears in the node table of **Clusters & nodes**, **Status** is **Online**, and **Applied** shows **In sync**.
 
 The token is single-use. For the installer's checks, the download mirror, and failure handling, see [Adding nodes](../deploy/nodes.en.md).
 
@@ -171,6 +171,7 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
 | Setup shows **Invalid setup token** | Wrong token, or already used | Read it from the log again; after setup, use the sign-in page |
 | Setup shows **Setup is already in progress. Retry shortly.** | Another setup request is running | Retry shortly |
 | Node missing or **Offline** | Enrollment failed, or the node cannot reach the node channel | See [Adding nodes](../deploy/nodes.en.md) and [Ports, reverse proxy, and trusted proxies](../deploy/networking.en.md) |
+| Node stays **Awaiting heartbeat** | Enrolled, but the node's agent has not connected to the node channel yet | See [Adding nodes](../deploy/nodes.en.md#troubleshooting) |
 | **Applied** shows **Apply failed** | The node failed to validate or apply the configuration | Hover the badge for the reason |
 | **Applied** shows **Upgrade required** | The node lacks a capability the configuration needs | Upgrade the node; see [Node upgrades](node-upgrades.en.md) |
 | 404 with `X-Edgeweir-Error: unknown-host` | The domain is not in the node's configuration: revision not applied, or the site is disabled | Check **Applied** and the **Status** on the site's **Overview** tab |

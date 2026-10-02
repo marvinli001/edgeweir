@@ -22,7 +22,7 @@ Edge nodes use separate `vX.Y.Z` versions; see [node upgrades](../guide/node-upg
 
 | Target | Command or location |
 | --- | --- |
-| Running version | `version` from `curl -s http://127.0.0.1:3000/healthz`; "Version" on the **System** page |
+| Running version | `version` from `curl -s http://127.0.0.1:3000/healthz`; "Version" on the **System settings** page |
 | Tag behind `latest` | `docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' ghcr.io/marvinli001/edgeweir:latest` (after a pull) |
 | Digest of a tag | `Digest` in the output of `docker buildx imagetools inspect ghcr.io/marvinli001/edgeweir:<tag>` |
 

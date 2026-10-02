@@ -1214,11 +1214,49 @@ export async function rollbackToRevision(
   opts: { clusterId: string; revision: number; userId?: string | null },
 ): Promise<{ row: RevisionRow; created: boolean } | undefined> {
   await lockClusterPublish(tx, opts.clusterId);
-  const target = await getRevision(tx, opts.clusterId, opts.revision);
+  const content = await rollbackContent(tx, opts.clusterId, opts.revision);
+  if (!content) return undefined;
+  const result = await insertRevision(
+    tx,
+    opts.clusterId,
+    (revision) => {
+      const config = clone(NodeConfigSchema, content);
+      config.revision = revision;
+      return config;
+    },
+    { code: "rollback", params: { revision: opts.revision } },
+    opts.userId ?? null,
+  );
+  // The operator's rollback restores known content: it goes to every node, no canary.
+  const rollout = await loadRollout(tx, opts.clusterId);
+  if (rollout?.enabled)
+    await updateRollout(tx, opts.clusterId, {
+      stableRevision: result.row.revision,
+      candidateRevision: null,
+      lastCandidateRevision: rollout.candidateRevision ?? rollout.lastCandidateRevision,
+      state: "promoted",
+      outcome: "manual_rollback",
+      finishedAt: new Date(),
+    });
+  return result;
+}
+
+/**
+ * The content (revision 0) a rollback to `revision` publishes, or undefined
+ * when the revision does not exist; refuses with ROLLBACK_RESOURCE_UNAVAILABLE
+ * like the rollback. It may write (challenge keys a restored site needs):
+ * a preview runs it in a transaction it rolls back.
+ */
+export async function rollbackContent(
+  tx: Tx,
+  clusterId: string,
+  revision: number,
+): Promise<NodeConfig | undefined> {
+  const target = await getRevision(tx, clusterId, revision);
   if (!target) return undefined;
   const { config: restored, currentSites } = await restoreSites(
     tx,
-    opts.clusterId,
+    clusterId,
     decodeNodeConfig(target.ir),
     { strict: true },
   );
@@ -1244,37 +1282,14 @@ export async function rollbackToRevision(
     }),
   );
   restored.platformRules = compileRules(
-    await platformRuleModels(tx, currentLists, previousConfig(tx, opts.clusterId), []),
+    await platformRuleModels(tx, currentLists, previousConfig(tx, clusterId), []),
   );
   restored.platformErrorPages = compilePlatformErrorPages(await loadPlatformErrorPages(tx));
   restored.originAllowedCidrs = await loadOriginAllowList(tx);
   // Challenge tokens are short-lived issuance state, never rollback content.
   restored.httpChallenges = [];
-  await restoreProtection(tx, opts.clusterId, restored, currentSites, { underAttack: "restored" });
-  const content = refreshDerived(restored);
-  const result = await insertRevision(
-    tx,
-    opts.clusterId,
-    (revision) => {
-      const config = clone(NodeConfigSchema, content);
-      config.revision = revision;
-      return config;
-    },
-    { code: "rollback", params: { revision: opts.revision } },
-    opts.userId ?? null,
-  );
-  // The operator's rollback restores known content: it goes to every node, no canary.
-  const rollout = await loadRollout(tx, opts.clusterId);
-  if (rollout?.enabled)
-    await updateRollout(tx, opts.clusterId, {
-      stableRevision: result.row.revision,
-      candidateRevision: null,
-      lastCandidateRevision: rollout.candidateRevision ?? rollout.lastCandidateRevision,
-      state: "promoted",
-      outcome: "manual_rollback",
-      finishedAt: new Date(),
-    });
-  return result;
+  await restoreProtection(tx, clusterId, restored, currentSites, { underAttack: "restored" });
+  return refreshDerived(restored);
 }
 
 /**

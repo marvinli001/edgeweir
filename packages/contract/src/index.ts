@@ -175,6 +175,14 @@ export const contract = {
       .route({ method: "POST", path: "/clusters/{id}/rollback", tags: ["clusters"] })
       .input(idParam.extend({ revision: z.number().int().min(1) }))
       .output(s.revision),
+    /**
+     * The sites a rollback to `revision` would add, change and remove against
+     * the latest revision; refuses like the rollback would. Writes nothing.
+     */
+    rollbackPreview: oc
+      .route({ method: "GET", path: "/clusters/{id}/rollback-preview", tags: ["clusters"] })
+      .input(idParam.extend({ revision: z.coerce.number().int().min(1) }))
+      .output(s.rollbackPreview),
     /** Configuration canary: policy, current rollout, canary nodes and window traffic. */
     rollout: oc
       .route({ method: "GET", path: "/clusters/{id}/rollout", tags: ["clusters"] })
@@ -367,6 +375,10 @@ export const contract = {
   },
   settings: {
     get: oc.route({ method: "GET", path: "/settings", tags: ["settings"] }).output(s.settings),
+    /** The console's TLS handshake with its own node channel URL (advisory, cached 30 s). */
+    nodeChannelCheck: oc
+      .route({ method: "GET", path: "/settings/node-channel-check", tags: ["settings"] })
+      .output(s.nodeChannelCheck),
     /** Special-purpose origin addresses (private, loopback...) sites may use anyway. */
     originAllowList: oc
       .route({ method: "GET", path: "/settings/origin-allow-list", tags: ["settings"] })
