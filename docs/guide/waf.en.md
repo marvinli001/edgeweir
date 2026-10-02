@@ -38,7 +38,7 @@ Prerequisites: every active node of the site's cluster supports `modsecurity-v1`
 | Paranoia level | 1–4 | 1 | CRS rule level that runs |
 | Anomaly score threshold | 1–1000 | 5 | A request whose anomaly score reaches it counts as an attack; 5 means a single critical rule is enough |
 | Request body inspected (bytes) | 0–134217728 (128 MiB) | 131072 (128 KiB) | Only this many bytes of the request body are inspected; 0 inspects no body |
-| Excluded rule IDs | 900000–999999, unique, up to 200 | None | These rules never run for the site; use them against false positives |
+| Excluded rule IDs | 900000–999999, unique, up to 200; no 901xxx, 949xxx, 959xxx or 980xxx | None | These rules never run for the site; use them against false positives |
 
 | Preset | Paranoia level | Anomaly score threshold | Request body inspected (bytes) |
 | --- | --- | --- | --- |
@@ -68,7 +68,7 @@ To exclude rules, type one or more IDs (separated by commas or spaces) into **Ex
 | **Security** tab → **Most-matched CRS rules** | The rule IDs matched most often in the selected range (last hour to 30 days). The counts are approximate: each node keeps at most 50 rules per site and minute |
 | The site's **Logs** tab | With access log sampling on, requests that matched rules show a **CRS** column: the rule IDs (at most 16 per request) and a **Blocked** badge. The CSV gets `wafRuleIds` (space-separated) and `wafBlocked` columns |
 
-Matches are recorded in both detect and block mode. A rule that raises false positives can be excluded where it shows: click **⋯** in its row of **Most-matched CRS rules** or of the logs → **Exclude CRS rule N** and confirm; the rule ID is added to **Excluded rule IDs** and saved at once, and the CRS card updates. Initialization, blocking evaluation and correlation rules (901xxx, 949xxx, 959xxx, 980xxx) do not offer it: excluding them turns blocking off. The status line at the top of the **Security** tab shows the CRS mode and preset; click it to jump to the CRS card. Access logs: [Access logs](access-logs.en.md).
+Matches are recorded in both detect and block mode. A rule that raises false positives can be excluded where it shows: click **⋯** in its row of **Most-matched CRS rules** or of the logs → **Exclude CRS rule N** and confirm; the rule ID is added to **Excluded rule IDs** and saved at once, and the CRS card updates. Initialization, blocking evaluation and correlation rules (901xxx, 949xxx, 959xxx, 980xxx) only add up scores and decide, so 949110, for one, matches every blocked request: they are left out of **Most-matched CRS rules** and cannot be excluded (the console and the API refuse them, `WAF_RULE_NOT_EXCLUDABLE`), since excluding them breaks CRS or turns blocking off. Against a false positive, exclude the rule that detected it in the log row; to stop blocking, set the mode to **Detect only**. The status line at the top of the **Security** tab shows the CRS mode and preset; click it to jump to the CRS card. Access logs: [Access logs](access-logs.en.md).
 
 ## Performance
 

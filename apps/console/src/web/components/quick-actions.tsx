@@ -124,15 +124,6 @@ export function RowMenu({ items, className }: { items: RowMenuItem[]; className?
   );
 }
 
-/**
- * CRS rules that only evaluate the others (initialization, blocking evaluation, correlation):
- * excluding one would turn blocking off for the whole site, so no menu offers it.
- */
-export function excludableCrsRule(id: number): boolean {
-  const file = Math.floor(id / 1000);
-  return ![901, 949, 959, 980].includes(file);
-}
-
 interface DialogProps<K extends QuickAction["kind"]> {
   action: Extract<QuickAction, { kind: K }>;
   open: boolean;

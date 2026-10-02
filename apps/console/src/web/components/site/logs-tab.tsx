@@ -1,9 +1,9 @@
-import type { LogQuery } from "@edgeweir/contract";
+import { crsDetectionRule, type LogQuery } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import { FormSelect } from "@/components/form-select";
-import { excludableCrsRule, RowMenu } from "@/components/quick-actions";
+import { RowMenu } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -286,7 +286,7 @@ export function LogsTab({ siteId }: { siteId: string }) {
                                     },
                                   ]
                                 : []),
-                              ...row.wafRuleIds.filter(excludableCrsRule).map((ruleId) => ({
+                              ...row.wafRuleIds.filter(crsDetectionRule).map((ruleId) => ({
                                 label: m.quick_exclude_rule({ id: String(ruleId) }),
                                 action: { kind: "exclude-rule" as const, siteId, ruleId },
                                 testId: "log-exclude-rule",

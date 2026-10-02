@@ -5,6 +5,7 @@ import {
   CHALLENGE_PRESETS,
   CHALLENGE_TYPES,
   type ChallengeType,
+  crsDetectionRule,
   type FeatureAvailability,
   matchPreset,
   PASS_TTL_RANGE,
@@ -40,7 +41,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Pager } from "@/components/pager";
 import { PresetSelect, presetLabel, usePreset } from "@/components/preset-select";
-import { excludableCrsRule, RowMenu, type RowMenuItem } from "@/components/quick-actions";
+import { RowMenu, type RowMenuItem } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
@@ -581,6 +582,12 @@ function WafForm({
       setRuleError(invalidRules());
       return;
     }
+    // Setup and evaluation rules would turn blocking off: the server refuses them too.
+    const refused = (ids ?? []).filter((id) => !crsDetectionRule(id));
+    if (refused.length) {
+      setRuleError(m.error_waf_rule_not_excludable({ ids: refused.join(", ") }));
+      return;
+    }
     setRuleError(null);
     setRuleInput("");
     setDraft({ ...draft, excludedRuleIds: next });
@@ -775,7 +782,7 @@ function WafRulesCard({ siteId }: { siteId: string }) {
             testId="waf-top-rules"
             mono
             actions={(value) =>
-              excludableCrsRule(Number(value))
+              crsDetectionRule(Number(value))
                 ? [
                     {
                       label: m.quick_exclude_rule({ id: value }),
