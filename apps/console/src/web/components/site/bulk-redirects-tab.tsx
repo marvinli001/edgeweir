@@ -58,11 +58,11 @@ export function BulkRedirectsTab({ siteId }: { siteId: string }) {
         <CardContent>
           <LoadingState />
         </CardContent>
-      ) : redirects.isError ? (
+      ) : redirects.isLoadingError ? (
         <CardContent>
           <ErrorState error={redirects.error} onRetry={() => void redirects.refetch()} />
         </CardContent>
-      ) : features.isError ? (
+      ) : features.isLoadingError ? (
         <CardContent>
           <ErrorState error={features.error} onRetry={() => void features.refetch()} />
         </CardContent>

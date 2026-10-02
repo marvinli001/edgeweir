@@ -29,7 +29,7 @@ export function ReleaseSourceCard() {
         <CardContent>
           <LoadingState />
         </CardContent>
-      ) : query.isError ? (
+      ) : query.isLoadingError ? (
         <CardContent>
           <ErrorState error={query.error} onRetry={() => query.refetch()} />
         </CardContent>

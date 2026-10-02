@@ -164,7 +164,7 @@ function SiteSelect({
       </Field>
       {sites.isPending ? (
         <LoadingState className="min-h-16" />
-      ) : sites.isError ? (
+      ) : sites.isLoadingError ? (
         <ErrorState error={sites.error} onRetry={() => void sites.refetch()} />
       ) : (
         <FormSelect
@@ -412,7 +412,7 @@ export function BansPage() {
       </div>
       {bans.isPending ? (
         <LoadingState />
-      ) : bans.isError ? (
+      ) : bans.isLoadingError ? (
         <ErrorState error={bans.error} onRetry={() => bans.refetch()} />
       ) : bans.data.total === 0 ? (
         <EmptyState icon={BlockedIcon} title={filtered ? m.bans_no_match() : m.bans_empty()}>

@@ -73,7 +73,7 @@ function OverviewPage() {
   const clusters = useQuery({ ...orpc.clusters.list.queryOptions(), ...live });
   const nodes = useQuery({ ...orpc.nodes.list.queryOptions({ input: {} }), ...live });
   const queries = [sites, starred, overview, clusters, nodes];
-  const failed = queries.find((q) => q.isError);
+  const failed = queries.find((q) => q.isLoadingError);
 
   return (
     <Page title={m.overview_title()}>

@@ -66,7 +66,7 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
       </div>
       {jobs.isPending ? (
         <LoadingState />
-      ) : jobs.isError ? (
+      ) : jobs.isLoadingError ? (
         <ErrorState error={jobs.error} onRetry={() => void jobs.refetch()} />
       ) : jobs.data.length === 0 ? (
         <EmptyState title={m.upgrade_empty()} />

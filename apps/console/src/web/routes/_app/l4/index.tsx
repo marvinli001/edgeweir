@@ -215,7 +215,7 @@ function L4AppsPage() {
       )}
       {apps.isPending ? (
         <LoadingState />
-      ) : apps.isError ? (
+      ) : apps.isLoadingError ? (
         <ErrorState error={apps.error} onRetry={() => apps.refetch()} />
       ) : apps.data.length === 0 ? (
         <EmptyState icon={ArrowDataTransferHorizontalIcon} title={m.l4_empty_title()}>

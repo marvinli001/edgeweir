@@ -64,7 +64,7 @@ export function ClusterDns({ clusterId }: { clusterId: string }) {
   const groups = useQuery(orpc.nodeGroups.list.queryOptions({ input: { clusterId } }));
   const nodes = useQuery(orpc.nodes.list.queryOptions({ input: { clusterId } }));
   const queries = [binding, providers, groups, nodes];
-  const error = queries.find((q) => q.isError);
+  const error = queries.find((q) => q.isLoadingError);
   if (error)
     return (
       <ErrorState
@@ -622,7 +622,7 @@ function ManualRecords({ clusterId, updatedAt }: { clusterId: string; updatedAt:
         <SafetyNote>{m.dns_manual_note()}</SafetyNote>
         {exported.isPending ? (
           <LoadingState />
-        ) : exported.isError ? (
+        ) : exported.isLoadingError ? (
           <ErrorState error={exported.error} onRetry={() => void exported.refetch()} />
         ) : (
           <>
@@ -657,7 +657,7 @@ function Revisions({ clusterId }: { clusterId: string }) {
       <CardContent>
         {history.isPending ? (
           <LoadingState />
-        ) : history.isError ? (
+        ) : history.isLoadingError ? (
           <ErrorState error={history.error} onRetry={() => void history.refetch()} />
         ) : !history.data.length ? (
           <EmptyState title={m.dns_no_revisions()} />

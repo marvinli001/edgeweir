@@ -121,7 +121,7 @@ function ClustersPage() {
     >
       {clusters.isPending ? (
         <LoadingState />
-      ) : clusters.isError ? (
+      ) : clusters.isLoadingError ? (
         <ErrorState error={clusters.error} onRetry={() => clusters.refetch()} />
       ) : !selected ? (
         <EmptyState icon={ServerStack01Icon} title={m.clusters_empty_title()}>
@@ -601,7 +601,7 @@ function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
       </div>
       {groups.isPending ? (
         <LoadingState />
-      ) : groups.isError ? (
+      ) : groups.isLoadingError ? (
         <ErrorState error={groups.error} onRetry={() => groups.refetch()} />
       ) : (
         <DataTable
@@ -851,7 +851,7 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
       <h2 className="text-sm font-medium">{m.nodes_title()}</h2>
       {nodes.isPending ? (
         <LoadingState />
-      ) : nodes.isError ? (
+      ) : nodes.isLoadingError ? (
         <ErrorState error={nodes.error} onRetry={() => nodes.refetch()} />
       ) : nodes.data.length === 0 ? (
         <EmptyState icon={ServerStack01Icon} title={m.nodes_empty_title()}>
@@ -1058,7 +1058,7 @@ function RevisionsSection({ cluster }: { cluster: Cluster }) {
       <h2 className="text-sm font-medium">{m.revisions_title()}</h2>
       {revisions.isPending ? (
         <LoadingState />
-      ) : revisions.isError ? (
+      ) : revisions.isLoadingError ? (
         <ErrorState error={revisions.error} onRetry={() => revisions.refetch()} />
       ) : revisions.data.length === 0 ? (
         <EmptyState title={m.revisions_empty()} />

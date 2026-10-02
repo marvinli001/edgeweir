@@ -336,7 +336,7 @@ function ServiceAccountsPage() {
     >
       {accounts.isPending ? (
         <LoadingState />
-      ) : accounts.isError ? (
+      ) : accounts.isLoadingError ? (
         <ErrorState error={accounts.error} onRetry={() => accounts.refetch()} />
       ) : accounts.data.length === 0 ? (
         <EmptyState icon={Key01Icon} title={m.service_accounts_empty()}>

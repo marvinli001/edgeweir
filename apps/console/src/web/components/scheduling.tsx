@@ -180,7 +180,7 @@ export function ClusterScheduling({ clusterId }: { clusterId: string }) {
         </div>
         {rules.isPending ? (
           <LoadingState />
-        ) : rules.isError ? (
+        ) : rules.isLoadingError ? (
           <ErrorState error={rules.error} onRetry={() => rules.refetch()} />
         ) : rules.data.length === 0 ? (
           <EmptyState icon={FlowConnectionIcon} title={m.scheduling_rules_empty()}>
@@ -700,7 +700,7 @@ function SchedulingPreviewSection({ clusterId }: { clusterId: string }) {
       </div>
       {preview.isPending ? (
         <LoadingState />
-      ) : preview.isError ? (
+      ) : preview.isLoadingError ? (
         <ErrorState error={preview.error} onRetry={() => preview.refetch()} />
       ) : (
         preview.data.rules.map((rule, index) => (

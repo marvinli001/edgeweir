@@ -206,7 +206,7 @@ function SitesPage() {
       </div>
       {sites.isPending ? (
         <LoadingState />
-      ) : sites.isError ? (
+      ) : sites.isLoadingError ? (
         <ErrorState error={sites.error} onRetry={() => sites.refetch()} />
       ) : sites.data.total === 0 ? (
         filtered ? (

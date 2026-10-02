@@ -14,7 +14,8 @@ export function CnameTarget({ siteId }: { siteId: string }) {
     }),
   );
   if (query.isPending) return <LoadingState />;
-  if (query.isError) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
+  if (query.isLoadingError)
+    return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
   if (!query.data.target) return null;
   return (
     <Card data-testid="cname-target">

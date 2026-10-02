@@ -231,7 +231,7 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
     <>
       {regions.isPending ? (
         <LoadingState />
-      ) : regions.isError ? (
+      ) : regions.isLoadingError ? (
         <ErrorState error={regions.error} onRetry={() => regions.refetch()} />
       ) : regions.data.length === 0 ? (
         <EmptyState icon={Location01Icon} title={m.regions_empty()}>

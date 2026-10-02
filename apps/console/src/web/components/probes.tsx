@@ -288,7 +288,7 @@ export function ProbesPanel({
     <div className="flex flex-col gap-4">
       {probes.isPending ? (
         <LoadingState />
-      ) : probes.isError ? (
+      ) : probes.isLoadingError ? (
         <ErrorState error={probes.error} onRetry={() => probes.refetch()} />
       ) : probes.data.length === 0 ? (
         <EmptyState icon={Radar01Icon} title={m.probes_empty()}>
@@ -396,7 +396,7 @@ function AddProbeDialog({
           </div>
         ) : regions.isPending ? (
           <LoadingState />
-        ) : regions.isError ? (
+        ) : regions.isLoadingError ? (
           <ErrorState error={regions.error} onRetry={() => regions.refetch()} />
         ) : (
           <form
@@ -551,7 +551,7 @@ export function ProbeResults({
     meta: { background: true },
   });
   if (results.isPending) return <LoadingState />;
-  if (results.isError)
+  if (results.isLoadingError)
     return <ErrorState error={results.error} onRetry={() => results.refetch()} />;
   if (!results.data.length)
     return <EmptyState icon={Radar01Icon} title={m.probes_results_empty()} />;
@@ -661,7 +661,7 @@ export function ProbeSettingsCard() {
         <CardContent>
           <LoadingState />
         </CardContent>
-      ) : query.isError ? (
+      ) : query.isLoadingError ? (
         <CardContent>
           <ErrorState error={query.error} onRetry={() => query.refetch()} />
         </CardContent>

@@ -27,7 +27,7 @@ export function TopRequestsCard({
       <PanelHeader title={by === "url" ? m.analytics_top_urls() : m.analytics_top_ips()} />
       {query.isPending ? (
         <LoadingState />
-      ) : query.isError ? (
+      ) : query.isLoadingError ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
       ) : items.length === 0 ? (
         <EmptyState title={m.analytics_no_traffic()} />

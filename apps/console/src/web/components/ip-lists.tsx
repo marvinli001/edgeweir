@@ -38,7 +38,7 @@ export function IpListsPage() {
     >
       {query.isPending ? (
         <LoadingState />
-      ) : query.isError ? (
+      ) : query.isLoadingError ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
       ) : query.data.length === 0 ? (
         <EmptyState title={m.ip_lists_empty()} />

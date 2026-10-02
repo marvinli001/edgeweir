@@ -173,7 +173,7 @@ export function DnsCredentialDialog({
     >
       {catalog.isPending ? (
         <LoadingState />
-      ) : catalog.isError ? (
+      ) : catalog.isLoadingError ? (
         <ErrorState error={catalog.error} onRetry={() => void catalog.refetch()} />
       ) : (
         <>

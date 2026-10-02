@@ -165,6 +165,23 @@ describe("UI behaviour", () => {
     expect(hooks).toEqual([]);
   });
 
+  it("shows a query's error only when it never loaded: a failed background refetch keeps the data", () => {
+    // TanStack Query v5 sets isError on a failed refetch and keeps the data; isLoadingError is the
+    // first load failing. Rendering ErrorState on isError unmounted polled pages, open dialogs
+    // and unsaved forms whenever the console restarted.
+    const found = webSources.flatMap((file) => {
+      const source = read(file);
+      const queries = [...source.matchAll(/\bconst (\w+) = use\w*Query\w*\(/g)].map(
+        (m) => m[1] as string,
+      );
+      return [
+        ...queries.filter((name) => new RegExp(`\\b${name}\\.isError\\b`).test(source)),
+        ...(/\((\w+)\) => \1\.isError\b/.test(source) ? ["(q) => q.isError"] : []),
+      ].map((name) => `${file}: ${name}`);
+    });
+    expect(found).toEqual([]);
+  });
+
   it("uses secure-context-only browser APIs only through lib/browser (plain HTTP on a LAN address)", () => {
     const found = allWeb
       .filter((file) => file !== "src/web/lib/browser.ts")

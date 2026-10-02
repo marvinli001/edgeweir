@@ -60,7 +60,8 @@ export function PortPoolsSection({
 }) {
   const pools = useQuery(orpc.clusters.portPools.queryOptions({ input: { clusterId } }));
   if (pools.isPending) return <LoadingState />;
-  if (pools.isError) return <ErrorState error={pools.error} onRetry={() => pools.refetch()} />;
+  if (pools.isLoadingError)
+    return <ErrorState error={pools.error} onRetry={() => pools.refetch()} />;
   return (
     <div className="flex flex-col gap-4">
       <L4NodesWarning cluster={clusterName} nodes={pools.data.nodesWithoutL4} />

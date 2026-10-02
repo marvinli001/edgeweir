@@ -91,7 +91,7 @@ export function SecurityTab({ siteId }: { siteId: string }) {
     <div className="flex min-w-0 flex-col gap-4">
       {protection.isPending ? (
         <LoadingState />
-      ) : protection.isError ? (
+      ) : protection.isLoadingError ? (
         <ErrorState error={protection.error} onRetry={() => void protection.refetch()} />
       ) : (
         <>
@@ -346,11 +346,11 @@ function WafCard({ siteId }: { siteId: string }) {
         <CardContent>
           <LoadingState />
         </CardContent>
-      ) : waf.isError ? (
+      ) : waf.isLoadingError ? (
         <CardContent>
           <ErrorState error={waf.error} onRetry={() => void waf.refetch()} />
         </CardContent>
-      ) : features.isError ? (
+      ) : features.isLoadingError ? (
         <CardContent>
           <ErrorState error={features.error} onRetry={() => void features.refetch()} />
         </CardContent>
@@ -584,7 +584,7 @@ function WafRulesCard({ siteId }: { siteId: string }) {
       <CardContent>
         {rules.isPending ? (
           <LoadingState />
-        ) : rules.isError ? (
+        ) : rules.isLoadingError ? (
           <ErrorState error={rules.error} onRetry={() => void rules.refetch()} />
         ) : (
           <TopList
@@ -618,7 +618,7 @@ function NodeLevelsCard({ siteId }: { siteId: string }) {
       <CardContent>
         {state.isPending ? (
           <LoadingState />
-        ) : state.isError ? (
+        ) : state.isLoadingError ? (
           <ErrorState error={state.error} onRetry={() => void state.refetch()} />
         ) : state.data.nodes.length === 0 ? (
           <EmptyState title={m.security_no_nodes()} />
@@ -716,7 +716,7 @@ function TopCard({ siteId }: { siteId: string }) {
       <CardContent>
         {state.isPending ? (
           <LoadingState />
-        ) : state.isError ? (
+        ) : state.isLoadingError ? (
           <ErrorState error={state.error} onRetry={() => void state.refetch()} />
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
@@ -777,7 +777,7 @@ function EventsCard({ siteId }: { siteId: string }) {
       <CardContent className="flex flex-col gap-3">
         {events.isPending ? (
           <LoadingState />
-        ) : events.isError ? (
+        ) : events.isLoadingError ? (
           <ErrorState error={events.error} onRetry={() => void events.refetch()} />
         ) : events.data.items.length === 0 ? (
           <EmptyState title={m.security_events_empty()} />

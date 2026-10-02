@@ -37,7 +37,7 @@ export function ProtectionSettingsCards() {
           <CardContent>
             <LoadingState />
           </CardContent>
-        ) : settings.isError ? (
+        ) : settings.isLoadingError ? (
           <CardContent>
             <ErrorState error={settings.error} onRetry={() => settings.refetch()} />
           </CardContent>
@@ -53,7 +53,7 @@ export function ProtectionSettingsCards() {
           <CardContent>
             <LoadingState />
           </CardContent>
-        ) : template.isError ? (
+        ) : template.isLoadingError ? (
           <CardContent>
             <ErrorState error={template.error} onRetry={() => template.refetch()} />
           </CardContent>

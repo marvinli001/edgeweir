@@ -153,7 +153,7 @@ function ApiKeysCard() {
         ) : null}
         {keys.isPending ? (
           <LoadingState className="min-h-24" />
-        ) : keys.isError ? (
+        ) : keys.isLoadingError ? (
           <ErrorState error={keys.error} onRetry={() => keys.refetch()} />
         ) : keys.data.length === 0 ? (
           <EmptyState title={m.settings_api_keys_empty()} />

@@ -170,8 +170,9 @@ export function RulesTab({ siteId, originGroups }: { siteId?: string; originGrou
     enabled: !!siteId,
   });
   if (query.isPending || (siteId && features.isPending)) return <LoadingState />;
-  if (query.isError) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
-  if (siteId && features.isError)
+  if (query.isLoadingError)
+    return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
+  if (siteId && features.isLoadingError)
     return <ErrorState error={features.error} onRetry={() => void features.refetch()} />;
   const availability = siteId ? features.data?.rulesV2 : undefined;
   return (

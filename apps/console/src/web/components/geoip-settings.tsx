@@ -38,7 +38,7 @@ export function GeoIpSettings() {
       <CardContent>
         {nodes.isPending ? (
           <LoadingState />
-        ) : nodes.isError ? (
+        ) : nodes.isLoadingError ? (
           <ErrorState error={nodes.error} onRetry={() => void nodes.refetch()} />
         ) : !nodes.data.length ? (
           <EmptyState title={m.geo_empty()} />

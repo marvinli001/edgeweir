@@ -20,7 +20,7 @@ export function SmtpSettings() {
       </CardHeader>
       {query.isPending ? (
         <LoadingState />
-      ) : query.isError ? (
+      ) : query.isLoadingError ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
       ) : (
         <SmtpEditor key={JSON.stringify(query.data)} initial={query.data} />

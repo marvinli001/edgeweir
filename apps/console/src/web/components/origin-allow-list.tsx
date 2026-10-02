@@ -37,7 +37,7 @@ export function OriginAllowListCard() {
         <CardContent>
           <LoadingState />
         </CardContent>
-      ) : list.isError ? (
+      ) : list.isLoadingError ? (
         <CardContent>
           <ErrorState error={list.error} onRetry={() => list.refetch()} />
         </CardContent>

@@ -117,7 +117,7 @@ export function AnalyticsSection({
       </div>
       {traffic.isPending ? (
         <LoadingState />
-      ) : traffic.isError ? (
+      ) : traffic.isLoadingError ? (
         <ErrorState error={traffic.error} onRetry={() => traffic.refetch()} />
       ) : (
         <div

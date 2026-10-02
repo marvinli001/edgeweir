@@ -39,7 +39,7 @@ function DnsPage() {
   const [creating, setCreating] = React.useState(false);
   const [editing, setEditing] = React.useState<EditableCredential | null>(null);
   const refresh = () => queries.invalidateQueries({ queryKey: orpc.dns.key() });
-  const error = [providers, bindings, catalog].find((q) => q.isError);
+  const error = [providers, bindings, catalog].find((q) => q.isLoadingError);
   return (
     <Page
       title={m.dns_title()}

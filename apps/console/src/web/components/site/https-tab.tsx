@@ -28,11 +28,11 @@ export function HttpsTab({ site }: { site: Site }) {
   const certificates = useQuery(orpc.certificates.list.queryOptions());
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   if (policy.isPending || certificates.isPending || features.isPending) return <LoadingState />;
-  if (policy.isError)
+  if (policy.isLoadingError)
     return <ErrorState error={policy.error} onRetry={() => void policy.refetch()} />;
-  if (certificates.isError)
+  if (certificates.isLoadingError)
     return <ErrorState error={certificates.error} onRetry={() => void certificates.refetch()} />;
-  if (features.isError)
+  if (features.isLoadingError)
     return <ErrorState error={features.error} onRetry={() => void features.refetch()} />;
   return (
     <HttpsEditor

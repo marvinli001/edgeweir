@@ -94,7 +94,7 @@ export function L4AppStats({
       </div>
       {stats.isPending ? (
         <LoadingState />
-      ) : stats.isError ? (
+      ) : stats.isLoadingError ? (
         <ErrorState error={stats.error} onRetry={() => stats.refetch()} />
       ) : (
         <StatsBody stats={stats.data} range={range} stale={stats.isPlaceholderData} />

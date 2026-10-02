@@ -58,7 +58,7 @@ export function LogsTab({ siteId }: { siteId: string }) {
         <CardContent className="space-y-4 pt-6">
           {settings.isPending ? (
             <LoadingState />
-          ) : settings.isError ? (
+          ) : settings.isLoadingError ? (
             <ErrorState error={settings.error} onRetry={() => void settings.refetch()} />
           ) : (
             <FormSelect
@@ -168,7 +168,7 @@ export function LogsTab({ siteId }: { siteId: string }) {
           </form>
           {logs.isPending ? (
             <LoadingState />
-          ) : logs.isError ? (
+          ) : logs.isLoadingError ? (
             <ErrorState error={logs.error} onRetry={() => void logs.refetch()} />
           ) : logs.data.entries.length === 0 ? (
             <EmptyState title={m.logs_empty()} />

@@ -41,7 +41,7 @@ function SystemSettingsPage() {
         <CardContent>
           {settings.isPending ? (
             <LoadingState />
-          ) : settings.isError ? (
+          ) : settings.isLoadingError ? (
             <ErrorState error={settings.error} onRetry={() => settings.refetch()} />
           ) : (
             <dl className="divide-y">

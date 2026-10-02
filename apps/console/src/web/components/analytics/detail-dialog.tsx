@@ -165,7 +165,8 @@ function Loaded({
   children: (data: TrafficBreakdown) => React.ReactNode;
 }) {
   if (query.isPending) return <LoadingState />;
-  if (query.isError) return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
+  if (query.isLoadingError)
+    return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
   return (
     <div
       className={cn(

@@ -198,7 +198,7 @@ function AuditPage() {
       </div>
       {entries.isPending ? (
         <LoadingState />
-      ) : entries.isError ? (
+      ) : entries.isLoadingError ? (
         <ErrorState error={entries.error} onRetry={() => entries.refetch()} />
       ) : entries.data.total === 0 ? (
         <EmptyState icon={Audit01Icon} title={m.audit_empty()} />

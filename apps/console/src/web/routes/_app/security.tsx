@@ -43,7 +43,7 @@ function SecurityPage() {
       <PasswordCard />
       {me.isPending ? (
         <LoadingState />
-      ) : me.isError ? (
+      ) : me.isLoadingError ? (
         <ErrorState error={me.error} onRetry={() => me.refetch()} />
       ) : (
         <TwoFactorCard enabled={me.data.user.twoFactorEnabled} />
@@ -322,7 +322,7 @@ function PasskeysCard() {
         {add.isError ? <FieldError>{localizeError(add.error)}</FieldError> : null}
         {passkeys.isPending ? (
           <LoadingState className="min-h-24" />
-        ) : passkeys.isError ? (
+        ) : passkeys.isLoadingError ? (
           <ErrorState error={passkeys.error} onRetry={() => passkeys.refetch()} />
         ) : passkeys.data.length === 0 ? (
           <EmptyState icon={FingerPrintIcon} title={m.security_passkeys_empty()} />

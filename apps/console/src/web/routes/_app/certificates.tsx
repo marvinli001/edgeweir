@@ -59,7 +59,7 @@ function CertificatesPage() {
     >
       {certificates.isPending ? (
         <LoadingState />
-      ) : certificates.isError ? (
+      ) : certificates.isLoadingError ? (
         <ErrorState error={certificates.error} onRetry={() => void certificates.refetch()} />
       ) : !certificates.data.length ? (
         <EmptyState title={m.cert_empty()}>
@@ -140,7 +140,7 @@ function CertificatesPage() {
         <CardContent>
           {credentials.isPending ? (
             <LoadingState />
-          ) : credentials.isError ? (
+          ) : credentials.isLoadingError ? (
             <ErrorState error={credentials.error} onRetry={() => void credentials.refetch()} />
           ) : !credentials.data.length ? (
             <EmptyState title={m.cert_dns_empty()} />

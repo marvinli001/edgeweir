@@ -100,7 +100,7 @@ function SiteDetailPage() {
     >
       {site.isPending ? (
         <LoadingState />
-      ) : site.isError ? (
+      ) : site.isLoadingError ? (
         <ErrorState error={site.error} onRetry={() => site.refetch()} />
       ) : (
         <Tabs

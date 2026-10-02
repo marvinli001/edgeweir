@@ -47,7 +47,7 @@ function L4AppPage() {
     >
       {app.isPending ? (
         <LoadingState />
-      ) : app.isError ? (
+      ) : app.isLoadingError ? (
         <ErrorState error={app.error} onRetry={() => app.refetch()} />
       ) : (
         <Tabs

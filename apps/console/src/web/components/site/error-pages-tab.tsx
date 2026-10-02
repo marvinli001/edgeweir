@@ -54,11 +54,11 @@ export function ErrorPagesTab({ siteId }: { siteId: string }) {
         <CardContent>
           <LoadingState />
         </CardContent>
-      ) : pages.isError ? (
+      ) : pages.isLoadingError ? (
         <CardContent>
           <ErrorState error={pages.error} onRetry={() => void pages.refetch()} />
         </CardContent>
-      ) : features.isError ? (
+      ) : features.isLoadingError ? (
         <CardContent>
           <ErrorState error={features.error} onRetry={() => void features.refetch()} />
         </CardContent>

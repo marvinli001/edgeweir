@@ -142,7 +142,7 @@ function PurgePage() {
         </h2>
         {tasks.isPending ? (
           <LoadingState />
-        ) : tasks.isError ? (
+        ) : tasks.isLoadingError ? (
           <ErrorState error={tasks.error} onRetry={() => tasks.refetch()} />
         ) : tasks.data.total === 0 ? (
           <EmptyState icon={DatabaseSync01Icon} title={m.purge_tasks_empty()} />
@@ -590,7 +590,7 @@ function TagSiteSelect({
   const searchable = (all.data?.total ?? 0) > 8;
 
   if (all.isPending) return <LoadingState className="min-h-20" />;
-  if (all.isError) return <ErrorState error={all.error} onRetry={() => all.refetch()} />;
+  if (all.isLoadingError) return <ErrorState error={all.error} onRetry={() => all.refetch()} />;
   if (all.data.total === 0) {
     return (
       <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
@@ -643,7 +643,9 @@ function TagSiteSelect({
           </SelectContent>
         </Select>
       </div>
-      {list.isError ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> : null}
+      {list.isLoadingError ? (
+        <ErrorState error={list.error} onRetry={() => list.refetch()} />
+      ) : null}
     </Field>
   );
 }
@@ -678,7 +680,7 @@ function SitePicker({
   };
 
   if (all.isPending) return <LoadingState className="min-h-36" />;
-  if (all.isError) return <ErrorState error={all.error} onRetry={() => all.refetch()} />;
+  if (all.isLoadingError) return <ErrorState error={all.error} onRetry={() => all.refetch()} />;
   if (all.data.total === 0) {
     return (
       <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
@@ -710,7 +712,7 @@ function SitePicker({
         aria-labelledby="purge-sites-label"
         className="max-h-72 min-w-0 divide-y overflow-y-auto rounded-2xl border"
       >
-        {list.isError ? (
+        {list.isLoadingError ? (
           <div className="p-3">
             <ErrorState error={list.error} onRetry={() => list.refetch()} />
           </div>

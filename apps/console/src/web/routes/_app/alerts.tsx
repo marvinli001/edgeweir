@@ -219,7 +219,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
       <CardContent>
         {subscriptions.isPending ? (
           <LoadingState />
-        ) : subscriptions.isError ? (
+        ) : subscriptions.isLoadingError ? (
           <ErrorState error={subscriptions.error} onRetry={() => void subscriptions.refetch()} />
         ) : !subscriptions.data.length ? (
           <EmptyState
@@ -284,7 +284,7 @@ function EventsCard() {
       <CardContent>
         {events.isPending ? (
           <LoadingState />
-        ) : events.isError ? (
+        ) : events.isLoadingError ? (
           <ErrorState error={events.error} onRetry={() => void events.refetch()} />
         ) : !events.data.length ? (
           <EmptyState title={m.alert_no_events()} />
@@ -315,7 +315,7 @@ function PolicyCard() {
   const policy = useQuery(orpc.alerts.policy.queryOptions());
   return policy.isPending ? (
     <LoadingState />
-  ) : policy.isError ? (
+  ) : policy.isLoadingError ? (
     <ErrorState error={policy.error} onRetry={() => void policy.refetch()} />
   ) : (
     <PolicyEditor key={JSON.stringify(policy.data)} initial={policy.data} />
@@ -550,7 +550,7 @@ function SubscriptionDialog({
       </Field>
       {sites.isPending ? (
         <LoadingState />
-      ) : sites.isError ? (
+      ) : sites.isLoadingError ? (
         <ErrorState error={sites.error} onRetry={() => void sites.refetch()} />
       ) : (
         <FormSelect
