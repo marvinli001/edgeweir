@@ -63,56 +63,85 @@ export async function findCertificate(db: Executor, id: string) {
   return row;
 }
 
+const utc = (date: Date) => `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+/** Runs a check whose own exceptions (unreadable input) mean the given failure. */
+function readOr<T>(read: () => T, fallback: () => T): T {
+  try {
+    return read();
+  } catch {
+    return fallback();
+  }
+}
+
 /**
  * Checks a chain and its key and returns them re-encoded: only the
  * certificates and the key in PKCS #8 are ever stored, whatever else the
  * pasted text held. Any other PEM block in the chain (a combined
  * fullchain-and-key file) is refused, so a key never lands in `chain_pem`.
+ * Each problem has its own error code, so the operator learns which one it is.
  */
 export function inspectCertificate(chainPem: string, privateKeyPem: string) {
   const labels = [...chainPem.matchAll(/-----BEGIN ([^\r\n]*?)-----/g)].map((m) => m[1]);
   if (labels.some((label) => label !== "CERTIFICATE"))
     fail("CERTIFICATE_CHAIN_FOREIGN_BLOCK", "the chain may contain only certificates");
-  try {
-    const blocks = chainPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
-    if (!blocks?.length || blocks.length > 10 || blocks.length !== labels.length)
-      throw new Error("invalid chain");
-    const chain = blocks.map((block) => new X509Certificate(block));
-    const leaf = chain[0];
-    const key = createPrivateKey(privateKeyPem);
-    if (!leaf || leaf.ca || !leaf.checkPrivateKey(key)) throw new Error("invalid leaf or key");
-    for (let i = 0; i + 1 < chain.length; i++) {
-      const cert = chain[i];
-      const issuer = chain[i + 1];
-      if (!cert || !issuer?.ca || !cert.checkIssued(issuer) || !cert.verify(issuer.publicKey))
-        throw new Error("invalid chain order");
-    }
-    const notBefore = new Date(leaf.validFrom);
-    const notAfter = new Date(leaf.validTo);
-    if (notBefore.getTime() > Date.now() || notAfter.getTime() <= Date.now())
-      throw new Error("certificate is not currently valid");
-    const names = [
-      ...new Set(
-        (leaf.subjectAltName ?? "")
-          .split(/,\s*/)
-          .filter((part) => part.startsWith("DNS:"))
-          .map((part) => part.slice(4).toLowerCase()),
-      ),
-    ];
-    if (!names.length || names.some((name) => !/^(\*\.)?[a-z0-9.-]+$/.test(name)))
-      throw new Error("DNS SAN required");
-    return {
-      leaf,
-      names,
-      notBefore,
-      notAfter,
-      fingerprint: leaf.fingerprint256.replaceAll(":", "").toLowerCase(),
-      chainPem: chain.map((cert) => cert.toString()).join(""),
-      privateKeyPem: key.export({ type: "pkcs8", format: "pem" }).toString(),
-    };
-  } catch {
-    fail("CERTIFICATE_INVALID", "invalid certificate chain, validity or matching private key");
+  const unreadableChain: () => never = () =>
+    fail("CERTIFICATE_CHAIN_UNREADABLE", "the chain must hold 1 to 10 readable PEM certificates");
+  const blocks = chainPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
+  if (!blocks?.length || blocks.length > 10 || blocks.length !== labels.length) unreadableChain();
+  const chain = readOr(() => blocks.map((block) => new X509Certificate(block)), unreadableChain);
+  const key = readOr(
+    () => createPrivateKey(privateKeyPem),
+    () => fail("CERTIFICATE_KEY_UNREADABLE", "the private key cannot be read (or is encrypted)"),
+  );
+  const leaf = chain[0] as X509Certificate;
+  const wrongOrder: () => never = () =>
+    fail("CERTIFICATE_CHAIN_ORDER", "the chain must start with the leaf, each issued by the next");
+  if (leaf.ca) wrongOrder();
+  if (
+    !readOr(
+      () => leaf.checkPrivateKey(key),
+      () => false,
+    )
+  )
+    fail("CERTIFICATE_KEY_MISMATCH", "the private key does not belong to the certificate");
+  for (let i = 0; i + 1 < chain.length; i++) {
+    const cert = chain[i] as X509Certificate;
+    const issuer = chain[i + 1] as X509Certificate;
+    if (
+      !issuer.ca ||
+      !readOr(
+        () => cert.checkIssued(issuer) && cert.verify(issuer.publicKey),
+        () => false,
+      )
+    )
+      wrongOrder();
   }
+  const notBefore = new Date(leaf.validFrom);
+  const notAfter = new Date(leaf.validTo);
+  if (notBefore.getTime() > Date.now() || notAfter.getTime() <= Date.now())
+    fail("CERTIFICATE_NOT_CURRENTLY_VALID", "the certificate is not currently valid", {
+      notBefore: utc(notBefore),
+      notAfter: utc(notAfter),
+    });
+  const names = [
+    ...new Set(
+      (leaf.subjectAltName ?? "")
+        .split(/,\s*/)
+        .filter((part) => part.startsWith("DNS:"))
+        .map((part) => part.slice(4).toLowerCase()),
+    ),
+  ];
+  if (!names.length || names.some((name) => !/^(\*\.)?[a-z0-9.-]+$/.test(name)))
+    fail("CERTIFICATE_NO_DNS_NAMES", "the certificate needs DNS names (subject alternative names)");
+  return {
+    leaf,
+    names,
+    notBefore,
+    notAfter,
+    fingerprint: leaf.fingerprint256.replaceAll(":", "").toLowerCase(),
+    chainPem: chain.map((cert) => cert.toString()).join(""),
+    privateKeyPem: key.export({ type: "pkcs8", format: "pem" }).toString(),
+  };
 }
 
 export async function listCertificates(app: AppContext) {
@@ -288,7 +317,7 @@ export async function updateHttps(
     if (settings.certificateId) {
       const cert = await findCertificate(tx, settings.certificateId);
       if (!cert.chainPem || !cert.notAfter || cert.notAfter.getTime() <= Date.now())
-        fail("CERTIFICATE_INVALID", "certificate is unavailable or expired");
+        fail("CERTIFICATE_UNAVAILABLE", "certificate is not issued yet or expired");
       const domains = await tx
         .select()
         .from(schema.siteDomain)

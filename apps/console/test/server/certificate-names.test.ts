@@ -122,7 +122,11 @@ describe("certificate names", async () => {
       .from(schema.certificate)
       .where(eq(schema.certificate.id, id));
     // The fake helper refused; the names stay until a renewal succeeds.
-    expect(row).toMatchObject({ status: "error", names: ["shop.test", "www.shop.test"] });
+    expect(row).toMatchObject({
+      status: "error",
+      names: ["shop.test", "www.shop.test"],
+      lastError: "certd_failed",
+    });
 
     // With no name left on a site, the renewal asks for all of them (and fails at the CA).
     await api.sites.update({ id: siteId, domains: ["other.test"] });

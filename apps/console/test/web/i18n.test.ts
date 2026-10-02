@@ -1,6 +1,7 @@
 import { globSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  certificateErrorDefs,
   dnsRevisionReasonDefs,
   errorCodes,
   errorDefs,
@@ -245,11 +246,12 @@ describe("i18n messages", () => {
     }
   });
 
-  it("localizes every node error code and task outcome code with the same parameters", () => {
+  it("localizes every node error code, task outcome code and certificate failure code with the same parameters", () => {
     const tables: [string, string, Record<string, { params: readonly string[] }>][] = [
       ["node_error_", "nodeErrorDefs", nodeErrorDefs],
       ["task_error_", "taskErrorDefs", taskErrorDefs],
       ["task_error_reason_", "prefetchFailureReasonDefs", prefetchFailureReasonDefs],
+      ["cert_error_", "certificateErrorDefs", certificateErrorDefs],
     ];
     expect(nodeErrorCodes.length).toBeGreaterThanOrEqual(6);
     expect(taskErrorCodes.length).toBeGreaterThanOrEqual(6);

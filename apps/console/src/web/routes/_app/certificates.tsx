@@ -8,6 +8,7 @@ import { providerLabel } from "@/components/dns/labels";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
+import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { certificateErrorText } from "@/lib/certificate-errors";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -77,6 +79,11 @@ function CertificatesPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="break-all text-sm">{cert.names.join(", ")}</p>
+                {cert.lastError ? (
+                  <SafetyNote className="text-destructive" data-testid="certificate-error">
+                    {certificateErrorText(cert.lastError)}
+                  </SafetyNote>
+                ) : null}
                 {cert.notAfter ? (
                   <p className="text-sm text-muted-foreground">
                     {m.cert_expires({

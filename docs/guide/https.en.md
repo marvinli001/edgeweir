@@ -85,7 +85,7 @@ Certificates with the same certificate authority, EAB key ID, and account email 
 | Check interval | A background job checks due certificates every minute, up to 10 at a time: new requests and **Renew now** first, then by renewal time, three issuances at once; it needs a console process with `ROLE=worker` or `ROLE=all` |
 | Renewed names | An HTTP-01 renewal drops the names no site uses any more, as long as at least one name is left; every domain of a site that uses the certificate is kept, so the site stays covered. After a successful renewal the certificate's name list is updated |
 | Effect | After issuance or renewal, a new revision is published for the clusters of the sites that use the certificate |
-| Failure | Status changes to **Issuance failed** and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance; the console logs the reason, see [Troubleshooting](#troubleshooting) |
+| Failure | Status changes to **Issuance failed**, the card shows the reason, and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance, see [Troubleshooting](#troubleshooting) |
 | Manual | ACME certificates have **Renew now**, which runs at the next check; unavailable while **Issuing** |
 | Interruption | **Issuing** for more than 10 minutes counts as interrupted and runs again at the next check; one issuance run is limited to 8 minutes |
 
@@ -218,15 +218,31 @@ A change saved in the console or with an AccessKey is published even when it nee
 | Cipher suites | Only the **Modern** and **Compatible** profiles; no custom nginx configuration |
 | Compression | Gzip, Brotli, and Zstandard |
 | Node packages | Nodes use OpenResty 1.31.1.1 built for Edgeweir (`edgeweir-openresty`) with HTTP/2, HTTP/3, Brotli, and Zstandard, see [Adding nodes](../deploy/nodes.en.md) |
-| Failure reasons | The UI shows only **Issuance failed**. The console log records the certificate ID and the console's own reason; the text a CA or DNS provider returned is not logged |
+| Failure reasons | The card shows a classified reason: the CA's problem type (RFC 8555), a DNS provider error, or the console's own reason. The text a CA or DNS provider returned is neither stored nor logged; `certificate operation failed` in the console log records the certificate ID, the `code`, and the console's own reason |
 
 ## Troubleshooting
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| "Invalid or expired certificate, chain or private key" | Wrong chain order, mismatched key, no DNS SAN, not yet valid, or expired | Order the PEM as leaf then intermediates; check the key |
+| "The chain must hold 1 to 10 readable PEM certificates" | The chain is empty, has more than 10 certificates, or is damaged | Export the chain as PEM again |
+| "The private key cannot be read; encrypted keys are not supported" | The key is damaged or protected by a passphrase | Remove the passphrase with `openssl pkey -in key.pem -out plain.pem` and upload that |
+| "The private key does not belong to the certificate" | The key belongs to another certificate | Upload the key of the leaf certificate |
+| "Wrong chain order: the leaf certificate first, then each issuer" | An intermediate comes before the leaf, or a certificate is not issued by the next one | Order the PEM as leaf then intermediates |
+| "The certificate is not valid now (valid from … to …)" | Not yet valid or expired (times in UTC) | Check the server clock, or use a valid certificate |
+| "The certificate has no DNS names (subject alternative names)" | The certificate has only IP addresses or only a CN | Use a certificate with DNS SANs |
+| "The certificate is not issued yet or has expired" | The certificate selected for a site is still pending, or has expired | Wait for issuance, or renew it first |
 | "Certificate domains do not match the site or DNS zone" | An HTTP-01 name is not a domain of any site; the DNS credential zone does not cover every name; the selected certificate does not cover every site domain, or a domain added to the site is not in its certificate | Add the domain to a site first, or use DNS-01; use a matching DNS credential or certificate |
-| Certificate shows **Issuance failed** | HTTP-01: the domain does not resolve to the nodes, port 80 is blocked, the cluster has no online node, a node did not apply the challenge within 40 seconds or lacks `http01-v1`, no certificate name is a site domain any more; DNS-01: insufficient credential permissions or propagation over 3 minutes; CA rate limits | Find `certificate operation failed` in the log of the console process that runs background jobs, fix the cause given in `reason`, and click **Renew now**; otherwise it retries after the [retry interval](#renewal) |
+| Certificate shows **Issuance failed** | The reason on the card, see the rows below | Fix it and click **Renew now**; otherwise it retries after the [retry interval](#renewal) |
+| "The CA did not accept the domain validation", "The CA received a wrong challenge answer", "The CA could not connect to the domain" | HTTP-01: the domain does not resolve to the nodes, port 80 is blocked, or another proxy is in front; DNS-01: the TXT record went to another zone | Check the DNS records and port 80 |
+| "The CA could not resolve the domain" | The domain has no records, or its authoritative DNS fails | Add the records |
+| "A CAA record does not allow this CA" | The domain's CAA records do not list the chosen CA | Add `letsencrypt.org` or `sectigo.com` (ZeroSSL) to CAA, or remove CAA |
+| "CA rate limit reached" | Too many orders for the domain or account | Wait for the CA's limit window |
+| "The CA requires EAB credentials" | CAs such as ZeroSSL need EAB | Request again with the EAB key ID and HMAC key |
+| "The TXT record did not propagate within 3 minutes" | The DNS provider syncs slowly, or the credential's zone is not the domain's authoritative zone | Retry later; check the credential's zone |
+| "Provider authentication failed" and other DNS provider reasons | The DNS provider refused the DNS-01 TXT record | Edit the DNS credential and enter its credentials again |
+| "No online node can answer HTTP-01 (http01-v1)", "Nodes did not apply the challenge within 40 seconds" | The cluster serving the domain has no online node, a node lacks `http01-v1`, or nodes apply configurations slowly | Check the cluster's nodes and upgrade them if needed |
+| "A domain belongs to no site" | No certificate name is a site domain any more | Add the domain to a site, or use DNS-01 |
+| "Issuance failed; see the console log" | An unclassified error | Find `certificate operation failed` in the log of the console process that runs background jobs and follow its `reason` |
 | Certificate stays **Pending** | No console process runs background jobs | Make sure a process with `ROLE=worker` or `ROLE=all` runs |
 | "Certificate operation is already in progress" | The certificate is **Issuing** | Wait for issuance to finish |
 | "Certificate or credential is still in use" | The certificate is used by a site, issuing, or has DNS records to clean up; the DNS credential is referenced by a certificate | Select another certificate on the sites, or delete the certificates that reference the credential |

@@ -25,6 +25,8 @@ type Plan = {
   /** Issued material by requested names ("a,b"). */
   issued: Record<string, { chainPem: string; privateKeyPem: string }>;
   fail: string[];
+  /** The code a failure answers with. */
+  failCode?: string;
   /** Renewal windows by chain. */
   windows: Record<string, unknown>;
   failRenewalInfo?: boolean;
@@ -63,7 +65,7 @@ const send = async (event) => {
   const names = p.domains.join(",");
   if (!p.account.registration)
     await send({ event: "account", account: { privateKeyPem: "account-key-" + names, registration: { uri: "https://acme-v02.api.letsencrypt.org/acme/acct/" + names, body: {} } } });
-  if (plan.fail.includes(names)) return done({ ok: false });
+  if (plan.fail.includes(names)) return done({ ok: false, code: plan.failCode, error: "CA said: ops@example.com is not allowed" });
   const challenges = p.domains.map((domain, i) => ({ domain, token: "t" + process.pid + "-" + i + "-abcdefghijklmnop", keyAuthorization: "t" + process.pid + "-" + i + ".thumbprint" }));
   await send({ event: "http01.present", challenges });
   await send({ event: "http01.cleanup", challenges: challenges.map(({ domain, token }) => ({ domain, token })) });
@@ -275,9 +277,53 @@ describe("certificate issuance", async () => {
     await issueCertificate(ctx, id);
     const failed = await row(id);
     expect(failed.status).toBe("error");
+    expect(failed.lastError).toBe("certd_failed");
     expect((failed.renewAt?.getTime() ?? 0) - Date.now()).toBeGreaterThan(2.3 * hour);
     expect((failed.renewAt?.getTime() ?? 0) - Date.now()).toBeLessThan(2.4 * hour);
     certd.plan({ fail: [] });
+  });
+
+  it("stores why an issuance failed as a code, never the helper's or the CA's text", async () => {
+    const { id } = await request(["b.issue.test", "c.issue.test"], "codes@example.com");
+    const names = "b.issue.test,c.issue.test";
+    certd.plan({ fail: [names], failCode: "acme_caa" });
+    await issueCertificate(ctx, id);
+    expect(await row(id)).toMatchObject({ status: "error", lastError: "acme_caa" });
+    expect((await api.certificates.list()).find((c) => c.id === id)?.lastError).toBe("acme_caa");
+    // A code the console does not accept is not stored as it is.
+    certd.plan({ failCode: "CA said: no" });
+    await api.certificates.renew({ id });
+    await issueCertificate(ctx, id);
+    expect((await row(id)).lastError).toBe("certd_failed");
+    // A manual renewal clears the reason until the next attempt.
+    certd.plan({ fail: [], failCode: undefined });
+    expect((await api.certificates.renew({ id })).lastError).toBe("");
+    await issueCertificate(ctx, id);
+    expect(await row(id)).toMatchObject({ status: "ready", lastError: "" });
+  });
+
+  it("stores the console's own reason when an HTTP-01 challenge cannot be published", async () => {
+    // A name of a site in a cluster without nodes (inserted as the API refuses such a request).
+    const lonely = await api.clusters.create({ name: "lonely" });
+    await api.sites.create({
+      name: "lonely",
+      clusterId: lonely.id,
+      domains: ["lonely.issue.test"],
+      origins: [{ address: "origin.example.com" }],
+    });
+    const [cert] = await ctx.db
+      .insert(schema.certificate)
+      .values({
+        name: "lonely",
+        names: ["lonely.issue.test"],
+        source: "acme",
+        autoRenew: true,
+        acme: { ca: "letsencrypt", challenge: "http01", email: "ops@example.com" },
+      })
+      .returning();
+    if (!cert) throw new Error("certificate missing");
+    await issueCertificate(ctx, cert.id);
+    expect(await row(cert.id)).toMatchObject({ status: "error", lastError: "http01_no_nodes" });
   });
 
   it("takes requests and manual renewals first, then the longest overdue renewals", async () => {

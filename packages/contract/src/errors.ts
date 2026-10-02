@@ -64,8 +64,21 @@ export const errorDefs = {
   BAN_NOT_FOUND: { status: 404, params: [] },
   PROTECTION_POW_DIFFICULTY: { status: 400, params: ["min"] },
   CERTIFICATE_NOT_FOUND: { status: 404, params: [] },
+  /** A stored certificate that cannot be read. */
   CERTIFICATE_INVALID: { status: 400, params: [] },
   CERTIFICATE_CHAIN_FOREIGN_BLOCK: { status: 400, params: [] },
+  /** No PEM certificate, more than 10, or one that cannot be parsed. */
+  CERTIFICATE_CHAIN_UNREADABLE: { status: 400, params: [] },
+  /** A private key that cannot be read, such as an encrypted one. */
+  CERTIFICATE_KEY_UNREADABLE: { status: 400, params: [] },
+  CERTIFICATE_KEY_MISMATCH: { status: 400, params: [] },
+  /** The first certificate is a CA, or one is not issued by the next. */
+  CERTIFICATE_CHAIN_ORDER: { status: 400, params: [] },
+  /** Not yet valid or expired; the validity in UTC ("2026-10-02 12:00 UTC"). */
+  CERTIFICATE_NOT_CURRENTLY_VALID: { status: 400, params: ["notBefore", "notAfter"] },
+  CERTIFICATE_NO_DNS_NAMES: { status: 400, params: [] },
+  /** A certificate chosen for a site that is not issued yet or has expired. */
+  CERTIFICATE_UNAVAILABLE: { status: 409, params: [] },
   CERTIFICATE_DOMAIN_MISMATCH: { status: 400, params: [] },
   CERTIFICATE_BUSY: { status: 409, params: [] },
   CERTIFICATE_IN_USE: { status: 409, params: [] },
