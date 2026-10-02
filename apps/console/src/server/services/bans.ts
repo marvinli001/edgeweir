@@ -16,6 +16,7 @@ import {
   MAX_AUTO_BANS_PER_CLUSTER,
   parseBanCidr,
   protectedBanOverlap,
+  protectedBanRanges,
   unicastAddress,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
@@ -247,7 +248,7 @@ export async function createBan(
   checkDuration(input.durationSeconds);
   const id = await db.transaction(async (tx) => {
     const site = input.scope === "site" ? await findSite(tx, input.siteId ?? "") : undefined;
-    await lockBans(tx);
+    // Checked before the ban lock: other ban writers need not wait for it.
     const covered = protectedBanOverlap(
       target.cidr,
       await protectedAddresses(tx, site?.clusterId ?? null),
@@ -256,6 +257,7 @@ export async function createBan(
       fail("BAN_PROTECTED_ADDRESS", `the ban covers the protected address ${covered}`, {
         address: covered,
       });
+    await lockBans(tx);
     const now = new Date();
     const expiresAt = new Date(now.getTime() + input.durationSeconds * 1000);
     const [existing] = await tx
@@ -523,10 +525,16 @@ export async function reportAutoBans(
     });
   }
   if (items.size === 0) return 0;
+  // The node and allow-list addresses are parsed once and checked outside
+  // the ban lock: a report of many bans against a long allow list must not
+  // hold up every other ban writer and reader.
+  const isProtected = protectedBanRanges(await protectedAddresses(db, node.clusterId));
+  const candidates = [...items.values()].filter((item) => !isProtected(item.cidr.cidr));
+  if (candidates.length === 0) return 0;
   return db.transaction(async (tx) => {
     await lockBans(tx);
     const { shareAutoBans } = await getBanSettings(tx);
-    const siteIds = [...new Set([...items.values()].map((item) => item.siteId))];
+    const siteIds = [...new Set(candidates.map((item) => item.siteId))];
     const sites = new Map(
       (
         await tx
@@ -535,10 +543,7 @@ export async function reportAutoBans(
           .where(and(inArray(schema.site.id, siteIds), eq(schema.site.clusterId, node.clusterId)))
       ).map((site) => [site.id, site]),
     );
-    const protectedList = await protectedAddresses(tx, node.clusterId);
-    const accepted = [...items.values()].filter(
-      (item) => sites.has(item.siteId) && !protectedBanOverlap(item.cidr.cidr, protectedList),
-    );
+    const accepted = candidates.filter((item) => sites.has(item.siteId));
     if (accepted.length === 0) return 0;
     const existing = new Map(
       (

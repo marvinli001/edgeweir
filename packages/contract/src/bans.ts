@@ -1,6 +1,6 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
-import { type Cidr, cidrContains, cidrsOverlap, formatCidr, parseCidr } from "./addresses";
+import { type Cidr, cidrContains, formatCidr, parseCidr } from "./addresses";
 import { isoDateTime, uuid } from "./schemas";
 
 /**
@@ -65,14 +65,75 @@ export function isSingleAddress(cidr: Cidr): boolean {
 /**
  * The first protected address or range the ban overlaps, or null. `extra`
  * holds addresses and CIDRs besides loopback and unspecified (node addresses,
- * the platform allow list).
+ * the platform allow list). For many bans, build protectedBanRanges once.
  */
 export function protectedBanOverlap(cidr: Cidr, extra: readonly string[]): string | null {
-  for (const text of [...BAN_PROTECTED_RANGES, ...extra]) {
-    const other = parseCidr(text.trim());
-    if (other && cidrsOverlap(cidr, other)) return text;
-  }
-  return null;
+  return protectedBanRanges(extra)(cidr);
+}
+
+interface ProtectedRange {
+  start: bigint;
+  end: bigint;
+  text: string;
+  /** Position in the list: the first one a ban overlaps is reported. */
+  order: number;
+}
+
+const toBigInt = (bytes: Uint8Array) => bytes.reduce((n, b) => (n << 8n) | BigInt(b), 0n);
+
+/**
+ * Parses loopback, unspecified and `extra` once into ranges sorted by start
+ * (one list per family) and returns protectedBanOverlap for that list. CIDRs
+ * are nested or disjoint, so a ban overlaps a range exactly when the range
+ * contains the ban's first address or starts inside the ban: a check costs a
+ * lookup per prefix length in use and a binary search, not a parse of the
+ * whole list.
+ */
+export function protectedBanRanges(extra: readonly string[]): (cidr: Cidr) => string | null {
+  const families = { 4: [] as ProtectedRange[], 6: [] as ProtectedRange[] };
+  /** Per family and prefix length: network start → the first range with it. */
+  const networks: Record<4 | 6, Map<number, Map<bigint, ProtectedRange>>> = {
+    4: new Map(),
+    6: new Map(),
+  };
+  [...BAN_PROTECTED_RANGES, ...extra].forEach((text, order) => {
+    const cidr = parseCidr(text.trim());
+    if (!cidr) return;
+    const bits = cidr.version === 4 ? 32 : 128;
+    const start = toBigInt(cidr.bytes);
+    const range = { start, end: start + (1n << BigInt(bits - cidr.prefix)) - 1n, text, order };
+    families[cidr.version].push(range);
+    const byStart = networks[cidr.version].get(cidr.prefix) ?? new Map<bigint, ProtectedRange>();
+    networks[cidr.version].set(cidr.prefix, byStart);
+    if (!byStart.has(start)) byStart.set(start, range);
+  });
+  for (const list of Object.values(families))
+    list.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : a.order - b.order));
+  return (cidr) => {
+    const list = families[cidr.version];
+    const bits = cidr.version === 4 ? 32 : 128;
+    const start = toBigInt(cidr.bytes);
+    const end = start + (1n << BigInt(bits - cidr.prefix)) - 1n;
+    let first: ProtectedRange | undefined;
+    const consider = (range: ProtectedRange | undefined) => {
+      if (range && (!first || range.order < first.order)) first = range;
+    };
+    // Ranges that contain the ban.
+    for (const [prefix, byStart] of networks[cidr.version])
+      if (prefix <= cidr.prefix)
+        consider(byStart.get((start >> BigInt(bits - prefix)) << BigInt(bits - prefix)));
+    // Ranges that start inside it.
+    let low = 0;
+    let high = list.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if ((list[mid] as ProtectedRange).start < start) low = mid + 1;
+      else high = mid;
+    }
+    for (let i = low; i < list.length && (list[i] as ProtectedRange).start <= end; i++)
+      consider(list[i]);
+    return first?.text ?? null;
+  };
 }
 
 const decimal = z.string().regex(/^(0|[1-9][0-9]*)$/);

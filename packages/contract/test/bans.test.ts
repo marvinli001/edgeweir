@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  BAN_PROTECTED_RANGES,
   banCreateInput,
+  type Cidr,
   cidrsOverlap,
   isSingleAddress,
   parseBanCidr,
   parseCidr,
   protectedBanOverlap,
+  protectedBanRanges,
 } from "../src/index";
 
 const text = (input: string) => {
@@ -55,6 +58,34 @@ describe("ban CIDRs", () => {
     expect(covers("192.0.2.10", ["192.0.2.0/24"])).toBe("192.0.2.0/24");
     expect(covers("192.0.3.0/24", ["192.0.2.0/24", "garbage"])).toBeNull();
     expect(covers("2001:db8::1", ["192.0.2.1"])).toBeNull();
+  });
+
+  it("finds the same overlap as a scan of the whole list", () => {
+    let seed = 7;
+    const random = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % n;
+    };
+    const v4 = (prefix: number) => `10.${random(4)}.${random(4)}.${random(256)}/${prefix}`;
+    const v6 = (prefix: number) =>
+      `2001:db8:${random(4).toString(16)}::${random(65536).toString(16)}/${prefix}`;
+    const extra = Array.from({ length: 400 }, (_, i) =>
+      i % 2 ? v4(16 + random(17)) : v6(48 + random(81)),
+    );
+    extra.push("garbage", "10.1.2.3", "10.1.2.3/32");
+    const ranges = protectedBanRanges(extra);
+    const scan = (cidr: Cidr) => {
+      for (const text of [...BAN_PROTECTED_RANGES, ...extra]) {
+        const other = parseCidr(text.trim());
+        if (other && cidrsOverlap(cidr, other)) return text;
+      }
+      return null;
+    };
+    for (let i = 0; i < 2000; i++) {
+      const parsed = parseBanCidr(i % 2 ? v4(16 + random(17)) : v6(48 + random(81)));
+      if (!parsed.ok) throw new Error("parse");
+      expect(ranges(parsed.cidr)).toBe(scan(parsed.cidr));
+    }
   });
 
   it("overlaps when one CIDR contains the other", () => {
