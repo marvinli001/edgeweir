@@ -26,20 +26,31 @@ export function ConfirmDialog({
   title: string;
   /** One line on what exactly the action touches (a safety note, not an explanation). */
   note?: string;
+  /** What the action changes, e.g. a list of the sites it touches. */
+  children?: React.ReactNode;
   confirmLabel?: string;
+  /** While what the action changes is not known, or it cannot be done. */
+  confirmDisabled?: boolean;
   destructive?: boolean;
   onConfirm: () => Promise<unknown>;
+  /** Follows the dialog opening and closing (e.g. to load what `children` show). */
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = React.useState(false);
+  const { onOpenChange } = props;
+  const change = (next: boolean) => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
   return (
     <>
       {React.cloneElement(trigger as React.ReactElement<{ onClick?: () => void }>, {
-        onClick: () => setOpen(true),
+        onClick: () => change(true),
       })}
       <ControlledConfirmDialog
         {...props}
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={change}
         destructive={props.destructive ?? false}
       />
     </>
@@ -55,7 +66,9 @@ export function ControlledConfirmDialog({
   onOpenChange,
   title,
   note,
+  children,
   confirmLabel,
+  confirmDisabled = false,
   destructive = true,
   onConfirm,
 }: {
@@ -64,7 +77,11 @@ export function ControlledConfirmDialog({
   title: string;
   /** One line on what exactly the action touches (a safety note, not an explanation). */
   note?: string;
+  /** What the action changes, e.g. a list of the sites it touches. */
+  children?: React.ReactNode;
   confirmLabel?: string;
+  /** While what the action changes is not known, or it cannot be done. */
+  confirmDisabled?: boolean;
   destructive?: boolean;
   onConfirm: () => Promise<unknown>;
 }) {
@@ -84,6 +101,7 @@ export function ControlledConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           {note ? <SafetyNote id={noteId}>{note}</SafetyNote> : null}
         </DialogHeader>
+        {children}
         {error ? (
           <FieldError data-testid="confirm-error" className="animate-in fade-in">
             {error}
@@ -95,7 +113,7 @@ export function ControlledConfirmDialog({
           </Button>
           <Button
             variant={destructive ? "destructive" : "default"}
-            disabled={action.pending}
+            disabled={action.pending || confirmDisabled}
             data-testid="confirm-action"
             onClick={async () => {
               setError(null);

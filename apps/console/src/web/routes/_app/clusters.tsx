@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import * as z from "zod";
 import { Countdown } from "@/components/appica/countdown";
 import { ClusterRolloutCard } from "@/components/cluster-rollout";
+import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog, ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
@@ -1028,24 +1029,53 @@ function DeleteNodeDialog({ node, onClose }: { node: Node; onClose: () => void }
   );
 }
 
+/**
+ * Rollback with what it changes: the sites it adds, changes and removes
+ * against the latest revision, or why it cannot be done, before confirming.
+ */
 function RollbackAction({ clusterId, revision }: { clusterId: string; revision: number }) {
   const queryClient = useQueryClient();
   const rollback = useMutation(orpc.clusters.rollback.mutationOptions());
+  const [open, setOpen] = React.useState(false);
+  const preview = useQuery({
+    ...orpc.clusters.rollbackPreview.queryOptions({ input: { id: clusterId, revision } }),
+    enabled: open,
+    // Always against the latest revision; a refusal is an answer, not a hiccup.
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
   return (
     <ConfirmDialog
       trigger={
-        <Button size="sm" variant="ghost">
+        <Button size="sm" variant="ghost" data-testid="revision-rollback">
           {m.revisions_rollback()}
         </Button>
       }
       title={m.revisions_rollback()}
       note={m.revisions_rollback_confirm({ revision })}
+      onOpenChange={setOpen}
+      confirmDisabled={!preview.data}
       onConfirm={async () => {
         const result = await rollback.mutateAsync({ id: clusterId, revision });
         toast.success(m.revisions_rolled_back({ revision: result.revision }));
         await queryClient.invalidateQueries();
       }}
-    />
+    >
+      {preview.isPending ? (
+        <LoadingState />
+      ) : preview.isLoadingError ? (
+        <FieldError data-testid="rollback-preview-error">{errorMessage(preview.error)}</FieldError>
+      ) : (
+        <div className="animate-enter rounded-xl border p-3">
+          <SiteChangeList
+            changes={preview.data.sites}
+            unchanged={preview.data.unchanged}
+            testId="rollback-preview"
+          />
+        </div>
+      )}
+    </ConfirmDialog>
   );
 }
 

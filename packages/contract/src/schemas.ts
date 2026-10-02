@@ -449,6 +449,25 @@ export const revision = z.object({
   createdAt: isoDateTime,
 });
 
+/** A site named in a configuration change. */
+const changedSite = z.object({ id: uuid, name: z.string() });
+
+/** The sites one configuration adds, changes and removes against another (by name). */
+export const siteChanges = z.object({
+  added: z.array(changedSite),
+  changed: z.array(changedSite),
+  removed: z.array(changedSite),
+});
+
+/** What rolling back to `revision` would publish, against the cluster's latest revision. */
+export const rollbackPreview = z.object({
+  revision: z.number().int(),
+  currentRevision: z.number().int().nullable(),
+  /** The content equals the latest revision's: the rollback publishes nothing new. */
+  unchanged: z.boolean(),
+  sites: siteChanges,
+});
+
 export const siteMutationResult = z.object({
   site,
   revision,
@@ -1263,6 +1282,8 @@ export type ReleaseSourceInput = z.infer<typeof releaseSourceInput>;
 export type AuditLogEntry = z.infer<typeof auditLogEntry>;
 export type NodeGroup = z.infer<typeof nodeGroup>;
 export type NodeChannelCheck = z.infer<typeof nodeChannelCheck>;
+export type SiteChanges = z.infer<typeof siteChanges>;
+export type RollbackPreview = z.infer<typeof rollbackPreview>;
 export type RolloutPolicy = z.infer<typeof rolloutPolicy>;
 export type ClusterRollout = z.infer<typeof clusterRollout>;
 export type RolloutState = z.infer<typeof rolloutState>;

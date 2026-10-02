@@ -52,6 +52,7 @@ import {
   deleteCluster,
   getCluster,
   listClusters,
+  previewRollback,
   rollbackCluster,
   updateCluster,
 } from "../services/clusters";
@@ -604,6 +605,9 @@ export const router = os.router({
     }),
     rollback: authed.clusters.rollback.handler(({ input, context }) =>
       rollbackCluster(context.app.db, input, context.actor),
+    ),
+    rollbackPreview: authed.clusters.rollbackPreview.handler(({ input, context }) =>
+      previewRollback(context.app.db, input),
     ),
     rollout: authed.clusters.rollout.handler(({ input, context }) =>
       getRollout(context.app.db, input.id),

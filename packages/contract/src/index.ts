@@ -175,6 +175,14 @@ export const contract = {
       .route({ method: "POST", path: "/clusters/{id}/rollback", tags: ["clusters"] })
       .input(idParam.extend({ revision: z.number().int().min(1) }))
       .output(s.revision),
+    /**
+     * The sites a rollback to `revision` would add, change and remove against
+     * the latest revision; refuses like the rollback would. Writes nothing.
+     */
+    rollbackPreview: oc
+      .route({ method: "GET", path: "/clusters/{id}/rollback-preview", tags: ["clusters"] })
+      .input(idParam.extend({ revision: z.coerce.number().int().min(1) }))
+      .output(s.rollbackPreview),
     /** Configuration canary: policy, current rollout, canary nodes and window traffic. */
     rollout: oc
       .route({ method: "GET", path: "/clusters/{id}/rollout", tags: ["clusters"] })

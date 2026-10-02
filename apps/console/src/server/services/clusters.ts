@@ -1,8 +1,10 @@
-import type { Cluster, Revision } from "@edgeweir/contract";
+import { decodeNodeConfig } from "@edgeweir/config-compiler";
+import type { Cluster, Revision, RollbackPreview } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, eq, gt, ne, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
+import { siteChanges } from "./config-changes";
 import { assertBindingReleased } from "./dns";
 import { isOnline, ONLINE_WINDOW_SECONDS } from "./nodes";
 import {
@@ -10,6 +12,7 @@ import {
   latestRevision,
   publisher,
   publishRevision,
+  rollbackContent,
   rollbackToRevision,
   rolloutTargets,
   type Tx,
@@ -201,6 +204,42 @@ export async function deleteCluster(db: Database, id: string, actor: Actor): Pro
  * and audits it in the same transaction (nothing is written when the
  * revision does not exist).
  */
+/** Thrown to roll the preview's transaction back once it holds the result. */
+class PreviewDone extends Error {
+  constructor(readonly preview: RollbackPreview) {
+    super("rollback preview");
+  }
+}
+
+/**
+ * What rolling back to `revision` would publish, against the latest
+ * revision. The content is built as the rollback builds it, in a
+ * transaction that is rolled back: nothing it writes persists.
+ */
+export async function previewRollback(
+  db: Database,
+  input: { id: string; revision: number },
+): Promise<RollbackPreview> {
+  try {
+    await db.transaction(async (tx) => {
+      const cluster = await findCluster(tx, input.id);
+      const content = await rollbackContent(tx, cluster.id, input.revision);
+      if (!content) fail("REVISION_NOT_FOUND", "revision not found");
+      const latest = await latestRevision(tx, cluster.id);
+      throw new PreviewDone({
+        revision: input.revision,
+        currentRevision: latest?.revision ?? null,
+        unchanged: latest?.contentHash === content.contentHash,
+        sites: siteChanges(latest ? decodeNodeConfig(latest.ir) : undefined, content),
+      });
+    });
+  } catch (error) {
+    if (error instanceof PreviewDone) return error.preview;
+    throw error;
+  }
+  throw new Error("rollback preview ended without a result");
+}
+
 export async function rollbackCluster(
   db: Database,
   input: { id: string; revision: number },
