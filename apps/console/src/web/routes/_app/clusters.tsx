@@ -276,7 +276,9 @@ function SummaryStat({ label, children }: { label: string; children: React.React
   return (
     <div className="flex min-w-0 flex-col gap-1 px-4 py-3">
       <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd className="flex items-center gap-2 text-xl font-semibold tracking-tight">{children}</dd>
+      <dd className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl font-semibold tracking-tight">
+        {children}
+      </dd>
     </div>
   );
 }
@@ -380,6 +382,22 @@ function ClusterSummary({
                 ? `#${selected.latestRevision.revision}`
                 : m.clusters_no_revision()}
             </span>
+            {selected.latestRevision && selected.liveNodeCount > 0 ? (
+              <span
+                className="flex min-w-0 items-center gap-1.5 text-sm font-normal tracking-normal text-muted-foreground"
+                data-testid="cluster-applied"
+              >
+                <span aria-hidden="true">·</span>
+                <Dot
+                  tone={selected.appliedNodeCount < selected.liveNodeCount ? "warn" : "good"}
+                  small
+                />
+                {m.clusters_applied({
+                  applied: selected.appliedNodeCount,
+                  total: selected.liveNodeCount,
+                })}
+              </span>
+            ) : null}
           </SummaryStat>
         </dl>
       </CardContent>

@@ -99,6 +99,7 @@
   "home_recents_empty": "暂无记录",
   "clusters_nodes_online": "在线节点",
   "clusters_latest_revision": "最新版本",
+  "clusters_applied": "{applied}/{total} 已应用",
   "clusters_sites": "网站",
   "revisions_recent": "最近发布",
   "revisions_empty": "暂无发布",

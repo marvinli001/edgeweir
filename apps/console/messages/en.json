@@ -99,6 +99,7 @@
   "home_recents_empty": "Nothing yet",
   "clusters_nodes_online": "Nodes online",
   "clusters_latest_revision": "Latest revision",
+  "clusters_applied": "{applied}/{total} applied",
   "clusters_sites": "Sites",
   "revisions_recent": "Recent revisions",
   "revisions_empty": "No revisions yet",

@@ -471,6 +471,10 @@ export const cluster = z.object({
   description: z.string(),
   nodeCount: z.number().int(),
   onlineNodeCount: z.number().int(),
+  /** Online active nodes: what the configuration is delivered to now. */
+  liveNodeCount: z.number().int(),
+  /** Of those, nodes running their target revision (with a canary: stable or candidate). */
+  appliedNodeCount: z.number().int(),
   siteCount: z.number().int(),
   latestRevision: revision.nullable(),
   createdAt: isoDateTime,
