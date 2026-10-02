@@ -855,6 +855,45 @@ export async function checkRenewalInfo(app: AppContext, now = Date.now()) {
   }
 }
 
+/** How often failed issuances whose names did not resolve to the nodes look again. */
+const POINTING_RECHECK = 5 * 60_000;
+const pointingChecked = new WeakMap<AppContext, number>();
+
+/**
+ * Moves up the retry of HTTP-01 certificates whose last issuance failed
+ * because names did not resolve to the nodes (http01_dns_not_pointing),
+ * once they do: the next sweep issues them instead of waiting for the
+ * retry delay. The lookups ask no CA. Returns the certificates moved up.
+ */
+export async function retryWhenPointing(app: AppContext) {
+  const now = new Date();
+  const rows = await app.db
+    .select()
+    .from(schema.certificate)
+    .where(
+      and(
+        eq(schema.certificate.source, "acme"),
+        eq(schema.certificate.status, "error"),
+        eq(schema.certificate.lastError, "http01_dns_not_pointing"),
+        gt(schema.certificate.renewAt, now),
+      ),
+    )
+    .orderBy(asc(schema.certificate.renewAt))
+    .limit(50);
+  const ready: string[] = [];
+  for (const row of rows) {
+    if (row.acme.challenge !== "http01") continue;
+    const names = await issuanceNames(app.db, row);
+    if (!notPointing(await http01Pointing(app, app.db, names)).length) ready.push(row.id);
+  }
+  if (ready.length)
+    await app.db
+      .update(schema.certificate)
+      .set({ renewAt: now })
+      .where(and(inArray(schema.certificate.id, ready), eq(schema.certificate.status, "error")));
+  return ready;
+}
+
 /** The certificates a sweep issues: requests and manual renewals first, then the longest overdue. */
 export async function dueCertificates(app: AppContext, limit = 10) {
   const rows = await app.db
@@ -897,6 +936,11 @@ export async function sweepCertificates(app: AppContext) {
   for (const { lease } of leases) await cleanupDnsLease(app, lease);
   // HTTP-01 challenges an attempt left behind when its process died.
   await app.db.delete(schema.acmeChallenge).where(lt(schema.acmeChallenge.expiresAt, new Date()));
+  const now = Date.now();
+  if (now - (pointingChecked.get(app) ?? 0) >= POINTING_RECHECK) {
+    pointingChecked.set(app, now);
+    await retryWhenPointing(app);
+  }
   const queue = await dueCertificates(app);
   await Promise.all(
     Array.from({ length: SWEEP_CONCURRENCY }, async () => {
