@@ -973,24 +973,25 @@ export function createNodeService(
 
     async getBans(req, ctx) {
       const node = await requireNode(ctx);
-      const page = await banChanges(app.db, node.clusterId, req.afterSequence, req.limit);
+      const page = await banChanges(app.db, node, req.afterSequence, req.limit);
+      const toBan = (ban: (typeof page.bans)[number]) =>
+        create(BanSchema, {
+          id: ban.id,
+          cidr: ban.cidr,
+          scope: ban.scope === "platform" ? BanScope.PLATFORM : BanScope.SITE,
+          siteId: ban.siteId ?? "",
+          expiresAt: timestampFromDate(ban.expiresAt),
+          source: ban.source === "auto" ? BanSource.AUTO : BanSource.MANUAL,
+          reason: ban.reason,
+          createdAt: timestampFromDate(ban.createdAt),
+        });
       return {
         reset: page.reset,
-        bans: page.bans.map((ban) =>
-          create(BanSchema, {
-            id: ban.id,
-            cidr: ban.cidr,
-            scope: ban.scope === "platform" ? BanScope.PLATFORM : BanScope.SITE,
-            siteId: ban.siteId ?? "",
-            expiresAt: timestampFromDate(ban.expiresAt),
-            source: ban.source === "auto" ? BanSource.AUTO : BanSource.MANUAL,
-            reason: ban.reason,
-            createdAt: timestampFromDate(ban.createdAt),
-          }),
-        ),
+        bans: page.bans.map(toBan),
         removedIds: page.removedIds,
         sequence: page.sequence,
         more: page.more,
+        liftedOwnBans: page.liftedOwn.map(toBan),
       };
     },
 

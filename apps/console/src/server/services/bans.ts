@@ -363,7 +363,8 @@ export async function deleteBan(db: Database, id: string, ctx: { actor: Actor })
     if (!row) fail("BAN_NOT_FOUND", "ban not found");
     const seq = await nextSeq(tx);
     await tx.update(schema.ipBan).set({ removedAt: now, seq }).where(eq(schema.ipBan.id, id));
-    if (row.distributed) await notifyBans(tx, row.clusterId ? [row.clusterId] : null);
+    // A ban never distributed is lifted on the node that created it.
+    await notifyBans(tx, row.clusterId ? [row.clusterId] : null);
     const [site] = row.siteId
       ? await tx
           .select({ name: schema.site.name })
@@ -393,22 +394,25 @@ export interface BanPage {
   reset: boolean;
   bans: BanRow[];
   removedIds: string[];
+  /** The node's own automatic bans, never distributed, lifted on this page. */
+  liftedOwn: BanRow[];
   sequence: bigint;
   more: boolean;
 }
 
 /**
- * One page of the ban changes a node of `clusterId` sees: bans of its cluster
- * and platform bans that are distributed. From 0, or from a sequence ahead of
- * the console's (a restored database), it is a snapshot of the active bans
- * (`reset`). Otherwise it holds the active bans and the lifted ones changed
- * after `afterSequence`; expired bans are left out (nodes drop them at
- * expiry). `sequence` is the highest sequence of the page, or the current
- * sequence value on the last page.
+ * One page of the ban changes a node sees: bans of its cluster and platform
+ * bans that are distributed, and its own automatic bans that were never
+ * distributed once they are lifted (only the node holds them). From 0, or
+ * from a sequence ahead of the console's (a restored database), it is a
+ * snapshot of the active distributed bans (`reset`). Otherwise it holds the
+ * active bans and the lifted ones changed after `afterSequence`; expired
+ * bans are left out (nodes drop them at expiry). `sequence` is the highest
+ * sequence of the page, or the current sequence value on the last page.
  */
 export async function banChanges(
   db: Database,
-  clusterId: string,
+  node: { id: string; clusterId: string },
   afterSequence: bigint,
   limit: number,
   now = new Date(),
@@ -419,22 +423,30 @@ export async function banChanges(
     await tx.execute(sql`select pg_advisory_xact_lock_shared(hashtext(${LOCK_KEY}))`);
     const current = await currentBanSequence(tx);
     const reset = afterSequence === 0n || afterSequence > current;
-    const visible = and(
-      or(isNull(schema.ipBan.clusterId), eq(schema.ipBan.clusterId, clusterId)),
+    const distributed = and(
+      or(isNull(schema.ipBan.clusterId), eq(schema.ipBan.clusterId, node.clusterId)),
       eq(schema.ipBan.distributed, true),
-      lte(schema.ipBan.seq, current),
+    );
+    const ownLifted = and(
+      eq(schema.ipBan.source, "auto"),
+      eq(schema.ipBan.nodeId, node.id),
+      eq(schema.ipBan.distributed, false),
+      isNotNull(schema.ipBan.removedAt),
     );
     const rows = await tx
       .select()
       .from(schema.ipBan)
       .where(
-        reset
-          ? and(visible, active(now))
-          : and(
-              visible,
-              gt(schema.ipBan.seq, afterSequence),
-              or(isNotNull(schema.ipBan.removedAt), gt(schema.ipBan.expiresAt, now)),
-            ),
+        and(
+          lte(schema.ipBan.seq, current),
+          reset
+            ? and(distributed, active(now))
+            : and(
+                or(distributed, ownLifted),
+                gt(schema.ipBan.seq, afterSequence),
+                or(isNotNull(schema.ipBan.removedAt), gt(schema.ipBan.expiresAt, now)),
+              ),
+        ),
       )
       .orderBy(schema.ipBan.seq)
       .limit(size + 1);
@@ -443,7 +455,13 @@ export async function banChanges(
     return {
       reset,
       bans: page.filter((row) => row.removedAt === null),
-      removedIds: page.filter((row) => row.removedAt !== null).map((row) => row.id),
+      removedIds: page
+        .filter((row) => row.removedAt !== null && row.distributed)
+        .map((row) => row.id),
+      // Expired ones are gone from the node already.
+      liftedOwn: page.filter(
+        (row) => row.removedAt !== null && !row.distributed && row.expiresAt > now,
+      ),
       sequence: more ? (page.at(-1)?.seq ?? current) : current,
       more,
     };

@@ -70,7 +70,7 @@ A node bans a single address on a trigger (the per-IP QPS of CC mitigation, see 
 | Sharing | **System → Bans → Share automatic bans in the cluster**, on by default: on, the ban goes to every node of the cluster; off, it is kept for viewing only and marked "Not shared". A change applies to automatic bans added afterwards |
 | Merging | One entry per node, site and address; a repeated report extends the expiry |
 | Checks | The site must belong to the node's cluster; single addresses only; at most 7 days after creation; protected addresses are not stored |
-| Unban | Like a manual ban: click "Unban" in the row |
+| Unban | Like a manual ban: click "Unban" in the row; a ban that was not shared is deleted within seconds by the node that created it (older nodes without support keep it until it expires), and a later ban of the same address by that node is not affected |
 
 ## Nodes
 

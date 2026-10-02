@@ -400,6 +400,21 @@ describe("dynamic ban channel", async () => {
       trigger: { metric: "ip_qps", observed: 250, threshold: 100, windowSeconds: 10 },
       createdBy: null,
     });
+    // Lifting it reaches the node that holds it, and only that one.
+    const beforeLocalLift = await currentBanSequence(ctx.db);
+    await deleteBan(ctx.db, local?.id ?? "", { actor });
+    const own = await reporter.mtls.getBans({ afterSequence: beforeLocalLift });
+    expect(own.removedIds).toEqual([]);
+    expect(own.liftedOwnBans.map((ban) => [ban.cidr, ban.siteId, ban.source])).toEqual([
+      ["198.51.100.50/32", siteId, BanSource.AUTO],
+    ]);
+    expect(own.sequence).toBeGreaterThan(beforeLocalLift);
+    expect(await peer.mtls.getBans({ afterSequence: beforeLocalLift })).toMatchObject({
+      bans: [],
+      removedIds: [],
+      liftedOwnBans: [],
+    });
+    expect((await reporter.mtls.getBans({ afterSequence: 0n })).liftedOwnBans).toEqual([]);
     await setBanSettings(ctx.db, { maxTotal: 10000, shareAutoBans: true }, actor);
 
     // Lifting an automatic ban tells the nodes.
