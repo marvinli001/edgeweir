@@ -159,6 +159,7 @@ import {
   updateServiceAccount,
 } from "../services/service-accounts";
 import { isInitialized, runSetup, setupCompletedAt } from "../services/setup";
+import { siteLaunch } from "../services/site-launch";
 import {
   countSites,
   createSite,
@@ -726,6 +727,7 @@ export const router = os.router({
     setEnabled: authed.sites.setEnabled.handler(({ input, context }) =>
       setSiteEnabled(context.app.db, input, { actor: context.actor }),
     ),
+    launch: authed.sites.launch.handler(({ input, context }) => siteLaunch(context.app, input.id)),
     originHealth: authed.sites.originHealth.handler(({ input, context }) =>
       siteOriginHealth(context.app.db, input.id),
     ),

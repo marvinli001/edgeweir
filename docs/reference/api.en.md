@@ -76,6 +76,7 @@ A service account can call only the procedures below, each with its scope:
 | `settings.get` | `GET /settings` | `system:read` |
 | `clusters.list`, `clusters.get` | `GET /clusters`, `GET /clusters/{id}` | `clusters:read` |
 | `sites.list`, `sites.get` | `GET /sites`, `GET /sites/{id}` | `sites:read` |
+| `sites.launch` | `GET /sites/{id}/launch` | `sites:read` |
 | `sites.setEnabled` | `PUT /sites/{id}/enabled` | `sites:write` |
 | `dns.siteTarget` | `GET /sites/{siteId}/cname` | `sites:read` |
 | `usage.list`, `usage.changes` | `GET /usage`, `GET /usage/changes` | `usage:read` |
@@ -128,6 +129,28 @@ When a site or L4 app is already enabled or disabled as requested, `sites.setEna
 - A change publishes a configuration revision (reason codes `site_enabled`, `site_disabled`) and writes an audit entry (`site.enable`, `site.disable`); an unchanged state returns the current state without a revision or audit entry.
 - Purging or prefetching a disabled site: 409 `SITE_DISABLED`.
 - The response is `{ site, revision }`; `site.enabled` holds the current state.
+
+### Site delivery and launch check
+
+Sites (`sites.list`, `sites.get` and the `site` that writes return) carry `delivery`:
+
+| Field | Description |
+| --- | --- |
+| `state` | `pending`: no online node runs the site; `partial`: some online nodes run an older version or have an unhealthy data plane; `live`: every online node runs the latest version; `disabled` |
+| `totalNodes` | Online active nodes of the site's cluster |
+| `servingNodes` | Of those, nodes whose applied configuration has the site (any version); for a disabled site, the nodes that still run it |
+| `currentNodes` | Of those, nodes running the site's latest version (canary candidates included) with a healthy data plane |
+| `canary` | `{ endsAt, autoPromote }` while the cluster's configuration canary keeps the nodes outside the canary on the site's previous version (when the window ends; `autoPromote: false` waits for a manual promotion), otherwise `null` |
+
+`GET /sites/{id}/launch` (procedure `sites.launch`) resolves each of the site's domains when called, which can take seconds:
+
+| Field | Description |
+| --- | --- |
+| `addresses` | The cluster's edge addresses (values for A / AAAA records): the primary scheduling addresses of its online active nodes, the configured ones of a node that has any, otherwise the public addresses it reports; IPv4 first |
+| `domains[]` | `name` (as on the site, `*.example.com` for a wildcard), `probe` (the name resolved; a wildcard resolves the fixed name `edgeweir-check.example.com` under it), `pointing` |
+| `domains[].pointing` | `ok`: every address it resolves to belongs to an active node of the cluster (configured or reported public, backup addresses and offline nodes included); `elsewhere`: some address does not; `unresolved`: no A or AAAA record; `unknown`: the lookup failed (a timeout, for example) or the cluster's nodes have no known address |
+| `certificate` | `state`: `none` (the site has no certificate), `covered` (the chain covers every domain), `uncovered` (it misses the domains in `uncovered`), `issuing` (an ACME issuance is queued or running), `failed` (the last issuance failed, `error` holds its code), `expired`; plus `id`, `name`, `uncovered`, `error` |
+| `delivery` | As above |
 
 ### Node capabilities
 

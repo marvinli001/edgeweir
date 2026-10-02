@@ -25,6 +25,7 @@ export const serviceAccountProcedures = {
   "clusters.get": "clusters:read",
   "sites.list": "sites:read",
   "sites.get": "sites:read",
+  "sites.launch": "sites:read",
   "sites.setEnabled": "sites:write",
   "dns.catalog": null,
   "dns.siteTarget": "sites:read",

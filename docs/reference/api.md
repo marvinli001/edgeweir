@@ -76,6 +76,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | `settings.get` | `GET /settings` | `system:read` |
 | `clusters.list`、`clusters.get` | `GET /clusters`、`GET /clusters/{id}` | `clusters:read` |
 | `sites.list`、`sites.get` | `GET /sites`、`GET /sites/{id}` | `sites:read` |
+| `sites.launch` | `GET /sites/{id}/launch` | `sites:read` |
 | `sites.setEnabled` | `PUT /sites/{id}/enabled` | `sites:write` |
 | `dns.siteTarget` | `GET /sites/{siteId}/cname` | `sites:read` |
 | `usage.list`、`usage.changes` | `GET /usage`、`GET /usage/changes` | `usage:read` |
@@ -128,6 +129,28 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 - 状态有变化时生成新的配置版本（原因码 `site_enabled`、`site_disabled`）并写审计（`site.enable`、`site.disable`）；没有变化时返回当前状态，不生成版本、不写审计。
 - 对停用的网站清缓存或预热：409 `SITE_DISABLED`。
 - 响应为 `{ site, revision }`；`site.enabled` 为当前状态。
+
+### 网站生效与上线检查
+
+网站（`sites.list`、`sites.get` 与各写操作返回的 `site`）带 `delivery`：
+
+| 字段 | 说明 |
+| --- | --- |
+| `state` | `pending`：没有在线节点运行该网站；`partial`：部分在线节点运行旧版本或数据面异常；`live`：全部在线节点运行最新版本；`disabled`：已停用 |
+| `totalNodes` | 网站所在集群的在线活动节点数 |
+| `servingNodes` | 其中已应用的配置含该网站（任意版本）的节点数；停用的网站为仍在运行它的节点数 |
+| `currentNodes` | 其中运行该网站最新版本（含金丝雀候选版本）且数据面正常的节点数 |
+| `canary` | 集群的配置金丝雀让非金丝雀节点在窗口内继续运行该网站的旧版本时为 `{ endsAt, autoPromote }`（窗口结束时间；`autoPromote` 为 `false` 时等待手动晋升），否则为 `null` |
+
+`GET /sites/{id}/launch`（过程 `sites.launch`）当场解析网站的每个域名，耗时可达数秒：
+
+| 字段 | 说明 |
+| --- | --- |
+| `addresses` | 集群的边缘地址（A / AAAA 记录的值）：在线活动节点的主调度地址，节点配置了调度地址时用配置的地址，否则用节点上报的公网地址；IPv4 在前 |
+| `domains[]` | `name`（网站上的写法，泛域名为 `*.example.com`）、`probe`（实际解析的名称；泛域名解析其下的固定名称 `edgeweir-check.example.com`）、`pointing` |
+| `domains[].pointing` | `ok`：解析到的全部地址都属于集群的活动节点（配置的地址或上报的公网地址，含备用地址与离线节点）；`elsewhere`：有地址不属于；`unresolved`：没有 A / AAAA 记录；`unknown`：解析失败（超时等），或集群节点没有已知地址 |
+| `certificate` | `state`：`none`（网站没有证书）、`covered`（证书链覆盖全部域名）、`uncovered`（不覆盖 `uncovered` 中的域名）、`issuing`（ACME 签发排队或进行中）、`failed`（上次签发失败，`error` 为失败代码）、`expired`；另有 `id`、`name`、`uncovered`、`error` |
+| `delivery` | 同上 |
 
 ### 节点能力
 

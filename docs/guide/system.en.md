@@ -181,7 +181,7 @@ Page: **Service accounts** (`/service-accounts`). A service account is an identi
 | No scope needed | `system.status`, `account.me`, `dns.catalog` |
 | `system:read` | `settings.get` |
 | `clusters:read` | `clusters.list`, `clusters.get` |
-| `sites:read` | `sites.list`, `sites.get`, `dns.siteTarget` |
+| `sites:read` | `sites.list`, `sites.get`, `sites.launch`, `dns.siteTarget` |
 | `sites:write` | `sites.setEnabled` |
 | `usage:read` | `usage.list`, `usage.changes` |
 
