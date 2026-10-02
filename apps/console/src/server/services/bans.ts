@@ -40,6 +40,7 @@ import { BANS_CHANNEL } from "../lib/events";
 import { ONLINE_WINDOW_SECONDS } from "../lib/node-online";
 import { type Actor, recordAudit } from "./audit";
 import type { Executor } from "./revisions";
+import { defineSetting } from "./settings";
 import { findSite } from "./sites";
 
 type BanRow = typeof schema.ipBan.$inferSelect;
@@ -91,30 +92,17 @@ async function notifyBans(tx: Executor, clusterIds: string[] | null) {
   await tx.execute(sql`select pg_notify(${BANS_CHANNEL}, ${JSON.stringify({ clusterIds })})`);
 }
 
-export async function getBanSettings(db: Executor): Promise<BanSettings> {
-  const [row] = await db
-    .select()
-    .from(schema.systemSetting)
-    .where(eq(schema.systemSetting.key, SETTINGS_KEY));
-  const parsed = banSettings.safeParse({ ...BAN_SETTINGS_DEFAULTS, ...(row?.value ?? {}) });
-  return parsed.success ? parsed.data : BAN_SETTINGS_DEFAULTS;
-}
+const banSetting = defineSetting({
+  key: SETTINGS_KEY,
+  schema: banSettings,
+  defaults: BAN_SETTINGS_DEFAULTS,
+  auditAction: "system.bans_update",
+});
 
-export async function setBanSettings(db: Database, input: BanSettings, actor: Actor) {
-  return db.transaction(async (tx) => {
-    const before = await getBanSettings(tx);
-    await tx
-      .insert(schema.systemSetting)
-      .values({ key: SETTINGS_KEY, value: input })
-      .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value: input } });
-    await recordAudit(tx, actor, {
-      action: "system.bans_update",
-      targetType: "system_setting",
-      targetId: SETTINGS_KEY,
-      metadata: { from: before, to: input },
-    });
-    return input;
-  });
+export const getBanSettings = banSetting.read;
+
+export function setBanSettings(db: Database, input: BanSettings, actor: Actor) {
+  return db.transaction((tx) => banSetting.write(tx, actor, input));
 }
 
 /**
