@@ -39,6 +39,11 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
   }
   await page.getByTestId("rule-add-waf-custom").click();
   let first = page.getByTestId("rule-row").first();
+  // A new rule starts disabled.
+  const enabled = first.getByRole("switch", { name: "启用", exact: true });
+  await expect(enabled).toHaveAttribute("aria-checked", "false");
+  await enabled.click();
+  await expect(enabled).toHaveAttribute("aria-checked", "true");
   await first.getByLabel("名称", { exact: true }).fill("Browser block");
   await first.getByLabel("表达式", { exact: true }).fill("http.host gt 4");
   await expect(first.getByRole("alert")).toHaveText(/检查第 11 个字符/);

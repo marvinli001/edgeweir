@@ -186,7 +186,7 @@ WebSocket upgrades (`Upgrade: websocket`) are proxied by default and never cache
 **Origin group** splits a site's origins into groups; empty is the default group. Requests that match no **Origin override** rule go to the default group only.
 
 1. In the **Origins** card, enter an **Origin group** for an origin, for example `api`, and click **Save**. Keep at least one origin in the default group; otherwise the card shows "Keep at least one origin in the default group" and cannot be saved.
-2. On the **Rules** tab, click **Add rule** in the **Origin** phase and enter an expression such as `starts_with(http.request.uri.path, "/api/")`; select the **Origin override** action, pick `api` as **Origin group**, set **Origin Host**, **SNI**, and **Port** as needed, and click **Save**. Fields: [Action fields](rules.en.md#action-fields).
+2. On the **Rules** tab, click **Add rule** in the **Origin** phase and enter an expression such as `starts_with(http.request.uri.path, "/api/")`; select the **Origin override** action, pick `api` as **Origin group**, set **Origin Host**, **SNI**, and **Port** as needed, turn on **Enabled** (a new rule starts disabled), and click **Save**. Fields: [Action fields](rules.en.md#action-fields).
 3. Verify: requests below `/api/` reach the origins of the `api` group in their logs; other paths still reach the default group.
 
 | Item | Behavior |

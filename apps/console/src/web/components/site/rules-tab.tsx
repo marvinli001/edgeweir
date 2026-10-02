@@ -306,7 +306,9 @@ function RulesEditor({
                         name: m.rules_new(),
                         phase,
                         expression: "true",
-                        enabled: true,
+                        // Saved with an edit elsewhere, an enabled `true` rule would redirect or
+                        // block every request.
+                        enabled: false,
                         action: defaultAction(first),
                       },
                     ])
