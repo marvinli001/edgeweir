@@ -18,12 +18,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  appendCondition,
   CONDITION_TEMPLATES,
   type ConditionTemplate,
   conditionTemplateLabel,
   type ExpressionFailure,
   expressionErrorText,
+  insertCondition,
+  TEMPLATE_VALUES,
 } from "@/lib/expressions";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -115,6 +116,19 @@ export function ExpressionEditor({
   testId?: string;
 }) {
   const textarea = React.useRef<HTMLTextAreaElement>(null);
+  // The range to select once an inserted template is rendered (its example value).
+  const selection = React.useRef<{ source: string; range: [number, number] } | null>(null);
+  React.useEffect(() => {
+    const pending = selection.current;
+    if (!pending || pending.source !== value) return;
+    selection.current = null;
+    // After the template menu has closed and handed focus back to its trigger.
+    const frame = requestAnimationFrame(() => {
+      textarea.current?.focus();
+      textarea.current?.setSelectionRange(...pending.range);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
   const failure = expressionFailure(value, phase, kind);
   const position = failure?.position ?? null;
   const lists = useQuery({ ...orpc.ipLists.list.queryOptions(), enabled: kind === "condition" });
@@ -143,10 +157,16 @@ export function ExpressionEditor({
               value={null}
               onValueChange={(choice: string | null) => {
                 if (!choice) return;
-                const condition = choice.startsWith(LIST_PREFIX)
-                  ? `ip.src in ${choice}`
-                  : CONDITION_TEMPLATES[choice as ConditionTemplate];
-                onChange(appendCondition(value, condition, phase));
+                const inserted = choice.startsWith(LIST_PREFIX)
+                  ? insertCondition(value, `ip.src in ${choice}`, phase)
+                  : insertCondition(
+                      value,
+                      CONDITION_TEMPLATES[choice as ConditionTemplate],
+                      phase,
+                      TEMPLATE_VALUES[choice as ConditionTemplate],
+                    );
+                selection.current = { source: inserted.source, range: inserted.selection };
+                onChange(inserted.source);
               }}
             >
               <SelectTrigger

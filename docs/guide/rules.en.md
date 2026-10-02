@@ -19,7 +19,7 @@ The console parses expressions and checks their fields, types, and actions befor
 
 1. Open **Sites**, select the site, and open the **Rules** tab.
 2. Click **Add rule** next to the target phase.
-3. Enter the rule name and **Expression**. **Insert condition** appends a common condition (path prefix, IP range, IP list, country, User-Agent contains, request method) and **Insert field** appends a field, both joined with `and`. When the expression is invalid, "Character N: reason" appears below the editor, for example "Character 11: Ordered comparisons need a number field".
+3. Enter the rule name and **Expression**. **Insert condition** appends a common condition (path prefix, Host equals, file extension, IP range, IP list, country, ASN, User-Agent contains, request method) and selects its example value, so typing replaces it; **Insert field** appends a field; both join with `and`. When the expression is invalid, "Character N: reason" appears below the editor, for example "Character 11: Ordered comparisons need a number field"; an expression the console refuses on save shows its position and reason the same way.
 4. Select **Action**, fill in its fields, and turn on **Enabled**. A new rule starts disabled with the expression `true` (every request); check the condition and the action before you save.
 5. Drag the handle on the left of a rule to reorder rules within a phase.
 6. Click **Save**. The console shows **Saved** and publishes a new configuration revision ("Rules and IP lists updated").
@@ -73,6 +73,7 @@ Phases run in the order of this table.
 | Origin override | SNI | Host name; empty leaves it unchanged | Empty |
 | Origin override | Port | 1–65535; empty leaves it unchanged | Empty |
 | Compression algorithms | Preference order | Some of Zstandard, Brotli, and Gzip: **Add algorithm** appends one, the arrows reorder them; an empty list shows **No compression** | No compression |
+| Rate limit | Preset | Loose (300 per minute), Standard (100 per minute), Strict (20 per minute), or Custom; Custom shows the next two fields | Standard |
 | Rate limit | Requests per window | 1–100000 | 100 |
 | Rate limit | Window (seconds) | 1–3600 | 60 |
 | Rate limit | Rate limit key | `ip.src`, `http.host`, `tls.ja4`, or `http.request.headers.<name>` (pick **Request header** and enter the name) | `ip.src` |
