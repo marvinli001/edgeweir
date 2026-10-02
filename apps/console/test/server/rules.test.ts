@@ -50,7 +50,16 @@ describe("M4 rules and IP list boundaries", async () => {
   it("checks syntax with a character position and rejects invalid actions before publishing", async () => {
     expect(
       await admin.rules.validate({ expression: "http.host gt 5", phase: "waf-custom" }),
-    ).toMatchObject({ valid: false, position: 10 });
+    ).toEqual({
+      valid: false,
+      position: 10,
+      message: "ordered comparison needs integers",
+      code: "ordered_comparison",
+      params: {},
+    });
+    expect(
+      await admin.rules.validate({ expression: "(ssl eq true", phase: "waf-custom" }),
+    ).toMatchObject({ valid: false, code: "unexpected_end", position: 12 });
     expect(
       await admin.rules.validate({
         expression: 'http.host eq "own-rules.test"',

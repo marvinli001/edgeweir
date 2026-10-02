@@ -3,6 +3,7 @@ import {
   canonicalCidr,
   challengeTypes,
   compressionCodings,
+  expressionErrorCodes,
   isRateLimitKey,
   ORIGIN_GROUP_RE,
   parseExpression,
@@ -12,6 +13,7 @@ import {
 } from "@edgeweir/rule-engine";
 import { oc } from "@orpc/contract";
 import * as z from "zod";
+import { addExpressionIssue, expressionKinds } from "./expressions";
 import { optionalHostname, uuid } from "./schemas";
 
 const text = z
@@ -276,21 +278,13 @@ export const ruleInput = z
     try {
       parseExpression(rule.expression, rule.phase);
     } catch (error) {
-      ctx.addIssue({
-        code: "custom",
-        message: error instanceof Error ? error.message : "invalid expression",
-        path: ["expression"],
-      });
+      addExpressionIssue(ctx, error, ["expression"]);
     }
     if ((action.kind === "redirect" || action.kind === "rewrite") && action.target !== "")
       try {
         parseValueExpression(action.target, rule.phase);
       } catch (error) {
-        ctx.addIssue({
-          code: "custom",
-          message: error instanceof Error ? error.message : "invalid expression",
-          path: ["action", "target"],
-        });
+        addExpressionIssue(ctx, error, ["action", "target"]);
       }
   });
 export const ruleDto = ruleInput.safeExtend({ id: uuid });
@@ -314,10 +308,21 @@ export const rulesContract = {
       z.object({
         expression: z.string().max(16384),
         phase: z.enum(phases),
-        kind: z.enum(["condition", "value", "cacheRule"]).default("condition"),
+        kind: z.enum(expressionKinds).default("condition"),
       }),
     )
-    .output(z.object({ valid: z.boolean(), position: z.number().int(), message: z.string() })),
+    .output(
+      z.object({
+        valid: z.boolean(),
+        /** Where an invalid expression fails (a character offset), 0 when valid. */
+        position: z.number().int(),
+        /** Why it fails, in English; empty when valid. */
+        message: z.string(),
+        /** Why it fails as a stable code with the values its text names (invalid only). */
+        code: z.enum(expressionErrorCodes).optional(),
+        params: z.record(z.string(), z.string()).optional(),
+      }),
+    ),
 };
 export const platformRulesContract = {
   get: oc

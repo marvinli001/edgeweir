@@ -144,7 +144,7 @@ test("G5: the rule editor shows dynamic redirects, rewrites with query edits and
 
     // The value parser marks where a target stops making sense.
     await target.fill("concat(http.host)");
-    await expect(redirect.getByRole("alert")).toHaveText(/^检查第 \d+ 个字符$/);
+    await expect(redirect.getByRole("alert")).toHaveText("第 1 个字符：参数不足");
     await target.fill(OLD_TO_NEW);
     await expect(redirect.getByRole("alert")).toHaveCount(0);
 
@@ -419,7 +419,7 @@ test("G5: the cache tab keeps expression rules in advanced mode with their brows
   // An expression the parser refuses keeps the card from saving.
   const editor = expression.getByTestId("cache-rule-expression");
   await editor.fill(`${CACHE_EXPRESSION} and`);
-  await expect(expression.getByRole("alert")).toHaveText(/^检查第 \d+ 个字符$/);
+  await expect(expression.getByRole("alert")).toHaveText(/^第 \d+ 个字符：表达式不完整$/);
   await expect(save).toBeDisabled();
   await editor.fill(CACHE_EXPRESSION);
   await expect(expression.getByRole("alert")).toHaveCount(0);

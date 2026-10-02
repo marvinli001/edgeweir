@@ -361,7 +361,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `rules.*`、`platformRules.*` | 规则数组，按保存顺序，带 `id` |
 | `bulkRedirects.*` | `[{ source, target, statusCode, preserveQuery }]`，按保存顺序 |
 | `sites.get`；`sites.create`、`sites.update` 的 `site` | `cacheRules[]` 总带 `expression`（`"true"` 匹配所有请求）；条件是构建器形状时 `pathPrefixes`、`paths`、`extensions` 为其结构化形式，否则为空；另有 `browserTtlSeconds`。`origins[]` 带 `group` |
-| `rules.validate` | `{ valid, position, message }`；无效时 `position` 为出错的字符位置，`message` 为 `invalid_expression` |
+| `rules.validate` | `{ valid, position, message, code?, params? }`；无效时 `position` 为出错的字符位置（从 0 计），`message` 为英文原因，`code` 为稳定的原因代码（如 `unknown_field`、`ordered_comparison`、`expected_token`），`params` 为原因中的值（如 `expected_token` 的 `token`） |
 | `sites.features` | 增加 `rulesV2`；`reason` 为 `nodes` 时集群有活动节点缺少 `rules-v2` |
 
 - `rules.save` 发布网站所在集群（原因 `rules_updated`），审计 `site.rules_update`；`platformRules.save` 发布所有集群，审计 `platform.rules_update`；`bulkRedirects.save` 发布网站所在集群（`rules_updated`），审计 `site.bulk_redirects_update`（条目数）。

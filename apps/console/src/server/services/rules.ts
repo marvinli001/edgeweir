@@ -147,10 +147,14 @@ export function validateExpression(
     else parseExpression(expression, phase);
     return { valid: true, position: 0, message: "" };
   } catch (error) {
+    if (!(error instanceof ExpressionError))
+      return { valid: false, position: 0, message: "invalid expression" };
     return {
       valid: false,
-      position: error instanceof ExpressionError ? error.position : 0,
-      message: "invalid_expression",
+      position: error.position,
+      message: error.message,
+      code: error.code,
+      params: { ...error.params },
     };
   }
 }

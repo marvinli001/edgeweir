@@ -19,7 +19,7 @@ The console parses expressions and checks their fields, types, and actions befor
 
 1. Open **Sites**, select the site, and open the **Rules** tab.
 2. Click **Add rule** next to the target phase.
-3. Enter the rule name and **Expression**. When the expression is invalid, "Check character N" appears below the editor.
+3. Enter the rule name and **Expression**. **Insert condition** appends a common condition (path prefix, IP range, IP list, country, User-Agent contains, request method) and **Insert field** appends a field, both joined with `and`. When the expression is invalid, "Character N: reason" appears below the editor, for example "Character 11: Ordered comparisons need a number field".
 4. Select **Action**, fill in its fields, and turn on **Enabled**. A new rule starts disabled with the expression `true` (every request); check the condition and the action before you save.
 5. Drag the handle on the left of a rule to reorder rules within a phase.
 6. Click **Save**. The console shows **Saved** and publishes a new configuration revision ("Rules and IP lists updated").
@@ -108,7 +108,7 @@ A later matching rule overrides an earlier one setting by setting. Compression s
 ### Dynamic targets and query parameters
 
 1. Next to **Target** of a redirect or rewrite path rule, select **Expression**.
-2. Enter a value expression. When "Check character N" appears below the editor, fix it using [Functions](#functions) and [Fields](#fields).
+2. Enter a value expression. When "Character N: reason" appears below the editor, fix it using [Functions](#functions) and [Fields](#fields).
 3. Switch **Keep query string** as needed, and fill in **Set query parameters** and **Remove query parameters**.
 4. Click **Save**.
 5. Verify: for example, a redirect rule with the expression `starts_with(http.request.uri.path, "/old/")`, the target `regex_replace(http.request.uri.path, "^/old/", "/new/")`, **Keep query string** on, and `utm_source` in **Remove query parameters**:
@@ -436,8 +436,8 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| "Check character N" below the editor | Unsupported syntax, field, type, function, or regular expression at that position | Fix it using the syntax tables above |
-| Saving shows "Check rule “name”" | A field of that rule is invalid, for example the target format, a repeated parameter name, or a parameter both set and removed | Fix it using the action field table |
+| "Character N: reason" below the editor | Unsupported syntax, field, type, function, or regular expression at that position; the reason names the problem | Fix it using the syntax tables above |
+| Saving shows "Check field of rule “name”" | That field of the rule is invalid, for example the target format, a repeated parameter name, or a parameter both set and removed; an invalid expression shows the position and reason | Fix it using the action field table |
 | Saving shows "Invalid rule" | The action does not belong to the phase, a protected header, or an invalid redirect target or rewrite path; an origin override picks an origin group the site does not have | Fix it using the action field table; add an origin of that group on the **Origins** tab first |
 | "The site does not serve …" | A bulk redirect source names a host that is not a domain of the site | Use a domain of the site, or write `/path` |
 | "Line N is invalid" | The field count, source, target, or status code of that imported line is invalid | Fix the line and import again |

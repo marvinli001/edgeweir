@@ -50,7 +50,7 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
   await expect(enabled).toHaveAttribute("aria-checked", "true");
   await first.getByLabel("名称", { exact: true }).fill("Browser block");
   await first.getByLabel("表达式", { exact: true }).fill("http.host gt 4");
-  await expect(first.getByRole("alert")).toHaveText(/检查第 11 个字符/);
+  await expect(first.getByRole("alert")).toHaveText("第 11 个字符：大小比较只用于数字字段");
   await first.getByLabel("表达式", { exact: true }).fill(`ip.src in $${name}`);
   await expect(first.getByRole("alert")).toHaveCount(0);
   await page.getByTestId("rule-add-waf-custom").click();

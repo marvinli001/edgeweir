@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   actionPhases,
+  bindLists,
   cacheConditionExpression,
   canonicalCidr,
   challengeTypes,
   ExpressionError,
+  type ExpressionErrorCode,
   evaluate,
   evaluateValue,
+  expressionErrorCodes,
+  expressionErrorDefs,
   isRateLimitKey,
   needsRulesV2,
   type Phase,
@@ -228,5 +232,66 @@ describe("rules-v2 functions, value expressions and cache conditions", () => {
     expect(() =>
       parseExpression('http.response.content_type.media_type eq "text/html"', "compression"),
     ).not.toThrow();
+  });
+});
+
+describe("expression error codes", () => {
+  const failure = (parse: () => unknown) => {
+    try {
+      parse();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExpressionError);
+      return error as ExpressionError;
+    }
+    throw new Error("accepted");
+  };
+  it.each([
+    ["http.host gt 4", "ordered_comparison", 10, {}],
+    ['unknown.field eq "x"', "unknown_field", 0, {}],
+    ['http.host eq "x" and', "unexpected_end", 20, {}],
+    ['(http.host eq "x" true', "expected_token", 18, { token: ")" }],
+    ["http.host eq 4", "expected_string", 13, {}],
+    ["ip.src in {10.0.0.300}", "expected_ip", 11, {}],
+    ["http.host in {}", "set_empty", 10, {}],
+    ['http.host is "x"', "unknown_operator", 10, {}],
+    ["http.host in $list", "list_reference", 13, {}],
+    ['http.host matches "a{,2}"', "regex_repetition", 20, {}],
+    ['http.host matches "(?=a)"', "regex_group", 19, {}],
+    ['http.host matches "[]"', "regex_class_empty", 19, {}],
+    ["http.response.code ge 500", "response_field", 0, {}],
+    ['regex_replace(http.host, "a", "b") eq "c"', "value_only_function", 0, {}],
+    ['starts_with(http.host, "a", "b")', "too_many_arguments", 28, {}],
+    ['"x', "string_invalid", 0, {}],
+    ['true "x"', "unexpected_token", 5, {}],
+  ] as const)("refuses %s with %s", (source, code, position, params) => {
+    const error = failure(() => parseExpression(source));
+    expect(error).toMatchObject({ code, position, params });
+  });
+  it("keeps the code and parameters of value expressions and literal arguments", () => {
+    expect(failure(() => parseValueExpression("ssl", "redirect"))).toMatchObject({
+      code: "value_not_string",
+      position: 0,
+    });
+    expect(
+      failure(() => parseValueExpression('wildcard_replace(http.host, "/*", "${2}")', "redirect")),
+    ).toMatchObject({ code: "replacement_capture", position: 35 });
+    expect(failure(() => parseExpression("x".repeat(4097)))).toMatchObject({
+      code: "too_long",
+      params: { max: "4096" },
+    });
+  });
+  it("names the unknown list when binding", () => {
+    const error = failure(() => bindLists(parseExpression("ip.src in $office"), {}));
+    expect(error).toMatchObject({ code: "unknown_list", params: { list: "office" } });
+    expect(error.message).toBe("unknown IP list office");
+  });
+  it("interpolates every code's parameters into its English text", () => {
+    for (const code of expressionErrorCodes) {
+      const def = expressionErrorDefs[code as ExpressionErrorCode];
+      const params = Object.fromEntries(def.params.map((name) => [name, `<${name}>`]));
+      const error = new ExpressionError(code, 3, params);
+      expect(error.message, code).not.toMatch(/\{\w+\}/);
+      expect(error.at(7)).toMatchObject({ code, position: 7, params, message: error.message });
+    }
   });
 });

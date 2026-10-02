@@ -361,7 +361,7 @@ Responses:
 | `rules.*`, `platformRules.*` | The rules in saved order, with `id` |
 | `bulkRedirects.*` | `[{ source, target, statusCode, preserveQuery }]` in saved order |
 | `sites.get`; `site` of `sites.create` and `sites.update` | `cacheRules[]` always carry `expression` (`"true"` matches every request); `pathPrefixes`, `paths`, and `extensions` hold its structured form when the condition has the builder's shape and are empty otherwise; `browserTtlSeconds` is added. `origins[]` carry `group` |
-| `rules.validate` | `{ valid, position, message }`; when invalid, `position` is the character where it fails and `message` is `invalid_expression` |
+| `rules.validate` | `{ valid, position, message, code?, params? }`; when invalid, `position` is the character where it fails (from 0), `message` the reason in English, `code` a stable reason code (such as `unknown_field`, `ordered_comparison`, `expected_token`) and `params` the values the reason names (such as `token` of `expected_token`) |
 | `sites.features` | Adds `rulesV2`; `reason` `nodes` means an active node of the cluster lacks `rules-v2` |
 
 - `rules.save` publishes the site's cluster (reason `rules_updated`) and is audited as `site.rules_update`; `platformRules.save` publishes every cluster and is audited as `platform.rules_update`; `bulkRedirects.save` publishes the site's cluster (`rules_updated`) and is audited as `site.bulk_redirects_update` (with the entry count).

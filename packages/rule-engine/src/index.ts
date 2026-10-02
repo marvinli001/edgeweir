@@ -22,13 +22,85 @@ export interface Expression {
   values: string[];
   children: Expression[];
 }
+/**
+ * Why an expression is refused: stable codes the console localizes, the parameters their
+ * messages interpolate and the English text (the error's `message`).
+ */
+export const expressionErrorDefs = {
+  too_long: { params: ["max"], en: "expression is too long" },
+  string_invalid: { params: [], en: "invalid quoted string" },
+  unexpected_character: { params: [], en: "unexpected character" },
+  too_many_tokens: { params: ["max"], en: "too many tokens" },
+  unexpected_end: { params: [], en: "unexpected end of expression" },
+  unexpected_token: { params: [], en: "unexpected token" },
+  expected_token: { params: ["token"], en: "expected {token}" },
+  too_complex: { params: [], en: "expression is too complex" },
+  expected_string: { params: [], en: "expected quoted string" },
+  expected_integer: { params: [], en: "expected integer" },
+  expected_boolean: { params: [], en: "expected boolean" },
+  expected_ip: { params: [], en: "expected IP address or CIDR" },
+  header_name: { params: [], en: "invalid header name" },
+  unknown_field: { params: [], en: "unknown field" },
+  response_field: { params: [], en: "response field is unavailable in this phase" },
+  unknown_operator: { params: [], en: "unknown operator" },
+  ordered_comparison: { params: [], en: "ordered comparison needs integers" },
+  string_operator: { params: [], en: "operator needs a string field" },
+  list_reference: { params: [], en: "invalid named IP list" },
+  unknown_list: { params: ["list"], en: "unknown IP list {list}" },
+  set_empty: { params: [], en: "empty set" },
+  set_too_large: { params: ["max"], en: "set is too large" },
+  unknown_function: { params: [], en: "unknown function" },
+  value_only_function: { params: [], en: "function is only available in value expressions" },
+  function_repeated: { params: [], en: "function may appear once per expression" },
+  functions_too_deep: { params: [], en: "functions are nested too deeply" },
+  too_many_arguments: { params: [], en: "too many arguments" },
+  too_few_arguments: { params: [], en: "too few arguments" },
+  argument_not_string: { params: [], en: "argument must be a string" },
+  literal_argument: { params: [], en: "this argument must be a quoted string" },
+  flags: { params: [], en: 'the only flag is "s"' },
+  value_not_string: { params: [], en: "value expressions must be strings" },
+  value_too_long: { params: ["max"], en: "value is too long" },
+  regex_too_long: { params: ["max"], en: "regular expression is too long" },
+  regex_ascii: { params: [], en: "regular expressions accept printable ASCII only" },
+  regex_escape: { params: [], en: "unsupported escape in regular expression" },
+  regex_group: { params: [], en: "unsupported group" },
+  regex_parenthesis: { params: [], en: "unbalanced parenthesis" },
+  regex_nothing_to_repeat: { params: [], en: "nothing to repeat" },
+  regex_repetition: { params: [], en: "unsupported repetition" },
+  regex_brackets: { params: [], en: "escape literal brackets and braces" },
+  regex_class_unterminated: { params: [], en: "unterminated character class" },
+  regex_class_empty: { params: [], en: "empty character class" },
+  regex_class_range: { params: [], en: "invalid character class range" },
+  regex_class_dash: { params: [], en: "escape - inside a character class" },
+  regex_class_bracket: { params: [], en: "escape [ inside a character class" },
+  regex_class_posix: { params: [], en: "character class reads as a POSIX class" },
+  wildcard_too_long: { params: ["max"], en: "wildcard pattern is too long" },
+  wildcard_invalid: { params: [], en: "invalid wildcard pattern" },
+  wildcard_escape: { params: [], en: "escape only * and \\ in wildcard patterns" },
+  wildcard_too_many: { params: ["max"], en: "too many wildcards" },
+  replacement_invalid: { params: [], en: "invalid replacement" },
+  replacement_capture: { params: [], en: "replacement references a missing capture" },
+} as const satisfies Record<string, { params: readonly string[]; en: string }>;
+export type ExpressionErrorCode = keyof typeof expressionErrorDefs;
+export const expressionErrorCodes = Object.keys(expressionErrorDefs) as ExpressionErrorCode[];
+export type ExpressionErrorParams = Readonly<Record<string, string>>;
+
 export class ExpressionError extends Error {
   constructor(
-    message: string,
+    public readonly code: ExpressionErrorCode,
+    /** Offset in the source (a character index) where the expression stops making sense. */
     public readonly position: number,
+    /** The values the code's message interpolates (expressionErrorDefs[code].params). */
+    public readonly params: ExpressionErrorParams = {},
   ) {
-    super(message);
+    super(
+      expressionErrorDefs[code].en.replace(/\{(\w+)\}/g, (_, key: string) => params[key] ?? ""),
+    );
     this.name = "ExpressionError";
+  }
+  /** The same error at another position (e.g. a literal's error placed in the whole source). */
+  at(position: number): ExpressionError {
+    return new ExpressionError(this.code, position, this.params);
   }
 }
 export const fields: Record<string, ValueType> = {
@@ -385,7 +457,8 @@ export function ipMatches(address: string, cidr: string): boolean {
 
 type Token = { kind: "word" | "string" | "punct"; text: string; position: number };
 function tokenize(source: string, maxLength: number): Token[] {
-  if (source.length > maxLength) throw new ExpressionError("expression is too long", maxLength);
+  if (source.length > maxLength)
+    throw new ExpressionError("too_long", maxLength, { max: String(maxLength) });
   const out: Token[] = [];
   let i = 0;
   while (i < source.length) {
@@ -408,19 +481,19 @@ function tokenize(source: string, maxLength: number): Token[] {
       try {
         text = JSON.parse(source.slice(position, i));
       } catch {
-        throw new ExpressionError("invalid quoted string", position);
+        throw new ExpressionError("string_invalid", position);
       }
-      if (typeof text !== "string") throw new ExpressionError("expected string", position);
+      if (typeof text !== "string") throw new ExpressionError("string_invalid", position);
       out.push({ kind: "string", text, position });
     } else if ("(){}[],".includes(c ?? "")) {
       out.push({ kind: "punct", text: c ?? "", position });
       i++;
     } else {
       while (i < source.length && !/[\s(){}[\]",]/.test(source[i] ?? "")) i++;
-      if (i === position) throw new ExpressionError("unexpected character", i);
+      if (i === position) throw new ExpressionError("unexpected_character", i);
       out.push({ kind: "word", text: source.slice(position, i), position });
     }
-    if (out.length > 512) throw new ExpressionError("too many tokens", position);
+    if (out.length > 512) throw new ExpressionError("too_many_tokens", position, { max: "512" });
   }
   return out;
 }
@@ -465,7 +538,7 @@ function patternEscape(pattern: string, i: number, inClass: boolean): PatternIte
       if (e && patternPunctuation.includes(e))
         return { length: 2, kind: "char", code: e.charCodeAt(0) };
   }
-  throw new ExpressionError("unsupported escape in regular expression", i);
+  throw new ExpressionError("regex_escape", i);
 }
 
 function patternClassAtom(pattern: string, j: number, body: number): PatternItem {
@@ -473,10 +546,9 @@ function patternClassAtom(pattern: string, j: number, body: number): PatternItem
   if (c === "\\") return patternEscape(pattern, j, true);
   if (c === "-" && (j === body || pattern[j + 1] === "]"))
     return { length: 1, kind: "dash", code: 45 };
-  if (c === "-") throw new ExpressionError("escape - inside a character class", j);
-  if (c === "[") throw new ExpressionError("escape [ inside a character class", j);
-  if (c < " " || c > "~")
-    throw new ExpressionError("regular expressions accept printable ASCII only", j);
+  if (c === "-") throw new ExpressionError("regex_class_dash", j);
+  if (c === "[") throw new ExpressionError("regex_class_bracket", j);
+  if (c < " " || c > "~") throw new ExpressionError("regex_ascii", j);
   return { length: 1, kind: "char", code: c.charCodeAt(0) };
 }
 
@@ -485,22 +557,22 @@ function patternClass(pattern: string, i: number): number {
   const body = pattern[i + 1] === "^" ? i + 2 : i + 1;
   let j = body;
   while (pattern[j] !== "]") {
-    if (j >= pattern.length) throw new ExpressionError("unterminated character class", i);
+    if (j >= pattern.length) throw new ExpressionError("regex_class_unterminated", i);
     const low = patternClassAtom(pattern, j, body);
     let end = j + low.length;
     if (pattern[end] === "-" && end + 1 < pattern.length && pattern[end + 1] !== "]") {
       const high = low.kind === "char" ? patternClassAtom(pattern, end + 1, body) : undefined;
       if (high?.kind !== "char" || high.code < low.code)
-        throw new ExpressionError("invalid character class range", j);
+        throw new ExpressionError("regex_class_range", j);
       end += 1 + high.length;
     }
     j = end;
   }
-  if (j === body) throw new ExpressionError("empty character class", i);
+  if (j === body) throw new ExpressionError("regex_class_empty", i);
   // PCRE2 reads [:x:], [.x.] and [=x=] as POSIX syntax and refuses them outside a class.
   const text = pattern.slice(body, j);
   if (text.length > 1 && ":.=".includes(text[0] ?? "") && text.endsWith(text[0] ?? ""))
-    throw new ExpressionError("character class reads as a POSIX class", i);
+    throw new ExpressionError("regex_class_posix", i);
   return j + 1;
 }
 
@@ -510,13 +582,13 @@ function patternBraces(pattern: string, i: number): number {
   const low = Number(q?.[1]);
   const high = q?.[3] === undefined ? low : Number(q[3]);
   if (!q || low > 1000 || high > 1000 || high < low)
-    throw new ExpressionError("unsupported repetition", i);
+    throw new ExpressionError("regex_repetition", i);
   return q[0].length;
 }
 
 /** Validates `pattern` (see validatePattern) and returns its JavaScript source. */
 function compilePattern(pattern: string): string {
-  if (pattern.length > 256) throw new ExpressionError("regular expression is too long", 256);
+  if (pattern.length > 256) throw new ExpressionError("regex_too_long", 256, { max: "256" });
   let source = "";
   let depth = 0;
   let previous: PatternState = "none";
@@ -531,11 +603,11 @@ function compilePattern(pattern: string): string {
     } else if (c === "[") {
       length = patternClass(pattern, i) - i;
     } else if (c === "(") {
-      if (pattern[i + 1] === "?") throw new ExpressionError("unsupported group", i);
+      if (pattern[i + 1] === "?") throw new ExpressionError("regex_group", i);
       depth++;
       next = "none";
     } else if (c === ")") {
-      if (--depth < 0) throw new ExpressionError("unbalanced parenthesis", i);
+      if (--depth < 0) throw new ExpressionError("regex_parenthesis", i);
       next = "fixed";
     } else if (c === "|") {
       next = "none";
@@ -546,22 +618,22 @@ function compilePattern(pattern: string): string {
     } else if (c === "*" || c === "+" || c === "?" || c === "{") {
       if (previous !== "atom")
         throw new ExpressionError(
-          previous === "none" ? "nothing to repeat" : "unsupported repetition",
+          previous === "none" ? "regex_nothing_to_repeat" : "regex_repetition",
           i,
         );
       if (c === "{") length = patternBraces(pattern, i);
       next = "quantifier";
     } else if (c === "]" || c === "}") {
-      throw new ExpressionError("escape literal brackets and braces", i);
+      throw new ExpressionError("regex_brackets", i);
     } else if (c < " " || c > "~") {
-      throw new ExpressionError("regular expressions accept printable ASCII only", i);
+      throw new ExpressionError("regex_ascii", i);
     }
     // JavaScript's "." also skips "\r"; PCRE2 and RE2 skip only "\n".
     source += c === "." ? "[^\\n]" : pattern.slice(i, i + length);
     previous = next;
     i += length;
   }
-  if (depth > 0) throw new ExpressionError("unbalanced parenthesis", pattern.length);
+  if (depth > 0) throw new ExpressionError("regex_parenthesis", pattern.length);
   return source;
 }
 
@@ -643,20 +715,20 @@ function patternGroups(pattern: string): number {
  * characters, more than 8 wildcards or more than 1024 bytes are rejected.
  */
 export function wildcardSegments(pattern: string): string[] {
-  if (byteLength(pattern) > 1024) throw new ExpressionError("wildcard pattern is too long", 0);
-  if (controlCharacter(pattern)) throw new ExpressionError("invalid wildcard pattern", 0);
+  if (byteLength(pattern) > 1024)
+    throw new ExpressionError("wildcard_too_long", 0, { max: "1024" });
+  if (controlCharacter(pattern)) throw new ExpressionError("wildcard_invalid", 0);
   const segments = [""];
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i] ?? "";
     if (c === "\\") {
       const next = pattern[i + 1];
-      if (next !== "*" && next !== "\\")
-        throw new ExpressionError("escape only * and \\ in wildcard patterns", i);
+      if (next !== "*" && next !== "\\") throw new ExpressionError("wildcard_escape", i);
       segments[segments.length - 1] += next;
       i++;
     } else if (c === "*") {
       segments.push("");
-      if (segments.length > 9) throw new ExpressionError("too many wildcards", i);
+      if (segments.length > 9) throw new ExpressionError("wildcard_too_many", i, { max: "8" });
     } else segments[segments.length - 1] += c;
   }
   return segments;
@@ -665,10 +737,9 @@ export function wildcardSegments(pattern: string): string[] {
 /** Checks a replacement literal: `${1}`-`${8}` up to `captures`, other `$` literal. */
 function checkReplacement(replacement: string, captures: number): void {
   if (byteLength(replacement) > 1024 || controlCharacter(replacement))
-    throw new ExpressionError("invalid replacement", 0);
+    throw new ExpressionError("replacement_invalid", 0);
   for (const m of replacement.matchAll(/\$\{([1-8])\}/g))
-    if (Number(m[1]) > captures)
-      throw new ExpressionError("replacement references a missing capture", m.index ?? 0);
+    if (Number(m[1]) > captures) throw new ExpressionError("replacement_capture", m.index ?? 0);
 }
 
 type Field = { name: string; type: ValueType; position: number };
@@ -686,38 +757,37 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
   const peek = () => tokens[cursor];
   const take = () => {
     const token = tokens[cursor++];
-    if (!token) throw new ExpressionError("unexpected end of expression", source.length);
+    if (!token) throw new ExpressionError("unexpected_end", source.length);
     return token;
   };
   const expect = (text: string) => {
     const token = take();
-    if (token.text !== text) throw new ExpressionError(`expected ${text}`, token.position);
+    if (token.text !== text)
+      throw new ExpressionError("expected_token", token.position, { token: text });
   };
   const count = () => {
-    if (++nodes > 128)
-      throw new ExpressionError("expression is too complex", peek()?.position ?? source.length);
+    if (++nodes > 128) throw new ExpressionError("too_complex", peek()?.position ?? source.length);
   };
   const readValue = (type: ValueType): string => {
     const token = take();
     if (type === "string") {
-      if (token.kind !== "string")
-        throw new ExpressionError("expected quoted string", token.position);
+      if (token.kind !== "string") throw new ExpressionError("expected_string", token.position);
       return token.text;
     }
     if (type === "number") {
       if (!/^-?\d+$/.test(token.text) || !Number.isSafeInteger(Number(token.text)))
-        throw new ExpressionError("expected integer", token.position);
+        throw new ExpressionError("expected_integer", token.position);
       return String(Number(token.text));
     }
     if (type === "boolean") {
       if (!["true", "false"].includes(token.text))
-        throw new ExpressionError("expected boolean", token.position);
+        throw new ExpressionError("expected_boolean", token.position);
       return token.text;
     }
     try {
       return canonicalCidr(token.text);
     } catch {
-      throw new ExpressionError("expected IP address or CIDR", token.position);
+      throw new ExpressionError("expected_ip", token.position);
     }
   };
   /** Reads a field name (with the headers["name"] form) starting at `token`. */
@@ -727,7 +797,7 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
       expect("[");
       const key = take();
       if (key.kind !== "string" || !/^[!#$%&'*+.^_`|~0-9a-z-]{1,64}$/i.test(key.text))
-        throw new ExpressionError("invalid header name", key.position);
+        throw new ExpressionError("header_name", key.position);
       expect("]");
       field += `.${key.text.toLowerCase()}`;
     }
@@ -735,7 +805,7 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
       if (field.startsWith(prefix)) {
         const name = field.slice(prefix.length);
         if (!/^[!#$%&'*+.^_`|~0-9a-z-]{1,64}$/i.test(name))
-          throw new ExpressionError("invalid header name", token.position);
+          throw new ExpressionError("header_name", token.position);
         field = prefix + name.toLowerCase();
       }
     }
@@ -745,26 +815,24 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
         : Object.hasOwn(fields, field)
           ? fields[field]
           : undefined;
-    if (!type || token.kind !== "word") throw new ExpressionError("unknown field", token.position);
+    if (!type || token.kind !== "word") throw new ExpressionError("unknown_field", token.position);
     if (field.startsWith("http.response.") && !responsePhases.has(phase))
-      throw new ExpressionError("response field is unavailable in this phase", token.position);
+      throw new ExpressionError("response_field", token.position);
     return { name: field, type, position: token.position };
   };
   /** A literal argument of `kind` (pattern, wildcard, replacement or flags). */
   const literal = (kind: string, captures: number): Expression => {
     const start = peek()?.position ?? source.length;
     const token = take();
-    if (token.kind !== "string")
-      throw new ExpressionError(`the ${kind} must be a quoted string`, token.position);
+    if (token.kind !== "string") throw new ExpressionError("literal_argument", token.position);
     try {
       if (kind === "pattern") validatePattern(token.text);
       if (kind === "wildcard") wildcardSegments(token.text);
       if (kind === "replacement") checkReplacement(token.text, captures);
-      if (kind === "flags" && token.text !== "s")
-        throw new ExpressionError('the only flag is "s"', 0);
+      if (kind === "flags" && token.text !== "s") throw new ExpressionError("flags", 0);
     } catch (error) {
       if (!(error instanceof ExpressionError)) throw error;
-      throw new ExpressionError(error.message, stringOffset(source, start, error.position));
+      throw error.at(stringOffset(source, start, error.position));
     }
     count();
     return node("const", { valueType: "string", value: token.text });
@@ -772,16 +840,15 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
   /** A function call whose name is `token`; "(" is next. */
   const call = (token: Token, depth: number, valueContext: boolean): Expression => {
     const spec = Object.hasOwn(functions, token.text) ? functions[token.text] : undefined;
-    if (!spec) throw new ExpressionError("unknown function", token.position);
+    if (!spec) throw new ExpressionError("unknown_function", token.position);
     if (spec.valueOnly && !valueContext)
-      throw new ExpressionError("function is only available in value expressions", token.position);
+      throw new ExpressionError("value_only_function", token.position);
     if (spec.valueOnly) {
       if (replaceCalls.has(token.text))
-        throw new ExpressionError("function may appear once per expression", token.position);
+        throw new ExpressionError("function_repeated", token.position);
       replaceCalls.add(token.text);
     }
-    if (depth > MAX_CALL_DEPTH)
-      throw new ExpressionError("functions are nested too deeply", token.position);
+    if (depth > MAX_CALL_DEPTH) throw new ExpressionError("functions_too_deep", token.position);
     count();
     expect("(");
     const args: Expression[] = [];
@@ -792,13 +859,12 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
     while (peek()?.text !== ")") {
       if (args.length) expect(",");
       if (args.length >= max)
-        throw new ExpressionError("too many arguments", peek()?.position ?? source.length);
+        throw new ExpressionError("too_many_arguments", peek()?.position ?? source.length);
       const kind = kinds[args.length] ?? "string";
       if (kind === "string") {
         const start = peek()?.position ?? source.length;
         const arg = value(depth + 1, valueContext);
-        if (arg.valueType !== "string")
-          throw new ExpressionError("argument must be a string", start);
+        if (arg.valueType !== "string") throw new ExpressionError("argument_not_string", start);
         args.push(arg);
       } else {
         const arg = literal(kind, captures);
@@ -808,7 +874,7 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
       }
     }
     expect(")");
-    if (args.length < min) throw new ExpressionError("too few arguments", token.position);
+    if (args.length < min) throw new ExpressionError("too_few_arguments", token.position);
     return node("call", { field: token.text, valueType: spec.returns, children: args });
   };
   /** A value: a string literal, a field or a function call. */
@@ -830,26 +896,27 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
     const operator = take();
     const op = operator.text;
     if (!["eq", "ne", "lt", "le", "gt", "ge", "contains", "matches", "in"].includes(op))
-      throw new ExpressionError("unknown operator", operator.position);
+      throw new ExpressionError("unknown_operator", operator.position);
     if (["lt", "le", "gt", "ge"].includes(op) && type !== "number")
-      throw new ExpressionError("ordered comparison needs integers", operator.position);
+      throw new ExpressionError("ordered_comparison", operator.position);
     if (["contains", "matches"].includes(op) && type !== "string")
-      throw new ExpressionError("operator needs a string field", operator.position);
+      throw new ExpressionError("string_operator", operator.position);
     if (op === "in") {
       if (peek()?.text.startsWith("$")) {
         const list = take();
         if (computed || type !== "ip" || !/^\$[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(list.text))
-          throw new ExpressionError("invalid named IP list", list.position);
+          throw new ExpressionError("list_reference", list.position);
         return node("in_list", { ...target, valueType: type, value: list.text.slice(1) });
       }
       expect("{");
       const values: string[] = [];
       while (peek()?.text !== "}") {
         values.push(readValue(type));
-        if (values.length > 256) throw new ExpressionError("set is too large", operator.position);
+        if (values.length > 256)
+          throw new ExpressionError("set_too_large", operator.position, { max: "256" });
       }
       expect("}");
-      if (!values.length) throw new ExpressionError("empty set", operator.position);
+      if (!values.length) throw new ExpressionError("set_empty", operator.position);
       return node("in", { ...target, valueType: type, values: [...new Set(values)].sort() });
     }
     const start = peek()?.position ?? source.length;
@@ -859,7 +926,7 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
         validatePattern(value);
       } catch (error) {
         if (!(error instanceof ExpressionError)) throw error;
-        throw new ExpressionError(error.message, stringOffset(source, start, error.position));
+        throw error.at(stringOffset(source, start, error.position));
       }
     }
     void depth;
@@ -867,7 +934,7 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
   }
   const operators = new Set(["eq", "ne", "lt", "le", "gt", "ge", "contains", "matches", "in"]);
   function primary(depth: number): Expression {
-    if (depth > 16) throw new ExpressionError("expression is too complex", peek()?.position ?? 0);
+    if (depth > 16) throw new ExpressionError("too_complex", peek()?.position ?? 0);
     count();
     if (peek()?.text === "not") {
       take();
@@ -908,7 +975,7 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
   }
   const done = <T>(result: T) => {
     if (cursor !== tokens.length)
-      throw new ExpressionError("unexpected token", peek()?.position ?? source.length);
+      throw new ExpressionError("unexpected_token", peek()?.position ?? source.length);
     return result;
   };
   return {
@@ -916,8 +983,7 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
     value: () => {
       const start = peek()?.position ?? 0;
       const result = value(1, true);
-      if (result.valueType !== "string")
-        throw new ExpressionError("value expressions must be strings", start);
+      if (result.valueType !== "string") throw new ExpressionError("value_not_string", start);
       return done(result);
     },
   };
@@ -972,7 +1038,7 @@ export function needsRulesV2(expression: Expression): boolean {
 }
 export function bindLists(expression: Expression, lists: Record<string, string>): Expression {
   if (expression.op === "in_list" && !Object.hasOwn(lists, expression.value))
-    throw new ExpressionError("unknown IP list", 0);
+    throw new ExpressionError("unknown_list", 0, { list: expression.value });
   return {
     ...expression,
     value: expression.op === "in_list" ? (lists[expression.value] ?? "") : expression.value,
@@ -1247,10 +1313,10 @@ function evaluateNode(e: Expression, request: Request): string | number | boolea
       result = wildcardReplaceBytes(a, b, c, d === "s");
       break;
     default:
-      throw new ExpressionError("unknown function", 0);
+      throw new ExpressionError("unknown_function", 0);
   }
   if (typeof result === "string" && result.length > MAX_VALUE_BYTES)
-    throw new ExpressionError("value is too long", 0);
+    throw new ExpressionError("value_too_long", 0, { max: String(MAX_VALUE_BYTES) });
   return result;
 }
 

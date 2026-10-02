@@ -8,6 +8,7 @@ import {
   cacheRuleExpression,
   cacheRuleInput,
   contract,
+  expressionIssue,
   ruleAction,
   ruleInput,
   siteCreateInput,
@@ -209,6 +210,48 @@ describe("rule actions", () => {
     expect(
       input?.["~standard"].validate({ expression: "x".repeat(16385), phase: "cache" }),
     ).toHaveProperty("issues");
+  });
+});
+
+describe("expression issues", () => {
+  const failures = (result: { success: boolean; error?: { issues: unknown[] } }) =>
+    (result.error?.issues ?? []).map((issue) => ({
+      path: (issue as { path: unknown[] }).path.join("."),
+      failure: expressionIssue(issue as Parameters<typeof expressionIssue>[0]),
+    }));
+
+  it("carry the parser's code, position and parameters for conditions and targets", () => {
+    expect(failures(rule("waf-custom", { kind: "block" }, "http.host gt 4"))).toEqual([
+      {
+        path: "expression",
+        failure: { code: "ordered_comparison", position: 10, params: {} },
+      },
+    ]);
+    const redirect = rule("redirect", {
+      kind: "redirect",
+      value: "",
+      target: 'concat("/", lower(http.host)',
+    });
+    expect(failures(redirect)).toEqual([
+      {
+        path: "action.target",
+        failure: { code: "unexpected_end", position: 28, params: {} },
+      },
+    ]);
+  });
+
+  it("carry them for cache rule conditions and leave other issues alone", () => {
+    const cache = cacheRuleInput.safeParse({
+      action: "cache",
+      edgeTtlSeconds: 60,
+      expression: "ip.src in $Bad-name",
+    });
+    expect(failures(cache)).toMatchObject([
+      { path: "expression", failure: { code: "list_reference", position: 10 } },
+    ]);
+    expect(failures(rule("waf-custom", { kind: "redirect", value: "/" }))).toMatchObject([
+      { path: "action", failure: null },
+    ]);
   });
 });
 

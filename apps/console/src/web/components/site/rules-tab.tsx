@@ -15,6 +15,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  expressionIssue,
   type FeatureAvailability,
   type RuleDto,
   type RuleInput,
@@ -42,6 +43,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import type * as z from "zod";
 import { FormSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { ExpressionEditor } from "@/components/site/expression-editor";
@@ -61,6 +63,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { expressionReason } from "@/lib/expressions";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { challengeLabel } from "@/lib/protection";
@@ -155,6 +158,55 @@ const DEFAULT_GROUP = ":default";
 /** Select value of an unset config override. */
 const UNCHANGED = "unchanged";
 
+/** Labels of the action fields an issue can point at (the form's own labels). */
+const actionFieldLabels: Record<string, () => string> = {
+  target: m.rules_target,
+  header: m.rules_header,
+  setQuery: m.rules_set_query,
+  removeQuery: m.rules_remove_query,
+  statusCode: m.rules_status,
+  limit: m.rules_limit,
+  windowSeconds: m.rules_window,
+  key: m.rules_key,
+  type: m.rules_challenge_type,
+  originGroup: m.rules_origin_group,
+  hostHeader: m.site_form_host_header,
+  sni: m.site_origin_sni,
+  port: m.site_form_port,
+  algorithms: m.rules_compression,
+  ccMaxLevel: m.rules_cc_max_level,
+  originConnectTimeoutMs: m.rules_connect_timeout,
+  originSendTimeoutMs: m.rules_send_timeout,
+  originReadTimeoutMs: m.rules_read_timeout,
+  logSampleRate: m.rules_log_sample_rate,
+};
+/** The label of the field an issue of `row` points at. */
+function issueField(row: RuleDto, path: readonly PropertyKey[]): string {
+  const [head, field] = path;
+  if (head === "name") return m.rules_name();
+  if (head === "expression") return m.rules_expression();
+  if (head !== "action" || typeof field !== "string") return m.rules_action();
+  // Redirects and rewrites label their static value as the target.
+  if (field === "value")
+    return row.action.kind === "redirect" || row.action.kind === "rewrite"
+      ? m.rules_target()
+      : m.rules_value();
+  return (actionFieldLabels[field] ?? m.rules_action)();
+}
+/** Why a rule cannot be saved: the field, and where and why an expression fails. */
+function ruleIssueText(row: RuleDto, issue: z.core.$ZodIssue | undefined): string {
+  const field = issueField(row, issue?.path ?? []);
+  const failure = issue ? expressionIssue(issue) : null;
+  return failure
+    ? m.rules_check_rule_expression({
+        name: row.name,
+        field,
+        position: failure.position + 1,
+        reason: expressionReason(failure),
+      })
+    : m.rules_check_rule({ name: row.name, field });
+}
+
 /**
  * Rules of a site (siteId) or of the platform. A site's rules can send requests to its origin
  * groups; the rule engine extensions stay locked while the cluster's nodes lack them.
@@ -225,7 +277,7 @@ function RulesEditor({
         for (const row of rows) {
           const parsed = ruleInput.safeParse(row);
           if (!parsed.success) {
-            setError(m.rules_check_rule({ name: row.name }));
+            setError(ruleIssueText(row, parsed.error.issues[0]));
             return;
           }
           rules.push(parsed.data);

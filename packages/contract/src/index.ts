@@ -36,6 +36,7 @@ export * from "./bulk-redirects";
 export * from "./certificates";
 export * from "./error-pages";
 export * from "./errors";
+export * from "./expressions";
 export * from "./node-errors";
 export * from "./node-features";
 export * from "./protection";
