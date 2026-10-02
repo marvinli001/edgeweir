@@ -383,12 +383,64 @@ describe("install.sh", () => {
       );
       expect(steps.status).toBe(0);
       expect(steps.stdout).toContain("enroll-skipped");
-      expect(steps.stderr).toContain("edgeweir-node enroll --force");
+      expect(steps.stderr).toContain("run this command with --force");
       // Without identity.json the token is required as before.
       rmSync(join(state, "identity.json"));
       expect(run(valid, {}, enrolled).stderr).toContain("no enrollment token");
     } finally {
       rmSync(state, { recursive: true, force: true });
+    }
+  });
+
+  it("enrolls an enrolled host again with --force and a new token", () => {
+    const state = mkdtempSync(join(tmpdir(), "edgeweir-state-"));
+    const bin = mkdtempSync(join(tmpdir(), "edgeweir-force-"));
+    writeFileSync(join(state, "identity.json"), "{}\n");
+    // edgeweir-node and systemctl as stubs that log their calls (never the token).
+    writeFileSync(
+      join(bin, "edgeweir-node"),
+      `#!/bin/sh\necho "edgeweir-node $* token=\${EDGEWEIR_TOKEN:+set}" >> "${calls}"\nexit 0\n`,
+    );
+    writeFileSync(join(bin, "systemctl"), `#!/bin/sh\necho "systemctl $*" >> "${calls}"\nexit 0\n`);
+    chmodSync(join(bin, "edgeweir-node"), 0o755);
+    chmodSync(join(bin, "systemctl"), 0o755);
+    const enrolled = script
+      .replace('STATE_DIR="/var/lib/edgeweir-node"', `STATE_DIR="${state}"`)
+      .replaceAll("/usr/bin/edgeweir-node", join(bin, "edgeweir-node"));
+    const steps = (args: string[], env: Record<string, string> = {}) =>
+      run(
+        args,
+        { PATH: `${bin}${delimiter}${stubs}${delimiter}/usr/bin${delimiter}/bin`, ...env },
+        enrolled.replace(
+          /main "\$@"\s*$/,
+          'constants\nparse_args "$@"\nread_token\nenroll\necho enrolled\n',
+        ),
+      );
+    try {
+      expect(script).toContain("--force              enroll again on an enrolled host");
+      // --force needs a token, even though the host has an identity.
+      const missing = steps([...valid, "--force"]);
+      expect(missing.status).toBe(1);
+      expect(missing.stderr).toContain("no enrollment token");
+      expect(missing.calls).toBe("");
+
+      const forced = steps([...valid, "--force"], { EDGEWEIR_TOKEN: TOKEN });
+      expect(forced.status).toBe(0);
+      expect(forced.stdout).toContain("enrolled");
+      // The running node is stopped first; start_service starts it again.
+      expect(forced.calls.trim().split("\n")).toEqual([
+        "systemctl stop edgeweir-node.service",
+        `edgeweir-node enroll --force --server https://console.example.com:8443 --ca-sha256 ${CA} --state-dir ${state} token=set`,
+      ]);
+      expect(forced.calls).not.toContain(TOKEN);
+
+      // Without --force nothing is enrolled or stopped.
+      const kept = steps(valid, { EDGEWEIR_TOKEN: TOKEN });
+      expect(kept.status).toBe(0);
+      expect(kept.calls).toBe("");
+    } finally {
+      rmSync(state, { recursive: true, force: true });
+      rmSync(bin, { recursive: true, force: true });
     }
   });
 
@@ -429,7 +481,7 @@ describe("install.sh", () => {
     );
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(main).toContain('[ "$ENROLLED" = "true" ] || check_server');
+    expect(main).toContain("if enrolling; then\n    check_server\n  fi");
     // No token goes to the reachability check.
     const check = script.slice(script.indexOf("check_server() {"));
     expect(check.slice(0, check.indexOf("\n}"))).not.toContain("TOKEN");

@@ -47,6 +47,7 @@ curl -fsSL https://<console>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bas
 | `--mirror-only` | None | Off | Never fall back to GitHub. |
 | `--no-modsecurity` | None | Off | Do not install `edgeweir-openresty-modsecurity`: the node does not support OWASP CRS. |
 | `--no-start` | None | Off | Install and enroll only: do not require systemd, do not enable or start the service. |
+| `--force` | None | Off | Enroll an enrolled host again (needs a new token): stops `edgeweir-node`, replaces its identity, and starts it again. |
 | `--allow-unsigned` | None | Off | Skip the cosign signature check; development only. SHA-256 is still verified. |
 | `-h`, `--help` | None | None | Print usage. |
 

@@ -47,6 +47,7 @@ curl -fsSL https://<控制台>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN b
 | `--mirror-only` | 无 | 关 | 不回退到 GitHub。 |
 | `--no-modsecurity` | 无 | 关 | 不安装 `edgeweir-openresty-modsecurity`：该节点不支持 OWASP CRS。 |
 | `--no-start` | 无 | 关 | 只安装和注册：不要求 systemd，不启用、不启动服务。 |
+| `--force` | 无 | 关 | 已注册的主机重新注册（需要新的 token）：停止 `edgeweir-node`，替换身份后再启动。 |
 | `--allow-unsigned` | 无 | 关 | 跳过 cosign 签名校验，仅限开发；仍校验 SHA-256。 |
 | `-h`、`--help` | 无 | 无 | 输出用法。 |
 

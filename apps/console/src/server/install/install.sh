@@ -28,6 +28,9 @@
 #      locally and never leaves this machine) and starts the service. On a
 #      host that is already enrolled (identity.json in the state directory)
 #      no token is needed: the packages are updated and the service started.
+#      With --force such a host enrolls again with a new token (e.g. after
+#      its certificate expired): the service is stopped, the identity
+#      replaced and the service started again.
 # It never stores SSH credentials and never phones home.
 #
 # The whole script is a set of functions; `main` runs on the last line, so a
@@ -77,6 +80,8 @@ Usage:
   --mirror-only        never fall back to GitHub
   --no-modsecurity     do not install edgeweir-openresty-modsecurity (no OWASP CRS on this node)
   --no-start           install and enroll only: do not require, enable or start systemd
+  --force              enroll again on an enrolled host (needs a new token): stops
+                       edgeweir-node, replaces its identity and starts it again
   --allow-unsigned     skip the cosign signature check (development only; SHA-256 is still verified)
 USAGE
   exit 2
@@ -91,6 +96,7 @@ parse_args() {
   MIRROR=""
   MIRROR_ONLY="false"
   NO_START="false"
+  FORCE="false"
   ALLOW_UNSIGNED="false"
   WITH_MODSECURITY="true"
   while [ $# -gt 0 ]; do
@@ -104,6 +110,7 @@ parse_args() {
       --mirror-only) MIRROR_ONLY="true"; shift ;;
       --no-modsecurity) WITH_MODSECURITY="false"; shift ;;
       --no-start) NO_START="true"; shift ;;
+      --force) FORCE="true"; shift ;;
       --allow-unsigned) ALLOW_UNSIGNED="true"; shift ;;
       --token | --token=*)
         die "--token is not accepted (the process list would show it): export EDGEWEIR_TOKEN or use --token-file" ;;
@@ -129,18 +136,20 @@ parse_args() {
 # The token is read once and removed from the environment, so no other
 # child process (curl, apt, ...) inherits it. An enrolled host keeps its
 # identity: rerunning the script (after a failed step, or to update the
-# packages) needs no token.
+# packages) needs no token, unless --force enrolls it again.
 read_token() {
   TOKEN="${EDGEWEIR_TOKEN:-}"
   unset EDGEWEIR_TOKEN
   ENROLLED="false"
   if [ -f "${STATE_DIR}/identity.json" ]; then
     ENROLLED="true"
-    if [ -n "$TOKEN" ] || [ -n "$TOKEN_FILE" ]; then
-      log "already enrolled (${STATE_DIR}/identity.json); the token is not used"
+    if [ "$FORCE" != "true" ]; then
+      if [ -n "$TOKEN" ] || [ -n "$TOKEN_FILE" ]; then
+        log "already enrolled (${STATE_DIR}/identity.json); the token is not used (--force enrolls again)"
+      fi
+      TOKEN=""
+      return 0
     fi
-    TOKEN=""
-    return 0
   fi
   if [ -n "$TOKEN_FILE" ]; then
     [ -r "$TOKEN_FILE" ] || die "cannot read --token-file $TOKEN_FILE"
@@ -505,15 +514,28 @@ install_package() {
   [ -d "$STATE_DIR" ] || die "the package did not create ${STATE_DIR}"
 }
 
+# Whether this run enrolls: a new host, or an enrolled one with --force.
+enrolling() {
+  [ "$ENROLLED" != "true" ] || [ "$FORCE" = "true" ]
+}
+
 enroll() {
-  if [ "$ENROLLED" = "true" ]; then
-    log "already enrolled; to enroll again: systemctl stop edgeweir-node, edgeweir-node enroll --force, systemctl start edgeweir-node"
+  if ! enrolling; then
+    log "already enrolled; to enroll again with a new token, run this command with --force"
     return 0
   fi
   log "enrolling with ${SERVER}"
   # The token goes through the environment only (edgeweir-node reads EDGEWEIR_TOKEN).
-  EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --server "$SERVER" --ca-sha256 "$CA_SHA256" \
-    --state-dir "$STATE_DIR" || die "enrollment failed"
+  if [ "$ENROLLED" = "true" ]; then
+    # A running node keeps its identity: stop it first; start_service starts it again.
+    log "enrolling again (--force): stopping edgeweir-node"
+    systemctl stop edgeweir-node.service >/dev/null 2>&1 || true
+    EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --force --server "$SERVER" \
+      --ca-sha256 "$CA_SHA256" --state-dir "$STATE_DIR" || die "enrollment failed"
+  else
+    EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --server "$SERVER" --ca-sha256 "$CA_SHA256" \
+      --state-dir "$STATE_DIR" || die "enrollment failed"
+  fi
 }
 
 start_service() {
@@ -541,7 +563,9 @@ main() {
   umask 022
   WORK="$(mktemp -d)"
   trap 'rm -rf "$WORK"' EXIT
-  [ "$ENROLLED" = "true" ] || check_server
+  if enrolling; then
+    check_server
+  fi
   resolve_version
   log "installing edgeweir-node ${VERSION} (${FORMAT}, ${ARCH})"
   fetch "checksums.txt"
