@@ -302,4 +302,12 @@ describe("cache task delivery", async () => {
       expect(await hasDeliverableTasks(ctx.db, node.id)).toBe(false);
     });
   });
+
+  it("refuses URLs of host patterns (P1-62)", async () => {
+    for (const type of ["url", "prefix", "prefetch"] as const) {
+      await expect(
+        admin.cacheTasks.create({ type, urls: ["http://*.shop.test/x/"] }),
+      ).rejects.toMatchObject({ code: "CACHE_TASK_URL_INVALID" });
+    }
+  });
 });

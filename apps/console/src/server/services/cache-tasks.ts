@@ -68,7 +68,9 @@ interface ParsedTarget {
 /**
  * Parses an absolute http(s) URL. Prefixes must not carry a query string;
  * the fragment is dropped. The path keeps the percent-encoding of the WHATWG
- * URL parser, which is what nodes see in the request line.
+ * URL parser, which is what nodes see in the request line (nodes compare
+ * queries percent-decoded). The host must be a host name: a pattern such as
+ * "*.example.com" matches no request, so a purge of it would do nothing.
  */
 function parseTarget(input: string, type: CacheTaskType): ParsedTarget | null {
   let url: URL;
@@ -80,7 +82,7 @@ function parseTarget(input: string, type: CacheTaskType): ParsedTarget | null {
   if (url.protocol !== "http:" && url.protocol !== "https:") return null;
   if (url.username || url.password) return null;
   const host = url.hostname.toLowerCase().replace(/\.$/, "");
-  if (!host) return null;
+  if (!hostName.safeParse(host).success) return null;
   if (type === "prefix" && url.search) return null;
   url.hash = "";
   return {
