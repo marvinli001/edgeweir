@@ -37,8 +37,6 @@ import {
   type ReportStatsV2Request,
   SecurityEventKind,
   TaskState,
-  WatchConfigResponseSchema,
-  WatchEvent,
 } from "@edgeweir/proto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
@@ -76,6 +74,14 @@ import {
   reportUpgrade,
 } from "../services/upgrades";
 import { recordStatsWatermark } from "../services/usage";
+import {
+  certificateColumns,
+  issuedCertificateResponse,
+  keptSerial,
+  nodeInfoColumns,
+  signCsr,
+} from "./identity";
+import { watchStream } from "./watch";
 
 export const HEARTBEAT_SECONDS = 15;
 export const KEEPALIVE_MS = 15_000;
@@ -387,7 +393,7 @@ export function createNodeService(
       .select({ id: schema.node.id, clusterId: schema.node.clusterId })
       .from(schema.node)
       .where(eq(schema.node.id, nodeId));
-    return row ? nodeTarget(app.db, row) : undefined;
+    return row ? nodeTarget(app.db, row, "head") : undefined;
   }
 
   /** Ends an open watch stream once its node is disabled, deleted or its certificate superseded. */
@@ -531,33 +537,15 @@ export function createNodeService(
             clusterId: token.clusterId,
             nodeGroupId,
             name: token.nodeName || info?.hostname || `node-${token.id.slice(0, 8)}`,
-            hostname: info?.hostname ?? "",
-            agentVersion: info?.agentVersion ?? "",
-            supportedFeatures: [...new Set(info?.supportedFeatures ?? [])]
-              .filter((f) => /^[a-z0-9-]{1,64}$/.test(f))
-              .slice(0, 64),
-            engine: info?.engine ?? "",
-            engineVersion: info?.engineVersion ?? "",
-            os: info?.os ?? "",
-            arch: info?.arch ?? "",
+            ...nodeInfoColumns(info),
             remoteAddress: normalizeRemoteAddress(peer.remoteAddress),
           })
           .returning();
         if (!nodeRow) throw new Error("node insert failed");
-        let issued: Awaited<ReturnType<typeof app.nodeCa.signNodeCsr>>;
-        try {
-          issued = await app.nodeCa.signNodeCsr(req.csrPem, nodeRow.id);
-        } catch (error) {
-          throw new ConnectError(`rejected CSR: ${(error as Error).message}`, Code.InvalidArgument);
-        }
+        const issued = await signCsr(() => app.nodeCa.signNodeCsr(req.csrPem, nodeRow.id));
         await tx
           .update(schema.node)
-          .set({
-            certSerial: issued.serialNumber,
-            certFingerprint: issued.fingerprintSha256,
-            certNotAfter: issued.notAfter,
-            enrolledAt: new Date(),
-          })
+          .set({ ...certificateColumns(issued), enrolledAt: new Date() })
           .where(eq(schema.node.id, nodeRow.id));
         await replaceReportedAddresses(tx, nodeRow.id, info?.ipAddresses ?? []);
         await tx
@@ -587,9 +575,7 @@ export function createNodeService(
         nodeId: result.nodeRow.id,
         clusterId: result.nodeRow.clusterId,
         nodeName: result.nodeRow.name,
-        certificatePem: result.issued.certificatePem,
-        caCertificatePem: app.nodeCa.certificatePem,
-        notAfter: timestampFromDate(result.issued.notAfter),
+        ...issuedCertificateResponse(app, result.issued),
       };
     },
 
@@ -597,12 +583,7 @@ export function createNodeService(
       // Identity only: a disabled node keeps a valid certificate, so it can come back once enabled.
       const node = await requireNode(ctx, { disabled: true });
       const peerSerial = ctx.values.get(peerKey).serialNumber;
-      let issued: Awaited<ReturnType<typeof app.nodeCa.signNodeCsr>>;
-      try {
-        issued = await app.nodeCa.signNodeCsr(req.csrPem, node.id);
-      } catch (error) {
-        throw new ConnectError(`rejected CSR: ${(error as Error).message}`, Code.InvalidArgument);
-      }
+      const issued = await signCsr(() => app.nodeCa.signNodeCsr(req.csrPem, node.id));
       await app.db.transaction(async (tx) => {
         const [row] = await tx
           .select({
@@ -612,20 +593,10 @@ export function createNodeService(
           .from(schema.node)
           .where(eq(schema.node.id, node.id))
           .for("update");
-        const certificate = row && acceptedCertificate(row, peerSerial);
-        if (!certificate)
-          throw new ConnectError("certificate has been superseded", Code.Unauthenticated);
-        // The certificate the node authenticated with stays accepted until it uses the new one:
-        // a node that could not install the new certificate keeps working and renews again.
-        const kept = certificate === "current" ? row.certSerial : row.previousCertSerial;
+        const kept = keptSerial(row, peerSerial);
         await tx
           .update(schema.node)
-          .set({
-            certSerial: issued.serialNumber,
-            certFingerprint: issued.fingerprintSha256,
-            certNotAfter: issued.notAfter,
-            previousCertSerial: kept,
-          })
+          .set({ ...certificateColumns(issued), previousCertSerial: kept })
           .where(eq(schema.node.id, node.id));
         await recordAudit(
           tx,
@@ -639,150 +610,41 @@ export function createNodeService(
           },
         );
       });
-      return {
-        certificatePem: issued.certificatePem,
-        caCertificatePem: app.nodeCa.certificatePem,
-        notAfter: timestampFromDate(issued.notAfter),
-      };
+      return issuedCertificateResponse(app, issued);
     },
 
     async *watchConfig(_req, ctx) {
       const node = await requireNode(ctx);
-      const queue: { revision: number; contentHash: string }[] = [];
-      let tasksPending = false;
-      let wake: (() => void) | undefined;
-      const push = (item: { revision: number; contentHash: string }) => {
-        queue.push(item);
-        wake?.();
-      };
-      // A node follows its own target: the candidate in a canary group, else the stable revision.
-      const refresh = async () => {
-        const target = await currentTarget(node.id);
-        if (target) push({ revision: target.revision, contentHash: target.contentHash });
-        if (await hasDeliverableTasks(app.db, node.id)) {
-          tasksPending = true;
-          wake?.();
-        }
-      };
-      // Events arrive outside the stream: a read that fails there is repeated
-      // in the stream, where another error ends it and the node reconnects.
-      let stale = false;
-      const refreshLater = () =>
-        refresh().catch((error) => {
-          log.warn("watch refresh failed", { nodeId: node.id, error });
-          stale = true;
-          wake?.();
-        });
-      const offConfig = app.events.on("config", (e) => {
-        if (e.clusterId === node.clusterId) void refreshLater();
+      const serial = ctx.values.get(peerKey).serialNumber;
+      yield* watchStream({
+        node,
+        bans: nodeSupportsFeature(node.supportedFeatures, BANS_FEATURE),
+        // A node follows its own target: the candidate in a canary group, else the stable revision.
+        source: {
+          target: () => currentTarget(node.id),
+          hasTasks: () => hasDeliverableTasks(app.db, node.id),
+          assertActive: () => assertStillActive(node.id, serial),
+          banSequence: () => currentBanSequence(app.db),
+        },
+        events: app.events,
+        log,
+        signal: ctx.signal,
+        closing,
+        keepaliveMs: KEEPALIVE_MS,
       });
-      const offTasks = app.events.on("tasks", (e) => {
-        if (e.clusterIds.includes(node.clusterId)) {
-          tasksPending = true;
-          wake?.();
-        }
-      });
-      // Nodes with bans-v1 learn the ban sequence when the stream opens and on every change.
-      const bans = nodeSupportsFeature(node.supportedFeatures, BANS_FEATURE);
-      let bansPending = bans;
-      const offBans = app.events.on("bans", (e) => {
-        if (bans && (e.clusterIds === null || e.clusterIds.includes(node.clusterId))) {
-          bansPending = true;
-          wake?.();
-        }
-      });
-      const offReconnect = app.events.on("reconnected", () => {
-        bansPending ||= bans;
-        void refreshLater();
-      });
-      const onAbort = () => wake?.();
-      ctx.signal.addEventListener("abort", onAbort);
-      closing?.addEventListener("abort", onAbort);
-      const ended = () => ctx.signal.aborted || closing?.aborted === true;
-      log.info("watch stream opened", { nodeId: node.id });
-      try {
-        await refresh();
-        if (queue.length === 0) {
-          yield create(WatchConfigResponseSchema, {
-            event: WatchEvent.REVISION,
-            latestRevision: 0n,
-          });
-        }
-        let lastSent = -1;
-        while (!ended()) {
-          if (tasksPending) {
-            tasksPending = false;
-            yield create(WatchConfigResponseSchema, {
-              event: WatchEvent.TASKS,
-              latestRevision: BigInt(Math.max(lastSent, 0)),
-            });
-            continue;
-          }
-          if (queue.length === 0 && !bansPending) {
-            await new Promise<void>((resolve) => {
-              const timer = setTimeout(resolve, KEEPALIVE_MS);
-              wake = () => {
-                clearTimeout(timer);
-                resolve();
-              };
-            });
-            wake = undefined;
-          }
-          if (ended()) break;
-          await assertStillActive(node.id, ctx.values.get(peerKey).serialNumber);
-          if (stale) {
-            stale = false;
-            await refresh();
-          }
-          if (tasksPending) continue;
-          const item = queue
-            .splice(0)
-            .reduce<{ revision: number; contentHash: string } | undefined>(
-              (max, cur) => (!max || cur.revision > max.revision ? cur : max),
-              undefined,
-            );
-          if (item && item.revision !== lastSent) {
-            lastSent = item.revision;
-            yield create(WatchConfigResponseSchema, {
-              event: WatchEvent.REVISION,
-              latestRevision: BigInt(item.revision),
-              contentHash: item.contentHash,
-            });
-          } else if (!item && !bansPending) {
-            yield create(WatchConfigResponseSchema, {
-              event: WatchEvent.KEEPALIVE,
-              latestRevision: BigInt(Math.max(lastSent, 0)),
-            });
-          }
-          if (bansPending) {
-            bansPending = false;
-            yield create(WatchConfigResponseSchema, {
-              event: WatchEvent.BANS,
-              latestRevision: BigInt(Math.max(lastSent, 0)),
-              banSequence: await currentBanSequence(app.db),
-            });
-          }
-        }
-      } finally {
-        offConfig();
-        offTasks();
-        offBans();
-        offReconnect();
-        ctx.signal.removeEventListener("abort", onAbort);
-        closing?.removeEventListener("abort", onAbort);
-        log.info("watch stream closed", { nodeId: node.id });
-      }
     },
 
     async getConfig(req, ctx) {
       const node = await requireNode(ctx);
-      const own = await nodeTarget(app.db, node);
+      const own = await nodeTarget(app.db, node, "head");
       // A node never gets a revision newer than its target (a canary candidate
       // stays with the canary nodes).
       if (req.revision !== 0n && own && req.revision > BigInt(own.revision))
         throw new ConnectError("revision is not published to this node", Code.FailedPrecondition);
+      // The configuration itself is read for the revision shipped only.
+      const wanted = req.revision === 0n ? own?.revision : Number(req.revision);
       const target =
-        req.revision === 0n ? own : await getRevision(app.db, node.clusterId, Number(req.revision));
+        wanted === undefined ? undefined : await getRevision(app.db, node.clusterId, wanted);
       if (!target) throw new ConnectError("revision not found", Code.NotFound);
       const snapshot = decodeNodeConfig(target.ir);
       if (
@@ -824,7 +686,7 @@ export function createNodeService(
       const now = new Date();
       if (req.appliedRevision < 0n || req.appliedRevision >= BigInt(Number.MAX_SAFE_INTEGER))
         throw new ConnectError("invalid applied revision", Code.InvalidArgument);
-      const issued = await latestRevision(app.db, node.clusterId);
+      const issued = await latestRevision(app.db, node.clusterId, "head");
       const revisionReceiptVerified = verifyRevisionReceipt(
         app,
         node,
@@ -856,19 +718,7 @@ export function createNodeService(
             banStatus: req.bans ? toNodeBanStatus(req.bans, now) : null,
             // Sites above the normal CC level; nodes without challenge-v1 send none.
             securityState: toNodeSecurityState(req.security),
-            ...(info
-              ? {
-                  hostname: info.hostname || node.hostname,
-                  agentVersion: info.agentVersion,
-                  supportedFeatures: [...new Set(info.supportedFeatures)]
-                    .filter((f) => /^[a-z0-9-]{1,64}$/.test(f))
-                    .slice(0, 64),
-                  engine: info.engine,
-                  engineVersion: info.engineVersion,
-                  os: info.os,
-                  arch: info.arch,
-                }
-              : {}),
+            ...(info ? { ...nodeInfoColumns(info), hostname: info.hostname || node.hostname } : {}),
           })
           .where(eq(schema.node.id, node.id));
         const values = {
@@ -893,7 +743,7 @@ export function createNodeService(
           now,
         );
         // Every heartbeat carries the host's current addresses.
-        if (info) await replaceReportedAddresses(tx, node.id, info.ipAddresses);
+        await replaceReportedAddresses(tx, node.id, info?.ipAddresses ?? []);
         await replaceOriginHealth(
           tx,
           node,

@@ -183,7 +183,7 @@ export async function evaluateRollout(
       return (row?.state as RolloutState | undefined) ?? null;
     const candidate =
       row.candidateRevision !== null
-        ? await getRevision(tx, clusterId, row.candidateRevision)
+        ? await getRevision(tx, clusterId, row.candidateRevision, "head")
         : undefined;
     if (!candidate) {
       await updateRollout(tx, clusterId, { state: "idle", candidateRevision: null });

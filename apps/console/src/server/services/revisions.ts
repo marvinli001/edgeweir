@@ -16,7 +16,7 @@ import {
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { type NodeConfig, NodeConfigSchema } from "@edgeweir/proto";
-import { and, desc, eq, inArray, lt, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { CONFIG_CHANNEL } from "../lib/events";
 import { lockClusterPublish } from "../lib/locks";
@@ -58,26 +58,47 @@ export function toRevisionDto(row: RevisionRow): Revision {
   };
 }
 
-export async function latestRevision(
+/**
+ * A revision without its configuration (`ir`): what targets, receipts and
+ * watch streams compare. Heartbeats read only these columns; the
+ * configuration is read where it is shipped or compiled.
+ */
+export type RevisionHead = Pick<RevisionRow, "revision" | "contentHash" | "createdAt">;
+/** What a revision read returns: the whole row (the default) or its head. */
+export type RevisionColumns = "row" | "head";
+type RevisionOf<C extends RevisionColumns> = C extends "head" ? RevisionHead : RevisionRow;
+
+const revisionColumns = (columns: RevisionColumns | undefined) =>
+  columns === "head"
+    ? {
+        revision: schema.configRevision.revision,
+        contentHash: schema.configRevision.contentHash,
+        createdAt: schema.configRevision.createdAt,
+      }
+    : getTableColumns(schema.configRevision);
+
+export async function latestRevision<C extends RevisionColumns = "row">(
   db: Executor,
   clusterId: string,
-): Promise<RevisionRow | undefined> {
+  columns?: C,
+): Promise<RevisionOf<C> | undefined> {
   const [row] = await db
-    .select()
+    .select(revisionColumns(columns))
     .from(schema.configRevision)
     .where(eq(schema.configRevision.clusterId, clusterId))
     .orderBy(desc(schema.configRevision.revision))
     .limit(1);
-  return row;
+  return row as RevisionOf<C> | undefined;
 }
 
-export async function getRevision(
+export async function getRevision<C extends RevisionColumns = "row">(
   db: Executor,
   clusterId: string,
   revision: number,
-): Promise<RevisionRow | undefined> {
+  columns?: C,
+): Promise<RevisionOf<C> | undefined> {
   const [row] = await db
-    .select()
+    .select(revisionColumns(columns))
     .from(schema.configRevision)
     .where(
       and(
@@ -85,7 +106,7 @@ export async function getRevision(
         eq(schema.configRevision.revision, revision),
       ),
     );
-  return row;
+  return row as RevisionOf<C> | undefined;
 }
 
 /** Why a revision is published; rendered per locale in the UI. */
@@ -258,24 +279,28 @@ export async function updateRollout(
  * canary nodes of the running window that are still active, every other
  * node gets the stable one.
  */
-export interface RolloutTargets {
-  stable: RevisionRow | undefined;
-  candidate: RevisionRow | undefined;
+export interface RolloutTargets<R = RevisionRow> {
+  stable: R | undefined;
+  candidate: R | undefined;
   canaryNodeIds: Set<string>;
 }
 
-export async function rolloutTargets(db: Executor, clusterId: string): Promise<RolloutTargets> {
+export async function rolloutTargets<C extends RevisionColumns = "row">(
+  db: Executor,
+  clusterId: string,
+  columns?: C,
+): Promise<RolloutTargets<RevisionOf<C>>> {
   const rollout = await loadRollout(db, clusterId);
-  const latest = await latestRevision(db, clusterId);
+  const latest = await latestRevision(db, clusterId, columns);
   if (!rollout?.enabled) return { stable: latest, candidate: undefined, canaryNodeIds: new Set() };
   const stable =
     rollout.stableRevision === null
       ? latest
-      : ((await getRevision(db, clusterId, rollout.stableRevision)) ?? latest);
+      : ((await getRevision(db, clusterId, rollout.stableRevision, columns)) ?? latest);
   const candidate =
     rollout.candidateRevision === null
       ? undefined
-      : await getRevision(db, clusterId, rollout.candidateRevision);
+      : await getRevision(db, clusterId, rollout.candidateRevision, columns);
   const nodes =
     candidate && rollout.canaryNodeIds.length
       ? await db
@@ -298,17 +323,18 @@ export async function rolloutTargets(db: Executor, clusterId: string): Promise<R
  * candidate it may already run (nodes never apply a lower revision), and
  * one that joins waits for the next window.
  */
-export function targetFor(node: { id: string }, targets: RolloutTargets): RevisionRow | undefined {
+export function targetFor<R>(node: { id: string }, targets: RolloutTargets<R>): R | undefined {
   if (targets.candidate && targets.canaryNodeIds.has(node.id)) return targets.candidate;
   return targets.stable;
 }
 
 /** The revision a node should run (its target), per the cluster's rollout. */
-export async function nodeTarget(
+export async function nodeTarget<C extends RevisionColumns = "row">(
   db: Executor,
   node: { id: string; clusterId: string },
-): Promise<RevisionRow | undefined> {
-  return targetFor(node, await rolloutTargets(db, node.clusterId));
+  columns?: C,
+): Promise<RevisionOf<C> | undefined> {
+  return targetFor(node, await rolloutTargets(db, node.clusterId, columns));
 }
 
 /** Tells every console instance's watch streams of the cluster to re-read their targets. */

@@ -19,6 +19,7 @@ import { getReleaseSource } from "./release-source";
 import {
   type Executor,
   nodeTarget,
+  type RevisionHead,
   type RolloutTargets,
   rolloutTargets,
   targetFor,
@@ -200,9 +201,9 @@ async function dtos(db: Executor, rows: JobRow[], now = Date.now()): Promise<Upg
     : [];
   const nodeMap = new Map(nodes.map((n) => [n.node.id, n]));
   // Healthy means running the node's own target (canary groups may run a candidate).
-  const targets = new Map<string, RolloutTargets>();
+  const targets = new Map<string, RolloutTargets<RevisionHead>>();
   for (const clusterId of [...new Set(rows.map((r) => r.clusterId))])
-    targets.set(clusterId, await rolloutTargets(db, clusterId));
+    targets.set(clusterId, await rolloutTargets(db, clusterId, "head"));
   return rows.map((r) => {
     const items = deliveries.filter((d) => d.upgradeId === r.id),
       canary = items.filter((d) => d.phase === "canary" && !removed(d)),
@@ -420,7 +421,7 @@ export async function createUpgrade(
       fail("UPGRADE_TOO_MANY_NODES", `an upgrade covers at most ${MAX_UPGRADE_NODES} nodes`, {
         limit: MAX_UPGRADE_NODES,
       });
-    const clusterTargets = await rolloutTargets(tx, cluster.id);
+    const clusterTargets = await rolloutTargets(tx, cluster.id, "head");
     const canary = nodes.filter((n) => n.node.nodeGroupId === group.id),
       now = Date.now();
     if (!canary.length)
@@ -659,7 +660,7 @@ export async function reportUpgrade(
         .from(schema.node)
         .leftJoin(schema.nodeConfigStatus, eq(schema.nodeConfigStatus.nodeId, schema.node.id))
         .where(eq(schema.node.id, nodeId));
-      const desired = receipt ? await nodeTarget(tx, receipt.node) : undefined;
+      const desired = receipt ? await nodeTarget(tx, receipt.node, "head") : undefined;
       if (
         !receipt ||
         receipt.node.status !== "active" ||
@@ -742,7 +743,7 @@ export async function recordUpgradeHealth(
       ),
     );
   if (!rows.length) return;
-  const desired = await nodeTarget(tx, node);
+  const desired = await nodeTarget(tx, node, "head");
   for (const row of rows) {
     const healthy =
       node.status === "active" &&
