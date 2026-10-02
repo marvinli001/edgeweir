@@ -33,7 +33,7 @@ A site's origin pool and origin groups, health checks and session affinity, orig
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
 | Origin | Host name or IPv4/IPv6 literal without port or brackets, up to 253 characters | None | Origin target, subject to [origin address restrictions](#origin-address-restrictions) |
-| Port | 1–65535 | 80 | Origin port; change it to the origin's HTTPS port when selecting HTTPS |
+| Port | 1–65535 | HTTP 80, HTTPS 443 | Origin port; switching the protocol swaps 80 and 443 |
 | Protocol | HTTP / HTTPS | HTTP | Protocol from node to origin |
 | Weight | 1–100 | 1 | Weight used by all three load balancing policies |
 | Origin Host | Host name, up to 253 characters | Empty (same as request) | `Host` sent to the origin. Empty: the visitor's Host (lowercase, port removed); for S3 origins the origin address, with the port unless it is 80 (HTTP) or 443 (HTTPS) |

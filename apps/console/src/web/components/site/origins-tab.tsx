@@ -294,7 +294,13 @@ function OriginRow({
           <FieldLabel>{m.site_form_scheme()}</FieldLabel>
           <Select
             value={row.scheme}
-            onValueChange={(v) => v && onChange({ scheme: v as Scheme })}
+            onValueChange={(v) => {
+              if (!v) return;
+              const scheme = v as Scheme;
+              // The port follows the scheme while it is empty or the other scheme's default.
+              const follows = row.port === "" || row.port === (scheme === "https" ? "80" : "443");
+              onChange({ scheme, ...(follows ? { port: scheme === "https" ? "443" : "80" } : {}) });
+            }}
             items={SCHEMES}
           >
             <SelectTrigger className="w-full" data-testid="origin-scheme">

@@ -219,6 +219,12 @@ describe("M2 origin and cache inputs", () => {
     ).toBe(false);
   });
 
+  it("defaults an origin's port to its scheme's", () => {
+    expect(originInput.parse({ address: "10.0.0.1" })).toMatchObject({ scheme: "http", port: 80 });
+    expect(originInput.parse({ address: "10.0.0.1", scheme: "https" }).port).toBe(443);
+    expect(originInput.parse({ address: "10.0.0.1", scheme: "https", port: 8443 }).port).toBe(8443);
+  });
+
   it("accepts SNI host names only", () => {
     expect(originInput.parse({ address: "10.0.0.1", sni: "Origin.Example.com" }).sni).toBe(
       "origin.example.com",

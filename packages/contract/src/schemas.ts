@@ -140,9 +140,10 @@ export const s3Input = z.object({
   secretAccessKey: z.string().min(1).max(256).optional(),
 });
 
-export const originInput = z.object({
+const originFields = z.object({
   address: originAddress,
-  port: port.default(80),
+  /** Defaults to the scheme's port: 80 for HTTP, 443 for HTTPS. */
+  port: port.optional(),
   scheme: originScheme.default("http"),
   weight: z.number().int().min(1).max(100).default(1),
   backup: z.boolean().default(false),
@@ -159,6 +160,11 @@ export const originInput = z.object({
     .regex(/^[a-z0-9_-]{0,32}$/, "invalid origin group")
     .default(""),
 });
+
+export const originInput = originFields.transform((origin) => ({
+  ...origin,
+  port: origin.port ?? (origin.scheme === "https" ? 443 : 80),
+}));
 
 /** A site's origins: 1 to 32, at least one of them in the default group. */
 export const siteOrigins = z
@@ -368,8 +374,9 @@ export const siteCreateInput = z.object({
   cacheSettings: cacheSettings.prefault({}),
 });
 
-export const origin = originInput.omit({ s3: true }).extend({
+export const origin = originFields.omit({ s3: true }).extend({
   id: uuid,
+  port,
   /** Secrets are never returned. */
   s3: z.object({ region: z.string(), bucket: z.string(), accessKeyId: z.string() }).nullable(),
 });
