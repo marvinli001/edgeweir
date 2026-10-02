@@ -47,17 +47,19 @@ export function SaveBar({
   pending,
   error,
   testId,
+  errorTestId = "site-save-error",
 }: {
   dirty: boolean;
   pending: boolean;
   error: string | null;
   testId: string;
+  errorTestId?: string;
 }) {
   useUnsavedChanges(dirty);
   return (
     <CardFooter className="flex-wrap justify-end gap-3 border-t">
       {error ? (
-        <FieldError className="mr-auto animate-in fade-in" data-testid="site-save-error">
+        <FieldError className="mr-auto animate-in fade-in" data-testid={errorTestId}>
           {error}
         </FieldError>
       ) : null}

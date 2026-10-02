@@ -11,13 +11,12 @@ import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
+import { SettingsCard } from "@/components/settings-card";
 import { NumberField } from "@/components/site/fields";
-import { SaveBar } from "@/components/site/save-site";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -649,29 +648,6 @@ function ResultRow({
   );
 }
 
-/** Interval, timeout and attempts of the probes, and when an address counts as down or up. */
-export function ProbeSettingsCard() {
-  const query = useQuery(orpc.settings.probes.queryOptions());
-  return (
-    <Card className="animate-enter" style={{ animationDelay: "120ms" }}>
-      <CardHeader>
-        <CardTitle>{m.probes_settings_title()}</CardTitle>
-      </CardHeader>
-      {query.isPending ? (
-        <CardContent>
-          <LoadingState />
-        </CardContent>
-      ) : query.isLoadingError ? (
-        <CardContent>
-          <ErrorState error={query.error} onRetry={() => query.refetch()} />
-        </CardContent>
-      ) : (
-        <ProbeSettingsForm key={JSON.stringify(query.data)} initial={query.data} />
-      )}
-    </Card>
-  );
-}
-
 const SETTINGS_FIELDS: {
   key: keyof ProbeSettings;
   label: () => string;
@@ -686,60 +662,46 @@ const SETTINGS_FIELDS: {
   { key: "ipUpSeconds", label: () => m.probes_settings_up(), min: 5, max: 3600 },
 ];
 
-type SettingsDraft = Record<keyof ProbeSettings, string>;
-const toDraft = (s: ProbeSettings): SettingsDraft => ({
-  intervalSeconds: String(s.intervalSeconds),
-  timeoutMs: String(s.timeoutMs),
-  attempts: String(s.attempts),
-  lossPercent: String(s.lossPercent),
-  ipDownSeconds: String(s.ipDownSeconds),
-  ipUpSeconds: String(s.ipUpSeconds),
-});
-
-function ProbeSettingsForm({ initial }: { initial: ProbeSettings }) {
-  const queryClient = useQueryClient();
-  const save = useMutation(orpc.settings.setProbes.mutationOptions());
-  const [draft, setDraft] = React.useState(() => toDraft(initial));
-  const [error, setError] = React.useState<string | null>(null);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(toDraft(initial));
+/** Interval, timeout and attempts of the probes, and when an address counts as down or up. */
+export function ProbeSettingsCard() {
   return (
-    <form
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setError(null);
-        const values = Object.fromEntries(
-          Object.entries(draft).map(([key, value]) => [key, Number(value)]),
-        ) as ProbeSettings;
-        if (values.timeoutMs > values.intervalSeconds * 1000) {
-          setError(m.probes_settings_timeout_too_long());
-          return;
-        }
-        try {
-          await save.mutateAsync(values);
-          await queryClient.invalidateQueries({ queryKey: orpc.settings.probes.key() });
-          toast.success(m.common_saved());
-        } catch (err) {
-          setError(errorMessage(err));
-        }
-      }}
+    <SettingsCard
+      title={m.probes_settings_title()}
+      className="animate-enter"
+      style={{ animationDelay: "120ms" }}
+      query={orpc.settings.probes.queryOptions()}
+      mutation={orpc.settings.setProbes.mutationOptions()}
+      toDraft={(s) =>
+        Object.fromEntries(SETTINGS_FIELDS.map(({ key }) => [key, String(s[key])])) as Record<
+          keyof ProbeSettings,
+          string
+        >
+      }
+      toInput={(d) =>
+        Object.fromEntries(SETTINGS_FIELDS.map(({ key }) => [key, Number(d[key])])) as ProbeSettings
+      }
+      check={(s) =>
+        s.timeoutMs > s.intervalSeconds * 1000 ? m.probes_settings_timeout_too_long() : null
+      }
+      contentClassName="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      saveTestId="probe-settings-save"
     >
-      <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {SETTINGS_FIELDS.map((field) => (
+      {({ draft, set }) =>
+        SETTINGS_FIELDS.map((field) => (
           <NumberField
             key={field.key}
             id={`probe-settings-${field.key}`}
             label={field.label()}
             value={draft[field.key]}
-            onChange={(value) => setDraft({ ...draft, [field.key]: value })}
+            onChange={(value) => set({ [field.key]: value })}
             min={field.min}
             max={field.max}
             step={1}
             required
             testId={`probe-settings-${field.key}`}
           />
-        ))}
-      </CardContent>
-      <SaveBar dirty={dirty} pending={save.isPending} error={error} testId="probe-settings-save" />
-    </form>
+        ))
+      }
+    </SettingsCard>
   );
 }
