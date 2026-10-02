@@ -45,6 +45,8 @@ import { cn } from "@/lib/utils";
 
 const MAX_ADDRESSES = 8;
 const LEVELS = [0, 1, 2] as const;
+/** Nodes renew a third of the way before expiry (10 of 30 days): less means renewal is failing. */
+const CERT_WARN_MS = 10 * 24 * 3600 * 1000;
 
 export const levelLabel = (level: number) =>
   level === 0
@@ -90,6 +92,7 @@ export function NodeDetailDialog({ node, onClose }: { node: Node; onClose: () =>
         </DialogHeader>
         <div className="flex min-w-0 flex-col gap-6">
           <NodeMetrics node={node} />
+          <NodeFacts node={node} />
           <NodeProbeSwitch node={node} />
           <NodeAddresses node={node} />
           <section className="flex flex-col gap-3">
@@ -172,6 +175,57 @@ function NodeMetrics({ node }: { node: Node }) {
         </p>
       )}
     </section>
+  );
+}
+
+function Fact({
+  label,
+  children,
+  testId,
+}: {
+  label: string;
+  children: React.ReactNode;
+  testId: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 rounded-xl border px-3 py-2">
+      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+      <dd className="flex min-w-0 flex-wrap items-center gap-2 text-sm" data-testid={testId}>
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+/** Data plane health and client certificate lifetime. */
+function NodeFacts({ node }: { node: Node }) {
+  const certLeft = node.certNotAfter ? Date.parse(node.certNotAfter) - Date.now() : null;
+  return (
+    <dl className="grid gap-2 sm:grid-cols-2" data-testid="node-facts">
+      <Fact label={m.node_data_plane()} testId="node-data-plane">
+        {node.dataPlaneHealthy ? (
+          <StatusDot tone="good">{m.node_data_plane_healthy()}</StatusDot>
+        ) : (
+          <StatusDot tone="bad">{m.nodes_unhealthy()}</StatusDot>
+        )}
+      </Fact>
+      <Fact label={m.node_cert_not_after()} testId="node-cert-not-after">
+        {node.certNotAfter ? (
+          <span className="tabular-nums">{formatDateTime(node.certNotAfter)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+        {certLeft === null ? null : certLeft <= 0 ? (
+          <Badge variant="destructive" data-testid="node-cert-expired">
+            {m.node_cert_expired()}
+          </Badge>
+        ) : certLeft < CERT_WARN_MS ? (
+          <Badge variant="outline" data-testid="node-cert-expiring">
+            {m.node_cert_expiring()}
+          </Badge>
+        ) : null}
+      </Fact>
+    </dl>
   );
 }
 

@@ -128,7 +128,7 @@ The bottom of the sidebar shows the account's name and email; click it to open t
 | Block | Content |
 | --- | --- |
 | **Sites** | Number of sites; starred sites first, then the other sites by creation time, at most 5. Sites are starred in the **Sites** list or on the site page |
-| **Nodes** | Online and total nodes; nodes that need attention first: **Offline**, **Apply failed**, **Behind**, **Pending**, **Disabled**, **In sync**. Shows **Add node** when there are no nodes |
+| **Nodes** | Online and total nodes; nodes that need attention first: **Offline**, **Apply failed**, **Data plane unhealthy**, **Behind**, **Pending**, **Disabled**, **In sync**. Shows **Add node** when there are no nodes |
 | **Recent revisions** | The latest revisions across all clusters, with their reasons |
 | **Recents** | Pages and sites recently opened in the current browser, at most 5 |
 | **Analytics** | Traffic, ranges from 1 hour to 30 days (24 hours by default); the metric cards open breakdowns by site, node, and status code. **Top sites** and **Top nodes** show each item's cluster |

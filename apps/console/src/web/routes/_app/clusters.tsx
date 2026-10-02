@@ -766,9 +766,20 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
               {m.nodes_disabled()}
             </StatusDot>
           ) : row.original.online ? (
-            <StatusDot tone="good" pulse data-testid="node-online">
-              {m.nodes_online()}
-            </StatusDot>
+            <span className="flex flex-wrap items-center gap-1.5">
+              <StatusDot
+                tone={row.original.dataPlaneHealthy ? "good" : "warn"}
+                pulse={row.original.dataPlaneHealthy}
+                data-testid="node-online"
+              >
+                {m.nodes_online()}
+              </StatusDot>
+              {row.original.dataPlaneHealthy ? null : (
+                <Badge variant="destructive" data-testid="node-unhealthy">
+                  {m.nodes_unhealthy()}
+                </Badge>
+              )}
+            </span>
           ) : (
             <StatusDot tone="bad" data-testid="node-offline">
               {m.nodes_offline()}
