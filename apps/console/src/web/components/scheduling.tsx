@@ -281,13 +281,9 @@ function DeleteRuleAction({ rule }: { rule: SchedulingRule }) {
       title={m.scheduling_rule_delete_confirm({ name: rule.name })}
       confirmLabel={m.common_delete()}
       onConfirm={async () => {
-        try {
-          await remove.mutateAsync({ id: rule.id });
-          await queryClient.invalidateQueries({ queryKey: orpc.scheduling.key() });
-          toast.success(m.common_deleted());
-        } catch (error) {
-          toast.error(errorMessage(error));
-        }
+        await remove.mutateAsync({ id: rule.id });
+        await queryClient.invalidateQueries({ queryKey: orpc.scheduling.key() });
+        toast.success(m.common_deleted());
       }}
     />
   );

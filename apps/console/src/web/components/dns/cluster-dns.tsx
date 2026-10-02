@@ -704,12 +704,8 @@ function Revisions({ clusterId }: { clusterId: string }) {
                         </Button>
                       }
                       onConfirm={async () => {
-                        try {
-                          await client.dns.rollbackBinding({ clusterId, revision: r.revision });
-                          await queries.invalidateQueries({ queryKey: orpc.dns.key() });
-                        } catch (e) {
-                          toast.error(errorMessage(e));
-                        }
+                        await client.dns.rollbackBinding({ clusterId, revision: r.revision });
+                        await queries.invalidateQueries({ queryKey: orpc.dns.key() });
                       }}
                     />
                   </TableCell>

@@ -167,12 +167,8 @@ function CertificatesPage() {
                     </Button>
                   }
                   onConfirm={async () => {
-                    try {
-                      await removeDns.mutateAsync({ id: credential.id });
-                      await refresh();
-                    } catch (e) {
-                      toast.error(errorMessage(e));
-                    }
+                    await removeDns.mutateAsync({ id: credential.id });
+                    await refresh();
                   }}
                 />
               </div>

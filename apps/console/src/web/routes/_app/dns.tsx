@@ -92,12 +92,8 @@ function DnsPage() {
                           </Button>
                         }
                         onConfirm={async () => {
-                          try {
-                            await client.dns.deleteProvider({ id: p.id });
-                            await refresh();
-                          } catch (e) {
-                            toast.error(errorMessage(e));
-                          }
+                          await client.dns.deleteProvider({ id: p.id });
+                          await refresh();
                         }}
                       />
                     </li>

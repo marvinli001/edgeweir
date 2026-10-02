@@ -64,12 +64,16 @@ function useUpdateProtection(siteId: string) {
   const queryClient = useQueryClient();
   const mutation = useMutation(orpc.protection.update.mutationOptions());
   const [error, setError] = React.useState<string | null>(null);
+  /** Saves or throws (for confirmations, which show the failure themselves). */
+  const apply = async (patch: Omit<SiteProtectionUpdateInput, "id">) => {
+    const saved = await mutation.mutateAsync({ id: siteId, ...patch });
+    queryClient.setQueryData(orpc.protection.get.queryKey({ input: { id: siteId } }), saved);
+    toast.success(m.common_saved());
+  };
   const save = async (patch: Omit<SiteProtectionUpdateInput, "id">) => {
     setError(null);
     try {
-      const saved = await mutation.mutateAsync({ id: siteId, ...patch });
-      queryClient.setQueryData(orpc.protection.get.queryKey({ input: { id: siteId } }), saved);
-      toast.success(m.common_saved());
+      await apply(patch);
       return true;
     } catch (err) {
       setError(errorMessage(err));
@@ -77,7 +81,7 @@ function useUpdateProtection(siteId: string) {
       return false;
     }
   };
-  return { save, error, pending: mutation.isPending };
+  return { apply, save, error, pending: mutation.isPending };
 }
 
 /** The site's security tab: Under Attack, challenges, CC policy and what the nodes report. */
@@ -114,7 +118,7 @@ export function SecurityTab({ siteId }: { siteId: string }) {
 }
 
 function UnderAttackCard({ siteId, protection }: { siteId: string; protection: SiteProtection }) {
-  const { save, pending } = useUpdateProtection(siteId);
+  const { apply, save, pending } = useUpdateProtection(siteId);
   const turningOn = !protection.underAttack;
   const toggle = (
     <Switch
@@ -137,7 +141,7 @@ function UnderAttackCard({ siteId, protection }: { siteId: string; protection: S
             title={turningOn ? m.protection_under_attack_on() : m.protection_under_attack_off()}
             note={turningOn ? m.protection_under_attack_on_note() : undefined}
             confirmLabel={turningOn ? m.protection_turn_on() : m.protection_turn_off()}
-            onConfirm={() => save({ underAttack: turningOn })}
+            onConfirm={() => apply({ underAttack: turningOn })}
           />
           <FieldLabel htmlFor="protection-under-attack">{m.protection_under_attack()}</FieldLabel>
           {protection.underAttack ? (

@@ -23,7 +23,7 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { m, timeAgo } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 
 export const Route = createFileRoute("/_app/regions")({
   validateSearch: z.object({
@@ -110,12 +110,8 @@ function DeleteRegionAction({ region }: { region: Region }) {
       title={m.regions_delete_confirm({ name: region.name })}
       confirmLabel={m.common_delete()}
       onConfirm={async () => {
-        try {
-          await remove.mutateAsync({ id: region.id });
-          await queryClient.invalidateQueries();
-        } catch (error) {
-          toast.error(errorMessage(error));
-        }
+        await remove.mutateAsync({ id: region.id });
+        await queryClient.invalidateQueries();
       }}
     />
   );

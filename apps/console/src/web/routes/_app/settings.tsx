@@ -151,7 +151,6 @@ function ApiKeysCard() {
             <SafetyNote>{m.settings_api_key_created()}</SafetyNote>
           </Field>
         ) : null}
-        {revoke.isError ? <FieldError>{errorMessage(revoke.error)}</FieldError> : null}
         {keys.isPending ? (
           <LoadingState className="min-h-24" />
         ) : keys.isError ? (
@@ -191,9 +190,7 @@ function ApiKeysCard() {
                         {m.access_key_revoke()}
                       </Button>
                     }
-                    onConfirm={async () => {
-                      await revoke.mutateAsync({ id: k.id }).catch(() => {});
-                    }}
+                    onConfirm={() => revoke.mutateAsync({ id: k.id })}
                   />
                 ) : null}
               </li>

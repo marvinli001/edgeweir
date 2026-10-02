@@ -511,12 +511,8 @@ function DeleteNodeGroupAction({ group }: { group: NodeGroup }) {
       title={m.node_groups_delete_confirm({ name: group.name })}
       confirmLabel={m.common_delete()}
       onConfirm={async () => {
-        try {
-          await remove.mutateAsync({ id: group.id });
-          await queryClient.invalidateQueries();
-        } catch (error) {
-          toast.error(errorMessage(error));
-        }
+        await remove.mutateAsync({ id: group.id });
+        await queryClient.invalidateQueries();
       }}
     />
   );
@@ -988,13 +984,9 @@ function RollbackAction({ clusterId, revision }: { clusterId: string; revision: 
       title={m.revisions_rollback()}
       note={m.revisions_rollback_confirm({ revision })}
       onConfirm={async () => {
-        try {
-          const result = await rollback.mutateAsync({ id: clusterId, revision });
-          toast.success(m.revisions_rolled_back({ revision: result.revision }));
-          await queryClient.invalidateQueries();
-        } catch (error) {
-          toast.error(errorMessage(error));
-        }
+        const result = await rollback.mutateAsync({ id: clusterId, revision });
+        toast.success(m.revisions_rolled_back({ revision: result.revision }));
+        await queryClient.invalidateQueries();
       }}
     />
   );

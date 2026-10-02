@@ -89,5 +89,17 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
   expect(await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")).toBe(
     true,
   );
+  // The list is in use: the refusal stays in the confirmation, which stays open.
+  await page.goto("/ip-lists");
+  await page
+    .locator('[data-slot="card"]')
+    .filter({ hasText: `$${name}` })
+    .getByRole("button", { name: "删除", exact: true })
+    .click();
+  await page.getByTestId("confirm-action").click();
+  await expect(page.getByTestId("confirm-error")).toHaveText("IP 名单正在被规则或 L4 应用引用");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
   expect(errors).toEqual([]);
 });

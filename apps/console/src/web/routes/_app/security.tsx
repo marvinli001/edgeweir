@@ -354,12 +354,8 @@ function PasskeysCard() {
                   title={m.security_passkey_delete({ name: key.name || "" })}
                   confirmLabel={m.common_delete()}
                   onConfirm={async () => {
-                    try {
-                      await unwrap(authClient.passkey.deletePasskey({ id: key.id }));
-                      await queryClient.invalidateQueries({ queryKey: ["passkeys"] });
-                    } catch (err) {
-                      toast.error(localizeError(err));
-                    }
+                    await unwrap(authClient.passkey.deletePasskey({ id: key.id }));
+                    await queryClient.invalidateQueries({ queryKey: ["passkeys"] });
                   }}
                 />
               </li>

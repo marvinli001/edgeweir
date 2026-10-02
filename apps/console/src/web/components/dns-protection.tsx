@@ -45,13 +45,9 @@ export function DnsHeldBack({
           })}
           confirmLabel={m.dns_force_publish()}
           onConfirm={async () => {
-            try {
-              await force.mutateAsync({ clusterId, revision: blocked.revision });
-              await queryClient.invalidateQueries({ queryKey: orpc.dns.key() });
-              toast.success(m.common_saved());
-            } catch (err) {
-              toast.error(errorMessage(err));
-            }
+            await force.mutateAsync({ clusterId, revision: blocked.revision });
+            await queryClient.invalidateQueries({ queryKey: orpc.dns.key() });
+            toast.success(m.common_saved());
           }}
         />
       </AlertTitle>

@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_RANGE } from "@/lib/analytics";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
-import { errorMessage, orpc } from "@/lib/orpc";
+import { orpc } from "@/lib/orpc";
 import { recordRecent } from "@/lib/recents";
 import { SITE_TABS, type SiteTab, siteTabLabel } from "@/lib/site-tabs";
 
@@ -239,21 +239,17 @@ function OverviewTab({ site }: { site: Site }) {
                   note={site.enabled ? m.site_disable_note() : undefined}
                   confirmLabel={site.enabled ? m.site_disable() : m.site_enable()}
                   onConfirm={async () => {
-                    try {
-                      const result = await setEnabled.mutateAsync({
-                        id: site.id,
-                        enabled: !site.enabled,
-                        expectedUpdatedAt: site.updatedAt,
-                      });
-                      toast.success(
-                        result.site.enabled
-                          ? m.site_enabled_toast({ revision: result.revision.revision })
-                          : m.site_disabled_toast({ revision: result.revision.revision }),
-                      );
-                      await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
-                    } catch (err) {
-                      toast.error(errorMessage(err));
-                    }
+                    const result = await setEnabled.mutateAsync({
+                      id: site.id,
+                      enabled: !site.enabled,
+                      expectedUpdatedAt: site.updatedAt,
+                    });
+                    toast.success(
+                      result.site.enabled
+                        ? m.site_enabled_toast({ revision: result.revision.revision })
+                        : m.site_disabled_toast({ revision: result.revision.revision }),
+                    );
+                    await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
                   }}
                 />
               </InfoRow>
@@ -290,13 +286,9 @@ function OverviewTab({ site }: { site: Site }) {
             title={m.sites_purge()}
             note={site.domains.join(", ")}
             onConfirm={async () => {
-              try {
-                const result = await purge.mutateAsync({ id: site.id });
-                toast.success(m.sites_purged({ revision: result.revision.revision }));
-                await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
-              } catch (err) {
-                toast.error(errorMessage(err));
-              }
+              const result = await purge.mutateAsync({ id: site.id });
+              toast.success(m.sites_purged({ revision: result.revision.revision }));
+              await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
             }}
           />
           <ConfirmDialog
@@ -310,14 +302,10 @@ function OverviewTab({ site }: { site: Site }) {
             title={m.sites_delete_confirm({ name: site.name })}
             confirmLabel={m.common_delete()}
             onConfirm={async () => {
-              try {
-                const result = await remove.mutateAsync({ id: site.id });
-                toast.success(m.sites_deleted({ revision: result.revision.revision }));
-                await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
-                await navigate({ to: "/sites" });
-              } catch (err) {
-                toast.error(errorMessage(err));
-              }
+              const result = await remove.mutateAsync({ id: site.id });
+              toast.success(m.sites_deleted({ revision: result.revision.revision }));
+              await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
+              await navigate({ to: "/sites" });
             }}
           />
         </CardContent>

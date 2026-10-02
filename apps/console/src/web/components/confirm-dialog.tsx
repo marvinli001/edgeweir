@@ -3,7 +3,6 @@ import { SafetyNote } from "@/components/safety-note";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -15,14 +14,13 @@ import { useAction } from "@/hooks/use-action";
 import { m } from "@/lib/i18n";
 import { errorMessage } from "@/lib/orpc";
 
-/** Confirmation for irreversible or publishing actions. */
+/**
+ * Confirmation for irreversible or publishing actions, opened by `trigger`. A failure stays in the
+ * dialog with its message, and the dialog stays open.
+ */
 export function ConfirmDialog({
   trigger,
-  title,
-  note,
-  confirmLabel,
-  destructive,
-  onConfirm,
+  ...props
 }: {
   trigger: React.ReactElement;
   title: string;
@@ -33,36 +31,17 @@ export function ConfirmDialog({
   onConfirm: () => Promise<unknown>;
 }) {
   const [open, setOpen] = React.useState(false);
-  const action = useAction();
-  const noteId = React.useId();
   return (
     <>
       {React.cloneElement(trigger as React.ReactElement<{ onClick?: () => void }>, {
         onClick: () => setOpen(true),
       })}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent aria-describedby={note ? noteId : undefined}>
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            {note ? <SafetyNote id={noteId}>{note}</SafetyNote> : null}
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>{m.common_cancel()}</DialogClose>
-            <Button
-              variant={destructive ? "destructive" : "default"}
-              disabled={action.pending}
-              data-testid="confirm-action"
-              onClick={async () => {
-                await action.run(onConfirm);
-                setOpen(false);
-              }}
-            >
-              {action.pending ? <Spinner /> : null}
-              {confirmLabel ?? m.common_confirm()}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ControlledConfirmDialog
+        {...props}
+        open={open}
+        onOpenChange={setOpen}
+        destructive={props.destructive ?? false}
+      />
     </>
   );
 }
@@ -87,7 +66,7 @@ export function ControlledConfirmDialog({
   note?: string;
   confirmLabel?: string;
   destructive?: boolean;
-  onConfirm: () => Promise<void>;
+  onConfirm: () => Promise<unknown>;
 }) {
   const action = useAction();
   const [error, setError] = React.useState<string | null>(null);

@@ -206,12 +206,8 @@ function KeysDialog({ account, onClose }: { account: ServiceAccount; onClose: ()
                     title={m.service_accounts_key_revoke_confirm({ prefix: k.prefix })}
                     confirmLabel={m.service_accounts_key_revoke()}
                     onConfirm={async () => {
-                      try {
-                        await revoke.mutateAsync({ id: account.id, keyId: k.id });
-                        await refresh();
-                      } catch (err) {
-                        toast.error(errorMessage(err));
-                      }
+                      await revoke.mutateAsync({ id: account.id, keyId: k.id });
+                      await refresh();
                     }}
                   />
                 )}
@@ -248,13 +244,9 @@ function DeleteAccountAction({ account }: { account: ServiceAccount }) {
       note={m.service_accounts_delete_note()}
       confirmLabel={m.common_delete()}
       onConfirm={async () => {
-        try {
-          await remove.mutateAsync({ id: account.id });
-          await queryClient.invalidateQueries({ queryKey: orpc.serviceAccounts.key() });
-          toast.success(m.service_accounts_deleted());
-        } catch (err) {
-          toast.error(errorMessage(err));
-        }
+        await remove.mutateAsync({ id: account.id });
+        await queryClient.invalidateQueries({ queryKey: orpc.serviceAccounts.key() });
+        toast.success(m.service_accounts_deleted());
       }}
     />
   );

@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
-import { client, errorMessage, orpc } from "@/lib/orpc";
+import { client, orpc } from "@/lib/orpc";
 
 const PAGE_SIZE = 50;
 const ALL = "__all__";
@@ -276,13 +276,9 @@ function UnbanAction({ ban }: { ban: Ban }) {
       title={m.bans_unban_confirm({ address: ban.cidr })}
       confirmLabel={m.bans_unban()}
       onConfirm={async () => {
-        try {
-          await unban.mutateAsync(ban.id);
-          await queryClient.invalidateQueries({ queryKey: orpc.bans.key() });
-          toast.success(m.bans_unbanned());
-        } catch (err) {
-          toast.error(errorMessage(err));
-        }
+        await unban.mutateAsync(ban.id);
+        await queryClient.invalidateQueries({ queryKey: orpc.bans.key() });
+        toast.success(m.bans_unbanned());
       }}
     />
   );

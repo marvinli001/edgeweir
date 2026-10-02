@@ -104,14 +104,12 @@ function ChannelsCard({
       await queries.invalidateQueries();
     },
   });
-  const act = async (action: "toggle" | "test" | "delete", id: string, enabled?: boolean) => {
-    try {
-      await mutation.mutateAsync({ action, id, enabled });
-      toast.success(m.common_saved());
-    } catch (e) {
-      toast.error(errorMessage(e));
-    }
+  const run = async (action: "toggle" | "test" | "delete", id: string, enabled?: boolean) => {
+    await mutation.mutateAsync({ action, id, enabled });
+    toast.success(m.common_saved());
   };
+  const act = (action: "toggle" | "test", id: string, enabled?: boolean) =>
+    run(action, id, enabled).catch((e: unknown) => toast.error(errorMessage(e)));
   return (
     <Card className="animate-enter">
       <CardHeader>
@@ -177,7 +175,7 @@ function ChannelsCard({
                       {m.common_delete()}
                     </Button>
                   }
-                  onConfirm={() => act("delete", channel.id)}
+                  onConfirm={() => run("delete", channel.id)}
                 />
               </li>
             ))}
@@ -254,12 +252,8 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                     </Button>
                   }
                   onConfirm={async () => {
-                    try {
-                      await client.alerts.unsubscribe({ id: sub.id });
-                      await queries.invalidateQueries();
-                    } catch (e) {
-                      toast.error(errorMessage(e));
-                    }
+                    await client.alerts.unsubscribe({ id: sub.id });
+                    await queries.invalidateQueries();
                   }}
                 />
               </li>

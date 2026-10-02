@@ -71,15 +71,17 @@ function ProtectionForm({ initial }: { initial: ProtectionSettings }) {
   const [type, setType] = React.useState(initial.underAttackChallenge);
   const [retention, setRetention] = React.useState(String(initial.eventRetentionDays));
   const [error, setError] = React.useState<string | null>(null);
+  const apply = async (next: ProtectionSettings) => {
+    await save.mutateAsync(next);
+    await queryClient.invalidateQueries({ queryKey: orpc.settings.protection.key() });
+    toast.success(m.common_saved());
+  };
   const submit = async (next: ProtectionSettings) => {
     setError(null);
     try {
-      await save.mutateAsync(next);
-      await queryClient.invalidateQueries({ queryKey: orpc.settings.protection.key() });
-      toast.success(m.common_saved());
+      await apply(next);
     } catch (err) {
       setError(errorMessage(err));
-      throw err;
     }
   };
   const turningOn = !initial.underAttack;
@@ -91,7 +93,7 @@ function ProtectionForm({ initial }: { initial: ProtectionSettings }) {
           ...initial,
           underAttackChallenge: type,
           eventRetentionDays: Number(retention),
-        }).catch(() => undefined);
+        });
       }}
     >
       <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -112,9 +114,7 @@ function ProtectionForm({ initial }: { initial: ProtectionSettings }) {
             note={m.protection_platform_note()}
             confirmLabel={turningOn ? m.protection_turn_on() : m.protection_turn_off()}
             onConfirm={() =>
-              submit({ ...initial, underAttack: turningOn, underAttackChallenge: type }).catch(
-                (err: unknown) => toast.error(errorMessage(err)),
-              )
+              apply({ ...initial, underAttack: turningOn, underAttackChallenge: type })
             }
           />
           <FieldLabel htmlFor="platform-under-attack">

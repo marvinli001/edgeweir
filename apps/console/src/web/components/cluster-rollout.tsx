@@ -185,13 +185,9 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
             title={m.rollout_promote_confirm({ revision: rollout.candidateRevision })}
             confirmLabel={m.rollout_promote()}
             onConfirm={async () => {
-              try {
-                await promote.mutateAsync({ id: rollout.clusterId });
-                await refresh();
-                toast.success(m.rollout_promoted_toast());
-              } catch (err) {
-                toast.error(errorMessage(err));
-              }
+              await promote.mutateAsync({ id: rollout.clusterId });
+              await refresh();
+              toast.success(m.rollout_promoted_toast());
             }}
           />
           <ConfirmDialog
@@ -204,13 +200,9 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
             title={m.rollout_abort_confirm({ revision: rollout.candidateRevision })}
             confirmLabel={m.rollout_abort()}
             onConfirm={async () => {
-              try {
-                await abort.mutateAsync({ id: rollout.clusterId });
-                await refresh();
-                toast.success(m.rollout_aborted_toast());
-              } catch (err) {
-                toast.error(errorMessage(err));
-              }
+              await abort.mutateAsync({ id: rollout.clusterId });
+              await refresh();
+              toast.success(m.rollout_aborted_toast());
             }}
           />
         </div>
