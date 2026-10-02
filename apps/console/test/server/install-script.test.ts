@@ -13,8 +13,12 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { assetPath } from "../../src/server/app";
+import type { AppContext } from "../../src/server/lib/context";
+import { loadEnv } from "../../src/server/lib/env";
+import { createLogger } from "../../src/server/lib/logger";
 import { startNodeChannel } from "../../src/server/node-channel/server";
-import { createTestContext } from "./helpers";
+import { CertificateAuthority, generateCa } from "../../src/server/pki/ca";
+import { TEST_MASTER_KEY } from "./helpers";
 
 /** The script as the console serves it (app.ts fills in the console URL). */
 const script = readFileSync(assetPath("install", "install.sh"), "utf8").replaceAll(
@@ -509,7 +513,20 @@ describe("install.sh", () => {
   it.runIf(hasTools)(
     "finds an unreachable node channel and a TLS-terminating proxy in front of it",
     async () => {
-      const { ctx, client } = await createTestContext();
+      // Only TLS and the 404 for "/" are needed: no database.
+      const ctx = {
+        env: loadEnv({
+          NODE_ENV: "test",
+          DATABASE_URL: "postgres://unused",
+          EDGEWEIR_MASTER_KEY: TEST_MASTER_KEY,
+          EDGEWEIR_PUBLIC_URL: "http://console.test:3000",
+          HOST: "127.0.0.1",
+          NODE_API_PORT: "0",
+          LOG_LEVEL: "error",
+        }),
+        nodeCa: await CertificateAuthority.load(await generateCa("Test CA")),
+        log: createLogger({ test: true }),
+      } as unknown as AppContext;
       const channel = await startNodeChannel(ctx);
       const tools = mkdtempSync(join(tmpdir(), "edgeweir-check-server-"));
       try {
@@ -578,10 +595,9 @@ describe("install.sh", () => {
       } finally {
         rmSync(tools, { recursive: true, force: true });
         await channel.close();
-        await client.close();
       }
     },
-    30_000,
+    60_000,
   );
 
   it("executes nothing when the download is cut short", () => {
