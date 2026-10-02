@@ -61,8 +61,8 @@ The only contract between the console and the nodes is `edgeweir.node.v1` in `pr
 1. Parse and validate the environment (`lib/env.ts`); on failure, list the invalid variables and exit.
 2. Wait up to 60 seconds for PostgreSQL.
 3. Apply pending migrations on a dedicated connection under an advisory lock; instances that start together run them one at a time.
-4. Resolve the session secret (`BETTER_AUTH_SECRET`, or derived from the master key) and compare it with the HMAC check value in the database: a derived secret that differs from the one the database was used with stops startup; a new explicit value is accepted with a warning ([SECURITY.en.md](SECURITY.en.md#session-secret)).
-5. Re-encrypt v1 envelopes written by older versions as v2.
+4. Check that the internal CA key's envelope was sealed with `EDGEWEIR_MASTER_KEY` or `EDGEWEIR_MASTER_KEY_PREVIOUS`, or stop. Resolve the session secret (`BETTER_AUTH_SECRET`, or derived from the master key; after a master key rotation, the stored original) and compare it with the HMAC check value in the database: a derived secret that differs from the one the database was used with stops startup; a new explicit value is accepted with a warning ([SECURITY.en.md](SECURITY.en.md#session-secret)).
+5. Re-encrypt v1 envelopes written by older versions as v2; with `EDGEWEIR_MASTER_KEY_PREVIOUS` set, re-encrypt every envelope it sealed with the current master key and log how many still use it (`services/envelope-rotation.ts`).
 6. Load the internal CA; generate it when the database has none.
 7. `app`, `all`: before setup, create or read the setup token and write it to the log; start LISTEN; issue the node channel server certificate from the internal CA and start listening.
 8. `worker`, `all`: start pg-boss, create the queues, register the schedules.
@@ -287,7 +287,7 @@ Every RPC other than `Enroll` and `EnrollProbe` requires a client certificate ve
 | `GetProbeTargets` | Probe targets (node, address, port, method, PROXY protocol), interval, timeout, and attempts |
 | `ReportProbeResults` | One round of probe results, at most 10,000 per call; the clusters concerned are evaluated right after |
 
-A revision receipt is sealed with the master key (purpose `node.revision_receipt`, bound to the node ID) and carries the cluster, the revision, and the content hash. The node stores the receipt locally and returns it in `ReportStatus`; a report of an applied revision above the console's latest revision without a valid receipt is refused.
+A revision receipt is sealed with the master key (purpose `node.revision_receipt`, bound to the node ID) and carries the cluster, the revision, and the content hash. The node stores the receipt locally and returns it in `ReportStatus`; a report of an applied revision above the console's latest revision without a valid receipt is refused. During a master key rotation, receipts sealed with the old key stay valid.
 
 ## Certificates and DNS
 

@@ -112,6 +112,31 @@ describe("outbound allow list", () => {
   });
 });
 
+describe("previous master key", () => {
+  const previous = Buffer.alloc(32, 6).toString("base64");
+
+  it("is optional, and empty is unset", () => {
+    expect(loadEnv(base).EDGEWEIR_MASTER_KEY_PREVIOUS).toBeUndefined();
+    expect(
+      loadEnv({ ...base, EDGEWEIR_MASTER_KEY_PREVIOUS: "" }).EDGEWEIR_MASTER_KEY_PREVIOUS,
+    ).toBe(undefined);
+    expect(
+      loadEnv({ ...base, EDGEWEIR_MASTER_KEY_PREVIOUS: previous }).EDGEWEIR_MASTER_KEY_PREVIOUS,
+    ).toBe(previous);
+  });
+
+  it("is checked like the master key and must differ from it", () => {
+    expect(() =>
+      loadEnv({ ...base, EDGEWEIR_MASTER_KEY_PREVIOUS: previous.replace("B", " ") }),
+    ).toThrow(/^invalid configuration:\n {2}EDGEWEIR_MASTER_KEY_PREVIOUS: is not valid base64/);
+    expect(() =>
+      loadEnv({ ...base, EDGEWEIR_MASTER_KEY_PREVIOUS: base.EDGEWEIR_MASTER_KEY }),
+    ).toThrow(
+      /^invalid configuration:\n {2}EDGEWEIR_MASTER_KEY_PREVIOUS: is the same key as EDGEWEIR_MASTER_KEY/,
+    );
+  });
+});
+
 describe("secrets from files", () => {
   const dir = mkdtempSync(join(tmpdir(), "edgeweir-env-"));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));

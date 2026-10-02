@@ -3,7 +3,7 @@ import { hostname } from "node:os";
 import { normalizeCidr, releaseBaseUrl } from "@edgeweir/contract";
 import * as z from "zod";
 import { TrustedProxies } from "./client-ip";
-import { masterKeyProblem } from "./envelope";
+import { decodeMasterKey, masterKeyProblem } from "./envelope";
 
 /**
  * `<scheme>://host[:port]` with nothing after it (a trailing "/" is fine), as
@@ -35,18 +35,29 @@ const originUrl = (schemes: readonly ("http" | "https")[]) =>
     return url.origin;
   });
 
+/** A master key: canonical base64 of 32+ bytes (masterKeyProblem). */
+const masterKey = z
+  .string()
+  .min(1)
+  .check((ctx) => {
+    const problem = masterKeyProblem(ctx.value);
+    if (problem) ctx.issues.push({ code: "custom", message: problem, input: ctx.value });
+  });
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   ROLE: z.enum(["app", "worker", "all"]).default("all"),
   DATABASE_URL: z.string().min(1),
   /** Base64-encoded 32+ byte key used to envelope-encrypt secrets at rest. */
-  EDGEWEIR_MASTER_KEY: z
-    .string()
-    .min(1)
-    .check((ctx) => {
-      const problem = masterKeyProblem(ctx.value);
-      if (problem) ctx.issues.push({ code: "custom", message: problem, input: ctx.value });
-    }),
+  EDGEWEIR_MASTER_KEY: masterKey,
+  /**
+   * The master key before a rotation: opens what it sealed until the startup
+   * re-seal pass has moved everything to EDGEWEIR_MASTER_KEY; never seals.
+   */
+  EDGEWEIR_MASTER_KEY_PREVIOUS: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    masterKey.optional(),
+  ),
   /**
    * better-auth's secret (session signatures, two-factor secrets at rest).
    * Empty or unset: derived from EDGEWEIR_MASTER_KEY (lib/auth-secret.ts).
@@ -128,6 +139,7 @@ const schema = z.object({
 export const FILE_VARIABLES = [
   "DATABASE_URL",
   "EDGEWEIR_MASTER_KEY",
+  "EDGEWEIR_MASTER_KEY_PREVIOUS",
   "BETTER_AUTH_SECRET",
   "EDGEWEIR_CLICKHOUSE_PASSWORD",
 ] as const;
@@ -206,6 +218,16 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error(`invalid configuration:\n${issues}`);
   }
   const env = parsed.data;
+  if (
+    env.EDGEWEIR_MASTER_KEY_PREVIOUS &&
+    decodeMasterKey(env.EDGEWEIR_MASTER_KEY_PREVIOUS).equals(
+      decodeMasterKey(env.EDGEWEIR_MASTER_KEY),
+    )
+  ) {
+    throw new Error(
+      "invalid configuration:\n  EDGEWEIR_MASTER_KEY_PREVIOUS: is the same key as EDGEWEIR_MASTER_KEY (set it to the key before the rotation)",
+    );
+  }
   let trustedProxies: TrustedProxies;
   try {
     trustedProxies = new TrustedProxies(env.EDGEWEIR_TRUSTED_PROXIES);

@@ -72,7 +72,8 @@ Separate commercial products (see [LICENSING.en.md](LICENSING.en.md)) may use li
 | --- | --- |
 | Master key | `EDGEWEIR_MASTER_KEY`: base64 of at least 32 random bytes (`openssl rand -base64 32`); never stored in the database |
 | Master key format | Canonical base64 (standard or URL-safe alphabet); a space, a quote, or any other extra character stops the console instead of decoding to another key |
-| Master key id | Envelopes record the key id `kid` (the first 16 hex characters of the SHA-256 of the raw master key); at startup the console first compares it with the `kid` of the internal CA key's envelope and, when they differ, refuses to start with "master key does not match this database", before checking the session secret |
+| Master key id | Envelopes record the key id `kid` (the first 16 hex characters of the SHA-256 of the raw master key), which picks the master key that decrypts them; at startup the `kid` of the internal CA key's envelope must be the current master key's or that of `EDGEWEIR_MASTER_KEY_PREVIOUS`, otherwise the console refuses to start with "master key does not match this database", before checking the session secret |
+| Master key rotation | `EDGEWEIR_MASTER_KEY_PREVIOUS` (the key before the rotation) only decrypts. At startup, under an advisory lock, every stored envelope it sealed is opened and encrypted again with the current master key and a new data key, bound to the same row, and the log reports how many still use it; revision receipts held by nodes keep verifying while it is set. Steps: [Rotating the master key](docs/deploy/docker.en.md#rotating-the-master-key) |
 | Key-encryption key | HKDF-SHA256, salt `edgeweir/kek/v1`, info `envelope`, 32 bytes |
 | Data key | Random per record; data and data key both encrypted with AES-256-GCM |
 | Additional authenticated data | `edgeweir/envelope/v2`, `<table>.<column>`, `<record id>`; a ciphertext moved to another row or column fails to decrypt |
@@ -84,20 +85,21 @@ Separate commercial products (see [LICENSING.en.md](LICENSING.en.md)) may use li
 | --- | --- | --- |
 | Internal CA private key | Envelope-encrypted | `pki_authority.private_key_envelope` |
 | Certificate private keys | Envelope-encrypted | `certificate.private_key_envelope` |
-| ACME accounts | Envelope-encrypted | `certificate.account_envelope` |
+| ACME accounts | Envelope-encrypted | `acme_account.account_envelope`; the EAB key of a request in `certificate.account_envelope` |
 | ACME DNS-01 credentials | Envelope-encrypted | `dns_credential.credential_envelope` |
 | DNS steering provider credentials | Envelope-encrypted | `platform_dns_provider.credential_envelope` |
 | S3 origin keys | Envelope-encrypted | `origin_credential.secret_envelope` |
 | Alert channel configuration (webhook URL and bearer token, email recipients) | Envelope-encrypted | `alert_channel.config_envelope` |
 | SMTP settings (including the password) | Envelope-encrypted | `notification_smtp` in `system_setting` |
 | Setup token | Envelope-encrypted; SHA-256 kept for comparison | `setup_token` in `system_setting` |
+| Challenge page signing keys | Envelope-encrypted | `challenge_key.secret` |
 | Node enrollment tokens | SHA-256 | `enrollment_token` |
 | Probe enrollment tokens | SHA-256 | `probe_token` |
 | AccessKeys | Hash (better-auth) | `apikey` |
 | User passwords | scrypt hash (better-auth) | `account` |
 | TOTP secrets and backup codes | Encrypted with the session secret (better-auth) | `two_factor` |
-| Session secret | Not stored; only an HMAC-SHA256 check value | `auth_secret_check` in `system_setting` |
-| Master key | Not stored | Environment variable `EDGEWEIR_MASTER_KEY`, or the file named by `EDGEWEIR_MASTER_KEY_FILE` |
+| Session secret | Not stored, only an HMAC-SHA256 check value; after a master key rotation, the value derived from the old key is stored envelope-encrypted | `auth_secret_check` and `auth_secret` in `system_setting` |
+| Master key | Not stored | Environment variable `EDGEWEIR_MASTER_KEY`, or the file named by `EDGEWEIR_MASTER_KEY_FILE`; during a rotation also `EDGEWEIR_MASTER_KEY_PREVIOUS` |
 
 ### Session secret
 
@@ -107,6 +109,7 @@ better-auth's session secret signs session cookies and encrypts TOTP secrets and
 | --- | --- |
 | `BETTER_AUTH_SECRET` set (at least 32 characters) | That value is used |
 | `BETTER_AUTH_SECRET` unset | Derived from the master key with HKDF-SHA256: salt `edgeweir/auth-secret/v1`, info `better-auth.secret`, 32 bytes, base64url; independent of the envelope key-encryption key (salt `edgeweir/kek/v1`, info `envelope`) |
+| Master key rotated, and the database ran with the secret derived from the old key | That secret stays: on the first start with `EDGEWEIR_MASTER_KEY_PREVIOUS` it is sealed with the current master key into `auth_secret` in `system_setting` and read from there from then on, also after `EDGEWEIR_MASTER_KEY_PREVIOUS` is removed; sessions and two-factor secrets are not affected |
 | The derived secret differs from the one the database was used with (for example `BETTER_AUTH_SECRET` removed from an existing deployment) | The console refuses to start |
 | The explicit value changes | The console starts and logs a warning; existing sessions end and enrolled two-factor secrets can no longer be read |
 
@@ -153,7 +156,7 @@ better-auth's session secret signs session cookies and encrypts TOTP secrets and
 | `install.sh` is served by the console | Trust in the console (the operator's own server) is a precondition; for stronger assurance, download and review the script first, or compare it with the same version on GitHub |
 | Compromised console | An attacker can push malicious configuration (for example, point sites to a malicious origin) but cannot make nodes run unsigned programs or obtain node private keys |
 | Credentials on the node | The node keeps its private key, the S3 origin keys (`credentials.json`), and site certificate private keys (`certificates.json`) in plain text with mode 0600 in its state directory (default `/var/lib/edgeweir-node`, mode 0700), so it keeps serving after a restart while the console is unreachable; root on the node can read them |
-| Master key and database leaked together | Envelope encryption no longer protects the data; without `BETTER_AUTH_SECRET`, the leaked master key also allows forging sessions. Read it from a secret file with `EDGEWEIR_MASTER_KEY_FILE` ([Master key file](docs/deploy/docker.en.md#master-key-file)) or inject it through the orchestrator's secret mechanism, and keep it apart from database backups |
+| Master key and database leaked together | Envelope encryption no longer protects the data; without `BETTER_AUTH_SECRET`, the leaked master key also allows forging sessions. Read it from a secret file with `EDGEWEIR_MASTER_KEY_FILE` ([Master key file](docs/deploy/docker.en.md#master-key-file)) or inject it through the orchestrator's secret mechanism, and keep it apart from database backups. After a leak, [rotate](docs/deploy/docker.en.md#rotating-the-master-key) the master key: rotation keeps the session secret, so a deployment without `BETTER_AUTH_SECRET` also sets a new one (every session ends, two-factor authentication must be enrolled again); when the database leaked too, replace the credentials stored in it |
 | Setup token in the log | First-run setup needs the one-time setup token the console writes to its log at startup; anyone who can read the console log can complete setup. Restrict log access at the same level as the master key |
 | Account recovery on the server | Anyone who can run commands in the console container (and so could read `DATABASE_URL` and change the database directly) can reset the account's password and turn two-factor authentication off with `recover.js`; a recovery signs out every session and is written to the audit log (`account.recover`), and neither the web UI nor HTTP offers recovery ([Command line](docs/reference/cli.en.md#account-recovery)). Restrict server access at the same level as the master key |
 | Credentials on a probe | A probe keeps its private key in plain text with mode 0600 in its state directory (default `/var/lib/edgeweir-probe`, mode 0700); root on the probe host can report results as that probe until it is deleted in the console |

@@ -61,8 +61,8 @@
 1. 解析并校验环境变量（`lib/env.ts`）；无效时列出变量名并退出。
 2. 等待 PostgreSQL 可连接，最长 60 秒。
 3. 在专用连接上持 advisory lock 执行未应用的迁移；多个实例同时启动时串行执行。
-4. 确定会话 secret（`BETTER_AUTH_SECRET`，或由主密钥派生），与数据库中的 HMAC 校验值比对：派生值与数据库此前使用的 secret 不一致时拒绝启动；显式设置的新值被接受并记录警告（[SECURITY.md](SECURITY.md#会话-secret)）。
-5. 把旧版本写入的 v1 信封重新加密为 v2。
+4. 确认内部 CA 私钥信封由 `EDGEWEIR_MASTER_KEY` 或 `EDGEWEIR_MASTER_KEY_PREVIOUS` 加密，否则拒绝启动。确定会话 secret（`BETTER_AUTH_SECRET`，或由主密钥派生；轮换主密钥后为入库的原值），与数据库中的 HMAC 校验值比对：派生值与数据库此前使用的 secret 不一致时拒绝启动；显式设置的新值被接受并记录警告（[SECURITY.md](SECURITY.md#会话-secret)）。
+5. 把旧版本写入的 v1 信封重新加密为 v2；设置了 `EDGEWEIR_MASTER_KEY_PREVIOUS` 时，把它加密的全部信封改用当前主密钥加密，并在日志中记录仍使用它的数量（`services/envelope-rotation.ts`）。
 6. 加载内部 CA；数据库中没有时生成。
 7. `app`、`all`：未初始化时生成或读取 setup token 并写入日志；开始 LISTEN；由内部 CA 签发节点通道服务端证书并开始监听。
 8. `worker`、`all`：启动 pg-boss，创建队列，注册定时任务。
@@ -287,7 +287,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `GetProbeTargets` | 探测目标（节点、地址、端口、方式、PROXY protocol）、间隔、超时与尝试次数 |
 | `ReportProbeResults` | 一轮探测结果，每次至多 10000 条；之后立即对涉及的集群求值 |
 
-revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节点 ID），内容为集群、revision 与内容哈希。节点把回执保存在本地并在 `ReportStatus` 中带回；节点报告的已应用 revision 高于控制台最新 revision 且回执无效时，请求被拒绝。
+revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节点 ID），内容为集群、revision 与内容哈希。节点把回执保存在本地并在 `ReportStatus` 中带回；节点报告的已应用 revision 高于控制台最新 revision 且回执无效时，请求被拒绝。轮换主密钥期间，旧主密钥封装的回执仍有效。
 
 ## 证书与 DNS
 
