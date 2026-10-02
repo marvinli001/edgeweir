@@ -39,7 +39,7 @@ DNS-01 validation needs a credential first.
 5. Click **Create**.
 6. Verify: the credential appears in the **DNS credentials** card with its zone and provider.
 
-The fields and least permissions of every provider are in [Providers and credentials](dns-and-alerts.en.md#providers-and-credentials); DNS steering uses the same provider catalog. Credentials are envelope-encrypted with the master key and are write-only; **Edit** renames the credential or rotates the secrets with **Replace credentials**.
+The fields and least permissions of every provider are in [Providers and credentials](dns-and-alerts.en.md#providers-and-credentials); DNS steering uses the same provider catalog. Credentials are envelope-encrypted with the master key and are write-only; **Edit** renames the credential or rotates the secrets with **Replace credentials**. After a rotation, certificates using the credential that show **Issuance failed** and TXT records still to clean up are retried at once.
 
 ## Request an ACME certificate
 
@@ -73,7 +73,7 @@ Certificates with the same certificate authority, EAB key ID, and account email 
 | Method | Behavior |
 | --- | --- |
 | HTTP-01 | Each name must be a non-wildcard domain of a site, or the request is refused ("Certificate domains do not match the site or DNS zone"): only the clusters serving a name answer its challenge. The console publishes all challenges of a certificate to those clusters at once (one revision per cluster, also when the site is disabled); every online node there must support `http01-v1` and apply it within 40 seconds before the CA is asked to validate, four names at a time. Challenges are answered on port 80 without redirect or caching and expire after 10 minutes or when the issuance ends (other HTTP-01 tokens go to the origin, uncached and unchallenged, so that it can obtain certificates of its own); challenge revisions do not count toward the kept configuration revisions |
-| DNS-01 | Each name must be inside the DNS credential's zone (the zone itself or a name below it), or the request is refused. Writes TXT records at `_acme-challenge.<domain>` and waits up to 3 minutes for propagation. When issuance ends, times out, or the process is interrupted, the TXT values it wrote are deleted; a certificate with records still to clean up cannot be deleted |
+| DNS-01 | Each name must be inside the DNS credential's zone (the zone itself or a name below it), or the request is refused. Writes TXT records at `_acme-challenge.<domain>` and waits up to 3 minutes for propagation. When issuance ends, times out, or the process is interrupted, the TXT values it wrote are deleted; a failed deletion is retried after 1 minute, doubling up to 6 hours, and a zone the provider no longer has counts as deleted |
 
 ### Renewal
 
@@ -91,7 +91,7 @@ Certificates with the same certificate authority, EAB key ID, and account email 
 
 ### Deletion
 
-A certificate used by a site, in **Issuing**, or with DNS-01 records still to clean up returns "Certificate or credential is still in use" on delete. A DNS credential referenced by any certificate cannot be deleted.
+Deleting a certificate used by sites returns "The certificate is used by sites: …" (up to 5 sites); while it is **Issuing**, "Certificate operation is already in progress". A certificate with DNS-01 TXT records still to clean up is deleted, and those records are no longer cleaned up: `leftDnsRecords` of the `certificate.delete` audit entry lists them for removal at the DNS provider. A DNS credential referenced by any certificate cannot be deleted ("The DNS credential is used by certificates: …").
 
 ## Configure a site's HTTPS
 
@@ -251,13 +251,14 @@ A change saved in the console or with an AccessKey is published even when it nee
 | "CA rate limit reached" | Too many orders for the domain or account | Wait for the CA's limit window |
 | "The CA requires EAB credentials" | CAs such as ZeroSSL need EAB | Request again with the EAB key ID and HMAC key |
 | "The TXT record did not propagate within 3 minutes" | The DNS provider syncs slowly, or the credential's zone is not the domain's authoritative zone | Retry later; check the credential's zone |
-| "Provider authentication failed" and other DNS provider reasons | The DNS provider refused the DNS-01 TXT record | Edit the DNS credential and enter its credentials again |
+| "Provider authentication failed" and other DNS provider reasons | The DNS provider refused the DNS-01 TXT record | Edit the DNS credential; certificates retry right after new credentials are saved |
 | "No online node can answer HTTP-01 (http01-v1)", "Nodes did not apply the challenge within 40 seconds" | The cluster serving the domain has no online node, a node lacks `http01-v1`, or nodes apply configurations slowly | Check the cluster's nodes and upgrade them if needed |
 | "A domain belongs to no site" | No certificate name is a site domain any more | Add the domain to a site, or use DNS-01 |
 | "Issuance failed; see the console log" | An unclassified error | Find `certificate operation failed` in the log of the console process that runs background jobs and follow its `reason` |
 | Certificate stays **Pending** | No console process runs background jobs | Make sure a process with `ROLE=worker` or `ROLE=all` runs |
 | "Certificate operation is already in progress" | The certificate is **Issuing** | Wait for issuance to finish |
-| "Certificate or credential is still in use" | The certificate is used by a site, issuing, or has DNS records to clean up; the DNS credential is referenced by a certificate | Select another certificate on the sites, or delete the certificates that reference the credential |
+| "The certificate is used by sites: …" | The listed sites selected the certificate | Select another certificate on their **HTTPS** tab first |
+| "The DNS credential is used by certificates: …" | The listed certificates use the credential for DNS-01 | Delete those certificates first |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (such as `http3-v1`) and keeps its last-known-good configuration | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | TLS SNI differs from `Host`, for example a client reused a connection opened for another domain | The client opens a connection for the requested domain |
 | Browsers do not use HTTP/3 | UDP 443 is blocked; the node lacks `http3-v1`; clients read `Alt-Svc` only after a first visit | Open UDP 443 and check node capabilities |

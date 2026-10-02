@@ -82,9 +82,12 @@ export const errorDefs = {
   /** Names a certificate or DNS zone does not cover, or HTTP-01 names no site has (first 5). */
   CERTIFICATE_DOMAIN_MISMATCH: { status: 400, params: ["domains"] },
   CERTIFICATE_BUSY: { status: 409, params: [] },
-  CERTIFICATE_IN_USE: { status: 409, params: [] },
+  /** Sites use the certificate (the first 5 names). */
+  CERTIFICATE_IN_USE: { status: 409, params: ["sites"] },
   DNS_CREDENTIAL_NOT_FOUND: { status: 404, params: [] },
   DNS_CREDENTIAL_INVALID: { status: 400, params: [] },
+  /** Certificates use the DNS credential (the first 5 names). */
+  DNS_CREDENTIAL_IN_USE: { status: 409, params: ["certificates"] },
 
   SETUP_DONE: { status: 403, params: [] },
   SETUP_IN_PROGRESS: { status: 409, params: [] },

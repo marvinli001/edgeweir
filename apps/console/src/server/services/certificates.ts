@@ -10,7 +10,7 @@ import {
   tlsSettings,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import {
   certificateName,
   failUncovered,
@@ -334,27 +334,53 @@ export async function renewCertificate(app: AppContext, id: string, ctx: Certifi
   });
 }
 
+/**
+ * Deletes a certificate no site uses (CERTIFICATE_IN_USE names the sites)
+ * and that is not issuing (CERTIFICATE_BUSY). DNS-01 TXT records still to
+ * clean up are given up: the audit entry lists them for removal by hand.
+ */
 export async function deleteCertificate(app: AppContext, id: string, ctx: CertificateContext) {
   return app.db.transaction(async (tx) => {
     const cert = await findCertificate(tx, id);
-    const refs = await tx
-      .select({ id: schema.site.id })
+    const sites = await tx
+      .select({ name: schema.site.name })
       .from(schema.site)
       .where(eq(schema.site.certificateId, id))
-      .limit(1);
+      .orderBy(schema.site.name)
+      .limit(5);
+    if (sites.length)
+      fail("CERTIFICATE_IN_USE", "certificate is used by sites", {
+        sites: sites.map((site) => site.name).join(", "),
+      });
+    if (cert.status === "issuing") fail("CERTIFICATE_BUSY", "certificate is issuing");
     const leases = await tx
-      .select({ id: schema.dnsChallengeLease.id })
-      .from(schema.dnsChallengeLease)
+      .delete(schema.dnsChallengeLease)
       .where(eq(schema.dnsChallengeLease.certificateId, id))
-      .limit(1);
-    if (refs.length || leases.length || cert.status === "issuing")
-      fail("CERTIFICATE_IN_USE", "certificate is in use");
+      .returning({
+        record: schema.dnsChallengeLease.record,
+        credentialId: schema.dnsChallengeLease.credentialId,
+      });
+    const zones = leases.length
+      ? await tx
+          .select({ id: schema.dnsCredential.id, zone: schema.dnsCredential.zone })
+          .from(schema.dnsCredential)
+          .where(inArray(schema.dnsCredential.id, [...new Set(leases.map((l) => l.credentialId))]))
+      : [];
+    const leftDnsRecords = [
+      ...new Set(
+        leases.map(({ record, credentialId }) => {
+          const zone = zones.find((z) => z.id === credentialId)?.zone ?? "";
+          return `${record.name}.${zone} TXT ${record.data}`;
+        }),
+      ),
+    ].sort();
     await tx.delete(schema.certificate).where(eq(schema.certificate.id, id));
     await recordAudit(tx, ctx.actor, {
       action: "certificate.delete",
       targetType: "certificate",
       targetId: id,
       targetName: cert.name,
+      ...(leftDnsRecords.length ? { metadata: { leftDnsRecords } } : {}),
     });
     return { ok: true as const };
   });
@@ -501,12 +527,39 @@ export async function updateDnsCredential(
       .where(eq(schema.dnsCredential.id, row.id))
       .returning();
     if (!updated) throw new Error("DNS credential disappeared");
+    // New credentials are tried at once: by certificates whose issuance
+    // failed, and by TXT records whose cleanup failed.
+    const retried = credentials
+      ? await tx
+          .update(schema.certificate)
+          .set({ renewAt: new Date() })
+          .where(
+            and(
+              eq(schema.certificate.status, "error"),
+              sql`${schema.certificate.acme}->>'dnsCredentialId' = ${row.id}`,
+            ),
+          )
+          .returning({ id: schema.certificate.id })
+      : [];
+    if (credentials)
+      await tx
+        .update(schema.dnsChallengeLease)
+        .set({ expiresAt: new Date() })
+        .where(
+          and(
+            eq(schema.dnsChallengeLease.credentialId, row.id),
+            gt(schema.dnsChallengeLease.attempts, 0),
+          ),
+        );
     await recordAudit(tx, ctx.actor, {
       action: "dns_credential.update",
       targetType: "dns_credential",
       targetId: row.id,
       targetName: updated.name,
-      metadata: { credentialsRotated: !!credentials },
+      metadata: {
+        credentialsRotated: !!credentials,
+        ...(retried.length ? { retriedCertificates: retried.length } : {}),
+      },
     });
     return credentialDto(updated);
   });
@@ -554,11 +607,15 @@ export async function deleteDnsCredential(app: AppContext, id: string, ctx: Cert
   return app.db.transaction(async (tx) => {
     const row = await findDnsCredential(tx, id, true);
     const refs = await tx
-      .select({ id: schema.certificate.id })
+      .select({ name: schema.certificate.name })
       .from(schema.certificate)
       .where(sql`${schema.certificate.acme}->>'dnsCredentialId' = ${id}`)
-      .limit(1);
-    if (refs.length) fail("CERTIFICATE_IN_USE", "DNS credential is referenced by a certificate");
+      .orderBy(schema.certificate.name)
+      .limit(5);
+    if (refs.length)
+      fail("DNS_CREDENTIAL_IN_USE", "DNS credential is used by certificates", {
+        certificates: refs.map((ref) => ref.name).join(", "),
+      });
     await tx.delete(schema.dnsCredential).where(eq(schema.dnsCredential.id, id));
     await recordAudit(tx, ctx.actor, {
       action: "dns_credential.delete",

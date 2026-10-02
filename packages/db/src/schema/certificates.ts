@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { boolean, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 const now = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -85,7 +94,13 @@ export const dnsChallengeLease = pgTable(
     record: jsonb("record")
       .$type<{ name: string; type: string; data: string; ttl: number }>()
       .notNull(),
+    /**
+     * When the record may be cleaned up; after a failed cleanup, when to try
+     * again (backing off with `attempts`).
+     */
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /** Failed cleanups so far. */
+    attempts: integer("attempts").notNull().default(0),
   },
   (t) => [
     uniqueIndex("dns_challenge_attempt_uq").on(t.certificateId, t.operationStartedAt, t.token),

@@ -528,6 +528,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0043_stats_marker_generation` | `stats_rollup_dirty.generation` (rollups clear only the marker generation they read) |
 | `0044_node_offline_per_node` | Drops the per-site node offline alert states (one per node now) |
 | `0045_rollout_policy_updated_at` | `cluster_rollout.policy_updated_at` (the canary policy's own version; existing rows take `updated_at`) |
+| `0046_dns_lease_attempts` | `dns_challenge_lease.attempts` (failed cleanups of a TXT record, for the retry backoff) |
 
 ## Build output
 

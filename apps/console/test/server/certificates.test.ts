@@ -167,9 +167,10 @@ describe("M3 certificate lifecycle and isolation", async () => {
     expect((await rpcError(api.https.get({ id: crypto.randomUUID() }))).code).toBe(
       "SITE_NOT_FOUND",
     );
-    expect((await rpcError(api.certificates.delete({ id: certificateId }))).code).toBe(
-      "CERTIFICATE_IN_USE",
-    );
+    expect(await rpcError(api.certificates.delete({ id: certificateId }))).toMatchObject({
+      code: "CERTIFICATE_IN_USE",
+      data: { sites: "secure" },
+    });
   });
   it("rejects a certificate for an unrelated hostname and compression settings out of range", async () => {
     const site = await api.sites.create({

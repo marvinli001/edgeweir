@@ -685,6 +685,14 @@ async function issueNow(app: AppContext, id: string) {
   }
 }
 
+/**
+ * How long the next cleanup of a TXT record waits after `attempts` failed
+ * ones: 1 minute, doubling, at most 6 hours.
+ */
+export function cleanupBackoff(attempts: number) {
+  return Math.min(6 * 3_600_000, 60_000 * 2 ** Math.min(Math.max(attempts, 0), 16));
+}
+
 async function cleanupDnsLease(
   app: AppContext,
   lease: typeof schema.dnsChallengeLease.$inferSelect,
@@ -694,6 +702,8 @@ async function cleanupDnsLease(
     .from(schema.dnsCredential)
     .where(eq(schema.dnsCredential.id, lease.credentialId));
   if (!credential) return;
+  const done = () =>
+    app.db.delete(schema.dnsChallengeLease).where(eq(schema.dnsChallengeLease.id, lease.id));
   try {
     const cleaned = await withLease(app.db, `credential:${credential.id}`, 10 * 60, () =>
       certdDns(app, "dns.cleanup", {
@@ -704,9 +714,27 @@ async function cleanupDnsLease(
       }),
     );
     if (!cleaned.ran) return;
-    await app.db.delete(schema.dnsChallengeLease).where(eq(schema.dnsChallengeLease.id, lease.id));
-  } catch {
-    app.log.warn("DNS challenge cleanup pending", { certificateId: lease.certificateId });
+    await done();
+  } catch (error) {
+    // A zone the provider no longer has holds no record either.
+    if (error instanceof CertdError && error.code === "dns_zone_not_found") {
+      await done();
+      return;
+    }
+    // Failing credentials or a provider that is down are tried again later and
+    // later (new credentials try at once: updateDnsCredential).
+    await app.db
+      .update(schema.dnsChallengeLease)
+      .set({
+        attempts: lease.attempts + 1,
+        expiresAt: new Date(Date.now() + cleanupBackoff(lease.attempts)),
+      })
+      .where(eq(schema.dnsChallengeLease.id, lease.id));
+    app.log.warn("DNS challenge cleanup pending", {
+      certificateId: lease.certificateId,
+      attempts: lease.attempts + 1,
+      code: failureCode(error),
+    });
   }
 }
 
@@ -813,22 +841,31 @@ export async function dueCertificates(app: AppContext, limit = 10) {
 const SWEEP_CONCURRENCY = 3;
 
 export async function sweepCertificates(app: AppContext) {
+  // TXT records to delete: those of ended attempts, and those whose
+  // cleanup failed before once their backoff has passed.
   const leases = await app.db
-    .select({ lease: schema.dnsChallengeLease, certificate: schema.certificate })
+    .select({ lease: schema.dnsChallengeLease })
     .from(schema.dnsChallengeLease)
     .innerJoin(
       schema.certificate,
       eq(schema.certificate.id, schema.dnsChallengeLease.certificateId),
     )
-    .limit(100);
-  for (const { lease, certificate } of leases) {
-    if (
-      lease.expiresAt.getTime() < Date.now() ||
-      certificate.status !== "issuing" ||
-      certificate.operationStartedAt?.getTime() !== lease.operationStartedAt.getTime()
+    .where(
+      or(
+        lt(schema.dnsChallengeLease.expiresAt, new Date()),
+        and(
+          eq(schema.dnsChallengeLease.attempts, 0),
+          or(
+            ne(schema.certificate.status, "issuing"),
+            isNull(schema.certificate.operationStartedAt),
+            ne(schema.certificate.operationStartedAt, schema.dnsChallengeLease.operationStartedAt),
+          ),
+        ),
+      ),
     )
-      await cleanupDnsLease(app, lease);
-  }
+    .orderBy(asc(schema.dnsChallengeLease.expiresAt))
+    .limit(100);
+  for (const { lease } of leases) await cleanupDnsLease(app, lease);
   // HTTP-01 challenges an attempt left behind when its process died.
   await app.db.delete(schema.acmeChallenge).where(lt(schema.acmeChallenge.expiresAt, new Date()));
   const queue = await dueCertificates(app);

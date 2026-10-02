@@ -528,6 +528,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0043_stats_marker_generation` | `stats_rollup_dirty.generation`（汇总只清除读到的那一代标记） |
 | `0044_node_offline_per_node` | 删除按网站记录的「节点离线」告警状态（改为每个节点一条） |
 | `0045_rollout_policy_updated_at` | `cluster_rollout.policy_updated_at`（金丝雀策略自身的版本，已有行取 `updated_at`） |
+| `0046_dns_lease_attempts` | `dns_challenge_lease.attempts`（TXT 记录清理失败的次数，用于退避重试） |
 
 ## 构建产物
 
