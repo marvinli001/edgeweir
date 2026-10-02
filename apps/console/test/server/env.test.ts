@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadEnv } from "../../src/server/lib/env";
+import { loadEnv, parseOutboundAllowCidrs } from "../../src/server/lib/env";
 
 const base = {
   DATABASE_URL: "postgres://example.invalid/test",
@@ -78,5 +78,28 @@ describe("node channel listen address", () => {
     const env = loadEnv({ ...base, HOST: "127.0.0.1", NODE_API_HOST: "0.0.0.0" });
     expect(env.HOST).toBe("127.0.0.1");
     expect(env.nodeApiHost).toBe("0.0.0.0");
+  });
+});
+
+describe("outbound allow list", () => {
+  it.each(["intranet", "10.0.0.0/33", "10.0.0.0/8,192.168.1.0/24x"])(
+    "refuses %j at startup",
+    (value) => {
+      expect(() => loadEnv({ ...base, EDGEWEIR_OUTBOUND_ALLOW_CIDRS: value })).toThrow(
+        /^invalid configuration:\n {2}EDGEWEIR_OUTBOUND_ALLOW_CIDRS: not an IP address or CIDR range: /,
+      );
+    },
+  );
+
+  it("takes addresses and ranges separated by commas or whitespace", () => {
+    const env = loadEnv({
+      ...base,
+      EDGEWEIR_OUTBOUND_ALLOW_CIDRS: "10.1.2.3/8, 192.168.1.5\nFD00::/8",
+    });
+    expect(parseOutboundAllowCidrs(env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS)).toEqual([
+      "10.0.0.0/8",
+      "192.168.1.5/32",
+      "fd00::/8",
+    ]);
   });
 });

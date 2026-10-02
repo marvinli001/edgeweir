@@ -2,8 +2,9 @@ import { lookup } from "node:dns/promises";
 import http from "node:http";
 import https from "node:https";
 import { isIP } from "node:net";
-import { forbiddenOriginRange, normalizeCidr } from "@edgeweir/contract";
+import { forbiddenOriginRange } from "@edgeweir/contract";
 import type { AppContext } from "./context";
+import { parseOutboundAllowCidrs } from "./env";
 
 /** Bounds resolver/transport promises; their consumers must stop after cancellation. */
 export function withinDeadline<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -30,13 +31,7 @@ export function withinDeadline<T>(operation: Promise<T>, signal: AbortSignal): P
 /** Resolve once, reject special-purpose answers, then connect to the pinned IP. */
 export async function outboundAddress(app: AppContext, host: string) {
   const name = host.replace(/^\[|\]$/g, "");
-  const allowed = app.env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS.split(/[,\s]+/)
-    .filter(Boolean)
-    .map((value) => {
-      const cidr = normalizeCidr(value);
-      if (!cidr) throw new Error("invalid outbound allow list");
-      return cidr;
-    });
+  const allowed = parseOutboundAllowCidrs(app.env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS);
   const addresses = isIP(name)
     ? [{ address: name, family: isIP(name) }]
     : await lookup(name, { all: true });

@@ -1,5 +1,5 @@
 import { hostname } from "node:os";
-import { releaseBaseUrl } from "@edgeweir/contract";
+import { normalizeCidr, releaseBaseUrl } from "@edgeweir/contract";
 import * as z from "zod";
 import { TrustedProxies } from "./client-ip";
 import { masterKeyProblem } from "./envelope";
@@ -137,6 +137,21 @@ export type Env = z.infer<typeof schema> & {
   version: string;
 };
 
+/**
+ * EDGEWEIR_OUTBOUND_ALLOW_CIDRS (commas or whitespace) as canonical CIDRs;
+ * throws on an entry that is neither an IP address nor a CIDR range.
+ */
+export function parseOutboundAllowCidrs(text: string): string[] {
+  return text
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .map((value) => {
+      const cidr = normalizeCidr(value);
+      if (!cidr) throw new Error(`not an IP address or CIDR range: ${value}`);
+      return cidr;
+    });
+}
+
 /** Rolling image version `<YYYYMMDD>-<commit>` baked in by the Dockerfile; `dev` from source. */
 export const VERSION = process.env.EDGEWEIR_VERSION ?? "dev";
 
@@ -153,6 +168,13 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   } catch (error) {
     throw new Error(
       `invalid configuration:\n  EDGEWEIR_TRUSTED_PROXIES: ${(error as Error).message}`,
+    );
+  }
+  try {
+    parseOutboundAllowCidrs(env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS);
+  } catch (error) {
+    throw new Error(
+      `invalid configuration:\n  EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${(error as Error).message}`,
     );
   }
   const nodeApiUrl =

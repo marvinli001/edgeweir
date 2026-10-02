@@ -1,13 +1,9 @@
 import { randomUUID } from "node:crypto";
-import {
-  checkDnsCredentials,
-  type DnsProviderInput,
-  dnsProviderEntry,
-  normalizeCidr,
-} from "@edgeweir/contract";
+import { checkDnsCredentials, type DnsProviderInput, dnsProviderEntry } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
+import { parseOutboundAllowCidrs } from "../lib/env";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { CertdError, runCertd } from "./certificate-worker";
@@ -40,13 +36,7 @@ export const providerDto = (p: Provider) => ({
 
 /** The operator's outbound allow list, passed to certd for user-configured endpoints. */
 export function outboundAllowCidrs(app: AppContext): string[] {
-  return app.env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS.split(/[,\s]+/)
-    .filter(Boolean)
-    .map((value) => {
-      const cidr = normalizeCidr(value);
-      if (!cidr) throw new Error("invalid outbound allow list");
-      return cidr;
-    });
+  return parseOutboundAllowCidrs(app.env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS);
 }
 
 /**
