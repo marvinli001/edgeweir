@@ -715,6 +715,14 @@ describe("certificate issuance", async () => {
           { name: "g4.issue.test", tlsPending: true },
         ]);
         expect((await latest()).requiredFeatures).toContain("tls-pending-domains-v1");
+        // A rollback to it needs no cover for the waiting domain.
+        const waiting = (await latestRevision(ctx.db, clusterId))?.revision ?? 0;
+        await api.https.update({
+          id: siteId,
+          settings: tlsSettings.parse({ certificateId: certId, hstsMaxAge: 120 }),
+        });
+        await api.clusters.rollback({ id: clusterId, revision: waiting });
+        expect((await domains())?.find((d) => d.name === "g4.issue.test")?.tlsPending).toBe(true);
         await issuable(all);
         await issueCertificate(ctx, certId);
         expect(await row(certId)).toMatchObject({ status: "ready", names: all });
