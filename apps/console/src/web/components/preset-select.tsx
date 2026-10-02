@@ -6,7 +6,7 @@ import { m } from "@/lib/i18n";
 /** A preset level, or custom values. */
 export type PresetChoice = PresetLevel | "custom";
 
-const presetLabel = (choice: PresetChoice) =>
+export const presetLabel = (choice: PresetChoice) =>
   ({
     loose: m.preset_loose,
     standard: m.preset_standard,
