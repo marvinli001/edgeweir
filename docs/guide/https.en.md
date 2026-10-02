@@ -101,7 +101,7 @@ While a site has no usable certificate, its **HTTPS** tab shows only **Enable HT
 1. Open **Sites**, select the site, and open the **HTTPS** tab.
 2. The console first checks whether a certificate can be issued; anything in the way is listed line by line and the button is unavailable. After fixing it, click **Check again**.
 3. Click **Enable HTTPS**.
-4. Verify: the tab shows **Requesting a certificate**; once issued it switches to the HTTPS settings, with the new certificate under **Certificates** and **Redirect HTTP to HTTPS** on.
+4. Verify: the tab shows **Requesting a certificate**; once issued it switches to the HTTPS settings, with the new certificate under **Certificates**. **Redirect HTTP to HTTPS** stays off; turn it on in the HTTPS settings when wanted.
 
 | Item | Value |
 | --- | --- |
@@ -109,7 +109,7 @@ While a site has no usable certificate, its **HTTPS** tab shows only **Enable HT
 | Validation | HTTP-01; DNS-01 with the first DNS credential whose zone covers every name when the site has a wildcard domain |
 | Account email | The email of the last ACME account or request, else the console account's email; editable under **Customize** |
 | Certificate authority | Let's Encrypt; ZeroSSL under **Customize** (needs EAB credentials) |
-| Once issued | The certificate is bound to the site and **Redirect HTTP to HTTPS** turned on, the site's cluster is published, and the audit log records `site.https_update` (actor system); domains added to the site since the request are reissued right away. A site that has another usable certificate by then is left unchanged |
+| Once issued | The certificate is bound to the site (**Redirect HTTP to HTTPS** and the other settings stay as they are), the site's cluster is published, and the audit log records `site.https_update` (actor system); domains added to the site since the request are reissued right away. A site that has another usable certificate by then is left unchanged |
 
 | Check | Cause |
 | --- | --- |
@@ -120,7 +120,7 @@ While a site has no usable certificate, its **HTTPS** tab shows only **Enable HT
 | "DNS credential …: …" | DNS-01: the credential's connection test failed |
 | "CAA records of … do not allow …" | CAA records of the name or a parent domain do not allow the chosen CA (Let's Encrypt: `letsencrypt.org`; ZeroSSL: `sectigo.com`, `trust-provider.com`, `usertrust.com`), `issuewild` and `validationmethods` included; not checked when `EDGEWEIR_ACME_DIRECTORY` is set |
 
-While the certificate is issued, the tab refreshes its status every 3 seconds. A failure shows the classified reason (as on the certificate card) with **Retry** and **Cancel** (which deletes this certificate). When usable certificates already cover every domain of the site, the tab lists them under **Existing certificate**; **Use** selects one and turns on **Redirect HTTP to HTTPS**. When the site's ACME certificate is reissued or fails, the same status shows above the HTTPS settings.
+While the certificate is issued, the tab refreshes its status every 3 seconds. A failure shows the classified reason (as on the certificate card) with **Retry** and **Cancel** (which deletes this certificate). When usable certificates already cover every domain of the site, the tab lists them under **Existing certificate**; **Use** selects one. When the site's ACME certificate is reissued or fails, the same status shows above the HTTPS settings.
 
 ## Configure a site's HTTPS
 

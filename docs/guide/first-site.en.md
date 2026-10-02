@@ -120,7 +120,7 @@ For lines, health-based removal, and TTL of DNS steering, see [Configure DNS ste
 ## 5. Enable HTTPS
 
 1. Open the site's **HTTPS** tab. Fix what the tab lists (for example records from step 4 that are not live yet) and click **Check again**.
-2. Click **Enable HTTPS**. The console requests a certificate for all of the site's domains (a wildcard domain needs a DNS credential first); once issued, the site uses it and **Redirect HTTP to HTTPS** is on.
+2. Click **Enable HTTPS**. The console requests a certificate for all of the site's domains (a wildcard domain needs a DNS credential first); once issued, the site uses it. To redirect HTTP to HTTPS, turn on **Redirect HTTP to HTTPS** in the HTTPS settings afterwards.
 3. The cluster publishes a new revision. Once an enabled site in the cluster uses a certificate, nodes listen on TCP 443.
 
 An uploaded certificate (on the **Certificates** page) is chosen under **Existing certificate** on the site's **HTTPS** tab.

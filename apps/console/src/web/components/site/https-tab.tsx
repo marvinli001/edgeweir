@@ -357,7 +357,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
                   run(() =>
                     update.mutateAsync({
                       id: site.id,
-                      settings: { ...current, certificateId: chosen, forceHttps: true },
+                      settings: { ...current, certificateId: chosen },
                     }),
                   )
                 }

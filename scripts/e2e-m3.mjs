@@ -123,9 +123,9 @@ console.log("PASS real HTTP-01 issuance through the edge node");
 if (unbound) {
   const bound = await api("GET", `/sites/${site.id}/https`);
   assert.equal(bound.certificateId, certificate.id);
-  assert.equal(bound.forceHttps, true);
+  assert.equal(bound.forceHttps, false);
   assert.equal(certificate.bindSiteId, null);
-  console.log("PASS one-click HTTPS binds the issued certificate with an HTTPS redirect");
+  console.log("PASS one-click HTTPS binds the issued certificate and leaves the redirect off");
 }
 const settings = await api("PUT", `/sites/${site.id}/https`, {
   settings: {

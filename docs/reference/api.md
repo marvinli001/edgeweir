@@ -294,7 +294,7 @@ curl -fsS -X PATCH -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicati
 | `https.check` | `request`：一键启用 HTTPS 发送的申请（`name`、`names`、`email`、`challenge`、`dnsCredentialId`）；`blockers`：全部阻碍，每项为 `code` 与参数：`nodes_offline`（`cluster`）、`nodes_lack_http01`（`nodes`）、`dns_not_pointing`（`name`、`pointing`：`unresolved` / `elsewhere`）、`dns_credential_missing`（`names`）、`dns_credential_failed`（`credential`、`error`：API 错误代码）、`caa_forbidden`（`name`）；`certificates`：已签发、未过期且覆盖网站全部域名的证书 `{ id, name }` |
 
 - `https.update` 发布网站所在集群（原因 `certificate_updated`），审计 `site.https_update`；`waf.update` 发布（`site_waf_updated`），审计 `site.waf_update`。
-- `POST /certificates/request` 的 `bindSiteId`：证书签发后绑定到该网站并开启 `forceHttps`，发布网站所在集群，审计 `site.https_update`（操作者 system）；`names` 须覆盖网站全部域名（400 `CERTIFICATE_DOMAIN_MISMATCH`），每个网站同时只有一个这样的申请（409 `CERTIFICATE_BUSY`）。证书的 `bindSiteId` 在签发前为该网站 ID，签发后为 `null`。
+- `POST /certificates/request` 的 `bindSiteId`：证书签发后绑定到该网站（`forceHttps` 等其他设置不变），发布网站所在集群，审计 `site.https_update`（操作者 system）；`names` 须覆盖网站全部域名（400 `CERTIFICATE_DOMAIN_MISMATCH`），每个网站同时只有一个这样的申请（409 `CERTIFICATE_BUSY`）。证书的 `bindSiteId` 在签发前为该网站 ID，签发后为 `null`。
 - `available` 为 `false` 时仍可经 API 开启，见[节点能力](#节点能力)。
 - 网站不存在：404 `SITE_NOT_FOUND`。
 

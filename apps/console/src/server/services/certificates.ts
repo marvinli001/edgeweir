@@ -352,9 +352,10 @@ export async function coverSiteDomains(
 
 /**
  * Binds a certificate issued for a site's one-click HTTPS (bindSiteId) to
- * the site, inside the issuance's transaction: the certificate, an HTTPS
- * redirect, and the site's domains added since the request covered by a
- * reissue (coverSiteDomains); audited as the system. A site deleted
+ * the site, inside the issuance's transaction: the certificate (the HTTPS
+ * redirect and the other settings stay the site's own), and the site's
+ * domains added since the request covered by a reissue (coverSiteDomains);
+ * audited as the system. A site deleted
  * meanwhile, one that has another usable certificate by now, or one with
  * domains the certificate cannot take keeps its settings. Returns the
  * site's cluster when bound.
@@ -395,7 +396,6 @@ export async function bindIssuedCertificate(
   const { certificateId, ...options } = tlsSettings.parse({
     ...site.tlsSettings,
     certificateId: cert.id,
-    forceHttps: true,
   });
   await tx
     .update(schema.site)

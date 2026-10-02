@@ -480,7 +480,7 @@ describe("certificate issuance", async () => {
       return config.sites.find((s) => s.id === siteId);
     };
 
-    it("binds the issued certificate to the site with an HTTPS redirect and publishes it", async () => {
+    it("binds the issued certificate to the site, without an HTTPS redirect, and publishes it", async () => {
       const siteId = await site("bind", ["k1.issue.test"]);
       await issuable(["k1.issue.test"]);
       const { id } = await api.certificates.request({
@@ -495,7 +495,7 @@ describe("certificate issuance", async () => {
 
       expect(await api.https.get({ id: siteId })).toMatchObject({
         certificateId: id,
-        forceHttps: true,
+        forceHttps: false,
       });
       const cert = (await api.certificates.list()).find((c) => c.id === id);
       expect(cert).toMatchObject({ bindSiteId: null, names: ["k1.issue.test", "k2.issue.test"] });
@@ -508,7 +508,7 @@ describe("certificate issuance", async () => {
         metadata: { certificateId: id, certificate: "bind" },
       });
       const published = await served(siteId);
-      expect(published).toMatchObject({ certificateId: id, tls: { forceHttps: true } });
+      expect(published).toMatchObject({ certificateId: id, tls: { forceHttps: false } });
       expect(published?.domains.map((d) => d.name)).toEqual(["k1.issue.test"]);
 
       await issuable(["k1.issue.test", "k2.issue.test"]);
