@@ -307,11 +307,12 @@ A success is a 2xx JSON answer (up to 16 MiB): `{"records":[...]}` for `list`, `
 
 ## Alerts page
 
-Alerts are configured on the **Alerts** page, which has four cards:
+Alerts are configured on the **Alerts** page, which has five cards:
 
 | Card | Contents |
 | --- | --- |
 | Alert channels | Notification targets, which can be added, edited, tested, enabled or disabled, and deleted |
+| SMTP | The mail server of email channels, see [SMTP](#smtp) |
 | Subscriptions | The sites and alert kinds each channel receives |
 | Recent events | The latest 100 alert events, including cluster and DNS alerts |
 | Alert rules | The thresholds that raise alerts |
@@ -325,7 +326,7 @@ Alerts are configured on the **Alerts** page, which has four cards:
 5. Click **Create**.
 6. Verify: click **Send test**; the target receives a test notification and the channel row does not show **Notification delivery failed**.
 
-Email channels use the server configured in **System → SMTP**, see [SMTP](system.en.md#smtp).
+Email channels use the server in the **SMTP** card, see [SMTP](#smtp).
 
 ### Channel fields
 
@@ -348,6 +349,25 @@ At most 32 channels. When editing a channel, turn on **Replace channel credentia
 ### Webhook payload
 
 The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `status` (`firing` / `resolved`), `occurredAt`, `resourceId` (the object of the alert, such as a node or certificate ID), `text`, and `url` (a console link). For cluster and DNS alerts, `siteId` is `null` and `siteName` is the cluster name; for **Node offline**, `siteId` is `null`, `siteName` is the node name and `resourceId` the node ID; and `url` points to **Clusters & nodes** or **DNS steering**; for `scheduling_action`, `siteName` is "rule · node" and `resourceId` is `<rule ID>:<node ID>`. With a bearer token, the request carries `Authorization: Bearer <token>`. A 2xx response counts as delivered.
+
+### SMTP
+
+The outgoing mail server of email channels, set in the **SMTP** card of the **Alerts** page and saved with **Save**. Until it is set, **Send test** on an email channel answers "SMTP is not configured", and a channel whose deliveries fail for that reason shows the same message.
+
+| Field | Default | Description |
+| --- | --- | --- |
+| **SMTP host** | None | At most 253 characters |
+| **SMTP port** | 465 | 1–65535 |
+| **Implicit TLS (off uses required STARTTLS)** | On | Off requires STARTTLS; certificate verification is always on |
+| **From address** | None | Email address |
+| **SMTP username** | None | Required |
+| **SMTP password** | None | Envelope-encrypted with the master key before storage; leave blank to keep the current password |
+| **CA certificates (PEM)** | Empty | PEM certificates only; when set, replaces the system trust store for this server |
+
+| Constraint | Description |
+| --- | --- |
+| Changing the destination | Changing host, port, TLS mode, username, or CA certificates requires the password again |
+| Outbound policy | The address is resolved and pinned for each delivery; private addresses must be allowed by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 
 ## Set alert rules
 
@@ -441,4 +461,7 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | Carrier users get the default line's addresses | The resolver is not on that carrier's network, or no binding line maps to that resolution line | Test with a resolver of that carrier; add a binding line for it |
 | Channel shows **Notification delivery failed** | The target refused or timed out, or the outbound policy refused the address | Reproduce with **Send test**; add internal targets to `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | "Notification channel limit reached" | 32 channels exist | Delete unused channels |
+| "SMTP is not configured" | An email channel was tested or delivered before the SMTP settings were saved | Fill in and save the **SMTP** card, then **Send test** |
+| "Enter a new password when changing the SMTP server or account" | The SMTP destination changed without a password | Enter the password and save |
+| "The CA bundle must contain PEM certificates only" | The CA field contains something other than certificates | Paste PEM certificates only |
 | **Subscribe** is unavailable | No channel is enabled, or every enabled channel has a subscription | Add or enable a channel; click **Edit** to change an existing subscription |

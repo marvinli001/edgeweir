@@ -48,7 +48,7 @@ test("M5: DNS provider controls, statistics and alert subscriptions", async ({ p
   await page.getByTestId("alert-channel-submit").click();
   await expect(dialog).toBeHidden();
   await expect(page.getByTestId("alert-channel").filter({ hasText: channelName })).toBeVisible();
-  await page.getByTestId("nav-system").click();
+  // The mail server of email channels is on the alerts page, not under system settings.
   await expect(page.getByLabel("SMTP 主机", { exact: true })).toBeVisible();
   await page.goto(`/sites/${state.siteId}?tab=domains`);
   await expect(page.getByTestId("cname-target")).toContainText("edge.cdn.m5.test");

@@ -18,6 +18,7 @@ import { Page } from "@/components/page";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { SiteMultiSelect } from "@/components/site-multi-select";
+import { SmtpSettings } from "@/components/smtp-settings";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,7 +60,7 @@ const kindLabel = (kind: AlertChannelConfig["kind"]) =>
     telegram: m.alert_channel_telegram,
   })[kind]();
 
-/** Channels, the sites subscribed to them, recent alerts and the thresholds, on one page. */
+/** Channels and their mail server, the sites subscribed to them, recent alerts and the thresholds, on one page. */
 function AlertsPage() {
   const channels = useQuery(
     orpc.alerts.channels.queryOptions({ refetchInterval: 15000, meta: { background: true } }),
@@ -72,6 +73,7 @@ function AlertsPage() {
         error={channels.error}
         onRetry={() => void channels.refetch()}
       />
+      <SmtpSettings className="animate-enter" style={{ animationDelay: "60ms" }} />
       <SubscriptionsCard channels={(channels.data ?? []).filter((c) => c.enabled)} />
       <EventsCard />
       <PolicyCard />
@@ -147,7 +149,11 @@ function ChannelsCard({
                   <Badge variant="secondary">{m.alert_platform_scope()}</Badge>
                 ) : null}
                 {channel.lastError ? (
-                  <Badge variant="destructive">{m.error_alert_send_failed()}</Badge>
+                  <Badge variant="destructive">
+                    {channel.lastError === "alert_smtp_not_configured"
+                      ? m.error_alert_smtp_not_configured()
+                      : m.error_alert_send_failed()}
+                  </Badge>
                 ) : null}
                 <Button size="sm" variant="outline" onClick={() => setEditing(channel)}>
                   {m.common_edit()}
@@ -219,7 +225,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
     (c) => !subscriptions.data?.some((sub) => sub.channelId === c.id),
   );
   return (
-    <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
+    <Card className="animate-enter" style={{ animationDelay: "120ms" }}>
       <CardHeader>
         <CardTitle>{m.alert_subscriptions_title()}</CardTitle>
         <CardAction>
@@ -321,7 +327,7 @@ function EventsCard() {
     }),
   );
   return (
-    <Card className="animate-enter" style={{ animationDelay: "120ms" }}>
+    <Card className="animate-enter" style={{ animationDelay: "180ms" }}>
       <CardHeader>
         <CardTitle>{m.alert_recent_events()}</CardTitle>
       </CardHeader>
@@ -372,7 +378,7 @@ function PolicyEditor({ initial }: { initial: AlertPolicy }) {
   const queries = useQueryClient(),
     mutation = useMutation(orpc.alerts.setPolicy.mutationOptions());
   return (
-    <Card className="animate-enter" style={{ animationDelay: "180ms" }}>
+    <Card className="animate-enter" style={{ animationDelay: "240ms" }}>
       <CardHeader>
         <CardTitle>{m.alert_policy_title()}</CardTitle>
       </CardHeader>

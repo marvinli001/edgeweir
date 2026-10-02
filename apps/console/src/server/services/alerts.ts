@@ -19,6 +19,7 @@ import {
   deliverNotification,
   loadSmtp,
   SMTP_KEY,
+  SmtpNotConfiguredError,
   smtpBinding,
 } from "./notification-delivery";
 import type { Executor } from "./revisions";
@@ -165,7 +166,9 @@ export async function testAlertChannel(app: AppContext, id: string, actor: Actor
       status: "firing",
       occurredAt: new Date().toISOString(),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof SmtpNotConfiguredError)
+      fail("ALERT_SMTP_NOT_CONFIGURED", "email channels need the SMTP settings");
     fail("ALERT_SEND_FAILED", "notification test failed");
   }
   await recordAudit(app.db, actor, {
@@ -734,20 +737,25 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
           .update(schema.alertChannel)
           .set({ lastError: "" })
           .where(eq(schema.alertChannel.id, c.id));
-      } catch {
+      } catch (error) {
         const attempts = delivery.attempts + 1;
+        // Lower-case error codes the alerts page shows on the channel.
+        const lastError =
+          error instanceof SmtpNotConfiguredError
+            ? "alert_smtp_not_configured"
+            : "alert_send_failed";
         await app.db
           .update(schema.alertDelivery)
           .set({
             status: attempts >= 5 ? "failed" : "pending",
             attempts,
             nextAttemptAt: new Date(now + Math.min(3600000, 60000 * 2 ** attempts)),
-            lastError: "alert_send_failed",
+            lastError,
           })
           .where(eq(schema.alertDelivery.id, delivery.id));
         await app.db
           .update(schema.alertChannel)
-          .set({ lastError: "alert_send_failed" })
+          .set({ lastError })
           .where(eq(schema.alertChannel.id, c.id));
         app.log.warn("notification delivery failed", { channelId: c.id, eventId: event.id });
       }

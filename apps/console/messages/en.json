@@ -739,6 +739,7 @@
   "error_alert_channel_not_found": "Notification channel not found",
   "error_alert_channel_limit": "Notification channel limit reached",
   "error_alert_send_failed": "Notification delivery failed",
+  "error_alert_smtp_not_configured": "SMTP is not configured",
   "error_alert_subscription_not_found": "Alert subscription not found",
   "error_smtp_password_required": "Enter a new password when changing the SMTP server or account",
   "error_smtp_ca_invalid": "The CA bundle must contain PEM certificates only",

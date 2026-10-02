@@ -353,6 +353,40 @@ describe("M5 notification delivery and subscription authorization", async () => 
     expect(deliveries).toHaveLength(before);
     await new Promise<void>((resolve) => redirect.close(() => resolve()));
   });
+  it("names the missing SMTP settings when an email channel tests or delivers", async () => {
+    expect(await admin.alerts.smtp()).toBeNull();
+    const mail = await admin.alerts.createChannel({
+      name: "Mail without SMTP",
+      config: { kind: "email", to: ["ops@example.test"] },
+    });
+    expect((await rpcError(admin.alerts.testChannel({ id: mail.id }))).code).toBe(
+      "ALERT_SMTP_NOT_CONFIGURED",
+    );
+    const sub = await admin.alerts.subscribe({
+      channelId: mail.id,
+      kinds: ["high_5xx"],
+      siteIds: [siteId],
+    });
+    await ctx.db.insert(schema.nodeMinuteStats).values({
+      minute: new Date(Math.floor(Date.now() / 60_000) * 60_000),
+      nodeId: crypto.randomUUID(),
+      siteId,
+      requests: 200,
+      statusCodes: { "502": 200 },
+    });
+    await sweepAlerts(ctx);
+    expect((await admin.alerts.channels()).find((c) => c.id === mail.id)?.lastError).toBe(
+      "alert_smtp_not_configured",
+    );
+    const [delivery] = await ctx.db
+      .select()
+      .from(schema.alertDelivery)
+      .where(eq(schema.alertDelivery.channelId, mail.id));
+    expect(delivery).toMatchObject({ status: "pending", lastError: "alert_smtp_not_configured" });
+    await ctx.db.delete(schema.nodeMinuteStats);
+    await admin.alerts.unsubscribe({ id: sub.id });
+    await admin.alerts.deleteChannel({ id: mail.id });
+  });
   it("delivers real SMTP over verified TLS and never returns the password", async () => {
     const folder = await mkdtemp(join(tmpdir(), "edgeweir-smtp-"));
     const ca = join(folder, "ca.pem");
