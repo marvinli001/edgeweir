@@ -162,6 +162,11 @@ export const certificateRequest = z
     eabKid: z.string().max(256).optional(),
     eabHmacKey: z.string().max(1024).optional(),
     autoRenew: z.boolean().default(true),
+    /**
+     * HTTP-01: skip checking that every name resolves to the nodes of the
+     * cluster serving it (at the request and before each issuance).
+     */
+    skipDnsCheck: z.boolean().default(false),
   })
   .refine((s) => s.challenge !== "dns01" || !!s.dnsCredentialId, {
     message: "DNS-01 requires a DNS credential",

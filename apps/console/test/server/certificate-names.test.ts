@@ -69,6 +69,15 @@ describe("certificate names", async () => {
         origins: [{ address: "origin.example.com" }],
       })
     ).site.id;
+    // A node that answers HTTP-01 (requests need one online; certificate-http01-check.test.ts).
+    const clusterId = (await api.clusters.list())[0]?.id ?? "";
+    await ctx.db.insert(schema.node).values({
+      clusterId,
+      nodeGroupId: (await api.nodeGroups.list({ clusterId }))[0]?.id ?? "",
+      name: "edge",
+      lastSeenAt: new Date(Date.now() + 3_600_000),
+      supportedFeatures: ["tls-v1", "http01-v1"],
+    });
   });
   afterAll(async () => {
     await client.close();

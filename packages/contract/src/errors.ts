@@ -88,13 +88,18 @@ export const errorDefs = {
   DNS_CREDENTIAL_INVALID: { status: 400, params: [] },
   /** Certificates use the DNS credential (the first 5 names). */
   DNS_CREDENTIAL_IN_USE: { status: 409, params: ["certificates"] },
+  /** HTTP-01 names that resolve to no node, or to other addresses too (first 5). */
+  CERTIFICATE_DNS_NOT_POINTING: { status: 409, params: ["names"] },
+  /** Clusters serving HTTP-01 names without an online node (first 5). */
+  CERTIFICATE_NODES_OFFLINE: { status: 409, params: ["clusters"] },
 
   SETUP_DONE: { status: 403, params: [] },
   SETUP_IN_PROGRESS: { status: 409, params: [] },
   SETUP_TOKEN_INVALID: { status: 403, params: [] },
   CLUSTER_NOT_FOUND: { status: 404, params: [] },
   CLUSTER_SITE_LIMIT: { status: 409, params: ["limit"] },
-  NODE_CAPABILITY_REQUIRED: { status: 409, params: ["features"] },
+  /** `nodes`: active nodes lacking the features (first 5). */
+  NODE_CAPABILITY_REQUIRED: { status: 409, params: ["features", "nodes"] },
   CLUSTER_NAME_TAKEN: { status: 409, params: ["name"] },
   CLUSTER_NOT_EMPTY: { status: 409, params: ["nodes", "sites"] },
   NO_CLUSTER: { status: 412, params: [] },

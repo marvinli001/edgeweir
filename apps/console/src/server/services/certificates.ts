@@ -21,6 +21,7 @@ import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { certdDns, probe, validCredentials } from "./dns-providers";
+import { assertHttp01Ready } from "./http01-check";
 import { type Executor, getRevision, publisher, publishRevision } from "./revisions";
 import { publishedRevisions } from "./rollout";
 
@@ -212,6 +213,7 @@ export async function requestCertificate(
       fail("CERTIFICATE_DOMAIN_MISMATCH", "add the HTTP-01 names to a site first", {
         domains: unserved.slice(0, 5).join(", "),
       });
+    await assertHttp01Ready(app, input.names, { skipDnsCheck: input.skipDnsCheck });
   }
   if (input.dnsCredentialId) {
     const credential = await findDnsCredential(app.db, input.dnsCredentialId);
@@ -239,6 +241,7 @@ export async function requestCertificate(
           challenge: input.challenge,
           email: input.email,
           dnsCredentialId: input.dnsCredentialId ?? "",
+          ...(input.challenge === "http01" && input.skipDnsCheck ? { skipDnsCheck: "true" } : {}),
         },
         accountEnvelope: JSON.stringify(
           app.masterKey.seal(

@@ -18,6 +18,7 @@ import {
 } from "./certificates";
 import { withLease } from "./dns-lease";
 import { certdDns, outboundAllowCidrs } from "./dns-providers";
+import { http01Pointing, notPointing } from "./http01-check";
 import { publishClusters, rolloutTargets, targetFor } from "./revisions";
 
 type HttpToken = { domain?: unknown; token?: unknown; keyAuthorization?: unknown };
@@ -529,6 +530,15 @@ async function issueNow(app: AppContext, id: string) {
   const issuance: Issuance = { row, directoryUrl: acmeDirectory(app, row.acme.ca) };
   try {
     const names = await issuanceNames(app.db, row);
+    // The CA would only find other servers: no order, no rate limit spent.
+    if (row.acme.challenge === "http01" && row.acme.skipDnsCheck !== "true") {
+      const failed = notPointing(await http01Pointing(app, app.db, names));
+      if (failed.length)
+        throw new IssuanceError(
+          "http01_dns_not_pointing",
+          `names do not resolve to the nodes: ${failed.slice(0, 5).join(", ")}`,
+        );
+    }
     const request = openRequest(app, row);
     const account = await issuanceAccount(app, issuance, request);
     let dns: Record<string, unknown> | undefined;

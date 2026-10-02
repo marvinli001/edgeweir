@@ -9,6 +9,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
+import { SwitchField } from "@/components/site/fields";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -293,6 +294,7 @@ function RequestDialog({
   const [ca, setCa] = React.useState("letsencrypt");
   const [challenge, setChallenge] = React.useState("http01");
   const [credential, setCredential] = React.useState(credentials[0]?.id ?? "");
+  const [skipDnsCheck, setSkipDnsCheck] = React.useState(false);
   return (
     <FormDialog
       open
@@ -311,7 +313,7 @@ function RequestDialog({
           email: String(data.get("email")),
           ca: ca as "letsencrypt" | "zerossl",
           challenge: challenge as "http01" | "dns01",
-          ...(challenge === "dns01" ? { dnsCredentialId: credential } : {}),
+          ...(challenge === "dns01" ? { dnsCredentialId: credential } : { skipDnsCheck }),
           ...(ca === "zerossl"
             ? { eabKid: String(data.get("eabKid")), eabHmacKey: String(data.get("eabHmacKey")) }
             : {}),
@@ -351,7 +353,15 @@ function RequestDialog({
           onChange={setCredential}
           options={credentials.map((c) => ({ value: c.id, label: c.name }))}
         />
-      ) : null}
+      ) : (
+        <SwitchField
+          id="certSkipDnsCheck"
+          label={m.cert_skip_dns_check()}
+          checked={skipDnsCheck}
+          onCheckedChange={setSkipDnsCheck}
+          className="self-start"
+        />
+      )}
       {ca === "zerossl" ? (
         <>
           <TextField id="eabKid" label={m.cert_eab_kid()} />
