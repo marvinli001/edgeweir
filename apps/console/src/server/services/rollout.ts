@@ -349,6 +349,7 @@ export async function getRollout(db: Executor, clusterId: string): Promise<Clust
             row.canaryNodeIds.filter((id) => nodes.some((n) => n.node.id === id)),
           )
         : null,
+    policyUpdatedAt: (row?.policyUpdatedAt ?? new Date(0)).toISOString(),
     updatedAt: (row?.updatedAt ?? new Date(0)).toISOString(),
   };
 }
@@ -356,6 +357,8 @@ export async function getRollout(db: Executor, clusterId: string): Promise<Clust
 /**
  * Saves the policy. Turning it on pins the current revision as stable;
  * turning it off during a rollout gives the candidate to every node.
+ * `expectedUpdatedAt` is checked against the policy's own version, so a
+ * publication or a rollout step since it was read does not refuse it.
  */
 export async function setRolloutPolicy(
   db: Database,
@@ -367,11 +370,15 @@ export async function setRolloutPolicy(
     const name = await clusterName(tx, clusterId);
     await lockClusterPublish(tx, clusterId);
     const before = await loadRollout(tx, clusterId);
-    if (expectedUpdatedAt !== undefined)
-      assertUpdatedAt(before?.updatedAt ?? new Date(0), expectedUpdatedAt);
+    // The row's updatedAt (what clients read before policyUpdatedAt existed) means nothing changed.
+    if (
+      expectedUpdatedAt !== undefined &&
+      Date.parse(expectedUpdatedAt) !== (before?.updatedAt ?? new Date(0)).getTime()
+    )
+      assertUpdatedAt(before?.policyUpdatedAt ?? new Date(0), expectedUpdatedAt);
     const latest = await latestRevision(tx, clusterId);
     if (!before) await tx.insert(schema.clusterRollout).values({ clusterId, ...policy });
-    else await updateRollout(tx, clusterId, policy);
+    else await updateRollout(tx, clusterId, { ...policy, policyUpdatedAt: new Date() });
     if (policy.enabled && !before?.enabled)
       await updateRollout(tx, clusterId, {
         state: "idle",

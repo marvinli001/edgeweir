@@ -115,7 +115,7 @@ These writes accept an optional `expectedUpdatedAt` (ISO 8601, the `updatedAt` t
 | Procedure | `updatedAt` of |
 | --- | --- |
 | `sites.setEnabled` | The site |
-| `clusters.setRolloutPolicy` | The cluster's canary policy |
+| `clusters.setRolloutPolicy` | `policyUpdatedAt` of the cluster's canary policy (publications and canary progress leave it alone; the `updatedAt` read then passes too while nothing has changed since) |
 | `l4Apps.update`, `l4Apps.setEnabled` | The L4 app |
 
 When a site or L4 app is already enabled or disabled as requested, `sites.setEnabled` and `l4Apps.setEnabled` return the current state without comparing `expectedUpdatedAt`.

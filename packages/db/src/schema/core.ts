@@ -449,6 +449,8 @@ export const clusterRollout = pgTable("cluster_rollout", {
   /** Why the last rollout ended (auto_promote, manual_promote, apply_failed, ...). */
   outcome: text("outcome").notNull().default(""),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
+  /** Last change of the policy columns; `updated_at` also moves with every rollout step. */
+  policyUpdatedAt: timestamp("policy_updated_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: updatedAt(),
 });
 

@@ -437,4 +437,40 @@ describe("configuration canary with automatic rollback", async () => {
       stableRevision: null,
     });
   });
+
+  it("checks a policy save against the policy's own version, which publications leave alone", async () => {
+    await admin.clusters.setRolloutPolicy({ id: clusterId, ...policy });
+    const read = await rollout();
+    await change();
+    const moved = await rollout();
+    expect(moved.state).toBe("canary");
+    expect(moved.updatedAt).not.toBe(read.updatedAt);
+    expect(moved.policyUpdatedAt).toBe(read.policyUpdatedAt);
+    // A form read before the publication saves.
+    const saved = await admin.clusters.setRolloutPolicy({
+      id: clusterId,
+      ...policy,
+      minRequests: 11,
+      expectedUpdatedAt: read.policyUpdatedAt,
+    });
+    expect(saved.policy.minRequests).toBe(11);
+    expect(saved.policyUpdatedAt).not.toBe(read.policyUpdatedAt);
+    // One read before another policy change is refused.
+    expect(
+      await rpcError(
+        admin.clusters.setRolloutPolicy({
+          id: clusterId,
+          ...policy,
+          expectedUpdatedAt: read.policyUpdatedAt,
+        }),
+      ),
+    ).toMatchObject({ code: "UPDATED_AT_MISMATCH" });
+    // The rollout's updatedAt, which clients sent before policyUpdatedAt, passes while unchanged.
+    const again = await admin.clusters.setRolloutPolicy({
+      id: clusterId,
+      ...policy,
+      expectedUpdatedAt: saved.updatedAt,
+    });
+    expect(again.policy.minRequests).toBe(policy.minRequests);
+  });
 });

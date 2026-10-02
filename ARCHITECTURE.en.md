@@ -527,6 +527,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0042_g7_layer4` | `cluster_port_pool`, `l4_app`, `l4_origin`, `l4_minute_stats` |
 | `0043_stats_marker_generation` | `stats_rollup_dirty.generation` (rollups clear only the marker generation they read) |
 | `0044_node_offline_per_node` | Drops the per-site node offline alert states (one per node now) |
+| `0045_rollout_policy_updated_at` | `cluster_rollout.policy_updated_at` (the canary policy's own version; existing rows take `updated_at`) |
 
 ## Build output
 

@@ -597,9 +597,13 @@ export const clusterRollout = z.object({
       baseline5xx: z.number().int(),
     })
     .nullable(),
+  /** Last change of the policy; `expectedUpdatedAt` of a policy update compares with it. */
+  policyUpdatedAt: isoDateTime,
+  /** Last change of any kind (every rollout step moves it). */
   updatedAt: isoDateTime,
 });
 
+/** `expectedUpdatedAt` is the rollout's `policyUpdatedAt` (its `updatedAt` passes too). */
 export const rolloutPolicyInput = rolloutPolicy.extend({ id: uuid, expectedUpdatedAt });
 
 /** How a node holds the dynamic bans, from its last heartbeat (nodes with bans-v1). */

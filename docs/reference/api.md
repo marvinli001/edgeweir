@@ -115,7 +115,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | 过程 | 资源的 `updatedAt` |
 | --- | --- |
 | `sites.setEnabled` | 网站 |
-| `clusters.setRolloutPolicy` | 集群的金丝雀策略 |
+| `clusters.setRolloutPolicy` | 集群金丝雀策略的 `policyUpdatedAt`（发布与金丝雀进度不改变它；传入当时读取的 `updatedAt` 也可，前提是此后没有任何变化） |
 | `l4Apps.update`、`l4Apps.setEnabled` | L4 应用 |
 
 网站或 L4 应用已经是请求的启停状态时，`sites.setEnabled`、`l4Apps.setEnabled` 直接返回当前状态，不比较 `expectedUpdatedAt`。
