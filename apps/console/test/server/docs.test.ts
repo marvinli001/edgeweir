@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { schema } from "@edgeweir/db";
 import { getTableName, is, Table } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { QUEUES } from "../../src/server/jobs/worker";
 
 // Documentation-consistency checks for the wrap-up audit items that only
 // touched documents (dev-docs/audits/2026-09-25-wrapup.md CP-H8 and CP-M11).
@@ -358,5 +359,18 @@ describe("U-14: the deployment documents agree on the required variables", () =>
     const heredoc = /cat > \.env <<EOF\n([\s\S]*?)\nEOF/.exec(read(file))?.[1] ?? "";
     const written = [...heredoc.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]);
     expect(written).toEqual(REQUIRED_VARIABLES.map(([name]) => name));
+  });
+});
+
+// --- U-16 --------------------------------------------------------------------
+
+describe("U-16: ARCHITECTURE lists every background queue", () => {
+  it.each([
+    ["ARCHITECTURE.md", /^## 后台任务$/m],
+    ["ARCHITECTURE.en.md", /^## Background jobs$/m],
+  ])("%s has a row for each queue the worker creates", (file, heading) => {
+    const jobs = section(read(file), heading);
+    expect(jobs).not.toBe("");
+    for (const queue of Object.values(QUEUES)) expect(jobs, queue).toContain(`| \`${queue}\` |`);
   });
 });

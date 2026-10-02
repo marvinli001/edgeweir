@@ -36,8 +36,8 @@ export const QUEUES = {
 } as const;
 
 /**
- * Background worker (ROLE=worker|all): pg-boss queues and cron schedules.
- * Certificate issuance via edgeweir-certd will be added here.
+ * Background worker (ROLE=worker|all): pg-boss queues and cron schedules
+ * (listed in ARCHITECTURE.md), plus the in-process scheduling timer.
  */
 export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   const log = ctx.log.child({ component: "worker" });

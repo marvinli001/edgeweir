@@ -354,11 +354,13 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | Queue | Schedule | Work |
 | --- | --- | --- |
 | `alerts.sweep` | Every minute | Alert detection and delivery |
+| `rollouts.evaluate` | Every minute | Evaluates running configuration canaries: promote, await promotion, or roll back (canary node heartbeats trigger an evaluation too) |
 | `dns.reconcile` | Every minute | DNS steering publishing and external record maintenance |
-| `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), access log partition maintenance, upgrade expiry |
+| `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), usage rollup and retention, access log partition maintenance, upgrade expiry; one failing part does not stop the others |
 | `certificates.sweep` | Every minute | Certificate issuance and renewal |
 | `maintenance.recompile` | At start; skipped while `config_recompiled` in `system_setting` matches the current marker | Republishes every cluster once when an upgrade changes what stored data compiles to |
-| `maintenance.prune-revisions` | Minute 17 of every hour | Deletes revisions beyond the retention count |
+| `maintenance.prune-revisions` | Minute 17 of every hour | Deletes revisions and DNS revisions beyond the retention count |
+| `maintenance.prune-idempotency-keys` | Minute 29 of every hour | Deletes expired idempotency keys (older than 24 hours) |
 | `maintenance.expire-cache-tasks` | Minute 43 of every hour | Fails purge and prefetch deliveries past their deadline |
 | `maintenance.expire-enrollment-tokens` | Every 30 minutes | Deletes enrollment tokens expired or used more than 7 days ago |
 | `maintenance.prune-bans` | Every 10 minutes | Deletes bans that expired more than an hour ago |
