@@ -428,7 +428,7 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | Retries | After a failure, retries back off 2, 4, 8, and 16 minutes; each channel gets 5 attempts |
 | Batches | Checked every minute; at most 200 notifications per check, and deliveries that would start after 40 seconds wait for the next minute |
 | Duplicates | A lost receipt can cause duplicate notifications; webhook receivers deduplicate by event ID |
-| Checks before delivery | Every delivery rechecks that the channel is enabled, that the event is still the condition's current state, and that the subscription is enabled and still covers the site and the alert kind (except for channels with **Receive every alert**) |
+| Checks before delivery | Every delivery rechecks that the channel is enabled, that the event is still the condition's current state and less than 24 hours old, and that the subscription is enabled and still covers the site and the alert kind (except for channels with **Receive every alert**) |
 | Outbound policy | Resolves and pins the target IP; refuses special-purpose addresses; webhook-style targets do not follow redirects; internal webhooks or SMTP need their network in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | Timeouts and sizes | 10 seconds per delivery; request body up to 32 KiB, response body up to 64 KiB |
 | Retention | Alert events are kept for 90 days |

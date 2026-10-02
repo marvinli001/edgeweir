@@ -10,7 +10,7 @@ import {
   type SmtpInput,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
@@ -645,6 +645,8 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
           });
       }
     });
+    // The latest event of each alert, if within the last day: older ones are
+    // not notified, and a delivery still pending for one is cancelled.
     const latest = await app.db
       .selectDistinctOn([
         schema.alertEvent.siteId,
@@ -652,6 +654,7 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
         schema.alertEvent.resourceId,
       ])
       .from(schema.alertEvent)
+      .where(gte(schema.alertEvent.occurredAt, new Date(now - 86400000)))
       .orderBy(
         schema.alertEvent.siteId,
         schema.alertEvent.kind,
@@ -670,7 +673,7 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
       .from(schema.alertChannel)
       .where(eq(schema.alertChannel.enabled, true));
     for (const event of latest) {
-      if (!currentEvent(event) || event.occurredAt.getTime() < now - 86400000) continue;
+      if (!currentEvent(event)) continue;
       for (const c of channels)
         if (await eligible(app, c, event))
           await app.db
