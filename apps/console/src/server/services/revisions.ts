@@ -18,9 +18,11 @@ import {
   refreshDerived,
   ruleModelOf,
   type SiteModel,
+  TLS_PENDING_DOMAINS_FEATURE,
   usesChallengeKeys,
 } from "@edgeweir/config-compiler";
 import {
+  nodeSupportsFeature,
   normalizeCidr,
   type ReasonParams,
   type Revision,
@@ -229,18 +231,38 @@ export async function loadSiteModels(
       : []
     ).map((c) => [c.id, c.chainPem]),
   );
+  // Nodes that serve a domain the site's certificate does not cover over
+  // HTTP meanwhile: every active node of the cluster has to.
+  const nodes = certificateIds.length
+    ? await db
+        .select({ features: schema.node.supportedFeatures })
+        .from(schema.node)
+        .where(and(eq(schema.node.clusterId, clusterId), eq(schema.node.status, "active")))
+    : [];
+  const httpWhilePending = nodes.every((node) =>
+    nodeSupportsFeature(node.features, TLS_PENDING_DOMAINS_FEATURE),
+  );
   /**
-   * The domains a site serves: with a certificate, those its chain covers.
-   * Nodes refuse a site whose certificate misses a domain, so a domain an
-   * ACME certificate is being reissued for (coverSiteDomains) waits for
-   * the new chain; its HTTP-01 challenge is answered meanwhile.
+   * The domains a site serves. Nodes refuse a site whose certificate misses
+   * a domain, so a domain an ACME certificate is being reissued for
+   * (coverSiteDomains) is served over HTTP only until the new chain covers
+   * it (tlsPending), or, while a node of the cluster lacks
+   * tls-pending-domains-v1, waits unserved. Its HTTP-01 challenge is
+   * answered meanwhile either way.
    */
-  const served = (site: (typeof sites)[number], list: { name: string; wildcard: boolean }[]) => {
+  const served = (
+    site: (typeof sites)[number],
+    list: { name: string; wildcard: boolean }[],
+  ): SiteModel["domains"] => {
     const chain = site.certificateId ? chains.get(site.certificateId) : undefined;
     if (!chain) return list;
     try {
       const uncovered = uncoveredDomains(chain, list);
-      return list.filter((domain) => !uncovered.includes(domain));
+      return httpWhilePending
+        ? list.map((domain) =>
+            uncovered.includes(domain) ? { ...domain, tlsPending: true } : domain,
+          )
+        : list.filter((domain) => !uncovered.includes(domain));
     } catch {
       return list;
     }
@@ -929,8 +951,8 @@ export async function onlineCanaryNodes(tx: Executor, clusterId: string, now = D
 /**
  * Publishing with the configuration canary on. What does not wait for a
  * canary (currentStable: ACME challenges, sites taken offline, removed
- * domains, purges, renewed certificates, challenge keys, Under Attack)
- * goes into the stable revision of every node at once; when that is the
+ * domains, renewed certificates, challenge keys, Under Attack) goes into
+ * the stable revision of every node at once; when that is the
  * whole change, the change is the new stable revision. Without an online
  * canary node the change goes to every node too (audited and alerted).
  * Otherwise the change becomes the candidate for the canary nodes. A
@@ -1125,7 +1147,11 @@ async function restoreSites(
       if (opts.strict) {
         if (!cert?.notAfter || cert.notAfter.getTime() <= Date.now())
           fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate is unavailable or expired");
-        assertCertificateNames(cert.chainPem, site.domains);
+        // Domains served over HTTP until the certificate covers them need no cover.
+        assertCertificateNames(
+          cert.chainPem,
+          site.domains.filter((domain) => !domain.tlsPending),
+        );
         if (!ref)
           fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate reference is missing");
       }
@@ -1158,7 +1184,7 @@ async function restoreSites(
 /**
  * The canary's stable content with what never waits for a canary: the
  * current state of sites (restoreSites: sites taken offline and removed
- * domains are gone, purges and renewed certificates apply), the current
+ * domains are gone, renewed certificates apply), the current
  * ACME challenges (`challenges`, else loaded), challenge keys and Under
  * Attack of sites and the platform. Every publication refreshes the stable
  * revision with it and the automatic rollback publishes it.

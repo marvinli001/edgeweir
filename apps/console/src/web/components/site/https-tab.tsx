@@ -1,32 +1,414 @@
-import { type CertificateDto, type Site, type TlsSettings, tlsSettings } from "@edgeweir/contract";
+import {
+  type CertificateDto,
+  type HttpsCheck,
+  type Site,
+  type TlsSettings,
+  tlsSettings,
+} from "@edgeweir/contract";
+import { Alert02Icon, ArrowDown01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DnsCredentialDialog } from "@/components/dns/credential-dialog";
 import { FormSelect } from "@/components/form-select";
 import { COMPRESSION_KEYS, compressionOf } from "@/components/site/compression-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { ErrorState, LoadingState } from "@/components/states";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
+import { certificateErrorText } from "@/lib/certificate-errors";
+import { httpsBlockerText } from "@/lib/https-blockers";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
 
+/** How often the tab looks at a certificate being issued. */
+const POLL = 3000;
+
+const busy = (cert: CertificateDto | undefined) =>
+  cert?.status === "pending" || cert?.status === "issuing";
+/** Issued and not expired. */
+const usable = (cert: CertificateDto) =>
+  !!cert.fingerprint && !!cert.notAfter && Date.parse(cert.notAfter) > Date.now();
+
+/**
+ * A site's HTTPS: the settings while it has a certificate; the certificate
+ * requested for it while it is issued; else one click to enable HTTPS.
+ */
 export function HttpsTab({ site }: { site: Site }) {
-  const policy = useQuery(orpc.https.get.queryOptions({ input: { id: site.id } }));
-  const certificates = useQuery(orpc.certificates.list.queryOptions());
+  const client = useQueryClient();
+  const [polling, setPolling] = React.useState(false);
+  const policy = useQuery({
+    ...orpc.https.get.queryOptions({ input: { id: site.id } }),
+    refetchInterval: polling ? POLL : false,
+    meta: { background: true },
+  });
+  const certificates = useQuery({
+    ...orpc.certificates.list.queryOptions(),
+    refetchInterval: polling ? POLL : false,
+    meta: { background: true },
+  });
+  const bound = certificates.data?.find((c) => c.id === policy.data?.certificateId);
+  const waiting = certificates.data?.find((c) => c.bindSiteId === site.id);
+  React.useEffect(() => setPolling(busy(waiting) || busy(bound)), [waiting, bound]);
+  // Issued and bound: the settings take over once they name the certificate.
+  const issued = React.useRef<string | undefined>(undefined);
+  const [settling, setSettling] = React.useState<CertificateDto | null>(null);
+  React.useEffect(() => {
+    const before = issued.current;
+    issued.current = waiting?.id;
+    const after = before && !waiting ? certificates.data?.find((c) => c.id === before) : undefined;
+    if (after?.status !== "ready") return;
+    setSettling(after);
+    void client.invalidateQueries().finally(() => setSettling(null));
+  }, [waiting, certificates.data, client]);
+
   if (policy.isPending || certificates.isPending) return <LoadingState />;
   if (policy.isLoadingError)
     return <ErrorState error={policy.error} onRetry={() => void policy.refetch()} />;
   if (certificates.isLoadingError)
     return <ErrorState error={certificates.error} onRetry={() => void certificates.refetch()} />;
+  if (bound && (usable(bound) || bound.source === "acme"))
+    return (
+      <div className="grid gap-4">
+        {bound.status === "ready" ? null : <CertificateState cert={bound} />}
+        <HttpsEditor
+          // Keyed by its own fields: saving compression on the cache tab keeps unsaved edits here.
+          key={JSON.stringify(httpsOf(policy.data))}
+          site={site}
+          initial={policy.data}
+          certificates={certificates.data}
+        />
+      </div>
+    );
+  const requested = waiting ?? settling;
+  if (requested) return <RequestedCertificate cert={requested} />;
+  return <EnableHttps site={site} current={policy.data} />;
+}
+
+/** The status of a certificate being issued or that failed, with a retry. */
+function CertificateState({ cert, actions }: { cert: CertificateDto; actions?: React.ReactNode }) {
+  const client = useQueryClient();
+  const renew = useMutation(orpc.certificates.renew.mutationOptions());
+  const failed = cert.status === "error";
   return (
-    <HttpsEditor
-      // Keyed by its own fields: saving compression on the cache tab keeps unsaved edits here.
-      key={JSON.stringify(httpsOf(policy.data))}
-      site={site}
-      initial={policy.data}
-      certificates={certificates.data}
-    />
+    <div
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-4 py-3 text-sm animate-enter"
+      data-testid="https-certificate-state"
+    >
+      {failed ? (
+        <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} className="size-4 text-destructive" />
+      ) : (
+        <Spinner />
+      )}
+      <span className="min-w-48 flex-1 break-words">
+        <span className="font-medium">{cert.name}</span>
+        <span className="text-muted-foreground"> · </span>
+        <span className={failed ? "text-destructive" : "text-muted-foreground"}>
+          {failed
+            ? certificateErrorText(cert.lastError) || m.cert_status_error()
+            : cert.status === "issuing"
+              ? m.cert_status_issuing()
+              : m.cert_status_pending()}
+        </span>
+      </span>
+      {failed ? (
+        <div className="flex gap-2">
+          {actions}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={renew.isPending}
+            onClick={async () => {
+              try {
+                await renew.mutateAsync({ id: cert.id });
+                await client.invalidateQueries();
+              } catch (e) {
+                toast.error(errorMessage(e));
+              }
+            }}
+          >
+            {renew.isPending ? <Spinner /> : null}
+            {m.common_retry()}
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The certificate requested for the site: issuing, or why it failed (retry or cancel). */
+function RequestedCertificate({ cert }: { cert: CertificateDto }) {
+  const client = useQueryClient();
+  const remove = useMutation(orpc.certificates.delete.mutationOptions());
+  const failed = cert.status === "error";
+  return (
+    <Card className="animate-enter" data-testid="https-requested">
+      <CardHeader>
+        <CardTitle>{failed ? m.https_off() : m.https_requesting()}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        <p className="text-sm break-words text-muted-foreground">{cert.names.join(", ")}</p>
+        <CertificateState
+          cert={cert}
+          actions={
+            <ConfirmDialog
+              title={m.cert_delete_confirm({ name: cert.name })}
+              destructive
+              trigger={
+                <Button size="sm" variant="ghost">
+                  {m.common_cancel()}
+                </Button>
+              }
+              onConfirm={async () => {
+                await remove.mutateAsync({ id: cert.id });
+                await client.invalidateQueries();
+              }}
+            />
+          }
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+const caLabel = (ca: string) => (ca === "zerossl" ? m.cert_ca_zerossl() : m.cert_ca_letsencrypt());
+
+/**
+ * One click: a certificate for the site's domains, bound to it once issued.
+ * The button waits for https.check; its blockers are listed instead.
+ */
+function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
+  const client = useQueryClient();
+  const [ca, setCa] = React.useState<"letsencrypt" | "zerossl">("letsencrypt");
+  // The DNS-01 check asks the provider: not again on every focus.
+  const check = useQuery({
+    ...orpc.https.check.queryOptions({ input: { id: site.id, ca } }),
+    staleTime: 30_000,
+  });
+  const settings = useQuery(orpc.certificates.settings.queryOptions());
+  const request = useMutation(orpc.certificates.request.mutationOptions());
+  const update = useMutation(orpc.https.update.mutationOptions());
+  const [email, setEmail] = React.useState<string | null>(null);
+  const [eab, setEab] = React.useState({ kid: "", key: "" });
+  const [existing, setExisting] = React.useState<string | null>(null);
+  const [addCredential, setAddCredential] = React.useState(false);
+  const [customize, setCustomize] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [pending, setPending] = React.useState(false);
+  const acmeDirectory = settings.data?.acmeDirectory ?? null;
+  const zerossl = ca === "zerossl" && !acmeDirectory;
+  const data = check.data;
+  const blockers = data?.blockers ?? [];
+  const run = async (action: () => Promise<unknown>) => {
+    setPending(true);
+    setError(null);
+    try {
+      await action();
+      await client.invalidateQueries();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setPending(false);
+    }
+  };
+  const enable = (data: HttpsCheck) =>
+    run(() =>
+      request.mutateAsync({
+        name: data.request.name.slice(0, 100),
+        names: data.request.names,
+        email: (email ?? data.request.email).trim(),
+        ca: acmeDirectory ? "letsencrypt" : ca,
+        challenge: data.request.challenge,
+        ...(data.request.dnsCredentialId ? { dnsCredentialId: data.request.dnsCredentialId } : {}),
+        ...(zerossl ? { eabKid: eab.kid, eabHmacKey: eab.key } : {}),
+        autoRenew: true,
+        bindSiteId: site.id,
+      }),
+    );
+  const chosen = existing ?? data?.certificates[0]?.id ?? "";
+  return (
+    <Card className="animate-enter" data-testid="https-enable">
+      <CardHeader>
+        <CardTitle>{m.https_off()}</CardTitle>
+      </CardHeader>
+      <Collapsible
+        open={customize}
+        onOpenChange={setCustomize}
+        className="flex flex-col gap-(--card-spacing)"
+      >
+        <CardContent className="grid gap-4">
+          <p className="text-sm break-words text-muted-foreground">{site.domains.join(", ")}</p>
+          {check.isLoadingError ? (
+            <ErrorState error={check.error} onRetry={() => void check.refetch()} />
+          ) : blockers.length ? (
+            <ul className="grid gap-2" data-testid="https-blockers">
+              {blockers.map((blocker, index) => (
+                <li
+                  key={JSON.stringify(blocker)}
+                  className="flex items-start gap-2 text-sm animate-enter"
+                  style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+                >
+                  <HugeiconsIcon
+                    icon={Alert02Icon}
+                    strokeWidth={2}
+                    className="mt-0.5 size-4 shrink-0 text-destructive"
+                  />
+                  <span className="min-w-0 flex-1 break-words">
+                    {httpsBlockerText(blocker, caLabel(ca))}
+                  </span>
+                  {blocker.code === "dns_credential_missing" ? (
+                    <Button size="xs" variant="outline" onClick={() => setAddCredential(true)}>
+                      {m.cert_dns_add()}
+                    </Button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <CollapsibleContent className="grid gap-4 sm:grid-cols-2">
+            {acmeDirectory ? (
+              <Field>
+                <FieldTitle>{m.cert_acme_directory()}</FieldTitle>
+                <p className="font-mono text-sm break-all">{acmeDirectory}</p>
+              </Field>
+            ) : (
+              <FormSelect
+                id="httpsCa"
+                label={m.cert_ca()}
+                value={ca}
+                onChange={(value) => setCa(value === "zerossl" ? "zerossl" : "letsencrypt")}
+                options={[
+                  { value: "letsencrypt", label: m.cert_ca_letsencrypt() },
+                  { value: "zerossl", label: m.cert_ca_zerossl() },
+                ]}
+              />
+            )}
+            <Field>
+              <FieldLabel htmlFor="httpsEmail">{m.cert_email()}</FieldLabel>
+              <Input
+                id="httpsEmail"
+                type="email"
+                autoComplete="email"
+                value={email ?? data?.request.email ?? ""}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </Field>
+            {zerossl ? (
+              <>
+                <Field>
+                  <FieldLabel htmlFor="httpsEabKid">{m.cert_eab_kid()}</FieldLabel>
+                  <Input
+                    id="httpsEabKid"
+                    autoComplete="off"
+                    value={eab.kid}
+                    onChange={(event) => setEab({ ...eab, kid: event.target.value })}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="httpsEabKey">{m.cert_eab_key()}</FieldLabel>
+                  <Input
+                    id="httpsEabKey"
+                    type="password"
+                    autoComplete="off"
+                    value={eab.key}
+                    onChange={(event) => setEab({ ...eab, key: event.target.value })}
+                  />
+                </Field>
+              </>
+            ) : null}
+          </CollapsibleContent>
+          {data?.certificates.length ? (
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-48 flex-1">
+                <FormSelect
+                  id="httpsExisting"
+                  label={m.https_existing()}
+                  value={chosen}
+                  onChange={setExisting}
+                  options={data.certificates.map((c) => ({ value: c.id, label: c.name }))}
+                />
+              </div>
+              <Button
+                variant="outline"
+                disabled={pending || !chosen}
+                data-testid="https-use-existing"
+                onClick={() =>
+                  run(() =>
+                    update.mutateAsync({
+                      id: site.id,
+                      settings: { ...current, certificateId: chosen, forceHttps: true },
+                    }),
+                  )
+                }
+              >
+                {m.https_use()}
+              </Button>
+            </div>
+          ) : null}
+        </CardContent>
+        <CardFooter className="flex-wrap justify-end gap-2">
+          {error ? (
+            <FieldError className="mr-auto animate-in fade-in" data-testid="https-error">
+              {error}
+            </FieldError>
+          ) : null}
+          <CollapsibleTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-muted-foreground"
+                data-testid="https-customize"
+              />
+            }
+          >
+            {m.https_customize()}
+            <HugeiconsIcon
+              icon={ArrowDown01Icon}
+              strokeWidth={2}
+              className={cn(
+                "transition-transform motion-reduce:transition-none",
+                customize && "rotate-180",
+              )}
+            />
+          </CollapsibleTrigger>
+          {blockers.length ? (
+            <Button
+              variant="outline"
+              disabled={check.isFetching}
+              onClick={() => void check.refetch()}
+            >
+              {m.https_recheck()}
+            </Button>
+          ) : null}
+          <Button
+            disabled={!data || blockers.length > 0 || pending || check.isFetching}
+            data-testid="https-enable-submit"
+            onClick={() => data && enable(data)}
+          >
+            {pending || check.isFetching ? <Spinner /> : null}
+            {m.https_enable()}
+          </Button>
+        </CardFooter>
+      </Collapsible>
+      {addCredential ? (
+        <DnsCredentialDialog
+          scope="credential"
+          onClose={() => setAddCredential(false)}
+          onSaved={async () => {
+            await client.invalidateQueries();
+          }}
+        />
+      ) : null}
+    </Card>
   );
 }
 
@@ -67,7 +449,7 @@ function HttpsEditor({
     ["ocspStapling", m.cert_ocsp()],
   ] as const;
   return (
-    <Card>
+    <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -98,7 +480,7 @@ function HttpsEditor({
             options={[
               { value: "none", label: m.cert_none() },
               ...certificates
-                .filter((c) => c.fingerprint && c.notAfter && Date.parse(c.notAfter) > Date.now())
+                .filter((c) => c.id === initial.certificateId || usable(c))
                 .map((c) => ({ value: c.id, label: c.name })),
             ]}
             onChange={(value) =>

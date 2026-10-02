@@ -6,7 +6,11 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { type AddressResolver, pointing } from "../../src/server/lib/dns-check";
-import { issueCertificate } from "../../src/server/services/certificate-worker";
+import {
+  dueCertificates,
+  issueCertificate,
+  retryWhenPointing,
+} from "../../src/server/services/certificate-worker";
 import {
   type ApiClient,
   createTestContext,
@@ -202,6 +206,25 @@ describe("HTTP-01 preconditions", async () => {
       .from(schema.certificate)
       .where(eq(schema.certificate.id, skipped.id));
     expect(refused?.lastError).toBe("acme_unauthorized");
+  });
+
+  it("retries a failure to point as soon as the names point to the nodes (audit S-2)", async () => {
+    await node({ lastSeenAt: new Date() });
+    table["b.check.test"] = { v4: ["203.0.113.10"] };
+    const { id } = await request(["b.check.test"]);
+    table["b.check.test"] = { v4: ["198.51.100.7"] };
+    await issueCertificate(ctx, id);
+    const failed = await ctx.db
+      .select({ lastError: schema.certificate.lastError })
+      .from(schema.certificate)
+      .where(eq(schema.certificate.id, id));
+    expect(failed[0]?.lastError).toBe("http01_dns_not_pointing");
+    expect(await retryWhenPointing(ctx)).not.toContain(id);
+    expect(await dueCertificates(ctx, 100)).not.toContain(id);
+    table["b.check.test"] = { v4: ["203.0.113.10"] };
+    expect(await retryWhenPointing(ctx)).toContain(id);
+    expect(await dueCertificates(ctx, 100)).toContain(id);
+    await ctx.db.delete(schema.certificate).where(eq(schema.certificate.id, id));
   });
 
   it("shows the directory EDGEWEIR_ACME_DIRECTORY sets and keeps the one an attempt used", async () => {

@@ -8,7 +8,7 @@ From console setup to a first site served over HTTP and HTTPS by an edge node.
 2. **Enroll a node**: generate the install command in the console and run it on the node host; once enrolled, the node connects to the node channel over mTLS.
 3. **Create a site**: enter its domains, origin, and cache setting; the cluster publishes a new configuration revision.
 4. **Configure DNS**: point the site's domains at the edge addresses or the CNAME target listed on the site's **Domains** tab in the authoritative DNS and wait for the records to take effect.
-5. **Enable HTTPS**: request or upload a certificate and select it on the site's HTTPS tab; see [HTTPS and certificates](https.en.md).
+5. **Enable HTTPS**: click **Enable HTTPS** on the site's HTTPS tab; HTTPS turns on once the certificate is issued, see [HTTPS and certificates](https.en.md).
 6. **Verify**: every item of the **Launch check** on the site's **Overview** tab passes; check origin fetch and caching with curl.
 
 Node installation, DNS propagation, and certificate issuance each take time that depends on the network and the providers.
@@ -119,9 +119,11 @@ For lines, health-based removal, and TTL of DNS steering, see [Configure DNS ste
 
 ## 5. Enable HTTPS
 
-1. Open **Certificates** and click **Request certificate** (ACME) or **Upload certificate**. HTTP-01 validation requires every certificate name to be a domain of a site and the records from step 4 to be live.
-2. On the site's **HTTPS** tab, select the certificate under **Certificates**, turn on **Redirect HTTP to HTTPS** if needed, and click **Save**.
-3. The cluster publishes a new revision. Once an enabled site in the cluster references a certificate, nodes listen on TCP 443.
+1. Open the site's **HTTPS** tab. Fix what the tab lists (for example records from step 4 that are not live yet) and click **Check again**.
+2. Click **Enable HTTPS**. The console requests a certificate for all of the site's domains (a wildcard domain needs a DNS credential first); once issued, the site uses it and **Redirect HTTP to HTTPS** is on.
+3. The cluster publishes a new revision. Once an enabled site in the cluster uses a certificate, nodes listen on TCP 443.
+
+An uploaded certificate (on the **Certificates** page) is chosen under **Existing certificate** on the site's **HTTPS** tab.
 
 For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](https.en.md).
 

@@ -269,6 +269,7 @@ Behavior: [Challenges and CC mitigation](../guide/challenges.en.md).
 | Procedure | Endpoint |
 | --- | --- |
 | `https.get`, `https.update` | `GET`, `PUT /sites/{id}/https` |
+| `https.check` | `GET /sites/{id}/https/check` |
 | `sites.features` | `GET /sites/{id}/features` |
 | `waf.get` | `GET /sites/{id}/waf` |
 | `waf.update` | `PATCH /sites/{id}/waf` |
@@ -281,6 +282,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `PUT /sites/{id}/https` | `settings` replaces all HTTPS settings of the site; missing fields take their defaults, so `GET` first and change what you need. Compression fields: `brotli`, `brotliLevel` (1–11, default 6), `brotliMinLength`, `brotliTypes`; `zstd`, `zstdLevel` (1–19, default 3), `zstdMinLength`, `zstdTypes`; `gzip`, `gzipMinLength`, `gzipTypes`; minimum lengths 1–1048576 (default 256), types are arrays of MIME types (up to 32) |
 | `PATCH /sites/{id}/waf` | Changes only the fields given: `mode` (`off` / `detect` / `block`), `paranoiaLevel` (1–4), `anomalyThreshold` (1–1000), `excludedRuleIds` (900000–999999, unique, up to 200), `requestBodyLimit` (0–134217728 bytes) |
 | `GET /sites/{id}/waf/rules` | Query parameters `range` (`1h` / `6h` / `24h` / `7d` / `30d`, default `24h`), `limit` (1–50, default 10) |
+| `GET /sites/{id}/https/check` | Query parameter `ca` (`letsencrypt` / `zerossl`, default `letsencrypt`): the CA whose CAA permission is checked |
 
 Responses:
 
@@ -289,8 +291,10 @@ Responses:
 | `sites.features` | `brotli`, `zstd`, `crs`, each `{ available, reason }`; when an active node of the cluster lacks `brotli-v1` / `zstd-v1` / `modsecurity-v1`, `available` is `false` and `reason` is `nodes`; otherwise `reason` is `null` |
 | `waf.get`, `waf.update` | `siteId`, the fields above (`excludedRuleIds` ascending), `updatedAt` (`null` until first saved, with the defaults `off`, 1, 5, `[]`, 131072) |
 | `waf.topRules` | `{ approximate: true, items: [{ ruleId, requests }] }`, most matched first |
+| `https.check` | `request`: the request one-click HTTPS sends (`name`, `names`, `email`, `challenge`, `dnsCredentialId`); `blockers`: everything in the way, each a `code` with parameters: `nodes_offline` (`cluster`), `nodes_lack_http01` (`nodes`), `dns_not_pointing` (`name`, `pointing`: `unresolved` / `elsewhere`), `dns_credential_missing` (`names`), `dns_credential_failed` (`credential`, `error`: an API error code), `caa_forbidden` (`name`); `certificates`: issued, unexpired certificates covering every domain of the site, `{ id, name }` |
 
 - `https.update` publishes the site's cluster (reason `certificate_updated`), audited as `site.https_update`; `waf.update` publishes (`site_waf_updated`), audited as `site.waf_update`.
+- `bindSiteId` of `POST /certificates/request`: once issued, the certificate is bound to that site with `forceHttps` on, the site's cluster is published, audited as `site.https_update` (actor system); `names` must cover every domain of the site (400 `CERTIFICATE_DOMAIN_MISMATCH`), and a site has at most one such request at a time (409 `CERTIFICATE_BUSY`). A certificate's `bindSiteId` is the site's ID until it is issued, then `null`.
 - A feature with `available` `false` can still be turned on through the API; see [Node capabilities](#node-capabilities).
 - Unknown site: 404 `SITE_NOT_FOUND`.
 

@@ -23,7 +23,7 @@ Console (ROLE=app|worker|all)
 └── child process stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA, DNS provider APIs
 ```
 
-The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.18.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
+The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.19.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
 
 ## Repository layout
 
@@ -293,11 +293,13 @@ A revision receipt is sealed with the master key (purpose `node.revision_receipt
 
 `edgeweir-certd` performs ACME issuance, renewal, and revocation and DNS record operations.
 
-1. The pg-boss queue `certificates.sweep` selects, every minute, certificates waiting for issuance and certificates past `renew_at` (new requests and manual renewals first, then by `renew_at`, three at a time). A failure backs off by the remaining validity (a tenth, 10 minutes to 12 hours; one hour for a first issuance). Issued certificates read their ARI renewal window after the CA's Retry-After (1 to 24 hours, 6 by default) and renew earlier when the window ends before `renew_at`.
+1. The pg-boss queue `certificates.sweep` selects, every minute, certificates waiting for issuance and certificates past `renew_at` (new requests and manual renewals first, then by `renew_at`, three at a time). A failure backs off by the remaining validity (a tenth, 10 minutes to 12 hours; one hour for a first issuance); an HTTP-01 certificate that failed because names did not resolve to the nodes (`http01_dns_not_pointing`) has its names looked up again every 5 minutes and is retried once they point to the nodes. Issued certificates read their ARI renewal window after the CA's Retry-After (1 to 24 hours, 6 by default) and renew earlier when the window ends before `renew_at`.
 2. The worker starts `EDGEWEIR_CERTD_BIN` (`/usr/local/bin/edgeweir-certd` in the image) with only `PATH` and `EDGEWEIR_DNS_TEST_ENDPOINT` in its environment.
 3. It writes one JSON request line to stdin (command and parameters, including the ACME account and DNS credentials). certd writes JSON event lines to stdout (`account`, `http01.present`, `http01.cleanup`, `dns01.prepare`, `dns01.cleanup`); the console handles each one and acknowledges it on stdin. The last line is the result.
 4. One `http01.present` carries all HTTP-01 challenges of an order: they are written to `acme_challenge`, each cluster involved publishes one revision, and once nodes apply it certd has the CA validate them (four at a time); `http01.cleanup` only deletes the rows and publishes nothing (nodes and the next revision drop a challenge once it expires or its operation ends). Challenge revisions do not count toward the 200 kept revisions and are deleted after an hour. `dns01.prepare` records the cleanup obligation in `dns_challenge_lease` before certd writes the TXT record; after completion, failure, or a restart, only the values written by that operation are removed. The ACME account from an `account` event is envelope-encrypted into `acme_account`; certificates with the same directory, EAB key id, and email share one account.
-5. The result is written back to `certificate`: chain (certificates only), fingerprint, expiry, next renewal time, and the envelope-encrypted private key (PKCS #8); clusters that reference the certificate publish a new revision.
+5. The result is written back to `certificate`: chain (certificates only), fingerprint, expiry, next renewal time, and the envelope-encrypted private key (PKCS #8); a request with `bindSiteId` (one-click HTTPS on a site's HTTPS tab, preceded by `https.check`, which lists every blocker at once: nodes, DNS, the DNS credential and CAA) is bound to the site with the HTTPS redirect on in the same transaction; clusters that reference the certificate publish a new revision.
+
+Domains a site's certificate does not cover yet (the certificate is being reissued for them) are published with `Domain.tls_pending` (proto v0.19.0) when every active node of the cluster has `tls-pending-domains-v1`, and nodes serve them over HTTP only; otherwise they are left out until the new certificate is issued.
 
 | Limit | Value |
 | --- | --- |

@@ -82,6 +82,7 @@ import {
   setPlatformErrorPages,
   updateSiteErrorPages,
 } from "../services/error-pages";
+import { checkHttps } from "../services/https-check";
 import {
   createL4App,
   deleteL4App,
@@ -369,6 +370,9 @@ export const router = os.router({
     get: authed.https.get.handler(({ input, context }) => getHttps(context.app, input.id)),
     update: authed.https.update.handler(({ input, context }) =>
       updateHttps(context.app, input.id, input.settings, context),
+    ),
+    check: authed.https.check.handler(({ input, context }) =>
+      checkHttps(context.app, input.id, input.ca),
     ),
   },
   dnsCredentials: {

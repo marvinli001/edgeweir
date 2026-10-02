@@ -43,6 +43,7 @@ import {
   ruleModelOf,
   rulesFeatures,
   type SiteModel,
+  TLS_PENDING_DOMAINS_FEATURE,
   type TlsModel,
   usesChallengeKeys,
   usesChallenges,
@@ -1637,6 +1638,56 @@ describe("refreshDerived", () => {
   it("keeps a compiled configuration as it is", () => {
     const config = compileNodeConfig({ clusterId: "c", sites, certificates }, 7n);
     expect(refreshDerived(config)).toEqual(config);
+  });
+});
+
+describe("domains waiting for the site's certificate (tls-pending-domains-v1)", () => {
+  const domains = [
+    { name: "a.test", wildcard: false },
+    { name: "new.a.test", wildcard: false, tlsPending: true },
+  ];
+
+  it("marks the domains and requires the feature", () => {
+    const config = compileNodeConfig(
+      { clusterId: "c", sites: [site("a", { certificateId: "cert-a", domains })] },
+      1n,
+    );
+    expect(
+      config.sites[0]?.domains.map((d) => ({ name: d.name, tlsPending: d.tlsPending })),
+    ).toEqual([
+      { name: "a.test", tlsPending: false },
+      { name: "new.a.test", tlsPending: true },
+    ]);
+    expect(config.requiredFeatures).toContain(TLS_PENDING_DOMAINS_FEATURE);
+    expect(TLS_PENDING_DOMAINS_FEATURE).toBe("tls-pending-domains-v1");
+  });
+
+  it("ignores the flag on a site without a certificate", () => {
+    const config = compileNodeConfig({ clusterId: "c", sites: [site("a", { domains })] }, 1n);
+    expect(config.sites[0]?.domains.some((d) => d.tlsPending)).toBe(false);
+    expect(config.requiredFeatures).not.toContain(TLS_PENDING_DOMAINS_FEATURE);
+  });
+
+  it("encodes a configuration without waiting domains as before", () => {
+    const covered = [{ name: "a.test", wildcard: false }];
+    const config = compileNodeConfig(
+      { clusterId: "c", sites: [site("a", { certificateId: "cert-a", domains: covered })] },
+      1n,
+    );
+    const flagged = compileNodeConfig(
+      {
+        clusterId: "c",
+        sites: [
+          site("a", {
+            certificateId: "cert-a",
+            domains: [{ name: "a.test", wildcard: false, tlsPending: false }],
+          }),
+        ],
+      },
+      1n,
+    );
+    expect(flagged.contentHash).toBe(config.contentHash);
+    expect(config.requiredFeatures).not.toContain(TLS_PENDING_DOMAINS_FEATURE);
   });
 });
 
