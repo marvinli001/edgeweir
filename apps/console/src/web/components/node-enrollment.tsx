@@ -133,7 +133,9 @@ export function EnrollProgress({ result }: { result: EnrollmentTokenResult }) {
     { id: "online", label: m.nodes_online(), ...reached(online, !!node) },
     { id: "applied", label: m.enroll_step_applied(), ...reached(applied, online) },
     { id: "healthy", label: m.enroll_step_healthy(), ...reached(healthy, applied) },
-    { id: "address", label: m.enroll_step_address(), ...reached(addressed, healthy) },
+    node?.dnsIssue === "no_public_address" && online
+      ? { id: "address", tone: "warn", label: m.node_dns_no_public_address() }
+      : { id: "address", label: m.enroll_step_address(), ...reached(addressed, healthy) },
   ];
   return (
     <ol className="flex flex-col gap-2 rounded-xl border p-3 text-sm" data-testid="enroll-progress">

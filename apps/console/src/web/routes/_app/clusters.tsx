@@ -802,10 +802,15 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
         id: "ips",
         header: () => m.nodes_col_ips(),
         cell: ({ row }) => (
-          <div className="flex flex-col font-mono text-xs">
+          <div className="flex flex-col items-start gap-1 font-mono text-xs">
             {row.original.ipAddresses.length
               ? row.original.ipAddresses.map((ip) => <span key={ip}>{ip}</span>)
               : "—"}
+            {row.original.dnsIssue === "no_public_address" ? (
+              <Badge variant="outline" className="font-sans" data-testid="node-dns-issue">
+                {m.node_dns_no_public_address()}
+              </Badge>
+            ) : null}
           </div>
         ),
       },

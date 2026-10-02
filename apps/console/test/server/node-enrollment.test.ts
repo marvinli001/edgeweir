@@ -2,12 +2,15 @@ import "reflect-metadata";
 import { webcrypto } from "node:crypto";
 import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
-import { NodeService } from "@edgeweir/proto";
+import { schema } from "@edgeweir/db";
+import { ApplyState, NodeService } from "@edgeweir/proto";
 import * as x509 from "@peculiar/x509";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { warnConsoleUrls } from "../../src/server/bootstrap";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
+import { normalizeRemoteAddress } from "../../src/server/node-channel/service";
 import {
   type ApiClient,
   createTestContext,
@@ -49,6 +52,22 @@ describe("following an enrollment from the add-node dialog", async () => {
         baseUrl,
         httpVersion: "2",
         nodeOptions: { ca: ctx.nodeCa.certificatePem, servername: "localhost" },
+      }),
+    );
+
+  /** The node's mTLS client. */
+  const mtls = (enrolled: { caCertificatePem: string; certificatePem: string }, keyPem: string) =>
+    createClient(
+      NodeService,
+      createConnectTransport({
+        baseUrl,
+        httpVersion: "2",
+        nodeOptions: {
+          ca: enrolled.caCertificatePem,
+          cert: enrolled.certificatePem,
+          key: keyPem,
+          servername: "localhost",
+        },
       }),
     );
 
@@ -130,5 +149,56 @@ describe("following an enrollment from the add-node dialog", async () => {
       admin.clusters.getEnrollmentToken({ id: "00000000-0000-4000-8000-000000000000" }),
     );
     expect(missing).toMatchObject({ code: "ENROLLMENT_TOKEN_NOT_FOUND", status: 404 });
+  });
+
+  it("normalizes connection source addresses", () => {
+    expect(normalizeRemoteAddress("::ffff:203.0.114.7")).toBe("203.0.114.7");
+    expect(normalizeRemoteAddress("2001:DB8:0:0::1")).toBe("2001:db8::1");
+    expect(normalizeRemoteAddress("fe80::1%eth0")).toBe("fe80::1");
+    expect(normalizeRemoteAddress("127.0.0.1")).toBe("127.0.0.1");
+    expect(normalizeRemoteAddress(undefined)).toBeNull();
+    expect(normalizeRemoteAddress("not-an-ip")).toBeNull();
+  });
+
+  it("records where a node connects from and flags nodes without a public address", async () => {
+    const token = await admin.clusters.createEnrollmentToken({ clusterId, nodeName: "edge-nat" });
+    const { csrPem, keyPem } = await nodeKeyAndCsr();
+    // Behind NAT the host only has private addresses.
+    const enrolled = await anonymous().enroll({
+      token: token.token,
+      csrPem,
+      info: { ipAddresses: ["10.0.0.5", "fd00::5"], supportedFeatures: [] },
+    });
+    let node = await admin.nodes.get({ id: enrolled.nodeId });
+    expect(node).toMatchObject({
+      remoteAddress: "127.0.0.1",
+      ipAddresses: ["10.0.0.5", "fd00::5"],
+      schedulingAddresses: [],
+      dnsIssue: "no_public_address",
+    });
+
+    // Every heartbeat records the address of its connection.
+    await ctx.db
+      .update(schema.node)
+      .set({ remoteAddress: "198.51.100.1" })
+      .where(eq(schema.node.id, enrolled.nodeId));
+    await mtls(enrolled, keyPem).reportStatus({
+      appliedRevision: 0n,
+      state: ApplyState.APPLYING,
+      info: { ipAddresses: ["10.0.0.5"], supportedFeatures: [] },
+    });
+    node = await admin.nodes.get({ id: enrolled.nodeId });
+    expect(node.remoteAddress).toBe("127.0.0.1");
+    expect(node.online).toBe(true);
+    // The source address is only an offer: DNS still has nothing to answer with.
+    expect(node.schedulingAddresses).toEqual([]);
+
+    // A configured scheduling address (e.g. the NAT's public address) clears the issue.
+    node = await admin.nodes.setAddresses({
+      id: enrolled.nodeId,
+      addresses: [{ address: "203.0.114.9", level: 0 }],
+    });
+    expect(node.dnsIssue).toBeNull();
+    expect(node.schedulingAddresses.map((a) => a.address)).toEqual(["203.0.114.9"]);
   });
 });

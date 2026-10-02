@@ -695,6 +695,16 @@ export const node = z.object({
   schedulingAddresses: z.array(nodeSchedulingAddress),
   /** Address level DNS uses now (0 primary; higher while lower levels are unreachable). */
   schedulingLevel: z.number().int(),
+  /**
+   * Source address of the node's latest connection to the console (its
+   * public address behind NAT, or a proxy's). Null before it connects.
+   */
+  remoteAddress: z.string().nullable(),
+  /**
+   * Why DNS cannot answer with the node: no_public_address when it reports
+   * no public address and none is configured.
+   */
+  dnsIssue: z.enum(["no_public_address"]).nullable(),
 });
 
 export const nodeUpdateInput = z.object({

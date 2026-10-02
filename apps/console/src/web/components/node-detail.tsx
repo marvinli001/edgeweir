@@ -1,4 +1,4 @@
-import type { Node } from "@edgeweir/contract";
+import { forbiddenOriginRange, type Node, unicastAddress } from "@edgeweir/contract";
 import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -197,7 +197,7 @@ function Fact({
   );
 }
 
-/** Data plane health and client certificate lifetime. */
+/** Data plane health, the connection's source address and the client certificate's lifetime. */
 function NodeFacts({ node }: { node: Node }) {
   const certLeft = node.certNotAfter ? Date.parse(node.certNotAfter) - Date.now() : null;
   return (
@@ -208,6 +208,9 @@ function NodeFacts({ node }: { node: Node }) {
         ) : (
           <StatusDot tone="bad">{m.nodes_unhealthy()}</StatusDot>
         )}
+      </Fact>
+      <Fact label={m.node_remote_address()} testId="node-remote-address">
+        <span className="font-mono">{node.remoteAddress ?? "—"}</span>
       </Fact>
       <Fact label={m.node_cert_not_after()} testId="node-cert-not-after">
         {node.certNotAfter ? (
@@ -266,7 +269,14 @@ function NodeAddresses({ node }: { node: Node }) {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">{m.node_addresses_title()}</h3>
+        <h3 className="flex items-center gap-2 text-sm font-medium">
+          {m.node_addresses_title()}
+          {node.dnsIssue === "no_public_address" ? (
+            <Badge variant="outline" data-testid="node-detail-dns-issue">
+              {m.node_dns_no_public_address()}
+            </Badge>
+          ) : null}
+        </h3>
         {editing ? null : (
           <Button
             size="sm"
@@ -368,6 +378,20 @@ function AddressEditor({
   const [pending, setPending] = React.useState<"save" | "reset" | null>(null);
   const patch = (key: number, change: Partial<AddressDraft>) =>
     setRows(rows.map((row) => (row.key === key ? { ...row, ...change } : row)));
+  const addRow = (address: string) =>
+    setRows([
+      ...rows,
+      { key: nextDraftKey(), address, level: rows.some((r) => r.level === 0) ? 1 : 0 },
+    ]);
+  // The connection's source address, offered when public and not listed: it
+  // may be a proxy's, so it is never added on its own.
+  const suggested =
+    node.remoteAddress &&
+    unicastAddress(node.remoteAddress) &&
+    forbiddenOriginRange(node.remoteAddress, []) === null &&
+    !rows.some((row) => unicastAddress(row.address.trim()) === node.remoteAddress)
+      ? node.remoteAddress
+      : null;
   const submit = async (
     addresses: { address: string; level: number }[],
     kind: "save" | "reset",
@@ -453,23 +477,32 @@ function AddressEditor({
           </li>
         ))}
       </ol>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="self-start"
-        disabled={rows.length >= MAX_ADDRESSES}
-        onClick={() =>
-          setRows([
-            ...rows,
-            { key: nextDraftKey(), address: "", level: rows.some((r) => r.level === 0) ? 1 : 0 },
-          ])
-        }
-        data-testid="node-address-add"
-      >
-        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-        {m.node_addresses_add()}
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={rows.length >= MAX_ADDRESSES}
+          onClick={() => addRow("")}
+          data-testid="node-address-add"
+        >
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+          {m.node_addresses_add()}
+        </Button>
+        {suggested ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={rows.length >= MAX_ADDRESSES}
+            onClick={() => addRow(suggested)}
+            data-testid="node-address-suggest"
+          >
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+            {m.node_addresses_use_remote({ address: suggested })}
+          </Button>
+        ) : null}
+      </div>
       {error ? (
         <FieldError className="animate-in fade-in" data-testid="node-addresses-error">
           {error}

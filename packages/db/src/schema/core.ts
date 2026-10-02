@@ -133,6 +133,12 @@ export const node = pgTable(
     previousCertSerial: text("previous_cert_serial"),
     enrolledAt: timestamp("enrolled_at", { withTimezone: true }),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    /**
+     * Source address of the node's enrollment and latest heartbeat
+     * connection: the node's public address behind NAT, or a proxy's.
+     * Shown and offered as a scheduling address, never used on its own.
+     */
+    remoteAddress: text("remote_address"),
     /** Last BanStatus the node reported; null for nodes without dynamic bans. */
     banStatus: jsonb("ban_status").$type<NodeBanStatus>(),
     /** Sites above the normal CC level in the last heartbeat. */

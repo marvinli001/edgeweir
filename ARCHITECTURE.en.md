@@ -396,7 +396,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `region` | Region dictionary |
 | `cluster` | Clusters: sets of nodes that share one revision stream |
 | `node_group` | Node groups, optionally tied to a region |
-| `node` | Nodes: status, capabilities, certificate serial and fingerprint (after a renewal also the replaced certificate's serial), last heartbeat, last reported ban state, CC level per site and host metrics, whether the node also probes |
+| `node` | Nodes: status, capabilities, certificate serial and fingerprint (after a renewal also the replaced certificate's serial), last heartbeat and its connection's source address, last reported ban state, CC level per site and host metrics, whether the node also probes |
 | `node_ip` | Node IP addresses: reported by the node (`reported`) and scheduling addresses the operator configured (`configured`, level 0 primary, 1 backup 1, 2 backup 2) |
 | `node_address_state` | Probe reachability of scheduling addresses: failing since, down flag, answering since |
 | `probe` | Regional probes: name, region, enabled, certificate serial and expiry, last seen, version |
@@ -528,6 +528,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0043_stats_marker_generation` | `stats_rollup_dirty.generation` (rollups clear only the marker generation they read) |
 | `0044_node_offline_per_node` | Drops the per-site node offline alert states (one per node now) |
 | `0045_rollout_policy_updated_at` | `cluster_rollout.policy_updated_at` (the canary policy's own version; existing rows take `updated_at`) |
+| `0046_node_remote_address` | `node.remote_address` (source address of the node's enrollment and latest heartbeat connection) |
 
 ## Build output
 

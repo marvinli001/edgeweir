@@ -396,7 +396,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `region` | 区域字典 |
 | `cluster` | 集群：共享一条 revision 序列的节点集合 |
 | `node_group` | 节点组，可关联区域 |
-| `node` | 节点：状态、能力清单、证书序列号与指纹（续期后还有被替换证书的序列号）、最近心跳、最近上报的封禁状态、各网站的 CC 级别与主机指标、是否兼任探针 |
+| `node` | 节点：状态、能力清单、证书序列号与指纹（续期后还有被替换证书的序列号）、最近心跳与其连接的源地址、最近上报的封禁状态、各网站的 CC 级别与主机指标、是否兼任探针 |
 | `node_ip` | 节点的 IP 地址：节点上报的（`reported`）与运营者配置的调度地址（`configured`，级别 0 主、1 备 1、2 备 2） |
 | `node_address_state` | 调度地址的探针可达性：失败起点、不可达标记、恢复起点 |
 | `probe` | 区域探针：名称、区域、启用、证书序列号与到期、最后在线、版本 |
@@ -528,6 +528,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0043_stats_marker_generation` | `stats_rollup_dirty.generation`（汇总只清除读到的那一代标记） |
 | `0044_node_offline_per_node` | 删除按网站记录的「节点离线」告警状态（改为每个节点一条） |
 | `0045_rollout_policy_updated_at` | `cluster_rollout.policy_updated_at`（金丝雀策略自身的版本，已有行取 `updated_at`） |
+| `0046_node_remote_address` | `node.remote_address`（节点注册与最近一次心跳连接的源地址） |
 
 ## 构建产物
 

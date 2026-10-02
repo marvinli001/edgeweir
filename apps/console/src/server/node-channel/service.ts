@@ -18,7 +18,7 @@ import {
   diffNodeConfig,
   nodeRequirements,
 } from "@edgeweir/config-compiler";
-import { MAX_REPORTED_BANS, nodeSupportsFeature } from "@edgeweir/contract";
+import { formatIp, MAX_REPORTED_BANS, nodeSupportsFeature, parseIp } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
   ApplyState,
@@ -237,6 +237,18 @@ export interface PeerInfo {
 }
 
 export const peerKey = createContextKey<PeerInfo>({ authorized: false });
+
+/**
+ * A connection's source address as stored on the node: canonical text, an
+ * IPv4-mapped address (dual-stack listeners) as IPv4, no zone; null when
+ * it is not an IP address.
+ */
+export function normalizeRemoteAddress(address: string | undefined): string | null {
+  if (!address) return null;
+  const text = address.replace(/%.*$/, "").replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/i, "");
+  const ip = parseIp(text);
+  return ip ? formatIp(ip) : null;
+}
 
 type NodeServerRequest = Parameters<NonNullable<ConnectNodeAdapterOptions["contextValues"]>>[0];
 
@@ -467,6 +479,7 @@ export function createNodeService(
             engineVersion: info?.engineVersion ?? "",
             os: info?.os ?? "",
             arch: info?.arch ?? "",
+            remoteAddress: normalizeRemoteAddress(peer.remoteAddress),
           })
           .returning();
         if (!nodeRow) throw new Error("node insert failed");
@@ -775,6 +788,7 @@ export function createNodeService(
           .update(schema.node)
           .set({
             lastSeenAt: now,
+            remoteAddress: normalizeRemoteAddress(peer.remoteAddress) ?? node.remoteAddress,
             // Nodes without metrics-v1 send none (nor do others before their second sample).
             metrics: req.metrics ? toNodeMetrics(req.metrics, now) : null,
             // Nodes without bans-v1 send no BanStatus.
