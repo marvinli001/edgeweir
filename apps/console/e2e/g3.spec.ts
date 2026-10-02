@@ -88,7 +88,11 @@ test("G3: the HTTPS tab turns Zstandard and Brotli on with their levels and keep
   await brotli.click();
   await page.getByTestId("https-brotli-level").fill("9");
   await page.getByTestId("https-brotli-min").fill("512");
-  await page.getByTestId("https-zstd-types").fill("text/html, text/plain, application/json");
+  // Typed key by key: a separator stays while typing.
+  const zstdTypes = page.getByTestId("https-zstd-types");
+  await zstdTypes.clear();
+  await zstdTypes.pressSequentially("text/html, text/plain, application/json");
+  await expect(zstdTypes).toHaveValue("text/html, text/plain, application/json");
   await check(page, "https-compression");
   await save.click();
   await expect(save).toBeDisabled();

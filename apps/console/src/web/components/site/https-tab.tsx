@@ -3,6 +3,7 @@ import {
   type CertificateDto,
   COMPRESSION_MIN_LENGTH_RANGE,
   type FeatureAvailability,
+  MIME_TYPE_RE,
   type Site,
   type SiteFeatures,
   type TlsSettings,
@@ -14,12 +15,11 @@ import * as React from "react";
 import { toast } from "sonner";
 import { FormSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
-import { NumberField, SwitchField } from "@/components/site/fields";
+import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -269,16 +269,12 @@ function CompressionGroup({
         </div>
         <Field className={fields.level ? undefined : "sm:col-span-2 lg:col-span-1"}>
           <FieldLabel htmlFor={id("Types")}>{m.cert_gzip_types()}</FieldLabel>
-          <Input
+          <ListInput
             id={id("Types")}
-            value={settings[fields.types].join(", ")}
-            data-testid={`https-${algorithm}-types`}
-            onChange={(e) =>
-              onChange({
-                ...settings,
-                [fields.types]: e.target.value.split(/[,\s]+/).filter(Boolean),
-              })
-            }
+            value={settings[fields.types]}
+            invalid={settings[fields.types].some((type) => !MIME_TYPE_RE.test(type))}
+            testId={`https-${algorithm}-types`}
+            onChange={(types) => onChange({ ...settings, [fields.types]: types })}
           />
         </Field>
       </div>

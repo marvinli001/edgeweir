@@ -45,8 +45,8 @@ import { toast } from "sonner";
 import { FormSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { ExpressionEditor } from "@/components/site/expression-editor";
-import { NumberField, SwitchField } from "@/components/site/fields";
-import { nextDraftKey, SaveBar, splitList } from "@/components/site/save-site";
+import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
+import { nextDraftKey, SaveBar } from "@/components/site/save-site";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -824,43 +824,6 @@ function SetQueryFields({
         {m.rules_query_add()}
       </Button>
     </FieldSet>
-  );
-}
-
-/** "a, b c" edited as text, reported as a list; the text survives while it means the same list. */
-function ListInput({
-  id,
-  value,
-  onChange,
-  placeholder,
-  disabled,
-  invalid,
-  testId,
-}: {
-  id: string;
-  value: string[];
-  onChange: (value: string[]) => void;
-  placeholder?: string;
-  disabled?: boolean;
-  invalid?: boolean;
-  testId?: string;
-}) {
-  const [text, setText] = React.useState(() => value.join(", "));
-  const same = splitList(text).join("\n") === value.join("\n");
-  return (
-    <Input
-      id={id}
-      value={same ? text : value.join(", ")}
-      placeholder={placeholder}
-      disabled={disabled}
-      aria-invalid={invalid || undefined}
-      onChange={(e) => {
-        setText(e.target.value);
-        onChange(splitList(e.target.value));
-      }}
-      className="font-mono"
-      data-testid={testId}
-    />
   );
 }
 

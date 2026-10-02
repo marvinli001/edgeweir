@@ -1,4 +1,5 @@
-import type * as React from "react";
+import * as React from "react";
+import { splitList } from "@/components/site/save-site";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -106,5 +107,45 @@ export function SettingsGroup({
       </FieldLegend>
       <div className={cn("grid grid-cols-2 gap-3 lg:grid-cols-3", className)}>{children}</div>
     </FieldSet>
+  );
+}
+
+/**
+ * "a, b c" edited as text, reported as a list. The text survives while it means the same list, so
+ * a separator typed at the end stays.
+ */
+export function ListInput({
+  id,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  invalid,
+  testId,
+}: {
+  id: string;
+  value: string[];
+  onChange: (value: string[]) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  invalid?: boolean;
+  testId?: string;
+}) {
+  const [text, setText] = React.useState(() => value.join(", "));
+  const same = splitList(text).join("\n") === value.join("\n");
+  return (
+    <Input
+      id={id}
+      value={same ? text : value.join(", ")}
+      placeholder={placeholder}
+      disabled={disabled}
+      aria-invalid={invalid || undefined}
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange(splitList(e.target.value));
+      }}
+      className="font-mono"
+      data-testid={testId}
+    />
   );
 }

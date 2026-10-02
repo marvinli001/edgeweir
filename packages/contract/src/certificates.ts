@@ -3,8 +3,10 @@ import * as z from "zod";
 import { type DnsProviderId, dnsProviderIds } from "./dns-providers";
 import { domainName, uuid } from "./schemas";
 
+/** A MIME type compression applies to, without parameters. */
+export const MIME_TYPE_RE = /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/;
 /** Response compression: MIME types, the defaults of every algorithm. */
-const compressionTypes = z.array(z.string().regex(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/)).max(32);
+const compressionTypes = z.array(z.string().regex(MIME_TYPE_RE)).max(32);
 export const DEFAULT_COMPRESSION_TYPES = [
   "text/html",
   "text/plain",
