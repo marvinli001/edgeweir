@@ -14,13 +14,36 @@ const genericCodes: Record<string, MessageFn> = {
   INTERNAL_SERVER_ERROR: () => m.error_internal(),
 };
 
-/** better-auth error codes the UI can meet (sign-in, password, 2FA, passkeys). */
+/**
+ * better-auth error codes the UI can meet (sign-in, password, 2FA, passkeys), with the WebAuthn
+ * codes (`ERROR_*`, @simplewebauthn/browser) its passkey client passes through.
+ */
 const authCodes: Record<string, MessageFn> = {
   INVALID_EMAIL_OR_PASSWORD: () => m.login_failed(),
   INVALID_PASSWORD: () => m.error_invalid_password(),
   PASSWORD_TOO_SHORT: () => m.error_password_too_short(),
+  PASSWORD_TOO_LONG: () => m.error_password_too_long(),
+  SESSION_EXPIRED: () => m.error_session_expired(),
+  SESSION_NOT_FRESH: () => m.error_session_not_fresh(),
   INVALID_CODE: () => m.error_invalid_code(),
+  INVALID_BACKUP_CODE: () => m.error_invalid_code(),
   INVALID_TWO_FACTOR_COOKIE: () => m.error_two_factor_expired(),
+  TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE: () => m.error_too_many_requests(),
+  ACCOUNT_TEMPORARILY_LOCKED: () => m.error_too_many_requests(),
+  AUTH_CANCELLED: () => m.error_passkey_cancelled(),
+  REGISTRATION_CANCELLED: () => m.error_passkey_cancelled(),
+  ERROR_CEREMONY_ABORTED: () => m.error_passkey_cancelled(),
+  PREVIOUSLY_REGISTERED: () => m.error_passkey_registered(),
+  ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED: () => m.error_passkey_registered(),
+  ERROR_INVALID_DOMAIN: () => m.error_passkey_domain(),
+  ERROR_INVALID_RP_ID: () => m.error_passkey_domain(),
+  ERROR_AUTHENTICATOR_MISSING_DISCOVERABLE_CREDENTIAL_SUPPORT: () => m.error_passkey_unsupported(),
+  ERROR_AUTHENTICATOR_MISSING_USER_VERIFICATION_SUPPORT: () => m.error_passkey_unsupported(),
+  ERROR_AUTHENTICATOR_NO_SUPPORTED_PUBKEYCREDPARAMS_ALG: () => m.error_passkey_unsupported(),
+  AUTHENTICATION_FAILED: () => m.error_passkey_failed(),
+  PASSKEY_NOT_FOUND: () => m.error_passkey_failed(),
+  CHALLENGE_NOT_FOUND: () => m.error_passkey_failed(),
+  FAILED_TO_VERIFY_REGISTRATION: () => m.error_passkey_failed(),
 };
 
 function errorFields(error: unknown): {
@@ -57,6 +80,8 @@ export function localizeError(error: unknown, fallback: string = m.common_unknow
   }
   if (code && genericCodes[code]) return (genericCodes[code] as MessageFn)();
   if (code && authCodes[code]) return (authCodes[code] as MessageFn)();
+  // Other WebAuthn failures carry the browser's English message.
+  if (code?.startsWith("ERROR_")) return m.error_passkey_failed();
   // better-auth's rate limiter answers 429 without a code.
   if (status === 429) return m.error_too_many_requests();
   // A schema parsed in the browser: its message is the issues as JSON.
