@@ -46,7 +46,7 @@ export function UrlScopeBadge({ url, testId }: { url: string; testId: string }) 
   const scope = urlHostScope(url);
   if (!scope) return null;
   return (
-    <Badge variant="outline" className="font-sans" data-testid={testId} data-scope={scope}>
+    <Badge variant="outline" data-testid={testId} data-scope={scope}>
       <Dot tone="warn" small />
       {scope === "local" ? m.url_scope_local() : m.url_scope_private()}
     </Badge>
