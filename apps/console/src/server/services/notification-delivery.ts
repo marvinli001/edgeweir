@@ -2,12 +2,13 @@ import { createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import { type AlertEventKind, alertChannelConfig, smtpInput } from "@edgeweir/contract";
-import { schema } from "@edgeweir/db";
-import { eq } from "drizzle-orm";
+import type { schema } from "@edgeweir/db";
 import nodemailer from "nodemailer";
+import * as z from "zod";
 import { m } from "../../web/paraglide/messages.js";
 import type { AppContext } from "../lib/context";
 import { outboundAddress, postNotification, withinDeadline } from "../lib/outbound";
+import { defineSetting } from "./settings";
 
 export const SMTP_KEY = "notification_smtp";
 export const smtpBinding = { purpose: "system_setting.notification_smtp", recordId: SMTP_KEY };
@@ -30,16 +31,18 @@ export type Notification = {
   occurredAt: string;
   resourceId?: string;
 };
+/** The SMTP settings, sealed with smtpBinding into one envelope (JSON text); empty until saved. */
+export const smtpSetting = defineSetting({
+  key: SMTP_KEY,
+  schema: z.object({ envelope: z.string() }),
+  defaults: { envelope: "" },
+  auditAction: "alert.smtp_update",
+});
 export async function loadSmtp(app: AppContext) {
-  const [row] = await app.db
-    .select()
-    .from(schema.systemSetting)
-    .where(eq(schema.systemSetting.key, SMTP_KEY));
-  if (!row) return null;
+  const { envelope } = await smtpSetting.read(app.db);
+  if (!envelope) return null;
   return smtpInput.parse(
-    JSON.parse(
-      app.masterKey.open(JSON.parse(String(row.value.envelope)), smtpBinding).toString("utf8"),
-    ),
+    JSON.parse(app.masterKey.open(JSON.parse(envelope), smtpBinding).toString("utf8")),
   );
 }
 export async function deliverNotification(

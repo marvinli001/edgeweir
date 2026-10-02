@@ -9,8 +9,9 @@ import { and, asc, eq, gt, gte, lt, lte, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { lockUsage, lockUsageWatermark } from "../lib/locks";
 import { deleteInBatches } from "../lib/retention";
-import { type Actor, recordAudit } from "./audit";
+import type { Actor } from "./audit";
 import type { Executor } from "./revisions";
+import { defineSetting } from "./settings";
 import { findSite } from "./sites";
 
 const WINDOW_MS = USAGE_WINDOW_SECONDS * 1000;
@@ -40,30 +41,17 @@ function toRecord(row: UsageRow): UsageRecord {
   };
 }
 
-export async function getUsageSettings(db: Executor): Promise<UsageSettings> {
-  const [row] = await db
-    .select()
-    .from(schema.systemSetting)
-    .where(eq(schema.systemSetting.key, SETTINGS_KEY));
-  const parsed = usageSettings.safeParse({ ...USAGE_DEFAULTS, ...(row?.value ?? {}) });
-  return parsed.success ? parsed.data : USAGE_DEFAULTS;
-}
+const usageSetting = defineSetting({
+  key: SETTINGS_KEY,
+  schema: usageSettings,
+  defaults: USAGE_DEFAULTS,
+  auditAction: "system.usage_update",
+});
 
-export async function setUsageSettings(db: Database, input: UsageSettings, actor: Actor) {
-  return db.transaction(async (tx) => {
-    const before = await getUsageSettings(tx);
-    await tx
-      .insert(schema.systemSetting)
-      .values({ key: SETTINGS_KEY, value: input })
-      .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value: input } });
-    await recordAudit(tx, actor, {
-      action: "system.usage_update",
-      targetType: "system_setting",
-      targetId: SETTINGS_KEY,
-      metadata: { from: before, to: input },
-    });
-    return input;
-  });
+export const getUsageSettings = usageSetting.read;
+
+export function setUsageSettings(db: Database, input: UsageSettings, actor: Actor) {
+  return db.transaction((tx) => usageSetting.write(tx, actor, input));
 }
 
 /** The stored completeness watermark (it only moves forward), or null. */

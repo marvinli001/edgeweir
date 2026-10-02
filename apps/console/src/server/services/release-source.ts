@@ -3,25 +3,27 @@ import {
   forbiddenOriginRange,
   type ReleaseSource,
   type ReleaseSourceInput,
-  releaseBaseUrl,
+  releaseSourceInput,
 } from "@edgeweir/contract";
-import { schema } from "@edgeweir/db";
-import { eq } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { outboundAddress, withinDeadline } from "../lib/outbound";
-import { type Actor, recordAudit } from "./audit";
+import type { Actor } from "./audit";
 import type { Executor } from "./revisions";
+import { defineSetting } from "./settings";
 
 const RELEASE_SOURCE_KEY = "node_release_source";
 
+/** The saved mirror; an empty URL when none is saved. */
+const releaseSourceSetting = defineSetting({
+  key: RELEASE_SOURCE_KEY,
+  schema: releaseSourceInput,
+  defaults: { url: "" },
+  auditAction: "system.release_source_update",
+});
+
 async function savedUrl(db: Executor): Promise<string> {
-  const [row] = await db
-    .select()
-    .from(schema.systemSetting)
-    .where(eq(schema.systemSetting.key, RELEASE_SOURCE_KEY));
-  const parsed = releaseBaseUrl.safeParse(row?.value.url);
-  return parsed.success ? parsed.data : "";
+  return (await releaseSourceSetting.read(db)).url;
 }
 
 /**
@@ -56,23 +58,11 @@ export async function setReleaseSource(
       );
     }
   }
-  await app.db.transaction(async (tx) => {
-    const before = await savedUrl(tx);
-    if (input.url) {
-      const value = { url: input.url };
-      await tx
-        .insert(schema.systemSetting)
-        .values({ key: RELEASE_SOURCE_KEY, value })
-        .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value } });
-    } else {
-      await tx.delete(schema.systemSetting).where(eq(schema.systemSetting.key, RELEASE_SOURCE_KEY));
-    }
-    await recordAudit(tx, actor, {
-      action: "system.release_source_update",
-      targetType: "system_setting",
-      targetId: RELEASE_SOURCE_KEY,
-      metadata: { before, after: input.url },
-    });
-  });
+  await app.db.transaction((tx) =>
+    // An empty URL removes the saved one: the environment or the default applies again.
+    releaseSourceSetting.write(tx, actor, input.url ? { url: input.url } : null, {
+      metadata: (before) => ({ before: before.url, after: input.url }),
+    }),
+  );
   return getReleaseSource(app);
 }

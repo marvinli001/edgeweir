@@ -20,12 +20,13 @@ import {
   channelBinding,
   deliverNotification,
   loadSmtp,
-  SMTP_KEY,
   SmtpNotConfiguredError,
   smtpBinding,
+  smtpSetting,
 } from "./notification-delivery";
 import type { Executor } from "./revisions";
 import { elevatedSites, raiseCcAlert } from "./security";
+import { defineSetting } from "./settings";
 import { findSite } from "./sites";
 
 const POLICY_KEY = "alert_policy";
@@ -181,27 +182,19 @@ export async function testAlertChannel(app: AppContext, id: string, actor: Actor
   });
   return { ok: true as const };
 }
+const policySetting = defineSetting({
+  key: POLICY_KEY,
+  schema: alertPolicy,
+  defaults: alertPolicy.parse({}),
+  auditAction: "alert.policy_update",
+});
 export async function getAlertPolicy(app: AppContext): Promise<AlertPolicy> {
-  const [row] = await app.db
-    .select()
-    .from(schema.systemSetting)
-    .where(eq(schema.systemSetting.key, POLICY_KEY));
-  return alertPolicy.parse(row?.value ?? {});
+  return policySetting.read(app.db);
 }
 export async function setAlertPolicy(app: AppContext, input: AlertPolicy, actor: Actor) {
-  return app.db.transaction(async (tx) => {
-    await tx
-      .insert(schema.systemSetting)
-      .values({ key: POLICY_KEY, value: input })
-      .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value: input } });
-    await recordAudit(tx, actor, {
-      action: "alert.policy_update",
-      targetType: "system_setting",
-      targetId: POLICY_KEY,
-      metadata: input,
-    });
-    return input;
-  });
+  return app.db.transaction((tx) =>
+    policySetting.write(tx, actor, input, { metadata: () => input }),
+  );
 }
 export async function getSmtpConfig(app: AppContext) {
   const config = await loadSmtp(app);
@@ -241,15 +234,12 @@ export async function setSmtpConfig(app: AppContext, input: SmtpInput, actor: Ac
     envelope: JSON.stringify(app.masterKey.seal(JSON.stringify(config), smtpBinding)),
   };
   return app.db.transaction(async (tx) => {
-    await tx
-      .insert(schema.systemSetting)
-      .values({ key: SMTP_KEY, value })
-      .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value } });
-    await recordAudit(tx, actor, {
-      action: "alert.smtp_update",
-      targetType: "system_setting",
-      targetId: SMTP_KEY,
-      metadata: { host: input.host, credentialsRotated: !!input.password, customCa: !!input.ca },
+    await smtpSetting.write(tx, actor, value, {
+      metadata: () => ({
+        host: input.host,
+        credentialsRotated: !!input.password,
+        customCa: !!input.ca,
+      }),
     });
     return { ok: true as const };
   });

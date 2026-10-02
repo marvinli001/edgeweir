@@ -19,6 +19,7 @@ import { type Actor, recordAudit } from "./audit";
 import { nodeIpRows, schedulingAddressesOf } from "./node-addresses";
 import { normalizeSerial } from "./nodes";
 import { type Executor, latestRevision, publisher, type Tx } from "./revisions";
+import { defineSetting } from "./settings";
 
 export const PROBE_TOKEN_PREFIX = "ewp_";
 export const PROBE_SETTINGS_KEY = "probes";
@@ -51,30 +52,17 @@ export interface Prober {
 export const hashProbeToken = (token: string) =>
   createHash("sha256").update(token, "utf8").digest("hex");
 
-export async function getProbeSettings(db: Executor): Promise<ProbeSettings> {
-  const [row] = await db
-    .select()
-    .from(schema.systemSetting)
-    .where(eq(schema.systemSetting.key, PROBE_SETTINGS_KEY));
-  const parsed = probeSettings.safeParse({ ...PROBE_SETTINGS_DEFAULTS, ...(row?.value ?? {}) });
-  return parsed.success ? parsed.data : PROBE_SETTINGS_DEFAULTS;
-}
+const probeSetting = defineSetting({
+  key: PROBE_SETTINGS_KEY,
+  schema: probeSettings,
+  defaults: PROBE_SETTINGS_DEFAULTS,
+  auditAction: "system.probes_update",
+});
 
-export async function setProbeSettings(db: Database, input: ProbeSettings, actor: Actor) {
-  return db.transaction(async (tx) => {
-    const before = await getProbeSettings(tx);
-    await tx
-      .insert(schema.systemSetting)
-      .values({ key: PROBE_SETTINGS_KEY, value: input })
-      .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value: input } });
-    await recordAudit(tx, actor, {
-      action: "system.probes_update",
-      targetType: "system_setting",
-      targetId: PROBE_SETTINGS_KEY,
-      metadata: { from: before, to: input },
-    });
-    return input;
-  });
+export const getProbeSettings = probeSetting.read;
+
+export function setProbeSettings(db: Database, input: ProbeSettings, actor: Actor) {
+  return db.transaction((tx) => probeSetting.write(tx, actor, input));
 }
 
 /** Seconds of results that count: three rounds, at least 15 s. */
