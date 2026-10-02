@@ -408,10 +408,19 @@ export const siteDelivery = z.object({
   state: z.enum(["disabled", "pending", "partial", "live"]),
   /** Online active nodes of the site's cluster. */
   totalNodes: z.number().int(),
-  /** Of those, nodes whose applied configuration has the site (any version). */
+  /**
+   * Of those, nodes whose applied configuration has the site (any version);
+   * for a disabled site, the nodes that still run it.
+   */
   servingNodes: z.number().int(),
   /** Of those, nodes running the site's latest version with a healthy data plane. */
   currentNodes: z.number().int(),
+  /**
+   * Set while the cluster's configuration canary holds the site's latest
+   * version back from the nodes outside the canary: when its window ends
+   * and whether every node then gets the version without the operator.
+   */
+  canary: z.object({ endsAt: isoDateTime, autoPromote: z.boolean() }).nullable(),
 });
 
 export const site = z.object({

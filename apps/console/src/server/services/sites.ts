@@ -125,6 +125,7 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
         totalNodes: 0,
         servingNodes: 0,
         currentNodes: 0,
+        canary: null,
       },
       cacheGeneration: r.cacheGeneration,
       domains: domains.filter((d) => d.siteId === r.id).map(formatDomain),

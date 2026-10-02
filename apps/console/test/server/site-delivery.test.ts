@@ -66,6 +66,7 @@ describe("site delivery: where a site's configuration runs", async () => {
       totalNodes: 2,
       servingNodes: 0,
       currentNodes: 0,
+      canary: null,
     });
     await apply([nodeIds[0] as string]);
     expect(await delivery()).toEqual({
@@ -73,6 +74,7 @@ describe("site delivery: where a site's configuration runs", async () => {
       totalNodes: 2,
       servingNodes: 1,
       currentNodes: 1,
+      canary: null,
     });
     await apply([nodeIds[1] as string]);
     expect(await delivery()).toEqual({
@@ -80,6 +82,7 @@ describe("site delivery: where a site's configuration runs", async () => {
       totalNodes: 2,
       servingNodes: 2,
       currentNodes: 2,
+      canary: null,
     });
   });
 
@@ -114,7 +117,18 @@ describe("site delivery: where a site's configuration runs", async () => {
       enabled: false,
       expectedUpdatedAt: site.updatedAt,
     });
-    expect(disabled.site.delivery.state).toBe("disabled");
+    // Until they apply the revision without it, the nodes still run the site.
+    expect(disabled.site.delivery).toEqual({
+      state: "disabled",
+      totalNodes: 2,
+      servingNodes: 2,
+      currentNodes: 0,
+      canary: null,
+    });
+    await apply(nodeIds.slice(0, 1));
+    expect(await delivery()).toMatchObject({ state: "disabled", servingNodes: 1 });
+    await apply(nodeIds.slice(1, 2));
+    expect(await delivery()).toMatchObject({ state: "disabled", servingNodes: 0 });
   });
 
   it("is pending without online nodes", async () => {
@@ -129,6 +143,104 @@ describe("site delivery: where a site's configuration runs", async () => {
       totalNodes: 0,
       servingNodes: 0,
       currentNodes: 0,
+      canary: null,
     });
+  });
+});
+
+describe("site delivery during a configuration canary", async () => {
+  const { ctx, client: pglite } = await createTestContext();
+  const app = createApp(ctx);
+  const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
+  let admin: ApiClient;
+  let clusterId: string;
+  let canaryNode: string;
+  let stableNode: string;
+  let siteId: string;
+  let otherId: string;
+  const origins = [{ address: "origin.test", port: 8080 }];
+  const policy = {
+    enabled: true,
+    windowSeconds: 600,
+    autoPromote: true,
+    errorRatioMultiplier: 2,
+    errorRatioFloor: 0.05,
+    minRequests: 10,
+  };
+
+  /** The node reports the cluster's latest revision applied with a healthy data plane. */
+  const report = async (nodeId: string) => {
+    const row = await latestRevision(ctx.db, clusterId);
+    const values = {
+      nodeId,
+      appliedRevision: row?.revision ?? 0,
+      appliedContentHash: row?.contentHash ?? "",
+      state: "applied",
+      dataPlaneHealthy: true,
+    };
+    await ctx.db
+      .insert(schema.nodeConfigStatus)
+      .values(values)
+      .onConflictDoUpdate({ target: schema.nodeConfigStatus.nodeId, set: values });
+  };
+  const delivery = async (id = siteId) => (await admin.sites.get({ id })).delivery;
+
+  beforeAll(async () => {
+    await setupPlatform(ctx);
+    admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
+    clusterId = (await admin.clusters.list())[0]?.id ?? "";
+    const defaultGroup = (await admin.nodeGroups.list({ clusterId }))[0]?.id ?? "";
+    const canaryGroup = (
+      await admin.nodeGroups.create({ clusterId, name: "canary", isCanary: true })
+    ).id;
+    const [a, b] = await ctx.db
+      .insert(schema.node)
+      .values([
+        { clusterId, nodeGroupId: canaryGroup, name: "edge-canary", lastSeenAt: new Date() },
+        { clusterId, nodeGroupId: defaultGroup, name: "edge-stable", lastSeenAt: new Date() },
+      ])
+      .returning({ id: schema.node.id });
+    canaryNode = a?.id ?? "";
+    stableNode = b?.id ?? "";
+    siteId = (await admin.sites.create({ name: "shop", domains: ["shop.test"], origins })).site.id;
+    otherId = (await admin.sites.create({ name: "blog", domains: ["blog.test"], origins })).site.id;
+    await report(canaryNode);
+    await report(stableNode);
+    await admin.clusters.setRolloutPolicy({ id: clusterId, ...policy });
+  });
+  afterAll(() => pglite.close());
+
+  it("says until when the canary holds a changed site back from the other nodes", async () => {
+    const changed = await admin.sites.update({
+      id: siteId,
+      domains: ["shop.test", "www.shop.test"],
+    });
+    const rollout = await admin.clusters.rollout({ id: clusterId });
+    expect(rollout).toMatchObject({
+      state: "canary",
+      candidateRevision: changed.revision.revision,
+    });
+    const canary = { endsAt: rollout.windowEndsAt, autoPromote: true };
+    expect(changed.site.delivery).toEqual({
+      state: "partial",
+      totalNodes: 2,
+      servingNodes: 2,
+      currentNodes: 0,
+      canary,
+    });
+    // An unchanged site runs the same version on both revisions.
+    expect(await delivery(otherId)).toMatchObject({ state: "live", canary: null });
+    await report(canaryNode);
+    expect(await delivery()).toMatchObject({ state: "partial", currentNodes: 1, canary });
+    // Without automatic promotion the operator ends the canary.
+    await admin.clusters.setRolloutPolicy({ id: clusterId, ...policy, autoPromote: false });
+    expect((await delivery()).canary).toEqual({ ...canary, autoPromote: false });
+  });
+
+  it("drops the canary once the candidate goes to every node", async () => {
+    await admin.clusters.promoteRollout({ id: clusterId });
+    expect(await delivery()).toMatchObject({ state: "partial", currentNodes: 1, canary: null });
+    await report(stableNode);
+    expect(await delivery()).toMatchObject({ state: "live", currentNodes: 2, canary: null });
   });
 });
