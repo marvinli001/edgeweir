@@ -196,7 +196,7 @@ export async function uploadCertificate(
 }
 
 /** A certificate name outside a DNS zone (the zone itself and names below it are inside). */
-const outsideZone = (name: string, zone: string) =>
+export const outsideZone = (name: string, zone: string) =>
   name.replace(/^\*\./, "") !== zone && !name.endsWith(`.${zone}`);
 
 export async function requestCertificate(

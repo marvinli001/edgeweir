@@ -86,47 +86,56 @@ export const notPointing = (result: Map<string, Pointing>) =>
   [...result].filter(([, p]) => p === "unresolved" || p === "elsewhere").map(([name]) => name);
 
 /**
+ * Who would answer the HTTP-01 challenges of `names`: the clusters serving
+ * them that have no online active node (`offline`, by name) and the online
+ * active nodes there without http01-v1 (`lacking`, by name), both sorted.
+ */
+export async function http01Readiness(db: Executor, names: readonly string[]) {
+  const clusters = await servingClusters(db, names);
+  const clusterIds = [...new Set(clusters.values())];
+  const online = (await activeNodes(db, clusterIds)).filter((n) => isOnline(n.lastSeenAt));
+  const lacking = online
+    .filter((n) => !nodeSupportsFeature(n.features, HTTP01))
+    .map((n) => n.name)
+    .sort();
+  const empty = clusterIds.filter((id) => !online.some((n) => n.clusterId === id));
+  const offline = empty.length
+    ? (
+        await db
+          .select({ name: schema.cluster.name })
+          .from(schema.cluster)
+          .where(inArray(schema.cluster.id, empty))
+      )
+        .map((c) => c.name)
+        .sort()
+    : [];
+  return { offline, lacking };
+}
+
+/**
  * Refuses an HTTP-01 request the nodes cannot answer: every cluster serving
  * its names needs an online active node, and every online active node there
  * http01-v1 (the issuance needs them all to apply the challenge); unless
  * skipped, every name must resolve to the cluster's nodes only
  * (CERTIFICATE_DNS_NOT_POINTING). Lookups that fail or nodes without a known
- * public address never refuse.
+ * public address never refuse. The first failure only (https.check lists
+ * them all).
  */
 export async function assertHttp01Ready(
   app: AppContext,
   names: readonly string[],
   opts: { skipDnsCheck: boolean },
 ) {
-  const clusters = await servingClusters(app.db, names);
-  const clusterIds = [...new Set(clusters.values())];
-  const online = (await activeNodes(app.db, clusterIds)).filter((n) => isOnline(n.lastSeenAt));
-  const lacking = online.filter((n) => !nodeSupportsFeature(n.features, HTTP01));
-  const empty = clusterIds.filter((id) => !online.some((n) => n.clusterId === id));
-  if (lacking.length || empty.length) {
-    const offline = empty.length
-      ? await app.db
-          .select({ name: schema.cluster.name })
-          .from(schema.cluster)
-          .where(inArray(schema.cluster.id, empty))
-      : [];
-    if (!lacking.length)
-      fail("CERTIFICATE_NODES_OFFLINE", "no online node answers HTTP-01", {
-        clusters: offline
-          .map((c) => c.name)
-          .sort()
-          .slice(0, 5)
-          .join(", "),
-      });
+  const { offline, lacking } = await http01Readiness(app.db, names);
+  if (lacking.length)
     fail("NODE_CAPABILITY_REQUIRED", "cluster nodes cannot answer HTTP-01", {
       features: HTTP01,
-      nodes: lacking
-        .map((n) => n.name)
-        .sort()
-        .slice(0, 5)
-        .join(", "),
+      nodes: lacking.slice(0, 5).join(", "),
     });
-  }
+  if (offline.length)
+    fail("CERTIFICATE_NODES_OFFLINE", "no online node answers HTTP-01", {
+      clusters: offline.slice(0, 5).join(", "),
+    });
   if (opts.skipDnsCheck) return;
   const failed = notPointing(await http01Pointing(app, app.db, names));
   if (failed.length)

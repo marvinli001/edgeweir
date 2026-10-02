@@ -182,6 +182,57 @@ export const certificateRequest = z
     path: ["eabKid"],
   });
 
+/**
+ * What stops one-click HTTPS for a site (https.check), every blocker at
+ * once. HTTP-01: `nodes_offline` (the cluster has no online active node),
+ * `nodes_lack_http01` (online nodes without http01-v1), `dns_not_pointing`
+ * (a name resolves to no node, or to other addresses too). DNS-01 (a site
+ * with a wildcard domain): `dns_credential_missing` (no DNS credential's
+ * zone covers every name), `dns_credential_failed` (its test failed;
+ * `error` is the API error code). Both: `caa_forbidden` (CAA records of the
+ * name or a parent domain do not allow the CA).
+ */
+export const httpsBlocker = z.discriminatedUnion("code", [
+  z.object({ code: z.literal("nodes_offline"), cluster: z.string() }),
+  z.object({ code: z.literal("nodes_lack_http01"), nodes: z.array(z.string()) }),
+  z.object({
+    code: z.literal("dns_not_pointing"),
+    name: z.string(),
+    pointing: z.enum(["unresolved", "elsewhere"]),
+  }),
+  z.object({ code: z.literal("dns_credential_missing"), names: z.array(z.string()) }),
+  z.object({
+    code: z.literal("dns_credential_failed"),
+    credential: z.string(),
+    error: z.string(),
+  }),
+  z.object({ code: z.literal("caa_forbidden"), name: z.string() }),
+]);
+export const httpsCheckInput = z.object({
+  id: uuid,
+  /** The CA whose CAA permission is checked. */
+  ca: z.enum(["letsencrypt", "zerossl"]).default("letsencrypt"),
+});
+export const httpsCheck = z.object({
+  /**
+   * The request one-click HTTPS sends (certificates.request with
+   * bindSiteId): the site's name and domains, HTTP-01, or DNS-01 with the
+   * first DNS credential whose zone covers every name when the site has a
+   * wildcard domain; the email of the last ACME account or request, else
+   * the operator's.
+   */
+  request: z.object({
+    name: z.string(),
+    names: z.array(z.string()),
+    email: z.string(),
+    challenge: z.enum(["http01", "dns01"]),
+    dnsCredentialId: uuid.nullable(),
+  }),
+  blockers: z.array(httpsBlocker),
+  /** Issued, unexpired certificates that cover every domain of the site. */
+  certificates: z.array(z.object({ id: uuid, name: z.string() })),
+});
+
 /** How the console issues ACME certificates. */
 export const certificateSettings = z.object({
   /**
@@ -225,6 +276,11 @@ export const httpsContract = {
     .route({ method: "PUT", path: "/sites/{id}/https", tags: ["sites"] })
     .input(id.extend({ settings: tlsSettings }))
     .output(tlsSettings),
+  /** What a one-click certificate for the site would request, and what stops it. */
+  check: oc
+    .route({ method: "GET", path: "/sites/{id}/https/check", tags: ["sites"] })
+    .input(httpsCheckInput)
+    .output(httpsCheck),
 };
 const credentialProviders = dnsProviderIds.filter((id) => id !== "test") as [
   Exclude<DnsProviderId, "test">,
@@ -297,4 +353,6 @@ export type CertificateDto = z.infer<typeof certificateDto>;
 export type CertificateUpload = z.infer<typeof certificateUpload>;
 export type CertificateRequest = z.infer<typeof certificateRequest>;
 export type CertificateSettings = z.infer<typeof certificateSettings>;
+export type HttpsBlocker = z.infer<typeof httpsBlocker>;
+export type HttpsCheck = z.infer<typeof httpsCheck>;
 export type DnsCredentialInput = z.infer<typeof dnsCredentialInput>;
