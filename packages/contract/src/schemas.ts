@@ -5,7 +5,7 @@ import {
   structuredCacheCondition,
 } from "@edgeweir/rule-engine";
 import * as z from "zod";
-import { normalizeCidr, parseIp } from "./addresses";
+import { CONSOLE_URL_WARNINGS, normalizeCidr, parseIp } from "./addresses";
 import { addExpressionIssue } from "./expressions";
 
 const LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
@@ -711,6 +711,22 @@ export const node = z.object({
   schedulingAddresses: z.array(nodeSchedulingAddress),
   /** Address level DNS uses now (0 primary; higher while lower levels are unreachable). */
   schedulingLevel: z.number().int(),
+  /**
+   * Source address of the node's latest connection to the console (its
+   * public address behind NAT, or a proxy's). Null before it connects.
+   */
+  remoteAddress: z.string().nullable(),
+  /**
+   * Why DNS cannot answer with the node: no_public_address when it reports
+   * no public address and none is configured.
+   */
+  dnsIssue: z.enum(["no_public_address"]).nullable(),
+  /**
+   * Why the node channel refused the node's own client certificate since
+   * its last heartbeat: an OpenSSL verify code, CERT_HAS_EXPIRED when the
+   * node must enroll again.
+   */
+  authError: z.string().nullable(),
 });
 
 export const nodeUpdateInput = z.object({
@@ -732,6 +748,9 @@ export const enrollmentTokenInput = z.object({
     .default(60),
 });
 
+/** Why nodes on other networks may not reach the console URL or the node channel URL. */
+export const consoleUrlWarning = z.enum(CONSOLE_URL_WARNINGS);
+
 export const enrollmentTokenResult = z.object({
   tokenId: uuid,
   token: z.string(),
@@ -739,6 +758,17 @@ export const enrollmentTokenResult = z.object({
   serverUrl: z.string(),
   caSha256: z.string(),
   installCommand: z.string(),
+  /** The console URL (install.sh) or the node channel URL may be out of the nodes' reach. */
+  warnings: z.array(consoleUrlWarning),
+});
+
+/** Whether a token was used yet, and the node it enrolled. */
+export const enrollmentTokenStatus = z.object({
+  tokenId: uuid,
+  expiresAt: isoDateTime,
+  usedAt: isoDateTime.nullable(),
+  /** Null until the token is used, or after the node was deleted. */
+  node: node.nullable(),
 });
 
 export const overview = z.object({
@@ -1210,6 +1240,7 @@ export type TrafficBreakdownItem = z.infer<typeof trafficBreakdownItem>;
 export type TrafficBreakdown = z.infer<typeof trafficBreakdown>;
 export type StarredSite = z.infer<typeof starredSite>;
 export type EnrollmentTokenResult = z.infer<typeof enrollmentTokenResult>;
+export type EnrollmentTokenStatus = z.infer<typeof enrollmentTokenStatus>;
 export type Settings = z.infer<typeof settings>;
 export type ReleaseSource = z.infer<typeof releaseSource>;
 export type ReleaseSourceInput = z.infer<typeof releaseSourceInput>;

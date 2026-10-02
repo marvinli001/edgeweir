@@ -32,6 +32,16 @@ const FRESH = 45_000,
 export const UPGRADE_DEADLINE_MS = 30 * 60_000;
 /** Share of the rollout nodes upgrading at the same time after promotion (at least one). */
 export const MAX_UNAVAILABLE = 0.25;
+/** Active nodes one upgrade covers at most. */
+export const MAX_UPGRADE_NODES = 1000;
+/** Node names an error lists before "+N". */
+const LISTED_NODES = 10;
+/** "a, b, c" for the first names, then "+N" for the rest. */
+export function nodeNameList(names: readonly string[]): string {
+  const sorted = [...names].sort((a, b) => a.localeCompare(b));
+  const shown = sorted.slice(0, LISTED_NODES).join(", ");
+  return sorted.length > LISTED_NODES ? `${shown} +${sorted.length - LISTED_NODES}` : shown;
+}
 /** Deliveries of nodes disabled or deleted during the upgrade; the upgrade goes on without them. */
 const NODE_REMOVED = "upgrade_node_removed";
 type JobRow = typeof job.$inferSelect;
@@ -99,6 +109,77 @@ export async function nodeRelease(
   if (!artifacts.length) fail("UPGRADE_RELEASE_UNAVAILABLE", "release has no supported archive");
   return { version, artifacts };
 }
+/** A looked-up latest version is reused this long, a failed lookup a minute. */
+export const LATEST_VERSION_TTL_MS = 10 * 60_000;
+const LATEST_FAILED_TTL_MS = 60_000;
+const latestVersions = new Map<string, { version: string | null; until: number }>();
+/** Release files on GitHub; their latest version comes from the releases API. */
+const GITHUB_DOWNLOADS =
+  /^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/releases\/download$/;
+
+/** A response body of at most `maxBytes`, as text. */
+async function limitedText(res: Response, maxBytes: number): Promise<string> {
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for await (const chunk of res.body) {
+    length += chunk.byteLength;
+    if (length > maxBytes) throw new Error("response too large");
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/**
+ * The newest node release of the release source, to prefill the upgrade
+ * dialog; null when it cannot be told. GitHub releases (the default
+ * source) answer through the releases API; a mirror through its
+ * `<base>/latest` file, as install.sh reads it (a saved mirror under the
+ * outbound policy). Cached per source for 10 minutes.
+ */
+export async function latestNodeVersion(app: AppContext, now = Date.now()): Promise<string | null> {
+  const source = await getReleaseSource(app);
+  const base = source.effectiveUrl.replace(/\/+$/, "");
+  const cached = latestVersions.get(base);
+  if (cached && cached.until > now) return cached.version;
+  let version: string | null = null;
+  try {
+    const repo = base.match(GITHUB_DOWNLOADS)?.[1];
+    let text: string;
+    if (repo) {
+      const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+        signal: AbortSignal.timeout(10_000),
+        headers: { accept: "application/vnd.github+json", "user-agent": "edgeweir-console" },
+      });
+      const tag = (JSON.parse(await limitedText(res, 2 * 1024 * 1024)) as { tag_name?: unknown })
+        .tag_name;
+      text = typeof tag === "string" ? tag : "";
+    } else if (source.source === "setting") {
+      text = (
+        await outboundGet(app, `${base}/latest`, {
+          maxBytes: 1024,
+          timeoutMs: 10_000,
+          maxRedirects: 3,
+        })
+      ).toString("utf8");
+    } else {
+      text = await limitedText(
+        await fetch(`${base}/latest`, { signal: AbortSignal.timeout(10_000), redirect: "follow" }),
+        1024,
+      );
+    }
+    const parsed = releaseVersion.safeParse(text);
+    version = parsed.success ? parsed.data : null;
+  } catch {
+    version = null;
+  }
+  latestVersions.set(base, {
+    version,
+    until: now + (version ? LATEST_VERSION_TTL_MS : LATEST_FAILED_TTL_MS),
+  });
+  return version;
+}
+
 async function dtos(db: Executor, rows: JobRow[], now = Date.now()): Promise<UpgradeJob[]> {
   if (!rows.length) return [];
   const deliveries = await db
@@ -336,31 +417,37 @@ export async function createUpgrade(
       .from(schema.node)
       .leftJoin(schema.nodeConfigStatus, eq(schema.nodeConfigStatus.nodeId, schema.node.id))
       .where(and(eq(schema.node.clusterId, cluster.id), eq(schema.node.status, "active")))
-      .limit(1001);
+      .limit(MAX_UPGRADE_NODES + 1);
+    if (nodes.length > MAX_UPGRADE_NODES)
+      fail("UPGRADE_TOO_MANY_NODES", `an upgrade covers at most ${MAX_UPGRADE_NODES} nodes`, {
+        limit: MAX_UPGRADE_NODES,
+      });
     const clusterTargets = await rolloutTargets(tx, cluster.id);
     const canary = nodes.filter((n) => n.node.nodeGroupId === group.id),
       now = Date.now();
-    if (
-      !canary.length ||
-      nodes.length > 1000 ||
-      nodes.some(
-        ({ node: n, status: s }) =>
-          n.os !== "linux" ||
-          !release.artifacts.some((a) => a.arch === n.arch) ||
-          !n.supportedFeatures.includes("self-upgrade-v1") ||
-          !n.lastSeenAt ||
-          now - n.lastSeenAt.getTime() > FRESH ||
-          !s?.dataPlaneHealthy ||
-          s.state !== "applied" ||
-          s.appliedContentHash !== targetFor(n, clusterTargets)?.contentHash,
-      )
-    )
+    if (!canary.length)
+      fail("UPGRADE_CANARY_EMPTY", "the node group to upgrade first has no active nodes");
+    const blocked = nodes.filter(
+      ({ node: n, status: s }) =>
+        n.os !== "linux" ||
+        !release.artifacts.some((a) => a.arch === n.arch) ||
+        !n.supportedFeatures.includes("self-upgrade-v1") ||
+        !n.lastSeenAt ||
+        now - n.lastSeenAt.getTime() > FRESH ||
+        !s?.dataPlaneHealthy ||
+        s.state !== "applied" ||
+        s.appliedContentHash !== targetFor(n, clusterTargets)?.contentHash,
+    );
+    if (blocked.length) {
+      const names = nodeNameList(blocked.map((n) => n.node.name));
       fail(
         "UPGRADE_NODES_UNAVAILABLE",
-        "all target nodes must be online, healthy and support signed upgrades",
+        `all active nodes must be online, healthy, in sync and support signed upgrades: ${names}`,
+        { nodes: names },
       );
+    }
     const conflict = await tx
-      .select({ id: delivery.id })
+      .selectDistinct({ name: delivery.nodeName })
       .from(delivery)
       .where(
         and(
@@ -370,9 +457,11 @@ export async function createUpgrade(
           ),
           inArray(delivery.state, ACTIVE),
         ),
-      )
-      .limit(1);
-    if (conflict.length) fail("UPGRADE_BUSY", "a node already has an active upgrade");
+      );
+    if (conflict.length) {
+      const names = nodeNameList(conflict.map((c) => c.name));
+      fail("UPGRADE_BUSY", `nodes already have an unfinished upgrade: ${names}`, { nodes: names });
+    }
     const [created] = await tx
       .insert(job)
       .values({
@@ -435,13 +524,17 @@ export async function cancelUpgrade(app: AppContext, id: string, actor: Actor) {
     const row = await getJob(tx, id);
     await lockCluster(tx, row.clusterId);
     const running = await tx
-      .select()
+      .select({ name: delivery.nodeName })
       .from(delivery)
-      .where(and(eq(delivery.upgradeId, id), eq(delivery.state, "running")))
-      .limit(1);
-    if (running.length) fail("UPGRADE_BUSY", "wait for the running upgrade to finish or roll back");
+      .where(and(eq(delivery.upgradeId, id), eq(delivery.state, "running")));
+    if (running.length) {
+      const names = nodeNameList(running.map((d) => d.name));
+      fail("UPGRADE_BUSY", `wait for the running upgrade to finish or roll back: ${names}`, {
+        nodes: names,
+      });
+    }
     if (!["canary", "rollout"].includes((await getJob(tx, id)).state))
-      fail("UPGRADE_BUSY", "upgrade has already finished");
+      fail("UPGRADE_FINISHED", "upgrade has already finished");
     await tx
       .update(delivery)
       .set({

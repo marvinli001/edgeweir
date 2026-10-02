@@ -27,23 +27,34 @@ export const Route = createFileRoute("/_app/overview")({
   component: OverviewPage,
 });
 
-type NodeState = "disabled" | "offline" | "failed" | "behind" | "synced" | "pending";
+type NodeState = "disabled" | "offline" | "failed" | "unhealthy" | "behind" | "synced" | "pending";
 
 function nodeState(node: Node, latest: number): NodeState {
   if (node.status === "disabled") return "disabled";
   if (!node.online) return "offline";
   if (node.applyState === "failed") return "failed";
   if (node.appliedRevision === 0) return "pending";
+  // Online and configured, but its data plane does not serve.
+  if (!node.dataPlaneHealthy) return "unhealthy";
   // During a canary rollout the other nodes' target is the stable revision, not the latest.
   return node.appliedRevision < (node.targetRevision ?? latest) ? "behind" : "synced";
 }
 
 /** Nodes that need a look come first. */
-const STATE_ORDER: NodeState[] = ["offline", "failed", "behind", "pending", "disabled", "synced"];
+const STATE_ORDER: NodeState[] = [
+  "offline",
+  "failed",
+  "unhealthy",
+  "behind",
+  "pending",
+  "disabled",
+  "synced",
+];
 
 const STATE_TONE: Record<NodeState, StatusTone> = {
   offline: "bad",
   failed: "bad",
+  unhealthy: "bad",
   behind: "warn",
   pending: "idle",
   disabled: "idle",
@@ -54,6 +65,7 @@ function stateLabel(state: NodeState): string {
   return {
     offline: m.nodes_offline,
     failed: m.nodes_apply_failed,
+    unhealthy: m.nodes_unhealthy,
     behind: m.nodes_behind,
     pending: m.nodes_pending,
     disabled: m.nodes_disabled,

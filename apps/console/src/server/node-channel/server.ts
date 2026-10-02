@@ -6,7 +6,13 @@ import { NodeService, ProbeService } from "@edgeweir/proto";
 import type { AppContext } from "../lib/context";
 import { type IssuedServerCertificate, SERVER_CERT_LIFETIME_DAYS } from "../pki/ca";
 import { createProbeService, type ProbeServiceOptions } from "./probe-service";
-import { createNodeService, peerContextValues, peerKey } from "./service";
+import {
+  clientCertificateError,
+  createNodeService,
+  peerContextValues,
+  peerKey,
+  recordRefusedCertificate,
+} from "./service";
 
 /** Reissue the server certificate once less than a third of its lifetime remains. */
 const RENEW_BEFORE_MS = (SERVER_CERT_LIFETIME_DAYS * 24 * 3600 * 1000) / 3;
@@ -35,17 +41,23 @@ export interface NodeChannelOptions {
   probes?: ProbeServiceOptions;
 }
 
-/** Runs before the body is read: without a client certificate only the enrollments are served. */
-function requireClientCertificate(ctx: HandlerContext) {
-  if (
-    ctx.method !== NodeService.method.enroll &&
-    ctx.method !== ProbeService.method.enrollProbe &&
-    !ctx.values.get(peerKey).authorized
-  )
-    throw new ConnectError(
-      "client certificate required (mutual TLS); enroll first",
-      Code.Unauthenticated,
-    );
+/**
+ * Runs before the body is read: without a client certificate only the
+ * enrollments are served. A node's own certificate the TLS layer refused
+ * (e.g. expired) is recorded on the node.
+ */
+function clientCertificateGate(app: AppContext) {
+  return async (ctx: HandlerContext) => {
+    const peer = ctx.values.get(peerKey);
+    if (
+      ctx.method === NodeService.method.enroll ||
+      ctx.method === ProbeService.method.enrollProbe ||
+      peer.authorized
+    )
+      return;
+    await recordRefusedCertificate(app, peer);
+    throw new ConnectError(clientCertificateError(peer), Code.Unauthenticated);
+  };
 }
 
 export interface NodeChannel {
@@ -99,7 +111,7 @@ export async function startNodeChannel(
     },
     contextValues: peerContextValues,
     readMaxBytes: READ_MAX_BYTES,
-    requestGate: requireClientCertificate,
+    requestGate: clientCertificateGate(app),
     // The node channel serves nothing but NodeService and ProbeService.
     fallback: (_req, res) => {
       res.writeHead(404, { "content-type": "text/plain" });

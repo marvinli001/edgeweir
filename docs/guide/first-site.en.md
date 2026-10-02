@@ -44,7 +44,7 @@ Node installation, DNS propagation, and certificate issuance each take time that
    | **Email** | Sign-in email |
    | **Password** | 12–128 characters |
 
-4. Verify: the console signs in and opens **Overview**; on **System**, the **System** card shows **Setup token** as **Used {time}**.
+4. Verify: the console signs in and opens **Clusters & nodes** with the **Add node** dialog of the cluster `default` (the next step); on **System**, the **System** card shows **Setup token** as **Used {time}**.
 
 Objects created by setup:
 
@@ -56,7 +56,7 @@ Objects created by setup:
 
 ## 2. Enroll a node
 
-1. Open **Clusters & nodes**, select the cluster `default`, and click **Add node**.
+1. Open **Clusters & nodes**, select the cluster `default`, and click **Add node** (open already after setup; while there is no node, the button at the top of the sidebar is **Add node** too).
 
 2. Fill in the form and click **Generate command**.
 

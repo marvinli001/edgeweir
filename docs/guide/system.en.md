@@ -50,9 +50,9 @@ Result: the **Install command** (shown once, with a countdown) and the **CA fing
 | Column | Content |
 | --- | --- |
 | **Node** | Name and host name |
-| **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled** |
+| **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled**; an online node that reports an unhealthy data plane is also marked **Data plane unhealthy**; an offline node whose certificate the node channel refuses is marked **Certificate expired** or **Certificate refused** |
 | **Node group** | Node group and region |
-| **IP** | Unicast addresses in the node's latest heartbeat (replaced on every heartbeat, at most 64); for the addresses DNS and probes use, see [Scheduling addresses and backup IPs](scheduling.en.md#scheduling-addresses-and-backup-ips) |
+| **IP** | Unicast addresses in the node's latest heartbeat (replaced on every heartbeat, at most 64); for the addresses DNS and probes use, see [Scheduling addresses and backup IPs](scheduling.en.md#scheduling-addresses-and-backup-ips); marked **No public address** when DNS has no address for the node, see [Nodes without a public address](scheduling.en.md#nodes-without-a-public-address) |
 | **Metrics** | CPU and memory usage reported by the node (`metrics-v1`); "—" without metrics |
 | **Applied** | The revision the node has applied; badge **In sync** (the node's target revision reached), **Behind**, **Apply failed** (hover for the reason), or **Upgrade required** |
 | **Agent / engine** | Agent version, engine, and engine version |
@@ -60,7 +60,7 @@ Result: the **Install command** (shown once, with a countdown) and the **CA fing
 
 | Action | Description |
 | --- | --- |
-| **Details** | Also by clicking the node's name (`/clusters?node=<node ID>`): **Metrics**, **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md) |
+| **Details** | Also by clicking the node's name (`/clusters?node=<node ID>`): **Metrics**, **Data plane** (Healthy / Data plane unhealthy), **Connects from**, **Certificate expires** (the client certificate; marked **Expires soon** with less than 10 days left, by when nodes normally renewed it already, and **Certificate expired** or **Certificate refused** once past or refused by the node channel), **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md) |
 | **Rename** | At most 64 characters |
 | **Move to group** | Node groups of the same cluster only |
 | **Disable** / **Enable** | A disabled node is refused by the node channel (except for certificate renewal, so its certificate is still valid when enabled) and keeps serving its last successfully applied configuration; its unfinished purge & prefetch deliveries are marked **Skipped**. Once the node is enabled and pulls tasks again, it gets one whole-site purge for every site those purges touched |
@@ -235,8 +235,8 @@ Read-only (card **System**).
 | Item | Source |
 | --- | --- |
 | **Version** | Image version `<YYYYMMDD>-<commit>`; `dev` when run from source |
-| **Console URL** | `EDGEWEIR_PUBLIC_URL` |
-| **Node channel** | `EDGEWEIR_NODE_API_URL`; when unset, `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` |
+| **Console URL** | `EDGEWEIR_PUBLIC_URL`; localhost or a loopback address is marked "This machine only", a private address "Private address": nodes on other networks cannot download `install.sh` from it |
+| **Node channel** | `EDGEWEIR_NODE_API_URL`; when unset, `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>`. Marked the same way: nodes on other networks cannot enroll |
 | **CA fingerprint** | SHA-256 of the node channel's internal CA; install commands carry the same value in `--ca-sha256` |
 | **Analytics** | `EDGEWEIR_ANALYTICS` (`lite` / `clickhouse`) |
 | **Setup token** | **Not used** or **Used {time}** |

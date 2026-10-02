@@ -1,4 +1,10 @@
-import type { UpgradeJob } from "@edgeweir/contract";
+import {
+  compareReleaseVersions,
+  type Node,
+  type NodeGroup,
+  releaseVersion,
+  type UpgradeJob,
+} from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -9,8 +15,9 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
 import { orpc } from "@/lib/orpc";
@@ -26,6 +33,41 @@ const stateLabel = (state: UpgradeJob["state"] | UpgradeJob["deliveries"][number
     pending: m.upgrade_pending,
     running: m.upgrade_running,
   })[state]?.() ?? state;
+
+/** Architectures node releases are built for. */
+const RELEASE_ARCHES = ["amd64", "arm64"];
+const ACTIVE_DELIVERY = ["held", "pending", "running"];
+
+/**
+ * Why an active node stops an upgrade from starting, as the console checks
+ * it (every active node of the cluster must be ready); null when ready.
+ */
+function upgradeBlocker(node: Node, busy: ReadonlySet<string>): string | null {
+  if (busy.has(node.id)) return m.upgrade_reason_busy();
+  if (!node.online) return m.nodes_offline();
+  if (node.os !== "linux") return m.upgrade_reason_os();
+  if (!RELEASE_ARCHES.includes(node.arch)) return m.upgrade_reason_arch();
+  if (!node.supportedFeatures.includes("self-upgrade-v1")) return m.upgrade_reason_feature();
+  if (!node.dataPlaneHealthy) return m.nodes_unhealthy();
+  if (node.applyState !== "applied") return m.upgrade_reason_not_applied();
+  if (node.targetRevision !== null && node.appliedRevision !== node.targetRevision)
+    return m.nodes_behind();
+  return null;
+}
+
+/**
+ * The group to upgrade first: a canary group with active nodes, else the
+ * smallest other non-default group with active nodes, else any with nodes.
+ */
+function defaultUpgradeGroup(groups: NodeGroup[], count: (group: NodeGroup) => number) {
+  const withNodes = groups.filter((g) => count(g) > 0);
+  return (
+    withNodes.find((g) => g.isCanary) ??
+    withNodes.filter((g) => !g.isDefault).sort((a, b) => count(a) - count(b))[0] ??
+    withNodes[0]
+  );
+}
+
 export function NodeUpgrades({ clusterId }: { clusterId: string }) {
   const cache = useQueryClient();
   const jobs = useQuery({
@@ -39,15 +81,10 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
     refetchInterval: 5000,
     meta: { background: true },
   });
-  const create = useMutation(orpc.upgrades.create.mutationOptions());
   const promote = useMutation(orpc.upgrades.promote.mutationOptions());
   const cancel = useMutation(orpc.upgrades.cancel.mutationOptions());
-  const [open, setOpen] = React.useState(false),
-    [chosenGroup, setChosenGroup] = React.useState("");
-  const groupId =
-    chosenGroup ||
-    groups.data?.find((g) => nodes.data?.some((n) => n.nodeGroupId === g.id))?.id ||
-    "";
+  const [open, setOpen] = React.useState(false);
+  const openKey = useOpenKey(open);
   const refreshed = async () => {
     await cache.invalidateQueries();
   };
@@ -141,49 +178,139 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
           </Card>
         ))
       )}
-      <FormDialog
+      <UpgradeDialog
+        key={openKey}
         open={open}
         onOpenChange={setOpen}
-        title={m.upgrade_create()}
-        submitLabel={m.upgrade_start()}
-        submitTestId="upgrade-submit"
-        onSubmit={async (data) => {
-          await create.mutateAsync({
-            nodeGroupId: groupId,
-            version: String(data.get("version") ?? ""),
-          });
-          setOpen(false);
-          await refreshed();
-        }}
-      >
-        <Field>
-          <FieldLabel htmlFor="upgrade-version">{m.upgrade_version()}</FieldLabel>
-          <Input
-            id="upgrade-version"
-            name="version"
-            required
-            maxLength={64}
-            placeholder={m.upgrade_version_placeholder()}
-          />
-        </Field>
-        <FormSelect
-          id="upgrade-group"
-          label={m.upgrade_group()}
-          value={groupId}
-          onChange={setChosenGroup}
-          options={(groups.data ?? []).map((g) => ({
-            value: g.id,
-            label: m.upgrade_group_nodes({
-              name: g.name,
-              count: (nodes.data ?? []).filter((n) => n.nodeGroupId === g.id).length,
-            }),
-          }))}
-        />
-        <SafetyNote>{m.upgrade_start_note()}</SafetyNote>
-      </FormDialog>
+        groups={groups.data ?? []}
+        nodes={nodes.data ?? []}
+        jobs={jobs.data ?? []}
+        onCreated={refreshed}
+      />
     </section>
   );
 }
+function UpgradeDialog({
+  open,
+  onOpenChange,
+  groups,
+  nodes,
+  jobs,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  groups: NodeGroup[];
+  nodes: Node[];
+  jobs: UpgradeJob[];
+  onCreated: () => Promise<void>;
+}) {
+  const create = useMutation(orpc.upgrades.create.mutationOptions());
+  const latest = useQuery({
+    ...orpc.upgrades.latestVersion.queryOptions(),
+    enabled: open,
+    staleTime: 10 * 60_000,
+    meta: { background: true },
+  });
+  const [typed, setTyped] = React.useState<string | null>(null);
+  const [chosenGroup, setChosenGroup] = React.useState("");
+  // The latest release until the operator types another version.
+  const version = typed ?? latest.data?.version ?? "";
+  const active = nodes.filter((n) => n.status === "active");
+  const count = (group: NodeGroup) => active.filter((n) => n.nodeGroupId === group.id).length;
+  const groupId = chosenGroup || defaultUpgradeGroup(groups, count)?.id || "";
+  const group = groups.find((g) => g.id === groupId);
+  const busy = new Set(
+    jobs.flatMap((job) =>
+      job.deliveries.filter((d) => ACTIVE_DELIVERY.includes(d.state)).map((d) => d.nodeId),
+    ),
+  );
+  const blocked = active.flatMap((node) => {
+    const reason = upgradeBlocker(node, busy);
+    return reason ? [{ node, reason }] : [];
+  });
+  const parsed = releaseVersion.safeParse(version);
+  // Nodes refuse downgrades: nothing to do when every node runs this version or a newer one.
+  const current =
+    parsed.success &&
+    active.length > 0 &&
+    active.every((n) => (compareReleaseVersions(n.agentVersion, parsed.data) ?? -1) >= 0);
+  const canaryEmpty = !!group && count(group) === 0;
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={m.upgrade_create()}
+      submitLabel={m.upgrade_start()}
+      submitTestId="upgrade-submit"
+      submitDisabled={!parsed.success || blocked.length > 0 || current || canaryEmpty || !groupId}
+      onSubmit={async () => {
+        await create.mutateAsync({ nodeGroupId: groupId, version: parsed.data ?? version });
+        onOpenChange(false);
+        await onCreated();
+      }}
+    >
+      <Field>
+        <FieldLabel htmlFor="upgrade-version">{m.upgrade_version()}</FieldLabel>
+        <Input
+          id="upgrade-version"
+          name="version"
+          required
+          maxLength={64}
+          value={version}
+          onChange={(event) => setTyped(event.target.value)}
+          placeholder={m.upgrade_version_placeholder()}
+          className="font-mono"
+          aria-invalid={!!version.trim() && !parsed.success}
+        />
+        {version.trim() && !parsed.success ? (
+          <FieldError data-testid="upgrade-version-invalid">
+            {m.upgrade_version_invalid()}
+          </FieldError>
+        ) : null}
+        {current ? (
+          <SafetyNote data-testid="upgrade-current">
+            {m.upgrade_nodes_current({ version: parsed.data ?? version })}
+          </SafetyNote>
+        ) : null}
+      </Field>
+      <FormSelect
+        id="upgrade-group"
+        label={m.upgrade_group()}
+        value={groupId}
+        onChange={setChosenGroup}
+        options={groups.map((g) => ({
+          value: g.id,
+          label: m.upgrade_group_nodes({ name: g.name, count: count(g) }),
+        }))}
+      />
+      {group && count(group) === active.length && active.length > 1 ? (
+        <SafetyNote data-testid="upgrade-group-all">
+          {m.upgrade_group_all({ count: active.length })}
+        </SafetyNote>
+      ) : null}
+      {blocked.length ? (
+        <Field data-testid="upgrade-blocked">
+          <FieldLabel>{m.upgrade_blocked()}</FieldLabel>
+          <ul className="divide-y rounded-xl border text-sm">
+            {blocked.map(({ node, reason }) => (
+              <li
+                key={node.id}
+                className="flex items-center gap-2 px-3 py-2"
+                data-testid="upgrade-blocked-node"
+              >
+                <span className="min-w-0 flex-1 truncate font-medium">{node.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{reason}</span>
+              </li>
+            ))}
+          </ul>
+        </Field>
+      ) : null}
+      <SafetyNote>{m.upgrade_start_note()}</SafetyNote>
+    </FormDialog>
+  );
+}
+
 function Delivery({
   delivery: d,
   version,

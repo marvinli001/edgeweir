@@ -1,10 +1,15 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { EnrollmentTokenResult } from "@edgeweir/contract";
+import {
+  consoleUrlWarnings,
+  type EnrollmentTokenResult,
+  type EnrollmentTokenStatus,
+} from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { findNodeGroup } from "./node-groups";
+import { getNode } from "./nodes";
 import { publisher, type Tx } from "./revisions";
 
 export const TOKEN_PREFIX = "ewt_";
@@ -114,6 +119,36 @@ export async function createEnrollmentToken(
       token,
       caSha256: ctx.caSha256,
     }),
+    warnings: consoleUrlWarnings({ consoleUrl: ctx.consoleUrl, nodeApiUrl: ctx.serverUrl }),
+  };
+}
+
+/**
+ * Whether a token enrolled a node yet, and that node, for the add-node
+ * dialog to follow the enrollment. Never returns the token.
+ */
+export async function getEnrollmentToken(db: Database, id: string): Promise<EnrollmentTokenStatus> {
+  const [row] = await db
+    .select({
+      id: schema.enrollmentToken.id,
+      expiresAt: schema.enrollmentToken.expiresAt,
+      usedAt: schema.enrollmentToken.usedAt,
+      usedByNodeId: schema.enrollmentToken.usedByNodeId,
+    })
+    .from(schema.enrollmentToken)
+    .where(eq(schema.enrollmentToken.id, id));
+  if (!row) fail("ENROLLMENT_TOKEN_NOT_FOUND", "enrollment token not found");
+  const [node] = row.usedByNodeId
+    ? await db
+        .select({ id: schema.node.id })
+        .from(schema.node)
+        .where(eq(schema.node.id, row.usedByNodeId))
+    : [];
+  return {
+    tokenId: row.id,
+    expiresAt: row.expiresAt.toISOString(),
+    usedAt: row.usedAt?.toISOString() ?? null,
+    node: node ? await getNode(db, node.id) : null,
   };
 }
 

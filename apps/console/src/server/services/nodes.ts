@@ -117,6 +117,13 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
         reachable: !unreachable.has(a.address),
       })),
       schedulingLevel: effectiveAddresses(scheduling, unreachable).level,
+      remoteAddress: r.remoteAddress,
+      dnsIssue: scheduling.length === 0 ? "no_public_address" : null,
+      // A refusal counts until the node gets through again.
+      authError:
+        r.lastAuthError && r.lastAuthErrorAt && (!r.lastSeenAt || r.lastAuthErrorAt > r.lastSeenAt)
+          ? r.lastAuthError
+          : null,
     };
   });
 }

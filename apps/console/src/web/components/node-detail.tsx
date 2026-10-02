@@ -1,4 +1,4 @@
-import type { Node } from "@edgeweir/contract";
+import { forbiddenOriginRange, type Node, unicastAddress } from "@edgeweir/contract";
 import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -45,6 +45,8 @@ import { cn } from "@/lib/utils";
 
 const MAX_ADDRESSES = 8;
 const LEVELS = [0, 1, 2] as const;
+/** Nodes renew a third of the way before expiry (10 of 30 days): less means renewal is failing. */
+const CERT_WARN_MS = 10 * 24 * 3600 * 1000;
 
 export const levelLabel = (level: number) =>
   level === 0
@@ -57,6 +59,20 @@ const load = (value: number) =>
   new Intl.NumberFormat(getLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
     value,
   );
+
+/** The node channel refuses the node's certificate: expired (enroll again) or another verify error. */
+export function AuthErrorBadge({ node }: { node: Node }) {
+  if (!node.authError) return null;
+  return node.authError === "CERT_HAS_EXPIRED" ? (
+    <Badge variant="destructive" data-testid="node-cert-expired">
+      {m.node_cert_expired()}
+    </Badge>
+  ) : (
+    <Badge variant="destructive" title={node.authError} data-testid="node-cert-rejected">
+      {m.node_cert_rejected()}
+    </Badge>
+  );
+}
 
 /** Used share of a node's memory, 0-100; null without a total. */
 export const memoryPercent = (metrics: NonNullable<Node["metrics"]>) =>
@@ -90,6 +106,7 @@ export function NodeDetailDialog({ node, onClose }: { node: Node; onClose: () =>
         </DialogHeader>
         <div className="flex min-w-0 flex-col gap-6">
           <NodeMetrics node={node} />
+          <NodeFacts node={node} />
           <NodeProbeSwitch node={node} />
           <NodeAddresses node={node} />
           <section className="flex flex-col gap-3">
@@ -175,6 +192,62 @@ function NodeMetrics({ node }: { node: Node }) {
   );
 }
 
+function Fact({
+  label,
+  children,
+  testId,
+}: {
+  label: string;
+  children: React.ReactNode;
+  testId: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1 rounded-xl border px-3 py-2">
+      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+      <dd className="flex min-w-0 flex-wrap items-center gap-2 text-sm" data-testid={testId}>
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+/** Data plane health, the connection's source address and the client certificate's lifetime. */
+function NodeFacts({ node }: { node: Node }) {
+  const certLeft = node.certNotAfter ? Date.parse(node.certNotAfter) - Date.now() : null;
+  return (
+    <dl className="grid gap-2 sm:grid-cols-2" data-testid="node-facts">
+      <Fact label={m.node_data_plane()} testId="node-data-plane">
+        {node.dataPlaneHealthy ? (
+          <StatusDot tone="good">{m.node_data_plane_healthy()}</StatusDot>
+        ) : (
+          <StatusDot tone="bad">{m.nodes_unhealthy()}</StatusDot>
+        )}
+      </Fact>
+      <Fact label={m.node_remote_address()} testId="node-remote-address">
+        <span className="font-mono">{node.remoteAddress ?? "—"}</span>
+      </Fact>
+      <Fact label={m.node_cert_not_after()} testId="node-cert-not-after">
+        {node.certNotAfter ? (
+          <span className="tabular-nums">{formatDateTime(node.certNotAfter)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+        {node.authError ? (
+          <AuthErrorBadge node={node} />
+        ) : certLeft === null ? null : certLeft <= 0 ? (
+          <Badge variant="destructive" data-testid="node-cert-expired">
+            {m.node_cert_expired()}
+          </Badge>
+        ) : certLeft < CERT_WARN_MS ? (
+          <Badge variant="outline" data-testid="node-cert-expiring">
+            {m.node_cert_expiring()}
+          </Badge>
+        ) : null}
+      </Fact>
+    </dl>
+  );
+}
+
 function NodeProbeSwitch({ node }: { node: Node }) {
   const queryClient = useQueryClient();
   const setProbe = useMutation(orpc.nodes.setProbe.mutationOptions());
@@ -212,7 +285,14 @@ function NodeAddresses({ node }: { node: Node }) {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-medium">{m.node_addresses_title()}</h3>
+        <h3 className="flex items-center gap-2 text-sm font-medium">
+          {m.node_addresses_title()}
+          {node.dnsIssue === "no_public_address" ? (
+            <Badge variant="outline" data-testid="node-detail-dns-issue">
+              {m.node_dns_no_public_address()}
+            </Badge>
+          ) : null}
+        </h3>
         {editing ? null : (
           <Button
             size="sm"
@@ -314,6 +394,20 @@ function AddressEditor({
   const [pending, setPending] = React.useState<"save" | "reset" | null>(null);
   const patch = (key: number, change: Partial<AddressDraft>) =>
     setRows(rows.map((row) => (row.key === key ? { ...row, ...change } : row)));
+  const addRow = (address: string) =>
+    setRows([
+      ...rows,
+      { key: nextDraftKey(), address, level: rows.some((r) => r.level === 0) ? 1 : 0 },
+    ]);
+  // The connection's source address, offered when public and not listed: it
+  // may be a proxy's, so it is never added on its own.
+  const suggested =
+    node.remoteAddress &&
+    unicastAddress(node.remoteAddress) &&
+    forbiddenOriginRange(node.remoteAddress, []) === null &&
+    !rows.some((row) => unicastAddress(row.address.trim()) === node.remoteAddress)
+      ? node.remoteAddress
+      : null;
   const submit = async (
     addresses: { address: string; level: number }[],
     kind: "save" | "reset",
@@ -399,23 +493,32 @@ function AddressEditor({
           </li>
         ))}
       </ol>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="self-start"
-        disabled={rows.length >= MAX_ADDRESSES}
-        onClick={() =>
-          setRows([
-            ...rows,
-            { key: nextDraftKey(), address: "", level: rows.some((r) => r.level === 0) ? 1 : 0 },
-          ])
-        }
-        data-testid="node-address-add"
-      >
-        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-        {m.node_addresses_add()}
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={rows.length >= MAX_ADDRESSES}
+          onClick={() => addRow("")}
+          data-testid="node-address-add"
+        >
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+          {m.node_addresses_add()}
+        </Button>
+        {suggested ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={rows.length >= MAX_ADDRESSES}
+            onClick={() => addRow(suggested)}
+            data-testid="node-address-suggest"
+          >
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+            {m.node_addresses_use_remote({ address: suggested })}
+          </Button>
+        ) : null}
+      </div>
       {error ? (
         <FieldError className="animate-in fade-in" data-testid="node-addresses-error">
           {error}

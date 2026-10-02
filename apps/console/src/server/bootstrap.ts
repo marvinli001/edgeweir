@@ -1,4 +1,5 @@
 import type { Server } from "node:http";
+import { consoleUrlWarnings } from "@edgeweir/contract";
 import { createDatabase, runMigrations } from "@edgeweir/db";
 import type { PgBoss } from "pg-boss";
 import { checkDownloadsDir } from "./downloads";
@@ -28,6 +29,34 @@ async function waitForDatabase(pool: import("pg").Pool, timeoutMs = 60_000) {
       await new Promise((r) => setTimeout(r, Math.min(500 * attempt, 3000)));
     }
   }
+}
+
+const URL_WARNINGS = {
+  console_url_local:
+    "EDGEWEIR_PUBLIC_URL names this machine only: nodes on other hosts cannot download install.sh from it",
+  console_url_private:
+    "EDGEWEIR_PUBLIC_URL is a private address: nodes outside this network cannot download install.sh from it",
+  node_api_url_local:
+    "the node channel URL names this machine only: nodes on other hosts cannot enroll or connect (set EDGEWEIR_NODE_API_URL or EDGEWEIR_PUBLIC_URL)",
+  node_api_url_private:
+    "the node channel URL is a private address: nodes outside this network cannot enroll or connect (set EDGEWEIR_NODE_API_URL)",
+} as const;
+
+/** Warns (never refuses) when the URLs nodes use cannot be reached from other networks. */
+export function warnConsoleUrls(
+  log: Pick<typeof logger, "warn">,
+  env: { EDGEWEIR_PUBLIC_URL: string; nodeApiUrl: string },
+) {
+  const warnings = consoleUrlWarnings({
+    consoleUrl: env.EDGEWEIR_PUBLIC_URL,
+    nodeApiUrl: env.nodeApiUrl,
+  });
+  for (const warning of warnings)
+    log.warn(URL_WARNINGS[warning], {
+      consoleUrl: env.EDGEWEIR_PUBLIC_URL,
+      nodeApiUrl: env.nodeApiUrl,
+    });
+  return warnings;
 }
 
 /** The whole shutdown, after which the process exits with 1. */
@@ -101,6 +130,7 @@ export async function bootstrap(): Promise<Running> {
   if (env.ROLE === "app" || env.ROLE === "all") {
     const setupToken = await ensureSetupToken(ctx);
     if (setupToken) announceSetupToken(log, setupToken, env.EDGEWEIR_PUBLIC_URL);
+    warnConsoleUrls(log, env);
     await events.start();
     await checkDownloadsDir(env.EDGEWEIR_DOWNLOADS_DIR, log);
     nodeChannel = await startNodeChannel(ctx);

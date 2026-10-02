@@ -395,7 +395,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `region` | Region dictionary |
 | `cluster` | Clusters: sets of nodes that share one revision stream |
 | `node_group` | Node groups, optionally tied to a region |
-| `node` | Nodes: status, capabilities, certificate serial and fingerprint (after a renewal also the replaced certificate's serial), last heartbeat, last reported ban state, CC level per site and host metrics, whether the node also probes |
+| `node` | Nodes: status, capabilities, certificate serial and fingerprint (after a renewal also the replaced certificate's serial), last heartbeat and its connection's source address, why its certificate was last refused, last reported ban state, CC level per site and host metrics, whether the node also probes |
 | `node_ip` | Node IP addresses: reported by the node (`reported`) and scheduling addresses the operator configured (`configured`, level 0 primary, 1 backup 1, 2 backup 2) |
 | `node_address_state` | Probe reachability of scheduling addresses: failing since, down flag, answering since |
 | `probe` | Regional probes: name, region, enabled, certificate serial and expiry, last seen, version |
@@ -532,6 +532,8 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0047_alert_subscription_sites` | `alert_subscription_site`, `alert_subscription.all_sites`; drops `alert_subscription.site_id`, the unique key becomes account and channel; a channel's subscriptions merge into one (the sites and alert kinds of the enabled ones when any is enabled, otherwise of all) |
 | `0048_rule_log_stats` | `logged_rules` (matches of **Log** rules) in the minute, hour and day statistics and the `traffic_hour_stats` view |
 | `0049_dns_lease_attempts` | `dns_challenge_lease.attempts` (failed cleanups of a TXT record, for the retry backoff) |
+| `0050_node_remote_address` | `node.remote_address` (source address of the node's enrollment and latest heartbeat connection) |
+| `0051_node_last_auth_error` | `node.last_auth_error`, `last_auth_error_at` (why the node channel last refused the node's own certificate, e.g. `CERT_HAS_EXPIRED`) |
 
 ## Build output
 

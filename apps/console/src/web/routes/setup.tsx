@@ -61,7 +61,8 @@ function SetupPage() {
                   // The cached status still says "not initialized"; start from a clean cache.
                   queryClient.clear();
                   toast.success(m.setup_done());
-                  if (!error) return navigate({ to: "/overview" });
+                  // No node yet: the console starts with adding one (the default cluster exists).
+                  if (!error) return navigate({ to: "/clusters", search: { enroll: true } });
                   // The account exists; signing in is left to the sign-in page.
                   toast.error(localizeError(error, m.login_failed()));
                   return navigate({ to: "/login" });

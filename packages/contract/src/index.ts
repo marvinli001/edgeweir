@@ -198,6 +198,11 @@ export const contract = {
       .route({ method: "POST", path: "/enrollment-tokens", tags: ["nodes"] })
       .input(s.enrollmentTokenInput)
       .output(s.enrollmentTokenResult),
+    /** Whether the token enrolled a node yet, and that node (never the token itself). */
+    getEnrollmentToken: oc
+      .route({ method: "GET", path: "/enrollment-tokens/{id}", tags: ["nodes"] })
+      .input(idParam)
+      .output(s.enrollmentTokenStatus),
     /** Port ranges the cluster's layer-4 applications may listen on. */
     portPools: portPoolProcedures.portPools,
     /** Replaces the port pools (no configuration revision: nodes only see the applications). */

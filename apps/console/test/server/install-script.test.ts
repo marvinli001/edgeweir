@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
   mkdirSync,
@@ -8,10 +8,17 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { assetPath } from "../../src/server/app";
+import type { AppContext } from "../../src/server/lib/context";
+import { loadEnv } from "../../src/server/lib/env";
+import { createLogger } from "../../src/server/lib/logger";
+import { startNodeChannel } from "../../src/server/node-channel/server";
+import { CertificateAuthority, generateCa } from "../../src/server/pki/ca";
+import { TEST_MASTER_KEY } from "./helpers";
 
 /** The script as the console serves it (app.ts fills in the console URL). */
 const script = readFileSync(assetPath("install", "install.sh"), "utf8").replaceAll(
@@ -380,12 +387,64 @@ describe("install.sh", () => {
       );
       expect(steps.status).toBe(0);
       expect(steps.stdout).toContain("enroll-skipped");
-      expect(steps.stderr).toContain("edgeweir-node enroll --force");
+      expect(steps.stderr).toContain("run this command with --force");
       // Without identity.json the token is required as before.
       rmSync(join(state, "identity.json"));
       expect(run(valid, {}, enrolled).stderr).toContain("no enrollment token");
     } finally {
       rmSync(state, { recursive: true, force: true });
+    }
+  });
+
+  it("enrolls an enrolled host again with --force and a new token", () => {
+    const state = mkdtempSync(join(tmpdir(), "edgeweir-state-"));
+    const bin = mkdtempSync(join(tmpdir(), "edgeweir-force-"));
+    writeFileSync(join(state, "identity.json"), "{}\n");
+    // edgeweir-node and systemctl as stubs that log their calls (never the token).
+    writeFileSync(
+      join(bin, "edgeweir-node"),
+      `#!/bin/sh\necho "edgeweir-node $* token=\${EDGEWEIR_TOKEN:+set}" >> "${calls}"\nexit 0\n`,
+    );
+    writeFileSync(join(bin, "systemctl"), `#!/bin/sh\necho "systemctl $*" >> "${calls}"\nexit 0\n`);
+    chmodSync(join(bin, "edgeweir-node"), 0o755);
+    chmodSync(join(bin, "systemctl"), 0o755);
+    const enrolled = script
+      .replace('STATE_DIR="/var/lib/edgeweir-node"', `STATE_DIR="${state}"`)
+      .replaceAll("/usr/bin/edgeweir-node", join(bin, "edgeweir-node"));
+    const steps = (args: string[], env: Record<string, string> = {}) =>
+      run(
+        args,
+        { PATH: `${bin}${delimiter}${stubs}${delimiter}/usr/bin${delimiter}/bin`, ...env },
+        enrolled.replace(
+          /main "\$@"\s*$/,
+          'constants\nparse_args "$@"\nread_token\nenroll\necho enrolled\n',
+        ),
+      );
+    try {
+      expect(script).toContain("--force              enroll again on an enrolled host");
+      // --force needs a token, even though the host has an identity.
+      const missing = steps([...valid, "--force"]);
+      expect(missing.status).toBe(1);
+      expect(missing.stderr).toContain("no enrollment token");
+      expect(missing.calls).toBe("");
+
+      const forced = steps([...valid, "--force"], { EDGEWEIR_TOKEN: TOKEN });
+      expect(forced.status).toBe(0);
+      expect(forced.stdout).toContain("enrolled");
+      // The running node is stopped first; start_service starts it again.
+      expect(forced.calls.trim().split("\n")).toEqual([
+        "systemctl stop edgeweir-node.service",
+        `edgeweir-node enroll --force --server https://console.example.com:8443 --ca-sha256 ${CA} --state-dir ${state} token=set`,
+      ]);
+      expect(forced.calls).not.toContain(TOKEN);
+
+      // Without --force nothing is enrolled or stopped.
+      const kept = steps(valid, { EDGEWEIR_TOKEN: TOKEN });
+      expect(kept.status).toBe(0);
+      expect(kept.calls).toBe("");
+    } finally {
+      rmSync(state, { recursive: true, force: true });
+      rmSync(bin, { recursive: true, force: true });
     }
   });
 
@@ -418,6 +477,128 @@ describe("install.sh", () => {
       rmSync(ok, { recursive: true, force: true });
     }
   });
+
+  it("checks the node channel before downloading anything, unless already enrolled", () => {
+    const main = script.slice(script.indexOf("main() {"));
+    const order = ["check_system", "check_server", "resolve_version", 'fetch "checksums.txt"'].map(
+      (step) => main.indexOf(step),
+    );
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(main).toContain("if enrolling; then\n    check_server\n  fi");
+    // No token goes to the reachability check.
+    const check = script.slice(script.indexOf("check_server() {"));
+    expect(check.slice(0, check.indexOf("\n}"))).not.toContain("TOKEN");
+
+    const authority = (server: string) =>
+      spawnSync("bash", ["-s"], {
+        input: script.replace(/main "\$@"\s*$/, `SERVER='${server}'\nserver_authority\n`),
+        encoding: "utf8",
+      }).stdout;
+    expect(authority("https://console.example.com")).toBe("console.example.com:443\n");
+    expect(authority("https://console.example.com:8443/")).toBe("console.example.com:8443\n");
+    expect(authority("https://10.0.0.1:8443/x")).toBe("10.0.0.1:8443\n");
+    expect(authority("https://[2001:db8::1]")).toBe("[2001:db8::1]:443\n");
+    expect(authority("https://[2001:db8::1]:8443")).toBe("[2001:db8::1]:8443\n");
+  });
+
+  const hostTools = ["curl", "openssl", "sha256sum", "awk", "timeout"].flatMap((tool) => {
+    const found = spawnSync("sh", ["-c", `command -v ${tool}`], { encoding: "utf8" }).stdout.trim();
+    return found ? [[tool, found] as const] : [];
+  });
+  const hasTools = ["curl", "openssl", "sha256sum", "awk"].every((tool) =>
+    hostTools.some(([name]) => name === tool),
+  );
+
+  it.runIf(hasTools)(
+    "finds an unreachable node channel and a TLS-terminating proxy in front of it",
+    async () => {
+      // Only TLS and the 404 for "/" are needed: no database.
+      const ctx = {
+        env: loadEnv({
+          NODE_ENV: "test",
+          DATABASE_URL: "postgres://unused",
+          EDGEWEIR_MASTER_KEY: TEST_MASTER_KEY,
+          EDGEWEIR_PUBLIC_URL: "http://console.test:3000",
+          HOST: "127.0.0.1",
+          NODE_API_PORT: "0",
+          LOG_LEVEL: "error",
+        }),
+        nodeCa: await CertificateAuthority.load(await generateCa("Test CA")),
+        log: createLogger({ test: true }),
+      } as unknown as AppContext;
+      const channel = await startNodeChannel(ctx);
+      const tools = mkdtempSync(join(tmpdir(), "edgeweir-check-server-"));
+      try {
+        const address = channel.server.address();
+        if (!address || typeof address === "string") throw new Error("no address");
+        const bash = spawnSync("sh", ["-c", "command -v bash"], { encoding: "utf8" }).stdout.trim();
+        const link = (except: string[] = []) => {
+          rmSync(tools, { recursive: true, force: true });
+          mkdirSync(tools);
+          for (const [name, path] of hostTools)
+            if (!except.includes(name)) symlinkSync(path, join(tools, name));
+        };
+        // Asynchronous: the node channel answers from this process's event loop.
+        const check = (server: string, ca: string) =>
+          new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
+            const child = spawn(bash, ["-s"], { env: { PATH: tools } });
+            let stdout = "";
+            let stderr = "";
+            child.stdout.on("data", (chunk) => {
+              stdout += chunk;
+            });
+            child.stderr.on("data", (chunk) => {
+              stderr += chunk;
+            });
+            child.on("close", (status) => resolve({ status, stdout, stderr }));
+            child.stdin.end(
+              script.replace(
+                /main "\$@"\s*$/,
+                `constants\nSERVER='${server}'\nCA_SHA256='${ca}'\ncheck_server\necho checked\n`,
+              ),
+            );
+          });
+        const server = `https://127.0.0.1:${address.port}`;
+        const pin = ctx.nodeCa.fingerprintSha256;
+        link();
+
+        // The console presents its node CA last: the pin matches.
+        const ok = await check(server, pin);
+        expect(ok.stderr).toContain("presents the pinned CA");
+        expect(ok.stdout).toBe("checked\n");
+
+        // Another CA in front (a proxy or CDN terminating TLS) is refused before any download.
+        const proxied = await check(server, "b".repeat(64));
+        expect(proxied.status).toBe(1);
+        expect(proxied.stderr).toContain("does not present the console's node CA");
+        expect(proxied.stderr).toContain("layer-4");
+
+        // Without openssl only reachability is checked.
+        link(["openssl"]);
+        const plain = await check(server, "b".repeat(64));
+        expect(plain.stdout).toBe("checked\n");
+        expect(plain.stderr).toContain("openssl not installed");
+
+        // A port nobody listens on.
+        const closed = await new Promise<number>((resolve) => {
+          const probe = createServer().listen(0, "127.0.0.1", () => {
+            const port = (probe.address() as { port: number }).port;
+            probe.close(() => resolve(port));
+          });
+        });
+        link();
+        const unreachable = await check(`https://127.0.0.1:${closed}`, pin);
+        expect(unreachable.status).toBe(1);
+        expect(unreachable.stderr).toContain("cannot reach the node channel");
+        expect(unreachable.stderr).toContain(`127.0.0.1:${closed}`);
+      } finally {
+        rmSync(tools, { recursive: true, force: true });
+        await channel.close();
+      }
+    },
+    60_000,
+  );
 
   it("executes nothing when the download is cut short", () => {
     const last = script.lastIndexOf('main "$@"');

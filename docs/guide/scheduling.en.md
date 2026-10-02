@@ -177,6 +177,15 @@ Configure addresses:
 2. Click **Add address**, enter a single IP, and select its level. At most 8; a primary address is required.
 3. Click **Save**. **Use reported addresses** clears every configured address.
 
+### Nodes without a public address
+
+A node behind NAT that reports only private addresses, with none configured, gives DNS nothing to answer with: the **IP** column of the node list and **Scheduling addresses** in its details are marked **No public address**.
+
+| Item | Behavior |
+| --- | --- |
+| Connects from | The node's details show the source address of its enrollment and latest heartbeat connection to the console (the NAT's public address; a proxy's when the node connects through one) |
+| Add source address | While editing, when the source address is public and not listed, **Add source address …** adds it to the list to save; it is never used on its own |
+
 Saving publishes the cluster's DNS revision (reason **Binding saved**) and is audited as `node.set_addresses`. An address must be a single unicast IP: no CIDR, host name, loopback, link-local, or multicast address, and no duplicates ("Not a single unicast IP address: …").
 
 ### Reachability from the probes

@@ -53,7 +53,7 @@ export function AppSidebar({
             key={group.label ?? "main"}
             items={group.items}
             label={group.label}
-            showNewSite={index === 0}
+            showPrimary={index === 0}
           />
         ))}
       </SidebarContent>

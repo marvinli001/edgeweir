@@ -28,6 +28,9 @@
 #      locally and never leaves this machine) and starts the service. On a
 #      host that is already enrolled (identity.json in the state directory)
 #      no token is needed: the packages are updated and the service started.
+#      With --force such a host enrolls again with a new token (e.g. after
+#      its certificate expired): the service is stopped, the identity
+#      replaced and the service started again.
 # It never stores SSH credentials and never phones home.
 #
 # The whole script is a set of functions; `main` runs on the last line, so a
@@ -77,6 +80,8 @@ Usage:
   --mirror-only        never fall back to GitHub
   --no-modsecurity     do not install edgeweir-openresty-modsecurity (no OWASP CRS on this node)
   --no-start           install and enroll only: do not require, enable or start systemd
+  --force              enroll again on an enrolled host (needs a new token): stops
+                       edgeweir-node, replaces its identity and starts it again
   --allow-unsigned     skip the cosign signature check (development only; SHA-256 is still verified)
 USAGE
   exit 2
@@ -91,6 +96,7 @@ parse_args() {
   MIRROR=""
   MIRROR_ONLY="false"
   NO_START="false"
+  FORCE="false"
   ALLOW_UNSIGNED="false"
   WITH_MODSECURITY="true"
   while [ $# -gt 0 ]; do
@@ -104,6 +110,7 @@ parse_args() {
       --mirror-only) MIRROR_ONLY="true"; shift ;;
       --no-modsecurity) WITH_MODSECURITY="false"; shift ;;
       --no-start) NO_START="true"; shift ;;
+      --force) FORCE="true"; shift ;;
       --allow-unsigned) ALLOW_UNSIGNED="true"; shift ;;
       --token | --token=*)
         die "--token is not accepted (the process list would show it): export EDGEWEIR_TOKEN or use --token-file" ;;
@@ -129,18 +136,20 @@ parse_args() {
 # The token is read once and removed from the environment, so no other
 # child process (curl, apt, ...) inherits it. An enrolled host keeps its
 # identity: rerunning the script (after a failed step, or to update the
-# packages) needs no token.
+# packages) needs no token, unless --force enrolls it again.
 read_token() {
   TOKEN="${EDGEWEIR_TOKEN:-}"
   unset EDGEWEIR_TOKEN
   ENROLLED="false"
   if [ -f "${STATE_DIR}/identity.json" ]; then
     ENROLLED="true"
-    if [ -n "$TOKEN" ] || [ -n "$TOKEN_FILE" ]; then
-      log "already enrolled (${STATE_DIR}/identity.json); the token is not used"
+    if [ "$FORCE" != "true" ]; then
+      if [ -n "$TOKEN" ] || [ -n "$TOKEN_FILE" ]; then
+        log "already enrolled (${STATE_DIR}/identity.json); the token is not used (--force enrolls again)"
+      fi
+      TOKEN=""
+      return 0
     fi
-    TOKEN=""
-    return 0
   fi
   if [ -n "$TOKEN_FILE" ]; then
     [ -r "$TOKEN_FILE" ] || die "cannot read --token-file $TOKEN_FILE"
@@ -175,6 +184,68 @@ check_system() {
       FORMAT="tar"
     fi
   fi
+}
+
+# server_authority: host and port of --server ("[v6]:port" for IPv6; 443 by default).
+server_authority() {
+  local authority="${SERVER#https://}"
+  authority="${authority%%/*}"
+  if [[ "$authority" =~ ^\[[0-9A-Fa-f:.]+\]$ || ! "$authority" =~ :[0-9]+$ ]]; then
+    authority="${authority}:443"
+  fi
+  printf '%s\n' "$authority"
+}
+
+# tls_chain AUTHORITY [SERVERNAME]: the certificates the server presents, as
+# openssl prints them (nothing when the handshake fails).
+tls_chain() {
+  local args=(s_client -connect "$1" -showcerts)
+  [ -z "${2:-}" ] || args+=(-servername "$2")
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 20 openssl "${args[@]}" </dev/null 2>/dev/null || true
+  else
+    openssl "${args[@]}" </dev/null 2>/dev/null || true
+  fi
+}
+
+# Before anything is downloaded: the node channel must be reachable, and it
+# must be the console itself, not a proxy or CDN that terminates TLS. The
+# channel answers every request (404 for /), so any HTTP status means
+# reachable; no token is sent. With openssl on the machine, the last
+# certificate the server presents (the console sends its certificate and
+# its node CA) must be the CA pinned by --ca-sha256.
+check_server() {
+  local status authority host presented
+  authority="$(server_authority)"
+  status="$(curl -sk -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "${SERVER%/}/" 2>/dev/null || true)"
+  if ! [[ "$status" =~ ^[1-5][0-9][0-9]$ ]]; then
+    die "cannot reach the node channel ${SERVER}: check the address and its DNS name, and that the firewall or security group lets this host reach ${authority} (the console's EDGEWEIR_NODE_API_URL)"
+  fi
+  if ! command -v openssl >/dev/null 2>&1; then
+    log "node channel reachable (${authority}); openssl not installed, the CA is checked at enrollment"
+    return 0
+  fi
+  host="${authority%:*}"
+  host="${host#[}"
+  host="${host%]}"
+  # SNI carries names only.
+  if [[ "$host" =~ ^[0-9.]+$ || "$host" == *:* ]]; then
+    host=""
+  fi
+  presented="$(tls_chain "$authority" "$host" | awk '
+    /-----BEGIN CERTIFICATE-----/ { cert = ""; inside = 1 }
+    inside { cert = cert $0 "\n" }
+    /-----END CERTIFICATE-----/ { inside = 0; last = cert }
+    END { printf "%s", last }')"
+  if [ -z "$presented" ]; then
+    log "node channel reachable (${authority}); could not read its certificates, the CA is checked at enrollment"
+    return 0
+  fi
+  presented="$(printf '%s' "$presented" | openssl x509 -outform DER 2>/dev/null | sha256sum | awk '{ print $1 }')"
+  if [ "$presented" != "$CA_SHA256" ]; then
+    die "${SERVER} does not present the console's node CA (--ca-sha256): a proxy or CDN terminates TLS in front of the node channel, or the address points at another service; nodes need a direct or layer-4 (TCP passthrough) connection to the console's port"
+  fi
+  log "node channel reachable and presents the pinned CA (${authority})"
 }
 
 # download URL DEST: fails (non-zero) on HTTP errors, never writes an error page.
@@ -443,15 +514,28 @@ install_package() {
   [ -d "$STATE_DIR" ] || die "the package did not create ${STATE_DIR}"
 }
 
+# Whether this run enrolls: a new host, or an enrolled one with --force.
+enrolling() {
+  [ "$ENROLLED" != "true" ] || [ "$FORCE" = "true" ]
+}
+
 enroll() {
-  if [ "$ENROLLED" = "true" ]; then
-    log "already enrolled; to enroll again: systemctl stop edgeweir-node, edgeweir-node enroll --force, systemctl start edgeweir-node"
+  if ! enrolling; then
+    log "already enrolled; to enroll again with a new token, run this command with --force"
     return 0
   fi
   log "enrolling with ${SERVER}"
   # The token goes through the environment only (edgeweir-node reads EDGEWEIR_TOKEN).
-  EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --server "$SERVER" --ca-sha256 "$CA_SHA256" \
-    --state-dir "$STATE_DIR" || die "enrollment failed"
+  if [ "$ENROLLED" = "true" ]; then
+    # A running node keeps its identity: stop it first; start_service starts it again.
+    log "enrolling again (--force): stopping edgeweir-node"
+    systemctl stop edgeweir-node.service >/dev/null 2>&1 || true
+    EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --force --server "$SERVER" \
+      --ca-sha256 "$CA_SHA256" --state-dir "$STATE_DIR" || die "enrollment failed"
+  else
+    EDGEWEIR_TOKEN="$TOKEN" /usr/bin/edgeweir-node enroll --server "$SERVER" --ca-sha256 "$CA_SHA256" \
+      --state-dir "$STATE_DIR" || die "enrollment failed"
+  fi
 }
 
 start_service() {
@@ -479,6 +563,9 @@ main() {
   umask 022
   WORK="$(mktemp -d)"
   trap 'rm -rf "$WORK"' EXIT
+  if enrolling; then
+    check_server
+  fi
   resolve_version
   log "installing edgeweir-node ${VERSION} (${FORMAT}, ${ARCH})"
   fetch "checksums.txt"

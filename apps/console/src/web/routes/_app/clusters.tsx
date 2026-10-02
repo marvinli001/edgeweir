@@ -27,7 +27,8 @@ import { type Columns, DataTable } from "@/components/data-table";
 import { ClusterDns } from "@/components/dns/cluster-dns";
 import { FormDialog } from "@/components/form-dialog";
 import { PortPoolsSection } from "@/components/l4/port-pools";
-import { NodeDetailDialog, NodeLoad } from "@/components/node-detail";
+import { AuthErrorBadge, NodeDetailDialog, NodeLoad } from "@/components/node-detail";
+import { ConsoleUrlWarnings, EnrollProgress } from "@/components/node-enrollment";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
@@ -765,13 +766,27 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
               {m.nodes_disabled()}
             </StatusDot>
           ) : row.original.online ? (
-            <StatusDot tone="good" pulse data-testid="node-online">
-              {m.nodes_online()}
-            </StatusDot>
+            <span className="flex flex-wrap items-center gap-1.5">
+              <StatusDot
+                tone={row.original.dataPlaneHealthy ? "good" : "warn"}
+                pulse={row.original.dataPlaneHealthy}
+                data-testid="node-online"
+              >
+                {m.nodes_online()}
+              </StatusDot>
+              {row.original.dataPlaneHealthy ? null : (
+                <Badge variant="destructive" data-testid="node-unhealthy">
+                  {m.nodes_unhealthy()}
+                </Badge>
+              )}
+            </span>
           ) : (
-            <StatusDot tone="bad" data-testid="node-offline">
-              {m.nodes_offline()}
-            </StatusDot>
+            <span className="flex flex-wrap items-center gap-1.5">
+              <StatusDot tone="bad" data-testid="node-offline">
+                {m.nodes_offline()}
+              </StatusDot>
+              <AuthErrorBadge node={row.original} />
+            </span>
           ),
       },
       {
@@ -790,10 +805,15 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
         id: "ips",
         header: () => m.nodes_col_ips(),
         cell: ({ row }) => (
-          <div className="flex flex-col font-mono text-xs">
+          <div className="flex flex-col items-start gap-1 font-mono text-xs">
             {row.original.ipAddresses.length
               ? row.original.ipAddresses.map((ip) => <span key={ip}>{ip}</span>)
               : "—"}
+            {row.original.dnsIssue === "no_public_address" ? (
+              <Badge variant="outline" className="font-sans" data-testid="node-dns-issue">
+                {m.node_dns_no_public_address()}
+              </Badge>
+            ) : null}
           </div>
         ),
       },
@@ -1127,12 +1147,17 @@ function EnrollDialog({
                   <span aria-hidden="true">·</span>
                   <SafetyNote data-testid="enroll-token-once">{m.enroll_shown_once()}</SafetyNote>
                 </div>
+                <ConsoleUrlWarnings warnings={result.warnings} />
               </Field>
               <Field>
                 <FieldLabel>{m.enroll_ca_fingerprint()}</FieldLabel>
                 <code className="rounded-xl bg-muted p-2 font-mono text-xs break-all">
                   {result.caSha256}
                 </code>
+              </Field>
+              <Field>
+                <FieldLabel>{m.enroll_progress()}</FieldLabel>
+                <EnrollProgress result={result} />
               </Field>
             </FieldGroup>
             <DialogFooter>

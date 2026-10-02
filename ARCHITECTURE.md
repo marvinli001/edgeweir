@@ -395,7 +395,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `region` | 区域字典 |
 | `cluster` | 集群：共享一条 revision 序列的节点集合 |
 | `node_group` | 节点组，可关联区域 |
-| `node` | 节点：状态、能力清单、证书序列号与指纹（续期后还有被替换证书的序列号）、最近心跳、最近上报的封禁状态、各网站的 CC 级别与主机指标、是否兼任探针 |
+| `node` | 节点：状态、能力清单、证书序列号与指纹（续期后还有被替换证书的序列号）、最近心跳与其连接的源地址、最近一次证书被拒绝的原因、最近上报的封禁状态、各网站的 CC 级别与主机指标、是否兼任探针 |
 | `node_ip` | 节点的 IP 地址：节点上报的（`reported`）与运营者配置的调度地址（`configured`，级别 0 主、1 备 1、2 备 2） |
 | `node_address_state` | 调度地址的探针可达性：失败起点、不可达标记、恢复起点 |
 | `probe` | 区域探针：名称、区域、启用、证书序列号与到期、最后在线、版本 |
@@ -532,6 +532,8 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0047_alert_subscription_sites` | `alert_subscription_site`、`alert_subscription.all_sites`；删除 `alert_subscription.site_id`，唯一键改为账户与渠道；同一渠道的订阅合并为一条（有启用的订阅时取启用订阅的网站与告警种类，否则取全部） |
 | `0048_rule_log_stats` | 分钟、小时、天统计与视图 `traffic_hour_stats` 的 `logged_rules`（「记录」规则的命中） |
 | `0049_dns_lease_attempts` | `dns_challenge_lease.attempts`（TXT 记录清理失败的次数，用于退避重试） |
+| `0050_node_remote_address` | `node.remote_address`（节点注册与最近一次心跳连接的源地址） |
+| `0051_node_last_auth_error` | `node.last_auth_error`、`last_auth_error_at`（节点通道最近一次拒绝该节点自己的证书的原因，如 `CERT_HAS_EXPIRED`） |
 
 ## 构建产物
 

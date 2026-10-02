@@ -26,13 +26,15 @@ Both packages come as deb and rpm only (amd64, arm64). The openresty.org reposit
 1. Open **Clusters & nodes**, select a cluster, and click **Add node**.
 2. Fill in **Node name**, choose a **Node group** (default: the cluster's default node group) and **Valid for** (15 minutes, 1 hour, or 24 hours; default 1 hour).
 3. Click **Generate command**. The dialog shows the **Install command** and the **CA fingerprint**, once.
+4. Once the command runs on the node, the dialog's **Progress** refreshes every 3 seconds: waiting for the node (or token expired), enrolled (the node name links to its details), online, configuration applied, data plane healthy, has an address for DNS.
 
 | Item | Behavior |
 | --- | --- |
 | Enrollment token | Prefix `ewt_`, single use, stored as SHA-256 only; generating one writes an audit entry. |
 | `--server` | `EDGEWEIR_NODE_API_URL`. |
 | `--ca-sha256` | SHA-256 fingerprint of the node channel internal CA. |
-| API | `POST /api/v1/enrollment-tokens`, `ttlMinutes` 5–10080, default 60; see [API and endpoints](../reference/api.en.md). |
+| API | `POST /api/v1/enrollment-tokens`, `ttlMinutes` 5–10080, default 60; `GET /api/v1/enrollment-tokens/{id}` returns `usedAt` and the enrolled node. See [API and endpoints](../reference/api.en.md). |
+| Address warnings | When the console URL (where `install.sh` comes from) or the node channel URL is localhost, a loopback or a private address, the dialog warns about each, **System settings** marks the URL "This machine only" or "Private address", and the console logs a warning at startup; generating is not refused. |
 | Cleanup | Tokens expired or used more than 7 days ago are deleted every 30 minutes. |
 
 ## 2. Run the install command
@@ -60,20 +62,21 @@ Expected: `edgeweir-node.service` is `active (running)`; in **Clusters & nodes**
 
 | Step | Behavior | On failure |
 | --- | --- | --- |
-| 1 | Reads the token (`EDGEWEIR_TOKEN` or `--token-file`), checks the `ewt_` format, and removes it from the environment so child processes do not inherit it. On an enrolled host (`identity.json` in the state directory) no token is needed, and one given is not used | Exit |
-| 2 | Checks Linux, root, `curl`, `sha256sum`, `tar`, systemd, and architecture; with `--format auto`, picks deb when `dpkg` and `apt-get` exist, rpm when `rpm` and `dnf`/`yum` exist, else tar.gz | Exit |
+| 1 | Reads the token (`EDGEWEIR_TOKEN` or `--token-file`), checks the `ewt_` format, and removes it from the environment so child processes do not inherit it. On an enrolled host (`identity.json` in the state directory) no token is needed, and one given is not used; with `--force` the token is required | Exit |
+| 2 | Checks Linux, root, `curl`, `sha256sum`, `tar`, systemd, and architecture; with `--format auto`, picks deb when `dpkg` and `apt-get` exist, rpm when `rpm` and `dnf`/`yum` exist, else tar.gz. Unless the host is enrolled, then checks the node channel: `--server` must answer HTTP (any status; no token is sent), and with `openssl` on the host, the last certificate the server presents must be the CA pinned by `--ca-sha256` | Exit, naming an unreachable channel or a TLS-terminating proxy |
 | 3 | Resolves the version: `--version`, or the `latest` file of the downloads mirror, falling back to the latest GitHub release | Exit, asking for `--version` |
 | 4 | Downloads `checksums.txt` and `checksums.txt.sigstore.json`: mirror first, then GitHub | Exit |
 | 5 | Verifies the signature with `cosign verify-blob`: the certificate identity must be `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<version>`, the issuer `https://token.actions.githubusercontent.com`. Without cosign on the host, downloads cosign v3.1.3, checks it against the SHA-256 pinned in the script, and installs it to `/usr/local/bin/cosign` | Exit |
 | 6 | Picks the package for this host from the signed `checksums.txt`, and `edgeweir-openresty` and `edgeweir-openresty-modsecurity` of the same release (exactly one file per package, format, and architecture); exits on glibc older than 2.34; downloads them (mirror first, then GitHub) and verifies their SHA-256 | Exit |
 | 7 | Installs `edgeweir-openresty` and `edgeweir-openresty-modsecurity` first. A tar.gz install uses the host's `dpkg` or `rpm` for them; without either, `edgeweir-openresty` must already be installed | Exit |
 | 8 | Installs the deb, rpm, or tar.gz | Exit |
-| 9 | `edgeweir-node enroll`: checks the CA fingerprint before sending the token, generates the private key locally, and exchanges a CSR for the node certificate; from then on, mTLS only. Skipped on an enrolled host (to enroll again: `systemctl stop edgeweir-node`, `edgeweir-node enroll --force`, then start it) | Exit |
+| 9 | `edgeweir-node enroll`: checks the CA fingerprint before sending the token, generates the private key locally, and exchanges a CSR for the node certificate; from then on, mTLS only. Skipped on an enrolled host; with `--force`, stops `edgeweir-node.service` and replaces the identity with `edgeweir-node enroll --force` and the new token; step 10 starts it again | Exit |
 | 10 | Disables `openresty.service`, enables and starts `edgeweir-node.service` (skipped with `--no-start`); a tar.gz install first restarts a running service (deb and rpm package scripts do that themselves) | — |
 
 - Nothing downloaded runs before steps 5 and 6 pass. `--allow-unsigned` skips step 5 for development only; the SHA-256 is still verified.
 - The script consists of functions and calls `main` on its last line: a truncated download executes nothing.
 - An enrolled host can run the same command again: to retry after a failed step, or to update the packages.
+- To enroll again (for example after the certificate expired): generate a new install command in the console and run it with `--force` appended; then delete the old node in the console.
 - The console never stores SSH credentials; the node private key never leaves the node.
 
 Installed files:
@@ -279,9 +282,11 @@ The release source for agent self-upgrades is set in **System → Node release s
 | `checksums.txt does not list exactly one ... package of edgeweir-openresty...` | The mirror or release lacks the package, or lists several versions for the architecture | Complete the mirror directory from `checksums.txt`; add `--no-modsecurity` when the release has no ModSecurity module. |
 | `edgeweir-openresty comes as .deb and .rpm only` | A tar.gz install on a host without `dpkg`, `rpm`, or an installed `edgeweir-openresty` | Use a host with deb or rpm package management. |
 | `cosign signature verification FAILED`, `SHA-256 verification FAILED` | Downloaded content does not match the signature or checksum | Check the download source and the mirror contents; do not skip verification. |
-| `CA pin mismatch` | A proxy or CDN terminates TLS on 8443, or `--server` points at another service | Connect directly or use [layer-4 passthrough](networking.en.md#node-channel-passthrough). |
+| `CA pin mismatch`, `does not present the console's node CA` | A proxy or CDN terminates TLS on 8443, or `--server` points at another service | Connect directly or use [layer-4 passthrough](networking.en.md#node-channel-passthrough). |
+| `cannot reach the node channel` | The `--server` address or its DNS name is wrong, a firewall or security group blocks the port, or the console's `EDGEWEIR_NODE_API_URL` is a local or private address | Check the address and DNS, open the port; `curl -k https://<address>:8443/` on the node should return 404. |
 | `console rejected the enrollment token (expired or already used)` | Token expired or already used | Generate a new install command. |
-| `node is already enrolled (use --force to replace the identity)` | The host already has a node identity (`/var/lib/edgeweir-node/identity.json`) | Keep the existing enrollment; to replace the identity, stop the node (`systemctl stop edgeweir-node`; a running node refuses), run `edgeweir-node enroll --force` with a new token, then start it; flags in [edgeweir-node](https://github.com/marvinli001/edgeweir-node). |
+| `node is already enrolled (use --force to replace the identity)` | The host already has a node identity (`/var/lib/edgeweir-node/identity.json`) | Keep the existing enrollment; to replace the identity, run a new install command with `--force` appended, or stop the node (`systemctl stop edgeweir-node`; a running node refuses), run `edgeweir-node enroll --force` with a new token, then start it; flags in [edgeweir-node](https://github.com/marvinli001/edgeweir-node). |
+| Node log `client certificate expired at ...`, the console marks the node **Certificate expired** | The node was offline longer than its certificate had left and could not renew it; the node channel refuses it with `client certificate has expired (CERT_HAS_EXPIRED)` | Generate a new install command; run it on the node with `--force` appended (or `systemctl stop edgeweir-node`, run `edgeweir-node enroll --force` with the new token, then start it); delete the old node in the console. |
 | `x509: certificate is valid for ..., not ...` | The name the node connects to is not in the node channel certificate | Add the name to `EDGEWEIR_NODE_API_HOSTNAMES` and restart the console; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
 | Enrollment times out, or the node stays offline | Firewall or security group blocks 8443; `EDGEWEIR_NODE_API_URL` resolves incorrectly | Open 8443; check DNS resolution. |
 | Connections to an L4 app's port time out | The node firewall or security group does not open the port pools; a container node does not publish the ports | Open or publish them as in [Ports and firewall](#ports-and-firewall). |
