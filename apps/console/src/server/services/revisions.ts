@@ -929,8 +929,8 @@ export async function onlineCanaryNodes(tx: Executor, clusterId: string, now = D
 /**
  * Publishing with the configuration canary on. What does not wait for a
  * canary (currentStable: ACME challenges, sites taken offline, removed
- * domains, purges, renewed certificates, challenge keys, Under Attack)
- * goes into the stable revision of every node at once; when that is the
+ * domains, renewed certificates, challenge keys, Under Attack) goes into
+ * the stable revision of every node at once; when that is the
  * whole change, the change is the new stable revision. Without an online
  * canary node the change goes to every node too (audited and alerted).
  * Otherwise the change becomes the candidate for the canary nodes. A
@@ -1158,7 +1158,7 @@ async function restoreSites(
 /**
  * The canary's stable content with what never waits for a canary: the
  * current state of sites (restoreSites: sites taken offline and removed
- * domains are gone, purges and renewed certificates apply), the current
+ * domains are gone, renewed certificates apply), the current
  * ACME challenges (`challenges`, else loaded), challenge keys and Under
  * Attack of sites and the platform. Every publication refreshes the stable
  * revision with it and the automatic rollback publishes it.

@@ -70,7 +70,7 @@ async function promote(tx: Tx, row: RolloutRow, outcome: RolloutOutcome, actor: 
  * of every node. The database keeps the change; the next publication goes
  * through the canary again. Like an administrator's rollback, it ships
  * nothing the current state no longer has (sites taken offline, removed
- * domains, purged cache, renewed certificates; see currentStable).
+ * domains, renewed certificates; see currentStable).
  */
 async function rollBack(tx: Tx, row: RolloutRow, outcome: RolloutOutcome, actor: Actor) {
   const name = await clusterName(tx, row.clusterId);
