@@ -249,12 +249,13 @@ export async function elevatedSites(db: Executor, now = Date.now()): Promise<Set
       for (const entry of node.securityState)
         if (entry.level !== "normal") elevated.add(entry.siteId);
   // A raise reported moments ago counts until the next heartbeat carries it.
+  // Literal conditions: they select the partial index security_event_raise_idx.
   const recent = await db
     .selectDistinct({ siteId: schema.securityEvent.siteId })
     .from(schema.securityEvent)
     .where(
       and(
-        eq(schema.securityEvent.kind, "site_level"),
+        sql`${schema.securityEvent.kind} = 'site_level'`,
         sql`${schema.securityEvent.level} <> 'normal'`,
         gt(schema.securityEvent.receivedAt, new Date(now - 120_000)),
       ),
