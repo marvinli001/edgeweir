@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { login, pick } from "./helpers";
+import { login, pick, saved } from "./helpers";
 
 test("M4: IP list and rule editing with syntax errors, ordering and mobile", async ({ page }) => {
   const errors: string[] = [];
@@ -78,7 +78,7 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
   await expect(
     page.getByTestId("rule-row").first().getByLabel("名称", { exact: true }),
   ).toHaveValue("Browser log");
-  await page.getByTestId("rules-save").click();
+  await saved(page, page.getByTestId("rules-save"), "rules/save");
   await expect(page.getByTestId("rules-save")).toBeDisabled();
   await page.reload();
   first = page.getByTestId("rule-row").first();

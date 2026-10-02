@@ -33,3 +33,17 @@ export async function pick(page: Page, trigger: Locator, option: string) {
   await trigger.click();
   await page.getByRole("option", { name: option, exact: true }).click();
 }
+
+/**
+ * Clicks a save button and waits for its RPC to answer: the button turns
+ * disabled while the mutation is still pending, so a reload right after the
+ * click could read the old value.
+ */
+export async function saved(page: Page, save: Locator, procedure: string) {
+  const answered = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/rpc/${procedure}`) && response.request().method() === "POST",
+  );
+  await save.click();
+  expect((await answered).ok()).toBe(true);
+}

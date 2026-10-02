@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { login, logout, pick } from "./helpers";
+import { login, logout, pick, saved } from "./helpers";
 
 /**
  * Written by scripts/e2e-g2.mjs: the bench site (Under Attack js, CC off, no
@@ -278,24 +278,24 @@ test("G2: the rules editor offers the challenge action and tls.ja4 in expression
   await rate.getByLabel("名称", { exact: true }).fill("G2 JA4 rate");
   await pick(page, rate.getByLabel("限速键", { exact: true }), "tls.ja4");
   await check(page, "rules");
-  await page.getByTestId("rules-save").click();
+  await saved(page, page.getByTestId("rules-save"), "rules/save");
   await expect(page.getByTestId("rules-save")).toBeDisabled();
 
   await page.reload();
-  const saved = page.getByTestId("rule-row");
-  await expect(saved).toHaveCount(2);
-  await expect(saved.first().getByLabel("名称", { exact: true })).toHaveValue("G2 JA4 challenge");
-  await expect(saved.first().getByLabel("表达式", { exact: true })).toHaveValue(
+  const rows = page.getByTestId("rule-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first().getByLabel("名称", { exact: true })).toHaveValue("G2 JA4 challenge");
+  await expect(rows.first().getByLabel("表达式", { exact: true })).toHaveValue(
     `tls.ja4 eq "${SAMPLE_JA4}"`,
   );
-  await expect(saved.first().getByLabel("动作", { exact: true })).toHaveText("挑战");
-  await expect(saved.first().getByLabel("挑战类型", { exact: true })).toHaveText("工作量证明");
-  await expect(saved.nth(1).getByLabel("限速键", { exact: true })).toHaveText("tls.ja4");
+  await expect(rows.first().getByLabel("动作", { exact: true })).toHaveText("挑战");
+  await expect(rows.first().getByLabel("挑战类型", { exact: true })).toHaveText("工作量证明");
+  await expect(rows.nth(1).getByLabel("限速键", { exact: true })).toHaveText("tls.ja4");
 
   // The bench site keeps no rules.
-  while (await saved.count())
-    await saved.first().getByRole("button", { name: "删除", exact: true }).click();
-  await page.getByTestId("rules-save").click();
+  while (await rows.count())
+    await rows.first().getByRole("button", { name: "删除", exact: true }).click();
+  await saved(page, page.getByTestId("rules-save"), "rules/save");
   await expect(page.getByTestId("rules-save")).toBeDisabled();
   await page.reload();
   await expect(page.getByTestId("rule-add-waf-custom")).toBeVisible();
