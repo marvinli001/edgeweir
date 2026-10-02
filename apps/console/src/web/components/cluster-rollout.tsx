@@ -15,6 +15,7 @@ import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useDraft } from "@/hooks/use-draft";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -73,7 +74,7 @@ export function ClusterRolloutCard({ clusterId }: { clusterId: string }) {
       ) : (
         <>
           <RolloutStatus rollout={query.data} />
-          <PolicyForm key={query.data.updatedAt} rollout={query.data} />
+          <PolicyForm rollout={query.data} />
         </>
       )}
     </Card>
@@ -230,10 +231,12 @@ function toDraft(policy: RolloutPolicy): Draft {
 function PolicyForm({ rollout }: { rollout: ClusterRollout }) {
   const queryClient = useQueryClient();
   const save = useMutation(orpc.clusters.setRolloutPolicy.mutationOptions());
-  const initial = React.useMemo(() => toDraft(rollout.policy), [rollout.policy]);
-  const [draft, setDraft] = React.useState(initial);
+  // The card polls and every publication moves the rollout; the policy has its own version.
+  const { draft, setDraft, version, dirty } = useDraft(
+    toDraft(rollout.policy),
+    rollout.policyUpdatedAt,
+  );
   const [error, setError] = React.useState<string | null>(null);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
   return (
     <form
@@ -249,7 +252,7 @@ function PolicyForm({ rollout }: { rollout: ClusterRollout }) {
             errorRatioMultiplier: Number(draft.errorRatioMultiplier),
             errorRatioFloor: Number(draft.errorRatioFloor) / 100,
             minRequests: Number(draft.minRequests),
-            expectedUpdatedAt: rollout.updatedAt,
+            expectedUpdatedAt: version,
           });
           await queryClient.invalidateQueries({ queryKey: orpc.clusters.key() });
           toast.success(m.common_saved());

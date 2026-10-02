@@ -44,6 +44,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { useDraft } from "@/hooks/use-draft";
 import { ANALYTICS_RANGES, rangeLabel } from "@/lib/analytics";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -96,16 +97,8 @@ export function SecurityTab({ siteId }: { siteId: string }) {
       ) : (
         <>
           <UnderAttackCard siteId={siteId} protection={protection.data} />
-          <ChallengeSettingsCard
-            key={`challenge-${protection.data.updatedAt}`}
-            siteId={siteId}
-            protection={protection.data}
-          />
-          <CcPolicyCard
-            key={`cc-${protection.data.updatedAt}`}
-            siteId={siteId}
-            protection={protection.data}
-          />
+          <ChallengeSettingsCard siteId={siteId} protection={protection.data} />
+          <CcPolicyCard siteId={siteId} protection={protection.data} />
         </>
       )}
       <WafCard siteId={siteId} />
@@ -177,13 +170,13 @@ function ChallengeSettingsCard({
   protection: SiteProtection;
 }) {
   const { save, error, pending } = useUpdateProtection(siteId);
-  const initial = {
+  // Its own fields only: saving Under Attack or the CC policy leaves an unsaved draft here alone.
+  const { draft, setDraft, dirty } = useDraft({
     passTtlSeconds: String(protection.passTtlSeconds),
     powDifficulty: String(protection.powDifficulty),
     powHighDifficulty: String(protection.powHighDifficulty),
     logJa4: protection.logJa4,
-  };
-  const [draft, setDraft] = React.useState(initial);
+  });
   return (
     <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
       <form
@@ -243,12 +236,7 @@ function ChallengeSettingsCard({
             onCheckedChange={(logJa4) => setDraft({ ...draft, logJa4 })}
           />
         </CardContent>
-        <SaveBar
-          dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
-          pending={pending}
-          error={error}
-          testId="protection-save"
-        />
+        <SaveBar dirty={dirty} pending={pending} error={error} testId="protection-save" />
       </form>
     </Card>
   );
@@ -256,12 +244,11 @@ function ChallengeSettingsCard({
 
 function CcPolicyCard({ siteId, protection }: { siteId: string; protection: SiteProtection }) {
   const { save, error, pending } = useUpdateProtection(siteId);
-  const initial = {
+  const { draft, setDraft, dirty } = useDraft({
     enabled: protection.cc.enabled,
     followTemplate: protection.cc.followTemplate,
     thresholds: toCcDraft(protection.cc),
-  };
-  const [draft, setDraft] = React.useState(initial);
+  });
   // While following, the fields show the platform template.
   const shown: CcDraft = draft.followTemplate ? toCcDraft(protection.ccTemplate) : draft.thresholds;
   return (
@@ -314,12 +301,7 @@ function CcPolicyCard({ siteId, protection }: { siteId: string; protection: Site
           />
           <SafetyNote>{m.cc_per_node_note()}</SafetyNote>
         </CardContent>
-        <SaveBar
-          dirty={JSON.stringify(draft) !== JSON.stringify(initial)}
-          pending={pending}
-          error={error}
-          testId="cc-save"
-        />
+        <SaveBar dirty={dirty} pending={pending} error={error} testId="cc-save" />
       </form>
     </Card>
   );
