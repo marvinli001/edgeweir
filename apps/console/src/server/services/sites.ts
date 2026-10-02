@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { formatDomain, parseDomain } from "@edgeweir/config-compiler";
 import type {
+  AuditAction,
   Revision,
+  RevisionReasonCode,
   Site,
   StarredSite,
   siteCreateInput,
@@ -248,11 +250,14 @@ export async function findSite(db: Executor, id: string, lock = false) {
   return row;
 }
 
-export async function getSite(db: Database, id: string): Promise<Site> {
-  const row = await findSite(db, id);
+async function toSiteDto(db: Executor, row: SiteRow): Promise<Site> {
   const [dto] = await toSiteDtos(db, [row]);
-  if (!dto) fail("SITE_NOT_FOUND", "site not found");
+  if (!dto) throw new Error("site not readable");
   return dto;
+}
+
+export async function getSite(db: Database, id: string): Promise<Site> {
+  return toSiteDto(db, await findSite(db, id));
 }
 
 function uniqueDomains(values: string[]) {
@@ -548,6 +553,33 @@ async function sitePool(tx: Tx, siteId: string) {
 }
 
 /**
+ * Publishes the site's cluster after a change to the site and audits the
+ * change with the new revision number. The site's stored rules must compile
+ * (RULE_INVALID; a deleted site has none).
+ */
+async function publishSiteChange(
+  tx: Tx,
+  actor: Actor,
+  site: Pick<SiteRow, "id" | "name" | "clusterId">,
+  change: { reason: RevisionReasonCode; action: AuditAction; metadata?: Record<string, unknown> },
+): Promise<Revision> {
+  const { row } = await publishRevision(tx, {
+    clusterId: site.clusterId,
+    reason: { code: change.reason, params: { site: site.name } },
+    actor,
+    site: site.id,
+  });
+  await recordAudit(tx, actor, {
+    action: change.action,
+    targetType: "site",
+    targetId: site.id,
+    targetName: site.name,
+    metadata: { ...change.metadata, revision: row.revision },
+  });
+  return toRevisionDto(row);
+}
+
+/**
  * Creates a site with its domains, origin pool and cache rules, then publishes
  * a new revision for the site's cluster in the same transaction. Without an
  * explicit cluster the site lands on the default (oldest) cluster.
@@ -590,22 +622,12 @@ export async function createSite(
     if (!pool) throw new Error("origin pool insert failed");
     await writeOrigins(tx, pool, input.origins, ctx.masterKey);
     await replaceCacheRules(tx, siteRow, input.cacheRules);
-    const { row: revision } = await publishRevision(tx, {
-      clusterId,
-      reason: { code: "site_created", params: { site: name } },
-      actor: ctx.actor,
-      site: siteRow.id,
-    });
-    await recordAudit(tx, ctx.actor, {
+    const revision = await publishSiteChange(tx, ctx.actor, siteRow, {
+      reason: "site_created",
       action: "site.create",
-      targetType: "site",
-      targetId: siteRow.id,
-      targetName: siteRow.name,
-      metadata: { name, domains: input.domains, revision: revision.revision },
+      metadata: { name, domains: input.domains },
     });
-    const [dto] = await toSiteDtos(tx, [siteRow]);
-    if (!dto) throw new Error("site not readable after insert");
-    return { site: dto, revision: toRevisionDto(revision) };
+    return { site: await toSiteDto(tx, siteRow), revision };
   });
 }
 
@@ -680,17 +702,9 @@ export async function updateSite(
       .where(eq(schema.site.id, row.id))
       .returning();
     if (!updated) throw new Error("site update failed");
-    const { row: revision } = await publishRevision(tx, {
-      clusterId: row.clusterId,
-      reason: { code: "site_updated", params: { site: updated.name } },
-      actor: ctx.actor,
-      site: row.id,
-    });
-    await recordAudit(tx, ctx.actor, {
+    const revision = await publishSiteChange(tx, ctx.actor, updated, {
+      reason: "site_updated",
       action: "site.update",
-      targetType: "site",
-      targetId: row.id,
-      targetName: updated.name,
       metadata: {
         changed,
         ...(input.name !== undefined ? { name: input.name } : {}),
@@ -701,14 +715,11 @@ export async function updateSite(
         ...(input.cacheRules ? { cacheRules: input.cacheRules.length } : {}),
         ...(input.originSettings ? { originSettings: input.originSettings } : {}),
         ...(input.cacheSettings ? { cacheSettings: input.cacheSettings } : {}),
-        revision: revision.revision,
       },
     });
-    const [dto] = await toSiteDtos(tx, [updated]);
-    if (!dto) throw new Error("site not readable after update");
     return {
-      site: dto,
-      revision: toRevisionDto(revision),
+      site: await toSiteDto(tx, updated),
+      revision,
       ...(certificateReissue ? { certificateReissue } : {}),
     };
   });
@@ -741,19 +752,12 @@ export async function deleteSite(
           ),
         ),
       );
-    const { row: revision } = await publishRevision(tx, {
-      clusterId: row.clusterId,
-      reason: { code: "site_deleted", params: { site: row.name } },
-      actor: ctx.actor,
-    });
-    await recordAudit(tx, ctx.actor, {
+    const revision = await publishSiteChange(tx, ctx.actor, row, {
+      reason: "site_deleted",
       action: "site.delete",
-      targetType: "site",
-      targetId: row.id,
-      targetName: row.name,
-      metadata: { name: row.name, revision: revision.revision },
+      metadata: { name: row.name },
     });
-    return { revision: toRevisionDto(revision) };
+    return { revision };
   });
 }
 
@@ -772,9 +776,7 @@ export async function setSiteEnabled(
     if (row.enabled === input.enabled) {
       const latest = await latestRevision(tx, row.clusterId);
       if (!latest) throw new Error("cluster has no revision");
-      const [dto] = await toSiteDtos(tx, [row]);
-      if (!dto) throw new Error("site not readable");
-      return { site: dto, revision: toRevisionDto(latest) };
+      return { site: await toSiteDto(tx, row), revision: toRevisionDto(latest) };
     }
     assertUpdatedAt(row.updatedAt, input.expectedUpdatedAt);
     const [updated] = await tx
@@ -783,26 +785,11 @@ export async function setSiteEnabled(
       .where(eq(schema.site.id, row.id))
       .returning();
     if (!updated) throw new Error("site update failed");
-    const action = input.enabled ? "enable" : "disable";
-    const { row: revision } = await publishRevision(tx, {
-      clusterId: row.clusterId,
-      reason: {
-        code: input.enabled ? "site_enabled" : "site_disabled",
-        params: { site: row.name },
-      },
-      actor: ctx.actor,
-      site: row.id,
+    const revision = await publishSiteChange(tx, ctx.actor, updated, {
+      reason: input.enabled ? "site_enabled" : "site_disabled",
+      action: input.enabled ? "site.enable" : "site.disable",
     });
-    await recordAudit(tx, ctx.actor, {
-      action: `site.${action}`,
-      targetType: "site",
-      targetId: row.id,
-      targetName: row.name,
-      metadata: { revision: revision.revision },
-    });
-    const [dto] = await toSiteDtos(tx, [updated]);
-    if (!dto) throw new Error("site not readable after update");
-    return { site: dto, revision: toRevisionDto(revision) };
+    return { site: await toSiteDto(tx, updated), revision };
   });
 }
 
