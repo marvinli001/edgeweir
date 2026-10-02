@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { OptionSelect } from "@/components/form-select";
 import { ProbeResults } from "@/components/probes";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
@@ -14,13 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -461,25 +455,14 @@ function AddressEditor({
               required
               data-testid="node-address-input"
             />
-            <Select
+            <OptionSelect
               value={String(row.level)}
-              onValueChange={(value) => value !== null && patch(row.key, { level: Number(value) })}
-            >
-              <SelectTrigger
-                className="w-28"
-                aria-label={m.node_address_col_level()}
-                data-testid="node-address-level"
-              >
-                <SelectValue>{levelLabel(row.level)}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {LEVELS.map((level) => (
-                  <SelectItem key={level} value={String(level)}>
-                    {levelLabel(level)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={LEVELS.map((level) => ({ value: String(level), label: levelLabel(level) }))}
+              onChange={(value) => patch(row.key, { level: Number(value) })}
+              label={m.node_address_col_level()}
+              className="w-28"
+              testId="node-address-level"
+            />
             <Button
               type="button"
               size="icon-sm"

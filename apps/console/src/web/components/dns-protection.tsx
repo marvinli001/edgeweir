@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { NumberField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,17 +63,9 @@ export function DnsProtectionCard() {
       <CardHeader>
         <CardTitle>{m.dns_protection_title()}</CardTitle>
       </CardHeader>
-      {query.isPending ? (
-        <CardContent>
-          <LoadingState />
-        </CardContent>
-      ) : query.isLoadingError ? (
-        <CardContent>
-          <ErrorState error={query.error} onRetry={() => query.refetch()} />
-        </CardContent>
-      ) : (
-        <ProtectionForm key={JSON.stringify(query.data)} initial={query.data} />
-      )}
+      <QueryView query={query} frame={CardContent}>
+        {(protection) => <ProtectionForm key={JSON.stringify(protection)} initial={protection} />}
+      </QueryView>
     </Card>
   );
 }
