@@ -108,6 +108,7 @@ export function SecurityTab({ siteId }: { siteId: string }) {
       <NodeLevelsCard siteId={siteId} />
       <TopCard siteId={siteId} />
       <WafRulesCard siteId={siteId} />
+      <LoggedRulesCard siteId={siteId} />
       <EventsCard siteId={siteId} />
     </div>
   );
@@ -627,6 +628,59 @@ function WafRulesCard({ siteId }: { siteId: string }) {
   );
 }
 
+/** Requests that matched rules with the log action, per rule, over a range (approximate). */
+function LoggedRulesCard({ siteId }: { siteId: string }) {
+  const [range, setRange] = React.useState<AnalyticsRange>("24h");
+  const logged = useQuery({
+    ...orpc.rules.topLogged.queryOptions({ input: { id: siteId, range, limit: 10 } }),
+    placeholderData: keepPreviousData,
+  });
+  return (
+    <Card className="animate-enter" style={{ animationDelay: "285ms" }}>
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+        <CardTitle>{m.rules_logged_title()}</CardTitle>
+        <div className="w-full sm:w-44">
+          <FormSelect
+            id="logged-rules-range"
+            label={m.security_hours()}
+            value={range}
+            testId="logged-rules-range"
+            options={ANALYTICS_RANGES.map((value) => ({ value, label: rangeLabel(value) }))}
+            onChange={(value) => setRange(value as AnalyticsRange)}
+          />
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {logged.isPending ? (
+          <LoadingState />
+        ) : logged.isLoadingError ? (
+          <ErrorState error={logged.error} onRetry={() => void logged.refetch()} />
+        ) : (
+          <>
+            <TopList
+              title={m.rules_logged_rule()}
+              items={logged.data.items.map((item) => ({
+                id: item.ruleId,
+                value:
+                  item.name === null
+                    ? m.rules_logged_deleted()
+                    : item.platform
+                      ? m.rules_logged_platform({ name: item.name })
+                      : item.name,
+                count: item.requests,
+              }))}
+              testId="logged-rules"
+            />
+            {logged.data.unsupportedNodes > 0 ? (
+              <SafetyNote data-testid="logged-rules-partial">{m.rules_logged_partial()}</SafetyNote>
+            ) : null}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function NodeLevelsCard({ siteId }: { siteId: string }) {
   const state = useQuery(
     orpc.security.state.queryOptions({
@@ -689,7 +743,8 @@ function TopList({
   mono,
 }: {
   title: string;
-  items: { value: string; count: number }[];
+  /** `id` keys an entry whose value may repeat (e.g. rule names). */
+  items: { id?: string; value: string; count: number }[];
   testId: string;
   mono?: boolean;
 }) {
@@ -701,7 +756,7 @@ function TopList({
       ) : (
         <ol className="divide-y rounded-2xl border">
           {items.map((item) => (
-            <li key={item.value} className="flex items-center gap-3 px-3 py-2 text-sm">
+            <li key={item.id ?? item.value} className="flex items-center gap-3 px-3 py-2 text-sm">
               <span className={`min-w-0 flex-1 break-all ${mono ? "font-mono text-xs" : ""}`}>
                 {item.value}
               </span>

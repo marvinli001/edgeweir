@@ -195,7 +195,7 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 1. 网站的 Brotli、Zstandard 设置与 Gzip 一起保存在 `site.tls_settings`，编译进 `TlsOptions`；只有开启的算法带级别、最小长度与类型（类型排序去重），未开启时内容哈希不变。有启用网站开启时 `required_features` 加 `brotli-v1` / `zstd-v1`。
 2. 网站的 CRS 设置保存在 `site_waf`；模式不为关闭时编译为 `Site.waf`（排除的规则 id 升序去重），`required_features` 加 `modsecurity-v1`。
 3. 与其他能力相同，引入集群活动节点缺少的能力时，服务账号与后台任务的发布返回 `NODE_CAPABILITY_REQUIRED`，运营者本人可以发布。`sites.features` 按网站给出三项功能能否开启（原因 `nodes`），界面据此禁用开关。回滚按保留的网站重新计算这三项能力。
-4. `ReportStats` 的 `waf_rules`（规则 id → 请求数）按节点、网站、分钟最多保留 50 条，与其他分钟统计一起汇总到小时和天，并写入 ClickHouse `minute_stats` 副本；`waf.topRules` 按时间范围汇总。访问日志保存命中的规则 id（最多 16 个，升序）与 `waf_blocked`（PostgreSQL、ClickHouse、CSV）。
+4. `ReportStats` 的 `waf_rules`（规则 id → 请求数）按节点、网站、分钟最多保留 50 条，与其他分钟统计一起汇总到小时和天，并写入 ClickHouse `minute_stats` 副本；`waf.topRules` 按时间范围汇总。访问日志保存命中的规则 id（最多 16 个，升序）与 `waf_blocked`（PostgreSQL、ClickHouse、CSV）。「记录」动作的规则同样：`MinuteStats.logged_rules`（proto v0.18.0，节点能力 `rule-log-v1`；规则 id → 请求数，只收 UUID）按节点、网站、分钟最多保留 50 条，存为 `logged_rules`，经同样的汇总与 ClickHouse 副本；`rules.topLogged` 按时间范围汇总并关联规则的当前名称（网站自己的规则与全局规则），同时给出网站所在集群里缺少 `rule-log-v1` 的活动节点数。
 
 | 管理操作 | 审计 |
 | --- | --- |
@@ -528,6 +528,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0043_stats_marker_generation` | `stats_rollup_dirty.generation`（汇总只清除读到的那一代标记） |
 | `0044_node_offline_per_node` | 删除按网站记录的「节点离线」告警状态（改为每个节点一条） |
 | `0045_rollout_policy_updated_at` | `cluster_rollout.policy_updated_at`（金丝雀策略自身的版本，已有行取 `updated_at`） |
+| `0046_rule_log_stats` | 分钟、小时、天统计与视图 `traffic_hour_stats` 的 `logged_rules`（「记录」规则的命中） |
 
 ## 构建产物
 

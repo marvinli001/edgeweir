@@ -337,6 +337,7 @@ Behavior: [Origins and cache](../guide/origins-and-cache.en.md) and [Error pages
 | `rules.get`, `rules.save` | `GET`, `PUT /sites/{id}/rules` |
 | `platformRules.get`, `platformRules.save` (global rules) | `GET`, `PUT /platform-rules` |
 | `rules.validate` | `POST /rules/validate` |
+| `rules.topLogged` (log rule matches) | `GET /sites/{id}/rules/logged` |
 | `bulkRedirects.get` | `GET /sites/{id}/bulk-redirects` |
 | `bulkRedirects.save` | `PUT /sites/{id}/bulk-redirects` |
 
@@ -353,12 +354,14 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `POST /sites`, `PATCH /sites/{id}` | `cacheRules[]` adds `expression` (a condition of the `cache` phase, up to 16384 characters; when empty, `pathPrefixes`, `paths`, and `extensions` build it; when set, those are empty or equal its builder form) and `browserTtlSeconds` (0–31536000, 0 keeps the origin's `Cache-Control`); `origins[]` adds `group` (`[a-z0-9_-]{0,32}`, empty for the default group, at least one origin in the default group) |
 | `PUT /sites/{id}/bulk-redirects` | `redirects`: replaces everything, up to 5000, unique `source`; each with `source` (`/path` or `host/path`, 2–512 bytes without whitespace, `?`, or control characters, lowercase host), `target` (static redirect target, up to 1024 bytes), `statusCode` (default 301), `preserveQuery` (default `false`) |
 | `POST /rules/validate` | `expression` (up to 16384 characters), `phase`, `kind`: `condition` (default, a rule condition), `value` (a redirect target or rewrite path of `phase`), `cacheRule` (a cache rule condition; `phase` is ignored) |
+| `GET /sites/{id}/rules/logged` | `range` (`1h`, `6h`, `24h` (default), `7d`, `30d`), `limit` (1–50, default 10) |
 
 Responses:
 
 | Procedure | Content |
 | --- | --- |
-| `rules.*`, `platformRules.*` | The rules in saved order, with `id` |
+| `rules.get`, `rules.save`, `platformRules.*` | The rules in saved order, with `id` |
+| `rules.topLogged` | `{ approximate: true, items: [{ ruleId, name, platform, requests }], unsupportedNodes }`: requests that matched the site's **Log** rules and global **Log** rules, most first; `name` is the rule's current name, `null` once it is deleted; `platform` marks global rules; `unsupportedNodes` counts the active nodes of the site's cluster that do not report matches (no node capability `rule-log-v1`) |
 | `bulkRedirects.*` | `[{ source, target, statusCode, preserveQuery }]` in saved order |
 | `sites.get`; `site` of `sites.create` and `sites.update` | `cacheRules[]` always carry `expression` (`"true"` matches every request); `pathPrefixes`, `paths`, and `extensions` hold its structured form when the condition has the builder's shape and are empty otherwise; `browserTtlSeconds` is added. `origins[]` carry `group` |
 | `rules.validate` | `{ valid, position, message, code?, params? }`; when invalid, `position` is the character where it fails (from 0), `message` the reason in English, `code` a stable reason code (such as `unknown_field`, `ordered_comparison`, `expected_token`) and `params` the values the reason names (such as `token` of `expected_token`) |

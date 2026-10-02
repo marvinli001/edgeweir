@@ -14,7 +14,7 @@ import {
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { addExpressionIssue, expressionKinds } from "./expressions";
-import { optionalHostname, uuid } from "./schemas";
+import { analyticsRange, optionalHostname, uuid } from "./schemas";
 
 const text = z
   .string()
@@ -288,6 +288,27 @@ export const ruleInput = z
       }
   });
 export const ruleDto = ruleInput.safeExtend({ id: uuid });
+/** Most-matched log rules of a site over a range (approximate, bounded per minute). */
+export const loggedRulesInput = z.object({
+  id: uuid,
+  range: analyticsRange.default("24h"),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+export const loggedRules = z.object({
+  approximate: z.literal(true),
+  items: z.array(
+    z.object({
+      ruleId: uuid,
+      /** The rule's current name; null once it is deleted. */
+      name: z.string().nullable(),
+      /** A platform rule (it applies to every site). */
+      platform: z.boolean(),
+      requests: z.number(),
+    }),
+  ),
+  /** Active nodes of the site's cluster that do not count matches (no rule-log-v1). */
+  unsupportedNodes: z.number().int(),
+});
 export const rulesContract = {
   get: oc
     .route({ method: "GET", path: "/sites/{id}/rules", tags: ["rules"] })
@@ -297,6 +318,14 @@ export const rulesContract = {
     .route({ method: "PUT", path: "/sites/{id}/rules", tags: ["rules"] })
     .input(z.object({ id: uuid, rules: z.array(ruleInput).max(64) }))
     .output(z.array(ruleDto)),
+  /**
+   * Requests that matched the site's rules with the log action (and platform
+   * rules with it) per rule, heaviest first.
+   */
+  topLogged: oc
+    .route({ method: "GET", path: "/sites/{id}/rules/logged", tags: ["rules"] })
+    .input(loggedRulesInput)
+    .output(loggedRules),
   /**
    * Checks an expression: a rule condition of `phase` (kind condition), a
    * redirect target or rewrite path of `phase` (kind value) or a cache rule
@@ -375,3 +404,4 @@ export type RuleInput = z.infer<typeof ruleInput>;
 export type RuleDto = z.infer<typeof ruleDto>;
 export type IpListInput = z.infer<typeof ipListInput>;
 export type IpListDto = z.infer<typeof ipListDto>;
+export type LoggedRules = z.infer<typeof loggedRules>;

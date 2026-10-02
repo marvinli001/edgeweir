@@ -163,7 +163,7 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 | 压缩算法 | 只在列表内、网站已开启且未被覆盖设置关闭的算法中，按请求 `Accept-Encoding` 的 q 值协商，q 值相同时按列表顺序；「不压缩」时不压缩；不绕过缓存 |
 | 拦截、限速超额 | 响应头 `X-Edgeweir-Error: policy-denied`；限速超额另带 `Retry-After`（窗口秒数） |
 | 挑战 | 请求带有级别足够的通行凭证时继续执行后续规则，否则返回挑战页（非 GET/HEAD 请求返回 403 与 `X-Edgeweir-Challenge: required`）；放行规则跳过 Under Attack 与 CC 挑战，但在放行之前命中的挑战规则仍然生效。见[挑战与 CC 防护](challenges.md) |
-| 记录 | 不改变响应。每条规则在每个节点每 60 秒最多写一条 NOTICE 级 nginx 错误日志，内容为网站 ID 和规则 ID；nginx 为请求期间的日志附加客户端 IP、请求行和 Host |
+| 记录 | 不改变响应。节点按规则与分钟统计命中的请求数（不含节点自己的预热请求），网站「安全」页签的「记录命中」卡片按时间范围列出命中最多的规则（全局规则带「（全局）」，已删除的规则显示为「已删除的规则」），数值为近似值：每个节点每分钟最多上报 20 条规则。所在集群有节点不支持（缺少能力 `rule-log-v1`）时卡片提示「所在集群有节点不上报记录命中」。此外每条规则在每个节点每 60 秒最多写一条 NOTICE 级 nginx 错误日志，内容为网站 ID 和规则 ID；nginx 为请求期间的日志附加客户端 IP、请求行和 Host |
 
 ### 限速
 
