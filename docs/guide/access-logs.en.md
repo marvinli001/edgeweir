@@ -10,7 +10,7 @@ Traffic analytics, access log sampling, search, and export, analytics storage mo
 | Access logs | Individual requests recorded at a sample rate. Bounded diagnostic data, not a lossless audit record. |
 | Sample rate | The share of requests recorded; a percentage in the UI, an integer in 1/10,000 units (0–10000) in the API. |
 | Analytics mode | The value of `EDGEWEIR_ANALYTICS`: `lite` (PostgreSQL, default) or `clickhouse`. |
-| Access key | A key (prefix `ewk_`) that calls `/api/v1` as the console account; created and revoked in **Settings**. |
+| Access key | A key (prefix `ewk_`) that calls `/api/v1` as the console account; created and revoked in **Personal settings**. |
 
 ## View analytics
 
@@ -109,7 +109,7 @@ Access logs need the node capability `access-logs-v1`, and JA4 also `ja4-v1`. A 
    docker compose --profile analytics up -d
    ```
 
-3. Verify: on the **System** page, **Analytics** shows `clickhouse`.
+3. Verify: on the **System settings** page, **Analytics** shows `clickhouse`.
 
 Defaults of `EDGEWEIR_CLICKHOUSE_URL`, `EDGEWEIR_CLICKHOUSE_DATABASE`, and `EDGEWEIR_CLICKHOUSE_USER` and settings for an external ClickHouse are in [Environment variables](../reference/environment.en.md).
 
@@ -122,7 +122,7 @@ Defaults of `EDGEWEIR_CLICKHOUSE_URL`, `EDGEWEIR_CLICKHOUSE_DATABASE`, and `EDGE
 
 ## Create an access key
 
-1. Open **Settings** from the user menu (bottom of the sidebar) and find the **Access keys** card.
+1. Open **Personal settings** from the user menu (bottom of the sidebar) and find the **Access keys** card.
 2. Enter **Name** (1–64 characters; `default` when empty) and select **Scope**.
 3. Click **Create**.
 4. Copy the key shown. It is shown once (**Shown once**).
@@ -143,14 +143,14 @@ Request format and endpoints are in [API and endpoints](../reference/api.en.md).
 
 ## Revoke an access key
 
-1. In the **Access keys** card of **Settings**, click **Revoke key** for the key and confirm.
+1. In the **Access keys** card of **Personal settings**, click **Revoke key** for the key and confirm.
 2. Verify: the key shows **Revoked**; requests with it return 401.
 
 | Item | Behavior |
 | --- | --- |
 | List | The **Access keys** card lists every key, with scope and "Last used: …" |
 | Identity | A key calls the API as the console account; the audit log shows the actor type AccessKey |
-| Issuing | Keys can be created only in a signed-in console session (the **Settings** page, or `accessKeys.create` over `/rpc`); no access key, including read-write and legacy keys, can create new keys: `POST /api/v1/access-keys` returns 403 (`ACCESS_KEY_SESSION_REQUIRED`) |
+| Issuing | Keys can be created only in a signed-in console session (the **Personal settings** page, or `accessKeys.create` over `/rpc`); no access key, including read-write and legacy keys, can create new keys: `POST /api/v1/access-keys` returns 403 (`ACCESS_KEY_SESSION_REQUIRED`) |
 | Legacy keys | Legacy keys without a scope keep read-write access; revoke and recreate them by purpose |
 
 ## Limits

@@ -36,11 +36,11 @@ The web port of `compose.yml` is reachable only locally by default, served by a 
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` | URL nodes use for the node channel; `--server` in the install command; "Node channel" in **System**. |
+| `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` | URL nodes use for the node channel; `--server` in the install command; "Node channel" in **System settings**. |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | Empty | Extra names for the node channel certificate: DNS names or IPs, comma separated. |
 
 - The internal CA issues the node channel server certificate at every start. Its names: `localhost`, `127.0.0.1`, `::1`, the container host name, the host of `EDGEWEIR_NODE_API_URL`, and every entry of `EDGEWEIR_NODE_API_HOSTNAMES`. Changes apply after a restart.
-- The CA fingerprint (SHA-256) appears as `caSha256` in the `node channel listening` startup log, as "CA fingerprint" in **System**, and as `--ca-sha256` in the install command.
+- The CA fingerprint (SHA-256) appears as `caSha256` in the `node channel listening` startup log, as "CA fingerprint" in **System settings**, and as `--ca-sha256` in the install command.
 
 | Case | Setting |
 | --- | --- |
@@ -115,7 +115,7 @@ Use nginx `stream` layer-4 passthrough when 8443 must go through nginx.
      | openssl x509 -noout -issuer
    ```
 
-   Expected: the issuer contains `Edgeweir Node Channel CA`. Any other issuer means a device in between terminates TLS.
+   Expected: the issuer contains `Edgeweir Node Channel CA`. Any other issuer means a device in between terminates TLS. The check beside "Node channel" in **System settings** does the same from the console's network against `EDGEWEIR_NODE_API_URL`; see [Node channel check](nodes.en.md#node-channel-check).
 
 ## Trusted proxies and client IP
 

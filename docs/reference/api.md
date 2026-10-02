@@ -38,7 +38,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 
 ### AccessKey
 
-在 **设置 → AccessKey**（用户菜单）中管理；也可在已登录的会话中经 `/rpc` 调用 `accessKeys.*`。
+在 **个人设置 → AccessKey**（用户菜单）中管理；也可在已登录的会话中经 `/rpc` 调用 `accessKeys.*`。
 
 | 操作 | 位置 | 说明 |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 
 ### 服务账号
 
-服务账号是供集成调用 `/api/v1` 的机器身份。它不能登录：没有密码、passkey 或会话，只有 key。在 **服务账号** 页面管理。
+服务账号是供集成调用 `/api/v1` 的机器身份。它不能登录：没有密码、passkey 或会话，只有 key。在 **系统设置 → 服务账号** 中管理。
 
 | 操作 | 说明 |
 | --- | --- |
@@ -426,6 +426,34 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | 计算 | 参与节点水位的最小值；从未上报水位的节点（旧版本节点）按注册时间计；落后超过离线阈值的节点按「当前时间减阈值」计（与离线节点一样，它之后补报的数据按修订处理）；尚未重算的窗口不计入；向下取整到 5 分钟 |
 | 单调 | 只前移不后退。离线超过阈值的节点恢复后，它补报的更早窗口的数据按修订处理（`revision` 加 1） |
 | 停用或删除的节点 | 不参与 |
+
+### 集群与概览
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `clusters.list`、`clusters.get` | `GET /clusters`、`GET /clusters/{id}` | 集群与其概要 |
+| `clusters.rollout` | `GET /clusters/{id}/rollout` | 配置金丝雀的策略、当前发布与金丝雀节点 |
+| `clusters.rollbackPreview` | `GET /clusters/{id}/rollback-preview` | 回滚到查询参数 `revision` 会发布的变化；按回滚的规则拒绝，不写入 |
+| `overview.get` | `GET /overview` | 概览：集群、节点与网站数，最近发布，待处理事项 |
+| `settings.nodeChannelCheck` | `GET /settings/node-channel-check` | 控制台对自己的节点通道地址做的 TLS 握手检查 |
+
+`clusters:read` 服务账号可以调用 `clusters.list`、`clusters.get`；其他过程服务账号不能调用（403 `SERVICE_ACCOUNT_FORBIDDEN`）。都是 `GET`，只读 AccessKey 可以调用。
+
+| 过程 | 响应字段 |
+| --- | --- |
+| `clusters.list`、`clusters.get` | `liveNodeCount`：在线的已启用节点数；`appliedNodeCount`：其中运行目标版本的节点数（金丝雀进行中时，金丝雀节点的目标为候选版本，其他节点为稳定版本） |
+| `clusters.rollout` | `candidateChanges`：发布进行中时为 `{ sites: { added, changed, removed }, reasons }`，`sites` 为候选版本相对稳定版本新增、修改、移除的网站（`[{ id, name }]`），`reasons` 为稳定版本之后发布的版本（与 `GET /clusters/{id}/revisions` 的元素相同，原因不重复）；没有进行中的发布时为 `null` |
+| `clusters.rollbackPreview` | `{ revision, currentRevision, unchanged, sites: { added, changed, removed } }`：`currentRevision` 为集群最新版本（没有时为 `null`）；`unchanged` 为 `true` 时内容与最新版本相同；`sites` 为相对最新版本的变化 |
+| `overview.get` | `attention`：`[{ kind, clusterId, clusterName, revision, at, count, version }]`，按下列 `kind` 的顺序排列，没有事项时为 `[]`。`kind`：`nodes_unhealthy`、`dns_failed`、`dns_blocked`、`upgrade_failed`、`canary_rolled_back`、`canary_awaiting_promotion`、`canary_running`、`nodes_lagging`、`nodes_no_address`。`revision`：DNS 版本或候选版本；`at`：`canary_running` 的窗口结束时间、`canary_rolled_back` 的回滚时间；`count`：节点数；`version`：`upgrade_failed` 的目标版本。不适用的字段为 `null`、`0` 或空字符串 |
+| `settings.nodeChannelCheck` | `{ url, result, checkedAt }`：`url` 为 `EDGEWEIR_NODE_API_URL`；`result` 为 `ok`（证书链含节点通道 CA）、`unreachable`（3 秒内没有完成握手）或 `mismatch`（出示了其他证书链，或地址不是 `https`）。结果缓存 30 秒，只作提示 |
+
+| 错误代码 | 状态 | 场景 |
+| --- | --- | --- |
+| `ROLLBACK_RESOURCE_UNAVAILABLE` | 409 | `rollbackPreview` 与 `rollback`：所选版本引用的网站、域名、证书或 IP 名单已删除或不可用，或证书已过期 |
+| `REVISION_NOT_FOUND` | 404 | 集群没有该版本 |
+| `CLUSTER_NOT_FOUND` | 404 | 集群不存在 |
+
+行为见[集群与系统](../guide/system.md)与[接入节点](../deploy/nodes.md#节点通道自检)。
 
 ### 节点升级
 

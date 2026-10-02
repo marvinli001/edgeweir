@@ -1,12 +1,18 @@
 # Clusters and system
 
-Clusters, node groups, and nodes; revisions and the configuration canary; site enabling; regions and probes; service accounts; the audit log; and system settings.
+Clusters, node groups, and nodes; revisions and the configuration canary; what needs attention; site enabling; regions; service accounts; the audit log; and system settings.
 
 For **Global rules** and **IP lists**, see [Rules, IP lists, and GeoIP](rules.en.md); for **Bans**, [Bans](bans.en.md); for **DNS steering** and **Alerts**, [DNS steering and alerts](dns-and-alerts.en.md); for regional probes, scheduling addresses, and scheduling rules, [Regional probes and scheduling](scheduling.en.md). Every page of the sidebar: [Console navigation](account.en.md#console-navigation).
 
 ## Clusters and nodes
 
-Page: **Clusters & nodes** (`/clusters`). The top of the page holds **New cluster**, **Add node**, and a summary of the current cluster (**Nodes online**, **Sites**, **Latest revision**). With several clusters, **Select cluster** switches between them. The **Overview** tab holds node groups, nodes, configuration canary, node upgrades, and revisions; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster); the **Scheduling** tab holds the cluster's scheduling rules and their preview, see [Scheduling rules](scheduling.en.md#scheduling-rules); the **Port pools** tab (`/clusters?tab=ports`) holds the port ranges the cluster's L4 apps may use, see [Set up port pools](l4.en.md#set-up-port-pools).
+Page: **Clusters & nodes** (`/clusters`); the **Clusters | Regions** switch at the top moves between clusters and [regions](#regions) (`/clusters?view=regions`). The clusters view has the page actions **New cluster** and **Add node**, then a summary of the current cluster. With several clusters, **Select cluster** switches between them. A cluster without nodes shows only its node section (with **Add node**); the summary and the tabs appear once it has a node. The **Overview** tab holds node groups, nodes, configuration canary, node upgrades, and revisions; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster); the **Scheduling** tab holds the cluster's scheduling rules and their preview, see [Scheduling rules](scheduling.en.md#scheduling-rules); the **Port pools** tab (`/clusters?tab=ports`) holds the port ranges the cluster's L4 apps may use, see [Set up port pools](l4.en.md#set-up-port-pools).
+
+| Summary | Content |
+| --- | --- |
+| **Nodes online** | Online nodes / all nodes |
+| **Sites** | The cluster's sites |
+| **Latest revision** | The cluster's latest revision, such as `#12 · 7/8 applied`: 8 online enabled nodes, 7 of which run their target revision. While a canary runs, the canary nodes' target is the candidate and the other nodes' the stable revision, see [Configuration canary](#configuration-canary) |
 
 ### Clusters
 
@@ -35,26 +41,26 @@ Node groups serve as the lines and backup node groups of **DNS steering**, as ca
 
 ### Adding a node
 
-**Add node** generates a one-time install command.
+The **Add node** dialog generates a one-time install command as it opens: the cluster's default node group, valid for 1 hour, no node name. **Options** shows the fields below; **Regenerate** generates a new command with them.
 
 | Field | Description |
 | --- | --- |
 | **Node name** | Optional, at most 64 characters |
-| **Node group** | Defaults to the cluster's default node group |
+| **Node group** | Defaults to the cluster's default node group; hidden when the cluster has only one |
 | **Valid for** | 15 minutes, 1 hour (default), or 24 hours; the API accepts 5 minutes to 7 days |
 
-Result: the **Install command** (shown once, with a countdown) and the **CA fingerprint**. The token starts with `ewt_` and is single-use; the database keeps its SHA-256 and prefix, never the plaintext. For the install flow, see [Adding nodes](../deploy/nodes.en.md).
+The dialog shows the **Install command** (with a countdown, shown once), address warnings, and one line with the node channel check, then **Progress**. The CA fingerprint is in the command's `--ca-sha256` and in [System information](#system-information). Every opening of the dialog generates a new token; once closed, the command is not shown again. The token starts with `ewt_` and is single-use; the database keeps its SHA-256 and prefix, never the plaintext. Address warnings, the node channel check, and the install flow: [Adding nodes](../deploy/nodes.en.md).
 
 ### Nodes
 
 | Column | Content |
 | --- | --- |
 | **Node** | Name and host name |
-| **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled**; an online node that reports an unhealthy data plane is also marked **Data plane unhealthy**; an offline node whose certificate the node channel refuses is marked **Certificate expired** or **Certificate refused** |
+| **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled**; an enrolled node that has not connected to the node channel since shows **Awaiting heartbeat** (grey); an online node that reports an unhealthy data plane is also marked **Data plane unhealthy**; an offline node whose certificate the node channel refuses is marked **Certificate expired** or **Certificate refused** |
 | **Node group** | Node group and region |
 | **IP** | Unicast addresses in the node's latest heartbeat (replaced on every heartbeat, at most 64); for the addresses DNS and probes use, see [Scheduling addresses and backup IPs](scheduling.en.md#scheduling-addresses-and-backup-ips); marked **No public address** when DNS has no address for the node, see [Nodes without a public address](scheduling.en.md#nodes-without-a-public-address) |
 | **Metrics** | CPU and memory usage reported by the node (`metrics-v1`); "—" without metrics |
-| **Applied** | The revision the node has applied; badge **In sync** (the node's target revision reached), **Behind**, **Apply failed** (hover for the reason), or **Upgrade required** |
+| **Applied** | The revision the node has applied; badge **In sync** (the node's target revision reached), **Behind**, **Apply failed** (hover for the reason), or **Upgrade required**; an online node without any configuration yet shows **Awaiting configuration** |
 | **Agent / engine** | Agent version, engine, and engine version |
 | **Heartbeat** | Time of the last heartbeat |
 
@@ -105,6 +111,14 @@ The **Configuration canary** card sets the cluster's policy and shows the curren
 | **Rolled back** | The canary nodes returned to the stable revision |
 | **Published to all** | No canary node was online; the change went to every node |
 
+While a rollout runs, the card also shows:
+
+| Item | Content |
+| --- | --- |
+| **Changes** | Sites the candidate adds, changes, and removes against the stable revision, by name under **Added**, **Changed**, **Removed**; "No site changes" when no site differs |
+| **Reasons** | Why the revisions after the stable one were published, without repeats |
+| **Window ends** | A countdown; hover for the time |
+
 **Promote to all now** (audited as `cluster.rollout_promote`) and **Abort and roll back** (audited as `cluster.rollout_abort`) need confirmation and are available in **Canary** and **Awaiting promotion** only. Policy changes are audited as `cluster.rollout_policy_update`.
 
 ### Revisions
@@ -133,6 +147,8 @@ Every change that affects node configuration publishes a new revision in the clu
 
 **Roll back** publishes the content of the chosen revision as a new revision; history is kept. Sites and L4 apps that are currently disabled do not return through a rollback; IP lists, global rules, global Under Attack, and the origin allow list keep their current values. A rollback is refused when a site, domain, certificate, IP list, or L4 app the chosen revision references was deleted, an L4 app's port is no longer inside a port pool, or the certificate has expired.
 
+The confirmation of **Roll back** lists the sites the rollback adds, changes, and removes against the latest revision (**Added**, **Changed**, **Removed**); "Same as the current revision" when the content equals the latest revision, "No site changes" when only settings other than sites differ. When the rollback cannot be done (for example `ROLLBACK_RESOURCE_UNAVAILABLE`), the reason shows instead and the confirm button stays disabled. The preview writes nothing; for the API, see [Clusters and overview](../reference/api.en.md#clusters-and-overview).
+
 When a change needs a capability that active nodes of the cluster lack:
 
 | Publisher | Behavior |
@@ -140,6 +156,24 @@ When a change needs a capability that active nodes of the cluster lack:
 | The console account (session or AccessKey) | Published anyway; nodes without the capability show **Upgrade required** and keep their configuration |
 | Service accounts | 409 `NODE_CAPABILITY_REQUIRED`; nothing is published |
 | Automatic console jobs | Nothing is published |
+
+## Needs attention
+
+**Needs attention** at the top of **Overview** (`/overview`) lists what needs the operator, each row with its cluster; a row opens the cluster (DNS items its **DNS** tab). It is hidden when nothing does. The sidebar shows the number of items beside **Overview**. Items come in this order:
+
+| Item | Condition |
+| --- | --- |
+| **Unhealthy nodes: N** | Enabled nodes that connected before and are now offline, failed to apply, have an unhealthy data plane (after applying a configuration), or whose certificate the node channel refuses |
+| **DNS revision #N failed** | The cluster's DNS is not **Not managed** and a DNS revision failed to publish |
+| **DNS publication held back by the mass removal protection** | [Mass removal protection](dns-and-alerts.en.md#mass-removal-protection) stopped the cluster's DNS publication |
+| **Upgrade to X failed** | The cluster's latest [node upgrade](node-upgrades.en.md) failed, within the last 24 hours |
+| **Canary #N rolled back** | The [configuration canary](#configuration-canary) rolled back, within the last 24 hours |
+| **Canary #N awaits promotion** | The window passed; waiting for **Promote to all now** |
+| **Canary #N under observation** | The candidate runs on the canary nodes, with a countdown to the window's end |
+| **Lagging nodes: N** | Online, healthy nodes that do not run their target revision or need an upgrade |
+| **Nodes without a public address: N** | Online nodes without an address DNS can use, only in clusters whose DNS is not **Not managed**; see [Nodes without a public address](scheduling.en.md#nodes-without-a-public-address) |
+
+API: `attention` of `GET /api/v1/overview`, see [Clusters and overview](../reference/api.en.md#clusters-and-overview).
 
 ## Site enabling
 
@@ -157,7 +191,7 @@ When a change needs a capability that active nodes of the cluster lack:
 
 ## Regions
 
-Page: **Regions & probes** (`/regions`), with the tabs **Regions** and **Probes** (`/regions?tab=probes`). A region is a label for node groups and regional probes (for example East China), shown in the node group and node tables; scheduling conditions on probe metrics can count the probers of one region alone. Probes: [Regional probes](scheduling.en.md#regional-probes).
+Page: the **Regions** view of **Clusters & nodes** (`/clusters?view=regions`; `/regions` redirects there), with the page action **New region**. A region is a label for node groups and regional probes (for example East China), shown in the node group and node tables; scheduling conditions on probe metrics can count the probers of one region alone. Probes are on the **Monitoring** tab of **System settings**, see [Regional probes](scheduling.en.md#regional-probes).
 
 | Action | Description |
 | --- | --- |
@@ -167,7 +201,7 @@ Page: **Regions & probes** (`/regions`), with the tabs **Regions** and **Probes*
 
 ## Service accounts
 
-Page: **Service accounts** (`/service-accounts`). A service account is an identity integrations use on `/api/v1`: it cannot sign in to the console and calls only the procedures below, with a key (prefix `ews_`, header `x-api-key`).
+Page: the **Service accounts** tab of **System settings** (`/system?tab=service-accounts`; `/service-accounts` redirects there), with the page action **New service account**. A service account is an identity integrations use on `/api/v1`: it cannot sign in to the console and calls only the procedures below, with a key (prefix `ews_`, header `x-api-key`).
 
 | Action | Description |
 | --- | --- |
@@ -226,7 +260,13 @@ The page shows **Time**, **Actor**, **Action** (name and code), and **Target**, 
 
 ## System settings
 
-Page: **System** (`/system`).
+Page: **System settings** (`/system`), with the tabs:
+
+| Tab | Content |
+| --- | --- |
+| **General** | The sections below: system information, origin allow list, node release source, usage, platform error pages |
+| **Monitoring** | `/system?tab=probes`: the regional probe list (page action **Add probe**) and the **Probe settings** card, see [Regional probes](scheduling.en.md#regional-probes); `/regions?tab=probes` redirects there |
+| **Service accounts** | `/system?tab=service-accounts`, see [Service accounts](#service-accounts) |
 
 ### System information
 
@@ -235,8 +275,8 @@ Read-only (card **System**).
 | Item | Source |
 | --- | --- |
 | **Version** | Image version `<YYYYMMDD>-<commit>`; `dev` when run from source |
-| **Console URL** | `EDGEWEIR_PUBLIC_URL`; localhost or a loopback address is marked "This machine only", a private address "Private address": nodes on other networks cannot download `install.sh` from it |
-| **Node channel** | `EDGEWEIR_NODE_API_URL`; when unset, `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>`. Marked the same way: nodes on other networks cannot enroll |
+| **Console URL** | `EDGEWEIR_PUBLIC_URL`; localhost or a loopback address is marked "This machine only", a private address "Private address": nodes on other networks cannot download `install.sh` from it; a public address over HTTP is marked "Unencrypted": `install.sh` reaches the hosts that run it as root unencrypted |
+| **Node channel** | `EDGEWEIR_NODE_API_URL`; when unset, `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>`. "This machine only" and "Private address" as above: nodes on other networks cannot enroll. Beside it, the node channel check: **reachable, CA matches**, **the console cannot reach this URL**, or **CA mismatch: something in front terminates TLS**; see [Node channel check](../deploy/nodes.en.md#node-channel-check) |
 | **CA fingerprint** | SHA-256 of the node channel's internal CA; install commands carry the same value in `--ca-sha256` |
 | **Analytics** | `EDGEWEIR_ANALYTICS` (`lite` / `clickhouse`) |
 | **Setup token** | **Not used** or **Used {time}** |
@@ -283,11 +323,11 @@ A value saved in the console wins over the environment variable, which wins over
 
 | Setting | Location | Environment variable | Default |
 | --- | --- | --- | --- |
-| Node release source | **System → Node release source** | `EDGEWEIR_NODE_RELEASE_BASE_URL` | `https://github.com/marvinli001/edgeweir-node/releases/download` |
+| Node release source | **System settings → Node release source** | `EDGEWEIR_NODE_RELEASE_BASE_URL` | `https://github.com/marvinli001/edgeweir-node/releases/download` |
 | SMTP CA certificates | **Alerts → SMTP → CA certificates (PEM)** | `EDGEWEIR_SMTP_CA_FILE` (path to a PEM file) | System trust store |
 | SMTP server and account | **Alerts → SMTP** | None | Not configured |
-| Origin allow list | **System → Origin allow list** | None | Empty |
-| Usage | **System → Usage** | None | 100 days retention, 60-minute offline threshold |
+| Origin allow list | **System settings → Origin allow list** | None | Empty |
+| Usage | **System settings → Usage** | None | 100 days retention, 60-minute offline threshold |
 | Bans | **Protection settings → Bans** | None | Limit 10000, automatic bans shared |
 | Protection | **Protection settings → Protection** | None | Global Under Attack off, challenge type JavaScript, events kept 30 days |
 
@@ -332,11 +372,11 @@ Read-only. Shows, per node, the state of the **Country**, **Subdivision**, and *
 | **Turn the cluster's DNS off and wait for its records to be removed** | The cluster's DNS is still **Automatic** or still owns records | Switch to **Not managed** on the **DNS** tab, wait for cleanup, then retry |
 | **Cluster name already exists: …** / **Node group already exists: …** / **Region code already exists: …** / **A service account named … exists** | Duplicate name or code | Use another name or code |
 | **The default node group cannot be deleted** | Deleting the default node group | The default node group can only be renamed or given another region |
-| **N probes still belong to this region** | Deleting a region that still has probes | Delete those probes on the **Probes** tab first |
+| **N probes still belong to this region** | Deleting a region that still has probes | Delete those probes on the **Monitoring** tab of **System settings** first |
 | **The node group belongs to another cluster** | Moving a node across clusters | Nodes move only within their cluster; changing clusters means deleting and enrolling again |
 | **This cluster has reached its limit of 512 published sites** | The cluster's enabled sites reached the limit | Disable sites no longer in use, or create new sites in another cluster through `/api/v1` with `clusterId` |
 | **Cluster nodes need these capabilities first: …** | A change published by a service account or an automatic job needs a capability active nodes of the cluster lack | Upgrade the nodes; see [Node upgrades](node-upgrades.en.md) |
-| **Rollback references resources that are no longer assigned or available** | A site, domain, certificate, or IP list the chosen revision references was deleted, or the certificate has expired | Pick a more recent revision, or fix the current configuration |
+| **Rollback references resources that are no longer assigned or available** (in the rollback confirmation) | A site, domain, certificate, or IP list the chosen revision references was deleted, or the certificate has expired | Pick a more recent revision, or fix the current configuration |
 | **Service accounts cannot call this** | A service account called a procedure outside the [Service accounts](#service-accounts) table | Use an AccessKey |
-| **Missing scope: …** | The service account lacks the scope the procedure needs | Edit its scopes in **Service accounts** |
+| **Missing scope: …** | The service account lacks the scope the procedure needs | Edit its scopes on the **Service accounts** tab of **System settings** |
 | **The release source must use HTTPS and resolve to an allowed address** | Public HTTP URL, or a private address that is not allowed | Use HTTPS, or allow the range in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |

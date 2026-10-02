@@ -110,7 +110,7 @@ After a package or image update changes the installed base program and Lua, the 
 
 | Item | Setting |
 | --- | --- |
-| Console release source | Where the console reads release manifests, set in **System → Node release source**, see [Node release source](system.en.md#node-release-source) |
+| Console release source | Where the console reads release manifests, set in **System settings → Node release source**, see [Node release source](system.en.md#node-release-source) |
 | Node release source | The node's `EDGEWEIR_UPGRADE_SOURCE`, pointing at the same base URL with `v<version>/` directories |
 | Mirror requirements | The mirror serves the files directly; nodes refuse cross-origin redirects |
 | Own signing key | Set `EDGEWEIR_UPGRADE_PUBLIC_KEY` on the node to a public key deployed by the operator; the node verifies against that key without the public transparency log; changing the console database cannot change the key a node trusts |
@@ -175,7 +175,7 @@ The endpoints are under `/api/v1`. Read-only AccessKeys can call the GET endpoin
 | "The node group to upgrade first has no active nodes" | The chosen node group has no active node | Choose another node group |
 | "An upgrade covers at most 1000 nodes" | The cluster has more than 1000 active nodes | Split the cluster |
 | "This release manifest is unavailable" | The version does not exist, the release source is unreachable, or the manifest lists no Linux archive | Check the version and the console release source |
-| "The release source must use HTTPS and resolve to an allowed address" | The release source saved in **System → Node release source** fails the outbound policy | See [Node release source](system.en.md#node-release-source) |
+| "The release source must use HTTPS and resolve to an allowed address" | The release source saved in **System settings → Node release source** fails the outbound policy | See [Node release source](system.en.md#node-release-source) |
 | "These nodes already have an unfinished upgrade: …" | The listed nodes have a task, or are **Upgrading** during cancellation | Wait for the current task to finish |
 | "The upgrade has already finished" | Cancelling an upgrade that ended | — |
 | "Canary nodes have not passed the health window" | The canary group has been healthy for less than 30 seconds | Wait, then promote |

@@ -8,7 +8,7 @@ Variables the console process reads, with defaults and validation, plus the host
 - Recreate the container after a change: `docker compose up -d`. `docker compose restart` does not apply new values.
 - An empty `BETTER_AUTH_SECRET`, `EDGEWEIR_NODE_API_URL`, `NODE_API_HOST`, or `EDGEWEIR_NODE_RELEASE_BASE_URL` counts as unset; an empty value of any other variable is validated as is, e.g. `ROLE=` is invalid.
 - The Default column is the process default. Values set by the image or a Compose file are given in the Description column.
-- **Fallback**: a value saved in **System** wins; clearing the saved value restores the variable.
+- **Fallback**: a value saved in **System settings** wins; clearing the saved value restores the variable.
 - Template with comments: [`.env.example`](https://github.com/marvinli001/edgeweir/blob/master/.env.example).
 
 ## Required
@@ -20,7 +20,7 @@ With `compose.yml` or `compose.baota.yml`, `DATABASE_URL` is built from the [Com
 | `EDGEWEIR_MASTER_KEY` | None | Master key. Canonical base64 (standard or URL-safe alphabet) of at least 32 bytes; the console refuses to start on any other character, such as a space or a quote, or on fewer than 32 bytes. Generate it with `openssl rand -base64 32` and use the output as is (keep `/`, `+`, and `=`). A key other than the one the database's secrets were encrypted with stops the console with `EDGEWEIR_MASTER_KEY does not match this database`; restore the original key rather than setting `BETTER_AUTH_SECRET`. Envelope-encrypts private keys, DNS API keys, and other secrets at rest, and derives the session secret. Losing it makes encrypted data unrecoverable; back it up separately from the database. |
 | `EDGEWEIR_MASTER_KEY_FILE` | Unset | File holding the master key (for example a Docker secret), instead of `EDGEWEIR_MASTER_KEY`; its trailing newline is ignored and the content is checked like `EDGEWEIR_MASTER_KEY`. The console refuses to start when `EDGEWEIR_MASTER_KEY` is also set to a non-empty value or the file cannot be read. The Compose templates do not pass it; see [Master key file](../deploy/docker.en.md#master-key-file). |
 | `DATABASE_URL` | None | PostgreSQL 18 connection string. At startup the console waits up to 60 seconds for the database, then runs migrations. `compose.yml` and `compose.baota.yml` build it from `POSTGRES_PASSWORD` and ignore the `.env` value; `compose.baota-host.yml` requires it in `.env`. |
-| `EDGEWEIR_PUBLIC_URL` | `http://localhost:3000` | URL browsers use to reach the console; behind a reverse proxy, the proxy URL. Format `http(s)://host[:port]`, without path, query, fragment, user name, or password; a trailing `/` and the default port are dropped. Any other value stops the console at startup. Used for the trusted origin of the authentication endpoints, the `Secure` attribute of session cookies (with `https://`), the passkey RP ID (host name), the `servers` entry of the OpenAPI document, the console URL in `/install.sh`, links in alert notifications, and the default host of `EDGEWEIR_NODE_API_URL`. The default only suits local access: node install commands and alert links would point to localhost. |
+| `EDGEWEIR_PUBLIC_URL` | `http://localhost:3000` | URL browsers use to reach the console; behind a reverse proxy, the proxy URL. Format `http(s)://host[:port]`, without path, query, fragment, user name, or password; a trailing `/` and the default port are dropped. Any other value stops the console at startup. Used for the trusted origin of the authentication endpoints, the `Secure` attribute of session cookies (with `https://`), the passkey RP ID (host name), the `servers` entry of the OpenAPI document, the console URL in `/install.sh`, links in alert notifications, and the default host of `EDGEWEIR_NODE_API_URL`. The default only suits local access: node install commands and alert links would point to localhost. A local or private address, or a public `http://` one, logs a warning at startup; see [Adding nodes](../deploy/nodes.en.md#1-generate-the-install-command). |
 
 ## Session secret
 
@@ -32,7 +32,7 @@ With `compose.yml` or `compose.baota.yml`, `DATABASE_URL` is built from the [Com
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` | URL nodes use to reach the node channel, in the form `https://host[:port]` (same rules as `EDGEWEIR_PUBLIC_URL`). Used as `--server` in node install commands and shown as "Node channel" in **System**; its host goes into the node channel server certificate. The default uses the process `NODE_API_PORT` (`8443` in the image), not Compose's `EDGEWEIR_NODE_API_PORT`; set this variable when the host port is not `8443` or nodes connect through another address. |
+| `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` | URL nodes use to reach the node channel, in the form `https://host[:port]` (same rules as `EDGEWEIR_PUBLIC_URL`). Used as `--server` in node install commands and shown as "Node channel" in **System settings**; its host goes into the node channel server certificate. The default uses the process `NODE_API_PORT` (`8443` in the image), not Compose's `EDGEWEIR_NODE_API_PORT`; set this variable when the host port is not `8443` or nodes connect through another address. |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | Empty | Extra names (DNS names or IPs) for the node channel server certificate, comma separated. The certificate always includes `localhost`, `127.0.0.1`, `::1`, the machine host name (the container host name in a container), and the host of `EDGEWEIR_NODE_API_URL`. The certificate is issued at every start; enrolled nodes verify these names. |
 | `EDGEWEIR_TRUSTED_PROXIES` | Empty | Trusted reverse proxies as IPs or CIDRs, comma separated. `X-Forwarded-For` and `X-Real-IP` are used only from these addresses, for audit log IPs and sign-in rate limiting. Empty: the TCP peer is the client. An entry that is not an IP or CIDR stops the console from starting. `compose.baota-host.yml` defaults to `127.0.0.1,::1`. Configuration: [Ports, reverse proxy, and trusted proxies](../deploy/networking.en.md). |
 | `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` | Empty | Private or special-purpose ranges (CIDRs, separated by commas or whitespace) the console may reach for destinations saved in the web console: alert notification channels, SMTP, and the node release source. Empty: public addresses only. Values saved in the web console cannot widen this boundary. A release source set through an environment variable is not bound by it. The console refuses to start on an entry that is not an IP address or CIDR range. |
@@ -43,7 +43,7 @@ The ClickHouse variables apply only with `EDGEWEIR_ANALYTICS=clickhouse`. The `a
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `EDGEWEIR_ANALYTICS` | `lite` | Storage for access logs and per-minute statistics: `lite` (PostgreSQL) or `clickhouse`. Switching does not migrate history. Shown as "Analytics" in **System**. Behavior: [Access logs and AccessKey](../guide/access-logs.en.md). |
+| `EDGEWEIR_ANALYTICS` | `lite` | Storage for access logs and per-minute statistics: `lite` (PostgreSQL) or `clickhouse`. Switching does not migrate history. Shown as "Analytics" in **System settings**. Behavior: [Access logs and AccessKey](../guide/access-logs.en.md). |
 | `EDGEWEIR_CLICKHOUSE_URL` | `http://clickhouse:8123` | ClickHouse HTTP interface. `http` or `https` only, without user name, password, query, or fragment. `compose.baota.yml` defaults to `http://host.docker.internal:8123` (the host; ClickHouse must listen on the Docker bridge address), `compose.baota-host.yml` to `http://localhost:8123`. |
 | `EDGEWEIR_CLICKHOUSE_DATABASE` | `edgeweir` | Database name; must match `^[A-Za-z_][A-Za-z0-9_]{0,63}$`. |
 | `EDGEWEIR_CLICKHOUSE_USER` | `edgeweir` | User name, sent in the `X-ClickHouse-User` header. |
@@ -62,7 +62,7 @@ The ClickHouse variables apply only with `EDGEWEIR_ANALYTICS=clickhouse`. The `a
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `EDGEWEIR_NODE_RELEASE_BASE_URL` | Empty | **Fallback** for **System → Node release source**. Base URL node upgrades read release manifests from, at `<base>/v<version>/checksums.txt`. `http` or `https` only, without user name, password, query, or fragment; at most 2048 characters. Empty: `https://github.com/marvinli001/edgeweir-node/releases/download`. |
+| `EDGEWEIR_NODE_RELEASE_BASE_URL` | Empty | **Fallback** for **System settings → Node release source**. Base URL node upgrades read release manifests from, at `<base>/v<version>/checksums.txt`. `http` or `https` only, without user name, password, query, or fragment; at most 2048 characters. Empty: `https://github.com/marvinli001/edgeweir-node/releases/download`. |
 | `EDGEWEIR_DOWNLOADS_DIR` | Unset | Directory of release files served at `/downloads/*`, from which `install.sh` downloads node packages and cosign. Unset: `/downloads/*` returns 404 and `install.sh` downloads from GitHub. Directory layout: [Adding nodes](../deploy/nodes.en.md). |
 
 ## Runtime
@@ -78,7 +78,7 @@ The ClickHouse variables apply only with `EDGEWEIR_ANALYTICS=clickhouse`. The `a
 | `NODE_ENV` | `development` (image: `production`) | `development`, `production`, or `test`. `production` enables rate limiting of the authentication endpoints, with counters in PostgreSQL. |
 | `EDGEWEIR_WEB_DIST` | `<directory of main.js>/../web` | Directory of the built web UI; resolves to `/app/dist/web` in the image. Not used by `pnpm dev`. |
 | `EDGEWEIR_CERTD_BIN` | `edgeweir-certd` (image: `/usr/local/bin/edgeweir-certd`) | Path of the certificate helper; looked up in `PATH` when it contains no `/`. From source, build it with `cd helpers/certd && go build -o bin/edgeweir-certd .` and set its absolute path. |
-| `EDGEWEIR_VERSION` | `dev` (image: build version) | Version the process reports in `/healthz`, the OpenAPI document, and "Version" in **System**. The image build sets the rolling version `<YYYYMMDD>-<commit>`; do not override it in the container environment. Compose uses a host variable of the same name to pick the image tag; see [Compose host variables](#compose-host-variables). |
+| `EDGEWEIR_VERSION` | `dev` (image: build version) | Version the process reports in `/healthz`, the OpenAPI document, and "Version" in **System settings**. The image build sets the rolling version `<YYYYMMDD>-<commit>`; do not override it in the container environment. Compose uses a host variable of the same name to pick the image tag; see [Compose host variables](#compose-host-variables). |
 
 ## Compose host variables
 

@@ -25,9 +25,9 @@ Only clusters whose DNS mode is **Automatic** are affected, see [DNS steering an
 
 ### Add a probe
 
-Prerequisites: a region exists (**Regions & probes** → **Regions** → **New region**); the probe host can reach the node channel (`EDGEWEIR_NODE_API_URL`, 8443 by default) and the nodes' listener ports. No inbound port is needed.
+Prerequisites: a region exists (**Clusters & nodes** → **Regions** → **New region**); the probe host can reach the node channel (`EDGEWEIR_NODE_API_URL`, 8443 by default) and the nodes' listener ports. No inbound port is needed.
 
-1. Open **Regions & probes**, switch to the **Probes** tab (`/regions?tab=probes`), and click **Add probe**.
+1. Open **System settings**, switch to the **Monitoring** tab (`/system?tab=probes`), and click **Add probe**.
 2. Fill in **Probe name** (at most 64 characters) and select **Region** and **Valid for** (15 minutes, 1 hour, or 24 hours; 1 hour by default).
 3. Click **Generate token**. The dialog shows the **Start command**, the time left, the **Enrollment token**, the **Node channel**, and the **CA fingerprint**, once.
 4. Run the **Start command** on the probe host:
@@ -52,7 +52,7 @@ Prerequisites: a region exists (**Regions & probes** → **Regions** → **New r
    sudo systemctl enable --now edgeweir-probe
    ```
 
-5. Verify: the probe appears in the **Probes** list as **Online**, and **Last round** shows loss and RTT.
+5. Verify: the probe appears in the list on the **Monitoring** tab as **Online**, and **Last round** shows loss and RTT.
 
 Compose, binary flags, the state directory, and re-enrollment: [Adding nodes](../deploy/nodes.en.md#regional-probes).
 
@@ -85,7 +85,7 @@ Health endpoint: on every edge listener, a node answers `GET /.edgeweir/health` 
 
 ### Probe settings
 
-The **Probe settings** card on the **Probes** tab applies to every prober; probers pick up new values with their next round. Changes are audited as `system.probes_update`.
+The **Probe settings** card on the **Monitoring** tab applies to every prober; probers pick up new values with their next round. Changes are audited as `system.probes_update`.
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
@@ -215,7 +215,7 @@ Example: a node has `203.0.113.10` (primary) and `198.51.100.10` (backup 1). Aft
 
 ## Scheduling rules
 
-Page: **Clusters & nodes** → select the cluster → **Scheduling** tab (`/clusters?tab=scheduling`), with **Scheduling rules** on top and **Preview** below.
+Page: **Clusters & nodes** → select the cluster → **Scheduling** tab (`/clusters?tab=scheduling`, shown once the cluster has a node), with **Scheduling rules** on top and **Preview** below.
 
 ### Create a rule
 

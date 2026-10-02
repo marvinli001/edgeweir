@@ -212,7 +212,7 @@ Origins cannot point at special-purpose addresses.
 | --- | --- |
 | Console save | IP literals in these ranges are refused (`ORIGIN_ADDRESS_FORBIDDEN`) |
 | Node | Applies the same list to configured addresses and to every DNS answer; special-purpose addresses in an answer are dropped, and when all are dropped the attempt fails with `address_forbidden` |
-| Allow list | Ranges are allowed in **System → Origin allow list**; saving publishes to every cluster, see [Origin allow list](system.en.md#origin-allow-list); `localhost` cannot be allowed |
+| Allow list | Ranges are allowed in **System settings → Origin allow list**; saving publishes to every cluster, see [Origin allow list](system.en.md#origin-allow-list); `localhost` cannot be allowed |
 | Loop detection | Nodes send `CDN-Loop` (RFC 8586) to origins; a request that already carries the node's identifier gets 508 (`X-Edgeweir-Error: loop-detected`) |
 
 ## S3-compatible object storage

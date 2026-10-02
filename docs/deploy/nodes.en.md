@@ -23,19 +23,31 @@ Both packages come as deb and rpm only (amd64, arm64). The openresty.org reposit
 
 ## 1. Generate the install command
 
-1. Open **Clusters & nodes**, select a cluster, and click **Add node**.
-2. Fill in **Node name**, choose a **Node group** (default: the cluster's default node group) and **Valid for** (15 minutes, 1 hour, or 24 hours; default 1 hour).
-3. Click **Generate command**. The dialog shows the **Install command** and the **CA fingerprint**, once.
+1. Open **Clusters & nodes**, select a cluster, and click **Add node**. The dialog shows the **Install command** at once: the cluster's default node group, valid for 1 hour, no node name.
+2. For a node name, another node group, or another lifetime, open **Options**: fill in **Node name**, choose a **Node group** (shown when the cluster has several) and **Valid for** (15 minutes, 1 hour, or 24 hours), and click **Regenerate**.
+3. Copy the **Install command**. Below it are the time left, **Shown once**, address warnings, and the [node channel check](#node-channel-check); once the dialog is closed the command is not shown again, and opening it again generates a new token.
 4. Once the command runs on the node, the dialog's **Progress** refreshes every 3 seconds: waiting for the node (or token expired), enrolled (the node name links to its details), online, configuration applied, data plane healthy, has an address for DNS.
 
 | Item | Behavior |
 | --- | --- |
 | Enrollment token | Prefix `ewt_`, single use, stored as SHA-256 only; generating one writes an audit entry. |
 | `--server` | `EDGEWEIR_NODE_API_URL`. |
-| `--ca-sha256` | SHA-256 fingerprint of the node channel internal CA. |
+| `--ca-sha256` | SHA-256 fingerprint of the node channel internal CA, the same as "CA fingerprint" in **System settings**. |
 | API | `POST /api/v1/enrollment-tokens`, `ttlMinutes` 5–10080, default 60; `GET /api/v1/enrollment-tokens/{id}` returns `usedAt` and the enrolled node. See [API and endpoints](../reference/api.en.md). |
-| Address warnings | When the console URL (where `install.sh` comes from) or the node channel URL is localhost, a loopback or a private address, the dialog warns about each, **System settings** marks the URL "This machine only" or "Private address", and the console logs a warning at startup; generating is not refused. |
+| Address warnings | When the console URL (where `install.sh` comes from) or the node channel URL is localhost, a loopback or a private address, the dialog warns about each and **System settings** marks the URL "This machine only" or "Private address"; a public console URL over plain HTTP gets "The console URL is plain HTTP: install.sh reaches the hosts that run it as root unencrypted" and the mark "Unencrypted". The console logs a warning for each at startup; generating is not refused. |
 | Cleanup | Tokens expired or used more than 7 days ago are deleted every 30 minutes. |
+
+### Node channel check
+
+The console makes a TLS handshake with its own node channel at `EDGEWEIR_NODE_API_URL` (no client certificate, no request) and compares the presented certificate chain with the node channel's internal CA. The add-node dialog shows the result as one line, "Node channel check: …"; **System settings** shows it beside "Node channel".
+
+| Result | Meaning |
+| --- | --- |
+| reachable, CA matches | The handshake completed and the chain includes the internal CA |
+| the console cannot reach this URL | No handshake within 3 seconds: wrong address or DNS, a closed port, or the console's network cannot reach the address |
+| CA mismatch: something in front terminates TLS | Another certificate chain answered, or the URL is not `https`: a proxy or CDN terminates TLS and node mTLS will fail; see [Node channel passthrough](networking.en.md#node-channel-passthrough) |
+
+The check is advisory and blocks nothing: the console reaching its own address does not prove that nodes on other networks do. A result is reused for 30 seconds. API: `GET /api/v1/settings/node-channel-check` returns `{ url, result, checkedAt }`, with `result` `ok`, `unreachable`, or `mismatch`.
 
 ## 2. Run the install command
 
@@ -58,7 +70,7 @@ systemctl status edgeweir-node
 journalctl -u edgeweir-node -f
 ```
 
-Expected: `edgeweir-node.service` is `active (running)`; in **Clusters & nodes** the node is "Online" and **Applied** shows a revision number.
+Expected: `edgeweir-node.service` is `active (running)`; in **Clusters & nodes** the node is "Online" and **Applied** shows a revision number. After enrolling and before its first connection to the node channel the node shows "Awaiting heartbeat"; online without a configuration yet, **Applied** shows "Awaiting configuration".
 
 ## install.sh flow
 
@@ -130,7 +142,7 @@ Then run `sudo systemctl restart edgeweir-node`. Container nodes take `-e EDGEWE
 
 ## Regional probes
 
-A regional probe measures every node's scheduling addresses from its region; the results drive backup IPs and scheduling, see [Regional probes and scheduling](../guide/scheduling.en.md). A probe is the `probe` mode of `edgeweir-node`: it runs no OpenResty, listens on no port, and has an identity separate from nodes. Its enrollment token comes from **Regions & probes** → **Probes** → **Add probe** and is shown once.
+A regional probe measures every node's scheduling addresses from its region; the results drive backup IPs and scheduling, see [Regional probes and scheduling](../guide/scheduling.en.md). A probe is the `probe` mode of `edgeweir-node`: it runs no OpenResty, listens on no port, and has an identity separate from nodes. Its enrollment token comes from **System settings** → **Monitoring** → **Add probe** and is shown once.
 
 | Item | Requirement |
 | --- | --- |
@@ -271,7 +283,7 @@ Enable it with `compose.yml`:
 
    Expected: the version number.
 
-The release source for agent self-upgrades is set in **System → Node release source** and is independent of this mirror; see [node upgrades](../guide/node-upgrades.en.md).
+The release source for agent self-upgrades is set in **System settings → Node release source** and is independent of this mirror; see [node upgrades](../guide/node-upgrades.en.md).
 
 ## Troubleshooting
 
@@ -293,6 +305,8 @@ The release source for agent self-upgrades is set in **System → Node release s
 | Node log `client certificate expired at ...`, the console marks the node **Certificate expired** | The node was offline longer than its certificate had left and could not renew it; the node channel refuses it with `client certificate has expired (CERT_HAS_EXPIRED)` | Generate a new install command; run it on the node with `--force` appended (or `systemctl stop edgeweir-node`, run `edgeweir-node enroll --force` with the new token, then start it); delete the old node in the console. |
 | `x509: certificate is valid for ..., not ...` | The name the node connects to is not in the node channel certificate | Add the name to `EDGEWEIR_NODE_API_HOSTNAMES` and restart the console; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
 | Enrollment times out, or the node stays offline | Firewall or security group blocks 8443; `EDGEWEIR_NODE_API_URL` resolves incorrectly | Open 8443; check DNS resolution. |
+| The node stays "Awaiting heartbeat" | Enrolled, but the agent has not connected to the node channel over mTLS yet: the service is not running (for example `--no-start`), or the connection fails | Run `systemctl status edgeweir-node` and `journalctl -u edgeweir-node -n 50` on the node. |
+| The node channel check shows "CA mismatch: something in front terminates TLS" | `EDGEWEIR_NODE_API_URL` points at a proxy, CDN, or other service that terminates TLS | Connect directly or use [layer-4 passthrough](networking.en.md#node-channel-passthrough). |
 | Connections to an L4 app's port time out | The node firewall or security group does not open the port pools; a container node does not publish the ports | Open or publish them as in [Ports and firewall](#ports-and-firewall). |
 | `probe is not enrolled: the first run needs --server, --ca-sha256 and a probe token` | A probe's first start lacks the enrollment settings (exit status 2) | Set `EDGEWEIR_SERVER`, `EDGEWEIR_CA_SHA256`, and `EDGEWEIR_TOKEN`, then start it again. |
 | `probe enrollment failed: console rejected the enrollment token (expired or already used)` | The probe token expired or was already used | **Add probe** again for a new token. |

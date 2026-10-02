@@ -36,10 +36,10 @@ DNS-01 validation needs a credential first.
 2. Enter **Name**, select **DNS provider**, and fill in the credential fields the form shows.
 3. For providers that can list zones, click **List zones** and pick the **Zone**; otherwise type the **Zone**.
 4. Click **Test connection** and check that **Connected** appears.
-5. Click **Create**.
+5. Click **Create**. Saving first runs the same test as **Test connection**; when it fails, the dialog shows the error and the button becomes **Save anyway**.
 6. Verify: the credential appears in the **DNS credentials** card with its zone and provider.
 
-The fields and least permissions of every provider are in [Providers and credentials](dns-and-alerts.en.md#providers-and-credentials); DNS steering uses the same provider catalog. Credentials are envelope-encrypted with the master key and are write-only; **Edit** renames the credential or rotates the secrets with **Replace credentials**. After a rotation, certificates using the credential that show **Issuance failed** and TXT records still to clean up are retried at once.
+The fields and least permissions of every provider are in [Providers and credentials](dns-and-alerts.en.md#providers-and-credentials); DNS steering uses the same provider catalog. Credentials are envelope-encrypted with the master key and are write-only; **Edit** renames the credential or rotates the secrets with **Replace credentials**; new secrets are tested before saving too, a rename alone is not, and after a failed test changing any field makes the next save test again. After a rotation, certificates using the credential that show **Issuance failed** and TXT records still to clean up are retried at once.
 
 ## Request an ACME certificate
 

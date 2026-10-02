@@ -201,8 +201,8 @@ A secret takes precedence over an `[env]` entry with the same name. `ROLE`, `HOS
 | Public addresses | Networking section of **Overview**; `fly ips list` | Dedicated IPv4 and IPv6, no shared IPv4 |
 | Web and API | `curl -fsS https://edgeweir-console.fly.dev/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
 | Node channel TLS | `openssl` command below | Issuer `Edgeweir Node Channel CA`; SAN includes `edgeweir-console.fly.dev` |
-| Node channel URL | **System**, "Node channel" | `https://edgeweir-console.fly.dev:8443` |
-| Node enrollment | **Clusters & nodes** → **Add node** → **Generate command** | `--server` is `https://edgeweir-console.fly.dev:8443`; running it on a node: [Adding nodes](nodes.en.md) |
+| Node channel URL | **System settings**, "Node channel" | `https://edgeweir-console.fly.dev:8443` |
+| Node enrollment | **Clusters & nodes** → **Add node** (the dialog shows the install command as it opens) | `--server` is `https://edgeweir-console.fly.dev:8443`; running it on a node: [Adding nodes](nodes.en.md) |
 
 ```bash
 openssl s_client -connect edgeweir-console.fly.dev:8443 -servername edgeweir-console.fly.dev </dev/null 2>/dev/null \

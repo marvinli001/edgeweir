@@ -202,7 +202,7 @@ fly logs --no-tail | grep setupToken
 | Web 与 API | `curl -fsS https://edgeweir-console.fly.dev/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
 | 节点通道 TLS | 下方 `openssl` 命令 | 签发者为 `Edgeweir Node Channel CA`，SAN 含 `edgeweir-console.fly.dev` |
 | 节点通道地址 | **系统设置** 的「节点通道」 | `https://edgeweir-console.fly.dev:8443` |
-| 节点注册 | **集群与节点** → **添加节点** → **生成安装命令** | `--server` 为 `https://edgeweir-console.fly.dev:8443`；在节点上执行见 [接入节点](nodes.md) |
+| 节点注册 | **集群与节点** → **添加节点**（对话框打开即显示安装命令） | `--server` 为 `https://edgeweir-console.fly.dev:8443`；在节点上执行见 [接入节点](nodes.md) |
 
 ```bash
 openssl s_client -connect edgeweir-console.fly.dev:8443 -servername edgeweir-console.fly.dev </dev/null 2>/dev/null \
