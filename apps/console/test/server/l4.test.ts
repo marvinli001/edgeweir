@@ -567,6 +567,7 @@ describe("port pools and layer-4 applications", async () => {
       expect(await rpcError(admin.ipLists.delete({ id }))).toMatchObject({
         code: "IP_LIST_IN_USE",
         status: 409,
+        data: { users: "game" },
       });
     await admin.l4Apps.update({ id: gameId, allowListIds: [], blockListIds: [] });
     await admin.ipLists.delete({ id: office.id });

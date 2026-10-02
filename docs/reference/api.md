@@ -371,7 +371,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | --- | --- | --- |
 | `RULE_INVALID` | 400 | `origin` 动作选择了网站没有的源站组，或全局规则选择源站组；`sites.update` 移除仍被规则选择的源站组；已保存的规则或缓存规则条件无法编译 |
 | `BULK_REDIRECT_HOST_UNKNOWN` | 400 | `域名/路径` 来源的域名不是网站的域名（网站泛域名下一级的子域名可以）；`data.hosts`（逗号分隔，最多 5 个） |
-| `IP_LIST_NOT_FOUND` | 404 | 规则或缓存规则条件引用的 IP 名单不存在或不可见 |
+| `IP_LIST_REFERENCE_UNKNOWN` | 404 | 规则或缓存规则条件引用的 IP 名单不存在；`data.lists` 为名单名称（前 5 个） |
 | `NODE_CAPABILITY_REQUIRED` | 409 | 集群内有活动节点缺少 `rules-v2`（服务账号与后台任务发布时）；`data.features` |
 | `SITE_NOT_FOUND` | 404 | 网站不存在或不在调用方范围内 |
 
@@ -562,7 +562,7 @@ DNS 绑定与记录的新增字段：
 | `L4_PORT_POOL_OVERLAP` | 400 | 同一协议的端口池重叠，`both` 与 `tcp`、`udp` 都重叠；`data.pools`（`起始-结束/协议`，逗号分隔） |
 | `L4_PROXY_PROTOCOL_UNSUPPORTED` | 400 | UDP 应用设置了 `acceptProxyProtocol` 或非 0 的 `proxyProtocolVersion` |
 | `IP_LIST_NOT_FOUND` | 404 | `allowListIds` 或 `blockListIds` 中的名单不存在 |
-| `IP_LIST_IN_USE` | 409 | `DELETE /ip-lists/{id}` 删除仍被规则、缓存规则条件或 L4 应用引用的名单 |
+| `IP_LIST_IN_USE` | 409 | `DELETE /ip-lists/{id}` 删除仍被规则、缓存规则条件或 L4 应用引用的名单；`data.users` 列出前 5 个引用者：规则名（网站规则带网站名，如 `拦截 (shop)`）、缓存规则所在的网站名、L4 应用名 |
 | `ORIGIN_ADDRESS_FORBIDDEN` | 400 | 源站为特殊用途地址且不在源站地址允许清单内；`data.address`、`data.range` |
 | `UPDATED_AT_MISMATCH` | 409 | `expectedUpdatedAt` 不是当前值 |
 | `CLUSTER_NOT_FOUND` | 404 | 集群不存在 |

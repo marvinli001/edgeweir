@@ -465,15 +465,19 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     expect((await config()).ipLists.some((l) => l.id === list.id)).toBe(true);
     expect(await rpcError(admin.ipLists.delete({ id: list.id }))).toMatchObject({
       code: "IP_LIST_IN_USE",
+      data: { users: "shop" },
     });
     expect(
       await rpcError(
         admin.sites.update({
           id: siteId,
-          cacheRules: [{ expression: "ip.src in $nowhere", action: "bypass" }],
+          cacheRules: [
+            { expression: "ip.src in $nowhere", action: "bypass" },
+            { expression: "ip.src in $office or ip.src in $elsewhere", action: "bypass" },
+          ],
         }),
       ),
-    ).toMatchObject({ code: "IP_LIST_NOT_FOUND" });
+    ).toMatchObject({ code: "IP_LIST_REFERENCE_UNKNOWN", data: { lists: "nowhere, elsewhere" } });
     // Every site's cache conditions may bind any list.
     await admin.sites.update({
       id: otherSiteId,
@@ -482,6 +486,11 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     expect((await siteOf(otherSiteId))?.cacheRules[0]?.match?.condition).toMatchObject({
       op: "in_list",
       value: list.id,
+    });
+    // Sites whose cache rules use the list, by name.
+    expect(await rpcError(admin.ipLists.delete({ id: list.id }))).toMatchObject({
+      code: "IP_LIST_IN_USE",
+      data: { users: "rival, shop" },
     });
     await admin.sites.update({ id: otherSiteId, cacheRules: [] });
     await admin.sites.update({ id: siteId, cacheRules: [] });

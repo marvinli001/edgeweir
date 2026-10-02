@@ -371,7 +371,7 @@ Responses:
 | --- | --- | --- |
 | `RULE_INVALID` | 400 | An `origin` action picks an origin group the site does not have, or a global rule picks one; `sites.update` removes an origin group a rule still picks; a saved rule or cache rule condition no longer compiles |
 | `BULK_REDIRECT_HOST_UNKNOWN` | 400 | The host of a `host/path` source is not a domain of the site (one label under a wildcard domain of the site is fine); `data.hosts` (comma-separated, up to 5) |
-| `IP_LIST_NOT_FOUND` | 404 | A rule or cache rule condition references an IP list that does not exist or is not visible |
+| `IP_LIST_REFERENCE_UNKNOWN` | 404 | A rule or cache rule condition references IP lists that do not exist; `data.lists` names them (the first 5) |
 | `NODE_CAPABILITY_REQUIRED` | 409 | An active node of the cluster lacks `rules-v2` (changes by service accounts and background jobs); `data.features` |
 | `SITE_NOT_FOUND` | 404 | The site does not exist or is outside the caller's scope |
 
@@ -562,7 +562,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `L4_PORT_POOL_OVERLAP` | 400 | Pools of one protocol overlap, and `both` overlaps `tcp` and `udp`; `data.pools` (`from-to/protocol`, comma-separated) |
 | `L4_PROXY_PROTOCOL_UNSUPPORTED` | 400 | A UDP app with `acceptProxyProtocol` or a non-zero `proxyProtocolVersion` |
 | `IP_LIST_NOT_FOUND` | 404 | A list of `allowListIds` or `blockListIds` does not exist |
-| `IP_LIST_IN_USE` | 409 | `DELETE /ip-lists/{id}` on a list a rule, a cache rule condition, or an L4 app still references |
+| `IP_LIST_IN_USE` | 409 | `DELETE /ip-lists/{id}` on a list a rule, a cache rule condition, or an L4 app still references; `data.users` names the first 5: rule names (site rules with the site, such as `block (shop)`), sites whose cache rules use it, and L4 app names |
 | `ORIGIN_ADDRESS_FORBIDDEN` | 400 | An origin is a special-purpose address outside the origin allow list; `data.address`, `data.range` |
 | `UPDATED_AT_MISMATCH` | 409 | `expectedUpdatedAt` is not the current value |
 | `CLUSTER_NOT_FOUND` | 404 | The cluster does not exist |

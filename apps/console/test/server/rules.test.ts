@@ -140,23 +140,25 @@ describe("M4 rules and IP list boundaries", async () => {
     const compiled = (await config()).sites.find((s) => s.id === otherSiteId)?.rules;
     expect(compiled?.[0]?.expression?.value).toBe(listId);
     expect(
-      (
-        await rpcError(
-          admin.rules.save({
-            id: otherSiteId,
-            rules: [
-              {
-                name: "missing",
-                phase: "waf-custom",
-                expression: "ip.src in $missing",
-                action: { kind: "block" },
-              },
-            ],
-          }),
-        )
-      ).code,
-    ).toBe("IP_LIST_NOT_FOUND");
-    expect((await rpcError(admin.ipLists.delete({ id: listId }))).code).toBe("IP_LIST_IN_USE");
+      await rpcError(
+        admin.rules.save({
+          id: otherSiteId,
+          rules: [
+            {
+              name: "missing",
+              phase: "waf-custom",
+              expression: "ip.src in $missing",
+              action: { kind: "block" },
+            },
+          ],
+        }),
+      ),
+    ).toMatchObject({ code: "IP_LIST_REFERENCE_UNKNOWN", data: { lists: "missing" } });
+    // The rules that use the list, with their sites.
+    expect(await rpcError(admin.ipLists.delete({ id: listId }))).toMatchObject({
+      code: "IP_LIST_IN_USE",
+      data: { users: "foreign (own), block (rules)" },
+    });
     await admin.rules.save({ id: otherSiteId, rules: [] });
   });
   it("applies lists to every site and prevents rollback from restoring old security policy", async () => {

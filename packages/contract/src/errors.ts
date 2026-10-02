@@ -53,9 +53,15 @@ export const errorDefs = {
   /** A "host/path" bulk redirect source whose host is none of the site's domains. */
   BULK_REDIRECT_HOST_UNKNOWN: { status: 400, params: ["hosts"] },
   IP_LIST_NOT_FOUND: { status: 404, params: [] },
+  /** A rule or cache rule condition references IP lists (`$name`) that do not exist. */
+  IP_LIST_REFERENCE_UNKNOWN: { status: 404, params: ["lists"] },
   IP_LIST_NAME_TAKEN: { status: 409, params: [] },
   IP_LIST_LIMIT: { status: 409, params: [] },
-  IP_LIST_IN_USE: { status: 409, params: [] },
+  /**
+   * Rules ("name (site)" for site rules), sites whose cache rules, and L4
+   * applications that still use the list; the first five.
+   */
+  IP_LIST_IN_USE: { status: 409, params: ["users"] },
   BAN_INVALID_CIDR: { status: 400, params: [] },
   BAN_PREFIX_TOO_SHORT: { status: 400, params: ["min"] },
   BAN_EXPIRY_OUT_OF_RANGE: { status: 400, params: [] },

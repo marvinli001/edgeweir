@@ -106,7 +106,9 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
     .getByRole("button", { name: "删除", exact: true })
     .click();
   await page.getByTestId("confirm-action").click();
-  await expect(page.getByTestId("confirm-error")).toHaveText("IP 名单正在被规则或 L4 应用引用");
+  await expect(page.getByTestId("confirm-error")).toHaveText(
+    /^IP 名单正在被使用：Browser block \(.+\)$/,
+  );
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
