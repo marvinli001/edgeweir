@@ -223,6 +223,10 @@ describe("M3 certificate lifecycle and isolation", async () => {
   });
   it("refuses changing a bound site to a domain its certificate does not cover", async () => {
     const before = await latestRevision(ctx.db, clusterId);
+    // An uploaded certificate is never extended; the error names what it misses.
+    expect(
+      await rpcError(api.sites.update({ id: siteId, domains: ["secure.test", "uncovered.test"] })),
+    ).toMatchObject({ code: "CERTIFICATE_DOMAIN_MISMATCH", data: { domains: "uncovered.test" } });
     expect(
       (await rpcError(api.sites.update({ id: siteId, domains: ["uncovered.test"] }))).code,
     ).toBe("CERTIFICATE_DOMAIN_MISMATCH");

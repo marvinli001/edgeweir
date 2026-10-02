@@ -11,7 +11,12 @@ import {
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { assertCertificateNames } from "../lib/certificate-names";
+import {
+  certificateName,
+  failUncovered,
+  namesCover,
+  uncoveredDomains,
+} from "../lib/certificate-names";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
@@ -184,6 +189,10 @@ export async function uploadCertificate(
   });
 }
 
+/** A certificate name outside a DNS zone (the zone itself and names below it are inside). */
+const outsideZone = (name: string, zone: string) =>
+  name.replace(/^\*\./, "") !== zone && !name.endsWith(`.${zone}`);
+
 export async function requestCertificate(
   app: AppContext,
   input: CertificateRequest,
@@ -198,22 +207,23 @@ export async function requestCertificate(
       .where(
         and(inArray(schema.siteDomain.name, input.names), eq(schema.siteDomain.wildcard, false)),
       );
-    if (input.names.some((name) => !served.some((d) => d.name === name)))
-      fail("CERTIFICATE_DOMAIN_MISMATCH", "add the HTTP-01 names to a site first");
+    const unserved = input.names.filter((name) => !served.some((d) => d.name === name));
+    if (unserved.length)
+      fail("CERTIFICATE_DOMAIN_MISMATCH", "add the HTTP-01 names to a site first", {
+        domains: unserved.slice(0, 5).join(", "),
+      });
   }
   if (input.dnsCredentialId) {
     const credential = await findDnsCredential(app.db, input.dnsCredentialId);
-    if (
-      input.names.some(
-        (name) =>
-          name.replace(/^\*\./, "") !== credential.zone && !name.endsWith(`.${credential.zone}`),
-      )
-    ) {
+    const outside = input.names.filter((name) => outsideZone(name, credential.zone));
+    if (outside.length)
       fail(
         "CERTIFICATE_DOMAIN_MISMATCH",
         "DNS credential zone does not cover all certificate names",
+        {
+          domains: outside.slice(0, 5).join(", "),
+        },
       );
-    }
   }
   return app.db.transaction(async (tx) => {
     const [row] = await tx
@@ -247,6 +257,60 @@ export async function requestCertificate(
     });
     return certificateDto(row);
   });
+}
+
+/**
+ * Checks that a site's certificate covers the site's new domains. An ACME
+ * certificate the console renews takes the domains it does not cover yet:
+ * its names grow by them (a name below one of its wildcards needs none)
+ * and it is reissued at once; an attempt already running is left alone and
+ * reissues when it ends (issueNow). Until the new chain is issued, nodes
+ * keep the current one and the new domains wait (loadSiteModels). Any
+ * other certificate must cover every domain (CERTIFICATE_DOMAIN_MISMATCH,
+ * naming the domains). Returns the certificate when its names grew.
+ */
+export async function coverSiteDomains(
+  tx: Executor,
+  certificateId: string,
+  domains: { name: string; wildcard: boolean }[],
+  ctx: CertificateContext & { site: { id: string; name: string } },
+): Promise<{ id: string; name: string } | undefined> {
+  const cert = await findCertificate(tx, certificateId);
+  const uncovered = uncoveredDomains(cert.chainPem, domains);
+  if (!uncovered.length) return undefined;
+  if (cert.source !== "acme" || !cert.autoRenew) failUncovered(uncovered);
+  // Names the certificate already grew by wait for its reissue.
+  const missing = uncovered.filter((domain) => !namesCover(cert.names, domain));
+  if (!missing.length) return undefined;
+  // HTTP-01 cannot validate wildcards; DNS-01 only names in its credential's zone.
+  const refused =
+    cert.acme.challenge === "dns01"
+      ? await (async () => {
+          if (!cert.acme.dnsCredentialId) return missing;
+          const credential = await findDnsCredential(tx, cert.acme.dnsCredentialId);
+          return missing.filter((d) => outsideZone(certificateName(d), credential.zone));
+        })()
+      : missing.filter((d) => d.wildcard);
+  if (refused.length) failUncovered(refused);
+  const added = missing.map(certificateName);
+  const names = [...cert.names, ...added];
+  if (names.length > 100) failUncovered(missing);
+  await tx
+    .update(schema.certificate)
+    .set({
+      names,
+      ...(cert.status === "issuing" ? {} : { status: "pending", lastError: "" }),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.certificate.id, cert.id));
+  await recordAudit(tx, ctx.actor, {
+    action: "certificate.names_extended",
+    targetType: "certificate",
+    targetId: cert.id,
+    targetName: cert.name,
+    metadata: { siteId: ctx.site.id, site: ctx.site.name, added },
+  });
+  return { id: cert.id, name: cert.name };
 }
 
 export async function renewCertificate(app: AppContext, id: string, ctx: CertificateContext) {
@@ -322,7 +386,12 @@ export async function updateHttps(
         .select()
         .from(schema.siteDomain)
         .where(eq(schema.siteDomain.siteId, id));
-      assertCertificateNames(cert.chainPem, cert.names, domains);
+      // The site's own ACME certificate may be being reissued for domains
+      // added since (coverSiteDomains): they wait for it, as before.
+      const waiting = (domain: { name: string; wildcard: boolean }) =>
+        cert.id === site.certificateId && cert.source === "acme" && namesCover(cert.names, domain);
+      const uncovered = uncoveredDomains(cert.chainPem, domains).filter((d) => !waiting(d));
+      if (uncovered.length) failUncovered(uncovered);
     }
     const { certificateId, ...options } = settings;
     await tx

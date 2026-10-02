@@ -53,7 +53,7 @@ import {
 import { and, asc, desc, eq, gt, inArray, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { parseCacheCondition } from "../lib/cache-conditions";
 import { readCacheKey } from "../lib/cache-key";
-import { assertCertificateNames } from "../lib/certificate-names";
+import { assertCertificateNames, uncoveredDomains } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { CONFIG_CHANNEL } from "../lib/events";
 import { lockClusterPublish } from "../lib/locks";
@@ -219,6 +219,32 @@ export async function loadSiteModels(
   const protection = await loadSiteProtectionModels(db, siteIds);
   const waf = await loadSiteWafModels(db, siteIds);
   const errorPages = await loadSiteErrorPages(db, siteIds);
+  const certificateIds = [...new Set(sites.flatMap((s) => s.certificateId ?? []))];
+  const chains = new Map(
+    (certificateIds.length
+      ? await db
+          .select({ id: schema.certificate.id, chainPem: schema.certificate.chainPem })
+          .from(schema.certificate)
+          .where(inArray(schema.certificate.id, certificateIds))
+      : []
+    ).map((c) => [c.id, c.chainPem]),
+  );
+  /**
+   * The domains a site serves: with a certificate, those its chain covers.
+   * Nodes refuse a site whose certificate misses a domain, so a domain an
+   * ACME certificate is being reissued for (coverSiteDomains) waits for
+   * the new chain; its HTTP-01 challenge is answered meanwhile.
+   */
+  const served = (site: (typeof sites)[number], list: { name: string; wildcard: boolean }[]) => {
+    const chain = site.certificateId ? chains.get(site.certificateId) : undefined;
+    if (!chain) return list;
+    try {
+      const uncovered = uncoveredDomains(chain, list);
+      return list.filter((domain) => !uncovered.includes(domain));
+    } catch {
+      return list;
+    }
+  };
   return sites
     .map((s): SiteModel => {
       const pool = pools
@@ -233,9 +259,12 @@ export async function loadSiteModels(
         enabled: s.enabled && !site?.missing,
         cacheGeneration: s.cacheGeneration,
         logSampleRate: s.logSampleRate,
-        domains: domains
-          .filter((d) => d.siteId === s.id)
-          .map((d) => ({ name: d.name, wildcard: d.wildcard })),
+        domains: served(
+          s,
+          domains
+            .filter((d) => d.siteId === s.id)
+            .map((d) => ({ name: d.name, wildcard: d.wildcard })),
+        ),
         originPool: {
           id: pool?.id ?? s.id,
           policy: (pool?.policy ?? "weighted_random") as SiteModel["originPool"]["policy"],
@@ -1101,7 +1130,7 @@ async function restoreSites(
       if (opts.strict) {
         if (!cert?.notAfter || cert.notAfter.getTime() <= Date.now())
           fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate is unavailable or expired");
-        assertCertificateNames(cert.chainPem, cert.names, site.domains);
+        assertCertificateNames(cert.chainPem, site.domains);
         if (!ref)
           fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate reference is missing");
       }

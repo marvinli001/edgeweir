@@ -79,7 +79,8 @@ export const errorDefs = {
   CERTIFICATE_NO_DNS_NAMES: { status: 400, params: [] },
   /** A certificate chosen for a site that is not issued yet or has expired. */
   CERTIFICATE_UNAVAILABLE: { status: 409, params: [] },
-  CERTIFICATE_DOMAIN_MISMATCH: { status: 400, params: [] },
+  /** Names a certificate or DNS zone does not cover, or HTTP-01 names no site has (first 5). */
+  CERTIFICATE_DOMAIN_MISMATCH: { status: 400, params: ["domains"] },
   CERTIFICATE_BUSY: { status: 409, params: [] },
   CERTIFICATE_IN_USE: { status: 409, params: [] },
   DNS_CREDENTIAL_NOT_FOUND: { status: 404, params: [] },

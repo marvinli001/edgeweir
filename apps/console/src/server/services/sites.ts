@@ -29,7 +29,6 @@ import {
   structuredForm,
 } from "../lib/cache-conditions";
 import { readCacheKey } from "../lib/cache-key";
-import { assertCertificateNames } from "../lib/certificate-names";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { lockStats } from "../lib/locks";
@@ -37,6 +36,7 @@ import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings
 import { assertServing } from "../lib/site-state";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
+import { coverSiteDomains } from "./certificates";
 import { defaultClusterId } from "./clusters";
 import { assertOriginsAllowed } from "./origin-allow-list";
 import {
@@ -616,31 +616,31 @@ export async function createSite(
 /**
  * Updates a site's name, domains, origins and/or cache rules. Every save
  * publishes a new revision (unless the compiled configuration is unchanged,
- * in which case the current revision is returned).
+ * in which case the current revision is returned). New domains the site's
+ * ACME certificate does not cover extend it (coverSiteDomains); the result
+ * then names the certificate being reissued.
  */
 export async function updateSite(
   db: Database,
   input: SiteUpdate,
   ctx: { actor: Actor; masterKey: MasterKey },
-): Promise<{ site: Site; revision: Revision }> {
+): Promise<{ site: Site; revision: Revision; certificateReissue?: { id: string; name: string } }> {
   return db.transaction(async (tx) => {
     const row = await findSite(tx, input.id, true);
     const changed: string[] = [];
+    let certificateReissue: { id: string; name: string } | undefined;
     if (input.name !== undefined && input.name !== row.name) {
       await tx.update(schema.site).set({ name: input.name }).where(eq(schema.site.id, row.id));
       changed.push("name");
     }
     if (input.domains) {
       const domains = uniqueDomains(input.domains);
-      if (row.certificateId) {
-        const [certificate] = await tx
-          .select()
-          .from(schema.certificate)
-          .where(eq(schema.certificate.id, row.certificateId));
-        if (!certificate) fail("CERTIFICATE_NOT_FOUND", "bound certificate not found");
-        assertCertificateNames(certificate.chainPem, certificate.names, domains);
-      }
       await assertDomainsFree(tx, domains, row.id);
+      if (row.certificateId)
+        certificateReissue = await coverSiteDomains(tx, row.certificateId, domains, {
+          actor: ctx.actor,
+          site: { id: row.id, name: input.name ?? row.name },
+        });
       await tx.delete(schema.siteDomain).where(eq(schema.siteDomain.siteId, row.id));
       await tx
         .insert(schema.siteDomain)
@@ -710,7 +710,11 @@ export async function updateSite(
     });
     const [dto] = await toSiteDtos(tx, [updated]);
     if (!dto) throw new Error("site not readable after update");
-    return { site: dto, revision: toRevisionDto(revision) };
+    return {
+      site: dto,
+      revision: toRevisionDto(revision),
+      ...(certificateReissue ? { certificateReissue } : {}),
+    };
   });
 }
 

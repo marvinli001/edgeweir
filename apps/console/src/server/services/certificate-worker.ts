@@ -586,6 +586,16 @@ async function issueNow(app: AppContext, id: string) {
         : fallback,
     );
     await app.db.transaction(async (tx) => {
+      // Names a site's new domains added during the attempt (coverSiteDomains)
+      // stay, and the certificate is reissued for them right away.
+      const [current] = await tx
+        .select({ names: schema.certificate.names })
+        .from(schema.certificate)
+        .where(attempt(row))
+        .for("update");
+      const added = (current?.names ?? []).filter(
+        (name) => !row.names.includes(name) && !inspected.names.includes(name),
+      );
       const updated = await tx
         .update(schema.certificate)
         .set({
@@ -600,13 +610,13 @@ async function issueNow(app: AppContext, id: string) {
               certificateAccountBinding(id),
             ),
           ),
-          names: inspected.names,
+          names: [...inspected.names, ...added],
           fingerprint: inspected.fingerprint,
           notBefore: inspected.notBefore,
           notAfter: inspected.notAfter,
           renewAt,
           renewalInfoAt: new Date(Date.now() + RENEWAL_INFO_INTERVAL),
-          status: "ready",
+          status: added.length ? "pending" : "ready",
           operationStartedAt: null,
           lastError: "",
           updatedAt: new Date(),
@@ -633,13 +643,19 @@ async function issueNow(app: AppContext, id: string) {
     });
   } catch (error) {
     const code = failureCode(error);
+    // Names added during the attempt are tried at once, not after the delay.
+    const [current] = await app.db
+      .select({ names: schema.certificate.names })
+      .from(schema.certificate)
+      .where(attempt(row));
+    const grown = current?.names.some((name) => !row.names.includes(name));
     await app.db
       .update(schema.certificate)
       .set({
         status: "error",
         lastError: code,
         operationStartedAt: null,
-        renewAt: new Date(Date.now() + retryDelay(row.notAfter)),
+        renewAt: new Date(grown ? Date.now() : Date.now() + retryDelay(row.notAfter)),
       })
       .where(attempt(row));
     // Never the helper's output, which may quote credentials or keys (a

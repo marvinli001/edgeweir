@@ -438,6 +438,8 @@ export const revision = z.object({
 export const siteMutationResult = z.object({
   site,
   revision,
+  /** sites.update: the site's ACME certificate, reissued for domains it did not cover. */
+  certificateReissue: z.object({ id: uuid, name: z.string() }).optional(),
 });
 
 /** Optimistic concurrency: the `updatedAt` the caller last read; a mismatch is a 409. */

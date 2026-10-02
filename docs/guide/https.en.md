@@ -83,7 +83,7 @@ Certificates with the same certificate authority, EAB key ID, and account email 
 | Renewal time | The CA's ARI (ACME Renewal Information) window when offered; otherwise when two thirds of the certificate lifetime have passed; at the latest 1 minute before expiry. The card shows "Next renewal: …" |
 | Window changes | After issuance, the ARI window is read again at the CA's suggested interval (1–24 hours, 6 by default); when the window moves before the next renewal (for example, the CA is going to revoke certificates early), the renewal moves into the new window and the audit log records `certificate.renewal_rescheduled` |
 | Check interval | A background job checks due certificates every minute, up to 10 at a time: new requests and **Renew now** first, then by renewal time, three issuances at once; it needs a console process with `ROLE=worker` or `ROLE=all` |
-| Renewed names | An HTTP-01 renewal drops the names no site uses any more, as long as at least one name is left; every domain of a site that uses the certificate is kept, so the site stays covered. After a successful renewal the certificate's name list is updated |
+| Renewed names | An HTTP-01 renewal drops the names no site uses any more, as long as at least one name is left; every domain of a site that uses the certificate is kept, so the site stays covered. After a successful renewal the certificate's name list is updated. For a site's new domains see [Adding domains](#adding-domains-to-an-https-site) |
 | Effect | After issuance or renewal, a new revision is published for the clusters of the sites that use the certificate |
 | Failure | Status changes to **Issuance failed**, the card shows the reason, and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance, see [Troubleshooting](#troubleshooting) |
 | Manual | ACME certificates have **Renew now**, which runs at the next check; unavailable while **Issuing** |
@@ -109,11 +109,23 @@ A certificate used by a site, in **Issuing**, or with DNS-01 records still to cl
 
 A configuration is in effect on a node only once the node reports the revision as applied.
 
+### Adding domains to an HTTPS site
+
+When new domains are saved on the site's **Domains** tab:
+
+| The site's certificate | Behavior |
+| --- | --- |
+| Covers the new domains (including a wildcard `*.example.com` one label up) | Saved |
+| Requested in the console with automatic renewal on | Saved; the certificate's names grow by the new domains and it is reissued right away ("Certificate … is being reissued for the new domains", audit `certificate.names_extended`). Until then nodes keep the current certificate, and the new domains take effect once the new certificate is issued; HTTP-01 challenges are answered meanwhile. When the certificate is issuing, it is issued once more right after that attempt |
+| Uploaded, or automatic renewal off | Refused with "Certificate domains do not match the site or DNS zone: …", naming the uncovered domains |
+
+An HTTP-01 certificate cannot grow by wildcards, and a DNS-01 certificate only by names inside its DNS credential's zone; a certificate has at most 100 names.
+
 ### HTTPS fields
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
-| Certificates | An unexpired certificate / HTTP only | HTTP only | Must cover every domain of the site; a wildcard site domain `*.example.com` requires the same `*.example.com` SAN. Domains added to the site later must be covered as well |
+| Certificates | An unexpired certificate / HTTP only | HTTP only | Must cover every domain of the site; a wildcard site domain `*.example.com` requires the same `*.example.com` SAN. For domains added later see [Adding domains](#adding-domains-to-an-https-site) |
 | Minimum TLS version | TLS 1.2 / TLS 1.3 | TLS 1.2 | Lowest version accepted in the handshake |
 | Cipher profile | Modern / Compatible | Modern | TLS 1.2 cipher suites, see below |
 | HSTS lifetime (seconds) | 0–63072000 | 0 | Above 0, HTTPS responses carry `Strict-Transport-Security`; needs a certificate |
@@ -231,7 +243,7 @@ A change saved in the console or with an AccessKey is published even when it nee
 | "The certificate is not valid now (valid from … to …)" | Not yet valid or expired (times in UTC) | Check the server clock, or use a valid certificate |
 | "The certificate has no DNS names (subject alternative names)" | The certificate has only IP addresses or only a CN | Use a certificate with DNS SANs |
 | "The certificate is not issued yet or has expired" | The certificate selected for a site is still pending, or has expired | Wait for issuance, or renew it first |
-| "Certificate domains do not match the site or DNS zone" | An HTTP-01 name is not a domain of any site; the DNS credential zone does not cover every name; the selected certificate does not cover every site domain, or a domain added to the site is not in its certificate | Add the domain to a site first, or use DNS-01; use a matching DNS credential or certificate |
+| "Certificate domains do not match the site or DNS zone: …" | The listed names: an HTTP-01 name is not a domain of any site; the DNS credential zone does not cover them; the selected certificate does not cover these site domains; a domain added to the site is not in its uploaded certificate, or is a wildcard an HTTP-01 certificate cannot get or a name outside a DNS-01 certificate's credential zone | Add the domain to a site first, or use DNS-01; use a matching DNS credential or certificate |
 | Certificate shows **Issuance failed** | The reason on the card, see the rows below | Fix it and click **Renew now**; otherwise it retries after the [retry interval](#renewal) |
 | "The CA did not accept the domain validation", "The CA received a wrong challenge answer", "The CA could not connect to the domain" | HTTP-01: the domain does not resolve to the nodes, port 80 is blocked, or another proxy is in front; DNS-01: the TXT record went to another zone | Check the DNS records and port 80 |
 | "The CA could not resolve the domain" | The domain has no records, or its authoritative DNS fails | Add the records |
