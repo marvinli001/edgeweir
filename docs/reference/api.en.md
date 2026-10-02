@@ -428,8 +428,9 @@ Record fields:
 | Procedure | Endpoint | Notes |
 | --- | --- | --- |
 | `upgrades.release` | `GET /node-releases/{version}` | The version's release files per architecture in the release source |
+| `upgrades.latestVersion` | `GET /node-upgrades/latest-version` | `{ version }`: the latest version of the release source, `null` when it cannot be told; cached for 10 minutes |
 | `upgrades.list` | `GET /node-upgrades` | Upgrades; query parameter `clusterId` |
-| `upgrades.create` | `POST /node-upgrades` | `{ version, nodeGroupId }`: `version` without the `v` prefix, `nodeGroupId` is the canary node group |
+| `upgrades.create` | `POST /node-upgrades` | `{ version, nodeGroupId }`: a leading `v` of `version` is dropped, `nodeGroupId` is the canary node group |
 | `upgrades.promote` | `POST /node-upgrades/{id}/promote` | Promotes the remaining nodes |
 | `upgrades.cancel` | `POST /node-upgrades/{id}/cancel` | Cancels node tasks that are "Waiting for canary" or "Pending" |
 
@@ -438,8 +439,11 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | Error code | Status | When |
 | --- | --- | --- |
 | `UPGRADE_RELEASE_UNAVAILABLE` | 502 | The release source has no readable manifest for the version, or the manifest lists no supported archive |
-| `UPGRADE_NODES_UNAVAILABLE` | 409 | The chosen node group has no enabled node, or an enabled node of the cluster does not meet the upgrade requirements |
-| `UPGRADE_BUSY` | 409 | A node already has an active upgrade; on cancel, a node is upgrading or the upgrade has finished |
+| `UPGRADE_NODES_UNAVAILABLE` | 409 | Active nodes of the cluster do not meet the upgrade requirements; `data.nodes` lists them (at most 10, the rest as "+N") |
+| `UPGRADE_CANARY_EMPTY` | 409 | The chosen node group has no active node |
+| `UPGRADE_TOO_MANY_NODES` | 409 | The cluster has more active nodes than `data.limit` (1000) |
+| `UPGRADE_BUSY` | 409 | Nodes already have an unfinished upgrade, or are upgrading during cancellation; `data.nodes` lists them |
+| `UPGRADE_FINISHED` | 409 | Cancelling an upgrade that has ended |
 | `UPGRADE_NOT_READY` | 409 | The canary group does not meet the promotion condition yet |
 | `UPGRADE_NOT_FOUND` | 404 | The upgrade does not exist |
 
@@ -484,7 +488,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `probes.delete`, `scheduling.delete` | `{ ok: true }` |
 | `probes.results` | Sorted by node, address, port, and prober, at most 5000: `proberKind` (`probe` / `node`), `proberId`, `proberName`, `regionId`, `regionName`, `nodeId`, `nodeName`, `address`, `port`, `method` (`tcp` / `http` / `https`), `sent`, `lost`, `lossPercent`, `rttMs` (median of successful attempts, 0 when all were lost), `error` (`timeout`, `refused`, `reset`, `tls`, `status`, `unreachable`), `checkedAt` |
 | `settings.probes`, `settings.setProbes` | The probe settings; the defaults 10, 3000, 3, 50, 30, 60 until saved |
-| Nodes returned by `nodes.*` | Add `probeEnabled`; `metrics` (`{ cpuPercent, load1, load5, load15, memoryUsedBytes, memoryTotalBytes, egressBps, activeConnections, reportedAt }`, `null` when the latest heartbeat carried none, as from nodes without `metrics-v1`); `schedulingAddresses` (`[{ address, level, source, reachable }]`, `source` is `reported` or `configured`); `schedulingLevel` (the level DNS uses now) |
+| Nodes returned by `nodes.*` | Add `probeEnabled`; `metrics` (`{ cpuPercent, load1, load5, load15, memoryUsedBytes, memoryTotalBytes, egressBps, activeConnections, reportedAt }`, `null` when the latest heartbeat carried none, as from nodes without `metrics-v1`); `schedulingAddresses` (`[{ address, level, source, reachable }]`, `source` is `reported` or `configured`); `schedulingLevel` (the level DNS uses now); `remoteAddress` (source address of the node's enrollment and latest heartbeat connection; a proxy's when it connects through one); `dnsIssue` (`no_public_address` without scheduling addresses, else `null`); `authError` (why the node channel refused the node's own certificate since its last heartbeat, e.g. `CERT_HAS_EXPIRED`, else `null`) |
 | `scheduling.list`, `scheduling.create`, `scheduling.update` | Rule: `id`, `clusterId`, the request fields (conditions with defaults filled in), `activeNodes` (`[{ nodeId, nodeName, since }]`, nodes in `active` or `recovering`), `createdAt`, `updatedAt` |
 | `scheduling.preview` | `{ clusterId, evaluatedAt, rules }`. Per rule: `ruleId`, `ruleName`, `enabled`, `lineName`, `match`, `action`, `nodes`. Per node: `nodeId`, `nodeName`, `state` (`idle`, `pending`, `active`, `recovering`), `conditions` (the condition fields plus `value` (`null` without data), `holds`, `heldSeconds`, `satisfied`), `matches`, `inEffect`, `wouldActivate`, `wouldRecover`, `activeSince`, `recoveringSince`, `recoversAt` |
 

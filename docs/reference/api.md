@@ -428,8 +428,9 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | 过程 | 端点 | 说明 |
 | --- | --- | --- |
 | `upgrades.release` | `GET /node-releases/{version}` | 发布源中该版本各架构的发布物 |
+| `upgrades.latestVersion` | `GET /node-upgrades/latest-version` | `{ version }`：发布源的最新版本，无法得知时为 `null`；缓存 10 分钟 |
 | `upgrades.list` | `GET /node-upgrades` | 升级任务；查询参数 `clusterId` |
-| `upgrades.create` | `POST /node-upgrades` | `{ version, nodeGroupId }`：`version` 不带 `v` 前缀，`nodeGroupId` 为先升级的节点组 |
+| `upgrades.create` | `POST /node-upgrades` | `{ version, nodeGroupId }`：`version` 开头的 `v` 会被去掉，`nodeGroupId` 为先升级的节点组 |
 | `upgrades.promote` | `POST /node-upgrades/{id}/promote` | 推进剩余节点 |
 | `upgrades.cancel` | `POST /node-upgrades/{id}/cancel` | 取消「等待试运行组」与「待执行」的节点任务 |
 
@@ -438,8 +439,11 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | 错误代码 | 状态 | 场景 |
 | --- | --- | --- |
 | `UPGRADE_RELEASE_UNAVAILABLE` | 502 | 发布源中读不到该版本的清单，或清单中没有支持的归档 |
-| `UPGRADE_NODES_UNAVAILABLE` | 409 | 所选节点组没有已启用节点，或集群中有已启用节点不满足升级前提 |
-| `UPGRADE_BUSY` | 409 | 节点已有进行中的升级；取消时有节点正在升级，或任务已结束 |
+| `UPGRADE_NODES_UNAVAILABLE` | 409 | 集群中有已启用节点不满足升级前提；`data.nodes` 列出这些节点（最多 10 个，其余为「+N」） |
+| `UPGRADE_CANARY_EMPTY` | 409 | 所选节点组没有已启用节点 |
+| `UPGRADE_TOO_MANY_NODES` | 409 | 集群的已启用节点超过 `data.limit`（1000） |
+| `UPGRADE_BUSY` | 409 | 节点已有未完成的升级，或取消时有节点正在升级；`data.nodes` 列出这些节点 |
+| `UPGRADE_FINISHED` | 409 | 取消已结束的升级任务 |
 | `UPGRADE_NOT_READY` | 409 | 试运行组尚未满足推进条件 |
 | `UPGRADE_NOT_FOUND` | 404 | 升级任务不存在 |
 
@@ -484,7 +488,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `probes.delete`、`scheduling.delete` | `{ ok: true }` |
 | `probes.results` | 按节点、地址、端口、探测方排序，至多 5000 条：`proberKind`（`probe` / `node`）、`proberId`、`proberName`、`regionId`、`regionName`、`nodeId`、`nodeName`、`address`、`port`、`method`（`tcp` / `http` / `https`）、`sent`、`lost`、`lossPercent`、`rttMs`（成功尝试的中位数，全部丢失时为 0）、`error`（`timeout`、`refused`、`reset`、`tls`、`status`、`unreachable`）、`checkedAt` |
 | `settings.probes`、`settings.setProbes` | 探测设置；从未保存时为默认值 10、3000、3、50、30、60 |
-| `nodes.*` 返回的节点 | 增加 `probeEnabled`；`metrics`（`{ cpuPercent, load1, load5, load15, memoryUsedBytes, memoryTotalBytes, egressBps, activeConnections, reportedAt }`，最近一次心跳没有指标（节点缺少 `metrics-v1`）时为 `null`）；`schedulingAddresses`（`[{ address, level, source, reachable }]`，`source` 为 `reported` 或 `configured`）；`schedulingLevel`（DNS 当前使用的级别） |
+| `nodes.*` 返回的节点 | 增加 `probeEnabled`；`metrics`（`{ cpuPercent, load1, load5, load15, memoryUsedBytes, memoryTotalBytes, egressBps, activeConnections, reportedAt }`，最近一次心跳没有指标（节点缺少 `metrics-v1`）时为 `null`）；`schedulingAddresses`（`[{ address, level, source, reachable }]`，`source` 为 `reported` 或 `configured`）；`schedulingLevel`（DNS 当前使用的级别）；`remoteAddress`（节点注册与最近一次心跳连接的源地址，经代理时为代理的地址）；`dnsIssue`（没有调度地址时为 `no_public_address`，否则 `null`）；`authError`（自最近一次心跳以来节点通道拒绝该节点自己证书的原因，如 `CERT_HAS_EXPIRED`，否则 `null`） |
 | `scheduling.list`、`scheduling.create`、`scheduling.update` | 规则：`id`、`clusterId`、请求中的字段（条件补齐默认值）、`activeNodes`（`[{ nodeId, nodeName, since }]`，生效中与恢复中的节点）、`createdAt`、`updatedAt` |
 | `scheduling.preview` | `{ clusterId, evaluatedAt, rules }`。每条规则：`ruleId`、`ruleName`、`enabled`、`lineName`、`match`、`action`、`nodes`。每个节点：`nodeId`、`nodeName`、`state`（`idle`、`pending`、`active`、`recovering`）、`conditions`（条件字段与 `value`（没有数据为 `null`）、`holds`、`heldSeconds`、`satisfied`）、`matches`、`inEffect`、`wouldActivate`、`wouldRecover`、`activeSince`、`recoveringSince`、`recoversAt` |
 
