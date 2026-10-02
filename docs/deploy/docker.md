@@ -77,7 +77,17 @@ secrets:
     file: ./master.key
 ```
 
-文件末尾的换行被忽略；同时设置非空的 `EDGEWEIR_MASTER_KEY`，或文件不可读时，控制台拒绝启动。
+文件末尾的换行被忽略；同时设置非空的 `EDGEWEIR_MASTER_KEY`，或文件为空、不可读时，控制台拒绝启动。
+
+### 其他机密文件
+
+以下变量同样可以从文件读取：设置 `<变量>_FILE`，按上例挂载文件，`.env` 中不设置该变量。规则与主密钥文件相同。
+
+| 变量 | 用于 |
+| --- | --- |
+| `DATABASE_URL_FILE` | 外部 PostgreSQL（`compose.baota-host.yml`、[单独的容器](#不用-compose单独的容器)）：文件内容为完整连接串。`compose.yml` 的内置数据库只在编排网络内可达，`POSTGRES_PASSWORD` 留在 `.env` |
+| `BETTER_AUTH_SECRET_FILE` | 已设置 `BETTER_AUTH_SECRET` 的部署 |
+| `EDGEWEIR_CLICKHOUSE_PASSWORD_FILE` | 外部 ClickHouse；`compose.override.yml` 中另设 `EDGEWEIR_CLICKHOUSE_PASSWORD: ""`，否则与模板的默认值冲突 |
 
 ## 4. 配置 `.env`
 

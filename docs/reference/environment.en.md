@@ -18,7 +18,7 @@ With `compose.yml` or `compose.baota.yml`, `DATABASE_URL` is built from the [Com
 | Variable | Default | Description |
 | --- | --- | --- |
 | `EDGEWEIR_MASTER_KEY` | None | Master key. Canonical base64 (standard or URL-safe alphabet) of at least 32 bytes; the console refuses to start on any other character, such as a space or a quote, or on fewer than 32 bytes. Generate it with `openssl rand -base64 32` and use the output as is (keep `/`, `+`, and `=`). A key other than the one the database's secrets were encrypted with stops the console with `EDGEWEIR_MASTER_KEY does not match this database`; restore the original key rather than setting `BETTER_AUTH_SECRET`. Envelope-encrypts private keys, DNS API keys, and other secrets at rest, and derives the session secret. Losing it makes encrypted data unrecoverable; back it up separately from the database. |
-| `EDGEWEIR_MASTER_KEY_FILE` | Unset | File holding the master key (for example a Docker secret), instead of `EDGEWEIR_MASTER_KEY`; its trailing newline is ignored and the content is checked like `EDGEWEIR_MASTER_KEY`. The console refuses to start when `EDGEWEIR_MASTER_KEY` is also set to a non-empty value or the file cannot be read. The Compose templates do not pass it; see [Master key file](../deploy/docker.en.md#master-key-file). |
+| `EDGEWEIR_MASTER_KEY_FILE` | Unset | File holding the master key (for example a Docker secret), instead of `EDGEWEIR_MASTER_KEY`; its trailing newline is ignored and the content is checked like `EDGEWEIR_MASTER_KEY`. The console refuses to start when `EDGEWEIR_MASTER_KEY` is also set to a non-empty value or the file is empty or cannot be read. The Compose templates do not pass it; see [Master key file](../deploy/docker.en.md#master-key-file). |
 | `DATABASE_URL` | None | PostgreSQL 18 connection string. At startup the console waits up to 60 seconds for the database, then runs migrations. `compose.yml` and `compose.baota.yml` build it from `POSTGRES_PASSWORD` and ignore the `.env` value; `compose.baota-host.yml` requires it in `.env`. |
 | `EDGEWEIR_PUBLIC_URL` | `http://localhost:3000` | URL browsers use to reach the console; behind a reverse proxy, the proxy URL. Format `http(s)://host[:port]`, without path, query, fragment, user name, or password; a trailing `/` and the default port are dropped. Any other value stops the console at startup. Used for the trusted origin of the authentication endpoints, the `Secure` attribute of session cookies (with `https://`), the passkey RP ID (host name), the `servers` entry of the OpenAPI document, the console URL in `/install.sh`, links in alert notifications, and the default host of `EDGEWEIR_NODE_API_URL`. The default only suits local access: node install commands and alert links would point to localhost. |
 
@@ -27,6 +27,17 @@ With `compose.yml` or `compose.baota.yml`, `DATABASE_URL` is built from the [Com
 | Variable | Default | Description |
 | --- | --- | --- |
 | `BETTER_AUTH_SECRET` | Derived from the master key | Secret that signs sessions and encrypts two-factor secrets; at least 32 characters. Unset: derived from the master key with HKDF-SHA256 (parameters in [SECURITY.en.md](../../SECURITY.en.md)). A deployment that has set it must keep the value: removing it stops the console from starting; a new value starts the console with a warning, ends every session, and makes enrolled two-factor secrets unreadable. |
+
+## Read from files
+
+These variables can be read from files instead (for example Docker secrets): `<variable>_FILE` names the file, whose content is the value; its trailing newline is ignored and the value is checked like the variable itself. The console refuses to start when the variable is also set to a non-empty value, or the file is empty or cannot be read; an empty `_FILE` counts as unset. The Compose templates do not pass the `_FILE` variables; mounting and setting them: [Other secret files](../deploy/docker.en.md#other-secret-files).
+
+| Variable | Instead of |
+| --- | --- |
+| `EDGEWEIR_MASTER_KEY_FILE` | `EDGEWEIR_MASTER_KEY`; see [Required](#required) |
+| `DATABASE_URL_FILE` | `DATABASE_URL`: the whole connection string of an external database |
+| `BETTER_AUTH_SECRET_FILE` | `BETTER_AUTH_SECRET` |
+| `EDGEWEIR_CLICKHOUSE_PASSWORD_FILE` | `EDGEWEIR_CLICKHOUSE_PASSWORD`; the Compose templates give it a default, so set it to `""` in `compose.override.yml` |
 
 ## Addresses and network
 
@@ -99,6 +110,6 @@ The Compose files pass the remaining console variables as `${VARIABLE:-default}`
 
 | Compose file | Fixed values | Not passed |
 | --- | --- | --- |
-| `compose.yml` | `ROLE=all` | `EDGEWEIR_MASTER_KEY_FILE`, `HOST`, `PORT`, `NODE_API_HOST`, `NODE_API_PORT`, `NODE_ENV`, `EDGEWEIR_WEB_DIST`, `EDGEWEIR_CERTD_BIN`, `EDGEWEIR_DNS_TEST_ENDPOINT`, `EDGEWEIR_VERSION` |
+| `compose.yml` | `ROLE=all` | The `_FILE` variables of [Read from files](#read-from-files), `HOST`, `PORT`, `NODE_API_HOST`, `NODE_API_PORT`, `NODE_ENV`, `EDGEWEIR_WEB_DIST`, `EDGEWEIR_CERTD_BIN`, `EDGEWEIR_DNS_TEST_ENDPOINT`, `EDGEWEIR_VERSION` |
 | `compose.baota.yml` | `ROLE=all` | Same as `compose.yml`, plus `LOG_LEVEL` and `EDGEWEIR_DOWNLOADS_DIR` |
-| `compose.baota-host.yml` | `ROLE=all`, `HOST=127.0.0.1`, `NODE_API_HOST=0.0.0.0`; `PORT` and `NODE_API_PORT` from the host port variables | `EDGEWEIR_MASTER_KEY_FILE`, `NODE_ENV`, `EDGEWEIR_WEB_DIST`, `EDGEWEIR_CERTD_BIN`, `EDGEWEIR_DNS_TEST_ENDPOINT`, `EDGEWEIR_VERSION`, `LOG_LEVEL`, and `EDGEWEIR_DOWNLOADS_DIR` |
+| `compose.baota-host.yml` | `ROLE=all`, `HOST=127.0.0.1`, `NODE_API_HOST=0.0.0.0`; `PORT` and `NODE_API_PORT` from the host port variables | The `_FILE` variables of [Read from files](#read-from-files), `NODE_ENV`, `EDGEWEIR_WEB_DIST`, `EDGEWEIR_CERTD_BIN`, `EDGEWEIR_DNS_TEST_ENDPOINT`, `EDGEWEIR_VERSION`, `LOG_LEVEL`, and `EDGEWEIR_DOWNLOADS_DIR` |

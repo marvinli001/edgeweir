@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { loadEnv, parseOutboundAllowCidrs } from "../../src/server/lib/env";
+import {
+  ENV_VARIABLES,
+  FILE_VARIABLES,
+  loadEnv,
+  parseOutboundAllowCidrs,
+} from "../../src/server/lib/env";
 
 const base = {
   DATABASE_URL: "postgres://example.invalid/test",
@@ -107,18 +112,27 @@ describe("outbound allow list", () => {
   });
 });
 
-describe("master key from a file", () => {
+describe("secrets from files", () => {
   const dir = mkdtempSync(join(tmpdir(), "edgeweir-env-"));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
   const key = Buffer.alloc(32, 5).toString("base64");
-  const fromFile = (content: string, extra: Record<string, string> = {}) => {
-    const file = join(dir, `key-${Math.random()}`);
-    writeFileSync(file, content, { mode: 0o600 });
-    return loadEnv({ ...base, EDGEWEIR_MASTER_KEY: "", EDGEWEIR_MASTER_KEY_FILE: file, ...extra });
+  let files = 0;
+  const file = (content: string) => {
+    const path = join(dir, `secret-${files++}`);
+    writeFileSync(path, content, { mode: 0o600 });
+    return path;
   };
+  const fromFile = (content: string, extra: Record<string, string> = {}) =>
+    loadEnv({
+      ...base,
+      EDGEWEIR_MASTER_KEY: "",
+      EDGEWEIR_MASTER_KEY_FILE: file(content),
+      ...extra,
+    });
 
   it("reads EDGEWEIR_MASTER_KEY_FILE, without the file's last newline", () => {
     expect(fromFile(`${key}\n`).EDGEWEIR_MASTER_KEY).toBe(key);
+    expect(fromFile(`${key}\r\n`).EDGEWEIR_MASTER_KEY).toBe(key);
     expect(fromFile(key).EDGEWEIR_MASTER_KEY).toBe(key);
   });
 
@@ -135,5 +149,58 @@ describe("master key from a file", () => {
     expect(() =>
       loadEnv({ ...base, EDGEWEIR_MASTER_KEY_FILE: join(dir, "missing"), EDGEWEIR_MASTER_KEY: "" }),
     ).toThrow(/^invalid configuration:\n {2}EDGEWEIR_MASTER_KEY_FILE: cannot read .*ENOENT/);
+  });
+
+  it("reads the database URL, the session secret and the ClickHouse password the same way", () => {
+    const url = "postgres://edgeweir:p%40ss@db.example.com:5432/edgeweir?sslmode=verify-full";
+    const secret = "s".repeat(20) + "t".repeat(20);
+    const env = loadEnv({
+      ...base,
+      DATABASE_URL: "",
+      DATABASE_URL_FILE: file(`${url}\n`),
+      BETTER_AUTH_SECRET: "",
+      BETTER_AUTH_SECRET_FILE: file(`${secret}\n`),
+      EDGEWEIR_CLICKHOUSE_PASSWORD_FILE: file("click house \n"),
+    });
+    expect(env.DATABASE_URL).toBe(url);
+    expect(env.BETTER_AUTH_SECRET).toBe(secret);
+    // Only the line break goes: other whitespace belongs to the password.
+    expect(env.EDGEWEIR_CLICKHOUSE_PASSWORD).toBe("click house ");
+    // The value read is checked like the variable.
+    expect(() => loadEnv({ ...base, BETTER_AUTH_SECRET_FILE: file("short\n") })).toThrow(
+      /BETTER_AUTH_SECRET/,
+    );
+  });
+
+  it.each(FILE_VARIABLES)("refuses %s together with its file, and an empty file", (name) => {
+    const value = name === "EDGEWEIR_MASTER_KEY" ? key : "value-value-value-value-value-value";
+    expect(() => loadEnv({ ...base, [name]: value, [`${name}_FILE`]: file(value) })).toThrow(
+      `invalid configuration:\n  ${name}_FILE: set either ${name} or ${name}_FILE, not both`,
+    );
+    expect(() => loadEnv({ ...base, [name]: "", [`${name}_FILE`]: file("\n") })).toThrow(
+      /^invalid configuration:\n {2}\S+_FILE: \S+ is empty$/,
+    );
+    // An empty file variable is unset, as the compose templates pass them.
+    expect(() => loadEnv({ ...base, [`${name}_FILE`]: "" })).not.toThrow();
+    expect(ENV_VARIABLES).toContain(`${name}_FILE`);
+  });
+
+  it("names every problem at once", () => {
+    const error = (() => {
+      try {
+        loadEnv({
+          ...base,
+          DATABASE_URL_FILE: join(dir, "missing"),
+          BETTER_AUTH_SECRET_FILE: file("x".repeat(40)),
+        });
+      } catch (e) {
+        return (e as Error).message;
+      }
+    })();
+    expect(error?.split("\n")).toEqual([
+      "invalid configuration:",
+      expect.stringMatching(/^ {2}DATABASE_URL_FILE: set either DATABASE_URL or/),
+      expect.stringMatching(/^ {2}BETTER_AUTH_SECRET_FILE: set either BETTER_AUTH_SECRET or/),
+    ]);
   });
 });

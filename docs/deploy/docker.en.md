@@ -77,7 +77,17 @@ secrets:
     file: ./master.key
 ```
 
-The file's trailing newline is ignored; the console refuses to start when `EDGEWEIR_MASTER_KEY` is also set to a non-empty value or the file cannot be read.
+The file's trailing newline is ignored; the console refuses to start when `EDGEWEIR_MASTER_KEY` is also set to a non-empty value or the file is empty or cannot be read.
+
+### Other secret files
+
+These variables can be read from files too: set `<variable>_FILE`, mount the file as above, and leave the variable out of `.env`. The rules of the master key file apply.
+
+| Variable | For |
+| --- | --- |
+| `DATABASE_URL_FILE` | External PostgreSQL (`compose.baota-host.yml`, [standalone containers](#without-compose-standalone-containers)): the file holds the whole connection string. The bundled database of `compose.yml` is reachable inside the compose network only; `POSTGRES_PASSWORD` stays in `.env` |
+| `BETTER_AUTH_SECRET_FILE` | Deployments that set `BETTER_AUTH_SECRET` |
+| `EDGEWEIR_CLICKHOUSE_PASSWORD_FILE` | External ClickHouse; also set `EDGEWEIR_CLICKHOUSE_PASSWORD: ""` in `compose.override.yml`, or the template's default conflicts with it |
 
 ## 4. Configure `.env`
 
