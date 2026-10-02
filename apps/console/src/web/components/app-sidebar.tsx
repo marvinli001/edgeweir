@@ -1,5 +1,5 @@
-import { Link } from "@tanstack/react-router";
-import type * as React from "react";
+import { Link, useRouter } from "@tanstack/react-router";
+import * as React from "react";
 import { Logo } from "@/components/logo";
 import { navGroups } from "@/components/nav-items";
 import { NavMain } from "@/components/nav-main";
@@ -12,6 +12,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { m } from "@/lib/i18n";
 
@@ -21,6 +22,16 @@ export function AppSidebar({
 }: React.ComponentProps<typeof Sidebar> & {
   user: { name: string; email: string };
 }) {
+  const router = useRouter();
+  const { setOpenMobile } = useSidebar();
+  // On a phone the sidebar is a drawer over the page: any navigation from it closes it.
+  React.useEffect(
+    () =>
+      router.subscribe("onBeforeNavigate", (event) => {
+        if (event.hrefChanged) setOpenMobile(false);
+      }),
+    [router, setOpenMobile],
+  );
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
