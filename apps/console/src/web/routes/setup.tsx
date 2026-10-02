@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useAction } from "@/hooks/use-action";
 import { authClient } from "@/lib/auth-client";
+import { localizeError } from "@/lib/errors";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -53,11 +54,17 @@ function SetupPage() {
                   return; // rendered below via setup.error
                 }
                 await signIn.run(async () => {
-                  await authClient.signIn.email({ email: input.email, password: input.password });
+                  const { error } = await authClient.signIn.email({
+                    email: input.email,
+                    password: input.password,
+                  });
                   // The cached status still says "not initialized"; start from a clean cache.
                   queryClient.clear();
                   toast.success(m.setup_done());
-                  await navigate({ to: "/overview" });
+                  if (!error) return navigate({ to: "/overview" });
+                  // The account exists; signing in is left to the sign-in page.
+                  toast.error(localizeError(error, m.login_failed()));
+                  return navigate({ to: "/login" });
                 });
               }}
             >
