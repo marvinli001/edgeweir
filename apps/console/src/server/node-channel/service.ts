@@ -37,8 +37,6 @@ import {
   type ReportStatsV2Request,
   SecurityEventKind,
   TaskState,
-  WatchConfigResponseSchema,
-  WatchEvent,
 } from "@edgeweir/proto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
@@ -76,6 +74,7 @@ import {
   reportUpgrade,
 } from "../services/upgrades";
 import { recordStatsWatermark } from "../services/usage";
+import { watchStream } from "./watch";
 
 export const HEARTBEAT_SECONDS = 15;
 export const KEEPALIVE_MS = 15_000;
@@ -648,130 +647,23 @@ export function createNodeService(
 
     async *watchConfig(_req, ctx) {
       const node = await requireNode(ctx);
-      const queue: { revision: number; contentHash: string }[] = [];
-      let tasksPending = false;
-      let wake: (() => void) | undefined;
-      const push = (item: { revision: number; contentHash: string }) => {
-        queue.push(item);
-        wake?.();
-      };
-      // A node follows its own target: the candidate in a canary group, else the stable revision.
-      const refresh = async () => {
-        const target = await currentTarget(node.id);
-        if (target) push({ revision: target.revision, contentHash: target.contentHash });
-        if (await hasDeliverableTasks(app.db, node.id)) {
-          tasksPending = true;
-          wake?.();
-        }
-      };
-      // Events arrive outside the stream: a read that fails there is repeated
-      // in the stream, where another error ends it and the node reconnects.
-      let stale = false;
-      const refreshLater = () =>
-        refresh().catch((error) => {
-          log.warn("watch refresh failed", { nodeId: node.id, error });
-          stale = true;
-          wake?.();
-        });
-      const offConfig = app.events.on("config", (e) => {
-        if (e.clusterId === node.clusterId) void refreshLater();
+      const serial = ctx.values.get(peerKey).serialNumber;
+      yield* watchStream({
+        node,
+        bans: nodeSupportsFeature(node.supportedFeatures, BANS_FEATURE),
+        // A node follows its own target: the candidate in a canary group, else the stable revision.
+        source: {
+          target: () => currentTarget(node.id),
+          hasTasks: () => hasDeliverableTasks(app.db, node.id),
+          assertActive: () => assertStillActive(node.id, serial),
+          banSequence: () => currentBanSequence(app.db),
+        },
+        events: app.events,
+        log,
+        signal: ctx.signal,
+        closing,
+        keepaliveMs: KEEPALIVE_MS,
       });
-      const offTasks = app.events.on("tasks", (e) => {
-        if (e.clusterIds.includes(node.clusterId)) {
-          tasksPending = true;
-          wake?.();
-        }
-      });
-      // Nodes with bans-v1 learn the ban sequence when the stream opens and on every change.
-      const bans = nodeSupportsFeature(node.supportedFeatures, BANS_FEATURE);
-      let bansPending = bans;
-      const offBans = app.events.on("bans", (e) => {
-        if (bans && (e.clusterIds === null || e.clusterIds.includes(node.clusterId))) {
-          bansPending = true;
-          wake?.();
-        }
-      });
-      const offReconnect = app.events.on("reconnected", () => {
-        bansPending ||= bans;
-        void refreshLater();
-      });
-      const onAbort = () => wake?.();
-      ctx.signal.addEventListener("abort", onAbort);
-      closing?.addEventListener("abort", onAbort);
-      const ended = () => ctx.signal.aborted || closing?.aborted === true;
-      log.info("watch stream opened", { nodeId: node.id });
-      try {
-        await refresh();
-        if (queue.length === 0) {
-          yield create(WatchConfigResponseSchema, {
-            event: WatchEvent.REVISION,
-            latestRevision: 0n,
-          });
-        }
-        let lastSent = -1;
-        while (!ended()) {
-          if (tasksPending) {
-            tasksPending = false;
-            yield create(WatchConfigResponseSchema, {
-              event: WatchEvent.TASKS,
-              latestRevision: BigInt(Math.max(lastSent, 0)),
-            });
-            continue;
-          }
-          if (queue.length === 0 && !bansPending) {
-            await new Promise<void>((resolve) => {
-              const timer = setTimeout(resolve, KEEPALIVE_MS);
-              wake = () => {
-                clearTimeout(timer);
-                resolve();
-              };
-            });
-            wake = undefined;
-          }
-          if (ended()) break;
-          await assertStillActive(node.id, ctx.values.get(peerKey).serialNumber);
-          if (stale) {
-            stale = false;
-            await refresh();
-          }
-          if (tasksPending) continue;
-          const item = queue
-            .splice(0)
-            .reduce<{ revision: number; contentHash: string } | undefined>(
-              (max, cur) => (!max || cur.revision > max.revision ? cur : max),
-              undefined,
-            );
-          if (item && item.revision !== lastSent) {
-            lastSent = item.revision;
-            yield create(WatchConfigResponseSchema, {
-              event: WatchEvent.REVISION,
-              latestRevision: BigInt(item.revision),
-              contentHash: item.contentHash,
-            });
-          } else if (!item && !bansPending) {
-            yield create(WatchConfigResponseSchema, {
-              event: WatchEvent.KEEPALIVE,
-              latestRevision: BigInt(Math.max(lastSent, 0)),
-            });
-          }
-          if (bansPending) {
-            bansPending = false;
-            yield create(WatchConfigResponseSchema, {
-              event: WatchEvent.BANS,
-              latestRevision: BigInt(Math.max(lastSent, 0)),
-              banSequence: await currentBanSequence(app.db),
-            });
-          }
-        }
-      } finally {
-        offConfig();
-        offTasks();
-        offBans();
-        offReconnect();
-        ctx.signal.removeEventListener("abort", onAbort);
-        closing?.removeEventListener("abort", onAbort);
-        log.info("watch stream closed", { nodeId: node.id });
-      }
     },
 
     async getConfig(req, ctx) {
