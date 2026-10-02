@@ -10,26 +10,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import { FormDialog } from "@/components/form-dialog";
+import { OptionSelect } from "@/components/form-select";
 import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { nextDraftKey, SaveBar, serializeDrafts } from "@/components/site/save-site";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useOpenKey } from "@/hooks/use-open-key";
+import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatNumber, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -54,26 +48,16 @@ export function BulkRedirectsTab({ siteId }: { siteId: string }) {
       <CardHeader>
         <CardTitle>{m.bulk_redirects_title()}</CardTitle>
       </CardHeader>
-      {redirects.isPending || features.isPending ? (
-        <CardContent>
-          <LoadingState />
-        </CardContent>
-      ) : redirects.isLoadingError ? (
-        <CardContent>
-          <ErrorState error={redirects.error} onRetry={() => void redirects.refetch()} />
-        </CardContent>
-      ) : features.isLoadingError ? (
-        <CardContent>
-          <ErrorState error={features.error} onRetry={() => void features.refetch()} />
-        </CardContent>
-      ) : (
-        <BulkRedirectsForm
-          key={redirects.dataUpdatedAt}
-          siteId={siteId}
-          initial={redirects.data}
-          availability={features.data.rulesV2}
-        />
-      )}
+      <QueryView query={combineQueries(redirects, features)} frame={CardContent}>
+        {([list, available]) => (
+          <BulkRedirectsForm
+            key={redirects.dataUpdatedAt}
+            siteId={siteId}
+            initial={list}
+            availability={available.rulesV2}
+          />
+        )}
+      </QueryView>
     </Card>
   );
 }
@@ -126,8 +110,7 @@ function BulkRedirectsForm({
   const [rows, setRows] = React.useState(saved);
   const [filter, setFilter] = React.useState("");
   const [page, setPage] = React.useState(1);
-  const [importing, setImporting] = React.useState(false);
-  const importKey = useOpenKey(importing);
+  const importDialog = useDialogState();
   const [error, setError] = React.useState<string | null>(null);
   // The table waits until the cluster's nodes run it.
   const editable = availability.available;
@@ -158,7 +141,7 @@ function BulkRedirectsForm({
       <Button
         type="button"
         variant="outline"
-        onClick={() => setImporting(true)}
+        onClick={() => importDialog.show()}
         data-testid="bulk-redirects-import"
       >
         <HugeiconsIcon icon={FileImportIcon} strokeWidth={2} />
@@ -293,9 +276,9 @@ function BulkRedirectsForm({
       </form>
       {/* Outside the form: React bubbles the dialog's submit through the portal. */}
       <ImportDialog
-        key={importKey}
-        open={importing}
-        onOpenChange={setImporting}
+        key={importDialog.key}
+        open={importDialog.open}
+        onOpenChange={importDialog.onOpenChange}
         onImport={(redirects, replace) => {
           const sources = new Set(redirects.map((redirect) => redirect.source));
           const merged = [
@@ -307,7 +290,7 @@ function BulkRedirectsForm({
           setRows(merged);
           setFilter("");
           setPage(1);
-          setImporting(false);
+          importDialog.onOpenChange(false);
           toast.success(m.bulk_redirects_imported({ count: formatNumber(redirects.length) }));
         }}
       />
@@ -361,29 +344,14 @@ function RedirectRow({
         className="col-span-3 font-mono sm:col-span-1"
         data-testid="bulk-redirect-target"
       />
-      <Select
+      <OptionSelect
         value={String(row.statusCode)}
-        onValueChange={(code) => {
-          if (code) onChange({ statusCode: Number(code) as StatusCode });
-        }}
-        items={statuses}
+        options={statuses}
+        onChange={(code) => onChange({ statusCode: Number(code) as StatusCode })}
         disabled={!editable}
-      >
-        <SelectTrigger
-          className="w-full"
-          aria-label={m.rules_status()}
-          data-testid="bulk-redirect-status"
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {statuses.map((status) => (
-            <SelectItem key={status.value} value={status.value}>
-              {status.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        label={m.rules_status()}
+        testId="bulk-redirect-status"
+      />
       <Field orientation="horizontal" className="w-auto gap-2">
         <Switch
           id={id("query")}
@@ -419,18 +387,13 @@ function ImportDialog({
   onOpenChange,
   onImport,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   onImport: (redirects: BulkRedirect[], replace: boolean) => void;
-}) {
+} & DialogProps) {
   const [replace, setReplace] = React.useState(false);
   return (
     <FormDialog
       open={open}
-      onOpenChange={(next) => {
-        if (!next) setReplace(false);
-        onOpenChange(next);
-      }}
+      onOpenChange={onOpenChange}
       title={m.bulk_redirects_import_title()}
       submitLabel={m.bulk_redirects_import()}
       submitTestId="bulk-redirects-import-submit"

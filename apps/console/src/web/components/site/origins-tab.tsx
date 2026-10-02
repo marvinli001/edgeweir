@@ -10,6 +10,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { BorderBeam } from "@/components/appica/effects";
+import { OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
 import { OriginHealthBadge, OriginHealthError } from "@/components/site/origin-health";
@@ -90,7 +91,7 @@ const fillRow = (value: string, row: Pick<OriginDraft, "scheme" | "port">) =>
 const SCHEMES = [
   { label: "HTTP", value: "http" },
   { label: "HTTPS", value: "https" },
-];
+] as const;
 
 function OriginsCard({ site }: { site: Site }) {
   const initial = React.useMemo(
@@ -311,28 +312,16 @@ function OriginRow({
         />
         <Field>
           <FieldLabel>{m.site_form_scheme()}</FieldLabel>
-          <Select
+          <OptionSelect
             value={row.scheme}
-            onValueChange={(v) => {
-              if (!v) return;
-              const scheme = v as Scheme;
+            options={SCHEMES}
+            onChange={(scheme) => {
               // The port follows the scheme while it is empty or the other scheme's default.
               const follows = row.port === "" || row.port === (scheme === "https" ? "80" : "443");
               onChange({ scheme, ...(follows ? { port: scheme === "https" ? "443" : "80" } : {}) });
             }}
-            items={SCHEMES}
-          >
-            <SelectTrigger className="w-full" data-testid="origin-scheme">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SCHEMES.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            testId="origin-scheme"
+          />
         </Field>
         <NumberField
           id={id("weight")}

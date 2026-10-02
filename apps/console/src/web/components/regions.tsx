@@ -12,11 +12,12 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useDialogState } from "@/hooks/use-dialog-state";
 import { m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -125,7 +126,7 @@ export function RegionsPanel({
 
 function RegionsList({ onCreate }: { onCreate: () => void }) {
   const regions = useQuery(orpc.regions.list.queryOptions());
-  const [editing, setEditing] = React.useState<Region | null>(null);
+  const edit = useDialogState<Region>();
   const columns = React.useMemo<Columns<Region>>(
     () => [
       {
@@ -167,7 +168,7 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
               size="icon-sm"
               variant="ghost"
               aria-label={m.regions_edit()}
-              onClick={() => setEditing(row.original)}
+              onClick={() => edit.show(row.original)}
             >
               <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
             </Button>
@@ -176,36 +177,32 @@ function RegionsList({ onCreate }: { onCreate: () => void }) {
         ),
       },
     ],
-    [],
+    [edit.show],
   );
 
   return (
     <>
-      {regions.isPending ? (
-        <LoadingState />
-      ) : regions.isLoadingError ? (
-        <ErrorState error={regions.error} onRetry={() => regions.refetch()} />
-      ) : regions.data.length === 0 ? (
-        <EmptyState icon={Location01Icon} title={m.regions_empty()}>
-          <Button onClick={onCreate}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            {m.regions_create()}
-          </Button>
-        </EmptyState>
-      ) : (
-        <DataTable
-          data={regions.data}
-          columns={columns}
-          getRowId={(r) => r.id}
-          testId="regions-table"
-        />
-      )}
-      {editing ? (
+      <QueryView
+        query={regions}
+        empty={
+          <EmptyState icon={Location01Icon} title={m.regions_empty()}>
+            <Button onClick={onCreate}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              {m.regions_create()}
+            </Button>
+          </EmptyState>
+        }
+      >
+        {(list) => (
+          <DataTable data={list} columns={columns} getRowId={(r) => r.id} testId="regions-table" />
+        )}
+      </QueryView>
+      {edit.value ? (
         <RegionDialog
-          key={editing.id}
-          region={editing}
-          open
-          onOpenChange={(open) => !open && setEditing(null)}
+          key={edit.key}
+          region={edit.value}
+          open={edit.open}
+          onOpenChange={edit.onOpenChange}
         />
       ) : null}
     </>

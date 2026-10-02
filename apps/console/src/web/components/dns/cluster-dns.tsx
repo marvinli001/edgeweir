@@ -15,23 +15,16 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { DnsHeldBack } from "@/components/dns-protection";
-import { FormSelect } from "@/components/form-select";
+import { FormSelect, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -63,44 +56,35 @@ export function ClusterDns({ clusterId }: { clusterId: string }) {
   const providers = useQuery(orpc.dns.providers.queryOptions());
   const groups = useQuery(orpc.nodeGroups.list.queryOptions({ input: { clusterId } }));
   const nodes = useQuery(orpc.nodes.list.queryOptions({ input: { clusterId } }));
-  const queries = [binding, providers, groups, nodes];
-  const error = queries.find((q) => q.isLoadingError);
-  if (error)
-    return (
-      <ErrorState
-        error={error.error}
-        onRetry={() => {
-          for (const q of queries) void q.refetch();
-        }}
-      />
-    );
-  if (!binding.data || !providers.data || !groups.data || !nodes.data) return <LoadingState />;
-  const state = binding.data;
   return (
-    <div className="flex flex-col gap-4" data-testid="cluster-dns">
-      {state.blocked ? <DnsHeldBack clusterId={clusterId} blocked={state.blocked} /> : null}
-      <BindingEditor
-        key={`${state.binding.updatedAt}-${state.binding.mode}`}
-        clusterId={clusterId}
-        initial={{
-          mode: state.binding.mode,
-          providerId: state.binding.providerId,
-          domain: state.binding.domain,
-          ttl: state.binding.ttl,
-          lines: state.binding.lines,
-          lineAliases: state.binding.lineAliases,
-        }}
-        providers={providers.data.items}
-        groups={groups.data.filter((g) => g.clusterId === clusterId)}
-        nodes={nodes.data.filter((n) => n.clusterId === clusterId)}
-      />
-      {state.binding.mode === "manual" ? (
-        <ManualRecords clusterId={clusterId} updatedAt={state.binding.updatedAt} />
-      ) : state.binding.mode === "auto" ? (
-        <CurrentRecords clusterId={clusterId} state={state} />
-      ) : null}
-      <Revisions clusterId={clusterId} />
-    </div>
+    <QueryView query={combineQueries(binding, providers, groups, nodes)}>
+      {([state, providerList, groupList, nodeList]) => (
+        <div className="flex flex-col gap-4" data-testid="cluster-dns">
+          {state.blocked ? <DnsHeldBack clusterId={clusterId} blocked={state.blocked} /> : null}
+          <BindingEditor
+            key={`${state.binding.updatedAt}-${state.binding.mode}`}
+            clusterId={clusterId}
+            initial={{
+              mode: state.binding.mode,
+              providerId: state.binding.providerId,
+              domain: state.binding.domain,
+              ttl: state.binding.ttl,
+              lines: state.binding.lines,
+              lineAliases: state.binding.lineAliases,
+            }}
+            providers={providerList.items}
+            groups={groupList.filter((g) => g.clusterId === clusterId)}
+            nodes={nodeList.filter((n) => n.clusterId === clusterId)}
+          />
+          {state.binding.mode === "manual" ? (
+            <ManualRecords clusterId={clusterId} updatedAt={state.binding.updatedAt} />
+          ) : state.binding.mode === "auto" ? (
+            <CurrentRecords clusterId={clusterId} state={state} />
+          ) : null}
+          <Revisions clusterId={clusterId} />
+        </div>
+      )}
+    </QueryView>
   );
 }
 
@@ -456,28 +440,16 @@ function BackupGroups({
         </ol>
       )}
       {remaining.length && value.length < MAX_BACKUP_GROUPS ? (
-        <Select
+        <OptionSelect
           value={null}
-          onValueChange={(id) => {
-            if (id) onChange([...value, String(id)]);
-          }}
-        >
-          <SelectTrigger
-            size="sm"
-            className="self-start"
-            aria-label={m.dns_backup_group_add()}
-            data-testid="dns-line-backup-add"
-          >
-            <SelectValue placeholder={m.dns_backup_group_add()} />
-          </SelectTrigger>
-          <SelectContent>
-            {remaining.map((g) => (
-              <SelectItem key={g.id} value={g.id}>
-                {g.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          options={remaining.map((g) => ({ value: g.id, label: g.name }))}
+          onChange={(id) => onChange([...value, id])}
+          placeholder={m.dns_backup_group_add()}
+          label={m.dns_backup_group_add()}
+          size="sm"
+          className="self-start"
+          testId="dns-line-backup-add"
+        />
       ) : null}
     </FieldSet>
   );
@@ -620,21 +592,19 @@ function ManualRecords({ clusterId, updatedAt }: { clusterId: string; updatedAt:
       </CardHeader>
       <CardContent className="grid gap-4">
         <SafetyNote>{m.dns_manual_note()}</SafetyNote>
-        {exported.isPending ? (
-          <LoadingState />
-        ) : exported.isLoadingError ? (
-          <ErrorState error={exported.error} onRetry={() => void exported.refetch()} />
-        ) : (
-          <>
-            <RecordTable records={exported.data.records} testId="dns-manual-records" />
-            {exported.data.zoneFile ? (
-              <div className="grid gap-2">
-                <h3 className="text-sm font-medium">{m.dns_zone_file()}</h3>
-                <CodeBlock value={exported.data.zoneFile} testId="dns-zone-file" wrap={false} />
-              </div>
-            ) : null}
-          </>
-        )}
+        <QueryView query={exported}>
+          {({ records, zoneFile }) => (
+            <>
+              <RecordTable records={records} testId="dns-manual-records" />
+              {zoneFile ? (
+                <div className="grid gap-2">
+                  <h3 className="text-sm font-medium">{m.dns_zone_file()}</h3>
+                  <CodeBlock value={zoneFile} testId="dns-zone-file" wrap={false} />
+                </div>
+              ) : null}
+            </>
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );
@@ -655,65 +625,61 @@ function Revisions({ clusterId }: { clusterId: string }) {
         <CardTitle>{m.dns_revisions()}</CardTitle>
       </CardHeader>
       <CardContent>
-        {history.isPending ? (
-          <LoadingState />
-        ) : history.isLoadingError ? (
-          <ErrorState error={history.error} onRetry={() => void history.refetch()} />
-        ) : !history.data.length ? (
-          <EmptyState title={m.dns_no_revisions()} />
-        ) : (
-          <Table data-testid="dns-revisions">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{m.dns_version()}</TableHead>
-                <TableHead>{m.dns_status()}</TableHead>
-                <TableHead>{m.dns_reason()}</TableHead>
-                <TableHead>{m.dns_records()}</TableHead>
-                <TableHead>{m.dns_time()}</TableHead>
-                <TableHead>{m.common_actions()}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {history.data.map((r) => (
-                <TableRow key={r.revision}>
-                  <TableCell className="font-mono">{r.revision}</TableCell>
-                  <TableCell>
-                    <span className="flex items-center gap-2">
-                      <Badge variant="outline">{statusLabel(r.status)}</Badge>
-                      {r.lastError ? (
-                        <span className="text-xs text-muted-foreground">
-                          {revisionError(r.lastError, r.lastErrorParams)}
-                        </span>
-                      ) : null}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-sm" data-testid="dns-revision-reason">
-                    {dnsRevisionReason(r)}
-                  </TableCell>
-                  <TableCell className="tabular-nums">{r.recordCount}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {formatDateTime(r.createdAt)}
-                  </TableCell>
-                  <TableCell>
-                    <ConfirmDialog
-                      title={m.dns_rollback()}
-                      note={m.dns_rollback_note({ revision: r.revision })}
-                      trigger={
-                        <Button size="sm" variant="outline">
-                          {m.dns_rollback()}
-                        </Button>
-                      }
-                      onConfirm={async () => {
-                        await client.dns.rollbackBinding({ clusterId, revision: r.revision });
-                        await queries.invalidateQueries({ queryKey: orpc.dns.key() });
-                      }}
-                    />
-                  </TableCell>
+        <QueryView query={history} empty={<EmptyState title={m.dns_no_revisions()} />}>
+          {(list) => (
+            <Table data-testid="dns-revisions">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{m.dns_version()}</TableHead>
+                  <TableHead>{m.dns_status()}</TableHead>
+                  <TableHead>{m.dns_reason()}</TableHead>
+                  <TableHead>{m.dns_records()}</TableHead>
+                  <TableHead>{m.dns_time()}</TableHead>
+                  <TableHead>{m.common_actions()}</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+              </TableHeader>
+              <TableBody>
+                {list.map((r) => (
+                  <TableRow key={r.revision}>
+                    <TableCell className="font-mono">{r.revision}</TableCell>
+                    <TableCell>
+                      <span className="flex items-center gap-2">
+                        <Badge variant="outline">{statusLabel(r.status)}</Badge>
+                        {r.lastError ? (
+                          <span className="text-xs text-muted-foreground">
+                            {revisionError(r.lastError, r.lastErrorParams)}
+                          </span>
+                        ) : null}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm" data-testid="dns-revision-reason">
+                      {dnsRevisionReason(r)}
+                    </TableCell>
+                    <TableCell className="tabular-nums">{r.recordCount}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {formatDateTime(r.createdAt)}
+                    </TableCell>
+                    <TableCell>
+                      <ConfirmDialog
+                        title={m.dns_rollback()}
+                        note={m.dns_rollback_note({ revision: r.revision })}
+                        trigger={
+                          <Button size="sm" variant="outline">
+                            {m.dns_rollback()}
+                          </Button>
+                        }
+                        onConfirm={async () => {
+                          await client.dns.rollbackBinding({ clusterId, revision: r.revision });
+                          await queries.invalidateQueries({ queryKey: orpc.dns.key() });
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );

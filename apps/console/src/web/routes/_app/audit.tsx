@@ -6,9 +6,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { type Columns, DataTable } from "@/components/data-table";
+import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,19 +18,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { auditActionLabel, auditTargetLabel } from "@/lib/audit";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
 const PAGE_SIZE = 50;
-const ALL = "__all__";
 const RANGES = { "1h": 3600, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400 } as const;
 type Range = keyof typeof RANGES;
 
@@ -60,42 +53,6 @@ const rangeLabels: Record<Range, () => string> = {
   "7d": () => m.audit_range_7d(),
   "30d": () => m.audit_range_30d(),
 };
-
-function FilterSelect({
-  value,
-  onChange,
-  allLabel,
-  options,
-  label,
-  testId,
-}: {
-  value: string | undefined;
-  onChange: (value: string | undefined) => void;
-  allLabel: string;
-  options: { label: string; value: string }[];
-  label: string;
-  testId: string;
-}) {
-  const items = [{ label: allLabel, value: ALL }, ...options];
-  return (
-    <Select
-      value={value ?? ALL}
-      onValueChange={(v) => onChange(!v || v === ALL ? undefined : String(v))}
-      items={items}
-    >
-      <SelectTrigger className="w-full sm:w-48" aria-label={label} data-testid={testId}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {items.map((item) => (
-          <SelectItem key={item.value} value={item.value}>
-            {item.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -312,28 +269,28 @@ function AuditPage() {
           testId="audit-filter-range"
         />
       </div>
-      {entries.isPending ? (
-        <LoadingState />
-      ) : entries.isLoadingError ? (
-        <ErrorState error={entries.error} onRetry={() => entries.refetch()} />
-      ) : entries.data.total === 0 ? (
-        <EmptyState icon={Audit01Icon} title={m.audit_empty()} />
-      ) : (
-        <>
-          <DataTable
-            data={entries.data.items}
-            columns={columns}
-            getRowId={(e) => String(e.id)}
-            testId="audit-table"
-          />
-          <Pager
-            page={page}
-            pageSize={PAGE_SIZE}
-            total={entries.data.total}
-            onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
-          />
-        </>
-      )}
+      <QueryView
+        query={entries}
+        isEmpty={(data) => data.total === 0}
+        empty={<EmptyState icon={Audit01Icon} title={m.audit_empty()} />}
+      >
+        {({ items, total }) => (
+          <>
+            <DataTable
+              data={items}
+              columns={columns}
+              getRowId={(e) => String(e.id)}
+              testId="audit-table"
+            />
+            <Pager
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={total}
+              onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
+            />
+          </>
+        )}
+      </QueryView>
     </Page>
   );
 }

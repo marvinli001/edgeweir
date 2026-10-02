@@ -8,7 +8,7 @@ import {
   templateTooLarge,
 } from "@/components/error-page-template";
 import { SaveBar } from "@/components/site/save-site";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -36,17 +36,9 @@ export function PlatformErrorPagesCard() {
       <CardHeader>
         <CardTitle>{m.platform_pages_title()}</CardTitle>
       </CardHeader>
-      {query.isPending ? (
-        <CardContent>
-          <LoadingState />
-        </CardContent>
-      ) : query.isLoadingError ? (
-        <CardContent>
-          <ErrorState error={query.error} onRetry={() => query.refetch()} />
-        </CardContent>
-      ) : (
-        <PlatformErrorPagesForm key={JSON.stringify(query.data)} initial={query.data} />
-      )}
+      <QueryView query={query} frame={CardContent}>
+        {(pages) => <PlatformErrorPagesForm key={JSON.stringify(pages)} initial={pages} />}
+      </QueryView>
     </Card>
   );
 }

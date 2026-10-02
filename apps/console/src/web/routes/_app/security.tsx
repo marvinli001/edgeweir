@@ -10,7 +10,7 @@ import { CodeBlock } from "@/components/copy-button";
 import { Page } from "@/components/page";
 import { QrCode } from "@/components/qr-code";
 import { SafetyNote } from "@/components/safety-note";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,13 +41,9 @@ function SecurityPage() {
   return (
     <Page title={m.security_title()}>
       <PasswordCard />
-      {me.isPending ? (
-        <LoadingState />
-      ) : me.isLoadingError ? (
-        <ErrorState error={me.error} onRetry={() => me.refetch()} />
-      ) : (
-        <TwoFactorCard enabled={me.data.user.twoFactorEnabled} />
-      )}
+      <QueryView query={me}>
+        {({ user }) => <TwoFactorCard enabled={user.twoFactorEnabled} />}
+      </QueryView>
       <PasskeysCard />
     </Page>
   );
@@ -320,48 +316,50 @@ function PasskeysCard() {
           </Button>
         </form>
         {add.isError ? <FieldError>{localizeError(add.error)}</FieldError> : null}
-        {passkeys.isPending ? (
-          <LoadingState className="min-h-24" />
-        ) : passkeys.isLoadingError ? (
-          <ErrorState error={passkeys.error} onRetry={() => passkeys.refetch()} />
-        ) : passkeys.data.length === 0 ? (
-          <EmptyState icon={FingerPrintIcon} title={m.security_passkeys_empty()} />
-        ) : (
-          <ul className="divide-y rounded-2xl border bg-card text-sm shadow-xs">
-            {passkeys.data.map((key, index) => (
-              <li
-                key={key.id}
-                className="flex flex-wrap items-center gap-3 px-3 py-2.5 animate-enter"
-                style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
-              >
-                <HugeiconsIcon icon={FingerPrintIcon} strokeWidth={2} className="size-4" />
-                <span className="font-medium">{key.name || m.security_passkey_default_name()}</span>
-                {key.createdAt ? (
-                  <span
-                    className="ml-auto text-xs text-muted-foreground"
-                    title={formatDateTime(new Date(key.createdAt).toISOString())}
-                  >
-                    {timeAgo(new Date(key.createdAt).toISOString())}
+        <QueryView
+          query={passkeys}
+          loadingClassName="min-h-24"
+          empty={<EmptyState icon={FingerPrintIcon} title={m.security_passkeys_empty()} />}
+        >
+          {(list) => (
+            <ul className="divide-y rounded-2xl border bg-card text-sm shadow-xs">
+              {list.map((key, index) => (
+                <li
+                  key={key.id}
+                  className="flex flex-wrap items-center gap-3 px-3 py-2.5 animate-enter"
+                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                >
+                  <HugeiconsIcon icon={FingerPrintIcon} strokeWidth={2} className="size-4" />
+                  <span className="font-medium">
+                    {key.name || m.security_passkey_default_name()}
                   </span>
-                ) : null}
-                <ConfirmDialog
-                  trigger={
-                    <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
-                      <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                    </Button>
-                  }
-                  destructive
-                  title={m.security_passkey_delete({ name: key.name || "" })}
-                  confirmLabel={m.common_delete()}
-                  onConfirm={async () => {
-                    await unwrap(authClient.passkey.deletePasskey({ id: key.id }));
-                    await queryClient.invalidateQueries({ queryKey: ["passkeys"] });
-                  }}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+                  {key.createdAt ? (
+                    <span
+                      className="ml-auto text-xs text-muted-foreground"
+                      title={formatDateTime(new Date(key.createdAt).toISOString())}
+                    >
+                      {timeAgo(new Date(key.createdAt).toISOString())}
+                    </span>
+                  ) : null}
+                  <ConfirmDialog
+                    trigger={
+                      <Button size="icon-sm" variant="ghost" aria-label={m.common_delete()}>
+                        <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                      </Button>
+                    }
+                    destructive
+                    title={m.security_passkey_delete({ name: key.name || "" })}
+                    confirmLabel={m.common_delete()}
+                    onConfirm={async () => {
+                      await unwrap(authClient.passkey.deletePasskey({ id: key.id }));
+                      await queryClient.invalidateQueries({ queryKey: ["passkeys"] });
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );

@@ -11,7 +11,7 @@ import { L4AppDialog } from "@/components/l4/app-dialog";
 import { L4AppStats } from "@/components/l4/app-stats";
 import { DnsTarget, L4NodesWarning, ProtocolBadge } from "@/components/l4/common";
 import { Page } from "@/components/page";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,49 +45,47 @@ function L4AppPage() {
         </Link>
       }
     >
-      {app.isPending ? (
-        <LoadingState />
-      ) : app.isLoadingError ? (
-        <ErrorState error={app.error} onRetry={() => app.refetch()} />
-      ) : (
-        <Tabs
-          key={app.data.id}
-          value={tab}
-          onValueChange={(value) =>
-            navigate({
-              search: (prev) => ({ ...prev, tab: value === "stats" ? "stats" : undefined }),
-              replace: true,
-            })
-          }
-        >
-          <TabsList>
-            <TabsTrigger value="overview" data-testid="l4-tab-overview">
-              {m.site_tab_overview()}
-            </TabsTrigger>
-            <TabsTrigger value="stats" data-testid="l4-tab-stats">
-              {m.analytics_title()}
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="overview" className="animate-enter">
-            <Overview app={app.data} />
-          </TabsContent>
-          <TabsContent value="stats" className="animate-enter">
-            <L4AppStats
-              appId={app.data.id}
-              range={search.range ?? DEFAULT_RANGE}
-              onRangeChange={(range) =>
-                navigate({
-                  search: (prev) => ({
-                    ...prev,
-                    range: range === DEFAULT_RANGE ? undefined : range,
-                  }),
-                  replace: true,
-                })
-              }
-            />
-          </TabsContent>
-        </Tabs>
-      )}
+      <QueryView query={app}>
+        {(data) => (
+          <Tabs
+            key={data.id}
+            value={tab}
+            onValueChange={(value) =>
+              navigate({
+                search: (prev) => ({ ...prev, tab: value === "stats" ? "stats" : undefined }),
+                replace: true,
+              })
+            }
+          >
+            <TabsList>
+              <TabsTrigger value="overview" data-testid="l4-tab-overview">
+                {m.site_tab_overview()}
+              </TabsTrigger>
+              <TabsTrigger value="stats" data-testid="l4-tab-stats">
+                {m.analytics_title()}
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="overview" className="animate-enter">
+              <Overview app={data} />
+            </TabsContent>
+            <TabsContent value="stats" className="animate-enter">
+              <L4AppStats
+                appId={data.id}
+                range={search.range ?? DEFAULT_RANGE}
+                onRangeChange={(range) =>
+                  navigate({
+                    search: (prev) => ({
+                      ...prev,
+                      range: range === DEFAULT_RANGE ? undefined : range,
+                    }),
+                    replace: true,
+                  })
+                }
+              />
+            </TabsContent>
+          </Tabs>
+        )}
+      </QueryView>
     </Page>
   );
 }

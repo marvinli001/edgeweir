@@ -23,7 +23,7 @@ import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { SecurityTab } from "@/components/site/security-tab";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { SiteStatus, untilLive } from "@/components/site-status";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -106,78 +106,76 @@ function SiteDetailPage() {
         </>
       }
     >
-      {site.isPending ? (
-        <LoadingState />
-      ) : site.isLoadingError ? (
-        <ErrorState error={site.error} onRetry={() => site.refetch()} />
-      ) : (
-        <Tabs
-          key={site.data.id}
-          value={tab}
-          onValueChange={(value) =>
-            navigate({
-              search: (prev) => ({
-                ...prev,
-                tab: value === "overview" ? undefined : (value as SiteTab),
-              }),
-              replace: true,
-            })
-          }
-        >
-          <TabsList ref={tabsList} className="max-w-full justify-start overflow-x-auto">
-            {SITE_TABS.map((value) => (
-              <TabsTrigger key={value} value={value} data-testid={`tab-${value}`}>
-                {siteTabLabel(value)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <TabsContent value="overview" className="animate-enter">
-            <OverviewTab site={site.data} />
-          </TabsContent>
-          <TabsContent value="analytics" className="animate-enter">
-            <AnalyticsSection
-              siteId={site.data.id}
-              range={search.range ?? DEFAULT_RANGE}
-              onRangeChange={(range) =>
-                navigate({
-                  search: (prev) => ({
-                    ...prev,
-                    range: range === DEFAULT_RANGE ? undefined : range,
-                  }),
-                  replace: true,
-                })
-              }
-            />
-          </TabsContent>
-          <TabsContent value="domains" className="animate-enter">
-            <DomainsTab site={site.data} />
-          </TabsContent>
-          <TabsContent value="origins" className="animate-enter">
-            <OriginsTab site={site.data} />
-          </TabsContent>
-          <TabsContent value="https" className="animate-enter">
-            <HttpsTab site={site.data} />
-          </TabsContent>
-          <TabsContent value="rules" className="animate-enter">
-            <RulesTab siteId={site.data.id} originGroups={originGroups(site.data)} />
-          </TabsContent>
-          <TabsContent value="redirects" className="animate-enter">
-            <BulkRedirectsTab siteId={site.data.id} />
-          </TabsContent>
-          <TabsContent value="security" className="animate-enter">
-            <SecurityTab siteId={site.data.id} />
-          </TabsContent>
-          <TabsContent value="errors" className="animate-enter">
-            <ErrorPagesTab siteId={site.data.id} />
-          </TabsContent>
-          <TabsContent value="logs" className="animate-enter">
-            <LogsTab siteId={site.data.id} />
-          </TabsContent>
-          <TabsContent value="cache" className="animate-enter">
-            <CacheTab site={site.data} />
-          </TabsContent>
-        </Tabs>
-      )}
+      <QueryView query={site}>
+        {(data) => (
+          <Tabs
+            key={data.id}
+            value={tab}
+            onValueChange={(value) =>
+              navigate({
+                search: (prev) => ({
+                  ...prev,
+                  tab: value === "overview" ? undefined : (value as SiteTab),
+                }),
+                replace: true,
+              })
+            }
+          >
+            <TabsList ref={tabsList} className="max-w-full justify-start overflow-x-auto">
+              {SITE_TABS.map((value) => (
+                <TabsTrigger key={value} value={value} data-testid={`tab-${value}`}>
+                  {siteTabLabel(value)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <TabsContent value="overview" className="animate-enter">
+              <OverviewTab site={data} />
+            </TabsContent>
+            <TabsContent value="analytics" className="animate-enter">
+              <AnalyticsSection
+                siteId={data.id}
+                range={search.range ?? DEFAULT_RANGE}
+                onRangeChange={(range) =>
+                  navigate({
+                    search: (prev) => ({
+                      ...prev,
+                      range: range === DEFAULT_RANGE ? undefined : range,
+                    }),
+                    replace: true,
+                  })
+                }
+              />
+            </TabsContent>
+            <TabsContent value="domains" className="animate-enter">
+              <DomainsTab site={data} />
+            </TabsContent>
+            <TabsContent value="origins" className="animate-enter">
+              <OriginsTab site={data} />
+            </TabsContent>
+            <TabsContent value="https" className="animate-enter">
+              <HttpsTab site={data} />
+            </TabsContent>
+            <TabsContent value="rules" className="animate-enter">
+              <RulesTab siteId={data.id} originGroups={originGroups(data)} />
+            </TabsContent>
+            <TabsContent value="redirects" className="animate-enter">
+              <BulkRedirectsTab siteId={data.id} />
+            </TabsContent>
+            <TabsContent value="security" className="animate-enter">
+              <SecurityTab siteId={data.id} />
+            </TabsContent>
+            <TabsContent value="errors" className="animate-enter">
+              <ErrorPagesTab siteId={data.id} />
+            </TabsContent>
+            <TabsContent value="logs" className="animate-enter">
+              <LogsTab siteId={data.id} />
+            </TabsContent>
+            <TabsContent value="cache" className="animate-enter">
+              <CacheTab site={data} />
+            </TabsContent>
+          </Tabs>
+        )}
+      </QueryView>
     </Page>
   );
 }

@@ -182,6 +182,36 @@ describe("UI behaviour", () => {
     expect(found).toEqual([]);
   });
 
+  it("renders a query's loading and error states through QueryView", () => {
+    // QueryView (components/states.tsx) shows LoadingState on the first load, ErrorState only when
+    // that load fails and the empty state; hand-written branches each had to get that right.
+    // Settings cards awaiting the shared SettingsCard (C-5) keep theirs until it moves to QueryView.
+    const awaitingSettingsCard = [
+      "src/web/components/ban-settings.tsx: query",
+      "src/web/components/geoip-settings.tsx: nodes",
+      "src/web/components/origin-allow-list.tsx: list",
+      "src/web/components/probes.tsx: query",
+      "src/web/components/protection-settings.tsx: settings",
+      "src/web/components/protection-settings.tsx: template",
+      "src/web/components/release-source.tsx: query",
+      "src/web/components/smtp-settings.tsx: query",
+      "src/web/components/usage-settings.tsx: query",
+    ];
+    const handWritten = (name: string) =>
+      new RegExp(
+        `\\b${name}\\.isPending\\b(?:\\s*\\|\\|[^?;]*)?\\s*(?:\\?|&&)\\s*\\(?\\s*(?:<CardContent>\\s*)?<LoadingState\\b` +
+          `|if \\([^)]*\\b${name}\\.isPending\\b[^)]*\\)\\s*return\\s*<LoadingState\\b`,
+      );
+    const found = webSources.flatMap((file) => {
+      const source = read(file);
+      return [...source.matchAll(/\bconst (\w+) = use\w*Query\w*\(/g)]
+        .map((m) => m[1] as string)
+        .filter((name) => handWritten(name).test(source))
+        .map((name) => `${file}: ${name}`);
+    });
+    expect(found.filter((entry) => !awaitingSettingsCard.includes(entry))).toEqual([]);
+  });
+
   it("avoids secure-context-only browser APIs (plain HTTP on a LAN address)", () => {
     // lib/uuid.ts and lib/browser.ts replace crypto.randomUUID and wrap navigator.clipboard.
     const found = allWeb

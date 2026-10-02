@@ -15,7 +15,7 @@ import {
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { ErrorState, LoadingState } from "@/components/states";
+import { combineQueries, QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -50,26 +50,16 @@ export function ErrorPagesTab({ siteId }: { siteId: string }) {
       <CardHeader>
         <CardTitle>{m.error_pages_title()}</CardTitle>
       </CardHeader>
-      {pages.isPending || features.isPending ? (
-        <CardContent>
-          <LoadingState />
-        </CardContent>
-      ) : pages.isLoadingError ? (
-        <CardContent>
-          <ErrorState error={pages.error} onRetry={() => void pages.refetch()} />
-        </CardContent>
-      ) : features.isLoadingError ? (
-        <CardContent>
-          <ErrorState error={features.error} onRetry={() => void features.refetch()} />
-        </CardContent>
-      ) : (
-        <ErrorPagesForm
-          key={pages.data.updatedAt ?? "default"}
-          siteId={siteId}
-          initial={pages.data}
-          availability={features.data.errorPages}
-        />
-      )}
+      <QueryView query={combineQueries(pages, features)} frame={CardContent}>
+        {([saved, available]) => (
+          <ErrorPagesForm
+            key={saved.updatedAt ?? "default"}
+            siteId={siteId}
+            initial={saved}
+            availability={available.errorPages}
+          />
+        )}
+      </QueryView>
     </Card>
   );
 }

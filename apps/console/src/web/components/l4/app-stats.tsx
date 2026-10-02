@@ -8,7 +8,7 @@ import { Panel, PanelHeader } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
 import { AnimatedValue } from "@/components/appica/effects";
 import { type Columns, DataTable } from "@/components/data-table";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { groupBuckets, SERIES_COLORS } from "@/lib/analytics";
 import { formatBytes, formatCompact, formatNumber, m } from "@/lib/i18n";
@@ -92,13 +92,9 @@ export function L4AppStats({
           />
         </Button>
       </div>
-      {stats.isPending ? (
-        <LoadingState />
-      ) : stats.isLoadingError ? (
-        <ErrorState error={stats.error} onRetry={() => stats.refetch()} />
-      ) : (
-        <StatsBody stats={stats.data} range={range} stale={stats.isPlaceholderData} />
-      )}
+      <QueryView query={stats}>
+        {(data) => <StatsBody stats={data} range={range} stale={stats.isPlaceholderData} />}
+      </QueryView>
     </section>
   );
 }

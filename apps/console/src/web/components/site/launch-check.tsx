@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { LinkProps } from "@tanstack/react-router";
 import { ResourceRow } from "@/components/resource-list";
 import { canaryLabel } from "@/components/site-status";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { certificateErrorText } from "@/lib/certificate-errors";
@@ -142,30 +142,28 @@ export function LaunchCheck({ site }: { site: Site }) {
         <CardTitle>{m.site_launch_title()}</CardTitle>
       </CardHeader>
       <CardContent>
-        {launch.isPending ? (
-          <LoadingState className="min-h-33" />
-        ) : launch.isLoadingError ? (
-          <ErrorState error={launch.error} onRetry={() => void launch.refetch()} />
-        ) : (
-          <ul className="flex flex-col animate-enter [&>li:last-child>a]:border-b-0">
-            <LaunchRow
-              item={dnsItem(launch.data)}
-              link={{ to: "/sites/$id", params: { id: site.id }, search: { tab: "domains" } }}
-              testId="launch-dns"
-            />
-            <LaunchRow
-              item={certificateItem(launch.data)}
-              link={{ to: "/sites/$id", params: { id: site.id }, search: { tab: "https" } }}
-              testId="launch-certificate"
-            />
-            <LaunchRow
-              item={nodesItem(site)}
-              link={{ to: "/clusters", search: { cluster: site.clusterId } }}
-              testId="launch-nodes"
-              pulse
-            />
-          </ul>
-        )}
+        <QueryView query={launch} loadingClassName="min-h-33">
+          {(data) => (
+            <ul className="flex flex-col animate-enter [&>li:last-child>a]:border-b-0">
+              <LaunchRow
+                item={dnsItem(data)}
+                link={{ to: "/sites/$id", params: { id: site.id }, search: { tab: "domains" } }}
+                testId="launch-dns"
+              />
+              <LaunchRow
+                item={certificateItem(data)}
+                link={{ to: "/sites/$id", params: { id: site.id }, search: { tab: "https" } }}
+                testId="launch-certificate"
+              />
+              <LaunchRow
+                item={nodesItem(site)}
+                link={{ to: "/clusters", search: { cluster: site.clusterId } }}
+                testId="launch-nodes"
+                pulse
+              />
+            </ul>
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );

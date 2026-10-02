@@ -20,6 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 import { expandPurgeTargets } from "@/lib/purge";
@@ -57,27 +58,16 @@ export function useQuickActions(): (action: QuickAction) => void {
 /** Holds the one dialog of the quick action in progress, for every page of the console. */
 export function QuickActionsProvider({ children }: { children: React.ReactNode }) {
   // The last action stays while its dialog closes; each start gets a fresh dialog.
-  const [state, setState] = React.useState<{
-    action: QuickAction | null;
-    open: boolean;
-    key: number;
-  }>({ action: null, open: false, key: 0 });
-  const run = React.useCallback(
-    (action: QuickAction) => setState((prev) => ({ action, open: true, key: prev.key + 1 })),
-    [],
-  );
-  const onOpenChange = React.useCallback((open: boolean) => {
-    if (!open) setState((prev) => ({ ...prev, open: false }));
-  }, []);
+  const dialog = useDialogState<QuickAction>();
   return (
-    <QuickActionsContext.Provider value={run}>
+    <QuickActionsContext.Provider value={dialog.show}>
       {children}
-      {state.action ? (
+      {dialog.value ? (
         <QuickActionDialog
-          key={state.key}
-          action={state.action}
-          open={state.open}
-          onOpenChange={onOpenChange}
+          key={dialog.key}
+          action={dialog.value}
+          open={dialog.open}
+          onOpenChange={dialog.onOpenChange}
         />
       ) : null}
     </QuickActionsContext.Provider>

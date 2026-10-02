@@ -12,7 +12,7 @@ import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,20 +66,14 @@ export function ClusterRolloutCard({ clusterId }: { clusterId: string }) {
       <CardHeader>
         <CardTitle>{m.rollout_title()}</CardTitle>
       </CardHeader>
-      {query.isPending ? (
-        <CardContent>
-          <LoadingState />
-        </CardContent>
-      ) : query.isLoadingError ? (
-        <CardContent>
-          <ErrorState error={query.error} onRetry={() => query.refetch()} />
-        </CardContent>
-      ) : (
-        <>
-          <RolloutStatus rollout={query.data} />
-          <PolicyForm rollout={query.data} />
-        </>
-      )}
+      <QueryView query={query} frame={CardContent}>
+        {(rollout) => (
+          <>
+            <RolloutStatus rollout={rollout} />
+            <PolicyForm rollout={rollout} />
+          </>
+        )}
+      </QueryView>
     </Card>
   );
 }

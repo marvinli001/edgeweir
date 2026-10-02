@@ -16,13 +16,14 @@ import { FormSelect } from "@/components/form-select";
 import { COMPRESSION_KEYS, compressionOf } from "@/components/site/compression-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { ErrorState, LoadingState } from "@/components/states";
+import { combineQueries, ErrorState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
 import { httpsBlockerText } from "@/lib/https-blockers";
 import { m } from "@/lib/i18n";
@@ -70,27 +71,29 @@ export function HttpsTab({ site }: { site: Site }) {
     void client.invalidateQueries().finally(() => setSettling(null));
   }, [waiting, certificates.data, client]);
 
-  if (policy.isPending || certificates.isPending) return <LoadingState />;
-  if (policy.isLoadingError)
-    return <ErrorState error={policy.error} onRetry={() => void policy.refetch()} />;
-  if (certificates.isLoadingError)
-    return <ErrorState error={certificates.error} onRetry={() => void certificates.refetch()} />;
-  if (bound && (usable(bound) || bound.source === "acme"))
-    return (
-      <div className="grid gap-4">
-        {bound.status === "ready" ? null : <CertificateState cert={bound} />}
-        <HttpsEditor
-          // Keyed by its own fields: saving compression on the cache tab keeps unsaved edits here.
-          key={JSON.stringify(httpsOf(policy.data))}
-          site={site}
-          initial={policy.data}
-          certificates={certificates.data}
-        />
-      </div>
-    );
   const requested = waiting ?? settling;
-  if (requested) return <RequestedCertificate cert={requested} />;
-  return <EnableHttps site={site} current={policy.data} />;
+  return (
+    <QueryView query={combineQueries(policy, certificates)}>
+      {([saved, list]) =>
+        bound && (usable(bound) || bound.source === "acme") ? (
+          <div className="grid gap-4">
+            {bound.status === "ready" ? null : <CertificateState cert={bound} />}
+            <HttpsEditor
+              // Keyed by its own fields: saving compression on the cache tab keeps unsaved edits here.
+              key={JSON.stringify(httpsOf(saved))}
+              site={site}
+              initial={saved}
+              certificates={list}
+            />
+          </div>
+        ) : requested ? (
+          <RequestedCertificate cert={requested} />
+        ) : (
+          <EnableHttps site={site} current={saved} />
+        )
+      }
+    </QueryView>
+  );
 }
 
 /** The status of a certificate being issued or that failed, with a retry. */
@@ -199,7 +202,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
   const [email, setEmail] = React.useState<string | null>(null);
   const [eab, setEab] = React.useState({ kid: "", key: "" });
   const [existing, setExisting] = React.useState<string | null>(null);
-  const [addCredential, setAddCredential] = React.useState(false);
+  const addCredential = useDialogState();
   const [customize, setCustomize] = React.useState(false);
   const [skipDns, setSkipDns] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -270,7 +273,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
                     {httpsBlockerText(blocker, caLabel(ca))}
                   </span>
                   {blocker.code === "dns_credential_missing" ? (
-                    <Button size="xs" variant="outline" onClick={() => setAddCredential(true)}>
+                    <Button size="xs" variant="outline" onClick={() => addCredential.show()}>
                       {m.cert_dns_add()}
                     </Button>
                   ) : null}
@@ -412,15 +415,15 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
           </Button>
         </CardFooter>
       </Collapsible>
-      {addCredential ? (
-        <DnsCredentialDialog
-          scope="credential"
-          onClose={() => setAddCredential(false)}
-          onSaved={async () => {
-            await client.invalidateQueries();
-          }}
-        />
-      ) : null}
+      <DnsCredentialDialog
+        key={addCredential.key}
+        scope="credential"
+        open={addCredential.open}
+        onOpenChange={addCredential.onOpenChange}
+        onSaved={async () => {
+          await client.invalidateQueries();
+        }}
+      />
     </Card>
   );
 }

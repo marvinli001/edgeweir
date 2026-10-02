@@ -11,13 +11,13 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { useOpenKey } from "@/hooks/use-open-key";
+import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
 import { orpc } from "@/lib/orpc";
@@ -83,8 +83,7 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
   });
   const promote = useMutation(orpc.upgrades.promote.mutationOptions());
   const cancel = useMutation(orpc.upgrades.cancel.mutationOptions());
-  const [open, setOpen] = React.useState(false);
-  const openKey = useOpenKey(open);
+  const dialog = useDialogState();
   const refreshed = async () => {
     await cache.invalidateQueries();
   };
@@ -94,94 +93,90 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
         <h2 className="flex-1 text-sm font-medium">{m.upgrade_title()}</h2>
         <Button
           variant="outline"
-          onClick={() => setOpen(true)}
+          onClick={() => dialog.show()}
           disabled={!groups.data?.length || !nodes.data?.length}
           data-testid="upgrade-create"
         >
           {m.upgrade_create()}
         </Button>
       </div>
-      {jobs.isPending ? (
-        <LoadingState />
-      ) : jobs.isLoadingError ? (
-        <ErrorState error={jobs.error} onRetry={() => void jobs.refetch()} />
-      ) : jobs.data.length === 0 ? (
-        <EmptyState title={m.upgrade_empty()} />
-      ) : (
-        jobs.data.map((job) => (
-          <Card key={job.id} data-testid={`upgrade-${job.version}`}>
-            <CardHeader className="flex flex-row flex-wrap items-center gap-3">
-              <CardTitle className="min-w-0 flex-1 break-all font-mono">{job.version}</CardTitle>
-              <Badge variant="outline">{stateLabel(job.state)}</Badge>
-              <span className="text-xs text-muted-foreground">{timeAgo(job.createdAt)}</span>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <span className="min-w-0 flex-1 break-all">
-                  {m.upgrade_group_label({ name: job.groupName })}
-                </span>
-                <span className="tabular-nums">
-                  {m.upgrade_progress({
-                    done: job.deliveries.filter((d) => d.state === "succeeded").length,
-                    total: job.deliveries.length,
-                  })}
-                </span>
-              </div>
-              <div className="divide-y rounded-xl border">
-                {job.deliveries.map((d) => (
-                  <Delivery key={d.id} delivery={d} version={job.version} jobState={job.state} />
-                ))}
-              </div>
-              {job.state === "canary" && job.deliveries.some((d) => d.state === "held") ? (
-                <div className="flex flex-wrap items-center gap-3">
-                  <SafetyNote>{m.upgrade_observe()}</SafetyNote>
+      <QueryView query={jobs} empty={<EmptyState title={m.upgrade_empty()} />}>
+        {(list) =>
+          list.map((job) => (
+            <Card key={job.id} data-testid={`upgrade-${job.version}`}>
+              <CardHeader className="flex flex-row flex-wrap items-center gap-3">
+                <CardTitle className="min-w-0 flex-1 break-all font-mono">{job.version}</CardTitle>
+                <Badge variant="outline">{stateLabel(job.state)}</Badge>
+                <span className="text-xs text-muted-foreground">{timeAgo(job.createdAt)}</span>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="min-w-0 flex-1 break-all">
+                    {m.upgrade_group_label({ name: job.groupName })}
+                  </span>
+                  <span className="tabular-nums">
+                    {m.upgrade_progress({
+                      done: job.deliveries.filter((d) => d.state === "succeeded").length,
+                      total: job.deliveries.length,
+                    })}
+                  </span>
+                </div>
+                <div className="divide-y rounded-xl border">
+                  {job.deliveries.map((d) => (
+                    <Delivery key={d.id} delivery={d} version={job.version} jobState={job.state} />
+                  ))}
+                </div>
+                {job.state === "canary" && job.deliveries.some((d) => d.state === "held") ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <SafetyNote>{m.upgrade_observe()}</SafetyNote>
+                    <ConfirmDialog
+                      title={m.upgrade_promote()}
+                      note={job.version}
+                      trigger={
+                        <Button
+                          disabled={!job.canPromote || promote.isPending}
+                          data-testid="upgrade-promote"
+                        >
+                          {m.upgrade_promote()}
+                        </Button>
+                      }
+                      onConfirm={async () => {
+                        await promote.mutateAsync({ id: job.id });
+                        await refreshed();
+                      }}
+                    />
+                  </div>
+                ) : null}
+                {["canary", "rollout"].includes(job.state) ? (
                   <ConfirmDialog
-                    title={m.upgrade_promote()}
-                    note={job.version}
+                    title={m.upgrade_cancel()}
+                    note={m.upgrade_cancel_note()}
+                    destructive
                     trigger={
                       <Button
-                        disabled={!job.canPromote || promote.isPending}
-                        data-testid="upgrade-promote"
+                        variant="outline"
+                        disabled={
+                          cancel.isPending || job.deliveries.some((d) => d.state === "running")
+                        }
                       >
-                        {m.upgrade_promote()}
+                        {m.upgrade_cancel()}
                       </Button>
                     }
                     onConfirm={async () => {
-                      await promote.mutateAsync({ id: job.id });
+                      await cancel.mutateAsync({ id: job.id });
                       await refreshed();
                     }}
                   />
-                </div>
-              ) : null}
-              {["canary", "rollout"].includes(job.state) ? (
-                <ConfirmDialog
-                  title={m.upgrade_cancel()}
-                  note={m.upgrade_cancel_note()}
-                  destructive
-                  trigger={
-                    <Button
-                      variant="outline"
-                      disabled={
-                        cancel.isPending || job.deliveries.some((d) => d.state === "running")
-                      }
-                    >
-                      {m.upgrade_cancel()}
-                    </Button>
-                  }
-                  onConfirm={async () => {
-                    await cancel.mutateAsync({ id: job.id });
-                    await refreshed();
-                  }}
-                />
-              ) : null}
-            </CardContent>
-          </Card>
-        ))
-      )}
+                ) : null}
+              </CardContent>
+            </Card>
+          ))
+        }
+      </QueryView>
       <UpgradeDialog
-        key={openKey}
-        open={open}
-        onOpenChange={setOpen}
+        key={dialog.key}
+        open={dialog.open}
+        onOpenChange={dialog.onOpenChange}
         groups={groups.data ?? []}
         nodes={nodes.data ?? []}
         jobs={jobs.data ?? []}
@@ -198,13 +193,11 @@ function UpgradeDialog({
   jobs,
   onCreated,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   groups: NodeGroup[];
   nodes: Node[];
   jobs: UpgradeJob[];
   onCreated: () => Promise<void>;
-}) {
+} & DialogProps) {
   const create = useMutation(orpc.upgrades.create.mutationOptions());
   const latest = useQuery({
     ...orpc.upgrades.latestVersion.queryOptions(),

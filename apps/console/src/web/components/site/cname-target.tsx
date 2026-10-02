@@ -2,12 +2,14 @@ import type { SiteLaunch } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
 import { CopyButton } from "@/components/copy-button";
 import { PointingStatus, useSiteLaunch } from "@/components/site/launch-check";
-import { ErrorState, LoadingState } from "@/components/states";
+import { type QueryResult, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
 import { coversDomain, curlCheck } from "@/lib/launch";
-import { orpc } from "@/lib/orpc";
+import { type client, orpc } from "@/lib/orpc";
+
+type SiteDnsTarget = Awaited<ReturnType<typeof client.dns.siteTarget>>;
 
 /**
  * How the site's domains reach the cluster: with platform DNS the CNAME
@@ -24,10 +26,15 @@ export function DnsSetupCard({ siteId }: { siteId: string }) {
   );
   // The lookups take seconds: the CNAME target does not wait for them.
   const launch = useSiteLaunch(siteId);
-  if (target.isPending) return <LoadingState className="min-h-24" />;
-  if (target.isLoadingError)
-    return <ErrorState error={target.error} onRetry={() => void target.refetch()} />;
-  const cname = target.data.target;
+  return (
+    <QueryView query={target} loadingClassName="min-h-24">
+      {(data) => <DnsSetup target={data} launch={launch} />}
+    </QueryView>
+  );
+}
+
+function DnsSetup({ target, launch }: { target: SiteDnsTarget; launch: QueryResult<SiteLaunch> }) {
+  const cname = target.target;
   return (
     <Card data-testid={cname ? "cname-target" : "edge-addresses"}>
       <CardHeader>
@@ -42,16 +49,16 @@ export function DnsSetupCard({ siteId }: { siteId: string }) {
               </code>
               <CopyButton iconOnly value={cname} />
               <Badge variant="outline" data-testid="cname-target-status">
-                {target.data.mode === "manual"
+                {target.mode === "manual"
                   ? m.dns_mode_manual()
-                  : target.data.published
-                    ? target.data.healthy
+                  : target.published
+                    ? target.healthy
                       ? m.dns_applied()
                       : m.dns_no_healthy_nodes()
                     : m.dns_pending()}
               </Badge>
             </div>
-            {target.data.lines.map((line) => (
+            {target.lines.map((line) => (
               <div key={line.name} className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="text-muted-foreground">{line.name}</span>
                 <code className="min-w-0 flex-1 break-all">{line.target}</code>
@@ -60,21 +67,16 @@ export function DnsSetupCard({ siteId }: { siteId: string }) {
             ))}
           </>
         ) : null}
-        {launch.isPending ? (
-          <LoadingState className="min-h-20" />
-        ) : launch.isLoadingError ? (
-          <ErrorState error={launch.error} onRetry={() => void launch.refetch()} />
-        ) : (
-          <>
-            {cname ? null : (
-              <EdgeAddresses
-                addresses={launch.data.addresses}
-                online={launch.data.delivery.totalNodes}
-              />
-            )}
-            <DomainPointing launch={launch.data} checks={!cname} />
-          </>
-        )}
+        <QueryView query={launch} loadingClassName="min-h-20">
+          {(data) => (
+            <>
+              {cname ? null : (
+                <EdgeAddresses addresses={data.addresses} online={data.delivery.totalNodes} />
+              )}
+              <DomainPointing launch={data} checks={!cname} />
+            </>
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );

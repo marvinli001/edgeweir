@@ -10,13 +10,14 @@ import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { certificateErrorText } from "@/lib/certificate-errors";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -35,8 +36,8 @@ function CertificatesPage() {
   const remove = useMutation(orpc.certificates.delete.mutationOptions());
   const renew = useMutation(orpc.certificates.renew.mutationOptions());
   const removeDns = useMutation(orpc.dnsCredentials.delete.mutationOptions());
-  const [dialog, setDialog] = React.useState<"upload" | "request" | "dns" | null>(null);
-  const [editing, setEditing] = React.useState<EditableCredential | null>(null);
+  // A DNS credential is edited in the dialog that adds one ("dns").
+  const dialog = useDialogState<"upload" | "request" | "dns" | EditableCredential>();
   const refresh = () => client.invalidateQueries();
   const status = {
     pending: m.cert_status_pending,
@@ -49,158 +50,156 @@ function CertificatesPage() {
       title={m.cert_title()}
       actions={
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setDialog("dns")}>
+          <Button variant="outline" onClick={() => dialog.show("dns")}>
             {m.cert_dns_add()}
           </Button>
-          <Button variant="outline" onClick={() => setDialog("upload")} data-testid="cert-upload">
+          <Button variant="outline" onClick={() => dialog.show("upload")} data-testid="cert-upload">
             {m.cert_upload()}
           </Button>
-          <Button onClick={() => setDialog("request")} data-testid="cert-request">
+          <Button onClick={() => dialog.show("request")} data-testid="cert-request">
             {m.cert_request()}
           </Button>
         </div>
       }
     >
-      {certificates.isPending ? (
-        <LoadingState />
-      ) : certificates.isLoadingError ? (
-        <ErrorState error={certificates.error} onRetry={() => void certificates.refetch()} />
-      ) : !certificates.data.length ? (
-        <EmptyState title={m.cert_empty()}>
-          <Button onClick={() => setDialog("request")}>{m.cert_request()}</Button>
-        </EmptyState>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {certificates.data.map((cert) => (
-            <Card key={cert.id} className="animate-enter" data-testid="certificate-card">
-              <CardHeader className="flex-row items-center justify-between">
-                <CardTitle className="truncate">{cert.name}</CardTitle>
-                <Badge variant={cert.status === "error" ? "destructive" : "secondary"}>
-                  {status[cert.status]()}
-                </Badge>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="break-all text-sm">{cert.names.join(", ")}</p>
-                {cert.lastError ? (
-                  <SafetyNote className="text-destructive" data-testid="certificate-error">
-                    {certificateErrorText(cert.lastError)}
-                  </SafetyNote>
-                ) : null}
-                {cert.notAfter ? (
-                  <p className="text-sm text-muted-foreground">
-                    {m.cert_expires({
-                      date: formatDateTime(cert.notAfter),
-                      days: Math.max(
-                        0,
-                        Math.ceil((Date.parse(cert.notAfter) - Date.now()) / 86_400_000),
-                      ),
-                    })}
-                  </p>
-                ) : null}
-                <p className="text-sm text-muted-foreground">
-                  {cert.autoRenew ? m.cert_auto_on() : m.cert_auto_off()}
-                </p>
-                {cert.renewAt && cert.autoRenew ? (
-                  <p className="text-xs text-muted-foreground">
-                    {m.cert_renew_at({ date: formatDateTime(cert.renewAt) })}
-                  </p>
-                ) : null}
-                <div className="flex justify-end gap-2">
-                  {cert.source === "acme" ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={renew.isPending || ["pending", "issuing"].includes(cert.status)}
-                      onClick={async () => {
-                        try {
-                          await renew.mutateAsync({ id: cert.id });
-                          await refresh();
-                        } catch (e) {
-                          toast.error(errorMessage(e));
-                        }
-                      }}
-                    >
-                      {m.cert_renew()}
-                    </Button>
+      <QueryView
+        query={certificates}
+        empty={
+          <EmptyState title={m.cert_empty()}>
+            <Button onClick={() => dialog.show("request")}>{m.cert_request()}</Button>
+          </EmptyState>
+        }
+      >
+        {(list) => (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {list.map((cert) => (
+              <Card key={cert.id} className="animate-enter" data-testid="certificate-card">
+                <CardHeader className="flex-row items-center justify-between">
+                  <CardTitle className="truncate">{cert.name}</CardTitle>
+                  <Badge variant={cert.status === "error" ? "destructive" : "secondary"}>
+                    {status[cert.status]()}
+                  </Badge>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="break-all text-sm">{cert.names.join(", ")}</p>
+                  {cert.lastError ? (
+                    <SafetyNote className="text-destructive" data-testid="certificate-error">
+                      {certificateErrorText(cert.lastError)}
+                    </SafetyNote>
                   ) : null}
-                  <ConfirmDialog
-                    title={m.cert_delete_confirm({ name: cert.name })}
-                    destructive
-                    trigger={
-                      <Button size="sm" variant="ghost">
-                        {m.common_delete()}
+                  {cert.notAfter ? (
+                    <p className="text-sm text-muted-foreground">
+                      {m.cert_expires({
+                        date: formatDateTime(cert.notAfter),
+                        days: Math.max(
+                          0,
+                          Math.ceil((Date.parse(cert.notAfter) - Date.now()) / 86_400_000),
+                        ),
+                      })}
+                    </p>
+                  ) : null}
+                  <p className="text-sm text-muted-foreground">
+                    {cert.autoRenew ? m.cert_auto_on() : m.cert_auto_off()}
+                  </p>
+                  {cert.renewAt && cert.autoRenew ? (
+                    <p className="text-xs text-muted-foreground">
+                      {m.cert_renew_at({ date: formatDateTime(cert.renewAt) })}
+                    </p>
+                  ) : null}
+                  <div className="flex justify-end gap-2">
+                    {cert.source === "acme" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={renew.isPending || ["pending", "issuing"].includes(cert.status)}
+                        onClick={async () => {
+                          try {
+                            await renew.mutateAsync({ id: cert.id });
+                            await refresh();
+                          } catch (e) {
+                            toast.error(errorMessage(e));
+                          }
+                        }}
+                      >
+                        {m.cert_renew()}
                       </Button>
-                    }
-                    onConfirm={async () => {
-                      await remove.mutateAsync({ id: cert.id });
-                      await refresh();
-                    }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                    ) : null}
+                    <ConfirmDialog
+                      title={m.cert_delete_confirm({ name: cert.name })}
+                      destructive
+                      trigger={
+                        <Button size="sm" variant="ghost">
+                          {m.common_delete()}
+                        </Button>
+                      }
+                      onConfirm={async () => {
+                        await remove.mutateAsync({ id: cert.id });
+                        await refresh();
+                      }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </QueryView>
       <Card>
         <CardHeader>
           <CardTitle>{m.cert_dns_title()}</CardTitle>
         </CardHeader>
         <CardContent>
-          {credentials.isPending ? (
-            <LoadingState />
-          ) : credentials.isLoadingError ? (
-            <ErrorState error={credentials.error} onRetry={() => void credentials.refetch()} />
-          ) : !credentials.data.length ? (
-            <EmptyState title={m.cert_dns_empty()} />
-          ) : (
-            credentials.data.map((credential) => (
-              <div
-                key={credential.id}
-                className="flex flex-wrap items-center justify-between gap-2 border-b py-3 last:border-0"
-              >
-                <div className="min-w-48 flex-1">
-                  <p className="font-medium break-words">{credential.name}</p>
-                  <p className="text-sm break-words text-muted-foreground">{credential.zone}</p>
+          <QueryView query={credentials} empty={<EmptyState title={m.cert_dns_empty()} />}>
+            {(list) =>
+              list.map((credential) => (
+                <div
+                  key={credential.id}
+                  className="flex flex-wrap items-center justify-between gap-2 border-b py-3 last:border-0"
+                >
+                  <div className="min-w-48 flex-1">
+                    <p className="font-medium break-words">{credential.name}</p>
+                    <p className="text-sm break-words text-muted-foreground">{credential.zone}</p>
+                  </div>
+                  <Badge variant="outline">{providerLabel(credential.provider)}</Badge>
+                  <Button variant="ghost" size="sm" onClick={() => dialog.show(credential)}>
+                    {m.common_edit()}
+                  </Button>
+                  <ConfirmDialog
+                    title={m.cert_delete_confirm({ name: credential.name })}
+                    destructive
+                    trigger={
+                      <Button variant="ghost" size="sm">
+                        {m.common_delete()}
+                      </Button>
+                    }
+                    onConfirm={async () => {
+                      await removeDns.mutateAsync({ id: credential.id });
+                      await refresh();
+                    }}
+                  />
                 </div>
-                <Badge variant="outline">{providerLabel(credential.provider)}</Badge>
-                <Button variant="ghost" size="sm" onClick={() => setEditing(credential)}>
-                  {m.common_edit()}
-                </Button>
-                <ConfirmDialog
-                  title={m.cert_delete_confirm({ name: credential.name })}
-                  destructive
-                  trigger={
-                    <Button variant="ghost" size="sm">
-                      {m.common_delete()}
-                    </Button>
-                  }
-                  onConfirm={async () => {
-                    await removeDns.mutateAsync({ id: credential.id });
-                    await refresh();
-                  }}
-                />
-              </div>
-            ))
-          )}
+              ))
+            }
+          </QueryView>
         </CardContent>
       </Card>
-      {dialog === "upload" ? <UploadDialog onClose={() => setDialog(null)} /> : null}
-      {dialog === "request" ? (
+      {dialog.value === "upload" ? (
+        <UploadDialog key={dialog.key} open={dialog.open} onOpenChange={dialog.onOpenChange} />
+      ) : dialog.value === "request" ? (
         <RequestDialog
+          key={dialog.key}
           credentials={credentials.data ?? []}
           acmeDirectory={settings.data?.acmeDirectory ?? null}
-          onClose={() => setDialog(null)}
+          open={dialog.open}
+          onOpenChange={dialog.onOpenChange}
         />
-      ) : null}
-      {dialog === "dns" || editing ? (
+      ) : dialog.value ? (
         <DnsCredentialDialog
+          key={dialog.key}
           scope="credential"
-          initial={editing ?? undefined}
-          onClose={() => {
-            setDialog(null);
-            setEditing(null);
-          }}
+          initial={dialog.value === "dns" ? undefined : dialog.value}
+          open={dialog.open}
+          onOpenChange={dialog.onOpenChange}
           onSaved={async () => {
             await refresh();
           }}
@@ -218,17 +217,15 @@ function TextField({ id, label, type = "text" }: { id: string; label: string; ty
     </Field>
   );
 }
-function UploadDialog({ onClose }: { onClose: () => void }) {
+function UploadDialog({ open, onOpenChange }: DialogProps) {
   const client = useQueryClient();
   const upload = useMutation(orpc.certificates.upload.mutationOptions());
   const [chain, setChain] = React.useState("");
   const [key, setKey] = React.useState("");
   return (
     <FormDialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+      open={open}
+      onOpenChange={onOpenChange}
       title={m.cert_upload()}
       submitLabel={m.cert_upload()}
       submitTestId="cert-upload-submit"
@@ -240,7 +237,7 @@ function UploadDialog({ onClose }: { onClose: () => void }) {
         });
         setKey("");
         await client.invalidateQueries();
-        onClose();
+        onOpenChange(false);
       }}
     >
       <TextField id="certName" label={m.cert_name()} />
@@ -290,13 +287,13 @@ function UploadDialog({ onClose }: { onClose: () => void }) {
 function RequestDialog({
   credentials,
   acmeDirectory,
-  onClose,
+  open,
+  onOpenChange,
 }: {
   credentials: { id: string; name: string }[];
   /** EDGEWEIR_ACME_DIRECTORY: every certificate uses it, whatever CA is chosen. */
   acmeDirectory: string | null;
-  onClose: () => void;
-}) {
+} & DialogProps) {
   const client = useQueryClient();
   const request = useMutation(orpc.certificates.request.mutationOptions());
   const [ca, setCa] = React.useState("letsencrypt");
@@ -309,10 +306,8 @@ function RequestDialog({
   const wildcard = challenge === "http01" && parsedNames.some((n) => n.startsWith("*."));
   return (
     <FormDialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+      open={open}
+      onOpenChange={onOpenChange}
       title={m.cert_request()}
       submitLabel={m.cert_request()}
       submitTestId="cert-request-submit"
@@ -330,7 +325,7 @@ function RequestDialog({
             : {}),
         });
         await client.invalidateQueries();
-        onClose();
+        onOpenChange(false);
       }}
     >
       <TextField id="certName" label={m.cert_name()} />

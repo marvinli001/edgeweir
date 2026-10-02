@@ -2,15 +2,16 @@ import type { AnalyticsRange, TrafficTopItem } from "@edgeweir/contract";
 import { RefreshIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import * as React from "react";
+import type * as React from "react";
 import { StatusCodesCard, TopListCard } from "@/components/analytics/breakdowns";
 import { type DetailTarget, MetricDetailDialog } from "@/components/analytics/detail-dialog";
 import { MetricChart } from "@/components/analytics/metric-chart";
 import { MetricCard } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
 import { TopRequestsCard } from "@/components/analytics/top-requests";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
+import { useDialogState } from "@/hooks/use-dialog-state";
 import { detailViews, METRICS, relativeChange } from "@/lib/analytics";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
@@ -45,7 +46,7 @@ export function AnalyticsSection({
   delay?: number;
 }) {
   // The card whose breakdown dialog is open.
-  const [detail, setDetail] = React.useState<string | null>(null);
+  const detail = useDialogState<string>();
   const available = { site: !siteId, node: true };
   const live = {
     placeholderData: keepPreviousData,
@@ -75,7 +76,7 @@ export function AnalyticsSection({
   });
   // Without top lists the status card has the row to itself.
   const statusWide = topLists.length === 0;
-  const metric = METRICS.find((candidate) => candidate.id === detail);
+  const metric = METRICS.find((candidate) => candidate.id === detail.value);
   const target: DetailTarget | null = metric
     ? {
         id: metric.id,
@@ -83,9 +84,9 @@ export function AnalyticsSection({
         views: detailViews(metric.details, available),
         metric,
       }
-    : detail === "status-codes"
+    : detail.value === "status-codes"
       ? {
-          id: detail,
+          id: detail.value,
           title: m.analytics_status_codes(),
           views: detailViews([{ kind: "status" }], available),
         }
@@ -115,97 +116,96 @@ export function AnalyticsSection({
           />
         </Button>
       </div>
-      {traffic.isPending ? (
-        <LoadingState />
-      ) : traffic.isLoadingError ? (
-        <ErrorState error={traffic.error} onRetry={() => traffic.refetch()} />
-      ) : (
-        <div
-          className={cn(
-            "flex flex-col gap-3 transition-opacity duration-300",
-            stale && "opacity-60",
-          )}
-          aria-busy={stale}
-          data-testid="analytics"
-        >
-          {(["lg", "sm"] as const).map((size, row) => (
+      <QueryView query={traffic}>
+        {(series) => (
+          <div
+            className={cn(
+              "flex flex-col gap-3 transition-opacity duration-300",
+              stale && "opacity-60",
+            )}
+            aria-busy={stale}
+            data-testid="analytics"
+          >
+            {(["lg", "sm"] as const).map((size, row) => (
+              <div
+                key={size}
+                className={cn(
+                  "grid gap-3",
+                  size === "lg" ? "@3xl/main:grid-cols-2" : "grid-cols-2 @3xl/main:grid-cols-4",
+                )}
+              >
+                {METRICS.filter((metric) => metric.size === size).map((metric, index) => {
+                  const data = series.points.map((point) => ({
+                    time: point.time,
+                    value: metric.point(point, series.bucketSeconds),
+                  }));
+                  const total = metric.total(series.totals);
+                  const open = () => detail.show(metric.id);
+                  return (
+                    <div key={metric.id} {...enter(row * 2 + index)}>
+                      <MetricCard
+                        title={metric.title()}
+                        value={total === null ? "—" : metric.format(total)}
+                        change={relativeChange(total, metric.total(series.previous))}
+                        better={metric.better}
+                        size={size}
+                        onOpen={open}
+                        testId={`metric-${metric.id}`}
+                      >
+                        <MetricChart
+                          data={data}
+                          label={metric.title()}
+                          format={metric.format}
+                          axis={size === "lg"}
+                          domain={metric.domain}
+                          onClick={open}
+                        />
+                      </MetricCard>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
             <div
-              key={size}
               className={cn(
-                "grid gap-3",
-                size === "lg" ? "@3xl/main:grid-cols-2" : "grid-cols-2 @3xl/main:grid-cols-4",
+                "grid gap-3 @3xl/main:grid-cols-2",
+                topLists.length > 1 && "@4xl/main:grid-cols-3",
               )}
             >
-              {METRICS.filter((metric) => metric.size === size).map((metric, index) => {
-                const data = traffic.data.points.map((point) => ({
-                  time: point.time,
-                  value: metric.point(point, traffic.data.bucketSeconds),
-                }));
-                const total = metric.total(traffic.data.totals);
-                const open = () => setDetail(metric.id);
+              <div {...enter(6, statusWide ? "@3xl/main:col-span-2" : undefined)}>
+                <StatusCodesCard
+                  totals={series.totals}
+                  wide={statusWide}
+                  onOpen={() => detail.show("status-codes")}
+                />
+              </div>
+              {topLists.map((list, index) => {
+                const items: TrafficTopItem[] =
+                  (list.id === "sites" ? topSites.data : topNodes.data) ?? [];
                 return (
-                  <div key={metric.id} {...enter(row * 2 + index)}>
-                    <MetricCard
-                      title={metric.title()}
-                      value={total === null ? "—" : metric.format(total)}
-                      change={relativeChange(total, metric.total(traffic.data.previous))}
-                      better={metric.better}
-                      size={size}
-                      onOpen={open}
-                      testId={`metric-${metric.id}`}
-                    >
-                      <MetricChart
-                        data={data}
-                        label={metric.title()}
-                        format={metric.format}
-                        axis={size === "lg"}
-                        domain={metric.domain}
-                        onClick={open}
-                      />
-                    </MetricCard>
+                  <div key={list.id} {...enter(7 + index)}>
+                    <TopListCard
+                      title={list.title}
+                      items={items}
+                      renderLink={list.renderLink}
+                      showParent={list.showParent}
+                      testId={`top-${list.id}`}
+                    />
                   </div>
                 );
               })}
             </div>
-          ))}
-          <div
-            className={cn(
-              "grid gap-3 @3xl/main:grid-cols-2",
-              topLists.length > 1 && "@4xl/main:grid-cols-3",
-            )}
-          >
-            <div {...enter(6, statusWide ? "@3xl/main:col-span-2" : undefined)}>
-              <StatusCodesCard
-                totals={traffic.data.totals}
-                wide={statusWide}
-                onOpen={() => setDetail("status-codes")}
-              />
+            <div className="grid gap-3 @3xl/main:grid-cols-2">
+              <TopRequestsCard range={range} siteId={siteId} by="url" />
+              <TopRequestsCard range={range} siteId={siteId} by="ip" />
             </div>
-            {topLists.map((list, index) => {
-              const items: TrafficTopItem[] =
-                (list.id === "sites" ? topSites.data : topNodes.data) ?? [];
-              return (
-                <div key={list.id} {...enter(7 + index)}>
-                  <TopListCard
-                    title={list.title}
-                    items={items}
-                    renderLink={list.renderLink}
-                    showParent={list.showParent}
-                    testId={`top-${list.id}`}
-                  />
-                </div>
-              );
-            })}
           </div>
-          <div className="grid gap-3 @3xl/main:grid-cols-2">
-            <TopRequestsCard range={range} siteId={siteId} by="url" />
-            <TopRequestsCard range={range} siteId={siteId} by="ip" />
-          </div>
-        </div>
-      )}
+        )}
+      </QueryView>
       <MetricDetailDialog
         target={target}
-        onClose={() => setDetail(null)}
+        open={detail.open}
+        onOpenChange={detail.onOpenChange}
         range={range}
         onRangeChange={onRangeChange}
         siteId={siteId}

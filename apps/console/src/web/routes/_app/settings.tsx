@@ -3,28 +3,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
-import { FormSelect } from "@/components/form-select";
+import { FormSelect, OptionSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { useTheme } from "@/components/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import {
   formatDateTime,
   getLocale,
-  type Locale,
   localeLabels,
   locales,
   m,
@@ -49,43 +41,26 @@ function SettingsPage() {
           <FieldGroup className="sm:flex-row">
             <Field>
               <FieldLabel>{m.user_menu_language()}</FieldLabel>
-              <Select
+              <OptionSelect
                 value={getLocale()}
-                onValueChange={(value) => value && setLocale(value as Locale)}
-                items={locales.map((l) => ({ label: localeLabels[l](), value: l }))}
-              >
-                <SelectTrigger className="w-48" data-testid="settings-language">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {locales.map((l) => (
-                    <SelectItem key={l} value={l}>
-                      {localeLabels[l]()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={locales.map((l) => ({ label: localeLabels[l](), value: l }))}
+                onChange={setLocale}
+                className="w-48"
+                testId="settings-language"
+              />
             </Field>
             <Field>
               <FieldLabel>{m.user_menu_theme()}</FieldLabel>
-              <Select
+              <OptionSelect
                 value={theme}
-                onValueChange={(value) => value && setTheme(value as "light" | "dark" | "system")}
-                items={[
+                options={[
                   { label: m.theme_light(), value: "light" },
                   { label: m.theme_dark(), value: "dark" },
                   { label: m.theme_system(), value: "system" },
                 ]}
-              >
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="light">{m.theme_light()}</SelectItem>
-                  <SelectItem value="dark">{m.theme_dark()}</SelectItem>
-                  <SelectItem value="system">{m.theme_system()}</SelectItem>
-                </SelectContent>
-              </Select>
+                onChange={setTheme}
+                className="w-48"
+              />
             </Field>
           </FieldGroup>
         </CardContent>
@@ -151,52 +126,52 @@ function ApiKeysCard() {
             <SafetyNote>{m.settings_api_key_created()}</SafetyNote>
           </Field>
         ) : null}
-        {keys.isPending ? (
-          <LoadingState className="min-h-24" />
-        ) : keys.isLoadingError ? (
-          <ErrorState error={keys.error} onRetry={() => keys.refetch()} />
-        ) : keys.data.length === 0 ? (
-          <EmptyState title={m.settings_api_keys_empty()} />
-        ) : (
-          <ul className="divide-y rounded-2xl border bg-card text-sm shadow-xs">
-            {keys.data.map((k, index) => (
-              <li
-                key={k.id}
-                className="flex flex-wrap items-center gap-3 px-3 py-2.5 animate-enter"
-                style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
-              >
-                <span className="font-medium">{k.name ?? "—"}</span>
-                <code className="text-xs text-muted-foreground">{k.prefix}…</code>
-                <Badge variant="outline">
-                  {k.scope === "read" ? m.access_key_read() : m.access_key_write()}
-                </Badge>
-                {!k.enabled ? <Badge variant="secondary">{m.access_key_revoked()}</Badge> : null}
-                <span className="text-xs text-muted-foreground">
-                  {m.access_key_last_used({
-                    time: k.lastUsedAt ? timeAgo(k.lastUsedAt) : m.common_never(),
-                  })}
-                </span>
-                <span
-                  className="ml-auto text-xs text-muted-foreground"
-                  title={formatDateTime(new Date(k.createdAt).toISOString())}
+        <QueryView
+          query={keys}
+          loadingClassName="min-h-24"
+          empty={<EmptyState title={m.settings_api_keys_empty()} />}
+        >
+          {(list) => (
+            <ul className="divide-y rounded-2xl border bg-card text-sm shadow-xs">
+              {list.map((k, index) => (
+                <li
+                  key={k.id}
+                  className="flex flex-wrap items-center gap-3 px-3 py-2.5 animate-enter"
+                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
                 >
-                  {timeAgo(new Date(k.createdAt).toISOString())}
-                </span>
-                {k.enabled ? (
-                  <ConfirmDialog
-                    title={m.access_key_revoke()}
-                    trigger={
-                      <Button size="sm" variant="outline" disabled={revoke.isPending}>
-                        {m.access_key_revoke()}
-                      </Button>
-                    }
-                    onConfirm={() => revoke.mutateAsync({ id: k.id })}
-                  />
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
+                  <span className="font-medium">{k.name ?? "—"}</span>
+                  <code className="text-xs text-muted-foreground">{k.prefix}…</code>
+                  <Badge variant="outline">
+                    {k.scope === "read" ? m.access_key_read() : m.access_key_write()}
+                  </Badge>
+                  {!k.enabled ? <Badge variant="secondary">{m.access_key_revoked()}</Badge> : null}
+                  <span className="text-xs text-muted-foreground">
+                    {m.access_key_last_used({
+                      time: k.lastUsedAt ? timeAgo(k.lastUsedAt) : m.common_never(),
+                    })}
+                  </span>
+                  <span
+                    className="ml-auto text-xs text-muted-foreground"
+                    title={formatDateTime(new Date(k.createdAt).toISOString())}
+                  >
+                    {timeAgo(new Date(k.createdAt).toISOString())}
+                  </span>
+                  {k.enabled ? (
+                    <ConfirmDialog
+                      title={m.access_key_revoke()}
+                      trigger={
+                        <Button size="sm" variant="outline" disabled={revoke.isPending}>
+                          {m.access_key_revoke()}
+                        </Button>
+                      }
+                      onConfirm={() => revoke.mutateAsync({ id: k.id })}
+                    />
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );

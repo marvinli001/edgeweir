@@ -11,7 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
-import { FormSelect } from "@/components/form-select";
+import { FormSelect, OptionSelect } from "@/components/form-select";
 import { L4NodesWarning } from "@/components/l4/common";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
@@ -34,13 +34,6 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { m } from "@/lib/i18n";
 import {
@@ -352,42 +345,25 @@ function AppForm({
           <L4NodesWarning cluster={clusterName} nodes={pools.data.nodesWithoutL4} />
         ) : null}
         <div className="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
-          <Field>
-            <FieldLabel htmlFor={id("protocol")}>{m.l4_protocol()}</FieldLabel>
-            <Select
-              value={draft.protocol}
-              onValueChange={(value) => {
-                if (!value) return;
-                const protocol = value as L4Protocol;
-                set({
-                  protocol,
-                  // UDP takes no PROXY protocol.
-                  ...(protocol === "udp"
-                    ? { acceptProxyProtocol: false, proxyProtocolVersion: 0 }
-                    : {}),
-                  ...(idleEdited
-                    ? {}
-                    : { idleTimeoutSeconds: String(L4_APP_DEFAULTS.idleTimeoutSeconds[protocol]) }),
-                });
-              }}
-              items={L4_PROTOCOLS.map((p) => ({ label: p.label, value: p.value }))}
-            >
-              <SelectTrigger
-                id={id("protocol")}
-                className="w-full"
-                data-testid="l4-app-protocol-select"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {L4_PROTOCOLS.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
+          <FormSelect
+            id={id("protocol")}
+            label={m.l4_protocol()}
+            value={draft.protocol}
+            options={L4_PROTOCOLS}
+            onChange={(protocol) =>
+              set({
+                protocol,
+                // UDP takes no PROXY protocol.
+                ...(protocol === "udp"
+                  ? { acceptProxyProtocol: false, proxyProtocolVersion: 0 }
+                  : {}),
+                ...(idleEdited
+                  ? {}
+                  : { idleTimeoutSeconds: String(L4_APP_DEFAULTS.idleTimeoutSeconds[protocol]) }),
+              })
+            }
+            testId="l4-app-protocol-select"
+          />
           <Field data-invalid={refusal?.field === "port" || undefined}>
             <FieldLabel htmlFor={id("port")}>{m.l4_port()}</FieldLabel>
             <Input
@@ -456,32 +432,17 @@ function AppForm({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Field data-disabled={udp || undefined}>
               <FieldLabel htmlFor={id("proxy-send")}>{m.l4_proxy_send()}</FieldLabel>
-              <Select
+              <OptionSelect
+                id={id("proxy-send")}
                 value={String(draft.proxyProtocolVersion)}
-                disabled={udp}
-                onValueChange={(value) =>
-                  value !== null && set({ proxyProtocolVersion: Number(value) })
-                }
-                items={PROXY_VERSIONS.map((v) => ({
+                options={PROXY_VERSIONS.map((v) => ({
                   label: proxyVersionLabel(v),
                   value: String(v),
                 }))}
-              >
-                <SelectTrigger
-                  id={id("proxy-send")}
-                  className="w-full"
-                  data-testid="l4-app-proxy-send"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROXY_VERSIONS.map((v) => (
-                    <SelectItem key={v} value={String(v)}>
-                      {proxyVersionLabel(v)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(value) => set({ proxyProtocolVersion: Number(value) })}
+                disabled={udp}
+                testId="l4-app-proxy-send"
+              />
             </Field>
             <SwitchField
               id={id("proxy-accept")}
@@ -809,23 +770,16 @@ function ListPicker({
           })
         )}
         {remaining.length > 0 && value.length < MAX_L4_APP_LISTS ? (
-          <Select
+          <OptionSelect
             value={null}
-            onValueChange={(listId) => {
-              if (listId) onChange([...value, String(listId)]);
-            }}
-          >
-            <SelectTrigger size="sm" aria-label={m.l4_list_add()} data-testid={`${testId}-add`}>
-              <SelectValue placeholder={m.l4_list_add()} />
-            </SelectTrigger>
-            <SelectContent>
-              {remaining.map((list) => (
-                <SelectItem key={list.id} value={list.id}>
-                  {list.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            options={remaining.map((list) => ({ value: list.id, label: list.name }))}
+            onChange={(listId) => onChange([...value, listId])}
+            placeholder={m.l4_list_add()}
+            label={m.l4_list_add()}
+            size="sm"
+            className="w-fit"
+            testId={`${testId}-add`}
+          />
         ) : null}
       </div>
     </div>

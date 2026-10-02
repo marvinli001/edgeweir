@@ -10,21 +10,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
+import { OptionSelect } from "@/components/form-select";
 import { L4NodesWarning } from "@/components/l4/common";
 import { nextDraftKey, serializeDrafts } from "@/components/site/save-site";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { m } from "@/lib/i18n";
@@ -60,15 +54,16 @@ export function PortPoolsSection({
   clusterName: string;
 }) {
   const pools = useQuery(orpc.clusters.portPools.queryOptions({ input: { clusterId } }));
-  if (pools.isPending) return <LoadingState />;
-  if (pools.isLoadingError)
-    return <ErrorState error={pools.error} onRetry={() => pools.refetch()} />;
   return (
-    <div className="flex flex-col gap-4">
-      <L4NodesWarning cluster={clusterName} nodes={pools.data.nodesWithoutL4} />
-      {/* Keyed by the saved pools, so a save resets the drafts to what the server stored. */}
-      <PortPoolsCard key={JSON.stringify(pools.data.pools)} data={pools.data} />
-    </div>
+    <QueryView query={pools}>
+      {(data) => (
+        <div className="flex flex-col gap-4">
+          <L4NodesWarning cluster={clusterName} nodes={data.nodesWithoutL4} />
+          {/* Keyed by the saved pools, so a save resets the drafts to what the server stored. */}
+          <PortPoolsCard key={JSON.stringify(data.pools)} data={data} />
+        </div>
+      )}
+    </QueryView>
   );
 }
 
@@ -251,22 +246,13 @@ function PoolRow({
     >
       <Field className="w-full sm:w-40">
         <FieldLabel htmlFor={id("protocol")}>{m.l4_protocol()}</FieldLabel>
-        <Select
+        <OptionSelect
+          id={id("protocol")}
           value={row.protocol}
-          onValueChange={(value) => value && onChange({ protocol: value as PortPoolProtocol })}
-          items={POOL_PROTOCOLS.map((p) => ({ label: p.label, value: p.value }))}
-        >
-          <SelectTrigger id={id("protocol")} className="w-full" data-testid="port-pool-protocol">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {POOL_PROTOCOLS.map((p) => (
-              <SelectItem key={p.value} value={p.value}>
-                {p.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          options={POOL_PROTOCOLS}
+          onChange={(protocol) => onChange({ protocol })}
+          testId="port-pool-protocol"
+        />
       </Field>
       <Field className="min-w-24 flex-1 sm:w-36 sm:flex-none">
         <FieldLabel htmlFor={id("from")}>{m.l4_pool_from()}</FieldLabel>
