@@ -923,9 +923,11 @@ export function createNodeService(
     async pullTasks(req, ctx) {
       const node = await requireNode(ctx);
       const max = Math.min(req.maxTasks || MAX_TASKS_PER_PULL, MAX_TASKS_PER_PULL);
-      const upgrade = await pullUpgrade(app, node);
+      // The node's purge lane (proto v0.17.0) takes purges only.
+      const purgeOnly = req.purgeOnly;
+      const upgrade = purgeOnly ? null : await pullUpgrade(app, node);
       const limit = max - (upgrade ? 1 : 0);
-      const tasks = limit > 0 ? await pullCacheTasks(app.db, node, limit) : [];
+      const tasks = limit > 0 ? await pullCacheTasks(app.db, node, limit, { purgeOnly }) : [];
       // Only prefetches depend on the cache key's device type.
       const deviceType = await deviceTypeSites(
         app.db,

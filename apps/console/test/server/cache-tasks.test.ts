@@ -303,6 +303,21 @@ describe("cache task delivery", async () => {
     });
   });
 
+  it("hands the purge lane purges only (P1-62)", async () => {
+    await ctx.db.delete(schema.node).where(eq(schema.node.clusterId, clusterId));
+    const node = await addNode("edge-lanes");
+    const prefetch = await admin.cacheTasks.create({
+      type: "prefetch",
+      urls: ["http://shop.test/a"],
+    });
+    const purge = await admin.cacheTasks.create({ type: "url", urls: ["http://shop.test/a"] });
+    const prefix = await admin.cacheTasks.create({ type: "prefix", urls: ["http://shop.test/p/"] });
+    const lane = await pullCacheTasks(ctx.db, node, 10, { purgeOnly: true });
+    expect(lane.map((t) => t.id)).toEqual([purge.id, prefix.id]);
+    expect(await delivery(prefetch.id, node.id)).toMatchObject({ state: "pending" });
+    expect((await pullCacheTasks(ctx.db, node, 10)).map((t) => t.id)).toEqual([prefetch.id]);
+  });
+
   it("refuses URLs of host patterns (P1-62)", async () => {
     for (const type of ["url", "prefix", "prefetch"] as const) {
       await expect(

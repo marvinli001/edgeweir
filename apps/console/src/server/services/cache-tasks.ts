@@ -620,17 +620,22 @@ async function recoverMissedPurges(
   return sites.length ? 1 : 0;
 }
 
+/** The task types that purge (the nodes' purge lane pulls only these). */
+export const PURGE_TASK_TYPES: readonly CacheTaskType[] = ["url", "prefix", "site", "host", "tag"];
+
 /**
- * Hands out the oldest deliverable tasks of a node and marks them running.
- * Only the items for the node's cluster are returned. Purges older than
- * CACHE_TASK_TTL_MS are not run any more: they expire, and together with
- * purges skipped while the node was disabled they are made up with
- * whole-site purges (recoverMissedPurges).
+ * Hands out the oldest deliverable tasks of a node and marks them running
+ * (only purges with purgeOnly: the node's purge lane, PullTasksRequest
+ * .purge_only). Only the items for the node's cluster are returned. Purges
+ * older than CACHE_TASK_TTL_MS are not run any more: they expire, and
+ * together with purges skipped while the node was disabled they are made up
+ * with whole-site purges (recoverMissedPurges).
  */
 export async function pullCacheTasks(
   db: Database,
   node: { id: string; clusterId: string },
   max: number,
+  { purgeOnly = false }: { purgeOnly?: boolean } = {},
 ): Promise<{ id: string; type: string; createdAt: Date; items: CacheTaskItem[] }[]> {
   const now = new Date();
   return db.transaction(async (tx) => {
@@ -640,7 +645,12 @@ export async function pullCacheTasks(
       .select({ task: schema.cacheTask })
       .from(schema.cacheTaskNode)
       .innerJoin(schema.cacheTask, eq(schema.cacheTask.id, schema.cacheTaskNode.taskId))
-      .where(deliverable(node.id, now))
+      .where(
+        and(
+          deliverable(node.id, now),
+          purgeOnly ? inArray(schema.cacheTask.type, [...PURGE_TASK_TYPES]) : undefined,
+        ),
+      )
       .orderBy(schema.cacheTask.createdAt)
       .limit(max)
       .for("update", { of: schema.cacheTaskNode, skipLocked: true });
