@@ -1530,6 +1530,7 @@
   "dns_zone": "区域",
   "dns_test_connection": "测试连接",
   "dns_test_ok": "连接正常：区域内有 {records} 条记录",
+  "dns_save_anyway": "仍然保存",
   "dns_list_zones": "列出区域",
   "dns_zones_found": "找到 {count} 个区域",
   "dns_capability_lines": "线路",

@@ -85,21 +85,32 @@ export function DnsCredentialDialog({
   const [selects, setSelects] = React.useState<Record<string, string>>({});
   const [rotate, setRotate] = React.useState(!initial);
   const [probe, setProbe] = React.useState<{ ok: boolean; text: string } | null>(null);
+  // The credentials failed their test on saving: the next submit saves them anyway.
+  const [saveAnyway, setSaveAnyway] = React.useState(false);
   const testing = useAction(),
     listing = useAction();
   const entry = providers.find((p) => p.id === provider);
-  const credentialsOf = (form: HTMLFormElement | null) => {
-    const data = form ? new FormData(form) : new FormData();
+  const credentialsOf = (form: HTMLFormElement | FormData | null) => {
+    const data = form instanceof FormData ? form : form ? new FormData(form) : new FormData();
     return Object.fromEntries(
       (entry?.fields ?? [])
         .map((f) => [f.key, String(data.get(f.key) ?? "")] as const)
         .filter(([, value]) => value !== ""),
     );
   };
-  const source = (form: HTMLFormElement | null) =>
+  const source = (form: HTMLFormElement | FormData | null) =>
     initial && !rotate
       ? { id: initial.id }
       : { provider: provider as DnsProviderDto["id"], credentials: credentialsOf(form) };
+  /** Tests the credentials as entered (or the saved ones) against the zone; throws on failure. */
+  const runTest = (form: HTMLFormElement | FormData | null) => {
+    const target = initial && !rotate ? { id: initial.id } : { ...source(form), zone };
+    return testing.run(() =>
+      scope === "account"
+        ? client.dns.testProvider(target as never)
+        : client.dnsCredentials.test(target as never),
+    );
+  };
   const listZones = async (form: HTMLFormElement | null) => {
     setProbe(null);
     try {
@@ -118,12 +129,7 @@ export function DnsCredentialDialog({
   const test = async (form: HTMLFormElement | null) => {
     setProbe(null);
     try {
-      const target = initial && !rotate ? { id: initial.id } : { ...source(form), zone };
-      const result = await testing.run(() =>
-        scope === "account"
-          ? client.dns.testProvider(target as never)
-          : client.dnsCredentials.test(target as never),
-      );
+      const result = await runTest(form);
       setProbe({ ok: true, text: m.dns_test_ok({ records: result.records }) });
     } catch (error) {
       setProbe({ ok: false, text: errorMessage(error) });
@@ -135,12 +141,24 @@ export function DnsCredentialDialog({
       title={
         initial ? m.common_edit() : scope === "account" ? m.dns_add_account() : m.cert_dns_add()
       }
-      submitLabel={initial ? m.common_save() : m.common_create()}
+      submitLabel={saveAnyway ? m.dns_save_anyway() : initial ? m.common_save() : m.common_create()}
       submitTestId="dns-credential-submit"
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
       onSubmit={async (data) => {
+        // New credentials are tested before they are saved; a rename alone is not.
+        if ((!initial || rotate) && !saveAnyway) {
+          setProbe(null);
+          try {
+            const result = await runTest(data);
+            setProbe({ ok: true, text: m.dns_test_ok({ records: result.records }) });
+          } catch (error) {
+            setProbe({ ok: false, text: errorMessage(error) });
+            setSaveAnyway(true);
+            return;
+          }
+        }
         const name = String(data.get("dns-credential-name"));
         const credentials = rotate
           ? Object.fromEntries(
@@ -176,7 +194,8 @@ export function DnsCredentialDialog({
       ) : catalog.isLoadingError ? (
         <ErrorState error={catalog.error} onRetry={() => void catalog.refetch()} />
       ) : (
-        <>
+        // Any edit asks for a new test before saving.
+        <div className="contents" onChange={() => setSaveAnyway(false)}>
           <Field>
             <FieldLabel htmlFor="dns-credential-name">{m.cert_name()}</FieldLabel>
             <Input
@@ -197,6 +216,7 @@ export function DnsCredentialDialog({
               setZones(null);
               setSelects({});
               setProbe(null);
+              setSaveAnyway(false);
             }}
             options={providers.map((p) => ({ value: p.id, label: providerLabel(p.id) }))}
           />
@@ -293,7 +313,7 @@ export function DnsCredentialDialog({
               </SafetyNote>
             ) : null}
           </div>
-        </>
+        </div>
       )}
     </FormDialog>
   );

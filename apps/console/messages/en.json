@@ -1691,6 +1691,7 @@
   "dns_zone": "Zone",
   "dns_test_connection": "Test connection",
   "dns_test_ok": "Connected: {records} records in the zone",
+  "dns_save_anyway": "Save anyway",
   "dns_list_zones": "List zones",
   "dns_zones_found": "{count} zones found",
   "dns_capability_lines": "Lines",
