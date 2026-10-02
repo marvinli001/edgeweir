@@ -5,6 +5,7 @@ import { type Database, schema } from "@edgeweir/db";
 import { ORPCError } from "@orpc/server";
 import { and, eq, lt, lte } from "drizzle-orm";
 import { hashServiceAccountKey, isServiceAccountKey } from "../services/service-accounts";
+import { deleteInBatches } from "./retention";
 
 /**
  * Idempotency-Key for /api/v1 writes (draft-ietf-httpapi-idempotency-key-header):
@@ -205,9 +206,5 @@ export async function withIdempotency(
 
 /** Deletes records older than the retention (worker, hourly). */
 export async function pruneIdempotencyKeys(db: Database, now = new Date()): Promise<number> {
-  const rows = await db
-    .delete(schema.idempotencyKey)
-    .where(lt(schema.idempotencyKey.expiresAt, now))
-    .returning({ key: schema.idempotencyKey.key });
-  return rows.length;
+  return deleteInBatches(db, schema.idempotencyKey, lt(schema.idempotencyKey.expiresAt, now));
 }

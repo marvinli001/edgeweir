@@ -21,6 +21,7 @@ import { and, desc, eq, gt, inArray, isNotNull, lte, ne, notInArray, sql } from 
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { isOnline } from "../lib/node-online";
+import { deleteInBatches } from "../lib/retention";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { withLease } from "./dns-lease";
 import {
@@ -969,21 +970,19 @@ export async function pruneDnsRevisions(db: Executor, keep = DNS_REVISION_RETENT
   const inUse = (
     column: typeof schema.dnsBinding.desiredRevision | typeof schema.dnsBinding.appliedRevision,
   ) => db.select({ revision: column }).from(schema.dnsBinding).where(isNotNull(column));
-  const deleted = await db
-    .delete(schema.dnsRevision)
-    .where(
-      and(
-        inArray(
-          schema.dnsRevision.revision,
-          db.select({ revision: ranked.revision }).from(ranked).where(gt(ranked.rank, keep)),
-        ),
-        ne(schema.dnsRevision.status, "blocked"),
-        notInArray(schema.dnsRevision.revision, inUse(schema.dnsBinding.desiredRevision)),
-        notInArray(schema.dnsRevision.revision, inUse(schema.dnsBinding.appliedRevision)),
+  return deleteInBatches(
+    db,
+    schema.dnsRevision,
+    and(
+      inArray(
+        schema.dnsRevision.revision,
+        db.select({ revision: ranked.revision }).from(ranked).where(gt(ranked.rank, keep)),
       ),
-    )
-    .returning({ revision: schema.dnsRevision.revision });
-  return deleted.length;
+      ne(schema.dnsRevision.status, "blocked"),
+      notInArray(schema.dnsRevision.revision, inUse(schema.dnsBinding.desiredRevision)),
+      notInArray(schema.dnsRevision.revision, inUse(schema.dnsBinding.appliedRevision)),
+    ),
+  );
 }
 
 export async function listBindingRevisions(app: AppContext, clusterId: string) {

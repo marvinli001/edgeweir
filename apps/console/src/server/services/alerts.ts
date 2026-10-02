@@ -13,6 +13,7 @@ import { schema } from "@edgeweir/db";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { deleteInBatches } from "../lib/retention";
 import { type Actor, recordAudit } from "./audit";
 import {
   channelBinding,
@@ -758,9 +759,11 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
         app.log.warn("notification delivery failed", { channelId: c.id, eventId: event.id });
       }
     }
-    await app.db
-      .delete(schema.alertEvent)
-      .where(lt(schema.alertEvent.occurredAt, new Date(now - 90 * 86400000)));
+    await deleteInBatches(
+      app.db,
+      schema.alertEvent,
+      lt(schema.alertEvent.occurredAt, new Date(now - 90 * 86400000)),
+    );
     await app.db
       .delete(schema.alertState)
       .where(

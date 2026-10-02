@@ -11,6 +11,7 @@ import {
 import { type Database, schema } from "@edgeweir/db";
 import { and, count, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { isOnline } from "../lib/node-online";
+import { deleteInBatches } from "../lib/retention";
 import { getProtectionSettings } from "./protection";
 import type { Executor } from "./revisions";
 import { findSite } from "./sites";
@@ -352,11 +353,9 @@ export async function listSecurityEvents(
 /** Deletes events older than the retention of the protection settings. */
 export async function pruneSecurityEvents(db: Database, now = new Date()): Promise<number> {
   const { eventRetentionDays } = await getProtectionSettings(db);
-  const deleted = await db
-    .delete(schema.securityEvent)
-    .where(
-      lt(schema.securityEvent.occurredAt, new Date(now.getTime() - eventRetentionDays * 86400_000)),
-    )
-    .returning({ id: schema.securityEvent.id });
-  return deleted.length;
+  return deleteInBatches(
+    db,
+    schema.securityEvent,
+    lt(schema.securityEvent.occurredAt, new Date(now.getTime() - eventRetentionDays * 86400_000)),
+  );
 }

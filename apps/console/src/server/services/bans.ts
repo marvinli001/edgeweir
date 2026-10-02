@@ -38,6 +38,7 @@ import {
 import { fail } from "../lib/errors";
 import { BANS_CHANNEL } from "../lib/events";
 import { ONLINE_WINDOW_SECONDS } from "../lib/node-online";
+import { deleteInBatches } from "../lib/retention";
 import { type Actor, recordAudit } from "./audit";
 import type { Executor } from "./revisions";
 import { findSite } from "./sites";
@@ -689,10 +690,10 @@ async function capAutoBans(tx: Executor, clusterId: string, now: Date): Promise<
 export async function pruneBans(db: Database, now = new Date()): Promise<number> {
   return db.transaction(async (tx) => {
     await lockBans(tx);
-    const deleted = await tx
-      .delete(schema.ipBan)
-      .where(lt(schema.ipBan.expiresAt, new Date(now.getTime() - BAN_RETENTION_MS)))
-      .returning({ id: schema.ipBan.id });
-    return deleted.length;
+    return deleteInBatches(
+      tx,
+      schema.ipBan,
+      lt(schema.ipBan.expiresAt, new Date(now.getTime() - BAN_RETENTION_MS)),
+    );
   });
 }
