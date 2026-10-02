@@ -21,7 +21,6 @@ import {
   usesChallengeKeys,
 } from "@edgeweir/config-compiler";
 import {
-  nodeSupportsFeature,
   normalizeCidr,
   type ReasonParams,
   type Revision,
@@ -57,6 +56,7 @@ import { assertCertificateNames } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { CONFIG_CHANNEL } from "../lib/events";
 import { lockClusterPublish } from "../lib/locks";
+import { assertNodeFeatures } from "../lib/node-features";
 import { isOnline } from "../lib/node-online";
 import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settings";
 import { recordAudit, systemActor } from "./audit";
@@ -616,18 +616,13 @@ export async function insertRevision(
   );
   // Only the operator may deliberately require an upgrade across the cluster;
   // service accounts and background changes must keep every site delivered.
-  if (addedFeatures.length && !userId) {
-    const nodes = await tx
-      .select({ features: schema.node.supportedFeatures })
-      .from(schema.node)
-      .where(and(eq(schema.node.clusterId, clusterId), eq(schema.node.status, "active")));
-    const missing = addedFeatures.filter((feature) =>
-      nodes.some((node) => !nodeSupportsFeature(node.features, feature)),
+  if (!userId) {
+    await assertNodeFeatures(
+      tx,
+      [clusterId],
+      addedFeatures,
+      "cluster nodes do not support this change",
     );
-    if (missing.length)
-      fail("NODE_CAPABILITY_REQUIRED", "cluster nodes do not support this change", {
-        features: missing.join(", "),
-      });
   }
   const [row] = await tx
     .insert(schema.configRevision)

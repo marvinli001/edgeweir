@@ -85,6 +85,11 @@ export const dnsRevision = pgTable(
       .default({}),
     status: text("status").notNull().default("pending"),
     lastError: text("last_error").notNull().default(""),
+    /** Parameters of the error code (the conflicting DNS name). */
+    lastErrorParams: jsonb("last_error_params")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     appliedAt: timestamp("applied_at", { withTimezone: true }),
   },

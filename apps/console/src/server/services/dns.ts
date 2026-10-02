@@ -26,6 +26,7 @@ import { withLease } from "./dns-lease";
 import {
   certdDns,
   errorCode,
+  errorParams,
   findProvider,
   openProvider,
   type ProviderRecord,
@@ -80,6 +81,7 @@ const revisionDto = (r: Revision): DnsRevision => ({
   createdAt: r.createdAt.toISOString(),
   appliedAt: r.appliedAt?.toISOString() ?? null,
   lastError: r.lastError,
+  lastErrorParams: r.lastErrorParams,
 });
 const nameKey = (r: ManagedName) => `${r.name}|${r.type}`;
 /** The resolution line of a record ("" for the default line). */
@@ -229,12 +231,14 @@ async function validateBinding(db: Executor, clusterId: string, policy: BindingP
       ),
     );
   const mine = new Set(fixedLabels(policy));
-  for (const other of others)
-    if (
-      other.zone === provider.zone &&
-      fixedLabels(bindingPolicy(other.binding)).some((label) => mine.has(label))
-    )
-      fail("DNS_BINDING_CONFLICT", "another cluster uses the same record names");
+  for (const other of others) {
+    if (other.zone !== provider.zone) continue;
+    const label = fixedLabels(bindingPolicy(other.binding)).find((l) => mine.has(l));
+    if (label !== undefined)
+      fail("DNS_BINDING_CONFLICT", "another cluster uses the same record names", {
+        name: `${label}.${policy.domain}`,
+      });
+  }
 }
 
 /** How long a node may lag a new target (applying it, or not told yet) and keep its records. */
@@ -759,6 +763,7 @@ async function publishBinding(
           reasonParams,
           status: "blocked",
           lastError: "dns_mass_removal_blocked",
+          lastErrorParams: {},
         })
         .returning();
     }
@@ -1157,9 +1162,13 @@ async function reconcileProvider(
   const otherNames = new Set(stored.filter((r) => r.clusterId !== clusterId).map((r) => r.name));
   for (const name of desiredNames) {
     if (otherNames.has(name.name))
-      fail("DNS_BINDING_CONFLICT", "another cluster manages this DNS name");
+      fail("DNS_BINDING_CONFLICT", "another cluster manages this DNS name", {
+        name: absolute(name.name, p.zone),
+      });
     if (!ownNames.has(name.name) && actual.some((r) => r.name === name.name))
-      fail("DNS_RECORD_CONFLICT", "DNS name contains an unmanaged record");
+      fail("DNS_RECORD_CONFLICT", "DNS name contains an unmanaged record", {
+        name: absolute(name.name, p.zone),
+      });
   }
   await assertCurrent(app, clusterId, revision.revision);
   if (desiredNames.length) {
@@ -1173,8 +1182,11 @@ async function reconcileProvider(
       .select()
       .from(schema.dnsManagedName)
       .where(eq(schema.dnsManagedName.providerId, p.id));
-    if (claimed.some((r) => wantedNames.has(nameKey(r)) && r.clusterId !== clusterId))
-      fail("DNS_BINDING_CONFLICT", "another cluster manages this DNS name");
+    const taken = claimed.find((r) => wantedNames.has(nameKey(r)) && r.clusterId !== clusterId);
+    if (taken)
+      fail("DNS_BINDING_CONFLICT", "another cluster manages this DNS name", {
+        name: absolute(taken.name, p.zone),
+      });
   }
   const key = sameAs(compareTtl);
   const managed = new Set([...own, ...desiredNames].map(nameKey));
@@ -1292,7 +1304,7 @@ export async function reconcileBinding(
       await app.db.transaction(async (tx) => {
         await tx
           .update(schema.dnsRevision)
-          .set({ status: "applied", lastError: "", appliedAt: new Date() })
+          .set({ status: "applied", lastError: "", lastErrorParams: {}, appliedAt: new Date() })
           .where(eq(schema.dnsRevision.revision, revision.revision));
         await tx
           .update(schema.dnsBinding)
@@ -1321,7 +1333,7 @@ export async function reconcileBinding(
       }
       await app.db
         .update(schema.dnsRevision)
-        .set({ status: "failed", lastError: errorCode(error) })
+        .set({ status: "failed", lastError: errorCode(error), lastErrorParams: errorParams(error) })
         .where(eq(schema.dnsRevision.revision, revision.revision));
       app.log.warn("DNS reconciliation failed", {
         clusterId,

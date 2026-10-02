@@ -80,6 +80,11 @@ export function errorCode(error: unknown, fallback = "dns_reconcile_failed") {
   if (code === "DNS_ZONE_MISMATCH") return "dns_zone_mismatch";
   return fallback;
 }
+/** The parameters of a stored DNS error code: the conflicting name, if any. */
+export function errorParams(error: unknown): Record<string, string> {
+  const name = (error as { data?: { name?: unknown } })?.data?.name;
+  return typeof name === "string" ? { name } : {};
+}
 
 /** Runs a DNS command in certd with the operator's outbound policy. */
 export function certdDns<T>(

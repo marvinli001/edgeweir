@@ -140,7 +140,7 @@ function DnsPage() {
                               </Badge>
                               {b.revision.lastError && !b.blocked ? (
                                 <span className="text-xs text-muted-foreground">
-                                  {revisionError(b.revision.lastError)}
+                                  {revisionError(b.revision.lastError, b.revision.lastErrorParams)}
                                 </span>
                               ) : null}
                             </span>

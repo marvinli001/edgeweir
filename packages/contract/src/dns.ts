@@ -163,6 +163,8 @@ const revision = z.object({
   appliedAt: z.string().nullable(),
   /** A code: dns_reconcile_failed, dns_auth_failed, dns_record_conflict, … */
   lastError: z.string(),
+  /** Parameters of the code (dns_record_conflict, dns_binding_conflict: name). */
+  lastErrorParams: z.record(z.string(), z.string()),
 });
 export const dnsProtection = z.object({
   /** Share of the previous address records (0.05-1, default 0.5). */

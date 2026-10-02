@@ -421,7 +421,10 @@ describe("cluster DNS bindings", async () => {
         },
       }),
     );
-    expect(conflict.code).toBe("DNS_BINDING_CONFLICT");
+    expect(conflict).toMatchObject({
+      code: "DNS_BINDING_CONFLICT",
+      data: { name: "all.edge.a.test" },
+    });
     expect(
       (
         await rpcError(
@@ -466,10 +469,14 @@ describe("cluster DNS bindings", async () => {
         ],
       },
     });
-    await rpcError(admin.dns.reconcile({ clusterId: b.clusterId }));
-    expect((await admin.dns.binding({ clusterId: b.clusterId })).revision?.lastError).toBe(
-      "dns_record_conflict",
-    );
+    expect(await rpcError(admin.dns.reconcile({ clusterId: b.clusterId }))).toMatchObject({
+      code: "DNS_RECORD_CONFLICT",
+      data: { name: "south.cdn.b.test" },
+    });
+    expect((await admin.dns.binding({ clusterId: b.clusterId })).revision).toMatchObject({
+      lastError: "dns_record_conflict",
+      lastErrorParams: { name: "south.cdn.b.test" },
+    });
     expect(dnsFixture.records("token-b", "b.test").find((r) => r.name === "south.cdn")?.data).toBe(
       "192.0.2.50",
     );

@@ -5,7 +5,6 @@ import {
   type CacheTaskType,
   type cacheTaskCreateInput,
   hostName,
-  nodeSupportsFeature,
   normalizeCacheTag,
   PREFETCH_V2_FEATURE,
   type PrefetchVariant,
@@ -20,6 +19,7 @@ import { readCacheKey } from "../lib/cache-key";
 import { fail } from "../lib/errors";
 import { TASKS_CHANNEL } from "../lib/events";
 import { cleanErrorCode, cleanErrorParams, taskError } from "../lib/node-errors";
+import { assertNodeFeatures } from "../lib/node-features";
 import { assertServing } from "../lib/site-state";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { type Executor, publisher } from "./revisions";
@@ -136,18 +136,7 @@ function normalizeHosts(raw: string[]): string[] {
  * configuration features, an old node cannot run such a task at all.
  */
 async function assertTaskFeatures(tx: Executor, clusterIds: string[], features: string[]) {
-  if (!features.length || !clusterIds.length) return;
-  const nodes = await tx
-    .select({ features: schema.node.supportedFeatures })
-    .from(schema.node)
-    .where(and(inArray(schema.node.clusterId, clusterIds), eq(schema.node.status, "active")));
-  const missing = features.filter((feature) =>
-    nodes.some((node) => !nodeSupportsFeature(node.features, feature)),
-  );
-  if (missing.length)
-    fail("NODE_CAPABILITY_REQUIRED", "cluster nodes cannot run this task", {
-      features: missing.join(", "),
-    });
+  await assertNodeFeatures(tx, clusterIds, features, "cluster nodes cannot run this task");
 }
 
 /** Maps host names to the sites that serve them: exact domains win over wildcards. */

@@ -18,9 +18,9 @@ export const fieldLabel = (field: string) => messages[key("dns_field_", field)]?
 /** Select options are technical values ("ovh-eu", "hmac-sha256") unless a label exists. */
 export const optionLabel = (value: string) =>
   messages[key("dns_option_", value.toLowerCase())]?.() ?? value;
-/** A DNS revision's error code ("dns_auth_failed") in words. */
-export const revisionError = (code: string) =>
-  code ? (messages[key("dns_error_", code)]?.() ?? code) : "";
+/** A DNS revision's error code ("dns_auth_failed") and its parameters in words. */
+export const revisionError = (code: string, params: Record<string, string> = {}) =>
+  code ? (messages[key("dns_error_", code)]?.({ name: "", ...params }) ?? code) : "";
 
 export const modeLabel = (mode: DnsBinding["mode"]) =>
   ({ off: m.dns_mode_off, manual: m.dns_mode_manual, auto: m.dns_mode_auto })[mode]();

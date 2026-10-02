@@ -190,7 +190,7 @@ describe("purges by host and Cache-Tag, variant and sitemap prefetches", async (
       expect((await rpcError(admin.cacheTasks.create(input))).status, input.type).toBe(400);
   });
 
-  it("refuses host, tag, sitemap and mobile prefetch tasks with NODE_CAPABILITY_REQUIRED while an active node lacks the feature, the operator included", async () => {
+  it("refuses host, tag, sitemap and mobile prefetch tasks with NODE_CAPABILITY_REQUIRED naming the active nodes that lack the feature, the operator included", async () => {
     await setNodeFeatures([]);
     const cases: [CacheTaskCreateInput, string][] = [
       [{ type: "host", hosts: ["www.shop.test"] }, "purge-tag-v1"],
@@ -202,7 +202,7 @@ describe("purges by host and Cache-Tag, variant and sitemap prefetches", async (
       expect(await rpcError(admin.cacheTasks.create(input))).toMatchObject({
         code: "NODE_CAPABILITY_REQUIRED",
         status: 409,
-        data: { features },
+        data: { features, nodes: "edge-tasks" },
       });
     // Desktop prefetches and URL purges run on every node.
     await admin.cacheTasks.create({ type: "prefetch", urls: ["https://www.shop.test/"] });

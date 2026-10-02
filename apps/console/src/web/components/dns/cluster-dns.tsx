@@ -581,7 +581,7 @@ function CurrentRecords({ clusterId, state }: { clusterId: string; state: Bindin
       <CardContent className="grid gap-3">
         {state.revision?.lastError ? (
           <SafetyNote className="text-destructive">
-            {revisionError(state.revision.lastError)}
+            {revisionError(state.revision.lastError, state.revision.lastErrorParams)}
           </SafetyNote>
         ) : null}
         <RecordTable records={state.records} testId="dns-current-records" />
@@ -682,7 +682,7 @@ function Revisions({ clusterId }: { clusterId: string }) {
                       <Badge variant="outline">{statusLabel(r.status)}</Badge>
                       {r.lastError ? (
                         <span className="text-xs text-muted-foreground">
-                          {revisionError(r.lastError)}
+                          {revisionError(r.lastError, r.lastErrorParams)}
                         </span>
                       ) : null}
                     </span>

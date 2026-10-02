@@ -1,0 +1,1 @@
+ALTER TABLE "dns_revision" ADD COLUMN "last_error_params" jsonb DEFAULT '{}'::jsonb NOT NULL;
