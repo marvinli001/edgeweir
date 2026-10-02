@@ -194,7 +194,9 @@ try {
     },
     120,
   );
-  console.log("PASS the node-offline alert of the subscribed site's node reached the local webhook sink");
+  console.log(
+    "PASS the node-offline alert of the subscribed site's node reached the local webhook sink",
+  );
 } finally {
   await run([...compose, "start", "node"]);
 }
