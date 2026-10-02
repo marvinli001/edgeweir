@@ -9,7 +9,7 @@ import { type Columns, DataTable } from "@/components/data-table";
 import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -269,28 +269,28 @@ function AuditPage() {
           testId="audit-filter-range"
         />
       </div>
-      {entries.isPending ? (
-        <LoadingState />
-      ) : entries.isLoadingError ? (
-        <ErrorState error={entries.error} onRetry={() => entries.refetch()} />
-      ) : entries.data.total === 0 ? (
-        <EmptyState icon={Audit01Icon} title={m.audit_empty()} />
-      ) : (
-        <>
-          <DataTable
-            data={entries.data.items}
-            columns={columns}
-            getRowId={(e) => String(e.id)}
-            testId="audit-table"
-          />
-          <Pager
-            page={page}
-            pageSize={PAGE_SIZE}
-            total={entries.data.total}
-            onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
-          />
-        </>
-      )}
+      <QueryView
+        query={entries}
+        isEmpty={(data) => data.total === 0}
+        empty={<EmptyState icon={Audit01Icon} title={m.audit_empty()} />}
+      >
+        {({ items, total }) => (
+          <>
+            <DataTable
+              data={items}
+              columns={columns}
+              getRowId={(e) => String(e.id)}
+              testId="audit-table"
+            />
+            <Pager
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={total}
+              onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
+            />
+          </>
+        )}
+      </QueryView>
     </Page>
   );
 }

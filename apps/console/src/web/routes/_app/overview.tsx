@@ -17,7 +17,7 @@ import { Countdown } from "@/components/appica/countdown";
 import { Page } from "@/components/page";
 import { ResourceEmpty, ResourceList, ResourceRow } from "@/components/resource-list";
 import { StarMark, useSiteStars } from "@/components/site-star";
-import { ErrorState, LoadingState } from "@/components/states";
+import { combineQueries, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
 import { buttonVariants } from "@/components/ui/button";
 import { DEFAULT_RANGE } from "@/lib/analytics";
@@ -106,61 +106,50 @@ function OverviewPage() {
   const overview = useQuery({ ...orpc.overview.get.queryOptions(), ...live });
   const clusters = useQuery({ ...orpc.clusters.list.queryOptions(), ...live });
   const nodes = useQuery({ ...orpc.nodes.list.queryOptions({ input: {} }), ...live });
-  const queries = [sites, starred, overview, clusters, nodes];
-  const failed = queries.find((q) => q.isLoadingError);
 
   return (
     <Page title={m.overview_title()}>
-      {queries.some((q) => q.isPending) ? (
-        <LoadingState />
-      ) : failed ? (
-        <ErrorState error={failed.error} onRetry={() => failed.refetch()} />
-      ) : (
-        <>
-          <AttentionList items={overview.data?.attention ?? []} />
-          <div className="grid gap-x-10 gap-y-6 @3xl/main:grid-cols-2">
-            <SitesList
-              total={sites.data?.total ?? 0}
-              starred={starred.data ?? []}
-              recent={sites.data?.items ?? []}
+      <QueryView query={combineQueries(sites, starred, overview, clusters, nodes)}>
+        {([recent, starredSites, summary, clusterList, nodeList]) => (
+          <>
+            <AttentionList items={summary.attention} />
+            <div className="grid gap-x-10 gap-y-6 @3xl/main:grid-cols-2">
+              <SitesList total={recent.total} starred={starredSites} recent={recent.items} />
+              <NodesList
+                nodes={nodeList}
+                clusters={clusterList}
+                online={summary.onlineNodes}
+                total={summary.nodes}
+              />
+              <RevisionsList revisions={summary.revisions} clusters={clusterList} />
+              <RecentsList />
+            </div>
+            <AnalyticsSection
+              range={search.range ?? DEFAULT_RANGE}
+              onRangeChange={(range) =>
+                navigate({ search: { range: range === DEFAULT_RANGE ? undefined : range } })
+              }
+              topLists={[
+                {
+                  id: "sites",
+                  title: m.analytics_top_sites(),
+                  renderLink: (item, props) => (
+                    <Link to="/sites/$id" params={{ id: item.id }} {...props} />
+                  ),
+                },
+                {
+                  id: "nodes",
+                  title: m.analytics_top_nodes(),
+                  renderLink: (item, props) => (
+                    <Link to="/clusters" search={{ cluster: item.parentId }} {...props} />
+                  ),
+                },
+              ]}
+              delay={240}
             />
-            <NodesList
-              nodes={nodes.data ?? []}
-              clusters={clusters.data ?? []}
-              online={overview.data?.onlineNodes ?? 0}
-              total={overview.data?.nodes ?? 0}
-            />
-            <RevisionsList
-              revisions={overview.data?.revisions ?? []}
-              clusters={clusters.data ?? []}
-            />
-            <RecentsList />
-          </div>
-          <AnalyticsSection
-            range={search.range ?? DEFAULT_RANGE}
-            onRangeChange={(range) =>
-              navigate({ search: { range: range === DEFAULT_RANGE ? undefined : range } })
-            }
-            topLists={[
-              {
-                id: "sites",
-                title: m.analytics_top_sites(),
-                renderLink: (item, props) => (
-                  <Link to="/sites/$id" params={{ id: item.id }} {...props} />
-                ),
-              },
-              {
-                id: "nodes",
-                title: m.analytics_top_nodes(),
-                renderLink: (item, props) => (
-                  <Link to="/clusters" search={{ cluster: item.parentId }} {...props} />
-                ),
-              },
-            ]}
-            delay={240}
-          />
-        </>
-      )}
+          </>
+        )}
+      </QueryView>
     </Page>
   );
 }

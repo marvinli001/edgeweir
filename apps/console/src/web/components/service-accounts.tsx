@@ -14,7 +14,7 @@ import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,8 @@ import {
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
+import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -108,14 +110,19 @@ function AccountDialog({
   );
 }
 
-function KeysDialog({ account, onClose }: { account: ServiceAccount; onClose: () => void }) {
+function KeysDialog({ account, open, onOpenChange }: { account: ServiceAccount } & DialogProps) {
   const queryClient = useQueryClient();
   const create = useMutation(orpc.serviceAccounts.createKey.mutationOptions());
   const revoke = useMutation(orpc.serviceAccounts.revokeKey.mutationOptions());
   const [name, setName] = React.useState("");
   const refresh = () => queryClient.invalidateQueries({ queryKey: orpc.serviceAccounts.key() });
+  // Closing forgets the new key's secret: it is shown once.
+  const setOpen = (next: boolean) => {
+    if (!next) create.reset();
+    onOpenChange(next);
+  };
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
@@ -210,7 +217,7 @@ function KeysDialog({ account, onClose }: { account: ServiceAccount; onClose: ()
           </ul>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={() => setOpen(false)}>
             {m.common_close()}
           </Button>
         </DialogFooter>
@@ -258,9 +265,11 @@ export function ServiceAccountsPanel({
   onCreateOpenChange: (open: boolean) => void;
 }) {
   const accounts = useQuery(orpc.serviceAccounts.list.queryOptions());
-  const [editing, setEditing] = React.useState<ServiceAccount | null>(null);
-  const [keysOf, setKeysOf] = React.useState<string | null>(null);
-  const keysAccount = accounts.data?.find((a) => a.id === keysOf) ?? null;
+  const createKey = useOpenKey(createOpen);
+  const edit = useDialogState<ServiceAccount>();
+  // The account whose keys are open, from the list so they stay current.
+  const keys = useDialogState<string>();
+  const keysAccount = accounts.data?.find((a) => a.id === keys.value);
   const columns = React.useMemo<Columns<ServiceAccount>>(
     () => [
       {
@@ -312,12 +321,12 @@ export function ServiceAccountsPanel({
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => setKeysOf(row.original.id)}
+              onClick={() => keys.show(row.original.id)}
               data-testid="service-account-keys-open"
             >
               {m.service_accounts_keys()}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(row.original)}>
+            <Button size="sm" variant="ghost" onClick={() => edit.show(row.original)}>
               {m.orgs_edit()}
             </Button>
             <DeleteAccountAction account={row.original} />
@@ -325,36 +334,44 @@ export function ServiceAccountsPanel({
         ),
       },
     ],
-    [],
+    [keys.show, edit.show],
   );
   return (
     <>
-      {accounts.isPending ? (
-        <LoadingState />
-      ) : accounts.isLoadingError ? (
-        <ErrorState error={accounts.error} onRetry={() => accounts.refetch()} />
-      ) : accounts.data.length === 0 ? (
-        <EmptyState icon={Key01Icon} title={m.service_accounts_empty()}>
-          <Button onClick={() => setCreateOpen(true)}>{m.service_accounts_create()}</Button>
-        </EmptyState>
-      ) : (
-        <DataTable
-          data={accounts.data}
-          columns={columns}
-          getRowId={(a) => a.id}
-          testId="service-accounts-table"
-        />
-      )}
-      {createOpen ? <AccountDialog open onOpenChange={setCreateOpen} /> : null}
-      {editing ? (
+      <QueryView
+        query={accounts}
+        empty={
+          <EmptyState icon={Key01Icon} title={m.service_accounts_empty()}>
+            <Button onClick={() => setCreateOpen(true)}>{m.service_accounts_create()}</Button>
+          </EmptyState>
+        }
+      >
+        {(list) => (
+          <DataTable
+            data={list}
+            columns={columns}
+            getRowId={(a) => a.id}
+            testId="service-accounts-table"
+          />
+        )}
+      </QueryView>
+      <AccountDialog key={`create-${createKey}`} open={createOpen} onOpenChange={setCreateOpen} />
+      {edit.value ? (
         <AccountDialog
-          key={editing.id}
-          account={editing}
-          open
-          onOpenChange={(open) => !open && setEditing(null)}
+          key={`edit-${edit.key}`}
+          account={edit.value}
+          open={edit.open}
+          onOpenChange={edit.onOpenChange}
         />
       ) : null}
-      {keysAccount ? <KeysDialog account={keysAccount} onClose={() => setKeysOf(null)} /> : null}
+      {keysAccount ? (
+        <KeysDialog
+          key={`keys-${keys.key}`}
+          account={keysAccount}
+          open={keys.open}
+          onOpenChange={keys.onOpenChange}
+        />
+      ) : null}
     </>
   );
 }

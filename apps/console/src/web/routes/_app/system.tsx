@@ -12,7 +12,7 @@ import { PlatformErrorPagesCard } from "@/components/platform-error-pages";
 import { ProbesPanel } from "@/components/probes";
 import { ReleaseSourceCard } from "@/components/release-source";
 import { ServiceAccountsPanel } from "@/components/service-accounts";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -114,52 +114,50 @@ function GeneralSettings() {
           <CardTitle>{m.system_info()}</CardTitle>
         </CardHeader>
         <CardContent>
-          {settings.isPending ? (
-            <LoadingState />
-          ) : settings.isLoadingError ? (
-            <ErrorState error={settings.error} onRetry={() => settings.refetch()} />
-          ) : (
-            <dl className="divide-y">
-              <Row label={m.system_version()}>
-                <span className="font-mono">{settings.data.version}</span>
-              </Row>
-              <Row label={m.system_console_url()}>
-                <span className="font-mono">{settings.data.consoleUrl}</span>
-                <UrlScopeBadge url={settings.data.consoleUrl} testId="console-url-scope" />
-              </Row>
-              <Row label={m.system_node_api_url()}>
-                <span className="font-mono">{settings.data.nodeApiUrl}</span>
-                <UrlScopeBadge url={settings.data.nodeApiUrl} testId="node-api-url-scope" />
-                <NodeChannelCheckStatus />
-              </Row>
-              <Row label={m.system_ca_fingerprint()}>
-                <code className="min-w-0 flex-1 font-mono text-xs" data-testid="ca-fingerprint">
-                  {settings.data.nodeCaSha256}
-                </code>
-                <CopyButton value={settings.data.nodeCaSha256} iconOnly />
-              </Row>
-              <Row label={m.system_analytics()}>
-                <Badge variant="outline">{settings.data.analyticsMode}</Badge>
-              </Row>
-              <Row label={m.system_setup_token()}>
-                <Badge variant="secondary" data-testid="setup-token-state">
-                  {settings.data.setupCompletedAt
-                    ? m.system_setup_token_used({
-                        time: formatDateTime(settings.data.setupCompletedAt),
-                      })
-                    : m.system_setup_token_pending()}
-                </Badge>
-              </Row>
-              <Row label={m.system_openapi()}>
-                <a
-                  className="font-mono text-primary underline-offset-4 hover:underline"
-                  href="/api/v1/openapi.json"
-                >
-                  /api/v1/openapi.json
-                </a>
-              </Row>
-            </dl>
-          )}
+          <QueryView query={settings}>
+            {(system) => (
+              <dl className="divide-y">
+                <Row label={m.system_version()}>
+                  <span className="font-mono">{system.version}</span>
+                </Row>
+                <Row label={m.system_console_url()}>
+                  <span className="font-mono">{system.consoleUrl}</span>
+                  <UrlScopeBadge url={system.consoleUrl} testId="console-url-scope" />
+                </Row>
+                <Row label={m.system_node_api_url()}>
+                  <span className="font-mono">{system.nodeApiUrl}</span>
+                  <UrlScopeBadge url={system.nodeApiUrl} testId="node-api-url-scope" />
+                  <NodeChannelCheckStatus />
+                </Row>
+                <Row label={m.system_ca_fingerprint()}>
+                  <code className="min-w-0 flex-1 font-mono text-xs" data-testid="ca-fingerprint">
+                    {system.nodeCaSha256}
+                  </code>
+                  <CopyButton value={system.nodeCaSha256} iconOnly />
+                </Row>
+                <Row label={m.system_analytics()}>
+                  <Badge variant="outline">{system.analyticsMode}</Badge>
+                </Row>
+                <Row label={m.system_setup_token()}>
+                  <Badge variant="secondary" data-testid="setup-token-state">
+                    {system.setupCompletedAt
+                      ? m.system_setup_token_used({
+                          time: formatDateTime(system.setupCompletedAt),
+                        })
+                      : m.system_setup_token_pending()}
+                  </Badge>
+                </Row>
+                <Row label={m.system_openapi()}>
+                  <a
+                    className="font-mono text-primary underline-offset-4 hover:underline"
+                    href="/api/v1/openapi.json"
+                  >
+                    /api/v1/openapi.json
+                  </a>
+                </Row>
+              </dl>
+            )}
+          </QueryView>
         </CardContent>
       </Card>
       <OriginAllowListCard />

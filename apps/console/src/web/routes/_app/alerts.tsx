@@ -19,12 +19,13 @@ import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { SiteMultiSelect } from "@/components/site-multi-select";
 import { SmtpSettings } from "@/components/smtp-settings";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, type QueryResult, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 
@@ -67,12 +68,7 @@ function AlertsPage() {
   );
   return (
     <Page title={m.alert_title()}>
-      <ChannelsCard
-        channels={channels.data}
-        pending={channels.isPending}
-        error={channels.error}
-        onRetry={() => void channels.refetch()}
-      />
+      <ChannelsCard channels={channels} />
       <SmtpSettings className="animate-enter" style={{ animationDelay: "60ms" }} />
       <SubscriptionsCard channels={(channels.data ?? []).filter((c) => c.enabled)} />
       <EventsCard />
@@ -81,20 +77,9 @@ function AlertsPage() {
   );
 }
 
-function ChannelsCard({
-  channels,
-  pending,
-  error,
-  onRetry,
-}: {
-  channels: Channel[] | undefined;
-  pending: boolean;
-  error: Error | null;
-  onRetry: () => void;
-}) {
-  const queries = useQueryClient(),
-    [creating, setCreating] = React.useState(false);
-  const [editing, setEditing] = React.useState<EditableChannel | null>(null);
+function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
+  const queries = useQueryClient();
+  const dialog = useDialogState<EditableChannel | "new">();
   const mutation = useMutation({
     mutationFn: async (input: {
       action: "toggle" | "test" | "delete";
@@ -118,84 +103,79 @@ function ChannelsCard({
       <CardHeader>
         <CardTitle>{m.alert_channels_title()}</CardTitle>
         <CardAction>
-          <Button size="sm" onClick={() => setCreating(true)} data-testid="alert-channel-create">
+          <Button size="sm" onClick={() => dialog.show("new")} data-testid="alert-channel-create">
             {m.alert_channel_add()}
           </Button>
         </CardAction>
       </CardHeader>
       <CardContent>
-        {pending ? (
-          <LoadingState />
-        ) : error || !channels ? (
-          <ErrorState error={error} onRetry={onRetry} />
-        ) : !channels.length ? (
-          <EmptyState title={m.alert_no_channels()} />
-        ) : (
-          <ul className="divide-y">
-            {channels.map((channel) => (
-              <li
-                key={channel.id}
-                className="flex flex-wrap items-center gap-3 py-3"
-                data-testid="alert-channel"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="break-all text-sm font-medium">{channel.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {kindLabel(channel.kind as AlertChannelConfig["kind"])}
-                  </p>
-                </div>
-                <Badge variant="outline">{channel.enabled ? m.rules_on() : m.rules_off()}</Badge>
-                {channel.platform ? (
-                  <Badge variant="secondary">{m.alert_platform_scope()}</Badge>
-                ) : null}
-                {channel.lastError ? (
-                  <Badge variant="destructive">
-                    {channel.lastError === "alert_smtp_not_configured"
-                      ? m.error_alert_smtp_not_configured()
-                      : m.error_alert_send_failed()}
-                  </Badge>
-                ) : null}
-                <Button size="sm" variant="outline" onClick={() => setEditing(channel)}>
-                  {m.common_edit()}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={mutation.isPending}
-                  onClick={() => void act("test", channel.id)}
+        <QueryView query={channels} empty={<EmptyState title={m.alert_no_channels()} />}>
+          {(list) => (
+            <ul className="divide-y">
+              {list.map((channel) => (
+                <li
+                  key={channel.id}
+                  className="flex flex-wrap items-center gap-3 py-3"
+                  data-testid="alert-channel"
                 >
-                  {m.alert_test_send()}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={mutation.isPending}
-                  onClick={() => void act("toggle", channel.id, !channel.enabled)}
-                >
-                  {channel.enabled ? m.alert_disable() : m.alert_enable()}
-                </Button>
-                <ConfirmDialog
-                  title={m.common_delete()}
-                  destructive
-                  trigger={
-                    <Button variant="destructive" size="sm" disabled={mutation.isPending}>
-                      {m.common_delete()}
-                    </Button>
-                  }
-                  onConfirm={() => run("delete", channel.id)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+                  <div className="min-w-0 flex-1">
+                    <p className="break-all text-sm font-medium">{channel.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {kindLabel(channel.kind as AlertChannelConfig["kind"])}
+                    </p>
+                  </div>
+                  <Badge variant="outline">{channel.enabled ? m.rules_on() : m.rules_off()}</Badge>
+                  {channel.platform ? (
+                    <Badge variant="secondary">{m.alert_platform_scope()}</Badge>
+                  ) : null}
+                  {channel.lastError ? (
+                    <Badge variant="destructive">
+                      {channel.lastError === "alert_smtp_not_configured"
+                        ? m.error_alert_smtp_not_configured()
+                        : m.error_alert_send_failed()}
+                    </Badge>
+                  ) : null}
+                  <Button size="sm" variant="outline" onClick={() => dialog.show(channel)}>
+                    {m.common_edit()}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={mutation.isPending}
+                    onClick={() => void act("test", channel.id)}
+                  >
+                    {m.alert_test_send()}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={mutation.isPending}
+                    onClick={() => void act("toggle", channel.id, !channel.enabled)}
+                  >
+                    {channel.enabled ? m.alert_disable() : m.alert_enable()}
+                  </Button>
+                  <ConfirmDialog
+                    title={m.common_delete()}
+                    destructive
+                    trigger={
+                      <Button variant="destructive" size="sm" disabled={mutation.isPending}>
+                        {m.common_delete()}
+                      </Button>
+                    }
+                    onConfirm={() => run("delete", channel.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </QueryView>
       </CardContent>
-      {creating || editing ? (
+      {dialog.value ? (
         <ChannelDialog
-          initial={editing ?? undefined}
-          onClose={() => {
-            setCreating(false);
-            setEditing(null);
-          }}
+          key={dialog.key}
+          initial={dialog.value === "new" ? undefined : dialog.value}
+          open={dialog.open}
+          onOpenChange={dialog.onOpenChange}
         />
       ) : null}
     </Card>
@@ -217,8 +197,7 @@ const SITE_BADGES = 6;
 /** Site alerts go to the channel a subscription covers them with (and to every-alert channels). */
 function SubscriptionsCard({ channels }: { channels: { id: string; name: string }[] }) {
   const subscriptions = useQuery(orpc.alerts.subscriptions.queryOptions());
-  const [creating, setCreating] = React.useState(false),
-    [editing, setEditing] = React.useState<Subscription | null>(null);
+  const dialog = useDialogState<Subscription | "new">();
   const queries = useQueryClient();
   // One subscription per channel: the others are edited from their row.
   const available = channels.filter(
@@ -232,7 +211,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setCreating(true)}
+            onClick={() => dialog.show("new")}
             disabled={!subscriptions.data || !available.length}
             data-testid="alert-subscribe"
           >
@@ -241,77 +220,77 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
         </CardAction>
       </CardHeader>
       <CardContent>
-        {subscriptions.isPending ? (
-          <LoadingState />
-        ) : subscriptions.isLoadingError ? (
-          <ErrorState error={subscriptions.error} onRetry={() => void subscriptions.refetch()} />
-        ) : !subscriptions.data.length ? (
-          <EmptyState
-            title={channels.length ? m.alert_no_subscriptions() : m.alert_no_available_channels()}
-          />
-        ) : (
-          <ul className="divide-y">
-            {subscriptions.data.map((sub) => (
-              <li
-                key={sub.id}
-                className="flex flex-wrap items-center gap-3 py-3"
-                data-testid="alert-subscription"
-              >
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <p className="break-all text-sm font-medium">{sub.channelName}</p>
-                  <div className="flex flex-wrap gap-1" data-testid="alert-subscription-sites">
-                    {sub.allSites ? (
-                      <Badge variant="secondary">{m.alert_all_sites()}</Badge>
-                    ) : (
-                      <>
-                        {sub.sites.slice(0, SITE_BADGES).map((site) => (
-                          <Badge key={site.id} variant="secondary" className="max-w-48 truncate">
-                            {site.name}
-                          </Badge>
-                        ))}
-                        {sub.sites.length > SITE_BADGES ? (
-                          <Badge variant="secondary">{`+${sub.sites.length - SITE_BADGES}`}</Badge>
-                        ) : null}
-                      </>
-                    )}
+        <QueryView
+          query={subscriptions}
+          empty={
+            <EmptyState
+              title={channels.length ? m.alert_no_subscriptions() : m.alert_no_available_channels()}
+            />
+          }
+        >
+          {(list) => (
+            <ul className="divide-y">
+              {list.map((sub) => (
+                <li
+                  key={sub.id}
+                  className="flex flex-wrap items-center gap-3 py-3"
+                  data-testid="alert-subscription"
+                >
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <p className="break-all text-sm font-medium">{sub.channelName}</p>
+                    <div className="flex flex-wrap gap-1" data-testid="alert-subscription-sites">
+                      {sub.allSites ? (
+                        <Badge variant="secondary">{m.alert_all_sites()}</Badge>
+                      ) : (
+                        <>
+                          {sub.sites.slice(0, SITE_BADGES).map((site) => (
+                            <Badge key={site.id} variant="secondary" className="max-w-48 truncate">
+                              {site.name}
+                            </Badge>
+                          ))}
+                          {sub.sites.length > SITE_BADGES ? (
+                            <Badge variant="secondary">{`+${sub.sites.length - SITE_BADGES}`}</Badge>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {sub.kinds.map((kind) => (
-                    <Badge key={kind} variant="outline">
-                      {label(kind)}
-                    </Badge>
-                  ))}
-                </div>
-                {sub.enabled ? null : <Badge variant="outline">{m.rules_off()}</Badge>}
-                <Button size="sm" variant="outline" onClick={() => setEditing(sub)}>
-                  {m.common_edit()}
-                </Button>
-                <ConfirmDialog
-                  title={m.alert_unsubscribe()}
-                  trigger={
-                    <Button size="sm" variant="outline">
-                      {m.alert_unsubscribe()}
-                    </Button>
-                  }
-                  onConfirm={async () => {
-                    await client.alerts.unsubscribe({ id: sub.id });
-                    await queries.invalidateQueries();
-                  }}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+                  <div className="flex flex-wrap gap-1">
+                    {sub.kinds.map((kind) => (
+                      <Badge key={kind} variant="outline">
+                        {label(kind)}
+                      </Badge>
+                    ))}
+                  </div>
+                  {sub.enabled ? null : <Badge variant="outline">{m.rules_off()}</Badge>}
+                  <Button size="sm" variant="outline" onClick={() => dialog.show(sub)}>
+                    {m.common_edit()}
+                  </Button>
+                  <ConfirmDialog
+                    title={m.alert_unsubscribe()}
+                    trigger={
+                      <Button size="sm" variant="outline">
+                        {m.alert_unsubscribe()}
+                      </Button>
+                    }
+                    onConfirm={async () => {
+                      await client.alerts.unsubscribe({ id: sub.id });
+                      await queries.invalidateQueries();
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </QueryView>
       </CardContent>
-      {creating || editing ? (
+      {dialog.value ? (
         <SubscriptionDialog
+          key={dialog.key}
           channels={available}
-          initial={editing ?? undefined}
-          onClose={() => {
-            setCreating(false);
-            setEditing(null);
-          }}
+          initial={dialog.value === "new" ? undefined : dialog.value}
+          open={dialog.open}
+          onOpenChange={dialog.onOpenChange}
         />
       ) : null}
     </Card>
@@ -332,30 +311,26 @@ function EventsCard() {
         <CardTitle>{m.alert_recent_events()}</CardTitle>
       </CardHeader>
       <CardContent>
-        {events.isPending ? (
-          <LoadingState />
-        ) : events.isLoadingError ? (
-          <ErrorState error={events.error} onRetry={() => void events.refetch()} />
-        ) : !events.data.length ? (
-          <EmptyState title={m.alert_no_events()} />
-        ) : (
-          <ul className="divide-y">
-            {events.data.map((event) => (
-              <li key={event.id} className="flex flex-wrap items-center gap-2 py-3 text-sm">
-                <span className="w-full min-w-0 break-words sm:w-auto sm:flex-1">
-                  {event.siteName}
-                </span>
-                <Badge variant="outline">{label(event.kind)}</Badge>
-                <Badge variant="secondary">
-                  {event.status === "resolved" ? m.alert_recovered() : m.alert_firing()}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {formatDateTime(event.occurredAt)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <QueryView query={events} empty={<EmptyState title={m.alert_no_events()} />}>
+          {(list) => (
+            <ul className="divide-y">
+              {list.map((event) => (
+                <li key={event.id} className="flex flex-wrap items-center gap-2 py-3 text-sm">
+                  <span className="w-full min-w-0 break-words sm:w-auto sm:flex-1">
+                    {event.siteName}
+                  </span>
+                  <Badge variant="outline">{label(event.kind)}</Badge>
+                  <Badge variant="secondary">
+                    {event.status === "resolved" ? m.alert_recovered() : m.alert_firing()}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDateTime(event.occurredAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );
@@ -363,12 +338,10 @@ function EventsCard() {
 
 function PolicyCard() {
   const policy = useQuery(orpc.alerts.policy.queryOptions());
-  return policy.isPending ? (
-    <LoadingState />
-  ) : policy.isLoadingError ? (
-    <ErrorState error={policy.error} onRetry={() => void policy.refetch()} />
-  ) : (
-    <PolicyEditor key={JSON.stringify(policy.data)} initial={policy.data} />
+  return (
+    <QueryView query={policy}>
+      {(saved) => <PolicyEditor key={JSON.stringify(saved)} initial={saved} />}
+    </QueryView>
   );
 }
 
@@ -438,7 +411,11 @@ function PolicyEditor({ initial }: { initial: AlertPolicy }) {
     </Card>
   );
 }
-function ChannelDialog({ onClose, initial }: { onClose: () => void; initial?: EditableChannel }) {
+function ChannelDialog({
+  initial,
+  open,
+  onOpenChange,
+}: { initial?: EditableChannel } & DialogProps) {
   const [kind, setKind] = React.useState<AlertChannelConfig["kind"]>(
       (initial?.kind as AlertChannelConfig["kind"]) ?? "webhook",
     ),
@@ -468,10 +445,8 @@ function ChannelDialog({ onClose, initial }: { onClose: () => void; initial?: Ed
   };
   return (
     <FormDialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+      open={open}
+      onOpenChange={onOpenChange}
       title={initial ? m.common_edit() : m.alert_channel_add()}
       submitLabel={initial ? m.common_save() : m.common_create()}
       submitTestId="alert-channel-submit"
@@ -496,7 +471,7 @@ function ChannelDialog({ onClose, initial }: { onClose: () => void; initial?: Ed
         if (initial) await update.mutateAsync({ id: initial.id, ...common, config });
         else if (config) await mutation.mutateAsync({ ...common, config });
         await queries.invalidateQueries();
-        onClose();
+        onOpenChange(false);
       }}
     >
       <Field>
@@ -563,12 +538,12 @@ function ChannelDialog({ onClose, initial }: { onClose: () => void; initial?: Ed
 function SubscriptionDialog({
   channels,
   initial,
-  onClose,
+  open,
+  onOpenChange,
 }: {
   channels: { id: string; name: string }[];
   initial?: Subscription;
-  onClose: () => void;
-}) {
+} & DialogProps) {
   const [channelId, setChannelId] = React.useState(initial?.channelId ?? channels[0]?.id ?? ""),
     [allSites, setAllSites] = React.useState(initial?.allSites ?? false),
     [sites, setSites] = React.useState<ReadonlyMap<string, string>>(
@@ -584,13 +559,11 @@ function SubscriptionDialog({
     : channels.map((c) => ({ value: c.id, label: c.name }));
   return (
     <FormDialog
-      open
+      open={open}
       title={initial ? m.common_edit() : m.alert_subscribe()}
       submitLabel={m.common_save()}
       submitTestId="alert-subscription-submit"
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+      onOpenChange={onOpenChange}
       onSubmit={async () => {
         if (!channelId || !kinds.length || (!allSites && !sites.size))
           throw new Error(m.alert_check_fields());
@@ -598,7 +571,7 @@ function SubscriptionDialog({
         if (initial) await update.mutateAsync({ id: initial.id, ...fields });
         else await subscribe.mutateAsync({ channelId, ...fields });
         await queries.invalidateQueries();
-        onClose();
+        onOpenChange(false);
       }}
     >
       <FormSelect
