@@ -22,6 +22,7 @@ import { CONFIG_CHANNEL } from "../lib/events";
 import { lockClusterPublish } from "../lib/locks";
 import { assertNodeFeatures } from "../lib/node-features";
 import { isOnline } from "../lib/node-online";
+import { deleteInBatches } from "../lib/retention";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { ensureChallengeKeys } from "./challenge-keys";
 import { loadConfigInput } from "./config-input";
@@ -499,7 +500,7 @@ export async function pruneRevisions(
   const clusters = await db.select({ id: schema.cluster.id }).from(schema.cluster);
   let removed = 0;
   for (const { id } of clusters) {
-    const latest = await latestRevision(db, id);
+    const latest = await latestRevision(db, id, "head");
     if (!latest) continue;
     // The stable and candidate revisions of a rollout are kept however old they are.
     const rollout = await loadRollout(db, id);
@@ -518,23 +519,21 @@ export async function pruneRevisions(
       .orderBy(desc(schema.configRevision.revision))
       .offset(keep - 1)
       .limit(1);
-    const deleted = await db
-      .delete(schema.configRevision)
-      .where(
-        and(
-          eq(schema.configRevision.clusterId, id),
-          notInArray(schema.configRevision.revision, pinned),
-          or(
-            oldestKept ? lt(schema.configRevision.revision, oldestKept.revision) : undefined,
-            and(
-              eq(schema.configRevision.reasonCode, CHALLENGE_REASON),
-              lt(schema.configRevision.createdAt, new Date(now - CHALLENGE_REVISION_TTL)),
-            ),
+    removed += await deleteInBatches(
+      db,
+      schema.configRevision,
+      and(
+        eq(schema.configRevision.clusterId, id),
+        notInArray(schema.configRevision.revision, pinned),
+        or(
+          oldestKept ? lt(schema.configRevision.revision, oldestKept.revision) : undefined,
+          and(
+            eq(schema.configRevision.reasonCode, CHALLENGE_REASON),
+            lt(schema.configRevision.createdAt, new Date(now - CHALLENGE_REVISION_TTL)),
           ),
         ),
-      )
-      .returning({ id: schema.configRevision.id });
-    removed += deleted.length;
+      ),
+    );
   }
   return removed;
 }
