@@ -1,5 +1,6 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
+import type { PresetLevel } from "./protection";
 import { analyticsRange, isoDateTime, uuid } from "./schemas";
 
 /**
@@ -32,6 +33,27 @@ export const WAF_DEFAULTS = {
   excludedRuleIds: [] as number[],
   requestBodyLimit: 131_072,
 } as const satisfies Omit<SiteWaf, "siteId" | "updatedAt">;
+
+/** The CRS settings a preset sets; mode and exclusions stay the site's own. */
+export interface WafPreset {
+  paranoiaLevel: number;
+  anomalyThreshold: number;
+  requestBodyLimit: number;
+}
+/**
+ * CRS presets. Loose blocks from an anomaly score of 10 (two critical matches instead of one)
+ * and inspects 64 KiB of the body; strict runs paranoia level 2 (more rules, more false
+ * positives) and inspects 1 MiB.
+ */
+export const WAF_PRESETS: Record<PresetLevel, WafPreset> = {
+  loose: { paranoiaLevel: 1, anomalyThreshold: 10, requestBodyLimit: 65_536 },
+  standard: {
+    paranoiaLevel: WAF_DEFAULTS.paranoiaLevel,
+    anomalyThreshold: WAF_DEFAULTS.anomalyThreshold,
+    requestBodyLimit: WAF_DEFAULTS.requestBodyLimit,
+  },
+  strict: { paranoiaLevel: 2, anomalyThreshold: 5, requestBodyLimit: 1_048_576 },
+};
 
 export const siteWaf = z.object({
   siteId: uuid,

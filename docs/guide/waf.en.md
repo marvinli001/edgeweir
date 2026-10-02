@@ -18,7 +18,7 @@ Prerequisites: every active node of the site's cluster supports `modsecurity-v1`
 
 1. Open **Sites**, select the site, and open the **Security** tab.
 2. In the **OWASP CRS managed rules** card, set **Mode** to **Detect only**.
-3. Set **Paranoia level**, **Anomaly score threshold**, **Request body inspected (bytes)**, and **Excluded rule IDs** as needed.
+3. Pick Loose, Standard (the default), or Strict under **Preset**, or **Custom** to set **Paranoia level**, **Anomaly score threshold**, and **Request body inspected (bytes)**; add **Excluded rule IDs** as needed.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision for the site's cluster.
 5. Verify: after the node applies the revision, send a test payload:
 
@@ -39,6 +39,14 @@ Prerequisites: every active node of the site's cluster supports `modsecurity-v1`
 | Anomaly score threshold | 1–1000 | 5 | A request whose anomaly score reaches it counts as an attack; 5 means a single critical rule is enough |
 | Request body inspected (bytes) | 0–134217728 (128 MiB) | 131072 (128 KiB) | Only this many bytes of the request body are inspected; 0 inspects no body |
 | Excluded rule IDs | 900000–999999, unique, up to 200 | None | These rules never run for the site; use them against false positives |
+
+| Preset | Paranoia level | Anomaly score threshold | Request body inspected (bytes) |
+| --- | --- | --- | --- |
+| Loose | 1 | 10 | 65536 |
+| Standard | 1 | 5 | 131072 |
+| Strict | 2 | 5 | 1048576 |
+
+Presets leave **Mode** and **Excluded rule IDs** alone. Saved values that match no preset show as **Custom**.
 
 To exclude rules, type one or more IDs (separated by commas or spaces) into **Excluded rule IDs** and click **Add** or press Enter; click the × next to an ID to remove it. Changes apply once you click **Save**.
 

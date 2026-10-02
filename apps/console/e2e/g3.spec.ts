@@ -146,12 +146,12 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
   const exclusions = page.getByTestId("waf-exclusion");
   const save = page.getByTestId("waf-save");
   const badge = page.getByTestId("waf-mode-badge");
+  const preset = page.getByTestId("waf-preset");
   await expect(mode).toHaveText("关闭");
   await expect(mode).toBeEnabled();
   await expect(badge).toHaveCount(0);
-  await expect(paranoia).toHaveText("1 级");
-  await expect(threshold).toHaveValue("5");
-  await expect(bodyLimit).toHaveValue("131072");
+  await expect(preset).toHaveText("标准");
+  await expect(threshold).toHaveCount(0);
   await expect(exclusions).toHaveCount(0);
   await expect(page.getByTestId("waf-unavailable")).toHaveCount(0);
   await expect(save).toBeDisabled();
@@ -164,6 +164,10 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
   for (const rule of state.crsRuleIds) await expect(top).toContainText(String(rule));
 
   await pick(page, mode, "拦截");
+  await pick(page, preset, "自定义");
+  await expect(paranoia).toHaveText("1 级");
+  await expect(threshold).toHaveValue("5");
+  await expect(bodyLimit).toHaveValue("131072");
   await pick(page, paranoia, "2 级");
   await threshold.fill("10");
   await bodyLimit.fill("65536");
@@ -187,6 +191,7 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
   await page.reload();
   await expect(mode).toHaveText("拦截");
   await expect(badge).toHaveText("拦截");
+  await expect(preset).toHaveText("自定义");
   await expect(paranoia).toHaveText("2 级");
   await expect(threshold).toHaveValue("10");
   await expect(bodyLimit).toHaveValue("65536");
@@ -199,16 +204,15 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
   await expect(save).toBeDisabled();
   await expect(badge).toHaveText("仅检测");
   await pick(page, mode, "关闭");
-  await pick(page, paranoia, "1 级");
-  await threshold.fill("5");
-  await bodyLimit.fill("131072");
+  await pick(page, preset, "标准");
+  await expect(threshold).toHaveCount(0);
   await exclusions.first().getByTestId("waf-exclusion-remove").click();
   await save.click();
   await expect(save).toBeDisabled();
   await expect(badge).toHaveCount(0);
   await page.reload();
   await expect(mode).toHaveText("关闭");
-  await expect(paranoia).toHaveText("1 级");
+  await expect(preset).toHaveText("标准");
   await expect(exclusions).toHaveCount(0);
   await page.goto("/audit?action=site.waf_update");
   await expect(page.getByTestId("audit-action").first()).toHaveText("site.waf_update");

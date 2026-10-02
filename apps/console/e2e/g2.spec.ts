@@ -106,14 +106,19 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   const urlQps = page.getByTestId("cc-url-qps");
   const ipQps = page.getByTestId("cc-ip-qps");
   const save = page.getByTestId("cc-save");
+  const preset = page.getByTestId("cc-preset");
   await expect(enabled).toHaveAttribute("aria-checked", "false");
   await expect(follow).toHaveAttribute("aria-checked", "false");
   await expect(save).toBeDisabled();
+  await expect(preset).toHaveText("标准");
+  await expect(urlQps).toHaveCount(0);
   await enabled.click();
   await follow.click();
-  await expect(urlQps).toBeDisabled();
-  await expect(urlQps).toHaveValue("200");
+  // Following, the policy shows the template's preset.
+  await expect(preset).toHaveText("标准");
   await follow.click();
+  await expect(preset).toHaveText("标准");
+  await pick(page, preset, "自定义");
   await expect(urlQps).toBeEnabled();
   await expect(urlQps).toHaveValue("200");
   await urlQps.fill("30");
@@ -124,6 +129,8 @@ test("G2: the site's security tab turns Under Attack off and on, edits the CC po
   await page.reload();
   await expect(enabled).toHaveAttribute("aria-checked", "true");
   await expect(follow).toHaveAttribute("aria-checked", "false");
+  // Values of no preset show as custom.
+  await expect(preset).toHaveText("自定义");
   await expect(urlQps).toHaveValue("30");
   await expect(ipQps).toHaveValue("80");
   await expect(page.getByTestId("cc-max-level")).toHaveText("工作量证明");
@@ -203,23 +210,31 @@ test("G2: the operator turns global Under Attack on and off and edits the CC tem
   await page.goto("/system");
   const urlQps = page.getByTestId("cc-template-url-qps");
   const save = page.getByTestId("cc-template-save");
-  await expect(urlQps).toHaveValue("200");
+  const preset = page.getByTestId("cc-template-preset");
+  await expect(preset).toHaveText("标准");
+  await expect(urlQps).toHaveCount(0);
   await expect(save).toBeDisabled();
+  await pick(page, preset, "严格");
+  await expect(save).toBeEnabled();
+  await pick(page, preset, "自定义");
+  await expect(urlQps).toHaveValue("60");
   await urlQps.fill("250");
   await pick(page, page.getByTestId("cc-template-max-level"), "JS 计算");
   await save.click();
   await expect(save).toBeDisabled();
   await page.reload();
+  await expect(preset).toHaveText("自定义");
   await expect(urlQps).toHaveValue("250");
   await expect(page.getByTestId("cc-template-max-level")).toHaveText("JS 计算");
   await check(page, "system-protection");
-  await urlQps.fill("200");
-  await pick(page, page.getByTestId("cc-template-max-level"), "图片验证码");
+  // Back to the defaults: the standard preset.
+  await pick(page, preset, "标准");
+  await expect(urlQps).toHaveCount(0);
   await save.click();
   await expect(save).toBeDisabled();
   await page.reload();
-  await expect(urlQps).toHaveValue("200");
-  await expect(page.getByTestId("cc-template-max-level")).toHaveText("图片验证码");
+  await expect(preset).toHaveText("标准");
+  await expect(urlQps).toHaveCount(0);
   await page.goto("/audit?action=system.cc_template_update");
   await expect(page.getByTestId("audit-action").first()).toHaveText("system.cc_template_update");
   await page.goto("/audit?action=system.protection_update");
