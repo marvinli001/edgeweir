@@ -417,23 +417,30 @@ export async function compileBindingPlan(
   const addAddresses = (name: string, ips: Iterable<string>, line?: DnsResolutionLine) => {
     for (const ip of ips) add(name, ip.includes(":") ? "AAAA" : "A", ip, line);
   };
-  const healthy = (node: (typeof nodes)[number]) => {
-    if (node.status !== "active") return false;
-    if (manual) return true;
-    const receipt = receipts.find((r) => r.nodeId === node.id),
-      target = targets ? targetFor(node, targets) : undefined;
-    return (
-      isOnline(node.lastSeenAt, now) &&
-      !!receipt?.dataPlaneHealthy &&
-      !!target &&
-      servesTarget(receipt, target, settled, now)
-    );
-  };
+  const receiptOf = new Map(receipts.map((r) => [r.nodeId, r]));
+  // Once per node: every line and backup group of the binding asks again.
+  const healthy = new Set(
+    nodes
+      .filter((node) => {
+        if (node.status !== "active") return false;
+        if (manual) return true;
+        const receipt = receiptOf.get(node.id),
+          target = targets ? targetFor(node, targets) : undefined;
+        return (
+          isOnline(node.lastSeenAt, now) &&
+          !!receipt?.dataPlaneHealthy &&
+          !!target &&
+          servesTarget(receipt, target, settled, now)
+        );
+      })
+      .map((node) => node.id),
+  );
+  const members = Map.groupBy(nodes, (n) => n.nodeGroupId);
   /** Healthy addresses of a group's nodes as `line` publishes them. */
   const groupAddresses = (line: DnsLine, groupId: string) => {
     const ips = new Set<string>();
-    for (const node of nodes.filter((n) => n.nodeGroupId === groupId)) {
-      if (!healthy(node) || appliesTo(effects?.removed.get(node.id), line.name)) continue;
+    for (const node of members.get(groupId) ?? []) {
+      if (!healthy.has(node.id) || appliesTo(effects?.removed.get(node.id), line.name)) continue;
       const override = line.overrides.find((o) => o.nodeId === node.id);
       let candidates: string[];
       if (override) {
@@ -1160,12 +1167,13 @@ async function reconcileProvider(
   const own = stored.filter((r) => r.clusterId === clusterId);
   const ownNames = new Set(own.map((r) => r.name));
   const otherNames = new Set(stored.filter((r) => r.clusterId !== clusterId).map((r) => r.name));
+  const actualNames = new Set(actual.map((r) => r.name));
   for (const name of desiredNames) {
     if (otherNames.has(name.name))
       fail("DNS_BINDING_CONFLICT", "another cluster manages this DNS name", {
         name: absolute(name.name, p.zone),
       });
-    if (!ownNames.has(name.name) && actual.some((r) => r.name === name.name))
+    if (!ownNames.has(name.name) && actualNames.has(name.name))
       fail("DNS_RECORD_CONFLICT", "DNS name contains an unmanaged record", {
         name: absolute(name.name, p.zone),
       });
