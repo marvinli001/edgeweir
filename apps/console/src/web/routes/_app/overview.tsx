@@ -1,4 +1,11 @@
-import { analyticsRange, type Cluster, type Node, type Revision } from "@edgeweir/contract";
+import {
+  type AttentionItem,
+  type AttentionKind,
+  analyticsRange,
+  type Cluster,
+  type Node,
+  type Revision,
+} from "@edgeweir/contract";
 import { Add01Icon, GitCommitIcon, GlobeIcon, HistoryIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
@@ -6,6 +13,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
+import { Countdown } from "@/components/appica/countdown";
 import { Page } from "@/components/page";
 import { ResourceEmpty, ResourceList, ResourceRow } from "@/components/resource-list";
 import { StarMark, useSiteStars } from "@/components/site-star";
@@ -109,6 +117,7 @@ function OverviewPage() {
         <ErrorState error={failed.error} onRetry={() => failed.refetch()} />
       ) : (
         <>
+          <AttentionList items={overview.data?.attention ?? []} />
           <div className="grid gap-x-10 gap-y-6 @3xl/main:grid-cols-2">
             <SitesList
               total={sites.data?.total ?? 0}
@@ -153,6 +162,87 @@ function OverviewPage() {
         </>
       )}
     </Page>
+  );
+}
+
+const ATTENTION_TONE: Record<AttentionKind, StatusTone> = {
+  nodes_unhealthy: "bad",
+  dns_failed: "bad",
+  dns_blocked: "bad",
+  upgrade_failed: "bad",
+  canary_rolled_back: "bad",
+  canary_awaiting_promotion: "warn",
+  canary_running: "warn",
+  nodes_lagging: "warn",
+  nodes_no_address: "warn",
+};
+
+function attentionText(item: AttentionItem): string {
+  const revision = item.revision ?? 0;
+  switch (item.kind) {
+    case "nodes_unhealthy":
+      return m.attention_nodes_unhealthy({ count: item.count });
+    case "nodes_lagging":
+      return m.attention_nodes_lagging({ count: item.count });
+    case "nodes_no_address":
+      return m.attention_nodes_no_address({ count: item.count });
+    case "dns_failed":
+      return m.attention_dns_failed({ revision });
+    case "dns_blocked":
+      return m.attention_dns_blocked();
+    case "upgrade_failed":
+      return m.attention_upgrade_failed({ version: item.version });
+    case "canary_rolled_back":
+      return m.attention_canary_rolled_back({ revision });
+    case "canary_awaiting_promotion":
+      return m.attention_canary_awaiting_promotion({ revision });
+    case "canary_running":
+      return m.attention_canary_running({ revision });
+  }
+}
+
+/**
+ * What needs the operator, each row leading to where to act (the cluster,
+ * its DNS tab). Nothing when all is well.
+ */
+function AttentionList({ items }: { items: AttentionItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <ResourceList
+      title={m.attention_title()}
+      count={formatNumber(items.length)}
+      testId="attention"
+      className="animate-enter"
+    >
+      {items.map((item) => (
+        <ResourceRow
+          key={`${item.kind}-${item.clusterId}`}
+          icon={<Dot tone={ATTENTION_TONE[item.kind]} pulse={item.kind === "canary_running"} />}
+          link={{
+            to: "/clusters",
+            search: {
+              cluster: item.clusterId,
+              tab: item.kind === "dns_failed" || item.kind === "dns_blocked" ? "dns" : undefined,
+            },
+          }}
+          trailing={
+            <span className="max-w-32 shrink-0 truncate text-xs text-muted-foreground">
+              {item.clusterName}
+            </span>
+          }
+          testId="attention-item"
+        >
+          <span className="truncate" data-kind={item.kind}>
+            {attentionText(item)}
+          </span>
+          {item.kind === "canary_running" && item.at ? (
+            <Countdown target={item.at} className="shrink-0 text-xs text-muted-foreground" />
+          ) : item.kind === "canary_rolled_back" && item.at ? (
+            <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(item.at)}</span>
+          ) : null}
+        </ResourceRow>
+      ))}
+    </ResourceList>
   );
 }
 

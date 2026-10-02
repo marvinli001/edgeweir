@@ -27,6 +27,7 @@ import {
   trafficBreakdown,
   trafficSeries,
 } from "../services/analytics";
+import { listAttention } from "../services/attention";
 import { auditFacets, listAuditLogs } from "../services/audit";
 import { createBan, deleteBan, getBanSettings, listBans, setBanSettings } from "../services/bans";
 import { getBulkRedirects, saveBulkRedirects } from "../services/bulk-redirects";
@@ -408,7 +409,7 @@ export const router = os.router({
     get: authed.overview.get.handler(async ({ context }) => {
       const db = context.app.db;
       const since = sql`now() - make_interval(secs => ${ONLINE_WINDOW_SECONDS})`;
-      const [[clusters], [nodes], [online], sites, revisions] = await Promise.all([
+      const [[clusters], [nodes], [online], sites, revisions, attention] = await Promise.all([
         db.select({ n: count() }).from(schema.cluster),
         db.select({ n: count() }).from(schema.node),
         db.select({ n: count() }).from(schema.node).where(gt(schema.node.lastSeenAt, since)),
@@ -418,6 +419,7 @@ export const router = os.router({
           .from(schema.configRevision)
           .orderBy(desc(schema.configRevision.createdAt))
           .limit(10),
+        listAttention(context.app),
       ]);
       return {
         clusters: clusters?.n ?? 0,
@@ -425,6 +427,7 @@ export const router = os.router({
         onlineNodes: online?.n ?? 0,
         sites,
         revisions: revisions.map(toRevisionDto),
+        attention,
       };
     }),
   },

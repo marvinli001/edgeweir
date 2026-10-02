@@ -800,12 +800,45 @@ export const enrollmentTokenStatus = z.object({
   node: node.nullable(),
 });
 
+/** Kinds of what needs the operator, most pressing first. */
+export const ATTENTION_KINDS = [
+  "nodes_unhealthy",
+  "dns_failed",
+  "dns_blocked",
+  "upgrade_failed",
+  "canary_rolled_back",
+  "canary_awaiting_promotion",
+  "canary_running",
+  "nodes_lagging",
+  "nodes_no_address",
+] as const;
+
+/**
+ * Something of a cluster that needs the operator: a canary running (until
+ * `at`), awaiting promotion or rolled back (at `at`, for a day); a failed
+ * (`revision`) or blocked DNS publication; an upgrade (to `version`) that
+ * failed within a day; `count` nodes unhealthy (offline after connecting,
+ * failed to apply, data plane down, refused certificate), lagging behind
+ * their target revision, or without an address DNS can use.
+ */
+export const attentionItem = z.object({
+  kind: z.enum(ATTENTION_KINDS),
+  clusterId: uuid,
+  clusterName: z.string(),
+  revision: z.number().int().nullable(),
+  at: isoDateTime.nullable(),
+  count: z.number().int(),
+  version: z.string(),
+});
+
 export const overview = z.object({
   clusters: z.number().int(),
   nodes: z.number().int(),
   onlineNodes: z.number().int(),
   sites: z.number().int(),
   revisions: z.array(revision),
+  /** What needs the operator now; empty when all is well. */
+  attention: z.array(attentionItem),
 });
 
 /** Time windows the analytics views offer, each ending now. */
@@ -1290,6 +1323,8 @@ export type NodeGroup = z.infer<typeof nodeGroup>;
 export type NodeChannelCheck = z.infer<typeof nodeChannelCheck>;
 export type SiteChanges = z.infer<typeof siteChanges>;
 export type RollbackPreview = z.infer<typeof rollbackPreview>;
+export type AttentionItem = z.infer<typeof attentionItem>;
+export type AttentionKind = (typeof ATTENTION_KINDS)[number];
 export type RolloutPolicy = z.infer<typeof rolloutPolicy>;
 export type ClusterRollout = z.infer<typeof clusterRollout>;
 export type RolloutState = z.infer<typeof rolloutState>;

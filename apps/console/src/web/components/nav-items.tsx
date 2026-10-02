@@ -38,6 +38,7 @@ export function navGroups(): NavGroup[] {
           icon: icon(DashboardSquare01Icon),
           testId: "nav-overview",
           exact: true,
+          attention: true,
         },
         {
           title: m.nav_sites(),
