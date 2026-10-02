@@ -33,6 +33,7 @@
   "common_close": "关闭",
   "common_copy": "复制",
   "common_copied": "已复制",
+  "common_copy_failed": "复制失败，请手动选择复制",
   "common_delete": "删除",
   "common_confirm": "确认",
   "common_never": "从未",

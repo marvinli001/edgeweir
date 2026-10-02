@@ -1,7 +1,9 @@
 import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { copyText } from "@/lib/browser";
 import { m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -20,9 +22,10 @@ export function CopyButton({ value, iconOnly }: { value: string; iconOnly?: bool
       variant="outline"
       aria-label={iconOnly ? label : undefined}
       title={iconOnly ? label : undefined}
-      onClick={async () => {
-        await navigator.clipboard.writeText(value);
-        setCopied(true);
+      onClick={async (event) => {
+        const container = event.currentTarget.parentElement ?? undefined;
+        if (await copyText(value, container)) setCopied(true);
+        else toast.error(m.common_copy_failed());
       }}
     >
       <HugeiconsIcon

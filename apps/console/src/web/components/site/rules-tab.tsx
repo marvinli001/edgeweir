@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { randomUuid } from "@/lib/browser";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { challengeLabel } from "@/lib/protection";
@@ -301,7 +302,7 @@ function RulesEditor({
                     setRows([
                       ...rows,
                       {
-                        id: crypto.randomUUID(),
+                        id: randomUuid(),
                         name: m.rules_new(),
                         phase,
                         expression: "true",

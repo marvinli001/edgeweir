@@ -164,4 +164,11 @@ describe("UI behaviour", () => {
       .map(({ file, template }) => `${file}: ${template.split("\n")[0]}`);
     expect(hooks).toEqual([]);
   });
+
+  it("uses secure-context-only browser APIs only through lib/browser (plain HTTP on a LAN address)", () => {
+    const found = allWeb
+      .filter((file) => file !== "src/web/lib/browser.ts")
+      .filter((file) => /\bcrypto\.randomUUID\b|\bnavigator\.clipboard\b/.test(read(file)));
+    expect(found).toEqual([]);
+  });
 });

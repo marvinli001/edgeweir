@@ -33,6 +33,7 @@
   "common_close": "Close",
   "common_copy": "Copy",
   "common_copied": "Copied",
+  "common_copy_failed": "Copy failed; select the text and copy it",
   "common_delete": "Delete",
   "common_confirm": "Confirm",
   "common_never": "never",
