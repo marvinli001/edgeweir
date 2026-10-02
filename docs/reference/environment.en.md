@@ -78,7 +78,6 @@ The ClickHouse variables apply only with `EDGEWEIR_ANALYTICS=clickhouse`. The `a
 | `NODE_ENV` | `development` (image: `production`) | `development`, `production`, or `test`. `production` enables rate limiting of the authentication endpoints, with counters in PostgreSQL. |
 | `EDGEWEIR_WEB_DIST` | `<directory of main.js>/../web` | Directory of the built web UI; resolves to `/app/dist/web` in the image. Not used by `pnpm dev`. |
 | `EDGEWEIR_CERTD_BIN` | `edgeweir-certd` (image: `/usr/local/bin/edgeweir-certd`) | Path of the certificate helper; looked up in `PATH` when it contains no `/`. From source, build it with `cd helpers/certd && go build -o bin/edgeweir-certd .` and set its absolute path. |
-| `EDGEWEIR_TELEMETRY` | `false` | Anonymous usage telemetry. Accepts `true`, `1`, `yes`, `on` and `false`, `0`, `no`, `off`. The current version sends nothing; the state is shown as "Telemetry" in **System**. |
 | `EDGEWEIR_VERSION` | `dev` (image: build version) | Version the process reports in `/healthz`, the OpenAPI document, and "Version" in **System**. The image build sets the rolling version `<YYYYMMDD>-<commit>`; do not override it in the container environment. Compose uses a host variable of the same name to pick the image tag; see [Compose host variables](#compose-host-variables). |
 
 ## Compose host variables
@@ -101,5 +100,5 @@ The Compose files pass the remaining console variables as `${VARIABLE:-default}`
 | Compose file | Fixed values | Not passed |
 | --- | --- | --- |
 | `compose.yml` | `ROLE=all` | `EDGEWEIR_MASTER_KEY_FILE`, `HOST`, `PORT`, `NODE_API_HOST`, `NODE_API_PORT`, `NODE_ENV`, `EDGEWEIR_WEB_DIST`, `EDGEWEIR_CERTD_BIN`, `EDGEWEIR_DNS_TEST_ENDPOINT`, `EDGEWEIR_VERSION` |
-| `compose.baota.yml` | `ROLE=all` | Same as `compose.yml`, plus `EDGEWEIR_TELEMETRY`, `LOG_LEVEL`, and `EDGEWEIR_DOWNLOADS_DIR` |
-| `compose.baota-host.yml` | `ROLE=all`, `HOST=127.0.0.1`, `NODE_API_HOST=0.0.0.0`; `PORT` and `NODE_API_PORT` from the host port variables | `EDGEWEIR_MASTER_KEY_FILE`, `NODE_ENV`, `EDGEWEIR_WEB_DIST`, `EDGEWEIR_CERTD_BIN`, `EDGEWEIR_DNS_TEST_ENDPOINT`, `EDGEWEIR_VERSION`, `EDGEWEIR_TELEMETRY`, `LOG_LEVEL`, and `EDGEWEIR_DOWNLOADS_DIR` |
+| `compose.baota.yml` | `ROLE=all` | Same as `compose.yml`, plus `LOG_LEVEL` and `EDGEWEIR_DOWNLOADS_DIR` |
+| `compose.baota-host.yml` | `ROLE=all`, `HOST=127.0.0.1`, `NODE_API_HOST=0.0.0.0`; `PORT` and `NODE_API_PORT` from the host port variables | `EDGEWEIR_MASTER_KEY_FILE`, `NODE_ENV`, `EDGEWEIR_WEB_DIST`, `EDGEWEIR_CERTD_BIN`, `EDGEWEIR_DNS_TEST_ENDPOINT`, `EDGEWEIR_VERSION`, `LOG_LEVEL`, and `EDGEWEIR_DOWNLOADS_DIR` |

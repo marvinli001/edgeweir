@@ -55,7 +55,7 @@ The only contract between console and node is the protobuf in `proto/`, managed 
 - Internal CA keys, certificate keys, S3 origin keys and DNS API credentials are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they reach the database; each ciphertext is bound to its row.
 - Enrollment tokens are single-use and stored as SHA-256 only; after enrollment every node RPC requires mTLS.
 - `/api/v1` accepts only `x-api-key`; `/rpc` accepts only the session cookie plus the CSRF header.
-- No vendor phone-home and no license checks. Telemetry is off by default; third-party telemetry is hard-disabled.
+- No vendor phone-home, no license checks and no telemetry; third-party telemetry is hard-disabled.
 
 Trust baseline, vulnerability reporting and release verification: [SECURITY.en.md](SECURITY.en.md).
 

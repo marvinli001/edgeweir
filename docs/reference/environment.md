@@ -78,7 +78,6 @@ ClickHouse 变量仅在 `EDGEWEIR_ANALYTICS=clickhouse` 时使用。`compose.yml
 | `NODE_ENV` | `development`（镜像：`production`） | `development`、`production`、`test`。`production` 启用认证接口限速，计数存于 PostgreSQL。 |
 | `EDGEWEIR_WEB_DIST` | `<main.js 所在目录>/../web` | 已构建 Web UI 的目录；镜像内解析为 `/app/dist/web`。`pnpm dev` 不使用。 |
 | `EDGEWEIR_CERTD_BIN` | `edgeweir-certd`（镜像：`/usr/local/bin/edgeweir-certd`） | 证书助手的路径；不含 `/` 时在 `PATH` 中查找。源码运行时构建：`cd helpers/certd && go build -o bin/edgeweir-certd .`，填写其绝对路径。 |
-| `EDGEWEIR_TELEMETRY` | `false` | 匿名使用遥测。接受 `true`、`1`、`yes`、`on` 与 `false`、`0`、`no`、`off`。当前版本不发送任何数据；状态显示在 **系统设置** 的「遥测」。 |
 | `EDGEWEIR_VERSION` | `dev`（镜像：构建版本） | 进程报告的版本，出现在 `/healthz`、OpenAPI 文档与 **系统设置** 的「版本」。镜像构建时写入滚动版本 `<YYYYMMDD>-<commit>`；不要在容器环境中覆盖。Compose 另用同名宿主机变量选择镜像 tag，见 [Compose 宿主机变量](#compose-宿主机变量)。 |
 
 ## Compose 宿主机变量
@@ -101,5 +100,5 @@ Compose 在宿主机读取以下变量（`.env` 或 shell 环境），用于插�
 | 编排文件 | 固定值 | 未传入 |
 | --- | --- | --- |
 | `compose.yml` | `ROLE=all` | `EDGEWEIR_MASTER_KEY_FILE`、`HOST`、`PORT`、`NODE_API_HOST`、`NODE_API_PORT`、`NODE_ENV`、`EDGEWEIR_WEB_DIST`、`EDGEWEIR_CERTD_BIN`、`EDGEWEIR_DNS_TEST_ENDPOINT`、`EDGEWEIR_VERSION` |
-| `compose.baota.yml` | `ROLE=all` | 同 `compose.yml`，另加 `EDGEWEIR_TELEMETRY`、`LOG_LEVEL`、`EDGEWEIR_DOWNLOADS_DIR` |
-| `compose.baota-host.yml` | `ROLE=all`、`HOST=127.0.0.1`、`NODE_API_HOST=0.0.0.0`；`PORT`、`NODE_API_PORT` 取自宿主机端口变量 | `EDGEWEIR_MASTER_KEY_FILE`、`NODE_ENV`、`EDGEWEIR_WEB_DIST`、`EDGEWEIR_CERTD_BIN`、`EDGEWEIR_DNS_TEST_ENDPOINT`、`EDGEWEIR_VERSION`、`EDGEWEIR_TELEMETRY`、`LOG_LEVEL`、`EDGEWEIR_DOWNLOADS_DIR` |
+| `compose.baota.yml` | `ROLE=all` | 同 `compose.yml`，另加 `LOG_LEVEL`、`EDGEWEIR_DOWNLOADS_DIR` |
+| `compose.baota-host.yml` | `ROLE=all`、`HOST=127.0.0.1`、`NODE_API_HOST=0.0.0.0`；`PORT`、`NODE_API_PORT` 取自宿主机端口变量 | `EDGEWEIR_MASTER_KEY_FILE`、`NODE_ENV`、`EDGEWEIR_WEB_DIST`、`EDGEWEIR_CERTD_BIN`、`EDGEWEIR_DNS_TEST_ENDPOINT`、`EDGEWEIR_VERSION`、`LOG_LEVEL`、`EDGEWEIR_DOWNLOADS_DIR` |

@@ -239,7 +239,6 @@
 | **节点通道** | `EDGEWEIR_NODE_API_URL`；未设置时为 `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` |
 | **CA 指纹** | 节点通道内部 CA 的 SHA-256；安装命令中的 `--ca-sha256` 与之相同 |
 | **统计模式** | `EDGEWEIR_ANALYTICS`（`lite` / `clickhouse`） |
-| **遥测** | `EDGEWEIR_TELEMETRY`；默认 **关闭** |
 | **Setup token** | **未使用** 或 **已于 {时间} 使用** |
 | **OpenAPI** | `/api/v1/openapi.json` |
 

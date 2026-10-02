@@ -874,7 +874,6 @@ export const settings = z.object({
   consoleUrl: z.string(),
   nodeApiUrl: z.string(),
   nodeCaSha256: z.string(),
-  telemetryEnabled: z.boolean(),
   analyticsMode: z.enum(["lite", "clickhouse"]),
   /** When the setup wizard consumed the one-time setup token. */
   setupCompletedAt: isoDateTime.nullable(),

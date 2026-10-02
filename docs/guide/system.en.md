@@ -239,7 +239,6 @@ Read-only (card **System**).
 | **Node channel** | `EDGEWEIR_NODE_API_URL`; when unset, `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` |
 | **CA fingerprint** | SHA-256 of the node channel's internal CA; install commands carry the same value in `--ca-sha256` |
 | **Analytics** | `EDGEWEIR_ANALYTICS` (`lite` / `clickhouse`) |
-| **Telemetry** | `EDGEWEIR_TELEMETRY`; **Off** by default |
 | **Setup token** | **Not used** or **Used {time}** |
 | **OpenAPI** | `/api/v1/openapi.json` |
 

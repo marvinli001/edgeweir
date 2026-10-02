@@ -5,10 +5,6 @@ import * as z from "zod";
 import { TrustedProxies } from "./client-ip";
 import { masterKeyProblem } from "./envelope";
 
-const bool = z
-  .enum(["true", "false", "1", "0", "yes", "no", "on", "off", ""])
-  .transform((v) => ["true", "1", "yes", "on"].includes(v));
-
 /**
  * `<scheme>://host[:port]` with nothing after it (a trailing "/" is fine), as
  * deploy.sh's valid_url; parses to the origin. z.url() would also take
@@ -114,8 +110,6 @@ const schema = z.object({
     .default("edgeweir"),
   EDGEWEIR_CLICKHOUSE_USER: z.string().default("edgeweir"),
   EDGEWEIR_CLICKHOUSE_PASSWORD: z.string().default(""),
-  /** Anonymous usage telemetry. Off unless explicitly enabled; Phase 0 sends nothing. */
-  EDGEWEIR_TELEMETRY: bool.default(false),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   EDGEWEIR_WEB_DIST: z.string().optional(),
   /**
