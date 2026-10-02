@@ -239,6 +239,7 @@ cd /www/dk_project/edgeweir
 ./deploy.sh update                     # back up, then upgrade to the dated tag behind latest
 ./deploy.sh update 20260929-a1b2c3d    # upgrade or roll back to a given tag
 ./deploy.sh backup                     # back up to backups/<time>/
+./deploy.sh restore backups/<time>     # back up, then replace the database with that backup
 ```
 
 Commands, backup layout, and abort behavior: [deploy-script.en.md](deploy-script.en.md). Version policy and rollback constraints: [upgrade.en.md](upgrade.en.md). Restore: [backup.en.md](backup.en.md).

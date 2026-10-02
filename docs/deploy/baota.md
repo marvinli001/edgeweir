@@ -239,6 +239,7 @@ cd /www/dk_project/edgeweir
 ./deploy.sh update                     # 备份后升级到 latest 对应的日期 tag
 ./deploy.sh update 20260929-a1b2c3d    # 升级或回退到指定 tag
 ./deploy.sh backup                     # 备份到 backups/<时间>/
+./deploy.sh restore backups/<时间>      # 先备份，再用该备份替换数据库
 ```
 
 命令、备份布局与中止行为见 [deploy-script.md](deploy-script.md)；版本策略与回退约束见 [upgrade.md](upgrade.md)；恢复见 [backup.md](backup.md)。

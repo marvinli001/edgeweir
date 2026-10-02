@@ -57,6 +57,16 @@ Verify in an isolated environment first. The restore environment requires:
 | Console version | The backup's version or newer: migrations only move forward. |
 | Background jobs | Only one restore environment at a time may run background jobs against real DNS providers and notification channels; drills use local simulators. |
 
+### deploy.sh
+
+In the deployment directory of a `deploy.sh` deployment:
+
+```bash
+./deploy.sh restore backups/20261001-080000
+```
+
+The command backs up the current database, stops the console, drops and recreates the database, imports the backup's `edgeweir.dump`, then starts and waits for the health checks. `.env` is left alone and must hold the master key from the table above. Preconditions and failure behavior: [deploy.sh reference](deploy-script.en.md#restore).
+
 ### Docker Compose
 
 On a new host or in a new Compose project:

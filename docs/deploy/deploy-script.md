@@ -1,6 +1,6 @@
 # deploy.sh 参考
 
-仓库根目录 `deploy.sh` 的命令、无人值守安装变量、生成的文件、备份布局与退出行为。
+仓库根目录 `deploy.sh` 的命令、无人值守安装变量、生成的文件、备份布局、恢复与退出行为。
 
 ## 运行要求
 
@@ -26,6 +26,7 @@ sudo bash deploy.sh install
 | `install` | — | 对话式安装：选择数据库模式，检查数据库，写入 `.env`、`compose.yml` 与脚本副本，启动并等待健康检查，打印 setup token |
 | `update`（别名 `upgrade`） | `[tag]` `[--no-backup]` | 备份后升级到指定 tag；省略时为 `latest` 对应的日期 tag，见 [update](#update) |
 | `backup` | — | 备份数据库、`.env`（不含主密钥）与编排文件到 `backups/<时间>/`，保留最近 5 份，见 [备份](#备份) |
+| `restore` | `<备份>` `[--no-backup]` | 先备份当前数据库，再用备份中的 `edgeweir.dump` 替换数据库；`.env` 不变，见 [restore](#restore) |
 | `config` | — | 修改控制台地址与节点通道地址并重建容器；只能交互运行 |
 | `start` | — | 启动编排并等待健康检查 |
 | `stop` | — | `docker compose stop`；保留容器 |
@@ -97,7 +98,7 @@ sudo bash deploy.sh install
 
 | 变量 | 取值 | 默认 | 作用 |
 | --- | --- | --- | --- |
-| `EDGEWEIR_YES` | 任意非空值 | 空 | 启用无人值守 |
+| `EDGEWEIR_YES` | 任意非空值 | 空 | 启用无人值守；`restore` 无人值守时必须设置 |
 | `EDGEWEIR_DB` | `host` \| `bundled` | `bundled` | 数据库模式；其他值中止 |
 | `DATABASE_URL` | `postgres://用户:密码@主机:端口/库名[?sslmode=verify-full]` | — | host 模式必填 |
 | `EDGEWEIR_PUBLIC_URL` | `https://主机[:端口]` | — | 必填 |
@@ -118,6 +119,7 @@ sudo bash deploy.sh install
 | `update` 回退确认 | 否：中止 |
 | `update` 替换改动过的编排文件 | 否：保留现有文件（未改动过的直接替换，不询问） |
 | `update` 用镜像内的脚本替换本脚本 | 是 |
+| `restore` 确认 | 设置了 `EDGEWEIR_YES` 时为是；没有终端且未设置时中止 |
 | `config` | 不支持：中止 |
 
 ```bash
@@ -277,7 +279,27 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 | 主密钥 | 不在备份中：只在 `.env`（或 `EDGEWEIR_MASTER_KEY_FILE` 指定的文件）里，另行离线保存；恢复数据库需要它 |
 | 范围 | 不含 ClickHouse 数据 |
 
-恢复步骤见 [backup.md](backup.md)。
+恢复用 [restore](#restore)；手动恢复与恢复验收见 [backup.md](backup.md)。
+
+## restore
+
+`./deploy.sh restore <备份> [--no-backup]` 用备份替换部署的数据库。`<备份>` 是备份目录（取其中的 `edgeweir.dump`）或 dump 文件，依次按原样、相对部署目录、相对 `backups/` 查找，例如 `./deploy.sh restore 20261001-080000`。
+
+1. 检查备份：bundled 先启动 `postgres`；`pg_restore --list` 能读取，且含表数据与 `drizzle.__drizzle_migrations`（控制台的数据库），否则中止。
+2. host：`DATABASE_URL` 的用户须为数据库所有者（或超级用户）且有 `CREATEDB` 权限，否则中止，改为[手动恢复到新数据库](backup.md#外部-postgresql)。
+3. 确认，默认否；无人值守见 [确认项](#无人值守安装)。
+4. 备份当前数据库到 `backups/<时间>-before-restore/`，本次不删除旧备份；`--no-backup` 跳过。备份失败时中止，部署不变。
+5. 停止 `console`。
+6. 删除并重建数据库：`DROP DATABASE … WITH (FORCE)` 与 `CREATE DATABASE`。bundled 在 `postgres` 容器内以 `edgeweir` 执行；host 用 `postgres:18.6-alpine` 连接 `postgres` 维护库执行，新库属于 `DATABASE_URL` 的用户。
+7. `pg_restore --exit-on-error --single-transaction --no-owner --no-privileges` 导入。
+8. 按 `start` 的流程启动并等待健康检查。
+
+| 项目 | 规则 |
+| --- | --- |
+| `.env` | 不修改；备份中的 `env` 不使用。主密钥须为备份时的主密钥，否则控制台拒绝启动 |
+| 控制台版本 | 不早于备份时的版本：迁移只向前执行 |
+| 导入失败 | 数据库为空，控制台保持停止；输出恢复前备份的 `restore` 命令 |
+| 节点 | 恢复后重新连接；发布一次配置让节点同步，见 [节点重新同步](backup.md#3-节点重新同步) |
 
 ## 退出与中止
 
@@ -292,6 +314,7 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 | `install` 确认前 | 不写入安装目录 |
 | `install` 启动失败 | 文件保留，输出「启动失败。修正 .env 后运行 ./deploy.sh start 重试。」；该目录此后被识别为已有部署，再次 `install` 被拒绝 |
 | `update` 启动失败 | `.env` 已指向目标版本；按输出的回退命令或备份恢复 |
+| `restore` 导入失败 | 数据库为空，控制台保持停止；按输出的命令恢复到恢复前的备份 |
 | `setup-token` 找不到令牌 | 中止：已完成初始化，或容器未启动 |
 
 `template` 与 `setup-token` 的结果写到标准输出；进度、提示与错误写到标准错误，标准错误是终端时带颜色。
