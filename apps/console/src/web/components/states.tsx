@@ -83,7 +83,8 @@ const noItems = (data: unknown) => Array.isArray(data) && data.length === 0;
  * data; `empty` instead when `isEmpty` says the data holds nothing (by default an array without
  * items). A failed background refetch keeps showing the data: that is `isError`, not
  * `isLoadingError`. `frame` wraps the loading and error states, e.g. CardContent in a card whose
- * loaded content brings its own. `children` gets the data; it must not call hooks.
+ * loaded content brings its own; `error` replaces ErrorState where a failure is an answer rather
+ * than a hiccup (a refused rollback). `children` gets the data; it must not call hooks.
  */
 export function QueryView<T>({
   query,
@@ -92,6 +93,7 @@ export function QueryView<T>({
   isEmpty = noItems,
   loadingClassName,
   frame: Frame,
+  error,
 }: {
   query: QueryResult<T>;
   children: (data: T) => React.ReactNode;
@@ -99,11 +101,18 @@ export function QueryView<T>({
   isEmpty?: (data: T) => boolean;
   loadingClassName?: string;
   frame?: React.ComponentType<{ children?: React.ReactNode }>;
+  error?: (error: unknown) => React.ReactNode;
 }) {
   const framed = (node: React.ReactNode) => (Frame ? <Frame>{node}</Frame> : node);
   if (query.isPending) return framed(<LoadingState className={loadingClassName} />);
   if (query.isLoadingError)
-    return framed(<ErrorState error={query.error} onRetry={() => void query.refetch()} />);
+    return framed(
+      error ? (
+        error(query.error)
+      ) : (
+        <ErrorState error={query.error} onRetry={() => void query.refetch()} />
+      ),
+    );
   const data = query.data as T;
   return empty !== undefined && isEmpty(data) ? empty : children(data);
 }

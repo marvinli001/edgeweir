@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
-import { EmptyState, LoadingState, QueryView } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
@@ -45,19 +45,18 @@ function RollbackAction({ clusterId, revision }: { clusterId: string; revision: 
         await queryClient.invalidateQueries();
       }}
     >
-      {preview.isPending ? (
-        <LoadingState />
-      ) : preview.isLoadingError ? (
-        <FieldError data-testid="rollback-preview-error">{errorMessage(preview.error)}</FieldError>
-      ) : (
-        <div className="animate-enter rounded-xl border p-3">
-          <SiteChangeList
-            changes={preview.data.sites}
-            unchanged={preview.data.unchanged}
-            testId="rollback-preview"
-          />
-        </div>
-      )}
+      <QueryView
+        query={preview}
+        error={(error) => (
+          <FieldError data-testid="rollback-preview-error">{errorMessage(error)}</FieldError>
+        )}
+      >
+        {({ sites, unchanged }) => (
+          <div className="animate-enter rounded-xl border p-3">
+            <SiteChangeList changes={sites} unchanged={unchanged} testId="rollback-preview" />
+          </div>
+        )}
+      </QueryView>
     </ConfirmDialog>
   );
 }
