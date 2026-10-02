@@ -361,6 +361,17 @@ describe("configuration canary with automatic rollback", async () => {
       lastCandidateRevision: candidate,
     });
     expect((await admin.auditLogs.list({ action: "cluster.rollout_abort" })).total).toBe(1);
+    // The operator's abort publishes the restored revision as the operator.
+    const [restored] = await ctx.db
+      .select({ createdByUserId: schema.configRevision.createdByUserId })
+      .from(schema.configRevision)
+      .where(
+        and(
+          eq(schema.configRevision.clusterId, clusterId),
+          eq(schema.configRevision.revision, aborted.stableRevision ?? 0),
+        ),
+      );
+    expect(restored?.createdByUserId).toBe((await admin.account.me()).user.id);
     expect((await rpcError(admin.clusters.abortRollout({ id: clusterId }))).code).toBe(
       "ROLLOUT_NOT_ACTIVE",
     );

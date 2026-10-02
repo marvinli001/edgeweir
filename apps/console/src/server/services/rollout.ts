@@ -24,6 +24,7 @@ import {
   notifyClusterTargets,
   onlineCanaryNodes,
   prebuilt,
+  publisher,
   type Tx,
   toRevisionDto,
   updateRollout,
@@ -86,7 +87,7 @@ async function rollBack(tx: Tx, row: RolloutRow, outcome: RolloutOutcome, actor:
     row.clusterId,
     prebuilt(content),
     { code: "rollout_rollback", params: { revision: row.candidateRevision ?? 0 } },
-    null,
+    publisher(actor),
   );
   await updateRollout(tx, row.clusterId, {
     stableRevision: restored.revision,
