@@ -157,9 +157,9 @@ if (!channel)
     config: { kind: "webhook", url: "http://mock-services:8080/webhook" },
   });
 await a("POST", "/alerts/subscriptions", {
-  siteId: site.id,
   channelId: channel.id,
   kinds: ["node_offline"],
+  siteIds: [site.id],
 });
 await a("PUT", "/alerts/policy", { nodeOfflineSeconds: 45 });
 const published = (await records()).filter((r) => r.type === "A" && r.data === address).length;

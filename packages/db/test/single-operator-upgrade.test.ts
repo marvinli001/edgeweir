@@ -129,17 +129,21 @@ describe("upgrade to a single operator", () => {
   });
 
   it("moves the other accounts' alert subscriptions to the operator, merging kinds", async () => {
-    const rows = await q<{ user_id: string; site: string; kinds: string[]; enabled: boolean }>(
-      "select a.user_id, s.name as site, a.kinds, a.enabled from alert_subscription a join site s on s.id = a.site_id order by s.name",
+    // 0036 leaves one enabled subscription per site and channel (site a: the
+    // kinds of both accounts); 0046 then folds them into one per channel.
+    const rows = await q<{ user_id: string; sites: string[]; kinds: string[]; enabled: boolean }>(
+      `select a.user_id, a.kinds, a.enabled,
+         array(select s.name from alert_subscription_site m join site s on s.id = m.site_id
+               where m.subscription_id = a.id order by s.name) as sites
+       from alert_subscription a`,
     );
     expect(rows).toEqual([
       {
         user_id: "u_admin",
-        site: "a",
-        kinds: ["certificate_expiry", "node_offline"],
+        sites: ["a", "b"],
+        kinds: ["certificate_expiry", "node_offline", "origin_errors"],
         enabled: true,
       },
-      { user_id: "u_admin", site: "b", kinds: ["origin_errors"], enabled: true },
     ]);
   });
 

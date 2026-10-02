@@ -17,6 +17,7 @@ import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
+import { SiteMultiSelect } from "@/components/site-multi-select";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -195,11 +196,28 @@ function ChannelsCard({
   );
 }
 
-/** Site alerts go to the channels the site is subscribed to (and to every-alert channels). */
+type Subscription = {
+  id: string;
+  channelId: string;
+  channelName: string;
+  kinds: AlertKind[];
+  enabled: boolean;
+  allSites: boolean;
+  sites: { id: string; name: string }[];
+};
+/** Site badges a subscription row shows before "+N". */
+const SITE_BADGES = 6;
+
+/** Site alerts go to the channel a subscription covers them with (and to every-alert channels). */
 function SubscriptionsCard({ channels }: { channels: { id: string; name: string }[] }) {
   const subscriptions = useQuery(orpc.alerts.subscriptions.queryOptions());
-  const [creating, setCreating] = React.useState(false);
+  const [creating, setCreating] = React.useState(false),
+    [editing, setEditing] = React.useState<Subscription | null>(null);
   const queries = useQueryClient();
+  // One subscription per channel: the others are edited from their row.
+  const available = channels.filter(
+    (c) => !subscriptions.data?.some((sub) => sub.channelId === c.id),
+  );
   return (
     <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
       <CardHeader>
@@ -209,7 +227,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
             size="sm"
             variant="outline"
             onClick={() => setCreating(true)}
-            disabled={!channels.length}
+            disabled={!subscriptions.data || !available.length}
             data-testid="alert-subscribe"
           >
             {m.alert_subscribe()}
@@ -233,9 +251,24 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                 className="flex flex-wrap items-center gap-3 py-3"
                 data-testid="alert-subscription"
               >
-                <div className="min-w-0 flex-1">
-                  <p className="break-all text-sm font-medium">{sub.siteName}</p>
-                  <span className="text-xs text-muted-foreground">{sub.channelName}</span>
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <p className="break-all text-sm font-medium">{sub.channelName}</p>
+                  <div className="flex flex-wrap gap-1" data-testid="alert-subscription-sites">
+                    {sub.allSites ? (
+                      <Badge variant="secondary">{m.alert_all_sites()}</Badge>
+                    ) : (
+                      <>
+                        {sub.sites.slice(0, SITE_BADGES).map((site) => (
+                          <Badge key={site.id} variant="secondary" className="max-w-48 truncate">
+                            {site.name}
+                          </Badge>
+                        ))}
+                        {sub.sites.length > SITE_BADGES ? (
+                          <Badge variant="secondary">{`+${sub.sites.length - SITE_BADGES}`}</Badge>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {sub.kinds.map((kind) => (
@@ -244,6 +277,10 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                     </Badge>
                   ))}
                 </div>
+                {sub.enabled ? null : <Badge variant="outline">{m.rules_off()}</Badge>}
+                <Button size="sm" variant="outline" onClick={() => setEditing(sub)}>
+                  {m.common_edit()}
+                </Button>
                 <ConfirmDialog
                   title={m.alert_unsubscribe()}
                   trigger={
@@ -261,8 +298,15 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
           </ul>
         )}
       </CardContent>
-      {creating ? (
-        <SubscriptionDialog channels={channels} onClose={() => setCreating(false)} />
+      {creating || editing ? (
+        <SubscriptionDialog
+          channels={available}
+          initial={editing ?? undefined}
+          onClose={() => {
+            setCreating(false);
+            setEditing(null);
+          }}
+        />
       ) : null}
     </Card>
   );
@@ -512,76 +556,85 @@ function ChannelDialog({ onClose, initial }: { onClose: () => void; initial?: Ed
 }
 function SubscriptionDialog({
   channels,
+  initial,
   onClose,
 }: {
   channels: { id: string; name: string }[];
+  initial?: Subscription;
   onClose: () => void;
 }) {
-  const [search, setSearch] = React.useState(""),
-    [siteId, setSiteId] = React.useState(""),
-    [selectedName, setSelectedName] = React.useState(""),
-    [channelId, setChannelId] = React.useState(channels[0]?.id ?? ""),
-    [kinds, setKinds] = React.useState<AlertKind[]>([...alertKind.options]);
-  const sites = useQuery(orpc.sites.list.queryOptions({ input: { search, pageSize: 100 } }));
+  const [channelId, setChannelId] = React.useState(initial?.channelId ?? channels[0]?.id ?? ""),
+    [allSites, setAllSites] = React.useState(initial?.allSites ?? false),
+    [sites, setSites] = React.useState<ReadonlyMap<string, string>>(
+      () => new Map(initial?.sites.map((site) => [site.id, site.name])),
+    ),
+    [kinds, setKinds] = React.useState<AlertKind[]>(initial?.kinds ?? [...alertKind.options]),
+    [enabled, setEnabled] = React.useState(initial?.enabled ?? true);
   const queries = useQueryClient(),
-    mutation = useMutation(orpc.alerts.subscribe.mutationOptions());
-  const choices = (sites.data?.items ?? []).map((s) => ({ value: s.id, label: s.name }));
-  if (siteId && !choices.some((c) => c.value === siteId))
-    choices.unshift({ value: siteId, label: selectedName });
+    subscribe = useMutation(orpc.alerts.subscribe.mutationOptions()),
+    update = useMutation(orpc.alerts.updateSubscription.mutationOptions());
+  const channelOptions = initial
+    ? [{ value: initial.channelId, label: initial.channelName }]
+    : channels.map((c) => ({ value: c.id, label: c.name }));
   return (
     <FormDialog
       open
-      title={m.alert_subscribe()}
+      title={initial ? m.common_edit() : m.alert_subscribe()}
       submitLabel={m.common_save()}
       submitTestId="alert-subscription-submit"
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
       onSubmit={async () => {
-        if (!siteId || !channelId || !kinds.length) throw new Error(m.alert_check_fields());
-        await mutation.mutateAsync({ siteId, channelId, kinds });
+        if (!channelId || !kinds.length || (!allSites && !sites.size))
+          throw new Error(m.alert_check_fields());
+        const fields = { kinds, allSites, siteIds: allSites ? [] : [...sites.keys()], enabled };
+        if (initial) await update.mutateAsync({ id: initial.id, ...fields });
+        else await subscribe.mutateAsync({ channelId, ...fields });
         await queries.invalidateQueries();
         onClose();
       }}
     >
-      <Field>
-        <FieldLabel htmlFor="alert-site-search">{m.alert_site_search()}</FieldLabel>
-        <Input id="alert-site-search" value={search} onChange={(e) => setSearch(e.target.value)} />
-      </Field>
-      {sites.isPending ? (
-        <LoadingState />
-      ) : sites.isLoadingError ? (
-        <ErrorState error={sites.error} onRetry={() => void sites.refetch()} />
-      ) : (
-        <FormSelect
-          id="alert-site"
-          label={m.nav_sites()}
-          value={siteId}
-          options={choices}
-          onChange={(id) => {
-            setSiteId(id);
-            setSelectedName(choices.find((c) => c.value === id)?.label ?? "");
-          }}
-        />
-      )}
       <FormSelect
         id="alert-channel"
         label={m.alert_channel_label()}
         value={channelId}
-        options={channels.map((c) => ({ value: c.id, label: c.name }))}
+        options={channelOptions}
         onChange={setChannelId}
+        disabled={!!initial}
       />
+      <SwitchField
+        id="subscribe-all-sites"
+        label={m.alert_all_sites()}
+        checked={allSites}
+        onCheckedChange={setAllSites}
+      />
+      {allSites ? null : (
+        <SiteMultiSelect
+          id="alert-sites"
+          label={m.nav_sites()}
+          searchLabel={m.alert_site_search()}
+          selected={sites}
+          onChange={setSites}
+        />
+      )}
       {alertKind.options.map((kind) => (
         <SwitchField
           key={kind}
           id={`subscribe-${kind}`}
           label={label(kind)}
           checked={kinds.includes(kind)}
-          onCheckedChange={(enabled) =>
-            setKinds(enabled ? [...kinds, kind] : kinds.filter((k) => k !== kind))
+          onCheckedChange={(checked) =>
+            setKinds(checked ? [...kinds, kind] : kinds.filter((k) => k !== kind))
           }
         />
       ))}
+      <SwitchField
+        id="subscribe-enabled"
+        label={m.alert_enable()}
+        checked={enabled}
+        onCheckedChange={setEnabled}
+      />
     </FormDialog>
   );
 }

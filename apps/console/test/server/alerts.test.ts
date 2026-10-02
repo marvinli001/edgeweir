@@ -8,7 +8,11 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { postNotification } from "../../src/server/lib/outbound";
-import { sweepAlerts, unsubscribeAlerts } from "../../src/server/services/alerts";
+import {
+  sweepAlerts,
+  unsubscribeAlerts,
+  updateAlertSubscription,
+} from "../../src/server/services/alerts";
 import { deliverNotification } from "../../src/server/services/notification-delivery";
 import {
   type ApiClient,
@@ -37,7 +41,7 @@ describe("M5 notification delivery and subscription authorization", async () => 
   });
   const app = createApp(ctx),
     origin = ctx.env.EDGEWEIR_PUBLIC_URL;
-  let admin: ApiClient, siteId: string, channelId: string, nodeId: string;
+  let admin: ApiClient, siteId: string, otherSiteId: string, channelId: string, nodeId: string;
   const received = () => deliveries.filter((d) => d.kind !== "test");
   beforeAll(async () => {
     await setupPlatform(ctx);
@@ -52,11 +56,13 @@ describe("M5 notification delivery and subscription authorization", async () => 
       })
     ).site.id;
     // A site of the same cluster that no channel is subscribed to.
-    await admin.sites.create({
-      name: "Unsubscribed site",
-      domains: ["private-alert.test"],
-      origins: [{ address: "origin.test" }],
-    });
+    otherSiteId = (
+      await admin.sites.create({
+        name: "Unsubscribed site",
+        domains: ["private-alert.test"],
+        origins: [{ address: "origin.test" }],
+      })
+    ).site.id;
     const [node] = await ctx.db
       .insert(schema.node)
       .values({
@@ -90,8 +96,22 @@ describe("M5 notification delivery and subscription authorization", async () => 
     expect((await admin.alerts.channels())[0]?.name).toBe("Updated webhook");
   });
   it("notifies a channel once per transition of the sites subscribed to it", async () => {
-    const sub = await admin.alerts.subscribe({ siteId, channelId, kinds: ["node_offline"] });
-    expect(await admin.alerts.subscriptions()).toHaveLength(1);
+    const sub = await admin.alerts.subscribe({
+      channelId,
+      kinds: ["node_offline"],
+      siteIds: [siteId],
+    });
+    expect(await admin.alerts.subscriptions()).toEqual([
+      {
+        id: sub.id,
+        channelId,
+        channelName: "Updated webhook",
+        kinds: ["node_offline"],
+        enabled: true,
+        allSites: false,
+        sites: [{ id: siteId, name: "Alerted site" }],
+      },
+    ]);
     // Subscriptions belong to the account that made them.
     await expect(
       unsubscribeAlerts(ctx, sub.id, {
@@ -156,6 +176,163 @@ describe("M5 notification delivery and subscription authorization", async () => 
     // A deleted node's alert ends without a recovery notice.
     expect(received().slice(before)).toHaveLength(1);
     await admin.alerts.deleteChannel({ id: platform.id });
+  });
+  it("covers a set of sites or all sites with one subscription per channel", async () => {
+    const third = (
+      await admin.sites.create({
+        name: "Third site",
+        domains: ["third-alert.test"],
+        origins: [{ address: "origin.test" }],
+      })
+    ).site.id;
+    const [node] = await ctx.db
+      .insert(schema.node)
+      .values({
+        clusterId: (await admin.clusters.list())[0]?.id ?? "",
+        name: "all-sites node",
+        enrolledAt: new Date(Date.now() - 86400000),
+        lastSeenAt: new Date(),
+      })
+      .returning();
+    if (!node) throw new Error("node missing");
+    // A site set or all sites, exactly one of them; every site must exist.
+    for (const input of [
+      { channelId, kinds: ["high_5xx" as const], siteIds: [] },
+      { channelId, kinds: ["high_5xx" as const], allSites: true, siteIds: [siteId] },
+    ])
+      expect((await rpcError(admin.alerts.subscribe(input))).code).toBe("BAD_REQUEST");
+    expect(
+      (
+        await rpcError(
+          admin.alerts.subscribe({
+            channelId,
+            kinds: ["high_5xx"],
+            siteIds: [siteId, crypto.randomUUID()],
+          }),
+        )
+      ).code,
+    ).toBe("SITE_NOT_FOUND");
+    expect(await admin.alerts.subscriptions()).toEqual([]);
+    const first = await admin.alerts.subscribe({
+      channelId,
+      kinds: ["node_offline"],
+      siteIds: [third],
+    });
+    // Subscribing the channel again replaces its subscription.
+    const sub = await admin.alerts.subscribe({
+      channelId,
+      kinds: ["high_5xx", "high_5xx"],
+      siteIds: [third, siteId, third],
+    });
+    expect(sub).toMatchObject({
+      id: first.id,
+      kinds: ["high_5xx"],
+      allSites: false,
+      sites: [
+        { id: siteId, name: "Alerted site" },
+        { id: third, name: "Third site" },
+      ],
+    });
+    expect(await admin.alerts.subscriptions()).toHaveLength(1);
+    await expect(
+      updateAlertSubscription(
+        ctx,
+        { id: sub.id, kinds: ["high_5xx"], allSites: true, siteIds: [], enabled: true },
+        {
+          actor: { type: "user", id: "someone-else", name: "Someone else" },
+          userId: "someone-else",
+        },
+      ),
+    ).rejects.toMatchObject({ code: "ALERT_SUBSCRIPTION_NOT_FOUND" });
+    // Every site's 5xx ratio is high: only the sites in the set notify.
+    const minute = new Date(Math.floor(Date.now() / 60_000) * 60_000);
+    await ctx.db.insert(schema.nodeMinuteStats).values(
+      [siteId, otherSiteId, third].map((site) => ({
+        minute,
+        nodeId: node.id,
+        siteId: site,
+        requests: 200,
+        statusCodes: { "500": 100, "200": 100 },
+      })),
+    );
+    const before = received().length;
+    const fivexx = () =>
+      received()
+        .slice(before)
+        .filter((d) => d.kind === "high_5xx")
+        .map((d) => `${d.siteName} ${d.status}`)
+        .sort();
+    await sweepAlerts(ctx);
+    expect(fivexx()).toEqual(["Alerted site firing", "Third site firing"]);
+    // All sites, present and future: the firing alert of the third site is sent next.
+    const all = await admin.alerts.updateSubscription({
+      id: sub.id,
+      kinds: ["high_5xx", "node_offline"],
+      allSites: true,
+    });
+    expect(all).toMatchObject({ allSites: true, sites: [], kinds: ["high_5xx", "node_offline"] });
+    await sweepAlerts(ctx);
+    expect(fivexx()).toEqual([
+      "Alerted site firing",
+      "Third site firing",
+      "Unsubscribed site firing",
+    ]);
+    // A paused subscription sends nothing.
+    await admin.alerts.updateSubscription({
+      id: sub.id,
+      kinds: ["high_5xx"],
+      allSites: true,
+      enabled: false,
+    });
+    await ctx.db.delete(schema.nodeMinuteStats);
+    await sweepAlerts(ctx);
+    expect(fivexx()).toHaveLength(3);
+    // node_offline of a node serving any site reaches an all-sites subscription.
+    await admin.alerts.updateSubscription({ id: sub.id, kinds: ["node_offline"], allSites: true });
+    await ctx.db
+      .update(schema.node)
+      .set({ lastSeenAt: new Date(0) })
+      .where(eq(schema.node.id, node.id));
+    await sweepAlerts(ctx);
+    expect(
+      received()
+        .slice(before)
+        .filter((d) => d.kind === "node_offline"),
+    ).toMatchObject([{ resourceId: node.id, siteName: "all-sites node", status: "firing" }]);
+    await ctx.db.delete(schema.node).where(eq(schema.node.id, node.id));
+    await sweepAlerts(ctx);
+    await admin.alerts.unsubscribe({ id: sub.id });
+  });
+  it("drops a deleted site out of subscriptions and removes those left without sites", async () => {
+    const doomed = (
+      await admin.sites.create({
+        name: "Doomed site",
+        domains: ["doomed-alert.test"],
+        origins: [{ address: "origin.test" }],
+      })
+    ).site.id;
+    const second = await admin.alerts.createChannel({
+      name: "Second webhook",
+      config: { kind: "webhook", url: endpoint },
+    });
+    const kept = await admin.alerts.subscribe({
+      channelId,
+      kinds: ["high_5xx"],
+      siteIds: [siteId, doomed],
+    });
+    const only = await admin.alerts.subscribe({
+      channelId: second.id,
+      kinds: ["high_5xx"],
+      siteIds: [doomed],
+    });
+    await admin.sites.delete({ id: doomed });
+    const left = await admin.alerts.subscriptions();
+    expect(left.map((s) => [s.id, s.sites.map((site) => site.name)])).toEqual([
+      [kept.id, ["Alerted site"]],
+    ]);
+    expect(left.some((s) => s.id === only.id)).toBe(false);
+    await admin.alerts.unsubscribe({ id: kept.id });
+    await admin.alerts.deleteChannel({ id: second.id });
   });
   it("refuses private endpoints unless the operator explicitly allows them and never follows redirects", async () => {
     const allow = ctx.env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS;

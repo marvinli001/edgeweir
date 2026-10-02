@@ -18,6 +18,7 @@ import {
   ilike,
   inArray,
   ne,
+  notExists,
   or,
   type SQL,
   sql,
@@ -726,6 +727,21 @@ export async function deleteSite(
     const row = await findSite(tx, id);
     await flushSiteUsage(tx, row.id);
     await tx.delete(schema.site).where(eq(schema.site.id, row.id));
+    // The site drops out of alert subscriptions; one left without sites goes.
+    const member = schema.alertSubscriptionSite;
+    await tx
+      .delete(schema.alertSubscription)
+      .where(
+        and(
+          eq(schema.alertSubscription.allSites, false),
+          notExists(
+            tx
+              .select({ one: sql`1` })
+              .from(member)
+              .where(eq(member.subscriptionId, schema.alertSubscription.id)),
+          ),
+        ),
+      );
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,
       reason: { code: "site_deleted", params: { site: row.name } },

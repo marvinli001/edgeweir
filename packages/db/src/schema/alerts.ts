@@ -5,6 +5,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -23,6 +24,7 @@ export const alertChannel = pgTable("alert_channel", {
   lastError: text("last_error").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+/** One per account and channel: the alert kinds it sends for a set of sites, or all sites. */
 export const alertSubscription = pgTable(
   "alert_subscription",
   {
@@ -30,17 +32,30 @@ export const alertSubscription = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    siteId: uuid("site_id")
-      .notNull()
-      .references(() => site.id, { onDelete: "cascade" }),
     channelId: uuid("channel_id")
       .notNull()
       .references(() => alertChannel.id, { onDelete: "cascade" }),
+    /** Every site, present and future; alert_subscription_site is then empty. */
+    allSites: boolean("all_sites").notNull().default(false),
     kinds: text("kinds").array().notNull(),
     enabled: boolean("enabled").notNull().default(true),
   },
+  (t) => [uniqueIndex("alert_subscription_user_channel_uq").on(t.userId, t.channelId)],
+);
+/** The sites of a subscription that does not cover all sites. */
+export const alertSubscriptionSite = pgTable(
+  "alert_subscription_site",
+  {
+    subscriptionId: uuid("subscription_id")
+      .notNull()
+      .references(() => alertSubscription.id, { onDelete: "cascade" }),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+  },
   (t) => [
-    uniqueIndex("alert_subscription_user_site_channel_uq").on(t.userId, t.siteId, t.channelId),
+    primaryKey({ columns: [t.subscriptionId, t.siteId] }),
+    index("alert_subscription_site_site_idx").on(t.siteId),
   ],
 );
 export const alertState = pgTable("alert_state", {

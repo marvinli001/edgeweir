@@ -14,7 +14,7 @@ DNS steering records (third-party DNS providers bound per cluster), and alert ch
 | Backup node group | A node group that answers, in order, while a line's own node group has too few healthy addresses. |
 | DNS revision | A snapshot of a cluster's DNS binding and its records, separate from node configuration revisions. |
 | Alert channel | A notification target: email, webhook, DingTalk, WeCom, or Telegram. |
-| Alert subscription | Sends some alert kinds of one site to one channel. |
+| Alert subscription | Sends some alert kinds of a set of sites (or all sites) to one channel; one per channel. |
 
 ## Configure DNS steering
 
@@ -312,7 +312,7 @@ Alerts are configured on the **Alerts** page, which has four cards:
 | Card | Contents |
 | --- | --- |
 | Alert channels | Notification targets, which can be added, edited, tested, enabled or disabled, and deleted |
-| Subscriptions | The alert kinds of a site and the channels that receive them |
+| Subscriptions | The sites and alert kinds each channel receives |
 | Recent events | The latest 100 alert events, including cluster and DNS alerts |
 | Alert rules | The thresholds that raise alerts |
 
@@ -383,27 +383,32 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 ## Subscribe to alerts
 
 1. Open **Alerts** and click **Subscribe** in the **Subscriptions** card.
-2. Find the site with **Search sites** and select it under **Sites**, select **Notification channel**, and turn on the alert kinds to send.
-3. Click **Save**.
-4. Verify: the subscription appears under **Subscriptions**; **Recent events** shows the site's events.
+2. Select **Notification channel**.
+3. Turn on **All sites**, or tick sites in the **Sites** list (**Search sites** finds them; ticked sites stay ticked across searches).
+4. Turn on the alert kinds to send and click **Save**.
+5. Verify: the subscription row shows the channel, the sites (or **All sites**), and the alert kinds; **Recent events** shows these sites' events.
 
 | Item | Behavior |
 | --- | --- |
-| Channels | Only enabled channels can be chosen; without one, **Subscribe** is unavailable |
+| Channels | One subscription per channel; **Subscribe** lists only enabled channels without a subscription and is unavailable when there is none |
+| Sites | **All sites** includes sites created later; otherwise tick at least one site |
 | Alert kinds | Node offline, Certificate expiring, Origin unavailable, High server error ratio, CC mitigation raised |
-| Repeated subscriptions | A site and a channel have one subscription; saving again replaces its alert kinds |
+| Changes | Click **Edit** on the subscription row to change its sites, alert kinds, or **Enable**; a subscription with **Enable** off sends nothing and its row shows **Off** |
+| Deleted sites | The site leaves the subscription; a subscription left without sites is deleted with it |
 | Removal | Click **Unsubscribe** on the subscription row and confirm |
+| API | `POST /api/v1/alerts/subscriptions` (`channelId`, `kinds`, `allSites` or `siteIds`) creates the channel's subscription, replacing the one it has; `PUT /api/v1/alerts/subscriptions/{id}` changes it; both return `allSites` and `sites` (`id`, `name`). The former `siteId` field is gone |
+| Upgrades | A subscription used to cover one site; on upgrade, the subscriptions of a channel merge into one. If any of them is enabled, the result is enabled with the sites and alert kinds of the enabled ones; if all are paused, it stays paused with all their sites and alert kinds |
 
 ## Delivery behavior
 
 | Item | Behavior |
 | --- | --- |
 | Events | A condition creates one event when it starts and one when it recovers; event IDs are stable |
-| Receiving channels | Channels with **Receive every alert** receive every alert; other channels receive only the site alerts subscribed to them, and **Node offline** when the channel subscribes to that kind for any site in the node's cluster |
+| Receiving channels | Channels with **Receive every alert** receive every alert; other channels receive only the alerts of the sites their subscription covers, and **Node offline** when the subscription covers any site in the node's cluster (or **All sites**) and includes that kind |
 | Retries | After a failure, retries back off 2, 4, 8, and 16 minutes; each channel gets 5 attempts |
 | Batches | Checked every minute; at most 200 notifications per check, and deliveries that would start after 40 seconds wait for the next minute |
 | Duplicates | A lost receipt can cause duplicate notifications; webhook receivers deduplicate by event ID |
-| Checks before delivery | Every delivery rechecks that the channel is enabled, that the event is still the condition's current state, and that a subscription still includes the alert kind (except for channels with **Receive every alert**) |
+| Checks before delivery | Every delivery rechecks that the channel is enabled, that the event is still the condition's current state, and that the subscription is enabled and still covers the site and the alert kind (except for channels with **Receive every alert**) |
 | Outbound policy | Resolves and pins the target IP; refuses special-purpose addresses; webhook-style targets do not follow redirects; internal webhooks or SMTP need their network in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | Timeouts and sizes | 10 seconds per delivery; request body up to 32 KiB, response body up to 64 KiB |
 | Retention | Alert events are kept for 90 days |
@@ -436,4 +441,4 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | Carrier users get the default line's addresses | The resolver is not on that carrier's network, or no binding line maps to that resolution line | Test with a resolver of that carrier; add a binding line for it |
 | Channel shows **Notification delivery failed** | The target refused or timed out, or the outbound policy refused the address | Reproduce with **Send test**; add internal targets to `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |
 | "Notification channel limit reached" | 32 channels exist | Delete unused channels |
-| **Subscribe** is unavailable | No channel is enabled | Add or enable a channel |
+| **Subscribe** is unavailable | No channel is enabled, or every enabled channel has a subscription | Add or enable a channel; click **Edit** to change an existing subscription |

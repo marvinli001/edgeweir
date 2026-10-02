@@ -18,6 +18,7 @@ import {
   testAlertChannel,
   unsubscribeAlerts,
   updateAlertChannel,
+  updateAlertSubscription,
 } from "../services/alerts";
 import {
   topNodes,
@@ -455,6 +456,12 @@ export const router = os.router({
     ),
     subscribe: authed.alerts.subscribe.handler(({ input, context }) =>
       subscribeAlerts(context.app, input, { actor: context.actor, userId: context.user.id }),
+    ),
+    updateSubscription: authed.alerts.updateSubscription.handler(({ input, context }) =>
+      updateAlertSubscription(context.app, input, {
+        actor: context.actor,
+        userId: context.user.id,
+      }),
     ),
     unsubscribe: authed.alerts.unsubscribe.handler(({ input, context }) =>
       unsubscribeAlerts(context.app, input.id, { actor: context.actor, userId: context.user.id }),
