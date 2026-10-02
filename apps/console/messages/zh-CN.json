@@ -774,6 +774,7 @@
   "upgrade_start": "开始试运行",
   "upgrade_version": "目标版本",
   "upgrade_version_placeholder": "0.1.0",
+  "upgrade_version_invalid": "版本号格式如 0.2.0",
   "upgrade_group": "先升级的节点组",
   "upgrade_group_nodes": "{name}（{count} 个节点）",
   "upgrade_start_note": "节点验签后重启，未通过健康检查会自动回滚。",

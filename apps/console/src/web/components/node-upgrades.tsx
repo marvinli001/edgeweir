@@ -15,7 +15,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
@@ -243,9 +243,9 @@ function UpgradeDialog({
       title={m.upgrade_create()}
       submitLabel={m.upgrade_start()}
       submitTestId="upgrade-submit"
-      submitDisabled={blocked.length > 0 || current || canaryEmpty || !groupId}
+      submitDisabled={!parsed.success || blocked.length > 0 || current || canaryEmpty || !groupId}
       onSubmit={async () => {
-        await create.mutateAsync({ nodeGroupId: groupId, version });
+        await create.mutateAsync({ nodeGroupId: groupId, version: parsed.data ?? version });
         onOpenChange(false);
         await onCreated();
       }}
@@ -261,7 +261,13 @@ function UpgradeDialog({
           onChange={(event) => setTyped(event.target.value)}
           placeholder={m.upgrade_version_placeholder()}
           className="font-mono"
+          aria-invalid={!!version.trim() && !parsed.success}
         />
+        {version.trim() && !parsed.success ? (
+          <FieldError data-testid="upgrade-version-invalid">
+            {m.upgrade_version_invalid()}
+          </FieldError>
+        ) : null}
         {current ? (
           <SafetyNote data-testid="upgrade-current">
             {m.upgrade_nodes_current({ version: parsed.data ?? version })}

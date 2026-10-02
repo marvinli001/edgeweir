@@ -168,7 +168,7 @@ export async function latestNodeVersion(app: AppContext, now = Date.now()): Prom
         1024,
       );
     }
-    const parsed = releaseVersion.safeParse(text.trim().replace(/^v/, ""));
+    const parsed = releaseVersion.safeParse(text);
     version = parsed.success ? parsed.data : null;
   } catch {
     version = null;

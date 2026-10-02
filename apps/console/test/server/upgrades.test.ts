@@ -215,7 +215,9 @@ describe("signed upgrade orchestration: canary health, scope, retries and outcom
     expect(await pullUpgrade(ctx, canary)).toBeNull();
   });
   it("cancels queued work without changing completed node versions", async () => {
-    const job = await admin.upgrades.create({ version: "0.5.0", nodeGroupId: groupId });
+    // A tag name ("v0.5.0") is the version.
+    const job = await admin.upgrades.create({ version: "v0.5.0", nodeGroupId: groupId });
+    expect(job.version).toBe("0.5.0");
     const cancelled = await admin.upgrades.cancel({ id: job.id });
     expect(cancelled.state).toBe("cancelled");
     expect(cancelled.deliveries.every((d) => d.state === "cancelled")).toBe(true);

@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { compareReleaseVersions } from "../src/index";
+import { compareReleaseVersions, releaseVersion } from "../src/index";
 
 describe("release versions", () => {
+  it("accepts tag names and plain versions", () => {
+    for (const [input, version] of [
+      ["0.2.0", "0.2.0"],
+      ["v0.2.0", "0.2.0"],
+      [" V1.0.0-rc.1 ", "1.0.0-rc.1"],
+    ])
+      expect(releaseVersion.parse(input), input).toBe(version);
+    for (const input of ["vv0.2.0", "v", "version", "0.2", "0.2.0+build", "latest"])
+      expect(releaseVersion.safeParse(input).success, input).toBe(false);
+  });
+
   it("orders versions by semantic version precedence", () => {
     const ordered = [
       "0.1.9",

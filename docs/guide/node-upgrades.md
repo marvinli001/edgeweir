@@ -27,7 +27,7 @@
 
 1. 打开 **集群与节点**，选择集群。
 2. 在「节点升级」中点击「发起升级」。
-3. 填写「目标版本」，不带 `v` 前缀，例如 `0.1.0`；选择「先升级的节点组」。
+3. 填写「目标版本」，例如 `0.1.0`（也可写成标签 `v0.1.0`）；选择「先升级的节点组」。
 4. 点击「开始试运行」。对话框列出「未就绪的节点」时不能开始，先处理这些节点（见下表）。
 5. 等待试运行组的节点显示「已成功」，并持续健康 30 秒。
 6. 点击「推进剩余节点」。其余节点分批升级：同时升级的节点最多为其余节点数的四分之一（至少 1 个，按节点名称排序），一个节点成功后下发下一个。
@@ -152,7 +152,7 @@ EDGEWEIR_UPGRADE_PUBLIC_KEY=/etc/edgeweir-node/release.pub
 | `upgrades.release` | `GET /node-releases/{version}` | 读取发布清单：每个架构的归档、SHA-256 与签名地址 |
 | `upgrades.latestVersion` | `GET /node-upgrades/latest-version` | 发布源的最新版本 `version`；无法得知时为 `null` |
 | `upgrades.list` | `GET /node-upgrades` | 升级任务及每个节点的状态；可用 `clusterId` 只列出一个集群 |
-| `upgrades.create` | `POST /node-upgrades` | 发起升级：`version`（不带 `v`）、`nodeGroupId`（试运行组） |
+| `upgrades.create` | `POST /node-upgrades` | 发起升级：`version`（开头的 `v` 会被去掉）、`nodeGroupId`（试运行组） |
 | `upgrades.promote` | `POST /node-upgrades/{id}/promote` | 推进剩余节点 |
 | `upgrades.cancel` | `POST /node-upgrades/{id}/cancel` | 取消待执行任务 |
 
@@ -173,7 +173,7 @@ EDGEWEIR_UPGRADE_PUBLIC_KEY=/etc/edgeweir-node/release.pub
 | 「这些节点须在线、数据面正常、配置同步且支持签名升级：…」 | 列出的已启用节点（最多 10 个，其余显示为「+N」）离线、未应用当前版本、数据面不健康、缺少 `self-upgrade-v1`，或架构不在发布物中 | 修复或停用这些节点后重试 |
 | 「先升级的节点组没有启用的节点」 | 所选节点组没有已启用节点 | 选择其他节点组 |
 | 「一次升级最多 1000 个节点」 | 集群的已启用节点超过 1000 个 | 拆分集群 |
-| 「输入有误」 | 「目标版本」带 `v` 前缀，或不是 `主版本.次版本.修订号` 格式 | 去掉 `v` 前缀 |
+| 「版本号格式如 0.2.0」 | 「目标版本」不是 `主版本.次版本.修订号`（可带预发布后缀，如 `1.0.0-rc.1`）格式 | 改正版本号 |
 | 「无法读取此版本的发布清单」 | 版本不存在、发布源不可达，或清单缺少 Linux 归档 | 核对版本号和控制台发布源 |
 | 「发布源须使用 HTTPS 并解析到允许的地址」 | **系统设置 → 节点发布源** 中保存的发布源不满足出站策略 | 见[节点发布源](system.md#节点发布源) |
 | 「这些节点已有未完成的升级：…」 | 列出的节点已有任务，或取消时这些节点「升级中」 | 等待当前任务结束 |

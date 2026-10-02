@@ -1,10 +1,16 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
+/** A release version such as 0.2.0 or 1.0.0-rc.1; a leading "v" (a tag name) is dropped. */
 export const releaseVersion = z
   .string()
   .trim()
-  .regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/)
-  .max(64);
+  .transform((value) => value.replace(/^v(?=\d)/i, ""))
+  .pipe(
+    z
+      .string()
+      .regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/)
+      .max(64),
+  );
 
 const VERSION_PARTS = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
 

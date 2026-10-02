@@ -27,7 +27,7 @@ Nodes that do not meet the supervisor conditions do not report `self-upgrade-v1`
 
 1. Open **Clusters & nodes** and select the cluster.
 2. In **Node upgrades**, click **New upgrade**.
-3. Enter **Target version** without the `v` prefix, for example `0.1.0`, and select **Canary node group**.
+3. Enter **Target version**, for example `0.1.0` (the tag `v0.1.0` works too), and select **Canary node group**.
 4. Click **Start canary**. While the dialog lists **Nodes not ready**, it cannot start: deal with those nodes first (see below).
 5. Wait until the canary nodes show **Succeeded** and stay healthy for 30 seconds.
 6. Click **Promote remaining nodes**. The rest are upgraded in batches: at most a quarter of them at a time (at least one, by node name); when a node succeeds the next one is released.
@@ -152,7 +152,7 @@ The console account (session or AccessKey) can publish a configuration that need
 | `upgrades.release` | `GET /node-releases/{version}` | Reads a release manifest: archive, SHA-256, and signature URLs per architecture |
 | `upgrades.latestVersion` | `GET /node-upgrades/latest-version` | The latest `version` of the release source; `null` when it cannot be told |
 | `upgrades.list` | `GET /node-upgrades` | Upgrades with the state of every node; `clusterId` limits the list to one cluster |
-| `upgrades.create` | `POST /node-upgrades` | Starts an upgrade: `version` (without `v`), `nodeGroupId` (canary group) |
+| `upgrades.create` | `POST /node-upgrades` | Starts an upgrade: `version` (a leading `v` is dropped), `nodeGroupId` (canary group) |
 | `upgrades.promote` | `POST /node-upgrades/{id}/promote` | Promotes the remaining nodes |
 | `upgrades.cancel` | `POST /node-upgrades/{id}/cancel` | Cancels queued work |
 
@@ -170,7 +170,7 @@ The endpoints are under `/api/v1`. Read-only AccessKeys can call the GET endpoin
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| "Invalid input" | **Target version** has a `v` prefix or is not in `major.minor.patch` form | Remove the `v` prefix |
+| "Use a version such as 0.2.0" | **Target version** is not in `major.minor.patch` form (optionally with a pre-release suffix such as `1.0.0-rc.1`) | Correct the version |
 | "These nodes must be online, healthy, in sync and support signed upgrades: …" | The listed active nodes (at most 10, the rest as "+N") are offline, have not applied the current revision, have an unhealthy data plane, lack `self-upgrade-v1`, or have an architecture missing from the release | Fix or disable those nodes and retry |
 | "The node group to upgrade first has no active nodes" | The chosen node group has no active node | Choose another node group |
 | "An upgrade covers at most 1000 nodes" | The cluster has more than 1000 active nodes | Split the cluster |
