@@ -94,7 +94,7 @@ For using and revoking AccessKeys, see [Access logs and access keys](access-logs
 | --- | --- |
 | Sites | Type a site's name or domain to search; Enter opens the site. Before typing, starred and recently visited sites are listed |
 | Site actions | The first 3 sites found each have **Under Attack: (site)** (turns the site's Under Attack the other way after a confirmation) and **Purge cache: (site)** (creates a whole-site purge after a confirmation) |
-| Navigation | Opens any page (**Security** and **Personal settings** included, and **Regions** and **Service accounts**, which open the page they live on) |
+| Navigation | Opens any page (**Security**, **Personal settings** and the **Monitoring** tab of the system settings included, and **Regions** and **Service accounts**, which open the page they live on) |
 | Actions | **New site**, **Add node**, **Ban an IP…** (opens the ban dialog, with the site filled in on a site's pages), **Purge URLs…** (opens **Purge & prefetch**), **Global Under Attack** (turns it the other way after a confirmation), **Switch language**, **Toggle dark mode** |
 
 ### Sidebar

@@ -1,4 +1,5 @@
 import {
+  Activity01Icon,
   Add01Icon,
   BlockedIcon,
   DatabaseSync01Icon,
@@ -173,6 +174,12 @@ export function CommandMenu() {
                 </CommandItem>
               ),
             )}
+            <CommandItem
+              onSelect={run(() => navigate({ to: "/system", search: { tab: "probes" } }))}
+            >
+              <HugeiconsIcon icon={Activity01Icon} strokeWidth={2} />
+              {m.system_tab_probes()}
+            </CommandItem>
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading={m.command_group_actions()}>
