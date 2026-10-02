@@ -61,7 +61,9 @@ test("P0: the operator disables and enables a site", async ({ page }) => {
   // Re-enabled, the site rolls out to the nodes again (polled every 5 s) before it is live.
   await expect(status).toHaveAttribute("data-state", /^(pending|partial|active)$/);
   await expect(status).toHaveAttribute("data-state", "active", { timeout: 60_000 });
-  await page.goto("/sites");
+  // The e2e has more sites than one page: find this one by its name.
+  const name = await page.getByTestId("page-title").innerText();
+  await page.goto(`/sites?q=${encodeURIComponent(name)}`);
   const row = page
     .getByTestId("sites-table")
     .getByRole("row")
