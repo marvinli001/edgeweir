@@ -37,7 +37,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useOpenKey } from "@/hooks/use-open-key";
-import { domainList, originInput } from "@/lib/address-input";
+import { domainList, fillOrigin, replacesField } from "@/lib/address-input";
 import { m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -265,6 +265,11 @@ function CreateSiteDialog({
   const navigate = useNavigate();
   const create = useMutation(orpc.sites.create.mutationOptions());
   const [scheme, setScheme] = React.useState<"http" | "https">("http");
+  // The address, port and protocol fields; a pasted URL or "host:port" fills all three.
+  const [address, setAddress] = React.useState("");
+  const [port, setPort] = React.useState("");
+  // The name defaults to the first domain.
+  const [firstDomain, setFirstDomain] = React.useState("");
   const [cacheEnabled, setCacheEnabled] = React.useState(true);
   const [respectOrigin, setRespectOrigin] = React.useState(true);
   const [navigating, setNavigating] = React.useState(false);
@@ -272,6 +277,14 @@ function CreateSiteDialog({
   const [invalid, setInvalid] = React.useState<string | null>(null);
   const cluster = clusters.some((c) => c.id === clusterId) ? clusterId : clusters[0]?.id;
   const pending = create.isPending || navigating;
+  /** Puts an origin into the fields (a URL's protocol and port into theirs) and returns it. */
+  const fill = (value: string) => {
+    const next = fillOrigin(value, { scheme, port }, () => "");
+    setAddress(next.address);
+    setScheme(next.scheme);
+    setPort(next.port);
+    return next;
+  };
 
   return (
     <Dialog
@@ -293,20 +306,17 @@ function CreateSiteDialog({
             event.preventDefault();
             const data = new FormData(event.currentTarget);
             const text = (key: string) => String(data.get(key) ?? "").trim();
-            // A pasted URL or "host:port" fills the address, port and protocol.
-            const origin = originInput(text("origin"));
-            const originScheme = origin.scheme ?? scheme;
+            // A URL typed without leaving the field fills the fields now, visibly.
+            const origin = fill(address);
             const input: SiteCreateInput = {
-              name: text("siteName"),
+              name: text("siteName") || undefined,
               clusterId: clusters.length > 1 ? cluster : undefined,
               domains: domainList(text("domains")),
               origins: [
                 {
                   address: origin.address,
-                  port: Number(
-                    text("port") || origin.port || (originScheme === "https" ? 443 : 80),
-                  ),
-                  scheme: originScheme,
+                  port: Number(origin.port || (origin.scheme === "https" ? 443 : 80)),
+                  scheme: origin.scheme,
                   hostHeader: text("hostHeader"),
                 },
               ],
@@ -343,7 +353,12 @@ function CreateSiteDialog({
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="siteName">{m.site_form_name()}</FieldLabel>
-              <Input id="siteName" name="siteName" required maxLength={100} placeholder="demo" />
+              <Input
+                id="siteName"
+                name="siteName"
+                maxLength={100}
+                placeholder={firstDomain || "demo.test"}
+              />
             </Field>
             {clusters.length > 1 && cluster ? (
               <FormSelect
@@ -363,12 +378,27 @@ function CreateSiteDialog({
                 required
                 rows={2}
                 placeholder={"demo.test\n*.demo.test"}
+                onChange={(event) => setFirstDomain(domainList(event.target.value)[0] ?? "")}
               />
             </Field>
             <div className="grid gap-4 sm:grid-cols-[1fr_7rem_8rem]">
               <Field>
                 <FieldLabel htmlFor="origin">{m.site_form_origin()}</FieldLabel>
-                <Input id="origin" name="origin" required placeholder="origin.example.com" />
+                <Input
+                  id="origin"
+                  name="origin"
+                  required
+                  placeholder="origin.example.com"
+                  value={address}
+                  onChange={(event) => setAddress(event.target.value)}
+                  onPaste={(event) => {
+                    if (!replacesField(event.currentTarget)) return;
+                    event.preventDefault();
+                    fill(event.clipboardData.getData("text"));
+                  }}
+                  onBlur={() => fill(address)}
+                  data-testid="site-origin-address"
+                />
               </Field>
               <Field>
                 <FieldLabel htmlFor="port">{m.site_form_port()}</FieldLabel>
@@ -379,19 +409,28 @@ function CreateSiteDialog({
                   min={1}
                   max={65535}
                   placeholder={scheme === "https" ? "443" : "80"}
+                  value={port}
+                  onChange={(event) => setPort(event.target.value)}
+                  data-testid="site-origin-port"
                 />
               </Field>
               <Field>
                 <FieldLabel>{m.site_form_scheme()}</FieldLabel>
                 <Select
                   value={scheme}
-                  onValueChange={(v) => v && setScheme(v as "http" | "https")}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    const next = v as "http" | "https";
+                    setScheme(next);
+                    // A port set to the other protocol's default follows the protocol.
+                    if (port === (next === "https" ? "80" : "443")) setPort("");
+                  }}
                   items={[
                     { label: "HTTP", value: "http" },
                     { label: "HTTPS", value: "https" },
                   ]}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full" data-testid="site-origin-scheme">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

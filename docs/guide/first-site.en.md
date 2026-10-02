@@ -85,9 +85,9 @@ The token is single-use. For the installer's checks, the download mirror, and fa
 
    | Field | Default | Description |
    | --- | --- | --- |
-   | **Name** | None | At most 100 characters |
+   | **Name** | The first domain | At most 100 characters |
    | **Domains** | None | One per line or comma-separated; wildcards as `*.example.com`; 1–50 domains |
-   | **Origin** | None | IP address or host name |
+   | **Origin** | None | IP address or host name. Pasting a URL (`https://origin.example.com:8443/app`) or `host:port` puts the port and protocol into their own fields |
    | **Port** | 80 (HTTP) / 443 (HTTPS) | Origin port |
    | **Protocol** | HTTP | HTTP or HTTPS |
    | **Origin Host** | Same as request | `Host` sent to the origin |
