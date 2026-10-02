@@ -576,4 +576,42 @@ describe("DNS resolution lines and backup groups", async () => {
     await reconcileDns(ctx);
     expect((await admin.dns.binding({ clusterId })).revision?.revision).toBe(revision?.revision);
   });
+
+  it("leaves out a node with an unhealthy data plane or no receipt, in its group and as a backup", async () => {
+    const policy = {
+      ...bindingPolicy(await loadBinding(ctx.db, clusterId)),
+      lines: [
+        line("main", groups.main),
+        line("tel", groups.tel, {
+          resolutionLine: "telecom",
+          backupNodeGroupIds: [groups.main],
+          minHealthyIps: 2,
+        }),
+      ],
+    };
+    const addresses = async (name: string) =>
+      (await compileBindingPlan(ctx.db, clusterId, policy)).records
+        .filter((r) => r.name === name && r.type === "A")
+        .map((r) => r.data);
+    const receipt = (name: string) => eq(schema.nodeConfigStatus.nodeId, nodes[name] ?? "");
+    // tel has one address, fewer than 2: its backup group has two.
+    expect(await addresses("main.edge")).toEqual(["8.8.1.1", "8.8.1.2"]);
+    expect(await addresses("tel.edge")).toEqual(["8.8.1.1", "8.8.1.2"]);
+    await ctx.db
+      .update(schema.nodeConfigStatus)
+      .set({ dataPlaneHealthy: false })
+      .where(receipt("m2"));
+    expect(await addresses("main.edge")).toEqual(["8.8.1.1"]);
+    // No group has enough: every healthy address of the line's groups.
+    expect(await addresses("tel.edge")).toEqual(["8.8.1.1", "8.8.2.1"]);
+    const [kept] = await ctx.db.delete(schema.nodeConfigStatus).where(receipt("t1")).returning();
+    if (!kept) throw new Error("receipt missing");
+    expect(await addresses("tel.edge")).toEqual(["8.8.1.1"]);
+    await ctx.db
+      .update(schema.nodeConfigStatus)
+      .set({ dataPlaneHealthy: true })
+      .where(receipt("m2"));
+    await ctx.db.insert(schema.nodeConfigStatus).values(kept);
+    expect(await addresses("tel.edge")).toEqual(["8.8.1.1", "8.8.1.2"]);
+  });
 });
