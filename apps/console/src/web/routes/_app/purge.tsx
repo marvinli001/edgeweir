@@ -66,6 +66,8 @@ export const Route = createFileRoute("/_app/purge")({
     type: z.enum(TYPES).optional(),
     /** One site's tasks, and the site preselected in the form. */
     site: z.string().optional(),
+    /** URLs (or prefixes) the form starts with: one, or a list. */
+    urls: z.union([z.string(), z.array(z.string())]).optional(),
     page: z.number().int().min(1).optional(),
   }),
   component: PurgePage,
@@ -106,6 +108,7 @@ function PurgePage() {
       <PurgeForm
         key={search.site ?? ""}
         site={site.data ? { id: site.data.id, name: site.data.name } : undefined}
+        initialUrls={typeof search.urls === "string" ? [search.urls] : (search.urls ?? [])}
         listInput={{ ...listInput, page: 1 }}
         type={search.type ?? "url"}
         onTypeChange={(type) =>
@@ -209,6 +212,7 @@ const emptyDraft: Draft = {
 
 function PurgeForm({
   site,
+  initialUrls,
   listInput,
   type,
   onTypeChange,
@@ -216,6 +220,8 @@ function PurgeForm({
 }: {
   /** Preselected for whole-site and tag purges once known. */
   site?: { id: string; name: string };
+  /** What the URL list starts with (read once). */
+  initialUrls: string[];
   /** The first page of the task list as the page shows it. */
   listInput: { page: number; pageSize: number; siteId?: string };
   type: CacheTaskType;
@@ -224,7 +230,10 @@ function PurgeForm({
 }) {
   const queryClient = useQueryClient();
   const create = useMutation(orpc.cacheTasks.create.mutationOptions());
-  const [draft, setDraft] = React.useState<Draft>(emptyDraft);
+  const [draft, setDraft] = React.useState<Draft>(() => ({
+    ...emptyDraft,
+    urls: initialUrls.join("\n"),
+  }));
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const set = (change: Partial<Draft>) => setDraft((prev) => ({ ...prev, ...change }));
