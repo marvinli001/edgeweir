@@ -13,9 +13,10 @@ import {
 } from "@/components/analytics/breakdown-charts";
 import { Panel, PanelHeader } from "@/components/analytics/panel";
 import { RangeSelect } from "@/components/analytics/range-select";
-import { ErrorState, LoadingState } from "@/components/states";
+import { LoadingState, QueryView } from "@/components/states";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { DialogProps } from "@/hooks/use-dialog-state";
 import {
   type DetailView,
   detailViewId,
@@ -164,19 +165,20 @@ function Loaded({
   query: UseQueryResult<TrafficBreakdown>;
   children: (data: TrafficBreakdown) => React.ReactNode;
 }) {
-  if (query.isPending) return <LoadingState />;
-  if (query.isLoadingError)
-    return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-3 transition-opacity duration-300",
-        query.isPlaceholderData && "opacity-60",
+    <QueryView query={query}>
+      {(data) => (
+        <div
+          className={cn(
+            "flex flex-col gap-3 transition-opacity duration-300",
+            query.isPlaceholderData && "opacity-60",
+          )}
+          aria-busy={query.isPlaceholderData}
+        >
+          {children(data)}
+        </div>
       )}
-      aria-busy={query.isPlaceholderData}
-    >
-      {children(query.data)}
-    </div>
+    </QueryView>
   );
 }
 
@@ -481,46 +483,46 @@ function viewLabel(view: DetailView): string {
  */
 export function MetricDetailDialog({
   target,
-  onClose,
+  open,
+  onOpenChange,
   range,
   onRangeChange,
   siteId,
   traffic,
   showParent,
 }: {
+  /** Stays while the dialog closes, so the closing animation shows it. */
   target: DetailTarget | null;
-  onClose: () => void;
   range: AnalyticsRange;
   onRangeChange: (range: AnalyticsRange) => void;
   siteId?: string;
   traffic: Traffic | undefined;
   /** Show each site's cluster. */
   showParent: boolean;
-}) {
-  // Keep the last target on screen while the dialog animates out.
-  const [shown, setShown] = React.useState(target);
-  if (target && target !== shown) setShown(target);
+} & DialogProps) {
   // The chosen tab per dialog, for this visit to the page.
   const [tabs, setTabs] = React.useState<Record<string, string>>({});
-  if (!shown) return null;
-  const view = shown.views.find((v) => detailViewId(v) === tabs[shown.id]) ?? shown.views[0];
+  if (!target) return null;
+  const view = target.views.find((v) => detailViewId(v) === tabs[target.id]) ?? target.views[0];
   const viewId = view ? detailViewId(view) : "";
 
   return (
-    <Dialog open={target !== null} onOpenChange={(open) => (open ? undefined : onClose())}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="top-[max(1rem,6dvh)] flex max-h-[calc(100dvh-max(2rem,12dvh))] translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl"
         data-testid="metric-detail"
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 py-4 pr-14 pl-5">
-          <DialogTitle className="mr-auto">{shown.title}</DialogTitle>
-          {shown.views.length > 1 ? (
+          <DialogTitle className="mr-auto">{target.title}</DialogTitle>
+          {target.views.length > 1 ? (
             <Tabs
               value={viewId}
-              onValueChange={(value) => setTabs((prev) => ({ ...prev, [shown.id]: String(value) }))}
+              onValueChange={(value) =>
+                setTabs((prev) => ({ ...prev, [target.id]: String(value) }))
+              }
             >
               <TabsList className="h-8">
-                {shown.views.map((v) => (
+                {target.views.map((v) => (
                   <TabsTrigger
                     key={detailViewId(v)}
                     value={detailViewId(v)}
@@ -543,15 +545,15 @@ export function MetricDetailDialog({
               view={view}
               range={range}
               siteId={siteId}
-              metricTitle={shown.title}
+              metricTitle={target.title}
               showParent={showParent}
             />
           ) : view.kind === "status" ? (
             <StatusView key={viewId} view={view} range={range} siteId={siteId} />
           ) : view.kind === "cache" ? (
             <CacheView key={viewId} traffic={traffic} range={range} />
-          ) : shown.metric ? (
-            <TrendView traffic={traffic} metric={shown.metric} range={range} />
+          ) : target.metric ? (
+            <TrendView traffic={traffic} metric={target.metric} range={range} />
           ) : null}
         </div>
       </DialogContent>
