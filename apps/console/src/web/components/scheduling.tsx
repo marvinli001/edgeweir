@@ -23,7 +23,7 @@ import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import {
@@ -81,7 +82,7 @@ export function ClusterScheduling({ clusterId }: { clusterId: string }) {
       meta: { background: true },
     }),
   );
-  const [editing, setEditing] = React.useState<SchedulingRule | "new" | null>(null);
+  const edit = useDialogState<SchedulingRule | "new">();
   const columns = React.useMemo<Columns<SchedulingRule>>(
     () => [
       {
@@ -150,7 +151,7 @@ export function ClusterScheduling({ clusterId }: { clusterId: string }) {
               size="icon-sm"
               variant="ghost"
               aria-label={m.scheduling_rule_edit()}
-              onClick={() => setEditing(row.original)}
+              onClick={() => edit.show(row.original)}
               data-testid="scheduling-rule-edit"
             >
               <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
@@ -160,7 +161,7 @@ export function ClusterScheduling({ clusterId }: { clusterId: string }) {
         ),
       },
     ],
-    [],
+    [edit.show],
   );
 
   return (
@@ -171,40 +172,42 @@ export function ClusterScheduling({ clusterId }: { clusterId: string }) {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setEditing("new")}
+            onClick={() => edit.show("new")}
             data-testid="scheduling-rule-create"
           >
             <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.scheduling_rule_create()}
           </Button>
         </div>
-        {rules.isPending ? (
-          <LoadingState />
-        ) : rules.isLoadingError ? (
-          <ErrorState error={rules.error} onRetry={() => rules.refetch()} />
-        ) : rules.data.length === 0 ? (
-          <EmptyState icon={FlowConnectionIcon} title={m.scheduling_rules_empty()}>
-            <Button onClick={() => setEditing("new")}>
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-              {m.scheduling_rule_create()}
-            </Button>
-          </EmptyState>
-        ) : (
-          <DataTable
-            data={rules.data}
-            columns={columns}
-            getRowId={(r) => r.id}
-            testId="scheduling-rules-table"
-          />
-        )}
+        <QueryView
+          query={rules}
+          empty={
+            <EmptyState icon={FlowConnectionIcon} title={m.scheduling_rules_empty()}>
+              <Button onClick={() => edit.show("new")}>
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                {m.scheduling_rule_create()}
+              </Button>
+            </EmptyState>
+          }
+        >
+          {(list) => (
+            <DataTable
+              data={list}
+              columns={columns}
+              getRowId={(r) => r.id}
+              testId="scheduling-rules-table"
+            />
+          )}
+        </QueryView>
       </section>
       {rules.data?.length ? <SchedulingPreviewSection clusterId={clusterId} /> : null}
-      {editing ? (
+      {edit.value ? (
         <RuleDialog
-          key={editing === "new" ? "new" : editing.id}
+          key={edit.key}
           clusterId={clusterId}
-          rule={editing === "new" ? undefined : editing}
-          onClose={() => setEditing(null)}
+          rule={edit.value === "new" ? undefined : edit.value}
+          open={edit.open}
+          onOpenChange={edit.onOpenChange}
         />
       ) : null}
     </div>
@@ -366,17 +369,20 @@ const conditionsKey = (conditions: SchedulingCondition[]) =>
 function RuleDialog({
   clusterId,
   rule,
-  onClose,
+  open,
+  onOpenChange,
 }: {
   clusterId: string;
   rule?: SchedulingRule;
-  onClose: () => void;
-}) {
+} & DialogProps) {
   const queryClient = useQueryClient();
   const create = useMutation(orpc.scheduling.create.mutationOptions());
   const update = useMutation(orpc.scheduling.update.mutationOptions());
-  const binding = useQuery(orpc.dns.binding.queryOptions({ input: { clusterId } }));
-  const regions = useQuery(orpc.regions.list.queryOptions());
+  const binding = useQuery({
+    ...orpc.dns.binding.queryOptions({ input: { clusterId } }),
+    enabled: open,
+  });
+  const regions = useQuery({ ...orpc.regions.list.queryOptions(), enabled: open });
   const [draft, setDraft] = React.useState(() => toDraft(rule));
   const lines = [
     ...new Set([
@@ -392,8 +398,8 @@ function RuleDialog({
 
   return (
     <FormDialog
-      open
-      onOpenChange={(open) => !open && onClose()}
+      open={open}
+      onOpenChange={onOpenChange}
       title={rule ? m.scheduling_rule_edit() : m.scheduling_rule_create()}
       submitLabel={rule ? m.common_save() : m.common_create()}
       submitTestId="scheduling-rule-submit"
@@ -436,7 +442,7 @@ function RuleDialog({
         }
         await queryClient.invalidateQueries({ queryKey: orpc.scheduling.key() });
         toast.success(m.common_saved());
-        onClose();
+        onOpenChange(false);
       }}
     >
       <div className="grid gap-4 sm:grid-cols-2">
@@ -698,15 +704,13 @@ function SchedulingPreviewSection({ clusterId }: { clusterId: string }) {
           </span>
         ) : null}
       </div>
-      {preview.isPending ? (
-        <LoadingState />
-      ) : preview.isLoadingError ? (
-        <ErrorState error={preview.error} onRetry={() => preview.refetch()} />
-      ) : (
-        preview.data.rules.map((rule, index) => (
-          <PreviewRuleBlock key={rule.ruleId} rule={rule} index={index} />
-        ))
-      )}
+      <QueryView query={preview}>
+        {(data) =>
+          data.rules.map((rule, index) => (
+            <PreviewRuleBlock key={rule.ruleId} rule={rule} index={index} />
+          ))
+        }
+      </QueryView>
     </section>
   );
 }

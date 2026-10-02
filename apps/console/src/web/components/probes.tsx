@@ -13,7 +13,7 @@ import { FormSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, ErrorState, LoadingState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, formatPercent, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
@@ -163,7 +164,7 @@ export function ProbesPanel({
     refetchInterval: 5_000,
     meta: { background: true },
   });
-  const [action, setAction] = React.useState<ProbeAction | null>(null);
+  const action = useDialogState<ProbeAction>();
   const columns = React.useMemo<Columns<Probe>>(
     () => [
       {
@@ -174,7 +175,7 @@ export function ProbesPanel({
             <button
               type="button"
               className="w-fit text-left font-medium underline-offset-4 hover:underline"
-              onClick={() => setAction({ kind: "results", probe: row.original })}
+              onClick={() => action.show({ kind: "results", probe: row.original })}
               data-testid="probe-name"
             >
               {row.original.name}
@@ -276,45 +277,40 @@ export function ProbesPanel({
         header: () => <span className="sr-only">{m.common_actions()}</span>,
         cell: ({ row }) => (
           <div className="flex justify-end">
-            <ProbeActions probe={row.original} onAction={setAction} />
+            <ProbeActions probe={row.original} onAction={action.show} />
           </div>
         ),
       },
     ],
-    [],
+    [action.show],
   );
 
   return (
     <div className="flex flex-col gap-4">
-      {probes.isPending ? (
-        <LoadingState />
-      ) : probes.isLoadingError ? (
-        <ErrorState error={probes.error} onRetry={() => probes.refetch()} />
-      ) : probes.data.length === 0 ? (
-        <EmptyState icon={Radar01Icon} title={m.probes_empty()}>
-          <Button onClick={() => onAddOpenChange(true)}>
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-            {m.probes_add()}
-          </Button>
-        </EmptyState>
-      ) : (
-        <DataTable
-          data={probes.data}
-          columns={columns}
-          getRowId={(p) => p.id}
-          testId="probes-table"
-        />
-      )}
+      <QueryView
+        query={probes}
+        empty={
+          <EmptyState icon={Radar01Icon} title={m.probes_empty()}>
+            <Button onClick={() => onAddOpenChange(true)}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              {m.probes_add()}
+            </Button>
+          </EmptyState>
+        }
+      >
+        {(list) => (
+          <DataTable data={list} columns={columns} getRowId={(p) => p.id} testId="probes-table" />
+        )}
+      </QueryView>
       <ProbeSettingsCard />
-      <AddProbeDialog key={addKey} open={addOpen} onOpenChange={onAddOpenChange} />
-      {action?.kind === "rename" ? (
-        <RenameProbeDialog probe={action.probe} onClose={() => setAction(null)} />
-      ) : null}
-      {action?.kind === "delete" ? (
-        <DeleteProbeDialog probe={action.probe} onClose={() => setAction(null)} />
-      ) : null}
-      {action?.kind === "results" ? (
-        <ProbeResultsDialog probe={action.probe} onClose={() => setAction(null)} />
+      <AddProbeDialog key={`add-${addKey}`} open={addOpen} onOpenChange={onAddOpenChange} />
+      {action.value ? (
+        <ProbeActionDialog
+          key={`action-${action.key}`}
+          action={action.value}
+          open={action.open}
+          onOpenChange={action.onOpenChange}
+        />
       ) : null}
     </div>
   );
@@ -394,87 +390,102 @@ function AddProbeDialog({
               </Button>
             </DialogFooter>
           </div>
-        ) : regions.isPending ? (
-          <LoadingState />
-        ) : regions.isLoadingError ? (
-          <ErrorState error={regions.error} onRetry={() => regions.refetch()} />
         ) : (
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              try {
-                setResult(
-                  await create.mutateAsync({
-                    name: String(data.get("probeName") ?? "").trim(),
-                    regionId: selectedRegion,
-                    ttlMinutes: ttl,
-                  }),
-                );
-              } catch {
-                // rendered below via create.error
-              }
-            }}
-          >
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="probeName">{m.probes_name()}</FieldLabel>
-                <Input
-                  id="probeName"
-                  name="probeName"
-                  required
-                  maxLength={64}
-                  placeholder="probe-sh-01"
-                  data-testid="probe-name-input"
-                />
-              </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormSelect
-                  id="probe-region"
-                  label={m.node_groups_region()}
-                  value={selectedRegion}
-                  options={regionList.map((r) => ({ value: r.id, label: `${r.name} (${r.code})` }))}
-                  onChange={setRegionId}
-                  disabled={!regionList.length}
-                  testId="probe-region-select"
-                />
-                <FormSelect
-                  id="probe-ttl"
-                  label={m.enroll_ttl()}
-                  value={String(ttl)}
-                  options={TTL_OPTIONS.map((v) => ({ value: String(v), label: ttlLabel(v) }))}
-                  onChange={(value) => setTtl(Number(value))}
-                />
-              </div>
-              {regionList.length ? null : (
-                <SafetyNote data-testid="probe-no-regions">{m.probes_no_regions()}</SafetyNote>
-              )}
-              {create.isError ? <FieldError>{errorMessage(create.error)}</FieldError> : null}
-              <DialogFooter>
-                <Button
-                  type="submit"
-                  disabled={create.isPending || !selectedRegion}
-                  data-testid="probe-generate"
-                >
-                  {create.isPending ? <Spinner /> : null}
-                  {m.probes_generate()}
-                </Button>
-              </DialogFooter>
-            </FieldGroup>
-          </form>
+          <QueryView query={regions}>
+            {() => (
+              <form
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  const data = new FormData(event.currentTarget);
+                  try {
+                    setResult(
+                      await create.mutateAsync({
+                        name: String(data.get("probeName") ?? "").trim(),
+                        regionId: selectedRegion,
+                        ttlMinutes: ttl,
+                      }),
+                    );
+                  } catch {
+                    // rendered below via create.error
+                  }
+                }}
+              >
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="probeName">{m.probes_name()}</FieldLabel>
+                    <Input
+                      id="probeName"
+                      name="probeName"
+                      required
+                      maxLength={64}
+                      placeholder="probe-sh-01"
+                      data-testid="probe-name-input"
+                    />
+                  </Field>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormSelect
+                      id="probe-region"
+                      label={m.node_groups_region()}
+                      value={selectedRegion}
+                      options={regionList.map((r) => ({
+                        value: r.id,
+                        label: `${r.name} (${r.code})`,
+                      }))}
+                      onChange={setRegionId}
+                      disabled={!regionList.length}
+                      testId="probe-region-select"
+                    />
+                    <FormSelect
+                      id="probe-ttl"
+                      label={m.enroll_ttl()}
+                      value={String(ttl)}
+                      options={TTL_OPTIONS.map((v) => ({ value: String(v), label: ttlLabel(v) }))}
+                      onChange={(value) => setTtl(Number(value))}
+                    />
+                  </div>
+                  {regionList.length ? null : (
+                    <SafetyNote data-testid="probe-no-regions">{m.probes_no_regions()}</SafetyNote>
+                  )}
+                  {create.isError ? <FieldError>{errorMessage(create.error)}</FieldError> : null}
+                  <DialogFooter>
+                    <Button
+                      type="submit"
+                      disabled={create.isPending || !selectedRegion}
+                      data-testid="probe-generate"
+                    >
+                      {create.isPending ? <Spinner /> : null}
+                      {m.probes_generate()}
+                    </Button>
+                  </DialogFooter>
+                </FieldGroup>
+              </form>
+            )}
+          </QueryView>
         )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function RenameProbeDialog({ probe, onClose }: { probe: Probe; onClose: () => void }) {
+/** The dialog of a probe menu action. */
+function ProbeActionDialog({ action, ...dialog }: { action: ProbeAction } & DialogProps) {
+  switch (action.kind) {
+    case "rename":
+      return <RenameProbeDialog probe={action.probe} {...dialog} />;
+    case "delete":
+      return <DeleteProbeDialog probe={action.probe} {...dialog} />;
+    case "results":
+      return <ProbeResultsDialog probe={action.probe} {...dialog} />;
+  }
+}
+
+function RenameProbeDialog({ probe, open, onOpenChange }: { probe: Probe } & DialogProps) {
   const queryClient = useQueryClient();
   const update = useMutation(orpc.probes.update.mutationOptions());
   return (
     <FormDialog
-      open
-      onOpenChange={(open) => !open && onClose()}
+      open={open}
+      onOpenChange={onOpenChange}
       title={m.nodes_rename()}
       submitLabel={m.common_save()}
       submitTestId="probe-rename-submit"
@@ -485,7 +496,7 @@ function RenameProbeDialog({ probe, onClose }: { probe: Probe; onClose: () => vo
         });
         await queryClient.invalidateQueries({ queryKey: orpc.probes.key() });
         toast.success(m.common_saved());
-        onClose();
+        onOpenChange(false);
       }}
     >
       <Field>
@@ -502,13 +513,13 @@ function RenameProbeDialog({ probe, onClose }: { probe: Probe; onClose: () => vo
   );
 }
 
-function DeleteProbeDialog({ probe, onClose }: { probe: Probe; onClose: () => void }) {
+function DeleteProbeDialog({ probe, open, onOpenChange }: { probe: Probe } & DialogProps) {
   const queryClient = useQueryClient();
   const remove = useMutation(orpc.probes.delete.mutationOptions());
   return (
     <ControlledConfirmDialog
-      open
-      onOpenChange={(open) => !open && onClose()}
+      open={open}
+      onOpenChange={onOpenChange}
       title={m.probes_delete_confirm({ name: probe.name })}
       onConfirm={async () => {
         await remove.mutateAsync({ id: probe.id });
@@ -519,9 +530,9 @@ function DeleteProbeDialog({ probe, onClose }: { probe: Probe; onClose: () => vo
   );
 }
 
-function ProbeResultsDialog({ probe, onClose }: { probe: Probe; onClose: () => void }) {
+function ProbeResultsDialog({ probe, open, onOpenChange }: { probe: Probe } & DialogProps) {
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{m.probes_results_title({ name: probe.name })}</DialogTitle>
@@ -550,16 +561,35 @@ export function ProbeResults({
     refetchInterval: 10_000,
     meta: { background: true },
   });
-  if (results.isPending) return <LoadingState />;
-  if (results.isLoadingError)
-    return <ErrorState error={results.error} onRetry={() => results.refetch()} />;
-  if (!results.data.length)
-    return <EmptyState icon={Radar01Icon} title={m.probes_results_empty()} />;
-  const rows = [...results.data].sort((a, b) =>
-    (by === "node" ? a.nodeName : a.proberName).localeCompare(
-      by === "node" ? b.nodeName : b.proberName,
-    ),
+  return (
+    <QueryView
+      query={results}
+      empty={<EmptyState icon={Radar01Icon} title={m.probes_results_empty()} />}
+    >
+      {(list) => (
+        <ResultsTable
+          rows={[...list].sort((a, b) =>
+            (by === "node" ? a.nodeName : a.proberName).localeCompare(
+              by === "node" ? b.nodeName : b.proberName,
+            ),
+          )}
+          by={by}
+          testId={testId}
+        />
+      )}
+    </QueryView>
   );
+}
+
+function ResultsTable({
+  rows,
+  by,
+  testId,
+}: {
+  rows: ProbeResultDto[];
+  by: "node" | "prober";
+  testId: string;
+}) {
   return (
     <div className="overflow-hidden rounded-2xl border" data-testid={testId}>
       <Table>
