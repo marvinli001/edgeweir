@@ -458,7 +458,8 @@ interface Condition {
   siteName: string;
   domain: string;
 }
-async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
+/** The alert conditions that hold at `now`, keyed like alert_state (exported for tests). */
+export async function alertConditions(app: AppContext, policy: AlertPolicy, now: number) {
   const sites = await app.db
     .selectDistinct({
       id: schema.site.id,
@@ -589,7 +590,7 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
     locked = result.rows[0]?.locked === true;
     if (!locked) return;
     const policy = await getAlertPolicy(app),
-      snapshot = await conditions(app, policy, now);
+      snapshot = await alertConditions(app, policy, now);
     await app.db.transaction(async (tx) => {
       const previous = await tx.select().from(schema.alertState);
       for (const [key, c] of snapshot.active) {
