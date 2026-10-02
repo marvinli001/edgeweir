@@ -34,7 +34,8 @@ function nodeState(node: Node, latest: number): NodeState {
   if (!node.online) return "offline";
   if (node.applyState === "failed") return "failed";
   if (node.appliedRevision === 0) return "pending";
-  return node.appliedRevision < latest ? "behind" : "synced";
+  // During a canary rollout the other nodes' target is the stable revision, not the latest.
+  return node.appliedRevision < (node.targetRevision ?? latest) ? "behind" : "synced";
 }
 
 /** Nodes that need a look come first. */
