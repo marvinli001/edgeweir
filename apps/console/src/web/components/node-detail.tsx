@@ -60,6 +60,20 @@ const load = (value: number) =>
     value,
   );
 
+/** The node channel refuses the node's certificate: expired (enroll again) or another verify error. */
+export function AuthErrorBadge({ node }: { node: Node }) {
+  if (!node.authError) return null;
+  return node.authError === "CERT_HAS_EXPIRED" ? (
+    <Badge variant="destructive" data-testid="node-cert-expired">
+      {m.node_cert_expired()}
+    </Badge>
+  ) : (
+    <Badge variant="destructive" title={node.authError} data-testid="node-cert-rejected">
+      {m.node_cert_rejected()}
+    </Badge>
+  );
+}
+
 /** Used share of a node's memory, 0-100; null without a total. */
 export const memoryPercent = (metrics: NonNullable<Node["metrics"]>) =>
   metrics.memoryTotalBytes > 0 ? (metrics.memoryUsedBytes / metrics.memoryTotalBytes) * 100 : null;
@@ -218,7 +232,9 @@ function NodeFacts({ node }: { node: Node }) {
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
-        {certLeft === null ? null : certLeft <= 0 ? (
+        {node.authError ? (
+          <AuthErrorBadge node={node} />
+        ) : certLeft === null ? null : certLeft <= 0 ? (
           <Badge variant="destructive" data-testid="node-cert-expired">
             {m.node_cert_expired()}
           </Badge>

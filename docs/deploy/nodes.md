@@ -285,6 +285,7 @@ downloads/
 | `cannot reach the node channel` | `--server` 的地址或域名解析错误，防火墙或安全组未放行该端口，或控制台的 `EDGEWEIR_NODE_API_URL` 是本机或内网地址 | 核对地址与解析，放行端口；在节点上执行 `curl -k https://<地址>:8443/` 应返回 404。 |
 | `console rejected the enrollment token (expired or already used)` | token 已过期或已使用 | 重新生成安装命令。 |
 | `node is already enrolled (use --force to replace the identity)` | 主机已有节点身份（`/var/lib/edgeweir-node/identity.json`） | 保留现有注册；替换身份时先停止节点（`systemctl stop edgeweir-node`，运行中的节点会拒绝），用新 token 执行 `edgeweir-node enroll --force` 后再启动，参数见 [edgeweir-node](https://github.com/marvinli001/edgeweir-node)。 |
+| 节点日志 `client certificate expired at ...`，控制台节点标 **证书已过期** | 节点离线超过证书剩余有效期，未能续期；节点通道拒绝并说明 `client certificate has expired (CERT_HAS_EXPIRED)` | 生成新的安装命令，在节点上 `systemctl stop edgeweir-node`，用新 token 执行 `edgeweir-node enroll --force` 后启动；删除控制台中原来的节点。 |
 | `x509: certificate is valid for ..., not ...` | 节点连接的名称不在节点通道证书中 | 将该名称加入 `EDGEWEIR_NODE_API_HOSTNAMES`，重启控制台，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
 | 注册超时，或节点一直离线 | 防火墙或安全组未放行 8443；`EDGEWEIR_NODE_API_URL` 解析错误 | 放行 8443；核对域名解析。 |
 | L4 应用的端口连接超时 | 节点防火墙或安全组未放行端口池；容器节点未发布端口 | 按 [端口与防火墙](#端口与防火墙) 放行或发布端口。 |

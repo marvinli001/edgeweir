@@ -1356,6 +1356,7 @@
   "node_cert_not_after": "证书到期",
   "node_cert_expiring": "即将到期",
   "node_cert_expired": "证书已过期",
+  "node_cert_rejected": "证书被拒绝",
   "node_addresses_title": "调度地址",
   "node_address_col_address": "地址",
   "node_address_col_level": "级别",

@@ -139,6 +139,13 @@ export const node = pgTable(
      * Shown and offered as a scheduling address, never used on its own.
      */
     remoteAddress: text("remote_address"),
+    /**
+     * Why the node channel last refused this node's own client certificate
+     * (an OpenSSL verify code such as CERT_HAS_EXPIRED), and when; at most
+     * once a minute. Current while newer than lastSeenAt.
+     */
+    lastAuthError: text("last_auth_error"),
+    lastAuthErrorAt: timestamp("last_auth_error_at", { withTimezone: true }),
     /** Last BanStatus the node reported; null for nodes without dynamic bans. */
     banStatus: jsonb("ban_status").$type<NodeBanStatus>(),
     /** Sites above the normal CC level in the last heartbeat. */

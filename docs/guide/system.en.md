@@ -50,7 +50,7 @@ Result: the **Install command** (shown once, with a countdown) and the **CA fing
 | Column | Content |
 | --- | --- |
 | **Node** | Name and host name |
-| **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled**; an online node that reports an unhealthy data plane is also marked **Data plane unhealthy** |
+| **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled**; an online node that reports an unhealthy data plane is also marked **Data plane unhealthy**; an offline node whose certificate the node channel refuses is marked **Certificate expired** or **Certificate refused** |
 | **Node group** | Node group and region |
 | **IP** | Unicast addresses in the node's latest heartbeat (replaced on every heartbeat, at most 64); for the addresses DNS and probes use, see [Scheduling addresses and backup IPs](scheduling.en.md#scheduling-addresses-and-backup-ips); marked **No public address** when DNS has no address for the node, see [Nodes without a public address](scheduling.en.md#nodes-without-a-public-address) |
 | **Metrics** | CPU and memory usage reported by the node (`metrics-v1`); "—" without metrics |
@@ -60,7 +60,7 @@ Result: the **Install command** (shown once, with a countdown) and the **CA fing
 
 | Action | Description |
 | --- | --- |
-| **Details** | Also by clicking the node's name (`/clusters?node=<node ID>`): **Metrics**, **Data plane** (Healthy / Data plane unhealthy), **Connects from**, **Certificate expires** (the client certificate; marked **Expires soon** with less than 10 days left, by when nodes normally renewed it already, and **Certificate expired** once past), **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md) |
+| **Details** | Also by clicking the node's name (`/clusters?node=<node ID>`): **Metrics**, **Data plane** (Healthy / Data plane unhealthy), **Connects from**, **Certificate expires** (the client certificate; marked **Expires soon** with less than 10 days left, by when nodes normally renewed it already, and **Certificate expired** or **Certificate refused** once past or refused by the node channel), **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md) |
 | **Rename** | At most 64 characters |
 | **Move to group** | Node groups of the same cluster only |
 | **Disable** / **Enable** | A disabled node is refused by the node channel (except for certificate renewal, so its certificate is still valid when enabled) and keeps serving its last successfully applied configuration; its unfinished purge & prefetch deliveries are marked **Skipped**. Once the node is enabled and pulls tasks again, it gets one whole-site purge for every site those purges touched |

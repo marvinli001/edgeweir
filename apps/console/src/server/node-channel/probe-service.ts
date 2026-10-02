@@ -22,7 +22,7 @@ import {
   recordProbeResults,
 } from "../services/probes";
 import { evaluateAfterProbeReport } from "../services/scheduling";
-import { nodeProbeRegion, peerKey } from "./service";
+import { clientCertificateError, nodeProbeRegion, peerKey } from "./service";
 
 /** Ask probes to renew once less than a third of the lifetime remains (as nodes). */
 const RENEW_BEFORE_MS = (NODE_CERT_LIFETIME_DAYS * 24 * 3600 * 1000) / 3;
@@ -62,10 +62,7 @@ export function createProbeService(
   ): Promise<Prober & { certNotAfter: Date | null }> {
     const peer = ctx.values.get(peerKey);
     if (!peer.authorized || !peer.commonName || !UUID_RE.test(peer.commonName))
-      throw new ConnectError(
-        "client certificate required (mutual TLS); enroll first",
-        Code.Unauthenticated,
-      );
+      throw new ConnectError(clientCertificateError(peer), Code.Unauthenticated);
     if (await isSerialRevoked(app.db, peer.serialNumber))
       throw new ConnectError("certificate has been revoked", Code.Unauthenticated);
     if (peer.organization === PROBE_ORGANIZATION) {

@@ -1535,6 +1535,7 @@
   "node_cert_not_after": "Certificate expires",
   "node_cert_expiring": "Expires soon",
   "node_cert_expired": "Certificate expired",
+  "node_cert_rejected": "Certificate refused",
   "node_addresses_title": "Scheduling addresses",
   "node_address_col_address": "Address",
   "node_address_col_level": "Level",

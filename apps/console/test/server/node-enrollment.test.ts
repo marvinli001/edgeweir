@@ -1,6 +1,6 @@
 import "reflect-metadata";
-import { webcrypto } from "node:crypto";
-import { createClient } from "@connectrpc/connect";
+import { createHash, webcrypto } from "node:crypto";
+import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { schema } from "@edgeweir/db";
 import { ApplyState, NodeService } from "@edgeweir/proto";
@@ -10,7 +10,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { warnConsoleUrls } from "../../src/server/bootstrap";
 import { type NodeChannel, startNodeChannel } from "../../src/server/node-channel/server";
-import { normalizeRemoteAddress } from "../../src/server/node-channel/service";
+import {
+  normalizeRemoteAddress,
+  recordRefusedCertificate,
+} from "../../src/server/node-channel/service";
+import { CertificateAuthority, generateCa, NODE_ORGANIZATION } from "../../src/server/pki/ca";
 import {
   type ApiClient,
   createTestContext,
@@ -38,6 +42,9 @@ async function nodeKeyAndCsr() {
 
 describe("following an enrollment from the add-node dialog", async () => {
   const { ctx, client: pglite } = await createTestContext();
+  // A CA whose key the tests hold, to issue a certificate that already expired.
+  const caMaterial = await generateCa("Test CA");
+  ctx.nodeCa = await CertificateAuthority.load(caMaterial);
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   let admin: ApiClient;
@@ -200,5 +207,90 @@ describe("following an enrollment from the add-node dialog", async () => {
     });
     expect(node.dnsIssue).toBeNull();
     expect(node.schedulingAddresses.map((a) => a.address)).toEqual(["203.0.114.9"]);
+  });
+
+  it("names an expired client certificate and records it on its node", async () => {
+    const token = await admin.clusters.createEnrollmentToken({ clusterId, nodeName: "edge-old" });
+    const { csrPem, keyPem, keys } = await nodeKeyAndCsr();
+    const enrolled = await anonymous().enroll({ token: token.token, csrPem, info: {} });
+    await mtls(enrolled, keyPem).reportStatus({ appliedRevision: 0n, state: ApplyState.APPLYING });
+
+    // The node stayed offline past its certificate's lifetime: the CA's own
+    // certificate for the node's key, valid until yesterday.
+    const day = 24 * 3600 * 1000;
+    const signingKey = await webcrypto.subtle.importKey(
+      "pkcs8",
+      caMaterial.privateKeyPkcs8Der,
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["sign"],
+    );
+    const expired = await x509.X509CertificateGenerator.create({
+      serialNumber: "0badc0de01",
+      subject: `CN=${enrolled.nodeId}, O=${NODE_ORGANIZATION}`,
+      issuer: new x509.X509Certificate(caMaterial.certificatePem).subject,
+      notBefore: new Date(Date.now() - 31 * day),
+      notAfter: new Date(Date.now() - day),
+      signingAlgorithm: { name: "ECDSA", hash: "SHA-256" },
+      publicKey: keys.publicKey as never,
+      signingKey: signingKey as never,
+      extensions: [
+        new x509.BasicConstraintsExtension(false, undefined, true),
+        new x509.KeyUsagesExtension(x509.KeyUsageFlags.digitalSignature, true),
+        new x509.ExtendedKeyUsageExtension([x509.ExtendedKeyUsage.clientAuth], false),
+      ],
+    });
+    const fingerprint = createHash("sha256").update(Buffer.from(expired.rawData)).digest("hex");
+    await ctx.db
+      .update(schema.node)
+      .set({ certSerial: expired.serialNumber, certFingerprint: fingerprint })
+      .where(eq(schema.node.id, enrolled.nodeId));
+
+    const refused = await mtls(
+      { caCertificatePem: enrolled.caCertificatePem, certificatePem: expired.toString("pem") },
+      keyPem,
+    )
+      .reportStatus({ appliedRevision: 0n, state: ApplyState.APPLYING })
+      .catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(ConnectError);
+    expect((refused as ConnectError).code).toBe(Code.Unauthenticated);
+    expect((refused as ConnectError).rawMessage).toBe(
+      "client certificate has expired (CERT_HAS_EXPIRED); re-enroll with `edgeweir-node enroll --force`",
+    );
+    const node = await admin.nodes.get({ id: enrolled.nodeId });
+    expect(node.authError).toBe("CERT_HAS_EXPIRED");
+
+    // Without a certificate the message stays as it was.
+    const anonymousError = await anonymous()
+      .getConfig({})
+      .catch((e: unknown) => e);
+    expect((anonymousError as ConnectError).rawMessage).toBe(
+      "client certificate required (mutual TLS); enroll first",
+    );
+
+    // Recorded once a minute at most, only for the node's own (current) certificate.
+    const peer = {
+      authorized: false,
+      authorizationError: "CERT_HAS_EXPIRED",
+      commonName: enrolled.nodeId,
+      organization: NODE_ORGANIZATION,
+      fingerprintSha256: fingerprint,
+    };
+    expect(await recordRefusedCertificate(ctx, peer)).toBe(false);
+    const later = new Date(Date.now() + 61_000);
+    expect(
+      await recordRefusedCertificate(ctx, { ...peer, fingerprintSha256: "f".repeat(64) }, later),
+    ).toBe(false);
+    expect(await recordRefusedCertificate(ctx, { ...peer, organization: "Edgeweir Probe" })).toBe(
+      false,
+    );
+    expect(await recordRefusedCertificate(ctx, peer, new Date(Date.now() + 2 * 61_000))).toBe(true);
+
+    // A heartbeat that gets through clears it.
+    await ctx.db
+      .update(schema.node)
+      .set({ lastSeenAt: new Date(Date.now() + 3 * 61_000) })
+      .where(eq(schema.node.id, enrolled.nodeId));
+    expect((await admin.nodes.get({ id: enrolled.nodeId })).authError).toBeNull();
   });
 });

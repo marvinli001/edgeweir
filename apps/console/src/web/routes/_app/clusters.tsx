@@ -27,7 +27,7 @@ import { type Columns, DataTable } from "@/components/data-table";
 import { ClusterDns } from "@/components/dns/cluster-dns";
 import { FormDialog } from "@/components/form-dialog";
 import { PortPoolsSection } from "@/components/l4/port-pools";
-import { NodeDetailDialog, NodeLoad } from "@/components/node-detail";
+import { AuthErrorBadge, NodeDetailDialog, NodeLoad } from "@/components/node-detail";
 import { ConsoleUrlWarnings, EnrollProgress } from "@/components/node-enrollment";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
@@ -781,9 +781,12 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
               )}
             </span>
           ) : (
-            <StatusDot tone="bad" data-testid="node-offline">
-              {m.nodes_offline()}
-            </StatusDot>
+            <span className="flex flex-wrap items-center gap-1.5">
+              <StatusDot tone="bad" data-testid="node-offline">
+                {m.nodes_offline()}
+              </StatusDot>
+              <AuthErrorBadge node={row.original} />
+            </span>
           ),
       },
       {

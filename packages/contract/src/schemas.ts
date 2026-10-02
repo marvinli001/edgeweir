@@ -705,6 +705,12 @@ export const node = z.object({
    * no public address and none is configured.
    */
   dnsIssue: z.enum(["no_public_address"]).nullable(),
+  /**
+   * Why the node channel refused the node's own client certificate since
+   * its last heartbeat: an OpenSSL verify code, CERT_HAS_EXPIRED when the
+   * node must enroll again.
+   */
+  authError: z.string().nullable(),
 });
 
 export const nodeUpdateInput = z.object({

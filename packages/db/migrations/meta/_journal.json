@@ -330,6 +330,13 @@
       "when": 1790924907926,
       "tag": "0046_node_remote_address",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790925234501,
+      "tag": "0047_node_last_auth_error",
+      "breakpoints": true
     }
   ]
 }

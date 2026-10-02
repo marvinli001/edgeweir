@@ -239,6 +239,67 @@ export interface PeerInfo {
 export const peerKey = createContextKey<PeerInfo>({ authorized: false });
 
 /**
+ * Why a request without an accepted client certificate is refused. With a
+ * certificate the TLS layer rejected, its OpenSSL verify code is named (an
+ * expired one, i.e. a node offline past its renewal, says how to recover).
+ */
+export function clientCertificateError(peer: PeerInfo): string {
+  if (!peer.fingerprintSha256 || !peer.authorizationError)
+    return "client certificate required (mutual TLS); enroll first";
+  if (peer.authorizationError === "CERT_HAS_EXPIRED")
+    return "client certificate has expired (CERT_HAS_EXPIRED); re-enroll with `edgeweir-node enroll --force`";
+  return `client certificate rejected (${peer.authorizationError})`;
+}
+
+/** Refusals recorded on a node at most this often. */
+const AUTH_ERROR_RECORD_MS = 60_000;
+const authErrorRecorded = new Map<string, number>();
+
+/**
+ * Records on the node why the TLS layer refused its certificate, when the
+ * certificate is the node's own (CN = node id, its current fingerprint),
+ * so the console can show an expired certificate. At most once a minute
+ * per node; never fails the request.
+ */
+export async function recordRefusedCertificate(
+  app: Pick<AppContext, "db" | "log">,
+  peer: PeerInfo,
+  now = new Date(),
+): Promise<boolean> {
+  const code = peer.authorizationError;
+  const nodeId = peer.commonName;
+  if (
+    !code ||
+    !/^[A-Z0-9_]{1,64}$/.test(code) ||
+    !nodeId ||
+    !UUID_RE.test(nodeId) ||
+    peer.organization !== NODE_ORGANIZATION ||
+    !peer.fingerprintSha256
+  )
+    return false;
+  const last = authErrorRecorded.get(nodeId);
+  if (last !== undefined && now.getTime() - last < AUTH_ERROR_RECORD_MS) return false;
+  if (authErrorRecorded.size > 10_000) authErrorRecorded.clear();
+  authErrorRecorded.set(nodeId, now.getTime());
+  try {
+    const updated = await app.db
+      .update(schema.node)
+      .set({ lastAuthError: code, lastAuthErrorAt: now })
+      .where(
+        and(
+          eq(schema.node.id, nodeId.toLowerCase()),
+          eq(schema.node.certFingerprint, peer.fingerprintSha256),
+        ),
+      )
+      .returning({ id: schema.node.id });
+    return updated.length > 0;
+  } catch (error) {
+    app.log.debug("could not record a refused node certificate", { nodeId, error });
+    return false;
+  }
+}
+
+/**
  * A connection's source address as stored on the node: canonical text, an
  * IPv4-mapped address (dual-stack listeners) as IPv4, no zone; null when
  * it is not an IP address.
@@ -291,10 +352,7 @@ export function createNodeService(
   async function requireNode(ctx: HandlerContext, { disabled = false } = {}) {
     const peer = ctx.values.get(peerKey);
     if (!peer.authorized || !peer.commonName) {
-      throw new ConnectError(
-        "client certificate required (mutual TLS); enroll first",
-        Code.Unauthenticated,
-      );
+      throw new ConnectError(clientCertificateError(peer), Code.Unauthenticated);
     }
     // Probe certificates (O=Edgeweir Probe) come from the same CA and never reach NodeService.
     if (peer.organization !== NODE_ORGANIZATION || !UUID_RE.test(peer.commonName))
