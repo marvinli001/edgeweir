@@ -15,9 +15,13 @@ export function SearchBox({
   const [text, setText] = React.useState(value);
   const latest = React.useRef(onChange);
   latest.current = onChange;
-  React.useEffect(() => setText(value), [value]);
+  // The URL holds the trimmed text: a space typed between words is not taken back.
+  React.useEffect(
+    () => setText((current) => (current.trim() === value ? current : value)),
+    [value],
+  );
   React.useEffect(() => {
-    if (text === value) return;
+    if (text.trim() === value) return;
     const timer = setTimeout(() => latest.current(text.trim()), 300);
     return () => clearTimeout(timer);
   }, [text, value]);
