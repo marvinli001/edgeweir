@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
   mkdirSync,
@@ -8,10 +8,13 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { assetPath } from "../../src/server/app";
+import { startNodeChannel } from "../../src/server/node-channel/server";
+import { createTestContext } from "./helpers";
 
 /** The script as the console serves it (app.ts fills in the console URL). */
 const script = readFileSync(assetPath("install", "install.sh"), "utf8").replaceAll(
@@ -418,6 +421,116 @@ describe("install.sh", () => {
       rmSync(ok, { recursive: true, force: true });
     }
   });
+
+  it("checks the node channel before downloading anything, unless already enrolled", () => {
+    const main = script.slice(script.indexOf("main() {"));
+    const order = ["check_system", "check_server", "resolve_version", 'fetch "checksums.txt"'].map(
+      (step) => main.indexOf(step),
+    );
+    expect(order.every((i) => i > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(main).toContain('[ "$ENROLLED" = "true" ] || check_server');
+    // No token goes to the reachability check.
+    const check = script.slice(script.indexOf("check_server() {"));
+    expect(check.slice(0, check.indexOf("\n}"))).not.toContain("TOKEN");
+
+    const authority = (server: string) =>
+      spawnSync("bash", ["-s"], {
+        input: script.replace(/main "\$@"\s*$/, `SERVER='${server}'\nserver_authority\n`),
+        encoding: "utf8",
+      }).stdout;
+    expect(authority("https://console.example.com")).toBe("console.example.com:443\n");
+    expect(authority("https://console.example.com:8443/")).toBe("console.example.com:8443\n");
+    expect(authority("https://10.0.0.1:8443/x")).toBe("10.0.0.1:8443\n");
+    expect(authority("https://[2001:db8::1]")).toBe("[2001:db8::1]:443\n");
+    expect(authority("https://[2001:db8::1]:8443")).toBe("[2001:db8::1]:8443\n");
+  });
+
+  const hostTools = ["curl", "openssl", "sha256sum", "awk", "timeout"].flatMap((tool) => {
+    const found = spawnSync("sh", ["-c", `command -v ${tool}`], { encoding: "utf8" }).stdout.trim();
+    return found ? [[tool, found] as const] : [];
+  });
+  const hasTools = ["curl", "openssl", "sha256sum", "awk"].every((tool) =>
+    hostTools.some(([name]) => name === tool),
+  );
+
+  it.runIf(hasTools)(
+    "finds an unreachable node channel and a TLS-terminating proxy in front of it",
+    async () => {
+      const { ctx, client } = await createTestContext();
+      const channel = await startNodeChannel(ctx);
+      const tools = mkdtempSync(join(tmpdir(), "edgeweir-check-server-"));
+      try {
+        const address = channel.server.address();
+        if (!address || typeof address === "string") throw new Error("no address");
+        const bash = spawnSync("sh", ["-c", "command -v bash"], { encoding: "utf8" }).stdout.trim();
+        const link = (except: string[] = []) => {
+          rmSync(tools, { recursive: true, force: true });
+          mkdirSync(tools);
+          for (const [name, path] of hostTools)
+            if (!except.includes(name)) symlinkSync(path, join(tools, name));
+        };
+        // Asynchronous: the node channel answers from this process's event loop.
+        const check = (server: string, ca: string) =>
+          new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
+            const child = spawn(bash, ["-s"], { env: { PATH: tools } });
+            let stdout = "";
+            let stderr = "";
+            child.stdout.on("data", (chunk) => {
+              stdout += chunk;
+            });
+            child.stderr.on("data", (chunk) => {
+              stderr += chunk;
+            });
+            child.on("close", (status) => resolve({ status, stdout, stderr }));
+            child.stdin.end(
+              script.replace(
+                /main "\$@"\s*$/,
+                `constants\nSERVER='${server}'\nCA_SHA256='${ca}'\ncheck_server\necho checked\n`,
+              ),
+            );
+          });
+        const server = `https://127.0.0.1:${address.port}`;
+        const pin = ctx.nodeCa.fingerprintSha256;
+        link();
+
+        // The console presents its node CA last: the pin matches.
+        const ok = await check(server, pin);
+        expect(ok.stderr).toContain("presents the pinned CA");
+        expect(ok.stdout).toBe("checked\n");
+
+        // Another CA in front (a proxy or CDN terminating TLS) is refused before any download.
+        const proxied = await check(server, "b".repeat(64));
+        expect(proxied.status).toBe(1);
+        expect(proxied.stderr).toContain("does not present the console's node CA");
+        expect(proxied.stderr).toContain("layer-4");
+
+        // Without openssl only reachability is checked.
+        link(["openssl"]);
+        const plain = await check(server, "b".repeat(64));
+        expect(plain.stdout).toBe("checked\n");
+        expect(plain.stderr).toContain("openssl not installed");
+
+        // A port nobody listens on.
+        const closed = await new Promise<number>((resolve) => {
+          const probe = createServer().listen(0, "127.0.0.1", () => {
+            const port = (probe.address() as { port: number }).port;
+            probe.close(() => resolve(port));
+          });
+        });
+        link();
+        const unreachable = await check(`https://127.0.0.1:${closed}`, pin);
+        expect(unreachable.status).toBe(1);
+        expect(unreachable.stderr).toContain("cannot reach the node channel");
+        expect(unreachable.stderr).toContain(`127.0.0.1:${closed}`);
+      } finally {
+        rmSync(tools, { recursive: true, force: true });
+        await channel.close();
+        await client.close();
+      }
+    },
+    30_000,
+  );
 
   it("executes nothing when the download is cut short", () => {
     const last = script.lastIndexOf('main "$@"');

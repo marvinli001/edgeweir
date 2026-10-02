@@ -855,7 +855,8 @@ EDGEWEIR_TOKEN="$(jq -r .token <<<"$INSTALL_TOKEN_JSON")" docker exec -e EDGEWEI
   _ "$INSTALL_SERVER" "$INSTALL_CA" >"$STATE_DIR/install.log" 2>&1 ||
   { tail -n 60 "$STATE_DIR/install.log" >&2; fail "install.sh failed"; }
 grep '\[edgeweir\]' "$STATE_DIR/install.log" | tr -d '\033' | sed -E 's/\[[0-9;]*m//g' || true
-grep -q "installing edgeweir-node $NODE_VERSION (deb, " "$STATE_DIR/install.log" &&
+grep -q "node channel reachable and presents the pinned CA (console:8443)" "$STATE_DIR/install.log" &&
+  grep -q "installing edgeweir-node $NODE_VERSION (deb, " "$STATE_DIR/install.log" &&
   grep -qE "SHA-256 verified: edgeweir-node_.*_(amd64|arm64)\.deb" "$STATE_DIR/install.log" &&
   grep -qE "SHA-256 verified: edgeweir-openresty_.*_(amd64|arm64)\.deb" "$STATE_DIR/install.log" &&
   grep -qE "SHA-256 verified: edgeweir-openresty-modsecurity_.*_(amd64|arm64)\.deb" "$STATE_DIR/install.log" &&

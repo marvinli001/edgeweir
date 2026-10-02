@@ -177,6 +177,68 @@ check_system() {
   fi
 }
 
+# server_authority: host and port of --server ("[v6]:port" for IPv6; 443 by default).
+server_authority() {
+  local authority="${SERVER#https://}"
+  authority="${authority%%/*}"
+  if [[ "$authority" =~ ^\[[0-9A-Fa-f:.]+\]$ || ! "$authority" =~ :[0-9]+$ ]]; then
+    authority="${authority}:443"
+  fi
+  printf '%s\n' "$authority"
+}
+
+# tls_chain AUTHORITY [SERVERNAME]: the certificates the server presents, as
+# openssl prints them (nothing when the handshake fails).
+tls_chain() {
+  local args=(s_client -connect "$1" -showcerts)
+  [ -z "${2:-}" ] || args+=(-servername "$2")
+  if command -v timeout >/dev/null 2>&1; then
+    timeout 20 openssl "${args[@]}" </dev/null 2>/dev/null || true
+  else
+    openssl "${args[@]}" </dev/null 2>/dev/null || true
+  fi
+}
+
+# Before anything is downloaded: the node channel must be reachable, and it
+# must be the console itself, not a proxy or CDN that terminates TLS. The
+# channel answers every request (404 for /), so any HTTP status means
+# reachable; no token is sent. With openssl on the machine, the last
+# certificate the server presents (the console sends its certificate and
+# its node CA) must be the CA pinned by --ca-sha256.
+check_server() {
+  local status authority host presented
+  authority="$(server_authority)"
+  status="$(curl -sk -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "${SERVER%/}/" 2>/dev/null || true)"
+  if ! [[ "$status" =~ ^[1-5][0-9][0-9]$ ]]; then
+    die "cannot reach the node channel ${SERVER}: check the address and its DNS name, and that the firewall or security group lets this host reach ${authority} (the console's EDGEWEIR_NODE_API_URL)"
+  fi
+  if ! command -v openssl >/dev/null 2>&1; then
+    log "node channel reachable (${authority}); openssl not installed, the CA is checked at enrollment"
+    return 0
+  fi
+  host="${authority%:*}"
+  host="${host#[}"
+  host="${host%]}"
+  # SNI carries names only.
+  if [[ "$host" =~ ^[0-9.]+$ || "$host" == *:* ]]; then
+    host=""
+  fi
+  presented="$(tls_chain "$authority" "$host" | awk '
+    /-----BEGIN CERTIFICATE-----/ { cert = ""; inside = 1 }
+    inside { cert = cert $0 "\n" }
+    /-----END CERTIFICATE-----/ { inside = 0; last = cert }
+    END { printf "%s", last }')"
+  if [ -z "$presented" ]; then
+    log "node channel reachable (${authority}); could not read its certificates, the CA is checked at enrollment"
+    return 0
+  fi
+  presented="$(printf '%s' "$presented" | openssl x509 -outform DER 2>/dev/null | sha256sum | awk '{ print $1 }')"
+  if [ "$presented" != "$CA_SHA256" ]; then
+    die "${SERVER} does not present the console's node CA (--ca-sha256): a proxy or CDN terminates TLS in front of the node channel, or the address points at another service; nodes need a direct or layer-4 (TCP passthrough) connection to the console's port"
+  fi
+  log "node channel reachable and presents the pinned CA (${authority})"
+}
+
 # download URL DEST: fails (non-zero) on HTTP errors, never writes an error page.
 download() {
   curl -fsSL --retry 3 --connect-timeout 15 -o "$2" "$1"
@@ -479,6 +541,7 @@ main() {
   umask 022
   WORK="$(mktemp -d)"
   trap 'rm -rf "$WORK"' EXIT
+  [ "$ENROLLED" = "true" ] || check_server
   resolve_version
   log "installing edgeweir-node ${VERSION} (${FORMAT}, ${ARCH})"
   fetch "checksums.txt"
