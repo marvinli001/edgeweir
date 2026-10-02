@@ -171,6 +171,7 @@ import {
 import {
   cancelUpgrade,
   createUpgrade,
+  latestNodeVersion,
   listUpgrades,
   nodeRelease,
   promoteUpgrade,
@@ -514,6 +515,9 @@ export const router = os.router({
     release: authed.upgrades.release.handler(({ input, context }) =>
       nodeRelease(context.app, input.version),
     ),
+    latestVersion: authed.upgrades.latestVersion.handler(async ({ context }) => ({
+      version: await latestNodeVersion(context.app),
+    })),
     list: authed.upgrades.list.handler(({ input, context }) =>
       listUpgrades(context.app, input.clusterId),
     ),

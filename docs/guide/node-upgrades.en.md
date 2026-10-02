@@ -28,12 +28,20 @@ Nodes that do not meet the supervisor conditions do not report `self-upgrade-v1`
 1. Open **Clusters & nodes** and select the cluster.
 2. In **Node upgrades**, click **New upgrade**.
 3. Enter **Target version** without the `v` prefix, for example `0.1.0`, and select **Canary node group**.
-4. Click **Start canary**.
+4. Click **Start canary**. While the dialog lists **Nodes not ready**, it cannot start: deal with those nodes first (see below).
 5. Wait until the canary nodes show **Succeeded** and stay healthy for 30 seconds.
 6. Click **Promote remaining nodes**. The rest are upgraded in batches: at most a quarter of them at a time (at least one, by node name); when a node succeeds the next one is released.
 7. Verify: the upgrade shows **Succeeded**; the **Agent / engine** column of the **Nodes** list shows the target version.
 
 An upgrade restarts the node's agent. OpenResty runs under the supervisor (node images and packages of this version and later): it keeps serving during an upgrade and reloads the configuration, and bans, CC state and rate-limit counters survive; a rollback to an older version restarts it. An upgrade is not guaranteed to be hitless; choose a canary group whose traffic other nodes can absorb.
+
+### The dialog
+
+| Item | Behavior |
+| --- | --- |
+| Target version | Prefilled with the latest version of the release source: the latest GitHub release for the default source, a mirror's `latest` file otherwise (as `install.sh` reads it), cached by the console for 10 minutes; empty when it cannot be read. When every active node already runs that version or a newer one, the dialog says "Every node runs … or newer" and cannot start (nodes refuse downgrades) |
+| Canary node group | Defaults to a canary node group (**Canary** turned on in the group's settings) with active nodes, else the non-default group with the fewest active nodes. Options show the active node count; when the chosen group holds every node (more than one), a note says none are left for the rollout |
+| Nodes not ready | Active nodes of the cluster that stop the upgrade, with the reason: Upgrade in progress, Offline, Not Linux, Unsupported architecture, No signed upgrades, Data plane unhealthy, Configuration not applied, Behind |
 
 ### Health window
 
@@ -142,6 +150,7 @@ The console account (session or AccessKey) can publish a configuration that need
 | Procedure | Endpoint | Purpose |
 | --- | --- | --- |
 | `upgrades.release` | `GET /node-releases/{version}` | Reads a release manifest: archive, SHA-256, and signature URLs per architecture |
+| `upgrades.latestVersion` | `GET /node-upgrades/latest-version` | The latest `version` of the release source; `null` when it cannot be told |
 | `upgrades.list` | `GET /node-upgrades` | Upgrades with the state of every node; `clusterId` limits the list to one cluster |
 | `upgrades.create` | `POST /node-upgrades` | Starts an upgrade: `version` (without `v`), `nodeGroupId` (canary group) |
 | `upgrades.promote` | `POST /node-upgrades/{id}/promote` | Promotes the remaining nodes |
@@ -162,10 +171,13 @@ The endpoints are under `/api/v1`. Read-only AccessKeys can call the GET endpoin
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | "Invalid input" | **Target version** has a `v` prefix or is not in `major.minor.patch` form | Remove the `v` prefix |
-| "All target nodes must be online, in sync and support signed upgrades" | An enabled node of the cluster is offline, has not applied the current revision, has an unhealthy data plane, lacks `self-upgrade-v1`, or has an architecture missing from the release | Fix or disable those nodes and retry |
+| "These nodes must be online, healthy, in sync and support signed upgrades: …" | The listed active nodes (at most 10, the rest as "+N") are offline, have not applied the current revision, have an unhealthy data plane, lack `self-upgrade-v1`, or have an architecture missing from the release | Fix or disable those nodes and retry |
+| "The node group to upgrade first has no active nodes" | The chosen node group has no active node | Choose another node group |
+| "An upgrade covers at most 1000 nodes" | The cluster has more than 1000 active nodes | Split the cluster |
 | "This release manifest is unavailable" | The version does not exist, the release source is unreachable, or the manifest lists no Linux archive | Check the version and the console release source |
 | "The release source must use HTTPS and resolve to an allowed address" | The release source saved in **System → Node release source** fails the outbound policy | See [Node release source](system.en.md#node-release-source) |
-| "A node already has an upgrade in progress" | A node has a task, or a node is **Upgrading** during cancellation | Wait for the current task to finish |
+| "These nodes already have an unfinished upgrade: …" | The listed nodes have a task, or are **Upgrading** during cancellation | Wait for the current task to finish |
+| "The upgrade has already finished" | Cancelling an upgrade that ended | — |
 | "Canary nodes have not passed the health window" | The canary group has been healthy for less than 30 seconds | Wait, then promote |
 | "Version … was rejected; the previous version is kept" | Download, signature, checksum, archive, or version check failed | Read **Diagnostics**; check the node release source and public key |
 | "Version … failed the health check and was rolled back" | The candidate did not apply the configuration and stay healthy within 90 seconds | Read the node logs |

@@ -8,8 +8,15 @@ export const errorDefs = {
   UPGRADE_RELEASE_UNAVAILABLE: { status: 502, params: [] },
   RELEASE_SOURCE_REFUSED: { status: 400, params: [] },
   UPGRADE_NOT_FOUND: { status: 404, params: [] },
-  UPGRADE_BUSY: { status: 409, params: [] },
-  UPGRADE_NODES_UNAVAILABLE: { status: 409, params: [] },
+  /** Nodes (first 10, then "+N") that already take part in an unfinished upgrade. */
+  UPGRADE_BUSY: { status: 409, params: ["nodes"] },
+  /** The upgrade being cancelled has already ended. */
+  UPGRADE_FINISHED: { status: 409, params: [] },
+  /** Active nodes (first 10, then "+N") that are offline, out of sync or cannot self-upgrade. */
+  UPGRADE_NODES_UNAVAILABLE: { status: 409, params: ["nodes"] },
+  /** The node group chosen to go first has no active nodes. */
+  UPGRADE_CANARY_EMPTY: { status: 409, params: [] },
+  UPGRADE_TOO_MANY_NODES: { status: 409, params: ["limit"] },
   UPGRADE_NOT_READY: { status: 409, params: [] },
 
   ACCESS_KEY_NOT_FOUND: { status: 404, params: [] },

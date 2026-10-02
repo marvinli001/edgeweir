@@ -5,6 +5,45 @@ export const releaseVersion = z
   .trim()
   .regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/)
   .max(64);
+
+const VERSION_PARTS = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
+
+/**
+ * Semantic version precedence of two versions (build metadata ignored, a
+ * leading "v" allowed): negative when a is older than b, 0 when equal;
+ * null when either is not a version (e.g. a development build).
+ */
+export function compareReleaseVersions(a: string, b: string): number | null {
+  const x = VERSION_PARTS.exec(a.trim());
+  const y = VERSION_PARTS.exec(b.trim());
+  if (!x || !y) return null;
+  for (let i = 1; i <= 3; i++) {
+    const diff = Number(x[i]) - Number(y[i]);
+    if (diff !== 0) return Math.sign(diff);
+  }
+  const pa = x[4];
+  const pb = y[4];
+  if (pa === pb) return 0;
+  // A pre-release precedes its release.
+  if (pa === undefined) return 1;
+  if (pb === undefined) return -1;
+  const ia = pa.split(".");
+  const ib = pb.split(".");
+  for (let i = 0; i < Math.max(ia.length, ib.length); i++) {
+    const ca = ia[i];
+    const cb = ib[i];
+    if (ca === undefined) return -1;
+    if (cb === undefined) return 1;
+    const na = /^\d+$/.test(ca);
+    const nb = /^\d+$/.test(cb);
+    if (na && nb) {
+      const diff = Number(ca) - Number(cb);
+      if (diff !== 0) return Math.sign(diff);
+    } else if (na !== nb) return na ? -1 : 1;
+    else if (ca !== cb) return ca < cb ? -1 : 1;
+  }
+  return 0;
+}
 const artifact = z.object({
   arch: z.enum(["amd64", "arm64"]),
   archiveUrl: z.url(),
@@ -43,6 +82,10 @@ export const upgradesContract = {
     .route({ method: "GET", path: "/node-releases/{version}", tags: ["node-upgrades"] })
     .input(z.object({ version: releaseVersion }))
     .output(release),
+  /** The newest release of the node release source; null when it cannot be told. */
+  latestVersion: oc
+    .route({ method: "GET", path: "/node-upgrades/latest-version", tags: ["node-upgrades"] })
+    .output(z.object({ version: releaseVersion.nullable() })),
   list: oc
     .route({ method: "GET", path: "/node-upgrades", tags: ["node-upgrades"] })
     .input(z.object({ clusterId: z.uuid().optional() }).default({}))

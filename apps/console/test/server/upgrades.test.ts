@@ -1,3 +1,4 @@
+import { createServer, type Server } from "node:http";
 import { create } from "@bufbuild/protobuf";
 import { schema } from "@edgeweir/db";
 import { ReportTaskResultRequestSchema, TaskState } from "@edgeweir/proto";
@@ -8,6 +9,10 @@ import { deleteNode, setNodeStatus } from "../../src/server/services/nodes";
 import { latestRevision } from "../../src/server/services/revisions";
 import {
   expireUpgrades,
+  LATEST_VERSION_TTL_MS,
+  latestNodeVersion,
+  MAX_UPGRADE_NODES,
+  nodeNameList,
   pullUpgrade,
   recordUpgradeHealth,
   reportUpgrade,
@@ -102,13 +107,27 @@ describe("signed upgrade orchestration: canary health, scope, retries and outcom
   const get = async (id: string) =>
     (await admin.upgrades.list({ clusterId })).find((j) => j.id === id);
   it("requires all target nodes to advertise upgrade support and be in sync", async () => {
+    // The group chosen to go first must have active nodes.
+    const empty = await admin.nodeGroups.create({ clusterId, name: "empty" });
+    expect(
+      await rpcError(admin.upgrades.create({ version: "0.2.0", nodeGroupId: empty.id })),
+    ).toMatchObject({ code: "UPGRADE_CANARY_EMPTY", status: 409 });
+    await admin.nodeGroups.delete({ id: empty.id });
+
     await ctx.db
       .update(schema.node)
       .set({ supportedFeatures: [] })
       .where(eq(schema.node.id, peer.id));
-    expect(
-      (await rpcError(admin.upgrades.create({ version: "0.2.0", nodeGroupId: groupId }))).code,
-    ).toBe("UPGRADE_NODES_UNAVAILABLE");
+    // The refusal names the nodes that hold it up.
+    const refused = await rpcError(
+      admin.upgrades.create({ version: "0.2.0", nodeGroupId: groupId }),
+    );
+    expect(refused).toMatchObject({
+      code: "UPGRADE_NODES_UNAVAILABLE",
+      status: 409,
+      data: { nodes: "peer" },
+    });
+    expect(refused.message).toContain("peer");
     expect(await ctx.db.select().from(schema.nodeUpgrade)).toHaveLength(0);
     await ctx.db
       .update(schema.node)
@@ -119,8 +138,8 @@ describe("signed upgrade orchestration: canary health, scope, retries and outcom
     const job = await admin.upgrades.create({ version: "0.2.0", nodeGroupId: groupId });
     expect(job.deliveries.map((d) => d.state).sort()).toEqual(["held", "pending"]);
     expect(
-      (await rpcError(admin.upgrades.create({ version: "0.2.0", nodeGroupId: groupId }))).code,
-    ).toBe("UPGRADE_BUSY");
+      await rpcError(admin.upgrades.create({ version: "0.2.0", nodeGroupId: groupId })),
+    ).toMatchObject({ code: "UPGRADE_BUSY", data: { nodes: "canary, peer" } });
     expect(await pullUpgrade(ctx, peer)).toBeNull();
     const task = await pullUpgrade(ctx, canary);
     if (!task) throw new Error("missing upgrade");
@@ -173,7 +192,10 @@ describe("signed upgrade orchestration: canary health, scope, retries and outcom
     expect((await admin.upgrades.promote({ id: job.id })).state).toBe("rollout");
     const second = await pullUpgrade(ctx, peer);
     if (!second) throw new Error("peer was not released");
-    expect((await rpcError(admin.upgrades.cancel({ id: job.id }))).code).toBe("UPGRADE_BUSY");
+    expect(await rpcError(admin.upgrades.cancel({ id: job.id }))).toMatchObject({
+      code: "UPGRADE_BUSY",
+      data: { nodes: "peer" },
+    });
     await fresh(peer.id, "0.2.0");
     await reportUpgrade(ctx, peer.id, result(second.id));
     expect((await get(job.id))?.state).toBe("succeeded");
@@ -207,6 +229,10 @@ describe("signed upgrade orchestration: canary health, scope, retries and outcom
         ),
       );
     expect(audits).toHaveLength(1);
+    expect(await rpcError(admin.upgrades.cancel({ id: job.id }))).toMatchObject({
+      code: "UPGRADE_FINISHED",
+      status: 409,
+    });
   });
 });
 
@@ -401,5 +427,116 @@ describe("upgrade rollout: batches, deadlines from release, removed nodes and lo
     expect(await pullUpgrade(ctx, node("r2"))).toBeNull();
     expect(transaction).not.toHaveBeenCalled();
     transaction.mockRestore();
+  });
+});
+
+describe("upgrade refusals and the latest release", async () => {
+  const { ctx, client } = await createTestContext();
+  const app = createApp(ctx);
+  let admin: ApiClient, clusterId: string, groupId: string;
+  let fetchMock: { mockRestore(): void };
+  const fetched: string[] = [];
+  let githubTag = "v0.9.1";
+  let mirror: Server;
+  let mirrorUrl: string;
+  let mirrorLatest = "0.8.0\n";
+  beforeAll(async () => {
+    fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      fetched.push(url);
+      if (url === "https://api.github.com/repos/marvinli001/edgeweir-node/releases/latest") {
+        const headers = new Headers(init?.headers);
+        // GitHub refuses API calls without a User-Agent.
+        if (!headers.get("user-agent")) return new Response("", { status: 403 });
+        return Response.json({ tag_name: githubTag, assets: [] });
+      }
+      if (url === "https://mirror.example.test/edgeweir/latest") return new Response("v0.7.2\n");
+      const v = url.match(/\/v([^/]+)\/checksums\.txt$/)?.[1];
+      if (!v) return new Response("", { status: 404 });
+      return new Response(
+        ["amd64", "arm64"]
+          .map((arch) => `${"a".repeat(64)}  edgeweir-node_${v}_linux_${arch}.tar.gz`)
+          .join("\n"),
+      );
+    });
+    mirror = createServer((req, res) => {
+      if (req.url === "/releases/latest") res.end(mirrorLatest);
+      else res.writeHead(404).end();
+    });
+    await new Promise<void>((resolve) => mirror.listen(0, "127.0.0.1", resolve));
+    const bound = mirror.address();
+    if (!bound || typeof bound === "string") throw new Error("mirror missing");
+    mirrorUrl = `http://127.0.0.1:${bound.port}/releases`;
+    await setupPlatform(ctx);
+    admin = rpcClient(
+      app,
+      ctx.env.EDGEWEIR_PUBLIC_URL,
+      await signIn(app, ctx.env.EDGEWEIR_PUBLIC_URL, "admin@example.com"),
+    );
+    clusterId = (await admin.clusters.list())[0]?.id ?? "";
+    groupId = (await admin.nodeGroups.create({ clusterId, name: "canary" })).id;
+  });
+  afterAll(async () => {
+    fetchMock.mockRestore();
+    await new Promise<void>((resolve) => mirror.close(() => resolve()));
+    await client.close();
+  });
+
+  it("lists the first ten node names, then how many more", () => {
+    expect(nodeNameList(["b", "a"])).toBe("a, b");
+    const names = Array.from({ length: 12 }, (_, i) => `edge-${String(i).padStart(2, "0")}`);
+    expect(nodeNameList(names)).toBe(`${names.slice(0, 10).join(", ")} +2`);
+  });
+
+  it("refuses more nodes than one upgrade covers", async () => {
+    const defaultGroup = (await admin.nodeGroups.list({ clusterId })).find((g) => g.isDefault);
+    if (!defaultGroup) throw new Error("no default group");
+    await ctx.db.insert(schema.node).values(
+      Array.from({ length: MAX_UPGRADE_NODES + 1 }, (_, i) => ({
+        clusterId,
+        name: `n${i}`,
+        nodeGroupId: i === 0 ? groupId : defaultGroup.id,
+      })),
+    );
+    expect(
+      await rpcError(admin.upgrades.create({ version: "0.2.0", nodeGroupId: groupId })),
+    ).toMatchObject({ code: "UPGRADE_TOO_MANY_NODES", data: { limit: MAX_UPGRADE_NODES } });
+  });
+
+  it("looks up the latest release of the release source, cached", async () => {
+    const now = Date.now();
+    // The official releases: GitHub's releases API.
+    expect(await latestNodeVersion(ctx, now)).toBe("0.9.1");
+    expect(await admin.upgrades.latestVersion()).toEqual({ version: "0.9.1" });
+    const lookups = () => fetched.filter((url) => url.endsWith("/releases/latest")).length;
+    expect(lookups()).toBe(1);
+    githubTag = "v0.9.2";
+    expect(await latestNodeVersion(ctx, now + 1000)).toBe("0.9.1");
+    expect(await latestNodeVersion(ctx, now + LATEST_VERSION_TTL_MS + 1)).toBe("0.9.2");
+    expect(lookups()).toBe(2);
+    // Not a version: unknown.
+    githubTag = "nightly";
+    expect(await latestNodeVersion(ctx, now + 3 * LATEST_VERSION_TTL_MS)).toBeNull();
+
+    // A mirror from the environment: its latest file, as install.sh reads it.
+    ctx.env.EDGEWEIR_NODE_RELEASE_BASE_URL = "https://mirror.example.test/edgeweir";
+    try {
+      expect(await latestNodeVersion(ctx, now)).toBe("0.7.2");
+    } finally {
+      ctx.env.EDGEWEIR_NODE_RELEASE_BASE_URL = undefined;
+    }
+
+    // A saved mirror, under the outbound policy.
+    ctx.env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS = "127.0.0.0/8";
+    try {
+      await admin.settings.setReleaseSource({ url: mirrorUrl });
+      expect(await latestNodeVersion(ctx, now)).toBe("0.8.0");
+    } finally {
+      ctx.env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS = "";
+    }
+    // Unreachable without the allow list: unknown, not an error.
+    mirrorLatest = "0.8.1";
+    expect(await latestNodeVersion(ctx, now + LATEST_VERSION_TTL_MS + 1)).toBeNull();
+    await admin.settings.setReleaseSource({ url: "" });
   });
 });

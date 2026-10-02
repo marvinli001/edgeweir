@@ -26,6 +26,7 @@ export function FormDialog({
   onSubmit,
   children,
   submitTestId,
+  submitDisabled,
   className,
 }: {
   open: boolean;
@@ -35,6 +36,8 @@ export function FormDialog({
   onSubmit: (data: FormData) => Promise<void>;
   children: React.ReactNode;
   submitTestId?: string;
+  /** Keeps the submit button disabled (e.g. while the fields say why it cannot go ahead). */
+  submitDisabled?: boolean;
   className?: string;
 }) {
   const action = useAction();
@@ -71,7 +74,11 @@ export function FormDialog({
               </FieldError>
             ) : null}
             <DialogFooter>
-              <Button type="submit" disabled={action.pending} data-testid={submitTestId}>
+              <Button
+                type="submit"
+                disabled={action.pending || submitDisabled}
+                data-testid={submitTestId}
+              >
                 {action.pending ? <Spinner /> : null}
                 {submitLabel}
               </Button>
