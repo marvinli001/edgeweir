@@ -269,6 +269,35 @@ Each node also pins its own release source and signature trust locally, out of t
 
 Changes are audited as `system.usage_update`. The usage API and the definition of `completeUntil`: [Usage](../reference/api.en.md#usage).
 
+### Platform error pages
+
+| Field | Requests it applies to | Notes |
+| --- | --- | --- |
+| **Unknown host** | The Host belongs to no site of the cluster | Status 404; empty uses the built-in page |
+| **Site disabled** | Domains of disabled sites | Status 503 |
+
+Each template is at most 65536 bytes (UTF-8); the values of the placeholders `{{status}}`, `{{request_id}}`, `{{client_ip}}` and `{{host}}` are HTML-escaped. Saving publishes one revision in every cluster ("Platform error pages updated") and is audited as `system.error_pages_update`. Older nodes ignore platform error pages. See [Error pages](error-pages.en.md#platform-error-pages).
+
+### Precedence
+
+A value saved in the console wins over the environment variable, which wins over the default. The environment variables remain only as a fallback for existing deployments.
+
+| Setting | Location | Environment variable | Default |
+| --- | --- | --- | --- |
+| Node release source | **System → Node release source** | `EDGEWEIR_NODE_RELEASE_BASE_URL` | `https://github.com/marvinli001/edgeweir-node/releases/download` |
+| SMTP CA certificates | **Alerts → SMTP → CA certificates (PEM)** | `EDGEWEIR_SMTP_CA_FILE` (path to a PEM file) | System trust store |
+| SMTP server and account | **Alerts → SMTP** | None | Not configured |
+| Origin allow list | **System → Origin allow list** | None | Empty |
+| Usage | **System → Usage** | None | 100 days retention, 60-minute offline threshold |
+| Bans | **Protection settings → Bans** | None | Limit 10000, automatic bans shared |
+| Protection | **Protection settings → Protection** | None | Global Under Attack off, challenge type JavaScript, events kept 30 days |
+
+The badge of **Node release source** shows where the value in effect comes from: **Saved**, **Environment**, or **Default**. Addresses saved in system settings are bounded by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`; values in environment variables are set by the operator and skip that check. For every environment variable, see [Environment variables](../reference/environment.en.md).
+
+## Protection settings
+
+Page: **Protection settings** (`/protection`), under **Access control** in the sidebar.
+
 ### Bans
 
 | Field | Values | Default | Description |
@@ -288,15 +317,6 @@ Changes are audited as `system.bans_update`. See [Bans](bans.en.md).
 
 Switching global Under Attack, or changing the challenge type while it is on, publishes one revision in every cluster. Changes are audited as `system.protection_update`. Global Under Attack needs the node capability `challenge-v1`; nodes without it keep their configuration, see [Revisions](#revisions). For a site's own Under Attack and CC mitigation, see [Challenges and CC mitigation](challenges.en.md).
 
-### Platform error pages
-
-| Field | Requests it applies to | Notes |
-| --- | --- | --- |
-| **Unknown host** | The Host belongs to no site of the cluster | Status 404; empty uses the built-in page |
-| **Site disabled** | Domains of disabled sites | Status 503 |
-
-Each template is at most 65536 bytes (UTF-8); the values of the placeholders `{{status}}`, `{{request_id}}`, `{{client_ip}}` and `{{host}}` are HTML-escaped. Saving publishes one revision in every cluster ("Platform error pages updated") and is audited as `system.error_pages_update`. Older nodes ignore platform error pages. See [Error pages](error-pages.en.md#platform-error-pages).
-
 ### CC template
 
 Thresholds for sites whose CC mitigation is on and set to **Follow the default template**: highest level, high proof of work instead of the captcha, window, site QPS, per-URL QPS, per-IP QPS, IP ban duration, origin error rate, minimum origin requests, escalate after, step down after. Fields, ranges, and defaults: [CC mitigation](challenges.en.md#cc-mitigation). Saving publishes a revision to every cluster with a following site; changes are audited as `system.cc_template_update`.
@@ -304,22 +324,6 @@ Thresholds for sites whose CC mitigation is on and set to **Follow the default t
 ### GeoIP databases
 
 Read-only. Shows, per node, the state of the **Country**, **Subdivision**, and **ASN** data (**Ready** / **Unavailable**), with the IPinfo attribution link. Country and ASN data ship in node release images; other databases are configured locally on each node; **Configure databases** links to [Rules, IP lists, and GeoIP](rules.en.md).
-
-### Precedence
-
-A value saved in the console wins over the environment variable, which wins over the default. The environment variables remain only as a fallback for existing deployments.
-
-| Setting | Location | Environment variable | Default |
-| --- | --- | --- | --- |
-| Node release source | **System → Node release source** | `EDGEWEIR_NODE_RELEASE_BASE_URL` | `https://github.com/marvinli001/edgeweir-node/releases/download` |
-| SMTP CA certificates | **Alerts → SMTP → CA certificates (PEM)** | `EDGEWEIR_SMTP_CA_FILE` (path to a PEM file) | System trust store |
-| SMTP server and account | **Alerts → SMTP** | None | Not configured |
-| Origin allow list | **System → Origin allow list** | None | Empty |
-| Usage | **System → Usage** | None | 100 days retention, 60-minute offline threshold |
-| Bans | **System → Bans** | None | Limit 10000, automatic bans shared |
-| Protection | **System → Protection** | None | Global Under Attack off, challenge type JavaScript, events kept 30 days |
-
-The badge of **Node release source** shows where the value in effect comes from: **Saved**, **Environment**, or **Default**. Addresses saved in system settings are bounded by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`; values in environment variables are set by the operator and skip that check. For every environment variable, see [Environment variables](../reference/environment.en.md).
 
 ## Troubleshooting
 

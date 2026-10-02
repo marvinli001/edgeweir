@@ -101,7 +101,7 @@
 | 区域 | 路径 | 访问者 |
 | --- | --- | --- |
 | 入口 | `/`（按状态跳转到 `/setup`、`/overview` 或 `/login`）、`/setup`、`/login` | 所有人 |
-| 控制台 | 网站：`/overview`、`/sites`（含 L4 应用 `/l4`）、`/certificates`、`/purge`；访问控制：`/ip-lists`、`/bans`、`/rules`；基础设施：`/clusters`、`/regions`、`/dns`；系统：`/alerts`、`/service-accounts`、`/audit`、`/system`；账户（用户菜单）：`/security`、`/settings` | 登录的运营者 |
+| 控制台 | 网站：`/overview`、`/sites`（含 L4 应用 `/l4`）、`/certificates`、`/purge`；访问控制：`/rules`、`/ip-lists`（含封禁 `/bans`）、`/protection`；基础设施：`/clusters`、`/regions`、`/dns`；系统：`/alerts`、`/service-accounts`、`/audit`、`/system`；账户（用户菜单）：`/security`、`/settings` | 登录的运营者 |
 
 ## 认证与授权
 

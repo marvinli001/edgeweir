@@ -22,6 +22,7 @@ import {
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import {
@@ -90,6 +91,22 @@ export function SecurityTab({ siteId }: { siteId: string }) {
   const protection = useQuery(orpc.protection.get.queryOptions({ input: { id: siteId } }));
   return (
     <div className="flex min-w-0 flex-col gap-4">
+      {/* Access control outside this tab: the site's bans, global rules, platform defaults. */}
+      <div className="flex flex-wrap justify-end gap-2" data-testid="security-links">
+        <Button
+          size="sm"
+          variant="outline"
+          render={<Link to="/bans" search={{ site: siteId }} data-testid="security-site-bans" />}
+        >
+          {m.security_site_bans()}
+        </Button>
+        <Button size="sm" variant="outline" render={<Link to="/rules" />}>
+          {m.rules_platform()}
+        </Button>
+        <Button size="sm" variant="outline" render={<Link to="/protection" />}>
+          {m.protection_page_title()}
+        </Button>
+      </div>
       {protection.isPending ? (
         <LoadingState />
       ) : protection.isLoadingError ? (

@@ -1,7 +1,6 @@
 import {
   ArrowDataTransferHorizontalIcon,
   Audit01Icon,
-  BlockedIcon,
   Certificate01Icon,
   DashboardSquare01Icon,
   DatabaseSync01Icon,
@@ -66,17 +65,24 @@ export function navGroups(): NavGroup[] {
       label: m.nav_group_access(),
       items: [
         {
-          title: m.ip_lists_title(),
-          to: "/ip-lists",
-          icon: icon(ListViewIcon),
-          testId: "nav-ip-lists",
-        },
-        { title: m.bans_title(), to: "/bans", icon: icon(BlockedIcon), testId: "nav-bans" },
-        {
           title: m.rules_platform(),
           to: "/rules",
           icon: icon(Shield01Icon),
           testId: "nav-rules",
+        },
+        {
+          title: m.nav_ip_lists_bans(),
+          to: "/ip-lists",
+          icon: icon(ListViewIcon),
+          testId: "nav-ip-lists",
+          // Bans are a tab of the same section.
+          also: ["/bans"],
+        },
+        {
+          title: m.protection_page_title(),
+          to: "/protection",
+          icon: icon(SecurityLockIcon),
+          testId: "nav-protection",
         },
       ],
     },

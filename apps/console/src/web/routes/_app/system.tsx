@@ -1,13 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import type * as React from "react";
-import { BanSettingsCard } from "@/components/ban-settings";
 import { CopyButton } from "@/components/copy-button";
-import { GeoIpSettings } from "@/components/geoip-settings";
 import { OriginAllowListCard } from "@/components/origin-allow-list";
 import { Page } from "@/components/page";
 import { PlatformErrorPagesCard } from "@/components/platform-error-pages";
-import { ProtectionSettingsCards } from "@/components/protection-settings";
 import { ReleaseSourceCard } from "@/components/release-source";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -93,10 +90,7 @@ function SystemSettingsPage() {
       <OriginAllowListCard />
       <ReleaseSourceCard />
       <UsageSettingsCard />
-      <BanSettingsCard />
-      <ProtectionSettingsCards />
       <PlatformErrorPagesCard />
-      <GeoIpSettings />
     </Page>
   );
 }

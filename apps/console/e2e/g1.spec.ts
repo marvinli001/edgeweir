@@ -73,7 +73,8 @@ async function unban(page: Page, cidr: string) {
 test("G1: the operator bans an address on a site and lifts it", async ({ page }) => {
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
-  await page.getByTestId("nav-bans").click();
+  await page.getByTestId("nav-ip-lists").click();
+  await page.getByTestId("access-tab-bans").click();
   await expect(page).toHaveURL(/\/bans$/);
   await expect(page.getByTestId("page-title")).toHaveText("封禁");
   await expect(page.getByText("暂无封禁", { exact: true })).toBeVisible();
@@ -120,7 +121,8 @@ test("G1: the operator bans an address on a site and lifts it", async ({ page })
 test("G1: the operator bans a range on every site and an address on one site", async ({ page }) => {
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
-  await page.getByTestId("nav-bans").click();
+  await page.getByTestId("nav-ip-lists").click();
+  await page.getByTestId("access-tab-bans").click();
   await expect(page.getByTestId("page-title")).toHaveText("封禁");
 
   let dialog = await openBanDialog(page);
@@ -170,7 +172,7 @@ test("G1: the operator bans a range on every site and an address on one site", a
 test("G1: the operator edits the ban settings", async ({ page }) => {
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
-  await page.goto("/system");
+  await page.goto("/protection");
   const maxTotal = page.getByTestId("bans-max-total");
   const share = page.getByRole("switch", { name: "集群内共享自动封禁", exact: true });
   const save = page.getByTestId("ban-settings-save");
@@ -191,7 +193,7 @@ test("G1: the operator edits the ban settings", async ({ page }) => {
   await expect(page.getByTestId("audit-action").first()).toHaveText("system.bans_update");
 
   // Back to the defaults for the next steps.
-  await page.goto("/system");
+  await page.goto("/protection");
   await maxTotal.fill("10000");
   await share.click();
   await save.click();

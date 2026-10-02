@@ -383,7 +383,7 @@ GeoIP 字段读取节点本地的 MMDB 文件。节点不自动下载更新，�
 | 优先级 | 国家和 ASN 优先取 IPinfo Lite，无记录时取 City / ASN MMDB |
 | 一级行政区 | 只来自 City MMDB；City MMDB 的国家与最终国家一致时才有值 |
 | 镜像内置数据 | `/usr/share/edgeweir-node/geoip/ipinfo_lite.mmdb`，构建时按 IPinfo 公布的 sha256 校验；同目录 `NOTICE` 记录下载时间和 sha256 |
-| 控制台署名 | **系统设置 → GeoIP 数据库** 带 IPinfo 署名链接 |
+| 控制台署名 | **防护设置 → GeoIP 数据库** 带 IPinfo 署名链接 |
 
 1. 容器节点使用发布镜像时，国家和 ASN 无需配置；更新数据时拉取新镜像，或挂载另行下载的副本并设置 `EDGEWEIR_GEOIP_IPINFO`。
 2. 安装包或压缩包节点：从 IPinfo 下载 `ipinfo_lite.mmdb`。需要按一级行政区匹配时，另外下载 City MMDB。核对来源、许可和完整性，记录下载日期。
@@ -401,7 +401,7 @@ GeoIP 字段读取节点本地的 MMDB 文件。节点不自动下载更新，�
    sudo systemctl restart edgeweir-node
    ```
 
-5. 验证：**系统设置 → GeoIP 数据库** 中该节点显示「国家：可用」「ASN：可用」；配置了 City MMDB 时另显示「省份：可用」。
+5. 验证：**防护设置 → GeoIP 数据库** 中该节点显示「国家：可用」「ASN：可用」；配置了 City MMDB 时另显示「省份：可用」。
 
 | 变量 | 参数 | 默认值 | 说明 |
 | --- | --- | --- | --- |

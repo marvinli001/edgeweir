@@ -101,7 +101,7 @@ Unmatched requests under `/api`, `/rpc`, and `/downloads`, and other methods on 
 | Area | Paths | Access |
 | --- | --- | --- |
 | Entry | `/` (redirects to `/setup`, `/overview`, or `/login` by state), `/setup`, `/login` | Everyone |
-| Console | Sites: `/overview`, `/sites` (with L4 apps at `/l4`), `/certificates`, `/purge`; access control: `/ip-lists`, `/bans`, `/rules`; infrastructure: `/clusters`, `/regions`, `/dns`; system: `/alerts`, `/service-accounts`, `/audit`, `/system`; account (user menu): `/security`, `/settings` | The signed-in operator |
+| Console | Sites: `/overview`, `/sites` (with L4 apps at `/l4`), `/certificates`, `/purge`; access control: `/rules`, `/ip-lists` (with bans at `/bans`), `/protection`; infrastructure: `/clusters`, `/regions`, `/dns`; system: `/alerts`, `/service-accounts`, `/audit`, `/system`; account (user menu): `/security`, `/settings` | The signed-in operator |
 
 ## Authentication and authorization
 

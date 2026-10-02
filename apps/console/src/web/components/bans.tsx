@@ -11,6 +11,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { AccessTabs } from "@/components/access-tabs";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
@@ -285,9 +286,9 @@ function UnbanAction({ ban }: { ban: Ban }) {
 }
 
 /** Dynamic IP bans of one site or of every site (platform bans). */
-export function BansPage() {
+export function BansPage({ initialSiteId }: { initialSiteId?: string }) {
   const [page, setPage] = React.useState(1);
-  const [siteId, setSiteId] = React.useState<string | undefined>();
+  const [siteId, setSiteId] = React.useState<string | undefined>(initialSiteId);
   const [source, setSource] = React.useState<BanSource | undefined>();
   const [scope, setScope] = React.useState<BanScope | undefined>();
   const [creating, setCreating] = React.useState(false);
@@ -378,6 +379,7 @@ export function BansPage() {
 
   return (
     <Page title={m.bans_title()} actions={createButton}>
+      <AccessTabs value="bans" />
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <FilterSelect
           value={scope}

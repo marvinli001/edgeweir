@@ -109,7 +109,7 @@ Common optional variables (uncomment in `.env`):
 
 All variables: [environment variables](../reference/environment.en.md).
 
-After setup, the node release source, the origin allow list, and GeoIP are configured in **System**, and SMTP on the **Alerts** page; saving applies them without a restart. Values saved there take precedence over `EDGEWEIR_SMTP_CA_FILE` and `EDGEWEIR_NODE_RELEASE_BASE_URL` in `.env`, which take precedence over the defaults. `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` bounds the outbound addresses saved there; the web console cannot widen it.
+After setup, the node release source and the origin allow list are configured in **System**, GeoIP in **Protection settings**, and SMTP on the **Alerts** page; saving applies them without a restart. Values saved there take precedence over `EDGEWEIR_SMTP_CA_FILE` and `EDGEWEIR_NODE_RELEASE_BASE_URL` in `.env`, which take precedence over the defaults. `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` bounds the outbound addresses saved there; the web console cannot widen it.
 
 ## 5. Start
 

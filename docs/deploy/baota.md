@@ -109,7 +109,7 @@ bash deploy.sh install
 
    预期：签发者含 `Edgeweir Node Channel CA`。
 
-节点发布源、源站地址允许清单与 GeoIP 数据库在 **系统设置** 配置，见 [集群与系统](../guide/system.md#系统设置)；SMTP 在 **告警** 页配置，见 [SMTP](../guide/dns-and-alerts.md#smtp)。添加节点见 [接入节点](nodes.md)；安装命令中的 `--server` 即 `EDGEWEIR_NODE_API_URL`。
+节点发布源与源站地址允许清单在 **系统设置** 配置，见 [集群与系统](../guide/system.md#系统设置)；GeoIP 数据库在 **防护设置**，见 [防护设置](../guide/system.md#防护设置)；SMTP 在 **告警** 页配置，见 [SMTP](../guide/dns-and-alerts.md#smtp)。添加节点见 [接入节点](nodes.md)；安装命令中的 `--server` 即 `EDGEWEIR_NODE_API_URL`。
 
 ## 节点通道端口
 

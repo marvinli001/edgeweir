@@ -56,7 +56,7 @@ The list shows active bans only (neither expired nor lifted), newest first, and 
 
 | Limit | Counts | Where |
 | --- | --- | --- |
-| Limit of manual bans | Active manual bans, global and site bans together | **System → Bans → Limit of manual bans**; 10000 by default, 100–100000 |
+| Limit of manual bans | Active manual bans, global and site bans together | **Protection settings → Bans → Limit of manual bans**; 10000 by default, 100–100000 |
 | Automatic bans | Active automatic bans per cluster | Fixed at 10000; the oldest automatic bans lapse first |
 
 Automatic bans do not count toward the limit of manual bans. Once the limit is reached, a new ban gets `BAN_PLATFORM_LIMIT` ("At most N manual bans can be active"); banning an address that is still banned is not limited.
@@ -67,7 +67,7 @@ A node bans on its own on a trigger (the per-IP QPS of CC mitigation, see [Chall
 
 | Item | Behavior |
 | --- | --- |
-| Sharing | **System → Bans → Share automatic bans in the cluster**, on by default: on, the ban goes to every node of the cluster; off, it is kept for viewing only and marked "Not shared". A change applies to automatic bans added afterwards |
+| Sharing | **Protection settings → Bans → Share automatic bans in the cluster**, on by default: on, the ban goes to every node of the cluster; off, it is kept for viewing only and marked "Not shared". A change applies to automatic bans added afterwards |
 | Merging | One entry per node, site and address; a repeated report extends the expiry |
 | Checks | The site must belong to the node's cluster; single addresses only; at most 7 days after creation; protected addresses are not stored |
 | Unban | Like a manual ban: click "Unban" in the row; a ban that was not shared is deleted within seconds by the node that created it (older nodes without support keep it until it expires), and a later ban of the same address by that node is not affected |
@@ -166,7 +166,7 @@ Read-only AccessKeys can call only `bans.list`; service accounts cannot call the
 | "The prefix is too short; the shortest allowed is /16" (or `/48`) | The prefix is shorter than the minimum | Split it into longer prefixes, or use an IP list |
 | "A ban lasts from 1 minute to 7 days" | Expiry out of range | Use an IP list to block for longer |
 | "The ban covers the protected address …" | The ban covers a node address, loopback or an unspecified address, or overlaps an allow list | Narrow it |
-| "At most N manual bans can be active" | Limit of manual bans reached | Unban addresses no longer needed, or raise **System → Bans → Limit of manual bans** |
+| "At most N manual bans can be active" | Limit of manual bans reached | Unban addresses no longer needed, or raise **Protection settings → Bans → Limit of manual bans** |
 | "Choose a site" | The scope is "Site" but no site is picked | Pick a site, or set the scope to "Global" |
 | "Ban not found or no longer active" | The ban expired or was lifted | Refresh the list |
 | The list shows "Not applied on N nodes" | Node ban capacity or memory exhausted | Raise the node's `--ban-capacity` and `--ban-dict-mb`, or ban less |

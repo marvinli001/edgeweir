@@ -97,7 +97,7 @@ docker compose logs console | grep setupToken
 | `POSTGRES_PASSWORD` | 是 | 内置 PostgreSQL 密码。 |
 | `BETTER_AUTH_SECRET` | 否 | 未设置时由主密钥派生。已设置的部署不得移除，否则控制台拒绝启动。 |
 
-其余变量均有默认值，完整列表见 [.env.example](.env.example)。节点发布源、源站地址允许清单与 GeoIP 在初始化后于 **系统设置** 配置，SMTP 在 **告警** 页配置。
+其余变量均有默认值，完整列表见 [.env.example](.env.example)。节点发布源与源站地址允许清单在初始化后于 **系统设置** 配置，封禁、全局防护与 GeoIP 在 **防护设置**，SMTP 在 **告警** 页。
 
 ### 可选组件
 

@@ -68,7 +68,7 @@ Origins cannot serve content under this prefix.
 
 To turn it off, click the switch again and confirm.
 
-For every site: in **System → Protection**, pick the **Challenge type**, turn on **Global Under Attack**, and confirm; every cluster gets a new configuration. The **Security** tab of each site then shows "Global Under Attack is on for every site". See [Protection](system.en.md#protection).
+For every site: in **Protection settings → Protection**, pick the **Challenge type**, turn on **Global Under Attack**, and confirm; every cluster gets a new configuration. The **Security** tab of each site then shows "Global Under Attack is on for every site". See [Protection](system.en.md#protection).
 
 These requests are never challenged by Under Attack or CC mitigation:
 
@@ -107,7 +107,7 @@ A request with a pass of a sufficient level continues with the following rules; 
 CC mitigation is set per site and off by default. **Security → CC mitigation**:
 
 1. Turn on **Enabled**.
-2. Keep **Follow the default template** to use the default thresholds (**System → CC template**), or turn it off to set your own.
+2. Keep **Follow the default template** to use the default thresholds (**Protection settings → CC template**), or turn it off to set your own.
 3. Click **Save**.
 
 | Field | Values | Template default |
@@ -154,7 +154,7 @@ Lower on the **Security** tab:
 | Top addresses and paths | Heaviest addresses and paths in the events of the last hour, 24 hours or 7 days (approximate) |
 | Events | Timeline of level changes, escalated paths and automatic bans: node and trigger (observed / threshold), filterable by type |
 
-Events are kept for 30 days by default, adjustable to 7–365 days with **Security event retention (days)** in **System → Protection**. A site leaving the normal level raises the **CC mitigation raised** alert (`cc_mitigation`), at most once per site in 15 minutes (a raise held back fires once they are over if the site has not recovered), see [Alerts](dns-and-alerts.en.md#set-alert-rules).
+Events are kept for 30 days by default, adjustable to 7–365 days with **Security event retention (days)** in **Protection settings → Protection**. A site leaving the normal level raises the **CC mitigation raised** alert (`cc_mitigation`), at most once per site in 15 minutes (a raise held back fires once they are over if the site has not recovered), see [Alerts](dns-and-alerts.en.md#set-alert-rules).
 
 ## JA4
 

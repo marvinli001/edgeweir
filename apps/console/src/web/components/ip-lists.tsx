@@ -3,6 +3,7 @@ import { canonicalCidr } from "@edgeweir/rule-engine";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { AccessTabs } from "@/components/access-tabs";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
@@ -47,6 +48,7 @@ export function IpListsPage() {
         </Button>
       }
     >
+      <AccessTabs value="ip-lists" />
       {query.isPending ? (
         <LoadingState />
       ) : query.isLoadingError ? (

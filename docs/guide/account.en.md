@@ -98,9 +98,9 @@ For using and revoking AccessKeys, see [Access logs and access keys](access-logs
 | — | **Sites** | `/sites` | Site list and details; for enabling and disabling, see [Site enabling](system.en.md#site-enabling). The **Sites \| L4 apps** switch above the list leads to the L4 app list (`/l4`), see [Layer-4 forwarding](l4.en.md) |
 | — | **Certificates** | `/certificates` | Certificates and DNS credentials; see [HTTPS and certificates](https.en.md) |
 | — | **Purge & prefetch** | `/purge` | URL, directory, and site purges, URL prefetch, and tasks; see [Origins and cache](origins-and-cache.en.md) |
-| **Access control** | **IP lists** | `/ip-lists` | Lists referenced by rules, and allow and block lists; see [Rules, IP lists, and GeoIP](rules.en.md) |
-| **Access control** | **Bans** | `/bans` | Site bans and global bans; see [Bans](bans.en.md) |
 | **Access control** | **Global rules** | `/rules` | Rules applied to every site; see [Rules, IP lists, and GeoIP](rules.en.md) |
+| **Access control** | **IP lists & bans** | `/ip-lists`, `/bans` | The **IP lists \| Bans** switch at the top moves between the two lists: lists referenced by rules, and allow and block lists, see [Rules, IP lists, and GeoIP](rules.en.md); site bans and global bans, see [Bans](bans.en.md). `/bans?site=<site ID>` shows one site's bans; **This site's bans** on a site's **Security** tab links there |
+| **Access control** | **Protection settings** | `/protection` | Global Under Attack, the CC template, ban settings, and GeoIP databases; see [Protection settings](system.en.md#protection-settings) |
 | **Infrastructure** | **Clusters & nodes** | `/clusters` | Clusters, node groups, nodes, configuration canary, node upgrades, revisions, and the cluster's DNS binding and scheduling; see [Clusters and nodes](system.en.md#clusters-and-nodes) |
 | **Infrastructure** | **Regions & probes** | `/regions` | Regions, regional probes, and probe settings; see [Regions](system.en.md#regions) and [Regional probes](scheduling.en.md#regional-probes) |
 | **Infrastructure** | **DNS steering** | `/dns` | DNS provider accounts, each cluster's DNS binding, and mass removal protection; see [Configure DNS steering](dns-and-alerts.en.md#configure-dns-steering) |

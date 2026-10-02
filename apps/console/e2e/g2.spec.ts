@@ -170,7 +170,7 @@ test("G2: the operator turns global Under Attack on and off and edits the CC tem
 }) => {
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
-  await page.goto("/system");
+  await page.goto("/protection");
   const platform = page.getByTestId("platform-under-attack");
   const badge = page.getByTestId("platform-under-attack-on");
   await expect(platform).toHaveAttribute("aria-checked", "false");
@@ -190,7 +190,7 @@ test("G2: the operator turns global Under Attack on and off and edits the CC tem
   await expect(page.getByTestId("protection-platform-on")).toHaveText(
     "已为所有网站开启全局 Under Attack",
   );
-  await page.goto("/system");
+  await page.goto("/protection");
   await confirmSwitch(page, "platform-under-attack", "关闭全局 Under Attack？");
   await expect(platform).toHaveAttribute("aria-checked", "false");
   await expect(badge).toHaveCount(0);
@@ -200,7 +200,7 @@ test("G2: the operator turns global Under Attack on and off and edits the CC tem
   await expect(page.getByTestId("protection-platform-on")).toHaveCount(0);
 
   // CC template.
-  await page.goto("/system");
+  await page.goto("/protection");
   const urlQps = page.getByTestId("cc-template-url-qps");
   const save = page.getByTestId("cc-template-save");
   await expect(urlQps).toHaveValue("200");

@@ -383,7 +383,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | Precedence | Country and ASN come from IPinfo Lite first, then from the City / ASN MMDB when IPinfo has no record |
 | Subdivision | Comes only from the City MMDB, and only when the City MMDB's country matches the final country |
 | Bundled data | `/usr/share/edgeweir-node/geoip/ipinfo_lite.mmdb`, checked at build time against the sha256 IPinfo publishes; `NOTICE` in the same directory records the download time and sha256 |
-| Console attribution | **System → GeoIP databases** carries the IPinfo attribution link |
+| Console attribution | **Protection settings → GeoIP databases** carries the IPinfo attribution link |
 
 1. Container nodes running a release image need no configuration for country and ASN; for newer data, pull a newer image, or mount a separately downloaded copy and set `EDGEWEIR_GEOIP_IPINFO`.
 2. Package or archive nodes: download `ipinfo_lite.mmdb` from IPinfo. To match on subdivisions, also download a City MMDB. Check source, license, and integrity, and record the download date.
@@ -401,7 +401,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
    sudo systemctl restart edgeweir-node
    ```
 
-5. Verify: **System → GeoIP databases** shows "Country: Ready" and "ASN: Ready" for the node, plus "Subdivision: Ready" when a City MMDB is configured.
+5. Verify: **Protection settings → GeoIP databases** shows "Country: Ready" and "ASN: Ready" for the node, plus "Subdivision: Ready" when a City MMDB is configured.
 
 | Variable | Flag | Default | Description |
 | --- | --- | --- | --- |

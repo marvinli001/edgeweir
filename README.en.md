@@ -97,7 +97,7 @@ Open <http://localhost:3000> (port 3000 listens on localhost only by default; ot
 | `POSTGRES_PASSWORD` | Yes | Password of the bundled PostgreSQL. |
 | `BETTER_AUTH_SECRET` | No | Derived from the master key when unset. Deployments that set it must keep it; the console refuses to start once it is removed. |
 
-All other variables have defaults; see [.env.example](.env.example). The node release source, the origin allow list and GeoIP are configured after setup in **System**, SMTP on the **Alerts** page.
+All other variables have defaults; see [.env.example](.env.example). The node release source and the origin allow list are configured after setup in **System**; bans, platform protection and GeoIP in **Protection settings**; SMTP on the **Alerts** page.
 
 ### Optional components
 
