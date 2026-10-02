@@ -49,6 +49,7 @@ import {
   toRevisionDto,
 } from "./revisions";
 import { actionOriginGroup, availableLists } from "./rules";
+import { siteDeliveries } from "./site-delivery";
 import { flushSiteUsage } from "./usage";
 
 type SiteCreate = z.output<typeof siteCreateInput>;
@@ -106,6 +107,7 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
     .select({ id: schema.originCredential.id, accessKeyId: schema.originCredential.accessKeyId })
     .from(schema.originCredential)
     .where(inArray(schema.originCredential.siteId, ids));
+  const deliveries = await siteDeliveries(db, rows);
   return rows.map((r) => {
     const sitePools = pools
       .filter((p) => p.siteId === r.id)
@@ -118,6 +120,12 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
       enabled: r.enabled,
       clusterId: r.clusterId,
       clusterName: clusters.find((c) => c.id === r.clusterId)?.name ?? "",
+      delivery: deliveries.get(r.id) ?? {
+        state: "pending",
+        totalNodes: 0,
+        servingNodes: 0,
+        currentNodes: 0,
+      },
       cacheGeneration: r.cacheGeneration,
       domains: domains.filter((d) => d.siteId === r.id).map(formatDomain),
       origins: origins

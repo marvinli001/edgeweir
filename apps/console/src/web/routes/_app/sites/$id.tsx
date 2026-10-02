@@ -20,7 +20,7 @@ import { RulesTab } from "@/components/site/rules-tab";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { SecurityTab } from "@/components/site/security-tab";
 import { StarButton, useSiteStars } from "@/components/site-star";
-import { SiteStatus } from "@/components/site-status";
+import { SiteStatus, untilLive } from "@/components/site-status";
 import { ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,11 @@ function SiteDetailPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const { session } = Route.useRouteContext();
-  const site = useQuery(orpc.sites.get.queryOptions({ input: { id } }));
+  const site = useQuery({
+    ...orpc.sites.get.queryOptions({ input: { id } }),
+    refetchInterval: (query) => untilLive(query.state.data ? [query.state.data] : undefined),
+    meta: { background: true },
+  });
   const stars = useSiteStars();
   const tab: SiteTab = search.tab ?? "overview";
   const name = site.data?.name;

@@ -1293,7 +1293,8 @@ export function decodeNodeConfig(bytes: Uint8Array): NodeConfig {
   return fromBinary(NodeConfigSchema, bytes);
 }
 
-const siteBytes = (site: Site) => Buffer.from(toBinary(SiteSchema, site)).toString("base64");
+/** A site's compiled form as text: two configurations run the same site when it is equal. */
+export const siteBytes = (site: Site) => Buffer.from(toBinary(SiteSchema, site)).toString("base64");
 
 /**
  * Computes the diff that turns `base` into `target`: sites are upserted or

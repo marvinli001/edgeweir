@@ -775,6 +775,8 @@
   "sites_col_status": "状态",
   "site_state_active": "运行中",
   "site_state_disabled": "已停用",
+  "site_state_pending": "待接入",
+  "site_state_partial": "生效中 {current}/{total}",
   "site_disable": "停用",
   "site_enable": "启用",
   "site_disable_confirm": "停用网站 {name}？",

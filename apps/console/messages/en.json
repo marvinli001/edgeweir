@@ -878,6 +878,8 @@
   "sites_col_status": "Status",
   "site_state_active": "Active",
   "site_state_disabled": "Disabled",
+  "site_state_pending": "Not live yet",
+  "site_state_partial": "Rolling out {current}/{total}",
   "site_disable": "Disable",
   "site_enable": "Enable",
   "site_disable_confirm": "Disable {name}?",

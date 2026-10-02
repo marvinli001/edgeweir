@@ -401,6 +401,22 @@ export const cacheRule = z.object({
   browserTtlSeconds: z.number().int(),
 });
 
+/** Whether the site's configuration runs on its cluster's online nodes. */
+export const siteDelivery = z.object({
+  /**
+   * disabled; pending: no online node runs the site yet; partial: some online
+   * nodes run an older version of it or have an unhealthy data plane; live:
+   * every online node runs its latest version.
+   */
+  state: z.enum(["disabled", "pending", "partial", "live"]),
+  /** Online active nodes of the site's cluster. */
+  totalNodes: z.number().int(),
+  /** Of those, nodes whose applied configuration has the site (any version). */
+  servingNodes: z.number().int(),
+  /** Of those, nodes running the site's latest version with a healthy data plane. */
+  currentNodes: z.number().int(),
+});
+
 export const site = z.object({
   id: uuid,
   name: z.string(),
@@ -418,6 +434,7 @@ export const site = z.object({
     keepCacheTag: z.boolean(),
   }),
   cacheGeneration: z.number().int(),
+  delivery: siteDelivery,
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
 });
@@ -1177,6 +1194,7 @@ export const me = z.object({
 export type OriginAllowList = z.infer<typeof originAllowList>;
 export type SiteCreateInput = z.input<typeof siteCreateInput>;
 export type Site = z.infer<typeof site>;
+export type SiteDelivery = z.infer<typeof siteDelivery>;
 export type Cluster = z.infer<typeof cluster>;
 export type Node = z.infer<typeof node>;
 export type Revision = z.infer<typeof revision>;

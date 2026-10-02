@@ -12,7 +12,7 @@ import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SearchBox } from "@/components/search-box";
 import { StarButton, useSiteStars } from "@/components/site-star";
-import { SiteStatus } from "@/components/site-status";
+import { SiteStatus, untilLive } from "@/components/site-status";
 import { SitesTabs } from "@/components/sites-tabs";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +69,8 @@ function SitesPage() {
       },
     }),
     placeholderData: keepPreviousData,
+    refetchInterval: (query) => untilLive(query.state.data?.items),
+    meta: { background: true },
   });
   const clusters = useQuery(orpc.clusters.list.queryOptions());
   const setCreateOpen = (open: boolean) =>

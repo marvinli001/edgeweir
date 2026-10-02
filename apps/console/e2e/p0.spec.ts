@@ -49,7 +49,8 @@ test("P0: the operator disables and enables a site", async ({ page }) => {
   await login(page, ...ADMIN);
   await page.goto(`/sites/${state.siteId}`);
   const status = page.getByTestId("site-status");
-  await expect(status).toHaveAttribute("data-state", "active");
+  // Live: every online node of the cluster runs the site's latest version.
+  await expect(status).toHaveAttribute("data-state", "active", { timeout: 60_000 });
   await page.getByTestId("site-toggle-enabled").click();
   await page.getByTestId("confirm-action").click();
   await expect(status).toHaveAttribute("data-state", "disabled");
@@ -57,11 +58,15 @@ test("P0: the operator disables and enables a site", async ({ page }) => {
   await check(page, "site-disabled");
   await page.getByTestId("site-toggle-enabled").click();
   await page.getByTestId("confirm-action").click();
-  await expect(status).toHaveAttribute("data-state", "active");
+  // Re-enabled, the site rolls out to the nodes again (polled every 5 s) before it is live.
+  await expect(status).toHaveAttribute("data-state", /^(pending|partial|active)$/);
+  await expect(status).toHaveAttribute("data-state", "active", { timeout: 60_000 });
   await page.goto("/sites");
-  await expect(page.getByTestId("sites-table").getByTestId("site-status").first()).toHaveText(
-    "运行中",
-  );
+  const row = page
+    .getByTestId("sites-table")
+    .getByRole("row")
+    .filter({ has: page.locator(`a[href="/sites/${state.siteId}"]`) });
+  await expect(row.getByTestId("site-status")).toHaveText("运行中");
   await logout(page);
   expect(pageErrors).toEqual([]);
 });
