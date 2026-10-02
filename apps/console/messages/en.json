@@ -69,7 +69,7 @@
   "attention_canary_awaiting_promotion": "Canary #{revision} awaits promotion",
   "attention_canary_rolled_back": "Canary #{revision} rolled back",
   "attention_dns_failed": "DNS revision #{revision} failed",
-  "attention_dns_blocked": "DNS publication blocked by the mass-removal protection",
+  "attention_dns_blocked": "DNS publication held back by the mass removal protection",
   "attention_upgrade_failed": "Upgrade to {version} failed",
   "attention_nodes_unhealthy": "Unhealthy nodes: {count}",
   "attention_nodes_lagging": "Lagging nodes: {count}",
