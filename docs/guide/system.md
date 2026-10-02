@@ -235,8 +235,8 @@
 | 项目 | 来源 |
 | --- | --- |
 | **版本** | 镜像版本 `<YYYYMMDD>-<commit>`；源码运行为 `dev` |
-| **控制台地址** | `EDGEWEIR_PUBLIC_URL` |
-| **节点通道** | `EDGEWEIR_NODE_API_URL`；未设置时为 `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` |
+| **控制台地址** | `EDGEWEIR_PUBLIC_URL`；localhost 或回环地址标「仅本机可达」，内网地址标「内网地址」：其他网络的节点无法从此下载 `install.sh` |
+| **节点通道** | `EDGEWEIR_NODE_API_URL`；未设置时为 `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>`。标记同上：其他网络的节点无法注册 |
 | **CA 指纹** | 节点通道内部 CA 的 SHA-256；安装命令中的 `--ca-sha256` 与之相同 |
 | **统计模式** | `EDGEWEIR_ANALYTICS`（`lite` / `clickhouse`） |
 | **遥测** | `EDGEWEIR_TELEMETRY`；默认 **关闭** |

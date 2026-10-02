@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cidr,
+  consoleUrlWarnings,
   forbiddenOriginRange,
   formatIp,
   normalizeCidr,
@@ -10,6 +11,7 @@ import {
   SPECIAL_PURPOSE_IPV4,
   SPECIAL_PURPOSE_IPV6,
   unicastAddress,
+  urlHostScope,
 } from "../src/index";
 
 describe("IP literals", () => {
@@ -185,6 +187,71 @@ describe("unicastAddress", () => {
       "255.255.255.255",
     ])
       expect(unicastAddress(text), text).toBeNull();
+  });
+});
+
+describe("console URLs nodes use", () => {
+  it("tells loopback and private hosts from the ones other networks reach", () => {
+    for (const url of [
+      "http://localhost:3000",
+      "https://console.localhost:8443",
+      "http://127.0.0.1:3000",
+      "https://[::1]:8443",
+      "http://0.0.0.0:3000",
+      "https://[::ffff:127.0.0.1]:8443",
+    ])
+      expect(urlHostScope(url), url).toBe("local");
+    for (const url of [
+      "https://10.0.0.5:8443",
+      "https://192.168.1.2:8443",
+      "https://172.16.0.1:8443",
+      "https://100.64.0.1:8443",
+      "https://[fd00::1]:8443",
+      "https://[fe80::1]:8443",
+    ])
+      expect(urlHostScope(url), url).toBe("private");
+    for (const url of [
+      "https://cdn-admin.example.com",
+      "https://console:8443",
+      "https://203.0.114.1:8443",
+      "https://[2606:4700::1]:8443",
+      "not a url",
+    ])
+      expect(urlHostScope(url), url).toBeNull();
+  });
+
+  it("warns per URL, never for public ones", () => {
+    expect(
+      consoleUrlWarnings({
+        consoleUrl: "http://localhost:3000",
+        nodeApiUrl: "https://localhost:8443",
+      }),
+    ).toEqual(["console_url_local", "node_api_url_local"]);
+    expect(
+      consoleUrlWarnings({
+        consoleUrl: "https://cdn-admin.example.com",
+        nodeApiUrl: "https://10.1.2.3:8443",
+      }),
+    ).toEqual(["node_api_url_private"]);
+    expect(
+      consoleUrlWarnings({
+        consoleUrl: "http://192.168.0.10:3000",
+        nodeApiUrl: "https://cdn-admin.example.com:8443",
+      }),
+    ).toEqual(["console_url_private"]);
+    // The e2e stack: a console on localhost, nodes reaching the channel by its service name.
+    expect(
+      consoleUrlWarnings({
+        consoleUrl: "http://localhost:3000",
+        nodeApiUrl: "https://console:8443",
+      }),
+    ).toEqual(["console_url_local"]);
+    expect(
+      consoleUrlWarnings({
+        consoleUrl: "https://cdn-admin.example.com",
+        nodeApiUrl: "https://cdn-admin.example.com:8443",
+      }),
+    ).toEqual([]);
   });
 });
 

@@ -98,6 +98,7 @@ export const errorDefs = {
   /** A rule the cluster cannot evaluate (e.g. backup_group without a line, an unknown line). */
   SCHEDULING_RULE_INVALID: { status: 400, params: [] },
   NODE_NOT_FOUND: { status: 404, params: [] },
+  ENROLLMENT_TOKEN_NOT_FOUND: { status: 404, params: [] },
   SITE_NOT_FOUND: { status: 404, params: [] },
   CACHE_RULE_PRIORITY_DUPLICATE: { status: 400, params: ["priority"] },
   SITE_DISABLED: { status: 409, params: [] },

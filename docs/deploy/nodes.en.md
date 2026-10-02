@@ -26,13 +26,15 @@ Both packages come as deb and rpm only (amd64, arm64). The openresty.org reposit
 1. Open **Clusters & nodes**, select a cluster, and click **Add node**.
 2. Fill in **Node name**, choose a **Node group** (default: the cluster's default node group) and **Valid for** (15 minutes, 1 hour, or 24 hours; default 1 hour).
 3. Click **Generate command**. The dialog shows the **Install command** and the **CA fingerprint**, once.
+4. Once the command runs on the node, the dialog's **Progress** refreshes every 3 seconds: waiting for the node (or token expired), enrolled (the node name links to its details), online, configuration applied, data plane healthy, has an address for DNS.
 
 | Item | Behavior |
 | --- | --- |
 | Enrollment token | Prefix `ewt_`, single use, stored as SHA-256 only; generating one writes an audit entry. |
 | `--server` | `EDGEWEIR_NODE_API_URL`. |
 | `--ca-sha256` | SHA-256 fingerprint of the node channel internal CA. |
-| API | `POST /api/v1/enrollment-tokens`, `ttlMinutes` 5–10080, default 60; see [API and endpoints](../reference/api.en.md). |
+| API | `POST /api/v1/enrollment-tokens`, `ttlMinutes` 5–10080, default 60; `GET /api/v1/enrollment-tokens/{id}` returns `usedAt` and the enrolled node. See [API and endpoints](../reference/api.en.md). |
+| Address warnings | When the console URL (where `install.sh` comes from) or the node channel URL is localhost, a loopback or a private address, the dialog warns about each, **System settings** marks the URL "This machine only" or "Private address", and the console logs a warning at startup; generating is not refused. |
 | Cleanup | Tokens expired or used more than 7 days ago are deleted every 30 minutes. |
 
 ## 2. Run the install command

@@ -4,6 +4,7 @@ import type * as React from "react";
 import { BanSettingsCard } from "@/components/ban-settings";
 import { CopyButton } from "@/components/copy-button";
 import { GeoIpSettings } from "@/components/geoip-settings";
+import { UrlScopeBadge } from "@/components/node-enrollment";
 import { OriginAllowListCard } from "@/components/origin-allow-list";
 import { Page } from "@/components/page";
 import { PlatformErrorPagesCard } from "@/components/platform-error-pages";
@@ -50,9 +51,11 @@ function SystemSettingsPage() {
               </Row>
               <Row label={m.system_console_url()}>
                 <span className="font-mono">{settings.data.consoleUrl}</span>
+                <UrlScopeBadge url={settings.data.consoleUrl} testId="console-url-scope" />
               </Row>
               <Row label={m.system_node_api_url()}>
                 <span className="font-mono">{settings.data.nodeApiUrl}</span>
+                <UrlScopeBadge url={settings.data.nodeApiUrl} testId="node-api-url-scope" />
               </Row>
               <Row label={m.system_ca_fingerprint()}>
                 <code className="min-w-0 flex-1 font-mono text-xs" data-testid="ca-fingerprint">

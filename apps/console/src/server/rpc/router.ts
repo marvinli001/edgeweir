@@ -73,7 +73,7 @@ import {
   updateDnsProvider,
 } from "../services/dns";
 import { failFromCertd } from "../services/dns-providers";
-import { createEnrollmentToken } from "../services/enrollment";
+import { createEnrollmentToken, getEnrollmentToken } from "../services/enrollment";
 import {
   getPlatformErrorPages,
   getSiteErrorPages,
@@ -611,6 +611,9 @@ export const router = os.router({
         serverUrl: context.app.env.nodeApiUrl,
         caSha256: context.app.nodeCa.fingerprintSha256,
       }),
+    ),
+    getEnrollmentToken: authed.clusters.getEnrollmentToken.handler(({ input, context }) =>
+      getEnrollmentToken(context.app.db, input.id),
     ),
   },
   nodeGroups: {

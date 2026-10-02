@@ -253,3 +253,55 @@ export function forbiddenOriginRange(address: string, allowed: readonly string[]
   const allowList = allowed.map(parseCidr).filter((c): c is Cidr => c !== null);
   return allowList.some((c) => cidrContains(c, judged)) ? null : range.text;
 }
+
+/** Loopback and unspecified ranges: a URL with such a host only reaches the machine itself. */
+const LOCAL_ONLY = ["0.0.0.0/8", "127.0.0.0/8", "::/128", "::1/128"].map(
+  (text) => parseCidr(text) as Cidr,
+);
+
+/**
+ * Whether other machines can reach a URL by its host: "local" for localhost
+ * names and loopback or unspecified addresses, "private" for an IP literal
+ * in another special-purpose range (private networks, CGNAT, link-local,
+ * documentation), null for public addresses and other host names.
+ */
+export function urlHostScope(url: string): "local" | "private" | null {
+  let host: string;
+  try {
+    host = new URL(url).hostname.replace(/^\[|\]$/g, "");
+  } catch {
+    return null;
+  }
+  if (isLocalhostName(host)) return "local";
+  const ip = parseIp(host);
+  if (!ip) return null;
+  const judged = embeddedIPv4(ip) ?? ip;
+  if (LOCAL_ONLY.some((range) => cidrContains(range, judged))) return "local";
+  return forbiddenOriginRange(host, []) === null ? null : "private";
+}
+
+/**
+ * Why nodes on other networks may fail to reach the console: install.sh is
+ * downloaded from the console URL, enrollment and every later RPC use the
+ * node channel URL.
+ */
+export const CONSOLE_URL_WARNINGS = [
+  "console_url_local",
+  "console_url_private",
+  "node_api_url_local",
+  "node_api_url_private",
+] as const;
+export type ConsoleUrlWarning = (typeof CONSOLE_URL_WARNINGS)[number];
+
+/** The warnings of the console URL (EDGEWEIR_PUBLIC_URL) and the node channel URL. */
+export function consoleUrlWarnings(urls: {
+  consoleUrl: string;
+  nodeApiUrl: string;
+}): ConsoleUrlWarning[] {
+  const warnings: ConsoleUrlWarning[] = [];
+  const consoleScope = urlHostScope(urls.consoleUrl);
+  if (consoleScope) warnings.push(`console_url_${consoleScope}`);
+  const channelScope = urlHostScope(urls.nodeApiUrl);
+  if (channelScope) warnings.push(`node_api_url_${channelScope}`);
+  return warnings;
+}

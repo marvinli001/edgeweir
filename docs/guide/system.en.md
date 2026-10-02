@@ -235,8 +235,8 @@ Read-only (card **System**).
 | Item | Source |
 | --- | --- |
 | **Version** | Image version `<YYYYMMDD>-<commit>`; `dev` when run from source |
-| **Console URL** | `EDGEWEIR_PUBLIC_URL` |
-| **Node channel** | `EDGEWEIR_NODE_API_URL`; when unset, `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` |
+| **Console URL** | `EDGEWEIR_PUBLIC_URL`; localhost or a loopback address is marked "This machine only", a private address "Private address": nodes on other networks cannot download `install.sh` from it |
+| **Node channel** | `EDGEWEIR_NODE_API_URL`; when unset, `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>`. Marked the same way: nodes on other networks cannot enroll |
 | **CA fingerprint** | SHA-256 of the node channel's internal CA; install commands carry the same value in `--ca-sha256` |
 | **Analytics** | `EDGEWEIR_ANALYTICS` (`lite` / `clickhouse`) |
 | **Telemetry** | `EDGEWEIR_TELEMETRY`; **Off** by default |

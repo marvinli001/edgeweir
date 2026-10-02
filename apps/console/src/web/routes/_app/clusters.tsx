@@ -28,6 +28,7 @@ import { ClusterDns } from "@/components/dns/cluster-dns";
 import { FormDialog } from "@/components/form-dialog";
 import { PortPoolsSection } from "@/components/l4/port-pools";
 import { NodeDetailDialog, NodeLoad } from "@/components/node-detail";
+import { ConsoleUrlWarnings, EnrollProgress } from "@/components/node-enrollment";
 import { NodeUpgrades } from "@/components/node-upgrades";
 import { Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
@@ -1127,12 +1128,17 @@ function EnrollDialog({
                   <span aria-hidden="true">·</span>
                   <SafetyNote data-testid="enroll-token-once">{m.enroll_shown_once()}</SafetyNote>
                 </div>
+                <ConsoleUrlWarnings warnings={result.warnings} />
               </Field>
               <Field>
                 <FieldLabel>{m.enroll_ca_fingerprint()}</FieldLabel>
                 <code className="rounded-xl bg-muted p-2 font-mono text-xs break-all">
                   {result.caSha256}
                 </code>
+              </Field>
+              <Field>
+                <FieldLabel>{m.enroll_progress()}</FieldLabel>
+                <EnrollProgress result={result} />
               </Field>
             </FieldGroup>
             <DialogFooter>
