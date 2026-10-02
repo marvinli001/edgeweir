@@ -4,13 +4,13 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
-import { toast } from "sonner";
 import * as z from "zod";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SearchBox } from "@/components/search-box";
+import { followSiteDelivery } from "@/components/site/delivery-toast";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { SiteStatus, untilLive } from "@/components/site-status";
 import { SitesTabs } from "@/components/sites-tabs";
@@ -327,7 +327,7 @@ function CreateSiteDialog({
             try {
               const result = await create.mutateAsync(input);
               siteId = result.site.id;
-              toast.success(m.site_form_created({ revision: result.revision.revision }));
+              followSiteDelivery(queryClient, siteId, m.site_created_toast(), result.site.delivery);
             } catch {
               return; // rendered below via create.error
             }
