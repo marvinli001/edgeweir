@@ -202,8 +202,9 @@ export async function flushSiteUsage(tx: Executor, siteId: string): Promise<numb
 /**
  * The completeness watermark: the earliest statistics watermark among nodes
  * that are active and were seen within the offline threshold (a node that
- * never reported one counts from its enrollment), capped by windows still
- * waiting to be computed, rounded down to a window. Stored, it only moves
+ * never reported one counts from its enrollment; none counts as older than
+ * the threshold), capped by windows still waiting to be computed, rounded
+ * down to a window. Stored, it only moves
  * forward: data that arrives later for an earlier window is a revision.
  */
 export async function advanceUsageWatermark(db: Database, now = new Date()): Promise<Date | null> {
@@ -221,8 +222,14 @@ export async function advanceUsageWatermark(db: Database, now = new Date()): Pro
       .leftJoin(schema.nodeStatsCursor, eq(schema.nodeStatsCursor.nodeId, schema.node.id))
       .where(and(eq(schema.node.status, "active"), gte(schema.node.lastSeenAt, seenSince)));
     let candidate = now.getTime();
+    // A node holds the watermark back by at most the offline threshold, like
+    // a node that went offline: what it reports later is a revision.
+    const oldest = now.getTime() - offlineThresholdMinutes * 60_000;
     for (const n of nodes)
-      candidate = Math.min(candidate, (n.completeUntil ?? n.enrolledAt ?? n.createdAt).getTime());
+      candidate = Math.min(
+        candidate,
+        Math.max((n.completeUntil ?? n.enrolledAt ?? n.createdAt).getTime(), oldest),
+      );
     const [pending] = await tx
       .select({ bucket: sql<Date | null>`min(${schema.statsRollupDirty.bucket})` })
       .from(schema.statsRollupDirty)

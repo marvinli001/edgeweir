@@ -1,5 +1,5 @@
 import { schema } from "@edgeweir/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
 import { ingestMinuteStats, ingestStatsBatch } from "../../src/server/services/stats";
@@ -332,6 +332,20 @@ describe("recomputable 5-minute usage", async () => {
     expect(await advanceUsageWatermark(ctx.db, now)).toEqual(at(5 * WINDOW));
     await maintainUsage(ctx.db, now);
     expect(await advanceUsageWatermark(ctx.db, now)).toEqual(at(8 * WINDOW));
+  });
+
+  it("waits for a node's watermark at most the offline threshold", async () => {
+    const now = new Date(window + 8 * WINDOW + 2 * 3600_000);
+    await ctx.db
+      .update(schema.node)
+      .set({ lastSeenAt: now })
+      .where(inArray(schema.node.id, [nodeA.id, nodeB.id]));
+    await recordStatsWatermark(ctx.db, nodeA.id, now, now.getTime());
+    // B is online, but its watermark stays two hours back (it dropped statistics).
+    await recordStatsWatermark(ctx.db, nodeB.id, at(8 * WINDOW), now.getTime());
+    expect(await advanceUsageWatermark(ctx.db, now)).toEqual(
+      new Date(Math.floor((now.getTime() - 3600_000) / WINDOW) * WINDOW),
+    );
   });
 
   it("computes a deleted site's pending windows, the open one included, before its statistics go", async () => {

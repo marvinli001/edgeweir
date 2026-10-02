@@ -417,9 +417,9 @@ Record fields:
 
 | Rule | Notes |
 | --- | --- |
-| Node watermark | Once every statistics batch is acknowledged, a node reports `complete_until`: the start of the minute of its last successful statistics drain; every earlier minute has been uploaded |
+| Node watermark | Once every statistics batch is acknowledged, a node reports `complete_until`: the start of the minute of its last successful statistics drain; every earlier minute has been uploaded. While the console is unreachable the node keeps draining statistics into its local spool, and before it stops it saves them, the current minute included; after the spool limit made it drop statistics, the watermark stays at the first dropped minute for 24 hours |
 | Nodes taken into account | Enabled nodes with a heartbeat within the offline threshold: 60 minutes by default, adjustable in **System → Usage** (5–1440 minutes) |
-| Computation | The lowest watermark of those nodes; a node that never reported one (older node versions) counts from its enrollment; windows still waiting to be recomputed hold it back; rounded down to 5 minutes |
+| Computation | The lowest watermark of those nodes; a node that never reported one (older node versions) counts from its enrollment; a node more than the offline threshold behind counts as now minus the threshold (like an offline node, what it sends later is a revision); windows still waiting to be recomputed hold it back; rounded down to 5 minutes |
 | Monotonic | It only moves forward. Data a node sends after being offline longer than the threshold is a revision (`revision` + 1) |
 | Disabled or deleted nodes | Not taken into account |
 
