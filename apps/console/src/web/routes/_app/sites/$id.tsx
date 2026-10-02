@@ -304,8 +304,13 @@ function OverviewTab({ site }: { site: Site }) {
             onConfirm={async () => {
               const result = await remove.mutateAsync({ id: site.id });
               toast.success(m.sites_deleted({ revision: result.revision.revision }));
-              await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
+              // Leave first and drop what was read about the site: refreshing its queries while
+              // they are on screen fails (404, retried for seconds) and flashes an error.
               await navigate({ to: "/sites" });
+              queryClient.removeQueries({
+                predicate: (query) => JSON.stringify(query.queryKey).includes(site.id),
+              });
+              await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
             }}
           />
         </CardContent>
