@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { login, logout, pick } from "./helpers";
+import { login, logout, pick, saved } from "./helpers";
 
 /** Written by scripts/e2e-g1.mjs, which lifts every ban before this spec runs. */
 const state = JSON.parse(readFileSync(resolve("../../.e2e/g1-state.json"), "utf8")) as {
@@ -183,7 +183,7 @@ test("G1: the operator edits the ban settings", async ({ page }) => {
   await maxTotal.fill("5000");
   await share.click();
   await expect(share).toHaveAttribute("aria-checked", "false");
-  await save.click();
+  await saved(page, save, "settings/setBans");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(maxTotal).toHaveValue("5000");
@@ -196,7 +196,7 @@ test("G1: the operator edits the ban settings", async ({ page }) => {
   await page.goto("/protection");
   await maxTotal.fill("10000");
   await share.click();
-  await save.click();
+  await saved(page, save, "settings/setBans");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(maxTotal).toHaveValue("10000");

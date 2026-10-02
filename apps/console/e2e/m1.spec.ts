@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { login, pick } from "./helpers";
+import { login, pick, saved } from "./helpers";
 
 /**
  * MVP M1 acceptance (dev-docs/specs/mvp.md §1): the operator creates and edits a site → creates a
@@ -39,15 +39,15 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
     await page.getByTestId("domain-add").click();
     await page.getByTestId("domains-save").click();
     // The saved notice follows the change onto the node.
-    const saved = page.getByTestId("site-delivery-toast");
-    await expect(saved).toContainText("已保存");
-    await expect(saved).toContainText(/生效中 \d+\/\d+|已生效/);
+    const notice = page.getByTestId("site-delivery-toast");
+    await expect(notice).toContainText("已保存");
+    await expect(notice).toContainText(/生效中 \d+\/\d+|已生效/);
     await expect(page.getByTestId("domain-list")).toContainText("www.edited.test");
 
     await page.getByTestId("tab-origins").click();
     await page.getByTestId("origin-address").fill("whoami");
     await page.getByTestId("origin-port").fill("80");
-    await page.getByTestId("origins-save").click();
+    await saved(page, page.getByTestId("origins-save"), "sites/update");
     await expect(page.getByTestId("origins-save")).toBeDisabled();
 
     // The edits are stored: a reload shows them.

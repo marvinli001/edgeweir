@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { login, logout, pick } from "./helpers";
+import { login, logout, pick, saved } from "./helpers";
 
 /**
  * Written by scripts/e2e-g3.mjs: the compression and CRS sites of the
@@ -94,7 +94,7 @@ test("G3: the cache tab turns Zstandard and Brotli on with their levels and keep
   await zstdTypes.pressSequentially("text/html, text/plain, application/json");
   await expect(zstdTypes).toHaveValue("text/html, text/plain, application/json");
   await check(page, "https-compression");
-  await save.click();
+  await saved(page, save, "https/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(zstd).toHaveAttribute("aria-checked", "true");
@@ -118,7 +118,7 @@ test("G3: the cache tab turns Zstandard and Brotli on with their levels and keep
   await brotli.click();
   await page.getByTestId("https-brotli-level").fill("6");
   await page.getByTestId("https-brotli-min").fill("256");
-  await save.click();
+  await saved(page, save, "https/update");
   await expect(save).toBeDisabled();
   await page.reload();
   await expect(zstd).toHaveAttribute("aria-checked", "false");
@@ -190,7 +190,7 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
   await exclusions.nth(1).getByTestId("waf-exclusion-remove").click();
   await expect(exclusions).toHaveCount(1);
   await check(page, "waf-card");
-  await save.click();
+  await saved(page, save, "waf/update");
   await expect(save).toBeDisabled();
   await expect(badge).toHaveText("拦截");
   await page.reload();
@@ -212,7 +212,7 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
   await pick(page, preset, "标准");
   await expect(threshold).toHaveCount(0);
   await exclusions.first().getByTestId("waf-exclusion-remove").click();
-  await save.click();
+  await saved(page, save, "waf/update");
   await expect(save).toBeDisabled();
   await expect(badge).toHaveCount(0);
   await page.reload();
