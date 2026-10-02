@@ -276,6 +276,7 @@ describe("deploy.sh", () => {
     const STUBS = `
       client() {
         case "$*" in
+          "run --rm"*) printf '%s\\r\\n' "$FILE_URL" ;;
           *"pg_restore --list"*) cat >/dev/null; printf '%s\\n' "$LIST" ;;
           *pg_has_role*) printf '%s\\n' "\${PRIVILEGES:-t t}" ;;
           *pg_dump*) printf current ;;
@@ -289,9 +290,9 @@ describe("deploy.sh", () => {
       # Never ask on the terminal that runs the tests.
       INTERACTIVE=
       DIR=$D; COMPOSE_FILE=compose.yml`;
-    const deployment = (mode: "host" | "bundled", backups = ["20261001-080000"]) =>
+    const deployment = (mode: "host" | "bundled", backups = ["20261001-080000"], env = ENV) =>
       directory({
-        ".env": ENV,
+        ".env": env,
         "compose.yml": read(mode === "host" ? "compose.baota-host.yml" : "compose.baota.yml"),
         ...Object.fromEntries(backups.map((b) => [`backups/${b}/edgeweir.dump`, `dump of ${b}`])),
       });
@@ -356,6 +357,30 @@ describe("deploy.sh", () => {
       ]);
       expect(log(dir)).toContain("stdin dump of 20261001-080000\n");
       expect(readdirSync(resolve(dir, "backups"))).toEqual(["20261001-080000"]);
+    });
+
+    it("reads a host DATABASE_URL_FILE through a one-off console container", () => {
+      const env = ENV.replace(/^DATABASE_URL=.*\n/m, "");
+      const dir = deployment("host", ["20261001-080000"], env);
+      const result = restore(dir, "20261001-080000", {
+        FILE_URL: "postgres://owner:s%40fe@127.0.0.1:5432/fromfile",
+      });
+      expect(result.status, result.stderr).toBe(0);
+      const run = calls(dir, "compose run");
+      // Once for the check, once for the backup before the restore.
+      expect(run).toHaveLength(2);
+      expect(run[0]).toMatch(
+        /^compose run --rm --no-deps -T --entrypoint sh console -c .*\$DATABASE_URL_FILE/,
+      );
+      expect(calls(dir, "pg_client --stdin psql")).toEqual([
+        "pg_client --stdin psql -X -q -v ON_ERROR_STOP=1 -v db=fromfile -d postgres",
+      ]);
+      // Without a URL from either source nothing is touched.
+      const none = deployment("host", ["20261001-080000"], env);
+      const refused = restore(none, "20261001-080000", { FILE_URL: "" });
+      expect(refused.status).toBe(1);
+      expect(refused.stderr).toContain("DATABASE_URL（.env 或 DATABASE_URL_FILE）无法解析");
+      expect(log(none)).not.toMatch(/pg_dump|stop console|psql/);
     });
 
     it.each([

@@ -312,6 +312,22 @@ db_check() {
   fi
 }
 
+# database_url: the DATABASE_URL the console connects with (host mode): the
+# .env line, or else the file DATABASE_URL_FILE names (set with its mount in
+# the override file), read in a one-off console container with those mounts.
+database_url() {
+  local url
+  url=$(env_get DATABASE_URL)
+  if [[ -z $url ]]; then
+    # shellcheck disable=SC2016
+    url=$(compose run --rm --no-deps -T --entrypoint sh console -c \
+      'if [ -n "${DATABASE_URL_FILE:-}" ]; then cat -- "$DATABASE_URL_FILE"; else printf %s "${DATABASE_URL:-}"; fi') ||
+      return 1
+    url=${url%$'\r'}
+  fi
+  printf '%s' "$url"
+}
+
 # --- deployment directory and compose -------------------------------------------
 
 compose_file_in() {
@@ -531,8 +547,9 @@ template_host() {
 #     宝塔站点反向代理），节点通道监听 0.0.0.0:EDGEWEIR_NODE_API_PORT（直接对外，TLS 由
 #     控制台自己终结，不能交给宝塔 nginx）。这里的两个端口只能是数字。
 #   - 宝塔 nginx 从 127.0.0.1 转发，EDGEWEIR_TRUSTED_PROXIES 默认只信任本机回环地址。
-# .env 至少需要 DATABASE_URL、EDGEWEIR_MASTER_KEY、EDGEWEIR_PUBLIC_URL；镜像 tag 用
-# EDGEWEIR_VERSION 固定（滚动发布的「日期-提交」，例如 20260929-a1b2c3d）。
+# .env 至少需要 DATABASE_URL、EDGEWEIR_MASTER_KEY、EDGEWEIR_PUBLIC_URL（连接串也可以放进文件，
+# 在 compose.override.yml 里挂载并设置 DATABASE_URL_FILE）；镜像 tag 用 EDGEWEIR_VERSION
+# 固定（滚动发布的「日期-提交」，例如 20260929-a1b2c3d）。
 name: edgeweir
 
 services:
@@ -543,7 +560,7 @@ services:
     network_mode: host
     environment:
       ROLE: all
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_URL: ${DATABASE_URL:-}
       EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       # 浏览器访问控制台的地址，即宝塔站点的域名，例如 https://cdn-admin.example.com
@@ -939,7 +956,7 @@ cmd_backup() {
   mkdir -m 700 "$dest"
   step "备份到 ${dest}"
   if [[ $(deploy_mode) == host ]]; then
-    db_parse "$(env_get DATABASE_URL)" || die ".env 里的 DATABASE_URL 无法解析，不能备份。"
+    db_parse "$(database_url)" || die "DATABASE_URL（.env 或 DATABASE_URL_FILE）无法解析，不能备份。"
     pg_client pg_dump --format=custom >"$dest/edgeweir.dump" || die "pg_dump 失败，已中止。"
   else
     compose exec -T postgres pg_dump -U edgeweir -d edgeweir --format=custom >"$dest/edgeweir.dump" ||
@@ -1032,7 +1049,7 @@ cmd_restore() {
 
   step "检查备份 ${dump}"
   if [[ $(deploy_mode) == host ]]; then
-    db_parse "$(env_get DATABASE_URL)" || die ".env 里的 DATABASE_URL 无法解析，不能恢复。"
+    db_parse "$(database_url)" || die "DATABASE_URL（.env 或 DATABASE_URL_FILE）无法解析，不能恢复。"
   else
     compose up -d --wait postgres || die "数据库容器没有启动。"
   fi

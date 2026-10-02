@@ -265,7 +265,7 @@ Values are unquoted. Changing a key keeps the other lines and mode 600. Other va
 
 | File | Content |
 | --- | --- |
-| `edgeweir.dump` | `pg_dump --format=custom`. host: dumped per `DATABASE_URL` with `postgres:18.6-alpine` on the host network; bundled: dumped inside the `postgres` container |
+| `edgeweir.dump` | `pg_dump --format=custom`. host: dumped per `DATABASE_URL` with `postgres:18.6-alpine` on the host network; without `DATABASE_URL` in `.env`, the file `DATABASE_URL_FILE` names (set and mounted in the override file) is read in a one-off console container; bundled: dumped inside the `postgres` container |
 | `env` | Copy of `.env` with the `EDGEWEIR_MASTER_KEY` and `BETTER_AUTH_SECRET` lines turned into comments, without their values |
 | `compose.yml` | Copy of the compose file under its original name, and of the override file when present |
 
