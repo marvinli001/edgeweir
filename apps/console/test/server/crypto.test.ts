@@ -56,6 +56,35 @@ describe("MasterKey envelopes", () => {
     expect(() => new MasterKey(Buffer.alloc(16).toString("base64"))).toThrow(/32 bytes/);
   });
 
+  it("takes only canonical base64, so a damaged key never decodes to another key", () => {
+    const raw = Buffer.alloc(33, 7);
+    raw[0] = 0xf8;
+    const key = raw.toString("base64");
+    expect(key).toMatch(/^\+/);
+    // A panel turning "+" into a space: Buffer.from skips the space and gets
+    // 32 other bytes, a valid but wrong key.
+    const spaced = key.replace("+", " ");
+    expect(Buffer.from(spaced, "base64")).toHaveLength(32);
+    for (const damaged of [
+      spaced,
+      `"${key}"`,
+      `${key}\n`,
+      key.slice(0, 20) + key.slice(21),
+      `${TEST_MASTER_KEY}=`,
+      TEST_MASTER_KEY.replace("=", "A="),
+    ]) {
+      expect(() => new MasterKey(damaged), damaged).toThrow(
+        /^EDGEWEIR_MASTER_KEY is not valid base64/,
+      );
+    }
+    // The same bytes in the URL-safe alphabet or without padding are the same key.
+    const kid = new MasterKey(key).kid;
+    expect(new MasterKey(raw.toString("base64url")).kid).toBe(kid);
+    expect(new MasterKey(TEST_MASTER_KEY.replace(/=+$/, "")).kid).toBe(
+      new MasterKey(TEST_MASTER_KEY).kid,
+    );
+  });
+
   it("detects tampering", () => {
     const mk = new MasterKey(TEST_MASTER_KEY);
     const env = mk.seal("secret", row1);

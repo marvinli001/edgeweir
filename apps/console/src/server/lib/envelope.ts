@@ -45,15 +45,35 @@ function bindingAad(binding: EnvelopeBinding): string {
   return `edgeweir/envelope/v2\u0000${binding.purpose}\u0000${binding.recordId}`;
 }
 
-/** The raw bytes of EDGEWEIR_MASTER_KEY; throws unless it decodes to 32+ bytes. */
-export function decodeMasterKey(encoded: string): Buffer {
-  const raw = Buffer.from(encoded, "base64");
-  if (raw.length < 32) {
-    throw new Error(
-      "EDGEWEIR_MASTER_KEY must be at least 32 bytes, base64 encoded (generate one with `openssl rand -base64 32` and use the output as is)",
-    );
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * Why EDGEWEIR_MASTER_KEY cannot be used, or null: it must be canonical
+ * base64 (standard or URL-safe alphabet) of 32+ bytes. Buffer.from skips
+ * characters outside the alphabet, so a key whose "+" a panel turned into a
+ * space would otherwise decode to another key.
+ */
+export function masterKeyProblem(encoded: string): string | null {
+  const standard = encoded.replaceAll("-", "+").replaceAll("_", "/");
+  const unpadded = standard.replace(/=+$/, "");
+  if (
+    !BASE64.test(standard) ||
+    (unpadded !== standard && standard.length % 4 !== 0) ||
+    Buffer.from(standard, "base64").toString("base64").replace(/=+$/, "") !== unpadded
+  ) {
+    return 'is not valid base64: use the output of `openssl rand -base64 32` as is, without quotes or spaces (check that "+" did not become a space)';
   }
-  return raw;
+  if (Buffer.from(standard, "base64").length < 32) {
+    return "must be at least 32 bytes, base64 encoded (generate one with `openssl rand -base64 32` and use the output as is)";
+  }
+  return null;
+}
+
+/** The raw bytes of EDGEWEIR_MASTER_KEY; throws when masterKeyProblem finds one. */
+export function decodeMasterKey(encoded: string): Buffer {
+  const problem = masterKeyProblem(encoded);
+  if (problem) throw new Error(`EDGEWEIR_MASTER_KEY ${problem}`);
+  return Buffer.from(encoded, "base64");
 }
 
 export class MasterKey {

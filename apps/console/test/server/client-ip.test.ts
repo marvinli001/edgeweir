@@ -79,7 +79,7 @@ describe("client IP resolution", () => {
   it("rejects malformed EDGEWEIR_TRUSTED_PROXIES entries at startup", () => {
     const base = {
       DATABASE_URL: "postgres://x",
-      EDGEWEIR_MASTER_KEY: "k",
+      EDGEWEIR_MASTER_KEY: Buffer.alloc(32, 1).toString("base64"),
       BETTER_AUTH_SECRET: "x".repeat(40),
     };
     expect(loadEnv({ ...base, EDGEWEIR_TRUSTED_PROXIES: "" }).trustedProxies.size).toBe(0);

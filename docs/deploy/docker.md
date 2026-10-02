@@ -47,7 +47,7 @@ sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
 
 | 变量 | 生成命令 | 约束 |
 | --- | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | `openssl rand -base64 32` | 原样使用输出，保留 `/`、`+`、`=`；解码后不足 32 字节时控制台拒绝启动。 |
+| `EDGEWEIR_MASTER_KEY` | `openssl rand -base64 32` | 原样使用输出，保留 `/`、`+`、`=`；含其他字符或解码后不足 32 字节时控制台拒绝启动。 |
 | `POSTGRES_PASSWORD` | `openssl rand -hex 24` | 拼入 `DATABASE_URL`，只用字母与数字。 |
 
 > [!WARNING]
@@ -191,9 +191,9 @@ docker run -d --name edgeweir-console --network edgeweir --restart unless-stoppe
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
 | 日志 `invalid configuration:`，随后列出变量 | 变量缺失或格式错误 | 按列出的变量修正 `.env`，执行 `docker compose up -d`。 |
-| `EDGEWEIR_MASTER_KEY must be at least 32 bytes` | 主密钥被截断或改写 | 使用 `openssl rand -base64 32` 的原样输出。 |
-| `BETTER_AUTH_SECRET is not set, but this database was used with another secret` | 已有部署移除了 `BETTER_AUTH_SECRET`，或更换了主密钥 | 恢复原值。 |
-| 主密钥更换后控制台启动失败 | 库中密文由原主密钥加密 | 恢复原主密钥。 |
+| `EDGEWEIR_MASTER_KEY: is not valid base64` 或 `must be at least 32 bytes` | 主密钥被截断或改写，例如面板把 `+` 换成了空格，或值带引号 | 使用 `openssl rand -base64 32` 的原样输出。 |
+| `EDGEWEIR_MASTER_KEY does not match this database` | 主密钥不是这个数据库所用的：更换了主密钥，或数据库来自另一次安装 | 恢复原主密钥（原 `.env` 或其离线副本）；设置 `BETTER_AUTH_SECRET` 无济于事。 |
+| `BETTER_AUTH_SECRET is not set, but this database was used with another secret` | 已有部署移除了 `BETTER_AUTH_SECRET` | 恢复原值。 |
 | 重复输出 `database not reachable yet`，60 秒后退出 | 数据库不可达 | `docker compose ps postgres` 检查数据库容器；外部数据库检查 `DATABASE_URL`。 |
 | 登录失败或提示来源不受信任 | `EDGEWEIR_PUBLIC_URL` 与浏览器地址的协议、主机名或端口不一致 | 修正 `EDGEWEIR_PUBLIC_URL`，执行 `docker compose up -d`。 |
 | `console` 为 `unhealthy` | `/healthz` 无响应 | `docker compose logs console`。 |

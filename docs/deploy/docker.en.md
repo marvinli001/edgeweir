@@ -47,7 +47,7 @@ sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 24)|" .env
 
 | Variable | Command | Constraint |
 | --- | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | `openssl rand -base64 32` | Use the output as is, keeping `/`, `+`, and `=`; the console refuses to start when it decodes to fewer than 32 bytes. |
+| `EDGEWEIR_MASTER_KEY` | `openssl rand -base64 32` | Use the output as is, keeping `/`, `+`, and `=`; the console refuses to start on any other character or when it decodes to fewer than 32 bytes. |
 | `POSTGRES_PASSWORD` | `openssl rand -hex 24` | Embedded in `DATABASE_URL`; letters and digits only. |
 
 > [!WARNING]
@@ -191,9 +191,9 @@ Upgrading standalone containers: [upgrade](upgrade.en.md#upgrade).
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | Log `invalid configuration:` followed by variable names | Variable missing or malformed | Fix the listed variables in `.env`, then run `docker compose up -d`. |
-| `EDGEWEIR_MASTER_KEY must be at least 32 bytes` | Master key truncated or edited | Use the unmodified output of `openssl rand -base64 32`. |
-| `BETTER_AUTH_SECRET is not set, but this database was used with another secret` | `BETTER_AUTH_SECRET` removed from an existing deployment, or the master key changed | Restore the previous value. |
-| Console fails to start after a master key change | Stored secrets are encrypted with the previous master key | Restore the previous master key. |
+| `EDGEWEIR_MASTER_KEY: is not valid base64` or `must be at least 32 bytes` | Master key truncated or edited, for example a panel turned `+` into a space, or the value is quoted | Use the unmodified output of `openssl rand -base64 32`. |
+| `EDGEWEIR_MASTER_KEY does not match this database` | The master key is not the one this database uses: the key changed, or the database comes from another installation | Restore the original master key (the original `.env` or its offline copy); setting `BETTER_AUTH_SECRET` does not help. |
+| `BETTER_AUTH_SECRET is not set, but this database was used with another secret` | `BETTER_AUTH_SECRET` removed from an existing deployment | Restore the previous value. |
 | `database not reachable yet` repeats, exit after 60 seconds | Database unreachable | Check the database container with `docker compose ps postgres`; for an external database, check `DATABASE_URL`. |
 | Sign-in fails, or the origin is reported as untrusted | Scheme, host, or port of `EDGEWEIR_PUBLIC_URL` differs from the browser address | Correct `EDGEWEIR_PUBLIC_URL`, then run `docker compose up -d`. |
 | `console` is `unhealthy` | `/healthz` does not answer | `docker compose logs console`. |

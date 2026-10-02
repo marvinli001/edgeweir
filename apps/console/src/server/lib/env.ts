@@ -2,6 +2,7 @@ import { hostname } from "node:os";
 import { releaseBaseUrl } from "@edgeweir/contract";
 import * as z from "zod";
 import { TrustedProxies } from "./client-ip";
+import { masterKeyProblem } from "./envelope";
 
 const bool = z
   .enum(["true", "false", "1", "0", "yes", "no", "on", "off", ""])
@@ -42,7 +43,13 @@ const schema = z.object({
   ROLE: z.enum(["app", "worker", "all"]).default("all"),
   DATABASE_URL: z.string().min(1),
   /** Base64-encoded 32+ byte key used to envelope-encrypt secrets at rest. */
-  EDGEWEIR_MASTER_KEY: z.string().min(1),
+  EDGEWEIR_MASTER_KEY: z
+    .string()
+    .min(1)
+    .check((ctx) => {
+      const problem = masterKeyProblem(ctx.value);
+      if (problem) ctx.issues.push({ code: "custom", message: problem, input: ctx.value });
+    }),
   /**
    * better-auth's secret (session signatures, two-factor secrets at rest).
    * Empty or unset: derived from EDGEWEIR_MASTER_KEY (lib/auth-secret.ts).

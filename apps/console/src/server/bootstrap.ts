@@ -9,6 +9,7 @@ import { loadEnv } from "./lib/env";
 import { MasterKey } from "./lib/envelope";
 import { ConfigEventBus } from "./lib/events";
 import { logger, setLogLevel } from "./lib/logger";
+import { assertMasterKey } from "./lib/master-key";
 import { CLOSE_GRACE_MS, type NodeChannel, startNodeChannel } from "./node-channel/server";
 import { loadOrCreateNodeCa } from "./pki/store";
 import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
@@ -72,6 +73,8 @@ export async function bootstrap(): Promise<Running> {
   log.info("database migrated");
 
   const masterKey = new MasterKey(env.EDGEWEIR_MASTER_KEY);
+  // First: a wrong master key would otherwise be reported as a session secret problem.
+  await assertMasterKey(db, masterKey);
   const authSecret = resolveAuthSecret(env);
   await assertAuthSecret(db, authSecret, log);
   log.info("session secret", { source: authSecret.source });

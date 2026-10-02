@@ -14,6 +14,9 @@ import {
   resolveAuthSecret,
 } from "../../src/server/lib/auth-secret";
 import { loadEnv } from "../../src/server/lib/env";
+import { MasterKey } from "../../src/server/lib/envelope";
+import { assertMasterKey, MASTER_KEY_MISMATCH } from "../../src/server/lib/master-key";
+import { loadOrCreateNodeCa } from "../../src/server/pki/store";
 import {
   createTestContext,
   createTestDatabase,
@@ -114,6 +117,66 @@ describe("console with the derived session secret", async () => {
     expect((await admin.account.me()).user.email).toBe("admin@example.com");
   });
 });
+
+describe("master key check at startup", () => {
+  const log = { warn: vi.fn() };
+
+  it("names a wrong master key before the session secret check can store anything", async () => {
+    const { db, client } = await createTestDatabase();
+    const right = new MasterKey(TEST_MASTER_KEY);
+    const wrong = new MasterKey(otherKey);
+    // A database a console has started on: the CA is sealed, the check stored.
+    await assertMasterKey(db, right);
+    await assertAuthSecret(db, resolveAuthSecret({ EDGEWEIR_MASTER_KEY: TEST_MASTER_KEY }), log);
+    await loadOrCreateNodeCa(db, right);
+    const checkValue = await storedCheck(db);
+
+    // Before this check, the derived secret was refused as "BETTER_AUTH_SECRET
+    // is not set", and setting one stored a new check value.
+    await expect(
+      assertAuthSecret(db, resolveAuthSecret({ EDGEWEIR_MASTER_KEY: otherKey }), log),
+    ).rejects.toThrow(AUTH_SECRET_CHANGED);
+    const error = await assertMasterKey(db, wrong).catch((e: Error) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain(MASTER_KEY_MISMATCH);
+    expect((error as Error).message).toContain(right.kid);
+    expect((error as Error).message).toContain(wrong.kid);
+    expect((error as Error).message).not.toContain(otherKey);
+    expect(await storedCheck(db)).toEqual(checkValue);
+
+    // The right key passes both checks.
+    await assertMasterKey(db, right);
+    await assertAuthSecret(db, resolveAuthSecret({ EDGEWEIR_MASTER_KEY: TEST_MASTER_KEY }), log);
+    await client.close();
+  });
+
+  it("passes on a new database", async () => {
+    const { db, client } = await createTestDatabase();
+    await assertMasterKey(db, new MasterKey(otherKey));
+    await client.close();
+  });
+
+  it("refuses a damaged master key as invalid configuration", () => {
+    const spaced = Buffer.alloc(33, 0xfb).toString("base64").replaceAll("+", " ");
+    for (const value of [spaced, `'${TEST_MASTER_KEY}'`, `${TEST_MASTER_KEY} `]) {
+      expect(() => loadEnv({ ...base, EDGEWEIR_MASTER_KEY: value }), value).toThrow(
+        /^invalid configuration:\n {2}EDGEWEIR_MASTER_KEY: is not valid base64/,
+      );
+    }
+    expect(() =>
+      loadEnv({ ...base, EDGEWEIR_MASTER_KEY: Buffer.alloc(16).toString("base64") }),
+    ).toThrow(/^invalid configuration:\n {2}EDGEWEIR_MASTER_KEY: must be at least 32 bytes/);
+  });
+});
+
+async function storedCheck(db: Awaited<ReturnType<typeof createTestDatabase>>["db"]) {
+  return (
+    await db
+      .select()
+      .from(schema.systemSetting)
+      .where(eq(schema.systemSetting.key, AUTH_SECRET_CHECK_KEY))
+  )[0]?.value;
+}
 
 describe("session secret check at startup", () => {
   const log = { warn: vi.fn() };

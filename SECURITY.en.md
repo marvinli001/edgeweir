@@ -71,6 +71,8 @@ Separate commercial products (see [LICENSING.en.md](LICENSING.en.md)) may use li
 | Item | Value |
 | --- | --- |
 | Master key | `EDGEWEIR_MASTER_KEY`: base64 of at least 32 random bytes (`openssl rand -base64 32`); never stored in the database |
+| Master key format | Canonical base64 (standard or URL-safe alphabet); a space, a quote, or any other extra character stops the console instead of decoding to another key |
+| Master key id | Envelopes record the key id `kid` (the first 16 hex characters of the SHA-256 of the raw master key); at startup the console first compares it with the `kid` of the internal CA key's envelope and, when they differ, refuses to start with "master key does not match this database", before checking the session secret |
 | Key-encryption key | HKDF-SHA256, salt `edgeweir/kek/v1`, info `envelope`, 32 bytes |
 | Data key | Random per record; data and data key both encrypted with AES-256-GCM |
 | Additional authenticated data | `edgeweir/envelope/v2`, `<table>.<column>`, `<record id>`; a ciphertext moved to another row or column fails to decrypt |
