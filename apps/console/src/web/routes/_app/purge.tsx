@@ -637,7 +637,7 @@ function TagSiteSelect({
   if (all.data.total === 0) {
     return (
       <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
-        <Button render={<Link to="/sites" search={{ create: true }} />}>
+        <Button nativeButton={false} render={<Link to="/sites" search={{ create: true }} />}>
           <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
           {m.nav_new_site()}
         </Button>
@@ -727,7 +727,7 @@ function SitePicker({
   if (all.data.total === 0) {
     return (
       <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
-        <Button render={<Link to="/sites" search={{ create: true }} />}>
+        <Button nativeButton={false} render={<Link to="/sites" search={{ create: true }} />}>
           <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
           {m.nav_new_site()}
         </Button>

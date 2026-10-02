@@ -99,14 +99,15 @@ export function SecurityTab({ siteId }: { siteId: string }) {
         <Button
           size="sm"
           variant="outline"
+          nativeButton={false}
           render={<Link to="/bans" search={{ site: siteId }} data-testid="security-site-bans" />}
         >
           {m.security_site_bans()}
         </Button>
-        <Button size="sm" variant="outline" render={<Link to="/rules" />}>
+        <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/rules" />}>
           {m.rules_platform()}
         </Button>
-        <Button size="sm" variant="outline" render={<Link to="/protection" />}>
+        <Button size="sm" variant="outline" nativeButton={false} render={<Link to="/protection" />}>
           {m.protection_page_title()}
         </Button>
       </div>
