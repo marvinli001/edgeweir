@@ -36,6 +36,8 @@ export function LogsTab({ siteId }: { siteId: string }) {
     path: "",
     requestId: "",
   }));
+  // The end stays "a minute from now" until the user sets one, so searching again shows new logs.
+  const [endIsNow, setEndIsNow] = React.useState(true);
   const [query, setQuery] = React.useState<LogQuery>(() => ({
     siteId,
     from: new Date(Date.now() - 3600000).toISOString(),
@@ -83,8 +85,10 @@ export function LogsTab({ siteId }: { siteId: string }) {
             className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
             onSubmit={(event) => {
               event.preventDefault();
+              const toText = endIsNow ? localTime(new Date(Date.now() + 60000)) : filters.to;
+              if (toText !== filters.to) setFilters({ ...filters, to: toText });
               const from = new Date(filters.from),
-                to = new Date(filters.to);
+                to = new Date(toText);
               if (
                 !Number.isFinite(from.getTime()) ||
                 !Number.isFinite(to.getTime()) ||
@@ -93,7 +97,7 @@ export function LogsTab({ siteId }: { siteId: string }) {
                 toast.error(m.logs_invalid_time());
                 return;
               }
-              setQuery({
+              const next: LogQuery = {
                 siteId,
                 from: from.toISOString(),
                 to: to.toISOString(),
@@ -103,7 +107,10 @@ export function LogsTab({ siteId }: { siteId: string }) {
                 // Exact match; empty matches every request.
                 requestId: filters.requestId.trim() || undefined,
                 limit: 100,
-              });
+              };
+              // The same search again fetches again.
+              if (JSON.stringify(next) === JSON.stringify(query)) void logs.refetch();
+              else setQuery(next);
             }}
           >
             {(
@@ -128,7 +135,10 @@ export function LogsTab({ siteId }: { siteId: string }) {
                   required={key === "from" || key === "to"}
                   spellCheck={key === "requestId" ? false : undefined}
                   className={key === "requestId" ? "font-mono" : undefined}
-                  onChange={(event) => setFilters({ ...filters, [key]: event.target.value })}
+                  onChange={(event) => {
+                    if (key === "to") setEndIsNow(false);
+                    setFilters({ ...filters, [key]: event.target.value });
+                  }}
                   data-testid={key === "requestId" ? "logs-request-id" : undefined}
                 />
               </Field>
