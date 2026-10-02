@@ -156,12 +156,17 @@ test("G3: the security tab edits the site's OWASP CRS and lists the most-matched
   await expect(page.getByTestId("waf-unavailable")).toHaveCount(0);
   await expect(save).toBeDisabled();
 
-  // The script's detect run: its rules are the most-matched ones.
+  // The script's detect run: its detection rules are the most-matched ones; the blocking
+  // evaluation (949110) matched every request too but does not rank.
   const top = page.getByTestId("waf-top-rules");
-  for (const rule of state.crsRuleIds) await expect(top).toContainText(String(rule));
+  const detection = state.crsRuleIds.filter(
+    (id) => ![901, 949, 959, 980].includes(Math.floor(id / 1000)),
+  );
+  for (const rule of detection) await expect(top).toContainText(String(rule));
+  await expect(top).not.toContainText("949110");
   await pick(page, page.getByTestId("waf-top-range"), "过去 1 小时");
   await expect(page.getByTestId("waf-top-range")).toHaveText("过去 1 小时");
-  for (const rule of state.crsRuleIds) await expect(top).toContainText(String(rule));
+  for (const rule of detection) await expect(top).toContainText(String(rule));
 
   await pick(page, mode, "拦截");
   await pick(page, preset, "自定义");
