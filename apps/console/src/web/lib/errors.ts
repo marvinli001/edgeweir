@@ -1,5 +1,6 @@
 import { errorDefs, isErrorCode } from "@edgeweir/contract";
-import { m } from "@/paraglide/messages.js";
+// Relative on purpose: the module is unit-tested outside Vite's "@" alias.
+import { m } from "../paraglide/messages.js";
 
 type MessageFn = (params?: Record<string, string | number>) => string;
 const messages = m as unknown as Record<string, MessageFn | undefined>;

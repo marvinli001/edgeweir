@@ -61,10 +61,10 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
-import { randomUuid } from "@/lib/browser";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { challengeLabel } from "@/lib/protection";
+import { randomUuid } from "@/lib/uuid";
 
 type Action = RuleDto["action"];
 type Kind = Action["kind"];

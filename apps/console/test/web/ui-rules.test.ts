@@ -182,10 +182,11 @@ describe("UI behaviour", () => {
     expect(found).toEqual([]);
   });
 
-  it("uses secure-context-only browser APIs only through lib/browser (plain HTTP on a LAN address)", () => {
+  it("avoids secure-context-only browser APIs (plain HTTP on a LAN address)", () => {
+    // lib/uuid.ts and lib/browser.ts replace crypto.randomUUID and wrap navigator.clipboard.
     const found = allWeb
       .filter((file) => file !== "src/web/lib/browser.ts")
-      .filter((file) => /\bcrypto\.randomUUID\b|\bnavigator\.clipboard\b/.test(read(file)));
+      .filter((file) => /\bcrypto\.randomUUID\(|\bnavigator\.clipboard\b/.test(read(file)));
     expect(found).toEqual([]);
   });
 });

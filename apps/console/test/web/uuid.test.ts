@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { randomUuid } from "../../src/web/lib/browser";
+import { randomUuid } from "../../src/web/lib/uuid";
 
-describe("browser helpers", () => {
+describe("randomUuid", () => {
   it("generates version 4 UUIDs without crypto.randomUUID", () => {
     const ids = new Set(Array.from({ length: 1000 }, randomUuid));
     expect(ids.size).toBe(1000);
