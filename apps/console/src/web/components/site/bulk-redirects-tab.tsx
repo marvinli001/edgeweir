@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useOpenKey } from "@/hooks/use-open-key";
 import { formatNumber, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -126,6 +127,7 @@ function BulkRedirectsForm({
   const [filter, setFilter] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [importing, setImporting] = React.useState(false);
+  const importKey = useOpenKey(importing);
   const [error, setError] = React.useState<string | null>(null);
   // The table waits until the cluster's nodes run it.
   const editable = availability.available;
@@ -291,6 +293,7 @@ function BulkRedirectsForm({
       </form>
       {/* Outside the form: React bubbles the dialog's submit through the portal. */}
       <ImportDialog
+        key={importKey}
         open={importing}
         onOpenChange={setImporting}
         onImport={(redirects, replace) => {

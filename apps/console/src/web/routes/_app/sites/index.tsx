@@ -36,6 +36,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useOpenKey } from "@/hooks/use-open-key";
 import { m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -54,6 +55,7 @@ export const Route = createFileRoute("/_app/sites/")({
 
 function SitesPage() {
   const search = Route.useSearch();
+  const createKey = useOpenKey(search.create === true);
   const navigate = Route.useNavigate();
   const page = search.page ?? 1;
   const sites = useQuery({
@@ -234,6 +236,7 @@ function SitesPage() {
         </>
       )}
       <CreateSiteDialog
+        key={createKey}
         open={search.create === true}
         onOpenChange={setCreateOpen}
         clusters={clusters.data ?? []}

@@ -43,6 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, formatPercent, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -156,6 +157,7 @@ export function ProbesPanel({
   addOpen: boolean;
   onAddOpenChange: (open: boolean) => void;
 }) {
+  const addKey = useOpenKey(addOpen);
   const probes = useQuery({
     ...orpc.probes.list.queryOptions(),
     refetchInterval: 5_000,
@@ -304,7 +306,7 @@ export function ProbesPanel({
         />
       )}
       <ProbeSettingsCard />
-      <AddProbeDialog open={addOpen} onOpenChange={onAddOpenChange} />
+      <AddProbeDialog key={addKey} open={addOpen} onOpenChange={onAddOpenChange} />
       {action?.kind === "rename" ? (
         <RenameProbeDialog probe={action.probe} onClose={() => setAction(null)} />
       ) : null}

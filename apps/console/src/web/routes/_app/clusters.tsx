@@ -63,6 +63,7 @@ import {
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useOpenKey } from "@/hooks/use-open-key";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { revisionReason } from "@/lib/revisions";
@@ -90,6 +91,7 @@ function ClustersPage() {
     meta: { background: true },
   });
   const selected = clusters.data?.find((c) => c.id === search.cluster) ?? clusters.data?.[0];
+  const enrollKey = useOpenKey(search.enroll === true);
 
   const setEnrollOpen = (open: boolean) =>
     navigate({ search: (prev) => ({ ...prev, enroll: open || undefined }), replace: true });
@@ -186,6 +188,7 @@ function ClustersPage() {
             </TabsContent>
           </Tabs>
           <EnrollDialog
+            key={`${selected.id}-${enrollKey}`}
             cluster={selected}
             open={search.enroll === true}
             onOpenChange={setEnrollOpen}
@@ -521,6 +524,7 @@ function DeleteNodeGroupAction({ group }: { group: NodeGroup }) {
 function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
   const groups = useQuery(orpc.nodeGroups.list.queryOptions({ input: { clusterId: cluster.id } }));
   const [createOpen, setCreateOpen] = React.useState(false);
+  const createKey = useOpenKey(createOpen);
   const [editing, setEditing] = React.useState<NodeGroup | null>(null);
   const columns = React.useMemo<Columns<NodeGroup>>(
     () => [
@@ -608,7 +612,7 @@ function NodeGroupsSection({ cluster }: { cluster: Cluster }) {
         />
       )}
       <NodeGroupDialog
-        key={`create-${cluster.id}`}
+        key={`create-${cluster.id}-${createKey}`}
         cluster={cluster}
         open={createOpen}
         onOpenChange={setCreateOpen}

@@ -78,7 +78,15 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
     await pick(page, page.getByTestId("cluster-select"), "default");
     await expect(page.getByTestId("cluster-name")).toHaveText("default");
 
+    // A dialog starts fresh each time it opens: a canary switch left on is off again.
+    const canary = page.getByTestId("node-group-canary");
     await page.getByTestId("create-node-group").click();
+    await canary.click();
+    await expect(canary).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await page.getByTestId("create-node-group").click();
+    await expect(canary).toHaveAttribute("aria-checked", "false");
     await page.getByLabel("节点组", { exact: true }).fill("group-a");
     await pick(page, page.getByTestId("region-select"), "华东 (cn-east)");
     await page.getByTestId("node-group-submit").click();
