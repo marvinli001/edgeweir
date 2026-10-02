@@ -32,6 +32,7 @@ import { readCacheKey } from "../lib/cache-key";
 import { assertCertificateNames } from "../lib/certificate-names";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
+import { lockStats } from "../lib/locks";
 import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings";
 import { assertServing } from "../lib/site-state";
 import { assertUpdatedAt } from "../lib/updated-at";
@@ -48,6 +49,7 @@ import {
   toRevisionDto,
 } from "./revisions";
 import { actionOriginGroup, availableLists } from "./rules";
+import { flushSiteUsage } from "./usage";
 
 type SiteCreate = z.output<typeof siteCreateInput>;
 type SiteUpdate = z.output<typeof siteUpdateInput>;
@@ -718,7 +720,11 @@ export async function deleteSite(
   ctx: { actor: Actor },
 ): Promise<{ revision: Revision }> {
   return db.transaction(async (tx) => {
+    // Its statistics go with the site: no ingestion or rollup may be in
+    // flight, and the usage of windows not computed yet is computed first.
+    await lockStats(tx, "exclusive");
     const row = await findSite(tx, id);
+    await flushSiteUsage(tx, row.id);
     await tx.delete(schema.site).where(eq(schema.site.id, row.id));
     const { row: revision } = await publishRevision(tx, {
       clusterId: row.clusterId,

@@ -181,6 +181,25 @@ export async function rollupUsage(
 }
 
 /**
+ * Computes every usage window of a site that is still marked dirty, open
+ * ones included, before the site and its statistics are deleted (usage
+ * outlives the site). Call with the statistics lock held exclusively, so
+ * that no ingestion is in flight. Returns how many windows changed.
+ */
+export async function flushSiteUsage(tx: Executor, siteId: string): Promise<number> {
+  await lockUsage(tx);
+  const dirty = schema.statsRollupDirty;
+  const buckets = await tx
+    .selectDistinct({ bucket: dirty.bucket })
+    .from(dirty)
+    .where(and(eq(dirty.granularity, "usage"), eq(dirty.siteId, siteId)))
+    .orderBy(dirty.bucket);
+  let changed = 0;
+  for (const { bucket } of buckets) if (await computeUsageWindow(tx, siteId, bucket)) changed++;
+  return changed;
+}
+
+/**
  * The completeness watermark: the earliest statistics watermark among nodes
  * that are active and were seen within the offline threshold (a node that
  * never reported one counts from its enrollment), capped by windows still

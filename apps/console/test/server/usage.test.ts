@@ -334,6 +334,39 @@ describe("recomputable 5-minute usage", async () => {
     expect(await advanceUsageWatermark(ctx.db, now)).toEqual(at(8 * WINDOW));
   });
 
+  it("computes a deleted site's pending windows, the open one included, before its statistics go", async () => {
+    const doomed = (
+      await admin.sites.create({
+        name: "doomed",
+        domains: ["doomed-usage.test"],
+        origins: [{ address: "origin.test" }],
+      })
+    ).site.id;
+    const open = new Date(Math.floor(Date.now() / WINDOW) * WINDOW);
+    await ingestStatsBatch(ctx.db, nodeA, 5n, [
+      minuteStats(doomed, at(0), 5, 50),
+      minuteStats(doomed, new Date(Math.floor(Date.now() / 60_000) * 60_000), 3, 30),
+    ]);
+    await admin.sites.delete({ id: doomed });
+    const rows = await usageRows(ctx.db, doomed, at(0), open);
+    expect(rows.map((r) => [r.windowStart.toISOString(), r.requests, r.bytesSent])).toEqual([
+      [at(0).toISOString(), "5", "50"],
+      [open.toISOString(), "3", "30"],
+    ]);
+    expect(
+      await ctx.db
+        .select()
+        .from(schema.nodeMinuteStats)
+        .where(eq(schema.nodeMinuteStats.siteId, doomed)),
+    ).toEqual([]);
+    const listed = await admin.usage.list({
+      from: at(0).toISOString(),
+      to: new Date(open.getTime() + WINDOW).toISOString(),
+      siteId: doomed,
+    });
+    expect(listed.items.map((i) => i.requests)).toEqual(["5", "3"]);
+  });
+
   it("keeps usage for the configured retention and audits settings", async () => {
     expect(await admin.settings.usage()).toEqual({
       retentionDays: 100,
