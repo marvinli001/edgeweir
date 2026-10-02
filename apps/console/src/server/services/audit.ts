@@ -1,4 +1,4 @@
-import type { AuditLogEntry } from "@edgeweir/contract";
+import type { AuditAction, AuditLogEntry, AuditTargetType } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, count, desc, eq, gte, inArray, lte, type SQL } from "drizzle-orm";
 import type { Executor } from "./revisions";
@@ -19,8 +19,8 @@ export async function recordAudit(
   db: Executor,
   actor: Actor,
   entry: {
-    action: string;
-    targetType?: string;
+    action: AuditAction;
+    targetType?: AuditTargetType | "";
     targetId?: string;
     /** Display name of the target, kept so the entry stays readable after deletion. */
     targetName?: string;
@@ -135,6 +135,8 @@ export async function listAuditLogs(
       actorType: r.actorType,
       actorId: r.actorId,
       actorName: r.actorName || nameOf(r.actorType, r.actorId),
+      ip: r.ip,
+      userAgent: r.userAgent,
       action: r.action,
       targetType: r.targetType,
       targetId: r.targetId,

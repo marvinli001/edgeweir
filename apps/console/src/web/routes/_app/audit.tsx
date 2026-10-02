@@ -1,5 +1,6 @@
 import type { AuditLogEntry } from "@edgeweir/contract";
-import { Audit01Icon } from "@hugeicons/core-free-icons";
+import { Audit01Icon, InformationCircleIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
@@ -8,7 +9,14 @@ import { type Columns, DataTable } from "@/components/data-table";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -16,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { auditActionLabel, auditTargetLabel } from "@/lib/audit";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -42,6 +51,8 @@ const actorLabels: Record<string, () => string> = {
   probe: () => m.audit_actor_probe(),
   system: () => m.audit_actor_system(),
 };
+
+const actorLabel = (type: string) => (actorLabels[type] ?? (() => type))();
 
 const rangeLabels: Record<Range, () => string> = {
   "1h": () => m.audit_range_1h(),
@@ -83,6 +94,95 @@ function FilterSelect({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-1 py-2.5 sm:grid-cols-[8rem_1fr] sm:gap-4">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="flex min-w-0 flex-col gap-0.5 break-all">{children}</dd>
+    </div>
+  );
+}
+
+/** Name, type and id of an entry's actor or target. */
+function Party({ name, type, id }: { name: string; type: string; id: string }) {
+  return (
+    <>
+      <span>
+        {name || "—"}
+        {type ? <span className="text-muted-foreground"> · {type}</span> : null}
+      </span>
+      {id ? <span className="font-mono text-xs text-muted-foreground">{id}</span> : null}
+    </>
+  );
+}
+
+/** Everything an entry holds: who, from where, what, and its metadata as JSON. */
+function AuditDetails({ entry }: { entry: AuditLogEntry }) {
+  const metadata = Object.keys(entry.metadata).length
+    ? JSON.stringify(entry.metadata, null, 2)
+    : "";
+  return (
+    <Dialog>
+      <DialogTrigger
+        render={
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={m.audit_details()}
+            data-testid="audit-details"
+          />
+        }
+      >
+        <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
+      </DialogTrigger>
+      <DialogContent
+        className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl"
+        data-testid="audit-detail"
+      >
+        <DialogHeader>
+          <DialogTitle className="pr-8">{auditActionLabel(entry.action)}</DialogTitle>
+        </DialogHeader>
+        <dl className="min-w-0 divide-y">
+          <Field label={m.audit_col_time()}>{formatDateTime(entry.occurredAt)}</Field>
+          <Field label={m.audit_col_action()}>
+            <code className="font-mono text-xs">{entry.action}</code>
+          </Field>
+          <Field label={m.audit_col_actor()}>
+            <Party name={entry.actorName} type={actorLabel(entry.actorType)} id={entry.actorId} />
+          </Field>
+          <Field label={m.audit_col_target()}>
+            <Party
+              name={entry.targetName}
+              type={entry.targetType ? auditTargetLabel(entry.targetType) : ""}
+              id={entry.targetId}
+            />
+          </Field>
+          <Field label={m.audit_field_ip()}>
+            <span className="font-mono" data-testid="audit-detail-ip">
+              {entry.ip || "—"}
+            </span>
+          </Field>
+          <Field label={m.audit_field_user_agent()}>
+            <span data-testid="audit-detail-user-agent">{entry.userAgent || "—"}</span>
+          </Field>
+          <Field label={m.audit_field_metadata()}>
+            {metadata ? (
+              <pre
+                className="max-h-80 overflow-auto rounded-xl bg-muted p-3 font-mono text-xs break-normal whitespace-pre"
+                data-testid="audit-detail-metadata"
+              >
+                {metadata}
+              </pre>
+            ) : (
+              "—"
+            )}
+          </Field>
+        </dl>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -135,7 +235,7 @@ function AuditPage() {
               {row.original.actorName || "—"}
             </span>
             <span className="text-xs text-muted-foreground">
-              {(actorLabels[row.original.actorType] ?? (() => row.original.actorType))()}
+              {actorLabel(row.original.actorType)}
             </span>
           </div>
         ),
@@ -144,9 +244,14 @@ function AuditPage() {
         id: "action",
         header: () => m.audit_col_action(),
         cell: ({ row }) => (
-          <Badge variant="outline" className="font-mono" data-testid="audit-action">
-            {row.original.action}
-          </Badge>
+          <div className="flex flex-col">
+            <span className="font-medium" data-testid="audit-action-label">
+              {auditActionLabel(row.original.action)}
+            </span>
+            <span className="font-mono text-xs text-muted-foreground" data-testid="audit-action">
+              {row.original.action}
+            </span>
+          </div>
         ),
       },
       {
@@ -155,11 +260,16 @@ function AuditPage() {
         cell: ({ row }) => (
           <div className="flex flex-col" title={row.original.targetId}>
             <span data-testid="audit-target">{row.original.targetName || "—"}</span>
-            <span className="font-mono text-xs text-muted-foreground">
-              {row.original.targetType}
+            <span className="text-xs text-muted-foreground">
+              {row.original.targetType ? auditTargetLabel(row.original.targetType) : null}
             </span>
           </div>
         ),
+      },
+      {
+        id: "details",
+        header: () => <span className="sr-only">{m.audit_details()}</span>,
+        cell: ({ row }) => <AuditDetails entry={row.original} />,
       },
     ],
     [],
@@ -172,7 +282,10 @@ function AuditPage() {
           value={search.action}
           onChange={(action) => setFilter({ action })}
           allLabel={m.audit_all_actions()}
-          options={(facets.data?.actions ?? []).map((a) => ({ label: a, value: a }))}
+          options={(facets.data?.actions ?? []).map((a) => ({
+            label: auditActionLabel(a),
+            value: a,
+          }))}
           label={m.audit_col_action()}
           testId="audit-filter-action"
         />
@@ -180,7 +293,10 @@ function AuditPage() {
           value={search.target}
           onChange={(target) => setFilter({ target })}
           allLabel={m.audit_all_targets()}
-          options={(facets.data?.targetTypes ?? []).map((t) => ({ label: t, value: t }))}
+          options={(facets.data?.targetTypes ?? []).map((t) => ({
+            label: auditTargetLabel(t),
+            value: t,
+          }))}
           label={m.audit_col_target()}
           testId="audit-filter-target"
         />

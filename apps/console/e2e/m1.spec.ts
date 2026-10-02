@@ -128,12 +128,24 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
       audit.getByTestId("audit-actor").filter({ hasText: "E2E Admin" }).first(),
     ).toBeVisible();
 
-    await pick(page, page.getByTestId("audit-filter-action"), "node.move");
+    // Actions are labelled; the code stays below the label.
+    await pick(page, page.getByTestId("audit-filter-action"), "移动节点");
+    await expect(audit.getByTestId("audit-action-label")).toHaveText(["移动节点"]);
     await expect(audit.getByTestId("audit-action")).toHaveText(["node.move"]);
     await expect(audit.getByTestId("audit-actor")).toHaveText(["E2E Admin"]);
     await expect(audit.getByTestId("audit-target")).toHaveText([nodeName]);
 
-    await pick(page, page.getByTestId("audit-filter-action"), "site.update");
+    // The details show where the request came from and the metadata.
+    await audit.getByTestId("audit-details").click();
+    const detail = page.getByTestId("audit-detail");
+    await expect(detail).toContainText("node.move");
+    await expect(detail.getByTestId("audit-detail-ip")).not.toHaveText("—");
+    await expect(detail.getByTestId("audit-detail-user-agent")).not.toHaveText("—");
+    await expect(detail.getByTestId("audit-detail-metadata")).toContainText('"nodeGroupId"');
+    await page.keyboard.press("Escape");
+    await expect(detail).toBeHidden();
+
+    await pick(page, page.getByTestId("audit-filter-action"), "修改网站");
     await expect(audit.getByTestId("audit-action")).toHaveText(["site.update", "site.update"]);
     await expect(audit.getByTestId("audit-actor")).toHaveText(["E2E Admin", "E2E Admin"]);
   });

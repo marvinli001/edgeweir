@@ -184,6 +184,18 @@ describe("audit entries for better-auth account events", async () => {
     });
   });
 
+  it("returns the client address, user agent and metadata in the audit log", async () => {
+    const page = await rpc<{ items: Record<string, unknown>[] }>("auditLogs/list", {
+      action: "api_key.create",
+    });
+    expect(page.items[0]).toMatchObject({
+      action: "api_key.create",
+      ip: "203.0.113.9",
+      userAgent: "audit-test",
+      metadata: { scope: "write" },
+    });
+  });
+
   it("records adding a passkey, signing in with it and deleting it", async () => {
     const authenticator = new SoftAuthenticator("console.test", origin);
     const options = await auth("/passkey/generate-register-options");

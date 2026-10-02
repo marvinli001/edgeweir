@@ -31,6 +31,7 @@ import { usageContract, usageSettings } from "./usage";
 import { siteFeatures, wafContract } from "./waf";
 
 export * from "./addresses";
+export * from "./audit";
 export * from "./bans";
 export * from "./bulk-redirects";
 export * from "./certificates";

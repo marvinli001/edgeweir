@@ -917,6 +917,9 @@ export const auditLogEntry = z.object({
   actorType: z.string(),
   actorId: z.string(),
   actorName: z.string(),
+  /** Client address and user agent of the request; empty when no request carried the action. */
+  ip: z.string(),
+  userAgent: z.string(),
   action: z.string(),
   targetType: z.string(),
   targetId: z.string(),
