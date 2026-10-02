@@ -6,7 +6,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { type Columns, DataTable } from "@/components/data-table";
-import { FormSelect } from "@/components/form-select";
+import { FilterSelect, FormSelect, OptionSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SearchBox } from "@/components/search-box";
@@ -14,7 +14,7 @@ import { followSiteDelivery } from "@/components/site/delivery-toast";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { SiteStatus, untilLive } from "@/components/site-status";
 import { SitesTabs } from "@/components/sites-tabs";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,13 +26,6 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,7 +35,6 @@ import { m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
 const PAGE_SIZE = 20;
-const ALL = "__all__";
 
 export const Route = createFileRoute("/_app/sites/")({
   validateSearch: z.object({
@@ -172,72 +164,50 @@ function SitesPage() {
           }
         />
         {clusters.data && clusters.data.length > 1 ? (
-          <Select
-            value={search.cluster ?? ALL}
-            onValueChange={(value) =>
+          <FilterSelect
+            value={search.cluster}
+            onChange={(cluster) =>
               navigate({
-                search: (prev) => ({
-                  ...prev,
-                  cluster: !value || value === ALL ? undefined : String(value),
-                  page: undefined,
-                }),
+                search: (prev) => ({ ...prev, cluster, page: undefined }),
                 replace: true,
               })
             }
-            items={[
-              { label: m.sites_all_clusters(), value: ALL },
-              ...clusters.data.map((c) => ({ label: c.name, value: c.id })),
-            ]}
-          >
-            <SelectTrigger
-              className="w-44"
-              aria-label={m.sites_col_cluster()}
-              data-testid="cluster-filter"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{m.sites_all_clusters()}</SelectItem>
-              {clusters.data.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            allLabel={m.sites_all_clusters()}
+            options={clusters.data.map((c) => ({ label: c.name, value: c.id }))}
+            label={m.sites_col_cluster()}
+            testId="cluster-filter"
+            className="w-44"
+          />
         ) : null}
       </div>
-      {sites.isPending ? (
-        <LoadingState />
-      ) : sites.isLoadingError ? (
-        <ErrorState error={sites.error} onRetry={() => sites.refetch()} />
-      ) : sites.data.total === 0 ? (
-        filtered ? (
-          <EmptyState icon={Search01Icon} title={m.sites_no_match()} />
-        ) : (
-          <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
-            <Button onClick={() => setCreateOpen(true)}>
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-              {m.nav_new_site()}
-            </Button>
-          </EmptyState>
-        )
-      ) : (
-        <>
-          <DataTable
-            data={sites.data.items}
-            columns={columns}
-            getRowId={(s) => s.id}
-            testId="sites-table"
-          />
-          <Pager
-            page={page}
-            pageSize={PAGE_SIZE}
-            total={sites.data.total}
-            onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
-          />
-        </>
-      )}
+      <QueryView
+        query={sites}
+        isEmpty={(data) => data.total === 0}
+        empty={
+          filtered ? (
+            <EmptyState icon={Search01Icon} title={m.sites_no_match()} />
+          ) : (
+            <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
+              <Button onClick={() => setCreateOpen(true)}>
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                {m.nav_new_site()}
+              </Button>
+            </EmptyState>
+          )
+        }
+      >
+        {({ items, total }) => (
+          <>
+            <DataTable data={items} columns={columns} getRowId={(s) => s.id} testId="sites-table" />
+            <Pager
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={total}
+              onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
+            />
+          </>
+        )}
+      </QueryView>
       <CreateSiteDialog
         key={createKey}
         open={search.create === true}
@@ -248,6 +218,11 @@ function SitesPage() {
     </Page>
   );
 }
+
+const SCHEMES = [
+  { label: "HTTP", value: "http" },
+  { label: "HTTPS", value: "https" },
+] as const;
 
 function CreateSiteDialog({
   open,
@@ -416,28 +391,16 @@ function CreateSiteDialog({
               </Field>
               <Field>
                 <FieldLabel>{m.site_form_scheme()}</FieldLabel>
-                <Select
+                <OptionSelect
                   value={scheme}
-                  onValueChange={(v) => {
-                    if (!v) return;
-                    const next = v as "http" | "https";
+                  options={SCHEMES}
+                  onChange={(next) => {
                     setScheme(next);
                     // A port set to the other protocol's default follows the protocol.
                     if (port === (next === "https" ? "80" : "443")) setPort("");
                   }}
-                  items={[
-                    { label: "HTTP", value: "http" },
-                    { label: "HTTPS", value: "https" },
-                  ]}
-                >
-                  <SelectTrigger className="w-full" data-testid="site-origin-scheme">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="http">HTTP</SelectItem>
-                    <SelectItem value="https">HTTPS</SelectItem>
-                  </SelectContent>
-                </Select>
+                  testId="site-origin-scheme"
+                />
               </Field>
             </div>
             <Field>

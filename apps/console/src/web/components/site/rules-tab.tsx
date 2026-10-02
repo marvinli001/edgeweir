@@ -45,24 +45,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import type * as z from "zod";
-import { FormSelect } from "@/components/form-select";
+import { FormSelect, OptionSelect } from "@/components/form-select";
 import { PresetSelect, usePreset } from "@/components/preset-select";
 import { SafetyNote } from "@/components/safety-note";
 import { ExpressionEditor } from "@/components/site/expression-editor";
 import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey, SaveBar } from "@/components/site/save-site";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { expressionReason } from "@/lib/expressions";
@@ -223,21 +216,27 @@ export function RulesTab({ siteId, originGroups }: { siteId?: string; originGrou
     ...orpc.sites.features.queryOptions({ input: { id: siteId ?? "" } }),
     enabled: !!siteId,
   });
-  if (query.isPending || (siteId && features.isPending)) return <LoadingState />;
-  if (query.isLoadingError)
-    return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
-  if (siteId && features.isLoadingError)
-    return <ErrorState error={features.error} onRetry={() => void features.refetch()} />;
-  const availability = siteId ? features.data?.rulesV2 : undefined;
-  return (
+  const editor = (rules: RuleDto[], availability?: FeatureAvailability) => (
     <RulesEditor
-      key={JSON.stringify(query.data)}
-      initial={query.data}
+      key={JSON.stringify(rules)}
+      initial={rules}
       siteId={siteId}
       originGroups={siteId ? (originGroups ?? []) : undefined}
       availability={availability}
       locked={availability?.available === false}
     />
+  );
+  // Platform rules have no site features to wait for.
+  return (
+    <QueryView query={query}>
+      {(rules) =>
+        siteId ? (
+          <QueryView query={features}>{({ rulesV2 }) => editor(rules, rulesV2)}</QueryView>
+        ) : (
+          editor(rules)
+        )
+      }
+    </QueryView>
   );
 }
 function RulesEditor({
@@ -1204,28 +1203,16 @@ function CompressionFields({
         </ol>
       )}
       {remaining.length ? (
-        <Select
+        <OptionSelect
           value={null}
-          onValueChange={(coding) => {
-            if (coding) set([...list, coding as Coding]);
-          }}
-        >
-          <SelectTrigger
-            size="sm"
-            className="self-start"
-            aria-label={m.rules_compression_add()}
-            data-testid="rule-compression-add"
-          >
-            <SelectValue placeholder={m.rules_compression_add()} />
-          </SelectTrigger>
-          <SelectContent>
-            {remaining.map((coding) => (
-              <SelectItem key={coding} value={coding}>
-                {codingLabel(coding)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          options={remaining.map((coding) => ({ value: coding, label: codingLabel(coding) }))}
+          onChange={(coding) => set([...list, coding])}
+          placeholder={m.rules_compression_add()}
+          label={m.rules_compression_add()}
+          size="sm"
+          className="self-start"
+          testId="rule-compression-add"
+        />
       ) : null}
     </FieldSet>
   );

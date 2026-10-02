@@ -45,7 +45,7 @@ import { RowMenu, type RowMenuItem } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { combineQueries, EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -125,17 +125,15 @@ export function SecurityTab({ siteId }: { siteId: string }) {
           </Button>
         </div>
       </div>
-      {protection.isPending ? (
-        <LoadingState />
-      ) : protection.isLoadingError ? (
-        <ErrorState error={protection.error} onRetry={() => void protection.refetch()} />
-      ) : (
-        <>
-          <UnderAttackCard siteId={siteId} protection={protection.data} />
-          <ChallengeSettingsCard siteId={siteId} protection={protection.data} />
-          <CcPolicyCard siteId={siteId} protection={protection.data} />
-        </>
-      )}
+      <QueryView query={protection}>
+        {(data) => (
+          <>
+            <UnderAttackCard siteId={siteId} protection={data} />
+            <ChallengeSettingsCard siteId={siteId} protection={data} />
+            <CcPolicyCard siteId={siteId} protection={data} />
+          </>
+        )}
+      </QueryView>
       <WafCard siteId={siteId} />
       <NodeLevelsCard siteId={siteId} />
       <TopCard siteId={siteId} />
@@ -502,26 +500,16 @@ function WafCard({ siteId }: { siteId: string }) {
           </Badge>
         ) : null}
       </CardHeader>
-      {waf.isPending || features.isPending ? (
-        <CardContent>
-          <LoadingState />
-        </CardContent>
-      ) : waf.isLoadingError ? (
-        <CardContent>
-          <ErrorState error={waf.error} onRetry={() => void waf.refetch()} />
-        </CardContent>
-      ) : features.isLoadingError ? (
-        <CardContent>
-          <ErrorState error={features.error} onRetry={() => void features.refetch()} />
-        </CardContent>
-      ) : (
-        <WafForm
-          key={waf.data.updatedAt ?? "default"}
-          siteId={siteId}
-          waf={waf.data}
-          availability={features.data.crs}
-        />
-      )}
+      <QueryView query={combineQueries(waf, features)} frame={CardContent}>
+        {([saved, available]) => (
+          <WafForm
+            key={saved.updatedAt ?? "default"}
+            siteId={siteId}
+            waf={saved}
+            availability={available.crs}
+          />
+        )}
+      </QueryView>
     </Card>
   );
 }
@@ -768,31 +756,26 @@ function WafRulesCard({ siteId }: { siteId: string }) {
         </div>
       </CardHeader>
       <CardContent>
-        {rules.isPending ? (
-          <LoadingState />
-        ) : rules.isLoadingError ? (
-          <ErrorState error={rules.error} onRetry={() => void rules.refetch()} />
-        ) : (
-          <TopList
-            title={m.waf_top_rules()}
-            items={rules.data.items.map((item) => ({
-              value: String(item.ruleId),
-              count: item.requests,
-            }))}
-            testId="waf-top-rules"
-            mono
-            actions={(value) =>
-              crsDetectionRule(Number(value))
-                ? [
-                    {
-                      label: m.quick_exclude_rule({ id: value }),
-                      action: { kind: "exclude-rule", siteId, ruleId: Number(value) },
-                    },
-                  ]
-                : []
-            }
-          />
-        )}
+        <QueryView query={rules}>
+          {({ items }) => (
+            <TopList
+              title={m.waf_top_rules()}
+              items={items.map((item) => ({ value: String(item.ruleId), count: item.requests }))}
+              testId="waf-top-rules"
+              mono
+              actions={(value) =>
+                crsDetectionRule(Number(value))
+                  ? [
+                      {
+                        label: m.quick_exclude_rule({ id: value }),
+                        action: { kind: "exclude-rule", siteId, ruleId: Number(value) },
+                      },
+                    ]
+                  : []
+              }
+            />
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );
@@ -821,31 +804,31 @@ function LoggedRulesCard({ siteId }: { siteId: string }) {
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {logged.isPending ? (
-          <LoadingState />
-        ) : logged.isLoadingError ? (
-          <ErrorState error={logged.error} onRetry={() => void logged.refetch()} />
-        ) : (
-          <>
-            <TopList
-              title={m.rules_logged_rule()}
-              items={logged.data.items.map((item) => ({
-                id: item.ruleId,
-                value:
-                  item.name === null
-                    ? m.rules_logged_deleted()
-                    : item.platform
-                      ? m.rules_logged_platform({ name: item.name })
-                      : item.name,
-                count: item.requests,
-              }))}
-              testId="logged-rules"
-            />
-            {logged.data.unsupportedNodes > 0 ? (
-              <SafetyNote data-testid="logged-rules-partial">{m.rules_logged_partial()}</SafetyNote>
-            ) : null}
-          </>
-        )}
+        <QueryView query={logged}>
+          {({ items, unsupportedNodes }) => (
+            <>
+              <TopList
+                title={m.rules_logged_rule()}
+                items={items.map((item) => ({
+                  id: item.ruleId,
+                  value:
+                    item.name === null
+                      ? m.rules_logged_deleted()
+                      : item.platform
+                        ? m.rules_logged_platform({ name: item.name })
+                        : item.name,
+                  count: item.requests,
+                }))}
+                testId="logged-rules"
+              />
+              {unsupportedNodes > 0 ? (
+                <SafetyNote data-testid="logged-rules-partial">
+                  {m.rules_logged_partial()}
+                </SafetyNote>
+              ) : null}
+            </>
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );
@@ -869,42 +852,42 @@ function NodeLevelsCard({ siteId }: { siteId: string }) {
         <CardTitle>{m.security_nodes_title()}</CardTitle>
       </CardHeader>
       <CardContent>
-        {state.isPending ? (
-          <LoadingState />
-        ) : state.isLoadingError ? (
-          <ErrorState error={state.error} onRetry={() => void state.refetch()} />
-        ) : state.data.nodes.length === 0 ? (
-          <EmptyState title={m.security_no_nodes()} />
-        ) : (
-          <ul className="divide-y rounded-2xl border" data-testid="security-nodes">
-            {state.data.nodes.map((node, index) => (
-              <li
-                key={node.id}
-                className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2.5 animate-enter"
-                style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
-                data-testid="security-node-row"
-                data-node-id={node.id}
-                data-level={node.level}
-              >
-                <span className="min-w-32 flex-1 truncate text-sm font-medium">{node.name}</span>
-                <StatusDot tone={node.online ? "good" : "idle"}>
-                  {node.online ? m.security_online() : m.security_offline()}
-                </StatusDot>
-                <Badge
-                  variant={node.level === "normal" ? "outline" : "destructive"}
-                  data-testid="security-node-level"
+        <QueryView
+          query={state}
+          isEmpty={(data) => data.nodes.length === 0}
+          empty={<EmptyState title={m.security_no_nodes()} />}
+        >
+          {({ nodes }) => (
+            <ul className="divide-y rounded-2xl border" data-testid="security-nodes">
+              {nodes.map((node, index) => (
+                <li
+                  key={node.id}
+                  className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2.5 animate-enter"
+                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                  data-testid="security-node-row"
+                  data-node-id={node.id}
+                  data-level={node.level}
                 >
-                  {levelLabel(node.level)}
-                </Badge>
-                {node.escalatedPaths ? (
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {m.security_escalated_paths({ count: formatNumber(node.escalatedPaths) })}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
+                  <span className="min-w-32 flex-1 truncate text-sm font-medium">{node.name}</span>
+                  <StatusDot tone={node.online ? "good" : "idle"}>
+                    {node.online ? m.security_online() : m.security_offline()}
+                  </StatusDot>
+                  <Badge
+                    variant={node.level === "normal" ? "outline" : "destructive"}
+                    data-testid="security-node-level"
+                  >
+                    {levelLabel(node.level)}
+                  </Badge>
+                  {node.escalatedPaths ? (
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {m.security_escalated_paths({ count: formatNumber(node.escalatedPaths) })}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );
@@ -977,32 +960,33 @@ function TopCard({ siteId }: { siteId: string }) {
         </div>
       </CardHeader>
       <CardContent>
-        {state.isPending ? (
-          <LoadingState />
-        ) : state.isLoadingError ? (
-          <ErrorState error={state.error} onRetry={() => void state.refetch()} />
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            <TopList
-              title={m.security_top_ips()}
-              items={state.data.topIps}
-              testId="security-top-ips"
-              mono
-              actions={(address) => [
-                { label: m.quick_ban_ip(), action: { kind: "ban", address, siteId } },
-              ]}
-            />
-            <TopList
-              title={m.security_top_paths()}
-              items={state.data.topPaths}
-              testId="security-top-paths"
-              mono
-              actions={(path) => [
-                { label: m.quick_purge_url(), action: { kind: "purge", targets: [path], siteId } },
-              ]}
-            />
-          </div>
-        )}
+        <QueryView query={state}>
+          {({ topIps, topPaths }) => (
+            <div className="grid gap-4 md:grid-cols-2">
+              <TopList
+                title={m.security_top_ips()}
+                items={topIps}
+                testId="security-top-ips"
+                mono
+                actions={(address) => [
+                  { label: m.quick_ban_ip(), action: { kind: "ban", address, siteId } },
+                ]}
+              />
+              <TopList
+                title={m.security_top_paths()}
+                items={topPaths}
+                testId="security-top-paths"
+                mono
+                actions={(path) => [
+                  {
+                    label: m.quick_purge_url(),
+                    action: { kind: "purge", targets: [path], siteId },
+                  },
+                ]}
+              />
+            </div>
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );
@@ -1044,86 +1028,81 @@ function EventsCard({ siteId }: { siteId: string }) {
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {events.isPending ? (
-          <LoadingState />
-        ) : events.isLoadingError ? (
-          <ErrorState error={events.error} onRetry={() => void events.refetch()} />
-        ) : events.data.items.length === 0 ? (
-          <EmptyState title={m.security_events_empty()} />
-        ) : (
-          <>
-            <ol className="flex flex-col gap-2" data-testid="security-events">
-              {events.data.items.map((event, index) => (
-                <li
-                  key={event.id}
-                  className="flex flex-col gap-1 rounded-2xl border px-3 py-2.5 animate-enter"
-                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
-                  data-testid="security-event-row"
-                  data-kind={event.kind}
-                >
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <Badge variant={event.kind === "ip_banned" ? "destructive" : "secondary"}>
-                      {eventKindLabel(event.kind)}
-                    </Badge>
-                    {event.kind === "ip_banned" ? (
-                      <span className="font-mono text-xs break-all">{event.address}</span>
-                    ) : (
-                      <span>
-                        {m.security_level_change({
-                          from: levelLabel(event.previousLevel),
-                          to: levelLabel(event.level),
-                        })}
+        <QueryView
+          query={events}
+          isEmpty={(data) => data.items.length === 0}
+          empty={<EmptyState title={m.security_events_empty()} />}
+        >
+          {({ items, total }) => (
+            <>
+              <ol className="flex flex-col gap-2" data-testid="security-events">
+                {items.map((event, index) => (
+                  <li
+                    key={event.id}
+                    className="flex flex-col gap-1 rounded-2xl border px-3 py-2.5 animate-enter"
+                    style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                    data-testid="security-event-row"
+                    data-kind={event.kind}
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <Badge variant={event.kind === "ip_banned" ? "destructive" : "secondary"}>
+                        {eventKindLabel(event.kind)}
+                      </Badge>
+                      {event.kind === "ip_banned" ? (
+                        <span className="font-mono text-xs break-all">{event.address}</span>
+                      ) : (
+                        <span>
+                          {m.security_level_change({
+                            from: levelLabel(event.previousLevel),
+                            to: levelLabel(event.level),
+                          })}
+                        </span>
+                      )}
+                      {event.path ? (
+                        <span className="font-mono text-xs break-all">{event.path}</span>
+                      ) : null}
+                      <span
+                        className="ml-auto text-xs text-muted-foreground"
+                        title={formatDateTime(event.occurredAt)}
+                      >
+                        {timeAgo(event.occurredAt)}
                       </span>
-                    )}
-                    {event.path ? (
-                      <span className="font-mono text-xs break-all">{event.path}</span>
-                    ) : null}
-                    <span
-                      className="ml-auto text-xs text-muted-foreground"
-                      title={formatDateTime(event.occurredAt)}
-                    >
-                      {timeAgo(event.occurredAt)}
-                    </span>
-                    {event.kind === "ip_banned" && event.address ? (
-                      <RowMenu
-                        items={[
-                          {
-                            label: m.quick_ban_everywhere(),
-                            action: { kind: "ban", address: event.address, scope: "platform" },
-                            testId: "event-ban-everywhere",
-                          },
-                          {
-                            label: m.bans_unban(),
-                            action: { kind: "unban", address: event.address, siteId },
-                            testId: "event-unban",
-                          },
-                        ]}
-                      />
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                    <span>{event.node?.name || m.security_node_deleted()}</span>
-                    {event.metric ? (
-                      <span className="tabular-nums">
-                        {m.security_metric_value({
-                          metric: metricLabel(event.metric),
-                          observed: formatNumber(event.observed),
-                          threshold: formatNumber(event.threshold),
-                        })}
-                      </span>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ol>
-            <Pager
-              page={page}
-              pageSize={PAGE_SIZE}
-              total={events.data.total}
-              onPageChange={setPage}
-            />
-          </>
-        )}
+                      {event.kind === "ip_banned" && event.address ? (
+                        <RowMenu
+                          items={[
+                            {
+                              label: m.quick_ban_everywhere(),
+                              action: { kind: "ban", address: event.address, scope: "platform" },
+                              testId: "event-ban-everywhere",
+                            },
+                            {
+                              label: m.bans_unban(),
+                              action: { kind: "unban", address: event.address, siteId },
+                              testId: "event-unban",
+                            },
+                          ]}
+                        />
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                      <span>{event.node?.name || m.security_node_deleted()}</span>
+                      {event.metric ? (
+                        <span className="tabular-nums">
+                          {m.security_metric_value({
+                            metric: metricLabel(event.metric),
+                            observed: formatNumber(event.observed),
+                            threshold: formatNumber(event.threshold),
+                          })}
+                        </span>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+            </>
+          )}
+        </QueryView>
       </CardContent>
     </Card>
   );

@@ -41,6 +41,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { type Option, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { CachePurgeCard } from "@/components/site/cache-purge-card";
 import { CompressionCard } from "@/components/site/compression-card";
@@ -59,13 +60,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { localizeError } from "@/lib/errors";
@@ -424,7 +418,7 @@ function SortableRule({
   // The builder takes an expression only when it has the builder's shape (or is empty).
   const builderAllowed = builder || !row.expression.trim() || builderForm(row.expression) !== null;
   const id = (name: string) => `rule-${name}-${row.key}`;
-  const actions = [
+  const actions: Option<Action>[] = [
     { label: m.site_rule_cache(), value: "cache" },
     { label: m.site_rule_bypass(), value: "bypass" },
   ];
@@ -560,22 +554,12 @@ function SortableRule({
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_8rem_8rem_auto]">
             <Field>
               <FieldLabel>{m.site_rule_action()}</FieldLabel>
-              <Select
+              <OptionSelect
                 value={row.action}
-                onValueChange={(v) => v && onChange({ action: v as Action })}
-                items={actions}
-              >
-                <SelectTrigger className="w-full" data-testid="cache-rule-action">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {actions.map((a) => (
-                    <SelectItem key={a.value} value={a.value}>
-                      {a.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={actions}
+                onChange={(action) => onChange({ action })}
+                testId="cache-rule-action"
+              />
             </Field>
             <NumberField
               id={id("ttl")}
@@ -722,7 +706,7 @@ function CacheKeyCard({ site }: { site: Site }) {
   const { save, error, pending } = useSaveSite(site.id);
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial);
   const set = (change: Partial<KeyDraft>) => setDraft({ ...draft, ...change });
-  const modes: { label: string; value: QueryMode }[] = [
+  const modes: Option<QueryMode>[] = [
     { label: m.site_cache_key_query_all(), value: "all" },
     { label: m.site_cache_key_query_ignore(), value: "ignore" },
     { label: m.site_cache_key_query_include(), value: "include" },
@@ -760,22 +744,12 @@ function CacheKeyCard({ site }: { site: Site }) {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[12rem_1fr_auto]">
             <Field>
               <FieldLabel>{m.site_cache_key_query()}</FieldLabel>
-              <Select
+              <OptionSelect
                 value={draft.query}
-                onValueChange={(v) => v && set({ query: v as QueryMode })}
-                items={modes}
-              >
-                <SelectTrigger className="w-full" data-testid="cache-key-query">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {modes.map((mode) => (
-                    <SelectItem key={mode.value} value={mode.value}>
-                      {mode.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={modes}
+                onChange={(query) => set({ query })}
+                testId="cache-key-query"
+              />
             </Field>
             <Field data-disabled={draft.query !== "include" || undefined}>
               <FieldLabel htmlFor="cache-key-params">{m.site_cache_key_params()}</FieldLabel>

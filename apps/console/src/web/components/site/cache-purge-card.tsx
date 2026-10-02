@@ -10,7 +10,7 @@ import {
   useExpandedTasks,
 } from "@/components/cache-tasks";
 import { SafetyNote } from "@/components/safety-note";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -175,15 +175,14 @@ export function CachePurgeCard({ site }: { site: Site }) {
             {m.purge_view_tasks()}
           </Button>
         </div>
-        {tasks.isPending ? (
-          <LoadingState className="min-h-24" />
-        ) : tasks.isLoadingError ? (
-          <ErrorState error={tasks.error} onRetry={() => void tasks.refetch()} />
-        ) : tasks.data.items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{m.purge_tasks_empty()}</p>
-        ) : (
-          <CacheTaskList tasks={tasks.data.items} expanded={expanded} onToggle={toggle} />
-        )}
+        <QueryView
+          query={tasks}
+          loadingClassName="min-h-24"
+          isEmpty={(data) => data.items.length === 0}
+          empty={<p className="text-sm text-muted-foreground">{m.purge_tasks_empty()}</p>}
+        >
+          {({ items }) => <CacheTaskList tasks={items} expanded={expanded} onToggle={toggle} />}
+        </QueryView>
       </CardContent>
     </Card>
   );

@@ -16,7 +16,7 @@ import { FormSelect } from "@/components/form-select";
 import { COMPRESSION_KEYS, compressionOf } from "@/components/site/compression-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { ErrorState, LoadingState } from "@/components/states";
+import { combineQueries, ErrorState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -71,27 +71,29 @@ export function HttpsTab({ site }: { site: Site }) {
     void client.invalidateQueries().finally(() => setSettling(null));
   }, [waiting, certificates.data, client]);
 
-  if (policy.isPending || certificates.isPending) return <LoadingState />;
-  if (policy.isLoadingError)
-    return <ErrorState error={policy.error} onRetry={() => void policy.refetch()} />;
-  if (certificates.isLoadingError)
-    return <ErrorState error={certificates.error} onRetry={() => void certificates.refetch()} />;
-  if (bound && (usable(bound) || bound.source === "acme"))
-    return (
-      <div className="grid gap-4">
-        {bound.status === "ready" ? null : <CertificateState cert={bound} />}
-        <HttpsEditor
-          // Keyed by its own fields: saving compression on the cache tab keeps unsaved edits here.
-          key={JSON.stringify(httpsOf(policy.data))}
-          site={site}
-          initial={policy.data}
-          certificates={certificates.data}
-        />
-      </div>
-    );
   const requested = waiting ?? settling;
-  if (requested) return <RequestedCertificate cert={requested} />;
-  return <EnableHttps site={site} current={policy.data} />;
+  return (
+    <QueryView query={combineQueries(policy, certificates)}>
+      {([saved, list]) =>
+        bound && (usable(bound) || bound.source === "acme") ? (
+          <div className="grid gap-4">
+            {bound.status === "ready" ? null : <CertificateState cert={bound} />}
+            <HttpsEditor
+              // Keyed by its own fields: saving compression on the cache tab keeps unsaved edits here.
+              key={JSON.stringify(httpsOf(saved))}
+              site={site}
+              initial={saved}
+              certificates={list}
+            />
+          </div>
+        ) : requested ? (
+          <RequestedCertificate cert={requested} />
+        ) : (
+          <EnableHttps site={site} current={saved} />
+        )
+      }
+    </QueryView>
+  );
 }
 
 /** The status of a certificate being issued or that failed, with a retry. */

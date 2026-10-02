@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { FormSelect } from "@/components/form-select";
 import { RowMenu } from "@/components/quick-actions";
 import { SafetyNote } from "@/components/safety-note";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, ErrorState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -60,23 +60,21 @@ export function LogsTab({ siteId }: { siteId: string }) {
     <div className="min-w-0 space-y-5">
       <Card>
         <CardContent className="space-y-4 pt-6">
-          {settings.isPending ? (
-            <LoadingState />
-          ) : settings.isLoadingError ? (
-            <ErrorState error={settings.error} onRetry={() => void settings.refetch()} />
-          ) : (
-            <FormSelect
-              id="logSampleRate"
-              label={m.logs_sampling()}
-              value={String(settings.data.sampleRate)}
-              disabled={save.isPending}
-              options={[0, 100, 1000, 10000].map((rate) => ({
-                value: String(rate),
-                label: rate === 0 ? m.logs_disabled() : m.logs_percent({ value: rate / 100 }),
-              }))}
-              onChange={(sampleRate) => save.mutate({ siteId, sampleRate: Number(sampleRate) })}
-            />
-          )}
+          <QueryView query={settings}>
+            {({ sampleRate }) => (
+              <FormSelect
+                id="logSampleRate"
+                label={m.logs_sampling()}
+                value={String(sampleRate)}
+                disabled={save.isPending}
+                options={[0, 100, 1000, 10000].map((rate) => ({
+                  value: String(rate),
+                  label: rate === 0 ? m.logs_disabled() : m.logs_percent({ value: rate / 100 }),
+                }))}
+                onChange={(rate) => save.mutate({ siteId, sampleRate: Number(rate) })}
+              />
+            )}
+          </QueryView>
           {save.isError && <ErrorState error={save.error} />}
           <SafetyNote>{m.logs_privacy()}</SafetyNote>
         </CardContent>
@@ -178,129 +176,131 @@ export function LogsTab({ siteId }: { siteId: string }) {
               </Button>
             </div>
           </form>
-          {logs.isPending ? (
-            <LoadingState />
-          ) : logs.isLoadingError ? (
-            <ErrorState error={logs.error} onRetry={() => void logs.refetch()} />
-          ) : logs.data.entries.length === 0 ? (
-            <EmptyState title={m.logs_empty()} />
-          ) : (
-            <>
-              {logs.data.truncated && <SafetyNote>{m.logs_query_limit()}</SafetyNote>}
-              <div className="max-w-full overflow-x-auto" data-testid="logs-table">
-                <table className="w-full min-w-[60rem] text-left text-sm">
-                  <thead>
-                    <tr className="border-b text-muted-foreground">
-                      {[
-                        m.logs_time(),
-                        m.logs_ip(),
-                        m.logs_request(),
-                        m.logs_status(),
-                        m.logs_bytes(),
-                        m.logs_duration(),
-                        m.logs_cache(),
-                        ...(withJa4 ? [m.logs_ja4()] : []),
-                        ...(withWaf ? [m.logs_waf()] : []),
-                      ].map((label) => (
-                        <th key={label} className="whitespace-nowrap p-3 font-medium">
-                          {label}
+          <QueryView
+            query={logs}
+            isEmpty={(data) => data.entries.length === 0}
+            empty={<EmptyState title={m.logs_empty()} />}
+          >
+            {({ entries, truncated }) => (
+              <>
+                {truncated && <SafetyNote>{m.logs_query_limit()}</SafetyNote>}
+                <div className="max-w-full overflow-x-auto" data-testid="logs-table">
+                  <table className="w-full min-w-[60rem] text-left text-sm">
+                    <thead>
+                      <tr className="border-b text-muted-foreground">
+                        {[
+                          m.logs_time(),
+                          m.logs_ip(),
+                          m.logs_request(),
+                          m.logs_status(),
+                          m.logs_bytes(),
+                          m.logs_duration(),
+                          m.logs_cache(),
+                          ...(withJa4 ? [m.logs_ja4()] : []),
+                          ...(withWaf ? [m.logs_waf()] : []),
+                        ].map((label) => (
+                          <th key={label} className="whitespace-nowrap p-3 font-medium">
+                            {label}
+                          </th>
+                        ))}
+                        <th className="relative w-0 p-3">
+                          <span className="sr-only">{m.common_actions()}</span>
                         </th>
-                      ))}
-                      <th className="relative w-0 p-3">
-                        <span className="sr-only">{m.common_actions()}</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {logs.data.entries.map((row) => (
-                      <tr key={row.id} className="border-b last:border-0">
-                        <td className="whitespace-nowrap p-3 tabular-nums">
-                          {new Date(row.time).toLocaleString()}
-                        </td>
-                        <td className="whitespace-nowrap p-3 font-mono text-xs">{row.clientIp}</td>
-                        <td className="min-w-64 max-w-96 p-3">
-                          <div className="break-all font-mono text-xs">
-                            {row.method} {row.host}
-                            {row.path}
-                          </div>
-                          {/* The id the node answered with (X-Request-Id, also on error pages). */}
-                          {row.requestId ? (
-                            <div className="mt-1 text-xs break-all text-muted-foreground">
-                              {m.logs_request_id()}{" "}
-                              <span className="font-mono" data-testid="log-request-id">
-                                {row.requestId}
-                              </span>
-                            </div>
-                          ) : null}
-                        </td>
-                        <td className="p-3 tabular-nums">{row.status}</td>
-                        <td className="p-3 tabular-nums">{row.bytesSent}</td>
-                        <td className="p-3 tabular-nums">{row.durationMs}</td>
-                        <td className="p-3">{row.cacheStatus}</td>
-                        {withJa4 ? (
-                          <td
-                            className="whitespace-nowrap p-3 font-mono text-xs"
-                            data-testid="log-ja4"
-                          >
-                            {row.ja4}
-                          </td>
-                        ) : null}
-                        {withWaf ? (
-                          <td className="min-w-40 p-3" data-testid="log-waf">
-                            <div className="flex flex-wrap items-center gap-1">
-                              {row.wafBlocked ? (
-                                <Badge variant="destructive" data-testid="log-waf-blocked">
-                                  {m.logs_waf_blocked()}
-                                </Badge>
-                              ) : null}
-                              {row.wafRuleIds.map((id) => (
-                                <span
-                                  key={id}
-                                  className="font-mono text-xs tabular-nums"
-                                  data-testid="log-waf-rule"
-                                >
-                                  {id}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                        ) : null}
-                        <td className="p-3 text-right">
-                          <RowMenu
-                            items={[
-                              {
-                                label: m.quick_ban_ip(),
-                                action: { kind: "ban", address: row.clientIp, siteId },
-                                testId: "log-ban",
-                              },
-                              ...(row.host
-                                ? [
-                                    {
-                                      label: m.quick_purge_url(),
-                                      action: {
-                                        kind: "purge" as const,
-                                        targets: [requestUrl(row.host, row.path)],
-                                        siteId,
-                                      },
-                                      testId: "log-purge",
-                                    },
-                                  ]
-                                : []),
-                              ...row.wafRuleIds.filter(crsDetectionRule).map((ruleId) => ({
-                                label: m.quick_exclude_rule({ id: String(ruleId) }),
-                                action: { kind: "exclude-rule" as const, siteId, ruleId },
-                                testId: "log-exclude-rule",
-                              })),
-                            ]}
-                          />
-                        </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+                    </thead>
+                    <tbody>
+                      {entries.map((row) => (
+                        <tr key={row.id} className="border-b last:border-0">
+                          <td className="whitespace-nowrap p-3 tabular-nums">
+                            {new Date(row.time).toLocaleString()}
+                          </td>
+                          <td className="whitespace-nowrap p-3 font-mono text-xs">
+                            {row.clientIp}
+                          </td>
+                          <td className="min-w-64 max-w-96 p-3">
+                            <div className="break-all font-mono text-xs">
+                              {row.method} {row.host}
+                              {row.path}
+                            </div>
+                            {/* The id the node answered with (X-Request-Id, also on error pages). */}
+                            {row.requestId ? (
+                              <div className="mt-1 text-xs break-all text-muted-foreground">
+                                {m.logs_request_id()}{" "}
+                                <span className="font-mono" data-testid="log-request-id">
+                                  {row.requestId}
+                                </span>
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="p-3 tabular-nums">{row.status}</td>
+                          <td className="p-3 tabular-nums">{row.bytesSent}</td>
+                          <td className="p-3 tabular-nums">{row.durationMs}</td>
+                          <td className="p-3">{row.cacheStatus}</td>
+                          {withJa4 ? (
+                            <td
+                              className="whitespace-nowrap p-3 font-mono text-xs"
+                              data-testid="log-ja4"
+                            >
+                              {row.ja4}
+                            </td>
+                          ) : null}
+                          {withWaf ? (
+                            <td className="min-w-40 p-3" data-testid="log-waf">
+                              <div className="flex flex-wrap items-center gap-1">
+                                {row.wafBlocked ? (
+                                  <Badge variant="destructive" data-testid="log-waf-blocked">
+                                    {m.logs_waf_blocked()}
+                                  </Badge>
+                                ) : null}
+                                {row.wafRuleIds.map((id) => (
+                                  <span
+                                    key={id}
+                                    className="font-mono text-xs tabular-nums"
+                                    data-testid="log-waf-rule"
+                                  >
+                                    {id}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          ) : null}
+                          <td className="p-3 text-right">
+                            <RowMenu
+                              items={[
+                                {
+                                  label: m.quick_ban_ip(),
+                                  action: { kind: "ban", address: row.clientIp, siteId },
+                                  testId: "log-ban",
+                                },
+                                ...(row.host
+                                  ? [
+                                      {
+                                        label: m.quick_purge_url(),
+                                        action: {
+                                          kind: "purge" as const,
+                                          targets: [requestUrl(row.host, row.path)],
+                                          siteId,
+                                        },
+                                        testId: "log-purge",
+                                      },
+                                    ]
+                                  : []),
+                                ...row.wafRuleIds.filter(crsDetectionRule).map((ruleId) => ({
+                                  label: m.quick_exclude_rule({ id: String(ruleId) }),
+                                  action: { kind: "exclude-rule" as const, siteId, ruleId },
+                                  testId: "log-exclude-rule",
+                                })),
+                              ]}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </QueryView>
         </CardContent>
       </Card>
     </div>

@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { SafetyNote } from "@/components/safety-note";
 import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
-import { ErrorState, LoadingState } from "@/components/states";
+import { combineQueries, QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { m } from "@/lib/i18n";
@@ -75,24 +75,18 @@ function compressionError(field: PropertyKey | undefined): string {
 export function CompressionCard({ site }: { site: Site }) {
   const policy = useQuery(orpc.https.get.queryOptions({ input: { id: site.id } }));
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
-  if (policy.isPending || features.isPending) return <LoadingState />;
-  if (policy.isLoadingError)
-    return <ErrorState error={policy.error} onRetry={() => void policy.refetch()} />;
-  if (features.isLoadingError)
-    return <ErrorState error={features.error} onRetry={() => void features.refetch()} />;
-  const availability: Record<Algorithm, FeatureAvailability> = {
-    gzip: { available: true, reason: null },
-    brotli: features.data.brotli,
-    zstd: features.data.zstd,
-  };
   return (
-    <CompressionEditor
-      // Keyed by its own fields: saving HTTPS settings keeps unsaved edits here.
-      key={JSON.stringify(compressionOf(policy.data))}
-      siteId={site.id}
-      server={policy.data}
-      availability={availability}
-    />
+    <QueryView query={combineQueries(policy, features)}>
+      {([saved, { brotli, zstd }]) => (
+        <CompressionEditor
+          // Keyed by its own fields: saving HTTPS settings keeps unsaved edits here.
+          key={JSON.stringify(compressionOf(saved))}
+          siteId={site.id}
+          server={saved}
+          availability={{ gzip: { available: true, reason: null }, brotli, zstd }}
+        />
+      )}
+    </QueryView>
   );
 }
 

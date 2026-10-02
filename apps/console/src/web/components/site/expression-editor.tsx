@@ -9,14 +9,8 @@ import {
 } from "@edgeweir/rule-engine";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
+import { OptionSelect } from "@/components/form-select";
 import { Field, FieldLabel } from "@/components/ui/field";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   CONDITION_TEMPLATES,
   type ConditionTemplate,
@@ -153,10 +147,19 @@ export function ExpressionEditor({
         <div className="flex flex-wrap items-center gap-2">
           {actions}
           {kind === "condition" ? (
-            <Select
+            <OptionSelect
               value={null}
-              onValueChange={(choice: string | null) => {
-                if (!choice) return;
+              options={[
+                ...(Object.keys(CONDITION_TEMPLATES) as ConditionTemplate[]).map((template) => ({
+                  value: template,
+                  label: conditionTemplateLabel(template),
+                })),
+                ...(lists.data ?? []).map((list) => ({
+                  value: `${LIST_PREFIX}${list.name}`,
+                  label: m.rules_template_ip_list({ name: list.name }),
+                })),
+              ]}
+              onChange={(choice) => {
                 const inserted = choice.startsWith(LIST_PREFIX)
                   ? insertCondition(value, `ip.src in ${choice}`, phase)
                   : insertCondition(
@@ -168,49 +171,23 @@ export function ExpressionEditor({
                 selection.current = { source: inserted.source, range: inserted.selection };
                 onChange(inserted.source);
               }}
-            >
-              <SelectTrigger
-                size="sm"
-                aria-label={m.rules_insert_condition()}
-                data-testid={`${id}-template`}
-              >
-                <SelectValue placeholder={m.rules_insert_condition()} />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(CONDITION_TEMPLATES) as ConditionTemplate[]).map((template) => (
-                  <SelectItem key={template} value={template}>
-                    {conditionTemplateLabel(template)}
-                  </SelectItem>
-                ))}
-                {(lists.data ?? []).map((list) => (
-                  <SelectItem key={list.id} value={`${LIST_PREFIX}${list.name}`}>
-                    {m.rules_template_ip_list({ name: list.name })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-          <Select
-            value={null}
-            onValueChange={(field) => {
-              if (field) insert(field);
-            }}
-          >
-            <SelectTrigger
+              placeholder={m.rules_insert_condition()}
+              label={m.rules_insert_condition()}
               size="sm"
-              aria-label={m.rules_insert_field()}
-              data-testid={`${id}-field`}
-            >
-              <SelectValue placeholder={m.rules_insert_field()} />
-            </SelectTrigger>
-            <SelectContent>
-              {available.map((field) => (
-                <SelectItem key={field} value={field}>
-                  {field}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              className="w-fit"
+              testId={`${id}-template`}
+            />
+          ) : null}
+          <OptionSelect
+            value={null}
+            options={available.map((field) => ({ value: field, label: field }))}
+            onChange={insert}
+            placeholder={m.rules_insert_field()}
+            label={m.rules_insert_field()}
+            size="sm"
+            className="w-fit"
+            testId={`${id}-field`}
+          />
         </div>
       </div>
       <div
