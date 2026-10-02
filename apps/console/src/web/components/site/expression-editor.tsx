@@ -17,7 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { type ExpressionFailure, expressionErrorText } from "@/lib/expressions";
+import {
+  appendCondition,
+  CONDITION_TEMPLATES,
+  type ConditionTemplate,
+  conditionTemplateLabel,
+  type ExpressionFailure,
+  expressionErrorText,
+} from "@/lib/expressions";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
@@ -80,23 +87,6 @@ export function expressionFailure(
   }
 }
 
-/** Common conditions the template menu appends (request fields: every phase has them). */
-const TEMPLATES = {
-  path_prefix: 'http.request.uri.path matches "^/admin/"',
-  ip_range: "ip.src in {192.0.2.0/24}",
-  country: 'ip.geoip.country in {"CN"}',
-  user_agent: 'http.request.headers["user-agent"] contains "bot"',
-  method: 'http.request.method in {"POST" "PUT" "DELETE"}',
-} as const;
-type Template = keyof typeof TEMPLATES;
-const templateLabel = (template: Template) =>
-  ({
-    path_prefix: m.rules_template_path_prefix,
-    ip_range: m.rules_template_ip_range,
-    country: m.rules_template_country,
-    user_agent: m.rules_template_user_agent,
-    method: m.rules_template_method,
-  })[template]();
 /** Select values of the template menu's IP list entries ("$" + list name). */
 const LIST_PREFIX = "$";
 
@@ -142,13 +132,6 @@ export function ExpressionEditor({
       onChange(`${value.slice(0, at)}${field}${value.slice(at)}`);
     } else onChange(`${value.trimEnd()}${value.trim() ? " and " : ""}${field} `);
   };
-  /** Appends a condition with "and"; a lone `true` (a new rule) is replaced. */
-  const append = (condition: string) =>
-    onChange(
-      value.trim() === "" || value.trim() === "true"
-        ? condition
-        : `${value.trimEnd()} and ${condition}`,
-    );
   return (
     <Field>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -160,11 +143,10 @@ export function ExpressionEditor({
               value={null}
               onValueChange={(choice: string | null) => {
                 if (!choice) return;
-                append(
-                  choice.startsWith(LIST_PREFIX)
-                    ? `ip.src in ${choice}`
-                    : TEMPLATES[choice as Template],
-                );
+                const condition = choice.startsWith(LIST_PREFIX)
+                  ? `ip.src in ${choice}`
+                  : CONDITION_TEMPLATES[choice as ConditionTemplate];
+                onChange(appendCondition(value, condition, phase));
               }}
             >
               <SelectTrigger
@@ -175,9 +157,9 @@ export function ExpressionEditor({
                 <SelectValue placeholder={m.rules_insert_condition()} />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(TEMPLATES) as Template[]).map((template) => (
+                {(Object.keys(CONDITION_TEMPLATES) as ConditionTemplate[]).map((template) => (
                   <SelectItem key={template} value={template}>
-                    {templateLabel(template)}
+                    {conditionTemplateLabel(template)}
                   </SelectItem>
                 ))}
                 {(lists.data ?? []).map((list) => (

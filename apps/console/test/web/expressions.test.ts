@@ -1,6 +1,11 @@
-import { ExpressionError, parseExpression } from "@edgeweir/rule-engine";
+import { ExpressionError, parseExpression, phases } from "@edgeweir/rule-engine";
 import { describe, expect, it } from "vitest";
-import { expressionErrorText, expressionReason } from "../../src/web/lib/expressions";
+import {
+  appendCondition,
+  CONDITION_TEMPLATES,
+  expressionErrorText,
+  expressionReason,
+} from "../../src/web/lib/expressions";
 import { overwriteGetLocale } from "../../src/web/paraglide/runtime.js";
 
 const failure = (source: string) => {
@@ -24,5 +29,26 @@ describe("expression error texts", () => {
     expect(expressionReason({ code: "unknown_list", params: { list: "office" } })).toBe(
       "IP 名单 office 不存在",
     );
+  });
+});
+
+describe("condition templates", () => {
+  it("parse as conditions in every phase and keep an 'or' together", () => {
+    for (const phase of phases)
+      for (const condition of Object.values(CONDITION_TEMPLATES))
+        expect(() => parseExpression(condition, phase), `${phase}: ${condition}`).not.toThrow();
+    const method = CONDITION_TEMPLATES.method;
+    expect(appendCondition("true", method, "waf-custom")).toBe(method);
+    expect(appendCondition("  ", method, "waf-custom")).toBe(method);
+    expect(appendCondition('http.host eq "a" ', method, "waf-custom")).toBe(
+      `http.host eq "a" and ${method}`,
+    );
+    expect(appendCondition('http.host eq "a" or ssl eq true', method, "waf-custom")).toBe(
+      `(http.host eq "a" or ssl eq true) and ${method}`,
+    );
+    expect(appendCondition("http.host eq", method, "waf-custom")).toBe(
+      `http.host eq and ${method}`,
+    );
+    expect(parseExpression(appendCondition("ip.src in $office", method, "cache")).op).toBe("and");
   });
 });
