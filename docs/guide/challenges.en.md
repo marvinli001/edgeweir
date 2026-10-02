@@ -82,7 +82,7 @@ The level required is the highest of: global Under Attack, the site's Under Atta
 
 ## Challenge settings
 
-**Security → Challenges**:
+**Security → Challenges**: **Preset** picks Loose, Standard (the default), or Strict and fills in the first three fields below; pick **Custom** to set each one. Saved values that match no preset show as **Custom**.
 
 | Field | Values | Default |
 | --- | --- | --- |
@@ -90,6 +90,14 @@ The level required is the highest of: global Under Attack, the site's Under Atta
 | Proof-of-work difficulty | 8–24 | 16 |
 | High proof-of-work difficulty | 8–26, at least the proof-of-work difficulty | 20 |
 | Record JA4 in access logs | On / off | Off |
+
+| Preset | Pass lifetime | Proof-of-work difficulty | High proof-of-work difficulty |
+| --- | --- | --- | --- |
+| Loose | 3600 | 14 | 18 |
+| Standard | 1800 | 16 | 20 |
+| Strict | 900 | 18 | 22 |
+
+Each extra step of difficulty doubles the work a browser does on average.
 
 ## Challenge rules
 
@@ -107,7 +115,7 @@ A request with a pass of a sufficient level continues with the following rules; 
 CC mitigation is set per site and off by default. **Security → CC mitigation**:
 
 1. Turn on **Enabled**.
-2. Keep **Follow the default template** to use the default thresholds (**Protection settings → CC template**), or turn it off to set your own.
+2. Keep **Follow the default template** to use the default thresholds (**Protection settings → CC template**), or turn it off and pick Loose, Standard, or Strict under **Preset**, or **Custom** to set each threshold. Saved thresholds that match no preset show as **Custom**.
 3. Click **Save**.
 
 | Field | Values | Template default |
@@ -125,6 +133,14 @@ CC mitigation is set per site and off by default. **Security → CC mitigation**
 | Step down after (seconds) | 1–86400 | 60 |
 
 A threshold of 0 turns its trigger off. Sites that follow the template use its new thresholds as soon as it changes.
+
+| Preset | Highest level | Site / per-URL / per-IP QPS | IP ban duration | Origin error rate / minimum origin requests | Escalate after / step down after |
+| --- | --- | --- | --- | --- | --- |
+| Loose | Proof of work | 3000 / 600 / 150 | 300 | 70 / 200 | 20 / 60 |
+| Standard (template default) | Image captcha | 1000 / 200 / 50 | 600 | 50 / 100 | 10 / 60 |
+| Strict | Image captcha | 300 / 60 / 20 | 3600 | 30 / 50 | 5 / 300 |
+
+Every preset uses a 10-second window and keeps the captcha level as a captcha.
 
 | Trigger | Behavior |
 | --- | --- |

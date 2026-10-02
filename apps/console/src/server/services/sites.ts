@@ -48,7 +48,7 @@ import {
   type Tx,
   toRevisionDto,
 } from "./revisions";
-import { actionOriginGroup, availableLists } from "./rules";
+import { actionOriginGroup, availableLists, failUnknownLists } from "./rules";
 import { siteDeliveries } from "./site-delivery";
 import { flushSiteUsage } from "./usage";
 
@@ -497,13 +497,8 @@ async function replaceCacheRules(tx: Tx, site: { id: string }, rules: CacheRuleI
   const bindings = references.some((names) => names.length)
     ? listBindings(await availableLists(tx, true))
     : {};
-  const listIds = references.map((names) =>
-    names.map((name) => {
-      const id = bindings[name];
-      if (!id) fail("IP_LIST_NOT_FOUND", "expression references an unavailable IP list");
-      return id;
-    }),
-  );
+  failUnknownLists(references.flat().filter((name) => !bindings[name]));
+  const listIds = references.map((names) => names.map((name) => bindings[name] as string));
   const values = rules.map((r, i) => ({
     priority: r.priority ?? (i + 1) * 10,
     expression: expressions[i] ?? "true",

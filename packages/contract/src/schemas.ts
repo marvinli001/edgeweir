@@ -6,6 +6,7 @@ import {
 } from "@edgeweir/rule-engine";
 import * as z from "zod";
 import { normalizeCidr, parseIp } from "./addresses";
+import { addExpressionIssue } from "./expressions";
 
 const LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
 const HOSTNAME_RE = new RegExp(`^(?:${LABEL}\\.)*${LABEL}$`);
@@ -251,11 +252,7 @@ export const cacheRuleInput = z
         parseExpression(r.expression, "cache", { maxLength: CACHE_EXPRESSION_MAX_LENGTH }),
       );
     } catch (error) {
-      ctx.addIssue({
-        code: "custom",
-        message: error instanceof Error ? error.message : "invalid expression",
-        path: ["expression"],
-      });
+      addExpressionIssue(ctx, error, ["expression"]);
       return;
     }
     const lists = r.pathPrefixes.length + r.paths.length + r.extensions.length > 0;

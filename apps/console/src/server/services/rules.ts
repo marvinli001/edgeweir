@@ -94,8 +94,7 @@ export async function saveRules(
     const rows = rules.map((rule, priority) => {
       const expression = parseExpression(rule.expression, rule.phase);
       const names = listReferences(expression);
-      if (names.some((name) => !bindings[name]))
-        fail("IP_LIST_NOT_FOUND", "expression references an unavailable IP list");
+      failUnknownLists(names.filter((name) => !bindings[name]));
       return {
         id: rule.id && owned.has(rule.id) ? rule.id : randomUUID(),
         siteId,
@@ -147,10 +146,14 @@ export function validateExpression(
     else parseExpression(expression, phase);
     return { valid: true, position: 0, message: "" };
   } catch (error) {
+    if (!(error instanceof ExpressionError))
+      return { valid: false, position: 0, message: "invalid expression" };
     return {
       valid: false,
-      position: error instanceof ExpressionError ? error.position : 0,
-      message: "invalid_expression",
+      position: error.position,
+      message: error.message,
+      code: error.code,
+      params: { ...error.params },
     };
   }
 }
@@ -183,6 +186,46 @@ async function publishListChange(tx: Executor, actor: Actor) {
     clusters.map((c) => c.id),
     { reason: { code: "rules_updated", params: {} }, userId: publisher(actor) },
   );
+}
+/** Refuses expressions that reference lists no one created (IP_LIST_REFERENCE_UNKNOWN). */
+export function failUnknownLists(names: string[]): void {
+  if (!names.length) return;
+  const lists = [...new Set(names)].slice(0, 5).join(", ");
+  fail("IP_LIST_REFERENCE_UNKNOWN", `unknown IP lists: ${lists}`, { lists });
+}
+/**
+ * What uses a list, the first five: rules ("name (site)" for site rules), sites whose cache
+ * rules reference it, and L4 applications.
+ */
+async function listUsers(tx: Executor, id: string): Promise<string[]> {
+  const uses = (column: unknown) => sql`${id}::uuid = any(${column})`;
+  const rules = await tx
+    .select({ name: schema.edgeRule.name, site: schema.site.name })
+    .from(schema.edgeRule)
+    .leftJoin(schema.site, eq(schema.site.id, schema.edgeRule.siteId))
+    .where(uses(schema.edgeRule.listIds))
+    .orderBy(sql`${schema.site.name} nulls first`, asc(schema.edgeRule.priority))
+    .limit(5);
+  const sites = await tx
+    .selectDistinct({ name: schema.site.name })
+    .from(schema.cacheRule)
+    .innerJoin(schema.site, eq(schema.site.id, schema.cacheRule.siteId))
+    .where(uses(schema.cacheRule.listIds))
+    .orderBy(asc(schema.site.name))
+    .limit(5);
+  const apps = await tx
+    .select({ name: schema.l4App.name })
+    .from(schema.l4App)
+    .where(sql`${uses(schema.l4App.allowListIds)} or ${uses(schema.l4App.blockListIds)}`)
+    .orderBy(asc(schema.l4App.name))
+    .limit(5);
+  return [
+    ...new Set([
+      ...rules.map((rule) => (rule.site ? `${rule.name} (${rule.site})` : rule.name)),
+      ...sites.map((site) => site.name),
+      ...apps.map((app) => app.name),
+    ]),
+  ].slice(0, 5);
 }
 const lockLists = (tx: Executor) =>
   tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.ip-lists'))`);
@@ -251,25 +294,8 @@ export async function deleteIpList(app: AppContext, id: string, actor: Actor) {
       .where(eq(schema.ipList.id, id))
       .for("update");
     if (!row) fail("IP_LIST_NOT_FOUND", "IP list not found");
-    const refs = await tx
-      .select({ id: schema.edgeRule.id })
-      .from(schema.edgeRule)
-      .where(sql`${id}::uuid = any(${schema.edgeRule.listIds})`)
-      .limit(1);
-    const cacheRefs = await tx
-      .select({ id: schema.cacheRule.id })
-      .from(schema.cacheRule)
-      .where(sql`${id}::uuid = any(${schema.cacheRule.listIds})`)
-      .limit(1);
-    const appRefs = await tx
-      .select({ id: schema.l4App.id })
-      .from(schema.l4App)
-      .where(
-        sql`${id}::uuid = any(${schema.l4App.allowListIds}) or ${id}::uuid = any(${schema.l4App.blockListIds})`,
-      )
-      .limit(1);
-    if (refs.length || cacheRefs.length || appRefs.length)
-      fail("IP_LIST_IN_USE", "IP list is referenced by a rule or an L4 application");
+    const users = (await listUsers(tx, id)).join(", ");
+    if (users) fail("IP_LIST_IN_USE", `IP list is used by ${users}`, { users });
     await tx.delete(schema.ipList).where(eq(schema.ipList.id, id));
     await publishListChange(tx, actor);
     await recordAudit(tx, actor, {

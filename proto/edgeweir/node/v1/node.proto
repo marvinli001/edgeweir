@@ -332,6 +332,10 @@ message MinuteStats {
   // CRS rules that matched, value = rule id, with the number of requests
   // (bounded, heaviest first). Added in v0.11.0.
   repeated TopCounter waf_rules = 11;
+  // Rules with the log action that matched (platform and site rules), value
+  // = rule id (EdgeRule.id), with the number of requests (bounded, heaviest
+  // first). Added in v0.18.0 (feature rule-log-v1).
+  repeated TopCounter logged_rules = 12;
 }
 
 // TopCounter is a bounded, approximate heavy-hitter counter (no query strings).

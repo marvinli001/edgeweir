@@ -23,7 +23,7 @@ Console (ROLE=app|worker|all)
 └── child process stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA, DNS provider APIs
 ```
 
-The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.17.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
+The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.18.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
 
 ## Repository layout
 
@@ -194,7 +194,7 @@ Nodes compress and run CRS with OpenResty built for Edgeweir (`edgeweir-openrest
 1. A site's Brotli and Zstandard settings live with Gzip in `site.tls_settings` and are compiled into `TlsOptions`; only algorithms that are on carry their level, minimum length and types (types sorted and unique), so the content hash stays the same while they are off. Enabled sites with them on add `brotli-v1` / `zstd-v1` to `required_features`.
 2. A site's CRS settings live in `site_waf`; unless the mode is off they compile into `Site.waf` (excluded rule ids ascending and unique) and add `modsecurity-v1`.
 3. As with other capabilities, a service account or background publish that introduces a capability an active node of the cluster lacks gets `NODE_CAPABILITY_REQUIRED`; the operator may publish it. `sites.features` tells per site whether each feature can be turned on (reason `nodes` when not), and the UI disables the switches accordingly. Rollback recomputes the three capabilities from the sites it ships.
-4. `waf_rules` of `ReportStats` (rule id → requests) keeps at most 50 rules per node, site and minute, rolls up into hours and days with the other per-minute statistics and is copied to ClickHouse `minute_stats`; `waf.topRules` sums a range. Access logs keep the matched rule ids (at most 16, ascending) and `waf_blocked` (PostgreSQL, ClickHouse, CSV).
+4. `waf_rules` of `ReportStats` (rule id → requests) keeps at most 50 rules per node, site and minute, rolls up into hours and days with the other per-minute statistics and is copied to ClickHouse `minute_stats`; `waf.topRules` sums a range. Access logs keep the matched rule ids (at most 16, ascending) and `waf_blocked` (PostgreSQL, ClickHouse, CSV). Rules with the log action likewise: `MinuteStats.logged_rules` (proto v0.18.0, node capability `rule-log-v1`; rule id → requests, UUIDs only) keeps at most 50 rules per node, site and minute as `logged_rules`, with the same rollups and ClickHouse copy; `rules.topLogged` sums a range, joins the rules' current names (the site's own rules and global rules) and counts the active nodes of the site's cluster that lack `rule-log-v1`.
 
 | Management action | Audit |
 | --- | --- |
@@ -530,6 +530,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0045_rollout_policy_updated_at` | `cluster_rollout.policy_updated_at` (the canary policy's own version; existing rows take `updated_at`) |
 | `0046_dns_error_params` | `dns_revision.last_error_params` (the failure code's parameters, such as the conflicting DNS name) |
 | `0047_alert_subscription_sites` | `alert_subscription_site`, `alert_subscription.all_sites`; drops `alert_subscription.site_id`, the unique key becomes account and channel; a channel's subscriptions merge into one (the sites and alert kinds of the enabled ones when any is enabled, otherwise of all) |
+| `0048_rule_log_stats` | `logged_rules` (matches of **Log** rules) in the minute, hour and day statistics and the `traffic_hour_stats` view |
 
 ## Build output
 

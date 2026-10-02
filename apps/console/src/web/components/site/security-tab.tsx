@@ -1,5 +1,6 @@
 import {
   type AnalyticsRange,
+  CHALLENGE_PRESETS,
   CHALLENGE_TYPES,
   type ChallengeType,
   type FeatureAvailability,
@@ -16,6 +17,7 @@ import {
   WAF_MAX_EXCLUSIONS,
   WAF_MODES,
   WAF_PARANOIA_RANGE,
+  WAF_PRESETS,
   type WafMode,
   wafExcludedRuleIds,
 } from "@edgeweir/contract";
@@ -34,6 +36,7 @@ import {
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Pager } from "@/components/pager";
+import { PresetSelect, usePreset } from "@/components/preset-select";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
@@ -122,6 +125,7 @@ export function SecurityTab({ siteId }: { siteId: string }) {
       <NodeLevelsCard siteId={siteId} />
       <TopCard siteId={siteId} />
       <WafRulesCard siteId={siteId} />
+      <LoggedRulesCard siteId={siteId} />
       <EventsCard siteId={siteId} />
     </div>
   );
@@ -194,6 +198,21 @@ function ChallengeSettingsCard({
     powHighDifficulty: String(protection.powHighDifficulty),
     logJa4: protection.logJa4,
   });
+  const preset = usePreset(
+    CHALLENGE_PRESETS,
+    {
+      passTtlSeconds: Number(draft.passTtlSeconds),
+      powDifficulty: Number(draft.powDifficulty),
+      powHighDifficulty: Number(draft.powHighDifficulty),
+    },
+    (values) =>
+      setDraft({
+        ...draft,
+        passTtlSeconds: String(values.passTtlSeconds),
+        powDifficulty: String(values.powDifficulty),
+        powHighDifficulty: String(values.powHighDifficulty),
+      }),
+  );
   return (
     <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
       <form
@@ -212,39 +231,44 @@ function ChallengeSettingsCard({
           <CardTitle>{m.protection_challenge_title()}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <NumberField
-            id="protection-pass-ttl"
-            label={m.protection_pass_ttl()}
-            value={draft.passTtlSeconds}
-            min={PASS_TTL_RANGE.min}
-            max={PASS_TTL_RANGE.max}
-            step={1}
-            required
-            testId="protection-pass-ttl"
-            onChange={(passTtlSeconds) => setDraft({ ...draft, passTtlSeconds })}
-          />
-          <NumberField
-            id="protection-pow"
-            label={m.protection_pow()}
-            value={draft.powDifficulty}
-            min={POW_DIFFICULTY_RANGE.min}
-            max={POW_DIFFICULTY_RANGE.max}
-            step={1}
-            required
-            testId="protection-pow"
-            onChange={(powDifficulty) => setDraft({ ...draft, powDifficulty })}
-          />
-          <NumberField
-            id="protection-pow-high"
-            label={m.protection_pow_high()}
-            value={draft.powHighDifficulty}
-            min={Math.max(POW_HIGH_DIFFICULTY_RANGE.min, Number(draft.powDifficulty) || 0)}
-            max={POW_HIGH_DIFFICULTY_RANGE.max}
-            step={1}
-            required
-            testId="protection-pow-high"
-            onChange={(powHighDifficulty) => setDraft({ ...draft, powHighDifficulty })}
-          />
+          <PresetSelect id="protection-preset" value={preset.choice} onChange={preset.choose} />
+          {preset.choice === "custom" ? (
+            <>
+              <NumberField
+                id="protection-pass-ttl"
+                label={m.protection_pass_ttl()}
+                value={draft.passTtlSeconds}
+                min={PASS_TTL_RANGE.min}
+                max={PASS_TTL_RANGE.max}
+                step={1}
+                required
+                testId="protection-pass-ttl"
+                onChange={(passTtlSeconds) => setDraft({ ...draft, passTtlSeconds })}
+              />
+              <NumberField
+                id="protection-pow"
+                label={m.protection_pow()}
+                value={draft.powDifficulty}
+                min={POW_DIFFICULTY_RANGE.min}
+                max={POW_DIFFICULTY_RANGE.max}
+                step={1}
+                required
+                testId="protection-pow"
+                onChange={(powDifficulty) => setDraft({ ...draft, powDifficulty })}
+              />
+              <NumberField
+                id="protection-pow-high"
+                label={m.protection_pow_high()}
+                value={draft.powHighDifficulty}
+                min={Math.max(POW_HIGH_DIFFICULTY_RANGE.min, Number(draft.powDifficulty) || 0)}
+                max={POW_HIGH_DIFFICULTY_RANGE.max}
+                step={1}
+                required
+                testId="protection-pow-high"
+                onChange={(powHighDifficulty) => setDraft({ ...draft, powHighDifficulty })}
+              />
+            </>
+          ) : null}
           <SwitchField
             id="protection-log-ja4"
             label={m.protection_log_ja4()}
@@ -391,6 +415,21 @@ function WafForm({
     excludedRuleIds: waf.excludedRuleIds,
   };
   const [draft, setDraft] = React.useState(initial);
+  const preset = usePreset(
+    WAF_PRESETS,
+    {
+      paranoiaLevel: Number(draft.paranoiaLevel),
+      anomalyThreshold: Number(draft.anomalyThreshold),
+      requestBodyLimit: Number(draft.requestBodyLimit),
+    },
+    (values) =>
+      setDraft({
+        ...draft,
+        paranoiaLevel: String(values.paranoiaLevel),
+        anomalyThreshold: String(values.anomalyThreshold),
+        requestBodyLimit: String(values.requestBodyLimit),
+      }),
+  );
   const [ruleInput, setRuleInput] = React.useState("");
   const [ruleError, setRuleError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -443,39 +482,44 @@ function WafForm({
             options={WAF_MODES.map((mode) => ({ value: mode, label: wafModeLabel(mode) }))}
             onChange={(mode) => setDraft({ ...draft, mode: mode as WafMode })}
           />
-          <FormSelect
-            id="waf-paranoia"
-            label={m.waf_paranoia()}
-            value={draft.paranoiaLevel}
-            testId="waf-paranoia"
-            options={Array.from(
-              { length: WAF_PARANOIA_RANGE.max - WAF_PARANOIA_RANGE.min + 1 },
-              (_, i) => String(WAF_PARANOIA_RANGE.min + i),
-            ).map((level) => ({ value: level, label: m.waf_paranoia_value({ level }) }))}
-            onChange={(paranoiaLevel) => setDraft({ ...draft, paranoiaLevel })}
-          />
-          <NumberField
-            id="waf-threshold"
-            label={m.waf_threshold()}
-            value={draft.anomalyThreshold}
-            min={WAF_ANOMALY_THRESHOLD_RANGE.min}
-            max={WAF_ANOMALY_THRESHOLD_RANGE.max}
-            step={1}
-            required
-            testId="waf-threshold"
-            onChange={(anomalyThreshold) => setDraft({ ...draft, anomalyThreshold })}
-          />
-          <NumberField
-            id="waf-body-limit"
-            label={m.waf_body_limit()}
-            value={draft.requestBodyLimit}
-            min={WAF_BODY_LIMIT_RANGE.min}
-            max={WAF_BODY_LIMIT_RANGE.max}
-            step={1}
-            required
-            testId="waf-body-limit"
-            onChange={(requestBodyLimit) => setDraft({ ...draft, requestBodyLimit })}
-          />
+          <PresetSelect id="waf-preset" value={preset.choice} onChange={preset.choose} />
+          {preset.choice === "custom" ? (
+            <>
+              <FormSelect
+                id="waf-paranoia"
+                label={m.waf_paranoia()}
+                value={draft.paranoiaLevel}
+                testId="waf-paranoia"
+                options={Array.from(
+                  { length: WAF_PARANOIA_RANGE.max - WAF_PARANOIA_RANGE.min + 1 },
+                  (_, i) => String(WAF_PARANOIA_RANGE.min + i),
+                ).map((level) => ({ value: level, label: m.waf_paranoia_value({ level }) }))}
+                onChange={(paranoiaLevel) => setDraft({ ...draft, paranoiaLevel })}
+              />
+              <NumberField
+                id="waf-threshold"
+                label={m.waf_threshold()}
+                value={draft.anomalyThreshold}
+                min={WAF_ANOMALY_THRESHOLD_RANGE.min}
+                max={WAF_ANOMALY_THRESHOLD_RANGE.max}
+                step={1}
+                required
+                testId="waf-threshold"
+                onChange={(anomalyThreshold) => setDraft({ ...draft, anomalyThreshold })}
+              />
+              <NumberField
+                id="waf-body-limit"
+                label={m.waf_body_limit()}
+                value={draft.requestBodyLimit}
+                min={WAF_BODY_LIMIT_RANGE.min}
+                max={WAF_BODY_LIMIT_RANGE.max}
+                step={1}
+                required
+                testId="waf-body-limit"
+                onChange={(requestBodyLimit) => setDraft({ ...draft, requestBodyLimit })}
+              />
+            </>
+          ) : null}
         </div>
         <Field data-invalid={ruleError ? true : undefined}>
           <FieldLabel htmlFor="waf-exclusion-input">{m.waf_exclusions()}</FieldLabel>
@@ -601,6 +645,59 @@ function WafRulesCard({ siteId }: { siteId: string }) {
   );
 }
 
+/** Requests that matched rules with the log action, per rule, over a range (approximate). */
+function LoggedRulesCard({ siteId }: { siteId: string }) {
+  const [range, setRange] = React.useState<AnalyticsRange>("24h");
+  const logged = useQuery({
+    ...orpc.rules.topLogged.queryOptions({ input: { id: siteId, range, limit: 10 } }),
+    placeholderData: keepPreviousData,
+  });
+  return (
+    <Card className="animate-enter" style={{ animationDelay: "285ms" }}>
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+        <CardTitle>{m.rules_logged_title()}</CardTitle>
+        <div className="w-full sm:w-44">
+          <FormSelect
+            id="logged-rules-range"
+            label={m.security_hours()}
+            value={range}
+            testId="logged-rules-range"
+            options={ANALYTICS_RANGES.map((value) => ({ value, label: rangeLabel(value) }))}
+            onChange={(value) => setRange(value as AnalyticsRange)}
+          />
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {logged.isPending ? (
+          <LoadingState />
+        ) : logged.isLoadingError ? (
+          <ErrorState error={logged.error} onRetry={() => void logged.refetch()} />
+        ) : (
+          <>
+            <TopList
+              title={m.rules_logged_rule()}
+              items={logged.data.items.map((item) => ({
+                id: item.ruleId,
+                value:
+                  item.name === null
+                    ? m.rules_logged_deleted()
+                    : item.platform
+                      ? m.rules_logged_platform({ name: item.name })
+                      : item.name,
+                count: item.requests,
+              }))}
+              testId="logged-rules"
+            />
+            {logged.data.unsupportedNodes > 0 ? (
+              <SafetyNote data-testid="logged-rules-partial">{m.rules_logged_partial()}</SafetyNote>
+            ) : null}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function NodeLevelsCard({ siteId }: { siteId: string }) {
   const state = useQuery(
     orpc.security.state.queryOptions({
@@ -663,7 +760,8 @@ function TopList({
   mono,
 }: {
   title: string;
-  items: { value: string; count: number }[];
+  /** `id` keys an entry whose value may repeat (e.g. rule names). */
+  items: { id?: string; value: string; count: number }[];
   testId: string;
   mono?: boolean;
 }) {
@@ -675,7 +773,7 @@ function TopList({
       ) : (
         <ol className="divide-y rounded-2xl border">
           {items.map((item) => (
-            <li key={item.value} className="flex items-center gap-3 px-3 py-2 text-sm">
+            <li key={item.id ?? item.value} className="flex items-center gap-3 px-3 py-2 text-sm">
               <span className={`min-w-0 flex-1 break-all ${mono ? "font-mono text-xs" : ""}`}>
                 {item.value}
               </span>

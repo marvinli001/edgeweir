@@ -29,6 +29,12 @@ export const PROBE_HEALTH_FEATURE = "probe-health-v1";
 /** metrics-v1: ReportStatusRequest.metrics (CPU, load, memory, egress, connections). */
 export const METRICS_FEATURE = "metrics-v1";
 /**
+ * rule-log-v1: MinuteStats.logged_rules, the matches of rules with the log
+ * action per rule and minute. Nodes without it only write their own error
+ * log, so a cluster's counts are partial while one of them is active.
+ */
+export const RULE_LOG_FEATURE = "rule-log-v1";
+/**
  * l4-v1: layer-4 applications (NodeConfig.l4_apps, required by
  * configurations with applications) and their statistics
  * (ReportStatsV2Request.l4_stats).

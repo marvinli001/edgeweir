@@ -338,6 +338,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `rules.get`、`rules.save` | `GET`、`PUT /sites/{id}/rules` |
 | `platformRules.get`、`platformRules.save`（全局规则） | `GET`、`PUT /platform-rules` |
 | `rules.validate` | `POST /rules/validate` |
+| `rules.topLogged`（记录命中） | `GET /sites/{id}/rules/logged` |
 | `bulkRedirects.get` | `GET /sites/{id}/bulk-redirects` |
 | `bulkRedirects.save` | `PUT /sites/{id}/bulk-redirects` |
 
@@ -354,15 +355,17 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `POST /sites`、`PATCH /sites/{id}` | `cacheRules[]` 增加 `expression`（`cache` 阶段的条件，最长 16384 字符；为空时由 `pathPrefixes`、`paths`、`extensions` 生成；不为空时这三项为空或等于它的构建器形式）与 `browserTtlSeconds`（0–31536000，0 保留源站的 `Cache-Control`）；`origins[]` 增加 `group`（`[a-z0-9_-]{0,32}`，空为默认组，至少一个源站在默认组） |
 | `PUT /sites/{id}/bulk-redirects` | `redirects`：整体替换，最多 5000 条，`source` 不重复；每条 `source`（`/路径` 或 `域名/路径`，2–512 字节，不含空白、`?` 与控制字符，域名小写）、`target`（静态重定向目标，最长 1024 字节）、`statusCode`（默认 301）、`preserveQuery`（默认 `false`） |
 | `POST /rules/validate` | `expression`（最长 16384 字符）、`phase`、`kind`：`condition`（默认，规则条件）、`value`（`phase` 阶段的重定向目标或改写路径）、`cacheRule`（缓存规则条件，忽略 `phase`） |
+| `GET /sites/{id}/rules/logged` | `range`（`1h`、`6h`、`24h`（默认）、`7d`、`30d`）、`limit`（1–50，默认 10） |
 
 响应：
 
 | 过程 | 内容 |
 | --- | --- |
-| `rules.*`、`platformRules.*` | 规则数组，按保存顺序，带 `id` |
+| `rules.get`、`rules.save`、`platformRules.*` | 规则数组，按保存顺序，带 `id` |
+| `rules.topLogged` | `{ approximate: true, items: [{ ruleId, name, platform, requests }], unsupportedNodes }`：网站的「记录」规则与全局「记录」规则命中的请求数，多的在前；`name` 为规则当前名称，规则已删除时为 `null`；`platform` 为全局规则；`unsupportedNodes` 为网站所在集群中不上报命中（缺少节点能力 `rule-log-v1`）的活动节点数 |
 | `bulkRedirects.*` | `[{ source, target, statusCode, preserveQuery }]`，按保存顺序 |
 | `sites.get`；`sites.create`、`sites.update` 的 `site` | `cacheRules[]` 总带 `expression`（`"true"` 匹配所有请求）；条件是构建器形状时 `pathPrefixes`、`paths`、`extensions` 为其结构化形式，否则为空；另有 `browserTtlSeconds`。`origins[]` 带 `group` |
-| `rules.validate` | `{ valid, position, message }`；无效时 `position` 为出错的字符位置，`message` 为 `invalid_expression` |
+| `rules.validate` | `{ valid, position, message, code?, params? }`；无效时 `position` 为出错的字符位置（从 0 计），`message` 为英文原因，`code` 为稳定的原因代码（如 `unknown_field`、`ordered_comparison`、`expected_token`），`params` 为原因中的值（如 `expected_token` 的 `token`） |
 | `sites.features` | 增加 `rulesV2`；`reason` 为 `nodes` 时集群有活动节点缺少 `rules-v2` |
 
 - `rules.save` 发布网站所在集群（原因 `rules_updated`），审计 `site.rules_update`；`platformRules.save` 发布所有集群，审计 `platform.rules_update`；`bulkRedirects.save` 发布网站所在集群（`rules_updated`），审计 `site.bulk_redirects_update`（条目数）。
@@ -372,7 +375,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | --- | --- | --- |
 | `RULE_INVALID` | 400 | `origin` 动作选择了网站没有的源站组，或全局规则选择源站组；`sites.update` 移除仍被规则选择的源站组；已保存的规则或缓存规则条件无法编译 |
 | `BULK_REDIRECT_HOST_UNKNOWN` | 400 | `域名/路径` 来源的域名不是网站的域名（网站泛域名下一级的子域名可以）；`data.hosts`（逗号分隔，最多 5 个） |
-| `IP_LIST_NOT_FOUND` | 404 | 规则或缓存规则条件引用的 IP 名单不存在或不可见 |
+| `IP_LIST_REFERENCE_UNKNOWN` | 404 | 规则或缓存规则条件引用的 IP 名单不存在；`data.lists` 为名单名称（前 5 个） |
 | `NODE_CAPABILITY_REQUIRED` | 409 | 集群内有活动节点缺少 `rules-v2`（服务账号与后台任务发布时）；`data.features`、`data.nodes` |
 | `SITE_NOT_FOUND` | 404 | 网站不存在或不在调用方范围内 |
 
@@ -563,7 +566,7 @@ DNS 绑定与记录的新增字段：
 | `L4_PORT_POOL_OVERLAP` | 400 | 同一协议的端口池重叠，`both` 与 `tcp`、`udp` 都重叠；`data.pools`（`起始-结束/协议`，逗号分隔） |
 | `L4_PROXY_PROTOCOL_UNSUPPORTED` | 400 | UDP 应用设置了 `acceptProxyProtocol` 或非 0 的 `proxyProtocolVersion` |
 | `IP_LIST_NOT_FOUND` | 404 | `allowListIds` 或 `blockListIds` 中的名单不存在 |
-| `IP_LIST_IN_USE` | 409 | `DELETE /ip-lists/{id}` 删除仍被规则、缓存规则条件或 L4 应用引用的名单 |
+| `IP_LIST_IN_USE` | 409 | `DELETE /ip-lists/{id}` 删除仍被规则、缓存规则条件或 L4 应用引用的名单；`data.users` 列出前 5 个引用者：规则名（网站规则带网站名，如 `拦截 (shop)`）、缓存规则所在的网站名、L4 应用名 |
 | `ORIGIN_ADDRESS_FORBIDDEN` | 400 | 源站为特殊用途地址且不在源站地址允许清单内；`data.address`、`data.range` |
 | `UPDATED_AT_MISMATCH` | 409 | `expectedUpdatedAt` 不是当前值 |
 | `CLUSTER_NOT_FOUND` | 404 | 集群不存在 |

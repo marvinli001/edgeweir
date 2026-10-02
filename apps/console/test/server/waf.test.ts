@@ -1,7 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
-import { DEFAULT_COMPRESSION_TYPES, tlsSettings } from "@edgeweir/contract";
+import { DEFAULT_COMPRESSION_TYPES, tlsSettings, WAF_PRESETS } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { AccessLogSchema } from "@edgeweir/proto";
 import { eq } from "drizzle-orm";
@@ -116,6 +116,8 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       requestBodyLimit: 131072,
       updatedAt: null,
     });
+    // The standard preset is the default.
+    expect(await admin.waf.get({ id: siteId })).toMatchObject(WAF_PRESETS.standard);
     const available = { available: true, reason: null };
     expect(await admin.sites.features({ id: siteId })).toEqual({
       brotli: available,

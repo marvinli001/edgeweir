@@ -24,6 +24,8 @@ export interface ReportedMinuteStats {
   topIps?: Record<string, number>;
   /** OWASP CRS rule id → matched requests. */
   wafRules?: Record<string, number>;
+  /** Id of a rule with the log action → matched requests (rule-log-v1). */
+  loggedRules?: Record<string, number>;
 }
 
 interface Bucket {
@@ -38,6 +40,7 @@ interface Bucket {
   top_urls: Record<string, number>;
   top_ips: Record<string, number>;
   waf_rules: Record<string, number>;
+  logged_rules: Record<string, number>;
 }
 
 /**
@@ -90,6 +93,7 @@ export async function ingestMinuteStats(
         top_urls: cleanTop(s.topUrls, "url"),
         top_ips: cleanTop(s.topIps, "ip"),
         waf_rules: cleanTop(s.wafRules, "rule"),
+        logged_rules: cleanTop(s.loggedRules, "id"),
       });
       continue;
     }
@@ -101,6 +105,7 @@ export async function ingestMinuteStats(
     b.top_urls = mergeTop(b.top_urls, cleanTop(s.topUrls, "url"));
     b.top_ips = mergeTop(b.top_ips, cleanTop(s.topIps, "ip"));
     b.waf_rules = mergeTop(b.waf_rules, cleanTop(s.wafRules, "rule"));
+    b.logged_rules = mergeTop(b.logged_rules, cleanTop(s.loggedRules, "id"));
     for (const [code, n] of Object.entries(s.statusCodes)) {
       if (/^[1-5][0-9]{2}$/.test(code))
         b.status_codes[code] = addTrafficCounter(b.status_codes[code] ?? 0, n);
@@ -111,12 +116,12 @@ export async function ingestMinuteStats(
   const t = schema.nodeMinuteStats;
   const result = await db.execute<{ site_id: string }>(sql`
     with stored as (
-    insert into ${t} (minute, node_id, site_id, requests, bytes_sent, bytes_received, cache_hits, cache_misses, status_codes, top_urls, top_ips, waf_rules)
+    insert into ${t} (minute, node_id, site_id, requests, bytes_sent, bytes_received, cache_hits, cache_misses, status_codes, top_urls, top_ips, waf_rules, logged_rules)
     select b.minute, ${node.id}::uuid, b.site_id, b.requests, b.bytes_sent, b.bytes_received,
-           b.cache_hits, b.cache_misses, coalesce(b.status_codes, '{}'::jsonb), b.top_urls, b.top_ips, b.waf_rules
+           b.cache_hits, b.cache_misses, coalesce(b.status_codes, '{}'::jsonb), b.top_urls, b.top_ips, b.waf_rules, b.logged_rules
     from jsonb_to_recordset(${JSON.stringify([...buckets.values()])}::jsonb) as b(
       minute timestamptz, site_id uuid, requests bigint, bytes_sent bigint, bytes_received bigint,
-      cache_hits bigint, cache_misses bigint, status_codes jsonb, top_urls jsonb, top_ips jsonb, waf_rules jsonb)
+      cache_hits bigint, cache_misses bigint, status_codes jsonb, top_urls jsonb, top_ips jsonb, waf_rules jsonb, logged_rules jsonb)
     join ${schema.site} on ${schema.site.id} = b.site_id and ${schema.site.clusterId} = ${node.clusterId}::uuid
     on conflict (minute, node_id, site_id) do update set
       requests = least(9007199254740991::numeric, ${t}.requests::numeric + excluded.requests),
@@ -133,6 +138,9 @@ export async function ingestMinuteStats(
       waf_rules = (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (
         select k, least(9007199254740991::numeric, coalesce((${t}.waf_rules ->> k)::numeric,0)+coalesce((excluded.waf_rules ->> k)::numeric,0)) as n
         from jsonb_object_keys(${t}.waf_rules || excluded.waf_rules) as k order by n desc,k limit ${MAX_WAF_RULES}) q),
+      logged_rules = (select coalesce(jsonb_object_agg(k,n),'{}'::jsonb) from (
+        select k, least(9007199254740991::numeric, coalesce((${t}.logged_rules ->> k)::numeric,0)+coalesce((excluded.logged_rules ->> k)::numeric,0)) as n
+        from jsonb_object_keys(${t}.logged_rules || excluded.logged_rules) as k order by n desc,k limit ${MAX_LOGGED_RULES}) q),
       -- Sum per-status counters key by key.
       status_codes = (
         select coalesce(jsonb_object_agg(k, least(9007199254740991::numeric, coalesce((${t}.status_codes ->> k)::numeric, 0)
@@ -159,12 +167,18 @@ export async function ingestMinuteStats(
 const MAX_TOP = 50;
 /** CRS rules kept per site, node and minute, heaviest first. */
 export const MAX_WAF_RULES = 50;
+/** Log rules kept per site, node and minute, heaviest first. */
+export const MAX_LOGGED_RULES = 50;
 /** A CRS rule id as nodes report it: a uint32 in decimal. */
 const isRuleId = (value: string) => /^[1-9][0-9]{0,9}$/.test(value) && Number(value) <= 4294967295;
 
+/** The id of a console rule (a UUID, lowercase). */
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
+
 function cleanTop(
   input: Record<string, number> | undefined,
-  kind: "url" | "ip" | "rule",
+  kind: "url" | "ip" | "rule" | "id",
 ): Record<string, number> {
   return Object.fromEntries(
     Object.entries(input ?? {})
@@ -176,13 +190,15 @@ function cleanTop(
             ? isIP(value) > 0
             : kind === "rule"
               ? isRuleId(value)
-              : value.startsWith("/") &&
-                value.length <= 2048 &&
-                !value.includes("?") &&
-                ![...value].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)),
+              : kind === "id"
+                ? isUuid(value)
+                : value.startsWith("/") &&
+                  value.length <= 2048 &&
+                  !value.includes("?") &&
+                  ![...value].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)),
       )
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, kind === "rule" ? MAX_WAF_RULES : MAX_TOP),
+      .slice(0, kind === "rule" ? MAX_WAF_RULES : kind === "id" ? MAX_LOGGED_RULES : MAX_TOP),
   );
 }
 function mergeTop(left: Record<string, number>, right: Record<string, number>) {

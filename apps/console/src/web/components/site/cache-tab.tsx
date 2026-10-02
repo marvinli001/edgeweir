@@ -43,7 +43,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { SafetyNote } from "@/components/safety-note";
 import { CompressionCard } from "@/components/site/compression-card";
-import { ExpressionEditor, expressionErrorPosition } from "@/components/site/expression-editor";
+import { ExpressionEditor, expressionFailure } from "@/components/site/expression-editor";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import {
   nextDraftKey,
@@ -232,8 +232,7 @@ function CacheRulesCard({ site }: { site: Site }) {
   const { save, error, pending } = useSaveSite(site.id);
   const dirty = serializeDrafts(rows) !== serializeDrafts(initial);
   const badExpression = rows.some(
-    (r) =>
-      r.mode === "advanced" && expressionErrorPosition(r.expression, "cache", "cacheRule") !== null,
+    (r) => r.mode === "advanced" && expressionFailure(r.expression, "cache", "cacheRule") !== null,
   );
   const [invalid, setInvalid] = React.useState<string | null>(null);
   const patch = (key: number, change: Partial<RuleDraft>) =>

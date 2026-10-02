@@ -50,7 +50,7 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
   await expect(enabled).toHaveAttribute("aria-checked", "true");
   await first.getByLabel("名称", { exact: true }).fill("Browser block");
   await first.getByLabel("表达式", { exact: true }).fill("http.host gt 4");
-  await expect(first.getByRole("alert")).toHaveText(/检查第 11 个字符/);
+  await expect(first.getByRole("alert")).toHaveText("第 11 个字符：大小比较只用于数字字段");
   await first.getByLabel("表达式", { exact: true }).fill(`ip.src in $${name}`);
   await expect(first.getByRole("alert")).toHaveCount(0);
   await page.getByTestId("rule-add-waf-custom").click();
@@ -106,7 +106,9 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
     .getByRole("button", { name: "删除", exact: true })
     .click();
   await page.getByTestId("confirm-action").click();
-  await expect(page.getByTestId("confirm-error")).toHaveText("IP 名单正在被规则或 L4 应用引用");
+  await expect(page.getByTestId("confirm-error")).toHaveText(
+    /^IP 名单正在被使用：Browser block \(.+\)$/,
+  );
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();

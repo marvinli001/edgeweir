@@ -636,6 +636,7 @@ describe("node channel", async () => {
           cacheHits: 1n,
           statusCodes: { 200: 2n },
           wafRules: [{ value: "942100", count: 2n }],
+          loggedRules: [{ value: "00000000-0000-4000-8000-00000000106a", count: 2n }],
         },
         {
           minute,
@@ -645,6 +646,10 @@ describe("node channel", async () => {
           wafRules: [
             { value: "942100", count: 1n },
             { value: "920350", count: 1n },
+          ],
+          loggedRules: [
+            { value: "00000000-0000-4000-8000-00000000106a", count: 3n },
+            { value: "not-a-rule-id", count: 5n },
           ],
         },
         { minute, siteId: foreign.site.id, requests: 7n },
@@ -694,6 +699,7 @@ describe("node channel", async () => {
         cacheHits: 1,
         statusCodes: { "200": 3, "404": 2 },
         wafRules: { "942100": 3, "920350": 1 },
+        loggedRules: { "00000000-0000-4000-8000-00000000106a": 5 },
       }),
     ]);
   });

@@ -131,6 +131,7 @@ import { createRegion, deleteRegion, listRegions, updateRegion } from "../servic
 import { getReleaseSource, setReleaseSource } from "../services/release-source";
 import { toRevisionDto } from "../services/revisions";
 import { abortRollout, getRollout, promoteRollout, setRolloutPolicy } from "../services/rollout";
+import { topLoggedRules } from "../services/rule-logs";
 import {
   createIpList,
   deleteIpList,
@@ -215,6 +216,9 @@ export const router = os.router({
     ),
     validate: authed.rules.validate.handler(({ input }) =>
       validateExpression(input.expression, input.phase, input.kind),
+    ),
+    topLogged: authed.rules.topLogged.handler(({ input, context }) =>
+      topLoggedRules(context.app.db, input),
     ),
   },
   bulkRedirects: {

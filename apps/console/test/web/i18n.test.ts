@@ -13,6 +13,7 @@ import {
   taskErrorCodes,
   taskErrorDefs,
 } from "@edgeweir/contract";
+import { expressionErrorCodes, expressionErrorDefs } from "@edgeweir/rule-engine";
 import { type ESTree, parseSync, Visitor } from "vite";
 import { describe, expect, it } from "vitest";
 import { m } from "../../src/web/paraglide/messages.js";
@@ -245,13 +246,15 @@ describe("i18n messages", () => {
     }
   });
 
-  it("localizes every node error code and task outcome code with the same parameters", () => {
+  it("localizes every node error code, task outcome code and expression error code with the same parameters", () => {
     const tables: [string, string, Record<string, { params: readonly string[] }>][] = [
       ["node_error_", "nodeErrorDefs", nodeErrorDefs],
       ["task_error_", "taskErrorDefs", taskErrorDefs],
       ["task_error_reason_", "prefetchFailureReasonDefs", prefetchFailureReasonDefs],
+      ["rules_expr_", "expressionErrorDefs", expressionErrorDefs],
     ];
     expect(nodeErrorCodes.length).toBeGreaterThanOrEqual(6);
+    expect(expressionErrorCodes).toContain("unknown_field");
     expect(taskErrorCodes.length).toBeGreaterThanOrEqual(6);
     expect(prefetchFailureReasons).toContain("status");
     for (const [prefix, table, defs] of tables) {

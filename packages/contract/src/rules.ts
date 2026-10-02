@@ -3,6 +3,7 @@ import {
   canonicalCidr,
   challengeTypes,
   compressionCodings,
+  expressionErrorCodes,
   isRateLimitKey,
   ORIGIN_GROUP_RE,
   parseExpression,
@@ -12,7 +13,8 @@ import {
 } from "@edgeweir/rule-engine";
 import { oc } from "@orpc/contract";
 import * as z from "zod";
-import { optionalHostname, uuid } from "./schemas";
+import { addExpressionIssue, expressionKinds } from "./expressions";
+import { analyticsRange, optionalHostname, uuid } from "./schemas";
 
 const text = z
   .string()
@@ -276,24 +278,37 @@ export const ruleInput = z
     try {
       parseExpression(rule.expression, rule.phase);
     } catch (error) {
-      ctx.addIssue({
-        code: "custom",
-        message: error instanceof Error ? error.message : "invalid expression",
-        path: ["expression"],
-      });
+      addExpressionIssue(ctx, error, ["expression"]);
     }
     if ((action.kind === "redirect" || action.kind === "rewrite") && action.target !== "")
       try {
         parseValueExpression(action.target, rule.phase);
       } catch (error) {
-        ctx.addIssue({
-          code: "custom",
-          message: error instanceof Error ? error.message : "invalid expression",
-          path: ["action", "target"],
-        });
+        addExpressionIssue(ctx, error, ["action", "target"]);
       }
   });
 export const ruleDto = ruleInput.safeExtend({ id: uuid });
+/** Most-matched log rules of a site over a range (approximate, bounded per minute). */
+export const loggedRulesInput = z.object({
+  id: uuid,
+  range: analyticsRange.default("24h"),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+export const loggedRules = z.object({
+  approximate: z.literal(true),
+  items: z.array(
+    z.object({
+      ruleId: uuid,
+      /** The rule's current name; null once it is deleted. */
+      name: z.string().nullable(),
+      /** A platform rule (it applies to every site). */
+      platform: z.boolean(),
+      requests: z.number(),
+    }),
+  ),
+  /** Active nodes of the site's cluster that do not count matches (no rule-log-v1). */
+  unsupportedNodes: z.number().int(),
+});
 export const rulesContract = {
   get: oc
     .route({ method: "GET", path: "/sites/{id}/rules", tags: ["rules"] })
@@ -303,6 +318,14 @@ export const rulesContract = {
     .route({ method: "PUT", path: "/sites/{id}/rules", tags: ["rules"] })
     .input(z.object({ id: uuid, rules: z.array(ruleInput).max(64) }))
     .output(z.array(ruleDto)),
+  /**
+   * Requests that matched the site's rules with the log action (and platform
+   * rules with it) per rule, heaviest first.
+   */
+  topLogged: oc
+    .route({ method: "GET", path: "/sites/{id}/rules/logged", tags: ["rules"] })
+    .input(loggedRulesInput)
+    .output(loggedRules),
   /**
    * Checks an expression: a rule condition of `phase` (kind condition), a
    * redirect target or rewrite path of `phase` (kind value) or a cache rule
@@ -314,10 +337,21 @@ export const rulesContract = {
       z.object({
         expression: z.string().max(16384),
         phase: z.enum(phases),
-        kind: z.enum(["condition", "value", "cacheRule"]).default("condition"),
+        kind: z.enum(expressionKinds).default("condition"),
       }),
     )
-    .output(z.object({ valid: z.boolean(), position: z.number().int(), message: z.string() })),
+    .output(
+      z.object({
+        valid: z.boolean(),
+        /** Where an invalid expression fails (a character offset), 0 when valid. */
+        position: z.number().int(),
+        /** Why it fails, in English; empty when valid. */
+        message: z.string(),
+        /** Why it fails as a stable code with the values its text names (invalid only). */
+        code: z.enum(expressionErrorCodes).optional(),
+        params: z.record(z.string(), z.string()).optional(),
+      }),
+    ),
 };
 export const platformRulesContract = {
   get: oc
@@ -370,3 +404,4 @@ export type RuleInput = z.infer<typeof ruleInput>;
 export type RuleDto = z.infer<typeof ruleDto>;
 export type IpListInput = z.infer<typeof ipListInput>;
 export type IpListDto = z.infer<typeof ipListDto>;
+export type LoggedRules = z.infer<typeof loggedRules>;

@@ -218,6 +218,44 @@ describe("migrations", () => {
     expect(await db.select().from(schema.siteWaf)).toEqual([]);
   });
 
+  it("carries log rule matches through the traffic view and its rollups", async () => {
+    const [cl] = await db.insert(schema.cluster).values({ name: "rule-log" }).returning();
+    if (!cl) throw new Error("cluster not inserted");
+    const [site] = await db
+      .insert(schema.site)
+      .values({ clusterId: cl.id, name: "rule-log" })
+      .returning();
+    if (!site) throw new Error("site not inserted");
+    const nodeId = "00000000-0000-4000-8000-0000000000b1";
+    const rule = "00000000-0000-4000-8000-0000000000b2";
+    await db.insert(schema.nodeMinuteStats).values({
+      minute: new Date("2026-10-02T10:05:00Z"),
+      nodeId,
+      siteId: site.id,
+      requests: 4,
+      loggedRules: { [rule]: 3 },
+    });
+    await db.insert(schema.nodeHourStats).values({
+      minute: new Date("2026-10-02T08:00:00Z"),
+      nodeId,
+      siteId: site.id,
+      requests: 9,
+      loggedRules: { [rule]: 7 },
+    });
+    const rows = await db
+      .select()
+      .from(schema.trafficHourStats)
+      .where(eq(schema.trafficHourStats.siteId, site.id));
+    expect(rows.map((row) => row.loggedRules[rule]).sort()).toEqual([3, 7]);
+    // Rows written before rule-log-v1 read as no matches.
+    const [old] = await db
+      .insert(schema.nodeMinuteStats)
+      .values({ minute: new Date("2026-10-02T10:06:00Z"), nodeId, siteId: site.id })
+      .returning();
+    expect(old?.loggedRules).toEqual({});
+    await db.delete(schema.site).where(eq(schema.site.id, site.id));
+  });
+
   it("keeps one origin health row per node, origin and check, and one error page per site and status", async () => {
     const [cl] = await db.insert(schema.cluster).values({ name: "g4" }).returning();
     if (!cl) throw new Error("cluster not inserted");

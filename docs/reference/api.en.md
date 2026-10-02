@@ -338,6 +338,7 @@ Behavior: [Origins and cache](../guide/origins-and-cache.en.md) and [Error pages
 | `rules.get`, `rules.save` | `GET`, `PUT /sites/{id}/rules` |
 | `platformRules.get`, `platformRules.save` (global rules) | `GET`, `PUT /platform-rules` |
 | `rules.validate` | `POST /rules/validate` |
+| `rules.topLogged` (log rule matches) | `GET /sites/{id}/rules/logged` |
 | `bulkRedirects.get` | `GET /sites/{id}/bulk-redirects` |
 | `bulkRedirects.save` | `PUT /sites/{id}/bulk-redirects` |
 
@@ -354,15 +355,17 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `POST /sites`, `PATCH /sites/{id}` | `cacheRules[]` adds `expression` (a condition of the `cache` phase, up to 16384 characters; when empty, `pathPrefixes`, `paths`, and `extensions` build it; when set, those are empty or equal its builder form) and `browserTtlSeconds` (0–31536000, 0 keeps the origin's `Cache-Control`); `origins[]` adds `group` (`[a-z0-9_-]{0,32}`, empty for the default group, at least one origin in the default group) |
 | `PUT /sites/{id}/bulk-redirects` | `redirects`: replaces everything, up to 5000, unique `source`; each with `source` (`/path` or `host/path`, 2–512 bytes without whitespace, `?`, or control characters, lowercase host), `target` (static redirect target, up to 1024 bytes), `statusCode` (default 301), `preserveQuery` (default `false`) |
 | `POST /rules/validate` | `expression` (up to 16384 characters), `phase`, `kind`: `condition` (default, a rule condition), `value` (a redirect target or rewrite path of `phase`), `cacheRule` (a cache rule condition; `phase` is ignored) |
+| `GET /sites/{id}/rules/logged` | `range` (`1h`, `6h`, `24h` (default), `7d`, `30d`), `limit` (1–50, default 10) |
 
 Responses:
 
 | Procedure | Content |
 | --- | --- |
-| `rules.*`, `platformRules.*` | The rules in saved order, with `id` |
+| `rules.get`, `rules.save`, `platformRules.*` | The rules in saved order, with `id` |
+| `rules.topLogged` | `{ approximate: true, items: [{ ruleId, name, platform, requests }], unsupportedNodes }`: requests that matched the site's **Log** rules and global **Log** rules, most first; `name` is the rule's current name, `null` once it is deleted; `platform` marks global rules; `unsupportedNodes` counts the active nodes of the site's cluster that do not report matches (no node capability `rule-log-v1`) |
 | `bulkRedirects.*` | `[{ source, target, statusCode, preserveQuery }]` in saved order |
 | `sites.get`; `site` of `sites.create` and `sites.update` | `cacheRules[]` always carry `expression` (`"true"` matches every request); `pathPrefixes`, `paths`, and `extensions` hold its structured form when the condition has the builder's shape and are empty otherwise; `browserTtlSeconds` is added. `origins[]` carry `group` |
-| `rules.validate` | `{ valid, position, message }`; when invalid, `position` is the character where it fails and `message` is `invalid_expression` |
+| `rules.validate` | `{ valid, position, message, code?, params? }`; when invalid, `position` is the character where it fails (from 0), `message` the reason in English, `code` a stable reason code (such as `unknown_field`, `ordered_comparison`, `expected_token`) and `params` the values the reason names (such as `token` of `expected_token`) |
 | `sites.features` | Adds `rulesV2`; `reason` `nodes` means an active node of the cluster lacks `rules-v2` |
 
 - `rules.save` publishes the site's cluster (reason `rules_updated`) and is audited as `site.rules_update`; `platformRules.save` publishes every cluster and is audited as `platform.rules_update`; `bulkRedirects.save` publishes the site's cluster (`rules_updated`) and is audited as `site.bulk_redirects_update` (with the entry count).
@@ -372,7 +375,7 @@ Responses:
 | --- | --- | --- |
 | `RULE_INVALID` | 400 | An `origin` action picks an origin group the site does not have, or a global rule picks one; `sites.update` removes an origin group a rule still picks; a saved rule or cache rule condition no longer compiles |
 | `BULK_REDIRECT_HOST_UNKNOWN` | 400 | The host of a `host/path` source is not a domain of the site (one label under a wildcard domain of the site is fine); `data.hosts` (comma-separated, up to 5) |
-| `IP_LIST_NOT_FOUND` | 404 | A rule or cache rule condition references an IP list that does not exist or is not visible |
+| `IP_LIST_REFERENCE_UNKNOWN` | 404 | A rule or cache rule condition references IP lists that do not exist; `data.lists` names them (the first 5) |
 | `NODE_CAPABILITY_REQUIRED` | 409 | An active node of the cluster lacks `rules-v2` (changes by service accounts and background jobs); `data.features`, `data.nodes` |
 | `SITE_NOT_FOUND` | 404 | The site does not exist or is outside the caller's scope |
 
@@ -563,7 +566,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `L4_PORT_POOL_OVERLAP` | 400 | Pools of one protocol overlap, and `both` overlaps `tcp` and `udp`; `data.pools` (`from-to/protocol`, comma-separated) |
 | `L4_PROXY_PROTOCOL_UNSUPPORTED` | 400 | A UDP app with `acceptProxyProtocol` or a non-zero `proxyProtocolVersion` |
 | `IP_LIST_NOT_FOUND` | 404 | A list of `allowListIds` or `blockListIds` does not exist |
-| `IP_LIST_IN_USE` | 409 | `DELETE /ip-lists/{id}` on a list a rule, a cache rule condition, or an L4 app still references |
+| `IP_LIST_IN_USE` | 409 | `DELETE /ip-lists/{id}` on a list a rule, a cache rule condition, or an L4 app still references; `data.users` names the first 5: rule names (site rules with the site, such as `block (shop)`), sites whose cache rules use it, and L4 app names |
 | `ORIGIN_ADDRESS_FORBIDDEN` | 400 | An origin is a special-purpose address outside the origin allow list; `data.address`, `data.range` |
 | `UPDATED_AT_MISMATCH` | 409 | `expectedUpdatedAt` is not the current value |
 | `CLUSTER_NOT_FOUND` | 404 | The cluster does not exist |

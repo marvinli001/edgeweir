@@ -66,6 +66,76 @@ export const CC_TEMPLATE_DEFAULTS: CcThresholds = {
   cooldownSeconds: 60,
 };
 
+/** Preset levels of the CC, challenge and CRS settings; "standard" is each one's default. */
+export const PRESET_LEVELS = ["loose", "standard", "strict"] as const;
+export type PresetLevel = (typeof PRESET_LEVELS)[number];
+
+/** The preset level whose every setting `value` has, or null (custom settings). */
+export function matchPreset<T extends object>(
+  presets: Record<PresetLevel, T>,
+  value: T,
+): PresetLevel | null {
+  return (
+    PRESET_LEVELS.find((level) =>
+      Object.entries(presets[level]).every(([key, want]) => value[key as keyof T] === want),
+    ) ?? null
+  );
+}
+
+/**
+ * CC presets. Loose triples the rates (bursty legitimate traffic: APIs, pages with many
+ * assets, many users behind one NAT), tolerates more origin errors, escalates more slowly,
+ * bans briefly and stops at proof of work, so no visitor meets a captcha. Strict divides the
+ * rates by about three, reacts to origin errors earlier, escalates faster, bans for an hour
+ * and cools down slowly so the level does not flap during an attack.
+ */
+export const CC_PRESETS: Record<PresetLevel, CcThresholds> = {
+  loose: {
+    maxLevel: "pow",
+    highPowInsteadOfCaptcha: false,
+    windowSeconds: 10,
+    siteQps: 3000,
+    urlQps: 600,
+    ipQps: 150,
+    ipBanSeconds: 300,
+    originErrorPercent: 70,
+    originErrorMinRequests: 200,
+    escalateAfterSeconds: 20,
+    cooldownSeconds: 60,
+  },
+  standard: CC_TEMPLATE_DEFAULTS,
+  strict: {
+    maxLevel: "captcha",
+    highPowInsteadOfCaptcha: false,
+    windowSeconds: 10,
+    siteQps: 300,
+    urlQps: 60,
+    ipQps: 20,
+    ipBanSeconds: 3600,
+    originErrorPercent: 30,
+    originErrorMinRequests: 50,
+    escalateAfterSeconds: 5,
+    cooldownSeconds: 300,
+  },
+};
+
+/** Pass lifetime and proof-of-work difficulties of a site's challenges. */
+export interface ChallengePreset {
+  passTtlSeconds: number;
+  powDifficulty: number;
+  powHighDifficulty: number;
+}
+/**
+ * Challenge presets; each extra bit doubles a proof of work. Loose needs a quarter of the
+ * standard work (about 16k hashes) and keeps passes an hour; strict four times as much (about
+ * 260k hashes) and asks again after 15 minutes.
+ */
+export const CHALLENGE_PRESETS: Record<PresetLevel, ChallengePreset> = {
+  loose: { passTtlSeconds: 3600, powDifficulty: 14, powHighDifficulty: 18 },
+  standard: { passTtlSeconds: 1800, powDifficulty: 16, powHighDifficulty: 20 },
+  strict: { passTtlSeconds: 900, powDifficulty: 18, powHighDifficulty: 22 },
+};
+
 /** A site's CC policy; with followTemplate the thresholds come from the platform template. */
 export const siteCcPolicy = ccThresholds.extend({
   enabled: z.boolean(),

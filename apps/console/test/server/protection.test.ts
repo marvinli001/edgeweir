@@ -1,5 +1,5 @@
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
-import { ruleInput } from "@edgeweir/contract";
+import { CC_PRESETS, CHALLENGE_PRESETS, ruleInput } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -118,6 +118,9 @@ describe("site protection, platform protection and challenge keys", async () => 
       platformUnderAttack: false,
       updatedAt: null,
     });
+    // The standard presets are the defaults.
+    expect(protection).toMatchObject(CHALLENGE_PRESETS.standard);
+    expect(protection.cc).toMatchObject(CC_PRESETS.standard);
     const current = await config();
     expect(current.challengeKeys).toEqual([]);
     expect(current.platformProtection).toBeUndefined();

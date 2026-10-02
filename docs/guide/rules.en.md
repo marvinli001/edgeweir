@@ -19,7 +19,7 @@ The console parses expressions and checks their fields, types, and actions befor
 
 1. Open **Sites**, select the site, and open the **Rules** tab.
 2. Click **Add rule** next to the target phase.
-3. Enter the rule name and **Expression**. When the expression is invalid, "Check character N" appears below the editor.
+3. Enter the rule name and **Expression**. **Insert condition** appends a common condition (path prefix, IP range, IP list, country, User-Agent contains, request method) and **Insert field** appends a field, both joined with `and`. When the expression is invalid, "Character N: reason" appears below the editor, for example "Character 11: Ordered comparisons need a number field".
 4. Select **Action**, fill in its fields, and turn on **Enabled**. A new rule starts disabled with the expression `true` (every request); check the condition and the action before you save.
 5. Drag the handle on the left of a rule to reorder rules within a phase.
 6. Click **Save**. The console shows **Saved** and publishes a new configuration revision ("Rules and IP lists updated").
@@ -108,7 +108,7 @@ A later matching rule overrides an earlier one setting by setting. Compression s
 ### Dynamic targets and query parameters
 
 1. Next to **Target** of a redirect or rewrite path rule, select **Expression**.
-2. Enter a value expression. When "Check character N" appears below the editor, fix it using [Functions](#functions) and [Fields](#fields).
+2. Enter a value expression. When "Character N: reason" appears below the editor, fix it using [Functions](#functions) and [Fields](#fields).
 3. Switch **Keep query string** as needed, and fill in **Set query parameters** and **Remove query parameters**.
 4. Click **Save**.
 5. Verify: for example, a redirect rule with the expression `starts_with(http.request.uri.path, "/old/")`, the target `regex_replace(http.request.uri.path, "^/old/", "/new/")`, **Keep query string** on, and `utm_source` in **Remove query parameters**:
@@ -163,7 +163,7 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 | Compression algorithms | Only algorithms on the list that the site has on and override settings did not turn off are negotiated by the q-values of the request's `Accept-Encoding`, with the list order breaking ties; **No compression** turns compression off; the cache is not bypassed |
 | Block, rate limit exceeded | Response header `X-Edgeweir-Error: policy-denied`; rate-limited responses also carry `Retry-After` (the window in seconds) |
 | Challenge | A request with a pass of a sufficient level continues with the following rules; otherwise it gets the challenge page (non-GET/HEAD requests get 403 with `X-Edgeweir-Challenge: required`). Allow rules skip Under Attack and CC challenges, but a challenge rule that matched before the allow still applies. See [Challenges and CC mitigation](challenges.en.md) |
-| Log | Does not change the response. Each rule writes at most one NOTICE-level nginx error log line per node per 60 seconds, containing the site ID and rule ID; nginx appends the client IP, request line, and Host to log lines written during a request |
+| Log | Does not change the response. Nodes count the matching requests per rule and minute (not the node's own prefetches), and the **Log rule matches** card on the site's **Security** tab lists the most-matched rules over a time range (global rules marked "(global)", deleted rules shown as "Deleted rule"); the numbers are approximate: each node reports at most 20 rules per minute. While some nodes of the site's cluster lack the capability `rule-log-v1`, the card shows "Some nodes of the site's cluster do not report these matches". Each rule also writes at most one NOTICE-level nginx error log line per node per 60 seconds, containing the site ID and rule ID; nginx appends the client IP, request line, and Host to log lines written during a request |
 
 ### Rate limiting
 
@@ -349,7 +349,7 @@ A site's table of exact-match redirects: each entry redirects one source to one 
 | References | Any site rule, global rule, or cache rule condition can reference any list, block and allow lists included; the **Allow lists** and **Block lists** of [L4 apps](l4.en.md#ip-lists-and-connection-limits) can use any list as well |
 | L4 apps | The **Block** and **Allow** actions apply to sites only; L4 apps check only the lists they selected |
 | Changes | Entries and **Action** can change at any time; creating, changing, or deleting a list publishes a new revision to every cluster ("Rules and IP lists updated"); nodes apply it without reload |
-| Deletion | A list referenced by a rule, a cache rule condition, or an L4 app cannot be deleted ("IP list is used by a rule or an L4 application") |
+| Deletion | A list referenced by a rule, a cache rule condition, or an L4 app cannot be deleted ("The IP list is used by …", naming the first 5 users: rule names, site rules with their site; sites whose cache rules use it; L4 app names) |
 | Entries | IPv4 / IPv6 addresses or CIDRs; host bits cleared, deduplicated, sorted; leading zeros and zone IDs refused |
 | Quota | Up to 128 lists and 50,000 entries in total; up to 10,000 entries per list; a change that does not add entries always saves |
 | Rollback | Site configuration rollbacks keep the current lists and global rules; a rollback that references a deleted list is refused |
@@ -436,16 +436,16 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| "Check character N" below the editor | Unsupported syntax, field, type, function, or regular expression at that position | Fix it using the syntax tables above |
-| Saving shows "Check rule “name”" | A field of that rule is invalid, for example the target format, a repeated parameter name, or a parameter both set and removed | Fix it using the action field table |
+| "Character N: reason" below the editor | Unsupported syntax, field, type, function, or regular expression at that position; the reason names the problem | Fix it using the syntax tables above |
+| Saving shows "Check field of rule “name”" | That field of the rule is invalid, for example the target format, a repeated parameter name, or a parameter both set and removed; an invalid expression shows the position and reason | Fix it using the action field table |
 | Saving shows "Invalid rule" | The action does not belong to the phase, a protected header, or an invalid redirect target or rewrite path; an origin override picks an origin group the site does not have | Fix it using the action field table; add an origin of that group on the **Origins** tab first |
 | "The site does not serve …" | A bulk redirect source names a host that is not a domain of the site | Use a domain of the site, or write `/path` |
 | "Line N is invalid" | The field count, source, target, or status code of that imported line is invalid | Fix the line and import again |
 | "N invalid" | The bulk redirect table has invalid entries or repeated sources | Fix the marked entries |
 | "Some nodes of the site's cluster do not support the rule extensions yet" | An active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
-| "IP list not found" | The referenced list does not exist | Create the list in **IP lists** first, or fix the name |
+| "No such IP list: …" | The referenced lists (named) do not exist | Create the list in **IP lists** first, or fix the name |
 | "IP list name already exists" | A list with that name exists | Use another name |
-| "IP list is used by a rule or an L4 application" | Deleting a list still referenced by a rule, a cache rule condition, or an L4 app | Remove the reference from the rules and L4 apps first |
+| "The IP list is used by …" | Deleting a list the listed rules, sites' cache rule conditions, or L4 apps still reference | Remove the reference from those rules and L4 apps first |
 | "IP list limit reached (128 lists, 50,000 entries)" | Over quota | Merge or delete lists |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (`rules-v1`, `rules-v2`, a GeoIP capability, and so on) and keeps its last-known-good configuration | Upgrade the node or configure the GeoIP databases |
 | "Cluster nodes need these capabilities first: …" | A configuration published by a service account or a background job needs `rules-v1`, `rules-v2`, or a GeoIP capability that an active node of the cluster lacks | Upgrade the nodes or configure the GeoIP databases |

@@ -1,5 +1,11 @@
-import { type CcThresholds, CHALLENGE_TYPES, type ChallengeType } from "@edgeweir/contract";
+import {
+  CC_PRESETS,
+  type CcThresholds,
+  CHALLENGE_TYPES,
+  type ChallengeType,
+} from "@edgeweir/contract";
 import { FormSelect } from "@/components/form-select";
+import { PresetSelect, usePreset } from "@/components/preset-select";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { m } from "@/lib/i18n";
 import { challengeLabel } from "@/lib/protection";
@@ -47,7 +53,7 @@ export function fromCcDraft(draft: CcDraft): CcThresholds {
   };
 }
 
-/** The thresholds of a CC policy or of the platform template. */
+/** The thresholds of a CC policy or of the platform template: a preset, or each field. */
 export function CcThresholdFields({
   prefix,
   value,
@@ -60,8 +66,37 @@ export function CcThresholdFields({
   onChange: (value: CcDraft) => void;
   disabled?: boolean;
 }) {
+  const preset = usePreset(CC_PRESETS, fromCcDraft(value), (thresholds) =>
+    onChange(toCcDraft(thresholds)),
+  );
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <PresetSelect
+        id={`${prefix}-preset`}
+        value={preset.choice}
+        disabled={disabled}
+        onChange={preset.choose}
+      />
+      {preset.choice === "custom" ? (
+        <CustomThresholds prefix={prefix} value={value} onChange={onChange} disabled={disabled} />
+      ) : null}
+    </div>
+  );
+}
+
+function CustomThresholds({
+  prefix,
+  value,
+  onChange,
+  disabled,
+}: {
+  prefix: string;
+  value: CcDraft;
+  onChange: (value: CcDraft) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <>
       <FormSelect
         id={`${prefix}-max-level`}
         label={m.cc_max_level()}
@@ -96,6 +131,6 @@ export function CcThresholdFields({
           onChange({ ...value, highPowInsteadOfCaptcha })
         }
       />
-    </div>
+    </>
   );
 }

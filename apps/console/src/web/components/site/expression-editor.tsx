@@ -7,6 +7,7 @@ import {
   parseValueExpression,
   responsePhases,
 } from "@edgeweir/rule-engine";
+import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
@@ -16,7 +17,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  appendCondition,
+  CONDITION_TEMPLATES,
+  type ConditionTemplate,
+  conditionTemplateLabel,
+  type ExpressionFailure,
+  expressionErrorText,
+} from "@/lib/expressions";
 import { m } from "@/lib/i18n";
+import { orpc } from "@/lib/orpc";
 
 /**
  * What an expression is: a rule condition, a redirect target or rewrite path computed per
@@ -56,14 +66,14 @@ const TOKENS = new RegExp(
 );
 
 /**
- * Where the expression fails to parse (the same parser the server validates with), or null.
- * Cache rule conditions are checked in the phase cache.
+ * Why and where the expression fails to parse (the same parser the server validates with), or
+ * null. Cache rule conditions are checked in the phase cache.
  */
-export function expressionErrorPosition(
+export function expressionFailure(
   source: string,
   phase: Phase,
   kind: ExpressionKind,
-): number | null {
+): ExpressionFailure | null {
   try {
     if (kind === "value") parseValueExpression(source, phase);
     else if (kind === "cacheRule")
@@ -71,13 +81,18 @@ export function expressionErrorPosition(
     else parseExpression(source, phase);
     return null;
   } catch (err) {
-    return err instanceof ExpressionError ? err.position : 0;
+    return err instanceof ExpressionError
+      ? { code: err.code, position: err.position, params: err.params }
+      : { code: "unexpected_token", position: 0, params: {} };
   }
 }
 
+/** Select values of the template menu's IP list entries ("$" + list name). */
+const LIST_PREFIX = "$";
+
 /**
  * A highlighted expression editor that marks the first character the parser refuses. Conditions
- * append inserted fields with "and"; values insert them at the caret.
+ * append inserted fields and templates with "and"; values insert fields at the caret.
  */
 export function ExpressionEditor({
   id,
@@ -100,7 +115,9 @@ export function ExpressionEditor({
   testId?: string;
 }) {
   const textarea = React.useRef<HTMLTextAreaElement>(null);
-  const position = expressionErrorPosition(value, phase, kind);
+  const failure = expressionFailure(value, phase, kind);
+  const position = failure?.position ?? null;
+  const lists = useQuery({ ...orpc.ipLists.list.queryOptions(), enabled: kind === "condition" });
   const tokens = value.split(TOKENS);
   let offset = 0;
   const available = Object.keys(fields).filter(
@@ -121,6 +138,38 @@ export function ExpressionEditor({
         <FieldLabel htmlFor={id}>{label}</FieldLabel>
         <div className="flex flex-wrap items-center gap-2">
           {actions}
+          {kind === "condition" ? (
+            <Select
+              value={null}
+              onValueChange={(choice: string | null) => {
+                if (!choice) return;
+                const condition = choice.startsWith(LIST_PREFIX)
+                  ? `ip.src in ${choice}`
+                  : CONDITION_TEMPLATES[choice as ConditionTemplate];
+                onChange(appendCondition(value, condition, phase));
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                aria-label={m.rules_insert_condition()}
+                data-testid={`${id}-template`}
+              >
+                <SelectValue placeholder={m.rules_insert_condition()} />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(CONDITION_TEMPLATES) as ConditionTemplate[]).map((template) => (
+                  <SelectItem key={template} value={template}>
+                    {conditionTemplateLabel(template)}
+                  </SelectItem>
+                ))}
+                {(lists.data ?? []).map((list) => (
+                  <SelectItem key={list.id} value={`${LIST_PREFIX}${list.name}`}>
+                    {m.rules_template_ip_list({ name: list.name })}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
           <Select
             value={null}
             onValueChange={(field) => {
@@ -193,9 +242,9 @@ export function ExpressionEditor({
           data-testid={testId}
         />
       </div>
-      {position !== null ? (
+      {failure ? (
         <p id={`${id}-error`} className="text-xs text-destructive" role="alert">
-          {m.rules_expression_error({ position: position + 1 })}
+          {expressionErrorText(failure)}
         </p>
       ) : null}
     </Field>
