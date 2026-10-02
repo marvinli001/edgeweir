@@ -16,6 +16,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { type Executor, publishClusters, publisher, publishRevision } from "./revisions";
+import { defineSetting } from "./settings";
 import { findSite } from "./sites";
 
 /** system_setting keys. */
@@ -24,36 +25,23 @@ export const CC_TEMPLATE_KEY = "cc_template";
 
 type ProtectionRow = typeof schema.siteProtection.$inferSelect;
 
-export async function readSetting(db: Executor, key: string) {
-  const [row] = await db
-    .select({ value: schema.systemSetting.value })
-    .from(schema.systemSetting)
-    .where(eq(schema.systemSetting.key, key));
-  return row?.value;
-}
+const protectionSetting = defineSetting({
+  key: PROTECTION_SETTINGS_KEY,
+  schema: protectionSettings,
+  defaults: PROTECTION_SETTINGS_DEFAULTS,
+  auditAction: "system.protection_update",
+});
 
-export async function writeSetting(db: Executor, key: string, value: Record<string, unknown>) {
-  await db
-    .insert(schema.systemSetting)
-    .values({ key, value })
-    .onConflictDoUpdate({ target: schema.systemSetting.key, set: { value } });
-}
+const ccTemplateSetting = defineSetting({
+  key: CC_TEMPLATE_KEY,
+  schema: ccTemplate,
+  defaults: CC_TEMPLATE_DEFAULTS,
+  auditAction: "system.cc_template_update",
+});
 
-export async function getProtectionSettings(db: Executor): Promise<ProtectionSettings> {
-  const parsed = protectionSettings.safeParse({
-    ...PROTECTION_SETTINGS_DEFAULTS,
-    ...((await readSetting(db, PROTECTION_SETTINGS_KEY)) ?? {}),
-  });
-  return parsed.success ? parsed.data : PROTECTION_SETTINGS_DEFAULTS;
-}
+export const getProtectionSettings = protectionSetting.read;
 
-export async function getCcTemplate(db: Executor): Promise<CcThresholds> {
-  const parsed = ccTemplate.safeParse({
-    ...CC_TEMPLATE_DEFAULTS,
-    ...((await readSetting(db, CC_TEMPLATE_KEY)) ?? {}),
-  });
-  return parsed.success ? parsed.data : CC_TEMPLATE_DEFAULTS;
-}
+export const getCcTemplate = ccTemplateSetting.read;
 
 /** Platform Under Attack as compiled into every cluster's configuration. */
 export async function loadPlatformProtection(db: Executor): Promise<PlatformProtectionModel> {
@@ -245,23 +233,23 @@ export async function setProtectionSettings(
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.protection-settings'))`);
     const before = await getProtectionSettings(tx);
-    await writeSetting(tx, PROTECTION_SETTINGS_KEY, input);
-    if (
-      before.underAttack !== input.underAttack ||
-      (input.underAttack && before.underAttackChallenge !== input.underAttackChallenge)
-    )
-      await publishClusters(
-        tx,
-        (await tx.select({ id: schema.cluster.id }).from(schema.cluster)).map((c) => c.id),
-        { reason: { code: "platform_protection_updated", params: {} }, userId: publisher(actor) },
-      );
-    await recordAudit(tx, actor, {
-      action: "system.protection_update",
-      targetType: "system_setting",
-      targetId: PROTECTION_SETTINGS_KEY,
-      metadata: { from: before, to: input },
+    return protectionSetting.write(tx, actor, input, {
+      before,
+      afterWrite: async () => {
+        if (
+          before.underAttack !== input.underAttack ||
+          (input.underAttack && before.underAttackChallenge !== input.underAttackChallenge)
+        )
+          await publishClusters(
+            tx,
+            (await tx.select({ id: schema.cluster.id }).from(schema.cluster)).map((c) => c.id),
+            {
+              reason: { code: "platform_protection_updated", params: {} },
+              userId: publisher(actor),
+            },
+          );
+      },
     });
-    return input;
   });
 }
 
@@ -277,28 +265,25 @@ export async function setCcTemplate(
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.cc-template'))`);
     const before = await getCcTemplate(tx);
-    await writeSetting(tx, CC_TEMPLATE_KEY, input);
-    const clusters = await tx
-      .selectDistinct({ id: schema.site.clusterId })
-      .from(schema.siteProtection)
-      .innerJoin(schema.site, eq(schema.site.id, schema.siteProtection.siteId))
-      .where(
-        and(
-          sql`(${schema.siteProtection.cc} ->> 'enabled')::boolean`,
-          sql`coalesce((${schema.siteProtection.cc} ->> 'followTemplate')::boolean, true)`,
-        ),
-      );
-    await publishClusters(
-      tx,
-      clusters.map((c) => c.id),
-      { reason: { code: "cc_template_updated", params: {} }, userId: publisher(actor) },
-    );
-    await recordAudit(tx, actor, {
-      action: "system.cc_template_update",
-      targetType: "system_setting",
-      targetId: CC_TEMPLATE_KEY,
-      metadata: { from: before, to: input },
+    return ccTemplateSetting.write(tx, actor, input, {
+      before,
+      afterWrite: async () => {
+        const clusters = await tx
+          .selectDistinct({ id: schema.site.clusterId })
+          .from(schema.siteProtection)
+          .innerJoin(schema.site, eq(schema.site.id, schema.siteProtection.siteId))
+          .where(
+            and(
+              sql`(${schema.siteProtection.cc} ->> 'enabled')::boolean`,
+              sql`coalesce((${schema.siteProtection.cc} ->> 'followTemplate')::boolean, true)`,
+            ),
+          );
+        await publishClusters(
+          tx,
+          clusters.map((c) => c.id),
+          { reason: { code: "cc_template_updated", params: {} }, userId: publisher(actor) },
+        );
+      },
     });
-    return input;
   });
 }

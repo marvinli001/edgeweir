@@ -15,8 +15,8 @@ import { asc, eq, inArray, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
-import { readSetting, writeSetting } from "./protection";
 import { type Executor, publishClusters, publisher, publishRevision } from "./revisions";
+import { defineSetting } from "./settings";
 import { findSite } from "./sites";
 
 /** system_setting key of the platform's error pages (`PlatformErrorPages`). */
@@ -143,11 +143,16 @@ export async function updateSiteErrorPages(
   });
 }
 
+const errorPagesSetting = defineSetting({
+  key: ERROR_PAGES_KEY,
+  schema: platformErrorPages,
+  defaults: platformErrorPages.parse({}),
+  auditAction: "system.error_pages_update",
+  targetName: ERROR_PAGES_KEY,
+});
+
 /** The platform's pages; empty templates mean the nodes' built-in pages. */
-export async function getPlatformErrorPages(db: Executor): Promise<PlatformErrorPages> {
-  const parsed = platformErrorPages.safeParse((await readSetting(db, ERROR_PAGES_KEY)) ?? {});
-  return parsed.success ? parsed.data : platformErrorPages.parse({});
-}
+export const getPlatformErrorPages = errorPagesSetting.read;
 
 /** The platform's pages as every cluster's configuration carries them (current, also on rollback). */
 export async function loadPlatformErrorPages(db: Executor): Promise<PlatformErrorPagesModel> {
@@ -171,29 +176,26 @@ export async function setPlatformErrorPages(
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.error-pages'))`);
     const before = await getPlatformErrorPages(tx);
-    await writeSetting(tx, ERROR_PAGES_KEY, input);
-    const clusters = await tx
-      .select({ id: schema.cluster.id, name: schema.cluster.name })
-      .from(schema.cluster);
-    const published = await publishClusters(
-      tx,
-      clusters.map((c) => c.id),
-      { reason: { code: "error_pages_updated", params: {} }, userId: publisher(actor) },
-    );
-    const revisions: Record<string, number> = {};
-    for (const cluster of clusters)
-      revisions[cluster.name] = published.get(cluster.id)?.row.revision ?? 0;
-    await recordAudit(tx, actor, {
-      action: "system.error_pages_update",
-      targetType: "system_setting",
-      targetId: ERROR_PAGES_KEY,
-      targetName: ERROR_PAGES_KEY,
-      metadata: {
+    return errorPagesSetting.write(tx, actor, input, {
+      before,
+      afterWrite: async () => {
+        const clusters = await tx
+          .select({ id: schema.cluster.id, name: schema.cluster.name })
+          .from(schema.cluster);
+        const published = await publishClusters(
+          tx,
+          clusters.map((c) => c.id),
+          { reason: { code: "error_pages_updated", params: {} }, userId: publisher(actor) },
+        );
+        const revisions: Record<string, number> = {};
+        for (const cluster of clusters)
+          revisions[cluster.name] = published.get(cluster.id)?.row.revision ?? 0;
+        return { revisions };
+      },
+      metadata: () => ({
         changed: PLATFORM_PAGES.filter((key) => before[key] !== input[key]),
         bytes: Object.fromEntries(PLATFORM_PAGES.map((key) => [key, utf8Bytes(input[key])])),
-        revisions,
-      },
+      }),
     });
-    return input;
   });
 }
