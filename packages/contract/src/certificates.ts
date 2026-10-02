@@ -140,6 +140,8 @@ export const certificateDto = z.object({
   renewAt: z.string().nullable(),
   /** Why the last issuance failed: a certificateErrorDefs or DNS error code, or "". */
   lastError: z.string(),
+  /** The site the certificate is bound to once issued (certificateRequest.bindSiteId), or null. */
+  bindSiteId: uuid.nullable(),
 });
 const label = z.string().trim().min(1).max(100);
 const names = z
@@ -168,6 +170,13 @@ export const certificateRequest = z
      * cluster serving it (at the request and before each issuance).
      */
     skipDnsCheck: z.boolean().default(false),
+    /**
+     * Once issued, the certificate is bound to this site and its HTTP
+     * requests redirect to HTTPS (the HTTPS tab's one-click request). The
+     * names must cover every domain of the site; a site that has another
+     * usable certificate by then keeps it.
+     */
+    bindSiteId: uuid.optional(),
   })
   .refine((s) => s.challenge !== "dns01" || !!s.dnsCredentialId, {
     message: "DNS-01 requires a DNS credential",

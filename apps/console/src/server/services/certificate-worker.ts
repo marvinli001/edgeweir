@@ -10,6 +10,7 @@ import type { AppContext } from "../lib/context";
 import { recordAudit, systemActor } from "./audit";
 import {
   acmeAccountBinding,
+  bindIssuedCertificate,
   certificateAccountBinding,
   certificateKeyBinding,
   findDnsCredential,
@@ -511,6 +512,8 @@ export function retryDelay(notAfter: Date | null, now = Date.now()) {
 /** The certificate's ACME settings with the directory an attempt used (kept with them). */
 const usedDirectory = (issuance: Issuance) =>
   sql`${schema.certificate.acme} || ${JSON.stringify({ directoryUrl: issuance.directoryUrl })}::jsonb`;
+/** The same once issued: the site to bind to (bindSiteId) is bound or given up. */
+const issuedSettings = (issuance: Issuance) => sql`(${usedDirectory(issuance)}) - 'bindSiteId'`;
 
 /**
  * Issues or renews a due ACME certificate. DNS-01 runs under the lease of its
@@ -636,12 +639,15 @@ async function issueNow(app: AppContext, id: string) {
           status: added.length ? "pending" : "ready",
           operationStartedAt: null,
           lastError: "",
-          acme: usedDirectory(issuance),
+          acme: issuedSettings(issuance),
           updatedAt: new Date(),
         })
         .where(attempt(row))
         .returning({ id: schema.certificate.id });
       if (!updated.length) throw new Error("stale issuance attempt");
+      // One-click HTTPS: the site gets the certificate now (published below).
+      if (row.acme.bindSiteId)
+        await bindIssuedCertificate(tx, { id, name: row.name, siteId: row.acme.bindSiteId });
       const sites = await tx
         .selectDistinct({ clusterId: schema.site.clusterId })
         .from(schema.site)

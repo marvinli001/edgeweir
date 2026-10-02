@@ -455,6 +455,117 @@ describe("certificate issuance", async () => {
     );
   });
 
+  describe("one-click HTTPS (audit S-2)", () => {
+    /** The issued material for these names, as the fake CA answers. */
+    const issuable = async (domains: string[]) => {
+      const material = await ctx.nodeCa.issueServerCertificate(domains);
+      certd.plan({
+        issued: {
+          ...JSON.parse(readFileSync(join(dir, "plan.json"), "utf8")).issued,
+          [domains.join(",")]: {
+            chainPem: material.certificatePem,
+            privateKeyPem: material.privateKeyPem,
+          },
+        },
+      });
+      return material;
+    };
+    const site = async (name: string, domains: string[]) =>
+      (await api.sites.create({ name, domains, origins: [{ address: "origin.example.com" }] })).site
+        .id;
+    const served = async (siteId: string) => {
+      const config = decodeNodeConfig(
+        (await latestRevision(ctx.db, clusterId))?.ir ?? new Uint8Array(),
+      );
+      return config.sites.find((s) => s.id === siteId);
+    };
+
+    it("binds the issued certificate to the site with an HTTPS redirect and publishes it", async () => {
+      const siteId = await site("bind", ["k1.issue.test"]);
+      await issuable(["k1.issue.test"]);
+      const { id } = await api.certificates.request({
+        name: "bind",
+        names: ["k1.issue.test"],
+        email: "ops@example.com",
+        bindSiteId: siteId,
+      });
+      // A domain added before the certificate is issued.
+      await api.sites.update({ id: siteId, domains: ["k1.issue.test", "k2.issue.test"] });
+      await issueCertificate(ctx, id);
+
+      expect(await api.https.get({ id: siteId })).toMatchObject({
+        certificateId: id,
+        forceHttps: true,
+      });
+      const cert = (await api.certificates.list()).find((c) => c.id === id);
+      expect(cert).toMatchObject({ bindSiteId: null, names: ["k1.issue.test", "k2.issue.test"] });
+      // Reissued for the domain added meanwhile, which waits for it.
+      expect(cert?.status).toBe("pending");
+      const [entry] = (await api.auditLogs.list({ action: "site.https_update" })).items;
+      expect(entry).toMatchObject({
+        actorType: "system",
+        targetId: siteId,
+        metadata: { certificateId: id, certificate: "bind" },
+      });
+      const published = await served(siteId);
+      expect(published).toMatchObject({ certificateId: id, tls: { forceHttps: true } });
+      expect(published?.domains.map((d) => d.name)).toEqual(["k1.issue.test"]);
+
+      await issuable(["k1.issue.test", "k2.issue.test"]);
+      await issueCertificate(ctx, id);
+      expect((await served(siteId))?.domains.map((d) => d.name)).toEqual([
+        "k1.issue.test",
+        "k2.issue.test",
+      ]);
+    });
+
+    it("keeps a usable certificate the site got meanwhile, and a deleted site is skipped", async () => {
+      const siteId = await site("keep", ["m1.issue.test"]);
+      const uploaded = await issuable(["m1.issue.test"]);
+      const own = await api.certificates.upload({
+        name: "uploaded",
+        chainPem: uploaded.certificatePem,
+        privateKeyPem: uploaded.privateKeyPem,
+      });
+      const { id } = await api.certificates.request({
+        name: "keep",
+        names: ["m1.issue.test"],
+        email: "ops@example.com",
+        bindSiteId: siteId,
+      });
+      await api.https.update({
+        id: siteId,
+        settings: tlsSettings.parse({ certificateId: own.id }),
+      });
+      await issueCertificate(ctx, id);
+      expect(await api.https.get({ id: siteId })).toMatchObject({
+        certificateId: own.id,
+        forceHttps: false,
+      });
+      expect(await row(id)).toMatchObject({ status: "ready" });
+      expect((await row(id)).acme.bindSiteId).toBeUndefined();
+
+      const gone = await site("gone", ["n1.issue.test"]);
+      await issuable(["n1.issue.test"]);
+      const orphan = await api.certificates.request({
+        name: "gone",
+        names: ["n1.issue.test"],
+        email: "ops@example.com",
+        bindSiteId: gone,
+        skipDnsCheck: true,
+      });
+      await api.sites.update({ id: gone, domains: ["n1.issue.test", "n2.issue.test"] });
+      await ctx.db.delete(schema.site).where(eq(schema.site.id, gone));
+      await api.sites.create({
+        name: "gone-again",
+        domains: ["n1.issue.test"],
+        origins: [{ address: "origin.example.com" }],
+      });
+      await issueCertificate(ctx, orphan.id);
+      expect(await row(orphan.id)).toMatchObject({ status: "ready", names: ["n1.issue.test"] });
+    });
+  });
+
   describe("a site's new domains and its ACME certificate (audit U-3)", () => {
     let siteId = "";
     let certId = "";

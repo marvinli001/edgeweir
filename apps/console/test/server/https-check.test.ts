@@ -9,6 +9,7 @@ import {
   type ApiClient,
   createTestContext,
   rpcClient,
+  rpcError,
   setupPlatform,
   signIn,
 } from "./helpers";
@@ -236,6 +237,44 @@ describe("https.check", async () => {
     delete table["wild.test"];
     expect((await api.https.check({ id: wildId })).blockers).toEqual([]);
     expect(dnsFixture.calls.some((c) => c.command === "dns.test")).toBe(true);
+  });
+
+  it("binds a request to the site only when it covers the site and is the only one", async () => {
+    const { request } = await api.https.check({ id: wildId });
+    const ask = (names: string[]) =>
+      api.certificates.request({
+        name: request.name,
+        names,
+        email: request.email,
+        challenge: "dns01",
+        dnsCredentialId: request.dnsCredentialId ?? undefined,
+        bindSiteId: wildId,
+      });
+    expect(await rpcError(ask(["wild.test"]))).toMatchObject({
+      code: "CERTIFICATE_DOMAIN_MISMATCH",
+      data: { domains: "*.wild.test" },
+    });
+    const cert = await ask(request.names);
+    expect(cert).toMatchObject({ status: "pending", bindSiteId: wildId });
+    expect((await rpcError(ask(request.names))).code).toBe("CERTIFICATE_BUSY");
+    // Its email becomes the default of the next request.
+    const [row] = await ctx.db
+      .select({ acme: schema.certificate.acme })
+      .from(schema.certificate)
+      .where(eq(schema.certificate.id, cert.id));
+    expect(row?.acme.email).toBe("admin@example.com");
+    await ctx.db
+      .update(schema.certificate)
+      .set({ acme: { ...row?.acme, email: "certs@example.com" } })
+      .where(eq(schema.certificate.id, cert.id));
+    expect((await api.https.check({ id: siteId })).request.email).toBe("certs@example.com");
+    await ctx.db.insert(schema.acmeAccount).values({
+      directoryUrl: "https://acme.test/directory",
+      email: "account@example.com",
+      accountEnvelope: "{}",
+    });
+    expect((await api.https.check({ id: siteId })).request.email).toBe("account@example.com");
+    await api.certificates.delete({ id: cert.id });
   });
 
   it("lists the issued certificates that cover every domain of the site", async () => {

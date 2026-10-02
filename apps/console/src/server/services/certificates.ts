@@ -11,6 +11,7 @@ import {
   tlsSettings,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
+import { ORPCError } from "@orpc/server";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import {
   certificateName,
@@ -20,7 +21,7 @@ import {
 } from "../lib/certificate-names";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
-import { type Actor, recordAudit } from "./audit";
+import { type Actor, recordAudit, systemActor } from "./audit";
 import { certdDns, probe, validCredentials } from "./dns-providers";
 import { assertHttp01Ready } from "./http01-check";
 import { type Executor, getRevision, publisher, publishRevision } from "./revisions";
@@ -57,6 +58,7 @@ export function certificateDto(row: typeof schema.certificate.$inferSelect): Cer
     autoRenew: row.autoRenew,
     renewAt: row.renewAt?.toISOString() ?? null,
     lastError: row.lastError,
+    bindSiteId: row.acme.bindSiteId || null,
   };
 }
 
@@ -205,6 +207,7 @@ export async function requestCertificate(
   ctx: CertificateContext,
 ) {
   const id = randomUUID();
+  if (input.bindSiteId) await assertBindable(app.db, input.bindSiteId, input.names);
   if (input.challenge === "http01") {
     // An HTTP-01 challenge is answered by the nodes of the clusters that serve the name.
     const served = await app.db
@@ -247,6 +250,7 @@ export async function requestCertificate(
           email: input.email,
           dnsCredentialId: input.dnsCredentialId ?? "",
           ...(input.challenge === "http01" && input.skipDnsCheck ? { skipDnsCheck: "true" } : {}),
+          ...(input.bindSiteId ? { bindSiteId: input.bindSiteId } : {}),
         },
         accountEnvelope: JSON.stringify(
           app.masterKey.seal(
@@ -265,6 +269,31 @@ export async function requestCertificate(
     });
     return certificateDto(row);
   });
+}
+
+/** Certificates waiting to be bound to the site once issued (bindSiteId). */
+export const boundOnIssue = (siteId: string) =>
+  sql`${schema.certificate.acme}->>'bindSiteId' = ${siteId}`;
+
+/**
+ * A request bound to a site (bindSiteId) covers every domain of the site
+ * (CERTIFICATE_DOMAIN_MISMATCH names the others) and is the only one
+ * waiting for it (CERTIFICATE_BUSY).
+ */
+async function assertBindable(db: Executor, siteId: string, names: readonly string[]) {
+  await tlsSite(db, siteId);
+  const domains = await db
+    .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
+    .from(schema.siteDomain)
+    .where(eq(schema.siteDomain.siteId, siteId));
+  const uncovered = domains.filter((domain) => !namesCover(names, domain));
+  if (uncovered.length) failUncovered(uncovered);
+  const [waiting] = await db
+    .select({ id: schema.certificate.id })
+    .from(schema.certificate)
+    .where(boundOnIssue(siteId))
+    .limit(1);
+  if (waiting) fail("CERTIFICATE_BUSY", "a certificate for this site is being requested");
 }
 
 /**
@@ -319,6 +348,67 @@ export async function coverSiteDomains(
     metadata: { siteId: ctx.site.id, site: ctx.site.name, added },
   });
   return { id: cert.id, name: cert.name };
+}
+
+/**
+ * Binds a certificate issued for a site's one-click HTTPS (bindSiteId) to
+ * the site, inside the issuance's transaction: the certificate, an HTTPS
+ * redirect, and the site's domains added since the request covered by a
+ * reissue (coverSiteDomains); audited as the system. A site deleted
+ * meanwhile, one that has another usable certificate by now, or one with
+ * domains the certificate cannot take keeps its settings. Returns the
+ * site's cluster when bound.
+ */
+export async function bindIssuedCertificate(
+  tx: Executor,
+  cert: { id: string; name: string; siteId: string },
+): Promise<string | undefined> {
+  const [site] = await tx
+    .select()
+    .from(schema.site)
+    .where(eq(schema.site.id, cert.siteId))
+    .for("update");
+  if (!site) return undefined;
+  if (site.certificateId && site.certificateId !== cert.id) {
+    const [current] = await tx
+      .select({ chainPem: schema.certificate.chainPem, notAfter: schema.certificate.notAfter })
+      .from(schema.certificate)
+      .where(eq(schema.certificate.id, site.certificateId));
+    if (current?.chainPem && current.notAfter && current.notAfter.getTime() > Date.now())
+      return undefined;
+  }
+  const domains = await tx
+    .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
+    .from(schema.siteDomain)
+    .where(eq(schema.siteDomain.siteId, site.id));
+  try {
+    await coverSiteDomains(tx, cert.id, domains, {
+      actor: systemActor,
+      site: { id: site.id, name: site.name },
+    });
+  } catch (error) {
+    // Refused before anything was written: the transaction goes on.
+    if (error instanceof ORPCError && error.code === "CERTIFICATE_DOMAIN_MISMATCH")
+      return undefined;
+    throw error;
+  }
+  const { certificateId, ...options } = tlsSettings.parse({
+    ...site.tlsSettings,
+    certificateId: cert.id,
+    forceHttps: true,
+  });
+  await tx
+    .update(schema.site)
+    .set({ certificateId, tlsSettings: options })
+    .where(eq(schema.site.id, site.id));
+  await recordAudit(tx, systemActor, {
+    action: "site.https_update",
+    targetType: "site",
+    targetId: site.id,
+    targetName: site.name,
+    metadata: { certificateId: cert.id, certificate: cert.name },
+  });
+  return site.clusterId;
 }
 
 export async function renewCertificate(app: AppContext, id: string, ctx: CertificateContext) {
