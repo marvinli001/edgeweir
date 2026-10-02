@@ -291,3 +291,69 @@ describe.runIf(hasDevDocs)("CP-M11: dev-docs/adr/README.md index", () => {
     }
   });
 });
+
+// --- U-14 --------------------------------------------------------------------
+
+/** The required variables, each with the alternative that replaces it. */
+const REQUIRED_VARIABLES = [
+  ["EDGEWEIR_MASTER_KEY", "EDGEWEIR_MASTER_KEY_FILE"],
+  ["POSTGRES_PASSWORD", "DATABASE_URL"],
+  ["EDGEWEIR_PUBLIC_URL"],
+];
+const VARIABLE = /`([A-Z][A-Z0-9_]*)`/g;
+
+/** The rows of the Markdown table that follows the line matching `label`. */
+function tableAfter(text: string, label: RegExp): string[] {
+  const lines = text.split("\n");
+  const start = lines.findIndex((l) => label.test(l));
+  if (start < 0) return [];
+  let i = start + 1;
+  while (i < lines.length && !lines[i]?.startsWith("|")) i++;
+  const rows: string[] = [];
+  while (i < lines.length && lines[i]?.startsWith("|")) rows.push(lines[i++] ?? "");
+  return rows.slice(2);
+}
+
+/** The variables named in the first cell of each row. */
+function firstCellVariables(rows: string[]): string[][] {
+  return rows.map((row) =>
+    [...(row.split("|")[1] ?? "").matchAll(VARIABLE)].map((m) => m[1] ?? ""),
+  );
+}
+
+describe("U-14: the deployment documents agree on the required variables", () => {
+  it.each([
+    ["README.md", /^必填变量：$/],
+    ["README.en.md", /^Required variables:$/],
+    ["docs/deploy/docker.md", /^必填变量：$/],
+    ["docs/deploy/docker.en.md", /^Required variables:$/],
+  ])("%s lists them", (file, label) => {
+    expect(firstCellVariables(tableAfter(read(file), label))).toEqual(REQUIRED_VARIABLES);
+  });
+
+  it.each([
+    ["docs/reference/environment.md", /^## 必需$/],
+    ["docs/reference/environment.en.md", /^## Required$/],
+  ])("%s lists the console's own and names POSTGRES_PASSWORD", (file, heading) => {
+    const required = section(read(file), new RegExp(heading.source, "m"));
+    expect(firstCellVariables(tableAfter(required, heading)).flat().sort()).toEqual(
+      REQUIRED_VARIABLES.flat()
+        .filter((name) => name !== "POSTGRES_PASSWORD")
+        .sort(),
+    );
+    expect(required).toContain("`POSTGRES_PASSWORD`");
+  });
+
+  it(".env.example's required block holds them and nothing else", () => {
+    const text = read(".env.example");
+    const block = text.slice(text.indexOf("# --- Required"), text.indexOf("# --- Optional"));
+    const assigned = [...block.matchAll(/^#?\s*([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]);
+    expect(assigned.sort()).toEqual(REQUIRED_VARIABLES.flat().sort());
+  });
+
+  it.each(["README.md", "README.en.md"])("the quick start of %s writes them to .env", (file) => {
+    const heredoc = /cat > \.env <<EOF\n([\s\S]*?)\nEOF/.exec(read(file))?.[1] ?? "";
+    const written = [...heredoc.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]);
+    expect(written).toEqual(REQUIRED_VARIABLES.map(([name]) => name));
+  });
+});

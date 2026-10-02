@@ -92,9 +92,9 @@ Required variables:
 
 | Variable | Description |
 | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | Master key, from the previous step. The console refuses to start without it. |
-| `POSTGRES_PASSWORD` | Password of the bundled PostgreSQL. `compose.yml` builds `DATABASE_URL` from it and ignores the `DATABASE_URL` line in `.env`. Compose refuses to start without it; deployments created without it used `edgeweir`, so set that. |
-| `EDGEWEIR_PUBLIC_URL` | URL browsers use for the console, including scheme and port. Must match the browser address bar; otherwise sign-in fails the origin check. |
+| `EDGEWEIR_MASTER_KEY` or `EDGEWEIR_MASTER_KEY_FILE` | Master key, or a file holding it, from the previous step. The console refuses to start without it. |
+| `POSTGRES_PASSWORD` or `DATABASE_URL` | Password of the bundled PostgreSQL. `compose.yml` builds `DATABASE_URL` from it and ignores the `DATABASE_URL` line in `.env`. Compose refuses to start without it; deployments created without it used `edgeweir`, so set that. [Without Compose](#without-compose-standalone-containers), set `DATABASE_URL` instead. |
+| `EDGEWEIR_PUBLIC_URL` | URL browsers use for the console, including scheme and port. Must match the browser address bar; otherwise sign-in fails the origin check. Defaults to `http://localhost:3000`, which also points the generated node install commands to localhost. |
 
 Common optional variables (uncomment in `.env`):
 

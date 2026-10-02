@@ -80,6 +80,7 @@ umask 077
 cat > .env <<EOF
 EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
+EDGEWEIR_PUBLIC_URL=http://localhost:3000
 EOF
 
 docker compose pull        # 从源码构建：docker compose up -d --build
@@ -91,13 +92,15 @@ docker compose logs console | grep setupToken
 
 ### 环境变量
 
-| 变量 | 必填 | 说明 |
-| --- | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | 是 | 主密钥，用于信封加密入库的敏感数据（内部 CA 私钥、证书私钥、S3 源站密钥、DNS API 凭据、setup token）并派生会话密钥。**须与数据库备份分开保存，丢失后上述数据不可恢复。** |
-| `POSTGRES_PASSWORD` | 是 | 内置 PostgreSQL 密码。 |
-| `BETTER_AUTH_SECRET` | 否 | 未设置时由主密钥派生。已设置的部署不得移除，否则控制台拒绝启动。 |
+必填变量：
 
-其余变量均有默认值，完整列表见 [.env.example](.env.example)。SMTP、节点发布源、源站地址允许清单与 GeoIP 在初始化后于 **系统设置** 配置。
+| 变量 | 说明 |
+| --- | --- |
+| `EDGEWEIR_MASTER_KEY` 或 `EDGEWEIR_MASTER_KEY_FILE` | 主密钥，或存放主密钥的文件（[主密钥文件](docs/deploy/docker.md#主密钥文件)）。用于信封加密入库的敏感数据（内部 CA 私钥、证书私钥、S3 源站密钥、DNS API 凭据、setup token）并派生会话密钥。**须与数据库备份分开保存，丢失后上述数据不可恢复。** |
+| `POSTGRES_PASSWORD` 或 `DATABASE_URL` | 使用 Compose：内置 PostgreSQL 的密码，`DATABASE_URL` 由它拼出。不用 Compose：PostgreSQL 18 连接串 `DATABASE_URL`。 |
+| `EDGEWEIR_PUBLIC_URL` | 浏览器访问控制台的地址，在反向代理后为代理地址，如 `https://cdn-admin.example.com`。须与浏览器地址栏一致，否则登录失败；保留 `http://localhost:3000` 时生成的节点安装命令也指向本机。 |
+
+其余变量均有默认值，完整列表见 [.env.example](.env.example)。`BETTER_AUTH_SECRET` 未设置时由主密钥派生；已设置的部署不得移除，否则控制台拒绝启动。SMTP、节点发布源、源站地址允许清单与 GeoIP 在初始化后于 **系统设置** 配置。
 
 ### 可选组件
 

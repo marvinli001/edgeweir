@@ -92,9 +92,9 @@ sed -i "s|^EDGEWEIR_PUBLIC_URL=.*|EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.
 
 | 变量 | 说明 |
 | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | 主密钥，见上一步。缺失时控制台拒绝启动。 |
-| `POSTGRES_PASSWORD` | 内置 PostgreSQL 的密码。`compose.yml` 由它拼出 `DATABASE_URL`，忽略 `.env` 中的 `DATABASE_URL` 行。未设置时 Compose 拒绝启动；早先未设置的部署用的是 `edgeweir`，填入它即可。 |
-| `EDGEWEIR_PUBLIC_URL` | 浏览器访问控制台的地址，含协议与端口。须与浏览器地址栏一致，否则登录因来源校验失败。 |
+| `EDGEWEIR_MASTER_KEY` 或 `EDGEWEIR_MASTER_KEY_FILE` | 主密钥，或存放主密钥的文件，见上一步。缺失时控制台拒绝启动。 |
+| `POSTGRES_PASSWORD` 或 `DATABASE_URL` | 内置 PostgreSQL 的密码。`compose.yml` 由它拼出 `DATABASE_URL`，忽略 `.env` 中的 `DATABASE_URL` 行。未设置时 Compose 拒绝启动；早先未设置的部署用的是 `edgeweir`，填入它即可。[不用 Compose](#不用-compose单独的容器) 时改设 `DATABASE_URL`。 |
+| `EDGEWEIR_PUBLIC_URL` | 浏览器访问控制台的地址，含协议与端口。须与浏览器地址栏一致，否则登录因来源校验失败。默认 `http://localhost:3000`，此时生成的节点安装命令也指向本机。 |
 
 常用可选变量（在 `.env` 中取消注释后填写）：
 

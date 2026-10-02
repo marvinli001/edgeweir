@@ -145,7 +145,7 @@ Equivalent to steps 1–8. The step 7 deployment settings and **Seal** are avail
 | `PORT` | `3000` | Railway injects `PORT` into the container and health-checks on it; set to 3000 to match the domain's target port. |
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | Private network connection string; `Postgres` is the PostgreSQL service name. |
 | `EDGEWEIR_MASTER_KEY` | Output of `openssl rand -base64 32` | Required. |
-| `EDGEWEIR_PUBLIC_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` | Scheme `https`: Railway accepts only TLS inbound. With a custom domain, use a literal value. |
+| `EDGEWEIR_PUBLIC_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` | Required. Scheme `https`: Railway accepts only TLS inbound. With a custom domain, use a literal value. |
 | `EDGEWEIR_NODE_API_URL` | `https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}` | Required: the default `https://<public domain>:8443` is unreachable on Railway. The host name is added to the node channel certificate automatically. |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | Empty | Extra names for the node channel certificate, comma separated. |
 | `EDGEWEIR_TRUSTED_PROXIES` | Empty | See [Limits](#limits). |

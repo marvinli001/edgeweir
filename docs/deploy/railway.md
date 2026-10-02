@@ -145,7 +145,7 @@ openssl rand -base64 32 > edgeweir-master-key
 | `PORT` | `3000` | Railway 向容器注入 `PORT` 并用它做健康检查；设置为 3000，与域名的目标端口一致。 |
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | 私有网络连接串；`Postgres` 为 PostgreSQL 服务名。 |
 | `EDGEWEIR_MASTER_KEY` | `openssl rand -base64 32` 的输出 | 必填。 |
-| `EDGEWEIR_PUBLIC_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` | 协议为 `https`：Railway 只接受 TLS 入站。使用自定义域名时写字面值。 |
+| `EDGEWEIR_PUBLIC_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` | 必填。协议为 `https`：Railway 只接受 TLS 入站。使用自定义域名时写字面值。 |
 | `EDGEWEIR_NODE_API_URL` | `https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}` | 必填：默认值 `https://<公开域名>:8443` 在 Railway 上不可达。主机名自动写入节点通道证书。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | 空 | 节点通道证书的额外名称，逗号分隔。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | 空 | 见 [限制](#限制)。 |

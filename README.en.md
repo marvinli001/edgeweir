@@ -80,6 +80,7 @@ umask 077
 cat > .env <<EOF
 EDGEWEIR_MASTER_KEY=$(openssl rand -base64 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
+EDGEWEIR_PUBLIC_URL=http://localhost:3000
 EOF
 
 docker compose pull        # build from source: docker compose up -d --build
@@ -91,13 +92,15 @@ Open <http://localhost:3000> (port 3000 listens on localhost only by default; ot
 
 ### Environment variables
 
-| Variable | Required | Description |
-| --- | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | Yes | Master key. Envelope-encrypts secrets at rest (internal CA key, certificate keys, S3 origin keys, DNS API credentials, setup token) and derives the session secret. **Back it up separately from the database; without it that data is unrecoverable.** |
-| `POSTGRES_PASSWORD` | Yes | Password of the bundled PostgreSQL. |
-| `BETTER_AUTH_SECRET` | No | Derived from the master key when unset. Deployments that set it must keep it; the console refuses to start once it is removed. |
+Required variables:
 
-All other variables have defaults; see [.env.example](.env.example). SMTP, the node release source, the origin allow list and GeoIP are configured after setup in **System**.
+| Variable | Description |
+| --- | --- |
+| `EDGEWEIR_MASTER_KEY` or `EDGEWEIR_MASTER_KEY_FILE` | Master key, or a file holding it ([master key file](docs/deploy/docker.en.md#master-key-file)). Envelope-encrypts secrets at rest (internal CA key, certificate keys, S3 origin keys, DNS API credentials, setup token) and derives the session secret. **Back it up separately from the database; without it that data is unrecoverable.** |
+| `POSTGRES_PASSWORD` or `DATABASE_URL` | With Compose: password of the bundled PostgreSQL, from which `DATABASE_URL` is built. Without Compose: the PostgreSQL 18 connection string `DATABASE_URL`. |
+| `EDGEWEIR_PUBLIC_URL` | URL browsers use for the console; behind a reverse proxy, the proxy URL, e.g. `https://cdn-admin.example.com`. It must match the browser address bar or sign-in fails; with `http://localhost:3000` the generated node install commands point to localhost as well. |
+
+All other variables have defaults; see [.env.example](.env.example). `BETTER_AUTH_SECRET` is derived from the master key when unset; deployments that set it must keep it, or the console refuses to start. SMTP, the node release source, the origin allow list and GeoIP are configured after setup in **System**.
 
 ### Optional components
 
