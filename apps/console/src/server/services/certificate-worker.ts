@@ -366,7 +366,7 @@ async function presentHttpChallenges(
     throw new IssuanceError("http01_no_nodes", "online ACME-capable nodes are required");
   const targets = new Map<string, number>();
   for (const clusterId of new Set(nodes.map((n) => n.clusterId))) {
-    const clusterTargets = await rolloutTargets(app.db, clusterId);
+    const clusterTargets = await rolloutTargets(app.db, clusterId, "head");
     for (const node of nodes.filter((n) => n.clusterId === clusterId)) {
       const target = targetFor(node, clusterTargets);
       if (target) targets.set(node.id, target.revision);

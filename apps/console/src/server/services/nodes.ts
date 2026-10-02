@@ -24,6 +24,7 @@ import {
   type Executor,
   latestRevision,
   notifyClusterTargets,
+  type RevisionHead,
   type RolloutTargets,
   rolloutTargets,
   targetFor,
@@ -60,11 +61,11 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
         .where(inArray(schema.nodeGroup.id, groupIds))
     : [];
   const required = new Map<string, string[]>();
-  const targets = new Map<string, RolloutTargets>();
+  const targets = new Map<string, RolloutTargets<RevisionHead>>();
   for (const clusterId of new Set(rows.map((r) => r.clusterId))) {
     const latest = await latestRevision(db, clusterId);
     required.set(clusterId, latest ? nodeRequirements(decodeNodeConfig(latest.ir)) : []);
-    targets.set(clusterId, await rolloutTargets(db, clusterId));
+    targets.set(clusterId, await rolloutTargets(db, clusterId, "head"));
   }
   return rows.map((r) => {
     const st = statuses.find((s) => s.nodeId === r.id);

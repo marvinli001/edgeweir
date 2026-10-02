@@ -37,7 +37,7 @@ export async function clusterDelivery(db: Executor, clusterId: string, now = Dat
     .where(and(eq(schema.node.clusterId, clusterId), eq(schema.node.status, "active")));
   const live = rows.filter((n) => isOnline(n.lastSeenAt, now));
   if (!live.length) return { live: 0, applied: 0 };
-  const targets = await rolloutTargets(db, clusterId);
+  const targets = await rolloutTargets(db, clusterId, "head");
   const applied = live.filter((n) => {
     const target = targetFor(n, targets);
     return !!target && (n.appliedRevision ?? 0) >= target.revision;

@@ -387,7 +387,7 @@ export function createNodeService(
       .select({ id: schema.node.id, clusterId: schema.node.clusterId })
       .from(schema.node)
       .where(eq(schema.node.id, nodeId));
-    return row ? nodeTarget(app.db, row) : undefined;
+    return row ? nodeTarget(app.db, row, "head") : undefined;
   }
 
   /** Ends an open watch stream once its node is disabled, deleted or its certificate superseded. */
@@ -776,13 +776,15 @@ export function createNodeService(
 
     async getConfig(req, ctx) {
       const node = await requireNode(ctx);
-      const own = await nodeTarget(app.db, node);
+      const own = await nodeTarget(app.db, node, "head");
       // A node never gets a revision newer than its target (a canary candidate
       // stays with the canary nodes).
       if (req.revision !== 0n && own && req.revision > BigInt(own.revision))
         throw new ConnectError("revision is not published to this node", Code.FailedPrecondition);
+      // The configuration itself is read for the revision shipped only.
+      const wanted = req.revision === 0n ? own?.revision : Number(req.revision);
       const target =
-        req.revision === 0n ? own : await getRevision(app.db, node.clusterId, Number(req.revision));
+        wanted === undefined ? undefined : await getRevision(app.db, node.clusterId, wanted);
       if (!target) throw new ConnectError("revision not found", Code.NotFound);
       const snapshot = decodeNodeConfig(target.ir);
       if (
@@ -824,7 +826,7 @@ export function createNodeService(
       const now = new Date();
       if (req.appliedRevision < 0n || req.appliedRevision >= BigInt(Number.MAX_SAFE_INTEGER))
         throw new ConnectError("invalid applied revision", Code.InvalidArgument);
-      const issued = await latestRevision(app.db, node.clusterId);
+      const issued = await latestRevision(app.db, node.clusterId, "head");
       const revisionReceiptVerified = verifyRevisionReceipt(
         app,
         node,
