@@ -663,6 +663,12 @@ message GetBansResponse {
   uint64 sequence = 4;
   // More pages follow.
   bool more = 5;
+  // Automatic bans of this node that were not shared with the cluster (so
+  // never in bans) and were lifted in the console after after_sequence:
+  // the node deletes its own entry for the site and address unless that
+  // expires later than expires_at (a newer ban of its own). Delta pages
+  // only. Added in v0.16.0.
+  repeated Ban lifted_own_bans = 6;
 }
 
 // AutoBan is a ban a node created by itself.
