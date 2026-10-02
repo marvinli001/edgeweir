@@ -31,6 +31,7 @@ export const auditActions = [
   "cache.purge",
   "certificate.delete",
   "certificate.issued",
+  "certificate.names_extended",
   "certificate.renew",
   "certificate.renewal_rescheduled",
   "certificate.request",

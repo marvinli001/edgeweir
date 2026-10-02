@@ -39,13 +39,13 @@ DNS-01 validation needs a credential first.
 5. Click **Create**.
 6. Verify: the credential appears in the **DNS credentials** card with its zone and provider.
 
-The fields and least permissions of every provider are in [Providers and credentials](dns-and-alerts.en.md#providers-and-credentials); DNS steering uses the same provider catalog. Credentials are envelope-encrypted with the master key and are write-only; **Edit** renames the credential or rotates the secrets with **Replace credentials**.
+The fields and least permissions of every provider are in [Providers and credentials](dns-and-alerts.en.md#providers-and-credentials); DNS steering uses the same provider catalog. Credentials are envelope-encrypted with the master key and are write-only; **Edit** renames the credential or rotates the secrets with **Replace credentials**. After a rotation, certificates using the credential that show **Issuance failed** and TXT records still to clean up are retried at once.
 
 ## Request an ACME certificate
 
 Prerequisites:
 
-- HTTP-01: every certificate name is a domain of a site (not a wildcard), resolves to the nodes, and port 80 on the nodes is reachable from the internet.
+- HTTP-01: every certificate name is a domain of a site (not a wildcard), resolves to the nodes, and port 80 on the nodes is reachable from the internet; the clusters serving the names have online nodes, all of them supporting `http01-v1`.
 - DNS-01: a DNS credential exists whose zone covers every certificate name; the names need not be on a site.
 
 1. Open **Certificates** and click **Request certificate**.
@@ -61,9 +61,10 @@ Prerequisites:
 | Name | 1–100 characters | None | The certificate's name in the console |
 | Domains | 1–100 names, separated by commas or spaces, no duplicates; `*.` wildcards allowed | None | Certificate SANs |
 | Account email | Email address | None | ACME account contact |
-| Certificate authority | Let's Encrypt / ZeroSSL | Let's Encrypt | ACME directory |
-| Validation method | HTTP-01 / DNS-01 | HTTP-01 | Domain control validation; wildcards require DNS-01 |
+| Certificate authority | Let's Encrypt / ZeroSSL | Let's Encrypt | ACME directory; read-only **ACME directory (EDGEWEIR_ACME_DIRECTORY)** when that variable is set |
+| Validation method | HTTP-01 / DNS-01 | HTTP-01 | Domain control validation; wildcards require DNS-01, and with HTTP-01 the form shows "Wildcards need DNS-01" under **Domains** |
 | DNS credentials | A DNS credential that has been added | The first credential | Account DNS-01 writes TXT records with; one zone per certificate |
+| Skip the DNS check | On / off | Off | HTTP-01 only: do not check that the names resolve to the nodes (at the request and before each issuance), for example with a load balancer in front of the nodes |
 | EAB key ID / EAB HMAC key | EAB credentials from ZeroSSL | None | Required for ZeroSSL; stored encrypted |
 
 Certificates with the same certificate authority, EAB key ID, and account email share one ACME account: CAs limit the accounts an IP address may register (Let's Encrypt: 10 in 3 hours).
@@ -72,8 +73,8 @@ Certificates with the same certificate authority, EAB key ID, and account email 
 
 | Method | Behavior |
 | --- | --- |
-| HTTP-01 | Each name must be a non-wildcard domain of a site, or the request is refused ("Certificate domains do not match the site or DNS zone"): only the clusters serving a name answer its challenge. The console publishes all challenges of a certificate to those clusters at once (one revision per cluster, also when the site is disabled); every online node there must support `http01-v1` and apply it within 40 seconds before the CA is asked to validate, four names at a time. Challenges are answered on port 80 without redirect or caching and expire after 10 minutes or when the issuance ends (other HTTP-01 tokens go to the origin, uncached and unchallenged, so that it can obtain certificates of its own); challenge revisions do not count toward the kept configuration revisions |
-| DNS-01 | Each name must be inside the DNS credential's zone (the zone itself or a name below it), or the request is refused. Writes TXT records at `_acme-challenge.<domain>` and waits up to 3 minutes for propagation. When issuance ends, times out, or the process is interrupted, the TXT values it wrote are deleted; a certificate with records still to clean up cannot be deleted |
+| HTTP-01 | Each name must be a non-wildcard domain of a site, or the request is refused ("Certificate domains do not match the site or DNS zone"): only the clusters serving a name answer its challenge. The console publishes all challenges of a certificate to those clusters at once (one revision per cluster, also when the site is disabled); every online node there must support `http01-v1` and apply it within 40 seconds before the CA is asked to validate, four names at a time. At the request and before each issuance the console resolves every name with the system's DNS (3 seconds a try, 2 tries): a name without A/AAAA records, or resolving to an address that is not one of the cluster's active nodes' (their configured scheduling addresses or reported public addresses), refuses the request ("These names do not resolve to the nodes: …") and fails the issuance without contacting the CA ("A domain does not resolve to the nodes"); lookups that time out and nodes without a known public address never stop it. Challenges are answered on port 80 without redirect or caching and expire after 10 minutes or when the issuance ends (other HTTP-01 tokens go to the origin, uncached and unchallenged, so that it can obtain certificates of its own); challenge revisions do not count toward the kept configuration revisions |
+| DNS-01 | Each name must be inside the DNS credential's zone (the zone itself or a name below it), or the request is refused. Writes TXT records at `_acme-challenge.<domain>` and waits up to 3 minutes for propagation. When issuance ends, times out, or the process is interrupted, the TXT values it wrote are deleted; a failed deletion is retried after 1 minute, doubling up to 6 hours, and a zone the provider no longer has counts as deleted |
 
 ### Renewal
 
@@ -83,15 +84,15 @@ Certificates with the same certificate authority, EAB key ID, and account email 
 | Renewal time | The CA's ARI (ACME Renewal Information) window when offered; otherwise when two thirds of the certificate lifetime have passed; at the latest 1 minute before expiry. The card shows "Next renewal: …" |
 | Window changes | After issuance, the ARI window is read again at the CA's suggested interval (1–24 hours, 6 by default); when the window moves before the next renewal (for example, the CA is going to revoke certificates early), the renewal moves into the new window and the audit log records `certificate.renewal_rescheduled` |
 | Check interval | A background job checks due certificates every minute, up to 10 at a time: new requests and **Renew now** first, then by renewal time, three issuances at once; it needs a console process with `ROLE=worker` or `ROLE=all` |
-| Renewed names | An HTTP-01 renewal drops the names no site uses any more, as long as at least one name is left; every domain of a site that uses the certificate is kept, so the site stays covered. After a successful renewal the certificate's name list is updated |
+| Renewed names | An HTTP-01 renewal drops the names no site uses any more, as long as at least one name is left; every domain of a site that uses the certificate is kept, so the site stays covered. After a successful renewal the certificate's name list is updated. For a site's new domains see [Adding domains](#adding-domains-to-an-https-site) |
 | Effect | After issuance or renewal, a new revision is published for the clusters of the sites that use the certificate |
-| Failure | Status changes to **Issuance failed** and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance; the console logs the reason, see [Troubleshooting](#troubleshooting) |
+| Failure | Status changes to **Issuance failed**, the card shows the reason, and the current certificate is kept; the next attempt waits a tenth of the certificate's remaining validity (10 minutes to 12 hours), 1 hour for a first issuance, see [Troubleshooting](#troubleshooting) |
 | Manual | ACME certificates have **Renew now**, which runs at the next check; unavailable while **Issuing** |
 | Interruption | **Issuing** for more than 10 minutes counts as interrupted and runs again at the next check; one issuance run is limited to 8 minutes |
 
 ### Deletion
 
-A certificate used by a site, in **Issuing**, or with DNS-01 records still to clean up returns "Certificate or credential is still in use" on delete. A DNS credential referenced by any certificate cannot be deleted.
+Deleting a certificate used by sites returns "The certificate is used by sites: …" (up to 5 sites); while it is **Issuing**, "Certificate operation is already in progress". A certificate with DNS-01 TXT records still to clean up is deleted, and those records are no longer cleaned up: `leftDnsRecords` of the `certificate.delete` audit entry lists them for removal at the DNS provider. A DNS credential referenced by any certificate cannot be deleted ("The DNS credential is used by certificates: …").
 
 ## Configure a site's HTTPS
 
@@ -109,11 +110,23 @@ A certificate used by a site, in **Issuing**, or with DNS-01 records still to cl
 
 A configuration is in effect on a node only once the node reports the revision as applied.
 
+### Adding domains to an HTTPS site
+
+When new domains are saved on the site's **Domains** tab:
+
+| The site's certificate | Behavior |
+| --- | --- |
+| Covers the new domains (including a wildcard `*.example.com` one label up) | Saved |
+| Requested in the console with automatic renewal on | Saved; the certificate's names grow by the new domains and it is reissued right away ("Certificate … is being reissued for the new domains", audit `certificate.names_extended`). Until then nodes keep the current certificate, and the new domains take effect once the new certificate is issued; HTTP-01 challenges are answered meanwhile. When the certificate is issuing, it is issued once more right after that attempt |
+| Uploaded, or automatic renewal off | Refused with "Certificate domains do not match the site or DNS zone: …", naming the uncovered domains |
+
+An HTTP-01 certificate cannot grow by wildcards, and a DNS-01 certificate only by names inside its DNS credential's zone; a certificate has at most 100 names.
+
 ### HTTPS fields
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
-| Certificates | An unexpired certificate / HTTP only | HTTP only | Must cover every domain of the site; a wildcard site domain `*.example.com` requires the same `*.example.com` SAN. Domains added to the site later must be covered as well |
+| Certificates | An unexpired certificate / HTTP only | HTTP only | Must cover every domain of the site; a wildcard site domain `*.example.com` requires the same `*.example.com` SAN. For domains added later see [Adding domains](#adding-domains-to-an-https-site) |
 | Minimum TLS version | TLS 1.2 / TLS 1.3 | TLS 1.2 | Lowest version accepted in the handshake |
 | Cipher profile | Modern / Compatible | Modern | TLS 1.2 cipher suites, see below |
 | HSTS lifetime (seconds) | 0–63072000 | 0 | Above 0, HTTPS responses carry `Strict-Transport-Security`; needs a certificate |
@@ -213,23 +226,44 @@ A change saved in the console or with an AccessKey is published even when it nee
 
 | Item | Description |
 | --- | --- |
-| Certificate authorities | The UI offers Let's Encrypt and ZeroSSL. `EDGEWEIR_ACME_DIRECTORY` and `EDGEWEIR_ACME_CA_FILE` move every certificate to a private or staging ACME directory, see [Environment variables](../reference/environment.en.md) |
+| Certificate authorities | The UI offers Let's Encrypt and ZeroSSL. `EDGEWEIR_ACME_DIRECTORY` and `EDGEWEIR_ACME_CA_FILE` move every certificate to a private or staging ACME directory; **Request certificate** then shows that directory instead of the CA and EAB fields, see [Environment variables](../reference/environment.en.md) |
 | TLS versions | TLS 1.0 and 1.1 are not supported |
 | Cipher suites | Only the **Modern** and **Compatible** profiles; no custom nginx configuration |
 | Compression | Gzip, Brotli, and Zstandard |
 | Node packages | Nodes use OpenResty 1.31.1.1 built for Edgeweir (`edgeweir-openresty`) with HTTP/2, HTTP/3, Brotli, and Zstandard, see [Adding nodes](../deploy/nodes.en.md) |
-| Failure reasons | The UI shows only **Issuance failed**. The console log records the certificate ID and the console's own reason; the text a CA or DNS provider returned is not logged |
+| Failure reasons | The card shows a classified reason: the CA's problem type (RFC 8555), a DNS provider error, or the console's own reason. The text a CA or DNS provider returned is neither stored nor logged; `certificate operation failed` in the console log records the certificate ID, the `code`, and the console's own reason |
 
 ## Troubleshooting
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| "Invalid or expired certificate, chain or private key" | Wrong chain order, mismatched key, no DNS SAN, not yet valid, or expired | Order the PEM as leaf then intermediates; check the key |
-| "Certificate domains do not match the site or DNS zone" | An HTTP-01 name is not a domain of any site; the DNS credential zone does not cover every name; the selected certificate does not cover every site domain, or a domain added to the site is not in its certificate | Add the domain to a site first, or use DNS-01; use a matching DNS credential or certificate |
-| Certificate shows **Issuance failed** | HTTP-01: the domain does not resolve to the nodes, port 80 is blocked, the cluster has no online node, a node did not apply the challenge within 40 seconds or lacks `http01-v1`, no certificate name is a site domain any more; DNS-01: insufficient credential permissions or propagation over 3 minutes; CA rate limits | Find `certificate operation failed` in the log of the console process that runs background jobs, fix the cause given in `reason`, and click **Renew now**; otherwise it retries after the [retry interval](#renewal) |
+| "The chain must hold 1 to 10 readable PEM certificates" | The chain is empty, has more than 10 certificates, or is damaged | Export the chain as PEM again |
+| "The private key cannot be read; encrypted keys are not supported" | The key is damaged or protected by a passphrase | Remove the passphrase with `openssl pkey -in key.pem -out plain.pem` and upload that |
+| "The private key does not belong to the certificate" | The key belongs to another certificate | Upload the key of the leaf certificate |
+| "Wrong chain order: the leaf certificate first, then each issuer" | An intermediate comes before the leaf, or a certificate is not issued by the next one | Order the PEM as leaf then intermediates |
+| "The certificate is not valid now (valid from … to …)" | Not yet valid or expired (times in UTC) | Check the server clock, or use a valid certificate |
+| "The certificate has no DNS names (subject alternative names)" | The certificate has only IP addresses or only a CN | Use a certificate with DNS SANs |
+| "The certificate is not issued yet or has expired" | The certificate selected for a site is still pending, or has expired | Wait for issuance, or renew it first |
+| "These names do not resolve to the nodes: …" | HTTP-01 names have no records, or resolve to the origin, another proxy, or other addresses that are not the cluster's nodes | Point the names to the nodes; with a load balancer in front of the nodes or a DNS change in progress, turn on **Skip the DNS check** |
+| "No online node can answer HTTP-01 in cluster …" | The cluster serving the names has no online active node | Check the nodes, or use DNS-01 |
+| "Some nodes don't support http01-v1 yet: …" | The listed online nodes lack `http01-v1` | Upgrade them, see [Node upgrades](node-upgrades.en.md) |
+| "Certificate domains do not match the site or DNS zone: …" | The listed names: an HTTP-01 name is not a domain of any site; the DNS credential zone does not cover them; the selected certificate does not cover these site domains; a domain added to the site is not in its uploaded certificate, or is a wildcard an HTTP-01 certificate cannot get or a name outside a DNS-01 certificate's credential zone | Add the domain to a site first, or use DNS-01; use a matching DNS credential or certificate |
+| Certificate shows **Issuance failed** | The reason on the card, see the rows below | Fix it and click **Renew now**; otherwise it retries after the [retry interval](#renewal) |
+| "The CA did not accept the domain validation", "The CA received a wrong challenge answer", "The CA could not connect to the domain" | HTTP-01: the domain does not resolve to the nodes, port 80 is blocked, or another proxy is in front; DNS-01: the TXT record went to another zone | Check the DNS records and port 80 |
+| "The CA could not resolve the domain" | The domain has no records, or its authoritative DNS fails | Add the records |
+| "A CAA record does not allow this CA" | The domain's CAA records do not list the chosen CA | Add `letsencrypt.org` or `sectigo.com` (ZeroSSL) to CAA, or remove CAA |
+| "CA rate limit reached" | Too many orders for the domain or account | Wait for the CA's limit window |
+| "The CA requires EAB credentials" | CAs such as ZeroSSL need EAB | Request again with the EAB key ID and HMAC key |
+| "The TXT record did not propagate within 3 minutes" | The DNS provider syncs slowly, or the credential's zone is not the domain's authoritative zone | Retry later; check the credential's zone |
+| "Provider authentication failed" and other DNS provider reasons | The DNS provider refused the DNS-01 TXT record | Edit the DNS credential; certificates retry right after new credentials are saved |
+| "No online node can answer HTTP-01 (http01-v1)", "Nodes did not apply the challenge within 40 seconds" | The cluster serving the domain has no online node, a node lacks `http01-v1`, or nodes apply configurations slowly | Check the cluster's nodes and upgrade them if needed |
+| "A domain belongs to no site" | No certificate name is a site domain any more | Add the domain to a site, or use DNS-01 |
+| "A domain does not resolve to the nodes" | The check before the issuance found a name that does not resolve to the cluster's nodes; the CA was not contacted | Fix the DNS records and click **Renew now** |
+| "Issuance failed; see the console log" | An unclassified error | Find `certificate operation failed` in the log of the console process that runs background jobs and follow its `reason` |
 | Certificate stays **Pending** | No console process runs background jobs | Make sure a process with `ROLE=worker` or `ROLE=all` runs |
 | "Certificate operation is already in progress" | The certificate is **Issuing** | Wait for issuance to finish |
-| "Certificate or credential is still in use" | The certificate is used by a site, issuing, or has DNS records to clean up; the DNS credential is referenced by a certificate | Select another certificate on the sites, or delete the certificates that reference the credential |
+| "The certificate is used by sites: …" | The listed sites selected the certificate | Select another certificate on their **HTTPS** tab first |
+| "The DNS credential is used by certificates: …" | The listed certificates use the credential for DNS-01 | Delete those certificates first |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (such as `http3-v1`) and keeps its last-known-good configuration | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | TLS SNI differs from `Host`, for example a client reused a connection opened for another domain | The client opens a connection for the requested domain |
 | Browsers do not use HTTP/3 | UDP 443 is blocked; the node lacks `http3-v1`; clients read `Alt-Svc` only after a first visit | Open UDP 443 and check node capabilities |

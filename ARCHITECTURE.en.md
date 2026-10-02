@@ -531,6 +531,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0046_dns_error_params` | `dns_revision.last_error_params` (the failure code's parameters, such as the conflicting DNS name) |
 | `0047_alert_subscription_sites` | `alert_subscription_site`, `alert_subscription.all_sites`; drops `alert_subscription.site_id`, the unique key becomes account and channel; a channel's subscriptions merge into one (the sites and alert kinds of the enabled ones when any is enabled, otherwise of all) |
 | `0048_rule_log_stats` | `logged_rules` (matches of **Log** rules) in the minute, hour and day statistics and the `traffic_hour_stats` view |
+| `0049_dns_lease_attempts` | `dns_challenge_lease.attempts` (failed cleanups of a TXT record, for the retry backoff) |
 
 ## Build output
 

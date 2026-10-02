@@ -64,7 +64,68 @@ export const tlsSettings = z
   })
   .refine((s) => (!s.forceHttps && s.hstsMaxAge === 0) || s.certificateId !== null, {
     message: "HTTPS redirect and HSTS require a certificate",
+    path: ["certificateId"],
   });
+
+/**
+ * Why the last issuance or renewal of an ACME certificate failed
+ * (`lastError`): codes of the certificate helper (ACME problem types,
+ * timeouts) and of the console. DNS provider failures of DNS-01 keep the
+ * DNS codes (dns_auth_failed, …, rendered like a DNS revision's error).
+ * The UI shows `cert_error_<code>`; codes are never the CA's or the
+ * provider's text.
+ */
+export const certificateErrorDefs = {
+  /** Anything not classified; the console log has the console's reason. */
+  certificate_operation_failed: { params: [] },
+  certd_failed: { params: [] },
+  certd_timeout: { params: [] },
+  certd_invalid_output: { params: [] },
+  acme_external_account_required: { params: [] },
+  acme_unauthorized: { params: [] },
+  acme_caa: { params: [] },
+  acme_dns: { params: [] },
+  acme_connection: { params: [] },
+  acme_tls: { params: [] },
+  acme_incorrect_response: { params: [] },
+  acme_rejected_identifier: { params: [] },
+  acme_unsupported_identifier: { params: [] },
+  acme_rate_limited: { params: [] },
+  acme_bad_csr: { params: [] },
+  acme_invalid_contact: { params: [] },
+  acme_unsupported_contact: { params: [] },
+  acme_user_action_required: { params: [] },
+  acme_account_does_not_exist: { params: [] },
+  acme_order_not_ready: { params: [] },
+  acme_malformed: { params: [] },
+  acme_server_internal: { params: [] },
+  /** An ACME problem of another type. */
+  acme_error: { params: [] },
+  acme_validation_timeout: { params: [] },
+  acme_order_timeout: { params: [] },
+  acme_unreachable: { params: [] },
+  acme_directory_invalid: { params: [] },
+  acme_directory_unreachable: { params: [] },
+  /** EDGEWEIR_ACME_CA_FILE holds no certificate. */
+  acme_ca_file_invalid: { params: [] },
+  dns_propagation_timeout: { params: [] },
+  dns_credential_not_found: { params: [] },
+  /** HTTP-01: a name no site has (no cluster answers its challenge). */
+  http01_unserved: { params: [] },
+  /** HTTP-01: a serving cluster has no online node, or one without http01-v1. */
+  http01_no_nodes: { params: [] },
+  http01_apply_timeout: { params: [] },
+  /** HTTP-01: a name resolves to no node, or to other addresses too. */
+  http01_dns_not_pointing: { params: [] },
+  issued_names_mismatch: { params: [] },
+  issued_certificate_invalid: { params: [] },
+} as const satisfies Record<string, { params: readonly string[] }>;
+
+export type CertificateErrorCode = keyof typeof certificateErrorDefs;
+
+export function isCertificateErrorCode(code: unknown): code is CertificateErrorCode {
+  return typeof code === "string" && Object.hasOwn(certificateErrorDefs, code);
+}
 
 export const certificateDto = z.object({
   id: uuid,
@@ -77,6 +138,7 @@ export const certificateDto = z.object({
   notAfter: z.string().nullable(),
   autoRenew: z.boolean(),
   renewAt: z.string().nullable(),
+  /** Why the last issuance failed: a certificateErrorDefs or DNS error code, or "". */
   lastError: z.string(),
 });
 const label = z.string().trim().min(1).max(100);
@@ -101,22 +163,42 @@ export const certificateRequest = z
     eabKid: z.string().max(256).optional(),
     eabHmacKey: z.string().max(1024).optional(),
     autoRenew: z.boolean().default(true),
+    /**
+     * HTTP-01: skip checking that every name resolves to the nodes of the
+     * cluster serving it (at the request and before each issuance).
+     */
+    skipDnsCheck: z.boolean().default(false),
   })
   .refine((s) => s.challenge !== "dns01" || !!s.dnsCredentialId, {
     message: "DNS-01 requires a DNS credential",
+    path: ["dnsCredentialId"],
   })
   .refine((s) => s.challenge !== "http01" || !s.names.some((n) => n.startsWith("*.")), {
     message: "wildcards require DNS-01",
+    path: ["names"],
   })
   .refine((s) => s.ca !== "zerossl" || (!!s.eabKid && !!s.eabHmacKey), {
     message: "ZeroSSL requires EAB credentials",
+    path: ["eabKid"],
   });
+
+/** How the console issues ACME certificates. */
+export const certificateSettings = z.object({
+  /**
+   * The ACME directory EDGEWEIR_ACME_DIRECTORY sets for every certificate
+   * (the CA chosen per certificate is not used), or null.
+   */
+  acmeDirectory: z.string().nullable(),
+});
 
 const id = z.object({ id: uuid });
 export const certificatesContract = {
   list: oc
     .route({ method: "GET", path: "/certificates", tags: ["certificates"] })
     .output(z.array(certificateDto)),
+  settings: oc
+    .route({ method: "GET", path: "/certificates/settings", tags: ["certificates"] })
+    .output(certificateSettings),
   upload: oc
     .route({ method: "POST", path: "/certificates/upload", tags: ["certificates"] })
     .input(certificateUpload)
@@ -214,4 +296,5 @@ export type TlsSettings = z.infer<typeof tlsSettings>;
 export type CertificateDto = z.infer<typeof certificateDto>;
 export type CertificateUpload = z.infer<typeof certificateUpload>;
 export type CertificateRequest = z.infer<typeof certificateRequest>;
+export type CertificateSettings = z.infer<typeof certificateSettings>;
 export type DnsCredentialInput = z.infer<typeof dnsCredentialInput>;

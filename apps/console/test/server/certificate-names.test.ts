@@ -5,6 +5,7 @@ import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
+import { namesCover, uncoveredDomains } from "../../src/server/lib/certificate-names";
 import { issueCertificate } from "../../src/server/services/certificate-worker";
 import {
   type ApiClient,
@@ -68,6 +69,15 @@ describe("certificate names", async () => {
         origins: [{ address: "origin.example.com" }],
       })
     ).site.id;
+    // A node that answers HTTP-01 (requests need one online; certificate-http01-check.test.ts).
+    const clusterId = (await api.clusters.list())[0]?.id ?? "";
+    await ctx.db.insert(schema.node).values({
+      clusterId,
+      nodeGroupId: (await api.nodeGroups.list({ clusterId }))[0]?.id ?? "",
+      name: "edge",
+      lastSeenAt: new Date(Date.now() + 3_600_000),
+      supportedFeatures: ["tls-v1", "http01-v1"],
+    });
   });
   afterAll(async () => {
     await client.close();
@@ -83,11 +93,34 @@ describe("certificate names", async () => {
       ...extra,
     });
 
+  it("covers a domain with the same name or a wildcard one label up", async () => {
+    const plain = (name: string) => ({ name, wildcard: false });
+    const wild = (name: string) => ({ name, wildcard: true });
+    expect(namesCover(["shop.test"], plain("shop.test"))).toBe(true);
+    expect(namesCover(["*.shop.test"], plain("www.shop.test"))).toBe(true);
+    expect(namesCover(["*.shop.test"], plain("a.www.shop.test"))).toBe(false);
+    expect(namesCover(["*.shop.test"], plain("shop.test"))).toBe(false);
+    expect(namesCover(["*.shop.test"], wild("shop.test"))).toBe(true);
+    expect(namesCover(["www.shop.test"], wild("shop.test"))).toBe(false);
+    // The chain decides what nodes serve.
+    const material = await ctx.nodeCa.issueServerCertificate(["shop.test", "*.shop.test"]);
+    expect(
+      uncoveredDomains(material.certificatePem, [
+        plain("shop.test"),
+        plain("www.shop.test"),
+        wild("shop.test"),
+        plain("other.test"),
+        wild("www.shop.test"),
+      ]),
+    ).toEqual([plain("other.test"), wild("www.shop.test")]);
+  });
+
   it("asks HTTP-01 names to be domains of a site, since only their clusters answer the challenge", async () => {
     expect((await request(["shop.test", "www.shop.test"])).status).toBe("pending");
-    expect((await rpcError(request(["shop.test", "elsewhere.test"]))).code).toBe(
-      "CERTIFICATE_DOMAIN_MISMATCH",
-    );
+    expect(await rpcError(request(["shop.test", "elsewhere.test"]))).toMatchObject({
+      code: "CERTIFICATE_DOMAIN_MISMATCH",
+      data: { domains: "elsewhere.test" },
+    });
   });
 
   it("lets DNS-01 names be any names inside the credential's zone", async () => {
@@ -122,7 +155,11 @@ describe("certificate names", async () => {
       .from(schema.certificate)
       .where(eq(schema.certificate.id, id));
     // The fake helper refused; the names stay until a renewal succeeds.
-    expect(row).toMatchObject({ status: "error", names: ["shop.test", "www.shop.test"] });
+    expect(row).toMatchObject({
+      status: "error",
+      names: ["shop.test", "www.shop.test"],
+      lastError: "certd_failed",
+    });
 
     // With no name left on a site, the renewal asks for all of them (and fails at the CA).
     await api.sites.update({ id: siteId, domains: ["other.test"] });

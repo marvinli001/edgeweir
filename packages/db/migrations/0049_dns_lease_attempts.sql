@@ -1,0 +1,1 @@
+ALTER TABLE "dns_challenge_lease" ADD COLUMN "attempts" integer DEFAULT 0 NOT NULL;

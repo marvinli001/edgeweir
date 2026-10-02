@@ -456,7 +456,7 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | Responses always show `X-Cache: MISS` | No applicable rule; in respect mode the origin sent no lifetime; the response has `Set-Cookie`; the TTL is 0 | Check rule order, conditions, and origin headers |
 | The **Origins** card shows "Keep at least one origin in the default group" | Every origin has an **Origin group** | Clear **Origin group** on at least one origin |
 | Saving origins or cache rules shows "Invalid rule" | An origin group that an **Origin override** rule still picks was removed; a cache rule condition is invalid | Change the rule first, or keep an origin in that group; fix the condition |
-| "Cluster nodes need these capabilities first: rules-v2" | A configuration published by a service account or a background job uses origin groups, advanced conditions, or a browser TTL, and an active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
+| "Some nodes don't support Rule extensions yet: <nodes>" | A configuration published by a service account or a background job uses origin groups, advanced conditions, or a browser TTL, and an active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | Requests sent to different origin groups get the same cached object | The cache key does not include the origin group | Pick origin groups by path, or add what decides the group to the cache key |
 | "No site serves …" | The URL's Host is not a domain of any site | Check the spelling of the domain |
 | "The site is disabled" | A task or **Purge cache** concerns a disabled site | Enable the site on its **Overview** tab, then submit again |

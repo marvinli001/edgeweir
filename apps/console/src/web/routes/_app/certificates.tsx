@@ -8,13 +8,16 @@ import { providerLabel } from "@/components/dns/labels";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
+import { SafetyNote } from "@/components/safety-note";
+import { SwitchField } from "@/components/site/fields";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { certificateErrorText } from "@/lib/certificate-errors";
 import { formatDateTime, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
@@ -28,6 +31,7 @@ function CertificatesPage() {
     meta: { background: true },
   });
   const credentials = useQuery(orpc.dnsCredentials.list.queryOptions());
+  const settings = useQuery(orpc.certificates.settings.queryOptions());
   const remove = useMutation(orpc.certificates.delete.mutationOptions());
   const renew = useMutation(orpc.certificates.renew.mutationOptions());
   const removeDns = useMutation(orpc.dnsCredentials.delete.mutationOptions());
@@ -77,6 +81,11 @@ function CertificatesPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="break-all text-sm">{cert.names.join(", ")}</p>
+                {cert.lastError ? (
+                  <SafetyNote className="text-destructive" data-testid="certificate-error">
+                    {certificateErrorText(cert.lastError)}
+                  </SafetyNote>
+                ) : null}
                 {cert.notAfter ? (
                   <p className="text-sm text-muted-foreground">
                     {m.cert_expires({
@@ -178,7 +187,11 @@ function CertificatesPage() {
       </Card>
       {dialog === "upload" ? <UploadDialog onClose={() => setDialog(null)} /> : null}
       {dialog === "request" ? (
-        <RequestDialog credentials={credentials.data ?? []} onClose={() => setDialog(null)} />
+        <RequestDialog
+          credentials={credentials.data ?? []}
+          acmeDirectory={settings.data?.acmeDirectory ?? null}
+          onClose={() => setDialog(null)}
+        />
       ) : null}
       {dialog === "dns" || editing ? (
         <DnsCredentialDialog
@@ -276,9 +289,12 @@ function UploadDialog({ onClose }: { onClose: () => void }) {
 }
 function RequestDialog({
   credentials,
+  acmeDirectory,
   onClose,
 }: {
   credentials: { id: string; name: string }[];
+  /** EDGEWEIR_ACME_DIRECTORY: every certificate uses it, whatever CA is chosen. */
+  acmeDirectory: string | null;
   onClose: () => void;
 }) {
   const client = useQueryClient();
@@ -286,6 +302,11 @@ function RequestDialog({
   const [ca, setCa] = React.useState("letsencrypt");
   const [challenge, setChallenge] = React.useState("http01");
   const [credential, setCredential] = React.useState(credentials[0]?.id ?? "");
+  const [skipDnsCheck, setSkipDnsCheck] = React.useState(false);
+  const [names, setNames] = React.useState("");
+  const parsedNames = names.split(/[\s,]+/).filter(Boolean);
+  // HTTP-01 cannot validate wildcards (the API refuses them too).
+  const wildcard = challenge === "http01" && parsedNames.some((n) => n.startsWith("*."));
   return (
     <FormDialog
       open
@@ -296,16 +317,15 @@ function RequestDialog({
       submitLabel={m.cert_request()}
       submitTestId="cert-request-submit"
       onSubmit={async (data) => {
+        if (wildcard) return;
         await request.mutateAsync({
           name: String(data.get("certName")),
-          names: String(data.get("names"))
-            .split(/[\s,]+/)
-            .filter(Boolean),
+          names: parsedNames,
           email: String(data.get("email")),
-          ca: ca as "letsencrypt" | "zerossl",
+          ca: acmeDirectory ? "letsencrypt" : (ca as "letsencrypt" | "zerossl"),
           challenge: challenge as "http01" | "dns01",
-          ...(challenge === "dns01" ? { dnsCredentialId: credential } : {}),
-          ...(ca === "zerossl"
+          ...(challenge === "dns01" ? { dnsCredentialId: credential } : { skipDnsCheck }),
+          ...(ca === "zerossl" && !acmeDirectory
             ? { eabKid: String(data.get("eabKid")), eabHmacKey: String(data.get("eabHmacKey")) }
             : {}),
         });
@@ -314,18 +334,43 @@ function RequestDialog({
       }}
     >
       <TextField id="certName" label={m.cert_name()} />
-      <TextField id="names" label={m.cert_domains()} />
+      <Field data-invalid={wildcard || undefined}>
+        <FieldLabel htmlFor="names">{m.cert_domains()}</FieldLabel>
+        <Input
+          id="names"
+          name="names"
+          required
+          autoComplete="off"
+          value={names}
+          onChange={(event) => setNames(event.target.value)}
+          aria-invalid={wildcard || undefined}
+        />
+        {wildcard ? (
+          <FieldError className="animate-in fade-in" data-testid="cert-names-error">
+            {m.cert_wildcard_needs_dns01()}
+          </FieldError>
+        ) : null}
+      </Field>
       <TextField id="email" label={m.cert_email()} type="email" />
-      <FormSelect
-        id="certCa"
-        label={m.cert_ca()}
-        value={ca}
-        onChange={setCa}
-        options={[
-          { value: "letsencrypt", label: m.cert_ca_letsencrypt() },
-          { value: "zerossl", label: m.cert_ca_zerossl() },
-        ]}
-      />
+      {acmeDirectory ? (
+        <Field>
+          <FieldTitle>{m.cert_acme_directory()}</FieldTitle>
+          <p className="font-mono text-sm break-all" data-testid="cert-acme-directory">
+            {acmeDirectory}
+          </p>
+        </Field>
+      ) : (
+        <FormSelect
+          id="certCa"
+          label={m.cert_ca()}
+          value={ca}
+          onChange={setCa}
+          options={[
+            { value: "letsencrypt", label: m.cert_ca_letsencrypt() },
+            { value: "zerossl", label: m.cert_ca_zerossl() },
+          ]}
+        />
+      )}
       <FormSelect
         id="certChallenge"
         label={m.cert_challenge()}
@@ -344,8 +389,16 @@ function RequestDialog({
           onChange={setCredential}
           options={credentials.map((c) => ({ value: c.id, label: c.name }))}
         />
-      ) : null}
-      {ca === "zerossl" ? (
+      ) : (
+        <SwitchField
+          id="certSkipDnsCheck"
+          label={m.cert_skip_dns_check()}
+          checked={skipDnsCheck}
+          onCheckedChange={setSkipDnsCheck}
+          className="self-start"
+        />
+      )}
+      {ca === "zerossl" && !acmeDirectory ? (
         <>
           <TextField id="eabKid" label={m.cert_eab_kid()} />
           <TextField id="eabHmacKey" label={m.cert_eab_key()} type="password" />

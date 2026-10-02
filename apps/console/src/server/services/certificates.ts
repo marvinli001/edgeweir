@@ -3,6 +3,7 @@ import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import {
   type CertificateDto,
   type CertificateRequest,
+  type CertificateSettings,
   type CertificateUpload,
   type DnsCredentialInput,
   dnsProviderEntry,
@@ -10,12 +11,18 @@ import {
   tlsSettings,
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
-import { assertCertificateNames } from "../lib/certificate-names";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import {
+  certificateName,
+  failUncovered,
+  namesCover,
+  uncoveredDomains,
+} from "../lib/certificate-names";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { type Actor, recordAudit } from "./audit";
 import { certdDns, probe, validCredentials } from "./dns-providers";
+import { assertHttp01Ready } from "./http01-check";
 import { type Executor, getRevision, publisher, publishRevision } from "./revisions";
 import { publishedRevisions } from "./rollout";
 
@@ -63,60 +70,93 @@ export async function findCertificate(db: Executor, id: string) {
   return row;
 }
 
+const utc = (date: Date) => `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+/** Runs a check whose own exceptions (unreadable input) mean the given failure. */
+function readOr<T>(read: () => T, fallback: () => T): T {
+  try {
+    return read();
+  } catch {
+    return fallback();
+  }
+}
+
 /**
  * Checks a chain and its key and returns them re-encoded: only the
  * certificates and the key in PKCS #8 are ever stored, whatever else the
  * pasted text held. Any other PEM block in the chain (a combined
  * fullchain-and-key file) is refused, so a key never lands in `chain_pem`.
+ * Each problem has its own error code, so the operator learns which one it is.
  */
 export function inspectCertificate(chainPem: string, privateKeyPem: string) {
   const labels = [...chainPem.matchAll(/-----BEGIN ([^\r\n]*?)-----/g)].map((m) => m[1]);
   if (labels.some((label) => label !== "CERTIFICATE"))
     fail("CERTIFICATE_CHAIN_FOREIGN_BLOCK", "the chain may contain only certificates");
-  try {
-    const blocks = chainPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
-    if (!blocks?.length || blocks.length > 10 || blocks.length !== labels.length)
-      throw new Error("invalid chain");
-    const chain = blocks.map((block) => new X509Certificate(block));
-    const leaf = chain[0];
-    const key = createPrivateKey(privateKeyPem);
-    if (!leaf || leaf.ca || !leaf.checkPrivateKey(key)) throw new Error("invalid leaf or key");
-    for (let i = 0; i + 1 < chain.length; i++) {
-      const cert = chain[i];
-      const issuer = chain[i + 1];
-      if (!cert || !issuer?.ca || !cert.checkIssued(issuer) || !cert.verify(issuer.publicKey))
-        throw new Error("invalid chain order");
-    }
-    const notBefore = new Date(leaf.validFrom);
-    const notAfter = new Date(leaf.validTo);
-    if (notBefore.getTime() > Date.now() || notAfter.getTime() <= Date.now())
-      throw new Error("certificate is not currently valid");
-    const names = [
-      ...new Set(
-        (leaf.subjectAltName ?? "")
-          .split(/,\s*/)
-          .filter((part) => part.startsWith("DNS:"))
-          .map((part) => part.slice(4).toLowerCase()),
-      ),
-    ];
-    if (!names.length || names.some((name) => !/^(\*\.)?[a-z0-9.-]+$/.test(name)))
-      throw new Error("DNS SAN required");
-    return {
-      leaf,
-      names,
-      notBefore,
-      notAfter,
-      fingerprint: leaf.fingerprint256.replaceAll(":", "").toLowerCase(),
-      chainPem: chain.map((cert) => cert.toString()).join(""),
-      privateKeyPem: key.export({ type: "pkcs8", format: "pem" }).toString(),
-    };
-  } catch {
-    fail("CERTIFICATE_INVALID", "invalid certificate chain, validity or matching private key");
+  const unreadableChain: () => never = () =>
+    fail("CERTIFICATE_CHAIN_UNREADABLE", "the chain must hold 1 to 10 readable PEM certificates");
+  const blocks = chainPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
+  if (!blocks?.length || blocks.length > 10 || blocks.length !== labels.length) unreadableChain();
+  const chain = readOr(() => blocks.map((block) => new X509Certificate(block)), unreadableChain);
+  const key = readOr(
+    () => createPrivateKey(privateKeyPem),
+    () => fail("CERTIFICATE_KEY_UNREADABLE", "the private key cannot be read (or is encrypted)"),
+  );
+  const leaf = chain[0] as X509Certificate;
+  const wrongOrder: () => never = () =>
+    fail("CERTIFICATE_CHAIN_ORDER", "the chain must start with the leaf, each issued by the next");
+  if (leaf.ca) wrongOrder();
+  if (
+    !readOr(
+      () => leaf.checkPrivateKey(key),
+      () => false,
+    )
+  )
+    fail("CERTIFICATE_KEY_MISMATCH", "the private key does not belong to the certificate");
+  for (let i = 0; i + 1 < chain.length; i++) {
+    const cert = chain[i] as X509Certificate;
+    const issuer = chain[i + 1] as X509Certificate;
+    if (
+      !issuer.ca ||
+      !readOr(
+        () => cert.checkIssued(issuer) && cert.verify(issuer.publicKey),
+        () => false,
+      )
+    )
+      wrongOrder();
   }
+  const notBefore = new Date(leaf.validFrom);
+  const notAfter = new Date(leaf.validTo);
+  if (notBefore.getTime() > Date.now() || notAfter.getTime() <= Date.now())
+    fail("CERTIFICATE_NOT_CURRENTLY_VALID", "the certificate is not currently valid", {
+      notBefore: utc(notBefore),
+      notAfter: utc(notAfter),
+    });
+  const names = [
+    ...new Set(
+      (leaf.subjectAltName ?? "")
+        .split(/,\s*/)
+        .filter((part) => part.startsWith("DNS:"))
+        .map((part) => part.slice(4).toLowerCase()),
+    ),
+  ];
+  if (!names.length || names.some((name) => !/^(\*\.)?[a-z0-9.-]+$/.test(name)))
+    fail("CERTIFICATE_NO_DNS_NAMES", "the certificate needs DNS names (subject alternative names)");
+  return {
+    leaf,
+    names,
+    notBefore,
+    notAfter,
+    fingerprint: leaf.fingerprint256.replaceAll(":", "").toLowerCase(),
+    chainPem: chain.map((cert) => cert.toString()).join(""),
+    privateKeyPem: key.export({ type: "pkcs8", format: "pem" }).toString(),
+  };
 }
 
 export async function listCertificates(app: AppContext) {
   return (await app.db.select().from(schema.certificate)).map(certificateDto);
+}
+
+export function certificateSettings(app: AppContext): CertificateSettings {
+  return { acmeDirectory: app.env.EDGEWEIR_ACME_DIRECTORY || null };
 }
 
 export async function uploadCertificate(
@@ -155,6 +195,10 @@ export async function uploadCertificate(
   });
 }
 
+/** A certificate name outside a DNS zone (the zone itself and names below it are inside). */
+const outsideZone = (name: string, zone: string) =>
+  name.replace(/^\*\./, "") !== zone && !name.endsWith(`.${zone}`);
+
 export async function requestCertificate(
   app: AppContext,
   input: CertificateRequest,
@@ -169,22 +213,24 @@ export async function requestCertificate(
       .where(
         and(inArray(schema.siteDomain.name, input.names), eq(schema.siteDomain.wildcard, false)),
       );
-    if (input.names.some((name) => !served.some((d) => d.name === name)))
-      fail("CERTIFICATE_DOMAIN_MISMATCH", "add the HTTP-01 names to a site first");
+    const unserved = input.names.filter((name) => !served.some((d) => d.name === name));
+    if (unserved.length)
+      fail("CERTIFICATE_DOMAIN_MISMATCH", "add the HTTP-01 names to a site first", {
+        domains: unserved.slice(0, 5).join(", "),
+      });
+    await assertHttp01Ready(app, input.names, { skipDnsCheck: input.skipDnsCheck });
   }
   if (input.dnsCredentialId) {
     const credential = await findDnsCredential(app.db, input.dnsCredentialId);
-    if (
-      input.names.some(
-        (name) =>
-          name.replace(/^\*\./, "") !== credential.zone && !name.endsWith(`.${credential.zone}`),
-      )
-    ) {
+    const outside = input.names.filter((name) => outsideZone(name, credential.zone));
+    if (outside.length)
       fail(
         "CERTIFICATE_DOMAIN_MISMATCH",
         "DNS credential zone does not cover all certificate names",
+        {
+          domains: outside.slice(0, 5).join(", "),
+        },
       );
-    }
   }
   return app.db.transaction(async (tx) => {
     const [row] = await tx
@@ -200,6 +246,7 @@ export async function requestCertificate(
           challenge: input.challenge,
           email: input.email,
           dnsCredentialId: input.dnsCredentialId ?? "",
+          ...(input.challenge === "http01" && input.skipDnsCheck ? { skipDnsCheck: "true" } : {}),
         },
         accountEnvelope: JSON.stringify(
           app.masterKey.seal(
@@ -218,6 +265,60 @@ export async function requestCertificate(
     });
     return certificateDto(row);
   });
+}
+
+/**
+ * Checks that a site's certificate covers the site's new domains. An ACME
+ * certificate the console renews takes the domains it does not cover yet:
+ * its names grow by them (a name below one of its wildcards needs none)
+ * and it is reissued at once; an attempt already running is left alone and
+ * reissues when it ends (issueNow). Until the new chain is issued, nodes
+ * keep the current one and the new domains wait (loadSiteModels). Any
+ * other certificate must cover every domain (CERTIFICATE_DOMAIN_MISMATCH,
+ * naming the domains). Returns the certificate when its names grew.
+ */
+export async function coverSiteDomains(
+  tx: Executor,
+  certificateId: string,
+  domains: { name: string; wildcard: boolean }[],
+  ctx: CertificateContext & { site: { id: string; name: string } },
+): Promise<{ id: string; name: string } | undefined> {
+  const cert = await findCertificate(tx, certificateId);
+  const uncovered = uncoveredDomains(cert.chainPem, domains);
+  if (!uncovered.length) return undefined;
+  if (cert.source !== "acme" || !cert.autoRenew) failUncovered(uncovered);
+  // Names the certificate already grew by wait for its reissue.
+  const missing = uncovered.filter((domain) => !namesCover(cert.names, domain));
+  if (!missing.length) return undefined;
+  // HTTP-01 cannot validate wildcards; DNS-01 only names in its credential's zone.
+  const refused =
+    cert.acme.challenge === "dns01"
+      ? await (async () => {
+          if (!cert.acme.dnsCredentialId) return missing;
+          const credential = await findDnsCredential(tx, cert.acme.dnsCredentialId);
+          return missing.filter((d) => outsideZone(certificateName(d), credential.zone));
+        })()
+      : missing.filter((d) => d.wildcard);
+  if (refused.length) failUncovered(refused);
+  const added = missing.map(certificateName);
+  const names = [...cert.names, ...added];
+  if (names.length > 100) failUncovered(missing);
+  await tx
+    .update(schema.certificate)
+    .set({
+      names,
+      ...(cert.status === "issuing" ? {} : { status: "pending", lastError: "" }),
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.certificate.id, cert.id));
+  await recordAudit(tx, ctx.actor, {
+    action: "certificate.names_extended",
+    targetType: "certificate",
+    targetId: cert.id,
+    targetName: cert.name,
+    metadata: { siteId: ctx.site.id, site: ctx.site.name, added },
+  });
+  return { id: cert.id, name: cert.name };
 }
 
 export async function renewCertificate(app: AppContext, id: string, ctx: CertificateContext) {
@@ -241,27 +342,53 @@ export async function renewCertificate(app: AppContext, id: string, ctx: Certifi
   });
 }
 
+/**
+ * Deletes a certificate no site uses (CERTIFICATE_IN_USE names the sites)
+ * and that is not issuing (CERTIFICATE_BUSY). DNS-01 TXT records still to
+ * clean up are given up: the audit entry lists them for removal by hand.
+ */
 export async function deleteCertificate(app: AppContext, id: string, ctx: CertificateContext) {
   return app.db.transaction(async (tx) => {
     const cert = await findCertificate(tx, id);
-    const refs = await tx
-      .select({ id: schema.site.id })
+    const sites = await tx
+      .select({ name: schema.site.name })
       .from(schema.site)
       .where(eq(schema.site.certificateId, id))
-      .limit(1);
+      .orderBy(schema.site.name)
+      .limit(5);
+    if (sites.length)
+      fail("CERTIFICATE_IN_USE", "certificate is used by sites", {
+        sites: sites.map((site) => site.name).join(", "),
+      });
+    if (cert.status === "issuing") fail("CERTIFICATE_BUSY", "certificate is issuing");
     const leases = await tx
-      .select({ id: schema.dnsChallengeLease.id })
-      .from(schema.dnsChallengeLease)
+      .delete(schema.dnsChallengeLease)
       .where(eq(schema.dnsChallengeLease.certificateId, id))
-      .limit(1);
-    if (refs.length || leases.length || cert.status === "issuing")
-      fail("CERTIFICATE_IN_USE", "certificate is in use");
+      .returning({
+        record: schema.dnsChallengeLease.record,
+        credentialId: schema.dnsChallengeLease.credentialId,
+      });
+    const zones = leases.length
+      ? await tx
+          .select({ id: schema.dnsCredential.id, zone: schema.dnsCredential.zone })
+          .from(schema.dnsCredential)
+          .where(inArray(schema.dnsCredential.id, [...new Set(leases.map((l) => l.credentialId))]))
+      : [];
+    const leftDnsRecords = [
+      ...new Set(
+        leases.map(({ record, credentialId }) => {
+          const zone = zones.find((z) => z.id === credentialId)?.zone ?? "";
+          return `${record.name}.${zone} TXT ${record.data}`;
+        }),
+      ),
+    ].sort();
     await tx.delete(schema.certificate).where(eq(schema.certificate.id, id));
     await recordAudit(tx, ctx.actor, {
       action: "certificate.delete",
       targetType: "certificate",
       targetId: id,
       targetName: cert.name,
+      ...(leftDnsRecords.length ? { metadata: { leftDnsRecords } } : {}),
     });
     return { ok: true as const };
   });
@@ -288,12 +415,17 @@ export async function updateHttps(
     if (settings.certificateId) {
       const cert = await findCertificate(tx, settings.certificateId);
       if (!cert.chainPem || !cert.notAfter || cert.notAfter.getTime() <= Date.now())
-        fail("CERTIFICATE_INVALID", "certificate is unavailable or expired");
+        fail("CERTIFICATE_UNAVAILABLE", "certificate is not issued yet or expired");
       const domains = await tx
         .select()
         .from(schema.siteDomain)
         .where(eq(schema.siteDomain.siteId, id));
-      assertCertificateNames(cert.chainPem, cert.names, domains);
+      // The site's own ACME certificate may be being reissued for domains
+      // added since (coverSiteDomains): they wait for it, as before.
+      const waiting = (domain: { name: string; wildcard: boolean }) =>
+        cert.id === site.certificateId && cert.source === "acme" && namesCover(cert.names, domain);
+      const uncovered = uncoveredDomains(cert.chainPem, domains).filter((d) => !waiting(d));
+      if (uncovered.length) failUncovered(uncovered);
     }
     const { certificateId, ...options } = settings;
     await tx
@@ -403,12 +535,39 @@ export async function updateDnsCredential(
       .where(eq(schema.dnsCredential.id, row.id))
       .returning();
     if (!updated) throw new Error("DNS credential disappeared");
+    // New credentials are tried at once: by certificates whose issuance
+    // failed, and by TXT records whose cleanup failed.
+    const retried = credentials
+      ? await tx
+          .update(schema.certificate)
+          .set({ renewAt: new Date() })
+          .where(
+            and(
+              eq(schema.certificate.status, "error"),
+              sql`${schema.certificate.acme}->>'dnsCredentialId' = ${row.id}`,
+            ),
+          )
+          .returning({ id: schema.certificate.id })
+      : [];
+    if (credentials)
+      await tx
+        .update(schema.dnsChallengeLease)
+        .set({ expiresAt: new Date() })
+        .where(
+          and(
+            eq(schema.dnsChallengeLease.credentialId, row.id),
+            gt(schema.dnsChallengeLease.attempts, 0),
+          ),
+        );
     await recordAudit(tx, ctx.actor, {
       action: "dns_credential.update",
       targetType: "dns_credential",
       targetId: row.id,
       targetName: updated.name,
-      metadata: { credentialsRotated: !!credentials },
+      metadata: {
+        credentialsRotated: !!credentials,
+        ...(retried.length ? { retriedCertificates: retried.length } : {}),
+      },
     });
     return credentialDto(updated);
   });
@@ -456,11 +615,15 @@ export async function deleteDnsCredential(app: AppContext, id: string, ctx: Cert
   return app.db.transaction(async (tx) => {
     const row = await findDnsCredential(tx, id, true);
     const refs = await tx
-      .select({ id: schema.certificate.id })
+      .select({ name: schema.certificate.name })
       .from(schema.certificate)
       .where(sql`${schema.certificate.acme}->>'dnsCredentialId' = ${id}`)
-      .limit(1);
-    if (refs.length) fail("CERTIFICATE_IN_USE", "DNS credential is referenced by a certificate");
+      .orderBy(schema.certificate.name)
+      .limit(5);
+    if (refs.length)
+      fail("DNS_CREDENTIAL_IN_USE", "DNS credential is used by certificates", {
+        certificates: refs.map((ref) => ref.name).join(", "),
+      });
     await tx.delete(schema.dnsCredential).where(eq(schema.dnsCredential.id, id));
     await recordAudit(tx, ctx.actor, {
       action: "dns_credential.delete",

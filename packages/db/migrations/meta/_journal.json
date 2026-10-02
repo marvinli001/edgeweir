@@ -344,6 +344,13 @@
       "when": 1790926339587,
       "tag": "0048_rule_log_stats",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1790926713394,
+      "tag": "0049_dns_lease_attempts",
+      "breakpoints": true
     }
   ]
 }

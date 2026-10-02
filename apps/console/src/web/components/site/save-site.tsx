@@ -27,6 +27,11 @@ export function useSaveSite(siteId: string) {
       toast.success(m.site_saved({ revision: result.revision.revision }), {
         id: "site-saved",
       });
+      // New domains the site's ACME certificate is reissued for.
+      if (result.certificateReissue)
+        toast.info(m.site_certificate_reissue({ name: result.certificateReissue.name }), {
+          id: "site-certificate-reissue",
+        });
       return true;
     } catch (err) {
       setError(errorMessage(err));

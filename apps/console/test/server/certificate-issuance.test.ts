@@ -2,9 +2,10 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
+import { tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, eq, gt, inArray } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
 import {
   checkRenewalInfo,
@@ -15,7 +16,14 @@ import {
 } from "../../src/server/services/certificate-worker";
 import { certificateAccountBinding } from "../../src/server/services/certificates";
 import { latestRevision, pruneRevisions } from "../../src/server/services/revisions";
-import { type ApiClient, createTestContext, rpcClient, setupPlatform, signIn } from "./helpers";
+import {
+  type ApiClient,
+  createTestContext,
+  rpcClient,
+  rpcError,
+  setupPlatform,
+  signIn,
+} from "./helpers";
 
 // How issuance publishes HTTP-01 challenges, which ACME account it uses,
 // when it runs and retries, and how it follows the CA's renewal windows
@@ -25,6 +33,10 @@ type Plan = {
   /** Issued material by requested names ("a,b"). */
   issued: Record<string, { chainPem: string; privateKeyPem: string }>;
   fail: string[];
+  /** The code a failure answers with. */
+  failCode?: string;
+  /** While set, the helper waits for this file before it answers (after the challenges). */
+  hold?: string;
   /** Renewal windows by chain. */
   windows: Record<string, unknown>;
   failRenewalInfo?: boolean;
@@ -63,10 +75,11 @@ const send = async (event) => {
   const names = p.domains.join(",");
   if (!p.account.registration)
     await send({ event: "account", account: { privateKeyPem: "account-key-" + names, registration: { uri: "https://acme-v02.api.letsencrypt.org/acme/acct/" + names, body: {} } } });
-  if (plan.fail.includes(names)) return done({ ok: false });
+  if (plan.fail.includes(names)) return done({ ok: false, code: plan.failCode, error: "CA said: ops@example.com is not allowed" });
   const challenges = p.domains.map((domain, i) => ({ domain, token: "t" + process.pid + "-" + i + "-abcdefghijklmnop", keyAuthorization: "t" + process.pid + "-" + i + ".thumbprint" }));
   await send({ event: "http01.present", challenges });
   await send({ event: "http01.cleanup", challenges: challenges.map(({ domain, token }) => ({ domain, token })) });
+  while (plan.hold && !fs.existsSync(plan.hold)) await new Promise((r) => setTimeout(r, 20));
   done({ ok: true, result: plan.issued[names] });
 })();
 `,
@@ -182,6 +195,12 @@ describe("certificate issuance", async () => {
     const before = (await latestRevision(ctx.db, clusterId))?.revision ?? 0;
     await issueCertificate(ctx, id);
     expect(await row(id)).toMatchObject({ status: "ready", names });
+    // The CA chosen per certificate: no directory set for all.
+    expect(await api.certificates.settings()).toEqual({ acmeDirectory: null });
+    expect((await row(id)).acme).toMatchObject({
+      ca: "letsencrypt",
+      directoryUrl: "https://acme-v02.api.letsencrypt.org/directory",
+    });
     const published = await ctx.db
       .select()
       .from(schema.configRevision)
@@ -275,9 +294,53 @@ describe("certificate issuance", async () => {
     await issueCertificate(ctx, id);
     const failed = await row(id);
     expect(failed.status).toBe("error");
+    expect(failed.lastError).toBe("certd_failed");
     expect((failed.renewAt?.getTime() ?? 0) - Date.now()).toBeGreaterThan(2.3 * hour);
     expect((failed.renewAt?.getTime() ?? 0) - Date.now()).toBeLessThan(2.4 * hour);
     certd.plan({ fail: [] });
+  });
+
+  it("stores why an issuance failed as a code, never the helper's or the CA's text", async () => {
+    const { id } = await request(["b.issue.test", "c.issue.test"], "codes@example.com");
+    const names = "b.issue.test,c.issue.test";
+    certd.plan({ fail: [names], failCode: "acme_caa" });
+    await issueCertificate(ctx, id);
+    expect(await row(id)).toMatchObject({ status: "error", lastError: "acme_caa" });
+    expect((await api.certificates.list()).find((c) => c.id === id)?.lastError).toBe("acme_caa");
+    // A code the console does not accept is not stored as it is.
+    certd.plan({ failCode: "CA said: no" });
+    await api.certificates.renew({ id });
+    await issueCertificate(ctx, id);
+    expect((await row(id)).lastError).toBe("certd_failed");
+    // A manual renewal clears the reason until the next attempt.
+    certd.plan({ fail: [], failCode: undefined });
+    expect((await api.certificates.renew({ id })).lastError).toBe("");
+    await issueCertificate(ctx, id);
+    expect(await row(id)).toMatchObject({ status: "ready", lastError: "" });
+  });
+
+  it("stores the console's own reason when an HTTP-01 challenge cannot be published", async () => {
+    // A name of a site in a cluster without nodes (inserted as the API refuses such a request).
+    const lonely = await api.clusters.create({ name: "lonely" });
+    await api.sites.create({
+      name: "lonely",
+      clusterId: lonely.id,
+      domains: ["lonely.issue.test"],
+      origins: [{ address: "origin.example.com" }],
+    });
+    const [cert] = await ctx.db
+      .insert(schema.certificate)
+      .values({
+        name: "lonely",
+        names: ["lonely.issue.test"],
+        source: "acme",
+        autoRenew: true,
+        acme: { ca: "letsencrypt", challenge: "http01", email: "ops@example.com" },
+      })
+      .returning();
+    if (!cert) throw new Error("certificate missing");
+    await issueCertificate(ctx, cert.id);
+    expect(await row(cert.id)).toMatchObject({ status: "error", lastError: "http01_no_nodes" });
   });
 
   it("takes requests and manual renewals first, then the longest overdue renewals", async () => {
@@ -390,5 +453,132 @@ describe("certificate issuance", async () => {
     expect([site1, challenge1, challenge2].some((r) => left.some((l) => l.revision === r))).toBe(
       false,
     );
+  });
+
+  describe("a site's new domains and its ACME certificate (audit U-3)", () => {
+    let siteId = "";
+    let certId = "";
+    const servedDomains = async () => {
+      const latest = await latestRevision(ctx.db, clusterId);
+      const site = decodeNodeConfig(latest?.ir ?? new Uint8Array()).sites.find(
+        (s) => s.id === siteId,
+      );
+      return site?.domains.map((d) => d.name);
+    };
+    /** The issued material for these names, as the fake CA answers. */
+    const issuable = async (domains: string[]) => {
+      const material = await ctx.nodeCa.issueServerCertificate(domains);
+      certd.plan({
+        issued: {
+          ...JSON.parse(readFileSync(join(dir, "plan.json"), "utf8")).issued,
+          [domains.join(",")]: {
+            chainPem: material.certificatePem,
+            privateKeyPem: material.privateKeyPem,
+          },
+        },
+      });
+    };
+
+    it("extends the certificate, reissues it, and serves the new domain once it is covered", async () => {
+      siteId = (
+        await api.sites.create({
+          name: "grow",
+          domains: ["g1.issue.test"],
+          origins: [{ address: "origin.example.com" }],
+        })
+      ).site.id;
+      certId = (await request(["g1.issue.test"], "grow@example.com")).id;
+      await issueCertificate(ctx, certId);
+      await api.https.update({
+        id: siteId,
+        settings: tlsSettings.parse({ certificateId: certId }),
+      });
+
+      const saved = await api.sites.update({
+        id: siteId,
+        domains: ["g1.issue.test", "g2.issue.test"],
+      });
+      expect(saved.certificateReissue).toEqual({ id: certId, name: "g1.issue.test" });
+      expect(await row(certId)).toMatchObject({
+        names: ["g1.issue.test", "g2.issue.test"],
+        status: "pending",
+        lastError: "",
+      });
+      const [entry] = (await api.auditLogs.list({ action: "certificate.names_extended" })).items;
+      expect(entry).toMatchObject({
+        targetId: certId,
+        metadata: { siteId, site: "grow", added: ["g2.issue.test"] },
+      });
+      // Nodes keep the current chain; the new domain waits for the reissue.
+      expect(await servedDomains()).toEqual(["g1.issue.test"]);
+      // The site's HTTPS settings can still be saved meanwhile.
+      await api.https.update({
+        id: siteId,
+        settings: tlsSettings.parse({ certificateId: certId, hstsMaxAge: 60 }),
+      });
+      // Saving again adds nothing.
+      expect(
+        (await api.sites.update({ id: siteId, domains: ["g1.issue.test", "g2.issue.test"] }))
+          .certificateReissue,
+      ).toBeUndefined();
+
+      await issuable(["g1.issue.test", "g2.issue.test"]);
+      expect(await dueCertificates(ctx)).toContain(certId);
+      await issueCertificate(ctx, certId);
+      expect(await row(certId)).toMatchObject({
+        status: "ready",
+        names: ["g1.issue.test", "g2.issue.test"],
+      });
+      expect(await servedDomains()).toEqual(["g1.issue.test", "g2.issue.test"]);
+    });
+
+    it("keeps names added while an attempt runs and reissues right after it", async () => {
+      const hold = join(dir, "hold");
+      certd.plan({ hold });
+      await ctx.db
+        .update(schema.certificate)
+        .set({ renewAt: new Date(0) })
+        .where(eq(schema.certificate.id, certId));
+      const running = issueCertificate(ctx, certId);
+      await vi.waitFor(async () => expect((await row(certId)).status).toBe("issuing"), {
+        timeout: 10_000,
+      });
+      const saved = await api.sites.update({
+        id: siteId,
+        domains: ["g1.issue.test", "g2.issue.test", "g3.issue.test"],
+      });
+      expect(saved.certificateReissue).toEqual({ id: certId, name: "g1.issue.test" });
+      // The running attempt is left alone.
+      expect((await row(certId)).status).toBe("issuing");
+      writeFileSync(hold, "");
+      await running;
+      certd.plan({ hold: undefined });
+      expect(await row(certId)).toMatchObject({
+        status: "pending",
+        names: ["g1.issue.test", "g2.issue.test", "g3.issue.test"],
+      });
+      await issuable(["g1.issue.test", "g2.issue.test", "g3.issue.test"]);
+      await issueCertificate(ctx, certId);
+      expect(await row(certId)).toMatchObject({ status: "ready" });
+      expect(await servedDomains()).toEqual(["g1.issue.test", "g2.issue.test", "g3.issue.test"]);
+    });
+
+    it("refuses domains the certificate's challenge cannot validate", async () => {
+      const refused = await rpcError(
+        api.sites.update({
+          id: siteId,
+          domains: ["g1.issue.test", "g2.issue.test", "g3.issue.test", "*.wild.issue.test"],
+        }),
+      );
+      expect(refused).toMatchObject({
+        code: "CERTIFICATE_DOMAIN_MISMATCH",
+        data: { domains: "*.wild.issue.test" },
+      });
+      expect((await row(certId)).names).toEqual([
+        "g1.issue.test",
+        "g2.issue.test",
+        "g3.issue.test",
+      ]);
+    });
   });
 });

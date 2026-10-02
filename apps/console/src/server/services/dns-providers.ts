@@ -73,7 +73,9 @@ export function failFromCertd(error: unknown): never {
 }
 /** The error code stored on a failed DNS revision or record. */
 export function errorCode(error: unknown, fallback = "dns_reconcile_failed") {
-  if (error instanceof CertdError && error.code.startsWith("dns_")) return error.code;
+  // A helper that failed, timed out or answered garbage is not a write failure.
+  if (error instanceof CertdError)
+    return /^(dns|certd)_/.test(error.code) ? error.code : "certd_failed";
   const code = (error as { code?: unknown })?.code;
   if (code === "DNS_RECORD_CONFLICT") return "dns_record_conflict";
   if (code === "DNS_BINDING_CONFLICT") return "dns_binding_conflict";

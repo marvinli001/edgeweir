@@ -1,4 +1,4 @@
-import { X509Certificate } from "node:crypto";
+import { generateKeyPairSync, X509Certificate } from "node:crypto";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import { tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
@@ -52,7 +52,7 @@ describe("M3 certificate lifecycle and isolation", async () => {
           }),
         )
       ).code,
-    ).toBe("CERTIFICATE_INVALID");
+    ).toBe("CERTIFICATE_KEY_MISMATCH");
     const cert = await api.certificates.upload({
       name: "secure",
       chainPem: material.certificatePem,
@@ -69,6 +69,48 @@ describe("M3 certificate lifecycle and isolation", async () => {
     expect(row?.privateKeyEnvelope).not.toContain(material.privateKeyPem);
     expect((await rpcError(api.certificates.delete({ id: crypto.randomUUID() }))).code).toBe(
       "CERTIFICATE_NOT_FOUND",
+    );
+  });
+  it("names what is wrong with an upload", async () => {
+    const upload = (chainPem: string, privateKeyPem = material.privateKeyPem) =>
+      rpcError(api.certificates.upload({ name: "bad", chainPem, privateKeyPem }));
+    const day = 86_400_000;
+    const garbled = material.certificatePem.replace(/\n[A-Za-z0-9+/]{8}/, "\n!!!!!!!!");
+    expect((await upload(garbled)).code).toBe("CERTIFICATE_CHAIN_UNREADABLE");
+    expect((await upload(material.certificatePem.repeat(11))).code).toBe(
+      "CERTIFICATE_CHAIN_UNREADABLE",
+    );
+    const encrypted = generateKeyPairSync("ec", {
+      namedCurve: "P-256",
+      publicKeyEncoding: { type: "spki", format: "pem" },
+      privateKeyEncoding: { type: "pkcs8", format: "pem", cipher: "aes-256-cbc", passphrase: "x" },
+    }).privateKey;
+    expect((await upload(material.certificatePem, encrypted)).code).toBe(
+      "CERTIFICATE_KEY_UNREADABLE",
+    );
+    // The CA certificate first, or an unrelated certificate as the issuer.
+    expect((await upload(`${ctx.nodeCa.certificatePem}${material.certificatePem}`)).code).toBe(
+      "CERTIFICATE_CHAIN_ORDER",
+    );
+    const other = await ctx.nodeCa.issueServerCertificate(["other.test"]);
+    expect((await upload(`${material.certificatePem}${other.certificatePem}`)).code).toBe(
+      "CERTIFICATE_CHAIN_ORDER",
+    );
+    const expired = await ctx.nodeCa.issueServerCertificate(
+      ["secure.test"],
+      new Date(Date.now() - 100 * day),
+    );
+    const outdated = await upload(expired.certificatePem, expired.privateKeyPem);
+    expect(outdated).toMatchObject({
+      code: "CERTIFICATE_NOT_CURRENTLY_VALID",
+      data: {
+        notBefore: expect.stringMatching(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$/),
+        notAfter: expect.stringMatching(/ UTC$/),
+      },
+    });
+    const ipOnly = await ctx.nodeCa.issueServerCertificate(["127.0.0.1"]);
+    expect((await upload(ipOnly.certificatePem, ipOnly.privateKeyPem)).code).toBe(
+      "CERTIFICATE_NO_DNS_NAMES",
     );
   });
   it("stores only the certificates and the key of an upload, never a key pasted into the chain", async () => {
@@ -125,9 +167,10 @@ describe("M3 certificate lifecycle and isolation", async () => {
     expect((await rpcError(api.https.get({ id: crypto.randomUUID() }))).code).toBe(
       "SITE_NOT_FOUND",
     );
-    expect((await rpcError(api.certificates.delete({ id: certificateId }))).code).toBe(
-      "CERTIFICATE_IN_USE",
-    );
+    expect(await rpcError(api.certificates.delete({ id: certificateId }))).toMatchObject({
+      code: "CERTIFICATE_IN_USE",
+      data: { sites: "secure" },
+    });
   });
   it("rejects a certificate for an unrelated hostname and compression settings out of range", async () => {
     const site = await api.sites.create({
@@ -142,6 +185,21 @@ describe("M3 certificate lifecycle and isolation", async () => {
         )
       ).code,
     ).toBe("CERTIFICATE_DOMAIN_MISMATCH");
+    // A certificate that is not issued yet.
+    const [pending] = await ctx.db
+      .insert(schema.certificate)
+      .values({ name: "pending", names: ["different.test"], source: "acme" })
+      .returning();
+    expect(
+      (
+        await rpcError(
+          api.https.update({
+            id: site.site.id,
+            settings: tlsSettings.parse({ certificateId: pending?.id }),
+          }),
+        )
+      ).code,
+    ).toBe("CERTIFICATE_UNAVAILABLE");
     // Brotli and Zstandard are switches now, gated by node capabilities (waf.test.ts).
     expect(tlsSettings.safeParse({ brotli: true, brotliLevel: 12 }).success).toBe(false);
     expect(tlsSettings.safeParse({ zstd: true, zstdLevel: 0 }).success).toBe(false);
@@ -166,6 +224,10 @@ describe("M3 certificate lifecycle and isolation", async () => {
   });
   it("refuses changing a bound site to a domain its certificate does not cover", async () => {
     const before = await latestRevision(ctx.db, clusterId);
+    // An uploaded certificate is never extended; the error names what it misses.
+    expect(
+      await rpcError(api.sites.update({ id: siteId, domains: ["secure.test", "uncovered.test"] })),
+    ).toMatchObject({ code: "CERTIFICATE_DOMAIN_MISMATCH", data: { domains: "uncovered.test" } });
     expect(
       (await rpcError(api.sites.update({ id: siteId, domains: ["uncovered.test"] }))).code,
     ).toBe("CERTIFICATE_DOMAIN_MISMATCH");

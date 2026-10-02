@@ -531,6 +531,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0046_dns_error_params` | `dns_revision.last_error_params`（失败代码的参数，如冲突的 DNS 名称） |
 | `0047_alert_subscription_sites` | `alert_subscription_site`、`alert_subscription.all_sites`；删除 `alert_subscription.site_id`，唯一键改为账户与渠道；同一渠道的订阅合并为一条（有启用的订阅时取启用订阅的网站与告警种类，否则取全部） |
 | `0048_rule_log_stats` | 分钟、小时、天统计与视图 `traffic_hour_stats` 的 `logged_rules`（「记录」规则的命中） |
+| `0049_dns_lease_attempts` | `dns_challenge_lease.attempts`（TXT 记录清理失败的次数，用于退避重试） |
 
 ## 构建产物
 

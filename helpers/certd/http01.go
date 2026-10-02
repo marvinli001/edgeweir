@@ -81,6 +81,8 @@ func (r *httpResolver) Solve(authorizations []acme.Authorization) error {
 	return errors.Join(errs...)
 }
 
+var errValidationTimeout = coded("acme_validation_timeout", errors.New("the CA did not validate the challenge in time"))
+
 // validateChallenge asks the CA to validate a challenge and polls its
 // authorization until it is decided, as lego's own validation does.
 func validateChallenge(core *api.Core, chlg acme.Challenge, limit time.Duration) error {
@@ -118,7 +120,7 @@ func validateChallenge(core *api.Core, chlg acme.Challenge, limit time.Duration)
 			return fmt.Errorf("the authorization is %s", authz.Status)
 		}
 		if time.Now().After(deadline) {
-			return errors.New("the CA did not validate the challenge in time")
+			return errValidationTimeout
 		}
 		delay = min(delay*3/2, 10*time.Second)
 	}
