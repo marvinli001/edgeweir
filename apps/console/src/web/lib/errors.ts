@@ -59,5 +59,7 @@ export function localizeError(error: unknown, fallback: string = m.common_unknow
   if (code && authCodes[code]) return (authCodes[code] as MessageFn)();
   // better-auth's rate limiter answers 429 without a code.
   if (status === 429) return m.error_too_many_requests();
+  // A schema parsed in the browser: its message is the issues as JSON.
+  if (Array.isArray((error as { issues?: unknown } | null)?.issues)) return m.error_bad_request();
   return message || fallback;
 }

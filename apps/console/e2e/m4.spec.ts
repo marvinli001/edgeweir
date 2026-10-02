@@ -13,6 +13,10 @@ test("M4: IP list and rule editing with syntax errors, ordering and mobile", asy
   await page.getByTestId("ip-list-create").click();
   const name = `browser_${Date.now()}`;
   await page.getByRole("dialog").getByLabel("名称", { exact: true }).fill(name);
+  // A bad entry is named in the dialog's language, not shown as a schema's JSON.
+  await page.getByLabel("IP 地址和 CIDR").fill("192.0.2.55/24\n10.0.0.300");
+  await page.getByTestId("ip-list-submit").click();
+  await expect(page.getByTestId("form-error")).toHaveText("IP 地址或 CIDR 无效：10.0.0.300");
   await page.getByLabel("IP 地址和 CIDR").fill("192.0.2.55/24\n2001:db8::/32");
   await page.getByTestId("ip-list-submit").click();
   await expect(page.getByRole("dialog")).toBeHidden();

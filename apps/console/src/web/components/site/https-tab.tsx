@@ -67,6 +67,24 @@ const ALGORITHMS = {
 const algorithmLabel = (algorithm: Algorithm) =>
   ({ gzip: m.cert_gzip, brotli: m.compression_brotli, zstd: m.compression_zstd })[algorithm]();
 
+/** What to check when the settings fail the contract, by the first issue's field. */
+function settingsError(field: PropertyKey | undefined): string {
+  if (field === "hstsMaxAge") return m.common_check_field({ field: m.cert_hsts_age() });
+  for (const algorithm of ["gzip", "brotli", "zstd"] as const) {
+    const fields = ALGORITHMS[algorithm];
+    const label =
+      field === fields.types
+        ? m.cert_gzip_types()
+        : field === fields.min
+          ? m.cert_gzip_min()
+          : field === fields.level?.key
+            ? m.compression_level()
+            : null;
+    if (label) return m.common_check_field({ field: `${algorithmLabel(algorithm)} · ${label}` });
+  }
+  return m.error_bad_request();
+}
+
 function HttpsEditor({
   site,
   initial,
@@ -101,10 +119,15 @@ function HttpsEditor({
       <form
         onSubmit={async (event) => {
           event.preventDefault();
+          const parsed = tlsSettings.safeParse(settings);
+          if (!parsed.success) {
+            setError(settingsError(parsed.error.issues[0]?.path[0]));
+            return;
+          }
           setPending(true);
           setError(null);
           try {
-            await mutation.mutateAsync({ id: site.id, settings: tlsSettings.parse(settings) });
+            await mutation.mutateAsync({ id: site.id, settings: parsed.data });
             await client.invalidateQueries();
             toast.success(m.common_saved());
           } catch (e) {

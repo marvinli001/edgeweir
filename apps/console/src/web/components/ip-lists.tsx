@@ -1,4 +1,5 @@
 import { type IpListDto, ipListInput } from "@edgeweir/contract";
+import { canonicalCidr } from "@edgeweir/rule-engine";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
@@ -15,6 +16,16 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
+
+/** An entry the contract accepts: an IP address or CIDR of at most 64 characters. */
+function validEntry(entry: string) {
+  try {
+    canonicalCidr(entry);
+    return entry.length <= 64;
+  } catch {
+    return false;
+  }
+}
 
 export function IpListsPage() {
   const query = useQuery(orpc.ipLists.list.queryOptions());
@@ -110,17 +121,20 @@ function IpListDialog({
       title={list ? m.common_edit() : m.ip_lists_create()}
       submitLabel={m.common_save()}
       submitTestId="ip-list-submit"
-      onSubmit={async (data) =>
-        onSave(
-          ipListInput.parse({
-            name: list?.name ?? data.get("name"),
-            entries: String(data.get("entries") ?? "")
-              .split(/[\s,]+/)
-              .filter(Boolean),
-            kind,
-          }),
-        )
-      }
+      onSubmit={async (data) => {
+        const entries = String(data.get("entries") ?? "")
+          .split(/[\s,]+/)
+          .filter(Boolean);
+        const invalid = entries.find((entry) => !validEntry(entry));
+        if (invalid !== undefined) throw new Error(m.ip_lists_invalid_entry({ entry: invalid }));
+        const parsed = ipListInput.safeParse({
+          name: list?.name ?? data.get("name"),
+          entries,
+          kind,
+        });
+        if (!parsed.success) throw new Error(m.error_bad_request());
+        await onSave(parsed.data);
+      }}
     >
       <Field>
         <FieldLabel htmlFor="ip-list-name">{m.rules_name()}</FieldLabel>
