@@ -28,6 +28,8 @@
 
 解封：点击该行的「解封」并确认。节点在数秒内移除该封禁。手动与自动封禁都可解封。
 
+不必重新输入：访问日志、统计中的热门 IP、网站「安全」页签的 Top IP 与自动封禁事件，在行右侧的「⋯」中提供「封禁 IP」，对话框已填好网站与地址（「范围」可改为「全局」），按 ⌘K / Ctrl+K 选择「封禁 IP…」打开同一对话框（在网站页面时预填该网站）。封禁后提示中的「查看封禁」打开列表。链接 `/bans?site=<网站 ID>&ip=<地址>` 打开同样预填的对话框，列表只显示与该地址重叠的封禁（地址旁的 × 清除）。
+
 列表只显示有效的封禁（未到期、未解封），按创建时间倒序，可按范围、网站与来源筛选：
 
 | 列 | 内容 |
@@ -152,7 +154,7 @@
 
 | 过程 | 端点 | 说明 |
 | --- | --- | --- |
-| `bans.list` | `GET /bans` | 有效的封禁；查询参数 `scope`（`site` / `platform`）、`siteId`、`source`（`manual` / `auto`）、`page`、`pageSize` |
+| `bans.list` | `GET /bans` | 有效的封禁；查询参数 `scope`（`site` / `platform`）、`siteId`、`source`（`manual` / `auto`）、`address`（IP 或 CIDR：覆盖它或在它之内的封禁）、`page`、`pageSize` |
 | `bans.create` | `POST /bans` | `scope` 为 `site` 时必须带 `siteId`，为 `platform` 时不能带；另需 `cidr`、`reason`、`durationSeconds` |
 | `bans.delete` | `DELETE /bans/{id}` | 解封手动或自动封禁 |
 

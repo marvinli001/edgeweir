@@ -154,7 +154,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | Request | Fields |
 | --- | --- |
 | `POST /bans` | `scope` (`site` / `platform`), `siteId` (required with `site`, not allowed with `platform`), `cidr` (IP address or CIDR), `reason` (`abuse`, `attack`, `scanner`, `spam`, `other`), `durationSeconds` (60–604800) |
-| `GET /bans` | Query parameters `scope`, `siteId`, `source` (`manual` / `auto`), `page`, `pageSize` (1–100, default 50) |
+| `GET /bans` | Query parameters `scope`, `siteId`, `source` (`manual` / `auto`), `address` (an IP or CIDR: the bans that cover it or lie inside it; 400 `BAN_INVALID_CIDR` when invalid), `page`, `pageSize` (1–100, default 50) |
 | `PUT /settings/bans` | `maxTotal` (100–100000, default 10000), `shareAutoBans` (default `true`) |
 
 Lists answer `{ items, total }` with active bans only (neither expired nor lifted), newest first. Ban fields:
