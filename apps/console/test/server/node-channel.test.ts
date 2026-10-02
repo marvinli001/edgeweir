@@ -60,6 +60,9 @@ async function nodeKeyAndCsr() {
   return { csrPem: csr.toString("pem"), keyPem };
 }
 
+/** Every agent reports tls-v1, which a configuration with a site requires. */
+const AGENT_FEATURES = ["tls-v1"];
+
 describe("node channel", async () => {
   const { ctx, client: pglite } = await createTestContext();
   let channel: NodeChannel;
@@ -80,7 +83,11 @@ describe("node channel", async () => {
     );
 
   /** Enrolls a node of the default cluster and returns its mTLS client. */
-  const enroll = async (nodeName: string, extra: Partial<typeof gzip> = {}) => {
+  const enroll = async (
+    nodeName: string,
+    extra: Partial<typeof gzip> = {},
+    supportedFeatures = AGENT_FEATURES,
+  ) => {
     const token = await createEnrollmentToken(
       ctx.db,
       { clusterId, nodeName, ttlMinutes: 10 },
@@ -92,7 +99,11 @@ describe("node channel", async () => {
       },
     );
     const { csrPem, keyPem } = await nodeKeyAndCsr();
-    const enrolled = await anonymous().enroll({ token: token.token, csrPem });
+    const enrolled = await anonymous().enroll({
+      token: token.token,
+      csrPem,
+      info: { supportedFeatures },
+    });
     const mtls = createClient(
       NodeService,
       createConnectTransport({
@@ -160,7 +171,12 @@ describe("node channel", async () => {
     const enrolled = await anonymous().enroll({
       token: token.token,
       csrPem,
-      info: { hostname: "edge-host", agentVersion: "test", ipAddresses: ["192.0.2.10"] },
+      info: {
+        hostname: "edge-host",
+        agentVersion: "test",
+        ipAddresses: ["192.0.2.10"],
+        supportedFeatures: AGENT_FEATURES,
+      },
     });
     expect(enrolled.nodeName).toBe("edge-1");
     expect(enrolled.caCertificatePem.trim()).toBe(ctx.nodeCa.certificatePem.trim());
@@ -265,7 +281,12 @@ describe("node channel", async () => {
       appliedContentHash: revision.contentHash,
       state: ApplyState.APPLIED,
       dataPlaneHealthy: true,
-      info: { hostname: "edge-host", engine: "openresty", engineVersion: "1.31.1.1" },
+      info: {
+        hostname: "edge-host",
+        engine: "openresty",
+        engineVersion: "1.31.1.1",
+        supportedFeatures: AGENT_FEATURES,
+      },
     });
     expect(status.latestRevision).toBe(2n);
     expect(status.renewCertificate).toBe(false);
@@ -286,7 +307,12 @@ describe("node channel", async () => {
         appliedContentHash: revision.contentHash,
         state: ApplyState.APPLIED,
         dataPlaneHealthy: true,
-        info: { hostname: "edge-host", engine: "openresty", ipAddresses },
+        info: {
+          hostname: "edge-host",
+          engine: "openresty",
+          ipAddresses,
+          supportedFeatures: AGENT_FEATURES,
+        },
       });
     const addressesNow = async () =>
       (await listNodes(ctx.db, clusterId)).find((n) => n.id === enrolled.nodeId)?.ipAddresses;
@@ -359,7 +385,11 @@ describe("node channel", async () => {
       },
     );
     const { csrPem, keyPem } = await nodeKeyAndCsr();
-    const enrolled = await anonymous().enroll({ token: token.token, csrPem });
+    const enrolled = await anonymous().enroll({
+      token: token.token,
+      csrPem,
+      info: { supportedFeatures: AGENT_FEATURES },
+    });
     const mtls = createClient(
       NodeService,
       createConnectTransport({
@@ -453,7 +483,11 @@ describe("node channel", async () => {
       },
     );
     const { csrPem, keyPem } = await nodeKeyAndCsr();
-    const enrolled = await anonymous().enroll({ token: token.token, csrPem });
+    const enrolled = await anonymous().enroll({
+      token: token.token,
+      csrPem,
+      info: { supportedFeatures: AGENT_FEATURES },
+    });
     const mtls = createClient(
       NodeService,
       createConnectTransport({
@@ -909,7 +943,8 @@ describe("node channel", async () => {
     });
   });
   it("withholds TLS revisions from old agents and gates certificate material with mTLS", async () => {
-    const { mtls, nodeId } = await enroll("capability-test");
+    // An agent from before tls-v1.
+    const { mtls, nodeId } = await enroll("capability-test", {}, []);
     const { site } = await demoSite("capability");
     const material = await ctx.nodeCa.issueServerCertificate(["capability.test"]);
     const certificateContext = { actor };

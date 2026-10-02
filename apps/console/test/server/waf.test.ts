@@ -1,7 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
-import { tlsSettings } from "@edgeweir/contract";
+import { DEFAULT_COMPRESSION_TYPES, tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { AccessLogSchema } from "@edgeweir/proto";
 import { eq } from "drizzle-orm";
@@ -88,6 +88,23 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
     nodeId = node.id;
   });
   afterAll(() => pglite.close());
+
+  it("compiles the default compression of a site without a certificate or HTTPS settings", async () => {
+    expect(await admin.https.get({ id: otherSiteId })).toMatchObject({
+      certificateId: null,
+      gzip: true,
+    });
+    expect((await siteOf(otherSiteId))?.tls).toMatchObject({
+      forceHttps: false,
+      hstsMaxAge: 0,
+      gzip: true,
+      gzipMinLength: 256,
+      gzipTypes: [...DEFAULT_COMPRESSION_TYPES].sort(),
+      brotli: false,
+      zstd: false,
+    });
+    expect((await siteOf(otherSiteId))?.certificateId).toBe("");
+  });
 
   it("reads CRS off with the defaults and every feature available", async () => {
     expect(await admin.waf.get({ id: siteId })).toEqual({

@@ -216,7 +216,7 @@ A change saved in the console or with an AccessKey is published even when it nee
 | Certificate authorities | The UI offers Let's Encrypt and ZeroSSL. `EDGEWEIR_ACME_DIRECTORY` and `EDGEWEIR_ACME_CA_FILE` move every certificate to a private or staging ACME directory, see [Environment variables](../reference/environment.en.md) |
 | TLS versions | TLS 1.0 and 1.1 are not supported |
 | Cipher suites | Only the **Modern** and **Compatible** profiles; no custom nginx configuration |
-| Compression | Gzip, Brotli, and Zstandard; compression settings apply after the site's **HTTPS** tab is saved for the first time |
+| Compression | Gzip, Brotli, and Zstandard |
 | Node packages | Nodes use OpenResty 1.31.1.1 built for Edgeweir (`edgeweir-openresty`) with HTTP/2, HTTP/3, Brotli, and Zstandard, see [Adding nodes](../deploy/nodes.en.md) |
 | Failure reasons | The UI shows only **Issuance failed**. The console log records the certificate ID and the console's own reason; the text a CA or DNS provider returned is not logged |
 
@@ -233,6 +233,6 @@ A change saved in the console or with an AccessKey is published even when it nee
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (such as `http3-v1`) and keeps its last-known-good configuration | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | TLS SNI differs from `Host`, for example a client reused a connection opened for another domain | The client opens a connection for the requested domain |
 | Browsers do not use HTTP/3 | UDP 443 is blocked; the node lacks `http3-v1`; clients read `Alt-Svc` only after a first visit | Open UDP 443 and check node capabilities |
-| Responses are not compressed | The **HTTPS** tab was never saved; the content type is not listed; the response is below the minimum size; the client sent no `Accept-Encoding`; the origin response already has a `Content-Encoding` | Save the **HTTPS** tab and check the compression settings |
+| Responses are not compressed | The content type is not listed; the response is below the minimum size; the client sent no `Accept-Encoding`; the origin response already has a `Content-Encoding` | Check the compression settings on the **HTTPS** tab |
 | gzip instead of br or zstd | The client's `Accept-Encoding` lacks the algorithm or gives it a lower q-value; the algorithm is off | Check the request header and the **Compression** settings |
 | The Brotli or Zstandard switch is unavailable | An active node of the cluster lacks `brotli-v1` / `zstd-v1` | Upgrade the nodes |

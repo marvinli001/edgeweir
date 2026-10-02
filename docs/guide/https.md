@@ -216,7 +216,7 @@ ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主
 | 证书颁发机构 | 界面只提供 Let's Encrypt 和 ZeroSSL。`EDGEWEIR_ACME_DIRECTORY` 和 `EDGEWEIR_ACME_CA_FILE` 可把全部证书改到私有或测试 ACME 目录，见[环境变量](../reference/environment.md) |
 | TLS 版本 | 不支持 TLS 1.0 和 1.1 |
 | 密码套件 | 只有「现代」「兼容」两档，不能写入任意 nginx 配置 |
-| 压缩 | Gzip、Brotli、Zstandard；压缩设置在网站首次保存「HTTPS」页签后生效 |
+| 压缩 | Gzip、Brotli、Zstandard |
 | 节点软件包 | 节点使用为 Edgeweir 构建的 OpenResty 1.31.1.1（`edgeweir-openresty`），含 HTTP/2、HTTP/3、Brotli 与 Zstandard，见[接入节点](../deploy/nodes.md) |
 | 失败原因 | 界面只显示「签发失败」。控制台日志记录证书 ID 与控制台一侧的原因；CA 或 DNS 服务商返回的原文不记录 |
 
@@ -233,6 +233,6 @@ ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主
 | 节点显示「需要升级」 | 节点缺少配置所需能力（如 `http3-v1`），保留 last-known-good 配置 | 升级节点，见[节点升级](node-upgrades.md) |
 | 421，`X-Edgeweir-Error: sni-host-mismatch` | TLS SNI 与 `Host` 不一致，例如客户端复用了其他域名的连接 | 客户端按请求的域名建立连接 |
 | 浏览器不使用 HTTP/3 | UDP 443 未放通；节点缺少 `http3-v1`；客户端首次访问后才读取 `Alt-Svc` | 放通 UDP 443，检查节点能力 |
-| 响应未压缩 | 从未保存「HTTPS」页签；内容类型不在列表中；响应小于最小压缩大小；客户端未发送 `Accept-Encoding`；源站响应已带 `Content-Encoding` | 保存「HTTPS」页签并检查压缩设置 |
+| 响应未压缩 | 内容类型不在列表中；响应小于最小压缩大小；客户端未发送 `Accept-Encoding`；源站响应已带 `Content-Encoding` | 检查「HTTPS」页签的压缩设置 |
 | 拿到 gzip 而不是 br / zstd | 客户端的 `Accept-Encoding` 不含该算法或 q 值更低；该算法未开启 | 检查请求头与「压缩」设置 |
 | Brotli / Zstandard 开关不可用 | 集群中有活动节点不支持 `brotli-v1` / `zstd-v1` | 升级节点 |
