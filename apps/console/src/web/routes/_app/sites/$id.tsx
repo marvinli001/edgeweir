@@ -31,7 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDraft } from "@/hooks/use-draft";
 import { domainList } from "@/lib/address-input";
 import { DEFAULT_RANGE } from "@/lib/analytics";
-import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
+import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { recordRecent } from "@/lib/recents";
 import { SITE_TABS, type SiteTab, siteTabLabel } from "@/lib/site-tabs";
@@ -270,9 +270,6 @@ function OverviewTab({ site }: { site: Site }) {
               <InfoRow label={m.sites_col_cluster()}>
                 <Badge variant="secondary">{site.clusterName}</Badge>
               </InfoRow>
-              <InfoRow label={m.site_cache_generation()}>
-                <span className="font-mono">{formatNumber(site.cacheGeneration)}</span>
-              </InfoRow>
               <InfoRow label={m.site_updated_at()}>
                 <span title={formatDateTime(site.updatedAt)}>{timeAgo(site.updatedAt)}</span>
               </InfoRow>
@@ -293,9 +290,14 @@ function OverviewTab({ site }: { site: Site }) {
             title={m.sites_purge()}
             note={site.domains.join(", ")}
             onConfirm={async () => {
-              const result = await purge.mutateAsync({ id: site.id });
-              toast.success(m.sites_purged({ revision: result.revision.revision }));
-              await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
+              await purge.mutateAsync({ id: site.id });
+              toast.success(m.sites_purged(), {
+                action: {
+                  label: m.purge_view_tasks(),
+                  onClick: () => void navigate({ to: "/purge", search: { site: site.id } }),
+                },
+              });
+              await queryClient.invalidateQueries({ queryKey: orpc.cacheTasks.key() });
             }}
           />
           <ConfirmDialog

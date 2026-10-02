@@ -14,6 +14,7 @@ import {
 import {
   Add01Icon,
   ArrowDown01Icon,
+  Cancel01Icon,
   DatabaseSync01Icon,
   GlobeIcon,
 } from "@hugeicons/core-free-icons";
@@ -66,6 +67,8 @@ const TYPES = [
 export const Route = createFileRoute("/_app/purge")({
   validateSearch: z.object({
     type: z.enum(TYPES).optional(),
+    /** One site's tasks, and the site preselected in the form. */
+    site: z.string().optional(),
     page: z.number().int().min(1).optional(),
   }),
   component: PurgePage,
@@ -105,8 +108,13 @@ function PurgePage() {
   const navigate = Route.useNavigate();
   const page = search.page ?? 1;
   const [expanded, setExpanded] = React.useState<ReadonlySet<string>>(new Set());
+  const site = useQuery({
+    ...orpc.sites.get.queryOptions({ input: { id: search.site ?? "" } }),
+    enabled: !!search.site,
+  });
+  const listInput = { page, pageSize: PAGE_SIZE, siteId: search.site };
   const tasks = useQuery({
-    ...orpc.cacheTasks.list.queryOptions({ input: { page, pageSize: PAGE_SIZE } }),
+    ...orpc.cacheTasks.list.queryOptions({ input: listInput }),
     placeholderData: keepPreviousData,
     // Follow tasks until every node reported.
     refetchInterval: (query) =>
@@ -124,6 +132,9 @@ function PurgePage() {
   return (
     <Page title={m.purge_title()}>
       <PurgeForm
+        key={search.site ?? ""}
+        site={site.data ? { id: site.data.id, name: site.data.name } : undefined}
+        listInput={{ ...listInput, page: 1 }}
         type={search.type ?? "url"}
         onTypeChange={(type) =>
           navigate({
@@ -137,9 +148,27 @@ function PurgePage() {
         }}
       />
       <section className="flex flex-col gap-3" aria-labelledby="purge-tasks-title">
-        <h2 id="purge-tasks-title" className="text-sm font-medium text-muted-foreground">
-          {m.purge_tasks()}
-        </h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 id="purge-tasks-title" className="text-sm font-medium text-muted-foreground">
+            {m.purge_tasks()}
+          </h2>
+          {search.site ? (
+            <Badge variant="secondary" className="gap-1 pr-1" data-testid="purge-site-filter">
+              {site.data?.name ?? "…"}
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost"
+                aria-label={m.purge_site_filter_clear()}
+                onClick={() =>
+                  navigate({ search: (prev) => ({ ...prev, site: undefined, page: undefined }) })
+                }
+              >
+                <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+              </Button>
+            </Badge>
+          ) : null}
+        </div>
         {tasks.isPending ? (
           <LoadingState />
         ) : tasks.isLoadingError ? (
@@ -220,10 +249,16 @@ const emptyDraft: Draft = {
 };
 
 function PurgeForm({
+  site,
+  listInput,
   type,
   onTypeChange,
   onCreated,
 }: {
+  /** Preselected for whole-site and tag purges once known. */
+  site?: { id: string; name: string };
+  /** The first page of the task list as the page shows it. */
+  listInput: { page: number; pageSize: number; siteId?: string };
   type: CacheTaskType;
   onTypeChange: (type: CacheTaskType) => void;
   onCreated: (task: CacheTask) => Promise<void>;
@@ -234,6 +269,12 @@ function PurgeForm({
   const [pending, setPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const set = (change: Partial<Draft>) => setDraft((prev) => ({ ...prev, ...change }));
+  const preselected = React.useRef(false);
+  React.useEffect(() => {
+    if (!site || preselected.current) return;
+    preselected.current = true;
+    setDraft((prev) => ({ ...prev, sites: new Map([[site.id, site.name]]), tagSite: site }));
+  }, [site]);
   const urls = lines(draft.urls);
   const hosts = hostEntries(draft.hosts);
   const tags = tagEntries(draft.tags);
@@ -244,24 +285,28 @@ function PurgeForm({
   });
   const tagAvailability = draft.tagSite ? tagFeatures.data?.purgeByTag : undefined;
 
+  // Lists of blank lines are empty: nothing to submit.
   const blocked = (() => {
     switch (type) {
       case "site":
         return draft.sites.size === 0;
       case "host":
-        return hosts.length > MAX_CACHE_TASK_HOSTS;
+        return hosts.length === 0 || hosts.length > MAX_CACHE_TASK_HOSTS;
       case "tag":
         return (
           !draft.tagSite ||
+          tags.length === 0 ||
           tags.length > MAX_CACHE_TASK_TAGS ||
           tagAvailability?.available === false
         );
       case "sitemap":
-        return draft.variants.length === 0;
+        return !draft.sitemapUrl.trim() || draft.variants.length === 0;
       case "prefetch":
-        return urls.length > MAX_CACHE_TASK_URLS || draft.variants.length === 0;
+        return (
+          urls.length === 0 || urls.length > MAX_CACHE_TASK_URLS || draft.variants.length === 0
+        );
       default:
-        return urls.length > MAX_CACHE_TASK_URLS;
+        return urls.length === 0 || urls.length > MAX_CACHE_TASK_URLS;
     }
   })();
 
@@ -312,15 +357,13 @@ function PurgeForm({
       set(submitted());
       await onCreated(task);
       // Show it right away at the top, then load the list as the server has it.
-      queryClient.setQueryData(
-        orpc.cacheTasks.list.queryKey({ input: { page: 1, pageSize: PAGE_SIZE } }),
-        (old) =>
-          old
-            ? {
-                items: [task, ...old.items.filter((t) => t.id !== task.id)].slice(0, PAGE_SIZE),
-                total: old.total + 1,
-              }
-            : old,
+      queryClient.setQueryData(orpc.cacheTasks.list.queryKey({ input: listInput }), (old) =>
+        old
+          ? {
+              items: [task, ...old.items.filter((t) => t.id !== task.id)].slice(0, PAGE_SIZE),
+              total: old.total + 1,
+            }
+          : old,
       );
       await queryClient.invalidateQueries({ queryKey: orpc.cacheTasks.key() });
     } catch (err) {

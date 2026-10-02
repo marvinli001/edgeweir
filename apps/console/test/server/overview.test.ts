@@ -1,9 +1,7 @@
-import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import { schema } from "@edgeweir/db";
 import { count } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../src/server/app";
-import { latestRevision } from "../../src/server/services/revisions";
 import {
   type ApiClient,
   createTestContext,
@@ -74,37 +72,26 @@ describe("overview, whole-site purge and site deletion", async () => {
     });
   });
 
-  it("sites.purgeAll bumps the cache generation, publishes a revision and audits it", async () => {
+  it("sites.purgeAll creates a whole-site purge task like /purge, publishing nothing", async () => {
     const before = await admin.sites.get({ id: shopSiteId });
     const revisionsBefore = await revisionCount(clusterB);
+    const tasksBefore = await taskCount();
 
-    const { site, revision } = await admin.sites.purgeAll({ id: shopSiteId });
-    expect(site.cacheGeneration).toBe(before.cacheGeneration + 1);
-    expect(revision).toMatchObject({
-      clusterId: clusterB,
-      reasonCode: "site_purged",
-      reasonParams: { site: "shop" },
-      reason: "site shop purged",
+    const task = await admin.sites.purgeAll({ id: shopSiteId });
+    expect(task).toMatchObject({
+      type: "site",
+      targets: ["shop"],
+      sites: [{ id: shopSiteId, name: "shop" }],
     });
-    expect(await revisionCount(clusterB)).toBe(revisionsBefore + 1);
-    const ir = decodeNodeConfig((await latestRevision(ctx.db, clusterB))?.ir ?? new Uint8Array());
-    expect(ir.revision).toBe(BigInt(revision.revision));
-    expect(ir.sites.find((s) => s.id === shopSiteId)?.cacheGeneration).toBe(
-      BigInt(before.cacheGeneration + 1),
+    expect(await taskCount()).toBe(tasksBefore + 1);
+    expect((await admin.cacheTasks.list({ siteId: shopSiteId })).items[0]?.id).toBe(task.id);
+    // One mechanism: no cache generation, no revision.
+    expect(await revisionCount(clusterB)).toBe(revisionsBefore);
+    expect((await admin.sites.get({ id: shopSiteId })).cacheGeneration).toBe(
+      before.cacheGeneration,
     );
-    const [entry] = (await admin.auditLogs.list({ action: "site.purge_all" })).items;
-    expect(entry).toMatchObject({
-      actorName: "Platform Admin",
-      targetType: "site",
-      targetId: shopSiteId,
-      targetName: "shop",
-      metadata: { cacheGeneration: before.cacheGeneration + 1, revision: revision.revision },
-    });
-
-    // Purging again bumps again: every purge is a new generation.
-    const again = await admin.sites.purgeAll({ id: shopSiteId });
-    expect(again.site.cacheGeneration).toBe(before.cacheGeneration + 2);
-    expect(again.revision.revision).toBe(revision.revision + 1);
+    const [entry] = (await admin.auditLogs.list({ action: "cache.purge" })).items;
+    expect(entry).toMatchObject({ actorName: "Platform Admin", targetId: task.id });
   });
 
   it("deletes a site with a new revision and refuses to delete or purge it again", async () => {
@@ -114,7 +101,7 @@ describe("overview, whole-site purge and site deletion", async () => {
 
     const revisions = await revisionCount(clusterB);
     const deletes = await auditCount("site.delete");
-    const purges = await auditCount("site.purge_all");
+    const purges = await auditCount("cache.purge");
     const again = await rpcError(admin.sites.delete({ id: blogSiteId }));
     expect(again).toMatchObject({ code: "SITE_NOT_FOUND", status: 404 });
     const purged = await rpcError(admin.sites.purgeAll({ id: blogSiteId }));
@@ -122,7 +109,7 @@ describe("overview, whole-site purge and site deletion", async () => {
     // Nothing was published or audited.
     expect(await revisionCount(clusterB)).toBe(revisions);
     expect(await auditCount("site.delete")).toBe(deletes);
-    expect(await auditCount("site.purge_all")).toBe(purges);
+    expect(await auditCount("cache.purge")).toBe(purges);
   });
 
   it("refuses cache tasks on a deleted site and never creates a partial task", async () => {

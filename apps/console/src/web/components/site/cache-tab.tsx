@@ -42,6 +42,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { SafetyNote } from "@/components/safety-note";
+import { CompressionCard } from "@/components/site/compression-card";
 import { ExpressionEditor, expressionErrorPosition } from "@/components/site/expression-editor";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import {
@@ -83,6 +84,7 @@ export function CacheTab({ site }: { site: Site }) {
       <CacheRulesCard key={JSON.stringify(site.cacheRules)} site={site} />
       <CacheKeyCard key={JSON.stringify({ cacheKey, rangeSlice })} site={site} />
       <CacheTagCard key={String(keepCacheTag)} site={site} />
+      <CompressionCard site={site} />
     </div>
   );
 }

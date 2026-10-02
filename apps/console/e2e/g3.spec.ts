@@ -55,21 +55,21 @@ function errors(page: Page) {
   return list;
 }
 
-async function openTab(page: Page, siteId: string, tab: "https" | "security" | "logs") {
+async function openTab(page: Page, siteId: string, tab: "cache" | "security" | "logs") {
   await page.goto(`/sites/${siteId}?tab=${tab}`);
   await expect(page.getByTestId(`tab-${tab}`)).toHaveAttribute("aria-selected", "true");
 }
 
-test("G3: the HTTPS tab turns Zstandard and Brotli on with their levels and keeps gzip", async ({
+test("G3: the cache tab turns Zstandard and Brotli on with their levels and keeps gzip", async ({
   page,
 }) => {
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
-  await openTab(page, state.compressSiteId, "https");
+  await openTab(page, state.compressSiteId, "cache");
   const zstd = page.getByTestId("https-zstd");
   const brotli = page.getByTestId("https-brotli");
   const gzip = page.getByTestId("https-gzip");
-  const save = page.getByTestId("https-save");
+  const save = page.getByTestId("compression-save");
   await expect(zstd).toHaveAttribute("aria-checked", "false");
   await expect(brotli).toHaveAttribute("aria-checked", "false");
   await expect(gzip).toHaveAttribute("aria-checked", "true");
@@ -244,7 +244,7 @@ test("G3: the logs tab shows the CRS rules of sampled requests and which were bl
 test("G3: a cluster with an old node cannot turn Brotli, Zstandard or CRS on", async ({ page }) => {
   const pageErrors = errors(page);
   await login(page, ...ADMIN);
-  await openTab(page, state.legacySiteId, "https");
+  await openTab(page, state.legacySiteId, "cache");
   for (const algorithm of ["zstd", "brotli"]) {
     await expect(page.getByTestId(`https-${algorithm}`)).toHaveAttribute("aria-checked", "false");
     await expect(page.getByTestId(`https-${algorithm}`)).toBeDisabled();
@@ -252,7 +252,7 @@ test("G3: a cluster with an old node cannot turn Brotli, Zstandard or CRS on", a
   }
   await expect(page.getByTestId("https-gzip")).toBeEnabled();
   await expect(page.getByTestId("https-gzip-unavailable")).toHaveCount(0);
-  await check(page, "https-old-node");
+  await check(page, "compression-old-node");
 
   await openTab(page, state.legacySiteId, "security");
   const unavailable = page.getByTestId("waf-unavailable");

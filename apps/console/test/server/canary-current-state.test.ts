@@ -220,12 +220,16 @@ describe("configuration canary and current state", async () => {
     const before = await config(stable);
     expect(before.sites.map((s) => s.name).sort()).toEqual(["blog", "old", expect.any(String)]);
     const generation = before.sites.find((s) => s.id === siteId)?.cacheGeneration ?? 0n;
-    // During the window: a domain is removed, a site disabled, the cache purged.
+    // During the window: a domain is removed, a site disabled, the cache generation changed
+    // (whole-site purges are node tasks now; generations bumped by older consoles remain).
     await change();
     await admin.sites.update({ id: blog, domains: ["blog.current.test"] });
     const withoutDomain = (await latestRevision(ctx.db, clusterId))?.revision ?? 0;
     await admin.sites.setEnabled({ id: old, enabled: false });
-    await admin.sites.purgeAll({ id: siteId });
+    await ctx.db
+      .update(schema.site)
+      .set({ cacheGeneration: sql`${schema.site.cacheGeneration} + 1` })
+      .where(eq(schema.site.id, siteId));
     const candidate = (await rollout()).candidateRevision ?? 0;
     await report(canary, candidate);
     await ctx.db
@@ -266,7 +270,11 @@ describe("configuration canary and current state", async () => {
     const site = async (node: TestNode) => (await config(node)).sites.find((s) => s.id === siteId);
     const generation = (await site(stable))?.cacheGeneration ?? 0n;
     const platform = await admin.settings.protection();
-    await admin.sites.purgeAll({ id: siteId });
+    const revisions = (await rollout()).candidateRevision;
+    // A whole-site purge is a node task: every node gets it, no revision is published.
+    const purge = await admin.sites.purgeAll({ id: siteId });
+    expect(purge.nodes.map((n) => n.nodeId).sort()).toEqual([canary.id, stable.id].sort());
+    expect((await rollout()).candidateRevision).toBe(revisions);
     await admin.protection.update({ id: siteId, underAttack: true });
     await admin.settings.setProtection({
       ...platform,
@@ -274,7 +282,7 @@ describe("configuration canary and current state", async () => {
       underAttackChallenge: "pow",
     });
     const other = await config(stable);
-    expect(other.sites[0]?.cacheGeneration).toBe(generation + 1n);
+    expect(other.sites[0]?.cacheGeneration).toBe(generation);
     expect(other.sites[0]?.protection?.underAttack).toBe(true);
     expect(other.platformProtection).toMatchObject({
       underAttack: true,
@@ -287,7 +295,7 @@ describe("configuration canary and current state", async () => {
     expect(await rollout()).toMatchObject({ state: "canary", windowStartedAt: started });
     expect(await site(canary)).toMatchObject({
       name: renamed,
-      cacheGeneration: generation + 1n,
+      cacheGeneration: generation,
       protection: expect.objectContaining({ underAttack: true }),
     });
     // Turning them off is just as immediate.

@@ -1,100 +1,57 @@
-import {
-  BROTLI_LEVEL_RANGE,
-  type CertificateDto,
-  COMPRESSION_MIN_LENGTH_RANGE,
-  type FeatureAvailability,
-  MIME_TYPE_RE,
-  type Site,
-  type SiteFeatures,
-  type TlsSettings,
-  tlsSettings,
-  ZSTD_LEVEL_RANGE,
-} from "@edgeweir/contract";
+import { type CertificateDto, type Site, type TlsSettings, tlsSettings } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import { FormSelect } from "@/components/form-select";
-import { SafetyNote } from "@/components/safety-note";
-import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
+import { COMPRESSION_KEYS, compressionOf } from "@/components/site/compression-card";
+import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { ErrorState, LoadingState } from "@/components/states";
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import { Card, CardContent } from "@/components/ui/card";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
 export function HttpsTab({ site }: { site: Site }) {
   const policy = useQuery(orpc.https.get.queryOptions({ input: { id: site.id } }));
   const certificates = useQuery(orpc.certificates.list.queryOptions());
-  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
-  if (policy.isPending || certificates.isPending || features.isPending) return <LoadingState />;
+  if (policy.isPending || certificates.isPending) return <LoadingState />;
   if (policy.isLoadingError)
     return <ErrorState error={policy.error} onRetry={() => void policy.refetch()} />;
   if (certificates.isLoadingError)
     return <ErrorState error={certificates.error} onRetry={() => void certificates.refetch()} />;
-  if (features.isLoadingError)
-    return <ErrorState error={features.error} onRetry={() => void features.refetch()} />;
   return (
     <HttpsEditor
-      key={JSON.stringify(policy.data)}
+      // Keyed by its own fields: saving compression on the cache tab keeps unsaved edits here.
+      key={JSON.stringify(httpsOf(policy.data))}
       site={site}
       initial={policy.data}
       certificates={certificates.data}
-      features={features.data}
     />
   );
 }
 
-type Algorithm = "gzip" | "brotli" | "zstd";
-
-/** The settings fields of each compression algorithm (gzip has no level). */
-const ALGORITHMS = {
-  gzip: { on: "gzip", level: null, min: "gzipMinLength", types: "gzipTypes" },
-  brotli: {
-    on: "brotli",
-    level: { key: "brotliLevel", range: BROTLI_LEVEL_RANGE },
-    min: "brotliMinLength",
-    types: "brotliTypes",
-  },
-  zstd: {
-    on: "zstd",
-    level: { key: "zstdLevel", range: ZSTD_LEVEL_RANGE },
-    min: "zstdMinLength",
-    types: "zstdTypes",
-  },
-} as const;
-
-const algorithmLabel = (algorithm: Algorithm) =>
-  ({ gzip: m.cert_gzip, brotli: m.compression_brotli, zstd: m.compression_zstd })[algorithm]();
-
 /** What to check when the settings fail the contract, by the first issue's field. */
 function settingsError(field: PropertyKey | undefined): string {
   if (field === "hstsMaxAge") return m.common_check_field({ field: m.cert_hsts_age() });
-  for (const algorithm of ["gzip", "brotli", "zstd"] as const) {
-    const fields = ALGORITHMS[algorithm];
-    const label =
-      field === fields.types
-        ? m.cert_gzip_types()
-        : field === fields.min
-          ? m.cert_gzip_min()
-          : field === fields.level?.key
-            ? m.compression_level()
-            : null;
-    if (label) return m.common_check_field({ field: `${algorithmLabel(algorithm)} · ${label}` });
-  }
   return m.error_bad_request();
 }
+
+/** The HTTPS fields of `settings` (the compression card owns the rest). */
+const httpsOf = (settings: TlsSettings) =>
+  Object.fromEntries(
+    Object.entries(settings).filter(
+      ([key]) => !COMPRESSION_KEYS.includes(key as keyof TlsSettings),
+    ),
+  );
 
 function HttpsEditor({
   site,
   initial,
   certificates,
-  features,
 }: {
   site: Site;
   initial: TlsSettings;
   certificates: CertificateDto[];
-  features: SiteFeatures;
 }) {
   const [settings, setSettings] = React.useState(initial);
   const [error, setError] = React.useState<string | null>(null);
@@ -109,17 +66,13 @@ function HttpsEditor({
     ["hstsPreload", m.cert_hsts_preload()],
     ["ocspStapling", m.cert_ocsp()],
   ] as const;
-  const availability: Record<Algorithm, FeatureAvailability> = {
-    gzip: { available: true, reason: null },
-    brotli: features.brotli,
-    zstd: features.zstd,
-  };
   return (
     <Card>
       <form
         onSubmit={async (event) => {
           event.preventDefault();
-          const parsed = tlsSettings.safeParse(settings);
+          // Compression as saved: the cache tab owns it.
+          const parsed = tlsSettings.safeParse({ ...settings, ...compressionOf(initial) });
           if (!parsed.success) {
             setError(settingsError(parsed.error.issues[0]?.path[0]));
             return;
@@ -200,112 +153,13 @@ function HttpsEditor({
             />
           ))}
         </CardContent>
-        <CardContent className="flex flex-col gap-6 pt-6">
-          <div className="border-t pt-6">
-            <CardTitle>{m.compression_title()}</CardTitle>
-          </div>
-          {(["zstd", "brotli", "gzip"] as const).map((algorithm) => (
-            <CompressionGroup
-              key={algorithm}
-              algorithm={algorithm}
-              settings={settings}
-              saved={initial}
-              availability={availability[algorithm]}
-              onChange={setSettings}
-            />
-          ))}
-        </CardContent>
         <SaveBar
-          dirty={JSON.stringify(settings) !== JSON.stringify(initial)}
+          dirty={JSON.stringify(httpsOf(settings)) !== JSON.stringify(httpsOf(initial))}
           pending={pending}
           error={error}
           testId="https-save"
         />
       </form>
     </Card>
-  );
-}
-
-/**
- * Switch, level, minimum length and types of one algorithm. An algorithm the
- * cluster's nodes lack cannot be turned on (it can still be turned off).
- */
-function CompressionGroup({
-  algorithm,
-  settings,
-  saved,
-  availability,
-  onChange,
-}: {
-  algorithm: Algorithm;
-  settings: TlsSettings;
-  saved: TlsSettings;
-  availability: FeatureAvailability;
-  onChange: (next: TlsSettings) => void;
-}) {
-  const fields = ALGORITHMS[algorithm];
-  const blocked = !availability.available && !saved[fields.on];
-  // gzip keeps the ids it always had.
-  const id = (suffix: string) => (algorithm === "gzip" ? `gzip${suffix}` : `${algorithm}${suffix}`);
-  return (
-    <FieldSet className="gap-0" data-testid={`compression-${algorithm}`}>
-      <FieldLegend variant="label" className="text-muted-foreground">
-        {algorithmLabel(algorithm)}
-      </FieldLegend>
-      {/* Shared columns (switch, level, minimum, types) line the algorithms up. */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[8rem_8rem_11rem_minmax(0,1fr)]">
-        <SwitchField
-          id={algorithm}
-          label={m.compression_enabled()}
-          checked={settings[fields.on]}
-          disabled={blocked}
-          testId={`https-${algorithm}`}
-          onCheckedChange={(value) => onChange({ ...settings, [fields.on]: value })}
-        />
-        {fields.level ? (
-          <NumberField
-            id={id("Level")}
-            label={m.compression_level()}
-            value={String(settings[fields.level.key])}
-            min={fields.level.range.min}
-            max={fields.level.range.max}
-            step={1}
-            required
-            testId={`https-${algorithm}-level`}
-            onChange={(value) =>
-              fields.level && onChange({ ...settings, [fields.level.key]: Number(value) })
-            }
-          />
-        ) : null}
-        <div className={fields.level ? undefined : "lg:col-start-3"}>
-          <NumberField
-            id={id("Min")}
-            label={m.cert_gzip_min()}
-            value={String(settings[fields.min])}
-            min={COMPRESSION_MIN_LENGTH_RANGE.min}
-            max={COMPRESSION_MIN_LENGTH_RANGE.max}
-            step={1}
-            required
-            testId={`https-${algorithm}-min`}
-            onChange={(value) => onChange({ ...settings, [fields.min]: Number(value) })}
-          />
-        </div>
-        <Field className={fields.level ? undefined : "sm:col-span-2 lg:col-span-1"}>
-          <FieldLabel htmlFor={id("Types")}>{m.cert_gzip_types()}</FieldLabel>
-          <ListInput
-            id={id("Types")}
-            value={settings[fields.types]}
-            invalid={settings[fields.types].some((type) => !MIME_TYPE_RE.test(type))}
-            testId={`https-${algorithm}-types`}
-            onChange={(types) => onChange({ ...settings, [fields.types]: types })}
-          />
-        </Field>
-      </div>
-      {availability.available ? null : (
-        <SafetyNote className="mt-2" data-testid={`https-${algorithm}-unavailable`}>
-          {m.feature_unavailable_nodes()}
-        </SafetyNote>
-      )}
-    </FieldSet>
   );
 }

@@ -93,7 +93,7 @@ The **Configuration canary** card sets the cluster's policy and shows the curren
 | After a rollback | The cluster stays on the stable revision. The database keeps the change; the next publication goes through the canary again |
 | New publication during the window | The new candidate replaces the old one; the window keeps its start and its canary nodes |
 | No canary node online | The change goes to every node, `cluster.rollout_direct` is audited and an alert is sent; publishing is not blocked |
-| Changes that reach every node at once | ACME HTTP-01 challenges; disabling or deleting a site and removing a domain; disabling or deleting an L4 app; a site's **Purge cache**; lowering the access log sampling rate; certificate renewals; challenge key rotation; **Under Attack** of sites and the global one. The stable revision takes these at once; other changes wait in the candidate for the window. **Roll back** in **Revisions** reaches every node at once too |
+| Changes that reach every node at once | ACME HTTP-01 challenges; disabling or deleting a site and removing a domain; disabling or deleting an L4 app; lowering the access log sampling rate; certificate renewals; challenge key rotation; **Under Attack** of sites and the global one. The stable revision takes these at once; other changes wait in the candidate for the window. **Roll back** in **Revisions** reaches every node at once too |
 | Turning the policy off | A running candidate is promoted to every node |
 
 | State | Meaning |
@@ -117,7 +117,7 @@ Every change that affects node configuration publishes a new revision in the clu
 | Site {site} created / updated / deleted | Site changes |
 | Site {site} enabled / disabled | [Site enabling](#site-enabling) |
 | L4 application {app} created / updated / deleted | [L4 app](l4.en.md) changes; disabling and enabling use "updated" |
-| Site {site} purged | **Purge cache** on a site |
+| Site {site} purged | **Purge cache** on a site in older consoles (now a node task that publishes no revision) |
 | Certificate policy for {site} updated | HTTPS settings changed; a certificate used by the site was issued or renewed |
 | ACME challenge updated | HTTP-01 challenge changes |
 | Rules and IP lists updated | Site rule, global rule, or IP list changes |

@@ -136,7 +136,7 @@ When a change makes the configuration need a capability that an active node of t
 | Caller | Result |
 | --- | --- |
 | The operator (session or AccessKey) | Saved and published; nodes lacking the capability keep their configuration and show "Upgrade required" in **Clusters & nodes** |
-| Service account | 409 `NODE_CAPABILITY_REQUIRED`; `data.features` lists the missing capabilities (comma separated); nothing is saved |
+| Service account | 409 `NODE_CAPABILITY_REQUIRED`; `data.features` lists the missing capabilities (comma separated) and `data.nodes` the nodes lacking them (the first 5, comma separated, ending in `+N` when there are more); nothing is saved |
 
 Automatic console jobs that publish configurations are held to the same rule as service accounts. Upgrading nodes: [Node upgrades](../guide/node-upgrades.en.md).
 
@@ -284,6 +284,7 @@ Behavior: [HTTPS and certificates](../guide/https.en.md#compression) and [OWASP 
 | Procedure | Endpoint |
 | --- | --- |
 | `cacheTasks.create`, `cacheTasks.get`, `cacheTasks.list` | `POST /cache-tasks`, `GET /cache-tasks/{id}`, `GET /cache-tasks` |
+| `sites.purgeAll` | `POST /sites/{id}/purge`: a whole-site purge, the same as `POST /cache-tasks` with `{"type":"site","siteIds":["<site ID>"]}`; returns the task (it no longer publishes a revision or changes `cacheGeneration`) |
 | `sites.update` | `PATCH /sites/{id}` (`originSettings`, `cacheSettings`) |
 | `sites.originHealth` | `GET /sites/{id}/origin-health` |
 | `errorPages.get` | `GET /sites/{id}/error-pages` |
@@ -316,7 +317,7 @@ Responses:
 | `CACHE_TASK_HOST_INVALID` | 400 | A host has a port or wildcard or is not a valid host name; `data.hosts` |
 | `CACHE_TASK_TAG_INVALID` | 400 | A tag breaks the rules; `data.tags` |
 | `CACHE_TASK_HOST_UNKNOWN` | 400 | A host, or the sitemap's host, belongs to no site; `data.hosts` |
-| `NODE_CAPABILITY_REQUIRED` | 409 | Tasks: an active node of the cluster lacks `purge-tag-v1` (hosts, tags) or `prefetch-v2` (mobile, sitemaps); `data.features` |
+| `NODE_CAPABILITY_REQUIRED` | 409 | Tasks: an active node of the cluster lacks `purge-tag-v1` (hosts, tags) or `prefetch-v2` (mobile, sitemaps); `data.features`, `data.nodes` |
 | `ERROR_PAGE_TOO_LARGE` | 400 | A template exceeds 65536 bytes; `data.status`, `data.limit` (`status` 404 or 503 for platform templates) |
 
 ```bash
@@ -372,7 +373,7 @@ Responses:
 | `RULE_INVALID` | 400 | An `origin` action picks an origin group the site does not have, or a global rule picks one; `sites.update` removes an origin group a rule still picks; a saved rule or cache rule condition no longer compiles |
 | `BULK_REDIRECT_HOST_UNKNOWN` | 400 | The host of a `host/path` source is not a domain of the site (one label under a wildcard domain of the site is fine); `data.hosts` (comma-separated, up to 5) |
 | `IP_LIST_NOT_FOUND` | 404 | A rule or cache rule condition references an IP list that does not exist or is not visible |
-| `NODE_CAPABILITY_REQUIRED` | 409 | An active node of the cluster lacks `rules-v2` (changes by service accounts and background jobs); `data.features` |
+| `NODE_CAPABILITY_REQUIRED` | 409 | An active node of the cluster lacks `rules-v2` (changes by service accounts and background jobs); `data.features`, `data.nodes` |
 | `SITE_NOT_FOUND` | 404 | The site does not exist or is outside the caller's scope |
 
 ```bash

@@ -136,7 +136,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | 调用方 | 结果 |
 | --- | --- |
 | 运营者（会话或 AccessKey） | 保存并发布；缺少能力的节点保留原配置，在 **集群与节点** 中显示「需要升级」 |
-| 服务账号 | 409 `NODE_CAPABILITY_REQUIRED`，`data.features` 为缺少的能力（逗号分隔）；修改不保存 |
+| 服务账号 | 409 `NODE_CAPABILITY_REQUIRED`，`data.features` 为缺少的能力（逗号分隔），`data.nodes` 为缺少能力的节点（前 5 个，逗号分隔，更多时以 `+N` 结尾）；修改不保存 |
 
 控制台的自动任务发布配置时与服务账号受同样的限制。升级节点见[节点升级](../guide/node-upgrades.md)。
 
@@ -284,6 +284,7 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 | 过程 | 端点 |
 | --- | --- |
 | `cacheTasks.create`、`cacheTasks.get`、`cacheTasks.list` | `POST /cache-tasks`、`GET /cache-tasks/{id}`、`GET /cache-tasks` |
+| `sites.purgeAll` | `POST /sites/{id}/purge`：全站刷新，等同 `POST /cache-tasks` 的 `{"type":"site","siteIds":["<网站 ID>"]}`，返回任务（不再发布配置版本、不再修改 `cacheGeneration`） |
 | `sites.update` | `PATCH /sites/{id}`（`originSettings`、`cacheSettings`） |
 | `sites.originHealth` | `GET /sites/{id}/origin-health` |
 | `errorPages.get` | `GET /sites/{id}/error-pages` |
@@ -316,7 +317,7 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 | `CACHE_TASK_HOST_INVALID` | 400 | Host 带端口、通配符或不是合法主机名；`data.hosts` |
 | `CACHE_TASK_TAG_INVALID` | 400 | 标签不符合规则；`data.tags` |
 | `CACHE_TASK_HOST_UNKNOWN` | 400 | Host 或站点地图的 Host 不属于任何网站；`data.hosts` |
-| `NODE_CAPABILITY_REQUIRED` | 409 | 任务：集群内有活动节点缺少 `purge-tag-v1`（Host、标签）或 `prefetch-v2`（移动端、站点地图）；`data.features` |
+| `NODE_CAPABILITY_REQUIRED` | 409 | 任务：集群内有活动节点缺少 `purge-tag-v1`（Host、标签）或 `prefetch-v2`（移动端、站点地图）；`data.features`、`data.nodes` |
 | `ERROR_PAGE_TOO_LARGE` | 400 | 模板超过 65536 字节；`data.status`、`data.limit`（平台模板的 `status` 为 404 或 503） |
 
 ```bash
@@ -372,7 +373,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `RULE_INVALID` | 400 | `origin` 动作选择了网站没有的源站组，或全局规则选择源站组；`sites.update` 移除仍被规则选择的源站组；已保存的规则或缓存规则条件无法编译 |
 | `BULK_REDIRECT_HOST_UNKNOWN` | 400 | `域名/路径` 来源的域名不是网站的域名（网站泛域名下一级的子域名可以）；`data.hosts`（逗号分隔，最多 5 个） |
 | `IP_LIST_NOT_FOUND` | 404 | 规则或缓存规则条件引用的 IP 名单不存在或不可见 |
-| `NODE_CAPABILITY_REQUIRED` | 409 | 集群内有活动节点缺少 `rules-v2`（服务账号与后台任务发布时）；`data.features` |
+| `NODE_CAPABILITY_REQUIRED` | 409 | 集群内有活动节点缺少 `rules-v2`（服务账号与后台任务发布时）；`data.features`、`data.nodes` |
 | `SITE_NOT_FOUND` | 404 | 网站不存在或不在调用方范围内 |
 
 ```bash

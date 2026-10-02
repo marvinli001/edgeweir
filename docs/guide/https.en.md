@@ -9,7 +9,7 @@ Certificate upload, ACME requests and renewal, and a site's HTTPS, TLS, HTTP/2, 
 | Certificate | A certificate chain and private key. A site can select any certificate that covers all of its domains. |
 | ACME certificate | A certificate the console requests from Let's Encrypt or ZeroSSL and renews automatically. |
 | DNS credential | A DNS provider credential that DNS-01 validation uses to write TXT records. Separate from the provider credentials of DNS steering. |
-| HTTPS settings | The certificate choice, redirect, HSTS, TLS, HTTP/2, HTTP/3, and compression options on a site's **HTTPS** tab. |
+| HTTPS settings | The certificate choice, redirect, HSTS, TLS, HTTP/2, and HTTP/3 options on a site's **HTTPS** tab; compression is set in the **Compression** card of the **Cache** tab. |
 
 ## Upload a certificate
 
@@ -97,7 +97,7 @@ A certificate used by a site, in **Issuing**, or with DNS-01 records still to cl
 
 1. Open **Sites**, select the site, and open the **HTTPS** tab.
 2. Select a certificate in **Certificates**. The list contains every issued, unexpired certificate; **HTTP only** disables HTTPS.
-3. Set **Minimum TLS version**, **Cipher profile**, **HSTS lifetime (seconds)**, the switches, and **Compression**.
+3. Set **Minimum TLS version**, **Cipher profile**, **HSTS lifetime (seconds)**, and the switches.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision.
 5. Verify: after the node applies the revision:
 
@@ -135,7 +135,7 @@ TLS session tickets are off.
 
 ### Compression
 
-**Compression** has a group of settings each for Zstandard, Brotli, and Gzip:
+The **Compression** card on a site's **Cache** tab has a group of settings each for Zstandard, Brotli, and Gzip, saved on their own (unsaved changes on the **HTTPS** tab stay):
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
@@ -233,6 +233,6 @@ A change saved in the console or with an AccessKey is published even when it nee
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (such as `http3-v1`) and keeps its last-known-good configuration | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | TLS SNI differs from `Host`, for example a client reused a connection opened for another domain | The client opens a connection for the requested domain |
 | Browsers do not use HTTP/3 | UDP 443 is blocked; the node lacks `http3-v1`; clients read `Alt-Svc` only after a first visit | Open UDP 443 and check node capabilities |
-| Responses are not compressed | The content type is not listed; the response is below the minimum size; the client sent no `Accept-Encoding`; the origin response already has a `Content-Encoding` | Check the compression settings on the **HTTPS** tab |
+| Responses are not compressed | The content type is not listed; the response is below the minimum size; the client sent no `Accept-Encoding`; the origin response already has a `Content-Encoding` | Check the **Compression** settings on the **Cache** tab |
 | gzip instead of br or zstd | The client's `Accept-Encoding` lacks the algorithm or gives it a lower q-value; the algorithm is off | Check the request header and the **Compression** settings |
 | The Brotli or Zstandard switch is unavailable | An active node of the cluster lacks `brotli-v1` / `zstd-v1` | Upgrade the nodes |

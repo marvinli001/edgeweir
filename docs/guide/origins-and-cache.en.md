@@ -11,7 +11,7 @@ A site's origin pool and origin groups, health checks and session affinity, orig
 | Origin group | A group label on an origin; empty is the default group. Requests go to the default group unless an **Origin override** rule sends them to another group. |
 | Cache rule | A rule matched in list order that decides whether and for how long a response is cached. |
 | Cache key | The request attributes that tell cached objects apart; applies to all cache rules of the site. |
-| Cache generation | A per-site counter that is part of the cache key; **Purge cache** increments it and every cached object of the site becomes stale. |
+| Cache generation | A per-site counter that is part of the cache key. Older consoles' **Purge cache** incremented it; whole-site purges are node tasks now and the counter no longer changes. |
 | Cache tag | A tag the origin names in the `Cache-Tag` response header; a purge by tag purges only the cached objects that carry it. |
 
 ## Configure origins
@@ -356,7 +356,7 @@ The **Cache key & slicing** card is saved separately and applies to all rules of
 4. Click **Submit**.
 5. Verify: the task appears under **Tasks**; expanded, each node shows **Succeeded**; after a purge, the next request returns `X-Cache: MISS`.
 
-Tasks go to every enabled node of the site's cluster, with a result per node. Disabled sites cannot be purged or prefetched ("The site is disabled").
+Tasks go to every enabled node of the site's cluster, with a result per node. Disabled sites cannot be purged or prefetched ("The site is disabled"). `/purge?site=<site ID>` lists only that site's tasks (the site's name shows next to **Tasks**; × clears it) and preselects the site for site and tag purges. **Submit** stays disabled while the list is empty or blank.
 
 ### Task types
 
@@ -398,7 +398,7 @@ The origin lists tags, comma separated, in the `Cache-Tag` response header, e.g.
 
 ### Purge a site's cache
 
-On the site's **Overview** tab, click **Purge cache** and confirm. The console increments the site's cache generation and publishes a revision ("Site {site} purged"); every cached object of the site becomes stale. A disabled site cannot be purged.
+On the site's **Overview** tab, click **Purge cache** and confirm. This is the same as **Purge sites** under **Purge & prefetch**: the console creates a whole-site purge task for every enabled node of the site's cluster and publishes no revision. **View tasks** in the notification opens `/purge?site=<site ID>`, which lists only that site's tasks and preselects the site in the form. A disabled site cannot be purged.
 
 ### Task limits
 

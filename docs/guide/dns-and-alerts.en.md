@@ -159,7 +159,7 @@ Earlier versions had one global DNS steering configuration. On upgrade it become
 | Failure isolation | Each binding publishes and reconciles on its own; an unavailable provider fails only the DNS revisions of the clusters that use it |
 | Propagation | Bound by TTL and resolver caches; not an instant switch |
 | Drift repair | System-managed names deleted or changed outside the console are restored at the next check; **Repair records** runs one for the cluster immediately |
-| Takeover scope | Only names this cluster registered are changed; a new name that already has unmanaged records is refused (`DNS_RECORD_CONFLICT`), as is a name managed by another cluster (`DNS_BINDING_CONFLICT`) |
+| Takeover scope | Only names this cluster registered are changed; a new name that already has unmanaged records is refused (`DNS_RECORD_CONFLICT`), as is a name managed by another cluster (`DNS_BINDING_CONFLICT`); the error and the failed DNS revision name the conflicting name (`data.name`) |
 | Write order | Names are registered first; changed address RRsets are replaced as a whole, then CNAMEs, in batches of at most 100 records; records no longer needed are deleted; the result is read back. New records are written before the records they replace (for example, addresses moving from A to AAAA), so a name never resolves empty in between; only a name changing to or from a CNAME loses its old records first. On failure the registration stays and the next cycle retries |
 | TTL | A provider raising the TTL to its own minimum is not drift; after the binding's TTL changes, the next reconciliation rewrites the records with the new TTL |
 | Concurrency | One console process at a time reconciles a cluster (a 15-minute lease that expires if the process exits) |

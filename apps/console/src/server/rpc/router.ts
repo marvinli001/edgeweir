@@ -162,7 +162,6 @@ import {
   deleteSite,
   getSite,
   listSites,
-  purgeSite,
   setSiteEnabled,
   setSiteStarred,
   starredSites,
@@ -685,7 +684,11 @@ export const router = os.router({
       deleteSite(context.app.db, input.id, { actor: context.actor }),
     ),
     purgeAll: authed.sites.purgeAll.handler(({ input, context }) =>
-      purgeSite(context.app.db, input.id, { actor: context.actor }),
+      createCacheTask(
+        context.app.db,
+        { type: "site", siteIds: [input.id], urls: [] },
+        { actor: context.actor },
+      ),
     ),
     starred: authed.sites.starred.handler(({ context }) =>
       starredSites(context.app.db, context.user.id),

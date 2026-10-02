@@ -297,10 +297,11 @@ export const contract = {
       .route({ method: "DELETE", path: "/sites/{id}", tags: ["sites"] })
       .input(idParam)
       .output(z.object({ revision: s.revision })),
+    /** Purges the whole site: the node task cacheTasks.create creates for type "site". */
     purgeAll: oc
       .route({ method: "POST", path: "/sites/{id}/purge", tags: ["sites"] })
       .input(idParam)
-      .output(s.siteMutationResult),
+      .output(s.cacheTask),
     /** The caller's starred sites, most recently starred first. */
     starred: oc
       .route({ method: "GET", path: "/starred-sites", tags: ["sites"] })

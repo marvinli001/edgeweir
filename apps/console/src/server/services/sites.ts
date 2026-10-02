@@ -34,7 +34,6 @@ import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
 import { lockStats } from "../lib/locks";
 import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings";
-import { assertServing } from "../lib/site-state";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { defaultClusterId } from "./clusters";
@@ -747,42 +746,6 @@ export async function deleteSite(
       metadata: { name: row.name, revision: revision.revision },
     });
     return { revision: toRevisionDto(revision) };
-  });
-}
-
-/** Invalidates every cached object of a site by bumping its cache generation. */
-export async function purgeSite(
-  db: Database,
-  id: string,
-  ctx: { actor: Actor },
-): Promise<{ site: Site; revision: Revision }> {
-  return db.transaction(async (tx) => {
-    const row = await findSite(tx, id);
-    assertServing(row);
-    const [updated] = await tx
-      .update(schema.site)
-      .set({ cacheGeneration: sql`${schema.site.cacheGeneration} + 1` })
-      .where(eq(schema.site.id, row.id))
-      .returning();
-    if (!updated) throw new Error("site update failed");
-    const { row: revision } = await publishRevision(tx, {
-      clusterId: row.clusterId,
-      reason: { code: "site_purged", params: { site: row.name } },
-      userId: publisher(ctx.actor),
-    });
-    await recordAudit(tx, ctx.actor, {
-      action: "site.purge_all",
-      targetType: "site",
-      targetId: row.id,
-      targetName: row.name,
-      metadata: {
-        cacheGeneration: updated.cacheGeneration,
-        revision: revision.revision,
-      },
-    });
-    const [dto] = await toSiteDtos(tx, [updated]);
-    if (!dto) throw new Error("site not readable after update");
-    return { site: dto, revision: toRevisionDto(revision) };
   });
 }
 
