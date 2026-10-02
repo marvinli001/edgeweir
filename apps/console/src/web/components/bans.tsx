@@ -8,24 +8,17 @@ import { AccessTabs } from "@/components/access-tabs";
 import { BAN_REASON_LABELS, BAN_SCOPE_LABELS, BanDialog } from "@/components/ban-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
+import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 
 const PAGE_SIZE = 50;
-const ALL = "__all__";
 
 const SOURCES: Record<BanSource, () => string> = {
   manual: () => m.bans_source_manual(),
@@ -38,42 +31,6 @@ function timeLeft(iso: string, now = Date.now()): string {
   if (seconds < 3600) return m.bans_left_minutes({ count: Math.max(1, Math.floor(seconds / 60)) });
   if (seconds < 86400) return m.bans_left_hours({ count: Math.floor(seconds / 3600) });
   return m.bans_left_days({ count: Math.floor(seconds / 86400) });
-}
-
-function FilterSelect({
-  value,
-  onChange,
-  allLabel,
-  options,
-  label,
-  testId,
-}: {
-  value: string | undefined;
-  onChange: (value: string | undefined) => void;
-  allLabel: string;
-  options: { label: string; value: string }[];
-  label: string;
-  testId: string;
-}) {
-  const items = [{ label: allLabel, value: ALL }, ...options];
-  return (
-    <Select
-      value={value ?? ALL}
-      onValueChange={(v) => onChange(!v || v === ALL ? undefined : String(v))}
-      items={items}
-    >
-      <SelectTrigger className="w-full sm:w-48" aria-label={label} data-testid={testId}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {items.map((item) => (
-          <SelectItem key={item.value} value={item.value}>
-            {item.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
 }
 
 /** Who or what created the ban: the operator, or the node and its trigger. */
