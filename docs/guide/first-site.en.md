@@ -7,7 +7,7 @@ From console setup to a first site served over HTTP and HTTPS by an edge node.
 1. **Complete the setup wizard**: create the only account and the default cluster.
 2. **Enroll a node**: generate the install command in the console and run it on the node host; once enrolled, the node connects to the node channel over mTLS.
 3. **Create a site**: enter its domains, origin, and cache setting; the cluster publishes a new configuration revision.
-4. **Configure DNS**: point the site's domains at the node addresses or the CNAME target in the authoritative DNS and wait for the records to take effect.
+4. **Configure DNS**: point the site's domains at the edge addresses or the CNAME target listed on the site's **Domains** tab in the authoritative DNS and wait for the records to take effect.
 5. **Enable HTTPS**: request or upload a certificate and select it on the site's HTTPS tab; see [HTTPS and certificates](https.en.md).
 6. **Verify**: every item of the **Launch check** on the site's **Overview** tab passes; check origin fetch and caching with curl.
 
@@ -110,8 +110,10 @@ Add a record for every site domain in the domain's authoritative DNS.
 
 | DNS steering | Record |
 | --- | --- |
-| Not configured (the cluster's DNS is **Not managed**) | `A` / `AAAA` records to the node's public address. The **IP** column of the node table in **Clusters & nodes** lists the addresses the node reports. One record per node |
+| Not configured (the cluster's DNS is **Not managed**) | `A` / `AAAA` records to the addresses in the **Edge addresses** card on the site's **Domains** tab (the scheduling addresses of the cluster's online nodes, copyable), one record per address |
 | Configured (the **DNS** tab of **Clusters & nodes**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** tab (`<site ID>.<cluster domain>`). In Automatic mode the card shows **Published** once the records are written to the provider; in Manual mode create the cluster's records listed on that tab first |
+
+The card lists where each domain resolves now: **Points here** (every address belongs to a node of the cluster), **Points elsewhere**, **Not resolved**, **Not checked** (the lookup failed, or the nodes have no known address). A wildcard is resolved as `edgeweir-check.<domain>`. The card resolves again every 30 seconds; DNS caches affect the result.
 
 For lines, health-based removal, and TTL of DNS steering, see [Configure DNS steering](dns-and-alerts.en.md#configure-dns-steering).
 
@@ -133,7 +135,7 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
    | Certificate | **Certificate covers every domain**, or **No certificate** (HTTP only) | **Certificate misses domains** (listed), **Certificate being issued**, **Certificate issuance failed** (with the reason), **Certificate expired**; opens the **HTTPS** tab |
    | **Live on N/M nodes** | N equals M | Shows the window's end during a canary; with **No online nodes**, enroll a node first; opens the cluster |
 
-2. Send an HTTP request straight to the node, bypassing DNS (replace `203.0.113.10` with the node address):
+2. Send an HTTP request straight to the node, bypassing DNS. Without DNS steering, the **Edge addresses** card gives a copyable command per domain (HTTPS when the site's certificate covers the domain); otherwise replace `203.0.113.10` below:
 
    ```bash
    curl -sI --resolve www.example.com:80:203.0.113.10 http://www.example.com/

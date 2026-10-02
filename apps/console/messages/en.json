@@ -1014,6 +1014,7 @@
   "dns_auto_address": "Use reported public IPs automatically",
   "dns_cname_target": "CNAME target",
   "dns_no_healthy_nodes": "No healthy nodes",
+  "dns_edge_addresses": "Edge addresses",
   "dns_pointing_ok": "Points here",
   "dns_pointing_elsewhere": "Points elsewhere",
   "dns_pointing_unresolved": "Not resolved",

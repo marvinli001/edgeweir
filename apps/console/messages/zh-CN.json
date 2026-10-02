@@ -920,6 +920,7 @@
   "dns_auto_address": "自动使用上报的公开 IP",
   "dns_cname_target": "CNAME 目标",
   "dns_no_healthy_nodes": "无健康节点",
+  "dns_edge_addresses": "边缘地址",
   "dns_pointing_ok": "指向正确",
   "dns_pointing_elsewhere": "指向其他地址",
   "dns_pointing_unresolved": "未解析",

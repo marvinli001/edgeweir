@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Page } from "@/components/page";
 import { BulkRedirectsTab } from "@/components/site/bulk-redirects-tab";
 import { CacheTab } from "@/components/site/cache-tab";
-import { CnameTarget } from "@/components/site/cname-target";
+import { DnsSetupCard } from "@/components/site/cname-target";
 import { ErrorPagesTab } from "@/components/site/error-pages-tab";
 import { HttpsTab } from "@/components/site/https-tab";
 import { LaunchCheck } from "@/components/site/launch-check";
@@ -353,7 +353,7 @@ function DomainsTab({ site }: { site: Site }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <CnameTarget siteId={site.id} />
+      <DnsSetupCard siteId={site.id} />
       <Card>
         <form
           className="flex flex-col gap-(--card-spacing)"
