@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -292,5 +293,88 @@ describe("deploy.sh", () => {
       }
       expect(run('iso_epoch "$T"', { T: "yesterday" }).status).toBe(1);
     });
+  });
+
+  describe("update and config keep local changes (P1-56)", () => {
+    it("records what it writes, so later edits can be told from template updates", () => {
+      const dir = directory();
+      sourced("DIR=$D; COMPOSE_FILE=compose.yml; write_template host", { D: dir });
+      expect(readFileSync(resolve(dir, "compose.yml"), "utf8")).toBe(
+        read("compose.baota-host.yml"),
+      );
+      expect(statSync(resolve(dir, "compose.yml")).mode & 0o777).toBe(0o600);
+      expect(readFileSync(resolve(dir, ".compose.cksum"), "utf8")).toBe(
+        sourced('file_sum "$D/compose.yml"', { D: dir }),
+      );
+    });
+
+    it("replaces an untouched compose file and keeps an edited one", () => {
+      const template = sourced("template bundled");
+      const older = template.replace("restart: unless-stopped", "restart: always");
+      const update = (dir: string) =>
+        run("DIR=$D; COMPOSE_FILE=compose.yml; update_template", { D: dir });
+      const sum = (dir: string) => sourced('file_sum "$D/compose.yml"', { D: dir });
+
+      // Written by an earlier script and never edited: replaced, also unattended.
+      const untouched = directory({ "compose.yml": older });
+      writeFileSync(resolve(untouched, ".compose.cksum"), sum(untouched));
+      expect(update(untouched).status).toBe(0);
+      expect(readFileSync(resolve(untouched, "compose.yml"), "utf8")).toBe(template);
+      expect(readFileSync(resolve(untouched, ".compose.cksum"), "utf8")).toBe(sum(untouched));
+
+      // Edited after the script wrote it: the change is shown and the file kept.
+      const edited = directory({ "compose.yml": older });
+      writeFileSync(resolve(edited, ".compose.cksum"), "0-0");
+      const kept = update(edited);
+      expect(kept.status).toBe(0);
+      expect(kept.stderr).toContain("-    restart: always");
+      expect(kept.stderr).toContain("compose.override.yml");
+      expect(readFileSync(resolve(edited, "compose.yml"), "utf8")).toBe(older);
+    });
+
+    it("passes compose.override.yml to Compose", () => {
+      const dir = directory({
+        ".env": "POSTGRES_PASSWORD=x\n",
+        "compose.yml": "services: {}\n",
+        "compose.override.yml": "services: {}\n",
+      });
+      // compose() runs docker through env(1): a docker on PATH that prints its arguments.
+      const bin = directory({ docker: '#!/bin/sh\nprintf "%s\\n" "$@"\n' });
+      execFileSync("chmod", ["+x", resolve(bin, "docker")]);
+      const args = sourced("DIR=$D; COMPOSE_FILE=compose.yml; compose ps", {
+        D: dir,
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+      });
+      expect(args).toContain(`-f\n${dir}/compose.yml\n-f\n${dir}/compose.override.yml\n`);
+      rmSync(resolve(dir, "compose.override.yml"));
+      expect(
+        sourced("DIR=$D; COMPOSE_FILE=compose.yml; compose ps", {
+          D: dir,
+          PATH: `${bin}:${process.env.PATH ?? ""}`,
+        }),
+      ).not.toContain("override");
+    });
+
+    it.each([
+      ["https://a.example.com:8443", "8443", "8443", "same"],
+      ["https://a.example.com:8443", "8443", "9443", "follow"],
+      ["https://a.example.com:8443", "", "9443", "follow"],
+      ["", "", "8443", "same"],
+      // An nginx stream in front: config leaves the published port alone.
+      ["https://a.example.com:8443", "127.0.0.1:18443", "8443", "same"],
+      ["https://a.example.com:8443", "127.0.0.1:18443", "9443", "custom"],
+      ["https://a.example.com:8443", "18443", "9443", "custom"],
+    ])(
+      "config with %s and EDGEWEIR_NODE_API_PORT=%j, new port %s: %s",
+      (url, port, next, change) => {
+        expect(
+          sourced('node_port_change "$OLD_URL" "$OLD_PORT" "$NEW_PORT"', {
+            OLD_URL: url,
+            OLD_PORT: port,
+            NEW_PORT: next,
+          }),
+        ).toBe(`${change}\n`);
+      },
+    );
   });
 });

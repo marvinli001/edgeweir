@@ -19,6 +19,8 @@ readonly PG_IMAGE=postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52
 readonly CONTAINER=edgeweir-console
 # The bundled database's volume: project "edgeweir" (the templates' name:), volume postgres-data.
 readonly PG_VOLUME=edgeweir_postgres-data
+# cksum of the compose file as this script last wrote it, to tell local edits from template updates.
+readonly TEMPLATE_SUM=.compose.cksum
 readonly SCRIPT_URL=${EDGEWEIR_SCRIPT_URL:-https://raw.githubusercontent.com/marvinli001/edgeweir/master/deploy.sh}
 readonly PG_TESTED_MAJOR=18
 
@@ -336,18 +338,29 @@ find_dir() {
   die "找不到 Edgeweir 部署。在部署目录里运行本脚本，或设置 EDGEWEIR_DIR=部署目录；新装请运行 install。"
 }
 
+# Local changes go into the override file next to the compose file
+# (compose.yml → compose.override.yml), which template updates never touch.
+# Compose merges it by itself only without -f, so compose() passes it.
+override_file() { printf '%s' "${COMPOSE_FILE%.*}.override.${COMPOSE_FILE##*.}"; }
+
+# file_sum <file>: checksum and size (cksum is everywhere; this is not about attackers).
+file_sum() { cksum <"$1" | awk '{print $1 "-" $2}'; }
+
 # Compose prefers variables from the calling shell over .env; drop every
-# variable .env or the compose file names, so .env decides.
+# variable .env or the compose files name, so .env decides.
 compose() {
-  local unset=() name
+  local unset=() name sources=("$DIR/$COMPOSE_FILE") files=() f
+  [[ -f $DIR/$(override_file) ]] && sources+=("$DIR/$(override_file)")
+  for f in "${sources[@]}"; do files+=(-f "$f"); done
+  # The grep pattern is a literal "$" "{" (shellcheck SC2016).
   while IFS= read -r name; do unset+=(-u "$name"); done < <(
     {
       sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$DIR/.env"
-      # shellcheck disable=SC2016 # a literal "${" in the compose file
-      grep -o '\${[A-Za-z_][A-Za-z0-9_]*' "$DIR/$COMPOSE_FILE" | cut -c3-
+      # shellcheck disable=SC2016
+      grep -ho '\${[A-Za-z_][A-Za-z0-9_]*' "${sources[@]}" | cut -c3-
     } | sort -u
   )
-  env ${unset[@]+"${unset[@]}"} docker compose --project-directory "$DIR" -f "$DIR/$COMPOSE_FILE" --env-file "$DIR/.env" \
+  env ${unset[@]+"${unset[@]}"} docker compose --project-directory "$DIR" "${files[@]}" --env-file "$DIR/.env" \
     ${PROJECT:+-p "$PROJECT"} "$@"
 }
 
@@ -657,6 +670,16 @@ template() {
   esac
 }
 
+# write_template <mode>: writes the compose file and records its checksum.
+write_template() {
+  local tmp
+  tmp=$(mktemp "$DIR/.compose.XXXXXX")
+  template "$1" >"$tmp"
+  chmod 600 "$tmp"
+  mv "$tmp" "$DIR/$COMPOSE_FILE"
+  file_sum "$DIR/$COMPOSE_FILE" >"$DIR/$TEMPLATE_SUM"
+}
+
 # --- commands -------------------------------------------------------------------
 
 cmd_install() {
@@ -831,7 +854,7 @@ cmd_install() {
     } >"$DIR/.env"
   )
   COMPOSE_FILE=compose.yml
-  template "$mode" >"$DIR/$COMPOSE_FILE"
+  write_template "$mode"
   if [[ $SELF != "$DIR/deploy.sh" ]]; then install -m 700 "$SELF" "$DIR/deploy.sh"; fi
   ok "已写入 ${DIR}/.env（600）、${DIR}/${COMPOSE_FILE} 和 ${DIR}/deploy.sh"
 
@@ -898,9 +921,9 @@ prune_backups() {
 }
 
 # backup [label]: database dump plus .env (without the master key) and the
-# compose file, into backups/<time>; keeps the newest EDGEWEIR_BACKUP_KEEP.
+# compose files, into backups/<time>; keeps the newest EDGEWEIR_BACKUP_KEEP.
 cmd_backup() {
-  local dest keep
+  local dest keep f
   keep=$(backup_keep)
   dest=$DIR/backups/$(date +%Y%m%d-%H%M%S)${1:+-$1}
   mkdir -p "$DIR/backups"
@@ -919,14 +942,57 @@ cmd_backup() {
     umask 077
     env_for_backup >"$dest/env"
   )
-  install -m 600 "$DIR/$COMPOSE_FILE" "$dest/$COMPOSE_FILE"
+  for f in "$COMPOSE_FILE" "$(override_file)"; do
+    if [[ -f $DIR/$f ]]; then install -m 600 "$DIR/$f" "$dest/$f"; fi
+  done
   ok "edgeweir.dump（$(du -h "$dest/edgeweir.dump" | awk '{print $1}')）、env、${COMPOSE_FILE}"
   info "备份不含主密钥（EDGEWEIR_MASTER_KEY）：它只在 ${DIR}/.env 里，另行离线保存；恢复步骤见 docs/deploy/backup.md。"
   prune_backups "$keep"
 }
 
+# update_template [no-backup]: replaces the compose file with this script's
+# template. A file this script wrote and nobody edited is replaced without
+# asking; otherwise the difference is shown first, and an edited file is kept
+# unless the operator says otherwise: local changes belong in the override file.
+update_template() {
+  local mode tmp written default kept="（现有文件在备份里）"
+  [[ -z ${1:-} ]] || kept=''
+  mode=$(deploy_mode)
+  tmp=$(mktemp)
+  template "$mode" >"$tmp"
+  if cmp -s "$tmp" "$DIR/$COMPOSE_FILE"; then
+    rm -f "$tmp"
+    return 0
+  fi
+  written=$(cat "$DIR/$TEMPLATE_SUM" 2>/dev/null || true)
+  if [[ -n $written && $written == "$(file_sum "$DIR/$COMPOSE_FILE")" ]]; then
+    rm -f "$tmp"
+    write_template "$mode"
+    ok "编排文件已更新为新模板"
+    return 0
+  fi
+  if [[ -n $written ]]; then
+    info "${COMPOSE_FILE} 在脚本写入后被改过，与脚本自带的模板不同（- 现有，+ 模板）："
+    default=n
+  else
+    info "${COMPOSE_FILE} 与脚本自带的模板不同：模板更新过，或你改过它（- 现有，+ 模板）："
+    if [[ -n $INTERACTIVE ]]; then default=y; else default=n; fi
+  fi
+  if command -v diff >/dev/null 2>&1; then
+    diff -u "$DIR/$COMPOSE_FILE" "$tmp" | tail -n +3 | sed 's/^/      /' >&2 || true
+  fi
+  rm -f "$tmp"
+  info "自己的改动放进 ${DIR}/$(override_file)：Compose 会合并它，替换模板不影响它。"
+  if confirm "替换为脚本自带的模板？${kept}" "$default"; then
+    write_template "$mode"
+    ok "编排文件已更新"
+  else
+    info "保留现有编排文件；需要时用 ./deploy.sh template ${mode} 查看模板。"
+  fi
+}
+
 cmd_update() {
-  local target=latest skip_backup='' arg current version tmp
+  local target=latest skip_backup='' arg current version
   for arg in "$@"; do
     case $arg in
       --no-backup) skip_backup=1 ;;
@@ -958,19 +1024,7 @@ cmd_update() {
   else
     warn "跳过备份。"
   fi
-
-  tmp=$(mktemp)
-  template "$(deploy_mode)" >"$tmp"
-  if ! cmp -s "$tmp" "$DIR/$COMPOSE_FILE"; then
-    info "编排文件与脚本自带的模板不同（模板更新过，或你改过它）。"
-    if confirm "替换为脚本自带的模板？（旧文件已在备份里）" "$([[ -n $INTERACTIVE ]] && echo y || echo n)"; then
-      install -m 600 "$tmp" "$DIR/$COMPOSE_FILE"
-      ok "编排文件已更新"
-    else
-      info "保留现有编排文件；需要时用 ./deploy.sh template $(deploy_mode) 查看模板。"
-    fi
-  fi
-  rm -f "$tmp"
+  update_template "$skip_backup"
 
   env_set EDGEWEIR_VERSION "$version"
   step "升级"
@@ -1008,9 +1062,25 @@ offer_script_update() {
   rm -f "$tmp"
 }
 
+# node_port_change <old node URL> <old EDGEWEIR_NODE_API_PORT> <new URL port>:
+# "same" when the port stays, "follow" when EDGEWEIR_NODE_API_PORT should take
+# the new port, "custom" when it was set apart from the address (e.g.
+# 127.0.0.1:18443 behind an nginx stream) and is kept.
+node_port_change() {
+  local bound
+  if [[ -n $1 ]]; then bound=$(url_port "$1"); else bound=${2:-8443}; fi
+  if [[ $3 == "$bound" ]]; then
+    echo same
+  elif [[ -z $2 || $2 == "$bound" ]]; then
+    echo follow
+  else
+    echo custom
+  fi
+}
+
 # config: changes the public and node channel addresses, then recreates the console.
 cmd_config() {
-  local public_url node_url node_port
+  local public_url node_url node_port old_url old_port set_port=''
   preflight
   find_dir
   [[ -n $INTERACTIVE ]] || die "config 需要在终端里交互运行；也可以直接编辑 ${DIR}/.env 后运行 ./deploy.sh start。"
@@ -1028,16 +1098,24 @@ cmd_config() {
     warn "需要形如 https://cdn-admin.example.com:8443"
   done
   node_port=$(url_port "$node_url")
-  if [[ $node_port != "$(env_get EDGEWEIR_NODE_API_PORT)" ]]; then
-    warn "节点通道端口改为 ${node_port}：记得放行新端口；已注册节点要按新地址重新注册。"
-  fi
-  if [[ $(url_host "$node_url") != $(url_host "$(env_get EDGEWEIR_NODE_API_URL)") ]]; then
+  old_url=$(env_get EDGEWEIR_NODE_API_URL)
+  old_port=$(env_get EDGEWEIR_NODE_API_PORT)
+  case $(node_port_change "$old_url" "$old_port" "$node_port") in
+    follow)
+      set_port=1
+      warn "节点通道端口改为 ${node_port}：记得放行新端口；已注册节点要按新地址重新注册。"
+      ;;
+    custom)
+      warn "EDGEWEIR_NODE_API_PORT 是单独设置的（${old_port}），保持不变；按需要自己调整它和透传配置。已注册节点要按新地址重新注册。"
+      ;;
+  esac
+  if [[ $(url_host "$node_url") != $(url_host "$old_url") ]]; then
     warn "节点通道主机名改变后，已注册的节点需要重新注册（或把旧名字加进 EDGEWEIR_NODE_API_HOSTNAMES）。"
   fi
   confirm "保存并重启控制台？" y || die "已取消。"
   env_set EDGEWEIR_PUBLIC_URL "$public_url"
   env_set EDGEWEIR_NODE_API_URL "$node_url"
-  env_set EDGEWEIR_NODE_API_PORT "$node_port"
+  if [[ -n $set_port ]]; then env_set EDGEWEIR_NODE_API_PORT "$node_port"; fi
   up_and_wait
   ok "已生效"
 }
@@ -1086,6 +1164,7 @@ usage() {
   [DATABASE_URL=…] [EDGEWEIR_NODE_API_URL=…] [EDGEWEIR_VERSION=…] [EDGEWEIR_DIR=…]
 只用本机已有镜像（docker load 导入）：EDGEWEIR_NO_PULL=1
 备份保留份数：EDGEWEIR_BACKUP_KEEP=5（0 为全部保留）
+自己的编排改动放进与编排文件同目录的 compose.override.yml，升级替换模板时保留
 EOF
 }
 

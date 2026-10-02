@@ -51,6 +51,7 @@ sudo bash deploy.sh install
 | --- | --- |
 | 部署目录 | 同时包含 `.env` 与含 `container_name: edgeweir-console` 的编排文件：`compose.yml`、`compose.yaml`、`docker-compose.yml` 或 `docker-compose.yaml` |
 | 模式 | 编排文件含 `network_mode: host` 时为 host，否则为 bundled |
+| 覆盖文件 | 编排文件旁的 `compose.override.yml`（`docker-compose.yml` 对应 `docker-compose.override.yml`，以此类推）存在时一并传给 Compose；自己的改动写在这里，`update` 替换模板时不受影响 |
 | Compose 项目名 | 取自容器 `edgeweir-console` 的 `com.docker.compose.project` 标签；面板以其他名称创建的编排同样适用 |
 | 环境变量 | 调用 Compose 前移除 shell 中与 `.env` 或编排文件同名的变量，以 `.env` 为准 |
 
@@ -86,7 +87,7 @@ sudo bash deploy.sh install
 ### 结果
 
 1. 解析并拉取镜像版本，见 [版本解析](#版本解析)。
-2. 创建安装目录（700），写入 `.env`（600）、`compose.yml` 与 `deploy.sh`（700）。
+2. 创建安装目录（700），写入 `.env`（600）、`compose.yml`（600）、`.compose.cksum` 与 `deploy.sh`（700）。
 3. 拉取编排镜像，启动并等待健康检查。
 4. 打印运行版本、后续步骤与 setup token。
 
@@ -115,7 +116,7 @@ sudo bash deploy.sh install
 | 数据库检查未通过或数据库不是空的，是否重填 | 不询问：中止 |
 | 「开始安装？」 | 是 |
 | `update` 回退确认 | 否：中止 |
-| `update` 替换编排文件 | 否：保留现有文件 |
+| `update` 替换改动过的编排文件 | 否：保留现有文件（未改动过的直接替换，不询问） |
 | `update` 用镜像内的脚本替换本脚本 | 是 |
 | `config` | 不支持：中止 |
 
@@ -162,7 +163,12 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 1. 解析目标版本，见 [版本解析](#版本解析)。目标等于 `.env` 中的 `EDGEWEIR_VERSION` 且容器已运行该版本时，输出 `已经是 <版本>。` 并以 0 退出。
 2. 目标不是 `latest` 且早于当前版本时视为回退：警告并询问是否继续，默认否。先比较 tag 中的日期；同一天的两个 tag 比较两个镜像的提交时间（标签 `org.opencontainers.image.created`）。无法判断时（tag 不是 `<YYYYMMDD>-<commit>`，或同一天但有镜像不在本机）只提示，不询问。
 3. 备份到 `backups/<时间>-before-<目标版本>/`；`--no-backup` 跳过。备份失败时中止，部署不变。
-4. 编排文件与脚本内置模板不同时询问是否替换：交互模式默认替换，无人值守保留。旧文件已在第 3 步的备份中；`./deploy.sh template <模式>` 输出模板。
+4. 编排文件与脚本内置模板不同时：
+   - 与脚本上次写入的内容相同（按 `.compose.cksum`）：直接替换为新模板。
+   - 写入后被改过：显示差异，询问是否替换，默认保留。
+   - 没有 `.compose.cksum`（较早的安装）：显示差异，询问是否替换，交互模式默认替换，无人值守保留。
+
+   旧文件在第 3 步的备份中；自己的改动放进[覆盖文件](#部署目录)；`./deploy.sh template <模式>` 输出模板。
 5. 写入 `EDGEWEIR_VERSION`，按 `start` 的流程重建容器。数据库迁移在控制台启动时执行。
 6. 输出回退命令 `./deploy.sh update <原版本>`（仅适用于两个版本之间没有新增迁移时）。
 7. 新镜像中的 `/app/deploy.sh` 与本脚本不同时询问是否替换本脚本，默认替换。
@@ -184,9 +190,9 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 只能交互运行；无人值守或没有终端时中止，此时直接编辑 `.env` 后运行 `./deploy.sh start`。
 
 1. 询问控制台地址与节点通道地址；回车保留当前值。校验规则同 [install](#校验)。
-2. 节点通道端口变化时警告：放行新端口，已注册的节点按新地址重新注册。
+2. 节点通道地址的端口变化时：`EDGEWEIR_NODE_API_PORT` 未设置或等于原地址的端口时随之修改，并警告放行新端口、已注册的节点按新地址重新注册；单独设置过的值（例如 nginx stream 透传用的 `127.0.0.1:18443`）保持不变，并提示自行调整。
 3. 节点通道主机名变化时警告：已注册的节点重新注册，或把旧主机名加入 `EDGEWEIR_NODE_API_HOSTNAMES`。
-4. 确认后写入 `EDGEWEIR_PUBLIC_URL`、`EDGEWEIR_NODE_API_URL` 与 `EDGEWEIR_NODE_API_PORT`（节点通道地址中的端口），按 `start` 的流程重建容器。
+4. 确认后写入 `EDGEWEIR_PUBLIC_URL`、`EDGEWEIR_NODE_API_URL`，以及第 2 步需要修改时的 `EDGEWEIR_NODE_API_PORT`，按 `start` 的流程重建容器。
 
 `config` 不修改 `EDGEWEIR_HTTP_PORT`，不检查新端口是否被占用。
 
@@ -224,7 +230,9 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 | --- | --- | --- | --- |
 | `<目录>/` | 700 | 部署目录 | `install` |
 | `<目录>/.env` | 600 | 见下表 | `install`；`update`、`config` 与可信代理同步修改其中的键 |
-| `<目录>/compose.yml` | 按 umask；替换后 600 | 所选模式的模板，与 [`compose.baota-host.yml`](../../compose.baota-host.yml) 或 [`compose.baota.yml`](../../compose.baota.yml) 逐字一致 | `install`；`update` 确认后替换 |
+| `<目录>/compose.yml` | 600 | 所选模式的模板，与 [`compose.baota-host.yml`](../../compose.baota-host.yml) 或 [`compose.baota.yml`](../../compose.baota.yml) 逐字一致 | `install`；`update` 替换，见 [update](#update) |
+| `<目录>/.compose.cksum` | 按 umask | 脚本最近一次写入的编排文件的 `cksum`，用来区分模板更新与自己的改动 | `install`、`update` |
+| `<目录>/compose.override.yml` | — | 自己的改动；脚本不写入 | — |
 | `<目录>/deploy.sh` | 700 | 脚本副本 | `install`；`update`、`self-update` 替换 |
 | `<目录>/backups/` | 700 | 备份 | `backup`、`update` |
 
@@ -249,14 +257,15 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 └── 20260929-153000-before-20260930-b2c3d4e/
     ├── edgeweir.dump
     ├── env
-    └── compose.yml
+    ├── compose.yml
+    └── compose.override.yml   # 存在时
 ```
 
 | 文件 | 内容 |
 | --- | --- |
 | `edgeweir.dump` | `pg_dump --format=custom`。host：按 `DATABASE_URL` 用 `postgres:18.6-alpine` 在 host 网络转储；bundled：在 `postgres` 容器内转储 |
 | `env` | `.env` 副本；`EDGEWEIR_MASTER_KEY` 与 `BETTER_AUTH_SECRET` 两行改为注释，不含其值 |
-| `compose.yml` | 编排文件副本，保留原文件名 |
+| `compose.yml` | 编排文件副本，保留原文件名；覆盖文件存在时一并复制 |
 
 | 项目 | 规则 |
 | --- | --- |

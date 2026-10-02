@@ -51,6 +51,7 @@ Commands other than `install`, `template`, and `help` look for the deployment di
 | --- | --- |
 | Deployment directory | Contains `.env` and a compose file containing `container_name: edgeweir-console`: `compose.yml`, `compose.yaml`, `docker-compose.yml`, or `docker-compose.yaml` |
 | Mode | host when the compose file contains `network_mode: host`, otherwise bundled |
+| Override file | `compose.override.yml` next to the compose file (`docker-compose.override.yml` for `docker-compose.yml`, and so on) is passed to Compose as well when it exists; local changes go there and survive template replacements by `update` |
 | Compose project name | Taken from the `com.docker.compose.project` label of the `edgeweir-console` container, so projects a panel created under another name work too |
 | Environment | Shell variables named in `.env` or the compose file are removed before Compose runs; `.env` decides |
 
@@ -86,7 +87,7 @@ Variables supply the defaults; in unattended mode they are the answers. A set `E
 ### Result
 
 1. Resolve and pull the image version, see [Version resolution](#version-resolution).
-2. Create the install directory (700), write `.env` (600), `compose.yml`, and `deploy.sh` (700).
+2. Create the install directory (700), write `.env` (600), `compose.yml` (600), `.compose.cksum`, and `deploy.sh` (700).
 3. Pull the compose images, start, and wait for health checks.
 4. Print the running version, next steps, and the setup token.
 
@@ -115,7 +116,7 @@ When `EDGEWEIR_YES` is non-empty, or `/dev/tty` cannot be opened, the script rea
 | Database check failed or the database is not empty, enter again | Not asked: abort |
 | Start the install | Yes |
 | `update` rollback confirmation | No: abort |
-| `update` replaces the compose file | No: the existing file is kept |
+| `update` replaces an edited compose file | No: the existing file is kept (an unedited one is replaced without asking) |
 | `update` replaces this script with the image's copy | Yes |
 | `config` | Not supported: abort |
 
@@ -162,7 +163,12 @@ The check and backups connect according to `sslmode` in `DATABASE_URL`:
 1. Resolve the target version, see [Version resolution](#version-resolution). When the target equals `EDGEWEIR_VERSION` in `.env` and the container already runs it, print `已经是 <version>。` (already at) and exit 0.
 2. A target other than `latest` that is older than the current version is a rollback: warn and ask whether to continue, default no. The dates in the tags are compared first; two tags of the same day compare the commit times of the two images (label `org.opencontainers.image.created`). When the order cannot be told (a tag is not `<YYYYMMDD>-<commit>`, or one image of the same day is not local), only a note is printed.
 3. Back up to `backups/<time>-before-<target version>/`; `--no-backup` skips this. A failed backup aborts with the deployment unchanged.
-4. When the compose file differs from the built-in template, ask whether to replace it: default yes interactively, kept in unattended mode. The old file is in the step 3 backup; `./deploy.sh template <mode>` prints the template.
+4. When the compose file differs from the built-in template:
+   - Same as the script last wrote it (per `.compose.cksum`): replaced with the new template.
+   - Edited since: the difference is shown and the script asks whether to replace it, default no.
+   - No `.compose.cksum` (older installs): the difference is shown and the script asks, default yes interactively, kept in unattended mode.
+
+   The old file is in the step 3 backup; local changes belong in the [override file](#deployment-directory); `./deploy.sh template <mode>` prints the template.
 5. Write `EDGEWEIR_VERSION` and recreate the containers with the `start` flow. Database migrations run when the console starts.
 6. Print the rollback command `./deploy.sh update <previous version>` (valid only when no migration was added between the two versions).
 7. When `/app/deploy.sh` in the new image differs from this script, ask whether to replace this script, default yes.
@@ -184,9 +190,9 @@ Version policy and rollback constraints: [upgrade.en.md](upgrade.en.md).
 Interactive only; in unattended mode or without a terminal it aborts; edit `.env` directly and run `./deploy.sh start` instead.
 
 1. Ask for the console URL and node channel URL; Enter keeps the current value. Validation as in [install](#validation).
-2. When the node channel port changes, warn: open the new port; enrolled nodes re-enroll with the new URL.
+2. When the port in the node channel URL changes: an `EDGEWEIR_NODE_API_PORT` that is unset or equal to the old URL's port follows it, with a warning to open the new port and re-enroll nodes with the new URL; a value set apart (e.g. `127.0.0.1:18443` behind an nginx stream) is kept, with a note to adjust it yourself.
 3. When the node channel host name changes, warn: enrolled nodes re-enroll, or add the old host name to `EDGEWEIR_NODE_API_HOSTNAMES`.
-4. After confirmation, write `EDGEWEIR_PUBLIC_URL`, `EDGEWEIR_NODE_API_URL`, and `EDGEWEIR_NODE_API_PORT` (the port in the node channel URL), then recreate the containers with the `start` flow.
+4. After confirmation, write `EDGEWEIR_PUBLIC_URL`, `EDGEWEIR_NODE_API_URL`, and `EDGEWEIR_NODE_API_PORT` when step 2 changes it, then recreate the containers with the `start` flow.
 
 `config` does not change `EDGEWEIR_HTTP_PORT` and does not check whether the new port is in use.
 
@@ -224,7 +230,9 @@ Identical content is left alone. A replacement is written to a new file (700) an
 | --- | --- | --- | --- |
 | `<dir>/` | 700 | Deployment directory | `install` |
 | `<dir>/.env` | 600 | See the next table | `install`; `update`, `config`, and the trusted proxy sync change keys in it |
-| `<dir>/compose.yml` | Per umask; 600 after a replacement | Template of the chosen mode, byte for byte [`compose.baota-host.yml`](../../compose.baota-host.yml) or [`compose.baota.yml`](../../compose.baota.yml) | `install`; replaced by `update` after confirmation |
+| `<dir>/compose.yml` | 600 | Template of the chosen mode, byte for byte [`compose.baota-host.yml`](../../compose.baota-host.yml) or [`compose.baota.yml`](../../compose.baota.yml) | `install`; replaced by `update`, see [update](#update) |
+| `<dir>/.compose.cksum` | Per umask | `cksum` of the compose file the script last wrote, to tell template updates from local changes | `install`, `update` |
+| `<dir>/compose.override.yml` | — | Local changes; never written by the script | — |
 | `<dir>/deploy.sh` | 700 | Copy of the script | `install`; replaced by `update` and `self-update` |
 | `<dir>/backups/` | 700 | Backups | `backup`, `update` |
 
@@ -249,14 +257,15 @@ Values are unquoted. Changing a key keeps the other lines and mode 600. Other va
 └── 20260929-153000-before-20260930-b2c3d4e/
     ├── edgeweir.dump
     ├── env
-    └── compose.yml
+    ├── compose.yml
+    └── compose.override.yml   # when present
 ```
 
 | File | Content |
 | --- | --- |
 | `edgeweir.dump` | `pg_dump --format=custom`. host: dumped per `DATABASE_URL` with `postgres:18.6-alpine` on the host network; bundled: dumped inside the `postgres` container |
 | `env` | Copy of `.env` with the `EDGEWEIR_MASTER_KEY` and `BETTER_AUTH_SECRET` lines turned into comments, without their values |
-| `compose.yml` | Copy of the compose file under its original name |
+| `compose.yml` | Copy of the compose file under its original name, and of the override file when present |
 
 | Item | Rule |
 | --- | --- |

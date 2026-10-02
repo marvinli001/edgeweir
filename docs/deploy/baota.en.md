@@ -134,7 +134,7 @@ SMTP, node release source, origin allow list, and GeoIP databases are configured
    | Mode | Change |
    | --- | --- |
    | bundled | `.env`: `EDGEWEIR_NODE_API_PORT=127.0.0.1:18443` |
-   | host | `.env`: `EDGEWEIR_NODE_API_PORT=18443`; `compose.yml`: `NODE_API_HOST: 127.0.0.1` |
+   | host | `.env`: `EDGEWEIR_NODE_API_PORT=18443`; `compose.override.yml` (next to `compose.yml`): `services.console.environment.NODE_API_HOST: 127.0.0.1` |
 
    ```bash
    ./deploy.sh start
@@ -150,8 +150,8 @@ SMTP, node release source, origin allow list, and GeoIP databases are configured
 
 | Case | Constraint |
 | --- | --- |
-| `./deploy.sh config` | Resets `EDGEWEIR_NODE_API_PORT` to the port in the node channel URL (8443), which conflicts with nginx. Restore the step 2 value afterwards, then run `./deploy.sh start`. |
-| host mode `./deploy.sh update` | Answer `n` when asked to replace `compose.yml` with the built-in template; replacing restores `NODE_API_HOST: 0.0.0.0`. |
+| `./deploy.sh config` | Keeps the step 2 `EDGEWEIR_NODE_API_PORT`; when the port in the node channel URL changes, adjust nginx's `listen` yourself. |
+| `./deploy.sh update` | Replacing `compose.yml` leaves `compose.override.yml` alone. |
 | host mode startup | The script warns that the node channel listens on loopback only; the warning does not apply to this setup. |
 
 ## Install without the script

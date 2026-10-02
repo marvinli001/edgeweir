@@ -134,7 +134,7 @@ SMTP、节点发布源、源站地址允许清单与 GeoIP 数据库在 **系统
    | 模式 | 修改 |
    | --- | --- |
    | bundled | `.env`：`EDGEWEIR_NODE_API_PORT=127.0.0.1:18443` |
-   | host | `.env`：`EDGEWEIR_NODE_API_PORT=18443`；`compose.yml`：`NODE_API_HOST: 127.0.0.1` |
+   | host | `.env`：`EDGEWEIR_NODE_API_PORT=18443`；`compose.override.yml`（与 `compose.yml` 同目录）：`services.console.environment.NODE_API_HOST: 127.0.0.1` |
 
    ```bash
    ./deploy.sh start
@@ -150,8 +150,8 @@ SMTP、节点发布源、源站地址允许清单与 GeoIP 数据库在 **系统
 
 | 场景 | 约束 |
 | --- | --- |
-| `./deploy.sh config` | 把 `EDGEWEIR_NODE_API_PORT` 改回节点通道地址中的端口（8443），与 nginx 冲突。运行后恢复第 2 步的值，再 `./deploy.sh start`。 |
-| host 模式 `./deploy.sh update` | 询问是否用内置模板替换 `compose.yml` 时回答 `n`；替换会恢复 `NODE_API_HOST: 0.0.0.0`。 |
+| `./deploy.sh config` | 保留第 2 步的 `EDGEWEIR_NODE_API_PORT`；节点通道地址的端口改变时，自行调整 nginx 的 `listen`。 |
+| `./deploy.sh update` | 替换 `compose.yml` 不影响 `compose.override.yml`。 |
 | host 模式启动 | 脚本警告节点通道只监听回环地址；透传配置下该警告不适用。 |
 
 ## 不用脚本部署
