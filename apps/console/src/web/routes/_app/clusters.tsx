@@ -474,10 +474,9 @@ function ClusterSummary({
               </span>
               {selected.latestRevision && selected.liveNodeCount > 0 ? (
                 <span
-                  className="flex min-w-0 items-center gap-1.5 text-sm font-normal tracking-normal text-muted-foreground"
+                  className="flex items-center gap-1.5 text-sm font-normal tracking-normal whitespace-nowrap text-muted-foreground"
                   data-testid="cluster-applied"
                 >
-                  <span aria-hidden="true">·</span>
                   <Dot
                     tone={selected.appliedNodeCount < selected.liveNodeCount ? "warn" : "good"}
                     small
@@ -776,6 +775,12 @@ function RevisionBadge({ node, latest }: { node: Node; latest: number }) {
   );
 }
 
+/**
+ * A healthy data plane, or none yet: before its first configuration a node
+ * serves nothing ("awaiting configuration" shows beside its revision).
+ */
+const servesOrStarts = (node: Node) => node.dataPlaneHealthy || node.appliedRevision === 0;
+
 type NodeAction = { kind: "rename" | "move" | "delete"; node: Node };
 
 function NodeActions({
@@ -892,13 +897,13 @@ function NodesSection({ cluster, onEnroll }: { cluster: Cluster; onEnroll: () =>
           ) : row.original.online ? (
             <span className="flex flex-wrap items-center gap-1.5">
               <StatusDot
-                tone={row.original.dataPlaneHealthy ? "good" : "warn"}
-                pulse={row.original.dataPlaneHealthy}
+                tone={servesOrStarts(row.original) ? "good" : "warn"}
+                pulse={servesOrStarts(row.original)}
                 data-testid="node-online"
               >
                 {m.nodes_online()}
               </StatusDot>
-              {row.original.dataPlaneHealthy ? null : (
+              {servesOrStarts(row.original) ? null : (
                 <Badge variant="destructive" data-testid="node-unhealthy">
                   {m.nodes_unhealthy()}
                 </Badge>
@@ -1277,6 +1282,8 @@ function EnrollDialog({
   // One token per opening (the dialog is keyed per opening). StrictMode runs
   // effects twice; the ref keeps that to one token.
   const minted = React.useRef(false);
+  // The command is the dialog's content: focus rests on closing, not on the options.
+  const closeRef = React.useRef<HTMLButtonElement>(null);
   React.useEffect(() => {
     if (!open || minted.current) return;
     minted.current = true;
@@ -1301,7 +1308,10 @@ function EnrollDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl"
+        initialFocus={closeRef}
+      >
         <DialogHeader>
           <DialogTitle>{m.enroll_title()}</DialogTitle>
         </DialogHeader>
@@ -1318,8 +1328,10 @@ function EnrollDialog({
                   <span aria-hidden="true">·</span>
                   <SafetyNote data-testid="enroll-token-once">{m.enroll_shown_once()}</SafetyNote>
                 </div>
-                <ConsoleUrlWarnings warnings={result.warnings} />
-                <NodeChannelCheckStatus line />
+                <div className="flex flex-col gap-1">
+                  <ConsoleUrlWarnings warnings={result.warnings} />
+                  <NodeChannelCheckStatus line />
+                </div>
               </Field>
               <Field>
                 <FieldLabel>{m.enroll_progress()}</FieldLabel>
@@ -1437,7 +1449,7 @@ function EnrollDialog({
             />
             {m.enroll_options()}
           </Button>
-          <Button onClick={() => setOpen(false)} data-testid="enroll-close">
+          <Button ref={closeRef} onClick={() => setOpen(false)} data-testid="enroll-close">
             {m.common_close()}
           </Button>
         </DialogFooter>
