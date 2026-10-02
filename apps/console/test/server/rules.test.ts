@@ -258,4 +258,45 @@ describe("M4 rules and IP list boundaries", async () => {
     await admin.rules.save({ id: otherSiteId, rules: [] });
     await ctx.db.delete(schema.node).where(eq(schema.node.id, node.id));
   });
+  it("copies rules read from one site to another, keeping ids only within a scope", async () => {
+    const saved = await admin.rules.save({
+      id: siteId,
+      rules: [
+        {
+          name: "a",
+          phase: "waf-custom",
+          expression: 'http.request.uri.path eq "/a"',
+          action: { kind: "block" },
+        },
+        {
+          name: "b",
+          phase: "waf-custom",
+          expression: 'http.request.uri.path eq "/b"',
+          action: { kind: "block" },
+        },
+      ],
+    });
+    const read = await admin.rules.get({ id: siteId });
+    expect(read.map((r) => r.id)).toEqual(saved.map((r) => r.id));
+    // The same rules, ids included, saved to another site and to the platform.
+    const copied = await admin.rules.save({ id: otherSiteId, rules: read });
+    expect(copied.map((r) => r.name)).toEqual(["a", "b"]);
+    expect(copied.some((r) => read.some((o) => o.id === r.id))).toBe(false);
+    const platform = await admin.platformRules.save({ rules: read });
+    expect(platform.some((r) => read.some((o) => o.id === r.id))).toBe(false);
+    // Saving a site's own rules again keeps their ids.
+    expect((await admin.rules.save({ id: siteId, rules: read })).map((r) => r.id)).toEqual(
+      read.map((r) => r.id),
+    );
+    expect((await admin.rules.get({ id: otherSiteId })).map((r) => r.id)).toEqual(
+      copied.map((r) => r.id),
+    );
+    const duplicate = [read[0], read[0]].map((r) => ({ ...r, name: "dup" })) as typeof read;
+    expect((await rpcError(admin.rules.save({ id: otherSiteId, rules: duplicate }))).code).toBe(
+      "RULE_INVALID",
+    );
+    await admin.rules.save({ id: siteId, rules: [] });
+    await admin.rules.save({ id: otherSiteId, rules: [] });
+    await admin.platformRules.save({ rules: [] });
+  });
 });

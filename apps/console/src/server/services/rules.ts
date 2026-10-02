@@ -82,13 +82,22 @@ export async function saveRules(
       if (group && !groups.has(group))
         fail("RULE_INVALID", `rule ${rule.name}: the site has no origin group ${group}`);
     }
+    const ids = rules.flatMap((rule) => (rule.id ? [rule.id] : []));
+    if (new Set(ids).size !== ids.length) fail("RULE_INVALID", "duplicate rule ID");
+    // Ids of this scope's rules are kept; any other id (e.g. rules copied
+    // from another site) gets a new one, since ids are unique platform-wide.
+    const owned = new Set(
+      (
+        await tx.select({ id: schema.edgeRule.id }).from(schema.edgeRule).where(ruleScope(siteId))
+      ).map((row) => row.id),
+    );
     const rows = rules.map((rule, priority) => {
       const expression = parseExpression(rule.expression, rule.phase);
       const names = listReferences(expression);
       if (names.some((name) => !bindings[name]))
         fail("IP_LIST_NOT_FOUND", "expression references an unavailable IP list");
       return {
-        id: rule.id ?? randomUUID(),
+        id: rule.id && owned.has(rule.id) ? rule.id : randomUUID(),
         siteId,
         name: rule.name,
         phase: rule.phase,
@@ -99,8 +108,6 @@ export async function saveRules(
         listIds: names.map((name) => bindings[name] as string),
       };
     });
-    if (new Set(rows.map((r) => r.id)).size !== rows.length)
-      fail("RULE_INVALID", "duplicate rule ID");
     await tx.delete(schema.edgeRule).where(ruleScope(siteId));
     if (rows.length) await tx.insert(schema.edgeRule).values(rows);
     const clusters = site
