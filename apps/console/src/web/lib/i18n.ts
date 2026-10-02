@@ -25,6 +25,15 @@ export function formatDateTime(iso: string): string {
   );
 }
 
+/** Time of day, hours and minutes ("14:05"). */
+export function formatClockTime(iso: string): string {
+  return new Intl.DateTimeFormat(getLocale(), {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(iso));
+}
+
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat(getLocale()).format(value);
 }

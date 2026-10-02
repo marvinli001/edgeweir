@@ -14,6 +14,7 @@ import { CacheTab } from "@/components/site/cache-tab";
 import { CnameTarget } from "@/components/site/cname-target";
 import { ErrorPagesTab } from "@/components/site/error-pages-tab";
 import { HttpsTab } from "@/components/site/https-tab";
+import { LaunchCheck } from "@/components/site/launch-check";
 import { LogsTab } from "@/components/site/logs-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
 import { RulesTab } from "@/components/site/rules-tab";
@@ -205,6 +206,7 @@ function OverviewTab({ site }: { site: Site }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <LaunchCheck site={site} />
       <Card>
         <form
           className="flex flex-col gap-(--card-spacing)"

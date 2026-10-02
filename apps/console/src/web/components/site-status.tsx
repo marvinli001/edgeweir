@@ -1,6 +1,15 @@
-import type { Site } from "@edgeweir/contract";
+import type { Site, SiteDelivery } from "@edgeweir/contract";
 import { StatusDot } from "@/components/status-dot";
-import { m } from "@/lib/i18n";
+import { formatClockTime, m } from "@/lib/i18n";
+
+/** "Canary 1/3, all nodes at 14:05" (or awaiting promotion), or null outside a canary. */
+export function canaryLabel(delivery: SiteDelivery): string | null {
+  const { canary, currentNodes: current, totalNodes: total } = delivery;
+  if (!canary || delivery.state === "live") return null;
+  return canary.autoPromote
+    ? m.site_state_canary({ current, total, time: formatClockTime(canary.endsAt) })
+    : m.site_state_canary_waiting({ current, total });
+}
 
 /** Whether the site runs on its cluster's online nodes: disabled, pending, rolling out or live. */
 export function SiteStatus({ site }: { site: Pick<Site, "enabled" | "delivery"> }) {
@@ -20,7 +29,8 @@ export function SiteStatus({ site }: { site: Pick<Site, "enabled" | "delivery"> 
   if (state === "partial")
     return (
       <StatusDot tone="warn" pulse data-testid="site-status" data-state="partial">
-        {m.site_state_partial({ current: currentNodes, total: totalNodes })}
+        {canaryLabel(site.delivery) ??
+          m.site_state_partial({ current: currentNodes, total: totalNodes })}
       </StatusDot>
     );
   return (

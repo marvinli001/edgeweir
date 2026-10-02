@@ -9,7 +9,7 @@ From console setup to a first site served over HTTP and HTTPS by an edge node.
 3. **Create a site**: enter its domains, origin, and cache setting; the cluster publishes a new configuration revision.
 4. **Configure DNS**: point the site's domains at the node addresses or the CNAME target in the authoritative DNS and wait for the records to take effect.
 5. **Enable HTTPS**: request or upload a certificate and select it on the site's HTTPS tab; see [HTTPS and certificates](https.en.md).
-6. **Verify**: check that the node applied the configuration, then check origin fetch and caching with curl.
+6. **Verify**: every item of the **Launch check** on the site's **Overview** tab passes; check origin fetch and caching with curl.
 
 Node installation, DNS propagation, and certificate issuance each take time that depends on the network and the providers.
 
@@ -125,7 +125,13 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
 
 ## 6. Verify
 
-1. Confirm the configuration is applied: in **Clusters & nodes**, the node's **Applied** revision equals the cluster's **Latest revision** and shows **In sync**.
+1. Check the **Launch check** on the site's **Overview** tab; each item leads to its settings:
+
+   | Item | Passes | Otherwise |
+   | --- | --- | --- |
+   | **DNS pointed N/M** | Every domain **Points here** | Lists the domains that do not; opens the **Domains** tab |
+   | Certificate | **Certificate covers every domain**, or **No certificate** (HTTP only) | **Certificate misses domains** (listed), **Certificate being issued**, **Certificate issuance failed** (with the reason), **Certificate expired**; opens the **HTTPS** tab |
+   | **Live on N/M nodes** | N equals M | Shows the window's end during a canary; with **No online nodes**, enroll a node first; opens the cluster |
 
 2. Send an HTTP request straight to the node, bypassing DNS (replace `203.0.113.10` with the node address):
 
@@ -164,6 +170,8 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
 | **Applied** shows **Apply failed** | The node failed to validate or apply the configuration | Hover the badge for the reason |
 | **Applied** shows **Upgrade required** | The node lacks a capability the configuration needs | Upgrade the node; see [Node upgrades](node-upgrades.en.md) |
 | 404 with `X-Edgeweir-Error: unknown-host` | The domain is not in the node's configuration: revision not applied, or the site is disabled | Check **Applied** and the **Status** on the site's **Overview** tab |
+| A domain in the **Launch check** **Points elsewhere** | Its records point at an old server or another CDN, or also hold other addresses | Keep only records for the edge addresses (or the CNAME target) and wait for the old records' TTL |
+| A domain in the **Launch check** is **Not checked** | The lookup timed out, or the cluster's nodes have no known address yet | Check that the nodes are online and report a public address, or configure scheduling addresses on the node |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | SNI and `Host` of an HTTPS request differ | Use `--resolve` |
 | 502 with `X-Edgeweir-Error: no-origin` | No usable origin | Check origin address, port, protocol, and health; see [Origins and cache](origins-and-cache.en.md) |
 | 508 with `X-Edgeweir-Error: loop-detected` | The origin points back to a node | Point the origin at the real origin server |
