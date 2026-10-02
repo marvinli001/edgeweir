@@ -4,7 +4,7 @@ import {
   type EnrollmentTokenStatus,
   urlHostScope,
 } from "@edgeweir/contract";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
 import { SafetyNote } from "@/components/safety-note";
@@ -100,6 +100,11 @@ export function EnrollProgress({ result }: { result: EnrollmentTokenResult }) {
   const data = status.data;
   const node = data?.node ?? null;
   const used = !!data?.usedAt;
+  // The first node changes the sidebar's primary action and the node lists.
+  const queryClient = useQueryClient();
+  React.useEffect(() => {
+    if (used) void queryClient.invalidateQueries({ queryKey: orpc.overview.key() });
+  }, [used, queryClient]);
   const reached = (done: boolean, previous: boolean): Pick<Step, "tone" | "pulse"> =>
     done ? { tone: "good" } : previous ? { tone: "idle", pulse: true } : { tone: "idle" };
   const online = !!node?.online;

@@ -88,7 +88,7 @@ For using and revoking AccessKeys, see [Access logs and access keys](access-logs
 
 ## Console navigation
 
-**New site** at the top of the sidebar opens the new site form. ⌘K / Ctrl+K opens the command menu: search for and open any page (**Security** and **Settings** included), or run **New site**, **Add node**, **Switch language**, or **Toggle dark mode**.
+**New site** at the top of the sidebar opens the new site form; while there is no node it is **Add node** and opens the add-node dialog. ⌘K / Ctrl+K opens the command menu: search for and open any page (**Security** and **Settings** included), or run **New site**, **Add node**, **Switch language**, or **Toggle dark mode**.
 
 ### Sidebar
 
