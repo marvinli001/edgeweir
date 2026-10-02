@@ -7,6 +7,36 @@ const bool = z
   .enum(["true", "false", "1", "0", "yes", "no", "on", "off", ""])
   .transform((v) => ["true", "1", "yes", "on"].includes(v));
 
+/**
+ * `<scheme>://host[:port]` with nothing after it (a trailing "/" is fine), as
+ * deploy.sh's valid_url; parses to the origin. z.url() would also take
+ * "localhost:3000" (scheme "localhost:") and URLs with a path.
+ */
+const originUrl = (schemes: readonly ("http" | "https")[]) =>
+  z.string().transform((value, ctx) => {
+    let url: URL | undefined;
+    try {
+      url = new URL(value);
+    } catch {}
+    if (
+      !url ||
+      !schemes.some((scheme) => url.protocol === `${scheme}:`) ||
+      url.username ||
+      url.password ||
+      url.pathname !== "/" ||
+      url.search ||
+      url.hash
+    ) {
+      ctx.issues.push({
+        code: "custom",
+        message: `expected ${schemes.map((s) => `${s}://`).join(" or ")}host[:port] without a path, e.g. https://cdn-admin.example.com`,
+        input: value,
+      });
+      return z.NEVER;
+    }
+    return url.origin;
+  });
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   ROLE: z.enum(["app", "worker", "all"]).default("all"),
@@ -22,11 +52,11 @@ const schema = z.object({
     z.string().min(32).optional(),
   ),
   /** Public URL of the web console (behind a reverse proxy this is the proxy URL). */
-  EDGEWEIR_PUBLIC_URL: z.url().default("http://localhost:3000"),
+  EDGEWEIR_PUBLIC_URL: originUrl(["http", "https"]).default("http://localhost:3000"),
   /** URL nodes use to reach the node channel. TLS is terminated by the console itself. */
   EDGEWEIR_NODE_API_URL: z.preprocess(
     (value) => (value === "" ? undefined : value),
-    z.url().optional(),
+    originUrl(["https"]).optional(),
   ),
   /** Extra DNS names / IPs for the node-channel server certificate, comma separated. */
   EDGEWEIR_NODE_API_HOSTNAMES: z.string().default(""),
