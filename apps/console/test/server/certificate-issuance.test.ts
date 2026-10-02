@@ -580,5 +580,38 @@ describe("certificate issuance", async () => {
         "g3.issue.test",
       ]);
     });
+
+    it("serves new domains over HTTP meanwhile where every node has tls-pending-domains-v1 (audit S-2)", async () => {
+      const latest = async () =>
+        decodeNodeConfig((await latestRevision(ctx.db, clusterId))?.ir ?? new Uint8Array());
+      const domains = async () =>
+        (await latest()).sites
+          .find((s) => s.id === siteId)
+          ?.domains.map((d) => ({ name: d.name, tlsPending: d.tlsPending }));
+      const features = (supportedFeatures: string[]) =>
+        ctx.db
+          .update(schema.node)
+          .set({ supportedFeatures })
+          .where(eq(schema.node.clusterId, clusterId));
+      await features(["tls-v1", "http01-v1", "tls-pending-domains-v1"]);
+      try {
+        const all = ["g1.issue.test", "g2.issue.test", "g3.issue.test", "g4.issue.test"];
+        await api.sites.update({ id: siteId, domains: all });
+        expect(await domains()).toEqual([
+          { name: "g1.issue.test", tlsPending: false },
+          { name: "g2.issue.test", tlsPending: false },
+          { name: "g3.issue.test", tlsPending: false },
+          { name: "g4.issue.test", tlsPending: true },
+        ]);
+        expect((await latest()).requiredFeatures).toContain("tls-pending-domains-v1");
+        await issuable(all);
+        await issueCertificate(ctx, certId);
+        expect(await row(certId)).toMatchObject({ status: "ready", names: all });
+        expect((await domains())?.every((d) => !d.tlsPending)).toBe(true);
+        expect((await latest()).requiredFeatures).not.toContain("tls-pending-domains-v1");
+      } finally {
+        await features(["tls-v1", "http01-v1"]);
+      }
+    });
   });
 });
