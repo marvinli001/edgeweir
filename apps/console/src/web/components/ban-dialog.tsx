@@ -10,9 +10,10 @@ import * as React from "react";
 import { toast } from "sonner";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
-import { ErrorState, LoadingState } from "@/components/states";
+import { QueryView } from "@/components/states";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import type { DialogProps } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 
@@ -67,21 +68,19 @@ function SiteSelect({
           onChange={(event) => setSearch(event.target.value)}
         />
       </Field>
-      {sites.isPending ? (
-        <LoadingState className="min-h-16" />
-      ) : sites.isLoadingError ? (
-        <ErrorState error={sites.error} onRetry={() => void sites.refetch()} />
-      ) : (
-        <FormSelect
-          id="ban-site"
-          label={m.bans_site()}
-          value={value?.id ?? ""}
-          options={choices}
-          onChange={(id) =>
-            onChange({ id, name: choices.find((c) => c.value === id)?.label ?? "" })
-          }
-        />
-      )}
+      <QueryView query={sites} loadingClassName="min-h-16">
+        {() => (
+          <FormSelect
+            id="ban-site"
+            label={m.bans_site()}
+            value={value?.id ?? ""}
+            options={choices}
+            onChange={(id) =>
+              onChange({ id, name: choices.find((c) => c.value === id)?.label ?? "" })
+            }
+          />
+        )}
+      </QueryView>
     </>
   );
 }
@@ -91,18 +90,16 @@ function SiteSelect({
  * row's address and site; the scope can still be switched.
  */
 export function BanDialog({
-  open = true,
+  open,
   onOpenChange,
   address,
   siteId,
   scope: initialScope = "site",
 }: {
-  open?: boolean;
-  onOpenChange: (open: boolean) => void;
   address?: string;
   siteId?: string;
   scope?: BanScope;
-}) {
+} & DialogProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [scope, setScope] = React.useState<BanScope>(initialScope);

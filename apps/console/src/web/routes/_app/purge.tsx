@@ -24,24 +24,18 @@ import {
   prefetchVariantLabel,
   useExpandedTasks,
 } from "@/components/cache-tasks";
+import { OptionSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField } from "@/components/site/fields";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, ErrorState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -144,23 +138,23 @@ function PurgePage() {
             </Badge>
           ) : null}
         </div>
-        {tasks.isPending ? (
-          <LoadingState />
-        ) : tasks.isLoadingError ? (
-          <ErrorState error={tasks.error} onRetry={() => tasks.refetch()} />
-        ) : tasks.data.total === 0 ? (
-          <EmptyState icon={DatabaseSync01Icon} title={m.purge_tasks_empty()} />
-        ) : (
-          <>
-            <CacheTaskList tasks={tasks.data.items} expanded={expanded} onToggle={toggle} />
-            <Pager
-              page={page}
-              pageSize={PAGE_SIZE}
-              total={tasks.data.total}
-              onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
-            />
-          </>
-        )}
+        <QueryView
+          query={tasks}
+          isEmpty={(data) => data.total === 0}
+          empty={<EmptyState icon={DatabaseSync01Icon} title={m.purge_tasks_empty()} />}
+        >
+          {({ items, total }) => (
+            <>
+              <CacheTaskList tasks={items} expanded={expanded} onToggle={toggle} />
+              <Pager
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={total}
+                onPageChange={(next) => navigate({ search: (prev) => ({ ...prev, page: next }) })}
+              />
+            </>
+          )}
+        </QueryView>
       </section>
     </Page>
   );
@@ -600,64 +594,64 @@ function TagSiteSelect({
   const list = query ? filtered : all;
   const searchable = (all.data?.total ?? 0) > 8;
 
-  if (all.isPending) return <LoadingState className="min-h-20" />;
-  if (all.isLoadingError) return <ErrorState error={all.error} onRetry={() => all.refetch()} />;
-  if (all.data.total === 0) {
-    return (
-      <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
-        <Button nativeButton={false} render={<Link to="/sites" search={{ create: true }} />}>
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-          {m.nav_new_site()}
-        </Button>
-      </EmptyState>
-    );
-  }
   const choices = (list.data?.items ?? []).map((site) => ({ value: site.id, label: site.name }));
   // The chosen site stays selectable while a search hides it.
   if (value && !choices.some((choice) => choice.value === value.id))
     choices.unshift({ value: value.id, label: value.name });
   return (
-    <Field>
-      <FieldLabel htmlFor="purge-tag-site">{m.purge_tag_site()}</FieldLabel>
-      <div className={cn("grid gap-2", searchable && "sm:grid-cols-2")}>
-        {searchable ? (
-          <Input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={m.sites_search_placeholder()}
-            aria-label={m.sites_search_placeholder()}
-            data-testid="purge-tag-site-search"
-          />
-        ) : null}
-        <Select
-          value={value?.id ?? null}
-          onValueChange={(id) => {
-            const choice = choices.find((c) => c.value === id);
-            if (choice) onChange({ id: choice.value, name: choice.label });
-          }}
-          items={choices}
-        >
-          <SelectTrigger id="purge-tag-site" className="w-full" data-testid="purge-tag-site">
-            <SelectValue placeholder={m.purge_tag_site_placeholder()} />
-          </SelectTrigger>
-          <SelectContent>
-            {choices.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-muted-foreground">{m.sites_no_match()}</p>
-            ) : (
-              choices.map((choice) => (
-                <SelectItem key={choice.value} value={choice.value}>
-                  {choice.label}
-                </SelectItem>
-              ))
-            )}
-          </SelectContent>
-        </Select>
-      </div>
-      {list.isLoadingError ? (
-        <ErrorState error={list.error} onRetry={() => list.refetch()} />
-      ) : null}
-    </Field>
+    <QueryView
+      query={all}
+      loadingClassName="min-h-20"
+      isEmpty={(data) => data.total === 0}
+      empty={<NoSites />}
+    >
+      {() => (
+        <Field>
+          <FieldLabel htmlFor="purge-tag-site">{m.purge_tag_site()}</FieldLabel>
+          <div className={cn("grid gap-2", searchable && "sm:grid-cols-2")}>
+            {searchable ? (
+              <Input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={m.sites_search_placeholder()}
+                aria-label={m.sites_search_placeholder()}
+                data-testid="purge-tag-site-search"
+              />
+            ) : null}
+            <OptionSelect
+              id="purge-tag-site"
+              value={value?.id ?? null}
+              options={choices}
+              onChange={(id) => {
+                const choice = choices.find((c) => c.value === id);
+                if (choice) onChange({ id: choice.value, name: choice.label });
+              }}
+              placeholder={m.purge_tag_site_placeholder()}
+              testId="purge-tag-site"
+              empty={
+                <p className="px-3 py-2 text-sm text-muted-foreground">{m.sites_no_match()}</p>
+              }
+            />
+          </div>
+          {list.isLoadingError ? (
+            <ErrorState error={list.error} onRetry={() => list.refetch()} />
+          ) : null}
+        </Field>
+      )}
+    </QueryView>
+  );
+}
+
+/** Without sites there is nothing to purge: the way to create one. */
+function NoSites() {
+  return (
+    <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
+      <Button nativeButton={false} render={<Link to="/sites" search={{ create: true }} />}>
+        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+        {m.nav_new_site()}
+      </Button>
+    </EmptyState>
   );
 }
 
@@ -690,68 +684,68 @@ function SitePicker({
     onChange(next);
   };
 
-  if (all.isPending) return <LoadingState className="min-h-36" />;
-  if (all.isLoadingError) return <ErrorState error={all.error} onRetry={() => all.refetch()} />;
-  if (all.data.total === 0) {
-    return (
-      <EmptyState icon={GlobeIcon} title={m.sites_empty_title()}>
-        <Button nativeButton={false} render={<Link to="/sites" search={{ create: true }} />}>
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-          {m.nav_new_site()}
-        </Button>
-      </EmptyState>
-    );
-  }
   return (
-    <Field>
-      <div className="flex items-center justify-between gap-2">
-        <FieldLabel id="purge-sites-label">{m.purge_sites()}</FieldLabel>
-        <span className="text-xs tabular-nums text-muted-foreground" data-testid="purge-selected">
-          {m.purge_sites_selected({ count: selected.size })}
-        </span>
-      </div>
-      {searchable ? (
-        <Input
-          type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder={m.sites_search_placeholder()}
-          aria-label={m.sites_search_placeholder()}
-        />
-      ) : null}
-      <fieldset
-        aria-labelledby="purge-sites-label"
-        className="max-h-72 min-w-0 divide-y overflow-y-auto rounded-2xl border"
-      >
-        {list.isLoadingError ? (
-          <div className="p-3">
-            <ErrorState error={list.error} onRetry={() => list.refetch()} />
-          </div>
-        ) : list.data?.items.length === 0 ? (
-          <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-            {m.sites_no_match()}
-          </p>
-        ) : (
-          list.data?.items.map((site, index) => (
-            // biome-ignore lint/a11y/noLabelWithoutControl: the Base UI checkbox inside is the control
-            <label
-              key={site.id}
-              className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors animate-enter hover:bg-muted/50 has-data-checked:bg-primary/5"
-              style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
-              data-testid="purge-site-option"
+    <QueryView
+      query={all}
+      loadingClassName="min-h-36"
+      isEmpty={(data) => data.total === 0}
+      empty={<NoSites />}
+    >
+      {() => (
+        <Field>
+          <div className="flex items-center justify-between gap-2">
+            <FieldLabel id="purge-sites-label">{m.purge_sites()}</FieldLabel>
+            <span
+              className="text-xs tabular-nums text-muted-foreground"
+              data-testid="purge-selected"
             >
-              <Checkbox
-                checked={selected.has(site.id)}
-                onCheckedChange={(checked) => toggle(site, checked)}
-              />
-              <span className="shrink-0 text-sm font-medium">{site.name}</span>
-              <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-                {site.domains.join(", ")}
-              </span>
-            </label>
-          ))
-        )}
-      </fieldset>
-    </Field>
+              {m.purge_sites_selected({ count: selected.size })}
+            </span>
+          </div>
+          {searchable ? (
+            <Input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={m.sites_search_placeholder()}
+              aria-label={m.sites_search_placeholder()}
+            />
+          ) : null}
+          <fieldset
+            aria-labelledby="purge-sites-label"
+            className="max-h-72 min-w-0 divide-y overflow-y-auto rounded-2xl border"
+          >
+            {list.isLoadingError ? (
+              <div className="p-3">
+                <ErrorState error={list.error} onRetry={() => list.refetch()} />
+              </div>
+            ) : list.data?.items.length === 0 ? (
+              <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                {m.sites_no_match()}
+              </p>
+            ) : (
+              list.data?.items.map((site, index) => (
+                // biome-ignore lint/a11y/noLabelWithoutControl: the Base UI checkbox inside is the control
+                <label
+                  key={site.id}
+                  className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors animate-enter hover:bg-muted/50 has-data-checked:bg-primary/5"
+                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                  data-testid="purge-site-option"
+                >
+                  <Checkbox
+                    checked={selected.has(site.id)}
+                    onCheckedChange={(checked) => toggle(site, checked)}
+                  />
+                  <span className="shrink-0 text-sm font-medium">{site.name}</span>
+                  <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+                    {site.domains.join(", ")}
+                  </span>
+                </label>
+              ))
+            )}
+          </fieldset>
+        </Field>
+      )}
+    </QueryView>
   );
 }

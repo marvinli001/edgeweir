@@ -1,3 +1,4 @@
+import type * as React from "react";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
   Select,
@@ -15,7 +16,8 @@ export interface Option<T extends string = string> {
 /**
  * A select over `{ value, label }` options. The trigger shows the chosen option's label (the value
  * itself when no option has it), or `placeholder` while `value` is null (a picker that adds what
- * is picked keeps it null). `label` names the trigger when no FieldLabel does.
+ * is picked keeps it null). `label` names the trigger when no FieldLabel does; `empty` fills the
+ * popup when there are no options.
  */
 export function OptionSelect<T extends string>({
   value,
@@ -28,6 +30,7 @@ export function OptionSelect<T extends string>({
   size,
   disabled,
   testId,
+  empty,
 }: {
   value: T | null;
   options: readonly Option<T>[];
@@ -39,6 +42,7 @@ export function OptionSelect<T extends string>({
   size?: "sm" | "default";
   disabled?: boolean;
   testId?: string;
+  empty?: React.ReactNode;
 }) {
   return (
     <Select
@@ -61,11 +65,13 @@ export function OptionSelect<T extends string>({
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
+        {options.length === 0
+          ? empty
+          : options.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
       </SelectContent>
     </Select>
   );

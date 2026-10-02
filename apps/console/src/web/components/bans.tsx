@@ -11,10 +11,11 @@ import { type Columns, DataTable } from "@/components/data-table";
 import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, formatNumber, m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 
@@ -105,8 +106,8 @@ export function BansPage({
   const [source, setSource] = React.useState<BanSource | undefined>();
   const [scope, setScope] = React.useState<BanScope | undefined>();
   // The dialog and what it starts with; a link with an address opens it once.
-  const [dialog, setDialog] = React.useState<{ address?: string; siteId?: string } | null>(
-    initialAddress ? { address: initialAddress, siteId: initialSiteId } : null,
+  const dialog = useDialogState<{ address?: string; siteId?: string }>(
+    initialAddress ? { address: initialAddress, siteId: initialSiteId } : undefined,
   );
   const bans = useQuery({
     ...orpc.bans.list.queryOptions({
@@ -191,7 +192,7 @@ export function BansPage({
   );
 
   const createButton = (
-    <Button size="sm" onClick={() => setDialog({})} data-testid="ban-create">
+    <Button size="sm" onClick={() => dialog.show({})} data-testid="ban-create">
       <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
       {m.bans_create()}
     </Button>
@@ -250,30 +251,34 @@ export function BansPage({
           </Badge>
         ) : null}
       </div>
-      {bans.isPending ? (
-        <LoadingState />
-      ) : bans.isLoadingError ? (
-        <ErrorState error={bans.error} onRetry={() => bans.refetch()} />
-      ) : bans.data.total === 0 ? (
-        <EmptyState icon={BlockedIcon} title={filtered ? m.bans_no_match() : m.bans_empty()}>
-          {filtered ? null : createButton}
-        </EmptyState>
-      ) : (
-        <>
-          <DataTable
-            data={bans.data.items}
-            columns={columns}
-            getRowId={(ban) => ban.id}
-            testId="bans-table"
-          />
-          <Pager page={page} pageSize={PAGE_SIZE} total={bans.data.total} onPageChange={setPage} />
-        </>
-      )}
-      {dialog ? (
+      <QueryView
+        query={bans}
+        isEmpty={(data) => data.total === 0}
+        empty={
+          <EmptyState icon={BlockedIcon} title={filtered ? m.bans_no_match() : m.bans_empty()}>
+            {filtered ? null : createButton}
+          </EmptyState>
+        }
+      >
+        {({ items, total }) => (
+          <>
+            <DataTable
+              data={items}
+              columns={columns}
+              getRowId={(ban) => ban.id}
+              testId="bans-table"
+            />
+            <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+          </>
+        )}
+      </QueryView>
+      {dialog.value ? (
         <BanDialog
-          address={dialog.address}
-          siteId={dialog.siteId}
-          onOpenChange={(open) => !open && setDialog(null)}
+          key={dialog.key}
+          address={dialog.value.address}
+          siteId={dialog.value.siteId}
+          open={dialog.open}
+          onOpenChange={dialog.onOpenChange}
         />
       ) : null}
     </Page>

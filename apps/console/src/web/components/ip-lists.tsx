@@ -8,13 +8,14 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { EmptyState, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
 import { client, orpc } from "@/lib/orpc";
 
@@ -32,7 +33,8 @@ export function IpListsPage() {
   const query = useQuery(orpc.ipLists.list.queryOptions());
   const api = client.ipLists;
   const queries = useQueryClient();
-  const [editing, setEditing] = React.useState<IpListDto | "new" | null>(null);
+  const edit = useDialogState<IpListDto | "new">();
+  const editing = edit.value;
   const remove = useMutation({
     mutationFn: async (id: string) => {
       await api.delete({ id });
@@ -43,61 +45,58 @@ export function IpListsPage() {
     <Page
       title={m.ip_lists_title()}
       actions={
-        <Button onClick={() => setEditing("new")} data-testid="ip-list-create">
+        <Button onClick={() => edit.show("new")} data-testid="ip-list-create">
           {m.ip_lists_create()}
         </Button>
       }
     >
       <AccessTabs value="ip-lists" />
-      {query.isPending ? (
-        <LoadingState />
-      ) : query.isLoadingError ? (
-        <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-      ) : query.data.length === 0 ? (
-        <EmptyState title={m.ip_lists_empty()} />
-      ) : (
-        <div className="grid gap-4">
-          {query.data.map((list) => (
-            <Card key={list.id} className="animate-enter">
-              <CardContent className="flex flex-wrap items-center gap-3 py-4">
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-2 break-all font-mono text-sm">
-                    {`$${list.name}`}
-                    {list.kind === "collection" ? null : (
-                      <Badge variant="secondary" className="font-sans">
-                        {list.kind === "allow" ? m.rules_allow() : m.rules_block()}
-                      </Badge>
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {m.ip_lists_count({ count: list.entries.length })}
-                  </p>
-                </div>
-                <Button variant="outline" onClick={() => setEditing(list)}>
-                  {m.common_edit()}
-                </Button>
-                <ConfirmDialog
-                  title={m.common_delete()}
-                  trigger={<Button variant="destructive">{m.common_delete()}</Button>}
-                  destructive
-                  onConfirm={() => remove.mutateAsync(list.id)}
-                />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <QueryView query={query} empty={<EmptyState title={m.ip_lists_empty()} />}>
+        {(lists) => (
+          <div className="grid gap-4">
+            {lists.map((list) => (
+              <Card key={list.id} className="animate-enter">
+                <CardContent className="flex flex-wrap items-center gap-3 py-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-center gap-2 break-all font-mono text-sm">
+                      {`$${list.name}`}
+                      {list.kind === "collection" ? null : (
+                        <Badge variant="secondary" className="font-sans">
+                          {list.kind === "allow" ? m.rules_allow() : m.rules_block()}
+                        </Badge>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {m.ip_lists_count({ count: list.entries.length })}
+                    </p>
+                  </div>
+                  <Button variant="outline" onClick={() => edit.show(list)}>
+                    {m.common_edit()}
+                  </Button>
+                  <ConfirmDialog
+                    title={m.common_delete()}
+                    trigger={<Button variant="destructive">{m.common_delete()}</Button>}
+                    destructive
+                    onConfirm={() => remove.mutateAsync(list.id)}
+                  />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </QueryView>
       {editing ? (
         <IpListDialog
-          key={editing === "new" ? "new" : editing.id}
+          key={edit.key}
           list={editing === "new" ? undefined : editing}
-          onClose={() => setEditing(null)}
+          open={edit.open}
+          onOpenChange={edit.onOpenChange}
           onSave={async (input) => {
             if (editing === "new") await api.create(input);
             else await api.update({ id: editing.id, entries: input.entries, kind: input.kind });
             await queries.invalidateQueries();
             toast.success(m.common_saved());
-            setEditing(null);
+            edit.onOpenChange(false);
           }}
         />
       ) : null}
@@ -106,20 +105,18 @@ export function IpListsPage() {
 }
 function IpListDialog({
   list,
-  onClose,
+  open,
+  onOpenChange,
   onSave,
 }: {
   list?: IpListDto;
-  onClose: () => void;
   onSave: (input: ReturnType<typeof ipListInput.parse>) => Promise<void>;
-}) {
+} & DialogProps) {
   const [kind, setKind] = React.useState(list?.kind ?? "collection");
   return (
     <FormDialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+      open={open}
+      onOpenChange={onOpenChange}
       title={list ? m.common_edit() : m.ip_lists_create()}
       submitLabel={m.common_save()}
       submitTestId="ip-list-submit"
@@ -153,7 +150,7 @@ function IpListDialog({
         id="ip-list-kind"
         label={m.rules_action()}
         value={kind}
-        onChange={(v) => setKind(v as typeof kind)}
+        onChange={setKind}
         options={[
           { value: "collection", label: m.ip_lists_collection() },
           { value: "block", label: m.rules_block() },

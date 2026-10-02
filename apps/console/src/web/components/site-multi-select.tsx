@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import * as React from "react";
-import { ErrorState, LoadingState } from "@/components/states";
+import { ErrorState, QueryView } from "@/components/states";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -62,57 +62,62 @@ export function SiteMultiSelect({
         ...items.map((site) => ({ id: site.id, name: site.name, domains: site.domains })),
       ];
 
-  if (all.isPending) return <LoadingState className="min-h-36" />;
-  if (all.isLoadingError) return <ErrorState error={all.error} onRetry={() => all.refetch()} />;
   return (
-    <Field>
-      <div className="flex items-center justify-between gap-2">
-        <FieldLabel id={`${id}-label`}>{label}</FieldLabel>
-        <span className="text-xs tabular-nums text-muted-foreground" data-testid={`${id}-selected`}>
-          {m.sites_selected({ count: selected.size })}
-        </span>
-      </div>
-      <Input
-        id={`${id}-search`}
-        type="search"
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder={m.sites_search_placeholder()}
-        aria-label={searchLabel}
-      />
-      <fieldset
-        aria-labelledby={`${id}-label`}
-        className="max-h-64 min-w-0 divide-y overflow-y-auto rounded-2xl border"
-      >
-        {list.isLoadingError ? (
-          <div className="p-3">
-            <ErrorState error={list.error} onRetry={() => list.refetch()} />
-          </div>
-        ) : rows.length === 0 ? (
-          <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-            {searching ? m.sites_no_match() : m.sites_empty_title()}
-          </p>
-        ) : (
-          rows.map((site, index) => (
-            // biome-ignore lint/a11y/noLabelWithoutControl: the Base UI checkbox inside is the control
-            <label
-              key={site.id}
-              className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors animate-enter hover:bg-muted/50 has-data-checked:bg-primary/5"
-              style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
-              data-testid="site-option"
+    <QueryView query={all} loadingClassName="min-h-36">
+      {() => (
+        <Field>
+          <div className="flex items-center justify-between gap-2">
+            <FieldLabel id={`${id}-label`}>{label}</FieldLabel>
+            <span
+              className="text-xs tabular-nums text-muted-foreground"
+              data-testid={`${id}-selected`}
             >
-              <Checkbox
-                checked={selected.has(site.id)}
-                onCheckedChange={(checked) => toggle(site, checked)}
-              />
-              <span className="shrink-0 text-sm font-medium">{site.name}</span>
-              <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
-                {site.domains.join(", ")}
-              </span>
-            </label>
-          ))
-        )}
-      </fieldset>
-    </Field>
+              {m.sites_selected({ count: selected.size })}
+            </span>
+          </div>
+          <Input
+            id={`${id}-search`}
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={m.sites_search_placeholder()}
+            aria-label={searchLabel}
+          />
+          <fieldset
+            aria-labelledby={`${id}-label`}
+            className="max-h-64 min-w-0 divide-y overflow-y-auto rounded-2xl border"
+          >
+            {list.isLoadingError ? (
+              <div className="p-3">
+                <ErrorState error={list.error} onRetry={() => list.refetch()} />
+              </div>
+            ) : rows.length === 0 ? (
+              <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                {searching ? m.sites_no_match() : m.sites_empty_title()}
+              </p>
+            ) : (
+              rows.map((site, index) => (
+                // biome-ignore lint/a11y/noLabelWithoutControl: the Base UI checkbox inside is the control
+                <label
+                  key={site.id}
+                  className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors animate-enter hover:bg-muted/50 has-data-checked:bg-primary/5"
+                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                  data-testid="site-option"
+                >
+                  <Checkbox
+                    checked={selected.has(site.id)}
+                    onCheckedChange={(checked) => toggle(site, checked)}
+                  />
+                  <span className="shrink-0 text-sm font-medium">{site.name}</span>
+                  <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+                    {site.domains.join(", ")}
+                  </span>
+                </label>
+              ))
+            )}
+          </fieldset>
+        </Field>
+      )}
+    </QueryView>
   );
 }
