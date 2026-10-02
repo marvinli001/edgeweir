@@ -925,6 +925,18 @@ export const settings = z.object({
   setupCompletedAt: isoDateTime.nullable(),
 });
 
+/**
+ * The console's own TLS handshake with its node channel URL: ok when the
+ * console's node CA answers, unreachable when no handshake completes,
+ * mismatch when another certificate chain answers (something in front of
+ * the console terminates TLS). Advisory only.
+ */
+export const nodeChannelCheck = z.object({
+  url: z.string(),
+  result: z.enum(["ok", "unreachable", "mismatch"]),
+  checkedAt: isoDateTime,
+});
+
 /** Where the console reads node release manifests unless configured otherwise. */
 export const DEFAULT_NODE_RELEASE_BASE_URL =
   "https://github.com/marvinli001/edgeweir-node/releases/download";
@@ -1246,6 +1258,7 @@ export type ReleaseSource = z.infer<typeof releaseSource>;
 export type ReleaseSourceInput = z.infer<typeof releaseSourceInput>;
 export type AuditLogEntry = z.infer<typeof auditLogEntry>;
 export type NodeGroup = z.infer<typeof nodeGroup>;
+export type NodeChannelCheck = z.infer<typeof nodeChannelCheck>;
 export type RolloutPolicy = z.infer<typeof rolloutPolicy>;
 export type ClusterRollout = z.infer<typeof clusterRollout>;
 export type RolloutState = z.infer<typeof rolloutState>;

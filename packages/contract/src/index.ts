@@ -358,6 +358,10 @@ export const contract = {
   },
   settings: {
     get: oc.route({ method: "GET", path: "/settings", tags: ["settings"] }).output(s.settings),
+    /** The console's TLS handshake with its own node channel URL (advisory, cached 30 s). */
+    nodeChannelCheck: oc
+      .route({ method: "GET", path: "/settings/node-channel-check", tags: ["settings"] })
+      .output(s.nodeChannelCheck),
     /** Special-purpose origin addresses (private, loopback...) sites may use anyway. */
     originAllowList: oc
       .route({ method: "GET", path: "/settings/origin-allow-list", tags: ["settings"] })

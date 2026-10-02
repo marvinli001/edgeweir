@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import type * as React from "react";
 import { CopyButton } from "@/components/copy-button";
-import { UrlScopeBadge } from "@/components/node-enrollment";
+import { NodeChannelCheckStatus, UrlScopeBadge } from "@/components/node-enrollment";
 import { OriginAllowListCard } from "@/components/origin-allow-list";
 import { Page } from "@/components/page";
 import { PlatformErrorPagesCard } from "@/components/platform-error-pages";
@@ -22,7 +22,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (
     <div className="grid gap-1 py-3 sm:grid-cols-[12rem_1fr] sm:items-center sm:gap-4">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="flex min-w-0 items-center gap-2 text-sm break-all">{children}</dd>
+      <dd className="flex min-w-0 flex-wrap items-center gap-2 text-sm break-all">{children}</dd>
     </div>
   );
 }
@@ -52,6 +52,7 @@ function SystemSettingsPage() {
               <Row label={m.system_node_api_url()}>
                 <span className="font-mono">{settings.data.nodeApiUrl}</span>
                 <UrlScopeBadge url={settings.data.nodeApiUrl} testId="node-api-url-scope" />
+                <NodeChannelCheckStatus />
               </Row>
               <Row label={m.system_ca_fingerprint()}>
                 <code className="min-w-0 flex-1 font-mono text-xs" data-testid="ca-fingerprint">

@@ -36,6 +36,8 @@ const URL_WARNINGS = {
     "EDGEWEIR_PUBLIC_URL names this machine only: nodes on other hosts cannot download install.sh from it",
   console_url_private:
     "EDGEWEIR_PUBLIC_URL is a private address: nodes outside this network cannot download install.sh from it",
+  console_url_http:
+    "EDGEWEIR_PUBLIC_URL is plain HTTP: install.sh reaches the nodes unencrypted and runs as root (serve the console over HTTPS)",
   node_api_url_local:
     "the node channel URL names this machine only: nodes on other hosts cannot enroll or connect (set EDGEWEIR_NODE_API_URL or EDGEWEIR_PUBLIC_URL)",
   node_api_url_private:

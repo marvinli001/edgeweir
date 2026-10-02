@@ -93,6 +93,7 @@ import {
   setPortPools,
   updateL4App,
 } from "../services/l4";
+import { checkNodeChannel } from "../services/node-channel-check";
 import {
   createNodeGroup,
   deleteNodeGroup,
@@ -753,6 +754,9 @@ export const router = os.router({
       analyticsMode: context.app.env.EDGEWEIR_ANALYTICS,
       setupCompletedAt: await setupCompletedAt(context.app.db),
     })),
+    nodeChannelCheck: authed.settings.nodeChannelCheck.handler(({ context }) =>
+      checkNodeChannel(context.app),
+    ),
     originAllowList: authed.settings.originAllowList.handler(({ context }) =>
       getOriginAllowList(context.app.db),
     ),
