@@ -6,6 +6,7 @@ import { type Database, schema } from "@edgeweir/db";
 import type { AccessLog } from "@edgeweir/proto";
 import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
+import { lockLogPartition, lockLogPartitions, tryLockNodeLogs } from "../lib/locks";
 import type { Actor } from "./audit";
 import { recordAudit } from "./audit";
 import { insertClickHouseLogs, queryClickHouseLogs } from "./clickhouse";
@@ -26,7 +27,7 @@ async function partition(tx: Executor, day: number) {
     to = new Date(day + DAY).toISOString();
   const name = `access_log_${from.slice(0, 10).replaceAll("-", "")}`;
   // All identifiers and bounds come exclusively from bounded, validated UTC dates.
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${name}))`);
+  await lockLogPartition(tx, name);
   await tx.execute(
     sql.raw(
       `CREATE TABLE IF NOT EXISTS "${name}" PARTITION OF access_log FOR VALUES FROM ('${from}') TO ('${to}')`,
@@ -35,7 +36,7 @@ async function partition(tx: Executor, day: number) {
 }
 export async function maintainLogs(db: Database, now = Date.now()) {
   await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.logs.partitions'))`);
+    await lockLogPartitions(tx);
     for (let d = logCutoff(now); d <= Math.floor(now / DAY) * DAY + DAY; d += DAY)
       await partition(tx, d);
     const rows = await tx.execute<{ relname: string }>(
@@ -135,10 +136,7 @@ export async function ingestLogs(
     ];
   });
   return app.db.transaction(async (tx) => {
-    const lock = await tx.execute<{ locked: boolean }>(
-      sql`select pg_try_advisory_xact_lock(hashtext(${`logs/${node.id}`})) AS locked`,
-    );
-    if (!lock.rows[0]?.locked)
+    if (!(await tryLockNodeLogs(tx, node.id)))
       throw new ConnectError("log batch already in progress", Code.ResourceExhausted);
     const cursor = schema.nodeLogCursor;
     await tx.insert(cursor).values({ nodeId: node.id }).onConflictDoNothing();

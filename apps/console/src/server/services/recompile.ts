@@ -1,6 +1,7 @@
 import { schema } from "@edgeweir/db";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
+import { lockRecompile } from "../lib/locks";
 import { recordAudit, systemActor } from "./audit";
 import { publishRevision } from "./revisions";
 
@@ -15,7 +16,7 @@ const RECOMPILE_KEY = "config_recompiled";
 /** Publishes every cluster once per marker; a cluster that fails keeps its revision. */
 export async function recompileAfterUpgrade(app: AppContext) {
   await app.db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.recompile'))`);
+    await lockRecompile(tx);
     const [done] = await tx
       .select()
       .from(schema.systemSetting)

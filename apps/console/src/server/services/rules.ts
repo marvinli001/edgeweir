@@ -19,6 +19,7 @@ import { asc, eq, isNull, sql } from "drizzle-orm";
 import { parseCacheCondition } from "../lib/cache-conditions";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { lockIpLists, lockPlatformRules } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
 import { type Executor, listBindings, publishClusters, publisher } from "./revisions";
 import { findSite } from "./sites";
@@ -69,8 +70,7 @@ export async function saveRules(
   ctx: { actor: Actor },
 ): Promise<RuleDto[]> {
   return app.db.transaction(async (tx) => {
-    if (!siteId)
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.platform-rules'))`);
+    if (!siteId) await lockPlatformRules(tx);
     const site = siteId ? await findSite(tx, siteId, true) : null;
     const bindings = listBindings(await availableLists(tx, true));
     // Origin rules choose among the site's origin groups; the platform has no origins.
@@ -227,11 +227,9 @@ async function listUsers(tx: Executor, id: string): Promise<string[]> {
     ]),
   ].slice(0, 5);
 }
-const lockLists = (tx: Executor) =>
-  tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.ip-lists'))`);
 export async function createIpList(app: AppContext, input: IpListInput, actor: Actor) {
   return app.db.transaction(async (tx) => {
-    await lockLists(tx);
+    await lockIpLists(tx);
     await checkListQuota(tx, input.entries.length);
     const existing = await tx
       .select({ id: schema.ipList.id })
@@ -260,7 +258,7 @@ export async function updateIpList(
   actor: Actor,
 ) {
   return app.db.transaction(async (tx) => {
-    await lockLists(tx);
+    await lockIpLists(tx);
     const [row] = await tx
       .select()
       .from(schema.ipList)
@@ -287,7 +285,7 @@ export async function updateIpList(
 }
 export async function deleteIpList(app: AppContext, id: string, actor: Actor) {
   return app.db.transaction(async (tx) => {
-    await lockLists(tx);
+    await lockIpLists(tx);
     const [row] = await tx
       .select()
       .from(schema.ipList)

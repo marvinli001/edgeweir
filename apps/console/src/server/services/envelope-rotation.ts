@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { AUTH_SECRET_BINDING, AUTH_SECRET_KEY } from "../lib/auth-secret";
 import type { Envelope, EnvelopeBinding, MasterKey } from "../lib/envelope";
+import { lockEnvelopeUpgrade } from "../lib/locks";
 import type { Logger } from "../lib/logger";
 import { caKeyBinding } from "../pki/store";
 import {
@@ -199,7 +200,7 @@ export async function resealEnvelopes(
   if (!previousKid) return null;
   const result: EnvelopeRotationResult = { resealed: 0, failed: 0, previous: 0, unknown: 0 };
   await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.envelope-upgrade'))`);
+    await lockEnvelopeUpgrade(tx);
     for (const { binding, envelope, replace } of await storedEnvelopes(tx)) {
       if (envelope.kid !== previousKid) continue;
       let next: Envelope;

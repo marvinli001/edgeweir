@@ -17,6 +17,7 @@ import {
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
+import { lockClusterL4 } from "../lib/locks";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { cnameTargets } from "./dns";
@@ -34,13 +35,6 @@ import { addTrafficCounter } from "./stats-counter";
 
 type AppRow = typeof schema.l4App.$inferSelect;
 type Pool = { protocol: string; from: number; to: number };
-
-/**
- * Serializes changes to a cluster's port pools and layer-4 applications
- * (ports are checked against both). Taken before the cluster's publish lock.
- */
-const lockClusterL4 = (tx: Executor, clusterId: string) =>
-  tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.l4.${clusterId}`}))`);
 
 const appLabel = (app: Pick<AppRow, "name" | "port" | "protocol">) =>
   `${app.name} (${app.port}/${app.protocol})`;

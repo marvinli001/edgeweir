@@ -14,6 +14,7 @@ import {
 import { type Database, schema } from "@edgeweir/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
+import { lockCcTemplate, lockProtectionSettings } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
 import { type Executor, publishClusters, publisher, publishRevision } from "./revisions";
 import { findSite } from "./sites";
@@ -243,7 +244,7 @@ export async function setProtectionSettings(
   actor: Actor,
 ): Promise<ProtectionSettings> {
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.protection-settings'))`);
+    await lockProtectionSettings(tx);
     const before = await getProtectionSettings(tx);
     await writeSetting(tx, PROTECTION_SETTINGS_KEY, input);
     if (
@@ -275,7 +276,7 @@ export async function setCcTemplate(
   actor: Actor,
 ): Promise<CcThresholds> {
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.cc-template'))`);
+    await lockCcTemplate(tx);
     const before = await getCcTemplate(tx);
     await writeSetting(tx, CC_TEMPLATE_KEY, input);
     const clusters = await tx

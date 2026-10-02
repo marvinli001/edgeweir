@@ -1,6 +1,7 @@
 import { type Database, schema } from "@edgeweir/db";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Envelope, MasterKey } from "../lib/envelope";
+import { lockNodeCa } from "../lib/locks";
 import { CertificateAuthority, generateCa, sha256Fingerprint } from "./ca";
 
 export const NODE_CA_ID = "node-channel";
@@ -19,7 +20,7 @@ export async function loadOrCreateNodeCa(
   masterKey: MasterKey,
 ): Promise<CertificateAuthority> {
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.pki.node-channel'))`);
+    await lockNodeCa(tx);
     const [existing] = await tx
       .select()
       .from(schema.pkiAuthority)

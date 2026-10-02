@@ -11,8 +11,9 @@ import {
   utf8Bytes,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { asc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { fail } from "../lib/errors";
+import { lockPlatformErrorPages } from "../lib/locks";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { readSetting, writeSetting } from "./protection";
@@ -169,7 +170,7 @@ export async function setPlatformErrorPages(
   for (const key of PLATFORM_PAGES)
     assertTemplateSize(PLATFORM_ERROR_PAGE_STATUSES[key], input[key]);
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.error-pages'))`);
+    await lockPlatformErrorPages(tx);
     const before = await getPlatformErrorPages(tx);
     await writeSetting(tx, ERROR_PAGES_KEY, input);
     const clusters = await tx

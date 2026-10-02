@@ -13,6 +13,7 @@ import { schema } from "@edgeweir/db";
 import { and, desc, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { lockAlertChannels, tryLockAlertSweep, unlockAlertSweep } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
 import {
   channelBinding,
@@ -57,7 +58,7 @@ export async function listAlertChannels(app: AppContext) {
 }
 export async function createAlertChannel(app: AppContext, input: AlertChannelInput, actor: Actor) {
   return app.db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.alert-channels'))`);
+    await lockAlertChannels(tx);
     const count = await tx.select({ id: schema.alertChannel.id }).from(schema.alertChannel);
     if (count.length >= 32) fail("ALERT_CHANNEL_LIMIT", "channel limit reached");
     const id = randomUUID(),
@@ -585,8 +586,7 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
   const connection = await app.pool.connect();
   let locked = false;
   try {
-    const result = await connection.query("select pg_try_advisory_lock(550075, 6) as locked");
-    locked = result.rows[0]?.locked === true;
+    locked = await tryLockAlertSweep(connection);
     if (!locked) return;
     const policy = await getAlertPolicy(app),
       snapshot = await conditions(app, policy, now);
@@ -772,7 +772,7 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
         ),
       );
   } finally {
-    if (locked) await connection.query("select pg_advisory_unlock(550075, 6)");
+    if (locked) await unlockAlertSweep(connection);
     connection.release();
   }
 }

@@ -4,6 +4,7 @@ import { count, eq } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import type { Envelope, MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
+import { tryLockSetup, unlockSetup } from "../lib/locks";
 import type { Logger } from "../lib/logger";
 import { recordAudit } from "./audit";
 import { createClusterTx } from "./clusters";
@@ -127,10 +128,7 @@ export async function runSetup(
   try {
     // Never queue pool connections behind this lock: the winning request
     // still needs the pool for better-auth and its transaction.
-    const result = await client.query(
-      "select pg_try_advisory_lock(hashtext('edgeweir.setup')) as locked",
-    );
-    locked = result.rows[0]?.locked === true;
+    locked = await tryLockSetup(client);
     if (!locked) fail("SETUP_IN_PROGRESS", "setup is already in progress; retry shortly");
     if (await isInitialized(ctx.db)) fail("SETUP_DONE", "setup has already been completed");
     if (!tokenMatches(await readSetupToken(ctx.db), input.setupToken)) {
@@ -176,7 +174,7 @@ export async function runSetup(
     }
   } finally {
     if (locked) {
-      await client.query("select pg_advisory_unlock(hashtext('edgeweir.setup'))").catch(() => {});
+      await unlockSetup(client).catch(() => {});
     }
     client.release();
   }

@@ -7,6 +7,7 @@ import {
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, eq, gt, gte, lt, lte, or, sql } from "drizzle-orm";
 import { fail } from "../lib/errors";
+import { lockUsage, lockUsageWatermark } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
 import type { Executor } from "./revisions";
 import { findSite } from "./sites";
@@ -98,10 +99,6 @@ export async function recordStatsWatermark(
       },
     });
 }
-
-/** Serializes usage computations, so that seq order is commit order for usage.changes readers. */
-const lockUsage = (tx: Executor) =>
-  tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.usage'))`);
 
 /**
  * Computes one window of a site from node_minute_stats of every node. A
@@ -209,7 +206,7 @@ export async function flushSiteUsage(tx: Executor, siteId: string): Promise<numb
  */
 export async function advanceUsageWatermark(db: Database, now = new Date()): Promise<Date | null> {
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.usage-watermark'))`);
+    await lockUsageWatermark(tx);
     const { offlineThresholdMinutes } = await getUsageSettings(tx);
     const seenSince = new Date(now.getTime() - offlineThresholdMinutes * 60_000);
     const nodes = await tx

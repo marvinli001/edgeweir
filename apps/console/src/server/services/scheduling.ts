@@ -8,9 +8,10 @@ import {
   withLineDefaults,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { lockClusterScheduling } from "../lib/locks";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { publishClusterDns, reconcileBinding } from "./dns";
 import { withLease } from "./dns-lease";
@@ -449,9 +450,7 @@ async function evaluateCluster(
   now: Date,
 ) {
   return db.transaction(async (tx) => {
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.scheduling.${clusterId}`}))`,
-    );
+    await lockClusterScheduling(tx, clusterId);
     const data = await loadClusterData(tx, clusterId, settings, now);
     if (!data) return false;
     let published = false;

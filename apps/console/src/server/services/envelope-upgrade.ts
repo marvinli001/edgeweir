@@ -1,6 +1,7 @@
 import { type Database, schema } from "@edgeweir/db";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { type Envelope, MasterKey } from "../lib/envelope";
+import { lockEnvelopeUpgrade } from "../lib/locks";
 import type { Logger } from "../lib/logger";
 import { caKeyBinding, legacyCaKeyPurpose } from "../pki/store";
 import {
@@ -39,7 +40,7 @@ export async function upgradeLegacyEnvelopes(
 ): Promise<EnvelopeUpgradeResult> {
   const result: EnvelopeUpgradeResult = { upgraded: 0, failed: 0 };
   await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.envelope-upgrade'))`);
+    await lockEnvelopeUpgrade(tx);
     const reseal = (
       envelope: Envelope,
       legacyPurpose: string,

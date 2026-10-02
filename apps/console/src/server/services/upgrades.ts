@@ -9,9 +9,10 @@ import {
   TaskState,
   UpgradeTaskSchema,
 } from "@edgeweir/proto";
-import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, or } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { lockClusterUpgrade } from "../lib/locks";
 import { outboundGet } from "../lib/outbound";
 import { type Actor, recordAudit } from "./audit";
 import { getReleaseSource } from "./release-source";
@@ -49,9 +50,6 @@ type DeliveryRow = typeof delivery.$inferSelect;
 const removed = (d: Pick<DeliveryRow, "state" | "errorCode">) =>
   d.state === "cancelled" && d.errorCode === NODE_REMOVED;
 const deadline = (now: Date) => new Date(now.getTime() + UPGRADE_DEADLINE_MS);
-async function lockCluster(tx: Executor, clusterId: string) {
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`upgrade/${clusterId}`}))`);
-}
 export async function nodeRelease(
   app: AppContext,
   version: string,
@@ -330,7 +328,7 @@ export async function expireUpgrades(db: Database, now = new Date()) {
     .where(and(inArray(delivery.state, ["pending", "running"]), lt(delivery.deadlineAt, now)));
   for (const row of expired)
     await db.transaction(async (tx) => {
-      await lockCluster(tx, row.clusterId);
+      await lockClusterUpgrade(tx, row.clusterId);
       await tx
         .update(delivery)
         .set({
@@ -360,7 +358,7 @@ export async function discardNodeUpgrades(tx: Executor, nodeId: string, now = ne
     .innerJoin(job, eq(job.id, delivery.upgradeId))
     .where(and(eq(delivery.nodeId, nodeId), inArray(delivery.state, ACTIVE)));
   for (const row of rows) {
-    await lockCluster(tx, row.clusterId);
+    await lockClusterUpgrade(tx, row.clusterId);
     await tx
       .update(delivery)
       .set({
@@ -406,7 +404,7 @@ export async function createUpgrade(
       .where(eq(schema.nodeGroup.id, input.nodeGroupId))
       .for("update");
     if (!group) fail("NODE_GROUP_NOT_FOUND", "node group not found");
-    await lockCluster(tx, group.clusterId);
+    await lockClusterUpgrade(tx, group.clusterId);
     const [cluster] = await tx
       .select()
       .from(schema.cluster)
@@ -499,7 +497,7 @@ export async function createUpgrade(
 export async function promoteUpgrade(app: AppContext, id: string, actor: Actor) {
   return app.db.transaction(async (tx) => {
     const row = await getJob(tx, id);
-    await lockCluster(tx, row.clusterId);
+    await lockClusterUpgrade(tx, row.clusterId);
     const current = await getJob(tx, id);
     const [dto] = await dtos(tx, [current]);
     if (!dto?.canPromote)
@@ -522,7 +520,7 @@ export async function promoteUpgrade(app: AppContext, id: string, actor: Actor) 
 export async function cancelUpgrade(app: AppContext, id: string, actor: Actor) {
   return app.db.transaction(async (tx) => {
     const row = await getJob(tx, id);
-    await lockCluster(tx, row.clusterId);
+    await lockClusterUpgrade(tx, row.clusterId);
     const running = await tx
       .select({ name: delivery.nodeName })
       .from(delivery)
@@ -587,7 +585,7 @@ export async function pullUpgrade(
   // Most pulls find no upgrade: only those that do take the cluster lock.
   if (!(await hasUpgradeTasks(app.db, node.id))) return null;
   return app.db.transaction(async (tx) => {
-    await lockCluster(tx, node.clusterId);
+    await lockClusterUpgrade(tx, node.clusterId);
     const [row] = await tx
       .select({ delivery, job })
       .from(delivery)
@@ -650,7 +648,7 @@ export async function reportUpgrade(
     if (!found) return false;
     if (found.delivery.nodeId !== nodeId)
       throw new ConnectError("upgrade belongs to another node", Code.PermissionDenied);
-    await lockCluster(tx, found.job.clusterId);
+    await lockClusterUpgrade(tx, found.job.clusterId);
     const [current] = await tx.select().from(delivery).where(eq(delivery.id, result.taskId));
     if (!current) return false;
     if (current.state !== "running") return true;

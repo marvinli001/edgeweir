@@ -32,7 +32,7 @@ import {
 import { readCacheKey } from "../lib/cache-key";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
-import { lockStats } from "../lib/locks";
+import { lockDomains, lockStats } from "../lib/locks";
 import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
@@ -265,15 +265,6 @@ function uniqueDomains(values: string[]) {
  * timestamps keep them in the order the user entered them.
  */
 const ordered = (index: number, base = Date.now()) => new Date(base + index);
-
-/**
- * Serializes changes to the same host names for the rest of the transaction,
- * so the check below and the insert after it cannot interleave.
- */
-async function lockDomains(tx: Tx, names: string[]) {
-  for (const name of [...new Set(names)].sort())
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`edgeweir.domain.${name}`}))`);
-}
 
 /** Every domain routes to exactly one site. */
 async function assertDomainsFree(

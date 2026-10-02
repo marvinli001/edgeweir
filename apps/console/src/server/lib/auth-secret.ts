@@ -1,8 +1,9 @@
 import { createHmac, hkdfSync } from "node:crypto";
 import { type Database, schema } from "@edgeweir/db";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { Env } from "./env";
 import { decodeMasterKey, type Envelope, type MasterKey } from "./envelope";
+import { lockAuthSecret } from "./locks";
 import type { Logger } from "./logger";
 
 /**
@@ -71,7 +72,7 @@ export async function loadAuthSecret(
   const resolved = resolveAuthSecret(env);
   if (resolved.source === "environment") return resolved;
   return db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.auth-secret'))`);
+    await lockAuthSecret(tx);
     const rows = await tx
       .select()
       .from(schema.systemSetting)
@@ -129,7 +130,7 @@ export async function assertAuthSecret(
 ): Promise<void> {
   const check = authSecretCheck(secret.value);
   await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('edgeweir.auth-secret'))`);
+    await lockAuthSecret(tx);
     const [row] = await tx
       .select({ value: schema.systemSetting.value })
       .from(schema.systemSetting)

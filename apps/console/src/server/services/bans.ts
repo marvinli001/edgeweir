@@ -37,6 +37,7 @@ import {
 } from "drizzle-orm";
 import { fail } from "../lib/errors";
 import { BANS_CHANNEL } from "../lib/events";
+import { lockBans } from "../lib/locks";
 import { ONLINE_WINDOW_SECONDS } from "../lib/node-online";
 import { type Actor, recordAudit } from "./audit";
 import type { Executor } from "./revisions";
@@ -44,18 +45,9 @@ import { findSite } from "./sites";
 
 type BanRow = typeof schema.ipBan.$inferSelect;
 
-const LOCK_KEY = "edgeweir.bans";
 const SETTINGS_KEY = "ban_settings";
 /** Expired rows are deleted this long after they expire (nodes drop them at expiry). */
 export const BAN_RETENTION_MS = 3600_000;
-
-/**
- * Serializes every ban write for the rest of the transaction. Writers take it
- * before `nextval('ip_ban_seq')`, so changes commit in sequence order.
- */
-async function lockBans(tx: Executor) {
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${LOCK_KEY}))`);
-}
 
 /** Next `n` values of ip_ban_seq, ascending. Call with the ban lock held. */
 async function nextSeqs(tx: Executor, n: number): Promise<bigint[]> {
@@ -265,7 +257,7 @@ export async function createBan(
       fail("BAN_PROTECTED_ADDRESS", `the ban covers the protected address ${covered}`, {
         address: covered,
       });
-    await lockBans(tx);
+    await lockBans(tx, "exclusive");
     const now = new Date();
     const expiresAt = new Date(now.getTime() + input.durationSeconds * 1000);
     const [existing] = await tx
@@ -361,7 +353,7 @@ export async function createBan(
  */
 export async function deleteBan(db: Database, id: string, ctx: { actor: Actor }) {
   await db.transaction(async (tx) => {
-    await lockBans(tx);
+    await lockBans(tx, "exclusive");
     const now = new Date();
     const [row] = await tx
       .select()
@@ -428,7 +420,7 @@ export async function banChanges(
   const size = Math.min(limit > 0 ? limit : BAN_PAGE_DEFAULT, BAN_PAGE_MAX);
   return db.transaction(async (tx) => {
     // Waits for writers in flight: the current value then only covers committed changes.
-    await tx.execute(sql`select pg_advisory_xact_lock_shared(hashtext(${LOCK_KEY}))`);
+    await lockBans(tx, "shared");
     const current = await currentBanSequence(tx);
     const reset = afterSequence === 0n || afterSequence > current;
     const distributed = and(
@@ -559,7 +551,7 @@ export async function reportAutoBans(
   const candidates = [...items.values()].filter((item) => !isProtected(item.cidr.cidr));
   if (candidates.length === 0) return 0;
   return db.transaction(async (tx) => {
-    await lockBans(tx);
+    await lockBans(tx, "exclusive");
     const { shareAutoBans } = await getBanSettings(tx);
     const siteIds = [...new Set(candidates.map((item) => item.siteId))];
     const sites = new Map(
@@ -688,7 +680,7 @@ async function capAutoBans(tx: Executor, clusterId: string, now: Date): Promise<
 /** Deletes bans that expired more than an hour ago, lifted or not. */
 export async function pruneBans(db: Database, now = new Date()): Promise<number> {
   return db.transaction(async (tx) => {
-    await lockBans(tx);
+    await lockBans(tx, "exclusive");
     const deleted = await tx
       .delete(schema.ipBan)
       .where(lt(schema.ipBan.expiresAt, new Date(now.getTime() - BAN_RETENTION_MS)))
