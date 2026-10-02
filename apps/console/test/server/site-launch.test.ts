@@ -186,3 +186,26 @@ describe("site launch check", async () => {
     expect(refused.json).toMatchObject({ code: "SCOPE_REQUIRED", data: { scope: "sites:read" } });
   });
 });
+
+describe("new sites", async () => {
+  const { ctx, client: pglite } = await createTestContext();
+  const app = createApp(ctx);
+  const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
+  let admin: ApiClient;
+  beforeAll(async () => {
+    await setupPlatform(ctx);
+    admin = rpcClient(app, origin, await signIn(app, origin, "admin@example.com"));
+  });
+  afterAll(() => pglite.close());
+
+  it("are named after their first domain unless named", async () => {
+    const created = await admin.sites.create({
+      domains: ["*.Wild.test", "wild.test"],
+      origins: [{ address: "origin.example.com" }],
+    });
+    expect(created.site.name).toBe("*.wild.test");
+    expect(created.revision.reasonParams).toEqual({ site: "*.wild.test" });
+    const [entry] = (await admin.auditLogs.list({ action: "site.create" })).items;
+    expect(entry).toMatchObject({ targetName: "*.wild.test", metadata: { name: "*.wild.test" } });
+  });
+});

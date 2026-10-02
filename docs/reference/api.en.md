@@ -142,6 +142,8 @@ Sites (`sites.list`, `sites.get` and the `site` that writes return) carry `deliv
 | `currentNodes` | Of those, nodes running the site's latest version (canary candidates included) with a healthy data plane |
 | `canary` | `{ endsAt, autoPromote }` while the cluster's configuration canary keeps the nodes outside the canary on the site's previous version (when the window ends; `autoPromote: false` waits for a manual promotion), otherwise `null` |
 
+`name` may be left out when creating a site (`POST /sites`); it defaults to the first domain (cut at 100 characters).
+
 `GET /sites/{id}/launch` (procedure `sites.launch`) resolves each of the site's domains when called, which can take seconds:
 
 | Field | Description |

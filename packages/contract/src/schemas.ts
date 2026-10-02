@@ -362,7 +362,8 @@ export const cacheSettings = z.object({
 });
 
 export const siteCreateInput = z.object({
-  name: z.string().trim().min(1).max(100),
+  /** Defaults to the first domain. */
+  name: z.string().trim().min(1).max(100).optional(),
   clusterId: uuid.optional(),
   domains: z.array(domainName).min(1).max(50),
   origins: siteOrigins,

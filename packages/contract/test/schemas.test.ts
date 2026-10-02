@@ -101,6 +101,12 @@ describe("siteCreateInput", () => {
     });
   });
 
+  it("leaves the name to the server (the first domain) when it is missing, never empty", () => {
+    const input = { domains: ["demo.test"], origins: [{ address: "whoami" }] };
+    expect(siteCreateInput.parse(input).name).toBeUndefined();
+    expect(siteCreateInput.safeParse({ ...input, name: " " }).success).toBe(false);
+  });
+
   it("rejects out-of-range ports and empty origins", () => {
     expect(siteCreateInput.safeParse({ name: "x", domains: ["a.test"], origins: [] }).success).toBe(
       false,

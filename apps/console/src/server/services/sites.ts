@@ -568,6 +568,8 @@ export async function createSite(
   ctx: { actor: Actor; masterKey: MasterKey },
 ): Promise<{ site: Site; revision: Revision }> {
   const domains = uniqueDomains(input.domains);
+  // Without a name the site is called after its first domain.
+  const name = input.name ?? (input.domains[0] ?? "").slice(0, 100);
   return db.transaction(async (tx) => {
     const clusterId = input.clusterId ?? (await defaultClusterId(tx));
     const [clusterRow] = await tx
@@ -582,7 +584,7 @@ export async function createSite(
       .insert(schema.site)
       .values({
         clusterId,
-        name: input.name,
+        name,
         websocket: input.originSettings.websocket,
         ...cacheSettingsValues(input.cacheSettings),
       })
@@ -600,7 +602,7 @@ export async function createSite(
     await replaceCacheRules(tx, siteRow, input.cacheRules);
     const { row: revision } = await publishRevision(tx, {
       clusterId,
-      reason: { code: "site_created", params: { site: input.name } },
+      reason: { code: "site_created", params: { site: name } },
       userId: publisher(ctx.actor),
       site: siteRow.id,
     });
@@ -609,7 +611,7 @@ export async function createSite(
       targetType: "site",
       targetId: siteRow.id,
       targetName: siteRow.name,
-      metadata: { name: input.name, domains: input.domains, revision: revision.revision },
+      metadata: { name, domains: input.domains, revision: revision.revision },
     });
     const [dto] = await toSiteDtos(tx, [siteRow]);
     if (!dto) throw new Error("site not readable after insert");

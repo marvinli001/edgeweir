@@ -142,6 +142,8 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 | `currentNodes` | 其中运行该网站最新版本（含金丝雀候选版本）且数据面正常的节点数 |
 | `canary` | 集群的配置金丝雀让非金丝雀节点在窗口内继续运行该网站的旧版本时为 `{ endsAt, autoPromote }`（窗口结束时间；`autoPromote` 为 `false` 时等待手动晋升），否则为 `null` |
 
+新建网站（`POST /sites`）时 `name` 可省略，默认为第一个域名（超过 100 字符时截断）。
+
 `GET /sites/{id}/launch`（过程 `sites.launch`）当场解析网站的每个域名，耗时可达数秒：
 
 | 字段 | 说明 |
