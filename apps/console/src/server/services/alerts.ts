@@ -22,7 +22,7 @@ import {
   smtpBinding,
 } from "./notification-delivery";
 import type { Executor } from "./revisions";
-import { elevatedSites } from "./security";
+import { elevatedSites, raiseCcAlert } from "./security";
 import { findSite } from "./sites";
 
 const POLICY_KEY = "alert_policy";
@@ -482,8 +482,11 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
       const previous = await tx.select().from(schema.alertState);
       for (const [key, c] of snapshot.active) {
         if (previous.find((s) => s.key === key)?.active) continue;
-        // cc_mitigation fires on a node's event only, at most once per site in 15 minutes.
-        if (c.kind === "cc_mitigation") continue;
+        // At most once per site in 15 minutes: a raise held back fires here once they are over.
+        if (c.kind === "cc_mitigation") {
+          await raiseCcAlert(tx, { id: c.siteId, name: c.siteName }, new Date(now));
+          continue;
+        }
         await tx
           .insert(schema.alertState)
           .values({

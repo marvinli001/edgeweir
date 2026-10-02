@@ -364,7 +364,7 @@ The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `st
 
 **Origin unavailable** has no threshold of its own: it fires when one node reports, within the offline threshold, every origin of the site unavailable. An origin is unavailable on that node when its passive or its active check result (either source) is unhealthy; see [Passive health check](origins-and-cache.en.md#passive-health-check) and [Active health check](origins-and-cache.en.md#active-health-check).
 
-**CC mitigation raised** (`cc_mitigation`) has no threshold of its own: it fires when a node reports that the site left the normal level, at most once per site in 15 minutes, and resolves once no online node reports the site above normal. See [Challenges and CC mitigation](challenges.en.md#cc-mitigation).
+**CC mitigation raised** (`cc_mitigation`) has no threshold of its own: it fires when a node reports that the site left the normal level, at most once per site in 15 minutes (a raise held back fires at the next minute check once the 15 minutes are over, if the site is still above normal), and resolves once no online node reports the site above normal. See [Challenges and CC mitigation](challenges.en.md#cc-mitigation).
 
 Site alerts cover only enabled sites with at least one domain.
 

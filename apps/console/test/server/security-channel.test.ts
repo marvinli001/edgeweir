@@ -358,6 +358,47 @@ describe("challenge keys, security events and JA4 over the node channel", async 
     expect((await alertEvents()).map((e) => e.status)).toEqual(["firing", "resolved", "firing"]);
   });
 
+  it("fires a throttled raise from the sweep once 15 minutes have passed", async () => {
+    // The last raise resolves.
+    await ctx.db
+      .update(schema.securityEvent)
+      .set({ receivedAt: new Date(Date.now() - 600_000) })
+      .where(eq(schema.securityEvent.siteId, siteId));
+    await sweepAlerts(ctx);
+    expect((await alertEvents()).map((e) => e.status).slice(-2)).toEqual(["firing", "resolved"]);
+    // The site escalates again within 15 minutes of that raise: throttled.
+    const { mtls } = await enroll(clusterId, "edge-throttled", ["challenge-v1"]);
+    await mtls.reportStatus({
+      appliedRevision: 0n,
+      state: ApplyState.APPLIED,
+      security: [{ siteId, level: "js", escalatedPaths: 0 }],
+    });
+    await mtls.reportSecurityEvents({ events: [event("throttled-raise")] });
+    await sweepAlerts(ctx);
+    expect((await alertEvents()).map((e) => e.status).slice(-2)).toEqual(["firing", "resolved"]);
+    // Still escalated after 15 minutes: the sweep fires it.
+    await ctx.db
+      .update(schema.alertEvent)
+      .set({ occurredAt: new Date(Date.now() - 16 * 60_000) })
+      .where(
+        and(eq(schema.alertEvent.siteId, siteId), eq(schema.alertEvent.kind, "cc_mitigation")),
+      );
+    await sweepAlerts(ctx);
+    expect((await alertEvents()).map((e) => e.status).slice(-3)).toEqual([
+      "firing",
+      "resolved",
+      "firing",
+    ]);
+    await sweepAlerts(ctx);
+    expect((await alertEvents()).at(-1)?.status).toBe("firing");
+    expect(await alertEvents()).toHaveLength(5);
+    await mtls.reportStatus({
+      appliedRevision: 0n,
+      state: ApplyState.APPLIED,
+      security: [{ siteId, level: "normal", escalatedPaths: 0 }],
+    });
+  });
+
   it("deletes events past the retention", async () => {
     await ctx.db
       .update(schema.securityEvent)

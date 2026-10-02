@@ -60,10 +60,12 @@ export const ccAlertKey = (siteId: string) => `cc_mitigation/${siteId}/${siteId}
 
 /**
  * Fires cc_mitigation for a site that left the normal level, unless it is
- * firing or fired within the last 15 minutes. The alert sweep resolves it
+ * firing or fired within the last 15 minutes. A node's event raises it at
+ * once; the alert sweep raises one that was held back, as soon as the 15
+ * minutes are over while the site is still above normal, and resolves it
  * once no node reports the site above normal.
  */
-async function raiseCcAlert(
+export async function raiseCcAlert(
   tx: Executor,
   site: { id: string; name: string },
   now: Date,
