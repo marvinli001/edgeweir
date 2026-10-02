@@ -40,6 +40,7 @@ import {
   getRevision,
   insertRevision,
   loadRollout,
+  prebuilt,
   publisher,
   type Tx,
   updateRollout,
@@ -193,11 +194,7 @@ export async function rollbackToRevision(
   const result = await insertRevision(
     tx,
     opts.clusterId,
-    (revision) => {
-      const config = clone(NodeConfigSchema, content);
-      config.revision = revision;
-      return config;
-    },
+    prebuilt(content),
     { code: "rollback", params: { revision: opts.revision } },
     publisher(opts.actor),
   );

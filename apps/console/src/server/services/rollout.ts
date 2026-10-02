@@ -1,4 +1,3 @@
-import { clone } from "@bufbuild/protobuf";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import type {
   ClusterRollout,
@@ -7,7 +6,6 @@ import type {
   RolloutState,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { NodeConfigSchema } from "@edgeweir/proto";
 import { and, asc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
@@ -25,6 +23,7 @@ import {
   loadRollout,
   notifyClusterTargets,
   onlineCanaryNodes,
+  prebuilt,
   type Tx,
   toRevisionDto,
   updateRollout,
@@ -85,11 +84,7 @@ async function rollBack(tx: Tx, row: RolloutRow, outcome: RolloutOutcome, actor:
   const { row: restored } = await insertRevision(
     tx,
     row.clusterId,
-    (revision) => {
-      const config = clone(NodeConfigSchema, content);
-      config.revision = revision;
-      return config;
-    },
+    prebuilt(content),
     { code: "rollout_rollback", params: { revision: row.candidateRevision ?? 0 } },
     null,
   );

@@ -172,6 +172,13 @@ export async function insertRevision(
   return { row, created: true };
 }
 
+/** The build of fixed content (a rollback, a restored stable revision): a copy numbered `revision`. */
+export const prebuilt = (content: NodeConfig) => (revision: bigint) => {
+  const config = clone(NodeConfigSchema, content);
+  config.revision = revision;
+  return config;
+};
+
 export interface PublishOptions {
   reason: RevisionReason;
   /** Who publishes (systemActor for background jobs); the revision records publisher(actor). */
@@ -414,17 +421,7 @@ async function publishThroughCanary(
     return result;
   }
   if (patched.contentHash !== stable.contentHash) {
-    const restabled = await insertRevision(
-      tx,
-      clusterId,
-      (revision) => {
-        const config = clone(NodeConfigSchema, patched);
-        config.revision = revision;
-        return config;
-      },
-      reason,
-      userId,
-    );
+    const restabled = await insertRevision(tx, clusterId, prebuilt(patched), reason, userId);
     await updateRollout(tx, clusterId, { stableRevision: restabled.row.revision });
   }
   const result = await insertRevision(tx, clusterId, build, reason, userId);
