@@ -188,7 +188,11 @@ const caLabel = (ca: string) => (ca === "zerossl" ? m.cert_ca_zerossl() : m.cert
 function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
   const client = useQueryClient();
   const [ca, setCa] = React.useState<"letsencrypt" | "zerossl">("letsencrypt");
-  const check = useQuery(orpc.https.check.queryOptions({ input: { id: site.id, ca } }));
+  // The DNS-01 check asks the provider: not again on every focus.
+  const check = useQuery({
+    ...orpc.https.check.queryOptions({ input: { id: site.id, ca } }),
+    staleTime: 30_000,
+  });
   const settings = useQuery(orpc.certificates.settings.queryOptions());
   const request = useMutation(orpc.certificates.request.mutationOptions());
   const update = useMutation(orpc.https.update.mutationOptions());
@@ -248,7 +252,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
             <ul className="grid gap-2" data-testid="https-blockers">
               {blockers.map((blocker, index) => (
                 <li
-                  key={`${blocker.code}-${index}`}
+                  key={JSON.stringify(blocker)}
                   className="flex items-start gap-2 text-sm animate-enter"
                   style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
                 >
