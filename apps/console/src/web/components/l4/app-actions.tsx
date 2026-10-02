@@ -24,8 +24,8 @@ import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
 /**
- * The application's enabled switch: turning it either way asks first. A component of its own
- * with its own mutation, so a table's cells keep their identity (f626d5f).
+ * The application's enabled switch: turning it either way asks first. A component of its own:
+ * column templates are plain functions (DataTable) and hold no hooks.
  */
 export function L4EnabledSwitch({ app }: { app: L4App }) {
   const queryClient = useQueryClient();

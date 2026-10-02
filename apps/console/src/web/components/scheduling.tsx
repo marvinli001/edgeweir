@@ -240,7 +240,7 @@ function ConditionSummary({ rule }: { rule: SchedulingRule }) {
   );
 }
 
-/** A component of its own so the table's cells keep their identity (f626d5f). */
+/** A component of its own: column templates are plain functions (DataTable) and hold no hooks. */
 function RuleEnabledSwitch({ rule }: { rule: SchedulingRule }) {
   const queryClient = useQueryClient();
   const update = useMutation(orpc.scheduling.update.mutationOptions());

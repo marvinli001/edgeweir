@@ -259,9 +259,8 @@ function BanDialog({ onClose }: { onClose: () => void }) {
 }
 
 /**
- * Unban with confirmation. A component of its own so that the table's cell
- * renderers keep their identity: a new renderer per render would remount the
- * cell and close an open dialog whenever the page re-renders.
+ * Unban with confirmation. A component of its own: column templates are plain
+ * functions (DataTable) and hold no hooks.
  */
 function UnbanAction({ ban }: { ban: Ban }) {
   const queryClient = useQueryClient();

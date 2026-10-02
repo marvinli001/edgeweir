@@ -93,9 +93,8 @@ function RegionDialog({
 }
 
 /**
- * Delete with confirmation. A component of its own so that the table's cell
- * renderers keep their identity: a new renderer per render would remount the
- * cell and close an open dialog whenever the page re-renders.
+ * Delete with confirmation. A component of its own: column templates are plain
+ * functions (DataTable) and hold no hooks.
  */
 function DeleteRegionAction({ region }: { region: Region }) {
   const queryClient = useQueryClient();

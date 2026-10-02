@@ -1,7 +1,6 @@
 import {
   type ColumnDef,
   createSortedRowModel,
-  FlexRender,
   type RowData,
   rowSortingFeature,
   type SortingState,
@@ -24,6 +23,20 @@ export const features = tableFeatures({
 });
 
 export type Columns<T extends RowData> = ColumnDef<typeof features, T>[];
+
+/**
+ * Renders a column's `header` or `cell` template by calling it. TanStack's `FlexRender` passes a
+ * template function to `createElement`, so each new `columns` array (a memo dependency changed,
+ * the list polled) gave every cell a new component type and remounted it, closing the dialogs and
+ * menus open in it. Templates are plain functions here and must not call hooks; a cell that needs
+ * state renders a component of its own.
+ */
+function renderTemplate<P extends object>(
+  template: string | ((props: P) => unknown) | undefined,
+  props: P,
+): React.ReactNode {
+  return (typeof template === "function" ? template(props) : template) as React.ReactNode;
+}
 
 /** Thin TanStack Table v9 wrapper rendered with the shadcn table primitives. */
 export function DataTable<T extends RowData>({
@@ -54,7 +67,9 @@ export function DataTable<T extends RowData>({
             <TableRow key={group.id}>
               {group.headers.map((header) => (
                 <TableHead key={header.id} colSpan={header.colSpan}>
-                  {header.isPlaceholder ? null : <FlexRender header={header} />}
+                  {header.isPlaceholder
+                    ? null
+                    : renderTemplate(header.column.columnDef.header, header.getContext())}
                 </TableHead>
               ))}
             </TableRow>
@@ -70,7 +85,7 @@ export function DataTable<T extends RowData>({
             >
               {row.getAllCells().map((cell) => (
                 <TableCell key={cell.id} className="align-top">
-                  <FlexRender cell={cell} />
+                  {renderTemplate(cell.column.columnDef.cell, cell.getContext())}
                 </TableCell>
               ))}
             </TableRow>

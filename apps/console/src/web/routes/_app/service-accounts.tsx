@@ -230,9 +230,8 @@ function KeysDialog({ account, onClose }: { account: ServiceAccount; onClose: ()
 }
 
 /**
- * Delete with confirmation. A component of its own so that the table's cell
- * renderers keep their identity: a new renderer per render would remount the
- * cell and close an open dialog whenever the page re-renders.
+ * Delete with confirmation. A component of its own: column templates are plain
+ * functions (DataTable) and hold no hooks.
  */
 function DeleteAccountAction({ account }: { account: ServiceAccount }) {
   const queryClient = useQueryClient();

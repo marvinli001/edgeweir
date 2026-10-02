@@ -85,9 +85,8 @@ function ProbeStatus({ probe }: { probe: Probe }) {
 type ProbeAction = { kind: "rename" | "delete" | "results"; probe: Probe };
 
 /**
- * The row menu. A component of its own so the table's cell renderers keep
- * their identity while the list polls (a new renderer would remount the cell
- * and close the menu).
+ * The row menu. A component of its own: column templates are plain
+ * functions (DataTable) and hold no hooks.
  */
 function ProbeActions({
   probe,

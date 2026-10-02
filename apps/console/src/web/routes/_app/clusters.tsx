@@ -494,10 +494,8 @@ function NodeGroupDialog({
 }
 
 /**
- * Delete with confirmation. The row actions of the tables below are components
- * of their own so that the table's cell renderers keep their identity: a new
- * renderer per render would remount the cell and close an open dialog or menu
- * whenever the section re-renders (the node list polls).
+ * Delete with confirmation. The row actions of the tables below are components of their own:
+ * column templates are plain functions (DataTable) and hold no hooks.
  */
 function DeleteNodeGroupAction({ group }: { group: NodeGroup }) {
   const queryClient = useQueryClient();

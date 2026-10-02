@@ -124,3 +124,44 @@ describe("UI rules (ADR-0003)", () => {
     expect([...scanned].sort()).toEqual([...needed].sort());
   });
 });
+
+/** The `cell:` and `header:` templates of a file's column definitions, as source text. */
+function columnTemplates(source: string): string[] {
+  const templates: string[] = [];
+  for (const match of source.matchAll(/\b(?:cell|header):\s*\(/g)) {
+    const arrow = source.indexOf("=>", match.index);
+    let depth = 0;
+    let end = arrow + 2;
+    for (; end < source.length; end++) {
+      const char = source[end] as string;
+      if ("([{".includes(char)) depth++;
+      else if (")]}".includes(char)) {
+        if (depth === 0) break;
+        depth--;
+      } else if (char === "," && depth === 0) break;
+    }
+    templates.push(source.slice(match.index, end));
+  }
+  return templates;
+}
+
+describe("UI behaviour", () => {
+  it("calls table column templates instead of mounting them (FlexRender remounts cells)", () => {
+    const flex = webSources.filter((file) =>
+      /import\s*\{[^}]*\b(?:FlexRender|flexRender)\b[^}]*\}\s*from\s*"@tanstack\/react-table"/.test(
+        read(file),
+      ),
+    );
+    expect(flex).toEqual([]);
+    // Templates are called as plain functions, so a hook in one would run inside DataTable.
+    const tables = webSources.filter((file) => read(file).includes("Columns<"));
+    const templates = tables.flatMap((file) =>
+      columnTemplates(read(file)).map((template) => ({ file, template })),
+    );
+    expect(templates.length).toBeGreaterThan(50);
+    const hooks = templates
+      .filter(({ template }) => /\buse[A-Z]\w*\(/.test(template))
+      .map(({ file, template }) => `${file}: ${template.split("\n")[0]}`);
+    expect(hooks).toEqual([]);
+  });
+});
