@@ -562,6 +562,8 @@ services:
       ROLE: all
       DATABASE_URL: ${DATABASE_URL:-}
       EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
+      # 轮换前的主密钥：日志显示不再使用后删除
+      EDGEWEIR_MASTER_KEY_PREVIOUS: ${EDGEWEIR_MASTER_KEY_PREVIOUS:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       # 浏览器访问控制台的地址，即宝塔站点的域名，例如 https://cdn-admin.example.com
       EDGEWEIR_PUBLIC_URL: ${EDGEWEIR_PUBLIC_URL:-http://localhost:3000}
@@ -626,6 +628,8 @@ services:
       ROLE: all
       DATABASE_URL: postgres://edgeweir:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env; deployments created without it used edgeweir}@postgres:5432/edgeweir
       EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
+      # 轮换前的主密钥：日志显示不再使用后删除
+      EDGEWEIR_MASTER_KEY_PREVIOUS: ${EDGEWEIR_MASTER_KEY_PREVIOUS:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       # 浏览器访问控制台的地址，即宝塔站点的域名，例如 https://cdn-admin.example.com
       EDGEWEIR_PUBLIC_URL: ${EDGEWEIR_PUBLIC_URL:-http://localhost:3000}
@@ -905,9 +909,9 @@ print_next_steps() {
 }
 
 # Variables in .env that open the encrypted data; backups leave them out.
-readonly UNBACKED_KEYS=(EDGEWEIR_MASTER_KEY BETTER_AUTH_SECRET)
+readonly UNBACKED_KEYS=(EDGEWEIR_MASTER_KEY EDGEWEIR_MASTER_KEY_PREVIOUS BETTER_AUTH_SECRET)
 
-# env_for_backup: .env with the master key and session secret commented out.
+# env_for_backup: .env with the master keys and session secret commented out.
 env_for_backup() {
   KEYS="${UNBACKED_KEYS[*]}" awk '
     BEGIN { n = split(ENVIRON["KEYS"], keys, " ") }

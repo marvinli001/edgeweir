@@ -266,7 +266,7 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 | 文件 | 内容 |
 | --- | --- |
 | `edgeweir.dump` | `pg_dump --format=custom`。host：按 `DATABASE_URL` 用 `postgres:18.6-alpine` 在 host 网络转储；`.env` 中没有 `DATABASE_URL` 时，在一次性的控制台容器里读取 `DATABASE_URL_FILE` 指定的文件（覆盖文件中设置并挂载）；bundled：在 `postgres` 容器内转储 |
-| `env` | `.env` 副本；`EDGEWEIR_MASTER_KEY` 与 `BETTER_AUTH_SECRET` 两行改为注释，不含其值 |
+| `env` | `.env` 副本；`EDGEWEIR_MASTER_KEY`、`EDGEWEIR_MASTER_KEY_PREVIOUS` 与 `BETTER_AUTH_SECRET` 各行改为注释，不含其值 |
 | `compose.yml` | 编排文件副本，保留原文件名；覆盖文件存在时一并复制 |
 
 | 项目 | 规则 |

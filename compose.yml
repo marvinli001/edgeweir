@@ -13,6 +13,8 @@ name: edgeweir
 x-console-env: &console-env
   DATABASE_URL: postgres://edgeweir:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env; deployments created without it used edgeweir}@postgres:5432/edgeweir
   EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
+  # The key before a rotation; remove it once the log says nothing uses it.
+  EDGEWEIR_MASTER_KEY_PREVIOUS: ${EDGEWEIR_MASTER_KEY_PREVIOUS:-}
   BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
   EDGEWEIR_PUBLIC_URL: ${EDGEWEIR_PUBLIC_URL:-http://localhost:3000}
   EDGEWEIR_NODE_API_URL: ${EDGEWEIR_NODE_API_URL:-}

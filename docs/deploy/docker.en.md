@@ -89,6 +89,29 @@ These variables can be read from files too: set `<variable>_FILE`, mount the fil
 | `BETTER_AUTH_SECRET_FILE` | Deployments that set `BETTER_AUTH_SECRET` |
 | `EDGEWEIR_CLICKHOUSE_PASSWORD_FILE` | External ClickHouse; also set `EDGEWEIR_CLICKHOUSE_PASSWORD: ""` in `compose.override.yml`, or the template's default conflicts with it |
 
+### Rotating the master key
+
+To replace the master key (for example after a suspected leak) and move the encrypted data to the new one:
+
+1. In `.env`, move the old value to `EDGEWEIR_MASTER_KEY_PREVIOUS` and set `EDGEWEIR_MASTER_KEY` to the output of `openssl rand -base64 32`. With files, use `EDGEWEIR_MASTER_KEY_PREVIOUS_FILE` and `EDGEWEIR_MASTER_KEY_FILE`.
+2. `docker compose up -d`.
+3. Wait for the log line `no envelope uses EDGEWEIR_MASTER_KEY_PREVIOUS any more`:
+
+   ```bash
+   docker compose logs console | grep EDGEWEIR_MASTER_KEY_PREVIOUS
+   ```
+
+   On `envelopes still use EDGEWEIR_MASTER_KEY_PREVIOUS: keep it set`, keep the old key and look into the `cannot re-seal` lines.
+4. Remove `EDGEWEIR_MASTER_KEY_PREVIOUS` and run `docker compose up -d` again.
+
+| Item | Notes |
+| --- | --- |
+| Sessions and two-factor authentication | Not affected: the session secret keeps its value. After a master key leak, also set a new `BETTER_AUTH_SECRET`: every session ends and two-factor authentication must be enrolled again |
+| Nodes | Nothing to do |
+| Several console instances | Recreate all of them with the same variables |
+| Backups from before the rotation | Still encrypted with the old key: keep it offline, and set it as `EDGEWEIR_MASTER_KEY_PREVIOUS` to restore one |
+| `deploy.sh` deployments | Edit `.env`, then run `./deploy.sh restart`; backups leave `EDGEWEIR_MASTER_KEY_PREVIOUS` out |
+
 ## 4. Configure `.env`
 
 Set the console URL:
@@ -227,7 +250,7 @@ Upgrading standalone containers: [upgrade](upgrade.en.md#upgrade).
 | --- | --- | --- |
 | Log `invalid configuration:` followed by variable names | Variable missing or malformed | Fix the listed variables in `.env`, then run `docker compose up -d`. |
 | `EDGEWEIR_MASTER_KEY: is not valid base64` or `must be at least 32 bytes` | Master key truncated or edited, for example a panel turned `+` into a space, or the value is quoted | Use the unmodified output of `openssl rand -base64 32`. |
-| `EDGEWEIR_MASTER_KEY does not match this database` | The master key is not the one this database uses: the key changed, or the database comes from another installation | Restore the original master key (the original `.env` or its offline copy); setting `BETTER_AUTH_SECRET` does not help. |
+| `EDGEWEIR_MASTER_KEY does not match this database` | The master key is not the one this database uses: the key changed, or the database comes from another installation | Restore the original master key (the original `.env` or its offline copy), or set it as `EDGEWEIR_MASTER_KEY_PREVIOUS` to [rotate](#rotating-the-master-key) it; setting `BETTER_AUTH_SECRET` does not help. |
 | `BETTER_AUTH_SECRET is not set, but this database was used with another secret` | `BETTER_AUTH_SECRET` removed from an existing deployment | Restore the previous value. |
 | `database not reachable yet` repeats, exit after 60 seconds | Database unreachable | Check the database container with `docker compose ps postgres`; for an external database, check `DATABASE_URL`. |
 | Sign-in fails, or the origin is reported as untrusted | Scheme, host, or port of `EDGEWEIR_PUBLIC_URL` differs from the browser address | Correct `EDGEWEIR_PUBLIC_URL`, then run `docker compose up -d`. |

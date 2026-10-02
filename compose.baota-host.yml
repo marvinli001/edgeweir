@@ -24,6 +24,8 @@ services:
       ROLE: all
       DATABASE_URL: ${DATABASE_URL:-}
       EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
+      # 轮换前的主密钥：日志显示不再使用后删除
+      EDGEWEIR_MASTER_KEY_PREVIOUS: ${EDGEWEIR_MASTER_KEY_PREVIOUS:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       # 浏览器访问控制台的地址，即宝塔站点的域名，例如 https://cdn-admin.example.com
       EDGEWEIR_PUBLIC_URL: ${EDGEWEIR_PUBLIC_URL:-http://localhost:3000}

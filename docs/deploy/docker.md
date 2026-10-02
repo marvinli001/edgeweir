@@ -89,6 +89,29 @@ secrets:
 | `BETTER_AUTH_SECRET_FILE` | 已设置 `BETTER_AUTH_SECRET` 的部署 |
 | `EDGEWEIR_CLICKHOUSE_PASSWORD_FILE` | 外部 ClickHouse；`compose.override.yml` 中另设 `EDGEWEIR_CLICKHOUSE_PASSWORD: ""`，否则与模板的默认值冲突 |
 
+### 轮换主密钥
+
+更换主密钥（例如怀疑泄露），已加密的数据改用新主密钥：
+
+1. `.env` 中把原值移到 `EDGEWEIR_MASTER_KEY_PREVIOUS`，`EDGEWEIR_MASTER_KEY` 设为 `openssl rand -base64 32` 的输出。用文件时对应 `EDGEWEIR_MASTER_KEY_PREVIOUS_FILE` 与 `EDGEWEIR_MASTER_KEY_FILE`。
+2. `docker compose up -d`。
+3. 等待日志 `no envelope uses EDGEWEIR_MASTER_KEY_PREVIOUS any more`：
+
+   ```bash
+   docker compose logs console | grep EDGEWEIR_MASTER_KEY_PREVIOUS
+   ```
+
+   日志为 `envelopes still use EDGEWEIR_MASTER_KEY_PREVIOUS: keep it set` 时保留旧主密钥，按 `cannot re-seal` 日志排查。
+4. 删除 `EDGEWEIR_MASTER_KEY_PREVIOUS`，再执行 `docker compose up -d`。
+
+| 项目 | 说明 |
+| --- | --- |
+| 会话与两步验证 | 不受影响：会话密钥保持原值。主密钥泄露时另设新的 `BETTER_AUTH_SECRET`：全部会话失效，两步验证需重新启用 |
+| 节点 | 无需操作 |
+| 多个控制台实例 | 全部实例用同一组变量重建 |
+| 轮换前的备份 | 仍由旧主密钥加密：离线保留旧主密钥，恢复时设为 `EDGEWEIR_MASTER_KEY_PREVIOUS` |
+| `deploy.sh` 部署 | 编辑 `.env` 后运行 `./deploy.sh restart`；备份中不含 `EDGEWEIR_MASTER_KEY_PREVIOUS` |
+
 ## 4. 配置 `.env`
 
 设置控制台地址：
@@ -227,7 +250,7 @@ docker run -d --name edgeweir-console --network edgeweir --restart unless-stoppe
 | --- | --- | --- |
 | 日志 `invalid configuration:`，随后列出变量 | 变量缺失或格式错误 | 按列出的变量修正 `.env`，执行 `docker compose up -d`。 |
 | `EDGEWEIR_MASTER_KEY: is not valid base64` 或 `must be at least 32 bytes` | 主密钥被截断或改写，例如面板把 `+` 换成了空格，或值带引号 | 使用 `openssl rand -base64 32` 的原样输出。 |
-| `EDGEWEIR_MASTER_KEY does not match this database` | 主密钥不是这个数据库所用的：更换了主密钥，或数据库来自另一次安装 | 恢复原主密钥（原 `.env` 或其离线副本）；设置 `BETTER_AUTH_SECRET` 无济于事。 |
+| `EDGEWEIR_MASTER_KEY does not match this database` | 主密钥不是这个数据库所用的：更换了主密钥，或数据库来自另一次安装 | 恢复原主密钥（原 `.env` 或其离线副本），或按[轮换主密钥](#轮换主密钥)把它设为 `EDGEWEIR_MASTER_KEY_PREVIOUS`；设置 `BETTER_AUTH_SECRET` 无济于事。 |
 | `BETTER_AUTH_SECRET is not set, but this database was used with another secret` | 已有部署移除了 `BETTER_AUTH_SECRET` | 恢复原值。 |
 | 重复输出 `database not reachable yet`，60 秒后退出 | 数据库不可达 | `docker compose ps postgres` 检查数据库容器；外部数据库检查 `DATABASE_URL`。 |
 | 登录失败或提示来源不受信任 | `EDGEWEIR_PUBLIC_URL` 与浏览器地址的协议、主机名或端口不一致 | 修正 `EDGEWEIR_PUBLIC_URL`，执行 `docker compose up -d`。 |

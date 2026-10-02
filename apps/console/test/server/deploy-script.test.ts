@@ -89,6 +89,15 @@ describe("deploy.sh", () => {
     expect(read("deploy.sh")).toContain(`readonly PG_IMAGE=${pinned}\n`);
   });
 
+  it.each(["compose.yml", "compose.baota.yml", "compose.baota-host.yml"])(
+    "%s passes the previous master key for a rotation",
+    (file) => {
+      expect(read(file)).toMatch(
+        /^ {2,6}EDGEWEIR_MASTER_KEY_PREVIOUS: \$\{EDGEWEIR_MASTER_KEY_PREVIOUS:-\}$/m,
+      );
+    },
+  );
+
   it("keeps the web console on loopback and the node channel public with host networking", () => {
     const host = read("compose.baota-host.yml");
     expect(host).toMatch(/^\s*network_mode: host$/m);
@@ -214,11 +223,12 @@ describe("deploy.sh", () => {
   });
 
   describe("backups (P1-54)", () => {
-    it("leave the master key and the session secret out of the .env copy", () => {
+    it("leave the master keys and the session secret out of the .env copy", () => {
       const dir = directory({
         ".env": [
           "# comment",
           "EDGEWEIR_MASTER_KEY=bWFzdGVyLWtleS1tYXN0ZXIta2V5LW1hc3Rlci1rZXkhIQ==",
+          "EDGEWEIR_MASTER_KEY_PREVIOUS=b2xkLW1hc3Rlci1rZXktb2xkLW1hc3Rlci1rZXktb2xkIQ==",
           "BETTER_AUTH_SECRET=session-secret-session-secret-session",
           "POSTGRES_PASSWORD=0123abcd",
           "EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com",
@@ -227,8 +237,10 @@ describe("deploy.sh", () => {
       });
       const copy = sourced("DIR=$D; env_for_backup", { D: dir });
       expect(copy).not.toContain("bWFzdGVy");
+      expect(copy).not.toContain("b2xkLW1h");
       expect(copy).not.toContain("session-secret");
       expect(copy).toMatch(/^# EDGEWEIR_MASTER_KEY= /m);
+      expect(copy).toMatch(/^# EDGEWEIR_MASTER_KEY_PREVIOUS= /m);
       expect(copy).toMatch(/^# BETTER_AUTH_SECRET= /m);
       expect(copy).toContain("POSTGRES_PASSWORD=0123abcd\n");
       expect(copy).toContain("EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com\n");
