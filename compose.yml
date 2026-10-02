@@ -1,6 +1,6 @@
 # Edgeweir console + PostgreSQL 18.
-#   docker compose up -d                        # console + postgres
-#   docker compose --profile analytics up -d    # + ClickHouse
+#   docker compose up -d    # console + postgres; + ClickHouse with
+#                           # COMPOSE_PROFILES=analytics in .env
 # Secrets come from .env (see .env.example): compose refuses to start without
 # POSTGRES_PASSWORD, the console without EDGEWEIR_MASTER_KEY; the session secret
 # is derived from it unless BETTER_AUTH_SECRET is set (deployments that set it
@@ -13,6 +13,8 @@ name: edgeweir
 x-console-env: &console-env
   DATABASE_URL: postgres://edgeweir:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env; deployments created without it used edgeweir}@postgres:5432/edgeweir
   EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
+  # The key before a rotation; remove it once the log says nothing uses it.
+  EDGEWEIR_MASTER_KEY_PREVIOUS: ${EDGEWEIR_MASTER_KEY_PREVIOUS:-}
   BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
   EDGEWEIR_PUBLIC_URL: ${EDGEWEIR_PUBLIC_URL:-http://localhost:3000}
   EDGEWEIR_NODE_API_URL: ${EDGEWEIR_NODE_API_URL:-}

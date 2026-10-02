@@ -3,7 +3,7 @@ import { hostname } from "node:os";
 import { normalizeCidr, releaseBaseUrl } from "@edgeweir/contract";
 import * as z from "zod";
 import { TrustedProxies } from "./client-ip";
-import { masterKeyProblem } from "./envelope";
+import { decodeMasterKey, masterKeyProblem } from "./envelope";
 
 /**
  * `<scheme>://host[:port]` with nothing after it (a trailing "/" is fine), as
@@ -35,23 +35,29 @@ const originUrl = (schemes: readonly ("http" | "https")[]) =>
     return url.origin;
   });
 
+/** A master key: canonical base64 of 32+ bytes (masterKeyProblem). */
+const masterKey = z
+  .string()
+  .min(1)
+  .check((ctx) => {
+    const problem = masterKeyProblem(ctx.value);
+    if (problem) ctx.issues.push({ code: "custom", message: problem, input: ctx.value });
+  });
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   ROLE: z.enum(["app", "worker", "all"]).default("all"),
   DATABASE_URL: z.string().min(1),
+  /** Base64-encoded 32+ byte key used to envelope-encrypt secrets at rest. */
+  EDGEWEIR_MASTER_KEY: masterKey,
   /**
-   * Base64-encoded 32+ byte key used to envelope-encrypt secrets at rest.
-   * loadEnv fills it from EDGEWEIR_MASTER_KEY_FILE when that is set.
+   * The master key before a rotation: opens what it sealed until the startup
+   * re-seal pass has moved everything to EDGEWEIR_MASTER_KEY; never seals.
    */
-  EDGEWEIR_MASTER_KEY: z
-    .string()
-    .min(1)
-    .check((ctx) => {
-      const problem = masterKeyProblem(ctx.value);
-      if (problem) ctx.issues.push({ code: "custom", message: problem, input: ctx.value });
-    }),
-  /** File holding the master key (a Docker or orchestrator secret), instead of EDGEWEIR_MASTER_KEY. */
-  EDGEWEIR_MASTER_KEY_FILE: z.string().optional(),
+  EDGEWEIR_MASTER_KEY_PREVIOUS: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    masterKey.optional(),
+  ),
   /**
    * better-auth's secret (session signatures, two-factor secrets at rest).
    * Empty or unset: derived from EDGEWEIR_MASTER_KEY (lib/auth-secret.ts).
@@ -126,8 +132,24 @@ const schema = z.object({
   EDGEWEIR_ACME_CA_FILE: z.string().default(""),
 });
 
+/**
+ * Variables that can be read from the file `<name>_FILE` names instead (a
+ * Docker or orchestrator secret), so the value stays out of the environment.
+ */
+export const FILE_VARIABLES = [
+  "DATABASE_URL",
+  "EDGEWEIR_MASTER_KEY",
+  "EDGEWEIR_MASTER_KEY_PREVIOUS",
+  "BETTER_AUTH_SECRET",
+  "EDGEWEIR_CLICKHOUSE_PASSWORD",
+] as const;
+
 /** Every environment variable the console reads (documented in .env.example). */
-export const ENV_VARIABLES = [...Object.keys(schema.shape), "EDGEWEIR_VERSION"];
+export const ENV_VARIABLES = [
+  ...Object.keys(schema.shape),
+  ...FILE_VARIABLES.map((name) => `${name}_FILE`),
+  "EDGEWEIR_VERSION",
+];
 
 export type Env = z.infer<typeof schema> & {
   nodeApiHost: string;
@@ -156,33 +178,56 @@ export function parseOutboundAllowCidrs(text: string): string[] {
 export const VERSION = process.env.EDGEWEIR_VERSION ?? "dev";
 
 /**
- * The environment with EDGEWEIR_MASTER_KEY read from EDGEWEIR_MASTER_KEY_FILE
- * when that is set; trailing whitespace (the file's last newline) is dropped.
+ * The environment with each FILE_VARIABLES entry read from its `<name>_FILE`
+ * when that is set; the file's last line break is dropped. Setting both the
+ * variable and its file, an unreadable file and an empty one are errors.
  */
-function withMasterKeyFile(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const file = source.EDGEWEIR_MASTER_KEY_FILE;
-  if (!file) return source;
-  const invalid = (message: string) =>
-    new Error(`invalid configuration:\n  EDGEWEIR_MASTER_KEY_FILE: ${message}`);
-  if (source.EDGEWEIR_MASTER_KEY) {
-    throw invalid("set either EDGEWEIR_MASTER_KEY or EDGEWEIR_MASTER_KEY_FILE, not both");
+function withSecretFiles(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env = { ...source };
+  const problems: string[] = [];
+  for (const name of FILE_VARIABLES) {
+    const variable = `${name}_FILE`;
+    const file = source[variable];
+    if (!file) continue;
+    if (source[name]) {
+      problems.push(`${variable}: set either ${name} or ${variable}, not both`);
+      continue;
+    }
+    let value: string;
+    try {
+      value = readFileSync(file, "utf8").replace(/[\r\n]+$/, "");
+    } catch (error) {
+      problems.push(
+        `${variable}: cannot read ${file}: ${(error as NodeJS.ErrnoException).code ?? error}`,
+      );
+      continue;
+    }
+    if (!value) problems.push(`${variable}: ${file} is empty`);
+    env[name] = value;
   }
-  let key: string;
-  try {
-    key = readFileSync(file, "utf8").replace(/\s+$/, "");
-  } catch (error) {
-    throw invalid(`cannot read ${file}: ${(error as NodeJS.ErrnoException).code ?? error}`);
+  if (problems.length > 0) {
+    throw new Error(`invalid configuration:\n${problems.map((p) => `  ${p}`).join("\n")}`);
   }
-  return { ...source, EDGEWEIR_MASTER_KEY: key };
+  return env;
 }
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  const parsed = schema.safeParse(withMasterKeyFile(source));
+  const parsed = schema.safeParse(withSecretFiles(source));
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
     throw new Error(`invalid configuration:\n${issues}`);
   }
   const env = parsed.data;
+  if (
+    env.EDGEWEIR_MASTER_KEY_PREVIOUS &&
+    decodeMasterKey(env.EDGEWEIR_MASTER_KEY_PREVIOUS).equals(
+      decodeMasterKey(env.EDGEWEIR_MASTER_KEY),
+    )
+  ) {
+    throw new Error(
+      "invalid configuration:\n  EDGEWEIR_MASTER_KEY_PREVIOUS: is the same key as EDGEWEIR_MASTER_KEY (set it to the key before the rotation)",
+    );
+  }
   let trustedProxies: TrustedProxies;
   try {
     trustedProxies = new TrustedProxies(env.EDGEWEIR_TRUSTED_PROXIES);

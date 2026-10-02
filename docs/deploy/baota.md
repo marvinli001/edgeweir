@@ -242,6 +242,8 @@ cd /www/dk_project/edgeweir
 ./deploy.sh restore backups/<时间>      # 先备份，再用该备份替换数据库
 ```
 
+轮换主密钥：`.env` 中把原值移到 `EDGEWEIR_MASTER_KEY_PREVIOUS`、写入新的 `EDGEWEIR_MASTER_KEY`，运行 `./deploy.sh restart`；`./deploy.sh logs console` 出现 `no envelope uses EDGEWEIR_MASTER_KEY_PREVIOUS any more` 后删除该行，再 `./deploy.sh restart`。说明见[轮换主密钥](docker.md#轮换主密钥)。
+
 命令、备份布局与中止行为见 [deploy-script.md](deploy-script.md)；版本策略与回退约束见 [upgrade.md](upgrade.md)；恢复见 [backup.md](backup.md)。
 
 | 场景 | 行为 |

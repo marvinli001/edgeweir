@@ -312,6 +312,22 @@ db_check() {
   fi
 }
 
+# database_url: the DATABASE_URL the console connects with (host mode): the
+# .env line, or else the file DATABASE_URL_FILE names (set with its mount in
+# the override file), read in a one-off console container with those mounts.
+database_url() {
+  local url
+  url=$(env_get DATABASE_URL)
+  if [[ -z $url ]]; then
+    # shellcheck disable=SC2016
+    url=$(compose run --rm --no-deps -T --entrypoint sh console -c \
+      'if [ -n "${DATABASE_URL_FILE:-}" ]; then cat -- "$DATABASE_URL_FILE"; else printf %s "${DATABASE_URL:-}"; fi') ||
+      return 1
+    url=${url%$'\r'}
+  fi
+  printf '%s' "$url"
+}
+
 # --- deployment directory and compose -------------------------------------------
 
 compose_file_in() {
@@ -491,7 +507,9 @@ sync_trusted_proxy() {
   fi
 }
 
-# up_and_wait: starts the project and waits for the health checks.
+# up_and_wait [up option or service...]: starts the project, applying .env and
+# compose file changes, and waits for the health checks. The arguments go to
+# the final `compose up`, e.g. --force-recreate console.
 up_and_wait() {
   local rc=0
   if [[ $(deploy_mode) == bundled ]]; then
@@ -499,7 +517,7 @@ up_and_wait() {
     sync_trusted_proxy || rc=$?
     ((rc == 0 || rc == 10)) || return "$rc"
   fi
-  if ! compose up -d --wait --remove-orphans; then
+  if ! compose up -d --wait --remove-orphans "$@"; then
     warn "服务没有进入健康状态，最近的日志："
     compose logs --no-color --tail=40 console >&2 || true
     die "启动失败。修正 .env 后运行 ./deploy.sh start 重试。"
@@ -531,8 +549,9 @@ template_host() {
 #     宝塔站点反向代理），节点通道监听 0.0.0.0:EDGEWEIR_NODE_API_PORT（直接对外，TLS 由
 #     控制台自己终结，不能交给宝塔 nginx）。这里的两个端口只能是数字。
 #   - 宝塔 nginx 从 127.0.0.1 转发，EDGEWEIR_TRUSTED_PROXIES 默认只信任本机回环地址。
-# .env 至少需要 DATABASE_URL、EDGEWEIR_MASTER_KEY、EDGEWEIR_PUBLIC_URL；镜像 tag 用
-# EDGEWEIR_VERSION 固定（滚动发布的「日期-提交」，例如 20260929-a1b2c3d）。
+# .env 至少需要 DATABASE_URL、EDGEWEIR_MASTER_KEY、EDGEWEIR_PUBLIC_URL（连接串也可以放进文件，
+# 在 compose.override.yml 里挂载并设置 DATABASE_URL_FILE）；镜像 tag 用 EDGEWEIR_VERSION
+# 固定（滚动发布的「日期-提交」，例如 20260929-a1b2c3d）。
 name: edgeweir
 
 services:
@@ -543,8 +562,10 @@ services:
     network_mode: host
     environment:
       ROLE: all
-      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_URL: ${DATABASE_URL:-}
       EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
+      # 轮换前的主密钥：日志显示不再使用后删除
+      EDGEWEIR_MASTER_KEY_PREVIOUS: ${EDGEWEIR_MASTER_KEY_PREVIOUS:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       # 浏览器访问控制台的地址，即宝塔站点的域名，例如 https://cdn-admin.example.com
       EDGEWEIR_PUBLIC_URL: ${EDGEWEIR_PUBLIC_URL:-http://localhost:3000}
@@ -609,6 +630,8 @@ services:
       ROLE: all
       DATABASE_URL: postgres://edgeweir:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env; deployments created without it used edgeweir}@postgres:5432/edgeweir
       EDGEWEIR_MASTER_KEY: ${EDGEWEIR_MASTER_KEY:-}
+      # 轮换前的主密钥：日志显示不再使用后删除
+      EDGEWEIR_MASTER_KEY_PREVIOUS: ${EDGEWEIR_MASTER_KEY_PREVIOUS:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       # 浏览器访问控制台的地址，即宝塔站点的域名，例如 https://cdn-admin.example.com
       EDGEWEIR_PUBLIC_URL: ${EDGEWEIR_PUBLIC_URL:-http://localhost:3000}
@@ -888,9 +911,9 @@ print_next_steps() {
 }
 
 # Variables in .env that open the encrypted data; backups leave them out.
-readonly UNBACKED_KEYS=(EDGEWEIR_MASTER_KEY BETTER_AUTH_SECRET)
+readonly UNBACKED_KEYS=(EDGEWEIR_MASTER_KEY EDGEWEIR_MASTER_KEY_PREVIOUS BETTER_AUTH_SECRET)
 
-# env_for_backup: .env with the master key and session secret commented out.
+# env_for_backup: .env with the master keys and session secret commented out.
 env_for_backup() {
   KEYS="${UNBACKED_KEYS[*]}" awk '
     BEGIN { n = split(ENVIRON["KEYS"], keys, " ") }
@@ -939,7 +962,7 @@ cmd_backup() {
   mkdir -m 700 "$dest"
   step "备份到 ${dest}"
   if [[ $(deploy_mode) == host ]]; then
-    db_parse "$(env_get DATABASE_URL)" || die ".env 里的 DATABASE_URL 无法解析，不能备份。"
+    db_parse "$(database_url)" || die "DATABASE_URL（.env 或 DATABASE_URL_FILE）无法解析，不能备份。"
     pg_client pg_dump --format=custom >"$dest/edgeweir.dump" || die "pg_dump 失败，已中止。"
   else
     compose exec -T postgres pg_dump -U edgeweir -d edgeweir --format=custom >"$dest/edgeweir.dump" ||
@@ -1032,7 +1055,7 @@ cmd_restore() {
 
   step "检查备份 ${dump}"
   if [[ $(deploy_mode) == host ]]; then
-    db_parse "$(env_get DATABASE_URL)" || die ".env 里的 DATABASE_URL 无法解析，不能恢复。"
+    db_parse "$(database_url)" || die "DATABASE_URL（.env 或 DATABASE_URL_FILE）无法解析，不能恢复。"
   else
     compose up -d --wait postgres || die "数据库容器没有启动。"
   fi
@@ -1281,7 +1304,8 @@ usage() {
   backup             备份数据库、.env（不含主密钥）和编排文件到 backups/，保留最近 5 份
   restore <备份>     先备份当前数据库，再用备份目录里的 edgeweir.dump 替换数据库（.env 不变；--no-backup 跳过备份）
   config             修改控制台地址和节点通道地址
-  start | stop | restart
+  start | stop       启动（应用 .env 的修改）、停止
+  restart            重建控制台容器并启动（应用 .env 的修改）
   status             容器状态和运行中的版本
   logs [服务]        跟随日志（console / postgres）
   setup-token        显示首次初始化令牌
@@ -1326,9 +1350,9 @@ main() {
     restart)
       preflight
       find_dir
-      local rc=0
-      sync_trusted_proxy || rc=$?
-      if ((rc == 10)); then up_and_wait; else compose restart; fi
+      # A new container, unlike `compose restart`, gets the .env changes.
+      up_and_wait --force-recreate console
+      ok "已重启，版本 $(running_version)"
       ;;
     status)
       preflight

@@ -17,16 +17,34 @@
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `EDGEWEIR_MASTER_KEY` | 无 | 主密钥。规范的 Base64（标准或 URL 安全字母表），解码后至少 32 字节；含空格、引号等其他字符或不足 32 字节时拒绝启动。用 `openssl rand -base64 32` 生成，输出原样使用（保留 `/`、`+`、`=`）。与数据库中加密数据所用的主密钥不一致时报 `EDGEWEIR_MASTER_KEY does not match this database` 并拒绝启动；改用原主密钥，不要设置 `BETTER_AUTH_SECRET`。用于信封加密入库的私钥、DNS API 密钥等，并派生会话密钥。丢失后已加密数据无法恢复；与数据库分开备份。 |
-| `EDGEWEIR_MASTER_KEY_FILE` | 未设置 | 存放主密钥的文件（例如 Docker secret），代替 `EDGEWEIR_MASTER_KEY`；文件末尾的换行被忽略，内容按 `EDGEWEIR_MASTER_KEY` 的规则校验。与非空的 `EDGEWEIR_MASTER_KEY` 同时设置，或文件不可读时拒绝启动。Compose 模板不传入，见[主密钥文件](../deploy/docker.md#主密钥文件)。 |
-| `DATABASE_URL` | 无 | PostgreSQL 18 连接串。启动时最长等待数据库 60 秒，随后执行迁移。`compose.yml`、`compose.baota.yml` 用 `POSTGRES_PASSWORD` 拼出此值，忽略 `.env` 中的设置；`compose.baota-host.yml` 要求 `.env` 提供。 |
+| `EDGEWEIR_MASTER_KEY` | 无 | 主密钥。规范的 Base64（标准或 URL 安全字母表），解码后至少 32 字节；含空格、引号等其他字符或不足 32 字节时拒绝启动。用 `openssl rand -base64 32` 生成，输出原样使用（保留 `/`、`+`、`=`）。与数据库中加密数据所用的主密钥不一致时报 `EDGEWEIR_MASTER_KEY does not match this database` 并拒绝启动；改用原主密钥，或在轮换时把原主密钥设为 [`EDGEWEIR_MASTER_KEY_PREVIOUS`](#主密钥轮换)，不要设置 `BETTER_AUTH_SECRET`。用于信封加密入库的私钥、DNS API 密钥等，并派生会话密钥。丢失后已加密数据无法恢复；与数据库分开备份。 |
+| `EDGEWEIR_MASTER_KEY_FILE` | 未设置 | 存放主密钥的文件（例如 Docker secret），代替 `EDGEWEIR_MASTER_KEY`；文件末尾的换行被忽略，内容按 `EDGEWEIR_MASTER_KEY` 的规则校验。与非空的 `EDGEWEIR_MASTER_KEY` 同时设置，或文件为空、不可读时拒绝启动。Compose 模板不传入，见[主密钥文件](../deploy/docker.md#主密钥文件)。 |
+| `DATABASE_URL` | 无 | PostgreSQL 18 连接串。启动时最长等待数据库 60 秒，随后执行迁移。`compose.yml`、`compose.baota.yml` 用 `POSTGRES_PASSWORD` 拼出此值，忽略 `.env` 中的设置；`compose.baota-host.yml` 取自 `.env`，或由 `compose.override.yml` 设置的 `DATABASE_URL_FILE` 读取（[从文件读取](#从文件读取)）。 |
 | `EDGEWEIR_PUBLIC_URL` | `http://localhost:3000` | 浏览器访问控制台的地址；在反向代理后为代理地址。格式 `http(s)://主机[:端口]`，不含路径、查询串、片段与用户名密码，末尾的 `/` 与默认端口被去掉；不符合时拒绝启动。用于：认证接口的可信 origin、会话 Cookie 的 `Secure` 属性（`https://` 时启用）、passkey 的 RP ID（主机名）、OpenAPI 文档的 `servers`、`/install.sh` 中的控制台地址、告警通知中的链接、`EDGEWEIR_NODE_API_URL` 的默认主机名。默认值只适合本机访问：节点安装命令与告警链接会指向 localhost。 |
 
 ## 会话密钥
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `BETTER_AUTH_SECRET` | 由主密钥派生 | 会话签名及两步验证密钥加密所用的密钥，至少 32 个字符。未设置时用 HKDF-SHA256 从主密钥派生，参数见 [SECURITY.md](../../SECURITY.md)。已设置过的部署必须保留原值：移除后控制台拒绝启动；换成新值时控制台启动并记录警告，所有会话失效，已启用的两步验证无法再读取。 |
+| `BETTER_AUTH_SECRET` | 由主密钥派生 | 会话签名及两步验证密钥加密所用的密钥，至少 32 个字符。未设置时用 HKDF-SHA256 从主密钥派生，参数见 [SECURITY.md](../../SECURITY.md)；[轮换主密钥](#主密钥轮换)后保持原值。已设置过的部署必须保留原值：移除后控制台拒绝启动；换成新值时控制台启动并记录警告，所有会话失效，已启用的两步验证无法再读取。 |
+
+## 主密钥轮换
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `EDGEWEIR_MASTER_KEY_PREVIOUS` | 未设置 | 轮换前的主密钥，只用于解密，规则同 `EDGEWEIR_MASTER_KEY`；与它相同时拒绝启动。启动时接受它加密的数据，并把库中它加密的全部信封改用 `EDGEWEIR_MASTER_KEY` 重新加密，日志 `master key rotation` 记录数量。全部改完后日志输出 `no envelope uses EDGEWEIR_MASTER_KEY_PREVIOUS any more: remove it and restart the console`，此后移除并重启；仍有信封使用它时输出 `envelopes still use EDGEWEIR_MASTER_KEY_PREVIOUS: keep it set`。节点保存的 revision 回执在设置期间仍可验证，节点下次拉取配置时换成新主密钥的回执。未设置 `BETTER_AUTH_SECRET` 时会话密钥保持为旧主密钥派生的值，经新主密钥加密存入 `system_setting`：会话与两步验证不受影响。步骤见[轮换主密钥](../deploy/docker.md#轮换主密钥)。 |
+
+## 从文件读取
+
+下列变量可改从文件读取（例如 Docker secret）：`<变量>_FILE` 指定文件，文件内容即变量值，末尾的换行被忽略，按变量本身的规则校验。同时设置非空的变量与其 `_FILE`，或文件为空、不可读时拒绝启动；`_FILE` 为空等同未设置。Compose 模板不传入 `_FILE` 变量，挂载与设置见[其他机密文件](../deploy/docker.md#其他机密文件)。
+
+| 变量 | 代替 |
+| --- | --- |
+| `EDGEWEIR_MASTER_KEY_FILE` | `EDGEWEIR_MASTER_KEY`，见[必需](#必需) |
+| `EDGEWEIR_MASTER_KEY_PREVIOUS_FILE` | `EDGEWEIR_MASTER_KEY_PREVIOUS` |
+| `DATABASE_URL_FILE` | `DATABASE_URL`：外部数据库的完整连接串 |
+| `BETTER_AUTH_SECRET_FILE` | `BETTER_AUTH_SECRET` |
+| `EDGEWEIR_CLICKHOUSE_PASSWORD_FILE` | `EDGEWEIR_CLICKHOUSE_PASSWORD`；Compose 模板为它设置了默认值，在 `compose.override.yml` 中设为 `""` |
 
 ## 访问地址与网络
 
@@ -90,6 +108,7 @@ Compose 在宿主机读取以下变量（`.env` 或 shell 环境），用于插�
 | `EDGEWEIR_HTTP_PORT` | `3000` | Web 控制台的宿主机端口。`compose.yml`：端口发布规格，可带绑定地址，默认 `127.0.0.1:3000`（Docker 发布的端口绕过 ufw、firewalld），`3000` 发布到所有接口。`compose.baota.yml`：仅数字，绑定 `127.0.0.1`。`compose.baota-host.yml`：仅数字，作为 `PORT`。 |
 | `EDGEWEIR_NODE_API_PORT` | `8443` | 节点通道的宿主机端口。`compose.yml`、`compose.baota.yml`：端口发布规格，可带绑定地址。`compose.baota-host.yml`：仅数字，作为 `NODE_API_PORT`。 |
 | `POSTGRES_PASSWORD` | 无 | 内置 PostgreSQL 的密码，`compose.yml`、`compose.baota.yml` 用它拼出 `DATABASE_URL`；未设置时这两个编排拒绝启动（早先未设置的部署用的是 `edgeweir`）。须 URL 安全：`openssl rand -hex 24`。PostgreSQL 镜像只在数据目录为空时应用此值，之后修改不改变已有密码。 |
+| `COMPOSE_PROFILES` | 空 | Compose 启用的 profile，逗号分隔。`analytics`：`compose.yml` 的 ClickHouse 服务；写在 `.env` 中时每条 `docker compose` 与 `deploy.sh` 命令都包含它，无需 `--profile`。 |
 | `CLICKHOUSE_PASSWORD` | `edgeweir` | `EDGEWEIR_CLICKHOUSE_PASSWORD` 未设置时的 ClickHouse 密码，控制台与 `analytics` profile 的 ClickHouse 容器共用。 |
 | `DEV_POSTGRES_PORT` | `5432` | `compose.dev.yml`：开发数据库在 `127.0.0.1` 上的端口。 |
 
@@ -99,6 +118,6 @@ Compose 在宿主机读取以下变量（`.env` 或 shell 环境），用于插�
 
 | 编排文件 | 固定值 | 未传入 |
 | --- | --- | --- |
-| `compose.yml` | `ROLE=all` | `EDGEWEIR_MASTER_KEY_FILE`、`HOST`、`PORT`、`NODE_API_HOST`、`NODE_API_PORT`、`NODE_ENV`、`EDGEWEIR_WEB_DIST`、`EDGEWEIR_CERTD_BIN`、`EDGEWEIR_DNS_TEST_ENDPOINT`、`EDGEWEIR_VERSION` |
+| `compose.yml` | `ROLE=all` | [从文件读取](#从文件读取)的 `_FILE` 变量、`HOST`、`PORT`、`NODE_API_HOST`、`NODE_API_PORT`、`NODE_ENV`、`EDGEWEIR_WEB_DIST`、`EDGEWEIR_CERTD_BIN`、`EDGEWEIR_DNS_TEST_ENDPOINT`、`EDGEWEIR_VERSION` |
 | `compose.baota.yml` | `ROLE=all` | 同 `compose.yml`，另加 `LOG_LEVEL`、`EDGEWEIR_DOWNLOADS_DIR` |
-| `compose.baota-host.yml` | `ROLE=all`、`HOST=127.0.0.1`、`NODE_API_HOST=0.0.0.0`；`PORT`、`NODE_API_PORT` 取自宿主机端口变量 | `EDGEWEIR_MASTER_KEY_FILE`、`NODE_ENV`、`EDGEWEIR_WEB_DIST`、`EDGEWEIR_CERTD_BIN`、`EDGEWEIR_DNS_TEST_ENDPOINT`、`EDGEWEIR_VERSION`、`LOG_LEVEL`、`EDGEWEIR_DOWNLOADS_DIR` |
+| `compose.baota-host.yml` | `ROLE=all`、`HOST=127.0.0.1`、`NODE_API_HOST=0.0.0.0`；`PORT`、`NODE_API_PORT` 取自宿主机端口变量 | [从文件读取](#从文件读取)的 `_FILE` 变量、`NODE_ENV`、`EDGEWEIR_WEB_DIST`、`EDGEWEIR_CERTD_BIN`、`EDGEWEIR_DNS_TEST_ENDPOINT`、`EDGEWEIR_VERSION`、`LOG_LEVEL`、`EDGEWEIR_DOWNLOADS_DIR` |

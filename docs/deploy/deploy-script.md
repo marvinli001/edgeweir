@@ -30,7 +30,7 @@ sudo bash deploy.sh install
 | `config` | — | 修改控制台地址与节点通道地址并重建容器；只能交互运行 |
 | `start` | — | 启动编排并等待健康检查 |
 | `stop` | — | `docker compose stop`；保留容器 |
-| `restart` | — | 重启编排；bundled 模式网关变化时改为重建 |
+| `restart` | — | 按 `start` 的流程启动，并强制重建 `console` 容器：`.env` 的修改生效 |
 | `status` | — | `docker compose ps`，以及部署目录、模式与运行版本 |
 | `logs` | `[服务…]` | 跟随日志，先输出最近 200 行；服务为 `console`、`postgres`（bundled），省略时为全部 |
 | `setup-token` | — | 从控制台日志读取最近一次输出的 setup token |
@@ -54,7 +54,7 @@ sudo bash deploy.sh install
 | 模式 | 编排文件含 `network_mode: host` 时为 host，否则为 bundled |
 | 覆盖文件 | 编排文件旁的 `compose.override.yml`（`docker-compose.yml` 对应 `docker-compose.override.yml`，以此类推）存在时一并传给 Compose；自己的改动写在这里，`update` 替换模板时不受影响 |
 | Compose 项目名 | 取自容器 `edgeweir-console` 的 `com.docker.compose.project` 标签；面板以其他名称创建的编排同样适用 |
-| 环境变量 | 调用 Compose 前移除 shell 中与 `.env` 或编排文件同名的变量，以 `.env` 为准 |
+| 环境变量 | 调用 Compose 前移除 shell 中与 `.env` 或编排文件同名的变量，以 `.env` 为准；`.env` 经 `--env-file` 传给 Compose，其中的 `COMPOSE_PROFILES`（例如覆盖文件中加了 `analytics` profile 的服务）对每条命令生效 |
 
 ## install
 
@@ -203,7 +203,7 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 | 命令 | 行为 |
 | --- | --- |
 | `start` | bundled：先启动 `postgres` 并同步 `EDGEWEIR_TRUSTED_PROXIES`；再执行 `docker compose up -d --wait --remove-orphans`；未进入健康状态时打印控制台最近 40 行日志并中止 |
-| `restart` | bundled 且同步改写了 `EDGEWEIR_TRUSTED_PROXIES`：按 `start` 重建；否则 `docker compose restart` |
+| `restart` | 同 `start`，最后一步为 `docker compose up -d --wait --remove-orphans --force-recreate console`：控制台容器总是重建（`docker compose restart` 不应用 `.env` 的修改），依赖的 `postgres` 配置变化时随之重建 |
 | `stop` | `docker compose stop` |
 
 `install`、`update` 与 `config` 使用 `start` 的流程。
@@ -265,8 +265,8 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 
 | 文件 | 内容 |
 | --- | --- |
-| `edgeweir.dump` | `pg_dump --format=custom`。host：按 `DATABASE_URL` 用 `postgres:18.6-alpine` 在 host 网络转储；bundled：在 `postgres` 容器内转储 |
-| `env` | `.env` 副本；`EDGEWEIR_MASTER_KEY` 与 `BETTER_AUTH_SECRET` 两行改为注释，不含其值 |
+| `edgeweir.dump` | `pg_dump --format=custom`。host：按 `DATABASE_URL` 用 `postgres:18.6-alpine` 在 host 网络转储；`.env` 中没有 `DATABASE_URL` 时，在一次性的控制台容器里读取 `DATABASE_URL_FILE` 指定的文件（覆盖文件中设置并挂载）；bundled：在 `postgres` 容器内转储 |
+| `env` | `.env` 副本；`EDGEWEIR_MASTER_KEY`、`EDGEWEIR_MASTER_KEY_PREVIOUS` 与 `BETTER_AUTH_SECRET` 各行改为注释，不含其值 |
 | `compose.yml` | 编排文件副本，保留原文件名；覆盖文件存在时一并复制 |
 
 | 项目 | 规则 |

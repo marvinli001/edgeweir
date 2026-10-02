@@ -11,8 +11,10 @@ Installer and operations script for 宝塔 / aaPanel Compose deployments. Usage:
 | `install` | Interactive install: choose the database mode, write `.env`, start |
 | `update [tag]` | Back up, then upgrade to the latest version or the given tag; `--no-backup` skips the backup. Alias `upgrade` |
 | `backup` | Back up the database, `.env` (without the master key), and the Compose file to `backups/`, keeping the newest 5 |
+| `restore <backup>` | Back up the current database, then replace it with the backup's `edgeweir.dump`; `.env` stays, `--no-backup` skips the backup |
 | `config` | Change the console URL and the node channel URL |
-| `start`, `stop`, `restart` | Start, stop, restart |
+| `start`, `stop` | Start (applying `.env` changes), stop |
+| `restart` | Recreate the console container and start, applying `.env` changes |
 | `status` | Container status and the running version |
 | `logs [service]` | Follow logs; service is `console` or `postgres` |
 | `setup-token` | Print the first-run setup token |
@@ -95,7 +97,7 @@ Run in the directory of `compose.yml`; add `-f <file>` for other Compose files.
 | Health check (in the container) | `docker compose exec console edgeweir-healthcheck` |
 | Recover the account (reset the password, turn two-factor off) | `docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor`, see [Account recovery](#account-recovery) |
 | Pull the image set by `EDGEWEIR_VERSION` and recreate | `docker compose pull && docker compose up -d` |
-| Start ClickHouse | `docker compose --profile analytics up -d` |
+| Start ClickHouse | `COMPOSE_PROFILES=analytics` in `.env`, then `docker compose up -d` (later commands include it) |
 
 > [!WARNING]
 > `docker compose down -v` removes named volumes such as `postgres-data`, that is, all data.

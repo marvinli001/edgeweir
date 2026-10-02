@@ -96,17 +96,18 @@ Access logs need the node capability `access-logs-v1`, and JA4 also `ja4-v1`. A 
 
 ## Use ClickHouse storage
 
-1. In the console's `.env`, set the analytics mode and the ClickHouse password:
+1. In the console's `.env`, enable the `analytics` profile and set the analytics mode and the ClickHouse password:
 
    ```bash title=".env"
+   COMPOSE_PROFILES=analytics
    EDGEWEIR_ANALYTICS=clickhouse
    EDGEWEIR_CLICKHOUSE_PASSWORD=<password>
    ```
 
-2. Start the Compose deployment with the `analytics` profile:
+2. Start the Compose deployment; with `COMPOSE_PROFILES`, every later `docker compose` command includes ClickHouse:
 
    ```bash
-   docker compose --profile analytics up -d
+   docker compose up -d
    ```
 
 3. Verify: on the **System** page, **Analytics** shows `clickhouse`.

@@ -19,7 +19,7 @@ Console components, runtime requirements, supported platforms, and process roles
 | PostgreSQL | 18; the console's database user has `CREATE` on the target database (schemas `drizzle`, `pgboss`) and `CREATE` on schema `public` | Earlier versions are untested. Migrations run at startup. |
 | 3000/TCP | HTTP: web UI, `/rpc`, `/api/v1`, `/healthz`, `/install.sh`, `/downloads/*` | A reverse proxy may terminate TLS; see [ports and reverse proxy](networking.en.md). |
 | 8443/TCP | Node channel (nodes and regional probes): the console terminates TLS and enforces mTLS after enrollment | Publicly reachable; direct or layer-4 passthrough only. |
-| Master key | `EDGEWEIR_MASTER_KEY`: base64, at least 32 bytes decoded; generate with `openssl rand -base64 32` | Keep apart from database backups; a lost or changed key leaves encrypted data unreadable. |
+| Master key | `EDGEWEIR_MASTER_KEY`: base64, at least 32 bytes decoded; generate with `openssl rand -base64 32` | Keep apart from database backups; a lost key leaves encrypted data unreadable; replace it by [rotating](docker.en.md#rotating-the-master-key) it. |
 | Session secret | `BETTER_AUTH_SECRET`: derived from the master key when unset | Deployments that set it keep it; the console refuses to start once it is removed. |
 | Architecture | linux/amd64, linux/arm64 | — |
 | Resources | No minimum specification | `compose.yml` sets `nofile` 262144 for ClickHouse. |

@@ -72,7 +72,8 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | --- | --- |
 | 主密钥 | `EDGEWEIR_MASTER_KEY`：至少 32 字节随机数的 base64（`openssl rand -base64 32`），不入库 |
 | 主密钥格式 | 规范的 base64（标准或 URL 安全字母表）；含空格、引号或多余字符时拒绝启动，不会按另一个密钥解码 |
-| 主密钥标识 | 信封记录密钥标识 `kid`（原始主密钥 SHA-256 的前 16 个十六进制字符）；启动时先与内部 CA 私钥信封的 `kid` 比对，不一致时报主密钥与数据库不匹配并拒绝启动，再检查会话 secret |
+| 主密钥标识 | 信封记录密钥标识 `kid`（原始主密钥 SHA-256 的前 16 个十六进制字符），按它选择解密的主密钥；启动时内部 CA 私钥信封的 `kid` 须为当前主密钥或 `EDGEWEIR_MASTER_KEY_PREVIOUS` 的标识，否则报主密钥与数据库不匹配并拒绝启动，再检查会话 secret |
+| 主密钥轮换 | `EDGEWEIR_MASTER_KEY_PREVIOUS`（轮换前的主密钥）只用于解密。启动时在 advisory lock 下把它加密的全部入库信封解开，用当前主密钥和新的数据密钥重新加密，绑定不变，并在日志中记录仍使用它的信封数；节点保存的 revision 回执在它设置期间仍可验证。步骤见[轮换主密钥](docs/deploy/docker.md#轮换主密钥) |
 | 密钥加密密钥 | HKDF-SHA256，salt `edgeweir/kek/v1`，info `envelope`，32 字节 |
 | 数据密钥 | 每条记录随机生成；数据与数据密钥均用 AES-256-GCM 加密 |
 | 附加认证数据 | `edgeweir/envelope/v2`、`<表>.<字段>`、`<记录 id>` 三段；密文移到其他行或字段后无法解密 |
@@ -84,20 +85,21 @@ English: [summary](#english) · [full policy](SECURITY.en.md)
 | --- | --- | --- |
 | 内部 CA 私钥 | 信封加密 | `pki_authority.private_key_envelope` |
 | 证书私钥 | 信封加密 | `certificate.private_key_envelope` |
-| ACME 账户 | 信封加密 | `certificate.account_envelope` |
+| ACME 账户 | 信封加密 | `acme_account.account_envelope`；申请时的 EAB 密钥在 `certificate.account_envelope` |
 | ACME DNS-01 凭据 | 信封加密 | `dns_credential.credential_envelope` |
 | DNS 调度服务商凭据 | 信封加密 | `platform_dns_provider.credential_envelope` |
 | S3 源站密钥 | 信封加密 | `origin_credential.secret_envelope` |
 | 告警渠道配置（webhook 地址与 Bearer token、邮件收件人） | 信封加密 | `alert_channel.config_envelope` |
 | SMTP 设置（含密码） | 信封加密 | `system_setting` 的 `notification_smtp` |
 | setup token | 信封加密；另存 SHA-256 用于比对 | `system_setting` 的 `setup_token` |
+| 挑战页签名密钥 | 信封加密 | `challenge_key.secret` |
 | 节点注册 token | SHA-256 | `enrollment_token` |
 | 探针注册 token | SHA-256 | `probe_token` |
 | AccessKey | 哈希（better-auth） | `apikey` |
 | 用户密码 | scrypt 哈希（better-auth） | `account` |
 | TOTP 密钥与备用码 | 以会话 secret 加密（better-auth） | `two_factor` |
-| 会话 secret | 不入库；只存 HMAC-SHA256 校验值 | `system_setting` 的 `auth_secret_check` |
-| 主密钥 | 不入库 | 环境变量 `EDGEWEIR_MASTER_KEY`，或 `EDGEWEIR_MASTER_KEY_FILE` 指定的文件 |
+| 会话 secret | 不入库，只存 HMAC-SHA256 校验值；轮换主密钥后，由旧主密钥派生的值信封加密入库 | `system_setting` 的 `auth_secret_check`、`auth_secret` |
+| 主密钥 | 不入库 | 环境变量 `EDGEWEIR_MASTER_KEY`，或 `EDGEWEIR_MASTER_KEY_FILE` 指定的文件；轮换期间另有 `EDGEWEIR_MASTER_KEY_PREVIOUS` |
 
 ### 会话 secret
 
@@ -107,6 +109,7 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | --- | --- |
 | 设置了 `BETTER_AUTH_SECRET`（至少 32 个字符） | 使用该值 |
 | 未设置 `BETTER_AUTH_SECRET` | 由主密钥经 HKDF-SHA256 派生：salt `edgeweir/auth-secret/v1`，info `better-auth.secret`，32 字节，base64url 编码；与信封加密的密钥加密密钥（salt `edgeweir/kek/v1`，info `envelope`）相互独立 |
+| 轮换主密钥，数据库此前使用旧主密钥派生的值 | 继续使用该值：设置 `EDGEWEIR_MASTER_KEY_PREVIOUS` 后首次启动时，用当前主密钥信封加密存入 `system_setting` 的 `auth_secret`，此后（包括移除 `EDGEWEIR_MASTER_KEY_PREVIOUS` 后）从这里读取；会话与两步验证不受影响 |
 | 派生值与数据库此前使用的 secret 不一致（例如已有部署删除了 `BETTER_AUTH_SECRET`） | 控制台拒绝启动 |
 | 显式设置的值发生变化 | 控制台启动并记录警告；现有会话失效，已启用的两步验证密钥无法再读取 |
 
@@ -153,7 +156,7 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | `install.sh` 由控制台提供 | 信任控制台（运营者自己的服务器）是前提；需要更强保证时，先下载脚本审阅，或与 GitHub 上同版本的脚本比对 |
 | 控制台被攻破 | 攻击者可以下发恶意配置（例如把网站指向恶意源站），但不能让节点运行未签名的程序，也拿不到节点私钥 |
 | 节点本地凭据 | 节点在状态目录（默认 `/var/lib/edgeweir-node`，权限 0700）以 0600 权限明文保存节点私钥、S3 源站密钥（`credentials.json`）与网站证书私钥（`certificates.json`），控制台不可达时节点重启后仍能服务；拿到节点 root 权限者可以读取 |
-| 主密钥与数据库同时泄露 | 信封加密失效；未设置 `BETTER_AUTH_SECRET` 时，泄露的主密钥还能伪造登录会话。经 `EDGEWEIR_MASTER_KEY_FILE` 从 secret 文件读取（[主密钥文件](docs/deploy/docker.md#主密钥文件)）或由编排平台的 secret 机制注入，不与数据库备份放在一起 |
+| 主密钥与数据库同时泄露 | 信封加密失效；未设置 `BETTER_AUTH_SECRET` 时，泄露的主密钥还能伪造登录会话。经 `EDGEWEIR_MASTER_KEY_FILE` 从 secret 文件读取（[主密钥文件](docs/deploy/docker.md#主密钥文件)）或由编排平台的 secret 机制注入，不与数据库备份放在一起。主密钥泄露后[轮换](docs/deploy/docker.md#轮换主密钥)：轮换保留会话 secret，未设置 `BETTER_AUTH_SECRET` 的部署另设一个新值（全部会话失效，两步验证需重新启用）；数据库也泄露时，更换其中的凭据 |
 | setup token 写入日志 | 首次初始化需要控制台启动时写入日志的一次性 setup token；能读控制台日志者即可完成初始化。按主密钥的级别控制日志访问 |
 | 在服务器上找回账户 | 能在控制台容器内执行命令者（本就能读取 `DATABASE_URL` 直接修改数据库）可以用 `recover.js` 重置账户密码、停用两步验证；找回让全部会话退出登录并写入审计日志（`account.recover`），Web 界面与 HTTP 没有找回入口（[命令行](docs/reference/cli.md#找回账户)）。按主密钥的级别控制服务器访问 |
 | 探针本地凭据 | 探针在状态目录（默认 `/var/lib/edgeweir-probe`，权限 0700）以 0600 权限明文保存探针私钥；拿到探针主机 root 权限者可以冒充该探针上报结果，直到探针在控制台被删除 |
@@ -256,8 +259,8 @@ Full English policy: [SECURITY.en.md](SECURITY.en.md).
 
 **Supported versions.** Console: the latest rolling image (`<YYYYMMDD>-<commit>` of the newest `master` commit, `latest`). Node: the latest `master`. Security fixes land on `master` only.
 
-**Trust baseline.** No phone-home of any kind and no license-check code. Telemetry is off by default and requires explicit opt-in; the current version sends no telemetry, and better-auth's own telemetry is hard-disabled. The console never stores SSH credentials; nodes join only through the one-time install command. Private keys and third-party credentials (internal CA key, certificate keys, ACME accounts, DNS provider credentials, S3 origin keys, alert channel and SMTP settings, the setup token) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they reach the database: AES-256-GCM with a random data key per record, and additional authenticated data that binds table, column, and record id (envelope format v2; v1 envelopes written by older versions are re-encrypted at startup and rejected otherwise). Enrollment tokens, API keys, and passwords are stored as hashes only. Unless `BETTER_AUTH_SECRET` is set, better-auth's session secret (session cookie signatures, TOTP secrets and backup codes at rest) is derived from `EDGEWEIR_MASTER_KEY` with HKDF-SHA256 (salt `edgeweir/auth-secret/v1`, info `better-auth.secret`, 32 bytes, base64url), independent of the envelope KEK (salt `edgeweir/kek/v1`, info `envelope`); the database keeps only an HMAC check value, and the console refuses to start when the derived secret differs from the one the database was used with (for example `BETTER_AUTH_SECRET` removed from an existing deployment). Before that, the console refuses a master key that is not canonical base64, and one whose key id differs from the one recorded in the internal CA key's envelope ("EDGEWEIR_MASTER_KEY does not match this database"). With the derived secret, a leaked master key also allows forging sessions. Every management action is written to the audit log: Edgeweir's own changes commit their audit entry in the same transaction; sign-ins, password changes, two-factor changes, passkeys, and API keys are completed by better-auth and audited right after it commits. Account recovery has no web or HTTP entry: `recover.js`, run on the server with the console's environment, resets the password or turns two-factor authentication off, signs out every session, and audits the change in the same transaction. Releases are signed with cosign keyless and ship with an SBOM and SLSA provenance.
+**Trust baseline.** No phone-home of any kind and no license-check code. Telemetry is off by default and requires explicit opt-in; the current version sends no telemetry, and better-auth's own telemetry is hard-disabled. The console never stores SSH credentials; nodes join only through the one-time install command. Private keys and third-party credentials (internal CA key, certificate keys, ACME accounts, DNS provider credentials, S3 origin keys, alert channel and SMTP settings, the setup token) are envelope-encrypted with `EDGEWEIR_MASTER_KEY` before they reach the database: AES-256-GCM with a random data key per record, and additional authenticated data that binds table, column, and record id (envelope format v2; v1 envelopes written by older versions are re-encrypted at startup and rejected otherwise). Enrollment tokens, API keys, and passwords are stored as hashes only. Unless `BETTER_AUTH_SECRET` is set, better-auth's session secret (session cookie signatures, TOTP secrets and backup codes at rest) is derived from `EDGEWEIR_MASTER_KEY` with HKDF-SHA256 (salt `edgeweir/auth-secret/v1`, info `better-auth.secret`, 32 bytes, base64url), independent of the envelope KEK (salt `edgeweir/kek/v1`, info `envelope`); the database keeps only an HMAC check value, and the console refuses to start when the derived secret differs from the one the database was used with (for example `BETTER_AUTH_SECRET` removed from an existing deployment). Before that, the console refuses a master key that is not canonical base64, and one whose key id differs from the one recorded in the internal CA key's envelope ("EDGEWEIR_MASTER_KEY does not match this database"). To rotate the master key, the old one goes into `EDGEWEIR_MASTER_KEY_PREVIOUS`, which only decrypts: at startup every stored envelope it sealed is re-encrypted with the new key under an advisory lock, the log reports how many still use it, and revision receipts held by nodes keep verifying while it is set; a session secret derived from the old key is kept, sealed with the new key in `system_setting`, so sessions and two-factor secrets survive. With the derived secret, a leaked master key also allows forging sessions. Every management action is written to the audit log: Edgeweir's own changes commit their audit entry in the same transaction; sign-ins, password changes, two-factor changes, passkeys, and API keys are completed by better-auth and audited right after it commits. Account recovery has no web or HTTP entry: `recover.js`, run on the server with the console's environment, resets the password or turns two-factor authentication off, signs out every session, and audits the change in the same transaction. Releases are signed with cosign keyless and ship with an SBOM and SLSA provenance.
 
-**Known limitations.** The node keeps its private key, the S3 origin keys (`credentials.json`), and site certificate keys (`certificates.json`) in plain text with mode 0600 in its state directory; a regional probe keeps its private key the same way. Nodes answer `/.edgeweir/health` on every edge listener with a self-signed health certificate that probes do not verify, so a man in the middle on a probe's path can fake reachability. A leaked master key together with the database defeats envelope encryption. The node channel on `:8443` must not sit behind a TLS-terminating proxy. L4 apps bypass the HTTP-layer protections (WAF, rules, challenges, site bans) and rely on their own IP lists, per-node limits, and kernel bans; a listener that accepts PROXY protocol must be reachable from the load balancer only.
+**Known limitations.** The node keeps its private key, the S3 origin keys (`credentials.json`), and site certificate keys (`certificates.json`) in plain text with mode 0600 in its state directory; a regional probe keeps its private key the same way. Nodes answer `/.edgeweir/health` on every edge listener with a self-signed health certificate that probes do not verify, so a man in the middle on a probe's path can fake reachability. A leaked master key together with the database defeats envelope encryption; rotating the key keeps the session secret, so after a leak also set a new `BETTER_AUTH_SECRET` (everyone is signed out, two-factor authentication must be enrolled again) and replace the credentials stored in the database. The node channel on `:8443` must not sit behind a TLS-terminating proxy. L4 apps bypass the HTTP-layer protections (WAF, rules, challenges, site bans) and rely on their own IP lists, per-node limits, and kernel bans; a listener that accepts PROXY protocol must be reachable from the load balancer only.
 
 **Verifying releases.** Console image: `cosign verify ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit> --certificate-identity https://github.com/marvinli001/edgeweir/.github/workflows/release.yml@refs/heads/master --certificate-oidc-issuer https://token.actions.githubusercontent.com`, then `gh attestation verify` for provenance. Node packages: verify `checksums.txt` with `cosign verify-blob`, the certificate identity pinned to the `marvinli001/edgeweir-node` release workflow on a `v*` tag and the issuer to `https://token.actions.githubusercontent.com`, then run `sha256sum -c checksums.txt --ignore-missing`. Full commands: [SECURITY.en.md](SECURITY.en.md#verifying-releases).

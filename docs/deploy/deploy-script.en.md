@@ -30,7 +30,7 @@ Save the script to a file before running it: through a pipe (`curl … | bash`) 
 | `config` | — | Change the console URL and node channel URL, then recreate the containers; interactive only |
 | `start` | — | Start the project and wait for health checks |
 | `stop` | — | `docker compose stop`; containers are kept |
-| `restart` | — | Restart the project; in bundled mode, recreate instead when the gateway changed |
+| `restart` | — | Start as `start` does, recreating the `console` container in any case: `.env` changes take effect |
 | `status` | — | `docker compose ps`, plus the deployment directory, mode, and running version |
 | `logs` | `[service…]` | Follow logs, starting with the last 200 lines; services are `console` and `postgres` (bundled), all when omitted |
 | `setup-token` | — | Read the most recent setup token from the console logs |
@@ -54,7 +54,7 @@ Commands other than `install`, `template`, and `help` look for the deployment di
 | Mode | host when the compose file contains `network_mode: host`, otherwise bundled |
 | Override file | `compose.override.yml` next to the compose file (`docker-compose.override.yml` for `docker-compose.yml`, and so on) is passed to Compose as well when it exists; local changes go there and survive template replacements by `update` |
 | Compose project name | Taken from the `com.docker.compose.project` label of the `edgeweir-console` container, so projects a panel created under another name work too |
-| Environment | Shell variables named in `.env` or the compose file are removed before Compose runs; `.env` decides |
+| Environment | Shell variables named in `.env` or the compose file are removed before Compose runs; `.env` decides. `.env` goes to Compose with `--env-file`, so its `COMPOSE_PROFILES` (for example for an `analytics` service added in the override file) applies to every command |
 
 ## install
 
@@ -203,7 +203,7 @@ Interactive only; in unattended mode or without a terminal it aborts; edit `.env
 | Command | Behavior |
 | --- | --- |
 | `start` | bundled: start `postgres` first and sync `EDGEWEIR_TRUSTED_PROXIES`. Then `docker compose up -d --wait --remove-orphans`; when the services do not become healthy, print the last 40 console log lines and abort |
-| `restart` | bundled and the sync rewrote `EDGEWEIR_TRUSTED_PROXIES`: recreate as in `start`; otherwise `docker compose restart` |
+| `restart` | As `start`, with `docker compose up -d --wait --remove-orphans --force-recreate console` as the last step: the console container is always recreated (`docker compose restart` would not apply `.env` changes), and `postgres`, which it depends on, is recreated when its configuration changed |
 | `stop` | `docker compose stop` |
 
 `install`, `update`, and `config` use the `start` flow.
@@ -265,8 +265,8 @@ Values are unquoted. Changing a key keeps the other lines and mode 600. Other va
 
 | File | Content |
 | --- | --- |
-| `edgeweir.dump` | `pg_dump --format=custom`. host: dumped per `DATABASE_URL` with `postgres:18.6-alpine` on the host network; bundled: dumped inside the `postgres` container |
-| `env` | Copy of `.env` with the `EDGEWEIR_MASTER_KEY` and `BETTER_AUTH_SECRET` lines turned into comments, without their values |
+| `edgeweir.dump` | `pg_dump --format=custom`. host: dumped per `DATABASE_URL` with `postgres:18.6-alpine` on the host network; without `DATABASE_URL` in `.env`, the file `DATABASE_URL_FILE` names (set and mounted in the override file) is read in a one-off console container; bundled: dumped inside the `postgres` container |
+| `env` | Copy of `.env` with the `EDGEWEIR_MASTER_KEY`, `EDGEWEIR_MASTER_KEY_PREVIOUS`, and `BETTER_AUTH_SECRET` lines turned into comments, without their values |
 | `compose.yml` | Copy of the compose file under its original name, and of the override file when present |
 
 | Item | Rule |

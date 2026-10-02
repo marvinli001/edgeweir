@@ -3,7 +3,9 @@ import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } f
 /**
  * Envelope encryption for secrets at rest (private keys, DNS API keys, ...).
  * Each record gets a random data key (DEK); the DEK is wrapped with a key
- * derived from EDGEWEIR_MASTER_KEY via HKDF. AES-256-GCM everywhere.
+ * derived from EDGEWEIR_MASTER_KEY via HKDF. AES-256-GCM everywhere. After a
+ * rotation, envelopes of EDGEWEIR_MASTER_KEY_PREVIOUS are re-sealed at
+ * startup (services/envelope-rotation.ts).
  *
  * Version 2 binds the purpose (table and column) *and the record id* as
  * additional authenticated data, so a ciphertext copied into another row,
@@ -69,21 +71,49 @@ export function masterKeyProblem(encoded: string): string | null {
   return null;
 }
 
-/** The raw bytes of EDGEWEIR_MASTER_KEY; throws when masterKeyProblem finds one. */
-export function decodeMasterKey(encoded: string): Buffer {
+/** The raw bytes of a master key; throws when masterKeyProblem finds one. */
+export function decodeMasterKey(encoded: string, name = "EDGEWEIR_MASTER_KEY"): Buffer {
   const problem = masterKeyProblem(encoded);
-  if (problem) throw new Error(`EDGEWEIR_MASTER_KEY ${problem}`);
+  if (problem) throw new Error(`${name} ${problem}`);
   return Buffer.from(encoded, "base64");
 }
 
-export class MasterKey {
-  readonly kid: string;
-  private readonly kek: Buffer;
+/** The key id envelopes record: the first 16 hex characters of SHA-256 over the raw key. */
+const keyId = (raw: Buffer) => createHash("sha256").update(raw).digest("hex").slice(0, 16);
 
-  constructor(encoded: string) {
+/**
+ * The master key ring: EDGEWEIR_MASTER_KEY seals and opens; during a rotation,
+ * EDGEWEIR_MASTER_KEY_PREVIOUS only opens. Envelopes name their key (`kid`),
+ * so each one is opened with the key that sealed it.
+ */
+export class MasterKey {
+  /** Id of the current key, the one that seals. */
+  readonly kid: string;
+  /** Id of the previous key, which only opens; undefined without one. */
+  readonly previousKid: string | undefined;
+  private readonly keks = new Map<string, Buffer>();
+
+  constructor(encoded: string, previous?: string) {
     const raw = decodeMasterKey(encoded);
-    this.kid = createHash("sha256").update(raw).digest("hex").slice(0, 16);
-    this.kek = Buffer.from(hkdfSync("sha256", raw, "edgeweir/kek/v1", "envelope", 32));
+    this.kid = keyId(raw);
+    this.keks.set(this.kid, MasterKey.kek(raw));
+    if (previous) {
+      const old = decodeMasterKey(previous, "EDGEWEIR_MASTER_KEY_PREVIOUS");
+      if (old.equals(raw)) {
+        throw new Error("EDGEWEIR_MASTER_KEY_PREVIOUS is the same key as EDGEWEIR_MASTER_KEY");
+      }
+      this.previousKid = keyId(old);
+      this.keks.set(this.previousKid, MasterKey.kek(old));
+    }
+  }
+
+  private static kek(raw: Buffer): Buffer {
+    return Buffer.from(hkdfSync("sha256", raw, "edgeweir/kek/v1", "envelope", 32));
+  }
+
+  /** Whether the ring holds the key with this id (current or previous). */
+  opens(kid: string): boolean {
+    return this.keks.has(kid);
   }
 
   seal(plaintext: Uint8Array | string, binding: EnvelopeBinding): Envelope {
@@ -115,7 +145,7 @@ export class MasterKey {
     const tag = cipher.getAuthTag();
 
     const wrapIv = randomBytes(12);
-    const wrap = createCipheriv("aes-256-gcm", this.kek, wrapIv);
+    const wrap = createCipheriv("aes-256-gcm", this.kekOf(this.kid), wrapIv);
     wrap.setAAD(Buffer.from(`${aad}\u0000${this.kid}`));
     const wrappedKey = Buffer.concat([wrap.update(dek), wrap.final()]);
     return {
@@ -132,18 +162,21 @@ export class MasterKey {
     };
   }
 
+  private kekOf(kid: string): Buffer {
+    const kek = this.keks.get(kid);
+    if (!kek) throw new Error("envelope was sealed with a different master key");
+    return kek;
+  }
+
   private openWith(envelope: Envelope, purpose: string, aad: string): Buffer {
     if (envelope.alg !== "A256GCM") throw new Error("unsupported envelope");
     if (envelope.purpose !== purpose) throw new Error("envelope purpose mismatch");
-    if (envelope.kid !== this.kid) {
-      throw new Error("envelope was sealed with a different master key");
-    }
     const unwrap = createDecipheriv(
       "aes-256-gcm",
-      this.kek,
+      this.kekOf(envelope.kid),
       Buffer.from(envelope.wrapIv, "base64"),
     );
-    unwrap.setAAD(Buffer.from(`${aad}\u0000${this.kid}`));
+    unwrap.setAAD(Buffer.from(`${aad}\u0000${envelope.kid}`));
     unwrap.setAuthTag(Buffer.from(envelope.wrapTag, "base64"));
     const dek = Buffer.concat([
       unwrap.update(Buffer.from(envelope.wrappedKey, "base64")),

@@ -11,8 +11,10 @@
 | `install` | 对话式安装：选择数据库方式、生成 `.env`、启动 |
 | `update [tag]` | 备份后升级到最新版本或指定 tag；`--no-backup` 跳过备份。别名 `upgrade` |
 | `backup` | 备份数据库、`.env`（不含主密钥）和编排文件到 `backups/`，保留最近 5 份 |
+| `restore <备份>` | 先备份当前数据库，再用备份中的 `edgeweir.dump` 替换数据库；`.env` 不变，`--no-backup` 跳过备份 |
 | `config` | 修改控制台地址和节点通道地址 |
-| `start`、`stop`、`restart` | 启动、停止、重启 |
+| `start`、`stop` | 启动（应用 `.env` 的修改）、停止 |
+| `restart` | 重建控制台容器并启动，应用 `.env` 的修改 |
 | `status` | 容器状态和运行中的版本 |
 | `logs [服务]` | 跟随日志，服务为 `console` 或 `postgres` |
 | `setup-token` | 输出首次初始化的 setup token |
@@ -95,7 +97,7 @@ curl -fsSL https://<控制台>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN b
 | 健康检查（容器内） | `docker compose exec console edgeweir-healthcheck` |
 | 找回账户（重置密码、停用两步验证） | `docker compose exec console node dist/server/recover.js --reset-password --disable-two-factor`，见 [找回账户](#找回账户) |
 | 拉取 `EDGEWEIR_VERSION` 指定的镜像并重建 | `docker compose pull && docker compose up -d` |
-| 启动 ClickHouse | `docker compose --profile analytics up -d` |
+| 启动 ClickHouse | `.env` 中设置 `COMPOSE_PROFILES=analytics` 后 `docker compose up -d`（此后的命令都包含它） |
 
 > [!WARNING]
 > `docker compose down -v` 删除 `postgres-data` 等命名卷，即全部数据。

@@ -89,6 +89,15 @@ describe("deploy.sh", () => {
     expect(read("deploy.sh")).toContain(`readonly PG_IMAGE=${pinned}\n`);
   });
 
+  it.each(["compose.yml", "compose.baota.yml", "compose.baota-host.yml"])(
+    "%s passes the previous master key for a rotation",
+    (file) => {
+      expect(read(file)).toMatch(
+        /^ {2,6}EDGEWEIR_MASTER_KEY_PREVIOUS: \$\{EDGEWEIR_MASTER_KEY_PREVIOUS:-\}$/m,
+      );
+    },
+  );
+
   it("keeps the web console on loopback and the node channel public with host networking", () => {
     const host = read("compose.baota-host.yml");
     expect(host).toMatch(/^\s*network_mode: host$/m);
@@ -214,11 +223,12 @@ describe("deploy.sh", () => {
   });
 
   describe("backups (P1-54)", () => {
-    it("leave the master key and the session secret out of the .env copy", () => {
+    it("leave the master keys and the session secret out of the .env copy", () => {
       const dir = directory({
         ".env": [
           "# comment",
           "EDGEWEIR_MASTER_KEY=bWFzdGVyLWtleS1tYXN0ZXIta2V5LW1hc3Rlci1rZXkhIQ==",
+          "EDGEWEIR_MASTER_KEY_PREVIOUS=b2xkLW1hc3Rlci1rZXktb2xkLW1hc3Rlci1rZXktb2xkIQ==",
           "BETTER_AUTH_SECRET=session-secret-session-secret-session",
           "POSTGRES_PASSWORD=0123abcd",
           "EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com",
@@ -227,8 +237,10 @@ describe("deploy.sh", () => {
       });
       const copy = sourced("DIR=$D; env_for_backup", { D: dir });
       expect(copy).not.toContain("bWFzdGVy");
+      expect(copy).not.toContain("b2xkLW1h");
       expect(copy).not.toContain("session-secret");
       expect(copy).toMatch(/^# EDGEWEIR_MASTER_KEY= /m);
+      expect(copy).toMatch(/^# EDGEWEIR_MASTER_KEY_PREVIOUS= /m);
       expect(copy).toMatch(/^# BETTER_AUTH_SECRET= /m);
       expect(copy).toContain("POSTGRES_PASSWORD=0123abcd\n");
       expect(copy).toContain("EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com\n");
@@ -276,6 +288,7 @@ describe("deploy.sh", () => {
     const STUBS = `
       client() {
         case "$*" in
+          "run --rm"*) printf '%s\\r\\n' "$FILE_URL" ;;
           *"pg_restore --list"*) cat >/dev/null; printf '%s\\n' "$LIST" ;;
           *pg_has_role*) printf '%s\\n' "\${PRIVILEGES:-t t}" ;;
           *pg_dump*) printf current ;;
@@ -289,9 +302,9 @@ describe("deploy.sh", () => {
       # Never ask on the terminal that runs the tests.
       INTERACTIVE=
       DIR=$D; COMPOSE_FILE=compose.yml`;
-    const deployment = (mode: "host" | "bundled", backups = ["20261001-080000"]) =>
+    const deployment = (mode: "host" | "bundled", backups = ["20261001-080000"], env = ENV) =>
       directory({
-        ".env": ENV,
+        ".env": env,
         "compose.yml": read(mode === "host" ? "compose.baota-host.yml" : "compose.baota.yml"),
         ...Object.fromEntries(backups.map((b) => [`backups/${b}/edgeweir.dump`, `dump of ${b}`])),
       });
@@ -358,6 +371,30 @@ describe("deploy.sh", () => {
       expect(readdirSync(resolve(dir, "backups"))).toEqual(["20261001-080000"]);
     });
 
+    it("reads a host DATABASE_URL_FILE through a one-off console container", () => {
+      const env = ENV.replace(/^DATABASE_URL=.*\n/m, "");
+      const dir = deployment("host", ["20261001-080000"], env);
+      const result = restore(dir, "20261001-080000", {
+        FILE_URL: "postgres://owner:s%40fe@127.0.0.1:5432/fromfile",
+      });
+      expect(result.status, result.stderr).toBe(0);
+      const run = calls(dir, "compose run");
+      // Once for the check, once for the backup before the restore.
+      expect(run).toHaveLength(2);
+      expect(run[0]).toMatch(
+        /^compose run --rm --no-deps -T --entrypoint sh console -c .*\$DATABASE_URL_FILE/,
+      );
+      expect(calls(dir, "pg_client --stdin psql")).toEqual([
+        "pg_client --stdin psql -X -q -v ON_ERROR_STOP=1 -v db=fromfile -d postgres",
+      ]);
+      // Without a URL from either source nothing is touched.
+      const none = deployment("host", ["20261001-080000"], env);
+      const refused = restore(none, "20261001-080000", { FILE_URL: "" });
+      expect(refused.status).toBe(1);
+      expect(refused.stderr).toContain("DATABASE_URL（.env 或 DATABASE_URL_FILE）无法解析");
+      expect(log(none)).not.toMatch(/pg_dump|stop console|psql/);
+    });
+
     it.each([
       ["no backup is named", "", {}, "用法：./deploy.sh restore"],
       ["the backup is missing", "20260101-000000", {}, "找不到备份 20260101-000000"],
@@ -393,6 +430,48 @@ describe("deploy.sh", () => {
         /\.\/deploy\.sh restore \S+\/backups\/\d{8}-\d{6}-before-restore --no-backup/,
       );
       expect(log(dir)).not.toContain("up -d --wait --remove-orphans");
+    });
+  });
+
+  describe("restart applies .env (S-13)", () => {
+    /** Stand-ins: each compose call goes to $D/log; the console reports its version. */
+    const STUBS = `
+      compose() { printf 'compose %s\\n' "$*" >>"$D/log"; }
+      docker() { printf '{"status":"ok","version":"20261001-abc1234"}'; }
+      preflight() { :; }
+      find_dir() { DIR=$D; COMPOSE_FILE=compose.yml; }`;
+    const restart = (mode: "host" | "bundled") => {
+      const dir = directory({
+        ".env": "EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com\n",
+        "compose.yml": read(mode === "host" ? "compose.baota-host.yml" : "compose.baota.yml"),
+      });
+      const result = run(`${STUBS}; main restart`, { D: dir });
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stderr).toContain("已重启，版本 20261001-abc1234");
+      return readFileSync(resolve(dir, "log"), "utf8").trim().split("\n");
+    };
+
+    it("recreates the console instead of restarting the old container", () => {
+      expect(restart("host")).toEqual([
+        "compose up -d --wait --remove-orphans --force-recreate console",
+      ]);
+      // Bundled: the database first, and the panel nginx's gateway kept in .env.
+      expect(restart("bundled")).toEqual([
+        "compose up -d postgres",
+        "compose ps -q postgres",
+        "compose up -d --wait --remove-orphans --force-recreate console",
+      ]);
+    });
+
+    it("starts without forcing anything", () => {
+      const dir = directory({
+        ".env": "EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.com\n",
+        "compose.yml": read("compose.baota-host.yml"),
+      });
+      expect(run(`${STUBS}; main start`, { D: dir }).status).toBe(0);
+      expect(readFileSync(resolve(dir, "log"), "utf8")).toBe(
+        "compose up -d --wait --remove-orphans\n",
+      );
     });
   });
 
@@ -494,6 +573,27 @@ describe("deploy.sh", () => {
           PATH: `${bin}:${process.env.PATH ?? ""}`,
         }),
       ).not.toContain("override");
+    });
+
+    it("leaves COMPOSE_PROFILES to .env, which Compose reads through --env-file", () => {
+      const dir = directory({
+        ".env": "POSTGRES_PASSWORD=x\nCOMPOSE_PROFILES=analytics\n",
+        "compose.yml": "services: {}\n",
+      });
+      // A docker on PATH that prints its arguments and the profiles it was given.
+      const bin = directory({
+        docker: '#!/bin/sh\nprintf "%s\\n" "$@" "profiles=${COMPOSE_PROFILES-unset}"\n',
+      });
+      execFileSync("chmod", ["+x", resolve(bin, "docker")]);
+      const args = sourced("DIR=$D; COMPOSE_FILE=compose.yml; compose up -d", {
+        D: dir,
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+        // A value in the calling shell would win over .env; compose() drops it.
+        COMPOSE_PROFILES: "upgrades",
+      });
+      expect(args).toContain(`--env-file\n${dir}/.env\n`);
+      expect(args).toContain("profiles=unset\n");
+      expect(args).not.toContain("--profile");
     });
 
     it.each([

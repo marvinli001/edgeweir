@@ -12,7 +12,7 @@
 | --- | --- | --- | --- |
 | `console` | `ghcr.io/marvinli001/edgeweir:${EDGEWEIR_VERSION:-latest}` | 默认 | `ROLE=all`；发布 `${EDGEWEIR_HTTP_PORT:-127.0.0.1:3000}:3000` 与 `${EDGEWEIR_NODE_API_PORT:-8443}:8443`；只读根文件系统、`/tmp` 为 tmpfs、`no-new-privileges` |
 | `postgres` | `postgres:18.6-alpine`（按 digest 固定） | 默认 | 卷 `postgres-data` 挂载到 `/var/lib/postgresql`；端口不发布；`pg_isready` 健康检查通过后 `console` 才启动 |
-| `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine`（按 digest 固定） | `--profile analytics` | 卷 `clickhouse-data` |
+| `clickhouse` | `clickhouse/clickhouse-server:26.9-alpine`（按 digest 固定） | `.env` 中 `COMPOSE_PROFILES=analytics` | 卷 `clickhouse-data` |
 
 镜像公开，拉取无需登录。tag 规则见 [版本、升级与回滚](upgrade.md)。
 
@@ -77,7 +77,40 @@ secrets:
     file: ./master.key
 ```
 
-文件末尾的换行被忽略；同时设置非空的 `EDGEWEIR_MASTER_KEY`，或文件不可读时，控制台拒绝启动。
+文件末尾的换行被忽略；同时设置非空的 `EDGEWEIR_MASTER_KEY`，或文件为空、不可读时，控制台拒绝启动。
+
+### 其他机密文件
+
+以下变量同样可以从文件读取：设置 `<变量>_FILE`，按上例挂载文件，`.env` 中不设置该变量。规则与主密钥文件相同。
+
+| 变量 | 用于 |
+| --- | --- |
+| `DATABASE_URL_FILE` | 外部 PostgreSQL（`compose.baota-host.yml`、[单独的容器](#不用-compose单独的容器)）：文件内容为完整连接串。`compose.yml` 的内置数据库只在编排网络内可达，`POSTGRES_PASSWORD` 留在 `.env` |
+| `BETTER_AUTH_SECRET_FILE` | 已设置 `BETTER_AUTH_SECRET` 的部署 |
+| `EDGEWEIR_CLICKHOUSE_PASSWORD_FILE` | 外部 ClickHouse；`compose.override.yml` 中另设 `EDGEWEIR_CLICKHOUSE_PASSWORD: ""`，否则与模板的默认值冲突 |
+
+### 轮换主密钥
+
+更换主密钥（例如怀疑泄露），已加密的数据改用新主密钥：
+
+1. `.env` 中把原值移到 `EDGEWEIR_MASTER_KEY_PREVIOUS`，`EDGEWEIR_MASTER_KEY` 设为 `openssl rand -base64 32` 的输出。用文件时对应 `EDGEWEIR_MASTER_KEY_PREVIOUS_FILE` 与 `EDGEWEIR_MASTER_KEY_FILE`。
+2. `docker compose up -d`。
+3. 等待日志 `no envelope uses EDGEWEIR_MASTER_KEY_PREVIOUS any more`：
+
+   ```bash
+   docker compose logs console | grep EDGEWEIR_MASTER_KEY_PREVIOUS
+   ```
+
+   日志为 `envelopes still use EDGEWEIR_MASTER_KEY_PREVIOUS: keep it set` 时保留旧主密钥，按 `cannot re-seal` 日志排查。
+4. 删除 `EDGEWEIR_MASTER_KEY_PREVIOUS`，再执行 `docker compose up -d`。
+
+| 项目 | 说明 |
+| --- | --- |
+| 会话与两步验证 | 不受影响：会话密钥保持原值。主密钥泄露时另设新的 `BETTER_AUTH_SECRET`：全部会话失效，两步验证需重新启用 |
+| 节点 | 无需操作 |
+| 多个控制台实例 | 全部实例用同一组变量重建 |
+| 轮换前的备份 | 仍由旧主密钥加密：离线保留旧主密钥，恢复时设为 `EDGEWEIR_MASTER_KEY_PREVIOUS` |
+| `deploy.sh` 部署 | 编辑 `.env` 后运行 `./deploy.sh restart`；备份中不含 `EDGEWEIR_MASTER_KEY_PREVIOUS` |
 
 ## 4. 配置 `.env`
 
@@ -156,11 +189,19 @@ docker compose ps
 
 | Profile | 组件 | 启用 |
 | --- | --- | --- |
-| `analytics` | ClickHouse：原始访问日志与分钟级统计 | `.env` 设置 `EDGEWEIR_ANALYTICS=clickhouse` 与 `CLICKHOUSE_PASSWORD` |
+| `analytics` | ClickHouse：原始访问日志与分钟级统计 | `.env` 设置 `COMPOSE_PROFILES=analytics`、`EDGEWEIR_ANALYTICS=clickhouse` 与 `CLICKHOUSE_PASSWORD` |
+
+```bash title=".env"
+COMPOSE_PROFILES=analytics
+EDGEWEIR_ANALYTICS=clickhouse
+CLICKHOUSE_PASSWORD=<密码>
+```
 
 ```bash
-docker compose --profile analytics up -d
+docker compose up -d
 ```
+
+Compose 从 `.env` 读取 `COMPOSE_PROFILES`，此后每条 `docker compose` 命令（`up`、`pull`、`logs`、`down`）都包含 ClickHouse，无需加 `--profile analytics`。
 
 控制台图表与告警使用 PostgreSQL 汇总数据。访问日志采样默认关闭，在网站的日志页面开启；原始日志保留 7 天。切换存储模式不迁移历史数据。详见 [访问日志与 AccessKey](../guide/access-logs.md)。
 
@@ -217,7 +258,7 @@ docker run -d --name edgeweir-console --network edgeweir --restart unless-stoppe
 | --- | --- | --- |
 | 日志 `invalid configuration:`，随后列出变量 | 变量缺失或格式错误 | 按列出的变量修正 `.env`，执行 `docker compose up -d`。 |
 | `EDGEWEIR_MASTER_KEY: is not valid base64` 或 `must be at least 32 bytes` | 主密钥被截断或改写，例如面板把 `+` 换成了空格，或值带引号 | 使用 `openssl rand -base64 32` 的原样输出。 |
-| `EDGEWEIR_MASTER_KEY does not match this database` | 主密钥不是这个数据库所用的：更换了主密钥，或数据库来自另一次安装 | 恢复原主密钥（原 `.env` 或其离线副本）；设置 `BETTER_AUTH_SECRET` 无济于事。 |
+| `EDGEWEIR_MASTER_KEY does not match this database` | 主密钥不是这个数据库所用的：更换了主密钥，或数据库来自另一次安装 | 恢复原主密钥（原 `.env` 或其离线副本），或按[轮换主密钥](#轮换主密钥)把它设为 `EDGEWEIR_MASTER_KEY_PREVIOUS`；设置 `BETTER_AUTH_SECRET` 无济于事。 |
 | `BETTER_AUTH_SECRET is not set, but this database was used with another secret` | 已有部署移除了 `BETTER_AUTH_SECRET` | 恢复原值。 |
 | 重复输出 `database not reachable yet`，60 秒后退出 | 数据库不可达 | `docker compose ps postgres` 检查数据库容器；外部数据库检查 `DATABASE_URL`。 |
 | 登录失败或提示来源不受信任 | `EDGEWEIR_PUBLIC_URL` 与浏览器地址的协议、主机名或端口不一致 | 修正 `EDGEWEIR_PUBLIC_URL`，执行 `docker compose up -d`。 |

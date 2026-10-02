@@ -93,6 +93,49 @@ describe("MasterKey envelopes", () => {
     expect(() => mk.open({ ...env, ciphertext: flipped.toString("base64") }, row1)).toThrow();
   });
 
+  it("seals with the current key and opens envelopes of the previous one during a rotation", () => {
+    const oldKey = Buffer.alloc(32, 9).toString("base64");
+    const before = new MasterKey(oldKey);
+    const sealedBefore = before.seal("old secret", row1);
+    const ring = new MasterKey(TEST_MASTER_KEY, oldKey);
+    expect(ring.kid).toBe(new MasterKey(TEST_MASTER_KEY).kid);
+    expect(ring.previousKid).toBe(before.kid);
+    expect(ring.opens(before.kid)).toBe(true);
+    expect(ring.open(sealedBefore, row1).toString()).toBe("old secret");
+    // Still bound to its row and purpose with the previous key.
+    expect(() => ring.open(sealedBefore, { ...row1, recordId: "row-2" })).toThrow();
+    // New envelopes use the current key only.
+    const sealedNow = ring.seal("new secret", row1);
+    expect(sealedNow.kid).toBe(ring.kid);
+    expect(() => before.open(sealedNow, row1)).toThrow(/different master key/);
+    expect(new MasterKey(TEST_MASTER_KEY).open(sealedNow, row1).toString()).toBe("new secret");
+    // A key that is neither stays refused, as does the previous one once removed.
+    const third = new MasterKey(Buffer.alloc(32, 3).toString("base64"));
+    expect(ring.opens(third.kid)).toBe(false);
+    expect(() => ring.open(third.seal("x", row1), row1)).toThrow(/different master key/);
+    expect(() => new MasterKey(TEST_MASTER_KEY).open(sealedBefore, row1)).toThrow(
+      /different master key/,
+    );
+    expect(new MasterKey(TEST_MASTER_KEY).previousKid).toBeUndefined();
+  });
+
+  it("refuses a previous key that is the current one or not a key", () => {
+    expect(() => new MasterKey(TEST_MASTER_KEY, TEST_MASTER_KEY)).toThrow(
+      "EDGEWEIR_MASTER_KEY_PREVIOUS is the same key as EDGEWEIR_MASTER_KEY",
+    );
+    // The same bytes in another alphabet are the same key.
+    expect(
+      () =>
+        new MasterKey(
+          TEST_MASTER_KEY,
+          Buffer.from(TEST_MASTER_KEY, "base64").toString("base64url"),
+        ),
+    ).toThrow(/same key/);
+    expect(() => new MasterKey(TEST_MASTER_KEY, Buffer.alloc(16).toString("base64"))).toThrow(
+      /^EDGEWEIR_MASTER_KEY_PREVIOUS must be at least 32 bytes/,
+    );
+  });
+
   it("opens legacy (v1) envelopes only through the upgrade path", () => {
     const mk = new MasterKey(TEST_MASTER_KEY);
     const { envelope, purpose, plaintext } = LEGACY_V1_FIXTURE;

@@ -242,6 +242,8 @@ cd /www/dk_project/edgeweir
 ./deploy.sh restore backups/<time>     # back up, then replace the database with that backup
 ```
 
+Rotating the master key: in `.env`, move the old value to `EDGEWEIR_MASTER_KEY_PREVIOUS`, write the new `EDGEWEIR_MASTER_KEY`, and run `./deploy.sh restart`; once `./deploy.sh logs console` shows `no envelope uses EDGEWEIR_MASTER_KEY_PREVIOUS any more`, delete that line and run `./deploy.sh restart` again. Details: [Rotating the master key](docker.en.md#rotating-the-master-key).
+
 Commands, backup layout, and abort behavior: [deploy-script.en.md](deploy-script.en.md). Version policy and rollback constraints: [upgrade.en.md](upgrade.en.md). Restore: [backup.en.md](backup.en.md).
 
 | Case | Behavior |

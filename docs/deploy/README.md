@@ -19,7 +19,7 @@
 | PostgreSQL | 18；控制台所用账号拥有目标库的 `CREATE` 权限（schema `drizzle`、`pgboss`）与 schema `public` 的 `CREATE` 权限 | 更低版本未经验证。迁移在启动时执行。 |
 | 3000/TCP | HTTP：Web UI、`/rpc`、`/api/v1`、`/healthz`、`/install.sh`、`/downloads/*` | 可由反向代理终结 TLS，见 [端口与反向代理](networking.md)。 |
 | 8443/TCP | 节点通道（节点与区域探针）：TLS 由控制台终结，注册后强制 mTLS | 公网可达；只能直连或四层透传。 |
-| 主密钥 | `EDGEWEIR_MASTER_KEY`：base64，解码后不少于 32 字节；`openssl rand -base64 32` 生成 | 与数据库备份分开保存；丢失或更换后已加密数据不可解密。 |
+| 主密钥 | `EDGEWEIR_MASTER_KEY`：base64，解码后不少于 32 字节；`openssl rand -base64 32` 生成 | 与数据库备份分开保存；丢失后已加密数据不可解密，更换按[轮换主密钥](docker.md#轮换主密钥)进行。 |
 | 会话密钥 | `BETTER_AUTH_SECRET`：未设置时由主密钥派生 | 已设置的部署须保留原值，移除后控制台拒绝启动。 |
 | 架构 | linux/amd64、linux/arm64 | — |
 | 资源 | 未规定最低规格 | `compose.yml` 为 ClickHouse 设置 `nofile` 262144。 |

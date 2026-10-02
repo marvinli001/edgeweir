@@ -96,17 +96,18 @@
 
 ## 使用 ClickHouse 存储
 
-1. 在控制台的 `.env` 中设置统计模式和 ClickHouse 密码：
+1. 在控制台的 `.env` 中启用 `analytics` profile，设置统计模式和 ClickHouse 密码：
 
    ```bash title=".env"
+   COMPOSE_PROFILES=analytics
    EDGEWEIR_ANALYTICS=clickhouse
    EDGEWEIR_CLICKHOUSE_PASSWORD=<密码>
    ```
 
-2. 启动带 `analytics` profile 的 Compose 部署：
+2. 启动 Compose 部署；`COMPOSE_PROFILES` 让此后的每条 `docker compose` 命令都包含 ClickHouse：
 
    ```bash
-   docker compose --profile analytics up -d
+   docker compose up -d
    ```
 
 3. 验证：**系统设置** 的「系统信息」中「统计模式」显示 `clickhouse`。

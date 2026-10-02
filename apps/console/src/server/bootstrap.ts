@@ -5,7 +5,7 @@ import type { PgBoss } from "pg-boss";
 import { checkDownloadsDir } from "./downloads";
 import { startWorker } from "./jobs/worker";
 import { createAuth } from "./lib/auth";
-import { assertAuthSecret, resolveAuthSecret } from "./lib/auth-secret";
+import { assertAuthSecret, loadAuthSecret } from "./lib/auth-secret";
 import type { AppContext } from "./lib/context";
 import { loadEnv } from "./lib/env";
 import { MasterKey } from "./lib/envelope";
@@ -14,6 +14,7 @@ import { logger, setLogLevel } from "./lib/logger";
 import { assertMasterKey } from "./lib/master-key";
 import { CLOSE_GRACE_MS, type NodeChannel, startNodeChannel } from "./node-channel/server";
 import { loadOrCreateNodeCa } from "./pki/store";
+import { resealEnvelopes } from "./services/envelope-rotation";
 import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
 import { announceSetupToken, ensureSetupToken } from "./services/setup";
 
@@ -106,14 +107,16 @@ export async function bootstrap(): Promise<Running> {
   await runMigrations(pool);
   log.info("database migrated");
 
-  const masterKey = new MasterKey(env.EDGEWEIR_MASTER_KEY);
+  const masterKey = new MasterKey(env.EDGEWEIR_MASTER_KEY, env.EDGEWEIR_MASTER_KEY_PREVIOUS);
   // First: a wrong master key would otherwise be reported as a session secret problem.
   await assertMasterKey(db, masterKey);
-  const authSecret = resolveAuthSecret(env);
+  const authSecret = await loadAuthSecret(db, env, masterKey);
   await assertAuthSecret(db, authSecret, log);
   log.info("session secret", { source: authSecret.source });
   // Secrets sealed before envelopes were bound to their record id.
   await upgradeLegacyEnvelopes(db, masterKey, log);
+  // After a master key rotation: everything the previous key sealed.
+  await resealEnvelopes(db, masterKey, log);
   const nodeCa = await loadOrCreateNodeCa(db, masterKey);
   const auth = createAuth({
     db,

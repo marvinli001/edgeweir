@@ -5,12 +5,15 @@ import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
+import { createAuth } from "../../src/server/lib/auth";
 import {
   AUTH_SECRET_CHANGED,
   AUTH_SECRET_CHECK_KEY,
   AUTH_SECRET_HKDF,
+  AUTH_SECRET_KEY,
   assertAuthSecret,
   deriveAuthSecret,
+  loadAuthSecret,
   resolveAuthSecret,
 } from "../../src/server/lib/auth-secret";
 import { loadEnv } from "../../src/server/lib/env";
@@ -239,5 +242,125 @@ describe("session secret check at startup", () => {
     // From now on the explicit value is the one to keep.
     await expect(assertAuthSecret(db, derived, log)).rejects.toThrow(AUTH_SECRET_CHANGED);
     await client.close();
+  });
+});
+
+describe("session secret across a master key rotation", () => {
+  const log = { warn: vi.fn() };
+  const newKey = Buffer.alloc(32, 4).toString("base64");
+  const env = (key: string, previous?: string, explicit?: string) => ({
+    EDGEWEIR_MASTER_KEY: key,
+    EDGEWEIR_MASTER_KEY_PREVIOUS: previous,
+    BETTER_AUTH_SECRET: explicit,
+  });
+  const ring = (key: string, previous?: string) => new MasterKey(key, previous);
+  const storedSecret = async (db: Awaited<ReturnType<typeof createTestDatabase>>["db"]) =>
+    (
+      await db
+        .select()
+        .from(schema.systemSetting)
+        .where(eq(schema.systemSetting.key, AUTH_SECRET_KEY))
+    )[0]?.value;
+  /** A database the console has run on with the secret derived from TEST_MASTER_KEY. */
+  const usedDatabase = async () => {
+    const created = await createTestDatabase();
+    const secret = await loadAuthSecret(created.db, env(TEST_MASTER_KEY), ring(TEST_MASTER_KEY));
+    expect(secret).toEqual({ value: deriveAuthSecret(TEST_MASTER_KEY), source: "master_key" });
+    await assertAuthSecret(created.db, secret, log);
+    return created;
+  };
+
+  it("keeps the secret derived from the previous key, sealed with the new one", async () => {
+    const { db, client } = await usedDatabase();
+    const original = deriveAuthSecret(TEST_MASTER_KEY);
+
+    // Rotation: new key, old key as EDGEWEIR_MASTER_KEY_PREVIOUS.
+    const rotating = ring(newKey, TEST_MASTER_KEY);
+    const during = await loadAuthSecret(db, env(newKey, TEST_MASTER_KEY), rotating);
+    expect(during).toEqual({ value: original, source: "stored" });
+    await assertAuthSecret(db, during, log);
+    const sealed = (await storedSecret(db))?.envelope as { kid: string };
+    expect(sealed.kid).toBe(rotating.kid);
+    expect(JSON.stringify(await storedSecret(db))).not.toContain(original);
+
+    // EDGEWEIR_MASTER_KEY_PREVIOUS removed: still the same secret, no warning.
+    const after = await loadAuthSecret(db, env(newKey), ring(newKey));
+    expect(after).toEqual({ value: original, source: "stored" });
+    await assertAuthSecret(db, after, log);
+    expect(log.warn).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it("stores nothing when the database runs with the current key's secret", async () => {
+    const { db, client } = await usedDatabase();
+    // A spare EDGEWEIR_MASTER_KEY_PREVIOUS changes nothing.
+    const other = Buffer.alloc(32, 2).toString("base64");
+    expect(
+      await loadAuthSecret(db, env(TEST_MASTER_KEY, other), ring(TEST_MASTER_KEY, other)),
+    ).toEqual({ value: deriveAuthSecret(TEST_MASTER_KEY), source: "master_key" });
+    // Nor does an explicit secret, which always wins.
+    const explicit = "e".repeat(40);
+    expect(
+      await loadAuthSecret(
+        db,
+        env(newKey, TEST_MASTER_KEY, explicit),
+        ring(newKey, TEST_MASTER_KEY),
+      ),
+    ).toEqual({ value: explicit, source: "environment" });
+    expect(await storedSecret(db)).toBeUndefined();
+    await client.close();
+  });
+
+  it("refuses to start when neither key derives the database's secret", async () => {
+    const { db, client } = await usedDatabase();
+    const other = Buffer.alloc(32, 2).toString("base64");
+    // Rotated without EDGEWEIR_MASTER_KEY_PREVIOUS, or with the wrong one.
+    for (const previous of [undefined, other]) {
+      const secret = await loadAuthSecret(db, env(newKey, previous), ring(newKey, previous));
+      expect(secret.source).toBe("master_key");
+      await expect(assertAuthSecret(db, secret, log)).rejects.toThrow(AUTH_SECRET_CHANGED);
+    }
+    expect(await storedSecret(db)).toBeUndefined();
+    await client.close();
+  });
+
+  it("treats the stored secret like the derived one when BETTER_AUTH_SECRET is removed", async () => {
+    const { db, client } = await usedDatabase();
+    await loadAuthSecret(db, env(newKey, TEST_MASTER_KEY), ring(newKey, TEST_MASTER_KEY));
+    // Later an explicit secret, then removed again: refused like the derived one.
+    const explicit = { value: "q".repeat(40), source: "environment" } as const;
+    await assertAuthSecret(db, explicit, log);
+    const stored = await loadAuthSecret(db, env(newKey), ring(newKey));
+    expect(stored.source).toBe("stored");
+    await expect(assertAuthSecret(db, stored, log)).rejects.toThrow(AUTH_SECRET_CHANGED);
+    await client.close();
+  });
+
+  it("keeps the operator signed in across the rotation", async () => {
+    const { ctx, client } = await createTestContext({ BETTER_AUTH_SECRET: "" });
+    afterAll(() => client.close());
+    const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
+    await assertAuthSecret(ctx.db, resolveAuthSecret(ctx.env), log);
+    await setupPlatform(ctx);
+    const cookie = await signIn(createApp(ctx), origin, "admin@example.com");
+
+    for (const [key, previous] of [
+      [newKey, TEST_MASTER_KEY],
+      [newKey, undefined],
+    ] as const) {
+      const rotated = loadEnv({
+        ...base,
+        EDGEWEIR_MASTER_KEY: key,
+        EDGEWEIR_MASTER_KEY_PREVIOUS: previous,
+      });
+      const masterKey = new MasterKey(key, previous);
+      const secret = await loadAuthSecret(ctx.db, rotated, masterKey);
+      await assertAuthSecret(ctx.db, secret, log);
+      const auth = createAuth({ db: ctx.db, secret: secret.value, publicUrl: origin });
+      const app = createApp({ ...ctx, env: { ...ctx.env, ...rotated }, auth, masterKey });
+      expect((await rpcClient(app, origin, cookie).account.me()).user.email).toBe(
+        "admin@example.com",
+      );
+    }
   });
 });

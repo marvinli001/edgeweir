@@ -23,7 +23,11 @@ export const CHALLENGE_KEY_ROTATION_MS = 24 * 3600 * 1000;
 export const CHALLENGE_KEY_BYTES = 32;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const binding = (id: string) => ({ purpose: "challenge_key.secret", recordId: id });
+/** Envelope binding of a challenge key's secret: the column and the key row (AAD). */
+export const challengeKeyBinding = (id: string) => ({
+  purpose: "challenge_key.secret",
+  recordId: id,
+});
 
 /**
  * The cluster's three keys, created when a cluster first needs them. Call
@@ -169,7 +173,7 @@ export async function challengeKeySecrets(
           .update(schema.challengeKey)
           .set({
             secret: JSON.stringify(
-              app.masterKey.seal(randomBytes(CHALLENGE_KEY_BYTES), binding(row.id)),
+              app.masterKey.seal(randomBytes(CHALLENGE_KEY_BYTES), challengeKeyBinding(row.id)),
             ),
           })
           .where(eq(schema.challengeKey.id, row.id));
@@ -178,7 +182,10 @@ export async function challengeKeySecrets(
   return rows.flatMap((row) => {
     if (!row.secret) return [];
     try {
-      const secret = app.masterKey.open(JSON.parse(row.secret) as Envelope, binding(row.id));
+      const secret = app.masterKey.open(
+        JSON.parse(row.secret) as Envelope,
+        challengeKeyBinding(row.id),
+      );
       if (secret.length !== CHALLENGE_KEY_BYTES) throw new Error("unexpected key length");
       return [{ id: row.id, secret: new Uint8Array(secret) }];
     } catch (error) {
