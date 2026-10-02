@@ -13,13 +13,26 @@ import {
   SITEMAP_MAX_URLS,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
-import { and, arrayContains, count, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  arrayContains,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import type * as z from "zod";
 import { readCacheKey } from "../lib/cache-key";
 import { fail } from "../lib/errors";
 import { TASKS_CHANNEL } from "../lib/events";
 import { cleanErrorCode, cleanErrorParams, taskError } from "../lib/node-errors";
 import { assertNodeFeatures } from "../lib/node-features";
+import { deleteInBatches } from "../lib/retention";
 import { assertServing } from "../lib/site-state";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { type Executor, publisher } from "./revisions";
@@ -35,6 +48,8 @@ type TaskNodeRow = typeof schema.cacheTaskNode.$inferSelect;
 export const CACHE_TASK_TTL_MS = 7 * 24 * 3600 * 1000;
 /** A task handed out without a result is handed out again after this long. */
 export const CACHE_TASK_REDISPATCH_MS = 5 * 60 * 1000;
+/** Tasks are kept this long, as alert events and hourly traffic (see pruneCacheTasks). */
+export const CACHE_TASK_RETENTION_MS = 90 * 24 * 3600 * 1000;
 
 /**
  * One unit of work for the nodes of `clusterId`. Purge items carry the
@@ -470,24 +485,29 @@ function deliverable(nodeId: string, now: Date) {
 const PURGE_TYPES = ["url", "prefix", "site", "host", "tag"];
 
 /**
- * Purges an enabled node missed: never executed within CACHE_TASK_TTL_MS
- * (task_expired) or skipped while it was disabled (node_disabled), and not
- * made up yet.
+ * A delivery that was never executed within CACHE_TASK_TTL_MS
+ * (task_expired) or skipped while its node was disabled (node_disabled),
+ * and not made up yet.
  */
+const unrecovered = and(
+  isNull(schema.cacheTaskNode.recoveredAt),
+  or(
+    and(
+      eq(schema.cacheTaskNode.state, "failed"),
+      eq(schema.cacheTaskNode.errorCode, "task_expired"),
+    ),
+    and(
+      eq(schema.cacheTaskNode.state, "skipped"),
+      eq(schema.cacheTaskNode.errorCode, "node_disabled"),
+    ),
+  ),
+);
+
+/** Purges an enabled node missed (unrecovered deliveries of purge tasks). */
 function missedPurges(nodeId: string) {
   return and(
     eq(schema.cacheTaskNode.nodeId, nodeId),
-    isNull(schema.cacheTaskNode.recoveredAt),
-    or(
-      and(
-        eq(schema.cacheTaskNode.state, "failed"),
-        eq(schema.cacheTaskNode.errorCode, "task_expired"),
-      ),
-      and(
-        eq(schema.cacheTaskNode.state, "skipped"),
-        eq(schema.cacheTaskNode.errorCode, "node_disabled"),
-      ),
-    ),
+    unrecovered,
     inArray(schema.cacheTask.type, PURGE_TYPES),
     eq(schema.node.status, "active"),
   );
@@ -806,4 +826,36 @@ async function expireDeliveries(tx: Executor, now: Date, nodeId?: string): Promi
  */
 export async function expireCacheTasks(db: Database, now = new Date()): Promise<number> {
   return db.transaction((tx) => expireDeliveries(tx, now));
+}
+
+/**
+ * Deletes tasks older than CACHE_TASK_RETENTION_MS with their deliveries,
+ * except a purge a node has yet to make up (kept until the node pulls tasks
+ * again, or is deleted) and a task with deliveries still open (not expired
+ * yet). Returns how many tasks were deleted.
+ */
+export async function pruneCacheTasks(db: Database, now = new Date()): Promise<number> {
+  const task = schema.cacheTask,
+    delivery = schema.cacheTaskNode;
+  return deleteInBatches(
+    db,
+    task,
+    and(
+      lt(task.createdAt, new Date(now.getTime() - CACHE_TASK_RETENTION_MS)),
+      notExists(
+        db
+          .select({ taskId: delivery.taskId })
+          .from(delivery)
+          .where(
+            and(
+              eq(delivery.taskId, task.id),
+              or(
+                inArray(delivery.state, ["pending", "running"]),
+                and(inArray(task.type, PURGE_TYPES), unrecovered),
+              ),
+            ),
+          ),
+      ),
+    ),
+  );
 }

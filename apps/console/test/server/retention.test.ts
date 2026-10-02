@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { schema } from "@edgeweir/db";
-import { eq, lt } from "drizzle-orm";
+import { eq, inArray, lt } from "drizzle-orm";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { deleteInBatches } from "../../src/server/lib/retention";
 import { sweepAlerts } from "../../src/server/services/alerts";
+import {
+  CACHE_TASK_RETENTION_MS,
+  hasDeliverableTasks,
+  pruneCacheTasks,
+} from "../../src/server/services/cache-tasks";
 import { createTestContext } from "./helpers";
 
 const DAY = 86400_000;
@@ -43,6 +48,75 @@ describe("retention", async () => {
     expect(left).toHaveLength(3);
     expect(left.every((e) => e.occurredAt.getTime() === now)).toBe(true);
     await ctx.db.delete(schema.alertEvent);
+  });
+
+  it("deletes old cache tasks except purges a node has yet to make up and open deliveries", async () => {
+    const now = new Date();
+    const old = new Date(now.getTime() - CACHE_TASK_RETENTION_MS - DAY);
+    const clusterId = randomUUID();
+    await ctx.db.insert(schema.cluster).values({ id: clusterId, name: "retention" });
+    const [active, disabled] = await ctx.db
+      .insert(schema.node)
+      .values([
+        { clusterId, name: "active" },
+        { clusterId, name: "disabled", status: "disabled" },
+      ])
+      .returning();
+    if (!active || !disabled) throw new Error("nodes missing");
+    const task = async (
+      name: string,
+      type: string,
+      createdAt: Date,
+      deliveries: Partial<typeof schema.cacheTaskNode.$inferInsert>[],
+    ) => {
+      const [row] = await ctx.db
+        .insert(schema.cacheTask)
+        .values({
+          type,
+          targets: [name],
+          payload: [{ siteId: randomUUID(), clusterId, type }],
+          createdAt,
+          finishedAt: createdAt,
+        })
+        .returning();
+      if (!row) throw new Error("task missing");
+      if (deliveries.length)
+        await ctx.db
+          .insert(schema.cacheTaskNode)
+          .values(deliveries.map((d) => ({ taskId: row.id, nodeId: active.id, clusterId, ...d })));
+      return [name, row.id] as const;
+    };
+    const expired = { state: "failed", errorCode: "task_expired" };
+    const tasks = Object.fromEntries([
+      await task("done", "url", old, [{ state: "succeeded" }]),
+      await task("missed", "url", old, [expired]),
+      await task("made up", "prefix", old, [{ ...expired, recoveredAt: now }]),
+      await task("prefetch", "prefetch", old, [expired]),
+      await task("skipped", "site", old, [
+        { nodeId: disabled.id, state: "skipped", errorCode: "node_disabled" },
+      ]),
+      await task("failed", "url", old, [{ state: "failed", errorCode: "purge_failed" }]),
+      await task("open", "url", old, [{ state: "running" }]),
+      await task("no nodes", "url", old, []),
+      await task("recent", "url", now, [{ state: "succeeded" }]),
+    ]);
+    expect(await pruneCacheTasks(ctx.db, now)).toBe(5);
+    const kept = await ctx.db
+      .select({ id: schema.cacheTask.id })
+      .from(schema.cacheTask)
+      .where(inArray(schema.cacheTask.id, Object.values(tasks)));
+    expect(new Set(kept.map((k) => k.id))).toEqual(
+      new Set([tasks.missed, tasks.skipped, tasks.open, tasks.recent]),
+    );
+    // Deliveries go with their tasks.
+    const deliveries = await ctx.db
+      .select({ taskId: schema.cacheTaskNode.taskId })
+      .from(schema.cacheTaskNode)
+      .where(eq(schema.cacheTaskNode.clusterId, clusterId));
+    expect(new Set(deliveries.map((d) => d.taskId))).toEqual(new Set(kept.map((k) => k.id)));
+    // The kept purge is still made up when the node pulls tasks.
+    expect(await hasDeliverableTasks(ctx.db, active.id)).toBe(true);
+    expect(await pruneCacheTasks(ctx.db, now)).toBe(0);
   });
 
   it("cancels a delivery still pending for an alert event older than a day", async () => {

@@ -363,7 +363,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | `maintenance.recompile` | At start; skipped while `config_recompiled` in `system_setting` matches the current marker | Republishes every cluster once when an upgrade changes what stored data compiles to |
 | `maintenance.prune-revisions` | Minute 17 of every hour | Deletes revisions and DNS revisions beyond the retention count |
 | `maintenance.prune-idempotency-keys` | Minute 29 of every hour | Deletes expired idempotency keys (older than 24 hours) |
-| `maintenance.expire-cache-tasks` | Minute 43 of every hour | Fails purge and prefetch deliveries past their deadline |
+| `maintenance.expire-cache-tasks` | Minute 43 of every hour | Fails purge and prefetch deliveries past their deadline; deletes tasks older than 90 days (purges a node has yet to make up stay) |
 | `maintenance.expire-enrollment-tokens` | Every 30 minutes | Deletes enrollment tokens expired or used more than 7 days ago |
 | `maintenance.prune-bans` | Every 10 minutes | Deletes bans that expired more than an hour ago |
 | `maintenance.rotate-challenge-keys` | Hourly at minute 11 | Rotates challenge keys that are a day old |
