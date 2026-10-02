@@ -132,3 +132,6 @@ export const authed = os.use(async ({ context, next }) => {
   };
   return next({ context: { user, actor } });
 });
+
+/** The response of procedures that return nothing else. */
+export const ok = { ok: true as const };
