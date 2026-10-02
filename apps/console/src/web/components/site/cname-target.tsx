@@ -66,7 +66,12 @@ export function DnsSetupCard({ siteId }: { siteId: string }) {
           <ErrorState error={launch.error} onRetry={() => void launch.refetch()} />
         ) : (
           <>
-            {cname ? null : <EdgeAddresses addresses={launch.data.addresses} />}
+            {cname ? null : (
+              <EdgeAddresses
+                addresses={launch.data.addresses}
+                online={launch.data.delivery.totalNodes}
+              />
+            )}
             <DomainPointing launch={launch.data} checks={!cname} />
           </>
         )}
@@ -75,9 +80,14 @@ export function DnsSetupCard({ siteId }: { siteId: string }) {
   );
 }
 
-function EdgeAddresses({ addresses }: { addresses: string[] }) {
+/** The online nodes' primary addresses; `online` tells "no node" from "no public address". */
+function EdgeAddresses({ addresses, online }: { addresses: string[]; online: number }) {
   if (!addresses.length)
-    return <p className="text-sm text-muted-foreground">{m.site_delivery_no_nodes()}</p>;
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="edge-address-none">
+        {online ? m.node_dns_no_public_address() : m.site_delivery_no_nodes()}
+      </p>
+    );
   return (
     <ul className="grid gap-1.5" data-testid="edge-address-list">
       {addresses.map((address) => (

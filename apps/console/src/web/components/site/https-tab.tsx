@@ -201,12 +201,16 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
   const [existing, setExisting] = React.useState<string | null>(null);
   const [addCredential, setAddCredential] = React.useState(false);
   const [customize, setCustomize] = React.useState(false);
+  const [skipDns, setSkipDns] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pending, setPending] = React.useState(false);
   const acmeDirectory = settings.data?.acmeDirectory ?? null;
   const zerossl = ca === "zerossl" && !acmeDirectory;
   const data = check.data;
   const blockers = data?.blockers ?? [];
+  const http01 = data?.request.challenge === "http01";
+  // Names the console sees elsewhere (split DNS, a proxy in front) may still reach the nodes.
+  const blocking = blockers.filter((b) => !(skipDns && http01 && b.code === "dns_not_pointing"));
   const run = async (action: () => Promise<unknown>) => {
     setPending(true);
     setError(null);
@@ -229,6 +233,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
         challenge: data.request.challenge,
         ...(data.request.dnsCredentialId ? { dnsCredentialId: data.request.dnsCredentialId } : {}),
         ...(zerossl ? { eabKid: eab.kid, eabHmacKey: eab.key } : {}),
+        ...(data.request.challenge === "http01" && skipDns ? { skipDnsCheck: true } : {}),
         autoRenew: true,
         bindSiteId: site.id,
       }),
@@ -324,6 +329,14 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
                 </Field>
               </>
             ) : null}
+            {http01 ? (
+              <SwitchField
+                id="httpsSkipDns"
+                label={m.cert_skip_dns_check()}
+                checked={skipDns}
+                onCheckedChange={setSkipDns}
+              />
+            ) : null}
           </CollapsibleContent>
           {data?.certificates.length ? (
             <div className="flex flex-wrap items-end gap-2">
@@ -390,7 +403,7 @@ function EnableHttps({ site, current }: { site: Site; current: TlsSettings }) {
             </Button>
           ) : null}
           <Button
-            disabled={!data || blockers.length > 0 || pending || check.isFetching}
+            disabled={!data || blocking.length > 0 || pending || check.isFetching}
             data-testid="https-enable-submit"
             onClick={() => data && enable(data)}
           >

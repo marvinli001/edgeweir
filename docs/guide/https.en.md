@@ -115,7 +115,7 @@ While a site has no usable certificate, its **HTTPS** tab shows only **Enable HT
 | --- | --- |
 | "Cluster … has no online node" | HTTP-01: the site's cluster has no online active node |
 | "These nodes need an upgrade to answer HTTP-01: …" | HTTP-01: online nodes lack `http01-v1` |
-| "… has no DNS record yet", "… does not point to the nodes" | HTTP-01: the name has no A/AAAA record, or resolves to addresses that are not the cluster's nodes; nothing is reported when lookups time out or no node address is known |
+| "… has no DNS record yet", "… does not point to the nodes" | HTTP-01: the name has no A/AAAA record, or resolves to addresses that are not the cluster's nodes; nothing is reported when lookups time out or no node address is known. When the console resolves names differently from the CA (split-horizon DNS, a load balancer in front), turn on **Skip the DNS check** under **Customize**: these two no longer stop the request, and the issuance does not check them either |
 | "Wildcards need a DNS credential whose zone covers …" | DNS-01: there is no such DNS credential; click **Add DNS credential** |
 | "DNS credential …: …" | DNS-01: the credential's connection test failed |
 | "CAA records of … do not allow …" | CAA records of the name or a parent domain do not allow the chosen CA (Let's Encrypt: `letsencrypt.org`; ZeroSSL: `sectigo.com`, `trust-provider.com`, `usertrust.com`), `issuewild` and `validationmethods` included; not checked when `EDGEWEIR_ACME_DIRECTORY` is set |
