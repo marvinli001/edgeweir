@@ -1,6 +1,7 @@
 import { errorDefs, isErrorCode } from "@edgeweir/contract";
 // Relative on purpose: the module is unit-tested outside Vite's "@" alias.
 import { m } from "../paraglide/messages.js";
+import { getLocale } from "../paraglide/runtime.js";
 
 type MessageFn = (params?: Record<string, string | number>) => string;
 const messages = m as unknown as Record<string, MessageFn | undefined>;
@@ -47,6 +48,83 @@ const authCodes: Record<string, MessageFn> = {
   FAILED_TO_VERIFY_REGISTRATION: () => m.error_passkey_failed(),
 };
 
+/**
+ * Labels of the input fields a validation issue can point at, by the field's name in the
+ * contract. The deepest named segment of the issue's path that has a label wins.
+ */
+const fieldLabels: Record<string, () => string> = {
+  name: () => m.site_form_name(),
+  domains: () => m.site_form_domains(),
+  domain: () => m.site_form_domains(),
+  address: () => m.site_form_origin(),
+  port: () => m.site_form_port(),
+  hostHeader: () => m.site_form_host_header(),
+  sni: () => m.site_origin_sni(),
+  pathPrefixes: () => m.site_form_cache_prefix(),
+  paths: () => m.site_rule_paths(),
+  edgeTtlSeconds: () => m.site_form_cache_ttl(),
+  headers: () => m.site_cache_key_headers(),
+  queryParams: () => m.site_cache_key_query(),
+  statusCodes: () => m.site_rule_status_codes(),
+  names: () => m.cert_domains(),
+  challenge: () => m.cert_challenge(),
+  email: () => m.cert_email(),
+  chainPem: () => m.cert_chain(),
+  hstsMaxAge: () => m.cert_hsts_age(),
+  version: () => m.upgrade_version(),
+  urls: () => m.purge_urls(),
+  hosts: () => m.purge_hosts(),
+  tags: () => m.purge_tags(),
+  sitemapUrl: () => m.purge_sitemap_url(),
+  siteIds: () => m.purge_sites(),
+  expression: () => m.rules_expression(),
+  entries: () => m.ip_lists_entries(),
+  cidr: () => m.bans_address(),
+  ttl: () => m.dns_ttl(),
+};
+
+/** A node capability id ("tls-v1") by its label, or the id itself when it has none. */
+export function nodeFeatureLabel(feature: string): string {
+  const fn = messages[`node_feature_${feature.replaceAll("-", "_")}`];
+  return fn ? fn() : feature;
+}
+
+/** "tls-v1, purge-tag-v1" → "HTTPS、Host 与标签刷新" (", " in English). */
+function featureList(features: string): string {
+  const labels = features
+    .split(",")
+    .map((feature) => feature.trim())
+    .filter(Boolean)
+    .map(nodeFeatureLabel);
+  return [...new Set(labels)].join(getLocale() === "zh-CN" ? "、" : ", ");
+}
+
+type Issue = { path?: readonly PropertyKey[] };
+
+/** The first validation issue of a server (oRPC `data.issues`) or browser (zod) error. */
+function firstIssue(error: unknown, data: unknown): Issue | undefined {
+  const fromData = (data as { issues?: unknown } | null | undefined)?.issues;
+  const issues = Array.isArray(fromData)
+    ? fromData
+    : (error as { issues?: unknown } | null | undefined)?.issues;
+  return Array.isArray(issues) ? (issues[0] as Issue | undefined) : undefined;
+}
+
+/** "Check “Domains” (item 3)" for the deepest labelled field of the issue's path. */
+function issueMessage(issue: Issue | undefined): string {
+  const path = issue?.path ?? [];
+  for (let i = path.length - 1; i >= 0; i--) {
+    const segment = path[i];
+    const label = typeof segment === "string" ? fieldLabels[segment] : undefined;
+    if (!label) continue;
+    const index = path[i + 1];
+    return typeof index === "number"
+      ? m.common_check_field_item({ field: label(), item: index + 1 })
+      : m.common_check_field({ field: label() });
+  }
+  return m.error_bad_request();
+}
+
 function errorFields(error: unknown): {
   code?: string;
   status?: number;
@@ -76,8 +154,13 @@ export function localizeError(error: unknown, fallback: string = m.common_unknow
       const value = values[name];
       params[name] = typeof value === "number" ? value : String(value ?? "");
     }
+    if (code === "NODE_CAPABILITY_REQUIRED") params.features = featureList(String(params.features));
     const fn = messages[`error_${code.toLowerCase()}`];
     if (fn) return fn(params);
+  }
+  // oRPC's input validation: name the field the first issue points at.
+  if (code === "BAD_REQUEST" && firstIssue(error, data)) {
+    return issueMessage(firstIssue(error, data));
   }
   if (code && genericCodes[code]) return (genericCodes[code] as MessageFn)();
   if (code && authCodes[code]) return (authCodes[code] as MessageFn)();
@@ -86,6 +169,8 @@ export function localizeError(error: unknown, fallback: string = m.common_unknow
   // better-auth's rate limiter answers 429 without a code.
   if (status === 429) return m.error_too_many_requests();
   // A schema parsed in the browser: its message is the issues as JSON.
-  if (Array.isArray((error as { issues?: unknown } | null)?.issues)) return m.error_bad_request();
+  if (Array.isArray((error as { issues?: unknown } | null)?.issues)) {
+    return issueMessage(firstIssue(error, undefined));
+  }
   return message || fallback;
 }

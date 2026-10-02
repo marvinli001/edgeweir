@@ -1,6 +1,8 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { ipListInput, tlsSettings } from "@edgeweir/contract";
 import { describe, expect, it } from "vitest";
-import { localizeError } from "../../src/web/lib/errors";
+import { localizeError, nodeFeatureLabel } from "../../src/web/lib/errors";
 import { overwriteGetLocale } from "../../src/web/paraglide/runtime.js";
 
 describe("localizeError", () => {
@@ -9,10 +11,25 @@ describe("localizeError", () => {
   it("never shows a schema's issues as JSON", () => {
     const error = ipListInput.safeParse({ name: "x", entries: ["10.0.0.300"] }).error;
     expect(error?.message).toContain('"code"');
-    expect(localizeError(error)).toBe("Invalid input");
+    expect(localizeError(error)).toBe("Check “IP addresses and CIDRs”");
     expect(localizeError(tlsSettings.safeParse({ gzipTypes: ["text/html;"] }).error)).toBe(
       "Invalid input",
     );
+  });
+
+  it("names the field of a server-side validation error", () => {
+    const invalid = (path: PropertyKey[]) => ({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Input validation failed",
+      data: { issues: [{ code: "custom", path, message: "Invalid input" }] },
+    });
+    expect(localizeError(invalid(["domains", 1]))).toBe("Check “Domains”, item 2");
+    expect(localizeError(invalid(["origins", 0, "address"]))).toBe("Check “Origin”");
+    expect(localizeError(invalid(["version"]))).toBe("Check “Target version”");
+    expect(localizeError(invalid(["unknownField"]))).toBe("Invalid input");
+    expect(localizeError(invalid([]))).toBe("Invalid input");
+    expect(localizeError({ code: "BAD_REQUEST", status: 400, message: "x" })).toBe("Invalid input");
   });
 
   it("localizes better-auth and WebAuthn codes the UI meets", () => {
@@ -35,6 +52,36 @@ describe("localizeError", () => {
     expect(localizeError(failure("ERROR_AUTHENTICATOR_GENERAL_ERROR", "The authenticator…"))).toBe(
       "Passkey verification failed",
     );
+  });
+
+  it("names the capabilities and the nodes that lack them", () => {
+    const error = {
+      code: "NODE_CAPABILITY_REQUIRED",
+      status: 409,
+      message: "cluster nodes cannot run this task",
+      data: { features: "purge-tag-v1, future-v9", nodes: "edge-1, edge-2" },
+    };
+    expect(localizeError(error)).toBe(
+      "Some nodes don't support Host and tag purges, future-v9 yet: edge-1, edge-2",
+    );
+  });
+
+  it("labels every capability nodes can be asked for", () => {
+    const compiler = readFileSync(
+      resolve(import.meta.dirname, "../../../../packages/config-compiler/src/index.ts"),
+      "utf8",
+    );
+    const contract = readFileSync(
+      resolve(import.meta.dirname, "../../../../packages/contract/src/node-features.ts"),
+      "utf8",
+    );
+    const features = new Set(
+      [...`${compiler}\n${contract}`.matchAll(/"([a-z0-9]+(?:-[a-z0-9]+)*-v\d+)"/g)].map(
+        (match) => match[1] as string,
+      ),
+    );
+    expect(features.size).toBeGreaterThan(15);
+    for (const feature of features) expect(nodeFeatureLabel(feature), feature).not.toBe(feature);
   });
 
   it("keeps a plain error's own message", () => {
