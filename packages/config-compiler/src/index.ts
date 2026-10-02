@@ -171,6 +171,11 @@ export const ERROR_PAGES_FEATURE = "error-pages-v1";
 export const RULES_V2_FEATURE = "rules-v2";
 /** Feature of layer-4 (TCP / UDP) applications (proto v0.15.0, NodeConfig.l4_apps). */
 export const L4_FEATURE = "l4-v1";
+/**
+ * Feature of domains served over HTTP until the site's certificate covers
+ * them (proto v0.19.0, Domain.tls_pending).
+ */
+export const TLS_PENDING_DOMAINS_FEATURE = "tls-pending-domains-v1";
 /** Layer-4 applications a cluster may have (enabled or not). */
 export const MAX_L4_APPS_PER_CLUSTER = 256;
 
@@ -243,7 +248,12 @@ export interface SiteModel {
   enabled: boolean;
   cacheGeneration: number;
   logSampleRate?: number;
-  domains: { name: string; wildcard: boolean }[];
+  /**
+   * `tlsPending`: the site's certificate does not cover the domain yet; it
+   * is served over HTTP only (feature tls-pending-domains-v1). Ignored on a
+   * site without a certificate.
+   */
+  domains: { name: string; wildcard: boolean; tlsPending?: boolean }[];
   originPool: {
     id: string;
     policy: "weighted_random" | "round_robin" | "consistent_hash";
@@ -917,7 +927,13 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
     cacheZone: DEFAULT_CACHE_ZONE,
     cacheGeneration: BigInt(model.cacheGeneration),
     logSampleRate: model.logSampleRate ?? 0,
-    domains: model.domains.map((d) => create(DomainSchema, { name: d.name, wildcard: d.wildcard })),
+    domains: model.domains.map((d) =>
+      create(DomainSchema, {
+        name: d.name,
+        wildcard: d.wildcard,
+        tlsPending: !!d.tlsPending && !!model.certificateId,
+      }),
+    ),
     originPool: create(OriginPoolSchema, {
       id: model.originPool.id,
       policy: policyMap[model.originPool.policy],
@@ -1202,6 +1218,9 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...(config.sites.some((s) => s.logSampleRate) ? ["access-logs-v1"] : []),
     ...(config.sites.some((s) => s.tls) ? ["tls-v1"] : []),
     ...(config.httpChallenges.length ? ["http01-v1"] : []),
+    ...(config.sites.some((s) => s.domains.some((d) => d.tlsPending))
+      ? [TLS_PENDING_DOMAINS_FEATURE]
+      : []),
     ...(config.sites.some((s) => s.tls?.http3) ? ["http3-v1"] : []),
     ...(config.sites.some((s) => s.rules.length) ||
     config.platformRules.length ||
