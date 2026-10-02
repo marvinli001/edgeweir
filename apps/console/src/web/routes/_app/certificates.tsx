@@ -14,7 +14,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { certificateErrorText } from "@/lib/certificate-errors";
@@ -31,6 +31,7 @@ function CertificatesPage() {
     meta: { background: true },
   });
   const credentials = useQuery(orpc.dnsCredentials.list.queryOptions());
+  const settings = useQuery(orpc.certificates.settings.queryOptions());
   const remove = useMutation(orpc.certificates.delete.mutationOptions());
   const renew = useMutation(orpc.certificates.renew.mutationOptions());
   const removeDns = useMutation(orpc.dnsCredentials.delete.mutationOptions());
@@ -186,7 +187,11 @@ function CertificatesPage() {
       </Card>
       {dialog === "upload" ? <UploadDialog onClose={() => setDialog(null)} /> : null}
       {dialog === "request" ? (
-        <RequestDialog credentials={credentials.data ?? []} onClose={() => setDialog(null)} />
+        <RequestDialog
+          credentials={credentials.data ?? []}
+          acmeDirectory={settings.data?.acmeDirectory ?? null}
+          onClose={() => setDialog(null)}
+        />
       ) : null}
       {dialog === "dns" || editing ? (
         <DnsCredentialDialog
@@ -284,9 +289,12 @@ function UploadDialog({ onClose }: { onClose: () => void }) {
 }
 function RequestDialog({
   credentials,
+  acmeDirectory,
   onClose,
 }: {
   credentials: { id: string; name: string }[];
+  /** EDGEWEIR_ACME_DIRECTORY: every certificate uses it, whatever CA is chosen. */
+  acmeDirectory: string | null;
   onClose: () => void;
 }) {
   const client = useQueryClient();
@@ -314,10 +322,10 @@ function RequestDialog({
           name: String(data.get("certName")),
           names: parsedNames,
           email: String(data.get("email")),
-          ca: ca as "letsencrypt" | "zerossl",
+          ca: acmeDirectory ? "letsencrypt" : (ca as "letsencrypt" | "zerossl"),
           challenge: challenge as "http01" | "dns01",
           ...(challenge === "dns01" ? { dnsCredentialId: credential } : { skipDnsCheck }),
-          ...(ca === "zerossl"
+          ...(ca === "zerossl" && !acmeDirectory
             ? { eabKid: String(data.get("eabKid")), eabHmacKey: String(data.get("eabHmacKey")) }
             : {}),
         });
@@ -344,16 +352,25 @@ function RequestDialog({
         ) : null}
       </Field>
       <TextField id="email" label={m.cert_email()} type="email" />
-      <FormSelect
-        id="certCa"
-        label={m.cert_ca()}
-        value={ca}
-        onChange={setCa}
-        options={[
-          { value: "letsencrypt", label: m.cert_ca_letsencrypt() },
-          { value: "zerossl", label: m.cert_ca_zerossl() },
-        ]}
-      />
+      {acmeDirectory ? (
+        <Field>
+          <FieldTitle>{m.cert_acme_directory()}</FieldTitle>
+          <p className="font-mono text-sm break-all" data-testid="cert-acme-directory">
+            {acmeDirectory}
+          </p>
+        </Field>
+      ) : (
+        <FormSelect
+          id="certCa"
+          label={m.cert_ca()}
+          value={ca}
+          onChange={setCa}
+          options={[
+            { value: "letsencrypt", label: m.cert_ca_letsencrypt() },
+            { value: "zerossl", label: m.cert_ca_zerossl() },
+          ]}
+        />
+      )}
       <FormSelect
         id="certChallenge"
         label={m.cert_challenge()}
@@ -381,7 +398,7 @@ function RequestDialog({
           className="self-start"
         />
       )}
-      {ca === "zerossl" ? (
+      {ca === "zerossl" && !acmeDirectory ? (
         <>
           <TextField id="eabKid" label={m.cert_eab_kid()} />
           <TextField id="eabHmacKey" label={m.cert_eab_key()} type="password" />

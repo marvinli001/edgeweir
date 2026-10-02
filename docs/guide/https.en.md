@@ -61,7 +61,7 @@ Prerequisites:
 | Name | 1–100 characters | None | The certificate's name in the console |
 | Domains | 1–100 names, separated by commas or spaces, no duplicates; `*.` wildcards allowed | None | Certificate SANs |
 | Account email | Email address | None | ACME account contact |
-| Certificate authority | Let's Encrypt / ZeroSSL | Let's Encrypt | ACME directory |
+| Certificate authority | Let's Encrypt / ZeroSSL | Let's Encrypt | ACME directory; read-only **ACME directory (EDGEWEIR_ACME_DIRECTORY)** when that variable is set |
 | Validation method | HTTP-01 / DNS-01 | HTTP-01 | Domain control validation; wildcards require DNS-01, and with HTTP-01 the form shows "Wildcards need DNS-01" under **Domains** |
 | DNS credentials | A DNS credential that has been added | The first credential | Account DNS-01 writes TXT records with; one zone per certificate |
 | Skip the DNS check | On / off | Off | HTTP-01 only: do not check that the names resolve to the nodes (at the request and before each issuance), for example with a load balancer in front of the nodes |
@@ -226,7 +226,7 @@ A change saved in the console or with an AccessKey is published even when it nee
 
 | Item | Description |
 | --- | --- |
-| Certificate authorities | The UI offers Let's Encrypt and ZeroSSL. `EDGEWEIR_ACME_DIRECTORY` and `EDGEWEIR_ACME_CA_FILE` move every certificate to a private or staging ACME directory, see [Environment variables](../reference/environment.en.md) |
+| Certificate authorities | The UI offers Let's Encrypt and ZeroSSL. `EDGEWEIR_ACME_DIRECTORY` and `EDGEWEIR_ACME_CA_FILE` move every certificate to a private or staging ACME directory; **Request certificate** then shows that directory instead of the CA and EAB fields, see [Environment variables](../reference/environment.en.md) |
 | TLS versions | TLS 1.0 and 1.1 are not supported |
 | Cipher suites | Only the **Modern** and **Compatible** profiles; no custom nginx configuration |
 | Compression | Gzip, Brotli, and Zstandard |

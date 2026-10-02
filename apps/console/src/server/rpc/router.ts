@@ -31,6 +31,7 @@ import { createBan, deleteBan, getBanSettings, listBans, setBanSettings } from "
 import { getBulkRedirects, saveBulkRedirects } from "../services/bulk-redirects";
 import { createCacheTask, getCacheTask, listCacheTasks } from "../services/cache-tasks";
 import {
+  certificateSettings,
   createDnsCredential,
   deleteCertificate,
   deleteDnsCredential,
@@ -287,6 +288,9 @@ export const router = os.router({
   },
   certificates: {
     list: authed.certificates.list.handler(({ context }) => listCertificates(context.app)),
+    settings: authed.certificates.settings.handler(({ context }) =>
+      certificateSettings(context.app),
+    ),
     upload: authed.certificates.upload.handler(({ input, context }) =>
       uploadCertificate(context.app, input, context),
     ),

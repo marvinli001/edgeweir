@@ -557,6 +557,7 @@
   "cert_ca": "证书颁发机构",
   "cert_ca_letsencrypt": "Let's Encrypt",
   "cert_ca_zerossl": "ZeroSSL",
+  "cert_acme_directory": "ACME 目录（EDGEWEIR_ACME_DIRECTORY）",
   "cert_challenge": "验证方式",
   "cert_http01": "HTTP-01",
   "cert_dns01": "DNS-01",

@@ -3,6 +3,7 @@ import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import {
   type CertificateDto,
   type CertificateRequest,
+  type CertificateSettings,
   type CertificateUpload,
   type DnsCredentialInput,
   dnsProviderEntry,
@@ -152,6 +153,10 @@ export function inspectCertificate(chainPem: string, privateKeyPem: string) {
 
 export async function listCertificates(app: AppContext) {
   return (await app.db.select().from(schema.certificate)).map(certificateDto);
+}
+
+export function certificateSettings(app: AppContext): CertificateSettings {
+  return { acmeDirectory: app.env.EDGEWEIR_ACME_DIRECTORY || null };
 }
 
 export async function uploadCertificate(

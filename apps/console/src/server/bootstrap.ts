@@ -62,6 +62,10 @@ export async function bootstrap(): Promise<Running> {
   setLogLevel(env.LOG_LEVEL);
   const log = logger;
   log.info("starting edgeweir console", { version: env.version, role: env.ROLE });
+  if (env.EDGEWEIR_ACME_DIRECTORY)
+    log.warn("EDGEWEIR_ACME_DIRECTORY replaces the certificate authority of every certificate", {
+      directoryUrl: env.EDGEWEIR_ACME_DIRECTORY,
+    });
   // A promise nobody awaits must not take down the UI, API, node channel and
   // worker with it (Node.js exits on an unhandled rejection by default).
   process.on("unhandledRejection", (reason) => log.error("unhandled rejection", { error: reason }));

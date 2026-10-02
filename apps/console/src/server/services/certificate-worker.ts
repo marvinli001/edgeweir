@@ -179,7 +179,10 @@ function attempt(certificate: CertificateRow) {
   );
 }
 
-/** The ACME directory of a certificate's CA (EDGEWEIR_ACME_DIRECTORY replaces every CA). */
+/**
+ * The ACME directory of a certificate's CA (EDGEWEIR_ACME_DIRECTORY replaces
+ * every CA; the UI shows it instead of the CA choice: certificateSettings).
+ */
 export function acmeDirectory(app: AppContext, ca: string | undefined) {
   return (
     app.env.EDGEWEIR_ACME_DIRECTORY ||
@@ -505,6 +508,10 @@ export function retryDelay(notAfter: Date | null, now = Date.now()) {
   return Math.min(12 * 3_600_000, Math.max(10 * 60_000, (notAfter.getTime() - now) / 10));
 }
 
+/** The certificate's ACME settings with the directory an attempt used (kept with them). */
+const usedDirectory = (issuance: Issuance) =>
+  sql`${schema.certificate.acme} || ${JSON.stringify({ directoryUrl: issuance.directoryUrl })}::jsonb`;
+
 /**
  * Issues or renews a due ACME certificate. DNS-01 runs under the lease of its
  * DNS credential, so two console processes never rewrite the same
@@ -629,6 +636,7 @@ async function issueNow(app: AppContext, id: string) {
           status: added.length ? "pending" : "ready",
           operationStartedAt: null,
           lastError: "",
+          acme: usedDirectory(issuance),
           updatedAt: new Date(),
         })
         .where(attempt(row))
@@ -665,6 +673,7 @@ async function issueNow(app: AppContext, id: string) {
         status: "error",
         lastError: code,
         operationStartedAt: null,
+        acme: usedDirectory(issuance),
         renewAt: new Date(grown ? Date.now() : Date.now() + retryDelay(row.notAfter)),
       })
       .where(attempt(row));
@@ -794,7 +803,11 @@ export async function checkRenewalInfo(app: AppContext, now = Date.now()) {
     )
     .orderBy(sql`${schema.certificate.renewalInfoAt} asc nulls first`)
     .limit(50);
-  const directories = Map.groupBy(rows, (row) => acmeDirectory(app, row.acme.ca));
+  // Asked of the CA that issued each certificate.
+  const directories = Map.groupBy(
+    rows,
+    (row) => row.acme.directoryUrl || acmeDirectory(app, row.acme.ca),
+  );
   for (const [directoryUrl, group] of directories) {
     let windows: unknown;
     try {

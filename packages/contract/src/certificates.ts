@@ -182,11 +182,23 @@ export const certificateRequest = z
     path: ["eabKid"],
   });
 
+/** How the console issues ACME certificates. */
+export const certificateSettings = z.object({
+  /**
+   * The ACME directory EDGEWEIR_ACME_DIRECTORY sets for every certificate
+   * (the CA chosen per certificate is not used), or null.
+   */
+  acmeDirectory: z.string().nullable(),
+});
+
 const id = z.object({ id: uuid });
 export const certificatesContract = {
   list: oc
     .route({ method: "GET", path: "/certificates", tags: ["certificates"] })
     .output(z.array(certificateDto)),
+  settings: oc
+    .route({ method: "GET", path: "/certificates/settings", tags: ["certificates"] })
+    .output(certificateSettings),
   upload: oc
     .route({ method: "POST", path: "/certificates/upload", tags: ["certificates"] })
     .input(certificateUpload)
@@ -284,4 +296,5 @@ export type TlsSettings = z.infer<typeof tlsSettings>;
 export type CertificateDto = z.infer<typeof certificateDto>;
 export type CertificateUpload = z.infer<typeof certificateUpload>;
 export type CertificateRequest = z.infer<typeof certificateRequest>;
+export type CertificateSettings = z.infer<typeof certificateSettings>;
 export type DnsCredentialInput = z.infer<typeof dnsCredentialInput>;

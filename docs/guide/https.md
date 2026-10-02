@@ -61,7 +61,7 @@ DNS-01 验证需要先添加凭据。
 | 名称 | 1–100 字符 | 无 | 证书在控制台中的名称 |
 | 域名 | 1–100 个域名，逗号或空格分隔，不重复；可含 `*.` 泛域名 | 无 | 证书 SAN |
 | 账户邮箱 | 邮箱地址 | 无 | ACME 账户联系邮箱 |
-| 证书颁发机构 | Let's Encrypt / ZeroSSL | Let's Encrypt | ACME 目录 |
+| 证书颁发机构 | Let's Encrypt / ZeroSSL | Let's Encrypt | ACME 目录；设置了 `EDGEWEIR_ACME_DIRECTORY` 时改为只读的「ACME 目录（EDGEWEIR_ACME_DIRECTORY）」 |
 | 验证方式 | HTTP-01 / DNS-01 | HTTP-01 | 域名控制验证方式；泛域名必须使用 DNS-01，选择 HTTP-01 时表单在「域名」下提示「泛域名需要 DNS-01 验证」 |
 | DNS 凭据 | 已添加的 DNS 凭据 | 第一个凭据 | DNS-01 写入 TXT 所用的账户；每张证书一个区域 |
 | 跳过解析检查 | 开 / 关 | 关 | 仅 HTTP-01：不检查域名是否解析到节点（申请时与每次签发前），例如节点前面还有负载均衡 |
@@ -226,7 +226,7 @@ ACME 账户私钥、证书私钥和 DNS 凭据分别使用绑定记录 ID 的主
 
 | 项目 | 说明 |
 | --- | --- |
-| 证书颁发机构 | 界面只提供 Let's Encrypt 和 ZeroSSL。`EDGEWEIR_ACME_DIRECTORY` 和 `EDGEWEIR_ACME_CA_FILE` 可把全部证书改到私有或测试 ACME 目录，见[环境变量](../reference/environment.md) |
+| 证书颁发机构 | 界面只提供 Let's Encrypt 和 ZeroSSL。`EDGEWEIR_ACME_DIRECTORY` 和 `EDGEWEIR_ACME_CA_FILE` 可把全部证书改到私有或测试 ACME 目录，此时「申请证书」显示该目录而不是 CA 与 EAB 字段，见[环境变量](../reference/environment.md) |
 | TLS 版本 | 不支持 TLS 1.0 和 1.1 |
 | 密码套件 | 只有「现代」「兼容」两档，不能写入任意 nginx 配置 |
 | 压缩 | Gzip、Brotli、Zstandard |

@@ -88,7 +88,11 @@ process.stdin.on("data", (chunk) => {
 describe("HTTP-01 preconditions", async () => {
   const dir = mkdtempSync(join(tmpdir(), "edgeweir-certd-"));
   const certd = fakeCertd(dir);
-  const { ctx, client } = await createTestContext({ EDGEWEIR_CERTD_BIN: certd.bin });
+  const directory = "https://ca.internal.test/directory";
+  const { ctx, client } = await createTestContext({
+    EDGEWEIR_CERTD_BIN: certd.bin,
+    EDGEWEIR_ACME_DIRECTORY: directory,
+  });
   const app = createApp(ctx);
   const origin = ctx.env.EDGEWEIR_PUBLIC_URL;
   const table: Parameters<typeof fakeResolver>[0] = {};
@@ -198,5 +202,14 @@ describe("HTTP-01 preconditions", async () => {
       .from(schema.certificate)
       .where(eq(schema.certificate.id, skipped.id));
     expect(refused?.lastError).toBe("acme_unauthorized");
+  });
+
+  it("shows the directory EDGEWEIR_ACME_DIRECTORY sets and keeps the one an attempt used", async () => {
+    expect(await api.certificates.settings()).toEqual({ acmeDirectory: directory });
+    const used = await ctx.db
+      .select({ acme: schema.certificate.acme, lastError: schema.certificate.lastError })
+      .from(schema.certificate)
+      .where(eq(schema.certificate.lastError, "acme_unauthorized"));
+    expect(used.map((row) => row.acme.directoryUrl)).toEqual([directory]);
   });
 });

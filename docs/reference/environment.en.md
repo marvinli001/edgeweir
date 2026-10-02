@@ -46,7 +46,7 @@ The ClickHouse variables apply only with `EDGEWEIR_ANALYTICS=clickhouse`. The `a
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `EDGEWEIR_ACME_DIRECTORY` | Empty | ACME directory URL for every certificate; overrides the CA chosen per certificate. Private PKI and tests only; ACME accounts do not move between directories. Empty: Let's Encrypt or ZeroSSL, chosen per certificate ([HTTPS and certificates](../guide/https.en.md)). |
+| `EDGEWEIR_ACME_DIRECTORY` | Empty | ACME directory URL for every certificate; overrides the CA chosen per certificate. When set, **Request certificate** shows this directory instead of the CA and EAB fields, the console logs a warning at startup, and each certificate records the directory it was issued from, which its ARI renewal windows are read from. Private PKI and tests only; ACME accounts do not move between directories. Empty: Let's Encrypt or ZeroSSL, chosen per certificate ([HTTPS and certificates](../guide/https.en.md)). |
 | `EDGEWEIR_ACME_CA_FILE` | Empty | Path of a PEM file the certificate helper uses to verify the ACME directory's TLS certificate. Used with `EDGEWEIR_ACME_DIRECTORY`. |
 | `EDGEWEIR_SMTP_CA_FILE` | Empty | **Fallback** for **System → SMTP** → "CA certificates (PEM)". CA for SMTP TLS (path of a PEM file), used only when the SMTP settings hold no CA. Empty: the system trust store. |
 | `EDGEWEIR_DNS_TEST_ENDPOINT` | Empty | Address of the local DNS simulator for integration tests; enables the `test` DNS provider. Never set it for real providers. |

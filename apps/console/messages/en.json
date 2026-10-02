@@ -642,6 +642,7 @@
   "cert_ca": "Certificate authority",
   "cert_ca_letsencrypt": "Let's Encrypt",
   "cert_ca_zerossl": "ZeroSSL",
+  "cert_acme_directory": "ACME directory (EDGEWEIR_ACME_DIRECTORY)",
   "cert_challenge": "Validation method",
   "cert_http01": "HTTP-01",
   "cert_dns01": "DNS-01",
