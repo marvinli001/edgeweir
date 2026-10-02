@@ -347,7 +347,7 @@ X-Edgeweir-Signature: v1=<hex>
 
 ### Webhook 载荷
 
-请求体为 JSON，包含 `id`（事件 ID）、`siteId`、`siteName`、`kind`、`status`（`firing` / `resolved`）、`occurredAt`、`resourceId`（告警对象，例如节点或证书的 ID）、`text` 和 `url`（控制台链接）。集群与 DNS 告警的 `siteId` 为 `null`，`siteName` 为集群名称，`url` 指向 **集群与节点** 或 **DNS 调度**；`scheduling_action` 的 `siteName` 为「规则 · 节点」，`resourceId` 为 `<规则 ID>:<节点 ID>`。配置了 Bearer 令牌时附带 `Authorization: Bearer <令牌>`。接收方返回 2xx 视为成功。
+请求体为 JSON，包含 `id`（事件 ID）、`siteId`、`siteName`、`kind`、`status`（`firing` / `resolved`）、`occurredAt`、`resourceId`（告警对象，例如节点或证书的 ID）、`text` 和 `url`（控制台链接）。集群与 DNS 告警的 `siteId` 为 `null`，`siteName` 为集群名称；「节点离线」的 `siteId` 为 `null`，`siteName` 为节点名称，`resourceId` 为节点 ID；`url` 指向 **集群与节点** 或 **DNS 调度**；`scheduling_action` 的 `siteName` 为「规则 · 节点」，`resourceId` 为 `<规则 ID>:<节点 ID>`。配置了 Bearer 令牌时附带 `Authorization: Bearer <令牌>`。接收方返回 2xx 视为成功。
 
 ## 设置告警规则
 
@@ -356,7 +356,7 @@ X-Edgeweir-Signature: v1=<hex>
 
 | 字段 | 取值 | 默认值 | 告警种类 | 触发条件 |
 | --- | --- | --- | --- | --- |
-| 离线阈值（秒） | 45–3600 | 90 | 节点离线 | 网站所在集群的已启用节点超过阈值未上报，或上报数据面不健康 |
+| 离线阈值（秒） | 45–3600 | 90 | 节点离线 | 已启用节点超过阈值未上报，或上报数据面不健康；每个节点一条告警，不按它服务的网站分别发送 |
 | 证书到期预警（小时） | 1–720 | 72 | 证书即将到期 | 网站当前证书在阈值内到期 |
 | 最低请求数 | 1–1000000 | 100 | 服务端错误率过高 | 统计窗口内请求数达到该值 |
 | 统计窗口（分钟） | 1–60 | 5 | 服务端错误率过高 | 计算 5xx 比例的时间窗口 |
@@ -399,8 +399,9 @@ X-Edgeweir-Signature: v1=<hex>
 | 项目 | 行为 |
 | --- | --- |
 | 事件 | 同一条件只在进入告警和恢复时各产生一个事件，事件 ID 固定 |
-| 接收渠道 | 开启「接收所有告警」的渠道接收全部告警；其他渠道只接收订阅到它们的网站告警 |
+| 接收渠道 | 开启「接收所有告警」的渠道接收全部告警；其他渠道只接收订阅到它们的网站告警，「节点离线」在渠道订阅了该节点所在集群任一网站的这一种类时发送 |
 | 重试 | 失败后按 2、4、8、16 分钟退避重试，每个渠道共尝试 5 次 |
+| 批量 | 每分钟检查一次，每次最多发送 200 条，40 秒后开始的投递留到下一分钟 |
 | 重复 | 网络回执丢失时接收方可能收到重复通知；Webhook 接收方按事件 ID 去重 |
 | 投递前检查 | 每次投递重新检查：渠道已启用、事件仍是该条件的当前状态、订阅仍包含该告警种类（开启「接收所有告警」的渠道除外） |
 | 出站策略 | 解析并固定目标 IP；拒绝特殊用途地址；Webhook 类目标不跟随重定向；内部 Webhook 或 SMTP 需在 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 中放行对应网段 |

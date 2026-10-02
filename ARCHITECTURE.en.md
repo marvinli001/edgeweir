@@ -526,6 +526,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0041_g6_probes_scheduling` | `probe`, `probe_token`, `probe_result`, `node_address_state`, `scheduling_rule`, `scheduling_state`; `node.metrics`, `node.probe_enabled`; `node_ip.source` and `level` (unique by node, source, address); `dns_revision.reason_params` |
 | `0042_g7_layer4` | `cluster_port_pool`, `l4_app`, `l4_origin`, `l4_minute_stats` |
 | `0043_stats_marker_generation` | `stats_rollup_dirty.generation` (rollups clear only the marker generation they read) |
+| `0044_node_offline_per_node` | Drops the per-site node offline alert states (one per node now) |
 
 ## Build output
 

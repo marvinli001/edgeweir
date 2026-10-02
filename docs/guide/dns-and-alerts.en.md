@@ -347,7 +347,7 @@ At most 32 channels. When editing a channel, turn on **Replace channel credentia
 
 ### Webhook payload
 
-The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `status` (`firing` / `resolved`), `occurredAt`, `resourceId` (the object of the alert, such as a node or certificate ID), `text`, and `url` (a console link). For cluster and DNS alerts, `siteId` is `null`, `siteName` is the cluster name, and `url` points to **Clusters & nodes** or **DNS steering**; for `scheduling_action`, `siteName` is "rule · node" and `resourceId` is `<rule ID>:<node ID>`. With a bearer token, the request carries `Authorization: Bearer <token>`. A 2xx response counts as delivered.
+The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `status` (`firing` / `resolved`), `occurredAt`, `resourceId` (the object of the alert, such as a node or certificate ID), `text`, and `url` (a console link). For cluster and DNS alerts, `siteId` is `null` and `siteName` is the cluster name; for **Node offline**, `siteId` is `null`, `siteName` is the node name and `resourceId` the node ID; and `url` points to **Clusters & nodes** or **DNS steering**; for `scheduling_action`, `siteName` is "rule · node" and `resourceId` is `<rule ID>:<node ID>`. With a bearer token, the request carries `Authorization: Bearer <token>`. A 2xx response counts as delivered.
 
 ## Set alert rules
 
@@ -356,7 +356,7 @@ The request body is JSON with `id` (event ID), `siteId`, `siteName`, `kind`, `st
 
 | Field | Values | Default | Alert kind | Condition |
 | --- | --- | --- | --- | --- |
-| Offline threshold (seconds) | 45–3600 | 90 | Node offline | An enabled node of the site's cluster has not reported for longer than the threshold, or reports an unhealthy data plane |
+| Offline threshold (seconds) | 45–3600 | 90 | Node offline | An enabled node has not reported for longer than the threshold, or reports an unhealthy data plane; one alert per node, not one per site it serves |
 | Certificate warning (hours) | 1–720 | 72 | Certificate expiring | The site's current certificate expires within the threshold |
 | Minimum requests | 1–1000000 | 100 | High server error ratio | Requests in the window reach this value |
 | Window (minutes) | 1–60 | 5 | High server error ratio | Time window for the 5xx ratio |
@@ -399,8 +399,9 @@ These alerts belong to a cluster, not to a site. They go only to channels with *
 | Item | Behavior |
 | --- | --- |
 | Events | A condition creates one event when it starts and one when it recovers; event IDs are stable |
-| Receiving channels | Channels with **Receive every alert** receive every alert; other channels receive only the site alerts subscribed to them |
+| Receiving channels | Channels with **Receive every alert** receive every alert; other channels receive only the site alerts subscribed to them, and **Node offline** when the channel subscribes to that kind for any site in the node's cluster |
 | Retries | After a failure, retries back off 2, 4, 8, and 16 minutes; each channel gets 5 attempts |
+| Batches | Checked every minute; at most 200 notifications per check, and deliveries that would start after 40 seconds wait for the next minute |
 | Duplicates | A lost receipt can cause duplicate notifications; webhook receivers deduplicate by event ID |
 | Checks before delivery | Every delivery rechecks that the channel is enabled, that the event is still the condition's current state, and that a subscription still includes the alert kind (except for channels with **Receive every alert**) |
 | Outbound policy | Resolves and pins the target IP; refuses special-purpose addresses; webhook-style targets do not follow redirects; internal webhooks or SMTP need their network in `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` |

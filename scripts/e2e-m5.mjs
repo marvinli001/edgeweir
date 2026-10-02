@@ -186,7 +186,7 @@ try {
       const events = await (await fetch(mock + "/events")).json();
       return events.some(
         (event) =>
-          event.siteId === site.id &&
+          event.siteId === null &&
           event.resourceId === edge.id &&
           event.kind === "node_offline" &&
           event.status === "firing",
@@ -194,7 +194,7 @@ try {
     },
     120,
   );
-  console.log("PASS the subscribed site's node-offline alert reached the local webhook sink");
+  console.log("PASS the node-offline alert of the subscribed site's node reached the local webhook sink");
 } finally {
   await run([...compose, "start", "node"]);
 }

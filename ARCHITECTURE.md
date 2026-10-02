@@ -526,6 +526,7 @@ Compose profile `cache` 启动 Valkey；控制台目前未使用 Valkey。
 | `0041_g6_probes_scheduling` | `probe`、`probe_token`、`probe_result`、`node_address_state`、`scheduling_rule`、`scheduling_state`；`node.metrics`、`node.probe_enabled`；`node_ip.source` 与 `level`（唯一键改为节点、来源、地址）；`dns_revision.reason_params` |
 | `0042_g7_layer4` | `cluster_port_pool`、`l4_app`、`l4_origin`、`l4_minute_stats` |
 | `0043_stats_marker_generation` | `stats_rollup_dirty.generation`（汇总只清除读到的那一代标记） |
+| `0044_node_offline_per_node` | 删除按网站记录的「节点离线」告警状态（改为每个节点一条） |
 
 ## 构建产物
 

@@ -26,6 +26,9 @@ import { elevatedSites, raiseCcAlert } from "./security";
 import { findSite } from "./sites";
 
 const POLICY_KEY = "alert_policy";
+/** Notifications a sweep sends at most, and for how long it keeps starting new ones. */
+const DELIVERY_BATCH = 200;
+const DELIVERY_BUDGET_MS = 40_000;
 type Channel = typeof schema.alertChannel.$inferSelect;
 type Event = typeof schema.alertEvent.$inferSelect;
 const dto = (c: Channel) => ({
@@ -338,7 +341,15 @@ export async function listAlertEvents(app: AppContext, siteId?: string) {
     .leftJoin(schema.site, eq(schema.site.id, schema.alertEvent.siteId))
     .where(
       siteId
-        ? eq(schema.site.id, siteId)
+        ? or(
+            eq(schema.site.id, siteId),
+            // Nodes that serve the site.
+            and(
+              eq(schema.alertEvent.kind, "node_offline"),
+              isNull(schema.alertEvent.siteId),
+              sql`${schema.alertEvent.resourceId} in (select n.id::text from node n join site s on s.cluster_id = n.cluster_id where s.id = ${siteId}::uuid)`,
+            ),
+          )
         : // Platform alerts have no site; alerts of deleted sites are gone with them.
           or(isNull(schema.alertEvent.siteId), isNotNull(schema.site.id)),
     )
@@ -358,7 +369,8 @@ export async function listAlertEvents(app: AppContext, siteId?: string) {
 const keyOf = (kind: string, siteId: string | null, resourceId: string) =>
   `${kind}/${siteId ?? "platform"}/${resourceId}`;
 interface Condition {
-  siteId: string;
+  /** Null for node_offline: one alert per node, whatever sites it serves. */
+  siteId: string | null;
   kind: AlertKind;
   resourceId: string;
   siteName: string;
@@ -393,6 +405,28 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
   );
   const elevated = await elevatedSites(app.db, now);
   const active = new Map<string, Condition>();
+  // A node counts once its enrollment is older than the threshold.
+  const watched = nodes.filter(
+    (n) =>
+      n.status === "active" &&
+      n.enrolledAt &&
+      n.enrolledAt.getTime() <= now - policy.nodeOfflineSeconds * 1000,
+  );
+  for (const node of watched) {
+    const receipt = receipts.find((r) => r.nodeId === node.id);
+    if (
+      !node.lastSeenAt ||
+      node.lastSeenAt.getTime() < now - policy.nodeOfflineSeconds * 1000 ||
+      receipt?.dataPlaneHealthy === false
+    )
+      active.set(keyOf("node_offline", null, node.id), {
+        siteId: null,
+        kind: "node_offline",
+        resourceId: node.id,
+        siteName: node.name,
+        domain: "",
+      });
+  }
   for (const site of sites) {
     const base = {
       siteId: site.id,
@@ -401,22 +435,7 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
     };
     const add = (kind: AlertKind, resourceId: string) =>
       active.set(keyOf(kind, site.id, resourceId), { ...base, kind, resourceId });
-    const members = nodes.filter(
-      (n) =>
-        n.clusterId === site.clusterId &&
-        n.status === "active" &&
-        n.enrolledAt &&
-        n.enrolledAt.getTime() <= now - policy.nodeOfflineSeconds * 1000,
-    );
-    for (const node of members) {
-      const receipt = receipts.find((r) => r.nodeId === node.id);
-      if (
-        !node.lastSeenAt ||
-        node.lastSeenAt.getTime() < now - policy.nodeOfflineSeconds * 1000 ||
-        receipt?.dataPlaneHealthy === false
-      )
-        add("node_offline", node.id);
-    }
+    const members = watched.filter((n) => n.clusterId === site.clusterId);
     const cert = certificates.find((c) => c.id === site.certificateId);
     if (cert?.notAfter && cert.notAfter.getTime() <= now + policy.certificateHours * 3600000)
       add("certificate_expiring", cert.id);
@@ -449,24 +468,33 @@ async function conditions(app: AppContext, policy: AlertPolicy, now: number) {
     // Fired by the nodes' events (reportSecurityEvents); held while a node reports the site above normal.
     if (elevated.has(site.id)) add("cc_mitigation", site.id);
   }
-  return { active, sites };
+  return { active, sites, nodes };
 }
-/** A platform channel gets every alert; others the site alerts subscribed to them. */
+/**
+ * A platform channel gets every alert; others the site alerts subscribed to
+ * them, and node_offline of a node in the cluster of a site whose
+ * subscription has it.
+ */
 async function eligible(app: AppContext, c: Channel, event: Event) {
   if (!c.enabled) return false;
   if (c.platform) return true;
+  const sub = schema.alertSubscription;
+  const subscribed = and(eq(sub.channelId, c.id), eq(sub.enabled, true));
+  if (event.siteId === null && event.kind === "node_offline") {
+    const rows = await app.db
+      .select({ kinds: sub.kinds })
+      .from(sub)
+      .innerJoin(schema.site, eq(schema.site.id, sub.siteId))
+      .innerJoin(schema.node, eq(schema.node.clusterId, schema.site.clusterId))
+      .where(and(subscribed, sql`${schema.node.id}::text = ${event.resourceId}`));
+    return rows.some((r) => r.kinds.includes(event.kind));
+  }
   // Platform alerts have no subscribers: platform channels only.
   if (event.siteId === null) return false;
   const rows = await app.db
-    .select({ kinds: schema.alertSubscription.kinds })
-    .from(schema.alertSubscription)
-    .where(
-      and(
-        eq(schema.alertSubscription.siteId, event.siteId),
-        eq(schema.alertSubscription.channelId, c.id),
-        eq(schema.alertSubscription.enabled, true),
-      ),
-    );
+    .select({ kinds: sub.kinds })
+    .from(sub)
+    .where(and(eq(sub.siteId, event.siteId), subscribed));
   return rows.some((r) => r.kinds.includes(event.kind));
 }
 export async function sweepAlerts(app: AppContext, now = Date.now()) {
@@ -483,7 +511,7 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
       for (const [key, c] of snapshot.active) {
         if (previous.find((s) => s.key === key)?.active) continue;
         // At most once per site in 15 minutes: a raise held back fires here once they are over.
-        if (c.kind === "cc_mitigation") {
+        if (c.kind === "cc_mitigation" && c.siteId) {
           await raiseCcAlert(tx, { id: c.siteId, name: c.siteName }, new Date(now));
           continue;
         }
@@ -510,22 +538,30 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
           occurredAt: new Date(now),
         });
       }
-      // Platform alerts (no site) are raised and resolved where they happen, not here.
+      // Platform alerts (no site) are raised and resolved where they happen,
+      // not here; node_offline is the exception.
       for (const old of previous.filter(
-        (s) => s.active && s.siteId !== null && !snapshot.active.has(s.key),
+        (s) =>
+          s.active &&
+          (s.siteId !== null || s.kind === "node_offline") &&
+          !snapshot.active.has(s.key),
       )) {
         await tx
           .update(schema.alertState)
           .set({ active: false, updatedAt: new Date(now) })
           .where(eq(schema.alertState.key, old.key));
-        const site = snapshot.sites.find((s) => s.id === old.siteId);
-        if (site && old.siteId)
+        // Nothing is announced for a deleted site or node.
+        const name =
+          old.siteId === null
+            ? snapshot.nodes.find((n) => n.id === old.resourceId)?.name
+            : snapshot.sites.find((s) => s.id === old.siteId)?.name;
+        if (name !== undefined)
           await tx.insert(schema.alertEvent).values({
-            siteId: site.id,
+            siteId: old.siteId,
             kind: old.kind,
             resourceId: old.resourceId,
             status: "resolved",
-            payload: { siteName: site.name, domain: "" },
+            payload: { siteName: name, domain: "" },
             occurredAt: new Date(now),
           });
       }
@@ -577,8 +613,11 @@ export async function sweepAlerts(app: AppContext, now = Date.now()) {
         ),
       )
       .orderBy(schema.alertDelivery.nextAttemptAt)
-      .limit(20);
+      .limit(DELIVERY_BATCH);
+    const started = Date.now();
     for (const delivery of pending) {
+      // The rest waits for the next minute's sweep.
+      if (Date.now() - started > DELIVERY_BUDGET_MS) break;
       const [c] = await app.db
         .select()
         .from(schema.alertChannel)

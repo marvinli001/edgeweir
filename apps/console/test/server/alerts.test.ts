@@ -108,7 +108,17 @@ describe("M5 notification delivery and subscription authorization", async () => 
     await sweepAlerts(ctx);
     await sweepAlerts(ctx);
     expect(received()).toHaveLength(1);
-    expect(received()[0]).toMatchObject({ siteId, kind: "node_offline", status: "firing" });
+    // One alert for the node, through the subscription of a site in its cluster.
+    expect(received()[0]).toMatchObject({
+      siteId: null,
+      siteName: "offline",
+      resourceId: nodeId,
+      kind: "node_offline",
+      status: "firing",
+    });
+    expect((await admin.alerts.events({ siteId })).map((e) => [e.kind, e.status])).toEqual([
+      ["node_offline", "firing"],
+    ]);
     expect(JSON.stringify(received())).not.toContain("Unsubscribed site");
     await ctx.db
       .update(schema.node)
@@ -123,6 +133,29 @@ describe("M5 notification delivery and subscription authorization", async () => 
     if (!sub) throw new Error("subscription missing");
     await admin.alerts.unsubscribe({ id: sub.id });
     expect(await admin.alerts.subscriptions()).toEqual([]);
+  });
+  it("sends a platform channel one node_offline per node, whatever the sites it serves", async () => {
+    const platform = await admin.alerts.createChannel({
+      name: "Everything",
+      platform: true,
+      config: { kind: "webhook", url: endpoint },
+    });
+    const before = received().length;
+    await ctx.db
+      .update(schema.node)
+      .set({ lastSeenAt: new Date(0) })
+      .where(eq(schema.node.id, nodeId));
+    await sweepAlerts(ctx);
+    await sweepAlerts(ctx);
+    // Two sites in the node's cluster, one notification.
+    expect(received().slice(before)).toMatchObject([
+      { kind: "node_offline", status: "firing", resourceId: nodeId, siteId: null },
+    ]);
+    await ctx.db.delete(schema.node).where(eq(schema.node.id, nodeId));
+    await sweepAlerts(ctx);
+    // A deleted node's alert ends without a recovery notice.
+    expect(received().slice(before)).toHaveLength(1);
+    await admin.alerts.deleteChannel({ id: platform.id });
   });
   it("refuses private endpoints unless the operator explicitly allows them and never follows redirects", async () => {
     const allow = ctx.env.EDGEWEIR_OUTBOUND_ALLOW_CIDRS;
