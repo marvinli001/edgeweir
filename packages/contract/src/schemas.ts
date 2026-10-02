@@ -643,6 +643,12 @@ export const clusterRollout = z.object({
       baseline5xx: z.number().int(),
     })
     .nullable(),
+  /**
+   * While a rollout runs: the sites the candidate adds, changes and removes
+   * against the stable revision, and why the revisions after the stable one
+   * were published (without repeats).
+   */
+  candidateChanges: z.object({ sites: siteChanges, reasons: z.array(revision) }).nullable(),
   /** Last change of the policy; `expectedUpdatedAt` of a policy update compares with it. */
   policyUpdatedAt: isoDateTime,
   /** Last change of any kind (every rollout step moves it). */

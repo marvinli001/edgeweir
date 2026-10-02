@@ -7,6 +7,8 @@ import type {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { Countdown } from "@/components/appica/countdown";
+import { SiteChangeList } from "@/components/config-changes";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
@@ -18,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDraft } from "@/hooks/use-draft";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
+import { revisionReason } from "@/lib/revisions";
 
 const STATES: Record<RolloutState, { tone: StatusTone; label: () => string; pulse?: boolean }> = {
   idle: { tone: "idle", label: () => m.rollout_state_idle() },
@@ -87,6 +90,8 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
   const abort = useMutation(orpc.clusters.abortRollout.mutationOptions());
   const state = STATES[rollout.state];
   const running = rollout.state === "canary" || rollout.state === "awaiting_promotion";
+  // The server drops repeated reasons; two codes may still read the same.
+  const reasons = [...new Set((rollout.candidateChanges?.reasons ?? []).map(revisionReason))];
   const refresh = () => queryClient.invalidateQueries({ queryKey: orpc.clusters.key() });
   return (
     <CardContent className="flex flex-col gap-3">
@@ -117,7 +122,29 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
               #{rollout.candidateRevision}
             </span>
           </Row>
-        ) : rollout.lastCandidateRevision !== null ? (
+        ) : null}
+        {rollout.candidateChanges ? (
+          <>
+            <Row label={m.rollout_changes()}>
+              <SiteChangeList
+                changes={rollout.candidateChanges.sites}
+                testId="rollout-candidate-changes"
+              />
+            </Row>
+            {reasons.length ? (
+              <Row label={m.rollout_reasons()}>
+                <ul className="flex min-w-0 flex-col gap-1" data-testid="rollout-candidate-reasons">
+                  {reasons.map((reason) => (
+                    <li key={reason} className="break-words">
+                      {reason}
+                    </li>
+                  ))}
+                </ul>
+              </Row>
+            ) : null}
+          </>
+        ) : null}
+        {rollout.candidateRevision === null && rollout.lastCandidateRevision !== null ? (
           <Row label={m.rollout_last_candidate()}>
             <span className="font-mono">#{rollout.lastCandidateRevision}</span>
             {rollout.finishedAt ? (
@@ -132,8 +159,12 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
         ) : null}
         {rollout.windowEndsAt ? (
           <Row label={m.rollout_window_ends()}>
-            <span title={formatDateTime(rollout.windowEndsAt)}>
-              {formatDateTime(rollout.windowEndsAt)}
+            <span
+              className="inline-flex items-center"
+              title={formatDateTime(rollout.windowEndsAt)}
+              data-testid="rollout-window-countdown"
+            >
+              <Countdown target={rollout.windowEndsAt} />
             </span>
           </Row>
         ) : null}

@@ -1256,6 +1256,8 @@
   "rollout_outcome_withdrawn": "Candidate withdrawn",
   "rollout_stable": "Stable revision",
   "rollout_candidate": "Candidate revision",
+  "rollout_changes": "Changes",
+  "rollout_reasons": "Reasons",
   "rollout_last_candidate": "Last candidate",
   "rollout_window_ends": "Window ends",
   "rollout_canary_nodes": "Canary nodes",

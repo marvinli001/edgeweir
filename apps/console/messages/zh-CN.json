@@ -1153,6 +1153,8 @@
   "rollout_outcome_withdrawn": "候选版本已撤回",
   "rollout_stable": "稳定版本",
   "rollout_candidate": "候选版本",
+  "rollout_changes": "改动",
+  "rollout_reasons": "原因",
   "rollout_last_candidate": "上一个候选版本",
   "rollout_window_ends": "窗口结束",
   "rollout_canary_nodes": "金丝雀节点",
