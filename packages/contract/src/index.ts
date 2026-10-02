@@ -322,6 +322,15 @@ export const contract = {
       .route({ method: "PUT", path: "/sites/{id}/enabled", tags: ["sites"] })
       .input(s.siteSetEnabledInput)
       .output(s.siteMutationResult),
+    /**
+     * Whether the site is ready to serve: where its domains point compared
+     * with the cluster's edge addresses (looked up now, which can take
+     * seconds), whether its certificate covers them, and its delivery.
+     */
+    launch: oc
+      .route({ method: "GET", path: "/sites/{id}/launch", tags: ["sites"] })
+      .input(idParam)
+      .output(s.siteLaunch),
     /** Health of the site's origins (passive and active checks), as reported by the nodes. */
     originHealth: oc
       .route({ method: "GET", path: "/sites/{id}/origin-health", tags: ["sites"] })

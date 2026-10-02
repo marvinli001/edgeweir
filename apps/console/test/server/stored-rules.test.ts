@@ -77,6 +77,7 @@ describe("stored rules the validator no longer accepts", async () => {
         {
           name: "admin",
           phase: "waf-custom",
+          enabled: true,
           expression: 'http.request.uri.path eq "/admin"',
           action: { kind: "block" },
         },

@@ -45,7 +45,7 @@ An account is one set of credentials and one zone; for several zones under the s
    ```
 
    The first prints `all.<cluster domain>.`, the second the addresses of the cluster's healthy nodes.
-7. In each site domain's DNS, CNAME the domain to the **CNAME target**.
+7. In each site domain's DNS, CNAME the domain to the **CNAME target**. Below it the card lists where each domain resolves (**Points here**, **Points elsewhere**, **Not resolved**, **Not checked**); the **Launch check** on the site's **Overview** tab sums it up as **DNS pointed N/M**.
 
 Clusters may use different provider accounts and cluster domains. The **Cluster bindings** table on the **DNS steering** page lists each cluster's mode, cluster domain, and publication state; **Open** goes to the cluster's **DNS** tab.
 

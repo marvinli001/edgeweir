@@ -11,9 +11,11 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Page } from "@/components/page";
 import { BulkRedirectsTab } from "@/components/site/bulk-redirects-tab";
 import { CacheTab } from "@/components/site/cache-tab";
-import { CnameTarget } from "@/components/site/cname-target";
+import { DnsSetupCard } from "@/components/site/cname-target";
+import { followSiteDelivery } from "@/components/site/delivery-toast";
 import { ErrorPagesTab } from "@/components/site/error-pages-tab";
 import { HttpsTab } from "@/components/site/https-tab";
+import { LaunchCheck } from "@/components/site/launch-check";
 import { LogsTab } from "@/components/site/logs-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
 import { RulesTab } from "@/components/site/rules-tab";
@@ -205,6 +207,7 @@ function OverviewTab({ site }: { site: Site }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <LaunchCheck site={site} />
       <Card>
         <form
           className="flex flex-col gap-(--card-spacing)"
@@ -251,10 +254,11 @@ function OverviewTab({ site }: { site: Site }) {
                       enabled: !site.enabled,
                       expectedUpdatedAt: site.updatedAt,
                     });
-                    toast.success(
-                      result.site.enabled
-                        ? m.site_enabled_toast({ revision: result.revision.revision })
-                        : m.site_disabled_toast({ revision: result.revision.revision }),
+                    followSiteDelivery(
+                      queryClient,
+                      site.id,
+                      result.site.enabled ? m.site_enabled_toast() : m.site_disabled_toast(),
+                      result.site.delivery,
                     );
                     await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
                   }}
@@ -351,7 +355,7 @@ function DomainsTab({ site }: { site: Site }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <CnameTarget siteId={site.id} />
+      <DnsSetupCard siteId={site.id} />
       <Card>
         <form
           className="flex flex-col gap-(--card-spacing)"

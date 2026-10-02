@@ -298,6 +298,7 @@ describe("site protection, platform protection and challenge keys", async () => 
           ruleInput.parse({
             name: "ja4",
             phase: "waf-custom",
+            enabled: true,
             expression: 'tls.ja4 eq "t13d1516h2_8daaf6152771_02713d6af862"',
             action: { kind: "challenge", type: "js" },
           }),
@@ -384,12 +385,14 @@ describe("site protection, platform protection and challenge keys", async () => 
         {
           name: "login",
           phase: "waf-custom",
+          enabled: true,
           expression: 'http.request.uri.path eq "/login"',
           action: { kind: "challenge", type: "captcha" },
         },
         {
           name: "fingerprint",
           phase: "ratelimit",
+          enabled: true,
           expression: 'tls.ja4 ne ""',
           action: { kind: "rate_limit", limit: 10, windowSeconds: 10, key: "tls.ja4" },
         },
@@ -408,6 +411,7 @@ describe("site protection, platform protection and challenge keys", async () => 
           {
             name: "wrong phase",
             phase: "ratelimit",
+            enabled: true,
             expression: "true",
             action: { kind: "challenge", type: "js" } as never,
           },

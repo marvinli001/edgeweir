@@ -73,6 +73,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     {
       name: "go",
       phase: "redirect",
+      enabled: true,
       expression: 'starts_with(http.request.uri.path, "/go/")',
       action: {
         kind: "redirect",
@@ -89,6 +90,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     {
       name: "old",
       phase: "request-transform",
+      enabled: true,
       expression: "true",
       action: {
         kind: "rewrite",
@@ -99,18 +101,21 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
     {
       name: "media",
       phase: "origin",
+      enabled: true,
       expression: 'http.request.uri.path.extension in {"mp4" "webm"}',
       action: { kind: "origin", originGroup: "eu", hostHeader: "media.shop.test", port: 8443 },
     },
     {
       name: "html",
       phase: "compression",
+      enabled: true,
       expression: 'http.response.content_type.media_type eq "text/html"',
       action: { kind: "compression", algorithms: ["zstd", "gzip"] },
     },
     {
       name: "settings",
       phase: "config",
+      enabled: true,
       expression: 'ends_with(http.host, ".shop.test")',
       action: {
         kind: "config",
@@ -247,6 +252,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       {
         name: "x",
         phase: "redirect",
+        enabled: true,
         expression: "true",
         action: { kind: "redirect", target: 'http.host eq "a"' },
       },
@@ -254,6 +260,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       {
         name: "x",
         phase: "redirect",
+        enabled: true,
         expression: "true",
         action: { kind: "redirect", value: "/a", target: "http.host" },
       },
@@ -261,6 +268,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       {
         name: "x",
         phase: "cache",
+        enabled: true,
         expression: "true",
         action: { kind: "config", websocket: true },
       },
@@ -268,6 +276,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       {
         name: "x",
         phase: "response-transform",
+        enabled: true,
         expression: "true",
         action: { kind: "compression", algorithms: [] },
       },
@@ -275,6 +284,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       {
         name: "x",
         phase: "redirect",
+        enabled: true,
         expression: "true",
         action: {
           kind: "redirect",
@@ -297,6 +307,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
             {
               name: "nowhere",
               phase: "origin",
+              enabled: true,
               expression: "true",
               action: { kind: "origin", originGroup: "us" },
             },
@@ -336,6 +347,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       {
         name: "group",
         phase: "origin",
+        enabled: true,
         expression: "true",
         action: { kind: "origin", originGroup: "eu" },
       },
@@ -348,12 +360,14 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       {
         name: "sni",
         phase: "origin",
+        enabled: true,
         expression: 'http.request.full_uri contains "/upstream/"',
         action: { kind: "origin", sni: "origin.example.com", port: 443 },
       },
       {
         name: "compression",
         phase: "compression",
+        enabled: true,
         expression: "true",
         action: { kind: "compression", algorithms: ["br"] },
       },
@@ -680,6 +694,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
           {
             name: "fn",
             phase: "waf-custom",
+            enabled: true,
             expression: "len(http.request.uri.query) gt 2048",
             action: { kind: "block" },
           },
@@ -710,7 +725,9 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
       setQuery: [],
       removeQuery: [],
     };
-    await serviceRules([{ name: "plain", phase: "redirect", expression: "true", action: plain }]);
+    await serviceRules([
+      { name: "plain", phase: "redirect", expression: "true", enabled: true, action: plain },
+    ]);
     await serviceUpdate({ id: siteId, cacheRules: [{ pathPrefixes: ["/a/"] }] });
     expect((await config()).revision).toBeGreaterThan(before);
     expect((await config()).requiredFeatures).not.toContain("rules-v2");
@@ -738,6 +755,7 @@ describe("rule engine extensions, cache conditions, origin groups and bulk redir
         {
           name: "login",
           phase: "config",
+          enabled: true,
           expression: 'starts_with(http.request.uri.path, "/login")',
           action: { kind: "config", underAttack: true },
         },

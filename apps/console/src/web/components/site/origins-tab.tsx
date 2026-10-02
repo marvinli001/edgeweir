@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { fillOrigin, replacesField } from "@/lib/address-input";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
@@ -79,6 +80,12 @@ const newOrigin = (): OriginDraft => ({
   accessKeyId: "",
   secretAccessKey: "",
 });
+
+const defaultPort = (scheme: Scheme) => (scheme === "https" ? "443" : "80");
+
+/** A row with an origin in its fields: a URL's protocol and port go into theirs. */
+const fillRow = (value: string, row: Pick<OriginDraft, "scheme" | "port">) =>
+  fillOrigin(value, row, defaultPort);
 
 const SCHEMES = [
   { label: "HTTP", value: "http" },
@@ -137,9 +144,12 @@ function OriginsCard({ site }: { site: Site }) {
         className="flex flex-col gap-(--card-spacing)"
         onSubmit={(event) => {
           event.preventDefault();
+          // A URL typed without leaving the field fills the row now, visibly.
+          const filled = rows.map((r) => ({ ...r, ...fillRow(r.address, r) }));
+          setRows(filled);
           void save({
-            origins: rows.map((r) => ({
-              address: r.address.trim(),
+            origins: filled.map((r) => ({
+              address: r.address,
               port: Number(r.port) || (r.scheme === "https" ? 443 : 80),
               scheme: r.scheme,
               weight: Number(r.weight) || 1,
@@ -277,6 +287,15 @@ function OriginRow({
             required
             maxLength={253}
             onChange={(event) => onChange({ address: event.target.value })}
+            onPaste={(event) => {
+              if (!replacesField(event.currentTarget)) return;
+              event.preventDefault();
+              onChange(fillRow(event.clipboardData.getData("text"), row));
+            }}
+            onBlur={() => {
+              const filled = fillRow(row.address, row);
+              if (filled.address !== row.address || filled.port !== row.port) onChange(filled);
+            }}
             placeholder="origin.example.com"
             data-testid="origin-address"
           />

@@ -2,6 +2,7 @@ import type { SiteUpdateInput } from "@edgeweir/contract";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { followSiteDelivery } from "@/components/site/delivery-toast";
 import { Button } from "@/components/ui/button";
 import { CardFooter } from "@/components/ui/card";
 import { FieldError } from "@/components/ui/field";
@@ -10,7 +11,7 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
-/** Saves part of a site; every save publishes a configuration revision and says which one. */
+/** Saves part of a site; the toast follows the change onto the nodes (followSiteDelivery). */
 export function useSaveSite(siteId: string) {
   const queryClient = useQueryClient();
   const update = useMutation(orpc.sites.update.mutationOptions());
@@ -24,9 +25,7 @@ export function useSaveSite(siteId: string) {
       const result = await update.mutateAsync({ id: siteId, ...patch });
       queryClient.setQueryData(orpc.sites.get.queryKey({ input: { id: siteId } }), result.site);
       await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
-      toast.success(m.site_saved({ revision: result.revision.revision }), {
-        id: "site-saved",
-      });
+      followSiteDelivery(queryClient, siteId, m.common_saved(), result.site.delivery);
       // New domains the site's ACME certificate is reissued for.
       if (result.certificateReissue)
         toast.info(m.site_certificate_reissue({ name: result.certificateReissue.name }), {

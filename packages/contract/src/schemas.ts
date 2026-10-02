@@ -362,7 +362,8 @@ export const cacheSettings = z.object({
 });
 
 export const siteCreateInput = z.object({
-  name: z.string().trim().min(1).max(100),
+  /** Defaults to the first domain. */
+  name: z.string().trim().min(1).max(100).optional(),
   clusterId: uuid.optional(),
   domains: z.array(domainName).min(1).max(50),
   origins: siteOrigins,
@@ -408,10 +409,65 @@ export const siteDelivery = z.object({
   state: z.enum(["disabled", "pending", "partial", "live"]),
   /** Online active nodes of the site's cluster. */
   totalNodes: z.number().int(),
-  /** Of those, nodes whose applied configuration has the site (any version). */
+  /**
+   * Of those, nodes whose applied configuration has the site (any version);
+   * for a disabled site, the nodes that still run it.
+   */
   servingNodes: z.number().int(),
   /** Of those, nodes running the site's latest version with a healthy data plane. */
   currentNodes: z.number().int(),
+  /**
+   * Set while the cluster's configuration canary holds the site's latest
+   * version back from the nodes outside the canary: when its window ends
+   * and whether every node then gets the version without the operator.
+   */
+  canary: z.object({ endsAt: isoDateTime, autoPromote: z.boolean() }).nullable(),
+});
+
+/** Where a name points compared with the addresses of its cluster's nodes (lib/dns-check). */
+export const dnsPointing = z.enum(["ok", "elsewhere", "unresolved", "unknown"]);
+
+/**
+ * What a site needs to serve its domains: DNS pointing to the cluster's
+ * nodes, a certificate covering the domains (when it has one) and the
+ * nodes running its latest version.
+ */
+export const siteLaunch = z.object({
+  /**
+   * The cluster's edge addresses (A and AAAA): the scheduling addresses of
+   * its online active nodes, configured ones or else the public addresses
+   * they report.
+   */
+  addresses: z.array(z.string()),
+  domains: z.array(
+    z.object({
+      /** As on the site ("*.example.com" for a wildcard). */
+      name: z.string(),
+      /** The name looked up: the domain, or a fixed label under a wildcard. */
+      probe: z.string(),
+      /**
+       * ok: every address it resolves to is one of the cluster's active
+       * nodes'; elsewhere: some address is not; unresolved: no A or AAAA
+       * record; unknown: the lookup failed or no node address is known.
+       */
+      pointing: dnsPointing,
+    }),
+  ),
+  certificate: z.object({
+    /**
+     * none: the site has no certificate; covered: its chain covers every
+     * domain; uncovered: it does not cover `uncovered`; issuing: an ACME
+     * issuance is pending or running; failed: the last one failed
+     * (`error`, a certificate error code); expired.
+     */
+    state: z.enum(["none", "covered", "uncovered", "issuing", "failed", "expired"]),
+    id: uuid.nullable(),
+    name: z.string(),
+    /** Domains the current chain does not cover (all of them before the first issuance). */
+    uncovered: z.array(z.string()),
+    error: z.string(),
+  }),
+  delivery: siteDelivery,
 });
 
 export const site = z.object({
@@ -1226,6 +1282,8 @@ export type OriginAllowList = z.infer<typeof originAllowList>;
 export type SiteCreateInput = z.input<typeof siteCreateInput>;
 export type Site = z.infer<typeof site>;
 export type SiteDelivery = z.infer<typeof siteDelivery>;
+export type SiteLaunch = z.infer<typeof siteLaunch>;
+export type DnsPointing = z.infer<typeof dnsPointing>;
 export type Cluster = z.infer<typeof cluster>;
 export type Node = z.infer<typeof node>;
 export type Revision = z.infer<typeof revision>;

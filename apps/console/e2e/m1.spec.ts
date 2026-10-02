@@ -38,7 +38,10 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
     await page.getByTestId("domain-input").fill("www.edited.test");
     await page.getByTestId("domain-add").click();
     await page.getByTestId("domains-save").click();
-    await expect(page.getByText(/已保存，版本 #\d+/)).toBeVisible();
+    // The saved notice follows the change onto the node.
+    const saved = page.getByTestId("site-delivery-toast");
+    await expect(saved).toContainText("已保存");
+    await expect(saved).toContainText(/生效中 \d+\/\d+|已生效/);
     await expect(page.getByTestId("domain-list")).toContainText("www.edited.test");
 
     await page.getByTestId("tab-origins").click();

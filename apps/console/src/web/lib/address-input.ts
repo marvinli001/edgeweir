@@ -59,3 +59,38 @@ function withPort(address: string, port: string | undefined, scheme?: "http" | "
     ...(scheme ? { scheme } : {}),
   };
 }
+
+type Scheme = "http" | "https";
+
+/**
+ * The origin fields once `value` is in the address field: a URL or
+ * "host:port" moves its scheme and port into their own fields (a scheme
+ * without a port sets that scheme's `defaultPort`); a plain host only
+ * changes the address.
+ */
+export function fillOrigin(
+  value: string,
+  fields: { scheme: Scheme; port: string },
+  defaultPort: (scheme: Scheme) => string,
+): { address: string; scheme: Scheme; port: string } {
+  const parsed = originInput(value);
+  const scheme = parsed.scheme ?? fields.scheme;
+  const port =
+    parsed.port !== undefined
+      ? String(parsed.port)
+      : parsed.scheme
+        ? defaultPort(parsed.scheme)
+        : fields.port;
+  return { address: parsed.address, scheme, port };
+}
+
+/**
+ * Whether a paste replaces the whole field (it is empty or all selected):
+ * only then is the pasted text read as a whole origin.
+ */
+export const replacesField = (field: {
+  value: string;
+  selectionStart: number | null;
+  selectionEnd: number | null;
+}) =>
+  field.value === "" || (field.selectionStart === 0 && field.selectionEnd === field.value.length);

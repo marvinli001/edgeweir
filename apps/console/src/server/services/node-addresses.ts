@@ -1,6 +1,7 @@
 import { forbiddenOriginRange, formatIp, parseIp, unicastAddress } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { and, eq, inArray } from "drizzle-orm";
+import { isOnline } from "../lib/node-online";
 import type { Executor } from "./revisions";
 
 type NodeIpRow = typeof schema.nodeIp.$inferSelect;
@@ -108,4 +109,44 @@ export async function downAddresses(db: Executor, nodeIds: readonly string[]) {
   for (const row of rows)
     byNode.set(row.nodeId, (byNode.get(row.nodeId) ?? new Set()).add(row.address));
   return byNode;
+}
+
+/**
+ * A cluster's edge addresses. `primary`: the level 0 scheduling addresses
+ * of its online active nodes, IPv4 first (what A and AAAA records of its
+ * sites point to). `known`: every address of its active nodes, configured
+ * or reported public, that a name may resolve to and still reach a node.
+ */
+export async function clusterEdgeAddresses(
+  db: Executor,
+  clusterId: string,
+  now = Date.now(),
+): Promise<{ primary: string[]; known: Set<string> }> {
+  const nodes = await db
+    .select({ id: schema.node.id, lastSeenAt: schema.node.lastSeenAt })
+    .from(schema.node)
+    .where(and(eq(schema.node.clusterId, clusterId), eq(schema.node.status, "active")));
+  const ips = await nodeIpRows(
+    db,
+    nodes.map((n) => n.id),
+  );
+  const primary = new Set<string>();
+  const known = new Set<string>();
+  for (const node of nodes) {
+    const rows = ips.get(node.id) ?? [];
+    if (isOnline(node.lastSeenAt, now))
+      for (const a of schedulingAddressesOf(rows)) if (a.level === 0) primary.add(a.address);
+    for (const group of [
+      rows.filter((r) => r.source === "configured"),
+      rows.filter((r) => r.source !== "configured"),
+    ])
+      for (const a of schedulingAddressesOf(group)) known.add(a.address);
+  }
+  const v6 = (address: string) => address.includes(":");
+  return {
+    primary: [...primary].sort(
+      (a, b) => Number(v6(a)) - Number(v6(b)) || (a < b ? -1 : a > b ? 1 : 0),
+    ),
+    known,
+  };
 }

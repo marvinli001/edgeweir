@@ -76,6 +76,7 @@ describe("M4 rules and IP list boundaries", async () => {
               {
                 name: "invalid",
                 phase: "waf-custom",
+                enabled: true,
                 expression: "true",
                 action: { kind: "request_header", header: "host", value: "other.test" },
               },
@@ -100,12 +101,14 @@ describe("M4 rules and IP list boundaries", async () => {
         {
           name: "response",
           phase: "response-transform",
+          enabled: true,
           expression: "http.response.code ge 200",
           action: { kind: "response_header", header: "x-test", value: "yes" },
         },
         {
           name: "block",
           phase: "waf-custom",
+          enabled: true,
           expression: "ip.src in $blocked",
           action: { kind: "block" },
         },
@@ -132,6 +135,7 @@ describe("M4 rules and IP list boundaries", async () => {
         {
           name: "foreign",
           phase: "waf-custom",
+          enabled: true,
           expression: "ip.src in $blocked",
           action: { kind: "block" },
         },
@@ -147,6 +151,7 @@ describe("M4 rules and IP list boundaries", async () => {
             {
               name: "missing",
               phase: "waf-custom",
+              enabled: true,
               expression: "ip.src in $missing",
               action: { kind: "block" },
             },
@@ -173,6 +178,7 @@ describe("M4 rules and IP list boundaries", async () => {
         {
           name: "global",
           phase: "waf-custom",
+          enabled: true,
           expression: "ip.src in $global_block",
           action: { kind: "block" },
         },
@@ -214,6 +220,7 @@ describe("M4 rules and IP list boundaries", async () => {
       ruleInput.parse({
         name: "country",
         phase: "waf-custom",
+        enabled: true,
         expression: 'ip.geoip.country eq "NZ"',
         action: { kind: "log" },
       }),
@@ -227,7 +234,13 @@ describe("M4 rules and IP list boundaries", async () => {
     await admin.rules.save({
       id: siteId,
       rules: [
-        { name: "ordinary", phase: "waf-custom", expression: "true", action: { kind: "log" } },
+        {
+          name: "ordinary",
+          phase: "waf-custom",
+          expression: "true",
+          enabled: true,
+          action: { kind: "log" },
+        },
       ],
     });
     expect((await config()).revision).toBeGreaterThan(before);
@@ -242,6 +255,7 @@ describe("M4 rules and IP list boundaries", async () => {
       ruleInput.parse({
         name: "subdivision",
         phase: "waf-custom",
+        enabled: true,
         expression: 'ip.geoip.subdivision eq "AUK"',
         action: { kind: "log" },
       }),
@@ -276,12 +290,14 @@ describe("M4 rules and IP list boundaries", async () => {
         {
           name: "a",
           phase: "waf-custom",
+          enabled: true,
           expression: 'http.request.uri.path eq "/a"',
           action: { kind: "block" },
         },
         {
           name: "b",
           phase: "waf-custom",
+          enabled: true,
           expression: 'http.request.uri.path eq "/b"',
           action: { kind: "block" },
         },

@@ -254,7 +254,8 @@ export const ruleInput = z
     name: z.string().trim().min(1).max(100),
     phase: z.enum(phases),
     expression: z.string().min(1).max(4096),
-    enabled: z.boolean().default(true),
+    /** Off unless set: a new rule matching more than intended would act on every request. */
+    enabled: z.boolean().default(false),
     action: ruleAction,
   })
   .superRefine((rule, ctx) => {

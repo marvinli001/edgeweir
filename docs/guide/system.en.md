@@ -147,7 +147,8 @@ When a change needs a capability that active nodes of the cluster lack:
 
 | Item | Behavior |
 | --- | --- |
-| Status | The **Status** column of **Sites** and the site's **Overview** tab show whether the site runs on the nodes: **Not live yet** (the cluster has no online node, or no online node has applied a revision with the site), **Rolling out N/M** (N of the M online nodes run the site's latest configuration with a healthy data plane), **Active** (every online node runs it), **Disabled**. Until the site is live the page refreshes every 5 seconds |
+| Status | The **Status** column of **Sites** and the site's **Overview** tab show whether the site runs on the nodes: **Not live yet** (the cluster has no online node, or no online node has applied a revision with the site), **Rolling out N/M** (N of the M online nodes run the site's latest configuration with a healthy data plane), **Active** (every online node runs it), **Disabled**. During a [configuration canary](#configuration-canary) window it shows **Canary N/M, all nodes at HH:MM** (the nodes outside the canary keep the previous version until the window ends; **awaiting promotion** when promotion is manual). Until the site is live the page refreshes every 5 seconds |
+| Notices | After saving, creating, enabling or disabling a site the notice follows the nodes: **Rolling out N/M** → **Live on every node** (the window's end during a canary; **Removing N/M** → **Removed from the nodes** when disabling), for up to 3 minutes |
 | Nodes | A disabled site is not shipped; nodes answer 404 for its domains (`X-Edgeweir-Error: unknown-host`) |
 | DNS | Records stay |
 | Certificates | Renewal continues; HTTP-01 challenges are answered |
@@ -181,7 +182,7 @@ Page: **Service accounts** (`/service-accounts`). A service account is an identi
 | No scope needed | `system.status`, `account.me`, `dns.catalog` |
 | `system:read` | `settings.get` |
 | `clusters:read` | `clusters.list`, `clusters.get` |
-| `sites:read` | `sites.list`, `sites.get`, `dns.siteTarget` |
+| `sites:read` | `sites.list`, `sites.get`, `sites.launch`, `dns.siteTarget` |
 | `sites:write` | `sites.setEnabled` |
 | `usage:read` | `usage.list`, `usage.changes` |
 

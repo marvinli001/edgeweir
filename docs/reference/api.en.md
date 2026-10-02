@@ -76,6 +76,7 @@ A service account can call only the procedures below, each with its scope:
 | `settings.get` | `GET /settings` | `system:read` |
 | `clusters.list`, `clusters.get` | `GET /clusters`, `GET /clusters/{id}` | `clusters:read` |
 | `sites.list`, `sites.get` | `GET /sites`, `GET /sites/{id}` | `sites:read` |
+| `sites.launch` | `GET /sites/{id}/launch` | `sites:read` |
 | `sites.setEnabled` | `PUT /sites/{id}/enabled` | `sites:write` |
 | `dns.siteTarget` | `GET /sites/{siteId}/cname` | `sites:read` |
 | `usage.list`, `usage.changes` | `GET /usage`, `GET /usage/changes` | `usage:read` |
@@ -128,6 +129,30 @@ When a site or L4 app is already enabled or disabled as requested, `sites.setEna
 - A change publishes a configuration revision (reason codes `site_enabled`, `site_disabled`) and writes an audit entry (`site.enable`, `site.disable`); an unchanged state returns the current state without a revision or audit entry.
 - Purging or prefetching a disabled site: 409 `SITE_DISABLED`.
 - The response is `{ site, revision }`; `site.enabled` holds the current state.
+
+### Site delivery and launch check
+
+Sites (`sites.list`, `sites.get` and the `site` that writes return) carry `delivery`:
+
+| Field | Description |
+| --- | --- |
+| `state` | `pending`: no online node runs the site; `partial`: some online nodes run an older version or have an unhealthy data plane; `live`: every online node runs the latest version; `disabled` |
+| `totalNodes` | Online active nodes of the site's cluster |
+| `servingNodes` | Of those, nodes whose applied configuration has the site (any version); for a disabled site, the nodes that still run it |
+| `currentNodes` | Of those, nodes running the site's latest version (canary candidates included) with a healthy data plane |
+| `canary` | `{ endsAt, autoPromote }` while the cluster's configuration canary keeps the nodes outside the canary on the site's previous version (when the window ends; `autoPromote: false` waits for a manual promotion), otherwise `null` |
+
+`name` may be left out when creating a site (`POST /sites`); it defaults to the first domain (cut at 100 characters).
+
+`GET /sites/{id}/launch` (procedure `sites.launch`) resolves each of the site's domains when called, which can take seconds:
+
+| Field | Description |
+| --- | --- |
+| `addresses` | The cluster's edge addresses (values for A / AAAA records): the primary scheduling addresses of its online active nodes, the configured ones of a node that has any, otherwise the public addresses it reports; IPv4 first |
+| `domains[]` | `name` (as on the site, `*.example.com` for a wildcard), `probe` (the name resolved; a wildcard resolves the fixed name `edgeweir-check.example.com` under it), `pointing` |
+| `domains[].pointing` | `ok`: every address it resolves to belongs to an active node of the cluster (configured or reported public, backup addresses and offline nodes included); `elsewhere`: some address does not; `unresolved`: no A or AAAA record; `unknown`: the lookup failed (a timeout, for example) or the cluster's nodes have no known address |
+| `certificate` | `state`: `none` (the site has no certificate), `covered` (the chain covers every domain), `uncovered` (it misses the domains in `uncovered`), `issuing` (an ACME issuance is queued or running), `failed` (the last issuance failed, `error` holds its code), `expired`; plus `id`, `name`, `uncovered`, `error` |
+| `delivery` | As above |
 
 ### Node capabilities
 
@@ -346,7 +371,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 
 | Request | Fields |
 | --- | --- |
-| `PUT /sites/{id}/rules`, `PUT /platform-rules` | `rules`: replaces everything, up to 64 per site and 32 for the platform; each with `id` (optional; an id that is not one of this site's or the platform's rules gets a new one, so rules read elsewhere can be saved as they are), `name` (1–100 characters), `phase`, `expression` (up to 4096 characters), `enabled`, `action`. `phase`: `request-transform`, `redirect`, `config`, `waf-custom`, `ratelimit`, `cache`, `origin`, `response-transform`, `compression` |
+| `PUT /sites/{id}/rules`, `PUT /platform-rules` | `rules`: replaces everything, up to 64 per site and 32 for the platform; each with `id` (optional; an id that is not one of this site's or the platform's rules gets a new one, so rules read elsewhere can be saved as they are), `name` (1–100 characters), `phase`, `expression` (up to 4096 characters), `enabled` (default `false`: a rule sent without it is saved disabled), `action`. `phase`: `request-transform`, `redirect`, `config`, `waf-custom`, `ratelimit`, `cache`, `origin`, `response-transform`, `compression` |
 | `action` (`kind: "redirect"`) | Exactly one of `value` (static target) and `target` (value expression); `statusCode` (301, 302, 307, 308, default 301); `preserveQuery` (default `false`); `setQuery` (`[{ name, value }]`, up to 16, unique names); `removeQuery` (parameter names, up to 16, none also in `setQuery`). Names `[A-Za-z0-9._~-]{1,64}`, values printable ASCII up to 256 characters |
 | `action` (`kind: "rewrite"`) | As `redirect` without `statusCode`; `preserveQuery` defaults to `true` |
 | `action` (`kind: "config"`) | At least one field. `cacheBypass`, `forceHttps`, `gzip` (booleans); in the `config` phase only: `brotli`, `zstd`, `websocket`, `underAttack`, `ccEnabled` (booleans), `ccMaxLevel` (`cookie302`, `js`, `pow`, `captcha`), `originConnectTimeoutMs` (100–120000), `originSendTimeoutMs`, `originReadTimeoutMs` (100–3600000), `logSampleRate` (0–10000, in 1/10,000). Omitted fields override nothing |
