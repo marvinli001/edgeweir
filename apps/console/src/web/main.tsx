@@ -4,11 +4,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { LoadingState } from "@/components/states";
+import { NotFoundPage, RouteErrorPage } from "@/components/status-page";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getLocale } from "@/lib/i18n";
-import { isUnauthorized } from "@/lib/orpc";
+import { isNotFound, isUnauthorized } from "@/lib/orpc";
 import { routeTree } from "./routeTree.gen";
 
 /**
@@ -28,7 +29,8 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5_000,
-      retry: (count, error) => !isUnauthorized(error) && count < 2,
+      // Asking again cannot sign in or bring back a deleted record.
+      retry: (count, error) => !isUnauthorized(error) && !isNotFound(error) && count < 2,
     },
   },
 });
@@ -41,6 +43,12 @@ const router = createRouter({
   // Until a route resolves nothing of it is on screen (not even TopProgress on a first load); one
   // slower than `defaultPendingMs` (session check, code chunk) shows the loader instead of a blank page.
   defaultPendingComponent: () => <LoadingState className="min-h-svh" />,
+  // A route that fails shows its status page (inside the console once the console has loaded);
+  // unknown paths are the console's catch-all route, this covers `notFound()` outside it.
+  defaultErrorComponent: ({ error }) => <RouteErrorPage error={error} />,
+  defaultNotFoundComponent: () => (
+    <NotFoundPage path={router.state.location.href} surface="screen" />
+  ),
 });
 
 declare module "@tanstack/react-router" {

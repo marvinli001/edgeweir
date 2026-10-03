@@ -2,7 +2,7 @@ import type { L4App } from "@edgeweir/contract";
 import { Delete02Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { CopyButton } from "@/components/copy-button";
@@ -12,6 +12,7 @@ import { L4AppStats } from "@/components/l4/app-stats";
 import { DnsTarget, L4NodesWarning, ProtocolBadge } from "@/components/l4/common";
 import { Page } from "@/components/page";
 import { QueryView } from "@/components/states";
+import { NotFoundPage } from "@/components/status-page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,7 @@ export const Route = createFileRoute("/_app/l4/$id")({
 
 function L4AppPage() {
   const { id } = Route.useParams();
+  const href = useLocation({ select: (location) => location.href });
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const app = useQuery(orpc.l4Apps.get.queryOptions({ input: { id } }));
@@ -45,7 +47,7 @@ function L4AppPage() {
         </Link>
       }
     >
-      <QueryView query={app}>
+      <QueryView query={app} notFound={<NotFoundPage path={href} surface="inline" />}>
         {(data) => (
           <Tabs
             key={data.id}

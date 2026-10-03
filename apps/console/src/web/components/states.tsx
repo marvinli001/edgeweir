@@ -6,7 +6,7 @@ import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { m } from "@/lib/i18n";
-import { errorMessage } from "@/lib/orpc";
+import { errorMessage, isNotFound } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
 /**
@@ -84,7 +84,8 @@ const noItems = (data: unknown) => Array.isArray(data) && data.length === 0;
  * items). A failed background refetch keeps showing the data: that is `isError`, not
  * `isLoadingError`. `frame` wraps the loading and error states, e.g. CardContent in a card whose
  * loaded content brings its own; `error` replaces ErrorState where a failure is an answer rather
- * than a hiccup (a refused rollback). `children` gets the data; it must not call hooks.
+ * than a hiccup (a refused rollback), `notFound` where the record no longer exists (404).
+ * `children` gets the data; it must not call hooks.
  */
 export function QueryView<T>({
   query,
@@ -94,6 +95,7 @@ export function QueryView<T>({
   loadingClassName,
   frame: Frame,
   error,
+  notFound,
 }: {
   query: QueryResult<T>;
   children: (data: T) => React.ReactNode;
@@ -102,9 +104,11 @@ export function QueryView<T>({
   loadingClassName?: string;
   frame?: React.ComponentType<{ children?: React.ReactNode }>;
   error?: (error: unknown) => React.ReactNode;
+  notFound?: React.ReactNode;
 }) {
   const framed = (node: React.ReactNode) => (Frame ? <Frame>{node}</Frame> : node);
   if (query.isPending) return framed(<LoadingState className={loadingClassName} />);
+  if (query.isLoadingError && notFound !== undefined && isNotFound(query.error)) return notFound;
   if (query.isLoadingError)
     return framed(
       error ? (

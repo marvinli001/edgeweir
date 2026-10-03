@@ -248,3 +248,337 @@
     stroke: transparent;
   }
 }
+
+/*
+ * Status pages (not found, denied, failed, unreachable), the same instrument as the edge nodes'
+ * built-in error pages: a signal runs from the operator through the console to the page and
+ * stops, thins out or breaks at the hop that failed. The graticule runs through the frame's
+ * edges to the edges of the surface, which clips it. Motion stops under reduced motion.
+ */
+@layer components {
+  .status-surface {
+    --status-tick: color-mix(in oklab, var(--foreground) 22%, transparent);
+    --status-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    padding: 3.5rem 1.25rem;
+  }
+  .status-frame {
+    position: relative;
+    width: min(100%, 60rem);
+  }
+  .status-frame::before,
+  .status-frame::after,
+  .status-top::before,
+  .status-top::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+  }
+  .status-frame::before {
+    inset: 0 -100vw;
+    border-block: 1px dashed var(--border);
+  }
+  .status-frame::after {
+    inset: -100vh 0;
+    border-inline: 1px dashed var(--border);
+  }
+  .status-top {
+    --at: 50%;
+    position: relative;
+    padding: 2.75rem 0 1.625rem;
+  }
+  .status-top[data-at="2"] {
+    --at: 83.333%;
+  }
+  .status-top::after {
+    inset: auto -100vw 0;
+    border-top: 1px dashed var(--border);
+  }
+  .status-top::before {
+    inset: auto 0 0;
+    height: 5px;
+    background: repeating-linear-gradient(90deg, var(--status-tick) 0 1px, transparent 0 2.0833%);
+  }
+  .status-detent {
+    position: absolute;
+    z-index: 1;
+    width: 7px;
+    height: 7px;
+    margin: -3.5px;
+    border: 1px solid var(--status-tick);
+    background: var(--background);
+  }
+  .status-code {
+    width: max-content;
+    margin-left: var(--at);
+    transform: translateX(-50%);
+    font-size: clamp(4.75rem, 14cqi, 8.5rem);
+    font-weight: var(--status-weight);
+    font-variant-numeric: tabular-nums;
+    line-height: 0.78;
+    letter-spacing: -0.04em;
+  }
+  @container status (width < 45rem) {
+    .status-top[data-at="2"] .status-code {
+      margin: 0 0.625rem 0 auto;
+      transform: none;
+    }
+  }
+  .status-trace {
+    position: relative;
+    height: 56px;
+    margin-top: 1.875rem;
+  }
+  .status-cursor {
+    position: absolute;
+    top: -26px;
+    left: var(--at);
+    height: 38px;
+    border-left: 1px dashed var(--foreground);
+    opacity: 0.45;
+  }
+  .status-head {
+    position: absolute;
+    z-index: 2;
+    top: 28px;
+    left: 16.667%;
+    width: 7px;
+    height: 7px;
+    margin: -3.5px;
+    border-radius: 50%;
+    background: var(--metric);
+    opacity: 0;
+  }
+  .status-head::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border: 1px solid var(--metric);
+    border-radius: 50%;
+    opacity: 0.5;
+  }
+  .status-seg {
+    position: absolute;
+    top: 0;
+    width: 33.333%;
+    height: 56px;
+  }
+  .status-seg svg {
+    display: block;
+    width: 100%;
+    height: 56px;
+  }
+  .status-seg[data-side="a"] {
+    left: 16.667%;
+  }
+  .status-seg[data-side="b"] {
+    left: 50%;
+  }
+  .status-wave {
+    fill: none;
+    stroke: var(--metric);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .status-seg[data-kind="slow"] .status-wave {
+    --status-period: -48px;
+    transform: scale(2, 0.6);
+    transform-origin: 0 28px;
+  }
+  .status-seg[data-kind="held"] line {
+    stroke: var(--muted-foreground);
+    stroke-dasharray: 1 5;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .status-seg[data-kind="fade"],
+  .status-seg[data-kind="slow"] {
+    mask: linear-gradient(90deg, #000 15%, transparent 70%);
+  }
+  .status-seg[data-kind="out"] {
+    mask: linear-gradient(90deg, #000 30%, transparent 62%);
+  }
+  .status-seg[data-kind="noise"] {
+    mask: linear-gradient(90deg, transparent 34%, #000 66%);
+  }
+  .status-seg[data-kind="noise"] path {
+    fill: none;
+    stroke: var(--destructive);
+    stroke-width: 1.25;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+  .status-marks {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 56px;
+    overflow: visible;
+  }
+  .status-marks * {
+    vector-effect: non-scaling-stroke;
+  }
+  .status-marks [data-mark] {
+    fill: none;
+    stroke: var(--foreground);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .status-marks [data-mark="shape"] {
+    fill: var(--background);
+  }
+  .status-marks [data-mark="ring"] {
+    fill: var(--background);
+    stroke: var(--status-tick);
+    stroke-width: 1;
+  }
+  .status-marks [data-mark="void"] {
+    stroke: var(--muted-foreground);
+    stroke-dasharray: 2.5 2.5;
+  }
+  .status-marks [data-failing] [data-mark] {
+    stroke: var(--destructive);
+  }
+  .status-marks [data-failing] g {
+    transform-origin: 0 0;
+  }
+  @keyframes status-weight {
+    from {
+      font-weight: 100;
+      opacity: 0;
+    }
+  }
+  @keyframes status-decay {
+    0% {
+      font-weight: 100;
+      opacity: 0;
+    }
+    28% {
+      font-weight: 620;
+      opacity: 1;
+    }
+  }
+  @keyframes status-head-1 {
+    0% {
+      left: 16.667%;
+      opacity: 1;
+      animation-timing-function: var(--status-ease);
+    }
+    78% {
+      left: 50%;
+      opacity: 1;
+    }
+    to {
+      left: 50%;
+      opacity: 0;
+      scale: 2.4;
+    }
+  }
+  @keyframes status-head-2 {
+    0% {
+      left: 16.667%;
+      opacity: 1;
+      animation-timing-function: var(--status-ease);
+    }
+    45% {
+      left: 50%;
+      animation-timing-function: var(--status-ease);
+    }
+    87% {
+      left: 83.333%;
+      opacity: 1;
+    }
+    to {
+      left: 83.333%;
+      opacity: 0;
+      scale: 2.4;
+    }
+  }
+  @keyframes status-wipe {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+  }
+  @keyframes status-flow {
+    to {
+      translate: var(--status-period, -24px);
+    }
+  }
+  @keyframes status-jitter {
+    50% {
+      translate: 0 1.5px;
+    }
+  }
+  @keyframes status-pop {
+    from {
+      opacity: 0;
+      scale: 0.5;
+    }
+  }
+  @keyframes status-fade {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes status-rise {
+    from {
+      opacity: 0;
+      translate: 0 10px;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .status-code {
+      animation: status-weight 1.2s var(--status-ease) both;
+    }
+    .status-top[data-decay] .status-code {
+      animation: status-decay 2.6s var(--status-ease) both;
+    }
+    .status-cursor {
+      animation: status-fade 0.5s 0.9s both;
+    }
+    .status-head {
+      animation: status-head-1 0.9s 0.1s both;
+    }
+    .status-top[data-at="2"] .status-head {
+      animation: status-head-2 1.55s 0.1s both;
+    }
+    .status-top[data-at="2"] .status-cursor {
+      animation-delay: 1.5s;
+    }
+    .status-seg[data-side="a"] {
+      animation: status-wipe 0.7s 0.1s var(--status-ease) both;
+    }
+    .status-seg[data-side="b"] {
+      animation: status-wipe 0.6s 0.8s var(--status-ease) both;
+    }
+    .status-wave {
+      animation: status-flow 1.6s linear infinite;
+    }
+    .status-seg[data-kind="slow"] .status-wave {
+      animation-duration: 4.8s;
+    }
+    .status-seg[data-kind="noise"] path {
+      animation: status-jitter 0.16s steps(2) infinite;
+    }
+    .status-marks [data-failing] g {
+      animation: status-pop 0.5s 0.75s var(--status-ease) both;
+    }
+    .status-top[data-at="2"] .status-marks [data-failing] g {
+      animation-delay: 1.35s;
+    }
+    .status-top li[data-state="failed"] > :last-child {
+      animation: status-fade 0.3s 0.8s both;
+    }
+    .status-top[data-at="2"] li[data-state="failed"] > :last-child {
+      animation-delay: 1.4s;
+    }
+    .status-bottom {
+      animation: status-rise 0.7s 0.4s var(--status-ease) both;
+    }
+  }
+}

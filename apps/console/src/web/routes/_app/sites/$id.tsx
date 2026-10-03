@@ -2,7 +2,7 @@ import { analyticsRange, domainName, type Site } from "@edgeweir/contract";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation } from "@tanstack/react-router";
 import * as React from "react";
 import { toast } from "sonner";
 import * as z from "zod";
@@ -24,6 +24,7 @@ import { SecurityTab } from "@/components/site/security-tab";
 import { StarButton, useSiteStars } from "@/components/site-star";
 import { SiteStatus, untilLive } from "@/components/site-status";
 import { QueryView } from "@/components/states";
+import { NotFoundPage } from "@/components/status-page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,6 +49,7 @@ export const Route = createFileRoute("/_app/sites/$id")({
 
 function SiteDetailPage() {
   const { id } = Route.useParams();
+  const href = useLocation({ select: (location) => location.href });
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const { session } = Route.useRouteContext();
@@ -106,7 +108,7 @@ function SiteDetailPage() {
         </>
       }
     >
-      <QueryView query={site}>
+      <QueryView query={site} notFound={<NotFoundPage path={href} surface="inline" />}>
         {(data) => (
           <Tabs
             key={data.id}

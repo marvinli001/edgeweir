@@ -26,3 +26,8 @@ export function errorMessage(error: unknown, fallback?: string): string {
 export function isUnauthorized(error: unknown): boolean {
   return !!error && typeof error === "object" && (error as { status?: number }).status === 401;
 }
+
+/** A record that does not exist (any `*_NOT_FOUND` code answers 404). */
+export function isNotFound(error: unknown): boolean {
+  return !!error && typeof error === "object" && (error as { status?: number }).status === 404;
+}
