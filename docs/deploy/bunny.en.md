@@ -192,7 +192,7 @@ bunny api POST /pullzone/<pull zone ID>/setForceSSL --body '{"Hostname":"mc-<id>
 
 An uninitialized console logs the same setup token on every start.
 
-1. In the app's **Logging → Logs → Application**, search for `first-run setup`. Logs are kept for 5 days.
+1. In the app's **Logging → Logs → Application**, search for `first-run setup`. Logs are kept for 5 days and may hold setup tokens from before a database change: use the latest line.
 2. The `setupToken` field of that line is the setup token; the `url` field is the setup wizard (`<EDGEWEIR_PUBLIC_URL>/setup`).
 3. Open the wizard and enter the setup token, see [Getting started](../guide/first-site.en.md#1-complete-the-setup-wizard).
 

@@ -192,7 +192,7 @@ bunny api POST /pullzone/<pull zone ID>/setForceSSL --body '{"Hostname":"mc-<id>
 
 未初始化的控制台每次启动都在日志中输出同一个 setup token。
 
-1. 应用 **Logging → Logs → Application**，搜索 `first-run setup`。日志保留 5 天。
+1. 应用 **Logging → Logs → Application**，搜索 `first-run setup`。日志保留 5 天，可能含有更换数据库之前的 setup token：取最新一行。
 2. 该行 `setupToken` 字段为 setup token，`url` 字段为初始化向导地址（`<EDGEWEIR_PUBLIC_URL>/setup`）。
 3. 打开向导，填入 setup token，见 [快速上手](../guide/first-site.md#1-完成初始化向导)。
 
