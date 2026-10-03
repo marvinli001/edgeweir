@@ -139,7 +139,7 @@ better-auth 的会话 secret 用于签名会话 cookie，并加密 TOTP 密钥�
 | 敏感数据信封加密，主密钥不入库；附加认证数据绑定表、字段与记录 id | 数据库备份或只读 SQL 注入泄露私钥与凭据；有库写权限者在行之间互换密文 |
 | 管理操作写审计，与变更同事务提交 | 越权或误操作无法追溯 |
 | `/api/auth/*` 只放行控制台界面用到的 better-auth 端点（不含注册、admin 与 api-key 端点），其余 404；AccessKey 只能由已登录的会话经 `accessKeys.*` 创建与吊销；`x-api-key` 在 `/api/auth/*` 与 `/rpc` 上被丢弃，只在 `/api/v1` 生效 | 借 better-auth 插件端点绕过审计与配置版本（创建账户、冒充用户、改密码）；API key 变成会话或签发新 key |
-| `/rpc` 要求 `x-csrf-token` 头；响应带 CSP `default-src 'self'`、`frame-ancestors 'none'` | 跨站请求伪造；页面被嵌入第三方站点 |
+| `/rpc` 要求 `x-csrf-token` 头；响应带 CSP `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'` | 跨站请求伪造；页面被嵌入第三方站点 |
 | 客户端 IP 取 TCP 对端地址，转发头只信任 `EDGEWEIR_TRUSTED_PROXIES`；登录与两步验证的限速计数存 PostgreSQL，多实例共享，重启不清零 | 伪造 IP 绕过登录与两步验证限速；审计日志中的 IP 失真 |
 | `install.sh` 与 agent 自升级先校验 cosign 签名（证书身份精确匹配待安装版本的 release 工作流）与 SHA-256，再执行；控制台 `/downloads` 镜像（`EDGEWEIR_DOWNLOADS_DIR`）只是传输通道，未镜像的文件返回 404 | 下载链路或镜像被篡改 |
 | 源站不能是特殊用途地址（回环、链路本地、私网、CGNAT、组播等）或 `localhost`：控制台拒绝这类 IP 字面量，节点对配置和每个 DNS 解析结果执行同一清单（`packages/contract/src/addresses.ts`）；只有经审计的源站地址允许清单能放行地址段；节点回源请求带 `CDN-Loop`（RFC 8586），收到带自身标识的请求返回 508 | 借回源访问云元数据（`169.254.169.254`）、探测内网，或造成回环 |

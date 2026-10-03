@@ -93,7 +93,7 @@
 | `/assets/*` | SPA 静态资源，`max-age=31536000, immutable` | 无 |
 | 其他路径 | SPA 静态文件；未命中时返回 `index.html` | 无 |
 
-`/api`、`/rpc`、`/downloads` 下没有匹配的请求，以及 `/install.sh`、`/healthz` 的其他方法，返回 404 JSON，不回退到 SPA。所有响应带安全头，CSP 为 `default-src 'self'`、`frame-ancestors 'none'`。
+`/api`、`/rpc`、`/downloads` 下没有匹配的请求，以及 `/install.sh`、`/healthz` 的其他方法，返回 404 JSON，不回退到 SPA。所有响应带安全头，CSP 为 `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'`。
 
 ### 界面区域
 

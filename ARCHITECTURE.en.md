@@ -93,7 +93,7 @@ Reverse proxy and layer-4 passthrough configuration: [Ports, reverse proxy, and 
 | `/assets/*` | SPA assets, `max-age=31536000, immutable` | None |
 | Any other path | SPA static files; `index.html` when no file matches | None |
 
-Unmatched requests under `/api`, `/rpc`, and `/downloads`, and other methods on `/install.sh` and `/healthz`, return a 404 JSON body and never fall back to the SPA. Every response carries security headers; the CSP is `default-src 'self'`, `frame-ancestors 'none'`.
+Unmatched requests under `/api`, `/rpc`, and `/downloads`, and other methods on `/install.sh` and `/healthz`, return a 404 JSON body and never fall back to the SPA. Every response carries security headers; the CSP is `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'`.
 
 ### UI areas
 
