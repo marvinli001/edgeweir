@@ -57,6 +57,8 @@ export const errorDefs = {
   DNS_ZONES_UNSUPPORTED: { status: 400, params: [] },
   /** A binding line's resolution line that the binding's provider does not implement. */
   DNS_LINE_UNSUPPORTED: { status: 400, params: ["line"] },
+  /** A requested reconciliation of a cluster's DNS waited in vain for the one in progress. */
+  DNS_RECONCILE_BUSY: { status: 409, params: [] },
   RULE_INVALID: { status: 400, params: [] },
   /** CRS rules (first 5) that set up or evaluate the others (CRS_EVALUATION_FILES). */
   WAF_RULE_NOT_EXCLUDABLE: { status: 400, params: ["ids"] },

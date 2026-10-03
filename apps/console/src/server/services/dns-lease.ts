@@ -30,14 +30,29 @@ export async function releaseLease(db: Executor, key: string, holder: string) {
     .where(and(eq(schema.dnsLease.key, key), eq(schema.dnsLease.holder, holder)));
 }
 
-/** Runs `work` under the lease, or returns `busy` without running it. */
+/** How often a caller that waits for a lease tries again. */
+const LEASE_RETRY_MS = 250;
+
+/**
+ * Runs `work` under the lease, or returns `{ ran: false }` without running
+ * it while another holder has the lease; with `waitMs`, it first waits that
+ * long for the holder to finish.
+ */
 export async function withLease<T>(
   db: Executor,
   key: string,
   seconds: number,
   work: () => Promise<T>,
+  waitMs = 0,
 ): Promise<{ ran: true; value: T } | { ran: false }> {
-  const holder = await acquireLease(db, key, seconds);
+  const deadline = Date.now() + waitMs;
+  let holder = await acquireLease(db, key, seconds);
+  while (!holder && Date.now() < deadline) {
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.min(LEASE_RETRY_MS, deadline - Date.now())),
+    );
+    holder = await acquireLease(db, key, seconds);
+  }
   if (!holder) return { ran: false };
   try {
     return { ran: true, value: await work() };

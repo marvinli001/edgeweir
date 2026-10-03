@@ -1889,6 +1889,7 @@
   "bulk_redirects_no_match": "No matching redirects",
   "bulk_redirects_invalid": "{count} invalid",
   "error_dns_line_unsupported": "This DNS provider has no {line} resolution line",
+  "error_dns_reconcile_busy": "This cluster's DNS is still being synced; try again later",
   "error_region_in_use": [
     {
       "declarations": ["input probes", "local probesPlural = probes: plural"],

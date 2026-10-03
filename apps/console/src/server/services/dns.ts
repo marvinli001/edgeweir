@@ -1256,14 +1256,16 @@ async function reconcileProvider(
  * at a time (a lease, so no connection waits on a provider); other bindings
  * are not affected by this one's provider. The active account is written
  * first; a failing account the cluster used before is cleaned later and only
- * marks the revision failed.
+ * marks the revision failed. While another run holds the binding, waits up
+ * to `waitMs` for it; false when it did not run.
  */
 export async function reconcileBinding(
   app: AppContext,
   clusterId: string,
   actor: Actor = systemActor,
+  waitMs = 0,
 ) {
-  await withLease(app.db, `binding:${clusterId}`, 15 * 60, async () => {
+  const reconcile = async () => {
     const row = await loadBinding(app.db, clusterId);
     const owned = await app.db
       .select({ providerId: schema.dnsManagedName.providerId })
@@ -1349,22 +1351,32 @@ export async function reconcileBinding(
       });
       throw error;
     }
-  });
+  };
+  const { ran } = await withLease(app.db, `binding:${clusterId}`, 15 * 60, reconcile, waitMs);
+  return ran;
 }
+
+/** How long reconciling one cluster on request waits for a run already in progress. */
+export const DNS_RECONCILE_WAIT_MS = 30_000;
 
 /**
  * Reconciles every binding that is automatic or still owns records, four at
- * a time; a failing provider only fails its own clusters. With a cluster id,
- * reconciles that binding and reports its error.
+ * a time; a failing provider only fails its own clusters (a binding another
+ * run holds is left to it). With a cluster id, reconciles that binding and
+ * reports its error: a run in progress may have planned before the caller's
+ * change, so it waits up to `waitMs` for that run and then runs again
+ * (DNS_RECONCILE_BUSY when it is still going).
  */
 export async function reconcileDns(
   app: AppContext,
   actor: Actor = systemActor,
   clusterId?: string,
+  waitMs = DNS_RECONCILE_WAIT_MS,
 ) {
   if (clusterId) {
     await assertCluster(app.db, clusterId);
-    await reconcileBinding(app, clusterId, actor);
+    if (!(await reconcileBinding(app, clusterId, actor, waitMs)))
+      fail("DNS_RECONCILE_BUSY", "another DNS reconciliation of this cluster is still running");
     return { ok: true as const };
   }
   const bindings = await app.db

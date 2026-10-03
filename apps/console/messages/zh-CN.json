@@ -1719,6 +1719,7 @@
   "bulk_redirects_no_match": "没有匹配的重定向",
   "bulk_redirects_invalid": "{count} 条无效",
   "error_dns_line_unsupported": "该 DNS 服务商不支持 {line} 解析线路",
+  "error_dns_reconcile_busy": "该集群的 DNS 同步仍在进行，请稍后重试",
   "error_region_in_use": "该区域下还有 {probes} 个探针",
   "error_probe_not_found": "探针不存在",
   "error_node_region_required": "先为节点所在的节点组设置区域，节点才能兼任探针",

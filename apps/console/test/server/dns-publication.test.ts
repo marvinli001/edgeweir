@@ -2,7 +2,9 @@ import { schema } from "@edgeweir/db";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/server/app";
+import { systemActor } from "../../src/server/services/audit";
 import { pruneDnsRevisions, reconcileDns } from "../../src/server/services/dns";
+import { acquireLease, releaseLease } from "../../src/server/services/dns-lease";
 import { latestRevision } from "../../src/server/services/revisions";
 import { dnsFixture } from "./dns-fixture";
 import { type ApiClient, createTestContext, rpcClient, setupPlatform, signIn } from "./helpers";
@@ -195,6 +197,60 @@ describe("DNS publication", async () => {
     await reconcileDns(ctx);
     expect(addresses()).toEqual(["8.8.4.1", "8.8.4.2"]);
     await ctx.db.delete(schema.node).where(eq(schema.node.id, fresh.id));
+  });
+
+  it("repairs a cluster after the run in progress, which may have planned before the change", async () => {
+    const [n1 = "", n2 = ""] = nodes;
+    const current = await latest();
+    await report(n1, current);
+    await report(n2, current);
+    await reconcileDns(ctx);
+    expect(addresses()).toEqual(["8.8.4.1", "8.8.4.2"]);
+    const key = `binding:${clusterId}`;
+    /** Runs `fn` while another run (the worker's) holds the binding. */
+    const busy = async (fn: (release: () => Promise<void>) => Promise<void>) => {
+      const holder = await acquireLease(ctx.db, key, 60);
+      if (!holder) throw new Error("lease taken");
+      const release = () => releaseLease(ctx.db, key, holder);
+      try {
+        await fn(release);
+      } finally {
+        await release();
+      }
+    };
+    try {
+      // n2 goes offline while the other run holds the binding.
+      await ctx.db
+        .update(schema.node)
+        .set({ lastSeenAt: new Date(Date.now() - 120_000) })
+        .where(eq(schema.node.id, n2));
+      await busy(async (release) => {
+        let done = false;
+        const repair = admin.dns.reconcile({ clusterId }).then(() => {
+          done = true;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        expect(done).toBe(false);
+        expect(addresses()).toEqual(["8.8.4.1", "8.8.4.2"]);
+        await release();
+        await repair;
+        expect(addresses()).toEqual(["8.8.4.1"]);
+      });
+
+      // A run that outlasts the wait is reported, not passed off as done.
+      await report(n2, current);
+      await busy(async () => {
+        await expect(reconcileDns(ctx, systemActor, clusterId, 300)).rejects.toMatchObject({
+          code: "DNS_RECONCILE_BUSY",
+          status: 409,
+        });
+        expect(addresses()).toEqual(["8.8.4.1"]);
+      });
+    } finally {
+      await report(n2, current);
+    }
+    await reconcileDns(ctx, systemActor, clusterId);
+    expect(addresses()).toEqual(["8.8.4.1", "8.8.4.2"]);
   });
 
   it("writes new records before deleting those they replace", async () => {
