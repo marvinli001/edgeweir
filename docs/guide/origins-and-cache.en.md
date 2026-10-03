@@ -461,7 +461,9 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | The origin shows "… is a special-purpose address outside the origin allow list" | Every DNS answer for the origin name is a special-purpose address | Same as above |
 | An HTTPS origin returns 502 and shows "TLS handshake or certificate verification failed" | Self-signed certificate, certificate not covering the SNI, or incomplete chain; missing CA file on the node | Use a trusted certificate or the correct **SNI**; for self-signed origins turn off **Verify origin certificates**; point the node at a CA file with `--trusted-ca` |
 | 502 with `X-Edgeweir-Error: no-origin` | Every origin was dropped before the attempt (resolution failure, forbidden address, missing S3 credentials) | Read the error on the **Origins** tab |
-| 404 with `X-Edgeweir-Error: unknown-host` | The Host belongs to no site the node applied: the site is disabled or deleted, or the node has not applied the latest revision | Check the **Status** on the site's **Overview** tab and the node's **Applied** revision |
+| 404 with `X-Edgeweir-Error: unknown-host` | The Host belongs to no site the node applied and is no domain of a disabled site: the site or domain was deleted, or the node has not applied the latest revision | Check the domain and the node's **Applied** revision |
+| 503 with `X-Edgeweir-Error: site-disabled` | The site is disabled | Enable the site on its **Overview** tab |
+| HTTPS requests fail in the TLS handshake | The SNI belongs to no site the node serves (an unknown domain, a disabled site), or the site has no certificate | Send the request over HTTP to see the node's answer; give the site a certificate, see [HTTPS and certificates](https.en.md) |
 | 508 with `X-Edgeweir-Error: loop-detected` | The origin points back at this node or at a CDN in front of it | Change the origin address |
 | 403 with `X-Edgeweir-Error: websocket-disabled` | WebSocket is off for the site | Turn on **WebSocket** |
 | 405 with `X-Edgeweir-Error: method-not-allowed` | S3 origins accept only `GET` and `HEAD` | Add a non-S3 origin for write requests |

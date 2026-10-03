@@ -100,7 +100,7 @@ The token is single-use. For the installer's checks, the download mirror, and fa
 | Cluster | With several clusters, **Cluster** in the form (default: the oldest); through the API, `clusterId`. A site cannot change clusters later |
 | Domains | Domains are published to the nodes as soon as the site is saved. A domain (name and wildcard flag) belongs to at most one site |
 | Origin address | Origins in special-purpose ranges are refused unless the origin allow list covers the range |
-| Disabling | **Disable** on the site's **Overview** tab: the site is no longer sent to the nodes, which answer 404 for its domains; DNS records stay. **Enable** restores it, see [Site enabling](system.en.md#site-enabling) |
+| Disabling | **Disable** on the site's **Overview** tab: the site is no longer sent to the nodes, which answer HTTP requests for its domains with a 503 disabled page (`X-Edgeweir-Error: site-disabled`) and fail the TLS handshake of HTTPS requests; DNS records stay. **Enable** restores it, see [Site enabling](system.en.md#site-enabling) |
 
 For origin pools, cache rules, and cache keys, see [Origins and cache](origins-and-cache.en.md).
 
@@ -174,7 +174,9 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
 | Node stays **Awaiting heartbeat** | Enrolled, but the node's agent has not connected to the node channel yet | See [Adding nodes](../deploy/nodes.en.md#troubleshooting) |
 | **Applied** shows **Apply failed** | The node failed to validate or apply the configuration | Hover the badge for the reason |
 | **Applied** shows **Upgrade required** | The node lacks a capability the configuration needs | Upgrade the node; see [Node upgrades](node-upgrades.en.md) |
-| 404 with `X-Edgeweir-Error: unknown-host` | The domain is not in the node's configuration: revision not applied, or the site is disabled | Check **Applied** and the **Status** on the site's **Overview** tab |
+| 404 with `X-Edgeweir-Error: unknown-host` | The domain is not in the node's configuration: revision not applied, or the domain belongs to no site | Check **Applied** and the **Status** on the site's **Overview** tab |
+| 503 with `X-Edgeweir-Error: site-disabled` | The site is disabled | **Enable** it on the site's **Overview** tab |
+| HTTPS requests fail in the TLS handshake | The SNI belongs to no site the node serves (an unknown domain, a disabled site), or the site has no certificate or one that does not cover the domain yet | Send the request over HTTP to see the node's answer; check the certificate item of the **Launch check** |
 | A domain in the **Launch check** **Points elsewhere** | Its records point at an old server or another CDN, or also hold other addresses | Keep only records for the edge addresses (or the CNAME target) and wait for the old records' TTL |
 | A domain in the **Launch check** is **Not checked** | The lookup timed out, or the cluster's nodes have no known address yet | Check that the nodes are online and report a public address, or configure scheduling addresses on the node |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | SNI and `Host` of an HTTPS request differ | Use `--resolve` |

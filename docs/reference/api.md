@@ -125,7 +125,7 @@ curl -fsS https://cdn-admin.example.com/api/v1/openapi.json
 
 `PUT /sites/{id}/enabled`（过程 `sites.setEnabled`），请求体 `{"enabled":false}`。运营者（会话或读写 AccessKey）与 `sites:write` 服务账号可以调用。
 
-- 停用的网站不下发到节点，节点对其域名返回 404；DNS 记录保留；证书续期继续，HTTP-01 挑战照常应答。
+- 停用的网站不下发到节点，节点对其域名的 HTTP 请求返回 503（`X-Edgeweir-Error: site-disabled`），HTTPS 请求在 TLS 握手时失败；DNS 记录保留；证书续期继续，HTTP-01 挑战照常应答。
 - 状态有变化时生成新的配置版本（原因码 `site_enabled`、`site_disabled`）并写审计（`site.enable`、`site.disable`）；没有变化时返回当前状态，不生成版本、不写审计。
 - 对停用的网站清缓存或预热：409 `SITE_DISABLED`。
 - 响应为 `{ site, revision }`；`site.enabled` 为当前状态。

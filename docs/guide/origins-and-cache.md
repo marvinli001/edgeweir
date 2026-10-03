@@ -461,7 +461,9 @@ URL 必须以 `http://` 或 `https://` 开头，不能包含账号，Host 必须
 | 源站显示「… 是特殊用途地址，不在源站地址允许清单内」 | 源站域名的解析结果全部为特殊用途地址 | 同上 |
 | HTTPS 源站返回 502，源站显示「TLS 握手或证书校验失败」 | 源站证书自签名、不覆盖 SNI 或证书链不完整；节点缺少 CA 文件 | 换受信任证书或填写正确的「SNI」；自签名源站关闭「校验源站证书」；节点用 `--trusted-ca` 指定 CA 文件 |
 | 502，`X-Edgeweir-Error: no-origin` | 所有源站都在尝试前被剔除（解析失败、地址被禁止、缺少 S3 凭据） | 查看「源站」页签的错误信息 |
-| 404，`X-Edgeweir-Error: unknown-host` | Host 不属于节点已应用的任何网站：网站已停用或被删除，或节点未应用最新版本 | 检查网站「概览」页签的「状态」与节点「已应用版本」 |
+| 404，`X-Edgeweir-Error: unknown-host` | Host 不属于节点已应用的任何网站，也不是已停用网站的域名：网站或域名已删除，或节点未应用最新版本 | 检查域名与节点「已应用版本」 |
+| 503，`X-Edgeweir-Error: site-disabled` | 网站已停用 | 在网站「概览」页签启用网站 |
+| HTTPS 请求在 TLS 握手时失败 | SNI 不属于节点正在服务的网站（未知域名、已停用的网站），或网站没有证书 | 用 HTTP 请求查看节点的应答；为网站配置证书，见[HTTPS 与证书](https.md) |
 | 508，`X-Edgeweir-Error: loop-detected` | 源站指回了本节点或其上游 CDN | 修改源站地址 |
 | 403，`X-Edgeweir-Error: websocket-disabled` | 网站关闭了 WebSocket | 打开「WebSocket」 |
 | 405，`X-Edgeweir-Error: method-not-allowed` | S3 源站只接收 `GET`、`HEAD` | 为写请求增加非 S3 源站 |

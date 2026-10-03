@@ -125,7 +125,7 @@ When a site or L4 app is already enabled or disabled as requested, `sites.setEna
 
 `PUT /sites/{id}/enabled` (procedure `sites.setEnabled`) with the body `{"enabled":false}`. The operator (session or read-and-write AccessKey) and `sites:write` service accounts can call it.
 
-- A disabled site is not shipped to nodes and nodes answer 404 for its domains; its DNS records stay; certificate renewal continues and HTTP-01 challenges are answered.
+- A disabled site is not shipped to nodes; nodes answer HTTP requests for its domains with 503 (`X-Edgeweir-Error: site-disabled`) and fail the TLS handshake of HTTPS requests; its DNS records stay; certificate renewal continues and HTTP-01 challenges are answered.
 - A change publishes a configuration revision (reason codes `site_enabled`, `site_disabled`) and writes an audit entry (`site.enable`, `site.disable`); an unchanged state returns the current state without a revision or audit entry.
 - Purging or prefetching a disabled site: 409 `SITE_DISABLED`.
 - The response is `{ site, revision }`; `site.enabled` holds the current state.
