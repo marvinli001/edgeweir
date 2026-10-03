@@ -25,7 +25,7 @@ Only clusters whose DNS mode is **Automatic** are affected, see [DNS steering an
 
 ### Add a probe
 
-Prerequisites: a region exists (**Clusters & nodes** → **Regions** → **New region**); the probe host can reach the node channel (`EDGEWEIR_NODE_API_URL`, 8443 by default) and the nodes' listener ports. No inbound port is needed.
+Prerequisites: a region exists (**Clusters & nodes** → **Regions** → **New region**); the probe host can reach the node channel URL ("Node channel" in **System settings**, 8443 by default) and the nodes' listener ports. No inbound port is needed.
 
 1. Open **System settings**, switch to the **Monitoring** tab (`/system?tab=probes`), and click **Add probe**.
 2. Fill in **Probe name** (at most 64 characters) and select **Region** and **Valid for** (15 minutes, 1 hour, or 24 hours; 1 hour by default).
@@ -60,7 +60,7 @@ Compose, binary flags, the state directory, and re-enrollment: [Adding nodes](..
 | --- | --- |
 | Enrollment token | `ewp_` prefix, single-use; the database keeps only its SHA-256 and prefix. Creating one is audited as `probe.token_create` |
 | Validity | The UI offers 15 minutes, 1 hour, or 24 hours; the API accepts 5 minutes to 7 days, 60 minutes by default |
-| Node channel | `EDGEWEIR_NODE_API_URL`, the same as for nodes |
+| Node channel | The node channel URL in **System settings**, the same as for nodes |
 | CA fingerprint | SHA-256 of the node channel's internal CA; the probe checks it before sending the token |
 | Enrollment | The probe enrolls with the token on its first start and appears in the list from then on; audited as `probe.enroll` with the actor **Probe**. Later starts ignore the token |
 | No region | The dialog shows **Create a region first** |

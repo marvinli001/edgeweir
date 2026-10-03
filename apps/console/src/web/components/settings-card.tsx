@@ -4,10 +4,32 @@ import * as React from "react";
 import { toast } from "sonner";
 import { SaveBar } from "@/components/site/save-site";
 import { QueryView } from "@/components/states";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useDraft } from "@/hooks/use-draft";
 import { m } from "@/lib/i18n";
 import { errorMessage } from "@/lib/orpc";
+
+const SOURCE_LABEL = {
+  setting: m.system_source_setting,
+  environment: m.system_source_environment,
+  default: m.system_source_default,
+};
+
+/** Where a setting with an environment fallback comes from: saved here, the environment or the default. */
+export function SettingSourceBadge({
+  source,
+  testId,
+}: {
+  source: keyof typeof SOURCE_LABEL;
+  testId: string;
+}) {
+  return (
+    <Badge variant="secondary" data-testid={testId}>
+      {SOURCE_LABEL[source]()}
+    </Badge>
+  );
+}
 
 /** What the fields of a settings card render from. */
 export interface SettingsFields<T, D, I> {

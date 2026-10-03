@@ -109,7 +109,7 @@ Generic nginx configuration and headers: [networking.en.md](networking.en.md#rev
 
    Expected: the issuer contains `Edgeweir Node Channel CA`.
 
-Node release source and origin allow list are configured in **System settings**, see [Clusters and system](../guide/system.en.md#system-settings); GeoIP databases in **Protection settings**, see [Protection settings](../guide/system.en.md#protection-settings); SMTP on the **Alerts** page, see [SMTP](../guide/dns-and-alerts.en.md#smtp). Adding nodes: [Adding nodes](nodes.en.md); `--server` in the install command is `EDGEWEIR_NODE_API_URL`.
+Node release source and origin allow list are configured in **System settings**, see [Clusters and system](../guide/system.en.md#system-settings); GeoIP databases in **Protection settings**, see [Protection settings](../guide/system.en.md#protection-settings); SMTP on the **Alerts** page, see [SMTP](../guide/dns-and-alerts.en.md#smtp). Adding nodes: [Adding nodes](nodes.en.md); `--server` in the install command is "Node channel" in **System settings** (`EDGEWEIR_NODE_API_URL` while none is saved); to change it, see [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate).
 
 ## Node channel port
 

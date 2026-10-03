@@ -16,6 +16,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { assetPath } from "../../src/server/app";
 import type { AppContext } from "../../src/server/lib/context";
 import { loadEnv } from "../../src/server/lib/env";
+import { ConfigEventBus } from "../../src/server/lib/events";
 import { createLogger } from "../../src/server/lib/logger";
 import { startNodeChannel } from "../../src/server/node-channel/server";
 import { CertificateAuthority, generateCa } from "../../src/server/pki/ca";
@@ -757,7 +758,9 @@ describe("install.sh", () => {
   it.runIf(hasTools)(
     "finds an unreachable node channel and a TLS-terminating proxy in front of it",
     async () => {
-      // Only TLS and the 404 for "/" are needed: no database.
+      // Only TLS and the 404 for "/" are needed: no database (the certificate names
+      // fall back to the environment's).
+      const log = createLogger({ test: true });
       const ctx = {
         env: loadEnv({
           NODE_ENV: "test",
@@ -769,7 +772,8 @@ describe("install.sh", () => {
           LOG_LEVEL: "error",
         }),
         nodeCa: await CertificateAuthority.load(await generateCa("Test CA")),
-        log: createLogger({ test: true }),
+        events: new ConfigEventBus("postgres://unused", log),
+        log,
       } as unknown as AppContext;
       const channel = await startNodeChannel(ctx);
       const tools = mkdtempSync(join(tmpdir(), "edgeweir-check-server-"));

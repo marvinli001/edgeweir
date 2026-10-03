@@ -474,7 +474,7 @@ Service accounts with `clusters:read` call `clusters.list` and `clusters.get`; t
 | `clusters.rollout` | `candidateChanges`: while a rollout runs, `{ sites: { added, changed, removed }, reasons }`; `sites` holds the sites the candidate adds, changes, and removes against the stable revision (`[{ id, name }]`), `reasons` the revisions published after the stable one (elements as in `GET /clusters/{id}/revisions`, without repeated reasons); `null` without a running rollout |
 | `clusters.rollbackPreview` | `{ revision, currentRevision, unchanged, sites: { added, changed, removed } }`: `currentRevision` is the cluster's latest revision (`null` without one); `unchanged` is `true` when the content equals the latest revision; `sites` are the changes against it |
 | `overview.get` | `attention`: `[{ kind, clusterId, clusterName, revision, at, count, version }]` in the order of the `kind` list below, `[]` when nothing needs attention. `kind`: `nodes_unhealthy`, `dns_failed`, `dns_blocked`, `upgrade_failed`, `canary_rolled_back`, `canary_awaiting_promotion`, `canary_running`, `nodes_lagging`, `nodes_no_address`. `revision`: the DNS revision or the candidate; `at`: the window end of `canary_running`, the rollback time of `canary_rolled_back`; `count`: the number of nodes; `version`: the target version of `upgrade_failed`. Fields that do not apply are `null`, `0`, or empty |
-| `settings.nodeChannelCheck` | `{ url, result, checkedAt }`: `url` is `EDGEWEIR_NODE_API_URL`; `result` is `ok` (the chain includes the node channel CA), `unreachable` (no handshake within 3 seconds), or `mismatch` (another chain answered, or the URL is not `https`). A result is reused for 30 seconds; advisory only |
+| `settings.nodeChannelCheck` | `{ url, result, checkedAt }`: `url` is the node channel URL in effect; `result` is `ok` (the chain includes the node channel CA), `unreachable` (no handshake within 3 seconds), `mismatch` (another chain answered, or the URL is not `https`), or `refused` (a URL saved in system settings resolves to a special-purpose address the outbound policy does not allow; no connection is made). A result is reused for 30 seconds; advisory only |
 
 | Error code | Status | When |
 | --- | --- | --- |
@@ -482,7 +482,16 @@ Service accounts with `clusters:read` call `clusters.list` and `clusters.get`; t
 | `REVISION_NOT_FOUND` | 404 | The cluster has no such revision |
 | `CLUSTER_NOT_FOUND` | 404 | The cluster does not exist |
 
-Behavior: [Clusters and system](../guide/system.en.md) and [Adding nodes](../deploy/nodes.en.md#node-channel-check).
+Behavior: [Clusters and system](../guide/system.en.md) and [Adding nodes](../deploy/nodes.en.md#node-channel-connection-check).
+
+### Node channel URL
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `settings.nodeChannel` | `GET /settings/node-channel` | `{ url, effectiveUrl, source }`: `url` is the URL saved in system settings (an empty string when none is); `effectiveUrl` the URL install commands carry; `source` is `setting`, `environment` (`EDGEWEIR_NODE_API_URL`), or `default` |
+| `settings.setNodeChannel` | `PUT /settings/node-channel` | Body `{ url }`: `https://host[:port]` without a path, query, fragment, or credentials, otherwise 400; saved as its origin. An empty string clears the saved URL. Responds like `settings.nodeChannel`. Applies at once, the node channel certificate adds the new URL's name; audited as `system.node_channel_update` |
+
+Service accounts cannot call them (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys call `settings.nodeChannel` only. Enrolled nodes keep the URL they enrolled with; see [Node channel URL and certificate](../deploy/networking.en.md#node-channel-url-and-certificate).
 
 ### Node upgrades
 

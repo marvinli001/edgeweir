@@ -34,19 +34,34 @@
 
 ## 节点通道地址与证书
 
+节点通道地址是节点与区域探针连接节点通道的地址，即安装命令中的 `--server`。在 **系统设置** 的「节点通道」卡片中修改，保存即生效，不重启控制台。取值顺序：
+
+| 顺序 | 来源 | 卡片中的标记 |
+| --- | --- | --- |
+| 1 | **系统设置** 中保存的地址 | 已保存 |
+| 2 | `EDGEWEIR_NODE_API_URL` | 环境变量 |
+| 3 | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` | 默认 |
+
+清空输入框并保存后回到 2、3。格式为 `https://主机[:端口]`，不含路径、查询参数与账号；端口省略时为 443。
+
 | 变量 | 默认值 | 作用 |
 | --- | --- | --- |
-| `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` | 节点连接节点通道的地址；安装命令中的 `--server`；**系统设置** 中的「节点通道」。 |
+| `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` | **系统设置** 中没有保存地址时的节点通道地址。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | 空 | 节点通道证书的额外名称，逗号分隔的 DNS 名或 IP。 |
 
-- 节点通道的服务端证书由内部 CA 在每次启动时签发，名称包括：`localhost`、`127.0.0.1`、`::1`、容器主机名、`EDGEWEIR_NODE_API_URL` 的主机名、`EDGEWEIR_NODE_API_HOSTNAMES` 的全部条目。修改后重启生效。
+- 节点通道的服务端证书由内部 CA 签发，名称包括：`localhost`、`127.0.0.1`、`::1`、容器主机名、`EDGEWEIR_NODE_API_URL` 的主机名（未设置时为默认地址的主机名）、`EDGEWEIR_NODE_API_HOSTNAMES` 的全部条目、**系统设置** 中保存的地址的主机名或 IP，以及此前生效过的节点通道地址的主机名或 IP（保留最近 32 个）。
+- 在 **系统设置** 保存地址后，每个控制台实例立即为新名称重新签发证书，新握手使用新证书，已建立的连接不受影响；修改环境变量后重启生效。
+- 已注册的节点与探针一直使用注册时记录的 `server_url` 与 TLS 服务器名（`/var/lib/edgeweir-node/identity.json`），修改地址不会改变它们：旧地址需保持可用（旧名称留在证书中），或在节点上重新注册。
 - CA 指纹（SHA-256）出现在启动日志 `node channel listening` 的 `caSha256`、**系统设置** 的「CA 指纹」、安装命令的 `--ca-sha256`。
 
 | 场景 | 设置 |
 | --- | --- |
-| 宿主机发布端口不是 8443，例如 `EDGEWEIR_NODE_API_PORT=9443` | 显式设置 `EDGEWEIR_NODE_API_URL=https://<主机名>:9443`：默认值使用进程监听端口 `NODE_API_PORT`，不是发布端口。 |
+| 宿主机发布端口不是 8443，例如 `EDGEWEIR_NODE_API_PORT=9443` | 在 **系统设置** 填写 `https://<主机名>:9443`，或设置 `EDGEWEIR_NODE_API_URL`：默认值使用进程监听端口 `NODE_API_PORT`，不是发布端口。 |
+| 部署后才有节点通道的公网地址（平台后加的 Anycast IP、TCP 代理） | 地址可用后在 **系统设置** 填写，再生成安装命令。 |
 | 节点经其他名称或 IP 连接（内网地址、负载均衡名称） | 将该名称加入 `EDGEWEIR_NODE_API_HOSTNAMES`。 |
-| 更换 `EDGEWEIR_NODE_API_URL` 的主机名 | 将旧主机名保留在 `EDGEWEIR_NODE_API_HOSTNAMES`：已注册节点使用注册时记录的 `server_url` 与 TLS 服务器名（`/var/lib/edgeweir-node/identity.json`）校验证书。 |
+| 节点通道域名的 DNS 在 Cloudflare | 该记录关闭代理（仅 DNS）：Cloudflare 代理的 HTTPS 端口包括 8443，会终结 TLS，节点报 `CA pin mismatch`。 |
+| 更换节点通道地址 | 在 **系统设置** 修改；已注册的节点继续连接旧地址，旧地址需保持可用。 |
+| 更换 `EDGEWEIR_NODE_API_URL` 的主机名（系统设置中没有保存地址） | 将旧主机名保留在 `EDGEWEIR_NODE_API_HOSTNAMES`：已注册节点按注册时记录的名称校验证书。 |
 
 ## 反向代理 Web 控制台
 
@@ -115,7 +130,7 @@ server {
      | openssl x509 -noout -issuer
    ```
 
-   预期：签发者含 `Edgeweir Node Channel CA`。出现其他签发者表示 TLS 被中间设备终结。**系统设置** 中「节点通道」旁的自检做同样的检查，从控制台所在网络连接 `EDGEWEIR_NODE_API_URL`，见 [节点通道自检](nodes.md#节点通道自检)。
+   预期：签发者含 `Edgeweir Node Channel CA`。出现其他签发者表示 TLS 被中间设备终结。**系统设置** 的「节点通道」卡片中的连接检查做同样的检查，从控制台所在网络连接节点通道地址，见 [节点通道连接检查](nodes.md#节点通道连接检查)。
 
 ## 可信代理与客户端 IP
 

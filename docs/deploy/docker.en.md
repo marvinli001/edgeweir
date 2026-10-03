@@ -133,7 +133,7 @@ Common optional variables (uncomment in `.env`):
 | Variable | Default | Description |
 | --- | --- | --- |
 | `EDGEWEIR_VERSION` | `latest` | Image tag to pull. Pin a dated tag in production; see [pinning a version](upgrade.en.md#pinning-a-version). |
-| `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:8443` | URL nodes use for the node channel; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
+| `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:8443` | URL nodes use for the node channel; a URL saved under "Node channel" in **System settings** wins; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
 | `EDGEWEIR_TRUSTED_PROXIES` | Empty | Reverse proxy addresses; see [trusted proxies](networking.en.md#trusted-proxies-and-client-ip). |
 | `EDGEWEIR_HTTP_PORT`, `EDGEWEIR_NODE_API_PORT` | `127.0.0.1:3000`, `8443` | Published host ports, optionally with a bind address. The web port is local only by default: ports Docker publishes bypass ufw and firewalld, so a reverse proxy serves it; `EDGEWEIR_HTTP_PORT=3000` publishes it on every interface. |
 | `BETTER_AUTH_SECRET` | Empty, derived from the master key | Deployments that set it keep it; the console refuses to start once it is removed. |

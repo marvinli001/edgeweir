@@ -53,7 +53,7 @@ Verify in an isolated environment first. The restore environment requires:
 | --- | --- |
 | Master key | The original `EDGEWEIR_MASTER_KEY`. When the master key was [rotated](docker.en.md#rotating-the-master-key) after the backup, use the new key and set the original as `EDGEWEIR_MASTER_KEY_PREVIOUS`. |
 | `BETTER_AUTH_SECRET` | The original value when it was set; otherwise derived from the master key. |
-| Node channel address | The original `EDGEWEIR_NODE_API_URL` and `EDGEWEIR_NODE_API_HOSTNAMES`: enrolled nodes verify the certificate against the names used at enrollment. |
+| Node channel address | The original `EDGEWEIR_NODE_API_URL` and `EDGEWEIR_NODE_API_HOSTNAMES`: enrolled nodes verify the certificate against the names used at enrollment. A URL saved in **System settings** lives in the database and comes back with the backup. |
 | Console version | The backup's version or newer: migrations only move forward. |
 | Background jobs | Only one restore environment at a time may run background jobs against real DNS providers and notification channels; drills use local simulators. |
 

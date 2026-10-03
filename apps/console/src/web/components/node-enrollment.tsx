@@ -63,19 +63,29 @@ const CHECK_TONE: Record<NodeChannelCheck["result"], StatusTone> = {
   ok: "good",
   unreachable: "warn",
   mismatch: "warn",
+  refused: "idle",
 };
 
-const checkText = (result: NodeChannelCheck["result"]) =>
-  ({
-    ok: m.node_channel_check_ok,
-    unreachable: m.node_channel_check_unreachable,
-    mismatch: m.node_channel_check_mismatch,
-  })[result]();
+const checkText = (result: NodeChannelCheck["result"], line: boolean) =>
+  (line
+    ? {
+        ok: m.node_channel_line_ok,
+        unreachable: m.node_channel_line_unreachable,
+        mismatch: m.node_channel_line_mismatch,
+        refused: m.node_channel_line_refused,
+      }
+    : {
+        ok: m.node_channel_check_ok,
+        unreachable: m.node_channel_check_unreachable,
+        mismatch: m.node_channel_check_mismatch,
+        refused: m.node_channel_check_refused,
+      })[result]();
 
 /**
  * The console's own TLS handshake with the node channel URL, as one line:
  * a pulsing dot while it runs, nothing when it cannot be asked. `line`
- * prefixes the result with what was checked (the add-node dialog).
+ * names the node channel and links a failed check to the setting (the
+ * add-node dialog).
  */
 export function NodeChannelCheckStatus({ line = false }: { line?: boolean }) {
   const check = useQuery({
@@ -84,16 +94,24 @@ export function NodeChannelCheckStatus({ line = false }: { line?: boolean }) {
   });
   if (check.isPending) return <Dot tone="idle" pulse small />;
   if (!check.data) return null;
-  const text = checkText(check.data.result);
+  const { result } = check.data;
   return (
     <span
-      className="flex items-center gap-1.5 text-sm text-muted-foreground"
-      title={line ? undefined : m.node_channel_check_title()}
+      className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground"
       data-testid="node-channel-check"
-      data-result={check.data.result}
+      data-result={result}
     >
-      <Dot tone={CHECK_TONE[check.data.result]} small />
-      {line ? m.node_channel_check_line({ result: text }) : text}
+      <Dot tone={CHECK_TONE[result]} small />
+      {checkText(result, line)}
+      {line && result !== "ok" ? (
+        <Link
+          to="/system"
+          className="font-medium text-foreground underline-offset-4 hover:underline"
+          data-testid="node-channel-fix"
+        >
+          {m.node_channel_line_fix()}
+        </Link>
+      ) : null}
     </span>
   );
 }

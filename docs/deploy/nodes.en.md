@@ -9,7 +9,7 @@ Generate an install command for a cluster, then install and enroll an edge node 
 | System | Linux, amd64 or arm64, glibc 2.34 or later: RHEL, Rocky, AlmaLinux 9 or later, Debian 12 or later, Ubuntu 22.04 or later; systemd (not required with `--no-start`) |
 | Privileges | root or sudo |
 | Commands | `curl`, `sha256sum`, `tar` |
-| Console access | `EDGEWEIR_PUBLIC_URL` (`/install.sh`, `/downloads/*`) and `EDGEWEIR_NODE_API_URL` (node channel, 8443 by default); see [ports and reverse proxy](networking.en.md) |
+| Console access | `EDGEWEIR_PUBLIC_URL` (`/install.sh`, `/downloads/*`) and the node channel URL ("Node channel" in **System settings**, 8443 by default); see [ports and reverse proxy](networking.en.md) |
 | External access | GitHub Releases and `api.github.com` (unless `--mirror-only`) |
 
 Nodes use OpenResty built for Edgeweir, released with edgeweir-node and listed in the same signed `checksums.txt`:
@@ -25,29 +25,30 @@ Both packages come as deb and rpm only (amd64, arm64). The openresty.org reposit
 
 1. Open **Clusters & nodes**, select a cluster, and click **Add node**. The dialog shows the **Install command** at once: the cluster's default node group, valid for 1 hour, no node name.
 2. For a node name, another node group, or another lifetime, open **Options**: fill in **Node name**, choose a **Node group** (shown when the cluster has several) and **Valid for** (15 minutes, 1 hour, or 24 hours), and click **Regenerate**.
-3. Copy the **Install command**. Below it are the time left, **Shown once**, address warnings, and the [node channel check](#node-channel-check); once the dialog is closed the command is not shown again, and opening it again generates a new token.
+3. Copy the **Install command**. Below it are the time left, **Shown once**, address warnings, and the [node channel connection check](#node-channel-connection-check); once the dialog is closed the command is not shown again, and opening it again generates a new token.
 4. Once the command runs on the node, the dialog's **Progress** refreshes every 3 seconds: waiting for the node (or token expired), enrolled (the node name links to its details), online, configuration applied, data plane healthy, has an address for DNS.
 
 | Item | Behavior |
 | --- | --- |
 | Enrollment token | Prefix `ewt_`, single use, stored as SHA-256 only; generating one writes an audit entry. |
-| `--server` | `EDGEWEIR_NODE_API_URL`. |
+| `--server` | The "Node channel" URL in **System settings**; see [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
 | `--ca-sha256` | SHA-256 fingerprint of the node channel internal CA, the same as "CA fingerprint" in **System settings**. |
 | API | `POST /api/v1/enrollment-tokens`, `ttlMinutes` 5–10080, default 60; `GET /api/v1/enrollment-tokens/{id}` returns `usedAt` and the enrolled node. See [API and endpoints](../reference/api.en.md). |
 | Address warnings | When the console URL (where `install.sh` comes from) or the node channel URL is localhost, a loopback or a private address, the dialog warns about each and **System settings** marks the URL "This machine only" or "Private address"; a public console URL over plain HTTP gets "The console URL is plain HTTP: install.sh reaches the hosts that run it as root unencrypted" and the mark "Unencrypted". The console logs a warning for each at startup; generating is not refused. |
 | Cleanup | Tokens expired or used more than 7 days ago are deleted every 30 minutes. |
 
-### Node channel check
+### Node channel connection check
 
-The console makes a TLS handshake with its own node channel at `EDGEWEIR_NODE_API_URL` (no client certificate, no request) and compares the presented certificate chain with the node channel's internal CA. The add-node dialog shows the result as one line, "Node channel check: …"; **System settings** shows it beside "Node channel".
+The console makes a TLS handshake with its own node channel at the node channel URL (no client certificate, no request) and compares the presented certificate chain with the node channel's internal CA. **System settings** shows the result below the URL in the "Node channel" card; the add-node dialog shows it as one line, with a "Change" link to **System settings** when the check fails.
 
-| Result | Meaning |
+| Result (System settings / add-node dialog) | Meaning |
 | --- | --- |
-| reachable, CA matches | The handshake completed and the chain includes the internal CA |
-| the console cannot reach this URL | No handshake within 3 seconds: wrong address or DNS, a closed port, or the console's network cannot reach the address |
-| CA mismatch: something in front terminates TLS | Another certificate chain answered, or the URL is not `https`: a proxy or CDN terminates TLS and node mTLS will fail; see [Node channel passthrough](networking.en.md#node-channel-passthrough) |
+| Reachable / Node channel reachable | The handshake completed and the chain includes the internal CA |
+| The console cannot connect to this URL / The console cannot connect to the node channel URL | No handshake within 3 seconds: wrong address or DNS, a closed port, or the console's network cannot reach the address |
+| Certificate mismatch: a proxy or CDN may be in front / Node channel certificate mismatch: a proxy or CDN may be in front | Another certificate chain answered: a proxy or CDN terminates TLS, or the URL points at another service, and node mTLS will fail; see [Node channel passthrough](networking.en.md#node-channel-passthrough) |
+| The outbound policy does not allow this address / The outbound policy does not allow the node channel address | The URL saved in **System settings** resolves to a private, loopback, or other special-purpose address that `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` does not allow: the console does not connect, as with other targets saved in the web UI. `EDGEWEIR_NODE_API_URL` and the default are not limited this way |
 
-The check is advisory and blocks nothing: the console reaching its own address does not prove that nodes on other networks do. A result is reused for 30 seconds. API: `GET /api/v1/settings/node-channel-check` returns `{ url, result, checkedAt }`, with `result` `ok`, `unreachable`, or `mismatch`.
+The check is advisory and blocks nothing: the console reaching its own address does not prove that nodes on other networks do, and where the console's network cannot reach its own public address (no NAT hairpinning) the check fails while nodes may still enroll. A result is reused for 30 seconds and checked again when the URL changes. API: `GET /api/v1/settings/node-channel-check` returns `{ url, result, checkedAt }`, with `result` `ok`, `unreachable`, `mismatch`, or `refused`.
 
 ## 2. Run the install command
 
@@ -147,7 +148,7 @@ A regional probe measures every node's scheduling addresses from its region; the
 | Item | Requirement |
 | --- | --- |
 | Runs as | The node image (Docker, amd64 / arm64), or the systemd unit and binary on Linux amd64 / arm64 |
-| Outbound | The node channel (`EDGEWEIR_NODE_API_URL`, 8443 by default) and the listener ports on the nodes' scheduling addresses |
+| Outbound | The node channel URL (8443 by default) and the listener ports on the nodes' scheduling addresses |
 | Inbound | None |
 | Placement | Inside the carrier or regional network it stands for |
 | Count | Reachability is decided by a strict majority of all probers: with a single prober its own network failure marks addresses unreachable; with two or more, more than half must fail at once |
@@ -297,16 +298,17 @@ The release source for agent self-upgrades is set in **System settings → Node 
 | `checksums.txt does not list exactly one ... package of edgeweir-openresty...` | The mirror or release lacks the package, or lists several versions for the architecture | Complete the mirror directory from `checksums.txt`; add `--no-modsecurity` when the release has no ModSecurity module. |
 | `edgeweir-openresty comes as .deb and .rpm only` | A tar.gz install on a host without `dpkg`, `rpm`, or an installed `edgeweir-openresty` | Use a host with deb or rpm package management. |
 | `cosign signature verification FAILED`, `SHA-256 verification FAILED` | Downloaded content does not match the signature or checksum | Check the download source and the mirror contents; do not skip verification. |
-| `CA pin mismatch`, `does not present the console's node CA` | A proxy or CDN terminates TLS on 8443, or `--server` points at another service | Connect directly or use [layer-4 passthrough](networking.en.md#node-channel-passthrough). |
-| `cannot reach the node channel` | The `--server` address or its DNS name is wrong, a firewall or security group blocks the port, or the console's `EDGEWEIR_NODE_API_URL` is a local or private address | Check the address and DNS, open the port; `curl -k https://<address>:8443/` on the node should return 404. |
+| `CA pin mismatch`, `does not present the console's node CA` | A proxy or CDN terminates TLS on 8443 (a proxied Cloudflare record included), or `--server` points at another service | Connect directly or use [layer-4 passthrough](networking.en.md#node-channel-passthrough); set the Cloudflare record to DNS only. |
+| `cannot reach the node channel` | The `--server` address or its DNS name is wrong, a firewall or security group blocks the port, or the node channel URL is a local or private address | Check the address and DNS, open the port; `curl -k https://<address>:8443/` on the node should return 404. When the URL is wrong, change "Node channel" in **System settings** and generate a new install command. |
 | `console rejected the enrollment token (expired or already used)` | Token expired or already used | Generate a new install command. |
 | `edgeweir-node is installed but not healthy after 90s` | The node did not apply its configuration within 90 seconds: it cannot reach the node channel, its certificate is rejected, or OpenResty failed to start | Read `journalctl -u edgeweir-node -n 50`; after fixing, run the same command again (it only restarts and checks the service). |
 | `node is already enrolled (use --force to replace the identity)` | The host already has a node identity (`/var/lib/edgeweir-node/identity.json`) | Keep the existing enrollment; to replace the identity, run a new install command with `--force` appended, or stop the node (`systemctl stop edgeweir-node`; a running node refuses), run `edgeweir-node enroll --force` with a new token, then start it; flags in [edgeweir-node](https://github.com/marvinli001/edgeweir-node). |
 | Node log `client certificate expired at ...`, the console marks the node **Certificate expired** | The node was offline longer than its certificate had left and could not renew it; the node channel refuses it with `client certificate has expired (CERT_HAS_EXPIRED)` | Generate a new install command; run it on the node with `--force` appended (or `systemctl stop edgeweir-node`, run `edgeweir-node enroll --force` with the new token, then start it); delete the old node in the console. |
-| `x509: certificate is valid for ..., not ...` | The name the node connects to is not in the node channel certificate | Add the name to `EDGEWEIR_NODE_API_HOSTNAMES` and restart the console; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
-| Enrollment times out, or the node stays offline | Firewall or security group blocks 8443; `EDGEWEIR_NODE_API_URL` resolves incorrectly | Open 8443; check DNS resolution. |
+| `x509: certificate is valid for ..., not ...` | The name the node connects to is not in the node channel certificate: the node enrolled with an `EDGEWEIR_NODE_API_URL` that has since changed | Add the name to `EDGEWEIR_NODE_API_HOSTNAMES` and restart the console; see [node channel URL and certificate](networking.en.md#node-channel-url-and-certificate). |
+| Enrollment times out, or the node stays offline | Firewall or security group blocks 8443; the node channel URL resolves incorrectly | Open 8443; check DNS resolution. |
+| Enrolled nodes go offline after the node channel URL changed | Nodes keep the URL they enrolled with, which no longer leads to the console | Restore the old address (endpoint, DNS record, or port forwarding), or enroll the node again by running a new install command with `--force` appended, then delete the old node in the console. |
 | The node stays "Awaiting heartbeat" | Enrolled, but the agent has not connected to the node channel over mTLS yet: the service is not running (for example `--no-start`), or the connection fails | Run `systemctl status edgeweir-node` and `journalctl -u edgeweir-node -n 50` on the node. |
-| The node channel check shows "CA mismatch: something in front terminates TLS" | `EDGEWEIR_NODE_API_URL` points at a proxy, CDN, or other service that terminates TLS | Connect directly or use [layer-4 passthrough](networking.en.md#node-channel-passthrough). |
+| The connection check shows "Certificate mismatch: a proxy or CDN may be in front" | The node channel URL points at a proxy, CDN, or other service that terminates TLS | Connect directly or use [layer-4 passthrough](networking.en.md#node-channel-passthrough), or change it in **System settings** to an address that reaches the console directly. |
 | Connections to an L4 app's port time out | The node firewall or security group does not open the port pools; a container node does not publish the ports | Open or publish them as in [Ports and firewall](#ports-and-firewall). |
 | `probe is not enrolled: the first run needs --server, --ca-sha256 and a probe token` | A probe's first start lacks the enrollment settings (exit status 2) | Set `EDGEWEIR_SERVER`, `EDGEWEIR_CA_SHA256`, and `EDGEWEIR_TOKEN`, then start it again. |
 | `probe enrollment failed: console rejected the enrollment token (expired or already used)` | The probe token expired or was already used | **Add probe** again for a new token. |

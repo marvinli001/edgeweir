@@ -49,7 +49,7 @@
 | **节点组** | 默认为集群的默认节点组；集群只有一个节点组时不显示 |
 | **有效期** | 15 分钟、1 小时（默认）、24 小时；API 允许 5 分钟至 7 天 |
 
-对话框显示 **安装命令**（带剩余时间，仅显示一次）、地址提醒与一行节点通道自检，其下为 **注册进度**。CA 指纹在命令的 `--ca-sha256` 中，也显示在 [系统信息](#系统信息)。每次打开对话框都生成新的 token，关闭后命令不再显示。token 以 `ewt_` 开头，单次有效；数据库保存其 SHA-256 与前缀，不保存明文。地址提醒、节点通道自检与安装流程见 [接入节点](../deploy/nodes.md)。
+对话框显示 **安装命令**（带剩余时间，仅显示一次）、地址提醒与一行节点通道连接检查（未通过时带「修改」链接，打开 [节点通道](#节点通道)），其下为 **注册进度**。CA 指纹在命令的 `--ca-sha256` 中，也显示在 [系统信息](#系统信息)。每次打开对话框都生成新的 token，关闭后命令不再显示。token 以 `ewt_` 开头，单次有效；数据库保存其 SHA-256 与前缀，不保存明文。地址提醒、连接检查与安装流程见 [接入节点](../deploy/nodes.md)。
 
 ### 节点
 
@@ -246,7 +246,7 @@ API：`GET /api/v1/overview` 的 `attention`，见 [集群与概览](../referenc
 
 | 操作前缀 | 内容 |
 | --- | --- |
-| `system.*` | 初始化（含 setup token 错误的 `system.setup_rejected`）、源站地址允许清单、节点发布源、用量设置、封禁设置、防护、CC 模板、探测设置（`system.probes_update`）、升级后重新编译 |
+| `system.*` | 初始化（含 setup token 错误的 `system.setup_rejected`）、节点通道地址（`system.node_channel_update`）、源站地址允许清单、节点发布源、用量设置、封禁设置、防护、CC 模板、探测设置（`system.probes_update`）、升级后重新编译 |
 | `auth.*` | 登录成功（`auth.sign_in`，含登录方式）与失败（`auth.sign_in_failed`） |
 | `account.*` | 修改密码、启用 / 停用两步验证、添加 / 删除通行密钥、在服务器上找回账户（`account.recover`，见 [找回账户](account.md#找回账户)） |
 | `api_key.*` | AccessKey 创建、吊销 |
@@ -265,7 +265,7 @@ API：`GET /api/v1/overview` 的 `attention`，见 [集群与概览](../referenc
 
 | 页签 | 内容 |
 | --- | --- |
-| **通用** | 以下各节：系统信息、源站地址允许清单、节点发布源、用量、平台错误页 |
+| **通用** | 以下各节：系统信息、节点通道、源站地址允许清单、节点发布源、用量、平台错误页 |
 | **监控** | `/system?tab=probes`：区域探针列表（页面操作 **添加探针**）与 **探测设置** 卡片，见 [区域探针](scheduling.md#区域探针)；`/regions?tab=probes` 跳转到这里 |
 | **服务账号** | `/system?tab=service-accounts`，见 [服务账号](#服务账号) |
 
@@ -277,11 +277,23 @@ API：`GET /api/v1/overview` 的 `attention`，见 [集群与概览](../referenc
 | --- | --- |
 | **版本** | 镜像版本 `<YYYYMMDD>-<commit>`；源码运行为 `dev` |
 | **控制台地址** | `EDGEWEIR_PUBLIC_URL`；localhost 或回环地址标「仅本机可达」，内网地址标「内网地址」：其他网络的节点无法从此下载 `install.sh`；公网地址使用 HTTP 时标「未加密」：`install.sh` 以明文传给要用 root 运行它的主机 |
-| **节点通道** | `EDGEWEIR_NODE_API_URL`；未设置时为 `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>`。「仅本机可达」与「内网地址」标记同上：其他网络的节点无法注册。旁边显示节点通道自检结果：**可达，CA 一致**、**控制台连不上该地址** 或 **CA 不一致，前面有代理终止了 TLS**，见 [节点通道自检](../deploy/nodes.md#节点通道自检) |
 | **CA 指纹** | 节点通道内部 CA 的 SHA-256；安装命令中的 `--ca-sha256` 与之相同 |
 | **统计模式** | `EDGEWEIR_ANALYTICS`（`lite` / `clickhouse`） |
 | **Setup token** | **未使用** 或 **已于 {时间} 使用** |
 | **OpenAPI** | `/api/v1/openapi.json` |
+
+### 节点通道
+
+**地址**：节点与区域探针连接节点通道的地址，即安装命令中的 `--server`。输入框为空时使用 `EDGEWEIR_NODE_API_URL`，未设置时为 `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>`；占位文字为当前生效的地址，标签显示其来源。
+
+| 约束 | 说明 |
+| --- | --- |
+| 格式 | `https://主机[:端口]`，不含路径、查询参数与账号；保存为主机名小写、去掉末尾 `/` 与默认端口 443 的形式 |
+| 生效 | 保存后立即生效，不重启控制台：新的安装命令与探针命令使用该地址，节点通道证书加入其主机名或 IP |
+| 已注册的节点 | 继续连接注册时的地址，旧地址的名称留在证书中；编辑时提示「已注册的节点仍连接原地址，原地址需保持可用」 |
+| 清空 | 保存空值后回退到环境变量或默认值 |
+
+地址为 localhost、回环或内网地址时标「仅本机可达」或「内网地址」：其他网络的节点无法注册。地址下方显示 [连接检查](../deploy/nodes.md#节点通道连接检查) 的结果：**连接正常**、**控制台无法连接该地址**、**证书不符，前面可能有代理或 CDN**，或 **出站策略不允许连接该地址**（保存的地址是内网、回环等特殊用途地址，`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 未放行，控制台不连接）。修改写审计 `system.node_channel_update`。证书名称见 [节点通道地址与证书](../deploy/networking.md#节点通道地址与证书)。
 
 ### 源站地址允许清单
 
@@ -324,6 +336,7 @@ API：`GET /api/v1/overview` 的 `attention`，见 [集群与概览](../referenc
 
 | 设置 | 位置 | 环境变量 | 默认值 |
 | --- | --- | --- | --- |
+| 节点通道 | **系统设置 → 节点通道** | `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` |
 | 节点发布源 | **系统设置 → 节点发布源** | `EDGEWEIR_NODE_RELEASE_BASE_URL` | `https://github.com/marvinli001/edgeweir-node/releases/download` |
 | SMTP CA 证书 | **告警 → SMTP → CA 证书（PEM）** | `EDGEWEIR_SMTP_CA_FILE`（PEM 文件路径） | 系统信任库 |
 | SMTP 服务器与账户 | **告警 → SMTP** | 无 | 未配置 |
@@ -332,7 +345,7 @@ API：`GET /api/v1/overview` 的 `attention`，见 [集群与概览](../referenc
 | 封禁 | **防护设置 → 封禁** | 无 | 上限 10000，共享自动封禁 |
 | 防护 | **防护设置 → 防护** | 无 | 全局 Under Attack 关闭，挑战类型 JS 计算，事件保留 30 天 |
 
-**节点发布源** 的标签显示当前生效值的来源：**已保存**、**环境变量** 或 **默认**。系统设置中保存的地址受 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 约束；环境变量中的值由运维设置，不经该检查。全部环境变量见 [环境变量](../reference/environment.md)。
+**节点通道** 与 **节点发布源** 的标签显示当前生效值的来源：**已保存**、**环境变量** 或 **默认**。系统设置中保存的发布源地址受 `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 约束；环境变量中的值由运维设置，不经该检查。全部环境变量见 [环境变量](../reference/environment.md)。
 
 ## 防护设置
 

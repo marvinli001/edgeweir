@@ -4,6 +4,8 @@ import {
   consoleUrlWarnings,
   forbiddenOriginRange,
   formatIp,
+  nodeChannelInput,
+  nodeChannelOrigin,
   normalizeCidr,
   originAddress,
   originAllowListInput,
@@ -293,5 +295,38 @@ describe("originAddress", () => {
     }
     expect(originAddress.safeParse("host-123.example").success).toBe(true);
     expect(originAddress.safeParse("123host.example").success).toBe(true);
+  });
+});
+
+describe("node channel URLs", () => {
+  it("takes https://host[:port] and normalizes it to its origin", () => {
+    expect(nodeChannelOrigin("https://Nodes.Example.com:8443/")).toBe(
+      "https://nodes.example.com:8443",
+    );
+    expect(nodeChannelOrigin("https://203.0.113.5:8443")).toBe("https://203.0.113.5:8443");
+    expect(nodeChannelOrigin("https://[2001:DB8::1]:8443")).toBe("https://[2001:db8::1]:8443");
+    // The default port is the URL's own: nodes connect to 443.
+    expect(nodeChannelOrigin("https://nodes.example.com:443")).toBe("https://nodes.example.com");
+  });
+
+  it("refuses other schemes, paths, queries, fragments and credentials", () => {
+    for (const url of [
+      "http://nodes.example.com:8443",
+      "https://nodes.example.com:8443/rpc",
+      "https://nodes.example.com:8443/?a=1",
+      "https://nodes.example.com:8443/#a",
+      "https://user@nodes.example.com:8443",
+      "nodes.example.com:8443",
+      "",
+    ])
+      expect(nodeChannelOrigin(url), url).toBeUndefined();
+  });
+
+  it("lets an empty input clear the saved URL", () => {
+    expect(nodeChannelInput.safeParse({ url: "" }).success).toBe(true);
+    expect(nodeChannelInput.safeParse({ url: "https://nodes.example.com:8443" }).success).toBe(
+      true,
+    );
+    expect(nodeChannelInput.safeParse({ url: "http://nodes.example.com" }).success).toBe(false);
   });
 });

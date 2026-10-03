@@ -1,16 +1,9 @@
-import { type ReleaseSource, releaseSourceInput } from "@edgeweir/contract";
-import { SettingsCard } from "@/components/settings-card";
-import { Badge } from "@/components/ui/badge";
+import { releaseSourceInput } from "@edgeweir/contract";
+import { SettingSourceBadge, SettingsCard } from "@/components/settings-card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
-
-const sourceLabel: Record<ReleaseSource["source"], () => string> = {
-  setting: m.system_release_source_setting,
-  environment: m.system_release_source_environment,
-  default: m.system_release_source_default,
-};
 
 /** Admin card: the mirror node upgrades read release manifests from. */
 export function ReleaseSourceCard() {
@@ -33,9 +26,7 @@ export function ReleaseSourceCard() {
         <Field data-invalid={error ? true : undefined}>
           <FieldLabel htmlFor="release-source" className="flex items-center gap-2">
             {m.system_release_url()}
-            <Badge variant="secondary" data-testid="release-source-origin">
-              {sourceLabel[value.source]()}
-            </Badge>
+            <SettingSourceBadge source={value.source} testId="release-source-origin" />
           </FieldLabel>
           <Input
             id="release-source"

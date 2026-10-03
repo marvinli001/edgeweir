@@ -1235,6 +1235,7 @@ cmd_config() {
   find_dir
   [[ -n $INTERACTIVE ]] || die "config 需要在终端里交互运行；也可以直接编辑 ${DIR}/.env 后运行 ./deploy.sh start。"
   step "修改访问地址（回车保留当前值）"
+  info "控制台「系统设置 → 节点通道」里保存的地址优先于这里的节点通道地址，在那里修改不需要重启。"
   while true; do
     ask public_url "控制台地址" "$(env_get EDGEWEIR_PUBLIC_URL)"
     public_url=${public_url%/}

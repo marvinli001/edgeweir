@@ -196,7 +196,7 @@ Interactive only; in unattended mode or without a terminal it aborts; edit `.env
 3. When the node channel host name changes, warn: enrolled nodes re-enroll, or add the old host name to `EDGEWEIR_NODE_API_HOSTNAMES`.
 4. After confirmation, write `EDGEWEIR_PUBLIC_URL`, `EDGEWEIR_NODE_API_URL`, and `EDGEWEIR_NODE_API_PORT` when step 2 changes it, then recreate the containers with the `start` flow.
 
-`config` does not change `EDGEWEIR_HTTP_PORT` and does not check whether the new port is in use.
+`config` does not change `EDGEWEIR_HTTP_PORT` and does not check whether the new port is in use. A URL saved in the console under **System settings → Node channel** wins over `EDGEWEIR_NODE_API_URL`: once one is saved, the node channel URL `config` writes does not reach install commands; to change only the node channel URL, change it in System settings, which needs no restart; see [Node channel URL and certificate](networking.en.md#node-channel-url-and-certificate).
 
 ## Start, stop, and trusted proxy sync
 

@@ -307,6 +307,26 @@ export function parseUrl(value: string): URL | undefined {
   }
 }
 
+/**
+ * A node channel URL as nodes take it, `https://host[:port]` with nothing
+ * after it (a trailing "/" is fine), normalized to its origin; undefined for
+ * anything else. EDGEWEIR_NODE_API_URL follows the same rule.
+ */
+export function nodeChannelOrigin(value: string): string | undefined {
+  const url = parseUrl(value);
+  if (
+    url?.protocol !== "https:" ||
+    !url.hostname ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  )
+    return undefined;
+  return url.origin;
+}
+
 /** Whether a URL is plain http:// (unparsable URLs are not). */
 export function isPlainHttp(url: string): boolean {
   try {

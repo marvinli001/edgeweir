@@ -34,19 +34,34 @@ The web port of `compose.yml` is reachable only locally by default, served by a 
 
 ## Node channel URL and certificate
 
+The node channel URL is where nodes and region probes reach the node channel: `--server` in the install command. Change it in the "Node channel" card of **System settings**; saving applies at once, without restarting the console. Precedence:
+
+| Order | Source | Mark in the card |
+| --- | --- | --- |
+| 1 | The URL saved in **System settings** | Saved |
+| 2 | `EDGEWEIR_NODE_API_URL` | Environment |
+| 3 | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` | Default |
+
+Saving an empty field returns to 2 and 3. The format is `https://host[:port]` without a path, query, or credentials; without a port it is 443.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` | URL nodes use for the node channel; `--server` in the install command; "Node channel" in **System settings**. |
+| `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` | The node channel URL while none is saved in **System settings**. |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | Empty | Extra names for the node channel certificate: DNS names or IPs, comma separated. |
 
-- The internal CA issues the node channel server certificate at every start. Its names: `localhost`, `127.0.0.1`, `::1`, the container host name, the host of `EDGEWEIR_NODE_API_URL`, and every entry of `EDGEWEIR_NODE_API_HOSTNAMES`. Changes apply after a restart.
+- The internal CA issues the node channel server certificate. Its names: `localhost`, `127.0.0.1`, `::1`, the container host name, the host of `EDGEWEIR_NODE_API_URL` (of the default URL when unset), every entry of `EDGEWEIR_NODE_API_HOSTNAMES`, the host name or IP of the URL saved in **System settings**, and those of node channel URLs in effect before it (the latest 32).
+- Once a URL is saved in **System settings**, every console instance reissues the certificate for the new name at once: new handshakes get the new certificate, established connections keep theirs. Changes to the variables apply after a restart.
+- Enrolled nodes and probes keep the `server_url` and TLS server name recorded at enrollment (`/var/lib/edgeweir-node/identity.json`); changing the URL does not move them. Keep the old address reachable (its name stays in the certificate), or enroll them again.
 - The CA fingerprint (SHA-256) appears as `caSha256` in the `node channel listening` startup log, as "CA fingerprint" in **System settings**, and as `--ca-sha256` in the install command.
 
 | Case | Setting |
 | --- | --- |
-| The published host port is not 8443, e.g. `EDGEWEIR_NODE_API_PORT=9443` | Set `EDGEWEIR_NODE_API_URL=https://<host>:9443` explicitly: the default uses the process listen port `NODE_API_PORT`, not the published port. |
+| The published host port is not 8443, e.g. `EDGEWEIR_NODE_API_PORT=9443` | Enter `https://<host>:9443` in **System settings**, or set `EDGEWEIR_NODE_API_URL`: the default uses the process listen port `NODE_API_PORT`, not the published port. |
+| The node channel's public address exists only after deployment (an Anycast IP or TCP proxy added later on the platform) | Enter it in **System settings** once it works, then generate install commands. |
 | Nodes connect through another name or IP (private address, load balancer name) | Add that name to `EDGEWEIR_NODE_API_HOSTNAMES`. |
-| The host name of `EDGEWEIR_NODE_API_URL` changes | Keep the old host name in `EDGEWEIR_NODE_API_HOSTNAMES`: enrolled nodes verify the certificate against the `server_url` and TLS server name recorded at enrollment (`/var/lib/edgeweir-node/identity.json`). |
+| The node channel's DNS name is on Cloudflare | Turn the proxy off for that record (DNS only): Cloudflare proxies HTTPS on port 8443 too, terminates TLS, and nodes report `CA pin mismatch`. |
+| The node channel URL changes | Change it in **System settings**; enrolled nodes keep connecting to the old address, which must stay reachable. |
+| The host name of `EDGEWEIR_NODE_API_URL` changes (no URL saved in System settings) | Keep the old host name in `EDGEWEIR_NODE_API_HOSTNAMES`: enrolled nodes verify the certificate against the name recorded at enrollment. |
 
 ## Reverse proxy for the web console
 
@@ -115,7 +130,7 @@ Use nginx `stream` layer-4 passthrough when 8443 must go through nginx.
      | openssl x509 -noout -issuer
    ```
 
-   Expected: the issuer contains `Edgeweir Node Channel CA`. Any other issuer means a device in between terminates TLS. The check beside "Node channel" in **System settings** does the same from the console's network against `EDGEWEIR_NODE_API_URL`; see [Node channel check](nodes.en.md#node-channel-check).
+   Expected: the issuer contains `Edgeweir Node Channel CA`. Any other issuer means a device in between terminates TLS. The connection check in the "Node channel" card of **System settings** does the same from the console's network against the node channel URL; see [Node channel connection check](nodes.en.md#node-channel-connection-check).
 
 ## Trusted proxies and client IP
 

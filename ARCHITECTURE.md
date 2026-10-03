@@ -252,7 +252,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | 项 | 值 |
 | --- | --- |
 | 内部 CA | ECDSA P-256，有效期 10 年，首次启动生成；私钥信封加密后存入 `pki_authority` |
-| 服务端证书 | 每次启动由内部 CA 签发，有效期 90 天；进程每小时检查一次，剩余不足三分之一时重新签发，新握手使用新证书，已建立的连接不受影响；SAN 包含 `EDGEWEIR_NODE_API_URL` 的主机名（未设置时为 `EDGEWEIR_PUBLIC_URL` 的主机名）、`EDGEWEIR_NODE_API_HOSTNAMES`、`localhost`、`127.0.0.1`、`::1` 与容器主机名 |
+| 服务端证书 | 每次启动由内部 CA 签发，有效期 90 天；进程每小时检查一次，剩余不足三分之一时重新签发，系统设置中的节点通道地址改变时（经 LISTEN/NOTIFY 通知每个实例）立即重新签发，新握手使用新证书，已建立的连接不受影响；SAN 包含 `EDGEWEIR_NODE_API_URL` 的主机名（未设置时为 `EDGEWEIR_PUBLIC_URL` 的主机名）、`EDGEWEIR_NODE_API_HOSTNAMES`、系统设置中保存的节点通道地址及此前生效过的地址的主机名（最近 32 个）、`localhost`、`127.0.0.1`、`::1` 与容器主机名 |
 | 节点证书 | CN 为节点 ID，仅客户端认证，有效期 30 天（服务端证书与节点证书都从签发前 1 小时起生效，容忍节点时钟偏慢）；剩余不足三分之一时 `ReportStatus` 提示调用 `RenewCertificate`。续期后旧证书（`node.previous_cert_serial`）继续有效，直到节点第一次用新证书认证；未装上新证书的节点用旧证书再次续期。已停用的节点也可以续期，其他调用仍被拒绝 |
 | 探针证书 | CN 为探针 ID，`O=Edgeweir Probe`（节点证书为 `O=Edgeweir Node`），仅客户端认证，有效期 30 天；剩余不足三分之一时 `GetProbeTargets` 提示调用 `RenewProbeCertificate`，续期后旧证书的处理与节点相同。节点通道按组织区分：探针证书只能调用 `ProbeService`，`NodeService` 拒绝一切非节点证书；节点证书只在节点兼任探针时调用 `GetProbeTargets`、`ReportProbeResults`，不能注册或续期探针 |
 | 心跳 | 间隔 15 秒；`WatchConfig` 每 15 秒发送 keepalive |

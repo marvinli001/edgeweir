@@ -5,6 +5,7 @@ import { connectNodeAdapter } from "@connectrpc/connect-node";
 import { NodeService, ProbeService } from "@edgeweir/proto";
 import type { AppContext } from "../lib/context";
 import { type IssuedServerCertificate, SERVER_CERT_LIFETIME_DAYS } from "../pki/ca";
+import { nodeChannelNames, nodeChannelUrl } from "../services/node-channel-url";
 import { createProbeService, type ProbeServiceOptions } from "./probe-service";
 import {
   clientCertificateError,
@@ -63,7 +64,7 @@ function clientCertificateGate(app: AppContext) {
 export interface NodeChannel {
   server: http2.Http2SecureServer;
   /** The server certificate that new handshakes receive. */
-  readonly certificate: { serialNumber: string; notAfter: Date };
+  readonly certificate: { serialNumber: string; notAfter: Date; names: readonly string[] };
   /**
    * Stops certificate rotation and the listener, ends the watch streams and
    * closes every session; connections still open after `graceMs` are destroyed.
@@ -81,20 +82,34 @@ function secureContext(app: AppContext, cert: IssuedServerCertificate): SecureCo
   };
 }
 
+const sameNames = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && [...a].sort().join("\n") === [...b].sort().join("\n");
+
 /**
  * Starts the node channel: Connect-RPC over HTTPS on its own port. TLS is
- * terminated here with a server certificate issued by the internal CA and
- * reissued in-process before it expires. Client certificates are requested
- * but not required at the TLS layer, so that Enroll can run with a token;
- * every other RPC checks the verified peer, before reading the request.
+ * terminated here with a server certificate issued by the internal CA for
+ * the names of nodeChannelNames, reissued in-process before it expires and
+ * when the node channel URL in system settings changes (on every instance,
+ * through the event bus). Client certificates are requested but not
+ * required at the TLS layer, so that Enroll can run with a token; every
+ * other RPC checks the verified peer, before reading the request.
  */
 export async function startNodeChannel(
   app: AppContext,
   options: NodeChannelOptions = {},
 ): Promise<NodeChannel> {
   const now = options.now ?? (() => new Date());
-  const issue = () => app.nodeCa.issueServerCertificate(app.env.nodeApiHostnames, now());
-  let current = await issue();
+  const issue = async (names: string[]) => ({
+    ...(await app.nodeCa.issueServerCertificate(names, now())),
+    names,
+  });
+  /** The names to issue for; `fallback` while the database does not answer. */
+  const names = (fallback: readonly string[]) =>
+    nodeChannelNames(app).catch((error: unknown) => {
+      app.log.warn("node channel certificate names unavailable", { error });
+      return [...fallback];
+    });
+  let current = await issue(await names(app.env.nodeApiHostnames));
   const closing = new AbortController();
   const handler = connectNodeAdapter({
     routes: (router) => {
@@ -150,42 +165,64 @@ export async function startNodeChannel(
   const address = server.address();
   app.log.info("node channel listening", {
     port: typeof address === "object" && address ? address.port : app.env.NODE_API_PORT,
-    url: app.env.nodeApiUrl,
+    url: await nodeChannelUrl(app).catch(() => app.env.nodeApiUrl),
     caSha256: app.nodeCa.fingerprintSha256,
-    sans: app.env.nodeApiHostnames,
+    sans: current.names,
     certificateNotAfter: current.notAfter,
   });
 
-  let rotating = false;
-  const rotateIfDue = async () => {
-    if (rotating || current.notAfter.getTime() - now().getTime() >= RENEW_BEFORE_MS) return;
-    rotating = true;
+  /**
+   * Issues the certificate again when it expires soon or misses a name, one
+   * check at a time. New handshakes get the new certificate; established
+   * sessions keep theirs.
+   */
+  const reissueIfDue = async () => {
+    // Rotation goes on with the names in use until the database answers.
+    const wanted = await names(current.names);
+    const renamed = !sameNames(wanted, current.names);
+    if (!renamed && current.notAfter.getTime() - now().getTime() >= RENEW_BEFORE_MS) return;
     try {
-      const next = await issue();
-      // New handshakes get the new certificate; established sessions keep theirs.
+      const next = await issue(wanted);
       server.setSecureContext(secureContext(app, next));
-      app.log.info("node channel certificate rotated", {
-        serialNumber: next.serialNumber,
-        notAfter: next.notAfter,
-        previousSerialNumber: current.serialNumber,
-      });
+      app.log.info(
+        renamed ? "node channel certificate names changed" : "node channel certificate rotated",
+        {
+          serialNumber: next.serialNumber,
+          notAfter: next.notAfter,
+          previousSerialNumber: current.serialNumber,
+          ...(renamed ? { sans: wanted } : {}),
+        },
+      );
       current = next;
     } catch (error) {
       app.log.error("node channel certificate rotation failed", { error });
-    } finally {
-      rotating = false;
     }
   };
-  const timer = setInterval(() => void rotateIfDue(), options.rotationCheckMs ?? ROTATION_CHECK_MS);
+  let pending: Promise<void> = Promise.resolve();
+  const check = () => {
+    pending = pending.then(reissueIfDue);
+    return pending;
+  };
+  const timer = setInterval(() => void check(), options.rotationCheckMs ?? ROTATION_CHECK_MS);
   timer.unref();
+  // Saved on this instance or another one; after a reconnect, in case a notification was lost.
+  const unsubscribe = [
+    app.events.on("node-channel", () => void check()),
+    app.events.on("reconnected", () => void check()),
+  ];
 
   return {
     server,
     get certificate() {
-      return { serialNumber: current.serialNumber, notAfter: current.notAfter };
+      return {
+        serialNumber: current.serialNumber,
+        notAfter: current.notAfter,
+        names: current.names,
+      };
     },
     close: (graceMs = CLOSE_GRACE_MS) => {
       clearInterval(timer);
+      for (const off of unsubscribe) off();
       closing.abort();
       return new Promise<void>((resolve) => {
         const deadline = setTimeout(() => {

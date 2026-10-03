@@ -16,6 +16,7 @@ import { CLOSE_GRACE_MS, type NodeChannel, startNodeChannel } from "./node-chann
 import { loadOrCreateNodeCa } from "./pki/store";
 import { resealEnvelopes } from "./services/envelope-rotation";
 import { upgradeLegacyEnvelopes } from "./services/envelope-upgrade";
+import { nodeChannelUrl } from "./services/node-channel-url";
 import { announceSetupToken, ensureSetupToken } from "./services/setup";
 
 async function waitForDatabase(pool: import("pg").Pool, timeoutMs = 60_000) {
@@ -40,9 +41,9 @@ const URL_WARNINGS = {
   console_url_http:
     "EDGEWEIR_PUBLIC_URL is plain HTTP: install.sh reaches the nodes unencrypted and runs as root (serve the console over HTTPS)",
   node_api_url_local:
-    "the node channel URL names this machine only: nodes on other hosts cannot enroll or connect (set EDGEWEIR_NODE_API_URL or EDGEWEIR_PUBLIC_URL)",
+    "the node channel URL names this machine only: nodes on other hosts cannot enroll or connect (change it in System settings, or set EDGEWEIR_NODE_API_URL or EDGEWEIR_PUBLIC_URL)",
   node_api_url_private:
-    "the node channel URL is a private address: nodes outside this network cannot enroll or connect (set EDGEWEIR_NODE_API_URL)",
+    "the node channel URL is a private address: nodes outside this network cannot enroll or connect (change it in System settings, or set EDGEWEIR_NODE_API_URL)",
 } as const;
 
 /** Warns (never refuses) when the URLs nodes use cannot be reached from other networks. */
@@ -135,7 +136,10 @@ export async function bootstrap(): Promise<Running> {
   if (env.ROLE === "app" || env.ROLE === "all") {
     const setupToken = await ensureSetupToken(ctx);
     if (setupToken) announceSetupToken(log, setupToken, env.EDGEWEIR_PUBLIC_URL);
-    warnConsoleUrls(log, env);
+    warnConsoleUrls(log, {
+      EDGEWEIR_PUBLIC_URL: env.EDGEWEIR_PUBLIC_URL,
+      nodeApiUrl: await nodeChannelUrl(ctx),
+    });
     await events.start();
     await checkDownloadsDir(env.EDGEWEIR_DOWNLOADS_DIR, log);
     nodeChannel = await startNodeChannel(ctx);

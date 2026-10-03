@@ -1,6 +1,7 @@
 import { getBanSettings, setBanSettings } from "../../services/bans";
 import { getPlatformErrorPages, setPlatformErrorPages } from "../../services/error-pages";
 import { checkNodeChannel } from "../../services/node-channel-check";
+import { getNodeChannel, nodeChannelUrl, setNodeChannel } from "../../services/node-channel-url";
 import { getOriginAllowList, setOriginAllowList } from "../../services/origin-allow-list";
 import { getProbeSettings, setProbeSettings } from "../../services/probes";
 import {
@@ -20,13 +21,17 @@ export const settingsRouter = {
     get: authed.settings.get.handler(async ({ context }) => ({
       version: context.app.env.version,
       consoleUrl: context.app.env.EDGEWEIR_PUBLIC_URL,
-      nodeApiUrl: context.app.env.nodeApiUrl,
+      nodeApiUrl: await nodeChannelUrl(context.app),
       nodeCaSha256: context.app.nodeCa.fingerprintSha256,
       analyticsMode: context.app.env.EDGEWEIR_ANALYTICS,
       setupCompletedAt: await setupCompletedAt(context.app.db),
     })),
     nodeChannelCheck: authed.settings.nodeChannelCheck.handler(({ context }) =>
       checkNodeChannel(context.app),
+    ),
+    nodeChannel: authed.settings.nodeChannel.handler(({ context }) => getNodeChannel(context.app)),
+    setNodeChannel: authed.settings.setNodeChannel.handler(({ input, context }) =>
+      setNodeChannel(context.app, input, context.actor),
     ),
     originAllowList: authed.settings.originAllowList.handler(({ context }) =>
       getOriginAllowList(context.app.db),

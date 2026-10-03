@@ -379,6 +379,18 @@ export const contract = {
     nodeChannelCheck: oc
       .route({ method: "GET", path: "/settings/node-channel-check", tags: ["settings"] })
       .output(s.nodeChannelCheck),
+    /** The URL nodes and probes connect to; install commands carry it. */
+    nodeChannel: oc
+      .route({ method: "GET", path: "/settings/node-channel", tags: ["settings"] })
+      .output(s.nodeChannel),
+    /**
+     * Saves the node channel URL (empty: EDGEWEIR_NODE_API_URL or the default). The node
+     * channel's certificate names it from then on; enrolled nodes keep the URL they enrolled with.
+     */
+    setNodeChannel: oc
+      .route({ method: "PUT", path: "/settings/node-channel", tags: ["settings"] })
+      .input(s.nodeChannelInput)
+      .output(s.nodeChannel),
     /** Special-purpose origin addresses (private, loopback...) sites may use anyway. */
     originAllowList: oc
       .route({ method: "GET", path: "/settings/origin-allow-list", tags: ["settings"] })

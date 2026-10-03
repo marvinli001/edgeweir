@@ -66,7 +66,7 @@ Objects created by setup:
    | **Node group** | Defaults to the cluster's default node group; shown when the cluster has several |
    | **Valid for** | 15 minutes, 1 hour (default), or 24 hours |
 
-3. Copy the **Install command** (shown once) and run it on the node host. The warnings and the "Node channel check" below the command point out addresses nodes may not reach; see [Adding nodes](../deploy/nodes.en.md#1-generate-the-install-command). Command format:
+3. Copy the **Install command** (shown once) and run it on the node host. The warnings and the node channel connection check below the command point out addresses nodes may not reach; see [Adding nodes](../deploy/nodes.en.md#1-generate-the-install-command). Command format:
 
    ```bash title="Node host"
    export EDGEWEIR_TOKEN='ewt_…'

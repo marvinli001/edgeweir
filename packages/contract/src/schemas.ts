@@ -5,7 +5,13 @@ import {
   structuredCacheCondition,
 } from "@edgeweir/rule-engine";
 import * as z from "zod";
-import { CONSOLE_URL_WARNINGS, normalizeCidr, parseIp, parseUrl } from "./addresses";
+import {
+  CONSOLE_URL_WARNINGS,
+  nodeChannelOrigin,
+  normalizeCidr,
+  parseIp,
+  parseUrl,
+} from "./addresses";
 import { addExpressionIssue } from "./expressions";
 
 const LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
@@ -1047,12 +1053,34 @@ export const settings = z.object({
  * The console's own TLS handshake with its node channel URL: ok when the
  * console's node CA answers, unreachable when no handshake completes,
  * mismatch when another certificate chain answers (something in front of
- * the console terminates TLS). Advisory only.
+ * the console terminates TLS), refused when a URL saved in system settings
+ * resolves to a special-purpose address the outbound policy does not allow
+ * (no connection is made). Advisory only.
  */
 export const nodeChannelCheck = z.object({
   url: z.string(),
-  result: z.enum(["ok", "unreachable", "mismatch"]),
+  result: z.enum(["ok", "unreachable", "mismatch", "refused"]),
   checkedAt: isoDateTime,
+});
+
+/** A node channel URL: `https://host[:port]` without a path (nodeChannelOrigin). */
+export const nodeChannelUrl = z
+  .string()
+  .max(2048)
+  .refine((value) => nodeChannelOrigin(value) !== undefined);
+
+/** The URL nodes and probes connect to: install commands carry it. */
+export const nodeChannel = z.object({
+  /** Saved in system settings; empty when none is saved. */
+  url: z.string(),
+  /** The URL new install commands carry. */
+  effectiveUrl: z.string(),
+  source: z.enum(["setting", "environment", "default"]),
+});
+
+/** Empty clears the saved value (EDGEWEIR_NODE_API_URL or the default applies). */
+export const nodeChannelInput = z.object({
+  url: z.union([z.literal(""), nodeChannelUrl]),
 });
 
 /** Where the console reads node release manifests unless configured otherwise. */
@@ -1377,6 +1405,8 @@ export type EnrollmentTokenStatus = z.infer<typeof enrollmentTokenStatus>;
 export type Settings = z.infer<typeof settings>;
 export type ReleaseSource = z.infer<typeof releaseSource>;
 export type ReleaseSourceInput = z.infer<typeof releaseSourceInput>;
+export type NodeChannel = z.infer<typeof nodeChannel>;
+export type NodeChannelInput = z.infer<typeof nodeChannelInput>;
 export type AuditLogEntry = z.infer<typeof auditLogEntry>;
 export type NodeGroup = z.infer<typeof nodeGroup>;
 export type NodeChannelCheck = z.infer<typeof nodeChannelCheck>;

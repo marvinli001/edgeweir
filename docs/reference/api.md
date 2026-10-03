@@ -474,7 +474,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `clusters.rollout` | `candidateChanges`：发布进行中时为 `{ sites: { added, changed, removed }, reasons }`，`sites` 为候选版本相对稳定版本新增、修改、移除的网站（`[{ id, name }]`），`reasons` 为稳定版本之后发布的版本（与 `GET /clusters/{id}/revisions` 的元素相同，原因不重复）；没有进行中的发布时为 `null` |
 | `clusters.rollbackPreview` | `{ revision, currentRevision, unchanged, sites: { added, changed, removed } }`：`currentRevision` 为集群最新版本（没有时为 `null`）；`unchanged` 为 `true` 时内容与最新版本相同；`sites` 为相对最新版本的变化 |
 | `overview.get` | `attention`：`[{ kind, clusterId, clusterName, revision, at, count, version }]`，按下列 `kind` 的顺序排列，没有事项时为 `[]`。`kind`：`nodes_unhealthy`、`dns_failed`、`dns_blocked`、`upgrade_failed`、`canary_rolled_back`、`canary_awaiting_promotion`、`canary_running`、`nodes_lagging`、`nodes_no_address`。`revision`：DNS 版本或候选版本；`at`：`canary_running` 的窗口结束时间、`canary_rolled_back` 的回滚时间；`count`：节点数；`version`：`upgrade_failed` 的目标版本。不适用的字段为 `null`、`0` 或空字符串 |
-| `settings.nodeChannelCheck` | `{ url, result, checkedAt }`：`url` 为 `EDGEWEIR_NODE_API_URL`；`result` 为 `ok`（证书链含节点通道 CA）、`unreachable`（3 秒内没有完成握手）或 `mismatch`（出示了其他证书链，或地址不是 `https`）。结果缓存 30 秒，只作提示 |
+| `settings.nodeChannelCheck` | `{ url, result, checkedAt }`：`url` 为当前的节点通道地址；`result` 为 `ok`（证书链含节点通道 CA）、`unreachable`（3 秒内没有完成握手）、`mismatch`（出示了其他证书链，或地址不是 `https`）或 `refused`（系统设置中保存的地址解析到出站策略不允许的特殊用途地址，不连接）。结果缓存 30 秒，只作提示 |
 
 | 错误代码 | 状态 | 场景 |
 | --- | --- | --- |
@@ -482,7 +482,16 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `REVISION_NOT_FOUND` | 404 | 集群没有该版本 |
 | `CLUSTER_NOT_FOUND` | 404 | 集群不存在 |
 
-行为见[集群与系统](../guide/system.md)与[接入节点](../deploy/nodes.md#节点通道自检)。
+行为见[集群与系统](../guide/system.md)与[接入节点](../deploy/nodes.md#节点通道连接检查)。
+
+### 节点通道地址
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `settings.nodeChannel` | `GET /settings/node-channel` | `{ url, effectiveUrl, source }`：`url` 为系统设置中保存的地址（未保存时为空字符串）；`effectiveUrl` 为安装命令使用的地址；`source` 为 `setting`、`environment`（`EDGEWEIR_NODE_API_URL`）或 `default` |
+| `settings.setNodeChannel` | `PUT /settings/node-channel` | 请求体 `{ url }`：`https://主机[:端口]`，不含路径、查询参数、片段与账号，否则 400；保存为 origin 形式。空字符串清除保存的地址。响应同 `settings.nodeChannel`。立即生效，节点通道证书加入新地址的名称；写审计 `system.node_channel_update` |
+
+服务账号不能调用（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `settings.nodeChannel`。已注册的节点继续使用注册时的地址，见 [节点通道地址与证书](../deploy/networking.md#节点通道地址与证书)。
 
 ### 节点升级
 

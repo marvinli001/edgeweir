@@ -5,7 +5,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { CopyButton } from "@/components/copy-button";
-import { NodeChannelCheckStatus, UrlScopeBadge } from "@/components/node-enrollment";
+import { NodeChannelCard } from "@/components/node-channel";
+import { UrlScopeBadge } from "@/components/node-enrollment";
 import { OriginAllowListCard } from "@/components/origin-allow-list";
 import { Page } from "@/components/page";
 import { PlatformErrorPagesCard } from "@/components/platform-error-pages";
@@ -124,11 +125,6 @@ function GeneralSettings() {
                   <span className="font-mono">{system.consoleUrl}</span>
                   <UrlScopeBadge url={system.consoleUrl} testId="console-url-scope" />
                 </Row>
-                <Row label={m.system_node_api_url()}>
-                  <span className="font-mono">{system.nodeApiUrl}</span>
-                  <UrlScopeBadge url={system.nodeApiUrl} testId="node-api-url-scope" />
-                  <NodeChannelCheckStatus />
-                </Row>
                 <Row label={m.system_ca_fingerprint()}>
                   <code className="min-w-0 flex-1 font-mono text-xs" data-testid="ca-fingerprint">
                     {system.nodeCaSha256}
@@ -160,6 +156,7 @@ function GeneralSettings() {
           </QueryView>
         </CardContent>
       </Card>
+      <NodeChannelCard />
       <OriginAllowListCard />
       <ReleaseSourceCard />
       <UsageSettingsCard />

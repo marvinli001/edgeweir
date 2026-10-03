@@ -11,6 +11,7 @@ import {
 } from "../../services/clusters";
 import { createEnrollmentToken, getEnrollmentToken } from "../../services/enrollment";
 import { getPortPools, setPortPools } from "../../services/l4";
+import { nodeChannelUrl } from "../../services/node-channel-url";
 import {
   createNodeGroup,
   deleteNodeGroup,
@@ -57,10 +58,10 @@ import { authed, ok } from "../base";
 export const clustersRouter = {
   probes: {
     list: authed.probes.list.handler(({ context }) => listProbes(context.app.db)),
-    createToken: authed.probes.createToken.handler(({ input, context }) =>
+    createToken: authed.probes.createToken.handler(async ({ input, context }) =>
       createProbeToken(context.app.db, input, {
         actor: context.actor,
-        serverUrl: context.app.env.nodeApiUrl,
+        serverUrl: await nodeChannelUrl(context.app),
         caSha256: context.app.nodeCa.fingerprintSha256,
       }),
     ),
@@ -158,13 +159,14 @@ export const clustersRouter = {
     setPortPools: authed.clusters.setPortPools.handler(({ input, context }) =>
       setPortPools(context.app.db, input, context.actor),
     ),
-    createEnrollmentToken: authed.clusters.createEnrollmentToken.handler(({ input, context }) =>
-      createEnrollmentToken(context.app.db, input, {
-        actor: context.actor,
-        consoleUrl: context.app.env.EDGEWEIR_PUBLIC_URL,
-        serverUrl: context.app.env.nodeApiUrl,
-        caSha256: context.app.nodeCa.fingerprintSha256,
-      }),
+    createEnrollmentToken: authed.clusters.createEnrollmentToken.handler(
+      async ({ input, context }) =>
+        createEnrollmentToken(context.app.db, input, {
+          actor: context.actor,
+          consoleUrl: context.app.env.EDGEWEIR_PUBLIC_URL,
+          serverUrl: await nodeChannelUrl(context.app),
+          caSha256: context.app.nodeCa.fingerprintSha256,
+        }),
     ),
     getEnrollmentToken: authed.clusters.getEnrollmentToken.handler(({ input, context }) =>
       getEnrollmentToken(context.app.db, input.id),

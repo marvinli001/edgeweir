@@ -133,7 +133,7 @@ sed -i "s|^EDGEWEIR_PUBLIC_URL=.*|EDGEWEIR_PUBLIC_URL=https://cdn-admin.example.
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `EDGEWEIR_VERSION` | `latest` | 拉取的镜像 tag。生产环境固定日期 tag，见 [固定版本](upgrade.md#固定版本)。 |
-| `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:8443` | 节点连接节点通道的地址，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
+| `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:8443` | 节点连接节点通道的地址；**系统设置** 的「节点通道」中保存的地址优先，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | 空 | 反向代理地址，见 [可信代理](networking.md#可信代理与客户端-ip)。 |
 | `EDGEWEIR_HTTP_PORT`、`EDGEWEIR_NODE_API_PORT` | `127.0.0.1:3000`、`8443` | 宿主机发布端口，可带绑定地址。Web 端口默认只在本机：Docker 发布的端口绕过 ufw、firewalld，由反向代理对外；`EDGEWEIR_HTTP_PORT=3000` 发布到所有接口。 |
 | `BETTER_AUTH_SECRET` | 空，由主密钥派生 | 已设置的部署保留原值；移除后控制台拒绝启动。 |

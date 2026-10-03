@@ -28,6 +28,9 @@ export function withinDeadline<T>(operation: Promise<T>, signal: AbortSignal): P
   });
 }
 
+/** The name resolves to a special-purpose address EDGEWEIR_OUTBOUND_ALLOW_CIDRS does not allow. */
+export class OutboundRefusedError extends Error {}
+
 /** Resolve once, reject special-purpose answers, then connect to the pinned IP. */
 export async function outboundAddress(app: AppContext, host: string) {
   const name = host.replace(/^\[|\]$/g, "");
@@ -39,7 +42,7 @@ export async function outboundAddress(app: AppContext, host: string) {
     !addresses.length ||
     addresses.some((entry) => forbiddenOriginRange(entry.address, allowed) !== null)
   )
-    throw new Error("notification destination refused");
+    throw new OutboundRefusedError("notification destination refused");
   const selected = addresses.find((entry) => entry.family === 4) ?? addresses[0];
   if (!selected) throw new Error("destination unavailable");
   return { ...selected, servername: name };

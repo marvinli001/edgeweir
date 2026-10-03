@@ -53,7 +53,7 @@ grep -c 'TABLE DATA' edgeweir.dump.list
 | --- | --- |
 | 主密钥 | 原 `EDGEWEIR_MASTER_KEY`。备份之后[轮换](docker.md#轮换主密钥)过主密钥时，用新主密钥并把原主密钥设为 `EDGEWEIR_MASTER_KEY_PREVIOUS`。 |
 | `BETTER_AUTH_SECRET` | 设置过时使用原值；未设置时由主密钥派生。 |
-| 节点通道地址 | 原 `EDGEWEIR_NODE_API_URL` 与 `EDGEWEIR_NODE_API_HOSTNAMES`：已注册节点按注册时的名称校验证书。 |
+| 节点通道地址 | 原 `EDGEWEIR_NODE_API_URL` 与 `EDGEWEIR_NODE_API_HOSTNAMES`：已注册节点按注册时的名称校验证书。**系统设置** 中保存的地址在数据库中，随备份恢复。 |
 | 控制台版本 | 与备份相同或更新：迁移只向前执行。 |
 | 后台任务 | 同一时间只允许一个恢复环境对真实 DNS 服务商与通知渠道执行后台任务；演练使用本地模拟服务。 |
 

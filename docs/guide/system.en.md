@@ -49,7 +49,7 @@ The **Add node** dialog generates a one-time install command as it opens: the cl
 | **Node group** | Defaults to the cluster's default node group; hidden when the cluster has only one |
 | **Valid for** | 15 minutes, 1 hour (default), or 24 hours; the API accepts 5 minutes to 7 days |
 
-The dialog shows the **Install command** (with a countdown, shown once), address warnings, and one line with the node channel check, then **Progress**. The CA fingerprint is in the command's `--ca-sha256` and in [System information](#system-information). Every opening of the dialog generates a new token; once closed, the command is not shown again. The token starts with `ewt_` and is single-use; the database keeps its SHA-256 and prefix, never the plaintext. Address warnings, the node channel check, and the install flow: [Adding nodes](../deploy/nodes.en.md).
+The dialog shows the **Install command** (with a countdown, shown once), address warnings, and one line with the node channel connection check (with a "Change" link to [Node channel](#node-channel) when it fails), then **Progress**. The CA fingerprint is in the command's `--ca-sha256` and in [System information](#system-information). Every opening of the dialog generates a new token; once closed, the command is not shown again. The token starts with `ewt_` and is single-use; the database keeps its SHA-256 and prefix, never the plaintext. Address warnings, the connection check, and the install flow: [Adding nodes](../deploy/nodes.en.md).
 
 ### Nodes
 
@@ -246,7 +246,7 @@ The page shows **Time**, **Actor**, **Action** (name and code), and **Target**, 
 
 | Action prefix | Content |
 | --- | --- |
-| `system.*` | Setup (including `system.setup_rejected` for a wrong setup token), origin allow list, node release source, usage settings, ban settings, protection, CC template, probe settings (`system.probes_update`), recompilation after an upgrade |
+| `system.*` | Setup (including `system.setup_rejected` for a wrong setup token), node channel URL (`system.node_channel_update`), origin allow list, node release source, usage settings, ban settings, protection, CC template, probe settings (`system.probes_update`), recompilation after an upgrade |
 | `auth.*` | Successful (`auth.sign_in`, with the sign-in method) and failed (`auth.sign_in_failed`) sign-ins |
 | `account.*` | Password change, two-factor enable / disable, passkey add / delete, account recovery on the server (`account.recover`, see [Account recovery](account.en.md#account-recovery)) |
 | `api_key.*` | AccessKey create, revoke |
@@ -265,7 +265,7 @@ Page: **System settings** (`/system`), with the tabs:
 
 | Tab | Content |
 | --- | --- |
-| **General** | The sections below: system information, origin allow list, node release source, usage, platform error pages |
+| **General** | The sections below: system information, node channel, origin allow list, node release source, usage, platform error pages |
 | **Monitoring** | `/system?tab=probes`: the regional probe list (page action **Add probe**) and the **Probe settings** card, see [Regional probes](scheduling.en.md#regional-probes); `/regions?tab=probes` redirects there |
 | **Service accounts** | `/system?tab=service-accounts`, see [Service accounts](#service-accounts) |
 
@@ -277,11 +277,23 @@ Read-only (card **System**).
 | --- | --- |
 | **Version** | Image version `<YYYYMMDD>-<commit>`; `dev` when run from source |
 | **Console URL** | `EDGEWEIR_PUBLIC_URL`; localhost or a loopback address is marked "This machine only", a private address "Private address": nodes on other networks cannot download `install.sh` from it; a public address over HTTP is marked "Unencrypted": `install.sh` reaches the hosts that run it as root unencrypted |
-| **Node channel** | `EDGEWEIR_NODE_API_URL`; when unset, `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>`. "This machine only" and "Private address" as above: nodes on other networks cannot enroll. Beside it, the node channel check: **reachable, CA matches**, **the console cannot reach this URL**, or **CA mismatch: something in front terminates TLS**; see [Node channel check](../deploy/nodes.en.md#node-channel-check) |
 | **CA fingerprint** | SHA-256 of the node channel's internal CA; install commands carry the same value in `--ca-sha256` |
 | **Analytics** | `EDGEWEIR_ANALYTICS` (`lite` / `clickhouse`) |
 | **Setup token** | **Not used** or **Used {time}** |
 | **OpenAPI** | `/api/v1/openapi.json` |
+
+### Node channel
+
+**URL**: where nodes and region probes reach the node channel, `--server` in the install command. While the field is empty, `EDGEWEIR_NODE_API_URL` applies, and when that is unset `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>`; the placeholder shows the URL in effect and the badge where it comes from.
+
+| Constraint | Description |
+| --- | --- |
+| Format | `https://host[:port]` without a path, query, or credentials; saved with the host name in lower case, without a trailing `/` or the default port 443 |
+| Effect | Applies on saving, without a restart: new install and probe commands carry the URL, and the node channel certificate adds its host name or IP |
+| Enrolled nodes | Keep connecting to the URL they enrolled with, whose name stays in the certificate; while editing, the card notes "Enrolled nodes keep connecting to the previous URL: keep it reachable" |
+| Clearing | Saving an empty value falls back to the environment variable or the default |
+
+A localhost, loopback, or private address is marked "This machine only" or "Private address": nodes on other networks cannot enroll. Below the URL is the result of the [connection check](../deploy/nodes.en.md#node-channel-connection-check): **Reachable**, **The console cannot connect to this URL**, **Certificate mismatch: a proxy or CDN may be in front**, or **The outbound policy does not allow this address** (the saved URL is a private, loopback, or other special-purpose address that `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` does not allow, so the console does not connect). Changes are audited as `system.node_channel_update`. For the certificate names, see [Node channel URL and certificate](../deploy/networking.en.md#node-channel-url-and-certificate).
 
 ### Origin allow list
 
@@ -324,6 +336,7 @@ A value saved in the console wins over the environment variable, which wins over
 
 | Setting | Location | Environment variable | Default |
 | --- | --- | --- | --- |
+| Node channel | **System settings → Node channel** | `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` |
 | Node release source | **System settings → Node release source** | `EDGEWEIR_NODE_RELEASE_BASE_URL` | `https://github.com/marvinli001/edgeweir-node/releases/download` |
 | SMTP CA certificates | **Alerts → SMTP → CA certificates (PEM)** | `EDGEWEIR_SMTP_CA_FILE` (path to a PEM file) | System trust store |
 | SMTP server and account | **Alerts → SMTP** | None | Not configured |
@@ -332,7 +345,7 @@ A value saved in the console wins over the environment variable, which wins over
 | Bans | **Protection settings → Bans** | None | Limit 10000, automatic bans shared |
 | Protection | **Protection settings → Protection** | None | Global Under Attack off, challenge type JavaScript, events kept 30 days |
 
-The badge of **Node release source** shows where the value in effect comes from: **Saved**, **Environment**, or **Default**. Addresses saved in system settings are bounded by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`; values in environment variables are set by the operator and skip that check. For every environment variable, see [Environment variables](../reference/environment.en.md).
+The badges of **Node channel** and **Node release source** show where the value in effect comes from: **Saved**, **Environment**, or **Default**. Release source addresses saved in system settings are bounded by `EDGEWEIR_OUTBOUND_ALLOW_CIDRS`; values in environment variables are set by the operator and skip that check. For every environment variable, see [Environment variables](../reference/environment.en.md).
 
 ## Protection settings
 

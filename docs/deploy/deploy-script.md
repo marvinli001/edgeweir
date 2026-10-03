@@ -196,7 +196,7 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 3. 节点通道主机名变化时警告：已注册的节点重新注册，或把旧主机名加入 `EDGEWEIR_NODE_API_HOSTNAMES`。
 4. 确认后写入 `EDGEWEIR_PUBLIC_URL`、`EDGEWEIR_NODE_API_URL`，以及第 2 步需要修改时的 `EDGEWEIR_NODE_API_PORT`，按 `start` 的流程重建容器。
 
-`config` 不修改 `EDGEWEIR_HTTP_PORT`，不检查新端口是否被占用。
+`config` 不修改 `EDGEWEIR_HTTP_PORT`，不检查新端口是否被占用。控制台 **系统设置 → 节点通道** 中保存的地址优先于 `EDGEWEIR_NODE_API_URL`：保存过地址时，`config` 改动的节点通道地址不影响安装命令；只改节点通道地址时在系统设置中修改，不需要重启，见 [节点通道地址与证书](networking.md#节点通道地址与证书)。
 
 ## 启停与可信代理同步
 
