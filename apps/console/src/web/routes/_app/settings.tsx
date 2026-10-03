@@ -32,7 +32,7 @@ export const Route = createFileRoute("/_app/settings")({
 function SettingsPage() {
   const { theme, setTheme } = useTheme();
   return (
-    <Page title={m.settings_title()}>
+    <Page title={m.settings_title()} width="narrow">
       <Card>
         <CardHeader>
           <CardTitle>{m.settings_preferences()}</CardTitle>

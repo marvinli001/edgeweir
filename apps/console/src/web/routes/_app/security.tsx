@@ -39,7 +39,7 @@ async function unwrap<T>(
 function SecurityPage() {
   const me = useQuery(orpc.account.me.queryOptions());
   return (
-    <Page title={m.security_title()}>
+    <Page title={m.security_title()} width="narrow">
       <PasswordCard />
       <QueryView query={me}>
         {({ user }) => <TwoFactorCard enabled={user.twoFactorEnabled} />}
