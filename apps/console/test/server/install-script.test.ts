@@ -480,6 +480,85 @@ describe("install.sh", () => {
     }
   });
 
+  it("downloads from GitHub with one note when the mirror lacks the files", () => {
+    // curl ... -o DEST URL: the console's mirror answers 404, GitHub serves
+    // the file unless $GITHUB_DOWN is set.
+    const bin = mkdtempSync(join(tmpdir(), "edgeweir-fetch-"));
+    writeFileSync(
+      join(bin, "curl"),
+      [
+        "#!/bin/sh",
+        'dest=""',
+        'while [ $# -gt 1 ]; do [ "$1" = "-o" ] && dest="$2"; shift; done',
+        `echo "curl $1" >> "${calls}"`,
+        'case "$1" in https://github.com/*) [ -z "$GITHUB_DOWN" ] && echo ok > "$dest" && exit 0 ;; esac',
+        'echo "curl: (22) The requested URL returned error: 404" >&2',
+        "exit 22",
+      ].join("\n"),
+    );
+    chmodSync(join(bin, "curl"), 0o755);
+    const fetchTwo = (env: Record<string, string>, mirrorOnly = false) =>
+      run(
+        [],
+        { PATH: `${bin}${delimiter}/usr/bin${delimiter}/bin`, ...env },
+        script.replace(
+          /main "\$@"\s*$/,
+          [
+            "constants",
+            "MIRROR=http://console.test:3000/downloads/edgeweir-node",
+            `MIRROR_ONLY=${mirrorOnly}`,
+            "VERSION=0.1.0",
+            'WORK="$(mktemp -d)"',
+            `trap 'rm -rf "$WORK"' EXIT`,
+            'fetch "checksums.txt"',
+            'fetch "edgeweir-node_0.1.0_amd64.deb"',
+            'cat "$WORK/checksums.txt" "$WORK/edgeweir-node_0.1.0_amd64.deb"',
+            "",
+          ].join("\n"),
+        ),
+      );
+    const mirror = "http://console.test:3000/downloads/edgeweir-node/v0.1.0";
+    const github = "https://github.com/marvinli001/edgeweir-node/releases/download/v0.1.0";
+    const notFound = "curl: (22) The requested URL returned error: 404";
+    try {
+      const ok = fetchTwo({});
+      expect(ok.status, ok.stderr).toBe(0);
+      expect(ok.stdout).toBe("ok\nok\n");
+      expect(ok.calls.trim().split("\n")).toEqual([
+        `curl ${mirror}/checksums.txt`,
+        `curl ${github}/checksums.txt`,
+        `curl ${mirror}/edgeweir-node_0.1.0_amd64.deb`,
+        `curl ${github}/edgeweir-node_0.1.0_amd64.deb`,
+      ]);
+      expect(ok.stderr).not.toContain("curl:");
+      expect(ok.stderr.match(/no copy at /g)).toHaveLength(1);
+      expect(ok.stderr).toContain(`no copy at ${mirror}, downloading from GitHub`);
+
+      // Every source failed: each one's error, then the failure.
+      const down = fetchTwo({ GITHUB_DOWN: "1" });
+      expect(down.status).toBe(1);
+      expect(down.stderr).toContain(`${mirror}/checksums.txt: ${notFound}`);
+      expect(down.stderr).toContain(`${github}/checksums.txt: ${notFound}`);
+      expect(down.stderr).toContain("failed to download checksums.txt");
+
+      // --mirror-only: neither GitHub nor the note.
+      const only = fetchTwo({}, true);
+      expect(only.status).toBe(1);
+      expect(only.calls.trim().split("\n")).toEqual([`curl ${mirror}/checksums.txt`]);
+      expect(only.stderr).not.toContain("no copy at");
+      expect(only.stderr).toContain(`${mirror}/checksums.txt: ${notFound}`);
+    } finally {
+      rmSync(bin, { recursive: true, force: true });
+    }
+  });
+
+  it("lets apt's _apt user read the downloaded packages", () => {
+    const main = script.slice(script.indexOf("main() {"));
+    expect(main).toMatch(
+      /\n {2}WORK="\$\(mktemp -d\)"\n {2}trap 'rm -rf "\$WORK"' EXIT\n(?: {2}#.*\n)* {2}chmod 0755 "\$WORK"\n/,
+    );
+  });
+
   /** sha256sum with its check mode (coreutils; /sbin/sha256sum on macOS). */
   const sha256sum = spawnSync("sh", ["-c", "command -v sha256sum"], {
     encoding: "utf8",

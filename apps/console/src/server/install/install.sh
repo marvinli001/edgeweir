@@ -260,20 +260,35 @@ download() {
   curl -fsSL --retry 3 --connect-timeout 15 -o "$2" "$1"
 }
 
-# fetch NAME: the release file NAME of $VERSION into $WORK, mirror first.
-fetch() {
-  local name="$1" url
-  for url in "${MIRROR}/v${VERSION}/${name}" \
-    "https://github.com/${REPO}/releases/download/v${VERSION}/${name}"; do
+# download_first DEST URL...: the first URL that downloads, into DEST; GitHub
+# URLs are skipped with --mirror-only. Most consoles serve no mirror, so a
+# miss there is one note, and curl's errors appear only when every URL fails.
+download_first() {
+  local dest="$1" url err errors=""
+  shift
+  for url in "$@"; do
     if [ "$MIRROR_ONLY" = "true" ] && [[ "$url" == https://github.com/* ]]; then
       continue
     fi
-    if download "$url" "${WORK}/${name}"; then
+    if err="$(download "$url" "$dest" 2>&1)"; then
       return 0
     fi
-    log "not available from ${url%/*}"
+    errors="${errors}${url}: ${err}"$'\n'
+    if [ "$MIRROR_ONLY" != "true" ] && [[ "$url" != https://github.com/* ]] \
+      && [ -z "${MIRROR_MISSED:-}" ]; then
+      MIRROR_MISSED="true"
+      log "no copy at ${url%/*}, downloading from GitHub"
+    fi
   done
-  die "failed to download ${name}"
+  printf '%s' "$errors" >&2
+  return 1
+}
+
+# fetch NAME: the release file NAME of $VERSION into $WORK, mirror first.
+fetch() {
+  download_first "${WORK}/$1" "${MIRROR}/v${VERSION}/$1" \
+    "https://github.com/${REPO}/releases/download/v${VERSION}/$1" \
+    || die "failed to download $1"
 }
 
 resolve_version() {
@@ -298,19 +313,10 @@ ensure_cosign() {
     COSIGN="$(command -v cosign)"
     return 0
   fi
-  local name="cosign-linux-${ARCH}" url ok="false"
-  local mirror_base="${MIRROR%/edgeweir-node}"
-  for url in "${mirror_base}/cosign/v${COSIGN_VERSION}/${name}" \
-    "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/${name}"; do
-    if [ "$MIRROR_ONLY" = "true" ] && [[ "$url" == https://github.com/* ]]; then
-      continue
-    fi
-    if download "$url" "${WORK}/cosign"; then
-      ok="true"
-      break
-    fi
-  done
-  [ "$ok" = "true" ] || die "cosign is not installed and cosign v${COSIGN_VERSION} could not be downloaded"
+  local name="cosign-linux-${ARCH}"
+  download_first "${WORK}/cosign" "${MIRROR%/edgeweir-node}/cosign/v${COSIGN_VERSION}/${name}" \
+    "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/${name}" \
+    || die "cosign is not installed and cosign v${COSIGN_VERSION} could not be downloaded"
   printf '%s  %s\n' "$COSIGN_SHA256" "${WORK}/cosign" | sha256sum -c --status - \
     || die "SHA-256 verification FAILED for the downloaded cosign v${COSIGN_VERSION}"
   chmod 0755 "${WORK}/cosign"
@@ -603,6 +609,9 @@ main() {
   umask 022
   WORK="$(mktemp -d)"
   trap 'rm -rf "$WORK"' EXIT
+  # apt reads local packages as its _apt user (otherwise it notes "Permission
+  # denied"); $WORK holds only public release files, never the token.
+  chmod 0755 "$WORK"
   if enrolling; then
     check_server
   fi
