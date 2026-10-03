@@ -64,8 +64,18 @@ test("login -> clusters & nodes -> sites, then switch to English", async ({ page
   await expect(page.getByLabel("节点名称", { exact: true })).toHaveCount(0);
   const second = (await command.textContent())?.match(token)?.[1];
   const enroll = page.getByRole("dialog");
+  // Closing only changes the search: the session checked on entering the console holds, so the
+  // dialog closes at once even when the console is a slow round trip away (behind a CDN).
+  const sessionChecks: string[] = [];
+  await page.route("**/api/auth/get-session", async (route) => {
+    sessionChecks.push(route.request().url());
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await route.continue();
+  });
   await page.getByTestId("enroll-close").click();
-  await expect(enroll).toBeHidden();
+  await expect(enroll).toBeHidden({ timeout: 1_500 });
+  expect(sessionChecks).toEqual([]);
+  await page.unroute("**/api/auth/get-session");
   // Opened again, the dialog shows a new node's command, the options closed and empty.
   await page.getByTestId("add-node").click();
   await expect(command).toContainText(token);
