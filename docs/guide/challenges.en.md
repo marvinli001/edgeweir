@@ -208,7 +208,7 @@ Changes need a console session or a read-write AccessKey; read-only AccessKeys c
 | Under Attack, CC mitigation, challenge rules | `challenge-v1` |
 | `tls.ja4` field, JA4 rate limit key, JA4 logging | `ja4-v1` |
 
-When an active node of the cluster lacks a capability, the change is still saved and published; nodes without the capability keep their previous configuration and show **Upgrade required** in **Clusters & nodes**, see [Node upgrades](node-upgrades.en.md). Service accounts and background jobs that publish such a configuration get 409 `NODE_CAPABILITY_REQUIRED` ("Some nodes don't support … yet: <nodes>") and the settings stay as they were. Clusters that use none of these features keep their configuration unchanged.
+When an active node of the cluster lacks a capability, the change is still saved and published; nodes without the capability keep their previous configuration and show **Upgrade required** in **Clusters & nodes**, see [Node upgrades](node-upgrades.en.md). Service accounts and background jobs that publish such a configuration get 409 `NODE_CAPABILITY_REQUIRED` ("Some nodes don't support … yet: {nodes}") and the settings stay as they were. Clusters that use none of these features keep their configuration unchanged.
 
 ## API
 
@@ -229,7 +229,7 @@ Fields and examples: [API and endpoints](../reference/api.en.md#challenges-and-c
 | --- | --- | --- |
 | "The high proof-of-work difficulty must be at least N" | The high difficulty is below the proof-of-work difficulty | Raise the high difficulty or lower the normal one |
 | A node shows **Upgrade required** | The node is too old and lacks `challenge-v1` or `ja4-v1` | Upgrade the node |
-| "Some nodes don't support Challenges yet: <nodes>" | A service account or background job published a configuration that needs a capability the cluster's nodes lack | Upgrade the node |
+| "Some nodes don't support Challenges yet: {nodes}" | A service account or background job published a configuration that needs a capability the cluster's nodes lack | Upgrade the node |
 | 503, `X-Edgeweir-Error: challenge-unavailable` | The node has not fetched the pass keys yet | Check the node's connection to the console |
 | Forms or API calls get 403 with `X-Edgeweir-Challenge: required` | Non-GET/HEAD requests without a valid pass | Pass the challenge in a browser first; let machine-to-machine endpoints through with an `allow` rule |
 | Challenged again after passing | The pass expired; the client changed network or User-Agent; the required level is above the pass level | Lengthen the lifetime; check whether a proxy's exit address keeps changing |
