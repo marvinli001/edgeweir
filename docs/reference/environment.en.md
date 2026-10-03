@@ -90,7 +90,7 @@ The ClickHouse variables apply only with `EDGEWEIR_ANALYTICS=clickhouse`. The `a
 | `ROLE` | `all` | Process role: `all`, `app`, or `worker`. Components per role: [Deployment overview](../deploy/README.en.md#process-roles). |
 | `HOST` | `0.0.0.0` | Listen address of the web UI and API. `compose.baota-host.yml`: `127.0.0.1`. |
 | `PORT` | `3000` | Listen port of the web UI and API, 1–65535. |
-| `NODE_API_HOST` | Value of `HOST` | Listen address of the node channel. `compose.baota-host.yml`: `0.0.0.0`. |
+| `NODE_API_HOST` | Value of `HOST` | Listen address of the node channel. `compose.baota-host.yml`: from `EDGEWEIR_NODE_API_HOST`, default `0.0.0.0`. |
 | `NODE_API_PORT` | `8443` | Listen port of the node channel. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. Logs are one JSON object per line. |
 | `NODE_ENV` | `development` (image: `production`) | `development`, `production`, or `test`. `production` enables rate limiting of the authentication endpoints, with counters in PostgreSQL. |
@@ -107,6 +107,7 @@ Compose reads these variables on the host (`.env` or the shell environment) to i
 | `EDGEWEIR_VERSION` | `latest` | Image tag to pull: `ghcr.io/marvinli001/edgeweir:<EDGEWEIR_VERSION>`. Rolling tags are `<YYYYMMDD>-<commit>`; `@sha256:<digest>` may be appended. See [Versions, upgrades, and rollback](../deploy/upgrade.en.md). |
 | `EDGEWEIR_HTTP_PORT` | `3000` | Host port of the web console. `compose.yml`: a port publishing spec, may include a bind address, default `127.0.0.1:3000` (ports Docker publishes bypass ufw and firewalld); `3000` publishes it on every interface. `compose.baota.yml`: number only, bound to `127.0.0.1`. `compose.baota-host.yml`: number only, used as `PORT`. |
 | `EDGEWEIR_NODE_API_PORT` | `8443` | Host port of the node channel. `compose.yml` and `compose.baota.yml`: a port publishing spec, may include a bind address. `compose.baota-host.yml`: number only, used as `NODE_API_PORT`. |
+| `EDGEWEIR_NODE_API_HOST` | `0.0.0.0` | `compose.baota-host.yml` only: listen address of the node channel, used as `NODE_API_HOST`; `127.0.0.1` behind an nginx `stream` passthrough on the same host. |
 | `POSTGRES_PASSWORD` | None | Password of the bundled PostgreSQL; `compose.yml` and `compose.baota.yml` build `DATABASE_URL` from it, and refuse to start without it (deployments created without it used `edgeweir`). Must be URL-safe: `openssl rand -hex 24`. The PostgreSQL image applies it only to an empty data directory; changing it later does not change the existing password. |
 | `COMPOSE_PROFILES` | Empty | Profiles Compose enables, comma separated. `analytics`: the ClickHouse service of `compose.yml`; set in `.env`, every `docker compose` and `deploy.sh` command includes it without `--profile`. |
 | `CLICKHOUSE_PASSWORD` | `edgeweir` | ClickHouse password when `EDGEWEIR_CLICKHOUSE_PASSWORD` is unset, shared by the console and the ClickHouse container of the `analytics` profile. |
@@ -120,4 +121,4 @@ The Compose files pass the remaining console variables as `${VARIABLE:-default}`
 | --- | --- | --- |
 | `compose.yml` | `ROLE=all` | The `_FILE` variables of [Read from files](#read-from-files), `HOST`, `PORT`, `NODE_API_HOST`, `NODE_API_PORT`, `NODE_ENV`, `EDGEWEIR_WEB_DIST`, `EDGEWEIR_CERTD_BIN`, `EDGEWEIR_DNS_TEST_ENDPOINT`, `EDGEWEIR_VERSION` |
 | `compose.baota.yml` | `ROLE=all` | Same as `compose.yml`, plus `LOG_LEVEL` and `EDGEWEIR_DOWNLOADS_DIR` |
-| `compose.baota-host.yml` | `ROLE=all`, `HOST=127.0.0.1`, `NODE_API_HOST=0.0.0.0`; `PORT` and `NODE_API_PORT` from the host port variables | The `_FILE` variables of [Read from files](#read-from-files), `NODE_ENV`, `EDGEWEIR_WEB_DIST`, `EDGEWEIR_CERTD_BIN`, `EDGEWEIR_DNS_TEST_ENDPOINT`, `EDGEWEIR_VERSION`, `LOG_LEVEL`, and `EDGEWEIR_DOWNLOADS_DIR` |
+| `compose.baota-host.yml` | `ROLE=all`, `HOST=127.0.0.1`; `PORT`, `NODE_API_HOST`, and `NODE_API_PORT` from the host variables `EDGEWEIR_HTTP_PORT`, `EDGEWEIR_NODE_API_HOST` (default `0.0.0.0`), and `EDGEWEIR_NODE_API_PORT` | The `_FILE` variables of [Read from files](#read-from-files), `NODE_ENV`, `EDGEWEIR_WEB_DIST`, `EDGEWEIR_CERTD_BIN`, `EDGEWEIR_DNS_TEST_ENDPOINT`, `EDGEWEIR_VERSION`, `LOG_LEVEL`, and `EDGEWEIR_DOWNLOADS_DIR` |

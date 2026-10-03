@@ -21,6 +21,7 @@ Configure console ports, reverse proxies, node channel passthrough, and client I
 | `NODE_API_PORT` | `8443` | Node channel listen port of the process. |
 | `EDGEWEIR_HTTP_PORT` | `127.0.0.1:3000` (`compose.yml`) | Web port published by Compose, optionally with a bind address. |
 | `EDGEWEIR_NODE_API_PORT` | `8443` | Node channel port published by Compose, optionally with a bind address. |
+| `EDGEWEIR_NODE_API_HOST` | `0.0.0.0` | `compose.baota-host.yml` only: node channel listen address, used as `NODE_API_HOST`. |
 
 Values per Compose file:
 
@@ -28,7 +29,7 @@ Values per Compose file:
 | --- | --- | --- |
 | `compose.yml` | Image defaults `0.0.0.0:3000`, `0.0.0.0:8443` | Port mappings `${EDGEWEIR_HTTP_PORT}:3000` (default `127.0.0.1:3000`) and `${EDGEWEIR_NODE_API_PORT}:8443` (all interfaces by default) |
 | `compose.baota.yml` | Image defaults | Port mappings `127.0.0.1:${EDGEWEIR_HTTP_PORT}:3000` (`EDGEWEIR_HTTP_PORT` is a number only), `${EDGEWEIR_NODE_API_PORT}:8443` |
-| `compose.baota-host.yml` (host network) | `HOST=127.0.0.1`, `PORT=${EDGEWEIR_HTTP_PORT}`, `NODE_API_HOST=0.0.0.0`, `NODE_API_PORT=${EDGEWEIR_NODE_API_PORT}` | No port mappings; both port variables are numbers only |
+| `compose.baota-host.yml` (host network) | `HOST=127.0.0.1`, `PORT=${EDGEWEIR_HTTP_PORT}`, `NODE_API_HOST=${EDGEWEIR_NODE_API_HOST}` (default `0.0.0.0`), `NODE_API_PORT=${EDGEWEIR_NODE_API_PORT}` | No port mappings; both port variables are numbers only |
 
 The web port of `compose.yml` is reachable only locally by default, served by a reverse proxy on the host: ports Docker publishes bypass host firewalls such as ufw and firewalld. To reach it directly without a proxy, set `EDGEWEIR_HTTP_PORT=3000`.
 
@@ -95,7 +96,7 @@ Use nginx `stream` layer-4 passthrough when 8443 must go through nginx.
    | --- | --- |
    | `compose.yml`, `compose.baota.yml` | `.env`: `EDGEWEIR_NODE_API_PORT=127.0.0.1:18443` |
    | Process listening directly (`pnpm dev`, outside a container) | `NODE_API_HOST=127.0.0.1`, `NODE_API_PORT=18443` |
-   | `compose.baota-host.yml` | See [baota.en.md](baota.en.md): the file fixes `NODE_API_HOST: 0.0.0.0` |
+   | `compose.baota-host.yml` | `.env`: `EDGEWEIR_NODE_API_HOST=127.0.0.1`, `EDGEWEIR_NODE_API_PORT=18443`; not in `compose.override.yml`, which BaoTa / aaPanel skip when they run the project with `docker compose -f`, see [baota.en.md](baota.en.md#node-channel-port) |
 
    `EDGEWEIR_NODE_API_URL` keeps the public `:8443`.
 

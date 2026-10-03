@@ -21,6 +21,7 @@
 | `NODE_API_PORT` | `8443` | 进程的节点通道监听端口。 |
 | `EDGEWEIR_HTTP_PORT` | `127.0.0.1:3000`（`compose.yml`） | Compose 发布的 Web 端口，可带绑定地址。 |
 | `EDGEWEIR_NODE_API_PORT` | `8443` | Compose 发布的节点通道端口，可带绑定地址。 |
+| `EDGEWEIR_NODE_API_HOST` | `0.0.0.0` | 只用于 `compose.baota-host.yml`：节点通道的监听地址，作为 `NODE_API_HOST`。 |
 
 各编排文件的取值：
 
@@ -28,7 +29,7 @@
 | --- | --- | --- |
 | `compose.yml` | 镜像默认值 `0.0.0.0:3000`、`0.0.0.0:8443` | 端口映射 `${EDGEWEIR_HTTP_PORT}:3000`（默认 `127.0.0.1:3000`）、`${EDGEWEIR_NODE_API_PORT}:8443`（默认所有接口） |
 | `compose.baota.yml` | 镜像默认值 | 端口映射 `127.0.0.1:${EDGEWEIR_HTTP_PORT}:3000`（`EDGEWEIR_HTTP_PORT` 只能是数字）、`${EDGEWEIR_NODE_API_PORT}:8443` |
-| `compose.baota-host.yml`（host 网络） | `HOST=127.0.0.1`、`PORT=${EDGEWEIR_HTTP_PORT}`、`NODE_API_HOST=0.0.0.0`、`NODE_API_PORT=${EDGEWEIR_NODE_API_PORT}` | 无端口映射；两个端口变量只能是数字 |
+| `compose.baota-host.yml`（host 网络） | `HOST=127.0.0.1`、`PORT=${EDGEWEIR_HTTP_PORT}`、`NODE_API_HOST=${EDGEWEIR_NODE_API_HOST}`（默认 `0.0.0.0`）、`NODE_API_PORT=${EDGEWEIR_NODE_API_PORT}` | 无端口映射；两个端口变量只能是数字 |
 
 `compose.yml` 的 Web 端口默认只在本机可达，由宿主机反向代理对外：Docker 发布的端口绕过 ufw、firewalld 等主机防火墙。不经代理直接访问时设置 `EDGEWEIR_HTTP_PORT=3000`。
 
@@ -95,7 +96,7 @@ server {
    | --- | --- |
    | `compose.yml`、`compose.baota.yml` | `.env`：`EDGEWEIR_NODE_API_PORT=127.0.0.1:18443` |
    | 进程直接监听（`pnpm dev`、非容器运行） | `NODE_API_HOST=127.0.0.1`、`NODE_API_PORT=18443` |
-   | `compose.baota-host.yml` | 见 [baota.md](baota.md)：该文件固定 `NODE_API_HOST: 0.0.0.0` |
+   | `compose.baota-host.yml` | `.env`：`EDGEWEIR_NODE_API_HOST=127.0.0.1`、`EDGEWEIR_NODE_API_PORT=18443`；不写在 `compose.override.yml`：宝塔 / aaPanel 以 `docker compose -f` 执行编排时不读取它，见 [baota.md](baota.md#节点通道端口) |
 
    `EDGEWEIR_NODE_API_URL` 保持对外的 `:8443`。
 

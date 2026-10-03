@@ -12,7 +12,7 @@ Deploy the console with Docker Compose on BaoTa Panel (宝塔) or aaPanel: compo
 | Compose file | [`compose.baota-host.yml`](../../compose.baota-host.yml) | [`compose.baota.yml`](../../compose.baota.yml) |
 | Container network | `network_mode: host`; `127.0.0.1` in the container is the host, so a local PostgreSQL listening on loopback only needs no change to `listen_addresses` or `pg_hba.conf` | Docker bridge; the database is not exposed |
 | Web console | Process listens on `127.0.0.1:3000` (`EDGEWEIR_HTTP_PORT`) | Port mapping `127.0.0.1:3000` (`EDGEWEIR_HTTP_PORT`) → `3000` |
-| Node channel | Process listens on `0.0.0.0:8443` (`EDGEWEIR_NODE_API_PORT`) | Port mapping `8443` (`EDGEWEIR_NODE_API_PORT`) → `8443` |
+| Node channel | Process listens on `0.0.0.0:8443` (`EDGEWEIR_NODE_API_HOST`, `EDGEWEIR_NODE_API_PORT`) | Port mapping `8443` (`EDGEWEIR_NODE_API_PORT`) → `8443` |
 | Port variable format | Numbers only | `EDGEWEIR_HTTP_PORT` numbers only; `EDGEWEIR_NODE_API_PORT` may include a bind address, e.g. `127.0.0.1:18443` |
 | `EDGEWEIR_TRUSTED_PROXIES` | Default `127.0.0.1,::1` | Docker gateway address, written by `deploy.sh` and synced at startup |
 | Port column in the panel's container list | Empty (host networking has no port mappings) | Shows the mappings |
@@ -134,7 +134,7 @@ Node release source and origin allow list are configured in **System settings**,
    | Mode | Change |
    | --- | --- |
    | bundled | `.env`: `EDGEWEIR_NODE_API_PORT=127.0.0.1:18443` |
-   | host | `.env`: `EDGEWEIR_NODE_API_PORT=18443`; `compose.override.yml` (next to `compose.yml`): `services.console.environment.NODE_API_HOST: 127.0.0.1` |
+   | host | `.env`: `EDGEWEIR_NODE_API_PORT=18443`, `EDGEWEIR_NODE_API_HOST=127.0.0.1` |
 
    ```bash
    ./deploy.sh start
@@ -151,8 +151,9 @@ Node release source and origin allow list are configured in **System settings**,
 | Case | Constraint |
 | --- | --- |
 | `./deploy.sh config` | Keeps the step 2 `EDGEWEIR_NODE_API_PORT`; when the port in the node channel URL changes, adjust nginx's `listen` yourself. |
-| `./deploy.sh update` | Replacing `compose.yml` leaves `compose.override.yml` alone. |
-| host mode startup | The script warns that the node channel listens on loopback only; the warning does not apply to this setup. |
+| `./deploy.sh update` | Replacing `compose.yml` leaves the step 2 settings in `.env` alone. |
+| Restarting or updating the project in the panel | The panel runs `docker compose -f <compose file>`: it reads `.env`, so the step 2 settings hold; it skips `compose.override.yml`, whose changes apply only when you start, stop, and upgrade with `./deploy.sh`. |
+| The host mode `compose.yml` lacks `EDGEWEIR_NODE_API_HOST` (an older template) | `EDGEWEIR_NODE_API_HOST` in `.env` has no effect, and `./deploy.sh start` warns; change its `NODE_API_HOST` line as in `./deploy.sh template host`. |
 
 ## Install without the script
 
@@ -261,7 +262,8 @@ Commands, backup layout, and abort behavior: [deploy-script.en.md](deploy-script
 | Image pull fails | `ghcr.io` unreachable | Import the images with `docker load`, then set `EDGEWEIR_NO_PULL=1`. |
 | Sign-in fails, or the session ends right after sign-in | `EDGEWEIR_PUBLIC_URL` differs from the browser address in scheme, domain, or port | `./deploy.sh config`. |
 | Node enrollment fails with `CA pin mismatch` | The panel's nginx or a CDN terminates TLS on the node channel port | Use direct exposure or `stream` passthrough; verify as in section 4, step 4. |
-| Node enrollment times out | The firewall or security group blocks the node channel port, or the node channel domain resolves incorrectly | Open the port; check DNS for the `EDGEWEIR_NODE_API_URL` host. |
-| host mode warns that the node channel listens on loopback only | The image does not support `NODE_API_HOST`, or the channel was moved to loopback for `stream` passthrough | First case: `./deploy.sh update`; second case: no action. |
+| Node enrollment times out | The firewall or security group blocks the node channel port, or the node channel domain resolves incorrectly | Open the port; check DNS for the node channel URL's host. |
+| host mode warns that the node channel listens on loopback only | The image does not support `NODE_API_HOST` | `./deploy.sh update`. |
+| host mode warns that `compose.override.yml` sets `NODE_API_HOST` | Restarting or updating the project in the panel skips the override file and loses the setting | Set `EDGEWEIR_NODE_API_HOST` in `.env` instead (step 2 of [Node channel port](#node-channel-port)), remove `NODE_API_HOST` from the override file, and run `./deploy.sh start`. |
 | All IPs in the audit log are the Docker gateway (`172.x.x.1`) | In bundled mode, `EDGEWEIR_TRUSTED_PROXIES` differs from the current gateway | `./deploy.sh restart`. |
 | `./deploy.sh start` reports 「启动失败」 (startup failed) | `.env` lacks a variable, or the database is unreachable | `./deploy.sh logs console`; fix `.env`, then `./deploy.sh start`. |

@@ -12,7 +12,7 @@
 | 编排文件 | [`compose.baota-host.yml`](../../compose.baota-host.yml) | [`compose.baota.yml`](../../compose.baota.yml) |
 | 容器网络 | `network_mode: host`；容器内 `127.0.0.1` 即宿主机，只监听回环地址的本机 PostgreSQL 无需修改 `listen_addresses` 与 `pg_hba.conf` | Docker 网桥；数据库不对外 |
 | Web 控制台 | 进程监听 `127.0.0.1:3000`（`EDGEWEIR_HTTP_PORT`） | 端口映射 `127.0.0.1:3000`（`EDGEWEIR_HTTP_PORT`）→ `3000` |
-| 节点通道 | 进程监听 `0.0.0.0:8443`（`EDGEWEIR_NODE_API_PORT`） | 端口映射 `8443`（`EDGEWEIR_NODE_API_PORT`）→ `8443` |
+| 节点通道 | 进程监听 `0.0.0.0:8443`（`EDGEWEIR_NODE_API_HOST`、`EDGEWEIR_NODE_API_PORT`） | 端口映射 `8443`（`EDGEWEIR_NODE_API_PORT`）→ `8443` |
 | 端口变量格式 | 只能是数字 | `EDGEWEIR_HTTP_PORT` 只能是数字；`EDGEWEIR_NODE_API_PORT` 可带绑定地址，例如 `127.0.0.1:18443` |
 | `EDGEWEIR_TRUSTED_PROXIES` | 默认 `127.0.0.1,::1` | Docker 网关地址，由 `deploy.sh` 写入并在启动时同步 |
 | 面板容器列表的端口列 | 空（host 网络没有端口映射） | 显示映射 |
@@ -134,7 +134,7 @@ bash deploy.sh install
    | 模式 | 修改 |
    | --- | --- |
    | bundled | `.env`：`EDGEWEIR_NODE_API_PORT=127.0.0.1:18443` |
-   | host | `.env`：`EDGEWEIR_NODE_API_PORT=18443`；`compose.override.yml`（与 `compose.yml` 同目录）：`services.console.environment.NODE_API_HOST: 127.0.0.1` |
+   | host | `.env`：`EDGEWEIR_NODE_API_PORT=18443`、`EDGEWEIR_NODE_API_HOST=127.0.0.1` |
 
    ```bash
    ./deploy.sh start
@@ -151,8 +151,9 @@ bash deploy.sh install
 | 场景 | 约束 |
 | --- | --- |
 | `./deploy.sh config` | 保留第 2 步的 `EDGEWEIR_NODE_API_PORT`；节点通道地址的端口改变时，自行调整 nginx 的 `listen`。 |
-| `./deploy.sh update` | 替换 `compose.yml` 不影响 `compose.override.yml`。 |
-| host 模式启动 | 脚本警告节点通道只监听回环地址；透传配置下该警告不适用。 |
+| `./deploy.sh update` | 替换 `compose.yml` 不影响 `.env` 中第 2 步的设置。 |
+| 在面板中重启或更新该编排 | 面板以 `docker compose -f <编排文件>` 执行：读取 `.env`，第 2 步的设置不受影响；不读取 `compose.override.yml`，其中的改动只在用 `./deploy.sh` 启停与升级时生效。 |
+| host 模式的 `compose.yml` 不含 `EDGEWEIR_NODE_API_HOST`（较早的模板） | `.env` 中的 `EDGEWEIR_NODE_API_HOST` 不生效，`./deploy.sh start` 时警告；按 `./deploy.sh template host` 修改其中 `NODE_API_HOST` 一行。 |
 
 ## 不用脚本部署
 
@@ -261,7 +262,8 @@ cd /www/dk_project/edgeweir
 | 拉取镜像失败 | 无法访问 `ghcr.io` | `docker load` 导入镜像后设置 `EDGEWEIR_NO_PULL=1`。 |
 | 登录失败或登录后立即退出 | `EDGEWEIR_PUBLIC_URL` 与浏览器地址的协议、域名或端口不一致 | `./deploy.sh config`。 |
 | 节点注册报 `CA pin mismatch` | 节点通道端口上的 TLS 被面板 nginx 或 CDN 终结 | 直接暴露或 `stream` 透传；按第 4 节第 4 步验证。 |
-| 节点注册超时 | 防火墙或安全组未放行节点通道端口，或节点通道域名解析错误 | 放行端口；检查 `EDGEWEIR_NODE_API_URL` 的域名解析。 |
-| host 模式警告节点通道只监听回环地址 | 镜像不支持 `NODE_API_HOST`，或已按 `stream` 透传改为回环监听 | 前者 `./deploy.sh update`；后者无需处理。 |
+| 节点注册超时 | 防火墙或安全组未放行节点通道端口，或节点通道域名解析错误 | 放行端口；检查节点通道地址的域名解析。 |
+| host 模式警告节点通道只监听回环地址 | 镜像不支持 `NODE_API_HOST` | `./deploy.sh update`。 |
+| host 模式警告 `compose.override.yml` 设置了 `NODE_API_HOST` | 面板重启或更新编排时不读取覆盖文件，该设置丢失 | 改在 `.env` 中设置 `EDGEWEIR_NODE_API_HOST`（[节点通道端口](#节点通道端口) 第 2 步），从覆盖文件删除 `NODE_API_HOST`，`./deploy.sh start`。 |
 | 审计日志中的 IP 均为 Docker 网关（`172.x.x.1`） | bundled 模式 `EDGEWEIR_TRUSTED_PROXIES` 与当前网关不一致 | `./deploy.sh restart`。 |
 | `./deploy.sh start` 报「启动失败」 | `.env` 缺少变量或数据库不可达 | `./deploy.sh logs console`；修正 `.env` 后 `./deploy.sh start`。 |

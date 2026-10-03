@@ -102,7 +102,9 @@ describe("deploy.sh", () => {
     const host = read("compose.baota-host.yml");
     expect(host).toMatch(/^\s*network_mode: host$/m);
     expect(host).toMatch(/^\s*HOST: 127\.0\.0\.1$/m);
-    expect(host).toMatch(/^\s*NODE_API_HOST: 0\.0\.0\.0$/m);
+    // From .env, which panels read (they skip compose.override.yml); ":-" keeps
+    // 0.0.0.0 when it is unset or empty (an empty NODE_API_HOST would follow HOST).
+    expect(host).toMatch(/^\s*NODE_API_HOST: \$\{EDGEWEIR_NODE_API_HOST:-0\.0\.0\.0\}$/m);
     expect(host).not.toMatch(/^\s*ports:/m);
   });
 
@@ -472,6 +474,87 @@ describe("deploy.sh", () => {
       expect(readFileSync(resolve(dir, "log"), "utf8")).toBe(
         "compose up -d --wait --remove-orphans\n",
       );
+    });
+  });
+
+  describe("host mode node channel listen address", () => {
+    const template = read("compose.baota-host.yml");
+    /**
+     * check_node_listen in a host deployment with this .env (and extra files);
+     * the host listens on ADDRS (space separated) on EDGEWEIR_NODE_API_PORT.
+     */
+    const check = (env: string, addrs: string, files: Record<string, string> = {}) =>
+      run(
+        `listen_addresses() { if [[ $1 == "$WANT_PORT" ]]; then tr ' ' '\\n' <<<"$ADDRS"; fi; }
+         DIR=$D; COMPOSE_FILE=compose.yml; check_node_listen`,
+        {
+          D: directory({ ".env": env, "compose.yml": template, ...files }),
+          ADDRS: addrs,
+          WANT_PORT: /^EDGEWEIR_NODE_API_PORT=(.*)$/m.exec(env)?.[1] ?? "8443",
+        },
+      );
+    const override = (environment: string) => ({
+      "compose.override.yml": `services:\n  console:\n    environment:\n${environment}`,
+    });
+
+    it("warns when the node channel should be public and listens on loopback only", () => {
+      const result = check("EDGEWEIR_NODE_API_PORT=9443\n", "127.0.0.1:9443 [::1]:9443");
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stderr).toContain("镜像版本不支持 NODE_API_HOST");
+      expect(check("EDGEWEIR_NODE_API_PORT=9443\n", "0.0.0.0:9443").stderr).toBe("");
+      expect(check("EDGEWEIR_NODE_API_HOST=\n", "*:8443").stderr).toBe("");
+    });
+
+    it.each(["127.0.0.1", "::1", "localhost"])(
+      "takes loopback from EDGEWEIR_NODE_API_HOST=%s as asked for (nginx stream)",
+      (host) => {
+        const result = check(
+          `EDGEWEIR_NODE_API_HOST=${host}\nEDGEWEIR_NODE_API_PORT=18443\n`,
+          "127.0.0.1:18443",
+        );
+        expect(result.status, result.stderr).toBe(0);
+        expect(result.stderr).toBe("");
+      },
+    );
+
+    it("asks to move NODE_API_HOST out of the override file, which panels skip", () => {
+      const result = check(
+        "EDGEWEIR_NODE_API_PORT=18443\n",
+        "127.0.0.1:18443",
+        override("      NODE_API_HOST: 127.0.0.1\n"),
+      );
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stderr).toContain("compose.override.yml 设置了 NODE_API_HOST");
+      expect(result.stderr).toContain("改在 .env 中设置 EDGEWEIR_NODE_API_HOST");
+      // The loopback listener is the override's, not an image without NODE_API_HOST.
+      expect(result.stderr).not.toContain("镜像版本不支持");
+      expect(
+        check("", "0.0.0.0:8443", override("      - NODE_API_HOST=127.0.0.1\n")).stderr,
+      ).toContain("设置了 NODE_API_HOST");
+      // Comments and other names do not count.
+      expect(
+        check(
+          "",
+          "0.0.0.0:8443",
+          override(
+            "      # NODE_API_HOST: 127.0.0.1\n      EDGEWEIR_NODE_API_HOSTNAMES: a.example\n",
+          ),
+        ).stderr,
+      ).toBe("");
+    });
+
+    it("names a compose file that predates EDGEWEIR_NODE_API_HOST", () => {
+      const older = template.replace("${EDGEWEIR_NODE_API_HOST:-0.0.0.0}", "0.0.0.0");
+      expect(older).not.toBe(template);
+      const result = check(
+        "EDGEWEIR_NODE_API_HOST=127.0.0.1\nEDGEWEIR_NODE_API_PORT=18443\n",
+        "0.0.0.0:18443",
+        { "compose.yml": older },
+      );
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stderr).toContain("compose.yml 是较早的模板");
+      // Without the variable the older file listens where .env says.
+      expect(check("", "0.0.0.0:8443", { "compose.yml": older }).stderr).toBe("");
     });
   });
 

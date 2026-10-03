@@ -6,8 +6,10 @@
 #     宝塔「数据库 → PgSQL」装在本机、只监听回环地址的 PostgreSQL 无需改 listen_addresses
 #     和 pg_hba；云数据库照常填它的地址（sslmode=verify-full）。
 #   - host 网络下没有端口映射：Web 控制台自己只监听 127.0.0.1:EDGEWEIR_HTTP_PORT（交给
-#     宝塔站点反向代理），节点通道监听 0.0.0.0:EDGEWEIR_NODE_API_PORT（直接对外，TLS 由
-#     控制台自己终结，不能交给宝塔 nginx）。这里的两个端口只能是数字。
+#     宝塔站点反向代理），节点通道监听 EDGEWEIR_NODE_API_HOST:EDGEWEIR_NODE_API_PORT，
+#     默认 0.0.0.0 直接对外（TLS 由控制台自己终结，不能交给宝塔 nginx）；nginx stream
+#     透传时在 .env 设 EDGEWEIR_NODE_API_HOST=127.0.0.1（面板以 -f 运行编排，不读取
+#     compose.override.yml）。这里的两个端口只能是数字。
 #   - 宝塔 nginx 从 127.0.0.1 转发，EDGEWEIR_TRUSTED_PROXIES 默认只信任本机回环地址。
 # .env 至少需要 DATABASE_URL、EDGEWEIR_MASTER_KEY、EDGEWEIR_PUBLIC_URL（连接串也可以放进文件，
 # 在 compose.override.yml 里挂载并设置 DATABASE_URL_FILE）；镜像 tag 用 EDGEWEIR_VERSION
@@ -32,10 +34,10 @@ services:
       # 节点连接控制台的地址，例如 https://cdn-admin.example.com:8443
       EDGEWEIR_NODE_API_URL: ${EDGEWEIR_NODE_API_URL:-}
       EDGEWEIR_NODE_API_HOSTNAMES: ${EDGEWEIR_NODE_API_HOSTNAMES:-}
-      # Web 控制台只在本机回环地址监听；节点通道对外
+      # Web 控制台只在本机回环地址监听；节点通道默认对外
       HOST: 127.0.0.1
       PORT: ${EDGEWEIR_HTTP_PORT:-3000}
-      NODE_API_HOST: 0.0.0.0
+      NODE_API_HOST: ${EDGEWEIR_NODE_API_HOST:-0.0.0.0}
       NODE_API_PORT: ${EDGEWEIR_NODE_API_PORT:-8443}
       EDGEWEIR_ANALYTICS: ${EDGEWEIR_ANALYTICS:-lite}
       # 可选外部 ClickHouse；此模板不额外创建分析服务。

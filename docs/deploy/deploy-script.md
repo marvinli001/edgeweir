@@ -52,7 +52,7 @@ sudo bash deploy.sh install
 | --- | --- |
 | 部署目录 | 同时包含 `.env` 与含 `container_name: edgeweir-console` 的编排文件：`compose.yml`、`compose.yaml`、`docker-compose.yml` 或 `docker-compose.yaml` |
 | 模式 | 编排文件含 `network_mode: host` 时为 host，否则为 bundled |
-| 覆盖文件 | 编排文件旁的 `compose.override.yml`（`docker-compose.yml` 对应 `docker-compose.override.yml`，以此类推）存在时一并传给 Compose；自己的改动写在这里，`update` 替换模板时不受影响 |
+| 覆盖文件 | 编排文件旁的 `compose.override.yml`（`docker-compose.yml` 对应 `docker-compose.override.yml`，以此类推）存在时一并传给 Compose；自己的改动写在这里，`update` 替换模板时不受影响。宝塔 / aaPanel 以 `docker compose -f <编排文件>` 执行编排，不读取覆盖文件 |
 | Compose 项目名 | 取自容器 `edgeweir-console` 的 `com.docker.compose.project` 标签；面板以其他名称创建的编排同样适用 |
 | 环境变量 | 调用 Compose 前移除 shell 中与 `.env` 或编排文件同名的变量，以 `.env` 为准；`.env` 经 `--env-file` 传给 Compose，其中的 `COMPOSE_PROFILES`（例如覆盖文件中加了 `analytics` profile 的服务）对每条命令生效 |
 
@@ -213,9 +213,16 @@ host 模式在写入任何文件前检查数据库。检查用 `postgres:18.6-al
 | 同步条件 | bundled 模式，`postgres` 容器在运行，且 `EDGEWEIR_TRUSTED_PROXIES` 为空或为不等于当前网关的单个 IPv4 地址 |
 | 写入值 | `postgres` 容器所在网络的 IPv4 网关 |
 | 不改动 | 值为列表或 CIDR；host 模式（模板默认 `127.0.0.1,::1`） |
-| host 模式启动后 | 节点通道端口只监听回环地址时警告：镜像不支持 `NODE_API_HOST` |
 
 可信代理的含义见 [networking.md](networking.md#可信代理与客户端-ip)。
+
+host 模式启动后按顺序检查节点通道的监听地址，命中一项时警告并停止检查：
+
+| 条件 | 警告 |
+| --- | --- |
+| 覆盖文件设置了 `NODE_API_HOST` | 面板重启或更新编排时不读取覆盖文件，该设置丢失；改在 `.env` 中设置 `EDGEWEIR_NODE_API_HOST` |
+| `.env` 设置了 `EDGEWEIR_NODE_API_HOST`，编排文件不读取它 | 编排文件是较早的模板；按 `./deploy.sh template host` 修改其中 `NODE_API_HOST` 一行 |
+| `EDGEWEIR_NODE_API_HOST`（默认 `0.0.0.0`）不是回环地址，节点通道端口只监听回环地址（没有 `ss` 时跳过） | 镜像不支持 `NODE_API_HOST`；`./deploy.sh update` |
 
 ## self-update
 

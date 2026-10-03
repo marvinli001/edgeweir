@@ -52,7 +52,7 @@ Commands other than `install`, `template`, and `help` look for the deployment di
 | --- | --- |
 | Deployment directory | Contains `.env` and a compose file containing `container_name: edgeweir-console`: `compose.yml`, `compose.yaml`, `docker-compose.yml`, or `docker-compose.yaml` |
 | Mode | host when the compose file contains `network_mode: host`, otherwise bundled |
-| Override file | `compose.override.yml` next to the compose file (`docker-compose.override.yml` for `docker-compose.yml`, and so on) is passed to Compose as well when it exists; local changes go there and survive template replacements by `update` |
+| Override file | `compose.override.yml` next to the compose file (`docker-compose.override.yml` for `docker-compose.yml`, and so on) is passed to Compose as well when it exists; local changes go there and survive template replacements by `update`. BaoTa / aaPanel run the project with `docker compose -f <compose file>` and skip the override file |
 | Compose project name | Taken from the `com.docker.compose.project` label of the `edgeweir-console` container, so projects a panel created under another name work too |
 | Environment | Shell variables named in `.env` or the compose file are removed before Compose runs; `.env` decides. `.env` goes to Compose with `--env-file`, so its `COMPOSE_PROFILES` (for example for an `analytics` service added in the override file) applies to every command |
 
@@ -213,9 +213,16 @@ Interactive only; in unattended mode or without a terminal it aborts; edit `.env
 | Sync condition | bundled mode, the `postgres` container is running, and `EDGEWEIR_TRUSTED_PROXIES` is empty or a single IPv4 address other than the current gateway |
 | Value written | The IPv4 gateway of the network the `postgres` container is on |
 | Left unchanged | Lists or CIDR ranges; host mode (template default `127.0.0.1,::1`) |
-| After a host mode start | Warns when the node channel port listens on loopback only: the image does not support `NODE_API_HOST` |
 
 Meaning of trusted proxies: [networking.en.md](networking.en.md#trusted-proxies-and-client-ip).
+
+After a host mode start, the script checks where the node channel listens, in this order, and stops at the first warning:
+
+| Condition | Warning |
+| --- | --- |
+| The override file sets `NODE_API_HOST` | Restarting or updating the project in the panel skips the override file and loses the setting; set `EDGEWEIR_NODE_API_HOST` in `.env` instead |
+| `.env` sets `EDGEWEIR_NODE_API_HOST` and the compose file does not read it | The compose file is an older template; change its `NODE_API_HOST` line as in `./deploy.sh template host` |
+| `EDGEWEIR_NODE_API_HOST` (default `0.0.0.0`) is not a loopback address, and the node channel port listens on loopback only (skipped without `ss`) | The image does not support `NODE_API_HOST`; `./deploy.sh update` |
 
 ## self-update
 

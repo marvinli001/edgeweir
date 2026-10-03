@@ -90,7 +90,7 @@ ClickHouse 变量仅在 `EDGEWEIR_ANALYTICS=clickhouse` 时使用。`compose.yml
 | `ROLE` | `all` | 进程角色：`all`、`app`、`worker`。各角色运行的组件见[部署概览](../deploy/README.md#进程角色)。 |
 | `HOST` | `0.0.0.0` | Web 与 API 的监听地址。`compose.baota-host.yml`：`127.0.0.1`。 |
 | `PORT` | `3000` | Web 与 API 的监听端口，1–65535。 |
-| `NODE_API_HOST` | `HOST` 的值 | 节点通道的监听地址。`compose.baota-host.yml`：`0.0.0.0`。 |
+| `NODE_API_HOST` | `HOST` 的值 | 节点通道的监听地址。`compose.baota-host.yml`：取自 `EDGEWEIR_NODE_API_HOST`，默认 `0.0.0.0`。 |
 | `NODE_API_PORT` | `8443` | 节点通道的监听端口。 |
 | `LOG_LEVEL` | `info` | `debug`、`info`、`warn`、`error`。日志每行一个 JSON 对象。 |
 | `NODE_ENV` | `development`（镜像：`production`） | `development`、`production`、`test`。`production` 启用认证接口限速，计数存于 PostgreSQL。 |
@@ -107,6 +107,7 @@ Compose 在宿主机读取以下变量（`.env` 或 shell 环境），用于插�
 | `EDGEWEIR_VERSION` | `latest` | 拉取的镜像 tag：`ghcr.io/marvinli001/edgeweir:<EDGEWEIR_VERSION>`。滚动 tag 格式 `<YYYYMMDD>-<commit>`，可附加 `@sha256:<digest>`。见[版本、升级与回滚](../deploy/upgrade.md)。 |
 | `EDGEWEIR_HTTP_PORT` | `3000` | Web 控制台的宿主机端口。`compose.yml`：端口发布规格，可带绑定地址，默认 `127.0.0.1:3000`（Docker 发布的端口绕过 ufw、firewalld），`3000` 发布到所有接口。`compose.baota.yml`：仅数字，绑定 `127.0.0.1`。`compose.baota-host.yml`：仅数字，作为 `PORT`。 |
 | `EDGEWEIR_NODE_API_PORT` | `8443` | 节点通道的宿主机端口。`compose.yml`、`compose.baota.yml`：端口发布规格，可带绑定地址。`compose.baota-host.yml`：仅数字，作为 `NODE_API_PORT`。 |
+| `EDGEWEIR_NODE_API_HOST` | `0.0.0.0` | 只用于 `compose.baota-host.yml`：节点通道的监听地址，作为 `NODE_API_HOST`；同一主机上的 nginx `stream` 透传时设为 `127.0.0.1`。 |
 | `POSTGRES_PASSWORD` | 无 | 内置 PostgreSQL 的密码，`compose.yml`、`compose.baota.yml` 用它拼出 `DATABASE_URL`；未设置时这两个编排拒绝启动（早先未设置的部署用的是 `edgeweir`）。须 URL 安全：`openssl rand -hex 24`。PostgreSQL 镜像只在数据目录为空时应用此值，之后修改不改变已有密码。 |
 | `COMPOSE_PROFILES` | 空 | Compose 启用的 profile，逗号分隔。`analytics`：`compose.yml` 的 ClickHouse 服务；写在 `.env` 中时每条 `docker compose` 与 `deploy.sh` 命令都包含它，无需 `--profile`。 |
 | `CLICKHOUSE_PASSWORD` | `edgeweir` | `EDGEWEIR_CLICKHOUSE_PASSWORD` 未设置时的 ClickHouse 密码，控制台与 `analytics` profile 的 ClickHouse 容器共用。 |
@@ -120,4 +121,4 @@ Compose 在宿主机读取以下变量（`.env` 或 shell 环境），用于插�
 | --- | --- | --- |
 | `compose.yml` | `ROLE=all` | [从文件读取](#从文件读取)的 `_FILE` 变量、`HOST`、`PORT`、`NODE_API_HOST`、`NODE_API_PORT`、`NODE_ENV`、`EDGEWEIR_WEB_DIST`、`EDGEWEIR_CERTD_BIN`、`EDGEWEIR_DNS_TEST_ENDPOINT`、`EDGEWEIR_VERSION` |
 | `compose.baota.yml` | `ROLE=all` | 同 `compose.yml`，另加 `LOG_LEVEL`、`EDGEWEIR_DOWNLOADS_DIR` |
-| `compose.baota-host.yml` | `ROLE=all`、`HOST=127.0.0.1`、`NODE_API_HOST=0.0.0.0`；`PORT`、`NODE_API_PORT` 取自宿主机端口变量 | [从文件读取](#从文件读取)的 `_FILE` 变量、`NODE_ENV`、`EDGEWEIR_WEB_DIST`、`EDGEWEIR_CERTD_BIN`、`EDGEWEIR_DNS_TEST_ENDPOINT`、`EDGEWEIR_VERSION`、`LOG_LEVEL`、`EDGEWEIR_DOWNLOADS_DIR` |
+| `compose.baota-host.yml` | `ROLE=all`、`HOST=127.0.0.1`；`PORT`、`NODE_API_HOST`、`NODE_API_PORT` 取自宿主机变量 `EDGEWEIR_HTTP_PORT`、`EDGEWEIR_NODE_API_HOST`（默认 `0.0.0.0`）、`EDGEWEIR_NODE_API_PORT` | [从文件读取](#从文件读取)的 `_FILE` 变量、`NODE_ENV`、`EDGEWEIR_WEB_DIST`、`EDGEWEIR_CERTD_BIN`、`EDGEWEIR_DNS_TEST_ENDPOINT`、`EDGEWEIR_VERSION`、`LOG_LEVEL`、`EDGEWEIR_DOWNLOADS_DIR` |

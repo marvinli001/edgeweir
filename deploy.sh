@@ -522,14 +522,34 @@ up_and_wait() {
     compose logs --no-color --tail=40 console >&2 || true
     die "启动失败。修正 .env 后运行 ./deploy.sh start 重试。"
   fi
-  if [[ $(deploy_mode) == host ]]; then
-    local port addrs
-    port=$(env_get EDGEWEIR_NODE_API_PORT)
-    addrs=$(listen_addresses "${port:-8443}")
-    if [[ -n $addrs ]] && ! grep -qvE '^(127\.|\[::1\]|::1)' <<<"$addrs"; then
-      warn "节点通道只监听在本机回环地址（${addrs//$'\n'/ }）：镜像版本不支持 NODE_API_HOST，节点无法连接。"
-      info "运行 ./deploy.sh update 升级到最新版本。"
-    fi
+  if [[ $(deploy_mode) == host ]]; then check_node_listen; fi
+}
+
+# check_node_listen: host mode, after a start. The node channel listens on
+# EDGEWEIR_NODE_API_HOST from .env (default 0.0.0.0; 127.0.0.1 behind an nginx
+# stream). Panels run Compose with -f and skip the override file, so a
+# NODE_API_HOST set there is lost on a restart from the panel.
+check_node_listen() {
+  local host override port addrs
+  host=$(env_get EDGEWEIR_NODE_API_HOST)
+  override=$(override_file)
+  if [[ -f $DIR/$override ]] && grep -qE '^[^#]*(^|[^A-Za-z0-9_])NODE_API_HOST([^A-Za-z0-9_]|$)' "$DIR/$override"; then
+    warn "${override} 设置了 NODE_API_HOST：在面板中重启或更新编排时不读取该文件，这项设置会丢失。"
+    info "改在 .env 中设置 EDGEWEIR_NODE_API_HOST，并从 ${override} 删除 NODE_API_HOST。"
+    return 0
+  fi
+  if [[ -n $host ]] && ! grep -qE '^[^#]*EDGEWEIR_NODE_API_HOST([^A-Za-z0-9_]|$)' "$DIR/$COMPOSE_FILE"; then
+    warn "${COMPOSE_FILE} 是较早的模板，不读取 .env 中的 EDGEWEIR_NODE_API_HOST。"
+    info "按 ./deploy.sh template host 修改其中 NODE_API_HOST 一行，再运行 ./deploy.sh start。"
+    return 0
+  fi
+  # Loopback is what .env asked for.
+  is_loopback "${host:-0.0.0.0}" && return 0
+  port=$(env_get EDGEWEIR_NODE_API_PORT)
+  addrs=$(listen_addresses "${port:-8443}")
+  if [[ -n $addrs ]] && ! grep -qvE '^(127\.|\[::1\]|::1)' <<<"$addrs"; then
+    warn "节点通道只监听在本机回环地址（${addrs//$'\n'/ }）：镜像版本不支持 NODE_API_HOST，节点无法连接。"
+    info "运行 ./deploy.sh update 升级到最新版本。"
   fi
 }
 
@@ -546,8 +566,10 @@ template_host() {
 #     宝塔「数据库 → PgSQL」装在本机、只监听回环地址的 PostgreSQL 无需改 listen_addresses
 #     和 pg_hba；云数据库照常填它的地址（sslmode=verify-full）。
 #   - host 网络下没有端口映射：Web 控制台自己只监听 127.0.0.1:EDGEWEIR_HTTP_PORT（交给
-#     宝塔站点反向代理），节点通道监听 0.0.0.0:EDGEWEIR_NODE_API_PORT（直接对外，TLS 由
-#     控制台自己终结，不能交给宝塔 nginx）。这里的两个端口只能是数字。
+#     宝塔站点反向代理），节点通道监听 EDGEWEIR_NODE_API_HOST:EDGEWEIR_NODE_API_PORT，
+#     默认 0.0.0.0 直接对外（TLS 由控制台自己终结，不能交给宝塔 nginx）；nginx stream
+#     透传时在 .env 设 EDGEWEIR_NODE_API_HOST=127.0.0.1（面板以 -f 运行编排，不读取
+#     compose.override.yml）。这里的两个端口只能是数字。
 #   - 宝塔 nginx 从 127.0.0.1 转发，EDGEWEIR_TRUSTED_PROXIES 默认只信任本机回环地址。
 # .env 至少需要 DATABASE_URL、EDGEWEIR_MASTER_KEY、EDGEWEIR_PUBLIC_URL（连接串也可以放进文件，
 # 在 compose.override.yml 里挂载并设置 DATABASE_URL_FILE）；镜像 tag 用 EDGEWEIR_VERSION
@@ -572,10 +594,10 @@ services:
       # 节点连接控制台的地址，例如 https://cdn-admin.example.com:8443
       EDGEWEIR_NODE_API_URL: ${EDGEWEIR_NODE_API_URL:-}
       EDGEWEIR_NODE_API_HOSTNAMES: ${EDGEWEIR_NODE_API_HOSTNAMES:-}
-      # Web 控制台只在本机回环地址监听；节点通道对外
+      # Web 控制台只在本机回环地址监听；节点通道默认对外
       HOST: 127.0.0.1
       PORT: ${EDGEWEIR_HTTP_PORT:-3000}
-      NODE_API_HOST: 0.0.0.0
+      NODE_API_HOST: ${EDGEWEIR_NODE_API_HOST:-0.0.0.0}
       NODE_API_PORT: ${EDGEWEIR_NODE_API_PORT:-8443}
       EDGEWEIR_ANALYTICS: ${EDGEWEIR_ANALYTICS:-lite}
       # 可选外部 ClickHouse；此模板不额外创建分析服务。
