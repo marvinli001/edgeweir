@@ -10,7 +10,7 @@ Deploy the console on bunny.net Magic Containers from the console image, with an
 | bunny CLI | Optional: `npm install -g @bunny.net/cli` (0.18) after `bunny login`; usage and limits in [Methods](#methods) |
 | Console image | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`, public; Magic Containers runs linux/amd64 only, which the image includes. Tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
 | PostgreSQL | PostgreSQL 18 reachable from the container. When it filters by source address, allow the addresses listed at `https://api.bunny.net/mc/nodes/plain`; the list changes. bunny Database is libSQL and does not replace PostgreSQL |
-| Public address | One Anycast IPv4 (USD 2 per month); Anycast has no IPv6 |
+| Public address | One Anycast IPv4 (USD 2 per month); Anycast has no IPv6. It can be added after deployment, see [Adding the Anycast IP later](#adding-the-anycast-ip-later) |
 | Master key | Generated with `openssl rand -base64 32`; stored outside bunny.net and apart from database backups |
 | Always on | Minimum of 1 instance; the platform does not scale to zero |
 | Local commands | `openssl`, `curl` |
@@ -21,7 +21,7 @@ Deploy the console on bunny.net Magic Containers from the console image, with an
 | --- | --- | --- |
 | App `edgeweir-console`, container `edgeweir`, 1 region, 1 instance | — | `ROLE=all` (image default): web UI, API, node channel, pg-boss worker |
 | CDN endpoint: host name `mc-<id>.bunny.run`, backed by the pull zone `mc-<id>` (system host name `mc-<id>.b-cdn.net`) | Container port 3000 | HTTPS terminated at the bunny.net edge: browsers, `/api/v1`, `/install.sh`, `/healthz` |
-| Anycast endpoint: 8443/TCP on the Anycast IPv4 | Container port 8443 | Node channel; forwarded as TCP with the client source address kept, the console terminates TLS and mTLS |
+| Anycast endpoint: 8443/TCP on the Anycast IPv4 | Container port 8443 | Node channel; forwarded as TCP, the console terminates TLS and mTLS |
 | External PostgreSQL 18 | Environment variable `DATABASE_URL` | Database |
 
 General rules for ports and the node channel certificate: [Ports, reverse proxy, and trusted proxies](networking.en.md).
@@ -70,9 +70,9 @@ Use the output as is. Keep `edgeweir-master-key` offline and apart from database
    ```
 
 5. Under **Region**, pick one region near PostgreSQL that supports Anycast; set **App name** to `edgeweir-console`; click **Deploy**.
-6. In the app's **Regions and Scaling**, set the minimum and maximum instances to 1 and add no regions.
+6. In the app's **Regions and Scaling**, set the minimum and maximum instances to 1 and keep this single region: autoprovisioning starts instances in regions with growing demand.
 
-The console still lacks `EDGEWEIR_PUBLIC_URL` at this point: it fails to start and the platform keeps restarting it until step 3.
+The console still lacks `EDGEWEIR_PUBLIC_URL` at this point: it fails to start and the platform keeps restarting it until step 3. Do step 3 soon: restarts have a deadline, after which the platform removes the instance.
 
 bunny CLI: create `bunny.jsonc` in an empty directory and adjust `regions` and the image tag:
 
@@ -107,10 +107,10 @@ bunny CLI: create `bunny.jsonc` in an empty directory and adjust `regions` and t
 In that directory run:
 
 ```bash
-bunny apps deploy
+bunny apps deploy ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
 ```
 
-The first run creates the app, writes `.bunny/app.json` (the app ID), and deploys. When the CLI asks for `ghcr.io` credentials, choose a public image.
+Pass the image on the first run: it creates the app, writes `.bunny/app.json` (the app ID), and deploys. When the CLI asks `Is ghcr.io public, or do you need credentials?`, choose **Public**. Without an image the CLI redeploys from `bunny.jsonc` and does not ask about the registry.
 
 ## 3. Set variables
 
@@ -120,7 +120,7 @@ The first run creates the app, writes `.bunny/app.json` (the app ID), and deploy
    bunny apps endpoints list
    ```
 
-   The CDN endpoint is `mc-<id>.bunny.run`; the Anycast endpoint is `<Anycast IP>:8443`.
+   The CDN endpoint is `mc-<id>.bunny.run` (the CLI prints it as `http://…` when `ssl` is `false`; the variables still use `https://`); the Anycast endpoint is `<Anycast IP>:8443`.
 2. In the app's **Container Settings → Edit → Environment Variables**, complete the variables, click **Update Container**, then **Save Changes**:
 
    ```ini
@@ -130,17 +130,19 @@ The first run creates the app, writes `.bunny/app.json` (the app ID), and deploy
    EDGEWEIR_NODE_API_URL=https://<Anycast IP>:8443
    ```
 
+`EDGEWEIR_NODE_API_URL` can also stay unset: after setup, enter `https://<Anycast IP>:8443` under "Node channel" in **System settings**, which applies on saving without a rolling update.
+
 bunny CLI: write the four lines above to `.env.bunny` (`umask 077`), then:
 
 ```bash
 bunny apps env push .env.bunny --container edgeweir
 ```
 
-Changing variables starts a rolling update. Magic Containers has no secret storage: values are shown in plain text in the Dashboard, the API, and `bunny apps env pull`. Each variable is described in [Variables](#variables).
+Changing variables starts a rolling update; `bunny apps env push` merges with the existing variables, and with `--replace` drops those missing from the file. Magic Containers has no secret storage: values are shown in plain text in the Dashboard, the API, and `bunny apps env pull`. Each variable is described in [Variables](#variables).
 
 ## 4. Health checks
 
-In the app's **Container Settings → Edit → Monitoring**, enable all three checks with type **HTTP GET**, path `/healthz`, port `3000`, and click **Update Container**.
+In the app's **Container Settings → Edit → Monitoring**, enable all three checks with type **HTTP GET**, path `/healthz`, port `3000`, click **Update Container**, then **Save Changes**. When the Dashboard lacks a parameter of the table below, use `probes.json` instead: with the API defaults the startup check fails after about 40 seconds, less than the 60 seconds the console waits for PostgreSQL.
 
 | Check | Effect | Suggested parameters |
 | --- | --- | --- |
@@ -205,7 +207,7 @@ Without that line, restart the app (the app's **Restart**, or `bunny apps restar
 | `DATABASE_URL` | PostgreSQL 18 connection string | Required. |
 | `EDGEWEIR_MASTER_KEY` | Output of `openssl rand -base64 32` | Required. |
 | `EDGEWEIR_PUBLIC_URL` | `https://mc-<id>.bunny.run` | Required. Change to your domain when you use a custom domain. |
-| `EDGEWEIR_NODE_API_URL` | `https://<Anycast IP>:8443` | Required: the default `https://<public host>:8443` points at the CDN and is unreachable. The host name or IP is added to the node channel certificate. |
+| `EDGEWEIR_NODE_API_URL` | `https://<Anycast IP>:8443` | Required while no URL is saved under "Node channel" in **System settings**: the default `https://<public host>:8443` points at the CDN and is unreachable. The host name or IP is added to the node channel certificate. |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | Empty | Extra names for the node channel certificate, comma-separated. |
 | `EDGEWEIR_TRUSTED_PROXIES` | Empty, or the bunny.net edge server addresses | See [Limits](#limits). |
 | `EDGEWEIR_VERSION` | Not set | The running version built into the image; the image tag sets it. |
@@ -226,7 +228,7 @@ The value of `EDGEWEIR_TRUSTED_PROXIES` is built from the two bunny.net edge ser
 | --- | --- | --- |
 | App | The app's **Overview**; `bunny apps show` | Status Active, 1 instance |
 | Web and API | `curl -fsS https://mc-<id>.bunny.run/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
-| Cache | `curl -sI https://mc-<id>.bunny.run/api/v1/system/status`, twice | `cdn-cache: MISS` both times |
+| Cache | `curl -sI https://mc-<id>.bunny.run/api/v1/system/status`, twice | Never `cdn-cache: HIT` (`MISS` or `BYPASS`) |
 | HTTPS | `curl -sI http://mc-<id>.bunny.run/healthz` | `301` with an HTTPS `Location` |
 | Node channel TLS | The `openssl` command below | Issuer `Edgeweir Node Channel CA`, SAN includes the Anycast IP |
 | Node channel URL | **System settings**, "Node channel" | `https://<Anycast IP>:8443` |
@@ -247,18 +249,36 @@ Expected:
 
 Any other issuer means a middlebox terminated TLS.
 
+## Adding the Anycast IP later
+
+The app can start with the CDN endpoint only and `EDGEWEIR_NODE_API_URL` unset; "Node channel" in **System settings** is then `https://mc-<id>.bunny.run:8443`, the connection check shows "The console cannot connect to this URL", and nodes cannot enroll. To add nodes:
+
+1. Check that the app's region supports Anycast: the Anycast column of `bunny apps regions list`.
+2. Add an Anycast endpoint in the app's **Endpoints**: container port 8443, public port 8443. Endpoint changes apply at once without a rolling update and do not restart the console; the Anycast IP is billed from then on. bunny CLI:
+
+   ```bash
+   bunny apps endpoints add --type anycast --container-port 8443 --public-port 8443 --container edgeweir
+   ```
+
+   With `bunny.jsonc`, add the same endpoint to the file, or the next `bunny apps deploy` removes it.
+3. Read the Anycast IP in the app's **Endpoints**, or with `bunny apps endpoints list`.
+4. In the console, **System settings** → "Node channel", enter `https://<Anycast IP>:8443`, or a name pointing at it (see [Custom domains](#custom-domains)), and save. It applies at once: the node channel certificate adds the name, the connection check shows "Reachable", and new install commands carry the URL.
+5. Verify with the `openssl` command of [Verification](#verification).
+
 ## Custom domains
 
 Do this before enrolling nodes.
 
 1. Web console: pull zone `mc-<id>` → **General → Hostnames**, add `console.example.com`; add the `CNAME` the page shows (`mc-<id>.b-cdn.net`) in DNS; click **Verify & Activate SSL**, then turn on **Force SSL** for that host name.
-2. Node channel: pull zones do not forward TCP. Add an `A` record for `nodes.example.com` pointing at the Anycast IP.
+2. Node channel: pull zones do not forward TCP. Add an `A` record for `nodes.example.com` pointing at the Anycast IP; on Cloudflare, turn the proxy off (DNS only). Nodes enrolled with the name only need this record changed when the Anycast IP changes.
 3. Change the variables (starts a rolling update):
 
    ```ini
    EDGEWEIR_PUBLIC_URL=https://console.example.com
    EDGEWEIR_NODE_API_URL=https://nodes.example.com:8443
    ```
+
+   The node channel URL can instead be changed only under "Node channel" in **System settings** to `https://nodes.example.com:8443`, without a rolling update; once a URL is saved there, `EDGEWEIR_NODE_API_URL` has no effect.
 
 4. Verify: run the `curl` commands of [Verification](#verification) with the new domain, and the `openssl` command with `nodes.example.com:8443` and `-servername nodes.example.com`; the SAN includes `DNS:nodes.example.com`.
 
@@ -290,10 +310,11 @@ bunny api PATCH /mc/apps/<app ID>/containers/<container ID> --body '{"imageTag":
 | --- | --- | --- |
 | Client IP | The TCP peer of CDN requests is a bunny.net edge server, listed publicly at `https://api.bunny.net/system/edgeserverlist/plain` and `https://api.bunny.net/system/edgeserverlist/ipv6/plain` (900+ entries that change); the edge passes the visitor address as a single `X-Forwarded-For` and `X-Real-IP` and drops those headers when visitors send them | With `EDGEWEIR_TRUSTED_PROXIES` empty, audit log IPs and sign-in rate limits use the edge address, see [Trusted proxies and client IP](networking.en.md#trusted-proxies-and-client-ip). With both lists set (comma-joined, about 17 KB) they use the visitor address; update the variable when the lists change, requests from new edges use the edge address until then |
 | Anycast | IPv4 only | Nodes without IPv4 cannot reach the node channel |
+| Anycast IP | Fixed while the endpoint exists; removing and adding the endpoint again, or a `bunny apps deploy` that rewrites the endpoints from `bunny.jsonc`, may give a new IP | Enrolled nodes keep the URL they enrolled with: use a name pointing at the Anycast IP as the node channel URL, so an IP change only needs a DNS change |
 | Variables | Shown in plain text in the Dashboard, the API, and the CLI | Keep the master key outside bunny.net as well |
 | CLI 0.18 | `bunny apps deploy` rewrites the container from `bunny.jsonc`: removes health checks and endpoints the file does not list; an `env` block replaces all variables | Use the Dashboard or `bunny api` for health checks and upgrades |
-| Rolling update | After a variable, image, or health check change, a new instance starts and the old one stops once health checks pass; it gets SIGTERM and 30 seconds to exit | Old and new versions run side by side briefly; node channel connections on the old instance drop and reconnect |
+| Rolling update | After a variable, image, or health check change, a new instance starts and the old one stops once health checks pass; endpoint changes do not start one. The old one gets SIGTERM and 30 seconds to exit (1 second for apps created before 1 February 2026; adjustable with `terminationGracePeriodSeconds` in the API). A new instance not running within 10 minutes aborts the update and keeps the old one. Apps with persistent volumes stop the old instance before starting the new one | Old and new versions run side by side briefly; node channel connections on the old instance drop and reconnect. Updating `EDGEWEIR_TRUSTED_PROXIES` is a variable change too. A single instance with a persistent volume is briefly down during an update |
 | Regions | An app can run in several regions; Anycast routes nodes to the nearest one | Every region connects to the same PostgreSQL; multi-instance conditions in [Deployment overview](README.en.md#scaling) |
-| Outbound ports | 25, 465, 587, and 2525 are blocked by default | The SMTP channel of alert notifications cannot send; ask bunny.net support to open the ports |
-| Billing | Minimum of 1 instance; the Anycast IP is billed monthly | The Anycast IP is billed even after the app is undeployed |
+| Mail ports | 25, 465, 587, and 2525 are restricted by default (inbound and outbound) | The SMTP channel of alert notifications cannot send; ask bunny.net support to open the ports |
+| Billing | Minimum of 1 instance; the Anycast IP is billed monthly, prorated for the time it is attached | The Anycast IP is billed even after the app is undeployed, until the endpoint is removed |
 | `/downloads/*` | The container has no downloads mirror; `EDGEWEIR_DOWNLOADS_DIR` is unset | Returns 404; `install.sh` downloads from GitHub, see [Adding nodes](nodes.en.md#downloads-mirror) |

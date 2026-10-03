@@ -24,7 +24,7 @@ The image `ghcr.io/marvinli001/edgeweir` is public; the panel needs no registry 
 | Item | Requirement | BaoTa Panel | aaPanel |
 | --- | --- | --- | --- |
 | Docker | Docker Engine and Compose v2 (`docker compose`) | Install on the **Docker** page | Install on the **Docker** page |
-| Firewall | Open the node channel port (default 8443/TCP); do not open web port 3000 | **安全 → 系统防火墙 → 添加端口规则**: protocol TCP, source all IPs, policy allow | **Security → Firewall → Add Port Rule**: Protocol TCP, Source IP All, Strategy Allow |
+| Firewall | Open the node channel port (default 8443/TCP); do not open web port 3000. In bundled mode Docker publishes the ports past the system firewall; to limit sources, use the cloud security group | **安全 → 系统防火墙 → 添加端口规则**: protocol TCP, source all IPs, policy allow | **Security → Firewall → Add Port Rule**: Protocol TCP, Source IP All, Strategy Allow |
 | Cloud security group | Open the same port | — | — |
 | Domain | Console domain (e.g. `cdn-admin.example.com`) resolves to this host | — | — |
 | Database (host) | PostgreSQL 18; an empty database and its owner user; a cloud database allow list that includes this host's IP | **数据库 → PgSQL → 添加数据库** | **Databases → PgSQL → Add DB** |
@@ -140,7 +140,17 @@ Node release source and origin allow list are configured in **System settings**,
    ./deploy.sh start
    ```
 
-3. Add the `stream` block (`listen 8443;`, `proxy_pass 127.0.0.1:18443;`) to `/www/server/nginx/conf/nginx.conf` outside the `http { }` block, then test and reload:
+3. The panel's `/www/server/nginx/conf/nginx.conf` already has a `stream { }` block that includes `/www/server/panel/vhost/nginx/tcp/*.conf`; do not add another `stream` block, or `nginx -t` fails with `"stream" directive is duplicate`. Create `/www/server/panel/vhost/nginx/tcp/edgeweir.conf`:
+
+   ```nginx title="/www/server/panel/vhost/nginx/tcp/edgeweir.conf"
+   server {
+     listen 8443;
+     proxy_pass 127.0.0.1:18443;
+     proxy_timeout 1h;
+   }
+   ```
+
+   When the node channel's DNS name has an AAAA record, add `listen [::]:8443;` as well. Test and reload:
 
    ```bash
    /www/server/nginx/sbin/nginx -t && /www/server/nginx/sbin/nginx -s reload

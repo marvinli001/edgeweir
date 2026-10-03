@@ -10,7 +10,7 @@
 | bunny CLI | 可选：`npm install -g @bunny.net/cli`（0.18），已执行 `bunny login`；用法与限制见 [操作方式](#操作方式) |
 | 控制台镜像 | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`，公开拉取；Magic Containers 只运行 linux/amd64，镜像包含该架构。tag 规则见 [版本、升级与回滚](upgrade.md) |
 | PostgreSQL | PostgreSQL 18，容器可达。按来源地址放行时，放行 `https://api.bunny.net/mc/nodes/plain` 列出的地址，该列表会变化。bunny Database 是 libSQL，不能替代 PostgreSQL |
-| 公网地址 | 一个 Anycast IPv4（每月 2 美元）；Anycast 不提供 IPv6 |
+| 公网地址 | 一个 Anycast IPv4（每月 2 美元）；Anycast 不提供 IPv6。可以在部署后再添加，见 [后加 Anycast IP](#后加-anycast-ip) |
 | 主密钥 | `openssl rand -base64 32` 生成；保存在 bunny.net 之外，与数据库备份分开 |
 | 常驻运行 | 最小实例数 1，平台不会缩容到零 |
 | 本机命令 | `openssl`、`curl` |
@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | 应用 `edgeweir-console`，容器 `edgeweir`，1 个区域、1 个实例 | — | `ROLE=all`（镜像默认）：Web UI、API、节点通道、pg-boss worker |
 | CDN 端点：主机名 `mc-<id>.bunny.run`，背后是 pull zone `mc-<id>`（系统主机名 `mc-<id>.b-cdn.net`） | 容器端口 3000 | HTTPS，bunny.net 边缘终结 TLS：浏览器、`/api/v1`、`/install.sh`、`/healthz` |
-| Anycast 端点：Anycast IPv4 的 8443/TCP | 容器端口 8443 | 节点通道；按 TCP 转发并保留客户端源地址，TLS 与 mTLS 由控制台终结 |
+| Anycast 端点：Anycast IPv4 的 8443/TCP | 容器端口 8443 | 节点通道；按 TCP 转发，TLS 与 mTLS 由控制台终结 |
 | 外部 PostgreSQL 18 | 环境变量 `DATABASE_URL` | 数据库 |
 
 端口与节点通道证书的通用规则见 [端口、反向代理与可信代理](networking.md)。
@@ -70,9 +70,9 @@ openssl rand -base64 32 > edgeweir-master-key
    ```
 
 5. **Region** 选 PostgreSQL 附近、支持 Anycast 的一个区域；**App name** 填 `edgeweir-console`；点击 **Deploy**。
-6. 应用 **Regions and Scaling**：最小与最大实例数均为 1，不添加区域。
+6. 应用 **Regions and Scaling**：最小与最大实例数均为 1，只保留这一个区域：自动扩展会在需求增加的区域启动新实例。
 
-此时控制台缺少 `EDGEWEIR_PUBLIC_URL`，启动失败并被平台反复重启，第 3 步后恢复。
+此时控制台缺少 `EDGEWEIR_PUBLIC_URL`，启动失败，平台反复重启它，第 3 步后恢复。尽快完成第 3 步：重启有期限，到期后平台移除该实例。
 
 bunny CLI：在空目录中创建 `bunny.jsonc`，按实际修改 `regions` 与镜像 tag：
 
@@ -104,13 +104,13 @@ bunny CLI：在空目录中创建 `bunny.jsonc`，按实际修改 `regions` 与�
 | `"ssl": false` | CDN 以 HTTP 连接容器的 3000。默认 `true` 时以 HTTPS 连接，控制台不响应 |
 | 无 `env` | 容器声明 `env` 时，每次 `bunny apps deploy` 用它替换全部变量；变量用第 3 步的 `bunny apps env push` 设置 |
 
-在该目录执行：
+在该目录执行，首次带上镜像：
 
 ```bash
-bunny apps deploy
+bunny apps deploy ghcr.io/marvinli001/edgeweir:20260929-a1b2c3d
 ```
 
-首次执行创建应用、写入 `.bunny/app.json`（应用 ID）并部署。CLI 询问 `ghcr.io` 的凭据时选择公开镜像。
+首次执行创建应用、写入 `.bunny/app.json`（应用 ID）并部署。CLI 询问 `Is ghcr.io public, or do you need credentials?` 时选择 **Public**。不带镜像时 CLI 按 `bunny.jsonc` 重新部署，不询问镜像仓库。
 
 ## 3. 设置变量
 
@@ -120,7 +120,7 @@ bunny apps deploy
    bunny apps endpoints list
    ```
 
-   CDN 端点为 `mc-<id>.bunny.run`；Anycast 端点为 `<Anycast IP>:8443`。
+   CDN 端点为 `mc-<id>.bunny.run`（`ssl` 为 `false` 时 CLI 显示为 `http://…`，变量中仍用 `https://`）；Anycast 端点为 `<Anycast IP>:8443`。
 2. 应用 **Container Settings → Edit → Environment Variables**，补全后点击 **Update Container**，再 **Save Changes**：
 
    ```ini
@@ -130,17 +130,19 @@ bunny apps deploy
    EDGEWEIR_NODE_API_URL=https://<Anycast IP>:8443
    ```
 
+`EDGEWEIR_NODE_API_URL` 也可以不设置：初始化后在 **系统设置** 的「节点通道」填写 `https://<Anycast IP>:8443`，保存即生效，不触发滚动更新。
+
 bunny CLI：将上面四行写入 `.env.bunny`（`umask 077`），然后：
 
 ```bash
 bunny apps env push .env.bunny --container edgeweir
 ```
 
-变量修改触发滚动更新。Magic Containers 没有 secret 存储：变量值以明文显示在 Dashboard、API 与 `bunny apps env pull` 中。各变量见 [变量](#变量)。
+变量修改触发滚动更新；`bunny apps env push` 与已有变量合并，加 `--replace` 时删除文件中没有的变量。Magic Containers 没有 secret 存储：变量值以明文显示在 Dashboard、API 与 `bunny apps env pull` 中。各变量见 [变量](#变量)。
 
 ## 4. 健康检查
 
-应用 **Container Settings → Edit → Monitoring**，勾选三项，类型 **HTTP GET**，路径 `/healthz`，端口 `3000`，点击 **Update Container**。
+应用 **Container Settings → Edit → Monitoring**，勾选三项，类型 **HTTP GET**，路径 `/healthz`，端口 `3000`，点击 **Update Container**，再 **Save Changes**。Dashboard 不提供下表某项参数时改用下方 `probes.json`：API 的默认值约 40 秒内启动检查不通过即失败，短于控制台等待 PostgreSQL 的 60 秒。
 
 | 检查 | 作用 | 建议参数 |
 | --- | --- | --- |
@@ -205,7 +207,7 @@ bunny api POST /pullzone/<pull zone ID>/setForceSSL --body '{"Hostname":"mc-<id>
 | `DATABASE_URL` | PostgreSQL 18 连接串 | 必填。 |
 | `EDGEWEIR_MASTER_KEY` | `openssl rand -base64 32` 的输出 | 必填。 |
 | `EDGEWEIR_PUBLIC_URL` | `https://mc-<id>.bunny.run` | 必填。使用自定义域名时改为该域名。 |
-| `EDGEWEIR_NODE_API_URL` | `https://<Anycast IP>:8443` | 必填：默认值 `https://<公开域名>:8443` 指向 CDN，不可达。主机名或 IP 自动写入节点通道证书。 |
+| `EDGEWEIR_NODE_API_URL` | `https://<Anycast IP>:8443` | **系统设置** 的「节点通道」没有保存地址时必填：默认值 `https://<公开域名>:8443` 指向 CDN，不可达。主机名或 IP 自动写入节点通道证书。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | 空 | 节点通道证书的额外名称，逗号分隔。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | 空，或 bunny.net 边缘服务器地址 | 见 [限制](#限制)。 |
 | `EDGEWEIR_VERSION` | 不设置 | 镜像内置的运行版本；版本由镜像 tag 决定。 |
@@ -226,7 +228,7 @@ bunny api POST /pullzone/<pull zone ID>/setForceSSL --body '{"Hostname":"mc-<id>
 | --- | --- | --- |
 | 应用 | 应用 **Overview**；`bunny apps show` | 状态 Active，1 个实例 |
 | Web 与 API | `curl -fsS https://mc-<id>.bunny.run/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
-| 缓存 | `curl -sI https://mc-<id>.bunny.run/api/v1/system/status` 执行两次 | 两次均为 `cdn-cache: MISS` |
+| 缓存 | `curl -sI https://mc-<id>.bunny.run/api/v1/system/status` 执行两次 | 两次都不是 `cdn-cache: HIT`（为 `MISS` 或 `BYPASS`） |
 | HTTPS | `curl -sI http://mc-<id>.bunny.run/healthz` | `301`，`Location` 为 HTTPS 地址 |
 | 节点通道 TLS | 下方 `openssl` 命令 | 签发者为 `Edgeweir Node Channel CA`，SAN 含 Anycast IP |
 | 节点通道地址 | **系统设置** 的「节点通道」 | `https://<Anycast IP>:8443` |
@@ -247,12 +249,28 @@ openssl s_client -connect <Anycast IP>:8443 </dev/null 2>/dev/null \
 
 出现其他签发者表示 TLS 被中间设备终结。
 
+## 后加 Anycast IP
+
+部署时可以只建 CDN 端点、不设置 `EDGEWEIR_NODE_API_URL`；此时 **系统设置** 的「节点通道」为 `https://mc-<id>.bunny.run:8443`，连接检查显示「控制台无法连接该地址」，节点无法注册。需要接入节点时：
+
+1. 确认应用所在区域支持 Anycast：`bunny apps regions list` 的 Anycast 列。
+2. 应用 **Endpoints** 添加 Anycast 端点：容器端口 8443，对外端口 8443。端点修改立即生效，不触发滚动更新，不重启控制台；Anycast IP 从此计费。bunny CLI：
+
+   ```bash
+   bunny apps endpoints add --type anycast --container-port 8443 --public-port 8443 --container edgeweir
+   ```
+
+   使用 `bunny.jsonc` 时把同一端点写进文件，否则下次 `bunny apps deploy` 删除它。
+3. 读取 Anycast IP：应用 **Endpoints**，或 `bunny apps endpoints list`。
+4. 控制台 **系统设置** →「节点通道」，地址填 `https://<Anycast IP>:8443`，或指向它的域名（见 [自定义域名](#自定义域名)），保存。立即生效：节点通道证书加入该名称，连接检查显示「连接正常」，新的安装命令使用该地址。
+5. 验证：按 [验证](#验证) 执行 `openssl` 命令。
+
 ## 自定义域名
 
 在注册节点之前完成。
 
 1. Web 控制台：pull zone `mc-<id>` → **General → Hostnames**，添加 `console.example.com`；在 DNS 中按界面给出的值添加 `CNAME`（`mc-<id>.b-cdn.net`）；点击 **Verify & Activate SSL**，再开启该主机名的 **Force SSL**。
-2. 节点通道：pull zone 不转发 TCP。在 DNS 中添加 `nodes.example.com` 的 `A` 记录，指向 Anycast IP。
+2. 节点通道：pull zone 不转发 TCP。在 DNS 中添加 `nodes.example.com` 的 `A` 记录，指向 Anycast IP；DNS 在 Cloudflare 时关闭代理（仅 DNS）。节点用域名注册后，Anycast IP 变化时只需修改这条记录。
 3. 修改变量（触发滚动更新）：
 
    ```ini
@@ -260,6 +278,7 @@ openssl s_client -connect <Anycast IP>:8443 </dev/null 2>/dev/null \
    EDGEWEIR_NODE_API_URL=https://nodes.example.com:8443
    ```
 
+   节点通道地址也可以只在 **系统设置** 的「节点通道」改为 `https://nodes.example.com:8443`，不触发滚动更新；那里保存过地址时，`EDGEWEIR_NODE_API_URL` 不起作用。
 4. 验证：以新域名执行 [验证](#验证) 中的 `curl` 命令，以 `nodes.example.com:8443` 与 `-servername nodes.example.com` 执行 `openssl` 命令，SAN 含 `DNS:nodes.example.com`。
 
 已注册节点更换节点通道地址见 [节点通道地址与证书](networking.md#节点通道地址与证书)。
@@ -290,10 +309,11 @@ bunny api PATCH /mc/apps/<应用 ID>/containers/<容器 ID> --body '{"imageTag":
 | --- | --- | --- |
 | 客户端 IP | CDN 端点到容器的 TCP 对端是 bunny.net 边缘服务器，地址见公开列表 `https://api.bunny.net/system/edgeserverlist/plain` 与 `https://api.bunny.net/system/edgeserverlist/ipv6/plain`（900 余条，会变化）；边缘以单值 `X-Forwarded-For` 与 `X-Real-IP` 传递访客地址，并丢弃访客发送的同名头 | `EDGEWEIR_TRUSTED_PROXIES` 留空时，审计日志 IP 与登录限速按边缘地址计算，见 [可信代理与客户端 IP](networking.md#可信代理与客户端-ip)。写入两个列表（逗号连接，约 17 KB）后取访客地址；列表变化后需更新变量，新边缘的请求在更新前按边缘地址计算 |
 | Anycast | 只有 IPv4 | 无 IPv4 的节点无法连接节点通道 |
+| Anycast IP | 端点存在期间不变；删除后重新添加端点，或 `bunny apps deploy` 按 `bunny.jsonc` 重写端点时，可能得到新 IP | 已注册节点一直连接注册时的地址：节点通道地址用指向 Anycast IP 的域名，IP 变化时只改 DNS 记录 |
 | 变量 | 明文显示在 Dashboard、API 与 CLI 中 | 主密钥在 bunny.net 之外另存 |
 | CLI 0.18 | `bunny apps deploy` 按 `bunny.jsonc` 重写容器：删除健康检查与文件中没有的端点；`env` 块替换全部变量 | 健康检查与升级用 Dashboard 或 `bunny api` |
-| 滚动更新 | 变量、镜像或健康检查修改后先启动新实例，健康检查通过后停止旧实例；停止前发送 SIGTERM，宽限 30 秒 | 新旧版本短暂同时运行；旧实例上的节点通道连接断开后重连 |
+| 滚动更新 | 变量、镜像或健康检查修改后先启动新实例，健康检查通过后停止旧实例；端点修改不触发。停止前发送 SIGTERM，宽限 30 秒（2026 年 2 月 1 日之前创建的应用为 1 秒，可经 API 的 `terminationGracePeriodSeconds` 调整）。新实例 10 分钟内没有运行时中止，保留旧实例。挂载持久卷的应用先停旧实例再启动新实例 | 新旧版本短暂同时运行；旧实例上的节点通道连接断开后重连。更新 `EDGEWEIR_TRUSTED_PROXIES` 也是变量修改。单实例挂载持久卷时更新期间短暂中断 |
 | 区域 | 应用可运行在多个区域，Anycast 将节点引到最近的区域 | 每个区域都连接同一 PostgreSQL；多实例条件见 [部署概览](README.md#扩展) |
-| 出站端口 | 25、465、587、2525 默认封锁 | 告警通知的 SMTP 渠道无法发送；经 bunny.net 工单开放端口 |
-| 计费 | 最小实例数 1，Anycast IP 按月计费 | 应用停止（Undeploy）后 Anycast IP 仍计费 |
+| 邮件端口 | 25、465、587、2525 默认受限（入站与出站） | 告警通知的 SMTP 渠道无法发送；经 bunny.net 工单开放端口 |
+| 计费 | 最小实例数 1，Anycast IP 按月计费，按使用天数折算 | 应用停止（Undeploy）后 Anycast IP 仍计费，删除端点后停止 |
 | `/downloads/*` | 容器无下载镜像目录，`EDGEWEIR_DOWNLOADS_DIR` 未设置 | 返回 404；`install.sh` 从 GitHub 下载，见 [接入节点](nodes.md#下载镜像) |

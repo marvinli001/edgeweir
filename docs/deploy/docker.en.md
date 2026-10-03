@@ -24,7 +24,7 @@ The image is public; pulling needs no login. Tag rules: [versions, upgrades, and
    docker compose version
    ```
 
-2. Open 8443/TCP in the firewall and cloud security group. Exposure of 3000/TCP: [ports and reverse proxy](networking.en.md).
+2. Open 8443/TCP in the cloud security group. Ports Docker publishes skip host firewalls such as ufw and firewalld; to limit sources, use the cloud security group or the `DOCKER-USER` chain. Before Docker Engine 28, hosts on the same layer-2 network can reach ports published to `127.0.0.1`: use 28 or later. Exposure of 3000/TCP: [ports and reverse proxy](networking.en.md).
 
 ## 2. Fetch the files
 

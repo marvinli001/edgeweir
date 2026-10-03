@@ -24,7 +24,7 @@
 | 项目 | 要求 | 宝塔面板 | aaPanel |
 | --- | --- | --- | --- |
 | Docker | Docker Engine 与 Compose v2（`docker compose`） | **Docker** 页面安装 | **Docker** 页面安装 |
-| 防火墙 | 放行节点通道端口（默认 8443/TCP）；Web 端口 3000 不对外放行 | **安全 → 系统防火墙 → 添加端口规则**：协议 TCP，来源所有 IP，策略允许 | **Security → Firewall → Add Port Rule**：Protocol TCP，Source IP All，Strategy Allow |
+| 防火墙 | 放行节点通道端口（默认 8443/TCP）；Web 端口 3000 不对外放行。bundled 模式由 Docker 发布端口，不经过系统防火墙，需要按来源限制时用云安全组 | **安全 → 系统防火墙 → 添加端口规则**：协议 TCP，来源所有 IP，策略允许 | **Security → Firewall → Add Port Rule**：Protocol TCP，Source IP All，Strategy Allow |
 | 云安全组 | 放行同一端口 | — | — |
 | 域名 | 控制台域名（例如 `cdn-admin.example.com`）解析到本机 | — | — |
 | 数据库（host） | PostgreSQL 18；空数据库及其所有者用户；云数据库白名单包含本机 IP | **数据库 → PgSQL → 添加数据库** | **Databases → PgSQL → Add DB** |
@@ -140,7 +140,17 @@ bash deploy.sh install
    ./deploy.sh start
    ```
 
-3. 在 `/www/server/nginx/conf/nginx.conf` 的 `http { }` 块之外加入 `stream` 块（`listen 8443;`，`proxy_pass 127.0.0.1:18443;`），检查并重载：
+3. 面板的 `/www/server/nginx/conf/nginx.conf` 已有 `stream { }` 块，并包含 `/www/server/panel/vhost/nginx/tcp/*.conf`；不要再加一个 `stream` 块，`nginx -t` 会报 `"stream" directive is duplicate`。新建 `/www/server/panel/vhost/nginx/tcp/edgeweir.conf`：
+
+   ```nginx title="/www/server/panel/vhost/nginx/tcp/edgeweir.conf"
+   server {
+     listen 8443;
+     proxy_pass 127.0.0.1:18443;
+     proxy_timeout 1h;
+   }
+   ```
+
+   节点通道域名有 AAAA 记录时再加 `listen [::]:8443;`。检查并重载：
 
    ```bash
    /www/server/nginx/sbin/nginx -t && /www/server/nginx/sbin/nginx -s reload

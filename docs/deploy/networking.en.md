@@ -116,7 +116,7 @@ Use nginx `stream` layer-4 passthrough when 8443 must go through nginx.
    }
    ```
 
-   Leave out `ssl`, `proxy_ssl`, and `proxy_protocol`: the server forwards TCP only.
+   Leave out `ssl`, `proxy_ssl`, and `proxy_protocol`: the server forwards TCP only. `listen 8443;` listens on IPv4 only; add `listen [::]:8443;` when the node channel's DNS name has an AAAA record. When the main configuration already has a `stream` block (BaoTa / aaPanel: see [baota.en.md](baota.en.md#node-channel-port)), put the `server` into it; when the distribution builds stream as a dynamic module (such as Debian's `libnginx-mod-stream`), install and load that module first.
 
 3. Test and reload nginx:
 

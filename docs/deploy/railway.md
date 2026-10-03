@@ -50,7 +50,7 @@
 | 1 | **Public Networking → Generate Domain**，端口 `3000` | `<名称>.up.railway.app` |
 | 2 | **TCP Proxy**，端口 `8443` | `<名称>.proxy.rlwy.net:<端口>`，端口由 Railway 分配 |
 
-网络设置立即生效，不进入暂存区。服务已有 TCP 代理时不显示 **Generate Domain**：先删除 TCP 代理，生成域名后重新添加。
+网络设置立即生效，不进入暂存区。服务已有 TCP 代理时不显示 **Generate Domain**：先删除 TCP 代理，生成域名后重新添加。每个服务只能有一个 TCP 代理；删除后重新创建得到新的域名与端口，在注册节点之前完成。
 
 ## 5. 生成主密钥
 
@@ -77,7 +77,7 @@ openssl rand -base64 32 > edgeweir-master-key
 
 2. `EDGEWEIR_MASTER_KEY` 行的 **⋮** 菜单 → **Seal**。
 
-封存后其值不再出现在 Railway 界面、API 与 CLI 中，不可解封；Raw Editor 不再编辑该变量，修改经 **⋮** 菜单。各变量见 [变量](#变量)。
+封存后其值不再出现在 Railway 界面、API 与 CLI 中，不可解封；Raw Editor 不再编辑该变量，修改经 **⋮** 菜单；复制环境或服务、PR 环境不带封存的变量。各变量见 [变量](#变量)。
 
 ## 7. 部署设置
 
@@ -87,7 +87,8 @@ openssl rand -base64 32 > edgeweir-master-key
    | --- | --- | --- |
    | Healthcheck Path | **Settings → Deploy** | `/healthz` |
    | Serverless | **Settings → Deploy → Enable Serverless** | 关闭 |
-   | Restart Policy | **Settings → Deploy** | `Always`；Free 计划不提供，保持默认 `On Failure` |
+   | Restart Policy | **Settings → Deploy** | `Always`；Free 计划与试用不提供，保持默认 `On Failure` |
+   | Draining Time | **Settings → Deploy**，或变量 `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `10`：旧部署收到 SIGTERM 后的退出时间，控制台最多需要 8 秒 |
    | Regions | **Settings → Scale** | 与 `Postgres` 服务相同 |
 
 2. 画布顶部暂存横幅点击 **Deploy**，应用第 3、6、7 步的全部变更。
@@ -102,7 +103,7 @@ openssl rand -base64 32 > edgeweir-master-key
 
 ## 命令行部署
 
-与第 1–8 步等效。第 7 步部署设置与 **Seal** 只能在网页控制台完成。
+与第 1–8 步等效。**Seal** 只能在网页控制台完成。
 
 1. 创建项目、PostgreSQL 与控制台服务：
 
@@ -128,10 +129,20 @@ openssl rand -base64 32 > edgeweir-master-key
    railway variable set --service edgeweir PORT=3000 \
      'DATABASE_URL=${{Postgres.DATABASE_URL}}' \
      'EDGEWEIR_PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}' \
-     'EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}'
+     'EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}' \
+     RAILWAY_DEPLOYMENT_DRAINING_SECONDS=10
    ```
 
-4. 在网页控制台完成 [第 7 步](#7-部署设置) 与 [第 6 步](#6-设置变量) 的 **Seal**。
+4. [第 7 步](#7-部署设置) 的部署设置：
+
+   ```bash
+   railway environment edit \
+     --service-config edgeweir deploy.healthcheckPath /healthz \
+     --service-config edgeweir deploy.sleepApplication false \
+     --service-config edgeweir deploy.restartPolicyType ALWAYS
+   ```
+
+   Free 计划与试用去掉 `restartPolicyType` 一行。区域用 `railway scale` 设置。在网页控制台完成 [第 6 步](#6-设置变量) 的 **Seal**。
 5. 读取 setup token：
 
    ```bash
@@ -146,7 +157,8 @@ openssl rand -base64 32 > edgeweir-master-key
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | 私有网络连接串；`Postgres` 为 PostgreSQL 服务名。 |
 | `EDGEWEIR_MASTER_KEY` | `openssl rand -base64 32` 的输出 | 必填。 |
 | `EDGEWEIR_PUBLIC_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` | 必填。协议为 `https`：Railway 只接受 TLS 入站。使用自定义域名时写字面值。 |
-| `EDGEWEIR_NODE_API_URL` | `https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}` | 必填：默认值 `https://<公开域名>:8443` 在 Railway 上不可达。主机名自动写入节点通道证书。 |
+| `EDGEWEIR_NODE_API_URL` | `https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}` | **系统设置** 的「节点通道」没有保存地址时必填：默认值 `https://<公开域名>:8443` 在 Railway 上不可达。主机名自动写入节点通道证书。 |
+| `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `10` | 旧部署收到 SIGTERM 后的退出时间，见 [第 7 步](#7-部署设置)。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | 空 | 节点通道证书的额外名称，逗号分隔。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | 空 | 见 [限制](#限制)。 |
 | `EDGEWEIR_VERSION` | 不设置 | 镜像内置的运行版本；版本由镜像 tag 决定。 |
@@ -184,7 +196,7 @@ openssl s_client -connect <名称>.proxy.rlwy.net:<端口> -servername <名称>.
 在注册节点之前完成。
 
 1. Web 控制台：`edgeweir` 服务 **Settings → Networking → + Custom Domain**，填 `console.example.com`，端口 `3000`；在 DNS 中添加界面给出的 `CNAME` 与 `TXT` 记录。`TXT` 记录缺失时该域名返回 404。
-2. 节点通道：在 DNS 中将 `nodes.example.com` 以 `CNAME` 指向 `<名称>.proxy.rlwy.net`（不含端口）；端口仍为 Railway 分配的端口。
+2. 节点通道：在 DNS 中将 `nodes.example.com` 以 `CNAME` 指向 `<名称>.proxy.rlwy.net`（不含端口）；端口仍为 Railway 分配的端口。DNS 在 Cloudflare 时关闭代理（仅 DNS）。
 3. **Variables** 中修改：
 
    ```ini
@@ -233,9 +245,10 @@ railway redeploy --service edgeweir --from-source --yes
 | 项目 | 行为 | 影响 |
 | --- | --- | --- |
 | 客户端 IP | Railway HTTP 代理以 `X-Real-IP` 传递客户端地址；代理连接容器的来源地址范围未公布 | `EDGEWEIR_TRUSTED_PROXIES` 留空；审计日志 IP 与登录限速按 Railway 代理地址计算，见 [可信代理与客户端 IP](networking.md#可信代理与客户端-ip) |
-| TCP 代理地址 | 域名与端口由 Railway 分配；自定义域名只替换主机名 | 已注册节点按注册时记录的地址连接；TCP 代理地址变化后这些节点无法连接 |
+| TCP 代理地址 | 域名与端口由 Railway 分配，删除后重新创建会改变；自定义域名只替换主机名 | 已注册节点按注册时记录的地址连接；TCP 代理地址变化后这些节点无法连接。新地址在 **系统设置** 的「节点通道」填写，不需要重新部署 |
+| 节点的连接来源地址 | TCP 代理不传递节点的地址，也不支持 PROXY 协议 | 节点详情的「连接来源地址」不是节点的公网地址；节点通道无法按来源地址限制访问 |
 | Serverless | 服务无出站流量 5–10 分钟后休眠 | 必须关闭：休眠停止 worker 定时任务与节点通道 |
 | 健康检查 | 只在部署时请求 `/healthz`，运行期间不检查 | 进程退出由 Restart Policy 处理 |
-| 部署切换 | 新部署通过健康检查后停止旧部署 | 新旧版本短暂同时运行；旧部署上的节点通道连接随之断开 |
-| Restart Policy | 默认 `On Failure`，最多重启 10 次 | PostgreSQL 60 秒内不可达时控制台退出，计入重启次数 |
+| 部署切换 | 新部署通过健康检查后停止旧部署：先发送 SIGTERM，draining 时间后强制结束 | 新旧版本短暂同时运行；旧部署上的节点通道连接随之断开。draining 时间设为 10 秒，控制台才能正常关闭连接 |
+| Restart Policy | 默认 `On Failure`；Free 计划与试用最多重启 10 次，付费计划不限 | PostgreSQL 60 秒内不可达时控制台退出，计入重启次数 |
 | `/downloads/*` | 容器无下载镜像目录，`EDGEWEIR_DOWNLOADS_DIR` 未设置 | 返回 404；`install.sh` 从 GitHub 下载，见 [接入节点](nodes.md#下载镜像) |

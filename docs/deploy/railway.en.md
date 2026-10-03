@@ -50,7 +50,7 @@ The service is staged and deployed in [step 7](#7-deployment-settings).
 | 1 | **Public Networking → Generate Domain**, port `3000` | `<name>.up.railway.app` |
 | 2 | **TCP Proxy**, port `8443` | `<name>.proxy.rlwy.net:<port>`, port assigned by Railway |
 
-Networking changes apply immediately and are not staged. **Generate Domain** is hidden while the service has a TCP proxy: delete the TCP proxy, generate the domain, then add the TCP proxy again.
+Networking changes apply immediately and are not staged. **Generate Domain** is hidden while the service has a TCP proxy: delete the TCP proxy, generate the domain, then add the TCP proxy again. A service has at most one TCP proxy; one created again gets a new domain and port, so do this before enrolling nodes.
 
 ## 5. Generate the master key
 
@@ -77,7 +77,7 @@ Use the output as is. Store `edgeweir-master-key` offline, apart from database b
 
 2. **⋮** menu of the `EDGEWEIR_MASTER_KEY` row → **Seal**.
 
-A sealed value no longer appears in the Railway UI, API, or CLI and cannot be unsealed; the Raw Editor no longer edits it, use the **⋮** menu instead. Each variable is described under [Variables](#variables).
+A sealed value no longer appears in the Railway UI, API, or CLI and cannot be unsealed; the Raw Editor no longer edits it, use the **⋮** menu instead; duplicated environments and services and PR environments do not get sealed variables. Each variable is described under [Variables](#variables).
 
 ## 7. Deployment settings
 
@@ -87,7 +87,8 @@ A sealed value no longer appears in the Railway UI, API, or CLI and cannot be un
    | --- | --- | --- |
    | Healthcheck Path | **Settings → Deploy** | `/healthz` |
    | Serverless | **Settings → Deploy → Enable Serverless** | Off |
-   | Restart Policy | **Settings → Deploy** | `Always`; not offered on the Free plan, keep the default `On Failure` there |
+   | Restart Policy | **Settings → Deploy** | `Always`; not offered on the Free plan or trials, keep the default `On Failure` there |
+   | Draining Time | **Settings → Deploy**, or the variable `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `10`: the time the old deployment gets after SIGTERM; the console needs up to 8 seconds |
    | Regions | **Settings → Scale** | Same as the `Postgres` service |
 
 2. Click **Deploy** in the staged-changes banner at the top of the canvas to apply all changes from steps 3, 6, and 7.
@@ -102,7 +103,7 @@ An uninitialized console logs the same setup token on every start.
 
 ## CLI deployment
 
-Equivalent to steps 1–8. The step 7 deployment settings and **Seal** are available only in the web console.
+Equivalent to steps 1–8. **Seal** is available only in the web console.
 
 1. Create the project, PostgreSQL, and the console service:
 
@@ -128,10 +129,20 @@ Equivalent to steps 1–8. The step 7 deployment settings and **Seal** are avail
    railway variable set --service edgeweir PORT=3000 \
      'DATABASE_URL=${{Postgres.DATABASE_URL}}' \
      'EDGEWEIR_PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}' \
-     'EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}'
+     'EDGEWEIR_NODE_API_URL=https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}' \
+     RAILWAY_DEPLOYMENT_DRAINING_SECONDS=10
    ```
 
-4. In the web console, complete [step 7](#7-deployment-settings) and the **Seal** from [step 6](#6-set-variables).
+4. The deployment settings of [step 7](#7-deployment-settings):
+
+   ```bash
+   railway environment edit \
+     --service-config edgeweir deploy.healthcheckPath /healthz \
+     --service-config edgeweir deploy.sleepApplication false \
+     --service-config edgeweir deploy.restartPolicyType ALWAYS
+   ```
+
+   On the Free plan or a trial, leave out the `restartPolicyType` line. Set the region with `railway scale`. Complete the **Seal** from [step 6](#6-set-variables) in the web console.
 5. Read the setup token:
 
    ```bash
@@ -146,7 +157,8 @@ Equivalent to steps 1–8. The step 7 deployment settings and **Seal** are avail
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | Private network connection string; `Postgres` is the PostgreSQL service name. |
 | `EDGEWEIR_MASTER_KEY` | Output of `openssl rand -base64 32` | Required. |
 | `EDGEWEIR_PUBLIC_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` | Required. Scheme `https`: Railway accepts only TLS inbound. With a custom domain, use a literal value. |
-| `EDGEWEIR_NODE_API_URL` | `https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}` | Required: the default `https://<public domain>:8443` is unreachable on Railway. The host name is added to the node channel certificate automatically. |
+| `EDGEWEIR_NODE_API_URL` | `https://${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}` | Required while no URL is saved under "Node channel" in **System settings**: the default `https://<public domain>:8443` is unreachable on Railway. The host name is added to the node channel certificate automatically. |
+| `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `10` | The time the old deployment gets after SIGTERM; see [step 7](#7-deployment-settings). |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | Empty | Extra names for the node channel certificate, comma separated. |
 | `EDGEWEIR_TRUSTED_PROXIES` | Empty | See [Limits](#limits). |
 | `EDGEWEIR_VERSION` | Not set | The running version built into the image; the image tag sets the version. |
@@ -184,7 +196,7 @@ Any other issuer means a device in the path terminates TLS.
 Complete this before enrolling nodes.
 
 1. Web console: `edgeweir` service, **Settings → Networking → + Custom Domain**, enter `console.example.com`, port `3000`; add the `CNAME` and `TXT` records shown there in DNS. Without the `TXT` record the domain returns 404.
-2. Node channel: in DNS, point `nodes.example.com` with a `CNAME` to `<name>.proxy.rlwy.net` (no port); the port stays the one Railway assigned.
+2. Node channel: in DNS, point `nodes.example.com` with a `CNAME` to `<name>.proxy.rlwy.net` (no port); the port stays the one Railway assigned. On Cloudflare, turn the proxy off (DNS only).
 3. Change in **Variables**:
 
    ```ini
@@ -233,9 +245,10 @@ Migrations, signature verification, and rollback: [Versions, upgrades, and rollb
 | Item | Behavior | Effect |
 | --- | --- | --- |
 | Client IP | The Railway HTTP proxy passes the client address in `X-Real-IP`; the source range the proxy connects from is not published | Leave `EDGEWEIR_TRUSTED_PROXIES` empty; audit log IPs and sign-in rate limiting use the Railway proxy address; see [Trusted proxies and client IP](networking.en.md#trusted-proxies-and-client-ip) |
-| TCP proxy address | Railway assigns the domain and port; a custom domain replaces only the host name | Enrolled nodes connect to the address recorded at enrollment; after the TCP proxy address changes, those nodes cannot connect |
+| TCP proxy address | Railway assigns the domain and port, which change when the proxy is deleted and created again; a custom domain replaces only the host name | Enrolled nodes connect to the address recorded at enrollment; after the TCP proxy address changes, those nodes cannot connect. Enter the new address under "Node channel" in **System settings**, without a redeploy |
+| Nodes' source address | The TCP proxy passes neither the node's address nor PROXY protocol | "Connects from" in the node details is not the node's public address; the node channel cannot be limited by source address |
 | Serverless | The service sleeps after 5–10 minutes without outbound traffic | Must be off: sleeping stops the worker's scheduled jobs and the node channel |
 | Health check | `/healthz` is requested only during a deployment, not while running | Process exits are handled by the Restart Policy |
-| Deployment switch | The old deployment stops after the new one passes its health check | Old and new versions run side by side briefly; node channel connections on the old deployment drop with it |
-| Restart Policy | Default `On Failure`, at most 10 restarts | The console exits when PostgreSQL is unreachable for 60 seconds, which counts as a restart |
+| Deployment switch | The old deployment stops after the new one passes its health check: SIGTERM first, SIGKILL after the draining time | Old and new versions run side by side briefly; node channel connections on the old deployment drop with it. Set the draining time to 10 seconds so the console can close its connections |
+| Restart Policy | Default `On Failure`; at most 10 restarts on the Free plan and trials, unlimited on paid plans | The console exits when PostgreSQL is unreachable for 60 seconds, which counts as a restart |
 | `/downloads/*` | No downloads mirror directory in the container; `EDGEWEIR_DOWNLOADS_DIR` unset | Returns 404; `install.sh` downloads from GitHub; see [Adding nodes](nodes.en.md#downloads-mirror) |

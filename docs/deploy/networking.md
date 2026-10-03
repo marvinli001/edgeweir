@@ -116,7 +116,7 @@ server {
    }
    ```
 
-   不写 `ssl`、`proxy_ssl`、`proxy_protocol`：只转发 TCP。
+   不写 `ssl`、`proxy_ssl`、`proxy_protocol`：只转发 TCP。`listen 8443;` 只监听 IPv4，节点通道域名有 AAAA 记录时再加 `listen [::]:8443;`。主配置已有 `stream` 块时（宝塔 / aaPanel 见 [baota.md](baota.md#节点通道端口)）把 `server` 放进已有的块；发行版软件包把 stream 编译为动态模块时（如 Debian 的 `libnginx-mod-stream`）先安装并加载该模块。
 
 3. 检查并重载 nginx：
 

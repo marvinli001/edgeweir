@@ -9,8 +9,8 @@ Deploy the console on Fly.io from the console image, with an external PostgreSQL
 | Fly.io | An organization that can create apps |
 | flyctl | The `fly` CLI after `fly auth login`; app creation, deployment, and upgrades use flyctl, see [Methods](#methods) |
 | Console image | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`, public; tag rules in [Versions, upgrades, and rollback](upgrade.en.md) |
-| PostgreSQL | PostgreSQL 18 reachable from the Machine. Fly Managed Postgres offers only 16 and 17 and does not qualify |
-| Public addresses | Dedicated IPv4 and dedicated IPv6 |
+| PostgreSQL | PostgreSQL 18 reachable from the Machine. Fly Managed Postgres offers only 16 and 17 (October 2026) and does not qualify |
+| Public addresses | Dedicated IPv4 (USD 2 a month) and dedicated IPv6 |
 | Master key | Generated with `openssl rand -base64 32`; stored outside Fly.io and apart from database backups |
 | Always on | `auto_stop_machines = "off"` |
 | Local commands | `fly`, `openssl`, `curl` |
@@ -29,7 +29,7 @@ General rules for ports and the node channel certificate: [Ports, reverse proxy,
 
 ## Methods
 
-The Fly.io Dashboard builds and deploys only from a GitHub repository; it does not deploy images. App creation, image deployment, and upgrades use flyctl; the other steps are done in the Dashboard, with flyctl as the equivalent.
+App creation, image deployment, and upgrades use flyctl; the other steps can be done in the Dashboard, with flyctl as the equivalent.
 
 | Step | Dashboard | flyctl |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ The Fly.io Dashboard builds and deploys only from a GitHub repository; it does n
 | [2. Write fly.toml](#2-write-flytoml) | — | Local file |
 | [3. Set secrets](#3-set-secrets) | **Secrets** | `fly secrets set` |
 | [4. Deploy](#4-deploy) | — | `fly deploy` |
-| [5. Allocate a dedicated IPv4](#5-allocate-a-dedicated-ipv4) | Networking section of **Overview** | `fly ips` |
+| [5. Check the public addresses](#5-check-the-public-addresses) | — | `fly ips` |
 | [6. Run setup](#6-run-setup) | **Search logs in Grafana** | `fly logs` |
 | [Custom domains](#custom-domains) | **Certificates** | `fly certs add` |
 | [Upgrade](#upgrade) | — | `fly deploy` |
@@ -103,7 +103,7 @@ primary_region = "nrt"
 | --- | --- |
 | `[build] image` | Deploys this image; no build |
 | `[http_service]`: `internal_port = 3000`, `force_https = true` | 80 redirects to HTTPS; Fly Proxy terminates TLS on 443 and forwards to 3000 |
-| `auto_stop_machines = "off"`, `min_machines_running = 1` | Fly Proxy does not stop an idle Machine |
+| `auto_stop_machines = "off"` | Fly Proxy does not stop an idle Machine; `min_machines_running` then has no effect |
 | `[[http_service.checks]]` | `GET /healthz` directly on the Machine over the private network; must return 2xx |
 | `[[services]]`: `internal_port = 8443`; `[[services.ports]]`: `port = 8443`, no `handlers` | Fly Proxy forwards TCP as is |
 | `[[services.tcp_checks]]` | Checks that 8443 accepts connections |
@@ -145,22 +145,22 @@ In the directory that holds `fly.toml`:
 fly deploy --ha=false
 ```
 
-`--ha=false` creates a single Machine. The first deployment assigns the app a dedicated IPv6 and a shared IPv4.
+`--ha=false` creates a single Machine. Because `[[services]]` has a non-HTTP port such as 8443, the first deployment asks `Would you like to allocate dedicated ipv4 and ipv6 addresses now?`: answer `y` to get a dedicated IPv4 (USD 2 a month) and a dedicated IPv6, and no shared IPv4. Answering `n`, or deploying without a terminal, allocates no address at all and the deployment still completes; add them in step 5.
 
-## 5. Allocate a dedicated IPv4
-
-1. Dashboard → `edgeweir-console` → Networking section of **Overview**, assign a **Dedicated IPv4**.
-2. In the same section, remove the **Shared IPv4**.
-
-`edgeweir-console.fly.dev` then resolves to the dedicated addresses.
-
-flyctl:
+## 5. Check the public addresses
 
 ```bash
-fly ips allocate-v4 --yes
 fly ips list
-fly ips release <shared IPv4>
 ```
+
+Expected: one dedicated IPv4 (`v4`) and one dedicated IPv6 (`v6`), no shared IPv4 (`shared_v4`).
+
+| Case | Action |
+| --- | --- |
+| No addresses | `fly ips allocate-v6`, then `fly ips allocate-v4 --yes` (`--yes` accepts the charge for the dedicated IPv4) |
+| A shared IPv4 (the app was deployed earlier with another `fly.toml`) | `fly ips allocate-v4 --yes`, then `fly ips release <shared IPv4>` |
+
+`edgeweir-console.fly.dev` resolves to the dedicated addresses once DNS caches expire. Do not go back to a shared IPv4: it does not forward 8443.
 
 ## 6. Run setup
 
@@ -185,7 +185,7 @@ fly logs --no-tail | grep setupToken
 | `DATABASE_URL` | Secret | PostgreSQL 18 connection string | Required. |
 | `EDGEWEIR_MASTER_KEY` | Secret | Output of `openssl rand -base64 32` | Required. |
 | `EDGEWEIR_PUBLIC_URL` | `[env]` | `https://edgeweir-console.fly.dev` | Required. With a custom domain, use that domain. |
-| `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | The host name must resolve to the dedicated IPv4 and IPv6; it is added to the node channel certificate automatically. |
+| `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | The host name must resolve to the dedicated IPv4 and IPv6; it is added to the node channel certificate automatically. After setup it can also be changed under "Node channel" in **System settings**, without a deployment; a URL saved there wins over this variable. |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | `[env]` | Empty | Extra names for the node channel certificate, comma separated. |
 | `EDGEWEIR_TRUSTED_PROXIES` | — | Empty | See [Limits](#limits). |
 | `EDGEWEIR_VERSION` | — | Not set | The running version built into the image; the tag in `[build] image` sets the version. |
@@ -198,7 +198,7 @@ A secret takes precedence over an `[env]` entry with the same name. `ROLE`, `HOS
 | Check | Dashboard or command | Expected |
 | --- | --- | --- |
 | Machine | **Machines**; `fly status` | 1 Machine, state `started`, all checks passing |
-| Public addresses | Networking section of **Overview**; `fly ips list` | Dedicated IPv4 and IPv6, no shared IPv4 |
+| Public addresses | `fly ips list` | Dedicated IPv4 and IPv6, no shared IPv4 |
 | Web and API | `curl -fsS https://edgeweir-console.fly.dev/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
 | Node channel TLS | `openssl` command below | Issuer `Edgeweir Node Channel CA`; SAN includes `edgeweir-console.fly.dev` |
 | Node channel URL | **System settings**, "Node channel" | `https://edgeweir-console.fly.dev:8443` |
@@ -231,6 +231,8 @@ Complete this before enrolling nodes.
      EDGEWEIR_PUBLIC_URL = "https://console.example.com"
      EDGEWEIR_NODE_API_URL = "https://console.example.com:8443"
    ```
+
+   When a URL is saved under "Node channel" in **System settings**, it wins over `EDGEWEIR_NODE_API_URL`: change it there to `https://console.example.com:8443`. Port 8443 needs no `fly certs add`, but the name must resolve straight to the dedicated addresses: turn the proxy off (DNS only) in Cloudflare or similar DNS, since Cloudflare's proxy also handles HTTPS on port 8443 and would terminate TLS.
 
 3. Deploy:
 
@@ -268,9 +270,11 @@ Migrations, signature verification, and rollback: [Versions, upgrades, and rollb
 | --- | --- | --- |
 | Client IP | Fly Proxy passes the client address in `Fly-Client-IP` and `X-Forwarded-For`; the source range Fly Proxy connects to the Machine from is not published; the console does not read `Fly-Client-IP` | Leave `EDGEWEIR_TRUSTED_PROXIES` empty; audit log IPs and sign-in rate limiting use the Fly Proxy address; see [Trusted proxies and client IP](networking.en.md#trusted-proxies-and-client-ip) |
 | Shared IPv4 | Forwards only 80, 443, and ports with the `tls` handler | Nodes connecting to 8443 over IPv4 need a dedicated IPv4 |
+| Nodes' source address | Fly Proxy forwards 8443 as TCP without the node's address | "Connects from" in the node details is not the node's public address. Do not enable the `proxy_proto` handler on 8443: the console does not parse PROXY protocol headers, so handshakes fail |
+| Outbound address | Machine egress IPs are not fixed and may change with restarts or platform changes | When PostgreSQL allows clients by source address, give the app a static egress IP: `fly ips allocate-egress --app edgeweir-console -r <region>` (USD 3.60 a month) |
 | No dedicated IPv4 | 8443 is reachable only over the dedicated IPv6 | Nodes without IPv6 cannot connect |
-| Deployment strategy | Default `rolling`: each old Machine is stopped and replaced in turn | With one Machine, the web console and the node channel are down during a deployment; conditions for several instances: [Deployment overview](README.en.md#scaling) |
+| Deployment strategy | Default `rolling`: each old Machine is stopped and replaced in turn. `fly secrets set` without `--stage`, `fly scale vm`, `fly scale memory`, and `fly apps restart` restart the Machine too | With one Machine, the web console and the node channel are down during a deployment or restart; conditions for several instances: [Deployment overview](README.en.md#scaling) |
 | Auto stop | With `auto_stop_machines` set to `stop` or `suspend`, Fly Proxy stops idle Machines | Must be `off`: a stopped Machine halts the worker's scheduled jobs and the node channel |
 | Configuration source | Machine size and HTTP service settings changed in the Dashboard or with `fly scale vm` / `fly scale memory` are reset to `fly.toml` on the next `fly deploy` | Change them in `fly.toml` |
-| Secrets | Values cannot be read back | Keep the master key outside Fly.io |
+| Secrets | The Dashboard, API, and flyctl do not return values; anyone with deploy or SSH access can read them inside the Machine | Keep the master key outside Fly.io |
 | `/downloads/*` | No downloads mirror directory in the container; `EDGEWEIR_DOWNLOADS_DIR` unset | Returns 404; `install.sh` downloads from GitHub; see [Adding nodes](nodes.en.md#downloads-mirror) |

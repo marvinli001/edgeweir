@@ -9,8 +9,8 @@
 | Fly.io | 可创建应用的组织 |
 | flyctl | `fly` CLI，已执行 `fly auth login`；创建应用、部署与升级使用 flyctl，见 [操作方式](#操作方式) |
 | 控制台镜像 | `ghcr.io/marvinli001/edgeweir:<YYYYMMDD>-<commit>`，公开拉取；tag 规则见 [版本、升级与回滚](upgrade.md) |
-| PostgreSQL | PostgreSQL 18，Machine 可达。Fly Managed Postgres 只提供 16 与 17，不满足要求 |
-| 公网地址 | 独享 IPv4 与独享 IPv6 |
+| PostgreSQL | PostgreSQL 18，Machine 可达。Fly Managed Postgres 只提供 16 与 17（2026 年 10 月），不满足要求 |
+| 公网地址 | 独享 IPv4（每月 2 美元）与独享 IPv6 |
 | 主密钥 | `openssl rand -base64 32` 生成；保存在 Fly.io 之外，与数据库备份分开 |
 | 常驻运行 | `auto_stop_machines = "off"` |
 | 本机命令 | `fly`、`openssl`、`curl` |
@@ -29,7 +29,7 @@
 
 ## 操作方式
 
-Fly.io Dashboard 只从 GitHub 仓库构建部署，不部署镜像。应用创建、镜像部署与升级使用 flyctl，其余步骤在 Dashboard 完成，flyctl 为等效方式。
+应用创建、镜像部署与升级使用 flyctl；其余步骤可在 Dashboard 完成，flyctl 为等效方式。
 
 | 步骤 | Dashboard | flyctl |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ Fly.io Dashboard 只从 GitHub 仓库构建部署，不部署镜像。应用创�
 | [2. 编写 fly.toml](#2-编写-flytoml) | — | 本机文件 |
 | [3. 设置 secrets](#3-设置-secrets) | **Secrets** | `fly secrets set` |
 | [4. 部署](#4-部署) | — | `fly deploy` |
-| [5. 分配独享 IPv4](#5-分配独享-ipv4) | **Overview** 的 Networking 区域 | `fly ips` |
+| [5. 检查公网地址](#5-检查公网地址) | — | `fly ips` |
 | [6. 初始化](#6-初始化) | **Search logs in Grafana** | `fly logs` |
 | [自定义域名](#自定义域名) | **Certificates** | `fly certs add` |
 | [升级](#升级) | — | `fly deploy` |
@@ -103,7 +103,7 @@ primary_region = "nrt"
 | --- | --- |
 | `[build] image` | 部署该镜像，不构建 |
 | `[http_service]`：`internal_port = 3000`、`force_https = true` | 80 重定向到 HTTPS；443 由 Fly Proxy 终结 TLS 后转发到 3000 |
-| `auto_stop_machines = "off"`、`min_machines_running = 1` | Fly Proxy 不停止空闲 Machine |
+| `auto_stop_machines = "off"` | Fly Proxy 不停止空闲 Machine；此时 `min_machines_running` 不起作用 |
 | `[[http_service.checks]]` | 经私有网络直连 Machine，`GET /healthz` 须返回 2xx |
 | `[[services]]`：`internal_port = 8443`；`[[services.ports]]`：`port = 8443`，无 `handlers` | Fly Proxy 原样转发 TCP |
 | `[[services.tcp_checks]]` | 检查 8443 可连接 |
@@ -145,22 +145,22 @@ Fly.io 不提供 secret 明文读取；`edgeweir-master-key` 离线保存，与�
 fly deploy --ha=false
 ```
 
-`--ha=false` 只创建 1 台 Machine。首次部署为应用分配独享 IPv6 与共享 IPv4。
+`--ha=false` 只创建 1 台 Machine。`[[services]]` 含 8443 这样的非 HTTP 端口，首次部署询问 `Would you like to allocate dedicated ipv4 and ipv6 addresses now?`：回答 `y`，分配独享 IPv4（每月 2 美元）与独享 IPv6，不分配共享 IPv4。回答 `n`，或没有终端时，不分配任何地址，部署照常完成，按第 5 步补上。
 
-## 5. 分配独享 IPv4
-
-1. Dashboard → `edgeweir-console` → **Overview** 的 Networking 区域，分配 **Dedicated IPv4**。
-2. 同一区域移除 **Shared IPv4**。
-
-`edgeweir-console.fly.dev` 随后解析到独享地址。
-
-flyctl：
+## 5. 检查公网地址
 
 ```bash
-fly ips allocate-v4 --yes
 fly ips list
-fly ips release <共享 IPv4>
 ```
+
+预期：一个独享 IPv4（`v4`）与一个独享 IPv6（`v6`），没有共享 IPv4（`shared_v4`）。
+
+| 情况 | 处理 |
+| --- | --- |
+| 没有地址 | `fly ips allocate-v6`，再 `fly ips allocate-v4 --yes`（`--yes` 同意独享 IPv4 的费用） |
+| 有共享 IPv4（应用此前按其他 `fly.toml` 部署过） | `fly ips allocate-v4 --yes`，再 `fly ips release <共享 IPv4>` |
+
+`edgeweir-console.fly.dev` 在 DNS 缓存过期后解析到独享地址。不要改回共享 IPv4：共享 IPv4 不转发 8443。
 
 ## 6. 初始化
 
@@ -185,7 +185,7 @@ fly logs --no-tail | grep setupToken
 | `DATABASE_URL` | secret | PostgreSQL 18 连接串 | 必填。 |
 | `EDGEWEIR_MASTER_KEY` | secret | `openssl rand -base64 32` 的输出 | 必填。 |
 | `EDGEWEIR_PUBLIC_URL` | `[env]` | `https://edgeweir-console.fly.dev` | 必填。使用自定义域名时改为该域名。 |
-| `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | 主机名须解析到独享 IPv4 与 IPv6；自动写入节点通道证书。 |
+| `EDGEWEIR_NODE_API_URL` | `[env]` | `https://edgeweir-console.fly.dev:8443` | 主机名须解析到独享 IPv4 与 IPv6；自动写入节点通道证书。初始化后也可在 **系统设置** 的「节点通道」修改，不需要部署；那里保存的地址优先于此变量。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | `[env]` | 空 | 节点通道证书的额外名称，逗号分隔。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | — | 空 | 见 [限制](#限制)。 |
 | `EDGEWEIR_VERSION` | — | 不设置 | 镜像内置的运行版本；版本由 `[build] image` 的 tag 决定。 |
@@ -198,7 +198,7 @@ fly logs --no-tail | grep setupToken
 | 检查 | Dashboard 或命令 | 预期 |
 | --- | --- | --- |
 | Machine | **Machines**；`fly status` | 1 台 Machine，状态 `started`，检查全部通过 |
-| 公网地址 | **Overview** 的 Networking 区域；`fly ips list` | 独享 IPv4 与 IPv6，无共享 IPv4 |
+| 公网地址 | `fly ips list` | 独享 IPv4 与 IPv6，无共享 IPv4 |
 | Web 与 API | `curl -fsS https://edgeweir-console.fly.dev/healthz` | `{"status":"ok","version":"20260929-a1b2c3d"}` |
 | 节点通道 TLS | 下方 `openssl` 命令 | 签发者为 `Edgeweir Node Channel CA`，SAN 含 `edgeweir-console.fly.dev` |
 | 节点通道地址 | **系统设置** 的「节点通道」 | `https://edgeweir-console.fly.dev:8443` |
@@ -231,6 +231,8 @@ openssl s_client -connect edgeweir-console.fly.dev:8443 -servername edgeweir-con
      EDGEWEIR_PUBLIC_URL = "https://console.example.com"
      EDGEWEIR_NODE_API_URL = "https://console.example.com:8443"
    ```
+
+   **系统设置** 的「节点通道」保存过地址时，它优先于 `EDGEWEIR_NODE_API_URL`：在那里改为 `https://console.example.com:8443`。8443 不需要 `fly certs add`，但域名须直接解析到独享地址：Cloudflare 等 DNS 关闭代理（仅 DNS），Cloudflare 代理也处理 8443 端口的 HTTPS，会终结 TLS。
 
 3. 部署：
 
@@ -268,9 +270,11 @@ openssl s_client -connect edgeweir-console.fly.dev:8443 -servername edgeweir-con
 | --- | --- | --- |
 | 客户端 IP | Fly Proxy 以 `Fly-Client-IP` 与 `X-Forwarded-For` 传递客户端地址；Fly Proxy 连接 Machine 的来源地址范围未公布；控制台不读取 `Fly-Client-IP` | `EDGEWEIR_TRUSTED_PROXIES` 留空；审计日志 IP 与登录限速按 Fly Proxy 地址计算，见 [可信代理与客户端 IP](networking.md#可信代理与客户端-ip) |
 | 共享 IPv4 | 只转发 80、443 与使用 `tls` handler 的端口 | 节点经 IPv4 连接 8443 需要独享 IPv4 |
+| 节点的连接来源地址 | Fly Proxy 按 TCP 转发 8443，不保留节点的地址 | 节点详情的「连接来源地址」不是节点的公网地址。不要为 8443 启用 `proxy_proto` handler：控制台不解析 PROXY 协议头，握手失败 |
+| 出站地址 | Machine 的出站 IP 不固定，可能随重启或平台调整变化 | PostgreSQL 按来源地址放行时，为应用分配固定出站 IP：`fly ips allocate-egress --app edgeweir-console -r <区域>`（每月 3.6 美元） |
 | 未分配独享 IPv4 | 8443 只经独享 IPv6 可达 | 无 IPv6 的节点无法连接 |
-| 部署策略 | 默认 `rolling`：逐台停止旧 Machine 并替换 | 单 Machine 部署期间 Web 控制台与节点通道中断；多实例条件见 [部署概览](README.md#扩展) |
+| 部署策略 | 默认 `rolling`：逐台停止旧 Machine 并替换。不带 `--stage` 的 `fly secrets set`、`fly scale vm`、`fly scale memory`、`fly apps restart` 同样重启 Machine | 单 Machine 部署或重启期间 Web 控制台与节点通道中断；多实例条件见 [部署概览](README.md#扩展) |
 | 自动停止 | `auto_stop_machines` 为 `stop` 或 `suspend` 时 Fly Proxy 停止空闲 Machine | 必须为 `off`：停止后 worker 定时任务与节点通道中断 |
 | 配置来源 | Dashboard、`fly scale vm`、`fly scale memory` 对 Machine 规格与 HTTP 服务设置的修改在下次 `fly deploy` 时按 `fly.toml` 重置 | 在 `fly.toml` 中修改 |
-| secret | 不可读回明文 | 主密钥在 Fly.io 之外保存 |
+| secret | Dashboard、API 与 flyctl 不返回明文；有部署或 SSH 权限的人可在 Machine 内读取 | 主密钥在 Fly.io 之外保存 |
 | `/downloads/*` | 容器无下载镜像目录，`EDGEWEIR_DOWNLOADS_DIR` 未设置 | 返回 404；`install.sh` 从 GitHub 下载，见 [接入节点](nodes.md#下载镜像) |

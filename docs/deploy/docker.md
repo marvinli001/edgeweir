@@ -24,7 +24,7 @@
    docker compose version
    ```
 
-2. 在防火墙与云安全组放行 8443/TCP。3000/TCP 的暴露方式见 [端口与反向代理](networking.md)。
+2. 在云安全组放行 8443/TCP。Docker 发布的端口不经过 ufw、firewalld 等主机防火墙，需要按来源限制时用云安全组或 `DOCKER-USER` 链。Docker Engine 28 之前，同一二层网络的主机能访问发布到 `127.0.0.1` 的端口：使用 28 或更新的版本。3000/TCP 的暴露方式见 [端口与反向代理](networking.md)。
 
 ## 2. 获取文件
 
