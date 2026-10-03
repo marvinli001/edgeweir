@@ -208,14 +208,13 @@ export interface SiteErrorPagesModel {
 export interface PlatformErrorPagesModel {
   unknownHost: string;
   siteDisabled: string;
-  siteSuspended?: string;
 }
 
-/** A domain of a disabled or suspended site (config.proto OfflineHost). */
+/** A domain of a disabled site (config.proto OfflineHost). */
 export interface OfflineHostModel {
   name: string;
   wildcard: boolean;
-  reason: "disabled" | "suspended";
+  reason: "disabled";
 }
 
 type TlsFields = Omit<TlsOptions, "$typeName" | "$unknown">;
@@ -705,7 +704,7 @@ export interface CompileInput {
   challengeKeys?: ChallengeKeyModel[];
   /** Omitted, or every template empty: the nodes' built-in pages. */
   platformErrorPages?: PlatformErrorPagesModel;
-  /** Domains of the cluster's disabled and suspended sites; any order. */
+  /** Domains of the cluster's disabled sites; any order. */
   offlineHosts?: OfflineHostModel[];
   /** The cluster's layer-4 applications; disabled ones are left out. */
   l4Apps?: L4AppModel[];
@@ -1103,11 +1102,10 @@ const offlineHostKey = (host: OfflineHost) => `${host.name}\u0000${host.wildcard
 export function compilePlatformErrorPages(
   pages: PlatformErrorPagesModel | undefined,
 ): PlatformErrorPages | undefined {
-  return pages && (pages.unknownHost || pages.siteDisabled || pages.siteSuspended)
+  return pages && (pages.unknownHost || pages.siteDisabled)
     ? create(PlatformErrorPagesSchema, {
         unknownHost: pages.unknownHost,
         siteDisabled: pages.siteDisabled,
-        siteSuspended: pages.siteSuspended,
       })
     : undefined;
 }

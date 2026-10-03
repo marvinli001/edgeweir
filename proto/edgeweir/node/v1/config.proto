@@ -60,10 +60,10 @@ message NodeConfig {
   // below; unset, or an empty template, uses the node's built-in page.
   // Added in v0.12.0; older nodes ignore it (no feature required).
   PlatformErrorPages platform_error_pages = 15;
-  // Domains of the cluster's sites that are disabled or suspended, sorted by
-  // (name, wildcard). Such sites are not in `sites`; nodes answer their
-  // hosts with the platform's page for the reason instead of the unknown
-  // host page. Added in v0.12.0; older nodes ignore it (no feature required).
+  // Domains of the cluster's disabled sites, sorted by (name, wildcard).
+  // Such sites are not in `sites`; nodes answer their hosts with the
+  // platform's page for the reason instead of the unknown host page.
+  // Added in v0.12.0; older nodes ignore it (no feature required).
   repeated OfflineHost offline_hosts = 16;
   // Layer-4 (TCP / UDP) applications of the cluster, sorted by id; inside an
   // application origins by id and the list ids sorted and unique. Ports,
@@ -274,17 +274,15 @@ message PlatformErrorPages {
   string unknown_host = 1;
   // Offline hosts of disabled sites (status 503).
   string site_disabled = 2;
-  // Offline hosts of suspended sites (status 503).
-  string site_suspended = 3;
+  reserved 3;
 }
 
-// OfflineHost is a domain of a site that is disabled or suspended.
+// OfflineHost is a domain of a disabled site.
 message OfflineHost {
   // Lowercase host name; a wildcard stores its suffix like Domain.
   string name = 1;
   bool wildcard = 2;
-  // disabled or suspended (suspended when both apply); anything else
-  // rejects the configuration.
+  // disabled; anything else rejects the configuration.
   string reason = 3;
 }
 

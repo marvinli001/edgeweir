@@ -23,7 +23,7 @@ Console (ROLE=app|worker|all)
 └── child process stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA, DNS provider APIs
 ```
 
-The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.19.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
+The only contract between the console and the nodes is `edgeweir.node.v1` in `proto/` (current tag `proto/v0.20.0`). The boundary between the open core and commercial products is defined in [LICENSING.en.md](LICENSING.en.md).
 
 ## Repository layout
 
@@ -507,7 +507,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0020_m6_upgrade_health` | `node_upgrade_delivery.healthy_since` |
 | `0021_authenticated_revision_floor` | `node_config_status.revision_receipt_verified` |
 | `0022_bound_traffic_counters` | Existing traffic counters clamped to 0 through 2^53−1 |
-| `0023_p0_site_state` | `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at` (platform suspension) |
+| `0023_p0_site_state` | Four site state columns (dropped by `0034`) |
 | `0024_p0_organization_limits` | `organization_limit` |
 | `0025_p0_service_accounts` | `service_account`, `service_account_key`, `idempotency_key`; `invitation.inviter_id` nullable, new `inviter_service_account_id` |
 | `0026_p0_usage` | `site_usage`, sequence `site_usage_seq`, `node_stats_cursor.complete_until`; marks usage windows for existing minute statistics |
@@ -518,7 +518,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0031_g4_cache_origins_error_pages` | `site_error_page`; `origin_pool.active_health_check`, `session_affinity`; `site.keep_cache_tag`, `intercept_origin_errors`, `error_pages_updated_at`; `origin_health.source` (joins the primary key, existing rows are passive); `access_log.request_id` |
 | `0032_g5_rules` | `bulk_redirect`; `origin.group_name`; `cache_rule.browser_ttl_seconds`, `list_ids`; the structured conditions of existing cache rules are rewritten as equivalent expressions and the structured columns cleared |
 | `0033_domains_without_ownership` | Drops `domain_ownership` and `site_domain.verified`; of duplicate pending domains one row stays; `site_domain (name, wildcard)` is unique |
-| `0034_sites_without_suspension` | Drops `site.suspended`, `suspend_reason`, `suspend_note`, `suspended_at`; suspended sites become disabled; service accounts lose `sites:suspend` |
+| `0034_sites_without_suspension` | Drops the `0023` site state columns; sites they took offline become disabled; service accounts lose the matching scope |
 | `0035_without_organization_limits` | Drops `organization_limit`; service accounts lose `limits:read`, `limits:write` |
 | `0036_single_operator` | Keeps only the earliest platform administrator who is not disabled (the other accounts' alert subscriptions move to it); IP list names become unique (organization lists with a taken name get a suffix and their rules follow), former organization lists become collections; drops `organization`, `member`, `invitation`, `organization_settings`, every `organization_id`, `session.active_organization_id` and `alert_channel.available_to_tenants`; service accounts lose the organization scopes |
 | `0037_dns_cluster_bindings` | `dns_binding`, `dns_lease`; `dns_revision.cluster_id`, `dns_managed_name.cluster_id`; the DNS steering policy becomes one binding per cluster; drops `dns_state` |

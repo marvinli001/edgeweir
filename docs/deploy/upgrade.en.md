@@ -116,7 +116,7 @@ Result of the migrations:
 | Alert subscriptions | The other accounts' subscriptions merge into the remaining account: one per channel, covering their sites, with the alert kinds combined |
 | Data | Sites, certificates, DNS credentials, bans, IP lists, rules, alerts, analytics, and audit log entries of every organization stay |
 | IP lists | Organization lists become **Referenced by rules** lists (before, only the platform allow and block lists applied at the edge); a list whose name is taken gets the suffix `_<6 hex digits>`, and the rules of its organization's sites follow the new name |
-| Suspended sites | Become disabled |
+| Site state | Enabled or disabled only: sites in any other offline state become disabled |
 | Domains | Domains pending verification route at once; a name on several sites stays on one: the verified one, else the one added first |
 | Removed settings | Organization technical limits, organization two-factor requirements and default clusters, the switch that let tenants turn on OWASP CRS, the ownership check DNS setting, and service account scopes for organizations |
 | Environment | `EDGEWEIR_DNS_RESOLVERS` is no longer read and can be removed from `.env` |
@@ -128,7 +128,7 @@ API changes; integrations that use these must change:
 
 | Change | Interface |
 | --- | --- |
-| Removed | `organizations.*`, `members.*`, `invitations.*`, `users.*`, `admin.*` (including suspend and resume under `/admin/sites`, `/admin/organizations/{id}/limits`, and `/admin/bans`), `platformIpLists.*` (`/platform-ip-lists`), `domainOwnership.*` and `/sites/{id}/ownership*`, `settings.waf`, `settings.dnsResolvers` |
+| Removed | `organizations.*`, `members.*`, `invitations.*`, `users.*`, `admin.*` (including `/admin/sites`, `/admin/organizations/{id}/limits`, and `/admin/bans`), `platformIpLists.*` (`/platform-ip-lists`), `domainOwnership.*` and `/sites/{id}/ownership*`, `settings.waf`, `settings.dnsResolvers` |
 | Fields | Sites, bans, certificates, usage records, and audit entries no longer carry an organization field |
 | Paths | Node upgrades are at `/api/v1/node-upgrades` and `/api/v1/node-releases/{version}`, without the `/admin` prefix; bans use `/api/v1/bans` only, IP lists `/api/v1/ip-lists` only |
 

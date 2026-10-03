@@ -696,8 +696,8 @@ describe("Cache-Tag, active health checks, session affinity, error pages and off
   ];
   const offline: OfflineHostModel[] = [
     { name: "old.test", wildcard: false, reason: "disabled" },
-    { name: "away.test", wildcard: true, reason: "suspended" },
-    { name: "away.test", wildcard: false, reason: "suspended" },
+    { name: "away.test", wildcard: true, reason: "disabled" },
+    { name: "away.test", wildcard: false, reason: "disabled" },
   ];
   const plain = compileNodeConfig({ clusterId: "c", sites: [site("a"), site("b")] }, 1n);
 
@@ -713,7 +713,7 @@ describe("Cache-Tag, active health checks, session affinity, error pages and off
           ),
           site("b", { errorPages: null }),
         ],
-        platformErrorPages: { unknownHost: "", siteDisabled: "", siteSuspended: "" },
+        platformErrorPages: { unknownHost: "", siteDisabled: "" },
         offlineHosts: [],
         challengeKeys: keys,
       },
@@ -731,7 +731,7 @@ describe("Cache-Tag, active health checks, session affinity, error pages and off
       {
         clusterId: "c",
         sites: [site("a", { keepCacheTag: true }), site("b")],
-        platformErrorPages: { unknownHost: "", siteDisabled: "", siteSuspended: "<p>later</p>" },
+        platformErrorPages: { unknownHost: "", siteDisabled: "<p>later</p>" },
         offlineHosts: offline,
       },
       1n,
@@ -739,12 +739,11 @@ describe("Cache-Tag, active health checks, session affinity, error pages and off
     expect(config.sites.map((s) => s.keepCacheTag)).toEqual([true, false]);
     expect(config.platformErrorPages).toMatchObject({
       unknownHost: "",
-      siteDisabled: "",
-      siteSuspended: "<p>later</p>",
+      siteDisabled: "<p>later</p>",
     });
     expect(config.offlineHosts.map((h) => [h.name, h.wildcard, h.reason])).toEqual([
-      ["away.test", false, "suspended"],
-      ["away.test", true, "suspended"],
+      ["away.test", false, "disabled"],
+      ["away.test", true, "disabled"],
       ["old.test", false, "disabled"],
     ]);
     expect(config.requiredFeatures).toEqual([]);
@@ -843,8 +842,8 @@ describe("Cache-Tag, active health checks, session affinity, error pages and off
       offlineHosts: [
         { name: "b.test", wildcard: false, reason: "disabled" },
         { name: "a.test.example", wildcard: false, reason: "disabled" },
-        { name: "a.test", wildcard: true, reason: "suspended" },
-        { name: "a.test", wildcard: false, reason: "suspended" },
+        { name: "a.test", wildcard: true, reason: "disabled" },
+        { name: "a.test", wildcard: false, reason: "disabled" },
       ],
       sites: [
         {
@@ -876,7 +875,7 @@ describe("Cache-Tag, active health checks, session affinity, error pages and off
       {
         clusterId: "c",
         sites: [site("a"), site("b")],
-        platformErrorPages: { unknownHost: "<p>nobody</p>", siteDisabled: "", siteSuspended: "" },
+        platformErrorPages: { unknownHost: "<p>nobody</p>", siteDisabled: "" },
         offlineHosts: offline,
       },
       2n,

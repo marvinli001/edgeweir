@@ -23,7 +23,7 @@
 └── 子进程 stdin/stdout ──▶ edgeweir-certd ──▶ ACME CA、DNS 服务商 API
 ```
 
-控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.19.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
+控制台与节点之间唯一的契约是 `proto/` 中的 `edgeweir.node.v1`（当前 tag `proto/v0.20.0`）。开源核心与商业产品的边界见 [LICENSING.md](LICENSING.md)。
 
 ## 仓库布局
 
@@ -507,7 +507,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0020_m6_upgrade_health` | `node_upgrade_delivery.healthy_since` |
 | `0021_authenticated_revision_floor` | `node_config_status.revision_receipt_verified` |
 | `0022_bound_traffic_counters` | 既有流量计数截断到 0 至 2^53−1 |
-| `0023_p0_site_state` | `site.suspended`、`suspend_reason`、`suspend_note`、`suspended_at`（平台暂停） |
+| `0023_p0_site_state` | 网站的四个状态列（`0034` 删除） |
 | `0024_p0_organization_limits` | `organization_limit` |
 | `0025_p0_service_accounts` | `service_account`、`service_account_key`、`idempotency_key`；`invitation.inviter_id` 可空，新增 `inviter_service_account_id` |
 | `0026_p0_usage` | `site_usage`、序列 `site_usage_seq`、`node_stats_cursor.complete_until`；为已有分钟统计标记用量窗口 |
@@ -518,7 +518,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0031_g4_cache_origins_error_pages` | `site_error_page`；`origin_pool.active_health_check`、`session_affinity`；`site.keep_cache_tag`、`intercept_origin_errors`、`error_pages_updated_at`；`origin_health.source`（进入主键，已有行为被动检查）；`access_log.request_id` |
 | `0032_g5_rules` | `bulk_redirect`；`origin.group_name`；`cache_rule.browser_ttl_seconds`、`list_ids`；已有缓存规则的结构化条件改写为等价表达式并清空结构化列 |
 | `0033_domains_without_ownership` | 删除 `domain_ownership` 与 `site_domain.verified`；重名的待验证域名只保留一条；`site_domain (name, wildcard)` 全局唯一 |
-| `0034_sites_without_suspension` | 删除 `site.suspended`、`suspend_reason`、`suspend_note`、`suspended_at`；已暂停的网站改为停用；服务账号去掉 `sites:suspend` |
+| `0034_sites_without_suspension` | 删除 `0023` 的网站状态列，由它们下线的网站改为停用；服务账号去掉对应的 scope |
 | `0035_without_organization_limits` | 删除 `organization_limit`；服务账号去掉 `limits:read`、`limits:write` |
 | `0036_single_operator` | 只保留最早且未停用的平台管理员账号（其余账号的告警订阅合并给它）；IP 名单名称全局唯一（重名的组织名单加后缀并改写其规则），原组织名单改为 collection；删除 `organization`、`member`、`invitation`、`organization_settings` 与各表的 `organization_id`、`session.active_organization_id`、`alert_channel.available_to_tenants`；服务账号去掉组织相关 scope |
 | `0037_dns_cluster_bindings` | `dns_binding`、`dns_lease`；`dns_revision.cluster_id`、`dns_managed_name.cluster_id`；DNS 调度策略转换为各集群的绑定，删除 `dns_state` |

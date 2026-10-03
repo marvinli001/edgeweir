@@ -116,7 +116,7 @@ Docker Compose：
 | 告警订阅 | 其他账户的订阅并入保留的账户：每个渠道一条，包含这些订阅的网站，告警种类合并 |
 | 数据 | 所有组织的网站、证书、DNS 凭据、封禁、IP 名单、规则、告警、统计与审计日志都保留 |
 | IP 名单 | 组织的名单变为「供规则引用」（此前只有平台的放行与拦截名单在边缘生效）；名称与已有名单重复时加后缀 `_<6 位十六进制>`，该组织网站规则中的引用随之改名 |
-| 暂停的网站 | 变为停用 |
+| 网站状态 | 只有启用与停用：处于其他下线状态的网站变为停用 |
 | 域名 | 待验证的域名直接参与路由；同一域名在多个网站上时只保留一个：已验证的优先，否则保留最早添加的 |
 | 删除的设置 | 组织技术限额、组织两步验证要求与默认集群、「允许租户开启 OWASP CRS」开关、「所有权校验 DNS」设置、服务账号中与组织有关的 scope |
 | 环境变量 | 不再读取 `EDGEWEIR_DNS_RESOLVERS`，可从 `.env` 删除 |
@@ -128,7 +128,7 @@ API 变化，使用这些接口的集成需要修改：
 
 | 变化 | 接口 |
 | --- | --- |
-| 移除 | `organizations.*`、`members.*`、`invitations.*`、`users.*`、`admin.*`（含 `/admin/sites` 的暂停与恢复、`/admin/organizations/{id}/limits`、`/admin/bans`）、`platformIpLists.*`（`/platform-ip-lists`）、`domainOwnership.*` 与 `/sites/{id}/ownership*`、`settings.waf`、`settings.dnsResolvers` |
+| 移除 | `organizations.*`、`members.*`、`invitations.*`、`users.*`、`admin.*`（含 `/admin/sites`、`/admin/organizations/{id}/limits`、`/admin/bans`）、`platformIpLists.*`（`/platform-ip-lists`）、`domainOwnership.*` 与 `/sites/{id}/ownership*`、`settings.waf`、`settings.dnsResolvers` |
 | 字段 | 网站、封禁、证书、用量与审计记录不再包含组织字段 |
 | 路径 | 节点升级为 `/api/v1/node-upgrades`、`/api/v1/node-releases/{version}`，不带 `/admin` 前缀；封禁只用 `/api/v1/bans`，IP 名单只用 `/api/v1/ip-lists` |
 

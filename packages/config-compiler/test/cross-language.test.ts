@@ -511,14 +511,13 @@ describe("content hash matches the Go agent", () => {
     ];
     input.platformErrorPages = {
       unknownHost: "<h1>{{host}} is not served here</h1>",
-      siteDisabled: "",
-      siteSuspended: "<h1>suspended</h1><p>{{request_id}}</p>",
+      siteDisabled: "<h1>disabled</h1><p>{{request_id}}</p>",
     };
     input.offlineHosts = [
       { name: "away.test.example", wildcard: false, reason: "disabled" },
-      { name: "away.test", wildcard: false, reason: "suspended" },
+      { name: "away.test", wildcard: false, reason: "disabled" },
       { name: "old.test", wildcard: false, reason: "disabled" },
-      { name: "away.test", wildcard: true, reason: "suspended" },
+      { name: "away.test", wildcard: true, reason: "disabled" },
     ];
     const config = compileNodeConfig(input, 12n);
     // Session affinity alone brings the cluster's keys (and challenge-v1), not the protection.
