@@ -40,6 +40,7 @@ const SECTIONS = [
       ["deploy-script", "docs/deploy/deploy-script.md"],
       ["railway", "docs/deploy/railway.md"],
       ["fly", "docs/deploy/fly.md"],
+      ["bunny", "docs/deploy/bunny.md"],
       ["networking", "docs/deploy/networking.md"],
       ["nodes", "docs/deploy/nodes.md"],
       ["upgrade", "docs/deploy/upgrade.md"],

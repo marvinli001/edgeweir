@@ -33,6 +33,7 @@ Console components, runtime requirements, supported platforms, and process roles
 | BaoTa / aaPanel, or any Docker host | `deploy.sh` with `compose.baota.yml` (bundled PostgreSQL) or `compose.baota-host.yml` (local or cloud PostgreSQL, host network) | [baota.en.md](baota.en.md), [deploy-script.en.md](deploy-script.en.md) | Supported |
 | Railway | Console image with Railway PostgreSQL 18; web console, optional Railway CLI | [railway.en.md](railway.en.md) | Supported |
 | Fly.io | Console image with an external PostgreSQL 18; flyctl deployment, Dashboard for secrets, IPs, certificates, and logs | [fly.en.md](fly.en.md) | Supported |
+| bunny.net Magic Containers | Console image with an external PostgreSQL 18; a CDN endpoint for the web console, an Anycast IP for the node channel; Dashboard, optional bunny CLI | [bunny.en.md](bunny.en.md) | Supported |
 
 ### Platform conditions
 
@@ -85,6 +86,7 @@ Worker schedules:
 | [deploy.sh reference](deploy-script.en.md) | Install and upgrade script |
 | [Railway](railway.en.md) | Web console deployment with CLI equivalents |
 | [Fly.io](fly.en.md) | flyctl deployment and Dashboard steps |
+| [bunny.net Magic Containers](bunny.en.md) | Dashboard deployment with bunny CLI equivalents |
 | [Ports, reverse proxy, and trusted proxies](networking.en.md) | 3000 and 8443, nginx examples, `EDGEWEIR_TRUSTED_PROXIES` |
 | [Adding nodes](nodes.en.md) | Install command, `install.sh` checks, regional probes, downloads mirror |
 | [Versions, upgrades, and rollback](upgrade.en.md) | Image tags, pinning, upgrade, rollback, signature verification |

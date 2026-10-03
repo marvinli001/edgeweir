@@ -33,6 +33,7 @@
 | 宝塔 / aaPanel，或任意 Docker 主机 | `deploy.sh` 与 `compose.baota.yml`（内置 PostgreSQL）或 `compose.baota-host.yml`（本机或云 PostgreSQL，host 网络） | [baota.md](baota.md)、[deploy-script.md](deploy-script.md) | 支持 |
 | Railway | 控制台镜像与 Railway PostgreSQL 18；网页控制台，可选 Railway CLI | [railway.md](railway.md) | 支持 |
 | Fly.io | 控制台镜像与外部 PostgreSQL 18；flyctl 部署，Dashboard 管理 secret、IP、证书与日志 | [fly.md](fly.md) | 支持 |
+| bunny.net Magic Containers | 控制台镜像与外部 PostgreSQL 18；CDN 端点承载 Web，Anycast IP 承载节点通道；Dashboard，可选 bunny CLI | [bunny.md](bunny.md) | 支持 |
 
 ### 平台条件
 
@@ -85,6 +86,7 @@ worker 定时任务：
 | [deploy.sh 参考](deploy-script.md) | 安装与升级脚本 |
 | [Railway](railway.md) | 网页控制台部署与命令行等效操作 |
 | [Fly.io](fly.md) | flyctl 部署与 Dashboard 操作 |
+| [bunny.net Magic Containers](bunny.md) | Dashboard 部署与 bunny CLI 等效操作 |
 | [端口、反向代理与可信代理](networking.md) | 3000 与 8443、nginx 示例、`EDGEWEIR_TRUSTED_PROXIES` |
 | [接入节点](nodes.md) | 安装命令、`install.sh` 校验、区域探针、下载镜像 |
 | [版本、升级与回滚](upgrade.md) | 镜像 tag、固定版本、升级、回滚、签名校验 |
