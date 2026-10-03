@@ -338,16 +338,14 @@ function AddProbeDialog({
   const selectedRegion = regionList.some((r) => r.id === regionId)
     ? regionId
     : (regionList[0]?.id ?? "");
-  // Closing forgets the token: it is shown once.
-  const setOpen = (next: boolean) => {
-    if (!next) {
-      setResult(null);
-      create.reset();
-    }
-    onOpenChange(next);
+  // The token is shown once: forgotten once the dialog has closed, not while it closes.
+  const forget = (isOpen: boolean) => {
+    if (isOpen) return;
+    setResult(null);
+    create.reset();
   };
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange} onOpenChangeComplete={forget}>
       <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{m.probes_add()}</DialogTitle>
@@ -384,7 +382,7 @@ function AddProbeDialog({
               </Field>
             </FieldGroup>
             <DialogFooter>
-              <Button onClick={() => setOpen(false)} data-testid="probe-token-close">
+              <Button onClick={() => onOpenChange(false)} data-testid="probe-token-close">
                 {m.common_close()}
               </Button>
             </DialogFooter>

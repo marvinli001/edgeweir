@@ -95,17 +95,15 @@ function EnrollDialog({
       : m.enroll_ttl_hours({ count: minutes / 60 });
   const groupOptions = (groups.data ?? []).map((g) => ({ label: g.name, value: g.id }));
   const selectedGroup = groupId || groups.data?.find((g) => g.isDefault)?.id || "";
-  // Closing forgets the token: it is shown once.
-  const setOpen = (next: boolean) => {
-    if (!next) {
-      setResult(null);
-      create.reset();
-    }
-    onOpenChange(next);
+  // The token is shown once: forgotten once the dialog has closed (clearing it on the click
+  // would leave an empty dialog on screen until the closing navigation and animation end).
+  const forget = (isOpen: boolean) => {
+    if (isOpen) return;
+    setResult(null);
+    create.reset();
   };
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange} onOpenChangeComplete={forget}>
       <DialogContent
         className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-2xl"
         initialFocus={closeRef}
@@ -226,7 +224,7 @@ function EnrollDialog({
             />
             {m.enroll_options()}
           </Button>
-          <Button ref={closeRef} onClick={() => setOpen(false)} data-testid="enroll-close">
+          <Button ref={closeRef} onClick={() => onOpenChange(false)} data-testid="enroll-close">
             {m.common_close()}
           </Button>
         </DialogFooter>
