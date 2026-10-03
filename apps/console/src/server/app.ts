@@ -96,6 +96,18 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
     }),
   );
 
+  /**
+   * A response without Cache-Control may be stored by a CDN in front of the
+   * console (bunny.net keeps one for a month) and served to the next caller of
+   * the same URL: the session, an /api/v1 answer for another API key, the SPA
+   * shell of an old release. Routes that may be cached set the header
+   * themselves (hashed /assets/*, /downloads/*).
+   */
+  app.use("*", async (c, next) => {
+    await next();
+    if (!c.res.headers.has("cache-control")) c.res.headers.set("cache-control", "no-store");
+  });
+
   app.get("/healthz", (c) => c.json({ status: "ok", version: ctx.env.version }));
 
   app.on(["GET", "POST"], "/api/auth/*", async (c, next) => {
@@ -173,15 +185,18 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
   if (opts.webDist) {
     const root = resolve(opts.webDist);
     const indexHtml = readFileSync(join(root, "index.html"), "utf8");
+    // Build output with content-hashed names. The header is set on the
+    // response: serveStatic's onFound runs after the response is built. A
+    // missing asset is a 404, never the SPA shell under an asset URL.
     app.use(
       "/assets/*",
-      serveStatic({
-        root,
-        onFound: (_p, c) => {
-          c.header("cache-control", "public, max-age=31536000, immutable");
-        },
-      }),
+      async (c, next) => {
+        await next();
+        if (c.res.ok) c.res.headers.set("cache-control", "public, max-age=31536000, immutable");
+      },
+      serveStatic({ root }),
     );
+    app.all("/assets/*", notFound);
     app.use("*", serveStatic({ root }));
     // Client-side routes fall back to the SPA shell.
     app.get("*", (c) => c.html(indexHtml));
