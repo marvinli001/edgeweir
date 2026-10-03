@@ -37,7 +37,7 @@ The error pages nodes answer with: site templates, platform templates, built-in 
 | Item | Behavior |
 | --- | --- |
 | Replace origin error responses | When on and the origin itself returns 403, 429, 502, 503 or 504 for a status with a template, the node returns the template instead (`origin-error`); statuses without a template pass the origin's response through |
-| Stale content first | When a rule sets **Stale if error (s)** and the node holds an expired copy, the stale copy wins over the error page |
+| Stale content first | When a rule sets **Stale if error (s)** and the node holds an expired copy, the stale copy wins over the error page; once the expired copy may no longer be served, the answer is the 502 page (`origin-unreachable`) |
 | Not cached | Error pages carry `Cache-Control: no-store`, and nodes never store them in the cache |
 | Other statuses | 404 (ACME challenge not found), 405, 421, 508 and others stay plain text; a non-GET/HEAD request without a pass refused by a challenge (`X-Edgeweir-Challenge: required`) is plain text too |
 | Audit | Changes are audited as `site.error_pages_update` (the statuses that changed and their sizes, not the templates) |
@@ -56,7 +56,7 @@ The error pages nodes answer with: site templates, platform templates, built-in 
 | `{{status}}` | The status, e.g. `403` |
 | `{{request_id}}` | The request ID, the same as the `X-Request-Id` response header |
 | `{{client_ip}}` | The visitor's IP (on PROXY protocol listeners, the address of the PROXY header) |
-| `{{host}}` | The request's Host, lowercase, without the port |
+| `{{host}}` | The request's Host, lowercase, without the port; empty when the request has no valid Host |
 
 Example:
 
@@ -71,13 +71,24 @@ Example:
 
 ## Built-in pages
 
-Without a template, nodes answer with a self-contained built-in page: no external resources, light or dark with the system, showing the status, a title and the request ID. The language is Chinese or English, whichever ranks highest in `Accept-Language`; English when neither is listed.
+Without a template, nodes answer with a self-contained built-in page: no external resources, no script, light or dark with the system. The page shows the status and the path from the visitor through the edge node to the origin, marking the hop that failed (the visitor, the edge node or the origin) and its state; below come the title, what the visitor can do, **Reload** where reloading can help, and the request ID, the time the node answered (UTC), the host and the visitor's IP (shown on click). Motion is CSS only and stops when the system asks for reduced motion. The language is Chinese or English, whichever ranks highest in `Accept-Language`; English when neither is listed.
 
 | Page | Status | `X-Edgeweir-Error` |
 | --- | --- | --- |
 | Access denied / Too many requests / Origin unreachable / Service unavailable / Origin timed out | 403 / 429 / 502 / 503 / 504 | See above |
 | Site not found | 404 | `unknown-host` |
 | Site disabled | 503 | `site-disabled` |
+
+Requests the node refuses and the node's internal errors get built-in pages too, never site templates. A refused request marks the visitor on the path, an internal error the edge node:
+
+| Page | Status | Requests | `X-Edgeweir-Error` |
+| --- | --- | --- | --- |
+| Bad request | 400 | Requests that do not parse (for example a TLS handshake on an HTTP port), a missing or invalid Host; a request body the OWASP CRS cannot parse | `bad-request`; `waf-blocked` when the CRS refuses it |
+| Request header too large | 400 | A request header over 8 KB or all headers over 32 KB, usually too many cookies | `header-too-large` |
+| HTTPS required | 400 | Plain HTTP sent to an HTTPS port | `https-required` |
+| URL too long | 414 | A request line over 8 KB | `uri-too-long` |
+| Request too large | 413 | A request body over 100 MB | `body-too-large` |
+| Edge error | 500 | The node failed while handling the request | `internal-error` |
 
 ## Platform error pages
 
@@ -105,6 +116,7 @@ Nodes recognize disabled sites from the offline host list in their configuration
 | --- | --- |
 | Site error pages | Node feature `error-pages-v1`; while an active node of the cluster lacks it, pages cannot be saved ("Some nodes of the site's cluster do not support it yet") |
 | Platform error pages, offline hosts | No feature needed; older nodes ignore them, keep their plain-text answers and answer offline hosts with 404 |
+| Built-in pages for refused requests and internal errors | No feature needed; older nodes answer with nginx's own error pages |
 | Template space | Templates travel with the site table into the node's shared memory; with many sites and large templates raise the node flag `--sites-dict-mb` (default 64) |
 
 ## Troubleshooting
@@ -112,6 +124,7 @@ Nodes recognize disabled sites from the offline host list in their configuration
 | Symptom | Cause | Action |
 | --- | --- | --- |
 | Still a plain-text error | The node is too old; the status is not 403, 429, 502, 503 or 504 | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
+| An error page ending in "openresty" | The node is too old: that is nginx's own page | Upgrade the node |
 | The origin's error page is not replaced | **Replace origin error responses** is off, or the status has no template | Turn it on and set the status's template |
 | Saving shows "The … error page is larger than 65536 bytes" | The template exceeds 64 KiB in UTF-8 | Shorten the template; host large images elsewhere |
 | A disabled site answers 404 | The node is too old to know offline hosts | Upgrade the node |
