@@ -577,6 +577,30 @@ message OriginPool {
   // Cookie-based session affinity (feature session-affinity-v1); unset
   // means none. Added in v0.12.0.
   SessionAffinity session_affinity = 8;
+  // HTTP version of the requests to the origins (feature origin-http2-v1
+  // for ORIGIN_PROTOCOL_HTTP2). Unspecified means HTTP/1.1. Added in
+  // v0.21.0.
+  OriginProtocol protocol = 9;
+  // Proxy gRPC requests (Content-Type application/grpc, optionally with a
+  // "+" suffix or parameters; not gRPC-Web) over HTTP/2 end to end: the
+  // edge forwards them unbuffered with their trailers, so streaming calls
+  // in both directions work. They are never cached, their bodies have no
+  // size limit, and the OWASP CRS (Site.waf) does not inspect them.
+  // Requires protocol ORIGIN_PROTOCOL_HTTP2 (feature origin-http2-v1).
+  // Added in v0.21.0.
+  bool grpc = 10;
+}
+
+// OriginProtocol is the HTTP version of the requests to a pool's origins.
+// HTTP/2 goes over TLS with ALPN "h2" to HTTPS origins and with prior
+// knowledge (h2c) to HTTP origins; an origin that does not speak it fails
+// the attempt (there is no fallback to HTTP/1.1). WebSocket upgrades use
+// HTTP/1.1 whatever the protocol. Added in v0.21.0.
+enum OriginProtocol {
+  // HTTP/1.1, as before v0.21.0.
+  ORIGIN_PROTOCOL_UNSPECIFIED = 0;
+  ORIGIN_PROTOCOL_HTTP1 = 1;
+  ORIGIN_PROTOCOL_HTTP2 = 2;
 }
 
 // ActiveHealthCheck probes every origin of the pool from each node, honoring
@@ -586,7 +610,8 @@ message OriginPool {
 // probes and healthy again after healthy_threshold consecutive successful
 // ones. Merge with the passive check: an origin that either check marks
 // down takes no traffic (passive marks last until their recovery time).
-// S3-compatible origins are not probed.
+// S3-compatible origins are not probed. Probes use the pool's protocol:
+// HTTP/2 for ORIGIN_PROTOCOL_HTTP2 (v0.21.0).
 message ActiveHealthCheck {
   // Absolute path with an optional query, e.g. "/healthz": 1-1024 bytes of
   // printable ASCII without spaces, starting with "/".
