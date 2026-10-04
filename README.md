@@ -115,7 +115,7 @@ docker compose logs console | grep setupToken
 | 端口 | 用途 | 反向代理 |
 | --- | --- | --- |
 | 3000 | Web 控制台与 API | 支持在前端终结 TLS（如宝塔 nginx）。须将代理地址写入 `EDGEWEIR_TRUSTED_PROXIES`，否则审计日志与登录限速取不到真实客户端 IP；其他来源的转发头一律忽略。 |
-| 8443 | 节点通道 | 直接暴露，或经 nginx `stream` 四层透传。**禁止由代理终结 TLS**：控制台自行终结 TLS 并强制 mTLS。 |
+| 8443 | 节点通道 | 直接暴露，或经 nginx `stream` 四层透传。**禁止由代理终结 TLS**：控制台自行终结 TLS 并强制 mTLS。平台只转发 HTTP 时，节点经 3000 上的 WebSocket 入口 `/node-channel` 连接，节点通道的 TLS 在 WebSocket 内，见 [节点通道的 WebSocket 入口](docs/deploy/networking.md#节点通道的-websocket-入口)。 |
 
 ### 部署方式
 
@@ -126,6 +126,8 @@ docker compose logs console | grep setupToken
 | Railway | [Railway](docs/deploy/railway.md) |
 | Fly.io | [Fly.io](docs/deploy/fly.md) |
 | bunny.net Magic Containers | [bunny.net Magic Containers](docs/deploy/bunny.md) |
+| Render | [Render](docs/deploy/render.md)；[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/marvinli001/edgeweir) |
+| Zeabur | [Zeabur](docs/deploy/zeabur.md)；模板 [`zeabur.yaml`](zeabur.yaml) |
 
 交互式安装与升级脚本 `deploy.sh` 适用于任何装有 Docker 与 Compose v2 的 Linux，支持本机、云端或内置 PostgreSQL：
 
@@ -247,7 +249,7 @@ doc/                       文档站（Fumadocs），发布至 GitHub Pages
 
 | 分类 | 文档 |
 | --- | --- |
-| 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [bunny.net](docs/deploy/bunny.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
+| 部署 | [部署概览](docs/deploy/README.md) · [Docker Compose](docs/deploy/docker.md) · [宝塔 / aaPanel](docs/deploy/baota.md) · [deploy.sh](docs/deploy/deploy-script.md) · [Railway](docs/deploy/railway.md) · [Fly.io](docs/deploy/fly.md) · [bunny.net](docs/deploy/bunny.md) · [Render](docs/deploy/render.md) · [Zeabur](docs/deploy/zeabur.md) · [端口与反向代理](docs/deploy/networking.md) · [接入节点](docs/deploy/nodes.md) · [版本与升级](docs/deploy/upgrade.md) · [备份与恢复](docs/deploy/backup.md) |
 | 使用 | [快速上手](docs/guide/first-site.md) · [账户与登录](docs/guide/account.md) · [集群与系统](docs/guide/system.md) · [源站与缓存](docs/guide/origins-and-cache.md) · [HTTPS 与证书](docs/guide/https.md) · [规则](docs/guide/rules.md) · [封禁](docs/guide/bans.md) · [挑战与 CC 防护](docs/guide/challenges.md) · [OWASP CRS 托管规则](docs/guide/waf.md) · [DNS 调度与告警](docs/guide/dns-and-alerts.md) · [区域探针与智能调度](docs/guide/scheduling.md) · [四层转发](docs/guide/l4.md) · [访问日志与 AccessKey](docs/guide/access-logs.md) · [节点升级](docs/guide/node-upgrades.md) |
 | 参考 | [环境变量](docs/reference/environment.md) · [命令行](docs/reference/cli.md) · [API 与端点](docs/reference/api.md) |
 | 项目 | [架构](ARCHITECTURE.md) · [安全](SECURITY.md) · [贡献指南](CONTRIBUTING.md) · [许可证](LICENSING.md) |

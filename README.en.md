@@ -115,7 +115,7 @@ See [access logs and AccessKeys](docs/guide/access-logs.en.md) and [backup and r
 | Port | Purpose | Reverse proxy |
 | --- | --- | --- |
 | 3000 | Web console and API | TLS may be terminated in front (e.g. BaoTa nginx). Add the proxy address to `EDGEWEIR_TRUSTED_PROXIES` so audit entries and sign-in rate limits see the client IP; forwarding headers from other sources are ignored. |
-| 8443 | Node channel | Expose directly or pass through at layer 4 with nginx `stream`. **Never terminate TLS on a proxy**: the console terminates TLS itself and enforces mTLS. |
+| 8443 | Node channel | Expose directly or pass through at layer 4 with nginx `stream`. **Never terminate TLS on a proxy**: the console terminates TLS itself and enforces mTLS. Where the platform forwards HTTP only, nodes use the WebSocket entry `/node-channel` on 3000, with the node channel's TLS inside the WebSocket; see [The node channel's WebSocket entry](docs/deploy/networking.en.md#the-node-channels-websocket-entry). |
 
 ### Deployment options
 
@@ -126,6 +126,8 @@ See [access logs and AccessKeys](docs/guide/access-logs.en.md) and [backup and r
 | Railway | [Railway](docs/deploy/railway.en.md) |
 | Fly.io | [Fly.io](docs/deploy/fly.en.md) |
 | bunny.net Magic Containers | [bunny.net Magic Containers](docs/deploy/bunny.en.md) |
+| Render | [Render](docs/deploy/render.en.md); [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/marvinli001/edgeweir) |
+| Zeabur | [Zeabur](docs/deploy/zeabur.en.md); template [`zeabur.yaml`](zeabur.yaml) |
 
 The interactive install and upgrade script `deploy.sh` runs on any Linux host with Docker and Compose v2, with a local, cloud or bundled PostgreSQL:
 
@@ -247,7 +249,7 @@ The documentation site <https://marvinli001.github.io/edgeweir/en/> is generated
 
 | Area | Documents |
 | --- | --- |
-| Deployment | [Overview](docs/deploy/README.en.md) · [Docker Compose](docs/deploy/docker.en.md) · [BT Panel / aaPanel](docs/deploy/baota.en.md) · [deploy.sh](docs/deploy/deploy-script.en.md) · [Railway](docs/deploy/railway.en.md) · [Fly.io](docs/deploy/fly.en.md) · [bunny.net](docs/deploy/bunny.en.md) · [Ports and reverse proxy](docs/deploy/networking.en.md) · [Adding nodes](docs/deploy/nodes.en.md) · [Versions and upgrades](docs/deploy/upgrade.en.md) · [Backup and recovery](docs/deploy/backup.en.md) |
+| Deployment | [Overview](docs/deploy/README.en.md) · [Docker Compose](docs/deploy/docker.en.md) · [BT Panel / aaPanel](docs/deploy/baota.en.md) · [deploy.sh](docs/deploy/deploy-script.en.md) · [Railway](docs/deploy/railway.en.md) · [Fly.io](docs/deploy/fly.en.md) · [bunny.net](docs/deploy/bunny.en.md) · [Render](docs/deploy/render.en.md) · [Zeabur](docs/deploy/zeabur.en.md) · [Ports and reverse proxy](docs/deploy/networking.en.md) · [Adding nodes](docs/deploy/nodes.en.md) · [Versions and upgrades](docs/deploy/upgrade.en.md) · [Backup and recovery](docs/deploy/backup.en.md) |
 | Usage | [Quick start](docs/guide/first-site.en.md) · [Account and sign-in](docs/guide/account.en.md) · [Clusters and system](docs/guide/system.en.md) · [Origins and cache](docs/guide/origins-and-cache.en.md) · [HTTPS and certificates](docs/guide/https.en.md) · [Rules](docs/guide/rules.en.md) · [Bans](docs/guide/bans.en.md) · [Challenges and CC mitigation](docs/guide/challenges.en.md) · [OWASP CRS managed rules](docs/guide/waf.en.md) · [DNS steering and alerts](docs/guide/dns-and-alerts.en.md) · [Regional probes and scheduling](docs/guide/scheduling.en.md) · [Layer-4 forwarding](docs/guide/l4.en.md) · [Access logs and AccessKeys](docs/guide/access-logs.en.md) · [Node upgrades](docs/guide/node-upgrades.en.md) |
 | Reference | [Environment variables](docs/reference/environment.en.md) · [Command line](docs/reference/cli.en.md) · [API and endpoints](docs/reference/api.en.md) |
 | Project | [Architecture](ARCHITECTURE.en.md) · [Security](SECURITY.en.md) · [Contributing](CONTRIBUTING.en.md) · [Licensing](LICENSING.en.md) |

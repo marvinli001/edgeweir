@@ -41,6 +41,8 @@ const SECTIONS = [
       ["railway", "docs/deploy/railway.md"],
       ["fly", "docs/deploy/fly.md"],
       ["bunny", "docs/deploy/bunny.md"],
+      ["render", "docs/deploy/render.md"],
+      ["zeabur", "docs/deploy/zeabur.md"],
       ["networking", "docs/deploy/networking.md"],
       ["nodes", "docs/deploy/nodes.md"],
       ["upgrade", "docs/deploy/upgrade.md"],

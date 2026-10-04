@@ -6,8 +6,8 @@ Configure console ports, reverse proxies, node channel passthrough, and client I
 
 | Port | Protocol | Serves | Exposure | Constraint |
 | --- | --- | --- | --- | --- |
-| 3000/TCP | HTTP | Web UI, `/rpc`, `/api/v1`, `/healthz`, `/install.sh`, `/downloads/*` | Reverse proxy (may terminate TLS), or direct | Nodes download `/install.sh` and `/downloads/*` from `EDGEWEIR_PUBLIC_URL` during installation; node hosts must reach that URL. |
-| 8443/TCP | TLS 1.2 or later, HTTP/2 or HTTP/1.1, Connect-RPC | Node channel (nodes and regional probes) | Direct, or layer-4 passthrough | 8443 needs layer-4 passthrough; a proxy that terminates TLS breaks the CA check and mTLS of nodes and probes. |
+| 3000/TCP | HTTP | Web UI, `/rpc`, `/api/v1`, `/healthz`, `/install.sh`, `/downloads/*`; the node channel's WebSocket entry `/node-channel` | Reverse proxy (may terminate TLS), or direct | Nodes download `/install.sh` and `/downloads/*` from `EDGEWEIR_PUBLIC_URL` during installation; node hosts must reach that URL. `/node-channel` is closed by default; see [The node channel's WebSocket entry](#the-node-channels-websocket-entry). |
+| 8443/TCP | TLS 1.2 or later, HTTP/2 or HTTP/1.1, Connect-RPC | Node channel (nodes and regional probes) | Direct, or layer-4 passthrough | 8443 needs layer-4 passthrough; a proxy that terminates TLS breaks the CA check and mTLS of nodes and probes. Where it cannot be opened to the internet, use the WebSocket entry. |
 | 5432/TCP | PostgreSQL | Bundled database | Not published | Reachable only inside the Compose network. |
 | 8123/TCP | HTTP | ClickHouse (`analytics` profile) | Not published | Reachable only inside the Compose network. |
 
@@ -41,13 +41,14 @@ The node channel URL is where nodes and region probes reach the node channel: `-
 | --- | --- | --- |
 | 1 | The URL saved in **System settings** | Saved |
 | 2 | `EDGEWEIR_NODE_API_URL` | Environment |
-| 3 | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` | Default |
+| 3 | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>`; with `EDGEWEIR_NODE_API_WEBSOCKET=true`, `wss://<host[:port] of EDGEWEIR_PUBLIC_URL>` (`ws://` when `EDGEWEIR_PUBLIC_URL` is plain HTTP) | Default |
 
-Saving an empty field returns to 2 and 3. The format is `https://host[:port]` without a path, query, or credentials; without a port it is 443.
+Saving an empty field returns to 2 and 3. The format is `https://host[:port]` (the node channel port), or `wss://host[:port]` or `ws://host[:port]` (the [WebSocket entry](#the-node-channels-websocket-entry) on the web port), without a path, query, or credentials; without a port it is 443 (80 for `ws://`).
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `EDGEWEIR_NODE_API_URL` | `https://<host of EDGEWEIR_PUBLIC_URL>:<NODE_API_PORT>` | The node channel URL while none is saved in **System settings**. |
+| `EDGEWEIR_NODE_API_WEBSOCKET` | `false` | `true`: the default URL becomes the WebSocket entry, `wss://<host[:port] of EDGEWEIR_PUBLIC_URL>`, and the entry is always open. |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | Empty | Extra names for the node channel certificate: DNS names or IPs, comma separated. |
 
 - The internal CA issues the node channel server certificate. Its names: `localhost`, `127.0.0.1`, `::1`, the container host name, the host of `EDGEWEIR_NODE_API_URL` (of the default URL when unset), every entry of `EDGEWEIR_NODE_API_HOSTNAMES`, the host name or IP of the URL saved in **System settings**, and those of node channel URLs in effect before it (the latest 32).
@@ -59,6 +60,7 @@ Saving an empty field returns to 2 and 3. The format is `https://host[:port]` wi
 | --- | --- |
 | The published host port is not 8443, e.g. `EDGEWEIR_NODE_API_PORT=9443` | Enter `https://<host>:9443` in **System settings**, or set `EDGEWEIR_NODE_API_URL`: the default uses the process listen port `NODE_API_PORT`, not the published port. |
 | The node channel's public address exists only after deployment (an Anycast IP or TCP proxy added later on the platform) | Enter it in **System settings** once it works, then generate install commands. |
+| The platform forwards HTTP only (Render), or 8443 cannot be opened to the internet | Use the [WebSocket entry](#the-node-channels-websocket-entry). |
 | Nodes connect through another name or IP (private address, load balancer name) | Add that name to `EDGEWEIR_NODE_API_HOSTNAMES`. |
 | The node channel's DNS name is on Cloudflare | Turn the proxy off for that record (DNS only): Cloudflare proxies HTTPS on port 8443 too, terminates TLS, and nodes report `CA pin mismatch`. |
 | The node channel URL changes | Change it in **System settings**; enrolled nodes keep connecting to the old address, which must stay reachable. |
@@ -133,6 +135,46 @@ Use nginx `stream` layer-4 passthrough when 8443 must go through nginx.
 
    Expected: the issuer contains `Edgeweir Node Channel CA`. Any other issuer means a device in between terminates TLS. The connection check in the "Node channel" card of **System settings** does the same from the console's network against the node channel URL; see [Node channel connection check](nodes.en.md#node-channel-connection-check).
 
+## The node channel's WebSocket entry
+
+When the platform forwards HTTP only (for example Render), or 8443 cannot be opened to the internet, nodes reach the node channel through the WebSocket entry on the web port.
+
+| Item | Details |
+| --- | --- |
+| URL | The node channel URL is `wss://<host>[:port]`, or `ws://` when the web port is reached over HTTP; usually the host and port of `EDGEWEIR_PUBLIC_URL`. Nodes connect to `<URL>/node-channel` with the WebSocket subprotocol `edgeweir-node-channel` |
+| TLS | The node channel's TLS runs inside the WebSocket and is terminated by the console; CA pinning and mTLS are the same as on 8443, and proxies or CDNs only forward TLS records. Nodes and `install.sh` verify the certificate of a `wss://` URL itself against the system roots: it must come from a public CA |
+| When it is open | `EDGEWEIR_NODE_API_WEBSOCKET=true`; or the node channel URL in effect is a `wss://` or `ws://` one; or, when a URL was saved in **System settings**, the URL in effect before or the one saved was such a URL (nodes enrolled through the entry keep connecting after the URL changes). Otherwise it answers 404 |
+| Refused | Requests with an `Origin` header (browsers) get 403; requests without the subprotocol `edgeweir-node-channel` get 400 |
+| Plain requests | `GET /node-channel` answers 426 while the entry is open and 404 while it is closed; `install.sh` takes 426 as reachable |
+| Source address | The "connection source address" of a node is the client address of the WebSocket request, resolved as in [Trusted proxies and client IP](#trusted-proxies-and-client-ip) |
+| Node version | edgeweir-node 0.2.0 or later; `install.sh` refuses to enroll an earlier version through a `wss://` or `ws://` URL |
+
+1. Set the node channel URL, either way:
+   - In the "Node channel" card of **System settings**, enter `wss://cdn-admin.example.com` and save; it applies at once.
+   - Set `EDGEWEIR_NODE_API_WEBSOCKET=true` and restart the console: without `EDGEWEIR_NODE_API_URL` and without a URL saved in **System settings**, the default URL is `wss://<host[:port] of EDGEWEIR_PUBLIC_URL>`.
+2. With a reverse proxy in front of the console, forward the WebSocket upgrade of `/node-channel`. nginx:
+
+   ```nginx title="nginx"
+   location = /node-channel {
+     proxy_pass http://127.0.0.1:3000;
+     proxy_http_version 1.1;
+     proxy_set_header Host $host;
+     proxy_set_header Upgrade $http_upgrade;
+     proxy_set_header Connection "upgrade";
+     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+     proxy_read_timeout 1h;   # long-lived node channel connections (WatchConfig streams)
+     proxy_send_timeout 1h;
+   }
+   ```
+
+3. Verify:
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' https://cdn-admin.example.com/node-channel
+   ```
+
+   Expected: `426`. The connection check in the "Node channel" card of **System settings** completes the TLS handshake through the WebSocket and shows "Reachable".
+
 ## Trusted proxies and client IP
 
 Audit entries and sign-in rate limiting use the client IP the console resolves.
@@ -179,4 +221,6 @@ Expected: `ip` is the browser's public address, not the gateway.
 | Every audit `ip` is the gateway address (e.g. `172.18.0.1`) | `EDGEWEIR_TRUSTED_PROXIES` unset, or different from the actual gateway (recreating the Compose network may change it) | Look up the gateway, update `EDGEWEIR_TRUSTED_PROXIES`, run `docker compose up -d`. |
 | Startup fails: `EDGEWEIR_TRUSTED_PROXIES: not an IP address or CIDR range` | An entry is neither an IP nor a CIDR range | Fix the entry. |
 | 3000 is reachable from the internet | `EDGEWEIR_HTTP_PORT` without a bind address (e.g. `3000`), or an older `compose.yml` that published it on all interfaces | Set `EDGEWEIR_HTTP_PORT=127.0.0.1:3000`, or update `compose.yml`. |
+| `install.sh`: `answers 404: the console's WebSocket entry is closed` | The node channel URL is a `wss://` or `ws://` one, but the console's entry is not open, or the URL points at another service | Save the URL in **System settings**, or set `EDGEWEIR_NODE_API_WEBSOCKET=true`; see [The node channel's WebSocket entry](#the-node-channels-websocket-entry). |
+| `install.sh`: `cannot reach the node channel WebSocket entry` | The node host cannot reach the web port, the system roots do not trust the certificate of the `wss://` URL, or a reverse proxy does not forward `/node-channel` | Run `curl -v https://<host>/node-channel` on the node; configure the reverse proxy as above. |
 | Node enrollment or connection fails | — | See [adding nodes: troubleshooting](nodes.en.md#troubleshooting). |

@@ -39,13 +39,13 @@
 
 ### 节点通道连接检查
 
-控制台用节点通道地址与自己的节点通道做一次 TLS 握手（不带客户端证书，不发送请求），比较对方出示的证书链与节点通道内部 CA。结果在 **系统设置** 的「节点通道」卡片中显示在地址下方；在添加节点对话框中显示为一行，检查未通过时带「修改」链接，打开 **系统设置**。
+控制台用节点通道地址与自己的节点通道做一次 TLS 握手（不带客户端证书，不发送请求），比较对方出示的证书链与节点通道内部 CA；`wss://`、`ws://` 地址先在 `/node-channel` 完成 WebSocket 握手，再在其中做这次 TLS 握手。结果在 **系统设置** 的「节点通道」卡片中显示在地址下方；在添加节点对话框中显示为一行，检查未通过时带「修改」链接，打开 **系统设置**。
 
 | 结果（系统设置 / 添加节点对话框） | 含义 |
 | --- | --- |
 | 连接正常 / 节点通道连接正常 | 握手成功，证书链含节点通道内部 CA |
 | 控制台无法连接该地址 / 控制台无法连接节点通道地址 | 3 秒内没有完成握手：地址或解析错误，端口未放行，或控制台所在网络到不了该地址 |
-| 证书不符，前面可能有代理或 CDN / 节点通道证书不符，前面可能有代理或 CDN | 出示了其他证书链：代理或 CDN 终结了 TLS，或地址指向其他服务，节点 mTLS 会失败，见 [节点通道四层透传](networking.md#节点通道四层透传) |
+| 证书不符，前面可能有代理或 CDN / 节点通道证书不符，前面可能有代理或 CDN | 出示了其他证书链：代理或 CDN 终结了 TLS，或地址指向其他服务，节点 mTLS 会失败，见 [节点通道四层透传](networking.md#节点通道四层透传)；`wss://`、`ws://` 地址的 WebSocket 握手被拒绝（入口未开放或地址指向其他服务）也是此结果，见 [节点通道的 WebSocket 入口](networking.md#节点通道的-websocket-入口) |
 | 出站策略不允许连接该地址 / 出站策略不允许连接节点通道地址 | **系统设置** 中保存的地址解析到内网、回环等特殊用途地址，`EDGEWEIR_OUTBOUND_ALLOW_CIDRS` 未放行：控制台不连接，与其他在 Web 界面保存的目标相同。`EDGEWEIR_NODE_API_URL` 与默认地址不受此限制 |
 
 检查只作提示，不阻止任何操作：控制台能连上自己的地址，不代表其他网络的节点也能连上；控制台所在网络不支持访问自己的公网地址（NAT 回流）时，结果为无法连接，节点仍可能正常注册。结果缓存 30 秒，地址改变后重新检查。API：`GET /api/v1/settings/node-channel-check`，返回 `{ url, result, checkedAt }`，`result` 为 `ok`、`unreachable`、`mismatch` 或 `refused`。
@@ -78,8 +78,8 @@ journalctl -u edgeweir-node -f
 | 步骤 | 行为 | 失败时 |
 | --- | --- | --- |
 | 1 | 读取 token（`EDGEWEIR_TOKEN` 或 `--token-file`），校验 `ewt_` 格式，从环境中移除，子进程不继承。状态目录已有 `identity.json`（已注册）时不需要 token，给出也不使用；加 `--force` 时仍需要 token | 退出 |
-| 2 | 检查 Linux、root、`curl`、`sha256sum`、`tar`、systemd、架构；`--format auto` 时有 `dpkg` 与 `apt-get` 选 deb，有 `rpm` 与 `dnf`/`yum` 选 rpm，否则 tar.gz。未注册时再检查节点通道：`--server` 须有 HTTP 响应（任意状态码，不发送 token）；主机有 `openssl` 时，服务器出示的最后一张证书须为 `--ca-sha256` 固定的 CA | 退出，指出无法连接或前面有终结 TLS 的代理 |
-| 3 | 解析版本：`--version`，或下载镜像的 `latest` 文件，再回退到 GitHub 最新发布。已注册的主机未给 `--version` 与 `--force` 时跳过第 3–9 步，不下载、不安装 | 退出，提示传入 `--version` |
+| 2 | 检查 Linux、root、`curl`、`sha256sum`、`tar`、systemd、架构；`--format auto` 时有 `dpkg` 与 `apt-get` 选 deb，有 `rpm` 与 `dnf`/`yum` 选 rpm，否则 tar.gz。未注册时再检查节点通道：`--server` 须有 HTTP 响应（任意状态码，不发送 token）；主机有 `openssl` 时，服务器出示的最后一张证书须为 `--ca-sha256` 固定的 CA。`wss://`、`ws://` 地址改为请求 `https://`（`ws://` 为 `http://`）`<主机[:端口]>/node-channel`，须返回 426（入口开放）；CA 在第 9 步注册时于 WebSocket 内核对 | 退出，指出无法连接、前面有终结 TLS 的代理，或 WebSocket 入口未开放 |
+| 3 | 解析版本：`--version`，或下载镜像的 `latest` 文件，再回退到 GitHub 最新发布。已注册的主机未给 `--version` 与 `--force` 时跳过第 3–9 步，不下载、不安装。经 `wss://`、`ws://` 地址注册时版本须为 0.2.0 及以上 | 退出，提示传入 `--version` |
 | 4 | 下载 `checksums.txt` 与 `checksums.txt.sigstore.json`：先下载镜像，后 GitHub | 退出 |
 | 5 | `cosign verify-blob` 校验签名：证书身份必须为 `https://github.com/marvinli001/edgeweir-node/.github/workflows/release.yml@refs/tags/v<版本>`，签发者 `https://token.actions.githubusercontent.com`。主机无 cosign 时下载 cosign v3.1.3，核对脚本内固定的 SHA-256 后安装到 `/usr/local/bin/cosign` | 退出 |
 | 6 | 从已签名的 `checksums.txt` 选出本机的安装包，以及同一发布的 `edgeweir-openresty`、`edgeweir-openresty-modsecurity`（每个软件包、格式、架构恰好一个文件）；glibc 低于 2.34 时退出；下载（先镜像，后 GitHub）并校验 SHA-256 | 退出 |

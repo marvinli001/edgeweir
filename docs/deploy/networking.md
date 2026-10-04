@@ -6,8 +6,8 @@
 
 | 端口 | 协议 | 内容 | 暴露方式 | 约束 |
 | --- | --- | --- | --- | --- |
-| 3000/TCP | HTTP | Web UI、`/rpc`、`/api/v1`、`/healthz`、`/install.sh`、`/downloads/*` | 反向代理（可终结 TLS），或直接暴露 | 节点安装时从 `EDGEWEIR_PUBLIC_URL` 下载 `/install.sh` 与 `/downloads/*`，节点主机须能访问该地址。 |
-| 8443/TCP | TLS 1.2 及以上，HTTP/2 或 HTTP/1.1，Connect-RPC | 节点通道（节点与区域探针） | 直接暴露，或四层透传 | 8443 必须四层透传；代理终结 TLS 会使节点与探针的 CA 校验与 mTLS 失败。 |
+| 3000/TCP | HTTP | Web UI、`/rpc`、`/api/v1`、`/healthz`、`/install.sh`、`/downloads/*`；节点通道的 WebSocket 入口 `/node-channel` | 反向代理（可终结 TLS），或直接暴露 | 节点安装时从 `EDGEWEIR_PUBLIC_URL` 下载 `/install.sh` 与 `/downloads/*`，节点主机须能访问该地址。`/node-channel` 默认关闭，见 [节点通道的 WebSocket 入口](#节点通道的-websocket-入口)。 |
+| 8443/TCP | TLS 1.2 及以上，HTTP/2 或 HTTP/1.1，Connect-RPC | 节点通道（节点与区域探针） | 直接暴露，或四层透传 | 8443 必须四层透传；代理终结 TLS 会使节点与探针的 CA 校验与 mTLS 失败。无法对外开放时改用 WebSocket 入口。 |
 | 5432/TCP | PostgreSQL | 内置数据库 | 不发布 | 仅 Compose 网络内可达。 |
 | 8123/TCP | HTTP | ClickHouse（`analytics` profile） | 不发布 | 仅 Compose 网络内可达。 |
 
@@ -41,13 +41,14 @@
 | --- | --- | --- |
 | 1 | **系统设置** 中保存的地址 | 已保存 |
 | 2 | `EDGEWEIR_NODE_API_URL` | 环境变量 |
-| 3 | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` | 默认 |
+| 3 | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>`；`EDGEWEIR_NODE_API_WEBSOCKET=true` 时为 `wss://<EDGEWEIR_PUBLIC_URL 的主机[:端口]>`（`EDGEWEIR_PUBLIC_URL` 为明文 HTTP 时 `ws://`） | 默认 |
 
-清空输入框并保存后回到 2、3。格式为 `https://主机[:端口]`，不含路径、查询参数与账号；端口省略时为 443。
+清空输入框并保存后回到 2、3。格式为 `https://主机[:端口]`（节点通道端口），或 `wss://主机[:端口]`、`ws://主机[:端口]`（Web 端口上的 [WebSocket 入口](#节点通道的-websocket-入口)），不含路径、查询参数与账号；端口省略时为 443（`ws://` 为 80）。
 
 | 变量 | 默认值 | 作用 |
 | --- | --- | --- |
 | `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` | **系统设置** 中没有保存地址时的节点通道地址。 |
+| `EDGEWEIR_NODE_API_WEBSOCKET` | `false` | `true`：默认地址改为 WebSocket 入口 `wss://<EDGEWEIR_PUBLIC_URL 的主机[:端口]>`，且入口始终开放。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | 空 | 节点通道证书的额外名称，逗号分隔的 DNS 名或 IP。 |
 
 - 节点通道的服务端证书由内部 CA 签发，名称包括：`localhost`、`127.0.0.1`、`::1`、容器主机名、`EDGEWEIR_NODE_API_URL` 的主机名（未设置时为默认地址的主机名）、`EDGEWEIR_NODE_API_HOSTNAMES` 的全部条目、**系统设置** 中保存的地址的主机名或 IP，以及此前生效过的节点通道地址的主机名或 IP（保留最近 32 个）。
@@ -59,6 +60,7 @@
 | --- | --- |
 | 宿主机发布端口不是 8443，例如 `EDGEWEIR_NODE_API_PORT=9443` | 在 **系统设置** 填写 `https://<主机名>:9443`，或设置 `EDGEWEIR_NODE_API_URL`：默认值使用进程监听端口 `NODE_API_PORT`，不是发布端口。 |
 | 部署后才有节点通道的公网地址（平台后加的 Anycast IP、TCP 代理） | 地址可用后在 **系统设置** 填写，再生成安装命令。 |
+| 平台只转发 HTTP（Render），或 8443 无法对外开放 | 使用 [WebSocket 入口](#节点通道的-websocket-入口)。 |
 | 节点经其他名称或 IP 连接（内网地址、负载均衡名称） | 将该名称加入 `EDGEWEIR_NODE_API_HOSTNAMES`。 |
 | 节点通道域名的 DNS 在 Cloudflare | 该记录关闭代理（仅 DNS）：Cloudflare 代理的 HTTPS 端口包括 8443，会终结 TLS，节点报 `CA pin mismatch`。 |
 | 更换节点通道地址 | 在 **系统设置** 修改；已注册的节点继续连接旧地址，旧地址需保持可用。 |
@@ -133,6 +135,46 @@ server {
 
    预期：签发者含 `Edgeweir Node Channel CA`。出现其他签发者表示 TLS 被中间设备终结。**系统设置** 的「节点通道」卡片中的连接检查做同样的检查，从控制台所在网络连接节点通道地址，见 [节点通道连接检查](nodes.md#节点通道连接检查)。
 
+## 节点通道的 WebSocket 入口
+
+平台只转发 HTTP（如 Render），或 8443 无法对外开放时，节点经 Web 端口上的 WebSocket 入口连接节点通道。
+
+| 项目 | 说明 |
+| --- | --- |
+| 地址 | 节点通道地址为 `wss://<主机>[:端口]`，Web 端口经 HTTP 访问时为 `ws://`；通常就是 `EDGEWEIR_PUBLIC_URL` 的主机与端口。节点连接 `<地址>/node-channel`，WebSocket 子协议 `edgeweir-node-channel` |
+| TLS | 节点通道的 TLS 在 WebSocket 内运行，由控制台终结；CA 指纹固定与 mTLS 与 8443 相同，代理或 CDN 只转发 TLS 记录。`wss://` 地址本身的证书由节点与 `install.sh` 按系统根证书校验，须由公共 CA 签发 |
+| 开放条件 | `EDGEWEIR_NODE_API_WEBSOCKET=true`；或生效的节点通道地址是 `wss://`、`ws://`；或在 **系统设置** 保存地址时，此前生效的或新保存的地址是这样的地址（经入口注册的节点改地址后仍能连接）。其余情况返回 404 |
+| 拒绝 | 带 `Origin` 头的请求（浏览器）返回 403；没有请求子协议 `edgeweir-node-channel` 返回 400 |
+| 普通请求 | `GET /node-channel` 在入口开放时返回 426，关闭时返回 404；`install.sh` 以 426 判断可达 |
+| 来源地址 | 节点详情的「连接来源地址」为 WebSocket 请求的客户端地址，按 [可信代理与客户端 IP](#可信代理与客户端-ip) 解析 |
+| 节点版本 | edgeweir-node 0.2.0 及以上；`install.sh` 拒绝用更早的版本经 `wss://`、`ws://` 地址注册 |
+
+1. 设置节点通道地址，任选其一：
+   - **系统设置** 的「节点通道」填写 `wss://cdn-admin.example.com`，保存；立即生效。
+   - 设置 `EDGEWEIR_NODE_API_WEBSOCKET=true` 并重启控制台：未设置 `EDGEWEIR_NODE_API_URL`、**系统设置** 中也没有保存地址时，默认地址为 `wss://<EDGEWEIR_PUBLIC_URL 的主机[:端口]>`。
+2. 控制台前有反向代理时，转发 `/node-channel` 的 WebSocket 升级。nginx：
+
+   ```nginx title="nginx"
+   location = /node-channel {
+     proxy_pass http://127.0.0.1:3000;
+     proxy_http_version 1.1;
+     proxy_set_header Host $host;
+     proxy_set_header Upgrade $http_upgrade;
+     proxy_set_header Connection "upgrade";
+     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+     proxy_read_timeout 1h;   # 节点通道长连接（WatchConfig 流）
+     proxy_send_timeout 1h;
+   }
+   ```
+
+3. 验证：
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' https://cdn-admin.example.com/node-channel
+   ```
+
+   预期：`426`。**系统设置** 的「节点通道」连接检查经 WebSocket 完成 TLS 握手，显示「连接正常」。
+
 ## 可信代理与客户端 IP
 
 审计日志的 IP 与认证接口限速使用控制台解析出的客户端 IP。
@@ -179,4 +221,6 @@ docker compose exec -T postgres psql -U edgeweir -d edgeweir \
 | 审计记录的 `ip` 均为网关地址（如 `172.18.0.1`） | `EDGEWEIR_TRUSTED_PROXIES` 未设置，或与实际网关不一致（重建 Compose 网络后网关可能变化） | 查询网关，更新 `EDGEWEIR_TRUSTED_PROXIES`，执行 `docker compose up -d`。 |
 | 启动失败：`EDGEWEIR_TRUSTED_PROXIES: not an IP address or CIDR range` | 条目不是 IP 或 CIDR | 修正条目。 |
 | 3000 可从公网直接访问 | `EDGEWEIR_HTTP_PORT` 不带绑定地址（例如 `3000`），或使用的是旧版 `compose.yml`（在所有接口发布） | 设置 `EDGEWEIR_HTTP_PORT=127.0.0.1:3000`，或更新 `compose.yml`。 |
+| `install.sh`：`answers 404: the console's WebSocket entry is closed` | 节点通道地址是 `wss://`、`ws://`，但控制台的入口未开放，或该地址指向其他服务 | 在 **系统设置** 保存该地址，或设置 `EDGEWEIR_NODE_API_WEBSOCKET=true`，见 [节点通道的 WebSocket 入口](#节点通道的-websocket-入口)。 |
+| `install.sh`：`cannot reach the node channel WebSocket entry` | 节点主机连不上 Web 端口，`wss://` 地址的证书不受系统根证书信任，或反向代理没有转发 `/node-channel` | 在节点上执行 `curl -v https://<主机>/node-channel`；按上文配置反向代理。 |
 | 节点注册或连接失败 | — | 见 [接入节点排障](nodes.md#排障)。 |

@@ -16,6 +16,7 @@
 ```text
 控制台（ROLE=app|worker|all）
 ├── :3000  HTTP ◀── 浏览器、API 调用方
+│          /node-channel（WebSocket，默认关闭）──▶ 回环连接 :8443
 ├── :8443  Connect-RPC（TLS + mTLS）◀── edgeweir-node agent ── OpenResty ──▶ 源站
 │                                    ◀── edgeweir-node probe（区域探针）──▶ 节点的监听端口
 ├── SQL、LISTEN/NOTIFY ──▶ PostgreSQL 18
@@ -74,7 +75,7 @@
 
 | 端口 | 变量 | 协议 | 约束 |
 | --- | --- | --- | --- |
-| 3000 | `HOST`、`PORT` | HTTP | 可置于反向代理后；代理地址写入 `EDGEWEIR_TRUSTED_PROXIES` |
+| 3000 | `HOST`、`PORT` | HTTP；`/node-channel` 为节点通道的 WebSocket 入口 | 可置于反向代理后；代理地址写入 `EDGEWEIR_TRUSTED_PROXIES` |
 | 8443 | `NODE_API_HOST`（默认同 `HOST`）、`NODE_API_PORT` | HTTPS，TLS 1.2 及以上，HTTP/2 与 HTTP/1.1 | 直接暴露或四层透传；代理终结 TLS 会使节点 mTLS 失败 |
 
 反向代理与四层透传配置见 [端口、反向代理与可信代理](docs/deploy/networking.md)。
@@ -110,6 +111,7 @@
 | `/rpc/*` | 会话 cookie + `x-csrf-token` | 请求中的 `x-api-key` 被丢弃 |
 | `/api/v1/*` | `x-api-key`（AccessKey 或服务账号 key） | cookie 被丢弃；AccessKey 以账号本人身份执行，权限与会话相同；只读 AccessKey 只能调用 GET 过程与 `rules.validate`；服务账号只能调用 `serviceAccountProcedures` 列出且 scope 允许的过程 |
 | `:8443` | 客户端证书 | 见 [节点通道](#节点通道) |
+| `/node-channel` | WebSocket 握手不认证；其中的节点通道 TLS 与 `:8443` 相同 | 默认 404；带 `Origin` 头时 403，见 [节点通道](#节点通道) |
 
 端点、OpenAPI 文档与 AccessKey 的细节见 [API 与端点](docs/reference/api.md)。控制台只有一个运营者账号，不分组织与角色：除 `system.status`、`system.setup` 外，所有过程都经 `rpc/base.ts` 的 `authed`（有效会话、启用中的 AccessKey 或服务账号 key）。
 
@@ -256,6 +258,7 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | 节点证书 | CN 为节点 ID，仅客户端认证，有效期 30 天（服务端证书与节点证书都从签发前 1 小时起生效，容忍节点时钟偏慢）；剩余不足三分之一时 `ReportStatus` 提示调用 `RenewCertificate`。续期后旧证书（`node.previous_cert_serial`）继续有效，直到节点第一次用新证书认证；未装上新证书的节点用旧证书再次续期。已停用的节点也可以续期，其他调用仍被拒绝 |
 | 探针证书 | CN 为探针 ID，`O=Edgeweir Probe`（节点证书为 `O=Edgeweir Node`），仅客户端认证，有效期 30 天；剩余不足三分之一时 `GetProbeTargets` 提示调用 `RenewProbeCertificate`，续期后旧证书的处理与节点相同。节点通道按组织区分：探针证书只能调用 `ProbeService`，`NodeService` 拒绝一切非节点证书；节点证书只在节点兼任探针时调用 `GetProbeTargets`、`ReportProbeResults`，不能注册或续期探针 |
 | 心跳 | 间隔 15 秒；`WatchConfig` 每 15 秒发送 keepalive |
+| WebSocket 入口 | Web 端口的 `GET /node-channel`（子协议 `edgeweir-node-channel`，`node-channel/websocket.ts`）：每个 WebSocket 对应一条到本进程节点通道端口的回环 TCP 连接，节点通道的 TLS 在 WebSocket 内运行，校验与 `:8443` 相同。`EDGEWEIR_NODE_API_WEBSOCKET=true`、生效的节点通道地址为 `wss://` / `ws://`，或系统设置中曾保存过这样的地址时开放，否则 404；拒绝带 `Origin` 的请求（403）与未请求子协议的请求（400）。节点的连接来源地址取 WebSocket 请求的客户端地址（`resolveClientIp`） |
 
 注册顺序：
 

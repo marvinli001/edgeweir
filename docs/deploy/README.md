@@ -17,8 +17,8 @@
 | --- | --- | --- |
 | 进程 | 常驻运行 | 缩容到零或按请求冻结会停止 worker 与节点长连接，见 [进程角色](#进程角色)。 |
 | PostgreSQL | 18；控制台所用账号拥有目标库的 `CREATE` 权限（schema `drizzle`、`pgboss`）与 schema `public` 的 `CREATE` 权限 | 更低版本未经验证。迁移在启动时执行。 |
-| 3000/TCP | HTTP：Web UI、`/rpc`、`/api/v1`、`/healthz`、`/install.sh`、`/downloads/*` | 可由反向代理终结 TLS，见 [端口与反向代理](networking.md)。 |
-| 8443/TCP | 节点通道（节点与区域探针）：TLS 由控制台终结，注册后强制 mTLS | 公网可达；只能直连或四层透传。 |
+| 3000/TCP | HTTP：Web UI、`/rpc`、`/api/v1`、`/healthz`、`/install.sh`、`/downloads/*`；节点通道的 WebSocket 入口 `/node-channel`（默认关闭） | 可由反向代理终结 TLS，见 [端口与反向代理](networking.md)。 |
+| 8443/TCP | 节点通道（节点与区域探针）：TLS 由控制台终结，注册后强制 mTLS | 公网可达，只能直连或四层透传；或节点经 3000 上的 [WebSocket 入口](networking.md#节点通道的-websocket-入口) 连接，8443 不对外。 |
 | 主密钥 | `EDGEWEIR_MASTER_KEY`：base64，解码后不少于 32 字节；`openssl rand -base64 32` 生成 | 与数据库备份分开保存；丢失后已加密数据不可解密，更换按[轮换主密钥](docker.md#轮换主密钥)进行。 |
 | 会话密钥 | `BETTER_AUTH_SECRET`：未设置时由主密钥派生 | 已设置的部署须保留原值，移除后控制台拒绝启动。 |
 | 架构 | linux/amd64、linux/arm64 | — |
@@ -34,6 +34,8 @@
 | Railway | 控制台镜像与 Railway PostgreSQL 18；网页控制台，可选 Railway CLI | [railway.md](railway.md) | 支持 |
 | Fly.io | 控制台镜像与外部 PostgreSQL 18；flyctl 部署，Dashboard 管理 secret、IP、证书与日志 | [fly.md](fly.md) | 支持 |
 | bunny.net Magic Containers | 控制台镜像与外部 PostgreSQL 18；CDN 端点承载 Web，Anycast IP 承载节点通道；Dashboard，可选 bunny CLI | [bunny.md](bunny.md) | 支持 |
+| Render | `render.yaml` 一键创建控制台与 Render Postgres 18，或 Dashboard 手动创建；节点经 WebSocket 入口连接（edgeweir-node 0.2.0 及以上） | [render.md](render.md) | 支持 |
+| Zeabur | `zeabur.yaml` 模板一键创建控制台与 PostgreSQL 18，或 Dashboard 手动创建；运行在 Zeabur Server，节点通道经 TCP 端口转发 | [zeabur.md](zeabur.md) | 支持 |
 
 ### 平台条件
 
@@ -42,7 +44,7 @@
 | 条件 | 说明 | 不满足时 |
 | --- | --- | --- |
 | 常驻进程 | 进程持续运行，不因无流量缩容到零 | worker 的证书续期与定时任务、LISTEN/NOTIFY 事件总线、节点 `WatchConfig` 长连接中断。 |
-| 公网 TCP 端口 | 节点通道端口以原始 TCP 暴露，平台不终结 TLS | 节点注册失败（`CA pin mismatch`），mTLS 无法建立。 |
+| 公网 TCP 端口或 WebSocket | 节点通道端口以原始 TCP 暴露，平台不终结 TLS；或平台的 HTTP 入口转发 WebSocket，节点经 [WebSocket 入口](networking.md#节点通道的-websocket-入口) 连接 | 节点注册失败（`CA pin mismatch`），mTLS 无法建立。 |
 | PostgreSQL 18 | 控制台可达，满足上文权限 | 控制台等待 60 秒后退出。 |
 | 持久密钥 | `EDGEWEIR_MASTER_KEY`（及已设置的 `BETTER_AUTH_SECRET`）在重启与重新部署间不变 | 已加密数据不可解密；控制台拒绝启动。 |
 | 可信代理地址 | 3000 直接接收客户端连接，或平台代理的来源地址固定，可写入 `EDGEWEIR_TRUSTED_PROXIES` | 审计日志与登录限速只能取到代理地址。 |
@@ -87,7 +89,9 @@ worker 定时任务：
 | [Railway](railway.md) | 网页控制台部署与命令行等效操作 |
 | [Fly.io](fly.md) | flyctl 部署与 Dashboard 操作 |
 | [bunny.net Magic Containers](bunny.md) | Dashboard 部署与 bunny CLI 等效操作 |
-| [端口、反向代理与可信代理](networking.md) | 3000 与 8443、nginx 示例、`EDGEWEIR_TRUSTED_PROXIES` |
+| [Render](render.md) | Deploy to Render 一键创建、Dashboard 手动创建与 Render CLI |
+| [Zeabur](zeabur.md) | 模板一键创建、Dashboard 手动创建与 Zeabur CLI |
+| [端口、反向代理与可信代理](networking.md) | 3000 与 8443、nginx 示例、节点通道的 WebSocket 入口、`EDGEWEIR_TRUSTED_PROXIES` |
 | [接入节点](nodes.md) | 安装命令、`install.sh` 校验、区域探针、下载镜像 |
 | [版本、升级与回滚](upgrade.md) | 镜像 tag、固定版本、升级、回滚、签名校验 |
 | [备份与恢复](backup.md) | 数据库与主密钥备份、恢复验收 |

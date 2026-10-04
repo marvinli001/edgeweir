@@ -6,7 +6,7 @@
 
 - 进程启动时读取并校验全部变量一次。任一变量不合法时进程退出，日志以 `invalid configuration:` 开头并列出出错的变量。
 - 修改后重建容器：`docker compose up -d`。`docker compose restart` 不应用新值。
-- `BETTER_AUTH_SECRET`、`EDGEWEIR_NODE_API_URL`、`NODE_API_HOST`、`EDGEWEIR_NODE_RELEASE_BASE_URL` 的空值等同未设置；其余变量的空值按字面校验，例如 `ROLE=` 不合法。
+- `BETTER_AUTH_SECRET`、`EDGEWEIR_NODE_API_URL`、`EDGEWEIR_NODE_API_WEBSOCKET`、`NODE_API_HOST`、`EDGEWEIR_NODE_RELEASE_BASE_URL` 的空值等同未设置；其余变量的空值按字面校验，例如 `ROLE=` 不合法。
 - 默认值列为进程默认值。镜像或 Compose 模板设置的不同值写在说明列。
 - **后备值**：**系统设置** 中保存了对应项时，以保存值为准；清空保存值后恢复使用变量。
 - 模板与注释：[`.env.example`](https://github.com/marvinli001/edgeweir/blob/master/.env.example)。
@@ -50,7 +50,8 @@
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>` | **系统设置** 的「节点通道」没有保存地址时，节点连接节点通道的 URL，格式 `https://主机[:端口]`，规则同 `EDGEWEIR_PUBLIC_URL`。用作节点安装命令的 `--server`；主机名写入节点通道服务器证书。默认值取进程的 `NODE_API_PORT`（镜像内为 `8443`），不取 Compose 的 `EDGEWEIR_NODE_API_PORT`；宿主机端口不是 `8443` 或节点经其他地址访问时，在系统设置中填写地址或设置此变量，见 [节点通道地址与证书](../deploy/networking.md#节点通道地址与证书)。 |
+| `EDGEWEIR_NODE_API_URL` | `https://<EDGEWEIR_PUBLIC_URL 的主机名>:<NODE_API_PORT>`；`EDGEWEIR_NODE_API_WEBSOCKET=true` 时 `wss://<EDGEWEIR_PUBLIC_URL 的主机[:端口]>` | **系统设置** 的「节点通道」没有保存地址时，节点连接节点通道的 URL，格式 `https://主机[:端口]`（节点通道端口），或 `wss://`、`ws://主机[:端口]`（Web 端口上的 WebSocket 入口，见 [节点通道的 WebSocket 入口](../deploy/networking.md#节点通道的-websocket-入口)），规则同 `EDGEWEIR_PUBLIC_URL`。用作节点安装命令的 `--server`；主机名写入节点通道服务器证书。默认值取进程的 `NODE_API_PORT`（镜像内为 `8443`），不取 Compose 的 `EDGEWEIR_NODE_API_PORT`；宿主机端口不是 `8443` 或节点经其他地址访问时，在系统设置中填写地址或设置此变量，见 [节点通道地址与证书](../deploy/networking.md#节点通道地址与证书)。 |
+| `EDGEWEIR_NODE_API_WEBSOCKET` | `false` | `true`、`1`、`yes`、`on` 为开，`false`、`0`、`no`、`off` 为关（不区分大小写）。开启时：未设置 `EDGEWEIR_NODE_API_URL` 的默认节点通道地址为 `wss://<EDGEWEIR_PUBLIC_URL 的主机[:端口]>`（`EDGEWEIR_PUBLIC_URL` 为 `http://` 时 `ws://`），Web 端口上的 WebSocket 入口 `/node-channel` 始终开放。用于只转发 HTTP 的平台（如 [Render](../deploy/render.md)）。其他值拒绝启动。 |
 | `EDGEWEIR_NODE_API_HOSTNAMES` | 空 | 节点通道服务器证书的附加名称（DNS 名或 IP），逗号分隔。证书始终包含 `localhost`、`127.0.0.1`、`::1`、本机主机名（容器内为容器主机名）、`EDGEWEIR_NODE_API_URL` 的主机，以及系统设置中保存过的节点通道地址的主机。修改此变量后重启生效；已注册节点校验这些名称。 |
 | `EDGEWEIR_TRUSTED_PROXIES` | 空 | 可信反向代理的 IP 或 CIDR，逗号分隔。仅采用来自这些地址的 `X-Forwarded-For`、`X-Real-IP`，用于审计日志 IP 与登录限速。空：TCP 对端地址即客户端地址。条目不是 IP 或 CIDR 时拒绝启动。`compose.baota-host.yml` 默认 `127.0.0.1,::1`。配置见[端口、反向代理与可信代理](../deploy/networking.md)。 |
 | `EDGEWEIR_OUTBOUND_ALLOW_CIDRS` | 空 | 允许控制台访问的私有或特殊用途网段（CIDR，逗号或空白分隔），约束 Web 端保存的出站目标：告警通知渠道、SMTP、节点发布源。空：只允许公网地址。Web 端保存的值不能放宽此边界。经环境变量设置的发布源不受此约束。条目不是 IP 或 CIDR 时拒绝启动。 |

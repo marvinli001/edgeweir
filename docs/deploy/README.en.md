@@ -17,8 +17,8 @@ Console components, runtime requirements, supported platforms, and process roles
 | --- | --- | --- |
 | Process | Always on | Scale-to-zero or per-request freezing stops the worker and the node streams; see [process roles](#process-roles). |
 | PostgreSQL | 18; the console's database user has `CREATE` on the target database (schemas `drizzle`, `pgboss`) and `CREATE` on schema `public` | Earlier versions are untested. Migrations run at startup. |
-| 3000/TCP | HTTP: web UI, `/rpc`, `/api/v1`, `/healthz`, `/install.sh`, `/downloads/*` | A reverse proxy may terminate TLS; see [ports and reverse proxy](networking.en.md). |
-| 8443/TCP | Node channel (nodes and regional probes): the console terminates TLS and enforces mTLS after enrollment | Publicly reachable; direct or layer-4 passthrough only. |
+| 3000/TCP | HTTP: web UI, `/rpc`, `/api/v1`, `/healthz`, `/install.sh`, `/downloads/*`; the node channel's WebSocket entry `/node-channel` (closed by default) | A reverse proxy may terminate TLS; see [ports and reverse proxy](networking.en.md). |
+| 8443/TCP | Node channel (nodes and regional probes): the console terminates TLS and enforces mTLS after enrollment | Publicly reachable, direct or layer-4 passthrough only; or nodes use the [WebSocket entry](networking.en.md#the-node-channels-websocket-entry) on 3000 and 8443 stays internal. |
 | Master key | `EDGEWEIR_MASTER_KEY`: base64, at least 32 bytes decoded; generate with `openssl rand -base64 32` | Keep apart from database backups; a lost key leaves encrypted data unreadable; replace it by [rotating](docker.en.md#rotating-the-master-key) it. |
 | Session secret | `BETTER_AUTH_SECRET`: derived from the master key when unset | Deployments that set it keep it; the console refuses to start once it is removed. |
 | Architecture | linux/amd64, linux/arm64 | — |
@@ -34,6 +34,8 @@ Console components, runtime requirements, supported platforms, and process roles
 | Railway | Console image with Railway PostgreSQL 18; web console, optional Railway CLI | [railway.en.md](railway.en.md) | Supported |
 | Fly.io | Console image with an external PostgreSQL 18; flyctl deployment, Dashboard for secrets, IPs, certificates, and logs | [fly.en.md](fly.en.md) | Supported |
 | bunny.net Magic Containers | Console image with an external PostgreSQL 18; a CDN endpoint for the web console, an Anycast IP for the node channel; Dashboard, optional bunny CLI | [bunny.en.md](bunny.en.md) | Supported |
+| Render | `render.yaml` creates the console and Render Postgres 18 in one click, or manual creation in the Dashboard; nodes connect through the WebSocket entry (edgeweir-node 0.2.0 or later) | [render.en.md](render.en.md) | Supported |
+| Zeabur | The `zeabur.yaml` template creates the console and PostgreSQL 18 in one click, or manual creation in the Dashboard; runs on a Zeabur Server, the node channel goes through TCP port forwarding | [zeabur.en.md](zeabur.en.md) | Supported |
 
 ### Platform conditions
 
@@ -42,7 +44,7 @@ A platform not listed above must meet every condition in this table.
 | Condition | Description | When not met |
 | --- | --- | --- |
 | Always-on process | The process keeps running and never scales to zero for lack of traffic | Worker certificate renewal and scheduled jobs, the LISTEN/NOTIFY event bus, and node `WatchConfig` streams stop. |
-| Public TCP port | The node channel port is exposed as raw TCP; the platform does not terminate TLS | Enrollment fails (`CA pin mismatch`); mTLS cannot be established. |
+| Public TCP port or WebSocket | The node channel port is exposed as raw TCP, and the platform does not terminate TLS; or the platform's HTTP entry forwards WebSocket and nodes use the [WebSocket entry](networking.en.md#the-node-channels-websocket-entry) | Enrollment fails (`CA pin mismatch`); mTLS cannot be established. |
 | PostgreSQL 18 | Reachable from the console, with the privileges above | The console waits 60 seconds, then exits. |
 | Persistent secrets | `EDGEWEIR_MASTER_KEY` (and `BETTER_AUTH_SECRET` when set) stay the same across restarts and redeploys | Encrypted data becomes unreadable; the console refuses to start. |
 | Trusted proxy address | Port 3000 receives client connections directly, or the platform proxy connects from fixed addresses that can go into `EDGEWEIR_TRUSTED_PROXIES` | Audit entries and sign-in rate limits see only the proxy address. |
@@ -87,7 +89,9 @@ Worker schedules:
 | [Railway](railway.en.md) | Web console deployment with CLI equivalents |
 | [Fly.io](fly.en.md) | flyctl deployment and Dashboard steps |
 | [bunny.net Magic Containers](bunny.en.md) | Dashboard deployment with bunny CLI equivalents |
-| [Ports, reverse proxy, and trusted proxies](networking.en.md) | 3000 and 8443, nginx examples, `EDGEWEIR_TRUSTED_PROXIES` |
+| [Render](render.en.md) | One-click Deploy to Render, manual creation in the Dashboard, Render CLI |
+| [Zeabur](zeabur.en.md) | One-click template, manual creation in the Dashboard, Zeabur CLI |
+| [Ports, reverse proxy, and trusted proxies](networking.en.md) | 3000 and 8443, nginx examples, the node channel's WebSocket entry, `EDGEWEIR_TRUSTED_PROXIES` |
 | [Adding nodes](nodes.en.md) | Install command, `install.sh` checks, regional probes, downloads mirror |
 | [Versions, upgrades, and rollback](upgrade.en.md) | Image tags, pinning, upgrade, rollback, signature verification |
 | [Backup and recovery](backup.en.md) | Database and master key backup, restore acceptance |

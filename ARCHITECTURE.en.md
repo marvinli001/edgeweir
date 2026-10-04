@@ -16,6 +16,7 @@ Components, processes, ports, data flows, data model, and trust boundaries of th
 ```text
 Console (ROLE=app|worker|all)
 ├── :3000  HTTP ◀── browsers, API clients
+│          /node-channel (WebSocket, closed by default) ──▶ loopback connection to :8443
 ├── :8443  Connect-RPC (TLS + mTLS) ◀── edgeweir-node agent ── OpenResty ──▶ origins
 │                                    ◀── edgeweir-node probe (regional probe) ──▶ node listeners
 ├── SQL, LISTEN/NOTIFY ──▶ PostgreSQL 18
@@ -74,7 +75,7 @@ On `SIGTERM` or `SIGINT` the process stops the HTTP and node channel listeners, 
 
 | Port | Variables | Protocol | Constraint |
 | --- | --- | --- | --- |
-| 3000 | `HOST`, `PORT` | HTTP | May sit behind a reverse proxy; list the proxy addresses in `EDGEWEIR_TRUSTED_PROXIES` |
+| 3000 | `HOST`, `PORT` | HTTP; `/node-channel` is the node channel's WebSocket entry | May sit behind a reverse proxy; list the proxy addresses in `EDGEWEIR_TRUSTED_PROXIES` |
 | 8443 | `NODE_API_HOST` (defaults to `HOST`), `NODE_API_PORT` | HTTPS, TLS 1.2 or later, HTTP/2 and HTTP/1.1 | Expose directly or pass through at layer 4; a proxy that terminates TLS breaks node mTLS |
 
 Reverse proxy and layer-4 passthrough configuration: [Ports, reverse proxy, and trusted proxies](docs/deploy/networking.en.md).
@@ -110,6 +111,7 @@ Unmatched requests under `/api`, `/rpc`, and `/downloads`, and other methods on 
 | `/rpc/*` | Session cookie + `x-csrf-token` | `x-api-key` is dropped |
 | `/api/v1/*` | `x-api-key` (AccessKey or service account key) | Cookies are dropped; an AccessKey acts as the account with the same permissions as a session; a read-only AccessKey can call GET procedures and `rules.validate` only; a service account can call only the procedures listed in `serviceAccountProcedures` that its scopes allow |
 | `:8443` | Client certificate | See [Node channel](#node-channel) |
+| `/node-channel` | The WebSocket handshake is not authenticated; the node channel TLS inside it is the same as on `:8443` | 404 by default; 403 with an `Origin` header; see [Node channel](#node-channel) |
 
 Endpoints, the OpenAPI document, and AccessKey details: [API and endpoints](docs/reference/api.en.md). The console has one operator account, with no organizations or roles: every procedure except `system.status` and `system.setup` goes through `authed` in `rpc/base.ts` (a valid session, an enabled AccessKey or a service account key).
 
@@ -256,6 +258,7 @@ Connect-RPC over HTTPS; the console process terminates TLS itself.
 | Node certificate | CN is the node ID, client authentication only, valid for 30 days (server and node certificates are valid from 1 hour before issue, for nodes whose clocks run behind); with less than a third of the lifetime left, `ReportStatus` asks the node to call `RenewCertificate`. After a renewal the old certificate (`node.previous_cert_serial`) stays valid until the node first authenticates with the new one; a node that could not install the new one renews again with the old one. A disabled node may still renew; its other calls are refused |
 | Probe certificate | CN is the probe ID, `O=Edgeweir Probe` (node certificates carry `O=Edgeweir Node`), client authentication only, valid for 30 days; with less than a third left, `GetProbeTargets` asks the probe to call `RenewProbeCertificate`, and the replaced certificate is handled as for nodes. The node channel tells them apart by organization: probe certificates can only call `ProbeService`, `NodeService` refuses every certificate that is not a node's, and node certificates call `GetProbeTargets` and `ReportProbeResults` only while the node also probes, never enrolling or renewing probes |
 | Heartbeat | Every 15 seconds; `WatchConfig` sends a keepalive every 15 seconds |
+| WebSocket entry | `GET /node-channel` on the web port (subprotocol `edgeweir-node-channel`, `node-channel/websocket.ts`): each WebSocket maps to one loopback TCP connection to this process's node channel port, and the node channel's TLS runs inside the WebSocket with the same checks as on `:8443`. Open with `EDGEWEIR_NODE_API_WEBSOCKET=true`, while the node channel URL in effect is a `wss://` or `ws://` one, or once such a URL was saved in system settings; otherwise 404. Requests with an `Origin` header get 403, requests without the subprotocol 400. A node's connection source address is the client address of the WebSocket request (`resolveClientIp`) |
 
 Enrollment:
 
