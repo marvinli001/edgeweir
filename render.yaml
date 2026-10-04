@@ -1,0 +1,45 @@
+# Render Blueprint: the console (image-backed web service, always on) and
+# Render Postgres 18. Guide and limits: docs/deploy/render.md.
+#
+# Render forwards one HTTP port per web service and terminates TLS in front
+# of it, so nodes reach the node channel through its WebSocket entry on that
+# port (wss://<host>/node-channel); the console still terminates the node
+# channel's TLS and requires mTLS inside the WebSocket.
+services:
+  - type: web
+    name: edgeweir
+    runtime: image
+    image:
+      # Pin a dated tag (<YYYYMMDD>-<commit>) after the first deploy: docs/deploy/render.md.
+      url: ghcr.io/marvinli001/edgeweir:latest
+    # The Free plan spins down when idle, which stops the worker and the node channel.
+    plan: 0.5c-512mb
+    numInstances: 1
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: "3000"
+      # A random base64-encoded 256-bit value; also keep a copy outside Render.
+      - key: EDGEWEIR_MASTER_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: edgeweir-db
+          property: connectionString
+      - key: EDGEWEIR_PUBLIC_URL
+        fromService:
+          name: edgeweir
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      # Install commands get wss://<host of EDGEWEIR_PUBLIC_URL>.
+      - key: EDGEWEIR_NODE_API_WEBSOCKET
+        value: "true"
+
+databases:
+  - name: edgeweir-db
+    databaseName: edgeweir
+    user: edgeweir
+    plan: 0.1c-256mb
+    postgresMajorVersion: "18"
+    # Private network only.
+    ipAllowList: []

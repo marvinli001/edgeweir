@@ -1,0 +1,129 @@
+# yaml-language-server: $schema=https://schema.zeabur.app/template.json
+#
+# Zeabur template: the console and PostgreSQL 18 on a Zeabur Server. Deploy
+# with `npx zeabur@latest template deploy -f zeabur.yaml`; guide and limits:
+# docs/deploy/zeabur.md. The node channel port is forwarded as raw TCP; the
+# console terminates its TLS and mTLS.
+apiVersion: zeabur.com/v1
+kind: Template
+metadata:
+  name: Edgeweir
+spec:
+  description: Self-hosted CDN, WAF and edge scheduling console with PostgreSQL 18.
+  icon: https://raw.githubusercontent.com/marvinli001/edgeweir/master/apps/console/public/favicon.svg
+  tags:
+    - CDN
+    - Security
+  readme: |
+    # Edgeweir
+
+    The console of a self-hosted CDN: the web UI and API on port 3000, the
+    node channel on port 8443 (forwarded as raw TCP), and PostgreSQL 18.
+
+    Guide: https://github.com/marvinli001/edgeweir/blob/master/docs/deploy/zeabur.en.md
+  resourceRequirement:
+    minConfig:
+      cpu: 1
+      ram: 2
+  variables:
+    - key: PUBLIC_DOMAIN
+      type: DOMAIN
+      name: Console domain
+      description: The address of the web console.
+    - key: EDGEWEIR_MASTER_KEY
+      type: PASSWORD
+      name: Master key
+      description: "The output of `openssl rand -base64 32`. Keep a copy outside Zeabur, apart from database backups: encrypted data cannot be recovered without it."
+  services:
+    - name: postgresql
+      icon: https://cdn.zeabur.com/marketplace/postgresql.svg
+      template: PREBUILT
+      spec:
+        source:
+          image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+        ports:
+          - id: database
+            port: 5432
+            type: TCP
+        # Reachable from the console over the private network only.
+        portForwarding:
+          enabled: false
+        volumes:
+          # PostgreSQL 18 images keep data under /var/lib/postgresql/<major>/docker.
+          - id: data
+            dir: /var/lib/postgresql
+        healthCheck:
+          type: TCP
+          port: database
+        env:
+          POSTGRES_USER:
+            default: edgeweir
+          POSTGRES_DB:
+            default: edgeweir
+          POSTGRES_PASSWORD:
+            default: ${PASSWORD}
+          POSTGRES_CONNECTION_STRING:
+            default: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${CONTAINER_HOSTNAME}:${DATABASE_PORT}/${POSTGRES_DB}
+            expose: true
+            readonly: true
+    - name: edgeweir
+      icon: https://raw.githubusercontent.com/marvinli001/edgeweir/master/apps/console/public/favicon.svg
+      template: PREBUILT
+      dependencies:
+        - postgresql
+      domainKey:
+        - port: web
+          variable: PUBLIC_DOMAIN
+      spec:
+        source:
+          # Pin a dated tag (<YYYYMMDD>-<commit>) after the first deploy: docs/deploy/zeabur.md.
+          image: ghcr.io/marvinli001/edgeweir:latest
+        ports:
+          - id: web
+            port: 3000
+            type: HTTP
+          - id: node
+            port: 8443
+            type: TCP
+        portForwarding:
+          enabled: true
+        healthCheck:
+          type: HTTP
+          port: web
+          http:
+            path: /healthz
+        env:
+          PORT:
+            default: "3000"
+          DATABASE_URL:
+            default: ${POSTGRES_CONNECTION_STRING}
+          EDGEWEIR_PUBLIC_URL:
+            default: https://${ZEABUR_WEB_DOMAIN}
+          EDGEWEIR_NODE_API_URL:
+            default: https://${PORT_FORWARDED_HOSTNAME}:${NODE_PORT_FORWARDED_PORT}
+        instructions:
+          - type: TEXT
+            title: Setup token
+            content: "Logs tab: the line \"first-run setup\" carries setupToken; open https://${ZEABUR_WEB_DOMAIN}/setup"
+          - type: TEXT
+            title: Node channel URL
+            content: https://${PORT_FORWARDED_HOSTNAME}:${NODE_PORT_FORWARDED_PORT}
+localization:
+  zh-CN:
+    description: 自托管 CDN、WAF 与边缘调度控制台，含 PostgreSQL 18。
+    readme: |
+      # Edgeweir
+
+      自托管 CDN 的控制台：Web UI 与 API 在 3000 端口，节点通道在 8443 端口
+      （以原始 TCP 转发），数据库为 PostgreSQL 18。
+
+      部署文档：https://github.com/marvinli001/edgeweir/blob/master/docs/deploy/zeabur.md
+    variables:
+      - key: PUBLIC_DOMAIN
+        type: DOMAIN
+        name: 控制台域名
+        description: Web 控制台的访问地址。
+      - key: EDGEWEIR_MASTER_KEY
+        type: PASSWORD
+        name: 主密钥
+        description: "`openssl rand -base64 32` 的输出。在 Zeabur 之外另存一份，与数据库备份分开：丢失后已加密的数据无法恢复。"

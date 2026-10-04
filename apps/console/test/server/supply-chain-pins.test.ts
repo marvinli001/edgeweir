@@ -38,6 +38,20 @@ describe("supply-chain pins", () => {
     }
   });
 
+  it("pins third-party images in the platform templates by digest", () => {
+    const images = (file: string, key: string) =>
+      [...read(file).matchAll(new RegExp(`^\\s*${key}:\\s*(\\S+)\\s*$`, "gm"))].map(
+        (m) => m[1] ?? "",
+      );
+    const zeabur = images("zeabur.yaml", "image");
+    expect(zeabur.length).toBeGreaterThan(1);
+    const render = images("render.yaml", "url");
+    expect(render.length).toBeGreaterThan(0);
+    for (const image of [...zeabur, ...render]) {
+      if (!OWN_IMAGE.test(image)) expect(image).toMatch(DIGEST);
+    }
+  });
+
   it("pins the Dockerfile frontend and base images by digest", () => {
     const text = read("Dockerfile");
     expect(text.split("\n")[0]).toMatch(
