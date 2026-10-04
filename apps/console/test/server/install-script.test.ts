@@ -9,6 +9,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -155,7 +156,8 @@ describe("install.sh", () => {
       [[...valid, "--version", "1.2"], /semantic version/],
       [[...valid, "--version", "latest; rm -rf /"], /semantic version/],
       [[...valid, "--version", "v1.2.3/../../x"], /semantic version/],
-      [["--server", "http://console:8443", "--ca-sha256", CA], /https:\/\//],
+      [["--server", "http://console:8443", "--ca-sha256", CA], /https:\/\/, wss:\/\/ or ws:\/\//],
+      [["--server", "ftp://console", "--ca-sha256", CA], /https:\/\/, wss:\/\/ or ws:\/\//],
       [["--server", "https://console:8443", "--ca-sha256", "ABC"], /64 lowercase hex/],
       [[...valid, "--format", "snap"], /--format/],
       [[...valid, "--mirror", "file:///etc"], /--mirror/],
@@ -171,6 +173,12 @@ describe("install.sh", () => {
     const optOut = run([...valid, "--no-modsecurity"], { EDGEWEIR_TOKEN: TOKEN });
     expect(optOut.stderr).toContain("run as root");
     expect(optOut.calls).toBe("");
+    // The WebSocket entry's URLs pass validation like https:// ones.
+    for (const server of ["wss://console.example.com", "ws://192.0.2.7:3000"]) {
+      const res = run(["--server", server, "--ca-sha256", CA], { EDGEWEIR_TOKEN: TOKEN });
+      expect(res.stderr, server).toContain("run as root");
+      expect(res.calls).toBe("");
+    }
     for (const version of ["0.2.0", "v0.2.0", "1.0.0-rc.1", "0.2.1-snapshot+abc1234"]) {
       const res = run([...valid, "--version", version], { EDGEWEIR_TOKEN: TOKEN });
       expect(res.stderr, version).not.toContain("semantic version");
@@ -802,6 +810,38 @@ describe("install.sh", () => {
     },
   );
 
+  it("needs edgeweir-node 0.2.0 or later to enroll through a wss:// or ws:// URL", () => {
+    const older = (a: string, b: string) =>
+      spawnSync("bash", ["-s"], {
+        input: script.replace(/main "\$@"\s*$/, `version_older '${a}' '${b}'\n`),
+      }).status === 0;
+    expect(older("0.1.0", "0.2.0")).toBe(true);
+    expect(older("0.1.9", "0.2.0")).toBe(true);
+    expect(older("0.2.0", "0.2.0")).toBe(false);
+    expect(older("0.2.0-rc.1", "0.2.0")).toBe(false);
+    expect(older("0.10.0", "0.2.0")).toBe(false);
+    expect(older("1.0.0", "0.2.0")).toBe(false);
+
+    const enroll = (server: string, version: string) =>
+      spawnSync("bash", ["-s"], {
+        input: script.replace(
+          /main "\$@"\s*$/,
+          `constants\nSERVER='${server}'\nVERSION='${version}'\ncheck_websocket_version\necho ok\n`,
+        ),
+        encoding: "utf8",
+      });
+    const refused = enroll("wss://console.example.com", "0.1.0");
+    expect(refused.status).toBe(1);
+    expect(refused.stderr).toContain("need 0.2.0 or later");
+    expect(enroll("wss://console.example.com", "0.2.0").stdout).toBe("ok\n");
+    expect(enroll("https://console.example.com:8443", "0.1.0").stdout).toBe("ok\n");
+    // Checked once the version is known, only when enrolling.
+    const main = script.slice(script.indexOf("main() {"));
+    expect(main).toContain(
+      "resolve_version\n  if enrolling; then\n    check_websocket_version\n  fi",
+    );
+  });
+
   it("checks the node channel before downloading anything, unless already enrolled", () => {
     const main = script.slice(script.indexOf("main() {"));
     const order = ["check_system", "check_server", "resolve_version", 'fetch "checksums.txt"'].map(
@@ -922,6 +962,59 @@ describe("install.sh", () => {
       } finally {
         rmSync(tools, { recursive: true, force: true });
         await channel.close();
+      }
+    },
+    60_000,
+  );
+
+  it.runIf(hostTools.some(([name]) => name === "curl"))(
+    "checks a wss:// or ws:// URL at the WebSocket entry of the web port",
+    async () => {
+      let open = true;
+      const web = createHttpServer((req, res) => {
+        res.writeHead(req.url === "/node-channel" ? (open ? 426 : 404) : 200).end();
+      });
+      await new Promise<void>((resolve) => web.listen(0, "127.0.0.1", resolve));
+      const port = (web.address() as { port: number }).port;
+      const tools = mkdtempSync(join(tmpdir(), "edgeweir-check-entry-"));
+      try {
+        for (const [name, path] of hostTools) symlinkSync(path, join(tools, name));
+        const bash = spawnSync("sh", ["-c", "command -v bash"], { encoding: "utf8" }).stdout.trim();
+        const check = (server: string) =>
+          new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
+            const child = spawn(bash, ["-s"], { env: { PATH: tools } });
+            let stdout = "";
+            let stderr = "";
+            child.stdout.on("data", (chunk) => {
+              stdout += chunk;
+            });
+            child.stderr.on("data", (chunk) => {
+              stderr += chunk;
+            });
+            child.on("close", (status) => resolve({ status, stdout, stderr }));
+            child.stdin.end(
+              script.replace(
+                /main "\$@"\s*$/,
+                `constants\nSERVER='${server}'\nCA_SHA256='${CA}'\ncheck_server\necho checked\n`,
+              ),
+            );
+          });
+        const ok = await check(`ws://127.0.0.1:${port}/`);
+        expect(ok.stdout).toBe("checked\n");
+        expect(ok.stderr).toContain(`entry reachable (http://127.0.0.1:${port}/node-channel)`);
+
+        open = false;
+        const closed = await check(`ws://127.0.0.1:${port}`);
+        expect(closed.status).toBe(1);
+        expect(closed.stderr).toContain("WebSocket entry is closed");
+
+        await new Promise<void>((resolve) => web.close(() => resolve()));
+        const gone = await check(`ws://127.0.0.1:${port}`);
+        expect(gone.status).toBe(1);
+        expect(gone.stderr).toContain("cannot reach the node channel WebSocket entry");
+      } finally {
+        web.close();
+        rmSync(tools, { recursive: true, force: true });
       }
     },
     60_000,

@@ -5,6 +5,9 @@
 #   curl -fsSL https://<console>/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- \
 #     --server https://<console>:8443 --ca-sha256 <fingerprint>
 #
+# --server wss://<console> (ws:// for a plain-HTTP console) connects through
+# the node channel's WebSocket entry on the console's web port instead.
+#
 # The token never appears on a command line (it would be visible in the
 # process list): it comes from the EDGEWEIR_TOKEN environment variable or
 # from --token-file PATH, and reaches `edgeweir-node enroll` the same way.
@@ -60,6 +63,8 @@ constants() {
   COSIGN_VERSION="3.1.3"
   COSIGN_SHA256_AMD64="4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71"
   COSIGN_SHA256_ARM64="c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a"
+  # The first edgeweir-node release that connects through wss:// and ws:// URLs.
+  WEBSOCKET_MIN_VERSION="0.2.0"
   SEMVER_RE='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 }
 
@@ -75,7 +80,8 @@ Usage:
   export EDGEWEIR_TOKEN='<one-time token>'
   install.sh --server URL --ca-sha256 HEX [options]
 
-  --server URL         node channel URL of the console, e.g. https://console.example.com:8443
+  --server URL         node channel URL of the console, e.g. https://console.example.com:8443,
+                       or wss://console.example.com for its WebSocket entry on the web port
   --ca-sha256 HEX      SHA-256 fingerprint of the console's node CA (pinned during enrollment)
   --token-file PATH    read the enrollment token from PATH instead of $EDGEWEIR_TOKEN
   --version VER        edgeweir-node version to install, e.g. 0.2.0 (default: latest;
@@ -128,7 +134,8 @@ parse_args() {
   if [ -z "$SERVER" ] || [ -z "$CA_SHA256" ]; then
     usage
   fi
-  [[ "$SERVER" =~ ^https://[^[:space:]/]+(/[^[:space:]]*)?$ ]] || die "--server must be an https:// URL"
+  [[ "$SERVER" =~ ^(https|wss|ws)://[^[:space:]/]+(/[^[:space:]]*)?$ ]] \
+    || die "--server must be an https://, wss:// or ws:// URL"
   [[ "$CA_SHA256" =~ ^[0-9a-f]{64}$ ]] || die "--ca-sha256 must be 64 lowercase hex characters"
   case "$FORMAT" in auto | deb | rpm | tar) ;; *) die "--format must be auto, deb, rpm or tar" ;; esac
   if [ "$VERSION" != "latest" ]; then
@@ -193,6 +200,11 @@ check_system() {
   fi
 }
 
+# websocket_server: whether --server is the node channel's WebSocket entry (wss:// or ws://).
+websocket_server() {
+  [[ "$SERVER" == wss://* || "$SERVER" == ws://* ]]
+}
+
 # server_authority: host and port of --server ("[v6]:port" for IPv6; 443 by default).
 server_authority() {
   local authority="${SERVER#https://}"
@@ -223,6 +235,10 @@ tls_chain() {
 # its node CA) must be the CA pinned by --ca-sha256.
 check_server() {
   local status authority host presented
+  if websocket_server; then
+    check_websocket_entry
+    return 0
+  fi
   authority="$(server_authority)"
   status="$(curl -sk -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "${SERVER%/}/" 2>/dev/null || true)"
   if ! [[ "$status" =~ ^[1-5][0-9][0-9]$ ]]; then
@@ -253,6 +269,48 @@ check_server() {
     die "${SERVER} does not present the console's node CA (--ca-sha256): a proxy or CDN terminates TLS in front of the node channel, or the address points at another service; nodes need a direct or layer-4 (TCP passthrough) connection to the console's port"
   fi
   log "node channel reachable and presents the pinned CA (${authority})"
+}
+
+# A wss:// or ws:// --server is the node channel's WebSocket entry on the
+# console's web port (https:// or http:// with the path /node-channel). A
+# plain request there answers 426 while the entry is open, 404 while it is
+# closed. The node channel's CA is pinned at enrollment, inside the WebSocket.
+check_websocket_entry() {
+  local scheme="http" authority url status
+  [[ "$SERVER" != wss://* ]] || scheme="https"
+  authority="${SERVER#*://}"
+  authority="${authority%%/*}"
+  url="${scheme}://${authority}/node-channel"
+  status="$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "$url" 2>/dev/null || true)"
+  case "$status" in
+    426) log "node channel WebSocket entry reachable (${url}); the CA is checked at enrollment" ;;
+    404) die "${url} answers 404: the console's WebSocket entry is closed (save a wss:// node channel URL in System settings or set EDGEWEIR_NODE_API_WEBSOCKET=true), or the address points at another service" ;;
+    *) die "cannot reach the node channel WebSocket entry ${url} (HTTP ${status:-none}): check the address and its DNS name, and that this host can reach the console's web port" ;;
+  esac
+}
+
+# version_older A B: whether version A is older than B (major.minor.patch; a
+# pre-release counts as its release).
+version_older() {
+  local a b i x y
+  IFS=. read -r -a a <<<"${1%%[-+]*}"
+  IFS=. read -r -a b <<<"${2%%[-+]*}"
+  for i in 0 1 2; do
+    x="${a[$i]:-0}"
+    y="${b[$i]:-0}"
+    if ((10#$x != 10#$y)); then
+      ((10#$x < 10#$y))
+      return
+    fi
+  done
+  return 1
+}
+
+# Enrolling through a wss:// or ws:// --server needs an edgeweir-node that speaks it.
+check_websocket_version() {
+  if websocket_server && version_older "$VERSION" "$WEBSOCKET_MIN_VERSION"; then
+    die "edgeweir-node ${VERSION} cannot connect through ${SERVER}: wss:// and ws:// node channel URLs need ${WEBSOCKET_MIN_VERSION} or later (pass --version)"
+  fi
 }
 
 # download URL DEST: fails (non-zero) on HTTP errors, never writes an error page.
@@ -623,6 +681,9 @@ main() {
     return 0
   fi
   resolve_version
+  if enrolling; then
+    check_websocket_version
+  fi
   log "installing edgeweir-node ${VERSION} (${FORMAT}, ${ARCH})"
   fetch "checksums.txt"
   verify_signature
