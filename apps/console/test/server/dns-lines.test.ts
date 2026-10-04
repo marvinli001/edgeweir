@@ -614,4 +614,21 @@ describe("DNS resolution lines and backup groups", async () => {
     await ctx.db.insert(schema.nodeConfigStatus).values(kept);
     expect(await addresses("tel.edge")).toEqual(["8.8.1.1", "8.8.1.2"]);
   });
+
+  it("answers with every healthy node of the cluster while the binding has no lines", async () => {
+    const everyNode = ["8.8.1.1", "8.8.1.2", "8.8.2.1", "8.8.3.1", "8.8.4.1", "8.8.4.2"];
+    await save([]);
+    await reconcileDns(ctx);
+    expect(allOn()).toEqual(everyNode);
+    expect(allOn("mobile")).toEqual([]);
+    expect(at()).toEqual(everyNode);
+    expect(await admin.dns.siteTarget({ siteId })).toMatchObject({ healthy: true, lines: [] });
+    // Health still decides: offline nodes leave and come back.
+    await online(["r1", "r2"], false);
+    await reconcileDns(ctx);
+    expect(allOn()).toEqual(everyNode.slice(0, 4));
+    await online(["r1", "r2"], true);
+    await reconcileDns(ctx);
+    expect(allOn()).toEqual(everyNode);
+  });
 });

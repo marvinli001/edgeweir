@@ -328,7 +328,8 @@ const appliesTo = (lines: Set<string> | undefined, line: string) =>
  * CNAMEs of sites and enabled layer-4 applications are default-line records; `<all>.<domain>` has records per
  * resolution line: the union of the binding lines mapped to it, and on the
  * default line the union of the lines mapped to default, or of every line
- * when none is (or they have no address). `failover`: what the mass
+ * when none is (or they have no address); a binding without lines answers
+ * with the nodes of the whole cluster on the default line. `failover`: what the mass
  * removal protection does not count by share (only emptying a set counts):
  * record sets a backup group answers now ("name|line") and backup group
  * addresses in the sets of their line ("name|line|address").
@@ -437,10 +438,10 @@ export async function compileBindingPlan(
       .map((node) => node.id),
   );
   const members = Map.groupBy(nodes, (n) => n.nodeGroupId);
-  /** Healthy addresses of a group's nodes as `line` publishes them. */
-  const groupAddresses = (line: DnsLine, groupId: string) => {
+  /** Healthy addresses of `group` (nodes) as `line` publishes them. */
+  const nodeAddresses = (line: Pick<DnsLine, "name" | "overrides">, group: typeof nodes) => {
     const ips = new Set<string>();
-    for (const node of members.get(groupId) ?? []) {
+    for (const node of group) {
       if (!healthy.has(node.id) || appliesTo(effects?.removed.get(node.id), line.name)) continue;
       const override = line.overrides.find((o) => o.nodeId === node.id);
       let candidates: string[];
@@ -465,6 +466,8 @@ export async function compileBindingPlan(
     }
     return ips;
   };
+  const groupAddresses = (line: DnsLine, groupId: string) =>
+    nodeAddresses(line, members.get(groupId) ?? []);
   const allName = `${policy.allLabel}.${policy.domain}`;
   declare(allName, "A");
   declare(allName, "AAAA");
@@ -514,6 +517,10 @@ export async function compileBindingPlan(
     for (const ip of ips) resolution.add(ip);
     byResolution.set(line.resolutionLine, resolution);
   }
+  // A binding without lines (those of deleted node groups do not count)
+  // answers with every healthy node of the cluster.
+  if (!lines.length)
+    for (const ip of nodeAddresses({ name: "", overrides: [] }, nodes)) all.add(ip);
   // DNSPod needs a default-line record, and other providers answer unmatched
   // resolvers with it: every line's addresses when the default lines have none.
   const defaultIps = byResolution.get("default");

@@ -35,7 +35,7 @@ An account is one set of credentials and one zone; for several zones under the s
 1. Open **Clusters & nodes**, select the cluster, and switch to the **DNS** tab (shown once the cluster has a node).
 2. Select **Mode**: **Not managed**, **Manual**, or **Automatic**.
 3. Select **Provider account**; **Zone** shows the account's zone. Fill in **Cluster domain** and **TTL (seconds)**.
-4. Click **Add line**, fill in **Line name**, and select a **Node group** of this cluster; if needed, select a **Resolution line**, fill in **Minimum healthy IPs**, and use **Add backup group** under **Backup node groups**, ordering the groups. For a node behind NAT or on a private network, enter its public addresses in the node's **node name: target addresses** field, or configure the node's [scheduling addresses](scheduling.en.md#scheduling-addresses-and-backup-ips); leave it empty to use the node's scheduling addresses.
+4. If needed, click **Add line**, fill in **Line name**, and select a **Node group** of this cluster; if needed, select a **Resolution line**, fill in **Minimum healthy IPs**, and use **Add backup group** under **Backup node groups**, ordering the groups. For a node behind NAT or on a private network, enter its public addresses in the node's **node name: target addresses** field, or configure the node's [scheduling addresses](scheduling.en.md#scheduling-addresses-and-backup-ips); leave it empty to use the node's scheduling addresses. Without lines, `all.<cluster domain>` answers with the addresses of every healthy node of the cluster.
 5. Click **Save**. The console shows **DNS revision N created**.
 6. Verify: the **Current records** card shows **Published**, and the site's **Domains** tab shows the **CNAME target**.
 
@@ -74,7 +74,7 @@ With a provider that has the default line only, **Resolution line** is unavailab
 
 | Name | Type | Content |
 | --- | --- | --- |
-| `all.<cluster domain>` | A / AAAA | Healthy node addresses of the cluster's lines, written per resolution line, see [Records per resolution line](#records-per-resolution-line) |
+| `all.<cluster domain>` | A / AAAA | Healthy node addresses of the cluster's lines, written per resolution line, see [Records per resolution line](#records-per-resolution-line); without lines, the addresses of every healthy node of the cluster |
 | `<line name>.<cluster domain>` | A / AAAA | Healthy node addresses of the line's node group (of the backup node groups while they answer); default line only |
 | `<site UUID>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per site with at least one domain, disabled sites included; default line only |
 | `<app UUID>.<cluster domain>` | CNAME | `all.<cluster domain>`; one per enabled [L4 app](l4.en.md), none for disabled apps; default line only |
@@ -91,7 +91,7 @@ The **Resolution line** column of the **Current records** and **Records to creat
 | Resolution line | Addresses of `all.<cluster domain>` |
 | --- | --- |
 | China Telecom, China Unicom, China Mobile, Education network, Overseas | The union of every binding line mapped to that resolution line; not written when no line maps to it |
-| Default | The union of the binding lines mapped to **Default**; when there is none, or they have no address, the union of every line |
+| Default | The union of the binding lines mapped to **Default**; when there is none, or they have no address, the union of every line; when the binding has no lines, the addresses of every healthy node of the cluster |
 
 - Resolvers no other resolution line matches get the default line's records; DNSPod requires a record on the default line.
 - Writing a name and type replaces its records on every resolution line; copies on resolution lines no longer in use are deleted. A binding that uses the default line only writes the same records as before.
