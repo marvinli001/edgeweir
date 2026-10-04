@@ -127,7 +127,7 @@ See [access logs and AccessKeys](docs/guide/access-logs.en.md) and [backup and r
 | Fly.io | [Fly.io](docs/deploy/fly.en.md) |
 | bunny.net Magic Containers | [bunny.net Magic Containers](docs/deploy/bunny.en.md) |
 | Render | [Render](docs/deploy/render.en.md); [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/marvinli001/edgeweir) |
-| Zeabur | [Zeabur](docs/deploy/zeabur.en.md); template [`zeabur.yaml`](zeabur.yaml) |
+| Zeabur | [Zeabur](docs/deploy/zeabur.en.md); [![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/templates/5MQJR2) |
 
 The interactive install and upgrade script `deploy.sh` runs on any Linux host with Docker and Compose v2, with a local, cloud or bundled PostgreSQL:
 

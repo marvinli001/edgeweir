@@ -2,6 +2,8 @@
 
 在 Zeabur Server 上用控制台镜像与 PostgreSQL 18 部署控制台：模板一键创建、Dashboard 手动创建与 Zeabur CLI 等效操作。
 
+[![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/templates/5MQJR2)
+
 ## 要求
 
 | 项目 | 要求 |
@@ -26,7 +28,7 @@
 
 ## 模板一键创建
 
-仓库根目录的 [`zeabur.yaml`](https://github.com/marvinli001/edgeweir/blob/master/zeabur.yaml) 是 Zeabur 模板：
+仓库根目录的 [`zeabur.yaml`](https://github.com/marvinli001/edgeweir/blob/master/zeabur.yaml) 是 Zeabur 模板，已发布为 [`5MQJR2`](https://zeabur.com/templates/5MQJR2)：
 
 | 服务 | 设置 |
 | --- | --- |
@@ -41,14 +43,13 @@
    openssl rand -base64 32 > edgeweir-master-key
    ```
 
-2. 下载模板并部署（首次执行 `npx zeabur@latest auth login`）：
+2. 点击本页顶部的 **Deploy on Zeabur**，在模板页点击 **Deploy**；按提示选择项目或在 Server 上新建项目，填写域名前缀（得到 `<前缀>.zeabur.app`）与主密钥（`edgeweir-master-key` 的内容）。
+
+   命令行等效（首次执行 `npx zeabur@latest auth login`）；`-f zeabur.yaml` 部署本地的模板文件：
 
    ```bash
-   curl -fsSLO https://raw.githubusercontent.com/marvinli001/edgeweir/master/zeabur.yaml
-   npx zeabur@latest template deploy -f zeabur.yaml
+   npx zeabur@latest template deploy -c 5MQJR2
    ```
-
-   按提示选择项目或在 Server 上新建项目，填写域名前缀（得到 `<前缀>.zeabur.app`）与主密钥（`edgeweir-master-key` 的内容）。
 3. [固定版本](#固定版本)，再 [初始化](#初始化)。
 
 模板变量会写入项目中的全部服务，`EDGEWEIR_MASTER_KEY` 也出现在 `postgresql` 服务的变量中；PostgreSQL 不读取它。

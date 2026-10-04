@@ -2,6 +2,8 @@
 
 Deploy the console on a Zeabur Server with the console image and PostgreSQL 18: one-click template deployment, manual creation in the Dashboard, and the Zeabur CLI equivalents.
 
+[![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/templates/5MQJR2)
+
 ## Requirements
 
 | Item | Requirement |
@@ -26,7 +28,7 @@ General rules for ports and the node channel certificate: [Ports, reverse proxy 
 
 ## One-click template
 
-[`zeabur.yaml`](https://github.com/marvinli001/edgeweir/blob/master/zeabur.yaml) at the repository root is a Zeabur template:
+[`zeabur.yaml`](https://github.com/marvinli001/edgeweir/blob/master/zeabur.yaml) at the repository root is a Zeabur template, published as [`5MQJR2`](https://zeabur.com/templates/5MQJR2):
 
 | Service | Settings |
 | --- | --- |
@@ -41,14 +43,13 @@ General rules for ports and the node channel certificate: [Ports, reverse proxy 
    openssl rand -base64 32 > edgeweir-master-key
    ```
 
-2. Download the template and deploy it (run `npx zeabur@latest auth login` first):
+2. Click **Deploy on Zeabur** at the top of this page and **Deploy** on the template page; when prompted, pick a project or create one on a Server, enter the domain prefix (giving `<prefix>.zeabur.app`) and the master key (the contents of `edgeweir-master-key`).
+
+   CLI equivalent (run `npx zeabur@latest auth login` first); `-f zeabur.yaml` deploys a local copy of the template file:
 
    ```bash
-   curl -fsSLO https://raw.githubusercontent.com/marvinli001/edgeweir/master/zeabur.yaml
-   npx zeabur@latest template deploy -f zeabur.yaml
+   npx zeabur@latest template deploy -c 5MQJR2
    ```
-
-   When prompted, pick a project or create one on a Server, enter the domain prefix (giving `<prefix>.zeabur.app`) and the master key (the contents of `edgeweir-master-key`).
 3. [Pin the version](#pin-the-version), then [initialize](#initialization).
 
 Template variables are written to every service of the project, so `EDGEWEIR_MASTER_KEY` also appears among the `postgresql` service's variables; PostgreSQL does not read it.

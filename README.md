@@ -127,7 +127,7 @@ docker compose logs console | grep setupToken
 | Fly.io | [Fly.io](docs/deploy/fly.md) |
 | bunny.net Magic Containers | [bunny.net Magic Containers](docs/deploy/bunny.md) |
 | Render | [Render](docs/deploy/render.md)；[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/marvinli001/edgeweir) |
-| Zeabur | [Zeabur](docs/deploy/zeabur.md)；模板 [`zeabur.yaml`](zeabur.yaml) |
+| Zeabur | [Zeabur](docs/deploy/zeabur.md)；[![Deploy on Zeabur](https://zeabur.com/button.svg)](https://zeabur.com/templates/5MQJR2) |
 
 交互式安装与升级脚本 `deploy.sh` 适用于任何装有 Docker 与 Compose v2 的 Linux，支持本机、云端或内置 PostgreSQL：
 
