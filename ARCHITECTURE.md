@@ -419,7 +419,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `site` | 网站：所属集群、启用状态、缓存键、分片、Cache-Tag 转发、WebSocket、证书、TLS 设置、缓存代际号、日志采样率、错误页是否拦截源站错误与保存时间 |
 | `site_domain` | 网站域名（主机名或泛域名），全局唯一 |
 | `site_star` | 用户星标 |
-| `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验、主动健康检查与会话保持（关闭时保留设置） |
+| `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验、回源 HTTP 版本与 gRPC、主动健康检查与会话保持（关闭时保留设置） |
 | `origin` | 源站与所属的源站组（空为默认组） |
 | `origin_credential` | S3 源站密钥，信封加密 |
 | `cache_rule` | 缓存规则：条件表达式与名单引用、状态码与大小条件、动作、边缘与浏览器 TTL |
@@ -540,6 +540,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0050_node_remote_address` | `node.remote_address`（节点注册与最近一次心跳连接的源地址） |
 | `0051_node_last_auth_error` | `node.last_auth_error`、`last_auth_error_at`（节点通道最近一次拒绝该节点自己的证书的原因，如 `CERT_HAS_EXPIRED`） |
 | `0052_retention_indexes` | 索引：`alert_event (occurred_at, ordinal)`；`security_event (received_at)`，只含高于正常的网站级别事件；`cache_task_node (node_id)`，只含未补发的失败与跳过交付 |
+| `0053_origin_protocol` | `origin_pool.protocol`（回源 HTTP 版本，`http1` 或 `http2`）、`origin_pool.grpc`（gRPC 经 HTTP/2 端到端转发） |
 
 ## 构建产物
 

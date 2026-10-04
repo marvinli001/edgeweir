@@ -419,7 +419,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `site` | Sites: cluster, enabled state, cache key, slicing, Cache-Tag forwarding, WebSocket, certificate, TLS settings, cache generation, log sample rate, whether error pages replace origin errors and when they were saved |
 | `site_domain` | Site domains (host names or wildcards), unique across the console |
 | `site_star` | Per-user stars |
-| `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification, active health check and session affinity (kept while off) |
+| `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification, HTTP version towards the origins and gRPC, active health check and session affinity (kept while off) |
 | `origin` | Origins and their origin group (empty for the default group) |
 | `origin_credential` | S3 origin keys, envelope-encrypted |
 | `cache_rule` | Cache rules: condition expression and list references, status and size conditions, action, edge and browser TTLs |
@@ -540,6 +540,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0050_node_remote_address` | `node.remote_address` (source address of the node's enrollment and latest heartbeat connection) |
 | `0051_node_last_auth_error` | `node.last_auth_error`, `last_auth_error_at` (why the node channel last refused the node's own certificate, e.g. `CERT_HAS_EXPIRED`) |
 | `0052_retention_indexes` | Indexes: `alert_event (occurred_at, ordinal)`; `security_event (received_at)`, site level events above normal only; `cache_task_node (node_id)`, failed and skipped deliveries not made up only |
+| `0053_origin_protocol` | `origin_pool.protocol` (HTTP version towards the origins, `http1` or `http2`), `origin_pool.grpc` (gRPC proxied over HTTP/2 end to end) |
 
 ## Build output
 

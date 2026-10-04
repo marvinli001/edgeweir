@@ -297,6 +297,10 @@ export const originPool = pgTable(
     keepalive: boolean("keepalive").notNull().default(true),
     keepaliveIdleSeconds: integer("keepalive_idle_seconds").notNull().default(60),
     keepaliveMaxRequests: integer("keepalive_max_requests").notNull().default(1000),
+    /** http1 | http2: HTTP version of the requests to the origins. */
+    protocol: text("protocol").notNull().default("http1"),
+    /** Proxy gRPC requests over HTTP/2 end to end (protocol http2 only). */
+    grpc: boolean("grpc").notNull().default(false),
     /** Active health check (contract `activeHealthCheck`), kept while off; `{}` means the defaults. */
     activeHealthCheck: jsonb("active_health_check")
       .$type<Record<string, unknown>>()
