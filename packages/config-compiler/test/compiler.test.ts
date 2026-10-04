@@ -3,6 +3,7 @@ import {
   CertificateRefSchema,
   L4Protocol,
   NodeConfigSchema,
+  OriginProtocol,
   type RuleAction,
   RuleActionSchema,
 } from "@edgeweir/proto";
@@ -35,6 +36,8 @@ import {
   moduleFeatures,
   nodeRequirements,
   type OfflineHostModel,
+  ORIGIN_HTTP2_FEATURE,
+  type OriginPoolSettingsModel,
   parseDomain,
   poolAndPageFeatures,
   protectionFeatures,
@@ -890,6 +893,55 @@ describe("Cache-Tag, active health checks, session affinity, error pages and off
     expect(back.platformErrorPages).toBeUndefined();
     expect(back.offlineHosts).toEqual([]);
     expect(back.contentHash).toBe(plain.contentHash);
+  });
+
+  it("compiles HTTP/2 and gRPC towards the origins with origin-http2-v1, HTTP/1.1 as before", () => {
+    const settings: OriginPoolSettingsModel = {
+      tlsVerify: true,
+      maxFails: 3,
+      recoverySeconds: 30,
+      connectTimeoutMs: 10_000,
+      sendTimeoutMs: 60_000,
+      readTimeoutMs: 60_000,
+      keepalive: true,
+      keepaliveIdleSeconds: 60,
+      keepaliveMaxRequests: 1000,
+    };
+    const compile = (extra: Partial<OriginPoolSettingsModel>, overrides: Partial<SiteModel> = {}) =>
+      compileNodeConfig(
+        {
+          clusterId: "c",
+          sites: [withPool("a", { settings: { ...settings, ...extra } }, overrides), site("b")],
+        },
+        1n,
+      );
+    const bare = compile({});
+    const http1 = compile({ protocol: "http1", grpc: false });
+    expect(http1.contentHash).toBe(bare.contentHash);
+    expect(http1.sites[0]?.originPool?.protocol).toBe(OriginProtocol.UNSPECIFIED);
+    expect(http1.requiredFeatures).toEqual([]);
+    const h2 = compile({ protocol: "http2" });
+    expect(h2.sites[0]?.originPool).toMatchObject({ protocol: OriginProtocol.HTTP2, grpc: false });
+    expect(h2.sites[1]?.originPool?.protocol).toBe(OriginProtocol.UNSPECIFIED);
+    expect(h2.requiredFeatures).toEqual([ORIGIN_HTTP2_FEATURE]);
+    const grpc = compile({ protocol: "http2", grpc: true });
+    expect(grpc.sites[0]?.originPool).toMatchObject({ protocol: OriginProtocol.HTTP2, grpc: true });
+    expect(poolAndPageFeatures(grpc)).toEqual([ORIGIN_HTTP2_FEATURE]);
+    expect(grpc.contentHash).not.toBe(h2.contentHash);
+    // The node enables HTTP/2 towards clients for gRPC sites itself.
+    expect(grpc.listeners).toEqual(bare.listeners);
+    // gRPC goes over HTTP/2 only (the contract refuses it otherwise).
+    expect(compile({ grpc: true }).contentHash).toBe(bare.contentHash);
+    // A disabled site is not shipped and requires nothing.
+    expect(compile({ protocol: "http2", grpc: true }, { enabled: false }).requiredFeatures).toEqual(
+      [],
+    );
+    const decoded = decodeNodeConfig(encodeNodeConfig(grpc));
+    expect(decoded.sites[0]?.originPool).toMatchObject({
+      protocol: OriginProtocol.HTTP2,
+      grpc: true,
+    });
+    expect(contentHash(decoded)).toBe(grpc.contentHash);
   });
 
   it("follows the compiled sites when the features are recomputed (rollback)", () => {

@@ -38,6 +38,7 @@ import {
   OriginCacheControl,
   OriginConnectionSchema,
   OriginPoolSchema,
+  OriginProtocol,
   OriginSchema,
   OriginScheme,
   PassiveHealthCheckSchema,
@@ -130,6 +131,10 @@ export interface CacheRuleModel {
 
 export interface OriginPoolSettingsModel {
   tlsVerify: boolean;
+  /** HTTP version towards the origins; omitted: HTTP/1.1. */
+  protocol?: "http1" | "http2";
+  /** gRPC proxied over HTTP/2 end to end (protocol http2 only). */
+  grpc?: boolean;
   maxFails: number;
   recoverySeconds: number;
   connectTimeoutMs: number;
@@ -162,6 +167,11 @@ export const MODSECURITY_FEATURE = "modsecurity-v1";
 export const ACTIVE_HEALTH_FEATURE = "active-health-v1";
 export const SESSION_AFFINITY_FEATURE = "session-affinity-v1";
 export const ERROR_PAGES_FEATURE = "error-pages-v1";
+/**
+ * Feature of HTTP/2 towards an origin pool's origins and of gRPC proxied
+ * over HTTP/2 end to end (proto v0.21.0, OriginPool.protocol and grpc).
+ */
+export const ORIGIN_HTTP2_FEATURE = "origin-http2-v1";
 /**
  * Feature of the rule engine extensions (proto v0.13.0): functions and the
  * new fields, dynamic redirects and rewrites with query edits, origin,
@@ -801,9 +811,10 @@ export function moduleFeatures(config: NodeConfig): string[] {
 }
 
 /**
- * Features of the active health checks, session affinity and error pages
- * that the sites of a compiled configuration use: active-health-v1,
- * session-affinity-v1 and error-pages-v1.
+ * Features of the active health checks, session affinity, HTTP/2 towards
+ * the origins and error pages that the sites of a compiled configuration
+ * use: active-health-v1, session-affinity-v1, origin-http2-v1 and
+ * error-pages-v1.
  */
 export function poolAndPageFeatures(config: NodeConfig): string[] {
   return [
@@ -812,6 +823,9 @@ export function poolAndPageFeatures(config: NodeConfig): string[] {
       : []),
     ...(config.sites.some((site) => site.originPool?.sessionAffinity)
       ? [SESSION_AFFINITY_FEATURE]
+      : []),
+    ...(config.sites.some((site) => site.originPool?.protocol === OriginProtocol.HTTP2)
+      ? [ORIGIN_HTTP2_FEATURE]
       : []),
     ...(config.sites.some((site) => site.errorPages) ? [ERROR_PAGES_FEATURE] : []),
   ];
@@ -960,6 +974,10 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
       ...(settings
         ? {
             skipTlsVerify: !settings.tlsVerify,
+            // HTTP/1.1 stays unset: configurations encode as before.
+            ...(settings.protocol === "http2"
+              ? { protocol: OriginProtocol.HTTP2, grpc: !!settings.grpc }
+              : {}),
             healthCheck: create(PassiveHealthCheckSchema, {
               maxFails: settings.maxFails,
               recoverySeconds: settings.recoverySeconds,
