@@ -2,6 +2,7 @@ import type {
   ActiveHealthCheck,
   FeatureAvailability,
   OriginHealth,
+  OriginProtocol,
   OriginSettings,
   Site,
 } from "@edgeweir/contract";
@@ -10,7 +11,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { BorderBeam } from "@/components/appica/effects";
-import { OptionSelect } from "@/components/form-select";
+import { FormSelect, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
 import { OriginHealthBadge, OriginHealthError } from "@/components/site/origin-health";
@@ -467,6 +468,9 @@ interface PoolDraft {
   keepaliveIdleSeconds: string;
   keepaliveMaxRequests: string;
   websocket: boolean;
+  protocol: OriginProtocol;
+  /** gRPC end to end; only with HTTP/2 towards the origins. */
+  grpc: boolean;
   /** Active health check; its values are kept (and editable) while it is off. */
   healthEnabled: boolean;
   healthPath: string;
@@ -498,6 +502,11 @@ const HEALTH_METHODS = [
   { label: "HEAD", value: "HEAD" },
 ] satisfies { label: string; value: HealthMethod }[];
 
+const PROTOCOLS = [
+  { label: "HTTP/1.1", value: "http1" },
+  { label: "HTTP/2", value: "http2" },
+] satisfies { label: string; value: OriginProtocol }[];
+
 /** A pool feature cannot be turned on while the cluster's nodes lack it; one that is on can go off. */
 const lockedFor = (availability: FeatureAvailability | undefined, savedOn: boolean) =>
   !savedOn && availability?.available === false;
@@ -519,6 +528,8 @@ function PoolSettingsCard({ site }: { site: Site }) {
       keepaliveIdleSeconds: String(s.keepaliveIdleSeconds),
       keepaliveMaxRequests: String(s.keepaliveMaxRequests),
       websocket: s.websocket,
+      protocol: s.protocol,
+      grpc: s.grpc,
       healthEnabled: s.activeHealthCheck.enabled,
       healthPath: s.activeHealthCheck.path,
       healthMethod: s.activeHealthCheck.method,
@@ -545,6 +556,7 @@ function PoolSettingsCard({ site }: { site: Site }) {
   ];
   const healthAvailability = features.data?.activeHealthCheck;
   const affinityAvailability = features.data?.sessionAffinity;
+  const http2Availability = features.data?.originHttp2;
   const interval = toInt(draft.healthInterval, health.intervalSeconds);
 
   return (
@@ -568,6 +580,8 @@ function PoolSettingsCard({ site }: { site: Site }) {
               keepaliveIdleSeconds: toInt(draft.keepaliveIdleSeconds, s.keepaliveIdleSeconds),
               keepaliveMaxRequests: toInt(draft.keepaliveMaxRequests, s.keepaliveMaxRequests),
               websocket: draft.websocket,
+              protocol: draft.protocol,
+              grpc: draft.protocol === "http2" && draft.grpc,
               activeHealthCheck: {
                 enabled: draft.healthEnabled,
                 path: draft.healthPath.trim(),
@@ -592,43 +606,69 @@ function PoolSettingsCard({ site }: { site: Site }) {
           <CardTitle>{m.site_pool_title()}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Field>
-              <FieldLabel>{m.site_pool_policy()}</FieldLabel>
-              <Select
-                value={draft.policy}
-                onValueChange={(v) => v && set({ policy: v as PolicyValue })}
-                items={policies}
-              >
-                <SelectTrigger className="w-full" data-testid="pool-policy">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {policies.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            {/* The switches wrap onto two lines where their labels do not fit side by side. */}
-            <div className="flex flex-wrap items-end gap-x-8 gap-y-3 lg:col-span-2">
-              <SwitchField
-                id="pool-tls-verify"
-                label={m.site_pool_tls_verify()}
-                checked={draft.tlsVerify}
-                onCheckedChange={(tlsVerify) => set({ tlsVerify })}
-                testId="pool-tls-verify"
+          <div className="flex flex-col gap-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field>
+                <FieldLabel>{m.site_pool_policy()}</FieldLabel>
+                <Select
+                  value={draft.policy}
+                  onValueChange={(v) => v && set({ policy: v as PolicyValue })}
+                  items={policies}
+                >
+                  <SelectTrigger className="w-full" data-testid="pool-policy">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {policies.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>
+                        {p.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <FormSelect
+                id="pool-protocol"
+                label={m.site_pool_protocol()}
+                value={draft.protocol}
+                options={PROTOCOLS}
+                disabled={lockedFor(http2Availability, s.protocol === "http2")}
+                // gRPC goes over HTTP/2 only.
+                onChange={(protocol) => set({ protocol, grpc: protocol === "http2" && draft.grpc })}
+                testId="pool-protocol"
               />
-              <SwitchField
-                id="pool-websocket"
-                label={m.site_pool_websocket()}
-                checked={draft.websocket}
-                onCheckedChange={(websocket) => set({ websocket })}
-                testId="pool-websocket"
-              />
+              {/* The switches wrap onto two lines where their labels do not fit side by side. */}
+              <div className="flex flex-wrap items-end gap-x-8 gap-y-3 sm:col-span-2">
+                <SwitchField
+                  id="pool-tls-verify"
+                  label={m.site_pool_tls_verify()}
+                  checked={draft.tlsVerify}
+                  onCheckedChange={(tlsVerify) => set({ tlsVerify })}
+                  testId="pool-tls-verify"
+                />
+                <SwitchField
+                  id="pool-websocket"
+                  label={m.site_pool_websocket()}
+                  checked={draft.websocket}
+                  onCheckedChange={(websocket) => set({ websocket })}
+                  testId="pool-websocket"
+                />
+                <SwitchField
+                  id="pool-grpc"
+                  label={m.site_pool_grpc()}
+                  checked={draft.grpc}
+                  disabled={draft.protocol !== "http2" || lockedFor(http2Availability, s.grpc)}
+                  onCheckedChange={(grpc) => set({ grpc })}
+                  testId="pool-grpc"
+                />
+              </div>
             </div>
+            <Unavailable availability={http2Availability} testId="pool-protocol-unavailable" />
+            {draft.grpc && (
+              <SafetyNote className="animate-in fade-in" data-testid="pool-grpc-note">
+                {m.site_pool_grpc_note()}
+              </SafetyNote>
+            )}
           </div>
           <div className="flex flex-col gap-2" data-testid="origins-affinity-group">
             <SettingsGroup legend={m.site_pool_affinity()}>
