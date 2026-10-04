@@ -308,14 +308,29 @@ export function parseUrl(value: string): URL | undefined {
 }
 
 /**
- * A node channel URL as nodes take it, `https://host[:port]` with nothing
- * after it (a trailing "/" is fine), normalized to its origin; undefined for
- * anything else. EDGEWEIR_NODE_API_URL follows the same rule.
+ * Where a `wss://` or `ws://` node channel URL is served: the node channel's
+ * WebSocket entry on the web port. Nodes run the node channel's TLS inside the
+ * WebSocket, so the console still terminates it and requires mTLS.
+ */
+export const NODE_CHANNEL_WEBSOCKET_PATH = "/node-channel";
+
+/** The WebSocket subprotocol nodes ask for at NODE_CHANNEL_WEBSOCKET_PATH. */
+export const NODE_CHANNEL_WEBSOCKET_PROTOCOL = "edgeweir-node-channel";
+
+const NODE_CHANNEL_PROTOCOLS = ["https:", "wss:", "ws:"];
+
+/**
+ * A node channel URL as nodes take it, normalized to its origin; undefined for
+ * anything else. `https://host[:port]` reaches the node channel port, `wss://`
+ * or `ws://host[:port]` its WebSocket entry on the web port
+ * (NODE_CHANNEL_WEBSOCKET_PATH). Nothing after the host and port (a trailing
+ * "/" is fine). EDGEWEIR_NODE_API_URL follows the same rule.
  */
 export function nodeChannelOrigin(value: string): string | undefined {
   const url = parseUrl(value);
   if (
-    url?.protocol !== "https:" ||
+    !url ||
+    !NODE_CHANNEL_PROTOCOLS.includes(url.protocol) ||
     !url.hostname ||
     url.username ||
     url.password ||
@@ -325,6 +340,12 @@ export function nodeChannelOrigin(value: string): string | undefined {
   )
     return undefined;
   return url.origin;
+}
+
+/** Whether a node channel URL goes through the WebSocket entry (`wss://` or `ws://`). */
+export function isWebSocketNodeChannel(url: string): boolean {
+  const protocol = parseUrl(url)?.protocol;
+  return protocol === "wss:" || protocol === "ws:";
 }
 
 /** Whether a URL is plain http:// (unparsable URLs are not). */

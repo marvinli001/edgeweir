@@ -4,6 +4,7 @@ import {
   consoleUrlWarnings,
   forbiddenOriginRange,
   formatIp,
+  isWebSocketNodeChannel,
   nodeChannelInput,
   nodeChannelOrigin,
   normalizeCidr,
@@ -309,10 +310,24 @@ describe("node channel URLs", () => {
     expect(nodeChannelOrigin("https://nodes.example.com:443")).toBe("https://nodes.example.com");
   });
 
+  it("takes wss:// and ws:// URLs of the WebSocket entry", () => {
+    expect(nodeChannelOrigin("wss://Console.Example.com/")).toBe("wss://console.example.com");
+    expect(nodeChannelOrigin("wss://console.example.com:443")).toBe("wss://console.example.com");
+    expect(nodeChannelOrigin("ws://203.0.113.5:3000")).toBe("ws://203.0.113.5:3000");
+    expect(nodeChannelOrigin("wss://[2001:db8::1]:8080")).toBe("wss://[2001:db8::1]:8080");
+    expect(isWebSocketNodeChannel("wss://console.example.com")).toBe(true);
+    expect(isWebSocketNodeChannel("ws://console.example.com")).toBe(true);
+    expect(isWebSocketNodeChannel("https://console.example.com:8443")).toBe(false);
+    expect(isWebSocketNodeChannel("not a url")).toBe(false);
+  });
+
   it("refuses other schemes, paths, queries, fragments and credentials", () => {
     for (const url of [
       "http://nodes.example.com:8443",
+      "ftp://nodes.example.com",
       "https://nodes.example.com:8443/rpc",
+      "wss://console.example.com/node-channel",
+      "wss://user:secret@console.example.com",
       "https://nodes.example.com:8443/?a=1",
       "https://nodes.example.com:8443/#a",
       "https://user@nodes.example.com:8443",
@@ -327,6 +342,7 @@ describe("node channel URLs", () => {
     expect(nodeChannelInput.safeParse({ url: "https://nodes.example.com:8443" }).success).toBe(
       true,
     );
+    expect(nodeChannelInput.safeParse({ url: "wss://console.example.com" }).success).toBe(true);
     expect(nodeChannelInput.safeParse({ url: "http://nodes.example.com" }).success).toBe(false);
   });
 });

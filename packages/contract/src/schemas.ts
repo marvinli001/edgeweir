@@ -1063,7 +1063,7 @@ export const nodeChannelCheck = z.object({
   checkedAt: isoDateTime,
 });
 
-/** A node channel URL: `https://host[:port]` without a path (nodeChannelOrigin). */
+/** A node channel URL: `https://`, `wss://` or `ws://host[:port]` without a path (nodeChannelOrigin). */
 export const nodeChannelUrl = z
   .string()
   .max(2048)
