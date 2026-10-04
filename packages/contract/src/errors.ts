@@ -149,6 +149,8 @@ export const errorDefs = {
   ROLLBACK_RESOURCE_UNAVAILABLE: { status: 409, params: [] },
   S3_SECRET_REQUIRED: { status: 400, params: ["accessKeyId"] },
   ORIGIN_ADDRESS_FORBIDDEN: { status: 400, params: ["address", "range"] },
+  /** originSettings.grpc on a pool whose protocol towards the origins is not http2. */
+  ORIGIN_GRPC_REQUIRES_HTTP2: { status: 400, params: [] },
   CACHE_TASK_NOT_FOUND: { status: 404, params: [] },
   USAGE_RANGE_INVALID: { status: 400, params: [] },
   USAGE_CURSOR_INVALID: { status: 400, params: [] },

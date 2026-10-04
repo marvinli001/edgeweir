@@ -346,9 +346,10 @@ export const contract = {
       .output(z.array(s.originHealth)),
     /**
      * Whether Brotli, Zstandard, OWASP CRS, active health checks, session
-     * affinity, error pages and the rule engine extensions can be turned on
-     * for the site now, and whether its cluster's nodes run purges by host or
-     * tag and variant and sitemap prefetches.
+     * affinity, HTTP/2 and gRPC towards the origins, error pages and the rule
+     * engine extensions can be turned on for the site now, and whether its
+     * cluster's nodes run purges by host or tag and variant and sitemap
+     * prefetches.
      */
     features: oc
       .route({ method: "GET", path: "/sites/{id}/features", tags: ["sites"] })

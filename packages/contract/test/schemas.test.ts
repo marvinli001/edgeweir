@@ -72,6 +72,8 @@ describe("siteCreateInput", () => {
       keepaliveIdleSeconds: 60,
       keepaliveMaxRequests: 1000,
       websocket: true,
+      protocol: "http1",
+      grpc: false,
       activeHealthCheck: {
         enabled: false,
         path: "/",
@@ -159,6 +161,29 @@ describe("siteUpdateInput", () => {
       siteUpdateInput.safeParse({ id: "8f2f9c3a-2c61-4f6b-9f68-2f43b8a3a0d1", origins: [] })
         .success,
     ).toBe(false);
+  });
+});
+
+describe("origin protocol", () => {
+  const id = "8f2f9c3a-2c61-4f6b-9f68-2f43b8a3a0d1";
+  const create = { domains: ["demo.test"], origins: [{ address: "whoami" }] };
+
+  it("defaults to HTTP/1.1 on create and keeps the stored values when an update omits them", () => {
+    const h2 = siteCreateInput.parse({
+      ...create,
+      originSettings: { protocol: "http2", grpc: true },
+    });
+    expect(h2.originSettings).toMatchObject({ protocol: "http2", grpc: true });
+    const kept = siteUpdateInput.parse({ id, originSettings: { policy: "round_robin" } });
+    expect(kept.originSettings?.protocol).toBeUndefined();
+    expect(kept.originSettings?.grpc).toBeUndefined();
+    const update = siteUpdateInput.parse({
+      id,
+      originSettings: { protocol: "http1", grpc: false },
+    });
+    expect(update.originSettings).toMatchObject({ protocol: "http1", grpc: false });
+    for (const protocol of ["h2c", "http3", ""])
+      expect(siteUpdateInput.safeParse({ id, originSettings: { protocol } }).success).toBe(false);
   });
 });
 

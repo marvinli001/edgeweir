@@ -124,6 +124,8 @@ export const queryParamName = z
   .refine((value) => !/[\s&=#]/.test(value), "invalid query parameter name");
 
 export const originScheme = z.enum(["http", "https"]);
+/** HTTP version of a site's requests to its origins. */
+export const originProtocol = z.enum(["http1", "http2"]);
 export const loadBalancePolicy = z.enum(["weighted_random", "round_robin", "consistent_hash"]);
 export const cacheAction = z.enum(["cache", "bypass"]);
 export const originCacheControl = z.enum(["override", "respect"]);
@@ -333,6 +335,19 @@ export const originSettings = z.object({
   keepaliveMaxRequests: z.number().int().min(1).max(100_000).default(1000),
   /** Proxy WebSocket upgrades to the origin. */
   websocket: z.boolean().default(true),
+  /**
+   * HTTP version of the requests to the origins (http2: feature
+   * origin-http2-v1): HTTP/2 over TLS (ALPN h2) to HTTPS origins and with
+   * prior knowledge (h2c) to HTTP ones, never falling back to HTTP/1.1.
+   * WebSocket upgrades use HTTP/1.1 either way.
+   */
+  protocol: originProtocol.default("http1"),
+  /**
+   * Proxy gRPC requests (Content-Type application/grpc) over HTTP/2 end to
+   * end: streamed both ways, never cached, not inspected by the OWASP CRS.
+   * Requires protocol http2.
+   */
+  grpc: z.boolean().default(false),
   activeHealthCheck: activeHealthCheck.prefault({}),
   sessionAffinity: sessionAffinity.prefault({}),
 });
@@ -374,6 +389,7 @@ export const siteCreateInput = z.object({
   domains: z.array(domainName).min(1).max(50),
   origins: siteOrigins,
   cacheRules: z.array(cacheRuleInput).max(64).default([]),
+  /** grpc needs protocol http2 (ORIGIN_GRPC_REQUIRES_HTTP2). */
   originSettings: originSettings.prefault({}),
   cacheSettings: cacheSettings.prefault({}),
 });
@@ -1159,12 +1175,16 @@ export const siteUpdateInput = z.object({
   cacheRules: z.array(cacheRuleInput).max(64).optional(),
   /**
    * Replaces the pool settings; omitted fields take their defaults, except
-   * activeHealthCheck and sessionAffinity, which stay as they are when omitted.
+   * activeHealthCheck, sessionAffinity, protocol and grpc, which stay as they
+   * are when omitted. The resulting grpc needs protocol http2
+   * (ORIGIN_GRPC_REQUIRES_HTTP2).
    */
   originSettings: originSettings
     .extend({
       activeHealthCheck: activeHealthCheck.optional(),
       sessionAffinity: sessionAffinity.optional(),
+      protocol: originProtocol.optional(),
+      grpc: z.boolean().optional(),
     })
     .optional(),
   /** Replaces the cache settings; keepCacheTag stays as it is when omitted. */
@@ -1426,6 +1446,7 @@ export type CacheRule = z.infer<typeof cacheRule>;
 export type OriginInput = z.input<typeof originInput>;
 export type CacheRuleInput = z.input<typeof cacheRuleInput>;
 export type OriginSettings = z.infer<typeof site>["originSettings"];
+export type OriginProtocol = z.infer<typeof originProtocol>;
 export type ActiveHealthCheck = OriginSettings["activeHealthCheck"];
 export type SessionAffinity = OriginSettings["sessionAffinity"];
 export type CacheSettings = z.infer<typeof site>["cacheSettings"];
