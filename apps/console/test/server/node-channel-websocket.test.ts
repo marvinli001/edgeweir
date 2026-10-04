@@ -1,6 +1,11 @@
 import "reflect-metadata";
 import { webcrypto } from "node:crypto";
 import { createServer, type Server } from "node:http";
+import {
+  type AddressInfo,
+  createServer as createTcpServer,
+  type Server as TcpServer,
+} from "node:net";
 import { connect as tlsConnect } from "node:tls";
 import { Code, ConnectError, createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
@@ -47,6 +52,7 @@ describe("the node channel's WebSocket entry", async () => {
   let web: Server;
   let entry: string;
   const sockets: WebSocket[] = [];
+  const relays: TcpServer[] = [];
 
   /** Opens a WebSocket to the entry; rejects with the HTTP status when it is refused. */
   const openWebSocket = (
@@ -61,12 +67,25 @@ describe("the node channel's WebSocket entry", async () => {
       ws.once("error", reject);
     });
 
-  /** A NodeService client whose HTTP/2 connection runs inside one WebSocket. */
+  /**
+   * A NodeService client connected the way a node is: its TLS runs on a local
+   * socket whose bytes travel inside one WebSocket to the entry. (TLS over the
+   * WebSocket stream itself is unreliable under HTTP/2 in Node.js 24.)
+   */
   const nodeClient = async (
     tls: { cert?: string; key?: string } = {},
     headers: Record<string, string> = {},
   ) => {
     const ws = await openWebSocket({ headers });
+    const relay = createTcpServer((socket) => {
+      const stream = createWebSocketStream(ws);
+      socket.pipe(stream).pipe(socket);
+      socket.on("error", () => stream.destroy());
+      stream.on("error", () => socket.destroy());
+    });
+    relays.push(relay);
+    await new Promise<void>((resolve) => relay.listen(0, "127.0.0.1", resolve));
+    const { port } = relay.address() as AddressInfo;
     const options = { ca: ctx.nodeCa.certificatePem, servername: "localhost", ...tls };
     return createClient(
       NodeService,
@@ -76,7 +95,7 @@ describe("the node channel's WebSocket entry", async () => {
         nodeOptions: {
           ...options,
           createConnection: () =>
-            tlsConnect({ ...options, socket: createWebSocketStream(ws), ALPNProtocols: ["h2"] }),
+            tlsConnect({ ...options, host: "127.0.0.1", port, ALPNProtocols: ["h2"] }),
         },
       }),
     );
@@ -102,6 +121,7 @@ describe("the node channel's WebSocket entry", async () => {
   });
   afterAll(async () => {
     for (const ws of sockets) ws.terminate();
+    for (const relay of relays) relay.close();
     await new Promise<void>((resolve) => web.close(() => resolve()));
     await channel.close();
     await pglite.close();
