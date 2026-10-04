@@ -10,7 +10,7 @@ import { decodeMasterKey, masterKeyProblem } from "./envelope";
  * deploy.sh's valid_url; parses to the origin. z.url() would also take
  * "localhost:3000" (scheme "localhost:") and URLs with a path.
  */
-const originUrl = (schemes: readonly ("http" | "https")[]) =>
+const originUrl = (schemes: readonly ("http" | "https" | "ws" | "wss")[]) =>
   z.string().transform((value, ctx) => {
     let url: URL | undefined;
     try {
@@ -25,9 +25,12 @@ const originUrl = (schemes: readonly ("http" | "https")[]) =>
       url.search ||
       url.hash
     ) {
+      const names = schemes.map((s) => `${s}://`);
+      const expected =
+        names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names.at(-1)}` : names[0];
       ctx.issues.push({
         code: "custom",
-        message: `expected ${schemes.map((s) => `${s}://`).join(" or ")}host[:port] without a path, e.g. https://cdn-admin.example.com`,
+        message: `expected ${expected}host[:port] without a path, e.g. https://cdn-admin.example.com`,
         input: value,
       });
       return z.NEVER;
@@ -68,10 +71,25 @@ const schema = z.object({
   ),
   /** Public URL of the web console (behind a reverse proxy this is the proxy URL). */
   EDGEWEIR_PUBLIC_URL: originUrl(["http", "https"]).default("http://localhost:3000"),
-  /** URL nodes use to reach the node channel. TLS is terminated by the console itself. */
+  /**
+   * URL nodes use to reach the node channel: https:// for its port, wss:// or
+   * ws:// for its WebSocket entry on the web port. TLS is terminated by the
+   * console itself either way.
+   */
   EDGEWEIR_NODE_API_URL: z.preprocess(
     (value) => (value === "" ? undefined : value),
-    originUrl(["https"]).optional(),
+    originUrl(["https", "wss", "ws"]).optional(),
+  ),
+  /**
+   * Without EDGEWEIR_NODE_API_URL, nodes get the WebSocket entry on the web
+   * port (wss://<EDGEWEIR_PUBLIC_URL host>) instead of the node channel port:
+   * for platforms that only forward HTTP. Also keeps the entry open.
+   */
+  EDGEWEIR_NODE_API_WEBSOCKET: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z
+      .stringbool({ truthy: ["true", "1", "yes", "on"], falsy: ["false", "0", "no", "off"] })
+      .default(false),
   ),
   /** Extra DNS names / IPs for the node-channel server certificate, comma separated. */
   EDGEWEIR_NODE_API_HOSTNAMES: z.string().default(""),
@@ -211,6 +229,20 @@ function withSecretFiles(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return env;
 }
 
+/**
+ * The node channel URL when EDGEWEIR_NODE_API_URL is unset: the node channel
+ * port on the console's host, or with EDGEWEIR_NODE_API_WEBSOCKET the
+ * WebSocket entry at the console's own address (wss:// behind https://).
+ */
+export function defaultNodeApiUrl(
+  env: Pick<Env, "EDGEWEIR_PUBLIC_URL" | "EDGEWEIR_NODE_API_WEBSOCKET" | "NODE_API_PORT">,
+): string {
+  const publicUrl = new URL(env.EDGEWEIR_PUBLIC_URL);
+  if (env.EDGEWEIR_NODE_API_WEBSOCKET)
+    return `${publicUrl.protocol === "https:" ? "wss" : "ws"}://${publicUrl.host}`;
+  return `https://${publicUrl.hostname}:${env.NODE_API_PORT}`;
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const parsed = schema.safeParse(withSecretFiles(source));
   if (!parsed.success) {
@@ -243,9 +275,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       `invalid configuration:\n  EDGEWEIR_OUTBOUND_ALLOW_CIDRS: ${(error as Error).message}`,
     );
   }
-  const nodeApiUrl =
-    env.EDGEWEIR_NODE_API_URL ??
-    `https://${new URL(env.EDGEWEIR_PUBLIC_URL).hostname}:${env.NODE_API_PORT}`;
+  const nodeApiUrl = env.EDGEWEIR_NODE_API_URL ?? defaultNodeApiUrl(env);
   const names = new Set<string>(["localhost", "127.0.0.1", "::1", hostname()]);
   names.add(new URL(nodeApiUrl).hostname.replace(/^\[|\]$/g, ""));
   for (const extra of env.EDGEWEIR_NODE_API_HOSTNAMES.split(",")) {

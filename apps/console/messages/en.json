@@ -251,7 +251,7 @@
   "system_console_url": "Console URL",
   "system_node_api_url": "Node channel",
   "system_node_channel_url": "URL",
-  "system_node_channel_invalid": "Enter https://host[:port] without a path",
+  "system_node_channel_invalid": "Enter https://host[:port] or wss://host[:port] without a path",
   "system_node_channel_note": "Enrolled nodes keep connecting to the previous URL: keep it reachable",
   "url_scope_local": "This machine only",
   "url_scope_private": "Private address",

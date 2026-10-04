@@ -55,9 +55,19 @@ describe("console and node channel URLs", () => {
     "cdn-admin.example.com:8443",
     "http://cdn-admin.example.com:8443",
     "https://cdn-admin.example.com:8443/node",
+    "wss://cdn-admin.example.com/node-channel",
   ])("refuses EDGEWEIR_NODE_API_URL %j", (value) => {
     expect(() => loadEnv({ ...base, EDGEWEIR_NODE_API_URL: value })).toThrow(
-      /^invalid configuration:\n {2}EDGEWEIR_NODE_API_URL: expected https:\/\/host/,
+      /^invalid configuration:\n {2}EDGEWEIR_NODE_API_URL: expected https:\/\/, wss:\/\/ or ws:\/\/host/,
+    );
+  });
+
+  it("takes the WebSocket entry's wss:// and ws:// URLs", () => {
+    const env = loadEnv({ ...base, EDGEWEIR_NODE_API_URL: "wss://Nodes.example.com/" });
+    expect(env.nodeApiUrl).toBe("wss://nodes.example.com");
+    expect(env.nodeApiHostnames).toContain("nodes.example.com");
+    expect(loadEnv({ ...base, EDGEWEIR_NODE_API_URL: "ws://192.0.2.7:3000" }).nodeApiUrl).toBe(
+      "ws://192.0.2.7:3000",
     );
   });
 
@@ -72,6 +82,50 @@ describe("console and node channel URLs", () => {
     expect(env.nodeApiHostnames).toContain("2001:db8::1");
     expect(loadEnv({ ...base, EDGEWEIR_PUBLIC_URL: "http://192.0.2.7:3000" }).nodeApiUrl).toBe(
       "https://192.0.2.7:8443",
+    );
+  });
+});
+
+describe("EDGEWEIR_NODE_API_WEBSOCKET", () => {
+  it.each([undefined, "", "false", "0"])("keeps the node channel port when %j", (value) => {
+    const env = loadEnv({ ...base, EDGEWEIR_NODE_API_WEBSOCKET: value });
+    expect(env.EDGEWEIR_NODE_API_WEBSOCKET).toBe(false);
+    expect(env.nodeApiUrl).toBe("https://console.example.com:8443");
+  });
+
+  it("defaults to the WebSocket entry at the console's own address", () => {
+    expect(loadEnv({ ...base, EDGEWEIR_NODE_API_WEBSOCKET: "true" }).nodeApiUrl).toBe(
+      "wss://console.example.com",
+    );
+    expect(
+      loadEnv({
+        ...base,
+        EDGEWEIR_PUBLIC_URL: "https://console.example.com:8080",
+        EDGEWEIR_NODE_API_WEBSOCKET: "1",
+      }).nodeApiUrl,
+    ).toBe("wss://console.example.com:8080");
+    expect(
+      loadEnv({
+        ...base,
+        EDGEWEIR_PUBLIC_URL: "http://192.0.2.7:3000",
+        EDGEWEIR_NODE_API_WEBSOCKET: "true",
+      }).nodeApiUrl,
+    ).toBe("ws://192.0.2.7:3000");
+  });
+
+  it("leaves an explicit EDGEWEIR_NODE_API_URL as it is", () => {
+    expect(
+      loadEnv({
+        ...base,
+        EDGEWEIR_NODE_API_WEBSOCKET: "true",
+        EDGEWEIR_NODE_API_URL: "https://nodes.example.com:9443",
+      }).nodeApiUrl,
+    ).toBe("https://nodes.example.com:9443");
+  });
+
+  it("refuses a value that is not a boolean", () => {
+    expect(() => loadEnv({ ...base, EDGEWEIR_NODE_API_WEBSOCKET: "maybe" })).toThrow(
+      /^invalid configuration:\n {2}EDGEWEIR_NODE_API_WEBSOCKET:/,
     );
   });
 });

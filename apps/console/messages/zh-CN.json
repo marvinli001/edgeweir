@@ -233,7 +233,7 @@
   "system_console_url": "控制台地址",
   "system_node_api_url": "节点通道",
   "system_node_channel_url": "地址",
-  "system_node_channel_invalid": "请输入 https://主机[:端口]，不含路径",
+  "system_node_channel_invalid": "请输入 https://主机[:端口] 或 wss://主机[:端口]，不含路径",
   "system_node_channel_note": "已注册的节点仍连接原地址，原地址需保持可用",
   "url_scope_local": "仅本机可达",
   "url_scope_private": "内网地址",

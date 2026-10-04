@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
+import type { LookupFunction } from "node:net";
 import { isIP } from "node:net";
-import { connect, type DetailedPeerCertificate } from "node:tls";
-import type { NodeChannelCheck } from "@edgeweir/contract";
+import { connect, type DetailedPeerCertificate, type TLSSocket } from "node:tls";
+import {
+  NODE_CHANNEL_WEBSOCKET_PATH,
+  NODE_CHANNEL_WEBSOCKET_PROTOCOL,
+  type NodeChannelCheck,
+} from "@edgeweir/contract";
+import WebSocket, { createWebSocketStream } from "ws";
 import type { AppContext } from "../lib/context";
 import { OutboundRefusedError, outboundAddress, withinDeadline } from "../lib/outbound";
 import { getNodeChannel } from "./node-channel-url";
@@ -47,6 +53,8 @@ export function checkNodeChannelUrl(
   } catch {
     return Promise.resolve("unreachable");
   }
+  if (target.protocol === "wss:" || target.protocol === "ws:")
+    return checkWebSocketEntry(target, caSha256, timeoutMs, address);
   if (target.protocol !== "https:") return Promise.resolve("mismatch");
   const host = target.hostname.replace(/^\[|\]$/g, "");
   const port = Number(target.port || 443);
@@ -73,6 +81,70 @@ export function checkNodeChannelUrl(
       finish(presented.includes(caSha256.toLowerCase()) ? "ok" : "mismatch");
     });
     socket.once("error", () => finish("unreachable"));
+  });
+}
+
+/** Resolves every name to `address` (already resolved and allowed). */
+function pinnedLookup(address: string): LookupFunction {
+  const family = isIP(address);
+  return (_hostname, options, callback) => {
+    if (options.all) callback(null, [{ address, family }]);
+    else callback(null, address, family);
+  };
+}
+
+/**
+ * The same check through the WebSocket entry of a wss:// or ws:// URL: the
+ * WebSocket handshake at NODE_CHANNEL_WEBSOCKET_PATH (a wss:// URL's own TLS
+ * is verified as usual), then the node channel's TLS handshake inside it.
+ * An HTTP answer other than the upgrade means something else answers there
+ * (or the entry is closed): mismatch.
+ */
+function checkWebSocketEntry(
+  target: URL,
+  caSha256: string,
+  timeoutMs: number,
+  address?: string,
+): Promise<NodeChannelCheck["result"]> {
+  const host = target.hostname.replace(/^\[|\]$/g, "");
+  return new Promise((resolve) => {
+    let settled = false;
+    let tls: TLSSocket | undefined;
+    const ws = new WebSocket(
+      new URL(NODE_CHANNEL_WEBSOCKET_PATH, target),
+      NODE_CHANNEL_WEBSOCKET_PROTOCOL,
+      {
+        handshakeTimeout: timeoutMs,
+        perMessageDeflate: false,
+        ...(address ? { lookup: pinnedLookup(address) } : {}),
+      },
+    );
+    const finish = (result: NodeChannelCheck["result"]) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      tls?.destroy();
+      ws.terminate();
+      resolve(result);
+    };
+    const timer = setTimeout(() => finish("unreachable"), timeoutMs);
+    ws.once("unexpected-response", () => finish("mismatch"));
+    ws.once("error", () => finish("unreachable"));
+    ws.once("open", () => {
+      const socket = connect({
+        socket: createWebSocketStream(ws),
+        // SNI carries names only.
+        servername: isIP(host) ? undefined : host,
+        rejectUnauthorized: false,
+        ALPNProtocols: ["h2", "http/1.1"],
+      });
+      tls = socket;
+      socket.once("secureConnect", () => {
+        const presented = presentedFingerprints(socket.getPeerCertificate(true));
+        finish(presented.includes(caSha256.toLowerCase()) ? "ok" : "mismatch");
+      });
+      socket.once("error", () => finish("mismatch"));
+    });
   });
 }
 
