@@ -100,6 +100,13 @@
 #   the origin and an accepting listener; an origin change without a reload;
 #   an IP block list and a connection limit; statistics and the app's CNAME;
 #   Playwright e2e/g7.spec.ts.
+#   HTTP/2 and gRPC (scripts/e2e-h2.mjs, test origin h2-origin, after G7):
+#   both nodes report origin-http2-v1; gRPC without HTTP/2 is refused; a
+#   site with HTTP/2 and gRPC reaches an h2c-only origin through both nodes
+#   (the origin sees HTTP/2 and the client's Host); gRPC over h2c through
+#   both nodes: unary, bidirectional streaming and error trailers; an update
+#   without the protocol keeps it; back on HTTP/1.1 the nodes no longer reach
+#   the h2c-only origin; Playwright e2e/h2.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1127,6 +1134,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g7.mjs --cleanup || fail "G7 cleanup failed"
 pass "G7 checks passed"
+
+step "HTTP/2 and gRPC to origins: h2c origin, gRPC unary, bidirectional streaming and trailers through both nodes"
+node scripts/e2e-h2.mjs || fail "HTTP/2 and gRPC end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/h2.spec.ts || fail "HTTP/2 and gRPC browser checks failed"
+fi
+node scripts/e2e-h2.mjs --cleanup || fail "HTTP/2 and gRPC cleanup failed"
+pass "HTTP/2 and gRPC checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"
