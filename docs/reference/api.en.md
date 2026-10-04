@@ -325,7 +325,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | Request | Fields |
 | --- | --- |
 | `POST /cache-tasks` | `type`: `url`, `prefix`, `site`, `prefetch`, `host`, `tag`, `sitemap`. `host`: `hosts` (up to 500 host names, without port or wildcard); `tag`: `siteIds` (1–100) and `tags` (1–500, trimmed and stored in lowercase, each 1–128 bytes of printable ASCII without commas); `sitemap`: `urls` with exactly one sitemap URL, `maxUrls` (1–10000, default 1000); `prefetch` and `sitemap`: `variants` (`desktop` / `mobile`, default `["desktop"]`) |
-| `PATCH /sites/{id}` | `originSettings.activeHealthCheck`: `enabled`, `path`, `method` (`GET` / `HEAD`), `expectedStatusMin`, `expectedStatusMax`, `host`, `intervalSeconds` (5–300), `timeoutSeconds` (1–60, not above the interval), `healthyThreshold`, `unhealthyThreshold` (1–10); `originSettings.sessionAffinity`: `enabled`, `ttlSeconds` (60–604800); `cacheSettings.keepCacheTag`. Omitted, these three keep their values; the other fields of `originSettings` and `cacheSettings` are still replaced as a whole, so `GET` first |
+| `PATCH /sites/{id}` | `originSettings.activeHealthCheck`: `enabled`, `path`, `method` (`GET` / `HEAD`), `expectedStatusMin`, `expectedStatusMax`, `host`, `intervalSeconds` (5–300), `timeoutSeconds` (1–60, not above the interval), `healthyThreshold`, `unhealthyThreshold` (1–10); `originSettings.sessionAffinity`: `enabled`, `ttlSeconds` (60–604800); `originSettings.protocol` (`http1` / `http2`), `originSettings.grpc` (`true` only with `http2`, otherwise 400 `ORIGIN_GRPC_REQUIRES_HTTP2`); `cacheSettings.keepCacheTag`. Omitted, these five keep their values; the other fields of `originSettings` and `cacheSettings` are still replaced as a whole, so `GET` first |
 | `PUT /sites/{id}/error-pages` | `pages`: `[{ status, template }]`, `status` one of 403, 429, 502, 503, 504, at most once each, `template` 1–65536 bytes (UTF-8); `interceptOriginErrors`; optional `expectedUpdatedAt`. Replaces everything |
 | `PUT /settings/error-pages` | `unknownHost`, `siteDisabled`: templates, an empty string meaning the built-in page, at most 65536 bytes each |
 
@@ -335,7 +335,7 @@ Responses:
 | --- | --- |
 | `cacheTasks.*` | Tasks add `variants` (`[]` for purges) and `maxUrls` (`null` except for sitemap tasks); `targets` holds the hosts, the normalized tags, or the sitemap URL; node results add the error codes `sitemap_failed` and `sitemap_empty` |
 | `sites.originHealth` | Each origin's `nodes` has one entry per node and source, with `source` (`passive` / `active`); `downNodes` counts online nodes with an unhealthy entry of either source, each node once |
-| `sites.features` | Adds `activeHealthCheck`, `sessionAffinity`, `errorPages`, `purgeByTag`, `prefetchVariants` |
+| `sites.features` | Adds `activeHealthCheck`, `sessionAffinity`, `originHttp2`, `errorPages`, `purgeByTag`, `prefetchVariants` |
 | `errorPages.get`, `errorPages.update` | `siteId`, `pages` (sorted by status), `interceptOriginErrors`, `updatedAt` (`null` until first saved) |
 | `logs.query`, `logs.export` | Query parameter `requestId` (exact, up to 128 characters); entries add `requestId`, the CSV a `requestId` column |
 

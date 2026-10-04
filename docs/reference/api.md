@@ -325,7 +325,7 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 | 请求 | 字段 |
 | --- | --- |
 | `POST /cache-tasks` | `type`：`url`、`prefix`、`site`、`prefetch`、`host`、`tag`、`sitemap`。`host`：`hosts`（最多 500 个主机名，不带端口或通配符）；`tag`：`siteIds`（1–100）与 `tags`（1–500，去首尾空格后按小写保存，每个 1–128 字节可打印 ASCII，不含逗号）；`sitemap`：`urls` 恰好一个站点地图 URL、`maxUrls`（1–10000，默认 1000）；`prefetch` 与 `sitemap`：`variants`（`desktop` / `mobile`，默认 `["desktop"]`） |
-| `PATCH /sites/{id}` | `originSettings.activeHealthCheck`：`enabled`、`path`、`method`（`GET` / `HEAD`）、`expectedStatusMin`、`expectedStatusMax`、`host`、`intervalSeconds`（5–300）、`timeoutSeconds`（1–60，不超过间隔）、`healthyThreshold`、`unhealthyThreshold`（1–10）；`originSettings.sessionAffinity`：`enabled`、`ttlSeconds`（60–604800）；`cacheSettings.keepCacheTag`。省略这三项时保持原值；`originSettings`、`cacheSettings` 的其他字段仍整体替换，先 `GET` 再修改 |
+| `PATCH /sites/{id}` | `originSettings.activeHealthCheck`：`enabled`、`path`、`method`（`GET` / `HEAD`）、`expectedStatusMin`、`expectedStatusMax`、`host`、`intervalSeconds`（5–300）、`timeoutSeconds`（1–60，不超过间隔）、`healthyThreshold`、`unhealthyThreshold`（1–10）；`originSettings.sessionAffinity`：`enabled`、`ttlSeconds`（60–604800）；`originSettings.protocol`（`http1` / `http2`）、`originSettings.grpc`（只能在 `http2` 下为 `true`，否则 400 `ORIGIN_GRPC_REQUIRES_HTTP2`）；`cacheSettings.keepCacheTag`。省略这五项时保持原值；`originSettings`、`cacheSettings` 的其他字段仍整体替换，先 `GET` 再修改 |
 | `PUT /sites/{id}/error-pages` | `pages`：`[{ status, template }]`，`status` 为 403、429、502、503、504，各至多一个，`template` 1–65536 字节（UTF-8）；`interceptOriginErrors`；可选 `expectedUpdatedAt`。整体替换 |
 | `PUT /settings/error-pages` | `unknownHost`、`siteDisabled`：模板，空字符串表示内置页面，每个最多 65536 字节 |
 
@@ -335,7 +335,7 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 | --- | --- |
 | `cacheTasks.*` | 任务对象增加 `variants`（清缓存任务为 `[]`）与 `maxUrls`（站点地图任务以外为 `null`）；`targets` 为 Host、规范化后的标签或站点地图 URL；节点结果的错误码增加 `sitemap_failed`、`sitemap_empty` |
 | `sites.originHealth` | 每个源站的 `nodes` 按节点和来源各一项，增加 `source`（`passive` / `active`）；`downNodes` 统计有任一来源不健康的在线节点，每个节点计一次 |
-| `sites.features` | 增加 `activeHealthCheck`、`sessionAffinity`、`errorPages`、`purgeByTag`、`prefetchVariants` |
+| `sites.features` | 增加 `activeHealthCheck`、`sessionAffinity`、`originHttp2`、`errorPages`、`purgeByTag`、`prefetchVariants` |
 | `errorPages.get`、`errorPages.update` | `siteId`、`pages`（按状态码排序）、`interceptOriginErrors`、`updatedAt`（从未保存时为 `null`） |
 | `logs.query`、`logs.export` | 查询参数 `requestId`（精确匹配，最长 128）；日志条目增加 `requestId`，CSV 增加 `requestId` 列 |
 

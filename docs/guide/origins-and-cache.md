@@ -53,6 +53,8 @@
 | 负载均衡 | 加权随机 / 轮询 / 一致性哈希 | 加权随机 | 主源之间的选择策略 |
 | 校验源站证书 | 开 / 关 | 开 | 校验 HTTPS 源站证书，见[回源 TLS](#回源-tls) |
 | WebSocket | 开 / 关 | 开 | 透传 WebSocket 升级请求 |
+| 回源 HTTP 版本 | HTTP/1.1 / HTTP/2 | HTTP/1.1 | 节点请求源站用的 HTTP 版本，见 [HTTP/2 与 gRPC](#http2-与-grpc) |
+| gRPC | 开 / 关 | 关 | 以 HTTP/2 端到端转发 gRPC 请求；「回源 HTTP 版本」为 HTTP/2 时才能打开 |
 | 失败次数 | 1–100 | 3 | 连续失败达到该值后标记源站不可用 |
 | 恢复时间（秒） | 1–3600 | 30 | 标记不可用后多久再次尝试 |
 | 超时（秒）：连接 | 0.1–120 | 10 | 建立连接的超时 |
@@ -128,7 +130,7 @@
 | --- | --- |
 | 执行者 | 每个节点的 agent 分别探测网站的每个源站；探测请求数随节点数增加，间隔不宜过短 |
 | 地址策略 | 与回源相同：解析结果中特殊用途地址（不在允许清单内）被丢弃，只连接校验过的地址；没有可用地址时记为失败（`dns_failed`、`address_forbidden`） |
-| 请求 | 协议和端口与源站相同；HTTPS 发送 SNI（源站的 SNI、回源 Host 或地址），「校验源站证书」打开时校验证书；不跟随跳转；最多读取 64 KiB 响应体 |
+| 请求 | 协议和端口与源站相同；HTTPS 发送 SNI（源站的 SNI、回源 Host 或地址），「校验源站证书」打开时校验证书；「回源 HTTP 版本」为 HTTP/2 时以 HTTP/2 探测；不跟随跳转；最多读取 64 KiB 响应体 |
 | 失败 | 连接失败、超时、TLS 失败、状态码不在范围内；错误码与被动检查相同 |
 | 初始状态 | 健康；节点启动或配置变化后的第一次探测在一个间隔内随机开始 |
 | 不探测 | S3 兼容源站（未签名的探测不代表签名请求）、地址字面量被禁止的源站 |
@@ -180,6 +182,39 @@
 ### WebSocket
 
 WebSocket 升级请求（`Upgrade: websocket`）默认透传，不经过缓存。关闭「WebSocket」后，升级请求返回 403，响应头 `X-Edgeweir-Error: websocket-disabled`。
+
+### HTTP/2 与 gRPC
+
+1. 在「源站」页签的「源站池设置」卡片中，把「回源 HTTP 版本」改为「HTTP/2」；需要转发 gRPC 时再打开「gRPC」。
+2. 点击卡片底部的「保存」。
+3. 验证：节点应用该版本后，源站访问日志里的请求为 HTTP/2。gRPC 网站可经节点调用，例如：
+
+   ```bash
+   grpcurl -authority grpc.example.com <节点 IP>:443 list
+   ```
+
+| 项目 | 行为 |
+| --- | --- |
+| 协商 | HTTPS 源站经 TLS ALPN 协商 `h2`；HTTP 源站以 HTTP/2 直连（prior knowledge，h2c）。源站不支持 HTTP/2 时回源失败，不回退到 HTTP/1.1 |
+| 回源 Host | 以 `host` 请求头发送，不发送 `:authority` |
+| 缓存与规则 | 与 HTTP/1.1 相同：边缘缓存、回源规则、超时与重试照常生效 |
+| WebSocket | 升级请求仍以 HTTP/1.1 回源；只支持 HTTP/2 的源站不能使用 WebSocket |
+| 连接池 | HTTP/1.1、HTTP/2 与 gRPC 的回源连接各自复用，互不混用 |
+| 主动健康检查 | 以 HTTP/2 探测；HTTPS 源站协商不出 `h2` 时记为失败。gRPC 服务常对普通请求返回 415，可改用源站的 HTTP 检查路径，或把 415 放进期望状态码范围 |
+| 节点要求 | 节点能力 `origin-http2-v1`；集群有活动节点不支持时无法开启（「所在集群有节点不支持，暂时无法开启」） |
+
+打开「gRPC」后，`Content-Type` 为 `application/grpc` 的请求（含 `+proto`、`+json` 等后缀或参数）经 HTTP/2 端到端转发：
+
+| 项目 | 行为 |
+| --- | --- |
+| 客户端连接 | gRPC 客户端须以 HTTP/2 连接节点：HTTPS 端口对该网站的域名启用 HTTP/2（「HTTPS」页签关闭 HTTP/2 时也是）；集群有网站打开 gRPC 时，HTTP 端口也接受 h2c，未打开 gRPC 的网站的域名对 h2c 请求返回 421 |
+| 流式 | 请求与响应双向逐帧转发，trailers（`grpc-status`、`grpc-message`）原样传回；客户端流与双向流可用 |
+| 缓存与压缩 | 不缓存，节点不压缩 |
+| 请求体 | 不限大小 |
+| OWASP CRS | 不检查 gRPC 请求（卡片显示「gRPC 请求不经过 OWASP CRS」）：ModSecurity 读完整个请求体后才转发，流式调用无法完成。`Content-Type` 由客户端决定，网站的其他接口也能以该类型绕过 CRS；源站的 gRPC 接口与其他接口不分开时，把 gRPC 放到单独的网站 |
+| 规则与防护 | 封禁、规则与限速照常生效；gRPC 客户端无法完成人机验证，需要时用「允许」规则豁免 gRPC 路径 |
+| 超时 | 「读取」超时是两次收到数据之间的上限；长时间没有消息的流需调大「读取」超时（最多 3600 秒），或用配置规则按路径覆盖 |
+| gRPC-Web | `application/grpc-web` 不属于 gRPC 请求，按普通 HTTP 请求处理 |
 
 ### 源站组
 
@@ -450,6 +485,8 @@ URL 必须以 `http://` 或 `https://` 开头，不能包含账号，Host 必须
 | 设备变体 | 只区分桌面端与移动端（平板按移动端处理） |
 | Authorization 开关 | 需要节点 proto v0.2.1 及以上；更早的节点忽略「缓存带 Authorization 头的请求」 |
 | WebSocket | 只识别 `Upgrade: websocket` |
+| HTTP/2 回源 | 不回退到 HTTP/1.1；不发送 `:authority` |
+| gRPC | 主动健康检查不支持 gRPC 健康检查协议（`grpc.health.v1`），只发送 HTTP 请求 |
 
 ## 故障排查
 
@@ -466,6 +503,13 @@ URL 必须以 `http://` 或 `https://` 开头，不能包含账号，Host 必须
 | HTTPS 请求在 TLS 握手时失败 | SNI 不属于节点正在服务的网站（未知域名、已停用的网站），或网站没有证书 | 用 HTTP 请求查看节点的应答；为网站配置证书，见[HTTPS 与证书](https.md) |
 | 508，`X-Edgeweir-Error: loop-detected` | 源站指回了本节点或其上游 CDN | 修改源站地址 |
 | 403，`X-Edgeweir-Error: websocket-disabled` | 网站关闭了 WebSocket | 打开「WebSocket」 |
+| 保存提示「gRPC 需要以 HTTP/2 回源」 | 「回源 HTTP 版本」不是 HTTP/2 时打开了 gRPC，或改回 HTTP/1.1 时没有关闭 gRPC | 先选择 HTTP/2，或同时关闭 gRPC |
+| 改为 HTTP/2 后 502，源站显示「TLS 握手或证书校验失败」 | HTTPS 源站不支持 HTTP/2（ALPN 没有 `h2`） | 在源站开启 HTTP/2，或改回 HTTP/1.1 |
+| 改为 HTTP/2 后 502，源站显示「连接失败」 | HTTP 源站不接受 h2c | 同上 |
+| 回源 HTTP/1.1 时客户端收到无法解析的响应或 502 | 源站只接受 HTTP/2（例如以 h2c 监听的 gRPC 服务） | 把「回源 HTTP 版本」改为 HTTP/2 |
+| gRPC 客户端收到 421 | 客户端以 h2c 访问了未打开 gRPC 的网站的域名 | 在该网站打开「gRPC」，或改用 HTTPS |
+| gRPC 客户端报告缺少 trailers | 网站没有打开「gRPC」，请求按普通请求回源 | 打开「gRPC」 |
+| 「节点尚不支持：HTTP/2 与 gRPC 回源（<节点>）」 | 服务账号或后台任务发布的配置用到了 HTTP/2 回源，而集群有活动节点缺少 `origin-http2-v1` | 升级节点，见[节点升级](node-upgrades.md) |
 | 405，`X-Edgeweir-Error: method-not-allowed` | S3 源站只接收 `GET`、`HEAD` | 为写请求增加非 S3 源站 |
 | 带 `Authorization` 的请求始终 `X-Cache: BYPASS` | 默认绕过缓存 | 在对应规则打开「缓存带 Authorization 头的请求」 |
 | 响应始终 `X-Cache: MISS` | 没有适用规则；遵循源站模式下源站未给出有效期；响应带 `Set-Cookie`；缓存时间为 0 | 检查规则顺序、条件和源站响应头 |

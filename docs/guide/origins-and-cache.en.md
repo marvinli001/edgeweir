@@ -53,6 +53,8 @@ The **Pool settings** card is saved separately. It also holds the [active health
 | Load balancing | Weighted random / Round robin / Consistent hash | Weighted random | Selection among primaries |
 | Verify origin certificates | On / off | On | Verifies HTTPS origin certificates, see [Origin TLS](#origin-tls) |
 | WebSocket | On / off | On | Proxies WebSocket upgrades |
+| Origin HTTP version | HTTP/1.1 / HTTP/2 | HTTP/1.1 | HTTP version of the node's requests to the origins, see [HTTP/2 and gRPC](#http2-and-grpc) |
+| gRPC | On / off | Off | Proxies gRPC requests over HTTP/2 end to end; can only be turned on with **Origin HTTP version** HTTP/2 |
 | Failures before down | 1–100 | 3 | Consecutive failures that mark an origin down |
 | Retry after (seconds) | 1–3600 | 30 | Time before a down origin is tried again |
 | Timeouts (seconds): Connect | 0.1–120 | 10 | Connection timeout |
@@ -128,7 +130,7 @@ Error codes need node proto v0.2.1 or later; other errors and older nodes show t
 | --- | --- |
 | Who probes | The agent of every node probes every origin of the site; probe traffic grows with the number of nodes, so keep the interval reasonable |
 | Address policy | As for origin requests: special-purpose addresses outside the allow list are dropped from DNS answers and only checked addresses are dialed; without a usable address the probe fails (`dns_failed`, `address_forbidden`) |
-| Request | Scheme and port of the origin; HTTPS sends SNI (the origin's SNI, Origin Host or address) and verifies the certificate while **Verify origin certificates** is on; redirects are not followed; at most 64 KiB of the body is read |
+| Request | Scheme and port of the origin; HTTPS sends SNI (the origin's SNI, Origin Host or address) and verifies the certificate while **Verify origin certificates** is on; HTTP/2 when **Origin HTTP version** is HTTP/2; redirects are not followed; at most 64 KiB of the body is read |
 | Failure | Connection failure, timeout, TLS failure, status outside the range; same error codes as the passive check |
 | Initial state | Healthy; the first probe after a node start or a configuration change starts at a random point within one interval |
 | Not probed | S3-compatible origins (an unsigned probe says nothing about signed requests) and origins whose address literal is forbidden |
@@ -180,6 +182,39 @@ When every origin is down, the node still tries primaries, then backups (fail op
 ### WebSocket
 
 WebSocket upgrades (`Upgrade: websocket`) are proxied by default and never cached. With **WebSocket** off, upgrade requests get 403 with `X-Edgeweir-Error: websocket-disabled`.
+
+### HTTP/2 and gRPC
+
+1. In the **Pool settings** card of the **Origins** tab, set **Origin HTTP version** to **HTTP/2**; to proxy gRPC, also turn on **gRPC**.
+2. Click **Save** at the bottom of the card.
+3. Verify: once the nodes apply the revision, the origin's access log shows HTTP/2 requests. A gRPC site can be called through a node, for example:
+
+   ```bash
+   grpcurl -authority grpc.example.com <node IP>:443 list
+   ```
+
+| Item | Behavior |
+| --- | --- |
+| Negotiation | HTTPS origins negotiate `h2` over TLS ALPN; HTTP origins get HTTP/2 with prior knowledge (h2c). An origin without HTTP/2 fails the attempt; there is no fallback to HTTP/1.1 |
+| Origin Host | Sent as the `host` header field, without `:authority` |
+| Cache and rules | As with HTTP/1.1: edge caching, origin rules, timeouts and retries apply |
+| WebSocket | Upgrades still go to the origin over HTTP/1.1; an origin that speaks HTTP/2 only cannot serve WebSocket |
+| Connection pools | HTTP/1.1, HTTP/2 and gRPC connections to origins are reused separately, never mixed |
+| Active health check | Probes over HTTP/2; an HTTPS origin that does not negotiate `h2` fails the probe. gRPC services often answer plain requests with 415: probe an HTTP path of the origin instead, or include 415 in the expected status range |
+| Node requirement | Node feature `origin-http2-v1`; while an active node of the cluster lacks it, it cannot be turned on ("Some nodes of the site's cluster do not support it yet") |
+
+With **gRPC** on, requests with `Content-Type: application/grpc` (also with a suffix such as `+proto` or `+json`, or parameters) go over HTTP/2 end to end:
+
+| Item | Behavior |
+| --- | --- |
+| Client connection | gRPC clients must connect to the node over HTTP/2: HTTPS ports enable HTTP/2 for the site's domains (also when the **HTTPS** tab turns HTTP/2 off); while a site of the cluster proxies gRPC, HTTP ports also take h2c, and the domains of sites without gRPC answer h2c requests with 421 |
+| Streaming | Requests and responses are passed on frame by frame both ways, trailers (`grpc-status`, `grpc-message`) as they are; client and bidirectional streaming work |
+| Cache and compression | Never cached; the node compresses nothing |
+| Request body | No size limit |
+| OWASP CRS | Does not inspect gRPC requests (the card shows "gRPC requests skip the OWASP CRS"): ModSecurity reads a request's whole body before passing it on, which a streaming call never finishes. Clients choose `Content-Type`, so the site's other endpoints can skip the CRS with it too; where the origin does not keep its gRPC endpoints apart, put gRPC on a site of its own |
+| Rules and protection | Bans, rules and rate limits apply; gRPC clients cannot solve challenges, so exempt gRPC paths with an **Allow** rule where needed |
+| Timeouts | The **Read** timeout bounds the time between two receipts of data; streams that stay quiet longer need a longer **Read** timeout (up to 3600 seconds) or a config rule for their paths |
+| gRPC-Web | `application/grpc-web` is not a gRPC request; it is proxied like any HTTP request |
 
 ### Origin groups
 
@@ -450,6 +485,8 @@ On the site's **Overview** tab, click **Purge cache** and confirm (or search the
 | Device variants | Desktop and mobile only (tablets count as mobile) |
 | Authorization switch | Needs node proto v0.2.1 or later; older nodes ignore **Cache requests with Authorization** |
 | WebSocket | Only `Upgrade: websocket` is recognized |
+| HTTP/2 to origins | No fallback to HTTP/1.1; `:authority` is not sent |
+| gRPC | Active health checks do not speak the gRPC health checking protocol (`grpc.health.v1`), only HTTP |
 
 ## Troubleshooting
 
@@ -466,6 +503,13 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | HTTPS requests fail in the TLS handshake | The SNI belongs to no site the node serves (an unknown domain, a disabled site), or the site has no certificate | Send the request over HTTP to see the node's answer; give the site a certificate, see [HTTPS and certificates](https.en.md) |
 | 508 with `X-Edgeweir-Error: loop-detected` | The origin points back at this node or at a CDN in front of it | Change the origin address |
 | 403 with `X-Edgeweir-Error: websocket-disabled` | WebSocket is off for the site | Turn on **WebSocket** |
+| Saving shows "gRPC requires HTTP/2 towards the origins" | **gRPC** turned on while **Origin HTTP version** is not HTTP/2, or HTTP/1.1 chosen again with **gRPC** still on | Choose HTTP/2 first, or turn **gRPC** off too |
+| 502 after switching to HTTP/2, the origin shows "TLS handshake or certificate verification failed" | The HTTPS origin does not support HTTP/2 (no `h2` in ALPN) | Enable HTTP/2 on the origin, or switch back to HTTP/1.1 |
+| 502 after switching to HTTP/2, the origin shows "Connection failed" | The HTTP origin does not take h2c | As above |
+| With HTTP/1.1, clients get a response they cannot parse, or 502 | The origin speaks HTTP/2 only (a gRPC service listening for h2c, for example) | Set **Origin HTTP version** to HTTP/2 |
+| gRPC clients get 421 | The client used h2c for a domain of a site without **gRPC** | Turn on **gRPC** for that site, or use HTTPS |
+| gRPC clients report missing trailers | **gRPC** is off for the site: the request went to the origin as a plain request | Turn on **gRPC** |
+| "Some nodes don't support HTTP/2 and gRPC to origins yet: {nodes}" | A configuration published by a service account or a background job uses HTTP/2 to origins, and an active node of the cluster lacks `origin-http2-v1` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | 405 with `X-Edgeweir-Error: method-not-allowed` | S3 origins accept only `GET` and `HEAD` | Add a non-S3 origin for write requests |
 | Requests with `Authorization` always show `X-Cache: BYPASS` | Bypassed by default | Turn on **Cache requests with Authorization** on the rule |
 | Responses always show `X-Cache: MISS` | No applicable rule; in respect mode the origin sent no lifetime; the response has `Set-Cookie`; the TTL is 0 | Check rule order, conditions, and origin headers |
