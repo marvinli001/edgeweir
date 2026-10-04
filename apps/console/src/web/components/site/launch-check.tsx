@@ -1,15 +1,20 @@
 import type { DnsPointing, Site, SiteLaunch } from "@edgeweir/contract";
+import { RefreshIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import type { LinkProps } from "@tanstack/react-router";
 import { ResourceRow } from "@/components/resource-list";
 import { canaryLabel } from "@/components/site-status";
 import { QueryView } from "@/components/states";
 import { Dot, type StatusTone } from "@/components/status-dot";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAction } from "@/hooks/use-action";
 import { certificateErrorText } from "@/lib/certificate-errors";
 import { formatClockTime, m } from "@/lib/i18n";
 import { notPointing } from "@/lib/launch";
 import { orpc } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
 
 /**
  * The site's launch check (sites.launch). DNS lookups take seconds, so it is
@@ -23,6 +28,33 @@ export const useSiteLaunch = (siteId: string) =>
       meta: { background: true },
     }),
   );
+
+/**
+ * Runs the launch check now instead of at the next poll: every request looks
+ * the domains up again. A resolver's cached answer (also "no such name")
+ * still holds until its TTL ends.
+ */
+export function RecheckButton({ queries }: { queries: { refetch: () => Promise<unknown> }[] }) {
+  const action = useAction();
+  return (
+    <Button
+      type="button"
+      size="icon-sm"
+      variant="ghost"
+      aria-label={m.site_launch_recheck()}
+      title={m.site_launch_recheck()}
+      disabled={action.pending}
+      onClick={() => void action.run(() => Promise.all(queries.map((query) => query.refetch())))}
+      data-testid="launch-recheck"
+    >
+      <HugeiconsIcon
+        icon={RefreshIcon}
+        strokeWidth={2}
+        className={cn(action.pending && "animate-spin motion-reduce:animate-none")}
+      />
+    </Button>
+  );
+}
 
 const POINTING_TONE: Record<DnsPointing, StatusTone> = {
   ok: "good",
@@ -138,8 +170,9 @@ export function LaunchCheck({ site }: { site: Site }) {
   const launch = useSiteLaunch(site.id);
   return (
     <Card data-testid="launch-check">
-      <CardHeader>
-        <CardTitle>{m.site_launch_title()}</CardTitle>
+      <CardHeader className="flex flex-row items-center gap-3">
+        <CardTitle className="flex-1">{m.site_launch_title()}</CardTitle>
+        <RecheckButton queries={[launch]} />
       </CardHeader>
       <CardContent>
         <QueryView query={launch} loadingClassName="min-h-33">

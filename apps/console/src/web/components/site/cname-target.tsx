@@ -1,7 +1,8 @@
 import type { SiteLaunch } from "@edgeweir/contract";
 import { useQuery } from "@tanstack/react-query";
+import type * as React from "react";
 import { CopyButton } from "@/components/copy-button";
-import { PointingStatus, useSiteLaunch } from "@/components/site/launch-check";
+import { PointingStatus, RecheckButton, useSiteLaunch } from "@/components/site/launch-check";
 import { type QueryResult, QueryView } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,17 +29,34 @@ export function DnsSetupCard({ siteId }: { siteId: string }) {
   const launch = useSiteLaunch(siteId);
   return (
     <QueryView query={target} loadingClassName="min-h-24">
-      {(data) => <DnsSetup target={data} launch={launch} />}
+      {(data) => (
+        <DnsSetup
+          target={data}
+          launch={launch}
+          recheck={<RecheckButton queries={[target, launch]} />}
+        />
+      )}
     </QueryView>
   );
 }
 
-function DnsSetup({ target, launch }: { target: SiteDnsTarget; launch: QueryResult<SiteLaunch> }) {
+function DnsSetup({
+  target,
+  launch,
+  recheck,
+}: {
+  target: SiteDnsTarget;
+  launch: QueryResult<SiteLaunch>;
+  recheck: React.ReactNode;
+}) {
   const cname = target.target;
   return (
     <Card data-testid={cname ? "cname-target" : "edge-addresses"}>
-      <CardHeader>
-        <CardTitle>{cname ? m.dns_cname_target() : m.dns_edge_addresses()}</CardTitle>
+      <CardHeader className="flex flex-row items-center gap-3">
+        <CardTitle className="flex-1">
+          {cname ? m.dns_cname_target() : m.dns_edge_addresses()}
+        </CardTitle>
+        {recheck}
       </CardHeader>
       <CardContent className="grid gap-3">
         {cname ? (

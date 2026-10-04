@@ -356,6 +356,7 @@
   "site_certificate_reissue": "Certificate {name} is being reissued for the new domains",
   "site_updated_at": "Updated",
   "site_launch_title": "Launch check",
+  "site_launch_recheck": "Check again",
   "site_launch_dns": "DNS pointed {ok}/{total}",
   "site_launch_cert_none": "No certificate",
   "site_launch_cert_covered": "Certificate covers every domain",

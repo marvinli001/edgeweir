@@ -113,7 +113,7 @@ Add a record for every site domain in the domain's authoritative DNS.
 | Not configured (the cluster's DNS is **Not managed**) | `A` / `AAAA` records to the addresses in the **Edge addresses** card on the site's **Domains** tab (the scheduling addresses of the cluster's online nodes, copyable), one record per address |
 | Configured (the **DNS** tab of **Clusters & nodes**) | A `CNAME` record to the address in the **CNAME target** card on the site's **Domains** tab (`<site ID>.<cluster domain>`). In Automatic mode the card shows **Published** once the records are written to the provider; in Manual mode create the cluster's records listed on that tab first |
 
-The card lists where each domain resolves now: **Points here** (every address belongs to a node of the cluster), **Points elsewhere**, **Not resolved**, **Not checked** (the lookup failed, or the nodes have no known address). A wildcard is resolved as `edgeweir-check.<domain>`. The card resolves again every 30 seconds; DNS caches affect the result.
+The card lists where each domain resolves now: **Points here** (every address belongs to a node of the cluster), **Points elsewhere**, **Not resolved**, **Not checked** (the lookup failed, or the nodes have no known address). A wildcard is resolved as `edgeweir-check.<domain>`. The card and the **Launch check** resolve again every 30 seconds; **Check again** beside the card's title resolves now. A recursive resolver's cached answer (also "no such name") holds until its TTL ends.
 
 For lines, health-based removal, and TTL of DNS steering, see [Configure DNS steering](dns-and-alerts.en.md#configure-dns-steering).
 
@@ -178,6 +178,7 @@ For issuance methods, renewal, TLS, and HTTP/3, see [HTTPS and certificates](htt
 | 503 with `X-Edgeweir-Error: site-disabled` | The site is disabled | **Enable** it on the site's **Overview** tab |
 | HTTPS requests fail in the TLS handshake | The SNI belongs to no site the node serves (an unknown domain, a disabled site), or the site has no certificate or one that does not cover the domain yet | Send the request over HTTP to see the node's answer; check the certificate item of the **Launch check** |
 | A domain in the **Launch check** **Points elsewhere** | Its records point at an old server or another CDN, or also hold other addresses | Keep only records for the edge addresses (or the CNAME target) and wait for the old records' TTL |
+| A domain in the **Launch check** is **Not resolved** | The domain has no record yet, or the CNAME target has no address (the **CNAME target** card shows **No healthy nodes**); resolvers that asked before the record existed answer "no such name" for the zone's negative caching time | Add the record; with **No healthy nodes**, check that the nodes are online with a healthy data plane; then click **Check again** |
 | A domain in the **Launch check** is **Not checked** | The lookup timed out, or the cluster's nodes have no known address yet | Check that the nodes are online and report a public address, or configure scheduling addresses on the node |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | SNI and `Host` of an HTTPS request differ | Use `--resolve` |
 | 502 with `X-Edgeweir-Error: no-origin` | No usable origin | Check origin address, port, protocol, and health; see [Origins and cache](origins-and-cache.en.md) |

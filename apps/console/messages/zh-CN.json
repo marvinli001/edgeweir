@@ -322,6 +322,7 @@
   "site_certificate_reissue": "证书 {name} 正在为新域名重新签发",
   "site_updated_at": "更新时间",
   "site_launch_title": "上线检查",
+  "site_launch_recheck": "重新检查",
   "site_launch_dns": "DNS 已指向 {ok}/{total}",
   "site_launch_cert_none": "未配置证书",
   "site_launch_cert_covered": "证书已覆盖全部域名",
