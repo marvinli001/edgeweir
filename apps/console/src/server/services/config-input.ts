@@ -261,6 +261,8 @@ export async function loadSiteModels(
                 keepalive: pool.keepalive,
                 keepaliveIdleSeconds: pool.keepaliveIdleSeconds,
                 keepaliveMaxRequests: pool.keepaliveMaxRequests,
+                protocol: pool.protocol === "http2" ? "http2" : "http1",
+                grpc: pool.grpc,
               }
             : undefined,
           // Compiled only while on; the settings are kept while off.

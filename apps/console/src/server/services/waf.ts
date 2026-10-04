@@ -3,6 +3,7 @@ import {
   BROTLI_FEATURE,
   ERROR_PAGES_FEATURE,
   MODSECURITY_FEATURE,
+  ORIGIN_HTTP2_FEATURE,
   RULES_V2_FEATURE,
   SESSION_AFFINITY_FEATURE,
   type SiteWafModel,
@@ -145,12 +146,12 @@ const AVAILABLE: FeatureAvailability = { available: true, reason: null };
 
 /**
  * Whether Brotli, Zstandard, CRS, active health checks, session affinity
- * (which also needs challenge-v1 for its keys) and error pages can be turned
- * on for a site now: every active node of its cluster must report the
- * feature (it may still be required through the API, as with other
- * features). purgeByTag and prefetchVariants tell whether the cluster's
- * nodes run host and tag purges, and mobile and sitemap prefetches; nobody
- * can create those tasks otherwise.
+ * (which also needs challenge-v1 for its keys), HTTP/2 and gRPC towards the
+ * origins and error pages can be turned on for a site now: every active
+ * node of its cluster must report the feature (it may still be required
+ * through the API, as with other features). purgeByTag and prefetchVariants
+ * tell whether the cluster's nodes run host and tag purges, and mobile and
+ * sitemap prefetches; nobody can create those tasks otherwise.
  */
 export async function siteFeatures(db: Database, siteId: string): Promise<SiteFeatures> {
   const site = await findSite(db, siteId);
@@ -168,6 +169,7 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     crs: byNodes(MODSECURITY_FEATURE),
     activeHealthCheck: byNodes(ACTIVE_HEALTH_FEATURE),
     sessionAffinity: byNodes(SESSION_AFFINITY_FEATURE, "challenge-v1"),
+    originHttp2: byNodes(ORIGIN_HTTP2_FEATURE),
     errorPages: byNodes(ERROR_PAGES_FEATURE),
     purgeByTag: byNodes(PURGE_TAG_FEATURE),
     prefetchVariants: byNodes(PREFETCH_V2_FEATURE),

@@ -187,6 +187,8 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
         keepaliveIdleSeconds: pool?.keepaliveIdleSeconds ?? 60,
         keepaliveMaxRequests: pool?.keepaliveMaxRequests ?? 1000,
         websocket: r.websocket,
+        protocol: pool?.protocol === "http2" ? "http2" : "http1",
+        grpc: pool?.grpc ?? false,
         activeHealthCheck: readActiveHealthCheck(pool?.activeHealthCheck),
         sessionAffinity: readSessionAffinity(pool?.sessionAffinity),
       },
@@ -409,10 +411,22 @@ async function writeOrigins(
   if (removed.length) await tx.delete(schema.origin).where(inArray(schema.origin.id, removed));
 }
 
-/** Pool columns of the settings; health check and affinity only when given (kept otherwise). */
+/** Pool settings whose omission in an update keeps the stored value. */
+type KeptPoolSettings = "activeHealthCheck" | "sessionAffinity" | "protocol" | "grpc";
+
+/** gRPC goes to the origins over HTTP/2 only. */
+function assertGrpcOverHttp2(settings: Pick<OriginSettingsInput, "protocol" | "grpc">) {
+  if (settings.grpc && settings.protocol !== "http2")
+    fail("ORIGIN_GRPC_REQUIRES_HTTP2", "gRPC requires HTTP/2 towards the origins");
+}
+
+/**
+ * Pool columns of the settings; health check, affinity, protocol and gRPC
+ * only when given (kept otherwise).
+ */
 function poolSettingsValues(
-  settings: Omit<OriginSettingsInput, "activeHealthCheck" | "sessionAffinity"> &
-    Partial<Pick<OriginSettingsInput, "activeHealthCheck" | "sessionAffinity">>,
+  settings: Omit<OriginSettingsInput, KeptPoolSettings> &
+    Partial<Pick<OriginSettingsInput, KeptPoolSettings>>,
 ) {
   return {
     policy: settings.policy,
@@ -425,6 +439,8 @@ function poolSettingsValues(
     keepalive: settings.keepalive,
     keepaliveIdleSeconds: settings.keepaliveIdleSeconds,
     keepaliveMaxRequests: settings.keepaliveMaxRequests,
+    ...(settings.protocol ? { protocol: settings.protocol } : {}),
+    ...(settings.grpc !== undefined ? { grpc: settings.grpc } : {}),
     ...(settings.activeHealthCheck ? { activeHealthCheck: settings.activeHealthCheck } : {}),
     ...(settings.sessionAffinity ? { sessionAffinity: settings.sessionAffinity } : {}),
   };
@@ -599,6 +615,7 @@ export async function createSite(
       .from(schema.cluster)
       .where(eq(schema.cluster.id, clusterId));
     if (!clusterRow) fail("CLUSTER_NOT_FOUND", "cluster not found");
+    assertGrpcOverHttp2(input.originSettings);
     await assertDomainsFree(tx, domains);
     await assertOriginsAllowed(tx, input.origins);
 
@@ -674,6 +691,10 @@ export async function updateSite(
     }
     if (input.originSettings) {
       const pool = await sitePool(tx, row.id);
+      assertGrpcOverHttp2({
+        protocol: input.originSettings.protocol ?? (pool.protocol === "http2" ? "http2" : "http1"),
+        grpc: input.originSettings.grpc ?? pool.grpc,
+      });
       await tx
         .update(schema.originPool)
         .set(poolSettingsValues(input.originSettings))
