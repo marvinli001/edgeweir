@@ -1,4 +1,9 @@
-import { type NodeChannel, type NodeChannelInput, nodeChannelOrigin } from "@edgeweir/contract";
+import {
+  isWebSocketNodeChannel,
+  type NodeChannel,
+  type NodeChannelInput,
+  nodeChannelOrigin,
+} from "@edgeweir/contract";
 import { sql } from "drizzle-orm";
 import * as z from "zod";
 import type { AppContext } from "../lib/context";
@@ -12,15 +17,17 @@ const MAX_PREVIOUS_HOSTS = 32;
 
 /**
  * The saved URL, and the hosts of the URLs nodes were given before it: nodes keep the URL they
- * enrolled with, so its name stays in the certificate.
+ * enrolled with, so its name stays in the certificate. `webSocket`: a wss:// or ws:// URL was
+ * in effect before, so nodes may still connect through the WebSocket entry.
  */
 const nodeChannelSetting = defineSetting({
   key: "node_channel_url",
   schema: z.object({
     url: z.string(),
     previousHosts: z.array(z.string()).max(MAX_PREVIOUS_HOSTS),
+    webSocket: z.boolean(),
   }),
-  defaults: { url: "", previousHosts: [] },
+  defaults: { url: "", previousHosts: [], webSocket: false },
   auditAction: "system.node_channel_update",
 });
 
@@ -49,6 +56,17 @@ export async function nodeChannelUrl(app: AppContext): Promise<string> {
 }
 
 /**
+ * Whether the node channel's WebSocket entry answers: with EDGEWEIR_NODE_API_WEBSOCKET, while
+ * the URL in effect is a wss:// or ws:// one, and once such a URL was in effect (nodes keep the
+ * URL they enrolled with).
+ */
+export async function nodeChannelWebSocketOpen(app: AppContext): Promise<boolean> {
+  if (app.env.EDGEWEIR_NODE_API_WEBSOCKET) return true;
+  const saved = await nodeChannelSetting.read(app.db);
+  return saved.webSocket || isWebSocketNodeChannel(resolve(app, saved.url).effectiveUrl);
+}
+
+/**
  * Every name the node channel certificate carries: the environment's (lib/env), the saved URL's
  * and those of the URLs nodes were given before it.
  */
@@ -73,15 +91,18 @@ export async function setNodeChannel(
   const url = input.url ? (nodeChannelOrigin(input.url) ?? input.url) : "";
   await app.db.transaction(async (tx) => {
     const before = await nodeChannelSetting.read(tx);
-    const previous = certificateName(resolve(app, before.url).effectiveUrl);
+    const previousUrl = resolve(app, before.url).effectiveUrl;
+    const previous = certificateName(previousUrl);
     const current = url ? certificateName(url) : undefined;
     const previousHosts = [...before.previousHosts.filter((host) => host !== previous), previous]
       .filter((host) => host !== current)
       .slice(-MAX_PREVIOUS_HOSTS);
+    const webSocket =
+      before.webSocket || isWebSocketNodeChannel(previousUrl) || isWebSocketNodeChannel(url);
     await nodeChannelSetting.write(
       tx,
       actor,
-      { url, previousHosts },
+      { url, previousHosts, webSocket },
       { before, metadata: () => ({ before: before.url, after: url }) },
     );
     await tx.execute(sql`select pg_notify(${NODE_CHANNEL_CHANNEL}, '{}')`);

@@ -82,6 +82,7 @@ import {
   signCsr,
 } from "./identity";
 import { watchStream } from "./watch";
+import { bridgedClientAddress } from "./websocket";
 
 export const HEARTBEAT_SECONDS = 15;
 export const KEEPALIVE_MS = 15_000;
@@ -324,10 +325,18 @@ function tlsSocketOf(req: NodeServerRequest): TLSSocket | undefined {
   return h2.stream?.session?.socket ?? (req.socket as TLSSocket | undefined);
 }
 
-/** Extracts the verified client certificate (if any) for every request. */
+/**
+ * Extracts the verified client certificate (if any) for every request. A
+ * connection through the WebSocket entry comes from loopback; its address is
+ * the WebSocket client's.
+ */
 export function peerContextValues(req: NodeServerRequest): ContextValues {
   const socket = tlsSocketOf(req);
-  const info: PeerInfo = { authorized: false, remoteAddress: socket?.remoteAddress };
+  const info: PeerInfo = {
+    authorized: false,
+    remoteAddress:
+      bridgedClientAddress(socket?.remoteAddress, socket?.remotePort) ?? socket?.remoteAddress,
+  };
   if (socket && typeof socket.getPeerCertificate === "function") {
     const cert = socket.getPeerCertificate(false);
     info.authorized = socket.authorized === true;

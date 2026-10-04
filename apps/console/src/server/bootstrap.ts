@@ -84,6 +84,8 @@ export function closeHttp(server: Server | undefined, graceMs = CLOSE_GRACE_MS):
 
 export interface Running {
   ctx: AppContext;
+  /** The node channel (ROLE app and all), whose WebSocket entry the HTTP server serves. */
+  nodeChannel?: NodeChannel;
   /** Registers the HTTP server so it is closed on shutdown. */
   attachHttp(server: Server): void;
   shutdown(): Promise<void>;
@@ -176,5 +178,5 @@ export async function bootstrap(): Promise<Running> {
       void shutdown().finally(() => process.exit(0));
     });
   }
-  return { ctx, attachHttp: (s) => (http = s), shutdown };
+  return { ctx, nodeChannel, attachHttp: (s) => (http = s), shutdown };
 }

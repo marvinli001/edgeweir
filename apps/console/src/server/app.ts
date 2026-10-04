@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { NODE_CHANNEL_WEBSOCKET_PATH } from "@edgeweir/contract";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { OpenAPIGenerator } from "@orpc/openapi";
@@ -17,6 +18,7 @@ import { resolveClientIp, withClientIp } from "./lib/client-ip";
 import type { AppContext } from "./lib/context";
 import { withIdempotency } from "./lib/idempotency";
 import { type RequestContext, router } from "./rpc/router";
+import { nodeChannelWebSocketOpen } from "./services/node-channel-url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -167,6 +169,14 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
     );
   });
 
+  // The node channel's WebSocket entry upgrades before Hono sees the request
+  // (node-channel/websocket.ts); a plain request learns whether it is open.
+  app.get(NODE_CHANNEL_WEBSOCKET_PATH, async (c) => {
+    if (!(await nodeChannelWebSocketOpen(ctx))) return c.json({ error: "not found" }, 404);
+    c.header("upgrade", "websocket");
+    return c.json({ error: "upgrade required" }, 426);
+  });
+
   app.on(["GET", "HEAD"], "/downloads/*", (c) =>
     serveDownload(ctx.env.EDGEWEIR_DOWNLOADS_DIR, c.req.raw, ctx.log),
   );
@@ -181,6 +191,7 @@ export function createApp(ctx: AppContext, opts: { webDist?: string } = {}) {
   }
   app.all("/install.sh", notFound);
   app.all("/healthz", notFound);
+  app.all(NODE_CHANNEL_WEBSOCKET_PATH, notFound);
 
   if (opts.webDist) {
     const root = resolve(opts.webDist);
