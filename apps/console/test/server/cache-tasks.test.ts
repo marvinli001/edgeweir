@@ -167,6 +167,22 @@ describe("cache task delivery", async () => {
     });
   });
 
+  it("purges and prefetches URLs with a port by the site of their host (G9)", async () => {
+    const node = await addNode("edge-ports");
+    const task = await admin.cacheTasks.create({
+      type: "url",
+      urls: ["https://shop.test:9443/a?b=1", "http://shop.test:8081/c"],
+    });
+    expect(task.sites.map((site) => site.id)).toEqual([siteId]);
+    const [pulled] = await pullCacheTasks(ctx.db, node, 10);
+    // The node matches purge markers by host and path: the port is not part of the key.
+    expect(pulled?.items.map((t) => [t.siteId, t.host, t.path, t.query])).toEqual([
+      [siteId, "shop.test", "/a", "b=1"],
+      [siteId, "shop.test", "/c", ""],
+    ]);
+    await ctx.db.delete(schema.node).where(eq(schema.node.id, node.id));
+  });
+
   describe("purges a node missed (N-M4)", () => {
     it("makes up purges that expired while the node was offline, once, with a whole-site purge", async () => {
       await ctx.db.delete(schema.node).where(eq(schema.node.clusterId, clusterId));
