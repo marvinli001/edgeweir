@@ -81,6 +81,7 @@ describe("port pools and layer-4 applications", async () => {
       pools: [],
       reservedPorts: [80, 443],
       nodesWithoutL4: [],
+      nodesWithoutL4V2: [],
     });
     const saved = await admin.clusters.setPortPools({ clusterId, pools });
     expect(saved.pools).toEqual([
