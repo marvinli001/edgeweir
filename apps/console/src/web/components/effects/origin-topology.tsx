@@ -86,7 +86,9 @@ function BoxNode({ data }: NodeProps<GraphNode>) {
               )}
             />
           ) : null}
-          <span className="truncate text-[13px] font-medium text-foreground">{data.title}</span>
+          <span className="truncate text-[13px] font-medium text-foreground" title={data.title}>
+            {data.title}
+          </span>
           {data.tag ? (
             <span className="shrink-0 rounded-md bg-well px-1.5 text-[10px] leading-4 text-muted-foreground">
               {data.tag}
@@ -131,18 +133,21 @@ function FlowEdge({
   const labelY = sourceY + (targetY - sourceY) * 0.66;
   return (
     <>
+      {/* Inline style: React Flow's own stylesheet sets the stroke after the utilities. */}
       <BaseEdge
         id={id}
         path={path}
-        className={cn(
-          "fill-none",
-          kind === "standby"
-            ? "stroke-muted-foreground/60 [stroke-dasharray:4_5]"
-            : kind === "degraded"
-              ? "stroke-state-warn"
-              : "stroke-signal/70",
-        )}
-        style={{ strokeWidth: kind === "standby" ? 1.25 : 1.5 }}
+        style={{
+          fill: "none",
+          strokeWidth: kind === "standby" ? 1.25 : 1.5,
+          strokeDasharray: kind === "standby" ? "4 5" : undefined,
+          stroke:
+            kind === "standby"
+              ? "color-mix(in oklch, var(--muted-foreground) 60%, transparent)"
+              : kind === "degraded"
+                ? "var(--state-warn)"
+                : "color-mix(in oklch, var(--signal) 75%, transparent)",
+        }}
       />
       {live && kind !== "standby" ? (
         <circle r={2.5} className={kind === "degraded" ? "fill-state-warn" : "fill-signal"}>

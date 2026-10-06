@@ -69,7 +69,7 @@ export default function LiveChart({
       height,
       pxAlign: false,
       legend: { show: false },
-      padding: [8, 0, 0, 0],
+      padding: [8, 0, 0, 14],
       cursor: {
         x: true,
         y: false,

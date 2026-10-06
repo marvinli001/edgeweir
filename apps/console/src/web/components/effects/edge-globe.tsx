@@ -111,8 +111,14 @@ export default function EdgeGlobe({
     };
     globe.current = createGlobe(element, options);
     const shown = requestAnimationFrame(() => element.setAttribute("data-ready", ""));
+    // The land texture decodes after the first frame; a still globe (reduced motion, off screen)
+    // draws a few more frames so it does not stay blank.
+    const settle = [120, 400, 1000].map((delay) =>
+      setTimeout(() => globe.current?.update({ phi: phi.current }), delay),
+    );
     return () => {
       cancelAnimationFrame(shown);
+      for (const timer of settle) clearTimeout(timer);
       globe.current?.destroy();
       globe.current = null;
       parent.replaceChildren();
