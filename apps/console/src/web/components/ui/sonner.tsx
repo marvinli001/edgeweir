@@ -30,15 +30,16 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
+          "--normal-bg": "color-mix(in oklch, var(--overlay) 84%, transparent)",
           "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          "--normal-border": "transparent",
+          "--border-radius": "var(--radius-2xl)",
         } as React.CSSProperties
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          // Raised glass: the overlay surface, frosted, with the top elevation.
+          toast: "cn-toast shadow-elev-3! backdrop-blur-xl backdrop-saturate-150",
         },
       }}
       {...props}

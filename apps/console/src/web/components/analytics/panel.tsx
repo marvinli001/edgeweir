@@ -9,12 +9,12 @@ import { AnimatedValue } from "@/components/appica/effects";
 import { formatPercent, m } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-/** The flat, hairline-bordered surface every analytics card sits on. */
+/** The lit card every analytics panel sits on (ring, soft shadow, top-lit edge in dark mode). */
 export function Panel({ className, ...props }: React.ComponentProps<"section">) {
   return (
     <section
       className={cn(
-        "relative flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground",
+        "relative flex min-w-0 flex-col overflow-hidden rounded-2xl bg-card text-card-foreground shadow-elev-1 edge-lit",
         className,
       )}
       {...props}
@@ -133,7 +133,8 @@ export function MetricCard({
       data-testid={testId}
       className={cn(
         size === "lg" ? "h-64" : "h-52 @3xl/main:h-60",
-        onOpen && "group/panel transition-colors hover:border-foreground/20",
+        onOpen &&
+          "group/panel transition-shadow duration-200 ease-lit hover:shadow-elev-2 motion-reduce:transition-none",
       )}
     >
       {onOpen ? (

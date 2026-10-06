@@ -2,6 +2,10 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+/* Second Latin face under review in the design lab (html[data-font="mona"]); loaded only when used. */
+@import "@fontsource-variable/mona-sans/standard.css";
+/* Simplified Chinese in 101 unicode-range shards: a page downloads only the shards it shows. */
+@import "@fontsource-variable/noto-sans-sc";
 @import "./appica-bridge.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -53,9 +57,189 @@
   }
 }
 
+/*
+ * Lit Instrument utilities (tokens below). Components reference these classes and the surface
+ * tokens; no component spells out a shadow or a color.
+ */
+
+/* Easing of every lit control: quick out, no overshoot. */
+@theme {
+  --ease-lit: cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+/*
+ * The primary action: a lit face over a darker plate (Sentry-style). Hovering lifts the face a
+ * pixel off the plate, pressing pushes it flat; the bottom edge never moves. Forced colors drop
+ * the shadows and keep the real border.
+ */
+@utility btn-lit {
+  --plate: color-mix(in oklch, var(--primary), black 40%);
+  background-image: linear-gradient(oklch(1 0 0 / 16%), oklch(1 0 0 / 0%) 60%);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 26%),
+    inset 0 -1px 0 oklch(0 0 0 / 12%),
+    0 2px 0 0 var(--plate),
+    0 4px 12px -4px color-mix(in oklch, var(--primary) 60%, transparent);
+  transition-property: transform, box-shadow, background-color, opacity;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-lit);
+  &:hover:not(:disabled, [data-disabled]) {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 oklch(1 0 0 / 30%),
+      inset 0 -1px 0 oklch(0 0 0 / 12%),
+      0 3px 0 0 var(--plate),
+      0 8px 18px -6px color-mix(in oklch, var(--primary) 65%, transparent);
+  }
+  &:active:not(:disabled, [data-disabled]) {
+    transform: translateY(1px);
+    transition-duration: 60ms;
+    box-shadow:
+      inset 0 1px 3px oklch(0 0 0 / 28%),
+      0 0 0 0 var(--plate);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition-property: box-shadow, background-color, opacity;
+    &:hover:not(:disabled, [data-disabled]),
+    &:active:not(:disabled, [data-disabled]) {
+      transform: none;
+    }
+  }
+  @media (forced-colors: active) {
+    box-shadow: none;
+    background-image: none;
+  }
+}
+
+/* A sunken field: the well color, a soft inner shadow from the top and a hairline boundary. */
+@utility input-well {
+  background-color: var(--well);
+  box-shadow:
+    inset 0 1px 2px oklch(0.2 0.03 258 / 8%),
+    inset 0 0 0 1px color-mix(in oklch, var(--foreground) 11%, transparent);
+  .dark & {
+    box-shadow:
+      inset 0 1px 2px oklch(0 0 0 / 45%),
+      inset 0 0 0 1px oklch(1 0 0 / 9%);
+  }
+}
+
+/* The track of a segmented control (tabs): a shallow well. */
+@utility seg-well {
+  background-color: var(--well);
+  box-shadow:
+    inset 0 1px 2px oklch(0.2 0.03 258 / 7%),
+    inset 0 0 0 1px var(--edge);
+  .dark & {
+    box-shadow:
+      inset 0 1px 2px oklch(0 0 0 / 40%),
+      inset 0 0 0 1px oklch(1 0 0 / 6%);
+  }
+}
+
+/* The raised thumb of a segmented control, with the same plate as btn-lit (neutral). */
+@utility seg-thumb {
+  background-color: var(--raised);
+  box-shadow:
+    var(--elev-1),
+    0 1px 0 0 color-mix(in oklch, var(--foreground) 12%, transparent);
+  .dark & {
+    box-shadow:
+      var(--elev-1),
+      0 1px 0 0 oklch(0 0 0 / 50%);
+  }
+}
+
+/* Dark surfaces catch the light on their top edge (a gradient hairline over the border). */
+@utility edge-lit {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    padding: 1px;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(to bottom, var(--highlight-edge), transparent 42%);
+    mask:
+      linear-gradient(#000 0 0) content-box exclude,
+      linear-gradient(#000 0 0);
+  }
+}
+
+/* Frosted glass, for the sticky header, ⌘K and bulk bars only (never over polled tables). */
+@utility glass {
+  background-color: color-mix(in oklch, var(--background) 74%, transparent);
+  backdrop-filter: blur(14px) saturate(1.5);
+  @supports not (backdrop-filter: blur(1px)) {
+    background-color: var(--background);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--background);
+    backdrop-filter: none;
+  }
+}
+
+/* Glass over overlay surfaces (⌘K, toasts). */
+@utility glass-overlay {
+  background-color: color-mix(in oklch, var(--overlay) 80%, transparent);
+  backdrop-filter: blur(20px) saturate(1.6);
+  @supports not (backdrop-filter: blur(1px)) {
+    background-color: var(--overlay);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    background-color: var(--overlay);
+    backdrop-filter: none;
+  }
+}
+
+/*
+ * A running state's light: a ring of its own color (set --lit), plus a soft glow in dark mode.
+ * Only for things that are live now (online, streaming, rolling out).
+ */
+@utility lit-glow {
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--lit, var(--signal)) 22%, transparent);
+  .dark & {
+    box-shadow:
+      0 0 0 3px color-mix(in oklch, var(--lit, var(--signal)) 24%, transparent),
+      0 0 12px color-mix(in oklch, var(--lit, var(--signal)) 55%, transparent);
+  }
+}
+
+/* Film grain over large gradients (auth backdrop); breaks up banding. */
+@utility grain {
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: var(--grain-opacity, 0.05);
+    mix-blend-mode: soft-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px;
+  }
+}
+
+/* Large readouts: tabular figures with slashed zeros. */
+@utility readout {
+  font-variant-numeric: tabular-nums slashed-zero;
+  letter-spacing: -0.02em;
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: "Geist Variable", sans-serif;
+  --font-sans: var(--font-latin), "Noto Sans SC Variable", ui-sans-serif, system-ui, sans-serif;
+  --color-canvas: var(--canvas);
+  --color-well: var(--well);
+  --color-raised: var(--raised);
+  --color-overlay: var(--overlay);
+  --color-edge: var(--edge);
+  --color-signal: var(--signal);
+  --shadow-elev-1: var(--elev-1);
+  --shadow-elev-2: var(--elev-2);
+  --shadow-elev-3: var(--elev-3);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -106,25 +290,55 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Lit Instrument surfaces. One light source from above: the canvas is the ground, wells sink
+ * below it (inputs, logs, editors), cards, raised controls and overlays rise above it. Light mode
+ * lifts with a hairline ring and layered soft shadows; dark mode lifts with brighter surfaces and a
+ * top highlight (shadows barely show on dark). Neutrals lean cool (hue 258, chroma 0.004–0.014)
+ * toward the blue action color. Components use the classes (bg-well, shadow-elev-2, btn-lit…),
+ * never the values.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --font-latin: "Geist Variable";
+  --canvas: oklch(0.982 0.004 258);
+  --well: oklch(0.958 0.006 258);
+  --raised: oklch(1 0 0);
+  --overlay: oklch(1 0 0);
+  --edge: oklch(0.32 0.03 258 / 9%);
+  --elev-1:
+    0 0 0 1px var(--edge), 0 1px 2px oklch(0.3 0.03 258 / 6%),
+    0 2px 6px -2px oklch(0.3 0.03 258 / 5%);
+  --elev-2:
+    0 0 0 1px var(--edge), 0 1px 1px oklch(0 0 0 / 2%), 0 4px 8px -4px oklch(0.3 0.03 258 / 8%),
+    0 16px 24px -8px oklch(0.3 0.03 258 / 10%);
+  --elev-3:
+    0 0 0 1px var(--edge), 0 1px 1px oklch(0 0 0 / 2%), 0 8px 16px -4px oklch(0.3 0.03 258 / 8%),
+    0 24px 32px -8px oklch(0.3 0.03 258 / 14%);
+  --highlight: oklch(1 0 0 / 0%);
+  --highlight-edge: oklch(1 0 0 / 0%);
+  --spotlight: oklch(0.55 0.14 258 / 9%);
+  /* Live data and the wave motif only (realtime curves, beams, arcs, running lights). */
+  --signal: oklch(0.6 0.118 196);
+  --signal-glow: color-mix(in oklch, var(--signal) 40%, transparent);
+
+  --background: var(--canvas);
+  --foreground: oklch(0.18 0.014 258);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.18 0.014 258);
+  --popover: var(--overlay);
+  --popover-foreground: oklch(0.18 0.014 258);
   --primary: oklch(0.488 0.243 264.376);
   --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.955 0.006 258);
+  --secondary-foreground: oklch(0.22 0.014 258);
+  --muted: oklch(0.955 0.006 258);
+  --muted-foreground: oklch(0.52 0.016 258);
+  --accent: oklch(0.955 0.006 258);
+  --accent-foreground: oklch(0.22 0.014 258);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.912 0.008 258);
+  --input: oklch(0.885 0.01 258);
+  --ring: oklch(0.7 0.02 258);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
@@ -158,35 +372,57 @@
   --state-good: #0ca30c;
   --state-warn: #eda100;
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar: oklch(0.962 0.006 258);
+  --sidebar-foreground: oklch(0.2 0.014 258);
   --sidebar-primary: oklch(0.546 0.245 262.881);
   --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: var(--raised);
+  --sidebar-accent-foreground: oklch(0.18 0.014 258);
+  --sidebar-border: oklch(0.905 0.008 258);
+  --sidebar-ring: oklch(0.7 0.02 258);
+}
+
+:root[data-font="mona"] {
+  --font-latin: "Mona Sans Variable";
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --canvas: oklch(0.168 0.011 258);
+  --well: oklch(0.142 0.01 258);
+  --raised: oklch(0.245 0.013 258);
+  --overlay: oklch(0.26 0.014 258);
+  --edge: oklch(1 0 0 / 8%);
+  --elev-1: inset 0 1px 0 oklch(1 0 0 / 5%), 0 0 0 1px var(--edge), 0 1px 2px oklch(0 0 0 / 40%);
+  --elev-2:
+    inset 0 1px 0 oklch(1 0 0 / 7%), 0 0 0 1px oklch(1 0 0 / 10%),
+    0 8px 24px -6px oklch(0 0 0 / 55%);
+  --elev-3:
+    inset 0 1px 0 oklch(1 0 0 / 9%), 0 0 0 1px oklch(1 0 0 / 12%),
+    0 24px 48px -12px oklch(0 0 0 / 70%);
+  --highlight: oklch(1 0 0 / 6%);
+  --highlight-edge: oklch(1 0 0 / 16%);
+  --spotlight: oklch(1 0 0 / 6%);
+  --signal: oklch(0.8 0.13 192);
+  --signal-glow: color-mix(in oklch, var(--signal) 45%, transparent);
+
+  --background: var(--canvas);
+  --foreground: oklch(0.972 0.004 258);
+  --card: oklch(0.205 0.012 258);
+  --card-foreground: oklch(0.972 0.004 258);
+  --popover: var(--overlay);
+  --popover-foreground: oklch(0.972 0.004 258);
   --primary: oklch(0.424 0.199 265.638);
   --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.255 0.012 258);
+  --secondary-foreground: oklch(0.972 0.004 258);
+  --muted: oklch(0.255 0.012 258);
+  --muted-foreground: oklch(0.72 0.014 258);
+  --accent: oklch(0.255 0.012 258);
+  --accent-foreground: oklch(0.972 0.004 258);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.58 0.02 258);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
@@ -208,14 +444,24 @@
   --star: #f0b429;
   --state-good: #0ca30c;
   --state-warn: #fab219;
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar: oklch(0.142 0.01 258);
+  --sidebar-foreground: oklch(0.94 0.006 258);
   --sidebar-primary: oklch(0.623 0.214 259.815);
   --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-accent: oklch(0.225 0.013 258);
+  --sidebar-accent-foreground: oklch(0.972 0.004 258);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.58 0.02 258);
+}
+
+/* Wide-gamut screens get a little more chroma on the signal (the action color is the preset's). */
+@media (color-gamut: p3) {
+  :root {
+    --signal: oklch(0.6 0.14 196);
+  }
+  .dark {
+    --signal: oklch(0.8 0.155 192);
+  }
 }
 
 @layer base {
@@ -227,6 +473,16 @@
   }
   html {
     @apply font-sans;
+    font-synthesis-weight: none;
+  }
+  /* Chinese and Latin runs get their gap from the browser, not from typed spaces. */
+  :lang(zh) {
+    text-autospace: normal;
+  }
+  /* Numbers in tables line up. */
+  [data-slot="table"],
+  [data-slot="badge"] {
+    font-variant-numeric: tabular-nums;
   }
 }
 
@@ -246,6 +502,61 @@
   [data-slot="chart"] .recharts-dot[stroke="#fff"],
   [data-slot="chart"] .recharts-sector[stroke="#fff"] {
     stroke: transparent;
+  }
+  /* Lit lines: in dark mode a series line glows softly in its own color. */
+  .dark [data-slot="chart"][data-glow] .recharts-area-curve {
+    filter: drop-shadow(0 0 5px color-mix(in oklch, var(--color-value) 60%, transparent));
+  }
+}
+
+/*
+ * Effects (components/effects): the globe's canvas fades in once drawn; its labels pin to cobe's
+ * marker anchors and fade out when the marker turns away. Without anchor positioning they stay off.
+ */
+@layer components {
+  .globe-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 700ms var(--ease-lit);
+  }
+  .globe-canvas[data-ready] {
+    opacity: 1;
+  }
+  .globe-label {
+    position: absolute;
+    bottom: anchor(top);
+    left: anchor(center);
+    translate: -50% -6px;
+    z-index: 1;
+    padding: 1px 6px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    color: var(--foreground);
+    background: color-mix(in oklch, var(--overlay) 82%, transparent);
+    box-shadow: var(--elev-1);
+    opacity: var(--visible);
+    transition: opacity 300ms var(--ease-lit);
+  }
+  @supports not (anchor-name: --a) {
+    .globe-label {
+      display: none;
+    }
+  }
+  /* React Flow draws on the card itself. */
+  .topology .react-flow {
+    --xy-background-color: transparent;
+    background: transparent;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .globe-canvas,
+    .globe-label {
+      transition: none;
+    }
   }
 }
 

@@ -60,9 +60,12 @@ export function DataTable<T extends RowData>({
     getRowId: (row) => getRowId(row),
   });
   return (
-    <div className="overflow-hidden rounded-2xl border bg-card shadow-xs" data-testid={testId}>
+    <div
+      className="overflow-hidden rounded-2xl bg-card shadow-elev-1 edge-lit"
+      data-testid={testId}
+    >
       <Table>
-        <TableHeader className="bg-muted/60">
+        <TableHeader className="bg-well/70">
           {table.getHeaderGroups().map((group) => (
             <TableRow key={group.id}>
               {group.headers.map((header) => (

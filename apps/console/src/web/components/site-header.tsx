@@ -42,7 +42,7 @@ export function SiteHeader({
   width?: PageWidth;
 }) {
   return (
-    <header className="@container/header sticky top-0 z-20 flex min-h-(--header-height) shrink-0 items-center gap-2 rounded-t-[inherit] border-b bg-background/80 backdrop-blur-md transition-[width,height] ease-linear">
+    <header className="@container/header sticky top-0 z-20 flex min-h-(--header-height) shrink-0 items-center gap-2 rounded-t-[inherit] border-b border-edge glass transition-[width,height] ease-linear">
       <div
         className={cn(
           "flex w-full flex-wrap items-center gap-x-1 gap-y-2 px-4 py-2 lg:gap-x-2 lg:px-6",

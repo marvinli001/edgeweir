@@ -5,7 +5,7 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * A column of resources on an overview page: a linked heading with a count, then rows split by
+ * A card of resources on an overview page: a linked heading with a count, then rows split by
  * hairlines. Rows are whole-row links; the chevron marks them as such.
  */
 export function ResourceList({
@@ -30,7 +30,7 @@ export function ResourceList({
     <>
       <span>{title}</span>
       {count !== undefined ? (
-        <span className="inline-flex h-5 min-w-5 items-center justify-center gap-1 rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
+        <span className="inline-flex h-5 min-w-5 items-center justify-center gap-1 rounded-full bg-well px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
           {count}
         </span>
       ) : null}
@@ -38,8 +38,15 @@ export function ResourceList({
     </>
   );
   return (
-    <section className={cn("flex min-w-0 flex-col", className)} style={style} data-testid={testId}>
-      <h2 className="flex h-8 items-center text-sm text-muted-foreground">
+    <section
+      className={cn(
+        "flex min-w-0 flex-col rounded-2xl bg-card px-2 pb-1.5 shadow-elev-1 edge-lit",
+        className,
+      )}
+      style={style}
+      data-testid={testId}
+    >
+      <h2 className="flex h-10 items-center px-2 text-[13px] text-muted-foreground">
         {link ? (
           <Link
             {...link}
@@ -57,7 +64,7 @@ export function ResourceList({
 }
 
 const rowClass =
-  "group/row flex h-11 min-w-0 items-center gap-3 border-b px-1 text-sm transition-colors outline-none";
+  "group/row flex h-10 min-w-0 items-center gap-3 rounded-xl px-2 text-sm transition-colors outline-none";
 
 /** One linked row: leading icon, label, optional trailing marks, chevron. */
 export function ResourceRow({
@@ -77,7 +84,7 @@ export function ResourceRow({
     <li>
       <Link
         {...link}
-        className={cn(rowClass, "hover:bg-muted/50 focus-visible:bg-muted/60")}
+        className={cn(rowClass, "hover:bg-foreground/[0.04] focus-visible:bg-foreground/[0.06]")}
         data-testid={testId}
       >
         <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4">

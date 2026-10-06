@@ -10,7 +10,18 @@ const TONE: Record<StatusTone, string> = {
   idle: "bg-muted-foreground/50",
 };
 
-/** A state dot; `pulse` marks live states. Always pair it with a text label. */
+/** The glow of a live dot is its own color. */
+const LIT: Record<StatusTone, string> = {
+  good: "[--lit:var(--state-good)]",
+  warn: "[--lit:var(--state-warn)]",
+  bad: "[--lit:var(--destructive)]",
+  idle: "[--lit:var(--muted-foreground)]",
+};
+
+/**
+ * A state dot; `pulse` marks live states (something running now), which also glow. Always pair
+ * it with a text label.
+ */
 export function Dot({
   tone,
   pulse,
@@ -31,7 +42,32 @@ export function Dot({
           )}
         />
       ) : null}
-      <span className={cn("relative inline-flex rounded-full", size, TONE[tone])} />
+      <span
+        className={cn(
+          "relative inline-flex rounded-full",
+          size,
+          TONE[tone],
+          pulse && cn("lit-glow", LIT[tone]),
+        )}
+      />
+    </span>
+  );
+}
+
+/** The signal light of a live view (data that refreshes by itself), with its word. */
+export function LiveDot({ label, className }: { label: string; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground",
+        className,
+      )}
+    >
+      <span className="relative flex size-1.5 shrink-0">
+        <span className="absolute inline-flex size-full animate-ping rounded-full bg-signal opacity-60 motion-reduce:hidden" />
+        <span className="lit-glow relative inline-flex size-1.5 rounded-full bg-signal" />
+      </span>
+      {label}
     </span>
   );
 }
