@@ -60,6 +60,14 @@ export const tlsSettings = z
     gzip: z.boolean().default(true),
     gzipMinLength: minLength,
     gzipTypes: compressionTypes.default(() => [...DEFAULT_COMPRESSION_TYPES]),
+    /** gzip level 1-9; 0 keeps the nodes' default (1). Other values need site-content-v1. */
+    gzipLevel: z.number().int().min(0).max(9).default(0),
+    /**
+     * The largest response, by its known length, that any coding compresses;
+     * 0: no limit (site-content-v1 otherwise). Responses of unknown length
+     * are compressed.
+     */
+    compressMaxLength: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
     ocspStapling: z.boolean().default(false),
   })
   .refine((s) => (!s.forceHttps && s.hstsMaxAge === 0) || s.certificateId !== null, {

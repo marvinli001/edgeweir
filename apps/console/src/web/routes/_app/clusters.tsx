@@ -6,6 +6,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { ClusterRolloutCard } from "@/components/cluster-rollout";
+import { ClusterCacheCard } from "@/components/clusters/cache-zone";
 import { ClusterDialog } from "@/components/clusters/cluster-dialog";
 import { ClusterSummary } from "@/components/clusters/cluster-summary";
 import { EnrollDialogHost } from "@/components/clusters/enroll-dialog";
@@ -218,6 +219,10 @@ function ClusterView({
             <NodeGroupsSection cluster={selected} />
             {nodes}
             <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
+            <ClusterCacheCard
+              key={`cache-${selected.id}-${JSON.stringify(selected.cache)}`}
+              cluster={selected}
+            />
             <NodeUpgrades key={selected.id} clusterId={selected.id} />
             <RevisionsSection cluster={selected} />
           </TabsContent>

@@ -215,7 +215,11 @@ function TaskRow({
           </CollapsibleTrigger>
           <div className="order-5 flex basis-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span data-testid="cache-task-creator">
-              {task.source === "recovery" ? m.purge_source_recovery() : task.createdByName || "—"}
+              {task.source === "recovery"
+                ? m.purge_source_recovery()
+                : task.source === "purge_method"
+                  ? m.purge_source_purge_method({ node: task.createdByName })
+                  : task.createdByName || "—"}
             </span>
             <span title={formatDateTime(task.createdAt)}>{timeAgo(task.createdAt)}</span>
             {task.type === "tag" ? (

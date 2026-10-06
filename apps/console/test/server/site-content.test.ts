@@ -253,6 +253,64 @@ describe("cache, origin and content settings (site-content-v1, cache-zone-v1) on
     expect((await siteOf())?.requestBodyLimit).toBeUndefined();
   });
 
+  it("compiles the gzip level, the largest compressed response and config rules' body limits", async () => {
+    const https = await admin.https.get({ id: siteId });
+    await admin.https.update({
+      id: siteId,
+      settings: { ...https, gzipLevel: 6, compressMaxLength: 8_388_608 },
+    });
+    expect((await admin.https.get({ id: siteId })).gzipLevel).toBe(6);
+    expect((await siteOf())?.tls).toMatchObject({ gzipLevel: 6, compressMaxLength: 8_388_608n });
+    expect((await config()).requiredFeatures).toContain("site-content-v1");
+    await admin.https.update({
+      id: siteId,
+      settings: { ...https, gzipLevel: 0, compressMaxLength: 0 },
+    });
+    expect((await config()).requiredFeatures).not.toContain("site-content-v1");
+    for (const settings of [{ gzipLevel: 10 }, { compressMaxLength: -1 }])
+      expect(
+        (await rpcError(admin.https.update({ id: siteId, settings: { ...https, ...settings } })))
+          .status,
+      ).toBe(400);
+
+    const saved = await admin.rules.save({
+      id: siteId,
+      rules: [
+        {
+          name: "uploads",
+          phase: "config",
+          enabled: true,
+          expression: 'starts_with(http.request.uri.path, "/upload/")',
+          action: { kind: "config", requestBodyLimit: 1024 * 1024 * 1024 },
+        },
+      ],
+    });
+    expect(saved[0]?.action).toMatchObject({ kind: "config", requestBodyLimit: 1_073_741_824 });
+    expect((await siteOf())?.rules[0]?.action?.requestBodyLimit).toBe(1_073_741_824n);
+    expect((await config()).requiredFeatures).toContain("site-content-v1");
+    // Only the config phase takes it.
+    expect(
+      (
+        await rpcError(
+          admin.rules.save({
+            id: siteId,
+            rules: [
+              {
+                name: "cached",
+                phase: "cache",
+                enabled: true,
+                expression: "true",
+                action: { kind: "config", requestBodyLimit: 1 },
+              },
+            ],
+          }),
+        )
+      ).status,
+    ).toBe(400);
+    await admin.rules.save({ id: siteId, rules: [] });
+    expect((await config()).requiredFeatures).not.toContain("site-content-v1");
+  });
+
   it("saves error pages of classes, redirects and replacement statuses", async () => {
     const saved = await admin.errorPages.update({
       id: siteId,

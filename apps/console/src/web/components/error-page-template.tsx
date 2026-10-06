@@ -27,8 +27,8 @@ export function TemplateField({
   testId,
 }: {
   id: string;
-  /** The status the page answers with, shown before its name and in the size error. */
-  status: number;
+  /** The status (or class, "4xx") the page answers, shown before its name and in the size error. */
+  status: number | string;
   name: string;
   value: string;
   onChange: (value: string) => void;

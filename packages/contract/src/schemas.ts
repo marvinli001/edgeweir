@@ -1595,6 +1595,7 @@ export type OriginProtocol = z.infer<typeof originProtocol>;
 export type ActiveHealthCheck = OriginSettings["activeHealthCheck"];
 export type SessionAffinity = OriginSettings["sessionAffinity"];
 export type CacheSettings = z.infer<typeof site>["cacheSettings"];
+export type ContentSettings = z.infer<typeof site>["contentSettings"];
 export type CacheKeyPolicy = CacheSettings["cacheKey"];
 export type OriginHealth = z.infer<typeof originHealth>;
 export type OriginHealthSource = z.infer<typeof originHealthSource>;
