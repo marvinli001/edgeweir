@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import { ClusterDialog } from "@/components/clusters/cluster-dialog";
+import { ClusterLinks } from "@/components/clusters/cluster-links";
 import { ControlledConfirmDialog } from "@/components/confirm-dialog";
 import { OptionSelect } from "@/components/form-select";
 import { Dot } from "@/components/status-dot";
@@ -96,8 +97,8 @@ export function ClusterSummary({
         </div>
       </CardHeader>
       {selected.nodeCount === 0 ? null : (
-        <CardContent>
-          <dl className="grid grid-cols-3 divide-x overflow-hidden rounded-xl border">
+        <CardContent className="flex flex-col gap-3">
+          <dl className="grid grid-cols-3 divide-x divide-edge overflow-hidden rounded-xl bg-well/60">
             <SummaryStat label={m.clusters_nodes_online()}>
               <Dot
                 tone={
@@ -108,7 +109,7 @@ export function ClusterSummary({
                       : "good"
                 }
               />
-              <span data-testid="cluster-nodes-online">
+              <span data-testid="cluster-nodes-online" className="readout">
                 {selected.onlineNodeCount}/{selected.nodeCount}
               </span>
             </SummaryStat>
@@ -139,6 +140,7 @@ export function ClusterSummary({
               ) : null}
             </SummaryStat>
           </dl>
+          <ClusterLinks cluster={selected} />
         </CardContent>
       )}
       <ClusterDialog

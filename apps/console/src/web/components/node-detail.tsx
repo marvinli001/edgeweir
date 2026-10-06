@@ -4,12 +4,13 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { Meter } from "@/components/appica/meter";
 import { OptionSelect } from "@/components/form-select";
 import { ProbeResults } from "@/components/probes";
 import { SafetyNote } from "@/components/safety-note";
 import { SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
-import { Dot, StatusDot } from "@/components/status-dot";
+import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -538,18 +539,24 @@ export function NodeLoad({ node }: { node: Node }) {
   const metrics = node.metrics;
   if (!metrics) return <span className="text-muted-foreground">—</span>;
   const memory = memoryPercent(metrics);
-  const tone = (value: number | null) =>
-    value === null ? "idle" : value >= 90 ? "bad" : value >= 75 ? "warn" : "good";
+  const row = (label: string, value: number | null) => (
+    <>
+      <span className="text-muted-foreground">{label}</span>
+      {value === null ? (
+        <span />
+      ) : (
+        <Meter value={value} high={75} label={`${label} ${formatPercent(value)}`} />
+      )}
+      <span className="text-right tabular-nums">{value === null ? "—" : formatPercent(value)}</span>
+    </>
+  );
   return (
-    <div className="flex flex-col gap-0.5 text-xs whitespace-nowrap" data-testid="node-load">
-      <span className="flex items-center gap-1.5">
-        <Dot tone={tone(metrics.cpuPercent)} small />
-        {m.node_metrics_cpu()} {formatPercent(metrics.cpuPercent)}
-      </span>
-      <span className="flex items-center gap-1.5 text-muted-foreground">
-        <Dot tone={tone(memory)} small />
-        {m.node_metrics_memory()} {memory === null ? "—" : formatPercent(memory)}
-      </span>
+    <div
+      className="grid w-40 grid-cols-[auto_minmax(0,1fr)_2.75rem] items-center gap-x-2 gap-y-1.5 text-xs whitespace-nowrap"
+      data-testid="node-load"
+    >
+      {row(m.node_metrics_cpu(), metrics.cpuPercent)}
+      {row(m.node_metrics_memory(), memory)}
     </div>
   );
 }
