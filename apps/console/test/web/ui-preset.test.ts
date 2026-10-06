@@ -6,9 +6,9 @@ import { describe, expect, it } from "vitest";
 const root = resolve(import.meta.dirname, "../..");
 
 describe("shadcn preset", () => {
-  it("components.json and theme resolve to preset b2D0wqNxT", () => {
+  it("components.json and theme resolve to preset b2DcSALVz", () => {
     const components = JSON.parse(readFileSync(resolve(root, "components.json"), "utf8"));
-    expect(components.style).toBe("base-luma");
+    expect(components.style).toBe("base-rhea");
     expect(components.iconLibrary).toBe("hugeicons");
     expect(components.menuColor).toBe("inverted-translucent");
     expect(components.menuAccent).toBe("subtle");
@@ -25,9 +25,9 @@ describe("shadcn preset", () => {
       code: string;
       values: Record<string, string>;
     };
-    expect(preset.code).toBe("b2D0wqNxT");
+    expect(preset.code).toBe("b2DcSALVz");
     expect(preset.values).toMatchObject({
-      style: "luma",
+      style: "rhea",
       theme: "blue",
       iconLibrary: "hugeicons",
       font: "geist",
