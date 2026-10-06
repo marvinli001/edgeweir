@@ -148,9 +148,10 @@ describe("error pages", () => {
       ],
     });
     expect(parsed).toMatchObject({ interceptOriginErrors: false });
+    // 404 and 500 are page statuses since site-content-v1 (test/content.test.ts); 418 and 501 are not.
     for (const pages of [
-      [{ status: 404, template: "x" }],
-      [{ status: 500, template: "x" }],
+      [{ status: 418, template: "x" }],
+      [{ status: 501, template: "x" }],
       [{ status: 403, template: "" }],
       [
         { status: 429, template: "a" },

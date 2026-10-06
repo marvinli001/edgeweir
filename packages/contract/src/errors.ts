@@ -165,6 +165,8 @@ export const errorDefs = {
   CACHE_TASK_TAG_INVALID: { status: 400, params: ["tags"] },
   /** An error page template over the byte limit; status names the page (404/503 for platform pages). */
   ERROR_PAGE_TOO_LARGE: { status: 400, params: ["status", "limit"] },
+  /** Turning the PURGE method on needs a key (cacheSettings.purgeMethod.key). */
+  PURGE_KEY_REQUIRED: { status: 400, params: [] },
   API_KEY_RATE_LIMITED: { status: 429, params: ["retryAfterSeconds"] },
   L4_APP_NOT_FOUND: { status: 404, params: [] },
   /** A cluster has at most MAX_L4_APPS_PER_CLUSTER applications. */
@@ -220,6 +222,9 @@ export const revisionReasonDefs = {
   challenge_keys_rotated: { params: [], en: "challenge keys rotated" },
   site_waf_updated: { params: ["site"], en: "OWASP CRS of {site} updated" },
   site_error_pages_updated: { params: ["site"], en: "error pages of {site} updated" },
+  site_maintenance_updated: { params: ["site"], en: "maintenance of {site} updated" },
+  cluster_cache_updated: { params: [], en: "cache zone updated" },
+  node_cache_updated: { params: ["node"], en: "cache size of node {node} updated" },
   error_pages_updated: { params: [], en: "platform error pages updated" },
   recompiled: { params: [], en: "configuration recompiled after an upgrade" },
   l4_app_created: { params: ["app"], en: "L4 application {app} created" },

@@ -14,7 +14,7 @@ import { banSettings, bansContract } from "./bans";
 import { bulkRedirectsContract } from "./bulk-redirects";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
-import { errorPagesContract, platformErrorPages } from "./error-pages";
+import { errorPagesContract, maintenanceContract, platformErrorPages } from "./error-pages";
 import { l4AppsContract, portPoolProcedures } from "./l4";
 import {
   nodeAddressesInput,
@@ -42,6 +42,7 @@ export * from "./node-errors";
 export * from "./node-features";
 export * from "./protection";
 export * from "./rules";
+export * from "./s3-presets";
 export * from "./schemas";
 export * from "./waf";
 
@@ -85,8 +86,10 @@ export const contract = {
   security: securityContract,
   /** OWASP CRS managed rules of a site and the rules it matched. */
   waf: wafContract,
-  /** A site's error pages for node-generated 403, 429, 502, 503 and 504 responses. */
+  /** A site's error pages for node-generated and (optionally) origin error responses. */
   errorPages: errorPagesContract,
+  /** A site's maintenance mode. */
+  maintenance: maintenanceContract,
   certificates: certificatesContract,
   /** Regional probes and their latest results. */
   probes: probesContract,
@@ -211,6 +214,14 @@ export const contract = {
       .route({ method: "GET", path: "/enrollment-tokens/{id}", tags: ["nodes"] })
       .input(idParam)
       .output(s.enrollmentTokenStatus),
+    /**
+     * The cache zone of every node of the cluster (size, inactive time);
+     * publishes the cluster: a structural change, nodes reload nginx.
+     */
+    setCache: oc
+      .route({ method: "PUT", path: "/clusters/{id}/cache", tags: ["clusters"] })
+      .input(s.clusterCacheInput)
+      .output(s.cluster),
     /** Port ranges the cluster's layer-4 applications may listen on. */
     portPools: portPoolProcedures.portPools,
     /** Replaces the port pools (no configuration revision: nodes only see the applications). */
@@ -289,6 +300,14 @@ export const contract = {
     setAddresses: oc
       .route({ method: "PUT", path: "/nodes/{id}/addresses", tags: ["nodes"] })
       .input(nodeAddressesInput)
+      .output(s.node),
+    /**
+     * The node's own cache zone size (cache-zone-v1); null uses the
+     * cluster's. Publishes the cluster; only that node reloads nginx.
+     */
+    setCache: oc
+      .route({ method: "PUT", path: "/nodes/{id}/cache", tags: ["nodes"] })
+      .input(s.nodeCacheInput)
       .output(s.node),
   },
   sites: {

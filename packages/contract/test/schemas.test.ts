@@ -88,6 +88,8 @@ describe("siteCreateInput", () => {
         unhealthyThreshold: 3,
       },
       sessionAffinity: { enabled: false, ttlSeconds: 3600 },
+      tries: 3,
+      statusRetry: true,
     });
     expect(parsed.cacheSettings).toEqual({
       cacheKey: {
@@ -101,6 +103,12 @@ describe("siteCreateInput", () => {
       },
       rangeSlice: false,
       keepCacheTag: false,
+      xCache: true,
+      purgeMethod: { enabled: false },
+    });
+    expect(parsed.contentSettings).toEqual({
+      charset: { name: "off", force: false, uppercase: false },
+      requestBodyLimit: 104_857_600,
     });
   });
 

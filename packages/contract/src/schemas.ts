@@ -252,6 +252,12 @@ export const cacheRuleInput = z
     cacheAuthorized: z.boolean().default(false),
     /** Cache-Control max-age towards clients for responses this rule caches; 0 keeps the origin's. */
     browserTtlSeconds: z.number().int().min(0).max(MAX_TTL).default(0),
+    /**
+     * Cache responses that carry Set-Cookie (site-content-v1). Only the
+     * response fetched from the origin for a request carries the cookies;
+     * cache hits, stale and updating responses never do.
+     */
+    cacheSetCookie: z.boolean().default(false),
   })
   .refine((r) => r.maxSizeBytes === 0 || r.maxSizeBytes >= r.minSizeBytes, {
     message: "maximum size must not be below the minimum size",
@@ -356,25 +362,62 @@ export const originSettings = z.object({
   grpc: z.boolean().default(false),
   activeHealthCheck: activeHealthCheck.prefault({}),
   sessionAffinity: sessionAffinity.prefault({}),
+  /** Origins a request tries at most, 1-5 (site-content-v1 unless 3). */
+  tries: z.number().int().min(1).max(5).default(3),
+  /** Retry after 502, 503 and 504 responses of an origin (site-content-v1 when off). */
+  statusRetry: z.boolean().default(true),
 });
 
-export const cacheKeyQuery = z.enum(["all", "ignore", "include"]);
+/** exclude: every parameter but queryParams (site-content-v1). */
+export const cacheKeyQuery = z.enum(["all", "ignore", "include", "exclude"]);
 
 /** How the cache key of every request of a site is composed. */
-export const cacheKeyPolicy = z.object({
-  query: cacheKeyQuery.default("all"),
-  /** Parameters kept by `include`. */
-  queryParams: z.array(queryParamName).max(32).default([]),
-  /** Sort parameters so that their order does not matter. */
-  sortQuery: z.boolean().default(false),
-  /** Request headers whose values vary the key. */
-  headers: z.array(headerName).max(8).default([]),
-  /** Cookies whose values vary the key. */
-  cookies: z.array(cookieName).max(8).default([]),
-  /** Separate mobile and desktop user agents. */
-  deviceType: z.boolean().default(false),
-  /** Include the Host; when off, all domains of the site share cached objects. */
-  includeHost: z.boolean().default(true),
+export const cacheKeyPolicy = z
+  .object({
+    query: cacheKeyQuery.default("all"),
+    /**
+     * Parameters kept by `include` or dropped by `exclude`; under `exclude` a
+     * name may end in "*" for every name with that prefix ("utm_*").
+     */
+    queryParams: z.array(queryParamName).max(32).default([]),
+    /** Sort parameters so that their order does not matter. */
+    sortQuery: z.boolean().default(false),
+    /** Request headers whose values vary the key. */
+    headers: z.array(headerName).max(8).default([]),
+    /** Cookies whose values vary the key. */
+    cookies: z.array(cookieName).max(8).default([]),
+    /** Separate mobile and desktop user agents. */
+    deviceType: z.boolean().default(false),
+    /** Include the Host; when off, all domains of the site share cached objects. */
+    includeHost: z.boolean().default(true),
+  })
+  .superRefine((key, ctx) => {
+    key.queryParams.forEach((name, i) => {
+      const star = name.indexOf("*");
+      if (star === -1) return;
+      if (key.query !== "exclude" || star !== name.length - 1 || name.length === 1)
+        ctx.addIssue({
+          code: "custom",
+          message: '"*" may only end a parameter name of the exclude mode',
+          path: ["queryParams", i],
+        });
+    });
+  });
+
+/** A PURGE key: 16-256 printable ASCII characters without spaces. */
+export const purgeKey = z
+  .string()
+  .regex(/^[\x21-\x7e]{16,256}$/, "16-256 printable characters without spaces");
+
+/**
+ * The PURGE method (site-content-v1): `PURGE <URL>` with the key in
+ * X-Purge-Key purges the URL on every node of the cluster. The key is
+ * write-only: omit it to keep the stored one; enabling needs one
+ * (PURGE_KEY_REQUIRED).
+ */
+export const purgeMethodInput = z.object({
+  enabled: z.boolean().default(false),
+  key: purgeKey.optional(),
 });
 
 export const cacheSettings = z.object({
@@ -386,6 +429,48 @@ export const cacheSettings = z.object({
    * removes it; nodes index the tags of cached objects either way.
    */
   keepCacheTag: z.boolean().default(false),
+  /** Send X-Cache to clients (site-content-v1 when off). */
+  xCache: z.boolean().default(true),
+  purgeMethod: purgeMethodInput.prefault({}),
+});
+
+/** Charsets a site may add to its text responses ("off": none). */
+export const CHARSETS = [
+  "utf-8",
+  "gbk",
+  "gb18030",
+  "gb2312",
+  "big5",
+  "iso-8859-1",
+  "shift_jis",
+  "euc-kr",
+] as const;
+/** Largest request body limit: 10 GiB. */
+export const MAX_REQUEST_BODY_LIMIT = 10 * 1024 * 1024 * 1024;
+/** A site's body limit unless set: the nodes' former global 100 MiB. */
+export const DEFAULT_REQUEST_BODY_LIMIT = 100 * 1024 * 1024;
+
+/**
+ * Content settings of a site (site-content-v1 unless at their defaults):
+ * the charset added to text/*, application/javascript, application/json and
+ * application/xml responses (force: also replace one the response names;
+ * uppercase: send the name in upper case), and the largest request body by
+ * Content-Length (0: no limit), 413 above it.
+ */
+export const contentSettings = z.object({
+  charset: z
+    .object({
+      name: z.enum(["off", ...CHARSETS]).default("off"),
+      force: z.boolean().default(false),
+      uppercase: z.boolean().default(false),
+    })
+    .prefault({}),
+  requestBodyLimit: z
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_REQUEST_BODY_LIMIT)
+    .default(DEFAULT_REQUEST_BODY_LIMIT),
 });
 
 export const siteCreateInput = z.object({
@@ -398,6 +483,7 @@ export const siteCreateInput = z.object({
   /** grpc needs protocol http2 (ORIGIN_GRPC_REQUIRES_HTTP2). */
   originSettings: originSettings.prefault({}),
   cacheSettings: cacheSettings.prefault({}),
+  contentSettings: contentSettings.prefault({}),
 });
 
 export const origin = originFields.omit({ s3: true }).extend({
@@ -425,6 +511,7 @@ export const cacheRule = z.object({
   staleIfErrorSeconds: z.number().int(),
   cacheAuthorized: z.boolean(),
   browserTtlSeconds: z.number().int(),
+  cacheSetCookie: z.boolean(),
 });
 
 /** Whether the site's configuration runs on its cluster's online nodes. */
@@ -513,7 +600,11 @@ export const site = z.object({
     cacheKey: cacheKeyPolicy.required(),
     rangeSlice: z.boolean(),
     keepCacheTag: z.boolean(),
+    xCache: z.boolean(),
+    /** The key itself is never returned. */
+    purgeMethod: z.object({ enabled: z.boolean(), keySet: z.boolean() }),
   }),
+  contentSettings: contentSettings.required(),
   cacheGeneration: z.number().int(),
   delivery: siteDelivery,
   createdAt: isoDateTime,
@@ -580,6 +671,8 @@ export const cluster = z.object({
   appliedNodeCount: z.number().int(),
   siteCount: z.number().int(),
   latestRevision: revision.nullable(),
+  /** The cache zone of every node (a node may override the size). */
+  cache: z.object({ maxSizeGb: z.number().int(), inactiveDays: z.number().int() }),
   createdAt: isoDateTime,
 });
 
@@ -599,6 +692,24 @@ export const clusterUpdateInput = z.object({
   id: uuid,
   name: clusterName.optional(),
   description: z.string().trim().max(500).optional(),
+});
+
+/** Cache zone sizes: 1 GiB to 64 TiB. */
+export const CACHE_SIZE_GB_RANGE = { min: 1, max: 65_536 } as const;
+export const cacheSizeGb = z
+  .number()
+  .int()
+  .min(CACHE_SIZE_GB_RANGE.min)
+  .max(CACHE_SIZE_GB_RANGE.max);
+
+/**
+ * The cluster's cache zone: its size on every node and how long unrequested
+ * objects stay. A structural change: nodes reload nginx.
+ */
+export const clusterCacheInput = z.object({
+  id: uuid,
+  maxSizeGb: cacheSizeGb,
+  inactiveDays: z.number().int().min(1).max(90),
 });
 
 export const regionCode = z
@@ -840,6 +951,20 @@ export const node = z.object({
    * node must enroll again.
    */
   authError: z.string().nullable(),
+  /**
+   * The node's cache zone size (null: the cluster's) and its disk usage as
+   * last measured (null until a node with cache-zone-v1 reports it).
+   */
+  cache: z.object({
+    maxSizeGb: z.number().int().nullable(),
+    usage: z
+      .object({
+        usedBytes: z.number(),
+        maxBytes: z.number(),
+        measuredAt: isoDateTime,
+      })
+      .nullable(),
+  }),
 });
 
 export const nodeUpdateInput = z.object({
@@ -847,6 +972,9 @@ export const nodeUpdateInput = z.object({
   name: z.string().trim().min(1).max(64).optional(),
   nodeGroupId: uuid.optional(),
 });
+
+/** The node's own cache zone size (cache-zone-v1); null uses the cluster's. */
+export const nodeCacheInput = z.object({ id: uuid, maxSizeGb: cacheSizeGb.nullable() });
 
 export const enrollmentTokenInput = z.object({
   clusterId: uuid,
@@ -1193,8 +1321,18 @@ export const siteUpdateInput = z.object({
       grpc: z.boolean().optional(),
     })
     .optional(),
-  /** Replaces the cache settings; keepCacheTag stays as it is when omitted. */
-  cacheSettings: cacheSettings.extend({ keepCacheTag: z.boolean().optional() }).optional(),
+  /**
+   * Replaces the cache settings; keepCacheTag, xCache and purgeMethod stay
+   * as they are when omitted.
+   */
+  cacheSettings: cacheSettings
+    .extend({
+      keepCacheTag: z.boolean().optional(),
+      xCache: z.boolean().optional(),
+      purgeMethod: purgeMethodInput.optional(),
+    })
+    .optional(),
+  contentSettings: contentSettings.optional(),
 });
 
 /** Parameters of a node error code (see node-errors.ts). */
@@ -1338,7 +1476,8 @@ export const cacheTaskNode = z.object({
   recoveredAt: isoDateTime.nullable(),
 });
 
-export const cacheTaskSource = z.enum(["user", "recovery"]);
+/** purge_method: a PURGE request a node accepted (createdByName is the node). */
+export const cacheTaskSource = z.enum(["user", "recovery", "purge_method"]);
 
 export const cacheTask = z.object({
   id: uuid,
