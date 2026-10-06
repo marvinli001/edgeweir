@@ -1,4 +1,7 @@
 import ipaddr from "ipaddr.js";
+import { validHostHeader } from "./host-header";
+
+export { MAX_HOST_HEADER_LENGTH, validHostHeader } from "./host-header";
 
 export const phases = [
   "request-transform",
@@ -376,7 +379,7 @@ export function validActionIr(phase: string, action: ActionIr): boolean {
       const port = action.port ?? 0;
       return (
         (group === "" || ORIGIN_GROUP_RE.test(group)) &&
-        (host === "" || hostnameRe.test(host)) &&
+        (host === "" || validHostHeader(host)) &&
         (sni === "" || hostnameRe.test(sni)) &&
         Number.isInteger(port) &&
         port >= 0 &&
