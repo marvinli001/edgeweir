@@ -7,6 +7,7 @@ import {
   listClusters,
   previewRollback,
   rollbackCluster,
+  setClusterCache,
   updateCluster,
 } from "../../services/clusters";
 import { createEnrollmentToken, getEnrollmentToken } from "../../services/enrollment";
@@ -23,6 +24,7 @@ import {
   getNode,
   listNodes,
   setNodeAddresses,
+  setNodeCache,
   setNodeProbe,
   setNodeStatus,
   updateNode,
@@ -159,6 +161,9 @@ export const clustersRouter = {
     setPortPools: authed.clusters.setPortPools.handler(({ input, context }) =>
       setPortPools(context.app.db, input, context.actor),
     ),
+    setCache: authed.clusters.setCache.handler(({ input, context }) =>
+      setClusterCache(context.app.db, input, context.actor),
+    ),
     createEnrollmentToken: authed.clusters.createEnrollmentToken.handler(
       async ({ input, context }) =>
         createEnrollmentToken(context.app.db, input, {
@@ -223,6 +228,9 @@ export const clustersRouter = {
     ),
     setAddresses: authed.nodes.setAddresses.handler(({ input, context }) =>
       setNodeAddresses(context.app.db, input, context.actor),
+    ),
+    setCache: authed.nodes.setCache.handler(({ input, context }) =>
+      setNodeCache(context.app.db, input, context.actor),
     ),
   },
 };

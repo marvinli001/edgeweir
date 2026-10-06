@@ -5,6 +5,7 @@ import { AUTH_SECRET_BINDING, AUTH_SECRET_KEY } from "../lib/auth-secret";
 import type { Envelope, EnvelopeBinding, MasterKey } from "../lib/envelope";
 import { lockEnvelopeUpgrade } from "../lib/locks";
 import type { Logger } from "../lib/logger";
+import { siteSecretBinding } from "../lib/site-secrets";
 import { caKeyBinding } from "../pki/store";
 import {
   acmeAccountBinding,
@@ -41,6 +42,12 @@ export const ENVELOPE_COLUMNS: EnvelopeColumn[] = [
     id: schema.originCredential.id,
     column: schema.originCredential.secretEnvelope,
     binding: s3SecretBinding,
+  },
+  {
+    table: schema.siteSecret,
+    id: schema.siteSecret.id,
+    column: schema.siteSecret.secretEnvelope,
+    binding: siteSecretBinding,
   },
   {
     table: schema.pkiAuthority,

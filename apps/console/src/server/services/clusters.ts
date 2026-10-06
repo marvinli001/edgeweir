@@ -73,6 +73,7 @@ async function toClusterDto(
     appliedNodeCount: delivery.applied,
     siteCount: sites?.n ?? 0,
     latestRevision: latest ? toRevisionDto(latest) : null,
+    cache: { maxSizeGb: row.cacheMaxSizeGb, inactiveDays: row.cacheInactiveDays },
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -159,6 +160,45 @@ export async function updateCluster(
       targetId: updated.id,
       targetName: updated.name,
       metadata: { from: { name: before.name, description: before.description }, ...input },
+    });
+    return updated;
+  });
+  return toClusterDto(db, row);
+}
+
+/**
+ * Sets the cluster's cache zone (size on every node, inactive time),
+ * publishes the cluster (nodes rewrite proxy_cache_path and reload nginx)
+ * and audits the change.
+ */
+export async function setClusterCache(
+  db: Database,
+  input: { id: string; maxSizeGb: number; inactiveDays: number },
+  actor: Actor,
+): Promise<Cluster> {
+  const row = await db.transaction(async (tx) => {
+    const before = await findCluster(tx, input.id);
+    const [updated] = await tx
+      .update(schema.cluster)
+      .set({ cacheMaxSizeGb: input.maxSizeGb, cacheInactiveDays: input.inactiveDays })
+      .where(eq(schema.cluster.id, input.id))
+      .returning();
+    if (!updated) throw new Error("cluster update failed");
+    const { row: revision } = await publishRevision(tx, {
+      clusterId: updated.id,
+      reason: { code: "cluster_cache_updated", params: {} },
+      actor,
+    });
+    await recordAudit(tx, actor, {
+      action: "cluster.cache_update",
+      targetType: "cluster",
+      targetId: updated.id,
+      targetName: updated.name,
+      metadata: {
+        from: { maxSizeGb: before.cacheMaxSizeGb, inactiveDays: before.cacheInactiveDays },
+        to: { maxSizeGb: input.maxSizeGb, inactiveDays: input.inactiveDays },
+        revision: revision.revision,
+      },
     });
     return updated;
   });

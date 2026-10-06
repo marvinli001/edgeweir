@@ -20,6 +20,7 @@ import {
   setL4AppEnabled,
   updateL4App,
 } from "../../services/l4";
+import { getSiteMaintenance, updateSiteMaintenance } from "../../services/maintenance";
 import { siteOriginHealth } from "../../services/origin-health";
 import { siteLaunch } from "../../services/site-launch";
 import {
@@ -51,6 +52,14 @@ export const sitesRouter = {
     ),
     update: authed.errorPages.update.handler(({ input, context }) =>
       updateSiteErrorPages(context.app.db, input, { actor: context.actor }),
+    ),
+  },
+  maintenance: {
+    get: authed.maintenance.get.handler(({ input, context }) =>
+      getSiteMaintenance(context.app.db, input.id),
+    ),
+    update: authed.maintenance.update.handler(({ input, context }) =>
+      updateSiteMaintenance(context.app.db, input, { actor: context.actor }),
     ),
   },
   https: {

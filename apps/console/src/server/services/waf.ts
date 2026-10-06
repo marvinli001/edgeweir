@@ -7,6 +7,7 @@ import {
   RULES_V2_FEATURE,
   RULES_V3_FEATURE,
   SESSION_AFFINITY_FEATURE,
+  SITE_CONTENT_FEATURE,
   type SiteWafModel,
   ZSTD_FEATURE,
 } from "@edgeweir/config-compiler";
@@ -177,6 +178,7 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     prefetchVariants: byNodes(PREFETCH_V2_FEATURE),
     rulesV2: byNodes(RULES_V2_FEATURE),
     rulesV3: byNodes(RULES_V3_FEATURE),
+    siteContent: byNodes(SITE_CONTENT_FEATURE),
   };
 }
 

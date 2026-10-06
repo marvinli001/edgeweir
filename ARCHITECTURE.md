@@ -424,6 +424,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `origin_pool` | 源站池：超时、keepalive、失败阈值、回源 TLS 校验、回源 HTTP 版本与 gRPC、主动健康检查与会话保持（关闭时保留设置） |
 | `origin` | 源站与所属的源站组（空为默认组） |
 | `origin_credential` | S3 源站密钥，信封加密 |
+| `site_secret` | 网站的其他密钥（PURGE 方法的密钥），信封加密，只经节点通道下发 |
 | `cache_rule` | 缓存规则：条件表达式与名单引用、状态码与大小条件、动作、边缘与浏览器 TTL |
 | `edge_rule` | 网站规则或全局规则：阶段、表达式、动作、名单引用 |
 | `bulk_redirect` | 网站的批量重定向：来源（路径或域名加路径，网站内唯一）、目标、状态码、是否保留查询串、顺序 |
@@ -543,6 +544,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0051_node_last_auth_error` | `node.last_auth_error`、`last_auth_error_at`（节点通道最近一次拒绝该节点自己的证书的原因，如 `CERT_HAS_EXPIRED`） |
 | `0052_retention_indexes` | 索引：`alert_event (occurred_at, ordinal)`；`security_event (received_at)`，只含高于正常的网站级别事件；`cache_task_node (node_id)`，只含未补发的失败与跳过交付 |
 | `0053_origin_protocol` | `origin_pool.protocol`（回源 HTTP 版本，`http1` 或 `http2`）、`origin_pool.grpc`（gRPC 经 HTTP/2 端到端转发） |
+| `0054_site_content` | `site_secret`；`cluster.cache_max_size_gb`、`cluster.cache_inactive_days`（缓存区）；`node.cache_max_size_gb`（节点容量覆盖）、`node.cache_usage`（上报的用量）；`site.hide_x_cache`、`site.purge_method`、`site.maintenance`、`site.maintenance_updated_at`、`site.charset`、`site.request_body_limit`；`origin_pool.tries`、`origin_pool.status_retry`；`cache_rule.cache_set_cookie`；`site_error_page.redirect_url`、`site_error_page.response_status` |
 
 ## 构建产物
 

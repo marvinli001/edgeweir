@@ -22,6 +22,7 @@ export const router = os.router({
   protection: accessControlRouter.protection,
   waf: accessControlRouter.waf,
   errorPages: sitesRouter.errorPages,
+  maintenance: sitesRouter.maintenance,
   security: accessControlRouter.security,
   certificates: certificatesRouter.certificates,
   probes: clustersRouter.probes,

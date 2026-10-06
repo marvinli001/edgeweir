@@ -24,6 +24,7 @@ import {
   type Executor,
   latestRevision,
   notifyClusterTargets,
+  publishRevision,
   type RevisionHead,
   type RolloutTargets,
   rolloutTargets,
@@ -125,7 +126,48 @@ async function toNodeDtos(db: Executor, rows: NodeRow[]): Promise<Node[]> {
         r.lastAuthError && r.lastAuthErrorAt && (!r.lastSeenAt || r.lastAuthErrorAt > r.lastSeenAt)
           ? r.lastAuthError
           : null,
+      cache: { maxSizeGb: r.cacheMaxSizeGb, usage: cacheUsage(r.cacheUsage) },
     };
+  });
+}
+
+/** The node's default cache zone as last measured (the cluster has one zone). */
+function cacheUsage(usage: NodeRow["cacheUsage"]): Node["cache"]["usage"] {
+  const zone = usage?.zones[0];
+  return zone
+    ? { usedBytes: zone.usedBytes, maxBytes: zone.maxBytes, measuredAt: zone.measuredAt }
+    : null;
+}
+
+/**
+ * Sets the node's own cache zone size (null: the cluster's), publishes the
+ * cluster (only this node's nginx.conf changes; cache-zone-v1 while a node
+ * has its own size) and audits the change.
+ */
+export async function setNodeCache(
+  db: Database,
+  input: { id: string; maxSizeGb: number | null },
+  actor: Actor,
+): Promise<Node> {
+  return db.transaction(async (tx) => {
+    const row = await findNode(tx, input.id);
+    await tx
+      .update(schema.node)
+      .set({ cacheMaxSizeGb: input.maxSizeGb })
+      .where(eq(schema.node.id, row.id));
+    const { row: revision } = await publishRevision(tx, {
+      clusterId: row.clusterId,
+      reason: { code: "node_cache_updated", params: { node: row.name } },
+      actor,
+    });
+    await recordAudit(tx, actor, {
+      action: "node.cache_update",
+      targetType: "node",
+      targetId: row.id,
+      targetName: row.name,
+      metadata: { from: row.cacheMaxSizeGb, to: input.maxSizeGb, revision: revision.revision },
+    });
+    return getNode(tx, row.id);
   });
 }
 

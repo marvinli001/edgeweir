@@ -424,6 +424,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification, HTTP version towards the origins and gRPC, active health check and session affinity (kept while off) |
 | `origin` | Origins and their origin group (empty for the default group) |
 | `origin_credential` | S3 origin keys, envelope-encrypted |
+| `site_secret` | Other site secrets (the PURGE method's key), envelope-encrypted, delivered over the node channel only |
 | `cache_rule` | Cache rules: condition expression and list references, status and size conditions, action, edge and browser TTLs |
 | `edge_rule` | Site or global rules: phase, expression, action, list references |
 | `bulk_redirect` | A site's bulk redirects: source (path or domain plus path, unique per site), target, status code, whether the query string is kept, order |
@@ -543,6 +544,7 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0051_node_last_auth_error` | `node.last_auth_error`, `last_auth_error_at` (why the node channel last refused the node's own certificate, e.g. `CERT_HAS_EXPIRED`) |
 | `0052_retention_indexes` | Indexes: `alert_event (occurred_at, ordinal)`; `security_event (received_at)`, site level events above normal only; `cache_task_node (node_id)`, failed and skipped deliveries not made up only |
 | `0053_origin_protocol` | `origin_pool.protocol` (HTTP version towards the origins, `http1` or `http2`), `origin_pool.grpc` (gRPC proxied over HTTP/2 end to end) |
+| `0054_site_content` | `site_secret`; `cluster.cache_max_size_gb`, `cluster.cache_inactive_days` (cache zone); `node.cache_max_size_gb` (node size override), `node.cache_usage` (reported usage); `site.hide_x_cache`, `site.purge_method`, `site.maintenance`, `site.maintenance_updated_at`, `site.charset`, `site.request_body_limit`; `origin_pool.tries`, `origin_pool.status_retry`; `cache_rule.cache_set_cookie`; `site_error_page.redirect_url`, `site_error_page.response_status` |
 
 ## Build output
 

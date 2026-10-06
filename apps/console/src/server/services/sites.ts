@@ -37,6 +37,8 @@ import { fail } from "../lib/errors";
 import { assertHostHeader } from "../lib/host-header";
 import { lockDomains, lockStats } from "../lib/locks";
 import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings";
+import { readContentSettings } from "../lib/site-content";
+import { PURGE_KEY, siteSecret, storeSiteSecret } from "../lib/site-secrets";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { coverSiteDomains } from "./certificates";
@@ -60,6 +62,7 @@ type OriginInput = SiteCreate["origins"][number];
 type CacheRuleInput = SiteCreate["cacheRules"][number];
 type OriginSettingsInput = SiteCreate["originSettings"];
 type CacheSettingsInput = SiteCreate["cacheSettings"];
+type ContentSettingsInput = SiteCreate["contentSettings"];
 
 /** Envelope binding of an S3 secret access key: the column and the credential row (AAD). */
 export const S3_SECRET_PURPOSE = "origin_credential.secret_envelope";
@@ -110,6 +113,10 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
     .from(schema.originCredential)
     .where(inArray(schema.originCredential.siteId, ids));
   const deliveries = await siteDeliveries(db, rows);
+  const purgeKeys = await db
+    .select({ siteId: schema.siteSecret.siteId })
+    .from(schema.siteSecret)
+    .where(and(inArray(schema.siteSecret.siteId, ids), eq(schema.siteSecret.kind, PURGE_KEY)));
   return rows.map((r) => {
     const sitePools = pools
       .filter((p) => p.siteId === r.id)
@@ -174,6 +181,7 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
             staleIfErrorSeconds: c.staleIfErrorSeconds,
             cacheAuthorized: c.cacheAuthorized,
             browserTtlSeconds: c.browserTtlSeconds,
+            cacheSetCookie: c.cacheSetCookie,
           };
         }),
       originSettings: {
@@ -192,12 +200,20 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
         grpc: pool?.grpc ?? false,
         activeHealthCheck: readActiveHealthCheck(pool?.activeHealthCheck),
         sessionAffinity: readSessionAffinity(pool?.sessionAffinity),
+        tries: pool?.tries ?? 3,
+        statusRetry: pool?.statusRetry ?? true,
       },
       cacheSettings: {
         cacheKey: readCacheKey(r.cacheKey),
         rangeSlice: r.rangeSlice,
         keepCacheTag: r.keepCacheTag,
+        xCache: !r.hideXCache,
+        purgeMethod: {
+          enabled: r.purgeMethod,
+          keySet: purgeKeys.some((k) => k.siteId === r.id),
+        },
       },
+      contentSettings: readContentSettings(r),
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
@@ -444,17 +460,62 @@ function poolSettingsValues(
     ...(settings.grpc !== undefined ? { grpc: settings.grpc } : {}),
     ...(settings.activeHealthCheck ? { activeHealthCheck: settings.activeHealthCheck } : {}),
     ...(settings.sessionAffinity ? { sessionAffinity: settings.sessionAffinity } : {}),
+    tries: settings.tries,
+    statusRetry: settings.statusRetry,
   };
 }
 
-/** Site columns of the cache settings; keepCacheTag only when given (kept otherwise). */
+/**
+ * Site columns of the cache settings; keepCacheTag, xCache and the PURGE
+ * method only when given (kept otherwise).
+ */
 function cacheSettingsValues(
-  settings: Omit<CacheSettingsInput, "keepCacheTag"> & { keepCacheTag?: boolean },
+  settings: Omit<CacheSettingsInput, KeptCacheSettings> &
+    Partial<Pick<CacheSettingsInput, KeptCacheSettings>>,
 ) {
   return {
     cacheKey: settings.cacheKey,
     rangeSlice: settings.rangeSlice,
     ...(settings.keepCacheTag !== undefined ? { keepCacheTag: settings.keepCacheTag } : {}),
+    ...(settings.xCache !== undefined ? { hideXCache: !settings.xCache } : {}),
+    ...(settings.purgeMethod !== undefined ? { purgeMethod: settings.purgeMethod.enabled } : {}),
+  };
+}
+type KeptCacheSettings = "keepCacheTag" | "xCache" | "purgeMethod";
+
+/**
+ * Stores a new PURGE key when given; turning the method on needs one
+ * (PURGE_KEY_REQUIRED). The key never enters audit entries or responses.
+ */
+async function writePurgeKey(
+  tx: Tx,
+  masterKey: MasterKey,
+  siteId: string,
+  purge: CacheSettingsInput["purgeMethod"] | undefined,
+): Promise<boolean> {
+  if (!purge) return false;
+  if (purge.key) await storeSiteSecret(tx, masterKey, siteId, PURGE_KEY, purge.key);
+  else if (purge.enabled && !(await siteSecret(tx, siteId, PURGE_KEY)))
+    fail("PURGE_KEY_REQUIRED", "the PURGE method needs a key");
+  return purge.key !== undefined;
+}
+
+/** The cache settings as audited: the PURGE key only as "changed". */
+function auditedCacheSettings(
+  settings: Partial<Pick<CacheSettingsInput, "purgeMethod">> & Record<string, unknown>,
+) {
+  const { purgeMethod, ...rest } = settings;
+  return purgeMethod
+    ? { ...rest, purgeMethod: { enabled: purgeMethod.enabled, keyChanged: !!purgeMethod.key } }
+    : rest;
+}
+
+/** Site columns of the content settings. */
+function contentSettingsValues(settings: ContentSettingsInput) {
+  const { name, force, uppercase } = settings.charset;
+  return {
+    charset: name === "off" ? {} : { name, force, uppercase },
+    requestBodyLimit: settings.requestBodyLimit,
   };
 }
 
@@ -476,6 +537,7 @@ const CACHE_RULE_FIELDS = [
   "staleIfErrorSeconds",
   "cacheAuthorized",
   "browserTtlSeconds",
+  "cacheSetCookie",
 ] as const;
 
 /**
@@ -529,6 +591,7 @@ async function replaceCacheRules(tx: Tx, site: { id: string }, rules: CacheRuleI
     staleIfErrorSeconds: r.staleIfErrorSeconds,
     cacheAuthorized: r.cacheAuthorized,
     browserTtlSeconds: r.browserTtlSeconds,
+    cacheSetCookie: r.cacheSetCookie,
   }));
   const content = (rule: Partial<Record<(typeof CACHE_RULE_FIELDS)[number], unknown>>) =>
     JSON.stringify(CACHE_RULE_FIELDS.map((field) => rule[field]));
@@ -628,9 +691,11 @@ export async function createSite(
         name,
         websocket: input.originSettings.websocket,
         ...cacheSettingsValues(input.cacheSettings),
+        ...contentSettingsValues(input.contentSettings),
       })
       .returning();
     if (!siteRow) throw new Error("site insert failed");
+    await writePurgeKey(tx, ctx.masterKey, siteRow.id, input.cacheSettings.purgeMethod);
     await tx
       .insert(schema.siteDomain)
       .values(domains.map((d, i) => ({ siteId: siteRow.id, createdAt: ordered(i), ...d })));
@@ -644,7 +709,11 @@ export async function createSite(
     const revision = await publishSiteChange(tx, ctx.actor, siteRow, {
       reason: "site_created",
       action: "site.create",
-      metadata: { name, domains: input.domains },
+      metadata: {
+        name,
+        domains: input.domains,
+        ...(input.cacheSettings.purgeMethod.enabled ? { purgeMethod: true } : {}),
+      },
     });
     return { site: await toSiteDto(tx, siteRow), revision };
   });
@@ -709,11 +778,19 @@ export async function updateSite(
       changed.push("originSettings");
     }
     if (input.cacheSettings) {
+      await writePurgeKey(tx, ctx.masterKey, row.id, input.cacheSettings.purgeMethod);
       await tx
         .update(schema.site)
         .set(cacheSettingsValues(input.cacheSettings))
         .where(eq(schema.site.id, row.id));
       changed.push("cacheSettings");
+    }
+    if (input.contentSettings) {
+      await tx
+        .update(schema.site)
+        .set(contentSettingsValues(input.contentSettings))
+        .where(eq(schema.site.id, row.id));
+      changed.push("contentSettings");
     }
     if (input.cacheRules) {
       await replaceCacheRules(tx, row, input.cacheRules);
@@ -738,7 +815,10 @@ export async function updateSite(
           : {}),
         ...(input.cacheRules ? { cacheRules: input.cacheRules.length } : {}),
         ...(input.originSettings ? { originSettings: input.originSettings } : {}),
-        ...(input.cacheSettings ? { cacheSettings: input.cacheSettings } : {}),
+        ...(input.cacheSettings
+          ? { cacheSettings: auditedCacheSettings(input.cacheSettings) }
+          : {}),
+        ...(input.contentSettings ? { contentSettings: input.contentSettings } : {}),
       },
     });
     return {
