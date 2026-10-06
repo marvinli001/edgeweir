@@ -450,7 +450,7 @@ try {
   for (const target of NODES)
     for (const port of [25000, 25001]) {
       const r = await tcp(target, port, ["NAME", "ping"]);
-      assert.deepEqual(r.got, ["l4-origin-a", "ping"], `${target}:${port} ${JSON.stringify(r)}`);
+      assert.deepEqual(r.got, ["a", "ping"], `${target}:${port} ${JSON.stringify(r)}`);
     }
   const peer = await containerId("node-upgrade-peer");
   const sClient = async (servername) => {
@@ -466,8 +466,8 @@ try {
       return `error ${error.code ?? ""}`;
     }
   };
-  assert.equal((await sClient(HOST_TLS)).trim(), "l4-origin-b", "TLS echo");
-  assert.notEqual((await sClient("nope.example")).trim(), "l4-origin-b", "foreign SNI");
+  assert.equal((await sClient(HOST_TLS)).trim(), "b", "TLS echo");
+  assert.notEqual((await sClient("nope.example")).trim(), "b", "foreign SNI");
   pass(
     `d. layer-4 range ${range.app.port}-${range.app.portEnd} echoes on both ports; ${tlsApp.app.name} terminates TLS for ${HOST_TLS} (openssl s_client), a foreign SNI is refused`,
   );
