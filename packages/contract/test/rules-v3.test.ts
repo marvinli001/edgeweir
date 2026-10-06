@@ -94,7 +94,7 @@ describe("rules-v3 actions", () => {
         setQuery: [{ name: "a", value: "1", expression: '"2"' }],
       }).success,
     ).toBe(false);
-    expect(ruleAction.parse({ kind: "redirect", value: "/a" }).statusCode).toBe(301);
+    expect(ruleAction.parse({ kind: "redirect", value: "/a" })).toMatchObject({ statusCode: 301 });
   });
   it("lists the error page placeholders, {{time}} and {{path}} needing rules-v3", () => {
     expect(ERROR_PAGE_PLACEHOLDERS).toEqual([
