@@ -1131,11 +1131,17 @@ function QueryValue({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className="flex min-w-0 items-center gap-2">
-        <ValueModeTabs
-          mode={mode}
-          expressionDisabled={lockedV3}
-          testId="rule-set-query-mode"
+        <OptionSelect
+          value={mode}
+          // A select rather than tabs: the row's target already has static / expression tabs.
+          options={[
+            { value: "static" as const, label: m.rules_target_static() },
+            ...(lockedV3 && mode === "static"
+              ? []
+              : [{ value: "expression" as const, label: m.rules_target_expression() }]),
+          ]}
           onChange={(next) => {
+            if (next === mode) return;
             onChange(
               next === "expression"
                 ? { value: "", expression: param.value ? JSON.stringify(param.value) : "http.host" }
@@ -1143,6 +1149,10 @@ function QueryValue({
             );
             setMode(next);
           }}
+          label={m.rules_value_mode()}
+          size="sm"
+          className="w-24 shrink-0"
+          testId="rule-set-query-mode"
         />
         {mode === "expression" ? (
           <Input
