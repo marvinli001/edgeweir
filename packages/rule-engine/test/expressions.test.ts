@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   actionPhases,
@@ -8,11 +9,13 @@ import {
   ExpressionError,
   type ExpressionErrorCode,
   evaluate,
+  evaluateHeaderValue,
   evaluateValue,
   expressionErrorCodes,
   expressionErrorDefs,
   isRateLimitKey,
   needsRulesV2,
+  needsRulesV3,
   type Phase,
   parseExpression,
   parseValueExpression,
@@ -21,6 +24,7 @@ import {
   usesGeo,
   usesJa4,
   validActionIr,
+  validExpressionIr,
   validRedirectTarget,
   wildcardSegments,
 } from "../src/index";
@@ -293,5 +297,122 @@ describe("expression error codes", () => {
       expect(error.message, code).not.toMatch(/\{\w+\}/);
       expect(error.at(7)).toMatchObject({ code, position: 7, params, message: error.message });
     }
+  });
+});
+
+describe("rules-v3 fields, functions, wildcard comparisons and header values", () => {
+  const failure = (parse: () => unknown) => {
+    try {
+      parse();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExpressionError);
+      return error as ExpressionError;
+    }
+    throw new Error("accepted");
+  };
+  it.each([
+    ['http.request.cookies["a b"] eq ""', "cookie_name", 21, {}],
+    ["http.request.cookies.a=b eq 1", "cookie_name", 0, {}],
+    ['http.request.uri.args["a&b"] eq ""', "argument_name", 22, {}],
+    ['http.request.uri.args["x"] eq ""', undefined, 0, {}],
+    ['http.host wildcard "a\\\\b"', "wildcard_escape", 21, {}],
+    ['http.host strict contains "a"', "expected_token", 17, { token: "wildcard" }],
+    ['ip.src wildcard "1*"', "string_operator", 7, {}],
+    ['substring(http.host, "1") eq ""', "integer_argument", 21, { min: "-65536", max: "65536" }],
+    ['substring(http.host, 0, -1) eq ""', "integer_argument", 24, { min: "0", max: "65536" }],
+    ['substring(http.host, 01) eq ""', "integer_argument", 21, { min: "-65536", max: "65536" }],
+    ['md5(ip.src) eq ""', "argument_not_string", 4, {}],
+    ['http.response.cache_status eq "HIT"', "response_field", 0, {}],
+  ] as const)("parses %s (%s)", (source, code, position, params) => {
+    if (!code) {
+      expect(parseExpression(source).field).toBe("http.request.uri.args.x");
+      return;
+    }
+    expect(failure(() => parseExpression(source))).toMatchObject({ code, position, params });
+  });
+  it("keeps cookie and parameter names as written and lowercases nothing else", () => {
+    expect(parseExpression('http.request.cookies["Session_ID"] eq "x"').field).toBe(
+      "http.request.cookies.Session_ID",
+    );
+    expect(parseExpression('http.request.uri.args["utm[Source]"] ne ""').field).toBe(
+      "http.request.uri.args.utm[Source]",
+    );
+    expect(parseExpression('http.request.headers["X-A"] eq ""').field).toBe(
+      "http.request.headers.x-a",
+    );
+  });
+  it("compiles integer arguments as number constants and to_string over any type", () => {
+    const e = parseValueExpression("substring(http.host, -0, 3)", "redirect");
+    expect(e.children.slice(1)).toEqual([
+      expect.objectContaining({ op: "const", valueType: "number", value: "0" }),
+      expect.objectContaining({ op: "const", valueType: "number", value: "3" }),
+    ]);
+    for (const field of ["ip.src", "ssl", "ip.geoip.asnum", "http.host"])
+      expect(parseValueExpression(`to_string(${field})`, "redirect").valueType).toBe("string");
+    expect(validExpressionIr(e, "redirect", true)).toBe(true);
+  });
+  it("needs rules-v3 only for the new fields, functions, comparisons and integers", () => {
+    const v3 = (source: string, phase: Phase = "waf-custom") =>
+      needsRulesV3(parseExpression(source, phase));
+    expect(v3('http.user_agent wildcard "*bot*"')).toBe(true);
+    expect(v3('http.request.cookies["a"] eq "b"')).toBe(true);
+    expect(v3('http.request.uri.args["a"] eq "b"')).toBe(true);
+    expect(v3('md5(http.host) eq ""')).toBe(true);
+    expect(v3('http.response.cache_status eq "HIT"', "response-transform")).toBe(true);
+    expect(v3('ip.geoip.as_name eq ""')).toBe(true);
+    expect(v3('http.request.headers["user-agent"] contains "bot"')).toBe(false);
+    expect(v3('lower(http.host) eq "a"')).toBe(false);
+    expect(needsRulesV2(parseExpression('http.user_agent wildcard "*bot*"'))).toBe(false);
+    expect(usesGeo(parseExpression('ip.geoip.as_name eq ""'))).toBe(true);
+  });
+  it("computes MD5, SHA-1 and SHA-256 like node:crypto across block boundaries", () => {
+    for (const length of [0, 1, 55, 56, 63, 64, 65, 119, 120, 128, 1000]) {
+      // Printable ASCII with a three-byte character every 20 positions (valid UTF-8).
+      const text = Array.from({ length }, (_, i) =>
+        i % 20 === 19 ? "中" : String.fromCharCode(32 + ((i * 37) % 95)),
+      ).join("");
+      for (const name of ["md5", "sha1", "sha256"] as const) {
+        const want = createHash(name).update(text, "utf8").digest("hex");
+        const e = parseValueExpression(`${name}(http.host)`, "redirect");
+        expect(evaluateValue(e, { "http.host": text }), `${name} ${length}`).toBe(want);
+      }
+    }
+  });
+  it("skips header values that are too long or carry control characters", () => {
+    const e = parseValueExpression('http.request.headers["x"]', "request-transform");
+    expect(evaluateHeaderValue(e, { "http.request.headers.x": "ok" })).toBe("ok");
+    expect(evaluateHeaderValue(e, { "http.request.headers.x": "a\u0000b" })).toBeNull();
+    expect(evaluateHeaderValue(e, { "http.request.headers.x": "a".repeat(4097) })).toBeNull();
+  });
+  it("accepts header targets, response header lines, 303 and computed query parameters", () => {
+    const target = parseValueExpression("http.request.id", "origin");
+    expect(validActionIr("origin", { kind: "request_header", header: "x-req", target })).toBe(true);
+    expect(
+      validActionIr("request-transform", {
+        kind: "request_header",
+        header: "x-req",
+        target,
+        append: true,
+      }),
+    ).toBe(false);
+    expect(
+      validActionIr("response-transform", {
+        kind: "response_header",
+        header: "link",
+        value: "<a>",
+        append: true,
+      }),
+    ).toBe(true);
+    expect(validActionIr("redirect", { kind: "redirect", value: "/a", statusCode: 303 })).toBe(
+      true,
+    );
+    expect(
+      validActionIr("redirect", {
+        kind: "redirect",
+        value: "/a",
+        statusCode: 302,
+        setQuery: [{ name: "n", value: "", expression: target }],
+      }),
+    ).toBe(true);
   });
 });

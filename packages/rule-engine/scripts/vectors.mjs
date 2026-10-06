@@ -1,16 +1,20 @@
-// node --experimental-transform-types scripts/vectors.mjs writes test/vectors.json; copy it to
+// node scripts/vectors.mjs (Node >= 24 strips the types) writes test/vectors.json; copy it to
 // edgeweir-node test/lua/expression-vectors.json, then `pnpm exec biome format --write` this copy.
+import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
 import {
   bindLists,
   cacheConditionExpression,
+  cookieValue,
   evaluate,
+  evaluateHeaderValue,
   evaluateValue,
   mediaType,
   parseExpression,
   parseValueExpression,
   pathExtension,
+  queryArgValue,
   structuredCacheCondition,
   structuredCacheMatch,
   validActionIr,
@@ -996,16 +1000,608 @@ const derived = [
   ["media_type", "", ""],
   ["media_type", "image/svg+xml", "image/svg+xml"],
 ];
+
+// ---- rules-v3 (site parity G8) ----
+const hash = (algorithm, text) => createHash(algorithm).update(text).digest("hex");
+const cookie = (name, value) => ({ [`http.request.cookies.${name}`]: value });
+const arg = (name, value) => ({ [`http.request.uri.args.${name}`]: value });
+const at = (p) => ({ "http.request.uri.path": p });
+// Conditions with the rules-v3 fields, functions and wildcard comparisons.
+function v3Cases() {
+  return [
+    ['http.request.cookies["role"] eq "admin"', cookie("role", "admin"), true],
+    ['http.request.cookies["role"] eq "admin"', {}, false],
+    ['http.request.cookies["role"] eq ""', {}, true],
+    ['http.request.cookies["Role"] eq "admin"', cookie("role", "admin"), false],
+    ['http.request.cookies.session ne ""', cookie("session", "abc"), true],
+    ['http.request.uri.args["next"] eq "/home"', arg("next", "/home"), true],
+    ['http.request.uri.args["next"] eq "/home"', arg("next", "%2Fhome"), false],
+    ['url_decode(http.request.uri.args["next"]) eq "/home"', arg("next", "%2Fhome"), true],
+    ['http.request.uri.args["a[]"] eq "1"', arg("a[]", "1"), true],
+    ['http.request.uri.args["page"] eq ""', {}, true],
+    [
+      'http.referer wildcard "https://*.example.test/*"',
+      { "http.referer": "https://www.Example.TEST/a" },
+      true,
+    ],
+    [
+      'http.referer strict wildcard "https://*.example.test/*"',
+      { "http.referer": "https://www.Example.TEST/a" },
+      false,
+    ],
+    ['http.referer wildcard "https://*.example.test/*"', {}, false],
+    ['http.user_agent wildcard "*curl*"', { "http.user_agent": "curl/8.10.1" }, true],
+    ['http.user_agent wildcard "*CURL*"', { "http.user_agent": "curl/8.10.1" }, true],
+    ['http.user_agent strict wildcard "*CURL*"', { "http.user_agent": "curl/8.10.1" }, false],
+    ['http.user_agent strict wildcard "curl/*"', { "http.user_agent": "curl/8.10.1" }, true],
+    ['http.user_agent wildcard "*curl*"', {}, false],
+    ['http.user_agent wildcard "*"', {}, true],
+    ['http.user_agent wildcard ""', {}, true],
+    ['http.request.uri.path wildcard "/a\\\\*b"', at("/a*b"), true],
+    ['http.request.uri.path wildcard "/a\\\\*b"', at("/axb"), false],
+    ['http.request.uri.path wildcard "/a\\\\\\\\b"', at("/a\\b"), true],
+    ['http.request.uri.path wildcard "/*/*/*"', at("/a/b"), false],
+    ['http.request.uri.path wildcard "/*/*"', at("/a/b/c"), true],
+    ['http.request.uri.path wildcard "/*.JS"', at("/app.min.js"), true],
+    ['http.request.uri.path wildcard "/中*"', at("/中文"), true],
+    ['http.request.uri.path wildcard "/É*"', at("/é"), false],
+    ['http.request.uri.path wildcard "/a*a"', at("/a"), false],
+    ['http.request.uri.path wildcard "/a*a"', at("/aa"), true],
+    ['http.request.uri.path wildcard "*/x/*/y*"', at("/x/x/y/y"), true],
+    ['not http.request.uri.path wildcard "/admin/*"', at("/public"), true],
+    ['lower(http.host) strict wildcard "*.example.test"', { "http.host": "A.Example.Test" }, true],
+    ['http.request.version eq "HTTP/2.0"', { "http.request.version": "HTTP/2.0" }, true],
+    [
+      'http.request.version in {"HTTP/1.0" "HTTP/1.1"}',
+      { "http.request.version": "HTTP/3.0" },
+      false,
+    ],
+    ['http.request.scheme eq "https"', { "http.request.scheme": "https" }, true],
+    ['http.request.id eq "4c1d6f0e9a2b"', { "http.request.id": "4c1d6f0e9a2b" }, true],
+    [
+      "http.request.timestamp.sec ge 1700000000",
+      { "http.request.timestamp.sec": 1791331200 },
+      true,
+    ],
+    ["http.request.timestamp.sec lt 1700000000", {}, true],
+    ["edge.server_port eq 8443", { "edge.server_port": 8443 }, true],
+    ["edge.server_port in {80 443}", { "edge.server_port": 8080 }, false],
+    ['ip.geoip.as_name contains "Cloudflare"', { "ip.geoip.as_name": "Cloudflare, Inc." }, true],
+    ['ip.geoip.as_name eq ""', {}, true],
+    [
+      'http.response.cache_status eq "HIT"',
+      { "http.response.cache_status": "HIT" },
+      true,
+      "response-transform",
+    ],
+    [
+      'http.response.cache_status in {"MISS" "EXPIRED"}',
+      { "http.response.cache_status": "STALE" },
+      false,
+      "compression",
+    ],
+    ['http.response.cache_status eq ""', {}, true, "response-transform"],
+    [`md5(http.request.uri.path) eq "${hash("md5", "/a")}"`, at("/a"), true],
+    [`sha1(http.request.uri.path) eq "${hash("sha1", "/中")}"`, at("/中"), true],
+    [
+      `sha256(http.request.uri.path) eq "${hash("sha256", "/a".repeat(100))}"`,
+      at("/a".repeat(100)),
+      true,
+    ],
+    ['len(sha256("")) eq 64', {}, true],
+    ['base64_decode(http.request.cookies["t"]) eq "user:1"', cookie("t", "dXNlcjox"), true],
+    ['base64_decode(http.request.uri.args["t"]) eq ""', arg("t", "!!!!"), true],
+    ['len(base64_decode("-_8")) eq 2', {}, true],
+    ['base64_encode(base64_decode("-_8")) eq "+/8="', {}, true],
+    ['len(substring("中文", 1)) eq 5', {}, true],
+    ['substring(http.request.uri.path, 0, 4) eq "/api"', at("/api/v1"), true],
+    ['substring(http.request.uri.path, -3) eq ".js"', at("/a.js"), true],
+    ['to_string(ip.geoip.asnum) eq "13335"', { "ip.geoip.asnum": 13335 }, true],
+    ['starts_with(to_string(ip.src), "192.0.2.")', { "ip.src": "192.0.2.7" }, true],
+    ['to_string(ssl) eq "false"', {}, true],
+    ['url_encode(http.request.uri.path) eq "%2Fa%20b"', at("/a b"), true],
+    [
+      'to_string(http.request.timestamp.sec) matches "^[0-9]+$"',
+      { "http.request.timestamp.sec": 1791331200 },
+      true,
+    ],
+  ];
+}
+// Value expressions with the rules-v3 functions (redirect targets and the like).
+function v3ValueCases() {
+  return [
+    ['url_encode("a b/é~-._")', {}, "a%20b%2F%C3%A9~-._"],
+    ['url_encode(http.request.uri.args["q"])', arg("q", "x y&z"), "x%20y%26z"],
+    ['base64_encode("hello")', {}, "aGVsbG8="],
+    ['base64_encode("中")', {}, "5Lit"],
+    ['base64_encode("")', {}, ""],
+    ['base64_decode("aGVsbG8=")', {}, "hello"],
+    ['base64_decode("aGVsbG8")', {}, "hello"],
+    ['base64_decode("5Lit")', {}, "中"],
+    ['base64_decode("aGk_Pz8-")', {}, "hi???>"],
+    ['base64_decode("aGk/Pz8+")', {}, "hi???>"],
+    ['base64_decode("aGVsbG8=x")', {}, ""],
+    ['base64_decode("aGVsbG8===")', {}, ""],
+    ['base64_decode("aGVsbA=")', {}, ""],
+    ['base64_decode("a")', {}, ""],
+    ['base64_decode("aGVs bG8=")', {}, ""],
+    ['base64_decode("aGVs*G8=")', {}, ""],
+    ['base64_decode("=")', {}, ""],
+    ['base64_decode("QR==")', {}, "A"],
+    ['base64_decode("")', {}, ""],
+    ['md5("")', {}, hash("md5", "")],
+    ['md5("中")', {}, hash("md5", "中")],
+    ['sha1("abc")', {}, hash("sha1", "abc")],
+    ['sha256(concat(http.request.uri.path, "secret"))', at("/a"), hash("sha256", "/asecret")],
+    [`md5("${"x".repeat(1000)}")`, {}, hash("md5", "x".repeat(1000))],
+    ['substring("hello", 1, 3)', {}, "ell"],
+    ['substring("hello", -2)', {}, "lo"],
+    ['substring("hello", -10, 2)', {}, "he"],
+    ['substring("hello", 5)', {}, ""],
+    ['substring("hello", 10, 2)', {}, ""],
+    ['substring("hello", 0, 0)', {}, ""],
+    ['substring("hello", 2, 100)', {}, "llo"],
+    ['substring("hello", -0)', {}, "hello"],
+    ['substring("中文", 0, 3)', {}, "中"],
+    ['substring("中文", -3)', {}, "文"],
+    ["to_string(ip.src)", { "ip.src": "2001:db8::1" }, "2001:db8::1"],
+    ["to_string(ip.geoip.asnum)", {}, "0"],
+    [
+      "to_string(http.request.timestamp.sec)",
+      { "http.request.timestamp.sec": 1791331200 },
+      "1791331200",
+    ],
+    ["to_string(ssl)", { ssl: true }, "true"],
+    ['to_string(starts_with(http.request.uri.path, "/a"))', at("/ab"), "true"],
+    ["to_string(len(http.request.uri.path))", at("/abc"), "4"],
+    ['to_string("x")', {}, "x"],
+    [
+      'concat(http.request.scheme, "://", http.host, "/", http.request.id)',
+      { "http.request.scheme": "https", "http.host": "example.test", "http.request.id": "r1" },
+      "https://example.test/r1",
+    ],
+    ['http.request.uri.args["next"]', arg("next", "/home?a=1"), "/home?a=1"],
+    [
+      'concat("/login?next=", url_encode(http.request.uri.args["next"]))',
+      arg("next", "/a b"),
+      "/login?next=%2Fa%20b",
+    ],
+    ['concat("/u/", http.request.cookies["user"])', cookie("user", "中"), "/u/中"],
+  ];
+}
+// Header values (rules-v3): the value set, or null when the node skips the header action.
+function v3HeaderCases() {
+  return [
+    ["http.request.id", { "http.request.id": "req-1" }, "req-1", "request-transform"],
+    ["ip.geoip.country", { "ip.geoip.country": "NZ" }, "NZ", "origin"],
+    [
+      'concat("<", http.request.uri.path, ">; rel=preload")',
+      at("/a.css"),
+      "</a.css>; rel=preload",
+      "response-transform",
+    ],
+    [
+      "http.response.cache_status",
+      { "http.response.cache_status": "HIT" },
+      "HIT",
+      "response-transform",
+    ],
+    ["http.response.cache_status", {}, "", "response-transform"],
+    ['http.request.cookies["missing"]', {}, "", "origin"],
+    ['url_decode(http.request.uri.args["v"])', arg("v", "a%0Ab"), null, "request-transform"],
+    ['url_decode(http.request.uri.args["v"])', arg("v", "a%7Fb"), null, "request-transform"],
+    ['url_decode(http.request.uri.args["v"])', arg("v", "a%09b"), null, "request-transform"],
+    ['url_decode(http.request.uri.args["v"])', arg("v", "a%20b"), "a b", "request-transform"],
+    [
+      'http.request.headers["x-long"]',
+      { "http.request.headers.x-long": "a".repeat(4097) },
+      null,
+      "request-transform",
+    ],
+    [
+      'http.request.headers["x-long"]',
+      { "http.request.headers.x-long": "a".repeat(4096) },
+      "a".repeat(4096),
+      "origin",
+    ],
+    [
+      'http.request.headers["x-u"]',
+      { "http.request.headers.x-u": "中".repeat(1366) },
+      null,
+      "origin",
+    ],
+    [
+      'http.request.headers["x-u"]',
+      { "http.request.headers.x-u": "中".repeat(1365) },
+      "中".repeat(1365),
+      "origin",
+    ],
+    [
+      'concat(http.request.headers["x-a"], http.request.headers["x-b"])',
+      {
+        "http.request.headers.x-a": "a".repeat(5000),
+        "http.request.headers.x-b": "b".repeat(4000),
+      },
+      null,
+      "request-transform",
+    ],
+    [
+      'base64_encode(http.request.headers["x-a"])',
+      { "http.request.headers.x-a": "a".repeat(3072) },
+      "YWFh".repeat(1024),
+      "origin",
+    ],
+    [
+      'base64_encode(http.request.headers["x-a"])',
+      { "http.request.headers.x-a": "a".repeat(3073) },
+      null,
+      "origin",
+    ],
+  ];
+}
+// Rules-v3 actions with conditions: computed header values, response header lines, 303
+// redirects and computed query parameters.
+function v3ActionCases() {
+  const pv = parseValueExpression;
+  return [
+    [
+      "true",
+      {},
+      true,
+      "origin",
+      {
+        kind: "request_header",
+        header: "x-client-country",
+        target: pv("ip.geoip.country", "origin"),
+      },
+    ],
+    [
+      "true",
+      {},
+      true,
+      "request-transform",
+      {
+        kind: "request_header",
+        header: "x-req",
+        target: pv("http.request.id", "request-transform"),
+      },
+    ],
+    [
+      "true",
+      {},
+      true,
+      "response-transform",
+      { kind: "response_header", header: "link", value: "</a.css>; rel=preload", append: true },
+    ],
+    [
+      "true",
+      {},
+      true,
+      "response-transform",
+      {
+        kind: "response_header",
+        header: "x-cache-status",
+        target: pv("http.response.cache_status", "response-transform"),
+        append: true,
+      },
+    ],
+    [
+      'http.request.uri.path eq "/login"',
+      at("/login"),
+      true,
+      "redirect",
+      {
+        kind: "redirect",
+        value: "/signin",
+        statusCode: 303,
+        setQuery: [
+          { name: "next", value: "", expression: pv('http.request.uri.args["next"]', "redirect") },
+        ],
+      },
+    ],
+    [
+      "true",
+      {},
+      true,
+      "request-transform",
+      {
+        kind: "rewrite",
+        value: "/b",
+        setQuery: [
+          { name: "a", value: "1" },
+          {
+            name: "sig",
+            value: "",
+            expression: pv("md5(http.request.uri.path)", "request-transform"),
+          },
+        ],
+      },
+    ],
+  ];
+}
+// Rules-v3 expressions the console refuses together with the IR nodes must refuse.
+const n3 = (op, field, value, valueType = "string", children = []) =>
+  n(op, { field, value, valueType, children });
+const num = (value) => n("const", { valueType: "number", value });
+const rejectedV3Ir = [
+  [
+    'substring(http.request.uri.path, "1") eq "x"',
+    false,
+    n3("eq", "", "x", "string", [call("substring", "string", PATH, c("1"))]),
+    "substring takes integers",
+  ],
+  [
+    'substring(http.request.uri.path, 70000) eq ""',
+    false,
+    n3("eq", "", "", "string", [call("substring", "string", PATH, num("70000"))]),
+    "start out of range",
+  ],
+  [
+    'substring(http.request.uri.path, 0, -1) eq ""',
+    false,
+    n3("eq", "", "", "string", [call("substring", "string", PATH, num("0"), num("-1"))]),
+    "length is not negative",
+  ],
+  [
+    'substring(http.request.uri.path, 1.5) eq ""',
+    false,
+    n3("eq", "", "", "string", [call("substring", "string", PATH, num("1.5"))]),
+    "integers only",
+  ],
+  [
+    'substring(http.request.uri.path, http.request.uri.path) eq ""',
+    false,
+    n3("eq", "", "", "string", [call("substring", "string", PATH, PATH)]),
+    "start is a literal",
+  ],
+  [
+    'substring(http.request.uri.path) eq ""',
+    false,
+    n3("eq", "", "", "string", [call("substring", "string", PATH)]),
+    "substring needs a start",
+  ],
+  [
+    'concat(http.request.uri.path, 5) eq ""',
+    false,
+    n3("eq", "", "", "string", [call("concat", "string", PATH, num("5"))]),
+    "integers only in substring",
+  ],
+  [
+    'to_string() eq ""',
+    false,
+    n3("eq", "", "", "string", [call("to_string", "string")]),
+    "to_string takes one value",
+  ],
+  [
+    'to_string(ip.src, ip.src) eq ""',
+    false,
+    n3("eq", "", "", "string", [call("to_string", "string", f("ip.src", "ip"), f("ip.src", "ip"))]),
+    "to_string takes one value",
+  ],
+  [
+    'md5(ip.src) eq ""',
+    false,
+    n3("eq", "", "", "string", [call("md5", "string", f("ip.src", "ip"))]),
+    "md5 takes a string",
+  ],
+  [
+    'base64_decode(ssl) eq ""',
+    false,
+    n3("eq", "", "", "string", [call("base64_decode", "string", f("ssl", "boolean"))]),
+    "base64_decode takes a string",
+  ],
+  [
+    'http.request.uri.path wildcard "/a\\\\b"',
+    false,
+    n3("wildcard", "http.request.uri.path", "/a\\b"),
+    "escape only * and \\\\",
+  ],
+  [
+    `http.request.uri.path wildcard "${"*".repeat(9)}"`,
+    false,
+    n3("wildcard", "http.request.uri.path", "*".repeat(9)),
+    "at most 8 wildcards",
+  ],
+  [
+    'http.request.uri.path strict wildcard "a\\u0001"',
+    false,
+    n3("strict_wildcard", "http.request.uri.path", "a\u0001"),
+    "no control characters",
+  ],
+  [
+    `http.request.uri.path wildcard "${"a".repeat(1025)}"`,
+    false,
+    n3("wildcard", "http.request.uri.path", "a".repeat(1025)),
+    "patterns of at most 1024 bytes",
+  ],
+  [
+    'ip.geoip.asnum wildcard "1*"',
+    false,
+    n3("wildcard", "ip.geoip.asnum", "1*", "number"),
+    "wildcard compares strings",
+  ],
+  [
+    'http.request.cookies["a b"] eq ""',
+    false,
+    n3("eq", "http.request.cookies.a b", ""),
+    "cookie names are tokens",
+  ],
+  [
+    'http.request.uri.args["a&b"] eq ""',
+    false,
+    n3("eq", "http.request.uri.args.a&b", ""),
+    "parameter names exclude &",
+  ],
+  [
+    'http.request.uri.args[""] eq ""',
+    false,
+    n3("eq", "http.request.uri.args.", ""),
+    "parameter names are not empty",
+  ],
+  [
+    'http.response.cache_status eq "HIT"',
+    false,
+    n3("eq", "http.response.cache_status", "HIT"),
+    "cache status only in response phases",
+  ],
+  [
+    'http.request.uri.path strict contains "x"',
+    false,
+    n3("strict_contains", "http.request.uri.path", "x"),
+    "only wildcard is strict",
+  ],
+  [
+    "substring(http.request.uri.path)",
+    true,
+    call("substring", "string", PATH),
+    "substring needs a start",
+  ],
+  [
+    "to_string(http.request.uri.path, 1)",
+    true,
+    call("to_string", "string", PATH, num("1")),
+    "to_string takes one value",
+  ],
+];
+// Rules-v3 actions nodes refuse (the condition itself is valid).
+const rejectedV3Actions = [
+  [
+    { kind: "request_header", header: "x-a", value: "a", append: true },
+    "request-transform",
+    "append is for response headers",
+  ],
+  [
+    { kind: "response_header", header: "link", remove: true, append: true },
+    "response-transform",
+    "append adds a line",
+  ],
+  [
+    { kind: "response_header", header: "x-a", remove: true, target: c("x") },
+    "response-transform",
+    "a removed header has no value",
+  ],
+  [
+    { kind: "request_header", header: "x-a", value: "a", target: c("b") },
+    "request-transform",
+    "a static value or an expression, not both",
+  ],
+  [
+    { kind: "request_header", header: "x-a", target: call("starts_with", "boolean", PATH, c("/")) },
+    "request-transform",
+    "header values are strings",
+  ],
+  [
+    { kind: "request_header", header: "x-a", target: f("http.response.cache_status") },
+    "origin",
+    "response fields only in response phases",
+  ],
+  [
+    {
+      kind: "response_header",
+      header: "x-a",
+      target: call("regex_replace", "string", PATH, c("("), c("")),
+    },
+    "response-transform",
+    "an invalid value expression",
+  ],
+  [
+    {
+      kind: "redirect",
+      value: "/a",
+      statusCode: 303,
+      setQuery: [{ name: "a", value: "1", expression: c("2") }],
+    },
+    "redirect",
+    "a parameter has a value or an expression",
+  ],
+  [{ kind: "redirect", value: "/a", statusCode: 304 }, "redirect", "unknown redirect status"],
+  [
+    {
+      kind: "rewrite",
+      value: "/a",
+      setQuery: [{ name: "a", value: "", expression: call("len", "number", PATH) }],
+    },
+    "request-transform",
+    "parameter expressions are strings",
+  ],
+];
+const derivedV3 = [
+  ["cookie", "role=admin", "role", "admin"],
+  ["cookie", "a=1; role=admin; role=root", "role", "admin"],
+  ["cookie", "a=1;role=admin", "role", "admin"],
+  ["cookie", " role = admin ;", "role", "admin"],
+  ["cookie", "\trole=tab\t", "role", "tab"],
+  ["cookie", "Role=x; role=y", "role", "y"],
+  ["cookie", "role; role=y", "role", "y"],
+  ["cookie", "role", "role", ""],
+  ["cookie", "role=", "role", ""],
+  ["cookie", "x=role=1", "x", "role=1"],
+  ["cookie", 'q="quoted value"', "q", '"quoted value"'],
+  ["cookie", "t=a%20b", "t", "a%20b"],
+  ["cookie", "", "role", ""],
+  ["cookie", "a=1; b=2", "c", ""],
+  ["cookie", "n=中文", "n", "中文"],
+  ["cookie", "a=1, role=x", "role", ""],
+  ["cookie", "a=1, role=x", "a", "1, role=x"],
+  ["arg", "next=/home", "next", "/home"],
+  ["arg", "a=1&next=%2Fhome&next=x", "next", "%2Fhome"],
+  ["arg", "next", "next", ""],
+  ["arg", "next=", "next", ""],
+  ["arg", "next=a=b", "next", "a=b"],
+  ["arg", "Next=x&next=y", "next", "y"],
+  ["arg", "a[]=1&a[]=2", "a[]", "1"],
+  ["arg", "", "next", ""],
+  ["arg", "&&next=1", "next", "1"],
+  ["arg", "q=a+b", "q", "a+b"],
+  ["arg", "a%20b=1", "a%20b", "1"],
+  ["arg", "a%20b=1", "a b", ""],
+  ["arg", "n=中", "n", "中"],
+];
+const deriveV3 = { cookie: cookieValue, arg: queryArgValue };
 const derive = { extension: pathExtension, media_type: mediaType };
 const vectors = [
   ...cases.map(accepted),
+  ...v3Cases().map((v) => {
+    const vector = accepted(v);
+    if (evaluate(vector.ir, vector.request, vector.lists) !== vector.expected)
+      throw new Error(`v3 mismatch: ${vector.source}`);
+    return vector;
+  }),
+  ...v3ActionCases().map(accepted),
+  ...v3ValueCases().map(([source, request, expected, phase = "redirect"]) => {
+    const ir = parseValueExpression(source, phase);
+    if (evaluateValue(ir, request) !== expected) throw new Error(`value mismatch: ${source}`);
+    if (!validExpressionIr(ir, phase, true)) throw new Error(`value IR refused: ${source}`);
+    return { source, phase, request, lists: {}, ir, value: true, expected };
+  }),
+  ...v3HeaderCases().map(([source, request, expected, phase]) => {
+    const ir = parseValueExpression(source, phase);
+    if (evaluateHeaderValue(ir, request) !== expected)
+      throw new Error(`header mismatch: ${source}`);
+    if (!validExpressionIr(ir, phase, true)) throw new Error(`header IR refused: ${source}`);
+    return { source, phase, request, lists: {}, ir, value: true, header: true, expected };
+  }),
+  ...derivedV3.map(([kind, input, name, expected]) => {
+    if (deriveV3[kind](input, name) !== expected)
+      throw new Error(`derive mismatch: ${kind} ${input}`);
+    return { derive: kind, input, name, expected };
+  }),
+  ...rejectedV3Actions.map(([action, phase, reason]) => {
+    if (validActionIr(phase, action)) throw new Error(`action not rejected: ${reason}`);
+    return {
+      ...accepted(["true", {}, true, phase]),
+      action,
+      actionRejected: true,
+      reason,
+    };
+  }),
   ...valueCases().map(([source, request, expected, phase = "redirect"]) => {
     const ir = parseValueExpression(source, phase);
     if (evaluateValue(ir, request) !== expected) throw new Error(`value mismatch: ${source}`);
     if (!validExpressionIr(ir, phase, true)) throw new Error(`value IR refused: ${source}`);
     return { source, phase, request, lists: {}, ir, value: true, expected };
   }),
-  ...rejectedIr.map(([source, value, ir, reason]) => {
+  ...[...rejectedIr, ...rejectedV3Ir].map(([source, value, ir, reason]) => {
     const phase = "waf-custom";
     const valuePhase = "redirect";
     try {
