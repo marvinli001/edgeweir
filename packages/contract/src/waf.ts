@@ -154,6 +154,10 @@ export const siteFeatures = z.object({
    * status 303 and the error page placeholders {{time}} and {{path}}.
    */
   rulesV3: featureAvailability,
+  /** Ports besides 80 and 443 and the HTTPS redirect's status, port and excluded domains (edge-ports-v1). */
+  edgePorts: featureAvailability,
+  /** The rule field ip.peer (client-ip-v1). */
+  clientIp: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });

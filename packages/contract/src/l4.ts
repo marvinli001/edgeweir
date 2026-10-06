@@ -11,6 +11,15 @@ export const MAX_PORT_POOLS = 64;
 export const MAX_L4_ORIGINS = 32;
 /** Allow or block lists of one application. */
 export const MAX_L4_APP_LISTS = 16;
+/** Ports of one application's range. */
+export const MAX_L4_RANGE_PORTS = 1000;
+/** Listening ports of a cluster's applications, ranges counted in full (L4_PORT_LIMIT). */
+export const MAX_L4_PORTS_PER_CLUSTER = 2048;
+/**
+ * l4-v2: port ranges, origins on the arriving port and TLS termination of
+ * TCP applications.
+ */
+export const L4_V2_FEATURE = "l4-v2";
 /** Longest range l4Apps.stats covers: the retention of the minute statistics. */
 export const L4_STATS_MAX_RANGE_SECONDS = 7 * 86400;
 
@@ -59,12 +68,15 @@ export const clusterPortPools = z.object({
    * configurations with applications until they are upgraded.
    */
   nodesWithoutL4: z.array(z.object({ id: uuid, name: z.string() })),
+  /** Active nodes without l4-v2: port ranges, origins on the arriving port and TLS wait for them. */
+  nodesWithoutL4V2: z.array(z.object({ id: uuid, name: z.string() })),
 });
 
 export const l4OriginInput = z.object({
   /** Host name or IP literal; the origin address policy applies as for sites. */
   address: originAddress,
-  port,
+  /** Required unless the application's originPortMode is same (L4_ORIGIN_PORT_REQUIRED). */
+  port: port.optional(),
   weight: z.number().int().min(1).max(100).default(1),
   /** Used only while every other origin is down. */
   backup: z.boolean().default(false),
@@ -90,6 +102,20 @@ const fields = {
   protocol: l4Protocol,
   /** Inside a port pool of the cluster for the protocol (L4_PORT_OUTSIDE_POOL). */
   port: l4Port,
+  /**
+   * The last port of a range port..portEnd (above port, at most 1000 ports,
+   * every one inside one port pool); null: the single port.
+   */
+  portEnd: l4Port.nullable(),
+  /** fixed: each origin's port; same: the port the connection arrived on (for ranges). */
+  originPortMode: z.enum(["fixed", "same"]),
+  /**
+   * TCP only (L4_TLS_UNSUPPORTED): the node terminates TLS with this
+   * certificate (L4_CERTIFICATE_UNAVAILABLE) and forwards plain TCP; the
+   * SNI must be one of its names. null: plain TCP.
+   */
+  certificateId: uuid.nullable(),
+  tlsMinimumVersion: z.enum(["1.2", "1.3"]),
   /** TCP only: the listener expects a PROXY protocol header (v1 or v2). */
   acceptProxyProtocol: z.boolean(),
   /** TCP only: PROXY protocol version sent to the origins; 0 sends none. */
@@ -120,6 +146,10 @@ export const l4AppCreateInput = z.object({
   enabled: z.boolean().default(true),
   acceptProxyProtocol: fields.acceptProxyProtocol.default(false),
   proxyProtocolVersion: fields.proxyProtocolVersion.default(0),
+  portEnd: fields.portEnd.default(null),
+  originPortMode: fields.originPortMode.default("fixed"),
+  certificateId: fields.certificateId.default(null),
+  tlsMinimumVersion: fields.tlsMinimumVersion.default("1.2"),
   origins: fields.origins,
   maxFails: fields.maxFails.default(L4_APP_DEFAULTS.maxFails),
   failTimeoutSeconds: fields.failTimeoutSeconds.default(L4_APP_DEFAULTS.failTimeoutSeconds),
@@ -142,6 +172,10 @@ export const l4AppUpdateInput = z.object({
   port: fields.port.optional(),
   acceptProxyProtocol: fields.acceptProxyProtocol.optional(),
   proxyProtocolVersion: fields.proxyProtocolVersion.optional(),
+  portEnd: fields.portEnd.optional(),
+  originPortMode: fields.originPortMode.optional(),
+  certificateId: fields.certificateId.optional(),
+  tlsMinimumVersion: fields.tlsMinimumVersion.optional(),
   origins: fields.origins.optional(),
   maxFails: fields.maxFails.optional(),
   failTimeoutSeconds: fields.failTimeoutSeconds.optional(),
@@ -162,6 +196,7 @@ export const l4AppSetEnabledInput = z.object({
 export const l4Origin = z.object({
   id: uuid,
   address: z.string(),
+  /** 0 with originPortMode same. */
   port: z.number().int(),
   weight: z.number().int(),
   backup: z.boolean(),
@@ -178,6 +213,13 @@ export const l4App = z.object({
   enabled: z.boolean(),
   acceptProxyProtocol: z.boolean(),
   proxyProtocolVersion: z.number().int(),
+  /** The last port of the range; null: a single port. */
+  portEnd: z.number().int().nullable(),
+  originPortMode: z.enum(["fixed", "same"]),
+  certificateId: uuid.nullable(),
+  /** The certificate's name; null without TLS. */
+  certificateName: z.string().nullable(),
+  tlsMinimumVersion: z.enum(["1.2", "1.3"]),
   /** In the order they were saved. */
   origins: z.array(l4Origin),
   maxFails: z.number().int(),

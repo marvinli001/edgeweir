@@ -1,7 +1,8 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { type DnsProviderId, dnsProviderIds } from "./dns-providers";
-import { domainName, uuid } from "./schemas";
+import { HTTPS_REDIRECT_STATUSES, MAX_REDIRECT_EXCLUDED_DOMAINS } from "./edge";
+import { domainName, port, uuid } from "./schemas";
 
 /** A MIME type compression applies to, without parameters. */
 export const MIME_TYPE_RE = /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/;
@@ -61,6 +62,20 @@ export const tlsSettings = z
     gzipMinLength: minLength,
     gzipTypes: compressionTypes.default(() => [...DEFAULT_COMPRESSION_TYPES]),
     ocspStapling: z.boolean().default(false),
+    /**
+     * The HTTPS redirect of forceHttps and of config rules' forceHttps:
+     * its status, the port of the target URL (443 or an HTTPS port of the
+     * site, HTTPS_REDIRECT_PORT_INVALID) and the site's domains forceHttps
+     * leaves alone (HTTPS_REDIRECT_DOMAIN_INVALID; a config rule still
+     * redirects them).
+     */
+    redirectStatus: z.literal(HTTPS_REDIRECT_STATUSES).default(301),
+    redirectPort: port.default(443),
+    redirectExcludedDomains: z
+      .array(domainName)
+      .max(MAX_REDIRECT_EXCLUDED_DOMAINS)
+      .default([])
+      .transform((names) => [...new Set(names)].sort()),
   })
   .refine((s) => (!s.forceHttps && s.hstsMaxAge === 0) || s.certificateId !== null, {
     message: "HTTPS redirect and HSTS require a certificate",

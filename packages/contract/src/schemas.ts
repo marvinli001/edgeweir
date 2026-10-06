@@ -388,6 +388,23 @@ export const cacheSettings = z.object({
   keepCacheTag: z.boolean().default(false),
 });
 
+/**
+ * The listener ports a site is served on (sorted, without duplicates): 80
+ * and its cluster's extra HTTP ports, 443 and its extra HTTPS ports. HTTPS
+ * ports serve only with a certificate. Default: 80 and 443.
+ */
+export const sitePorts = z.object({
+  http: z
+    .array(port)
+    .max(17)
+    .transform((ports) => [...new Set(ports)].sort((a, b) => a - b)),
+  https: z
+    .array(port)
+    .max(17)
+    .transform((ports) => [...new Set(ports)].sort((a, b) => a - b)),
+});
+export const DEFAULT_SITE_PORTS = { http: [80], https: [443] } as const;
+
 export const siteCreateInput = z.object({
   /** Defaults to the first domain. */
   name: z.string().trim().min(1).max(100).optional(),
@@ -398,6 +415,8 @@ export const siteCreateInput = z.object({
   /** grpc needs protocol http2 (ORIGIN_GRPC_REQUIRES_HTTP2). */
   originSettings: originSettings.prefault({}),
   cacheSettings: cacheSettings.prefault({}),
+  /** Omitted: 80 and 443 (SITE_PORT_UNAVAILABLE, SITE_PORTS_EMPTY). */
+  ports: sitePorts.optional(),
 });
 
 export const origin = originFields.omit({ s3: true }).extend({
@@ -515,6 +534,8 @@ export const site = z.object({
     keepCacheTag: z.boolean(),
   }),
   cacheGeneration: z.number().int(),
+  /** The listener ports the site is served on (HTTPS ones only with a certificate). */
+  ports: z.object({ http: z.array(z.number().int()), https: z.array(z.number().int()) }),
   delivery: siteDelivery,
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
@@ -580,6 +601,8 @@ export const cluster = z.object({
   appliedNodeCount: z.number().int(),
   siteCount: z.number().int(),
   latestRevision: revision.nullable(),
+  /** How its HTTP(S) listeners find the client address (clusters.clientIp has the details). */
+  clientIpMode: z.enum(["direct", "proxy_protocol", "header"]),
   createdAt: isoDateTime,
 });
 
@@ -1195,6 +1218,12 @@ export const siteUpdateInput = z.object({
     .optional(),
   /** Replaces the cache settings; keepCacheTag stays as it is when omitted. */
   cacheSettings: cacheSettings.extend({ keepCacheTag: z.boolean().optional() }).optional(),
+  /**
+   * Replaces the listener ports (SITE_PORT_UNAVAILABLE, SITE_PORTS_EMPTY,
+   * SITE_HTTPS_PORT_NEEDS_CERTIFICATE); the HTTPS redirect's port must stay
+   * among the HTTPS ports (HTTPS_REDIRECT_PORT_INVALID).
+   */
+  ports: sitePorts.optional(),
 });
 
 /** Parameters of a node error code (see node-errors.ts). */
@@ -1447,6 +1476,7 @@ export type RolloutOutcome = z.infer<typeof rolloutOutcome>;
 export type Region = z.infer<typeof region>;
 export type Me = z.infer<typeof me>;
 export type SiteUpdateInput = z.input<typeof siteUpdateInput>;
+export type SitePorts = z.infer<typeof sitePorts>;
 export type Origin = z.infer<typeof origin>;
 export type CacheRule = z.infer<typeof cacheRule>;
 export type OriginInput = z.input<typeof originInput>;
