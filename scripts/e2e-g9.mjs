@@ -570,7 +570,12 @@ try {
     1000,
     () => JSON.stringify(edge ?? null),
   );
-  const proxySite = await createSite("g9-proxy", [HOST_PROXY, HOST_BENCH], {}, proxyCluster.id);
+  const proxySite = await createSite(
+    "g9-proxy",
+    [HOST_PROXY, HOST_BENCH],
+    { cacheRules: [{ pathPrefixes: ["/bench-"], edgeTtlSeconds: 60, originCacheControl: "override" }] },
+    proxyCluster.id,
+  );
   await admin.ok("PUT", `/sites/${proxySite.id}/rules`, {
     rules: [
       {
