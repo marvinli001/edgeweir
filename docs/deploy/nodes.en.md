@@ -116,15 +116,43 @@ Nodes accept user traffic on these ports; open them in the host firewall and the
 | Port | Use | When |
 | --- | --- | --- |
 | 80/TCP | HTTP, ACME HTTP-01 | Always |
-| 443/TCP | HTTPS | A site of the cluster has a certificate selected |
-| 443/UDP | HTTP/3 | A site has HTTP/3 on, see [Listening ports](../guide/https.en.md#listening-ports) |
+| 443/TCP | HTTPS | A site of the cluster with a certificate is bound to 443 |
+| 443/UDP | HTTP/3 | A site bound to 443 has HTTP/3 on, see [Listening ports](../guide/https.en.md#listening-ports) |
+| The cluster's extra HTTP / HTTPS ports (TCP) | HTTP, HTTPS | Set on the cluster's **Network** tab, see [The cluster's listener ports](../guide/https.en.md#the-clusters-listener-ports) |
+| UDP of the same number as an extra HTTPS port | HTTP/3 | A site bound to that port has HTTP/3 on |
 | The cluster's port pools | [Layer-4 forwarding](../guide/l4.en.md) | TCP for TCP pools, UDP for UDP pools, both for TCP + UDP; opening only the ports L4 apps use is enough |
 
 | Item | Notes |
 | --- | --- |
 | Privileges | Port pools hold 1024–65535 only: the systemd unit and the image need no extra privileges |
 | Container nodes | Publish the ports of the pools, for example `-p 9000:9000 -p 9000:9000/udp`, a range as `-p 20000-20100:20000-20100`; use host networking (`--network host`) for large pools |
-| Port changes | Creating or deleting an L4 app or changing its port reloads the node; old workers keep serving open connections, see [Reloads and long connections](../guide/l4.en.md#reloads-and-long-connections) |
+| Port changes | Creating or deleting an L4 app or changing its port, and adding or removing the cluster's extra listener ports, reload the node; old workers keep serving open connections, see [Reloads and long connections](../guide/l4.en.md#reloads-and-long-connections) |
+| Extra ports below 1024 | Bound by the nginx master like 80 and 443: no extra privileges |
+| Port ranges | Every port takes a listening socket; with UDP one per worker (`reuseport`). The node raises `worker_connections` by the number of listening sockets and its own open-file soft limit to the hard limit |
+
+## Client IP
+
+**Client IP** on a cluster's **Network** tab decides the visitor address of the nodes' HTTP and HTTPS listeners: rules' `ip.src`, bans, CC, access logs, `{{client_ip}}` of error pages and `X-Real-IP` towards the origins all use it. Saving publishes a configuration revision; nodes reload.
+
+| Source | Behavior | For |
+| --- | --- | --- |
+| Direct (default) | The TCP peer | Visitors connect to the nodes directly |
+| PROXY protocol | Every TCP connection must start with a PROXY protocol v1 or v2 header, connections without one are closed; the visitor address is the header's source address (the TCP peer for `UNKNOWN`). HTTP/3 (QUIC) has no PROXY protocol: the UDP peer | A layer-4 load balancer that sends the PROXY protocol |
+| Trusted proxy header | When the peer is inside the **Trusted CIDRs** (1–64), the **Header** (`X-Forwarded-For`, `X-Real-IP`, `CF-Connecting-IP`, `True-Client-IP` or a custom name) names the visitor; otherwise the peer's own address. `X-Forwarded-For` is read from right to left past trusted addresses; the first untrusted one is the visitor | A layer-7 proxy or another CDN in front of the nodes |
+
+| Item | Notes |
+| --- | --- |
+| Headers towards origins | `X-Real-IP` is the visitor address; `X-Forwarded-For` is the received `X-Forwarded-For` followed by the direct peer (with the PROXY protocol, the balancer). In direct mode **Drop the client's X-Forwarded-For** sends the direct peer alone |
+| `ip.peer` | The rule field `ip.peer` is always the direct peer |
+| Trusted proxies | Addresses inside the trusted CIDRs are never banned and not counted per address by CC |
+| Header format | Parsed by nginx's realip module: a value that is no address leaves the peer's address; `address:port` takes the address; a single-value header such as `X-Real-IP` with commas takes its last item; an invalid item before trusted addresses in `X-Forwarded-For` leaves the last valid trusted address; when every address is trusted, the leftmost one |
+| Kernel bans | Match the TCP peer only: with the last two sources they do not apply to visitor addresses, see [Load balancers in front of the nodes](../guide/bans.en.md#load-balancers-in-front-of-the-nodes) |
+| Probes | Region probes send a PROXY v1 header first to listeners that require one |
+| Node capability | PROXY protocol, trusted proxy header and **Drop the client's X-Forwarded-For** need `client-ip-v1`; while an active node of the cluster lacks it, the card shows "Some nodes of the site's cluster do not support it yet" |
+| Audit | `cluster.client_ip_update` |
+
+> [!WARNING]
+> With the PROXY protocol, any client that reaches a node port directly can claim any address in the header: open the nodes' HTTP and HTTPS ports to the load balancer only. List only the addresses your proxies actually use as trusted CIDRs: an address there can claim any visitor address.
 
 ### How long old workers stay
 

@@ -55,7 +55,7 @@ The error pages nodes answer with: site templates, platform templates, built-in 
 | --- | --- |
 | `{{status}}` | The status, e.g. `403` |
 | `{{request_id}}` | The request ID, the same as the `X-Request-Id` response header |
-| `{{client_ip}}` | The visitor's IP, i.e. the TCP client address (the same as `ip.src` in rules) |
+| `{{client_ip}}` | The visitor's IP, the same as `ip.src` in rules (under the cluster's [client IP](../deploy/nodes.en.md#client-ip) setting) |
 | `{{host}}` | The request's Host, lowercase, without the port; empty when the request has no valid Host |
 | `{{time}}` | When the node answered, UTC, RFC 3339, e.g. `2026-10-06T12:34:56Z`; needs `rules-v3` |
 | `{{path}}` | The request path (`$uri` after nginx normalization, the same as `http.request.uri.path` in rules: the rewritten path after a rewrite); needs `rules-v3` |

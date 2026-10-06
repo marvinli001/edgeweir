@@ -244,7 +244,8 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `http.response.headers["name"]` | 字符串 | 响应头；仅响应变换与压缩阶段 |
 | `http.response.content_type.media_type` | 字符串 | 响应 `Content-Type` 去掉参数后的小写媒体类型；仅响应变换与压缩阶段 |
 | `http.response.cache_status` | 字符串 | 边缘缓存的状态：`HIT`、`MISS`、`BYPASS`、`EXPIRED`、`STALE`、`UPDATING` 或 `REVALIDATED`（同 `X-Cache`）；节点自身生成的响应（拦截、重定向、错误页）以及不经过缓存的 WebSocket 与 gRPC 为空字符串；仅响应变换与压缩阶段 |
-| `ip.src` | IP | TCP 客户端地址；节点前有负载均衡时为负载均衡器的地址（HTTP / HTTPS 监听不接受 PROXY 协议） |
+| `ip.src` | IP | 访客地址，按集群的[访客 IP](../deploy/nodes.md#访客-ip) 设置取得：直连时为 TCP 客户端地址；PROXY protocol 时为 PROXY 头中的地址（HTTP/3 为 UDP 对端）；可信代理报头时为可信代理在报头中写明的地址 |
+| `ip.peer` | IP | 直连对端：TCP 客户端地址（HTTP/3 为 UDP 对端），不受访客 IP 设置影响；直连模式下等于 `ip.src`。需要 `client-ip-v1` |
 | `ssl` | 布尔 | HTTPS 请求为 `true` |
 | `ip.geoip.country` | 字符串 | ISO 国家代码；无记录时为空字符串 |
 | `ip.geoip.subdivision` | 字符串 | City MMDB 中的一级行政区代码，没有代码时为其英文名称；无记录或 City MMDB 的国家与 `ip.geoip.country` 不一致时为空字符串 |
@@ -410,6 +411,7 @@ API：`GET`、`POST /api/v1/ip-lists`，`PUT`、`DELETE /api/v1/ip-lists/{id}`�
 | 能力 | 规则和放行/拦截名单需要节点能力 `rules-v1`；`ip.geoip.country`、`ip.geoip.subdivision` 需要 `geoip-city-v1`；`ip.geoip.asnum` 需要 `geoip-asn-v1`；挑战动作需要 `challenge-v1`；`tls.ja4`（字段或限速键）需要 `ja4-v1`；使用 `ip.geoip.subdivision` 时控制台另外检查 `geoip-subdivision-v1`（不写入配置） |
 | 规则扩展 | 以下任何一项需要 `rules-v2`：函数与 `http.request.full_uri`、`http.request.uri.path.extension`、`http.response.content_type.media_type`；表达式目标、查询参数编辑，以及重定向打开或改写路径关闭「保留查询参数」；源站覆盖；压缩阶段；只在配置阶段可用的覆盖项与 Gzip「开启」；不是[构建器](origins-and-cache.md#请求条件)形状的缓存规则条件与「浏览器 TTL（秒）」；批量重定向；默认组以外的源站组 |
 | 表达式变量与报头值 | 以下任何一项需要 `rules-v3`：`http.request.cookies[…]`、`http.request.uri.args[…]`、`http.referer`、`http.user_agent`、`http.request.version`、`http.request.scheme`、`http.request.id`、`http.request.timestamp.sec`、`edge.server_port`、`ip.geoip.as_name`（另需 `geoip-asn-v1`）、`http.response.cache_status`；`url_encode`、`base64_encode`、`base64_decode`、`md5`、`sha1`、`sha256`、`substring`、`to_string`；`wildcard`、`strict wildcard`；请求头、响应头与查询参数的表达式值；响应头「追加」；重定向 303；[错误页](error-pages.md)的 `{{time}}`、`{{path}}` |
+| 直连对端 | 读取 `ip.peer` 的配置需要 `client-ip-v1` |
 | 已有配置 | 没有用到规则扩展的配置与之前相同，不要求 `rules-v2`；构建器形状的缓存规则仍以原来的结构化条件下发；没有用到 `rules-v3` 各项的配置同样逐字节不变 |
 | 控制台与 AccessKey | 保存时即使集群内有活动节点缺少所需能力也照常发布；缺少能力的节点保留 last-known-good 配置，**集群与节点** 中显示「需要升级」，见[节点升级](node-upgrades.md) |
 | 服务账号与后台任务 | 它们发布的配置引入新能力时，检查集群内所有活动节点（含暂时离线的节点）；有节点缺少能力时拒绝（`NODE_CAPABILITY_REQUIRED`，「节点尚不支持：…（<节点>）」），原配置与版本不变 |

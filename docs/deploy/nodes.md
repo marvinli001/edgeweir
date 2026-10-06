@@ -116,15 +116,43 @@ deb、rpm 由包脚本创建 `edgeweir` 用户与目录；tar.gz 由 `install.sh
 | 端口 | 用途 | 条件 |
 | --- | --- | --- |
 | 80/TCP | HTTP、ACME HTTP-01 | 始终 |
-| 443/TCP | HTTPS | 集群中有网站选择了证书 |
-| 443/UDP | HTTP/3 | 有网站开启 HTTP/3，见 [监听端口](../guide/https.md#监听端口) |
+| 443/TCP | HTTPS | 集群中有选择了证书的网站绑定 443 |
+| 443/UDP | HTTP/3 | 绑定 443 的网站开启 HTTP/3，见 [监听端口](../guide/https.md#监听端口) |
+| 集群的附加 HTTP / HTTPS 端口（TCP） | HTTP、HTTPS | 集群「网络」页签设置了这些端口，见 [集群的监听端口](../guide/https.md#集群的监听端口) |
+| 附加 HTTPS 端口的同号 UDP | HTTP/3 | 绑定该端口的网站开启 HTTP/3 |
 | 集群的端口池 | [四层转发](../guide/l4.md) | TCP 端口池放行 TCP，UDP 端口池放行 UDP，TCP + UDP 两者都放行；也可以只放行已有 L4 应用使用的端口 |
 
 | 项目 | 说明 |
 | --- | --- |
 | 权限 | 端口池只含 1024–65535，systemd 单元与镜像不需要额外权限 |
 | 容器节点 | 发布端口池中的端口，例如 `-p 9000:9000 -p 9000:9000/udp`，区间写成 `-p 20000-20100:20000-20100`；端口池较大时使用 host 网络（`--network host`） |
-| 端口变化 | 新建、删除 L4 应用或修改其端口时节点 reload，已有连接由旧 worker 继续服务，见 [reload 与长连接](../guide/l4.md#reload-与长连接) |
+| 端口变化 | 新建、删除 L4 应用或修改其端口，增删集群的附加监听端口时节点 reload，已有连接由旧 worker 继续服务，见 [reload 与长连接](../guide/l4.md#reload-与长连接) |
+| 1024 以下的附加端口 | 与 80、443 相同由 nginx 主进程绑定，不需要额外权限 |
+| 端口段 | 每个端口占一个监听 socket；UDP 端口段每个 worker 各占一个（`reuseport`）。节点按监听 socket 数提高 `worker_connections`，并把自身的打开文件数软限制提到硬限制 |
+
+## 访客 IP
+
+集群「网络」页签的「访客 IP」决定节点 HTTP / HTTPS 监听的访客地址：规则的 `ip.src`、封禁、CC、访问日志、错误页的 `{{client_ip}}` 与回源的 `X-Real-IP` 都使用它。修改后发布配置版本，节点 reload。
+
+| 来源 | 行为 | 适用 |
+| --- | --- | --- |
+| 直连（默认） | TCP 对端 | 访客直接连接节点 |
+| PROXY protocol | 每个 TCP 连接必须以 PROXY protocol v1 或 v2 头开头，没有头的连接被关闭；访客地址取头中的源地址（`UNKNOWN` 时为 TCP 对端）。HTTP/3（QUIC）不经过 PROXY protocol，取 UDP 对端 | 节点前有发送 PROXY protocol 的四层负载均衡 |
+| 可信代理报头 | 对端在「可信 CIDR」（1–64 条）内时读「报头」（`X-Forwarded-For`、`X-Real-IP`、`CF-Connecting-IP`、`True-Client-IP` 或自定义名），否则用对端地址。`X-Forwarded-For` 从右向左跳过可信地址，取第一个不可信地址 | 节点前有七层代理或另一个 CDN |
+
+| 项目 | 说明 |
+| --- | --- |
+| 回源报头 | `X-Real-IP` 为访客地址；`X-Forwarded-For` 为收到的 `X-Forwarded-For` 后追加直连对端（PROXY protocol 时是负载均衡器）。直连模式可打开「丢弃访客自带的 X-Forwarded-For」，回源只带直连对端 |
+| `ip.peer` | 规则字段 `ip.peer` 始终是直连对端 |
+| 可信代理 | 可信 CIDR 内的地址永不封禁，也不计入 CC 单 IP 计数 |
+| 报头格式 | 由 nginx realip 模块解析：值不是合法地址时用对端地址；`地址:端口` 取地址；`X-Real-IP` 等单值报头含逗号时取最后一项；`X-Forwarded-For` 中可信地址之前出现非法项时，取最后一个合法的可信地址；全部为可信地址时取最左一项 |
+| 内核封禁 | 只匹配 TCP 对端，后两种模式下对访客地址不生效，见 [节点前的负载均衡](../guide/bans.md#节点前的负载均衡) |
+| 探针 | 区域探针对要求 PROXY 头的监听先发送 PROXY v1 头 |
+| 节点能力 | PROXY protocol、可信代理报头与「丢弃访客自带的 X-Forwarded-For」需要 `client-ip-v1`；集群有活动节点缺少它时卡片显示「所在集群有节点不支持，暂时无法开启」 |
+| 审计 | `cluster.client_ip_update` |
+
+> [!WARNING]
+> PROXY protocol 模式下，能直接连到节点端口的客户端可以在头中声明任意地址；只对负载均衡器开放节点的 HTTP / HTTPS 端口。可信 CIDR 只写代理实际使用的地址：列表中的地址可以为任意访客声明地址。
 
 ### 旧 worker 的关闭时间
 

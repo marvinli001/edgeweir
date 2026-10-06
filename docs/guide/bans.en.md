@@ -139,9 +139,17 @@ The default systemd unit and node image do not grant `CAP_NET_ADMIN`. Enable it 
 
 ### Load balancers in front of the nodes
 
-The nodes' HTTP and HTTPS listeners do not accept the PROXY protocol and do not read the visitor's address from request headers. With a layer-4 load balancer in front of the nodes, kernel bans and HTTP-layer bans both see the load balancer's address and cannot ban real visitors; an automatic ban would block the whole load balancer. In such deployments add the load balancers' addresses to an allow list: they can then never be banned or dropped in the kernel.
+The cluster's [client IP](../deploy/nodes.en.md#client-ip) setting decides the visitor address (`ip.src`) of the HTTP and HTTPS listeners:
 
-[L4 applications](l4.en.md) can accept the PROXY protocol on their listeners; that does not affect the HTTP and HTTPS listeners.
+| Client IP | HTTP-layer bans, CC, rules, logs | Kernel bans |
+| --- | --- | --- |
+| Direct (default) | The TCP peer; behind a load balancer that is the balancer, and an automatic ban blocks all of it | The TCP peer |
+| PROXY protocol | The visitor address from the PROXY header | Still the TCP peer only (the balancer): bans of visitor addresses do not take effect in the kernel |
+| Trusted proxy header | The visitor address the trusted proxies' header names; addresses inside the trusted CIDRs are never banned and not counted per address by CC | Likewise the TCP peer only |
+
+With the last two, the **Bans** page shows "Clusters {clusters} take client addresses from proxies: kernel bans match the TCP peer only". In direct mode behind a load balancer, add the balancers' addresses to an allow list: they can then never be banned or dropped in the kernel.
+
+[L4 apps](l4.en.md) accept the PROXY protocol on their own listeners, independently of the client IP setting of the HTTP and HTTPS listeners.
 
 ## API
 

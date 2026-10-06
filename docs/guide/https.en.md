@@ -10,6 +10,7 @@ Certificate upload, ACME requests and renewal, and a site's HTTPS, TLS, HTTP/2, 
 | ACME certificate | A certificate the console requests from Let's Encrypt or ZeroSSL and renews automatically. |
 | DNS credential | A DNS provider credential that DNS-01 validation uses to write TXT records. Separate from the provider credentials of DNS steering. |
 | HTTPS settings | The certificate choice, redirect, HSTS, TLS, HTTP/2, and HTTP/3 options on a site's **HTTPS** tab; compression is set in the **Compression** card of the **Cache** tab. |
+| Listener ports | The ports nodes take HTTP and HTTPS traffic on: 80, 443 and the cluster's extra ports; a site chooses some of them in its **Ports** card. |
 
 ## Upload a certificate
 
@@ -138,6 +139,26 @@ While the certificate is issued, the tab refreshes its status every 3 seconds. A
 
 A configuration is in effect on a node only once the node reports the revision as applied.
 
+### HTTPS redirect options
+
+With **Force HTTPS** on, the redirect options appear below the switches:
+
+| Field | Values | Default | Effect |
+| --- | --- | --- | --- |
+| Redirect status | 301, 302, 303, 307, 308 | 301 | Status of the redirect |
+| Redirect port | 443 or an HTTPS port the site is bound to | 443 | Port of the target URL; with 443 the URL has no port ("Redirect port {port} is not an HTTPS port of the site") |
+| Domains not redirected | Domains of the site, at most 50 | None | These domains are not redirected by **Force HTTPS**; a wildcard is written `*.example.com`, and an exact domain of the site is not covered by it |
+
+A [config rule](rules.en.md)'s `forceHttps` still turns the redirect on or off per request: when a rule turns it on, the status and port above apply and excluded domains are redirected too. Removing the HTTPS port the redirect goes to is refused. Configurations with values other than the defaults need `edge-ports-v1`.
+
+Verify:
+
+```bash
+curl -sI -H 'Host: www.example.com' http://<node IP>:8081/a
+```
+
+The chosen status returns with `location: https://www.example.com:9443/a` (redirect port 9443).
+
 ### Adding domains to an HTTPS site
 
 When new domains are saved on the site's **Domains** tab:
@@ -207,11 +228,41 @@ They return `content-encoding: zstd` and `content-encoding: br`, with `vary: Acc
 
 | Port | Protocol | Condition |
 | --- | --- | --- |
-| 80/TCP | HTTP, HTTP-01 challenges | Always |
-| 443/TCP | HTTPS (HTTP/1.1, HTTP/2) | Any enabled site in the cluster has a certificate selected |
-| 443/UDP | HTTP/3 (QUIC) | Any site with a certificate in the cluster turns on HTTP/3 |
+| 80/TCP | HTTP, HTTP-01 challenges | Always; HTTP-01 challenges are always answered on 80, whatever ports a site chose |
+| 443/TCP | HTTPS (HTTP/1.1, HTTP/2) | An enabled site with a certificate is bound to 443 |
+| The cluster's extra HTTP ports | HTTP | Always, see [The cluster's listener ports](#the-clusters-listener-ports) |
+| The cluster's extra HTTPS ports | HTTPS (HTTP/1.1, HTTP/2) | Always |
+| UDP of the same number as an HTTPS port | HTTP/3 (QUIC) | A site on that port turns on HTTP/3 |
 
-The ports cannot be changed. The SNI of an HTTPS request must equal its `Host`; otherwise the node returns 421.
+The SNI of an HTTPS request must equal its `Host`; otherwise the node returns 421. `Alt-Svc` names the port of the request's `Host` (443 without one). Adding or removing ports is structural: the node renders `nginx.conf` again and reloads, old workers keep serving open connections.
+
+### The cluster's listener ports
+
+1. Open **Clusters & nodes**, select the cluster and switch to the **Network** tab (`/clusters?tab=network`).
+2. In the **Listener ports** card fill in **Extra HTTP ports** and **Extra HTTPS ports**, separated by commas or spaces.
+3. Click **Save**. The console shows **Saved** and publishes a new configuration revision.
+4. Open the ports in the node hosts' firewalls and cloud security groups (UDP too for an HTTPS port with HTTP/3 sites), see [Ports and firewalls](../deploy/nodes.en.md#ports-and-firewalls).
+
+| Item | Rule |
+| --- | --- |
+| Ports | 1–65535 except 80 and 443; at most 16 extra HTTP and 16 extra HTTPS ports; a port is HTTP or HTTPS, not both ("Port {port} cannot be both HTTP and HTTPS") |
+| Port pools | Never inside one of the cluster's [L4 port pools](l4.en.md) ("Port {port} is inside port pools: …"); port pools never hold listener ports either |
+| Removing | A port sites are bound to stays ("Port {port} is still used by sites: …") |
+| Audit | `cluster.listen_ports_update`, with the ports before and after |
+| Node capability | Configurations with extra ports need `edge-ports-v1`; while an active node of the cluster lacks it, the card shows "Some nodes of the site's cluster do not support it yet" and ports can only be removed |
+
+### Site ports
+
+The **Ports** card on a site's **Domains** tab chooses where the site is served: HTTP on 80 and the cluster's extra HTTP ports, HTTPS on 443 and its extra HTTPS ports. Default: 80 and 443.
+
+| Item | Rule |
+| --- | --- |
+| At least one | The site is served on at least one usable port ("The site needs at least one usable port"); without a certificate HTTPS ports are unusable |
+| HTTPS ports | Need a certificate: without one only the default 443 may stay ("HTTPS port {port} needs a certificate"); a site losing its certificate must keep an HTTP port |
+| Other ports | A request on a port the site is not bound to is treated like one for an unknown host: 404 with the platform page over HTTP (`X-Edgeweir-Error: unknown-host`), the TLS handshake is aborted over HTTPS |
+| ACME | HTTP-01 challenges are always answered on 80; the origin's own HTTP-01 tokens still reach it on 80 |
+| Cache | The cache key holds no port: every port of a site shares its cached objects |
+| No extra ports | A site on the default ports compiles byte for byte as before and needs no `edge-ports-v1` |
 
 ### OCSP stapling
 
@@ -248,6 +299,7 @@ ACME account keys, certificate private keys, and DNS credentials are each envelo
 | `brotli-v1` | Any site with Brotli on |
 | `zstd-v1` | Any site with Zstandard on |
 | `tls-pending-domains-v1` | New domains of an HTTPS site are served over HTTP until the certificate covers them; without it they take effect once the new certificate is issued, and nothing is refused |
+| `edge-ports-v1` | The cluster has extra listener ports, a site is bound to ports other than the defaults, or the HTTPS redirect uses a status, port or excluded domains other than the defaults |
 
 A change saved in the console or with an AccessKey is published even when it needs a capability some active nodes of the cluster lack; those nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md). A configuration published by a service account or a background job that introduces a capability an active node lacks is refused (`NODE_CAPABILITY_REQUIRED`) and the configuration stays unchanged.
 
@@ -294,8 +346,11 @@ A change saved in the console or with an AccessKey is published even when it nee
 | "The certificate is used by sites: …" | The listed sites selected the certificate | Select another certificate on their **HTTPS** tab first |
 | "The DNS credential is used by certificates: …" | The listed certificates use the credential for DNS-01 | Delete those certificates first |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (such as `http3-v1`) and keeps its last-known-good configuration | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
+| 404 with `X-Edgeweir-Error: unknown-host` for a configured site | The request reached a port the site is not bound to | Bind the port in the **Ports** card of the **Domains** tab, or use the site's ports |
+| TLS handshake fails on an extra HTTPS port | The site is not bound to that port, or has no certificate | Bind the port and choose a certificate |
+| Connections to an extra port time out | The node's firewall or security group does not allow it; a container node does not publish it | Open it as described in [Ports and firewalls](../deploy/nodes.en.md#ports-and-firewalls) |
 | 421 with `X-Edgeweir-Error: sni-host-mismatch` | TLS SNI differs from `Host`, for example a client reused a connection opened for another domain | The client opens a connection for the requested domain |
-| Browsers do not use HTTP/3 | UDP 443 is blocked; the node lacks `http3-v1`; clients read `Alt-Svc` only after a first visit | Open UDP 443 and check node capabilities |
+| Browsers do not use HTTP/3 | UDP of the site's HTTPS port (UDP 443, UDP 9443…) is blocked; the node lacks `http3-v1`; clients read `Alt-Svc` only after a first visit | Open UDP 443 and check node capabilities |
 | Responses are not compressed | The content type is not listed; the response is below the minimum size; the client sent no `Accept-Encoding`; the origin response already has a `Content-Encoding` | Check the **Compression** settings on the **Cache** tab |
 | gzip instead of br or zstd | The client's `Accept-Encoding` lacks the algorithm or gives it a lower q-value; the algorithm is off | Check the request header and the **Compression** settings |
 | The Brotli or Zstandard switch is unavailable | An active node of the cluster lacks `brotli-v1` / `zstd-v1` | Upgrade the nodes |

@@ -593,11 +593,29 @@ DNS 绑定与记录的新增字段：
 
 行为见[区域探针与智能调度](../guide/scheduling.md)与[DNS 调度与告警](../guide/dns-and-alerts.md#按解析线路写入)。
 
+### 监听端口与访客 IP
+
+| 过程 | 端点 | 说明 |
+| --- | --- | --- |
+| `clusters.listenPorts` | `GET /clusters/{clusterId}/listen-ports` | 集群的附加 HTTP / HTTPS 端口与缺少 `edge-ports-v1` 的节点 |
+| `clusters.setListenPorts` | `PUT /clusters/{clusterId}/listen-ports` | 整体替换附加端口，发布配置版本 |
+| `clusters.clientIp` | `GET /clusters/{clusterId}/client-ip` | 访客 IP 设置与缺少 `client-ip-v1` 的节点 |
+| `clusters.setClientIp` | `PUT /clusters/{clusterId}/client-ip` | 替换访客 IP 设置，发布配置版本 |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `PUT /clusters/{clusterId}/listen-ports` | `httpPorts`、`httpsPorts`：各最多 16 个 1–65535 的端口，不含 80、443，去重排序；同一端口不能同时出现在两者中（`LISTEN_PORT_CONFLICT`），不能在端口池内（`LISTEN_PORT_IN_POOL`），移除仍被网站使用的端口返回 `LISTEN_PORT_IN_USE` |
+| `PUT /clusters/{clusterId}/client-ip` | `settings`：`mode`（`direct` / `proxy_protocol` / `header`，默认 `direct`）；`header` 模式必填 `trustedCidrs`（1–64 个 IP 或 CIDR，规范化、去重排序；不接受 IPv4 映射的 IPv6）与 `header`（小写报头名，`[a-z0-9-]`，1–64 字符，不能是 hop-by-hop、`Host`、`Cookie`、`Authorization`、`X-Request-Id` 或 `X-Edgeweir-*`）；`direct` 模式可选 `dropForwardedFor` |
+
+网站的端口经 `PATCH /sites/{id}` 的 `ports`（`{ http, https }`）修改，`POST /sites` 可选同一字段（省略为 80 与 443）；网站响应带 `ports`。错误码：`SITE_PORT_UNAVAILABLE`、`SITE_PORTS_EMPTY`、`SITE_HTTPS_PORT_NEEDS_CERTIFICATE`。`PUT /sites/{id}/https` 的设置新增 `redirectStatus`（301、302、303、307、308，默认 301）、`redirectPort`（443 或网站的 HTTPS 端口，默认 443，`HTTPS_REDIRECT_PORT_INVALID`）与 `redirectExcludedDomains`（网站的域名，最多 50 个，`HTTPS_REDIRECT_DOMAIN_INVALID`）。`GET /sites/{id}/features` 新增 `edgePorts`、`clientIp`；`GET /clusters` 的集群新增 `clientIpMode`。
+
 ### 端口池与 L4 应用
 
 | 过程 | 端点 | 说明 |
 | --- | --- | --- |
-| `clusters.portPools` | `GET /clusters/{clusterId}/port-pools` | 集群的端口池、保留端口与缺少 `l4-v1` 的节点 |
+| `clusters.portPools` | `GET /clusters/{clusterId}/port-pools` | 集群的端口池、保留端口与缺少 `l4-v1`、`l4-v2` 的节点 |
 | `clusters.setPortPools` | `PUT /clusters/{clusterId}/port-pools` | 整体替换端口池；不发布配置版本 |
 | `l4Apps.list` | `GET /l4-apps` | L4 应用，按端口、协议排序；查询参数 `clusterId`（可选） |
 | `l4Apps.get` | `GET /l4-apps/{id}` | 一个应用 |
@@ -612,16 +630,16 @@ DNS 绑定与记录的新增字段：
 | 请求 | 字段 |
 | --- | --- |
 | `PUT /clusters/{clusterId}/port-pools` | `pools`：整体替换，最多 64 个 `{ protocol, from, to }`；`protocol` 为 `tcp`、`udp` 或 `both`，`from`、`to` 为 1024–65535，`from` 不大于 `to` |
-| `POST /l4-apps` | `clusterId`、`name`（1–100 字符，去掉首尾空格）、`protocol`（`tcp` / `udp`）、`port`（1024–65535）、`origins`；可选：`enabled`（默认 `true`）、`acceptProxyProtocol`（默认 `false`）、`proxyProtocolVersion`（0–2，0 不发送，默认 0）、`maxFails`（1–100，默认 3）、`failTimeoutSeconds`（1–3600，默认 30）、`connectTimeoutMs`（100–60000，默认 5000）、`idleTimeoutSeconds`（1–86400，省略时 TCP 为 600、UDP 为 30）、`allowListIds`、`blockListIds`（IP 名单 ID，各最多 16 个，去重，默认 `[]`）、`maxConnections`（0–10000000）、`newConnectionsPerSecond`（0–1000000），后两项 0 表示不限，默认 0 |
-| `origins[]` | 1–32 个 `{ address, port, weight, backup }`：`address` 为主机名或 IP，规则同网站源站；`port` 1–65535；`weight` 1–100，默认 1；`backup` 默认 `false`。至少一个源站的 `backup` 为 `false` |
+| `POST /l4-apps` | `clusterId`、`name`（1–100 字符，去掉首尾空格）、`protocol`（`tcp` / `udp`）、`port`（1024–65535）、`origins`；可选：`portEnd`（端口段的结束端口，大于 `port`，最多 1000 个端口，默认 `null`）、`originPortMode`（`fixed` / `same`，默认 `fixed`）、`certificateId`（只用于 TCP，节点终结 TLS，默认 `null`）、`tlsMinimumVersion`（`1.2` / `1.3`，默认 `1.2`）、`enabled`（默认 `true`）、`acceptProxyProtocol`（默认 `false`）、`proxyProtocolVersion`（0–2，0 不发送，默认 0）、`maxFails`（1–100，默认 3）、`failTimeoutSeconds`（1–3600，默认 30）、`connectTimeoutMs`（100–60000，默认 5000）、`idleTimeoutSeconds`（1–86400，省略时 TCP 为 600、UDP 为 30）、`allowListIds`、`blockListIds`（IP 名单 ID，各最多 16 个，去重，默认 `[]`）、`maxConnections`（0–10000000）、`newConnectionsPerSecond`（0–1000000），后两项 0 表示不限，默认 0 |
+| `origins[]` | 1–32 个 `{ address, port, weight, backup }`：`address` 为主机名或 IP，规则同网站源站；`port` 1–65535，`originPortMode` 为 `same` 时省略（保存为 0）；`weight` 1–100，默认 1；`backup` 默认 `false`。至少一个源站的 `backup` 为 `false` |
 | `PATCH /l4-apps/{id}` | `POST` 中除 `clusterId`、`enabled` 外的字段，均可选；`origins` 整体替换，地址与端口不变的源站保留 ID（节点上的被动健康状态随之保留）；修改 `protocol` 不改变 `idleTimeoutSeconds`；可选 `expectedUpdatedAt` |
 | `PUT /l4-apps/{id}/enabled` | `enabled`；可选 `expectedUpdatedAt` |
 | `GET /l4-apps/{id}/stats` | 查询参数 `from`、`to`（ISO 8601），`from` 早于 `to`，范围最长 7 天 |
 
 | 过程 | 响应 |
 | --- | --- |
-| `clusters.portPools`、`clusters.setPortPools` | `clusterId`；`pools`（按起始端口、协议排序）；`reservedPorts`（集群 HTTP / HTTPS 监听的端口，不能进入端口池）；`nodesWithoutL4`（`[{ id, name }]`，集群中不上报 `l4-v1` 的活动节点） |
-| `l4Apps.list`、`l4Apps.get` 与其他过程返回的应用 | `id`、`clusterId`、`clusterName`、`name`、`protocol`、`port`、`enabled`、`acceptProxyProtocol`、`proxyProtocolVersion`、`origins`（`[{ id, address, port, weight, backup }]`，按保存顺序）、`maxFails`、`failTimeoutSeconds`、`connectTimeoutMs`、`idleTimeoutSeconds`、`allowListIds`、`blockListIds`、`maxConnections`、`newConnectionsPerSecond`、`dnsTarget`、`dnsLines`、`createdAt`、`updatedAt` |
+| `clusters.portPools`、`clusters.setPortPools` | `clusterId`；`pools`（按起始端口、协议排序）；`reservedPorts`（集群 HTTP / HTTPS 监听的端口，含附加端口，不能进入端口池）；`nodesWithoutL4`（`[{ id, name }]`，集群中不上报 `l4-v1` 的活动节点）；`nodesWithoutL4V2`（不上报 `l4-v2` 的活动节点） |
+| `l4Apps.list`、`l4Apps.get` 与其他过程返回的应用 | `id`、`clusterId`、`clusterName`、`name`、`protocol`、`port`、`enabled`、`acceptProxyProtocol`、`proxyProtocolVersion`、`portEnd`、`originPortMode`、`certificateId`、`certificateName`、`tlsMinimumVersion`、`origins`（`[{ id, address, port, weight, backup }]`，按保存顺序）、`maxFails`、`failTimeoutSeconds`、`connectTimeoutMs`、`idleTimeoutSeconds`、`allowListIds`、`blockListIds`、`maxConnections`、`newConnectionsPerSecond`、`dnsTarget`、`dnsLines`、`createdAt`、`updatedAt` |
 | `dnsTarget` | 客户端连接的 CNAME `<应用 ID>.<集群域名>`，只在应用启用时发布；集群 DNS 为「不管理」时为 `null` |
 | `dnsLines` | 每条绑定线路 `{ name, target }`：开启线路别名时 `target` 为 `<线路>.<应用 ID>.<集群域名>`，否则为 `<线路>.<集群域名>` |
 | `l4Apps.create`、`l4Apps.update`、`l4Apps.setEnabled` | `{ app, revision }` |
