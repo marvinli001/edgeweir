@@ -154,6 +154,9 @@ export const fields: Record<string, ValueType> = {
   "ip.geoip.as_name": "string",
   // rules-v3: the edge cache's status of the response; "" for responses the node made itself.
   "http.response.cache_status": "string",
+  // client-ip-v1: the TCP (QUIC: UDP) peer; ip.src is the client the cluster's client address
+  // setting names (equal without one).
+  "ip.peer": "ip",
 };
 /** Fields of one request cookie and one query parameter by name (rules-v3), besides headers. */
 export const COOKIE_FIELD = "http.request.cookies";
@@ -180,6 +183,15 @@ export const rulesV3Fields: ReadonlySet<string> = new Set([
   "ip.geoip.as_name",
   "http.response.cache_status",
 ]);
+/** Fields only nodes with client-ip-v1 provide. */
+export const clientIpFields: ReadonlySet<string> = new Set(["ip.peer"]);
+/** Whether the expression reads a field only client-ip-v1 nodes provide. */
+export function needsClientIp(expression: Expression): boolean {
+  return (
+    (expression.op !== "call" && clientIpFields.has(expression.field)) ||
+    expression.children.some(needsClientIp)
+  );
+}
 /** Whether `field` is a rules-v3 field: one of rulesV3Fields, a cookie or a query parameter. */
 export function isRulesV3Field(field: string): boolean {
   return (

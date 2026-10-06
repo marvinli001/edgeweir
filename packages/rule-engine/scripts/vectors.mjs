@@ -1684,6 +1684,17 @@ const vectors = [
     }
     throw new Error(`not rejected: ${source}`);
   }),
+  // client-ip-v1: ip.peer, the connection's peer; ip.src is the client the
+  // cluster's client address setting names.
+  ...[
+    ["ip.peer in {10.0.0.0/8}", { "ip.peer": "10.1.2.3", "ip.src": "203.0.113.9" }, true],
+    ["ip.peer in {10.0.0.0/8}", { "ip.peer": "203.0.113.9", "ip.src": "10.1.2.3" }, false],
+    ["ip.peer in $blocked", { "ip.peer": "192.0.2.5" }, true],
+    ["not ip.peer in {2001:db8::/32}", { "ip.peer": "2001:db8::7" }, false],
+    ["ip.peer ne 192.0.2.1", { "ip.peer": "::ffff:192.0.2.1" }, false],
+    ['to_string(ip.peer) eq "10.0.0.2"', { "ip.peer": "10.0.0.2" }, true],
+    ["ip.src in {10.0.0.0/8} and not ip.peer in {10.0.0.0/8}", { "ip.src": "10.0.0.9", "ip.peer": "198.51.100.1" }, true],
+  ].map(accepted),
 ];
 writeFileSync(
   new URL("../test/vectors.json", import.meta.url),
