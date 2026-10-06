@@ -18,6 +18,12 @@ import {
   UserSettings01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  BellIcon,
+  DashboardIcon,
+  ListIcon,
+  SlidersIcon,
+} from "@/components/effects/animated-icons";
 import type { NavItem } from "@/components/nav-main";
 import { m } from "@/lib/i18n";
 
@@ -37,6 +43,7 @@ export function navGroups(): NavGroup[] {
           title: m.nav_overview(),
           to: "/overview",
           icon: icon(DashboardSquare01Icon),
+          animated: DashboardIcon,
           testId: "nav-overview",
           exact: true,
           attention: true,
@@ -76,6 +83,7 @@ export function navGroups(): NavGroup[] {
           title: m.nav_ip_lists_bans(),
           to: "/ip-lists",
           icon: icon(ListViewIcon),
+          animated: ListIcon,
           testId: "nav-ip-lists",
           // Bans are a tab of the same section.
           also: ["/bans"],
@@ -109,6 +117,7 @@ export function navGroups(): NavGroup[] {
           title: m.alert_title(),
           to: "/alerts",
           icon: icon(Notification03Icon),
+          animated: BellIcon,
           testId: "nav-alerts",
         },
         { title: m.nav_audit(), to: "/audit", icon: icon(Audit01Icon), testId: "nav-audit" },
@@ -116,6 +125,7 @@ export function navGroups(): NavGroup[] {
           title: m.nav_system(),
           to: "/system",
           icon: icon(SlidersHorizontalIcon),
+          animated: SlidersIcon,
           testId: "nav-system",
           // Monitoring (probes) and service accounts are tabs of the system settings.
           also: ["/service-accounts"],

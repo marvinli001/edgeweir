@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, type LinkProps, useRouterState } from "@tanstack/react-router";
 import type * as React from "react";
+import { type IconPlayer, useIconPlay } from "@/components/effects/animated-icons";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -26,6 +27,29 @@ export interface NavItem {
   also?: string[];
   /** Shows how many things need the operator (the overview lists them). */
   attention?: boolean;
+  /** The same glyph, animated: it plays when the row is hovered or focused. */
+  animated?: React.ForwardRefExoticComponent<
+    { className?: string } & React.RefAttributes<IconPlayer>
+  >;
+}
+
+function NavRow({ item, active }: { item: NavItem; active: boolean }) {
+  const { ref, trigger } = useIconPlay();
+  const Animated = item.animated;
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip={item.title}
+        isActive={active}
+        render={<Link to={item.to} data-testid={item.testId} />}
+        {...(Animated ? trigger : {})}
+      >
+        {Animated ? <Animated ref={ref} /> : item.icon}
+        <span>{item.title}</span>
+      </SidebarMenuButton>
+      {item.attention ? <AttentionBadge /> : null}
+    </SidebarMenuItem>
+  );
 }
 
 const PRIMARY =
@@ -116,19 +140,7 @@ export function NavMain({
               : [to, ...(item.also ?? [])].some(
                   (path) => pathname === path || pathname.startsWith(`${path}/`),
                 );
-            return (
-              <SidebarMenuItem key={to}>
-                <SidebarMenuButton
-                  tooltip={item.title}
-                  isActive={active}
-                  render={<Link to={item.to} data-testid={item.testId} />}
-                >
-                  {item.icon}
-                  <span>{item.title}</span>
-                </SidebarMenuButton>
-                {item.attention ? <AttentionBadge /> : null}
-              </SidebarMenuItem>
-            );
+            return <NavRow key={to} item={item} active={active} />;
           })}
         </SidebarMenu>
       </SidebarGroupContent>

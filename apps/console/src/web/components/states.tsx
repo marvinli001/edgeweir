@@ -1,7 +1,8 @@
-import { Alert02Icon, InboxIcon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, type InboxIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type * as React from "react";
 import { Loader } from "@/components/appica/loader";
+import { InboxIcon as AnimatedInbox, useIconPlay } from "@/components/effects/animated-icons";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -47,18 +48,23 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
 
 export function EmptyState({
   title,
-  icon = InboxIcon,
+  icon,
   children,
 }: {
   title: string;
+  /** Without one, an inbox that settles when the state is hovered. */
   icon?: typeof InboxIcon;
   children?: React.ReactNode;
 }) {
+  const { ref, trigger } = useIconPlay();
   return (
-    <Empty className="border border-dashed bg-linear-to-b from-muted/40 to-transparent animate-enter">
+    <Empty
+      className="border border-dashed border-edge bg-linear-to-b from-well/70 to-transparent animate-enter"
+      {...trigger}
+    >
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <HugeiconsIcon icon={icon} strokeWidth={2} />
+          {icon ? <HugeiconsIcon icon={icon} strokeWidth={2} /> : <AnimatedInbox ref={ref} />}
         </EmptyMedia>
         <EmptyTitle>{title}</EmptyTitle>
       </EmptyHeader>
