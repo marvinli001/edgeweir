@@ -14,6 +14,26 @@ import { defineConfig, type Plugin } from "vite";
 
 const app = path.resolve(import.meta.dirname, "..");
 
+/** The static build: the lab page becomes `index.html` at the root, with relative URLs. */
+function labOutput(): Plugin {
+  return {
+    name: "edgeweir-lab-output",
+    apply: "build",
+    // After Vite's own HTML plugin has emitted the page.
+    enforce: "post",
+    generateBundle(_options, bundle) {
+      const page = bundle["lab/lab.html"];
+      if (page?.type !== "asset") return;
+      delete bundle["lab/lab.html"];
+      this.emitFile({
+        type: "asset",
+        fileName: "index.html",
+        source: String(page.source).replaceAll('="../', '="./'),
+      });
+    },
+  };
+}
+
 /** Serves the lab page at `/` (the routes live in the hash). */
 function labIndex(): Plugin {
   return {
@@ -33,6 +53,7 @@ export default defineConfig({
   base: "./",
   plugins: [
     labIndex(),
+    labOutput(),
     tanstackRouter({
       target: "react",
       autoCodeSplitting: true,

@@ -1,9 +1,15 @@
 /**
- * Lab entry: src/web/main.tsx with hash history (no server routes needed) and the lab panel.
+ * Lab entry: src/web/main.tsx with hash history (memory history in the static build; no server
+ * routes needed) and the lab panel.
  * Keep the providers and router options in step with it.
  */
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createHashHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import {
+  createHashHistory,
+  createMemoryHistory,
+  createRouter,
+  RouterProvider,
+} from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@/index.css";
@@ -37,7 +43,11 @@ const queryClient = new QueryClient({
 
 const router = createRouter({
   routeTree,
-  history: createHashHistory(),
+  // The dev server keeps the page in the hash (links, screenshots); the static build may run in a
+  // sandboxed frame that refuses history changes, so it keeps the route in memory.
+  history: import.meta.env.DEV
+    ? createHashHistory()
+    : createMemoryHistory({ initialEntries: [window.location.hash.slice(1) || "/"] }),
   context: { queryClient },
   defaultPreload: "intent",
   scrollRestoration: true,
