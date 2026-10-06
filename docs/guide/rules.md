@@ -156,7 +156,7 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 | --- | --- |
 | 可用阶段 | 请求头：请求变换、回源；响应头：响应变换（可读取响应字段）；查询参数：重定向、改写路径所在的阶段 |
 | 报头值 | 结果最长 4096 字节、不含控制字符（`\x00`–`\x1f`、`\x7f`）；结果无效或求值失败（正则超出执行预算、函数结果超过 8192 字节）时**跳过这一条报头动作**，请求照常继续，不返回 503 |
-| 跳过时的日志 | 每条规则在每个节点每 60 秒最多写一条 NOTICE 级 nginx 错误日志 `edgeweir: header value skipped site=<网站 ID> rule=<规则 ID>`，不含报头名、值、URL 或客户端地址 |
+| 跳过时的日志 | 每条规则在每个节点每 60 秒最多写一条 NOTICE 级 nginx 错误日志 `edgeweir: header value skipped site=<网站 ID> rule=<规则 ID>`，内容不含报头名与值；nginx 为请求期间的日志附加客户端 IP、请求行和 Host |
 | 追加 | 在已有同名头之外再加一行，不合并、不去重；之后的规则读取 `http.response.headers["名称"]` 得到以 `, ` 连接的全部行；与「移除」互斥 |
 | 查询参数值 | 结果照旧百分号编码（字母、数字与 `-` `.` `_` `~` 以外的字节）；求值失败时与动态目标相同，请求返回 503（`X-Edgeweir-Error: policy-unavailable`） |
 | 求值时机 | 请求阶段的值按当时的请求求值（改写之后的路径、查询与 `http.request.uri.args`）；响应头的值在边缘层的响应头过滤阶段求值，缓存命中与回源响应都会重新计算 |

@@ -214,7 +214,7 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 3. 批量重定向编译为 `Site.bulk_redirects`（按来源排序），源站组写入 `Origin.group`。
 4. 配置用到上述任何一项（含 `compression` 阶段与 `config` 动作的新字段）时 `required_features` 加 `rules-v2`；没有用到的配置与之前编码相同。与其他能力相同，服务账号与后台任务的发布引入集群活动节点缺少的 `rules-v2` 时返回 `NODE_CAPABILITY_REQUIRED`，运营者本人可以发布；`sites.features` 的 `rulesV2` 供界面锁定相关控件。
 
-proto `v0.22.0` 的补充由能力 `rules-v3` 标明：Cookie 与查询参数按名取值（`http.request.cookies.<名称>`、`http.request.uri.args.<名称>`，取第一个原始值）、请求与连接的新字段、`http.response.cache_status`、编码与摘要函数、`substring`（整数参数为 `value_type` 为 `number` 的 `const` 节点）、`to_string`（参数可为任何类型）、`wildcard` 与 `strict_wildcard` 比较；请求头与响应头的值表达式复用 `RuleAction.target`，`QueryParam.expression` 计算查询参数值，`RuleAction.append` 追加响应头行；重定向 303；错误页的 `{{time}}`、`{{path}}`。节点只为规则读到这些字段的网站计算它们；算出的报头值超过 4096 字节或含控制字符时跳过该动作（每条规则每节点 60 秒一条 NOTICE，只含 ID），查询参数值求值失败仍按失败关闭处理。没有用到这些的配置逐字节不变（跨语言内容哈希向量 `content_hash_vector_v0220.json`）。
+proto `v0.22.0` 的补充由能力 `rules-v3` 标明：Cookie 与查询参数按名取值（`http.request.cookies.<名称>`、`http.request.uri.args.<名称>`，取第一个原始值）、请求与连接的新字段、`http.response.cache_status`、编码与摘要函数、`substring`（整数参数为 `value_type` 为 `number` 的 `const` 节点）、`to_string`（参数可为任何类型）、`wildcard` 与 `strict_wildcard` 比较；请求头与响应头的值表达式复用 `RuleAction.target`，`QueryParam.expression` 计算查询参数值，`RuleAction.append` 追加响应头行；重定向 303；错误页的 `{{time}}`、`{{path}}`。节点只为规则读到这些字段的网站计算它们；算出的报头值超过 4096 字节或含控制字符时跳过该动作（每条规则每节点 60 秒一条 NOTICE，消息只含网站与规则 ID），查询参数值求值失败仍按失败关闭处理。没有用到这些的配置逐字节不变（跨语言内容哈希向量 `content_hash_vector_v0220.json`）。
 
 | 管理操作 | 审计 |
 | --- | --- |
