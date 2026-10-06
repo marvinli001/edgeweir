@@ -165,7 +165,8 @@ const PLATFORM_PAGES = ["unknownHost", "siteDisabled"] as const;
 /**
  * Replaces the platform's pages, publishes every cluster (reason
  * error_pages_updated) and audits the change, in one transaction. The pages
- * need no node feature: nodes without error pages keep their built-in ones.
+ * need no node feature (nodes without error pages keep their built-in ones)
+ * unless they use {{time}} or {{path}}, which need rules-v3.
  */
 export async function setPlatformErrorPages(
   db: Database,
