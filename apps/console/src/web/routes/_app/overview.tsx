@@ -14,11 +14,13 @@ import * as React from "react";
 import * as z from "zod";
 import { AnalyticsSection } from "@/components/analytics/analytics-section";
 import { Countdown } from "@/components/appica/countdown";
+import { EdgeNetworkCard } from "@/components/overview/edge-network";
+import { LiveKpis } from "@/components/overview/live-kpis";
 import { Page } from "@/components/page";
 import { ResourceEmpty, ResourceList, ResourceRow } from "@/components/resource-list";
 import { StarMark, useSiteStars } from "@/components/site-star";
 import { combineQueries, QueryView } from "@/components/states";
-import { Dot, type StatusTone } from "@/components/status-dot";
+import { Dot, LiveDot, type StatusTone } from "@/components/status-dot";
 import { buttonVariants } from "@/components/ui/button";
 import { DEFAULT_RANGE } from "@/lib/analytics";
 import { formatNumber, m, timeAgo } from "@/lib/i18n";
@@ -113,7 +115,27 @@ function OverviewPage() {
         {([recent, starredSites, summary, clusterList, nodeList]) => (
           <>
             <AttentionList items={summary.attention} />
-            <div className="grid gap-x-10 gap-y-6 @3xl/main:grid-cols-2">
+            <section className="flex flex-col gap-3" aria-labelledby="live-title">
+              <div className="flex items-center gap-3">
+                <h2 id="live-title" className="text-base font-semibold">
+                  {m.overview_live_title()}
+                </h2>
+                <LiveDot label={m.overview_live()} />
+              </div>
+              <div className="grid gap-3 @5xl/main:grid-cols-3">
+                <EdgeNetworkCard
+                  nodes={nodeList}
+                  clusters={clusterList}
+                  className="@5xl/main:col-span-2"
+                />
+                <LiveKpis
+                  online={summary.onlineNodes}
+                  total={summary.nodes}
+                  className="@3xl/main:grid-cols-4 @5xl/main:grid-cols-2"
+                />
+              </div>
+            </section>
+            <div className="grid gap-4 @3xl/main:grid-cols-2">
               <SitesList total={recent.total} starred={starredSites} recent={recent.items} />
               <NodesList
                 nodes={nodeList}
