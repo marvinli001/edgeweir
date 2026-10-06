@@ -131,7 +131,8 @@ function pointAt(time: number, bucketSeconds: number, siteId?: string): TrafficP
 function window(range: AnalyticsRange) {
   const { seconds, bucketSeconds } = RANGES[range];
   const bucketMs = bucketSeconds * 1000;
-  const last = Math.floor(NOW / bucketMs) * bucketMs;
+  // The window moves with the clock, so polling sees new buckets as they fill.
+  const last = Math.floor(Date.now() / bucketMs) * bucketMs;
   const count = seconds / bucketSeconds;
   const from = last - (count - 1) * bucketMs;
   return { seconds, bucketSeconds, bucketMs, count, from, last };

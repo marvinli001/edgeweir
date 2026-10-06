@@ -52,6 +52,11 @@ export default defineConfig({
       // Fixture API and a signed-in session instead of the server.
       { find: /^@\/lib\/orpc$/, replacement: path.join(app, "lab/orpc.ts") },
       { find: /^@\/lib\/auth-client$/, replacement: path.join(app, "lab/auth-client.ts") },
+      // The API has no visitor regions yet; sample flows draw the globe's arcs.
+      {
+        find: /^@\/lib\/visitor-flows$/,
+        replacement: path.join(app, "lab/fixtures/visitor-flows.ts"),
+      },
       { find: /^@\//, replacement: `${path.join(app, "src/web")}/` },
     ],
   },

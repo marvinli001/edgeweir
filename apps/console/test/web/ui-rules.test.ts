@@ -86,6 +86,34 @@ describe("UI rules (ADR-0003)", () => {
     expect(outside).toEqual([]);
   });
 
+  it("imports visual effect libraries only through src/web/components/effects", () => {
+    // Canvas, WebGL and graph libraries come in through components/effects, where their colors
+    // are read from tokens and their loops follow reduced motion and visibility.
+    const effectLibraries =
+      /from\s+"(?:cobe|uplot|@xyflow\/react|@dagrejs\/dagre|@paper-design\/[a-z-]+|@number-flow\/react)["/]/;
+    const outside = webSources.filter(
+      (file) => !file.includes("components/effects/") && effectLibraries.test(read(file)),
+    );
+    expect(outside).toEqual([]);
+  });
+
+  it("loads the WebGL, canvas and graph effects lazily (code split per page)", () => {
+    const heavy = ["edge-globe", "live-chart", "origin-topology", "auth-backdrop"];
+    const imports = webSources
+      .filter((file) => !file.includes("components/effects/"))
+      .flatMap((file) =>
+        [
+          ...read(file).matchAll(
+            /^import\s+(?!type\b)[^;]*from\s+"@\/components\/effects\/([a-z-]+)";/gm,
+          ),
+        ]
+          .map((m) => m[1] as string)
+          .filter((name) => heavy.includes(name))
+          .map((name) => `${file}: ${name}`),
+      );
+    expect(imports).toEqual([]);
+  });
+
   it("never loads appica's global tokens, only the scoped bridge", () => {
     const css = globSync("src/web/**/*.css", { cwd: root }).map(read).join("\n");
     expect(css).not.toMatch(/@import[^;]*@appica\/ui-react/);

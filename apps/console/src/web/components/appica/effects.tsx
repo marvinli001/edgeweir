@@ -2,7 +2,6 @@
  * appica effect wrappers. They read no appica tokens (colors are passed from shadcn tokens), so
  * they may wrap shadcn content without an AppicaScope.
  */
-import { BackgroundPattern as AppicaBackgroundPattern } from "@appica/ui-react/background-pattern";
 import { BorderBeam as AppicaBorderBeam } from "@appica/ui-react/border-beam";
 import { GradientGlow as AppicaGradientGlow } from "@appica/ui-react/gradient-glow";
 import { TextAnimate } from "@appica/ui-react/text-animate";
@@ -27,7 +26,7 @@ export function BorderBeam({
     <AppicaBorderBeam
       color={color}
       length={14}
-      className={cn("rounded-4xl", className)}
+      className={cn("rounded-2xl", className)}
       {...props}
     />
   );
@@ -46,22 +45,9 @@ export function GradientGlow({
       blur="3xl"
       speed={12}
       className={cn(
-        "rounded-4xl [--gradient-glow-opacity:0.28] dark:[--gradient-glow-opacity:0.2]",
+        "rounded-2xl [--gradient-glow-opacity:0.28] dark:[--gradient-glow-opacity:0.2]",
         className,
       )}
-      {...props}
-    />
-  );
-}
-
-/** Dot/grid backdrop tinted with the shadcn muted foreground. */
-export function BackgroundPattern({
-  className,
-  ...props
-}: React.ComponentProps<typeof AppicaBackgroundPattern>) {
-  return (
-    <AppicaBackgroundPattern
-      className={cn("[--pattern-color:var(--muted-foreground)]", className)}
       {...props}
     />
   );
