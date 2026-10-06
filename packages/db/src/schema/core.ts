@@ -32,10 +32,27 @@ const updatedAt = () =>
     .notNull();
 
 /** A cluster is a set of edge nodes that share one NodeConfig revision stream. */
+/**
+ * How a cluster's HTTP(S) listeners find the client address (null:
+ * direct). mode proxy_protocol | header; trustedCidrs and header for header,
+ * dropForwardedFor for direct.
+ */
+export interface ClusterClientIp {
+  mode: "direct" | "proxy_protocol" | "header";
+  trustedCidrs: string[];
+  header: string;
+  dropForwardedFor: boolean;
+}
+
 export const cluster = pgTable("cluster", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
   description: text("description").notNull().default(""),
+  /** HTTP and HTTPS ports the nodes listen on besides 80 and 443, sorted. */
+  extraHttpPorts: integer("extra_http_ports").array().notNull().default(sql`'{}'::integer[]`),
+  extraHttpsPorts: integer("extra_https_ports").array().notNull().default(sql`'{}'::integer[]`),
+  /** The client address setting; null is direct. */
+  clientIp: jsonb("client_ip").$type<ClusterClientIp>(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -233,6 +250,9 @@ export const site = pgTable(
       onDelete: "restrict",
     }),
     tlsSettings: jsonb("tls_settings").$type<Record<string, unknown>>().notNull().default({}),
+    /** Listener ports the site is served on (HTTPS ones with a certificate), sorted. */
+    httpPorts: integer("http_ports").array().notNull().default(sql`'{80}'::integer[]`),
+    httpsPorts: integer("https_ports").array().notNull().default(sql`'{443}'::integer[]`),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

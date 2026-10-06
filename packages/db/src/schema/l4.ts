@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { certificate } from "./certificates";
 import { cluster } from "./core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
@@ -70,6 +71,16 @@ export const l4App = pgTable(
     /** Per node; 0 means no limit. */
     maxConnections: integer("max_connections").notNull().default(0),
     newConnectionsPerSecond: integer("new_connections_per_second").notNull().default(0),
+    /** The last port of a range port..port_end; null: the single port. */
+    portEnd: integer("port_end"),
+    /** fixed | same (origins take the port the connection arrived on). */
+    originPortMode: text("origin_port_mode").notNull().default("fixed"),
+    /** TCP only: TLS terminated with this certificate; null: plain TCP. */
+    certificateId: uuid("certificate_id").references(() => certificate.id, {
+      onDelete: "restrict",
+    }),
+    /** 1.2 | 1.3, with a certificate. */
+    tlsMinimumVersion: text("tls_minimum_version").notNull().default("1.2"),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -88,6 +99,7 @@ export const l4Origin = pgTable(
       .notNull()
       .references(() => l4App.id, { onDelete: "cascade" }),
     address: text("address").notNull(),
+    /** 0 while the application's origin_port_mode is same. */
     port: integer("port").notNull(),
     weight: integer("weight").notNull().default(1),
     /** Used only while every primary origin is down. */
