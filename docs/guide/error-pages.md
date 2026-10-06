@@ -55,7 +55,7 @@
 | --- | --- |
 | `{{status}}` | 状态码，例如 `403` |
 | `{{request_id}}` | 请求 ID，与响应头 `X-Request-Id` 相同 |
-| `{{client_ip}}` | 访问者 IP（经 PROXY protocol 的监听为 PROXY 头中的地址） |
+| `{{client_ip}}` | 访问者 IP，即 TCP 客户端地址（与规则的 `ip.src` 相同） |
 | `{{host}}` | 请求的 Host，小写，不含端口；请求没有合法的 Host 时为空 |
 
 示例：

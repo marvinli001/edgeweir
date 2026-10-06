@@ -69,7 +69,7 @@ Phases run in the order of this table.
 | Request header / Response header | Remove header | On / off | Off |
 | Override settings | Each setting | See [Override settings](#override-settings) | **Bypass cache** On, everything else Unchanged |
 | Origin override | Origin group | **Default group** or one of the site's origin groups, see [Origin groups](origins-and-cache.en.md#origin-groups) | The site's first origin group; **Default group** without one |
-| Origin override | Origin Host | Host name; empty leaves it unchanged | Empty |
+| Origin override | Origin Host | Host name or IP, optionally with a port, as an origin's [Origin Host](origins-and-cache.en.md#origin-fields); empty leaves it unchanged | Empty |
 | Origin override | SNI | Host name; empty leaves it unchanged | Empty |
 | Origin override | Port | 1–65535; empty leaves it unchanged | Empty |
 | Compression algorithms | Preference order | Some of Zstandard, Brotli, and Gzip: **Add algorithm** appends one, the arrows reorder them; an empty list shows **No compression** | No compression |
@@ -208,7 +208,7 @@ http.request.uri.path.extension in {"jpg" "png" "webp"}
 | `http.response.code` | Integer | Response status; response transform and compression phases only |
 | `http.response.headers["name"]` | String | Response header; response transform and compression phases only |
 | `http.response.content_type.media_type` | String | The response's `Content-Type` without parameters, lowercase; response transform and compression phases only |
-| `ip.src` | IP | The TCP client address; with the PROXY protocol on the listener, the address the load balancer passed |
+| `ip.src` | IP | The TCP client address; behind a load balancer, the load balancer's address (HTTP and HTTPS listeners do not accept the PROXY protocol) |
 | `ssl` | Boolean | `true` for HTTPS requests |
 | `ip.geoip.country` | String | ISO country code; empty string without a record |
 | `ip.geoip.subdivision` | String | First-level subdivision code from the City MMDB, or its English name when it has no code; empty string without a record or when the City MMDB's country differs from `ip.geoip.country` |

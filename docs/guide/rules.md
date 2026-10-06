@@ -69,7 +69,7 @@
 | 请求头 / 响应头 | 移除请求头或响应头 | 开 / 关 | 关 |
 | 覆盖设置 | 各项设置 | 见[覆盖设置](#覆盖设置) | 绕过缓存「开启」，其余「不更改」 |
 | 源站覆盖 | 源站组 | 「默认组」或网站的源站组，见[源站组](origins-and-cache.md#源站组) | 网站的第一个源站组；没有时为「默认组」 |
-| 源站覆盖 | 回源 Host | 主机名；空为不更改 | 空 |
+| 源站覆盖 | 回源 Host | 主机名或 IP，可带端口，写法同源站的[回源 Host](origins-and-cache.md#源站字段)；空为不更改 | 空 |
 | 源站覆盖 | SNI | 主机名；空为不更改 | 空 |
 | 源站覆盖 | 端口 | 1–65535；空为不更改 | 空 |
 | 压缩算法 | 优先顺序 | Zstandard、Brotli、Gzip 中的若干个：「添加算法」追加，上下移动调整顺序；列表为空时显示「不压缩」 | 不压缩 |
@@ -208,7 +208,7 @@ http.request.uri.path.extension in {"jpg" "png" "webp"}
 | `http.response.code` | 整数 | 响应状态码；仅响应变换与压缩阶段 |
 | `http.response.headers["name"]` | 字符串 | 响应头；仅响应变换与压缩阶段 |
 | `http.response.content_type.media_type` | 字符串 | 响应 `Content-Type` 去掉参数后的小写媒体类型；仅响应变换与压缩阶段 |
-| `ip.src` | IP | TCP 客户端地址；监听启用 PROXY 协议时为负载均衡器传入的地址 |
+| `ip.src` | IP | TCP 客户端地址；节点前有负载均衡时为负载均衡器的地址（HTTP / HTTPS 监听不接受 PROXY 协议） |
 | `ssl` | 布尔 | HTTPS 请求为 `true` |
 | `ip.geoip.country` | 字符串 | ISO 国家代码；无记录时为空字符串 |
 | `ip.geoip.subdivision` | 字符串 | City MMDB 中的一级行政区代码，没有代码时为其英文名称；无记录或 City MMDB 的国家与 `ip.geoip.country` 不一致时为空字符串 |

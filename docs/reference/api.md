@@ -326,6 +326,7 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 | --- | --- |
 | `POST /cache-tasks` | `type`：`url`、`prefix`、`site`、`prefetch`、`host`、`tag`、`sitemap`。`host`：`hosts`（最多 500 个主机名，不带端口或通配符）；`tag`：`siteIds`（1–100）与 `tags`（1–500，去首尾空格后按小写保存，每个 1–128 字节可打印 ASCII，不含逗号）；`sitemap`：`urls` 恰好一个站点地图 URL、`maxUrls`（1–10000，默认 1000）；`prefetch` 与 `sitemap`：`variants`（`desktop` / `mobile`，默认 `["desktop"]`） |
 | `PATCH /sites/{id}` | `originSettings.activeHealthCheck`：`enabled`、`path`、`method`（`GET` / `HEAD`）、`expectedStatusMin`、`expectedStatusMax`、`host`、`intervalSeconds`（5–300）、`timeoutSeconds`（1–60，不超过间隔）、`healthyThreshold`、`unhealthyThreshold`（1–10）；`originSettings.sessionAffinity`：`enabled`、`ttlSeconds`（60–604800）；`originSettings.protocol`（`http1` / `http2`）、`originSettings.grpc`（只能在 `http2` 下为 `true`，否则 400 `ORIGIN_GRPC_REQUIRES_HTTP2`）；`cacheSettings.keepCacheTag`。省略这五项时保持原值；`originSettings`、`cacheSettings` 的其他字段仍整体替换，先 `GET` 再修改 |
+| `POST /sites`、`PATCH /sites/{id}` | `origins[].hostHeader`：空（跟随请求），或主机名、IP，可带端口：IPv6 带端口时写成 `[2001:db8::1]:8443`，不带端口时不加方括号；最长 259 字节，不含空白、引号、`/`、`\`。节点不接受的值返回 400 `ORIGIN_HOST_HEADER_INVALID`；已保存的值照常读出 |
 | `PUT /sites/{id}/error-pages` | `pages`：`[{ status, template }]`，`status` 为 403、429、502、503、504，各至多一个，`template` 1–65536 字节（UTF-8）；`interceptOriginErrors`；可选 `expectedUpdatedAt`。整体替换 |
 | `PUT /settings/error-pages` | `unknownHost`、`siteDisabled`：模板，空字符串表示内置页面，每个最多 65536 字节 |
 
@@ -343,6 +344,7 @@ curl -fsS -H "x-api-key: $EDGEWEIR_API_KEY" \
 
 | 错误代码 | 状态 | 场景 |
 | --- | --- | --- |
+| `ORIGIN_HOST_HEADER_INVALID` | 400 | 源站的 `hostHeader` 不是节点接受的主机名或 IP（见上）；`data.hostHeader` |
 | `CACHE_TASK_HOST_INVALID` | 400 | Host 带端口、通配符或不是合法主机名；`data.hosts` |
 | `CACHE_TASK_TAG_INVALID` | 400 | 标签不符合规则；`data.tags` |
 | `CACHE_TASK_HOST_UNKNOWN` | 400 | Host 或站点地图的 Host 不属于任何网站；`data.hosts` |
@@ -379,7 +381,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 | `action`（`kind: "redirect"`） | `value`（静态目标）与 `target`（值表达式）恰好填一个；`statusCode`（301、302、307、308，默认 301）；`preserveQuery`（默认 `false`）；`setQuery`（`[{ name, value }]`，最多 16 个，名称不重复）；`removeQuery`（参数名，最多 16 个，不能与 `setQuery` 重名）。参数名 `[A-Za-z0-9._~-]{1,64}`，值为可打印 ASCII，最长 256 字符 |
 | `action`（`kind: "rewrite"`） | 同 `redirect`，没有 `statusCode`；`preserveQuery` 默认 `true` |
 | `action`（`kind: "config"`） | 至少一项。`cacheBypass`、`forceHttps`、`gzip`（布尔）；只在 `config` 阶段：`brotli`、`zstd`、`websocket`、`underAttack`、`ccEnabled`（布尔），`ccMaxLevel`（`cookie302`、`js`、`pow`、`captcha`），`originConnectTimeoutMs`（100–120000），`originSendTimeoutMs`、`originReadTimeoutMs`（100–3600000），`logSampleRate`（0–10000，万分比）。省略的字段不覆盖 |
-| `action`（`kind: "origin"`） | `origin` 阶段。`originGroup`（网站的源站组，空为默认组；全局规则只能为空）、`hostHeader`、`sni`（主机名，空不覆盖）、`port`（0–65535，0 不覆盖），至少修改一项 |
+| `action`（`kind: "origin"`） | `origin` 阶段。`originGroup`（网站的源站组，空为默认组；全局规则只能为空）、`hostHeader`（写法同源站的 `hostHeader`，空不覆盖）、`sni`（主机名，空不覆盖）、`port`（0–65535，0 不覆盖），至少修改一项 |
 | `action`（`kind: "compression"`） | `compression` 阶段。`algorithms`：`zstd`、`br`、`gzip` 中不重复的若干个，按优先顺序；`[]` 不压缩 |
 | `POST /sites`、`PATCH /sites/{id}` | `cacheRules[]` 增加 `expression`（`cache` 阶段的条件，最长 16384 字符；为空时由 `pathPrefixes`、`paths`、`extensions` 生成；不为空时这三项为空或等于它的构建器形式）与 `browserTtlSeconds`（0–31536000，0 保留源站的 `Cache-Control`）；`origins[]` 增加 `group`（`[a-z0-9_-]{0,32}`，空为默认组，至少一个源站在默认组） |
 | `PUT /sites/{id}/bulk-redirects` | `redirects`：整体替换，最多 5000 条，`source` 不重复；每条 `source`（`/路径` 或 `域名/路径`，2–512 字节，不含空白、`?` 与控制字符，域名小写）、`target`（静态重定向目标，最长 1024 字节）、`statusCode`（默认 301）、`preserveQuery`（默认 `false`） |
@@ -402,6 +404,7 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 | 错误代码 | 状态 | 场景 |
 | --- | --- | --- |
+| `ORIGIN_HOST_HEADER_INVALID` | 400 | `origin` 动作的 `hostHeader` 不是节点接受的主机名或 IP；`data.hostHeader` |
 | `RULE_INVALID` | 400 | `origin` 动作选择了网站没有的源站组，或全局规则选择源站组；`sites.update` 移除仍被规则选择的源站组；已保存的规则或缓存规则条件无法编译 |
 | `BULK_REDIRECT_HOST_UNKNOWN` | 400 | `域名/路径` 来源的域名不是网站的域名（网站泛域名下一级的子域名可以）；`data.hosts`（逗号分隔，最多 5 个） |
 | `IP_LIST_REFERENCE_UNKNOWN` | 404 | 规则或缓存规则条件引用的 IP 名单不存在；`data.lists` 为名单名称（前 5 个） |

@@ -55,7 +55,7 @@ The error pages nodes answer with: site templates, platform templates, built-in 
 | --- | --- |
 | `{{status}}` | The status, e.g. `403` |
 | `{{request_id}}` | The request ID, the same as the `X-Request-Id` response header |
-| `{{client_ip}}` | The visitor's IP (on PROXY protocol listeners, the address of the PROXY header) |
+| `{{client_ip}}` | The visitor's IP, i.e. the TCP client address (the same as `ip.src` in rules) |
 | `{{host}}` | The request's Host, lowercase, without the port; empty when the request has no valid Host |
 
 Example:

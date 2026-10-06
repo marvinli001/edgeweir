@@ -326,6 +326,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | --- | --- |
 | `POST /cache-tasks` | `type`: `url`, `prefix`, `site`, `prefetch`, `host`, `tag`, `sitemap`. `host`: `hosts` (up to 500 host names, without port or wildcard); `tag`: `siteIds` (1–100) and `tags` (1–500, trimmed and stored in lowercase, each 1–128 bytes of printable ASCII without commas); `sitemap`: `urls` with exactly one sitemap URL, `maxUrls` (1–10000, default 1000); `prefetch` and `sitemap`: `variants` (`desktop` / `mobile`, default `["desktop"]`) |
 | `PATCH /sites/{id}` | `originSettings.activeHealthCheck`: `enabled`, `path`, `method` (`GET` / `HEAD`), `expectedStatusMin`, `expectedStatusMax`, `host`, `intervalSeconds` (5–300), `timeoutSeconds` (1–60, not above the interval), `healthyThreshold`, `unhealthyThreshold` (1–10); `originSettings.sessionAffinity`: `enabled`, `ttlSeconds` (60–604800); `originSettings.protocol` (`http1` / `http2`), `originSettings.grpc` (`true` only with `http2`, otherwise 400 `ORIGIN_GRPC_REQUIRES_HTTP2`); `cacheSettings.keepCacheTag`. Omitted, these five keep their values; the other fields of `originSettings` and `cacheSettings` are still replaced as a whole, so `GET` first |
+| `POST /sites`, `PATCH /sites/{id}` | `origins[].hostHeader`: empty (the request's), or a host name or IP, optionally with a port: IPv6 with a port as `[2001:db8::1]:8443`, without a port without brackets; at most 259 bytes, no whitespace, quotes, `/`, or `\`. Values nodes refuse get 400 `ORIGIN_HOST_HEADER_INVALID`; saved values still read back |
 | `PUT /sites/{id}/error-pages` | `pages`: `[{ status, template }]`, `status` one of 403, 429, 502, 503, 504, at most once each, `template` 1–65536 bytes (UTF-8); `interceptOriginErrors`; optional `expectedUpdatedAt`. Replaces everything |
 | `PUT /settings/error-pages` | `unknownHost`, `siteDisabled`: templates, an empty string meaning the built-in page, at most 65536 bytes each |
 
@@ -343,6 +344,7 @@ Responses:
 
 | Error code | Status | Case |
 | --- | --- | --- |
+| `ORIGIN_HOST_HEADER_INVALID` | 400 | An origin's `hostHeader` is not a host name or IP that nodes accept (see above); `data.hostHeader` |
 | `CACHE_TASK_HOST_INVALID` | 400 | A host has a port or wildcard or is not a valid host name; `data.hosts` |
 | `CACHE_TASK_TAG_INVALID` | 400 | A tag breaks the rules; `data.tags` |
 | `CACHE_TASK_HOST_UNKNOWN` | 400 | A host, or the sitemap's host, belongs to no site; `data.hosts` |
@@ -379,7 +381,7 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | `action` (`kind: "redirect"`) | Exactly one of `value` (static target) and `target` (value expression); `statusCode` (301, 302, 307, 308, default 301); `preserveQuery` (default `false`); `setQuery` (`[{ name, value }]`, up to 16, unique names); `removeQuery` (parameter names, up to 16, none also in `setQuery`). Names `[A-Za-z0-9._~-]{1,64}`, values printable ASCII up to 256 characters |
 | `action` (`kind: "rewrite"`) | As `redirect` without `statusCode`; `preserveQuery` defaults to `true` |
 | `action` (`kind: "config"`) | At least one field. `cacheBypass`, `forceHttps`, `gzip` (booleans); in the `config` phase only: `brotli`, `zstd`, `websocket`, `underAttack`, `ccEnabled` (booleans), `ccMaxLevel` (`cookie302`, `js`, `pow`, `captcha`), `originConnectTimeoutMs` (100–120000), `originSendTimeoutMs`, `originReadTimeoutMs` (100–3600000), `logSampleRate` (0–10000, in 1/10,000). Omitted fields override nothing |
-| `action` (`kind: "origin"`) | `origin` phase. `originGroup` (an origin group of the site, empty for the default group; always empty in global rules), `hostHeader`, `sni` (host names, empty overrides nothing), `port` (0–65535, 0 overrides nothing); at least one change |
+| `action` (`kind: "origin"`) | `origin` phase. `originGroup` (an origin group of the site, empty for the default group; always empty in global rules), `hostHeader` (as an origin's `hostHeader`, empty overrides nothing), `sni` (a host name, empty overrides nothing), `port` (0–65535, 0 overrides nothing); at least one change |
 | `action` (`kind: "compression"`) | `compression` phase. `algorithms`: unique entries of `zstd`, `br`, `gzip` in preference order; `[]` turns compression off |
 | `POST /sites`, `PATCH /sites/{id}` | `cacheRules[]` adds `expression` (a condition of the `cache` phase, up to 16384 characters; when empty, `pathPrefixes`, `paths`, and `extensions` build it; when set, those are empty or equal its builder form) and `browserTtlSeconds` (0–31536000, 0 keeps the origin's `Cache-Control`); `origins[]` adds `group` (`[a-z0-9_-]{0,32}`, empty for the default group, at least one origin in the default group) |
 | `PUT /sites/{id}/bulk-redirects` | `redirects`: replaces everything, up to 5000, unique `source`; each with `source` (`/path` or `host/path`, 2–512 bytes without whitespace, `?`, or control characters, lowercase host), `target` (static redirect target, up to 1024 bytes), `statusCode` (default 301), `preserveQuery` (default `false`) |
@@ -402,6 +404,7 @@ Responses:
 
 | Error code | Status | Case |
 | --- | --- | --- |
+| `ORIGIN_HOST_HEADER_INVALID` | 400 | The `hostHeader` of an `origin` action is not a host name or IP that nodes accept; `data.hostHeader` |
 | `RULE_INVALID` | 400 | An `origin` action picks an origin group the site does not have, or a global rule picks one; `sites.update` removes an origin group a rule still picks; a saved rule or cache rule condition no longer compiles |
 | `BULK_REDIRECT_HOST_UNKNOWN` | 400 | The host of a `host/path` source is not a domain of the site (one label under a wildcard domain of the site is fine); `data.hosts` (comma-separated, up to 5) |
 | `IP_LIST_REFERENCE_UNKNOWN` | 404 | A rule or cache rule condition references IP lists that do not exist; `data.lists` names them (the first 5) |
