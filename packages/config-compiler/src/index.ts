@@ -9,11 +9,13 @@ import {
   type CacheRule,
   CacheRuleSchema,
   type CacheZone,
+  CacheZoneNodeSizeSchema,
   CacheZoneSchema,
   CcPolicySchema,
   type CertificateRef,
   type ChallengeKeyRef,
   ChallengeKeyRefSchema,
+  CharsetSchema,
   DomainSchema,
   type EdgeRule,
   EdgeRuleSchema,
@@ -29,6 +31,7 @@ import {
   ListenerProtocol,
   ListenerSchema,
   LoadBalancePolicy,
+  MaintenanceSchema,
   type NodeConfig,
   type NodeConfigDiff,
   NodeConfigDiffSchema,
@@ -45,6 +48,7 @@ import {
   type PlatformErrorPages,
   PlatformErrorPagesSchema,
   PlatformProtectionSchema,
+  PurgeMethodSchema,
   QueryParamSchema,
   type RuleAction,
   RuleActionSchema,
@@ -129,6 +133,8 @@ export interface CacheRuleModel {
   staleIfErrorSeconds?: number;
   /** Cache responses to requests with an Authorization header; defaults to false. */
   cacheAuthorized?: boolean;
+  /** Cache responses with Set-Cookie (only the fetched response carries it); site-content-v1. */
+  cacheSetCookie?: boolean;
 }
 
 export interface OriginPoolSettingsModel {
@@ -145,10 +151,15 @@ export interface OriginPoolSettingsModel {
   keepalive: boolean;
   keepaliveIdleSeconds: number;
   keepaliveMaxRequests: number;
+  /** Origins a request tries, 1-5; omitted or 3 compiles as before (site-content-v1 otherwise). */
+  tries?: number;
+  /** Retry after 502, 503 and 504 responses; omitted or true compiles as before. */
+  statusRetry?: boolean;
 }
 
 export interface CacheKeyModel {
-  query: "all" | "ignore" | "include";
+  /** exclude: every parameter but queryParams ("prefix*" patterns allowed); site-content-v1. */
+  query: "all" | "ignore" | "include" | "exclude";
   queryParams: string[];
   sortQuery: boolean;
   headers: string[];
@@ -197,6 +208,26 @@ export const L4_FEATURE = "l4-v1";
  * them (proto v0.19.0, Domain.tls_pending).
  */
 export const TLS_PENDING_DOMAINS_FEATURE = "tls-pending-domains-v1";
+/**
+ * Feature of the site settings of proto v0.24.0: cache keys that drop
+ * parameters, responses cached with Set-Cookie, the PURGE method, hiding
+ * X-Cache, error pages for more statuses, classes and redirects,
+ * maintenance, charsets, the gzip level and the largest compressed
+ * response, request body limits and origin tries.
+ */
+export const SITE_CONTENT_FEATURE = "site-content-v1";
+/** Feature of per-node cache zone sizes (proto v0.24.0, CacheZone.node_sizes). */
+export const CACHE_ZONE_FEATURE = "cache-zone-v1";
+/** A site's body limit when it sets none: nodes' former global 100 MiB. */
+export const DEFAULT_REQUEST_BODY_LIMIT = 100 * 1024 * 1024;
+/** Origins a request tries when the pool sets none. */
+export const DEFAULT_ORIGIN_TRIES = 3;
+/**
+ * keys_zone of a cache zone of maxSizeMb (ADR-0033): nginx keeps about
+ * 8000 keys per MiB; 64 MiB for the default 10 GiB, at most 512 MiB.
+ */
+export const keysZoneMbFor = (maxSizeMb: number) =>
+  Math.min(Math.max(Math.ceil(maxSizeMb / 160), 16), 512);
 /** Layer-4 applications a cluster may have (enabled or not). */
 export const MAX_L4_APPS_PER_CLUSTER = 256;
 
@@ -220,9 +251,29 @@ export interface SessionAffinityModel {
 
 /** A site's error pages (config.proto SiteErrorPages). */
 export interface SiteErrorPagesModel {
-  /** Any order; compiled sorted by status. Without pages nothing is compiled. */
-  pages: { status: number; template: string }[];
+  /**
+   * Any order; compiled sorted by status. Without pages nothing is compiled.
+   * status 4 and 5 are the 4xx and 5xx classes; redirectUrl replaces the
+   * template; responseStatus (0: keep) replaces a template page's status.
+   */
+  pages: { status: number; template: string; redirectUrl?: string; responseStatus?: number }[];
   interceptOriginErrors: boolean;
+}
+
+/** A site's maintenance mode while on (config.proto Maintenance). */
+export interface MaintenanceModel {
+  template: string;
+  retryAfterSeconds: number;
+  /** CIDRs in canonical form; any order, compiled sorted without duplicates. */
+  allowedCidrs: string[];
+  allowedPathPrefixes: string[];
+}
+
+/** A site's charset setting while on (config.proto Charset). */
+export interface CharsetModel {
+  name: string;
+  force: boolean;
+  uppercase: boolean;
 }
 
 /** The platform's pages; an empty template means the node's built-in page. */
@@ -238,7 +289,7 @@ export interface OfflineHostModel {
   reason: "disabled";
 }
 
-type TlsFields = Omit<TlsOptions, "$typeName" | "$unknown">;
+type TlsFields = Omit<TlsOptions, "$typeName" | "$unknown" | "gzipLevel" | "compressMaxLength">;
 type CompressionField =
   | "brotli"
   | "brotliLevel"
@@ -248,9 +299,13 @@ type CompressionField =
   | "zstdLevel"
   | "zstdMinLength"
   | "zstdTypes";
-/** A site's TLS options; Brotli and Zstandard default to off. */
+/**
+ * A site's TLS options; Brotli and Zstandard default to off, the gzip level
+ * (0: nginx's default) and the largest compressed response (0: no limit)
+ * to 0 (site-content-v1 otherwise).
+ */
 export type TlsModel = Omit<TlsFields, CompressionField> &
-  Partial<Pick<TlsFields, CompressionField>>;
+  Partial<Pick<TlsFields, CompressionField>> & { gzipLevel?: number; compressMaxLength?: number };
 
 /** OWASP CRS of a site that runs it (config.proto SiteWaf). */
 export interface SiteWafModel {
@@ -304,6 +359,17 @@ export interface SiteModel {
   errorPages?: SiteErrorPagesModel | null;
   /** Exact-match redirect table; any order, compiled sorted by source (rules-v2). */
   bulkRedirects?: BulkRedirectModel[];
+  // site-content-v1 (proto v0.24.0); omitted values compile as before.
+  /** The PURGE method's key reference; omitted or null: off. */
+  purge?: { credentialId: string; credentialVersion: number } | null;
+  /** Send no X-Cache header. */
+  hideXCache?: boolean;
+  /** Omitted or null: off. */
+  maintenance?: MaintenanceModel | null;
+  /** Omitted or null: off. */
+  charset?: CharsetModel | null;
+  /** Bytes, 0 no limit; omitted or DEFAULT_REQUEST_BODY_LIMIT compiles as before. */
+  requestBodyLimit?: number;
 }
 
 /** One entry of a site's bulk redirect table (config.proto BulkRedirect). */
@@ -412,6 +478,9 @@ export interface RuleModel {
     port?: number;
     // rules-v2: compression codings in preference order (RuleAction.compression)
     algorithms?: string[];
+    // site-content-v1: config (phase config only)
+    /** The request's body limit in bytes (0: none); omitted keeps the site's. */
+    requestBodyLimit?: number;
   };
   /** A rule compiled earlier: compileRules keeps it as it is (see ruleModelOf). */
   compiled?: EdgeRule;
@@ -480,6 +549,10 @@ function compileAction(phase: string, a: RuleModel["action"]): RuleAction {
     port: a.port ?? 0,
     compression: a.kind === "compression" ? [...(a.algorithms ?? [])] : [],
     append: a.kind === "response_header" && header && a.append === true,
+    requestBodyLimit:
+      a.kind === "config" && a.requestBodyLimit !== undefined
+        ? BigInt(a.requestBodyLimit)
+        : undefined,
   });
 }
 
@@ -748,6 +821,8 @@ export interface CacheZoneModel {
   maxSizeMb: number;
   keysZoneMb: number;
   inactiveSeconds: number;
+  /** Sizes on single nodes (cache-zone-v1); any order, compiled sorted by node id. */
+  nodeSizes?: { nodeId: string; maxSizeMb: number; keysZoneMb: number }[];
 }
 
 export interface CompileInput {
@@ -890,6 +965,48 @@ export function poolAndPageFeatures(config: NodeConfig): string[] {
   ];
 }
 
+/** Error page statuses of error-pages-v1; others need site-content-v1. */
+const ERROR_PAGES_V1_STATUSES = new Set([403, 429, 502, 503, 504]);
+
+/** Whether a compiled site uses a setting of site-content-v1. */
+export function usesSiteContent(site: Site): boolean {
+  const pool = site.originPool;
+  const tls = site.tls;
+  return (
+    !!site.purge ||
+    site.hideXCache ||
+    !!site.maintenance ||
+    !!site.charset ||
+    site.requestBodyLimit !== undefined ||
+    (tls !== undefined && (tls.gzipLevel !== 0 || tls.compressMaxLength !== 0n)) ||
+    (pool !== undefined && (pool.tries !== 0 || pool.statusRetryDisabled)) ||
+    site.cacheRules.some((rule) => rule.cacheSetCookie) ||
+    site.cacheKey?.query === CacheKeyQuery.EXCLUDE ||
+    (site.errorPages?.pages ?? []).some(
+      (page) =>
+        !ERROR_PAGES_V1_STATUSES.has(page.status) ||
+        page.redirectUrl !== "" ||
+        page.responseStatus !== 0,
+    ) ||
+    site.rules.some((rule) => rule.action?.requestBodyLimit !== undefined)
+  );
+}
+
+/**
+ * Features of the proto v0.24.0 settings a compiled configuration uses:
+ * site-content-v1 (a site's settings, or a platform rule's body limit) and
+ * cache-zone-v1 (per-node cache zone sizes).
+ */
+export function contentFeatures(config: NodeConfig): string[] {
+  return [
+    ...(config.sites.some(usesSiteContent) ||
+    config.platformRules.some((rule) => rule.action?.requestBodyLimit !== undefined)
+      ? [SITE_CONTENT_FEATURE]
+      : []),
+    ...(config.cacheZones.some((zone) => zone.nodeSizes.length) ? [CACHE_ZONE_FEATURE] : []),
+  ];
+}
+
 export const DEFAULT_CACHE_ZONE = "default";
 
 export const defaultListeners: ListenerModel[] = [{ port: 80, protocol: "http" }];
@@ -925,6 +1042,7 @@ const queryMap = {
   all: CacheKeyQuery.ALL,
   ignore: CacheKeyQuery.IGNORE,
   include: CacheKeyQuery.INCLUDE,
+  exclude: CacheKeyQuery.EXCLUDE,
 } as const;
 
 /** Sorted, de-duplicated copy: list order carries no meaning in these fields. */
@@ -964,10 +1082,14 @@ function compileTls(model: TlsModel) {
     zstdLevel,
     zstdMinLength,
     zstdTypes,
+    gzipLevel,
+    compressMaxLength,
     ...rest
   } = model;
   return create(TlsOptionsSchema, {
     ...rest,
+    gzipLevel: gzipLevel ?? 0,
+    compressMaxLength: BigInt(compressMaxLength ?? 0),
     ...(brotli
       ? {
           brotli: true,
@@ -1037,6 +1159,12 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
             ...(settings.protocol === "http2"
               ? { protocol: OriginProtocol.HTTP2, grpc: !!settings.grpc }
               : {}),
+            // Three tries with status retries stay unset (site-content-v1 otherwise).
+            tries:
+              settings.tries !== undefined && settings.tries !== DEFAULT_ORIGIN_TRIES
+                ? settings.tries
+                : 0,
+            statusRetryDisabled: settings.statusRetry === false,
             healthCheck: create(PassiveHealthCheckSchema, {
               maxFails: settings.maxFails,
               recoverySeconds: settings.recoverySeconds,
@@ -1089,12 +1217,14 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
           staleIfErrorSeconds: r.staleIfErrorSeconds ?? 0,
           cacheAuthorized: r.cacheAuthorized ?? false,
           browserTtlSeconds: r.browserTtlSeconds ?? 0,
+          cacheSetCookie: r.cacheSetCookie ?? false,
         }),
     ),
     cacheKey: key
       ? create(CacheKeyPolicySchema, {
           query: queryMap[key.query],
-          queryParams: key.query === "include" ? sortedSet(key.queryParams) : [],
+          queryParams:
+            key.query === "include" || key.query === "exclude" ? sortedSet(key.queryParams) : [],
           sortQuery: key.sortQuery,
           headers: sortedSet(key.headers.map((h) => h.toLowerCase())),
           cookies: sortedSet(key.cookies),
@@ -1127,11 +1257,38 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
     errorPages: model.errorPages?.pages.length
       ? create(SiteErrorPagesSchema, {
           pages: model.errorPages.pages.map((page) =>
-            create(ErrorPageSchema, { status: page.status, template: page.template }),
+            create(ErrorPageSchema, {
+              status: page.status,
+              // A redirect page has no template (site-content-v1).
+              template: page.redirectUrl ? "" : page.template,
+              redirectUrl: page.redirectUrl ?? "",
+              responseStatus: page.redirectUrl ? 0 : (page.responseStatus ?? 0),
+            }),
           ),
           interceptOriginErrors: model.errorPages.interceptOriginErrors,
         })
       : undefined,
+    purge: model.purge
+      ? create(PurgeMethodSchema, {
+          credentialId: model.purge.credentialId,
+          credentialVersion: BigInt(model.purge.credentialVersion),
+        })
+      : undefined,
+    hideXCache: model.hideXCache ?? false,
+    maintenance: model.maintenance
+      ? create(MaintenanceSchema, {
+          template: model.maintenance.template,
+          retryAfterSeconds: model.maintenance.retryAfterSeconds,
+          allowedCidrs: sortedSet(model.maintenance.allowedCidrs),
+          allowedPathPrefixes: sortedSet(model.maintenance.allowedPathPrefixes),
+        })
+      : undefined,
+    charset: model.charset ? create(CharsetSchema, model.charset) : undefined,
+    // The default limit stays unset: configurations encode as before.
+    requestBodyLimit:
+      model.requestBodyLimit !== undefined && model.requestBodyLimit !== DEFAULT_REQUEST_BODY_LIMIT
+        ? BigInt(model.requestBodyLimit)
+        : undefined,
     bulkRedirects: [...(model.bulkRedirects ?? [])]
       .sort(byBytes((redirect) => redirect.source))
       .map((redirect) =>
@@ -1211,6 +1368,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   const out = clone(NodeConfigSchema, config) as T;
   out.listeners.sort((a, b) => a.port - b.port);
   out.cacheZones.sort(byString((z: CacheZone) => z.name));
+  for (const zone of out.cacheZones) zone.nodeSizes.sort(byString((n) => n.nodeId));
   out.certificates.sort(byString((c: CertificateRef) => c.id));
   out.sites.sort(byString((s: Site) => s.id));
   // A set: ascending (byte order, ASCII) without duplicates, as the Go agent sorts it.
@@ -1238,6 +1396,10 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
     }
     if (site.waf) site.waf.excludedRuleIds = sortedSet(site.waf.excludedRuleIds);
     site.errorPages?.pages.sort((a, b) => a.status - b.status);
+    if (site.maintenance) {
+      site.maintenance.allowedCidrs = sortedSet(site.maintenance.allowedCidrs);
+      site.maintenance.allowedPathPrefixes = sortedSet(site.maintenance.allowedPathPrefixes);
+    }
     site.bulkRedirects.sort(byBytes((redirect) => redirect.source));
     for (const rule of site.rules) canonicalizeAction(rule.action);
     site.domains.sort(byString((d) => `${d.name}\u0000${d.wildcard ? 1 : 0}`));
@@ -1307,6 +1469,7 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...protectionFeatures(config),
     ...moduleFeatures(config),
     ...poolAndPageFeatures(config),
+    ...contentFeatures(config),
     // Without applications the configuration encodes exactly as before.
     ...(config.l4Apps.length ? [L4_FEATURE] : []),
   ];
@@ -1342,6 +1505,13 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       maxSizeMb: BigInt(z.maxSizeMb),
       keysZoneMb: z.keysZoneMb,
       inactiveSeconds: z.inactiveSeconds,
+      nodeSizes: [...(z.nodeSizes ?? [])].sort(byString((n) => n.nodeId)).map((n) =>
+        create(CacheZoneNodeSizeSchema, {
+          nodeId: n.nodeId,
+          maxSizeMb: BigInt(n.maxSizeMb),
+          keysZoneMb: n.keysZoneMb,
+        }),
+      ),
     }),
   );
   const challenges = usesChallenges(input);
