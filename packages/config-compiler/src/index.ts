@@ -14,6 +14,8 @@ import {
   type CertificateRef,
   type ChallengeKeyRef,
   ChallengeKeyRefSchema,
+  type ClientAddress,
+  ClientAddressSchema,
   DomainSchema,
   type EdgeRule,
   EdgeRuleSchema,
@@ -61,6 +63,7 @@ import {
 } from "@edgeweir/proto";
 import {
   type Expression,
+  needsClientIp,
   needsRulesV2,
   needsRulesV3,
   type Phase,
@@ -248,9 +251,13 @@ type CompressionField =
   | "zstdLevel"
   | "zstdMinLength"
   | "zstdTypes";
-/** A site's TLS options; Brotli and Zstandard default to off. */
-export type TlsModel = Omit<TlsFields, CompressionField> &
-  Partial<Pick<TlsFields, CompressionField>>;
+type RedirectField = "redirectStatus" | "redirectPort" | "redirectExcludedDomains";
+/**
+ * A site's TLS options; Brotli and Zstandard default to off, the HTTPS
+ * redirect to 301 towards 443 with no domain excluded.
+ */
+export type TlsModel = Omit<TlsFields, CompressionField | RedirectField> &
+  Partial<Pick<TlsFields, CompressionField | RedirectField>>;
 
 /** OWASP CRS of a site that runs it (config.proto SiteWaf). */
 export interface SiteWafModel {
@@ -304,7 +311,39 @@ export interface SiteModel {
   errorPages?: SiteErrorPagesModel | null;
   /** Exact-match redirect table; any order, compiled sorted by source (rules-v2). */
   bulkRedirects?: BulkRedirectModel[];
+  /**
+   * The listener ports the site is served on (HTTPS ones only with a
+   * certificate). Omitted: 80 and 443.
+   */
+  ports?: SitePortsModel;
 }
+
+/** A site's listener ports. */
+export interface SitePortsModel {
+  http: number[];
+  https: number[];
+}
+
+/** The cluster's client address setting (config.proto ClientAddress); null is direct. */
+export interface ClientIpModel {
+  mode: "direct" | "proxy_protocol" | "header";
+  trustedCidrs: string[];
+  header: string;
+  dropForwardedFor: boolean;
+}
+
+/** The cluster's listener ports besides 80 and 443, and its client address setting. */
+export interface EdgeModel {
+  httpPorts: number[];
+  httpsPorts: number[];
+  clientIp: ClientIpModel | null;
+}
+
+export const DEFAULT_HTTP_PORT = 80;
+export const DEFAULT_HTTPS_PORT = 443;
+export const EDGE_PORTS_FEATURE = "edge-ports-v1";
+export const CLIENT_IP_FEATURE = "client-ip-v1";
+export const L4_V2_FEATURE = "l4-v2";
 
 /** One entry of a site's bulk redirect table (config.proto BulkRedirect). */
 export interface BulkRedirectModel {
@@ -670,6 +709,7 @@ export function nodeRequirements(config: NodeConfig): string[] {
 export interface L4OriginModel {
   id: string;
   address: string;
+  /** Compiled 0 while the application's originPortMode is same. */
   port: number;
   weight: number;
   backup: boolean;
@@ -696,6 +736,13 @@ export interface L4AppModel {
   blockListIds: string[];
   maxConnections: number;
   newConnectionsPerSecond: number;
+  /** The last port of a range (l4-v2); omitted or null: the single port. */
+  portEnd?: number | null;
+  /** same: origins take the port the connection arrived on (l4-v2). Omitted: fixed. */
+  originPortMode?: "fixed" | "same";
+  /** TCP only: TLS terminated with this certificate (l4-v2); omitted or null: none. */
+  certificateId?: string | null;
+  tlsMinimumVersion?: "1.2" | "1.3";
 }
 
 /**
@@ -714,11 +761,16 @@ export function compileL4Apps(apps: readonly L4AppModel[] | undefined): L4App[] 
         port: app.port,
         acceptProxyProtocol: tcp && app.acceptProxyProtocol,
         proxyProtocolVersion: tcp ? app.proxyProtocolVersion : 0,
+        // l4-v2: ranges, origins on the arriving port and TLS; unset
+        // otherwise, so applications without them encode as before.
+        portEnd: app.portEnd && app.portEnd > app.port ? app.portEnd : 0,
+        certificateId: tcp && app.certificateId ? app.certificateId : "",
+        tlsMinimumVersion: tcp && app.certificateId ? (app.tlsMinimumVersion ?? "1.2") : "",
         origins: [...app.origins].sort(byBytes((origin) => origin.id)).map((origin) =>
           create(L4OriginSchema, {
             id: origin.id,
             address: origin.address,
-            port: origin.port,
+            port: app.originPortMode === "same" ? 0 : origin.port,
             weight: Math.max(1, origin.weight),
             backup: origin.backup,
           }),
@@ -777,6 +829,8 @@ export interface CompileInput {
   offlineHosts?: OfflineHostModel[];
   /** The cluster's layer-4 applications; disabled ones are left out. */
   l4Apps?: L4AppModel[];
+  /** Listener ports besides 80 and 443 and the client address setting; omitted: none, direct. */
+  edge?: EdgeModel;
 }
 
 /**
@@ -964,10 +1018,17 @@ function compileTls(model: TlsModel) {
     zstdLevel,
     zstdMinLength,
     zstdTypes,
+    redirectStatus,
+    redirectPort,
+    redirectExcludedDomains,
     ...rest
   } = model;
   return create(TlsOptionsSchema, {
     ...rest,
+    // edge-ports-v1: the defaults (301 to 443, nothing excluded) stay unset.
+    redirectStatus: redirectStatus === 301 ? 0 : (redirectStatus ?? 0),
+    redirectPort: redirectPort === DEFAULT_HTTPS_PORT ? 0 : (redirectPort ?? 0),
+    redirectExcludedDomains: sortedByteSet(redirectExcludedDomains),
     ...(brotli
       ? {
           brotli: true,
@@ -987,7 +1048,32 @@ function compileTls(model: TlsModel) {
   });
 }
 
-function compileSite(model: SiteModel, challenges: boolean): Site {
+/**
+ * Site.ports of a site: its HTTP ports among 80 and the cluster's extra
+ * HTTP ports, and with a certificate its HTTPS ports among 443 and the
+ * extra HTTPS ports, sorted. Empty (every listener) when the cluster has no
+ * extra ports and the site keeps the defaults, so such configurations
+ * encode as before edge-ports-v1.
+ */
+export function compileSitePorts(
+  site: { ports?: SitePortsModel; certificateId?: string },
+  edge: EdgeModel | undefined,
+): number[] {
+  const ports = site.ports ?? { http: [DEFAULT_HTTP_PORT], https: [DEFAULT_HTTPS_PORT] };
+  const http = new Set([DEFAULT_HTTP_PORT, ...(edge?.httpPorts ?? [])]);
+  const https = new Set([DEFAULT_HTTPS_PORT, ...(edge?.httpsPorts ?? [])]);
+  const out = sortedSet([
+    ...ports.http.filter((port) => http.has(port)),
+    ...(site.certificateId ? ports.https.filter((port) => https.has(port)) : []),
+  ]);
+  const extra = (edge?.httpPorts.length ?? 0) + (edge?.httpsPorts.length ?? 0) > 0;
+  const defaults = site.certificateId
+    ? [DEFAULT_HTTP_PORT, DEFAULT_HTTPS_PORT]
+    : [DEFAULT_HTTP_PORT];
+  return !extra && out.join() === defaults.join() ? [] : out;
+}
+
+function compileSite(model: SiteModel, challenges: boolean, edge?: EdgeModel): Site {
   const settings = model.originPool.settings;
   const health = model.originPool.activeHealthCheck;
   const affinity = model.originPool.sessionAffinity;
@@ -1142,6 +1228,7 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
           preserveQuery: redirect.preserveQuery,
         }),
       ),
+    ports: compileSitePorts(model, edge),
   });
 }
 
@@ -1229,6 +1316,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
     app.blockListIds = sortedByteSet(app.blockListIds);
   }
   for (const list of out.ipLists) list.entries = sortedSet(list.entries);
+  if (out.clientAddress) out.clientAddress.trustedCidrs = sortedSet(out.clientAddress.trustedCidrs);
   for (const rule of out.platformRules) canonicalizeAction(rule.action);
   for (const site of out.sites) {
     if (site.tls) {
@@ -1237,6 +1325,10 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
       site.tls.zstdTypes = sortedSet(site.tls.zstdTypes);
     }
     if (site.waf) site.waf.excludedRuleIds = sortedSet(site.waf.excludedRuleIds);
+    // v0.23.0: listener ports and excluded domains as sets.
+    site.ports = sortedSet(site.ports);
+    if (site.tls)
+      site.tls.redirectExcludedDomains = sortedByteSet(site.tls.redirectExcludedDomains);
     site.errorPages?.pages.sort((a, b) => a.status - b.status);
     site.bulkRedirects.sort(byBytes((redirect) => redirect.source));
     for (const rule of site.rules) canonicalizeAction(rule.action);
@@ -1260,22 +1352,111 @@ export function contentHash(config: NodeConfig): string {
   return createHash("sha256").update(toBinary(NodeConfigSchema, bare)).digest("hex");
 }
 
-/** Port 80, plus 443 when a site has a certificate (HTTP/2 and HTTP/3 if one of them enables it). */
-function listenersFor(
-  sites: { certificateId?: string; tls?: { http2?: boolean; http3?: boolean } }[],
-) {
+/**
+ * The listeners of compiled sites: 80 and the cluster's extra HTTP ports;
+ * 443 while a site with a certificate is served there and the extra HTTPS
+ * ports. An HTTPS port takes HTTP/2 and HTTP/3 when a site with a
+ * certificate served there enables them; every listener takes the PROXY
+ * protocol in the proxy_protocol mode. Without extra ports and sites
+ * bound to other ports this is 80 plus 443 once a site has a certificate,
+ * as before edge-ports-v1.
+ */
+export function listenersFor(
+  sites: Pick<Site, "certificateId" | "tls" | "ports">[],
+  edge?: EdgeModel,
+): ListenerModel[] {
   const tlsSites = sites.filter((s) => s.certificateId);
-  return tlsSites.length
-    ? [
-        ...defaultListeners,
-        {
-          port: 443,
-          protocol: "https" as const,
-          http2: tlsSites.some((s) => s.tls?.http2),
-          http3: tlsSites.some((s) => s.tls?.http3),
-        },
-      ]
-    : defaultListeners;
+  const on = (site: Pick<Site, "ports">, port: number) =>
+    site.ports.length === 0 || site.ports.includes(port);
+  const proxyProtocol = edge?.clientIp?.mode === "proxy_protocol";
+  const https = sortedSet([
+    ...(tlsSites.some((s) => on(s, DEFAULT_HTTPS_PORT)) ? [DEFAULT_HTTPS_PORT] : []),
+    ...(edge?.httpsPorts ?? []),
+  ]);
+  const extra = (listener: ListenerModel) =>
+    proxyProtocol ? { ...listener, proxyProtocol } : listener;
+  return [
+    ...sortedSet([DEFAULT_HTTP_PORT, ...(edge?.httpPorts ?? [])]).map((port) =>
+      extra({ port, protocol: "http" as const }),
+    ),
+    ...https.map((port) => {
+      const served = tlsSites.filter((s) => on(s, port));
+      return extra({
+        port,
+        protocol: "https" as const,
+        http2: served.some((s) => s.tls?.http2),
+        http3: served.some((s) => s.tls?.http3),
+      });
+    }),
+  ].sort((a, b) => a.port - b.port);
+}
+
+/** NodeConfig.client_address: unset for direct without dropping X-Forwarded-For. */
+export function compileClientAddress(
+  model: ClientIpModel | null | undefined,
+): ClientAddress | undefined {
+  if (!model || (model.mode === "direct" && !model.dropForwardedFor)) return undefined;
+  return create(ClientAddressSchema, {
+    mode: model.mode,
+    trustedCidrs: model.mode === "header" ? sortedSet(model.trustedCidrs) : [],
+    header: model.mode === "header" ? model.header : "",
+    dropForwardedFor: model.mode === "direct" && model.dropForwardedFor,
+  });
+}
+
+/**
+ * The listener ports and client address setting a compiled configuration
+ * was made with (refreshDerived keeps them when no current ones are given).
+ */
+export function edgeOf(config: NodeConfig): EdgeModel {
+  const extra = (protocol: ListenerProtocol, standard: number) =>
+    config.listeners
+      .filter((l) => l.protocol === protocol && l.port !== standard)
+      .map((l) => l.port)
+      .filter((port) => port !== DEFAULT_HTTP_PORT && port !== DEFAULT_HTTPS_PORT);
+  const ca = config.clientAddress;
+  return {
+    httpPorts: extra(ListenerProtocol.HTTP, DEFAULT_HTTP_PORT),
+    httpsPorts: extra(ListenerProtocol.HTTPS, DEFAULT_HTTPS_PORT),
+    clientIp: ca
+      ? {
+          mode: ca.mode as ClientIpModel["mode"],
+          trustedCidrs: [...ca.trustedCidrs],
+          header: ca.header,
+          dropForwardedFor: ca.dropForwardedFor,
+        }
+      : null,
+  };
+}
+
+/** Features of the listener ports and client address setting a compiled configuration uses. */
+export function edgeFeatures(config: NodeConfig): string[] {
+  const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
+  return [
+    ...(config.listeners.some(
+      (l) => l.port !== DEFAULT_HTTP_PORT && l.port !== DEFAULT_HTTPS_PORT,
+    ) ||
+    config.sites.some(
+      (site) =>
+        site.ports.length > 0 ||
+        !!site.tls?.redirectStatus ||
+        !!site.tls?.redirectPort ||
+        (site.tls?.redirectExcludedDomains.length ?? 0) > 0,
+    )
+      ? [EDGE_PORTS_FEATURE]
+      : []),
+    ...(config.clientAddress ||
+    config.listeners.some((l) => l.proxyProtocol) ||
+    configExpressions(config).some(needsClientIp) ||
+    rules.some((rule) => rule.action?.key === "ip.peer")
+      ? [CLIENT_IP_FEATURE]
+      : []),
+    ...(config.l4Apps.some(
+      (app) => app.portEnd > 0 || !!app.certificateId || app.origins.some((o) => o.port === 0),
+    )
+      ? [L4_V2_FEATURE]
+      : []),
+  ];
 }
 
 const compileListener = (l: ListenerModel): Listener =>
@@ -1309,19 +1490,28 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...poolAndPageFeatures(config),
     // Without applications the configuration encodes exactly as before.
     ...(config.l4Apps.length ? [L4_FEATURE] : []),
+    ...edgeFeatures(config),
   ];
 }
 
 /**
  * Recomputes what a compiled configuration derives from its sites after
  * they were changed in place (a rollback, or changes that skip the
- * configuration canary): the default listeners, the certificate references
- * the sites still use and requiredFeatures. Canonical, with a new content hash.
+ * configuration canary): the listeners (of `edge`, else the ports and
+ * client address setting the configuration has), the certificate references
+ * the sites and layer-4 applications still use and requiredFeatures.
+ * Canonical, with a new content hash.
  */
-export function refreshDerived(config: NodeConfig): NodeConfig {
+export function refreshDerived(config: NodeConfig, edge?: EdgeModel): NodeConfig {
   const out = clone(NodeConfigSchema, config);
-  out.listeners = listenersFor(out.sites).map(compileListener);
-  const used = new Set(out.sites.map((s) => s.certificateId).filter(Boolean));
+  const current = edge ?? edgeOf(config);
+  out.listeners = listenersFor(out.sites, current).map(compileListener);
+  out.clientAddress = compileClientAddress(current.clientIp);
+  const used = new Set(
+    [...out.sites.map((s) => s.certificateId), ...out.l4Apps.map((a) => a.certificateId)].filter(
+      Boolean,
+    ),
+  );
   out.certificates = out.certificates.filter((c) => used.has(c.id));
   out.requiredFeatures = derivedFeatures(out);
   const canonical = canonicalize(out);
@@ -1333,9 +1523,12 @@ export function refreshDerived(config: NodeConfig): NodeConfig {
 export function compileNodeConfig(input: CompileInput, revision: bigint): NodeConfig {
   if (input.sites.filter((site) => site.enabled).length > MAX_SITES_PER_CLUSTER)
     throw new ConfigCapacityError();
-  const listeners = (input.listeners ?? listenersFor(input.sites.filter((s) => s.enabled))).map(
-    compileListener,
-  );
+  const challenges = usesChallenges(input);
+  // Disabled sites are not shipped to nodes; their domains are offline hosts.
+  const sites = input.sites
+    .filter((s) => s.enabled)
+    .map((s) => compileSite(s, challenges, input.edge));
+  const listeners = (input.listeners ?? listenersFor(sites, input.edge)).map(compileListener);
   const cacheZones = (input.cacheZones ?? defaultCacheZones).map((z) =>
     create(CacheZoneSchema, {
       name: z.name,
@@ -1344,9 +1537,6 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
       inactiveSeconds: z.inactiveSeconds,
     }),
   );
-  const challenges = usesChallenges(input);
-  // Disabled sites are not shipped to nodes; their domains are offline hosts.
-  const sites = input.sites.filter((s) => s.enabled).map((s) => compileSite(s, challenges));
   const compiled = create(NodeConfigSchema, {
     revision,
     clusterId: input.clusterId,
@@ -1372,6 +1562,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     platformErrorPages: compilePlatformErrorPages(input.platformErrorPages),
     offlineHosts: compileOfflineHosts(input.offlineHosts),
     l4Apps: compileL4Apps(input.l4Apps),
+    clientAddress: compileClientAddress(input.edge?.clientIp),
   });
   compiled.requiredFeatures = derivedFeatures(compiled);
   const config = canonicalize(compiled);
@@ -1417,6 +1608,7 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     platformErrorPages: target.platformErrorPages,
     offlineHosts: target.offlineHosts,
     l4Apps: target.l4Apps,
+    clientAddress: target.clientAddress,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -1452,6 +1644,7 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       platformErrorPages: diff.platformErrorPages,
       offlineHosts: diff.offlineHosts,
       l4Apps: diff.l4Apps,
+      clientAddress: diff.clientAddress,
       sites,
     }),
   );
