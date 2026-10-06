@@ -1,0 +1,423 @@
+{
+  "description": "proto v0.22.0 NodeConfig content_hash test vector: the M2 vector plus, on site s2, site rules with the rules-v3 fields (http.request.cookies.<name>, http.request.uri.args.<name>, http.request.version, http.request.scheme, http.request.id, http.request.timestamp.sec, edge.server_port, http.user_agent, http.referer, ip.geoip.as_name, http.response.cache_status), functions (concat, to_string, url_encode, md5, sha256, base64_decode, substring with integer constant arguments) and wildcard and strict_wildcard comparisons; request headers with value expression targets in request-transform and origin; a response header with append and one with a value expression; a 303 redirect whose set_query mixes a computed parameter (QueryParam.expression) and a static one (unsorted); an error page with {{time}} and {{path}}; required_features unsorted with a duplicate. The canonical form sorts set_query by name and required_features as a set: sha256(deterministic binary encoding with revision=0 and content_hash=\"\") after canonical sorting",
+  "config": {
+    "revision": "12",
+    "contentHash": "b39245559bdb9f83a00df992b42342c690d10d6b6fdd93af6772ea0f3306d61b",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "1024",
+        "keysZoneMb": 10,
+        "inactiveSeconds": 600
+      }
+    ],
+    "sites": [
+      {
+        "id": "s1",
+        "name": "demo",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "demo.test"
+          }
+        ],
+        "originPool": {
+          "id": "p1",
+          "policy": "LOAD_BALANCE_POLICY_ROUND_ROBIN",
+          "origins": [
+            {
+              "id": "o1",
+              "address": "whoami",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "cacheKey": {
+          "query": "CACHE_KEY_QUERY_IGNORE"
+        }
+      },
+      {
+        "id": "s2",
+        "name": "bucket",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "bucket.test"
+          },
+          {
+            "name": "cdn.test",
+            "wildcard": true
+          }
+        ],
+        "originPool": {
+          "id": "p2",
+          "policy": "LOAD_BALANCE_POLICY_CONSISTENT_HASH",
+          "origins": [
+            {
+              "id": "o2",
+              "address": "backup.example.com",
+              "port": 443,
+              "scheme": "ORIGIN_SCHEME_HTTPS",
+              "weight": 3,
+              "backup": true,
+              "hostHeader": "www.example.com",
+              "sni": "origin.example.com"
+            },
+            {
+              "id": "o3",
+              "address": "minio",
+              "port": 9000,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1,
+              "s3": {
+                "region": "us-east-1",
+                "bucket": "media",
+                "credentialId": "cred-1",
+                "credentialVersion": "2"
+              }
+            }
+          ],
+          "skipTlsVerify": true,
+          "healthCheck": {
+            "maxFails": 2,
+            "recoverySeconds": 15
+          },
+          "connection": {
+            "connectTimeoutMs": 1500,
+            "sendTimeoutMs": 60000,
+            "readTimeoutMs": 90000,
+            "keepaliveDisabled": true,
+            "keepaliveIdleSeconds": 30,
+            "keepaliveMaxRequests": 500
+          }
+        },
+        "cacheRules": [
+          {
+            "id": "r2",
+            "priority": 10,
+            "match": {
+              "pathPrefixes": ["/static/"],
+              "paths": ["/index.html"]
+            },
+            "action": "CACHE_ACTION_BYPASS",
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_OVERRIDE"
+          },
+          {
+            "id": "r3",
+            "priority": 20,
+            "match": {
+              "extensions": ["png"],
+              "statusCodes": [200, 404],
+              "minSizeBytes": "1",
+              "maxSizeBytes": "10485760"
+            },
+            "action": "CACHE_ACTION_CACHE",
+            "edgeTtlSeconds": 3600,
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_RESPECT",
+            "staleWhileRevalidateSeconds": 30,
+            "staleIfErrorSeconds": 86400
+          }
+        ],
+        "cacheZone": "default",
+        "cacheGeneration": "3",
+        "cacheKey": {
+          "query": "CACHE_KEY_QUERY_INCLUDE",
+          "queryParams": ["lang", "v"],
+          "sortQuery": true,
+          "headers": ["accept-language"],
+          "cookies": ["ab"],
+          "deviceType": true,
+          "excludeHost": true
+        },
+        "rangeSlice": true,
+        "websocketDisabled": true,
+        "rules": [
+          {
+            "id": "g1",
+            "phase": "request-transform",
+            "expression": {
+              "op": "and",
+              "children": [
+                {
+                  "op": "ne",
+                  "field": "http.request.cookies.role",
+                  "valueType": "string",
+                  "value": "admin"
+                },
+                {
+                  "op": "in",
+                  "field": "http.request.version",
+                  "valueType": "string",
+                  "values": ["HTTP/1.1", "HTTP/2.0"]
+                }
+              ]
+            },
+            "action": {
+              "kind": "request_header",
+              "header": "x-req",
+              "target": {
+                "op": "call",
+                "field": "concat",
+                "valueType": "string",
+                "children": [
+                  {
+                    "op": "field",
+                    "field": "http.request.scheme",
+                    "valueType": "string"
+                  },
+                  {
+                    "op": "const",
+                    "valueType": "string",
+                    "value": ":"
+                  },
+                  {
+                    "op": "field",
+                    "field": "http.request.id",
+                    "valueType": "string"
+                  },
+                  {
+                    "op": "const",
+                    "valueType": "string",
+                    "value": ":"
+                  },
+                  {
+                    "op": "call",
+                    "field": "to_string",
+                    "valueType": "string",
+                    "children": [
+                      {
+                        "op": "field",
+                        "field": "http.request.timestamp.sec",
+                        "valueType": "number"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "g2",
+            "phase": "redirect",
+            "expression": {
+              "op": "and",
+              "children": [
+                {
+                  "op": "strict_wildcard",
+                  "field": "http.user_agent",
+                  "valueType": "string",
+                  "value": "curl/*"
+                },
+                {
+                  "op": "eq",
+                  "field": "edge.server_port",
+                  "valueType": "number",
+                  "value": "443"
+                }
+              ]
+            },
+            "action": {
+              "kind": "redirect",
+              "value": "/signin",
+              "statusCode": 303,
+              "setQuery": [
+                {
+                  "name": "z",
+                  "expression": {
+                    "op": "call",
+                    "field": "url_encode",
+                    "valueType": "string",
+                    "children": [
+                      {
+                        "op": "field",
+                        "field": "http.request.uri.args.next",
+                        "valueType": "string"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "a",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          {
+            "id": "g3",
+            "phase": "waf-custom",
+            "expression": {
+              "op": "or",
+              "children": [
+                {
+                  "op": "eq",
+                  "valueType": "string",
+                  "value": "0cc175b9c0f1b6a831c399e269772661",
+                  "children": [
+                    {
+                      "op": "call",
+                      "field": "md5",
+                      "valueType": "string",
+                      "children": [
+                        {
+                          "op": "field",
+                          "field": "http.request.uri.path",
+                          "valueType": "string"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "wildcard",
+                  "field": "http.referer",
+                  "valueType": "string",
+                  "value": "*.example.com/*"
+                },
+                {
+                  "op": "eq",
+                  "valueType": "string",
+                  "value": "deadbeef",
+                  "children": [
+                    {
+                      "op": "call",
+                      "field": "substring",
+                      "valueType": "string",
+                      "children": [
+                        {
+                          "op": "call",
+                          "field": "sha256",
+                          "valueType": "string",
+                          "children": [
+                            {
+                              "op": "call",
+                              "field": "base64_decode",
+                              "valueType": "string",
+                              "children": [
+                                {
+                                  "op": "field",
+                                  "field": "http.request.cookies.t",
+                                  "valueType": "string"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "op": "const",
+                          "valueType": "number",
+                          "value": "0"
+                        },
+                        {
+                          "op": "const",
+                          "valueType": "number",
+                          "value": "8"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "action": {
+              "kind": "log"
+            }
+          },
+          {
+            "id": "g4",
+            "phase": "origin",
+            "expression": {
+              "op": "literal",
+              "valueType": "boolean",
+              "value": "true"
+            },
+            "action": {
+              "kind": "request_header",
+              "header": "x-as",
+              "target": {
+                "op": "field",
+                "field": "ip.geoip.as_name",
+                "valueType": "string"
+              }
+            }
+          },
+          {
+            "id": "g5",
+            "phase": "response-transform",
+            "expression": {
+              "op": "in",
+              "field": "http.response.cache_status",
+              "valueType": "string",
+              "values": ["HIT", "STALE"]
+            },
+            "action": {
+              "kind": "response_header",
+              "value": "</a.css>; rel=preload",
+              "header": "link",
+              "append": true
+            }
+          },
+          {
+            "id": "g6",
+            "phase": "response-transform",
+            "expression": {
+              "op": "literal",
+              "valueType": "boolean",
+              "value": "true"
+            },
+            "action": {
+              "kind": "response_header",
+              "header": "x-cache-status",
+              "target": {
+                "op": "call",
+                "field": "substring",
+                "valueType": "string",
+                "children": [
+                  {
+                    "op": "field",
+                    "field": "http.response.cache_status",
+                    "valueType": "string"
+                  },
+                  {
+                    "op": "const",
+                    "valueType": "number",
+                    "value": "-3"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "errorPages": {
+          "pages": [
+            {
+              "status": 503,
+              "template": "<p>{{status}} at {{time}} for {{path}}</p>"
+            }
+          ]
+        }
+      }
+    ],
+    "requiredFeatures": [
+      "rules-v3",
+      "rules-v1",
+      "error-pages-v1",
+      "rules-v3",
+      "geoip-asn-v1",
+      "rules-v2"
+    ]
+  },
+  "canonical_hex": "1a0263312204085010012a110a0764656661756c74108008180a20d80432440a027331120464656d6f1801220b0a0964656d6f2e746573742a1a0a02703110021a120a026f31120677686f616d691850200128013a0764656661756c7440015202080232f50d0a02733212066275636b65741801220d0a0b6275636b65742e74657374220c0a0863646e2e7465737410012a9c010a02703210031a460a026f3212126261636b75702e6578616d706c652e636f6d18bb032002280330013a0f7777772e6578616d706c652e636f6d42126f726967696e2e6578616d706c652e636f6d1a300a026f3312056d696e696f18a846200128014a1c0a0975732d656173742d3112056d656469611a06637265642d31200220012a040802100f321208dc0b10e0d4031890bf052001281e30f40332230a027232100a1a170a082f7374617469632f220b2f696e6465782e68746d6c2002300132270a02723310141a121203706e672a04c801940330013880808005200128901c3002381e4080a3053a0764656661756c7440035226080312046c616e671201761801220f6163636570742d6c616e67756167652a026162300138015801600172f2020a0267311211726571756573742d7472616e73666f726d1a6d0a03616e64322e0a026e651219687474702e726571756573742e636f6f6b6965732e726f6c651a06737472696e67220561646d696e32360a02696e1214687474702e726571756573742e76657273696f6e1a06737472696e672a08485454502f312e312a08485454502f322e3022e9010a0e726571756573745f6865616465721a05782d726571ba01ce010a0463616c6c1206636f6e6361741a06737472696e6732240a056669656c641213687474702e726571756573742e736368656d651a06737472696e6732120a05636f6e73741a06737472696e6722013a32200a056669656c64120f687474702e726571756573742e69641a06737472696e6732120a05636f6e73741a06737472696e6722013a32460a0463616c6c1209746f5f737472696e671a06737472696e67322b0a056669656c64121a687474702e726571756573742e74696d657374616d702e7365631a066e756d62657272de010a026732120872656469726563741a5e0a03616e6432320a0f7374726963745f77696c6463617264120f687474702e757365725f6167656e741a06737472696e6722066375726c2f2a32230a0265711210656467652e7365727665725f706f72741a066e756d6265722203343433226e0a08726564697265637412072f7369676e696e20af02ca01060a0161120131ca014c0a017a1a470a0463616c6c120a75726c5f656e636f64651a06737472696e67322b0a056669656c64121a687474702e726571756573742e7572692e617267732e6e6578741a06737472696e6772fb020a026733120a7761662d637573746f6d1ae1020a026f72326b0a0265711a06737472696e6722203063633137356239633066316236613833316333393965323639373732363631323b0a0463616c6c12036d64351a06737472696e6732260a056669656c641215687474702e726571756573742e7572692e706174681a06737472696e6732310a0877696c6463617264120c687474702e726566657265721a06737472696e67220f2a2e6578616d706c652e636f6d2f2a32ba010a0265711a06737472696e672208646561646265656632a1010a0463616c6c1209737562737472696e671a06737472696e67325e0a0463616c6c12067368613235361a06737472696e6732460a0463616c6c120d6261736536345f6465636f64651a06737472696e6732270a056669656c641216687474702e726571756573742e636f6f6b6965732e741a06737472696e6732120a05636f6e73741a066e756d62657222013032120a05636f6e73741a066e756d62657222013822050a036c6f6772620a02673412066f726967696e1a180a076c69746572616c1a07626f6f6c65616e220474727565223a0a0e726571756573745f6865616465721a04782d6173ba01210a056669656c64121069702e67656f69702e61735f6e616d651a06737472696e677281010a0267351212726573706f6e73652d7472616e73666f726d1a340a02696e121a687474702e726573706f6e73652e63616368655f7374617475731a06737472696e672a034849542a055354414c4522310a0f726573706f6e73655f68656164657212153c2f612e6373733e3b2072656c3d7072656c6f61641a046c696e6b80020172b3010a0267361212726573706f6e73652d7472616e73666f726d1a180a076c69746572616c1a07626f6f6c65616e220474727565227f0a0f726573706f6e73655f6865616465721a0e782d63616368652d737461747573ba015b0a0463616c6c1209737562737472696e671a06737472696e67322b0a056669656c64121a687474702e726573706f6e73652e63616368655f7374617475731a06737472696e6732130a05636f6e73741a066e756d62657222022d339a01310a2f08f703122a3c703e7b7b7374617475737d7d206174207b7b74696d657d7d20666f72207b7b706174687d7d3c2f703e4a0e6572726f722d70616765732d76314a0c67656f69702d61736e2d76314a0872756c65732d76314a0872756c65732d76324a0872756c65732d7633",
+  "content_hash": "b39245559bdb9f83a00df992b42342c690d10d6b6fdd93af6772ea0f3306d61b"
+}
