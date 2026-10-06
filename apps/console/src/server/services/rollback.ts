@@ -4,10 +4,12 @@ import {
   compileOfflineHosts,
   compilePlatformErrorPages,
   compileRules,
+  compileSitePorts,
   DEFAULT_SITE_PROTECTION,
   decodeNodeConfig,
   refreshDerived,
 } from "@edgeweir/config-compiler";
+import { tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
   ChallengeKeyRefSchema,
@@ -33,6 +35,7 @@ import {
   platformRuleModels,
   previousConfig,
 } from "./config-input";
+import { loadEdgeModel } from "./edge";
 import { loadPlatformErrorPages } from "./error-pages";
 import { restoreL4Apps } from "./l4-config";
 import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
@@ -70,6 +73,7 @@ async function restoreSites(
   opts: { strict: boolean },
 ) {
   const out = clone(NodeConfigSchema, config);
+  const edge = await loadEdgeModel(tx, clusterId);
   const currentSites = await tx
     .select()
     .from(schema.site)
@@ -136,6 +140,28 @@ async function restoreSites(
         ref.notAfter = cert.notAfter ? timestampFromDate(cert.notAfter) : undefined;
       }
     }
+    // Listener ports are current infrastructure: the site's current ports
+    // and its HTTPS redirect, which names one of them and its domains.
+    site.ports = compileSitePorts(
+      {
+        ports: { http: current.httpPorts, https: current.httpsPorts },
+        certificateId: site.certificateId,
+      },
+      edge,
+    );
+    if (site.tls) {
+      const settings = tlsSettings.parse({
+        ...current.tlsSettings,
+        certificateId: current.certificateId,
+      });
+      const names = new Set(site.domains.map((d) => (d.wildcard ? `*.${d.name}` : d.name)));
+      const port = settings.redirectPort === 443 ? 0 : settings.redirectPort;
+      site.tls.redirectStatus = settings.redirectStatus === 301 ? 0 : settings.redirectStatus;
+      site.tls.redirectPort = site.certificateId && site.ports.includes(port) ? port : 0;
+      site.tls.redirectExcludedDomains = settings.redirectExcludedDomains.filter((d) =>
+        names.has(d),
+      );
+    }
     sites.push(site);
   }
   out.sites = sites;
@@ -153,7 +179,7 @@ async function restoreSites(
     out.offlineHosts = [...hosts.values()].filter((h) => !served.has(hostKey(h)));
   }
   out.l4Apps = await restoreL4Apps(tx, clusterId, out.l4Apps, opts);
-  return { config: out, currentSites };
+  return { config: out, currentSites, edge };
 }
 
 /**
@@ -170,12 +196,14 @@ export async function currentStable(
   stable: NodeConfig,
   challenges?: NodeConfig["httpChallenges"],
 ) {
-  const { config, currentSites } = await restoreSites(tx, clusterId, stable, { strict: false });
+  const { config, currentSites, edge } = await restoreSites(tx, clusterId, stable, {
+    strict: false,
+  });
   config.httpChallenges = (challenges ?? (await loadHttpChallenges(tx, clusterId))).map((c) =>
     clone(HttpChallengeSchema, c),
   );
   await restoreProtection(tx, clusterId, config, currentSites, { underAttack: "current" });
-  return refreshDerived(config);
+  return refreshDerived(config, edge);
 }
 
 /**
@@ -225,12 +253,11 @@ export async function rollbackContent(
 ): Promise<NodeConfig | undefined> {
   const target = await getRevision(tx, clusterId, revision);
   if (!target) return undefined;
-  const { config: restored, currentSites } = await restoreSites(
-    tx,
-    clusterId,
-    decodeNodeConfig(target.ir),
-    { strict: true },
-  );
+  const {
+    config: restored,
+    currentSites,
+    edge,
+  } = await restoreSites(tx, clusterId, decodeNodeConfig(target.ir), { strict: true });
   const currentLists = await tx.select().from(schema.ipList);
   for (const site of restored.sites) {
     const unavailable = (expression: RuleExpression) =>
@@ -260,7 +287,7 @@ export async function rollbackContent(
   // Challenge tokens are short-lived issuance state, never rollback content.
   restored.httpChallenges = [];
   await restoreProtection(tx, clusterId, restored, currentSites, { underAttack: "restored" });
-  return refreshDerived(restored);
+  return refreshDerived(restored, edge);
 }
 
 /**

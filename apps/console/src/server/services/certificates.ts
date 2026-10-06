@@ -26,6 +26,7 @@ import { certdDns, probe, validCredentials } from "./dns-providers";
 import { assertHttp01Ready } from "./http01-check";
 import { type Executor, getRevision, publishRevision } from "./revisions";
 import { publishedRevisions } from "./rollout";
+import { assertSitePorts, portsOf } from "./site-ports";
 
 export type CertificateContext = { actor: Actor };
 export const certificateKeyBinding = (id: string) => ({
@@ -450,6 +451,16 @@ export async function deleteCertificate(app: AppContext, id: string, ctx: Certif
       fail("CERTIFICATE_IN_USE", "certificate is used by sites", {
         sites: sites.map((site) => site.name).join(", "),
       });
+    const apps = await tx
+      .select({ name: schema.l4App.name })
+      .from(schema.l4App)
+      .where(eq(schema.l4App.certificateId, id))
+      .orderBy(schema.l4App.name)
+      .limit(5);
+    if (apps.length)
+      fail("CERTIFICATE_IN_USE_BY_L4", "certificate is used by layer-4 applications", {
+        apps: apps.map((app) => app.name).join(", "),
+      });
     if (cert.status === "issuing") fail("CERTIFICATE_BUSY", "certificate is issuing");
     const leases = await tx
       .delete(schema.dnsChallengeLease)
@@ -517,6 +528,14 @@ export async function updateHttps(
       const uncovered = uncoveredDomains(cert.chainPem, domains).filter((d) => !waiting(d));
       if (uncovered.length) failUncovered(uncovered);
     }
+    // Ports were checked when saved; without a certificate the site must
+    // keep an HTTP port, and the redirect needs one of its HTTPS ports.
+    await assertSitePorts(
+      tx,
+      { id, clusterId: site.clusterId, certificateId: settings.certificateId },
+      portsOf(site),
+      { checkPorts: false, tls: settings },
+    );
     const { certificateId, ...options } = settings;
     await tx
       .update(schema.site)

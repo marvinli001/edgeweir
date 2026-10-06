@@ -9,6 +9,7 @@ import type {
   siteCreateInput,
   siteUpdateInput,
 } from "@edgeweir/contract";
+import { tlsSettings } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import {
   and,
@@ -52,6 +53,7 @@ import {
 } from "./revisions";
 import { actionOriginGroup, availableLists, failUnknownLists } from "./rules";
 import { siteDeliveries } from "./site-delivery";
+import { assertSitePorts, portsOf } from "./site-ports";
 import { flushSiteUsage } from "./usage";
 
 type SiteCreate = z.output<typeof siteCreateInput>;
@@ -130,6 +132,7 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
         canary: null,
       },
       cacheGeneration: r.cacheGeneration,
+      ports: portsOf(r),
       domains: domains.filter((d) => d.siteId === r.id).map(formatDomain),
       origins: origins
         .filter((o) => poolIds.has(o.poolId))
@@ -617,6 +620,8 @@ export async function createSite(
       .where(eq(schema.cluster.id, clusterId));
     if (!clusterRow) fail("CLUSTER_NOT_FOUND", "cluster not found");
     assertGrpcOverHttp2(input.originSettings);
+    const ports = input.ports ?? { http: [80], https: [443] };
+    await assertSitePorts(tx, { clusterId, certificateId: null }, ports);
     await assertDomainsFree(tx, domains);
     for (const origin of input.origins) assertHostHeader(origin.hostHeader);
     await assertOriginsAllowed(tx, input.origins);
@@ -627,6 +632,8 @@ export async function createSite(
         clusterId,
         name,
         websocket: input.originSettings.websocket,
+        httpPorts: ports.http,
+        httpsPorts: ports.https,
         ...cacheSettingsValues(input.cacheSettings),
       })
       .returning();
@@ -719,6 +726,18 @@ export async function updateSite(
       await replaceCacheRules(tx, row, input.cacheRules);
       changed.push("cacheRules");
     }
+    if (input.ports) {
+      const tls = tlsSettings.parse({ ...row.tlsSettings, certificateId: row.certificateId });
+      await assertSitePorts(tx, row, input.ports, { tls });
+      const before = portsOf(row);
+      if (JSON.stringify(before) !== JSON.stringify(input.ports)) {
+        await tx
+          .update(schema.site)
+          .set({ httpPorts: input.ports.http, httpsPorts: input.ports.https })
+          .where(eq(schema.site.id, row.id));
+        changed.push("ports");
+      }
+    }
     // Touch updated_at even when only child rows changed.
     const [updated] = await tx
       .update(schema.site)
@@ -739,6 +758,7 @@ export async function updateSite(
         ...(input.cacheRules ? { cacheRules: input.cacheRules.length } : {}),
         ...(input.originSettings ? { originSettings: input.originSettings } : {}),
         ...(input.cacheSettings ? { cacheSettings: input.cacheSettings } : {}),
+        ...(input.ports ? { ports: input.ports } : {}),
       },
     });
     return {

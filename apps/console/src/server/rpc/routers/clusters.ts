@@ -9,6 +9,7 @@ import {
   rollbackCluster,
   updateCluster,
 } from "../../services/clusters";
+import { getClientIp, getListenPorts, setClientIp, setListenPorts } from "../../services/edge";
 import { createEnrollmentToken, getEnrollmentToken } from "../../services/enrollment";
 import { getPortPools, setPortPools } from "../../services/l4";
 import { nodeChannelUrl } from "../../services/node-channel-url";
@@ -158,6 +159,18 @@ export const clustersRouter = {
     ),
     setPortPools: authed.clusters.setPortPools.handler(({ input, context }) =>
       setPortPools(context.app.db, input, context.actor),
+    ),
+    listenPorts: authed.clusters.listenPorts.handler(({ input, context }) =>
+      getListenPorts(context.app.db, input.clusterId),
+    ),
+    setListenPorts: authed.clusters.setListenPorts.handler(({ input, context }) =>
+      setListenPorts(context.app.db, input, context.actor),
+    ),
+    clientIp: authed.clusters.clientIp.handler(({ input, context }) =>
+      getClientIp(context.app.db, input.clusterId),
+    ),
+    setClientIp: authed.clusters.setClientIp.handler(({ input, context }) =>
+      setClientIp(context.app.db, input, context.actor),
     ),
     createEnrollmentToken: authed.clusters.createEnrollmentToken.handler(
       async ({ input, context }) =>
