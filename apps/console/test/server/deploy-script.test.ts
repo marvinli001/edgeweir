@@ -201,8 +201,12 @@ describe("deploy.sh", () => {
       expect(used.status).toBe(1);
       expect(used.stderr).toContain("数据库 edgeweir 里已经有 Edgeweir 的数据");
       expect(existsSync(dir)).toBe(false);
-      // An empty database gets past the check (to the image, missing here).
-      const empty = run(`${DOCKER}; ${psql("f")}; resolve_version() { exit 7; }; cmd_install`, env);
+      // An empty database gets past the check (to the image, missing here). The ports are the
+      // target host's: the test host's own listeners (a dev server on 3000) are not in the way.
+      const empty = run(
+        `${DOCKER}; ${psql("f")}; port_in_use() { return 1; }; resolve_version() { exit 7; }; cmd_install`,
+        env,
+      );
       expect(empty.status, empty.stderr).toBe(7);
     });
 
