@@ -62,11 +62,13 @@ import {
 import {
   type Expression,
   needsRulesV2,
+  needsRulesV3,
   type Phase,
   parseExpression,
   parseValueExpression,
   phases,
   structuredCacheCondition,
+  usesRulesV3Placeholders,
 } from "@edgeweir/rule-engine";
 
 /** Matches the node's fixed 256 KiB site partitions (128 MiB at full capacity). */
@@ -179,6 +181,15 @@ export const ORIGIN_HTTP2_FEATURE = "origin-http2-v1";
  * rule conditions and browser TTLs, bulk redirects and origin groups.
  */
 export const RULES_V2_FEATURE = "rules-v2";
+/**
+ * Feature of the rule engine additions (proto v0.22.0): the new fields
+ * (cookies and query parameters by name, Referer, User-Agent, request
+ * version, scheme, id and timestamp, listener port, AS name, cache status),
+ * the new functions and wildcard comparisons, header values and set query
+ * parameters computed per request, response header lines (append), redirect
+ * status 303 and the error page placeholders {{time}} and {{path}}.
+ */
+export const RULES_V3_FEATURE = "rules-v3";
 /** Feature of layer-4 (TCP / UDP) applications (proto v0.15.0, NodeConfig.l4_apps). */
 export const L4_FEATURE = "l4-v1";
 /**
@@ -386,8 +397,14 @@ export interface RuleModel {
     target?: string;
     /** Redirects drop the query by default, rewrites keep it. */
     preserveQuery?: boolean;
-    setQuery?: { name: string; value: string }[];
+    /** rules-v3: `expression` (a value expression's source) computes the value instead. */
+    setQuery?: { name: string; value: string; expression?: string }[];
     removeQuery?: string[];
+    // rules-v3: request and response headers
+    /** Value expression source of a header computed per request instead of the value; "" for none. */
+    expression?: string;
+    /** Response headers: add a line next to the response's own. */
+    append?: boolean;
     // rules-v2: origin
     originGroup?: string;
     hostHeader?: string;
@@ -418,6 +435,9 @@ const queryDefault = (kind: string) => kind === "rewrite";
  */
 function compileAction(phase: string, a: RuleModel["action"]): RuleAction {
   const redirectOrRewrite = a.kind === "redirect" || a.kind === "rewrite";
+  const header = (a.kind === "request_header" || a.kind === "response_header") && !a.remove;
+  const value = (source: string | undefined) =>
+    source ? parseValueExpression(source, phase as Phase) : undefined;
   return create(RuleActionSchema, {
     kind: a.kind,
     value: a.value,
@@ -441,21 +461,25 @@ function compileAction(phase: string, a: RuleModel["action"]): RuleAction {
     originSendTimeoutMs: a.originSendTimeoutMs ?? 0,
     originReadTimeoutMs: a.originReadTimeoutMs ?? 0,
     logSampleRate: a.logSampleRate,
-    target:
-      redirectOrRewrite && a.target ? parseValueExpression(a.target, phase as Phase) : undefined,
+    target: redirectOrRewrite ? value(a.target) : header ? value(a.expression) : undefined,
     preserveQuery:
       redirectOrRewrite && a.preserveQuery !== undefined && a.preserveQuery !== queryDefault(a.kind)
         ? a.preserveQuery
         : undefined,
-    setQuery: [...(a.setQuery ?? [])]
-      .sort(byString((param) => param.name))
-      .map((param) => create(QueryParamSchema, { name: param.name, value: param.value })),
+    setQuery: [...(a.setQuery ?? [])].sort(byString((param) => param.name)).map((param) =>
+      create(QueryParamSchema, {
+        name: param.name,
+        value: param.value,
+        expression: value(param.expression),
+      }),
+    ),
     removeQuery: sortedSet(a.removeQuery),
     originGroup: a.originGroup ?? "",
     hostHeader: a.hostHeader ?? "",
     sni: a.sni ?? "",
     port: a.port ?? 0,
     compression: a.kind === "compression" ? [...(a.algorithms ?? [])] : [],
+    append: a.kind === "response_header" && header && a.append === true,
   });
 }
 
@@ -518,7 +542,11 @@ export function configExpressions(
 ): RuleExpression[] {
   const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
   return [
-    ...rules.flatMap((rule) => [rule.expression, rule.action?.target]),
+    ...rules.flatMap((rule) => [
+      rule.expression,
+      rule.action?.target,
+      ...(rule.action?.setQuery ?? []).map((param) => param.expression),
+    ]),
     ...config.sites.flatMap((site) => site.cacheRules.map((rule) => rule.match?.condition)),
   ].filter((expression): expression is RuleExpression => !!expression);
 }
@@ -570,7 +598,38 @@ export function rulesFeatures(config: NodeConfig): string[] {
         !!site.originPool?.origins.some((origin) => origin.group !== "") ||
         site.cacheRules.some((rule) => !!rule.match?.condition || rule.browserTtlSeconds > 0),
     );
-  return uses ? [RULES_V2_FEATURE] : [];
+  return [
+    ...(uses ? [RULES_V2_FEATURE] : []),
+    ...(rulesV3Used(config, rules) ? [RULES_V3_FEATURE] : []),
+  ];
+}
+
+/**
+ * Whether the compiled configuration uses any of the rules-v3 additions (proto v0.22.0): new
+ * fields, functions, comparisons or integer arguments in an expression, a computed header value
+ * or query parameter, a response header line, a 303 redirect, or {{time}} or {{path}} in a
+ * site's or the platform's error page. Others encode exactly as before.
+ */
+function rulesV3Used(config: NodeConfig, rules: EdgeRule[]): boolean {
+  const pages = config.platformErrorPages;
+  return (
+    configExpressions(config).some((expression) => needsRulesV3(expression)) ||
+    rules.some(({ action }) => {
+      if (!action) return false;
+      return (
+        action.append ||
+        (action.kind === "redirect" && action.statusCode === 303) ||
+        ((action.kind === "request_header" || action.kind === "response_header") &&
+          !!action.target) ||
+        action.setQuery.some((param) => !!param.expression)
+      );
+    }) ||
+    config.sites.some((site) =>
+      site.errorPages?.pages.some((page) => usesRulesV3Placeholders(page.template)),
+    ) ||
+    usesRulesV3Placeholders(pages?.unknownHost ?? "") ||
+    usesRulesV3Placeholders(pages?.siteDisabled ?? "")
+  );
 }
 /**
  * requiredFeatures for GeoIP fields. geoip-city-v1 keeps its original name so
@@ -582,7 +641,7 @@ export function geoFeatures(expression: Expression): string[] {
   // A call's field is the function's name.
   const field = expression.op === "call" ? "" : expression.field;
   return [
-    ...(field === "ip.geoip.asnum"
+    ...(field === "ip.geoip.asnum" || field === "ip.geoip.as_name"
       ? ["geoip-asn-v1"]
       : field.startsWith("ip.geoip.")
         ? ["geoip-city-v1"]

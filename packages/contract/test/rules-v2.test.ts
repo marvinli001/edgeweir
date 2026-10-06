@@ -104,7 +104,7 @@ describe("rule actions", () => {
         value: "/a",
         removeQuery: Array.from({ length: 17 }, (_, i) => `p${i}`),
       },
-      { kind: "redirect", value: "/a", statusCode: 303 },
+      { kind: "redirect", value: "/a", statusCode: 304 },
     ])
       expect(ruleAction.safeParse(action).success, JSON.stringify(action)).toBe(false);
   });

@@ -188,6 +188,15 @@ export function isRulesV3Field(field: string): boolean {
     field.startsWith(`${ARG_FIELD}.`)
   );
 }
+/**
+ * Error page placeholders only rules-v3 nodes replace (the UTC time in RFC 3339 and the request
+ * path); nodes require the feature for configurations whose pages use them.
+ */
+export const RULES_V3_PLACEHOLDERS = ["{{time}}", "{{path}}"] as const;
+/** Whether an error page template uses a placeholder only nodes with rules-v3 replace. */
+export function usesRulesV3Placeholders(template: string): boolean {
+  return RULES_V3_PLACEHOLDERS.some((placeholder) => template.includes(placeholder));
+}
 /** Phases that may read response fields. */
 export const responsePhases: ReadonlySet<string> = new Set(["response-transform", "compression"]);
 

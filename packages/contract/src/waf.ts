@@ -148,6 +148,12 @@ export const siteFeatures = z.object({
    * browser TTLs, bulk redirects and origin groups.
    */
   rulesV2: featureAvailability,
+  /**
+   * The rule engine additions (rules-v3): the new fields, functions and wildcard comparisons,
+   * header values and query parameters computed per request, response header lines, redirect
+   * status 303 and the error page placeholders {{time}} and {{path}}.
+   */
+  rulesV3: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });
