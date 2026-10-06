@@ -11,10 +11,12 @@
   "scripts": {
     "generate": "paraglide-js compile --project ./project.inlang --outdir ./src/web/paraglide --strategy localStorage preferredLanguage baseLocale && tsr generate",
     "dev": "tsx watch --env-file-if-exists=../../.env --clear-screen=false --exclude './src/web/**' src/server/dev.ts",
+    "lab": "vite --config lab/vite.config.ts",
+    "lab:build": "vite build --config lab/vite.config.ts",
     "build": "vite build && node scripts/build-server.mjs",
     "start": "node dist/server/main.js",
     "recover": "tsx --env-file-if-exists=../../.env src/server/recover.ts",
-    "typecheck": "pnpm run generate && tsc -p tsconfig.web.json && tsc -p tsconfig.server.json && tsc -p tsconfig.node.json",
+    "typecheck": "pnpm run generate && tsc -p tsconfig.web.json && tsc -p tsconfig.server.json && tsc -p tsconfig.node.json && tsc -p tsconfig.lab.json",
     "test": "pnpm run generate && vitest run",
     "test:e2e": "playwright test",
     "ui:preset": "shadcn preset resolve --json"
