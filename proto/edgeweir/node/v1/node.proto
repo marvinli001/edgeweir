@@ -62,6 +62,27 @@ service NodeService {
   // paths and banned addresses. Idempotent by (node, event id). Added in
   // v0.10.0.
   rpc ReportSecurityEvents(ReportSecurityEventsRequest) returns (ReportSecurityEventsResponse);
+  // SubmitPurge creates a URL purge of the node's cluster for a PURGE request
+  // the node accepted (Site.purge; the agent checked the key). Errors:
+  // PermissionDenied when the node's cluster does not serve the site or the
+  // site has no PURGE method, InvalidArgument for a URL the site does not
+  // serve, ResourceExhausted over the console's per-site limit (the error
+  // message is "retry after <seconds>"). Added in v0.24.0 (feature
+  // site-content-v1).
+  rpc SubmitPurge(SubmitPurgeRequest) returns (SubmitPurgeResponse);
+}
+
+// SubmitPurgeRequest names the URL a PURGE request asked to purge.
+message SubmitPurgeRequest {
+  string site_id = 1;
+  // Absolute http(s) URL: the request's scheme, Host (without port), raw
+  // path and query, at most 2048 bytes.
+  string url = 2;
+}
+
+// SubmitPurgeResponse carries the id of the purge task.
+message SubmitPurgeResponse {
+  string task_id = 1;
 }
 
 // NodeInfo describes the host and software of a node.
@@ -217,6 +238,19 @@ message ReportStatusRequest {
   // Host metrics since the previous report (feature metrics-v1). Added in
   // v0.14.0.
   NodeMetrics metrics = 13;
+  // Disk space of the cache zones, as last measured (feature
+  // cache-zone-v1). Added in v0.24.0.
+  repeated CacheZoneUsage cache_usage = 14;
+}
+
+// CacheZoneUsage is the disk space one cache zone uses on a node.
+message CacheZoneUsage {
+  string name = 1;
+  // Bytes the zone's files occupy on disk (allocated blocks).
+  uint64 used_bytes = 2;
+  // The zone's max_size on this node, in bytes.
+  uint64 max_bytes = 3;
+  google.protobuf.Timestamp measured_at = 4;
 }
 
 // NodeMetrics are host metrics measured by the agent between two reports.
@@ -399,11 +433,13 @@ message ReportStatsV2Response {
 
 // GetOriginCredentialsRequest names the credentials to fetch.
 message GetOriginCredentialsRequest {
-  // Ids from S3Auth.credential_id.
+  // Ids from S3Auth.credential_id and, since v0.24.0, PurgeMethod.credential_id.
   repeated string ids = 1;
 }
 
-// OriginCredential is an access key pair for an S3-compatible origin.
+// OriginCredential is an access key pair for an S3-compatible origin, or
+// (since v0.24.0) the key of a site's PURGE method: access_key_id empty,
+// secret_access_key the key.
 message OriginCredential {
   string id = 1;
   // Matches S3Auth.credential_version of the configuration.

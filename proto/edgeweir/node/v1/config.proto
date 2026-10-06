@@ -20,7 +20,10 @@ import "google/protobuf/timestamp.proto";
 //     set_query by name and remove_query sorted (v0.13.0);
 //   - l4_apps by id, inside an application origins by id and
 //     allow_list_ids / block_list_ids sorted and unique (v0.15.0); ids
-//     compare by their UTF-8 bytes.
+//     compare by their UTF-8 bytes;
+//   - inside a cache zone node_sizes by node_id; inside a site's
+//     maintenance allowed_cidrs and allowed_path_prefixes sorted and unique
+//     (v0.24.0).
 // content_hash is the lowercase hex SHA-256 of the deterministic binary
 // encoding of this message with `revision` and `content_hash` cleared.
 message NodeConfig {
@@ -178,11 +181,26 @@ message Listener {
 }
 
 // CacheZone describes one on-disk cache with its in-memory key index.
+// Changing max_size_mb, keys_zone_mb or inactive_seconds rewrites
+// proxy_cache_path: a structural change (reload).
 message CacheZone {
   string name = 1;
   uint64 max_size_mb = 2;
   uint32 keys_zone_mb = 3;
   uint32 inactive_seconds = 4;
+  // Per-node sizes replacing max_size_mb and keys_zone_mb on the node whose
+  // id they name, sorted by node_id and unique; a node without an entry
+  // uses the zone's sizes. Added in v0.24.0 (feature cache-zone-v1).
+  repeated CacheZoneNodeSize node_sizes = 5;
+}
+
+// CacheZoneNodeSize is the size of a cache zone on one node.
+message CacheZoneNodeSize {
+  string node_id = 1;
+  // 1024-67108864 (1 GiB-64 TiB).
+  uint64 max_size_mb = 2;
+  // 16-512.
+  uint32 keys_zone_mb = 3;
 }
 
 // Site is one customer property: a set of domains, an origin pool and rules.
@@ -230,6 +248,64 @@ message Site {
   // phase with the client's original Host and normalized path ($uri):
   // "host/path" first, then "/path". Added in v0.13.0 (feature rules-v2).
   repeated BulkRedirect bulk_redirects = 20;
+  // Fields 22-26 were added in v0.24.0 (feature site-content-v1); field 21
+  // belongs to another addition.
+  //
+  // Purge cached URLs with the PURGE method: a PURGE request carrying the
+  // key in X-Purge-Key makes the node submit a URL purge of the cluster
+  // (NodeService.SubmitPurge). Unset: PURGE requests go to the origin like
+  // any other method.
+  PurgeMethod purge = 22;
+  // Send no X-Cache header to clients.
+  bool hide_x_cache = 23;
+  // Maintenance mode; unset means off.
+  Maintenance maintenance = 24;
+  // Charset parameter of text responses; unset means off.
+  Charset charset = 25;
+  // Largest request body by Content-Length, in bytes; unset means 104857600
+  // (100 MiB), 0 no limit, at most 10737418240 (10 GiB). Requests over it
+  // get 413. Config rules may override it (RuleAction.request_body_limit).
+  optional uint64 request_body_limit = 26;
+}
+
+// PurgeMethod names the key of a site's PURGE method. The key itself is
+// never part of the configuration: nodes fetch it with
+// NodeService.GetOriginCredentials (an OriginCredential without access key
+// id) and check it in the agent.
+message PurgeMethod {
+  string credential_id = 1;
+  // Changes whenever the key changes, so that nodes fetch it again.
+  uint64 credential_version = 2;
+}
+
+// Maintenance answers a site's requests with 503 and the maintenance page,
+// except requests from allowed addresses or to allowed path prefixes and
+// HTTP-01 requests for the origin. Nothing is looked up in the cache.
+message Maintenance {
+  // HTML page with the error page placeholders, 0-65536 bytes; empty uses
+  // the node's built-in maintenance page.
+  string template = 1;
+  // Retry-After seconds, 0 (none) to 86400.
+  uint32 retry_after_seconds = 2;
+  // Client addresses served as usual: at most 64 CIDRs in canonical form,
+  // sorted and unique.
+  repeated string allowed_cidrs = 3;
+  // Original request paths served as usual when they start with one of
+  // these: at most 32, each starting with "/", sorted and unique.
+  repeated string allowed_path_prefixes = 4;
+}
+
+// Charset adds the charset parameter to the Content-Type of responses of
+// type text/*, application/javascript, application/json and
+// application/xml that came from the origin or the cache.
+message Charset {
+  // utf-8, gbk, gb18030, gb2312, big5, iso-8859-1, shift_jis or euc-kr;
+  // anything else rejects the configuration.
+  string name = 1;
+  // Replace a charset the response already names (else it is kept).
+  bool force = 2;
+  // Send the name in upper case.
+  bool uppercase = 3;
 }
 
 // BulkRedirect is one entry of a site's exact-match redirect table.
@@ -249,12 +325,19 @@ message BulkRedirect {
 // SiteErrorPages replaces the node's built-in error pages of a site: 403
 // (denied by a rule, an IP list, a ban, the CRS or a missing challenge pass),
 // 429 (rate limited), 502, 503 and 504 (origin unavailable or failing).
+// Since v0.24.0 (feature site-content-v1) also 400, 401, 404, 405, 410 and
+// 500, and the classes 4 (every 4xx status) and 5 (every 5xx status): a
+// response takes the page of its status, else the page of its class, else
+// the built-in page. Node-generated 400, 403, 405, 413, 414, 429, 500, 502,
+// 503 and 504 responses use them.
 message SiteErrorPages {
   // At most one page per status, sorted by status. Statuses: 403, 429, 502,
-  // 503 and 504; anything else rejects the configuration.
+  // 503 and 504 (and those above since v0.24.0); anything else rejects the
+  // configuration.
   repeated ErrorPage pages = 1;
-  // Also replace error responses of the origin whose status has a page
-  // (nginx's proxy_intercept_errors). Off, they reach the client unchanged.
+  // Also replace error responses of the origin that have a page (of their
+  // status or, since v0.24.0, their class; nginx's proxy_intercept_errors).
+  // Off, they reach the client unchanged.
   bool intercept_origin_errors = 2;
 }
 
@@ -267,6 +350,16 @@ message SiteErrorPages {
 message ErrorPage {
   uint32 status = 1;
   string template = 2;
+  // Redirect with 302 to this URL instead of sending a template (template
+  // is empty then): an absolute http(s) URL or a path starting with a
+  // single "/", 1-2048 bytes of printable ASCII without spaces, in which
+  // {{status}} and {{request_id}} are replaced with their percent-encoded
+  // values (everything but RFC 3986 unreserved characters). Added in
+  // v0.24.0 (feature site-content-v1).
+  string redirect_url = 3;
+  // Send a template page with this status (200-599) instead of the
+  // response's; 0 keeps it. Not with redirect_url. Added in v0.24.0.
+  uint32 response_status = 4;
 }
 
 // PlatformErrorPages are the platform administrator's templates, with the
@@ -460,6 +553,10 @@ message RuleAction {
   // of the header next to those the response has. Added in v0.22.0 (feature
   // rules-v3), like the redirect status 303.
   bool append = 32;
+  // Kind "config": the request's body limit in bytes (Site.request_body_limit;
+  // 0 no limit, at most 10737418240). Unset keeps the site's. Added in
+  // v0.24.0 (feature site-content-v1).
+  optional uint64 request_body_limit = 33;
 }
 
 // QueryParam is one query parameter a redirect or rewrite sets. name:
@@ -519,6 +616,13 @@ message TlsOptions {
   uint32 zstd_level = 18;
   uint32 zstd_min_length = 19;
   repeated string zstd_types = 20;
+  // Fields 24-25 were added in v0.24.0 (feature site-content-v1); 21-23
+  // belong to another addition. gzip_comp_level 1-9 of the site's server
+  // blocks (0: nginx's default, 1) and the largest response, by its known
+  // length, that any coding compresses (0: no limit; responses of unknown
+  // length are compressed).
+  uint32 gzip_level = 24;
+  uint64 compress_max_length = 25;
 }
 
 // An HTTP-01 response is public; private account and certificate keys are not IR.
@@ -539,13 +643,18 @@ enum CacheKeyQuery {
   CACHE_KEY_QUERY_IGNORE = 2;
   // Only the parameters listed in CacheKeyPolicy.query_params.
   CACHE_KEY_QUERY_INCLUDE = 3;
+  // Every parameter but those listed in CacheKeyPolicy.query_params, where a
+  // name ending in "*" stands for every name with that prefix ("utm_*").
+  // Added in v0.24.0 (feature site-content-v1).
+  CACHE_KEY_QUERY_EXCLUDE = 4;
 }
 
 // CacheKeyPolicy describes the cache key of a site. Every request of the
 // site uses the same policy, so that purging a URL covers all its variants.
 message CacheKeyPolicy {
   CacheKeyQuery query = 1;
-  // Parameter names kept by CACHE_KEY_QUERY_INCLUDE, sorted.
+  // Parameter names kept by CACHE_KEY_QUERY_INCLUDE or dropped by
+  // CACHE_KEY_QUERY_EXCLUDE (which also takes "prefix*" patterns), sorted.
   repeated string query_params = 2;
   // Sort the kept parameters so that "?a=1&b=2" and "?b=2&a=1" share a key.
   bool sort_query = 3;
@@ -614,6 +723,12 @@ message OriginPool {
   // Requires protocol ORIGIN_PROTOCOL_HTTP2 (feature origin-http2-v1).
   // Added in v0.21.0.
   bool grpc = 10;
+  // Origins a request tries at most, 1-5; 0 means 3. Added in v0.24.0
+  // (feature site-content-v1), like the next field.
+  uint32 tries = 11;
+  // Retry only after connection errors and timeouts, not after a 502, 503
+  // or 504 response of the origin (which then reaches the client).
+  bool status_retry_disabled = 12;
 }
 
 // OriginProtocol is the HTTP version of the requests to a pool's origins.
@@ -781,6 +896,11 @@ message CacheRule {
   // caches; 0 keeps the origin's header. At most 31536000. Added in v0.13.0
   // (feature rules-v2).
   uint32 browser_ttl_seconds = 10;
+  // Cache responses that carry Set-Cookie when this rule decides them. Only
+  // the response fetched from the origin for a request carries the
+  // Set-Cookie lines; hits, stale and updating responses never do. Added in
+  // v0.24.0 (feature site-content-v1).
+  bool cache_set_cookie = 11;
 }
 
 // CacheRuleMatch is the condition of a cache rule. Empty lists match all
