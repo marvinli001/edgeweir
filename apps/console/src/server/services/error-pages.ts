@@ -129,16 +129,14 @@ export async function updateSiteErrorPages(
     );
     await tx.delete(schema.siteErrorPage).where(eq(schema.siteErrorPage.siteId, site.id));
     if (pages.length)
-      await tx
-        .insert(schema.siteErrorPage)
-        .values(
-          pages.map((page) => ({
-            siteId: site.id,
-            ...page,
-            status: storedStatus(page.status),
-            updatedAt,
-          })),
-        );
+      await tx.insert(schema.siteErrorPage).values(
+        pages.map((page) => ({
+          siteId: site.id,
+          ...page,
+          status: storedStatus(page.status),
+          updatedAt,
+        })),
+      );
     const [updated] = await tx
       .update(schema.site)
       .set({ interceptOriginErrors: input.interceptOriginErrors, errorPagesUpdatedAt: updatedAt })
