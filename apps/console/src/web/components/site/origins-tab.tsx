@@ -6,6 +6,7 @@ import type {
   OriginSettings,
   Site,
 } from "@edgeweir/contract";
+import { MAX_HOST_HEADER_LENGTH, validHostHeader } from "@edgeweir/rule-engine";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
@@ -85,6 +86,12 @@ const newOrigin = (): OriginDraft => ({
 
 const defaultPort = (scheme: Scheme) => (scheme === "https" ? "443" : "80");
 
+/** A Host header nodes refuse: they skip the origin. Empty follows the request. */
+const invalidHostHeader = (value: string) => {
+  const host = value.trim();
+  return host !== "" && !validHostHeader(host);
+};
+
 /** A row with an origin in its fields: a URL's protocol and port go into theirs. */
 const fillRow = (value: string, row: Pick<OriginDraft, "scheme" | "port">) =>
   fillOrigin(value, row, defaultPort);
@@ -129,6 +136,9 @@ function OriginsCard({ site }: { site: Site }) {
   const groupsLocked = groupsAvailability?.available === false;
   // Requests without an origin rule go to the default group.
   const noDefaultGroup = !rows.some((r) => r.group.trim() === "");
+  const badHost = rows.some((r) => invalidHostHeader(r.hostHeader));
+  const savedHost = (originId: string | null) =>
+    site.origins.find((o) => o.id === originId)?.hostHeader;
   const health = useQuery({
     ...orpc.sites.originHealth.queryOptions({ input: { id: site.id } }),
     refetchInterval: 10_000,
@@ -183,6 +193,7 @@ function OriginsCard({ site }: { site: Site }) {
                 row={row}
                 index={index}
                 health={rowHealth}
+                savedHostHeader={savedHost(row.originId)}
                 secretStored={storedKeys.has(row.accessKeyId.trim())}
                 removable={rows.length > 1}
                 groupLocked={groupsLocked && row.group === ""}
@@ -223,7 +234,7 @@ function OriginsCard({ site }: { site: Site }) {
           ) : null}
         </CardContent>
         <SaveBar
-          dirty={dirty && !noDefaultGroup}
+          dirty={dirty && !noDefaultGroup && !badHost}
           pending={pending}
           error={error}
           testId="origins-save"
@@ -237,6 +248,7 @@ function OriginRow({
   row,
   index,
   health,
+  savedHostHeader,
   secretStored,
   removable,
   groupLocked,
@@ -246,6 +258,8 @@ function OriginRow({
   row: OriginDraft;
   index: number;
   health: OriginHealth | undefined;
+  /** The Host header the server has for this origin; undefined for a new one. */
+  savedHostHeader: string | undefined;
   secretStored: boolean;
   removable: boolean;
   /** The origin is in the default group and may not leave it yet. */
@@ -255,6 +269,9 @@ function OriginRow({
 }) {
   const id = (name: string) => `origin-${name}-${row.key}`;
   const https = row.scheme === "https";
+  const hostInvalid = invalidHostHeader(row.hostHeader);
+  // Saved before the console checked Host headers: nodes skip this origin today.
+  const hostSkipped = hostInvalid && row.hostHeader === savedHostHeader;
   return (
     <fieldset
       className="flex min-w-0 flex-col gap-3 rounded-2xl border p-3"
@@ -280,6 +297,11 @@ function OriginRow({
         </Button>
       </div>
       <OriginHealthError health={health} />
+      {hostSkipped ? (
+        <FieldError className="animate-in fade-in" data-testid="origin-host-header-skipped">
+          {m.site_origin_host_header_skipped()}
+        </FieldError>
+      ) : null}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1fr_6rem_7rem_5rem]">
         <Field className="col-span-2 sm:col-span-1">
           <FieldLabel htmlFor={id("address")}>{m.site_form_origin()}</FieldLabel>
@@ -339,15 +361,25 @@ function OriginRow({
           https ? "lg:grid-cols-[1fr_1fr_9rem_auto_auto]" : "lg:grid-cols-[1fr_9rem_auto_auto]",
         )}
       >
-        <Field className={cn("col-span-2", https ? "sm:col-span-1" : "lg:col-span-1")}>
+        <Field
+          className={cn("col-span-2", https ? "sm:col-span-1" : "lg:col-span-1")}
+          data-invalid={hostInvalid || undefined}
+        >
           <FieldLabel htmlFor={id("host")}>{m.site_form_host_header()}</FieldLabel>
           <Input
             id={id("host")}
             value={row.hostHeader}
-            maxLength={253}
+            maxLength={MAX_HOST_HEADER_LENGTH}
             onChange={(event) => onChange({ hostHeader: event.target.value })}
             placeholder={m.site_form_host_header_placeholder()}
+            aria-invalid={hostInvalid || undefined}
+            data-testid="origin-host-header"
           />
+          {hostInvalid && !hostSkipped ? (
+            <FieldError className="animate-in fade-in" data-testid="origin-host-header-invalid">
+              {m.site_form_host_header_invalid()}
+            </FieldError>
+          ) : null}
         </Field>
         {https ? (
           <Field className="col-span-2 sm:col-span-1">

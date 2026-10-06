@@ -230,6 +230,8 @@
   "site_form_scheme": "Protocol",
   "site_form_host_header": "Origin Host",
   "site_form_host_header_placeholder": "Same as request",
+  "site_form_host_header_invalid": "Enter a host name or IP, optionally with a port; IPv6 with a port in brackets",
+  "site_origin_host_header_skipped": "Invalid origin Host; nodes skip this origin",
   "site_form_cache_enabled": "Caching",
   "site_form_cache_prefix": "Path prefix",
   "site_form_cache_ttl": "TTL (seconds)",

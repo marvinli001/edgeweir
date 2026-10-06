@@ -27,10 +27,12 @@ import {
   type ChallengeType,
   challengeTypes,
   compressionCodings,
+  MAX_HOST_HEADER_LENGTH,
   type Phase,
   phases,
   QUERY_NAME_RE,
   rateLimitKeys,
+  validHostHeader,
 } from "@edgeweir/rule-engine";
 import {
   Add01Icon,
@@ -54,7 +56,7 @@ import { nextDraftKey, SaveBar } from "@/components/site/save-site";
 import { EmptyState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -189,6 +191,12 @@ function issueField(row: RuleDto, path: readonly PropertyKey[]): string {
   return (actionFieldLabels[field] ?? m.rules_action)();
 }
 /** Why a rule cannot be saved: the field, and where and why an expression fails. */
+/** A Host header nodes refuse (they drop the rule); empty keeps the origin's. */
+const invalidHostHeader = (value: string) => {
+  const host = value.trim();
+  return host !== "" && !validHostHeader(host);
+};
+
 function ruleIssueText(row: RuleDto, issue: z.core.$ZodIssue | undefined): string {
   const field = issueField(row, issue?.path ?? []);
   const failure = issue ? expressionIssue(issue) : null;
@@ -279,6 +287,11 @@ function RulesEditor({
           const parsed = ruleInput.safeParse(row);
           if (!parsed.success) {
             setError(ruleIssueText(row, parsed.error.issues[0]));
+            return;
+          }
+          const { action } = parsed.data;
+          if (action.kind === "origin" && invalidHostHeader(action.hostHeader)) {
+            setError(m.rules_check_rule({ name: row.name, field: m.site_form_host_header() }));
             return;
           }
           rules.push(parsed.data);
@@ -1080,6 +1093,7 @@ function OriginFields({
   onChange: (action: ActionOf<"origin">) => void;
 }) {
   const set = (change: Partial<ActionOf<"origin">>) => onChange({ ...a, ...change });
+  const hostInvalid = invalidHostHeader(a.hostHeader);
   // A group no origin has any more still shows, so the rule can be pointed elsewhere.
   const groups = originGroups && [
     ...new Set([...originGroups, ...(a.originGroup ? [a.originGroup] : [])]),
@@ -1099,16 +1113,22 @@ function OriginFields({
           testId="rule-origin-group"
         />
       ) : null}
-      <Field>
+      <Field data-invalid={hostInvalid || undefined}>
         <FieldLabel htmlFor={`origin-host-${id}`}>{m.site_form_host_header()}</FieldLabel>
         <Input
           id={`origin-host-${id}`}
           value={a.hostHeader}
-          maxLength={253}
+          maxLength={MAX_HOST_HEADER_LENGTH}
           placeholder={m.rules_unchanged()}
           onChange={(e) => set({ hostHeader: e.target.value })}
+          aria-invalid={hostInvalid || undefined}
           data-testid="rule-origin-host"
         />
+        {hostInvalid ? (
+          <FieldError className="animate-in fade-in" data-testid="rule-origin-host-invalid">
+            {m.site_form_host_header_invalid()}
+          </FieldError>
+        ) : null}
       </Field>
       <Field>
         <FieldLabel htmlFor={`origin-sni-${id}`}>{m.site_origin_sni()}</FieldLabel>

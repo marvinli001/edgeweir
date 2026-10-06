@@ -212,6 +212,8 @@
   "site_form_scheme": "回源协议",
   "site_form_host_header": "回源 Host",
   "site_form_host_header_placeholder": "跟随请求",
+  "site_form_host_header_invalid": "填写域名或 IP，可带端口；IPv6 带端口时加方括号",
+  "site_origin_host_header_skipped": "回源 Host 无效，节点会跳过该源站",
   "site_form_cache_enabled": "缓存",
   "site_form_cache_prefix": "路径前缀",
   "site_form_cache_ttl": "缓存时间（秒）",
