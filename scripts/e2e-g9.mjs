@@ -573,7 +573,11 @@ try {
   const proxySite = await createSite(
     "g9-proxy",
     [HOST_PROXY, HOST_BENCH],
-    { cacheRules: [{ pathPrefixes: ["/bench-"], edgeTtlSeconds: 60, originCacheControl: "override" }] },
+    {
+      cacheRules: [
+        { pathPrefixes: ["/bench-"], edgeTtlSeconds: 60, originCacheControl: "override" },
+      ],
+    },
     proxyCluster.id,
   );
   await admin.ok("PUT", `/sites/${proxySite.id}/rules`, {
