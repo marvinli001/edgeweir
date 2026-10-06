@@ -18,7 +18,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDateTime, formatNumber, m, timeAgo } from "@/lib/i18n";
-import { L4_STATS_RANGES, type L4StatsRange, originLabel, proxyVersionLabel } from "@/lib/l4";
+import {
+  L4_STATS_RANGES,
+  type L4StatsRange,
+  originLabel,
+  portsLabel,
+  proxyVersionLabel,
+} from "@/lib/l4";
 import { orpc } from "@/lib/orpc";
 
 const DEFAULT_RANGE: L4StatsRange = "24h";
@@ -164,7 +170,7 @@ function Overview({ app }: { app: L4App }) {
             </InfoRow>
             <InfoRow label={m.l4_port()} testId="l4-app-listen">
               <ProtocolBadge protocol={app.protocol} />
-              <span className="font-mono tabular-nums">{app.port}</span>
+              <span className="font-mono tabular-nums">{portsLabel(app)}</span>
             </InfoRow>
             <InfoRow label={m.sites_col_cluster()}>
               <Badge
@@ -209,6 +215,12 @@ function Overview({ app }: { app: L4App }) {
                 ))}
               </ul>
             </InfoRow>
+            {app.certificateName ? (
+              <InfoRow label={m.l4_tls_certificate()} testId="l4-app-tls">
+                {app.certificateName}
+                <Badge variant="outline">{`TLS ${app.tlsMinimumVersion}+`}</Badge>
+              </InfoRow>
+            ) : null}
             <InfoRow label={m.l4_proxy()} testId="l4-app-proxy">
               {proxy.length ? proxy.join(" · ") : m.l4_proxy_off()}
             </InfoRow>

@@ -9,6 +9,7 @@ import { ClusterRolloutCard } from "@/components/cluster-rollout";
 import { ClusterDialog } from "@/components/clusters/cluster-dialog";
 import { ClusterSummary } from "@/components/clusters/cluster-summary";
 import { EnrollDialogHost } from "@/components/clusters/enroll-dialog";
+import { ClusterNetwork } from "@/components/clusters/network";
 import { NodeGroupsSection } from "@/components/clusters/node-groups";
 import { NodesSection } from "@/components/clusters/nodes";
 import { RevisionsSection } from "@/components/clusters/revisions";
@@ -30,7 +31,7 @@ export const Route = createFileRoute("/_app/clusters")({
     view: z.enum(["regions"]).optional(),
     cluster: z.string().optional(),
     enroll: z.boolean().optional(),
-    tab: z.enum(["overview", "dns", "scheduling", "ports"]).optional(),
+    tab: z.enum(["overview", "dns", "scheduling", "network", "ports"]).optional(),
     node: z.string().optional(),
   }),
   component: ClustersPage,
@@ -192,7 +193,10 @@ function ClusterView({
               search: (prev) => ({
                 ...prev,
                 tab:
-                  value === "dns" || value === "scheduling" || value === "ports"
+                  value === "dns" ||
+                  value === "scheduling" ||
+                  value === "network" ||
+                  value === "ports"
                     ? value
                     : undefined,
               }),
@@ -210,6 +214,9 @@ function ClusterView({
             <TabsTrigger value="scheduling" data-testid="cluster-tab-scheduling">
               {m.scheduling_tab()}
             </TabsTrigger>
+            <TabsTrigger value="network" data-testid="cluster-tab-network">
+              {m.cluster_tab_network()}
+            </TabsTrigger>
             <TabsTrigger value="ports" data-testid="cluster-tab-ports">
               {m.l4_pools_title()}
             </TabsTrigger>
@@ -226,6 +233,9 @@ function ClusterView({
           </TabsContent>
           <TabsContent value="scheduling" className="animate-enter">
             <ClusterScheduling key={selected.id} clusterId={selected.id} />
+          </TabsContent>
+          <TabsContent value="network" className="animate-enter">
+            <ClusterNetwork key={selected.id} clusterId={selected.id} />
           </TabsContent>
           <TabsContent value="ports" className="animate-enter">
             <PortPoolsSection

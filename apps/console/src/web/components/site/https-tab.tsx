@@ -1,5 +1,6 @@
 import {
   type CertificateDto,
+  HTTPS_REDIRECT_STATUSES,
   type HttpsCheck,
   type Site,
   type TlsSettings,
@@ -13,8 +14,10 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DnsCredentialDialog } from "@/components/dns/credential-dialog";
 import { FormSelect } from "@/components/form-select";
+import { SafetyNote } from "@/components/safety-note";
 import { COMPRESSION_KEYS, compressionOf } from "@/components/site/compression-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
+import { CheckboxList } from "@/components/site/ports-card";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, ErrorState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
@@ -456,6 +459,8 @@ function HttpsEditor({
   const [pending, setPending] = React.useState(false);
   const mutation = useMutation(orpc.https.update.mutationOptions());
   const client = useQueryClient();
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
+  const redirectAvailable = features.data?.edgePorts.available ?? true;
   const flags = [
     ["forceHttps", m.cert_force_https()],
     ["http2", m.cert_http2()],
@@ -550,6 +555,60 @@ function HttpsEditor({
               onCheckedChange={(value) => setSettings({ ...settings, [key]: value })}
             />
           ))}
+          {settings.forceHttps ? (
+            <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2" data-testid="https-redirect">
+              <FormSelect
+                id="redirectStatus"
+                label={m.https_redirect_status()}
+                value={String(settings.redirectStatus)}
+                disabled={!redirectAvailable}
+                options={HTTPS_REDIRECT_STATUSES.map((status) => ({
+                  value: String(status),
+                  label: String(status),
+                }))}
+                onChange={(value) =>
+                  setSettings({
+                    ...settings,
+                    redirectStatus: Number(value) as TlsSettings["redirectStatus"],
+                  })
+                }
+              />
+              <FormSelect
+                id="redirectPort"
+                label={m.https_redirect_port()}
+                value={String(settings.redirectPort)}
+                disabled={!redirectAvailable}
+                options={[...new Set([443, ...site.ports.https])].map((port) => ({
+                  value: String(port),
+                  label: String(port),
+                }))}
+                onChange={(value) => setSettings({ ...settings, redirectPort: Number(value) })}
+              />
+              {site.domains.length > 1 ? (
+                <div className="sm:col-span-2">
+                  <CheckboxList
+                    id="redirect-excluded"
+                    legend={m.https_redirect_excluded()}
+                    options={site.domains.map((domain) => ({ value: domain, label: domain }))}
+                    value={settings.redirectExcludedDomains}
+                    disabled={!redirectAvailable}
+                    onChange={(redirectExcludedDomains) =>
+                      setSettings({
+                        ...settings,
+                        redirectExcludedDomains: [...redirectExcludedDomains].sort(),
+                      })
+                    }
+                    testId="https-redirect-excluded"
+                  />
+                </div>
+              ) : null}
+              {redirectAvailable ? null : (
+                <SafetyNote className="sm:col-span-2" data-testid="https-redirect-unavailable">
+                  {m.feature_unavailable_nodes()}
+                </SafetyNote>
+              )}
+            </div>
+          ) : null}
         </CardContent>
         <SaveBar
           dirty={JSON.stringify(httpsOf(settings)) !== JSON.stringify(httpsOf(initial))}

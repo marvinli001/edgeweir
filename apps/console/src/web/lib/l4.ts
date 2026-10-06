@@ -30,11 +30,15 @@ export const poolCovers = (
 ) =>
   (pool.protocol === "both" || pool.protocol === protocol) && pool.from <= port && port <= pool.to;
 
-/** host:port, with IPv6 literals in brackets. */
-export const originLabel = (origin: { address: string; port: number }) =>
-  origin.address.includes(":")
-    ? `[${origin.address}]:${origin.port}`
-    : `${origin.address}:${origin.port}`;
+/** host:port, with IPv6 literals in brackets; origins on the arriving port (port 0) show the host alone. */
+export const originLabel = (origin: { address: string; port: number }) => {
+  const host = origin.address.includes(":") ? `[${origin.address}]` : origin.address;
+  return origin.port ? `${host}:${origin.port}` : host;
+};
+
+/** "9000" or a range "9000-9099". */
+export const portsLabel = (app: { port: number; portEnd: number | null }) =>
+  app.portEnd ? `${app.port}-${app.portEnd}` : String(app.port);
 
 /** PROXY protocol versions sent to the origins (0 sends none). */
 export const PROXY_VERSIONS = [0, 1, 2] as const;
