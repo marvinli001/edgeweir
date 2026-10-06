@@ -147,6 +147,13 @@ export function ExpressionEditor({
   // The field read by name being inserted, and its name so far.
   const [named, setNamed] = React.useState<NamedField | null>(null);
   const [name, setName] = React.useState("");
+  const nameInput = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    if (!named) return;
+    // After the field menu has closed and handed focus back to its trigger.
+    const frame = requestAnimationFrame(() => nameInput.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [named]);
   const textarea = React.useRef<HTMLTextAreaElement>(null);
   // The range to select once an inserted template is rendered (its example value).
   const selection = React.useRef<{ source: string; range: [number, number] } | null>(null);
@@ -257,8 +264,7 @@ export function ExpressionEditor({
         >
           <span className="text-xs text-muted-foreground">{namedField.label()}</span>
           <Input
-            // The menu has closed; the name is what comes next.
-            autoFocus
+            ref={nameInput}
             aria-label={m.rules_field_name()}
             value={name}
             maxLength={64}
