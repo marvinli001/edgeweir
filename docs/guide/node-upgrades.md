@@ -132,6 +132,7 @@ EDGEWEIR_UPGRADE_PUBLIC_KEY=/etc/edgeweir-node/release.pub
 | `http3-v1` | 网站开启 HTTP/3 |
 | `rules-v1` | 网站规则、全局规则、「放行」或「拦截」类 IP 名单 |
 | `rules-v2` | 规则扩展：函数与新字段、表达式目标与查询参数编辑、源站覆盖、压缩规则、新的覆盖设置、缓存规则的表达式条件与浏览器 TTL、批量重定向、源站组，见[规则](rules.md#节点能力与发布) |
+| `rules-v3` | 表达式变量与报头值：Cookie 与查询参数按名取值、User-Agent / Referer 等新字段、编码与哈希函数、`substring`、`to_string`、通配运算符、请求头 / 响应头 / 查询参数的表达式值、响应头追加、重定向 303、错误页的 `{{time}}` 与 `{{path}}`，见[规则](rules.md#节点能力与发布) |
 | `access-logs-v1` | 访问日志采样 |
 | `geoip-city-v1` / `geoip-asn-v1` | 规则使用 GeoIP 字段；节点有国家 / ASN 数据时才上报 |
 | `geoip-subdivision-v1` | 规则使用 `ip.geoip.subdivision`；节点配置了 City MMDB 时上报，只由控制台检查；未上报 `geoip-country-v1` 的旧版节点以 `geoip-city-v1` 代替 |
