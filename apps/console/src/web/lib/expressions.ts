@@ -36,8 +36,20 @@ export const CONDITION_TEMPLATES = {
   asn: "ip.geoip.asnum in {64496}",
   user_agent: 'http.request.headers["user-agent"] contains "bot"',
   method: 'http.request.method in {"POST" "PUT" "DELETE"}',
+  // rules-v3
+  cookie: 'http.request.cookies["session"] eq "value"',
+  arg: 'http.request.uri.args["page"] eq "1"',
+  user_agent_wildcard: 'http.user_agent wildcard "*bot*"',
+  referer_wildcard: 'http.referer wildcard "*://*.example.com/*"',
 } as const;
 export type ConditionTemplate = keyof typeof CONDITION_TEMPLATES;
+/** Templates only nodes with rules-v3 run; the menu leaves them out while the cluster lacks it. */
+export const RULES_V3_TEMPLATES: ReadonlySet<ConditionTemplate> = new Set([
+  "cookie",
+  "arg",
+  "user_agent_wildcard",
+  "referer_wildcard",
+]);
 
 /** The example value of each template: selected once inserted, so typing replaces it. */
 export const TEMPLATE_VALUES: Record<ConditionTemplate, string> = {
@@ -49,6 +61,10 @@ export const TEMPLATE_VALUES: Record<ConditionTemplate, string> = {
   asn: "64496",
   user_agent: "bot",
   method: 'POST" "PUT" "DELETE',
+  cookie: "session",
+  arg: "page",
+  user_agent_wildcard: "*bot*",
+  referer_wildcard: "*://*.example.com/*",
 };
 
 export const conditionTemplateLabel = (template: ConditionTemplate) =>
@@ -61,6 +77,10 @@ export const conditionTemplateLabel = (template: ConditionTemplate) =>
     asn: m.rules_template_asn,
     user_agent: m.rules_template_user_agent,
     method: m.rules_template_method,
+    cookie: m.rules_template_cookie,
+    arg: m.rules_template_arg,
+    user_agent_wildcard: m.rules_template_user_agent_wildcard,
+    referer_wildcard: m.rules_template_referer_wildcard,
   })[template]();
 
 /**

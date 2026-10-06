@@ -50,7 +50,7 @@ import type * as z from "zod";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { PresetSelect, usePreset } from "@/components/preset-select";
 import { SafetyNote } from "@/components/safety-note";
-import { ExpressionEditor } from "@/components/site/expression-editor";
+import { ExpressionEditor, expressionFailure } from "@/components/site/expression-editor";
 import { ListInput, NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey, SaveBar } from "@/components/site/save-site";
 import { EmptyState, QueryView } from "@/components/states";
@@ -60,7 +60,7 @@ import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/componen
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
-import { expressionReason } from "@/lib/expressions";
+import { expressionErrorText, expressionReason } from "@/lib/expressions";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { challengeLabel } from "@/lib/protection";
@@ -131,8 +131,9 @@ function defaultAction(kind: Kind): RuleInput["action"] {
     case "rewrite":
       return { kind, value: "/", target: "", preserveQuery: true, setQuery: [], removeQuery: [] };
     case "request_header":
+      return { kind, header: "x-custom", value: "", expression: "", remove: false };
     case "response_header":
-      return { kind, header: "x-custom", value: "", remove: false };
+      return { kind, header: "x-custom", value: "", expression: "", remove: false, append: false };
     case "config":
       return { kind, cacheBypass: true };
     case "rate_limit":
@@ -158,6 +159,9 @@ const UNCHANGED = "unchanged";
 /** Labels of the action fields an issue can point at (the form's own labels). */
 const actionFieldLabels: Record<string, () => string> = {
   target: m.rules_target,
+  // A header's value expression (rules-v3) is its value.
+  expression: m.rules_value,
+  append: m.rules_append_header,
   header: m.rules_header,
   setQuery: m.rules_set_query,
   removeQuery: m.rules_remove_query,
@@ -212,7 +216,8 @@ function ruleIssueText(row: RuleDto, issue: z.core.$ZodIssue | undefined): strin
 
 /**
  * Rules of a site (siteId) or of the platform. A site's rules can send requests to its origin
- * groups; the rule engine extensions stay locked while the cluster's nodes lack them.
+ * groups; the rule engine extensions (rules-v2) and additions (rules-v3) stay locked while the
+ * cluster's nodes lack them.
  */
 export function RulesTab({ siteId, originGroups }: { siteId?: string; originGroups?: string[] }) {
   const query = useQuery(
@@ -224,14 +229,20 @@ export function RulesTab({ siteId, originGroups }: { siteId?: string; originGrou
     ...orpc.sites.features.queryOptions({ input: { id: siteId ?? "" } }),
     enabled: !!siteId,
   });
-  const editor = (rules: RuleDto[], availability?: FeatureAvailability) => (
+  const editor = (
+    rules: RuleDto[],
+    availability?: FeatureAvailability,
+    availabilityV3?: FeatureAvailability,
+  ) => (
     <RulesEditor
       key={JSON.stringify(rules)}
       initial={rules}
       siteId={siteId}
       originGroups={siteId ? (originGroups ?? []) : undefined}
       availability={availability}
+      availabilityV3={availabilityV3}
       locked={availability?.available === false}
+      lockedV3={availabilityV3?.available === false}
     />
   );
   // Platform rules have no site features to wait for.
@@ -239,7 +250,9 @@ export function RulesTab({ siteId, originGroups }: { siteId?: string; originGrou
     <QueryView query={query}>
       {(rules) =>
         siteId ? (
-          <QueryView query={features}>{({ rulesV2 }) => editor(rules, rulesV2)}</QueryView>
+          <QueryView query={features}>
+            {({ rulesV2, rulesV3 }) => editor(rules, rulesV2, rulesV3)}
+          </QueryView>
         ) : (
           editor(rules)
         )
@@ -252,13 +265,18 @@ function RulesEditor({
   siteId,
   originGroups,
   availability,
+  availabilityV3,
   locked,
+  lockedV3,
 }: {
   initial: RuleDto[];
   siteId?: string;
   originGroups?: string[];
   availability?: FeatureAvailability;
+  availabilityV3?: FeatureAvailability;
   locked: boolean;
+  /** The rules-v3 additions wait until the cluster's nodes run them. */
+  lockedV3: boolean;
 }) {
   const [rows, setRows] = React.useState(initial);
   const [error, setError] = React.useState<string | null>(null);
@@ -311,6 +329,14 @@ function RulesEditor({
           data-reason={availability.reason ?? undefined}
         >
           {m.rules_v2_unavailable()}
+        </SafetyNote>
+      ) : availabilityV3 && !availabilityV3.available ? (
+        <SafetyNote
+          className="animate-in fade-in"
+          data-testid="rules-v3-unavailable"
+          data-reason={availabilityV3.reason ?? undefined}
+        >
+          {m.feature_unavailable_nodes()}
         </SafetyNote>
       ) : null}
       {rows.length === 0 ? <EmptyState title={m.rules_empty()} /> : null}
@@ -394,6 +420,7 @@ function RulesEditor({
                     row={row}
                     originGroups={originGroups}
                     locked={locked}
+                    lockedV3={lockedV3}
                     patch={(update) => patch(row.id, update)}
                     remove={() => setRows(rows.filter((r) => r.id !== row.id))}
                   />
@@ -416,6 +443,7 @@ function RuleRow({
   row,
   originGroups,
   locked,
+  lockedV3,
   patch,
   remove,
 }: {
@@ -423,6 +451,7 @@ function RuleRow({
   /** The site's origin groups besides the default one; undefined for platform rules. */
   originGroups?: string[];
   locked: boolean;
+  lockedV3: boolean;
   patch: (update: Partial<RuleDto>) => void;
   remove: () => void;
 }) {
@@ -480,6 +509,7 @@ function RuleRow({
           value={row.expression}
           phase={row.phase}
           onChange={(expression) => patch({ expression })}
+          hideRulesV3={lockedV3}
         />
         <div className="grid gap-4 sm:grid-cols-2">
           <FormSelect
@@ -507,6 +537,7 @@ function RuleRow({
             action={a}
             originGroups={originGroups}
             locked={locked}
+            lockedV3={lockedV3}
             onChange={(action) => patch({ action })}
           />
         </div>
@@ -522,6 +553,7 @@ function ActionFields({
   action: a,
   originGroups,
   locked,
+  lockedV3,
   onChange,
 }: {
   id: string;
@@ -529,39 +561,26 @@ function ActionFields({
   action: Action;
   originGroups?: string[];
   locked: boolean;
+  lockedV3: boolean;
   onChange: (action: Action) => void;
 }) {
   switch (a.kind) {
     case "redirect":
     case "rewrite":
-      return <TargetFields id={id} phase={phase} action={a} locked={locked} onChange={onChange} />;
+      return (
+        <TargetFields
+          id={id}
+          phase={phase}
+          action={a}
+          locked={locked}
+          lockedV3={lockedV3}
+          onChange={onChange}
+        />
+      );
     case "request_header":
     case "response_header":
       return (
-        <>
-          <Field>
-            <FieldLabel htmlFor={`header-${id}`}>{m.rules_header()}</FieldLabel>
-            <Input
-              id={`header-${id}`}
-              value={a.header}
-              onChange={(e) => onChange({ ...a, header: e.target.value })}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`value-${id}`}>{m.rules_value()}</FieldLabel>
-            <Input
-              id={`value-${id}`}
-              value={a.value}
-              onChange={(e) => onChange({ ...a, value: e.target.value })}
-            />
-          </Field>
-          <SwitchField
-            id={`remove-${id}`}
-            label={m.rules_remove_header()}
-            checked={a.remove}
-            onCheckedChange={(remove) => onChange({ ...a, remove })}
-          />
-        </>
+        <HeaderFields id={id} phase={phase} action={a} lockedV3={lockedV3} onChange={onChange} />
       );
     case "block":
       return (
@@ -689,6 +708,163 @@ function StatusSelect({
   );
 }
 
+type HeaderAction = ActionOf<"request_header"> | ActionOf<"response_header">;
+
+/** Static or expression: which way a value is written (a header's value, a query parameter's). */
+function ValueModeTabs({
+  mode,
+  onChange,
+  expressionDisabled,
+  testId,
+}: {
+  mode: "static" | "expression";
+  onChange: (mode: "static" | "expression") => void;
+  expressionDisabled: boolean;
+  testId: string;
+}) {
+  return (
+    <Tabs
+      value={mode}
+      onValueChange={(next) => {
+        if (next !== mode) onChange(next as "static" | "expression");
+      }}
+    >
+      <TabsList aria-label={m.rules_value_mode()}>
+        <TabsTrigger value="static" className="h-7 px-2.5 text-xs" data-testid={`${testId}-static`}>
+          {m.rules_target_static()}
+        </TabsTrigger>
+        <TabsTrigger
+          value="expression"
+          className="h-7 px-2.5 text-xs"
+          disabled={expressionDisabled && mode === "static"}
+          data-testid={`${testId}-expression`}
+        >
+          {m.rules_target_expression()}
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+}
+
+/**
+ * A request or response header rule: its name, its value (static or, with rules-v3, computed
+ * per request), removal and, for response headers, whether the value is added as another line.
+ */
+function HeaderFields({
+  id,
+  phase,
+  action: a,
+  lockedV3,
+  onChange,
+}: {
+  id: string;
+  phase: Phase;
+  action: HeaderAction;
+  lockedV3: boolean;
+  onChange: (action: HeaderAction) => void;
+}) {
+  const [mode, setMode] = React.useState<"static" | "expression">(
+    a.expression !== "" ? "expression" : "static",
+  );
+  // What the other mode held, so switching back and forth loses nothing.
+  const stash = React.useRef({ value: a.value, expression: a.expression });
+  const set = (change: Partial<HeaderAction>) => onChange({ ...a, ...change } as HeaderAction);
+  const tabs = (
+    <ValueModeTabs
+      mode={mode}
+      expressionDisabled={lockedV3}
+      testId="rule-header-value"
+      onChange={(next) => {
+        if (next === "expression") {
+          stash.current.value = a.value;
+          set({
+            value: "",
+            expression:
+              stash.current.expression || (a.value ? JSON.stringify(a.value) : "http.request.id"),
+          });
+        } else {
+          stash.current.expression = a.expression;
+          set({ expression: "", value: stash.current.value || literalText(a.expression) });
+        }
+        setMode(next);
+      }}
+    />
+  );
+  return (
+    <>
+      <Field>
+        <FieldLabel htmlFor={`header-${id}`}>{m.rules_header()}</FieldLabel>
+        <Input
+          id={`header-${id}`}
+          value={a.header}
+          onChange={(e) => set({ header: e.target.value })}
+          data-testid="rule-header-name"
+        />
+      </Field>
+      <SwitchField
+        id={`remove-${id}`}
+        label={m.rules_remove_header()}
+        checked={a.remove}
+        // A removed header has no value to set or add.
+        onCheckedChange={(remove) =>
+          set(
+            remove
+              ? {
+                  remove,
+                  value: "",
+                  expression: "",
+                  ...(a.kind === "response_header" ? { append: false } : {}),
+                }
+              : { remove },
+          )
+        }
+        testId="rule-header-remove"
+      />
+      {a.remove ? null : (
+        <div className="sm:col-span-2">
+          {mode === "expression" ? (
+            <ExpressionEditor
+              id={`value-${id}`}
+              label={m.rules_value()}
+              value={a.expression}
+              phase={phase}
+              kind="value"
+              onChange={(expression) => set({ expression })}
+              actions={tabs}
+              testId="rule-header-value"
+              hideRulesV3={lockedV3}
+            />
+          ) : (
+            <Field>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <FieldLabel htmlFor={`value-${id}`}>{m.rules_value()}</FieldLabel>
+                {tabs}
+              </div>
+              <Input
+                id={`value-${id}`}
+                value={a.value}
+                maxLength={4096}
+                onChange={(e) => set({ value: e.target.value })}
+                data-testid="rule-header-value"
+              />
+            </Field>
+          )}
+        </div>
+      )}
+      {a.kind === "response_header" && !a.remove ? (
+        <SwitchField
+          id={`append-${id}`}
+          label={m.rules_append_header()}
+          checked={a.append}
+          disabled={lockedV3 && !a.append}
+          onCheckedChange={(append) => set({ append })}
+          testId="rule-header-append"
+        />
+      ) : null}
+    </>
+  );
+}
+
 type TargetAction = ActionOf<"redirect"> | ActionOf<"rewrite">;
 /** A static rewrite path: a single leading "/", no query, fragment or backslash. */
 const staticRewritePath = (s: string) =>
@@ -712,12 +888,14 @@ function TargetFields({
   phase,
   action: a,
   locked,
+  lockedV3,
   onChange,
 }: {
   id: string;
   phase: Phase;
   action: TargetAction;
   locked: boolean;
+  lockedV3: boolean;
   onChange: (action: TargetAction) => void;
 }) {
   const [mode, setMode] = React.useState<"static" | "expression">(
@@ -775,6 +953,7 @@ function TargetFields({
             onChange={(target) => set({ target })}
             actions={tabs}
             testId="rule-target"
+            hideRulesV3={lockedV3}
           />
         ) : (
           <Field>
@@ -798,8 +977,13 @@ function TargetFields({
         <StatusSelect
           id={id}
           value={a.statusCode}
-          codes={[301, 302, 307, 308]}
-          onChange={(statusCode) => set({ statusCode: statusCode as 301 | 302 | 307 | 308 })}
+          // 303 is a rules-v3 addition.
+          codes={[301, 302, 303, 307, 308].filter(
+            (code) => code !== 303 || !lockedV3 || a.statusCode === 303,
+          )}
+          onChange={(statusCode) =>
+            set({ statusCode: statusCode as ActionOf<"redirect">["statusCode"] })
+          }
         />
       ) : null}
       <SwitchField
@@ -813,8 +997,10 @@ function TargetFields({
       />
       <SetQueryFields
         id={id}
+        phase={phase}
         params={a.setQuery}
         locked={locked}
+        lockedV3={lockedV3}
         onChange={(setQuery) => set({ setQuery })}
       />
       <Field
@@ -836,23 +1022,32 @@ function TargetFields({
   );
 }
 
-/** Query parameters a redirect or rewrite sets, at most 16. */
+type QueryParam = TargetAction["setQuery"][number];
+
+/**
+ * Query parameters a redirect or rewrite sets, at most 16; a value is static or (rules-v3) a value
+ * expression computed per request.
+ */
 function SetQueryFields({
   id,
+  phase,
   params,
   locked,
+  lockedV3,
   onChange,
 }: {
   id: string;
-  params: { name: string; value: string }[];
+  phase: Phase;
+  params: QueryParam[];
   locked: boolean;
-  onChange: (params: { name: string; value: string }[]) => void;
+  lockedV3: boolean;
+  onChange: (params: QueryParam[]) => void;
 }) {
   // Row keys live beside the data: parameters have no identity of their own.
   const [keys, setKeys] = React.useState(() => params.map(() => nextDraftKey()));
   const rowKeys = params.map((_, index) => keys[index] ?? -index - 1);
   const names = params.map((param) => param.name);
-  const update = (index: number, change: Partial<{ name: string; value: string }>) =>
+  const update = (index: number, change: Partial<QueryParam>) =>
     onChange(params.map((param, i) => (i === index ? { ...param, ...change } : param)));
   return (
     <FieldSet className="gap-2 sm:col-span-2">
@@ -862,7 +1057,7 @@ function SetQueryFields({
       {params.map((param, index) => (
         <div
           key={rowKeys[index]}
-          className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2 animate-enter"
+          className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] items-start gap-2 animate-enter"
           data-testid="rule-set-query"
         >
           <Input
@@ -877,12 +1072,11 @@ function SetQueryFields({
             className="font-mono"
             data-testid="rule-set-query-name"
           />
-          <Input
-            aria-label={m.rules_query_value()}
-            value={param.value}
-            maxLength={256}
-            onChange={(e) => update(index, { value: e.target.value })}
-            data-testid="rule-set-query-value"
+          <QueryValue
+            param={param}
+            phase={phase}
+            lockedV3={lockedV3}
+            onChange={(change) => update(index, change)}
           />
           <Button
             type="button"
@@ -906,7 +1100,7 @@ function SetQueryFields({
         disabled={params.length >= 16 || locked}
         onClick={() => {
           setKeys([...rowKeys, nextDraftKey()]);
-          onChange([...params, { name: "", value: "" }]);
+          onChange([...params, { name: "", value: "", expression: "" }]);
         }}
         data-testid="rule-set-query-add"
       >
@@ -914,6 +1108,70 @@ function SetQueryFields({
         {m.rules_query_add()}
       </Button>
     </FieldSet>
+  );
+}
+
+/** A set query parameter's value: static, or a value expression with the parser's error below. */
+function QueryValue({
+  param,
+  phase,
+  lockedV3,
+  onChange,
+}: {
+  param: QueryParam;
+  phase: Phase;
+  lockedV3: boolean;
+  onChange: (change: Partial<QueryParam>) => void;
+}) {
+  const [mode, setMode] = React.useState<"static" | "expression">(
+    param.expression !== "" ? "expression" : "static",
+  );
+  const failure =
+    mode === "expression" ? expressionFailure(param.expression, phase, "value") : null;
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 items-center gap-2">
+        <ValueModeTabs
+          mode={mode}
+          expressionDisabled={lockedV3}
+          testId="rule-set-query-mode"
+          onChange={(next) => {
+            onChange(
+              next === "expression"
+                ? { value: "", expression: param.value ? JSON.stringify(param.value) : "http.host" }
+                : { expression: "", value: literalText(param.expression).slice(0, 256) },
+            );
+            setMode(next);
+          }}
+        />
+        {mode === "expression" ? (
+          <Input
+            aria-label={m.rules_query_expression()}
+            value={param.expression}
+            maxLength={4096}
+            spellCheck={false}
+            aria-invalid={failure !== null || undefined}
+            onChange={(e) => onChange({ expression: e.target.value })}
+            className="min-w-0 font-mono"
+            data-testid="rule-set-query-expression"
+          />
+        ) : (
+          <Input
+            aria-label={m.rules_query_value()}
+            value={param.value}
+            maxLength={256}
+            onChange={(e) => onChange({ value: e.target.value })}
+            className="min-w-0"
+            data-testid="rule-set-query-value"
+          />
+        )}
+      </div>
+      {failure ? (
+        <p className="text-xs text-destructive" role="alert">
+          {expressionErrorText(failure)}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

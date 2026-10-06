@@ -111,3 +111,13 @@ describe("rules-v3 actions", () => {
     expect(usesRulesV3Placeholders("<p>{{ time }}</p>")).toBe(false);
   });
 });
+
+describe("bulk redirects keep their statuses", () => {
+  it("refuses 303, which only redirect rules answer", async () => {
+    const { bulkRedirect } = await import("../src/index");
+    expect(bulkRedirect.safeParse({ source: "/a", target: "/b", statusCode: 303 }).success).toBe(
+      false,
+    );
+    expect(bulkRedirect.parse({ source: "/a", target: "/b" }).statusCode).toBe(301);
+  });
+});

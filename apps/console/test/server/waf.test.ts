@@ -37,6 +37,7 @@ const ALL_FEATURES = [
   "purge-tag-v1",
   "prefetch-v2",
   "rules-v2",
+  "rules-v3",
 ];
 
 /** A change without the operator behind it (service accounts, background jobs). */
@@ -131,6 +132,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       purgeByTag: available,
       prefetchVariants: available,
       rulesV2: available,
+      rulesV3: available,
     });
     const https = await admin.https.get({ id: siteId });
     expect(https).toMatchObject({ brotli: false, brotliLevel: 6, zstd: false, zstdLevel: 3 });
@@ -285,6 +287,7 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       purgeByTag: unavailable,
       prefetchVariants: unavailable,
       rulesV2: unavailable,
+      rulesV3: unavailable,
     });
     const before = (await config()).revision;
     for (const [call, feature] of [

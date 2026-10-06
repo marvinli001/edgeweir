@@ -3,6 +3,7 @@ import {
   type ErrorPageStatus,
   type FeatureAvailability,
   type SiteErrorPages,
+  usesRulesV3Placeholders,
 } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
@@ -57,6 +58,7 @@ export function ErrorPagesTab({ siteId }: { siteId: string }) {
             siteId={siteId}
             initial={saved}
             availability={available.errorPages}
+            availabilityV3={available.rulesV3}
           />
         )}
       </QueryView>
@@ -68,10 +70,13 @@ function ErrorPagesForm({
   siteId,
   initial,
   availability,
+  availabilityV3,
 }: {
   siteId: string;
   initial: SiteErrorPages;
   availability: FeatureAvailability;
+  /** {{time}} and {{path}} (rules-v3). */
+  availabilityV3: FeatureAvailability;
 }) {
   const queryClient = useQueryClient();
   const mutation = useMutation(orpc.errorPages.update.mutationOptions());
@@ -115,6 +120,13 @@ function ErrorPagesForm({
             {m.feature_unavailable_nodes()}
           </SafetyNote>
         )}
+        {availability.available &&
+        !availabilityV3.available &&
+        ERROR_PAGE_STATUSES.some((status) => usesRulesV3Placeholders(templates[status])) ? (
+          <SafetyNote className="animate-in fade-in" data-testid="error-pages-v3-unavailable">
+            {m.feature_unavailable_nodes()}
+          </SafetyNote>
+        ) : null}
         {ERROR_PAGE_STATUSES.map((status, index) => (
           <div
             key={status}
@@ -141,7 +153,7 @@ function ErrorPagesForm({
           className="self-start"
           testId="error-pages-intercept"
         />
-        <TemplateVariables />
+        <TemplateVariables hideRulesV3={!availabilityV3.available} />
       </CardContent>
       <SaveBar
         dirty={dirty && editable && !tooLarge}

@@ -1,4 +1,8 @@
 import {
+  ARG_FIELD,
+  ARG_NAME_RE,
+  COOKIE_FIELD,
+  COOKIE_NAME_RE,
   ExpressionError,
   fields,
   functions,
@@ -6,11 +10,14 @@ import {
   parseExpression,
   parseValueExpression,
   responsePhases,
+  rulesV3Fields,
 } from "@edgeweir/rule-engine";
 import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { OptionSelect } from "@/components/form-select";
+import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   CONDITION_TEMPLATES,
   type ConditionTemplate,
@@ -18,6 +25,7 @@ import {
   type ExpressionFailure,
   expressionErrorText,
   insertCondition,
+  RULES_V3_TEMPLATES,
   TEMPLATE_VALUES,
 } from "@/lib/expressions";
 import { m } from "@/lib/i18n";
@@ -49,6 +57,8 @@ const KEYWORDS = [
   "contains",
   "matches",
   "in",
+  "wildcard",
+  "strict",
   "true",
   "false",
 ];
@@ -86,6 +96,28 @@ export function expressionFailure(
 const LIST_PREFIX = "$";
 
 /**
+ * Fields read by name: a cookie and a query parameter (rules-v3) and a request header. The field
+ * menu offers them first (select value "@" + kind); a name field then inserts the field.
+ */
+const NAMED_FIELDS = {
+  cookie: {
+    field: COOKIE_FIELD,
+    re: COOKIE_NAME_RE,
+    label: () => m.rules_field_cookie(),
+    v3: true,
+  },
+  arg: { field: ARG_FIELD, re: ARG_NAME_RE, label: () => m.rules_field_arg(), v3: true },
+  header: {
+    field: "http.request.headers",
+    re: /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/,
+    label: () => m.rules_field_header(),
+    v3: false,
+  },
+} as const;
+type NamedField = keyof typeof NAMED_FIELDS;
+const NAMED_PREFIX = "@";
+
+/**
  * A highlighted expression editor that marks the first character the parser refuses. Conditions
  * append inserted fields and templates with "and"; values insert fields at the caret.
  */
@@ -98,6 +130,7 @@ export function ExpressionEditor({
   onChange,
   actions,
   testId,
+  hideRulesV3 = false,
 }: {
   id: string;
   label: string;
@@ -108,7 +141,12 @@ export function ExpressionEditor({
   /** Controls shown beside the label, before the field picker. */
   actions?: React.ReactNode;
   testId?: string;
+  /** Leave the rules-v3 fields and templates out of the menus (the cluster's nodes lack it). */
+  hideRulesV3?: boolean;
 }) {
+  // The field read by name being inserted, and its name so far.
+  const [named, setNamed] = React.useState<NamedField | null>(null);
+  const [name, setName] = React.useState("");
   const textarea = React.useRef<HTMLTextAreaElement>(null);
   // The range to select once an inserted template is rendered (its example value).
   const selection = React.useRef<{ source: string; range: [number, number] } | null>(null);
@@ -132,13 +170,23 @@ export function ExpressionEditor({
     (field) =>
       (!field.startsWith("http.response.") || responsePhases.has(phase)) &&
       // A value is a string: string fields only.
-      (kind !== "value" || fields[field] === "string"),
+      (kind !== "value" || fields[field] === "string") &&
+      !(hideRulesV3 && rulesV3Fields.has(field)),
+  );
+  const namedKinds = (Object.keys(NAMED_FIELDS) as NamedField[]).filter(
+    (key) => !(hideRulesV3 && NAMED_FIELDS[key].v3),
   );
   const insert = (field: string) => {
     if (kind === "value") {
       const at = textarea.current?.selectionStart ?? value.length;
       onChange(`${value.slice(0, at)}${field}${value.slice(at)}`);
     } else onChange(`${value.trimEnd()}${value.trim() ? " and " : ""}${field} `);
+  };
+  const namedField = named ? NAMED_FIELDS[named] : null;
+  const insertNamed = () => {
+    if (!namedField?.re.test(name)) return;
+    insert(`${namedField.field}[${JSON.stringify(name)}]`);
+    setNamed(null);
   };
   return (
     <Field>
@@ -150,10 +198,12 @@ export function ExpressionEditor({
             <OptionSelect
               value={null}
               options={[
-                ...(Object.keys(CONDITION_TEMPLATES) as ConditionTemplate[]).map((template) => ({
-                  value: template,
-                  label: conditionTemplateLabel(template),
-                })),
+                ...(Object.keys(CONDITION_TEMPLATES) as ConditionTemplate[])
+                  .filter((template) => !(hideRulesV3 && RULES_V3_TEMPLATES.has(template)))
+                  .map((template) => ({
+                    value: template,
+                    label: conditionTemplateLabel(template),
+                  })),
                 ...(lists.data ?? []).map((list) => ({
                   value: `${LIST_PREFIX}${list.name}`,
                   label: m.rules_template_ip_list({ name: list.name }),
@@ -180,8 +230,18 @@ export function ExpressionEditor({
           ) : null}
           <OptionSelect
             value={null}
-            options={available.map((field) => ({ value: field, label: field }))}
-            onChange={insert}
+            options={[
+              ...namedKinds.map((key) => ({
+                value: `${NAMED_PREFIX}${key}`,
+                label: NAMED_FIELDS[key].label(),
+              })),
+              ...available.map((field) => ({ value: field, label: field })),
+            ]}
+            onChange={(choice) => {
+              if (!choice.startsWith(NAMED_PREFIX)) return insert(choice);
+              setNamed(choice.slice(NAMED_PREFIX.length) as NamedField);
+              setName("");
+            }}
             placeholder={m.rules_insert_field()}
             label={m.rules_insert_field()}
             size="sm"
@@ -190,6 +250,44 @@ export function ExpressionEditor({
           />
         </div>
       </div>
+      {namedField ? (
+        <div
+          className="flex flex-wrap items-center gap-2 animate-in fade-in"
+          data-testid={`${id}-named`}
+        >
+          <span className="text-xs text-muted-foreground">{namedField.label()}</span>
+          <Input
+            // The menu has closed; the name is what comes next.
+            autoFocus
+            aria-label={m.rules_field_name()}
+            value={name}
+            maxLength={64}
+            aria-invalid={(name !== "" && !namedField.re.test(name)) || undefined}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                // Enter inserts the field instead of submitting the rule form.
+                e.preventDefault();
+                insertNamed();
+              } else if (e.key === "Escape") setNamed(null);
+            }}
+            className="h-8 w-48 font-mono"
+            data-testid={`${id}-named-name`}
+          />
+          <Button
+            type="button"
+            size="sm"
+            disabled={!namedField.re.test(name)}
+            onClick={insertNamed}
+            data-testid={`${id}-named-insert`}
+          >
+            {m.rules_field_insert()}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setNamed(null)}>
+            {m.common_cancel()}
+          </Button>
+        </div>
+      ) : null}
       <div
         className={
           kind === "value"
