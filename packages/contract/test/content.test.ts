@@ -62,7 +62,6 @@ describe("site-content-v1 inputs", () => {
     expect(omitted?.purgeMethod).toBeUndefined();
     expect(omitted?.xCache).toBeUndefined();
   });
-  });
 
   it("offers the charsets and bounds the body limit to 0-10 GiB", () => {
     expect(contentSettings.parse({ charset: { name: "gb18030", force: true } }).charset).toEqual({
