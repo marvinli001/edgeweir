@@ -1693,7 +1693,11 @@ const vectors = [
     ["not ip.peer in {2001:db8::/32}", { "ip.peer": "2001:db8::7" }, false],
     ["ip.peer ne 192.0.2.1", { "ip.peer": "::ffff:192.0.2.1" }, false],
     ['to_string(ip.peer) eq "10.0.0.2"', { "ip.peer": "10.0.0.2" }, true],
-    ["ip.src in {10.0.0.0/8} and not ip.peer in {10.0.0.0/8}", { "ip.src": "10.0.0.9", "ip.peer": "198.51.100.1" }, true],
+    [
+      "ip.src in {10.0.0.0/8} and not ip.peer in {10.0.0.0/8}",
+      { "ip.src": "10.0.0.9", "ip.peer": "198.51.100.1" },
+      true,
+    ],
   ].map(accepted),
 ];
 writeFileSync(
