@@ -5,6 +5,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
+import { Sparkline } from "@/components/appica/sparkline";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FilterSelect, FormSelect, OptionSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
@@ -31,10 +32,20 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useOpenKey } from "@/hooks/use-open-key";
 import { domainList, fillOrigin, replacesField } from "@/lib/address-input";
-import { m, timeAgo } from "@/lib/i18n";
+import { formatCompact, m, timeAgo } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
 const PAGE_SIZE = 20;
+
+/** Sums neighbouring buckets so a long series draws as `points` points. */
+function coarse(series: number[], points: number): number[] {
+  const step = Math.max(1, Math.ceil(series.length / points));
+  const out: number[] = [];
+  for (let i = 0; i < series.length; i += step) {
+    out.push(series.slice(i, i + step).reduce((sum, value) => sum + value, 0));
+  }
+  return out;
+}
 
 export const Route = createFileRoute("/_app/sites/")({
   validateSearch: z.object({
@@ -68,6 +79,26 @@ function SitesPage() {
   const setCreateOpen = (open: boolean) =>
     navigate({ search: (prev) => ({ ...prev, create: open || undefined }), replace: true });
   const filtered = !!search.q || !!search.cluster;
+
+  // Each site's requests over the last day, for the trend column.
+  const trends = useQuery({
+    ...orpc.analytics.breakdown.queryOptions({
+      input: { by: "site", range: "24h", limit: PAGE_SIZE },
+    }),
+    placeholderData: keepPreviousData,
+    refetchInterval: 60_000,
+    meta: { background: true },
+  });
+  const trendById = React.useMemo(
+    () =>
+      new Map(
+        (trends.data?.items ?? []).map((item) => [
+          item.id,
+          { total: item.total, series: coarse(item.series, 48) },
+        ]),
+      ),
+    [trends.data],
+  );
 
   const stars = useSiteStars();
   const { ids: starredIds, pendingId, toggle } = stars;
@@ -108,6 +139,20 @@ function SitesPage() {
         cell: ({ row }) => <SiteStatus site={row.original} />,
       },
       {
+        id: "traffic",
+        header: () => m.sites_col_traffic(),
+        cell: ({ row }) => {
+          const trend = trendById.get(row.original.id);
+          if (!trend) return <span className="text-muted-foreground">—</span>;
+          return (
+            <div className="flex w-36 items-center gap-3">
+              <Sparkline data={trend.series} height={24} fill={false} className="w-20" />
+              <span className="text-xs font-medium tabular-nums">{formatCompact(trend.total)}</span>
+            </div>
+          );
+        },
+      },
+      {
         id: "domains",
         header: () => m.sites_col_domains(),
         cell: ({ row }) => (
@@ -139,7 +184,7 @@ function SitesPage() {
         cell: ({ row }) => <Badge variant="secondary">{row.original.clusterName}</Badge>,
       },
     ],
-    [starredIds, pendingId, toggle],
+    [starredIds, pendingId, toggle, trendById],
   );
 
   return (

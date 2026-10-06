@@ -15,6 +15,7 @@ import { FormSelect, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
 import { OriginHealthBadge, OriginHealthError } from "@/components/site/origin-health";
+import { OriginTopologyCard } from "@/components/site/origin-topology-card";
 import { nextDraftKey, SaveBar, serializeDrafts, useSaveSite } from "@/components/site/save-site";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +37,7 @@ import { cn } from "@/lib/utils";
 export function OriginsTab({ site }: { site: Site }) {
   return (
     <div className="flex flex-col gap-4">
+      <OriginTopologyCard site={site} />
       {/* Keyed by their own data, so saving one card keeps unsaved edits in the other. */}
       <OriginsCard key={JSON.stringify(site.origins)} site={site} />
       <PoolSettingsCard key={JSON.stringify(site.originSettings)} site={site} />

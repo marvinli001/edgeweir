@@ -16,6 +16,7 @@ import { followSiteDelivery } from "@/components/site/delivery-toast";
 import { ErrorPagesTab } from "@/components/site/error-pages-tab";
 import { HttpsTab } from "@/components/site/https-tab";
 import { LaunchCheck } from "@/components/site/launch-check";
+import { LiveRequests } from "@/components/site/live-requests";
 import { LogsTab } from "@/components/site/logs-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
 import { RulesTab } from "@/components/site/rules-tab";
@@ -207,6 +208,7 @@ function OverviewTab({ site }: { site: Site }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {site.enabled ? <LiveRequests siteId={site.id} /> : null}
       <LaunchCheck site={site} />
       <Card>
         <form
