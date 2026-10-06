@@ -7,8 +7,14 @@
 #              User-Agent oha sends, then expects 200 and X-Cache HIT as for cache.
 #   challenge  the same site without a pass: every answer is the challenge (403
 #              page, 302 for cookie302); no HIT check.
+#   headers    cache HITs of a site whose rules compute header values (rules-v3):
+#              request headers from http.request.id and ip.geoip.country, two
+#              Link lines added with append, X-Cache-Status from
+#              http.response.cache_status and a User-Agent wildcard; checks that
+#              the warmed response carries X-Cache-Status: HIT and two Link lines.
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
-# behind (whoami, cache rule on /, Under Attack js).
+# behind (whoami, cache rule on /, Under Attack js); headers to
+# hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind.
 set -euo pipefail
 OHA_BIN="${OHA_BIN:-oha}"
 command -v "$OHA_BIN" >/dev/null || { echo 'Install oha or set OHA_BIN to its verified binary.' >&2; exit 1; }
@@ -16,7 +22,8 @@ BENCH_SCENARIO="${BENCH_SCENARIO:-cache}"
 case "$BENCH_SCENARIO" in
   cache) DEFAULT_HOST=demo.test ;;
   pass | challenge) DEFAULT_HOST=ua-bench.test ;;
-  *) echo "BENCH_SCENARIO must be cache, pass or challenge, not $BENCH_SCENARIO" >&2; exit 2 ;;
+  headers) DEFAULT_HOST=hdr-bench.g8.test ;;
+  *) echo "BENCH_SCENARIO must be cache, pass, challenge or headers, not $BENCH_SCENARIO" >&2; exit 2 ;;
 esac
 BENCH_URL="${BENCH_URL:-http://127.0.0.1:${E2E_NODE_PORT:-18080}/bench-cache.txt}"
 BENCH_HOST="${BENCH_HOST:-$DEFAULT_HOST}"
@@ -28,7 +35,7 @@ mkdir -p "$(dirname "$BENCH_OUTPUT")"
 OHA_HEADERS=(-H "Host: $BENCH_HOST")
 CURL_HEADERS=(-H "Host: $BENCH_HOST")
 EXPECT_STATUS=200
-if [[ "$BENCH_SCENARIO" != cache ]]; then
+if [[ "$BENCH_SCENARIO" == pass || "$BENCH_SCENARIO" == challenge ]]; then
   OHA_HEADERS+=(-H "User-Agent: $BENCH_USER_AGENT")
   CURL_HEADERS+=(-A "$BENCH_USER_AGENT")
   CHALLENGE="$(curl -sS -D - -o /dev/null "${CURL_HEADERS[@]}" "$BENCH_URL" | tr -d '\r')"
@@ -91,6 +98,13 @@ if [[ "$BENCH_SCENARIO" != challenge ]]; then
   if ! printf '%s\n' "$HEADERS" | tr -d '\r' | rg -qi '^x-cache: HIT$'; then
     echo 'Refusing to benchmark: the warmed response is not a cache HIT.' >&2
     exit 1
+  fi
+  if [[ "$BENCH_SCENARIO" == headers ]]; then
+    if ! printf '%s\n' "$HEADERS" | tr -d '\r' | grep -qi '^x-cache-status: HIT$' ||
+      [[ "$(printf '%s\n' "$HEADERS" | tr -d '\r' | grep -ci '^link: ')" != 2 ]]; then
+      echo "Refusing to benchmark: $BENCH_HOST does not compute its header values (X-Cache-Status, two Link lines)." >&2
+      exit 1
+    fi
   fi
 fi
 "$OHA_BIN" --no-tui --output-format json -n "$BENCH_REQUESTS" -c "$BENCH_CONCURRENCY" -t 10s "${OHA_HEADERS[@]}" "$BENCH_URL" > "$BENCH_OUTPUT"
