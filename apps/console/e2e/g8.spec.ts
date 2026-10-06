@@ -144,7 +144,15 @@ test("G8: the field menu inserts cookies, query parameters and headers by name; 
   await test.step("Cookie equals, User-Agent and Referer wildcards", async () => {
     await pick(page, page.getByTestId(`${id}-template`), "Cookie 等于");
     await expect(expression).toHaveValue('http.request.cookies["session"] eq "value"');
-    // The template's name is selected: typing replaces it.
+    // The template's name is selected once the menu hands focus back: typing replaces it.
+    await expect(expression).toBeFocused();
+    await expect
+      .poll(() =>
+        expression.evaluate((el: { value: string; selectionStart: number; selectionEnd: number }) =>
+          el.value.slice(el.selectionStart, el.selectionEnd),
+        ),
+      )
+      .toBe("session");
     await page.keyboard.type("sid");
     await expect(expression).toHaveValue('http.request.cookies["sid"] eq "value"');
     await pick(page, page.getByTestId(`${id}-template`), "User-Agent 通配");
