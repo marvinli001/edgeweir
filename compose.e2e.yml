@@ -306,6 +306,14 @@ services:
       s3:
         condition: service_started
 
+  # G9 (scripts/e2e-g9.mjs): a layer-4 load balancer that sends PROXY
+  # protocol v2 to the edge node of cluster g9-proxy (docker/e2e/g9-lb).
+  g9-lb:
+    image: openresty/openresty:1.31.1.1-bookworm@sha256:8005b87dcb25df5e202e71dcc4b8a2c20a4845a75302b2bb6ee816b5392883e4
+    command: ["openresty", "-g", "daemon off;", "-c", "/etc/nginx/g9-lb.conf"]
+    volumes:
+      - ./docker/e2e/g9-lb/nginx.conf:/etc/nginx/g9-lb.conf:ro
+
   upgrade-files:
     image: openresty/openresty:1.31.1.1-bookworm@sha256:8005b87dcb25df5e202e71dcc4b8a2c20a4845a75302b2bb6ee816b5392883e4
     profiles: ["upgrades"]
