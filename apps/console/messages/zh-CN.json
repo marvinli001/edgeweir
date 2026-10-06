@@ -267,6 +267,7 @@
   "error_s3_secret_required": "请填写 {accessKeyId} 的 Secret Key",
   "error_origin_address_forbidden": "源站地址 {address} 属于特殊用途地址段 {range}，不在源站地址允许清单中",
   "error_origin_grpc_requires_http2": "gRPC 需要以 HTTP/2 回源",
+  "error_origin_host_header_invalid": "回源 Host 无效：{hostHeader}",
   "error_cache_task_not_found": "任务不存在",
   "error_cache_task_url_invalid": "URL 无效：{urls}",
   "error_cache_task_host_unknown": "没有网站使用 {hosts}",

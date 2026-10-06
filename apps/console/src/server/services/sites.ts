@@ -34,6 +34,7 @@ import {
 import { readCacheKey } from "../lib/cache-key";
 import type { MasterKey } from "../lib/envelope";
 import { fail } from "../lib/errors";
+import { assertHostHeader } from "../lib/host-header";
 import { lockDomains, lockStats } from "../lib/locks";
 import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings";
 import { assertUpdatedAt } from "../lib/updated-at";
@@ -617,6 +618,7 @@ export async function createSite(
     if (!clusterRow) fail("CLUSTER_NOT_FOUND", "cluster not found");
     assertGrpcOverHttp2(input.originSettings);
     await assertDomainsFree(tx, domains);
+    for (const origin of input.origins) assertHostHeader(origin.hostHeader);
     await assertOriginsAllowed(tx, input.origins);
 
     const [siteRow] = await tx
@@ -683,6 +685,7 @@ export async function updateSite(
       changed.push("domains");
     }
     if (input.origins) {
+      for (const origin of input.origins) assertHostHeader(origin.hostHeader);
       await assertOriginsAllowed(tx, input.origins);
       await assertRuleGroups(tx, row.id, input.origins);
       const pool = await sitePool(tx, row.id);

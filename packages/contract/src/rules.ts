@@ -5,6 +5,7 @@ import {
   compressionCodings,
   expressionErrorCodes,
   isRateLimitKey,
+  MAX_HOST_HEADER_LENGTH,
   ORIGIN_GROUP_RE,
   parseExpression,
   parseValueExpression,
@@ -221,7 +222,16 @@ export const ruleAction = z.discriminatedUnion("kind", [
         .string()
         .refine((s) => s === "" || ORIGIN_GROUP_RE.test(s), "invalid origin group")
         .default(""),
-      hostHeader: optionalHostname.default(""),
+      /**
+       * Checked like an origin's Host header (ORIGIN_HOST_HEADER_INVALID). ASCII letters are
+       * lowercased, which keeps the value valid or invalid as it was.
+       */
+      hostHeader: z
+        .string()
+        .trim()
+        .overwrite((value) => value.replace(/[A-Z]+/g, (letters) => letters.toLowerCase()))
+        .max(MAX_HOST_HEADER_LENGTH)
+        .default(""),
       sni: optionalHostname.default(""),
       port: z.number().int().min(0).max(65535).default(0),
     })

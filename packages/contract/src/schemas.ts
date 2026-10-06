@@ -1,5 +1,6 @@
 import {
   cacheConditionExpression,
+  MAX_HOST_HEADER_LENGTH,
   parseExpression,
   type StructuredCacheCondition,
   structuredCacheCondition,
@@ -156,7 +157,12 @@ const originFields = z.object({
   scheme: originScheme.default("http"),
   weight: z.number().int().min(1).max(100).default(1),
   backup: z.boolean().default(false),
-  hostHeader: z.string().trim().max(253).default(""),
+  /**
+   * Host header sent to the origin; empty keeps the request's. A host name or IP literal with an
+   * optional port (IPv6 in brackets with a port), as nodes accept it; others are refused with
+   * ORIGIN_HOST_HEADER_INVALID. Saved values are not re-checked when read.
+   */
+  hostHeader: z.string().trim().max(MAX_HOST_HEADER_LENGTH).default(""),
   /** TLS server name for HTTPS origins; empty derives it from the Host or address. */
   sni: optionalHostname.default(""),
   s3: s3Input.nullable().default(null),
