@@ -1,3 +1,4 @@
+import { RULES_V3_PLACEHOLDERS, usesRulesV3Placeholders } from "@edgeweir/rule-engine";
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { expectedUpdatedAt, isoDateTime, uuid } from "./schemas";
@@ -18,7 +19,9 @@ export const ERROR_PAGE_PLACEHOLDERS = [
   "{{request_id}}",
   "{{client_ip}}",
   "{{host}}",
+  ...RULES_V3_PLACEHOLDERS,
 ] as const;
+export { RULES_V3_PLACEHOLDERS, usesRulesV3Placeholders };
 /** Statuses of the platform pages (the ERROR_PAGE_TOO_LARGE status of each). */
 export const PLATFORM_ERROR_PAGE_STATUSES = {
   unknownHost: 404,

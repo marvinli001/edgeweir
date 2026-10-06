@@ -172,7 +172,7 @@ Selecting **HTTP only** turns off **Redirect HTTP to HTTPS** and resets the HSTS
 | Modern | `ECDHE-ECDSA-AES128-GCM-SHA256`, `ECDHE-RSA-AES128-GCM-SHA256`, `ECDHE-ECDSA-CHACHA20-POLY1305`, `ECDHE-RSA-CHACHA20-POLY1305` |
 | Compatible | The modern suites plus `ECDHE-ECDSA-AES256-GCM-SHA384` and `ECDHE-RSA-AES256-GCM-SHA384` |
 
-TLS session tickets are off.
+TLS session resumption is off: nodes keep no session cache (TLS 1.2) and send no session tickets (TLS 1.2 and TLS 1.3), so every connection does a full handshake.
 
 ### Compression
 

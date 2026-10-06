@@ -5,6 +5,7 @@ import {
   compressionCodings,
   expressionErrorCodes,
   isRateLimitKey,
+  MAX_HOST_HEADER_LENGTH,
   ORIGIN_GROUP_RE,
   parseExpression,
   parseValueExpression,
@@ -69,18 +70,28 @@ export function staticRedirectTarget(s: string): boolean {
 const staticRewritePath = (s: string) =>
   s.startsWith("/") && !s.startsWith("//") && !/[?\\#]/.test(s);
 
+/** Redirect statuses; 303 needs rules-v3. */
 export const redirectStatusCode = z
-  .union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)])
+  .union([z.literal(301), z.literal(302), z.literal(303), z.literal(307), z.literal(308)])
   .default(301);
+/** A value expression's source (rules-v3 for header values and query parameters); "" for none. */
+const valueExpression = z.string().max(4096).default("");
 /** A query parameter a redirect or rewrite sets (the node percent-encodes the value). */
-export const queryParam = z.object({
-  name: z.string().regex(QUERY_NAME_RE),
-  /** Printable ASCII, at most 256 characters. */
-  value: z
-    .string()
-    .max(256)
-    .regex(/^[\x20-\x7e]*$/),
-});
+export const queryParam = z
+  .object({
+    name: z.string().regex(QUERY_NAME_RE),
+    /** Printable ASCII, at most 256 characters; empty when `expression` computes it. */
+    value: z
+      .string()
+      .max(256)
+      .regex(/^[\x20-\x7e]*$/),
+    /** Value expression computed per request instead of `value` (rules-v3). */
+    expression: valueExpression,
+  })
+  .refine((p) => p.expression === "" || p.value === "", {
+    message: "set a value or an expression, not both",
+    path: ["value"],
+  });
 /** Query string edits of redirects and rewrites (rules-v2). */
 const queryEdits = {
   /** Value expression computed per request instead of `value` (exactly one of both is set). */
@@ -117,6 +128,21 @@ const checkQueryEdits =
         path: ["removeQuery"],
       });
   };
+
+/** A header's value is static or an expression, and neither goes with remove (nor append). */
+function checkHeaderValue(
+  a: { value: string; expression: string; remove: boolean; append?: boolean },
+  ctx: z.RefinementCtx,
+): void {
+  if (a.expression !== "" && (a.value !== "" || a.remove))
+    ctx.addIssue({
+      code: "custom",
+      message: "set a value or an expression; removing a header takes neither",
+      path: ["expression"],
+    });
+  if (a.append && a.remove)
+    ctx.addIssue({ code: "custom", message: "append adds a line", path: ["append"] });
+}
 
 /** Config action fields that only the config phase accepts (rules-v2). */
 export const configPhaseFields = [
@@ -162,18 +188,28 @@ export const ruleAction = z.discriminatedUnion("kind", [
       preserveQuery: z.boolean().default(true),
     })
     .superRefine(checkQueryEdits(staticRewritePath)),
-  z.object({
-    kind: z.literal("request_header"),
-    header: ruleHeaderName,
-    value: text.default(""),
-    remove: z.boolean().default(false),
-  }),
-  z.object({
-    kind: z.literal("response_header"),
-    header: ruleHeaderName,
-    value: text.default(""),
-    remove: z.boolean().default(false),
-  }),
+  z
+    .object({
+      kind: z.literal("request_header"),
+      header: ruleHeaderName,
+      value: text.default(""),
+      /** Value expression computed per request instead of `value` (rules-v3). */
+      expression: valueExpression,
+      remove: z.boolean().default(false),
+    })
+    .superRefine(checkHeaderValue),
+  z
+    .object({
+      kind: z.literal("response_header"),
+      header: ruleHeaderName,
+      value: text.default(""),
+      /** Value expression computed per request instead of `value` (rules-v3). */
+      expression: valueExpression,
+      remove: z.boolean().default(false),
+      /** Add the value as another line next to the response's own (rules-v3). */
+      append: z.boolean().default(false),
+    })
+    .superRefine(checkHeaderValue),
   /**
    * Overrides site settings for the requests it matches; later matching
    * rules override field by field. The phase cache accepts only cacheBypass,
@@ -221,7 +257,16 @@ export const ruleAction = z.discriminatedUnion("kind", [
         .string()
         .refine((s) => s === "" || ORIGIN_GROUP_RE.test(s), "invalid origin group")
         .default(""),
-      hostHeader: optionalHostname.default(""),
+      /**
+       * Checked like an origin's Host header (ORIGIN_HOST_HEADER_INVALID). ASCII letters are
+       * lowercased, which keeps the value valid or invalid as it was.
+       */
+      hostHeader: z
+        .string()
+        .trim()
+        .overwrite((value) => value.replace(/[A-Z]+/g, (letters) => letters.toLowerCase()))
+        .max(MAX_HOST_HEADER_LENGTH)
+        .default(""),
       sni: optionalHostname.default(""),
       port: z.number().int().min(0).max(65535).default(0),
     })
@@ -298,12 +343,22 @@ export const ruleInput = z
     } catch (error) {
       addExpressionIssue(ctx, error, ["expression"]);
     }
-    if ((action.kind === "redirect" || action.kind === "rewrite") && action.target !== "")
+    const values = (source: string, path: (string | number)[]) => {
+      if (source === "") return;
       try {
-        parseValueExpression(action.target, rule.phase);
+        parseValueExpression(source, rule.phase);
       } catch (error) {
-        addExpressionIssue(ctx, error, ["action", "target"]);
+        addExpressionIssue(ctx, error, ["action", ...path]);
       }
+    };
+    if (action.kind === "redirect" || action.kind === "rewrite") {
+      values(action.target, ["target"]);
+      action.setQuery.forEach((param, i) => {
+        values(param.expression, ["setQuery", i, "expression"]);
+      });
+    }
+    if (action.kind === "request_header" || action.kind === "response_header")
+      values(action.expression, ["expression"]);
   });
 export const ruleDto = ruleInput.safeExtend({ id: uuid });
 /** Most-matched log rules of a site over a range (approximate, bounded per minute). */

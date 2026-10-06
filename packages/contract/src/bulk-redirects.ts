@@ -1,6 +1,6 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
-import { redirectStatusCode, staticRedirectTarget } from "./rules";
+import { staticRedirectTarget } from "./rules";
 import { uuid } from "./schemas";
 
 /** Entries of a site's bulk redirect table at most. */
@@ -40,6 +40,14 @@ export function bulkRedirectSourceParts(source: string): { host: string; path: s
  * and normalized path, "host/path" first. The target is a static redirect
  * target of at most 1024 bytes.
  */
+/** Statuses of bulk redirects (redirect rules also have 303, rules-v3). */
+const bulkRedirectStatus = z.union([
+  z.literal(301),
+  z.literal(302),
+  z.literal(307),
+  z.literal(308),
+]);
+
 export const bulkRedirect = z.object({
   source: z
     .string()
@@ -51,7 +59,7 @@ export const bulkRedirect = z.object({
         utf8Bytes(target) <= BULK_REDIRECT_TARGET_MAX_BYTES && staticRedirectTarget(target),
       "invalid redirect target",
     ),
-  statusCode: redirectStatusCode,
+  statusCode: bulkRedirectStatus.default(301),
   /** Append the request's query string to the target. */
   preserveQuery: z.boolean().default(false),
 });
@@ -59,7 +67,7 @@ export const bulkRedirect = z.object({
 export const bulkRedirectDto = z.object({
   source: z.string(),
   target: z.string(),
-  statusCode: z.union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)]),
+  statusCode: bulkRedirectStatus,
   preserveQuery: z.boolean(),
 });
 

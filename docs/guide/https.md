@@ -172,7 +172,7 @@ HTTP-01 证书不能扩展到泛域名，DNS-01 证书只能扩展到其 DNS 凭
 | 现代 | `ECDHE-ECDSA-AES128-GCM-SHA256`、`ECDHE-RSA-AES128-GCM-SHA256`、`ECDHE-ECDSA-CHACHA20-POLY1305`、`ECDHE-RSA-CHACHA20-POLY1305` |
 | 兼容 | 现代档位加 `ECDHE-ECDSA-AES256-GCM-SHA384`、`ECDHE-RSA-AES256-GCM-SHA384` |
 
-TLS 会话票据（session ticket）关闭。
+TLS 会话复用未启用：节点不保存会话缓存（TLS 1.2），也不发会话票据（TLS 1.2 与 TLS 1.3），每个连接都完整握手。
 
 ### 压缩
 

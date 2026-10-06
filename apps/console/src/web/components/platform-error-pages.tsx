@@ -1,4 +1,8 @@
-import { PLATFORM_ERROR_PAGE_STATUSES, type PlatformErrorPages } from "@edgeweir/contract";
+import {
+  PLATFORM_ERROR_PAGE_STATUSES,
+  type PlatformErrorPages,
+  usesRulesV3Placeholders,
+} from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
@@ -7,6 +11,7 @@ import {
   TemplateVariables,
   templateTooLarge,
 } from "@/components/error-page-template";
+import { SafetyNote } from "@/components/safety-note";
 import { SaveBar } from "@/components/site/save-site";
 import { QueryView } from "@/components/states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,6 +87,11 @@ function PlatformErrorPagesForm({ initial }: { initial: PlatformErrorPages }) {
           />
         ))}
         <TemplateVariables />
+        {PAGES.some(({ key }) => usesRulesV3Placeholders(pages[key])) ? (
+          <SafetyNote className="animate-in fade-in" data-testid="platform-pages-v3-note">
+            {m.error_pages_v3_note({ time: "{{time}}", path: "{{path}}" })}
+          </SafetyNote>
+        ) : null}
       </CardContent>
       <SaveBar
         dirty={dirty && !tooLarge}

@@ -5,6 +5,7 @@ import {
   MODSECURITY_FEATURE,
   ORIGIN_HTTP2_FEATURE,
   RULES_V2_FEATURE,
+  RULES_V3_FEATURE,
   SESSION_AFFINITY_FEATURE,
   type SiteWafModel,
   ZSTD_FEATURE,
@@ -147,7 +148,8 @@ const AVAILABLE: FeatureAvailability = { available: true, reason: null };
 /**
  * Whether Brotli, Zstandard, CRS, active health checks, session affinity
  * (which also needs challenge-v1 for its keys), HTTP/2 and gRPC towards the
- * origins and error pages can be turned on for a site now: every active
+ * origins, error pages and the rule engine extensions (rules-v2, rules-v3)
+ * can be turned on for a site now: every active
  * node of its cluster must report the feature (it may still be required
  * through the API, as with other features). purgeByTag and prefetchVariants
  * tell whether the cluster's nodes run host and tag purges, and mobile and
@@ -174,6 +176,7 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     purgeByTag: byNodes(PURGE_TAG_FEATURE),
     prefetchVariants: byNodes(PREFETCH_V2_FEATURE),
     rulesV2: byNodes(RULES_V2_FEATURE),
+    rulesV3: byNodes(RULES_V3_FEATURE),
   };
 }
 

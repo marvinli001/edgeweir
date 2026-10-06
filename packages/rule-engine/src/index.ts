@@ -1,4 +1,8 @@
 import ipaddr from "ipaddr.js";
+import { md5Hex, sha1Hex, sha256Hex } from "./digest.ts";
+import { validHostHeader } from "./host-header.ts";
+
+export { MAX_HOST_HEADER_LENGTH, validHostHeader } from "./host-header.ts";
 
 export const phases = [
   "request-transform",
@@ -40,6 +44,8 @@ export const expressionErrorDefs = {
   expected_boolean: { params: [], en: "expected boolean" },
   expected_ip: { params: [], en: "expected IP address or CIDR" },
   header_name: { params: [], en: "invalid header name" },
+  cookie_name: { params: [], en: "invalid cookie name" },
+  argument_name: { params: [], en: "invalid query parameter name" },
   unknown_field: { params: [], en: "unknown field" },
   response_field: { params: [], en: "response field is unavailable in this phase" },
   unknown_operator: { params: [], en: "unknown operator" },
@@ -57,6 +63,10 @@ export const expressionErrorDefs = {
   too_few_arguments: { params: [], en: "too few arguments" },
   argument_not_string: { params: [], en: "argument must be a string" },
   literal_argument: { params: [], en: "this argument must be a quoted string" },
+  integer_argument: {
+    params: ["min", "max"],
+    en: "this argument must be an integer from {min} to {max}",
+  },
   flags: { params: [], en: 'the only flag is "s"' },
   value_not_string: { params: [], en: "value expressions must be strings" },
   value_too_long: { params: ["max"], en: "value is too long" },
@@ -85,17 +95,21 @@ export type ExpressionErrorCode = keyof typeof expressionErrorDefs;
 export const expressionErrorCodes = Object.keys(expressionErrorDefs) as ExpressionErrorCode[];
 export type ExpressionErrorParams = Readonly<Record<string, string>>;
 
+// Fields are declared explicitly (no parameter properties) so that Node runs this file with
+// its built-in type stripping (scripts/vectors.mjs).
 export class ExpressionError extends Error {
-  constructor(
-    public readonly code: ExpressionErrorCode,
-    /** Offset in the source (a character index) where the expression stops making sense. */
-    public readonly position: number,
-    /** The values the code's message interpolates (expressionErrorDefs[code].params). */
-    public readonly params: ExpressionErrorParams = {},
-  ) {
+  readonly code: ExpressionErrorCode;
+  /** Offset in the source (a character index) where the expression stops making sense. */
+  readonly position: number;
+  /** The values the code's message interpolates (expressionErrorDefs[code].params). */
+  readonly params: ExpressionErrorParams;
+  constructor(code: ExpressionErrorCode, position: number, params: ExpressionErrorParams = {}) {
     super(
       expressionErrorDefs[code].en.replace(/\{(\w+)\}/g, (_, key: string) => params[key] ?? ""),
     );
+    this.code = code;
+    this.position = position;
+    this.params = params;
     this.name = "ExpressionError";
   }
   /** The same error at another position (e.g. a literal's error placed in the whole source). */
@@ -123,13 +137,66 @@ export const fields: Record<string, ValueType> = {
   "http.request.uri.path.extension": "string",
   // rules-v2: lowercase media type of the response's Content-Type, parameters removed.
   "http.response.content_type.media_type": "string",
+  // rules-v3: the Referer and User-Agent request headers (like http.request.headers[...]).
+  "http.referer": "string",
+  "http.user_agent": "string",
+  // rules-v3: HTTP/1.0, HTTP/1.1, HTTP/2.0 or HTTP/3.0.
+  "http.request.version": "string",
+  // rules-v3: http or https.
+  "http.request.scheme": "string",
+  // rules-v3: the node's request id (X-Request-Id).
+  "http.request.id": "string",
+  // rules-v3: Unix seconds when the node received the request.
+  "http.request.timestamp.sec": "number",
+  // rules-v3: port of the listener that received the request.
+  "edge.server_port": "number",
+  // rules-v3: name of the AS (geoip-asn-v1); "" without a record.
+  "ip.geoip.as_name": "string",
+  // rules-v3: the edge cache's status of the response; "" for responses the node made itself.
+  "http.response.cache_status": "string",
 };
+/** Fields of one request cookie and one query parameter by name (rules-v3), besides headers. */
+export const COOKIE_FIELD = "http.request.cookies";
+export const ARG_FIELD = "http.request.uri.args";
+/** Cookie names (RFC 6265 tokens), case-sensitive. */
+export const COOKIE_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;
+/** Query parameter names as sent (not decoded): printable ASCII without `"`, `#`, `&` and `=`. */
+export const ARG_NAME_RE = /^[\x21\x24\x25\x27-\x3c\x3e-\x7e]{1,64}$/;
 /** Fields only nodes with rules-v2 provide. */
 export const rulesV2Fields: ReadonlySet<string> = new Set([
   "http.request.full_uri",
   "http.request.uri.path.extension",
   "http.response.content_type.media_type",
 ]);
+/** Fields only nodes with rules-v3 provide (besides cookies and query parameters by name). */
+export const rulesV3Fields: ReadonlySet<string> = new Set([
+  "http.referer",
+  "http.user_agent",
+  "http.request.version",
+  "http.request.scheme",
+  "http.request.id",
+  "http.request.timestamp.sec",
+  "edge.server_port",
+  "ip.geoip.as_name",
+  "http.response.cache_status",
+]);
+/** Whether `field` is a rules-v3 field: one of rulesV3Fields, a cookie or a query parameter. */
+export function isRulesV3Field(field: string): boolean {
+  return (
+    rulesV3Fields.has(field) ||
+    field.startsWith(`${COOKIE_FIELD}.`) ||
+    field.startsWith(`${ARG_FIELD}.`)
+  );
+}
+/**
+ * Error page placeholders only rules-v3 nodes replace (the UTC time in RFC 3339 and the request
+ * path); nodes require the feature for configurations whose pages use them.
+ */
+export const RULES_V3_PLACEHOLDERS = ["{{time}}", "{{path}}"] as const;
+/** Whether an error page template uses a placeholder only nodes with rules-v3 replace. */
+export function usesRulesV3Placeholders(template: string): boolean {
+  return RULES_V3_PLACEHOLDERS.some((placeholder) => template.includes(placeholder));
+}
 /** Phases that may read response fields. */
 export const responsePhases: ReadonlySet<string> = new Set(["response-transform", "compression"]);
 
@@ -187,10 +254,11 @@ export interface ActionIr {
   originSendTimeoutMs?: number;
   originReadTimeoutMs?: number;
   logSampleRate?: number;
-  // rules-v2: redirect and rewrite
+  // rules-v2: redirect and rewrite (rules-v3: also request and response header values)
   target?: Expression;
   preserveQuery?: boolean;
-  setQuery?: { name: string; value: string }[];
+  /** rules-v3: `expression` computes a value instead of `value`. */
+  setQuery?: { name: string; value: string; expression?: Expression }[];
   removeQuery?: string[];
   // rules-v2: origin
   originGroup?: string;
@@ -199,10 +267,16 @@ export interface ActionIr {
   port?: number;
   // rules-v2: compression
   compression?: string[];
+  // rules-v3: a response header line added next to the response's own
+  append?: boolean;
 }
 
 /** Codings of compression rules and of the config switches, node names. */
 export const compressionCodings = ["zstd", "br", "gzip"] as const;
+/** Redirect status codes (303 since rules-v3). */
+export const redirectStatuses = [301, 302, 303, 307, 308] as const;
+/** Longest header value a value expression may compute; longer ones skip the header action. */
+export const MAX_HEADER_VALUE_BYTES = 4096;
 /** Query parameter names redirects and rewrites may set or remove (RFC 3986 unreserved). */
 export const QUERY_NAME_RE = /^[A-Za-z0-9._~-]{1,64}$/;
 /** Origin groups inside a site; "" is the default group. */
@@ -247,8 +321,8 @@ const actionFields: Record<string, readonly (keyof ActionIr)[]> = {
   challenge: ["challenge"],
   redirect: ["value", "statusCode", "target", "preserveQuery", "setQuery", "removeQuery"],
   rewrite: ["value", "target", "preserveQuery", "setQuery", "removeQuery"],
-  request_header: ["header", "value", "remove"],
-  response_header: ["header", "value", "remove"],
+  request_header: ["header", "value", "remove", "target"],
+  response_header: ["header", "value", "remove", "target", "append"],
   config: [
     "cacheBypass",
     "forceHttps",
@@ -287,7 +361,7 @@ const isSet = (value: unknown) =>
   value !== 0 &&
   !(Array.isArray(value) && value.length === 0);
 
-function validQueryEdits(action: ActionIr): boolean {
+function validQueryEdits(action: ActionIr, phase: string): boolean {
   const set = action.setQuery ?? [];
   const remove = action.removeQuery ?? [];
   if (set.length > 16 || remove.length > 16) return false;
@@ -298,7 +372,12 @@ function validQueryEdits(action: ActionIr): boolean {
     sortedUnique(names) &&
     sortedUnique(remove) &&
     !names.some((name) => remove.includes(name)) &&
-    set.every((p) => p.value.length <= 256 && /^[\x20-\x7e]*$/.test(p.value))
+    set.every(
+      (p) =>
+        p.value.length <= 256 &&
+        /^[\x20-\x7e]*$/.test(p.value) &&
+        (!p.expression || (p.value === "" && validExpressionIr(p.expression, phase, true))),
+    )
   );
 }
 
@@ -334,17 +413,27 @@ export function validActionIr(phase: string, action: ActionIr): boolean {
     case "challenge":
       return (challengeTypes as readonly string[]).includes(action.challenge ?? "");
     case "redirect": {
-      if (!validQueryEdits(action) || ![301, 302, 307, 308].includes(status)) return false;
+      if (
+        !validQueryEdits(action, phase) ||
+        !(redirectStatuses as readonly number[]).includes(status)
+      )
+        return false;
       if (action.target) return value === "" && validExpressionIr(action.target, phase, true);
       return validRedirectTarget(value);
     }
     case "rewrite":
-      if (!validQueryEdits(action)) return false;
+      if (!validQueryEdits(action, phase)) return false;
       if (action.target) return value === "" && validExpressionIr(action.target, phase, true);
       return value.startsWith("/") && !value.startsWith("//") && !/[?\\#]/.test(value);
     case "request_header":
     case "response_header":
-      return ruleHeader(action.header ?? "");
+      // A computed value (rules-v3) replaces the static one; neither goes with remove.
+      if (
+        action.target &&
+        (action.remove || value !== "" || !validExpressionIr(action.target, phase, true))
+      )
+        return false;
+      return ruleHeader(action.header ?? "") && !(action.append && action.remove);
     case "config": {
       if (phase !== "config" && configV2Fields.some((field) => action[field] !== undefined))
         return false;
@@ -376,7 +465,7 @@ export function validActionIr(phase: string, action: ActionIr): boolean {
       const port = action.port ?? 0;
       return (
         (group === "" || ORIGIN_GROUP_RE.test(group)) &&
-        (host === "" || hostnameRe.test(host)) &&
+        (host === "" || validHostHeader(host)) &&
         (sni === "" || hostnameRe.test(sni)) &&
         Number.isInteger(port) &&
         port >= 0 &&
@@ -660,9 +749,12 @@ function stringOffset(source: string, start: number, index: number): number {
   return i;
 }
 
-/** Functions of the expression language (rules-v2), all over byte strings. */
+/** Functions of the expression language (rules-v2, rules-v3), all over byte strings. */
 interface FunctionSpec {
-  /** Argument types; "pattern", "wildcard", "replacement" and "flags" are string literals. */
+  /**
+   * Argument kinds: "string" a string value, "any" a value of any type; "pattern", "wildcard",
+   * "replacement" and "flags" are string literals, "start" and "length" integer literals.
+   */
   args: readonly string[];
   /** Extra trailing optional arguments of the last listed kind... see variadic. */
   optional?: number;
@@ -686,6 +778,31 @@ export const functions: Record<string, FunctionSpec> = {
     returns: "string",
     valueOnly: true,
   },
+  // rules-v3
+  url_encode: { args: ["string"], returns: "string" },
+  base64_encode: { args: ["string"], returns: "string" },
+  base64_decode: { args: ["string"], returns: "string" },
+  md5: { args: ["string"], returns: "string" },
+  sha1: { args: ["string"], returns: "string" },
+  sha256: { args: ["string"], returns: "string" },
+  substring: { args: ["string", "start", "length"], optional: 1, returns: "string" },
+  to_string: { args: ["any"], returns: "string" },
+};
+/** Functions only nodes with rules-v3 run. */
+export const rulesV3Functions: ReadonlySet<string> = new Set([
+  "url_encode",
+  "base64_encode",
+  "base64_decode",
+  "md5",
+  "sha1",
+  "sha256",
+  "substring",
+  "to_string",
+]);
+/** Bounds of substring's integer arguments: start (negative counts from the end) and length. */
+export const SUBSTRING_BOUNDS: Record<string, readonly [number, number]> = {
+  start: [-65536, 65536],
+  length: [0, 65536],
 };
 const MAX_CALL_DEPTH = 4;
 /** Longest value an expression computes on the node; longer results fail the request. */
@@ -744,6 +861,33 @@ function checkReplacement(replacement: string, captures: number): void {
 
 type Field = { name: string; type: ValueType; position: number };
 
+/** Comparison operators; wildcard and strict_wildcard (`strict wildcard`) since rules-v3. */
+const comparisonOps: ReadonlySet<string> = new Set([
+  "eq",
+  "ne",
+  "lt",
+  "le",
+  "gt",
+  "ge",
+  "contains",
+  "matches",
+  "in",
+  "wildcard",
+  "strict_wildcard",
+]);
+/** Operators of string values only. */
+const stringOps: ReadonlySet<string> = new Set([
+  "contains",
+  "matches",
+  "wildcard",
+  "strict_wildcard",
+]);
+/** Fields of a cookie and a query parameter by name, with the parse error of a bad name. */
+const namedFields: Record<string, { re: RegExp; code: ExpressionErrorCode }> = {
+  [COOKIE_FIELD]: { re: COOKIE_NAME_RE, code: "cookie_name" },
+  [ARG_FIELD]: { re: ARG_NAME_RE, code: "argument_name" },
+};
+
 export interface ParseOptions {
   /** Longest source accepted; 4096 by default (cache rules: 16384). */
   maxLength?: number;
@@ -801,6 +945,16 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
       expect("]");
       field += `.${key.text.toLowerCase()}`;
     }
+    // Cookies and query parameters by name (rules-v3); names keep their case.
+    const named = namedFields[field];
+    if (named) {
+      expect("[");
+      const key = take();
+      if (key.kind !== "string" || !named.re.test(key.text))
+        throw new ExpressionError(named.code, key.position);
+      expect("]");
+      field += `.${key.text}`;
+    }
     for (const prefix of ["http.request.headers.", "http.response.headers."]) {
       if (field.startsWith(prefix)) {
         const name = field.slice(prefix.length);
@@ -809,12 +963,10 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
         field = prefix + name.toLowerCase();
       }
     }
-    const type =
-      field.startsWith("http.request.headers.") || field.startsWith("http.response.headers.")
-        ? "string"
-        : Object.hasOwn(fields, field)
-          ? fields[field]
-          : undefined;
+    for (const [prefix, { re, code }] of Object.entries(namedFields))
+      if (field.startsWith(`${prefix}.`) && !re.test(field.slice(prefix.length + 1)))
+        throw new ExpressionError(code, token.position);
+    const type = irFieldType(field);
     if (!type || token.kind !== "word") throw new ExpressionError("unknown_field", token.position);
     if (field.startsWith("http.response.") && !responsePhases.has(phase))
       throw new ExpressionError("response_field", token.position);
@@ -836,6 +988,19 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
     }
     count();
     return node("const", { valueType: "string", value: token.text });
+  };
+  /** An integer literal argument of `kind` (start or length, see SUBSTRING_BOUNDS). */
+  const integer = (kind: string): Expression => {
+    const token = take();
+    const [min, max] = SUBSTRING_BOUNDS[kind] as readonly [number, number];
+    const n = Number(token.text);
+    if (token.kind !== "word" || !/^-?(0|[1-9]\d{0,5})$/.test(token.text) || n < min || n > max)
+      throw new ExpressionError("integer_argument", token.position, {
+        min: String(min),
+        max: String(max),
+      });
+    count();
+    return node("const", { valueType: "number", value: String(n === 0 ? 0 : n) });
   };
   /** A function call whose name is `token`; "(" is next. */
   const call = (token: Token, depth: number, valueContext: boolean): Expression => {
@@ -861,11 +1026,14 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
       if (args.length >= max)
         throw new ExpressionError("too_many_arguments", peek()?.position ?? source.length);
       const kind = kinds[args.length] ?? "string";
-      if (kind === "string") {
+      if (kind === "string" || kind === "any") {
         const start = peek()?.position ?? source.length;
         const arg = value(depth + 1, valueContext);
-        if (arg.valueType !== "string") throw new ExpressionError("argument_not_string", start);
+        if (kind === "string" && arg.valueType !== "string")
+          throw new ExpressionError("argument_not_string", start);
         args.push(arg);
+      } else if (kind === "start" || kind === "length") {
+        args.push(integer(kind));
       } else {
         const arg = literal(kind, captures);
         if (kind === "pattern") captures = patternGroups(arg.value);
@@ -894,12 +1062,19 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
     const type = computed ? (left.valueType as ValueType) : left.type;
     const target = computed ? { children: [left] } : { field: left.name };
     const operator = take();
-    const op = operator.text;
-    if (!["eq", "ne", "lt", "le", "gt", "ge", "contains", "matches", "in"].includes(op))
-      throw new ExpressionError("unknown_operator", operator.position);
+    let op = operator.text;
+    if (op === "strict") {
+      // `strict wildcard` (rules-v3): the case-sensitive wildcard.
+      if (take().text !== "wildcard")
+        throw new ExpressionError("expected_token", tokens[cursor - 1]?.position ?? 0, {
+          token: "wildcard",
+        });
+      op = "strict_wildcard";
+    }
+    if (!comparisonOps.has(op)) throw new ExpressionError("unknown_operator", operator.position);
     if (["lt", "le", "gt", "ge"].includes(op) && type !== "number")
       throw new ExpressionError("ordered_comparison", operator.position);
-    if (["contains", "matches"].includes(op) && type !== "string")
+    if (stringOps.has(op) && type !== "string")
       throw new ExpressionError("string_operator", operator.position);
     if (op === "in") {
       if (peek()?.text.startsWith("$")) {
@@ -921,9 +1096,10 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
     }
     const start = peek()?.position ?? source.length;
     const value = readValue(type);
-    if (op === "matches") {
+    if (op === "matches" || op === "wildcard" || op === "strict_wildcard") {
       try {
-        validatePattern(value);
+        if (op === "matches") validatePattern(value);
+        else wildcardSegments(value);
       } catch (error) {
         if (!(error instanceof ExpressionError)) throw error;
         throw error.at(stringOffset(source, start, error.position));
@@ -932,7 +1108,7 @@ function parser(source: string, phase: Phase, options: ParseOptions) {
     void depth;
     return node(op, { ...target, valueType: type, value });
   }
-  const operators = new Set(["eq", "ne", "lt", "le", "gt", "ge", "contains", "matches", "in"]);
+  const operators = new Set([...comparisonOps, "strict"]);
   function primary(depth: number): Expression {
     if (depth > 16) throw new ExpressionError("too_complex", peek()?.position ?? 0);
     count();
@@ -1036,6 +1212,20 @@ export function needsRulesV2(expression: Expression): boolean {
     expression.children.some(needsRulesV2)
   );
 }
+/**
+ * Whether the expression uses fields, functions, operators or integer arguments only rules-v3
+ * nodes know.
+ */
+export function needsRulesV3(expression: Expression): boolean {
+  return (
+    expression.op === "wildcard" ||
+    expression.op === "strict_wildcard" ||
+    (expression.op === "call" && rulesV3Functions.has(expression.field)) ||
+    (expression.op === "const" && expression.valueType === "number") ||
+    (expression.op !== "call" && isRulesV3Field(expression.field)) ||
+    expression.children.some(needsRulesV3)
+  );
+}
 export function bindLists(expression: Expression, lists: Record<string, string>): Expression {
   if (expression.op === "in_list" && !Object.hasOwn(lists, expression.value))
     throw new ExpressionError("unknown_list", 0, { list: expression.value });
@@ -1047,8 +1237,6 @@ export function bindLists(expression: Expression, lists: Record<string, string>)
 }
 
 // ---- Typed IR validation (the node's check, edgeweir-node configir/rules.go) ----
-
-const comparisonOps = new Set(["eq", "ne", "lt", "le", "gt", "ge", "contains", "matches", "in"]);
 
 function validIrValue(value: string, type: string): boolean {
   switch (type) {
@@ -1068,13 +1256,16 @@ function validIrValue(value: string, type: string): boolean {
   return false;
 }
 
-function irFieldType(field: string): string | undefined {
+/** The type of a field name (headers, cookies and query parameters included), undefined if unknown. */
+function irFieldType(field: string): ValueType | undefined {
   for (const prefix of ["http.request.headers.", "http.response.headers."])
     if (
       field.startsWith(prefix) &&
       /^[!#$%&'*+.^_`|~0-9a-z-]{1,64}$/.test(field.slice(prefix.length))
     )
       return "string";
+  for (const [prefix, { re }] of Object.entries(namedFields))
+    if (field.startsWith(`${prefix}.`) && re.test(field.slice(prefix.length + 1))) return "string";
   return Object.hasOwn(fields, field) ? fields[field] : undefined;
 }
 
@@ -1123,8 +1314,23 @@ export function validExpressionIr(e: Expression, phase: string, valueExpression 
     let captures = 0;
     for (const [i, arg] of x.children.entries()) {
       const kind = kinds[i] ?? "string";
-      if (kind === "string") {
-        if (valueNode(arg, depth + 1, inValue) !== "string") return undefined;
+      if (kind === "string" || kind === "any") {
+        const type = valueNode(arg, depth + 1, inValue);
+        if (type === undefined || (kind === "string" && type !== "string")) return undefined;
+        continue;
+      }
+      if (kind === "start" || kind === "length") {
+        const [min, max] = SUBSTRING_BOUNDS[kind] as readonly [number, number];
+        if (
+          --budget < 0 ||
+          arg.op !== "const" ||
+          !empty(arg, ["value", "valueType"]) ||
+          arg.valueType !== "number" ||
+          !validIrValue(arg.value, "number") ||
+          Number(arg.value) < min ||
+          Number(arg.value) > max
+        )
+          return undefined;
         continue;
       }
       if (arg.op !== "const" || valueNode(arg, depth + 1, inValue) !== "string") return undefined;
@@ -1185,10 +1391,11 @@ export function validExpressionIr(e: Expression, phase: string, valueExpression 
     if (x.values.length > 0 || !validIrValue(x.value, type)) return false;
     if (["lt", "le", "gt", "ge"].includes(x.op)) return type === "number";
     if (x.op === "contains") return type === "string";
-    if (x.op === "matches") {
+    if (x.op === "matches" || x.op === "wildcard" || x.op === "strict_wildcard") {
       if (type !== "string") return false;
       try {
-        validatePattern(x.value);
+        if (x.op === "matches") validatePattern(x.value);
+        else wildcardSegments(x.value);
         return true;
       } catch {
         return false;
@@ -1226,6 +1433,68 @@ export function urlDecodeBytes(value: string): string {
   return out;
 }
 
+/** url_encode over a byte string: every byte but the RFC 3986 unreserved ones as %XX. */
+export function urlEncodeBytes(value: string): string {
+  return value.replace(
+    /[^A-Za-z0-9._~-]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`,
+  );
+}
+/** base64_encode over a byte string: the standard alphabet with padding. */
+export function base64EncodeBytes(value: string): string {
+  return btoa(value);
+}
+/**
+ * base64_decode over a byte string: the standard or the URL-safe alphabet (they may mix), with
+ * or without padding; unused trailing bits are ignored. Anything else (other characters,
+ * whitespace, misplaced or excess padding, a length that leaves one character) decodes to "".
+ */
+export function base64DecodeBytes(value: string): string {
+  const text = value.replace(/-/g, "+").replace(/_/g, "/");
+  const body = text.replace(/={1,2}$/, "");
+  if (body !== text && text.length % 4 !== 0) return "";
+  if (!/^[A-Za-z0-9+/]*$/.test(body) || body.length % 4 === 1) return "";
+  return atob(body);
+}
+/**
+ * substring over a byte string: `length` bytes (all when omitted) from byte `start`, counted
+ * from the end when negative (clamped to the first byte); "" past the end.
+ */
+export function substringBytes(value: string, start: number, length?: number): string {
+  const from = start < 0 ? Math.max(value.length + start, 0) : start;
+  if (from >= value.length) return "";
+  return value.slice(from, length === undefined ? value.length : from + length);
+}
+
+/**
+ * The first cookie named `name` (case-sensitive) in a Cookie header value, as sent (not
+ * decoded, quotes kept); "" without one. Several Cookie headers join with "; ". Pairs are
+ * separated by ";"; spaces and tabs around a pair, its name and its value are ignored; a
+ * pair without "=" is skipped.
+ */
+export function cookieValue(header: string, name: string): string {
+  for (const pair of header.split(";")) {
+    const eq = pair.indexOf("=");
+    if (eq < 0) continue;
+    if (pair.slice(0, eq).replace(/^[ \t]+|[ \t]+$/g, "") === name)
+      return pair.slice(eq + 1).replace(/^[ \t]+|[ \t]+$/g, "");
+  }
+  return "";
+}
+/**
+ * The first query parameter named `name` in a query string, as sent (neither name nor value
+ * decoded); "" without one. Parameters are separated by "&"; the name is the text before the
+ * first "=" (all of it without one, the value then being "").
+ */
+export function queryArgValue(query: string, name: string): string {
+  for (const element of query.split("&")) {
+    const eq = element.indexOf("=");
+    if ((eq < 0 ? element : element.slice(0, eq)) === name)
+      return eq < 0 ? "" : element.slice(eq + 1);
+  }
+  return "";
+}
+
 function expandReplacement(replacement: string, captures: (string | undefined)[]): string {
   return replacement.replace(/\$\{([1-8])\}/g, (_, n: string) => captures[Number(n)] ?? "");
 }
@@ -1241,25 +1510,43 @@ export function wildcardReplaceBytes(
   replacement: string,
   caseSensitive = false,
 ): string {
+  const captures = wildcardCaptures(source, pattern, caseSensitive);
+  return captures ? expandReplacement(replacement, captures) : source;
+}
+
+/**
+ * The captures (index 1 up) of a full wildcard match of a byte string, leftmost placement,
+ * ASCII case-insensitive unless `caseSensitive`; null without a match. `pattern` is bytes.
+ */
+function wildcardCaptures(
+  source: string,
+  pattern: string,
+  caseSensitive: boolean,
+): (string | undefined)[] | null {
   const segments = wildcardSegments(fromBytes(pattern)).map(toBytes);
   const fold = caseSensitive ? (x: string) => x : asciiLower;
   const subject = fold(source);
   const parts = segments.map(fold);
   const first = parts[0] ?? "";
-  if (parts.length === 1) return subject === first ? expandReplacement(replacement, []) : source;
-  if (!subject.startsWith(first)) return source;
+  if (parts.length === 1) return subject === first ? [undefined] : null;
+  if (!subject.startsWith(first)) return null;
   let pos = first.length;
   const captures: (string | undefined)[] = [undefined];
   for (let i = 1; i < parts.length - 1; i++) {
     const at = subject.indexOf(parts[i] ?? "", pos);
-    if (at < 0) return source;
+    if (at < 0) return null;
     captures.push(source.slice(pos, at));
     pos = at + (parts[i] ?? "").length;
   }
   const last = parts[parts.length - 1] ?? "";
-  if (subject.length - last.length < pos || !subject.endsWith(last)) return source;
+  if (subject.length - last.length < pos || !subject.endsWith(last)) return null;
   captures.push(source.slice(pos, subject.length - last.length));
-  return expandReplacement(replacement, captures);
+  return captures;
+}
+
+/** `wildcard` (strict: `strict wildcard`) over byte strings: a full match of the pattern. */
+export function wildcardMatchBytes(source: string, pattern: string, strict = false): boolean {
+  return wildcardCaptures(source, pattern, strict) !== null;
 }
 
 /** regex_replace over byte strings: replaces the first match of a validated pattern. */
@@ -1283,7 +1570,11 @@ function fieldValue(field: string, type: string, request: Request): string | num
 
 function evaluateNode(e: Expression, request: Request): string | number | boolean {
   if (e.op === "field") return fieldValue(e.field, e.valueType, request);
-  if (e.op === "const") return toBytes(e.value);
+  if (e.op === "const") return e.valueType === "number" ? Number(e.value) : toBytes(e.value);
+  if (e.field === "to_string") {
+    const v = evaluateNode(e.children[0] as Expression, request);
+    return typeof v === "string" ? v : String(v);
+  }
   const args = e.children.map((c) => evaluateNode(c, request) as string);
   const [a = "", b = "", c = "", d = ""] = args;
   let result: string | number | boolean;
@@ -1312,6 +1603,27 @@ function evaluateNode(e: Expression, request: Request): string | number | boolea
     case "wildcard_replace":
       result = wildcardReplaceBytes(a, b, c, d === "s");
       break;
+    case "url_encode":
+      result = urlEncodeBytes(a);
+      break;
+    case "base64_encode":
+      result = base64EncodeBytes(a);
+      break;
+    case "base64_decode":
+      result = base64DecodeBytes(a);
+      break;
+    case "md5":
+      result = md5Hex(a);
+      break;
+    case "sha1":
+      result = sha1Hex(a);
+      break;
+    case "sha256":
+      result = sha256Hex(a);
+      break;
+    case "substring":
+      result = substringBytes(a, Number(b), e.children[2] ? Number(c) : undefined);
+      break;
     default:
       throw new ExpressionError("unknown_function", 0);
   }
@@ -1323,6 +1635,22 @@ function evaluateNode(e: Expression, request: Request): string | number | boolea
 /** Evaluates a value expression to the string the node computes (UTF-8 decoded). */
 export function evaluateValue(expression: Expression, request: Request): string {
   return fromBytes(String(evaluateNode(expression, request)));
+}
+
+/**
+ * The value a header action with a value expression sets (rules-v3), UTF-8 decoded, or null
+ * when the node skips the action: the evaluation fails or the value has more than 4096 bytes
+ * or a control character.
+ */
+export function evaluateHeaderValue(expression: Expression, request: Request): string | null {
+  let value: string;
+  try {
+    value = String(evaluateNode(expression, request));
+  } catch {
+    return null;
+  }
+  if (value.length > MAX_HEADER_VALUE_BYTES || controlCharacter(value)) return null;
+  return fromBytes(value);
 }
 
 export function evaluate(
@@ -1356,6 +1684,8 @@ export function evaluate(
   if (e.op === "ne") return !equal(e.value);
   if (e.op === "contains") return String(actual).includes(toBytes(e.value));
   if (e.op === "matches") return new RegExp(compilePattern(e.value)).test(String(actual));
+  if (e.op === "wildcard" || e.op === "strict_wildcard")
+    return wildcardMatchBytes(String(actual), toBytes(e.value), e.op === "strict_wildcard");
   const a = Number(actual),
     b = Number(e.value);
   return e.op === "lt"

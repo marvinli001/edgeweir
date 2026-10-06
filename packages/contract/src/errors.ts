@@ -151,6 +151,11 @@ export const errorDefs = {
   ORIGIN_ADDRESS_FORBIDDEN: { status: 400, params: ["address", "range"] },
   /** originSettings.grpc on a pool whose protocol towards the origins is not http2. */
   ORIGIN_GRPC_REQUIRES_HTTP2: { status: 400, params: [] },
+  /**
+   * The Host header of an origin or origin rule is not a host name or IP literal with an optional
+   * port as nodes accept it (validHostHeader of @edgeweir/rule-engine).
+   */
+  ORIGIN_HOST_HEADER_INVALID: { status: 400, params: ["hostHeader"] },
   CACHE_TASK_NOT_FOUND: { status: 404, params: [] },
   USAGE_RANGE_INVALID: { status: 400, params: [] },
   USAGE_CURSOR_INVALID: { status: 400, params: [] },

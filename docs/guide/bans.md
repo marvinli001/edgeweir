@@ -137,16 +137,11 @@
 2. 运行容器时加 `--cap-add NET_ADMIN`（Compose：`cap_add: [NET_ADMIN]`）。
 3. 验证：`docker exec <容器> nft list table inet edgeweir` 列出集合 `ban4` 与 `ban6`；`GET /api/v1/nodes/{id}` 的 `supportedFeatures` 含 `kernel-ban-v1`。
 
-### PROXY 协议
+### 节点前的负载均衡
 
-节点监听启用 PROXY 协议（节点前有四层负载均衡）时：
+节点的 HTTP / HTTPS 监听不接受 PROXY 协议，也不从请求头读取访客地址。节点前有四层负载均衡时，内核封禁和 HTTP 层封禁看到的都是负载均衡器的地址，不能按真实访客封禁；自动封禁会把负载均衡器整个封掉。这种部署把负载均衡器的地址加入放行名单：它们不会被封禁，也不会在内核被丢包。
 
-| 层 | 匹配的地址 |
-| --- | --- |
-| 内核封禁 | TCP 对端，即负载均衡器的地址 |
-| HTTP 层封禁 | PROXY 协议传入的真实客户端地址 |
-
-这种部署下全局封禁仍由 HTTP 层按真实客户端拦截。把负载均衡器的地址加入放行名单：它们不会被封禁，也不会在内核被丢包。
+[L4 应用](l4.md)可以在监听上接受 PROXY 协议，它不影响 HTTP / HTTPS 监听。
 
 ## API
 

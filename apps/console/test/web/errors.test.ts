@@ -95,6 +95,16 @@ describe("localizeError", () => {
     );
   });
 
+  it("names the Host header nodes would refuse", () => {
+    const error = {
+      code: "ORIGIN_HOST_HEADER_INVALID",
+      status: 400,
+      message: 'invalid Host header "[2001:db8::1]"',
+      data: { hostHeader: "[2001:db8::1]" },
+    };
+    expect(localizeError(error)).toBe("Invalid origin Host: [2001:db8::1]");
+  });
+
   it("labels every capability nodes can be asked for", () => {
     const compiler = readFileSync(
       resolve(import.meta.dirname, "../../../../packages/config-compiler/src/index.ts"),

@@ -196,7 +196,7 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 1. 网站的 Brotli、Zstandard 设置与 Gzip 一起保存在 `site.tls_settings`，编译进 `TlsOptions`；只有开启的算法带级别、最小长度与类型（类型排序去重），未开启时内容哈希不变。有启用网站开启时 `required_features` 加 `brotli-v1` / `zstd-v1`。
 2. 网站的 CRS 设置保存在 `site_waf`；模式不为关闭时编译为 `Site.waf`（排除的规则 id 升序去重），`required_features` 加 `modsecurity-v1`。
 3. 与其他能力相同，引入集群活动节点缺少的能力时，服务账号与后台任务的发布返回 `NODE_CAPABILITY_REQUIRED`，运营者本人可以发布。`sites.features` 按网站给出三项功能能否开启（原因 `nodes`），界面据此禁用开关。回滚按保留的网站重新计算这三项能力。
-4. `ReportStats` 的 `waf_rules`（规则 id → 请求数）按节点、网站、分钟最多保留 50 条，与其他分钟统计一起汇总到小时和天，并写入 ClickHouse `minute_stats` 副本；`waf.topRules` 按时间范围汇总。访问日志保存命中的规则 id（最多 16 个，升序）与 `waf_blocked`（PostgreSQL、ClickHouse、CSV）。「记录」动作的规则同样：`MinuteStats.logged_rules`（proto v0.18.0，节点能力 `rule-log-v1`；规则 id → 请求数，只收 UUID）按节点、网站、分钟最多保留 50 条，存为 `logged_rules`，经同样的汇总与 ClickHouse 副本；`rules.topLogged` 按时间范围汇总并关联规则的当前名称（网站自己的规则与全局规则），同时给出网站所在集群里缺少 `rule-log-v1` 的活动节点数。
+4. `ReportStats` 的 `waf_rules`（规则 id → 请求数）按节点、网站、分钟最多保留 50 条（节点只上报命中最多的 20 条），与其他分钟统计一起汇总到小时和天，并写入 ClickHouse `minute_stats` 副本；`waf.topRules` 按时间范围汇总。访问日志保存命中的规则 id（最多 16 个，升序）与 `waf_blocked`（PostgreSQL、ClickHouse、CSV）。「记录」动作的规则同样：`MinuteStats.logged_rules`（proto v0.18.0，节点能力 `rule-log-v1`；规则 id → 请求数，只收 UUID）按节点、网站、分钟最多保留 50 条（节点同样只上报 20 条），存为 `logged_rules`，经同样的汇总与 ClickHouse 副本；`rules.topLogged` 按时间范围汇总并关联规则的当前名称（网站自己的规则与全局规则），同时给出网站所在集群里缺少 `rule-log-v1` 的活动节点数。
 
 | 管理操作 | 审计 |
 | --- | --- |
@@ -213,6 +213,8 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 2. 缓存规则以表达式保存（`cache_rule.expression`，引用的名单记在 `list_ids`）。构建器形状的表达式编译为原来的 `path_prefixes`、`paths`、`extensions`，旧节点照常执行，内容哈希不变；其他表达式编译为 `CacheRuleMatch.condition`。`browser_ttl_seconds` 写入 `CacheRule`。
 3. 批量重定向编译为 `Site.bulk_redirects`（按来源排序），源站组写入 `Origin.group`。
 4. 配置用到上述任何一项（含 `compression` 阶段与 `config` 动作的新字段）时 `required_features` 加 `rules-v2`；没有用到的配置与之前编码相同。与其他能力相同，服务账号与后台任务的发布引入集群活动节点缺少的 `rules-v2` 时返回 `NODE_CAPABILITY_REQUIRED`，运营者本人可以发布；`sites.features` 的 `rulesV2` 供界面锁定相关控件。
+
+proto `v0.22.0` 的补充由能力 `rules-v3` 标明：Cookie 与查询参数按名取值（`http.request.cookies.<名称>`、`http.request.uri.args.<名称>`，取第一个原始值）、请求与连接的新字段、`http.response.cache_status`、编码与摘要函数、`substring`（整数参数为 `value_type` 为 `number` 的 `const` 节点）、`to_string`（参数可为任何类型）、`wildcard` 与 `strict_wildcard` 比较；请求头与响应头的值表达式复用 `RuleAction.target`，`QueryParam.expression` 计算查询参数值，`RuleAction.append` 追加响应头行；重定向 303；错误页的 `{{time}}`、`{{path}}`。节点只为规则读到这些字段的网站计算它们；算出的报头值超过 4096 字节或含控制字符时跳过该动作（每条规则每节点 60 秒一条 NOTICE，消息只含网站与规则 ID），查询参数值求值失败仍按失败关闭处理。没有用到这些的配置逐字节不变（跨语言内容哈希向量 `content_hash_vector_v0220.json`）。
 
 | 管理操作 | 审计 |
 | --- | --- |

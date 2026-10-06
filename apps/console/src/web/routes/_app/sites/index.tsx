@@ -1,4 +1,5 @@
 import { type Site, type SiteCreateInput, siteCreateInput } from "@edgeweir/contract";
+import { MAX_HOST_HEADER_LENGTH, validHostHeader } from "@edgeweir/rule-engine";
 import { Add01Icon, GlobeIcon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -295,6 +296,7 @@ function CreateSiteDialog({
   const [navigating, setNavigating] = React.useState(false);
   const [clusterId, setClusterId] = React.useState(initialClusterId);
   const [invalid, setInvalid] = React.useState<string | null>(null);
+  const [hostInvalid, setHostInvalid] = React.useState(false);
   const cluster = clusters.some((c) => c.id === clusterId) ? clusterId : clusters[0]?.id;
   const pending = create.isPending || navigating;
   /** Puts an origin into the fields (a URL's protocol and port into theirs) and returns it. */
@@ -313,6 +315,7 @@ function CreateSiteDialog({
         if (!next) {
           create.reset();
           setInvalid(null);
+          setHostInvalid(false);
         }
         onOpenChange(next);
       }}
@@ -353,6 +356,11 @@ function CreateSiteDialog({
             const checked = siteCreateInput.safeParse(input);
             setInvalid(checked.success ? null : errorMessage(checked.error));
             if (!checked.success) return;
+            // Nodes would skip the origin: its Host header is checked as they check it.
+            const host = text("hostHeader");
+            const badHost = host !== "" && !validHostHeader(host);
+            setHostInvalid(badHost);
+            if (badHost) return;
             let siteId: string;
             try {
               const result = await create.mutateAsync(input);
@@ -448,14 +456,22 @@ function CreateSiteDialog({
                 />
               </Field>
             </div>
-            <Field>
+            <Field data-invalid={hostInvalid || undefined}>
               <FieldLabel htmlFor="hostHeader">{m.site_form_host_header()}</FieldLabel>
               <Input
                 id="hostHeader"
                 name="hostHeader"
-                maxLength={253}
+                maxLength={MAX_HOST_HEADER_LENGTH}
                 placeholder={m.site_form_host_header_placeholder()}
+                aria-invalid={hostInvalid || undefined}
+                onChange={() => setHostInvalid(false)}
+                data-testid="site-host-header"
               />
+              {hostInvalid ? (
+                <FieldError className="animate-in fade-in" data-testid="site-host-header-invalid">
+                  {m.site_form_host_header_invalid()}
+                </FieldError>
+              ) : null}
             </Field>
             <FieldSeparator />
             <Field orientation="horizontal">

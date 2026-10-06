@@ -3485,6 +3485,4081 @@
     }
   },
   {
+    "source": "http.request.cookies[\"role\"] eq \"admin\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.cookies.role": "admin"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.cookies.role",
+      "valueType": "string",
+      "value": "admin",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.cookies[\"role\"] eq \"admin\"",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.cookies.role",
+      "valueType": "string",
+      "value": "admin",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.cookies[\"role\"] eq \"\"",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.cookies.role",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.cookies[\"Role\"] eq \"admin\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.cookies.role": "admin"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.cookies.Role",
+      "valueType": "string",
+      "value": "admin",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.cookies.session ne \"\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.cookies.session": "abc"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "ne",
+      "field": "http.request.cookies.session",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.args[\"next\"] eq \"/home\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.args.next": "/home"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.args.next",
+      "valueType": "string",
+      "value": "/home",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.args[\"next\"] eq \"/home\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.args.next": "%2Fhome"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.args.next",
+      "valueType": "string",
+      "value": "/home",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "url_decode(http.request.uri.args[\"next\"]) eq \"/home\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.args.next": "%2Fhome"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "/home",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "url_decode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.args.next",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.uri.args[\"a[]\"] eq \"1\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.args.a[]": "1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.args.a[]",
+      "valueType": "string",
+      "value": "1",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.args[\"page\"] eq \"\"",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.args.page",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.referer wildcard \"https://*.example.test/*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.referer": "https://www.Example.TEST/a"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.referer",
+      "valueType": "string",
+      "value": "https://*.example.test/*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.referer strict wildcard \"https://*.example.test/*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.referer": "https://www.Example.TEST/a"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "strict_wildcard",
+      "field": "http.referer",
+      "valueType": "string",
+      "value": "https://*.example.test/*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.referer wildcard \"https://*.example.test/*\"",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.referer",
+      "valueType": "string",
+      "value": "https://*.example.test/*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.user_agent wildcard \"*curl*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.user_agent": "curl/8.10.1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.user_agent",
+      "valueType": "string",
+      "value": "*curl*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.user_agent wildcard \"*CURL*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.user_agent": "curl/8.10.1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.user_agent",
+      "valueType": "string",
+      "value": "*CURL*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.user_agent strict wildcard \"*CURL*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.user_agent": "curl/8.10.1"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "strict_wildcard",
+      "field": "http.user_agent",
+      "valueType": "string",
+      "value": "*CURL*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.user_agent strict wildcard \"curl/*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.user_agent": "curl/8.10.1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "strict_wildcard",
+      "field": "http.user_agent",
+      "valueType": "string",
+      "value": "curl/*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.user_agent wildcard \"*curl*\"",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.user_agent",
+      "valueType": "string",
+      "value": "*curl*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.user_agent wildcard \"*\"",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.user_agent",
+      "valueType": "string",
+      "value": "*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.user_agent wildcard \"\"",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.user_agent",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"/a\\\\*b\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a*b"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/a\\*b",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"/a\\\\*b\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/axb"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/a\\*b",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"/a\\\\\\\\b\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a\\b"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/a\\\\b",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"/*/*/*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a/b"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/*/*/*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"/*/*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a/b/c"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/*/*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"/*.JS\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/app.min.js"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/*.JS",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"/中*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/中文"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/中*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"/É*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/é"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/É*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"/a*a\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/a*a",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"/a*a\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/aa"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/a*a",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"*/x/*/y*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/x/x/y/y"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "*/x/*/y*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "not http.request.uri.path wildcard \"/admin/*\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/public"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "not",
+      "field": "",
+      "valueType": "",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "wildcard",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "/admin/*",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "lower(http.host) strict wildcard \"*.example.test\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.host": "A.Example.Test"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "strict_wildcard",
+      "field": "",
+      "valueType": "string",
+      "value": "*.example.test",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "lower",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.host",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.version eq \"HTTP/2.0\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.version": "HTTP/2.0"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.version",
+      "valueType": "string",
+      "value": "HTTP/2.0",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.version in {\"HTTP/1.0\" \"HTTP/1.1\"}",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.version": "HTTP/3.0"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "http.request.version",
+      "valueType": "string",
+      "value": "",
+      "values": ["HTTP/1.0", "HTTP/1.1"],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.scheme eq \"https\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.scheme": "https"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.scheme",
+      "valueType": "string",
+      "value": "https",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.id eq \"4c1d6f0e9a2b\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.id": "4c1d6f0e9a2b"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.id",
+      "valueType": "string",
+      "value": "4c1d6f0e9a2b",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.timestamp.sec ge 1700000000",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.timestamp.sec": 1791331200
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "ge",
+      "field": "http.request.timestamp.sec",
+      "valueType": "number",
+      "value": "1700000000",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.timestamp.sec lt 1700000000",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "lt",
+      "field": "http.request.timestamp.sec",
+      "valueType": "number",
+      "value": "1700000000",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "edge.server_port eq 8443",
+    "phase": "waf-custom",
+    "request": {
+      "edge.server_port": 8443
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "edge.server_port",
+      "valueType": "number",
+      "value": "8443",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "edge.server_port in {80 443}",
+    "phase": "waf-custom",
+    "request": {
+      "edge.server_port": 8080
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "edge.server_port",
+      "valueType": "number",
+      "value": "",
+      "values": ["443", "80"],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.geoip.as_name contains \"Cloudflare\"",
+    "phase": "waf-custom",
+    "request": {
+      "ip.geoip.as_name": "Cloudflare, Inc."
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "contains",
+      "field": "ip.geoip.as_name",
+      "valueType": "string",
+      "value": "Cloudflare",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.geoip.as_name eq \"\"",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "ip.geoip.as_name",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.response.cache_status eq \"HIT\"",
+    "phase": "response-transform",
+    "request": {
+      "http.response.cache_status": "HIT"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.response.cache_status",
+      "valueType": "string",
+      "value": "HIT",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.response.cache_status in {\"MISS\" \"EXPIRED\"}",
+    "phase": "compression",
+    "request": {
+      "http.response.cache_status": "STALE"
+    },
+    "expected": false,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "in",
+      "field": "http.response.cache_status",
+      "valueType": "string",
+      "value": "",
+      "values": ["EXPIRED", "MISS"],
+      "children": []
+    }
+  },
+  {
+    "source": "http.response.cache_status eq \"\"",
+    "phase": "response-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.response.cache_status",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "md5(http.request.uri.path) eq \"0639767f3e9eaad729b54037a7e2abf5\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "0639767f3e9eaad729b54037a7e2abf5",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "md5",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "sha1(http.request.uri.path) eq \"360e110eacf39a537aaaf192c9e367e8c5a5cecb\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/中"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "360e110eacf39a537aaaf192c9e367e8c5a5cecb",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "sha1",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "sha256(http.request.uri.path) eq \"87df6655385dfb4b872b6355216d3b96b86ee04f6be5d11db551d3f9c95fe80a\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a/a"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "87df6655385dfb4b872b6355216d3b96b86ee04f6be5d11db551d3f9c95fe80a",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "sha256",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(sha256(\"\")) eq 64",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "number",
+      "value": "64",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "sha256",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "const",
+                  "field": "",
+                  "valueType": "string",
+                  "value": "",
+                  "values": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "base64_decode(http.request.cookies[\"t\"]) eq \"user:1\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.cookies.t": "dXNlcjox"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "user:1",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "base64_decode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.cookies.t",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "base64_decode(http.request.uri.args[\"t\"]) eq \"\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.args.t": "!!!!"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "base64_decode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.args.t",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(base64_decode(\"-_8\")) eq 2",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "number",
+      "value": "2",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "base64_decode",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "const",
+                  "field": "",
+                  "valueType": "string",
+                  "value": "-_8",
+                  "values": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "base64_encode(base64_decode(\"-_8\")) eq \"+/8=\"",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "+/8=",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "base64_encode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "base64_decode",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "const",
+                  "field": "",
+                  "valueType": "string",
+                  "value": "-_8",
+                  "values": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "len(substring(\"中文\", 1)) eq 5",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "number",
+      "value": "5",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "call",
+              "field": "substring",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": [
+                {
+                  "op": "const",
+                  "field": "",
+                  "valueType": "string",
+                  "value": "中文",
+                  "values": [],
+                  "children": []
+                },
+                {
+                  "op": "const",
+                  "field": "",
+                  "valueType": "number",
+                  "value": "1",
+                  "values": [],
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "substring(http.request.uri.path, 0, 4) eq \"/api\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/api/v1"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "/api",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "substring",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "number",
+              "value": "0",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "number",
+              "value": "4",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "substring(http.request.uri.path, -3) eq \".js\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a.js"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": ".js",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "substring",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "number",
+              "value": "-3",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "to_string(ip.geoip.asnum) eq \"13335\"",
+    "phase": "waf-custom",
+    "request": {
+      "ip.geoip.asnum": 13335
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "13335",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "to_string",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "ip.geoip.asnum",
+              "valueType": "number",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "starts_with(to_string(ip.src), \"192.0.2.\")",
+    "phase": "waf-custom",
+    "request": {
+      "ip.src": "192.0.2.7"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "call",
+      "field": "starts_with",
+      "valueType": "boolean",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "to_string",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "ip.src",
+              "valueType": "ip",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "192.0.2.",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "to_string(ssl) eq \"false\"",
+    "phase": "waf-custom",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "false",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "to_string",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "ssl",
+              "valueType": "boolean",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "url_encode(http.request.uri.path) eq \"%2Fa%20b\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.uri.path": "/a b"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "%2Fa%20b",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "url_encode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "to_string(http.request.timestamp.sec) matches \"^[0-9]+$\"",
+    "phase": "waf-custom",
+    "request": {
+      "http.request.timestamp.sec": 1791331200
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "matches",
+      "field": "",
+      "valueType": "string",
+      "value": "^[0-9]+$",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "to_string",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.timestamp.sec",
+              "valueType": "number",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "true",
+    "phase": "origin",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "request_header",
+      "header": "x-client-country",
+      "target": {
+        "op": "field",
+        "field": "ip.geoip.country",
+        "valueType": "string",
+        "value": "",
+        "values": [],
+        "children": []
+      }
+    }
+  },
+  {
+    "source": "true",
+    "phase": "request-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "request_header",
+      "header": "x-req",
+      "target": {
+        "op": "field",
+        "field": "http.request.id",
+        "valueType": "string",
+        "value": "",
+        "values": [],
+        "children": []
+      }
+    }
+  },
+  {
+    "source": "true",
+    "phase": "response-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "response_header",
+      "header": "link",
+      "value": "</a.css>; rel=preload",
+      "append": true
+    }
+  },
+  {
+    "source": "true",
+    "phase": "response-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "response_header",
+      "header": "x-cache-status",
+      "target": {
+        "op": "field",
+        "field": "http.response.cache_status",
+        "valueType": "string",
+        "value": "",
+        "values": [],
+        "children": []
+      },
+      "append": true
+    }
+  },
+  {
+    "source": "http.request.uri.path eq \"/login\"",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/login"
+    },
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/login",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "redirect",
+      "value": "/signin",
+      "statusCode": 303,
+      "setQuery": [
+        {
+          "name": "next",
+          "value": "",
+          "expression": {
+            "op": "field",
+            "field": "http.request.uri.args.next",
+            "valueType": "string",
+            "value": "",
+            "values": [],
+            "children": []
+          }
+        }
+      ]
+    }
+  },
+  {
+    "source": "true",
+    "phase": "request-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "rewrite",
+      "value": "/b",
+      "setQuery": [
+        {
+          "name": "a",
+          "value": "1"
+        },
+        {
+          "name": "sig",
+          "value": "",
+          "expression": {
+            "op": "call",
+            "field": "md5",
+            "valueType": "string",
+            "value": "",
+            "values": [],
+            "children": [
+              {
+                "op": "field",
+                "field": "http.request.uri.path",
+                "valueType": "string",
+                "value": "",
+                "values": [],
+                "children": []
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "source": "url_encode(\"a b/é~-._\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "url_encode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "a b/é~-._",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "a%20b%2F%C3%A9~-._"
+  },
+  {
+    "source": "url_encode(http.request.uri.args[\"q\"])",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.args.q": "x y&z"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "url_encode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.args.q",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "x%20y%26z"
+  },
+  {
+    "source": "base64_encode(\"hello\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_encode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "hello",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "aGVsbG8="
+  },
+  {
+    "source": "base64_encode(\"中\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_encode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "中",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "5Lit"
+  },
+  {
+    "source": "base64_encode(\"\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_encode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "base64_decode(\"aGVsbG8=\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "aGVsbG8=",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "hello"
+  },
+  {
+    "source": "base64_decode(\"aGVsbG8\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "aGVsbG8",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "hello"
+  },
+  {
+    "source": "base64_decode(\"5Lit\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "5Lit",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "中"
+  },
+  {
+    "source": "base64_decode(\"aGk_Pz8-\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "aGk_Pz8-",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "hi???>"
+  },
+  {
+    "source": "base64_decode(\"aGk/Pz8+\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "aGk/Pz8+",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "hi???>"
+  },
+  {
+    "source": "base64_decode(\"aGVsbG8=x\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "aGVsbG8=x",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "base64_decode(\"aGVsbG8===\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "aGVsbG8===",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "base64_decode(\"aGVsbA=\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "aGVsbA=",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "base64_decode(\"a\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "a",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "base64_decode(\"aGVs bG8=\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "aGVs bG8=",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "base64_decode(\"aGVs*G8=\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "aGVs*G8=",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "base64_decode(\"=\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "=",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "base64_decode(\"QR==\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "QR==",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "A"
+  },
+  {
+    "source": "base64_decode(\"\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "md5(\"\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "md5",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  {
+    "source": "md5(\"中\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "md5",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "中",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "aed1dfbc31703955e64806b799b67645"
+  },
+  {
+    "source": "sha1(\"abc\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "sha1",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "abc",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "a9993e364706816aba3e25717850c26c9cd0d89d"
+  },
+  {
+    "source": "sha256(concat(http.request.uri.path, \"secret\"))",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/a"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "sha256",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "concat",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "secret",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "value": true,
+    "expected": "35bdf2e19d6c0524f2133c1c944a2cc7b78e8b6282091c3cefef1c2b33314b88"
+  },
+  {
+    "source": "md5(\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "md5",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "398533d48111e9f664b1f64cb10c4b63"
+  },
+  {
+    "source": "substring(\"hello\", 1, 3)",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "substring",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "hello",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "1",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "3",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "ell"
+  },
+  {
+    "source": "substring(\"hello\", -2)",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "substring",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "hello",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "-2",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "lo"
+  },
+  {
+    "source": "substring(\"hello\", -10, 2)",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "substring",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "hello",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "-10",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "2",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "he"
+  },
+  {
+    "source": "substring(\"hello\", 5)",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "substring",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "hello",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "5",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "substring(\"hello\", 10, 2)",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "substring",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "hello",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "10",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "2",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "substring(\"hello\", 0, 0)",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "substring",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "hello",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "0",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "0",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": ""
+  },
+  {
+    "source": "substring(\"hello\", 2, 100)",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "substring",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "hello",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "2",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "100",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "llo"
+  },
+  {
+    "source": "substring(\"hello\", -0)",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "substring",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "hello",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "0",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "hello"
+  },
+  {
+    "source": "substring(\"中文\", 0, 3)",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "substring",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "中文",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "0",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "3",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "中"
+  },
+  {
+    "source": "substring(\"中文\", -3)",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "substring",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "中文",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "-3",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "文"
+  },
+  {
+    "source": "to_string(ip.src)",
+    "phase": "redirect",
+    "request": {
+      "ip.src": "2001:db8::1"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "to_string",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "ip.src",
+          "valueType": "ip",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "2001:db8::1"
+  },
+  {
+    "source": "to_string(ip.geoip.asnum)",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "to_string",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "ip.geoip.asnum",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "0"
+  },
+  {
+    "source": "to_string(http.request.timestamp.sec)",
+    "phase": "redirect",
+    "request": {
+      "http.request.timestamp.sec": 1791331200
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "to_string",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.timestamp.sec",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "1791331200"
+  },
+  {
+    "source": "to_string(ssl)",
+    "phase": "redirect",
+    "request": {
+      "ssl": true
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "to_string",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "ssl",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "true"
+  },
+  {
+    "source": "to_string(starts_with(http.request.uri.path, \"/a\"))",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/ab"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "to_string",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "starts_with",
+          "valueType": "boolean",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "/a",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "value": true,
+    "expected": "true"
+  },
+  {
+    "source": "to_string(len(http.request.uri.path))",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.path": "/abc"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "to_string",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "len",
+          "valueType": "number",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "value": true,
+    "expected": "4"
+  },
+  {
+    "source": "to_string(\"x\")",
+    "phase": "redirect",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "to_string",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "x",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "x"
+  },
+  {
+    "source": "concat(http.request.scheme, \"://\", http.host, \"/\", http.request.id)",
+    "phase": "redirect",
+    "request": {
+      "http.request.scheme": "https",
+      "http.host": "example.test",
+      "http.request.id": "r1"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "concat",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.scheme",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "://",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "field",
+          "field": "http.host",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "field",
+          "field": "http.request.id",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "https://example.test/r1"
+  },
+  {
+    "source": "http.request.uri.args[\"next\"]",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.args.next": "/home?a=1"
+    },
+    "lists": {},
+    "ir": {
+      "op": "field",
+      "field": "http.request.uri.args.next",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "expected": "/home?a=1"
+  },
+  {
+    "source": "concat(\"/login?next=\", url_encode(http.request.uri.args[\"next\"]))",
+    "phase": "redirect",
+    "request": {
+      "http.request.uri.args.next": "/a b"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "concat",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/login?next=",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "call",
+          "field": "url_encode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.args.next",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/login?next=%2Fa%20b"
+  },
+  {
+    "source": "concat(\"/u/\", http.request.cookies[\"user\"])",
+    "phase": "redirect",
+    "request": {
+      "http.request.cookies.user": "中"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "concat",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "/u/",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "field",
+          "field": "http.request.cookies.user",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "expected": "/u/中"
+  },
+  {
+    "source": "http.request.id",
+    "phase": "request-transform",
+    "request": {
+      "http.request.id": "req-1"
+    },
+    "lists": {},
+    "ir": {
+      "op": "field",
+      "field": "http.request.id",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "header": true,
+    "expected": "req-1"
+  },
+  {
+    "source": "ip.geoip.country",
+    "phase": "origin",
+    "request": {
+      "ip.geoip.country": "NZ"
+    },
+    "lists": {},
+    "ir": {
+      "op": "field",
+      "field": "ip.geoip.country",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "header": true,
+    "expected": "NZ"
+  },
+  {
+    "source": "concat(\"<\", http.request.uri.path, \">; rel=preload\")",
+    "phase": "response-transform",
+    "request": {
+      "http.request.uri.path": "/a.css"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "concat",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": "<",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "string",
+          "value": ">; rel=preload",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "header": true,
+    "expected": "</a.css>; rel=preload"
+  },
+  {
+    "source": "http.response.cache_status",
+    "phase": "response-transform",
+    "request": {
+      "http.response.cache_status": "HIT"
+    },
+    "lists": {},
+    "ir": {
+      "op": "field",
+      "field": "http.response.cache_status",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "header": true,
+    "expected": "HIT"
+  },
+  {
+    "source": "http.response.cache_status",
+    "phase": "response-transform",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "field",
+      "field": "http.response.cache_status",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "header": true,
+    "expected": ""
+  },
+  {
+    "source": "http.request.cookies[\"missing\"]",
+    "phase": "origin",
+    "request": {},
+    "lists": {},
+    "ir": {
+      "op": "field",
+      "field": "http.request.cookies.missing",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "header": true,
+    "expected": ""
+  },
+  {
+    "source": "url_decode(http.request.uri.args[\"v\"])",
+    "phase": "request-transform",
+    "request": {
+      "http.request.uri.args.v": "a%0Ab"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "url_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.args.v",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "header": true,
+    "expected": null
+  },
+  {
+    "source": "url_decode(http.request.uri.args[\"v\"])",
+    "phase": "request-transform",
+    "request": {
+      "http.request.uri.args.v": "a%7Fb"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "url_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.args.v",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "header": true,
+    "expected": null
+  },
+  {
+    "source": "url_decode(http.request.uri.args[\"v\"])",
+    "phase": "request-transform",
+    "request": {
+      "http.request.uri.args.v": "a%09b"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "url_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.args.v",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "header": true,
+    "expected": null
+  },
+  {
+    "source": "url_decode(http.request.uri.args[\"v\"])",
+    "phase": "request-transform",
+    "request": {
+      "http.request.uri.args.v": "a%20b"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "url_decode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.args.v",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "header": true,
+    "expected": "a b"
+  },
+  {
+    "source": "http.request.headers[\"x-long\"]",
+    "phase": "request-transform",
+    "request": {
+      "http.request.headers.x-long": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "lists": {},
+    "ir": {
+      "op": "field",
+      "field": "http.request.headers.x-long",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "header": true,
+    "expected": null
+  },
+  {
+    "source": "http.request.headers[\"x-long\"]",
+    "phase": "origin",
+    "request": {
+      "http.request.headers.x-long": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "lists": {},
+    "ir": {
+      "op": "field",
+      "field": "http.request.headers.x-long",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "header": true,
+    "expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+    "source": "http.request.headers[\"x-u\"]",
+    "phase": "origin",
+    "request": {
+      "http.request.headers.x-u": "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中"
+    },
+    "lists": {},
+    "ir": {
+      "op": "field",
+      "field": "http.request.headers.x-u",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "header": true,
+    "expected": null
+  },
+  {
+    "source": "http.request.headers[\"x-u\"]",
+    "phase": "origin",
+    "request": {
+      "http.request.headers.x-u": "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中"
+    },
+    "lists": {},
+    "ir": {
+      "op": "field",
+      "field": "http.request.headers.x-u",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    },
+    "value": true,
+    "header": true,
+    "expected": "中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中中"
+  },
+  {
+    "source": "concat(http.request.headers[\"x-a\"], http.request.headers[\"x-b\"])",
+    "phase": "request-transform",
+    "request": {
+      "http.request.headers.x-a": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "http.request.headers.x-b": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "concat",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.headers.x-a",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "field",
+          "field": "http.request.headers.x-b",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "header": true,
+    "expected": null
+  },
+  {
+    "source": "base64_encode(http.request.headers[\"x-a\"])",
+    "phase": "origin",
+    "request": {
+      "http.request.headers.x-a": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_encode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.headers.x-a",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "header": true,
+    "expected": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh"
+  },
+  {
+    "source": "base64_encode(http.request.headers[\"x-a\"])",
+    "phase": "origin",
+    "request": {
+      "http.request.headers.x-a": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "lists": {},
+    "ir": {
+      "op": "call",
+      "field": "base64_encode",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.headers.x-a",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    },
+    "value": true,
+    "header": true,
+    "expected": null
+  },
+  {
+    "derive": "cookie",
+    "input": "role=admin",
+    "name": "role",
+    "expected": "admin"
+  },
+  {
+    "derive": "cookie",
+    "input": "a=1; role=admin; role=root",
+    "name": "role",
+    "expected": "admin"
+  },
+  {
+    "derive": "cookie",
+    "input": "a=1;role=admin",
+    "name": "role",
+    "expected": "admin"
+  },
+  {
+    "derive": "cookie",
+    "input": " role = admin ;",
+    "name": "role",
+    "expected": "admin"
+  },
+  {
+    "derive": "cookie",
+    "input": "\trole=tab\t",
+    "name": "role",
+    "expected": "tab"
+  },
+  {
+    "derive": "cookie",
+    "input": "Role=x; role=y",
+    "name": "role",
+    "expected": "y"
+  },
+  {
+    "derive": "cookie",
+    "input": "role; role=y",
+    "name": "role",
+    "expected": "y"
+  },
+  {
+    "derive": "cookie",
+    "input": "role",
+    "name": "role",
+    "expected": ""
+  },
+  {
+    "derive": "cookie",
+    "input": "role=",
+    "name": "role",
+    "expected": ""
+  },
+  {
+    "derive": "cookie",
+    "input": "x=role=1",
+    "name": "x",
+    "expected": "role=1"
+  },
+  {
+    "derive": "cookie",
+    "input": "q=\"quoted value\"",
+    "name": "q",
+    "expected": "\"quoted value\""
+  },
+  {
+    "derive": "cookie",
+    "input": "t=a%20b",
+    "name": "t",
+    "expected": "a%20b"
+  },
+  {
+    "derive": "cookie",
+    "input": "",
+    "name": "role",
+    "expected": ""
+  },
+  {
+    "derive": "cookie",
+    "input": "a=1; b=2",
+    "name": "c",
+    "expected": ""
+  },
+  {
+    "derive": "cookie",
+    "input": "n=中文",
+    "name": "n",
+    "expected": "中文"
+  },
+  {
+    "derive": "cookie",
+    "input": "a=1, role=x",
+    "name": "role",
+    "expected": ""
+  },
+  {
+    "derive": "cookie",
+    "input": "a=1, role=x",
+    "name": "a",
+    "expected": "1, role=x"
+  },
+  {
+    "derive": "arg",
+    "input": "next=/home",
+    "name": "next",
+    "expected": "/home"
+  },
+  {
+    "derive": "arg",
+    "input": "a=1&next=%2Fhome&next=x",
+    "name": "next",
+    "expected": "%2Fhome"
+  },
+  {
+    "derive": "arg",
+    "input": "next",
+    "name": "next",
+    "expected": ""
+  },
+  {
+    "derive": "arg",
+    "input": "next=",
+    "name": "next",
+    "expected": ""
+  },
+  {
+    "derive": "arg",
+    "input": "next=a=b",
+    "name": "next",
+    "expected": "a=b"
+  },
+  {
+    "derive": "arg",
+    "input": "Next=x&next=y",
+    "name": "next",
+    "expected": "y"
+  },
+  {
+    "derive": "arg",
+    "input": "a[]=1&a[]=2",
+    "name": "a[]",
+    "expected": "1"
+  },
+  {
+    "derive": "arg",
+    "input": "",
+    "name": "next",
+    "expected": ""
+  },
+  {
+    "derive": "arg",
+    "input": "&&next=1",
+    "name": "next",
+    "expected": "1"
+  },
+  {
+    "derive": "arg",
+    "input": "q=a+b",
+    "name": "q",
+    "expected": "a+b"
+  },
+  {
+    "derive": "arg",
+    "input": "a%20b=1",
+    "name": "a%20b",
+    "expected": "1"
+  },
+  {
+    "derive": "arg",
+    "input": "a%20b=1",
+    "name": "a b",
+    "expected": ""
+  },
+  {
+    "derive": "arg",
+    "input": "n=中",
+    "name": "n",
+    "expected": "中"
+  },
+  {
+    "source": "true",
+    "phase": "request-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "request_header",
+      "header": "x-a",
+      "value": "a",
+      "append": true
+    },
+    "actionRejected": true,
+    "reason": "append is for response headers"
+  },
+  {
+    "source": "true",
+    "phase": "response-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "response_header",
+      "header": "link",
+      "remove": true,
+      "append": true
+    },
+    "actionRejected": true,
+    "reason": "append adds a line"
+  },
+  {
+    "source": "true",
+    "phase": "response-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "response_header",
+      "header": "x-a",
+      "remove": true,
+      "target": {
+        "op": "const",
+        "field": "",
+        "valueType": "string",
+        "value": "x",
+        "values": [],
+        "children": []
+      }
+    },
+    "actionRejected": true,
+    "reason": "a removed header has no value"
+  },
+  {
+    "source": "true",
+    "phase": "request-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "request_header",
+      "header": "x-a",
+      "value": "a",
+      "target": {
+        "op": "const",
+        "field": "",
+        "valueType": "string",
+        "value": "b",
+        "values": [],
+        "children": []
+      }
+    },
+    "actionRejected": true,
+    "reason": "a static value or an expression, not both"
+  },
+  {
+    "source": "true",
+    "phase": "request-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "request_header",
+      "header": "x-a",
+      "target": {
+        "op": "call",
+        "field": "starts_with",
+        "valueType": "boolean",
+        "value": "",
+        "values": [],
+        "children": [
+          {
+            "op": "field",
+            "field": "http.request.uri.path",
+            "valueType": "string",
+            "value": "",
+            "values": [],
+            "children": []
+          },
+          {
+            "op": "const",
+            "field": "",
+            "valueType": "string",
+            "value": "/",
+            "values": [],
+            "children": []
+          }
+        ]
+      }
+    },
+    "actionRejected": true,
+    "reason": "header values are strings"
+  },
+  {
+    "source": "true",
+    "phase": "origin",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "request_header",
+      "header": "x-a",
+      "target": {
+        "op": "field",
+        "field": "http.response.cache_status",
+        "valueType": "string",
+        "value": "",
+        "values": [],
+        "children": []
+      }
+    },
+    "actionRejected": true,
+    "reason": "response fields only in response phases"
+  },
+  {
+    "source": "true",
+    "phase": "response-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "response_header",
+      "header": "x-a",
+      "target": {
+        "op": "call",
+        "field": "regex_replace",
+        "valueType": "string",
+        "value": "",
+        "values": [],
+        "children": [
+          {
+            "op": "field",
+            "field": "http.request.uri.path",
+            "valueType": "string",
+            "value": "",
+            "values": [],
+            "children": []
+          },
+          {
+            "op": "const",
+            "field": "",
+            "valueType": "string",
+            "value": "(",
+            "values": [],
+            "children": []
+          },
+          {
+            "op": "const",
+            "field": "",
+            "valueType": "string",
+            "value": "",
+            "values": [],
+            "children": []
+          }
+        ]
+      }
+    },
+    "actionRejected": true,
+    "reason": "an invalid value expression"
+  },
+  {
+    "source": "true",
+    "phase": "redirect",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "redirect",
+      "value": "/a",
+      "statusCode": 303,
+      "setQuery": [
+        {
+          "name": "a",
+          "value": "1",
+          "expression": {
+            "op": "const",
+            "field": "",
+            "valueType": "string",
+            "value": "2",
+            "values": [],
+            "children": []
+          }
+        }
+      ]
+    },
+    "actionRejected": true,
+    "reason": "a parameter has a value or an expression"
+  },
+  {
+    "source": "true",
+    "phase": "redirect",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "redirect",
+      "value": "/a",
+      "statusCode": 304
+    },
+    "actionRejected": true,
+    "reason": "unknown redirect status"
+  },
+  {
+    "source": "true",
+    "phase": "request-transform",
+    "request": {},
+    "expected": true,
+    "lists": {
+      "list-1": ["192.0.2.0/24"]
+    },
+    "ir": {
+      "op": "literal",
+      "field": "",
+      "valueType": "boolean",
+      "value": "true",
+      "values": [],
+      "children": []
+    },
+    "action": {
+      "kind": "rewrite",
+      "value": "/a",
+      "setQuery": [
+        {
+          "name": "a",
+          "value": "",
+          "expression": {
+            "op": "call",
+            "field": "len",
+            "valueType": "number",
+            "value": "",
+            "values": [],
+            "children": [
+              {
+                "op": "field",
+                "field": "http.request.uri.path",
+                "valueType": "string",
+                "value": "",
+                "values": [],
+                "children": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "actionRejected": true,
+    "reason": "parameter expressions are strings"
+  },
+  {
     "source": "concat(\"https://example.test\", http.request.uri.path)",
     "phase": "redirect",
     "request": {
@@ -5682,6 +9757,632 @@
           "field": "http.host",
           "valueType": "string",
           "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "substring(http.request.uri.path, \"1\") eq \"x\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "substring takes integers",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "substring",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "string",
+              "value": "1",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "substring(http.request.uri.path, 70000) eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "start out of range",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "substring",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "number",
+              "value": "70000",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "substring(http.request.uri.path, 0, -1) eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "length is not negative",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "substring",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "number",
+              "value": "0",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "number",
+              "value": "-1",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "substring(http.request.uri.path, 1.5) eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "integers only",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "substring",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "number",
+              "value": "1.5",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "substring(http.request.uri.path, http.request.uri.path) eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "start is a literal",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "substring",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "substring(http.request.uri.path) eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "substring needs a start",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "substring",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "concat(http.request.uri.path, 5) eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "integers only in substring",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "concat",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "http.request.uri.path",
+              "valueType": "string",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "const",
+              "field": "",
+              "valueType": "number",
+              "value": "5",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "to_string() eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "to_string takes one value",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "to_string",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "to_string(ip.src, ip.src) eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "to_string takes one value",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "to_string",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "ip.src",
+              "valueType": "ip",
+              "value": "",
+              "values": [],
+              "children": []
+            },
+            {
+              "op": "field",
+              "field": "ip.src",
+              "valueType": "ip",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "md5(ip.src) eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "md5 takes a string",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "md5",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "ip.src",
+              "valueType": "ip",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "base64_decode(ssl) eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "base64_decode takes a string",
+    "ir": {
+      "op": "eq",
+      "field": "",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "call",
+          "field": "base64_decode",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": [
+            {
+              "op": "field",
+              "field": "ssl",
+              "valueType": "boolean",
+              "value": "",
+              "values": [],
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"/a\\\\b\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "escape only * and \\\\",
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "/a\\b",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"*********\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "at most 8 wildcards",
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "*********",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path strict wildcard \"a\\u0001\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "no control characters",
+    "ir": {
+      "op": "strict_wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "a\u0001",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path wildcard \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "patterns of at most 1024 bytes",
+    "ir": {
+      "op": "wildcard",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "ip.geoip.asnum wildcard \"1*\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "wildcard compares strings",
+    "ir": {
+      "op": "wildcard",
+      "field": "ip.geoip.asnum",
+      "valueType": "number",
+      "value": "1*",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.cookies[\"a b\"] eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "cookie names are tokens",
+    "ir": {
+      "op": "eq",
+      "field": "http.request.cookies.a b",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.args[\"a&b\"] eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "parameter names exclude &",
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.args.a&b",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.args[\"\"] eq \"\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "parameter names are not empty",
+    "ir": {
+      "op": "eq",
+      "field": "http.request.uri.args.",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.response.cache_status eq \"HIT\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "cache status only in response phases",
+    "ir": {
+      "op": "eq",
+      "field": "http.response.cache_status",
+      "valueType": "string",
+      "value": "HIT",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "http.request.uri.path strict contains \"x\"",
+    "phase": "waf-custom",
+    "rejected": true,
+    "irRejected": true,
+    "reason": "only wildcard is strict",
+    "ir": {
+      "op": "strict_contains",
+      "field": "http.request.uri.path",
+      "valueType": "string",
+      "value": "x",
+      "values": [],
+      "children": []
+    }
+  },
+  {
+    "source": "substring(http.request.uri.path)",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "substring needs a start",
+    "ir": {
+      "op": "call",
+      "field": "substring",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        }
+      ]
+    }
+  },
+  {
+    "source": "to_string(http.request.uri.path, 1)",
+    "phase": "redirect",
+    "rejected": true,
+    "irRejected": true,
+    "value": true,
+    "reason": "to_string takes one value",
+    "ir": {
+      "op": "call",
+      "field": "to_string",
+      "valueType": "string",
+      "value": "",
+      "values": [],
+      "children": [
+        {
+          "op": "field",
+          "field": "http.request.uri.path",
+          "valueType": "string",
+          "value": "",
+          "values": [],
+          "children": []
+        },
+        {
+          "op": "const",
+          "field": "",
+          "valueType": "number",
+          "value": "1",
           "values": [],
           "children": []
         }

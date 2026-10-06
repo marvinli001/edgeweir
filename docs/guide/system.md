@@ -328,7 +328,7 @@ API：`GET /api/v1/overview` 的 `attention`，见 [集群与概览](../referenc
 | **未知域名** | Host 不属于集群的任何网站 | 状态码 404；留空使用内置页面 |
 | **网站已停用** | 已停用网站的域名 | 状态码 503 |
 
-每个模板最多 65536 字节（UTF-8），占位符 `{{status}}`、`{{request_id}}`、`{{client_ip}}`、`{{host}}` 的值经 HTML 转义。保存后所有集群各发布一个配置版本（原因「修改平台错误页」）；修改写审计 `system.error_pages_update`。旧节点忽略平台错误页。见 [错误页](error-pages.md#平台错误页)。
+每个模板最多 65536 字节（UTF-8），占位符 `{{status}}`、`{{request_id}}`、`{{client_ip}}`、`{{host}}`、`{{time}}`、`{{path}}` 的值经 HTML 转义；用到 `{{time}}` 或 `{{path}}` 时所有集群的配置要求节点能力 `rules-v3`。保存后所有集群各发布一个配置版本（原因「修改平台错误页」）；修改写审计 `system.error_pages_update`。旧节点忽略平台错误页。见 [错误页](error-pages.md#平台错误页)。
 
 ### 设置优先级
 

@@ -1,4 +1,9 @@
-import { ERROR_PAGE_MAX_BYTES, ERROR_PAGE_PLACEHOLDERS, utf8Bytes } from "@edgeweir/contract";
+import {
+  ERROR_PAGE_MAX_BYTES,
+  ERROR_PAGE_PLACEHOLDERS,
+  RULES_V3_PLACEHOLDERS,
+  utf8Bytes,
+} from "@edgeweir/contract";
 import { SafetyNote } from "@/components/safety-note";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
@@ -80,19 +85,31 @@ export function TemplateField({
   );
 }
 
-/** The one line on what nodes fill in: each placeholder, replaced with an HTML-escaped value. */
-export function TemplateVariables({ className }: { className?: string }) {
+/**
+ * The one line on what nodes fill in: each placeholder, replaced with an HTML-escaped value;
+ * without {{time}} and {{path}} while the nodes lack rules-v3 (hideRulesV3).
+ */
+export function TemplateVariables({
+  className,
+  hideRulesV3 = false,
+}: {
+  className?: string;
+  hideRulesV3?: boolean;
+}) {
+  const v3: readonly string[] = RULES_V3_PLACEHOLDERS;
   return (
     <SafetyNote className={cn("leading-relaxed", className)} data-testid="error-page-variables">
       {m.error_pages_variables()}{" "}
-      {ERROR_PAGE_PLACEHOLDERS.map((placeholder) => (
-        <code
-          key={placeholder}
-          className="mr-1 inline-block rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground"
-        >
-          {placeholder}
-        </code>
-      ))}
+      {ERROR_PAGE_PLACEHOLDERS.filter((p) => !(hideRulesV3 && v3.includes(p))).map(
+        (placeholder) => (
+          <code
+            key={placeholder}
+            className="mr-1 inline-block rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground"
+          >
+            {placeholder}
+          </code>
+        ),
+      )}
     </SafetyNote>
   );
 }

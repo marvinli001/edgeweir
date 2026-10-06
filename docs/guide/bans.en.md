@@ -137,16 +137,11 @@ The default systemd unit and node image do not grant `CAP_NET_ADMIN`. Enable it 
 2. Run the container with `--cap-add NET_ADMIN` (Compose: `cap_add: [NET_ADMIN]`).
 3. Verify: `docker exec <container> nft list table inet edgeweir` lists the sets `ban4` and `ban6`; `supportedFeatures` of `GET /api/v1/nodes/{id}` contains `kernel-ban-v1`.
 
-### PROXY protocol
+### Load balancers in front of the nodes
 
-With the PROXY protocol on the node's listeners (a layer-4 load balancer in front of the nodes):
+The nodes' HTTP and HTTPS listeners do not accept the PROXY protocol and do not read the visitor's address from request headers. With a layer-4 load balancer in front of the nodes, kernel bans and HTTP-layer bans both see the load balancer's address and cannot ban real visitors; an automatic ban would block the whole load balancer. In such deployments add the load balancers' addresses to an allow list: they can then never be banned or dropped in the kernel.
 
-| Layer | Address matched |
-| --- | --- |
-| Kernel bans | The TCP peer, i.e. the load balancer |
-| HTTP-layer bans | The real client address passed by the PROXY protocol |
-
-In such deployments the HTTP layer still blocks global bans by the real client. Add the load balancers' addresses to an allow list: they can then never be banned or dropped in the kernel.
+[L4 applications](l4.en.md) can accept the PROXY protocol on their listeners; that does not affect the HTTP and HTTPS listeners.
 
 ## API
 

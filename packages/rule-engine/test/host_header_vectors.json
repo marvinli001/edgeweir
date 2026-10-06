@@ -1,0 +1,364 @@
+{
+  "description": "Host headers of origins and origin rules: valid is what edgeweir-node accepts (internal/configir validHostHeader) and the console checks before saving (@edgeweir/rule-engine validHostHeader). Identical copies: edgeweir packages/rule-engine/test/host_header_vectors.json and edgeweir-node internal/configir/testdata/host_header_vectors.json.",
+  "cases": [
+    {
+      "value": "example.com",
+      "valid": true,
+      "note": "host name"
+    },
+    {
+      "value": "Example.COM",
+      "valid": true,
+      "note": "letters are case-insensitive"
+    },
+    {
+      "value": "api.example.com:8080",
+      "valid": true,
+      "note": "host name and port"
+    },
+    {
+      "value": "localhost",
+      "valid": true,
+      "note": "single label"
+    },
+    {
+      "value": "localhost:3000",
+      "valid": true
+    },
+    {
+      "value": "xn--fiqs8s.example",
+      "valid": true,
+      "note": "punycode"
+    },
+    {
+      "value": "example.com:0",
+      "valid": true,
+      "note": "port 0"
+    },
+    {
+      "value": "example.com:99999",
+      "valid": true,
+      "note": "a name's port is 1 to 5 digits, not range-checked"
+    },
+    {
+      "value": "1.2.3.4",
+      "valid": true,
+      "note": "IPv4"
+    },
+    {
+      "value": "1.2.3.4:80",
+      "valid": true,
+      "note": "IPv4 and port"
+    },
+    {
+      "value": "1.2.3.4:000080",
+      "valid": true,
+      "note": "an IP literal's port may have leading zeros"
+    },
+    {
+      "value": "1.2.3.4:65536",
+      "valid": true,
+      "note": "not an ip:port, but a valid name with a 5-digit port"
+    },
+    {
+      "value": "01.2.3.4",
+      "valid": true,
+      "note": "not an IPv4 address, but a valid name"
+    },
+    {
+      "value": "999.1.1.1",
+      "valid": true,
+      "note": "not an IPv4 address, but a valid name"
+    },
+    {
+      "value": "[2001:db8::1]:443",
+      "valid": true,
+      "note": "bracketed IPv6 and port"
+    },
+    {
+      "value": "[::1]:8080",
+      "valid": true
+    },
+    {
+      "value": "[::ffff:1.2.3.4]:80",
+      "valid": true,
+      "note": "IPv4-mapped IPv6"
+    },
+    {
+      "value": "2001:db8::1",
+      "valid": true,
+      "note": "bare IPv6 (accepted as an address)"
+    },
+    {
+      "value": "::1",
+      "valid": true
+    },
+    {
+      "value": "::",
+      "valid": true
+    },
+    {
+      "value": "::ffff:1.2.3.4",
+      "valid": true
+    },
+    {
+      "value": "1:2:3:4:5:6:1.2.3.4",
+      "valid": true,
+      "note": "embedded IPv4"
+    },
+    {
+      "value": "fe80::1%eth0",
+      "valid": true,
+      "note": "bare IPv6 with a zone (accepted as an address)"
+    },
+    {
+      "value": "fe80::1%a:80",
+      "valid": true,
+      "note": "the zone takes the rest"
+    },
+    {
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "valid": true,
+      "note": "253-byte name"
+    },
+    {
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:65535",
+      "valid": true,
+      "note": "259 bytes, the longest"
+    },
+    {
+      "value": "fe80::1%\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9",
+      "valid": true,
+      "note": "258 bytes"
+    },
+    {
+      "value": "\u212aexample.com",
+      "valid": true,
+      "note": "KELVIN SIGN lowercases to k"
+    },
+    {
+      "value": "\u0130example.com",
+      "valid": true,
+      "note": "LATIN CAPITAL LETTER I WITH DOT ABOVE lowercases to i"
+    },
+    {
+      "value": "",
+      "valid": false,
+      "note": "empty: callers treat it as unset and skip the check"
+    },
+    {
+      "value": "example.com ",
+      "valid": false,
+      "note": "space"
+    },
+    {
+      "value": "exa mple.com",
+      "valid": false,
+      "note": "space"
+    },
+    {
+      "value": "example.com\t",
+      "valid": false,
+      "note": "tab"
+    },
+    {
+      "value": "example.com\r\n",
+      "valid": false,
+      "note": "CR LF"
+    },
+    {
+      "value": "\"example.com\"",
+      "valid": false,
+      "note": "double quote"
+    },
+    {
+      "value": "'example.com'",
+      "valid": false,
+      "note": "single quote"
+    },
+    {
+      "value": "example.com/path",
+      "valid": false,
+      "note": "slash"
+    },
+    {
+      "value": "example.com\\x",
+      "valid": false,
+      "note": "backslash"
+    },
+    {
+      "value": "http://example.com",
+      "valid": false,
+      "note": "URL"
+    },
+    {
+      "value": "user@example.com",
+      "valid": false,
+      "note": "user info"
+    },
+    {
+      "value": "example.com:",
+      "valid": false,
+      "note": "empty port"
+    },
+    {
+      "value": "example.com:123456",
+      "valid": false,
+      "note": "6-digit port"
+    },
+    {
+      "value": "example.com:80a",
+      "valid": false
+    },
+    {
+      "value": "example.com:+80",
+      "valid": false
+    },
+    {
+      "value": "example.com:80:80",
+      "valid": false
+    },
+    {
+      "value": ":80",
+      "valid": false,
+      "note": "no host"
+    },
+    {
+      "value": "-example.com",
+      "valid": false,
+      "note": "leading hyphen"
+    },
+    {
+      "value": "example-.com",
+      "valid": false,
+      "note": "trailing hyphen"
+    },
+    {
+      "value": "exa_mple.com",
+      "valid": false,
+      "note": "underscore"
+    },
+    {
+      "value": "example..com",
+      "valid": false,
+      "note": "empty label"
+    },
+    {
+      "value": ".example.com",
+      "valid": false,
+      "note": "empty label"
+    },
+    {
+      "value": "example.com.",
+      "valid": false,
+      "note": "trailing dot"
+    },
+    {
+      "value": "*.example.com",
+      "valid": false,
+      "note": "wildcard"
+    },
+    {
+      "value": "\u4f8b\u5b50.com",
+      "valid": false,
+      "note": "not punycode"
+    },
+    {
+      "value": "\u00a0example.com",
+      "valid": false,
+      "note": "no-break space"
+    },
+    {
+      "value": "\u0131example.com",
+      "valid": false,
+      "note": "dotless i stays non-ASCII"
+    },
+    {
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+      "valid": false,
+      "note": "64-byte label"
+    },
+    {
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "valid": false,
+      "note": "254-byte name"
+    },
+    {
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:655350",
+      "valid": false,
+      "note": "260 bytes"
+    },
+    {
+      "value": "fe80::1%\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9",
+      "valid": false,
+      "note": "260 bytes in UTF-8, 134 UTF-16 units"
+    },
+    {
+      "value": "[2001:db8::1]",
+      "valid": false,
+      "note": "brackets need a port"
+    },
+    {
+      "value": "[2001:db8::1]:",
+      "valid": false,
+      "note": "empty port"
+    },
+    {
+      "value": "[2001:db8::1]:65536",
+      "valid": false,
+      "note": "port out of range"
+    },
+    {
+      "value": "[1.2.3.4]:80",
+      "valid": false,
+      "note": "brackets only for IPv6"
+    },
+    {
+      "value": "[fe80::1%eth0]:80",
+      "valid": false,
+      "note": "zone with a port"
+    },
+    {
+      "value": "2001:db8::1:",
+      "valid": false
+    },
+    {
+      "value": "fe80::1%",
+      "valid": false,
+      "note": "empty zone"
+    },
+    {
+      "value": "1:2:3:4:5:6:7:8:9",
+      "valid": false,
+      "note": "too many groups"
+    },
+    {
+      "value": "1::2::3",
+      "valid": false,
+      "note": "two ellipses"
+    },
+    {
+      "value": "12345::1",
+      "valid": false,
+      "note": "5-digit group"
+    },
+    {
+      "value": "1:2:3:4:5:6:7::8",
+      "valid": false,
+      "note": "ellipsis for no group"
+    },
+    {
+      "value": "1.2.3.4%eth0",
+      "valid": false,
+      "note": "zone on IPv4"
+    },
+    {
+      "value": "%eth0",
+      "valid": false
+    },
+    {
+      "value": "[]:80",
+      "valid": false
+    }
+  ]
+}

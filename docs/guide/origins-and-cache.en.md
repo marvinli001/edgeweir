@@ -36,7 +36,7 @@ A site's origin pool and origin groups, health checks and session affinity, orig
 | Port | 1–65535 | HTTP 80, HTTPS 443 | Origin port; switching the protocol swaps 80 and 443 |
 | Protocol | HTTP / HTTPS | HTTP | Protocol from node to origin |
 | Weight | 1–100 | 1 | Weight used by all three load balancing policies |
-| Origin Host | Host name, up to 253 characters | Empty (same as request) | `Host` sent to the origin. Empty: the visitor's Host (lowercase, port removed); for S3 origins the origin address, with the port unless it is 80 (HTTP) or 443 (HTTPS) |
+| Origin Host | Host name or IP, optionally with a port; IPv6 with a port as `[2001:db8::1]:8443`, without a port without brackets; up to 259 bytes | Empty (same as request) | `Host` sent to the origin. Empty: the visitor's Host (lowercase, port removed); for S3 origins the origin address, with the port unless it is 80 (HTTP) or 443 (HTTPS) |
 | SNI | Host name | Empty (same as origin Host) | HTTPS only. Empty: the origin Host without port, then the origin address; no SNI is sent for an IP literal |
 | Origin group | 1–32 lowercase letters, digits, `_`, or `-` | Empty (default group) | See [Origin groups](#origin-groups) |
 | Backup | On / off | Off | Makes the origin a backup |
@@ -59,7 +59,7 @@ The **Pool settings** card is saved separately. It also holds the [active health
 | Retry after (seconds) | 1–3600 | 30 | Time before a down origin is tried again |
 | Timeouts (seconds): Connect | 0.1–120 | 10 | Connection timeout |
 | Timeouts (seconds): Send | 0.1–3600 | 60 | Timeout for sending the request to the origin |
-| Timeouts (seconds): Read | 0.1–3600 | 60 | Timeout for reading the response; also the WebSocket idle timeout |
+| Timeouts (seconds): Read | 0.1–3600 | 60 | Timeout for reading the response; does not apply to upgraded WebSocket connections |
 | Keep-alive: Enabled | On / off | On | Reuses origin connections |
 | Keep-alive: Idle timeout (seconds) | 1–3600 | 60 | How long idle connections stay open |
 | Keep-alive: Max requests | 1–100000 | 1000 | Requests per connection |
@@ -182,6 +182,8 @@ When every origin is down, the node still tries primaries, then backups (fail op
 ### WebSocket
 
 WebSocket upgrades (`Upgrade: websocket`) are proxied by default and never cached. With **WebSocket** off, upgrade requests get 403 with `X-Edgeweir-Error: websocket-disabled`.
+
+An upgraded connection closes after 3600 seconds idle; the site's **Send** and **Read** timeouts do not apply to it. Only the **Origin send timeout** and **Origin read timeout** of configuration-phase rules change it, see [Override settings](rules.en.md#override-settings).
 
 ### HTTP/2 and gRPC
 
@@ -481,7 +483,7 @@ On the site's **Overview** tab, click **Purge cache** and confirm (or search the
 | Cache rule conditions | Up to 16384 characters; no response fields |
 | Origin groups | The cache key does not include the origin group |
 | Cache zone | Size and inactive time cannot be changed in the console |
-| HTTPS prefetch | Needs an HTTPS listener without the PROXY protocol on the node; the cache key includes the scheme, so `http://` prefetch warms only the HTTP cache |
+| HTTPS prefetch | Needs an HTTPS listener on the node, i.e. at least one site of the cluster with a certificate; the cache key includes the scheme, so `http://` prefetch warms only the HTTP cache |
 | Device variants | Desktop and mobile only (tablets count as mobile) |
 | Authorization switch | Needs node proto v0.2.1 or later; older nodes ignore **Cache requests with Authorization** |
 | WebSocket | Only `Upgrade: websocket` is recognized |
@@ -503,6 +505,8 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | HTTPS requests fail in the TLS handshake | The SNI belongs to no site the node serves (an unknown domain, a disabled site), or the site has no certificate | Send the request over HTTP to see the node's answer; give the site a certificate, see [HTTPS and certificates](https.en.md) |
 | 508 with `X-Edgeweir-Error: loop-detected` | The origin points back at this node or at a CDN in front of it | Change the origin address |
 | 403 with `X-Edgeweir-Error: websocket-disabled` | WebSocket is off for the site | Turn on **WebSocket** |
+| **Origin Host** shows the expected format, or saving shows "Invalid origin Host: …" | Spaces, quotes, `/` or `\`, a scheme or path, or a bracketed IPv6 address without a port | Enter only a host name or IP, optionally with a port |
+| An origin shows "Invalid origin Host; nodes skip this origin" | An earlier console version saved an origin Host that nodes refuse; nodes skip the origin, and a site with no other origin is not delivered | Change **Origin Host** and save |
 | Saving shows "gRPC requires HTTP/2 towards the origins" | **gRPC** turned on while **Origin HTTP version** is not HTTP/2, or HTTP/1.1 chosen again with **gRPC** still on | Choose HTTP/2 first, or turn **gRPC** off too |
 | 502 after switching to HTTP/2, the origin shows "TLS handshake or certificate verification failed" | The HTTPS origin does not support HTTP/2 (no `h2` in ALPN) | Enable HTTP/2 on the origin, or switch back to HTTP/1.1 |
 | 502 after switching to HTTP/2, the origin shows "Connection failed" | The HTTP origin does not take h2c | As above |
@@ -512,7 +516,8 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | "Some nodes don't support HTTP/2 and gRPC to origins yet: {nodes}" | A configuration published by a service account or a background job uses HTTP/2 to origins, and an active node of the cluster lacks `origin-http2-v1` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | 405 with `X-Edgeweir-Error: method-not-allowed` | S3 origins accept only `GET` and `HEAD` | Add a non-S3 origin for write requests |
 | Requests with `Authorization` always show `X-Cache: BYPASS` | Bypassed by default | Turn on **Cache requests with Authorization** on the rule |
-| Responses always show `X-Cache: MISS` | No applicable rule; in respect mode the origin sent no lifetime; the response has `Set-Cookie`; the TTL is 0 | Check rule order, conditions, and origin headers |
+| Responses always show `X-Cache: BYPASS` | No cache rule applies, or only **Bypass** rules apply | Check rule order and conditions |
+| Responses always show `X-Cache: MISS` | In respect mode the origin sent no lifetime; the response has `Set-Cookie`; the TTL is 0 | Check the rules and origin headers |
 | The **Origins** card shows "Keep at least one origin in the default group" | Every origin has an **Origin group** | Clear **Origin group** on at least one origin |
 | Saving origins or cache rules shows "Invalid rule" | An origin group that an **Origin override** rule still picks was removed; a cache rule condition is invalid | Change the rule first, or keep an origin in that group; fix the condition |
 | "Some nodes don't support Rule extensions yet: {nodes}" | A configuration published by a service account or a background job uses origin groups, advanced conditions, or a browser TTL, and an active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
@@ -523,7 +528,7 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | "Invalid host: …" | Has a port, is a wildcard, or is not a valid host name | Enter one host name per line |
 | "Invalid cache tag: …" | The tag has a comma or non-ASCII characters, or is longer than 128 bytes | Fix the tag; the origin's `Cache-Tag` follows the same rules |
 | "Some nodes … do not support …" (`NODE_CAPABILITY_REQUIRED`) | An active node of the cluster lacks `purge-tag-v1` or `prefetch-v2` | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
-| Prefetch fails with "the node has no HTTPS listener yet" | The node has no HTTPS listener without the PROXY protocol | Use `http://` URLs, or add an HTTPS listener to the node |
+| Prefetch fails with "the node has no HTTPS listener yet" | No site of the cluster has a certificate, so the node only listens for HTTP | Use `http://` URLs, or give a site a certificate |
 | "Could not fetch the sitemap … (…)" | The sitemap answered an error status or a redirect, timed out, is larger than 50 MiB, or is not a valid sitemap | Request the sitemap URL directly; enter the final address of a redirect |
 | "The sitemap … lists no URL of the site" | The sitemap lists URLs of other domains only | Check the domains in the sitemap |
 | Old content after a tag purge | The origin did not send that tag in the object's `Cache-Tag`, or the tag has characters that are not accepted | Turn on **Forward Cache-Tag to clients** and look at the response header |

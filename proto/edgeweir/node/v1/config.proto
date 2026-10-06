@@ -259,9 +259,11 @@ message SiteErrorPages {
 }
 
 // ErrorPage is an HTML template of 1 to 65536 bytes. The placeholders
-// {{status}}, {{request_id}}, {{client_ip}} and {{host}} are replaced with
-// HTML-escaped values; any other text, including other {{...}}, is sent as
-// it is. Pages are sent with Cache-Control: no-store.
+// {{status}}, {{request_id}}, {{client_ip}} and {{host}} and, since v0.22.0
+// (feature rules-v3), {{time}} (UTC, RFC 3339) and {{path}} (the request
+// path) are replaced with HTML-escaped values; any other text, including
+// other {{...}}, is sent as it is. Pages are sent with Cache-Control:
+// no-store.
 message ErrorPage {
   uint32 status = 1;
   string template = 2;
@@ -373,6 +375,18 @@ message ChallengeKeyRef {
 // regex_replace and wildcard_replace in value expressions only (at most once
 // each). Strings are byte strings; see the console's rule-engine package for
 // the exact semantics and the shared test vectors.
+//
+// Since v0.22.0 (feature rules-v3): fields http.request.cookies.<name> and
+// http.request.uri.args.<name> (the first raw value of that name, "" when
+// absent), http.referer, http.user_agent, http.request.version,
+// http.request.scheme, http.request.id, http.request.timestamp.sec,
+// edge.server_port, ip.geoip.as_name (feature geoip-asn-v1) and, in the
+// response phases, http.response.cache_status; functions url_encode,
+// base64_encode, base64_decode, md5, sha1, sha256, substring and to_string
+// (in conditions and value expressions); comparisons wildcard and
+// strict_wildcard (value: the pattern). to_string takes a value node of any
+// type; substring takes a string and one or two op "const" arguments of
+// value_type "number" (start, length).
 message RuleExpression {
   string op = 1;
   string field = 2;
@@ -417,8 +431,11 @@ message RuleAction {
   uint32 origin_send_timeout_ms = 20;
   uint32 origin_read_timeout_ms = 21;
   optional uint32 log_sample_rate = 22;
-  // Kinds "redirect" and "rewrite": a string value expression computed per
-  // request instead of the static value (exactly one of both is set).
+  // Kinds "redirect" and "rewrite" and, since v0.22.0 (feature rules-v3),
+  // "request_header" and "response_header" without remove: a string value
+  // expression computed per request instead of the static value (at most
+  // one of both is set). A header value that comes out longer than 4096
+  // bytes or with a control character skips the header action.
   RuleExpression target = 23;
   // Append (redirect) or keep (rewrite) the request's query string. Unset:
   // a redirect drops it, a rewrite keeps it.
@@ -439,6 +456,10 @@ message RuleAction {
   // Kind "compression" (phase compression): codings in preference order,
   // a subset of zstd, br and gzip; empty disables compression.
   repeated string compression = 31;
+  // Kind "response_header" without remove: add the value as another line
+  // of the header next to those the response has. Added in v0.22.0 (feature
+  // rules-v3), like the redirect status 303.
+  bool append = 32;
 }
 
 // QueryParam is one query parameter a redirect or rewrite sets. name:
@@ -447,6 +468,10 @@ message RuleAction {
 message QueryParam {
   string name = 1;
   string value = 2;
+  // A string value expression computed per request instead of value (value
+  // is empty then), percent-encoded like it. Added in v0.22.0 (feature
+  // rules-v3).
+  RuleExpression expression = 3;
 }
 
 // EdgeRule is executed in list order inside its fixed phase. Phases, in

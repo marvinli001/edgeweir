@@ -48,15 +48,17 @@ The error pages nodes answer with: site templates, platform templates, built-in 
 | --- | --- |
 | Size | 1–65536 bytes (UTF-8) per template |
 | Content | Sent as is; nodes neither check nor escape the template itself, and the site answers for the scripts, styles and images it references |
-| Placeholders | The four below; values are HTML-escaped (`&`, `<`, `>`, `"`, `'`) before they are inserted; any other `{{…}}` stays as it is |
+| Placeholders | The six below; values are HTML-escaped (`&`, `<`, `>`, `"`, `'`) before they are inserted; any other `{{…}}` stays as it is |
 | Response headers | `Content-Type: text/html; charset=utf-8`, `Cache-Control: no-store`, `X-Edgeweir-Error`, `X-Request-Id` |
 
 | Placeholder | Value |
 | --- | --- |
 | `{{status}}` | The status, e.g. `403` |
 | `{{request_id}}` | The request ID, the same as the `X-Request-Id` response header |
-| `{{client_ip}}` | The visitor's IP (on PROXY protocol listeners, the address of the PROXY header) |
+| `{{client_ip}}` | The visitor's IP, i.e. the TCP client address (the same as `ip.src` in rules) |
 | `{{host}}` | The request's Host, lowercase, without the port; empty when the request has no valid Host |
+| `{{time}}` | When the node answered, UTC, RFC 3339, e.g. `2026-10-06T12:34:56Z`; needs `rules-v3` |
+| `{{path}}` | The request path (`$uri` after nginx normalization, the same as `http.request.uri.path` in rules: the rewritten path after a rewrite); needs `rules-v3` |
 
 Example:
 
@@ -67,6 +69,7 @@ Example:
 <title>{{status}}</title>
 <h1>We could not complete your request</h1>
 <p>Request ID: {{request_id}}</p>
+<p>{{time}} · {{path}}</p>
 ```
 
 ## Built-in pages
@@ -116,6 +119,7 @@ Nodes recognize disabled sites from the offline host list in their configuration
 | --- | --- |
 | Site error pages | Node feature `error-pages-v1`; while an active node of the cluster lacks it, pages cannot be saved ("Some nodes of the site's cluster do not support it yet") |
 | Platform error pages, offline hosts | No feature needed; older nodes ignore them, keep their plain-text answers and answer offline hosts with 404 |
+| `{{time}}`, `{{path}}` | A site template or platform page that uses them makes the configuration need the node feature `rules-v3`; while an active node of the site's cluster lacks it, the **Error pages** tab leaves the two placeholders out and shows "Some nodes of the site's cluster do not support it yet" when a template uses them; a platform page that uses them shows "{{time}} and {{path}} need nodes with rules-v3; older nodes keep their last configuration". Nodes without the feature keep their last-known-good configuration, see [Node capabilities and publishing](rules.en.md#node-capabilities-and-publishing) |
 | Built-in pages for refused requests and internal errors | No feature needed; older nodes answer with nginx's own error pages |
 | Template space | Templates travel with the site table into the node's shared memory; with many sites and large templates raise the node flag `--sites-dict-mb` (default 64) |
 

@@ -107,6 +107,17 @@
 #   both nodes: unary, bidirectional streaming and error trailers; an update
 #   without the protocol keeps it; back on HTTP/1.1 the nodes no longer reach
 #   the h2c-only origin; Playwright e2e/h2.spec.ts.
+#   Site parity G8 (scripts/e2e-g8.mjs, after HTTP/2): both nodes report
+#   rules-v3; the origin sees X-Client-Country = ip.geoip.country and X-Req =
+#   http.request.id, a header whose computed value is invalid is skipped (and
+#   logged by IDs), two Link lines added with append, the cache status as a
+#   response header, a User-Agent wildcard; a Cookie block whose page fills
+#   {{time}} and {{path}}; a redirect to http.request.uri.args["next"] (an
+#   invalid one fails closed) and a 303 with a computed query parameter; a
+#   node from before G8 (edgeweir-node:pre-g8) keeps its last-known-good
+#   revision while a change needs rules-v3 and catches up once it is undone;
+#   leaves hdr-bench.g8.test for BENCH_SCENARIO=headers in scripts/bench.sh;
+#   Playwright e2e/g8.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -170,8 +181,9 @@ if $UP; then
 fi
 cleanup() {
   docker rm -f "$INSTALL_CONTAINER" >/dev/null 2>&1 || true
-  # Containers scripts/e2e-g3.mjs starts next to the stack (old nodes, curl).
+  # Containers scripts/e2e-g3.mjs and e2e-g8.mjs start next to the stack (old nodes, curl).
   docker ps -aq --filter "label=dev.edgeweir.e2e-g3=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
+  docker ps -aq --filter "label=dev.edgeweir.e2e-g8=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
   # Every profile: the upgrade peer and ClickHouse keep their state otherwise.
   if $DOWN; then "${COMPOSE[@]}" --profile '*' down -v >/dev/null 2>&1 || true; fi
 }
@@ -1142,6 +1154,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-h2.mjs --cleanup || fail "HTTP/2 and gRPC cleanup failed"
 pass "HTTP/2 and gRPC checks passed"
+
+step "G8: expression fields, functions and wildcards, header values and query parameters, response header lines, 303, error page placeholders, a node without rules-v3"
+node scripts/e2e-g8.mjs || fail "G8 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g8.spec.ts || fail "G8 browser checks failed"
+fi
+node scripts/e2e-g8.mjs --cleanup || fail "G8 cleanup failed"
+pass "G8 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"

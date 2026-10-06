@@ -24,6 +24,7 @@ const vectorV0110 = load("content_hash_vector_v0110.json");
 const vectorV0120 = load("content_hash_vector_v0120.json");
 const vectorV0130 = load("content_hash_vector_v0130.json");
 const vectorV0150 = load("content_hash_vector_v0150.json");
+const vectorV0220 = load("content_hash_vector_v0220.json");
 
 /** The console models behind the M2 vector (pools, S3, cache keys, rule conditions). */
 const m2Models = (): CompileInput => ({
@@ -337,6 +338,114 @@ const v0130Models = (): CompileInput => {
 };
 
 /**
+ * The console models behind the v0.22.0 vector: the M2 models plus, on site
+ * s2, rules with the rules-v3 fields (cookies and query parameters by name,
+ * User-Agent, version, scheme, id, timestamp, listener port, AS name, cache
+ * status), functions (substring with integer arguments, to_string, the
+ * digests, Base64, url_encode) and wildcard comparisons; request and
+ * response headers with value expressions, a response header line added
+ * with append, a 303 redirect with a computed query parameter beside a
+ * static one; and an error page with {{time}} and {{path}}.
+ */
+const v0220Models = (): CompileInput => {
+  const input = m2Models();
+  const bucket = input.sites.find((site) => site.id === "s2");
+  if (!bucket) throw new Error("site s2 missing");
+  const expr = (source: string, phase: Parameters<typeof parseExpression>[1]) =>
+    parseExpression(source, phase);
+  bucket.rules = [
+    {
+      id: "g1",
+      phase: "request-transform",
+      expression: expr(
+        'http.request.cookies["role"] ne "admin" and http.request.version in {"HTTP/1.1" "HTTP/2.0"}',
+        "request-transform",
+      ),
+      action: {
+        kind: "request_header",
+        header: "x-req",
+        value: "",
+        expression:
+          'concat(http.request.scheme, ":", http.request.id, ":", to_string(http.request.timestamp.sec))',
+        remove: false,
+      },
+    },
+    {
+      id: "g2",
+      phase: "redirect",
+      expression: expr(
+        'http.user_agent strict wildcard "curl/*" and edge.server_port eq 443',
+        "redirect",
+      ),
+      action: {
+        kind: "redirect",
+        value: "/signin",
+        target: "",
+        statusCode: 303,
+        preserveQuery: false,
+        setQuery: [
+          { name: "z", value: "", expression: 'url_encode(http.request.uri.args["next"])' },
+          { name: "a", value: "1", expression: "" },
+        ],
+        removeQuery: [],
+      },
+    },
+    {
+      id: "g3",
+      phase: "waf-custom",
+      expression: expr(
+        'md5(http.request.uri.path) eq "0cc175b9c0f1b6a831c399e269772661" or http.referer wildcard "*.example.com/*" or substring(sha256(base64_decode(http.request.cookies["t"])), 0, 8) eq "deadbeef"',
+        "waf-custom",
+      ),
+      action: { kind: "log" },
+    },
+    {
+      id: "g4",
+      phase: "origin",
+      expression: expr("true", "origin"),
+      action: {
+        kind: "request_header",
+        header: "x-as",
+        value: "",
+        expression: "ip.geoip.as_name",
+        remove: false,
+      },
+    },
+    {
+      id: "g5",
+      phase: "response-transform",
+      expression: expr('http.response.cache_status in {"HIT" "STALE"}', "response-transform"),
+      action: {
+        kind: "response_header",
+        header: "link",
+        value: "</a.css>; rel=preload",
+        expression: "",
+        remove: false,
+        append: true,
+      },
+    },
+    {
+      id: "g6",
+      phase: "response-transform",
+      expression: expr("true", "response-transform"),
+      action: {
+        kind: "response_header",
+        header: "x-cache-status",
+        value: "",
+        expression: "substring(http.response.cache_status, -3)",
+        remove: false,
+        append: false,
+      },
+    },
+  ];
+  bucket.errorPages = {
+    pages: [{ status: 503, template: "<p>{{status}} at {{time}} for {{path}}</p>" }],
+    interceptOriginErrors: false,
+  };
+  return input;
+};
+
+/**
  * The layer-4 applications behind the v0.15.0 vector, in unsorted order:
  * a TCP application that accepts PROXY protocol and sends v2 with every
  * limit, list and passive health field set, a TCP application that sends
@@ -430,6 +539,7 @@ describe("content hash matches the Go agent", () => {
     ["v0.12.0", vectorV0120],
     ["v0.13.0", vectorV0130],
     ["v0.15.0", vectorV0150],
+    ["v0.22.0", vectorV0220],
   ])("encodes the %s vector to the same canonical bytes and hash", (_, v) => {
     const config = canonicalize(fromJson(NodeConfigSchema, v.config));
     const bare = clone(NodeConfigSchema, config);
@@ -566,6 +676,27 @@ describe("content hash matches the Go agent", () => {
     ]);
     expect(config.requiredFeatures).toEqual(["rules-v1", "rules-v2"]);
     expect(contentHash(config)).toBe(vectorV0130.content_hash);
+  });
+
+  it("compiles the v0.22.0 fields (rules-v3 expressions, header values, append, 303, error page placeholders) into the same hash", () => {
+    const config = compileNodeConfig(v0220Models(), 12n);
+    expect(config.requiredFeatures).toEqual([
+      "error-pages-v1",
+      "geoip-asn-v1",
+      "rules-v1",
+      "rules-v2",
+      "rules-v3",
+    ]);
+    expect(config.contentHash).toBe(vectorV0220.content_hash);
+    const bucket = config.sites.find((site) => site.id === "s2");
+    const redirect = bucket?.rules.find((rule) => rule.id === "g2")?.action;
+    expect(redirect?.setQuery.map((param) => [param.name, !!param.expression])).toEqual([
+      ["a", false],
+      ["z", true],
+    ]);
+    expect(bucket?.rules.find((rule) => rule.id === "g5")?.action?.append).toBe(true);
+    // Without the v0.22.0 fields the models compile to the M2 hash again.
+    expect(compileNodeConfig(m2Models(), 12n).contentHash).toBe(vectorM2.content_hash);
   });
 
   it("compiles the v0.15.0 fields (layer-4 applications) into the same hash", () => {

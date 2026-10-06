@@ -9,7 +9,7 @@ Site rules, global rules, bulk redirects, IP lists, and the node-local GeoIP dat
 | Rule | An expression plus an action in one phase. Site rules apply to one site; global rules apply to every site in every cluster. |
 | Phase | A fixed point in request processing where rules run; there are 9. |
 | Expression | A typed, wirefilter-style condition, for example `ip.src in $blocked`. |
-| Value expression | An expression that computes a string per request, used as a redirect target or rewrite path, for example `concat("/new", http.request.uri.path)`. |
+| Value expression | An expression that computes a string per request, used as a redirect target, a rewrite path, a request or response header value, or the value of a set query parameter, for example `concat("/new", http.request.uri.path)`. |
 | Bulk redirects | A site's table of exact-match redirects, up to 5000 per site. |
 | IP list | A named set of IP addresses and CIDRs that expressions reference as `$name`; allow and block lists also apply to every site directly. |
 
@@ -19,7 +19,7 @@ The console parses expressions and checks their fields, types, and actions befor
 
 1. Open **Sites**, select the site, and open the **Rules** tab.
 2. Click **Add rule** next to the target phase.
-3. Enter the rule name and **Expression**. **Insert condition** appends a common condition (path prefix, Host equals, file extension, IP range, IP list, country, ASN, User-Agent contains, request method) and selects its example value, so typing replaces it; **Insert field** appends a field; both join with `and`. When the expression is invalid, "Character N: reason" appears below the editor, for example "Character 11: Ordered comparisons need a number field"; an expression the console refuses on save shows its position and reason the same way.
+3. Enter the rule name and **Expression**. **Insert condition** appends a common condition (path prefix, Host equals, file extension, IP range, IP list, country, ASN, User-Agent contains, request method, Cookie equals, query parameter equals, User-Agent wildcard, Referer wildcard) and selects its example value, so typing replaces it; **Insert field** appends a field, and for **Cookie**, **Query parameter**, and **Request header** you first enter the name in the field that appears and press Enter or click **Insert**; both join with `and`. When the expression is invalid, "Character N: reason" appears below the editor, for example "Character 11: Ordered comparisons need a number field"; an expression the console refuses on save shows its position and reason the same way.
 4. Select **Action**, fill in its fields, and turn on **Enabled**. A new rule starts disabled with the expression `true` (every request), as does a rule saved through the API without `enabled`; check the condition and the action before you save.
 5. Drag the handle on the left of a rule to reorder rules within a phase.
 6. Click **Save**. The console shows **Saved** and publishes a new configuration revision ("Rules and IP lists updated").
@@ -42,13 +42,13 @@ Phases run in the order of this table.
 | Phase | Actions | Effect |
 | --- | --- | --- |
 | Request transform | Rewrite path, Request header | Rewrites the origin path and query parameters; sets or removes request headers |
-| Redirect | Redirect | Returns 301, 302, 307, or 308; [bulk redirects](#bulk-redirects) are looked up after the rules |
+| Redirect | Redirect | Returns 301, 302, 303, 307, or 308; [bulk redirects](#bulk-redirects) are looked up after the rules |
 | Configuration | Override settings | Overrides site settings per request, see [Override settings](#override-settings) |
 | Custom WAF | Block, Log, Allow, Challenge | Block returns 403 or 451; Log only writes a log line; Allow skips the remaining custom WAF rules of the same scope; Challenge makes visitors pass a challenge first |
 | Rate limit | Rate limit | Fixed-window counting; over the limit returns 429 or 403 |
 | Cache | Override settings | Overrides only cache bypass, HTTPS redirect, and Gzip |
 | Origin | Request header, Origin override | Sets or removes headers sent to the origin; picks an origin group and overrides the origin Host, SNI, and port |
-| Response transform | Response header | Sets or removes response headers based on status and response headers |
+| Response transform | Response header | Sets, appends, or removes response headers based on status and response headers |
 | Compression | Compression algorithms | Limits the compression algorithms of the response and their preference order |
 
 ### Action fields
@@ -58,18 +58,19 @@ Phases run in the order of this table.
 | Block | Status code | 403 / 451 | 403 |
 | Challenge | Challenge type | Cookie redirect / JavaScript / Proof of work / Image captcha | JavaScript |
 | Redirect | Target | **Static**: an absolute path on the site (starts with `/`, not `//`), or an `http(s)` URL without credentials or whitespace; no backslashes or control characters, up to 4096 characters. **Expression**: a value expression, see [Dynamic targets and query parameters](#dynamic-targets-and-query-parameters) | Static, `/` |
-| Redirect | Status code | 301 / 302 / 307 / 308 | 301 |
+| Redirect | Status code | 301 / 302 / 303 / 307 / 308 | 301 |
 | Redirect | Keep query string | On / off | Off |
 | Rewrite path | Target | **Static**: starts with `/`, not `//`; no `?`, `#`, or `\`. **Expression**: a value expression | Static, `/` |
 | Rewrite path | Keep query string | On / off | On |
-| Redirect / Rewrite path | Set query parameters | Up to 16 pairs of **Parameter name** and **Parameter value**, one more per **Add parameter**; names are 1–64 letters, digits, or `.` `_` `~` `-`, unique; values are printable ASCII, up to 256 characters | None |
+| Redirect / Rewrite path | Set query parameters | Up to 16 pairs of **Parameter name** and **Parameter value**, one more per **Add parameter**; names are 1–64 letters, digits, or `.` `_` `~` `-`, unique; a **Static** value is printable ASCII, up to 256 characters, an **Expression** value a value expression, see [Header and query parameter values](#header-and-query-parameter-values) | None |
 | Redirect / Rewrite path | Remove query parameters | Parameter names, comma-separated, up to 16; not also in **Set query parameters** | Empty |
 | Request header / Response header | Header name | 1–64 token characters, not a protected header | `x-custom` |
-| Request header / Response header | Value | Up to 4096 characters, no control characters | Empty |
-| Request header / Response header | Remove header | On / off | Off |
+| Request header / Response header | Value | **Static**: up to 4096 characters, no control characters. **Expression**: a value expression, see [Header and query parameter values](#header-and-query-parameter-values) | Static, empty |
+| Request header / Response header | Remove header | On / off; a removed header has no value | Off |
+| Response header | Append | On / off; on, adds a line next to the response's lines of the same header (for example `Link` or `Vary`); off, replaces them | Off |
 | Override settings | Each setting | See [Override settings](#override-settings) | **Bypass cache** On, everything else Unchanged |
 | Origin override | Origin group | **Default group** or one of the site's origin groups, see [Origin groups](origins-and-cache.en.md#origin-groups) | The site's first origin group; **Default group** without one |
-| Origin override | Origin Host | Host name; empty leaves it unchanged | Empty |
+| Origin override | Origin Host | Host name or IP, optionally with a port, as an origin's [Origin Host](origins-and-cache.en.md#origin-fields); empty leaves it unchanged | Empty |
 | Origin override | SNI | Host name; empty leaves it unchanged | Empty |
 | Origin override | Port | 1–65535; empty leaves it unchanged | Empty |
 | Compression algorithms | Preference order | Some of Zstandard, Brotli, and Gzip: **Add algorithm** appends one, the arrows reorder them; an empty list shows **No compression** | No compression |
@@ -82,7 +83,7 @@ Phases run in the order of this table.
 Protected headers cannot be set or removed by rules: `Host`, `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Upgrade`, `TE`, `Trailer`, `CDN-Loop`, and headers starting with `X-Edgeweir-`.
 
 > [!WARNING]
-> Static request and response header values are written into the configuration revision and sent to nodes. Do not put API keys or other secrets in them.
+> Static request and response header values and value expressions are written into the configuration revision and sent to nodes. Do not put API keys or other secrets in them.
 
 **Origin override** changes at least one thing: an origin group other than **Default group**, or one of **Origin Host**, **SNI**, and **Port**.
 
@@ -139,6 +140,28 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 | Parameter values | Every character other than letters, digits, and `-` `.` `_` `~` is percent-encoded |
 | Fragment and empty query | A fragment after `#` in the target stays last; without parameters no `?` is left |
 
+### Header and query parameter values
+
+1. Next to **Value** of a request or response header rule, or after the name in a row of **Set query parameters**, select **Expression**.
+2. Enter a value expression, for example `ip.geoip.country` for a request header `X-Client-Country` of the origin phase and `http.request.id` for `X-Req`. When "Character N: reason" appears below the editor, fix it using [Functions](#functions) and [Fields](#fields).
+3. Turn on **Append** when a response header needs another line next to the response's own.
+4. Click **Save**. Rule changes are hot updates; nginx does not reload.
+5. Verify: for example, with a request header rule `X-Req` = `http.request.id` in the origin phase, the origin receives an `X-Req` equal to the response header `X-Request-Id`; two response transform rules that append `Link` give the response two `Link` lines:
+
+   ```bash
+   curl -sI -H 'Host: www.example.com' 'http://<node IP>/' | grep -i '^link:'
+   ```
+
+| Item | Behavior |
+| --- | --- |
+| Phases | Request headers: request transform and origin; response headers: response transform (response fields available); query parameters: the phases of redirects and rewrites |
+| Header values | At most 4096 bytes without control characters (`\x00`–`\x1f`, `\x7f`); an invalid result or a failed evaluation (a pattern over its execution budget, a function result over 8192 bytes) **skips that header action** and the request goes on; there is no 503 |
+| Logging skipped values | Each rule writes at most one NOTICE-level nginx error log line per node per 60 seconds, `edgeweir: header value skipped site=<site ID> rule=<rule ID>`, without the header name or value; nginx appends the client IP, request line, and Host to log lines written during a request |
+| Append | Adds one more line next to the lines of the same header, without merging or deduplicating; later rules that read `http.response.headers["name"]` see every line joined with `, `; not together with **Remove header** |
+| Query parameter values | Percent-encoded as before (every byte other than letters, digits, and `-` `.` `_` `~`); a failed evaluation gets the request a 503 (`X-Edgeweir-Error: policy-unavailable`), as with dynamic targets |
+| When values are computed | Request phase values use the request at that point (the path, query string, and `http.request.uri.args` after rewrites); response header values are computed in the edge layer's header filter, for cache hits and origin responses alike |
+| Node requirement | `rules-v3`, see [Node capabilities and publishing](#node-capabilities-and-publishing) |
+
 ### Execution order
 
 | Item | Behavior |
@@ -155,7 +178,7 @@ wildcard_replace(http.request.full_uri, "https://*.example.com/*", "https://exam
 
 | Action | Behavior |
 | --- | --- |
-| Rewrite path | Changes the path and query string sent to the origin; expressions in later phases see the rewritten path, query string, and extension (`http.request.full_uri` stays the same); cache rules, the cache key, purges, and bulk redirects still use the request before the rewrite |
+| Rewrite path | Changes the path and query string sent to the origin; expressions in later phases see the rewritten path, query string, query parameters, and extension (`http.request.full_uri` stays the same); cache rules, the cache key, purges, and bulk redirects still use the request before the rewrite |
 | Response transform | Applies to cache hits and origin responses |
 | Override settings: Gzip, Brotli, Zstandard | Affect only the response and never bypass the cache. On sites that compress at the edge (any algorithm on), the cache still holds the same uncompressed object; on sites that do not, **Gzip** off removes `Accept-Encoding` towards the origin and the cache tells variants apart by the origin's `Vary`; when the origin sends no `Vary: Accept-Encoding`, the request may hit a previously cached compressed object |
 | Override settings: Redirect HTTP to HTTPS | Requests get 503 when the site has no certificate |
@@ -191,6 +214,10 @@ len(http.request.uri.query) gt 1024
 url_decode(http.request.uri.query) contains "<script"
 not starts_with(http.request.uri.path, "/api/")
 http.request.uri.path.extension in {"jpg" "png" "webp"}
+http.request.cookies["role"] eq "admin"
+http.user_agent wildcard "*curl*"
+http.referer strict wildcard "https://*.example.com/*"
+substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 ```
 
 ### Fields
@@ -205,14 +232,24 @@ http.request.uri.path.extension in {"jpg" "png" "webp"}
 | `http.request.uri` | String | The raw request URI (path plus query) |
 | `http.request.full_uri` | String | `scheme://`, the Host (lowercase, without port), and the raw request URI; rewrites do not change it |
 | `http.request.headers["name"]` | String | Case-insensitive name; multiple values joined with `, ` |
+| `http.request.cookies["name"]` | String | The raw value (not decoded, quotes kept) of the first cookie of that name in the request's `Cookie` header; the name is case-sensitive, 1–64 token characters; empty string without one. Cookies are separated by `;`, spaces and tabs around a pair, its name, and its value are ignored, and a part without `=` is skipped; several `Cookie` headers are joined with `; ` |
+| `http.request.uri.args["name"]` | String | The raw value of the first query parameter of that name (neither name nor value decoded; combine with `url_decode`); the name is the part before the first `=`, case-sensitive, 1–64 printable ASCII characters other than `"` `#` `&` `=`; a parameter without `=` has an empty value; empty string without the parameter; follows rewrites |
+| `http.referer`, `http.user_agent` | String | The same as `http.request.headers["referer"]` and `["user-agent"]`, changed by request header rules too |
+| `http.request.version` | String | `HTTP/1.0`, `HTTP/1.1`, `HTTP/2.0`, or `HTTP/3.0` |
+| `http.request.scheme` | String | `http` or `https` |
+| `http.request.id` | String | The node's request ID, the same as the response header `X-Request-Id` |
+| `http.request.timestamp.sec` | Integer | Unix seconds when the node received the request |
+| `edge.server_port` | Integer | The port of the listener that received the request |
 | `http.response.code` | Integer | Response status; response transform and compression phases only |
 | `http.response.headers["name"]` | String | Response header; response transform and compression phases only |
 | `http.response.content_type.media_type` | String | The response's `Content-Type` without parameters, lowercase; response transform and compression phases only |
-| `ip.src` | IP | The TCP client address; with the PROXY protocol on the listener, the address the load balancer passed |
+| `http.response.cache_status` | String | The edge cache's status: `HIT`, `MISS`, `BYPASS`, `EXPIRED`, `STALE`, `UPDATING`, or `REVALIDATED` (as `X-Cache`); empty string for responses the node made itself (blocks, redirects, error pages) and for WebSocket and gRPC, which never pass the cache; response transform and compression phases only |
+| `ip.src` | IP | The TCP client address; behind a load balancer, the load balancer's address (HTTP and HTTPS listeners do not accept the PROXY protocol) |
 | `ssl` | Boolean | `true` for HTTPS requests |
 | `ip.geoip.country` | String | ISO country code; empty string without a record |
 | `ip.geoip.subdivision` | String | First-level subdivision code from the City MMDB, or its English name when it has no code; empty string without a record or when the City MMDB's country differs from `ip.geoip.country` |
 | `ip.geoip.asnum` | Integer | ASN; 0 without a record |
+| `ip.geoip.as_name` | String | AS name from the database that gave the ASN: IPinfo Lite's `as_name` or the ASN MMDB's `autonomous_system_organization`; empty string without a record |
 | `tls.ja4` | String | JA4 TLS client fingerprint of the connection; empty string over plain HTTP, see [JA4](challenges.en.md#ja4) |
 
 ### Operators and literals
@@ -223,6 +260,8 @@ http.request.uri.path.extension in {"jpg" "png" "webp"}
 | `lt`, `le`, `gt`, `ge` | Integer | Ordered comparison |
 | `contains` | String | Substring match |
 | `matches` | String | Regular expression match |
+| `wildcard "pattern"` | String | Whole-string wildcard match: `*` matches zero or more bytes (at most 8 of them), `\*` and `\\` are literals, other backslashes are invalid; ASCII letters are case-insensitive; patterns are at most 1024 bytes without control characters |
+| `strict wildcard "pattern"` | String | As `wildcard`, case-sensitive |
 | `in {…}` | All | Set, elements separated by whitespace |
 | `in $name` | IP | References an IP list; fields only, not function results |
 | `not`, `and`, `or`, `( )` | — | Precedence `not` → `and` → `or` |
@@ -242,10 +281,17 @@ Every string is handled as UTF-8 bytes. Arguments are fields, string literals, o
 | `concat(s1, s2, …)` | String | Joins 2–8 arguments in order |
 | `regex_replace(s, "pattern", "replacement")` | String | Replaces the first match; patterns as in [Regular expressions](#regular-expressions); without a match the string is returned unchanged |
 | `wildcard_replace(s, "wildcard", "replacement"[, "s"])` | String | The wildcard pattern must match the whole string: `*` matches zero or more bytes (at most 8 of them), `\*` and `\\` are literals; ASCII case-insensitive by default, case-sensitive with a fourth argument `"s"`; earlier `*` take the shortest match; without a match the string is returned unchanged |
+| `url_encode(s)` | String | Encodes every byte other than the RFC 3986 unreserved characters (letters, digits, and `-` `.` `_` `~`) as `%XX` (uppercase hexadecimal) |
+| `base64_encode(s)` | String | Standard alphabet with padding |
+| `base64_decode(s)` | String | Accepts the standard and the URL-safe alphabet (mixed too), with or without padding, and ignores unused trailing bits; other characters, whitespace, misplaced or excess padding, or a length that leaves 1 when divided by 4 give an empty string |
+| `md5(s)`, `sha1(s)`, `sha256(s)` | String | The digest in lowercase hexadecimal |
+| `substring(s, start[, length])` | String | Bytes from `start` (0-based; negative counts from the end, clamped to the first byte), up to the end without a length; empty when the start is not below the length of `s`. `start` is an integer literal from -65536 to 65536, `length` from 0 to 65536 |
+| `to_string(x)` | String | Integers in decimal, booleans as `true` / `false`, IPs as the address text the node sees, strings unchanged; the argument can be a field or function of any type |
 
 | Item | Rule |
 | --- | --- |
 | Where | Conditions (cache rule conditions included) can use every function except `regex_replace` and `wildcard_replace`; value expressions can use all of them, `regex_replace` and `wildcard_replace` at most once each per expression |
+| Argument types | Strings, except `to_string` (any type) and the start and length of `substring` (integer literals) |
 | Literal arguments | Patterns, wildcards, replacements, and `"s"` must be string literals; wildcards and replacements are at most 1024 bytes without control characters |
 | Replacements | `${1}`–`${8}` refer to the pattern's capture groups or the wildcard's `*`, up to their number; groups that did not take part in the match become empty; any other `$` is a literal; captures keep the case of the original string |
 | Nesting | At most 4 levels |
@@ -363,10 +409,11 @@ API: `GET` and `POST /api/v1/ip-lists`, `PUT` and `DELETE /api/v1/ip-lists/{id}`
 | --- | --- |
 | Capabilities | Rules and block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; the challenge action needs `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
 | Rule engine extensions | Any of these needs `rules-v2`: functions and `http.request.full_uri`, `http.request.uri.path.extension`, `http.response.content_type.media_type`; expression targets, query parameter edits, and a redirect with **Keep query string** on or a rewrite with it off; origin overrides; the compression phase; the overrides available only in the configuration phase and **Gzip** On; cache rule conditions not in the [builder](origins-and-cache.en.md#request-conditions)'s shape and **Browser TTL (s)**; bulk redirects; origin groups other than the default group |
-| Existing configurations | Configurations that use none of the extensions stay as they were and do not need `rules-v2`; cache rules in the builder's shape are still sent as the former structured conditions |
+| Expression fields and header values | Any of these needs `rules-v3`: `http.request.cookies[…]`, `http.request.uri.args[…]`, `http.referer`, `http.user_agent`, `http.request.version`, `http.request.scheme`, `http.request.id`, `http.request.timestamp.sec`, `edge.server_port`, `ip.geoip.as_name` (also `geoip-asn-v1`), `http.response.cache_status`; `url_encode`, `base64_encode`, `base64_decode`, `md5`, `sha1`, `sha256`, `substring`, `to_string`; `wildcard` and `strict wildcard`; expression values of request headers, response headers, and query parameters; response header **Append**; redirect status 303; `{{time}}` and `{{path}}` in [error pages](error-pages.en.md) |
+| Existing configurations | Configurations that use none of the extensions stay as they were and do not need `rules-v2`; cache rules in the builder's shape are still sent as the former structured conditions; configurations that use none of the `rules-v3` items stay byte for byte the same as well |
 | Console and AccessKeys | A save is published even when an active node of the cluster lacks a required capability; such nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md) |
 | Service accounts and background jobs | When a configuration they publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the publish is refused (`NODE_CAPABILITY_REQUIRED`, "Some nodes don't support … yet: {nodes}") and the configuration and revision stay unchanged |
-| UI | While an active node of the cluster lacks `rules-v2`, the **Rules**, **Cache**, and **Bulk redirects** tabs show "Some nodes of the site's cluster do not support the rule extensions yet"; the extensions cannot be picked there, and settings already in place can still be changed or cleared; **Bulk redirects** is read-only |
+| UI | While an active node of the cluster lacks `rules-v2`, the **Rules**, **Cache**, and **Bulk redirects** tabs show "Some nodes of the site's cluster do not support the rule extensions yet"; the extensions cannot be picked there, and settings already in place can still be changed or cleared; **Bulk redirects** is read-only. While one lacks `rules-v3`, the **Rules** tab shows "Some nodes of the site's cluster do not support it yet": the menus leave out the `rules-v3` fields and conditions, and **Expression** values, **Append**, and 303 cannot be newly picked, while those in place can still be changed or cleared; the **Error pages** tab leaves out `{{time}}` and `{{path}}` and shows the same note when a template uses them |
 | Unknown capabilities | Nodes reject configurations with unknown capabilities or enum values and keep last-known-good |
 
 ## Configure GeoIP databases
@@ -426,7 +473,8 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | --- | --- |
 | Rate limiting | Per-node fixed windows only; no network-wide quota and no sliding window |
 | Expressions | A wirefilter-style subset; built-in functions only, no custom functions or raw Lua |
-| String replacement | `regex_replace` and `wildcard_replace` only in redirect targets and rewrite paths, once each per expression; `regex_replace` replaces only the first match |
+| String replacement | `regex_replace` and `wildcard_replace` only in value expressions (redirect targets, rewrite paths, header values, and query parameter values), once each per expression; `regex_replace` replaces only the first match |
+| Cookies and query parameters | Read by name, the first value, not decoded; there is no list of every cookie or parameter, and names take no wildcards |
 | Bulk redirects | Exact matches only, static targets |
 | Protected headers | See [Action fields](#action-fields); rules cannot change them |
 | Compression | Override settings and compression rules choose only among the algorithms the site has on |
@@ -450,7 +498,9 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
 | "IP list limit reached (128 lists, 50,000 entries)" | Over quota | Merge or delete lists |
 | A node shows **Upgrade required** | The node lacks a capability the configuration needs (`rules-v1`, `rules-v2`, a GeoIP capability, and so on) and keeps its last-known-good configuration | Upgrade the node or configure the GeoIP databases |
 | "Some nodes don't support … yet: {nodes}" | A configuration published by a service account or a background job needs `rules-v1`, `rules-v2`, or a GeoIP capability that an active node of the cluster lacks | Upgrade the nodes or configure the GeoIP databases |
-| 503 with `X-Edgeweir-Error: policy-unavailable` | A regular expression exceeded its budget, a function result exceeded 8192 bytes, a dynamic target or rewrite path was invalid, or a GeoIP lookup failed | Simplify the pattern or expression; check what the value expression computes; check the node's GeoIP service |
+| 503 with `X-Edgeweir-Error: policy-unavailable` | A regular expression exceeded its budget, a function result exceeded 8192 bytes, a dynamic target, rewrite path, or query parameter value expression was invalid, or a GeoIP lookup failed | Simplify the pattern or expression; check what the value expression computes; check the node's GeoIP service |
+| A request or response header with an expression value is missing, and the node logs `header value skipped site=… rule=…` | The value the rule computed exceeds 4096 bytes, has a control character, or its evaluation failed; the node skips that header action | Limit or clean the value with `substring`, `url_encode`, and the like; a rule logs once per 60 seconds |
+| "Some nodes of the site's cluster do not support it yet" (Rules tab) | An active node of the cluster lacks `rules-v3` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | A rule that redirects HTTP to HTTPS makes requests return 503 | The site has no certificate | Select a certificate on the **HTTPS** tab |
 | Rate limits are not shared across nodes | Rate limits count per node | Scale the threshold by the number of nodes |
 | Some visitors are not rate limited and the node log shows `rate limit partition full` | The site's rate-limit partition is full and new clients are not counted | Raise the node flag `--rate-limit-dict-kb` |

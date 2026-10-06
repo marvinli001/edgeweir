@@ -1,3 +1,4 @@
+import { MAX_HOST_HEADER_LENGTH } from "@edgeweir/rule-engine";
 import { describe, expect, it } from "vitest";
 import {
   auditLogListInput,
@@ -261,6 +262,18 @@ describe("M2 origin and cache inputs", () => {
       "origin.example.com",
     );
     expect(originInput.safeParse({ address: "10.0.0.1", sni: "bad host" }).success).toBe(false);
+  });
+
+  it("trims an origin's Host header and bounds it to a 253-byte name with a port", () => {
+    const host = (hostHeader: string) => originInput.safeParse({ address: "10.0.0.1", hostHeader });
+    expect(host(" Shop.Example.test:8080 ").data?.hostHeader).toBe("Shop.Example.test:8080");
+    expect(host("[2001:db8::1]:443").success).toBe(true);
+    expect(host(`${"a".repeat(253)}:65535`).success).toBe(true);
+    expect(host("a".repeat(MAX_HOST_HEADER_LENGTH + 1)).success).toBe(false);
+    // Nodes skip an origin whose Host header they refuse: sites.create and sites.update refuse
+    // it with ORIGIN_HOST_HEADER_INVALID (validHostHeader); stored values still read back.
+    expect(host("bad host").success).toBe(true);
+    expect(errorDefs.ORIGIN_HOST_HEADER_INVALID).toEqual({ status: 400, params: ["hostHeader"] });
   });
 
   it("bounds origin connection settings", () => {

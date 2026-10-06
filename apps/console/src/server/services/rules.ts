@@ -19,6 +19,7 @@ import { asc, eq, isNull, sql } from "drizzle-orm";
 import { parseCacheCondition } from "../lib/cache-conditions";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { assertHostHeader } from "../lib/host-header";
 import { lockIpLists, lockPlatformRules } from "../lib/locks";
 import { type Actor, recordAudit } from "./audit";
 import { listBindings } from "./config-input";
@@ -82,6 +83,7 @@ export async function saveRules(
         fail("RULE_INVALID", `rule ${rule.name}: platform rules cannot choose an origin group`);
       if (group && !groups.has(group))
         fail("RULE_INVALID", `rule ${rule.name}: the site has no origin group ${group}`);
+      if (rule.action.kind === "origin") assertHostHeader(rule.action.hostHeader);
     }
     const ids = rules.flatMap((rule) => (rule.id ? [rule.id] : []));
     if (new Set(ids).size !== ids.length) fail("RULE_INVALID", "duplicate rule ID");

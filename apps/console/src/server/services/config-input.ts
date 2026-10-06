@@ -322,8 +322,14 @@ function tryCompileRuleModel(
   try {
     expression = parseExpression(row.expression, row.phase as Phase);
     action = ruleAction.parse(row.action);
-    if ((action.kind === "redirect" || action.kind === "rewrite") && action.target)
-      parseValueExpression(action.target, row.phase as Phase);
+    // Value expressions: targets and set query parameters, header values (rules-v3).
+    const values =
+      action.kind === "redirect" || action.kind === "rewrite"
+        ? [action.target, ...(action.setQuery ?? []).map((param) => param.expression)]
+        : action.kind === "request_header" || action.kind === "response_header"
+          ? [action.expression]
+          : [];
+    for (const source of values) if (source) parseValueExpression(source, row.phase as Phase);
   } catch (error) {
     return { invalid: (error as Error).message };
   }

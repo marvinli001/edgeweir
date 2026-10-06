@@ -1,4 +1,4 @@
-import { cacheConditionExpression } from "@edgeweir/rule-engine";
+import { cacheConditionExpression, MAX_HOST_HEADER_LENGTH } from "@edgeweir/rule-engine";
 import { describe, expect, it } from "vitest";
 import {
   BULK_REDIRECT_LIMIT,
@@ -104,7 +104,7 @@ describe("rule actions", () => {
         value: "/a",
         removeQuery: Array.from({ length: 17 }, (_, i) => `p${i}`),
       },
-      { kind: "redirect", value: "/a", statusCode: 303 },
+      { kind: "redirect", value: "/a", statusCode: 304 },
     ])
       expect(ruleAction.safeParse(action).success, JSON.stringify(action)).toBe(false);
   });
@@ -138,11 +138,24 @@ describe("rule actions", () => {
     expect(issuePaths(rule("request-transform", { kind: "origin", port: 8443 }))).toEqual([
       "action",
     ]);
+    // The Host header is any host name or IP literal with a port as nodes accept it; the console
+    // refuses the others with ORIGIN_HOST_HEADER_INVALID (rules.save), not as a schema issue.
+    for (const [hostHeader, parsed] of [
+      ["A.test:8080", "a.test:8080"],
+      [" [2001:DB8::1]:443 ", "[2001:db8::1]:443"],
+      ["\u0130x.test", "\u0130x.test"],
+    ])
+      expect(ruleAction.parse({ kind: "origin", hostHeader })).toMatchObject({
+        hostHeader: parsed,
+      });
+    expect(
+      ruleAction.safeParse({ kind: "origin", hostHeader: "a".repeat(MAX_HOST_HEADER_LENGTH + 1) })
+        .success,
+    ).toBe(false);
     for (const action of [
       { kind: "origin" },
       { kind: "origin", originGroup: "EU" },
       { kind: "origin", originGroup: "x".repeat(33) },
-      { kind: "origin", hostHeader: "a.test:8080" },
       { kind: "origin", sni: "*.a.test" },
       { kind: "origin", port: 65536 },
       { kind: "origin", port: -1 },

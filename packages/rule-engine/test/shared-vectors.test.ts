@@ -3,15 +3,22 @@ import { describe, expect, it } from "vitest";
 import {
   type ActionIr,
   bindLists,
+  cookieValue,
   type Expression,
   ExpressionError,
   evaluate,
+  evaluateHeaderValue,
   evaluateValue,
+  isRulesV3Field,
   mediaType,
+  needsRulesV3,
   type Phase,
   parseExpression,
   parseValueExpression,
   pathExtension,
+  queryArgValue,
+  rulesV3Fields,
+  rulesV3Functions,
   type StructuredCacheCondition,
   structuredCacheCondition,
   structuredCacheMatch,
@@ -27,7 +34,9 @@ import {
 // redirect targets and rewrite paths with the string the node computes; `irRejected` vectors
 // pair a refused source with the IR nodes must refuse; `structured` vectors are cache rule
 // conditions that older nodes read in their structured form; `derive` vectors are fields the
-// node derives from the request.
+// node derives from the request (cookies and query parameters by name: from the Cookie header
+// and the query string). `header` value vectors are header values (rules-v3): the value set, or
+// null when the node skips the header action.
 type Accepted = {
   source: string;
   phase: Phase;
@@ -40,7 +49,11 @@ type Accepted = {
   actionRejected?: true;
   reason?: string;
   structured?: StructuredCacheCondition;
-} & ({ value?: undefined; expected: boolean } | { value: true; expected: string });
+} & (
+  | { value?: undefined; header?: undefined; expected: boolean }
+  | { value: true; header?: undefined; expected: string }
+  | { value: true; header: true; expected: string | null }
+);
 type Rejected = {
   source: string;
   phase: Phase;
@@ -51,7 +64,9 @@ type Rejected = {
   value?: true;
   reason: string;
 };
-type Derived = { derive: "extension" | "media_type"; input: string; expected: string };
+type Derived =
+  | { derive: "extension" | "media_type"; input: string; expected: string }
+  | { derive: "cookie" | "arg"; input: string; name: string; expected: string };
 type Vector = Accepted | Rejected | Derived;
 const vectors: Vector[] = JSON.parse(
   readFileSync(new URL("./vectors.json", import.meta.url), "utf8"),
@@ -76,11 +91,12 @@ it.each(accepted.flatMap((v) => (v.value ? [] : [v])))(
 );
 it.each(accepted.flatMap((v) => (v.value ? [v] : [])))(
   "shared value vector: $source",
-  ({ source, phase, ir, request, expected }) => {
+  ({ source, phase, ir, request, expected, header }) => {
     expect(parseValueExpression(source, phase)).toEqual(ir);
     expect(validExpressionIr(ir, phase, true)).toBe(true);
     expect(validExpressionIr(ir, phase, false)).toBe(false);
-    expect(evaluateValue(ir, request)).toBe(expected);
+    if (header) expect(evaluateHeaderValue(ir, request)).toBe(expected);
+    else expect(evaluateValue(ir, request)).toBe(expected);
   },
 );
 it.each(rejected.filter((v) => !v.irRejected))(
@@ -107,8 +123,12 @@ it.each(accepted.flatMap((v) => (v.action ? [v] : [])))(
 );
 it.each(vectors.flatMap((v) => (v.derive ? [v] : [])))(
   "shared derived field: $derive $input",
-  ({ derive, input, expected }) => {
-    expect((derive === "extension" ? pathExtension : mediaType)(input)).toBe(expected);
+  (v) => {
+    if (v.derive === "cookie" || v.derive === "arg")
+      expect((v.derive === "cookie" ? cookieValue : queryArgValue)(v.input, v.name)).toBe(
+        v.expected,
+      );
+    else expect((v.derive === "extension" ? pathExtension : mediaType)(v.input)).toBe(v.expected);
   },
 );
 it("covers tls.ja4 and every challenge type", () => {
@@ -140,6 +160,15 @@ describe("rules-v2 coverage", () => {
         "concat",
         "regex_replace",
         "wildcard_replace",
+        // rules-v3
+        "url_encode",
+        "base64_encode",
+        "base64_decode",
+        "md5",
+        "sha1",
+        "sha256",
+        "substring",
+        "to_string",
       ]),
     );
     expect(rejected.filter((v) => v.irRejected).length).toBeGreaterThanOrEqual(20);
@@ -188,4 +217,59 @@ describe("rules-v2 coverage", () => {
       });
     }
   });
+});
+describe("rules-v3 coverage", () => {
+  const walk = (e: Expression): Expression[] => [e, ...e.children.flatMap(walk)];
+  const actionIrs = (v: Accepted) => [
+    ...(v.action?.target ? [v.action.target] : []),
+    ...(v.action?.setQuery ?? []).flatMap((p) => (p.expression ? [p.expression] : [])),
+  ];
+  const plain = accepted.filter((v) => !v.actionRejected);
+  const nodes = plain.flatMap((v) => [v.ir, ...actionIrs(v)].flatMap(walk));
+  it("reads every new field, calls every new function and uses both wildcard comparisons", () => {
+    const fields = new Set(nodes.flatMap((e) => (e.op !== "call" ? [e.field] : [])));
+    for (const field of rulesV3Fields) expect(fields.has(field), field).toBe(true);
+    expect([...fields].some((f) => f.startsWith("http.request.cookies."))).toBe(true);
+    expect([...fields].some((f) => f.startsWith("http.request.uri.args."))).toBe(true);
+    const calls = new Set(nodes.flatMap((e) => (e.op === "call" ? [e.field] : [])));
+    for (const name of rulesV3Functions) expect(calls.has(name), name).toBe(true);
+    const ops = new Set(nodes.map((e) => e.op));
+    expect(ops.has("wildcard") && ops.has("strict_wildcard")).toBe(true);
+    expect(plain.filter((v) => needsRulesV3(v.ir)).length).toBeGreaterThanOrEqual(60);
+  });
+  it("covers missing and repeated cookies and parameters, invalid Base64 and skipped headers", () => {
+    const derived = vectors.flatMap((v) =>
+      v.derive === "cookie" || v.derive === "arg" ? [v] : [],
+    );
+    for (const kind of ["cookie", "arg"]) {
+      const of = derived.filter((v) => v.derive === kind);
+      expect(of.some((v) => v.expected === "" && !v.input.includes(`${v.name}=`))).toBe(true);
+      expect(of.some((v) => v.input.split(v.name).length > 2)).toBe(true);
+    }
+    const values = plain.filter((v) => v.value);
+    expect(
+      values.filter((v) => v.source.startsWith("base64_decode") && v.expected === "").length,
+    ).toBeGreaterThanOrEqual(5);
+    expect(values.filter((v) => v.header && v.expected === null).length).toBeGreaterThanOrEqual(5);
+    expect(values.some((v) => /substring\([^)]*, -/.test(v.source))).toBe(true);
+  });
+  it("covers every new action field, accepted and refused, and refuses new IR shapes", () => {
+    const actions = accepted.flatMap((v) => (v.action ? [v] : []));
+    const ok = actions.filter((v) => !v.actionRejected).map((v) => v.action as ActionIr);
+    expect(ok.some((a) => a.append)).toBe(true);
+    expect(ok.some((a) => a.kind === "request_header" && a.target)).toBe(true);
+    expect(ok.some((a) => a.kind === "response_header" && a.target)).toBe(true);
+    expect(ok.some((a) => a.setQuery?.some((p) => p.expression))).toBe(true);
+    expect(ok.some((a) => a.statusCode === 303)).toBe(true);
+    const refused = actions.filter((v) => v.actionRejected).map((v) => v.action as ActionIr);
+    expect(refused.some((a) => a.append)).toBe(true);
+    expect(refused.some((a) => a.kind.endsWith("_header") && a.target)).toBe(true);
+    expect(refused.some((a) => a.setQuery?.some((p) => p.expression))).toBe(true);
+    expect(
+      rejected.filter((v) => v.irRejected && [v.ir, ...v.ir.children].some(needsRulesV3OrShape))
+        .length,
+    ).toBeGreaterThanOrEqual(15);
+  });
+  const needsRulesV3OrShape = (e: Expression): boolean =>
+    needsRulesV3(e) || isRulesV3Field(e.field) || e.op === "strict_contains";
 });
