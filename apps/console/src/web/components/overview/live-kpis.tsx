@@ -47,12 +47,15 @@ function useArrival<T extends number>(value: T): T | 0 {
 function Tile({
   icon,
   title,
+  span,
   children,
   footer,
   index,
 }: {
   icon: typeof ServerStack01Icon;
   title: string;
+  /** The window a value covers when it is not the last minute, shown after the title. */
+  span?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
   index: number;
@@ -66,6 +69,7 @@ function Tile({
       <div className="relative z-[1] flex items-center gap-2 px-4 pt-3.5 text-[13px] text-muted-foreground">
         <HugeiconsIcon icon={icon} strokeWidth={2} className="size-4" />
         <span className="truncate">{title}</span>
+        {span ? <span className="ms-auto shrink-0 text-xs">{span}</span> : null}
       </div>
       <div className="relative z-[1] truncate px-4 pt-1.5 text-[1.75rem] leading-tight font-semibold tracking-tight font-stretch-112%">
         {children}
@@ -77,9 +81,10 @@ function Tile({
 
 /**
  * The platform right now: request rate and egress of the last full minute, the cache hit ratio
- * of the last hour, and nodes online. Polls every 10 s; the digits roll to each new value. Until
- * the first answer the row is a loader, and a failed first load an error with a retry, never a
- * row of zeros.
+ * of the last hour (labelled, as the statistics below show it for the chosen range), and nodes
+ * online. Polls every minute, the size of the hour's buckets, so the 1-hour traffic query keeps
+ * the cadence the statistics give it; the digits roll to each new value. Until the first answer
+ * the row is a loader, and a failed first load an error with a retry, never a row of zeros.
  */
 export function LiveKpis({
   online,
@@ -92,7 +97,7 @@ export function LiveKpis({
 }) {
   const traffic = useQuery({
     ...orpc.analytics.traffic.queryOptions({ input: { range: "1h" } }),
-    refetchInterval: 10_000,
+    refetchInterval: 60_000,
     placeholderData: keepPreviousData,
     meta: { background: true },
   });
@@ -143,6 +148,7 @@ function LiveTiles({
         <Tile
           icon={DatabaseLightningIcon}
           title={m.analytics_hit_ratio()}
+          span={m.analytics_range_1h()}
           index={2}
           footer={
             <Sparkline
