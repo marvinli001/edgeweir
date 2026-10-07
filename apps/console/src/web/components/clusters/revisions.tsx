@@ -52,7 +52,7 @@ function RollbackAction({ clusterId, revision }: { clusterId: string; revision: 
         )}
       >
         {({ sites, unchanged }) => (
-          <div className="animate-enter rounded-xl border p-3">
+          <div className="animate-enter rounded-xl p-3 sunk-well">
             <SiteChangeList changes={sites} unchanged={unchanged} testId="rollback-preview" />
           </div>
         )}
@@ -129,6 +129,7 @@ export function RevisionsSection({ cluster }: { cluster: Cluster }) {
             columns={columns}
             getRowId={(r) => String(r.revision)}
             testId="revisions-table"
+            pinFirstColumn
           />
         )}
       </QueryView>

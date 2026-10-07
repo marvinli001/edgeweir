@@ -13,9 +13,9 @@ import { nextDraftKey } from "@/components/site/save-site";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FieldError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
@@ -73,64 +73,81 @@ export function AuthErrorBadge({ node }: { node: Node }) {
 export const memoryPercent = (metrics: NonNullable<Node["metrics"]>) =>
   metrics.memoryTotalBytes > 0 ? (metrics.memoryUsedBytes / metrics.memoryTotalBytes) * 100 : null;
 
+/** A node's state in its detail header: lit while online. */
+function DetailState({ node }: { node: Node }) {
+  if (node.status === "disabled") return <StatusDot tone="idle">{m.nodes_disabled()}</StatusDot>;
+  return node.online ? (
+    <StatusDot tone="good" glow>
+      {m.nodes_online()}
+    </StatusDot>
+  ) : (
+    <StatusDot tone="bad">{m.nodes_offline()}</StatusDot>
+  );
+}
+
 /**
- * A node's details: host metrics, the scheduling addresses with their levels
- * and reachability (and an editor for configured ones), whether it also
- * probes, and how the probes see it. `node` comes from the polling node list.
+ * A node's details in a side sheet: host metrics, the scheduling addresses with their levels and
+ * reachability (and an editor for configured ones), whether it also probes, and how the probes see
+ * it. `node` comes from the polling node list.
  */
-export function NodeDetailDialog({ node, onClose }: { node: Node; onClose: () => void }) {
+export function NodeDetailSheet({ node, onClose }: { node: Node; onClose: () => void }) {
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-3xl"
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        side="right"
+        className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl"
         data-testid="node-detail"
       >
-        <DialogHeader>
-          <DialogTitle className="flex flex-wrap items-center gap-3 pr-8">
-            <span data-testid="node-detail-name">{node.name}</span>
-            {node.status === "disabled" ? (
-              <StatusDot tone="idle">{m.nodes_disabled()}</StatusDot>
-            ) : node.online ? (
-              <StatusDot tone="good" pulse>
-                {m.nodes_online()}
-              </StatusDot>
-            ) : (
-              <StatusDot tone="bad">{m.nodes_offline()}</StatusDot>
-            )}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="flex min-w-0 flex-col gap-6">
+        <SheetHeader className="gap-1 border-b border-edge py-5 pr-16">
+          <SheetTitle className="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-semibold tracking-tight [font-stretch:106%]">
+            <span className="min-w-0 break-all" data-testid="node-detail-name">
+              {node.name}
+            </span>
+            <span className="text-sm font-normal tracking-normal [font-stretch:100%]">
+              <DetailState node={node} />
+            </span>
+          </SheetTitle>
+          <span className="truncate font-mono text-xs text-muted-foreground">{node.hostname}</span>
+        </SheetHeader>
+        <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
           <NodeMetrics node={node} />
           <NodeFacts node={node} />
           <NodeProbeSwitch node={node} />
           <NodeAddresses node={node} />
-          <section className="flex flex-col gap-3">
+          <section className="flex min-w-0 flex-col gap-3">
             <h3 className="text-sm font-medium">{m.probes_results()}</h3>
             <ProbeResults input={{ nodeId: node.id }} by="prober" testId="node-probe-results" />
           </section>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 
+/** One metric tile of the detail: label, value (the test id is on the value alone), a gauge. */
 function Metric({
   label,
   children,
   testId,
+  meter,
   className,
 }: {
   label: string;
   children: React.ReactNode;
   testId: string;
+  meter?: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1 rounded-xl border px-3 py-2", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-1.5 rounded-xl bg-well px-3 py-2.5", className)}>
       <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd className="truncate text-base font-semibold tabular-nums" data-testid={testId}>
+      <dd
+        className="truncate text-lg leading-tight font-semibold tracking-tight readout [font-stretch:108%]"
+        data-testid={testId}
+      >
         {children}
       </dd>
+      {meter ? <dd className="pt-0.5">{meter}</dd> : null}
     </div>
   );
 }
@@ -153,11 +170,35 @@ function NodeMetrics({ node }: { node: Node }) {
         ) : null}
       </div>
       {metrics ? (
-        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <Metric label={m.node_metrics_cpu()} testId="node-metric-cpu">
+        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+          <Metric
+            label={m.node_metrics_cpu()}
+            testId="node-metric-cpu"
+            className="sm:col-span-3"
+            meter={
+              <Meter
+                value={metrics.cpuPercent}
+                high={75}
+                label={`${m.node_metrics_cpu()} ${formatPercent(metrics.cpuPercent)}`}
+              />
+            }
+          >
             {formatPercent(metrics.cpuPercent)}
           </Metric>
-          <Metric label={m.node_metrics_memory()} testId="node-metric-memory">
+          <Metric
+            label={m.node_metrics_memory()}
+            testId="node-metric-memory"
+            className="sm:col-span-3"
+            meter={
+              memory === null ? undefined : (
+                <Meter
+                  value={memory}
+                  high={75}
+                  label={`${m.node_metrics_memory()} ${formatPercent(memory)}`}
+                />
+              )
+            }
+          >
             <span
               title={`${formatBytes(metrics.memoryUsedBytes)} / ${formatBytes(metrics.memoryTotalBytes)}`}
             >
@@ -167,19 +208,30 @@ function NodeMetrics({ node }: { node: Node }) {
           <Metric
             label={m.node_metrics_load()}
             testId="node-metric-load"
-            className="col-span-2 sm:col-span-1"
+            className="col-span-2 sm:col-span-2"
           >
             {load(metrics.load1)} / {load(metrics.load5)} / {load(metrics.load15)}
           </Metric>
-          <Metric label={m.node_metrics_egress()} testId="node-metric-egress">
+          <Metric
+            label={m.node_metrics_egress()}
+            testId="node-metric-egress"
+            className="sm:col-span-2"
+          >
             {formatBitRate(metrics.egressBps / 8)}
           </Metric>
-          <Metric label={m.node_metrics_connections()} testId="node-metric-connections">
+          <Metric
+            label={m.node_metrics_connections()}
+            testId="node-metric-connections"
+            className="sm:col-span-2"
+          >
             {formatNumber(metrics.activeConnections)}
           </Metric>
         </dl>
       ) : (
-        <p className="text-sm text-muted-foreground" data-testid="node-metrics-none">
+        <p
+          className="rounded-xl bg-well px-3 py-2.5 text-sm text-muted-foreground"
+          data-testid="node-metrics-none"
+        >
           {m.node_metrics_none()}
         </p>
       )}
@@ -197,7 +249,7 @@ function Fact({
   testId: string;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-xl border px-3 py-2">
+    <div className="flex min-w-0 flex-col gap-1 rounded-xl bg-well px-3 py-2.5">
       <dt className="truncate text-xs text-muted-foreground">{label}</dt>
       <dd className="flex min-w-0 flex-wrap items-center gap-2 text-sm" data-testid={testId}>
         {children}
@@ -213,7 +265,9 @@ function NodeFacts({ node }: { node: Node }) {
     <dl className="grid gap-2 sm:grid-cols-2" data-testid="node-facts">
       <Fact label={m.node_data_plane()} testId="node-data-plane">
         {node.dataPlaneHealthy ? (
-          <StatusDot tone="good">{m.node_data_plane_healthy()}</StatusDot>
+          <StatusDot tone="good" glow={node.online}>
+            {m.node_data_plane_healthy()}
+          </StatusDot>
         ) : (
           <StatusDot tone="bad">{m.nodes_unhealthy()}</StatusDot>
         )}
@@ -304,9 +358,9 @@ function NodeAddresses({ node }: { node: Node }) {
       ) : node.schedulingAddresses.length === 0 ? (
         <p className="text-sm text-muted-foreground">{m.node_addresses_none()}</p>
       ) : (
-        <div className="overflow-hidden rounded-2xl border" data-testid="node-addresses">
+        <div className="overflow-hidden rounded-xl sunk-well" data-testid="node-addresses">
           <Table>
-            <TableHeader className="bg-muted/60">
+            <TableHeader>
               <TableRow>
                 <TableHead>{m.node_address_col_address()}</TableHead>
                 <TableHead>{m.node_address_col_level()}</TableHead>
@@ -534,10 +588,18 @@ function AddressEditor({
   );
 }
 
-/** CPU and memory of a node in the node list; "—" before it reports metrics. */
-export function NodeLoad({ node }: { node: Node }) {
+/**
+ * A node card's load, in a well: CPU and memory as meters (the test id "node-load"), egress,
+ * connections and the 1-minute load as readouts; "no metrics" before it reports them.
+ */
+export function NodeVitals({ node }: { node: Node }) {
   const metrics = node.metrics;
-  if (!metrics) return <span className="text-muted-foreground">—</span>;
+  if (!metrics)
+    return (
+      <p className="rounded-xl px-3 py-2.5 text-xs text-muted-foreground sunk-well">
+        {m.node_metrics_none()}
+      </p>
+    );
   const memory = memoryPercent(metrics);
   const row = (label: string, value: number | null) => (
     <>
@@ -550,13 +612,26 @@ export function NodeLoad({ node }: { node: Node }) {
       <span className="text-right tabular-nums">{value === null ? "—" : formatPercent(value)}</span>
     </>
   );
+  const readout = (label: string, value: string) => (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="truncate text-[11px] text-muted-foreground">{label}</dt>
+      <dd className="truncate text-[13px] font-semibold readout">{value}</dd>
+    </div>
+  );
   return (
-    <div
-      className="grid w-40 grid-cols-[auto_minmax(0,1fr)_2.75rem] items-center gap-x-2 gap-y-1.5 text-xs whitespace-nowrap"
-      data-testid="node-load"
-    >
-      {row(m.node_metrics_cpu(), metrics.cpuPercent)}
-      {row(m.node_metrics_memory(), memory)}
+    <div className="flex flex-col gap-3 rounded-xl px-3 py-2.5 sunk-well">
+      <div
+        className="grid grid-cols-[auto_minmax(0,1fr)_3rem] items-center gap-x-2.5 gap-y-2 text-xs whitespace-nowrap"
+        data-testid="node-load"
+      >
+        {row(m.node_metrics_cpu(), metrics.cpuPercent)}
+        {row(m.node_metrics_memory(), memory)}
+      </div>
+      <dl className="grid grid-cols-3 gap-2 border-t border-edge pt-2.5">
+        {readout(m.node_metrics_egress(), formatBitRate(metrics.egressBps / 8))}
+        {readout(m.node_metrics_connections(), formatNumber(metrics.activeConnections))}
+        {readout(m.scheduling_metric_load1(), load(metrics.load1))}
+      </dl>
     </div>
   );
 }

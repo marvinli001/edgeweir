@@ -20,16 +20,20 @@ const LIT: Record<StatusTone, string> = {
 
 /**
  * A state dot; `pulse` marks live states (something running now), which also glow and pulse (a
- * pseudo-element; not under reduced motion). Always pair it with a text label. The transparent
- * border shows as a ring in forced colors, where the fill is dropped.
+ * pseudo-element; not under reduced motion). `glow` lights a live state without the pulse, for
+ * polled lists and pages where nothing loops (a node online in the node list). Always pair it
+ * with a text label. The transparent border shows as a ring in forced colors, where the fill is
+ * dropped.
  */
 export function Dot({
   tone,
   pulse,
+  glow,
   small,
 }: {
   tone: StatusTone;
   pulse?: boolean;
+  glow?: boolean;
   small?: boolean;
 }) {
   return (
@@ -38,7 +42,8 @@ export function Dot({
         "relative inline-flex shrink-0 rounded-full border border-transparent",
         small ? "size-1.5" : "size-2",
         TONE[tone],
-        pulse && cn("lit-glow dot-pulse", LIT[tone]),
+        (pulse || glow) && cn("lit-glow", LIT[tone]),
+        pulse && "dot-pulse",
       )}
     />
   );
@@ -63,12 +68,13 @@ export function LiveDot({ label, className }: { label: string; className?: strin
 export function StatusDot({
   tone,
   pulse,
+  glow,
   children,
   ...props
-}: React.ComponentProps<"span"> & { tone: StatusTone; pulse?: boolean }) {
+}: React.ComponentProps<"span"> & { tone: StatusTone; pulse?: boolean; glow?: boolean }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-sm whitespace-nowrap" {...props}>
-      <Dot tone={tone} pulse={pulse} />
+      <Dot tone={tone} pulse={pulse} glow={glow} />
       {children}
     </span>
   );

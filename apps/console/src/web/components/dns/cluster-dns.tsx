@@ -3,6 +3,7 @@ import type {
   DnsBindingInput,
   DnsLine,
   DnsResolutionLine,
+  DnsRevision,
   Node,
   NodeGroup,
 } from "@edgeweir/contract";
@@ -12,6 +13,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { CardTable } from "@/components/clusters/card-table";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { DnsHeldBack } from "@/components/dns-protection";
@@ -20,6 +22,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, EmptyState, QueryView } from "@/components/states";
+import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -184,7 +187,13 @@ function BindingEditor({
               <>
                 <Field>
                   <FieldLabel htmlFor="dns-binding-zone">{m.dns_zone()}</FieldLabel>
-                  <Input id="dns-binding-zone" value={account?.zone ?? ""} disabled readOnly />
+                  {/* The account's zone, a value rather than a field: shown in a well. */}
+                  <output
+                    id="dns-binding-zone"
+                    className="flex h-8 min-w-0 items-center truncate rounded-2xl px-2.5 font-mono text-sm sunk-well"
+                  >
+                    {account?.zone ?? "—"}
+                  </output>
                 </Field>
                 <Field>
                   <FieldLabel htmlFor="dns-binding-domain">{m.dns_cluster_domain()}</FieldLabel>
@@ -399,7 +408,7 @@ function BackupGroups({
             return (
               <li
                 key={id}
-                className="flex min-h-10 items-center gap-1 rounded-xl border py-1 pr-1 pl-3 animate-enter"
+                className="flex min-h-10 items-center gap-1 rounded-xl py-1 pr-1 pl-3 sunk-well animate-enter"
                 data-testid="dns-line-backup"
                 data-group={name}
               >
@@ -485,36 +494,66 @@ function RecordTable({
   records: { name: string; type: string; data: string; ttl: number; line?: DnsResolutionLine }[];
   testId: string;
 }) {
-  if (!records.length) return <EmptyState title={m.dns_no_records()} />;
+  if (!records.length)
+    return (
+      <CardContent className="pb-(--card-spacing)">
+        <EmptyState title={m.dns_no_records()} />
+      </CardContent>
+    );
   return (
-    <Table data-testid={testId}>
-      <TableHeader>
-        <TableRow>
-          <TableHead>{m.dns_record_name()}</TableHead>
-          <TableHead>{m.dns_record_type()}</TableHead>
-          <TableHead>{m.dns_resolution_line()}</TableHead>
-          <TableHead>{m.dns_record_data()}</TableHead>
-          <TableHead>{m.dns_ttl()}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {records.map((r) => (
-          <TableRow
-            key={`${r.name}|${r.type}|${r.line ?? "default"}|${r.data}`}
-            data-testid="dns-record"
-            data-line={r.line ?? "default"}
-          >
-            <TableCell className="font-mono text-xs">{r.name}</TableCell>
-            <TableCell>{r.type}</TableCell>
-            <TableCell className="whitespace-nowrap" data-testid="dns-record-line">
-              {resolutionLineLabel(r.line ?? "default")}
-            </TableCell>
-            <TableCell className="font-mono text-xs">{r.data}</TableCell>
-            <TableCell className="tabular-nums">{r.ttl}</TableCell>
+    <CardTable>
+      <Table data-testid={testId}>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{m.dns_record_name()}</TableHead>
+            <TableHead>{m.dns_record_type()}</TableHead>
+            <TableHead>{m.dns_resolution_line()}</TableHead>
+            <TableHead>{m.dns_record_data()}</TableHead>
+            <TableHead className="text-right">{m.dns_ttl()}</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {records.map((r) => (
+            <TableRow
+              key={`${r.name}|${r.type}|${r.line ?? "default"}|${r.data}`}
+              data-testid="dns-record"
+              data-line={r.line ?? "default"}
+            >
+              <TableCell className="font-mono text-xs">{r.name}</TableCell>
+              <TableCell>
+                <Badge variant="secondary" className="font-mono">
+                  {r.type}
+                </Badge>
+              </TableCell>
+              <TableCell className="whitespace-nowrap" data-testid="dns-record-line">
+                {resolutionLineLabel(r.line ?? "default")}
+              </TableCell>
+              <TableCell className="font-mono text-xs">{r.data}</TableCell>
+              <TableCell className="text-right tabular-nums text-muted-foreground">
+                {r.ttl}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </CardTable>
+  );
+}
+
+/** A DNS revision's state as a light and a word: a pending one is still on its way. */
+function RevisionState({ status, applied }: { status: DnsRevision["status"]; applied?: boolean }) {
+  const tone: StatusTone =
+    applied || status === "applied"
+      ? "good"
+      : status === "failed" || status === "blocked"
+        ? "bad"
+        : status === "pending"
+          ? "warn"
+          : "idle";
+  return (
+    <StatusDot tone={tone} pulse={status === "pending" && !applied}>
+      {applied ? m.dns_applied() : statusLabel(status)}
+    </StatusDot>
   );
 }
 
@@ -522,13 +561,13 @@ function CurrentRecords({ clusterId, state }: { clusterId: string; state: Bindin
   const queries = useQueryClient();
   const repair = useMutation(orpc.dns.reconcile.mutationOptions());
   return (
-    <Card>
+    <Card className="pb-0">
       <CardHeader className="flex flex-row flex-wrap items-center gap-3">
         <CardTitle className="flex-1">{m.dns_current_records()}</CardTitle>
         {state.revision ? (
-          <Badge variant="outline" data-testid="dns-binding-status">
-            {state.applied ? m.dns_applied() : statusLabel(state.revision.status)}
-          </Badge>
+          <span data-testid="dns-binding-status">
+            <RevisionState status={state.revision.status} applied={state.applied} />
+          </span>
         ) : null}
         <Button
           size="sm"
@@ -550,14 +589,14 @@ function CurrentRecords({ clusterId, state }: { clusterId: string; state: Bindin
           {m.dns_reconcile()}
         </Button>
       </CardHeader>
-      <CardContent className="grid gap-3">
-        {state.revision?.lastError ? (
+      {state.revision?.lastError ? (
+        <CardContent>
           <SafetyNote className="text-destructive">
             {revisionError(state.revision.lastError, state.revision.lastErrorParams)}
           </SafetyNote>
-        ) : null}
-        <RecordTable records={state.records} testId="dns-current-records" />
-      </CardContent>
+        </CardContent>
+      ) : null}
+      <RecordTable records={state.records} testId="dns-current-records" />
     </Card>
   );
 }
@@ -567,7 +606,7 @@ function ManualRecords({ clusterId, updatedAt }: { clusterId: string; updatedAt:
     orpc.dns.exportBinding.queryOptions({ input: { clusterId }, meta: { key: updatedAt } }),
   );
   return (
-    <Card>
+    <Card className="pb-0">
       <CardHeader className="flex flex-row flex-wrap items-center gap-3">
         <CardTitle className="flex-1">{m.dns_manual_records()}</CardTitle>
         {exported.data?.zoneFile ? (
@@ -590,22 +629,22 @@ function ManualRecords({ clusterId, updatedAt }: { clusterId: string; updatedAt:
           </Button>
         ) : null}
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent>
         <SafetyNote>{m.dns_manual_note()}</SafetyNote>
-        <QueryView query={exported}>
-          {({ records, zoneFile }) => (
-            <>
-              <RecordTable records={records} testId="dns-manual-records" />
-              {zoneFile ? (
-                <div className="grid gap-2">
-                  <h3 className="text-sm font-medium">{m.dns_zone_file()}</h3>
-                  <CodeBlock value={zoneFile} testId="dns-zone-file" wrap={false} />
-                </div>
-              ) : null}
-            </>
-          )}
-        </QueryView>
       </CardContent>
+      <QueryView query={exported} frame={CardContent}>
+        {({ records, zoneFile }) => (
+          <>
+            <RecordTable records={records} testId="dns-manual-records" />
+            {zoneFile ? (
+              <CardContent className="grid gap-2 border-t border-edge py-(--card-spacing)">
+                <h3 className="text-sm font-medium">{m.dns_zone_file()}</h3>
+                <CodeBlock value={zoneFile} testId="dns-zone-file" wrap={false} />
+              </CardContent>
+            ) : null}
+          </>
+        )}
+      </QueryView>
     </Card>
   );
 }
@@ -620,22 +659,32 @@ function Revisions({ clusterId }: { clusterId: string }) {
     }),
   );
   return (
-    <Card>
+    <Card className="pb-0">
       <CardHeader>
         <CardTitle>{m.dns_revisions()}</CardTitle>
       </CardHeader>
-      <CardContent>
-        <QueryView query={history} empty={<EmptyState title={m.dns_no_revisions()} />}>
-          {(list) => (
+      <QueryView
+        query={history}
+        frame={RevisionsFrame}
+        empty={
+          <RevisionsFrame>
+            <EmptyState title={m.dns_no_revisions()} />
+          </RevisionsFrame>
+        }
+      >
+        {(list) => (
+          <CardTable>
             <Table data-testid="dns-revisions">
               <TableHeader>
                 <TableRow>
                   <TableHead>{m.dns_version()}</TableHead>
                   <TableHead>{m.dns_status()}</TableHead>
                   <TableHead>{m.dns_reason()}</TableHead>
-                  <TableHead>{m.dns_records()}</TableHead>
+                  <TableHead className="text-right">{m.dns_records()}</TableHead>
                   <TableHead>{m.dns_time()}</TableHead>
-                  <TableHead>{m.common_actions()}</TableHead>
+                  <TableHead>
+                    <span className="sr-only">{m.common_actions()}</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -644,7 +693,7 @@ function Revisions({ clusterId }: { clusterId: string }) {
                     <TableCell className="font-mono">{r.revision}</TableCell>
                     <TableCell>
                       <span className="flex items-center gap-2">
-                        <Badge variant="outline">{statusLabel(r.status)}</Badge>
+                        <RevisionState status={r.status} />
                         {r.lastError ? (
                           <span className="text-xs text-muted-foreground">
                             {revisionError(r.lastError, r.lastErrorParams)}
@@ -655,16 +704,16 @@ function Revisions({ clusterId }: { clusterId: string }) {
                     <TableCell className="text-sm" data-testid="dns-revision-reason">
                       {dnsRevisionReason(r)}
                     </TableCell>
-                    <TableCell className="tabular-nums">{r.recordCount}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.recordCount}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {formatDateTime(r.createdAt)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-right">
                       <ConfirmDialog
                         title={m.dns_rollback()}
                         note={m.dns_rollback_note({ revision: r.revision })}
                         trigger={
-                          <Button size="sm" variant="outline">
+                          <Button size="sm" variant="ghost">
                             {m.dns_rollback()}
                           </Button>
                         }
@@ -678,9 +727,13 @@ function Revisions({ clusterId }: { clusterId: string }) {
                 ))}
               </TableBody>
             </Table>
-          )}
-        </QueryView>
-      </CardContent>
+          </CardTable>
+        )}
+      </QueryView>
     </Card>
   );
+}
+
+function RevisionsFrame({ children }: { children?: React.ReactNode }) {
+  return <CardContent className="pb-(--card-spacing)">{children}</CardContent>;
 }

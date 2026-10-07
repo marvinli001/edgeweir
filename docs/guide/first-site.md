@@ -73,7 +73,7 @@
    curl -fsSL https://console.example.com/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server https://console.example.com:8443 --ca-sha256 <CA 指纹>
    ```
 
-4. 验证：对话框的 **注册进度** 依次完成；**集群与节点** 的节点表出现该节点，**状态** 为 **在线**，**已应用版本** 旁显示 **已同步**。
+4. 验证：对话框的 **注册进度** 依次完成；**集群与节点** 的节点卡片中出现该节点，状态为 **在线**，**已应用版本** 旁显示 **已同步**。
 
 token 单次有效。安装脚本的校验步骤、下载镜像与失败处理见 [接入节点](../deploy/nodes.md)。
 

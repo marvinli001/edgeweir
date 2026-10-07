@@ -31,7 +31,7 @@ Nodes that do not meet the supervisor conditions do not report `self-upgrade-v1`
 4. Click **Start canary**. While the dialog lists **Nodes not ready**, it cannot start: deal with those nodes first (see below).
 5. Wait until the canary nodes show **Succeeded** and stay healthy for 30 seconds.
 6. Click **Promote remaining nodes**. The rest are upgraded in batches: at most a quarter of them at a time (at least one, by node name); when a node succeeds the next one is released.
-7. Verify: the upgrade shows **Succeeded**; the **Agent / engine** column of the **Nodes** list shows the target version.
+7. Verify: the upgrade shows **Succeeded**; **Agent / engine** on the **Nodes** cards shows the target version.
 
 An upgrade restarts the node's agent. OpenResty runs under the supervisor (node images and packages of this version and later): it keeps serving during an upgrade and reloads the configuration, and bans, CC state and rate-limit counters survive; a rollback to an older version restarts it. An upgrade is not guaranteed to be hitless; choose a canary group whose traffic other nodes can absorb.
 

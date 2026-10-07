@@ -109,7 +109,7 @@ function ClustersPage() {
         <QueryView
           query={clusters}
           empty={
-            <EmptyState icon={ServerStack01Icon} title={m.clusters_empty_title()}>
+            <EmptyState icon={ServerStack01Icon} art="node" title={m.clusters_empty_title()}>
               <Button onClick={() => setCreateOpen(true)}>
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
                 {m.clusters_create()}
@@ -200,23 +200,35 @@ function ClusterView({
             })
           }
         >
-          <TabsList className="max-w-full justify-start overflow-x-auto">
-            <TabsTrigger value="overview" data-testid="cluster-tab-overview">
+          {/* The cluster's tab bar: line tabs over a hairline, scrolling sideways on phones. */}
+          <TabsList
+            variant="line"
+            className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] [scrollbar-width:none]"
+          >
+            <TabsTrigger
+              value="overview"
+              className="flex-none px-2.5"
+              data-testid="cluster-tab-overview"
+            >
               {m.dns_tab_overview()}
             </TabsTrigger>
-            <TabsTrigger value="dns" data-testid="cluster-tab-dns">
+            <TabsTrigger value="dns" className="flex-none px-2.5" data-testid="cluster-tab-dns">
               {m.dns_tab_dns()}
             </TabsTrigger>
-            <TabsTrigger value="scheduling" data-testid="cluster-tab-scheduling">
+            <TabsTrigger
+              value="scheduling"
+              className="flex-none px-2.5"
+              data-testid="cluster-tab-scheduling"
+            >
               {m.scheduling_tab()}
             </TabsTrigger>
-            <TabsTrigger value="ports" data-testid="cluster-tab-ports">
+            <TabsTrigger value="ports" className="flex-none px-2.5" data-testid="cluster-tab-ports">
               {m.l4_pools_title()}
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="overview" className="flex flex-col gap-4 animate-enter">
-            <NodeGroupsSection cluster={selected} />
+          <TabsContent value="overview" className="flex flex-col gap-6 animate-enter">
             {nodes}
+            <NodeGroupsSection cluster={selected} />
             <ClusterRolloutCard key={`rollout-${selected.id}`} clusterId={selected.id} />
             <NodeUpgrades key={selected.id} clusterId={selected.id} />
             <RevisionsSection cluster={selected} />

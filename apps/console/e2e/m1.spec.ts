@@ -100,7 +100,7 @@ test("M1: site editing, clusters, node groups, audit and i18n", async ({ page })
     await expect(groups.getByText("华东 · cn-east")).toBeVisible();
 
     const nodes = page.getByTestId("nodes-table");
-    const row = nodes.getByRole("row").filter({ hasText: nodeName });
+    const row = nodes.locator("[data-row-id]").filter({ hasText: nodeName });
     await row.getByTestId("node-actions").click();
     await page.getByTestId("node-move").click();
     await pick(page, page.getByTestId("move-group-select"), "group-a · 华东");

@@ -150,7 +150,7 @@ Only the latest result per prober, node, address, and port is kept; results not 
 
 ## Node metrics
 
-Nodes with `metrics-v1` (Linux) report host metrics in every heartbeat (15 seconds). The **Metrics** column of the node list shows CPU and memory; **Metrics** in the node's details shows them all with **Reported …**, or **No metrics**.
+Nodes with `metrics-v1` (Linux) report host metrics in every heartbeat (15 seconds). Node cards show CPU and memory as gauges, egress, active connections and the 1-minute load; **Metrics** in the node's details shows them all with **Reported …**, or **No metrics**.
 
 | Metric | Source |
 | --- | --- |
@@ -179,7 +179,7 @@ Configure addresses:
 
 ### Nodes without a public address
 
-A node behind NAT that reports only private addresses, with none configured, gives DNS nothing to answer with: the **IP** column of the node list and **Scheduling addresses** in its details are marked **No public address**.
+A node behind NAT that reports only private addresses, with none configured, gives DNS nothing to answer with: **IP** on the node card and **Scheduling addresses** in its details are marked **No public address**.
 
 | Item | Behavior |
 | --- | --- |
