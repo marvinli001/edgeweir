@@ -38,7 +38,7 @@ The list shows active bans only (neither expired nor lifted), newest first, and 
 | Site | Site name; "Global" for global bans |
 | Reason | Why the address is banned |
 | Source | "Manual" and the operator; "Automatic" and the node and trigger (metric, observed / threshold, window in seconds); automatic bans that are not sent to other nodes are marked "Not shared" |
-| Expires | Time left; hover for the expiry time |
+| Expires | A status light and the time left; hover for the expiry time. A ban that expired since the list was last refreshed shows "Expired" |
 
 ## Rules
 

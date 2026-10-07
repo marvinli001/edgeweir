@@ -449,7 +449,7 @@ GeoIP fields read MMDB files on the node. Nodes download no updates and send no 
    sudo systemctl restart edgeweir-node
    ```
 
-5. Verify: **Protection settings → GeoIP databases** shows "Country: Ready" and "ASN: Ready" for the node, plus "Subdivision: Ready" when a City MMDB is configured.
+5. Verify: in **Protection settings → GeoIP databases**, the node's row shows "Ready" under "Country" and "ASN", and under "Subdivision" too when a City MMDB is configured.
 
 | Variable | Flag | Default | Description |
 | --- | --- | --- | --- |
