@@ -25,6 +25,7 @@ Certificate upload, ACME requests and renewal, and a site's HTTPS, TLS, HTTP/2, 
 | Chain | 1–10 certificates, up to 128 KiB; each signed by the next; certificates only: PEM with a private key in it is refused ("The chain may contain only certificates; put the private key in its own field") |
 | Leaf | Not a CA certificate, has DNS SANs, currently valid |
 | Private key | Matches the leaf, up to 32 KiB |
+| EC keys | Certificates and private key use a named curve (the curve's OID); explicit curve parameters are refused |
 
 Only the re-encoded certificates and the PKCS #8 private key are stored; any other text in the pasted content is not. Uploaded certificates do not renew automatically (**Automatic renewal disabled**); before expiry, upload a new certificate and select it on the sites. An expired certificate's card shows **Expired** and "Expired …".
 
@@ -270,6 +271,8 @@ A change saved in the console or with an AccessKey is published even when it nee
 | "The chain must hold 1 to 10 readable PEM certificates" | The chain is empty, has more than 10 certificates, or is damaged | Export the chain as PEM again |
 | "The private key cannot be read; encrypted keys are not supported" | The key is damaged or protected by a passphrase | Remove the passphrase with `openssl pkey -in key.pem -out plain.pem` and upload that |
 | "The private key does not belong to the certificate" | The key belongs to another certificate | Upload the key of the leaf certificate |
+| "The EC private key uses explicit curve parameters; convert it to a named curve" | The key spells out the curve's parameters instead of naming the curve, which nodes cannot load; LibreSSL, the `openssl` shipped with macOS, does this by default for `openssl req -newkey ec` and `openssl genpkey` | Convert it with OpenSSL 3 and upload the result: `openssl pkey -in key.pem -ec_param_enc named_curve -out key-named.pem` (LibreSSL cannot convert it); add `-pkeyopt ec_param_enc:named_curve` when generating keys |
+| "A certificate's EC key uses explicit curve parameters; reissue it with a named-curve key" | The certificate was issued for such a key, for example a self-signed certificate made with LibreSSL | Reissue it with the converted key, or create a new one: `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve …` |
 | "Wrong chain order: the leaf certificate first, then each issuer" | An intermediate comes before the leaf, or a certificate is not issued by the next one | Order the PEM as leaf then intermediates |
 | "The certificate is not valid now (valid from … to …)" | Not yet valid or expired (times in UTC) | Check the server clock, or use a valid certificate |
 | "The certificate has no DNS names (subject alternative names)" | The certificate has only IP addresses or only a CN | Use a certificate with DNS SANs |
