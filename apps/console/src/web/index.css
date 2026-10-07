@@ -840,9 +840,12 @@
   [data-slot="input-group-control"]:focus-visible {
     outline: none;
   }
+  /* Gauges and top-list bars: the fill is the value (the track keeps its border, if any). */
   [data-slot="checkbox"][data-checked],
   [data-slot="switch"][data-checked],
-  [data-slot="progress-indicator"] {
+  [data-slot="progress-indicator"],
+  [data-slot="meter-indicator"],
+  [data-slot="bar-fill"] {
     background-color: Highlight;
   }
   [data-slot="switch-thumb"] {

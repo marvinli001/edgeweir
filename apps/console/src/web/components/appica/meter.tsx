@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
  * A thin gauge (appica Meter on Base UI's meter role) colored by zone: the zone of `optimum` is
  * good, the next one a warning, the far one an error. By default low values are good (load); pass
  * `optimum={max}` when high values are (nodes online), and `low` to give the bottom its own zone.
- * Pair it with the value as text.
+ * Pair it with the value as text. In forced colors the fill turns Highlight and the track keeps
+ * seg-well's border (index.css).
  */
 export function Meter({
   value,

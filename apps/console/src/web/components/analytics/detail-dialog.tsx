@@ -130,6 +130,7 @@ function RankedList({
                 aria-hidden
               >
                 <span
+                  data-slot="bar-fill"
                   className="block h-full rounded-full bg-metric transition-[width] duration-500 motion-reduce:transition-none"
                   style={{ width: `${Math.min(100, share)}%` }}
                 />

@@ -64,6 +64,7 @@ export function TopRequestsCard({
                 </div>
                 <div className="h-1 overflow-hidden rounded-full bg-wash">
                   <div
+                    data-slot="bar-fill"
                     className="h-full rounded-full bg-metric transition-[width] duration-500 motion-reduce:transition-none"
                     style={{ width: `${(item.requests / maximum) * 100}%` }}
                   />

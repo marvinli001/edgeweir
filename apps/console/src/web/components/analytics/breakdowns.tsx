@@ -161,6 +161,7 @@ export function TopListCard({
                     </span>
                     <span className="h-1 overflow-hidden rounded-full bg-wash">
                       <span
+                        data-slot="bar-fill"
                         className="block h-full rounded-full bg-metric transition-[width] duration-500 motion-reduce:transition-none"
                         style={{ width: `${(item.requests / max) * 100}%` }}
                       />
