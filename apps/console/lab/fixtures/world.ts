@@ -229,17 +229,35 @@ const nodeSeeds: NodeSeed[] = [
 ];
 
 const FEATURES = [
+  "tls-v1",
+  "tls-pending-domains-v1",
+  "http01-v1",
+  "http3-v1",
   "metrics-v1",
+  "access-logs-v1",
   "bans-v1",
   "kernel-ban-v1",
   "active-health-v1",
   "session-affinity-v1",
   "challenge-v1",
+  "ja4-v1",
   "origin-http2-v1",
+  "brotli-v1",
+  "zstd-v1",
+  "modsecurity-v1",
   "error-pages-v1",
   "purge-tag-v1",
   "prefetch-v2",
+  "probe-health-v1",
+  "rule-log-v1",
+  "rules-v1",
   "rules-v2",
+  "rules-v3",
+  "l4-v1",
+  "geoip-country-v1",
+  "geoip-subdivision-v1",
+  "geoip-city-v1",
+  "geoip-asn-v1",
 ];
 
 export const nodes: Node[] = nodeSeeds.map((seed, index) => {
