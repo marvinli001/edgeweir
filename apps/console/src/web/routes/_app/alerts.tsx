@@ -276,15 +276,9 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                         </StatusDot>
                       )}
                     </div>
-                    {/* Sites in a well (machine names), the alert kinds as chips under them. */}
-                    <div
-                      className="flex flex-wrap gap-1 font-mono"
-                      data-testid="alert-subscription-sites"
-                    >
+                    <div className="flex flex-wrap gap-1" data-testid="alert-subscription-sites">
                       {sub.allSites ? (
-                        <Badge variant="secondary" className="font-sans">
-                          {m.alert_all_sites()}
-                        </Badge>
+                        <Badge variant="secondary">{m.alert_all_sites()}</Badge>
                       ) : (
                         <>
                           {sub.sites.slice(0, SITE_BADGES).map((site) => (
@@ -293,9 +287,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                             </Badge>
                           ))}
                           {sub.sites.length > SITE_BADGES ? (
-                            <Badge variant="secondary" className="font-sans">
-                              {`+${sub.sites.length - SITE_BADGES}`}
-                            </Badge>
+                            <Badge variant="secondary">{`+${sub.sites.length - SITE_BADGES}`}</Badge>
                           ) : null}
                         </>
                       )}
@@ -379,17 +371,20 @@ function EventsCard() {
                     <span className="order-1 min-w-0 font-medium [overflow-wrap:anywhere] sm:order-none">
                       {event.siteName}
                     </span>
-                    <span className="order-3 flex min-w-0 sm:order-none">
-                      <Badge variant="outline" className="max-w-full truncate">
-                        {label(event.kind)}
-                      </Badge>
+                    {/* Phones: the kind and the time share the second line. */}
+                    <span className="order-3 col-span-2 flex min-w-0 items-center justify-between gap-3 sm:order-none sm:contents">
+                      <span className="flex min-w-0">
+                        <Badge variant="outline" className="max-w-full justify-start">
+                          <span className="truncate">{label(event.kind)}</span>
+                        </Badge>
+                      </span>
+                      <time
+                        dateTime={event.occurredAt}
+                        className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums sm:justify-self-end"
+                      >
+                        {formatDateTime(event.occurredAt)}
+                      </time>
                     </span>
-                    <time
-                      dateTime={event.occurredAt}
-                      className="order-4 justify-self-end text-xs whitespace-nowrap text-muted-foreground tabular-nums sm:order-none"
-                    >
-                      {formatDateTime(event.occurredAt)}
-                    </time>
                   </li>
                 );
               })}
