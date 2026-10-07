@@ -73,7 +73,7 @@ Objects created by setup:
    curl -fsSL https://console.example.com/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server https://console.example.com:8443 --ca-sha256 <CA fingerprint>
    ```
 
-4. Verify: every step of the dialog's **Progress** completes; the node appears in the node table of **Clusters & nodes**, **Status** is **Online**, and **Applied** shows **In sync**.
+4. Verify: every step of the dialog's **Progress** completes; the node appears among the node cards of **Clusters & nodes**, **Online**, with **In sync** next to **Applied**.
 
 The token is single-use. For the installer's checks, the download mirror, and failure handling, see [Adding nodes](../deploy/nodes.en.md).
 
