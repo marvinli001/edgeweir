@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   bigserial,
   boolean,
@@ -44,6 +45,20 @@ export interface ClusterClientIp {
   dropForwardedFor: boolean;
 }
 
+/**
+ * How a cluster's nodes answer hosts no site serves and requests by node IP
+ * or without a Host (null: the platform's unknown host page for both, scan
+ * protection off). page | close (444) | site (the cluster's default site).
+ */
+export interface ClusterUnknownHosts {
+  unknownHost: "page" | "close" | "site";
+  ipAccess: "page" | "close" | "site";
+  /** Unknown SNI gets the default site's certificate (unknownHost site only). */
+  defaultCertificate: boolean;
+  /** Scan protection: ban an address after more than `threshold` requests in 60 s. */
+  scan: { enabled: boolean; threshold: number; banSeconds: number };
+}
+
 export const cluster = pgTable("cluster", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
@@ -53,6 +68,15 @@ export const cluster = pgTable("cluster", {
   extraHttpsPorts: integer("extra_https_ports").array().notNull().default(sql`'{}'::integer[]`),
   /** The client address setting; null is direct. */
   clientIp: jsonb("client_ip").$type<ClusterClientIp>(),
+  /** Handling of unknown hosts and node IP access; null: the defaults. */
+  unknownHosts: jsonb("unknown_hosts").$type<ClusterUnknownHosts>(),
+  /**
+   * The site unknown hosts or node IP access may be handed to (an enabled
+   * site of this cluster); cleared when the site is deleted.
+   */
+  defaultSiteId: uuid("default_site_id").references((): AnyPgColumn => site.id, {
+    onDelete: "set null",
+  }),
   /** Cache zone size of every node in GiB (1-65536); node.cache_max_size_gb overrides it. */
   cacheMaxSizeGb: integer("cache_max_size_gb").notNull().default(10),
   /** Cached objects not requested for this many days are removed (1-90). */
@@ -281,10 +305,19 @@ export const site = pgTable(
     requestBodyLimit: bigint("request_body_limit", { mode: "number" })
       .notNull()
       .default(104_857_600),
+    /**
+     * First label of the site's CNAME target `<prefix>.<cluster domain>`:
+     * 8 random characters for new sites, the site id for sites created
+     * before CNAME prefixes. Unique across sites and layer-4 applications.
+     */
+    cnamePrefix: text("cname_prefix").notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("site_cluster_idx").on(t.clusterId)],
+  (t) => [
+    index("site_cluster_idx").on(t.clusterId),
+    uniqueIndex("site_cname_prefix_uq").on(t.cnamePrefix),
+  ],
 );
 
 /**
@@ -334,15 +367,19 @@ export const siteDomain = pgTable(
     siteId: uuid("site_id")
       .notNull()
       .references(() => site.id, { onDelete: "cascade" }),
-    /** Lowercase host name; for wildcards the suffix without "*." */
+    /**
+     * Lowercase ASCII host name (exact); the suffix without "*." (wildcard)
+     * or "." (suffix); the pattern without "~" (regex).
+     */
     name: text("name").notNull(),
-    wildcard: boolean("wildcard").notNull().default(false),
+    /** exact | wildcard | suffix | regex (contract DOMAIN_KINDS) */
+    kind: text("kind").notNull().default("exact"),
     createdAt: createdAt(),
   },
   (t) => [
-    // A host name routes to exactly one site.
-    uniqueIndex("site_domain_name_uq").on(t.name, t.wildcard),
-    uniqueIndex("site_domain_site_name_uq").on(t.siteId, t.name, t.wildcard),
+    // A domain (name and form) belongs to exactly one site.
+    uniqueIndex("site_domain_name_uq").on(t.name, t.kind),
+    uniqueIndex("site_domain_site_name_uq").on(t.siteId, t.name, t.kind),
     index("site_domain_site_idx").on(t.siteId),
   ],
 );

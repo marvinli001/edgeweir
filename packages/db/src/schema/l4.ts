@@ -12,7 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { certificate } from "./certificates";
-import { cluster } from "./core";
+import { cluster, site } from "./core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
 
@@ -81,13 +81,21 @@ export const l4App = pgTable(
     }),
     /** 1.2 | 1.3, with a certificate. */
     tlsMinimumVersion: text("tls_minimum_version").notNull().default("1.2"),
+    /**
+     * First label of the application's CNAME target (as site.cname_prefix,
+     * unique across both): random for new applications, the id for older ones.
+     */
+    cnamePrefix: text("cname_prefix").notNull(),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (t) => [uniqueIndex("l4_app_cluster_protocol_port_uq").on(t.clusterId, t.protocol, t.port)],
+  (t) => [
+    uniqueIndex("l4_app_cluster_protocol_port_uq").on(t.clusterId, t.protocol, t.port),
+    uniqueIndex("l4_app_cname_prefix_uq").on(t.cnamePrefix),
+  ],
 );
 
 /** An origin of a layer-4 application, in the order the operator saved them. */
@@ -132,5 +140,30 @@ export const l4MinuteStats = pgTable(
   (t) => [
     primaryKey({ columns: [t.minute, t.nodeId, t.appId] }),
     index("l4_minute_stats_app_idx").on(t.appId, t.minute),
+  ],
+);
+
+/**
+ * CNAME prefixes a site or layer-4 application gave up: their names stay in
+ * the cluster's DNS plan, and nobody else may take them, until `expires_at`
+ * (24 hours after the change); then a job deletes the row and republishes.
+ */
+export const cnameRetired = pgTable(
+  "cname_retired",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clusterId: uuid("cluster_id")
+      .notNull()
+      .references(() => cluster.id, { onDelete: "cascade" }),
+    siteId: uuid("site_id").references(() => site.id, { onDelete: "cascade" }),
+    l4AppId: uuid("l4_app_id").references(() => l4App.id, { onDelete: "cascade" }),
+    prefix: text("prefix").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("cname_retired_prefix_uq").on(t.prefix),
+    index("cname_retired_cluster_idx").on(t.clusterId),
+    index("cname_retired_expires_idx").on(t.expiresAt),
   ],
 );
