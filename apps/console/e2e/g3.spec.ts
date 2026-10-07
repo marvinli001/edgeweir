@@ -79,7 +79,8 @@ test("G3: the cache tab turns Zstandard and Brotli on with their levels and keep
   await expect(brotli).toBeEnabled();
   await expect(page.getByTestId("https-zstd-level")).toHaveValue("3");
   await expect(page.getByTestId("https-brotli-level")).toHaveValue("6");
-  await expect(page.getByTestId("https-gzip-level")).toHaveCount(0);
+  // Gzip has a level since G15; empty keeps the nodes' default.
+  await expect(page.getByTestId("https-gzip-level")).toHaveValue("");
   await expect(page.getByTestId("https-brotli-types")).toHaveValue(/text\/plain/);
   await expect(save).toBeDisabled();
 
