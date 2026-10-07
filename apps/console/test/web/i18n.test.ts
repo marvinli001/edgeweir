@@ -156,6 +156,19 @@ describe("i18n messages", () => {
     expect(keys).toEqual([]);
   });
 
+  it("translates key, scope and token in zh-CN, except in provider and credential field names", () => {
+    // Names as the provider's own console shows them ("Zone Token", "Secret Key") stay English.
+    const names = /^(dns_provider_|dns_field_|site_origin_s3_|error_s3_)/;
+    const english = /(?<![\w-])(?:[Kk]ey|[Ss]cope|[Tt]oken)s?(?![\w-])/;
+    const untranslated = Object.entries(zh)
+      .filter(([key]) => key !== "$schema" && !names.test(key))
+      .filter(([, message]) =>
+        patterns(message).some((text) => english.test(text.replace(/\{\w+\}/g, ""))),
+      )
+      .map(([key]) => key);
+    expect(untranslated).toEqual([]);
+  });
+
   it("uses the same placeholders in every locale and variant and never leaves a message empty", () => {
     for (const key of Object.keys(zh)) {
       if (key === "$schema") continue;

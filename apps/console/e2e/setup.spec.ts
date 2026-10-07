@@ -11,15 +11,15 @@ test("first-run setup needs the setup token printed in the console log", async (
 
   await page.goto("/");
   await expect(page).toHaveURL(/\/setup/);
-  await page.getByLabel("Setup token").fill("ews_not-the-token");
+  await page.getByLabel("初始化令牌").fill("ews_not-the-token");
   await page.getByLabel("姓名").fill("E2E Admin");
   await page.getByLabel("邮箱").fill(email);
   await page.getByLabel("密码").fill(password);
   await page.getByTestId("setup-submit").click();
   // Server errors are localized by their stable code.
-  await expect(page.getByTestId("setup-error")).toHaveText("Setup token 无效");
+  await expect(page.getByTestId("setup-error")).toHaveText("初始化令牌无效");
 
-  await page.getByLabel("Setup token").fill(setupToken);
+  await page.getByLabel("初始化令牌").fill(setupToken);
   await page.getByTestId("setup-submit").click();
   // Without a node the console starts with adding one: the add-node dialog of the default cluster.
   await expect(page.getByTestId("page-title")).toHaveText("集群与节点");
