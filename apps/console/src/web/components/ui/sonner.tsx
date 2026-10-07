@@ -30,7 +30,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "color-mix(in oklch, var(--overlay) 84%, transparent)",
+          "--normal-bg": "var(--glass-overlay)",
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "transparent",
           "--border-radius": "var(--radius-2xl)",
@@ -38,8 +38,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
       toastOptions={{
         classNames: {
-          // Raised glass: the overlay surface, frosted, with the top elevation.
-          toast: "cn-toast shadow-elev-3! backdrop-blur-xl backdrop-saturate-150",
+          // Overlay glass at the top elevation with a 2px edge in the type's color (toast-lit).
+          toast: "cn-toast toast-lit",
         },
       }}
       {...props}
