@@ -17,10 +17,12 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
+import { CardTable } from "@/components/clusters/card-table";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
+import { enterDelay } from "@/components/page";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
 import { EmptyState, QueryView } from "@/components/states";
@@ -196,6 +198,7 @@ export function ClusterScheduling({ clusterId }: { clusterId: string }) {
               columns={columns}
               getRowId={(r) => r.id}
               testId="scheduling-rules-table"
+              pinFirstColumn
             />
           )}
         </QueryView>
@@ -729,62 +732,69 @@ function PreviewRuleBlock({ rule, index }: { rule: PreviewRule; index: number })
   const regionName = useRegionName();
   return (
     <div
-      className="overflow-hidden rounded-2xl border bg-card shadow-xs animate-enter"
-      style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+      className="overflow-hidden rounded-2xl bg-card shadow-elev-1 edge-lit animate-enter [--card-spacing:--spacing(4)]"
+      style={enterDelay(index, 40)}
       data-testid="scheduling-preview-rule"
       data-rule-id={rule.ruleId}
     >
-      <div className="flex flex-wrap items-center gap-2 border-b bg-muted/60 px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
         <span className="mr-auto font-medium">{rule.ruleName}</span>
         {rule.enabled ? null : <Badge variant="outline">{m.nodes_disabled()}</Badge>}
         <Badge variant="outline">{rule.lineName ?? m.scheduling_line_all()}</Badge>
         <Badge variant="secondary">{actionLabel(rule.action)}</Badge>
       </div>
       {rule.nodes.length === 0 ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">{m.nodes_empty_title()}</p>
+        <p className="border-t border-edge px-4 py-3 text-sm text-muted-foreground">
+          {m.nodes_empty_title()}
+        </p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{m.nodes_col_name()}</TableHead>
-              <TableHead>{m.nodes_col_status()}</TableHead>
-              <TableHead>{m.scheduling_conditions()}</TableHead>
-              <TableHead>{m.scheduling_outcome()}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rule.nodes.map((node) => (
-              <TableRow
-                key={node.nodeId}
-                data-testid="scheduling-preview-node"
-                data-node-id={node.nodeId}
-                data-state={node.state}
-              >
-                <TableCell className="align-top font-medium">{node.nodeName}</TableCell>
-                <TableCell className="align-top">
-                  <Badge variant={stateVariant(node.state)} data-testid="scheduling-preview-state">
-                    {stateLabel(node.state)}
-                  </Badge>
-                </TableCell>
-                <TableCell className="align-top">
-                  <ul className="flex flex-col gap-1">
-                    {node.conditions.map((c, i) => (
-                      <PreviewConditionItem
-                        // biome-ignore lint/suspicious/noArrayIndexKey: conditions are identified by their order
-                        key={i}
-                        condition={c}
-                        regionName={regionName}
-                      />
-                    ))}
-                  </ul>
-                </TableCell>
-                <TableCell className="align-top text-xs">
-                  <Outcome node={node} />
-                </TableCell>
+        <CardTable>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{m.nodes_col_name()}</TableHead>
+                <TableHead>{m.nodes_col_status()}</TableHead>
+                <TableHead>{m.scheduling_conditions()}</TableHead>
+                <TableHead>{m.scheduling_outcome()}</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {rule.nodes.map((node) => (
+                <TableRow
+                  key={node.nodeId}
+                  data-testid="scheduling-preview-node"
+                  data-node-id={node.nodeId}
+                  data-state={node.state}
+                >
+                  <TableCell className="align-top font-medium">{node.nodeName}</TableCell>
+                  <TableCell className="align-top">
+                    <Badge
+                      variant={stateVariant(node.state)}
+                      data-testid="scheduling-preview-state"
+                    >
+                      {stateLabel(node.state)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="align-top">
+                    <ul className="flex flex-col gap-1">
+                      {node.conditions.map((c, i) => (
+                        <PreviewConditionItem
+                          // biome-ignore lint/suspicious/noArrayIndexKey: conditions are identified by their order
+                          key={i}
+                          condition={c}
+                          regionName={regionName}
+                        />
+                      ))}
+                    </ul>
+                  </TableCell>
+                  <TableCell className="align-top text-xs">
+                    <Outcome node={node} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardTable>
       )}
     </div>
   );
