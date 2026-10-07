@@ -45,7 +45,10 @@ function BreadcrumbLink({ className, render, ...props }: useRender.ComponentProp
     defaultTagName: "a",
     props: mergeProps<"a">(
       {
-        className: cn("transition-colors hover:text-foreground", className),
+        className: cn(
+          "rounded-md transition-colors outline-hidden focus-lit hover:text-foreground",
+          className,
+        ),
       },
       props,
     ),
@@ -63,7 +66,7 @@ function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {
       role="link"
       aria-disabled="true"
       aria-current="page"
-      className={cn("font-normal text-foreground", className)}
+      className={cn("font-medium text-foreground", className)}
       {...props}
     />
   );
@@ -75,7 +78,7 @@ function BreadcrumbSeparator({ children, className, ...props }: React.ComponentP
       data-slot="breadcrumb-separator"
       role="presentation"
       aria-hidden="true"
-      className={cn("[&>svg]:size-3.5", className)}
+      className={cn("text-muted-foreground/70 [&>svg]:size-3.5", className)}
       {...props}
     >
       {children ?? <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />}

@@ -7,9 +7,11 @@ const alertVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-card text-card-foreground",
+        // A sunk callout: it sits in a page or a card without becoming a card on a card.
+        default: "border-edge bg-well text-foreground",
+        // Red text on its own tint (4.5:1 on the canvas and the card, contrast.test.ts).
         destructive:
-          "bg-card text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+          "border-destructive/20 bg-tint-destructive text-destructive *:data-[slot=alert-description]:text-destructive *:[svg]:text-current",
       },
     },
     defaultVariants: {

@@ -11,7 +11,11 @@ function Spinner({ className, ...props }: Omit<React.ComponentProps<"svg">, "str
       data-slot="spinner"
       role="status"
       aria-label={m.common_loading()}
-      className={cn("size-4 animate-spin", className)}
+      // Busy state: it keeps turning under reduced motion, slower.
+      className={cn(
+        "size-4 animate-spin motion-reduce:animate-[spin_2s_linear_infinite]",
+        className,
+      )}
       {...props}
     />
   );
