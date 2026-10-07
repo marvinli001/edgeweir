@@ -12,6 +12,8 @@ const SHOP = id(5, 2);
 const LAGGING_NODE = id(4, 4);
 /** The first layer-4 application (fixtures/infra.ts). */
 const L4_APP = id(33, 1);
+/** na-edge, behind a load balancer that names the client in a header (fixtures/world.ts). */
+const NA_CLUSTER = id(2, 3);
 
 export interface LabPage {
   name: string;
@@ -51,6 +53,11 @@ export const PAGES: LabPage[] = [
   { name: "clusters-node", group: "infrastructure", path: `/clusters?node=${LAGGING_NODE}` },
   { name: "clusters-dns", group: "infrastructure", path: "/clusters?tab=dns" },
   { name: "clusters-scheduling", group: "infrastructure", path: "/clusters?tab=scheduling" },
+  {
+    name: "clusters-network",
+    group: "infrastructure",
+    path: `/clusters?tab=network&cluster=${NA_CLUSTER}`,
+  },
   { name: "clusters-ports", group: "infrastructure", path: "/clusters?tab=ports" },
   { name: "clusters-regions", group: "infrastructure", path: "/clusters?view=regions" },
   { name: "l4", group: "infrastructure", path: "/l4" },

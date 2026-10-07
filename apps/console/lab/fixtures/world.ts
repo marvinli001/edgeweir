@@ -7,6 +7,7 @@ import {
   type AttentionItem,
   type ClientIpSettings,
   type Cluster,
+  type ClusterListenPorts,
   DEFAULT_REQUEST_BODY_LIMIT,
   type Node,
   type NodeGroup,
@@ -948,6 +949,9 @@ export const clusters: Cluster[] = clusterSeeds.map((seed) => {
   };
 });
 
+const clusterSeedOf = (clusterId: string) => clusterSeeds.find((c) => c.id === clusterId);
+
+/** Active nodes of a cluster without a node feature. */
 export const nodesWithout = (clusterId: string, feature: string) =>
   nodes
     .filter(
@@ -957,6 +961,26 @@ export const nodesWithout = (clusterId: string, feature: string) =>
         !n.supportedFeatures.includes(feature),
     )
     .map((n) => ({ id: n.id, name: n.name }));
+
+/** A cluster's extra listener ports (clusters.listenPorts). */
+export function listenPortsOf(clusterId: string): ClusterListenPorts {
+  const listen = clusterSeedOf(clusterId)?.listen ?? { http: [], https: [] };
+  return {
+    clusterId,
+    httpPorts: listen.http,
+    httpsPorts: listen.https,
+    nodesWithout: nodesWithout(clusterId, "edge-ports-v1"),
+  };
+}
+
+/** A cluster's client address setting (clusters.clientIp). */
+export function clientIpOf(clusterId: string) {
+  return {
+    clusterId,
+    settings: clusterSeedOf(clusterId)?.clientIp ?? DIRECT,
+    nodesWithout: nodesWithout(clusterId, "client-ip-v1"),
+  };
+}
 
 export const attention: AttentionItem[] = [
   {

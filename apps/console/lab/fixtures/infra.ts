@@ -26,10 +26,12 @@ import { type Fixtures, notFound } from "./define";
 import {
   ago,
   ahead,
+  clientIpOf,
   clusters,
   DAY,
   HOUR,
   id,
+  listenPortsOf,
   MINUTE,
   NOW,
   nodeGroups,
@@ -1324,13 +1326,19 @@ export const infraFixtures: Fixtures = {
         sites: { added: [], changed, removed: [] },
       };
     },
-    portPools: ({ clusterId }) => ({
-      clusterId,
-      pools: portPools[clusterId] ?? [],
-      reservedPorts: [80, 443],
-      nodesWithoutL4: nodesWithout(clusterId, "l4-v1"),
-      nodesWithoutL4V2: nodesWithout(clusterId, "l4-v2"),
-    }),
+    portPools: ({ clusterId }) => {
+      const listen = listenPortsOf(clusterId);
+      return {
+        clusterId,
+        pools: portPools[clusterId] ?? [],
+        // The HTTP(S) listeners: 80, 443 and the cluster's extra ports.
+        reservedPorts: [80, 443, ...listen.httpPorts, ...listen.httpsPorts].sort((a, b) => a - b),
+        nodesWithoutL4: nodesWithout(clusterId, "l4-v1"),
+        nodesWithoutL4V2: nodesWithout(clusterId, "l4-v2"),
+      };
+    },
+    listenPorts: ({ clusterId }) => listenPortsOf(clusterId),
+    clientIp: ({ clusterId }) => clientIpOf(clusterId),
     createEnrollmentToken: (input) => {
       minted = { at: Date.now(), name: input.nodeName ?? "" };
       return {
