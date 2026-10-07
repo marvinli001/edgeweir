@@ -94,7 +94,8 @@ export function PurgeMethodCard({ site }: { site: Site }) {
           />
           <Field data-disabled={blocked || undefined}>
             <FieldLabel htmlFor="purge-method-key">{m.site_purge_method_key()}</FieldLabel>
-            <div className="flex min-w-0 gap-2">
+            {/* Below sm the input takes its own line, so the saved-key placeholder is not cut off. */}
+            <div className="flex min-w-0 flex-wrap gap-2">
               <Input
                 id="purge-method-key"
                 value={key}
@@ -106,7 +107,7 @@ export function PurgeMethodCard({ site }: { site: Site }) {
                   setKey(event.target.value);
                   setGenerated(false);
                 }}
-                className="min-w-0 font-mono text-sm"
+                className="min-w-0 flex-1 font-mono text-sm max-sm:basis-full"
                 data-testid="purge-method-key"
               />
               {generated ? <CopyButton value={key} /> : null}
