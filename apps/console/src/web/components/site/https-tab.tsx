@@ -468,8 +468,8 @@ function HttpsEditor({
   const client = useQueryClient();
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   const redirectAvailable = features.data?.edgePorts.available ?? true;
+  // Force HTTPS comes first, with its redirect settings under it; then the other switches.
   const flags = [
-    ["forceHttps", m.cert_force_https()],
     ["http2", m.cert_http2()],
     ["http3", m.cert_http3()],
     ["hstsIncludeSubdomains", m.cert_hsts_subdomains()],
@@ -556,18 +556,16 @@ function HttpsEditor({
             disabled={!settings.certificateId}
             onChange={(value) => setSettings({ ...settings, hstsMaxAge: Number(value) })}
           />
-          {flags.map(([key, label]) => (
-            <SwitchField
-              key={key}
-              id={key}
-              label={label}
-              checked={settings[key]}
-              disabled={key === "forceHttps" && !settings.certificateId}
-              onCheckedChange={(value) => setSettings({ ...settings, [key]: value })}
-            />
-          ))}
+          <SwitchField
+            id="forceHttps"
+            label={m.cert_force_https()}
+            checked={settings.forceHttps}
+            disabled={!settings.certificateId}
+            onCheckedChange={(forceHttps) => setSettings({ ...settings, forceHttps })}
+          />
           {settings.forceHttps ? (
-            // The redirect's settings hang off the force HTTPS switch, marked by a rule beside them.
+            // The redirect's settings sit right under the force HTTPS switch (in the reading order
+            // too), marked by a rule beside them; the other switches follow.
             <div
               className="grid gap-4 border-l-2 border-border pl-3 animate-enter sm:col-span-2 sm:grid-cols-2"
               data-testid="https-redirect"
@@ -624,6 +622,15 @@ function HttpsEditor({
               )}
             </div>
           ) : null}
+          {flags.map(([key, label]) => (
+            <SwitchField
+              key={key}
+              id={key}
+              label={label}
+              checked={settings[key]}
+              onCheckedChange={(value) => setSettings({ ...settings, [key]: value })}
+            />
+          ))}
         </CardContent>
         <SaveBar
           dirty={JSON.stringify(httpsOf(settings)) !== JSON.stringify(httpsOf(initial))}
