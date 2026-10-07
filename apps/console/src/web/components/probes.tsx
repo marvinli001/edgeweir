@@ -175,7 +175,7 @@ export function ProbesPanel({
           <div className="flex flex-col">
             <button
               type="button"
-              className="w-fit text-left font-medium underline-offset-4 hover:underline"
+              className="w-fit rounded-sm text-left font-medium underline-offset-4 outline-none focus-lit hover:underline"
               onClick={() => action.show({ kind: "results", probe: row.original })}
               data-testid="probe-name"
             >
