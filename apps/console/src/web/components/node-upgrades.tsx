@@ -12,17 +12,20 @@ import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
+import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { type DialogProps, useDialogState } from "@/hooks/use-dialog-state";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { taskErrorText } from "@/lib/node-errors";
 import { orpc } from "@/lib/orpc";
 
-const stateLabel = (state: UpgradeJob["state"] | UpgradeJob["deliveries"][number]["state"]) =>
+type JobState = UpgradeJob["state"] | UpgradeJob["deliveries"][number]["state"];
+
+const stateLabel = (state: JobState) =>
   ({
     canary: m.upgrade_canary,
     rollout: m.upgrade_rollout,
@@ -33,6 +36,16 @@ const stateLabel = (state: UpgradeJob["state"] | UpgradeJob["deliveries"][number
     pending: m.upgrade_pending,
     running: m.upgrade_running,
   })[state]?.() ?? state;
+
+/** A state's light: running work pulses until it ends, results hold still. */
+const stateTone = (state: JobState): { tone: StatusTone; pulse?: boolean } =>
+  state === "succeeded"
+    ? { tone: "good" }
+    : state === "failed"
+      ? { tone: "bad" }
+      : state === "canary" || state === "rollout" || state === "running"
+        ? { tone: "warn", pulse: true }
+        : { tone: "idle" };
 
 /** Architectures node releases are built for. */
 const RELEASE_ARCHES = ["amd64", "arm64"];
@@ -106,22 +119,17 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
             <Card key={job.id} data-testid={`upgrade-${job.version}`}>
               <CardHeader className="flex flex-row flex-wrap items-center gap-3">
                 <CardTitle className="min-w-0 flex-1 break-all font-mono">{job.version}</CardTitle>
-                <Badge variant="outline">{stateLabel(job.state)}</Badge>
-                <span className="text-xs text-muted-foreground">{timeAgo(job.createdAt)}</span>
+                <StatusDot {...stateTone(job.state)}>{stateLabel(job.state)}</StatusDot>
+                <span
+                  className="text-xs text-muted-foreground"
+                  title={formatDateTime(job.createdAt)}
+                >
+                  {timeAgo(job.createdAt)}
+                </span>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex flex-wrap items-center gap-3 text-sm">
-                  <span className="min-w-0 flex-1 break-all">
-                    {m.upgrade_group_label({ name: job.groupName })}
-                  </span>
-                  <span className="tabular-nums">
-                    {m.upgrade_progress({
-                      done: job.deliveries.filter((d) => d.state === "succeeded").length,
-                      total: job.deliveries.length,
-                    })}
-                  </span>
-                </div>
-                <div className="divide-y rounded-xl border">
+                <UpgradeProgress job={job} />
+                <div className="divide-y divide-edge overflow-hidden rounded-xl sunk-well">
                   {job.deliveries.map((d) => (
                     <Delivery key={d.id} delivery={d} version={job.version} jobState={job.state} />
                   ))}
@@ -285,7 +293,7 @@ function UpgradeDialog({
       {blocked.length ? (
         <Field data-testid="upgrade-blocked">
           <FieldLabel>{m.upgrade_blocked()}</FieldLabel>
-          <ul className="divide-y rounded-xl border text-sm">
+          <ul className="divide-y divide-edge overflow-hidden rounded-xl text-sm sunk-well">
             {blocked.map(({ node, reason }) => (
               <li
                 key={node.id}
@@ -304,6 +312,24 @@ function UpgradeDialog({
   );
 }
 
+/** The job's group and how many of its deliveries succeeded, as words and a bar. */
+function UpgradeProgress({ job }: { job: UpgradeJob }) {
+  const done = job.deliveries.filter((d) => d.state === "succeeded").length;
+  const total = job.deliveries.length;
+  const progress = m.upgrade_progress({ done, total });
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <span className="min-w-0 flex-1 break-all">
+          {m.upgrade_group_label({ name: job.groupName })}
+        </span>
+        <span className="font-medium tabular-nums">{progress}</span>
+      </div>
+      <Progress value={total ? (done / total) * 100 : 0} aria-label={progress} />
+    </div>
+  );
+}
+
 function Delivery({
   delivery: d,
   version,
@@ -314,16 +340,16 @@ function Delivery({
   jobState: UpgradeJob["state"];
 }) {
   return (
-    <div className="space-y-2 p-3 text-sm">
+    <div className="space-y-2 px-3 py-2.5 text-sm">
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1 break-all font-medium">{d.nodeName}</span>
         <span className="text-xs text-muted-foreground">
           {d.phase === "canary" ? m.upgrade_canary() : m.upgrade_rollout()}
         </span>
-        <Badge variant="outline">
-          {/* After promotion the rest follows in batches. */}
+        {/* After promotion the rest follows in batches. */}
+        <StatusDot {...stateTone(d.state)}>
           {d.state === "held" && jobState === "rollout" ? m.upgrade_queued() : stateLabel(d.state)}
-        </Badge>
+        </StatusDot>
       </div>
       {d.deadlineAt ? (
         <p className="text-xs text-muted-foreground">
@@ -338,7 +364,9 @@ function Delivery({
       {d.message && d.state === "failed" ? (
         <details className="text-xs">
           <summary className="cursor-pointer text-muted-foreground">{m.upgrade_details()}</summary>
-          <pre className="mt-2 whitespace-pre-wrap break-all font-mono">{d.message}</pre>
+          <pre className="mt-2 rounded-lg bg-card p-2 whitespace-pre-wrap break-all font-mono">
+            {d.message}
+          </pre>
         </details>
       ) : null}
     </div>

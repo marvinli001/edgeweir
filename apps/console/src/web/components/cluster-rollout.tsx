@@ -192,7 +192,9 @@ function RolloutStatus({ rollout }: { rollout: ClusterRollout }) {
                 className="inline-flex items-center gap-1.5"
                 data-testid="rollout-canary-node"
               >
-                <StatusDot tone={node.online ? "good" : "idle"}>{node.name}</StatusDot>
+                <StatusDot tone={node.online ? "good" : "idle"} glow={node.online}>
+                  {node.name}
+                </StatusDot>
                 <Badge variant="outline" className="font-mono">
                   #{node.appliedRevision}
                 </Badge>
