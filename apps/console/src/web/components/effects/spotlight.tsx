@@ -3,7 +3,8 @@
  * light is the --spotlight token, it only runs for a fine hovering pointer without reduced motion,
  * and it no longer restyles its parent (the parent is positioned and clips).
  */
-import { motion, type SpringOptions, useSpring, useTransform } from "motion/react";
+import { type SpringOptions, useSpring, useTransform } from "motion/react";
+import * as motion from "motion/react-m";
 import * as React from "react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";

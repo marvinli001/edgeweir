@@ -99,6 +99,16 @@ describe("UI rules (ADR-0003)", () => {
     expect(outside).toEqual([]);
   });
 
+  it("animates with Motion's light components under LazyMotion (no drag or layout code in the entry)", () => {
+    // `motion.*` from "motion/react" bundles drag, pan and layout projection, and Rolldown puts
+    // Motion in a chunk the entry preloads; `motion/react-m` + LazyMotion(domAnimation) does not.
+    const full = /import\s*\{[^}]*\b(?:motion|m)\b[^}]*\}\s*from\s*"motion\/react"/;
+    const found = webSources.filter((file) => full.test(read(file)));
+    expect(found).toEqual([]);
+    const settings = read("src/web/components/effects/motion-config.tsx");
+    expect(settings).toMatch(/<LazyMotion features=\{domAnimation\} strict>/);
+  });
+
   it("uses none of the excluded visual libraries (license, runtime downloads or weight)", () => {
     // GSAP (non-OSI license), React Bits and Animate UI (Commons Clause), three.js renderers,
     // Spline, Rive and dotLottie (runtime fetches from other hosts, WASM). ADR-0034.

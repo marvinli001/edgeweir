@@ -4,7 +4,8 @@
  * sized by CSS like HugeiconsIcon, and played by the row they sit in (`useIconPlay`) instead of
  * their own hover. Reduced motion never plays them.
  */
-import { motion, useAnimation, type Variants } from "motion/react";
+import { useAnimation, type Variants } from "motion/react";
+import * as motion from "motion/react-m";
 import * as React from "react";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/utils";

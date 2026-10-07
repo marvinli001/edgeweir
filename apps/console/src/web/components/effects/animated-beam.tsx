@@ -4,7 +4,7 @@
  * the pulse only runs while the beam is on screen and motion is allowed (otherwise a still pulse
  * sits on the track).
  */
-import { motion } from "motion/react";
+import * as motion from "motion/react-m";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { useLive } from "./use-live";
