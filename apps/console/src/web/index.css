@@ -69,35 +69,40 @@
 }
 
 /*
+ * Shadow composition. The lit utilities put their own shadows in Tailwind's --tw-shadow and paint
+ * the same stack Tailwind's ring utilities paint, so a focus ring (focus-visible:ring-3) adds to
+ * a well or a plate instead of replacing it, and shadow-none still removes them. Dark-mode
+ * overrides use `:where(.dark *)` so they never outrank a variant such as
+ * in-data-[slot=input-group]:shadow-none.
+ */
+
+/*
  * The primary action: a lit face over a darker plate (Sentry-style). Hovering lifts the face a
- * pixel off the plate, pressing pushes it flat; the bottom edge never moves. Forced colors drop
- * the shadows and keep the real border.
+ * pixel off the plate, pressing pushes it flat; the bottom edge never moves. Primary buttons
+ * only (Button's default variant); forced colors drop the shadows and keep the real border.
  */
 @utility btn-lit {
   --plate: color-mix(in oklch, var(--primary), black 40%);
+  --tw-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 26%), inset 0 -1px 0 oklch(0 0 0 / 12%), 0 2px 0 0 var(--plate),
+    0 4px 12px -4px color-mix(in oklch, var(--primary) 60%, transparent);
   background-image: linear-gradient(oklch(1 0 0 / 16%), oklch(1 0 0 / 0%) 60%);
   box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 26%),
-    inset 0 -1px 0 oklch(0 0 0 / 12%),
-    0 2px 0 0 var(--plate),
-    0 4px 12px -4px color-mix(in oklch, var(--primary) 60%, transparent);
+    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
   transition-property: transform, box-shadow, background-color, opacity;
   transition-duration: 160ms;
   transition-timing-function: var(--ease-lit);
   &:hover:not(:disabled, [data-disabled]) {
     transform: translateY(-1px);
-    box-shadow:
-      inset 0 1px 0 oklch(1 0 0 / 30%),
-      inset 0 -1px 0 oklch(0 0 0 / 12%),
-      0 3px 0 0 var(--plate),
+    --tw-shadow:
+      inset 0 1px 0 oklch(1 0 0 / 30%), inset 0 -1px 0 oklch(0 0 0 / 12%), 0 3px 0 0 var(--plate),
       0 8px 18px -6px color-mix(in oklch, var(--primary) 65%, transparent);
   }
   &:active:not(:disabled, [data-disabled]) {
     transform: translateY(1px);
     transition-duration: 60ms;
-    box-shadow:
-      inset 0 1px 3px oklch(0 0 0 / 28%),
-      0 0 0 0 var(--plate);
+    --tw-shadow: inset 0 1px 3px oklch(0 0 0 / 28%), 0 0 0 0 var(--plate);
   }
   @media (prefers-reduced-motion: reduce) {
     transition-property: box-shadow, background-color, opacity;
@@ -112,46 +117,85 @@
   }
 }
 
-/* A sunken field: the well color, a soft inner shadow from the top and a hairline boundary. */
+/*
+ * A sunken field: the well color, a soft inner shadow from the top and a hairline boundary.
+ * Text inputs, textareas, select triggers, input groups and ⌘K's search; the element brings its
+ * own transparent border (it shows in forced colors). Not for checkboxes or switches (toggle-well).
+ */
 @utility input-well {
   background-color: var(--well);
-  box-shadow:
+  --tw-shadow:
     inset 0 1px 2px oklch(0.2 0.03 258 / 8%),
     inset 0 0 0 1px color-mix(in oklch, var(--foreground) 11%, transparent);
-  .dark & {
-    box-shadow:
-      inset 0 1px 2px oklch(0 0 0 / 45%),
-      inset 0 0 0 1px oklch(1 0 0 / 9%);
+  box-shadow:
+    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+  &:where(.dark *) {
+    --tw-shadow: inset 0 1px 2px oklch(0 0 0 / 45%), inset 0 0 0 1px oklch(1 0 0 / 9%);
   }
 }
 
-/* The track of a segmented control (tabs): a shallow well. */
+/*
+ * The box of a checkbox and the unchecked track of a switch: a well with a stronger hairline
+ * (--control-edge, 3:1 against the card in contrast.test.ts) so the control reads as a control.
+ * Checked states replace it with the primary fill. Not for text fields (input-well).
+ */
+@utility toggle-well {
+  background-color: var(--well);
+  --tw-shadow: inset 0 1px 2px oklch(0.2 0.03 258 / 10%), inset 0 0 0 1px var(--control-edge);
+  box-shadow:
+    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+  &:where(.dark *) {
+    --tw-shadow: inset 0 1px 2px oklch(0 0 0 / 45%), inset 0 0 0 1px var(--control-edge);
+  }
+}
+
+/*
+ * The track of a segmented control (tabs) and of a progress bar: a shallow well. Forced colors
+ * give it a real border, since its hairline is a shadow.
+ */
 @utility seg-well {
   background-color: var(--well);
   box-shadow:
     inset 0 1px 2px oklch(0.2 0.03 258 / 7%),
     inset 0 0 0 1px var(--edge);
-  .dark & {
+  &:where(.dark *) {
     box-shadow:
       inset 0 1px 2px oklch(0 0 0 / 40%),
       inset 0 0 0 1px oklch(1 0 0 / 6%);
   }
+  @media (forced-colors: active) {
+    border: 1px solid CanvasText;
+  }
 }
 
-/* The raised thumb of a segmented control, with the same plate as btn-lit (neutral). */
+/*
+ * The raised thumb of a segmented control (Tabs' indicator) and of a switch, with the same plate
+ * as btn-lit (neutral). Forced colors mark the active tab with a Highlight border instead.
+ */
 @utility seg-thumb {
   background-color: var(--raised);
   box-shadow:
     var(--elev-1),
     0 1px 0 0 color-mix(in oklch, var(--foreground) 12%, transparent);
-  .dark & {
+  &:where(.dark *) {
     box-shadow:
       var(--elev-1),
       0 1px 0 0 oklch(0 0 0 / 50%);
   }
+  @media (forced-colors: active) {
+    border: 2px solid Highlight;
+  }
 }
 
-/* Dark surfaces catch the light on their top edge (a gradient hairline over the border). */
+/*
+ * Dark surfaces catch the light on their top edge (a gradient hairline over the border). Every
+ * lifted container wears it (cards, list cards, menus, popovers, tooltips, dialogs, sheets); it
+ * is invisible in light mode. Positioned elements (fixed, absolute) keep their position: those
+ * utilities come later in the stylesheet. In forced colors it becomes the container's real border.
+ * Not for table rows or list items (rows stay flat).
+ */
 @utility edge-lit {
   position: relative;
   &::after {
@@ -167,31 +211,52 @@
       linear-gradient(#000 0 0) content-box exclude,
       linear-gradient(#000 0 0);
   }
+  @media (forced-colors: active) {
+    border: 1px solid CanvasText;
+    &::after {
+      content: none;
+    }
+  }
 }
 
-/* Frosted glass, for the sticky header, ⌘K and bulk bars only (never over polled tables). */
+/*
+ * Frosted glass (--glass: the canvas, opaque enough for muted text over any content), for the
+ * sticky header and bulk action bars only; never over polled tables or charts. The token turns
+ * opaque under reduced transparency or without backdrop-filter (below the themes).
+ */
 @utility glass {
-  background-color: color-mix(in oklch, var(--background) 74%, transparent);
+  background-color: var(--glass);
   backdrop-filter: blur(14px) saturate(1.5);
-  @supports not (backdrop-filter: blur(1px)) {
-    background-color: var(--background);
-  }
   @media (prefers-reduced-transparency: reduce) {
-    background-color: var(--background);
     backdrop-filter: none;
   }
 }
 
-/* Glass over overlay surfaces (⌘K, toasts). */
+/*
+ * Glass over the overlay surface (--glass-overlay), for ⌘K only (toasts use toast-lit). On an
+ * element that also has bg-popover, add bg-glass-overlay so the fill wins the class merge.
+ */
 @utility glass-overlay {
-  background-color: color-mix(in oklch, var(--overlay) 80%, transparent);
+  background-color: var(--glass-overlay);
   backdrop-filter: blur(20px) saturate(1.6);
-  @supports not (backdrop-filter: blur(1px)) {
-    background-color: var(--overlay);
-  }
   @media (prefers-reduced-transparency: reduce) {
-    background-color: var(--overlay);
     backdrop-filter: none;
+  }
+}
+
+/*
+ * Keyboard focus for controls without a border of their own (sidebar items, tab triggers, menu
+ * buttons, links): a 1px ring plus the 3px ring/30 halo, painted as box-shadow so it follows the
+ * radius and stacks on elev-1. Bordered controls use focus-visible:border-ring + ring-3
+ * ring-ring/30 instead. Forced colors switch every focus to an outline (base rule below).
+ */
+@utility focus-lit {
+  &:focus-visible {
+    --tw-ring-shadow:
+      0 0 0 1px var(--ring), 0 0 0 4px color-mix(in oklch, var(--ring) 30%, transparent);
+    box-shadow:
+      var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+      var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
   }
 }
 
@@ -201,7 +266,7 @@
  */
 @utility lit-glow {
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--lit, var(--signal)) 22%, transparent);
-  .dark & {
+  &:where(.dark *) {
     box-shadow:
       0 0 0 3px color-mix(in oklch, var(--lit, var(--signal)) 24%, transparent),
       0 0 12px color-mix(in oklch, var(--lit, var(--signal)) 55%, transparent);
@@ -229,6 +294,42 @@
   letter-spacing: -0.02em;
 }
 
+/*
+ * Toasts (sonner's toast element, given the class in components/ui/sonner.tsx; nothing else): the
+ * frosted overlay (the Toaster's --normal-bg is --glass-overlay), the top elevation and a 2px
+ * leading edge in the toast type's color. Plain selectors with enough specificity to beat the
+ * stylesheet sonner injects at runtime, which is unlayered.
+ */
+[data-sonner-toaster] [data-sonner-toast].toast-lit {
+  --toast-edge: var(--edge);
+  backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow:
+    inset 2px 0 0 0 var(--toast-edge),
+    var(--elev-3);
+  &:focus-visible {
+    box-shadow:
+      inset 2px 0 0 0 var(--toast-edge),
+      0 0 0 1px var(--ring),
+      0 0 0 4px color-mix(in oklch, var(--ring) 30%, transparent),
+      var(--elev-3);
+  }
+  &[data-type="success"] {
+    --toast-edge: var(--state-good);
+  }
+  &[data-type="info"] {
+    --toast-edge: var(--primary-ink);
+  }
+  &[data-type="warning"] {
+    --toast-edge: var(--state-warn);
+  }
+  &[data-type="error"] {
+    --toast-edge: var(--destructive);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    backdrop-filter: none;
+  }
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-latin), "Noto Sans SC Variable", ui-sans-serif, system-ui, sans-serif;
@@ -238,6 +339,17 @@
   --color-overlay: var(--overlay);
   --color-edge: var(--edge);
   --color-signal: var(--signal);
+  --color-primary-ink: var(--primary-ink);
+  --color-wash: var(--wash);
+  --color-tint-primary: var(--tint-primary);
+  --color-tint-destructive: var(--tint-destructive);
+  --color-scrim: var(--scrim);
+  --color-glass: var(--glass);
+  --color-glass-overlay: var(--glass-overlay);
+  /* Hover tones of filled controls: their own surface with a little light or ink mixed in. */
+  --color-primary-hover: color-mix(in oklch, var(--primary), white 7%);
+  --color-raised-hover: color-mix(in oklch, var(--raised), var(--foreground) 4%);
+  --color-secondary-hover: color-mix(in oklch, var(--secondary), var(--foreground) 5%);
   --shadow-elev-1: var(--elev-1);
   --shadow-elev-2: var(--elev-2);
   --shadow-elev-3: var(--elev-3);
@@ -321,6 +433,23 @@
   /* Live data and the wave motif only (realtime curves, beams, arcs, running lights). */
   --signal: oklch(0.6 0.118 196);
   --signal-glow: color-mix(in oklch, var(--signal) 40%, transparent);
+  /*
+   * Glass fills (glass, glass-overlay, toasts): opaque enough that muted text still reaches 4.5:1
+   * with foreground-colored content scrolling behind (contrast.test.ts, worst composite).
+   */
+  --glass: color-mix(in oklch, var(--canvas) 93%, transparent);
+  --glass-overlay: color-mix(in oklch, var(--overlay) 93%, transparent);
+  /* The action blue as text: links, link buttons, primary badges, the active nav icon. */
+  --primary-ink: var(--primary);
+  /* Hover and highlight wash (rows, menu items, ghost buttons) and neutral chips; on any surface. */
+  --wash: color-mix(in oklch, var(--foreground) 6%, transparent);
+  /* Tinted chips and callouts: primary badges; destructive buttons, badges and alerts. */
+  --tint-primary: color-mix(in oklch, var(--primary) 10%, transparent);
+  --tint-destructive: color-mix(in oklch, var(--destructive) 10%, transparent);
+  /* Behind dialogs and sheets: dims the canvas, no blur (polled content may sit behind). */
+  --scrim: oklch(0.2 0.02 258 / 30%);
+  /* The boundary of checkboxes and switch tracks (toggle-well): 3:1 on the card. */
+  --control-edge: color-mix(in oklch, var(--foreground) 45%, transparent);
 
   --background: var(--canvas);
   --foreground: oklch(0.18 0.014 258);
@@ -336,10 +465,12 @@
   --muted-foreground: oklch(0.52 0.016 258);
   --accent: oklch(0.955 0.006 258);
   --accent-foreground: oklch(0.22 0.014 258);
-  --destructive: oklch(0.577 0.245 27.325);
+  /* Darker than the preset's red so its text reaches 4.5:1 on its own 10% tint. */
+  --destructive: oklch(0.535 0.215 27.325);
   --border: oklch(0.912 0.008 258);
   --input: oklch(0.885 0.01 258);
-  --ring: oklch(0.7 0.02 258);
+  /* Focus (the 1px ring border reaches 3:1 on canvas, card, well and overlay; the halo is ring/30). */
+  --ring: oklch(0.6 0.15 262);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
@@ -380,7 +511,7 @@
   --sidebar-accent: var(--raised);
   --sidebar-accent-foreground: oklch(0.18 0.014 258);
   --sidebar-border: oklch(0.905 0.008 258);
-  --sidebar-ring: oklch(0.7 0.02 258);
+  --sidebar-ring: var(--ring);
 }
 
 .dark {
@@ -401,6 +532,15 @@
   --spotlight: oklch(1 0 0 / 6%);
   --signal: oklch(0.8 0.13 192);
   --signal-glow: color-mix(in oklch, var(--signal) 45%, transparent);
+  --glass: color-mix(in oklch, var(--canvas) 86%, transparent);
+  --glass-overlay: color-mix(in oklch, var(--overlay) 90%, transparent);
+  /* The preset's dark --primary is a button fill, too dark for text on dark surfaces. */
+  --primary-ink: oklch(0.72 0.14 262);
+  --wash: color-mix(in oklch, var(--foreground) 8%, transparent);
+  --tint-primary: color-mix(in oklch, var(--primary) 20%, transparent);
+  --tint-destructive: color-mix(in oklch, var(--destructive) 20%, transparent);
+  --scrim: oklch(0 0 0 / 50%);
+  --control-edge: color-mix(in oklch, var(--foreground) 40%, transparent);
 
   --background: var(--canvas);
   --foreground: oklch(0.972 0.004 258);
@@ -416,10 +556,11 @@
   --muted-foreground: oklch(0.72 0.014 258);
   --accent: oklch(0.255 0.012 258);
   --accent-foreground: oklch(0.972 0.004 258);
-  --destructive: oklch(0.704 0.191 22.216);
+  /* A touch lighter than the preset's, for 4.5:1 on a highlighted menu item. */
+  --destructive: oklch(0.72 0.18 22.216);
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.58 0.02 258);
+  --ring: oklch(0.62 0.15 262);
   --chart-1: oklch(0.845 0.143 164.978);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.596 0.145 163.225);
@@ -443,12 +584,12 @@
   --state-warn: #fab219;
   --sidebar: oklch(0.142 0.01 258);
   --sidebar-foreground: oklch(0.94 0.006 258);
-  --sidebar-primary: oklch(0.623 0.214 259.815);
+  --sidebar-primary: oklch(0.546 0.245 262.881);
   --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
   --sidebar-accent: oklch(0.225 0.013 258);
   --sidebar-accent-foreground: oklch(0.972 0.004 258);
   --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.58 0.02 258);
+  --sidebar-ring: var(--ring);
 }
 
 /* Wide-gamut screens get a little more chroma on the signal (the action color is the preset's). */
@@ -458,6 +599,83 @@
   }
   .dark {
     --signal: oklch(0.8 0.155 192);
+  }
+}
+
+/* Glass turns opaque when the reader asks for less transparency or the browser cannot blur. */
+@media (prefers-reduced-transparency: reduce) {
+  :root,
+  .dark {
+    --glass: var(--canvas);
+    --glass-overlay: var(--overlay);
+  }
+}
+@supports not (backdrop-filter: blur(1px)) {
+  :root,
+  .dark {
+    --glass: var(--canvas);
+    --glass-overlay: var(--overlay);
+  }
+}
+
+/*
+ * Forced colors (Windows high contrast) drop box-shadows and background images, so the rings and
+ * wells drawn with shadows disappear. Containers get real borders from edge-lit and seg-well,
+ * controls from their own transparent borders; here every keyboard focus becomes an outline
+ * (unlayered, so it beats outline-none), and states that were only a fill get a system color.
+ */
+@media (forced-colors: active) {
+  /* Tailwind's outline-hidden leaves a transparent outline that forced colors paint on every item. */
+  :not(:focus-visible) {
+    outline-style: none;
+  }
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  [data-slot="input-group"]:has([data-slot="input-group-control"]:focus-visible) {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  [data-slot="input-group-control"]:focus-visible {
+    outline: none;
+  }
+  [data-slot="checkbox"][data-checked],
+  [data-slot="switch"][data-checked],
+  [data-slot="progress-indicator"] {
+    background-color: Highlight;
+  }
+  [data-slot="switch-thumb"] {
+    background-color: CanvasText;
+  }
+  [data-slot="switch"][data-checked] [data-slot="switch-thumb"] {
+    background-color: HighlightText;
+  }
+  [data-slot="sidebar-menu-button"][data-active]:not(:focus-visible),
+  [data-slot="sidebar-menu-sub-button"][data-active]:not(:focus-visible),
+  [data-slot="table-row"][data-state="selected"],
+  [data-slot$="-item"][data-highlighted]:not(:focus-visible),
+  [data-slot="command-item"][data-selected="true"] {
+    outline: 1px solid Highlight;
+    outline-offset: -1px;
+  }
+}
+
+/*
+ * Reduced motion: popups, menus, dialogs and tooltips still fade, but nothing slides or zooms
+ * (tw-animate-css builds its enter/exit keyframes from these variables). Unlayered, so it beats
+ * zoom-in-95, slide-in-from-top-2 and the like.
+ */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    --tw-enter-translate-x: 0;
+    --tw-enter-translate-y: 0;
+    --tw-enter-scale: 1;
+    --tw-enter-rotate: 0;
+    --tw-exit-translate-x: 0;
+    --tw-exit-translate-y: 0;
+    --tw-exit-scale: 1;
+    --tw-exit-rotate: 0;
   }
 }
 
@@ -499,6 +717,19 @@
   [data-slot="chart"] .recharts-dot[stroke="#fff"],
   [data-slot="chart"] .recharts-sector[stroke="#fff"] {
     stroke: transparent;
+  }
+  /* The hovered point sits in a ring of the card color, so it reads on top of the line. */
+  [data-slot="chart"] .recharts-active-dot .recharts-dot {
+    stroke: var(--card);
+    stroke-width: 2;
+  }
+  /* Crosshair: a dashed hairline in muted ink over lines and areas, a wash band over bars. */
+  [data-slot="chart"] .recharts-curve.recharts-tooltip-cursor {
+    stroke: color-mix(in oklch, var(--muted-foreground) 55%, transparent);
+    stroke-dasharray: 3 3;
+  }
+  [data-slot="chart"] .recharts-rectangle.recharts-tooltip-cursor {
+    fill: var(--wash);
   }
   /* Lit lines: in dark mode a series line glows softly in its own color. */
   .dark [data-slot="chart"][data-glow] .recharts-area-curve {
@@ -585,6 +816,8 @@
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
     --ring: oklch(0.708 0 0);
+    /* The console's --destructive is darker since the redesign; the failing hop keeps the original red. */
+    --destructive: oklch(0.577 0.245 27.325);
     --well: var(--muted);
     --edge: oklch(0 0 0 / 8%);
     --status-tick: color-mix(in oklab, var(--foreground) 22%, transparent);
@@ -614,6 +847,7 @@
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.556 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
     --edge: oklch(1 0 0 / 10%);
   }
   .status-frame {
