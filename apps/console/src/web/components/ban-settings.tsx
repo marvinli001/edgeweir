@@ -1,43 +1,57 @@
+import type * as React from "react";
+import {
+  GRID_CARD,
+  SettingNumber,
+  SettingRow,
+  SettingRows,
+} from "@/components/protection-settings";
 import { SettingsCard } from "@/components/settings-card";
-import { NumberField, SwitchField } from "@/components/site/fields";
+import { Switch } from "@/components/ui/switch";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
 
-/** Admin card: platform limit of manual bans and sharing of automatic bans in a cluster. */
-export function BanSettingsCard() {
+/** Platform limit of manual bans and sharing of automatic bans in a cluster. */
+export function BanSettingsCard({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <SettingsCard
       title={m.system_bans_title()}
-      className="animate-enter"
-      style={{ animationDelay: "140ms" }}
+      className={cn(GRID_CARD, className)}
+      style={style}
       query={orpc.settings.bans.queryOptions()}
       mutation={orpc.settings.setBans.mutationOptions()}
       toDraft={(s) => ({ maxTotal: String(s.maxTotal), shareAutoBans: s.shareAutoBans })}
       toInput={(d) => ({ maxTotal: Number(d.maxTotal), shareAutoBans: d.shareAutoBans })}
-      contentClassName="grid gap-4 sm:grid-cols-2"
+      contentClassName="flex-1"
       saveTestId="ban-settings-save"
     >
       {({ draft, set }) => (
-        <>
-          <NumberField
-            id="bans-max-total"
-            label={m.system_bans_max_total()}
-            value={draft.maxTotal}
-            onChange={(maxTotal) => set({ maxTotal })}
-            min={100}
-            max={100000}
-            step={1}
-            required
-            testId="bans-max-total"
-          />
-          <SwitchField
-            id="bans-share-auto"
-            label={m.system_bans_share_auto()}
-            checked={draft.shareAutoBans}
-            onCheckedChange={(shareAutoBans) => set({ shareAutoBans })}
-            testId="bans-share-auto"
-          />
-        </>
+        <SettingRows>
+          <SettingRow htmlFor="bans-max-total" label={m.system_bans_max_total()}>
+            <SettingNumber
+              id="bans-max-total"
+              value={draft.maxTotal}
+              onChange={(maxTotal) => set({ maxTotal })}
+              min={100}
+              max={100000}
+              testId="bans-max-total"
+            />
+          </SettingRow>
+          <SettingRow htmlFor="bans-share-auto" label={m.system_bans_share_auto()}>
+            <Switch
+              id="bans-share-auto"
+              checked={draft.shareAutoBans}
+              onCheckedChange={(shareAutoBans) => set({ shareAutoBans })}
+              data-testid="bans-share-auto"
+            />
+          </SettingRow>
+        </SettingRows>
       )}
     </SettingsCard>
   );
