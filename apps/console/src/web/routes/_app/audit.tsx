@@ -5,7 +5,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
-import { type Columns, DataTable } from "@/components/data-table";
+import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
@@ -21,6 +21,7 @@ import {
 import { auditActionLabel, auditTargetLabel } from "@/lib/audit";
 import { formatDateTime, m, timeAgo } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
+import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
 const RANGES = { "1h": 3600, "24h": 86400, "7d": 7 * 86400, "30d": 30 * 86400 } as const;
@@ -47,6 +48,9 @@ const actorLabels: Record<string, () => string> = {
 
 const actorLabel = (type: string) => (actorLabels[type] ?? (() => type))();
 
+/** Targets whose name is a machine value (an address, a URL): set in monospace. */
+const MACHINE_TARGETS = new Set(["ban", "cache_task"]);
+
 const rangeLabels: Record<Range, () => string> = {
   "1h": () => m.audit_range_1h(),
   "24h": () => m.audit_range_24h(),
@@ -57,7 +61,7 @@ const rangeLabels: Record<Range, () => string> = {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid gap-1 py-2.5 sm:grid-cols-[8rem_1fr] sm:gap-4">
-      <dt className="text-muted-foreground">{label}</dt>
+      <dt className="text-xs font-medium text-muted-foreground sm:pt-0.5">{label}</dt>
       <dd className="flex min-w-0 flex-col gap-0.5 break-all">{children}</dd>
     </div>
   );
@@ -103,7 +107,11 @@ function AuditDetails({ entry }: { entry: AuditLogEntry }) {
           <DialogTitle className="pr-8">{auditActionLabel(entry.action)}</DialogTitle>
         </DialogHeader>
         <dl className="min-w-0 divide-y">
-          <Field label={m.audit_col_time()}>{formatDateTime(entry.occurredAt)}</Field>
+          <Field label={m.audit_col_time()}>
+            <time dateTime={entry.occurredAt} className="tabular-nums">
+              {formatDateTime(entry.occurredAt)}
+            </time>
+          </Field>
           <Field label={m.audit_col_action()}>
             <code className="font-mono text-xs">{entry.action}</code>
           </Field>
@@ -128,7 +136,7 @@ function AuditDetails({ entry }: { entry: AuditLogEntry }) {
           <Field label={m.audit_field_metadata()}>
             {metadata ? (
               <pre
-                className="max-h-80 overflow-auto rounded-xl bg-muted p-3 font-mono text-xs break-normal whitespace-pre"
+                className="max-h-80 overflow-auto rounded-2xl p-3 font-mono text-xs leading-relaxed break-normal whitespace-pre sunk-well"
                 data-testid="audit-detail-metadata"
               >
                 {metadata}
@@ -175,12 +183,13 @@ function AuditPage() {
         id: "time",
         header: () => m.audit_col_time(),
         cell: ({ row }) => (
-          <span
-            className="text-xs whitespace-nowrap text-muted-foreground"
+          <time
+            dateTime={row.original.occurredAt}
+            className="text-xs whitespace-nowrap text-muted-foreground tabular-nums"
             title={formatDateTime(row.original.occurredAt)}
           >
             {timeAgo(row.original.occurredAt)}
-          </span>
+          </time>
         ),
       },
       {
@@ -215,8 +224,16 @@ function AuditPage() {
         id: "target",
         header: () => m.audit_col_target(),
         cell: ({ row }) => (
-          <div className="flex flex-col" title={row.original.targetId}>
-            <span data-testid="audit-target">{row.original.targetName || "—"}</span>
+          <div className="flex max-w-[24rem] min-w-0 flex-col" title={row.original.targetId}>
+            <span
+              className={cn(
+                "truncate",
+                MACHINE_TARGETS.has(row.original.targetType) && "font-mono text-[13px]",
+              )}
+              data-testid="audit-target"
+            >
+              {row.original.targetName || "—"}
+            </span>
             <span className="text-xs text-muted-foreground">
               {row.original.targetType ? auditTargetLabel(row.original.targetType) : null}
             </span>
@@ -226,7 +243,11 @@ function AuditPage() {
       {
         id: "details",
         header: () => <span className="sr-only">{m.audit_details()}</span>,
-        cell: ({ row }) => <AuditDetails entry={row.original} />,
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <AuditDetails entry={row.original} />
+          </div>
+        ),
       },
     ],
     [],
@@ -234,7 +255,7 @@ function AuditPage() {
 
   return (
     <Page title={m.audit_title()}>
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <FilterBar className="grid grid-cols-1 sm:flex">
         <FilterSelect
           value={search.action}
           onChange={(action) => setFilter({ action })}
@@ -268,7 +289,7 @@ function AuditPage() {
           label={m.audit_col_time()}
           testId="audit-filter-range"
         />
-      </div>
+      </FilterBar>
       <QueryView
         query={entries}
         isEmpty={(data) => data.total === 0}
@@ -281,6 +302,7 @@ function AuditPage() {
               columns={columns}
               getRowId={(e) => String(e.id)}
               testId="audit-table"
+              pinFirstColumn
             />
             <Pager
               page={page}
