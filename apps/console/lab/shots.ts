@@ -9,7 +9,8 @@
  * fixture data. Files: <page>-<theme>-<width>[-en][-<state>][-reduced].png, full page; the lab
  * panel is hidden. Waits for fonts and until no LoadingState or TopProgress is left (except in
  * the loading state), then for entrances. Page errors and fixture answers outside their schema
- * are printed after the file name.
+ * are printed after the file name. Pages too tall for one capture at 2x (Chromium draws at most
+ * 16384 device pixels) are taken at a lower scale; concurrency 1 is steadier on a busy machine.
  */
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -78,10 +79,22 @@ const fileName = (shot: Shot) =>
     state === "full" ? "" : `-${state}`
   }${reduced ? "-reduced" : ""}.png`;
 
-async function take(browser: Browser, shot: Shot) {
+/** Chromium's largest capture, in device pixels. */
+const MAX_CAPTURE = 16_384;
+
+/** The page is too tall for its scale: take it again at `scale`. */
+class TooTall extends Error {
+  readonly scale: number;
+  constructor(scale: number) {
+    super(`too tall, retaking at ${scale}x`);
+    this.scale = scale;
+  }
+}
+
+async function take(browser: Browser, shot: Shot, scale = 2) {
   const context = await browser.newContext({
     viewport: { width: shot.width, height: shot.width < 768 ? 812 : 900 },
-    deviceScaleFactor: 2,
+    deviceScaleFactor: scale,
     locale,
     colorScheme: shot.theme,
     reducedMotion: reduced ? "reduce" : "no-preference",
@@ -112,12 +125,14 @@ async function take(browser: Browser, shot: Shot) {
       // The loader fades in after a short delay.
       await page.waitForTimeout(1_500);
     } else {
-      // First loads show a loader and the top bar; wait until both are gone for a moment.
+      // First loads show a loader and the top bar; wait until both are gone for longer than the
+      // router's pending delay (1 s), so a route that is still resolving cannot pass as settled.
       await page
         .waitForFunction(
           () => {
             const w = window as unknown as { __labQuietSince?: number };
             const busy =
+              !document.getElementById("root")?.childElementCount ||
               document.querySelector('[role="status"][aria-live="polite"]') ||
               document.querySelector('[data-testid="top-progress"][data-active]');
             if (busy) {
@@ -125,7 +140,7 @@ async function take(browser: Browser, shot: Shot) {
               return false;
             }
             w.__labQuietSince ??= performance.now();
-            return performance.now() - w.__labQuietSince > 400;
+            return performance.now() - w.__labQuietSince > 1_200;
           },
           null,
           { timeout: 15_000, polling: 100 },
@@ -138,6 +153,11 @@ async function take(browser: Browser, shot: Shot) {
     if (await page.evaluate(() => !document.getElementById("root")?.childElementCount)) {
       throw new Error("the page is blank");
     }
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    if (height * scale > MAX_CAPTURE && scale > 1) {
+      throw new TooTall(Math.max(1, Math.floor((MAX_CAPTURE / height) * 4) / 4));
+    }
+    if (height > MAX_CAPTURE) notes.push(`${height} px tall: cut off below ${MAX_CAPTURE} px`);
     await page.screenshot({
       path: path.join(out as string, name),
       fullPage: true,
@@ -151,11 +171,17 @@ async function take(browser: Browser, shot: Shot) {
 
 /** One more try for a shot that failed (the dev server reloading, a slow first compile). */
 async function attempt(browser: Browser, shot: Shot): Promise<boolean> {
+  let scale = 2;
   for (let tries = 1; ; tries++) {
     try {
-      await take(browser, shot);
+      await take(browser, shot, scale);
       return true;
     } catch (error) {
+      if (error instanceof TooTall) {
+        scale = error.scale;
+        tries--;
+        continue;
+      }
       const reason = error instanceof Error ? error.message.split("\n")[0] : String(error);
       if (tries >= 2) {
         console.error(`${fileName(shot)} failed: ${reason}`);
