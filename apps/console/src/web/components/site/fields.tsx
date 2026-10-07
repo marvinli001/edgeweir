@@ -1,6 +1,6 @@
 import * as React from "react";
 import { splitList } from "@/components/site/save-site";
-import { Field, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
+import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -56,6 +56,8 @@ export function NumberField({
   disabled,
   required,
   mono,
+  invalid,
+  error,
   testId,
 }: {
   id: string;
@@ -70,10 +72,15 @@ export function NumberField({
   required?: boolean;
   /** A machine value (a port): set in monospace. */
   mono?: boolean;
+  /** Marks the value invalid when the text saying why sits outside the field (id `${id}-error`). */
+  invalid?: boolean;
+  /** Why the value is invalid, shown under the input; it marks the value invalid too. */
+  error?: string;
   testId?: string;
 }) {
+  const bad = invalid || !!error;
   return (
-    <Field data-disabled={disabled || undefined}>
+    <Field data-invalid={bad || undefined} data-disabled={disabled || undefined}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Input
         id={id}
@@ -86,10 +93,17 @@ export function NumberField({
         placeholder={placeholder}
         disabled={disabled}
         required={required}
+        aria-invalid={bad || undefined}
+        aria-describedby={bad ? `${id}-error` : undefined}
         onChange={(event) => onChange(event.target.value)}
         className={mono ? "font-mono" : undefined}
         data-testid={testId}
       />
+      {error ? (
+        <FieldError id={`${id}-error`} className="animate-in fade-in">
+          {error}
+        </FieldError>
+      ) : null}
     </Field>
   );
 }

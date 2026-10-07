@@ -430,6 +430,7 @@ function NodeCache({ node }: { node: Node }) {
             max={CACHE_SIZE_GB_RANGE.max}
             step={1}
             disabled={blocked}
+            invalid={!valid}
             placeholder={
               cluster.data
                 ? m.node_cache_cluster({ size: String(cluster.data.cache.maxSizeGb) })
@@ -449,6 +450,14 @@ function NodeCache({ node }: { node: Node }) {
           {m.common_save()}
         </Button>
       </form>
+      {valid ? null : (
+        <FieldError id={`node-cache-size-${node.id}-error`} className="animate-in fade-in">
+          {m.common_whole_number_range({
+            min: formatNumber(CACHE_SIZE_GB_RANGE.min),
+            max: formatNumber(CACHE_SIZE_GB_RANGE.max),
+          })}
+        </FieldError>
+      )}
       {blocked ? (
         <SafetyNote data-testid="node-cache-unavailable">
           {m.feature_unavailable_nodes()}

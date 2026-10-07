@@ -6,7 +6,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { NumberField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { m } from "@/lib/i18n";
+import { formatNumber, m } from "@/lib/i18n";
 import { errorMessage, orpc } from "@/lib/orpc";
 
 const whole = (value: string, min: number, max: number) => {
@@ -24,8 +24,9 @@ export function ClusterCacheCard({ cluster }: { cluster: Cluster }) {
   };
   const [draft, setDraft] = React.useState(saved);
   const [error, setError] = React.useState<string | null>(null);
-  const valid =
-    whole(draft.size, CACHE_SIZE_GB_RANGE.min, CACHE_SIZE_GB_RANGE.max) && whole(draft.days, 1, 90);
+  const sizeValid = whole(draft.size, CACHE_SIZE_GB_RANGE.min, CACHE_SIZE_GB_RANGE.max);
+  const daysValid = whole(draft.days, 1, 90);
+  const valid = sizeValid && daysValid;
   const dirty = draft.size !== saved.size || draft.days !== saved.days;
   return (
     <Card className="animate-enter" data-testid="cluster-cache">
@@ -61,6 +62,14 @@ export function ClusterCacheCard({ cluster }: { cluster: Cluster }) {
               max={CACHE_SIZE_GB_RANGE.max}
               step={1}
               required
+              error={
+                sizeValid
+                  ? undefined
+                  : m.common_whole_number_range({
+                      min: formatNumber(CACHE_SIZE_GB_RANGE.min),
+                      max: formatNumber(CACHE_SIZE_GB_RANGE.max),
+                    })
+              }
               onChange={(size) => setDraft({ ...draft, size })}
               testId="cluster-cache-size"
             />
@@ -72,6 +81,7 @@ export function ClusterCacheCard({ cluster }: { cluster: Cluster }) {
               max={90}
               step={1}
               required
+              error={daysValid ? undefined : m.common_whole_number_range({ min: "1", max: "90" })}
               onChange={(days) => setDraft({ ...draft, days })}
               testId="cluster-cache-days"
             />

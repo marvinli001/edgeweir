@@ -47,6 +47,7 @@
   "common_check_field_item": "Check “{field}”, item {item}",
   "common_check_field_expression": "“{field}”, character {position}: {reason}",
   "common_check_field_item_expression": "“{field}”, item {item}, character {position}: {reason}",
+  "common_whole_number_range": "A whole number from {min} to {max}",
   "unsaved_leave_title": "Discard unsaved changes?",
   "unsaved_discard": "Discard",
   "common_delete": "Delete",
