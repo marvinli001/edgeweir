@@ -113,6 +113,7 @@ function SiteDetailPage() {
         {(data) => (
           <Tabs
             key={data.id}
+            className="gap-4"
             value={tab}
             onValueChange={(value) =>
               navigate({
