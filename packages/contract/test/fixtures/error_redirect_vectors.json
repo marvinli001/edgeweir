@@ -1,5 +1,5 @@
 {
-  "description": "Redirect URLs of error pages: valid is what edgeweir-node accepts (internal/configir validErrorRedirect) and the console checks before saving (@edgeweir/contract validErrorRedirect). Identical copies: edgeweir packages/contract/test/fixtures/error_redirect_vectors.json and edgeweir-node internal/configir/testdata/error_redirect_vectors.json.",
+  "description": "Redirect URLs of error pages: valid is what edgeweir-node accepts (internal/configir validErrorRedirect) and the console checks before saving (@edgeweir/contract validErrorRedirect); both apply the same syntax before their URL parser, so the console never saves a URL nodes refuse. Identical copies: edgeweir packages/contract/test/fixtures/error_redirect_vectors.json and edgeweir-node internal/configir/testdata/error_redirect_vectors.json.",
   "cases": [
     {
       "value": "/error?code={{status}}",
@@ -180,6 +180,66 @@
       "value": "https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "valid": false,
       "note": "2049 characters"
+    },
+    {
+      "value": "http://1.2.3.4/",
+      "valid": true,
+      "note": "dotted-quad IPv4 host"
+    },
+    {
+      "value": "http://localhost/",
+      "valid": true,
+      "note": "single-label host"
+    },
+    {
+      "value": "http://-a.example/",
+      "valid": true,
+      "note": "hyphen at the start of a label"
+    },
+    {
+      "value": "http://1.08/",
+      "valid": false,
+      "note": "numeric last label that is no valid IPv4 address"
+    },
+    {
+      "value": "http://a.256/",
+      "valid": false,
+      "note": "numeric last label"
+    },
+    {
+      "value": "http://99999999999/",
+      "valid": false,
+      "note": "number as host"
+    },
+    {
+      "value": "http://1.2.3.4.5/",
+      "valid": false,
+      "note": "five numeric labels"
+    },
+    {
+      "value": "http://256.1.1.1/",
+      "valid": false,
+      "note": "IPv4 octet over 255"
+    },
+    {
+      "value": "http://01.2.3.4/",
+      "valid": false,
+      "note": "IPv4 octet with a leading zero"
+    },
+    {
+      "value": "http://a..b/",
+      "valid": false,
+      "note": "empty label"
+    },
+    {
+      "value": "http://a.1b/",
+      "valid": false,
+      "note": "last label starting with a digit"
+    },
+    {
+      "value": "http://example.com./",
+      "valid": false,
+      "note": "trailing dot"
     }
   ]
 }

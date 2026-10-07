@@ -1,8 +1,11 @@
-import { RULES_V3_PLACEHOLDERS, usesRulesV3Placeholders } from "@edgeweir/rule-engine";
+import {
+  canonicalCidr,
+  RULES_V3_PLACEHOLDERS,
+  usesRulesV3Placeholders,
+} from "@edgeweir/rule-engine";
 import { oc } from "@orpc/contract";
 import * as z from "zod";
-import { banLookupCidr } from "./bans";
-import { cidr, expectedUpdatedAt, isoDateTime, pathPrefix, uuid } from "./schemas";
+import { expectedUpdatedAt, isoDateTime, pathPrefix, uuid } from "./schemas";
 
 /**
  * Error pages replace the nodes' built-in pages (feature error-pages-v1):
@@ -49,13 +52,15 @@ export const errorPageStatus = z.union([
 
 /**
  * An absolute redirect URL as nodes and the console both take it: http(s),
- * "//", a host of DNS characters or a bracketed IPv6 literal (no user
+ * "//", a host that is a dotted-quad IPv4 address, a DNS name whose last
+ * label starts with a letter or a bracketed IPv6 literal (no user
  * information, no escapes), an optional port, then a path, query or
  * fragment. URL parsers repair other shapes differently (WHATWG reads
- * "https:example.com" as https://example.com/, Go as an opaque URL).
+ * "https:example.com" as https://example.com/ and "1.08" as an invalid
+ * IPv4 address, Go reads them as an opaque URL and a host name).
  */
 const ABSOLUTE_REDIRECT =
-  /^https?:\/\/(?:[A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?(?:[/?#][\x21-\x7e]*)?$/;
+  /^https?:\/\/(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}|(?:[A-Za-z0-9-]+\.)*[A-Za-z][A-Za-z0-9-]*|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?(?:[/?#][\x21-\x7e]*)?$/;
 
 /**
  * Whether a redirect URL is valid: an absolute http(s) URL without user
@@ -199,9 +204,26 @@ export const siteMaintenanceInput = z.object({
   /** 0-65536 bytes (UTF-8), with the error page placeholders; larger fails with ERROR_PAGE_TOO_LARGE. */
   template: z.string().default(""),
   retryAfterSeconds: z.number().int().min(0).max(86_400).default(0),
-  /** An IPv4-mapped IPv6 prefix becomes IPv4: nodes look IPv4 clients up as IPv4. */
+  /**
+   * Addresses or CIDRs, normalized as IP list entries are: an IPv4-mapped
+   * IPv6 prefix becomes IPv4 (nodes look IPv4 clients up as IPv4), and one
+   * shorter than /96 is refused as ambiguous.
+   */
   allowedCidrs: z
-    .array(cidr.transform((value) => banLookupCidr(value) ?? value))
+    .array(
+      z
+        .string()
+        .trim()
+        .max(64)
+        .transform((value, ctx) => {
+          try {
+            return canonicalCidr(value);
+          } catch {
+            ctx.addIssue({ code: "custom", message: "invalid CIDR", input: value });
+            return z.NEVER;
+          }
+        }),
+    )
     .max(MAINTENANCE_MAX_CIDRS)
     .default([]),
   allowedPathPrefixes: z

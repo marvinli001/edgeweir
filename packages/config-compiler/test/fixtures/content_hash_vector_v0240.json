@@ -2,7 +2,7 @@
   "description": "proto v0.24.0 NodeConfig content_hash test vector: one site with every site-content-v1 setting (PURGE key reference, hide_x_cache, maintenance with unsorted allowed CIDRs and path prefixes with duplicates (two non-ASCII prefixes that UTF-16 and UTF-8 byte order sort differently), charset, request_body_limit 0, gzip_level and compress_max_length, origin tries and status_retry_disabled, a cache rule with cache_set_cookie, an EXCLUDE cache key with a prefix pattern, error pages of the 4xx and 5xx classes, a redirect page and a page with a replacement status, unsorted, and a config rule with a body limit), a platform config rule with request_body_limit 0, and a cache zone with unsorted node_sizes (cache-zone-v1); required_features reversed with a duplicate. canonical_hex and content_hash come from protobuf-es.",
   "config": {
     "revision": "12",
-    "contentHash": "a2bc5e79429bacfac920b0b334a631e331ae8b9503c6298f545b585b54680cf6",
+    "contentHash": "e61d5392e8298b5b74e12c6c9ebb2cdea7abee650d6b93604537881c0dc14f01",
     "clusterId": "c1",
     "listeners": [
       {

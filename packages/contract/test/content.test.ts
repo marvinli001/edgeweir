@@ -172,6 +172,9 @@ describe("error pages and maintenance", () => {
     });
     for (const input of [
       { allowedCidrs: ["not-a-cidr"] },
+      // A mapped address with a prefix under /96 is ambiguous (as in IP lists).
+      { allowedCidrs: ["::ffff:1.2.3.4/90"] },
+      { allowedCidrs: ["01.2.3.4"] },
       { allowedCidrs: Array(65).fill("10.0.0.0/8") },
       { allowedPathPrefixes: ["health"] },
       { allowedPathPrefixes: ["/a?b"] },
