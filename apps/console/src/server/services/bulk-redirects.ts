@@ -34,11 +34,17 @@ export async function getBulkRedirects(db: Database, siteId: string): Promise<Bu
   return siteRedirects(db, site.id);
 }
 
-/** Whether `host` is one of the domains (exact, or one label under a wildcard domain). */
-function servesHost(domains: { name: string; wildcard: boolean }[], host: string): boolean {
+/**
+ * Whether `host` is one of the domains: an exact domain, or one label under
+ * a wildcard domain. Hosts only a `.` suffix or a pattern matches are not
+ * accepted as sources.
+ */
+function servesHost(domains: { name: string; kind: string }[], host: string): boolean {
   const dot = host.indexOf(".");
   return domains.some((domain) =>
-    domain.wildcard ? dot > 0 && host.slice(dot + 1) === domain.name : domain.name === host,
+    domain.kind === "wildcard"
+      ? dot > 0 && host.slice(dot + 1) === domain.name
+      : domain.kind === "exact" && domain.name === host,
   );
 }
 
@@ -60,7 +66,7 @@ export async function saveBulkRedirects(
   return db.transaction(async (tx) => {
     const site = await findSite(tx, input.id, true);
     const domains = await tx
-      .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
+      .select({ name: schema.siteDomain.name, kind: schema.siteDomain.kind })
       .from(schema.siteDomain)
       .where(eq(schema.siteDomain.siteId, site.id));
     const unknown = [

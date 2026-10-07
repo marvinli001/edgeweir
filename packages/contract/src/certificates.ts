@@ -257,6 +257,8 @@ export const httpsBlocker = z.discriminatedUnion("code", [
     error: z.string(),
   }),
   z.object({ code: z.literal("caa_forbidden"), name: z.string() }),
+  /** Every domain of the site is a `~pattern`: no name to issue for. */
+  z.object({ code: z.literal("no_certificate_names") }),
 ]);
 export const httpsCheckInput = z.object({
   id: uuid,

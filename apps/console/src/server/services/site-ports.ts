@@ -2,6 +2,7 @@ import { DEFAULT_SITE_PORTS, type SitePorts, type TlsSettings } from "@edgeweir/
 import { schema } from "@edgeweir/db";
 import { eq } from "drizzle-orm";
 import { fail } from "../lib/errors";
+import { formatDomain, namesHosts } from "../lib/site-domains";
 import type { Executor } from "./revisions";
 
 const HTTP_PORT = 80;
@@ -54,11 +55,12 @@ export async function assertSitePorts(
   if (opts.tls.redirectExcludedDomains.length) {
     const domains = site.id
       ? await tx
-          .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
+          .select({ name: schema.siteDomain.name, kind: schema.siteDomain.kind })
           .from(schema.siteDomain)
           .where(eq(schema.siteDomain.siteId, site.id))
       : [];
-    const names = new Set(domains.map((d) => (d.wildcard ? `*.${d.name}` : d.name)));
+    // Only exact and `*.` domains: the redirect excludes host names.
+    const names = new Set(domains.filter(namesHosts).map(formatDomain));
     const missing = opts.tls.redirectExcludedDomains.filter((name) => !names.has(name));
     if (missing.length)
       fail("HTTPS_REDIRECT_DOMAIN_INVALID", "excluded domains the site does not have", {

@@ -13,6 +13,7 @@ import { certificateUnloadable, tlsSettings } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
   ChallengeKeyRefSchema,
+  type DomainMatch,
   HttpChallengeSchema,
   IpListSchema,
   type NodeConfig,
@@ -26,6 +27,7 @@ import { eq, inArray } from "drizzle-orm";
 import { assertCertificateNames } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { lockClusterPublish } from "../lib/locks";
+import { formatDomain, namesHosts, protoKind } from "../lib/site-domains";
 import type { Actor } from "./audit";
 import { ensureChallengeKeys } from "./challenge-keys";
 import {
@@ -49,9 +51,11 @@ import {
   updateRollout,
 } from "./revisions";
 
-/** Offline host identity: name and wildcard. */
-const hostKey = (host: { name: string; wildcard: boolean }) =>
-  `${host.name}\u0000${host.wildcard ? 1 : 0}`;
+/** Domain identity: name and form. */
+const rowKey = (domain: { name: string; kind: string }) => `${domain.name}\u0000${domain.kind}`;
+/** The identity of a compiled Domain or OfflineHost. */
+const hostKey = (host: { name: string; wildcard: boolean; match: DomainMatch }) =>
+  rowKey({ name: host.name, kind: protoKind(host) });
 
 /**
  * The sites of an earlier configuration as they may be published now.
@@ -105,9 +109,9 @@ async function restoreSites(
       fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback references a removed site or domain");
     // Enabling is current policy: no site that is disabled now is shipped.
     if (!current?.enabled) continue;
-    const live = (domain: { name: string; wildcard: boolean }) =>
+    const live = (domain: { name: string; wildcard: boolean; match: DomainMatch }) =>
       currentDomains.some(
-        (d) => d.siteId === site.id && d.name === domain.name && d.wildcard === domain.wildcard,
+        (d) => d.siteId === site.id && d.name === domain.name && d.kind === protoKind(domain),
       );
     if (site.domains.some((domain) => !live(domain))) {
       if (opts.strict)
@@ -129,7 +133,9 @@ async function restoreSites(
         // Domains served over HTTP until the certificate covers them need no cover.
         assertCertificateNames(
           cert.chainPem,
-          site.domains.filter((domain) => !domain.tlsPending),
+          site.domains
+            .filter((domain) => !domain.tlsPending)
+            .map((domain) => ({ name: domain.name, kind: protoKind(domain) })),
         );
         if (!ref)
           fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate reference is missing");
@@ -154,7 +160,12 @@ async function restoreSites(
         ...current.tlsSettings,
         certificateId: current.certificateId,
       });
-      const names = new Set(site.domains.map((d) => (d.wildcard ? `*.${d.name}` : d.name)));
+      const names = new Set(
+        site.domains
+          .map((d) => ({ name: d.name, kind: protoKind(d) }))
+          .filter(namesHosts)
+          .map(formatDomain),
+      );
       const port = settings.redirectPort === 443 ? 0 : settings.redirectPort;
       site.tls.redirectStatus = settings.redirectStatus === 301 ? 0 : settings.redirectStatus;
       site.tls.redirectPort = site.certificateId && site.ports.includes(port) ? port : 0;
@@ -171,7 +182,7 @@ async function restoreSites(
     // Hosts that were offline stay offline while their site is not served
     // here (a site enabled since waits for the canary); the current ones win.
     const served = new Set(sites.flatMap((s) => s.domains.map(hostKey)));
-    const known = new Set(currentDomains.map(hostKey));
+    const known = new Set(currentDomains.map(rowKey));
     const hosts = new Map(
       out.offlineHosts.filter((h) => known.has(hostKey(h))).map((h) => [hostKey(h), h]),
     );

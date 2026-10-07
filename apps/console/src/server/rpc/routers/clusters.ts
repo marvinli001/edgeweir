@@ -10,7 +10,14 @@ import {
   setClusterCache,
   updateCluster,
 } from "../../services/clusters";
-import { getClientIp, getListenPorts, setClientIp, setListenPorts } from "../../services/edge";
+import {
+  getClientIp,
+  getListenPorts,
+  getUnknownHosts,
+  setClientIp,
+  setListenPorts,
+  setUnknownHosts,
+} from "../../services/edge";
 import { createEnrollmentToken, getEnrollmentToken } from "../../services/enrollment";
 import { getPortPools, setPortPools } from "../../services/l4";
 import { nodeChannelUrl } from "../../services/node-channel-url";
@@ -173,6 +180,12 @@ export const clustersRouter = {
     ),
     setClientIp: authed.clusters.setClientIp.handler(({ input, context }) =>
       setClientIp(context.app.db, input, context.actor),
+    ),
+    unknownHosts: authed.clusters.unknownHosts.handler(({ input, context }) =>
+      getUnknownHosts(context.app.db, input.clusterId),
+    ),
+    setUnknownHosts: authed.clusters.setUnknownHosts.handler(({ input, context }) =>
+      setUnknownHosts(context.app.db, input, context.actor),
     ),
     setCache: authed.clusters.setCache.handler(({ input, context }) =>
       setClusterCache(context.app.db, input, context.actor),

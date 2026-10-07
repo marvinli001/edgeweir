@@ -27,7 +27,7 @@ describe("sampled logs: bounded retention, safe export and durable acknowledgeme
     );
     const [s] = await ctx.db
       .insert(schema.site)
-      .values({ name: "logs", clusterId: cluster.id, logSampleRate: 10000 })
+      .values({ name: "logs", clusterId: cluster.id, logSampleRate: 10000, cnamePrefix: "logs" })
       .returning();
     const [n] = await ctx.db
       .insert(schema.node)
@@ -90,7 +90,7 @@ describe("sampled logs: bounded retention, safe export and durable acknowledgeme
   it("stores logs of a site that samples nothing only while a rule samples it", async () => {
     const [quiet] = await ctx.db
       .insert(schema.site)
-      .values({ name: "quiet", clusterId: node.clusterId, logSampleRate: 0 })
+      .values({ name: "quiet", clusterId: node.clusterId, logSampleRate: 0, cnamePrefix: "quiet" })
       .returning();
     if (!quiet) throw new Error("fixture missing");
     const sampled = () => create(AccessLogSchema, { ...entry(), siteId: quiet.id });

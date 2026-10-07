@@ -122,7 +122,10 @@ describe("master key rotation", () => {
     };
     const [cluster] = await db.insert(schema.cluster).values({ name: "default" }).returning();
     const clusterId = cluster?.id ?? "";
-    const [site] = await db.insert(schema.site).values({ clusterId, name: "assets" }).returning();
+    const [site] = await db
+      .insert(schema.site)
+      .values({ clusterId, name: "assets", cnamePrefix: "assets" })
+      .returning();
     const ids = {
       credential: crypto.randomUUID(),
       channel: crypto.randomUUID(),

@@ -11,6 +11,7 @@ import { expireCacheTasks, pruneCacheTasks } from "../services/cache-tasks";
 import { sweepCertificates } from "../services/certificate-worker";
 import { markUnloadableCertificates } from "../services/certificates";
 import { rotateChallengeKeys } from "../services/challenge-keys";
+import { expireCnamePrefixes } from "../services/cname-prefixes";
 import { pruneDnsRevisions, reconcileDns } from "../services/dns";
 import { recompileAfterUpgrade } from "../services/recompile";
 import { pruneRevisions } from "../services/revisions";
@@ -59,6 +60,9 @@ export async function startWorker(ctx: AppContext): Promise<PgBoss> {
   });
   await boss.schedule(QUEUES.rollouts, "* * * * *");
   await boss.work(QUEUES.dns, async () => {
+    // Replaced CNAME prefixes leave the plan after their 24 hours.
+    const expired = await expireCnamePrefixes(ctx);
+    if (expired.length) log.info("expired replaced CNAME prefixes", { clusters: expired });
     await reconcileDns(ctx);
   });
   await boss.schedule(QUEUES.dns, "* * * * *");

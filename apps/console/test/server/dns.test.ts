@@ -33,6 +33,8 @@ describe("cluster DNS bindings", async () => {
     clusterId: "",
     groupId: "",
     siteIds: [] as string[],
+    /** The sites' CNAME prefixes (random for new sites). */
+    prefixes: [] as string[],
     nodes: [] as string[],
   };
   const b = {
@@ -40,6 +42,7 @@ describe("cluster DNS bindings", async () => {
     clusterId: "",
     groupId: "",
     siteIds: [] as string[],
+    prefixes: [] as string[],
     nodes: [] as string[],
   };
   let initialConfigRevision = 0;
@@ -107,17 +110,16 @@ describe("cluster DNS bindings", async () => {
       [a, ["one.customer.test", "two.customer.test"]],
       [b, ["three.customer.test"]],
     ] as const)
-      for (const domain of names)
-        cluster.siteIds.push(
-          (
-            await admin.sites.create({
-              name: domain,
-              domains: [domain],
-              origins: [{ address: "origin.test" }],
-              clusterId: cluster.clusterId,
-            })
-          ).site.id,
-        );
+      for (const domain of names) {
+        const { site } = await admin.sites.create({
+          name: domain,
+          domains: [domain],
+          origins: [{ address: "origin.test" }],
+          clusterId: cluster.clusterId,
+        });
+        cluster.siteIds.push(site.id);
+        cluster.prefixes.push(site.cnamePrefix);
+      }
     initialConfigRevision = (await latestRevision(ctx.db, a.clusterId))?.revision ?? 0;
     await addNode(a, "a1", "8.8.8.1");
     await addNode(a, "a2", "8.8.8.2");
@@ -228,15 +230,16 @@ describe("cluster DNS bindings", async () => {
     const state = await admin.dns.binding({ clusterId: a.clusterId });
     expect(state).toMatchObject({ applied: true, revision: { status: "applied" } });
     expect(state.binding).toMatchObject({ zone: "a.test", domain: "edge.a.test", allLabel: "all" });
-    const [one, two] = a.siteIds;
+    const [one] = a.siteIds;
+    expect(a.prefixes.every((prefix) => /^[a-z][a-z0-9]{7}$/.test(prefix))).toBe(true);
     expect(sorted(records("token-a", "a.test"))).toEqual(
       sorted([
         { name: "all.edge", type: "A", data: "8.8.8.1", ttl: 60 },
         { name: "all.edge", type: "A", data: "8.8.8.2", ttl: 60 },
         { name: "east.edge", type: "A", data: "8.8.8.1", ttl: 60 },
         { name: "east.edge", type: "A", data: "8.8.8.2", ttl: 60 },
-        ...[one, two].map((id) => ({
-          name: `${id}.edge`,
+        ...a.prefixes.map((prefix) => ({
+          name: `${prefix}.edge`,
           type: "CNAME",
           data: "all.edge.a.test",
           ttl: 60,
@@ -247,11 +250,12 @@ describe("cluster DNS bindings", async () => {
       "keep",
     );
     expect(await admin.dns.siteTarget({ siteId: one ?? "" })).toEqual({
-      target: `${one}.edge.a.test`,
+      target: `${a.prefixes[0]}.edge.a.test`,
       mode: "auto",
       published: true,
       healthy: true,
       lines: [{ name: "east", target: "east.edge.a.test" }],
+      retired: [],
     });
     expect((await rpcError(admin.dns.deleteProvider({ id: a.providerId }))).code).toBe(
       "DNS_PROVIDER_IN_USE",
@@ -280,7 +284,7 @@ describe("cluster DNS bindings", async () => {
     expect(records("token-b", "b.test")).toEqual(
       expect.arrayContaining([
         { name: "all.cdn", type: "A", data: "9.9.9.1", ttl: 120 },
-        { name: `${b.siteIds[0]}.cdn`, type: "CNAME", data: "all.cdn.b.test", ttl: 120 },
+        { name: `${b.prefixes[0]}.cdn`, type: "CNAME", data: "all.cdn.b.test", ttl: 120 },
       ]),
     );
     const failed = await admin.dns.binding({ clusterId: a.clusterId });
@@ -384,16 +388,16 @@ describe("cluster DNS bindings", async () => {
     await admin.dns.reconcile({ clusterId: a.clusterId });
     expect((await admin.dns.binding({ clusterId: a.clusterId })).revision?.status).toBe("applied");
     const names = () => records("token-a", "a.test").map((r) => r.name);
-    expect(names()).toContain(`${a.siteIds[0]}.next`);
-    expect(names()).not.toContain(`${a.siteIds[0]}.edge`);
+    expect(names()).toContain(`${a.prefixes[0]}.next`);
+    expect(names()).not.toContain(`${a.prefixes[0]}.edge`);
     const restored = await admin.dns.rollbackBinding({
       clusterId: a.clusterId,
       revision: oldRevision,
     });
     expect(restored.revision).toBeGreaterThan(next?.revision ?? 0);
     await admin.dns.reconcile({ clusterId: a.clusterId });
-    expect(names()).toContain(`${a.siteIds[0]}.edge`);
-    expect(names()).not.toContain(`${a.siteIds[0]}.next`);
+    expect(names()).toContain(`${a.prefixes[0]}.edge`);
+    expect(names()).not.toContain(`${a.prefixes[0]}.next`);
     expect((await latestRevision(ctx.db, a.clusterId))?.revision).toBe(initialConfigRevision);
     expect(
       (await admin.dns.bindingRevisions({ clusterId: a.clusterId })).some(
@@ -516,12 +520,13 @@ describe("cluster DNS bindings", async () => {
         .filter((c) => c.token === "token-b" && c.command !== "dns.list"),
     ).toEqual([]);
     const site = b.siteIds[0] ?? "";
+    const prefix = b.prefixes[0] ?? "";
     const exported = await admin.dns.exportBinding({ clusterId: b.clusterId });
     expect(exported.origin).toBe("b.test");
     expect(sorted(exported.records)).toEqual(
       sorted([
         { name: "all.cdn.b.test", type: "A", data: "9.9.9.1", ttl: 300 },
-        { name: `${site}.cdn.b.test`, type: "CNAME", data: "all.cdn.b.test", ttl: 300 },
+        { name: `${prefix}.cdn.b.test`, type: "CNAME", data: "all.cdn.b.test", ttl: 300 },
         { name: "west.cdn.b.test", type: "A", data: "9.9.9.1", ttl: 300 },
       ]),
     );
@@ -535,12 +540,12 @@ describe("cluster DNS bindings", async () => {
     ).toEqual(
       [
         "all.cdn 300 IN A 9.9.9.1",
-        `${site}.cdn 300 IN CNAME all.cdn.b.test.`,
+        `${prefix}.cdn 300 IN CNAME all.cdn.b.test.`,
         "west.cdn 300 IN A 9.9.9.1",
       ].sort(),
     );
     expect(await admin.dns.siteTarget({ siteId: site })).toMatchObject({
-      target: `${site}.cdn.b.test`,
+      target: `${prefix}.cdn.b.test`,
       mode: "manual",
     });
     await seen(b.nodes[0] ?? "", new Date());
@@ -551,7 +556,7 @@ describe("cluster DNS bindings", async () => {
     for (let i = 0; i < 150; i++) {
       const [site] = await ctx.db
         .insert(schema.site)
-        .values({ clusterId: b.clusterId, name: `bulk-${i}` })
+        .values({ clusterId: b.clusterId, name: `bulk-${i}`, cnamePrefix: `bulk-${i}` })
         .returning();
       await ctx.db
         .insert(schema.siteDomain)

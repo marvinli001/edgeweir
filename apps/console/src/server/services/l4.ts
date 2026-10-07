@@ -25,6 +25,7 @@ import { lockClusterL4 } from "../lib/locks";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { assertLoadable } from "./certificates";
+import { newCnamePrefix, retiredPrefixesOf } from "./cname-prefixes";
 import { cnameTargets } from "./dns";
 import { loadPortPools, poolCovers, poolsCoverRange } from "./l4-config";
 import { assertOriginsAllowed } from "./origin-allow-list";
@@ -213,8 +214,14 @@ async function toDtos(db: Executor, rows: AppRow[]): Promise<L4App[]> {
   // Sequential on purpose: `db` may be a transaction, i.e. a single connection.
   const names = new Map<string, Awaited<ReturnType<typeof cnameTargets>>>();
   for (const clusterId of clusterIds) names.set(clusterId, await cnameTargets(db, clusterId));
+  const retired = await retiredPrefixesOf(
+    db,
+    rows.map((row) => row.id),
+  );
   return rows.map((row) => {
-    const dns = names.get(row.clusterId)?.(row.id) ?? null;
+    const binding = names.get(row.clusterId);
+    const dns = binding?.names(row.cnamePrefix) ?? null;
+    const domain = binding?.domain;
     return {
       id: row.id,
       clusterId: row.clusterId,
@@ -247,8 +254,15 @@ async function toDtos(db: Executor, rows: AppRow[]): Promise<L4App[]> {
       blockListIds: row.blockListIds,
       maxConnections: row.maxConnections,
       newConnectionsPerSecond: row.newConnectionsPerSecond,
+      cnamePrefix: row.cnamePrefix,
       dnsTarget: dns?.target ?? null,
       dnsLines: dns?.lines ?? [],
+      dnsRetired: domain
+        ? (retired.get(row.id) ?? []).map((r) => ({
+            name: `${r.prefix}.${domain}`,
+            expiresAt: r.expiresAt.toISOString(),
+          }))
+        : [],
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -461,11 +475,13 @@ export async function createL4App(
       input.idleTimeoutSeconds ?? L4_APP_DEFAULTS.idleTimeoutSeconds[input.protocol];
     await validateApp(ctx, tx, cluster.id, input);
     await assertOriginsAllowed(tx, input.origins);
+    const cnamePrefix = await newCnamePrefix(tx);
     const [row] = await tx
       .insert(schema.l4App)
       .values({
         clusterId: cluster.id,
         name: input.name,
+        cnamePrefix,
         protocol: input.protocol,
         port: input.port,
         enabled: input.enabled,

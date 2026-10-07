@@ -115,6 +115,8 @@ describe("DNS resolution lines and backup groups", async () => {
         origins: [{ address: "origin.test" }],
       })
     ).site.id;
+    // A site from before CNAME prefixes: migration 0056 gave it its id.
+    await ctx.db.update(schema.site).set({ cnamePrefix: siteId }).where(eq(schema.site.id, siteId));
     await addNode(groups.main, "m1", "8.8.1.1");
     await addNode(groups.main, "m2", "8.8.1.2");
     await addNode(groups.tel, "t1", "8.8.2.1");

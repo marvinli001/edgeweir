@@ -71,11 +71,16 @@ export async function loadOfflineHosts(
   clusterId: string,
 ): Promise<OfflineHostModel[]> {
   const rows = await db
-    .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
+    .select({ name: schema.siteDomain.name, kind: schema.siteDomain.kind })
     .from(schema.siteDomain)
     .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
     .where(and(eq(schema.site.clusterId, clusterId), eq(schema.site.enabled, false)));
-  return rows.map((row) => ({ ...row, reason: "disabled" as const }));
+  return rows.map((row) => ({
+    name: row.name,
+    wildcard: row.kind === "wildcard",
+    ...(row.kind === "suffix" || row.kind === "regex" ? { match: row.kind } : {}),
+    reason: "disabled" as const,
+  }));
 }
 
 /**
@@ -104,7 +109,8 @@ export async function loadSiteModels(
   const domains = await db
     .select()
     .from(schema.siteDomain)
-    .where(inArray(schema.siteDomain.siteId, siteIds));
+    .where(inArray(schema.siteDomain.siteId, siteIds))
+    .orderBy(asc(schema.siteDomain.createdAt), asc(schema.siteDomain.name));
   const pools = await db
     .select()
     .from(schema.originPool)
@@ -202,19 +208,29 @@ export async function loadSiteModels(
    */
   const served = (
     site: (typeof sites)[number],
-    list: { name: string; wildcard: boolean }[],
+    rows: { name: string; kind: string }[],
   ): SiteModel["domains"] => {
+    // Patterns are ordered by the site's creation time, then the order they were saved in.
+    let pattern = 0;
+    const all: SiteModel["domains"] = rows.map((row) => ({
+      name: row.name,
+      wildcard: row.kind === "wildcard",
+      ...(row.kind === "suffix" ? { match: "suffix" as const } : {}),
+      ...(row.kind === "regex"
+        ? { match: "regex" as const, order: site.createdAt.getTime() * 16 + pattern++ }
+        : {}),
+    }));
     const chain = site.certificateId ? chains.get(site.certificateId) : undefined;
-    if (!chain) return list;
+    if (!chain) return all;
     try {
-      const uncovered = uncoveredDomains(chain, list);
+      // Suffix and pattern domains are never uncovered (nodes check each host).
+      const uncovered = new Set(uncoveredDomains(chain, rows));
+      const pending = rows.map((row) => uncovered.has(row));
       return httpWhilePending
-        ? list.map((domain) =>
-            uncovered.includes(domain) ? { ...domain, tlsPending: true } : domain,
-          )
-        : list.filter((domain) => !uncovered.includes(domain));
+        ? all.map((domain, i) => (pending[i] ? { ...domain, tlsPending: true } : domain))
+        : all.filter((_, i) => !pending[i]);
     } catch {
-      return list;
+      return all;
     }
   };
   return sites
@@ -233,9 +249,7 @@ export async function loadSiteModels(
         logSampleRate: s.logSampleRate,
         domains: served(
           s,
-          domains
-            .filter((d) => d.siteId === s.id)
-            .map((d) => ({ name: d.name, wildcard: d.wildcard })),
+          domains.filter((d) => d.siteId === s.id),
         ),
         originPool: {
           id: pool?.id ?? s.id,
@@ -581,7 +595,7 @@ export async function loadHttpChallenges(tx: Executor, clusterId: string) {
       and(
         eq(schema.siteDomain.siteId, schema.site.id),
         eq(schema.siteDomain.name, schema.acmeChallenge.domain),
-        eq(schema.siteDomain.wildcard, false),
+        eq(schema.siteDomain.kind, "exact"),
       ),
     )
     .where(

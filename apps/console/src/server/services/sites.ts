@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { formatDomain, parseDomain } from "@edgeweir/config-compiler";
 import type {
   AuditAction,
   Revision,
@@ -39,11 +38,19 @@ import { assertHostHeader } from "../lib/host-header";
 import { lockDomains, lockStats } from "../lib/locks";
 import { readActiveHealthCheck, readSessionAffinity } from "../lib/pool-settings";
 import { readContentSettings } from "../lib/site-content";
+import {
+  asciiSearch,
+  type DomainRow,
+  formatDomain,
+  namesHosts,
+  normalizeDomains,
+} from "../lib/site-domains";
 import { PURGE_KEY, siteSecret, storeSiteSecret } from "../lib/site-secrets";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
 import { coverSiteDomains } from "./certificates";
 import { defaultClusterId } from "./clusters";
+import { newCnamePrefix } from "./cname-prefixes";
 import { listBindings } from "./config-input";
 import { assertOriginsAllowed } from "./origin-allow-list";
 import {
@@ -141,6 +148,7 @@ async function toSiteDtos(db: Executor, rows: SiteRow[]): Promise<Site[]> {
       cacheGeneration: r.cacheGeneration,
       ports: portsOf(r),
       domains: domains.filter((d) => d.siteId === r.id).map(formatDomain),
+      cnamePrefix: r.cnamePrefix,
       origins: origins
         .filter((o) => poolIds.has(o.poolId))
         .map((o) => ({
@@ -231,10 +239,15 @@ export async function listSites(
   const filters: (SQL | undefined)[] = [];
   if (query.clusterId) filters.push(eq(schema.site.clusterId, query.clusterId));
   if (query.search) {
-    const pattern = `%${query.search.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const like = (term: string) => `%${term.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    // Unicode host names are stored as Punycode: search both forms.
+    const ascii = asciiSearch(query.search);
+    const patterns = [like(query.search), ...(ascii ? [like(ascii)] : [])];
+    // Domains are stored without "*.", "." or "~" but match searches like "*.demo".
+    const formatted = sql`case ${schema.siteDomain.kind} when 'wildcard' then '*.' || ${schema.siteDomain.name} when 'suffix' then '.' || ${schema.siteDomain.name} when 'regex' then '~' || ${schema.siteDomain.name} else ${schema.siteDomain.name} end`;
     filters.push(
       or(
-        ilike(schema.site.name, pattern),
+        ilike(schema.site.name, like(query.search)),
         exists(
           db
             .select({ one: sql`1` })
@@ -242,11 +255,7 @@ export async function listSites(
             .where(
               and(
                 eq(schema.siteDomain.siteId, schema.site.id),
-                // Wildcards are stored without "*." but match searches like "*.demo".
-                ilike(
-                  sql`case when ${schema.siteDomain.wildcard} then '*.' || ${schema.siteDomain.name} else ${schema.siteDomain.name} end`,
-                  pattern,
-                ),
+                or(...patterns.map((pattern) => ilike(formatted, pattern))),
               ),
             ),
         ),
@@ -282,34 +291,26 @@ export async function getSite(db: Database, id: string): Promise<Site> {
   return toSiteDto(db, await findSite(db, id));
 }
 
-function uniqueDomains(values: string[]) {
-  return [...new Map(values.map((d) => [d, parseDomain(d)])).values()];
-}
-
 /**
  * Child rows inserted in one statement share now(); explicit, increasing
  * timestamps keep them in the order the user entered them.
  */
 const ordered = (index: number, base = Date.now()) => new Date(base + index);
 
-/** Every domain routes to exactly one site. */
-async function assertDomainsFree(
-  tx: Tx,
-  domains: { name: string; wildcard: boolean }[],
-  exceptSiteId?: string,
-) {
+/** Every domain (name and form) belongs to exactly one site. */
+async function assertDomainsFree(tx: Tx, domains: DomainRow[], exceptSiteId?: string) {
   await lockDomains(
     tx,
     domains.map((d) => d.name),
   );
   const taken = await tx
-    .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
+    .select({ name: schema.siteDomain.name, kind: schema.siteDomain.kind })
     .from(schema.siteDomain)
     .where(
       and(
         or(
           ...domains.map((d) =>
-            and(eq(schema.siteDomain.name, d.name), eq(schema.siteDomain.wildcard, d.wildcard)),
+            and(eq(schema.siteDomain.name, d.name), eq(schema.siteDomain.kind, d.kind)),
           ),
         ),
         exceptSiteId ? ne(schema.siteDomain.siteId, exceptSiteId) : undefined,
@@ -678,7 +679,7 @@ export async function createSite(
   input: SiteCreate,
   ctx: { actor: Actor; masterKey: MasterKey },
 ): Promise<{ site: Site; revision: Revision }> {
-  const domains = uniqueDomains(input.domains);
+  const domains = normalizeDomains(input.domains);
   // Without a name the site is called after its first domain.
   const name = input.name ?? (input.domains[0] ?? "").slice(0, 100);
   return db.transaction(async (tx) => {
@@ -694,12 +695,14 @@ export async function createSite(
     await assertDomainsFree(tx, domains);
     for (const origin of input.origins) assertHostHeader(origin.hostHeader);
     await assertOriginsAllowed(tx, input.origins);
+    const cnamePrefix = await newCnamePrefix(tx);
 
     const [siteRow] = await tx
       .insert(schema.site)
       .values({
         clusterId,
         name,
+        cnamePrefix,
         websocket: input.originSettings.websocket,
         httpPorts: ports.http,
         httpsPorts: ports.https,
@@ -724,7 +727,7 @@ export async function createSite(
       action: "site.create",
       metadata: {
         name,
-        domains: input.domains,
+        domains: domains.map(formatDomain),
         ...(input.cacheSettings.purgeMethod.enabled ? { purgeMethod: true } : {}),
       },
     });
@@ -754,7 +757,7 @@ export async function updateSite(
       changed.push("name");
     }
     if (input.domains) {
-      const domains = uniqueDomains(input.domains);
+      const domains = normalizeDomains(input.domains);
       await assertDomainsFree(tx, domains, row.id);
       if (row.certificateId)
         certificateReissue = await coverSiteDomains(tx, row.certificateId, domains, {
@@ -767,7 +770,7 @@ export async function updateSite(
         .values(domains.map((d, i) => ({ siteId: row.id, createdAt: ordered(i), ...d })));
       changed.push("domains");
       // The HTTPS redirect excludes only domains the site has: nodes refuse others.
-      const names = new Set(domains.map((d) => (d.wildcard ? `*.${d.name}` : d.name)));
+      const names = new Set(domains.filter(namesHosts).map(formatDomain));
       const excluded = tlsSettings.parse({
         ...tlsOptions,
         certificateId: row.certificateId,
@@ -851,7 +854,7 @@ export async function updateSite(
       metadata: {
         changed,
         ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.domains ? { domains: input.domains } : {}),
+        ...(input.domains ? { domains: normalizeDomains(input.domains).map(formatDomain) } : {}),
         ...(input.origins
           ? { origins: input.origins.map((o) => `${o.scheme}://${o.address}:${o.port}`) }
           : {}),

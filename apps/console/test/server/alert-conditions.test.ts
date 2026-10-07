@@ -307,6 +307,7 @@ describe("alert conditions", async () => {
         name: s.name,
         enabled: s.enabled,
         certificateId: s.certificateId,
+        cnamePrefix: s.id,
       })),
     );
     await ctx.db

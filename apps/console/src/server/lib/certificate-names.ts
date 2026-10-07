@@ -1,20 +1,29 @@
 import { X509Certificate } from "node:crypto";
 import { fail } from "./errors";
 
-type Domain = { name: string; wildcard: boolean };
+/** A site domain (site_domain.name and kind). */
+type Domain = { name: string; kind: string };
 
-/** A site domain as a certificate name ("*.example.com" for a wildcard domain). */
-export const certificateName = (domain: Domain) =>
-  domain.wildcard ? `*.${domain.name}` : domain.name;
+/**
+ * A site domain as a certificate name: "*.example.com" for a wildcard
+ * domain and for a suffix domain (".example.com", whose deeper levels no
+ * certificate name covers). A pattern names no host: it is shown as
+ * "~pattern" and never issued for (callers leave patterns out).
+ */
+export function certificateName(domain: Domain): string {
+  if (domain.kind === "regex") return `~${domain.name}`;
+  return domain.kind === "exact" ? domain.name : `*.${domain.name}`;
+}
 
 /**
  * Whether certificate names cover a site domain: the same name, or for a
- * plain domain a wildcard one label up. A wildcard domain needs the same
- * wildcard.
+ * plain domain a wildcard one label up. A wildcard or suffix domain needs
+ * the wildcard; a pattern is never covered.
  */
 export function namesCover(names: readonly string[], domain: Domain): boolean {
+  if (domain.kind === "regex") return false;
   if (names.includes(certificateName(domain))) return true;
-  if (domain.wildcard) return false;
+  if (domain.kind !== "exact") return false;
   const dot = domain.name.indexOf(".");
   return dot > 0 && names.includes(`*.${domain.name.slice(dot + 1)}`);
 }
@@ -32,12 +41,18 @@ const dnsNames = (leaf: X509Certificate) =>
     .filter((part) => part.startsWith("DNS:"))
     .map((part) => part.slice(4).toLowerCase());
 
-/** The site domains a certificate chain does not cover (as nodes check it). */
+/**
+ * The site domains a certificate chain does not cover (as nodes check it).
+ * Suffix and pattern domains are never listed: nodes complete the handshake
+ * for the hosts among them the certificate covers and abort it for others.
+ */
 export function uncoveredDomains<T extends Domain>(chainPem: string, domains: readonly T[]): T[] {
   const leaf = leafOf(chainPem);
   const sans = dnsNames(leaf);
   return domains.filter((domain) =>
-    domain.wildcard ? !sans.includes(certificateName(domain)) : !leaf.checkHost(domain.name),
+    domain.kind === "wildcard"
+      ? !sans.includes(certificateName(domain))
+      : domain.kind === "exact" && !leaf.checkHost(domain.name),
   );
 }
 

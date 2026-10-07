@@ -605,183 +605,127 @@
     {
       "input": "àא",
       "ascii": null,
-      "status": [
-        "B5",
-        "B6"
-      ]
+      "status": ["B5", "B6"]
     },
     {
       "input": "àא",
       "ascii": null,
-      "status": [
-        "B5",
-        "B6"
-      ]
+      "status": ["B5", "B6"]
     },
     {
       "input": "Àא",
       "ascii": null,
-      "status": [
-        "B5",
-        "B6"
-      ]
+      "status": ["B5", "B6"]
     },
     {
       "input": "Àא",
       "ascii": null,
-      "status": [
-        "B5",
-        "B6"
-      ]
+      "status": ["B5", "B6"]
     },
     {
       "input": "xn--0ca24w",
       "ascii": null,
-      "status": [
-        "B5",
-        "B6"
-      ]
+      "status": ["B5", "B6"]
     },
     {
       "input": "0à.א",
       "ascii": null,
-      "status": [
-        "B1"
-      ]
+      "status": ["B1"]
     },
     {
       "input": "0à.א",
       "ascii": null,
-      "status": [
-        "B1"
-      ]
+      "status": ["B1"]
     },
     {
       "input": "0À.א",
       "ascii": null,
-      "status": [
-        "B1"
-      ]
+      "status": ["B1"]
     },
     {
       "input": "0À.א",
       "ascii": null,
-      "status": [
-        "B1"
-      ]
+      "status": ["B1"]
     },
     {
       "input": "xn--0-sfa.xn--4db",
       "ascii": null,
-      "status": [
-        "B1"
-      ]
+      "status": ["B1"]
     },
     {
       "input": "à.א0٠א",
       "ascii": null,
-      "status": [
-        "B4"
-      ]
+      "status": ["B4"]
     },
     {
       "input": "à.א0٠א",
       "ascii": null,
-      "status": [
-        "B4"
-      ]
+      "status": ["B4"]
     },
     {
       "input": "À.א0٠א",
       "ascii": null,
-      "status": [
-        "B4"
-      ]
+      "status": ["B4"]
     },
     {
       "input": "À.א0٠א",
       "ascii": null,
-      "status": [
-        "B4"
-      ]
+      "status": ["B4"]
     },
     {
       "input": "xn--0ca.xn--0-zhcb98c",
       "ascii": null,
-      "status": [
-        "B4"
-      ]
+      "status": ["B4"]
     },
     {
       "input": "̈.א",
       "ascii": null,
-      "status": [
-        "B1",
-        "V6"
-      ]
+      "status": ["B1", "V6"]
     },
     {
       "input": "à.א0٠",
       "ascii": null,
-      "status": [
-        "B4"
-      ]
+      "status": ["B4"]
     },
     {
       "input": "àˇ.א",
       "ascii": null,
-      "status": [
-        "B6"
-      ]
+      "status": ["B6"]
     },
     {
       "input": "àˇ.א",
       "ascii": null,
-      "status": [
-        "B6"
-      ]
+      "status": ["B6"]
     },
     {
       "input": "Àˇ.א",
       "ascii": null,
-      "status": [
-        "B6"
-      ]
+      "status": ["B6"]
     },
     {
       "input": "Àˇ.א",
       "ascii": null,
-      "status": [
-        "B6"
-      ]
+      "status": ["B6"]
     },
     {
       "input": "xn--0ca88g.xn--4db",
       "ascii": null,
-      "status": [
-        "B6"
-      ]
+      "status": ["B6"]
     },
     {
       "input": "a‌b",
       "ascii": null,
-      "status": [
-        "C1"
-      ]
+      "status": ["C1"]
     },
     {
       "input": "A‌B",
       "ascii": null,
-      "status": [
-        "C1"
-      ]
+      "status": ["C1"]
     },
     {
       "input": "A‌b",
       "ascii": null,
-      "status": [
-        "C1"
-      ]
+      "status": ["C1"]
     },
     {
       "input": "ab",
@@ -790,9 +734,7 @@
     {
       "input": "xn--ab-j1t",
       "ascii": null,
-      "status": [
-        "C1"
-      ]
+      "status": ["C1"]
     },
     {
       "input": "a्‌b",
@@ -817,536 +759,357 @@
     {
       "input": "aب̈‌̈",
       "ascii": null,
-      "status": [
-        "B5",
-        "B6",
-        "C1"
-      ]
+      "status": ["B5", "B6", "C1"]
     },
     {
       "input": "a‍b",
       "ascii": null,
-      "status": [
-        "C2"
-      ]
+      "status": ["C2"]
     },
     {
       "input": "A‍B",
       "ascii": null,
-      "status": [
-        "C2"
-      ]
+      "status": ["C2"]
     },
     {
       "input": "A‍b",
       "ascii": null,
-      "status": [
-        "C2"
-      ]
+      "status": ["C2"]
     },
     {
       "input": "xn--ab-m1t",
       "ascii": null,
-      "status": [
-        "C2"
-      ]
+      "status": ["C2"]
     },
     {
       "input": "",
       "ascii": null,
-      "status": [
-        "A4_1",
-        "A4_2"
-      ]
+      "status": ["A4_1", "A4_2"]
     },
     {
       "input": "。",
       "ascii": null,
-      "status": [
-        "A4_1",
-        "A4_2"
-      ]
+      "status": ["A4_1", "A4_2"]
     },
     {
       "input": ".",
       "ascii": null,
-      "status": [
-        "A4_1",
-        "A4_2"
-      ]
+      "status": ["A4_1", "A4_2"]
     },
     {
       "input": "1234567890ä1234567890123456789012345678901234567890123456",
       "ascii": null,
-      "status": [
-        "A4_2"
-      ]
+      "status": ["A4_2"]
     },
     {
       "input": "1234567890ä1234567890123456789012345678901234567890123456",
       "ascii": null,
-      "status": [
-        "A4_2"
-      ]
+      "status": ["A4_2"]
     },
     {
       "input": "1234567890Ä1234567890123456789012345678901234567890123456",
       "ascii": null,
-      "status": [
-        "A4_2"
-      ]
+      "status": ["A4_2"]
     },
     {
       "input": "1234567890Ä1234567890123456789012345678901234567890123456",
       "ascii": null,
-      "status": [
-        "A4_2"
-      ]
+      "status": ["A4_2"]
     },
     {
       "input": "xn--12345678901234567890123456789012345678901234567890123456-fxe",
       "ascii": null,
-      "status": [
-        "A4_2"
-      ]
+      "status": ["A4_2"]
     },
     {
       "input": "a.b．c。d｡",
       "ascii": null,
-      "status": [
-        "A4_2"
-      ]
+      "status": ["A4_2"]
     },
     {
       "input": "xn--u-ccb",
       "ascii": null,
-      "status": [
-        "V1"
-      ]
+      "status": ["V1"]
     },
     {
       "input": "a⒈com",
       "ascii": null,
-      "status": [
-        "V7"
-      ]
+      "status": ["V7"]
     },
     {
       "input": "A⒈COM",
       "ascii": null,
-      "status": [
-        "V7"
-      ]
+      "status": ["V7"]
     },
     {
       "input": "A⒈Com",
       "ascii": null,
-      "status": [
-        "V7"
-      ]
+      "status": ["V7"]
     },
     {
       "input": "xn--acom-0w1b",
       "ascii": null,
-      "status": [
-        "V7"
-      ]
+      "status": ["V7"]
     },
     {
       "input": "xn--a-ecp.ru",
       "ascii": null,
-      "status": [
-        "V7"
-      ]
+      "status": ["V7"]
     },
     {
       "input": "xn--0.pt",
       "ascii": null,
-      "status": [
-        "P4"
-      ]
+      "status": ["P4"]
     },
     {
       "input": "xn--a.pt",
       "ascii": null,
-      "status": [
-        "V7"
-      ]
+      "status": ["V7"]
     },
     {
       "input": "xn--a-Ä.pt",
       "ascii": null,
-      "status": [
-        "P4"
-      ]
+      "status": ["P4"]
     },
     {
       "input": "xn--a-Ä.pt",
       "ascii": null,
-      "status": [
-        "P4"
-      ]
+      "status": ["P4"]
     },
     {
       "input": "xn--a-ä.pt",
       "ascii": null,
-      "status": [
-        "P4"
-      ]
+      "status": ["P4"]
     },
     {
       "input": "xn--a-ä.pt",
       "ascii": null,
-      "status": [
-        "P4"
-      ]
+      "status": ["P4"]
     },
     {
       "input": "XN--A-Ä.PT",
       "ascii": null,
-      "status": [
-        "P4"
-      ]
+      "status": ["P4"]
     },
     {
       "input": "xn--xn--a--gua.pt",
       "ascii": null,
-      "status": [
-        "V2",
-        "V4"
-      ]
+      "status": ["V2", "V4"]
     },
     {
       "input": "1.aß‌‍b‌‍cßßßßdςσßßßßßßßßeßßßßßßßßßßxßßßßßßßßßßyßßßßßßßß̂ßz",
       "ascii": null,
-      "status": [
-        "C1",
-        "C2",
-        "A4_2"
-      ]
+      "status": ["C1", "C2", "A4_2"]
     },
     {
       "input": "1.ASS‌‍B‌‍CSSSSSSSSDΣΣSSSSSSSSSSSSSSSSESSSSSSSSSSSSSSSSSSSSXSSSSSSSSSSSSSSSSSSSSYSSSSSSSSSSSSSSSŜSSZ",
       "ascii": null,
-      "status": [
-        "C1",
-        "C2",
-        "A4_2"
-      ]
+      "status": ["C1", "C2", "A4_2"]
     },
     {
       "input": "123456789012345678901234567890123456789012345678901234567890123.123456789012345678901234567890123456789012345678901234567890123.123456789012345678901234567890123456789012345678901234567890123.1234567890123456789012345678901234567890123456789012345678901c",
       "ascii": null,
-      "status": [
-        "A4_1"
-      ]
+      "status": ["A4_1"]
     },
     {
       "input": "123456789012345678901234567890123456789012345678901234567890123.1234567890123456789012345678901234567890123456789012345678901234.123456789012345678901234567890123456789012345678901234567890123.123456789012345678901234567890123456789012345678901234567890b",
       "ascii": null,
-      "status": [
-        "A4_1",
-        "A4_2"
-      ]
+      "status": ["A4_1", "A4_2"]
     },
     {
       "input": "123456789012345678901234567890123456789012345678901234567890123.1234567890ä123456789012345678901234567890123456789012345.123456789012345678901234567890123456789012345678901234567890123.1234567890123456789012345678901234567890123456789012345678901c",
       "ascii": null,
-      "status": [
-        "A4_1"
-      ]
+      "status": ["A4_1"]
     },
     {
       "input": "a.b..-q--a-.e",
       "ascii": null,
-      "status": [
-        "V2",
-        "V3",
-        "A4_2"
-      ]
+      "status": ["V2", "V3", "A4_2"]
     },
     {
       "input": "a.b..-q--ä-.e",
       "ascii": null,
-      "status": [
-        "V2",
-        "V3",
-        "A4_2"
-      ]
+      "status": ["V2", "V3", "A4_2"]
     },
     {
       "input": "a.b..-q--ä-.e",
       "ascii": null,
-      "status": [
-        "V2",
-        "V3",
-        "A4_2"
-      ]
+      "status": ["V2", "V3", "A4_2"]
     },
     {
       "input": "A.B..-Q--Ä-.E",
       "ascii": null,
-      "status": [
-        "V2",
-        "V3",
-        "A4_2"
-      ]
+      "status": ["V2", "V3", "A4_2"]
     },
     {
       "input": "A.B..-Q--Ä-.E",
       "ascii": null,
-      "status": [
-        "V2",
-        "V3",
-        "A4_2"
-      ]
+      "status": ["V2", "V3", "A4_2"]
     },
     {
       "input": "a.-b.",
       "ascii": null,
-      "status": [
-        "V3",
-        "A4_2"
-      ]
+      "status": ["V3", "A4_2"]
     },
     {
       "input": "a.b-.c",
       "ascii": null,
-      "status": [
-        "V3"
-      ]
+      "status": ["V3"]
     },
     {
       "input": "a.-.c",
       "ascii": null,
-      "status": [
-        "V3"
-      ]
+      "status": ["V3"]
     },
     {
       "input": "ä.-b.",
       "ascii": null,
-      "status": [
-        "V3",
-        "A4_2"
-      ]
+      "status": ["V3", "A4_2"]
     },
     {
       "input": "ä.-b.",
       "ascii": null,
-      "status": [
-        "V3",
-        "A4_2"
-      ]
+      "status": ["V3", "A4_2"]
     },
     {
       "input": "Ä.-B.",
       "ascii": null,
-      "status": [
-        "V3",
-        "A4_2"
-      ]
+      "status": ["V3", "A4_2"]
     },
     {
       "input": "a.b.̈c.d",
       "ascii": null,
-      "status": [
-        "V6"
-      ]
+      "status": ["V6"]
     },
     {
       "input": "A.B.̈C.D",
       "ascii": null,
-      "status": [
-        "V6"
-      ]
+      "status": ["V6"]
     },
     {
       "input": "A.b.̈c.d",
       "ascii": null,
-      "status": [
-        "V6"
-      ]
+      "status": ["V6"]
     },
     {
       "input": "a.b.xn--c-bcb.d",
       "ascii": null,
-      "status": [
-        "V6"
-      ]
+      "status": ["V6"]
     },
     {
       "input": "b-.א",
       "ascii": null,
-      "status": [
-        "B6",
-        "V3"
-      ]
+      "status": ["B6", "V3"]
     },
     {
       "input": "אaׇ",
       "ascii": null,
-      "status": [
-        "B2",
-        "B3"
-      ]
+      "status": ["B2", "B3"]
     },
     {
       "input": "אAׇ",
       "ascii": null,
-      "status": [
-        "B2",
-        "B3"
-      ]
+      "status": ["B2", "B3"]
     },
     {
       "input": "xn--a-ihcz",
       "ascii": null,
-      "status": [
-        "B2",
-        "B3"
-      ]
+      "status": ["B2", "B3"]
     },
     {
       "input": "אTת",
       "ascii": null,
-      "status": [
-        "B2"
-      ]
+      "status": ["B2"]
     },
     {
       "input": "אtת",
       "ascii": null,
-      "status": [
-        "B2"
-      ]
+      "status": ["B2"]
     },
     {
       "input": "xn--t-zhc3f",
       "ascii": null,
-      "status": [
-        "B2"
-      ]
+      "status": ["B2"]
     },
     {
       "input": "ஹ‍",
       "ascii": null,
-      "status": [
-        "C2"
-      ]
+      "status": ["C2"]
     },
     {
       "input": "xn--dmc225h",
       "ascii": null,
-      "status": [
-        "C2"
-      ]
+      "status": ["C2"]
     },
     {
       "input": "لٰ‌ۭ",
       "ascii": null,
-      "status": [
-        "B3",
-        "C1"
-      ]
+      "status": ["B3", "C1"]
     },
     {
       "input": "xn--ghb2gxqy34f",
       "ascii": null,
-      "status": [
-        "B3",
-        "C1"
-      ]
+      "status": ["B3", "C1"]
     },
     {
       "input": "ل‌",
       "ascii": null,
-      "status": [
-        "B3",
-        "C1"
-      ]
+      "status": ["B3", "C1"]
     },
     {
       "input": "xn--ghb413k",
       "ascii": null,
-      "status": [
-        "B3",
-        "C1"
-      ]
+      "status": ["B3", "C1"]
     },
     {
       "input": "$",
       "ascii": null,
-      "status": [
-        "U1"
-      ]
+      "status": ["U1"]
     },
     {
       "input": "⑷.four",
       "ascii": null,
-      "status": [
-        "U1"
-      ]
+      "status": ["U1"]
     },
     {
       "input": "(4).four",
       "ascii": null,
-      "status": [
-        "U1"
-      ]
+      "status": ["U1"]
     },
     {
       "input": "⑷.FOUR",
       "ascii": null,
-      "status": [
-        "U1"
-      ]
+      "status": ["U1"]
     },
     {
       "input": "⑷.Four",
       "ascii": null,
-      "status": [
-        "U1"
-      ]
+      "status": ["U1"]
     },
     {
       "input": "𣳔̃.𑓂",
       "ascii": null,
-      "status": [
-        "V6"
-      ]
+      "status": ["V6"]
     },
     {
       "input": "xn--nsa95820a.xn--wz1d",
       "ascii": null,
-      "status": [
-        "V6"
-      ]
+      "status": ["V6"]
     },
     {
       "input": "堕𑓂ᬂ。𐮇𞤽‌-",
       "ascii": null,
-      "status": [
-        "B3",
-        "C1",
-        "V3"
-      ]
+      "status": ["B3", "C1", "V3"]
     },
     {
       "input": "堕𑓂ᬂ。𐮇𞤛‌-",
       "ascii": null,
-      "status": [
-        "B3",
-        "C1",
-        "V3"
-      ]
+      "status": ["B3", "C1", "V3"]
     },
     {
       "input": "xn--8,-g9oy26fzu4d.xn--kmb6733w",
       "ascii": null,
-      "status": [
-        "U1"
-      ]
+      "status": ["U1"]
     }
   ]
 }

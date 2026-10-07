@@ -94,8 +94,8 @@ describe("certificate names", async () => {
     });
 
   it("covers a domain with the same name or a wildcard one label up", async () => {
-    const plain = (name: string) => ({ name, wildcard: false });
-    const wild = (name: string) => ({ name, wildcard: true });
+    const plain = (name: string) => ({ name, kind: "exact" });
+    const wild = (name: string) => ({ name, kind: "wildcard" });
     expect(namesCover(["shop.test"], plain("shop.test"))).toBe(true);
     expect(namesCover(["*.shop.test"], plain("www.shop.test"))).toBe(true);
     expect(namesCover(["*.shop.test"], plain("a.www.shop.test"))).toBe(false);

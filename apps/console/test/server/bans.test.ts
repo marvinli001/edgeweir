@@ -345,6 +345,7 @@ describe("dynamic bans", async () => {
     expect(
       await reportAutoBans(ctx.db, { id: near?.id ?? "", clusterId }, [
         {
+          scope: "site",
           siteId,
           cidr: "192.0.2.77/32",
           createdAt: new Date(),

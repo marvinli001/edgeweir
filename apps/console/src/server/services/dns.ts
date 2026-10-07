@@ -20,9 +20,11 @@ import { schema } from "@edgeweir/db";
 import { and, desc, eq, gt, inArray, isNotNull, lte, ne, notInArray, sql } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { lockCnamePrefixes } from "../lib/locks";
 import { isOnline } from "../lib/node-online";
 import { deleteInBatches } from "../lib/retention";
 import { type Actor, recordAudit, systemActor } from "./audit";
+import { retiredPrefixes, usedCnamePrefixes } from "./cname-prefixes";
 import { withLease } from "./dns-lease";
 import {
   certdDns,
@@ -242,6 +244,22 @@ async function validateBinding(db: Executor, clusterId: string, policy: BindingP
   }
 }
 
+/**
+ * A binding's all-lines record and line names are never a CNAME prefix of
+ * a site or layer-4 application, nor one still resolving after a change
+ * (DNS_BINDING_CONFLICT); takes lockCnamePrefixes.
+ */
+async function assertLabelsFree(tx: Tx, policy: BindingPolicy) {
+  if (policy.mode === "off") return;
+  await lockCnamePrefixes(tx);
+  const used = await usedCnamePrefixes(tx);
+  const label = fixedLabels(policy).find((l) => used.has(l));
+  if (label !== undefined)
+    fail("DNS_BINDING_CONFLICT", "a site or layer-4 application uses this name", {
+      name: `${label}.${policy.domain}`,
+    });
+}
+
 /** How long a node may lag a new target (applying it, or not told yet) and keep its records. */
 export const DNS_APPLY_GRACE_MS = 2 * 60_000;
 type Receipt = typeof schema.nodeConfigStatus.$inferSelect;
@@ -348,7 +366,7 @@ export async function compileBindingPlan(
   relative(policy.domain, zone);
   const manual = policy.mode === "manual";
   const sites = await db
-    .selectDistinct({ id: schema.site.id })
+    .selectDistinct({ id: schema.site.id, prefix: schema.site.cnamePrefix })
     .from(schema.site)
     .innerJoin(schema.siteDomain, eq(schema.siteDomain.siteId, schema.site.id))
     // Disabled sites keep their records; nodes answer them with the disabled page.
@@ -542,16 +560,35 @@ export async function compileBindingPlan(
       for (const address of backup) failover.push(`${set}|${address}`);
     }
   }
-  // Layer-4 applications use the sites' names: <id>.<domain> (and line aliases).
+  // Layer-4 applications use the sites' names: <prefix>.<domain> (and line aliases).
   const apps = await db
-    .select({ id: schema.l4App.id })
+    .select({ id: schema.l4App.id, prefix: schema.l4App.cnamePrefix })
     .from(schema.l4App)
     .where(and(eq(schema.l4App.clusterId, clusterId), eq(schema.l4App.enabled, true)))
     .orderBy(schema.l4App.id);
-  for (const { id } of [...sites, ...apps]) {
-    add(`${id}.${policy.domain}`, "CNAME", allName);
+  // Prefixes replaced less than 24 hours ago keep resolving beside the new ones.
+  const planned = new Set([...sites, ...apps].map((owner) => owner.id));
+  const retired = (
+    await db
+      .select({
+        prefix: schema.cnameRetired.prefix,
+        siteId: schema.cnameRetired.siteId,
+        appId: schema.cnameRetired.l4AppId,
+      })
+      .from(schema.cnameRetired)
+      .where(
+        and(
+          eq(schema.cnameRetired.clusterId, clusterId),
+          gt(schema.cnameRetired.expiresAt, new Date(now)),
+        ),
+      )
+      .orderBy(schema.cnameRetired.prefix)
+  ).filter((row) => planned.has(row.siteId ?? row.appId ?? ""));
+  for (const { prefix } of [...sites, ...apps, ...retired]) {
+    add(`${prefix}.${policy.domain}`, "CNAME", allName);
     if (policy.lineAliases)
-      for (const line of lines) add(`${line.name}.${id}.${policy.domain}`, "CNAME", line.target);
+      for (const line of lines)
+        add(`${line.name}.${prefix}.${policy.domain}`, "CNAME", line.target);
   }
   if (names.size > MAX_RECORDS || records.length > MAX_RECORDS)
     fail("DNS_POLICY_INVALID", "DNS managed record limit exceeded");
@@ -941,6 +978,7 @@ export async function saveBinding(
   const policy: BindingPolicy = { ...input, allLabel: current.allLabel };
   await validateBinding(app.db, clusterId, policy);
   return app.db.transaction(async (tx) => {
+    await assertLabelsFree(tx, policy);
     const revision = await publishBinding(tx, clusterId, policy, "manual", { save: true });
     await recordAudit(tx, actor, {
       action: "dns.binding_update",
@@ -1018,6 +1056,7 @@ export async function rollbackBinding(
   policy.allLabel = current.allLabel;
   await validateBinding(app.db, clusterId, policy);
   return app.db.transaction(async (tx) => {
+    await assertLabelsFree(tx, policy);
     const result = await publishBinding(tx, clusterId, policy, "rollback", { save: true });
     await recordAudit(tx, actor, {
       action: "dns.rollback",
@@ -1422,9 +1461,9 @@ export async function assertBindingReleased(db: Executor, clusterId: string) {
 
 /**
  * The names a site or layer-4 application of the cluster is published
- * under: its CNAME `<id>.<domain>` and, per line of the binding,
- * `<line>.<id>.<domain>` with line aliases or else the line's own name.
- * Null while the binding is off or has no domain.
+ * under (`names(prefix)`): its CNAME `<prefix>.<domain>` and, per line of
+ * the binding, `<line>.<prefix>.<domain>` with line aliases or else the
+ * line's own name. Null while the binding is off or has no domain.
  */
 export async function cnameTargets(db: Executor, clusterId: string) {
   const row = await loadBinding(db, clusterId);
@@ -1434,8 +1473,8 @@ export async function cnameTargets(db: Executor, clusterId: string) {
     .from(schema.nodeGroup)
     .where(eq(schema.nodeGroup.clusterId, clusterId));
   const lines = row.lines.filter((l) => groups.some((g) => g.id === l.nodeGroupId));
-  return (id: string) => {
-    const target = `${id}.${row.domain}`;
+  const names = (prefix: string) => {
+    const target = `${prefix}.${row.domain}`;
     return {
       target,
       lines: lines.map((l) => ({
@@ -1444,17 +1483,29 @@ export async function cnameTargets(db: Executor, clusterId: string) {
       })),
     };
   };
+  return { domain: row.domain, names };
 }
 
 export async function siteDnsTarget(app: AppContext, siteId: string) {
   const site = await findSite(app.db, siteId);
   const row = await loadBinding(app.db, site.clusterId);
-  const names = (await cnameTargets(app.db, site.clusterId))?.(site.id);
+  const names = (await cnameTargets(app.db, site.clusterId))?.names(site.cnamePrefix);
   if (!names)
-    return { target: null, mode: "off" as const, published: false, healthy: false, lines: [] };
+    return {
+      target: null,
+      mode: "off" as const,
+      published: false,
+      healthy: false,
+      lines: [],
+      retired: [],
+    };
   const { target, lines } = names;
+  const retired = (await retiredPrefixes(app.db, { site: site.id })).map((r) => ({
+    name: `${r.prefix}.${row.domain}`,
+    expiresAt: r.expiresAt.toISOString(),
+  }));
   if (row.mode === "manual")
-    return { target, mode: "manual" as const, published: false, healthy: false, lines };
+    return { target, mode: "manual" as const, published: false, healthy: false, lines, retired };
   const provider = row.providerId ? await findProvider(app.db, row.providerId) : null;
   const revision = await revisionRow(app.db, site.clusterId, row.desiredRevision);
   const allName = provider ? relative(`${row.allLabel}.${row.domain}`, provider.zone) : "";
@@ -1464,5 +1515,6 @@ export async function siteDnsTarget(app: AppContext, siteId: string) {
     published: row.appliedRevision === row.desiredRevision && revision?.status === "applied",
     healthy: !!revision?.records.some((r) => r.name === allName && addressRecord(r)),
     lines,
+    retired,
   };
 }

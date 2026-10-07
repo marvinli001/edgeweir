@@ -9,6 +9,7 @@ import {
 import { getBulkRedirects, saveBulkRedirects } from "../../services/bulk-redirects";
 import { createCacheTask, getCacheTask, listCacheTasks } from "../../services/cache-tasks";
 import { getHttps, updateHttps } from "../../services/certificates";
+import { setCnamePrefix } from "../../services/cname-prefixes";
 import { getSiteErrorPages, updateSiteErrorPages } from "../../services/error-pages";
 import { checkHttps } from "../../services/https-check";
 import {
@@ -88,6 +89,9 @@ export const sitesRouter = {
     setEnabled: authed.l4Apps.setEnabled.handler(({ input, context }) =>
       setL4AppEnabled(context.app.db, input, context.actor),
     ),
+    setCnamePrefix: authed.l4Apps.setCnamePrefix.handler(({ input, context }) =>
+      setCnamePrefix(context.app, { app: input.id }, input.prefix, context.actor),
+    ),
     stats: authed.l4Apps.stats.handler(({ input, context }) => l4AppStats(context.app.db, input)),
   },
   logs: {
@@ -161,6 +165,9 @@ export const sitesRouter = {
     }),
     setEnabled: authed.sites.setEnabled.handler(({ input, context }) =>
       setSiteEnabled(context.app.db, input, { actor: context.actor }),
+    ),
+    setCnamePrefix: authed.sites.setCnamePrefix.handler(({ input, context }) =>
+      setCnamePrefix(context.app, { site: input.id }, input.prefix, context.actor),
     ),
     launch: authed.sites.launch.handler(({ input, context }) => siteLaunch(context.app, input.id)),
     originHealth: authed.sites.originHealth.handler(({ input, context }) =>

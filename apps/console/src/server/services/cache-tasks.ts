@@ -4,7 +4,10 @@ import {
   type CacheTaskState,
   type CacheTaskType,
   type cacheTaskCreateInput,
+  type DomainKind,
+  hostMatcher,
   hostName,
+  matchHost,
   normalizeCacheTag,
   PREFETCH_V2_FEATURE,
   type PrefetchVariant,
@@ -16,6 +19,7 @@ import { type Database, schema } from "@edgeweir/db";
 import {
   and,
   arrayContains,
+  asc,
   count,
   desc,
   eq,
@@ -156,35 +160,59 @@ async function assertTaskFeatures(tx: Executor, clusterIds: string[], features: 
   await assertNodeFeatures(tx, clusterIds, features, "cluster nodes cannot run this task");
 }
 
-/** Maps host names to the sites that serve them: exact domains win over wildcards. */
+/**
+ * Maps host names to the sites that serve them, by the nodes' precedence:
+ * exact, `*.` over the parent, the longest `.` suffix, then patterns by
+ * site creation time and the site's order.
+ */
 async function resolveHosts(db: Executor, hosts: string[]) {
-  const parents = hosts.map((h) => h.slice(h.indexOf(".") + 1)).filter((p, i) => p !== hosts[i]);
+  const ancestors = [
+    ...new Set(
+      hosts.flatMap((host) => {
+        const out: string[] = [];
+        for (let dot = host.indexOf("."); dot > 0; dot = host.indexOf(".", dot + 1))
+          out.push(host.slice(dot + 1));
+        return out;
+      }),
+    ),
+  ];
   const rows = await db
     .select({
       name: schema.siteDomain.name,
-      wildcard: schema.siteDomain.wildcard,
+      kind: schema.siteDomain.kind,
+      domainCreatedAt: schema.siteDomain.createdAt,
       siteId: schema.site.id,
       siteName: schema.site.name,
       clusterId: schema.site.clusterId,
       enabled: schema.site.enabled,
+      siteCreatedAt: schema.site.createdAt,
     })
     .from(schema.siteDomain)
     .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
     .where(
       or(
-        and(inArray(schema.siteDomain.name, hosts), eq(schema.siteDomain.wildcard, false)),
-        parents.length
-          ? and(inArray(schema.siteDomain.name, parents), eq(schema.siteDomain.wildcard, true))
+        and(inArray(schema.siteDomain.name, hosts), eq(schema.siteDomain.kind, "exact")),
+        ancestors.length
+          ? and(
+              inArray(schema.siteDomain.name, ancestors),
+              inArray(schema.siteDomain.kind, ["wildcard", "suffix"]),
+            )
           : undefined,
+        eq(schema.siteDomain.kind, "regex"),
       ),
+    )
+    .orderBy(
+      asc(schema.site.createdAt),
+      asc(schema.site.id),
+      asc(schema.siteDomain.createdAt),
+      asc(schema.siteDomain.name),
     );
+  const matcher = hostMatcher(
+    rows.map((row) => ({ kind: row.kind as DomainKind, name: row.name, value: row })),
+  );
   const resolved = new Map<string, (typeof rows)[number]>();
   for (const host of hosts) {
-    const exact = rows.find((r) => !r.wildcard && r.name === host);
-    const dot = host.indexOf(".");
-    const wild =
-      dot > 0 ? rows.find((r) => r.wildcard && r.name === host.slice(dot + 1)) : undefined;
-    const match = exact ?? wild;
+    const match = matchHost(matcher, host);
     if (match) resolved.set(host, match);
   }
   return resolved;

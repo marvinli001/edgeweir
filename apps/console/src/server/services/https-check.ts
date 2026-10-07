@@ -53,14 +53,18 @@ export async function checkHttps(
     .from(schema.site)
     .where(eq(schema.site.id, id));
   if (!site) fail("SITE_NOT_FOUND", "site not found");
-  const domains = await app.db
-    .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
+  const stored = await app.db
+    .select({ name: schema.siteDomain.name, kind: schema.siteDomain.kind })
     .from(schema.siteDomain)
     .where(eq(schema.siteDomain.siteId, id))
-    .orderBy(asc(schema.siteDomain.name), asc(schema.siteDomain.wildcard));
+    .orderBy(asc(schema.siteDomain.name), asc(schema.siteDomain.kind));
+  // Patterns name no host to issue for; a suffix domain asks for its wildcard.
+  const domains = stored
+    .filter((d) => d.kind !== "regex")
+    .map((d) => (d.kind === "suffix" ? { ...d, kind: "wildcard" } : d));
   const names = [...new Set(domains.map(certificateName))];
   // HTTP-01 cannot validate wildcards.
-  const challenge = domains.some((d) => d.wildcard) ? "dns01" : "http01";
+  const challenge = domains.some((d) => d.kind !== "exact") ? "dns01" : "http01";
   const credential =
     challenge === "dns01"
       ? (
@@ -115,7 +119,9 @@ export async function checkHttps(
       result === "forbidden" ? [{ code: "caa_forbidden" as const, name }] : [],
     );
   };
-  const [nodes, dns, caa] = await Promise.all([nodeBlockers(), dnsBlockers(), caaBlockers()]);
+  const [nodes, dns, caa] = names.length
+    ? await Promise.all([nodeBlockers(), dnsBlockers(), caaBlockers()])
+    : [[{ code: "no_certificate_names" as const }], [], []];
 
   const issued = await app.db
     .select({
@@ -129,6 +135,7 @@ export async function checkHttps(
     .where(and(ne(schema.certificate.chainPem, ""), gt(schema.certificate.notAfter, new Date())))
     .orderBy(asc(schema.certificate.name));
   const covering = issued.filter((cert) => {
+    if (!domains.length) return false;
     if (certificateUnloadable(cert)) return false;
     try {
       return uncoveredDomains(cert.chainPem, domains).length === 0;

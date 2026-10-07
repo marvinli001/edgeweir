@@ -51,6 +51,13 @@ export const lockClusterUpgrade = (tx: Executor, clusterId: string) =>
   xactLock(tx, `upgrade/${clusterId}`);
 
 /**
+ * Serializes CNAME prefix changes, new sites and layer-4 applications (their
+ * random prefix) and DNS binding saves (line names), so a prefix that was
+ * checked free cannot be taken meanwhile.
+ */
+export const lockCnamePrefixes = (tx: Executor) => xactLock(tx, "edgeweir.cname-prefix");
+
+/**
  * Serializes changes to the same host names, so a check that a domain is
  * free and the insert after it cannot interleave. Taken in name order.
  */

@@ -136,6 +136,7 @@ describe("OpenAPI security requirements", async () => {
       "patch /l4-apps/{id} l4Apps.update",
       "post /l4-apps l4Apps.create",
       "put /clusters/{clusterId}/port-pools clusters.setPortPools",
+      "put /l4-apps/{id}/cname-prefix l4Apps.setCnamePrefix",
       "put /l4-apps/{id}/enabled l4Apps.setEnabled",
     ]);
     const body = (path: string, method: string) =>

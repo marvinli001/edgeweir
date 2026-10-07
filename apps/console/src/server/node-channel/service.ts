@@ -1039,6 +1039,7 @@ export function createNodeService(
         app.db,
         node,
         req.bans.map((ban) => ({
+          scope: ban.scope === BanScope.PLATFORM ? ("platform" as const) : ("site" as const),
           siteId: ban.siteId,
           cidr: ban.cidr,
           createdAt: ban.createdAt ? timestampDate(ban.createdAt) : null,

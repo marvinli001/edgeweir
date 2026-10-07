@@ -18,7 +18,7 @@ async function servingClusters(db: Executor, names: readonly string[]) {
         .from(schema.siteDomain)
         .innerJoin(schema.site, eq(schema.site.id, schema.siteDomain.siteId))
         .where(
-          and(inArray(schema.siteDomain.name, [...names]), eq(schema.siteDomain.wildcard, false)),
+          and(inArray(schema.siteDomain.name, [...names]), eq(schema.siteDomain.kind, "exact")),
         )
     : [];
   return new Map(rows.map((row) => [row.name, row.clusterId]));

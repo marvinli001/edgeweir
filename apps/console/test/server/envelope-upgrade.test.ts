@@ -63,7 +63,7 @@ describe("legacy envelope upgrade", async () => {
     const [cluster] = await ctx.db.insert(schema.cluster).values({ name: "default" }).returning();
     const [site] = await ctx.db
       .insert(schema.site)
-      .values({ clusterId: cluster?.id ?? "", name: "assets" })
+      .values({ clusterId: cluster?.id ?? "", name: "assets", cnamePrefix: "assets" })
       .returning();
     const siteId = site?.id ?? "";
     const legacy = (secret: string) =>

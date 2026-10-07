@@ -163,10 +163,7 @@ async function issuanceNames(
     .selectDistinct({ name: schema.siteDomain.name })
     .from(schema.siteDomain)
     .where(
-      and(
-        inArray(schema.siteDomain.name, certificate.names),
-        eq(schema.siteDomain.wildcard, false),
-      ),
+      and(inArray(schema.siteDomain.name, certificate.names), eq(schema.siteDomain.kind, "exact")),
     );
   const served = certificate.names.filter((name) => rows.some((row) => row.name === name));
   return served.length ? served : certificate.names;
@@ -337,7 +334,7 @@ async function presentHttpChallenges(
       .selectDistinct({ clusterId: schema.site.clusterId, name: schema.siteDomain.name })
       .from(schema.site)
       .innerJoin(schema.siteDomain, eq(schema.siteDomain.siteId, schema.site.id))
-      .where(and(inArray(schema.siteDomain.name, domains), eq(schema.siteDomain.wildcard, false)));
+      .where(and(inArray(schema.siteDomain.name, domains), eq(schema.siteDomain.kind, "exact")));
     if (domains.some((domain) => !served.some((s) => s.name === domain)))
       throw new IssuanceError("http01_unserved", "no cluster serves this challenge domain");
     const published = await publishClusters(

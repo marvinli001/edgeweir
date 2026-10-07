@@ -4,9 +4,14 @@ import {
   type ClientIpInput,
   type ClusterClientIp,
   type ClusterListenPorts,
+  type ClusterUnknownHosts,
   EDGE_PORTS_FEATURE,
   type ListenPortsInput,
   nodeSupportsFeature,
+  SCAN_BAN_SECONDS,
+  SCAN_THRESHOLD,
+  UNKNOWN_HOST_FEATURE,
+  type UnknownHostsInput,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, eq } from "drizzle-orm";
@@ -50,14 +55,49 @@ export function clientIpOf(row: Pick<ClusterRow, "clientIp">): ClusterClientIp["
     : { mode: "direct", trustedCidrs: [], header: "", dropForwardedFor: false };
 }
 
-/** The cluster's listener ports and client address setting as the compiler takes them. */
+/** The unknown host handling of a cluster row (null is the defaults). */
+export function unknownHostsOf(
+  row: Pick<ClusterRow, "unknownHosts" | "defaultSiteId">,
+): ClusterUnknownHosts["settings"] {
+  const stored = row.unknownHosts;
+  return {
+    unknownHost: stored?.unknownHost ?? "page",
+    ipAccess: stored?.ipAccess ?? "page",
+    defaultSiteId: row.defaultSiteId,
+    defaultCertificate: stored?.defaultCertificate ?? false,
+    scan: {
+      enabled: stored?.scan.enabled ?? false,
+      threshold: stored?.scan.threshold ?? SCAN_THRESHOLD.default,
+      banSeconds: stored?.scan.banSeconds ?? SCAN_BAN_SECONDS.default,
+    },
+  };
+}
+
+/**
+ * The cluster's listener ports, client address setting and unknown host
+ * handling as the compiler takes them.
+ */
 export function edgeModelOf(
-  row: Pick<ClusterRow, "extraHttpPorts" | "extraHttpsPorts" | "clientIp">,
+  row: Pick<
+    ClusterRow,
+    "extraHttpPorts" | "extraHttpsPorts" | "clientIp" | "unknownHosts" | "defaultSiteId"
+  >,
 ): EdgeModel {
+  const unknown = unknownHostsOf(row);
   return {
     httpPorts: [...row.extraHttpPorts],
     httpsPorts: [...row.extraHttpsPorts],
     clientIp: row.clientIp ? clientIpOf(row) : null,
+    unknownHosts: row.unknownHosts
+      ? {
+          unknownHost: unknown.unknownHost,
+          ipAccess: unknown.ipAccess,
+          defaultSiteId: unknown.defaultSiteId,
+          defaultCertificate: unknown.defaultCertificate,
+          scanThreshold: unknown.scan.enabled ? unknown.scan.threshold : 0,
+          scanBanSeconds: unknown.scan.enabled ? unknown.scan.banSeconds : 0,
+        }
+      : null,
   };
 }
 
@@ -221,4 +261,104 @@ export async function setClientIp(
     });
   });
   return getClientIp(db, input.clusterId);
+}
+
+export async function getUnknownHosts(
+  db: Executor,
+  clusterId: string,
+): Promise<ClusterUnknownHosts> {
+  const row = await findCluster(db, clusterId);
+  const [site] = row.defaultSiteId
+    ? await db
+        .select({
+          id: schema.site.id,
+          name: schema.site.name,
+          enabled: schema.site.enabled,
+          certificateId: schema.site.certificateId,
+        })
+        .from(schema.site)
+        .where(eq(schema.site.id, row.defaultSiteId))
+    : [];
+  return {
+    clusterId,
+    settings: unknownHostsOf(row),
+    defaultSite: site
+      ? { id: site.id, name: site.name, enabled: site.enabled, certificate: !!site.certificateId }
+      : null,
+    nodesWithout: await nodesWithout(db, clusterId, UNKNOWN_HOST_FEATURE),
+  };
+}
+
+/**
+ * Replaces a cluster's handling of unknown hosts and node IP access, audits
+ * and publishes it. The default site must be an enabled site of the
+ * cluster (DEFAULT_SITE_INVALID), with a certificate when unknown SNI gets
+ * it (DEFAULT_SITE_CERTIFICATE_REQUIRED). The defaults are stored as null.
+ */
+export async function setUnknownHosts(
+  db: Database,
+  input: UnknownHostsInput,
+  actor: Actor,
+): Promise<ClusterUnknownHosts> {
+  await db.transaction(async (tx) => {
+    const cluster = await findCluster(tx, input.clusterId, true);
+    const s = input.settings;
+    if (s.defaultSiteId) {
+      const [site] = await tx
+        .select({
+          clusterId: schema.site.clusterId,
+          enabled: schema.site.enabled,
+          certificateId: schema.site.certificateId,
+        })
+        .from(schema.site)
+        .where(eq(schema.site.id, s.defaultSiteId))
+        .for("update");
+      if (!site || site.clusterId !== cluster.id || !site.enabled)
+        fail("DEFAULT_SITE_INVALID", "the default site must be an enabled site of this cluster");
+      if (s.defaultCertificate && !site.certificateId)
+        fail("DEFAULT_SITE_CERTIFICATE_REQUIRED", "the default site has no certificate");
+    }
+    const defaults =
+      s.unknownHost === "page" &&
+      s.ipAccess === "page" &&
+      !s.defaultCertificate &&
+      !s.scan.enabled &&
+      s.scan.threshold === SCAN_THRESHOLD.default &&
+      s.scan.banSeconds === SCAN_BAN_SECONDS.default;
+    const stored = defaults
+      ? null
+      : {
+          unknownHost: s.unknownHost,
+          ipAccess: s.ipAccess,
+          defaultCertificate: s.defaultCertificate,
+          scan: { ...s.scan },
+        };
+    const before = unknownHostsOf(cluster);
+    if (
+      JSON.stringify(stored) === JSON.stringify(cluster.unknownHosts ?? null) &&
+      s.defaultSiteId === cluster.defaultSiteId
+    )
+      return;
+    await tx
+      .update(schema.cluster)
+      .set({ unknownHosts: stored, defaultSiteId: s.defaultSiteId, updatedAt: new Date() })
+      .where(eq(schema.cluster.id, cluster.id));
+    const { row: revision } = await publishRevision(tx, {
+      clusterId: cluster.id,
+      reason: { code: "unknown_hosts_updated", params: {} },
+      actor,
+    });
+    await recordAudit(tx, actor, {
+      action: "cluster.unknown_hosts_update",
+      targetType: "cluster",
+      targetId: cluster.id,
+      targetName: cluster.name,
+      metadata: {
+        from: before,
+        to: unknownHostsOf({ unknownHosts: stored, defaultSiteId: s.defaultSiteId }),
+        revision: revision.revision,
+      },
+    });
+  });
+  return getUnknownHosts(db, input.clusterId);
 }

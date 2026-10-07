@@ -601,21 +601,28 @@ describe("port pools and layer-4 applications", async () => {
     });
     const withApps = await plan(clusterId);
     const cname = (name: string, data: string) => ({ name, type: "CNAME", data, ttl: 60 });
-    const appRecords = [gameId, voiceId].flatMap((id) => [
-      cname(id, "all.edge.l4.test"),
-      cname(`main.${id}`, "main.edge.l4.test"),
+    // Records are named after the CNAME prefixes (random for new objects).
+    const gamePrefix = (await admin.l4Apps.get({ id: gameId })).cnamePrefix;
+    const voicePrefix = (await admin.l4Apps.get({ id: voiceId })).cnamePrefix;
+    const sitePrefix = site.site.cnamePrefix;
+    expect([gamePrefix, voicePrefix, sitePrefix].every((p) => /^[a-z][a-z0-9]{7}$/.test(p))).toBe(
+      true,
+    );
+    const appRecords = [gamePrefix, voicePrefix].flatMap((prefix) => [
+      cname(prefix, "all.edge.l4.test"),
+      cname(`main.${prefix}`, "main.edge.l4.test"),
     ]);
     expect(withApps.records).toEqual(expect.arrayContaining(appRecords));
     expect(withApps.records).toEqual(
       expect.arrayContaining([
-        cname(site.site.id, "all.edge.l4.test"),
-        cname(`main.${site.site.id}`, "main.edge.l4.test"),
+        cname(sitePrefix, "all.edge.l4.test"),
+        cname(`main.${sitePrefix}`, "main.edge.l4.test"),
       ]),
     );
     expect(withApps.managedNames).toEqual(
       expect.arrayContaining([
-        { name: gameId, type: "CNAME" },
-        { name: `main.${gameId}`, type: "CNAME" },
+        { name: gamePrefix, type: "CNAME" },
+        { name: `main.${gamePrefix}`, type: "CNAME" },
       ]),
     );
     // The applications add their CNAMEs and nothing else.
@@ -625,7 +632,7 @@ describe("port pools and layer-4 applications", async () => {
     expect(withoutApps.records).toEqual(
       withApps.records.filter((r) => !appRecords.some((a) => a.name === r.name)),
     );
-    expect(withoutApps.records.some((r) => r.name.includes(gameId))).toBe(false);
+    expect(withoutApps.records.some((r) => r.name.includes(gamePrefix))).toBe(false);
     await admin.l4Apps.setEnabled({ id: gameId, enabled: true });
     await admin.l4Apps.setEnabled({ id: voiceId, enabled: true });
     // A binding without applications plans what it did before.
@@ -634,12 +641,12 @@ describe("port pools and layer-4 applications", async () => {
     // The manual binding's revision lists the records; the DTO names the target.
     const stored = await admin.dns.binding({ clusterId });
     expect(stored.records).toEqual(expect.arrayContaining(appRecords));
-    expect((await admin.l4Apps.get({ id: gameId })).dnsTarget).toBe(`${gameId}.edge.l4.test`);
+    expect((await admin.l4Apps.get({ id: gameId })).dnsTarget).toBe(`${gamePrefix}.edge.l4.test`);
     expect((await admin.l4Apps.get({ id: gameId })).dnsLines).toEqual([
-      { name: "main", target: `main.${gameId}.edge.l4.test` },
+      { name: "main", target: `main.${gamePrefix}.edge.l4.test` },
     ]);
     expect((await admin.dns.siteTarget({ siteId: site.site.id })).target).toBe(
-      `${site.site.id}.edge.l4.test`,
+      `${sitePrefix}.edge.l4.test`,
     );
     await admin.dns.saveBinding({
       clusterId,
@@ -732,6 +739,7 @@ describe("port pools and layer-4 applications", async () => {
       Array.from({ length: MAX_L4_APPS_PER_CLUSTER }, (_, i) => ({
         clusterId: cluster.id,
         name: `a${i}`,
+        cnamePrefix: `limit-a${i}`,
         protocol: "udp",
         port: 10000 + i,
         enabled: false,

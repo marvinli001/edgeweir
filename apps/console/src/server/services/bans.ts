@@ -458,6 +458,8 @@ export async function banChanges(
 }
 
 export interface ReportedAutoBan {
+  /** platform: scan protection (unknown_host_scan, no site); site: CC (cc_ip_rate). */
+  scope: "site" | "platform";
   siteId: string;
   cidr: string;
   createdAt: Date | null;
@@ -479,6 +481,10 @@ const finite = (value: number) => (Number.isFinite(value) ? value : 0);
  * cluster, prefixes other than an IPv4 address or an IPv6 /64 (or /128 of
  * older nodes), unknown reasons, protected addresses and
  * expired bans are skipped; expiry is capped at 7 days after creation.
+ * Platform bans (scan protection, reason unknown_host_scan, no site) are
+ * keyed by CIDR alone, like manual platform bans: an active one (manual or
+ * from another node) stays, an automatic one keeps the later expiry; they
+ * hold back every node's address and apply to every cluster when shared.
  * Returns how many bans were accepted.
  */
 export async function reportAutoBans(
@@ -491,6 +497,7 @@ export async function reportAutoBans(
   const items = new Map<
     string,
     {
+      scope: "site" | "platform";
       siteId: string;
       cidr: ReturnType<typeof parseBanCidr> & { ok: true };
       createdAt: Date;
@@ -500,8 +507,11 @@ export async function reportAutoBans(
     }
   >();
   for (const ban of reported) {
-    if (!UUID_RE.test(ban.siteId)) continue;
     if (!(AUTO_BAN_REASONS as readonly string[]).includes(ban.reason)) continue;
+    const platform = ban.scope === "platform";
+    // Scan protection bans at platform scope only; CC per site.
+    if (platform !== (ban.reason === "unknown_host_scan")) continue;
+    if (platform ? ban.siteId !== "" : !UUID_RE.test(ban.siteId)) continue;
     const cidr = parseBanCidr(ban.cidr);
     if (!cidr.ok || !isAutoBanPrefix(cidr.cidr)) continue;
     const created =
@@ -515,10 +525,11 @@ export async function reportAutoBans(
       Math.min(ban.expiresAt.getTime(), created.getTime() + BAN_MAX_SECONDS * 1000, maxExpiry),
     );
     if (expiresAt.getTime() <= now.getTime()) continue;
-    const key = `${ban.siteId.toLowerCase()}|${cidr.text}`;
+    const key = `${platform ? "*" : ban.siteId.toLowerCase()}|${cidr.text}`;
     const previous = items.get(key);
     if (previous && previous.expiresAt >= expiresAt) continue;
     items.set(key, {
+      scope: platform ? "platform" : "site",
       siteId: ban.siteId.toLowerCase(),
       cidr,
       createdAt: created,
@@ -537,12 +548,23 @@ export async function reportAutoBans(
   // the ban lock: a report of many bans against a long allow list must not
   // hold up every other ban writer and reader.
   const isProtected = protectedBanRanges(await protectedAddresses(db, node.clusterId));
-  const candidates = [...items.values()].filter((item) => !isProtected(item.cidr.cidr));
+  const values = [...items.values()];
+  const isProtectedEverywhere = values.some((item) => item.scope === "platform")
+    ? protectedBanRanges(await protectedAddresses(db, null))
+    : isProtected;
+  const candidates = values.filter((item) =>
+    item.scope === "platform"
+      ? !isProtectedEverywhere(item.cidr.cidr)
+      : !isProtected(item.cidr.cidr),
+  );
   if (candidates.length === 0) return 0;
+  const platform = candidates.filter((item) => item.scope === "platform");
+  const siteBans = candidates.filter((item) => item.scope === "site");
   return db.transaction(async (tx) => {
     await lockBans(tx, "exclusive");
     const { shareAutoBans } = await getBanSettings(tx);
-    const siteIds = [...new Set(candidates.map((item) => item.siteId))];
+    const platformAccepted = await storePlatformAutoBans(tx, node, platform, shareAutoBans, now);
+    const siteIds = [...new Set(siteBans.map((item) => item.siteId))];
     const sites = new Map(
       (
         await tx
@@ -551,8 +573,8 @@ export async function reportAutoBans(
           .where(and(inArray(schema.site.id, siteIds), eq(schema.site.clusterId, node.clusterId)))
       ).map((site) => [site.id, site]),
     );
-    const accepted = candidates.filter((item) => sites.has(item.siteId));
-    if (accepted.length === 0) return 0;
+    const accepted = siteBans.filter((item) => sites.has(item.siteId));
+    if (accepted.length === 0) return platformAccepted;
     const existing = new Map(
       (
         await tx
@@ -630,20 +652,119 @@ export async function reportAutoBans(
     // Only new active entries can push the cluster over the cap.
     if (added) changed = (await capAutoBans(tx, node.clusterId, now)) || changed;
     if (changed) await notifyBans(tx, [node.clusterId]);
-    return accepted.length;
+    return accepted.length + platformAccepted;
   });
 }
 
 /**
- * Keeps at most MAX_AUTO_BANS_PER_CLUSTER active automatic bans in a
- * cluster: older ones are lifted (distributed, so nodes learn it) or deleted
- * (never sent). Returns whether distributed bans were lifted.
+ * Stores platform-wide automatic bans (scan protection) inside
+ * reportAutoBans' transaction: one row per CIDR (ip_ban_platform_uq). An
+ * active manual platform ban or a later-expiring automatic one stays; an
+ * expired row is reused. Returns how many were accepted.
  */
-async function capAutoBans(tx: Executor, clusterId: string, now: Date): Promise<boolean> {
+async function storePlatformAutoBans(
+  tx: Executor,
+  node: { id: string; clusterId: string },
+  items: {
+    cidr: ReturnType<typeof parseBanCidr> & { ok: true };
+    createdAt: Date;
+    expiresAt: Date;
+    reason: string;
+    trigger: NonNullable<BanRow["trigger"]>;
+  }[],
+  shareAutoBans: boolean,
+  now: Date,
+): Promise<number> {
+  if (!items.length) return 0;
+  const existing = new Map(
+    (
+      await tx
+        .select()
+        .from(schema.ipBan)
+        .where(
+          and(
+            eq(schema.ipBan.scope, "platform"),
+            isNull(schema.ipBan.removedAt),
+            inArray(
+              schema.ipBan.cidr,
+              items.map((item) => item.cidr.text),
+            ),
+          ),
+        )
+        .for("update")
+    ).map((row) => [row.cidr, row]),
+  );
+  let changed = false;
+  let added = false;
+  for (const item of items) {
+    const row = existing.get(item.cidr.text);
+    const values = {
+      reason: item.reason,
+      trigger: item.trigger,
+      seq: await nextSeq(tx),
+    };
+    if (row && row.expiresAt > now) {
+      // Already banned on every site: a manual ban stays as it is.
+      if (row.source !== "auto" || item.expiresAt <= row.expiresAt) continue;
+      await tx
+        .update(schema.ipBan)
+        .set({ ...values, expiresAt: item.expiresAt })
+        .where(eq(schema.ipBan.id, row.id));
+      changed ||= row.distributed;
+    } else if (row) {
+      await tx
+        .update(schema.ipBan)
+        .set({
+          ...values,
+          source: "auto",
+          nodeId: node.id,
+          createdBy: null,
+          createdAt: item.createdAt,
+          expiresAt: item.expiresAt,
+          distributed: shareAutoBans,
+        })
+        .where(eq(schema.ipBan.id, row.id));
+      changed ||= shareAutoBans || row.distributed;
+      added = true;
+    } else {
+      await tx.insert(schema.ipBan).values({
+        scope: "platform",
+        siteId: null,
+        clusterId: null,
+        cidr: item.cidr.text,
+        source: "auto",
+        nodeId: node.id,
+        createdAt: item.createdAt,
+        expiresAt: item.expiresAt,
+        distributed: shareAutoBans,
+        ...values,
+      });
+      changed ||= shareAutoBans;
+      added = true;
+    }
+  }
+  if (added) changed = (await capAutoBans(tx, null, now)) || changed;
+  if (changed) await notifyBans(tx, null);
+  return items.length;
+}
+
+/**
+ * Keeps at most MAX_AUTO_BANS_PER_CLUSTER active automatic bans in a
+ * cluster (null: the platform-wide ones of scan protection): older ones are
+ * lifted (distributed, so nodes learn it) or deleted (never sent). Returns
+ * whether distributed bans were lifted.
+ */
+async function capAutoBans(tx: Executor, clusterId: string | null, now: Date): Promise<boolean> {
   const overflow = await tx
     .select({ id: schema.ipBan.id, distributed: schema.ipBan.distributed })
     .from(schema.ipBan)
-    .where(and(eq(schema.ipBan.clusterId, clusterId), eq(schema.ipBan.source, "auto"), active(now)))
+    .where(
+      and(
+        clusterId === null ? isNull(schema.ipBan.clusterId) : eq(schema.ipBan.clusterId, clusterId),
+        eq(schema.ipBan.source, "auto"),
+        active(now),
+      ),
+    )
     .orderBy(desc(schema.ipBan.createdAt), desc(schema.ipBan.seq))
     .offset(MAX_AUTO_BANS_PER_CLUSTER);
   if (overflow.length === 0) return false;

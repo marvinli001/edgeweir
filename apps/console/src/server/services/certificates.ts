@@ -22,6 +22,7 @@ import {
 } from "../lib/certificate-names";
 import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
+import { namesHosts } from "../lib/site-domains";
 import { type Actor, recordAudit, systemActor } from "./audit";
 import { certdDns, probe, validCredentials } from "./dns-providers";
 import { assertHttp01Ready } from "./http01-check";
@@ -432,7 +433,7 @@ export async function requestCertificate(
       .selectDistinct({ name: schema.siteDomain.name })
       .from(schema.siteDomain)
       .where(
-        and(inArray(schema.siteDomain.name, input.names), eq(schema.siteDomain.wildcard, false)),
+        and(inArray(schema.siteDomain.name, input.names), eq(schema.siteDomain.kind, "exact")),
       );
     const unserved = input.names.filter((name) => !served.some((d) => d.name === name));
     if (unserved.length)
@@ -494,17 +495,18 @@ export const boundOnIssue = (siteId: string) =>
   sql`${schema.certificate.acme}->>'bindSiteId' = ${siteId}`;
 
 /**
- * A request bound to a site (bindSiteId) covers every domain of the site
- * (CERTIFICATE_DOMAIN_MISMATCH names the others) and is the only one
- * waiting for it (CERTIFICATE_BUSY).
+ * A request bound to a site (bindSiteId) covers every exact and wildcard
+ * domain of the site (CERTIFICATE_DOMAIN_MISMATCH names the others; suffix
+ * and pattern domains are served where the certificate covers the host)
+ * and is the only one waiting for it (CERTIFICATE_BUSY).
  */
 async function assertBindable(db: Executor, siteId: string, names: readonly string[]) {
   await tlsSite(db, siteId);
   const domains = await db
-    .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
+    .select({ name: schema.siteDomain.name, kind: schema.siteDomain.kind })
     .from(schema.siteDomain)
     .where(eq(schema.siteDomain.siteId, siteId));
-  const uncovered = domains.filter((domain) => !namesCover(names, domain));
+  const uncovered = domains.filter(namesHosts).filter((domain) => !namesCover(names, domain));
   if (uncovered.length) failUncovered(uncovered);
   const [waiting] = await db
     .select({ id: schema.certificate.id })
@@ -527,7 +529,7 @@ async function assertBindable(db: Executor, siteId: string, names: readonly stri
 export async function coverSiteDomains(
   tx: Executor,
   certificateId: string,
-  domains: { name: string; wildcard: boolean }[],
+  domains: { name: string; kind: string }[],
   ctx: CertificateContext & { site: { id: string; name: string } },
 ): Promise<{ id: string; name: string } | undefined> {
   const cert = await findCertificate(tx, certificateId);
@@ -545,7 +547,7 @@ export async function coverSiteDomains(
           const credential = await findDnsCredential(tx, cert.acme.dnsCredentialId);
           return missing.filter((d) => outsideZone(certificateName(d), credential.zone));
         })()
-      : missing.filter((d) => d.wildcard);
+      : missing.filter((d) => d.kind !== "exact");
   if (refused.length) failUncovered(refused);
   const added = missing.map(certificateName);
   const names = [...cert.names, ...added];
@@ -603,7 +605,7 @@ export async function bindIssuedCertificate(
       return undefined;
   }
   const domains = await tx
-    .select({ name: schema.siteDomain.name, wildcard: schema.siteDomain.wildcard })
+    .select({ name: schema.siteDomain.name, kind: schema.siteDomain.kind })
     .from(schema.siteDomain)
     .where(eq(schema.siteDomain.siteId, site.id));
   try {
@@ -751,7 +753,7 @@ export async function updateHttps(
         .where(eq(schema.siteDomain.siteId, id));
       // The site's own ACME certificate may be being reissued for domains
       // added since (coverSiteDomains): they wait for it, as before.
-      const waiting = (domain: { name: string; wildcard: boolean }) =>
+      const waiting = (domain: { name: string; kind: string }) =>
         cert.id === site.certificateId && cert.source === "acme" && namesCover(cert.names, domain);
       const uncovered = uncoveredDomains(cert.chainPem, domains).filter((d) => !waiting(d));
       if (uncovered.length) failUncovered(uncovered);
