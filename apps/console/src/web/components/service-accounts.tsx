@@ -355,7 +355,10 @@ export function ServiceAccountsPanel({
         query={accounts}
         empty={
           <EmptyState icon={Key01Icon} title={m.service_accounts_empty()}>
-            <Button onClick={() => setCreateOpen(true)}>{m.service_accounts_create()}</Button>
+            <Button onClick={() => setCreateOpen(true)}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              {m.service_accounts_create()}
+            </Button>
           </EmptyState>
         }
       >

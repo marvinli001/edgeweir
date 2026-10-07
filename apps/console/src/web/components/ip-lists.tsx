@@ -59,7 +59,7 @@ export function IpListsPage() {
         query={query}
         empty={
           <EmptyState icon={ListViewIcon} art="checkpoint" title={m.ip_lists_empty()}>
-            <Button variant="outline" onClick={() => edit.show("new")}>
+            <Button onClick={() => edit.show("new")}>
               <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
               {m.ip_lists_create()}
             </Button>

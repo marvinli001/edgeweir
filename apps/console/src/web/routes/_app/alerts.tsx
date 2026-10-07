@@ -7,7 +7,13 @@ import {
   alertKind,
   alertPolicy,
 } from "@edgeweir/contract";
-import { Mail01Icon, Message01Icon, TelegramIcon, WebhookIcon } from "@hugeicons/core-free-icons";
+import {
+  Add01Icon,
+  Mail01Icon,
+  Message01Icon,
+  TelegramIcon,
+  WebhookIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -113,7 +119,13 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
       <CardHeader>
         <CardTitle>{m.alert_channels_title()}</CardTitle>
         <CardAction>
-          <Button size="sm" onClick={() => dialog.show("new")} data-testid="alert-channel-create">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => dialog.show("new")}
+            data-testid="alert-channel-create"
+          >
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.alert_channel_add()}
           </Button>
         </CardAction>
@@ -243,6 +255,7 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
             disabled={!subscriptions.data || !available.length}
             data-testid="alert-subscribe"
           >
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.alert_subscribe()}
           </Button>
         </CardAction>

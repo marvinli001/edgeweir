@@ -8,7 +8,12 @@ import type {
   NodeGroup,
 } from "@edgeweir/contract";
 import { DNS_LINES, dnsBindingInput, providerLines } from "@edgeweir/contract";
-import { ArrowDown01Icon, ArrowUp01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
+import {
+  Add01Icon,
+  ArrowDown01Icon,
+  ArrowUp01Icon,
+  Cancel01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
@@ -255,6 +260,7 @@ function BindingEditor({
                   }
                   data-testid="dns-line-add"
                 >
+                  <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
                   {m.dns_add_line()}
                 </Button>
               </div>

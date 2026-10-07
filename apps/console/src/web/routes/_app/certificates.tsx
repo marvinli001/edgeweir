@@ -1,4 +1,6 @@
 import type { CertificateDto } from "@edgeweir/contract";
+import { Add01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
@@ -54,6 +56,7 @@ function CertificatesPage() {
             {m.cert_upload()}
           </Button>
           <Button onClick={() => dialog.show("request")} data-testid="cert-request">
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
             {m.cert_request()}
           </Button>
         </div>
@@ -63,7 +66,10 @@ function CertificatesPage() {
         query={certificates}
         empty={
           <EmptyState title={m.cert_empty()}>
-            <Button onClick={() => dialog.show("request")}>{m.cert_request()}</Button>
+            <Button onClick={() => dialog.show("request")}>
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              {m.cert_request()}
+            </Button>
           </EmptyState>
         }
       >

@@ -343,6 +343,7 @@ function CacheRulesCard({ site }: { site: Site }) {
           </DndContext>
           <Button
             type="button"
+            size="sm"
             variant="outline"
             className="self-start"
             onClick={() => setRows([...rows, newRule()])}

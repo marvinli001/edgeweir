@@ -408,6 +408,7 @@ function RulesEditor({
                     ])
                   }
                 >
+                  <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
                   {m.rules_add()}
                 </Button>
               </div>

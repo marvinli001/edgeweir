@@ -1,3 +1,5 @@
+import { Add01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
@@ -118,7 +120,7 @@ function ApiKeysCard() {
             />
           </div>
           <Button type="submit" disabled={create.isPending} data-testid="access-key-create">
-            {create.isPending ? <Spinner /> : null}
+            {create.isPending ? <Spinner /> : <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />}
             {m.settings_api_key_create()}
           </Button>
         </form>

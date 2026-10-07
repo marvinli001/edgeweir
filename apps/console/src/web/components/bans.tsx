@@ -273,7 +273,7 @@ export function BansPage({
             title={filtered ? m.bans_no_match() : m.bans_empty()}
           >
             {filtered ? null : (
-              <Button variant="outline" onClick={() => dialog.show({})}>
+              <Button onClick={() => dialog.show({})}>
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
                 {m.bans_create()}
               </Button>

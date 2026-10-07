@@ -1,5 +1,5 @@
 import type { DnsRevision } from "@edgeweir/contract";
-import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -50,6 +50,7 @@ function DnsPage() {
       title={m.dns_title()}
       actions={
         <Button onClick={() => credential.show("new")} data-testid="dns-account-create">
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
           {m.dns_add_account()}
         </Button>
       }
@@ -65,7 +66,10 @@ function DnsPage() {
               <CardContent>
                 {!providerList.items.length ? (
                   <EmptyState title={m.dns_accounts_empty()}>
-                    <Button onClick={() => credential.show("new")}>{m.dns_add_account()}</Button>
+                    <Button onClick={() => credential.show("new")}>
+                      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                      {m.dns_add_account()}
+                    </Button>
                   </EmptyState>
                 ) : (
                   <ul className="-my-1 divide-y divide-edge" data-testid="dns-accounts">

@@ -224,6 +224,7 @@ function OriginsCard({ site }: { site: Site }) {
           </div>
           <Button
             type="button"
+            size="sm"
             variant="outline"
             className="self-start"
             onClick={() => setRows([...rows, newOrigin()])}

@@ -182,6 +182,7 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
               </ol>
               <Button
                 type="button"
+                size="sm"
                 variant="outline"
                 className="self-start"
                 disabled={rows.length >= MAX_POOLS}

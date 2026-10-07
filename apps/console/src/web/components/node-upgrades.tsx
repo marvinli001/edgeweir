@@ -5,6 +5,8 @@ import {
   releaseVersion,
   type UpgradeJob,
 } from "@edgeweir/contract";
+import { Add01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -105,11 +107,13 @@ export function NodeUpgrades({ clusterId }: { clusterId: string }) {
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="flex-1 text-sm font-medium">{m.upgrade_title()}</h2>
         <Button
+          size="sm"
           variant="outline"
           onClick={() => dialog.show()}
           disabled={!groups.data?.length || !nodes.data?.length}
           data-testid="upgrade-create"
         >
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
           {m.upgrade_create()}
         </Button>
       </div>
