@@ -601,6 +601,8 @@ try {
   });
   assert.equal(purged.status, 202, summary(purged));
   assert.equal(purged.headers["cache-control"], "no-store");
+  // The site forces charset GBK; the node's own answers keep their type.
+  assert.equal(purged.headers["content-type"], "application/json");
   const taskId = JSON.parse(purged.body).task_id;
   const task = await waitFor(
     "the PURGE task succeeds on both nodes",
