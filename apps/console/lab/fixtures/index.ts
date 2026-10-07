@@ -130,10 +130,6 @@ const core: Fixtures = {
     list: (input) => nodes.filter((n) => !input.clusterId || n.clusterId === input.clusterId),
     get: ({ id }) => nodes.find((n) => n.id === id) ?? Promise.reject(notFound()),
   },
-  upgrades: {
-    latestVersion: () => ({ version: "0.2.1" }),
-    list: () => [],
-  },
   sites: {
     list: (input) => {
       const search = input.search?.toLowerCase() ?? "";
