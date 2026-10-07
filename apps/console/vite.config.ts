@@ -30,5 +30,8 @@ export default defineConfig({
     outDir: "dist/web",
     emptyOutDir: true,
     sourcemap: false,
+    // Font shards stay files: inlined into the entry CSS, every visitor would download them as
+    // base64 whether or not the page shows those characters (ADR-0034, entry budget).
+    assetsInlineLimit: (file) => (file.endsWith(".woff2") ? false : undefined),
   },
 });
