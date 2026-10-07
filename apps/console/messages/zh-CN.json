@@ -727,6 +727,7 @@
   "error_certificate_chain_order": "证书链顺序错误：叶证书在前，签发者依次在后",
   "error_certificate_not_currently_valid": "证书当前不在有效期内（{notBefore} 至 {notAfter}）",
   "error_certificate_no_dns_names": "证书没有 DNS 类型的 SAN",
+  "error_certificate_key_type_unsupported": "不支持该证书的密钥类型；请使用 RSA（2048 位及以上）或 ECDSA P-256、P-384、P-521",
   "error_certificate_unavailable": "证书尚未签发或已过期",
   "error_certificate_domain_mismatch": "证书域名与网站或 DNS 区域不匹配：{domains}",
   "error_certificate_busy": "证书正在处理中",

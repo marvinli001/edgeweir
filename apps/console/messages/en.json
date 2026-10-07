@@ -812,6 +812,7 @@
   "error_certificate_chain_order": "Wrong chain order: the leaf certificate first, then each issuer",
   "error_certificate_not_currently_valid": "The certificate is not valid now (valid from {notBefore} to {notAfter})",
   "error_certificate_no_dns_names": "The certificate has no DNS names (subject alternative names)",
+  "error_certificate_key_type_unsupported": "The certificate's key type is not supported; use RSA (2048 bits or more) or ECDSA P-256, P-384 or P-521",
   "error_certificate_unavailable": "The certificate is not issued yet or has expired",
   "error_certificate_domain_mismatch": "Certificate domains do not match the site or DNS zone: {domains}",
   "error_certificate_busy": "Certificate operation is already in progress",

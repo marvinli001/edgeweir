@@ -73,6 +73,32 @@ export async function findCertificate(db: Executor, id: string) {
   return row;
 }
 
+/**
+ * Whether the nodes can serve a leaf with this key to every TLS client: RSA
+ * of 2048 bits or more, or ECDSA on P-256, P-384 or P-521, the keys public
+ * CAs issue (CA/Browser Forum Baseline Requirements 6.1.5). The agent loads
+ * the pair with Go's tls.X509KeyPair, whose error fails the revision on
+ * every node of the cluster: it refuses other curves (secp256k1, Brainpool,
+ * SM2), Ed448, RSA-PSS and DSA keys and RSA exponents above 2³¹ − 1.
+ * OpenResty (OpenSSL's default security level 2) refuses RSA keys under 2048
+ * bits in every handshake. Go also loads P-224, Ed25519 and ML-DSA keys;
+ * they are refused because a site has one certificate and many clients could
+ * not connect: P-224 has no TLS 1.3 signature scheme (and OpenSSL clients do
+ * not offer it in TLS 1.2), Chromium does not offer Ed25519, and ML-DSA works
+ * only over TLS 1.3 with clients that offer it.
+ */
+function servableKey(key: KeyObject) {
+  const details = key.asymmetricKeyDetails ?? {};
+  if (key.asymmetricKeyType === "rsa") {
+    const exponent = details.publicExponent ?? 0n;
+    return (details.modulusLength ?? 0) >= 2048 && exponent % 2n === 1n && exponent < 2n ** 31n;
+  }
+  return (
+    key.asymmetricKeyType === "ec" &&
+    ["prime256v1", "secp384r1", "secp521r1"].includes(details.namedCurve ?? "")
+  );
+}
+
 const utc = (date: Date) => `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 /** Runs a check whose own exceptions (unreadable input) mean the given failure. */
 function readOr<T>(read: () => T, fallback: () => T): T {
@@ -167,6 +193,11 @@ export function inspectCertificate(chainPem: string, privateKeyPem: string) {
   const wrongOrder: () => never = () =>
     fail("CERTIFICATE_CHAIN_ORDER", "the chain must start with the leaf, each issued by the next");
   if (leaf.ca) wrongOrder();
+  if (!servableKey(leaf.publicKey))
+    fail(
+      "CERTIFICATE_KEY_TYPE_UNSUPPORTED",
+      "the leaf key must be RSA (2048+ bits) or ECDSA P-256/384/521",
+    );
   if (
     !readOr(
       () => leaf.checkPrivateKey(key),
