@@ -29,6 +29,8 @@ Certificate upload, ACME requests and renewal, and a site's HTTPS, TLS, HTTP/2, 
 
 Only the re-encoded certificates and the PKCS #8 private key are stored; any other text in the pasted content is not. Uploaded certificates do not renew automatically (**Automatic renewal disabled**); before expiry, upload a new certificate and select it on the sites. An expired certificate's card shows **Expired** and "Expired …".
 
+Nodes cannot load certificates with explicit curve parameters uploaded earlier either: no node of a cluster applies a revision that references one. A background job checks the uploaded certificates at every start: such a certificate's card shows **Unusable** with the reason, and the audit log records "Certificate marked unloadable" with the sites that use it. Sites can no longer select it; a site that uses it is not changed automatically: upload a named-curve certificate (see [Troubleshooting](#troubleshooting)), select it on the site's **HTTPS** tab and save, or choose **HTTP only**, then delete the old certificate.
+
 ## Add a DNS credential
 
 DNS-01 validation needs a credential first.
@@ -127,7 +129,7 @@ While the certificate is issued, the tab refreshes its status every 3 seconds. A
 ## Configure a site's HTTPS
 
 1. Open **Sites**, select the site, and open the **HTTPS** tab (for a site without a certificate see [Enable HTTPS with one click](#enable-https-with-one-click)).
-2. Select a certificate in **Certificates**. The list contains every issued, unexpired certificate; **HTTP only** disables HTTPS.
+2. Select a certificate in **Certificates**. The list contains every issued, unexpired certificate nodes can load; **HTTP only** disables HTTPS.
 3. Set **Minimum TLS version**, **Cipher profile**, **HSTS lifetime (seconds)**, and the switches.
 4. Click **Save**. The console shows **Saved** and publishes a new configuration revision.
 5. Verify: after the node applies the revision:
@@ -229,12 +231,12 @@ The ports cannot be changed. The SNI of an HTTPS request must equal its `Host`; 
 | Item | Behavior |
 | --- | --- |
 | Delivery | Nodes fetch certificate material separately over mTLS; only certificate IDs and fingerprints referenced by the cluster's current target configuration are released |
-| Checks | Nodes verify the fingerprint, the key match, and name coverage (except for domains served over HTTP until a new certificate covers them) |
+| Checks | Nodes verify the fingerprint, the key match, and name coverage (except for domains served over HTTP until a new certificate covers them); when one certificate cannot be loaded, the whole revision is not applied, the node keeps its previous configuration and retries at every sync |
 | Storage | `certificates.json` (0600) in the node state directory; private keys on the node are not encrypted, and the host administrator can read them |
 | Hot updates | Certificate content and minimum TLS version changes do not reload nginx |
 | Reloads | Changes to HTTP/2, HTTP/3, compression, cipher profile, certificate presence, domain lists, or the set of sites are tested first and then reloaded; on failure the previous configuration is restored |
 | Applied | A node reports a revision as applied only after persisting it; keys referenced by the current and previous last-known-good configurations are kept |
-| Rollback | A configuration rollback uses the current certificate material; it is refused when the certificate is deleted, expired, or does not cover the target domains |
+| Rollback | A configuration rollback uses the current certificate material; it is refused when the certificate is deleted, expired, unloadable by nodes, or does not cover the target domains |
 
 ## Key handling
 
@@ -271,8 +273,10 @@ A change saved in the console or with an AccessKey is published even when it nee
 | "The chain must hold 1 to 10 readable PEM certificates" | The chain is empty, has more than 10 certificates, or is damaged | Export the chain as PEM again |
 | "The private key cannot be read; encrypted keys are not supported" | The key is damaged or protected by a passphrase | Remove the passphrase with `openssl pkey -in key.pem -out plain.pem` and upload that |
 | "The private key does not belong to the certificate" | The key belongs to another certificate | Upload the key of the leaf certificate |
-| "The EC private key uses explicit curve parameters; convert it to a named curve" | The key spells out the curve's parameters instead of naming the curve, which nodes cannot load; LibreSSL, the `openssl` shipped with macOS, does this by default for `openssl req -newkey ec` and `openssl genpkey` | Convert it with OpenSSL 3 and upload the result: `openssl pkey -in key.pem -ec_param_enc named_curve -out key-named.pem` (LibreSSL cannot convert it); add `-pkeyopt ec_param_enc:named_curve` when generating keys |
-| "A certificate's EC key uses explicit curve parameters; reissue it with a named-curve key" | The certificate was issued for such a key, for example a self-signed certificate made with LibreSSL | Reissue it with the converted key, or create a new one: `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve …` |
+| "The EC private key uses explicit curve parameters; convert it to a named curve" | The key spells out the curve's parameters instead of naming the curve, which nodes cannot load; when saving a site's HTTPS, the selected certificate was uploaded with such a key earlier. LibreSSL, the `openssl` shipped with macOS, does this by default for `openssl req -newkey ec` and `openssl genpkey` | Convert it with OpenSSL 3 and upload the result: `openssl pkey -in key.pem -ec_param_enc named_curve -out key-named.pem` (LibreSSL cannot convert it); add `-pkeyopt ec_param_enc:named_curve` when generating keys |
+| "A certificate's EC key uses explicit curve parameters; reissue it with a named-curve key" | The certificate was issued for such a key, for example a self-signed certificate made with LibreSSL; when saving a site's HTTPS, the selected certificate was uploaded earlier | Reissue it with the converted key, or create a new one: `openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -pkeyopt ec_param_enc:named_curve …` |
+| Certificate status **Unusable**, reason "Nodes cannot load it: a certificate's EC key uses explicit curve parameters" or "Nodes cannot load it: the EC private key uses explicit curve parameters" | The certificate was uploaded earlier with explicit curve parameters | Convert or reissue it as in the two rows above and upload it, select it on the sites that use the old one, then delete the old one |
+| A node shows **Apply failed** with `invalid certificate material` (such as `x509: invalid ECDSA parameters` or `unknown elliptic curve`) | The cluster's configuration references a certificate nodes cannot load, so the whole revision is not applied | Find the **Unusable** certificate in the list and proceed as in the row above; the revision published once another certificate is selected applies |
 | "Wrong chain order: the leaf certificate first, then each issuer" | An intermediate comes before the leaf, or a certificate is not issued by the next one | Order the PEM as leaf then intermediates |
 | "The certificate is not valid now (valid from … to …)" | Not yet valid or expired (times in UTC) | Check the server clock, or use a valid certificate |
 | "The certificate has no DNS names (subject alternative names)" | The certificate has only IP addresses or only a CN | Use a certificate with DNS SANs |
