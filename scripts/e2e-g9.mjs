@@ -334,6 +334,9 @@ async function certificate() {
     "ec",
     "-pkeyopt",
     "ec_paramgen_curve:P-256",
+    // Go refuses explicit curve parameters (LibreSSL's default encoding).
+    "-pkeyopt",
+    "ec_param_enc:named_curve",
     "-nodes",
     "-keyout",
     join(dir, "key.pem"),
@@ -364,7 +367,7 @@ try {
   pass("a. both nodes report edge-ports-v1, client-ip-v1 and l4-v2");
 
   // -------------------------------------------------------------- b. ports
-  const cert = await admin.ok("POST", "/certificates", {
+  const cert = await admin.ok("POST", "/certificates/upload", {
     name: "g9-ports",
     ...(await certificate()),
   });
