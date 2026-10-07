@@ -80,8 +80,9 @@
 
 /*
  * The primary action: a lit face over a darker plate (Sentry-style). Hovering lifts the face a
- * pixel off the plate, pressing pushes it flat; the bottom edge never moves. Primary buttons
- * only (Button's default variant); forced colors drop the shadows and keep the real border.
+ * pixel off the plate, pressing pushes it flat; the bottom edge never moves; disabled, it lies
+ * flat. Primary buttons only (Button's default variant); forced colors drop the shadows and keep
+ * the real border.
  */
 @utility btn-lit {
   --plate: color-mix(in oklch, var(--primary), black 40%);
@@ -105,6 +106,12 @@
     transform: translateY(1px);
     transition-duration: 60ms;
     --tw-shadow: inset 0 1px 3px oklch(0 0 0 / 28%), 0 0 0 0 var(--plate);
+  }
+  /* Disabled sits flat as well as faded: no plate, no glow, no lit face. */
+  &:disabled,
+  &[data-disabled] {
+    --tw-shadow: 0 0 #0000;
+    background-image: none;
   }
   @media (prefers-reduced-motion: reduce) {
     transition-property: box-shadow, background-color, opacity;
