@@ -713,7 +713,7 @@ function SitePicker({
           ) : null}
           <fieldset
             aria-labelledby="purge-sites-label"
-            className="max-h-72 min-w-0 divide-y overflow-y-auto rounded-2xl border"
+            className="max-h-72 min-w-0 divide-y overflow-y-auto rounded-2xl sunk-well"
           >
             {list.isLoadingError ? (
               <div className="p-3">
@@ -728,7 +728,7 @@ function SitePicker({
                 // biome-ignore lint/a11y/noLabelWithoutControl: the Base UI checkbox inside is the control
                 <label
                   key={site.id}
-                  className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors animate-enter hover:bg-muted/50 has-data-checked:bg-primary/5"
+                  className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors animate-enter hover:bg-wash has-data-checked:bg-tint-primary"
                   style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
                   data-testid="purge-site-option"
                 >
