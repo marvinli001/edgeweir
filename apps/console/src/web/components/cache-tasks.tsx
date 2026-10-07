@@ -57,7 +57,7 @@ export function useExpandedTasks() {
 
 /**
  * Purge and prefetch tasks, newest first, each with its nodes' progress and details: flat rows in
- * a card of their own, or (`inset`) in a hairline group inside another card.
+ * a card of their own, or (`inset`) in a sunk well inside another card.
  */
 export function CacheTaskList({
   tasks,
@@ -74,7 +74,7 @@ export function CacheTaskList({
     <ul
       className={cn(
         "divide-y overflow-hidden rounded-2xl",
-        inset ? "border" : "bg-card shadow-elev-1 edge-lit",
+        inset ? "sunk-well" : "bg-card shadow-elev-1 edge-lit",
       )}
       data-testid="cache-tasks"
     >

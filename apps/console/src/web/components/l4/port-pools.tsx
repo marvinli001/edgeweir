@@ -168,7 +168,7 @@ function PortPoolsCard({ data }: { data: ClusterPortPools }) {
             </EmptyState>
           ) : (
             <>
-              <ol className="flex flex-col gap-3">
+              <ol className="flex flex-col">
                 {rows.map((row, index) => (
                   <PoolRow
                     key={row.key}
@@ -236,8 +236,10 @@ function PoolRow({
   return (
     <li
       className={cn(
-        "flex flex-wrap items-end gap-3 rounded-2xl border p-3 transition-colors animate-enter",
-        invalid && "border-destructive/60",
+        "relative flex flex-wrap items-end gap-3 border-t py-3 animate-enter first:border-t-0 first:pt-0",
+        // A pool the console refused carries a still red edge in the gutter (its fields are marked too).
+        invalid &&
+          "before:absolute before:inset-y-3 before:-left-3 before:w-0.5 before:rounded-full before:bg-destructive first:before:top-0",
       )}
       style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
       aria-label={m.l4_pool_number({ index: index + 1 })}

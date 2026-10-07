@@ -266,7 +266,7 @@ function BindingEditor({
               {draft.lines.map((line, index) => (
                 <div
                   key={line.nodeGroupId || index}
-                  className="grid gap-4 rounded-xl border p-4 animate-enter"
+                  className="grid gap-4 border-t pt-4 animate-enter"
                   style={{ animationDelay: `${index * 40}ms` }}
                   data-testid="dns-line"
                 >
