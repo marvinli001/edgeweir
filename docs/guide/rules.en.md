@@ -382,7 +382,7 @@ A site's table of exact-match redirects: each entry redirects one source to one 
 3. Select **Action**: **Referenced by rules**, **Block**, or **Allow**.
 4. Enter entries in **IP addresses and CIDRs**, separated by newlines, spaces, or commas.
 5. Click **Save**.
-6. Verify: the list shows `$name` and "N entries", block and allow lists also a **Block** or **Allow** badge; reference it in rules or cache rule conditions with `ip.src in $name`.
+6. Verify: the list shows `$name`, "N entries", and the first entries (with more than 6, the first 5 and the count of the rest), block and allow lists also a **Block** or **Allow** badge; reference it in rules or cache rule conditions with `ip.src in $name`.
 
 | Action | Effect |
 | --- | --- |

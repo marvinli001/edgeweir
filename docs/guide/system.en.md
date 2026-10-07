@@ -14,6 +14,8 @@ Page: **Clusters & nodes** (`/clusters`); the **Clusters | Regions** switch at t
 | **Sites** | The cluster's sites |
 | **Latest revision** | The cluster's latest revision, such as `#12 · 7/8 applied`: 8 online enabled nodes, 7 of which run their target revision. While a canary runs, the canary nodes' target is the candidate and the other nodes' the stable revision, see [Configuration canary](#configuration-canary) |
 
+Below the summary, a diagram links the cluster to its first 8 nodes (the node cards list them all): online nodes on solid lines, offline or disabled ones on dashed lines; each node shows its applied revision and egress, and every state but **In sync** in words (**Apply failed**, **Awaiting configuration**, **Data plane unhealthy**, **Behind**, **Offline**, **Disabled**).
+
 ### Clusters
 
 A cluster is a set of nodes plus the sites assigned to them; each cluster has its own revision sequence.
@@ -53,16 +55,16 @@ The dialog shows the **Install command** (with a countdown, shown once), address
 
 ### Nodes
 
-| Column | Content |
+| Item | Content |
 | --- | --- |
 | **Node** | Name and host name |
 | **Status** | **Online** (heartbeat within 45 seconds), **Offline**, **Disabled**; an enrolled node that has not connected to the node channel since shows **Awaiting heartbeat** (grey); an online node that reports an unhealthy data plane is also marked **Data plane unhealthy**; an offline node whose certificate the node channel refuses is marked **Certificate expired** or **Certificate refused** |
 | **Node group** | Node group and region |
 | **IP** | Unicast addresses in the node's latest heartbeat (replaced on every heartbeat, at most 64); for the addresses DNS and probes use, see [Scheduling addresses and backup IPs](scheduling.en.md#scheduling-addresses-and-backup-ips); marked **No public address** when DNS has no address for the node, see [Nodes without a public address](scheduling.en.md#nodes-without-a-public-address) |
-| **Metrics** | CPU and memory usage reported by the node (`metrics-v1`); "—" without metrics |
+| **Metrics** | Gauges of the CPU and memory usage reported by the node (`metrics-v1`), in the warning color from 75% and the error color from 90%; also egress, active connections, and the 1-minute load; **No metrics** without metrics |
 | **Applied** | The revision the node has applied; badge **In sync** (the node's target revision reached), **Behind**, **Apply failed** (hover for the reason), or **Upgrade required**; an online node without any configuration yet shows **Awaiting configuration** |
 | **Agent / engine** | Agent version, engine, and engine version |
-| **Heartbeat** | Time of the last heartbeat |
+| **Heartbeat** | How long ago the last heartbeat came; hover for the time |
 
 | Action | Description |
 | --- | --- |
@@ -193,6 +195,8 @@ API: `attention` of `GET /api/v1/overview`, see [Clusters and overview](../refer
 ## Regions
 
 Page: the **Regions** view of **Clusters & nodes** (`/clusters?view=regions`; `/regions` redirects there), with the page action **New region**. A region is a label for node groups and regional probes (for example East China), shown in the node group and node tables; scheduling conditions on probe metrics can count the probers of one region alone. Probes are on the **Monitoring** tab of **System settings**, see [Regional probes](scheduling.en.md#regional-probes).
+
+A dot map above the list marks the regions, placed by the city their code or name mentions (such as `ap-tokyo` or Tokyo); regions without a known city appear only in the list, and the map is hidden when none has one.
 
 | Action | Description |
 | --- | --- |

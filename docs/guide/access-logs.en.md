@@ -24,6 +24,14 @@ Traffic analytics, access log sampling, search, and export, analytics storage mo
 3. Click **Refresh** to reload.
 4. To act on an entry, click **⋯** at the end of its row: a top IP offers **Ban IP** (with the site filled in on a site's **Analytics** tab, with the **Global** scope on the overview); a top URL on a site's **Analytics** tab offers **Purge URL**, which expands the path to each of the site's domains that is not a wildcard and lists the URLs before it submits the purge.
 
+Readouts with a fixed window and no range to pick:
+
+| Location | Content |
+| --- | --- |
+| **Right now** on the **Overview** | Request rate and egress of all sites in the last full minute, cache hit ratio over the last hour, see [Overview](account.en.md#overview) |
+| **Requests (24h)** in the **Sites** list | Each site's requests over the last 24 hours, with a trend line; shown only with at most 20 sites and no search or filter on the list |
+| **Sites** → **Overview** tab → **Live requests** | An enabled site's requests per second over the last hour, minute by minute (the minute still being counted is left out); hover to read a minute |
+
 ### Analytics data
 
 | Item | Behavior |

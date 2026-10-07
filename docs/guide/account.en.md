@@ -133,13 +133,14 @@ The bottom of the sidebar shows the account's name and email; click it to open t
 | Block | Content |
 | --- | --- |
 | **Needs attention** | What needs the operator, each row with its cluster's name and a link to it; hidden when nothing does, see [Needs attention](system.en.md#needs-attention) |
-| **Sites** | Number of sites; starred sites first, then the other sites by creation time, at most 5. Sites are starred in the **Sites** list or on the site page |
-| **Nodes** | Online and total nodes; nodes that need attention first: **Offline**, **Apply failed**, **Data plane unhealthy**, **Behind**, **Awaiting configuration**, **Awaiting heartbeat**, **Disabled**, **In sync**. Shows **Add node** when there are no nodes |
+| **Right now** | **Request rate** and **Egress** of the last full minute, **Cache hit ratio** (last hour), and **Nodes online** (online / all nodes); the first three with a trend line over the last hour |
+| **Analytics** | Traffic, ranges from 1 hour to 30 days (24 hours by default); the metric cards open breakdowns by site, node, and status code. **Top sites** and **Top nodes** show each item's cluster. Beside it, **Edge network** shows the total egress of online nodes and lists the edge locations by cluster and region: online / all nodes and egress, marked **Offline**, **Data plane unhealthy**, or **Behind** when not all nodes are well; click a row to open its cluster. Locations whose region name names a known city also appear on the globe |
 | **Recent revisions** | The latest revisions across all clusters, with their reasons |
 | **Recents** | Pages and sites recently opened in the current browser, at most 5 |
-| **Analytics** | Traffic, ranges from 1 hour to 30 days (24 hours by default); the metric cards open breakdowns by site, node, and status code. **Top sites** and **Top nodes** show each item's cluster |
+| **Sites** | Number of sites; starred sites first, then the other sites by creation time, at most 5. Sites are starred in the **Sites** list or on the site page |
+| **Nodes** | Online and total nodes; nodes that need attention first: **Offline**, **Apply failed**, **Data plane unhealthy**, **Behind**, **Awaiting configuration**, **Awaiting heartbeat**, **Disabled**, **In sync**. Shows **Add node** when there are no nodes |
 
-Needs attention, nodes, and recent revisions refresh every 10 seconds, analytics every minute.
+Needs attention, nodes, recent revisions, the edge network, and nodes online refresh every 10 seconds; the other traffic figures and analytics every minute.
 
 ### Other paths
 

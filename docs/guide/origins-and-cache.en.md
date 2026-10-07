@@ -28,6 +28,8 @@ A site's origin pool and origin groups, health checks and session affinity, orig
 
    The origin's status code comes back; once traffic flows, the origin shows **Healthy**.
 
+The **Traffic path** card at the top of the **Origins** tab draws where requests go under the saved configuration: visitors → the site's cluster → origin groups (load balancing, plus HTTP/2 when origins are reached over it) → origins (address, protocol, and port). With several primaries in a group and load balancing other than consistent hash, the lines carry the weight shares; a backup origin's line reads **Failover**; an origin that nodes report as down is shown as degraded, along with its line.
+
 ### Origin fields
 
 | Field | Values | Default | Effect |
