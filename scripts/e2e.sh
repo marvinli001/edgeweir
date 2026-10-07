@@ -118,6 +118,20 @@
 #   revision while a change needs rules-v3 and catches up once it is undone;
 #   leaves hdr-bench.g8.test for BENCH_SCENARIO=headers in scripts/bench.sh;
 #   Playwright e2e/g8.spec.ts.
+#   Site parity G15 (scripts/e2e-g15.mjs, after G8): both nodes report
+#   site-content-v1 and cache-zone-v1; the cluster's cache zone size reaches
+#   nginx.conf (keys_zone derived), a node's own size overrides it there only,
+#   both nodes report their usage; Set-Cookie of a cached response only with
+#   the fetched response; utm_* left out of the cache key; charset GBK on text
+#   only; body limit 413 by Content-Length, lifted by a config rule, chunked
+#   uploads unchecked; gzip level 9 and the largest compressed length; PURGE
+#   with the key (202, a purge_method task both nodes run), a wrong key 403,
+#   429 over the rate; 4xx/5xx class pages, a 404 redirect with placeholders,
+#   a 405 page, a status replaced by 200; X-Cache off per site; maintenance
+#   (503, Retry-After, allowed address and path, ACME passes, audited, never
+#   cached); origin tries and status retries; an S3 origin with the MinIO
+#   preset; leaves charset-bench.g15.test for BENCH_SCENARIO=charset in
+#   scripts/bench.sh; Playwright e2e/g15.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -1162,6 +1176,14 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g8.mjs --cleanup || fail "G8 cleanup failed"
 pass "G8 checks passed"
+
+step "G15: cache zone sizes and usage, Set-Cookie caching, excluded parameters, charset, body limits, gzip level, PURGE, error page classes and redirects, X-Cache, maintenance, origin tries, S3 with MinIO"
+node scripts/e2e-g15.mjs || fail "G15 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g15.spec.ts || fail "G15 browser checks failed"
+fi
+node scripts/e2e-g15.mjs --cleanup || fail "G15 cleanup failed"
+pass "G15 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"

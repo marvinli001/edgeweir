@@ -12,9 +12,13 @@
 #              Link lines added with append, X-Cache-Status from
 #              http.response.cache_status and a User-Agent wildcard; checks that
 #              the warmed response carries X-Cache-Status: HIT and two Link lines.
+#   charset    cache HITs of a site that adds a charset (site-content-v1: gbk,
+#              forced over the origin's utf-8); checks that the warmed response
+#              carries charset=gbk.
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
 # behind (whoami, cache rule on /, Under Attack js); headers to
-# hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind.
+# hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind; charset to
+# charset-bench.g15.test, which scripts/e2e-g15.mjs leaves behind.
 set -euo pipefail
 OHA_BIN="${OHA_BIN:-oha}"
 command -v "$OHA_BIN" >/dev/null || { echo 'Install oha or set OHA_BIN to its verified binary.' >&2; exit 1; }
@@ -23,7 +27,8 @@ case "$BENCH_SCENARIO" in
   cache) DEFAULT_HOST=demo.test ;;
   pass | challenge) DEFAULT_HOST=ua-bench.test ;;
   headers) DEFAULT_HOST=hdr-bench.g8.test ;;
-  *) echo "BENCH_SCENARIO must be cache, pass, challenge or headers, not $BENCH_SCENARIO" >&2; exit 2 ;;
+  charset) DEFAULT_HOST=charset-bench.g15.test ;;
+  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers or charset, not $BENCH_SCENARIO" >&2; exit 2 ;;
 esac
 BENCH_URL="${BENCH_URL:-http://127.0.0.1:${E2E_NODE_PORT:-18080}/bench-cache.txt}"
 BENCH_HOST="${BENCH_HOST:-$DEFAULT_HOST}"
@@ -105,6 +110,11 @@ if [[ "$BENCH_SCENARIO" != challenge ]]; then
       echo "Refusing to benchmark: $BENCH_HOST does not compute its header values (X-Cache-Status, two Link lines)." >&2
       exit 1
     fi
+  fi
+  if [[ "$BENCH_SCENARIO" == charset ]] &&
+    ! printf '%s\n' "$HEADERS" | tr -d '\r' | grep -qi '^content-type: .*; charset=gbk$'; then
+    echo "Refusing to benchmark: $BENCH_HOST does not add charset=gbk." >&2
+    exit 1
   fi
 fi
 "$OHA_BIN" --no-tui --output-format json -n "$BENCH_REQUESTS" -c "$BENCH_CONCURRENCY" -t 10s "${OHA_HEADERS[@]}" "$BENCH_URL" > "$BENCH_OUTPUT"
