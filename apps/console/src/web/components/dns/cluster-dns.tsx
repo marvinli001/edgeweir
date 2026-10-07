@@ -507,11 +507,11 @@ function RecordTable({
       </CardContent>
     );
   return (
-    <CardTable>
+    <CardTable pinFirstColumn>
       <Table data-testid={testId}>
         <TableHeader>
           <TableRow>
-            <TableHead>{m.dns_record_name()}</TableHead>
+            <TableHead className="cell-pinned">{m.dns_record_name()}</TableHead>
             <TableHead>{m.dns_record_type()}</TableHead>
             <TableHead>{m.dns_resolution_line()}</TableHead>
             <TableHead>{m.dns_record_data()}</TableHead>
@@ -525,7 +525,10 @@ function RecordTable({
               data-testid="dns-record"
               data-line={r.line ?? "default"}
             >
-              <TableCell className="font-mono text-xs">{r.name}</TableCell>
+              {/* Long names wrap (at least 7rem wide) so the pinned column leaves room to scroll. */}
+              <TableCell className="cell-pinned font-mono text-xs whitespace-normal">
+                <span className="block min-w-28 break-all">{r.name}</span>
+              </TableCell>
               <TableCell>
                 <Badge variant="secondary" className="font-mono">
                   {r.type}
@@ -679,11 +682,11 @@ function Revisions({ clusterId }: { clusterId: string }) {
         }
       >
         {(list) => (
-          <CardTable>
+          <CardTable pinFirstColumn>
             <Table data-testid="dns-revisions">
               <TableHeader>
                 <TableRow>
-                  <TableHead>{m.dns_version()}</TableHead>
+                  <TableHead className="cell-pinned">{m.dns_version()}</TableHead>
                   <TableHead>{m.dns_status()}</TableHead>
                   <TableHead>{m.dns_reason()}</TableHead>
                   <TableHead className="text-right">{m.dns_records()}</TableHead>
@@ -696,7 +699,7 @@ function Revisions({ clusterId }: { clusterId: string }) {
               <TableBody>
                 {list.map((r) => (
                   <TableRow key={r.revision}>
-                    <TableCell className="font-mono">{r.revision}</TableCell>
+                    <TableCell className="cell-pinned font-mono">{r.revision}</TableCell>
                     <TableCell>
                       <span className="flex items-center gap-2">
                         <RevisionState status={r.status} />

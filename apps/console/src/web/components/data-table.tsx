@@ -41,32 +41,36 @@ function renderTemplate<P extends object>(
 }
 
 /**
- * Measures whether the table is wider than its container: `data-overflow` on the container while
- * it scrolls sideways (the pinned first column needs it), nothing while it fits (its header then
- * sticks under the page header, since the container no longer scrolls).
+ * Measures whether a table is wider than its container: `data-overflow` on the container while
+ * it scrolls sideways (a pinned first column, `cell-pinned`, needs it), nothing while it fits (a
+ * DataTable's header then sticks under the page header, since the container no longer scrolls).
+ * `root` is the table or an element that holds one; a ref callback (it returns its cleanup) for
+ * the plain tables in cards (CardTable) and wells.
  */
+export function markOverflow(root: HTMLElement | null): (() => void) | undefined {
+  const element = root?.matches("table") ? root : root?.querySelector("table");
+  const container = element?.parentElement;
+  if (!element || !container) return;
+  const measure = () =>
+    container.toggleAttribute("data-overflow", element.offsetWidth > container.clientWidth + 1);
+  measure();
+  // Later changes apply on the next frame: toggling the container's overflow inside the
+  // observer's callback could resize what it observes (a scrollbar) and loop.
+  let frame = 0;
+  const observer = new ResizeObserver(() => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(measure);
+  });
+  observer.observe(container);
+  observer.observe(element);
+  return () => {
+    cancelAnimationFrame(frame);
+    observer.disconnect();
+  };
+}
+
 function useOverflowMark(table: React.RefObject<HTMLTableElement | null>) {
-  React.useLayoutEffect(() => {
-    const element = table.current;
-    const container = element?.parentElement;
-    if (!element || !container) return;
-    const measure = () =>
-      container.toggleAttribute("data-overflow", element.offsetWidth > container.clientWidth + 1);
-    measure();
-    // Later changes apply on the next frame: toggling the container's overflow inside the
-    // observer's callback could resize what it observes (a scrollbar) and loop.
-    let frame = 0;
-    const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(measure);
-    });
-    observer.observe(container);
-    observer.observe(element);
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [table]);
+  React.useLayoutEffect(() => markOverflow(table.current), [table]);
 }
 
 /** Filters above a table (a SearchBox, FilterSelects): one wrapping row. */

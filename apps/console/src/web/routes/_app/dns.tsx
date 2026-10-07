@@ -125,11 +125,11 @@ function DnsPage() {
                   <EmptyState art="node" title={m.clusters_empty_title()} />
                 </CardContent>
               ) : (
-                <CardTable>
+                <CardTable pinFirstColumn>
                   <Table data-testid="dns-bindings">
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{m.dns_cluster()}</TableHead>
+                        <TableHead className="cell-pinned">{m.dns_cluster()}</TableHead>
                         <TableHead>{m.dns_mode()}</TableHead>
                         <TableHead>{m.dns_cluster_domain()}</TableHead>
                         <TableHead>{m.dns_status()}</TableHead>
@@ -141,7 +141,7 @@ function DnsPage() {
                     <TableBody>
                       {bindingList.map((b) => (
                         <TableRow key={b.clusterId}>
-                          <TableCell className="font-medium">{b.clusterName}</TableCell>
+                          <TableCell className="cell-pinned font-medium">{b.clusterName}</TableCell>
                           <TableCell>
                             <Badge variant={b.mode === "off" ? "outline" : "secondary"}>
                               {modeLabel(b.mode)}

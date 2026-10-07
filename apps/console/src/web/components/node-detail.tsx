@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import { Meter } from "@/components/appica/meter";
+import { markOverflow } from "@/components/data-table";
 import { OptionSelect } from "@/components/form-select";
 import { ProbeResults } from "@/components/probes";
 import { SafetyNote } from "@/components/safety-note";
@@ -358,11 +359,15 @@ function NodeAddresses({ node }: { node: Node }) {
       ) : node.schedulingAddresses.length === 0 ? (
         <p className="text-sm text-muted-foreground">{m.node_addresses_none()}</p>
       ) : (
-        <div className="overflow-hidden rounded-xl sunk-well" data-testid="node-addresses">
+        <div
+          ref={markOverflow}
+          className="overflow-hidden rounded-xl sunk-well [--cell-bg:var(--well)]"
+          data-testid="node-addresses"
+        >
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{m.node_address_col_address()}</TableHead>
+                <TableHead className="cell-pinned">{m.node_address_col_address()}</TableHead>
                 <TableHead>{m.node_address_col_level()}</TableHead>
                 <TableHead>{m.node_address_col_source()}</TableHead>
                 <TableHead>{m.node_address_col_state()}</TableHead>
@@ -382,7 +387,7 @@ function NodeAddresses({ node }: { node: Node }) {
                       data-source={a.source}
                       data-reachable={a.reachable}
                     >
-                      <TableCell className="font-mono text-xs">{a.address}</TableCell>
+                      <TableCell className="cell-pinned font-mono text-xs">{a.address}</TableCell>
                       <TableCell>
                         <span className="flex items-center gap-1.5">
                           <Badge variant={a.level === 0 ? "secondary" : "outline"}>

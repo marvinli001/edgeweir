@@ -494,9 +494,10 @@
 }
 
 /*
- * DataTable's pinned first column while the table scrolls sideways ([data-overflow] on the table
- * container): an opaque cell (the card, or the header's well via --cell-bg) that keeps the row's
- * hover wash and selection tint, with a hairline on its trailing edge. Not for other tables.
+ * A pinned first column while the table scrolls sideways ([data-overflow] on the table container,
+ * set by DataTable or markOverflow: CardTable's pinFirstColumn, tables in wells): an opaque cell
+ * (the card, or the header's or well's color via --cell-bg) that keeps the row's hover wash and
+ * selection tint, with a hairline on its trailing edge.
  */
 @utility cell-pinned {
   [data-overflow] & {

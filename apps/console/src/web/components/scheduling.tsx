@@ -748,11 +748,11 @@ function PreviewRuleBlock({ rule, index }: { rule: PreviewRule; index: number })
           {m.nodes_empty_title()}
         </p>
       ) : (
-        <CardTable>
+        <CardTable pinFirstColumn>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{m.nodes_col_name()}</TableHead>
+                <TableHead className="cell-pinned">{m.nodes_col_name()}</TableHead>
                 <TableHead>{m.nodes_col_status()}</TableHead>
                 <TableHead>{m.scheduling_conditions()}</TableHead>
                 <TableHead>{m.scheduling_outcome()}</TableHead>
@@ -766,7 +766,9 @@ function PreviewRuleBlock({ rule, index }: { rule: PreviewRule; index: number })
                   data-node-id={node.nodeId}
                   data-state={node.state}
                 >
-                  <TableCell className="align-top font-medium">{node.nodeName}</TableCell>
+                  <TableCell className="cell-pinned align-top font-medium">
+                    {node.nodeName}
+                  </TableCell>
                   <TableCell className="align-top">
                     <Badge
                       variant={stateVariant(node.state)}
