@@ -295,7 +295,7 @@ await waitFor("the site is served", async () => (await edge("p0.e2e.test", "/"))
 await reconcileDns();
 const dnsBefore = await providerRecords();
 assert.ok(
-  dnsBefore.some((r) => r.startsWith(`${site.id}.edge CNAME`)),
+  dnsBefore.some((r) => r.startsWith(`${site.cnamePrefix}.edge CNAME`)),
   JSON.stringify(dnsBefore),
 );
 const readOnly = await call(narrow, "PUT", `/sites/${site.id}/enabled`, { enabled: false });

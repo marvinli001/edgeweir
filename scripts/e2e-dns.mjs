@@ -248,14 +248,14 @@ for (const record of [
   `all.edge A ${peerIp}`,
   `default.edge A ${edgeIp}`,
   `default.edge A ${peerIp}`,
-  `${m5.siteId}.edge CNAME all.edge.cdn.m5.test`,
+  `${(await a("GET", `/sites/${m5.siteId}`)).cnamePrefix}.edge CNAME all.edge.cdn.m5.test`,
 ])
   assert.ok(zoneA.includes(record), `${record} in ${JSON.stringify(zoneA)}`);
 assert.deepEqual(
   zoneB,
   [
     `all.edge A ${nodeBIp}`,
-    `${siteB.id}.edge CNAME all.edge.cdn-b.dns.test`,
+    `${siteB.cnamePrefix}.edge CNAME all.edge.cdn-b.dns.test`,
     `west.edge A ${nodeBIp}`,
   ].sort(),
 );
@@ -264,7 +264,7 @@ const sitesA = zoneA.filter((r) => r.includes(" CNAME all.edge.cdn.m5.test")).le
 assert.equal(zoneA.filter((r) => / A /.test(r)).length, 4);
 const targetB = await a("GET", `/sites/${siteB.id}/cname`);
 assert.deepEqual(targetB, {
-  target: `${siteB.id}.edge.cdn-b.dns.test`,
+  target: `${siteB.cnamePrefix}.edge.cdn-b.dns.test`,
   mode: "auto",
   published: true,
   healthy: true,
@@ -338,7 +338,7 @@ assert.deepEqual(
     .sort(),
   [
     `all.edge 120 IN A ${nodeBIp}`,
-    `${siteB.id}.edge 120 IN CNAME all.edge.cdn-b.dns.test.`,
+    `${siteB.cnamePrefix}.edge 120 IN CNAME all.edge.cdn-b.dns.test.`,
     `west.edge 120 IN A ${nodeBIp}`,
   ].sort(),
 );
@@ -400,6 +400,7 @@ await writeFile(
     clusterA,
     clusterB: clusterB.id,
     siteB: siteB.id,
+    siteBPrefix: siteB.cnamePrefix,
     accountB: accountB.id,
     credential: CREDENTIAL,
     credentialZone: HOOK_ZONE,

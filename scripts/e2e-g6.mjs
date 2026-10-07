@@ -155,6 +155,8 @@ async function unblock(service) {
 // ---------------------------------------------------------------- setup
 const a = await operator("admin@e2e.test", "e2e-admin-password-123");
 const m5 = JSON.parse(await readFile(".e2e/m5-state.json", "utf8"));
+/** The first label of the m5 site's CNAME target. */
+const m5Prefix = (await a("GET", `/sites/${m5.siteId}`)).cnamePrefix;
 const upgrade = JSON.parse(await readFile(".e2e/m6-upgrade-state.json", "utf8"));
 const clusterA = upgrade.clusterId;
 const edgeId = upgrade.nodeId;
@@ -333,7 +335,7 @@ try {
   assert.ok(names.includes(`tel.edge A ${edgeIp} default`), JSON.stringify(names));
   assert.ok(names.includes(`uni.edge A ${peerIp} default`), JSON.stringify(names));
   assert.ok(
-    names.some((r) => r.startsWith(`${m5.siteId}.edge CNAME all.edge.cdn.m5.test default`)),
+    names.some((r) => r.startsWith(`${m5Prefix}.edge CNAME all.edge.cdn.m5.test default`)),
     JSON.stringify(names),
   );
   pass(

@@ -139,7 +139,9 @@ let target = await a("GET", `/sites/${site.id}/cname`);
 assert.equal(target.published, true);
 assert.equal(target.healthy, true);
 const records = async () => (await (await fetch(mock + "/records")).json())[provider.zone] ?? [];
-assert.ok((await records()).some((r) => r.type === "CNAME" && r.name === `${site.id}.edge`));
+assert.ok(
+  (await records()).some((r) => r.type === "CNAME" && r.name === `${site.cnamePrefix}.edge`),
+);
 assert.ok((await records()).some((r) => r.type === "A" && r.data === address));
 console.log(
   "PASS DNS records published by the real Go helper; DNS revisions are independent from node revisions",

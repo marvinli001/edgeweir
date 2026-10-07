@@ -7,6 +7,8 @@ const state = JSON.parse(readFileSync(resolve("../../.e2e/dns-state.json"), "utf
   clusterA: string;
   clusterB: string;
   siteB: string;
+  /** The first label of site B's CNAME target. */
+  siteBPrefix: string;
   credential: string;
   credentialZone: string;
 };
@@ -98,7 +100,7 @@ test("DNS: a cluster's binding, the manual record list and zone file, then autom
   await expect(page.getByTestId("dns-manual-records").locator("tbody tr")).toHaveCount(3);
   await expect(page.getByTestId("dns-zone-file")).toContainText("$ORIGIN cdn-b.dns.test.");
   await expect(page.getByTestId("dns-zone-file")).toContainText(
-    `${state.siteB}.edge 120 IN CNAME all.edge.cdn-b.dns.test.`,
+    `${state.siteBPrefix}.edge 120 IN CNAME all.edge.cdn-b.dns.test.`,
   );
   await check(page, "cluster-manual");
   const download = page.waitForEvent("download");
@@ -126,7 +128,7 @@ test("DNS: the CNAME target on the site page and the Custom HTTP DNS-01 credenti
   await login(page, ...ADMIN);
   await page.goto(`/sites/${state.siteB}?tab=domains`);
   await expect(page.getByTestId("cname-target-value")).toHaveText(
-    `${state.siteB}.edge.cdn-b.dns.test`,
+    `${state.siteBPrefix}.edge.cdn-b.dns.test`,
   );
   await expect(page.getByTestId("cname-target-status")).toHaveText("已发布", { timeout: 30000 });
   await check(page, "site-target-b");
