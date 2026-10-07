@@ -7,6 +7,8 @@ import {
   alertKind,
   alertPolicy,
 } from "@edgeweir/contract";
+import { Mail01Icon, Message01Icon, TelegramIcon, WebhookIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import * as React from "react";
@@ -14,12 +16,13 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
-import { Page } from "@/components/page";
+import { enterDelay, Page } from "@/components/page";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import { SaveBar } from "@/components/site/save-site";
 import { SiteMultiSelect } from "@/components/site-multi-select";
 import { SmtpSettings } from "@/components/smtp-settings";
 import { EmptyState, type QueryResult, QueryView } from "@/components/states";
+import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +63,13 @@ const kindLabel = (kind: AlertChannelConfig["kind"]) =>
     wecom: m.alert_channel_wecom,
     telegram: m.alert_channel_telegram,
   })[kind]();
+const KIND_ICON: Record<AlertChannelConfig["kind"], typeof WebhookIcon> = {
+  webhook: WebhookIcon,
+  email: Mail01Icon,
+  dingtalk: Message01Icon,
+  wecom: Message01Icon,
+  telegram: TelegramIcon,
+};
 
 /** Channels and their mail server, the sites subscribed to them, recent alerts and the thresholds, on one page. */
 function AlertsPage() {
@@ -112,58 +122,76 @@ function ChannelsCard({ channels }: { channels: QueryResult<Channel[]> }) {
         <QueryView query={channels} empty={<EmptyState title={m.alert_no_channels()} />}>
           {(list) => (
             <ul className="divide-y">
-              {list.map((channel) => (
+              {list.map((channel, index) => (
                 <li
                   key={channel.id}
-                  className="flex flex-wrap items-center gap-3 py-3"
+                  className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2.5 py-3 animate-enter first:pt-0 last:pb-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+                  style={enterDelay(index)}
                   data-testid="alert-channel"
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="break-all text-sm font-medium">{channel.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {kindLabel(channel.kind as AlertChannelConfig["kind"])}
-                    </p>
+                  <span className="grid size-9 place-items-center rounded-xl text-muted-foreground sunk-well">
+                    <HugeiconsIcon
+                      icon={KIND_ICON[channel.kind as AlertChannelConfig["kind"]] ?? WebhookIcon}
+                      strokeWidth={2}
+                      className="size-4"
+                    />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                      <p className="min-w-0 font-medium [overflow-wrap:anywhere]">{channel.name}</p>
+                      <StatusDot tone={channel.enabled ? "good" : "idle"}>
+                        <span className="text-xs text-muted-foreground">
+                          {channel.enabled ? m.rules_on() : m.rules_off()}
+                        </span>
+                      </StatusDot>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">
+                        {kindLabel(channel.kind as AlertChannelConfig["kind"])}
+                      </span>
+                      {channel.platform ? (
+                        <Badge variant="secondary">{m.alert_platform_scope()}</Badge>
+                      ) : null}
+                      {channel.lastError ? (
+                        <Badge variant="destructive">
+                          {channel.lastError === "alert_smtp_not_configured"
+                            ? m.error_alert_smtp_not_configured()
+                            : m.error_alert_send_failed()}
+                        </Badge>
+                      ) : null}
+                    </div>
                   </div>
-                  <Badge variant="outline">{channel.enabled ? m.rules_on() : m.rules_off()}</Badge>
-                  {channel.platform ? (
-                    <Badge variant="secondary">{m.alert_platform_scope()}</Badge>
-                  ) : null}
-                  {channel.lastError ? (
-                    <Badge variant="destructive">
-                      {channel.lastError === "alert_smtp_not_configured"
-                        ? m.error_alert_smtp_not_configured()
-                        : m.error_alert_send_failed()}
-                    </Badge>
-                  ) : null}
-                  <Button size="sm" variant="outline" onClick={() => dialog.show(channel)}>
-                    {m.common_edit()}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={mutation.isPending}
-                    onClick={() => void act("test", channel.id)}
-                  >
-                    {m.alert_test_send()}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={mutation.isPending}
-                    onClick={() => void act("toggle", channel.id, !channel.enabled)}
-                  >
-                    {channel.enabled ? m.alert_disable() : m.alert_enable()}
-                  </Button>
-                  <ConfirmDialog
-                    title={m.common_delete()}
-                    destructive
-                    trigger={
-                      <Button variant="destructive" size="sm" disabled={mutation.isPending}>
-                        {m.common_delete()}
-                      </Button>
-                    }
-                    onConfirm={() => run("delete", channel.id)}
-                  />
+                  <div className="col-span-2 flex flex-wrap items-center gap-1.5 sm:col-span-1 sm:justify-end">
+                    <Button size="sm" variant="outline" onClick={() => dialog.show(channel)}>
+                      {m.common_edit()}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={mutation.isPending}
+                      onClick={() => void act("test", channel.id)}
+                    >
+                      {m.alert_test_send()}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={mutation.isPending}
+                      onClick={() => void act("toggle", channel.id, !channel.enabled)}
+                    >
+                      {channel.enabled ? m.alert_disable() : m.alert_enable()}
+                    </Button>
+                    <ConfirmDialog
+                      title={m.common_delete()}
+                      destructive
+                      trigger={
+                        <Button variant="destructive" size="sm" disabled={mutation.isPending}>
+                          {m.common_delete()}
+                        </Button>
+                      }
+                      onConfirm={() => run("delete", channel.id)}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -230,14 +258,24 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
         >
           {(list) => (
             <ul className="divide-y">
-              {list.map((sub) => (
+              {list.map((sub, index) => (
                 <li
                   key={sub.id}
-                  className="flex flex-wrap items-center gap-3 py-3"
+                  className="grid grid-cols-1 items-center gap-x-4 gap-y-2.5 py-3 animate-enter first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto]"
+                  style={enterDelay(index)}
                   data-testid="alert-subscription"
                 >
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <p className="break-all text-sm font-medium">{sub.channelName}</p>
+                  <div className="flex min-w-0 flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                      <p className="min-w-0 font-medium [overflow-wrap:anywhere]">
+                        {sub.channelName}
+                      </p>
+                      {sub.enabled ? null : (
+                        <StatusDot tone="idle">
+                          <span className="text-xs text-muted-foreground">{m.rules_off()}</span>
+                        </StatusDot>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-1" data-testid="alert-subscription-sites">
                       {sub.allSites ? (
                         <Badge variant="secondary">{m.alert_all_sites()}</Badge>
@@ -254,30 +292,31 @@ function SubscriptionsCard({ channels }: { channels: { id: string; name: string 
                         </>
                       )}
                     </div>
+                    <div className="flex flex-wrap gap-1">
+                      {sub.kinds.map((kind) => (
+                        <Badge key={kind} variant="outline">
+                          {label(kind)}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {sub.kinds.map((kind) => (
-                      <Badge key={kind} variant="outline">
-                        {label(kind)}
-                      </Badge>
-                    ))}
+                  <div className="flex flex-wrap items-center gap-1.5 sm:justify-end sm:self-start">
+                    <Button size="sm" variant="outline" onClick={() => dialog.show(sub)}>
+                      {m.common_edit()}
+                    </Button>
+                    <ConfirmDialog
+                      title={m.alert_unsubscribe()}
+                      trigger={
+                        <Button size="sm" variant="outline">
+                          {m.alert_unsubscribe()}
+                        </Button>
+                      }
+                      onConfirm={async () => {
+                        await client.alerts.unsubscribe({ id: sub.id });
+                        await queries.invalidateQueries();
+                      }}
+                    />
                   </div>
-                  {sub.enabled ? null : <Badge variant="outline">{m.rules_off()}</Badge>}
-                  <Button size="sm" variant="outline" onClick={() => dialog.show(sub)}>
-                    {m.common_edit()}
-                  </Button>
-                  <ConfirmDialog
-                    title={m.alert_unsubscribe()}
-                    trigger={
-                      <Button size="sm" variant="outline">
-                        {m.alert_unsubscribe()}
-                      </Button>
-                    }
-                    onConfirm={async () => {
-                      await client.alerts.unsubscribe({ id: sub.id });
-                      await queries.invalidateQueries();
-                    }}
-                  />
                 </li>
               ))}
             </ul>
@@ -314,20 +353,41 @@ function EventsCard() {
         <QueryView query={events} empty={<EmptyState title={m.alert_no_events()} />}>
           {(list) => (
             <ul className="divide-y">
-              {list.map((event) => (
-                <li key={event.id} className="flex flex-wrap items-center gap-2 py-3 text-sm">
-                  <span className="w-full min-w-0 break-words sm:w-auto sm:flex-1">
-                    {event.siteName}
-                  </span>
-                  <Badge variant="outline">{label(event.kind)}</Badge>
-                  <Badge variant="secondary">
-                    {event.status === "resolved" ? m.alert_recovered() : m.alert_firing()}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDateTime(event.occurredAt)}
-                  </span>
-                </li>
-              ))}
+              {list.map((event, index) => {
+                const firing = event.status !== "resolved";
+                return (
+                  <li
+                    key={event.id}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-2.5 text-sm animate-enter first:pt-0 last:pb-0 sm:grid-cols-[6.5rem_minmax(0,1fr)_auto_auto]"
+                    style={enterDelay(index)}
+                  >
+                    <span className="order-2 justify-self-end sm:order-none sm:justify-self-start">
+                      <StatusDot tone={firing ? "bad" : "good"}>
+                        <span className={firing ? "font-medium" : "text-muted-foreground"}>
+                          {firing ? m.alert_firing() : m.alert_recovered()}
+                        </span>
+                      </StatusDot>
+                    </span>
+                    <span className="order-1 min-w-0 font-medium [overflow-wrap:anywhere] sm:order-none">
+                      {event.siteName}
+                    </span>
+                    {/* Phones: the kind and the time share the second line. */}
+                    <span className="order-3 col-span-2 flex min-w-0 items-center justify-between gap-3 sm:order-none sm:contents">
+                      <span className="flex min-w-0">
+                        <Badge variant="outline" className="max-w-full justify-start">
+                          <span className="truncate">{label(event.kind)}</span>
+                        </Badge>
+                      </span>
+                      <time
+                        dateTime={event.occurredAt}
+                        className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums sm:justify-self-end"
+                      >
+                        {formatDateTime(event.occurredAt)}
+                      </time>
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </QueryView>
@@ -336,12 +396,18 @@ function EventsCard() {
   );
 }
 
+/** The thresholds; the card frames the loading and error states too. */
 function PolicyCard() {
   const policy = useQuery(orpc.alerts.policy.queryOptions());
   return (
-    <QueryView query={policy}>
-      {(saved) => <PolicyEditor key={JSON.stringify(saved)} initial={saved} />}
-    </QueryView>
+    <Card className="animate-enter" style={{ animationDelay: "240ms" }}>
+      <CardHeader>
+        <CardTitle>{m.alert_policy_title()}</CardTitle>
+      </CardHeader>
+      <QueryView query={policy} frame={CardContent}>
+        {(saved) => <PolicyEditor key={JSON.stringify(saved)} initial={saved} />}
+      </QueryView>
+    </Card>
   );
 }
 
@@ -351,66 +417,63 @@ function PolicyEditor({ initial }: { initial: AlertPolicy }) {
   const queries = useQueryClient(),
     mutation = useMutation(orpc.alerts.setPolicy.mutationOptions());
   return (
-    <Card className="animate-enter" style={{ animationDelay: "240ms" }}>
-      <CardHeader>
-        <CardTitle>{m.alert_policy_title()}</CardTitle>
-      </CardHeader>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setError(null);
-          try {
-            const parsed = alertPolicy.safeParse(form);
-            if (!parsed.success) {
-              setError(m.alert_check_fields());
-              return;
-            }
-            await mutation.mutateAsync(parsed.data);
-            await queries.invalidateQueries();
-            toast.success(m.common_saved());
-          } catch (e) {
-            setError(errorMessage(e));
+    <form
+      className="flex flex-col gap-(--card-spacing)"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setError(null);
+        try {
+          const parsed = alertPolicy.safeParse(form);
+          if (!parsed.success) {
+            setError(m.alert_check_fields());
+            return;
           }
-        }}
-      >
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          {(
-            [
-              ["nodeOfflineSeconds", m.alert_offline_seconds(), 45, 3600],
-              ["certificateHours", m.alert_certificate_hours(), 1, 720],
-              ["minimumRequests", m.alert_minimum_requests(), 1, 1000000],
-              ["windowMinutes", m.alert_window_minutes(), 1, 60],
-            ] as const
-          ).map(([key, label, min, max]) => (
-            <NumberField
-              key={key}
-              id={`alert-${key}`}
-              label={label}
-              value={String(form[key])}
-              min={min}
-              max={max}
-              onChange={(value) => setForm({ ...form, [key]: Number(value) })}
-            />
-          ))}
+          await mutation.mutateAsync(parsed.data);
+          await queries.invalidateQueries();
+          toast.success(m.common_saved());
+        } catch (e) {
+          setError(errorMessage(e));
+        }
+      }}
+    >
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        {(
+          [
+            ["nodeOfflineSeconds", m.alert_offline_seconds(), 45, 3600],
+            ["certificateHours", m.alert_certificate_hours(), 1, 720],
+            ["minimumRequests", m.alert_minimum_requests(), 1, 1000000],
+            ["windowMinutes", m.alert_window_minutes(), 1, 60],
+          ] as const
+        ).map(([key, label, min, max]) => (
           <NumberField
-            id="alert-ratio"
-            label={m.alert_error_ratio()}
-            value={String(Math.round(form.errorRatio * 100))}
-            min={1}
-            max={100}
-            onChange={(value) => setForm({ ...form, errorRatio: Number(value) / 100 })}
+            key={key}
+            id={`alert-${key}`}
+            label={label}
+            value={String(form[key])}
+            min={min}
+            max={max}
+            onChange={(value) => setForm({ ...form, [key]: Number(value) })}
           />
-        </CardContent>
-        <SaveBar
-          dirty={JSON.stringify(form) !== JSON.stringify(initial)}
-          pending={mutation.isPending}
-          error={error}
-          testId="alert-policy-save"
+        ))}
+        <NumberField
+          id="alert-ratio"
+          label={m.alert_error_ratio()}
+          value={String(Math.round(form.errorRatio * 100))}
+          min={1}
+          max={100}
+          onChange={(value) => setForm({ ...form, errorRatio: Number(value) / 100 })}
         />
-      </form>
-    </Card>
+      </CardContent>
+      <SaveBar
+        dirty={JSON.stringify(form) !== JSON.stringify(initial)}
+        pending={mutation.isPending}
+        error={error}
+        testId="alert-policy-save"
+      />
+    </form>
   );
 }
+
 function ChannelDialog({
   initial,
   open,

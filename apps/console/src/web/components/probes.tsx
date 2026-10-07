@@ -10,6 +10,7 @@ import { CodeBlock } from "@/components/copy-button";
 import { type Columns, DataTable } from "@/components/data-table";
 import { FormDialog } from "@/components/form-dialog";
 import { FormSelect } from "@/components/form-select";
+import { enterDelay } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { SettingsCard } from "@/components/settings-card";
 import { NumberField } from "@/components/site/fields";
@@ -17,6 +18,7 @@ import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -173,7 +175,7 @@ export function ProbesPanel({
           <div className="flex flex-col">
             <button
               type="button"
-              className="w-fit text-left font-medium underline-offset-4 hover:underline"
+              className="w-fit rounded-sm text-left font-medium underline-offset-4 outline-none focus-lit hover:underline"
               onClick={() => action.show({ kind: "results", probe: row.original })}
               data-testid="probe-name"
             >
@@ -285,7 +287,7 @@ export function ProbesPanel({
   );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <QueryView
         query={probes}
         empty={
@@ -298,9 +300,16 @@ export function ProbesPanel({
         }
       >
         {(list) => (
-          <DataTable data={list} columns={columns} getRowId={(p) => p.id} testId="probes-table" />
+          <DataTable
+            data={list}
+            columns={columns}
+            getRowId={(p) => p.id}
+            testId="probes-table"
+            pinFirstColumn
+          />
         )}
       </QueryView>
+      <ProbeMatrixCard />
       <ProbeSettingsCard />
       <AddProbeDialog key={`add-${addKey}`} open={addOpen} onOpenChange={onAddOpenChange} />
       {action.value ? (
@@ -359,7 +368,10 @@ function AddProbeDialog({
                 {/* The countdown renders a <div>, which a SafetyNote <p> cannot hold. */}
                 <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
                   <span title={formatDateTime(result.expiresAt)}>{m.enroll_expires_in()}</span>
-                  <Countdown target={result.expiresAt} className="text-foreground" />
+                  <Countdown
+                    target={result.expiresAt}
+                    className="rounded-md bg-wash px-1.5 text-foreground"
+                  />
                   <span aria-hidden="true">·</span>
                   <SafetyNote data-testid="probe-token-once">{m.enroll_shown_once()}</SafetyNote>
                 </div>
@@ -370,13 +382,13 @@ function AddProbeDialog({
               </Field>
               <Field>
                 <FieldLabel>{m.system_node_api_url()}</FieldLabel>
-                <code className="rounded-xl bg-muted p-2 font-mono text-xs break-all">
+                <code className="rounded-xl px-3 py-2 font-mono text-xs break-all sunk-well">
                   {result.serverUrl}
                 </code>
               </Field>
               <Field>
                 <FieldLabel>{m.enroll_ca_fingerprint()}</FieldLabel>
-                <code className="rounded-xl bg-muted p-2 font-mono text-xs break-all">
+                <code className="rounded-xl px-3 py-2 font-mono text-xs leading-relaxed break-all sunk-well">
                   {result.caSha256}
                 </code>
               </Field>
@@ -588,9 +600,9 @@ function ResultsTable({
   testId: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border" data-testid={testId}>
+    <div className="overflow-hidden rounded-2xl border border-edge" data-testid={testId}>
       <Table>
-        <TableHeader className="bg-muted/60">
+        <TableHeader>
           <TableRow>
             <TableHead>{by === "node" ? m.nodes_col_name() : m.probes_col_prober()}</TableHead>
             <TableHead>{m.probes_col_address()}</TableHead>
@@ -626,7 +638,7 @@ function ResultRow({
   return (
     <TableRow
       className="animate-enter"
-      style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+      style={enterDelay(index)}
       data-testid="probe-result-row"
       data-node={r.nodeName}
       data-prober={r.proberName}
@@ -653,7 +665,7 @@ function ResultRow({
           <span className="font-mono text-xs whitespace-nowrap">
             {r.address.includes(":") ? `[${r.address}]` : r.address}:{r.port}
           </span>
-          <Badge variant="secondary" className="uppercase">
+          <Badge variant="secondary" className="font-mono uppercase">
             {r.method}
           </Badge>
         </div>
@@ -673,6 +685,249 @@ function ResultRow({
         <span title={formatDateTime(r.checkedAt)}>{timeAgo(r.checkedAt)}</span>
       </TableCell>
     </TableRow>
+  );
+}
+
+/**
+ * RTT bands of the latency matrix (ms): one hue (the metric blue), lighter to darker. The value is
+ * printed in every cell, so the fill never carries it alone; text stays foreground (AA on the
+ * darkest band in both themes).
+ */
+const RTT_BANDS = [
+  { below: 30, label: "< 30", className: "bg-metric/12" },
+  { below: 80, label: "30–80", className: "bg-metric/26" },
+  { below: 150, label: "80–150", className: "bg-metric/40" },
+  { below: 250, label: "150–250", className: "bg-metric/55" },
+  { below: Number.POSITIVE_INFINITY, label: "≥ 250", className: "bg-metric/70" },
+] as const;
+
+const bandOf = (rtt: number) => RTT_BANDS.find((band) => rtt < band.below) ?? RTT_BANDS[4];
+
+interface MatrixProber {
+  key: string;
+  name: string;
+  kind: ProbeResultDto["proberKind"];
+  region: string | null;
+}
+
+interface MatrixCell {
+  /** Median RTT of the targets that answered; null when none did. */
+  rtt: number | null;
+  /** Lost attempts / sent attempts over the node's targets, in percent. */
+  lossPercent: number;
+  /** Every target of the node lost every attempt. */
+  failed: boolean;
+  checkedAt: string;
+}
+
+const median = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2
+    ? (sorted[mid] as number)
+    : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
+};
+
+/** Probers × nodes from the latest result per target (addresses and ports of a node folded). */
+function matrixOf(results: ProbeResultDto[]) {
+  const probers = new Map<string, MatrixProber>();
+  const nodes = new Map<string, string>();
+  const groups = new Map<string, ProbeResultDto[]>();
+  for (const r of results) {
+    const key = `${r.proberKind}:${r.proberId}`;
+    if (!probers.has(key))
+      probers.set(key, { key, name: r.proberName, kind: r.proberKind, region: r.regionName });
+    nodes.set(r.nodeId, r.nodeName);
+    const cell = `${key}|${r.nodeId}`;
+    groups.set(cell, [...(groups.get(cell) ?? []), r]);
+  }
+  const cells = new Map<string, MatrixCell>();
+  for (const [key, rows] of groups) {
+    const sent = rows.reduce((sum, r) => sum + r.sent, 0);
+    const lost = rows.reduce((sum, r) => sum + r.lost, 0);
+    const answered = rows.filter((r) => r.lost < r.sent);
+    cells.set(key, {
+      rtt: answered.length ? Math.round(median(answered.map((r) => r.rttMs))) : null,
+      lossPercent: sent ? (lost / sent) * 100 : 0,
+      failed: sent > 0 && answered.length === 0,
+      checkedAt: rows.reduce((last, r) => (r.checkedAt > last ? r.checkedAt : last), ""),
+    });
+  }
+  const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+  return {
+    // Probes first, then the nodes that also probe.
+    probers: [...probers.values()].sort((a, b) =>
+      a.kind === b.kind ? byName(a.name, b.name) : a.kind === "probe" ? -1 : 1,
+    ),
+    nodes: [...nodes].map(([id, name]) => ({ id, name })).sort((a, b) => byName(a.name, b.name)),
+    cells,
+  };
+}
+
+/**
+ * The latest round as a heat matrix: who probed (rows) × which node (columns), each cell the
+ * median RTT of the node's targets in a blue band, a warning dot for partial loss and the loss in
+ * red where nothing answered. The API keeps the latest result per target only, so this is one
+ * round, not a time series. A real table, so screen readers get row and column headers and every
+ * value; polls like the probe results. Hidden while there are no results.
+ */
+function ProbeMatrixCard() {
+  const results = useQuery({
+    ...orpc.probes.results.queryOptions({ input: {} }),
+    refetchInterval: 10_000,
+    meta: { background: true },
+  });
+  // Nothing measured yet: the probe list says so (its empty state or its pending rows).
+  if (results.data?.length === 0) return null;
+  return (
+    <Card className="animate-enter" style={{ animationDelay: "60ms" }} data-testid="probe-matrix">
+      <CardHeader>
+        <CardTitle>{m.probes_col_round()}</CardTitle>
+      </CardHeader>
+      <QueryView query={results} frame={CardContent}>
+        {(rows) => <ProbeMatrix results={rows} />}
+      </QueryView>
+    </Card>
+  );
+}
+
+function ProbeMatrix({ results }: { results: ProbeResultDto[] }) {
+  const { probers, nodes, cells } = React.useMemo(() => matrixOf(results), [results]);
+  return (
+    <CardContent className="flex flex-col gap-4">
+      <div className="-mx-(--card-spacing) overflow-x-auto px-(--card-spacing) [scrollbar-width:thin]">
+        <table className="w-max min-w-full border-separate border-spacing-0.5 text-xs">
+          <caption className="sr-only">{m.probes_col_round()}</caption>
+          <thead>
+            <tr>
+              <th
+                scope="col"
+                className="sticky left-0 z-10 bg-card pr-3 pb-1.5 text-left font-medium text-muted-foreground"
+              >
+                {m.probes_col_prober()}
+              </th>
+              {nodes.map((node) => (
+                <th
+                  key={node.id}
+                  scope="col"
+                  className="px-1 pb-1.5 text-center font-medium whitespace-nowrap text-muted-foreground"
+                >
+                  {node.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {probers.map((prober, index) => (
+              <tr
+                key={prober.key}
+                className="animate-enter"
+                style={enterDelay(index)}
+                data-testid="probe-matrix-row"
+              >
+                <th
+                  scope="row"
+                  className="sticky left-0 z-10 bg-card py-0.5 pr-3 text-left font-normal whitespace-nowrap"
+                >
+                  <span className="flex items-center gap-1.5 text-sm font-medium">
+                    {prober.name}
+                    {prober.kind === "node" ? (
+                      <Badge variant="outline">{m.probes_prober_node()}</Badge>
+                    ) : null}
+                  </span>
+                  {prober.region ? (
+                    <span className="block text-muted-foreground">{prober.region}</span>
+                  ) : null}
+                </th>
+                {nodes.map((node) => (
+                  <MatrixValue
+                    key={node.id}
+                    cell={cells.get(`${prober.key}|${node.id}`)}
+                    title={`${prober.name} → ${node.name}`}
+                  />
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <MatrixLegend />
+    </CardContent>
+  );
+}
+
+function MatrixValue({ cell, title }: { cell: MatrixCell | undefined; title: string }) {
+  const base =
+    "relative h-10 min-w-16 rounded-lg border border-transparent px-2 text-center align-middle font-medium whitespace-nowrap tabular-nums";
+  if (!cell) return <td className={cn(base, "font-normal text-muted-foreground")}>—</td>;
+  const loss = m.probes_loss({ loss: formatPercent(cell.lossPercent) });
+  const details = [
+    title,
+    cell.rtt !== null ? m.probes_rtt({ rtt: cell.rtt }) : probeErrorLabel("unreachable"),
+    loss,
+    timeAgo(cell.checkedAt),
+  ].join(" · ");
+  if (cell.failed || cell.rtt === null)
+    return (
+      <td
+        className={cn(base, "bg-tint-destructive text-destructive")}
+        title={details}
+        data-testid="probe-matrix-cell"
+        data-state="failed"
+      >
+        {formatPercent(cell.lossPercent)}
+        <span className="sr-only">{`, ${probeErrorLabel("unreachable")}`}</span>
+      </td>
+    );
+  return (
+    <td
+      className={cn(base, bandOf(cell.rtt).className)}
+      title={details}
+      data-testid="probe-matrix-cell"
+      data-state={cell.lossPercent > 0 ? "loss" : "ok"}
+    >
+      {cell.rtt}
+      {cell.lossPercent > 0 ? (
+        <>
+          <span
+            aria-hidden="true"
+            className="absolute top-1 right-1 size-1.5 rounded-full border border-transparent bg-state-warn"
+          />
+          <span className="sr-only">{`, ${loss}`}</span>
+        </>
+      ) : null}
+    </td>
+  );
+}
+
+/** What the fills, the dot and the red cells mean. */
+function MatrixLegend() {
+  const swatch =
+    "inline-block h-3 w-5 shrink-0 rounded-sm border border-transparent ring-1 ring-edge ring-inset";
+  return (
+    <ul
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground"
+      data-testid="probe-matrix-legend"
+    >
+      <li className="font-medium text-foreground">{m.probes_col_rtt()}</li>
+      {RTT_BANDS.map((band) => (
+        <li key={band.label} className="flex items-center gap-1.5 tabular-nums">
+          <span aria-hidden="true" className={cn(swatch, band.className)} />
+          {m.probes_rtt({ rtt: band.label })}
+        </li>
+      ))}
+      <li className="flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className="inline-block size-1.5 rounded-full border border-transparent bg-state-warn"
+        />
+        {m.probes_col_loss()}
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden="true" className={cn(swatch, "bg-tint-destructive")} />
+        {probeErrorLabel("unreachable")}
+      </li>
+    </ul>
   );
 }
 

@@ -115,6 +115,8 @@ The **Probe settings** card on the **Monitoring** tab applies to every prober; p
 | Disable / Enable | Disabling deletes its results, which no longer count; the node channel refuses it, except for certificate renewal |
 | Delete | After confirming **Delete probe {name}? Its certificate is revoked**, revokes its certificate and deletes its results; joining again needs a new token |
 
+The **Last round** card below the list is a matrix of the latest results of every prober (probes, and nodes that also probe, marked **Node**) against every node: each cell is the median RTT (ms) of the node's answering addresses and ports, shaded by band (< 30, 30–80, 80–150, 150–250, ≥ 250 ms); a yellow dot in the corner marks loss; red cells lost every attempt and show the loss; **—** means no result (such as the node itself). The console keeps only the latest result per target, so the matrix shows the last round, not a history; it is hidden until there are results.
+
 Probe result columns: **Prober** (in node details) or **Node** (in a probe's results), **Address** (address:port and method), **Loss**, **RTT**, **Error**, **Checked**. Error codes:
 
 | Error | Code | Meaning |

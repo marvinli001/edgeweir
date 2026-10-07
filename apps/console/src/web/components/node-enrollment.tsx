@@ -206,7 +206,10 @@ export function EnrollProgress({ result }: { result: EnrollmentTokenResult }) {
       : { id: "address", label: m.enroll_step_address(), ...reached(addressed, healthy) },
   ];
   return (
-    <ol className="flex flex-col gap-2 rounded-xl border p-3 text-sm" data-testid="enroll-progress">
+    <ol
+      className="flex flex-col gap-2 rounded-2xl p-3 text-sm sunk-well"
+      data-testid="enroll-progress"
+    >
       {steps.map((step, index) => (
         <li
           key={step.id}

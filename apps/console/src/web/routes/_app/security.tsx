@@ -7,11 +7,11 @@ import { toast } from "sonner";
 import { OtpField } from "@/components/appica/otp-field";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
-import { Page } from "@/components/page";
+import { enterDelay, Page } from "@/components/page";
 import { QrCode } from "@/components/qr-code";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
-import { Badge } from "@/components/ui/badge";
+import { StatusDot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -39,12 +39,15 @@ async function unwrap<T>(
 function SecurityPage() {
   const me = useQuery(orpc.account.me.queryOptions());
   return (
-    <Page title={m.security_title()} width="narrow">
-      <PasswordCard />
-      <QueryView query={me}>
-        {({ user }) => <TwoFactorCard enabled={user.twoFactorEnabled} />}
-      </QueryView>
-      <PasskeysCard />
+    <Page title={m.security_title()}>
+      {/* Short forms keep a narrow column, at the start of the page column like the title. */}
+      <div className="flex w-full max-w-[56rem] flex-col gap-6">
+        <PasswordCard />
+        <QueryView query={me}>
+          {({ user }) => <TwoFactorCard enabled={user.twoFactorEnabled} />}
+        </QueryView>
+        <PasskeysCard />
+      </div>
     </Page>
   );
 }
@@ -167,11 +170,13 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
 
   return (
     <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
-      <CardHeader className="flex flex-row items-center gap-2">
+      <CardHeader className="flex flex-row items-center gap-3">
         <CardTitle className="flex-1">{m.security_2fa()}</CardTitle>
-        <Badge variant={enabled ? "default" : "outline"} data-testid="two-factor-status">
-          {enabled ? m.members_2fa_on() : m.members_2fa_off()}
-        </Badge>
+        <StatusDot tone={enabled ? "good" : "idle"} data-testid="two-factor-status">
+          <span className={enabled ? "font-medium" : "text-muted-foreground"}>
+            {enabled ? m.members_2fa_on() : m.members_2fa_off()}
+          </span>
+        </StatusDot>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {backupCodes ? (
@@ -182,9 +187,9 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
           </Field>
         ) : null}
         {enrollment ? (
-          <div className="flex flex-col gap-4 animate-enter sm:flex-row sm:items-start">
+          <div className="flex flex-col items-center gap-5 animate-enter sm:flex-row sm:items-start">
             <QrCode value={enrollment.totpURI} label={m.security_2fa_qr()} />
-            <FieldGroup>
+            <FieldGroup className="min-w-0">
               <Field>
                 <FieldLabel>{m.security_2fa_secret()}</FieldLabel>
                 <CodeBlock value={secret} testId="totp-secret" />
@@ -306,7 +311,7 @@ function PasskeysCard() {
             add.mutate(name || m.security_passkey_default_name());
           }}
         >
-          <Field className="w-64">
+          <Field className="w-full sm:w-64">
             <FieldLabel htmlFor="passkeyName">{m.settings_api_key_name()}</FieldLabel>
             <Input id="passkeyName" name="passkeyName" maxLength={64} placeholder="MacBook" />
           </Field>
@@ -322,20 +327,25 @@ function PasskeysCard() {
           empty={<EmptyState icon={FingerPrintIcon} title={m.security_passkeys_empty()} />}
         >
           {(list) => (
-            <ul className="divide-y rounded-2xl border bg-card text-sm shadow-xs">
+            <ul
+              className="divide-y divide-edge rounded-2xl text-sm sunk-well"
+              data-testid="passkeys"
+            >
               {list.map((key, index) => (
                 <li
                   key={key.id}
-                  className="flex flex-wrap items-center gap-3 px-3 py-2.5 animate-enter"
-                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                  className="flex min-h-12 items-center gap-3 px-3 py-1.5 animate-enter"
+                  style={enterDelay(index)}
                 >
-                  <HugeiconsIcon icon={FingerPrintIcon} strokeWidth={2} className="size-4" />
-                  <span className="font-medium">
+                  <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-raised text-muted-foreground shadow-elev-1">
+                    <HugeiconsIcon icon={FingerPrintIcon} strokeWidth={2} className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-medium">
                     {key.name || m.security_passkey_default_name()}
                   </span>
                   {key.createdAt ? (
                     <span
-                      className="ml-auto text-xs text-muted-foreground"
+                      className="shrink-0 text-xs text-muted-foreground tabular-nums"
                       title={formatDateTime(new Date(key.createdAt).toISOString())}
                     >
                       {timeAgo(new Date(key.createdAt).toISOString())}
