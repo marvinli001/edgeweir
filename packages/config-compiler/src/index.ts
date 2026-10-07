@@ -1127,7 +1127,10 @@ const sortedByteSet = (values: readonly string[] | undefined): string[] =>
  * length and types only while on, so sites without them keep the encoding
  * (and content hash) they had before these fields existed.
  */
-function compileTls(model: TlsModel) {
+function compileTls(
+  model: TlsModel,
+  site: { certificate: boolean; ports: readonly number[]; domains: ReadonlySet<string> },
+) {
   const {
     brotli,
     brotliLevel,
@@ -1147,9 +1150,20 @@ function compileTls(model: TlsModel) {
   return create(TlsOptionsSchema, {
     ...rest,
     // edge-ports-v1: the defaults (301 to 443, nothing excluded) stay unset.
+    // Nodes refuse a redirect port the site is not served on over HTTPS and
+    // excluded names that are no domain of the site: those compile as unset
+    // (as in rollback), not into a revision the cluster cannot apply.
     redirectStatus: redirectStatus === 301 ? 0 : (redirectStatus ?? 0),
-    redirectPort: redirectPort === DEFAULT_HTTPS_PORT ? 0 : (redirectPort ?? 0),
-    redirectExcludedDomains: sortedByteSet(redirectExcludedDomains),
+    redirectPort:
+      redirectPort &&
+      redirectPort !== DEFAULT_HTTPS_PORT &&
+      site.certificate &&
+      site.ports.includes(redirectPort)
+        ? redirectPort
+        : 0,
+    redirectExcludedDomains: sortedByteSet(
+      redirectExcludedDomains?.filter((name) => site.domains.has(name)),
+    ),
     gzipLevel: gzipLevel ?? 0,
     compressMaxLength: BigInt(compressMaxLength ?? 0),
     ...(brotli
@@ -1322,7 +1336,13 @@ function compileSite(model: SiteModel, challenges: boolean, edge?: EdgeModel): S
     rangeSlice: model.rangeSlice ?? false,
     websocketDisabled: model.websocket === false,
     certificateId: model.certificateId ?? "",
-    tls: model.tls ? compileTls(model.tls) : undefined,
+    tls: model.tls
+      ? compileTls(model.tls, {
+          certificate: !!model.certificateId,
+          ports: compileSitePorts(model, edge),
+          domains: new Set(model.domains.map((d) => (d.wildcard ? `*.${d.name}` : d.name))),
+        })
+      : undefined,
     rules: compileRules(model.rules),
     waf: model.waf
       ? create(SiteWafSchema, {

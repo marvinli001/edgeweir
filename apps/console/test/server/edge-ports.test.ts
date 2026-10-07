@@ -302,6 +302,32 @@ describe("listener ports, client address, HTTPS redirect and layer-4 additions (
     });
   });
 
+  it("keeps the redirect on ports and domains nodes accept when the certificate or a domain goes", async () => {
+    await admin.https.update({
+      id: siteId,
+      settings: {
+        certificateId,
+        forceHttps: true,
+        redirectPort: 9443,
+        redirectExcludedDomains: ["a.g9.test"],
+      },
+    });
+    // Removing an excluded domain removes its exclusion.
+    await admin.sites.update({ id: siteId, domains: ["shop.g9.test", "*.g9.test"] });
+    expect((await admin.https.get({ id: siteId })).redirectExcludedDomains).toEqual([]);
+    expect((await site())?.tls).toMatchObject({ redirectPort: 9443, redirectExcludedDomains: [] });
+    // Without a certificate no HTTPS port is left to redirect to.
+    const saved = await admin.https.update({
+      id: siteId,
+      settings: { certificateId: null, redirectPort: 9443 },
+    });
+    expect(saved.redirectPort).toBe(443);
+    expect((await admin.https.get({ id: siteId })).redirectPort).toBe(443);
+    expect(await site()).toMatchObject({ ports: [80, 8081], tls: { redirectPort: 0 } });
+    await admin.sites.update({ id: siteId, domains: ["shop.g9.test", "a.g9.test", "*.g9.test"] });
+    await admin.https.update({ id: siteId, settings: { certificateId, forceHttps: true } });
+  });
+
   it("saves the client address setting, audits and publishes it; the cluster list shows its mode", async () => {
     expect((await admin.clusters.clientIp({ clusterId })).settings).toEqual({
       mode: "direct",

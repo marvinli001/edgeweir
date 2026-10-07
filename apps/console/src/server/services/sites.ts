@@ -748,6 +748,7 @@ export async function updateSite(
     const row = await findSite(tx, input.id, true);
     const changed: string[] = [];
     let certificateReissue: { id: string; name: string } | undefined;
+    let tlsOptions = row.tlsSettings;
     if (input.name !== undefined && input.name !== row.name) {
       await tx.update(schema.site).set({ name: input.name }).where(eq(schema.site.id, row.id));
       changed.push("name");
@@ -765,6 +766,22 @@ export async function updateSite(
         .insert(schema.siteDomain)
         .values(domains.map((d, i) => ({ siteId: row.id, createdAt: ordered(i), ...d })));
       changed.push("domains");
+      // The HTTPS redirect excludes only domains the site has: nodes refuse others.
+      const names = new Set(domains.map((d) => (d.wildcard ? `*.${d.name}` : d.name)));
+      const excluded = tlsSettings.parse({
+        ...tlsOptions,
+        certificateId: row.certificateId,
+      }).redirectExcludedDomains;
+      if (excluded.some((name) => !names.has(name))) {
+        tlsOptions = {
+          ...tlsOptions,
+          redirectExcludedDomains: excluded.filter((name) => names.has(name)),
+        };
+        await tx
+          .update(schema.site)
+          .set({ tlsSettings: tlsOptions })
+          .where(eq(schema.site.id, row.id));
+      }
     }
     if (input.origins) {
       for (const origin of input.origins) assertHostHeader(origin.hostHeader);
@@ -810,7 +827,7 @@ export async function updateSite(
       changed.push("cacheRules");
     }
     if (input.ports) {
-      const tls = tlsSettings.parse({ ...row.tlsSettings, certificateId: row.certificateId });
+      const tls = tlsSettings.parse({ ...tlsOptions, certificateId: row.certificateId });
       await assertSitePorts(tx, row, input.ports, { tls });
       const before = portsOf(row);
       if (JSON.stringify(before) !== JSON.stringify(input.ports)) {

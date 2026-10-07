@@ -731,9 +731,12 @@ export async function getHttps(app: AppContext, id: string) {
 export async function updateHttps(
   app: AppContext,
   id: string,
-  settings: TlsSettings,
+  input: TlsSettings,
   ctx: CertificateContext,
 ) {
+  // Without a certificate the site has no HTTPS port to redirect to: a port
+  // kept from before would name one nodes no longer serve it on.
+  const settings = input.certificateId ? input : { ...input, redirectPort: 443 };
   return app.db.transaction(async (tx) => {
     const site = await tlsSite(tx, id, true);
     if (settings.certificateId) {

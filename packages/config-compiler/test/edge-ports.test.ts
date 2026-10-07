@@ -147,6 +147,22 @@ describe("listener ports and site ports (edge-ports-v1)", () => {
 });
 
 describe("content hash matches the Go agent (v0.23.0)", () => {
+  it("leaves out a redirect port and excluded domains nodes would refuse", () => {
+    const input = v0230Models();
+    const [a] = input.sites;
+    if (!a?.tls) throw new Error("site a missing");
+    // Its certificate removed: the HTTPS ports, and so the redirect port, are gone.
+    input.sites = [{ ...a, certificateId: undefined, tls: { ...a.tls, forceHttps: false } }];
+    let compiled = compileNodeConfig(input, 1n).sites[0];
+    expect(compiled?.ports).toEqual([8081]);
+    expect(compiled?.tls?.redirectPort).toBe(0);
+    // An excluded domain the site no longer has.
+    input.sites = [{ ...a, domains: a.domains.filter((d) => d.name !== "b.test") }];
+    compiled = compileNodeConfig(input, 1n).sites[0];
+    expect(compiled?.tls?.redirectPort).toBe(9443);
+    expect(compiled?.tls?.redirectExcludedDomains).toEqual(["*.w.test"]);
+  });
+
   it("encodes the v0.23.0 vector to the same canonical bytes and hash", () => {
     const config = canonicalize(fromJson(NodeConfigSchema, vectorV0230.config));
     const bare = clone(NodeConfigSchema, config);
