@@ -261,7 +261,8 @@ const DEFAULT_LIMIT = 100 * MIB;
 export function BodyLimitCard({ site }: { site: Site }) {
   const saved = site.contentSettings.requestBodyLimit;
   const available = useSiteContent(site.id);
-  const toMib = (bytes: number) => String(Math.round((bytes / MIB) * 100) / 100);
+  // Six decimals keep byte-sized limits (1 KiB is 0.000977 MiB) from rounding to 0.
+  const toMib = (bytes: number) => String(Number((bytes / MIB).toFixed(6)));
   const [value, setValue] = React.useState(toMib(saved));
   const { save, error, pending } = useSaveSite(site.id);
   const bytes = Math.round(Number(value) * MIB);
