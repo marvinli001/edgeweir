@@ -18,6 +18,7 @@ import {
   CharsetSchema,
   type ClientAddress,
   ClientAddressSchema,
+  DomainMatch,
   DomainSchema,
   type EdgeRule,
   EdgeRuleSchema,
@@ -64,6 +65,8 @@ import {
   SiteWafSchema,
   type TlsOptions,
   TlsOptionsSchema,
+  type UnknownHosts,
+  UnknownHostsSchema,
 } from "@edgeweir/proto";
 import {
   type Expression,
@@ -289,7 +292,29 @@ export interface PlatformErrorPagesModel {
 export interface OfflineHostModel {
   name: string;
   wildcard: boolean;
+  /** `.a.com` (suffix) and `~pattern` (regex) domains; domains-v2. */
+  match?: DomainMatchModel;
   reason: "disabled";
+}
+
+/** How a domain matches besides exact and `*.` (config.proto DomainMatch, domains-v2). */
+export type DomainMatchModel = "suffix" | "regex";
+/** Feature of `.a.com` and `~pattern` site domains (proto v0.25.0). */
+export const DOMAINS_V2_FEATURE = "domains-v2";
+/** Feature of the cluster's unknown host handling and scan protection (proto v0.25.0). */
+export const UNKNOWN_HOST_FEATURE = "unknown-host-v1";
+
+/**
+ * The cluster's unknown host handling (config.proto UnknownHosts):
+ * page | close | site per case; scanThreshold 0 turns scan protection off.
+ */
+export interface UnknownHostsModel {
+  unknownHost: "page" | "close" | "site";
+  ipAccess: "page" | "close" | "site";
+  defaultSiteId: string | null;
+  defaultCertificate: boolean;
+  scanThreshold: number;
+  scanBanSeconds: number;
 }
 
 type TlsFields = Omit<TlsOptions, "$typeName" | "$unknown" | "gzipLevel" | "compressMaxLength">;
@@ -336,7 +361,15 @@ export interface SiteModel {
    * is served over HTTP only (feature tls-pending-domains-v1). Ignored on a
    * site without a certificate.
    */
-  domains: { name: string; wildcard: boolean; tlsPending?: boolean }[];
+  domains: {
+    name: string;
+    wildcard: boolean;
+    tlsPending?: boolean;
+    /** suffix (`.a.com`) or regex (`~pattern`, name the pattern); domains-v2. */
+    match?: DomainMatchModel;
+    /** Regex only: site creation time in Unix ms × 16 + the pattern's index in the site. */
+    order?: number;
+  }[];
   originPool: {
     id: string;
     policy: "weighted_random" | "round_robin" | "consistent_hash";
@@ -399,11 +432,16 @@ export interface ClientIpModel {
   dropForwardedFor: boolean;
 }
 
-/** The cluster's listener ports besides 80 and 443, and its client address setting. */
+/**
+ * The cluster's listener ports besides 80 and 443, its client address
+ * setting and its unknown host handling (cluster state a rollback keeps).
+ */
 export interface EdgeModel {
   httpPorts: number[];
   httpsPorts: number[];
   clientIp: ClientIpModel | null;
+  /** Omitted or null: the platform's page for both, no scan protection. */
+  unknownHosts?: UnknownHostsModel | null;
 }
 
 export const DEFAULT_HTTP_PORT = 80;
@@ -1225,8 +1263,10 @@ function compileSite(model: SiteModel, challenges: boolean, edge?: EdgeModel): S
     domains: model.domains.map((d) =>
       create(DomainSchema, {
         name: d.name,
-        wildcard: d.wildcard,
-        tlsPending: !!d.tlsPending && !!model.certificateId,
+        wildcard: !d.match && d.wildcard,
+        tlsPending: !d.match && !!d.tlsPending && !!model.certificateId,
+        match: d.match ? matchMap[d.match] : DomainMatch.UNSPECIFIED,
+        order: d.match === "regex" ? BigInt(d.order ?? 0) : 0n,
       }),
     ),
     originPool: create(OriginPoolSchema, {
@@ -1340,7 +1380,9 @@ function compileSite(model: SiteModel, challenges: boolean, edge?: EdgeModel): S
       ? compileTls(model.tls, {
           certificate: !!model.certificateId,
           ports: compileSitePorts(model, edge),
-          domains: new Set(model.domains.map((d) => (d.wildcard ? `*.${d.name}` : d.name))),
+          domains: new Set(
+            model.domains.filter((d) => !d.match).map((d) => (d.wildcard ? `*.${d.name}` : d.name)),
+          ),
         })
       : undefined,
     rules: compileRules(model.rules),
@@ -1435,8 +1477,11 @@ function cacheCondition(r: CacheRuleModel) {
   return structured ? lists(structured) : { condition };
 }
 
-/** Offline hosts sort like domains: by name, the exact host before the wildcard. */
-const offlineHostKey = (host: OfflineHost) => `${host.name}\u0000${host.wildcard ? 1 : 0}`;
+/** Domains and offline hosts sort by (name, wildcard, match): the exact host first. */
+const domainKey = (d: { name: string; wildcard: boolean; match: DomainMatch }) =>
+  `${d.name}\u0000${d.wildcard ? 1 : 0}\u0000${d.match}`;
+const offlineHostKey = domainKey;
+const matchMap = { suffix: DomainMatch.SUFFIX, regex: DomainMatch.REGEX } as const;
 
 /**
  * NodeConfig.platform_error_pages: unset when every template is empty (the
@@ -1460,7 +1505,12 @@ export function compilePlatformErrorPages(
 export function compileOfflineHosts(hosts: OfflineHostModel[] | undefined): OfflineHost[] {
   return (hosts ?? [])
     .map((host) =>
-      create(OfflineHostSchema, { name: host.name, wildcard: host.wildcard, reason: host.reason }),
+      create(OfflineHostSchema, {
+        name: host.name,
+        wildcard: !host.match && host.wildcard,
+        reason: host.reason,
+        match: host.match ? matchMap[host.match] : DomainMatch.UNSPECIFIED,
+      }),
     )
     .sort(byString(offlineHostKey));
 }
@@ -1516,7 +1566,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
     }
     site.bulkRedirects.sort(byBytes((redirect) => redirect.source));
     for (const rule of site.rules) canonicalizeAction(rule.action);
-    site.domains.sort(byString((d) => `${d.name}\u0000${d.wildcard ? 1 : 0}`));
+    site.domains.sort(byString(domainKey));
     site.originPool?.origins.sort(byString((o) => o.id));
     site.cacheRules.sort((a, b) =>
       a.priority !== b.priority ? a.priority - b.priority : a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
@@ -1589,8 +1639,38 @@ export function compileClientAddress(
 }
 
 /**
- * The listener ports and client address setting a compiled configuration
- * was made with (refreshDerived keeps them when no current ones are given).
+ * NodeConfig.unknown_hosts: unset for the defaults (the platform's page for
+ * both cases, scan protection off). A default site that is not among the
+ * compiled sites hands nothing over (page), and its certificate is only
+ * offered when it has one.
+ */
+export function compileUnknownHosts(
+  model: UnknownHostsModel | null | undefined,
+  sites: Pick<Site, "id" | "certificateId">[],
+): UnknownHosts | undefined {
+  if (!model) return undefined;
+  const site = model.defaultSiteId ? sites.find((s) => s.id === model.defaultSiteId) : undefined;
+  const resolve = (action: UnknownHostsModel["unknownHost"]) =>
+    action === "site" && !site ? "page" : action;
+  const unknownHost = resolve(model.unknownHost);
+  const ipAccess = resolve(model.ipAccess);
+  const scan = model.scanThreshold > 0;
+  if (unknownHost === "page" && ipAccess === "page" && !scan) return undefined;
+  const handsOver = unknownHost === "site" || ipAccess === "site";
+  return create(UnknownHostsSchema, {
+    unknownHost,
+    ipAccess,
+    defaultSiteId: handsOver && site ? site.id : "",
+    defaultCertificate: model.defaultCertificate && unknownHost === "site" && !!site?.certificateId,
+    scanThreshold: scan ? model.scanThreshold : 0,
+    scanBanSeconds: scan ? model.scanBanSeconds : 0,
+  });
+}
+
+/**
+ * The listener ports, client address setting and unknown host handling a
+ * compiled configuration was made with (refreshDerived keeps them when no
+ * current ones are given).
  */
 export function edgeOf(config: NodeConfig): EdgeModel {
   const extra = (protocol: ListenerProtocol, standard: number) =>
@@ -1599,6 +1679,7 @@ export function edgeOf(config: NodeConfig): EdgeModel {
       .map((l) => l.port)
       .filter((port) => port !== DEFAULT_HTTP_PORT && port !== DEFAULT_HTTPS_PORT);
   const ca = config.clientAddress;
+  const uh = config.unknownHosts;
   return {
     httpPorts: extra(ListenerProtocol.HTTP, DEFAULT_HTTP_PORT),
     httpsPorts: extra(ListenerProtocol.HTTPS, DEFAULT_HTTPS_PORT),
@@ -1610,7 +1691,32 @@ export function edgeOf(config: NodeConfig): EdgeModel {
           dropForwardedFor: ca.dropForwardedFor,
         }
       : null,
+    // Only configurations with unknown host handling carry it.
+    ...(uh
+      ? {
+          unknownHosts: {
+            unknownHost: uh.unknownHost as UnknownHostsModel["unknownHost"],
+            ipAccess: uh.ipAccess as UnknownHostsModel["ipAccess"],
+            defaultSiteId: uh.defaultSiteId || null,
+            defaultCertificate: uh.defaultCertificate,
+            scanThreshold: uh.scanThreshold,
+            scanBanSeconds: uh.scanBanSeconds,
+          },
+        }
+      : {}),
   };
+}
+
+/** Features of the domain forms and unknown host handling a compiled configuration uses. */
+export function domainFeatures(config: NodeConfig): string[] {
+  return [
+    ...(config.sites.some((site) =>
+      site.domains.some((d) => d.match !== DomainMatch.UNSPECIFIED),
+    ) || config.offlineHosts.some((host) => host.match !== DomainMatch.UNSPECIFIED)
+      ? [DOMAINS_V2_FEATURE]
+      : []),
+    ...(config.unknownHosts ? [UNKNOWN_HOST_FEATURE] : []),
+  ];
 }
 
 /** Features of the listener ports and client address setting a compiled configuration uses. */
@@ -1676,6 +1782,7 @@ export function derivedFeatures(config: NodeConfig): string[] {
     // Without applications the configuration encodes exactly as before.
     ...(config.l4Apps.length ? [L4_FEATURE] : []),
     ...edgeFeatures(config),
+    ...domainFeatures(config),
   ];
 }
 
@@ -1692,6 +1799,7 @@ export function refreshDerived(config: NodeConfig, edge?: EdgeModel): NodeConfig
   const current = edge ?? edgeOf(config);
   out.listeners = listenersFor(out.sites, current).map(compileListener);
   out.clientAddress = compileClientAddress(current.clientIp);
+  out.unknownHosts = compileUnknownHosts(current.unknownHosts, out.sites);
   const used = new Set(
     [...out.sites.map((s) => s.certificateId), ...out.l4Apps.map((a) => a.certificateId)].filter(
       Boolean,
@@ -1755,6 +1863,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     offlineHosts: compileOfflineHosts(input.offlineHosts),
     l4Apps: compileL4Apps(input.l4Apps),
     clientAddress: compileClientAddress(input.edge?.clientIp),
+    unknownHosts: compileUnknownHosts(input.edge?.unknownHosts, sites),
   });
   compiled.requiredFeatures = derivedFeatures(compiled);
   const config = canonicalize(compiled);
@@ -1801,6 +1910,7 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     offlineHosts: target.offlineHosts,
     l4Apps: target.l4Apps,
     clientAddress: target.clientAddress,
+    unknownHosts: target.unknownHosts,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -1837,6 +1947,7 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       offlineHosts: diff.offlineHosts,
       l4Apps: diff.l4Apps,
       clientAddress: diff.clientAddress,
+      unknownHosts: diff.unknownHosts,
       sites,
     }),
   );
