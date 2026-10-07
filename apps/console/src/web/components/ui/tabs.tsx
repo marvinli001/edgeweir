@@ -20,7 +20,8 @@ const tabsListVariants = cva(
       variant: {
         // A segmented control: a shallow well with a raised thumb (seg-well / seg-thumb).
         default: "seg-well",
-        // Page-level tab bar: no track, a 2px primary bar under the active tab.
+        // Page-level tab bar: no track, a 2px primary bar under the active tab (Highlight in
+        // forced colors, index.css).
         line: "gap-1 bg-transparent",
       },
     },

@@ -840,12 +840,22 @@
   [data-slot="input-group-control"]:focus-visible {
     outline: none;
   }
-  /* Gauges and top-list bars: the fill is the value (the track keeps its border, if any). */
+  /* Checked toggles, and the fills of progress bars, meters and top-list bars (their value). */
   [data-slot="checkbox"][data-checked],
   [data-slot="switch"][data-checked],
   [data-slot="progress-indicator"],
   [data-slot="meter-indicator"],
   [data-slot="bar-fill"] {
+    background-color: Highlight;
+  }
+  /*
+   * Line tabs: only the active tab is marked, by its bar in Highlight; the others drop the ring
+   * their transparent border would draw (the focused one still gets the outline).
+   */
+  [data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"] {
+    border-color: Canvas;
+  }
+  [data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"][data-active]::after {
     background-color: Highlight;
   }
   [data-slot="switch-thumb"] {
