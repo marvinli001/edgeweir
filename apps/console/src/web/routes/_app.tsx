@@ -47,13 +47,10 @@ function AppLayout() {
     if (isRecentPath(pathname)) recordRecent(session.user.id, { kind: "page", path: pathname });
   }, [pathname, session.user.id]);
   return (
+    // The header's height (--header-height) lives on :root, where the document's scroll padding
+    // reads it too (index.css).
     <SidebarProvider
-      style={
-        {
-          "--sidebar-width": "calc(var(--spacing) * 64)",
-          "--header-height": "calc(var(--spacing) * 12)",
-        } as React.CSSProperties
-      }
+      style={{ "--sidebar-width": "calc(var(--spacing) * 64)" } as React.CSSProperties}
     >
       <QuickActionsProvider>
         <AppSidebar variant="inset" user={{ name: session.user.name, email: session.user.email }} />

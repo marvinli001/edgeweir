@@ -27,10 +27,12 @@ const TITLE_ROW: Record<PageWidth, string> = {
 };
 
 /**
- * Page header. On a wide inset the title and the page actions sit over the content column, with
- * the sidebar trigger at the left edge and the theme toggle at the right; narrower it is one row,
- * and below `sm` the page actions wrap onto a second row so the title keeps its room on phones.
- * Without a title (status pages) only the trigger and the toggle show.
+ * Page header: sticky glass with a hairline, lifting off the content once the page scrolls
+ * (header-lift); `scroll-padding-top` on the document keeps focused rows clear of it. On a wide
+ * inset the title (headline: 600, slightly widened) and the page actions sit over the content
+ * column, with the sidebar trigger at the left edge and the theme toggle at the right; narrower it
+ * is one row, and below `sm` the page actions wrap onto a second row so the title keeps its room
+ * on phones. Without a title (status pages) only the trigger and the toggle show.
  */
 export function SiteHeader({
   title,
@@ -42,7 +44,7 @@ export function SiteHeader({
   width?: PageWidth;
 }) {
   return (
-    <header className="@container/header sticky top-0 z-20 flex min-h-(--header-height) shrink-0 items-center gap-2 rounded-t-[inherit] border-b border-edge glass transition-[width,height] ease-linear">
+    <header className="@container/header sticky top-0 z-20 flex min-h-(--header-height) shrink-0 items-center gap-2 rounded-t-[inherit] border-b border-edge glass header-lift transition-[width,height] ease-linear">
       <div
         className={cn(
           "flex w-full flex-wrap items-center gap-x-1 gap-y-2 px-4 py-2 lg:gap-x-2 lg:px-6",
@@ -60,7 +62,10 @@ export function SiteHeader({
         </div>
         <div className={cn("contents min-w-0 items-center gap-2", TITLE_ROW[width])}>
           {title ? (
-            <h1 className="min-w-0 flex-1 truncate text-base font-medium" data-testid="page-title">
+            <h1
+              className="min-w-0 flex-1 truncate text-lg leading-7 font-semibold tracking-tight font-stretch-106% sm:text-xl"
+              data-testid="page-title"
+            >
               {title}
             </h1>
           ) : (

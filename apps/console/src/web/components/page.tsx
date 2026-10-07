@@ -9,8 +9,18 @@ const COLUMN: Record<PageWidth, string> = {
 };
 
 /**
- * Standard page frame inside the sidebar inset: header + a centered content column that fades in
- * on mount. The column is the `main` container that container queries measure.
+ * The entrance delay of the `index`th card or row of a list (with `animate-enter`): a short
+ * stagger that stops growing after a dozen, so long lists do not keep the last rows waiting.
+ */
+export function enterDelay(index: number, step = 30): React.CSSProperties {
+  return { animationDelay: `${Math.min(index, 12) * step}ms` };
+}
+
+/**
+ * Standard page frame inside the sidebar inset: the sticky header and a centered content column
+ * (24px between sections, 16px / 24px padding) that rises in on mount; its cards and rows
+ * stagger after it (`animate-enter` with `enterDelay`). The column is the `main` container that
+ * container queries measure.
  */
 export function Page({
   title,
