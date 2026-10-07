@@ -1,5 +1,6 @@
 import type { AnalyticsRange, L4Protocol, PortPoolProtocol } from "@edgeweir/contract";
-import { m } from "@/lib/i18n";
+// Relative on purpose: the module is unit-tested outside Vite's "@" alias.
+import { m } from "../paraglide/messages.js";
 
 /** Protocols of an application, in menu order. Labels are protocol names, the same in every language. */
 export const L4_PROTOCOLS = [
@@ -35,6 +36,13 @@ export const originLabel = (origin: { address: string; port: number }) =>
   origin.address.includes(":")
     ? `[${origin.address}]:${origin.port}`
     : `${origin.address}:${origin.port}`;
+
+/**
+ * The IP lists an application uses, in its order, as chips keyed by id: a
+ * list's name, or the start of its id while the lists load or once it is gone.
+ */
+export const listChips = (ids: string[], lists: readonly { id: string; name: string }[] = []) =>
+  ids.map((id) => ({ id, name: lists.find((list) => list.id === id)?.name ?? id.slice(0, 8) }));
 
 /** PROXY protocol versions sent to the origins (0 sends none). */
 export const PROXY_VERSIONS = [0, 1, 2] as const;
