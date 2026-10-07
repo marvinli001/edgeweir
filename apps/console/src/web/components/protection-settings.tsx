@@ -12,7 +12,7 @@ import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { challengeLabel } from "@/lib/protection";
 
-/** Admin protection section: platform Under Attack, event retention and the CC template. */
+/** Protection page cards: platform Under Attack, event retention and the CC template. */
 export function ProtectionSettingsCards() {
   return (
     <>

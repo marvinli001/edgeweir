@@ -13,7 +13,7 @@ const lines = (text: string) =>
     .filter(Boolean);
 
 /**
- * Admin card: special-purpose addresses (private, loopback, link-local...) that
+ * System page card: special-purpose addresses (private, loopback, link-local...) that
  * origins may use anyway. Saving publishes a new revision for every cluster.
  */
 export function OriginAllowListCard() {

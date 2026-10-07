@@ -3,7 +3,7 @@ import { NumberField } from "@/components/site/fields";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
-/** Admin card: usage record retention and when an offline node stops holding back completeness. */
+/** System page card: usage record retention and when an offline node stops holding back completeness. */
 export function UsageSettingsCard() {
   return (
     <SettingsCard
