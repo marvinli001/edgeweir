@@ -970,7 +970,6 @@
   "geo_country": "国家",
   "geo_subdivision": "省份",
   "geo_asn": "ASN",
-  "geo_state": "：{state}",
   "geo_available": "可用",
   "geo_unavailable": "未配置",
   "geo_attribution": "IP 地址数据由 IPinfo 提供（CC BY-SA 4.0）",

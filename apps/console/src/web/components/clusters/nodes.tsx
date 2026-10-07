@@ -230,7 +230,7 @@ function NodeCard({
           className="ml-auto shrink-0 text-xs text-muted-foreground"
           title={node.lastSeenAt ? formatDateTime(node.lastSeenAt) : undefined}
         >
-          {timeAgo(node.lastSeenAt)}
+          {m.nodes_col_last_seen()} {timeAgo(node.lastSeenAt)}
         </span>
       </div>
       <NodeVitals node={node} />

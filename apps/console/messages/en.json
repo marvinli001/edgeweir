@@ -1073,7 +1073,6 @@
   "geo_country": "Country",
   "geo_subdivision": "Subdivision",
   "geo_asn": "ASN",
-  "geo_state": ": {state}",
   "geo_available": "Ready",
   "geo_unavailable": "Unavailable",
   "geo_attribution": "IP address data is powered by IPinfo (CC BY-SA 4.0)",
