@@ -680,8 +680,8 @@ message Ban {
   // At most 7 days after created_at.
   google.protobuf.Timestamp expires_at = 5;
   BanSource source = 6;
-  // Reason code: abuse, attack, scanner, spam, other (manual) or cc_ip_rate
-  // (automatic).
+  // Reason code: abuse, attack, scanner, spam, other (manual), cc_ip_rate or
+  // unknown_host_scan (automatic).
   string reason = 7;
   google.protobuf.Timestamp created_at = 8;
 }
@@ -718,6 +718,7 @@ message GetBansResponse {
 
 // AutoBan is a ban a node created by itself.
 message AutoBan {
+  // The site of a site ban; empty with BAN_SCOPE_PLATFORM.
   string site_id = 1;
   // What the node banned: an IPv4 address ("/32") or an IPv6 /64 (since
   // v0.17.0; earlier nodes banned single IPv6 addresses, "/128").
@@ -731,6 +732,10 @@ message AutoBan {
   double observed = 7;
   double threshold = 8;
   uint32 window_seconds = 9;
+  // BAN_SCOPE_PLATFORM: every site of the node, from scan protection
+  // (UnknownHosts, reason unknown_host_scan); unspecified is
+  // BAN_SCOPE_SITE. Added in v0.25.0.
+  BanScope scope = 10;
 }
 
 // ReportBansRequest uploads automatic bans, at most 1000 per request.

@@ -26,7 +26,9 @@ import "google/protobuf/timestamp.proto";
 //     trusted_cidrs sorted and unique (v0.23.0);
 //   - inside a cache zone node_sizes by node_id; inside a site's
 //     maintenance allowed_cidrs and allowed_path_prefixes sorted and unique
-//     (v0.24.0).
+//     (v0.24.0);
+//   - inside a site domains, and offline_hosts, by (name, wildcard, match)
+//     (v0.25.0; a name sorts before the same name with wildcard).
 // content_hash is the lowercase hex SHA-256 of the deterministic binary
 // encoding of this message with `revision` and `content_hash` cleared.
 message NodeConfig {
@@ -82,6 +84,47 @@ message NodeConfig {
   // origins). Unset: the TCP peer, for QUIC the UDP peer. Added in v0.23.0
   // (feature client-ip-v1).
   ClientAddress client_address = 18;
+  // How the nodes answer hosts no site serves and requests by node IP.
+  // Unset: the platform's unknown host page (HTTPS: an aborted handshake
+  // for unknown SNI, 421 without SNI), no scan protection. Added in v0.25.0
+  // (feature unknown-host-v1).
+  UnknownHosts unknown_hosts = 19;
+}
+
+// UnknownHosts is the cluster's handling of requests no site serves.
+//
+// unknown_host applies to a Host no site (nor offline host) serves and to
+// a site's host on a port the site is not bound to (Site.ports); ip_access
+// to a Host that is an IP literal (IPv4, or IPv6 in brackets) or empty or
+// missing. Values: "page": the platform's unknown host page (404; over
+// HTTPS without SNI ip_access keeps 421); "close": the connection is closed
+// without a response (444); "site": the request is served by the site
+// default_site_id when it is in `sites` and bound to the request's port,
+// else as "page". Hosts of disabled sites (offline_hosts) keep their page.
+// Anything else rejects the configuration.
+//
+// default_certificate (unknown_host "site" only): a TLS handshake whose
+// SNI no site serves completes with the default site's certificate; the
+// request then follows its Host. Without it, or when the default site has
+// no certificate or is not bound to the port, such handshakes are aborted.
+// Connections without SNI keep the node's health certificate.
+//
+// scan_threshold > 0 (10-10000) turns on scan protection: a client address
+// (ip.src) whose requests reach the unknown_host or ip_access handling, in
+// any of its forms, more than scan_threshold times within 60 seconds
+// (counted from the first) is banned at platform scope for
+// scan_ban_seconds (60-86400): the node holds the ban and reports it
+// (ReportBans: AutoBan.scope BAN_SCOPE_PLATFORM, reason unknown_host_scan,
+// metric unknown_host_requests). Loopback addresses, trusted proxies
+// (ClientAddress.trusted_cidrs) and addresses the platform rules allow are
+// never banned. TLS handshakes aborted for unknown SNI are not counted.
+message UnknownHosts {
+  string unknown_host = 1;
+  string ip_access = 2;
+  string default_site_id = 3;
+  bool default_certificate = 4;
+  uint32 scan_threshold = 5;
+  uint32 scan_ban_seconds = 6;
 }
 
 // ClientAddress is the cluster's client address setting.
@@ -155,6 +198,8 @@ message NodeConfigDiff {
   repeated L4App l4_apps = 19;
   // Always sent in full (NodeConfig field 18). Added in v0.23.0.
   ClientAddress client_address = 20;
+  // Always sent in full (NodeConfig field 19). Added in v0.25.0.
+  UnknownHosts unknown_hosts = 21;
 }
 
 // L4Protocol is the transport of a layer-4 application.
@@ -446,6 +491,8 @@ message OfflineHost {
   bool wildcard = 2;
   // disabled; anything else rejects the configuration.
   string reason = 3;
+  // As Domain.match (v0.25.0, feature domains-v2).
+  DomainMatch match = 4;
 }
 
 // SiteWaf runs the OWASP Core Rule Set bundled with the node.
@@ -751,7 +798,8 @@ message CacheKeyPolicy {
 
 // Domain is a host name routed to a site.
 message Domain {
-  // Lowercase host name without port, e.g. "a.example.com".
+  // Lowercase host name without port, e.g. "a.example.com"; with match
+  // DOMAIN_MATCH_REGEX a pattern.
   string name = 1;
   // When true, name is a suffix and matches any single left-most label
   // ("*.example.com" is stored as name "example.com", wildcard true).
@@ -764,6 +812,31 @@ message Domain {
   // console sends it only to clusters whose active nodes all report the
   // feature and otherwise leaves such domains out.
   bool tls_pending = 3;
+  // How name matches (v0.25.0, feature domains-v2; never with wildcard or
+  // tls_pending). A host goes to the site of its exact name, else of the
+  // wildcard over its parent, else of the longest DOMAIN_MATCH_SUFFIX
+  // name it ends in (after a dot), else of the first DOMAIN_MATCH_REGEX
+  // pattern by (order, site id) that matches it. Over HTTPS, a host found
+  // through a suffix or pattern completes the handshake only when the
+  // site's certificate covers it (a DNS name equal to the host, or "*."
+  // and its parent).
+  DomainMatch match = 4;
+  // DOMAIN_MATCH_REGEX only: the precedence key, lower first: the site's
+  // creation time in Unix milliseconds times 16 plus the pattern's index
+  // among the site's patterns (0-9).
+  uint64 order = 5;
+}
+
+// DomainMatch is how a Domain (or OfflineHost) matches the request host.
+enum DomainMatch {
+  // name exactly, or the single left-most label over it with wildcard.
+  DOMAIN_MATCH_UNSPECIFIED = 0;
+  // Any subdomain of name at any depth ("x.name", "y.x.name"), not name.
+  DOMAIN_MATCH_SUFFIX = 1;
+  // name is a regular expression of the rule engine's subset (at most 256
+  // characters, letters lowercase outside escapes, no '"', "\\" or
+  // whitespace) that must match the whole lowercase host: ^(?:name)$.
+  DOMAIN_MATCH_REGEX = 2;
 }
 
 // LoadBalancePolicy selects how an origin is picked from a pool.
