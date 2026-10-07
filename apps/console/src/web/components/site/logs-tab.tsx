@@ -243,10 +243,7 @@ function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) 
       className="@container/logs max-h-[min(70svh,42rem)] overflow-y-auto rounded-2xl sunk-well outline-none focus-lit"
       data-testid="logs-table"
     >
-      <table
-        className={cn("grid text-left text-sm", LOG_VARS)}
-        aria-rowcount={entries.length + 1}
-      >
+      <table className={cn("grid text-left text-sm", LOG_VARS)} aria-rowcount={entries.length + 1}>
         <thead className="sticky top-0 z-[2] hidden bg-well @min-[57rem]/logs:grid">
           <tr className={cn("grid border-b", LOG_COLUMNS)} aria-rowindex={1}>
             {headers.map((label, index) => (
