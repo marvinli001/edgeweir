@@ -1,10 +1,11 @@
 import type { Cluster, EnrollmentTokenResult } from "@edgeweir/contract";
-import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon, CloudServerIcon, ServerStack01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { Countdown } from "@/components/appica/countdown";
 import { CodeBlock } from "@/components/copy-button";
+import { AnimatedBeam } from "@/components/effects/animated-beam";
 import { OptionSelect } from "@/components/form-select";
 import {
   ConsoleUrlWarnings,
@@ -51,6 +52,71 @@ export function EnrollDialogHost({
 }
 
 const TTL_OPTIONS = [15, 60, 24 * 60];
+
+/**
+ * The cluster and the node being added: a dashed idle line while the token waits, a live beam
+ * once the node is online. Reads the token status EnrollProgress polls (same query, no fetch of
+ * its own). Decorative: the progress list says the same in words.
+ */
+function EnrollLink({ cluster, tokenId }: { cluster: Cluster; tokenId: string }) {
+  const status = useQuery({
+    ...orpc.clusters.getEnrollmentToken.queryOptions({ input: { id: tokenId } }),
+    enabled: false,
+  });
+  const node = status.data?.node ?? null;
+  const online = !!node?.online;
+  const container = React.useRef<HTMLDivElement>(null);
+  const from = React.useRef<HTMLSpanElement>(null);
+  const to = React.useRef<HTMLSpanElement>(null);
+  return (
+    <div
+      ref={container}
+      aria-hidden
+      className="relative flex items-center justify-between gap-16 overflow-hidden rounded-xl px-5 py-4 sunk-well animate-enter sm:px-10"
+    >
+      <div className="relative z-[1] flex min-w-0 items-center gap-2 rounded-xl bg-raised py-2 pr-3 pl-2 shadow-elev-2 edge-lit">
+        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground btn-lit [&_svg]:size-3.5">
+          <HugeiconsIcon icon={ServerStack01Icon} strokeWidth={2} />
+        </span>
+        <span className="truncate text-xs font-medium">{cluster.name}</span>
+        <span
+          ref={from}
+          className="lit-glow absolute top-1/2 -right-1 size-2 -translate-y-1/2 rounded-full border border-transparent bg-signal"
+        />
+      </div>
+      <div
+        className={cn(
+          "relative z-[1] flex min-w-0 items-center gap-2 rounded-xl py-2 pr-3 pl-2 transition-colors duration-300",
+          node ? "bg-raised shadow-elev-1" : "border border-dashed border-muted-foreground/40",
+        )}
+      >
+        <span
+          ref={to}
+          className={cn(
+            "absolute top-1/2 -left-1 size-2 -translate-y-1/2 rounded-full",
+            online ? "bg-signal" : "bg-muted-foreground/50",
+          )}
+        />
+        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-wash text-muted-foreground [&_svg]:size-3.5">
+          <HugeiconsIcon icon={CloudServerIcon} strokeWidth={2} />
+        </span>
+        {node ? (
+          <span className="truncate text-xs font-medium">{node.name}</span>
+        ) : (
+          <span className="h-2 w-14 rounded-full bg-wash" />
+        )}
+      </div>
+      <AnimatedBeam
+        containerRef={container}
+        fromRef={from}
+        toRef={to}
+        dim={!online}
+        repeatDelay={1.2}
+        className="z-0"
+      />
+    </div>
+  );
+}
 
 /**
  * Adding a node: the install command of a token minted with the defaults as
@@ -114,6 +180,7 @@ function EnrollDialog({
         <div className="flex flex-col gap-4">
           {result ? (
             <FieldGroup className="animate-enter">
+              <EnrollLink cluster={cluster} tokenId={result.tokenId} />
               <Field>
                 <FieldLabel>{m.enroll_command()}</FieldLabel>
                 <CodeBlock value={result.installCommand} testId="install-command" />

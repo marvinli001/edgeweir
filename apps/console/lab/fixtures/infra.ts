@@ -1256,11 +1256,28 @@ const upgradeJobs: UpgradeJob[] = jobSeeds
   .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
 // ---------------------------------------------------------------------------------------------
-// The add-node dialog: a token nobody has used yet (kind 36). Obviously fake values.
+// The add-node dialog (kind 36): the token waits, then a node enrolls with it a few seconds after
+// it was minted and comes online in apac-edge's default group. Obviously fake values.
 
 const NODE_CHANNEL = "https://edge-api.example.net:8443";
 const CA_SHA256 = "5f".repeat(32);
 const LAB_TOKEN = "ewt_lab-token-for-screenshots-only";
+const ENROLL_AFTER = 6 * SECOND;
+let minted = { at: Number.POSITIVE_INFINITY, name: "" };
+
+function enrolledNode(): Node {
+  const template = nodeNamed("tyo-edge-01");
+  const name = minted.name || "tyo-edge-03";
+  return {
+    ...template,
+    id: id(4, 99),
+    name,
+    hostname: `${name}.edge.example.net`,
+    lastSeenAt: new Date().toISOString(),
+    enrolledAt: new Date(minted.at + ENROLL_AFTER).toISOString(),
+    probeEnabled: false,
+  };
+}
 
 // ---------------------------------------------------------------------------------------------
 
@@ -1301,24 +1318,30 @@ export const infraFixtures: Fixtures = {
         )
         .map((n) => ({ id: n.id, name: n.name })),
     }),
-    createEnrollmentToken: (input) => ({
-      tokenId: id(36, 1),
-      token: LAB_TOKEN,
-      expiresAt: ahead((input.ttlMinutes ?? 60) * MINUTE),
-      serverUrl: NODE_CHANNEL,
-      caSha256: CA_SHA256,
-      installCommand: [
-        `export EDGEWEIR_TOKEN='${LAB_TOKEN}'`,
-        `curl -fsSL https://console.example.net/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server ${NODE_CHANNEL} --ca-sha256 ${CA_SHA256}`,
-      ].join("\n"),
-      warnings: [],
-    }),
-    getEnrollmentToken: ({ id: tokenId }) => ({
-      tokenId,
-      expiresAt: ahead(58 * MINUTE),
-      usedAt: null,
-      node: null,
-    }),
+    createEnrollmentToken: (input) => {
+      minted = { at: Date.now(), name: input.nodeName ?? "" };
+      return {
+        tokenId: id(36, 1),
+        token: LAB_TOKEN,
+        expiresAt: ahead((input.ttlMinutes ?? 60) * MINUTE),
+        serverUrl: NODE_CHANNEL,
+        caSha256: CA_SHA256,
+        installCommand: [
+          `export EDGEWEIR_TOKEN='${LAB_TOKEN}'`,
+          `curl -fsSL https://console.example.net/install.sh | sudo --preserve-env=EDGEWEIR_TOKEN bash -s -- --server ${NODE_CHANNEL} --ca-sha256 ${CA_SHA256}`,
+        ].join("\n"),
+        warnings: [],
+      };
+    },
+    getEnrollmentToken: ({ id: tokenId }) => {
+      const used = Date.now() >= minted.at + ENROLL_AFTER;
+      return {
+        tokenId,
+        expiresAt: ahead(58 * MINUTE),
+        usedAt: used ? new Date(minted.at + ENROLL_AFTER).toISOString() : null,
+        node: used ? enrolledNode() : null,
+      };
+    },
   },
   upgrades: {
     latestVersion: () => ({ version: "0.2.1" }),
