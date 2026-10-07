@@ -467,6 +467,7 @@ function HttpsEditor({
   return (
     <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
       <form
+        className="flex flex-col gap-(--card-spacing)"
         onSubmit={async (event) => {
           event.preventDefault();
           // Compression as saved: the cache tab owns it.
@@ -488,6 +489,9 @@ function HttpsEditor({
           }
         }}
       >
+        <CardHeader>
+          <CardTitle>{m.site_tab_https()}</CardTitle>
+        </CardHeader>
         <CardContent className="grid gap-5 sm:grid-cols-2">
           <FormSelect
             id="siteCertificate"
