@@ -1,9 +1,14 @@
 /**
- * Fixture answers by procedure, typed by the contract's client: a handler takes the procedure's
- * input and returns its output. Procedures without a handler answer emptyOutput().
+ * Fixture answers by procedure (define.ts): the platform core here, the pages' own data in one
+ * file per area. Procedures without a handler answer emptyOutput(); the lab's empty state
+ * answers from empty-state.ts.
  */
-import type { Contract, Site } from "@edgeweir/contract";
-import type { ContractRouterClient } from "@orpc/contract";
+import type { Site } from "@edgeweir/contract";
+import { accessFixtures } from "./access";
+import { type Fixtures, mergeFixtures, notFound, ok } from "./define";
+import { infraFixtures } from "./infra";
+import { siteDetailFixtures } from "./sites-detail";
+import { systemFixtures } from "./system";
 import { breakdownOf, topNodesOf, topRequestsOf, topSitesOf, trafficOf } from "./traffic";
 import {
   ago,
@@ -20,20 +25,10 @@ import {
   starredIds,
 } from "./world";
 
-type Handler<T extends (...args: never[]) => unknown> = (
-  input: Parameters<T>[0],
-) => Awaited<ReturnType<T>> | Promise<Awaited<ReturnType<T>>>;
-
-type Fixture<T> = T extends (...args: never[]) => unknown
-  ? Handler<T>
-  : { [K in keyof T]?: Fixture<T[K]> };
-
-export type Fixtures = Fixture<ContractRouterClient<Contract>>;
+export type { Fixtures } from "./define";
 
 /** The page the lab shows now (hash history). */
 const currentPath = () => window.location.hash.replace(/^#/, "").split("?")[0] || "/";
-
-const notFound = () => Object.assign(new Error("Not found"), { status: 404, code: "NOT_FOUND" });
 
 function siteById(id: string): Site {
   const site = sites.find((s) => s.id === id);
@@ -41,9 +36,7 @@ function siteById(id: string): Site {
   return site;
 }
 
-const ok = { ok: true } as const;
-
-export const fixtures: Fixtures = {
+const core: Fixtures = {
   system: {
     // /setup only renders before the console is initialized.
     status: () => ({ initialized: currentPath() !== "/setup", version: "20261006-afad833" }),
@@ -137,10 +130,6 @@ export const fixtures: Fixtures = {
     list: (input) => nodes.filter((n) => !input.clusterId || n.clusterId === input.clusterId),
     get: ({ id }) => nodes.find((n) => n.id === id) ?? Promise.reject(notFound()),
   },
-  upgrades: {
-    latestVersion: () => ({ version: "0.2.1" }),
-    list: () => [],
-  },
   sites: {
     list: (input) => {
       const search = input.search?.toLowerCase() ?? "";
@@ -198,7 +187,16 @@ export const fixtures: Fixtures = {
         purgeByTag: on,
         prefetchVariants: on,
         rulesV2: on,
+        rulesV3: on,
       };
     },
   },
 };
+
+export const fixtures: Fixtures = mergeFixtures(
+  core,
+  siteDetailFixtures,
+  accessFixtures,
+  infraFixtures,
+  systemFixtures,
+);

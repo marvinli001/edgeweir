@@ -1,7 +1,8 @@
 /**
  * Lab entry: src/web/main.tsx with hash history (memory history in the static build; no server
  * routes needed) and the lab panel.
- * Keep the providers and router options in step with it.
+ * Keep the providers and router options in step with it; the one difference is that failed
+ * queries are not retried in the lab's error state, so ErrorState shows at once.
  */
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -23,7 +24,8 @@ import { isNotFound, isUnauthorized } from "@/lib/orpc";
 import { readRecents, recordRecent } from "@/lib/recents";
 import { routeTree } from "@/routeTree.gen";
 import { sites } from "./fixtures/world";
-import { applyLabFont, LabPanel } from "./panel";
+import { LabPanel } from "./panel";
+import { labState } from "./state";
 
 function onUnauthorized(error: unknown) {
   if (!isUnauthorized(error)) return;
@@ -36,7 +38,8 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5_000,
-      retry: (count, error) => !isUnauthorized(error) && !isNotFound(error) && count < 2,
+      retry: (count, error) =>
+        labState() !== "error" && !isUnauthorized(error) && !isNotFound(error) && count < 2,
     },
   },
 });
@@ -65,7 +68,6 @@ declare module "@tanstack/react-router" {
 }
 
 document.documentElement.lang = getLocale();
-applyLabFont();
 
 // A few places visited before, for the overview's recent list.
 if (readRecents("lab-operator").length === 0) {

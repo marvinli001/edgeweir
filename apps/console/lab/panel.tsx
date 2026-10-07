@@ -1,20 +1,19 @@
 /**
- * Lab-only switches in a corner: theme, language, Latin typeface, and shortcuts to the pages
- * under review. Styled inline with the console's tokens so it adds no classes to the app's CSS.
+ * Lab-only switches in a corner: theme, language, data state (state.ts) and every page
+ * (pages.ts). Styled inline with the console's tokens so it adds no classes to the app's CSS.
  * Hidden with `localStorage["edgeweir-lab:panel"] = "hidden"` (screenshots) or the × button.
  */
 import type { QueryClient } from "@tanstack/react-query";
 import type { AnyRouter } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
 import * as React from "react";
 import { useTheme } from "@/components/theme-provider";
 import { getLocale, type Locale, setLocale } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
-import { sites } from "./fixtures/world";
+import { type LabPage, PAGES } from "./pages";
+import { LAB_STATES, type LabState, labState, setLabState } from "./state";
 
-const FONT_KEY = "edgeweir-lab:font";
 const PANEL_KEY = "edgeweir-lab:panel";
-
-type LabFont = "geist" | "mona";
 
 function read(key: string): string | null {
   try {
@@ -32,24 +31,7 @@ function write(key: string, value: string) {
   }
 }
 
-const storedFont = (): LabFont => (read(FONT_KEY) === "mona" ? "mona" : "geist");
-
-/** Applies the stored typeface before the first paint (`html[data-font]`). */
-export function applyLabFont(font: LabFont = storedFont()) {
-  document.documentElement.dataset.font = font;
-}
-
-const SHOP = sites.find((s) => s.name === "shop.example.com")?.id ?? "";
-
-const PAGES: { label: string; to: string; params?: Record<string, string>; search?: object }[] = [
-  { label: "login", to: "/login" },
-  { label: "setup", to: "/setup" },
-  { label: "overview", to: "/overview" },
-  { label: "sites", to: "/sites" },
-  { label: "site", to: "/sites/$id", params: { id: SHOP } },
-  { label: "origins", to: "/sites/$id", params: { id: SHOP }, search: { tab: "origins" } },
-  { label: "clusters", to: "/clusters" },
-];
+const GROUPS = [...new Set(PAGES.map((page) => page.group))];
 
 const panel: React.CSSProperties = {
   position: "fixed",
@@ -76,19 +58,24 @@ const row: React.CSSProperties = {
   flexWrap: "wrap",
 };
 
+const quiet = "color-mix(in oklch, var(--foreground) 7%, transparent)";
+
 function Chip({
   active,
   onClick,
+  title,
   children,
 }: {
   active?: boolean;
   onClick: () => void;
+  title?: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      title={title}
       style={{
         padding: "4px 7px",
         borderRadius: 7,
@@ -96,9 +83,7 @@ function Chip({
         cursor: "pointer",
         font: "inherit",
         color: active ? "var(--primary-foreground)" : "inherit",
-        background: active
-          ? "var(--primary)"
-          : "color-mix(in oklch, var(--foreground) 7%, transparent)",
+        background: active ? "var(--primary)" : quiet,
       }}
     >
       {children}
@@ -106,26 +91,42 @@ function Chip({
   );
 }
 
+/** The page whose path matches the current location best (longest match wins). */
+function pageAt(href: string): LabPage | undefined {
+  const exact = PAGES.find((page) => page.path === href);
+  if (exact) return exact;
+  const pathname = href.split("?")[0];
+  return PAGES.find((page) => page.path === pathname);
+}
+
 export function LabPanel({ router, queryClient }: { router: AnyRouter; queryClient: QueryClient }) {
   const { resolvedTheme, setTheme } = useTheme();
-  const [font, setFont] = React.useState<LabFont>(storedFont);
   const [hidden, setHidden] = React.useState(() => read(PANEL_KEY) === "hidden");
+  const [state, setState] = React.useState<LabState>(labState);
+  const href = useRouterState({ router, select: (s) => s.location.href });
   const locale = getLocale();
 
   if (hidden) return null;
 
-  const chooseFont = (next: LabFont) => {
-    write(FONT_KEY, next);
-    applyLabFont(next);
-    setFont(next);
-  };
+  const current = pageAt(href);
   const chooseLocale = (next: Locale) => {
     if (next !== locale) void setLocale(next);
   };
-  const go = (page: (typeof PAGES)[number]) => {
+  const chooseState = (next: LabState) => {
+    setLabState(next);
+    setState(next);
+    // Pending and failed queries start over in the new state.
+    void queryClient.resetQueries();
+  };
+  const go = (page: LabPage) => {
     // The cached status decides between /setup and /login.
     queryClient.removeQueries({ queryKey: orpc.system.status.queryKey() });
-    void router.navigate({ to: page.to, params: page.params, search: page.search ?? {} });
+    void router.navigate({ href: page.path });
+  };
+  const step = (by: number) => {
+    const index = current ? PAGES.indexOf(current) : -1;
+    const next = PAGES[(index + by + PAGES.length) % PAGES.length];
+    if (next) go(next);
   };
 
   return (
@@ -144,14 +145,9 @@ export function LabPanel({ router, queryClient }: { router: AnyRouter; queryClie
         <Chip active={locale === "en"} onClick={() => chooseLocale("en")}>
           en
         </Chip>
-        <span style={{ width: 6 }} />
-        <Chip active={font === "geist"} onClick={() => chooseFont("geist")}>
-          Geist
-        </Chip>
-        <Chip active={font === "mona"} onClick={() => chooseFont("mona")}>
-          Mona Sans
-        </Chip>
+        <span style={{ flex: 1 }} />
         <Chip
+          title="hide (localStorage edgeweir-lab:panel)"
           onClick={() => {
             write(PANEL_KEY, "hidden");
             setHidden(true);
@@ -161,11 +157,48 @@ export function LabPanel({ router, queryClient }: { router: AnyRouter; queryClie
         </Chip>
       </div>
       <div style={row}>
-        {PAGES.map((page) => (
-          <Chip key={page.label} onClick={() => go(page)}>
-            {page.label}
+        {LAB_STATES.map((value) => (
+          <Chip key={value} active={state === value} onClick={() => chooseState(value)}>
+            {value}
           </Chip>
         ))}
+      </div>
+      <div style={row}>
+        <Chip title="previous page" onClick={() => step(-1)}>
+          ‹
+        </Chip>
+        <select
+          aria-label="page"
+          value={current?.name ?? ""}
+          onChange={(event) => {
+            const page = PAGES.find((candidate) => candidate.name === event.target.value);
+            if (page) go(page);
+          }}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: "3px 4px",
+            borderRadius: 7,
+            border: 0,
+            font: "inherit",
+            color: "inherit",
+            background: quiet,
+          }}
+        >
+          {current ? null : <option value="">—</option>}
+          {GROUPS.map((group) => (
+            <optgroup key={group} label={group}>
+              {PAGES.filter((page) => page.group === group).map((page) => (
+                <option key={page.name} value={page.name}>
+                  {page.name}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <Chip title="next page" onClick={() => step(1)}>
+          ›
+        </Chip>
       </div>
     </div>
   );

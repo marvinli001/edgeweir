@@ -3,8 +3,9 @@
  *
  *   node lab/record.ts <out-dir> [--theme dark] [--base http://localhost:5180/] [--ffmpeg path]
  *
- * Globe and rolling digits, spotlight hover, the primary button press, sidebar icons, page
- * changes, the command menu, the segmented tabs, the traffic path, a toast and the cluster beams.
+ * A short tour (login → overview → sites → site → clusters): signing in, the globe and rolling
+ * digits, spotlight hover, sidebar icons, the primary button press, the sites table, the command
+ * menu, the live chart, the segmented tabs and the traffic path, a toast and the cluster beams.
  * Frames come from the DevTools screencast (JPEG, high quality) and are encoded at 25 fps with
  * Playwright's own ffmpeg build (VP8, high bitrate): walkthrough-<theme>.webm, 1440×900.
  */
@@ -79,10 +80,21 @@ cdp.on("Page.screencastFrame", (frame) => {
   void cdp.send("Page.screencastFrameAck", { sessionId: frame.sessionId });
 });
 
-// Overview: the globe turns, the digits roll in.
-await page.goto(`${base}#/overview`);
-await page.waitForSelector('[data-testid="edge-network"]');
+// Login: the backdrop moves, the operator signs in (the lab accepts any password).
+await page.goto(`${base}#/login`);
+await page.waitForSelector('[data-testid="login-submit"]');
+await page.waitForTimeout(600);
 await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, everyNthFrame: 1 });
+await page.waitForTimeout(1600);
+await page.locator('input[type="email"]').click();
+await page.keyboard.type("ops@example.com", { delay: 45 });
+await page.locator('input[type="password"]').click();
+await page.keyboard.type("lab-password", { delay: 45 });
+await page.waitForTimeout(300);
+await page.click('[data-testid="login-submit"]');
+
+// Overview: the globe turns, the digits roll in.
+await page.waitForSelector('[data-testid="edge-network"]');
 await page.waitForTimeout(2400);
 
 // Spotlight across the live tiles and the edge network card.
