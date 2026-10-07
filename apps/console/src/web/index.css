@@ -876,12 +876,16 @@
   [data-slot="input-group-control"]:focus-visible {
     outline: none;
   }
-  /* Checked toggles, and the fills of progress bars, meters and top-list bars (their value). */
+  /*
+   * Checked toggles, and the fills of progress bars, meters, top-list bars and the status-class
+   * bar's segments (their value; the segments stay apart by their gaps).
+   */
   [data-slot="checkbox"][data-checked],
   [data-slot="switch"][data-checked],
   [data-slot="progress-indicator"],
   [data-slot="meter-indicator"],
-  [data-slot="bar-fill"] {
+  [data-slot="bar-fill"],
+  [data-slot="bar-segment"] {
     background-color: Highlight;
   }
   /*

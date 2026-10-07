@@ -56,8 +56,10 @@ export function StatusCodesCard({
             {STATUS_CLASSES.filter((c) => totals[c.key] > 0).map((c) => (
               <span
                 key={c.key}
-                className="h-full min-w-0.5 transition-[flex-grow] duration-500 motion-reduce:transition-none"
-                style={{ flexGrow: totals[c.key], backgroundColor: c.color }}
+                data-slot="bar-segment"
+                className="h-full min-w-0.5 bg-(--segment) transition-[flex-grow] duration-500 motion-reduce:transition-none"
+                // The color through a class, so forced colors can repaint it (index.css).
+                style={{ flexGrow: totals[c.key], "--segment": c.color } as React.CSSProperties}
                 title={`${c.label} · ${formatPercent((totals[c.key] / total) * 100)}`}
               />
             ))}
