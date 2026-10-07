@@ -4,7 +4,7 @@ import * as React from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CodeBlock } from "@/components/copy-button";
 import { FormSelect, OptionSelect } from "@/components/form-select";
-import { Page } from "@/components/page";
+import { enterDelay, Page } from "@/components/page";
 import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { useTheme } from "@/components/theme-provider";
@@ -32,41 +32,44 @@ export const Route = createFileRoute("/_app/settings")({
 function SettingsPage() {
   const { theme, setTheme } = useTheme();
   return (
-    <Page title={m.settings_title()} width="narrow">
-      <Card>
-        <CardHeader>
-          <CardTitle>{m.settings_preferences()}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <FieldGroup className="sm:flex-row">
-            <Field>
-              <FieldLabel>{m.user_menu_language()}</FieldLabel>
-              <OptionSelect
-                value={getLocale()}
-                options={locales.map((l) => ({ label: localeLabels[l](), value: l }))}
-                onChange={setLocale}
-                className="w-48"
-                testId="settings-language"
-              />
-            </Field>
-            <Field>
-              <FieldLabel>{m.user_menu_theme()}</FieldLabel>
-              <OptionSelect
-                value={theme}
-                options={[
-                  { label: m.theme_light(), value: "light" },
-                  { label: m.theme_dark(), value: "dark" },
-                  { label: m.theme_system(), value: "system" },
-                ]}
-                onChange={setTheme}
-                className="w-48"
-              />
-            </Field>
-          </FieldGroup>
-        </CardContent>
-      </Card>
+    <Page title={m.settings_title()}>
+      {/* Short forms keep a narrow column, at the start of the page column like the title. */}
+      <div className="flex w-full max-w-[56rem] flex-col gap-6">
+        <Card className="animate-enter">
+          <CardHeader>
+            <CardTitle>{m.settings_preferences()}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FieldGroup className="sm:flex-row sm:gap-4">
+              <Field>
+                <FieldLabel>{m.user_menu_language()}</FieldLabel>
+                <OptionSelect
+                  value={getLocale()}
+                  options={locales.map((l) => ({ label: localeLabels[l](), value: l }))}
+                  onChange={setLocale}
+                  className="w-full sm:w-48"
+                  testId="settings-language"
+                />
+              </Field>
+              <Field>
+                <FieldLabel>{m.user_menu_theme()}</FieldLabel>
+                <OptionSelect
+                  value={theme}
+                  options={[
+                    { label: m.theme_light(), value: "light" },
+                    { label: m.theme_dark(), value: "dark" },
+                    { label: m.theme_system(), value: "system" },
+                  ]}
+                  onChange={setTheme}
+                  className="w-full sm:w-48"
+                />
+              </Field>
+            </FieldGroup>
+          </CardContent>
+        </Card>
 
-      <ApiKeysCard />
+        <ApiKeysCard />
+      </div>
     </Page>
   );
 }
@@ -85,7 +88,7 @@ function ApiKeysCard() {
   });
 
   return (
-    <Card>
+    <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
       <CardHeader>
         <CardTitle>{m.settings_api_keys()}</CardTitle>
       </CardHeader>
@@ -98,7 +101,7 @@ function ApiKeysCard() {
             create.mutate({ name: String(data.get("keyName") ?? "").trim() || "default", scope });
           }}
         >
-          <Field className="w-64">
+          <Field className="w-full sm:w-64">
             <FieldLabel htmlFor="keyName">{m.settings_api_key_name()}</FieldLabel>
             <Input id="keyName" name="keyName" maxLength={64} placeholder="terraform" />
           </Field>
@@ -132,26 +135,29 @@ function ApiKeysCard() {
           empty={<EmptyState title={m.settings_api_keys_empty()} />}
         >
           {(list) => (
-            <ul className="divide-y rounded-2xl border bg-card text-sm shadow-xs">
+            <ul
+              className="divide-y divide-edge rounded-2xl text-sm sunk-well"
+              data-testid="access-keys"
+            >
               {list.map((k, index) => (
                 <li
                   key={k.id}
-                  className="flex flex-wrap items-center gap-3 px-3 py-2.5 animate-enter"
-                  style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
+                  className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 animate-enter"
+                  style={enterDelay(index)}
                 >
                   <span className="font-medium">{k.name ?? "—"}</span>
-                  <code className="text-xs text-muted-foreground">{k.prefix}…</code>
+                  <code className="font-mono text-xs text-muted-foreground">{k.prefix}…</code>
                   <Badge variant="outline">
                     {k.scope === "read" ? m.access_key_read() : m.access_key_write()}
                   </Badge>
                   {!k.enabled ? <Badge variant="secondary">{m.access_key_revoked()}</Badge> : null}
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground tabular-nums">
                     {m.access_key_last_used({
                       time: k.lastUsedAt ? timeAgo(k.lastUsedAt) : m.common_never(),
                     })}
                   </span>
                   <span
-                    className="ml-auto text-xs text-muted-foreground"
+                    className="ml-auto text-xs text-muted-foreground tabular-nums"
                     title={formatDateTime(new Date(k.createdAt).toISOString())}
                   >
                     {timeAgo(new Date(k.createdAt).toISOString())}
