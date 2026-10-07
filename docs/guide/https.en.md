@@ -181,9 +181,10 @@ The **Compression** card on a site's **Cache** tab has a group of settings each 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
 | On | On / off | Gzip on, Brotli and Zstandard off | Compresses responses with the algorithm |
-| Level | Brotli 1–11, Zstandard 1–19 | Brotli 6, Zstandard 3 | Higher levels compress more and use more CPU; Gzip has no level |
+| Level | Brotli 1–11, Zstandard 1–19, Gzip 1–9 | Brotli 6, Zstandard 3, Gzip empty (the node default 1) | Higher levels compress more and use more CPU; a Gzip level other than the default needs the node capability `site-content-v1` |
 | Minimum compression size (bytes) | 1–1048576 | 256 | Shorter responses are not compressed |
 | Compressed content types | MIME types, separated by commas or spaces, up to 32 | `text/html`, `text/plain`, `text/css`, `application/javascript`, `application/json`, `image/svg+xml` | Response types to compress; `text/html` is always compressed |
+| Largest compressed (bytes) | 0 or more, shared by the three algorithms | Empty (no limit) | Responses whose `Content-Length` exceeds it are not compressed; responses of unknown length (chunked) are compressed as usual. Needs `site-content-v1` |
 
 | Behavior | Description |
 | --- | --- |

@@ -223,7 +223,7 @@ export const DEFAULT_REQUEST_BODY_LIMIT = 100 * 1024 * 1024;
 /** Origins a request tries when the pool sets none. */
 export const DEFAULT_ORIGIN_TRIES = 3;
 /**
- * keys_zone of a cache zone of maxSizeMb (ADR-0033): nginx keeps about
+ * keys_zone of a cache zone of maxSizeMb (ADR-0035): nginx keeps about
  * 8000 keys per MiB; 64 MiB for the default 10 GiB, at most 512 MiB.
  */
 export const keysZoneMbFor = (maxSizeMb: number) =>

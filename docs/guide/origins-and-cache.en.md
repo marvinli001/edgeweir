@@ -1,6 +1,6 @@
 # Origins and cache
 
-A site's origin pool and origin groups, health checks and session affinity, origin connections, cache rules, cache key, and purge and prefetch.
+A site's origin pool and origin groups, health checks and session affinity, origin connections and the request body limit, cache rules, cache key, the PURGE method, X-Cache and charset, the cluster's cache zone, and purge and prefetch.
 
 ## Concepts
 
@@ -13,6 +13,7 @@ A site's origin pool and origin groups, health checks and session affinity, orig
 | Cache key | The request attributes that tell cached objects apart; applies to all cache rules of the site. |
 | Cache generation | A per-site counter that is part of the cache key. Older consoles' **Purge cache** incremented it; whole-site purges are node tasks now and the counter no longer changes. |
 | Cache tag | A tag the origin names in the `Cache-Tag` response header; a purge by tag purges only the cached objects that carry it. |
+| Cache zone | The disk directory where a node keeps cached objects, and its index. One setting per cluster; a node can override the size. |
 
 ## Configure origins
 
@@ -57,6 +58,8 @@ The **Pool settings** card is saved separately. It also holds the [active health
 | gRPC | On / off | Off | Proxies gRPC requests over HTTP/2 end to end; can only be turned on with **Origin HTTP version** HTTP/2 |
 | Failures before down | 1–100 | 3 | Consecutive failures that mark an origin down |
 | Retry after (seconds) | 1–3600 | 30 | Time before a down origin is tried again |
+| Retries: Tries | 1–5 | 3 | Origins a request tries at most, see [Load balancing and retries](#load-balancing-and-retries) |
+| Retries: Retry on 502 / 503 / 504 | On / off | On | Off, an origin's 502/503/504 response goes to the visitor; connection failures and timeouts are still retried |
 | Timeouts (seconds): Connect | 0.1–120 | 10 | Connection timeout |
 | Timeouts (seconds): Send | 0.1–3600 | 60 | Timeout for sending the request to the origin |
 | Timeouts (seconds): Read | 0.1–3600 | 60 | Timeout for reading the response; does not apply to upgraded WebSocket connections |
@@ -76,11 +79,11 @@ Rules of the configuration phase can override the three timeouts and **WebSocket
 
 | Item | Behavior |
 | --- | --- |
-| Attempts | At most 3 origins per request |
-| Retry triggers | Connection failure, timeout (including a failed TLS handshake), origin response 502/503/504 |
+| Attempts | At most **Tries** origins per request (default 3) |
+| Retry triggers | Connection failure, timeout (including a failed TLS handshake); with **Retry on 502 / 503 / 504** on, also an origin response 502/503/504 |
 | No retry | `POST`, `LOCK`, and `PATCH` requests are not retried once sent; `PUT` and `DELETE` are retried |
 | Retry scope | Only within the currently usable group: healthy primaries while any exist; backups when every primary is down; never switches between HTTP and HTTPS origins within one request |
-| Exclusion | Origins whose name fails to resolve, resolves only to special-purpose addresses, or lacks S3 credentials are dropped before the attempt, so fewer than 3 attempts can happen |
+| Exclusion | Origins whose name fails to resolve, resolves only to special-purpose addresses, or lacks S3 credentials are dropped before the attempt, so fewer than **Tries** attempts can happen |
 
 ### Passive health check
 
@@ -88,7 +91,7 @@ No probe requests are sent; health is judged from real traffic only. With the ac
 
 | Item | Behavior |
 | --- | --- |
-| Counted as failure | Connection failure, timeout, origin response 502/503/504, DNS resolution failure, only special-purpose addresses in the DNS answer, missing S3 credentials, missing CA file on the node for a verified origin |
+| Counted as failure | Connection failure, timeout, origin response 502/503/504 (also without status retries), DNS resolution failure, only special-purpose addresses in the DNS answer, missing S3 credentials, missing CA file on the node for a verified origin |
 | Reset | Any other response resets the failure count |
 | Down | After **Failures before down** consecutive failures, the origin is not selected for **Retry after (seconds)** |
 | Recovery | After that period the origin receives traffic again; one success marks it healthy, one more failure marks it down again immediately |
@@ -235,6 +238,22 @@ With **gRPC** on, requests with `Content-Type: application/grpc` (also with a su
 | Global rules | An **Origin override** in the global rules cannot pick an origin group; it overrides only the origin Host, SNI, and port |
 | Node requirement | `rules-v2`; while an active node of the cluster lacks it, the **Origins** card shows "Some nodes of the site's cluster do not support it yet" and origins cannot be moved out of the default group; existing origin groups can still be changed or cleared |
 
+## Request body limit
+
+The **Request body limit** card on the site's **Origins** tab is saved separately.
+
+| Field | Values | Default | Effect |
+| --- | --- | --- | --- |
+| Limit (MiB) | 0–10240, decimals allowed | 100 | Requests whose `Content-Length` exceeds it get 413; 0 means no limit |
+
+| Item | Behavior |
+| --- | --- |
+| Check | By `Content-Length` only, after the rules; the 413 carries `X-Edgeweir-Error: body-too-large` and its page is looked up as 413 → **Other 4xx** → built-in page, see [Error pages](error-pages.en.md) |
+| Chunked uploads | Chunked requests without `Content-Length` are not checked against the site's limit, only against the node-wide one: the largest limit of all enabled sites and rules of the cluster (none when any is 0) |
+| Per request | **Body limit (MiB)** of a configuration rule overrides the site's limit, see [Override settings](rules.en.md#override-settings) |
+| gRPC | Not checked |
+| Node requirement | Another value than 100 MiB needs the node capability `site-content-v1` |
+
 ## Origin address restrictions
 
 Origins cannot point at special-purpose addresses.
@@ -254,7 +273,7 @@ Origins cannot point at special-purpose addresses.
 
 ## S3-compatible object storage
 
-Turn on **S3 signing** on an origin and fill in these fields.
+Turn on **S3 signing** on an origin and fill in these fields. **Preset** fills the provider's origin address template and an example region; replace the parts in angle brackets such as `<region>` with your own values. A preset only fills the form and is not saved.
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
@@ -269,6 +288,19 @@ Turn on **S3 signing** on an origin and fill in these fields.
 | Methods | Only `GET` and `HEAD` are forwarded; other methods get 405 (`Allow: GET, HEAD`) when no non-S3 origin can take them |
 | Query string | The visitor's query string is not forwarded to object storage |
 | Secret storage | The secret key is envelope-encrypted with the master key, sent only over the node channel (mTLS), and kept in the node state directory's `credentials.json` (0600) so the node can restart while the console is unreachable |
+
+| Preset | Origin address | Example region | Bucket |
+| --- | --- | --- | --- |
+| AWS S3 | `s3.<region>.amazonaws.com` | `us-east-1` | Set (path style) |
+| Cloudflare R2 | `<account_id>.r2.cloudflarestorage.com` | `auto` | Set |
+| Backblaze B2 | `s3.<region>.backblazeb2.com` | `us-west-004` | Set |
+| MinIO | `<host>`, keeps the current scheme and port | `us-east-1` | Set |
+| Alibaba Cloud OSS | `<bucket>.s3.oss-<region>.aliyuncs.com` | `cn-hangzhou` | Empty (the address names the bucket) |
+| Tencent Cloud COS | `<bucket>-<appid>.cos.<region>.myqcloud.com` | `ap-guangzhou` | Empty (the address names the bucket) |
+| Baidu AI Cloud BOS | `s3.<region>.bcebos.com` | `bj` | Set |
+| Qiniu Kodo | `s3.<region>.qiniucs.com` | `cn-east-1` | Set |
+
+Every preset but MinIO switches the scheme to HTTPS and the port to 443. Only services whose official documentation states S3-compatible AWS Signature V4 are listed; Huawei Cloud OBS documents only its own signature and is not listed, though it can still be entered as **Custom**.
 
 ## Configure cache rules
 
@@ -305,6 +337,7 @@ Turn on **S3 signing** on an origin and fill in these fields.
 | Stale while revalidate (s) | 0–2592000 | Empty (off) | stale-while-revalidate |
 | Stale if error (s) | 0–2592000 | Empty (off) | stale-if-error |
 | Cache requests with Authorization | On / off | Off | Allows caching requests with `Authorization` |
+| Cache responses with Set-Cookie | On / off | Off | Allows caching responses with `Set-Cookie`, see [Set-Cookie](#set-cookie) |
 
 Each site has at most 64 rules. Without rules the card shows **No caching** and the site caches nothing.
 
@@ -348,11 +381,22 @@ With **Browser TTL (s)** above 0, responses the rule caches reach visitors with 
 | --- | --- |
 | Override (**Respect origin** off) | Uses the rule TTL and ignores origin `Cache-Control` and `Expires` (including `no-store` and `private`); without status codes only 200, 203, 206, 300, 301, and 308 are cached. Use it only for static assets without user data, or pages of signed-in users reach other visitors |
 | Respect (**Respect origin** on) | Follows origin `Cache-Control` or `Expires` when present; the rule TTL applies only when neither is sent; a `Cache-Control` without a lifetime (for example only `public`) is not cached; `no-store` and `private` apply |
-| Always | Responses with `Set-Cookie` are not cached |
+| Always | Responses with `Set-Cookie` are not cached unless the rule has **Cache responses with Set-Cookie** on |
 
 ### Authorization
 
 Requests with `Authorization` bypass the cache by default, and their responses are not stored (RFC 9111 §3.5), even when the origin sends `public` or the rule overrides origin headers. With **Cache requests with Authorization** on, the rule caches them and every visitor holding any credential shares the same cached copy; use it only for content that does not depend on the credential.
+
+### Set-Cookie
+
+With **Cache responses with Set-Cookie** on, a rule caches responses that carry `Set-Cookie`.
+
+| Item | Behavior |
+| --- | --- |
+| Who gets the cookies | Only the response fetched from the origin for this request (`X-Cache` `MISS`, `EXPIRED`, `BYPASS`) carries `Set-Cookie`, every line restored as sent; `HIT`, `STALE`, `UPDATING`, and `REVALIDATED` responses carry no `Set-Cookie`, so no visitor gets another visitor's cookies |
+| Cached object | The object on the node's disk keeps the fetched `Set-Cookie` lines (only to restore them for that request) until it is purged or evicted |
+| Suitable content | Pages whose body is the same for every visitor and that only mark the session with a cookie; when the body depends on cookies, add those cookies to the [cache key](#cache-key-and-slicing) |
+| Node requirement | `site-content-v1` |
 
 ### Stale content
 
@@ -369,8 +413,8 @@ The **Cache key & slicing** card is saved separately and applies to all rules of
 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
-| Query string | All parameters / Ignore / Only listed | All parameters | How the query string enters the key |
-| Parameters | Parameter names, comma-separated, up to 32 | Empty | Parameters kept by **Only listed** |
+| Query string | All parameters / Ignore / Only listed / All but listed | All parameters | How the query string enters the key |
+| Parameters | Parameter names, comma-separated, up to 32 | Empty | Parameters kept by **Only listed** or left out by **All but listed**, where a name may end in `*` to match a prefix (`utm_*`) |
 | Sort parameters | On / off | Off | Makes `?a=1&b=2` and `?b=2&a=1` hit the same object; unavailable with **Ignore** |
 | Headers | Header names, comma-separated, up to 8, not `Cookie` or `Host` | Empty | Different values are cached separately |
 | Cookies | Cookie names, comma-separated, up to 8 | Empty | Different values are cached separately. Names are case-sensitive; a request where such a cookie appears twice, in another case, percent-encoded, or after a comma is not cached (the origin may read another value) |
@@ -382,8 +426,63 @@ The **Cache key & slicing** card is saved separately and applies to all rules of
 | --- | --- |
 | Fixed parts | The scheme and cache generation are always part of the key; with **Include Host** off, HTTP and HTTPS are still cached separately |
 | Mobile detection | The User-Agent matches `Mobi\|Android\|iPhone\|iPad\|iPod\|Windows Phone\|BlackBerry\|Opera Mini\|webOS` |
+| All but listed | Names are case-sensitive and compared as sent and percent-decoded; `*` may only end a name. The origin still gets the whole query string; URL purges compare the query the same way |
 | After a change | Objects cached under the old key no longer hit and are evicted by the cache zone's inactive time |
-| Cache zone | One zone per node: 10 GiB maximum size; objects not accessed for 7 days are evicted |
+| Node requirement | **All but listed** needs `site-content-v1` |
+
+## PURGE method
+
+In the **PURGE method** card on the **Cache** tab, turn on **Enabled**, enter 16–256 printable characters without spaces in **PURGE key** or click **Generate** for a random 32-byte key (shown only there; copy it before saving), and save. Then:
+
+```bash
+curl -X PURGE -H 'X-Purge-Key: <key>' -H 'Host: www.example.com' 'http://<node IP>/static/app.js?v=2'
+```
+
+answers `202 {"task_id":"…"}`: the console creates a URL purge task for that URL and sends it to every node of the site's cluster; **Purge & prefetch** shows the node as its creator.
+
+| Item | Behavior |
+| --- | --- |
+| Key | Write-only: after saving it shows "Saved; leave empty to keep it"; entering a new key rotates it. Envelope-encrypted with the master key and sent over the node channel to the agent; it never enters the data plane |
+| Answers | 202 task created; 403 wrong or missing key (`purge-key-invalid`); 400 invalid URL (`purge-url-invalid`); 429 over the rate (`purge-rate-limited`, with `Retry-After`); 503 node agent or console unavailable (`purge-unavailable`). Answers are JSON with `Cache-Control: no-store` |
+| Rate | 20 per second per site on each node; 120 PURGE tasks per site and minute in the console |
+| Scope | The request's URL (scheme, host, path, and query), compared like a URL purge |
+| Disabled | `PURGE` requests go to the origin as before |
+| Audit | `cache.purge`, the node as actor, metadata `method: PURGE` |
+| Node requirement | `site-content-v1` |
+
+## X-Cache
+
+With **Send X-Cache to visitors** off in the **X-Cache** card, the site's responses carry no `X-Cache` (cache hits included); caching is unchanged. Needs `site-content-v1`.
+
+## Charset
+
+The **Charset** card adds the `charset` parameter to the `Content-Type` of text responses. Only the header changes; the body is not converted.
+
+| Field | Values | Default | Effect |
+| --- | --- | --- | --- |
+| Charset | Off / utf-8 / gbk / gb18030 / gb2312 / big5 / iso-8859-1 / shift_jis / euc-kr | Off | The charset added |
+| Replace existing | On / off | Off | Replaces a `charset` the origin sent; off keeps the origin's |
+| Upper case | On / off | Off | Writes the name in upper case, such as `charset=GBK` |
+
+Applies to `text/*`, `application/javascript`, `application/json`, and `application/xml` responses, cache hits included; pages the node generates itself are unchanged. Needs `site-content-v1`.
+
+## Cache zone
+
+The **Cache zone** card on the **Overview** of the **Clusters** page sets every node's cache zone of the cluster; **Cache** in the node details overrides the size for that node.
+
+| Field | Values | Default | Effect |
+| --- | --- | --- | --- |
+| Size (GiB) | 1–65536 | 10 | Disk limit of the zone; beyond it the least recently used objects are evicted |
+| Remove when idle (days) | 1–90 | 7 | Objects not accessed for this long are evicted |
+| Node details: Size (GiB) | 1–65536, empty follows the cluster | Empty | This node's size |
+
+| Item | Behavior |
+| --- | --- |
+| Index memory | Derived from the size: 1 MiB per 160 MiB, at least 16 MiB, at most 512 MiB (64 MiB for 10 GiB) |
+| Applying | Nodes reload nginx; open connections stay. When the index size changes, the node reloads the cache index from disk; cached files are kept |
+| Usage | Every 10 minutes (first one minute after start; node flag `--cache-usage-interval`) a node adds up the disk space of the cache directory and reports it with the heartbeat; node details show "… of … used" and when it was measured, or "Not reported yet" |
+| Audit | `cluster.cache_update`, `node.cache_update` |
+| Node requirement | The cluster setting needs no new capability; a node's own size and usage reports need `cache-zone-v1` |
 
 ## Purge and prefetch
 
@@ -482,7 +581,8 @@ On the site's **Overview** tab, click **Purge cache** and confirm (or search the
 | Counts | Per site: 1–50 domains, 1–32 origins, up to 64 cache rules |
 | Cache rule conditions | Up to 16384 characters; no response fields |
 | Origin groups | The cache key does not include the origin group |
-| Cache zone | Size and inactive time cannot be changed in the console |
+| Cache zone | One zone per node; size and inactive time come from the cluster, a node can only override the size |
+| Largest compressed length | Applies to responses of known length only; chunked responses (unknown length) are compressed as usual |
 | HTTPS prefetch | Needs an HTTPS listener on the node, i.e. at least one site of the cluster with a certificate; the cache key includes the scheme, so `http://` prefetch warms only the HTTP cache |
 | Device variants | Desktop and mobile only (tablets count as mobile) |
 | Authorization switch | Needs node proto v0.2.1 or later; older nodes ignore **Cache requests with Authorization** |
@@ -517,7 +617,16 @@ Errors the node returns itself carry `X-Edgeweir-Error` and `Cache-Control: no-s
 | 405 with `X-Edgeweir-Error: method-not-allowed` | S3 origins accept only `GET` and `HEAD` | Add a non-S3 origin for write requests |
 | Requests with `Authorization` always show `X-Cache: BYPASS` | Bypassed by default | Turn on **Cache requests with Authorization** on the rule |
 | Responses always show `X-Cache: BYPASS` | No cache rule applies, or only **Bypass** rules apply | Check rule order and conditions |
-| Responses always show `X-Cache: MISS` | In respect mode the origin sent no lifetime; the response has `Set-Cookie`; the TTL is 0 | Check the rules and origin headers |
+| Responses always show `X-Cache: MISS` | In respect mode the origin sent no lifetime; the response has `Set-Cookie` and the rule does not have **Cache responses with Set-Cookie** on; the TTL is 0 | Check the rules and origin headers |
+| Responses lack `X-Cache` | The site has **Send X-Cache to visitors** off | Turn it on in the **X-Cache** card |
+| 413, `X-Edgeweir-Error: body-too-large` | The request's `Content-Length` exceeds the site's or a rule's body limit | Raise **Request body limit**, or add a configuration rule for upload paths |
+| `PURGE` answers 403, `purge-key-invalid` | `X-Purge-Key` is missing or differs from the saved key | Check the key; if it is lost, generate a new one and save |
+| `PURGE` answers 429, `purge-rate-limited` | Over 20 per second or 120 tasks per minute | Retry after `Retry-After`; purge in bulk with **Purge & prefetch** or the API |
+| `PURGE` answers 503, `purge-unavailable` | The node agent or the console is unreachable | Check the connection between node and console |
+| `PURGE` requests reach the origin | The site does not have the PURGE method enabled | Enable it in the **PURGE method** card |
+| An origin's 502 reaches the visitor without a retry on another origin | **Retry on 502 / 503 / 504** is off, or **Tries** is 1 | Check **Pool settings** |
+| Saving says "The PURGE method needs a key" | Enabled without a saved key | Enter or generate a key and save |
+| "Some nodes of the site's cluster do not support it yet" | An active node of the cluster lacks `site-content-v1` or `cache-zone-v1` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |
 | The **Origins** card shows "Keep at least one origin in the default group" | Every origin has an **Origin group** | Clear **Origin group** on at least one origin |
 | Saving origins or cache rules shows "Invalid rule" | An origin group that an **Origin override** rule still picks was removed; a cache rule condition is invalid | Change the rule first, or keep an origin in that group; fix the condition |
 | "Some nodes don't support Rule extensions yet: {nodes}" | A configuration published by a service account or a background job uses origin groups, advanced conditions, or a browser TTL, and an active node of the cluster lacks `rules-v2` | Upgrade the nodes, see [Node upgrades](node-upgrades.en.md) |

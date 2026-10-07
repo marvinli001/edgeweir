@@ -104,6 +104,7 @@ Every setting of **Override settings** starts as **Unchanged**; numbers left emp
 | Origin connect timeout (s) | 0.1–120 | Configuration | Overrides the pool's connect timeout |
 | Origin send timeout (s), Origin read timeout (s) | 0.1–3600 | Configuration | Override the pool's send and read timeouts |
 | Log sample rate (%) | 0–100 | Configuration | The access log sample rate of the request |
+| Body limit (MiB) | 0–10240, 0 for no limit | Configuration | Overrides the site's [request body limit](origins-and-cache.en.md#request-body-limit); needs the node capability `site-content-v1` |
 
 A later matching rule overrides an earlier one setting by setting. Compression switches apply only among the algorithms the site has turned on; rules cannot turn on an algorithm the site has off.
 

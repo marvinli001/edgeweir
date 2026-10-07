@@ -1,12 +1,13 @@
 # Error pages
 
-The error pages nodes answer with: site templates, platform templates, built-in pages, and the request ID of every request.
+The error pages nodes answer with: a site's templates and redirects, maintenance mode, platform templates, built-in pages, and the request ID of every request.
 
 ## Concepts
 
 | Term | Definition |
 | --- | --- |
-| Site error page | An HTML template a site sets for 403, 429, 502, 503 or 504, replacing the node's built-in page. |
+| Site error page | An HTML template or redirect URL a site sets for a status or for **Other 4xx** / **Other 5xx**, replacing the node's built-in page and, optionally, the origin's error responses. |
+| Maintenance mode | The site is paused: every request but those from allowed addresses and paths gets the 503 maintenance page. |
 | Platform error page | An HTML template for unknown hosts and disabled sites. |
 | Built-in page | The page nodes use without a template, in Chinese or English by `Accept-Language`. |
 | Request ID | The ID a node settles for each request; it appears in the `X-Request-Id` response header, in error pages and in sampled logs. |
@@ -15,7 +16,7 @@ The error pages nodes answer with: site templates, platform templates, built-in 
 ## Set a site's error pages
 
 1. Open **Sites**, select the site, and go to the **Error pages** tab.
-2. Enter an HTML template in the field of a status; statuses left empty use the built-in page.
+2. Enter an HTML template in the field of a status; statuses left empty use the built-in page. To redirect instead, choose **Redirect to URL** above the status and enter the URL; a template page can change the status it is sent with in **Response status**.
 3. To replace errors the origin returns itself, turn on **Replace origin error responses**.
 4. Click **Save**. The console publishes a revision ("Error pages of {site} updated"); nodes hot-update without a reload.
 5. Verify:
@@ -33,14 +34,57 @@ The error pages nodes answer with: site templates, platform templates, built-in 
 | 502 Bad Gateway | The node cannot connect to the origin, every origin was dropped before the attempt, origin signing failed | `origin-unreachable`, `no-origin`, and others |
 | 503 Service Unavailable | The node cannot complete a check for now (for example, challenge keys not delivered yet) | `challenge-unavailable`, `policy-unavailable` |
 | 504 Gateway Timeout | The origin timed out | `origin-timeout` |
+| 400 Bad request | Requests the node cannot parse, request headers too large, plain HTTP on an HTTPS port (when the site is known) | `bad-request`, `header-too-large`, `https-required`, `waf-blocked` |
+| 405 Method not allowed | Methods an S3 origin does not take | `method-not-allowed` |
+| 500 Server error | The node failed while handling the request (when the site is known) | `internal-error` |
+| 401 Unauthorized, 404 Not found, 410 Gone | Only to replace errors the origin returns | `origin-error` |
+| Other 4xx / Other 5xx | The 4xx / 5xx without a page of their own above: the node's 413 and 414 and other statuses from the origin | As for the status |
+
+| Lookup order | Description |
+| --- | --- |
+| 1 | The status's own page |
+| 2 | **Other 4xx** or **Other 5xx** |
+| 3 | The built-in page; an origin error without a page passes through |
 
 | Item | Behavior |
 | --- | --- |
-| Replace origin error responses | When on and the origin itself returns 403, 429, 502, 503 or 504 for a status with a template, the node returns the template instead (`origin-error`); statuses without a template pass the origin's response through |
+| Replace origin error responses | When on and the origin itself returns 400–599 and the lookup finds a page, the node returns that page instead (`origin-error`); without a page the origin's response passes through |
 | Stale content first | When a rule sets **Stale if error (s)** and the node holds an expired copy, the stale copy wins over the error page; once the expired copy may no longer be served, the answer is the 502 page (`origin-unreachable`) |
 | Not cached | Error pages carry `Cache-Control: no-store`, and nodes never store them in the cache |
-| Other statuses | 404 (ACME challenge not found), 405, 421, 508 and others stay plain text; a non-GET/HEAD request without a pass refused by a challenge (`X-Edgeweir-Challenge: required`) is plain text too |
+| Other statuses | The node's own 404 (ACME challenge not found), 421, 508 and others stay plain text; a non-GET/HEAD request without a pass refused by a challenge (`X-Edgeweir-Challenge: required`) is plain text too |
 | Audit | Changes are audited as `site.error_pages_update` (the statuses that changed and their sizes, not the templates) |
+
+## Redirect pages
+
+With **Redirect to URL**, responses of that status become a 302 redirect.
+
+| Item | Rule |
+| --- | --- |
+| URL | An absolute `http://` / `https://` URL (without user information) or a path starting with a single `/`; 1–2048 printable ASCII characters without spaces |
+| Placeholders | Only `{{status}}` and `{{request_id}}`, URL-encoded when inserted, e.g. `/error?code={{status}}&id={{request_id}}` |
+| Response | 302, `Location`, `Cache-Control: no-store`, `X-Edgeweir-Error`, an empty body |
+| Response status | Redirect pages are always 302; an HTML template page can set 200–599 to change the status it is sent with, empty keeps the status |
+
+## Maintenance mode
+
+In the **Maintenance mode** card on the **Error pages** tab, turn on **Enabled**, fill in **Retry-After (seconds)**, **Allowed addresses**, **Allowed path prefixes** and **Maintenance page** as needed, and click **Save**. The other settings are kept while it is off.
+
+| Field | Values | Default | Effect |
+| --- | --- | --- | --- |
+| Enabled | On / off | Off | Turns maintenance mode on |
+| Retry-After (seconds) | 0–86400 | 0 (not sent) | `Retry-After` of the 503 response |
+| Allowed addresses | IPs or CIDRs, up to 64 | Empty | Requests from these addresses are served as usual |
+| Allowed path prefixes | Start with `/`, no query or fragment, up to 32 | Empty | Requests whose path starts with one of them are served as usual |
+| Maintenance page | HTML template, rules as for [templates](#templates) | Empty (built-in maintenance page) | The page of the 503 response |
+
+| Item | Behavior |
+| --- | --- |
+| Response | 503, `X-Edgeweir-Error: maintenance`, `Cache-Control: no-store`; no cache lookup and no origin request, and nothing answered during maintenance enters the cache |
+| Where | After bans and PURGE, before the rules; allowed addresses are matched against the visitor's TCP address, allowed prefixes against the normalized path before rule rewrites |
+| ACME | HTTP-01 validation requests for certificates are not affected |
+| Applying | Saving publishes a revision ("Maintenance of {site} updated"); nodes hot-update |
+| Audit | `site.maintenance_update` |
+| Node requirement | `site-content-v1`; while an active node of the cluster lacks it, maintenance cannot be turned on, but it can be turned off |
 
 ## Templates
 
@@ -79,10 +123,12 @@ Without a template, nodes answer with a self-contained built-in page: no externa
 | Page | Status | `X-Edgeweir-Error` |
 | --- | --- | --- |
 | Access denied / Too many requests / Origin unreachable / Service unavailable / Origin timed out | 403 / 429 / 502 / 503 / 504 | See above |
+| Method not allowed | 405 | `method-not-allowed` |
+| Under maintenance | 503 | `maintenance` |
 | Site not found | 404 | `unknown-host` |
 | Site disabled | 503 | `site-disabled` |
 
-Requests the node refuses and the node's internal errors get built-in pages too, never site templates. A refused request marks the visitor on the path, an internal error the edge node:
+Requests the node refuses and the node's internal errors use the site's pages in the [lookup order](#set-a-sites-error-pages) when the site is known, else the built-in page. A refused request marks the visitor on the path, an internal error the edge node:
 
 | Page | Status | Requests | `X-Edgeweir-Error` |
 | --- | --- | --- | --- |
@@ -90,7 +136,7 @@ Requests the node refuses and the node's internal errors get built-in pages too,
 | Request header too large | 400 | A request header over 8 KB or all headers over 32 KB, usually too many cookies | `header-too-large` |
 | HTTPS required | 400 | Plain HTTP sent to an HTTPS port | `https-required` |
 | URL too long | 414 | A request line over 8 KB | `uri-too-long` |
-| Request too large | 413 | A request body over 100 MB | `body-too-large` |
+| Request too large | 413 | A request body over the site's or a rule's [request body limit](origins-and-cache.en.md#request-body-limit), or a chunked request over the node-wide limit | `body-too-large` |
 | Edge error | 500 | The node failed while handling the request | `internal-error` |
 
 ## Platform error pages
@@ -121,15 +167,19 @@ Nodes recognize disabled sites from the offline host list in their configuration
 | Platform error pages, offline hosts | No feature needed; older nodes ignore them, keep their plain-text answers and answer offline hosts with 404 |
 | `{{time}}`, `{{path}}` | A site template or platform page that uses them makes the configuration need the node feature `rules-v3`; while an active node of the site's cluster lacks it, the **Error pages** tab leaves the two placeholders out and shows "Some nodes of the site's cluster do not support it yet" when a template uses them; a platform page that uses them shows "{{time}} and {{path}} need nodes with rules-v3; older nodes keep their last configuration". Nodes without the feature keep their last-known-good configuration, see [Node capabilities and publishing](rules.en.md#node-capabilities-and-publishing) |
 | Built-in pages for refused requests and internal errors | No feature needed; older nodes answer with nginx's own error pages |
+| 400, 401, 404, 405, 410, 500, **Other 4xx**, **Other 5xx**, redirect pages, response status, maintenance mode | Node feature `site-content-v1`; while an active node of the cluster lacks it, the **Error pages** tab lists only the original five statuses, offers no redirect or response status, and shows "Some nodes of the site's cluster do not support it yet" |
 | Template space | Templates travel with the site table into the node's shared memory; with many sites and large templates raise the node flag `--sites-dict-mb` (default 64) |
 
 ## Troubleshooting
 
 | Symptom | Cause | Action |
 | --- | --- | --- |
-| Still a plain-text error | The node is too old; the status is not 403, 429, 502, 503 or 504 | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
+| Still a plain-text error | The node is too old; the node's own status has no page (404, 421, 508) | Upgrade the node, see [Node upgrades](node-upgrades.en.md) |
 | An error page ending in "openresty" | The node is too old: that is nginx's own page | Upgrade the node |
-| The origin's error page is not replaced | **Replace origin error responses** is off, or the status has no template | Turn it on and set the status's template |
+| The origin's error page is not replaced | **Replace origin error responses** is off, or neither the status nor its class has a page | Turn it on and set a page for the status or for **Other 4xx** / **Other 5xx** |
+| The redirect URL shows "Check “Redirect to URL”" | The URL is no `http(s)` URL or path starting with `/`, has spaces or other placeholders, or exceeds 2048 characters | Fix the URL; use only `{{status}}` and `{{request_id}}` |
+| Every visitor sees the maintenance page | Maintenance mode is on and the visitor's address and path are not allowed | Turn maintenance off, or add allowed addresses or path prefixes |
+| An allowed address still gets the maintenance page | With a proxy in front of the node, the TCP address is the proxy's | Allow the proxy's range, or allow on the proxy |
 | Saving shows "The … error page is larger than 65536 bytes" | The template exceeds 64 KiB in UTF-8 | Shorten the template; host large images elsewhere |
 | A disabled site answers 404 | The node is too old to know offline hosts | Upgrade the node |
 | The request ID of a page is not in the logs | Access logs are off or the request was not sampled | Raise the sample rate on the **Logs** tab |

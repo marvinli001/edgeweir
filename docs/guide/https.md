@@ -181,9 +181,10 @@ TLS 会话复用未启用：节点不保存会话缓存（TLS 1.2），也不发
 | 字段 | 取值 | 默认值 | 作用 |
 | --- | --- | --- | --- |
 | 开启 | 开 / 关 | Gzip 开，Brotli、Zstandard 关 | 按该算法压缩响应 |
-| 压缩级别 | Brotli 1–11，Zstandard 1–19 | Brotli 6，Zstandard 3 | 级别越高压缩率越高、CPU 开销越大；Gzip 没有此项 |
+| 压缩级别 | Brotli 1–11，Zstandard 1–19，Gzip 1–9 | Brotli 6，Zstandard 3，Gzip 空（节点默认 1） | 级别越高压缩率越高、CPU 开销越大；Gzip 级别不是默认值时需要节点能力 `site-content-v1` |
 | 最小压缩大小（字节） | 1–1048576 | 256 | 小于该长度的响应不压缩 |
 | 压缩内容类型 | MIME 类型，逗号或空格分隔，最多 32 个 | `text/html`、`text/plain`、`text/css`、`application/javascript`、`application/json`、`image/svg+xml` | 压缩的响应类型；`text/html` 始终压缩 |
+| 最大压缩长度（字节） | 不小于 0，三种算法共用 | 空（不限） | `Content-Length` 超过该值的响应不压缩；长度未知（分块）的响应照常压缩。需要 `site-content-v1` |
 
 | 行为 | 说明 |
 | --- | --- |

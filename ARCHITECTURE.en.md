@@ -151,6 +151,8 @@ URL, prefix, host, Cache-Tag, and full-site purges and URL and sitemap prefetche
 3. The node pulls tasks with `PullTasks` and reports results with `ReportTaskResult`.
 4. A task without a result 5 minutes after hand-out is handed out again; a task not finished within 7 days fails. When a node reconnects, the console issues a full-site purge for each site whose purges the node missed.
 
+For a site with the PURGE method on, the node has its agent check the key of a `PURGE` request and hands it to the console with `SubmitPurge`; the console creates a URL purge task for the cluster as in step 1.
+
 Host and Cache-Tag purges need the node feature `purge-tag-v1`, mobile and sitemap prefetches `prefetch-v2`; while an active node of an affected cluster lacks it, the console refuses the task (`NODE_CAPABILITY_REQUIRED`). Nodes derive cache keys from the purge markers' points in time and an index of the cached objects' `Cache-Tag`, so purged objects (stale ones included) are never looked up again; nodes fetch sitemaps through their own edge layer. Behavior: [Origins and cache](docs/guide/origins-and-cache.en.md#purge-and-prefetch).
 
 Node upgrades are delivered through `PullTasks` as well: an upgrade first runs on one node group and is promoted after the health observation passes; the remaining nodes follow at most a quarter at a time, and each task must finish within 30 minutes after it is sent. A node pulling tasks first checks without a lock whether it has an upgrade task, and takes the cluster's upgrade lock only if it does. Behavior: [Node upgrades](docs/guide/node-upgrades.en.md).
@@ -280,10 +282,11 @@ Every RPC other than `Enroll` and `EnrollProbe` requires a client certificate ve
 | `RenewCertificate` | Rotate the node certificate |
 | `WatchConfig` | Server stream: revision notifications, task notifications, ban notifications (`bans-v1`), keepalives |
 | `GetConfig` | Snapshot, or diff against `base_revision`, with a revision receipt |
-| `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state, host metrics (`metrics-v1`); `probe` in the response tells the node whether it also probes |
+| `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state, host metrics (`metrics-v1`), cache zone usage (`cache-zone-v1`, kept in `node.cache_usage`); `probe` in the response tells the node whether it also probes |
 | `ReportStats`, `ReportStatsV2` | Per-minute pre-aggregated traffic statistics (`ReportStatsV2` also carries the L4 apps' minute statistics, `l4-v1`); deduplicated by batch sequence |
 | `ReportLogs` | Sampled access logs; deduplicated by batch sequence |
-| `GetOriginCredentials` | S3 origin keys referenced by the cluster's sites |
+| `GetOriginCredentials` | S3 origin keys and PURGE keys (`site_secret`, empty `access_key_id`) referenced by the cluster's sites |
+| `SubmitPurge` | A PURGE request the node hands on (`site-content-v1`): the console checks that the node's cluster serves the site, that the site has PURGE on and that the URL belongs to it, then creates a URL purge task as the node (source `purge_method`), at most 120 per site and minute |
 | `GetCertificates` | Certificate chains and private keys referenced by the cluster's sites |
 | `PullTasks`, `ReportTaskResult` | Purge, prefetch, and upgrade tasks |
 | `GetBans`, `ReportBans` | Incremental ban changes of the node's cluster by sequence; upload of the node's automatic bans |

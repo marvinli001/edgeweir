@@ -151,6 +151,8 @@ URL、目录、Host、Cache-Tag、整站刷新与 URL、站点地图预热不产
 3. 节点以 `PullTasks` 拉取，以 `ReportTaskResult` 回报结果。
 4. 交出 5 分钟后没有结果的任务再次交出；7 天未完成记为失败。节点重新连接时，控制台为其错过的清缓存按网站补发整站刷新。
 
+网站开启 PURGE 方法时，节点把带密钥的 `PURGE` 请求经 agent 校验后以 `SubmitPurge` 交给控制台，控制台按第 1 步为集群创建 URL 刷新任务。
+
 Host 与 Cache-Tag 刷新需要节点能力 `purge-tag-v1`，移动端与站点地图预热需要 `prefetch-v2`；受影响集群有活动节点缺少能力时，控制台拒绝创建任务（`NODE_CAPABILITY_REQUIRED`）。节点用刷新标记的时间点与缓存对象的 `Cache-Tag` 索引计算缓存键，被刷新的对象（包括过期内容）不再被查找；站点地图由节点经本机边缘层取回。行为说明见 [源站与缓存](docs/guide/origins-and-cache.md#刷新与预热)。
 
 节点升级同样经 `PullTasks` 下发：升级任务先在一个节点组试运行，健康观察通过后推进，其余节点每批最多四分之一，每个任务下发后 30 分钟内须完成。节点拉取任务时先不加锁检查有没有自己的升级任务，有才取集群的升级锁。行为说明见 [节点升级](docs/guide/node-upgrades.md)。
@@ -280,10 +282,11 @@ Connect-RPC over HTTPS，由控制台进程自己终结 TLS。
 | `RenewCertificate` | 轮换节点证书 |
 | `WatchConfig` | 服务端流：revision 通知、任务通知、封禁通知（`bans-v1`）、keepalive |
 | `GetConfig` | 快照或相对 `base_revision` 的 diff，附 revision 回执 |
-| `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态、主机指标（`metrics-v1`）；响应的 `probe` 告诉节点是否兼任探针 |
+| `ReportStatus` | 心跳、应用回执、源站健康状态与错误码（被动检查与主动检查分别上报）、封禁状态、主机指标（`metrics-v1`）、缓存区用量（`cache-zone-v1`，存入 `node.cache_usage`）；响应的 `probe` 告诉节点是否兼任探针 |
 | `ReportStats`、`ReportStatsV2` | 按分钟预聚合的流量统计（`ReportStatsV2` 另含 L4 应用的分钟统计，`l4-v1`）；按批次序号去重 |
 | `ReportLogs` | 采样访问日志；按批次序号去重 |
-| `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥 |
+| `GetOriginCredentials` | 本集群网站引用的 S3 源站密钥与 PURGE 密钥（`site_secret`，`access_key_id` 为空） |
+| `SubmitPurge` | 节点转交的 PURGE 请求（`site-content-v1`）：控制台确认节点所在集群服务该网站、网站开启了 PURGE 且 URL 属于网站，以节点身份创建 URL 刷新任务（来源 `purge_method`），每个网站每分钟至多 120 个 |
 | `GetCertificates` | 本集群网站引用的证书链与私钥 |
 | `PullTasks`、`ReportTaskResult` | 刷新预热与升级任务 |
 | `GetBans`、`ReportBans` | 按序号增量拉取本集群的封禁；上报节点的自动封禁 |

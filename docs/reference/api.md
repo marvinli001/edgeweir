@@ -362,6 +362,39 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 行为见 [源站与缓存](../guide/origins-and-cache.md) 与 [错误页](../guide/error-pages.md)。
 
+### 缓存区、PURGE 方法、内容设置与维护模式
+
+| 过程 | 端点 |
+| --- | --- |
+| `clusters.setCache` | `PUT /clusters/{id}/cache` |
+| `nodes.setCache` | `PUT /nodes/{id}/cache` |
+| `maintenance.get`、`maintenance.update` | `GET`、`PUT /sites/{id}/maintenance` |
+
+服务账号不能调用这些过程（403 `SERVICE_ACCOUNT_FORBIDDEN`）；只读 AccessKey 只能调用 `GET`。
+
+| 请求 | 字段 |
+| --- | --- |
+| `PUT /clusters/{id}/cache` | `maxSizeGb`（1–65536）、`inactiveDays`（1–90）；发布集群（原因 `cluster_cache_updated`），审计 `cluster.cache_update` |
+| `PUT /nodes/{id}/cache` | `maxSizeGb`（1–65536，`null` 跟随集群）；发布节点所在集群（`node_cache_updated`），审计 `node.cache_update` |
+| `PUT /sites/{id}/maintenance` | `enabled`、`template`（0–65536 字节，空为内置维护页）、`retryAfterSeconds`（0–86400）、`allowedCidrs`（最多 64 个）、`allowedPathPrefixes`（以 `/` 开头，不含 `?`、`#` 与控制字符，最多 32 个）、可选 `expectedUpdatedAt`（不一致时 409 `UPDATED_AT_MISMATCH`）；发布（`site_maintenance_updated`），审计 `site.maintenance_update` |
+| `POST /sites`、`PATCH /sites/{id}` | `originSettings.tries`（1–5，默认 3）、`originSettings.statusRetry`（默认 `true`）；`cacheSettings.cacheKey.query` 增加 `exclude`，此时 `queryParams` 为去掉的参数，名称可以以 `*` 结尾；`cacheSettings.xCache`（默认 `true`）；`cacheSettings.purgeMethod`：`{ enabled, key? }`，`key` 为 16–256 个可打印字符，只写，省略时保留已保存的密钥，开启时没有密钥返回 400 `PURGE_KEY_REQUIRED`；`cacheRules[].cacheSetCookie`（默认 `false`）；`contentSettings`：`charset`（`{ name, force, uppercase }`，`name` 为 `off`、`utf-8`、`gbk`、`gb18030`、`gb2312`、`big5`、`iso-8859-1`、`shift_jis`、`euc-kr`）、`requestBodyLimit`（字节，0–10737418240，默认 104857600，0 不限）。`PATCH` 省略 `xCache`、`purgeMethod` 时保持原值 |
+| `PUT /sites/{id}/https` | 增加 `gzipLevel`（0–9，0 为节点默认）、`compressMaxLength`（字节，0 不限） |
+| `PUT /sites/{id}/error-pages` | `status` 增加 400、401、404、405、410、500 与 `"4xx"`、`"5xx"`；每页增加 `redirectUrl`（与 `template` 二选一，见[跳转页面](../guide/error-pages.md#跳转页面)）与 `responseStatus`（200–599，0 不改；跳转页面只能为 0） |
+| `PUT /sites/{id}/rules` | 配置动作增加 `requestBodyLimit`（字节，0–10737418240） |
+
+响应：
+
+| 过程 | 内容 |
+| --- | --- |
+| `clusters.list`、`clusters.get` | 增加 `cache: { maxSizeGb, inactiveDays }` |
+| `nodes.list`、`nodes.get` | 增加 `cache: { maxSizeGb, usage }`：`maxSizeGb` 为节点自己的容量（`null` 跟随集群），`usage` 为最近一次上报的 `{ usedBytes, maxBytes, measuredAt }`（尚未上报时为 `null`） |
+| `sites.get` | `cacheSettings.purgeMethod` 为 `{ enabled, keySet }`，不返回密钥；增加 `contentSettings` |
+| `sites.features` | 增加 `siteContent` |
+| `maintenance.get`、`maintenance.update` | `siteId`、上述字段、`updatedAt`（从未保存时为 `null`） |
+| `cacheTasks.*` | `source` 增加 `purge_method`（PURGE 请求创建，`createdByName` 为节点名） |
+
+用到新字段的配置需要节点能力 `site-content-v1`（节点自己的缓存容量需要 `cache-zone-v1`），见[节点能力](#节点能力)。行为见[源站与缓存](../guide/origins-and-cache.md)与[错误页](../guide/error-pages.md)。
+
 ### 规则与批量重定向
 
 | 过程 | 端点 |

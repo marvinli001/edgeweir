@@ -6,7 +6,7 @@ For **Global rules** and **IP lists**, see [Rules, IP lists, and GeoIP](rules.en
 
 ## Clusters and nodes
 
-Page: **Clusters & nodes** (`/clusters`); the **Clusters | Regions** switch at the top moves between clusters and [regions](#regions) (`/clusters?view=regions`). The clusters view has the page actions **New cluster** and **Add node**, then a summary of the current cluster. With several clusters, **Select cluster** switches between them. A cluster without nodes shows only its node section (with **Add node**); the summary and the tabs appear once it has a node. The **Overview** tab holds node groups, nodes, configuration canary, node upgrades, and revisions; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster); the **Scheduling** tab holds the cluster's scheduling rules and their preview, see [Scheduling rules](scheduling.en.md#scheduling-rules); the **Port pools** tab (`/clusters?tab=ports`) holds the port ranges the cluster's L4 apps may use, see [Set up port pools](l4.en.md#set-up-port-pools).
+Page: **Clusters & nodes** (`/clusters`); the **Clusters | Regions** switch at the top moves between clusters and [regions](#regions) (`/clusters?view=regions`). The clusters view has the page actions **New cluster** and **Add node**, then a summary of the current cluster. With several clusters, **Select cluster** switches between them. A cluster without nodes shows only its node section (with **Add node**); the summary and the tabs appear once it has a node. The **Overview** tab holds node groups, nodes, configuration canary, cache zone, node upgrades, and revisions; the **DNS** tab holds the cluster's DNS binding, see [Bind a cluster](dns-and-alerts.en.md#bind-a-cluster); the **Scheduling** tab holds the cluster's scheduling rules and their preview, see [Scheduling rules](scheduling.en.md#scheduling-rules); the **Port pools** tab (`/clusters?tab=ports`) holds the port ranges the cluster's L4 apps may use, see [Set up port pools](l4.en.md#set-up-port-pools).
 
 | Summary | Content |
 | --- | --- |
@@ -28,6 +28,7 @@ A cluster is a set of nodes plus the sites assigned to them; each cluster has it
 | --- | --- |
 | Cluster of a site | With several clusters, the new-site form has a **Cluster** field (default: the oldest cluster); through `/api/v1`, `clusterId`. A site cannot change clusters later |
 | Capacity | A cluster publishes at most 512 enabled sites and has at most 256 [L4 apps](l4.en.md) |
+| Cache zone | The **Cache zone** card on the **Overview** sets the size and idle removal time of every node's cache zone, see [Cache zone](origins-and-cache.en.md#cache-zone) |
 
 ### Node groups
 
@@ -66,7 +67,7 @@ The dialog shows the **Install command** (with a countdown, shown once), address
 
 | Action | Description |
 | --- | --- |
-| **Details** | Also by clicking the node's name (`/clusters?node=<node ID>`): **Metrics**, **Data plane** (Healthy / Data plane unhealthy), **Connects from**, **Certificate expires** (the client certificate; marked **Expires soon** with less than 10 days left, by when nodes normally renewed it already, and **Certificate expired** or **Certificate refused** once past or refused by the node channel), **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md) |
+| **Details** | Also by clicking the node's name (`/clusters?node=<node ID>`): **Metrics**, **Data plane** (Healthy / Data plane unhealthy), **Connects from**, **Certificate expires** (the client certificate; marked **Expires soon** with less than 10 days left, by when nodes normally renewed it already, and **Certificate expired** or **Certificate refused** once past or refused by the node channel), **Also probes**, **Scheduling addresses** (**Edit addresses**), and **Probe results**, see [Regional probes and scheduling](scheduling.en.md); **Cache** shows the cache usage and sets this node's own size, see [Cache zone](origins-and-cache.en.md#cache-zone) |
 | **Rename** | At most 64 characters |
 | **Move to group** | Node groups of the same cluster only |
 | **Disable** / **Enable** | A disabled node is refused by the node channel (except for certificate renewal, so its certificate is still valid when enabled) and keeps serving its last successfully applied configuration; its unfinished purge & prefetch deliveries are marked **Skipped**. Once the node is enabled and pulls tasks again, it gets one whole-site purge for every site those purges touched |

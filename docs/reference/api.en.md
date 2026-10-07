@@ -362,6 +362,39 @@ curl -fsS -X POST -H "x-api-key: $EDGEWEIR_API_KEY" -H 'content-type: applicatio
 
 Behavior: [Origins and cache](../guide/origins-and-cache.en.md) and [Error pages](../guide/error-pages.en.md).
 
+### Cache zone, PURGE method, content settings and maintenance
+
+| Procedure | Endpoint |
+| --- | --- |
+| `clusters.setCache` | `PUT /clusters/{id}/cache` |
+| `nodes.setCache` | `PUT /nodes/{id}/cache` |
+| `maintenance.get`, `maintenance.update` | `GET`, `PUT /sites/{id}/maintenance` |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys can call only `GET`.
+
+| Request | Fields |
+| --- | --- |
+| `PUT /clusters/{id}/cache` | `maxSizeGb` (1–65536), `inactiveDays` (1–90); publishes the cluster (reason `cluster_cache_updated`), audited as `cluster.cache_update` |
+| `PUT /nodes/{id}/cache` | `maxSizeGb` (1–65536, `null` follows the cluster); publishes the node's cluster (`node_cache_updated`), audited as `node.cache_update` |
+| `PUT /sites/{id}/maintenance` | `enabled`, `template` (0–65536 bytes, empty for the built-in maintenance page), `retryAfterSeconds` (0–86400), `allowedCidrs` (up to 64), `allowedPathPrefixes` (starting with `/`, without `?`, `#`, or control characters, up to 32), optional `expectedUpdatedAt` (409 `UPDATED_AT_MISMATCH` when it differs); publishes (`site_maintenance_updated`), audited as `site.maintenance_update` |
+| `POST /sites`, `PATCH /sites/{id}` | `originSettings.tries` (1–5, default 3), `originSettings.statusRetry` (default `true`); `cacheSettings.cacheKey.query` adds `exclude`, with `queryParams` the parameters left out, a name may end in `*`; `cacheSettings.xCache` (default `true`); `cacheSettings.purgeMethod`: `{ enabled, key? }`, `key` 16–256 printable characters, write-only, omitted keeps the saved key, enabling without a key gets 400 `PURGE_KEY_REQUIRED`; `cacheRules[].cacheSetCookie` (default `false`); `contentSettings`: `charset` (`{ name, force, uppercase }`, `name` one of `off`, `utf-8`, `gbk`, `gb18030`, `gb2312`, `big5`, `iso-8859-1`, `shift_jis`, `euc-kr`), `requestBodyLimit` (bytes, 0–10737418240, default 104857600, 0 for no limit). `PATCH` keeps `xCache` and `purgeMethod` when omitted |
+| `PUT /sites/{id}/https` | Adds `gzipLevel` (0–9, 0 for the node default) and `compressMaxLength` (bytes, 0 for no limit) |
+| `PUT /sites/{id}/error-pages` | `status` adds 400, 401, 404, 405, 410, 500, `"4xx"`, and `"5xx"`; pages add `redirectUrl` (instead of `template`, see [Redirect pages](../guide/error-pages.en.md#redirect-pages)) and `responseStatus` (200–599, 0 keeps the status; only 0 for redirect pages) |
+| `PUT /sites/{id}/rules` | Configuration actions add `requestBodyLimit` (bytes, 0–10737418240) |
+
+Responses:
+
+| Procedure | Content |
+| --- | --- |
+| `clusters.list`, `clusters.get` | Add `cache: { maxSizeGb, inactiveDays }` |
+| `nodes.list`, `nodes.get` | Add `cache: { maxSizeGb, usage }`: `maxSizeGb` is the node's own size (`null` follows the cluster), `usage` the last report `{ usedBytes, maxBytes, measuredAt }` (`null` until reported) |
+| `sites.get` | `cacheSettings.purgeMethod` is `{ enabled, keySet }`, never the key; adds `contentSettings` |
+| `sites.features` | Adds `siteContent` |
+| `maintenance.get`, `maintenance.update` | `siteId`, the fields above, `updatedAt` (`null` until first saved) |
+| `cacheTasks.*` | `source` adds `purge_method` (created by a PURGE request; `createdByName` is the node's name) |
+
+Configurations that use the new fields need the node capability `site-content-v1` (a node's own cache size needs `cache-zone-v1`), see [Node capabilities](#node-capabilities). Behavior: [Origins and cache](../guide/origins-and-cache.en.md) and [Error pages](../guide/error-pages.en.md).
+
 ### Rules and bulk redirects
 
 | Procedure | Endpoint |
