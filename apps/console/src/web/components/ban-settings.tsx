@@ -11,7 +11,7 @@ import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
 
-/** Platform limit of manual bans and sharing of automatic bans in a cluster. */
+/** Protection page card: platform limit of manual bans and sharing of automatic bans in a cluster. */
 export function BanSettingsCard({
   className,
   style,

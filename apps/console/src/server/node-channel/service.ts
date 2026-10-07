@@ -26,6 +26,7 @@ import {
   BanScope,
   BanSource,
   type BanStatus,
+  type CacheZoneUsage,
   DeviceVariant,
   GetConfigResponseSchema,
   type NodeMetrics,
@@ -40,15 +41,19 @@ import {
 } from "@edgeweir/proto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { AppContext } from "../lib/context";
+import { PURGE_KEY, siteSecretBinding } from "../lib/site-secrets";
 import { NODE_CERT_LIFETIME_DAYS, NODE_ORGANIZATION } from "../pki/ca";
 import { ingestLogs } from "../services/access-logs";
 import { recordAudit } from "../services/audit";
 import { banChanges, currentBanSequence, reportAutoBans } from "../services/bans";
 import {
   type CacheTaskItem,
+  createCacheTask,
   deviceTypeSites,
   hasDeliverableTasks,
+  PurgeMethodLimited,
   pullCacheTasks,
+  purgeMethodRetryAfter,
   reportCacheTaskResult,
 } from "../services/cache-tasks";
 import { nodeCertificates } from "../services/certificates";
@@ -127,6 +132,21 @@ export function toNodeMetrics(m: NodeMetrics, now: Date): schema.NodeMetricsData
     memoryTotalBytes: count(m.memoryTotalBytes),
     egressBps: count(m.egressBps),
     activeConnections: count(m.activeConnections),
+    reportedAt: now.toISOString(),
+  };
+}
+
+/** ReportStatusRequest.cache_usage as stored on the node row (bounded, at most 8 zones). */
+export function toNodeCacheUsage(zones: CacheZoneUsage[], now: Date): schema.NodeCacheUsage {
+  const bytes = (value: bigint) =>
+    Number(value < 0n ? 0n : value > 9007199254740991n ? 9007199254740991n : value);
+  return {
+    zones: zones.slice(0, 8).map((zone) => ({
+      name: zone.name.slice(0, 64),
+      usedBytes: bytes(zone.usedBytes),
+      maxBytes: bytes(zone.maxBytes),
+      measuredAt: (zone.measuredAt ? timestampDate(zone.measuredAt) : now).toISOString(),
+    })),
     reportedAt: now.toISOString(),
   };
 }
@@ -723,6 +743,8 @@ export function createNodeService(
             remoteAddress: normalizeRemoteAddress(peer.remoteAddress) ?? node.remoteAddress,
             // Nodes without metrics-v1 send none (nor do others before their second sample).
             metrics: req.metrics ? toNodeMetrics(req.metrics, now) : null,
+            // cache-zone-v1: the last measurement; heartbeats before the first keep the stored one.
+            ...(req.cacheUsage.length ? { cacheUsage: toNodeCacheUsage(req.cacheUsage, now) } : {}),
             // Nodes without bans-v1 send no BanStatus.
             banStatus: req.bans ? toNodeBanStatus(req.bans, now) : null,
             // Sites above the normal CC level; nodes without challenge-v1 send none.
@@ -847,11 +869,86 @@ export function createNodeService(
           return [];
         }
       });
+      // PURGE keys of the cluster's sites travel the same way (no access key id).
+      const keys = await app.db
+        .select({ secret: schema.siteSecret })
+        .from(schema.siteSecret)
+        .innerJoin(schema.site, eq(schema.site.id, schema.siteSecret.siteId))
+        .where(
+          and(
+            inArray(schema.siteSecret.id, ids),
+            eq(schema.siteSecret.kind, PURGE_KEY),
+            eq(schema.site.clusterId, node.clusterId),
+          ),
+        );
+      for (const { secret } of keys) {
+        try {
+          const value = app.masterKey.open(
+            JSON.parse(secret.secretEnvelope),
+            siteSecretBinding(secret.id),
+          );
+          credentials.push({
+            id: secret.id,
+            version: BigInt(secret.version),
+            accessKeyId: "",
+            secretAccessKey: value.toString("utf8"),
+          });
+        } catch (error) {
+          log.error("cannot open site secret", { secretId: secret.id, error });
+        }
+      }
       log.info("origin credentials delivered", {
         nodeId: node.id,
         credentials: credentials.map((c) => c.id),
       });
       return { credentials };
+    },
+
+    async submitPurge(req, ctx) {
+      const node = await requireNode(ctx);
+      if (!/^[0-9a-f-]{36}$/i.test(req.siteId) || req.url.length > 2048)
+        throw new ConnectError("invalid PURGE request", Code.InvalidArgument);
+      const [site] = await app.db
+        .select({
+          id: schema.site.id,
+          clusterId: schema.site.clusterId,
+          enabled: schema.site.enabled,
+          purgeMethod: schema.site.purgeMethod,
+        })
+        .from(schema.site)
+        .where(eq(schema.site.id, req.siteId));
+      if (!site || site.clusterId !== node.clusterId || !site.enabled || !site.purgeMethod)
+        throw new ConnectError(
+          "the site has no PURGE method on this cluster",
+          Code.PermissionDenied,
+        );
+      // A lock-free check first: a site over its quota is refused without
+      // queueing on the site's lock (createCacheTask counts again under it).
+      const retryAfter = await purgeMethodRetryAfter(app.db, site.id);
+      if (retryAfter > 0)
+        throw new ConnectError(`retry after ${retryAfter}`, Code.ResourceExhausted);
+      try {
+        const task = await createCacheTask(
+          app.db,
+          { type: "url", urls: [req.url], siteIds: [] },
+          {
+            actor: { type: "node", id: node.id, name: node.name },
+            source: "purge_method",
+            siteId: site.id,
+          },
+        );
+        log.info("PURGE task created", { nodeId: node.id, siteId: site.id, taskId: task.id });
+        return { taskId: task.id };
+      } catch (error) {
+        if (error instanceof PurgeMethodLimited)
+          throw new ConnectError(`retry after ${error.retryAfter}`, Code.ResourceExhausted);
+        const code = (error as { code?: string }).code;
+        if (code === "CACHE_TASK_URL_INVALID" || code === "CACHE_TASK_HOST_UNKNOWN")
+          throw new ConnectError("the site does not serve this URL", Code.InvalidArgument);
+        if (code === "SITE_DISABLED")
+          throw new ConnectError("the site is disabled", Code.PermissionDenied);
+        throw error;
+      }
     },
 
     async pullTasks(req, ctx) {

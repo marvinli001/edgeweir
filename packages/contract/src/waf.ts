@@ -154,6 +154,18 @@ export const siteFeatures = z.object({
    * status 303 and the error page placeholders {{time}} and {{path}}.
    */
   rulesV3: featureAvailability,
+  /** Ports besides 80 and 443 and the HTTPS redirect's status, port and excluded domains (edge-ports-v1). */
+  edgePorts: featureAvailability,
+  /** The rule field ip.peer (client-ip-v1). */
+  clientIp: featureAvailability,
+  /**
+   * The site settings of proto v0.24.0 (site-content-v1): cache keys that drop
+   * parameters, caching responses with Set-Cookie, the PURGE method, hiding
+   * X-Cache, error pages for more statuses, classes and redirects,
+   * maintenance, charsets, the gzip level and the largest compressed response,
+   * request body limits and origin tries.
+   */
+  siteContent: featureAvailability,
 });
 
 const idParam = z.object({ id: uuid });

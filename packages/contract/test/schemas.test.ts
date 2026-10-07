@@ -10,6 +10,7 @@ import {
   errorCodes,
   errorDefs,
   extension,
+  ipListInput,
   isErrorCode,
   originInput,
   originSettings,
@@ -88,6 +89,8 @@ describe("siteCreateInput", () => {
         unhealthyThreshold: 3,
       },
       sessionAffinity: { enabled: false, ttlSeconds: 3600 },
+      tries: 3,
+      statusRetry: true,
     });
     expect(parsed.cacheSettings).toEqual({
       cacheKey: {
@@ -101,6 +104,12 @@ describe("siteCreateInput", () => {
       },
       rangeSlice: false,
       keepCacheTag: false,
+      xCache: true,
+      purgeMethod: { enabled: false },
+    });
+    expect(parsed.contentSettings).toEqual({
+      charset: { name: "off", force: false, uppercase: false },
+      requestBodyLimit: 104_857_600,
     });
   });
 
@@ -185,6 +194,21 @@ describe("origin protocol", () => {
     expect(update.originSettings).toMatchObject({ protocol: "http1", grpc: false });
     for (const protocol of ["h2c", "http3", ""])
       expect(siteUpdateInput.safeParse({ id, originSettings: { protocol } }).success).toBe(false);
+  });
+});
+
+describe("ipListInput", () => {
+  it("unmaps only IPv4-mapped entries; ::a.b.c.d stays IPv6 as nodes read it", () => {
+    const entries = (list: string[]) => ipListInput.parse({ name: "x", entries: list }).entries;
+    expect(entries(["::0.0.0.0/96", "::1.2.3.4", "::1.2.3.4/90"])).toEqual([
+      "::/90",
+      "::/96",
+      "::102:304/128",
+    ]);
+    expect(entries(["::ffff:1.2.3.4", "::ffff:0:0/96"])).toEqual(["0.0.0.0/0", "1.2.3.4/32"]);
+    expect(ipListInput.safeParse({ name: "x", entries: ["::ffff:1.2.3.4/90"] }).success).toBe(
+      false,
+    );
   });
 });
 

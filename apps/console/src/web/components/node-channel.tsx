@@ -8,7 +8,7 @@ import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
 /**
- * Admin card: the node channel URL install commands give nodes and probes, where it comes from,
+ * System page card: the node channel URL install commands give nodes and probes, where it comes from,
  * and the console's own check of it.
  */
 export function NodeChannelCard() {

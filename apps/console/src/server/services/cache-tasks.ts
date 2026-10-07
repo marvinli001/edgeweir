@@ -19,6 +19,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   inArray,
   isNull,
   lt,
@@ -30,6 +31,7 @@ import type * as z from "zod";
 import { readCacheKey } from "../lib/cache-key";
 import { fail } from "../lib/errors";
 import { TASKS_CHANNEL } from "../lib/events";
+import { lockPurgeMethod } from "../lib/locks";
 import { cleanErrorCode, cleanErrorParams, taskError } from "../lib/node-errors";
 import { assertNodeFeatures } from "../lib/node-features";
 import { deleteInBatches } from "../lib/retention";
@@ -255,7 +257,7 @@ async function toTaskDtos(db: Executor, rows: TaskRow[]): Promise<CacheTask[]> {
           recoveredAt: n.recoveredAt?.toISOString() ?? null,
         };
       }),
-      source: r.source === "recovery" ? "recovery" : "user",
+      source: r.source === "recovery" || r.source === "purge_method" ? r.source : "user",
       createdByName: r.createdByName,
       createdAt: r.createdAt.toISOString(),
       finishedAt: r.finishedAt?.toISOString() ?? null,
@@ -273,9 +275,17 @@ async function toTaskDtos(db: Executor, rows: TaskRow[]): Promise<CacheTask[]> {
 export async function createCacheTask(
   db: Database,
   input: CacheTaskCreate,
-  ctx: { actor: Actor },
+  ctx: { actor: Actor; source?: "purge_method"; siteId?: string },
 ): Promise<CacheTask> {
   return db.transaction(async (tx) => {
+    // PURGE-method tasks: the quota is counted under the site's lock, in the
+    // transaction that inserts the task, so concurrent requests cannot all
+    // see room.
+    if (ctx.source === "purge_method" && ctx.siteId) {
+      await lockPurgeMethod(tx, ctx.siteId);
+      const retryAfter = await purgeMethodRetryAfter(tx, ctx.siteId);
+      if (retryAfter > 0) throw new PurgeMethodLimited(retryAfter);
+    }
     const items: CacheTaskItem[] = [];
     const targets: string[] = [];
     const siteNames = new Map<string, string>();
@@ -345,6 +355,11 @@ export async function createCacheTask(
         fail("CACHE_TASK_HOST_UNKNOWN", `no site serves: ${hosts}`, { hosts });
       }
       for (const site of resolved.values()) assertServing(site);
+      // A PURGE request purges URLs of its own site only.
+      if (ctx.siteId && [...resolved.values()].some((site) => site.siteId !== ctx.siteId)) {
+        const hosts = [...resolved.keys()].join(", ");
+        fail("CACHE_TASK_HOST_UNKNOWN", `the site does not serve: ${hosts}`, { hosts });
+      }
       const seen = new Set<string>();
       for (const target of parsed) {
         const site = resolved.get(target.host);
@@ -395,6 +410,7 @@ export async function createCacheTask(
         payload: items as unknown as Record<string, string>[],
         createdByUserId: publisher(ctx.actor),
         createdByName: ctx.actor.name ?? "",
+        ...(ctx.source ? { source: ctx.source } : {}),
         finishedAt: active.length === 0 ? now : null,
       })
       .returning();
@@ -428,6 +444,7 @@ export async function createCacheTask(
       targetName: targets.length === 1 ? (targets[0] ?? "") : `${targets.length} × ${input.type}`,
       metadata: {
         type: input.type,
+        ...(ctx.source === "purge_method" ? { method: "PURGE" } : {}),
         targets: targets.slice(0, 20),
         count: targets.length,
         ...(prefetch ? { variants } : {}),
@@ -858,4 +875,41 @@ export async function pruneCacheTasks(db: Database, now = new Date()): Promise<n
       ),
     ),
   );
+}
+
+/** PURGE-method tasks a site may create per minute (all nodes together). */
+export const PURGE_METHOD_TASKS_PER_MINUTE = 120;
+
+/** The site created PURGE_METHOD_TASKS_PER_MINUTE tasks within the last minute. */
+export class PurgeMethodLimited extends Error {
+  constructor(readonly retryAfter: number) {
+    super(`retry after ${retryAfter}`);
+  }
+}
+
+/**
+ * Seconds until the site may create another PURGE-method task, 0 when it
+ * may now: at most PURGE_METHOD_TASKS_PER_MINUTE in any minute. The window
+ * is measured with the database's clock, which also stamps the tasks.
+ */
+export async function purgeMethodRetryAfter(db: Executor, siteId: string) {
+  const rows = await db
+    .select({
+      createdAt: schema.cacheTask.createdAt,
+      now: sql<Date>`now()`.mapWith(schema.cacheTask.createdAt),
+    })
+    .from(schema.cacheTask)
+    .where(
+      and(
+        eq(schema.cacheTask.source, "purge_method"),
+        arrayContains(schema.cacheTask.siteIds, [siteId]),
+        gt(schema.cacheTask.createdAt, sql`now() - interval '60 seconds'`),
+      ),
+    )
+    .orderBy(desc(schema.cacheTask.createdAt))
+    .limit(PURGE_METHOD_TASKS_PER_MINUTE);
+  if (rows.length < PURGE_METHOD_TASKS_PER_MINUTE) return 0;
+  const last = rows[rows.length - 1];
+  if (!last) return 0;
+  return Math.max(1, Math.ceil((last.createdAt.getTime() + 60_000 - last.now.getTime()) / 1000));
 }

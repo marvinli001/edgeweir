@@ -53,6 +53,24 @@ const cases = [
   ["ip.src ne 192.0.2.1", { "ip.src": "192.0.2.2" }, true],
   ["ip.src in $blocked", { "ip.src": "192.0.2.5" }, true],
   ["ip.src in $blocked", { "ip.src": "198.51.100.5" }, false],
+  // Only ::ffff:0:0/96 is IPv4-mapped (Go's Is4In6); the deprecated IPv4-compatible form
+  // ::a.b.c.d is an IPv6 address, in sets and in client addresses alike.
+  ["ip.src in {::1.2.3.4}", { "ip.src": "1.2.3.4" }, false],
+  ["ip.src in {::1.2.3.4}", { "ip.src": "::102:304" }, true],
+  ["ip.src eq ::1.2.3.4", { "ip.src": "::1.2.3.4" }, true],
+  ["ip.src in {::0.0.0.0/96}", { "ip.src": "198.51.100.7" }, false],
+  ["ip.src in {::0.0.0.0/96}", { "ip.src": "::198.51.100.7" }, true],
+  ["ip.src in {::0.0.0.0/96}", { "ip.src": "::ffff:198.51.100.7" }, false],
+  ["ip.src in {::1.2.3.4/90}", { "ip.src": "1.2.3.4" }, false],
+  ["ip.src in {::1.2.3.4/90}", { "ip.src": "::3f:ffff:ffff" }, true],
+  ["ip.src in {::ffff:1.2.3.4}", { "ip.src": "1.2.3.4" }, true],
+  ["ip.src in {::ffff:1.2.3.4}", { "ip.src": "::ffff:102:304" }, true],
+  ["ip.src in {::ffff:1.2.3.4}", { "ip.src": "::1.2.3.4" }, false],
+  ["ip.src in {::ffff:0:0/96}", { "ip.src": "203.0.113.9" }, true],
+  ["ip.src in {::ffff:0:0/96}", { "ip.src": "::cb00:7109" }, false],
+  ["ip.src in {::ffff:0:1.2.3.4}", { "ip.src": "1.2.3.4" }, false],
+  ["ip.src in {::ffff:0:1.2.3.4}", { "ip.src": "::ffff:0:102:304" }, true],
+  ["ip.src in $blocked", { "ip.src": "::192.0.2.5" }, false],
   ["ip.geoip.asnum in {13335 15169}", { "ip.geoip.asnum": 13335 }, true],
   [
     'ip.geoip.country eq "NZ" and ip.geoip.subdivision eq "AUK"',
@@ -1684,6 +1702,21 @@ const vectors = [
     }
     throw new Error(`not rejected: ${source}`);
   }),
+  // client-ip-v1: ip.peer, the connection's peer; ip.src is the client the
+  // cluster's client address setting names.
+  ...[
+    ["ip.peer in {10.0.0.0/8}", { "ip.peer": "10.1.2.3", "ip.src": "203.0.113.9" }, true],
+    ["ip.peer in {10.0.0.0/8}", { "ip.peer": "203.0.113.9", "ip.src": "10.1.2.3" }, false],
+    ["ip.peer in $blocked", { "ip.peer": "192.0.2.5" }, true],
+    ["not ip.peer in {2001:db8::/32}", { "ip.peer": "2001:db8::7" }, false],
+    ["ip.peer ne 192.0.2.1", { "ip.peer": "::ffff:192.0.2.1" }, false],
+    ['to_string(ip.peer) eq "10.0.0.2"', { "ip.peer": "10.0.0.2" }, true],
+    [
+      "ip.src in {10.0.0.0/8} and not ip.peer in {10.0.0.0/8}",
+      { "ip.src": "10.0.0.9", "ip.peer": "198.51.100.1" },
+      true,
+    ],
+  ].map(accepted),
 ];
 writeFileSync(
   new URL("../test/vectors.json", import.meta.url),

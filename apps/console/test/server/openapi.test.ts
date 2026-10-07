@@ -78,9 +78,24 @@ describe("OpenAPI security requirements", async () => {
       items: { enum: ["desktop", "mobile"] },
     });
     expect(task.maxUrls).toMatchObject({ default: 1000, maximum: 10000 });
-    expect(
-      body("/sites/{id}/error-pages", "put")?.properties?.pages?.items?.properties?.status?.enum,
-    ).toEqual([403, 429, 502, 503, 504]);
+    // The statuses and, since site-content-v1, the 4xx and 5xx classes.
+    const status = body("/sites/{id}/error-pages", "put")?.properties?.pages?.items?.properties
+      ?.status as { anyOf?: { enum?: unknown[] }[] } | undefined;
+    expect(status?.anyOf?.flatMap((option) => option.enum ?? [])).toEqual([
+      400,
+      401,
+      403,
+      404,
+      405,
+      410,
+      429,
+      500,
+      502,
+      503,
+      504,
+      "4xx",
+      "5xx",
+    ]);
     expect(Object.keys(body("/settings/error-pages", "put")?.properties ?? {})).toEqual([
       "unknownHost",
       "siteDisabled",

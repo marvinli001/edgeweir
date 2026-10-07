@@ -45,6 +45,7 @@ import { type Option, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
 import { CachePurgeCard } from "@/components/site/cache-purge-card";
 import { CompressionCard } from "@/components/site/compression-card";
+import { CharsetCard, PurgeMethodCard, XCacheCard } from "@/components/site/content-cards";
 import { ExpressionEditor, expressionFailure } from "@/components/site/expression-editor";
 import { NumberField, SwitchField } from "@/components/site/fields";
 import {
@@ -72,15 +73,19 @@ import { cn } from "@/lib/utils";
  * origin's Cache-Tag reaches clients. Each card saves on its own.
  */
 export function CacheTab({ site }: { site: Site }) {
-  const { cacheKey, rangeSlice, keepCacheTag } = site.cacheSettings;
+  const { cacheKey, rangeSlice, keepCacheTag, xCache, purgeMethod } = site.cacheSettings;
   return (
     <div className="flex flex-col gap-4">
       <CachePurgeCard site={site} />
       {/* Keyed by their own data, so saving one card keeps unsaved edits in the others. */}
-      <CacheRulesCard key={JSON.stringify(site.cacheRules)} site={site} />
-      <CacheKeyCard key={JSON.stringify({ cacheKey, rangeSlice })} site={site} />
-      <CacheTagCard key={String(keepCacheTag)} site={site} />
+      {/* Each key starts with the card's name: sibling keys must differ ("true" twice duplicates a card). */}
+      <CacheRulesCard key={`rules-${JSON.stringify(site.cacheRules)}`} site={site} />
+      <CacheKeyCard key={`key-${JSON.stringify({ cacheKey, rangeSlice })}`} site={site} />
+      <PurgeMethodCard key={`purge-${JSON.stringify(purgeMethod)}`} site={site} />
+      <CacheTagCard key={`cache-tag-${keepCacheTag}`} site={site} />
+      <XCacheCard key={`x-cache-${xCache}`} site={site} />
       <CompressionCard site={site} />
+      <CharsetCard key={`charset-${JSON.stringify(site.contentSettings.charset)}`} site={site} />
     </div>
   );
 }
@@ -109,6 +114,8 @@ interface RuleDraft {
   staleWhileRevalidate: string;
   staleIfError: string;
   cacheAuthorized: boolean;
+  /** Cache responses with Set-Cookie (site-content-v1). */
+  cacheSetCookie: boolean;
 }
 
 const bytesToKb = (bytes: number) => (bytes > 0 ? String(bytes / 1024) : "");
@@ -131,7 +138,9 @@ const moreCount = (r: RuleDraft) =>
     r.maxSizeKb,
     r.staleWhileRevalidate,
     r.staleIfError,
-  ].filter((v) => v.trim() !== "").length + (r.cacheAuthorized ? 1 : 0);
+  ].filter((v) => v.trim() !== "").length +
+  (r.cacheAuthorized ? 1 : 0) +
+  (r.cacheSetCookie ? 1 : 0);
 
 /** The builder's lists of a condition, or null when the builder cannot show it. */
 function builderForm(expression: string): StructuredCacheCondition | null {
@@ -170,6 +179,7 @@ const toDraft = (r: CacheRule): RuleDraft => {
     staleWhileRevalidate: secondsOrEmpty(r.staleWhileRevalidateSeconds),
     staleIfError: secondsOrEmpty(r.staleIfErrorSeconds),
     cacheAuthorized: r.cacheAuthorized,
+    cacheSetCookie: r.cacheSetCookie,
   };
 };
 
@@ -213,6 +223,7 @@ const newRule = (): RuleDraft => ({
   staleWhileRevalidate: "",
   staleIfError: "",
   cacheAuthorized: false,
+  cacheSetCookie: false,
 });
 
 /** Rows only move up and down. */
@@ -223,6 +234,7 @@ function CacheRulesCard({ site }: { site: Site }) {
   const availability = features.data?.rulesV2;
   // Expressions beyond the builder and browser TTLs wait until the nodes run rules-v2.
   const locked = availability?.available === false;
+  const contentLocked = features.data?.siteContent.available === false;
   const initial = React.useMemo(() => site.cacheRules.map(toDraft), [site.cacheRules]);
   const [rows, setRows] = React.useState(initial);
   const { save, error, pending } = useSaveSite(site.id);
@@ -280,6 +292,7 @@ function CacheRulesCard({ site }: { site: Site }) {
             staleWhileRevalidateSeconds: toSeconds(r.staleWhileRevalidate),
             staleIfErrorSeconds: toSeconds(r.staleIfError),
             cacheAuthorized: r.cacheAuthorized,
+            cacheSetCookie: r.cacheSetCookie,
           }));
           const problem = rulesProblem(cacheRules);
           setInvalid(problem);
@@ -334,6 +347,7 @@ function CacheRulesCard({ site }: { site: Site }) {
                     row={row}
                     index={index}
                     locked={locked}
+                    contentLocked={contentLocked}
                     onChange={(change) => patch(row.key, change)}
                     onRemove={() => setRows(rows.filter((r) => r.key !== row.key))}
                   />
@@ -393,12 +407,15 @@ function SortableRule({
   row,
   index,
   locked,
+  contentLocked,
   onChange,
   onRemove,
 }: {
   row: RuleDraft;
   index: number;
   locked: boolean;
+  /** The cluster's nodes lack site-content-v1: Set-Cookie caching can only be turned off. */
+  contentLocked: boolean;
   onChange: (change: Partial<RuleDraft>) => void;
   onRemove: () => void;
 }) {
@@ -671,6 +688,15 @@ function SortableRule({
                 onCheckedChange={(cacheAuthorized) => onChange({ cacheAuthorized })}
                 testId="cache-rule-authorized"
               />
+              <SwitchField
+                className="sm:col-span-2 lg:col-span-3"
+                id={id("set-cookie")}
+                label={m.site_cache_rule_set_cookie()}
+                checked={row.cacheSetCookie}
+                disabled={bypass || (contentLocked && !row.cacheSetCookie)}
+                onCheckedChange={(cacheSetCookie) => onChange({ cacheSetCookie })}
+                testId="cache-rule-set-cookie"
+              />
             </div>
           </CollapsibleContent>
         </Collapsible>
@@ -694,6 +720,8 @@ interface KeyDraft {
 
 function CacheKeyCard({ site }: { site: Site }) {
   const { cacheKey, rangeSlice } = site.cacheSettings;
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
+  const contentLocked = features.data?.siteContent.available === false;
   const initial = React.useMemo<KeyDraft>(
     () => ({
       query: cacheKey.query,
@@ -716,7 +744,12 @@ function CacheKeyCard({ site }: { site: Site }) {
     { label: m.site_cache_key_query_all(), value: "all" },
     { label: m.site_cache_key_query_ignore(), value: "ignore" },
     { label: m.site_cache_key_query_include(), value: "include" },
+    // Excluding parameters waits for site-content-v1 (a saved exclude mode stays).
+    ...(contentLocked && cacheKey.query !== "exclude"
+      ? []
+      : [{ label: m.site_cache_key_query_exclude(), value: "exclude" as const }]),
   ];
+  const listed = draft.query === "include" || draft.query === "exclude";
 
   return (
     <Card className="animate-enter" style={{ animationDelay: "80ms" }} data-testid="cache-key-card">
@@ -757,15 +790,15 @@ function CacheKeyCard({ site }: { site: Site }) {
                 testId="cache-key-query"
               />
             </Field>
-            <Field data-disabled={draft.query !== "include" || undefined}>
+            <Field data-disabled={!listed || undefined}>
               <FieldLabel htmlFor="cache-key-params">{m.site_cache_key_params()}</FieldLabel>
               <Input
                 id="cache-key-params"
                 value={draft.queryParams}
-                disabled={draft.query !== "include"}
-                required={draft.query === "include"}
+                disabled={!listed}
+                required={listed}
                 onChange={(event) => set({ queryParams: event.target.value })}
-                placeholder="id, page, lang"
+                placeholder={draft.query === "exclude" ? "utm_*, fbclid" : "id, page, lang"}
                 data-testid="cache-key-params"
               />
             </Field>

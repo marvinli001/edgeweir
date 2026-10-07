@@ -180,7 +180,11 @@ const actionFieldLabels: Record<string, () => string> = {
   originSendTimeoutMs: m.rules_send_timeout,
   originReadTimeoutMs: m.rules_read_timeout,
   logSampleRate: m.rules_log_sample_rate,
+  requestBodyLimit: m.rules_request_body_limit,
 };
+
+/** Whether the site's cluster lacks site-content-v1 (config rules' body limit). */
+const ContentLock = React.createContext(false);
 /** The label of the field an issue of `row` points at. */
 function issueField(row: RuleDto, path: readonly PropertyKey[]): string {
   const [head, field] = path;
@@ -233,17 +237,20 @@ export function RulesTab({ siteId, originGroups }: { siteId?: string; originGrou
     rules: RuleDto[],
     availability?: FeatureAvailability,
     availabilityV3?: FeatureAvailability,
+    availabilityContent?: FeatureAvailability,
   ) => (
-    <RulesEditor
-      key={JSON.stringify(rules)}
-      initial={rules}
-      siteId={siteId}
-      originGroups={siteId ? (originGroups ?? []) : undefined}
-      availability={availability}
-      availabilityV3={availabilityV3}
-      locked={availability?.available === false}
-      lockedV3={availabilityV3?.available === false}
-    />
+    <ContentLock.Provider value={availabilityContent?.available === false}>
+      <RulesEditor
+        key={JSON.stringify(rules)}
+        initial={rules}
+        siteId={siteId}
+        originGroups={siteId ? (originGroups ?? []) : undefined}
+        availability={availability}
+        availabilityV3={availabilityV3}
+        locked={availability?.available === false}
+        lockedV3={availabilityV3?.available === false}
+      />
+    </ContentLock.Provider>
   );
   // Platform rules have no site features to wait for.
   return (
@@ -251,7 +258,7 @@ export function RulesTab({ siteId, originGroups }: { siteId?: string; originGrou
       {(rules) =>
         siteId ? (
           <QueryView query={features}>
-            {({ rulesV2, rulesV3 }) => editor(rules, rulesV2, rulesV3)}
+            {({ rulesV2, rulesV3, siteContent }) => editor(rules, rulesV2, rulesV3, siteContent)}
           </QueryView>
         ) : (
           editor(rules)
@@ -1280,6 +1287,8 @@ function ConfigFields({
   onChange: (action: ConfigAction) => void;
 }) {
   const set = (change: Partial<ConfigAction>) => onChange({ ...a, ...change });
+  // The body limit waits until the cluster's nodes run site-content-v1.
+  const contentLocked = React.useContext(ContentLock);
   const triState = (key: ConfigSwitch, v2: boolean) => {
     // Turning gzip back on is new with rules-v2 as well.
     const noOn = locked && (v2 || key === "gzip") && a[key] !== true;
@@ -1352,6 +1361,17 @@ function ConfigFields({
             disabled={locked && a.logSampleRate === undefined}
             onChange={(logSampleRate) => set({ logSampleRate })}
             testId="rule-config-logSampleRate"
+          />
+          <OptionalNumber
+            id={`body-limit-${id}`}
+            label={m.rules_request_body_limit()}
+            value={a.requestBodyLimit}
+            scale={1024 * 1024}
+            min={0}
+            max={10240}
+            disabled={contentLocked && a.requestBodyLimit === undefined}
+            onChange={(requestBodyLimit) => set({ requestBodyLimit })}
+            testId="rule-config-requestBodyLimit"
           />
         </>
       ) : null}

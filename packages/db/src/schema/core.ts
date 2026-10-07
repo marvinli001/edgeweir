@@ -32,10 +32,31 @@ const updatedAt = () =>
     .notNull();
 
 /** A cluster is a set of edge nodes that share one NodeConfig revision stream. */
+/**
+ * How a cluster's HTTP(S) listeners find the client address (null:
+ * direct). mode proxy_protocol | header; trustedCidrs and header for header,
+ * dropForwardedFor for direct.
+ */
+export interface ClusterClientIp {
+  mode: "direct" | "proxy_protocol" | "header";
+  trustedCidrs: string[];
+  header: string;
+  dropForwardedFor: boolean;
+}
+
 export const cluster = pgTable("cluster", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
   description: text("description").notNull().default(""),
+  /** HTTP and HTTPS ports the nodes listen on besides 80 and 443, sorted. */
+  extraHttpPorts: integer("extra_http_ports").array().notNull().default(sql`'{}'::integer[]`),
+  extraHttpsPorts: integer("extra_https_ports").array().notNull().default(sql`'{}'::integer[]`),
+  /** The client address setting; null is direct. */
+  clientIp: jsonb("client_ip").$type<ClusterClientIp>(),
+  /** Cache zone size of every node in GiB (1-65536); node.cache_max_size_gb overrides it. */
+  cacheMaxSizeGb: integer("cache_max_size_gb").notNull().default(10),
+  /** Cached objects not requested for this many days are removed (1-90). */
+  cacheInactiveDays: integer("cache_inactive_days").notNull().default(7),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -76,6 +97,12 @@ export interface NodeBanStatus {
   unapplied: number;
   kernelEntries: number;
   autoEvicted: string;
+  reportedAt: string;
+}
+
+/** Disk usage of a node's cache zones as last measured (ReportStatusRequest.cache_usage). */
+export interface NodeCacheUsage {
+  zones: { name: string; usedBytes: number; maxBytes: number; measuredAt: string }[];
   reportedAt: string;
 }
 
@@ -154,6 +181,10 @@ export const node = pgTable(
     metrics: jsonb("metrics").$type<NodeMetricsData>(),
     /** The node also probes the others from its node group's region (ReportStatusResponse.probe). */
     probeEnabled: boolean("probe_enabled").notNull().default(false),
+    /** Cache zone size of this node in GiB; null uses the cluster's (cache-zone-v1). */
+    cacheMaxSizeGb: integer("cache_max_size_gb"),
+    /** Cache usage of the last heartbeat that carried one; null until then. */
+    cacheUsage: jsonb("cache_usage").$type<NodeCacheUsage>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -233,10 +264,52 @@ export const site = pgTable(
       onDelete: "restrict",
     }),
     tlsSettings: jsonb("tls_settings").$type<Record<string, unknown>>().notNull().default({}),
+    /** Listener ports the site is served on (HTTPS ones with a certificate), sorted. */
+    httpPorts: integer("http_ports").array().notNull().default(sql`'{80}'::integer[]`),
+    httpsPorts: integer("https_ports").array().notNull().default(sql`'{443}'::integer[]`),
+    /** Send no X-Cache header to clients. */
+    hideXCache: boolean("hide_x_cache").notNull().default(false),
+    /** The PURGE method (its key: site_secret kind purge_key). */
+    purgeMethod: boolean("purge_method").notNull().default(false),
+    /** Maintenance mode (contract `maintenance`), kept while off; `{}` means the defaults. */
+    maintenance: jsonb("maintenance").$type<Record<string, unknown>>().notNull().default({}),
+    /** When the maintenance settings were last saved; null until then. */
+    maintenanceUpdatedAt: timestamp("maintenance_updated_at", { withTimezone: true }),
+    /** Charset of text responses (contract `charsetSettings`); `{}` means off. */
+    charset: jsonb("charset").$type<Record<string, unknown>>().notNull().default({}),
+    /** Largest request body by Content-Length in bytes; 0 means no limit. */
+    requestBodyLimit: bigint("request_body_limit", { mode: "number" })
+      .notNull()
+      .default(104_857_600),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [index("site_cluster_idx").on(t.clusterId)],
+);
+
+/**
+ * Secrets of a site other than origin credentials: the key of the PURGE
+ * method (kind purge_key). Envelope-encrypted with the master key (purpose
+ * site_secret.secret_envelope, bound to the row); only nodes of the site's
+ * cluster receive it, over the mTLS node channel (GetOriginCredentials).
+ */
+export const siteSecret = pgTable(
+  "site_secret",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    siteId: uuid("site_id")
+      .notNull()
+      .references(() => site.id, { onDelete: "cascade" }),
+    /** purge_key */
+    kind: text("kind").notNull(),
+    /** JSON envelope of the secret. Never plaintext. */
+    secretEnvelope: text("secret_envelope").notNull(),
+    /** Bumped when the secret changes; part of the compiled configuration. */
+    version: integer("version").notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("site_secret_site_kind_uq").on(t.siteId, t.kind)],
 );
 
 /** Sites a user starred; they lead the site list on the console home. */
@@ -311,6 +384,10 @@ export const originPool = pgTable(
       .$type<Record<string, unknown>>()
       .notNull()
       .default({}),
+    /** Origins a request tries (1-5). */
+    tries: integer("tries").notNull().default(3),
+    /** Retry after 502, 503 and 504 responses of the origin. */
+    statusRetry: boolean("status_retry").notNull().default(true),
     createdAt: createdAt(),
   },
   (t) => [index("origin_pool_site_idx").on(t.siteId)],
@@ -402,6 +479,8 @@ export const cacheRule = pgTable(
     cacheAuthorized: boolean("cache_authorized").notNull().default(false),
     /** Cache-Control max-age towards clients; 0 keeps the origin's header. */
     browserTtlSeconds: integer("browser_ttl_seconds").notNull().default(0),
+    /** Cache responses with Set-Cookie (only the fetched response carries the cookies). */
+    cacheSetCookie: boolean("cache_set_cookie").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [index("cache_rule_site_idx").on(t.siteId)],
@@ -435,7 +514,7 @@ export const configRevision = pgTable(
 );
 
 /**
- * Configuration canary of a cluster: the policy (set in the admin area) and
+ * Configuration canary of a cluster: the policy (set on the clusters page) and
  * the current rollout. With the policy on, nodes in canary node groups get
  * `candidate_revision` while the others stay on `stable_revision`; without
  * it (or without a row) every node gets the latest revision.
@@ -700,7 +779,10 @@ export const cacheTask = pgTable(
       onDelete: "set null",
     }),
     createdByName: text("created_by_name").notNull().default(""),
-    /** user | recovery (a whole-site purge for purges a node missed) */
+    /**
+     * user | recovery (a whole-site purge for purges a node missed) |
+     * purge_method (a PURGE request a node accepted; createdByName is the node)
+     */
     source: text("source").notNull().default("user"),
     createdAt: createdAt(),
     /** Set once every node reported a result (or the task expired). */

@@ -1,5 +1,7 @@
 import {
   type CertificateDto,
+  certificateUnloadable,
+  HTTPS_REDIRECT_STATUSES,
   type HttpsCheck,
   type Site,
   type TlsSettings,
@@ -13,8 +15,10 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DnsCredentialDialog } from "@/components/dns/credential-dialog";
 import { FormSelect } from "@/components/form-select";
+import { SafetyNote } from "@/components/safety-note";
 import { COMPRESSION_KEYS, compressionOf } from "@/components/site/compression-card";
 import { NumberField, SwitchField } from "@/components/site/fields";
+import { CheckboxList } from "@/components/site/ports-card";
 import { SaveBar } from "@/components/site/save-site";
 import { combineQueries, ErrorState, QueryView } from "@/components/states";
 import { Button } from "@/components/ui/button";
@@ -36,8 +40,10 @@ const POLL = 3000;
 const busy = (cert: CertificateDto | undefined) =>
   cert?.status === "pending" || cert?.status === "issuing";
 /** Issued and not expired. */
-const usable = (cert: CertificateDto) =>
+const issuedValid = (cert: CertificateDto) =>
   !!cert.fingerprint && !!cert.notAfter && Date.parse(cert.notAfter) > Date.now();
+/** Issued, not expired, and loadable by nodes: one a site can be given. */
+const usable = (cert: CertificateDto) => issuedValid(cert) && !certificateUnloadable(cert);
 
 /**
  * A site's HTTPS: the settings while it has a certificate; the certificate
@@ -75,7 +81,7 @@ export function HttpsTab({ site }: { site: Site }) {
   return (
     <QueryView query={combineQueries(policy, certificates)}>
       {([saved, list]) =>
-        bound && (usable(bound) || bound.source === "acme") ? (
+        bound && (issuedValid(bound) || bound.source === "acme") ? (
           <div className="grid gap-4">
             {bound.status === "ready" ? null : <CertificateState cert={bound} />}
             <HttpsEditor
@@ -101,6 +107,8 @@ function CertificateState({ cert, actions }: { cert: CertificateDto; actions?: R
   const client = useQueryClient();
   const renew = useMutation(orpc.certificates.renew.mutationOptions());
   const failed = cert.status === "error";
+  // Only an ACME certificate is issued again; an upload is replaced.
+  const retry = cert.source === "acme";
   return (
     <div
       className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl sunk-well px-4 py-3 text-sm animate-enter"
@@ -125,22 +133,24 @@ function CertificateState({ cert, actions }: { cert: CertificateDto; actions?: R
       {failed ? (
         <div className="flex gap-2">
           {actions}
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={renew.isPending}
-            onClick={async () => {
-              try {
-                await renew.mutateAsync({ id: cert.id });
-                await client.invalidateQueries();
-              } catch (e) {
-                toast.error(errorMessage(e));
-              }
-            }}
-          >
-            {renew.isPending ? <Spinner /> : null}
-            {m.common_retry()}
-          </Button>
+          {retry ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={renew.isPending}
+              onClick={async () => {
+                try {
+                  await renew.mutateAsync({ id: cert.id });
+                  await client.invalidateQueries();
+                } catch (e) {
+                  toast.error(errorMessage(e));
+                }
+              }}
+            >
+              {renew.isPending ? <Spinner /> : null}
+              {m.common_retry()}
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -456,6 +466,8 @@ function HttpsEditor({
   const [pending, setPending] = React.useState(false);
   const mutation = useMutation(orpc.https.update.mutationOptions());
   const client = useQueryClient();
+  const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
+  const redirectAvailable = features.data?.edgePorts.available ?? true;
   const flags = [
     ["forceHttps", m.cert_force_https()],
     ["http2", m.cert_http2()],
@@ -554,6 +566,60 @@ function HttpsEditor({
               onCheckedChange={(value) => setSettings({ ...settings, [key]: value })}
             />
           ))}
+          {settings.forceHttps ? (
+            <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2" data-testid="https-redirect">
+              <FormSelect
+                id="redirectStatus"
+                label={m.https_redirect_status()}
+                value={String(settings.redirectStatus)}
+                disabled={!redirectAvailable}
+                options={HTTPS_REDIRECT_STATUSES.map((status) => ({
+                  value: String(status),
+                  label: String(status),
+                }))}
+                onChange={(value) =>
+                  setSettings({
+                    ...settings,
+                    redirectStatus: Number(value) as TlsSettings["redirectStatus"],
+                  })
+                }
+              />
+              <FormSelect
+                id="redirectPort"
+                label={m.https_redirect_port()}
+                value={String(settings.redirectPort)}
+                disabled={!redirectAvailable}
+                options={[...new Set([443, ...site.ports.https])].map((port) => ({
+                  value: String(port),
+                  label: String(port),
+                }))}
+                onChange={(value) => setSettings({ ...settings, redirectPort: Number(value) })}
+              />
+              {site.domains.length > 1 ? (
+                <div className="sm:col-span-2">
+                  <CheckboxList
+                    id="redirect-excluded"
+                    legend={m.https_redirect_excluded()}
+                    options={site.domains.map((domain) => ({ value: domain, label: domain }))}
+                    value={settings.redirectExcludedDomains}
+                    disabled={!redirectAvailable}
+                    onChange={(redirectExcludedDomains) =>
+                      setSettings({
+                        ...settings,
+                        redirectExcludedDomains: [...redirectExcludedDomains].sort(),
+                      })
+                    }
+                    testId="https-redirect-excluded"
+                  />
+                </div>
+              ) : null}
+              {redirectAvailable ? null : (
+                <SafetyNote className="sm:col-span-2" data-testid="https-redirect-unavailable">
+                  {m.feature_unavailable_nodes()}
+                </SafetyNote>
+              )}
+            </div>
+          ) : null}
         </CardContent>
         <SaveBar
           dirty={JSON.stringify(httpsOf(settings)) !== JSON.stringify(httpsOf(initial))}

@@ -1,7 +1,8 @@
 import { oc } from "@orpc/contract";
 import * as z from "zod";
 import { type DnsProviderId, dnsProviderIds } from "./dns-providers";
-import { domainName, uuid } from "./schemas";
+import { HTTPS_REDIRECT_STATUSES, MAX_REDIRECT_EXCLUDED_DOMAINS } from "./edge";
+import { domainName, port, uuid } from "./schemas";
 
 /** A MIME type compression applies to, without parameters. */
 export const MIME_TYPE_RE = /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/;
@@ -60,7 +61,29 @@ export const tlsSettings = z
     gzip: z.boolean().default(true),
     gzipMinLength: minLength,
     gzipTypes: compressionTypes.default(() => [...DEFAULT_COMPRESSION_TYPES]),
+    /** gzip level 1-9; 0 keeps the nodes' default (1). Other values need site-content-v1. */
+    gzipLevel: z.number().int().min(0).max(9).default(0),
+    /**
+     * The largest response, by its known length, that any coding compresses;
+     * 0: no limit (site-content-v1 otherwise). Responses of unknown length
+     * are compressed.
+     */
+    compressMaxLength: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),
     ocspStapling: z.boolean().default(false),
+    /**
+     * The HTTPS redirect of forceHttps and of config rules' forceHttps:
+     * its status, the port of the target URL (443 or an HTTPS port of the
+     * site, HTTPS_REDIRECT_PORT_INVALID) and the site's domains forceHttps
+     * leaves alone (HTTPS_REDIRECT_DOMAIN_INVALID; a config rule still
+     * redirects them).
+     */
+    redirectStatus: z.literal(HTTPS_REDIRECT_STATUSES).default(301),
+    redirectPort: port.default(443),
+    redirectExcludedDomains: z
+      .array(domainName)
+      .max(MAX_REDIRECT_EXCLUDED_DOMAINS)
+      .default([])
+      .transform((names) => [...new Set(names)].sort()),
   })
   .refine((s) => (!s.forceHttps && s.hstsMaxAge === 0) || s.certificateId !== null, {
     message: "HTTPS redirect and HSTS require a certificate",
@@ -119,6 +142,13 @@ export const certificateErrorDefs = {
   http01_dns_not_pointing: { params: [] },
   issued_names_mismatch: { params: [] },
   issued_certificate_invalid: { params: [] },
+  /**
+   * An uploaded certificate stored before EC keys with explicit curve
+   * parameters were refused, which nodes cannot load: a certificate of its
+   * chain, or its private key (unloadableCertificateErrors).
+   */
+  certificate_chain_explicit_curve: { params: [] },
+  certificate_key_explicit_curve: { params: [] },
 } as const satisfies Record<string, { params: readonly string[] }>;
 
 export type CertificateErrorCode = keyof typeof certificateErrorDefs;
@@ -126,6 +156,17 @@ export type CertificateErrorCode = keyof typeof certificateErrorDefs;
 export function isCertificateErrorCode(code: unknown): code is CertificateErrorCode {
   return typeof code === "string" && Object.hasOwn(certificateErrorDefs, code);
 }
+
+/** `lastError` codes of a stored certificate nodes cannot load; it cannot be bound. */
+export const unloadableCertificateErrors: readonly CertificateErrorCode[] = [
+  "certificate_chain_explicit_curve",
+  "certificate_key_explicit_curve",
+];
+
+/** Whether a stored certificate is marked as one nodes cannot load. */
+export const certificateUnloadable = (cert: { status: string; lastError: string }) =>
+  cert.status === "error" &&
+  (unloadableCertificateErrors as readonly string[]).includes(cert.lastError);
 
 export const certificateDto = z.object({
   id: uuid,

@@ -1,0 +1,205 @@
+{
+  "description": "proto v0.24.0 NodeConfig content_hash test vector: one site with every site-content-v1 setting (PURGE key reference, hide_x_cache, maintenance with unsorted allowed CIDRs and path prefixes with duplicates (two non-ASCII prefixes that UTF-16 and UTF-8 byte order sort differently), charset, request_body_limit 0, gzip_level and compress_max_length, origin tries and status_retry_disabled, a cache rule with cache_set_cookie, an EXCLUDE cache key with a prefix pattern, error pages of the 4xx and 5xx classes, a redirect page and a page with a replacement status, unsorted, and a config rule with a body limit), a platform config rule with request_body_limit 0, and a cache zone with unsorted node_sizes (cache-zone-v1); required_features reversed with a duplicate. canonical_hex and content_hash come from protobuf-es.",
+  "config": {
+    "revision": "12",
+    "contentHash": "e61d5392e8298b5b74e12c6c9ebb2cdea7abee650d6b93604537881c0dc14f01",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "20480",
+        "keysZoneMb": 128,
+        "inactiveSeconds": 1209600,
+        "nodeSizes": [
+          {
+            "nodeId": "node-b",
+            "maxSizeMb": "2048",
+            "keysZoneMb": 16
+          },
+          {
+            "nodeId": "node-a",
+            "maxSizeMb": "1048576",
+            "keysZoneMb": 512
+          }
+        ]
+      }
+    ],
+    "sites": [
+      {
+        "id": "s1",
+        "name": "s1",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "s1.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-s1",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o1",
+              "address": "origin.example.com",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ],
+          "healthCheck": {
+            "maxFails": 3,
+            "recoverySeconds": 30
+          },
+          "connection": {
+            "connectTimeoutMs": 10000,
+            "sendTimeoutMs": 60000,
+            "readTimeoutMs": 60000,
+            "keepaliveIdleSeconds": 60,
+            "keepaliveMaxRequests": 1000
+          },
+          "tries": 5,
+          "statusRetryDisabled": true
+        },
+        "cacheRules": [
+          {
+            "id": "r2",
+            "priority": 5,
+            "match": {
+              "pathPrefixes": ["/account/"]
+            },
+            "action": "CACHE_ACTION_CACHE",
+            "edgeTtlSeconds": 30,
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_RESPECT",
+            "cacheSetCookie": true
+          },
+          {
+            "id": "r1",
+            "priority": 10,
+            "match": {
+              "pathPrefixes": ["/"]
+            },
+            "action": "CACHE_ACTION_CACHE",
+            "edgeTtlSeconds": 60,
+            "originCacheControl": "ORIGIN_CACHE_CONTROL_OVERRIDE"
+          }
+        ],
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "cacheKey": {
+          "query": "CACHE_KEY_QUERY_EXCLUDE",
+          "queryParams": ["fbclid", "gclid", "utm_*"],
+          "sortQuery": true
+        },
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/css"],
+          "cipherProfile": "modern",
+          "gzipLevel": 6,
+          "compressMaxLength": "8388608"
+        },
+        "rules": [
+          {
+            "id": "big-uploads",
+            "phase": "config",
+            "expression": {
+              "op": "call",
+              "field": "starts_with",
+              "valueType": "boolean",
+              "children": [
+                {
+                  "op": "field",
+                  "field": "http.request.uri.path",
+                  "valueType": "string"
+                },
+                {
+                  "op": "const",
+                  "valueType": "string",
+                  "value": "/upload/"
+                }
+              ]
+            },
+            "action": {
+              "kind": "config",
+              "requestBodyLimit": "1073741824"
+            }
+          }
+        ],
+        "errorPages": {
+          "pages": [
+            {
+              "status": 404,
+              "template": "<p>没有这个页面</p>",
+              "responseStatus": 200
+            },
+            {
+              "status": 403,
+              "template": "<p>denied</p>"
+            },
+            {
+              "status": 5,
+              "redirectUrl": "https://status.example.com/?s={{status}}&id={{request_id}}"
+            },
+            {
+              "status": 4,
+              "template": "<p>{{status}}</p>"
+            }
+          ],
+          "interceptOriginErrors": true
+        },
+        "purge": {
+          "credentialId": "purge-key-1",
+          "credentialVersion": "2"
+        },
+        "hideXCache": true,
+        "maintenance": {
+          "template": "<h1>{{status}}</h1><p>{{request_id}} 维护中</p>",
+          "retryAfterSeconds": 600,
+          "allowedCidrs": ["2001:db8::/32", "192.0.2.0/24", "2001:db8::/32"],
+          "allowedPathPrefixes": ["/status", "/health", "/status", "/😀", "/！"]
+        },
+        "charset": {
+          "name": "gbk",
+          "force": true,
+          "uppercase": true
+        },
+        "requestBodyLimit": "0"
+      }
+    ],
+    "requiredFeatures": [
+      "tls-v1",
+      "site-content-v1",
+      "rules-v2",
+      "rules-v1",
+      "error-pages-v1",
+      "cache-zone-v1",
+      "site-content-v1"
+    ],
+    "platformRules": [
+      {
+        "id": "p-limit",
+        "phase": "config",
+        "expression": {
+          "op": "eq",
+          "field": "http.request.method",
+          "valueType": "string",
+          "value": "PUT"
+        },
+        "action": {
+          "kind": "config",
+          "requestBodyLimit": "0"
+        }
+      }
+    ]
+  },
+  "canonical_hex": "1a0263312204085010012a340a0764656661756c741080a0011880012080ea492a0f0a066e6f64652d61108080401880042a0d0a066e6f64652d6210801018103293050a02733112027331180122090a0773312e746573742a440a04702d733110011a1e0a026f3112126f726967696e2e6578616d706c652e636f6d1850200128012a040803101e321008904e10e0d40318e0d403283c30e80758056001321b0a02723210051a0b0a092f6163636f756e742f2001281e3002580132110a027231100a1a030a012f2001283c30013a0764656661756c744001521a080412066662636c6964120567636c6964120575746d5f2a18016a272a03312e32300138014080024a08746578742f6373735a066d6f6465726ec00106c801808080047287010a0b6269672d75706c6f6164731206636f6e6669671a5f0a0463616c6c120b7374617274735f776974681a07626f6f6c65616e32260a056669656c641215687474702e726571756573742e7572692e706174681a06737472696e6732190a05636f6e73741a06737472696e6722082f75706c6f61642f220f0a06636f6e666967880280808080049a0190010a15080412113c703e7b7b7374617475737d7d3c2f703e0a3e08051a3a68747470733a2f2f7374617475732e6578616d706c652e636f6d2f3f733d7b7b7374617475737d7d2669643d7b7b726571756573745f69647d7d0a12089303120d3c703e64656e6965643c2f703e0a2108940312193c703ee6b2a1e69c89e8bf99e4b8aae9a1b5e99da23c2f703e20c8011001b2010f0a0b70757267652d6b65792d311002b80101c201730a323c68313e7b7b7374617475737d7d3c2f68313e3c703e7b7b726571756573745f69647d7d20e7bbb4e68aa4e4b8ad3c2f703e10d8041a0c3139322e302e322e302f32341a0d323030313a6462383a3a2f333222072f6865616c746822072f73746174757322042fefbc8122052ff09f9880ca01090a0367626b10011801d001004a0d63616368652d7a6f6e652d76314a0e6572726f722d70616765732d76314a0872756c65732d76314a0872756c65732d76324a0f736974652d636f6e74656e742d76314a06746c732d763162460a07702d6c696d69741206636f6e6669671a260a0265711213687474702e726571756573742e6d6574686f641a06737472696e672203505554220b0a06636f6e666967880200",
+  "content_hash": "e61d5392e8298b5b74e12c6c9ebb2cdea7abee650d6b93604537881c0dc14f01"
+}

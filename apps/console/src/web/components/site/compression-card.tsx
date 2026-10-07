@@ -43,12 +43,17 @@ const algorithmLabel = (algorithm: Algorithm) =>
   ({ gzip: m.cert_gzip, brotli: m.compression_brotli, zstd: m.compression_zstd })[algorithm]();
 
 /** The settings fields the compression card owns; the HTTPS tab owns the others. */
-export const COMPRESSION_KEYS = Object.values(ALGORITHMS).flatMap((fields) => [
-  fields.on,
-  fields.min,
-  fields.types,
-  ...(fields.level ? [fields.level.key] : []),
-]) as (keyof TlsSettings)[];
+export const COMPRESSION_KEYS = [
+  ...Object.values(ALGORITHMS).flatMap((fields) => [
+    fields.on,
+    fields.min,
+    fields.types,
+    ...(fields.level ? [fields.level.key] : []),
+  ]),
+  // site-content-v1: gzip's level (0: the nodes' default) and the largest compressed response.
+  "gzipLevel",
+  "compressMaxLength",
+] as (keyof TlsSettings)[];
 
 /** The compression fields of `settings`. */
 export const compressionOf = (settings: TlsSettings) =>
@@ -77,13 +82,14 @@ export function CompressionCard({ site }: { site: Site }) {
   const features = useQuery(orpc.sites.features.queryOptions({ input: { id: site.id } }));
   return (
     <QueryView query={combineQueries(policy, features)}>
-      {([saved, { brotli, zstd }]) => (
+      {([saved, { brotli, zstd, siteContent }]) => (
         <CompressionEditor
           // Keyed by its own fields: saving HTTPS settings keeps unsaved edits here.
           key={JSON.stringify(compressionOf(saved))}
           siteId={site.id}
           server={saved}
           availability={{ gzip: { available: true, reason: null }, brotli, zstd }}
+          content={siteContent}
         />
       )}
     </QueryView>
@@ -94,10 +100,13 @@ function CompressionEditor({
   siteId,
   server,
   availability,
+  content,
 }: {
   siteId: string;
   server: TlsSettings;
   availability: Record<Algorithm, FeatureAvailability>;
+  /** gzip's level and the largest compressed response (site-content-v1). */
+  content: FeatureAvailability;
 }) {
   const [settings, setSettings] = React.useState(server);
   const [error, setError] = React.useState<string | null>(null);
@@ -145,9 +154,25 @@ function CompressionEditor({
               settings={settings}
               saved={server}
               availability={availability[algorithm]}
+              content={content}
               onChange={setSettings}
             />
           ))}
+          <div className="w-full sm:w-64">
+            <NumberField
+              id="compressMaxLength"
+              label={m.compression_max_length()}
+              value={settings.compressMaxLength ? String(settings.compressMaxLength) : ""}
+              min={0}
+              step={1}
+              placeholder={m.compression_no_limit()}
+              disabled={!content.available && !server.compressMaxLength}
+              testId="compression-max-length"
+              onChange={(value) =>
+                setSettings({ ...settings, compressMaxLength: value.trim() ? Number(value) : 0 })
+              }
+            />
+          </div>
         </CardContent>
         <SaveBar dirty={dirty} pending={pending} error={error} testId="compression-save" />
       </form>
@@ -164,12 +189,14 @@ function CompressionGroup({
   settings,
   saved,
   availability,
+  content,
   onChange,
 }: {
   algorithm: Algorithm;
   settings: TlsSettings;
   saved: TlsSettings;
   availability: FeatureAvailability;
+  content: FeatureAvailability;
   onChange: (next: TlsSettings) => void;
 }) {
   const fields = ALGORITHMS[algorithm];
@@ -205,8 +232,24 @@ function CompressionGroup({
               fields.level && onChange({ ...settings, [fields.level.key]: Number(value) })
             }
           />
-        ) : null}
-        <div className={fields.level ? undefined : "lg:col-start-3"}>
+        ) : (
+          // gzip: empty keeps the nodes' default level (1); 1-9 need site-content-v1.
+          <NumberField
+            id="gzipLevel"
+            label={m.compression_level()}
+            value={settings.gzipLevel ? String(settings.gzipLevel) : ""}
+            min={1}
+            max={9}
+            step={1}
+            placeholder={m.compression_default()}
+            disabled={!content.available && !saved.gzipLevel}
+            testId="https-gzip-level"
+            onChange={(value) =>
+              onChange({ ...settings, gzipLevel: value.trim() ? Number(value) : 0 })
+            }
+          />
+        )}
+        <div>
           <NumberField
             id={id("Min")}
             label={m.cert_gzip_min()}

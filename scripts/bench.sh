@@ -12,9 +12,22 @@
 #              Link lines added with append, X-Cache-Status from
 #              http.response.cache_status and a User-Agent wildcard; checks that
 #              the warmed response carries X-Cache-Status: HIT and two Link lines.
+#   proxy      cache HITs of proxy-bench.g9.test on the edge node of cluster
+#              g9-proxy through g9-lb, which sends PROXY protocol v2 (the
+#              cluster's client IP: PROXY protocol).
+#   proxy-plain the same node through the same balancer hop without the header
+#              (the cluster's client IP: direct), the baseline of proxy.
+#   charset    cache HITs of a site that adds a charset (site-content-v1: gbk,
+#              forced over the origin's utf-8); checks that the warmed response
+#              carries charset=gbk.
 # pass and challenge default to ua-bench.test, which scripts/e2e-g2.mjs leaves
 # behind (whoami, cache rule on /, Under Attack js); headers to
-# hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind.
+# hdr-bench.g8.test, which scripts/e2e-g8.mjs leaves behind; charset to
+# charset-bench.g15.test, which scripts/e2e-g15.mjs leaves behind; proxy and
+# proxy-plain to proxy-bench.g9.test, which scripts/e2e-g9.mjs sets up. The
+# full e2e removes it (and at its end the default cluster's node, which
+# e2e-g9.mjs needs): run e2e-g9.mjs on its own on a stack whose full e2e
+# stopped before the node lifecycle step, then bench.
 set -euo pipefail
 OHA_BIN="${OHA_BIN:-oha}"
 command -v "$OHA_BIN" >/dev/null || { echo 'Install oha or set OHA_BIN to its verified binary.' >&2; exit 1; }
@@ -23,9 +36,12 @@ case "$BENCH_SCENARIO" in
   cache) DEFAULT_HOST=demo.test ;;
   pass | challenge) DEFAULT_HOST=ua-bench.test ;;
   headers) DEFAULT_HOST=hdr-bench.g8.test ;;
-  *) echo "BENCH_SCENARIO must be cache, pass, challenge or headers, not $BENCH_SCENARIO" >&2; exit 2 ;;
+  proxy) DEFAULT_HOST=proxy-bench.g9.test DEFAULT_URL="http://127.0.0.1:${E2E_G9_LB_PORT:-18990}/bench-cache.txt" ;;
+  proxy-plain) DEFAULT_HOST=proxy-bench.g9.test DEFAULT_URL="http://127.0.0.1:${E2E_G9_LB_PLAIN_PORT:-18991}/bench-cache.txt" ;;
+  charset) DEFAULT_HOST=charset-bench.g15.test ;;
+  *) echo "BENCH_SCENARIO must be cache, pass, challenge, headers, proxy, proxy-plain or charset, not $BENCH_SCENARIO" >&2; exit 2 ;;
 esac
-BENCH_URL="${BENCH_URL:-http://127.0.0.1:${E2E_NODE_PORT:-18080}/bench-cache.txt}"
+BENCH_URL="${BENCH_URL:-${DEFAULT_URL:-http://127.0.0.1:${E2E_NODE_PORT:-18080}/bench-cache.txt}}"
 BENCH_HOST="${BENCH_HOST:-$DEFAULT_HOST}"
 BENCH_USER_AGENT="${BENCH_USER_AGENT:-edgeweir-bench}"
 BENCH_REQUESTS="${BENCH_REQUESTS:-100000}"
@@ -106,9 +122,18 @@ if [[ "$BENCH_SCENARIO" != challenge ]]; then
       exit 1
     fi
   fi
+  if [[ "$BENCH_SCENARIO" == charset ]] &&
+    ! printf '%s\n' "$HEADERS" | tr -d '\r' | grep -qi '^content-type: .*; charset=gbk$'; then
+    echo "Refusing to benchmark: $BENCH_HOST does not add charset=gbk." >&2
+    exit 1
+  fi
 fi
 "$OHA_BIN" --no-tui --output-format json -n "$BENCH_REQUESTS" -c "$BENCH_CONCURRENCY" -t 10s "${OHA_HEADERS[@]}" "$BENCH_URL" > "$BENCH_OUTPUT"
 NODE_CONTAINER="$(docker compose -f compose.e2e.yml ps -q node)"
+# The proxy scenarios measure the edge node of cluster g9-proxy.
+if [[ "$BENCH_SCENARIO" == proxy* ]]; then
+  NODE_CONTAINER="$(docker inspect -f '{{.Id}}' "${COMPOSE_PROJECT_NAME:-edgeweir-e2e}-g9-edge")"
+fi
 MEMORY="$(docker stats --no-stream --format '{{.MemUsage}}' "$NODE_CONTAINER")"
 RSS_KIB="$(docker exec "$NODE_CONTAINER" sh -c 'awk "/^VmRSS:/ { sum += \$2 } END { print sum }" /proc/[0-9]*/status 2>/dev/null')"
 export BENCH_OUTPUT BENCH_BASELINE="${BENCH_BASELINE:-}" MEMORY RSS_KIB BENCH_REQUESTS BENCH_CONCURRENCY BENCH_SCENARIO EXPECT_STATUS

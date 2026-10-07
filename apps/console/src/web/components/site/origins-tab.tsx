@@ -6,6 +6,7 @@ import type {
   OriginSettings,
   Site,
 } from "@edgeweir/contract";
+import { S3_PRESETS } from "@edgeweir/contract";
 import { MAX_HOST_HEADER_LENGTH, validHostHeader } from "@edgeweir/rule-engine";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -13,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as React from "react";
 import { FormSelect, OptionSelect } from "@/components/form-select";
 import { SafetyNote } from "@/components/safety-note";
+import { BodyLimitCard } from "@/components/site/content-cards";
 import { NumberField, SettingsGroup, SwitchField } from "@/components/site/fields";
 import { OriginHealthBadge, OriginHealthError } from "@/components/site/origin-health";
 import { OriginTopologyCard } from "@/components/site/origin-topology-card";
@@ -41,6 +43,7 @@ export function OriginsTab({ site }: { site: Site }) {
       {/* Keyed by their own data, so saving one card keeps unsaved edits in the other. */}
       <OriginsCard key={JSON.stringify(site.origins)} site={site} />
       <PoolSettingsCard key={JSON.stringify(site.originSettings)} site={site} />
+      <BodyLimitCard key={site.contentSettings.requestBodyLimit} site={site} />
     </div>
   );
 }
@@ -86,6 +89,18 @@ const newOrigin = (): OriginDraft => ({
 });
 
 const defaultPort = (scheme: Scheme) => (scheme === "https" ? "443" : "80");
+
+const CUSTOM_PRESET = "custom";
+const presetLabel: Record<(typeof S3_PRESETS)[number]["id"], () => string> = {
+  aws: m.s3_preset_aws,
+  r2: m.s3_preset_r2,
+  b2: m.s3_preset_b2,
+  minio: m.s3_preset_minio,
+  oss: m.s3_preset_oss,
+  cos: m.s3_preset_cos,
+  bos: m.s3_preset_bos,
+  kodo: m.s3_preset_kodo,
+};
 
 /** A Host header nodes refuse: they skip the origin. Empty follows the request. */
 const invalidHostHeader = (value: string) => {
@@ -275,6 +290,12 @@ function OriginRow({
 }) {
   const id = (name: string) => `origin-${name}-${row.key}`;
   const https = row.scheme === "https";
+  // The form only: the preset fills the address and region once.
+  const [preset, setPreset] = React.useState<string>(CUSTOM_PRESET);
+  const presetOptions = [
+    { value: CUSTOM_PRESET, label: m.site_origin_s3_preset_custom() },
+    ...S3_PRESETS.map((p) => ({ value: p.id, label: presetLabel[p.id]() })),
+  ];
   const hostInvalid = invalidHostHeader(row.hostHeader);
   // Saved before the console checked Host headers: nodes skip this origin today.
   const hostSkipped = hostInvalid && row.hostHeader === savedHostHeader;
@@ -434,6 +455,25 @@ function OriginRow({
           className="grid gap-3 border-l-2 border-border pl-3 animate-enter sm:grid-cols-2 lg:grid-cols-4"
           data-testid="origin-s3-fields"
         >
+          <FormSelect
+            id={id("preset")}
+            label={m.site_origin_s3_preset()}
+            value={preset}
+            options={presetOptions}
+            onChange={(value) => {
+              setPreset(value);
+              const chosen = S3_PRESETS.find((p) => p.id === value);
+              // A preset fills the endpoint and region format; HTTPS for the services.
+              if (chosen)
+                onChange({
+                  address: chosen.address,
+                  region: chosen.region,
+                  ...(chosen.bucketInHost ? { bucket: "" } : {}),
+                  ...(chosen.id === "minio" ? {} : { scheme: "https", port: "443" }),
+                });
+            }}
+            testId="origin-s3-preset"
+          />
           <Field>
             <FieldLabel htmlFor={id("region")}>{m.site_origin_s3_region()}</FieldLabel>
             <Input
@@ -523,6 +563,9 @@ interface PoolDraft {
   healthUnhealthy: string;
   affinityEnabled: boolean;
   affinityTtl: string;
+  /** Origins a request tries (1-5) and whether 502-504 responses are retried (site-content-v1). */
+  tries: string;
+  statusRetry: boolean;
 }
 
 /** Timeouts are stored in milliseconds and edited in seconds, like every other duration here. */
@@ -581,6 +624,8 @@ function PoolSettingsCard({ site }: { site: Site }) {
       healthUnhealthy: String(s.activeHealthCheck.unhealthyThreshold),
       affinityEnabled: s.sessionAffinity.enabled,
       affinityTtl: String(s.sessionAffinity.ttlSeconds),
+      tries: String(s.tries),
+      statusRetry: s.statusRetry,
     }),
     [s],
   );
@@ -596,6 +641,7 @@ function PoolSettingsCard({ site }: { site: Site }) {
   const healthAvailability = features.data?.activeHealthCheck;
   const affinityAvailability = features.data?.sessionAffinity;
   const http2Availability = features.data?.originHttp2;
+  const contentLocked = features.data?.siteContent.available === false;
   const interval = toInt(draft.healthInterval, health.intervalSeconds);
 
   return (
@@ -637,6 +683,8 @@ function PoolSettingsCard({ site }: { site: Site }) {
                 enabled: draft.affinityEnabled,
                 ttlSeconds: toInt(draft.affinityTtl, s.sessionAffinity.ttlSeconds),
               },
+              tries: toInt(draft.tries, s.tries),
+              statusRetry: draft.statusRetry,
             },
           });
         }}
@@ -757,6 +805,36 @@ function PoolSettingsCard({ site }: { site: Site }) {
               onChange={(recoverySeconds) => set({ recoverySeconds })}
             />
           </SettingsGroup>
+          <div className="flex flex-col gap-2">
+            <SettingsGroup legend={m.site_pool_retries()}>
+              <NumberField
+                id="pool-tries"
+                label={m.site_pool_tries()}
+                value={draft.tries}
+                min={1}
+                max={5}
+                required
+                // Other than 3 waits for site-content-v1 (a saved value stays editable).
+                disabled={contentLocked && s.tries === 3 && s.statusRetry}
+                onChange={(tries) => set({ tries })}
+                testId="pool-tries"
+              />
+              <SwitchField
+                id="pool-status-retry"
+                label={m.site_pool_status_retry()}
+                checked={draft.statusRetry}
+                disabled={contentLocked && s.tries === 3 && s.statusRetry}
+                onCheckedChange={(statusRetry) => set({ statusRetry })}
+                testId="pool-status-retry"
+              />
+            </SettingsGroup>
+            {contentLocked && s.tries === 3 && s.statusRetry ? (
+              <Unavailable
+                availability={features.data?.siteContent}
+                testId="pool-retries-unavailable"
+              />
+            ) : null}
+          </div>
           <div className="flex flex-col gap-2" data-testid="origins-active-health-group">
             {/* Two columns on phones, four from lg: path and Host take two each. */}
             <SettingsGroup legend={m.site_pool_active_health()} className="lg:grid-cols-4">

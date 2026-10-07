@@ -288,6 +288,16 @@ describe("https.check", async () => {
       });
     const covering = await upload("Wildcard", material);
     await upload("Partial", partial);
+    // An upload nodes cannot load (markUnloadableCertificates) is not offered.
+    await ctx.db.insert(schema.certificate).values({
+      name: "Unloadable",
+      names: ["*.check.test"],
+      source: "upload",
+      status: "error",
+      lastError: "certificate_key_explicit_curve",
+      chainPem: material.certificatePem,
+      notAfter: new Date(Date.now() + 86_400_000),
+    });
     expect((await api.https.check({ id: siteId })).certificates).toEqual([
       { id: covering.id, name: "Wildcard" },
     ]);

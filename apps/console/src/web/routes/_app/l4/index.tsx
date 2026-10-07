@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { m } from "@/lib/i18n";
-import { originLabel } from "@/lib/l4";
+import { originLabel, portsLabel } from "@/lib/l4";
 import { orpc } from "@/lib/orpc";
 
 export const Route = createFileRoute("/_app/l4/")({
@@ -96,7 +96,7 @@ function L4AppsPage() {
         header: () => m.l4_port(),
         cell: ({ row }) => (
           <span className="font-mono tabular-nums" data-testid="l4-app-port">
-            {row.original.port}
+            {portsLabel(row.original)}
           </span>
         ),
       },

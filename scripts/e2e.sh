@@ -116,8 +116,29 @@
 #   invalid one fails closed) and a 303 with a computed query parameter; a
 #   node from before G8 (edgeweir-node:pre-g8) keeps its last-known-good
 #   revision while a change needs rules-v3 and catches up once it is undone;
+#   Site parity G9 (scripts/e2e-g9.mjs, after G8): extra listener ports 8081
+#   and 9443, sites bound to ports (404 elsewhere, the handshake refused on
+#   an HTTPS port the site does not use), a 308 to :9443 with an excluded
+#   domain, a layer-4 port range and TLS termination (openssl s_client), a
+#   reload with an open layer-4 connection, a PROXY protocol v2 balancer
+#   (g9-lb) in front of cluster g9-proxy (ip.src, a ban and X-Real-IP are
+#   the client) and the trusted header mode; Playwright e2e/g9.spec.ts;
 #   leaves hdr-bench.g8.test for BENCH_SCENARIO=headers in scripts/bench.sh;
 #   Playwright e2e/g8.spec.ts.
+#   Site parity G15 (scripts/e2e-g15.mjs, after G8): both nodes report
+#   site-content-v1 and cache-zone-v1; the cluster's cache zone size reaches
+#   nginx.conf (keys_zone derived), a node's own size overrides it there only,
+#   both nodes report their usage; Set-Cookie of a cached response only with
+#   the fetched response; utm_* left out of the cache key; charset GBK on text
+#   only; body limit 413 by Content-Length, lifted by a config rule, chunked
+#   uploads unchecked; gzip level 9 and the largest compressed length; PURGE
+#   with the key (202, a purge_method task both nodes run), a wrong key 403,
+#   429 over the rate; 4xx/5xx class pages, a 404 redirect with placeholders,
+#   a 405 page, a status replaced by 200; X-Cache off per site; maintenance
+#   (503, Retry-After, allowed address and path, ACME passes, audited, never
+#   cached); origin tries and status retries; an S3 origin with the MinIO
+#   preset; leaves charset-bench.g15.test for BENCH_SCENARIO=charset in
+#   scripts/bench.sh; Playwright e2e/g15.spec.ts.
 #
 # Usage:
 #   docker compose -f compose.e2e.yml up -d --build
@@ -184,6 +205,8 @@ cleanup() {
   # Containers scripts/e2e-g3.mjs and e2e-g8.mjs start next to the stack (old nodes, curl).
   docker ps -aq --filter "label=dev.edgeweir.e2e-g3=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
   docker ps -aq --filter "label=dev.edgeweir.e2e-g8=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
+  # ... and the PROXY protocol cluster's node of e2e-g9.mjs.
+  docker ps -aq --filter "label=dev.edgeweir.e2e-g9=${COMPOSE_PROJECT_NAME:-edgeweir-e2e}" | xargs docker rm -f >/dev/null 2>&1 || true
   # Every profile: the upgrade peer and ClickHouse keep their state otherwise.
   if $DOWN; then "${COMPOSE[@]}" --profile '*' down -v >/dev/null 2>&1 || true; fi
 }
@@ -1162,6 +1185,21 @@ if ! $SKIP_UI; then
 fi
 node scripts/e2e-g8.mjs --cleanup || fail "G8 cleanup failed"
 pass "G8 checks passed"
+
+step "G9: listener ports, site ports, SNI on an extra HTTPS port, HTTPS redirect options, layer-4 range and TLS, reload with an open connection, PROXY protocol v2 balancer, trusted proxy header"
+node scripts/e2e-g9.mjs || fail "G9 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g9.spec.ts || fail "G9 browser checks failed"
+fi
+node scripts/e2e-g9.mjs --cleanup || fail "G9 cleanup failed"
+pass "G9 checks passed"
+step "G15: cache zone sizes and usage, Set-Cookie caching, excluded parameters, charset, body limits, gzip level, PURGE, error page classes and redirects, X-Cache, maintenance, origin tries, S3 with MinIO"
+node scripts/e2e-g15.mjs || fail "G15 end-to-end checks failed"
+if ! $SKIP_UI; then
+  E2E_BASE_URL="$CONSOLE" pnpm --filter @edgeweir/console test:e2e e2e/g15.spec.ts || fail "G15 browser checks failed"
+fi
+node scripts/e2e-g15.mjs --cleanup || fail "G15 cleanup failed"
+pass "G15 checks passed"
 
 step "node lifecycle: disable refuses the node, enable restores it, delete revokes its certificate"
 NODE_ID="$(node_json | jq -r .id)"

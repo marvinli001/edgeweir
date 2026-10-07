@@ -40,3 +40,10 @@ export const RULE_LOG_FEATURE = "rule-log-v1";
  * (ReportStatsV2Request.l4_stats).
  */
 export const L4_FEATURE = "l4-v1";
+/**
+ * cache-zone-v1: per-node cache zone sizes (CacheZone.node_sizes, required
+ * by configurations where a node has its own size) and the cache usage in
+ * heartbeats. A node's own size waits until every active node of its
+ * cluster reports it.
+ */
+export const CACHE_ZONE_FEATURE = "cache-zone-v1";

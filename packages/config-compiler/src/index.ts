@@ -9,11 +9,15 @@ import {
   type CacheRule,
   CacheRuleSchema,
   type CacheZone,
+  CacheZoneNodeSizeSchema,
   CacheZoneSchema,
   CcPolicySchema,
   type CertificateRef,
   type ChallengeKeyRef,
   ChallengeKeyRefSchema,
+  CharsetSchema,
+  type ClientAddress,
+  ClientAddressSchema,
   DomainSchema,
   type EdgeRule,
   EdgeRuleSchema,
@@ -29,6 +33,7 @@ import {
   ListenerProtocol,
   ListenerSchema,
   LoadBalancePolicy,
+  MaintenanceSchema,
   type NodeConfig,
   type NodeConfigDiff,
   NodeConfigDiffSchema,
@@ -45,6 +50,7 @@ import {
   type PlatformErrorPages,
   PlatformErrorPagesSchema,
   PlatformProtectionSchema,
+  PurgeMethodSchema,
   QueryParamSchema,
   type RuleAction,
   RuleActionSchema,
@@ -61,6 +67,7 @@ import {
 } from "@edgeweir/proto";
 import {
   type Expression,
+  needsClientIp,
   needsRulesV2,
   needsRulesV3,
   type Phase,
@@ -129,6 +136,8 @@ export interface CacheRuleModel {
   staleIfErrorSeconds?: number;
   /** Cache responses to requests with an Authorization header; defaults to false. */
   cacheAuthorized?: boolean;
+  /** Cache responses with Set-Cookie (only the fetched response carries it); site-content-v1. */
+  cacheSetCookie?: boolean;
 }
 
 export interface OriginPoolSettingsModel {
@@ -145,10 +154,15 @@ export interface OriginPoolSettingsModel {
   keepalive: boolean;
   keepaliveIdleSeconds: number;
   keepaliveMaxRequests: number;
+  /** Origins a request tries, 1-5; omitted or 3 compiles as before (site-content-v1 otherwise). */
+  tries?: number;
+  /** Retry after 502, 503 and 504 responses; omitted or true compiles as before. */
+  statusRetry?: boolean;
 }
 
 export interface CacheKeyModel {
-  query: "all" | "ignore" | "include";
+  /** exclude: every parameter but queryParams ("prefix*" patterns allowed); site-content-v1. */
+  query: "all" | "ignore" | "include" | "exclude";
   queryParams: string[];
   sortQuery: boolean;
   headers: string[];
@@ -197,6 +211,26 @@ export const L4_FEATURE = "l4-v1";
  * them (proto v0.19.0, Domain.tls_pending).
  */
 export const TLS_PENDING_DOMAINS_FEATURE = "tls-pending-domains-v1";
+/**
+ * Feature of the site settings of proto v0.24.0: cache keys that drop
+ * parameters, responses cached with Set-Cookie, the PURGE method, hiding
+ * X-Cache, error pages for more statuses, classes and redirects,
+ * maintenance, charsets, the gzip level and the largest compressed
+ * response, request body limits and origin tries.
+ */
+export const SITE_CONTENT_FEATURE = "site-content-v1";
+/** Feature of per-node cache zone sizes (proto v0.24.0, CacheZone.node_sizes). */
+export const CACHE_ZONE_FEATURE = "cache-zone-v1";
+/** A site's body limit when it sets none: nodes' former global 100 MiB. */
+export const DEFAULT_REQUEST_BODY_LIMIT = 100 * 1024 * 1024;
+/** Origins a request tries when the pool sets none. */
+export const DEFAULT_ORIGIN_TRIES = 3;
+/**
+ * keys_zone of a cache zone of maxSizeMb (ADR-0035): nginx keeps about
+ * 8000 keys per MiB; 64 MiB for the default 10 GiB, at most 512 MiB.
+ */
+export const keysZoneMbFor = (maxSizeMb: number) =>
+  Math.min(Math.max(Math.ceil(maxSizeMb / 160), 16), 512);
 /** Layer-4 applications a cluster may have (enabled or not). */
 export const MAX_L4_APPS_PER_CLUSTER = 256;
 
@@ -220,9 +254,29 @@ export interface SessionAffinityModel {
 
 /** A site's error pages (config.proto SiteErrorPages). */
 export interface SiteErrorPagesModel {
-  /** Any order; compiled sorted by status. Without pages nothing is compiled. */
-  pages: { status: number; template: string }[];
+  /**
+   * Any order; compiled sorted by status. Without pages nothing is compiled.
+   * status 4 and 5 are the 4xx and 5xx classes; redirectUrl replaces the
+   * template; responseStatus (0: keep) replaces a template page's status.
+   */
+  pages: { status: number; template: string; redirectUrl?: string; responseStatus?: number }[];
   interceptOriginErrors: boolean;
+}
+
+/** A site's maintenance mode while on (config.proto Maintenance). */
+export interface MaintenanceModel {
+  template: string;
+  retryAfterSeconds: number;
+  /** CIDRs in canonical form; any order, compiled sorted without duplicates. */
+  allowedCidrs: string[];
+  allowedPathPrefixes: string[];
+}
+
+/** A site's charset setting while on (config.proto Charset). */
+export interface CharsetModel {
+  name: string;
+  force: boolean;
+  uppercase: boolean;
 }
 
 /** The platform's pages; an empty template means the node's built-in page. */
@@ -238,7 +292,7 @@ export interface OfflineHostModel {
   reason: "disabled";
 }
 
-type TlsFields = Omit<TlsOptions, "$typeName" | "$unknown">;
+type TlsFields = Omit<TlsOptions, "$typeName" | "$unknown" | "gzipLevel" | "compressMaxLength">;
 type CompressionField =
   | "brotli"
   | "brotliLevel"
@@ -248,9 +302,18 @@ type CompressionField =
   | "zstdLevel"
   | "zstdMinLength"
   | "zstdTypes";
-/** A site's TLS options; Brotli and Zstandard default to off. */
-export type TlsModel = Omit<TlsFields, CompressionField> &
-  Partial<Pick<TlsFields, CompressionField>>;
+type RedirectField = "redirectStatus" | "redirectPort" | "redirectExcludedDomains";
+/**
+ * A site's TLS options; Brotli and Zstandard default to off, the HTTPS
+ * redirect to 301 towards 443 with no domain excluded, the gzip level
+ * (0: nginx's default) and the largest compressed response (0: no limit)
+ * to 0 (site-content-v1 otherwise).
+ */
+export type TlsModel = Omit<TlsFields, CompressionField | RedirectField> &
+  Partial<Pick<TlsFields, CompressionField | RedirectField>> & {
+    gzipLevel?: number;
+    compressMaxLength?: number;
+  };
 
 /** OWASP CRS of a site that runs it (config.proto SiteWaf). */
 export interface SiteWafModel {
@@ -304,7 +367,50 @@ export interface SiteModel {
   errorPages?: SiteErrorPagesModel | null;
   /** Exact-match redirect table; any order, compiled sorted by source (rules-v2). */
   bulkRedirects?: BulkRedirectModel[];
+  /**
+   * The listener ports the site is served on (HTTPS ones only with a
+   * certificate). Omitted: 80 and 443.
+   */
+  ports?: SitePortsModel;
+  // site-content-v1 (proto v0.24.0); omitted values compile as before.
+  /** The PURGE method's key reference; omitted or null: off. */
+  purge?: { credentialId: string; credentialVersion: number } | null;
+  /** Send no X-Cache header. */
+  hideXCache?: boolean;
+  /** Omitted or null: off. */
+  maintenance?: MaintenanceModel | null;
+  /** Omitted or null: off. */
+  charset?: CharsetModel | null;
+  /** Bytes, 0 no limit; omitted or DEFAULT_REQUEST_BODY_LIMIT compiles as before. */
+  requestBodyLimit?: number;
 }
+
+/** A site's listener ports. */
+export interface SitePortsModel {
+  http: number[];
+  https: number[];
+}
+
+/** The cluster's client address setting (config.proto ClientAddress); null is direct. */
+export interface ClientIpModel {
+  mode: "direct" | "proxy_protocol" | "header";
+  trustedCidrs: string[];
+  header: string;
+  dropForwardedFor: boolean;
+}
+
+/** The cluster's listener ports besides 80 and 443, and its client address setting. */
+export interface EdgeModel {
+  httpPorts: number[];
+  httpsPorts: number[];
+  clientIp: ClientIpModel | null;
+}
+
+export const DEFAULT_HTTP_PORT = 80;
+export const DEFAULT_HTTPS_PORT = 443;
+export const EDGE_PORTS_FEATURE = "edge-ports-v1";
+export const CLIENT_IP_FEATURE = "client-ip-v1";
+export const L4_V2_FEATURE = "l4-v2";
 
 /** One entry of a site's bulk redirect table (config.proto BulkRedirect). */
 export interface BulkRedirectModel {
@@ -412,6 +518,9 @@ export interface RuleModel {
     port?: number;
     // rules-v2: compression codings in preference order (RuleAction.compression)
     algorithms?: string[];
+    // site-content-v1: config (phase config only)
+    /** The request's body limit in bytes (0: none); omitted keeps the site's. */
+    requestBodyLimit?: number;
   };
   /** A rule compiled earlier: compileRules keeps it as it is (see ruleModelOf). */
   compiled?: EdgeRule;
@@ -480,6 +589,10 @@ function compileAction(phase: string, a: RuleModel["action"]): RuleAction {
     port: a.port ?? 0,
     compression: a.kind === "compression" ? [...(a.algorithms ?? [])] : [],
     append: a.kind === "response_header" && header && a.append === true,
+    requestBodyLimit:
+      a.kind === "config" && a.requestBodyLimit !== undefined
+        ? BigInt(a.requestBodyLimit)
+        : undefined,
   });
 }
 
@@ -670,6 +783,7 @@ export function nodeRequirements(config: NodeConfig): string[] {
 export interface L4OriginModel {
   id: string;
   address: string;
+  /** Compiled 0 while the application's originPortMode is same. */
   port: number;
   weight: number;
   backup: boolean;
@@ -696,6 +810,13 @@ export interface L4AppModel {
   blockListIds: string[];
   maxConnections: number;
   newConnectionsPerSecond: number;
+  /** The last port of a range (l4-v2); omitted or null: the single port. */
+  portEnd?: number | null;
+  /** same: origins take the port the connection arrived on (l4-v2). Omitted: fixed. */
+  originPortMode?: "fixed" | "same";
+  /** TCP only: TLS terminated with this certificate (l4-v2); omitted or null: none. */
+  certificateId?: string | null;
+  tlsMinimumVersion?: "1.2" | "1.3";
 }
 
 /**
@@ -714,11 +835,16 @@ export function compileL4Apps(apps: readonly L4AppModel[] | undefined): L4App[] 
         port: app.port,
         acceptProxyProtocol: tcp && app.acceptProxyProtocol,
         proxyProtocolVersion: tcp ? app.proxyProtocolVersion : 0,
+        // l4-v2: ranges, origins on the arriving port and TLS; unset
+        // otherwise, so applications without them encode as before.
+        portEnd: app.portEnd && app.portEnd > app.port ? app.portEnd : 0,
+        certificateId: tcp && app.certificateId ? app.certificateId : "",
+        tlsMinimumVersion: tcp && app.certificateId ? (app.tlsMinimumVersion ?? "1.2") : "",
         origins: [...app.origins].sort(byBytes((origin) => origin.id)).map((origin) =>
           create(L4OriginSchema, {
             id: origin.id,
             address: origin.address,
-            port: origin.port,
+            port: app.originPortMode === "same" ? 0 : origin.port,
             weight: Math.max(1, origin.weight),
             backup: origin.backup,
           }),
@@ -748,6 +874,8 @@ export interface CacheZoneModel {
   maxSizeMb: number;
   keysZoneMb: number;
   inactiveSeconds: number;
+  /** Sizes on single nodes (cache-zone-v1); any order, compiled sorted by node id. */
+  nodeSizes?: { nodeId: string; maxSizeMb: number; keysZoneMb: number }[];
 }
 
 export interface CompileInput {
@@ -777,6 +905,8 @@ export interface CompileInput {
   offlineHosts?: OfflineHostModel[];
   /** The cluster's layer-4 applications; disabled ones are left out. */
   l4Apps?: L4AppModel[];
+  /** Listener ports besides 80 and 443 and the client address setting; omitted: none, direct. */
+  edge?: EdgeModel;
 }
 
 /**
@@ -890,6 +1020,48 @@ export function poolAndPageFeatures(config: NodeConfig): string[] {
   ];
 }
 
+/** Error page statuses of error-pages-v1; others need site-content-v1. */
+const ERROR_PAGES_V1_STATUSES = new Set([403, 429, 502, 503, 504]);
+
+/** Whether a compiled site uses a setting of site-content-v1. */
+export function usesSiteContent(site: Site): boolean {
+  const pool = site.originPool;
+  const tls = site.tls;
+  return (
+    !!site.purge ||
+    site.hideXCache ||
+    !!site.maintenance ||
+    !!site.charset ||
+    site.requestBodyLimit !== undefined ||
+    (tls !== undefined && (tls.gzipLevel !== 0 || tls.compressMaxLength !== 0n)) ||
+    (pool !== undefined && (pool.tries !== 0 || pool.statusRetryDisabled)) ||
+    site.cacheRules.some((rule) => rule.cacheSetCookie) ||
+    site.cacheKey?.query === CacheKeyQuery.EXCLUDE ||
+    (site.errorPages?.pages ?? []).some(
+      (page) =>
+        !ERROR_PAGES_V1_STATUSES.has(page.status) ||
+        page.redirectUrl !== "" ||
+        page.responseStatus !== 0,
+    ) ||
+    site.rules.some((rule) => rule.action?.requestBodyLimit !== undefined)
+  );
+}
+
+/**
+ * Features of the proto v0.24.0 settings a compiled configuration uses:
+ * site-content-v1 (a site's settings, or a platform rule's body limit) and
+ * cache-zone-v1 (per-node cache zone sizes).
+ */
+export function contentFeatures(config: NodeConfig): string[] {
+  return [
+    ...(config.sites.some(usesSiteContent) ||
+    config.platformRules.some((rule) => rule.action?.requestBodyLimit !== undefined)
+      ? [SITE_CONTENT_FEATURE]
+      : []),
+    ...(config.cacheZones.some((zone) => zone.nodeSizes.length) ? [CACHE_ZONE_FEATURE] : []),
+  ];
+}
+
 export const DEFAULT_CACHE_ZONE = "default";
 
 export const defaultListeners: ListenerModel[] = [{ port: 80, protocol: "http" }];
@@ -925,6 +1097,7 @@ const queryMap = {
   all: CacheKeyQuery.ALL,
   ignore: CacheKeyQuery.IGNORE,
   include: CacheKeyQuery.INCLUDE,
+  exclude: CacheKeyQuery.EXCLUDE,
 } as const;
 
 /** Sorted, de-duplicated copy: list order carries no meaning in these fields. */
@@ -954,7 +1127,10 @@ const sortedByteSet = (values: readonly string[] | undefined): string[] =>
  * length and types only while on, so sites without them keep the encoding
  * (and content hash) they had before these fields existed.
  */
-function compileTls(model: TlsModel) {
+function compileTls(
+  model: TlsModel,
+  site: { certificate: boolean; ports: readonly number[]; domains: ReadonlySet<string> },
+) {
   const {
     brotli,
     brotliLevel,
@@ -964,10 +1140,32 @@ function compileTls(model: TlsModel) {
     zstdLevel,
     zstdMinLength,
     zstdTypes,
+    redirectStatus,
+    redirectPort,
+    redirectExcludedDomains,
+    gzipLevel,
+    compressMaxLength,
     ...rest
   } = model;
   return create(TlsOptionsSchema, {
     ...rest,
+    // edge-ports-v1: the defaults (301 to 443, nothing excluded) stay unset.
+    // Nodes refuse a redirect port the site is not served on over HTTPS and
+    // excluded names that are no domain of the site: those compile as unset
+    // (as in rollback), not into a revision the cluster cannot apply.
+    redirectStatus: redirectStatus === 301 ? 0 : (redirectStatus ?? 0),
+    redirectPort:
+      redirectPort &&
+      redirectPort !== DEFAULT_HTTPS_PORT &&
+      site.certificate &&
+      site.ports.includes(redirectPort)
+        ? redirectPort
+        : 0,
+    redirectExcludedDomains: sortedByteSet(
+      redirectExcludedDomains?.filter((name) => site.domains.has(name)),
+    ),
+    gzipLevel: gzipLevel ?? 0,
+    compressMaxLength: BigInt(compressMaxLength ?? 0),
     ...(brotli
       ? {
           brotli: true,
@@ -987,7 +1185,32 @@ function compileTls(model: TlsModel) {
   });
 }
 
-function compileSite(model: SiteModel, challenges: boolean): Site {
+/**
+ * Site.ports of a site: its HTTP ports among 80 and the cluster's extra
+ * HTTP ports, and with a certificate its HTTPS ports among 443 and the
+ * extra HTTPS ports, sorted. Empty (every listener) when the cluster has no
+ * extra ports and the site keeps the defaults, so such configurations
+ * encode as before edge-ports-v1.
+ */
+export function compileSitePorts(
+  site: { ports?: SitePortsModel; certificateId?: string },
+  edge: EdgeModel | undefined,
+): number[] {
+  const ports = site.ports ?? { http: [DEFAULT_HTTP_PORT], https: [DEFAULT_HTTPS_PORT] };
+  const http = new Set([DEFAULT_HTTP_PORT, ...(edge?.httpPorts ?? [])]);
+  const https = new Set([DEFAULT_HTTPS_PORT, ...(edge?.httpsPorts ?? [])]);
+  const out = sortedSet([
+    ...ports.http.filter((port) => http.has(port)),
+    ...(site.certificateId ? ports.https.filter((port) => https.has(port)) : []),
+  ]);
+  const extra = (edge?.httpPorts.length ?? 0) + (edge?.httpsPorts.length ?? 0) > 0;
+  const defaults = site.certificateId
+    ? [DEFAULT_HTTP_PORT, DEFAULT_HTTPS_PORT]
+    : [DEFAULT_HTTP_PORT];
+  return !extra && out.join() === defaults.join() ? [] : out;
+}
+
+function compileSite(model: SiteModel, challenges: boolean, edge?: EdgeModel): Site {
   const settings = model.originPool.settings;
   const health = model.originPool.activeHealthCheck;
   const affinity = model.originPool.sessionAffinity;
@@ -1037,6 +1260,12 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
             ...(settings.protocol === "http2"
               ? { protocol: OriginProtocol.HTTP2, grpc: !!settings.grpc }
               : {}),
+            // Three tries with status retries stay unset (site-content-v1 otherwise).
+            tries:
+              settings.tries !== undefined && settings.tries !== DEFAULT_ORIGIN_TRIES
+                ? settings.tries
+                : 0,
+            statusRetryDisabled: settings.statusRetry === false,
             healthCheck: create(PassiveHealthCheckSchema, {
               maxFails: settings.maxFails,
               recoverySeconds: settings.recoverySeconds,
@@ -1089,12 +1318,14 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
           staleIfErrorSeconds: r.staleIfErrorSeconds ?? 0,
           cacheAuthorized: r.cacheAuthorized ?? false,
           browserTtlSeconds: r.browserTtlSeconds ?? 0,
+          cacheSetCookie: r.cacheSetCookie ?? false,
         }),
     ),
     cacheKey: key
       ? create(CacheKeyPolicySchema, {
           query: queryMap[key.query],
-          queryParams: key.query === "include" ? sortedSet(key.queryParams) : [],
+          queryParams:
+            key.query === "include" || key.query === "exclude" ? sortedSet(key.queryParams) : [],
           sortQuery: key.sortQuery,
           headers: sortedSet(key.headers.map((h) => h.toLowerCase())),
           cookies: sortedSet(key.cookies),
@@ -1105,7 +1336,13 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
     rangeSlice: model.rangeSlice ?? false,
     websocketDisabled: model.websocket === false,
     certificateId: model.certificateId ?? "",
-    tls: model.tls ? compileTls(model.tls) : undefined,
+    tls: model.tls
+      ? compileTls(model.tls, {
+          certificate: !!model.certificateId,
+          ports: compileSitePorts(model, edge),
+          domains: new Set(model.domains.map((d) => (d.wildcard ? `*.${d.name}` : d.name))),
+        })
+      : undefined,
     rules: compileRules(model.rules),
     waf: model.waf
       ? create(SiteWafSchema, {
@@ -1127,11 +1364,39 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
     errorPages: model.errorPages?.pages.length
       ? create(SiteErrorPagesSchema, {
           pages: model.errorPages.pages.map((page) =>
-            create(ErrorPageSchema, { status: page.status, template: page.template }),
+            create(ErrorPageSchema, {
+              status: page.status,
+              // A redirect page has no template (site-content-v1).
+              template: page.redirectUrl ? "" : page.template,
+              redirectUrl: page.redirectUrl ?? "",
+              responseStatus: page.redirectUrl ? 0 : (page.responseStatus ?? 0),
+            }),
           ),
           interceptOriginErrors: model.errorPages.interceptOriginErrors,
         })
       : undefined,
+    purge: model.purge
+      ? create(PurgeMethodSchema, {
+          credentialId: model.purge.credentialId,
+          credentialVersion: BigInt(model.purge.credentialVersion),
+        })
+      : undefined,
+    hideXCache: model.hideXCache ?? false,
+    maintenance: model.maintenance
+      ? create(MaintenanceSchema, {
+          template: model.maintenance.template,
+          retryAfterSeconds: model.maintenance.retryAfterSeconds,
+          allowedCidrs: sortedSet(model.maintenance.allowedCidrs),
+          // Byte order: nodes sort the prefixes as Go compares strings.
+          allowedPathPrefixes: sortedByteSet(model.maintenance.allowedPathPrefixes),
+        })
+      : undefined,
+    charset: model.charset ? create(CharsetSchema, model.charset) : undefined,
+    // The default limit stays unset: configurations encode as before.
+    requestBodyLimit:
+      model.requestBodyLimit !== undefined && model.requestBodyLimit !== DEFAULT_REQUEST_BODY_LIMIT
+        ? BigInt(model.requestBodyLimit)
+        : undefined,
     bulkRedirects: [...(model.bulkRedirects ?? [])]
       .sort(byBytes((redirect) => redirect.source))
       .map((redirect) =>
@@ -1142,6 +1407,7 @@ function compileSite(model: SiteModel, challenges: boolean): Site {
           preserveQuery: redirect.preserveQuery,
         }),
       ),
+    ports: compileSitePorts(model, edge),
   });
 }
 
@@ -1211,6 +1477,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
   const out = clone(NodeConfigSchema, config) as T;
   out.listeners.sort((a, b) => a.port - b.port);
   out.cacheZones.sort(byString((z: CacheZone) => z.name));
+  for (const zone of out.cacheZones) zone.nodeSizes.sort(byString((n) => n.nodeId));
   out.certificates.sort(byString((c: CertificateRef) => c.id));
   out.sites.sort(byString((s: Site) => s.id));
   // A set: ascending (byte order, ASCII) without duplicates, as the Go agent sorts it.
@@ -1229,6 +1496,7 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
     app.blockListIds = sortedByteSet(app.blockListIds);
   }
   for (const list of out.ipLists) list.entries = sortedSet(list.entries);
+  if (out.clientAddress) out.clientAddress.trustedCidrs = sortedSet(out.clientAddress.trustedCidrs);
   for (const rule of out.platformRules) canonicalizeAction(rule.action);
   for (const site of out.sites) {
     if (site.tls) {
@@ -1237,7 +1505,15 @@ export function canonicalize<T extends NodeConfig>(config: T): T {
       site.tls.zstdTypes = sortedSet(site.tls.zstdTypes);
     }
     if (site.waf) site.waf.excludedRuleIds = sortedSet(site.waf.excludedRuleIds);
+    // v0.23.0: listener ports and excluded domains as sets.
+    site.ports = sortedSet(site.ports);
+    if (site.tls)
+      site.tls.redirectExcludedDomains = sortedByteSet(site.tls.redirectExcludedDomains);
     site.errorPages?.pages.sort((a, b) => a.status - b.status);
+    if (site.maintenance) {
+      site.maintenance.allowedCidrs = sortedSet(site.maintenance.allowedCidrs);
+      site.maintenance.allowedPathPrefixes = sortedByteSet(site.maintenance.allowedPathPrefixes);
+    }
     site.bulkRedirects.sort(byBytes((redirect) => redirect.source));
     for (const rule of site.rules) canonicalizeAction(rule.action);
     site.domains.sort(byString((d) => `${d.name}\u0000${d.wildcard ? 1 : 0}`));
@@ -1260,22 +1536,111 @@ export function contentHash(config: NodeConfig): string {
   return createHash("sha256").update(toBinary(NodeConfigSchema, bare)).digest("hex");
 }
 
-/** Port 80, plus 443 when a site has a certificate (HTTP/2 and HTTP/3 if one of them enables it). */
-function listenersFor(
-  sites: { certificateId?: string; tls?: { http2?: boolean; http3?: boolean } }[],
-) {
+/**
+ * The listeners of compiled sites: 80 and the cluster's extra HTTP ports;
+ * 443 while a site with a certificate is served there and the extra HTTPS
+ * ports. An HTTPS port takes HTTP/2 and HTTP/3 when a site with a
+ * certificate served there enables them; every listener takes the PROXY
+ * protocol in the proxy_protocol mode. Without extra ports and sites
+ * bound to other ports this is 80 plus 443 once a site has a certificate,
+ * as before edge-ports-v1.
+ */
+export function listenersFor(
+  sites: Pick<Site, "certificateId" | "tls" | "ports">[],
+  edge?: EdgeModel,
+): ListenerModel[] {
   const tlsSites = sites.filter((s) => s.certificateId);
-  return tlsSites.length
-    ? [
-        ...defaultListeners,
-        {
-          port: 443,
-          protocol: "https" as const,
-          http2: tlsSites.some((s) => s.tls?.http2),
-          http3: tlsSites.some((s) => s.tls?.http3),
-        },
-      ]
-    : defaultListeners;
+  const on = (site: Pick<Site, "ports">, port: number) =>
+    site.ports.length === 0 || site.ports.includes(port);
+  const proxyProtocol = edge?.clientIp?.mode === "proxy_protocol";
+  const https = sortedSet([
+    ...(tlsSites.some((s) => on(s, DEFAULT_HTTPS_PORT)) ? [DEFAULT_HTTPS_PORT] : []),
+    ...(edge?.httpsPorts ?? []),
+  ]);
+  const extra = (listener: ListenerModel) =>
+    proxyProtocol ? { ...listener, proxyProtocol } : listener;
+  return [
+    ...sortedSet([DEFAULT_HTTP_PORT, ...(edge?.httpPorts ?? [])]).map((port) =>
+      extra({ port, protocol: "http" as const }),
+    ),
+    ...https.map((port) => {
+      const served = tlsSites.filter((s) => on(s, port));
+      return extra({
+        port,
+        protocol: "https" as const,
+        http2: served.some((s) => s.tls?.http2),
+        http3: served.some((s) => s.tls?.http3),
+      });
+    }),
+  ].sort((a, b) => a.port - b.port);
+}
+
+/** NodeConfig.client_address: unset for direct without dropping X-Forwarded-For. */
+export function compileClientAddress(
+  model: ClientIpModel | null | undefined,
+): ClientAddress | undefined {
+  if (!model || (model.mode === "direct" && !model.dropForwardedFor)) return undefined;
+  return create(ClientAddressSchema, {
+    mode: model.mode,
+    trustedCidrs: model.mode === "header" ? sortedSet(model.trustedCidrs) : [],
+    header: model.mode === "header" ? model.header : "",
+    dropForwardedFor: model.mode === "direct" && model.dropForwardedFor,
+  });
+}
+
+/**
+ * The listener ports and client address setting a compiled configuration
+ * was made with (refreshDerived keeps them when no current ones are given).
+ */
+export function edgeOf(config: NodeConfig): EdgeModel {
+  const extra = (protocol: ListenerProtocol, standard: number) =>
+    config.listeners
+      .filter((l) => l.protocol === protocol && l.port !== standard)
+      .map((l) => l.port)
+      .filter((port) => port !== DEFAULT_HTTP_PORT && port !== DEFAULT_HTTPS_PORT);
+  const ca = config.clientAddress;
+  return {
+    httpPorts: extra(ListenerProtocol.HTTP, DEFAULT_HTTP_PORT),
+    httpsPorts: extra(ListenerProtocol.HTTPS, DEFAULT_HTTPS_PORT),
+    clientIp: ca
+      ? {
+          mode: ca.mode as ClientIpModel["mode"],
+          trustedCidrs: [...ca.trustedCidrs],
+          header: ca.header,
+          dropForwardedFor: ca.dropForwardedFor,
+        }
+      : null,
+  };
+}
+
+/** Features of the listener ports and client address setting a compiled configuration uses. */
+export function edgeFeatures(config: NodeConfig): string[] {
+  const rules = [...config.platformRules, ...config.sites.flatMap((site) => site.rules)];
+  return [
+    ...(config.listeners.some(
+      (l) => l.port !== DEFAULT_HTTP_PORT && l.port !== DEFAULT_HTTPS_PORT,
+    ) ||
+    config.sites.some(
+      (site) =>
+        site.ports.length > 0 ||
+        !!site.tls?.redirectStatus ||
+        !!site.tls?.redirectPort ||
+        (site.tls?.redirectExcludedDomains.length ?? 0) > 0,
+    )
+      ? [EDGE_PORTS_FEATURE]
+      : []),
+    ...(config.clientAddress ||
+    config.listeners.some((l) => l.proxyProtocol) ||
+    configExpressions(config).some(needsClientIp) ||
+    rules.some((rule) => rule.action?.key === "ip.peer")
+      ? [CLIENT_IP_FEATURE]
+      : []),
+    ...(config.l4Apps.some(
+      (app) => app.portEnd > 0 || !!app.certificateId || app.origins.some((o) => o.port === 0),
+    )
+      ? [L4_V2_FEATURE]
+      : []),
+  ];
 }
 
 const compileListener = (l: ListenerModel): Listener =>
@@ -1307,21 +1672,31 @@ export function derivedFeatures(config: NodeConfig): string[] {
     ...protectionFeatures(config),
     ...moduleFeatures(config),
     ...poolAndPageFeatures(config),
+    ...contentFeatures(config),
     // Without applications the configuration encodes exactly as before.
     ...(config.l4Apps.length ? [L4_FEATURE] : []),
+    ...edgeFeatures(config),
   ];
 }
 
 /**
  * Recomputes what a compiled configuration derives from its sites after
  * they were changed in place (a rollback, or changes that skip the
- * configuration canary): the default listeners, the certificate references
- * the sites still use and requiredFeatures. Canonical, with a new content hash.
+ * configuration canary): the listeners (of `edge`, else the ports and
+ * client address setting the configuration has), the certificate references
+ * the sites and layer-4 applications still use and requiredFeatures.
+ * Canonical, with a new content hash.
  */
-export function refreshDerived(config: NodeConfig): NodeConfig {
+export function refreshDerived(config: NodeConfig, edge?: EdgeModel): NodeConfig {
   const out = clone(NodeConfigSchema, config);
-  out.listeners = listenersFor(out.sites).map(compileListener);
-  const used = new Set(out.sites.map((s) => s.certificateId).filter(Boolean));
+  const current = edge ?? edgeOf(config);
+  out.listeners = listenersFor(out.sites, current).map(compileListener);
+  out.clientAddress = compileClientAddress(current.clientIp);
+  const used = new Set(
+    [...out.sites.map((s) => s.certificateId), ...out.l4Apps.map((a) => a.certificateId)].filter(
+      Boolean,
+    ),
+  );
   out.certificates = out.certificates.filter((c) => used.has(c.id));
   out.requiredFeatures = derivedFeatures(out);
   const canonical = canonicalize(out);
@@ -1333,20 +1708,27 @@ export function refreshDerived(config: NodeConfig): NodeConfig {
 export function compileNodeConfig(input: CompileInput, revision: bigint): NodeConfig {
   if (input.sites.filter((site) => site.enabled).length > MAX_SITES_PER_CLUSTER)
     throw new ConfigCapacityError();
-  const listeners = (input.listeners ?? listenersFor(input.sites.filter((s) => s.enabled))).map(
-    compileListener,
-  );
+  const challenges = usesChallenges(input);
+  // Disabled sites are not shipped to nodes; their domains are offline hosts.
+  const sites = input.sites
+    .filter((s) => s.enabled)
+    .map((s) => compileSite(s, challenges, input.edge));
+  const listeners = (input.listeners ?? listenersFor(sites, input.edge)).map(compileListener);
   const cacheZones = (input.cacheZones ?? defaultCacheZones).map((z) =>
     create(CacheZoneSchema, {
       name: z.name,
       maxSizeMb: BigInt(z.maxSizeMb),
       keysZoneMb: z.keysZoneMb,
       inactiveSeconds: z.inactiveSeconds,
+      nodeSizes: [...(z.nodeSizes ?? [])].sort(byString((n) => n.nodeId)).map((n) =>
+        create(CacheZoneNodeSizeSchema, {
+          nodeId: n.nodeId,
+          maxSizeMb: BigInt(n.maxSizeMb),
+          keysZoneMb: n.keysZoneMb,
+        }),
+      ),
     }),
   );
-  const challenges = usesChallenges(input);
-  // Disabled sites are not shipped to nodes; their domains are offline hosts.
-  const sites = input.sites.filter((s) => s.enabled).map((s) => compileSite(s, challenges));
   const compiled = create(NodeConfigSchema, {
     revision,
     clusterId: input.clusterId,
@@ -1372,6 +1754,7 @@ export function compileNodeConfig(input: CompileInput, revision: bigint): NodeCo
     platformErrorPages: compilePlatformErrorPages(input.platformErrorPages),
     offlineHosts: compileOfflineHosts(input.offlineHosts),
     l4Apps: compileL4Apps(input.l4Apps),
+    clientAddress: compileClientAddress(input.edge?.clientIp),
   });
   compiled.requiredFeatures = derivedFeatures(compiled);
   const config = canonicalize(compiled);
@@ -1417,6 +1800,7 @@ export function diffNodeConfig(base: NodeConfig, target: NodeConfig): NodeConfig
     platformErrorPages: target.platformErrorPages,
     offlineHosts: target.offlineHosts,
     l4Apps: target.l4Apps,
+    clientAddress: target.clientAddress,
     upsertedSites: target.sites.filter((s) => baseSites.get(s.id) !== siteBytes(s)),
     removedSiteIds: base.sites
       .filter((s) => !targetIds.has(s.id))
@@ -1452,6 +1836,7 @@ export function applyNodeConfigDiff(base: NodeConfig, diff: NodeConfigDiff): Nod
       platformErrorPages: diff.platformErrorPages,
       offlineHosts: diff.offlineHosts,
       l4Apps: diff.l4Apps,
+      clientAddress: diff.clientAddress,
       sites,
     }),
   );

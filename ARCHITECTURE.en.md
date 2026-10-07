@@ -151,6 +151,8 @@ URL, prefix, host, Cache-Tag, and full-site purges and URL and sitemap prefetche
 3. The node pulls tasks with `PullTasks` and reports results with `ReportTaskResult`.
 4. A task without a result 5 minutes after hand-out is handed out again; a task not finished within 7 days fails. When a node reconnects, the console issues a full-site purge for each site whose purges the node missed.
 
+For a site with the PURGE method on, the node has its agent check the key of a `PURGE` request and hands it to the console with `SubmitPurge`; the console creates a URL purge task for the cluster as in step 1.
+
 Host and Cache-Tag purges need the node feature `purge-tag-v1`, mobile and sitemap prefetches `prefetch-v2`; while an active node of an affected cluster lacks it, the console refuses the task (`NODE_CAPABILITY_REQUIRED`). Nodes derive cache keys from the purge markers' points in time and an index of the cached objects' `Cache-Tag`, so purged objects (stale ones included) are never looked up again; nodes fetch sitemaps through their own edge layer. Behavior: [Origins and cache](docs/guide/origins-and-cache.en.md#purge-and-prefetch).
 
 Node upgrades are delivered through `PullTasks` as well: an upgrade first runs on one node group and is promoted after the health observation passes; the remaining nodes follow at most a quarter at a time, and each task must finish within 30 minutes after it is sent. A node pulling tasks first checks without a lock whether it has an upgrade task, and takes the cluster's upgrade lock only if it does. Behavior: [Node upgrades](docs/guide/node-upgrades.en.md).
@@ -216,6 +218,8 @@ The console is the only authority on expression syntax: `packages/rule-engine` p
 
 The additions of proto `v0.22.0` are marked by the capability `rules-v3`: cookies and query parameters by name (`http.request.cookies.<name>`, `http.request.uri.args.<name>`, the first raw value), new request and connection fields, `http.response.cache_status`, encoding and digest functions, `substring` (its integer arguments are `const` nodes of `value_type` `number`), `to_string` (an argument of any type), and the `wildcard` and `strict_wildcard` comparisons; request and response header values reuse `RuleAction.target` for their value expression, `QueryParam.expression` computes a query parameter, and `RuleAction.append` adds a response header line; redirect status 303; `{{time}}` and `{{path}}` in error pages. Nodes compute these fields only for sites whose rules read them; a computed header value over 4096 bytes or with a control character skips the action (one NOTICE per rule and node every 60 seconds, its message naming only the site and rule IDs), while a failed query parameter value still fails closed. Configurations that use none of them encode byte for byte as before (cross-language content hash vector `content_hash_vector_v0220.json`).
 
+Proto `v0.23.0` adds three capabilities. `edge-ports-v1`: a `Listener` may use a port besides 80 / 443 (the cluster's extra ports), `Site.ports` lists the listener ports a site is bound to (empty means every listener, the former semantics; a site on 80 / 443 in a cluster without extra ports compiles to empty), and `TlsOptions.redirect_status` / `redirect_port` / `redirect_excluded_domains` are the HTTPS redirect options; nodes render a site's server blocks on its ports only, and the router and the TLS callbacks treat its hosts on other ports as unknown. `client-ip-v1`: `NodeConfig.client_address` is the cluster's client address source; in the PROXY protocol mode every `Listener.proxy_protocol` is set, the trusted header mode reads the header with nginx realip (`real_ip_recursive on`); `X-Forwarded-For` towards the origins is the received chain plus the direct peer (`$realip_remote_addr`), the rule field `ip.peer` is the direct peer, and trusted CIDRs are never banned and not counted per address by CC. `l4-v2`: `L4App.port_end` (a port range, a stream `listen` range), `L4Origin.port` 0 for the arriving port, `L4App.certificate_id` / `tls_minimum_version` (stream `ssl_client_hello_by_lua` / `ssl_certificate_by_lua` check the SNI and terminate TLS; the certificate travels with the layer-4 table). Listener ports and the client address are the cluster's current state: a rollback keeps the current ones, and sites take their current ports and redirect options (`refreshDerived(config, edge)`). Cross-language content hash vector `content_hash_vector_v0230.json`.
+
 | Management action | Audit |
 | --- | --- |
 | A site's rules | `site.rules_update` (publishes the site's cluster, reason `rules_updated`) |
@@ -280,10 +284,11 @@ Every RPC other than `Enroll` and `EnrollProbe` requires a client certificate ve
 | `RenewCertificate` | Rotate the node certificate |
 | `WatchConfig` | Server stream: revision notifications, task notifications, ban notifications (`bans-v1`), keepalives |
 | `GetConfig` | Snapshot, or diff against `base_revision`, with a revision receipt |
-| `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state, host metrics (`metrics-v1`); `probe` in the response tells the node whether it also probes |
+| `ReportStatus` | Heartbeat, apply receipt, origin health and error codes (passive and active checks reported apart), ban state, host metrics (`metrics-v1`), cache zone usage (`cache-zone-v1`, kept in `node.cache_usage`); `probe` in the response tells the node whether it also probes |
 | `ReportStats`, `ReportStatsV2` | Per-minute pre-aggregated traffic statistics (`ReportStatsV2` also carries the L4 apps' minute statistics, `l4-v1`); deduplicated by batch sequence |
 | `ReportLogs` | Sampled access logs; deduplicated by batch sequence |
-| `GetOriginCredentials` | S3 origin keys referenced by the cluster's sites |
+| `GetOriginCredentials` | S3 origin keys and PURGE keys (`site_secret`, empty `access_key_id`) referenced by the cluster's sites |
+| `SubmitPurge` | A PURGE request the node hands on (`site-content-v1`): the console checks that the node's cluster serves the site, that the site has PURGE on and that the URL belongs to it, then creates a URL purge task as the node (source `purge_method`), at most 120 per site and minute |
 | `GetCertificates` | Certificate chains and private keys referenced by the cluster's sites |
 | `PullTasks`, `ReportTaskResult` | Purge, prefetch, and upgrade tasks |
 | `GetBans`, `ReportBans` | Incremental ban changes of the node's cluster by sequence; upload of the node's automatic bans |
@@ -305,6 +310,8 @@ A revision receipt is sealed with the master key (purpose `node.revision_receipt
 5. The result is written back to `certificate`: chain (certificates only), fingerprint, expiry, next renewal time, and the envelope-encrypted private key (PKCS #8); a request with `bindSiteId` (one-click HTTPS on a site's HTTPS tab, preceded by `https.check`, which lists every blocker at once: nodes, DNS, the DNS credential and CAA) is bound to the site in the same transaction (the HTTPS redirect and other settings unchanged); clusters that reference the certificate publish a new revision.
 
 Domains a site's certificate does not cover yet (the certificate is being reissued for them) are published with `Domain.tls_pending` (proto v0.19.0) when every active node of the cluster has `tls-pending-domains-v1`, and nodes serve them over HTTP only; otherwise they are left out until the new certificate is issued.
+
+Uploads and issued certificates with EC keys that spell out the curve's parameters are refused: nodes (Go `crypto/tls`) cannot load them. Uploads stored before are checked by `maintenance.check-certificates` at worker start, which opens their private keys: those nodes cannot load get status `error` with `last_error` `certificate_chain_explicit_curve` or `certificate_key_explicit_curve`, audited as `certificate.unloadable`. Saving a site's HTTPS settings checks the chosen certificate itself and refuses such a certificate with `CERTIFICATE_CHAIN_EXPLICIT_CURVE` / `CERTIFICATE_KEY_EXPLICIT_CURVE`; a site bound to one is not changed automatically, and its cluster's nodes apply a new revision once another certificate (or none) is bound.
 
 | Limit | Value |
 | --- | --- |
@@ -366,6 +373,7 @@ Alerts (`alerts.sweep`, every minute) detect offline nodes, expiring certificate
 | `traffic.rollup` | Every minute | Traffic rollup and cleanup (L4 app minute statistics included), usage rollup and retention, access log partition maintenance, upgrade expiry; one failing part does not stop the others |
 | `certificates.sweep` | Every minute | Certificate issuance and renewal |
 | `maintenance.recompile` | At start; skipped while `config_recompiled` in `system_setting` matches the current marker | Republishes every cluster once when an upgrade changes what stored data compiles to |
+| `maintenance.check-certificates` | At start | Checks uploaded certificates not marked yet and marks those nodes cannot load (EC keys with explicit curve parameters) as failed |
 | `maintenance.prune-revisions` | Minute 17 of every hour | Deletes revisions and DNS revisions beyond the retention count |
 | `maintenance.prune-idempotency-keys` | Minute 29 of every hour | Deletes expired idempotency keys (older than 24 hours) |
 | `maintenance.expire-cache-tasks` | Minute 43 of every hour | Fails purge and prefetch deliveries past their deadline; deletes tasks older than 90 days (purges a node has yet to make up stay) |
@@ -424,6 +432,7 @@ Tables are defined in `packages/db/src/schema`; migrations are plain SQL generat
 | `origin_pool` | Origin pools: timeouts, keepalive, failure thresholds, origin TLS verification, HTTP version towards the origins and gRPC, active health check and session affinity (kept while off) |
 | `origin` | Origins and their origin group (empty for the default group) |
 | `origin_credential` | S3 origin keys, envelope-encrypted |
+| `site_secret` | Other site secrets (the PURGE method's key), envelope-encrypted, delivered over the node channel only |
 | `cache_rule` | Cache rules: condition expression and list references, status and size conditions, action, edge and browser TTLs |
 | `edge_rule` | Site or global rules: phase, expression, action, list references |
 | `bulk_redirect` | A site's bulk redirects: source (path or domain plus path, unique per site), target, status code, whether the query string is kept, order |
@@ -543,6 +552,8 @@ The view `traffic_hour_stats` combines hourly rollups with minute data not rolle
 | `0051_node_last_auth_error` | `node.last_auth_error`, `last_auth_error_at` (why the node channel last refused the node's own certificate, e.g. `CERT_HAS_EXPIRED`) |
 | `0052_retention_indexes` | Indexes: `alert_event (occurred_at, ordinal)`; `security_event (received_at)`, site level events above normal only; `cache_task_node (node_id)`, failed and skipped deliveries not made up only |
 | `0053_origin_protocol` | `origin_pool.protocol` (HTTP version towards the origins, `http1` or `http2`), `origin_pool.grpc` (gRPC proxied over HTTP/2 end to end) |
+| `0054_edge_ports` | `cluster.extra_http_ports`, `cluster.extra_https_ports` (listener ports besides 80 / 443), `cluster.client_ip` (the client address source, jsonb, null for direct); `site.http_ports`, `site.https_ports` (the ports a site is bound to, default 80 / 443); `l4_app.port_end` (port ranges), `l4_app.origin_port_mode` (`fixed` / `same`), `l4_app.certificate_id`, `l4_app.tls_minimum_version` (TLS termination) |
+| `0055_site_content` | `site_secret`; `cluster.cache_max_size_gb`, `cluster.cache_inactive_days` (cache zone); `node.cache_max_size_gb` (node size override), `node.cache_usage` (reported usage); `site.hide_x_cache`, `site.purge_method`, `site.maintenance`, `site.maintenance_updated_at`, `site.charset`, `site.request_body_limit`; `origin_pool.tries`, `origin_pool.status_retry`; `cache_rule.cache_set_cookie`; `site_error_page.redirect_url`, `site_error_page.response_status` |
 
 ## Build output
 

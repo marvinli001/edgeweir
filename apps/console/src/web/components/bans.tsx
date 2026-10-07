@@ -11,6 +11,7 @@ import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
+import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
@@ -133,6 +134,9 @@ export function BansPage({
     meta: { background: true },
   });
   const sites = useQuery(orpc.sites.list.queryOptions({ input: { page: 1, pageSize: 100 } }));
+  // Kernel bans see the TCP peer: behind proxies that is the proxy, not the client.
+  const clusters = useQuery(orpc.clusters.list.queryOptions());
+  const proxied = (clusters.data ?? []).filter((c) => c.clientIpMode !== "direct");
   const filtered = !!(siteId || source || scope || address);
   const filter =
     <T,>(set: (value: T) => void) =>
@@ -263,6 +267,11 @@ export function BansPage({
           ) : null}
         </FilterBar>
       </div>
+      {proxied.length ? (
+        <SafetyNote className="animate-enter" data-testid="bans-kernel-peer-note">
+          {m.bans_kernel_peer_note({ clusters: proxied.map((c) => c.name).join(", ") })}
+        </SafetyNote>
+      ) : null}
       <QueryView
         query={bans}
         isEmpty={(data) => data.total === 0}

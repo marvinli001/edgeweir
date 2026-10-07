@@ -84,7 +84,7 @@ export const bulkRedirectsInput = z.object({
     ),
 });
 
-/** A site's bulk redirects (members read; owners and admins replace them). */
+/** A site's bulk redirects: read the list or replace it whole. */
 export const bulkRedirectsContract = {
   get: oc
     .route({ method: "GET", path: "/sites/{id}/bulk-redirects", tags: ["rules"] })

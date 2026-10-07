@@ -1,7 +1,13 @@
-import { forbiddenOriginRange, type Node, unicastAddress } from "@edgeweir/contract";
+import {
+  CACHE_SIZE_GB_RANGE,
+  CACHE_ZONE_FEATURE,
+  forbiddenOriginRange,
+  type Node,
+  unicastAddress,
+} from "@edgeweir/contract";
 import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as React from "react";
 import { toast } from "sonner";
 import { Meter } from "@/components/appica/meter";
@@ -9,7 +15,7 @@ import { markOverflow } from "@/components/data-table";
 import { OptionSelect } from "@/components/form-select";
 import { ProbeResults } from "@/components/probes";
 import { SafetyNote } from "@/components/safety-note";
-import { SwitchField } from "@/components/site/fields";
+import { NumberField, SwitchField } from "@/components/site/fields";
 import { nextDraftKey } from "@/components/site/save-site";
 import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
@@ -134,6 +140,7 @@ export function NodeDetailSheet({ node, onClose }: { node: Node; onClose: () => 
           <NodeMetrics node={node} />
           <NodeFacts node={node} />
           <NodeProbeSwitch node={node} />
+          <NodeCache node={node} />
           <NodeAddresses node={node} />
           <section className="flex min-w-0 flex-col gap-3">
             <h3 className="text-sm font-medium">{m.probes_results()}</h3>
@@ -333,6 +340,97 @@ function NodeProbeSwitch({ node }: { node: Node }) {
       {hasRegion ? null : (
         <SafetyNote data-testid="node-probe-no-region">{m.node_probe_no_region()}</SafetyNote>
       )}
+    </section>
+  );
+}
+
+/**
+ * The node's cache zone: its disk usage as last measured and its own size
+ * (empty follows the cluster's; needs cache-zone-v1 on every active node).
+ */
+function NodeCache({ node }: { node: Node }) {
+  const queryClient = useQueryClient();
+  const cluster = useQuery(orpc.clusters.get.queryOptions({ input: { id: node.clusterId } }));
+  const nodes = useQuery(orpc.nodes.list.queryOptions({ input: { clusterId: node.clusterId } }));
+  const setCache = useMutation(orpc.nodes.setCache.mutationOptions());
+  const saved = node.cache.maxSizeGb === null ? "" : String(node.cache.maxSizeGb);
+  const [size, setSize] = React.useState(saved);
+  const available = (nodes.data ?? [])
+    .filter((n) => n.status === "active")
+    .every((n) => n.supportedFeatures.includes(CACHE_ZONE_FEATURE));
+  const usage = node.cache.usage;
+  const valid =
+    size.trim() === "" ||
+    (Number.isInteger(Number(size)) &&
+      Number(size) >= CACHE_SIZE_GB_RANGE.min &&
+      Number(size) <= CACHE_SIZE_GB_RANGE.max);
+  const blocked = !available && node.cache.maxSizeGb === null;
+  return (
+    <section className="flex flex-col gap-3" data-testid="node-cache">
+      <h3 className="text-sm font-medium">{m.node_cache_title()}</h3>
+      <p className="text-sm tabular-nums" data-testid="node-cache-usage">
+        {usage
+          ? m.node_cache_used({
+              used: formatBytes(usage.usedBytes),
+              total: formatBytes(usage.maxBytes),
+            })
+          : m.node_cache_unreported()}
+        {usage ? (
+          <span className="ml-2 text-xs text-muted-foreground">
+            {m.node_cache_measured({ time: formatDateTime(usage.measuredAt) })}
+          </span>
+        ) : null}
+      </p>
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (!valid) return;
+          try {
+            await setCache.mutateAsync({
+              id: node.id,
+              maxSizeGb: size.trim() === "" ? null : Number(size),
+            });
+            await queryClient.invalidateQueries({ queryKey: orpc.nodes.key() });
+            toast.success(m.common_saved());
+          } catch (error) {
+            toast.error(errorMessage(error));
+          }
+        }}
+      >
+        <div className="w-44">
+          <NumberField
+            id={`node-cache-size-${node.id}`}
+            label={m.node_cache_size()}
+            value={size}
+            min={CACHE_SIZE_GB_RANGE.min}
+            max={CACHE_SIZE_GB_RANGE.max}
+            step={1}
+            disabled={blocked}
+            placeholder={
+              cluster.data
+                ? m.node_cache_cluster({ size: String(cluster.data.cache.maxSizeGb) })
+                : ""
+            }
+            onChange={setSize}
+            testId="node-cache-size"
+          />
+        </div>
+        <Button
+          type="submit"
+          variant="outline"
+          disabled={size === saved || !valid || setCache.isPending}
+          data-testid="node-cache-save"
+        >
+          {setCache.isPending ? <Spinner /> : null}
+          {m.common_save()}
+        </Button>
+      </form>
+      {blocked ? (
+        <SafetyNote data-testid="node-cache-unavailable">
+          {m.feature_unavailable_nodes()}
+        </SafetyNote>
+      ) : null}
     </section>
   );
 }

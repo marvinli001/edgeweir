@@ -24,6 +24,7 @@ import {
   type L4StatsRange,
   listChips,
   originLabel,
+  portsLabel,
   proxyVersionLabel,
 } from "@/lib/l4";
 import { orpc } from "@/lib/orpc";
@@ -197,7 +198,7 @@ function Overview({ app }: { app: L4App }) {
             <SummaryCell label={m.l4_port()} testId="l4-app-listen">
               <ProtocolBadge protocol={app.protocol} />
               <span className="font-mono text-xl font-semibold tracking-tight readout">
-                {app.port}
+                {portsLabel(app)}
               </span>
             </SummaryCell>
             <SummaryCell label={m.sites_col_status()} testId="l4-app-state">
@@ -255,6 +256,12 @@ function Overview({ app }: { app: L4App }) {
                 ))}
               </ul>
             </InfoRow>
+            {app.certificateName ? (
+              <InfoRow label={m.l4_tls_certificate()} testId="l4-app-tls">
+                {app.certificateName}
+                <Badge variant="outline">{`TLS ${app.tlsMinimumVersion}+`}</Badge>
+              </InfoRow>
+            ) : null}
             <InfoRow label={m.l4_proxy()} testId="l4-app-proxy">
               {proxy.length ? proxy.join(" · ") : m.l4_proxy_off()}
             </InfoRow>

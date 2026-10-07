@@ -8,6 +8,7 @@ import { AUTH_SECRET_BINDING, AUTH_SECRET_KEY } from "../../src/server/lib/auth-
 import { type EnvelopeBinding, MasterKey } from "../../src/server/lib/envelope";
 import type { Logger } from "../../src/server/lib/logger";
 import { assertMasterKey, MASTER_KEY_MISMATCH } from "../../src/server/lib/master-key";
+import { siteSecretBinding } from "../../src/server/lib/site-secrets";
 import { generateCa } from "../../src/server/pki/ca";
 import { caKeyBinding, loadOrCreateNodeCa, NODE_CA_ID } from "../../src/server/pki/store";
 import {
@@ -132,12 +133,19 @@ describe("master key rotation", () => {
       account: crypto.randomUUID(),
       key: crypto.randomUUID(),
       pending: crypto.randomUUID(),
+      siteSecret: crypto.randomUUID(),
     };
     await db.insert(schema.originCredential).values({
       id: ids.credential,
       siteId: site?.id ?? "",
       accessKeyId: "AKID",
       secretEnvelope: seal(s3SecretBinding(ids.credential)),
+    });
+    await db.insert(schema.siteSecret).values({
+      id: ids.siteSecret,
+      siteId: site?.id ?? "",
+      kind: "purge_key",
+      secretEnvelope: seal(siteSecretBinding(ids.siteSecret)),
     });
     const ca = await generateCa("Rotation CA");
     await db.insert(schema.pkiAuthority).values({

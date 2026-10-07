@@ -58,6 +58,13 @@ export async function lockDomains(tx: Executor, names: string[]) {
   for (const name of [...new Set(names)].sort()) await xactLock(tx, `edgeweir.domain.${name}`);
 }
 
+/**
+ * Serializes a site's PURGE-method tasks, so the per-minute quota is
+ * counted and the task inserted in one step.
+ */
+export const lockPurgeMethod = (tx: Executor, siteId: string) =>
+  xactLock(tx, `edgeweir.purge-method.${siteId}`);
+
 /** Serializes saves of the platform protection settings. */
 export const lockProtectionSettings = (tx: Executor) =>
   xactLock(tx, "edgeweir.protection-settings");

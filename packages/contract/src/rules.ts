@@ -156,6 +156,7 @@ export const configPhaseFields = [
   "originSendTimeoutMs",
   "originReadTimeoutMs",
   "logSampleRate",
+  "requestBodyLimit",
 ] as const;
 
 export const ruleAction = z.discriminatedUnion("kind", [
@@ -236,6 +237,16 @@ export const ruleAction = z.discriminatedUnion("kind", [
       originReadTimeoutMs: z.number().int().min(100).max(3_600_000).optional(),
       /** Sampled access log rate in basis points (0 stops sampling). */
       logSampleRate: z.number().int().min(0).max(10_000).optional(),
+      /**
+       * The request's body limit in bytes by Content-Length, 0 for none
+       * (site-content-v1); replaces the site's for the requests the rule matches.
+       */
+      requestBodyLimit: z
+        .number()
+        .int()
+        .min(0)
+        .max(10 * 1024 * 1024 * 1024)
+        .optional(),
     })
     .refine(
       (a) =>

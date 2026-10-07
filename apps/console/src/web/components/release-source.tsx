@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { m } from "@/lib/i18n";
 import { orpc } from "@/lib/orpc";
 
-/** Admin card: the mirror node upgrades read release manifests from. */
+/** System page card: the mirror node upgrades read release manifests from. */
 export function ReleaseSourceCard() {
   return (
     <SettingsCard

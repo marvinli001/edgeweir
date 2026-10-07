@@ -405,9 +405,10 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     expect(cleared.pages).toEqual([]);
     expect((await siteOf())?.errorPages).toBeUndefined();
     expect((await config()).requiredFeatures).not.toContain("error-pages-v1");
-    // Unknown statuses and duplicates are validation errors.
+    // Unknown statuses and duplicates are validation errors (404 is a page
+    // status since site-content-v1, see content.test.ts; 418 is not).
     for (const pages of [
-      [{ status: 404, template: "x" }],
+      [{ status: 418, template: "x" }],
       [
         { status: 429, template: "a" },
         { status: 429, template: "b" },
@@ -451,7 +452,7 @@ describe("active health checks, session affinity, Cache-Tag and error pages on t
     ).toMatchObject({ code: "ERROR_PAGE_TOO_LARGE", data: { status: 502 } });
     // Nothing changed.
     expect((await admin.errorPages.get({ id: siteId })).pages).toEqual([
-      { status: 502, template: ascii },
+      { status: 502, template: ascii, redirectUrl: "", responseStatus: 0 },
     ]);
     expect(
       await rpcError(admin.settings.setErrorPages({ siteDisabled: "停".repeat(22_000) })),

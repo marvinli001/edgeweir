@@ -2,9 +2,12 @@ import { create } from "@bufbuild/protobuf";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
   type CacheRuleModel,
+  type CacheZoneModel,
   type CompileInput,
+  DEFAULT_CACHE_ZONE,
   decodeNodeConfig,
   expressionOf,
+  keysZoneMbFor,
   type OfflineHostModel,
   type RuleModel,
   ruleModelOf,
@@ -21,13 +24,16 @@ import {
   parseExpression,
   parseValueExpression,
 } from "@edgeweir/rule-engine";
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import { parseCacheCondition } from "../lib/cache-conditions";
 import { readCacheKey } from "../lib/cache-key";
 import { uncoveredDomains } from "../lib/certificate-names";
 import { fail } from "../lib/errors";
 import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settings";
-import { loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
+import { readContentSettings, readMaintenance } from "../lib/site-content";
+import { PURGE_KEY } from "../lib/site-secrets";
+import { loadEdgeModel } from "./edge";
+import { errorPagesModel, loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
 import { loadL4AppModels } from "./l4-config";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
 import { loadPlatformProtection, loadSiteProtectionModels } from "./protection";
@@ -122,6 +128,14 @@ export async function loadSiteModels(
     .select({ id: schema.originCredential.id, version: schema.originCredential.version })
     .from(schema.originCredential)
     .where(inArray(schema.originCredential.siteId, siteIds));
+  const purgeKeys = await db
+    .select({
+      id: schema.siteSecret.id,
+      siteId: schema.siteSecret.siteId,
+      version: schema.siteSecret.version,
+    })
+    .from(schema.siteSecret)
+    .where(and(inArray(schema.siteSecret.siteId, siteIds), eq(schema.siteSecret.kind, PURGE_KEY)));
 
   const edgeRules = await db
     .select()
@@ -263,6 +277,8 @@ export async function loadSiteModels(
                 keepaliveMaxRequests: pool.keepaliveMaxRequests,
                 protocol: pool.protocol === "http2" ? "http2" : "http1",
                 grpc: pool.grpc,
+                tries: pool.tries,
+                statusRetry: pool.statusRetry,
               }
             : undefined,
           // Compiled only while on; the settings are kept while off.
@@ -283,10 +299,15 @@ export async function loadSiteModels(
         waf: waf.get(s.id) ?? null,
         keepCacheTag: s.keepCacheTag,
         errorPages: errorPages.has(s.id)
-          ? { pages: errorPages.get(s.id) ?? [], interceptOriginErrors: s.interceptOriginErrors }
+          ? errorPagesModel(errorPages.get(s.id) ?? [], s.interceptOriginErrors)
           : null,
         rangeSlice: s.rangeSlice,
         websocket: s.websocket,
+        ports: { http: [...s.httpPorts], https: [...s.httpsPorts] },
+        ...contentModel(
+          s,
+          purgeKeys.find((key) => key.siteId === s.id),
+        ),
         certificateId: s.certificateId ?? "",
         // Always compiled: the node's per-site server, which carries compression, exists only
         // with it, and a site without a certificate or saved HTTPS settings is compressed with
@@ -301,6 +322,39 @@ export async function loadSiteModels(
       };
     })
     .filter((site) => site.domains.length > 0);
+}
+
+/**
+ * The site-content-v1 settings of a site (proto v0.24.0): the PURGE key
+ * reference while the method is on and a key exists, X-Cache, maintenance
+ * while on, the charset while set and the body limit.
+ */
+function contentModel(
+  s: typeof schema.site.$inferSelect,
+  purgeKey: { id: string; version: number } | undefined,
+): Pick<SiteModel, "purge" | "hideXCache" | "maintenance" | "charset" | "requestBodyLimit"> {
+  const maintenance = readMaintenance(s.maintenance);
+  const { charset, requestBodyLimit } = readContentSettings(s);
+  return {
+    purge:
+      s.purgeMethod && purgeKey
+        ? { credentialId: purgeKey.id, credentialVersion: purgeKey.version }
+        : null,
+    hideXCache: s.hideXCache,
+    maintenance: maintenance.enabled
+      ? {
+          template: maintenance.template,
+          retryAfterSeconds: maintenance.retryAfterSeconds,
+          allowedCidrs: maintenance.allowedCidrs,
+          allowedPathPrefixes: maintenance.allowedPathPrefixes,
+        }
+      : null,
+    charset:
+      charset.name === "off"
+        ? null
+        : { name: charset.name, force: charset.force, uppercase: charset.uppercase },
+    requestBodyLimit,
+  };
 }
 
 /** IP list names to ids (list names are unique). */
@@ -370,6 +424,7 @@ function tryCacheRuleModel(
     staleWhileRevalidateSeconds: r.staleWhileRevalidateSeconds,
     staleIfErrorSeconds: r.staleIfErrorSeconds,
     cacheAuthorized: r.cacheAuthorized,
+    cacheSetCookie: r.cacheSetCookie,
   };
 }
 
@@ -548,6 +603,45 @@ export async function loadHttpChallenges(tx: Executor, clusterId: string) {
 }
 
 /**
+ * The cluster's cache zone: its size on every node (a node may have its
+ * own, cache-zone-v1) and inactive time. The defaults (10 GiB, 7 days)
+ * compile as the configurations before cluster cache settings did.
+ */
+export async function loadCacheZones(db: Executor, clusterId: string): Promise<CacheZoneModel[]> {
+  const [cluster] = await db
+    .select({
+      maxSizeGb: schema.cluster.cacheMaxSizeGb,
+      inactiveDays: schema.cluster.cacheInactiveDays,
+    })
+    .from(schema.cluster)
+    .where(eq(schema.cluster.id, clusterId));
+  const nodes = await db
+    .select({ id: schema.node.id, maxSizeGb: schema.node.cacheMaxSizeGb })
+    .from(schema.node)
+    .where(and(eq(schema.node.clusterId, clusterId), isNotNull(schema.node.cacheMaxSizeGb)));
+  const maxSizeMb = (cluster?.maxSizeGb ?? 10) * 1024;
+  return [
+    {
+      name: DEFAULT_CACHE_ZONE,
+      maxSizeMb,
+      keysZoneMb: keysZoneMbFor(maxSizeMb),
+      inactiveSeconds: (cluster?.inactiveDays ?? 7) * 86_400,
+      nodeSizes: nodes.flatMap((node) =>
+        node.maxSizeGb === null
+          ? []
+          : [
+              {
+                nodeId: node.id,
+                maxSizeMb: node.maxSizeGb * 1024,
+                keysZoneMb: keysZoneMbFor(node.maxSizeGb * 1024),
+              },
+            ],
+      ),
+    },
+  ];
+}
+
+/**
  * What the cluster's configuration is compiled from now, except its
  * challenge keys. Stored rules the current validator refuses keep their
  * last compiled form and raise config_rule_invalid (resolved once they
@@ -578,10 +672,13 @@ export async function loadConfigInput(
   const platformRules = await platformRuleModels(tx, lists, previous, invalid);
   await syncRuleAlerts(tx, invalid);
   const originAllowedCidrs = await loadOriginAllowList(tx);
+  const l4Apps = await loadL4AppModels(tx, clusterId);
   const certIds = [
-    ...new Set(
-      sites.filter((s) => s.enabled && s.certificateId).map((s) => s.certificateId as string),
-    ),
+    ...new Set([
+      ...sites.filter((s) => s.enabled && s.certificateId).map((s) => s.certificateId as string),
+      // TCP applications that terminate TLS (l4-v2).
+      ...l4Apps.filter((a) => a.enabled && a.certificateId).map((a) => a.certificateId as string),
+    ]),
   ];
   const certRows = certIds.length
     ? await tx.select().from(schema.certificate).where(inArray(schema.certificate.id, certIds))
@@ -598,6 +695,7 @@ export async function loadConfigInput(
   const platformProtection = await loadPlatformProtection(tx);
   return {
     clusterId,
+    cacheZones: await loadCacheZones(tx, clusterId),
     sites,
     originAllowedCidrs,
     certificates,
@@ -607,6 +705,7 @@ export async function loadConfigInput(
     platformProtection,
     platformErrorPages: await loadPlatformErrorPages(tx),
     offlineHosts: await loadOfflineHosts(tx, clusterId),
-    l4Apps: await loadL4AppModels(tx, clusterId),
+    l4Apps,
+    edge: await loadEdgeModel(tx, clusterId),
   };
 }

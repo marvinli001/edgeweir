@@ -1,4 +1,4 @@
-import type { PlatformErrorPagesModel } from "@edgeweir/config-compiler";
+import type { PlatformErrorPagesModel, SiteErrorPagesModel } from "@edgeweir/config-compiler";
 import {
   ERROR_PAGE_MAX_BYTES,
   type ErrorPage,
@@ -27,7 +27,8 @@ type SiteRow = typeof schema.site.$inferSelect;
 type PageRow = typeof schema.siteErrorPage.$inferSelect;
 
 /** Refuses a template over 64 KiB of UTF-8 with the page's status. */
-function assertTemplateSize(status: number, template: string) {
+/** status: the page's status as the operator names it (403, "4xx"). */
+export function assertTemplateSize(status: number | string, template: string) {
   if (utf8Bytes(template) > ERROR_PAGE_MAX_BYTES)
     fail(
       "ERROR_PAGE_TOO_LARGE",
@@ -36,10 +37,36 @@ function assertTemplateSize(status: number, template: string) {
     );
 }
 
-const toPage = (row: Pick<PageRow, "status" | "template">): ErrorPage => ({
-  status: row.status as ErrorPageStatus,
+/** Stored status of a page: the status, or 4 / 5 for the 4xx / 5xx classes (as nodes take it). */
+export const storedStatus = (status: ErrorPageStatus): number =>
+  status === "4xx" ? 4 : status === "5xx" ? 5 : status;
+const pageStatus = (stored: number): ErrorPageStatus =>
+  (stored === 4 ? "4xx" : stored === 5 ? "5xx" : stored) as ErrorPageStatus;
+
+const toPage = (
+  row: Pick<PageRow, "status" | "template" | "redirectUrl" | "responseStatus">,
+): ErrorPage => ({
+  status: pageStatus(row.status),
   template: row.template,
+  redirectUrl: row.redirectUrl,
+  responseStatus: row.responseStatus,
 });
+
+/** A site's pages as the compiler takes them. */
+export function errorPagesModel(
+  pages: ErrorPage[],
+  interceptOriginErrors: boolean,
+): SiteErrorPagesModel {
+  return {
+    pages: pages.map((page) => ({
+      status: storedStatus(page.status),
+      template: page.template,
+      redirectUrl: page.redirectUrl,
+      responseStatus: page.responseStatus,
+    })),
+    interceptOriginErrors,
+  };
+}
 
 /** The error pages of the given sites, sorted by status (sites without pages are absent). */
 export async function loadSiteErrorPages(
@@ -95,15 +122,22 @@ export async function updateSiteErrorPages(
       assertUpdatedAt(site.errorPagesUpdatedAt, input.expectedUpdatedAt);
     }
     const before = (await loadSiteErrorPages(tx, [site.id])).get(site.id) ?? [];
-    const pages = [...input.pages].sort((a, b) => a.status - b.status);
+    const pages: ErrorPage[] = [...input.pages].sort(
+      (a, b) => storedStatus(a.status) - storedStatus(b.status),
+    );
     const updatedAt = new Date(
       Math.max(Date.now(), (site.errorPagesUpdatedAt?.getTime() ?? 0) + 1),
     );
     await tx.delete(schema.siteErrorPage).where(eq(schema.siteErrorPage.siteId, site.id));
     if (pages.length)
-      await tx
-        .insert(schema.siteErrorPage)
-        .values(pages.map((page) => ({ siteId: site.id, ...page, updatedAt })));
+      await tx.insert(schema.siteErrorPage).values(
+        pages.map((page) => ({
+          siteId: site.id,
+          ...page,
+          status: storedStatus(page.status),
+          updatedAt,
+        })),
+      );
     const [updated] = await tx
       .update(schema.site)
       .set({ interceptOriginErrors: input.interceptOriginErrors, errorPagesUpdatedAt: updatedAt })
@@ -115,10 +149,12 @@ export async function updateSiteErrorPages(
       reason: { code: "site_error_pages_updated", params: { site: site.name } },
       actor: ctx.actor,
     });
-    const template = (list: ErrorPage[], status: number) =>
-      list.find((page) => page.status === status)?.template;
+    const content = (list: ErrorPage[], status: ErrorPageStatus) => {
+      const page = list.find((p) => p.status === status);
+      return page && `${page.responseStatus}|${page.redirectUrl}|${page.template}`;
+    };
     const statuses = [...new Set([...before, ...pages].map((page) => page.status))].sort(
-      (a, b) => a - b,
+      (a, b) => storedStatus(a) - storedStatus(b),
     );
     await recordAudit(tx, ctx.actor, {
       action: "site.error_pages_update",
@@ -135,8 +171,9 @@ export async function updateSiteErrorPages(
           statuses: pages.map((page) => page.status),
           interceptOriginErrors: input.interceptOriginErrors,
         },
-        changed: statuses.filter((status) => template(before, status) !== template(pages, status)),
+        changed: statuses.filter((status) => content(before, status) !== content(pages, status)),
         bytes: Object.fromEntries(pages.map((page) => [page.status, utf8Bytes(page.template)])),
+        redirects: pages.filter((page) => page.redirectUrl).map((page) => page.status),
         revision: revision.revision,
       },
     });

@@ -1,5 +1,5 @@
 import { formatDomain } from "@edgeweir/config-compiler";
-import type { SiteLaunch } from "@edgeweir/contract";
+import { certificateUnloadable, type SiteLaunch } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { asc, eq } from "drizzle-orm";
 import { uncoveredDomains } from "../lib/certificate-names";
@@ -44,6 +44,8 @@ async function certificateCoverage(
   }
   if (cert.notAfter && cert.notAfter.getTime() <= now)
     return { state: "expired", ...base, uncovered: [] };
+  // Covers every domain, but nodes cannot load it.
+  if (certificateUnloadable(cert)) return { state: "failed", ...base, uncovered: [] };
   return { state: "covered", ...base, uncovered: [] };
 }
 

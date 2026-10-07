@@ -70,7 +70,7 @@ async function promote(tx: Tx, row: RolloutRow, outcome: RolloutOutcome, actor: 
  * The canary nodes go back to the stable content: as a new revision (nodes
  * never apply an older revision number), which becomes the stable revision
  * of every node. The database keeps the change; the next publication goes
- * through the canary again. Like an administrator's rollback, it ships
+ * through the canary again. Like the operator's rollback, it ships
  * nothing the current state no longer has (sites taken offline, removed
  * domains, renewed certificates; see currentStable).
  */

@@ -231,14 +231,18 @@ function CertificatesPage() {
 
 /**
  * A certificate's state as a tinted chip with its light: ready (good), waiting (idle), issuing
- * (the signal, live), failed (the destructive tint).
+ * (the signal, live), failed, expired or unloadable by nodes (the destructive tint).
  */
 function CertificateStatus({ state }: { state: CertificateState }) {
-  if (state === "error" || state === "expired") {
+  if (state === "error" || state === "expired" || state === "unloadable") {
     return (
       <Badge variant="destructive" data-testid="certificate-status">
         <Dot tone="bad" small />
-        {state === "expired" ? m.cert_status_expired() : m.cert_status_error()}
+        {state === "expired"
+          ? m.cert_status_expired()
+          : state === "unloadable"
+            ? m.cert_status_unloadable()
+            : m.cert_status_error()}
       </Badge>
     );
   }

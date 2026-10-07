@@ -57,7 +57,7 @@ describe("layer-4 statistics", async () => {
   const app = async (cluster: string, name: string, port: number) =>
     (
       await createL4App(
-        ctx.db,
+        ctx,
         l4AppCreateInput.parse({
           clusterId: cluster,
           name,
