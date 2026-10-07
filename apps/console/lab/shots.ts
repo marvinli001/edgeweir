@@ -95,58 +95,88 @@ async function take(browser: Browser, shot: Shot) {
     },
     { theme: shot.theme, locale, state, stateKey: STATE_KEY },
   );
-  const page = await context.newPage();
   const notes: string[] = [];
-  page.on("pageerror", (error) => notes.push(`error: ${error.message}`));
-  page.on("console", (message) => {
-    const text = message.text();
-    if (text.startsWith("[lab]")) notes.push(text);
-  });
-  const route = PAGES.find((candidate) => candidate.name === shot.page)?.path ?? "/";
-  await page.goto(`${base}#${route}`);
-  await page.waitForLoadState("networkidle");
-  await page.evaluate(() => document.fonts.ready.then(() => undefined));
-  if (state === "loading") {
-    // The loader fades in after a short delay.
-    await page.waitForTimeout(1_500);
-  } else {
-    // First loads show a loader and the top bar; wait until both are gone for a moment.
-    await page
-      .waitForFunction(
-        () => {
-          const w = window as unknown as { __labQuietSince?: number };
-          const busy =
-            document.querySelector('[role="status"][aria-live="polite"]') ||
-            document.querySelector('[data-testid="top-progress"][data-active]');
-          if (busy) {
-            w.__labQuietSince = undefined;
-            return false;
-          }
-          w.__labQuietSince ??= performance.now();
-          return performance.now() - w.__labQuietSince > 400;
-        },
-        null,
-        { timeout: 15_000, polling: 100 },
-      )
-      .catch(() => notes.push("still loading after 15 s"));
-    // Entrances (animate-enter with staggered delays) and number roll-ins.
-    await page.waitForTimeout(1_800);
-  }
   const name = fileName(shot);
-  await page.screenshot({ path: path.join(out as string, name), fullPage: true });
-  await context.close();
+  try {
+    const page = await context.newPage();
+    page.on("pageerror", (error) => notes.push(`error: ${error.message}`));
+    page.on("console", (message) => {
+      const text = message.text();
+      if (text.startsWith("[lab]")) notes.push(text);
+    });
+    const route = PAGES.find((candidate) => candidate.name === shot.page)?.path ?? "/";
+    await page.goto(`${base}#${route}`, { timeout: 60_000 });
+    await page.waitForLoadState("networkidle");
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    if (state === "loading") {
+      // The loader fades in after a short delay.
+      await page.waitForTimeout(1_500);
+    } else {
+      // First loads show a loader and the top bar; wait until both are gone for a moment.
+      await page
+        .waitForFunction(
+          () => {
+            const w = window as unknown as { __labQuietSince?: number };
+            const busy =
+              document.querySelector('[role="status"][aria-live="polite"]') ||
+              document.querySelector('[data-testid="top-progress"][data-active]');
+            if (busy) {
+              w.__labQuietSince = undefined;
+              return false;
+            }
+            w.__labQuietSince ??= performance.now();
+            return performance.now() - w.__labQuietSince > 400;
+          },
+          null,
+          { timeout: 15_000, polling: 100 },
+        )
+        .catch(() => notes.push("still loading after 15 s"));
+      // Entrances (animate-enter with staggered delays) and number roll-ins.
+      await page.waitForTimeout(1_800);
+    }
+    await page.screenshot({
+      path: path.join(out as string, name),
+      fullPage: true,
+      timeout: 60_000,
+    });
+  } finally {
+    await context.close();
+  }
   console.log(notes.length ? `${name}\n  ${[...new Set(notes)].join("\n  ")}` : name);
+}
+
+/** One more try for a shot that failed (the dev server reloading, a slow first compile). */
+async function attempt(browser: Browser, shot: Shot): Promise<boolean> {
+  for (let tries = 1; ; tries++) {
+    try {
+      await take(browser, shot);
+      return true;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.split("\n")[0] : String(error);
+      if (tries >= 2) {
+        console.error(`${fileName(shot)} failed: ${reason}`);
+        return false;
+      }
+    }
+  }
 }
 
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch();
+const failed: string[] = [];
 try {
   const queue = [...shots];
   await Promise.all(
     Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-      for (let shot = queue.shift(); shot; shot = queue.shift()) await take(browser, shot);
+      for (let shot = queue.shift(); shot; shot = queue.shift()) {
+        if (!(await attempt(browser, shot))) failed.push(fileName(shot));
+      }
     }),
   );
 } finally {
   await browser.close();
+}
+if (failed.length) {
+  console.error(`${failed.length} of ${shots.length} shots failed: ${failed.join(", ")}`);
+  process.exitCode = 1;
 }
