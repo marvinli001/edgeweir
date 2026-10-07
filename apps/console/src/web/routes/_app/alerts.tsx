@@ -384,16 +384,20 @@ function EventsCard() {
                     <span className="order-1 min-w-0 font-medium [overflow-wrap:anywhere] sm:order-none">
                       {event.siteName}
                     </span>
-                    {/* Phones: the kind and the time share the second line. */}
-                    <span className="order-3 col-span-2 flex min-w-0 items-center justify-between gap-3 sm:order-none sm:contents">
-                      <span className="flex min-w-0">
-                        <Badge variant="outline" className="max-w-full justify-start">
-                          <span className="truncate">{label(event.kind)}</span>
-                        </Badge>
-                      </span>
+                    {/*
+                      Phones: the kind and the time share the second line while they fit; a longer
+                      kind keeps its full text and the time drops to a line of its own.
+                    */}
+                    <span className="order-3 col-span-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 sm:order-none sm:contents">
+                      <Badge
+                        variant="outline"
+                        className="h-auto min-h-5 max-w-full justify-start text-left whitespace-normal"
+                      >
+                        {label(event.kind)}
+                      </Badge>
                       <time
                         dateTime={event.occurredAt}
-                        className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums sm:justify-self-end"
+                        className="ml-auto shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums sm:justify-self-end"
                       >
                         {formatDateTime(event.occurredAt)}
                       </time>
