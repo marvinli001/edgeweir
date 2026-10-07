@@ -1,10 +1,11 @@
-import { createPrivateKey, randomUUID, X509Certificate } from "node:crypto";
+import { createPrivateKey, type KeyObject, randomUUID, X509Certificate } from "node:crypto";
 import { decodeNodeConfig } from "@edgeweir/config-compiler";
 import {
   type CertificateDto,
   type CertificateRequest,
   type CertificateSettings,
   type CertificateUpload,
+  certificateUnloadable,
   type DnsCredentialInput,
   dnsProviderEntry,
   type TlsSettings,
@@ -12,7 +13,7 @@ import {
 } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { ORPCError } from "@orpc/server";
-import { and, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
 import {
   certificateName,
   failUncovered,
@@ -122,6 +123,19 @@ function publicKeyAlgorithm(der: Uint8Array) {
   return derContents(der, at).start;
 }
 
+/** Whether every certificate's key names its curve (namesCurve). */
+const chainNamesCurves = (chain: readonly X509Certificate[]) =>
+  chain.every((cert) => namesCurve(cert.raw, publicKeyAlgorithm(cert.raw)));
+
+/** Whether a private key names its curve (namesCurve). */
+function keyNamesCurve(key: KeyObject) {
+  const pkcs8 = key.export({ type: "pkcs8", format: "der" });
+  // PrivateKeyInfo: version, then privateKeyAlgorithm.
+  return namesCurve(pkcs8, derContents(pkcs8, derContents(pkcs8, 0).start).end);
+}
+
+const PEM_CERTIFICATE = /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g;
+
 /**
  * Checks a chain and its key and returns them re-encoded: only the
  * certificates and the key in PKCS #8 are ever stored, whatever else the
@@ -135,21 +149,19 @@ export function inspectCertificate(chainPem: string, privateKeyPem: string) {
     fail("CERTIFICATE_CHAIN_FOREIGN_BLOCK", "the chain may contain only certificates");
   const unreadableChain: () => never = () =>
     fail("CERTIFICATE_CHAIN_UNREADABLE", "the chain must hold 1 to 10 readable PEM certificates");
-  const blocks = chainPem.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g);
+  const blocks = chainPem.match(PEM_CERTIFICATE);
   if (!blocks?.length || blocks.length > 10 || blocks.length !== labels.length) unreadableChain();
   const chain = readOr(() => blocks.map((block) => new X509Certificate(block)), unreadableChain);
   // Refused rather than re-encoded: a certificate's key cannot be changed
   // without its issuer, and tools that write such keys (LibreSSL's default)
   // usually sign the certificate with that encoding too.
-  if (!chain.every((cert) => namesCurve(cert.raw, publicKeyAlgorithm(cert.raw))))
+  if (!chainNamesCurves(chain))
     fail("CERTIFICATE_CHAIN_EXPLICIT_CURVE", "an EC certificate key must name its curve");
   const key = readOr(
     () => createPrivateKey(privateKeyPem),
     () => fail("CERTIFICATE_KEY_UNREADABLE", "the private key cannot be read (or is encrypted)"),
   );
-  const pkcs8 = key.export({ type: "pkcs8", format: "der" });
-  // PrivateKeyInfo: version, then privateKeyAlgorithm.
-  if (!namesCurve(pkcs8, derContents(pkcs8, derContents(pkcs8, 0).start).end))
+  if (!keyNamesCurve(key))
     fail("CERTIFICATE_KEY_EXPLICIT_CURVE", "an EC private key must name its curve");
   const leaf = chain[0] as X509Certificate;
   const wrongOrder: () => never = () =>
@@ -200,6 +212,120 @@ export function inspectCertificate(chainPem: string, privateKeyPem: string) {
     chainPem: chain.map((cert) => cert.toString()).join(""),
     privateKeyPem: key.export({ type: "pkcs8", format: "pem" }).toString(),
   };
+}
+
+type CertificateRow = typeof schema.certificate.$inferSelect;
+
+/**
+ * Why nodes cannot load a stored, issued certificate, or undefined: an EC
+ * key of its chain or its private key spells out the curve's parameters.
+ * Uploads stored such keys until inspectCertificate refused them; nodes
+ * (Go's crypto/tls) refuse the material, and a revision that carries it is
+ * applied on no node of its cluster.
+ */
+export function explicitCurveError(
+  app: AppContext,
+  cert: Pick<CertificateRow, "id" | "chainPem" | "privateKeyEnvelope">,
+) {
+  const chain = (cert.chainPem.match(PEM_CERTIFICATE) ?? []).map((pem) => new X509Certificate(pem));
+  if (!chainNamesCurves(chain)) return "CERTIFICATE_CHAIN_EXPLICIT_CURVE" as const;
+  const key = createPrivateKey(
+    app.masterKey
+      .open(JSON.parse(cert.privateKeyEnvelope), certificateKeyBinding(cert.id))
+      .toString("utf8"),
+  );
+  if (!keyNamesCurve(key)) return "CERTIFICATE_KEY_EXPLICIT_CURVE" as const;
+  return undefined;
+}
+
+/**
+ * Refuses binding an issued certificate nodes cannot load
+ * (explicitCurveError), with the code inspectCertificate refuses its upload
+ * with now. Checks the stored material itself, not only the mark
+ * markUnloadableCertificates leaves.
+ */
+export function assertLoadable(
+  app: AppContext,
+  cert: Pick<CertificateRow, "id" | "chainPem" | "privateKeyEnvelope">,
+) {
+  const code = explicitCurveError(app, cert);
+  if (code === "CERTIFICATE_CHAIN_EXPLICIT_CURVE")
+    fail(code, "nodes cannot load the certificate: an EC certificate key must name its curve");
+  if (code === "CERTIFICATE_KEY_EXPLICIT_CURVE")
+    fail(code, "nodes cannot load the certificate: its EC private key must name its curve");
+}
+
+/**
+ * Marks the uploaded certificates nodes cannot load (explicitCurveError):
+ * status "error" with the reason as `lastError`
+ * (certificate_chain_explicit_curve, certificate_key_explicit_curve), each
+ * audited as the system with the sites bound to it. The list, the HTTPS tab
+ * and the launch check show it, and https.check and the HTTPS tab no longer
+ * offer it. Sites bound to it keep it until the operator binds another one
+ * (or none): nothing they serve changes behind the operator's back. Runs at
+ * every worker start (maintenance.check-certificates), as the keys are
+ * envelope-encrypted and no SQL migration can read them; marked uploads are
+ * skipped, so a later run audits nothing twice. ACME certificates are left
+ * alone: certd only ever writes named curves, their status belongs to
+ * issuance, and a binding still checks them (assertLoadable). Returns the
+ * ids marked now.
+ */
+export async function markUnloadableCertificates(app: AppContext) {
+  const rows = await app.db
+    .select()
+    .from(schema.certificate)
+    .where(and(eq(schema.certificate.source, "upload"), ne(schema.certificate.chainPem, "")))
+    .orderBy(asc(schema.certificate.name));
+  const marked: string[] = [];
+  for (const row of rows) {
+    if (certificateUnloadable(row)) continue;
+    let code: ReturnType<typeof explicitCurveError>;
+    try {
+      code = explicitCurveError(app, row);
+    } catch (error) {
+      app.log.warn("cannot check a stored certificate", {
+        certificateId: row.id,
+        reason: error instanceof Error ? error.message : "unknown",
+      });
+      continue;
+    }
+    if (!code) continue;
+    const lastError = code.toLowerCase();
+    await app.db.transaction(async (tx) => {
+      // The same material as checked; a mark another process left wins.
+      const [updated] = await tx
+        .update(schema.certificate)
+        .set({ status: "error", lastError, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.certificate.id, row.id),
+            eq(schema.certificate.fingerprint, row.fingerprint),
+            or(ne(schema.certificate.status, "error"), ne(schema.certificate.lastError, lastError)),
+          ),
+        )
+        .returning({ id: schema.certificate.id });
+      if (!updated) return;
+      const sites = await tx
+        .select({ name: schema.site.name })
+        .from(schema.site)
+        .where(eq(schema.site.certificateId, row.id))
+        .orderBy(schema.site.name)
+        .limit(20);
+      await recordAudit(tx, systemActor, {
+        action: "certificate.unloadable",
+        targetType: "certificate",
+        targetId: row.id,
+        targetName: row.name,
+        metadata: { code: lastError, sites: sites.map((site) => site.name) },
+      });
+      marked.push(row.id);
+    });
+  }
+  if (marked.length)
+    app.log.warn("certificates nodes cannot load: bind other certificates to their sites", {
+      certificateIds: marked,
+    });
+  return marked;
 }
 
 export async function listCertificates(app: AppContext) {
@@ -405,8 +531,9 @@ export async function coverSiteDomains(
  * redirect and the other settings stay the site's own), and the site's
  * domains added since the request covered by a reissue (coverSiteDomains);
  * audited as the system. A site deleted
- * meanwhile, one that has another usable certificate by now, or one with
- * domains the certificate cannot take keeps its settings. Returns the
+ * meanwhile, one that has another usable certificate by now (issued, not
+ * expired, not marked unloadable), or one with domains the certificate
+ * cannot take keeps its settings. Returns the
  * site's cluster when bound.
  */
 export async function bindIssuedCertificate(
@@ -421,10 +548,15 @@ export async function bindIssuedCertificate(
   if (!site) return undefined;
   if (site.certificateId && site.certificateId !== cert.id) {
     const [current] = await tx
-      .select({ chainPem: schema.certificate.chainPem, notAfter: schema.certificate.notAfter })
+      .select()
       .from(schema.certificate)
       .where(eq(schema.certificate.id, site.certificateId));
-    if (current?.chainPem && current.notAfter && current.notAfter.getTime() > Date.now())
+    if (
+      current?.chainPem &&
+      current.notAfter &&
+      current.notAfter.getTime() > Date.now() &&
+      !certificateUnloadable(current)
+    )
       return undefined;
   }
   const domains = await tx
@@ -555,6 +687,8 @@ export async function updateHttps(
       const cert = await findCertificate(tx, settings.certificateId);
       if (!cert.chainPem || !cert.notAfter || cert.notAfter.getTime() <= Date.now())
         fail("CERTIFICATE_UNAVAILABLE", "certificate is not issued yet or expired");
+      // Also when the site has it already: no revision nodes cannot apply.
+      assertLoadable(app, cert);
       const domains = await tx
         .select()
         .from(schema.siteDomain)

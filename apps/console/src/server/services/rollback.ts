@@ -8,6 +8,7 @@ import {
   decodeNodeConfig,
   refreshDerived,
 } from "@edgeweir/config-compiler";
+import { certificateUnloadable } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import {
   ChallengeKeyRefSchema,
@@ -58,7 +59,7 @@ const hostKey = (host: { name: string; wildcard: boolean }) =>
  * its current version only) and the log sampling rate never exceeds the
  * current one. A site or domain removed since: `strict` (the operator's
  * rollback) refuses with ROLLBACK_RESOURCE_UNAVAILABLE, as it does for an
- * expired or unavailable certificate; otherwise (the canary's stable
+ * expired, unavailable or unloadable certificate; otherwise (the canary's stable
  * revision) it is dropped. Offline hosts follow the current sites; layer-4
  * applications follow the same rules (restoreL4Apps).
  * Derived fields are left to refreshDerived.
@@ -120,7 +121,7 @@ async function restoreSites(
       const cert = certificates.find((c) => c.id === site.certificateId);
       const ref = out.certificates.find((c) => c.id === site.certificateId);
       if (opts.strict) {
-        if (!cert?.notAfter || cert.notAfter.getTime() <= Date.now())
+        if (!cert?.notAfter || cert.notAfter.getTime() <= Date.now() || certificateUnloadable(cert))
           fail("ROLLBACK_RESOURCE_UNAVAILABLE", "rollback certificate is unavailable or expired");
         // Domains served over HTTP until the certificate covers them need no cover.
         assertCertificateNames(

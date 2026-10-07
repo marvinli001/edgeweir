@@ -158,6 +158,19 @@ describe("site launch check", async () => {
       notAfter: year,
     });
     expect((await coverage()).state).toBe("covered");
+    // An upload nodes cannot load (markUnloadableCertificates).
+    await certificate({
+      source: "upload",
+      status: "error",
+      lastError: "certificate_chain_explicit_curve",
+      chainPem: all.certificatePem,
+      notAfter: year,
+    });
+    expect(await coverage()).toMatchObject({
+      state: "failed",
+      error: "certificate_chain_explicit_curve",
+      uncovered: [],
+    });
     await certificate({
       status: "ready",
       chainPem: all.certificatePem,

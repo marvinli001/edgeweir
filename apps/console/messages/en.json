@@ -495,6 +495,7 @@
   "audit_action_certificate_renew": "Certificate renewal requested",
   "audit_action_certificate_renewal_rescheduled": "Certificate renewal rescheduled",
   "audit_action_certificate_request": "Certificate requested",
+  "audit_action_certificate_unloadable": "Certificate marked unloadable",
   "audit_action_certificate_upload": "Certificate uploaded",
   "audit_action_cluster_challenge_keys_rotate": "Challenge keys rotated",
   "audit_action_cluster_create": "Cluster created",
@@ -831,6 +832,7 @@
   "cert_status_issuing": "Issuing",
   "cert_status_ready": "Ready",
   "cert_status_error": "Issuance failed",
+  "cert_status_unloadable": "Unusable",
   "cert_status_expired": "Expired",
   "cert_error_certificate_operation_failed": "Issuance failed; see the console log",
   "cert_error_certd_failed": "The certificate helper failed",
@@ -869,6 +871,8 @@
   "cert_error_http01_dns_not_pointing": "A domain does not resolve to the nodes",
   "cert_error_issued_names_mismatch": "The issued certificate lacks requested domains",
   "cert_error_issued_certificate_invalid": "The CA returned an unusable certificate",
+  "cert_error_certificate_chain_explicit_curve": "Nodes cannot load it: a certificate's EC key uses explicit curve parameters",
+  "cert_error_certificate_key_explicit_curve": "Nodes cannot load it: the EC private key uses explicit curve parameters",
   "cert_error_other": "Issuance failed ({code})",
   "cert_expires": [
     {

@@ -119,6 +119,13 @@ export const certificateErrorDefs = {
   http01_dns_not_pointing: { params: [] },
   issued_names_mismatch: { params: [] },
   issued_certificate_invalid: { params: [] },
+  /**
+   * An uploaded certificate stored before EC keys with explicit curve
+   * parameters were refused, which nodes cannot load: a certificate of its
+   * chain, or its private key (unloadableCertificateErrors).
+   */
+  certificate_chain_explicit_curve: { params: [] },
+  certificate_key_explicit_curve: { params: [] },
 } as const satisfies Record<string, { params: readonly string[] }>;
 
 export type CertificateErrorCode = keyof typeof certificateErrorDefs;
@@ -126,6 +133,17 @@ export type CertificateErrorCode = keyof typeof certificateErrorDefs;
 export function isCertificateErrorCode(code: unknown): code is CertificateErrorCode {
   return typeof code === "string" && Object.hasOwn(certificateErrorDefs, code);
 }
+
+/** `lastError` codes of a stored certificate nodes cannot load; it cannot be bound. */
+export const unloadableCertificateErrors: readonly CertificateErrorCode[] = [
+  "certificate_chain_explicit_curve",
+  "certificate_key_explicit_curve",
+];
+
+/** Whether a stored certificate is marked as one nodes cannot load. */
+export const certificateUnloadable = (cert: { status: string; lastError: string }) =>
+  cert.status === "error" &&
+  (unloadableCertificateErrors as readonly string[]).includes(cert.lastError);
 
 export const certificateDto = z.object({
   id: uuid,
