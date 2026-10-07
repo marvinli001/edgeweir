@@ -77,11 +77,12 @@ export default function EdgeGlobe({
     element.className = "globe-canvas";
     parent.append(element);
     const dark = theme === "dark";
-    const dpr = cappedDpr();
+    // cobe multiplies width and height by devicePixelRatio itself: pass CSS pixels, so the
+    // backing store is size × the capped ratio (not its square).
     const options: COBEOptions = {
-      devicePixelRatio: dpr,
-      width: size * dpr,
-      height: size * dpr,
+      devicePixelRatio: cappedDpr(),
+      width: size,
+      height: size,
       phi: phi.current,
       theta: 0.28,
       dark: dark ? 1 : 0,
