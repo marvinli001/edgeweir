@@ -13,7 +13,7 @@ import { SafetyNote } from "@/components/safety-note";
 import { EmptyState, QueryView } from "@/components/states";
 import { StatusDot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -57,40 +57,41 @@ function PasswordCard() {
   const [error, setError] = React.useState<string | null>(null);
   return (
     <Card className="animate-enter">
-      <CardHeader>
-        <CardTitle>{m.security_password()}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form
-          className="max-w-sm"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            const form = event.currentTarget;
-            const data = new FormData(form);
-            const next = String(data.get("newPassword") ?? "");
-            if (next !== String(data.get("confirmPassword") ?? "")) {
-              setError(m.security_password_mismatch());
-              return;
-            }
-            setError(null);
-            try {
-              await action.run(() =>
-                unwrap(
-                  authClient.changePassword({
-                    currentPassword: String(data.get("currentPassword") ?? ""),
-                    newPassword: next,
-                    revokeOtherSessions: true,
-                  }),
-                ),
-              );
-              form.reset();
-              toast.success(m.security_password_changed());
-            } catch (err) {
-              setError(localizeError(err));
-            }
-          }}
-        >
-          <FieldGroup>
+      {/* A settings card: the title, the fields, and the submit in a footer row. */}
+      <form
+        className="flex flex-col gap-(--card-spacing)"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const form = event.currentTarget;
+          const data = new FormData(form);
+          const next = String(data.get("newPassword") ?? "");
+          if (next !== String(data.get("confirmPassword") ?? "")) {
+            setError(m.security_password_mismatch());
+            return;
+          }
+          setError(null);
+          try {
+            await action.run(() =>
+              unwrap(
+                authClient.changePassword({
+                  currentPassword: String(data.get("currentPassword") ?? ""),
+                  newPassword: next,
+                  revokeOtherSessions: true,
+                }),
+              ),
+            );
+            form.reset();
+            toast.success(m.security_password_changed());
+          } catch (err) {
+            setError(localizeError(err));
+          }
+        }}
+      >
+        <CardHeader>
+          <CardTitle>{m.security_password()}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FieldGroup className="max-w-sm">
             <Field>
               <FieldLabel htmlFor="currentPassword">{m.security_current_password()}</FieldLabel>
               <Input
@@ -124,14 +125,16 @@ function PasswordCard() {
                 required
               />
             </Field>
-            {error ? <FieldError className="animate-in fade-in">{error}</FieldError> : null}
-            <Button type="submit" disabled={action.pending} className="self-start">
-              {action.pending ? <Spinner /> : null}
-              {m.security_change_password()}
-            </Button>
           </FieldGroup>
-        </form>
-      </CardContent>
+        </CardContent>
+        <CardFooter className="flex-wrap justify-end gap-3 border-t">
+          {error ? <FieldError className="mr-auto animate-in fade-in">{error}</FieldError> : null}
+          <Button type="submit" disabled={action.pending}>
+            {action.pending ? <Spinner /> : null}
+            {m.security_change_password()}
+          </Button>
+        </CardFooter>
+      </form>
     </Card>
   );
 }
@@ -178,16 +181,19 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
           </span>
         </StatusDot>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {backupCodes ? (
-          <Field className="animate-enter">
+      {backupCodes ? (
+        <CardContent className="animate-enter">
+          <Field>
             <FieldLabel>{m.security_backup_codes()}</FieldLabel>
             <CodeBlock value={backupCodes.join("\n")} testId="backup-codes" />
             <SafetyNote>{m.enroll_shown_once()}</SafetyNote>
           </Field>
-        ) : null}
-        {enrollment ? (
-          <div className="flex flex-col items-center gap-5 animate-enter sm:flex-row sm:items-start">
+        </CardContent>
+      ) : null}
+      {/* Each step ends in a footer row with its submit, like the other settings cards. */}
+      {enrollment ? (
+        <>
+          <CardContent className="flex flex-col items-center gap-5 animate-enter sm:flex-row sm:items-start">
             <QrCode value={enrollment.totpURI} label={m.security_2fa_qr()} />
             <FieldGroup className="min-w-0">
               <Field>
@@ -205,41 +211,44 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
                   autoFocus
                 />
               </Field>
-              {error ? <FieldError className="animate-in fade-in">{error}</FieldError> : null}
-              <Button
-                disabled={pending || code.length < 6}
-                className="self-start"
-                onClick={() => verify(code)}
-                data-testid="verify-totp"
-              >
-                {pending ? <Spinner /> : null}
-                {m.security_2fa_verify()}
-              </Button>
             </FieldGroup>
-          </div>
-        ) : (
-          <form
-            className="flex max-w-sm flex-col gap-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const password = String(new FormData(event.currentTarget).get("twoFactorPassword"));
-              void run(async () => {
-                if (enabled) {
-                  await unwrap(authClient.twoFactor.disable({ password }));
-                  setBackupCodes(null);
-                  toast.success(m.security_2fa_disabled());
-                  await refresh();
-                } else {
-                  const data = await unwrap(authClient.twoFactor.enable({ password }));
-                  setEnrollment({
-                    totpURI: (data as { totpURI: string }).totpURI,
-                    backupCodes: (data as { backupCodes: string[] }).backupCodes,
-                  });
-                }
-              });
-            }}
-          >
-            <Field>
+          </CardContent>
+          <CardFooter className="flex-wrap justify-end gap-3 border-t">
+            {error ? <FieldError className="mr-auto animate-in fade-in">{error}</FieldError> : null}
+            <Button
+              disabled={pending || code.length < 6}
+              onClick={() => verify(code)}
+              data-testid="verify-totp"
+            >
+              {pending ? <Spinner /> : null}
+              {m.security_2fa_verify()}
+            </Button>
+          </CardFooter>
+        </>
+      ) : (
+        <form
+          className="flex flex-col gap-(--card-spacing)"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const password = String(new FormData(event.currentTarget).get("twoFactorPassword"));
+            void run(async () => {
+              if (enabled) {
+                await unwrap(authClient.twoFactor.disable({ password }));
+                setBackupCodes(null);
+                toast.success(m.security_2fa_disabled());
+                await refresh();
+              } else {
+                const data = await unwrap(authClient.twoFactor.enable({ password }));
+                setEnrollment({
+                  totpURI: (data as { totpURI: string }).totpURI,
+                  backupCodes: (data as { backupCodes: string[] }).backupCodes,
+                });
+              }
+            });
+          }}
+        >
+          <CardContent>
+            <Field className="max-w-sm">
               <FieldLabel htmlFor="twoFactorPassword">{m.security_current_password()}</FieldLabel>
               <Input
                 id="twoFactorPassword"
@@ -249,20 +258,21 @@ function TwoFactorCard({ enabled }: { enabled: boolean }) {
                 required
               />
             </Field>
-            {error ? <FieldError className="animate-in fade-in">{error}</FieldError> : null}
+          </CardContent>
+          <CardFooter className="flex-wrap justify-end gap-3 border-t">
+            {error ? <FieldError className="mr-auto animate-in fade-in">{error}</FieldError> : null}
             <Button
               type="submit"
               variant={enabled ? "destructive" : "default"}
               disabled={pending}
-              className="self-start"
               data-testid="toggle-2fa"
             >
               {pending ? <Spinner /> : null}
               {enabled ? m.security_2fa_disable() : m.security_2fa_enable()}
             </Button>
-          </form>
-        )}
-      </CardContent>
+          </CardFooter>
+        </form>
+      )}
     </Card>
   );
 }
