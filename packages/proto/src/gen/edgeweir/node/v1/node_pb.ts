@@ -2544,7 +2544,7 @@ export enum BanSource {
   UNSPECIFIED = 0,
 
   /**
-   * An operator or a tenant.
+   * The operator, in the console or through the API.
    *
    * @generated from enum value: BAN_SOURCE_MANUAL = 1;
    */

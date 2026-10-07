@@ -1,5 +1,6 @@
 import type { AnalyticsRange, TrafficPoint, TrafficTotals } from "@edgeweir/contract";
 import { formatBitRate, formatBytes, formatCompact, formatPercent, m } from "@/lib/i18n";
+import { localMinutes } from "@/lib/time-buckets";
 
 export const ANALYTICS_RANGES = [
   "1h",
@@ -89,47 +90,6 @@ export const SERIES_COLORS = [
   "var(--series-5)",
 ] as const;
 export const OTHER_COLOR = "var(--series-other)";
-
-const MINUTE_MS = 60_000;
-
-/** Minutes since the epoch on the viewer's wall clock, so boundaries fall on local hours and days. */
-function localMinutes(time: number): number {
-  return Math.floor((time - new Date(time).getTimezoneOffset() * MINUTE_MS) / MINUTE_MS);
-}
-
-/** Bar widths that read as clock units, in minutes. */
-const GROUP_MINUTES = [1, 2, 5, 10, 15, 30, 60, 120, 180, 360, 720, 1_440];
-
-/**
- * Merges adjacent buckets into groups aligned to the viewer's clock, so a bar chart keeps at most
- * about `max` bars (hourly bars for a day of 10-minute buckets). Each group is labeled by the start
- * of its span; the first one may be partial.
- */
-export function groupBuckets(times: string[], series: number[][], bucketSeconds: number, max = 32) {
-  const bucketMinutes = bucketSeconds / 60;
-  const spanMinutes =
-    GROUP_MINUTES.find(
-      (span) => span % bucketMinutes === 0 && (times.length * bucketMinutes) / span <= max,
-    ) ?? times.length * bucketMinutes;
-  const groups: { time: string; values: number[] }[] = [];
-  let key: number | null = null;
-  times.forEach((time, index) => {
-    const next = Math.floor(localMinutes(new Date(time).getTime()) / spanMinutes);
-    if (next !== key) {
-      key = next;
-      // Start of the span on the wall clock, back in UTC.
-      const start = next * spanMinutes * MINUTE_MS;
-      const offset = new Date(start).getTimezoneOffset() * MINUTE_MS;
-      groups.push({ time: new Date(start + offset).toISOString(), values: series.map(() => 0) });
-    }
-    const values = groups.at(-1)?.values;
-    if (!values) return;
-    for (let i = 0; i < series.length; i++) {
-      values[i] = (values[i] ?? 0) + (series[i]?.[index] ?? 0);
-    }
-  });
-  return groups;
-}
 
 /** Axis tick spacing per range, in minutes of the viewer's clock. */
 const TICK_MINUTES: Record<AnalyticsRange, number> = {

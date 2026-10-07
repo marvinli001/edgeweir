@@ -32,10 +32,27 @@ const updatedAt = () =>
     .notNull();
 
 /** A cluster is a set of edge nodes that share one NodeConfig revision stream. */
+/**
+ * How a cluster's HTTP(S) listeners find the client address (null:
+ * direct). mode proxy_protocol | header; trustedCidrs and header for header,
+ * dropForwardedFor for direct.
+ */
+export interface ClusterClientIp {
+  mode: "direct" | "proxy_protocol" | "header";
+  trustedCidrs: string[];
+  header: string;
+  dropForwardedFor: boolean;
+}
+
 export const cluster = pgTable("cluster", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
   description: text("description").notNull().default(""),
+  /** HTTP and HTTPS ports the nodes listen on besides 80 and 443, sorted. */
+  extraHttpPorts: integer("extra_http_ports").array().notNull().default(sql`'{}'::integer[]`),
+  extraHttpsPorts: integer("extra_https_ports").array().notNull().default(sql`'{}'::integer[]`),
+  /** The client address setting; null is direct. */
+  clientIp: jsonb("client_ip").$type<ClusterClientIp>(),
   /** Cache zone size of every node in GiB (1-65536); node.cache_max_size_gb overrides it. */
   cacheMaxSizeGb: integer("cache_max_size_gb").notNull().default(10),
   /** Cached objects not requested for this many days are removed (1-90). */
@@ -247,6 +264,9 @@ export const site = pgTable(
       onDelete: "restrict",
     }),
     tlsSettings: jsonb("tls_settings").$type<Record<string, unknown>>().notNull().default({}),
+    /** Listener ports the site is served on (HTTPS ones with a certificate), sorted. */
+    httpPorts: integer("http_ports").array().notNull().default(sql`'{80}'::integer[]`),
+    httpsPorts: integer("https_ports").array().notNull().default(sql`'{443}'::integer[]`),
     /** Send no X-Cache header to clients. */
     hideXCache: boolean("hide_x_cache").notNull().default(false),
     /** The PURGE method (its key: site_secret kind purge_key). */
@@ -494,7 +514,7 @@ export const configRevision = pgTable(
 );
 
 /**
- * Configuration canary of a cluster: the policy (set in the admin area) and
+ * Configuration canary of a cluster: the policy (set on the clusters page) and
  * the current rollout. With the policy on, nodes in canary node groups get
  * `candidate_revision` while the others stay on `stable_revision`; without
  * it (or without a row) every node gets the latest revision.

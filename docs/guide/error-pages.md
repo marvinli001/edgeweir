@@ -99,7 +99,7 @@
 | --- | --- |
 | `{{status}}` | 状态码，例如 `403` |
 | `{{request_id}}` | 请求 ID，与响应头 `X-Request-Id` 相同 |
-| `{{client_ip}}` | 访问者 IP，即 TCP 客户端地址（与规则的 `ip.src` 相同） |
+| `{{client_ip}}` | 访问者 IP，与规则的 `ip.src` 相同（按集群的[访客 IP](../deploy/nodes.md#访客-ip) 设置取得） |
 | `{{host}}` | 请求的 Host，小写，不含端口；请求没有合法的 Host 时为空 |
 | `{{time}}` | 节点应答的时间，UTC，RFC 3339，例如 `2026-10-06T12:34:56Z`；需要 `rules-v3` |
 | `{{path}}` | 请求路径（nginx 规范化后的 `$uri`，与规则的 `http.request.uri.path` 相同，改写后为改写后的路径）；需要 `rules-v3` |

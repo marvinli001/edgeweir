@@ -77,10 +77,10 @@ export const sitesRouter = {
     ),
     get: authed.l4Apps.get.handler(({ input, context }) => getL4App(context.app.db, input.id)),
     create: authed.l4Apps.create.handler(({ input, context }) =>
-      createL4App(context.app.db, input, context.actor),
+      createL4App(context.app, input, context.actor),
     ),
     update: authed.l4Apps.update.handler(({ input, context }) =>
-      updateL4App(context.app.db, input, context.actor),
+      updateL4App(context.app, input, context.actor),
     ),
     delete: authed.l4Apps.delete.handler(({ input, context }) =>
       deleteL4App(context.app.db, input.id, context.actor),

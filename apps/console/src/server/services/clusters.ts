@@ -73,6 +73,7 @@ async function toClusterDto(
     appliedNodeCount: delivery.applied,
     siteCount: sites?.n ?? 0,
     latestRevision: latest ? toRevisionDto(latest) : null,
+    clientIpMode: row.clientIp?.mode ?? "direct",
     cache: { maxSizeGb: row.cacheMaxSizeGb, inactiveDays: row.cacheInactiveDays },
     createdAt: row.createdAt.toISOString(),
   };

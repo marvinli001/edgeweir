@@ -14,6 +14,7 @@ import { banSettings, bansContract } from "./bans";
 import { bulkRedirectsContract } from "./bulk-redirects";
 import { certificatesContract, dnsCredentialsContract, httpsContract } from "./certificates";
 import { dnsContract } from "./dns";
+import { edgeProcedures } from "./edge";
 import { errorPagesContract, maintenanceContract, platformErrorPages } from "./error-pages";
 import { l4AppsContract, portPoolProcedures } from "./l4";
 import {
@@ -226,6 +227,14 @@ export const contract = {
     portPools: portPoolProcedures.portPools,
     /** Replaces the port pools (no configuration revision: nodes only see the applications). */
     setPortPools: portPoolProcedures.setPortPools,
+    /** HTTP and HTTPS ports the cluster's nodes listen on besides 80 and 443. */
+    listenPorts: edgeProcedures.listenPorts,
+    /** Replaces the extra listener ports and publishes a revision. */
+    setListenPorts: edgeProcedures.setListenPorts,
+    /** How the cluster's HTTP(S) listeners find the client address. */
+    clientIp: edgeProcedures.clientIp,
+    /** Replaces the client address setting and publishes a revision. */
+    setClientIp: edgeProcedures.setClientIp,
   },
   nodeGroups: {
     list: oc
@@ -510,6 +519,7 @@ export * from "./access-keys";
 export * from "./alerts";
 export * from "./dns";
 export * from "./dns-providers";
+export * from "./edge";
 export * from "./l4";
 export * from "./probes";
 export * from "./service-accounts";

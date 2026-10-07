@@ -13,8 +13,10 @@ import {
 } from "@edgeweir/config-compiler";
 import {
   type AnalyticsRange,
+  CLIENT_IP_FEATURE,
   CRS_EVALUATION_FILES,
   crsDetectionRule,
+  EDGE_PORTS_FEATURE,
   type FeatureAvailability,
   nodeSupportsFeature,
   PREFETCH_V2_FEATURE,
@@ -178,6 +180,8 @@ export async function siteFeatures(db: Database, siteId: string): Promise<SiteFe
     prefetchVariants: byNodes(PREFETCH_V2_FEATURE),
     rulesV2: byNodes(RULES_V2_FEATURE),
     rulesV3: byNodes(RULES_V3_FEATURE),
+    edgePorts: byNodes(EDGE_PORTS_FEATURE),
+    clientIp: byNodes(CLIENT_IP_FEATURE),
     siteContent: byNodes(SITE_CONTENT_FEATURE),
   };
 }

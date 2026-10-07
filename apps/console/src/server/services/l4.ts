@@ -3,6 +3,7 @@ import {
   type ClusterPortPools,
   L4_APP_DEFAULTS,
   L4_FEATURE,
+  L4_V2_FEATURE,
   type L4App,
   type L4AppCreateInput,
   type L4AppMutationResult,
@@ -10,18 +11,22 @@ import {
   type L4AppUpdateInput,
   type L4Stats,
   type L4StatsInput,
+  MAX_L4_PORTS_PER_CLUSTER,
+  MAX_L4_RANGE_PORTS,
   nodeSupportsFeature,
   type PortPoolsInput,
   type Revision,
 } from "@edgeweir/contract";
 import { type Database, schema } from "@edgeweir/db";
 import { and, asc, count, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
+import type { AppContext } from "../lib/context";
 import { fail } from "../lib/errors";
 import { lockClusterL4 } from "../lib/locks";
 import { assertUpdatedAt } from "../lib/updated-at";
 import { type Actor, recordAudit } from "./audit";
+import { assertLoadable } from "./certificates";
 import { cnameTargets } from "./dns";
-import { loadPortPools, poolCovers } from "./l4-config";
+import { loadPortPools, poolCovers, poolsCoverRange } from "./l4-config";
 import { assertOriginsAllowed } from "./origin-allow-list";
 import {
   type Executor,
@@ -35,8 +40,12 @@ import { addTrafficCounter } from "./stats-counter";
 type AppRow = typeof schema.l4App.$inferSelect;
 type Pool = { protocol: string; from: number; to: number };
 
-const appLabel = (app: Pick<AppRow, "name" | "port" | "protocol">) =>
-  `${app.name} (${app.port}/${app.protocol})`;
+const portsLabel = (app: { port: number; portEnd: number | null }) =>
+  app.portEnd ? `${app.port}-${app.portEnd}` : `${app.port}`;
+const appLabel = (app: Pick<AppRow, "name" | "port" | "portEnd" | "protocol">) =>
+  `${app.name} (${portsLabel(app)}/${app.protocol})`;
+/** The last port of an application (its port without a range). */
+const lastPort = (app: { port: number; portEnd: number | null }) => app.portEnd ?? app.port;
 const poolLabel = (pool: Pool) => `${pool.from}-${pool.to}/${pool.protocol}`;
 
 async function findCluster(db: Executor, id: string) {
@@ -57,12 +66,19 @@ const HTTP_PORTS = [80, 443];
 
 /**
  * Ports no pool or application may use: the cluster's HTTP(S) listener
- * ports, those of its latest revision included.
+ * ports (80, 443 and its extra ports), those of its latest revision
+ * included.
  */
 export async function reservedPorts(db: Executor, clusterId: string): Promise<number[]> {
+  const [cluster] = await db
+    .select({ http: schema.cluster.extraHttpPorts, https: schema.cluster.extraHttpsPorts })
+    .from(schema.cluster)
+    .where(eq(schema.cluster.id, clusterId));
   const latest = await latestRevision(db, clusterId);
   const listeners = latest ? decodeNodeConfig(latest.ir).listeners.map((l) => l.port) : [];
-  return [...new Set([...HTTP_PORTS, ...listeners])].sort((a, b) => a - b);
+  return [
+    ...new Set([...HTTP_PORTS, ...(cluster?.http ?? []), ...(cluster?.https ?? []), ...listeners]),
+  ].sort((a, b) => a - b);
 }
 
 export async function getPortPools(db: Executor, clusterId: string): Promise<ClusterPortPools> {
@@ -87,6 +103,9 @@ export async function getPortPools(db: Executor, clusterId: string): Promise<Clu
     reservedPorts: await reservedPorts(db, clusterId),
     nodesWithoutL4: nodes
       .filter((node) => !nodeSupportsFeature(node.features, L4_FEATURE))
+      .map((node) => ({ id: node.id, name: node.name })),
+    nodesWithoutL4V2: nodes
+      .filter((node) => !nodeSupportsFeature(node.features, L4_V2_FEATURE))
       .map((node) => ({ id: node.id, name: node.name })),
   };
 }
@@ -128,15 +147,13 @@ export async function setPortPools(
       .from(schema.l4App)
       .where(eq(schema.l4App.clusterId, cluster.id))
       .orderBy(asc(schema.l4App.port), asc(schema.l4App.protocol));
+    const rows = pools.map((pool) => ({
+      protocol: pool.protocol,
+      portFrom: pool.from,
+      portTo: pool.to,
+    }));
     const outside = apps.filter(
-      (app) =>
-        !pools.some((pool) =>
-          poolCovers(
-            { protocol: pool.protocol, portFrom: pool.from, portTo: pool.to },
-            app.protocol,
-            app.port,
-          ),
-        ),
+      (app) => !poolsCoverRange(rows, app.protocol, app.port, lastPort(app)),
     );
     if (outside.length) {
       const labels = outside.map(appLabel).join(", ");
@@ -186,6 +203,13 @@ async function toDtos(db: Executor, rows: AppRow[]): Promise<L4App[]> {
     .select({ id: schema.cluster.id, name: schema.cluster.name })
     .from(schema.cluster)
     .where(inArray(schema.cluster.id, clusterIds));
+  const certificateIds = [...new Set(rows.flatMap((row) => row.certificateId ?? []))];
+  const certificates = certificateIds.length
+    ? await db
+        .select({ id: schema.certificate.id, name: schema.certificate.name })
+        .from(schema.certificate)
+        .where(inArray(schema.certificate.id, certificateIds))
+    : [];
   // Sequential on purpose: `db` may be a transaction, i.e. a single connection.
   const names = new Map<string, Awaited<ReturnType<typeof cnameTargets>>>();
   for (const clusterId of clusterIds) names.set(clusterId, await cnameTargets(db, clusterId));
@@ -201,6 +225,11 @@ async function toDtos(db: Executor, rows: AppRow[]): Promise<L4App[]> {
       enabled: row.enabled,
       acceptProxyProtocol: row.acceptProxyProtocol,
       proxyProtocolVersion: row.proxyProtocolVersion,
+      portEnd: row.portEnd,
+      originPortMode: row.originPortMode === "same" ? "same" : "fixed",
+      certificateId: row.certificateId,
+      certificateName: certificates.find((c) => c.id === row.certificateId)?.name ?? null,
+      tlsMinimumVersion: row.tlsMinimumVersion === "1.3" ? "1.3" : "1.2",
       origins: origins
         .filter((origin) => origin.appId === row.id)
         .map((origin) => ({
@@ -250,8 +279,10 @@ export async function getL4App(db: Database, id: string): Promise<L4App> {
 interface AppState {
   protocol: "tcp" | "udp";
   port: number;
+  portEnd: number | null;
   acceptProxyProtocol: boolean;
   proxyProtocolVersion: number;
+  certificateId: string | null;
   allowListIds: string[];
   blockListIds: string[];
 }
@@ -261,37 +292,86 @@ interface AppState {
  * (L4_PROXY_PROTOCOL_UNSUPPORTED), the port neither a listener port
  * (L4_PORT_RESERVED) nor outside the pools of its protocol
  * (L4_PORT_OUTSIDE_POOL) nor used by another application of the protocol
- * (L4_PORT_IN_USE), and every IP list present (IP_LIST_NOT_FOUND; the lists
- * are share-locked so they cannot be deleted before the change commits).
- * Runs under the cluster's L4 lock.
+ * (L4_PORT_IN_USE), a certificate issued, unexpired and loadable by nodes
+ * (L4_CERTIFICATE_UNAVAILABLE, assertLoadable), and every IP list present
+ * (IP_LIST_NOT_FOUND; the lists are share-locked so they cannot be deleted
+ * before the change commits). Runs under the cluster's L4 lock.
  */
-async function validateApp(tx: Tx, clusterId: string, app: AppState, exceptId?: string) {
+async function validateApp(
+  ctx: AppContext,
+  tx: Tx,
+  clusterId: string,
+  app: AppState,
+  exceptId?: string,
+) {
   if (app.protocol === "udp" && (app.acceptProxyProtocol || app.proxyProtocolVersion !== 0))
     fail("L4_PROXY_PROTOCOL_UNSUPPORTED", "PROXY protocol is for TCP applications only");
-  if ((await reservedPorts(tx, clusterId)).includes(app.port))
-    fail("L4_PORT_RESERVED", `port ${app.port} belongs to the cluster's HTTP listeners`, {
-      port: app.port,
+  if (app.protocol === "udp" && app.certificateId)
+    fail("L4_TLS_UNSUPPORTED", "TLS termination is for TCP applications only");
+  if (
+    app.portEnd !== null &&
+    (app.portEnd <= app.port || app.portEnd - app.port >= MAX_L4_RANGE_PORTS)
+  )
+    fail("L4_PORT_RANGE_INVALID", "the last port must be above the first, within the range limit", {
+      max: MAX_L4_RANGE_PORTS,
+    });
+  const last = lastPort(app);
+  const reserved = (await reservedPorts(tx, clusterId)).find((p) => app.port <= p && p <= last);
+  if (reserved !== undefined)
+    fail("L4_PORT_RESERVED", `port ${reserved} belongs to the cluster's HTTP listeners`, {
+      port: reserved,
     });
   const pools = await loadPortPools(tx, clusterId);
-  if (!pools.some((pool) => poolCovers(pool, app.protocol, app.port)))
-    fail("L4_PORT_OUTSIDE_POOL", `port ${app.port} is outside the cluster's port pools`, {
-      port: app.port,
-    });
-  const [clash] = await tx
+  if (!poolsCoverRange(pools, app.protocol, app.port, last)) {
+    let port = app.port;
+    while (pools.some((pool) => poolCovers(pool, app.protocol, port))) port++;
+    fail("L4_PORT_OUTSIDE_POOL", `port ${port} is outside the cluster's port pools`, { port });
+  }
+  const others = await tx
     .select()
     .from(schema.l4App)
     .where(
       and(
         eq(schema.l4App.clusterId, clusterId),
-        eq(schema.l4App.protocol, app.protocol),
-        eq(schema.l4App.port, app.port),
         exceptId ? ne(schema.l4App.id, exceptId) : undefined,
       ),
     );
+  const clash = others.find(
+    (other) => other.protocol === app.protocol && other.port <= last && app.port <= lastPort(other),
+  );
   if (clash)
-    fail("L4_PORT_IN_USE", `port ${app.port}/${app.protocol} is in use`, {
+    fail("L4_PORT_IN_USE", `port ${portsLabel(app)}/${app.protocol} is in use`, {
       apps: appLabel(clash),
     });
+  const total = others.reduce(
+    (n, other) => n + lastPort(other) - other.port + 1,
+    last - app.port + 1,
+  );
+  if (total > MAX_L4_PORTS_PER_CLUSTER)
+    fail("L4_PORT_LIMIT", "the cluster's layer-4 applications use too many ports", {
+      limit: MAX_L4_PORTS_PER_CLUSTER,
+    });
+  if (app.certificateId) {
+    const [certificate] = await tx
+      .select({
+        id: schema.certificate.id,
+        notAfter: schema.certificate.notAfter,
+        chainPem: schema.certificate.chainPem,
+        privateKeyEnvelope: schema.certificate.privateKeyEnvelope,
+      })
+      .from(schema.certificate)
+      .where(eq(schema.certificate.id, app.certificateId))
+      .for("share");
+    if (!certificate) fail("CERTIFICATE_NOT_FOUND", "certificate not found");
+    if (
+      !certificate.chainPem ||
+      !certificate.notAfter ||
+      certificate.notAfter.getTime() <= Date.now()
+    )
+      fail("L4_CERTIFICATE_UNAVAILABLE", "the certificate is not issued yet or has expired");
+    // Also when the application has it already: no revision nodes cannot apply.
+    assertLoadable(ctx, certificate);
+  }
   const listIds = [...new Set([...app.allowListIds, ...app.blockListIds])];
   if (listIds.length) {
     const lists = await tx
@@ -312,7 +392,10 @@ async function writeOrigins(
   tx: Tx,
   appId: string,
   origins: L4AppCreateInput["origins"],
+  mode: "fixed" | "same",
 ): Promise<void> {
+  if (mode === "fixed" && origins.some((origin) => origin.port === undefined))
+    fail("L4_ORIGIN_PORT_REQUIRED", "every origin needs a port");
   const existing = await tx
     .select({
       id: schema.l4Origin.id,
@@ -323,7 +406,9 @@ async function writeOrigins(
     .where(eq(schema.l4Origin.appId, appId))
     .orderBy(asc(schema.l4Origin.position));
   const kept = new Set<string>();
-  for (const [position, origin] of origins.entries()) {
+  for (const [position, input] of origins.entries()) {
+    // Origins on the arriving port store 0.
+    const origin = { ...input, port: mode === "same" ? 0 : (input.port ?? 0) };
     const values = {
       appId,
       address: origin.address,
@@ -344,12 +429,11 @@ async function writeOrigins(
   if (removed.length) await tx.delete(schema.l4Origin).where(inArray(schema.l4Origin.id, removed));
 }
 
-const originLabels = (origins: readonly { address: string; port: number }[]) =>
-  origins.map((origin) =>
-    origin.address.includes(":")
-      ? `[${origin.address}]:${origin.port}`
-      : `${origin.address}:${origin.port}`,
-  );
+const originLabels = (origins: readonly { address: string; port?: number }[]) =>
+  origins.map((origin) => {
+    const host = origin.address.includes(":") ? `[${origin.address}]` : origin.address;
+    return origin.port ? `${host}:${origin.port}` : host;
+  });
 
 /**
  * Creates an application, publishes its cluster and audits it, in one
@@ -358,11 +442,11 @@ const originLabels = (origins: readonly { address: string; port: number }[]) =>
  * (ORIGIN_ADDRESS_FORBIDDEN); see validateApp for the rest.
  */
 export async function createL4App(
-  db: Database,
+  ctx: AppContext,
   input: L4AppCreateInput,
   actor: Actor,
 ): Promise<L4AppMutationResult> {
-  return db.transaction(async (tx) => {
+  return ctx.db.transaction(async (tx) => {
     const cluster = await findCluster(tx, input.clusterId);
     await lockClusterL4(tx, cluster.id);
     const [apps] = await tx
@@ -375,7 +459,7 @@ export async function createL4App(
       });
     const idleTimeoutSeconds =
       input.idleTimeoutSeconds ?? L4_APP_DEFAULTS.idleTimeoutSeconds[input.protocol];
-    await validateApp(tx, cluster.id, input);
+    await validateApp(ctx, tx, cluster.id, input);
     await assertOriginsAllowed(tx, input.origins);
     const [row] = await tx
       .insert(schema.l4App)
@@ -387,6 +471,10 @@ export async function createL4App(
         enabled: input.enabled,
         acceptProxyProtocol: input.acceptProxyProtocol,
         proxyProtocolVersion: input.proxyProtocolVersion,
+        portEnd: input.portEnd,
+        originPortMode: input.originPortMode,
+        certificateId: input.certificateId,
+        tlsMinimumVersion: input.tlsMinimumVersion,
         maxFails: input.maxFails,
         failTimeoutSeconds: input.failTimeoutSeconds,
         connectTimeoutMs: input.connectTimeoutMs,
@@ -398,7 +486,7 @@ export async function createL4App(
       })
       .returning();
     if (!row) throw new Error("L4 application insert failed");
-    await writeOrigins(tx, row.id, input.origins);
+    await writeOrigins(tx, row.id, input.origins, input.originPortMode);
     const { row: revision } = await publishRevision(tx, {
       clusterId: cluster.id,
       reason: { code: "l4_app_created", params: { app: row.name } },
@@ -413,6 +501,9 @@ export async function createL4App(
         clusterId: cluster.id,
         protocol: row.protocol,
         port: row.port,
+        // Ranges and TLS only where used: other entries keep their shape.
+        ...(row.portEnd ? { portEnd: row.portEnd } : {}),
+        ...(row.certificateId ? { certificateId: row.certificateId } : {}),
         enabled: row.enabled,
         origins: originLabels(input.origins),
         revision: revision.revision,
@@ -429,6 +520,10 @@ const UPDATABLE = [
   "port",
   "acceptProxyProtocol",
   "proxyProtocolVersion",
+  "portEnd",
+  "originPortMode",
+  "certificateId",
+  "tlsMinimumVersion",
   "maxFails",
   "failTimeoutSeconds",
   "connectTimeoutMs",
@@ -449,11 +544,11 @@ const nextUpdatedAt = (row: AppRow) => new Date(Math.max(Date.now(), row.updated
  * like createL4App, publishes the cluster and audits the changed fields.
  */
 export async function updateL4App(
-  db: Database,
+  ctx: AppContext,
   input: L4AppUpdateInput,
   actor: Actor,
 ): Promise<L4AppMutationResult> {
-  return db.transaction(async (tx) => {
+  return ctx.db.transaction(async (tx) => {
     const found = await findApp(tx, input.id);
     await lockClusterL4(tx, found.clusterId);
     const row = await findApp(tx, input.id, true);
@@ -470,8 +565,26 @@ export async function updateL4App(
     }
     const next = { ...row, ...values };
     const protocol = next.protocol === "udp" ? "udp" : "tcp";
-    await validateApp(tx, row.clusterId, { ...next, protocol }, row.id);
+    await validateApp(ctx, tx, row.clusterId, { ...next, protocol }, row.id);
     const changed = Object.keys(to);
+    const mode = next.originPortMode === "same" ? "same" : "fixed";
+    // Changing the origin port mode alone rewrites the stored ports.
+    const origins =
+      input.origins ??
+      (values.originPortMode
+        ? (
+            await tx
+              .select({
+                address: schema.l4Origin.address,
+                port: schema.l4Origin.port,
+                weight: schema.l4Origin.weight,
+                backup: schema.l4Origin.backup,
+              })
+              .from(schema.l4Origin)
+              .where(eq(schema.l4Origin.appId, row.id))
+              .orderBy(asc(schema.l4Origin.position))
+          ).map((origin) => ({ ...origin, port: origin.port || undefined }))
+        : undefined);
     if (input.origins) {
       await assertOriginsAllowed(tx, input.origins);
       const before = await tx
@@ -479,11 +592,11 @@ export async function updateL4App(
         .from(schema.l4Origin)
         .where(eq(schema.l4Origin.appId, row.id))
         .orderBy(asc(schema.l4Origin.position));
-      await writeOrigins(tx, row.id, input.origins);
+      await writeOrigins(tx, row.id, input.origins, mode);
       changed.push("origins");
       from.origins = originLabels(before);
       to.origins = originLabels(input.origins);
-    }
+    } else if (origins) await writeOrigins(tx, row.id, origins, mode);
     const [updated] = await tx
       .update(schema.l4App)
       .set({ ...values, updatedAt: nextUpdatedAt(row) })

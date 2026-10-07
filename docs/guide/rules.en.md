@@ -245,7 +245,8 @@ substring(sha256(http.request.uri.path), 0, 8) eq "a1b2c3d4"
 | `http.response.headers["name"]` | String | Response header; response transform and compression phases only |
 | `http.response.content_type.media_type` | String | The response's `Content-Type` without parameters, lowercase; response transform and compression phases only |
 | `http.response.cache_status` | String | The edge cache's status: `HIT`, `MISS`, `BYPASS`, `EXPIRED`, `STALE`, `UPDATING`, or `REVALIDATED` (as `X-Cache`); empty string for responses the node made itself (blocks, redirects, error pages) and for WebSocket and gRPC, which never pass the cache; response transform and compression phases only |
-| `ip.src` | IP | The TCP client address; behind a load balancer, the load balancer's address (HTTP and HTTPS listeners do not accept the PROXY protocol) |
+| `ip.src` | IP | The visitor address under the cluster's [client IP](../deploy/nodes.en.md#client-ip) setting: the TCP client address when direct; the address in the PROXY header with the PROXY protocol (the UDP peer for HTTP/3); the address the trusted proxies' header names in the trusted header mode |
+| `ip.peer` | IP | The direct peer: the TCP client address (the UDP peer for HTTP/3), whatever the client IP setting; equal to `ip.src` in direct mode. Needs `client-ip-v1` |
 | `ssl` | Boolean | `true` for HTTPS requests |
 | `ip.geoip.country` | String | ISO country code; empty string without a record |
 | `ip.geoip.subdivision` | String | First-level subdivision code from the City MMDB, or its English name when it has no code; empty string without a record or when the City MMDB's country differs from `ip.geoip.country` |
@@ -304,6 +305,7 @@ Every string is handled as UTF-8 bytes. Arguments are fields, string literals, o
 | Item | Behavior |
 | --- | --- |
 | IPv4-mapped addresses | `::ffff:a.b.c.d` equals the IPv4 address; mapped CIDRs with a prefix shorter than 96 bits are ambiguous and refused |
+| IPv4-compatible form | `::a.b.c.d` is a plain IPv6 address (`::1.2.3.4` is saved as `::102:304/128`), not equal to IPv4 |
 | NAT64 | A distinct IPv6 address, not equal to IPv4 |
 | CIDR | Host bits are cleared before saving |
 | Refused | Leading zeros (octal ambiguity) and zone IDs (`%`) |
@@ -411,6 +413,7 @@ API: `GET` and `POST /api/v1/ip-lists`, `PUT` and `DELETE /api/v1/ip-lists/{id}`
 | Capabilities | Rules and block/allow lists need the node capability `rules-v1`; `ip.geoip.country` and `ip.geoip.subdivision` need `geoip-city-v1`; `ip.geoip.asnum` needs `geoip-asn-v1`; the challenge action needs `challenge-v1`; `tls.ja4` (field or rate limit key) needs `ja4-v1`; when `ip.geoip.subdivision` is used, the console also checks `geoip-subdivision-v1` (not written into the configuration) |
 | Rule engine extensions | Any of these needs `rules-v2`: functions and `http.request.full_uri`, `http.request.uri.path.extension`, `http.response.content_type.media_type`; expression targets, query parameter edits, and a redirect with **Keep query string** on or a rewrite with it off; origin overrides; the compression phase; the overrides available only in the configuration phase and **Gzip** On; cache rule conditions not in the [builder](origins-and-cache.en.md#request-conditions)'s shape and **Browser TTL (s)**; bulk redirects; origin groups other than the default group |
 | Expression fields and header values | Any of these needs `rules-v3`: `http.request.cookies[…]`, `http.request.uri.args[…]`, `http.referer`, `http.user_agent`, `http.request.version`, `http.request.scheme`, `http.request.id`, `http.request.timestamp.sec`, `edge.server_port`, `ip.geoip.as_name` (also `geoip-asn-v1`), `http.response.cache_status`; `url_encode`, `base64_encode`, `base64_decode`, `md5`, `sha1`, `sha256`, `substring`, `to_string`; `wildcard` and `strict wildcard`; expression values of request headers, response headers, and query parameters; response header **Append**; redirect status 303; `{{time}}` and `{{path}}` in [error pages](error-pages.en.md) |
+| Direct peer | Configurations that read `ip.peer` need `client-ip-v1` |
 | Existing configurations | Configurations that use none of the extensions stay as they were and do not need `rules-v2`; cache rules in the builder's shape are still sent as the former structured conditions; configurations that use none of the `rules-v3` items stay byte for byte the same as well |
 | Console and AccessKeys | A save is published even when an active node of the cluster lacks a required capability; such nodes keep their last-known-good configuration and **Clusters & nodes** shows **Upgrade required**, see [Node upgrades](node-upgrades.en.md) |
 | Service accounts and background jobs | When a configuration they publish introduces a new capability, every active node of the cluster is checked, including temporarily offline ones; if any lacks it, the publish is refused (`NODE_CAPABILITY_REQUIRED`, "Some nodes don't support … yet: {nodes}") and the configuration and revision stay unchanged |

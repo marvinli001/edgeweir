@@ -18,6 +18,7 @@ import { HttpsTab } from "@/components/site/https-tab";
 import { LaunchCheck } from "@/components/site/launch-check";
 import { LogsTab } from "@/components/site/logs-tab";
 import { OriginsTab } from "@/components/site/origins-tab";
+import { SitePortsCard } from "@/components/site/ports-card";
 import { RulesTab } from "@/components/site/rules-tab";
 import { SaveBar, useSaveSite } from "@/components/site/save-site";
 import { SecurityTab } from "@/components/site/security-tab";
@@ -423,6 +424,7 @@ function DomainsTab({ site }: { site: Site }) {
           <SaveBar dirty={dirty} pending={pending} error={invalid ?? error} testId="domains-save" />
         </form>
       </Card>
+      <SitePortsCard site={site} />
     </div>
   );
 }

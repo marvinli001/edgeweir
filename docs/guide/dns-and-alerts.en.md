@@ -54,7 +54,7 @@ Clusters may use different provider accounts and cluster domains. The **Cluster 
 | Field | Values | Default | Effect |
 | --- | --- | --- | --- |
 | Mode | Not managed / Manual / Automatic | Not managed | Automatic: the console writes the provider; Manual: lists the records to create, the console writes no DNS; Not managed: sites have no CNAME target and written records are removed |
-| Provider account | An added account | None | Required for Automatic; optional for Manual, in which case the zone is the cluster domain |
+| Provider account | An added account | None | Required for Automatic; Manual can use **No account**, in which case the zone is the cluster domain |
 | Zone | The account's zone | — | Read-only |
 | Cluster domain | A name inside the zone, up to 180 characters | None | Parent of all of the cluster's records; a site's CNAME target is `<site UUID>.<cluster domain>`, an L4 app's `<app UUID>.<cluster domain>` |
 | TTL (seconds) | 30–3600 | 600 | TTL of every record; some providers or plans require a higher minimum, see the provider table |

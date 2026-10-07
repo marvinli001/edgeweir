@@ -21,6 +21,9 @@ import "google/protobuf/timestamp.proto";
 //   - l4_apps by id, inside an application origins by id and
 //     allow_list_ids / block_list_ids sorted and unique (v0.15.0); ids
 //     compare by their UTF-8 bytes;
+//   - inside a site ports sorted and unique, inside its tls
+//     redirect_excluded_domains sorted and unique; client_address
+//     trusted_cidrs sorted and unique (v0.23.0);
 //   - inside a cache zone node_sizes by node_id; inside a site's
 //     maintenance allowed_cidrs and allowed_path_prefixes sorted and unique
 //     (v0.24.0).
@@ -43,8 +46,8 @@ message NodeConfig {
   repeated CertificateRef certificates = 7;
   // CIDRs origins may use although they are special-purpose addresses
   // (loopback, link-local, private, CGNAT...), which nodes otherwise refuse
-  // both as configured literals and as DNS answers. Set by the platform
-  // administrator; empty by default. Added in v0.2.1.
+  // both as configured literals and as DNS answers. Set by the operator;
+  // empty by default. Added in v0.2.1.
   repeated string origin_allowed_cidrs = 8;
   // Feature identifiers every receiving agent must implement. Unknown features
   // reject the whole configuration and retain last-known-good.
@@ -74,6 +77,45 @@ message NodeConfig {
   // structural (rendered into stream {}, applied with a reload); everything
   // else is hot-updated. Added in v0.15.0 (feature l4-v1).
   repeated L4App l4_apps = 17;
+  // How the edge layer's HTTP and HTTPS listeners find the client address
+  // (ip.src, $remote_addr: bans, CC, rules, logs, X-Real-IP towards the
+  // origins). Unset: the TCP peer, for QUIC the UDP peer. Added in v0.23.0
+  // (feature client-ip-v1).
+  ClientAddress client_address = 18;
+}
+
+// ClientAddress is the cluster's client address setting.
+//
+// mode "proxy_protocol": every TCP listener of NodeConfig.listeners has
+// proxy_protocol set and refuses connections without a PROXY protocol
+// header (v1 or v2); the header's source address is the client's (UNKNOWN:
+// the TCP peer). QUIC (HTTP/3) has no PROXY protocol: the UDP peer.
+//
+// mode "header": peers inside trusted_cidrs are proxies whose header names
+// the client; nginx's realip module reads it (real_ip_recursive on): for
+// x-forwarded-for, from right to left past trusted addresses; a value that
+// is no IP address leaves the TCP peer. Peers outside keep their own
+// address. Trusted addresses are never banned and not counted per address
+// by CC.
+//
+// mode "direct" (only with drop_forwarded_for): the TCP peer.
+//
+// The edge sends X-Real-IP: the client address, and X-Forwarded-For: the
+// received header followed by the TCP peer (direct mode: the client
+// address, which is the TCP peer; drop_forwarded_for: the TCP peer only).
+// ip.peer is the TCP (QUIC: UDP) peer in every mode.
+message ClientAddress {
+  string mode = 1;
+  // mode "header": 1-64 CIDRs in canonical form (IPv4 a.b.c.d/n, IPv6
+  // compressed lowercase), sorted and unique.
+  repeated string trusted_cidrs = 2;
+  // mode "header": the lowercase header name: x-forwarded-for, x-real-ip,
+  // cf-connecting-ip, true-client-ip or another token of 1-64 characters
+  // [a-z0-9-] (never a pseudo or hop-by-hop header, nor x-edgeweir-*).
+  string header = 3;
+  // mode "direct": X-Forwarded-For towards the origins is the TCP peer
+  // alone; the client's own X-Forwarded-For is dropped.
+  bool drop_forwarded_for = 4;
 }
 
 // NodeConfigDiff transforms the config at base_revision into revision.
@@ -111,6 +153,8 @@ message NodeConfigDiff {
   repeated OfflineHost offline_hosts = 18;
   // Always sent in full (NodeConfig field 17). Added in v0.15.0.
   repeated L4App l4_apps = 19;
+  // Always sent in full (NodeConfig field 18). Added in v0.23.0.
+  ClientAddress client_address = 20;
 }
 
 // L4Protocol is the transport of a layer-4 application.
@@ -149,6 +193,18 @@ message L4App {
   // 0 means no limit.
   uint32 max_connections = 13;
   uint32 new_connections_per_second = 14;
+  // Last port of the range port..port_end (port_end > port, at most 1000
+  // ports, unique per protocol like port); 0: the single port. Added in
+  // v0.23.0 (feature l4-v2).
+  uint32 port_end = 15;
+  // TCP only: the node terminates TLS with this certificate (an id of
+  // NodeConfig.certificates) and forwards the plain bytes. The handshake's
+  // SNI must be one of the certificate's names (a wildcard name covers one
+  // left-most label); a handshake without SNI gets the certificate too.
+  // Empty: plain TCP. Added in v0.23.0 (feature l4-v2).
+  string certificate_id = 16;
+  // With certificate_id: "1.2" (TLS 1.2 and 1.3) or "1.3".
+  string tls_minimum_version = 17;
 }
 
 // L4Origin is one upstream of a layer-4 application.
@@ -157,6 +213,8 @@ message L4Origin {
   // Host name or IP literal; the origin address policy applies like for
   // sites (special-purpose addresses only inside origin_allowed_cidrs).
   string address = 2;
+  // 1-65535; since v0.23.0 (feature l4-v2) 0: the port the connection or
+  // session arrived on (for port ranges).
   uint32 port = 3;
   // 1-100.
   uint32 weight = 4;
@@ -173,6 +231,9 @@ enum ListenerProtocol {
 
 // Listener is a port the data plane accepts traffic on.
 message Listener {
+  // 1-65535. Since v0.23.0 (feature edge-ports-v1) a cluster may have
+  // listeners besides 80 (HTTP) and 443 (HTTPS); sites name theirs in
+  // Site.ports. Port 80 always answers ACME HTTP-01 challenges.
   uint32 port = 1;
   ListenerProtocol protocol = 2;
   bool http2 = 3;
@@ -203,7 +264,7 @@ message CacheZoneNodeSize {
   uint32 keys_zone_mb = 3;
 }
 
-// Site is one customer property: a set of domains, an origin pool and rules.
+// Site is one property: a set of domains, an origin pool and rules.
 message Site {
   string id = 1;
   string name = 2;
@@ -248,8 +309,14 @@ message Site {
   // phase with the client's original Host and normalized path ($uri):
   // "host/path" first, then "/path". Added in v0.13.0 (feature rules-v2).
   repeated BulkRedirect bulk_redirects = 20;
-  // Fields 22-26 were added in v0.24.0 (feature site-content-v1); field 21
-  // belongs to another addition.
+  // Ports of NodeConfig.listeners the site is served on, sorted and
+  // unique; HTTPS ones only with a certificate. A request on another
+  // listener, and a TLS handshake there, is treated like one for an unknown
+  // host (404 page; the handshake is aborted). Empty: every listener
+  // (configurations without feature edge-ports-v1). Added in v0.23.0
+  // (feature edge-ports-v1).
+  repeated uint32 ports = 21;
+  // Fields 22-26 were added in v0.24.0 (feature site-content-v1).
   //
   // Purge cached URLs with the PURGE method: a PURGE request carrying the
   // key in X-Purge-Key makes the node submit a URL purge of the cluster
@@ -362,7 +429,7 @@ message ErrorPage {
   uint32 response_status = 4;
 }
 
-// PlatformErrorPages are the platform administrator's templates, with the
+// PlatformErrorPages are the operator's platform-wide templates, with the
 // rules of ErrorPage. An empty template uses the node's built-in page.
 message PlatformErrorPages {
   // Hosts no site of the cluster serves (status 404).
@@ -442,7 +509,7 @@ message CcPolicy {
   uint32 cooldown_seconds = 12;
 }
 
-// PlatformProtection is set by platform administrators for every site.
+// PlatformProtection is set by the operator for every site.
 message PlatformProtection {
   bool under_attack = 1;
   string under_attack_challenge = 2;
@@ -480,6 +547,10 @@ message ChallengeKeyRef {
 // strict_wildcard (value: the pattern). to_string takes a value node of any
 // type; substring takes a string and one or two op "const" arguments of
 // value_type "number" (start, length).
+//
+// Since v0.23.0 (feature client-ip-v1): field ip.peer (IP), the TCP (QUIC:
+// UDP) peer of the connection; ip.src is the client address the cluster's
+// ClientAddress setting resolves (equal to ip.peer without one).
 message RuleExpression {
   string op = 1;
   string field = 2;
@@ -591,7 +662,7 @@ message IpList {
   bool platform = 5;
 }
 
-// HTTP and TLS policy. Cipher strings are never accepted from tenants.
+// HTTP and TLS policy. Ciphers come from a named profile, never a cipher string.
 message TlsOptions {
   bool force_https = 1;
   uint32 hsts_max_age = 2;
@@ -616,8 +687,18 @@ message TlsOptions {
   uint32 zstd_level = 18;
   uint32 zstd_min_length = 19;
   repeated string zstd_types = 20;
-  // Fields 24-25 were added in v0.24.0 (feature site-content-v1); 21-23
-  // belong to another addition. gzip_comp_level 1-9 of the site's server
+  // The HTTPS redirect of force_https and of config rules' force_https:
+  // status 301, 302, 303, 307 or 308 (0: 301) and the port of the target
+  // URL (0: 443, else one of the site's HTTPS ports in Site.ports). Domains
+  // of the site that force_https does not redirect (a config rule's
+  // force_https still does): lowercase names as written in the site, a
+  // wildcard as "*.suffix", at most 50, sorted and unique. Added in v0.23.0
+  // (feature edge-ports-v1).
+  uint32 redirect_status = 21;
+  uint32 redirect_port = 22;
+  repeated string redirect_excluded_domains = 23;
+  // Fields 24-25 were added in v0.24.0 (feature site-content-v1):
+  // gzip_comp_level 1-9 of the site's server
   // blocks (0: nginx's default, 1) and the largest response, by its known
   // length, that any coding compresses (0: no limit; responses of unknown
   // length are compressed).

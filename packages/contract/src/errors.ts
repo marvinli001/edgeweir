@@ -90,11 +90,17 @@ export const errorDefs = {
   /** A private key that cannot be read, such as an encrypted one. */
   CERTIFICATE_KEY_UNREADABLE: { status: 400, params: [] },
   CERTIFICATE_KEY_MISMATCH: { status: 400, params: [] },
+  /** An EC private key with explicit curve parameters instead of the curve's OID. */
+  CERTIFICATE_KEY_EXPLICIT_CURVE: { status: 400, params: [] },
+  /** A chain certificate whose EC key has explicit curve parameters instead of the curve's OID. */
+  CERTIFICATE_CHAIN_EXPLICIT_CURVE: { status: 400, params: [] },
   /** The first certificate is a CA, or one is not issued by the next. */
   CERTIFICATE_CHAIN_ORDER: { status: 400, params: [] },
   /** Not yet valid or expired; the validity in UTC ("2026-10-02 12:00 UTC"). */
   CERTIFICATE_NOT_CURRENTLY_VALID: { status: 400, params: ["notBefore", "notAfter"] },
   CERTIFICATE_NO_DNS_NAMES: { status: 400, params: [] },
+  /** A leaf key other than RSA (2048 bits or more) or ECDSA P-256, P-384 or P-521. */
+  CERTIFICATE_KEY_TYPE_UNSUPPORTED: { status: 400, params: [] },
   /** A certificate chosen for a site that is not issued yet or has expired. */
   CERTIFICATE_UNAVAILABLE: { status: 409, params: [] },
   /** Names a certificate or DNS zone does not cover, or HTTP-01 names no site has (first 5). */
@@ -102,6 +108,8 @@ export const errorDefs = {
   CERTIFICATE_BUSY: { status: 409, params: [] },
   /** Sites use the certificate (the first 5 names). */
   CERTIFICATE_IN_USE: { status: 409, params: ["sites"] },
+  /** Layer-4 applications that terminate TLS with the certificate (first 5 names). */
+  CERTIFICATE_IN_USE_BY_L4: { status: 409, params: ["apps"] },
   DNS_CREDENTIAL_NOT_FOUND: { status: 404, params: [] },
   DNS_CREDENTIAL_INVALID: { status: 400, params: [] },
   /** Certificates use the DNS credential (the first 5 names). */
@@ -185,6 +193,32 @@ export const errorDefs = {
   L4_PORT_POOL_OVERLAP: { status: 400, params: ["pools"] },
   /** PROXY protocol (accepted or sent) on a UDP application. */
   L4_PROXY_PROTOCOL_UNSUPPORTED: { status: 400, params: [] },
+  /** The ports of a cluster's layer-4 applications (ranges counted in full) exceed `limit`. */
+  L4_PORT_LIMIT: { status: 409, params: ["limit"] },
+  /** A port range whose last port is not above the first or that holds more than `max` ports. */
+  L4_PORT_RANGE_INVALID: { status: 400, params: ["max"] },
+  /** An origin without a port while the application's originPortMode is fixed. */
+  L4_ORIGIN_PORT_REQUIRED: { status: 400, params: [] },
+  /** TLS termination on a UDP application. */
+  L4_TLS_UNSUPPORTED: { status: 400, params: [] },
+  /** The chosen certificate is not issued yet or has expired. */
+  L4_CERTIFICATE_UNAVAILABLE: { status: 400, params: [] },
+  /** A port in both the extra HTTP and the extra HTTPS ports of a cluster. */
+  LISTEN_PORT_CONFLICT: { status: 400, params: ["port"] },
+  /** An extra listener port inside a port pool of the cluster ("from-to/protocol"). */
+  LISTEN_PORT_IN_POOL: { status: 400, params: ["port", "pools"] },
+  /** A listener port that sites of the cluster still use (first 5 names). */
+  LISTEN_PORT_IN_USE: { status: 409, params: ["port", "sites"] },
+  /** A site port that is not an HTTP (or HTTPS) listener port of its cluster. */
+  SITE_PORT_UNAVAILABLE: { status: 400, params: ["port"] },
+  /** A site that would be served on no port. */
+  SITE_PORTS_EMPTY: { status: 400, params: [] },
+  /** An HTTPS port other than 443 for a site without a certificate. */
+  SITE_HTTPS_PORT_NEEDS_CERTIFICATE: { status: 400, params: ["port"] },
+  /** The HTTPS redirect's port is neither 443 nor an HTTPS port of the site. */
+  HTTPS_REDIRECT_PORT_INVALID: { status: 400, params: ["port"] },
+  /** Domains excluded from the HTTPS redirect that the site does not have. */
+  HTTPS_REDIRECT_DOMAIN_INVALID: { status: 400, params: ["domains"] },
 } as const satisfies Record<string, { status: number; params: readonly string[] }>;
 
 export type ErrorCode = keyof typeof errorDefs;
@@ -230,6 +264,8 @@ export const revisionReasonDefs = {
   l4_app_created: { params: ["app"], en: "L4 application {app} created" },
   l4_app_updated: { params: ["app"], en: "L4 application {app} updated" },
   l4_app_deleted: { params: ["app"], en: "L4 application {app} deleted" },
+  listen_ports_updated: { params: [], en: "listener ports updated" },
+  client_ip_updated: { params: [], en: "client address setting updated" },
 } as const satisfies Record<string, { params: readonly string[]; en: string }>;
 
 export type RevisionReasonCode = keyof typeof revisionReasonDefs;

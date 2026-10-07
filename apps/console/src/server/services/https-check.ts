@@ -1,4 +1,4 @@
-import type { HttpsBlocker, HttpsCheck } from "@edgeweir/contract";
+import { certificateUnloadable, type HttpsBlocker, type HttpsCheck } from "@edgeweir/contract";
 import { schema } from "@edgeweir/db";
 import { ORPCError } from "@orpc/server";
 import { and, asc, desc, eq, gt, ne, sql } from "drizzle-orm";
@@ -122,11 +122,14 @@ export async function checkHttps(
       id: schema.certificate.id,
       name: schema.certificate.name,
       chainPem: schema.certificate.chainPem,
+      status: schema.certificate.status,
+      lastError: schema.certificate.lastError,
     })
     .from(schema.certificate)
     .where(and(ne(schema.certificate.chainPem, ""), gt(schema.certificate.notAfter, new Date())))
     .orderBy(asc(schema.certificate.name));
   const covering = issued.filter((cert) => {
+    if (certificateUnloadable(cert)) return false;
     try {
       return uncoveredDomains(cert.chainPem, domains).length === 0;
     } catch {

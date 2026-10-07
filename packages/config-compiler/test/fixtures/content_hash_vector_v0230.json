@@ -1,0 +1,199 @@
+{
+  "description": "proto v0.23.0: listeners 80, 443, 8081 and 9443 (HTTP/3), site a on 8081 and 9443 with a 308 redirect to 9443 leaving *.w.test and b.test alone and a rule on ip.peer, site d on the defaults, client address header mode (trusted CIDRs unsorted with a duplicate), layer-4 applications with a port range on the arriving port and with TLS 1.3; ports, excluded domains and required_features unsorted",
+  "config": {
+    "revision": "12",
+    "contentHash": "0b47992edb2829c32d6b56e0d2d10c51345830522c24e5ecdb78a649a183f0a7",
+    "clusterId": "c1",
+    "listeners": [
+      {
+        "port": 80,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      },
+      {
+        "port": 443,
+        "protocol": "LISTENER_PROTOCOL_HTTPS",
+        "http2": true
+      },
+      {
+        "port": 8081,
+        "protocol": "LISTENER_PROTOCOL_HTTP"
+      },
+      {
+        "port": 9443,
+        "protocol": "LISTENER_PROTOCOL_HTTPS",
+        "http2": true,
+        "http3": true
+      }
+    ],
+    "cacheZones": [
+      {
+        "name": "default",
+        "maxSizeMb": "10240",
+        "keysZoneMb": 64,
+        "inactiveSeconds": 604800
+      }
+    ],
+    "sites": [
+      {
+        "id": "a",
+        "name": "a",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "a.test"
+          },
+          {
+            "name": "b.test"
+          },
+          {
+            "name": "w.test",
+            "wildcard": true
+          }
+        ],
+        "originPool": {
+          "id": "p-a",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-a",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "certificateId": "cert",
+        "tls": {
+          "forceHttps": true,
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/html"],
+          "cipherProfile": "modern",
+          "http3": true,
+          "redirectStatus": 308,
+          "redirectPort": 9443,
+          "redirectExcludedDomains": ["b.test", "*.w.test"]
+        },
+        "rules": [
+          {
+            "id": "peer",
+            "phase": "waf-custom",
+            "expression": {
+              "op": "in",
+              "field": "ip.peer",
+              "valueType": "ip",
+              "values": ["10.0.0.0/8"]
+            },
+            "action": {
+              "kind": "block",
+              "statusCode": 403
+            }
+          }
+        ],
+        "ports": [9443, 8081]
+      },
+      {
+        "id": "d",
+        "name": "d",
+        "enabled": true,
+        "domains": [
+          {
+            "name": "d.test"
+          }
+        ],
+        "originPool": {
+          "id": "p-d",
+          "policy": "LOAD_BALANCE_POLICY_WEIGHTED_RANDOM",
+          "origins": [
+            {
+              "id": "o-d",
+              "address": "origin.test",
+              "port": 80,
+              "scheme": "ORIGIN_SCHEME_HTTP",
+              "weight": 1
+            }
+          ]
+        },
+        "cacheZone": "default",
+        "cacheGeneration": "1",
+        "certificateId": "cert",
+        "tls": {
+          "minimumVersion": "1.2",
+          "http2": true,
+          "gzip": true,
+          "gzipMinLength": 256,
+          "gzipTypes": ["text/html"],
+          "cipherProfile": "modern"
+        },
+        "ports": [80, 443]
+      }
+    ],
+    "certificates": [
+      {
+        "id": "cert",
+        "names": ["*.test"],
+        "sha256Fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "requiredFeatures": [
+      "tls-v1",
+      "rules-v1",
+      "l4-v2",
+      "l4-v1",
+      "http3-v1",
+      "edge-ports-v1",
+      "client-ip-v1",
+      "l4-v2"
+    ],
+    "l4Apps": [
+      {
+        "id": "range",
+        "protocol": "L4_PROTOCOL_TCP",
+        "port": 20000,
+        "origins": [
+          {
+            "id": "o1",
+            "address": "198.51.100.7",
+            "weight": 1
+          }
+        ],
+        "maxFails": 3,
+        "failTimeoutSeconds": 30,
+        "connectTimeoutMs": 5000,
+        "idleTimeoutSeconds": 600,
+        "portEnd": 20099
+      },
+      {
+        "id": "tls",
+        "protocol": "L4_PROTOCOL_TCP",
+        "port": 21000,
+        "origins": [
+          {
+            "id": "o1",
+            "address": "198.51.100.8",
+            "port": 7000,
+            "weight": 1
+          }
+        ],
+        "maxFails": 3,
+        "failTimeoutSeconds": 30,
+        "connectTimeoutMs": 5000,
+        "idleTimeoutSeconds": 600,
+        "certificateId": "cert",
+        "tlsMinimumVersion": "1.3"
+      }
+    ],
+    "clientAddress": {
+      "mode": "header",
+      "trustedCidrs": ["192.0.2.0/24", "10.0.0.0/8", "10.0.0.0/8"],
+      "header": "x-forwarded-for"
+    }
+  },
+  "canonical_hex": "1a026331220408501001220708bb0310021801220508913f1001220908e3491002180120012a120a0764656661756c7410805018402080f52432e3010a0161120161180122080a06612e7465737422080a06622e74657374220a0a06772e7465737410012a210a03702d6110011a180a036f2d61120b6f726967696e2e746573741850200128013a0764656661756c7440014a04636572746a3f08012a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726e6001a801b402b001e349ba01082a2e772e74657374ba0106622e74657374723d0a0470656572120a7761662d637573746f6d1a1d0a02696e120769702e706565721a0269702a0a31302e302e302e302f38220a0a05626c6f636b209303aa0104913fe349326d0a0164120164180122080a06642e746573742a210a03702d6410011a180a036f2d64120b6f726967696e2e746573741850200128013a0764656661756c7440014a04636572746a1f2a03312e32300138014080024a09746578742f68746d6c5a066d6f6465726eaa010350bb033a500a046365727412062a2e746573741a40616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161614a0c636c69656e742d69702d76314a0d656467652d706f7274732d76314a0868747470332d76314a056c342d76314a056c342d76324a0872756c65732d76314a06746c732d76318a01310a0572616e6765100118a09c0132140a026f31120c3139382e35312e3130302e3720013803401e48882750d80478839d018a013b0a03746c7310011888a40132170a026f31120c3139382e35312e3130302e3818d83620013803401e48882750d804820104636572748a0103312e339201330a06686561646572120a31302e302e302e302f38120c3139322e302e322e302f32341a0f782d666f727761726465642d666f72",
+  "content_hash": "0b47992edb2829c32d6b56e0d2d10c51345830522c24e5ecdb78a649a183f0a7"
+}

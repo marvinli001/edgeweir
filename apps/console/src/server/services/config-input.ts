@@ -32,6 +32,7 @@ import { fail } from "../lib/errors";
 import { activeHealthCheckModel, sessionAffinityModel } from "../lib/pool-settings";
 import { readContentSettings, readMaintenance } from "../lib/site-content";
 import { PURGE_KEY } from "../lib/site-secrets";
+import { loadEdgeModel } from "./edge";
 import { errorPagesModel, loadPlatformErrorPages, loadSiteErrorPages } from "./error-pages";
 import { loadL4AppModels } from "./l4-config";
 import { raisePlatformAlert, resolvePlatformAlert } from "./platform-alerts";
@@ -302,6 +303,7 @@ export async function loadSiteModels(
           : null,
         rangeSlice: s.rangeSlice,
         websocket: s.websocket,
+        ports: { http: [...s.httpPorts], https: [...s.httpsPorts] },
         ...contentModel(
           s,
           purgeKeys.find((key) => key.siteId === s.id),
@@ -670,10 +672,13 @@ export async function loadConfigInput(
   const platformRules = await platformRuleModels(tx, lists, previous, invalid);
   await syncRuleAlerts(tx, invalid);
   const originAllowedCidrs = await loadOriginAllowList(tx);
+  const l4Apps = await loadL4AppModels(tx, clusterId);
   const certIds = [
-    ...new Set(
-      sites.filter((s) => s.enabled && s.certificateId).map((s) => s.certificateId as string),
-    ),
+    ...new Set([
+      ...sites.filter((s) => s.enabled && s.certificateId).map((s) => s.certificateId as string),
+      // TCP applications that terminate TLS (l4-v2).
+      ...l4Apps.filter((a) => a.enabled && a.certificateId).map((a) => a.certificateId as string),
+    ]),
   ];
   const certRows = certIds.length
     ? await tx.select().from(schema.certificate).where(inArray(schema.certificate.id, certIds))
@@ -700,6 +705,7 @@ export async function loadConfigInput(
     platformProtection,
     platformErrorPages: await loadPlatformErrorPages(tx),
     offlineHosts: await loadOfflineHosts(tx, clusterId),
-    l4Apps: await loadL4AppModels(tx, clusterId),
+    l4Apps,
+    edge: await loadEdgeModel(tx, clusterId),
   };
 }

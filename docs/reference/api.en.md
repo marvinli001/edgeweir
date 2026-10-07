@@ -626,11 +626,29 @@ New fields of DNS bindings and records:
 
 Behavior: [Regional probes and scheduling](../guide/scheduling.en.md) and [DNS steering and alerts](../guide/dns-and-alerts.en.md#records-per-resolution-line).
 
+### Listener ports and client IP
+
+| Procedure | Endpoint | Notes |
+| --- | --- | --- |
+| `clusters.listenPorts` | `GET /clusters/{clusterId}/listen-ports` | The cluster's extra HTTP / HTTPS ports and nodes without `edge-ports-v1` |
+| `clusters.setListenPorts` | `PUT /clusters/{clusterId}/listen-ports` | Replaces the extra ports and publishes a revision |
+| `clusters.clientIp` | `GET /clusters/{clusterId}/client-ip` | The client IP setting and nodes without `client-ip-v1` |
+| `clusters.setClientIp` | `PUT /clusters/{clusterId}/client-ip` | Replaces the client IP setting and publishes a revision |
+
+Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`); read-only AccessKeys only the `GET` ones.
+
+| Request | Fields |
+| --- | --- |
+| `PUT /clusters/{clusterId}/listen-ports` | `httpPorts`, `httpsPorts`: at most 16 ports 1–65535 each, without 80 and 443, deduplicated and sorted; a port in both is refused (`LISTEN_PORT_CONFLICT`), as is one inside a port pool (`LISTEN_PORT_IN_POOL`); removing a port sites use returns `LISTEN_PORT_IN_USE` |
+| `PUT /clusters/{clusterId}/client-ip` | `settings`: `mode` (`direct` / `proxy_protocol` / `header`, default `direct`); the `header` mode requires `trustedCidrs` (1–64 IPs or CIDRs, normalized, deduplicated and sorted; no IPv4-mapped IPv6) and `header` (a lowercase header name, `[a-z0-9-]`, 1–64 characters, never a hop-by-hop header, `Host`, `Cookie`, `Authorization`, `X-Request-Id` or `X-Edgeweir-*`); `direct` takes an optional `dropForwardedFor` |
+
+A site's ports change with `ports` (`{ http, https }`) in `PATCH /sites/{id}`, and `POST /sites` takes the same optional field (omitted: 80 and 443); sites carry `ports`. Error codes: `SITE_PORT_UNAVAILABLE`, `SITE_PORTS_EMPTY`, `SITE_HTTPS_PORT_NEEDS_CERTIFICATE`. The settings of `PUT /sites/{id}/https` add `redirectStatus` (301, 302, 303, 307, 308, default 301), `redirectPort` (443 or an HTTPS port of the site, default 443, `HTTPS_REDIRECT_PORT_INVALID`) and `redirectExcludedDomains` (domains of the site, at most 50, `HTTPS_REDIRECT_DOMAIN_INVALID`). `GET /sites/{id}/features` adds `edgePorts` and `clientIp`; clusters of `GET /clusters` add `clientIpMode`.
+
 ### Port pools and L4 apps
 
 | Procedure | Endpoint | Notes |
 | --- | --- | --- |
-| `clusters.portPools` | `GET /clusters/{clusterId}/port-pools` | The cluster's port pools, reserved ports, and nodes without `l4-v1` |
+| `clusters.portPools` | `GET /clusters/{clusterId}/port-pools` | The cluster's port pools, reserved ports, and nodes without `l4-v1` or `l4-v2` |
 | `clusters.setPortPools` | `PUT /clusters/{clusterId}/port-pools` | Replaces the port pools; publishes no configuration revision |
 | `l4Apps.list` | `GET /l4-apps` | L4 apps sorted by port and protocol; query parameter `clusterId` (optional) |
 | `l4Apps.get` | `GET /l4-apps/{id}` | One app |
@@ -645,16 +663,16 @@ Service accounts cannot call these procedures (403 `SERVICE_ACCOUNT_FORBIDDEN`);
 | Request | Fields |
 | --- | --- |
 | `PUT /clusters/{clusterId}/port-pools` | `pools`: replaces the list, at most 64 `{ protocol, from, to }`; `protocol` is `tcp`, `udp`, or `both`, `from` and `to` are 1024–65535, `from` not above `to` |
-| `POST /l4-apps` | `clusterId`, `name` (1–100 characters, trimmed), `protocol` (`tcp` / `udp`), `port` (1024–65535), `origins`; optional: `enabled` (default `true`), `acceptProxyProtocol` (default `false`), `proxyProtocolVersion` (0–2, 0 sends none, default 0), `maxFails` (1–100, default 3), `failTimeoutSeconds` (1–3600, default 30), `connectTimeoutMs` (100–60000, default 5000), `idleTimeoutSeconds` (1–86400; omitted: 600 for TCP, 30 for UDP), `allowListIds`, `blockListIds` (IP list IDs, at most 16 each, deduplicated, default `[]`), `maxConnections` (0–10000000), `newConnectionsPerSecond` (0–1000000); 0 means no limit for the last two, default 0 |
-| `origins[]` | 1–32 `{ address, port, weight, backup }`: `address` is a host name or IP under the rules for site origins; `port` 1–65535; `weight` 1–100, default 1; `backup` default `false`. At least one origin has `backup` `false` |
+| `POST /l4-apps` | `clusterId`, `name` (1–100 characters, trimmed), `protocol` (`tcp` / `udp`), `port` (1024–65535), `origins`; optional: `portEnd` (last port of a range, above `port`, at most 1000 ports, default `null`), `originPortMode` (`fixed` / `same`, default `fixed`), `certificateId` (TCP only, the node terminates TLS, default `null`), `tlsMinimumVersion` (`1.2` / `1.3`, default `1.2`), `enabled` (default `true`), `acceptProxyProtocol` (default `false`), `proxyProtocolVersion` (0–2, 0 sends none, default 0), `maxFails` (1–100, default 3), `failTimeoutSeconds` (1–3600, default 30), `connectTimeoutMs` (100–60000, default 5000), `idleTimeoutSeconds` (1–86400; omitted: 600 for TCP, 30 for UDP), `allowListIds`, `blockListIds` (IP list IDs, at most 16 each, deduplicated, default `[]`), `maxConnections` (0–10000000), `newConnectionsPerSecond` (0–1000000); 0 means no limit for the last two, default 0 |
+| `origins[]` | 1–32 `{ address, port, weight, backup }`: `address` is a host name or IP under the rules for site origins; `port` 1–65535, omitted with `originPortMode` `same` (stored as 0); `weight` 1–100, default 1; `backup` default `false`. At least one origin has `backup` `false` |
 | `PATCH /l4-apps/{id}` | The fields of `POST` except `clusterId` and `enabled`, all optional; `origins` replaces the list, and origins whose address and port stay keep their ID (and with it the nodes' passive health state); changing `protocol` leaves `idleTimeoutSeconds` as it is; optional `expectedUpdatedAt` |
 | `PUT /l4-apps/{id}/enabled` | `enabled`; optional `expectedUpdatedAt` |
 | `GET /l4-apps/{id}/stats` | Query parameters `from` and `to` (ISO 8601), `from` before `to`, at most 7 days |
 
 | Procedure | Response |
 | --- | --- |
-| `clusters.portPools`, `clusters.setPortPools` | `clusterId`; `pools` (sorted by first port, then protocol); `reservedPorts` (the ports of the cluster's HTTP / HTTPS listeners, never part of a pool); `nodesWithoutL4` (`[{ id, name }]`, active nodes of the cluster that do not report `l4-v1`) |
-| The app returned by `l4Apps.list`, `l4Apps.get`, and the other procedures | `id`, `clusterId`, `clusterName`, `name`, `protocol`, `port`, `enabled`, `acceptProxyProtocol`, `proxyProtocolVersion`, `origins` (`[{ id, address, port, weight, backup }]`, in the saved order), `maxFails`, `failTimeoutSeconds`, `connectTimeoutMs`, `idleTimeoutSeconds`, `allowListIds`, `blockListIds`, `maxConnections`, `newConnectionsPerSecond`, `dnsTarget`, `dnsLines`, `createdAt`, `updatedAt` |
+| `clusters.portPools`, `clusters.setPortPools` | `clusterId`; `pools` (sorted by first port, then protocol); `reservedPorts` (the ports of the cluster's HTTP / HTTPS listeners, extra ports included, never part of a pool); `nodesWithoutL4` (`[{ id, name }]`, active nodes of the cluster that do not report `l4-v1`); `nodesWithoutL4V2` (active nodes that do not report `l4-v2`) |
+| The app returned by `l4Apps.list`, `l4Apps.get`, and the other procedures | `id`, `clusterId`, `clusterName`, `name`, `protocol`, `port`, `enabled`, `acceptProxyProtocol`, `proxyProtocolVersion`, `portEnd`, `originPortMode`, `certificateId`, `certificateName`, `tlsMinimumVersion`, `origins` (`[{ id, address, port, weight, backup }]`, in the saved order), `maxFails`, `failTimeoutSeconds`, `connectTimeoutMs`, `idleTimeoutSeconds`, `allowListIds`, `blockListIds`, `maxConnections`, `newConnectionsPerSecond`, `dnsTarget`, `dnsLines`, `createdAt`, `updatedAt` |
 | `dnsTarget` | The CNAME clients connect to, `<app ID>.<cluster domain>`, published only while the app is enabled; `null` while the cluster's DNS is **Not managed** |
 | `dnsLines` | Per binding line `{ name, target }`: `target` is `<line>.<app ID>.<cluster domain>` with line aliases, else `<line>.<cluster domain>` |
 | `l4Apps.create`, `l4Apps.update`, `l4Apps.setEnabled` | `{ app, revision }` |

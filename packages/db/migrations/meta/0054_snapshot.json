@@ -1,5 +1,5 @@
 {
-  "id": "c74fcb15-5db2-4f42-9ad0-6a3a4a857d82",
+  "id": "eae8c201-c0e7-428f-b77c-0ae7339c384b",
   "prevId": "a9397cef-f847-4fb2-9591-0da3d9c49fbf",
   "version": "7",
   "dialect": "postgresql",
@@ -2922,13 +2922,6 @@
           "notNull": true,
           "default": 0
         },
-        "cache_set_cookie": {
-          "name": "cache_set_cookie",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -3280,19 +3273,25 @@
           "notNull": true,
           "default": "''"
         },
-        "cache_max_size_gb": {
-          "name": "cache_max_size_gb",
-          "type": "integer",
+        "extra_http_ports": {
+          "name": "extra_http_ports",
+          "type": "integer[]",
           "primaryKey": false,
           "notNull": true,
-          "default": 10
+          "default": "'{}'::integer[]"
         },
-        "cache_inactive_days": {
-          "name": "cache_inactive_days",
-          "type": "integer",
+        "extra_https_ports": {
+          "name": "extra_https_ports",
+          "type": "integer[]",
           "primaryKey": false,
           "notNull": true,
-          "default": 7
+          "default": "'{}'::integer[]"
+        },
+        "client_ip": {
+          "name": "client_ip",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -4035,18 +4034,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
-        },
-        "cache_max_size_gb": {
-          "name": "cache_max_size_gb",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cache_usage": {
-          "name": "cache_usage",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -5127,20 +5114,6 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
-        "tries": {
-          "name": "tries",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 3
-        },
-        "status_retry": {
-          "name": "status_retry",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -5566,46 +5539,19 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
-        "hide_x_cache": {
-          "name": "hide_x_cache",
-          "type": "boolean",
+        "http_ports": {
+          "name": "http_ports",
+          "type": "integer[]",
           "primaryKey": false,
           "notNull": true,
-          "default": false
+          "default": "'{80}'::integer[]"
         },
-        "purge_method": {
-          "name": "purge_method",
-          "type": "boolean",
+        "https_ports": {
+          "name": "https_ports",
+          "type": "integer[]",
           "primaryKey": false,
           "notNull": true,
-          "default": false
-        },
-        "maintenance": {
-          "name": "maintenance",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "maintenance_updated_at": {
-          "name": "maintenance_updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "charset": {
-          "name": "charset",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "request_body_limit": {
-          "name": "request_body_limit",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 104857600
+          "default": "'{443}'::integer[]"
         },
         "created_at": {
           "name": "created_at",
@@ -5780,101 +5726,6 @@
         "site_domain_site_id_site_id_fk": {
           "name": "site_domain_site_id_site_id_fk",
           "tableFrom": "site_domain",
-          "tableTo": "site",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.site_secret": {
-      "name": "site_secret",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "secret_envelope": {
-          "name": "secret_envelope",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "site_secret_site_kind_uq": {
-          "name": "site_secret_site_kind_uq",
-          "columns": [
-            {
-              "expression": "site_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "kind",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "site_secret_site_id_site_id_fk": {
-          "name": "site_secret_site_id_site_id_fk",
-          "tableFrom": "site_secret",
           "tableTo": "site",
           "columnsFrom": [
             "site_id"
@@ -6476,20 +6327,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "redirect_url": {
-          "name": "redirect_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "''"
-        },
-        "response_status": {
-          "name": "response_status",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp with time zone",
@@ -6721,6 +6558,32 @@
           "notNull": true,
           "default": 0
         },
+        "port_end": {
+          "name": "port_end",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "origin_port_mode": {
+          "name": "origin_port_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'fixed'"
+        },
+        "certificate_id": {
+          "name": "certificate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tls_minimum_version": {
+          "name": "tls_minimum_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'1.2'"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -6777,6 +6640,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "l4_app_certificate_id_certificate_id_fk": {
+          "name": "l4_app_certificate_id_certificate_id_fk",
+          "tableFrom": "l4_app",
+          "tableTo": "certificate",
+          "columnsFrom": [
+            "certificate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },

@@ -218,6 +218,8 @@ IP 封禁（`ip_ban`）不产生 revision，也不经配置金丝雀，经节点
 
 proto `v0.22.0` 的补充由能力 `rules-v3` 标明：Cookie 与查询参数按名取值（`http.request.cookies.<名称>`、`http.request.uri.args.<名称>`，取第一个原始值）、请求与连接的新字段、`http.response.cache_status`、编码与摘要函数、`substring`（整数参数为 `value_type` 为 `number` 的 `const` 节点）、`to_string`（参数可为任何类型）、`wildcard` 与 `strict_wildcard` 比较；请求头与响应头的值表达式复用 `RuleAction.target`，`QueryParam.expression` 计算查询参数值，`RuleAction.append` 追加响应头行；重定向 303；错误页的 `{{time}}`、`{{path}}`。节点只为规则读到这些字段的网站计算它们；算出的报头值超过 4096 字节或含控制字符时跳过该动作（每条规则每节点 60 秒一条 NOTICE，消息只含网站与规则 ID），查询参数值求值失败仍按失败关闭处理。没有用到这些的配置逐字节不变（跨语言内容哈希向量 `content_hash_vector_v0220.json`）。
 
+proto `v0.23.0` 增加三项能力。`edge-ports-v1`：`Listener` 可以是 80 / 443 之外的端口（集群的附加端口），`Site.ports` 列出网站绑定的监听端口（空为全部监听，即旧语义；集群没有附加端口且网站保持 80 / 443 时编译为空），`TlsOptions.redirect_status` / `redirect_port` / `redirect_excluded_domains` 为 HTTPS 跳转选项；节点只在网站绑定的端口上为它渲染 server 块，路由器与 TLS 回调在未绑定的端口上按未知域名处理。`client-ip-v1`：`NodeConfig.client_address` 为集群的访客 IP 来源，PROXY protocol 模式时每个 `Listener.proxy_protocol` 都为真，可信代理报头模式由 nginx realip（`real_ip_recursive on`）读报头；回源 `X-Forwarded-For` 为收到的链加直连对端（`$realip_remote_addr`），规则字段 `ip.peer` 为直连对端，可信 CIDR 永不封禁、不计入 CC 单 IP 计数。`l4-v2`：`L4App.port_end`（端口段，stream `listen` 端口区间）、`L4Origin.port` 为 0 表示取到达端口、`L4App.certificate_id` / `tls_minimum_version`（stream `ssl_client_hello_by_lua` / `ssl_certificate_by_lua` 按 SNI 校验后终结 TLS，证书材料随 L4 表下发）。监听端口与访客 IP 是集群的当前状态：回滚沿用当前的端口与设置，网站的端口与跳转选项取当前值（`refreshDerived(config, edge)`）。跨语言内容哈希向量 `content_hash_vector_v0230.json`。
+
 | 管理操作 | 审计 |
 | --- | --- |
 | 修改网站规则 | `site.rules_update`（发布该网站的集群，原因 `rules_updated`） |
@@ -309,6 +311,8 @@ revision 回执由主密钥封装（用途 `node.revision_receipt`，绑定节�
 
 网站证书尚未覆盖的域名（证书正为新域名重签）在集群全部活动节点具备 `tls-pending-domains-v1` 时带 `Domain.tls_pending` 下发（proto v0.19.0），节点只以 HTTP 服务它们；否则这些域名在新证书签发前不下发。
 
+上传与签发结果都不接受 EC 密钥使用显式曲线参数的证书，节点（Go `crypto/tls`）无法加载它们。此前保存的上传证书由 worker 启动时的 `maintenance.check-certificates` 解开私钥检查：节点无法加载的标记为 `error`，`last_error` 为 `certificate_chain_explicit_curve` 或 `certificate_key_explicit_curve`，并写审计日志（`certificate.unloadable`）。网站 HTTPS 保存时直接检查所选证书，这类证书以 `CERTIFICATE_CHAIN_EXPLICIT_CURVE` / `CERTIFICATE_KEY_EXPLICIT_CURVE` 拒绝；已绑定它的网站不被自动改动，换绑其他证书或取消证书后，新 revision 才能在该集群的节点上应用。
+
 | 限制 | 值 |
 | --- | --- |
 | 单次调用时长 | `dns.*` 5 分钟，其他 8 分钟，超时 `SIGKILL` |
@@ -369,6 +373,7 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `traffic.rollup` | 每分钟 | 流量汇总与清理（含 L4 应用的分钟统计）、用量汇总与保留期清理、访问日志分区维护、升级任务到期；一项失败不影响其他各项 |
 | `certificates.sweep` | 每分钟 | 证书签发与续期 |
 | `maintenance.recompile` | 启动时；`system_setting` 的 `config_recompiled` 与当前标记一致时跳过 | 升级改变了已存数据的编译结果时，为每个集群重新发布一次 revision |
+| `maintenance.check-certificates` | 启动时 | 检查尚未标记的已上传证书，把节点无法加载的（EC 密钥使用显式曲线参数）标记为错误 |
 | `maintenance.prune-revisions` | 每小时第 17 分 | 删除超出保留数量的 revision 与 DNS 版本 |
 | `maintenance.prune-idempotency-keys` | 每小时第 29 分 | 删除过期（超过 24 小时）的幂等键 |
 | `maintenance.expire-cache-tasks` | 每小时第 43 分 | 把超期未完成的刷新预热交付记为失败；删除 90 天前的任务（节点仍需补发的刷新保留） |
@@ -547,7 +552,8 @@ DNS 调度按集群绑定（`dns_binding`，模式为不管理、手动或自动
 | `0051_node_last_auth_error` | `node.last_auth_error`、`last_auth_error_at`（节点通道最近一次拒绝该节点自己的证书的原因，如 `CERT_HAS_EXPIRED`） |
 | `0052_retention_indexes` | 索引：`alert_event (occurred_at, ordinal)`；`security_event (received_at)`，只含高于正常的网站级别事件；`cache_task_node (node_id)`，只含未补发的失败与跳过交付 |
 | `0053_origin_protocol` | `origin_pool.protocol`（回源 HTTP 版本，`http1` 或 `http2`）、`origin_pool.grpc`（gRPC 经 HTTP/2 端到端转发） |
-| `0054_site_content` | `site_secret`；`cluster.cache_max_size_gb`、`cluster.cache_inactive_days`（缓存区）；`node.cache_max_size_gb`（节点容量覆盖）、`node.cache_usage`（上报的用量）；`site.hide_x_cache`、`site.purge_method`、`site.maintenance`、`site.maintenance_updated_at`、`site.charset`、`site.request_body_limit`；`origin_pool.tries`、`origin_pool.status_retry`；`cache_rule.cache_set_cookie`；`site_error_page.redirect_url`、`site_error_page.response_status` |
+| `0054_edge_ports` | `cluster.extra_http_ports`、`cluster.extra_https_ports`（80 / 443 之外的监听端口）、`cluster.client_ip`（访客 IP 来源，jsonb，null 为直连）；`site.http_ports`、`site.https_ports`（网站绑定的端口，默认 80 / 443）；`l4_app.port_end`（端口段）、`l4_app.origin_port_mode`（`fixed` / `same`）、`l4_app.certificate_id`、`l4_app.tls_minimum_version`（TLS 卸载） |
+| `0055_site_content` | `site_secret`；`cluster.cache_max_size_gb`、`cluster.cache_inactive_days`（缓存区）；`node.cache_max_size_gb`（节点容量覆盖）、`node.cache_usage`（上报的用量）；`site.hide_x_cache`、`site.purge_method`、`site.maintenance`、`site.maintenance_updated_at`、`site.charset`、`site.request_body_limit`；`origin_pool.tries`、`origin_pool.status_retry`；`cache_rule.cache_set_cookie`；`site_error_page.redirect_url`、`site_error_page.response_status` |
 
 ## 构建产物
 

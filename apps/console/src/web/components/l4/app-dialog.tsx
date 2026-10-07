@@ -1,9 +1,11 @@
 import {
+  certificateUnloadable,
   L4_APP_DEFAULTS,
   type L4App,
   type L4Protocol,
   MAX_L4_APP_LISTS,
   MAX_L4_ORIGINS,
+  MAX_L4_RANGE_PORTS,
 } from "@edgeweir/contract";
 import { Add01Icon, Cancel01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -39,6 +41,7 @@ import { m } from "@/lib/i18n";
 import {
   apiError,
   L4_PROTOCOLS,
+  listChips,
   PROXY_VERSIONS,
   poolCovers,
   poolLabel,
@@ -47,6 +50,9 @@ import {
 } from "@/lib/l4";
 import { errorMessage, orpc } from "@/lib/orpc";
 import { cn } from "@/lib/utils";
+
+/** The certificate select's value for plain TCP. */
+const NO_TLS = "none";
 
 interface OriginDraft {
   key: number;
@@ -61,6 +67,12 @@ interface AppDraft {
   name: string;
   protocol: L4Protocol;
   port: string;
+  /** The last port of a range; empty: a single port. */
+  portEnd: string;
+  originPortMode: "fixed" | "same";
+  /** A certificate id, or NO_TLS. */
+  certificateId: string;
+  tlsMinimumVersion: "1.2" | "1.3";
   enabled: boolean;
   acceptProxyProtocol: boolean;
   proxyProtocolVersion: number;
@@ -91,6 +103,10 @@ function draftOf(app: L4App | undefined, clusterId: string): AppDraft {
       name: "",
       protocol: "tcp",
       port: "",
+      portEnd: "",
+      originPortMode: "fixed",
+      certificateId: NO_TLS,
+      tlsMinimumVersion: "1.2",
       enabled: true,
       acceptProxyProtocol: false,
       proxyProtocolVersion: 0,
@@ -109,13 +125,17 @@ function draftOf(app: L4App | undefined, clusterId: string): AppDraft {
     name: app.name,
     protocol: app.protocol,
     port: String(app.port),
+    portEnd: app.portEnd ? String(app.portEnd) : "",
+    originPortMode: app.originPortMode,
+    certificateId: app.certificateId ?? NO_TLS,
+    tlsMinimumVersion: app.tlsMinimumVersion,
     enabled: app.enabled,
     acceptProxyProtocol: app.acceptProxyProtocol,
     proxyProtocolVersion: app.proxyProtocolVersion,
     origins: app.origins.map((o) => ({
       key: nextDraftKey(),
       address: o.address,
-      port: String(o.port),
+      port: o.port ? String(o.port) : "",
       weight: String(o.weight),
       backup: o.backup,
     })),
@@ -136,11 +156,17 @@ const toInt = (value: string, fallback: number) => {
 };
 
 /** Which part of the form a refusal concerns; the rest show under the form. */
-type ErrorField = "port" | "origins" | "proxy" | "lists" | "form";
+type ErrorField = "port" | "origins" | "proxy" | "tls" | "lists" | "form";
 const ERROR_FIELDS: Record<string, ErrorField> = {
   L4_PORT_OUTSIDE_POOL: "port",
   L4_PORT_IN_USE: "port",
   L4_PORT_RESERVED: "port",
+  L4_PORT_RANGE_INVALID: "port",
+  L4_PORT_LIMIT: "port",
+  L4_ORIGIN_PORT_REQUIRED: "origins",
+  L4_TLS_UNSUPPORTED: "tls",
+  L4_CERTIFICATE_UNAVAILABLE: "tls",
+  CERTIFICATE_NOT_FOUND: "tls",
   ORIGIN_ADDRESS_FORBIDDEN: "origins",
   L4_PROXY_PROTOCOL_UNSUPPORTED: "proxy",
   IP_LIST_NOT_FOUND: "lists",
@@ -219,6 +245,11 @@ function AppForm({
     enabled: !!clusterId,
   });
   const lists = useQuery(orpc.ipLists.list.queryOptions());
+  const certificates = useQuery(orpc.certificates.list.queryOptions());
+  // Ranges, origins on the arriving port and TLS wait for nodes with l4-v2,
+  // unless the application already has them.
+  const v2Locked = (pools.data?.nodesWithoutL4V2.length ?? 0) > 0;
+  const lockedUnlessSaved = (saved: boolean) => v2Locked && !saved;
   const set = (change: Partial<AppDraft>) => {
     setDraft((previous) => ({ ...previous, ...change }));
     setRefusal(null);
@@ -230,11 +261,19 @@ function AppForm({
     (pool) => pool.protocol === "both" || pool.protocol === draft.protocol,
   );
   const port = Number(draft.port);
+  const portEnd = draft.portEnd.trim() ? Number(draft.portEnd) : port;
+  const badRange =
+    draft.portEnd.trim() !== "" &&
+    (!Number.isInteger(portEnd) || portEnd <= port || portEnd - port >= MAX_L4_RANGE_PORTS);
   const outsidePools =
     pools.isSuccess &&
     draft.port.trim() !== "" &&
     Number.isInteger(port) &&
-    !protocolPools.some((pool) => poolCovers(pool, draft.protocol, port));
+    !badRange &&
+    Array.from({ length: portEnd - port + 1 }, (_, i) => port + i).some(
+      (p) => !protocolPools.some((pool) => poolCovers(pool, draft.protocol, p)),
+    );
+  const same = draft.originPortMode === "same";
   const errorFor = (field: ErrorField) =>
     refusal?.field === field ? (
       <FieldError className="animate-in fade-in" data-testid={`l4-app-${field}-error`}>
@@ -249,11 +288,15 @@ function AppForm({
       name: draft.name.trim(),
       protocol: draft.protocol,
       port: toInt(draft.port, 0),
+      portEnd: draft.portEnd.trim() ? toInt(draft.portEnd, 0) : null,
+      originPortMode: draft.originPortMode,
+      certificateId: udp || draft.certificateId === NO_TLS ? null : draft.certificateId,
+      tlsMinimumVersion: draft.tlsMinimumVersion,
       acceptProxyProtocol: udp ? false : draft.acceptProxyProtocol,
       proxyProtocolVersion: udp ? 0 : draft.proxyProtocolVersion,
       origins: draft.origins.map((o) => ({
         address: o.address.trim(),
-        port: toInt(o.port, 0),
+        port: same ? undefined : toInt(o.port, 0),
         weight: toInt(o.weight, 1),
         backup: o.backup,
       })),
@@ -344,7 +387,7 @@ function AppForm({
         {pools.data && clusterName ? (
           <L4NodesWarning cluster={clusterName} nodes={pools.data.nodesWithoutL4} />
         ) : null}
-        <div className="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
+        <div className="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)_minmax(0,1fr)]">
           <FormSelect
             id={id("protocol")}
             label={m.l4_protocol()}
@@ -389,16 +432,56 @@ function AppForm({
               outside={outsidePools}
             />
           </Field>
+          <Field data-disabled={lockedUnlessSaved(!!app?.portEnd) || undefined}>
+            <FieldLabel htmlFor={id("port-end")}>{m.l4_port_end()}</FieldLabel>
+            <Input
+              id={id("port-end")}
+              type="number"
+              inputMode="numeric"
+              min={1024}
+              max={65535}
+              step={1}
+              value={draft.portEnd}
+              disabled={lockedUnlessSaved(!!app?.portEnd)}
+              aria-invalid={badRange || undefined}
+              onChange={(event) => set({ portEnd: event.target.value })}
+              className="font-mono"
+              data-testid="l4-app-port-end"
+            />
+            {badRange ? (
+              <FieldError className="animate-in fade-in" data-testid="l4-app-port-end-invalid">
+                {m.l4_port_end_invalid()}
+              </FieldError>
+            ) : null}
+          </Field>
         </div>
         <FieldSet className="gap-3">
           <FieldLegend variant="label" className="mb-0 text-muted-foreground">
             {m.sites_col_origins()}
           </FieldLegend>
+          <Field
+            className="sm:max-w-56"
+            data-disabled={lockedUnlessSaved(app?.originPortMode === "same") || undefined}
+          >
+            <FieldLabel htmlFor={id("origin-port-mode")}>{m.l4_origin_port_mode()}</FieldLabel>
+            <OptionSelect
+              id={id("origin-port-mode")}
+              value={draft.originPortMode}
+              options={[
+                { value: "fixed" as const, label: m.l4_origin_port_fixed() },
+                { value: "same" as const, label: m.l4_origin_port_same() },
+              ]}
+              onChange={(originPortMode) => set({ originPortMode })}
+              disabled={lockedUnlessSaved(app?.originPortMode === "same")}
+              testId="l4-app-origin-port-mode"
+            />
+          </Field>
           <ol className="flex flex-col gap-3">
             {draft.origins.map((origin, index) => (
               <OriginRow
                 key={origin.key}
                 origin={origin}
+                portless={same}
                 index={index}
                 removable={draft.origins.length > 1}
                 onChange={(change) => patchOrigin(origin.key, change)}
@@ -460,6 +543,55 @@ function AppForm({
             </SafetyNote>
           ) : null}
           {errorFor("proxy")}
+        </FieldSet>
+        <FieldSet className="gap-2">
+          <FieldLegend variant="label" className="mb-1 text-muted-foreground">
+            {m.l4_tls_certificate()}
+          </FieldLegend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <OptionSelect
+              id={id("tls-certificate")}
+              value={udp ? NO_TLS : draft.certificateId}
+              disabled={udp || lockedUnlessSaved(!!app?.certificateId)}
+              options={[
+                { value: NO_TLS, label: m.l4_tls_none() },
+                ...(certificates.data ?? [])
+                  .filter(
+                    (c) =>
+                      c.id === app?.certificateId ||
+                      (!!c.fingerprint &&
+                        !!c.notAfter &&
+                        Date.parse(c.notAfter) > Date.now() &&
+                        !certificateUnloadable(c)),
+                  )
+                  .map((c) => ({ value: c.id, label: c.name })),
+              ]}
+              onChange={(certificateId) => set({ certificateId })}
+              testId="l4-app-tls-certificate"
+            />
+            <OptionSelect
+              id={id("tls-version")}
+              value={draft.tlsMinimumVersion}
+              disabled={udp || draft.certificateId === NO_TLS}
+              options={[
+                { value: "1.2" as const, label: m.cert_tls12() },
+                { value: "1.3" as const, label: m.cert_tls13() },
+              ]}
+              onChange={(tlsMinimumVersion) => set({ tlsMinimumVersion })}
+              testId="l4-app-tls-version"
+            />
+          </div>
+          {udp ? (
+            <SafetyNote className="animate-in fade-in" data-testid="l4-app-tls-udp">
+              {m.l4_tls_tcp_only()}
+            </SafetyNote>
+          ) : null}
+          {v2Locked ? (
+            <SafetyNote className="animate-in fade-in" data-testid="l4-app-v2-unavailable">
+              {m.feature_unavailable_nodes()}
+            </SafetyNote>
+          ) : null}
+          {errorFor("tls")}
         </FieldSet>
         <div className="grid gap-6 sm:grid-cols-2">
           <SettingsGroup legend={m.l4_timeouts()} className="lg:grid-cols-2">
@@ -630,12 +762,15 @@ function PoolsHint({
 
 function OriginRow({
   origin,
+  portless,
   index,
   removable,
   onChange,
   onRemove,
 }: {
   origin: OriginDraft;
+  /** Origins take the port the connection arrived on. */
+  portless: boolean;
   index: number;
   removable: boolean;
   onChange: (change: Partial<OriginDraft>) => void;
@@ -675,8 +810,10 @@ function OriginRow({
           min={1}
           max={65535}
           step={1}
-          required
-          value={origin.port}
+          required={!portless}
+          disabled={portless}
+          value={portless ? "" : origin.port}
+          placeholder={portless ? m.l4_origin_port_same() : undefined}
           onChange={(event) => onChange({ port: event.target.value })}
           className="font-mono"
           data-testid="l4-origin-port"
@@ -736,7 +873,6 @@ function ListPicker({
   testId: string;
 }) {
   const remaining = lists.filter((list) => !value.includes(list.id));
-  const nameOf = (listId: string) => lists.find((l) => l.id === listId)?.name ?? listId.slice(0, 8);
   return (
     <div className="flex min-w-0 flex-col gap-2" data-testid={testId}>
       <span className="text-sm font-medium">{label}</span>
@@ -746,8 +882,7 @@ function ListPicker({
             {m.l4_lists_none()}
           </span>
         ) : (
-          value.map((listId) => {
-            const name = nameOf(listId);
+          listChips(value, lists).map(({ id: listId, name }) => {
             return (
               <Badge
                 key={listId}

@@ -38,6 +38,8 @@ const ALL_FEATURES = [
   "prefetch-v2",
   "rules-v2",
   "rules-v3",
+  "edge-ports-v1",
+  "client-ip-v1",
   "site-content-v1",
 ];
 
@@ -134,6 +136,8 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       prefetchVariants: available,
       rulesV2: available,
       rulesV3: available,
+      edgePorts: available,
+      clientIp: available,
       siteContent: available,
     });
     const https = await admin.https.get({ id: siteId });
@@ -290,6 +294,8 @@ describe("Brotli, Zstandard and OWASP CRS on the console side", async () => {
       prefetchVariants: unavailable,
       rulesV2: unavailable,
       rulesV3: unavailable,
+      edgePorts: unavailable,
+      clientIp: unavailable,
       siteContent: unavailable,
     });
     const before = (await config()).revision;

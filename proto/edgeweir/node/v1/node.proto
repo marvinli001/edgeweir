@@ -662,7 +662,7 @@ enum BanScope {
 // BanSource tells who created a ban.
 enum BanSource {
   BAN_SOURCE_UNSPECIFIED = 0;
-  // An operator or a tenant.
+  // The operator, in the console or through the API.
   BAN_SOURCE_MANUAL = 1;
   // A node's automatic mitigation, shared with the cluster.
   BAN_SOURCE_AUTO = 2;

@@ -54,7 +54,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-/** Admin cluster page: canary state, promote / abort, and the canary policy. */
+/** Clusters page card: canary state, promote / abort, and the canary policy. */
 export function ClusterRolloutCard({ clusterId }: { clusterId: string }) {
   const query = useQuery({
     ...orpc.clusters.rollout.queryOptions({ input: { id: clusterId } }),
