@@ -78,6 +78,7 @@ function ProtectionForm({ initial }: { initial: DnsProtection }) {
   const [error, setError] = React.useState<string | null>(null);
   return (
     <form
+      className="flex flex-col gap-(--card-spacing)"
       onSubmit={async (event) => {
         event.preventDefault();
         setError(null);

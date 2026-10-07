@@ -267,6 +267,7 @@ function PolicyForm({ rollout }: { rollout: ClusterRollout }) {
   const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
   return (
     <form
+      className="flex flex-col gap-(--card-spacing)"
       onSubmit={async (event) => {
         event.preventDefault();
         setError(null);
