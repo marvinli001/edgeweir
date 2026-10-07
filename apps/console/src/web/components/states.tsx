@@ -2,6 +2,7 @@ import { Alert02Icon, type InboxIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type * as React from "react";
 import { InboxIcon as AnimatedInbox, useIconPlay } from "@/components/effects/animated-icons";
+import { EmptyArt, type EmptyArtKind } from "@/components/empty-art";
 import { LoadingState } from "@/components/loading-state";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -9,11 +10,12 @@ import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@/comp
 import { m } from "@/lib/i18n";
 import { errorMessage, isNotFound } from "@/lib/orpc";
 
+export type { EmptyArtKind };
 export { LoadingState };
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   return (
-    <Alert variant="destructive" role="alert">
+    <Alert variant="destructive" role="alert" className="animate-enter">
       <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
       <AlertTitle>{m.common_error_title()}</AlertTitle>
       <AlertDescription>{errorMessage(error, m.common_unknown_error())}</AlertDescription>
@@ -28,14 +30,20 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   );
 }
 
+/**
+ * Nothing to show yet: the icon on a raised tile inside a small illustration (`art`, a request's
+ * route by default; see EmptyArtKind), the title and an optional action. No description.
+ */
 export function EmptyState({
   title,
   icon,
+  art = "route",
   children,
 }: {
   title: string;
   /** Without one, an inbox that settles when the state is hovered. */
   icon?: typeof InboxIcon;
+  art?: EmptyArtKind;
   children?: React.ReactNode;
 }) {
   const { ref, trigger } = useIconPlay();
@@ -45,9 +53,12 @@ export function EmptyState({
       {...trigger}
     >
       <EmptyHeader>
-        <EmptyMedia variant="icon">
-          {icon ? <HugeiconsIcon icon={icon} strokeWidth={2} /> : <AnimatedInbox ref={ref} />}
-        </EmptyMedia>
+        <div className="relative mb-1 grid h-24 w-60 max-w-full place-items-center">
+          <EmptyArt kind={art} className="absolute inset-0 size-full" />
+          <EmptyMedia variant="icon" className="relative mb-0">
+            {icon ? <HugeiconsIcon icon={icon} strokeWidth={2} /> : <AnimatedInbox ref={ref} />}
+          </EmptyMedia>
+        </div>
         <EmptyTitle>{title}</EmptyTitle>
       </EmptyHeader>
       {children ? <EmptyContent>{children}</EmptyContent> : null}
