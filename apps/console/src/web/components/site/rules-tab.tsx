@@ -385,7 +385,7 @@ function RulesEditor({
               data-testid={`rules-phase-${phase}`}
             >
               <div className="flex min-h-14 items-center justify-between gap-3 px-5 py-3">
-                <h3 className="text-sm font-medium">{phaseLabel(phase)}</h3>
+                <h3 className="font-heading text-base font-medium">{phaseLabel(phase)}</h3>
                 <Button
                   type="button"
                   variant="outline"
