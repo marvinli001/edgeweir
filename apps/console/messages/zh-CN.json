@@ -1324,6 +1324,7 @@
   "bans_left_minutes": "剩 {count} 分钟",
   "bans_left_hours": "剩 {count} 小时",
   "bans_left_days": "剩 {count} 天",
+  "bans_expired": "已到期",
   "bans_unapplied": "{count} 个节点未生效",
   "bans_trigger": "{observed} / {threshold}，{window} 秒窗口",
   "bans_unban": "解封",

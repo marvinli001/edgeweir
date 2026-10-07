@@ -1458,6 +1458,7 @@
   "bans_left_minutes": "{count} min left",
   "bans_left_hours": "{count} h left",
   "bans_left_days": "{count} d left",
+  "bans_expired": "Expired",
   "bans_unapplied": [
     {
       "declarations": ["input count", "local countPlural = count: plural"],

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { AccessTabs } from "@/components/access-tabs";
 import { BAN_REASON_LABELS, BAN_SCOPE_LABELS, BanDialog } from "@/components/ban-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { type Columns, DataTable } from "@/components/data-table";
+import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
@@ -59,6 +59,21 @@ function BanOrigin({ ban }: { ban: Ban }) {
         <span className="text-xs text-muted-foreground">{ban.createdBy?.name || "—"}</span>
       )}
     </div>
+  );
+}
+
+/**
+ * The ban's light and the time it has left: in force (lit), or expired since the list was last
+ * fetched (the list holds active bans only, so this lasts until the next poll).
+ */
+function BanExpiry({ expiresAt }: { expiresAt: string }) {
+  const expired = Date.parse(expiresAt) <= Date.now();
+  return (
+    <StatusDot tone={expired ? "idle" : "good"} title={formatDateTime(expiresAt)}>
+      <span className={expired ? "text-muted-foreground" : undefined}>
+        {expired ? m.bans_expired() : timeLeft(expiresAt)}
+      </span>
+    </StatusDot>
   );
 }
 
@@ -169,14 +184,7 @@ export function BansPage({
       {
         id: "expires",
         header: () => m.bans_col_expires(),
-        cell: ({ row }) => (
-          <span
-            className="text-sm whitespace-nowrap text-muted-foreground"
-            title={formatDateTime(row.original.expiresAt)}
-          >
-            {timeLeft(row.original.expiresAt)}
-          </span>
-        ),
+        cell: ({ row }) => <BanExpiry expiresAt={row.original.expiresAt} />,
       },
       {
         id: "actions",
@@ -192,7 +200,7 @@ export function BansPage({
   );
 
   const createButton = (
-    <Button size="sm" onClick={() => dialog.show({})} data-testid="ban-create">
+    <Button onClick={() => dialog.show({})} data-testid="ban-create">
       <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
       {m.bans_create()}
     </Button>
@@ -200,63 +208,74 @@ export function BansPage({
 
   return (
     <Page title={m.bans_title()} actions={createButton}>
-      <AccessTabs value="bans" />
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <FilterSelect
-          value={scope}
-          onChange={filter((value) => setScope(value as BanScope | undefined))}
-          allLabel={m.bans_all_scopes()}
-          options={(["platform", "site"] as const).map((value) => ({
-            value,
-            label: BAN_SCOPE_LABELS[value](),
-          }))}
-          label={m.bans_filter_scope()}
-          testId="ban-filter-scope"
-        />
-        <FilterSelect
-          value={siteId}
-          onChange={filter(setSiteId)}
-          allLabel={m.bans_all_sites()}
-          options={(sites.data?.items ?? []).map((s) => ({ value: s.id, label: s.name }))}
-          label={m.bans_filter_site()}
-          testId="ban-filter-site"
-        />
-        <FilterSelect
-          value={source}
-          onChange={filter((value) => setSource(value as BanSource | undefined))}
-          allLabel={m.bans_all_sources()}
-          options={(["manual", "auto"] as const).map((value) => ({
-            value,
-            label: SOURCES[value](),
-          }))}
-          label={m.bans_filter_source()}
-          testId="ban-filter-source"
-        />
-        {address ? (
-          <Badge
-            variant="secondary"
-            className="h-8 gap-1 self-start pr-1 font-mono sm:self-center"
-            data-testid="ban-filter-address"
-          >
-            {address}
-            <Button
-              type="button"
-              size="icon-xs"
-              variant="ghost"
-              aria-label={m.bans_address_filter_clear()}
-              onClick={filter(() => setAddress(undefined))}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <AccessTabs value="bans" />
+        <FilterBar className="w-full @3xl/main:ml-auto @3xl/main:w-auto @3xl/main:justify-end">
+          <FilterSelect
+            value={scope}
+            onChange={filter((value) => setScope(value as BanScope | undefined))}
+            allLabel={m.bans_all_scopes()}
+            options={(["platform", "site"] as const).map((value) => ({
+              value,
+              label: BAN_SCOPE_LABELS[value](),
+            }))}
+            label={m.bans_filter_scope()}
+            testId="ban-filter-scope"
+          />
+          <FilterSelect
+            value={siteId}
+            onChange={filter(setSiteId)}
+            allLabel={m.bans_all_sites()}
+            options={(sites.data?.items ?? []).map((s) => ({ value: s.id, label: s.name }))}
+            label={m.bans_filter_site()}
+            testId="ban-filter-site"
+          />
+          <FilterSelect
+            value={source}
+            onChange={filter((value) => setSource(value as BanSource | undefined))}
+            allLabel={m.bans_all_sources()}
+            options={(["manual", "auto"] as const).map((value) => ({
+              value,
+              label: SOURCES[value](),
+            }))}
+            label={m.bans_filter_source()}
+            testId="ban-filter-source"
+          />
+          {address ? (
+            <Badge
+              variant="secondary"
+              className="h-8 gap-1 pr-1 pl-3 font-mono"
+              data-testid="ban-filter-address"
             >
-              <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
-            </Button>
-          </Badge>
-        ) : null}
+              {address}
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost"
+                aria-label={m.bans_address_filter_clear()}
+                onClick={filter(() => setAddress(undefined))}
+              >
+                <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+              </Button>
+            </Badge>
+          ) : null}
+        </FilterBar>
       </div>
       <QueryView
         query={bans}
         isEmpty={(data) => data.total === 0}
         empty={
-          <EmptyState icon={BlockedIcon} title={filtered ? m.bans_no_match() : m.bans_empty()}>
-            {filtered ? null : createButton}
+          <EmptyState
+            icon={BlockedIcon}
+            art="checkpoint"
+            title={filtered ? m.bans_no_match() : m.bans_empty()}
+          >
+            {filtered ? null : (
+              <Button variant="outline" onClick={() => dialog.show({})}>
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                {m.bans_create()}
+              </Button>
+            )}
           </EmptyState>
         }
       >
@@ -267,6 +286,7 @@ export function BansPage({
               columns={columns}
               getRowId={(ban) => ban.id}
               testId="bans-table"
+              pinFirstColumn
             />
             <Pager page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
           </>
