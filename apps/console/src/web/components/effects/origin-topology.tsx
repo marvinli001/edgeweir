@@ -2,8 +2,10 @@
  * A small directed graph read left to right (React Flow 12, MIT, webkid GmbH; nodes and edges
  * adapted from React Flow UI's base node, base handle and animated SVG edge, MIT; laid out with
  * dagre, MIT). Read-only: no dragging, panning or wheel zoom, so the page scrolls through it.
- * Pulses travel the live edges only while the graph is on screen and motion is allowed. Colors
- * are token classes. Lazy-loaded with the page.
+ * An image to assistive technology (role img with the caller's label): no node or edge takes
+ * focus, and React Flow's own keyboard help, live region and edge labels (English, for editing)
+ * stay out of the tree. Pulses travel the live edges only while the graph is on screen and motion
+ * is allowed. Colors are token classes. Lazy-loaded with the page.
  */
 import dagre from "@dagrejs/dagre";
 import {
@@ -213,7 +215,7 @@ export default function OriginTopology({
 }: {
   nodes: TopologyNode[];
   edges: TopologyEdge[];
-  /** What the graph shows, for screen readers. */
+  /** What the graph shows, for screen readers (the graph itself is hidden from them). */
   label: string;
 }) {
   const wrap = React.useRef<HTMLDivElement>(null);
@@ -239,7 +241,11 @@ export default function OriginTopology({
           fitViewOptions={{ padding: 0.06, maxZoom: 1 }}
           nodesDraggable={false}
           nodesConnectable={false}
+          nodesFocusable={false}
+          edgesFocusable={false}
           elementsSelectable={false}
+          disableKeyboardA11y
+          aria-hidden
           panOnDrag={false}
           zoomOnScroll={false}
           zoomOnPinch={false}
