@@ -113,6 +113,7 @@ function SiteDetailPage() {
         {(data) => (
           <Tabs
             key={data.id}
+            className="gap-4"
             value={tab}
             onValueChange={(value) =>
               navigate({
@@ -124,9 +125,19 @@ function SiteDetailPage() {
               })
             }
           >
-            <TabsList ref={tabsList} className="max-w-full justify-start overflow-x-auto">
+            {/* The page's tab bar: line tabs over a hairline, scrolling sideways on phones. */}
+            <TabsList
+              ref={tabsList}
+              variant="line"
+              className="h-11 w-full max-w-full justify-start gap-0.5 overflow-x-auto overflow-y-hidden border-b px-0 pt-1 pb-[5px] [scrollbar-width:none]"
+            >
               {SITE_TABS.map((value) => (
-                <TabsTrigger key={value} value={value} data-testid={`tab-${value}`}>
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  className="flex-none px-2.5"
+                  data-testid={`tab-${value}`}
+                >
                   {siteTabLabel(value)}
                 </TabsTrigger>
               ))}
@@ -189,7 +200,7 @@ const originGroups = (site: Site) =>
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="grid gap-1 py-2.5 sm:grid-cols-[10rem_1fr] sm:items-center sm:gap-4">
+    <div className="grid gap-1 py-2.5 @xs/facts:grid-cols-[6.5rem_minmax(0,1fr)] @xs/facts:items-center @xs/facts:gap-3">
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className="flex min-w-0 flex-wrap items-center gap-2 text-sm">{children}</dd>
     </div>
@@ -207,129 +218,135 @@ function OverviewTab({ site }: { site: Site }) {
   const remove = useMutation(orpc.sites.delete.mutationOptions());
 
   return (
-    <div className="flex flex-col gap-4">
-      {site.enabled ? <LiveRequests siteId={site.id} /> : null}
-      <LaunchCheck site={site} />
-      <Card>
-        <form
-          className="flex flex-col gap-(--card-spacing)"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save({ name: name.trim() });
-          }}
-        >
-          <CardHeader>
-            <CardTitle>{m.site_tab_overview()}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Field className="max-w-sm pb-2">
-              <FieldLabel htmlFor="site-name">{m.site_form_name()}</FieldLabel>
-              <Input
-                id="site-name"
-                value={name}
-                required
-                maxLength={100}
-                onChange={(event) => setName(event.target.value)}
-                data-testid="site-name-input"
-              />
-            </Field>
-            <dl className="divide-y">
-              <InfoRow label={m.sites_col_status()}>
-                <SiteStatus site={site} />
-                <ConfirmDialog
-                  trigger={
-                    <Button size="sm" variant="outline" data-testid="site-toggle-enabled">
-                      {site.enabled ? m.site_disable() : m.site_enable()}
-                    </Button>
-                  }
-                  destructive={site.enabled}
-                  title={
-                    site.enabled
-                      ? m.site_disable_confirm({ name: site.name })
-                      : m.site_enable_confirm({ name: site.name })
-                  }
-                  note={site.enabled ? m.site_disable_note() : undefined}
-                  confirmLabel={site.enabled ? m.site_disable() : m.site_enable()}
-                  onConfirm={async () => {
-                    const result = await setEnabled.mutateAsync({
-                      id: site.id,
-                      enabled: !site.enabled,
-                      expectedUpdatedAt: site.updatedAt,
-                    });
-                    followSiteDelivery(
-                      queryClient,
-                      site.id,
-                      result.site.enabled ? m.site_enabled_toast() : m.site_disabled_toast(),
-                      result.site.delivery,
-                    );
-                    await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
-                  }}
+    <div className="grid items-start gap-4 @4xl/main:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+      <div className="flex min-w-0 flex-col gap-4">
+        {site.enabled ? <LiveRequests siteId={site.id} /> : null}
+        <LaunchCheck site={site} />
+      </div>
+      <div className="flex min-w-0 flex-col gap-4">
+        <Card className="@container/facts">
+          <form
+            className="flex flex-col gap-(--card-spacing)"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save({ name: name.trim() });
+            }}
+          >
+            <CardHeader>
+              <CardTitle>{m.site_tab_overview()}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Field className="pb-2">
+                <FieldLabel htmlFor="site-name">{m.site_form_name()}</FieldLabel>
+                <Input
+                  id="site-name"
+                  value={name}
+                  required
+                  maxLength={100}
+                  onChange={(event) => setName(event.target.value)}
+                  data-testid="site-name-input"
                 />
-              </InfoRow>
-              <InfoRow label={m.sites_col_domains()}>
-                {site.domains.map((d) => (
-                  <Badge key={d} variant="outline" className="font-mono">
-                    {d}
-                  </Badge>
-                ))}
-              </InfoRow>
-              <InfoRow label={m.sites_col_cluster()}>
-                <Badge variant="secondary">{site.clusterName}</Badge>
-              </InfoRow>
-              <InfoRow label={m.site_updated_at()}>
-                <span title={formatDateTime(site.updatedAt)}>{timeAgo(site.updatedAt)}</span>
-              </InfoRow>
-            </dl>
+              </Field>
+              <dl className="divide-y border-t">
+                <InfoRow label={m.sites_col_status()}>
+                  <SiteStatus site={site} />
+                  <ConfirmDialog
+                    trigger={
+                      <Button size="sm" variant="outline" data-testid="site-toggle-enabled">
+                        {site.enabled ? m.site_disable() : m.site_enable()}
+                      </Button>
+                    }
+                    destructive={site.enabled}
+                    title={
+                      site.enabled
+                        ? m.site_disable_confirm({ name: site.name })
+                        : m.site_enable_confirm({ name: site.name })
+                    }
+                    note={site.enabled ? m.site_disable_note() : undefined}
+                    confirmLabel={site.enabled ? m.site_disable() : m.site_enable()}
+                    onConfirm={async () => {
+                      const result = await setEnabled.mutateAsync({
+                        id: site.id,
+                        enabled: !site.enabled,
+                        expectedUpdatedAt: site.updatedAt,
+                      });
+                      followSiteDelivery(
+                        queryClient,
+                        site.id,
+                        result.site.enabled ? m.site_enabled_toast() : m.site_disabled_toast(),
+                        result.site.delivery,
+                      );
+                      await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
+                    }}
+                  />
+                </InfoRow>
+                <InfoRow label={m.sites_col_domains()}>
+                  <span className="flex min-w-0 flex-col font-mono text-xs leading-5">
+                    {site.domains.map((d) => (
+                      <span key={d} className="break-all">
+                        {d}
+                      </span>
+                    ))}
+                  </span>
+                </InfoRow>
+                <InfoRow label={m.sites_col_cluster()}>
+                  <Badge variant="secondary">{site.clusterName}</Badge>
+                </InfoRow>
+                <InfoRow label={m.site_updated_at()}>
+                  <span title={formatDateTime(site.updatedAt)}>{timeAgo(site.updatedAt)}</span>
+                </InfoRow>
+              </dl>
+            </CardContent>
+            <SaveBar
+              dirty={name.trim() !== site.name && name.trim() !== ""}
+              pending={pending}
+              error={error}
+              testId="site-name-save"
+            />
+          </form>
+        </Card>
+        <Card>
+          <CardContent className="flex flex-wrap gap-2">
+            <ConfirmDialog
+              trigger={<Button variant="outline">{m.sites_purge()}</Button>}
+              title={m.sites_purge()}
+              note={site.domains.join(", ")}
+              onConfirm={async () => {
+                await purge.mutateAsync({ id: site.id });
+                toast.success(m.sites_purged(), {
+                  action: {
+                    label: m.purge_view_tasks(),
+                    onClick: () => void navigate({ to: "/purge", search: { site: site.id } }),
+                  },
+                });
+                await queryClient.invalidateQueries({ queryKey: orpc.cacheTasks.key() });
+              }}
+            />
+            <ConfirmDialog
+              trigger={
+                <Button variant="destructive" data-testid="site-delete">
+                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                  {m.common_delete()}
+                </Button>
+              }
+              destructive
+              title={m.sites_delete_confirm({ name: site.name })}
+              confirmLabel={m.common_delete()}
+              onConfirm={async () => {
+                const result = await remove.mutateAsync({ id: site.id });
+                toast.success(m.sites_deleted({ revision: result.revision.revision }));
+                // Leave first and drop what was read about the site: refreshing its queries while
+                // they are on screen fails (404, retried for seconds) and flashes an error.
+                await navigate({ to: "/sites" });
+                queryClient.removeQueries({
+                  predicate: (query) => JSON.stringify(query.queryKey).includes(site.id),
+                });
+                await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
+              }}
+            />
           </CardContent>
-          <SaveBar
-            dirty={name.trim() !== site.name && name.trim() !== ""}
-            pending={pending}
-            error={error}
-            testId="site-name-save"
-          />
-        </form>
-      </Card>
-      <Card>
-        <CardContent className="flex flex-wrap gap-2">
-          <ConfirmDialog
-            trigger={<Button variant="outline">{m.sites_purge()}</Button>}
-            title={m.sites_purge()}
-            note={site.domains.join(", ")}
-            onConfirm={async () => {
-              await purge.mutateAsync({ id: site.id });
-              toast.success(m.sites_purged(), {
-                action: {
-                  label: m.purge_view_tasks(),
-                  onClick: () => void navigate({ to: "/purge", search: { site: site.id } }),
-                },
-              });
-              await queryClient.invalidateQueries({ queryKey: orpc.cacheTasks.key() });
-            }}
-          />
-          <ConfirmDialog
-            trigger={
-              <Button variant="destructive" data-testid="site-delete">
-                <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                {m.common_delete()}
-              </Button>
-            }
-            destructive
-            title={m.sites_delete_confirm({ name: site.name })}
-            confirmLabel={m.common_delete()}
-            onConfirm={async () => {
-              const result = await remove.mutateAsync({ id: site.id });
-              toast.success(m.sites_deleted({ revision: result.revision.revision }));
-              // Leave first and drop what was read about the site: refreshing its queries while
-              // they are on screen fails (404, retried for seconds) and flashes an error.
-              await navigate({ to: "/sites" });
-              queryClient.removeQueries({
-                predicate: (query) => JSON.stringify(query.queryKey).includes(site.id),
-              });
-              await queryClient.invalidateQueries({ queryKey: orpc.sites.key() });
-            }}
-          />
-        </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -375,7 +392,7 @@ function DomainsTab({ site }: { site: Site }) {
             <CardTitle>{m.site_tab_domains()}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <ul className="divide-y rounded-2xl border" data-testid="domain-list">
+            <ul className="divide-y rounded-2xl sunk-well" data-testid="domain-list">
               {domains.map((domain, index) => (
                 <li
                   key={domain}

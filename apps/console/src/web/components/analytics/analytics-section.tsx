@@ -36,12 +36,18 @@ export function AnalyticsSection({
   onRangeChange,
   siteId,
   topLists = [],
+  aside,
   delay = 0,
 }: {
   range: AnalyticsRange;
   onRangeChange: (range: AnalyticsRange) => void;
   siteId?: string;
   topLists?: TopList[];
+  /**
+   * A card beside the two large charts (the overview's edge network): from @5xl the charts stack
+   * in two thirds of the row and the card takes the last third; narrower, it follows them.
+   */
+  aside?: React.ReactNode;
   /** Entrance delay of the first card, in ms. */
   delay?: number;
 }) {
@@ -126,46 +132,60 @@ export function AnalyticsSection({
             aria-busy={stale}
             data-testid="analytics"
           >
-            {(["lg", "sm"] as const).map((size, row) => (
-              <div
-                key={size}
-                className={cn(
-                  "grid gap-3",
-                  size === "lg" ? "@3xl/main:grid-cols-2" : "grid-cols-2 @3xl/main:grid-cols-4",
-                )}
-              >
-                {METRICS.filter((metric) => metric.size === size).map((metric, index) => {
-                  const data = series.points.map((point) => ({
-                    time: point.time,
-                    value: metric.point(point, series.bucketSeconds),
-                  }));
-                  const total = metric.total(series.totals);
-                  const open = () => detail.show(metric.id);
-                  return (
-                    <div key={metric.id} {...enter(row * 2 + index)}>
-                      <MetricCard
-                        title={metric.title()}
-                        value={total === null ? "—" : metric.format(total)}
-                        change={relativeChange(total, metric.total(series.previous))}
-                        better={metric.better}
-                        size={size}
-                        onOpen={open}
-                        testId={`metric-${metric.id}`}
-                      >
-                        <MetricChart
-                          data={data}
-                          label={metric.title()}
-                          format={metric.format}
-                          axis={size === "lg"}
-                          domain={metric.domain}
-                          onClick={open}
-                        />
-                      </MetricCard>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+            {(["lg", "sm"] as const).map((size, row) => {
+              const charts = (
+                <div
+                  key={size}
+                  className={cn(
+                    "grid gap-3",
+                    size === "sm"
+                      ? "@sm/main:grid-cols-2 @3xl/main:grid-cols-4"
+                      : aside
+                        ? "@3xl/main:grid-cols-2 @5xl/main:col-span-2 @5xl/main:grid-cols-1"
+                        : "@3xl/main:grid-cols-2",
+                  )}
+                >
+                  {METRICS.filter((metric) => metric.size === size).map((metric, index) => {
+                    const data = series.points.map((point) => ({
+                      time: point.time,
+                      value: metric.point(point, series.bucketSeconds),
+                    }));
+                    const total = metric.total(series.totals);
+                    const open = () => detail.show(metric.id);
+                    return (
+                      <div key={metric.id} {...enter(row * 2 + index)}>
+                        <MetricCard
+                          title={metric.title()}
+                          value={total === null ? "—" : metric.format(total)}
+                          change={relativeChange(total, metric.total(series.previous))}
+                          better={metric.better}
+                          size={size}
+                          onOpen={open}
+                          testId={`metric-${metric.id}`}
+                        >
+                          <MetricChart
+                            data={data}
+                            label={metric.title()}
+                            format={metric.format}
+                            axis={size === "lg"}
+                            domain={metric.domain}
+                            onClick={open}
+                          />
+                        </MetricCard>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+              return size === "lg" && aside ? (
+                <div key={size} className="grid gap-3 @5xl/main:grid-cols-3">
+                  {charts}
+                  <div {...enter(2, "flex min-w-0 flex-col *:flex-1")}>{aside}</div>
+                </div>
+              ) : (
+                charts
+              );
+            })}
             <div
               className={cn(
                 "grid gap-3 @3xl/main:grid-cols-2",

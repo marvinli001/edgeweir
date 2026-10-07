@@ -129,7 +129,7 @@ function EdgeAddresses({ addresses, online }: { addresses: string[]; online: num
 function DomainPointing({ launch, checks }: { launch: SiteLaunch; checks: boolean }) {
   const address = launch.addresses[0];
   return (
-    <ul className="divide-y rounded-2xl border" data-testid="domain-pointing">
+    <ul className="divide-y rounded-2xl sunk-well" data-testid="domain-pointing">
       {launch.domains.map((domain, index) => {
         const command =
           checks && address

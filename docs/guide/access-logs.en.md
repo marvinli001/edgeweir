@@ -61,9 +61,9 @@ Traffic analytics, access log sampling, search, and export, analytics storage mo
 | --- | --- |
 | Time, client IP, method, Host, path, status, bytes sent, duration (ms), cache status, sample rate, node ID | Query strings, request headers, cookies, request and response bodies |
 
-With **Record JA4 in access logs** on (**Security → Challenges** of the site), logs also record the JA4 TLS client fingerprint (empty over plain HTTP): the table gets a **JA4** column and the CSV a `ja4` column. Once it is off, the console stops keeping the field. JA4 format: [JA4](challenges.en.md#ja4).
+With **Record JA4 in access logs** on (**Security → Challenges** of the site), logs also record the JA4 TLS client fingerprint (empty over plain HTTP): the table shows **JA4** and the fingerprint under the request, and the CSV gets a `ja4` column. Once it is off, the console stops keeping the field. JA4 format: [JA4](challenges.en.md#ja4).
 
-With [OWASP CRS](waf.en.md) on, requests that matched rules also record the rule IDs (at most 16 per request, ascending) and whether CRS blocked them: the table gets a **CRS** column (rule IDs and a **Blocked** badge) and the CSV `wafRuleIds` (space-separated) and `wafBlocked` columns.
+With [OWASP CRS](waf.en.md) on, requests that matched rules also record the rule IDs (at most 16 per request, ascending) and whether CRS blocked them: the table shows **CRS** under the request (rule IDs and a **Blocked** badge) and the CSV gets `wafRuleIds` (space-separated) and `wafBlocked` columns.
 
 Rules of the configuration phase can set a sample rate for the requests they match with **Log sample rate (%)**; those logs are kept even while the site's sample rate is **Off**, see [Override settings](rules.en.md#override-settings).
 

@@ -190,7 +190,7 @@ JA4 is a TLS client fingerprint (format `a_b_c`, e.g. `t13d1516h2_8daaf6152771_0
 | --- | --- |
 | Rule field | `tls.ja4` (string, empty over plain HTTP) in custom WAF, challenge and rate limit rules |
 | Rate limit key | A rate limit rule can count by `tls.ja4`, so one fingerprint shares a counter |
-| Access logs | With **Record JA4 in access logs**, sampled logs carry a JA4 column, see [Access logs](access-logs.en.md) |
+| Access logs | With **Record JA4 in access logs**, sampled logs show the JA4 under the request, see [Access logs](access-logs.en.md) |
 
 > [!NOTE]
 > The TLS version is the highest version of the client's `supported_versions` extension; clients that do not send it get the version negotiated in the handshake. For such older clients, the version of the fingerprint is an approximation.

@@ -7,6 +7,7 @@ import type {
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import * as React from "react";
+import { BorderBeam } from "@/components/appica/effects";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -53,19 +54,27 @@ export function useExpandedTasks() {
   return { expanded, toggle };
 }
 
-/** Purge and prefetch tasks, newest first, each with its nodes' progress and details. */
+/**
+ * Purge and prefetch tasks, newest first, each with its nodes' progress and details: flat rows in
+ * a card of their own, or (`inset`) in a hairline group inside another card.
+ */
 export function CacheTaskList({
   tasks,
   expanded,
   onToggle,
+  inset = false,
 }: {
   tasks: CacheTask[];
   expanded: ReadonlySet<string>;
   onToggle: (id: string, open: boolean) => void;
+  inset?: boolean;
 }) {
   return (
     <ul
-      className="divide-y overflow-hidden rounded-2xl border bg-card shadow-xs"
+      className={cn(
+        "divide-y overflow-hidden rounded-2xl",
+        inset ? "border" : "bg-card shadow-elev-1 edge-lit",
+      )}
       data-testid="cache-tasks"
     >
       {tasks.map((task, index) => (
@@ -158,6 +167,9 @@ function TaskRow({
   const more = targets.length - 1;
   // URLs, hosts and tags read best in monospace; site names do not.
   const mono = task.type !== "site";
+  // Waiting for nodes: a signal beam runs around the row until the task ends (a still signal
+  // hairline under reduced motion).
+  const active = !finished(task.state);
   return (
     <li
       className="animate-enter"
@@ -166,12 +178,33 @@ function TaskRow({
       data-state={task.state}
       data-type={task.type}
     >
-      <Collapsible open={open} onOpenChange={onOpenChange}>
+      <Collapsible
+        open={open}
+        onOpenChange={onOpenChange}
+        className={cn(
+          "relative",
+          active &&
+            "m-1 rounded-xl shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--signal)_40%,transparent)]",
+        )}
+      >
+        {active ? (
+          <BorderBeam
+            tone="signal"
+            speed={4}
+            className="pointer-events-none absolute inset-0 rounded-[inherit]"
+            data-testid="cache-task-beam"
+          />
+        ) : null}
         {/*
           One wrapping row, reordered by width: on phones the state and the toggle share the first
           line with the type so the target gets a full line; from sm up the target sits in between.
         */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-4 py-3">
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-x-2 gap-y-1.5",
+            active ? "px-3 py-2" : "px-4 py-3",
+          )}
+        >
           <Badge variant="secondary" className="order-1" data-testid="cache-task-type">
             {cacheTaskTypeLabel[task.type]()}
           </Badge>
@@ -237,7 +270,12 @@ function TaskRow({
           </div>
         </div>
         <CollapsibleContent className="animate-in fade-in duration-300 motion-reduce:animate-none">
-          <div className="grid gap-4 border-t bg-muted/30 px-4 py-3 md:grid-cols-2">
+          <div
+            className={cn(
+              "grid gap-4 border-t bg-well px-4 py-3 md:grid-cols-2",
+              active && "rounded-b-xl px-3",
+            )}
+          >
             <div className="flex min-w-0 flex-col gap-1.5">
               <h3 className="text-xs font-medium text-muted-foreground">{m.purge_targets()}</h3>
               <ul
@@ -259,13 +297,13 @@ function TaskRow({
               {task.nodes.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{m.purge_no_nodes()}</p>
               ) : (
-                <ul className="flex flex-col gap-2">
+                <ul className="flex flex-col divide-y">
                   {task.nodes.map((node) => {
                     const outcome = taskErrorText(node.errorCode, node.errorParams, node.message);
                     return (
                       <li
                         key={node.nodeId}
-                        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-background px-3 py-2 text-sm"
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm first:pt-0 last:pb-0"
                         data-testid="cache-task-node"
                         data-state={node.state}
                       >

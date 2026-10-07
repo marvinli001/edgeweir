@@ -1,7 +1,6 @@
 /*
  * The edge network on a globe (cobe 2, MIT, Shu Ding): a marker per edge location colored by its
- * health, and arcs for traffic flowing into the clusters. Colors come from tokens and follow the
- * theme. The globe turns only while it is on screen, the tab is in front and motion is allowed;
+ * health, sized by its share of the nodes. Colors come from tokens and follow the theme. The globe turns only while it is on screen, the tab is in front and motion is allowed;
  * otherwise it holds one frame. Lazy-loaded with the overview.
  */
 import createGlobe, { type COBEOptions, type Globe } from "cobe";
@@ -19,12 +18,6 @@ export interface GlobeMarker {
   /** 0–1: how much of the network sits here (marker size). */
   weight: number;
   label: string;
-}
-
-export interface GlobeArc {
-  id: string;
-  from: [number, number];
-  to: [number, number];
 }
 
 const TONE_TOKEN: Record<GlobeTone, `--${string}`> = {
@@ -46,12 +39,10 @@ const scale = (rgb: [number, number, number], k: number): [number, number, numbe
 
 export default function EdgeGlobe({
   markers,
-  arcs,
   focus = 105,
   className,
 }: {
   markers: GlobeMarker[];
-  arcs: GlobeArc[];
   /** Longitude facing the viewer at first. */
   focus?: number;
   className?: string;
@@ -77,7 +68,7 @@ export default function EdgeGlobe({
     return () => observer.disconnect();
   }, []);
 
-  // (Re)create the globe for a size and theme; markers and arcs are updated in place below.
+  // (Re)create the globe for a size and theme; the markers are updated in place below.
   React.useEffect(() => {
     const parent = host.current;
     if (!parent || size === 0) return;
@@ -101,13 +92,9 @@ export default function EdgeGlobe({
       baseColor: dark ? scale(tokenVec3("--muted-foreground"), 0.42) : tokenVec3("--card"),
       markerColor: tokenVec3("--signal"),
       glowColor: dark ? tokenVec3("--primary") : tokenVec3("--canvas"),
-      arcColor: tokenVec3("--signal"),
-      arcWidth: 0.6,
-      arcHeight: 0.28,
       markerElevation: 0.015,
       opacity: dark ? 0.92 : 1,
       markers: [],
-      arcs: [],
     };
     globe.current = createGlobe(element, options);
     const shown = requestAnimationFrame(() => element.setAttribute("data-ready", ""));
@@ -134,10 +121,9 @@ export default function EdgeGlobe({
         size: 0.035 + marker.weight * 0.05,
         color: tokenVec3(TONE_TOKEN[marker.tone]),
       })),
-      arcs: arcs.map((arc) => ({ id: arc.id, from: arc.from, to: arc.to })),
       phi: phi.current,
     });
-  }, [markers, arcs, size, theme]);
+  }, [markers, size, theme]);
 
   // The turn: only while live; a drag turns it by hand either way.
   React.useEffect(() => {

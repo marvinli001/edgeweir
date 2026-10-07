@@ -1,5 +1,6 @@
-import { crsDetectionRule, type LogQuery } from "@edgeweir/contract";
+import { crsDetectionRule, type LogEntry, type LogQuery } from "@edgeweir/contract";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import * as React from "react";
 import { toast } from "sonner";
 import { FormSelect } from "@/components/form-select";
@@ -16,6 +17,7 @@ import { useAction } from "@/hooks/use-action";
 import { m } from "@/lib/i18n";
 import { client, errorMessage, orpc } from "@/lib/orpc";
 import { requestUrl } from "@/lib/purge";
+import { cn } from "@/lib/utils";
 
 const localTime = (date: Date) =>
   new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -49,17 +51,11 @@ export function LogsTab({ siteId }: { siteId: string }) {
     limit: 100,
   }));
   const logs = useQuery(orpc.logs.query.queryOptions({ input: query }));
-  // The JA4 column appears when an entry carries a fingerprint (the site records it).
-  const withJa4 = !!logs.data?.entries.some((entry) => entry.ja4);
-  // The CRS column appears when an entry matched CRS rules.
-  const withWaf = !!logs.data?.entries.some(
-    (entry) => entry.wafRuleIds.length > 0 || entry.wafBlocked,
-  );
   const exporter = useAction();
   return (
     <div className="min-w-0 space-y-5">
       <Card>
-        <CardContent className="space-y-4 pt-6">
+        <CardContent className="space-y-4">
           <QueryView query={settings}>
             {({ sampleRate }) => (
               <FormSelect
@@ -80,7 +76,7 @@ export function LogsTab({ siteId }: { siteId: string }) {
         </CardContent>
       </Card>
       <Card>
-        <CardContent className="space-y-5 pt-6">
+        <CardContent className="space-y-5">
           <form
             className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
             onSubmit={(event) => {
@@ -184,125 +180,235 @@ export function LogsTab({ siteId }: { siteId: string }) {
             {({ entries, truncated }) => (
               <>
                 {truncated && <SafetyNote>{m.logs_query_limit()}</SafetyNote>}
-                <div className="max-w-full overflow-x-auto" data-testid="logs-table">
-                  <table className="w-full min-w-[60rem] text-left text-sm">
-                    <thead>
-                      <tr className="border-b text-muted-foreground">
-                        {[
-                          m.logs_time(),
-                          m.logs_ip(),
-                          m.logs_request(),
-                          m.logs_status(),
-                          m.logs_bytes(),
-                          m.logs_duration(),
-                          m.logs_cache(),
-                          ...(withJa4 ? [m.logs_ja4()] : []),
-                          ...(withWaf ? [m.logs_waf()] : []),
-                        ].map((label) => (
-                          <th key={label} className="whitespace-nowrap p-3 font-medium">
-                            {label}
-                          </th>
-                        ))}
-                        <th className="relative w-0 p-3">
-                          <span className="sr-only">{m.common_actions()}</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {entries.map((row) => (
-                        <tr key={row.id} className="border-b last:border-0">
-                          <td className="whitespace-nowrap p-3 tabular-nums">
-                            {new Date(row.time).toLocaleString()}
-                          </td>
-                          <td className="whitespace-nowrap p-3 font-mono text-xs">
-                            {row.clientIp}
-                          </td>
-                          <td className="min-w-64 max-w-96 p-3">
-                            <div className="break-all font-mono text-xs">
-                              {row.method} {row.host}
-                              {row.path}
-                            </div>
-                            {/* The id the node answered with (X-Request-Id, also on error pages). */}
-                            {row.requestId ? (
-                              <div className="mt-1 text-xs break-all text-muted-foreground">
-                                {m.logs_request_id()}{" "}
-                                <span className="font-mono" data-testid="log-request-id">
-                                  {row.requestId}
-                                </span>
-                              </div>
-                            ) : null}
-                          </td>
-                          <td className="p-3 tabular-nums">{row.status}</td>
-                          <td className="p-3 tabular-nums">{row.bytesSent}</td>
-                          <td className="p-3 tabular-nums">{row.durationMs}</td>
-                          <td className="p-3">{row.cacheStatus}</td>
-                          {withJa4 ? (
-                            <td
-                              className="whitespace-nowrap p-3 font-mono text-xs"
-                              data-testid="log-ja4"
-                            >
-                              {row.ja4}
-                            </td>
-                          ) : null}
-                          {withWaf ? (
-                            <td className="min-w-40 p-3" data-testid="log-waf">
-                              <div className="flex flex-wrap items-center gap-1">
-                                {row.wafBlocked ? (
-                                  <Badge variant="destructive" data-testid="log-waf-blocked">
-                                    {m.logs_waf_blocked()}
-                                  </Badge>
-                                ) : null}
-                                {row.wafRuleIds.map((id) => (
-                                  <span
-                                    key={id}
-                                    className="font-mono text-xs tabular-nums"
-                                    data-testid="log-waf-rule"
-                                  >
-                                    {id}
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                          ) : null}
-                          <td className="p-3 text-right">
-                            <RowMenu
-                              items={[
-                                {
-                                  label: m.quick_ban_ip(),
-                                  action: { kind: "ban", address: row.clientIp, siteId },
-                                  testId: "log-ban",
-                                },
-                                ...(row.host
-                                  ? [
-                                      {
-                                        label: m.quick_purge_url(),
-                                        action: {
-                                          kind: "purge" as const,
-                                          targets: [requestUrl(row.host, row.path)],
-                                          siteId,
-                                        },
-                                        testId: "log-purge",
-                                      },
-                                    ]
-                                  : []),
-                                ...row.wafRuleIds.filter(crsDetectionRule).map((ruleId) => ({
-                                  label: m.quick_exclude_rule({ id: String(ruleId) }),
-                                  action: { kind: "exclude-rule" as const, siteId, ruleId },
-                                  testId: "log-exclude-rule",
-                                })),
-                              ]}
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <LogTable key={logs.dataUpdatedAt} entries={entries} siteId={siteId} />
               </>
             )}
           </QueryView>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/** The status class's color beside the code (the code itself is the label). */
+function statusDot(status: number): string {
+  if (status >= 500) return "bg-status-5xx";
+  if (status >= 400) return "bg-status-4xx";
+  if (status >= 300) return "bg-status-3xx";
+  if (status >= 200) return "bg-status-2xx";
+  return "bg-muted-foreground/50";
+}
+
+/*
+ * The log rows. From 57rem of well width each row is a grid on the header's columns (--log-cols on
+ * the table); narrower, a row wraps: time, status and actions, then the request, then the other
+ * values, each after its column's name (data-label), so nothing scrolls sideways.
+ */
+const LOG_VARS = "[--log-cols:11rem_9rem_minmax(14rem,1fr)_4.5rem_5.5rem_5rem_5.5rem_3rem]";
+const LOG_COLUMNS = "grid-cols-(--log-cols)";
+const CELL = "@min-[57rem]/logs:order-none @min-[57rem]/logs:px-3 @min-[57rem]/logs:py-2.5";
+const LABELLED =
+  "before:me-1.5 before:font-sans before:text-muted-foreground before:content-[attr(data-label)] @min-[57rem]/logs:before:content-none";
+
+/**
+ * Sampled requests in a well: a sticky header, rows rendered only while they are in view
+ * (TanStack Virtual, rows measured as they wrap), machine values in monospace. The request's id,
+ * JA4 fingerprint and CRS matches sit under the request, so the table keeps its width.
+ */
+function LogTable({ entries, siteId }: { entries: LogEntry[]; siteId: string }) {
+  const scroller = React.useRef<HTMLElement>(null);
+  const virtualizer = useVirtualizer({
+    count: entries.length,
+    getScrollElement: () => scroller.current,
+    estimateSize: () => 72,
+    overscan: 8,
+    getItemKey: (index) => entries[index]?.id ?? index,
+  });
+  const headers = [
+    m.logs_time(),
+    m.logs_ip(),
+    m.logs_request(),
+    m.logs_status(),
+    m.logs_bytes(),
+    m.logs_duration(),
+    m.logs_cache(),
+  ];
+  return (
+    <section
+      ref={scroller}
+      // Scrollable by keyboard: the well takes focus and arrows scroll it.
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll container must be focusable.
+      tabIndex={0}
+      aria-label={m.logs_request()}
+      className="@container/logs max-h-[min(70svh,42rem)] overflow-y-auto rounded-2xl sunk-well outline-none focus-lit"
+      data-testid="logs-table"
+    >
+      <table className={cn("grid text-left text-sm", LOG_VARS)} aria-rowcount={entries.length + 1}>
+        <thead className="sticky top-0 z-[2] hidden bg-well @min-[57rem]/logs:grid">
+          <tr className={cn("grid border-b", LOG_COLUMNS)} aria-rowindex={1}>
+            {headers.map((label, index) => (
+              <th
+                key={label}
+                className={cn(
+                  "px-3 py-2 text-xs font-medium whitespace-nowrap text-muted-foreground first:pl-4",
+                  (index === 4 || index === 5) && "text-right",
+                )}
+              >
+                {label}
+              </th>
+            ))}
+            <th className="px-3 py-2 pr-4">
+              <span className="sr-only">{m.common_actions()}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody className="relative grid" style={{ height: virtualizer.getTotalSize() }}>
+          {virtualizer.getVirtualItems().map((item) => {
+            const row = entries[item.index];
+            if (!row) return null;
+            return (
+              <tr
+                key={item.key}
+                ref={virtualizer.measureElement}
+                data-index={item.index}
+                aria-rowindex={item.index + 2}
+                className={cn(
+                  "absolute inset-x-0 top-0 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/70 px-4 py-2.5 font-mono text-xs leading-5 transition-colors hover:bg-wash has-aria-expanded:bg-wash",
+                  "@min-[57rem]/logs:grid @min-[57rem]/logs:items-start @min-[57rem]/logs:gap-0 @min-[57rem]/logs:p-0",
+                  LOG_COLUMNS,
+                )}
+                style={{ transform: `translateY(${item.start}px)` }}
+              >
+                <td
+                  className={cn(
+                    "order-1 flex-1 whitespace-nowrap text-muted-foreground @min-[57rem]/logs:pl-4",
+                    CELL,
+                  )}
+                >
+                  {new Date(row.time).toLocaleString()}
+                </td>
+                <td className={cn("order-5 break-all", LABELLED, CELL)} data-label={m.logs_ip()}>
+                  {row.clientIp}
+                </td>
+                <td className={cn("order-4 flex min-w-0 basis-full flex-col gap-1", CELL)}>
+                  <span className="break-all">
+                    <span className="text-muted-foreground">{row.method}</span> {row.host}
+                    {row.path}
+                  </span>
+                  {row.requestId || row.ja4 || row.wafBlocked || row.wafRuleIds.length > 0 ? (
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1 font-sans text-muted-foreground">
+                      {/* The id the node answered with (X-Request-Id, also on error pages). */}
+                      {row.requestId ? (
+                        <span className="min-w-0 break-all">
+                          {m.logs_request_id()}{" "}
+                          <span className="font-mono" data-testid="log-request-id">
+                            {row.requestId}
+                          </span>
+                        </span>
+                      ) : null}
+                      {row.ja4 ? (
+                        <span className="min-w-0 break-all">
+                          {m.logs_ja4()}{" "}
+                          <span className="font-mono" data-testid="log-ja4">
+                            {row.ja4}
+                          </span>
+                        </span>
+                      ) : null}
+                      {row.wafBlocked || row.wafRuleIds.length > 0 ? (
+                        <span className="flex flex-wrap items-center gap-1.5" data-testid="log-waf">
+                          {m.logs_waf()}
+                          {row.wafBlocked ? (
+                            <Badge variant="destructive" data-testid="log-waf-blocked">
+                              {m.logs_waf_blocked()}
+                            </Badge>
+                          ) : null}
+                          {row.wafRuleIds.map((id) => (
+                            <span
+                              key={id}
+                              className="font-mono tabular-nums text-foreground"
+                              data-testid="log-waf-rule"
+                            >
+                              {id}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </td>
+                <td className={cn("order-2", CELL)}>
+                  <span className="inline-flex items-center gap-1.5 tabular-nums">
+                    <span
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full border border-transparent",
+                        statusDot(row.status),
+                      )}
+                    />
+                    {row.status}
+                  </span>
+                </td>
+                <td
+                  className={cn(
+                    "order-6 tabular-nums @min-[57rem]/logs:text-right",
+                    LABELLED,
+                    CELL,
+                  )}
+                  data-label={m.logs_bytes()}
+                >
+                  {row.bytesSent}
+                </td>
+                <td
+                  className={cn(
+                    "order-7 tabular-nums @min-[57rem]/logs:text-right",
+                    LABELLED,
+                    CELL,
+                  )}
+                  data-label={m.logs_duration()}
+                >
+                  {row.durationMs}
+                </td>
+                <td className={cn("order-8", LABELLED, CELL)} data-label={m.logs_cache()}>
+                  {row.cacheStatus}
+                </td>
+                <td
+                  className={cn(
+                    "order-3 -my-1 font-sans @min-[57rem]/logs:my-0 @min-[57rem]/logs:py-1.5 @min-[57rem]/logs:pr-4 @min-[57rem]/logs:text-right",
+                    CELL,
+                  )}
+                >
+                  <RowMenu
+                    items={[
+                      {
+                        label: m.quick_ban_ip(),
+                        action: { kind: "ban", address: row.clientIp, siteId },
+                        testId: "log-ban",
+                      },
+                      ...(row.host
+                        ? [
+                            {
+                              label: m.quick_purge_url(),
+                              action: {
+                                kind: "purge" as const,
+                                targets: [requestUrl(row.host, row.path)],
+                                siteId,
+                              },
+                              testId: "log-purge",
+                            },
+                          ]
+                        : []),
+                      ...row.wafRuleIds.filter(crsDetectionRule).map((ruleId) => ({
+                        label: m.quick_exclude_rule({ id: String(ruleId) }),
+                        action: { kind: "exclude-rule" as const, siteId, ruleId },
+                        testId: "log-exclude-rule",
+                      })),
+                    ]}
+                  />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
   );
 }

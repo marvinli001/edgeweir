@@ -232,7 +232,7 @@ function SecuritySummary({ siteId, protection }: { siteId: string; protection: S
         <Badge
           key={part.key}
           variant={part.alert ? "destructive" : "outline"}
-          className="h-6 cursor-pointer px-2.5 hover:bg-muted"
+          className="h-6 cursor-pointer px-2.5 hover:bg-wash"
           render={
             <button
               type="button"
@@ -858,7 +858,7 @@ function NodeLevelsCard({ siteId }: { siteId: string }) {
           empty={<EmptyState title={m.security_no_nodes()} />}
         >
           {({ nodes }) => (
-            <ul className="divide-y rounded-2xl border" data-testid="security-nodes">
+            <ul className="divide-y rounded-2xl sunk-well" data-testid="security-nodes">
               {nodes.map((node, index) => (
                 <li
                   key={node.id}
@@ -914,7 +914,7 @@ function TopList({
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">{m.security_top_empty()}</p>
       ) : (
-        <ol className="divide-y rounded-2xl border">
+        <ol className="divide-y rounded-2xl sunk-well">
           {items.map((item) => (
             <li key={item.id ?? item.value} className="flex items-center gap-3 px-3 py-2 text-sm">
               <span className={`min-w-0 flex-1 break-all ${mono ? "font-mono text-xs" : ""}`}>
@@ -1035,11 +1035,14 @@ function EventsCard({ siteId }: { siteId: string }) {
         >
           {({ items, total }) => (
             <>
-              <ol className="flex flex-col gap-2" data-testid="security-events">
+              <ol
+                className="flex flex-col divide-y rounded-2xl sunk-well"
+                data-testid="security-events"
+              >
                 {items.map((event, index) => (
                   <li
                     key={event.id}
-                    className="flex flex-col gap-1 rounded-2xl border px-3 py-2.5 animate-enter"
+                    className="flex flex-col gap-1 px-3 py-2.5 animate-enter"
                     style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
                     data-testid="security-event-row"
                     data-kind={event.kind}

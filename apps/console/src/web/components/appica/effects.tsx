@@ -8,20 +8,25 @@ import { TextAnimate } from "@appica/ui-react/text-animate";
 import type * as React from "react";
 import { cn } from "@/lib/utils";
 
-/** A comet of light running around the border; `tone` picks the shadcn color. */
+/**
+ * A comet of light running around the border; `tone` picks the shadcn color (`signal` for work in
+ * progress, which stops when the work ends). Hidden under reduced motion.
+ */
 export function BorderBeam({
   tone = "primary",
   className,
   ...props
 }: Omit<React.ComponentProps<typeof AppicaBorderBeam>, "color"> & {
-  tone?: "primary" | "success" | "destructive";
+  tone?: "primary" | "success" | "destructive" | "signal";
 }) {
   const color =
     tone === "destructive"
       ? "var(--destructive)"
       : tone === "success"
         ? "var(--chart-2)"
-        : "var(--primary)";
+        : tone === "signal"
+          ? "var(--signal)"
+          : "var(--primary)";
   return (
     <AppicaBorderBeam
       color={color}

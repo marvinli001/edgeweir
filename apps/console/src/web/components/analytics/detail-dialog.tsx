@@ -126,7 +126,7 @@ function RankedList({
                 {format(item.value)}
               </span>
               <span
-                className="col-span-2 h-1.5 overflow-hidden rounded-full bg-muted sm:col-span-1 sm:col-start-2 sm:row-start-1"
+                className="col-span-2 h-1.5 overflow-hidden rounded-full bg-wash sm:col-span-1 sm:col-start-2 sm:row-start-1"
                 aria-hidden
               >
                 <span

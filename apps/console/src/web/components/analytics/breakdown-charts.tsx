@@ -97,8 +97,8 @@ function SeriesTooltip({
 }) {
   if (!row) return null;
   return (
-    <div className="grid min-w-48 gap-1.5 rounded-lg bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg ring-1 ring-foreground/10">
-      <span className="text-muted-foreground">{formatChartTime(row.time)}</span>
+    <div className="grid min-w-48 gap-1.5 rounded-xl bg-popover px-3 py-2 text-xs text-popover-foreground shadow-elev-2 edge-lit">
+      <span className="tabular-nums text-muted-foreground">{formatChartTime(row.time)}</span>
       {series.map((s) => (
         <div key={s.key} className="flex items-center gap-2">
           <span className="h-0.5 w-3 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />

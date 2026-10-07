@@ -7,7 +7,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 import * as z from "zod";
 import { Sparkline } from "@/components/appica/sparkline";
-import { type Columns, DataTable } from "@/components/data-table";
+import { type Columns, DataTable, FilterBar } from "@/components/data-table";
 import { FilterSelect, FormSelect, OptionSelect } from "@/components/form-select";
 import { Page } from "@/components/page";
 import { Pager } from "@/components/pager";
@@ -106,31 +106,31 @@ function SitesPage() {
   const columns = React.useMemo<Columns<Site>>(
     () => [
       {
-        id: "star",
-        header: () => <span className="sr-only">{m.site_star()}</span>,
-        cell: ({ row }) => (
-          <StarButton
-            starred={starredIds.has(row.original.id)}
-            pending={pendingId === row.original.id}
-            onToggle={() => void toggle(row.original.id)}
-            className="-my-1 -ml-1"
-          />
-        ),
-      },
-      {
+        // The star and the name share the first column, which stays put while the table scrolls
+        // sideways on narrow screens.
         id: "name",
-        header: () => m.sites_col_name(),
+        header: () => <span className="ps-[1.875rem]">{m.sites_col_name()}</span>,
         cell: ({ row }) => (
-          <div className="flex flex-col">
-            <Link
-              to="/sites/$id"
-              params={{ id: row.original.id }}
-              className="font-medium underline-offset-4 hover:underline"
-              data-testid="site-link"
-            >
-              {row.original.name}
-            </Link>
-            <span className="text-xs text-muted-foreground">{timeAgo(row.original.createdAt)}</span>
+          <div className="flex items-start gap-2">
+            <StarButton
+              starred={starredIds.has(row.original.id)}
+              pending={pendingId === row.original.id}
+              onToggle={() => void toggle(row.original.id)}
+              className="-my-1 -ml-1.5 shrink-0"
+            />
+            <div className="flex min-w-0 flex-col">
+              <Link
+                to="/sites/$id"
+                params={{ id: row.original.id }}
+                className="max-w-56 truncate rounded-sm font-medium underline-offset-4 outline-none focus-lit hover:underline"
+                data-testid="site-link"
+              >
+                {row.original.name}
+              </Link>
+              <span className="text-xs text-muted-foreground">
+                {timeAgo(row.original.createdAt)}
+              </span>
+            </div>
           </div>
         ),
       },
@@ -157,11 +157,9 @@ function SitesPage() {
         id: "domains",
         header: () => m.sites_col_domains(),
         cell: ({ row }) => (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-col font-mono text-xs leading-5">
             {row.original.domains.map((d) => (
-              <Badge key={d} variant="outline" className="font-mono">
-                {d}
-              </Badge>
+              <span key={d}>{d}</span>
             ))}
           </div>
         ),
@@ -170,7 +168,7 @@ function SitesPage() {
         id: "origins",
         header: () => m.sites_col_origins(),
         cell: ({ row }) => (
-          <div className="flex flex-col font-mono text-xs">
+          <div className="flex flex-col font-mono text-xs leading-5 text-muted-foreground">
             {row.original.origins.map((o) => (
               <span key={o.id}>
                 {o.scheme}://{o.address}:{o.port}
@@ -198,7 +196,7 @@ function SitesPage() {
         </Button>
       }
     >
-      <div className="flex flex-wrap items-center gap-2">
+      <FilterBar>
         <SitesTabs value="sites" />
         <SearchBox
           value={search.q ?? ""}
@@ -222,10 +220,10 @@ function SitesPage() {
             options={clusters.data.map((c) => ({ label: c.name, value: c.id }))}
             label={m.sites_col_cluster()}
             testId="cluster-filter"
-            className="w-44"
+            className="w-full sm:w-44"
           />
         ) : null}
-      </div>
+      </FilterBar>
       <QueryView
         query={sites}
         isEmpty={(data) => data.total === 0}
@@ -244,7 +242,13 @@ function SitesPage() {
       >
         {({ items, total }) => (
           <>
-            <DataTable data={items} columns={columns} getRowId={(s) => s.id} testId="sites-table" />
+            <DataTable
+              data={items}
+              columns={columns}
+              getRowId={(s) => s.id}
+              testId="sites-table"
+              pinFirstColumn
+            />
             <Pager
               page={page}
               pageSize={PAGE_SIZE}

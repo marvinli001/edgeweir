@@ -181,7 +181,9 @@ export function CachePurgeCard({ site }: { site: Site }) {
           isEmpty={(data) => data.items.length === 0}
           empty={<p className="text-sm text-muted-foreground">{m.purge_tasks_empty()}</p>}
         >
-          {({ items }) => <CacheTaskList tasks={items} expanded={expanded} onToggle={toggle} />}
+          {({ items }) => (
+            <CacheTaskList tasks={items} expanded={expanded} onToggle={toggle} inset />
+          )}
         </QueryView>
       </CardContent>
     </Card>

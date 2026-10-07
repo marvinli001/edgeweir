@@ -103,7 +103,7 @@ function CertificateState({ cert, actions }: { cert: CertificateDto; actions?: R
   const failed = cert.status === "error";
   return (
     <div
-      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-4 py-3 text-sm animate-enter"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl sunk-well px-4 py-3 text-sm animate-enter"
       data-testid="https-certificate-state"
     >
       {failed ? (
@@ -488,7 +488,7 @@ function HttpsEditor({
           }
         }}
       >
-        <CardContent className="grid gap-5 pt-6 sm:grid-cols-2">
+        <CardContent className="grid gap-5 sm:grid-cols-2">
           <FormSelect
             id="siteCertificate"
             label={m.cert_title()}
