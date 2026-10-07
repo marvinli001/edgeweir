@@ -35,7 +35,7 @@ function SummaryStat({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5 px-3 py-3 @2xl/main:px-4">
-      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+      <dt className="text-xs leading-tight text-muted-foreground">{label}</dt>
       <dd className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl leading-tight font-semibold tracking-tight [font-stretch:112%] @2xl/main:text-[1.375rem]">
         {children}
       </dd>
